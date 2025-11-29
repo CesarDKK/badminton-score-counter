@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  badminton-app:
+    build: .
+    container_name: badminton-counter
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    volumes:
+      - ./index.html:/usr/share/nginx/html/index.html:ro
+      - ./landing.html:/usr/share/nginx/html/landing.html:ro
+      - ./landing-styles.css:/usr/share/nginx/html/landing-styles.css:ro
+      - ./landing-script.js:/usr/share/nginx/html/landing-script.js:ro
+      - ./court.html:/usr/share/nginx/html/court.html:ro
+      - ./styles.css:/usr/share/nginx/html/styles.css:ro
+      - ./court-script.js:/usr/share/nginx/html/court-script.js:ro
+      - ./tv.html:/usr/share/nginx/html/tv.html:ro
+      - ./tv-styles.css:/usr/share/nginx/html/tv-styles.css:ro
+      - ./tv-script.js:/usr/share/nginx/html/tv-script.js:ro
+      - ./admin.html:/usr/share/nginx/html/admin.html:ro
+      - ./admin-styles.css:/usr/share/nginx/html/admin-styles.css:ro
+      - ./admin-script.js:/usr/share/nginx/html/admin-script.js:ro

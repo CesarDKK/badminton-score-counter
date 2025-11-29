@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Badminton Score Counter - Court</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <a href="landing.html" class="btn-back">← Back</a>
+                <h1>Court <span id="courtNumber">1</span></h1>
+            </div>
+            <div class="header-controls">
+                <a href="admin.html" class="btn-secondary" style="text-decoration: none;">Admin</a>
+            </div>
+        </header>
+
+        <!-- Main Score Display -->
+        <div class="score-container">
+            <div class="player-section">
+                <div class="player-names-container">
+                    <input type="text" id="player1Name" class="player-name" placeholder="Player 1">
+                    <input type="text" id="player1Name2" class="player-name player-name-doubles" placeholder="Partner 1" style="display: none;">
+                </div>
+                <div class="score-display" id="player1Score">0</div>
+                <div class="controls">
+                    <button class="btn-score" onclick="addPoint(1)">+1</button>
+                    <button class="btn-score-minus" onclick="removePoint(1)">-1</button>
+                </div>
+            </div>
+
+            <div class="match-info">
+                <div class="timer">
+                    <div id="timerDisplay">00:00</div>
+                    <div class="timer-controls">
+                        <button id="startTimer" class="btn-timer">Start</button>
+                    </div>
+                </div>
+                <div class="game-info">
+                    <div class="games">
+                        <span>Games Won</span>
+                        <div class="game-score">
+                            <span id="player1Games">0</span>
+                            <span>-</span>
+                            <span id="player2Games">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="player-section">
+                <div class="player-names-container">
+                    <input type="text" id="player2Name" class="player-name" placeholder="Player 2">
+                    <input type="text" id="player2Name2" class="player-name player-name-doubles" placeholder="Partner 2" style="display: none;">
+                </div>
+                <div class="score-display" id="player2Score">0</div>
+                <div class="controls">
+                    <button class="btn-score" onclick="addPoint(2)">+1</button>
+                    <button class="btn-score-minus" onclick="removePoint(2)">-1</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button id="doublesToggle" class="btn-mode">Switch to Doubles</button>
+            <button id="newMatchBtn" class="btn-secondary">Reset Court</button>
+        </div>
+    </div>
+
+    <script src="court-script.js"></script>
+</body>
+</html>

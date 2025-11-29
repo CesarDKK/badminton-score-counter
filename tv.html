@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Court TV Display</title>
+    <link rel="stylesheet" href="tv-styles.css">
+</head>
+<body>
+    <div class="tv-container">
+        <div class="tv-header">
+            <h1>COURT <span id="courtNumber">1</span></h1>
+            <div class="timer-large" id="timerDisplay">00:00</div>
+        </div>
+
+        <div class="scoreboard">
+            <div class="player-column">
+                <div class="player-names-group">
+                    <div class="player-name" id="player1Name">Player 1</div>
+                    <div class="player-name player-name-partner" id="player1Name2" style="display: none;">Partner 1</div>
+                </div>
+                <div class="player-score" id="player1Score">0</div>
+                <div class="player-games">
+                    <span class="games-label">Games</span>
+                    <span class="games-value" id="player1Games">0</span>
+                </div>
+            </div>
+
+            <div class="vs-separator">VS</div>
+
+            <div class="player-column">
+                <div class="player-names-group">
+                    <div class="player-name" id="player2Name">Player 2</div>
+                    <div class="player-name player-name-partner" id="player2Name2" style="display: none;">Partner 2</div>
+                </div>
+                <div class="player-score" id="player2Score">0</div>
+                <div class="player-games">
+                    <span class="games-label">Games</span>
+                    <span class="games-value" id="player2Games">0</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="tv-footer">
+            <div class="live-indicator">
+                <span class="live-dot"></span>
+                LIVE
+            </div>
+        </div>
+    </div>
+
+    <script src="tv-script.js"></script>
+</body>
+</html>
