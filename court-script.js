@@ -149,6 +149,8 @@ function checkGameWin() {
 
         // Check if player won the match (2 games)
         if (gameState.player1.games === 2) {
+            saveMatchResult(gameState.player1.name, gameState.player2.name,
+                           gameState.player1.games, gameState.player2.games);
             alert(`${gameState.player1.name} wins the match ${gameState.player1.games}-${gameState.player2.games}!`);
             if (confirm('Start a new match?')) {
                 startNewMatch();
@@ -168,6 +170,8 @@ function checkGameWin() {
 
         // Check if player won the match (2 games)
         if (gameState.player2.games === 2) {
+            saveMatchResult(gameState.player2.name, gameState.player1.name,
+                           gameState.player2.games, gameState.player1.games);
             alert(`${gameState.player2.name} wins the match ${gameState.player2.games}-${gameState.player1.games}!`);
             if (confirm('Start a new match?')) {
                 startNewMatch();
@@ -351,5 +355,35 @@ function loadGameState() {
         if (!gameState.player1.name2) gameState.player1.name2 = 'Partner 1';
         if (!gameState.player2.name2) gameState.player2.name2 = 'Partner 2';
     }
+}
+
+function saveMatchResult(winner, loser, winnerGames, loserGames) {
+    // Save to court-specific match history
+    const key = `matchHistory_court${courtId}`;
+    let history = JSON.parse(localStorage.getItem(key) || '[]');
+
+    const match = {
+        date: new Date().toLocaleString(),
+        winner: winner,
+        loser: loser,
+        gamesWon: `${winnerGames}-${loserGames}`,
+        duration: formatDuration(gameState.timerSeconds),
+        court: courtId
+    };
+
+    history.unshift(match);
+
+    // Keep only last 10 matches per court
+    if (history.length > 10) {
+        history = history.slice(0, 10);
+    }
+
+    localStorage.setItem(key, JSON.stringify(history));
+}
+
+function formatDuration(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 

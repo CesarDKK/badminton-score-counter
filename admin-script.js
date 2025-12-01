@@ -181,6 +181,18 @@ function createCourtCard(courtNumber) {
         ? `${escapeHtml(state.player2.name)}<br>${escapeHtml(state.player2.name2)}`
         : escapeHtml(state.player2.name);
 
+    // Load match history for this court
+    const historyKey = `matchHistory_court${courtNumber}`;
+    const history = JSON.parse(localStorage.getItem(historyKey) || '[]');
+    const historyHtml = history.length > 0
+        ? history.slice(0, 3).map(match => `
+            <div style="padding: 8px; background: rgba(15, 52, 96, 0.3); border-radius: 5px; margin-top: 5px; font-size: 0.85em;">
+                <div style="font-weight: bold; color: #e94560;">${escapeHtml(match.winner)} def. ${escapeHtml(match.loser)}</div>
+                <div style="color: #aaa; font-size: 0.9em;">Games: ${match.gamesWon} | Duration: ${match.duration}</div>
+            </div>
+        `).join('')
+        : '<div style="color: #999; font-style: italic; margin-top: 10px;">No match history</div>';
+
     card.innerHTML = `
         <div class="court-header">
             <h3>Court ${courtNumber}${isDoubles ? ' <span style="font-size: 0.7em; color: #e94560;">(Doubles)</span>' : ''}</h3>
@@ -209,6 +221,10 @@ function createCourtCard(courtNumber) {
                     <span class="meta-label">Duration</span>
                     <span class="meta-value">${formatDuration(state.timerSeconds)}</span>
                 </div>
+            </div>
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #533483;">
+                <div style="font-weight: bold; margin-bottom: 10px; color: #e94560;">Recent Matches</div>
+                ${historyHtml}
             </div>
         </div>
         <div class="court-actions">
