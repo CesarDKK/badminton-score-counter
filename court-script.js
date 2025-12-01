@@ -25,7 +25,8 @@ let gameState = {
     currentCourt: courtId,
     isActive: false,
     isDoubles: false,
-    gameMode: '21'  // '21' for 21/30, '15' for 15/21
+    gameMode: '21',  // '21' for 21/30, '15' for 15/21
+    decidingGameSwitched: false  // Track if sides switched at 11 in deciding game
 };
 
 // Initialize app
@@ -108,6 +109,16 @@ function addPoint(player) {
         startTimer();
     }
 
+    // Check for side switch at 11 points in deciding game (when games are 1-1)
+    const isDecidingGame = gameState.player1.games === 1 && gameState.player2.games === 1;
+    const scoredTo11 = gameState.player1.score === 11 || gameState.player2.score === 11;
+
+    if (isDecidingGame && scoredTo11 && !gameState.decidingGameSwitched) {
+        gameState.decidingGameSwitched = true;
+        switchSides();
+        alert('Score has reached 11 in the deciding game. Players have switched sides!');
+    }
+
     checkGameWin();
     updateDisplay();
     saveGameState();
@@ -135,18 +146,40 @@ function checkGameWin() {
     // Badminton rules: first to winScore, must win by 2, max maxScore
     if ((p1Score >= winScore && p1Score - p2Score >= 2) || p1Score === maxScore) {
         gameState.player1.games++;
+
+        // Check if player won the match (2 games)
+        if (gameState.player1.games === 2) {
+            alert(`${gameState.player1.name} wins the match ${gameState.player1.games}-${gameState.player2.games}!`);
+            if (confirm('Start a new match?')) {
+                startNewMatch();
+            }
+            return;
+        }
+
         if (!confirm(`${gameState.player1.name} wins this game! Start new game?`)) {
             return;
         }
         resetScores();
+        gameState.decidingGameSwitched = false;  // Reset for next game
         // Automatically switch sides after each game
         switchSides();
     } else if ((p2Score >= winScore && p2Score - p1Score >= 2) || p2Score === maxScore) {
         gameState.player2.games++;
+
+        // Check if player won the match (2 games)
+        if (gameState.player2.games === 2) {
+            alert(`${gameState.player2.name} wins the match ${gameState.player2.games}-${gameState.player1.games}!`);
+            if (confirm('Start a new match?')) {
+                startNewMatch();
+            }
+            return;
+        }
+
         if (!confirm(`${gameState.player2.name} wins this game! Start new game?`)) {
             return;
         }
         resetScores();
+        gameState.decidingGameSwitched = false;  // Reset for next game
         // Automatically switch sides after each game
         switchSides();
     }
@@ -292,7 +325,8 @@ function saveGameState() {
         currentCourt: courtId,
         isActive: isActive,  // Preserve admin-set active status
         isDoubles: gameState.isDoubles,  // Save doubles mode
-        gameMode: gameState.gameMode  // Save game mode
+        gameMode: gameState.gameMode,  // Save game mode
+        decidingGameSwitched: gameState.decidingGameSwitched  // Save deciding game switch status
     };
     localStorage.setItem(key, JSON.stringify(stateToSave));
 }
@@ -311,6 +345,7 @@ function loadGameState() {
         gameState.isActive = loaded.isActive;  // Load active status
         gameState.isDoubles = loaded.isDoubles || false;  // Load doubles mode
         gameState.gameMode = loaded.gameMode || '21';  // Load game mode, default to 21
+        gameState.decidingGameSwitched = loaded.decidingGameSwitched || false;  // Load deciding game switch status
 
         // Ensure name2 exists for backwards compatibility
         if (!gameState.player1.name2) gameState.player1.name2 = 'Partner 1';
