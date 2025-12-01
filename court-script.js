@@ -84,6 +84,7 @@ function setupEventListeners() {
     document.getElementById('startTimer').addEventListener('click', toggleTimer);
 
     // Action buttons
+    document.getElementById('switchSidesBtn').addEventListener('click', switchSides);
     document.getElementById('newMatchBtn').addEventListener('click', startNewMatch);
     document.getElementById('doublesToggle').addEventListener('click', toggleDoubles);
 }
@@ -138,12 +139,16 @@ function checkGameWin() {
             return;
         }
         resetScores();
+        // Automatically switch sides after each game
+        switchSides();
     } else if ((p2Score >= winScore && p2Score - p1Score >= 2) || p2Score === maxScore) {
         gameState.player2.games++;
         if (!confirm(`${gameState.player2.name} wins this game! Start new game?`)) {
             return;
         }
         resetScores();
+        // Automatically switch sides after each game
+        switchSides();
     }
 }
 
@@ -247,6 +252,29 @@ function updateDoublesDisplay() {
         player2Name2.style.display = 'none';
         toggleBtn.textContent = 'Switch to Doubles';
     }
+}
+
+function switchSides() {
+    // Swap all player data
+    const tempPlayer = {
+        name: gameState.player1.name,
+        name2: gameState.player1.name2,
+        score: gameState.player1.score,
+        games: gameState.player1.games
+    };
+
+    gameState.player1.name = gameState.player2.name;
+    gameState.player1.name2 = gameState.player2.name2;
+    gameState.player1.score = gameState.player2.score;
+    gameState.player1.games = gameState.player2.games;
+
+    gameState.player2.name = tempPlayer.name;
+    gameState.player2.name2 = tempPlayer.name2;
+    gameState.player2.score = tempPlayer.score;
+    gameState.player2.games = tempPlayer.games;
+
+    updateDisplay();
+    saveGameState();
 }
 
 function saveGameState() {
