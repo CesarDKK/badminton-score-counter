@@ -2,6 +2,7 @@
 const DEFAULT_PASSWORD = 'admin123';
 let refreshInterval = null;
 let currentEditingCourt = null;
+let allMatchesDisplayCount = 30;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
@@ -37,6 +38,10 @@ function setupEventListeners() {
 
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+
+    // Match History
+    document.getElementById('matchHistoryBtn').addEventListener('click', showMatchHistory);
+    document.getElementById('backToOverviewBtn').addEventListener('click', showCourtOverview);
 
     // Settings
     document.getElementById('saveCourtBtn').addEventListener('click', saveCourtCount);
@@ -181,18 +186,6 @@ function createCourtCard(courtNumber) {
         ? `${escapeHtml(state.player2.name)}<br>${escapeHtml(state.player2.name2)}`
         : escapeHtml(state.player2.name);
 
-    // Load match history for this court
-    const historyKey = `matchHistory_court${courtNumber}`;
-    const history = JSON.parse(localStorage.getItem(historyKey) || '[]');
-    const historyHtml = history.length > 0
-        ? history.slice(0, 3).map(match => `
-            <div style="padding: 8px; background: rgba(15, 52, 96, 0.3); border-radius: 5px; margin-top: 5px; font-size: 0.85em;">
-                <div style="font-weight: bold; color: #e94560;">${escapeHtml(match.winner)} def. ${escapeHtml(match.loser)}</div>
-                <div style="color: #aaa; font-size: 0.9em;">Games: ${match.gamesWon} | Duration: ${match.duration}</div>
-            </div>
-        `).join('')
-        : '<div style="color: #999; font-style: italic; margin-top: 10px;">No match history</div>';
-
     card.innerHTML = `
         <div class="court-header">
             <h3>Court ${courtNumber}${isDoubles ? ' <span style="font-size: 0.7em; color: #e94560;">(Doubles)</span>' : ''}</h3>
@@ -221,10 +214,6 @@ function createCourtCard(courtNumber) {
                     <span class="meta-label">Duration</span>
                     <span class="meta-value">${formatDuration(state.timerSeconds)}</span>
                 </div>
-            </div>
-            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #533483;">
-                <div style="font-weight: bold; margin-bottom: 10px; color: #e94560;">Recent Matches</div>
-                ${historyHtml}
             </div>
         </div>
         <div class="court-actions">
@@ -390,6 +379,95 @@ function resetCourtConfirm() {
     document.getElementById('editCourtModal').style.display = 'none';
     currentEditingCourt = null;
     loadCourtOverview();
+}
+
+function showMatchHistory() {
+    document.getElementById('courtOverviewSection').style.display = 'none';
+    document.getElementById('matchHistorySection').style.display = 'block';
+    loadAllMatches();
+}
+
+function showCourtOverview() {
+    document.getElementById('matchHistorySection').style.display = 'none';
+    document.getElementById('courtOverviewSection').style.display = 'block';
+}
+
+function loadAllMatches() {
+    const courtCount = parseInt(localStorage.getItem('courtCount') || '4');
+    let allMatches = [];
+
+    // Collect all matches from all courts
+    for (let i = 1; i <= courtCount; i++) {
+        const historyKey = `matchHistory_court${i}`;
+        const courtHistory = JSON.parse(localStorage.getItem(historyKey) || '[]');
+        courtHistory.forEach(match => {
+            match.courtNumber = i; // Add court number to each match
+        });
+        allMatches = allMatches.concat(courtHistory);
+    }
+
+    // Sort by date (most recent first)
+    allMatches.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    const container = document.getElementById('allMatchesContainer');
+
+    if (allMatches.length === 0) {
+        container.innerHTML = '<div style="color: #999; text-align: center; padding: 40px; font-size: 1.2em;">No match history available</div>';
+        return;
+    }
+
+    // Display matches (up to allMatchesDisplayCount)
+    const displayMatches = allMatches.slice(0, allMatchesDisplayCount);
+    const matchesHtml = displayMatches.map(match => `
+        <div style="padding: 15px; background: rgba(15, 52, 96, 0.5); border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #e94560;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <div style="font-weight: bold; font-size: 1.1em; color: #e94560; margin-bottom: 5px;">
+                        ${escapeHtml(match.winner)} defeated ${escapeHtml(match.loser)}
+                    </div>
+                    <div style="color: #aaa; font-size: 0.9em;">
+                        Games Won: ${match.gamesWon} | Duration: ${match.duration} | Court ${match.courtNumber}
+                    </div>
+                </div>
+                <div style="color: #999; font-size: 0.85em;">
+                    ${match.date}
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    container.innerHTML = matchesHtml;
+
+    // Add "Show More" button if there are more than 30 matches
+    if (allMatches.length > allMatchesDisplayCount) {
+        const showMoreBtn = `
+            <button onclick="showMoreMatches()" style="width: 100%; padding: 15px; background: #533483; color: white; border: none; border-radius: 10px; cursor: pointer; font-size: 1em; font-weight: bold; margin-top: 10px;">
+                Show More Matches (${allMatches.length - allMatchesDisplayCount} more)
+            </button>
+        `;
+        container.innerHTML += showMoreBtn;
+    }
+}
+
+function showMoreMatches() {
+    allMatchesDisplayCount += 30;
+    loadAllMatches();
+}
+
+// Toggle more matches display
+function toggleMoreMatches(courtNumber) {
+    const moreMatchesDiv = document.getElementById(`moreMatches${courtNumber}`);
+    const btnText = document.getElementById(`moreMatchesBtn${courtNumber}`);
+    const historyKey = `matchHistory_court${courtNumber}`;
+    const history = JSON.parse(localStorage.getItem(historyKey) || '[]');
+
+    if (moreMatchesDiv.style.display === 'none') {
+        moreMatchesDiv.style.display = 'block';
+        btnText.textContent = 'Show Less';
+    } else {
+        moreMatchesDiv.style.display = 'none';
+        btnText.textContent = `Show More Matches (${history.length - 1})`;
+    }
 }
 
 // Cleanup on page unload

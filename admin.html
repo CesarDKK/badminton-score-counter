@@ -31,15 +31,25 @@
             <header>
                 <h1>Admin Dashboard</h1>
                 <div class="header-controls">
+                    <button id="matchHistoryBtn" class="btn-primary" style="margin-right: 10px;">Match History</button>
                     <button id="logoutBtn" class="btn-secondary">Logout</button>
                     <a href="landing.html" class="btn-secondary" style="text-decoration: none; display: inline-block;">Back to Courts</a>
                 </div>
             </header>
 
             <!-- Court Overview Section -->
-            <div class="overview-section">
+            <div id="courtOverviewSection" class="overview-section">
                 <h2>Court Overview</h2>
                 <div id="courtOverview" class="court-grid"></div>
+            </div>
+
+            <!-- Match History Section -->
+            <div id="matchHistorySection" class="overview-section" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>Match History - All Courts</h2>
+                    <button id="backToOverviewBtn" class="btn-secondary">Back to Overview</button>
+                </div>
+                <div id="allMatchesContainer"></div>
             </div>
 
             <!-- Edit Court Modal -->
@@ -111,6 +121,11 @@
                     <button id="clearAllDataBtn" class="btn-danger">Clear All Court Data</button>
                     <p class="warning-text">Warning: This will reset all scores and match history for all courts!</p>
                 </div>
+            </div>
+
+            <!-- Version Footer -->
+            <div class="version-footer">
+                <p>Version 1.1.0</p>
             </div>
         </div>
     </div>
