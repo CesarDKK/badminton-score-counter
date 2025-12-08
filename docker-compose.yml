@@ -1,26 +1,83 @@
 version: '3.8'
 
 services:
-  badminton-app:
-    build: .
-    container_name: badminton-counter
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: badminton-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password_change_me}
+      MYSQL_DATABASE: badminton_counter
+      MYSQL_USER: badminton_user
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-secure_password_change_me}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - badminton-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root_password_change_me}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Node.js Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: badminton-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: badminton_user
+      DB_PASSWORD: ${MYSQL_PASSWORD:-secure_password_change_me}
+      DB_NAME: badminton_counter
+      JWT_SECRET: ${JWT_SECRET:-change_this_secret_key_min_32_chars}
+      UPLOAD_DIR: /app/uploads
+      MAX_FILE_SIZE: 10485760
+    ports:
+      - "3000:3000"
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - badminton-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Nginx Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: badminton-frontend
+    restart: unless-stopped
     ports:
       - "8080:80"
-    restart: unless-stopped
-    volumes:
-      - ./index.html:/usr/share/nginx/html/index.html:ro
-      - ./landing.html:/usr/share/nginx/html/landing.html:ro
-      - ./landing-styles.css:/usr/share/nginx/html/landing-styles.css:ro
-      - ./landing-script.js:/usr/share/nginx/html/landing-script.js:ro
-      - ./court.html:/usr/share/nginx/html/court.html:ro
-      - ./styles.css:/usr/share/nginx/html/styles.css:ro
-      - ./court-script.js:/usr/share/nginx/html/court-script.js:ro
-      - ./tv.html:/usr/share/nginx/html/tv.html:ro
-      - ./tv-styles.css:/usr/share/nginx/html/tv-styles.css:ro
-      - ./tv-script.js:/usr/share/nginx/html/tv-script.js:ro
-      - ./admin.html:/usr/share/nginx/html/admin.html:ro
-      - ./admin-styles.css:/usr/share/nginx/html/admin-styles.css:ro
-      - ./admin-script.js:/usr/share/nginx/html/admin-script.js:ro
-      - ./sponsor.html:/usr/share/nginx/html/sponsor.html:ro
-      - ./sponsor-styles.css:/usr/share/nginx/html/sponsor-styles.css:ro
-      - ./sponsor-script.js:/usr/share/nginx/html/sponsor-script.js:ro
+    depends_on:
+      - backend
+    networks:
+      - badminton-network
+
+networks:
+  badminton-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
+  uploads_data:
+    driver: local

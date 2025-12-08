@@ -16,3 +16,10 @@ npm-debug.log*
 # Environment variables
 .env
 .env.local
+
+# Uploads directory (user-generated content)
+backend/uploads/
+
+# Docker volumes
+mysql_data/
+uploads_data/

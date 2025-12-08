@@ -1,4 +1,6 @@
 // TV Display Script - Read-only view with auto-refresh
+const api = window.BadmintonAPI;
+
 const urlParams = new URLSearchParams(window.location.search);
 const courtId = parseInt(urlParams.get('id')) || 1;
 
@@ -6,31 +8,40 @@ let refreshInterval = null;
 let slideshowInterval = null;
 let currentSlideIndex = 0;
 let isShowingSlideshow = false;
-
-const SPONSOR_STORAGE_KEY = 'sponsorImages';
-const DURATION_KEY = 'sponsorSlideDuration';
-const DEFAULT_DURATION = 10;
+let cachedSponsorImages = [];
+let cachedSlideDuration = 10000; // 10 seconds default
 
 // Initialize
-document.addEventListener('DOMContentLoaded', function() {
-    initializeTVDisplay();
+document.addEventListener('DOMContentLoaded', async function() {
+    await initializeTVDisplay();
     loadCourtData();
     startAutoRefresh();
+    // Refresh sponsor settings every 30 seconds
+    setInterval(refreshSponsorSettings, 30000);
 });
 
-function initializeTVDisplay() {
+async function initializeTVDisplay() {
     // Display court number
     document.getElementById('courtNumber').textContent = courtId;
 
-    // Verify court is valid
-    const courtCount = parseInt(localStorage.getItem('courtCount') || '4');
-    if (courtId < 1 || courtId > courtCount) {
-        document.querySelector('.tv-container').innerHTML = `
-            <div style="display: flex; align-items: center; justify-content: center; height: 100vh; flex-direction: column; gap: 20px;">
-                <h1 style="font-size: 4em; color: #e94560;">Bane ${courtId} Ikke Fundet</h1>
-                <a href="landing.html" style="color: #fff; font-size: 2em; text-decoration: underline;">Tilbage til Landingsside</a>
-            </div>
-        `;
+    try {
+        // Verify court is valid
+        const settings = await api.getSettings();
+        const courtCount = settings.courtCount;
+
+        if (courtId < 1 || courtId > courtCount) {
+            document.querySelector('.tv-container').innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; height: 100vh; flex-direction: column; gap: 20px;">
+                    <h1 style="font-size: 4em; color: #e94560;">Bane ${courtId} Ikke Fundet</h1>
+                    <a href="landing.html" style="color: #fff; font-size: 2em; text-decoration: underline;">Tilbage til Landingsside</a>
+                </div>
+            `;
+        }
+
+        // Preload sponsor settings
+        await refreshSponsorSettings();
+    } catch (error) {
+        console.error('Failed to initialize TV display:', error);
     }
 }
 
@@ -39,77 +50,79 @@ function startAutoRefresh() {
     refreshInterval = setInterval(loadCourtData, 1000);
 }
 
-function loadCourtData() {
-    const key = `gameState_court${courtId}`;
-    const stateData = localStorage.getItem(key);
+async function loadCourtData() {
+    try {
+        // Get game state from API
+        const gameState = await api.getGameState(courtId);
 
-    // Check if match is active
-    const isMatchActive = checkIfMatchActive(stateData);
+        // Check if match is active
+        const isMatchActive = gameState.isActive === true;
 
-    if (!isMatchActive) {
-        // No active match - show sponsor slideshow
+        if (!isMatchActive) {
+            // No active match - show sponsor slideshow
+            showSponsorSlideshow();
+            return;
+        }
+
+        // Match is active - hide slideshow and show scores
+        hideSponsorSlideshow();
+
+        // Update display
+        document.getElementById('player1Name').textContent = gameState.player1.name;
+        document.getElementById('player2Name').textContent = gameState.player2.name;
+
+        // Handle doubles mode
+        const isDoubles = gameState.isDoubles || false;
+        const player1Name2 = document.getElementById('player1Name2');
+        const player2Name2 = document.getElementById('player2Name2');
+
+        if (isDoubles && gameState.player1.name2 && gameState.player2.name2) {
+            player1Name2.textContent = gameState.player1.name2;
+            player2Name2.textContent = gameState.player2.name2;
+            player1Name2.style.display = 'flex';
+            player2Name2.style.display = 'flex';
+        } else {
+            player1Name2.style.display = 'none';
+            player2Name2.style.display = 'none';
+        }
+
+        document.getElementById('player1Score').textContent = gameState.player1.score;
+        document.getElementById('player2Score').textContent = gameState.player2.score;
+        document.getElementById('player1Games').textContent = gameState.player1.games;
+        document.getElementById('player2Games').textContent = gameState.player2.games;
+
+        // Format timer
+        const minutes = Math.floor(gameState.timerSeconds / 60);
+        const seconds = gameState.timerSeconds % 60;
+        document.getElementById('timerDisplay').textContent =
+            `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    } catch (error) {
+        console.error('Failed to load court data:', error);
+        // Show sponsor slideshow on error (network issues)
         showSponsorSlideshow();
-        return;
     }
-
-    // Match is active - hide slideshow and show scores
-    hideSponsorSlideshow();
-
-    const state = JSON.parse(stateData);
-
-    // Update display
-    document.getElementById('player1Name').textContent = state.player1.name;
-    document.getElementById('player2Name').textContent = state.player2.name;
-
-    // Handle doubles mode
-    const isDoubles = state.isDoubles || false;
-    const player1Name2 = document.getElementById('player1Name2');
-    const player2Name2 = document.getElementById('player2Name2');
-
-    if (isDoubles && state.player1.name2 && state.player2.name2) {
-        player1Name2.textContent = state.player1.name2;
-        player2Name2.textContent = state.player2.name2;
-        player1Name2.style.display = 'flex';
-        player2Name2.style.display = 'flex';
-    } else {
-        player1Name2.style.display = 'none';
-        player2Name2.style.display = 'none';
-    }
-
-    document.getElementById('player1Score').textContent = state.player1.score;
-    document.getElementById('player2Score').textContent = state.player2.score;
-    document.getElementById('player1Games').textContent = state.player1.games;
-    document.getElementById('player2Games').textContent = state.player2.games;
-
-    // Format timer
-    const minutes = Math.floor(state.timerSeconds / 60);
-    const seconds = state.timerSeconds % 60;
-    document.getElementById('timerDisplay').textContent =
-        `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
-function checkIfMatchActive(stateData) {
-    if (!stateData) return false;
-
+async function refreshSponsorSettings() {
     try {
-        const state = JSON.parse(stateData);
-        // Match is considered active based on the isActive flag set in admin panel
-        // If isActive is true, show scoreboard
-        // If isActive is false or undefined, show sponsor slideshow
-        return state.isActive === true;
-    } catch (e) {
-        return false;
+        // Refresh sponsor images cache
+        const images = await api.getSponsorImages();
+        cachedSponsorImages = images;
+
+        // Refresh slide duration cache
+        const settings = await api.getSponsorSettings();
+        cachedSlideDuration = settings.slideDuration * 1000; // Convert to milliseconds
+    } catch (error) {
+        console.error('Failed to refresh sponsor settings:', error);
     }
 }
 
 function getSponsorImages() {
-    const stored = localStorage.getItem(SPONSOR_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
+    return cachedSponsorImages;
 }
 
 function getSlideDuration() {
-    const duration = localStorage.getItem(DURATION_KEY);
-    return duration ? parseInt(duration) * 1000 : DEFAULT_DURATION * 1000; // Convert to milliseconds
+    return cachedSlideDuration;
 }
 
 function showSponsorSlideshow() {
@@ -205,9 +218,10 @@ function displayCurrentSlide(images) {
 
     const image = images[currentSlideIndex];
 
+    // Use /uploads/ URL instead of base64 data
     container.innerHTML = `
         <div class="sponsor-slide">
-            <img src="${image.data}" alt="${escapeHtml(image.name)}" class="sponsor-image">
+            <img src="/uploads/${image.filename}" alt="${escapeHtml(image.original_name)}" class="sponsor-image">
             <div class="sponsor-indicator">
                 <span>${currentSlideIndex + 1} / ${images.length}</span>
             </div>

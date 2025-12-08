@@ -1,5 +1,5 @@
 // Court-specific script - gets court ID from URL parameter
-const DEFAULT_PASSWORD = 'admin123';
+const api = window.BadmintonAPI;
 
 // Get court ID from URL
 const urlParams = new URLSearchParams(window.location.search);
@@ -29,33 +29,35 @@ let gameState = {
     decidingGameSwitched: false  // Track if sides switched at 11 in deciding game
 };
 
+// Debouncing variables
+let saveTimeout = null;
+let isSaving = false;
+let pendingSave = false;
+
 // Initialize app
-document.addEventListener('DOMContentLoaded', function() {
-    initializeApp();
-    loadGameState();
+document.addEventListener('DOMContentLoaded', async function() {
+    await initializeApp();
+    await loadGameState();
     updateDisplay();
     setupEventListeners();
 });
 
-function initializeApp() {
-    // Set default password if not exists
-    if (!localStorage.getItem('adminPassword')) {
-        localStorage.setItem('adminPassword', DEFAULT_PASSWORD);
-    }
+async function initializeApp() {
+    try {
+        // Display court number
+        document.getElementById('courtNumber').textContent = courtId;
 
-    // Set default court count if not exists
-    if (!localStorage.getItem('courtCount')) {
-        localStorage.setItem('courtCount', '4');
-    }
+        // Verify court is valid
+        const settings = await api.getSettings();
+        const courtCount = settings.courtCount;
 
-    // Display court number
-    document.getElementById('courtNumber').textContent = courtId;
-
-    // Verify court is valid
-    const courtCount = parseInt(localStorage.getItem('courtCount') || '4');
-    if (courtId < 1 || courtId > courtCount) {
-        alert(`Bane ${courtId} findes ikke. Omdirigerer til landingsside.`);
-        window.location.href = 'landing.html';
+        if (courtId < 1 || courtId > courtCount) {
+            alert(`Bane ${courtId} findes ikke. Omdirigerer til landingsside.`);
+            window.location.href = 'landing.html';
+        }
+    } catch (error) {
+        console.error('Failed to initialize app:', error);
+        alert('Kunne ikke indlæse bane. Tjek din forbindelse.');
     }
 }
 
@@ -314,75 +316,98 @@ function switchSides() {
     saveGameState();
 }
 
+// Debounced save function - saves max once per 2 seconds
 function saveGameState() {
-    // Save to localStorage with court-specific key
-    const key = `gameState_court${courtId}`;
+    // Clear existing timeout
+    if (saveTimeout) {
+        clearTimeout(saveTimeout);
+    }
 
-    // Auto-determine active status based on match activity
-    // Court is active if there are any scores, games won, or timer running
-    const hasActivity = gameState.player1.score > 0 ||
-                       gameState.player2.score > 0 ||
-                       gameState.player1.games > 0 ||
-                       gameState.player2.games > 0 ||
-                       gameState.timerSeconds > 0;
+    // Mark that we have a pending save
+    pendingSave = true;
 
-    const stateToSave = {
-        player1: gameState.player1,
-        player2: gameState.player2,
-        timerSeconds: gameState.timerSeconds,
-        currentCourt: courtId,
-        isActive: hasActivity,  // Auto-set based on match activity
-        isDoubles: gameState.isDoubles,  // Save doubles mode
-        gameMode: gameState.gameMode,  // Save game mode
-        decidingGameSwitched: gameState.decidingGameSwitched  // Save deciding game switch status
-    };
-    localStorage.setItem(key, JSON.stringify(stateToSave));
+    // Debounce: wait 2 seconds before saving
+    saveTimeout = setTimeout(async () => {
+        if (pendingSave && !isSaving) {
+            await performSave();
+        }
+    }, 2000);
 }
 
-function loadGameState() {
-    // Load from localStorage with court-specific key
-    const key = `gameState_court${courtId}`;
-    const saved = localStorage.getItem(key);
+// Perform the actual API save
+async function performSave() {
+    if (isSaving) {
+        // Already saving, will retry
+        pendingSave = true;
+        return;
+    }
 
-    if (saved) {
-        const loaded = JSON.parse(saved);
+    isSaving = true;
+    pendingSave = false;
+
+    try {
+        const stateToSave = {
+            player1: gameState.player1,
+            player2: gameState.player2,
+            timerSeconds: gameState.timerSeconds,
+            decidingGameSwitched: gameState.decidingGameSwitched
+        };
+
+        await api.updateGameState(courtId, stateToSave);
+    } catch (error) {
+        console.error('Failed to save game state:', error);
+        // Retry after 5 seconds on error
+        pendingSave = true;
+        setTimeout(performSave, 5000);
+    } finally {
+        isSaving = false;
+
+        // If another save was requested while we were saving, do it now
+        if (pendingSave) {
+            setTimeout(performSave, 100);
+        }
+    }
+}
+
+// Load game state from API
+async function loadGameState() {
+    try {
+        const loaded = await api.getGameState(courtId);
+
         gameState.player1 = loaded.player1;
         gameState.player2 = loaded.player2;
         gameState.timerSeconds = loaded.timerSeconds;
         gameState.currentCourt = courtId;
-        gameState.isActive = loaded.isActive;  // Load active status
-        gameState.isDoubles = loaded.isDoubles || false;  // Load doubles mode
-        gameState.gameMode = loaded.gameMode || '21';  // Load game mode, default to 21
-        gameState.decidingGameSwitched = loaded.decidingGameSwitched || false;  // Load deciding game switch status
+        gameState.isActive = loaded.isActive;
+        gameState.isDoubles = loaded.isDoubles || false;
+        gameState.gameMode = loaded.gameMode || '21';
+        gameState.decidingGameSwitched = loaded.decidingGameSwitched || false;
 
         // Ensure name2 exists for backwards compatibility
         if (!gameState.player1.name2) gameState.player1.name2 = 'Makker 1';
         if (!gameState.player2.name2) gameState.player2.name2 = 'Makker 2';
+    } catch (error) {
+        console.error('Failed to load game state:', error);
+        // Continue with default state
     }
 }
 
-function saveMatchResult(winner, loser, winnerGames, loserGames) {
-    // Save to court-specific match history
-    const key = `matchHistory_court${courtId}`;
-    let history = JSON.parse(localStorage.getItem(key) || '[]');
+// Save match result to API
+async function saveMatchResult(winner, loser, winnerGames, loserGames) {
+    try {
+        const matchData = {
+            courtId: courtId,
+            winnerName: winner,
+            loserName: loser,
+            gamesWon: `${winnerGames}-${loserGames}`,
+            duration: formatDuration(gameState.timerSeconds)
+        };
 
-    const match = {
-        date: new Date().toLocaleString(),
-        winner: winner,
-        loser: loser,
-        gamesWon: `${winnerGames}-${loserGames}`,
-        duration: formatDuration(gameState.timerSeconds),
-        court: courtId
-    };
-
-    history.unshift(match);
-
-    // Keep only last 10 matches per court
-    if (history.length > 10) {
-        history = history.slice(0, 10);
+        await api.saveMatchResult(matchData);
+    } catch (error) {
+        console.error('Failed to save match result:', error);
+        alert('Advarsel: Kampresultatet kunne ikke gemmes.');
     }
-
-    localStorage.setItem(key, JSON.stringify(history));
 }
 
 function formatDuration(seconds) {
@@ -391,3 +416,31 @@ function formatDuration(seconds) {
     return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
+// Cleanup on page unload - save immediately before leaving
+window.addEventListener('beforeunload', async function() {
+    // Cancel any pending debounced save
+    if (saveTimeout) {
+        clearTimeout(saveTimeout);
+    }
+
+    // Perform immediate save
+    if (pendingSave) {
+        // Use synchronous XHR for beforeunload (fetch won't complete in time)
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', `/api/game-states/${courtId}`, false); // false = synchronous
+        xhr.setRequestHeader('Content-Type', 'application/json');
+
+        const stateToSave = {
+            player1: gameState.player1,
+            player2: gameState.player2,
+            timerSeconds: gameState.timerSeconds,
+            decidingGameSwitched: gameState.decidingGameSwitched
+        };
+
+        try {
+            xhr.send(JSON.stringify(stateToSave));
+        } catch (e) {
+            // Ignore errors during unload
+        }
+    }
+});
