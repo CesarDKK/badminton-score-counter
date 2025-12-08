@@ -3,6 +3,8 @@ const api = window.BadmintonAPI;
 let refreshInterval = null;
 let currentEditingCourt = null;
 let allMatchesDisplayCount = 30;
+let courtTimers = {}; // Store timer values and timestamps for each court
+let timerUpdateInterval = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
@@ -128,6 +130,11 @@ async function showDashboard() {
 function startAutoRefresh() {
     loadCourtOverview();
     refreshInterval = setInterval(loadCourtOverview, 2000);
+
+    // Start timer update interval (every second)
+    if (!timerUpdateInterval) {
+        timerUpdateInterval = setInterval(updateAllTimerDisplays, 1000);
+    }
 }
 
 function stopAutoRefresh() {
@@ -135,6 +142,27 @@ function stopAutoRefresh() {
         clearInterval(refreshInterval);
         refreshInterval = null;
     }
+    if (timerUpdateInterval) {
+        clearInterval(timerUpdateInterval);
+        timerUpdateInterval = null;
+    }
+}
+
+function updateAllTimerDisplays() {
+    // Update all court timer displays based on stored values
+    Object.keys(courtTimers).forEach(courtNumber => {
+        const timerData = courtTimers[courtNumber];
+        if (timerData && timerData.isActive) {
+            const elapsed = Math.floor((Date.now() - timerData.timestamp) / 1000);
+            const currentSeconds = timerData.baseSeconds + elapsed;
+
+            // Find the timer element for this court
+            const timerElement = document.querySelector(`[data-court-timer="${courtNumber}"]`);
+            if (timerElement) {
+                timerElement.textContent = formatDuration(currentSeconds);
+            }
+        }
+    });
 }
 
 async function loadCourtOverview() {
@@ -168,6 +196,11 @@ async function createCourtCard(courtNumber) {
         const state = await api.getGameState(courtNumber);
 
         if (!state || !state.isActive) {
+            // Remove from active timers if court is inactive
+            if (courtTimers[courtNumber]) {
+                delete courtTimers[courtNumber];
+            }
+
             card.innerHTML = `
                 <div class="court-header">
                     <h3>Bane ${courtNumber}</h3>
@@ -191,6 +224,13 @@ async function createCourtCard(courtNumber) {
         const player2Display = isDoubles && state.player2.name2
             ? `${escapeHtml(state.player2.name)}<br>${escapeHtml(state.player2.name2)}`
             : escapeHtml(state.player2.name);
+
+        // Store timer data for continuous updates
+        courtTimers[courtNumber] = {
+            baseSeconds: state.timerSeconds,
+            timestamp: Date.now(),
+            isActive: isActive
+        };
 
         card.innerHTML = `
             <div class="court-header">
@@ -218,7 +258,7 @@ async function createCourtCard(courtNumber) {
                     </div>
                     <div class="meta-item">
                         <span class="meta-label">Varighed</span>
-                        <span class="meta-value">${formatDuration(state.timerSeconds)}</span>
+                        <span class="meta-value" data-court-timer="${courtNumber}">${formatDuration(state.timerSeconds)}</span>
                     </div>
                 </div>
             </div>

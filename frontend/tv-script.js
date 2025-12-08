@@ -10,12 +10,16 @@ let currentSlideIndex = 0;
 let isShowingSlideshow = false;
 let cachedSponsorImages = [];
 let cachedSlideDuration = 10000; // 10 seconds default
+let localTimerSeconds = 0;
+let timerInterval = null;
+let lastSyncedTimerSeconds = 0;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async function() {
     await initializeTVDisplay();
     loadCourtData();
     startAutoRefresh();
+    startLocalTimer();
     // Refresh sponsor settings every 30 seconds
     setInterval(refreshSponsorSettings, 30000);
 });
@@ -46,8 +50,25 @@ async function initializeTVDisplay() {
 }
 
 function startAutoRefresh() {
-    // Refresh every 1 second for real-time updates
-    refreshInterval = setInterval(loadCourtData, 1000);
+    // Refresh every 5 seconds to sync with database
+    refreshInterval = setInterval(loadCourtData, 5000);
+}
+
+function startLocalTimer() {
+    // Update timer display every second
+    timerInterval = setInterval(function() {
+        if (localTimerSeconds > 0) {
+            localTimerSeconds++;
+            updateTimerDisplay();
+        }
+    }, 1000);
+}
+
+function updateTimerDisplay() {
+    const minutes = Math.floor(localTimerSeconds / 60);
+    const seconds = localTimerSeconds % 60;
+    document.getElementById('timerDisplay').textContent =
+        `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
 async function loadCourtData() {
@@ -91,11 +112,13 @@ async function loadCourtData() {
         document.getElementById('player1Games').textContent = gameState.player1.games;
         document.getElementById('player2Games').textContent = gameState.player2.games;
 
-        // Format timer
-        const minutes = Math.floor(gameState.timerSeconds / 60);
-        const seconds = gameState.timerSeconds % 60;
-        document.getElementById('timerDisplay').textContent =
-            `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        // Sync local timer with database timer
+        // Only update if database value is significantly different (more than 2 seconds drift)
+        if (Math.abs(gameState.timerSeconds - localTimerSeconds) > 2 || lastSyncedTimerSeconds === 0) {
+            localTimerSeconds = gameState.timerSeconds;
+            lastSyncedTimerSeconds = gameState.timerSeconds;
+            updateTimerDisplay();
+        }
     } catch (error) {
         console.error('Failed to load court data:', error);
         // Show sponsor slideshow on error (network issues)
