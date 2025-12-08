@@ -66,10 +66,9 @@ function startLocalTimer() {
 }
 
 function updateTimerDisplay() {
-    const minutes = Math.floor(localTimerSeconds / 60);
-    const seconds = localTimerSeconds % 60;
-    document.getElementById('timerDisplay').textContent =
-        `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    // Timer element removed from HTML, so this function does nothing
+    // Keeping function to avoid errors in other code that calls it
+    return;
 }
 
 async function loadCourtData() {
