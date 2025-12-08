@@ -390,22 +390,251 @@ header h1 {
 }
 
 /* Responsive Design */
+
+/* Tablets and Small Laptops */
+@media (max-width: 992px) {
+    .container {
+        padding: 20px;
+    }
+
+    header h1 {
+        font-size: 2em;
+    }
+
+    .score-display {
+        font-size: 6em;
+        min-width: 150px;
+    }
+
+    .btn-score {
+        padding: 30px 60px;
+        font-size: 2.5em;
+    }
+
+    .btn-score-minus {
+        padding: 15px 30px;
+        font-size: 1.3em;
+    }
+
+    #timerDisplay {
+        font-size: 2.5em;
+    }
+
+    .game-score {
+        font-size: 1.8em;
+    }
+}
+
+/* Tablets Portrait */
 @media (max-width: 768px) {
+    body {
+        padding: 10px;
+    }
+
+    .container {
+        padding: 15px;
+        border-radius: 15px;
+    }
+
+    header {
+        flex-direction: column;
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+
+    .header-left {
+        flex-direction: column;
+        gap: 10px;
+        width: 100%;
+    }
+
+    header h1 {
+        font-size: 1.8em;
+    }
+
+    .header-controls {
+        width: 100%;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
     .score-container {
         grid-template-columns: 1fr;
+        gap: 30px;
+        margin: 20px 0;
+    }
+
+    .match-info {
+        order: -1;
+        padding: 15px;
         gap: 20px;
+    }
+
+    .player-section {
+        gap: 15px;
     }
 
     .score-display {
         font-size: 5em;
     }
 
-    header {
-        flex-direction: column;
-        gap: 20px;
+    .btn-score {
+        padding: 25px 50px;
+        font-size: 2em;
+    }
+
+    .btn-score-minus {
+        padding: 12px 25px;
+        font-size: 1.2em;
+    }
+
+    #timerDisplay {
+        font-size: 2em;
+    }
+
+    .game-score {
+        font-size: 1.5em;
+    }
+
+    .action-buttons {
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+
+    .btn-primary, .btn-secondary, .btn-mode {
+        padding: 12px 20px;
+        font-size: 1em;
+        flex: 1 1 auto;
+        min-width: 140px;
+    }
+}
+
+/* Mobile Phones */
+@media (max-width: 576px) {
+    body {
+        padding: 5px;
+    }
+
+    .container {
+        padding: 10px;
+        border-radius: 10px;
     }
 
     header h1 {
+        font-size: 1.5em;
+    }
+
+    .btn-back {
+        padding: 10px 15px;
+        font-size: 0.9em;
+    }
+
+    .player-name {
+        padding: 12px;
+        font-size: 1.1em;
+    }
+
+    .player-name-doubles {
+        padding: 12px;
+        font-size: 1.1em;
+    }
+
+    .score-display {
+        font-size: 4em;
+        min-width: 100px;
+    }
+
+    .controls {
+        gap: 10px;
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .btn-score {
+        padding: 20px 40px;
         font-size: 1.8em;
+        width: 100%;
+    }
+
+    .btn-score-minus {
+        padding: 10px 20px;
+        font-size: 1em;
+        width: 100%;
+    }
+
+    .match-info {
+        padding: 10px;
+        gap: 15px;
+    }
+
+    #timerDisplay {
+        font-size: 1.8em;
+        margin-bottom: 10px;
+    }
+
+    .btn-timer {
+        padding: 8px 16px;
+        font-size: 0.9em;
+    }
+
+    .game-score {
+        font-size: 1.3em;
+        gap: 10px;
+    }
+
+    .action-buttons {
+        flex-direction: column;
+        gap: 10px;
+        margin: 20px 0;
+    }
+
+    .btn-primary, .btn-secondary, .btn-mode {
+        width: 100%;
+        padding: 15px 20px;
+        font-size: 1em;
+    }
+
+    .history-section {
+        margin-top: 20px;
+        padding-top: 20px;
+    }
+
+    .history-item {
+        padding: 12px;
+    }
+
+    .modal-content {
+        width: 95%;
+        padding: 20px;
+        margin: 20% auto;
+    }
+}
+
+/* Very Small Phones */
+@media (max-width: 360px) {
+    header h1 {
+        font-size: 1.3em;
+    }
+
+    .score-display {
+        font-size: 3.5em;
+    }
+
+    .btn-score {
+        padding: 15px 30px;
+        font-size: 1.5em;
+    }
+
+    .player-name {
+        font-size: 1em;
+        padding: 10px;
+    }
+
+    #timerDisplay {
+        font-size: 1.5em;
+    }
+
+    .game-score {
+        font-size: 1.1em;
     }
 }
