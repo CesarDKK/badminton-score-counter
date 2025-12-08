@@ -13,6 +13,7 @@ let cachedSlideDuration = 10000; // 10 seconds default
 let localTimerSeconds = 0;
 let timerInterval = null;
 let lastSyncedTimerSeconds = 0;
+let isMatchCurrentlyActive = false;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async function() {
@@ -57,7 +58,7 @@ function startAutoRefresh() {
 function startLocalTimer() {
     // Update timer display every second
     timerInterval = setInterval(function() {
-        if (localTimerSeconds > 0) {
+        if (isMatchCurrentlyActive) {
             localTimerSeconds++;
             updateTimerDisplay();
         }
@@ -78,9 +79,11 @@ async function loadCourtData() {
 
         // Check if match is active
         const isMatchActive = gameState.isActive === true;
+        isMatchCurrentlyActive = isMatchActive;
 
         if (!isMatchActive) {
             // No active match - show sponsor slideshow
+            localTimerSeconds = 0;
             showSponsorSlideshow();
             return;
         }
