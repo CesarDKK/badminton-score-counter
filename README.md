@@ -55,6 +55,290 @@ docker-compose up -d
 3. Click on "Admin" and log in with default password: `admin123`
 4. **IMPORTANT**: Change the admin password immediately in Admin > Settings
 
+## Complete Beginner's Guide to Docker Deployment
+
+### What is Docker?
+
+Docker is a tool that packages your application with everything it needs (code, database, web server) into "containers" - think of them as lightweight virtual machines. This means the app will work the same way on any computer.
+
+### Step 1: Install Docker Desktop
+
+**Windows:**
+1. Download Docker Desktop from: https://www.docker.com/products/docker-desktop
+2. Run the installer (DockerDesktop.exe)
+3. Follow the installation wizard
+4. Restart your computer when prompted
+5. Open Docker Desktop - you'll see a whale icon in your system tray when it's running
+6. Wait for "Docker Desktop is running" message
+
+**Mac:**
+1. Download Docker Desktop for Mac from: https://www.docker.com/products/docker-desktop
+2. Open the .dmg file and drag Docker to Applications
+3. Launch Docker from Applications
+4. Grant permissions when asked
+5. Wait for Docker to start (whale icon in menu bar)
+
+**Linux:**
+- Follow instructions at: https://docs.docker.com/engine/install/
+
+### Step 2: Verify Docker is Working
+
+Open a terminal/command prompt and run:
+```bash
+docker --version
+docker-compose --version
+```
+
+You should see version numbers. If you get "command not found", Docker isn't installed correctly.
+
+### Step 3: Get the Code
+
+**Option A: If you have Git installed**
+```bash
+# Open terminal/command prompt and run:
+git clone https://github.com/CesarDKK/badminton-score-counter.git
+cd badminton-score-counter
+```
+
+**Option B: Without Git**
+1. Go to: https://github.com/CesarDKK/badminton-score-counter
+2. Click green "Code" button → "Download ZIP"
+3. Extract the ZIP file
+4. Open terminal/command prompt
+5. Navigate to the extracted folder:
+   ```bash
+   # Windows example:
+   cd C:\Users\YourName\Downloads\badminton-score-counter
+
+   # Mac/Linux example:
+   cd ~/Downloads/badminton-score-counter
+   ```
+
+### Step 4: Configure Environment Variables
+
+**Windows:**
+```bash
+copy .env.example .env
+notepad .env
+```
+
+**Mac/Linux:**
+```bash
+cp .env.example .env
+nano .env
+```
+
+Edit the file and change these values to something secure:
+```env
+MYSQL_ROOT_PASSWORD=MySecurePassword123!
+MYSQL_PASSWORD=AnotherSecurePass456!
+JWT_SECRET=ThisIsMyVeryLongSecretKeyForJWTTokens32CharsMin
+```
+
+**Important:**
+- Use strong passwords (no simple passwords like "password123")
+- JWT_SECRET must be at least 32 characters long
+- Save the file and close the editor
+
+### Step 5: Start the Application
+
+In the terminal (make sure you're in the badminton-score-counter folder):
+
+```bash
+docker-compose up -d
+```
+
+**What this command does:**
+- `docker-compose` - Uses the docker-compose.yml file to start multiple containers
+- `up` - Start the services
+- `-d` - Run in background (detached mode)
+
+**First time running:** This will take 5-10 minutes because Docker needs to:
+1. Download the base images (MySQL, Node.js, Nginx)
+2. Build your custom containers
+3. Start the database and initialize tables
+4. Start the backend and frontend
+
+You'll see lots of text scrolling - this is normal!
+
+### Step 6: Check if Everything is Running
+
+```bash
+docker-compose ps
+```
+
+You should see 3 services running:
+- `badminton-app-mysql-1` (database)
+- `badminton-app-backend-1` (API server)
+- `badminton-app-frontend-1` (web server)
+
+All should show "Up" status.
+
+### Step 7: Access Your Application
+
+Open your web browser and go to:
+```
+http://localhost:8080
+```
+
+You should see the Badminton Counter landing page!
+
+### Step 8: Initial Setup
+
+1. Select how many courts you want (e.g., 4)
+2. Click "Admin Panel" button
+3. Login with password: `admin123`
+4. **IMMEDIATELY** go to Admin → Change Password and set a new password
+5. Start using the app!
+
+### Common Docker Commands
+
+**View running containers:**
+```bash
+docker-compose ps
+```
+
+**View logs (helpful for troubleshooting):**
+```bash
+# All services
+docker-compose logs
+
+# Just backend
+docker-compose logs backend
+
+# Just database
+docker-compose logs mysql
+
+# Follow logs in real-time (Ctrl+C to stop)
+docker-compose logs -f
+```
+
+**Stop the application:**
+```bash
+docker-compose down
+```
+
+**Start again:**
+```bash
+docker-compose up -d
+```
+
+**Restart after making code changes:**
+```bash
+docker-compose down
+docker-compose up -d --build
+```
+
+**Remove everything (including data - careful!):**
+```bash
+docker-compose down -v
+```
+
+### Troubleshooting for Beginners
+
+**Problem: "Port already in use" error**
+
+Another program is using port 8080 or 3000.
+
+Solution:
+```bash
+# Windows - check what's using the port
+netstat -ano | findstr :8080
+
+# Mac/Linux
+lsof -i :8080
+
+# Kill the process or change the port in docker-compose.yml
+```
+
+**Problem: "Cannot connect to Docker daemon"**
+
+Docker Desktop isn't running.
+
+Solution:
+- Open Docker Desktop application
+- Wait for it to fully start (green light in bottom left)
+- Try the command again
+
+**Problem: Application shows error or blank page**
+
+Database might still be initializing.
+
+Solution:
+```bash
+# Check backend logs
+docker-compose logs backend
+
+# Wait 30-60 seconds for MySQL to initialize
+# Look for "ready for connections" in MySQL logs
+docker-compose logs mysql
+```
+
+**Problem: Changes not appearing**
+
+Browser cache issue.
+
+Solution:
+- Hard refresh: Ctrl+Shift+R (Windows) or Cmd+Shift+R (Mac)
+- Or open in incognito/private window
+
+**Problem: Upload images failing**
+
+Permissions issue on uploads folder.
+
+Solution:
+```bash
+# Windows (in PowerShell as Administrator)
+docker exec badminton-app-backend-1 mkdir -p /app/uploads
+docker exec badminton-app-backend-1 chmod 777 /app/uploads
+
+# Mac/Linux
+docker exec badminton-app-backend-1 mkdir -p /app/uploads
+docker exec badminton-app-backend-1 chmod 777 /app/uploads
+```
+
+### Where is My Data Stored?
+
+Your data is stored in Docker volumes (persistent storage):
+- **Database:** All scores, courts, history
+- **Uploads:** Sponsor images
+
+Even if you stop the containers, your data is safe. It only gets deleted if you run `docker-compose down -v` (the `-v` flag removes volumes).
+
+### Accessing from Other Devices (Same Network)
+
+Want to access from tablets/phones on the same WiFi?
+
+1. Find your computer's IP address:
+   ```bash
+   # Windows
+   ipconfig
+   # Look for "IPv4 Address" (usually 192.168.x.x)
+
+   # Mac/Linux
+   ifconfig
+   # Look for inet address (usually 192.168.x.x)
+   ```
+
+2. On other devices, open browser and go to:
+   ```
+   http://192.168.x.x:8080
+   ```
+   (Replace x.x with your actual IP numbers)
+
+3. Make sure your firewall allows connections on port 8080
+
+### Next Steps
+
+Once everything is running:
+- Test scoring on a court
+- Check the TV display updates in real-time
+- Try uploading sponsor images
+- Explore the admin panel
+- View match history
+
+If you run into issues, check the logs with `docker-compose logs` and look for error messages.
+
 ## Architecture
 
 ### Three-Tier System
