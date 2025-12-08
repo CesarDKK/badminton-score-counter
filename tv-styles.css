@@ -210,3 +210,131 @@ body {
         padding: 20px 0;
     }
 }
+
+/* Sponsor Slideshow Styles */
+.sponsor-slideshow {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    position: relative;
+    overflow: hidden;
+}
+
+.sponsor-slide {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    animation: fadeIn 0.8s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.sponsor-image {
+    max-width: 90%;
+    max-height: 90%;
+    object-fit: contain;
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+    border: 5px solid rgba(233, 69, 96, 0.3);
+}
+
+.sponsor-indicator {
+    position: absolute;
+    bottom: 40px;
+    right: 40px;
+    background: rgba(15, 52, 96, 0.9);
+    padding: 15px 30px;
+    border-radius: 10px;
+    font-size: 1.8em;
+    font-weight: bold;
+    color: #e94560;
+    border: 2px solid #533483;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+}
+
+.no-sponsors-message {
+    text-align: center;
+    padding: 60px;
+    background: rgba(15, 52, 96, 0.5);
+    border-radius: 30px;
+    border: 3px solid #533483;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.no-sponsors-message h2 {
+    font-size: 5em;
+    color: #e94560;
+    margin-bottom: 20px;
+    text-shadow: 0 0 20px rgba(233, 69, 96, 0.6);
+}
+
+.no-sponsors-message p {
+    font-size: 3em;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+/* Responsive slideshow */
+@media (max-width: 1200px) {
+    .sponsor-image {
+        max-width: 85%;
+        max-height: 85%;
+    }
+
+    .sponsor-indicator {
+        font-size: 1.5em;
+        bottom: 30px;
+        right: 30px;
+        padding: 12px 25px;
+    }
+
+    .no-sponsors-message h2 {
+        font-size: 4em;
+    }
+
+    .no-sponsors-message p {
+        font-size: 2.5em;
+    }
+}
+
+@media (max-width: 768px) {
+    .sponsor-image {
+        max-width: 95%;
+        max-height: 95%;
+    }
+
+    .sponsor-indicator {
+        font-size: 1.2em;
+        bottom: 20px;
+        right: 20px;
+        padding: 10px 20px;
+    }
+
+    .no-sponsors-message {
+        padding: 40px;
+    }
+
+    .no-sponsors-message h2 {
+        font-size: 3em;
+    }
+
+    .no-sponsors-message p {
+        font-size: 2em;
+    }
+}

@@ -1,17 +1,17 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="da">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Badminton Score Counter - Court</title>
+    <title>Badminton Pointtæller - Bane</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
         <header>
             <div class="header-left">
-                <a href="landing.html" class="btn-back">← Back</a>
-                <h1>Court <span id="courtNumber">1</span></h1>
+                <a href="landing.html" class="btn-back">← Tilbage</a>
+                <h1>Bane <span id="courtNumber">1</span></h1>
             </div>
             <div class="header-controls">
                 <a href="admin.html" class="btn-secondary" style="text-decoration: none;">Admin</a>
@@ -22,8 +22,8 @@
         <div class="score-container">
             <div class="player-section">
                 <div class="player-names-container">
-                    <input type="text" id="player1Name" class="player-name" placeholder="Player 1">
-                    <input type="text" id="player1Name2" class="player-name player-name-doubles" placeholder="Partner 1" style="display: none;">
+                    <input type="text" id="player1Name" class="player-name" placeholder="Spiller 1">
+                    <input type="text" id="player1Name2" class="player-name player-name-doubles" placeholder="Makker 1" style="display: none;">
                 </div>
                 <div class="score-display" id="player1Score">0</div>
                 <div class="controls">
@@ -41,7 +41,7 @@
                 </div>
                 <div class="game-info">
                     <div class="games">
-                        <span>Games Won</span>
+                        <span>Sæt Vundet</span>
                         <div class="game-score">
                             <span id="player1Games">0</span>
                             <span>-</span>
@@ -53,8 +53,8 @@
 
             <div class="player-section">
                 <div class="player-names-container">
-                    <input type="text" id="player2Name" class="player-name" placeholder="Player 2">
-                    <input type="text" id="player2Name2" class="player-name player-name-doubles" placeholder="Partner 2" style="display: none;">
+                    <input type="text" id="player2Name" class="player-name" placeholder="Spiller 2">
+                    <input type="text" id="player2Name2" class="player-name player-name-doubles" placeholder="Makker 2" style="display: none;">
                 </div>
                 <div class="score-display" id="player2Score">0</div>
                 <div class="controls">
@@ -66,9 +66,9 @@
 
         <!-- Action Buttons -->
         <div class="action-buttons">
-            <button id="switchSidesBtn" class="btn-primary">Switch Sides</button>
-            <button id="doublesToggle" class="btn-mode">Switch to Doubles</button>
-            <button id="newMatchBtn" class="btn-secondary">Reset Court</button>
+            <button id="switchSidesBtn" class="btn-primary">Skift Sider</button>
+            <button id="doublesToggle" class="btn-mode">Skift til Double</button>
+            <button id="newMatchBtn" class="btn-secondary">Nulstil Bane</button>
         </div>
     </div>
 

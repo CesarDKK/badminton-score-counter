@@ -8,14 +8,14 @@ const courtId = parseInt(urlParams.get('id')) || 1;
 // Game state - specific to this court only
 let gameState = {
     player1: {
-        name: 'Player 1',
-        name2: 'Partner 1',
+        name: 'Spiller 1',
+        name2: 'Makker 1',
         score: 0,
         games: 0
     },
     player2: {
-        name: 'Player 2',
-        name2: 'Partner 2',
+        name: 'Spiller 2',
+        name2: 'Makker 2',
         score: 0,
         games: 0
     },
@@ -54,7 +54,7 @@ function initializeApp() {
     // Verify court is valid
     const courtCount = parseInt(localStorage.getItem('courtCount') || '4');
     if (courtId < 1 || courtId > courtCount) {
-        alert(`Court ${courtId} does not exist. Redirecting to landing page.`);
+        alert(`Bane ${courtId} findes ikke. Omdirigerer til landingsside.`);
         window.location.href = 'landing.html';
     }
 }
@@ -62,22 +62,22 @@ function initializeApp() {
 function setupEventListeners() {
     // Player name changes
     document.getElementById('player1Name').addEventListener('change', function(e) {
-        gameState.player1.name = e.target.value || 'Player 1';
+        gameState.player1.name = e.target.value || 'Spiller 1';
         saveGameState();
     });
 
     document.getElementById('player1Name2').addEventListener('change', function(e) {
-        gameState.player1.name2 = e.target.value || 'Partner 1';
+        gameState.player1.name2 = e.target.value || 'Makker 1';
         saveGameState();
     });
 
     document.getElementById('player2Name').addEventListener('change', function(e) {
-        gameState.player2.name = e.target.value || 'Player 2';
+        gameState.player2.name = e.target.value || 'Spiller 2';
         saveGameState();
     });
 
     document.getElementById('player2Name2').addEventListener('change', function(e) {
-        gameState.player2.name2 = e.target.value || 'Partner 2';
+        gameState.player2.name2 = e.target.value || 'Makker 2';
         saveGameState();
     });
 
@@ -116,7 +116,7 @@ function addPoint(player) {
     if (isDecidingGame && scoredTo11 && !gameState.decidingGameSwitched) {
         gameState.decidingGameSwitched = true;
         switchSides();
-        alert('Score has reached 11 in the deciding game. Players have switched sides!');
+        alert('Point har nået 11 i afgørende sæt. Spillere har skiftet side!');
     }
 
     checkGameWin();
@@ -151,14 +151,14 @@ function checkGameWin() {
         if (gameState.player1.games === 2) {
             saveMatchResult(gameState.player1.name, gameState.player2.name,
                            gameState.player1.games, gameState.player2.games);
-            alert(`${gameState.player1.name} wins the match ${gameState.player1.games}-${gameState.player2.games}!`);
-            if (confirm('Start a new match?')) {
+            alert(`${gameState.player1.name} vinder kampen ${gameState.player1.games}-${gameState.player2.games}!`);
+            if (confirm('Start en ny kamp?')) {
                 startNewMatch();
             }
             return;
         }
 
-        if (!confirm(`${gameState.player1.name} wins this game! Start new game?`)) {
+        if (!confirm(`${gameState.player1.name} vinder dette sæt! Start nyt sæt?`)) {
             return;
         }
         resetScores();
@@ -172,14 +172,14 @@ function checkGameWin() {
         if (gameState.player2.games === 2) {
             saveMatchResult(gameState.player2.name, gameState.player1.name,
                            gameState.player2.games, gameState.player1.games);
-            alert(`${gameState.player2.name} wins the match ${gameState.player2.games}-${gameState.player1.games}!`);
-            if (confirm('Start a new match?')) {
+            alert(`${gameState.player2.name} vinder kampen ${gameState.player2.games}-${gameState.player1.games}!`);
+            if (confirm('Start en ny kamp?')) {
                 startNewMatch();
             }
             return;
         }
 
-        if (!confirm(`${gameState.player2.name} wins this game! Start new game?`)) {
+        if (!confirm(`${gameState.player2.name} vinder dette sæt! Start nyt sæt?`)) {
             return;
         }
         resetScores();
@@ -197,13 +197,13 @@ function resetScores() {
 }
 
 function startNewGame() {
-    if (confirm('Start a new game? Current scores will be reset.')) {
+    if (confirm('Start et nyt sæt? Nuværende point vil blive nulstillet.')) {
         resetScores();
     }
 }
 
 function startNewMatch() {
-    if (confirm('Start a new match? All scores and games will be reset.')) {
+    if (confirm('Start en ny kamp? Alle point og sæt vil blive nulstillet.')) {
         gameState.player1.score = 0;
         gameState.player2.score = 0;
         gameState.player1.games = 0;
@@ -254,9 +254,9 @@ function updateTimerDisplay() {
 
 function updateDisplay() {
     document.getElementById('player1Name').value = gameState.player1.name;
-    document.getElementById('player1Name2').value = gameState.player1.name2 || 'Partner 1';
+    document.getElementById('player1Name2').value = gameState.player1.name2 || 'Makker 1';
     document.getElementById('player2Name').value = gameState.player2.name;
-    document.getElementById('player2Name2').value = gameState.player2.name2 || 'Partner 2';
+    document.getElementById('player2Name2').value = gameState.player2.name2 || 'Makker 2';
     document.getElementById('player1Score').textContent = gameState.player1.score;
     document.getElementById('player2Score').textContent = gameState.player2.score;
     document.getElementById('player1Games').textContent = gameState.player1.games;
@@ -266,8 +266,8 @@ function updateDisplay() {
 }
 
 function toggleDoubles() {
-    const newMode = gameState.isDoubles ? 'singles' : 'doubles';
-    if (!confirm(`Are you sure you want to switch to ${newMode} mode?`)) {
+    const newMode = gameState.isDoubles ? 'single' : 'double';
+    if (!confirm(`Er du sikker på at du vil skifte til ${newMode} tilstand?`)) {
         return;
     }
     gameState.isDoubles = !gameState.isDoubles;
@@ -283,11 +283,11 @@ function updateDoublesDisplay() {
     if (gameState.isDoubles) {
         player1Name2.style.display = 'block';
         player2Name2.style.display = 'block';
-        toggleBtn.textContent = 'Switch to Singles';
+        toggleBtn.textContent = 'Skift til Single';
     } else {
         player1Name2.style.display = 'none';
         player2Name2.style.display = 'none';
-        toggleBtn.textContent = 'Switch to Doubles';
+        toggleBtn.textContent = 'Skift til Double';
     }
 }
 
@@ -318,16 +318,20 @@ function saveGameState() {
     // Save to localStorage with court-specific key
     const key = `gameState_court${courtId}`;
 
-    // Check if there's an existing isActive flag and preserve it
-    const existing = localStorage.getItem(key);
-    const isActive = existing ? JSON.parse(existing).isActive : undefined;
+    // Auto-determine active status based on match activity
+    // Court is active if there are any scores, games won, or timer running
+    const hasActivity = gameState.player1.score > 0 ||
+                       gameState.player2.score > 0 ||
+                       gameState.player1.games > 0 ||
+                       gameState.player2.games > 0 ||
+                       gameState.timerSeconds > 0;
 
     const stateToSave = {
         player1: gameState.player1,
         player2: gameState.player2,
         timerSeconds: gameState.timerSeconds,
         currentCourt: courtId,
-        isActive: isActive,  // Preserve admin-set active status
+        isActive: hasActivity,  // Auto-set based on match activity
         isDoubles: gameState.isDoubles,  // Save doubles mode
         gameMode: gameState.gameMode,  // Save game mode
         decidingGameSwitched: gameState.decidingGameSwitched  // Save deciding game switch status
@@ -352,8 +356,8 @@ function loadGameState() {
         gameState.decidingGameSwitched = loaded.decidingGameSwitched || false;  // Load deciding game switch status
 
         // Ensure name2 exists for backwards compatibility
-        if (!gameState.player1.name2) gameState.player1.name2 = 'Partner 1';
-        if (!gameState.player2.name2) gameState.player2.name2 = 'Partner 2';
+        if (!gameState.player1.name2) gameState.player1.name2 = 'Makker 1';
+        if (!gameState.player2.name2) gameState.player2.name2 = 'Makker 2';
     }
 }
 

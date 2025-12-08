@@ -22,6 +22,11 @@ COPY admin.html /usr/share/nginx/html/
 COPY admin-styles.css /usr/share/nginx/html/
 COPY admin-script.js /usr/share/nginx/html/
 
+# Copy sponsor files
+COPY sponsor.html /usr/share/nginx/html/
+COPY sponsor-styles.css /usr/share/nginx/html/
+COPY sponsor-script.js /usr/share/nginx/html/
+
 # Expose port 80
 EXPOSE 80
 

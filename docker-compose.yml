@@ -21,3 +21,6 @@ services:
       - ./admin.html:/usr/share/nginx/html/admin.html:ro
       - ./admin-styles.css:/usr/share/nginx/html/admin-styles.css:ro
       - ./admin-script.js:/usr/share/nginx/html/admin-script.js:ro
+      - ./sponsor.html:/usr/share/nginx/html/sponsor.html:ro
+      - ./sponsor-styles.css:/usr/share/nginx/html/sponsor-styles.css:ro
+      - ./sponsor-script.js:/usr/share/nginx/html/sponsor-script.js:ro

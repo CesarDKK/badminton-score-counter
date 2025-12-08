@@ -97,7 +97,7 @@ function handleLogin() {
         sessionStorage.setItem('adminLoggedIn', 'true');
         showDashboard();
     } else {
-        alert('Incorrect password!');
+        alert('Forkert adgangskode!');
         document.getElementById('adminPassword').value = '';
     }
 }
@@ -158,14 +158,14 @@ function createCourtCard(courtNumber) {
     if (!stateData) {
         card.innerHTML = `
             <div class="court-header">
-                <h3>Court ${courtNumber}</h3>
-                <span class="court-status inactive">Inactive</span>
+                <h3>Bane ${courtNumber}</h3>
+                <span class="court-status inactive">Inaktiv</span>
             </div>
             <div class="court-empty">
-                No active match
+                Ingen aktiv kamp
             </div>
             <div class="court-actions">
-                <button class="btn-edit" onclick="openEditModal(${courtNumber})">Edit Court</button>
+                <button class="btn-edit" onclick="openEditModal(${courtNumber})">Redigér Bane</button>
             </div>
         `;
         return card;
@@ -188,9 +188,9 @@ function createCourtCard(courtNumber) {
 
     card.innerHTML = `
         <div class="court-header">
-            <h3>Court ${courtNumber}${isDoubles ? ' <span style="font-size: 0.7em; color: #e94560;">(Doubles)</span>' : ''}</h3>
+            <h3>Bane ${courtNumber}${isDoubles ? ' <span style="font-size: 0.7em; color: #e94560;">(Double)</span>' : ''}</h3>
             <span class="court-status ${isActive ? 'active' : 'inactive'}">
-                ${isActive ? 'Active' : 'Inactive'}
+                ${isActive ? 'Aktiv' : 'Inaktiv'}
             </span>
         </div>
         <div class="court-match">
@@ -207,17 +207,17 @@ function createCourtCard(courtNumber) {
             </div>
             <div class="court-meta">
                 <div class="meta-item">
-                    <span class="meta-label">Games Won</span>
+                    <span class="meta-label">Sæt Vundet</span>
                     <span class="meta-value">${state.player1.games} - ${state.player2.games}</span>
                 </div>
                 <div class="meta-item">
-                    <span class="meta-label">Duration</span>
+                    <span class="meta-label">Varighed</span>
                     <span class="meta-value">${formatDuration(state.timerSeconds)}</span>
                 </div>
             </div>
         </div>
         <div class="court-actions">
-            <button class="btn-edit" onclick="openEditModal(${courtNumber})">Edit Court</button>
+            <button class="btn-edit" onclick="openEditModal(${courtNumber})">Redigér Bane</button>
         </div>
     `;
 
@@ -240,20 +240,20 @@ function saveCourtCount() {
     const courtCount = parseInt(document.getElementById('courtCount').value);
 
     if (courtCount < 1 || courtCount > 20) {
-        alert('Court count must be between 1 and 20!');
+        alert('Antal baner skal være mellem 1 og 20!');
         return;
     }
 
     const oldCount = parseInt(localStorage.getItem('courtCount') || '4');
 
     if (courtCount < oldCount) {
-        if (!confirm(`This will reduce courts from ${oldCount} to ${courtCount}. Court data for courts ${courtCount + 1}-${oldCount} will remain in storage. Continue?`)) {
+        if (!confirm(`Dette vil reducere baner fra ${oldCount} til ${courtCount}. Banedata for bane ${courtCount + 1}-${oldCount} vil forblive i lagring. Fortsæt?`)) {
             return;
         }
     }
 
     localStorage.setItem('courtCount', courtCount.toString());
-    alert('Court count updated successfully!');
+    alert('Antal baner opdateret!');
     loadCourtOverview();
 }
 
@@ -261,21 +261,21 @@ function changePassword() {
     const newPassword = document.getElementById('newPassword').value;
 
     if (!newPassword || newPassword.length < 4) {
-        alert('Password must be at least 4 characters long!');
+        alert('Adgangskode skal være mindst 4 tegn lang!');
         return;
     }
 
     localStorage.setItem('adminPassword', newPassword);
     document.getElementById('newPassword').value = '';
-    alert('Password changed successfully! Please remember your new password.');
+    alert('Adgangskode ændret! Husk din nye adgangskode.');
 }
 
 function clearAllData() {
-    if (!confirm('Are you sure you want to clear ALL court data? This cannot be undone!')) {
+    if (!confirm('Er du sikker på at du vil rydde ALLE banedata? Dette kan ikke fortrydes!')) {
         return;
     }
 
-    if (!confirm('This will delete all scores, match history, and game states for ALL courts. Are you absolutely sure?')) {
+    if (!confirm('Dette vil slette alle point, kamphistorik og spiltilstande for ALLE baner. Er du helt sikker?')) {
         return;
     }
 
@@ -287,7 +287,7 @@ function clearAllData() {
         localStorage.removeItem(`matchHistory_court${i}`);
     }
 
-    alert('All court data has been cleared!');
+    alert('Alle banedata er blevet ryddet!');
     loadCourtOverview();
 }
 
@@ -302,16 +302,16 @@ function openEditModal(courtNumber) {
         const state = JSON.parse(stateData);
         document.getElementById('editPlayer1Name').value = state.player1.name;
         document.getElementById('editPlayer2Name').value = state.player2.name;
-        document.getElementById('editPlayer1Name2').value = state.player1.name2 || 'Partner 1';
-        document.getElementById('editPlayer2Name2').value = state.player2.name2 || 'Partner 2';
+        document.getElementById('editPlayer1Name2').value = state.player1.name2 || 'Makker 1';
+        document.getElementById('editPlayer2Name2').value = state.player2.name2 || 'Makker 2';
         document.getElementById('editCourtActive').checked = state.isActive || false;
         document.getElementById('editDoublesMode').checked = state.isDoubles || false;
         document.getElementById('editGameMode').checked = (state.gameMode === '15');
     } else {
-        document.getElementById('editPlayer1Name').value = 'Player 1';
-        document.getElementById('editPlayer2Name').value = 'Player 2';
-        document.getElementById('editPlayer1Name2').value = 'Partner 1';
-        document.getElementById('editPlayer2Name2').value = 'Partner 2';
+        document.getElementById('editPlayer1Name').value = 'Spiller 1';
+        document.getElementById('editPlayer2Name').value = 'Spiller 2';
+        document.getElementById('editPlayer1Name2').value = 'Makker 1';
+        document.getElementById('editPlayer2Name2').value = 'Makker 2';
         document.getElementById('editCourtActive').checked = false;
         document.getElementById('editDoublesMode').checked = false;
         document.getElementById('editGameMode').checked = false;
@@ -329,10 +329,10 @@ function saveCourtChanges() {
     const key = `gameState_court${currentEditingCourt}`;
     const stateData = localStorage.getItem(key);
 
-    const newPlayer1Name = document.getElementById('editPlayer1Name').value.trim() || 'Player 1';
-    const newPlayer2Name = document.getElementById('editPlayer2Name').value.trim() || 'Player 2';
-    const newPlayer1Name2 = document.getElementById('editPlayer1Name2').value.trim() || 'Partner 1';
-    const newPlayer2Name2 = document.getElementById('editPlayer2Name2').value.trim() || 'Partner 2';
+    const newPlayer1Name = document.getElementById('editPlayer1Name').value.trim() || 'Spiller 1';
+    const newPlayer2Name = document.getElementById('editPlayer2Name').value.trim() || 'Spiller 2';
+    const newPlayer1Name2 = document.getElementById('editPlayer1Name2').value.trim() || 'Makker 1';
+    const newPlayer2Name2 = document.getElementById('editPlayer2Name2').value.trim() || 'Makker 2';
     const isActive = document.getElementById('editCourtActive').checked;
     const isDoubles = document.getElementById('editDoublesMode').checked;
     const gameMode = document.getElementById('editGameMode').checked ? '15' : '21';
@@ -369,7 +369,7 @@ function saveCourtChanges() {
 function resetCourtConfirm() {
     if (!currentEditingCourt) return;
 
-    if (!confirm(`Are you sure you want to reset Court ${currentEditingCourt}? This will clear all scores and timer data for this court.`)) {
+    if (!confirm(`Er du sikker på at du vil nulstille Bane ${currentEditingCourt}? Dette vil rydde alle point og tidtagerdata for denne bane.`)) {
         return;
     }
 
@@ -412,7 +412,7 @@ function loadAllMatches() {
     const container = document.getElementById('allMatchesContainer');
 
     if (allMatches.length === 0) {
-        container.innerHTML = '<div style="color: #999; text-align: center; padding: 40px; font-size: 1.2em;">No match history available</div>';
+        container.innerHTML = '<div style="color: #999; text-align: center; padding: 40px; font-size: 1.2em;">Ingen kamphistorik tilgængelig</div>';
         return;
     }
 
@@ -423,10 +423,10 @@ function loadAllMatches() {
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div>
                     <div style="font-weight: bold; font-size: 1.1em; color: #e94560; margin-bottom: 5px;">
-                        ${escapeHtml(match.winner)} defeated ${escapeHtml(match.loser)}
+                        ${escapeHtml(match.winner)} besejrede ${escapeHtml(match.loser)}
                     </div>
                     <div style="color: #aaa; font-size: 0.9em;">
-                        Games Won: ${match.gamesWon} | Duration: ${match.duration} | Court ${match.courtNumber}
+                        Sæt Vundet: ${match.gamesWon} | Varighed: ${match.duration} | Bane ${match.courtNumber}
                     </div>
                 </div>
                 <div style="color: #999; font-size: 0.85em;">
@@ -442,7 +442,7 @@ function loadAllMatches() {
     if (allMatches.length > allMatchesDisplayCount) {
         const showMoreBtn = `
             <button onclick="showMoreMatches()" style="width: 100%; padding: 15px; background: #533483; color: white; border: none; border-radius: 10px; cursor: pointer; font-size: 1em; font-weight: bold; margin-top: 10px;">
-                Show More Matches (${allMatches.length - allMatchesDisplayCount} more)
+                Vis Flere Kampe (${allMatches.length - allMatchesDisplayCount} flere)
             </button>
         `;
         container.innerHTML += showMoreBtn;
@@ -463,10 +463,10 @@ function toggleMoreMatches(courtNumber) {
 
     if (moreMatchesDiv.style.display === 'none') {
         moreMatchesDiv.style.display = 'block';
-        btnText.textContent = 'Show Less';
+        btnText.textContent = 'Vis Færre';
     } else {
         moreMatchesDiv.style.display = 'none';
-        btnText.textContent = `Show More Matches (${history.length - 1})`;
+        btnText.textContent = `Vis Flere Kampe (${history.length - 1})`;
     }
 }
 

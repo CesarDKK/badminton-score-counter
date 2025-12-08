@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sponsor Administration - Badminton Pointtæller</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="admin-styles.css">
+    <link rel="stylesheet" href="sponsor-styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Login Screen -->
+        <div id="loginScreen" class="admin-section">
+            <header>
+                <h1>Sponsor Administration</h1>
+            </header>
+            <div class="login-container">
+                <div class="login-box">
+                    <h2>Login Påkrævet</h2>
+                    <input type="password" id="adminPassword" placeholder="Indtast admin adgangskode">
+                    <button id="loginBtn" class="btn-primary">Log Ind</button>
+                    <div class="back-link">
+                        <a href="admin.html">← Tilbage til Admin</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sponsor Dashboard -->
+        <div id="sponsorDashboard" style="display: none;">
+            <header>
+                <h1>Sponsor Administration</h1>
+                <div class="header-controls">
+                    <button id="logoutBtn" class="btn-secondary">Log Ud</button>
+                    <a href="admin.html" class="btn-secondary" style="text-decoration: none; display: inline-block;">Tilbage til Admin</a>
+                </div>
+            </header>
+
+            <!-- Upload Section -->
+            <div class="upload-section">
+                <h2>Upload Sponsor Billeder</h2>
+                <div class="upload-container">
+                    <div class="upload-box">
+                        <input type="file" id="imageUpload" accept="image/*" multiple style="display: none;">
+                        <button id="uploadBtn" class="btn-primary">Vælg Billeder</button>
+                        <p class="upload-hint">Anbefalet opløsning: 1920x1080 (FullHD)</p>
+                        <div id="uploadPreview" class="upload-preview"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Slideshow Settings Section -->
+            <div class="slideshow-settings-section">
+                <h2>TV Slideshow Indstillinger</h2>
+                <div class="settings-container">
+                    <div class="setting-item">
+                        <label for="slideDuration">Varighed pr. billede (sekunder):</label>
+                        <div class="duration-control">
+                            <input type="number" id="slideDuration" min="3" max="60" value="10">
+                            <button id="saveDurationBtn" class="btn-primary">Gem</button>
+                        </div>
+                        <p class="setting-hint">Hver sponsor billede vises i denne varighed på TV-skærmene når der ikke er aktive kampe</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gallery Section -->
+            <div class="gallery-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>Sponsor Galleri</h2>
+                    <button id="clearAllBtn" class="btn-danger">Slet Alle Billeder</button>
+                </div>
+                <div id="galleryContainer" class="gallery-grid"></div>
+                <div id="emptyGallery" class="empty-gallery" style="display: none;">
+                    <p>Ingen sponsor billeder uploadet endnu</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="sponsor-script.js"></script>
+</body>
+</html>

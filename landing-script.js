@@ -16,7 +16,7 @@ function loadCourtButtons() {
         button.className = 'court-button';
         button.innerHTML = `
             <div class="court-number">${i}</div>
-            <div class="court-label">Court</div>
+            <div class="court-label">Bane</div>
         `;
         courtButtons.appendChild(button);
     }
@@ -35,7 +35,7 @@ function loadTVButtons() {
         button.target = '_blank'; // Open in new window/tab
         button.innerHTML = `
             <div class="tv-icon">📺</div>
-            <div class="tv-label">Court ${i} TV</div>
+            <div class="tv-label">Bane ${i} TV</div>
         `;
         tvButtons.appendChild(button);
     }

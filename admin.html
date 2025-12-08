@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="da">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Panel - Badminton Score Counter</title>
+    <title>Admin Panel - Badminton Pointtæller</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="admin-styles.css">
 </head>
@@ -16,11 +16,11 @@
             </header>
             <div class="login-container">
                 <div class="login-box">
-                    <h2>Login Required</h2>
-                    <input type="password" id="adminPassword" placeholder="Enter admin password">
-                    <button id="loginBtn" class="btn-primary">Login</button>
+                    <h2>Login Påkrævet</h2>
+                    <input type="password" id="adminPassword" placeholder="Indtast admin adgangskode">
+                    <button id="loginBtn" class="btn-primary">Log Ind</button>
                     <div class="back-link">
-                        <a href="landing.html">← Back to Court Selection</a>
+                        <a href="landing.html">← Tilbage til Banevalg</a>
                     </div>
                 </div>
             </div>
@@ -29,25 +29,26 @@
         <!-- Admin Dashboard -->
         <div id="adminDashboard" style="display: none;">
             <header>
-                <h1>Admin Dashboard</h1>
+                <h1>Admin Oversigt</h1>
                 <div class="header-controls">
-                    <button id="matchHistoryBtn" class="btn-primary" style="margin-right: 10px;">Match History</button>
-                    <button id="logoutBtn" class="btn-secondary">Logout</button>
-                    <a href="landing.html" class="btn-secondary" style="text-decoration: none; display: inline-block;">Back to Courts</a>
+                    <button id="matchHistoryBtn" class="btn-primary" style="margin-right: 10px;">Kamphistorik</button>
+                    <a href="sponsor.html" class="btn-primary" style="text-decoration: none; display: inline-block; margin-right: 10px;">Sponsorer</a>
+                    <button id="logoutBtn" class="btn-secondary">Log Ud</button>
+                    <a href="landing.html" class="btn-secondary" style="text-decoration: none; display: inline-block;">Tilbage til Baner</a>
                 </div>
             </header>
 
             <!-- Court Overview Section -->
             <div id="courtOverviewSection" class="overview-section">
-                <h2>Court Overview</h2>
+                <h2>Baneoversigt</h2>
                 <div id="courtOverview" class="court-grid"></div>
             </div>
 
             <!-- Match History Section -->
             <div id="matchHistorySection" class="overview-section" style="display: none;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h2>Match History - All Courts</h2>
-                    <button id="backToOverviewBtn" class="btn-secondary">Back to Overview</button>
+                    <h2>Kamphistorik - Alle Baner</h2>
+                    <button id="backToOverviewBtn" class="btn-secondary">Tilbage til Oversigt</button>
                 </div>
                 <div id="allMatchesContainer"></div>
             </div>
@@ -56,45 +57,45 @@
             <div id="editCourtModal" class="modal">
                 <div class="modal-content">
                     <span class="close-modal">&times;</span>
-                    <h2>Edit Court <span id="editCourtNumber"></span></h2>
+                    <h2>Redigér Bane <span id="editCourtNumber"></span></h2>
                     <div class="edit-form">
                         <div class="active-toggle" style="margin-bottom: 20px;">
                             <label class="toggle-label">
                                 <input type="checkbox" id="editDoublesMode">
-                                <span class="toggle-text">Doubles Mode</span>
+                                <span class="toggle-text">Double-Tilstand</span>
                             </label>
                         </div>
 
                         <div class="active-toggle" style="margin-bottom: 20px;">
                             <label class="toggle-label">
                                 <input type="checkbox" id="editGameMode">
-                                <span class="toggle-text">Game Mode: 15/21 (unchecked = 21/30)</span>
+                                <span class="toggle-text">Spiltilstand: 15/21 (ikke markeret = 21/30)</span>
                             </label>
                         </div>
 
-                        <label>Player 1 Name:</label>
-                        <input type="text" id="editPlayer1Name" placeholder="Player 1">
+                        <label>Spiller 1 Navn:</label>
+                        <input type="text" id="editPlayer1Name" placeholder="Spiller 1">
 
-                        <label id="editPlayer1Name2Label" style="display: none;">Player 1 Partner:</label>
-                        <input type="text" id="editPlayer1Name2" placeholder="Partner 1" style="display: none;">
+                        <label id="editPlayer1Name2Label" style="display: none;">Spiller 1 Makker:</label>
+                        <input type="text" id="editPlayer1Name2" placeholder="Makker 1" style="display: none;">
 
-                        <label>Player 2 Name:</label>
-                        <input type="text" id="editPlayer2Name" placeholder="Player 2">
+                        <label>Spiller 2 Navn:</label>
+                        <input type="text" id="editPlayer2Name" placeholder="Spiller 2">
 
-                        <label id="editPlayer2Name2Label" style="display: none;">Player 2 Partner:</label>
-                        <input type="text" id="editPlayer2Name2" placeholder="Partner 2" style="display: none;">
+                        <label id="editPlayer2Name2Label" style="display: none;">Spiller 2 Makker:</label>
+                        <input type="text" id="editPlayer2Name2" placeholder="Makker 2" style="display: none;">
 
                         <div class="active-toggle">
                             <label class="toggle-label">
                                 <input type="checkbox" id="editCourtActive">
-                                <span class="toggle-text">Mark as Active (Court in use)</span>
+                                <span class="toggle-text">Markér som Aktiv (Bane i brug)</span>
                             </label>
-                            <p class="toggle-hint">Enable this to indicate the court is occupied or reserved, even before scoring begins.</p>
+                            <p class="toggle-hint">Aktivér dette for at angive at banen er optaget eller reserveret, selv før pointtælling begynder.</p>
                         </div>
 
                         <div class="modal-actions">
-                            <button id="saveCourtChanges" class="btn-primary">Save Changes</button>
-                            <button id="resetCourt" class="btn-danger">Reset Court</button>
+                            <button id="saveCourtChanges" class="btn-primary">Gem Ændringer</button>
+                            <button id="resetCourt" class="btn-danger">Nulstil Bane</button>
                         </div>
                     </div>
                 </div>
@@ -103,23 +104,23 @@
             <!-- Settings Section -->
             <div class="settings-section">
                 <div class="setting-card">
-                    <h3>Court Management</h3>
-                    <label>Number of Courts:</label>
+                    <h3>Banestyring</h3>
+                    <label>Antal Baner:</label>
                     <input type="number" id="courtCount" min="1" max="20" value="4">
-                    <button id="saveCourtBtn" class="btn-primary">Save Changes</button>
+                    <button id="saveCourtBtn" class="btn-primary">Gem Ændringer</button>
                 </div>
 
                 <div class="setting-card">
-                    <h3>Security</h3>
-                    <label>New Admin Password:</label>
-                    <input type="password" id="newPassword" placeholder="Enter new password">
-                    <button id="changePasswordBtn" class="btn-primary">Change Password</button>
+                    <h3>Sikkerhed</h3>
+                    <label>Ny Admin Adgangskode:</label>
+                    <input type="password" id="newPassword" placeholder="Indtast ny adgangskode">
+                    <button id="changePasswordBtn" class="btn-primary">Skift Adgangskode</button>
                 </div>
 
                 <div class="setting-card">
-                    <h3>Data Management</h3>
-                    <button id="clearAllDataBtn" class="btn-danger">Clear All Court Data</button>
-                    <p class="warning-text">Warning: This will reset all scores and match history for all courts!</p>
+                    <h3>Datastyring</h3>
+                    <button id="clearAllDataBtn" class="btn-danger">Ryd Alle Banedata</button>
+                    <p class="warning-text">Advarsel: Dette vil nulstille alle point og kamphistorik for alle baner!</p>
                 </div>
             </div>
 
