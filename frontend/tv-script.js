@@ -79,11 +79,22 @@ async function loadCourtData() {
 
         // Check if match is active
         const isMatchActive = gameState.isActive === true;
-        isMatchCurrentlyActive = isMatchActive;
+
+        // Check if there's actual game activity (scoring has started)
+        const hasGameActivity =
+            gameState.player1.score > 0 ||
+            gameState.player2.score > 0 ||
+            gameState.player1.games > 0 ||
+            gameState.player2.games > 0 ||
+            gameState.timerSeconds > 0;
+
+        // Timer should only run when there's actual game activity
+        isMatchCurrentlyActive = isMatchActive && hasGameActivity;
 
         if (!isMatchActive) {
             // No active match - show sponsor slideshow
             localTimerSeconds = 0;
+            isMatchCurrentlyActive = false;
             showSponsorSlideshow();
             return;
         }
