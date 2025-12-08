@@ -57,10 +57,13 @@ function startAutoRefresh() {
 
 function startLocalTimer() {
     // Update timer display every second
+    console.log('[TV Timer] Starting local timer interval');
     timerInterval = setInterval(function() {
+        console.log('[TV Timer] Tick - isActive:', isMatchCurrentlyActive, 'seconds:', localTimerSeconds);
         if (isMatchCurrentlyActive) {
             localTimerSeconds++;
             updateTimerDisplay();
+            console.log('[TV Timer] Incremented to:', localTimerSeconds);
         }
     }, 1000);
 }
@@ -90,6 +93,7 @@ async function loadCourtData() {
 
         // Timer should only run when there's actual game activity
         isMatchCurrentlyActive = isMatchActive && hasGameActivity;
+        console.log('[TV Timer] Match status - isActive:', isMatchActive, 'hasActivity:', hasGameActivity, 'shouldRun:', isMatchCurrentlyActive);
 
         if (!isMatchActive) {
             // No active match - show sponsor slideshow
