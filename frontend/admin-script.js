@@ -85,7 +85,7 @@ async function handleLogin() {
     const password = document.getElementById('adminPassword').value;
 
     if (!password) {
-        alert('Indtast venligst en adgangskode!');
+        showMessage('Fejl', 'Indtast venligst en adgangskode!');
         return;
     }
 
@@ -94,7 +94,7 @@ async function handleLogin() {
         showDashboard();
     } catch (error) {
         console.error('Login failed:', error);
-        alert('Forkert adgangskode!');
+        showMessage('Fejl', 'Forkert adgangskode!');
         document.getElementById('adminPassword').value = '';
     }
 }
@@ -123,7 +123,7 @@ async function showDashboard() {
         startAutoRefresh();
     } catch (error) {
         console.error('Failed to load dashboard:', error);
-        alert('Kunne ikke indlæse dashboard data. Tjek din forbindelse.');
+        showMessage('Fejl', 'Kunne ikke indlæse dashboard data. Tjek din forbindelse.');
     }
 }
 
@@ -303,7 +303,7 @@ async function saveCourtCount() {
     const courtCount = parseInt(document.getElementById('courtCount').value);
 
     if (courtCount < 1 || courtCount > 20) {
-        alert('Antal baner skal være mellem 1 og 20!');
+        showMessage('Fejl', 'Antal baner skal være mellem 1 og 20!');
         return;
     }
 
@@ -312,17 +312,36 @@ async function saveCourtCount() {
         const oldCount = settings.courtCount;
 
         if (courtCount < oldCount) {
-            if (!confirm(`Dette vil reducere baner fra ${oldCount} til ${courtCount}. Banedata for bane ${courtCount + 1}-${oldCount} vil forblive i lagring. Fortsæt?`)) {
-                return;
-            }
+            showMessage(
+                'Bekræft Reduktion',
+                `Dette vil reducere baner fra ${oldCount} til ${courtCount}. Banedata for bane ${courtCount + 1}-${oldCount} vil forblive i lagring. Fortsæt?`,
+                [
+                    {
+                        text: 'Ja, Fortsæt',
+                        callback: async () => {
+                            try {
+                                await api.updateCourtCount(courtCount);
+                                showMessage('Succes', 'Antal baner opdateret!');
+                                await loadCourtOverview();
+                            } catch (error) {
+                                console.error('Failed to save court count:', error);
+                                showMessage('Fejl', 'Kunne ikke gemme antal baner. Tjek din forbindelse.');
+                            }
+                        },
+                        style: 'primary'
+                    },
+                    { text: 'Annuller', callback: null, style: 'secondary' }
+                ]
+            );
+            return;
         }
 
         await api.updateCourtCount(courtCount);
-        alert('Antal baner opdateret!');
+        showMessage('Succes', 'Antal baner opdateret!');
         await loadCourtOverview();
     } catch (error) {
         console.error('Failed to save court count:', error);
-        alert('Kunne ikke gemme antal baner. Tjek din forbindelse.');
+        showMessage('Fejl', 'Kunne ikke gemme antal baner. Tjek din forbindelse.');
     }
 }
 
@@ -330,48 +349,66 @@ async function changePassword() {
     const newPassword = document.getElementById('newPassword').value;
 
     if (!newPassword || newPassword.length < 4) {
-        alert('Adgangskode skal være mindst 4 tegn lang!');
+        showMessage('Fejl', 'Adgangskode skal være mindst 4 tegn lang!');
         return;
     }
 
     try {
         await api.updatePassword(newPassword);
         document.getElementById('newPassword').value = '';
-        alert('Adgangskode ændret! Husk din nye adgangskode.');
+        showMessage('Succes', 'Adgangskode ændret! Husk din nye adgangskode.');
     } catch (error) {
         console.error('Failed to change password:', error);
-        alert('Kunne ikke ændre adgangskode. Tjek din forbindelse.');
+        showMessage('Fejl', 'Kunne ikke ændre adgangskode. Tjek din forbindelse.');
     }
 }
 
 async function clearAllData() {
-    if (!confirm('Er du sikker på at du vil rydde ALLE banedata? Dette kan ikke fortrydes!')) {
-        return;
-    }
+    showMessage(
+        'ADVARSEL',
+        'Er du sikker på at du vil rydde ALLE banedata? Dette kan ikke fortrydes!',
+        [
+            {
+                text: 'Ja, Fortsæt',
+                callback: () => {
+                    showMessage(
+                        'SIDSTE ADVARSEL',
+                        'Dette vil slette alle point, kamphistorik og spiltilstande for ALLE baner. Er du helt sikker?',
+                        [
+                            {
+                                text: 'Ja, Slet Alt',
+                                callback: async () => {
+                                    try {
+                                        const settings = await api.getSettings();
+                                        const courtCount = settings.courtCount;
 
-    if (!confirm('Dette vil slette alle point, kamphistorik og spiltilstande for ALLE baner. Er du helt sikker?')) {
-        return;
-    }
+                                        // Reset all game states
+                                        for (let i = 1; i <= courtCount; i++) {
+                                            try {
+                                                await api.resetGameState(i);
+                                            } catch (error) {
+                                                console.error(`Failed to reset court ${i}:`, error);
+                                            }
+                                        }
 
-    try {
-        const settings = await api.getSettings();
-        const courtCount = settings.courtCount;
-
-        // Reset all game states
-        for (let i = 1; i <= courtCount; i++) {
-            try {
-                await api.resetGameState(i);
-            } catch (error) {
-                console.error(`Failed to reset court ${i}:`, error);
-            }
-        }
-
-        alert('Alle banedata er blevet ryddet!');
-        await loadCourtOverview();
-    } catch (error) {
-        console.error('Failed to clear all data:', error);
-        alert('Kunne ikke rydde alle data. Tjek din forbindelse.');
-    }
+                                        showMessage('Succes', 'Alle banedata er blevet ryddet!');
+                                        await loadCourtOverview();
+                                    } catch (error) {
+                                        console.error('Failed to clear all data:', error);
+                                        showMessage('Fejl', 'Kunne ikke rydde alle data. Tjek din forbindelse.');
+                                    }
+                                },
+                                style: 'danger'
+                            },
+                            { text: 'Annuller', callback: null, style: 'secondary' }
+                        ]
+                    );
+                },
+                style: 'danger'
+            },
+            { text: 'Annuller', callback: null, style: 'secondary' }
+        ]
+    );
 }
 
 async function openEditModal(courtNumber) {
@@ -407,7 +444,7 @@ async function openEditModal(courtNumber) {
         document.getElementById('editCourtModal').style.display = 'block';
     } catch (error) {
         console.error(`Failed to load court ${courtNumber} for editing:`, error);
-        alert('Kunne ikke indlæse banedata. Tjek din forbindelse.');
+        showMessage('Fejl', 'Kunne ikke indlæse banedata. Tjek din forbindelse.');
     }
 }
 
@@ -476,27 +513,36 @@ async function saveCourtChanges() {
         await loadCourtOverview();
     } catch (error) {
         console.error('[DEBUG] Failed to save court changes:', error);
-        alert('Kunne ikke gemme ændringer. Tjek din forbindelse.');
+        showMessage('Fejl', 'Kunne ikke gemme ændringer. Tjek din forbindelse.');
     }
 }
 
 async function resetCourtConfirm() {
     if (!currentEditingCourt) return;
 
-    if (!confirm(`Er du sikker på at du vil nulstille Bane ${currentEditingCourt}? Dette vil rydde alle point og tidtagerdata for denne bane.`)) {
-        return;
-    }
+    showMessage(
+        'Bekræft Nulstilling',
+        `Er du sikker på at du vil nulstille Bane ${currentEditingCourt}? Dette vil rydde alle point og tidtagerdata for denne bane.`,
+        [
+            {
+                text: 'Ja, Nulstil',
+                callback: async () => {
+                    try {
+                        await api.resetGameState(currentEditingCourt);
 
-    try {
-        await api.resetGameState(currentEditingCourt);
-
-        document.getElementById('editCourtModal').style.display = 'none';
-        currentEditingCourt = null;
-        await loadCourtOverview();
-    } catch (error) {
-        console.error('Failed to reset court:', error);
-        alert('Kunne ikke nulstille bane. Tjek din forbindelse.');
-    }
+                        document.getElementById('editCourtModal').style.display = 'none';
+                        currentEditingCourt = null;
+                        await loadCourtOverview();
+                    } catch (error) {
+                        console.error('Failed to reset court:', error);
+                        showMessage('Fejl', 'Kunne ikke nulstille bane. Tjek din forbindelse.');
+                    }
+                },
+                style: 'danger'
+            },
+            { text: 'Annuller', callback: null, style: 'secondary' }
+        ]
+    );
 }
 
 async function showMatchHistory() {
@@ -566,6 +612,46 @@ async function loadAllMatches() {
 function showMoreMatches() {
     allMatchesDisplayCount += 30;
     loadAllMatches();
+}
+
+// Message overlay functions (replaces alert/confirm dialogs)
+function showMessage(title, text, buttons = [{ text: 'OK', callback: null, style: 'primary' }]) {
+    const overlay = document.getElementById('messageOverlay');
+    const titleElement = document.getElementById('messageTitle');
+    const textElement = document.getElementById('messageText');
+    const buttonsContainer = document.getElementById('messageButtons');
+
+    titleElement.textContent = title;
+    textElement.textContent = text;
+
+    // Clear existing buttons
+    buttonsContainer.innerHTML = '';
+
+    // Add buttons
+    buttons.forEach(button => {
+        const btn = document.createElement('button');
+        btn.textContent = button.text;
+        btn.className = button.style === 'secondary' ? 'btn-secondary' : (button.style === 'danger' ? 'btn-danger' : 'btn-primary');
+        btn.style.fontSize = '1.5em';
+        btn.style.padding = '15px 40px';
+        btn.style.cursor = 'pointer';
+
+        btn.onclick = () => {
+            hideMessage();
+            if (button.callback) {
+                button.callback();
+            }
+        };
+
+        buttonsContainer.appendChild(btn);
+    });
+
+    overlay.style.display = 'flex';
+}
+
+function hideMessage() {
+    const overlay = document.getElementById('messageOverlay');
+    overlay.style.display = 'none';
 }
 
 // Cleanup on page unload

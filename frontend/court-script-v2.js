@@ -59,12 +59,15 @@ async function initializeApp() {
         const courtCount = settings.courtCount;
 
         if (courtId < 1 || courtId > courtCount) {
-            alert(`Bane ${courtId} findes ikke. Omdirigerer til landingsside.`);
-            window.location.href = 'landing.html';
+            showMessage(
+                'Fejl',
+                `Bane ${courtId} findes ikke. Omdirigerer til landingsside.`,
+                [{ text: 'OK', callback: () => window.location.href = 'landing.html', style: 'primary' }]
+            );
         }
     } catch (error) {
         console.error('Failed to initialize app:', error);
-        alert('Kunne ikke indlæse bane. Tjek din forbindelse.');
+        showMessage('Fejl', 'Kunne ikke indlæse bane. Tjek din forbindelse.');
     }
 }
 
@@ -131,7 +134,7 @@ function addPoint(player) {
     if (isDecidingGame && scoredTo11 && !gameState.decidingGameSwitched) {
         gameState.decidingGameSwitched = true;
         switchSides();
-        alert('Point har nået 11 i afgørende sæt. Spillere har skiftet side!');
+        showMessage('Skift Sider!', 'Point har nået 11 i afgørende sæt. Spillere har skiftet side!');
     }
 
     checkGameWin();
@@ -166,17 +169,27 @@ function checkGameWin() {
 
         // Check if player won the match (2 games)
         if (gameState.player1.games === 2) {
+            // Stop the timer
+            if (gameState.timerRunning) {
+                clearInterval(gameState.timerInterval);
+                gameState.timerRunning = false;
+                document.getElementById('startTimer').textContent = 'Start';
+            }
+
             saveMatchResult(gameState.player1.name, gameState.player2.name,
                            gameState.player1.games, gameState.player2.games);
-            alert(`${gameState.player1.name} vinder kampen ${gameState.player1.games}-${gameState.player2.games}!`);
-            if (confirm('Start en ny kamp?')) {
-                startNewMatch();
-            }
+            showMessage(
+                'Kamp Vundet!',
+                `${gameState.player1.name} vinder kampen ${gameState.player1.games}-${gameState.player2.games}!`,
+                [
+                    { text: 'OK', callback: null, style: 'primary' }
+                ]
+            );
             return;
         }
 
         // Set won but not match - trigger 2-minute break for 21/30 mode
-        alert(`${gameState.player1.name} vinder dette sæt!`);
+        showMessage('Sæt Vundet!', `${gameState.player1.name} vinder dette sæt!`);
         if (gameState.gameMode === '21') {
             // Start 2-minute rest break with callback to reset and switch
             startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', () => {
@@ -196,17 +209,27 @@ function checkGameWin() {
 
         // Check if player won the match (2 games)
         if (gameState.player2.games === 2) {
+            // Stop the timer
+            if (gameState.timerRunning) {
+                clearInterval(gameState.timerInterval);
+                gameState.timerRunning = false;
+                document.getElementById('startTimer').textContent = 'Start';
+            }
+
             saveMatchResult(gameState.player2.name, gameState.player1.name,
                            gameState.player2.games, gameState.player1.games);
-            alert(`${gameState.player2.name} vinder kampen ${gameState.player2.games}-${gameState.player1.games}!`);
-            if (confirm('Start en ny kamp?')) {
-                startNewMatch();
-            }
+            showMessage(
+                'Kamp Vundet!',
+                `${gameState.player2.name} vinder kampen ${gameState.player2.games}-${gameState.player1.games}!`,
+                [
+                    { text: 'OK', callback: null, style: 'primary' }
+                ]
+            );
             return;
         }
 
         // Set won but not match - trigger 2-minute break for 21/30 mode
-        alert(`${gameState.player2.name} vinder dette sæt!`);
+        showMessage('Sæt Vundet!', `${gameState.player2.name} vinder dette sæt!`);
         if (gameState.gameMode === '21') {
             // Start 2-minute rest break with callback to reset and switch
             startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', () => {
@@ -231,23 +254,39 @@ function resetScores() {
 }
 
 function startNewGame() {
-    if (confirm('Start et nyt sæt? Nuværende point vil blive nulstillet.')) {
-        resetScores();
-    }
+    showMessage(
+        'Start Nyt Sæt?',
+        'Nuværende point vil blive nulstillet.',
+        [
+            { text: 'Ja, Start', callback: () => resetScores(), style: 'primary' },
+            { text: 'Annuller', callback: null, style: 'secondary' }
+        ]
+    );
 }
 
 function startNewMatch() {
-    if (confirm('Start en ny kamp? Alle point og sæt vil blive nulstillet.')) {
-        gameState.player1.score = 0;
-        gameState.player2.score = 0;
-        gameState.player1.games = 0;
-        gameState.player2.games = 0;
-        gameState.setScoresHistory = [];
-        gameState.restBreakTaken = false;
-        resetTimer();
-        updateDisplay();
-        saveGameState();
-    }
+    showMessage(
+        'Start Ny Kamp?',
+        'Alle point og sæt vil blive nulstillet.',
+        [
+            {
+                text: 'Ja, Start',
+                callback: () => {
+                    gameState.player1.score = 0;
+                    gameState.player2.score = 0;
+                    gameState.player1.games = 0;
+                    gameState.player2.games = 0;
+                    gameState.setScoresHistory = [];
+                    gameState.restBreakTaken = false;
+                    resetTimer();
+                    updateDisplay();
+                    saveGameState();
+                },
+                style: 'primary'
+            },
+            { text: 'Annuller', callback: null, style: 'secondary' }
+        ]
+    );
 }
 
 function toggleTimer() {
@@ -304,12 +343,22 @@ function updateDisplay() {
 
 function toggleDoubles() {
     const newMode = gameState.isDoubles ? 'single' : 'double';
-    if (!confirm(`Er du sikker på at du vil skifte til ${newMode} tilstand?`)) {
-        return;
-    }
-    gameState.isDoubles = !gameState.isDoubles;
-    updateDoublesDisplay();
-    saveGameState();
+    showMessage(
+        'Skift Tilstand?',
+        `Er du sikker på at du vil skifte til ${newMode} tilstand?`,
+        [
+            {
+                text: 'Ja, Skift',
+                callback: () => {
+                    gameState.isDoubles = !gameState.isDoubles;
+                    updateDoublesDisplay();
+                    saveGameState();
+                },
+                style: 'primary'
+            },
+            { text: 'Annuller', callback: null, style: 'secondary' }
+        ]
+    );
 }
 
 function updateDoublesDisplay() {
@@ -445,7 +494,7 @@ async function saveMatchResult(winner, loser, winnerGames, loserGames) {
         await api.saveMatchResult(matchData);
     } catch (error) {
         console.error('Failed to save match result:', error);
-        alert('Advarsel: Kampresultatet kunne ikke gemmes.');
+        showMessage('Advarsel', 'Kampresultatet kunne ikke gemmes.');
     }
 }
 
@@ -534,6 +583,46 @@ function checkRestBreak() {
             startRestBreak();
         }
     }
+}
+
+// Message overlay functions (replaces alert/confirm dialogs)
+function showMessage(title, text, buttons = [{ text: 'OK', callback: null, style: 'primary' }]) {
+    const overlay = document.getElementById('messageOverlay');
+    const titleElement = document.getElementById('messageTitle');
+    const textElement = document.getElementById('messageText');
+    const buttonsContainer = document.getElementById('messageButtons');
+
+    titleElement.textContent = title;
+    textElement.textContent = text;
+
+    // Clear existing buttons
+    buttonsContainer.innerHTML = '';
+
+    // Add buttons
+    buttons.forEach(button => {
+        const btn = document.createElement('button');
+        btn.textContent = button.text;
+        btn.className = button.style === 'secondary' ? 'btn-secondary' : 'btn-primary';
+        btn.style.fontSize = '1.5em';
+        btn.style.padding = '15px 40px';
+        btn.style.cursor = 'pointer';
+
+        btn.onclick = () => {
+            hideMessage();
+            if (button.callback) {
+                button.callback();
+            }
+        };
+
+        buttonsContainer.appendChild(btn);
+    });
+
+    overlay.style.display = 'flex';
+}
+
+function hideMessage() {
+    const overlay = document.getElementById('messageOverlay');
+    overlay.style.display = 'none';
 }
 
 // Cleanup on page unload - save immediately before leaving

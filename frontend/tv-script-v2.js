@@ -51,7 +51,7 @@ async function initializeTVDisplay() {
 }
 
 function startAutoRefresh() {
-    // Refresh every 1 second for faster sync with court page
+    // Refresh every 1 second for fast updates
     refreshInterval = setInterval(loadCourtData, 1000);
 }
 
@@ -90,8 +90,10 @@ async function loadCourtData() {
         // Timer should only run when there's actual game activity
         isMatchCurrentlyActive = isMatchActive && hasGameActivity;
 
+        // Show sponsors if court is not active (based on isActive flag)
+        // When admin deactivates the court, sponsors will show
         if (!isMatchActive) {
-            // No active match - show sponsor slideshow
+            // Court not active - show sponsor slideshow
             localTimerSeconds = 0;
             isMatchCurrentlyActive = false;
             showSponsorSlideshow();
