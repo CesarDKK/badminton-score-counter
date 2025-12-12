@@ -19,7 +19,8 @@ router.get('/:courtId', async (req, res, next) => {
         const gameState = await queryOne(
             `SELECT player1_name, player1_name2, player1_score, player1_games,
                     player2_name, player2_name2, player2_score, player2_games,
-                    timer_seconds, deciding_game_switched
+                    timer_seconds, deciding_game_switched,
+                    rest_break_active, rest_break_seconds_left, rest_break_title
              FROM game_states WHERE court_id = ?`,
             [court.id]
         );
@@ -31,6 +32,9 @@ router.get('/:courtId', async (req, res, next) => {
                 player2: { name: 'Spiller 2', name2: 'Makker 2', score: 0, games: 0 },
                 timerSeconds: 0,
                 decidingGameSwitched: false,
+                restBreakActive: false,
+                restBreakSecondsLeft: 0,
+                restBreakTitle: '',
                 isActive: !!court.is_active,
                 isDoubles: !!court.is_doubles,
                 gameMode: court.game_mode
@@ -53,6 +57,9 @@ router.get('/:courtId', async (req, res, next) => {
             },
             timerSeconds: gameState.timer_seconds,
             decidingGameSwitched: !!gameState.deciding_game_switched,
+            restBreakActive: !!gameState.rest_break_active,
+            restBreakSecondsLeft: gameState.rest_break_seconds_left || 0,
+            restBreakTitle: gameState.rest_break_title || '',
             isActive: !!court.is_active,
             isDoubles: !!court.is_doubles,
             gameMode: court.game_mode
@@ -66,7 +73,7 @@ router.get('/:courtId', async (req, res, next) => {
 router.put('/:courtId', async (req, res, next) => {
     try {
         const { courtId } = req.params;
-        const { player1, player2, timerSeconds, decidingGameSwitched } = req.body;
+        const { player1, player2, timerSeconds, decidingGameSwitched, restBreakActive, restBreakSecondsLeft, restBreakTitle } = req.body;
 
         // Check if we should skip auto-updating active status (for admin edits)
         const skipAutoActive = req.query.skipAutoActive === 'true';
@@ -88,8 +95,9 @@ router.put('/:courtId', async (req, res, next) => {
             `INSERT INTO game_states (
                 court_id, player1_name, player1_name2, player1_score, player1_games,
                 player2_name, player2_name2, player2_score, player2_games,
-                timer_seconds, deciding_game_switched
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                timer_seconds, deciding_game_switched,
+                rest_break_active, rest_break_seconds_left, rest_break_title
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 player1_name = VALUES(player1_name),
                 player1_name2 = VALUES(player1_name2),
@@ -100,7 +108,10 @@ router.put('/:courtId', async (req, res, next) => {
                 player2_score = VALUES(player2_score),
                 player2_games = VALUES(player2_games),
                 timer_seconds = VALUES(timer_seconds),
-                deciding_game_switched = VALUES(deciding_game_switched)`,
+                deciding_game_switched = VALUES(deciding_game_switched),
+                rest_break_active = VALUES(rest_break_active),
+                rest_break_seconds_left = VALUES(rest_break_seconds_left),
+                rest_break_title = VALUES(rest_break_title)`,
             [
                 court.id,  // Use actual database id, not court number
                 player1.name || 'Spiller 1',
@@ -112,7 +123,10 @@ router.put('/:courtId', async (req, res, next) => {
                 player2.score || 0,
                 player2.games || 0,
                 timerSeconds || 0,
-                decidingGameSwitched || false
+                decidingGameSwitched || false,
+                restBreakActive || false,
+                restBreakSecondsLeft || 0,
+                restBreakTitle || ''
             ]
         );
 

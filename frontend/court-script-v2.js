@@ -27,7 +27,13 @@ let gameState = {
     isDoubles: false,
     gameMode: '21',  // '21' for 21/30, '15' for 15/21
     decidingGameSwitched: false,  // Track if sides switched at 11 in deciding game
-    setScoresHistory: []  // Store scores from each completed set
+    setScoresHistory: [],  // Store scores from each completed set
+    restBreakTaken: false,  // Track if rest break at 11 points has been taken this set
+    restBreakActive: false,  // Track if rest break is currently active
+    restBreakInterval: null,  // Interval for rest break countdown
+    restBreakCallback: null,  // Callback to execute when rest break ends
+    restBreakSecondsLeft: 0,  // Seconds remaining in rest break
+    restBreakTitle: ''  // Title to display during rest break
 };
 
 // Debouncing variables
@@ -91,6 +97,9 @@ function setupEventListeners() {
     document.getElementById('switchSidesBtn').addEventListener('click', switchSides);
     document.getElementById('newMatchBtn').addEventListener('click', startNewMatch);
     document.getElementById('doublesToggle').addEventListener('click', toggleDoubles);
+
+    // Rest break skip button
+    document.getElementById('skipRestBreak').addEventListener('click', endRestBreak);
 }
 
 function addPoint(player) {
@@ -111,6 +120,9 @@ function addPoint(player) {
     if (isFirstPoint) {
         startTimer();
     }
+
+    // Check for rest break at 11 points
+    checkRestBreak();
 
     // Check for side switch at 11 points in deciding game (when games are 1-1)
     const isDecidingGame = gameState.player1.games === 1 && gameState.player2.games === 1;
@@ -163,13 +175,20 @@ function checkGameWin() {
             return;
         }
 
-        if (!confirm(`${gameState.player1.name} vinder dette sæt! Start nyt sæt?`)) {
-            return;
+        // Set won but not match - trigger 2-minute break for 21/30 mode
+        alert(`${gameState.player1.name} vinder dette sæt!`);
+        if (gameState.gameMode === '21') {
+            // Start 2-minute rest break with callback to reset and switch
+            startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', () => {
+                resetScores();
+                gameState.decidingGameSwitched = false;
+                switchSides();
+            });
+        } else {
+            resetScores();
+            gameState.decidingGameSwitched = false;
+            switchSides();
         }
-        resetScores();
-        gameState.decidingGameSwitched = false;  // Reset for next game
-        // Automatically switch sides after each game
-        switchSides();
     } else if ((p2Score >= winScore && p2Score - p1Score >= 2) || p2Score === maxScore) {
         gameState.player2.games++;
         // Save the set score
@@ -186,19 +205,27 @@ function checkGameWin() {
             return;
         }
 
-        if (!confirm(`${gameState.player2.name} vinder dette sæt! Start nyt sæt?`)) {
-            return;
+        // Set won but not match - trigger 2-minute break for 21/30 mode
+        alert(`${gameState.player2.name} vinder dette sæt!`);
+        if (gameState.gameMode === '21') {
+            // Start 2-minute rest break with callback to reset and switch
+            startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', () => {
+                resetScores();
+                gameState.decidingGameSwitched = false;
+                switchSides();
+            });
+        } else {
+            resetScores();
+            gameState.decidingGameSwitched = false;
+            switchSides();
         }
-        resetScores();
-        gameState.decidingGameSwitched = false;  // Reset for next game
-        // Automatically switch sides after each game
-        switchSides();
     }
 }
 
 function resetScores() {
     gameState.player1.score = 0;
     gameState.player2.score = 0;
+    gameState.restBreakTaken = false;  // Reset rest break flag for new set
     updateDisplay();
     saveGameState();
 }
@@ -216,6 +243,7 @@ function startNewMatch() {
         gameState.player1.games = 0;
         gameState.player2.games = 0;
         gameState.setScoresHistory = [];
+        gameState.restBreakTaken = false;
         resetTimer();
         updateDisplay();
         saveGameState();
@@ -323,7 +351,7 @@ function switchSides() {
     saveGameState();
 }
 
-// Debounced save function - saves max once per 2 seconds
+// Debounced save function - saves max once per 0.5 seconds
 function saveGameState() {
     // Clear existing timeout
     if (saveTimeout) {
@@ -333,12 +361,12 @@ function saveGameState() {
     // Mark that we have a pending save
     pendingSave = true;
 
-    // Debounce: wait 2 seconds before saving
+    // Debounce: wait 0.5 seconds before saving (faster sync with TV/Admin)
     saveTimeout = setTimeout(async () => {
         if (pendingSave && !isSaving) {
             await performSave();
         }
-    }, 2000);
+    }, 500);
 }
 
 // Perform the actual API save
@@ -357,7 +385,10 @@ async function performSave() {
             player1: gameState.player1,
             player2: gameState.player2,
             timerSeconds: gameState.timerSeconds,
-            decidingGameSwitched: gameState.decidingGameSwitched
+            decidingGameSwitched: gameState.decidingGameSwitched,
+            restBreakActive: gameState.restBreakActive,
+            restBreakSecondsLeft: gameState.restBreakSecondsLeft,
+            restBreakTitle: gameState.restBreakTitle
         };
 
         await api.updateGameState(courtId, stateToSave);
@@ -422,6 +453,87 @@ function formatDuration(seconds) {
     const minutes = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
+// Rest break functions
+async function startRestBreak(duration = 60, title = 'Pause til Vand og Hvile', callback = null) {
+    gameState.restBreakActive = true;
+    gameState.restBreakCallback = callback;
+    gameState.restBreakSecondsLeft = duration;
+    gameState.restBreakTitle = title;
+    if (duration === 60) {
+        gameState.restBreakTaken = true; // Only set this for 11-point break
+    }
+
+    const overlay = document.getElementById('restBreakOverlay');
+    const timerDisplay = document.getElementById('restBreakTimer');
+    const titleElement = overlay.querySelector('h1');
+
+    titleElement.textContent = title;
+    overlay.style.display = 'flex';
+
+    let secondsLeft = duration;
+    timerDisplay.textContent = secondsLeft;
+
+    // Immediately save to database so TV page sees it right away
+    await performSave();
+
+    gameState.restBreakInterval = setInterval(() => {
+        secondsLeft--;
+        gameState.restBreakSecondsLeft = secondsLeft;
+        timerDisplay.textContent = secondsLeft;
+
+        // Change color as time runs out
+        if (secondsLeft <= 10) {
+            timerDisplay.style.color = '#e94560';
+        } else if (secondsLeft <= 30) {
+            timerDisplay.style.color = '#FFA500';
+        }
+
+        if (secondsLeft <= 0) {
+            endRestBreak();
+        }
+
+        // Save state to sync with TV page (debounced)
+        saveGameState();
+    }, 1000);
+}
+
+async function endRestBreak() {
+    if (gameState.restBreakInterval) {
+        clearInterval(gameState.restBreakInterval);
+        gameState.restBreakInterval = null;
+    }
+
+    gameState.restBreakActive = false;
+    gameState.restBreakSecondsLeft = 0;
+    gameState.restBreakTitle = '';
+
+    const overlay = document.getElementById('restBreakOverlay');
+    const timerDisplay = document.getElementById('restBreakTimer');
+
+    overlay.style.display = 'none';
+    timerDisplay.style.color = '#4CAF50';
+    timerDisplay.textContent = '60';
+
+    // Execute callback if one was provided
+    if (gameState.restBreakCallback) {
+        gameState.restBreakCallback();
+        gameState.restBreakCallback = null;
+    }
+
+    // Immediately save to database so TV page sees it ended right away
+    await performSave();
+}
+
+function checkRestBreak() {
+    // Check if either player has reached 11 points and break hasn't been taken yet
+    // Only trigger rest break in 21/30 mode (gameMode === '21'), not in 15/21 mode
+    if (!gameState.restBreakTaken && !gameState.restBreakActive && gameState.gameMode === '21') {
+        if (gameState.player1.score === 11 || gameState.player2.score === 11) {
+            startRestBreak();
+        }
+    }
 }
 
 // Cleanup on page unload - save immediately before leaving

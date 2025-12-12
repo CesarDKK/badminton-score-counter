@@ -51,8 +51,8 @@ async function initializeTVDisplay() {
 }
 
 function startAutoRefresh() {
-    // Refresh every 5 seconds to sync with database
-    refreshInterval = setInterval(loadCourtData, 5000);
+    // Refresh every 1 second for faster sync with court page
+    refreshInterval = setInterval(loadCourtData, 1000);
 }
 
 function startLocalTimer() {
@@ -100,6 +100,13 @@ async function loadCourtData() {
 
         // Match is active - hide slideshow and show scores
         hideSponsorSlideshow();
+
+        // Check for rest break
+        if (gameState.restBreakActive) {
+            showRestBreak(gameState.restBreakSecondsLeft, gameState.restBreakTitle);
+        } else {
+            hideRestBreak();
+        }
 
         // Update display
         document.getElementById('player1Name').textContent = gameState.player1.name;
@@ -283,6 +290,36 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Rest break display functions
+function showRestBreak(secondsLeft, title) {
+    const overlay = document.getElementById('tvRestBreakOverlay');
+    const timerDisplay = document.getElementById('tvRestBreakTimer');
+    const titleElement = document.getElementById('tvRestBreakTitle');
+
+    if (!overlay) return;
+
+    titleElement.textContent = title || 'Pause';
+    timerDisplay.textContent = secondsLeft || 0;
+
+    // Change color based on time remaining
+    if (secondsLeft <= 10) {
+        timerDisplay.style.color = '#e94560';
+    } else if (secondsLeft <= 30) {
+        timerDisplay.style.color = '#FFA500';
+    } else {
+        timerDisplay.style.color = '#4CAF50';
+    }
+
+    overlay.style.display = 'flex';
+}
+
+function hideRestBreak() {
+    const overlay = document.getElementById('tvRestBreakOverlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+    }
 }
 
 // Cleanup on page unload

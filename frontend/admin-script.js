@@ -129,7 +129,7 @@ async function showDashboard() {
 
 function startAutoRefresh() {
     loadCourtOverview();
-    refreshInterval = setInterval(loadCourtOverview, 2000);
+    refreshInterval = setInterval(loadCourtOverview, 1000);
 
     // Start timer update interval (every second)
     if (!timerUpdateInterval) {

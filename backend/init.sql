@@ -62,6 +62,11 @@ CREATE TABLE IF NOT EXISTS game_states (
   timer_seconds INT DEFAULT 0,
   deciding_game_switched BOOLEAN DEFAULT FALSE,
 
+  -- Rest break data
+  rest_break_active BOOLEAN DEFAULT FALSE,
+  rest_break_seconds_left INT DEFAULT 0,
+  rest_break_title VARCHAR(200) DEFAULT '',
+
   -- Timestamps
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
