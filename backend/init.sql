@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS settings (
 -- Default password 'admin123' hashed with bcrypt
 INSERT INTO settings (setting_key, setting_value) VALUES
   ('admin_password_hash', '$2b$10$q6TkK7O2BsYMOA3Z3BUZEekWMzOwMdbooBwrvngsnYWOhpPFeOqJC'),
-  ('court_count', '4')
+  ('court_count', '5')
 ON DUPLICATE KEY UPDATE setting_key=setting_key;
 
 -- Courts table (stores court-specific settings)
@@ -37,8 +37,8 @@ CREATE TABLE IF NOT EXISTS courts (
   INDEX idx_is_active (is_active)
 ) ENGINE=InnoDB;
 
--- Pre-populate 4 default courts
-INSERT INTO courts (court_number) VALUES (1), (2), (3), (4)
+-- Pre-populate 5 default courts
+INSERT INTO courts (court_number) VALUES (1), (2), (3), (4), (5)
 ON DUPLICATE KEY UPDATE court_number=court_number;
 
 -- Game states table (replaces gameState_court{N})
@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS match_history (
   loser_name VARCHAR(100) NOT NULL,
   games_won VARCHAR(10) NOT NULL,
   duration VARCHAR(20) NOT NULL,
+  set_scores VARCHAR(200) DEFAULT NULL,
 
   match_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 

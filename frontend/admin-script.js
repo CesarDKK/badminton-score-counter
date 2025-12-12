@@ -535,7 +535,7 @@ async function loadAllMatches() {
                             ${escapeHtml(match.winner_name)} besejrede ${escapeHtml(match.loser_name)}
                         </div>
                         <div style="color: #aaa; font-size: 0.9em;">
-                            Sæt Vundet: ${match.games_won} | Varighed: ${match.duration} | Bane ${match.court_id}
+                            Sæt Vundet: ${match.games_won}${match.set_scores ? ` (${match.set_scores})` : ''} | Varighed: ${match.duration} | Bane ${match.court_id}
                         </div>
                     </div>
                     <div style="color: #999; font-size: 0.85em;">

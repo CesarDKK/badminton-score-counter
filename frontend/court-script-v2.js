@@ -26,7 +26,8 @@ let gameState = {
     isActive: false,
     isDoubles: false,
     gameMode: '21',  // '21' for 21/30, '15' for 15/21
-    decidingGameSwitched: false  // Track if sides switched at 11 in deciding game
+    decidingGameSwitched: false,  // Track if sides switched at 11 in deciding game
+    setScoresHistory: []  // Store scores from each completed set
 };
 
 // Debouncing variables
@@ -148,6 +149,8 @@ function checkGameWin() {
     // Badminton rules: first to winScore, must win by 2, max maxScore
     if ((p1Score >= winScore && p1Score - p2Score >= 2) || p1Score === maxScore) {
         gameState.player1.games++;
+        // Save the set score
+        gameState.setScoresHistory.push(`${p1Score}-${p2Score}`);
 
         // Check if player won the match (2 games)
         if (gameState.player1.games === 2) {
@@ -169,6 +172,8 @@ function checkGameWin() {
         switchSides();
     } else if ((p2Score >= winScore && p2Score - p1Score >= 2) || p2Score === maxScore) {
         gameState.player2.games++;
+        // Save the set score
+        gameState.setScoresHistory.push(`${p1Score}-${p2Score}`);
 
         // Check if player won the match (2 games)
         if (gameState.player2.games === 2) {
@@ -210,6 +215,7 @@ function startNewMatch() {
         gameState.player2.score = 0;
         gameState.player1.games = 0;
         gameState.player2.games = 0;
+        gameState.setScoresHistory = [];
         resetTimer();
         updateDisplay();
         saveGameState();
@@ -401,7 +407,8 @@ async function saveMatchResult(winner, loser, winnerGames, loserGames) {
             winnerName: winner,
             loserName: loser,
             gamesWon: `${winnerGames}-${loserGames}`,
-            duration: formatDuration(gameState.timerSeconds)
+            duration: formatDuration(gameState.timerSeconds),
+            setScores: gameState.setScoresHistory.join(', ')
         };
 
         await api.saveMatchResult(matchData);

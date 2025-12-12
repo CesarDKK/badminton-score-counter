@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { query } = require('../config/database');
+const { query, queryOne } = require('../config/database');
 
 // GET /api/match-history/all - Get all match history (public)
 // NOTE: This route must come BEFORE /:courtId to avoid matching "all" as a courtId
@@ -12,7 +12,7 @@ router.get('/all', async (req, res, next) => {
         // Use string interpolation for LIMIT/OFFSET as MySQL doesn't support placeholders for these
         const history = await query(
             `SELECT id, court_id, winner_name, loser_name,
-                    games_won, duration, match_date
+                    games_won, duration, set_scores, match_date
              FROM match_history
              ORDER BY match_date DESC
              LIMIT ${limit} OFFSET ${offset}`
@@ -32,7 +32,7 @@ router.get('/:courtId', async (req, res, next) => {
 
         // Use string interpolation for LIMIT as MySQL doesn't support placeholders for it
         const history = await query(
-            `SELECT id, winner_name, loser_name, games_won, duration, match_date
+            `SELECT id, winner_name, loser_name, games_won, duration, set_scores, match_date
              FROM match_history
              WHERE court_id = ?
              ORDER BY match_date DESC
@@ -49,7 +49,7 @@ router.get('/:courtId', async (req, res, next) => {
 // POST /api/match-history - Save match result (public - used after match completion)
 router.post('/', async (req, res, next) => {
     try {
-        const { courtId, winnerName, loserName, gamesWon, duration } = req.body;
+        const { courtId, winnerName, loserName, gamesWon, duration, setScores } = req.body;
 
         // Validate input
         if (!courtId || !winnerName || !loserName || !gamesWon || !duration) {
@@ -65,9 +65,9 @@ router.post('/', async (req, res, next) => {
 
         // Insert match result using actual court id
         const result = await query(
-            `INSERT INTO match_history (court_id, winner_name, loser_name, games_won, duration)
-             VALUES (?, ?, ?, ?, ?)`,
-            [court.id, winnerName, loserName, gamesWon, duration]
+            `INSERT INTO match_history (court_id, winner_name, loser_name, games_won, duration, set_scores)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [court.id, winnerName, loserName, gamesWon, duration, setScores || null]
         );
 
         res.json({
