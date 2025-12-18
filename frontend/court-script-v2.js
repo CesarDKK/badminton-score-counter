@@ -65,6 +65,12 @@ async function initializeApp() {
                 [{ text: 'OK', callback: () => window.location.href = 'landing.html', style: 'primary' }]
             );
         }
+
+        // Show/hide reset button based on settings
+        const clearBtn = document.getElementById('clearCourtBtn');
+        if (clearBtn) {
+            clearBtn.style.display = settings.showResetButton === false ? 'none' : 'inline-block';
+        }
     } catch (error) {
         console.error('Failed to initialize app:', error);
         showMessage('Fejl', 'Kunne ikke indlæse bane. Tjek din forbindelse.');

@@ -45,6 +45,16 @@
                     <label>Antal Baner:</label>
                     <input type="number" id="courtCount" min="1" max="20" value="4">
                     <button id="saveCourtBtn" class="btn-primary">Gem Ændringer</button>
+
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid rgba(255,255,255,0.1);">
+                        <label class="toggle-label" style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" id="showResetButton" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
+                            <span>Vis "Ryd Banen" knap på baneside</span>
+                        </label>
+                        <p style="color: #aaa; font-size: 0.9em; margin-top: 10px; line-height: 1.5;">
+                            Når aktiveret, kan spillere nulstille banen direkte fra banesiden. Deaktivér for at forhindre utilsigtet nulstilling.
+                        </p>
+                    </div>
                 </div>
 
                 <!-- Security -->

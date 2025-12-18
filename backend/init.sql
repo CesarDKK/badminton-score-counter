@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS settings (
 INSERT INTO settings (setting_key, setting_value) VALUES
   ('admin_password_hash', '$2b$10$q6TkK7O2BsYMOA3Z3BUZEekWMzOwMdbooBwrvngsnYWOhpPFeOqJC'),
   ('court_count', '5'),
+  ('show_reset_button', 'true'),
   ('theme_name', 'default'),
   ('color_primary', '#533483'),
   ('color_accent', '#e94560'),

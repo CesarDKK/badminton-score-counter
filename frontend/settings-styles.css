@@ -82,8 +82,8 @@
 
 .preset-btn.active {
     border-color: var(--color-accent);
-    background: rgba(233, 69, 96, 0.15);
-    box-shadow: 0 0 20px rgba(233, 69, 96, 0.3);
+    background: color-mix(in srgb, var(--color-accent) 15%, transparent);
+    box-shadow: 0 0 20px color-mix(in srgb, var(--color-accent) 30%, transparent);
 }
 
 .preset-preview {

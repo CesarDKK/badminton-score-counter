@@ -147,7 +147,7 @@ header h1 {
 
 .tv-button:hover {
     transform: translateY(-3px);
-    box-shadow: 0 5px 20px rgba(83, 52, 131, 0.5);
+    box-shadow: 0 5px 20px color-mix(in srgb, var(--color-primary) 50%, transparent);
     border-color: var(--color-accent);
 }
 

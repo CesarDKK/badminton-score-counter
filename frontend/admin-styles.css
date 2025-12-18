@@ -279,7 +279,7 @@ header h1 {
 }
 
 .btn-danger:hover {
-    background: #c0392b;
+    filter: brightness(0.85);
     transform: scale(1.05);
 }
 

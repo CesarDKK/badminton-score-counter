@@ -118,6 +118,18 @@ class BadmintonAPI {
     }
 
     /**
+     * Toggle reset button visibility
+     * @param {boolean} showResetButton - Whether to show reset button
+     * @returns {Promise<object>} - { success }
+     */
+    async updateResetButtonVisibility(showResetButton) {
+        return this.request('/settings/reset-button', {
+            method: 'PUT',
+            body: JSON.stringify({ showResetButton })
+        });
+    }
+
+    /**
      * Get theme settings
      * @returns {Promise<object>} - Theme object with all colors
      */

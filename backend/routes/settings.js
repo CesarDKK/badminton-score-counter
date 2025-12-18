@@ -12,8 +12,14 @@ router.get('/', async (req, res, next) => {
             ['court_count']
         );
 
+        const showResetButtonSetting = await queryOne(
+            'SELECT setting_value FROM settings WHERE setting_key = ?',
+            ['show_reset_button']
+        );
+
         res.json({
-            courtCount: parseInt(courtCountSetting?.setting_value || '4')
+            courtCount: parseInt(courtCountSetting?.setting_value || '4'),
+            showResetButton: showResetButtonSetting?.setting_value !== 'false'
         });
     } catch (error) {
         next(error);
@@ -74,6 +80,27 @@ router.put('/court-count', authMiddleware, async (req, res, next) => {
         if (courtCount < currentCourts.length) {
             await query('DELETE FROM courts WHERE court_number > ?', [courtCount]);
         }
+
+        res.json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// PUT /api/settings/reset-button - Toggle reset button visibility (requires auth)
+router.put('/reset-button', authMiddleware, async (req, res, next) => {
+    try {
+        const { showResetButton } = req.body;
+
+        if (typeof showResetButton !== 'boolean') {
+            return res.status(400).json({ error: 'showResetButton skal være true eller false' });
+        }
+
+        // Update setting (insert if not exists)
+        await query(
+            'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
+            ['show_reset_button', showResetButton.toString(), showResetButton.toString()]
+        );
 
         res.json({ success: true });
     } catch (error) {

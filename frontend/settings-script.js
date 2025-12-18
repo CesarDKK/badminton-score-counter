@@ -70,6 +70,9 @@ function setupEventListeners() {
     // Court Count
     document.getElementById('saveCourtBtn').addEventListener('click', saveCourtCount);
 
+    // Reset Button Toggle
+    document.getElementById('showResetButton').addEventListener('change', toggleResetButton);
+
     // Password
     document.getElementById('changePasswordBtn').addEventListener('click', changePassword);
 
@@ -152,6 +155,7 @@ async function loadSettings() {
     try {
         const settings = await api.getSettings();
         document.getElementById('courtCount').value = settings.courtCount;
+        document.getElementById('showResetButton').checked = settings.showResetButton !== false;
     } catch (error) {
         console.error('Failed to load settings:', error);
         showMessage('Fejl', 'Kunne ikke indlæse indstillinger');
@@ -253,6 +257,22 @@ async function changePassword() {
     } catch (error) {
         console.error('Failed to change password:', error);
         showMessage('Fejl', error.message);
+    }
+}
+
+async function toggleResetButton() {
+    const showResetButton = document.getElementById('showResetButton').checked;
+
+    try {
+        await api.updateResetButtonVisibility(showResetButton);
+        showMessage('Succes', showResetButton ?
+            '"Ryd Banen" knappen er nu synlig på banesiden' :
+            '"Ryd Banen" knappen er nu skjult på banesiden');
+    } catch (error) {
+        console.error('Failed to toggle reset button:', error);
+        showMessage('Fejl', error.message);
+        // Revert checkbox on error
+        document.getElementById('showResetButton').checked = !showResetButton;
     }
 }
 
