@@ -290,6 +290,23 @@ header h1 {
     transform: scale(1.05);
 }
 
+.btn-danger {
+    padding: 15px 30px;
+    font-size: 1.1em;
+    background: #e74c3c;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-weight: bold;
+}
+
+.btn-danger:hover {
+    background: #c0392b;
+    transform: scale(1.05);
+}
+
 /* History Section */
 .history-section {
     margin-top: 40px;

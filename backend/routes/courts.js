@@ -48,8 +48,8 @@ router.get('/:id', async (req, res, next) => {
     }
 });
 
-// PUT /api/courts/:id - Update court settings (requires auth)
-router.put('/:id', authMiddleware, async (req, res, next) => {
+// PUT /api/courts/:id - Update court settings (public - used during gameplay)
+router.put('/:id', async (req, res, next) => {
     try {
         const { id } = req.params;
         const { isActive, isDoubles, gameMode } = req.body;

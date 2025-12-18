@@ -98,8 +98,8 @@ function setupEventListeners() {
 
     // Action buttons
     document.getElementById('switchSidesBtn').addEventListener('click', switchSides);
-    document.getElementById('newMatchBtn').addEventListener('click', startNewMatch);
     document.getElementById('doublesToggle').addEventListener('click', toggleDoubles);
+    document.getElementById('clearCourtBtn').addEventListener('click', clearCourt);
 
     // Rest break skip button
     document.getElementById('skipRestBreak').addEventListener('click', endRestBreak);
@@ -271,7 +271,7 @@ function startNewMatch() {
         [
             {
                 text: 'Ja, Start',
-                callback: () => {
+                callback: async () => {
                     gameState.player1.score = 0;
                     gameState.player2.score = 0;
                     gameState.player1.games = 0;
@@ -281,8 +281,56 @@ function startNewMatch() {
                     resetTimer();
                     updateDisplay();
                     saveGameState();
+
+                    // Set court as inactive after 20 seconds to show sponsors on TV
+                    setTimeout(async () => {
+                        try {
+                            await api.updateCourt(courtId, { isActive: false });
+                            console.log('Court set to inactive after reset');
+                        } catch (error) {
+                            console.error('Failed to set court inactive:', error);
+                        }
+                    }, 20000);
                 },
                 style: 'primary'
+            },
+            { text: 'Annuller', callback: null, style: 'secondary' }
+        ]
+    );
+}
+
+function clearCourt() {
+    showMessage(
+        'Ryd Banen?',
+        'Dette vil nulstille alle point og tidtagerdata for denne bane og sætte banen til inaktiv.',
+        [
+            {
+                text: 'Ja, Ryd',
+                callback: async () => {
+                    try {
+                        // Reset all game state values
+                        gameState.player1.score = 0;
+                        gameState.player2.score = 0;
+                        gameState.player1.games = 0;
+                        gameState.player2.games = 0;
+                        gameState.setScoresHistory = [];
+                        gameState.restBreakTaken = false;
+                        resetTimer();
+                        updateDisplay();
+                        await saveGameState();
+
+                        // Immediately set court to inactive
+                        await api.updateCourt(courtId, { isActive: false });
+
+                        showMessage('Succes', 'Banen er blevet ryddet!', [
+                            { text: 'OK', callback: () => window.location.reload(), style: 'primary' }
+                        ]);
+                    } catch (error) {
+                        console.error('Failed to clear court:', error);
+                        showMessage('Fejl', 'Kunne ikke rydde banen. Tjek din forbindelse.');
+                    }
+                },
+                style: 'danger'
             },
             { text: 'Annuller', callback: null, style: 'secondary' }
         ]
@@ -505,7 +553,7 @@ function formatDuration(seconds) {
 }
 
 // Rest break functions
-async function startRestBreak(duration = 60, title = 'Pause til Vand og Hvile', callback = null) {
+async function startRestBreak(duration = 60, title = 'Pause 1 minut', callback = null) {
     gameState.restBreakActive = true;
     gameState.restBreakCallback = callback;
     gameState.restBreakSecondsLeft = duration;
