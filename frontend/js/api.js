@@ -117,6 +117,26 @@ class BadmintonAPI {
         });
     }
 
+    /**
+     * Get theme settings
+     * @returns {Promise<object>} - Theme object with all colors
+     */
+    async getTheme() {
+        return this.request('/settings/theme', { requiresAuth: false });
+    }
+
+    /**
+     * Update theme settings
+     * @param {object} themeData - { themeName, colorPrimary, colorAccent, colorBgDark, colorBgContainer, colorBgCard }
+     * @returns {Promise<object>} - { success }
+     */
+    async updateTheme(themeData) {
+        return this.request('/settings/theme', {
+            method: 'PUT',
+            body: JSON.stringify(themeData)
+        });
+    }
+
     // ==================== Courts ====================
 
     /**

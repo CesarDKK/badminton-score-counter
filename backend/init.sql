@@ -21,7 +21,13 @@ CREATE TABLE IF NOT EXISTS settings (
 -- Default password 'admin123' hashed with bcrypt
 INSERT INTO settings (setting_key, setting_value) VALUES
   ('admin_password_hash', '$2b$10$q6TkK7O2BsYMOA3Z3BUZEekWMzOwMdbooBwrvngsnYWOhpPFeOqJC'),
-  ('court_count', '5')
+  ('court_count', '5'),
+  ('theme_name', 'default'),
+  ('color_primary', '#533483'),
+  ('color_accent', '#e94560'),
+  ('color_bg_dark', '#1a1a2e'),
+  ('color_bg_container', '#16213e'),
+  ('color_bg_card', '#0f3460')
 ON DUPLICATE KEY UPDATE setting_key=setting_key;
 
 -- Courts table (stores court-specific settings)

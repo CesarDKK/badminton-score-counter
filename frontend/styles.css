@@ -4,9 +4,19 @@
     box-sizing: border-box;
 }
 
+/* Theme colors - dynamically loaded from database */
+:root {
+    --color-primary: #533483;
+    --color-accent: #e94560;
+    --color-bg-dark: #1a1a2e;
+    --color-bg-container: #16213e;
+    --color-bg-card: #0f3460;
+    --gradient-primary: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+}
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: #1a1a2e;
+    background: var(--color-bg-dark);
     min-height: 100vh;
     padding: 20px;
 }
@@ -14,7 +24,7 @@ body {
 .container {
     max-width: 1200px;
     margin: 0 auto;
-    background: #16213e;
+    background: var(--color-bg-container);
     border-radius: 20px;
     padding: 30px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
@@ -27,7 +37,7 @@ header {
     align-items: center;
     margin-bottom: 30px;
     padding-bottom: 20px;
-    border-bottom: 3px solid #e94560;
+    border-bottom: 3px solid var(--color-accent);
 }
 
 .header-left {
@@ -43,7 +53,7 @@ header h1 {
 
 .btn-back {
     padding: 12px 20px;
-    background: #0f3460;
+    background: var(--color-bg-card);
     color: white;
     text-decoration: none;
     border-radius: 8px;
@@ -74,10 +84,10 @@ header h1 {
 .court-selector select {
     padding: 8px 15px;
     font-size: 1em;
-    border: 2px solid #533483;
+    border: 2px solid var(--color-primary);
     border-radius: 5px;
     cursor: pointer;
-    background: #0f3460;
+    background: var(--color-bg-card);
     color: #eaeaea;
 }
 
@@ -108,10 +118,10 @@ header h1 {
     padding: 15px;
     font-size: 1.3em;
     text-align: center;
-    border: 2px solid #533483;
+    border: 2px solid var(--color-primary);
     border-radius: 10px;
     font-weight: bold;
-    background: #0f3460;
+    background: var(--color-bg-card);
     color: #eaeaea;
 }
 
@@ -175,7 +185,7 @@ header h1 {
     align-items: center;
     gap: 30px;
     padding: 20px;
-    background: #0f3460;
+    background: var(--color-bg-card);
     border-radius: 15px;
 }
 
@@ -231,7 +241,7 @@ header h1 {
     gap: 15px;
     font-size: 2em;
     font-weight: bold;
-    color: #e94560;
+    color: var(--color-accent);
 }
 
 /* Action Buttons */
@@ -253,7 +263,7 @@ header h1 {
 }
 
 .btn-primary {
-    background: #533483;
+    background: var(--color-primary);
     color: white;
 }
 
@@ -263,7 +273,7 @@ header h1 {
 }
 
 .btn-secondary {
-    background: #0f3460;
+    background: var(--color-bg-card);
     color: white;
 }
 
@@ -275,9 +285,9 @@ header h1 {
 .btn-mode {
     padding: 15px 30px;
     font-size: 1.1em;
-    border: 2px solid #e94560;
+    border: 2px solid var(--color-accent);
     background: transparent;
-    color: #e94560;
+    color: var(--color-accent);
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.3s;
@@ -285,7 +295,7 @@ header h1 {
 }
 
 .btn-mode:hover {
-    background: #e94560;
+    background: var(--color-accent);
     color: white;
     transform: scale(1.05);
 }
@@ -315,11 +325,11 @@ header h1 {
 }
 
 .history-section {
-    border-top: 2px solid #533483;
+    border-top: 2px solid var(--color-primary);
 }
 
 .history-section h2 {
-    color: #e94560;
+    color: var(--color-accent);
     margin-bottom: 20px;
 }
 
@@ -331,9 +341,9 @@ header h1 {
 
 .history-item {
     padding: 15px;
-    background: #0f3460;
+    background: var(--color-bg-card);
     border-radius: 10px;
-    border-left: 5px solid #e94560;
+    border-left: 5px solid var(--color-accent);
 }
 
 .history-item .match-result {

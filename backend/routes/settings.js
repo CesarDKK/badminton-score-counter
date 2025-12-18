@@ -81,4 +81,65 @@ router.put('/court-count', authMiddleware, async (req, res, next) => {
     }
 });
 
+// GET /api/settings/theme - Get theme colors (public)
+router.get('/theme', async (req, res, next) => {
+    try {
+        const themeSettings = await query(
+            'SELECT setting_key, setting_value FROM settings WHERE setting_key LIKE "theme_%" OR setting_key LIKE "color_%"'
+        );
+
+        const theme = {};
+        themeSettings.forEach(row => {
+            theme[row.setting_key] = row.setting_value;
+        });
+
+        res.json(theme);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// PUT /api/settings/theme - Update theme colors (requires auth)
+router.put('/theme', authMiddleware, async (req, res, next) => {
+    try {
+        const {
+            themeName,
+            colorPrimary,
+            colorAccent,
+            colorBgDark,
+            colorBgContainer,
+            colorBgCard
+        } = req.body;
+
+        // Validate hex colors
+        const hexRegex = /^#[0-9A-Fa-f]{6}$/;
+        const colors = [colorPrimary, colorAccent, colorBgDark, colorBgContainer, colorBgCard];
+
+        if (!colors.every(color => hexRegex.test(color))) {
+            return res.status(400).json({ error: 'Ugyldige farveværdier. Brug formatet #RRGGBB' });
+        }
+
+        // Update all color settings (insert if not exists)
+        const updates = [
+            ['theme_name', themeName],
+            ['color_primary', colorPrimary],
+            ['color_accent', colorAccent],
+            ['color_bg_dark', colorBgDark],
+            ['color_bg_container', colorBgContainer],
+            ['color_bg_card', colorBgCard]
+        ];
+
+        for (const [key, value] of updates) {
+            await query(
+                'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
+                [key, value, value]
+            );
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+});
+
 module.exports = router;

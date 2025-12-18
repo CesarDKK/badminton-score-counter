@@ -35,9 +35,7 @@ function setupEventListeners() {
     document.getElementById('matchHistoryBtn').addEventListener('click', showMatchHistory);
     document.getElementById('backToOverviewBtn').addEventListener('click', showCourtOverview);
 
-    // Settings
-    document.getElementById('saveCourtBtn').addEventListener('click', saveCourtCount);
-    document.getElementById('changePasswordBtn').addEventListener('click', changePassword);
+    // Settings (court count and password moved to settings.html)
     document.getElementById('clearAllDataBtn').addEventListener('click', clearAllData);
 
     // Edit Court Modal
@@ -112,10 +110,6 @@ async function showDashboard() {
     document.getElementById('adminDashboard').style.display = 'block';
 
     try {
-        // Load settings
-        const settings = await api.getSettings();
-        document.getElementById('courtCount').value = settings.courtCount;
-
         // Load and display court overview
         await loadCourtOverview();
 
@@ -299,69 +293,7 @@ function formatDuration(seconds) {
     return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
-async function saveCourtCount() {
-    const courtCount = parseInt(document.getElementById('courtCount').value);
-
-    if (courtCount < 1 || courtCount > 20) {
-        showMessage('Fejl', 'Antal baner skal være mellem 1 og 20!');
-        return;
-    }
-
-    try {
-        const settings = await api.getSettings();
-        const oldCount = settings.courtCount;
-
-        if (courtCount < oldCount) {
-            showMessage(
-                'Bekræft Reduktion',
-                `Dette vil reducere baner fra ${oldCount} til ${courtCount}. Banedata for bane ${courtCount + 1}-${oldCount} vil forblive i lagring. Fortsæt?`,
-                [
-                    {
-                        text: 'Ja, Fortsæt',
-                        callback: async () => {
-                            try {
-                                await api.updateCourtCount(courtCount);
-                                showMessage('Succes', 'Antal baner opdateret!');
-                                await loadCourtOverview();
-                            } catch (error) {
-                                console.error('Failed to save court count:', error);
-                                showMessage('Fejl', 'Kunne ikke gemme antal baner. Tjek din forbindelse.');
-                            }
-                        },
-                        style: 'primary'
-                    },
-                    { text: 'Annuller', callback: null, style: 'secondary' }
-                ]
-            );
-            return;
-        }
-
-        await api.updateCourtCount(courtCount);
-        showMessage('Succes', 'Antal baner opdateret!');
-        await loadCourtOverview();
-    } catch (error) {
-        console.error('Failed to save court count:', error);
-        showMessage('Fejl', 'Kunne ikke gemme antal baner. Tjek din forbindelse.');
-    }
-}
-
-async function changePassword() {
-    const newPassword = document.getElementById('newPassword').value;
-
-    if (!newPassword || newPassword.length < 4) {
-        showMessage('Fejl', 'Adgangskode skal være mindst 4 tegn lang!');
-        return;
-    }
-
-    try {
-        await api.updatePassword(newPassword);
-        document.getElementById('newPassword').value = '';
-        showMessage('Succes', 'Adgangskode ændret! Husk din nye adgangskode.');
-    } catch (error) {
-        console.error('Failed to change password:', error);
-        showMessage('Fejl', 'Kunne ikke ændre adgangskode. Tjek din forbindelse.');
-    }
-}
+// saveCourtCount and changePassword functions moved to settings-script.js
 
 async function clearAllData() {
     showMessage(

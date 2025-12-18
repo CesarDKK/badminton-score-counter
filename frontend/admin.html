@@ -6,6 +6,7 @@
     <title>Admin Panel - Badminton Pointtæller</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="admin-styles.css">
+    <script src="js/theme-loader.js"></script>
 </head>
 <body>
     <div class="container">
@@ -32,6 +33,7 @@
                 <h1>Admin Oversigt</h1>
                 <div class="header-controls">
                     <button id="matchHistoryBtn" class="btn-primary" style="margin-right: 10px;">Kamphistorik</button>
+                    <a href="settings.html" class="btn-primary" style="text-decoration: none; display: inline-block; margin-right: 10px;">Indstillinger</a>
                     <a href="sponsor.html" class="btn-primary" style="text-decoration: none; display: inline-block; margin-right: 10px;">Sponsorer</a>
                     <button id="logoutBtn" class="btn-secondary">Log Ud</button>
                     <a href="landing.html" class="btn-secondary" style="text-decoration: none; display: inline-block;">Tilbage til Baner</a>
@@ -104,20 +106,6 @@
             <!-- Settings Section -->
             <div class="settings-section">
                 <div class="setting-card">
-                    <h3>Banestyring</h3>
-                    <label>Antal Baner:</label>
-                    <input type="number" id="courtCount" min="1" max="20" value="4">
-                    <button id="saveCourtBtn" class="btn-primary">Gem Ændringer</button>
-                </div>
-
-                <div class="setting-card">
-                    <h3>Sikkerhed</h3>
-                    <label>Ny Admin Adgangskode:</label>
-                    <input type="password" id="newPassword" placeholder="Indtast ny adgangskode">
-                    <button id="changePasswordBtn" class="btn-primary">Skift Adgangskode</button>
-                </div>
-
-                <div class="setting-card">
                     <h3>Datastyring</h3>
                     <button id="clearAllDataBtn" class="btn-danger">Ryd Alle Banedata</button>
                     <p class="warning-text">Advarsel: Dette vil nulstille alle point og kamphistorik for alle baner!</p>
@@ -126,7 +114,7 @@
 
             <!-- Version Footer -->
             <div class="version-footer">
-                <p>Version 1.2.0</p>
+                <p>Version 1.3.0</p>
             </div>
         </div>
     </div>

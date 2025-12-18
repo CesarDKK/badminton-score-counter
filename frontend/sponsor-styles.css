@@ -16,7 +16,7 @@
 }
 
 .slideshow-settings-section h2 {
-    color: #e94560;
+    color: var(--color-accent);
     margin-bottom: 20px;
     font-size: 1.8em;
 }
@@ -31,7 +31,7 @@
     background: rgba(0, 20, 40, 0.5);
     border-radius: 10px;
     padding: 20px;
-    border: 2px solid #533483;
+    border: 2px solid var(--color-primary);
 }
 
 .setting-item label {
@@ -52,7 +52,7 @@
     flex: 0 0 150px;
     padding: 12px;
     font-size: 1.1em;
-    border: 2px solid #533483;
+    border: 2px solid var(--color-primary);
     border-radius: 8px;
     background: rgba(0, 20, 40, 0.8);
     color: #fff;
@@ -61,7 +61,7 @@
 
 .duration-control input[type="number"]:focus {
     outline: none;
-    border-color: #e94560;
+    border-color: var(--color-accent);
     box-shadow: 0 0 10px rgba(233, 69, 96, 0.3);
 }
 
@@ -77,7 +77,7 @@
 }
 
 .upload-section h2 {
-    color: #e94560;
+    color: var(--color-accent);
     margin-bottom: 20px;
     font-size: 1.8em;
 }
@@ -92,7 +92,7 @@
     padding: 30px;
     background: rgba(0, 20, 40, 0.5);
     border-radius: 10px;
-    border: 2px dashed #533483;
+    border: 2px dashed var(--color-primary);
     min-width: 400px;
 }
 
@@ -121,7 +121,7 @@
 }
 
 .gallery-section h2 {
-    color: #e94560;
+    color: var(--color-accent);
     font-size: 1.8em;
 }
 
@@ -136,7 +136,7 @@
     background: rgba(0, 20, 40, 0.6);
     border-radius: 10px;
     overflow: hidden;
-    border: 2px solid #533483;
+    border: 2px solid var(--color-primary);
     transition: transform 0.2s, box-shadow 0.2s;
 }
 
@@ -199,7 +199,7 @@
 }
 
 .btn-delete {
-    background: #e94560;
+    background: var(--color-accent);
     color: white;
 }
 
@@ -269,7 +269,7 @@
 }
 
 .image-modal-close:hover {
-    color: #e94560;
+    color: var(--color-accent);
 }
 
 .image-modal-img {
@@ -321,7 +321,7 @@
 
 /* Additional button styles for clear all */
 .btn-danger {
-    background: #e94560;
+    background: var(--color-accent);
     color: white;
     border: none;
     padding: 10px 20px;
