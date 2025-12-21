@@ -12,6 +12,28 @@ A real-time badminton score tracking system with multi-device support, sponsor s
 - **Match History**: Automatic tracking of completed matches with statistics
 - **Timer Support**: Built-in timer for tracking match duration
 
+## 🍓 Raspberry Pi Support
+
+This app runs great on Raspberry Pi! We provide optimized Docker configurations for ARM architecture.
+
+**Quick Start for Raspberry Pi**:
+```bash
+./start-rpi.sh
+```
+
+**Or manually**:
+```bash
+docker-compose -f docker-compose.rpi.yml up -d
+```
+
+**Full guides available**:
+- 📘 [Raspberry Pi Installation Guide](README.RASPBERRY_PI.md) - Complete setup instructions
+- 🚀 [Quick Start Guide](QUICKSTART.RASPBERRY_PI.md) - Get running in 4 commands
+
+**Tested on**: Raspberry Pi 3B+, 4 (2GB/4GB/8GB), 5, and Pi 400
+
+---
+
 ## Quick Start
 
 ### Prerequisites

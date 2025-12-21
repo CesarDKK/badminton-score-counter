@@ -1,0 +1,115 @@
+version: '3.8'
+
+services:
+  # MariaDB Database (ARM-optimized alternative to MySQL)
+  mysql:
+    image: mariadb:11
+    container_name: badminton-mysql
+    restart: unless-stopped
+    platform: linux/arm64
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password_change_me}
+      MYSQL_DATABASE: badminton_counter
+      MYSQL_USER: badminton_user
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-secure_password_change_me}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - badminton-network
+    # Resource limits for Raspberry Pi
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: >
+      --max_connections=50
+      --innodb_buffer_pool_size=128M
+      --innodb_log_file_size=32M
+      --query_cache_size=0
+      --query_cache_type=0
+
+  # Node.js Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend.rpi
+    container_name: badminton-backend
+    restart: unless-stopped
+    platform: linux/arm64
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: badminton_user
+      DB_PASSWORD: ${MYSQL_PASSWORD:-secure_password_change_me}
+      DB_NAME: badminton_counter
+      JWT_SECRET: ${JWT_SECRET:-change_this_secret_key_min_32_chars}
+      UPLOAD_DIR: /app/uploads
+      MAX_FILE_SIZE: 10485760
+      # Node.js memory optimization for Raspberry Pi
+      NODE_OPTIONS: "--max-old-space-size=512"
+    ports:
+      - "3000:3000"
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - badminton-network
+    # Resource limits for Raspberry Pi
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Nginx Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend.rpi
+    container_name: badminton-frontend
+    restart: unless-stopped
+    platform: linux/arm64
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - badminton-network
+    # Resource limits for Raspberry Pi
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+
+networks:
+  badminton-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
+  uploads_data:
+    driver: local
