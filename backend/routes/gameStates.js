@@ -73,7 +73,7 @@ router.get('/:courtId', async (req, res, next) => {
 router.put('/:courtId', async (req, res, next) => {
     try {
         const { courtId } = req.params;
-        const { player1, player2, timerSeconds, decidingGameSwitched, restBreakActive, restBreakSecondsLeft, restBreakTitle } = req.body;
+        const { player1, player2, timerSeconds, decidingGameSwitched, restBreakActive, restBreakSecondsLeft, restBreakTitle, isDoubles } = req.body;
 
         // Check if we should skip auto-updating active status (for admin edits)
         const skipAutoActive = req.query.skipAutoActive === 'true';
@@ -145,6 +145,11 @@ router.put('/:courtId', async (req, res, next) => {
             if (hasActivity) {
                 await query('UPDATE courts SET is_active = TRUE WHERE id = ?', [court.id]);
             }
+        }
+
+        // Update court's isDoubles setting if provided
+        if (isDoubles !== undefined && typeof isDoubles === 'boolean') {
+            await query('UPDATE courts SET is_doubles = ? WHERE id = ?', [isDoubles, court.id]);
         }
 
         res.json({ success: true });

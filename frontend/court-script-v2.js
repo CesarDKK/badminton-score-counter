@@ -491,7 +491,8 @@ async function performSave() {
             decidingGameSwitched: gameState.decidingGameSwitched,
             restBreakActive: gameState.restBreakActive,
             restBreakSecondsLeft: gameState.restBreakSecondsLeft,
-            restBreakTitle: gameState.restBreakTitle
+            restBreakTitle: gameState.restBreakTitle,
+            isDoubles: gameState.isDoubles
         };
 
         await api.updateGameState(courtId, stateToSave);

@@ -14,6 +14,7 @@ let localTimerSeconds = 0;
 let timerInterval = null;
 let lastSyncedTimerSeconds = 0;
 let isMatchCurrentlyActive = false;
+let wasMatchPreviouslyActive = false;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async function() {
@@ -96,8 +97,19 @@ async function loadCourtData() {
             // Court not active - show sponsor slideshow
             localTimerSeconds = 0;
             isMatchCurrentlyActive = false;
+            wasMatchPreviouslyActive = false;
             showSponsorSlideshow();
             return;
+        }
+
+        // Detect new match starting (transition from inactive to active)
+        if (isMatchActive && !wasMatchPreviouslyActive) {
+            console.log('[TV] New match detected - reloading theme colors');
+            // Reload theme colors when a new match starts
+            if (window.loadTheme) {
+                await window.loadTheme();
+            }
+            wasMatchPreviouslyActive = true;
         }
 
         // Match is active - hide slideshow and show scores

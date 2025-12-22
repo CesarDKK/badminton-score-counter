@@ -3,7 +3,8 @@
  * Must be loaded BEFORE any other scripts to prevent FOUC (Flash of Unstyled Content)
  */
 
-(async function loadTheme() {
+// Theme loading function that can be called multiple times
+window.loadTheme = async function() {
     try {
         const response = await fetch('/api/settings/theme');
         const theme = await response.json();
@@ -21,8 +22,15 @@
         root.style.setProperty('--gradient-primary', gradient);
 
         console.log('Theme loaded:', theme.theme_name || 'default');
+        return theme;
     } catch (error) {
         console.error('Failed to load theme, using defaults:', error);
         // Defaults are already set in CSS :root
+        return null;
     }
+};
+
+// Load theme immediately on page load
+(async function() {
+    await window.loadTheme();
 })();
