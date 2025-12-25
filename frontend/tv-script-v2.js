@@ -98,6 +98,8 @@ async function loadCourtData() {
             localTimerSeconds = 0;
             isMatchCurrentlyActive = false;
             wasMatchPreviouslyActive = false;
+            hideMatchFinished(); // Hide match finished overlay if shown
+            hideRestBreak(); // Hide rest break overlay if shown
             showSponsorSlideshow();
             return;
         }
@@ -115,9 +117,20 @@ async function loadCourtData() {
         // Match is active - hide slideshow and show scores
         hideSponsorSlideshow();
 
+        // Check if match is finished (someone won)
+        const maxGames = gameState.gameMode === '15' ? 2 : 2; // Best of 3 in both modes
+        const matchFinished = gameState.player1.games >= 2 || gameState.player2.games >= 2;
+
+        if (matchFinished) {
+            showMatchFinished(gameState);
+            return; // Don't update normal display if match is finished
+        } else {
+            hideMatchFinished();
+        }
+
         // Check for rest break
         if (gameState.restBreakActive) {
-            showRestBreak(gameState.restBreakSecondsLeft, gameState.restBreakTitle);
+            showRestBreak(gameState.restBreakSecondsLeft, gameState.restBreakTitle, gameState);
         } else {
             hideRestBreak();
         }
@@ -279,9 +292,6 @@ function displayCurrentSlide(images) {
     container.innerHTML = `
         <div class="sponsor-slide">
             <img src="/uploads/${image.filename}" alt="${escapeHtml(image.original_name)}" class="sponsor-image">
-            <div class="sponsor-indicator">
-                <span>${currentSlideIndex + 1} / ${images.length}</span>
-            </div>
         </div>
     `;
 }
@@ -307,7 +317,7 @@ function escapeHtml(text) {
 }
 
 // Rest break display functions
-function showRestBreak(secondsLeft, title) {
+function showRestBreak(secondsLeft, title, gameState) {
     const overlay = document.getElementById('tvRestBreakOverlay');
     const timerDisplay = document.getElementById('tvRestBreakTimer');
     const titleElement = document.getElementById('tvRestBreakTitle');
@@ -316,6 +326,16 @@ function showRestBreak(secondsLeft, title) {
 
     titleElement.textContent = title || 'Pause';
     timerDisplay.textContent = secondsLeft || 0;
+
+    // Update score display in rest break overlay
+    if (gameState) {
+        document.getElementById('tvRestBreakPlayer1').textContent = gameState.player1.name;
+        document.getElementById('tvRestBreakPlayer2').textContent = gameState.player2.name;
+        document.getElementById('tvRestBreakScore1').textContent = gameState.player1.score;
+        document.getElementById('tvRestBreakScore2').textContent = gameState.player2.score;
+        document.getElementById('tvRestBreakGames1').textContent = gameState.player1.games;
+        document.getElementById('tvRestBreakGames2').textContent = gameState.player2.games;
+    }
 
     // Change color based on time remaining
     if (secondsLeft <= 10) {
@@ -331,6 +351,78 @@ function showRestBreak(secondsLeft, title) {
 
 function hideRestBreak() {
     const overlay = document.getElementById('tvRestBreakOverlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+    }
+}
+
+// Match finished display functions
+function showMatchFinished(gameState) {
+    const overlay = document.getElementById('tvMatchFinishedOverlay');
+    if (!overlay) return;
+
+    // Display individual set scores with winner highlighted
+    const setScoresContainer = document.getElementById('tvSetScoresContainer');
+    if (setScoresContainer && gameState.setScoresHistory && gameState.setScoresHistory.length > 0) {
+        const setScoresHtml = gameState.setScoresHistory.map((setData, index) => {
+            let player1Name, player2Name, scoreText;
+
+            // Handle both old format (string) and new format (object)
+            if (typeof setData === 'string') {
+                // Old format: just score like "21-15"
+                player1Name = gameState.player1.name;
+                player2Name = gameState.player2.name;
+                scoreText = setData;
+            } else {
+                // New format: object with player names and score
+                player1Name = setData.player1Name;
+                player2Name = setData.player2Name;
+                scoreText = setData.score;
+            }
+
+            // Parse score (e.g., "21-15")
+            const scores = scoreText.split('-').map(s => parseInt(s.trim()));
+            const player1Won = scores[0] > scores[1];
+            const winnerName = player1Won ? player1Name : player2Name;
+            const winnerColor = '#4CAF50'; // Green for winner
+            const loserColor = '#e94560'; // Red for loser
+
+            return `
+                <div style="margin: 20px 0; font-size: 1.1em;">
+                    <div style="margin-bottom: 8px; color: #aaa;">Sæt ${index + 1}</div>
+                    <div style="font-size: 1.3em;">
+                        <span style="color: ${player1Won ? winnerColor : loserColor}; font-weight: ${player1Won ? 'bold' : 'normal'};">
+                            ${player1Name}
+                        </span>
+                        <span style="color: #fff; margin: 0 15px; font-weight: bold;">
+                            ${scoreText}
+                        </span>
+                        <span style="color: ${!player1Won ? winnerColor : loserColor}; font-weight: ${!player1Won ? 'bold' : 'normal'};">
+                            ${player2Name}
+                        </span>
+                    </div>
+                    <div style="color: ${winnerColor}; font-size: 0.9em; margin-top: 5px; font-weight: bold;">
+                        ✓ ${winnerName}
+                    </div>
+                </div>
+            `;
+        }).join('');
+        setScoresContainer.innerHTML = setScoresHtml;
+    } else {
+        setScoresContainer.innerHTML = '';
+    }
+
+    // Determine winner
+    const winner = gameState.player1.games > gameState.player2.games
+        ? gameState.player1.name
+        : gameState.player2.name;
+    document.getElementById('tvFinishedWinner').textContent = winner;
+
+    overlay.style.display = 'flex';
+}
+
+function hideMatchFinished() {
+    const overlay = document.getElementById('tvMatchFinishedOverlay');
     if (overlay) {
         overlay.style.display = 'none';
     }

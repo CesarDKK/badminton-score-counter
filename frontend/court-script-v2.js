@@ -170,8 +170,12 @@ function checkGameWin() {
     // Badminton rules: first to winScore, must win by 2, max maxScore
     if ((p1Score >= winScore && p1Score - p2Score >= 2) || p1Score === maxScore) {
         gameState.player1.games++;
-        // Save the set score
-        gameState.setScoresHistory.push(`${p1Score}-${p2Score}`);
+        // Save the set score with player names
+        gameState.setScoresHistory.push({
+            player1Name: gameState.player1.name,
+            player2Name: gameState.player2.name,
+            score: `${p1Score}-${p2Score}`
+        });
 
         // Check if player won the match (2 games)
         if (gameState.player1.games === 2) {
@@ -210,8 +214,12 @@ function checkGameWin() {
         }
     } else if ((p2Score >= winScore && p2Score - p1Score >= 2) || p2Score === maxScore) {
         gameState.player2.games++;
-        // Save the set score
-        gameState.setScoresHistory.push(`${p1Score}-${p2Score}`);
+        // Save the set score with player names
+        gameState.setScoresHistory.push({
+            player1Name: gameState.player1.name,
+            player2Name: gameState.player2.name,
+            score: `${p1Score}-${p2Score}`
+        });
 
         // Check if player won the match (2 games)
         if (gameState.player2.games === 2) {
@@ -314,10 +322,14 @@ function clearCourt() {
                 text: 'Ja, Ryd',
                 callback: async () => {
                     try {
-                        // Reset all game state values
+                        // Reset all game state values including player names
+                        gameState.player1.name = 'Spiller 1';
+                        gameState.player1.name2 = 'Makker 1';
                         gameState.player1.score = 0;
-                        gameState.player2.score = 0;
                         gameState.player1.games = 0;
+                        gameState.player2.name = 'Spiller 2';
+                        gameState.player2.name2 = 'Makker 2';
+                        gameState.player2.score = 0;
                         gameState.player2.games = 0;
                         gameState.setScoresHistory = [];
                         gameState.restBreakTaken = false;
@@ -492,7 +504,8 @@ async function performSave() {
             restBreakActive: gameState.restBreakActive,
             restBreakSecondsLeft: gameState.restBreakSecondsLeft,
             restBreakTitle: gameState.restBreakTitle,
-            isDoubles: gameState.isDoubles
+            isDoubles: gameState.isDoubles,
+            setScoresHistory: gameState.setScoresHistory
         };
 
         await api.updateGameState(courtId, stateToSave);
@@ -537,13 +550,22 @@ async function loadGameState() {
 // Save match result to API
 async function saveMatchResult(winner, loser, winnerGames, loserGames) {
     try {
+        // Format set scores for match history
+        const setScoresText = gameState.setScoresHistory.map(set => {
+            if (typeof set === 'string') {
+                return set; // Old format
+            } else {
+                return `${set.player1Name} ${set.score} ${set.player2Name}`; // New format
+            }
+        }).join(', ');
+
         const matchData = {
             courtId: courtId,
             winnerName: winner,
             loserName: loser,
             gamesWon: `${winnerGames}-${loserGames}`,
             duration: formatDuration(gameState.timerSeconds),
-            setScores: gameState.setScoresHistory.join(', ')
+            setScores: setScoresText
         };
 
         await api.saveMatchResult(matchData);

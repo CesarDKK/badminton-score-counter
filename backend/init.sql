@@ -74,6 +74,9 @@ CREATE TABLE IF NOT EXISTS game_states (
   rest_break_seconds_left INT DEFAULT 0,
   rest_break_title VARCHAR(200) DEFAULT '',
 
+  -- Set scores history (JSON array stored as text)
+  set_scores_history TEXT,
+
   -- Timestamps
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

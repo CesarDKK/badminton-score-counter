@@ -20,7 +20,8 @@ router.get('/:courtId', async (req, res, next) => {
             `SELECT player1_name, player1_name2, player1_score, player1_games,
                     player2_name, player2_name2, player2_score, player2_games,
                     timer_seconds, deciding_game_switched,
-                    rest_break_active, rest_break_seconds_left, rest_break_title
+                    rest_break_active, rest_break_seconds_left, rest_break_title,
+                    set_scores_history
              FROM game_states WHERE court_id = ?`,
             [court.id]
         );
@@ -35,6 +36,7 @@ router.get('/:courtId', async (req, res, next) => {
                 restBreakActive: false,
                 restBreakSecondsLeft: 0,
                 restBreakTitle: '',
+                setScoresHistory: [],
                 isActive: !!court.is_active,
                 isDoubles: !!court.is_doubles,
                 gameMode: court.game_mode
@@ -42,6 +44,12 @@ router.get('/:courtId', async (req, res, next) => {
         }
 
         // Format response
+        const setScoresHistory = gameState.set_scores_history
+            ? (typeof gameState.set_scores_history === 'string'
+                ? JSON.parse(gameState.set_scores_history)
+                : gameState.set_scores_history)
+            : [];
+
         res.json({
             player1: {
                 name: gameState.player1_name,
@@ -60,6 +68,7 @@ router.get('/:courtId', async (req, res, next) => {
             restBreakActive: !!gameState.rest_break_active,
             restBreakSecondsLeft: gameState.rest_break_seconds_left || 0,
             restBreakTitle: gameState.rest_break_title || '',
+            setScoresHistory: setScoresHistory,
             isActive: !!court.is_active,
             isDoubles: !!court.is_doubles,
             gameMode: court.game_mode
@@ -73,7 +82,7 @@ router.get('/:courtId', async (req, res, next) => {
 router.put('/:courtId', async (req, res, next) => {
     try {
         const { courtId } = req.params;
-        const { player1, player2, timerSeconds, decidingGameSwitched, restBreakActive, restBreakSecondsLeft, restBreakTitle, isDoubles } = req.body;
+        const { player1, player2, timerSeconds, decidingGameSwitched, restBreakActive, restBreakSecondsLeft, restBreakTitle, isDoubles, setScoresHistory } = req.body;
 
         // Check if we should skip auto-updating active status (for admin edits)
         const skipAutoActive = req.query.skipAutoActive === 'true';
@@ -90,14 +99,20 @@ router.put('/:courtId', async (req, res, next) => {
             return res.status(400).json({ error: 'Spillerdata mangler' });
         }
 
+        // Serialize setScoresHistory for storage
+        const setScoresHistoryJson = setScoresHistory
+            ? JSON.stringify(setScoresHistory)
+            : '[]';
+
         // Upsert game state (insert or update) using actual court.id
         await query(
             `INSERT INTO game_states (
                 court_id, player1_name, player1_name2, player1_score, player1_games,
                 player2_name, player2_name2, player2_score, player2_games,
                 timer_seconds, deciding_game_switched,
-                rest_break_active, rest_break_seconds_left, rest_break_title
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                rest_break_active, rest_break_seconds_left, rest_break_title,
+                set_scores_history
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 player1_name = VALUES(player1_name),
                 player1_name2 = VALUES(player1_name2),
@@ -111,7 +126,8 @@ router.put('/:courtId', async (req, res, next) => {
                 deciding_game_switched = VALUES(deciding_game_switched),
                 rest_break_active = VALUES(rest_break_active),
                 rest_break_seconds_left = VALUES(rest_break_seconds_left),
-                rest_break_title = VALUES(rest_break_title)`,
+                rest_break_title = VALUES(rest_break_title),
+                set_scores_history = VALUES(set_scores_history)`,
             [
                 court.id,  // Use actual database id, not court number
                 player1.name || 'Spiller 1',
@@ -126,7 +142,8 @@ router.put('/:courtId', async (req, res, next) => {
                 decidingGameSwitched || false,
                 restBreakActive || false,
                 restBreakSecondsLeft || 0,
-                restBreakTitle || ''
+                restBreakTitle || '',
+                setScoresHistoryJson
             ]
         );
 

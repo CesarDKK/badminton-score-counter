@@ -245,8 +245,8 @@ body {
 }
 
 .sponsor-image {
-    max-width: 90%;
-    max-height: 90%;
+    max-width: 98%;
+    max-height: 98%;
     object-fit: contain;
     border-radius: 20px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
@@ -293,8 +293,8 @@ body {
 /* Responsive slideshow */
 @media (max-width: 1200px) {
     .sponsor-image {
-        max-width: 85%;
-        max-height: 85%;
+        max-width: 96%;
+        max-height: 96%;
     }
 
     .sponsor-indicator {
@@ -315,8 +315,8 @@ body {
 
 @media (max-width: 768px) {
     .sponsor-image {
-        max-width: 95%;
-        max-height: 95%;
+        max-width: 98%;
+        max-height: 98%;
     }
 
     .sponsor-indicator {

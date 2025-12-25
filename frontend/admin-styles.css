@@ -310,6 +310,8 @@ header h1 {
     border-radius: 15px;
     width: 90%;
     max-width: 500px;
+    max-height: 85vh;
+    overflow-y: auto;
     box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
 }
 
