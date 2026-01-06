@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Shuttlecock feathers (white) -->
+  <path d="M32 8 L20 28 L44 28 Z" fill="#ffffff" stroke="#333" stroke-width="2"/>
+
+  <!-- Shuttlecock cork base (green) -->
+  <circle cx="32" cy="32" r="8" fill="#4CAF50" stroke="#333" stroke-width="2"/>
+
+  <!-- Feather details -->
+  <line x1="26" y1="20" x2="32" y2="28" stroke="#333" stroke-width="1"/>
+  <line x1="32" y1="12" x2="32" y2="28" stroke="#333" stroke-width="1"/>
+  <line x1="38" y1="20" x2="32" y2="28" stroke="#333" stroke-width="1"/>
+</svg>
