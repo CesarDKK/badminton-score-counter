@@ -22,6 +22,8 @@ let gameState = {
     timerSeconds: 0,
     timerRunning: false,
     timerInterval: null,
+    matchStartTime: null,  // Timestamp when match started (from server)
+    matchEndTime: null,    // Timestamp when match ended (from server)
     currentCourt: courtId,
     isActive: false,
     isDoubles: false,
@@ -47,6 +49,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     await loadGameState();
     updateDisplay();
     setupEventListeners();
+    startPeriodicSync();
 });
 
 async function initializeApp() {
@@ -98,9 +101,6 @@ function setupEventListeners() {
         gameState.player2.name2 = e.target.value || 'Makker 2';
         saveGameState();
     });
-
-    // Timer controls
-    document.getElementById('startTimer').addEventListener('click', toggleTimer);
 
     // Action buttons
     document.getElementById('switchSidesBtn').addEventListener('click', switchSides);
@@ -179,12 +179,8 @@ function checkGameWin() {
 
         // Check if player won the match (2 games)
         if (gameState.player1.games === 2) {
-            // Stop the timer
-            if (gameState.timerRunning) {
-                clearInterval(gameState.timerInterval);
-                gameState.timerRunning = false;
-                document.getElementById('startTimer').textContent = 'Start';
-            }
+            // Stop the timer display
+            stopTimer();
 
             saveMatchResult(gameState.player1.name, gameState.player2.name,
                            gameState.player1.games, gameState.player2.games);
@@ -223,12 +219,8 @@ function checkGameWin() {
 
         // Check if player won the match (2 games)
         if (gameState.player2.games === 2) {
-            // Stop the timer
-            if (gameState.timerRunning) {
-                clearInterval(gameState.timerInterval);
-                gameState.timerRunning = false;
-                document.getElementById('startTimer').textContent = 'Start';
-            }
+            // Stop the timer display
+            stopTimer();
 
             saveMatchResult(gameState.player2.name, gameState.player1.name,
                            gameState.player2.games, gameState.player1.games);
@@ -356,42 +348,56 @@ function clearCourt() {
 }
 
 function toggleTimer() {
-    if (gameState.timerRunning) {
-        clearInterval(gameState.timerInterval);
-        gameState.timerRunning = false;
-        document.getElementById('startTimer').textContent = 'Start';
-    } else {
-        startTimer();
-    }
+    // Timer functionality removed - timer runs automatically based on server timestamps
+    // Keeping function for backwards compatibility but it does nothing
+    console.log('Manual timer control disabled - timer runs automatically when match starts');
 }
 
 function startTimer() {
+    // Start display interval if not already running
     if (!gameState.timerRunning) {
         gameState.timerInterval = setInterval(function() {
-            gameState.timerSeconds++;
             updateTimerDisplay();
-            // Don't save every second - timer will be saved when points are added
-            // This prevents the debounce timer from being constantly reset
         }, 1000);
         gameState.timerRunning = true;
-        document.getElementById('startTimer').textContent = 'Pause';
+    }
+}
+
+function stopTimer() {
+    // Stop display interval
+    if (gameState.timerRunning && gameState.timerInterval) {
+        clearInterval(gameState.timerInterval);
+        gameState.timerInterval = null;
+        gameState.timerRunning = false;
     }
 }
 
 function resetTimer() {
-    clearInterval(gameState.timerInterval);
-    gameState.timerSeconds = 0;
-    gameState.timerRunning = false;
-    document.getElementById('startTimer').textContent = 'Start';
+    stopTimer();
+    gameState.matchStartTime = null;
+    gameState.matchEndTime = null;
     updateTimerDisplay();
     saveGameState();
 }
 
 function updateTimerDisplay() {
-    const minutes = Math.floor(gameState.timerSeconds / 60);
-    const seconds = gameState.timerSeconds % 60;
+    let elapsedSeconds = 0;
+
+    if (gameState.matchStartTime) {
+        // Calculate elapsed time from server timestamp
+        const startTime = new Date(gameState.matchStartTime);
+        const endTime = gameState.matchEndTime ? new Date(gameState.matchEndTime) : new Date();
+        const elapsedMs = endTime - startTime;
+        elapsedSeconds = Math.floor(elapsedMs / 1000);
+    }
+
+    const minutes = Math.floor(elapsedSeconds / 60);
+    const seconds = elapsedSeconds % 60;
     document.getElementById('timerDisplay').textContent =
         `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+    // Update timerSeconds for backwards compatibility (used in match history)
+    gameState.timerSeconds = elapsedSeconds;
 }
 
 function updateDisplay() {
@@ -537,14 +543,101 @@ async function loadGameState() {
         gameState.isDoubles = loaded.isDoubles || false;
         gameState.gameMode = loaded.gameMode || '21';
         gameState.decidingGameSwitched = loaded.decidingGameSwitched || false;
+        gameState.matchStartTime = loaded.matchStartTime;
+        gameState.matchEndTime = loaded.matchEndTime;
 
         // Ensure name2 exists for backwards compatibility
         if (!gameState.player1.name2) gameState.player1.name2 = 'Makker 1';
         if (!gameState.player2.name2) gameState.player2.name2 = 'Makker 2';
+
+        // Start timer display if match is active and not ended
+        if (gameState.matchStartTime && !gameState.matchEndTime) {
+            startTimer();
+        }
     } catch (error) {
         console.error('Failed to load game state:', error);
         // Continue with default state
     }
+}
+
+// Periodically sync game state with server to detect external changes (e.g., admin reset)
+async function syncGameState() {
+    try {
+        // Don't sync if we're currently saving to avoid conflicts
+        if (isSaving) {
+            return;
+        }
+
+        const loaded = await api.getGameState(courtId);
+
+        // Check if court was reset by admin (all scores/games back to 0)
+        const wasReset = (
+            loaded.player1.score === 0 &&
+            loaded.player1.games === 0 &&
+            loaded.player2.score === 0 &&
+            loaded.player2.games === 0 &&
+            !loaded.matchStartTime &&
+            (gameState.player1.score > 0 || gameState.player1.games > 0 ||
+             gameState.player2.score > 0 || gameState.player2.games > 0 ||
+             gameState.matchStartTime)
+        );
+
+        if (wasReset) {
+            // Stop timer display
+            stopTimer();
+
+            // Stop rest break if active
+            if (gameState.restBreakActive) {
+                gameState.restBreakActive = false;
+                if (gameState.restBreakInterval) {
+                    clearInterval(gameState.restBreakInterval);
+                    gameState.restBreakInterval = null;
+                }
+            }
+
+            // Reset game state
+            gameState.player1 = loaded.player1;
+            gameState.player2 = loaded.player2;
+            gameState.timerSeconds = 0;
+            gameState.matchStartTime = null;
+            gameState.matchEndTime = null;
+            gameState.isActive = loaded.isActive;
+            gameState.isDoubles = loaded.isDoubles || false;
+            gameState.gameMode = loaded.gameMode || '21';
+            gameState.decidingGameSwitched = loaded.decidingGameSwitched || false;
+            gameState.setScoresHistory = [];
+            gameState.restBreakTaken = false;
+
+            // Ensure name2 exists
+            if (!gameState.player1.name2) gameState.player1.name2 = 'Makker 1';
+            if (!gameState.player2.name2) gameState.player2.name2 = 'Makker 2';
+
+            // Update display
+            updateDisplay();
+
+            console.log('Court was reset by admin - state synchronized');
+        } else {
+            // Sync timestamps even if not reset (for timer continuity)
+            if (loaded.matchStartTime && !gameState.matchStartTime) {
+                // Match started elsewhere, start timer display
+                gameState.matchStartTime = loaded.matchStartTime;
+                startTimer();
+            }
+            if (loaded.matchEndTime && !gameState.matchEndTime) {
+                // Match ended elsewhere, stop timer display
+                gameState.matchEndTime = loaded.matchEndTime;
+                stopTimer();
+            }
+        }
+    } catch (error) {
+        console.error('Failed to sync game state:', error);
+    }
+}
+
+// Start periodic synchronization with server
+function startPeriodicSync() {
+    // Sync every 3 seconds to detect admin actions
+    setInterval(syncGameState, 3000);
 }
 
 // Save match result to API

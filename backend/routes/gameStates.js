@@ -21,7 +21,7 @@ router.get('/:courtId', async (req, res, next) => {
                     player2_name, player2_name2, player2_score, player2_games,
                     timer_seconds, deciding_game_switched,
                     rest_break_active, rest_break_seconds_left, rest_break_title,
-                    set_scores_history
+                    set_scores_history, match_start_time, match_end_time
              FROM game_states WHERE court_id = ?`,
             [court.id]
         );
@@ -37,6 +37,8 @@ router.get('/:courtId', async (req, res, next) => {
                 restBreakSecondsLeft: 0,
                 restBreakTitle: '',
                 setScoresHistory: [],
+                matchStartTime: null,
+                matchEndTime: null,
                 isActive: !!court.is_active,
                 isDoubles: !!court.is_doubles,
                 gameMode: court.game_mode
@@ -69,6 +71,8 @@ router.get('/:courtId', async (req, res, next) => {
             restBreakSecondsLeft: gameState.rest_break_seconds_left || 0,
             restBreakTitle: gameState.rest_break_title || '',
             setScoresHistory: setScoresHistory,
+            matchStartTime: gameState.match_start_time,
+            matchEndTime: gameState.match_end_time,
             isActive: !!court.is_active,
             isDoubles: !!court.is_doubles,
             gameMode: court.game_mode
@@ -104,6 +108,20 @@ router.put('/:courtId', async (req, res, next) => {
             ? JSON.stringify(setScoresHistory)
             : '[]';
 
+        // Check if match is ending (someone won 2 games)
+        const matchEnding = (player1.games >= 2 || player2.games >= 2);
+
+        // Check for match activity to set start time
+        const hasActivity =
+            (player1.score > 0) ||
+            (player2.score > 0) ||
+            (player1.games > 0) ||
+            (player2.games > 0) ||
+            (timerSeconds > 0);
+
+        // Check if this is a reset (no activity at all)
+        const isReset = !hasActivity;
+
         // Upsert game state (insert or update) using actual court.id
         await query(
             `INSERT INTO game_states (
@@ -111,8 +129,8 @@ router.put('/:courtId', async (req, res, next) => {
                 player2_name, player2_name2, player2_score, player2_games,
                 timer_seconds, deciding_game_switched,
                 rest_break_active, rest_break_seconds_left, rest_break_title,
-                set_scores_history
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                set_scores_history, match_start_time, match_end_time
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NULL)
             ON DUPLICATE KEY UPDATE
                 player1_name = VALUES(player1_name),
                 player1_name2 = VALUES(player1_name2),
@@ -127,7 +145,9 @@ router.put('/:courtId', async (req, res, next) => {
                 rest_break_active = VALUES(rest_break_active),
                 rest_break_seconds_left = VALUES(rest_break_seconds_left),
                 rest_break_title = VALUES(rest_break_title),
-                set_scores_history = VALUES(set_scores_history)`,
+                set_scores_history = VALUES(set_scores_history),
+                match_start_time = IF(? = 1, NULL, COALESCE(match_start_time, IF(? = 1, NOW(), NULL))),
+                match_end_time = IF(? = 1, NULL, IF(? = 1, NOW(), match_end_time))`,
             [
                 court.id,  // Use actual database id, not court number
                 player1.name || 'Spiller 1',
@@ -143,25 +163,19 @@ router.put('/:courtId', async (req, res, next) => {
                 restBreakActive || false,
                 restBreakSecondsLeft || 0,
                 restBreakTitle || '',
-                setScoresHistoryJson
+                setScoresHistoryJson,
+                isReset ? 1 : 0,       // For resetting match_start_time
+                hasActivity ? 1 : 0,   // For setting match_start_time on first activity
+                isReset ? 1 : 0,       // For resetting match_end_time
+                matchEnding ? 1 : 0    // For setting match_end_time when match ends
             ]
         );
 
         // Auto-update court active status based on activity (unless skipped by admin)
         // Only set to active if there IS activity, never set to inactive
         // This allows admin to manually mark courts as active without gameplay interference
-        if (!skipAutoActive) {
-            const hasActivity =
-                (player1.score > 0) ||
-                (player2.score > 0) ||
-                (player1.games > 0) ||
-                (player2.games > 0) ||
-                (timerSeconds > 0);
-
-            // Only update if there IS activity (set active), don't clear it if no activity
-            if (hasActivity) {
-                await query('UPDATE courts SET is_active = TRUE WHERE id = ?', [court.id]);
-            }
+        if (!skipAutoActive && hasActivity) {
+            await query('UPDATE courts SET is_active = TRUE WHERE id = ?', [court.id]);
         }
 
         // Update court's isDoubles setting if provided

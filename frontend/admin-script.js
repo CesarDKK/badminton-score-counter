@@ -143,12 +143,14 @@ function stopAutoRefresh() {
 }
 
 function updateAllTimerDisplays() {
-    // Update all court timer displays based on stored values
+    // Update all court timer displays based on match start time
     Object.keys(courtTimers).forEach(courtNumber => {
         const timerData = courtTimers[courtNumber];
-        if (timerData && timerData.isActive) {
-            const elapsed = Math.floor((Date.now() - timerData.timestamp) / 1000);
-            const currentSeconds = timerData.baseSeconds + elapsed;
+        if (timerData && timerData.isActive && timerData.matchStartTime) {
+            const startTime = new Date(timerData.matchStartTime);
+            const endTime = timerData.matchEndTime ? new Date(timerData.matchEndTime) : new Date();
+            const elapsedMs = endTime - startTime;
+            const currentSeconds = Math.floor(elapsedMs / 1000);
 
             // Find the timer element for this court
             const timerElement = document.querySelector(`[data-court-timer="${courtNumber}"]`);
@@ -221,8 +223,8 @@ async function createCourtCard(courtNumber) {
 
         // Store timer data for continuous updates
         courtTimers[courtNumber] = {
-            baseSeconds: state.timerSeconds,
-            timestamp: Date.now(),
+            matchStartTime: state.matchStartTime,
+            matchEndTime: state.matchEndTime,
             isActive: isActive
         };
 
@@ -252,7 +254,7 @@ async function createCourtCard(courtNumber) {
                     </div>
                     <div class="meta-item">
                         <span class="meta-label">Varighed</span>
-                        <span class="meta-value" data-court-timer="${courtNumber}">${formatDuration(state.timerSeconds)}</span>
+                        <span class="meta-value" data-court-timer="${courtNumber}">${calculateElapsedTime(state)}</span>
                     </div>
                 </div>
             </div>
@@ -291,6 +293,19 @@ function formatDuration(seconds) {
     const minutes = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
+function calculateElapsedTime(state) {
+    if (!state.matchStartTime) {
+        return '00:00';
+    }
+
+    const startTime = new Date(state.matchStartTime);
+    const endTime = state.matchEndTime ? new Date(state.matchEndTime) : new Date();
+    const elapsedMs = endTime - startTime;
+    const elapsedSeconds = Math.floor(elapsedMs / 1000);
+
+    return formatDuration(elapsedSeconds);
 }
 
 // saveCourtCount and changePassword functions moved to settings-script.js
