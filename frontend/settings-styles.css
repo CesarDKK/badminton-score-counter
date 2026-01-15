@@ -28,7 +28,9 @@
 }
 
 .setting-card input[type="number"],
-.setting-card input[type="password"] {
+.setting-card input[type="password"],
+.setting-card input[type="text"],
+.setting-card select {
     width: 100%;
     padding: 12px;
     border: 2px solid var(--color-primary);
@@ -37,6 +39,32 @@
     background: var(--color-bg-container);
     color: #eaeaea;
     margin-bottom: 15px;
+    font-family: inherit;
+}
+
+.setting-card select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23eaeaea' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 40px;
+}
+
+.setting-card select:hover {
+    border-color: var(--color-accent);
+}
+
+.setting-card select:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.1);
+}
+
+.setting-card select option {
+    background: var(--color-bg-container);
+    color: #eaeaea;
+    padding: 10px;
 }
 
 .setting-card button {
@@ -189,6 +217,67 @@
 .theme-color-value {
     font-family: 'Courier New', monospace;
     font-weight: bold;
+}
+
+/* Age Group Sections */
+.age-group-section {
+    margin-bottom: 40px;
+    padding: 25px;
+    background: var(--color-bg-card);
+    border-radius: 15px;
+    border: 2px solid var(--color-primary);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.age-group-section:last-child {
+    margin-bottom: 20px;
+}
+
+/* Modal Form Styling */
+.modal form label {
+    display: block;
+    margin: 15px 0 8px 0;
+    font-weight: bold;
+    color: #eaeaea;
+}
+
+.modal form input[type="text"],
+.modal form select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid var(--color-primary);
+    border-radius: 8px;
+    font-size: 1em;
+    background: var(--color-bg-container);
+    color: #eaeaea;
+    margin-bottom: 15px;
+    font-family: inherit;
+}
+
+.modal form select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23eaeaea' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 40px;
+}
+
+.modal form select:hover {
+    border-color: var(--color-accent);
+}
+
+.modal form select:focus,
+.modal form input[type="text"]:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.1);
+}
+
+.modal form select option {
+    background: var(--color-bg-container);
+    color: #eaeaea;
+    padding: 10px;
 }
 
 /* Responsive Design */

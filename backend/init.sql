@@ -133,3 +133,18 @@ CREATE TABLE IF NOT EXISTS sponsor_settings (
 -- Insert default sponsor settings
 INSERT INTO sponsor_settings (slide_duration) VALUES (10)
 ON DUPLICATE KEY UPDATE id=id;
+
+-- Player info table (stores player information)
+CREATE TABLE IF NOT EXISTS player_info (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(100) NOT NULL,
+  club VARCHAR(100) NOT NULL,
+  gender ENUM('Herre', 'Dame') NOT NULL,
+  age_group ENUM('U9', 'U11', 'U13', 'U15', 'U17', 'U19') NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_name (name),
+  INDEX idx_club (club),
+  INDEX idx_gender (gender),
+  INDEX idx_age_group (age_group)
+) ENGINE=InnoDB;

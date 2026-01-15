@@ -329,6 +329,84 @@ class BadmintonAPI {
             method: 'DELETE'
         });
     }
+
+    // ==================== Player Info ====================
+
+    /**
+     * Get all players
+     * @returns {Promise<Array>} - Array of player objects
+     */
+    async getPlayers() {
+        return this.request('/player-info', { requiresAuth: false });
+    }
+
+    /**
+     * Get specific player
+     * @param {number} playerId - Player ID
+     * @returns {Promise<object>} - Player object
+     */
+    async getPlayer(playerId) {
+        return this.request(`/player-info/${playerId}`, { requiresAuth: false });
+    }
+
+    /**
+     * Create new player
+     * @param {object} playerData - { name, club, ageGroup }
+     * @returns {Promise<object>} - { success, id, message }
+     */
+    async createPlayer(playerData) {
+        return this.request('/player-info', {
+            method: 'POST',
+            body: JSON.stringify(playerData)
+        });
+    }
+
+    /**
+     * Update player
+     * @param {number} playerId - Player ID
+     * @param {object} playerData - { name, club, ageGroup }
+     * @returns {Promise<object>} - { success, message }
+     */
+    async updatePlayer(playerId, playerData) {
+        return this.request(`/player-info/${playerId}`, {
+            method: 'PUT',
+            body: JSON.stringify(playerData)
+        });
+    }
+
+    /**
+     * Delete player
+     * @param {number} playerId - Player ID
+     * @returns {Promise<object>} - { success, message }
+     */
+    async deletePlayer(playerId) {
+        return this.request(`/player-info/${playerId}`, {
+            method: 'DELETE'
+        });
+    }
+
+    /**
+     * Delete all players in age group
+     * @param {string} ageGroup - Age group (U9, U11, U13, U15, U17, U19)
+     * @returns {Promise<object>} - { success, deletedCount, message }
+     */
+    async deletePlayersByAgeGroup(ageGroup) {
+        return this.request(`/player-info/age-group/${ageGroup}`, {
+            method: 'DELETE'
+        });
+    }
+
+    /**
+     * Import multiple players at once
+     * @param {Array} players - Array of player objects [{ name, club, ageGroup }]
+     * @returns {Promise<object>} - { success, imported, skipped, message }
+     */
+    async importPlayers(players) {
+        return this.request('/player-info/import', {
+            method: 'POST',
+            body: JSON.stringify({ players })
+        });
+    }
 }
 
 // Create and export singleton instance

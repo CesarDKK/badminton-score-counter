@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spiller Info - Badminton Admin</title>
+    <link rel="icon" type="image/png" href="/favicon.png?v=4">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="admin-styles.css">
+    <link rel="stylesheet" href="settings-styles.css">
+    <script src="js/theme-loader.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Login Screen -->
+        <div id="loginScreen" class="admin-section">
+            <header>
+                <h1>Spiller Info</h1>
+            </header>
+            <div class="login-container">
+                <div class="login-box">
+                    <h2>Login Påkrævet</h2>
+                    <input type="password" id="adminPassword" placeholder="Indtast admin adgangskode">
+                    <button id="loginBtn" class="btn-primary">Log Ind</button>
+                    <div class="back-link">
+                        <a href="admin.html">← Tilbage til Admin</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Player Info Dashboard -->
+        <div id="playerInfoDashboard" style="display: none;">
+            <header>
+                <h1>Spiller Info</h1>
+                <div class="header-controls">
+                    <button id="logoutBtn" class="btn-secondary">Log Ud</button>
+                    <a href="admin.html" class="btn-secondary" style="text-decoration: none; display: inline-block;">Tilbage til Admin</a>
+                </div>
+            </header>
+
+            <div class="settings-grid">
+                <!-- Add New Player -->
+                <div class="setting-card">
+                    <h3>Tilføj Ny Spiller</h3>
+                    <form id="addPlayerForm">
+                        <label>Navn:</label>
+                        <input type="text" id="playerName" placeholder="Indtast spillerens navn" required>
+
+                        <label>Klub:</label>
+                        <input type="text" id="playerClub" placeholder="Indtast klubnavn" required>
+
+                        <label>Køn:</label>
+                        <select id="playerGender" required>
+                            <option value="">Vælg køn</option>
+                            <option value="Herre">Herre</option>
+                            <option value="Dame">Dame</option>
+                        </select>
+
+                        <label>Årgang:</label>
+                        <select id="playerAgeGroup" required>
+                            <option value="">Vælg årgang</option>
+                            <option value="U9">U9</option>
+                            <option value="U11">U11</option>
+                            <option value="U13">U13</option>
+                            <option value="U15">U15</option>
+                            <option value="U17">U17</option>
+                            <option value="U19">U19</option>
+                        </select>
+
+                        <button type="submit" class="btn-primary">Tilføj Spiller</button>
+                    </form>
+                </div>
+
+                <!-- Import from XML -->
+                <div class="setting-card">
+                    <h3>Importér fra XML</h3>
+                    <p style="color: #aaa; font-size: 0.95em; margin-bottom: 20px; line-height: 1.5;">
+                        Upload en turnerings XML fil (TPTournament format) for at importere spillere automatisk.
+                    </p>
+                    <div style="margin-bottom: 15px;">
+                        <input type="file" id="xmlFileInput" accept=".xml" style="display: none;">
+                        <button id="selectXmlBtn" class="btn-primary" style="width: 100%; margin-bottom: 15px; font-size: 1.1em; padding: 18px; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                            <span style="font-size: 1.5em;">📁</span>
+                            <span>Vælg XML Fil</span>
+                        </button>
+                        <div id="selectedFileName" style="color: var(--color-accent); font-size: 1em; margin-top: 10px; display: none; padding: 12px; background: rgba(233, 69, 96, 0.1); border-radius: 8px; border: 2px solid var(--color-accent); text-align: center; font-weight: bold;"></div>
+                    </div>
+                    <button id="importXmlBtn" class="btn-primary" style="width: 100%; font-size: 1.1em; padding: 18px;" disabled>Importér Spillere til Database</button>
+                    <div id="importStatus" style="margin-top: 15px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px; display: none;">
+                        <p id="importStatusText" style="margin: 0; font-size: 0.9em;"></p>
+                    </div>
+                </div>
+
+                <!-- Players List -->
+                <div class="setting-card" style="grid-column: 1 / -1;">
+                    <h3>Alle Spillere</h3>
+                    <div id="playersListContainer">
+                        <p style="color: #aaa;">Indlæser spillere...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Version Footer -->
+            <div class="version-footer">
+                <p>Version 1.4.0</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Player Modal -->
+    <div id="editPlayerModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>Redigér Spiller</h2>
+            <form id="editPlayerForm">
+                <input type="hidden" id="editPlayerId">
+
+                <label>Navn:</label>
+                <input type="text" id="editPlayerName" placeholder="Indtast spillerens navn" required>
+
+                <label>Klub:</label>
+                <input type="text" id="editPlayerClub" placeholder="Indtast klubnavn" required>
+
+                <label>Køn:</label>
+                <select id="editPlayerGender" required>
+                    <option value="">Vælg køn</option>
+                    <option value="Herre">Herre</option>
+                    <option value="Dame">Dame</option>
+                </select>
+
+                <label>Årgang:</label>
+                <select id="editPlayerAgeGroup" required>
+                    <option value="">Vælg årgang</option>
+                    <option value="U9">U9</option>
+                    <option value="U11">U11</option>
+                    <option value="U13">U13</option>
+                    <option value="U15">U15</option>
+                    <option value="U17">U17</option>
+                    <option value="U19">U19</option>
+                </select>
+
+                <div class="modal-actions">
+                    <button type="submit" class="btn-primary">Gem Ændringer</button>
+                    <button type="button" id="cancelEditBtn" class="btn-secondary">Annuller</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Message Overlay -->
+    <div id="messageOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); z-index: 10000; justify-content: center; align-items: center;">
+        <div style="text-align: center; color: white; max-width: 600px; padding: 40px;">
+            <h1 id="messageTitle" style="font-size: 2.5em; margin-bottom: 30px; color: var(--color-accent);"></h1>
+            <p id="messageText" style="font-size: 1.5em; margin-bottom: 40px; line-height: 1.5;"></p>
+            <button id="messageOkBtn" class="btn-primary" style="font-size: 1.5em; padding: 20px 60px;">OK</button>
+        </div>
+    </div>
+
+    <!-- Confirm Overlay -->
+    <div id="confirmOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); z-index: 10001; justify-content: center; align-items: center;">
+        <div style="text-align: center; color: white; max-width: 600px; padding: 40px; background: var(--color-bg-card); border-radius: 15px; border: 2px solid var(--color-accent); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);">
+            <h1 id="confirmTitle" style="font-size: 2.5em; margin-bottom: 20px; color: var(--color-accent);"></h1>
+            <p id="confirmText" style="font-size: 1.3em; margin-bottom: 40px; line-height: 1.6; color: #eaeaea; white-space: pre-line;"></p>
+            <div style="display: flex; gap: 20px; justify-content: center;">
+                <button id="confirmCancelBtn" class="btn-secondary" style="font-size: 1.3em; padding: 15px 40px; flex: 1; max-width: 200px;">Annuller</button>
+                <button id="confirmOkBtn" class="btn-danger" style="font-size: 1.3em; padding: 15px 40px; flex: 1; max-width: 200px;">Slet</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js?v=5"></script>
+    <script src="player-info-script.js?v=6"></script>
+</body>
+</html>
