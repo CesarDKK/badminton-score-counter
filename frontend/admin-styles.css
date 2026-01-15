@@ -409,6 +409,55 @@ header h1 {
     margin: 0;
 }
 
+/* Player Name Autocomplete Styles */
+.autocomplete-dropdown {
+    position: absolute;
+    background: var(--color-bg-container);
+    border: 2px solid var(--color-primary);
+    border-radius: 8px;
+    margin-top: -10px;
+    max-height: 300px;
+    overflow-y: auto;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+    z-index: 3000;
+    width: calc(100% - 4px);
+}
+
+.autocomplete-item {
+    padding: 12px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(83, 52, 131, 0.3);
+    transition: background 0.2s;
+}
+
+.autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+.autocomplete-item:hover {
+    background: rgba(83, 52, 131, 0.5);
+}
+
+.autocomplete-name {
+    font-weight: bold;
+    font-size: 1em;
+    color: #eaeaea;
+    margin-bottom: 4px;
+}
+
+.autocomplete-info {
+    font-size: 0.85em;
+    color: #aaa;
+}
+
+.edit-form {
+    position: relative;
+}
+
+.edit-form label {
+    position: relative;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .court-grid {
@@ -426,5 +475,9 @@ header h1 {
 
     .vs-divider {
         margin: 10px 0;
+    }
+
+    .autocomplete-dropdown {
+        max-height: 200px;
     }
 }

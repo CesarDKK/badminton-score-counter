@@ -57,6 +57,12 @@ function setupEventListeners() {
     document.getElementById('saveCourtChanges').addEventListener('click', saveCourtChanges);
     document.getElementById('resetCourt').addEventListener('click', resetCourtConfirm);
     document.getElementById('editDoublesMode').addEventListener('change', toggleEditDoublesMode);
+
+    // Setup autocomplete for player name fields
+    setupPlayerNameAutocomplete('editPlayer1Name');
+    setupPlayerNameAutocomplete('editPlayer1Name2');
+    setupPlayerNameAutocomplete('editPlayer2Name');
+    setupPlayerNameAutocomplete('editPlayer2Name2');
 }
 
 function toggleEditDoublesMode() {
@@ -367,19 +373,20 @@ async function openEditModal(courtNumber) {
         const state = await api.getGameState(courtNumber);
 
         if (state && state.player1 && state.player2) {
-            document.getElementById('editPlayer1Name').value = state.player1.name;
-            document.getElementById('editPlayer2Name').value = state.player2.name;
-            document.getElementById('editPlayer1Name2').value = state.player1.name2 || 'Makker 1';
-            document.getElementById('editPlayer2Name2').value = state.player2.name2 || 'Makker 2';
+            // Only set values if they're not the default placeholder text
+            document.getElementById('editPlayer1Name').value = (state.player1.name && state.player1.name !== 'Spiller 1') ? state.player1.name : '';
+            document.getElementById('editPlayer2Name').value = (state.player2.name && state.player2.name !== 'Spiller 2') ? state.player2.name : '';
+            document.getElementById('editPlayer1Name2').value = (state.player1.name2 && state.player1.name2 !== 'Makker 1') ? state.player1.name2 : '';
+            document.getElementById('editPlayer2Name2').value = (state.player2.name2 && state.player2.name2 !== 'Makker 2') ? state.player2.name2 : '';
             document.getElementById('editCourtActive').checked = state.isActive || false;
             document.getElementById('editDoublesMode').checked = state.isDoubles || false;
             document.getElementById('editGameMode').checked = (state.gameMode === '15');
         } else {
-            // Default values for new court
-            document.getElementById('editPlayer1Name').value = 'Spiller 1';
-            document.getElementById('editPlayer2Name').value = 'Spiller 2';
-            document.getElementById('editPlayer1Name2').value = 'Makker 1';
-            document.getElementById('editPlayer2Name2').value = 'Makker 2';
+            // Empty values for new court (placeholder will show)
+            document.getElementById('editPlayer1Name').value = '';
+            document.getElementById('editPlayer2Name').value = '';
+            document.getElementById('editPlayer1Name2').value = '';
+            document.getElementById('editPlayer2Name2').value = '';
             document.getElementById('editCourtActive').checked = false;
             document.getElementById('editDoublesMode').checked = false;
             document.getElementById('editGameMode').checked = false;
@@ -398,10 +405,16 @@ async function openEditModal(courtNumber) {
 async function saveCourtChanges() {
     if (!currentEditingCourt) return;
 
-    const newPlayer1Name = document.getElementById('editPlayer1Name').value.trim() || 'Spiller 1';
-    const newPlayer2Name = document.getElementById('editPlayer2Name').value.trim() || 'Spiller 2';
-    const newPlayer1Name2 = document.getElementById('editPlayer1Name2').value.trim() || 'Makker 1';
-    const newPlayer2Name2 = document.getElementById('editPlayer2Name2').value.trim() || 'Makker 2';
+    // Get values, use placeholder text only if field is empty
+    const player1Value = document.getElementById('editPlayer1Name').value.trim();
+    const player2Value = document.getElementById('editPlayer2Name').value.trim();
+    const player1Value2 = document.getElementById('editPlayer1Name2').value.trim();
+    const player2Value2 = document.getElementById('editPlayer2Name2').value.trim();
+
+    const newPlayer1Name = player1Value || 'Spiller 1';
+    const newPlayer2Name = player2Value || 'Spiller 2';
+    const newPlayer1Name2 = player1Value2 || 'Makker 1';
+    const newPlayer2Name2 = player2Value2 || 'Makker 2';
     const isActive = document.getElementById('editCourtActive').checked;
     const isDoubles = document.getElementById('editDoublesMode').checked;
     const gameMode = document.getElementById('editGameMode').checked ? '15' : '21';
@@ -605,3 +618,129 @@ function hideMessage() {
 window.addEventListener('beforeunload', function() {
     stopAutoRefresh();
 });
+
+// ===== Player Name Autocomplete Functionality =====
+
+let autocompleteTimeout = null;
+let activeAutocompleteField = null;
+
+function setupPlayerNameAutocomplete(inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+
+    // Create autocomplete container
+    const autocompleteContainer = document.createElement('div');
+    autocompleteContainer.id = `${inputId}-autocomplete`;
+    autocompleteContainer.className = 'autocomplete-dropdown';
+    autocompleteContainer.style.display = 'none';
+
+    // Insert after input field
+    input.parentNode.insertBefore(autocompleteContainer, input.nextSibling);
+
+    // Add input event listener
+    input.addEventListener('input', function(e) {
+        const searchTerm = e.target.value.trim();
+
+        // Clear previous timeout
+        if (autocompleteTimeout) {
+            clearTimeout(autocompleteTimeout);
+        }
+
+        // Hide dropdown if search term is empty
+        if (searchTerm.length === 0) {
+            hideAutocomplete(inputId);
+            return;
+        }
+
+        // Debounce search - wait 300ms after user stops typing
+        autocompleteTimeout = setTimeout(() => {
+            searchPlayers(searchTerm, inputId);
+        }, 300);
+    });
+
+    // Handle focus
+    input.addEventListener('focus', function() {
+        activeAutocompleteField = inputId;
+    });
+
+    // Handle blur with delay to allow clicking on dropdown
+    input.addEventListener('blur', function() {
+        setTimeout(() => {
+            if (activeAutocompleteField === inputId) {
+                hideAutocomplete(inputId);
+            }
+        }, 200);
+    });
+}
+
+async function searchPlayers(searchTerm, inputId) {
+    try {
+        const response = await fetch(`/api/player-info/search?q=${encodeURIComponent(searchTerm)}`);
+
+        if (!response.ok) {
+            console.error('Failed to search players:', response.statusText);
+            return;
+        }
+
+        const players = await response.json();
+        showAutocompleteResults(players, inputId);
+    } catch (error) {
+        console.error('Error searching players:', error);
+    }
+}
+
+function showAutocompleteResults(players, inputId) {
+    const container = document.getElementById(`${inputId}-autocomplete`);
+    if (!container) return;
+
+    // Clear previous results
+    container.innerHTML = '';
+
+    if (players.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+
+    // Create dropdown items
+    players.forEach(player => {
+        const item = document.createElement('div');
+        item.className = 'autocomplete-item';
+
+        // Display name with club and age group info
+        const infoText = [player.club, player.age_group, player.gender]
+            .filter(x => x)
+            .join(' • ');
+
+        item.innerHTML = `
+            <div class="autocomplete-name">${escapeHtml(player.name)}</div>
+            <div class="autocomplete-info">${escapeHtml(infoText)}</div>
+        `;
+
+        item.addEventListener('mousedown', function(e) {
+            e.preventDefault(); // Prevent input blur
+            selectPlayer(player.name, inputId);
+        });
+
+        container.appendChild(item);
+    });
+
+    container.style.display = 'block';
+}
+
+function selectPlayer(playerName, inputId) {
+    const input = document.getElementById(inputId);
+    if (input) {
+        input.value = playerName;
+    }
+    hideAutocomplete(inputId);
+}
+
+function hideAutocomplete(inputId) {
+    const container = document.getElementById(`${inputId}-autocomplete`);
+    if (container) {
+        container.style.display = 'none';
+    }
+    if (activeAutocompleteField === inputId) {
+        activeAutocompleteField = null;
+    }
+}

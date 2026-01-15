@@ -3,6 +3,30 @@ const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
 
+// GET /api/player-info/search?q=searchTerm - Search players by name (public)
+router.get('/search', async (req, res, next) => {
+    try {
+        const searchTerm = req.query.q || '';
+
+        if (searchTerm.length < 1) {
+            return res.json([]);
+        }
+
+        const players = await query(
+            `SELECT id, name, club, gender, age_group
+             FROM player_info
+             WHERE name LIKE ?
+             ORDER BY name ASC
+             LIMIT 10`,
+            [`%${searchTerm}%`]
+        );
+
+        res.json(players);
+    } catch (error) {
+        next(error);
+    }
+});
+
 // GET /api/player-info - Get all players (public)
 router.get('/', async (req, res, next) => {
     try {

@@ -63,20 +63,16 @@
                     <span class="close-modal">&times;</span>
                     <h2>Redigér Bane <span id="editCourtNumber"></span></h2>
                     <div class="edit-form">
+                        <!-- 1. Markér som Aktiv -->
                         <div class="active-toggle" style="margin-bottom: 20px;">
                             <label class="toggle-label">
-                                <input type="checkbox" id="editDoublesMode">
-                                <span class="toggle-text">Double-Tilstand</span>
+                                <input type="checkbox" id="editCourtActive">
+                                <span class="toggle-text">Markér som Aktiv (Bane i brug)</span>
                             </label>
+                            <p class="toggle-hint">Aktivér dette for at angive at banen er optaget eller reserveret, selv før pointtælling begynder.</p>
                         </div>
 
-                        <div class="active-toggle" style="margin-bottom: 20px;">
-                            <label class="toggle-label">
-                                <input type="checkbox" id="editGameMode">
-                                <span class="toggle-text">Spiltilstand: 15/21 (ikke markeret = 21/30)</span>
-                            </label>
-                        </div>
-
+                        <!-- 2. Spillernavne -->
                         <label>Spiller 1 Navn:</label>
                         <input type="text" id="editPlayer1Name" placeholder="Spiller 1">
 
@@ -89,12 +85,20 @@
                         <label id="editPlayer2Name2Label" style="display: none;">Spiller 2 Makker:</label>
                         <input type="text" id="editPlayer2Name2" placeholder="Makker 2" style="display: none;">
 
-                        <div class="active-toggle">
+                        <!-- 3. Double-Tilstand -->
+                        <div class="active-toggle" style="margin-bottom: 20px;">
                             <label class="toggle-label">
-                                <input type="checkbox" id="editCourtActive">
-                                <span class="toggle-text">Markér som Aktiv (Bane i brug)</span>
+                                <input type="checkbox" id="editDoublesMode">
+                                <span class="toggle-text">Double-Tilstand</span>
                             </label>
-                            <p class="toggle-hint">Aktivér dette for at angive at banen er optaget eller reserveret, selv før pointtælling begynder.</p>
+                        </div>
+
+                        <!-- 4. Spiltilstand -->
+                        <div class="active-toggle" style="margin-bottom: 20px;">
+                            <label class="toggle-label">
+                                <input type="checkbox" id="editGameMode">
+                                <span class="toggle-text">Spiltilstand: 15/21 (ikke markeret = 21/30)</span>
+                            </label>
                         </div>
 
                         <div class="modal-actions">
@@ -116,7 +120,7 @@
 
             <!-- Version Footer -->
             <div class="version-footer">
-                <p>Version 1.4.0</p>
+                <p>Version 1.5.0</p>
             </div>
         </div>
     </div>
