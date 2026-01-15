@@ -252,6 +252,17 @@ class BadmintonAPI {
         });
     }
 
+    /**
+     * Delete all match history
+     * @returns {Promise<object>} - { success, message }
+     */
+    async deleteAllMatchHistory() {
+        return this.request('/match-history/all', {
+            method: 'DELETE',
+            requiresAuth: true
+        });
+    }
+
     // ==================== Sponsors ====================
 
     /**

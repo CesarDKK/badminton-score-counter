@@ -46,6 +46,13 @@
             <div id="courtOverviewSection" class="overview-section">
                 <h2>Baneoversigt</h2>
                 <div id="courtOverview" class="court-grid"></div>
+
+                <!-- Clear All Court Data Section -->
+                <div style="margin-top: 40px; padding: 20px; background: rgba(231, 76, 60, 0.1); border: 2px solid #e74c3c; border-radius: 10px;">
+                    <h3 style="color: #e94560; margin-bottom: 15px;">Ryd Banedata</h3>
+                    <button id="clearAllDataBtn" class="btn-danger">Ryd Alle Banedata</button>
+                    <p class="warning-text">Advarsel: Dette vil nulstille alle point og spiltilstande for alle baner!</p>
+                </div>
             </div>
 
             <!-- Match History Section -->
@@ -54,7 +61,29 @@
                     <h2>Kamphistorik - Alle Baner</h2>
                     <button id="backToOverviewBtn" class="btn-secondary">Tilbage til Oversigt</button>
                 </div>
+
+                <!-- Search and Filter Controls -->
+                <div class="match-history-controls">
+                    <div class="search-box">
+                        <input type="text" id="matchSearchInput" placeholder="Søg på spillernavn..." />
+                    </div>
+                    <div class="sort-box">
+                        <label for="courtFilterSelect">Vælg bane:</label>
+                        <select id="courtFilterSelect">
+                            <option value="all">Alle baner</option>
+                            <!-- Court numbers will be populated dynamically -->
+                        </select>
+                    </div>
+                </div>
+
                 <div id="allMatchesContainer"></div>
+
+                <!-- Delete Match History Section -->
+                <div style="margin-top: 40px; padding: 20px; background: rgba(231, 76, 60, 0.1); border: 2px solid #e74c3c; border-radius: 10px;">
+                    <h3 style="color: #e94560; margin-bottom: 15px;">Slet Kamphistorik</h3>
+                    <button id="deleteAllMatchHistoryBtn" class="btn-danger">Slet Alt Kamphistorik</button>
+                    <p class="warning-text">Advarsel: Dette vil permanent slette hele kamphistorikken!</p>
+                </div>
             </div>
 
             <!-- Edit Court Modal -->
@@ -111,11 +140,7 @@
 
             <!-- Settings Section -->
             <div class="settings-section">
-                <div class="setting-card">
-                    <h3>Datastyring</h3>
-                    <button id="clearAllDataBtn" class="btn-danger">Ryd Alle Banedata</button>
-                    <p class="warning-text">Advarsel: Dette vil nulstille alle point og kamphistorik for alle baner!</p>
-                </div>
+                <!-- Settings moved to settings.html -->
             </div>
 
             <!-- Version Footer -->

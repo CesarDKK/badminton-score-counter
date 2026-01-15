@@ -5,6 +5,9 @@ let currentEditingCourt = null;
 let allMatchesDisplayCount = 30;
 let courtTimers = {}; // Store timer values and timestamps for each court
 let timerUpdateInterval = null;
+let allMatchesData = []; // Store all matches for filtering/sorting
+let currentSearchTerm = '';
+let currentCourtFilter = 'all';
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
@@ -35,7 +38,12 @@ function setupEventListeners() {
     document.getElementById('matchHistoryBtn').addEventListener('click', showMatchHistory);
     document.getElementById('backToOverviewBtn').addEventListener('click', showCourtOverview);
 
-    // Settings (court count and password moved to settings.html)
+    // Match History Search and Filter
+    document.getElementById('matchSearchInput').addEventListener('input', handleMatchSearch);
+    document.getElementById('courtFilterSelect').addEventListener('change', handleCourtFilter);
+    document.getElementById('deleteAllMatchHistoryBtn').addEventListener('click', deleteAllMatchHistory);
+
+    // Clear All Court Data
     document.getElementById('clearAllDataBtn').addEventListener('click', clearAllData);
 
     // Edit Court Modal
@@ -316,39 +324,72 @@ function calculateElapsedTime(state) {
 
 // saveCourtCount and changePassword functions moved to settings-script.js
 
-async function clearAllData() {
+async function deleteAllMatchHistory() {
     showMessage(
         'ADVARSEL',
-        'Er du sikker på at du vil rydde ALLE banedata? Dette kan ikke fortrydes!',
+        'Er du sikker på at du vil slette ALT kamphistorik? Dette kan ikke fortrydes!',
         [
             {
                 text: 'Ja, Fortsæt',
                 callback: () => {
                     showMessage(
                         'SIDSTE ADVARSEL',
-                        'Dette vil slette alle point, kamphistorik og spiltilstande for ALLE baner. Er du helt sikker?',
+                        'Dette vil permanent slette hele kamphistorikken. Er du helt sikker?',
                         [
                             {
                                 text: 'Ja, Slet Alt',
                                 callback: async () => {
                                     try {
-                                        const settings = await api.getSettings();
-                                        const courtCount = settings.courtCount;
+                                        await api.deleteAllMatchHistory();
+                                        showMessage('Succes', 'Alt kamphistorik er blevet slettet!');
+                                        await loadAllMatches();
+                                    } catch (error) {
+                                        console.error('Failed to delete match history:', error);
+                                        showMessage('Fejl', 'Kunne ikke slette kamphistorik. Tjek din forbindelse.');
+                                    }
+                                },
+                                style: 'danger'
+                            },
+                            { text: 'Annuller', callback: null, style: 'secondary' }
+                        ]
+                    );
+                },
+                style: 'danger'
+            },
+            { text: 'Annuller', callback: null, style: 'secondary' }
+        ]
+    );
+}
 
-                                        // Reset all game states
+async function clearAllData() {
+    showMessage(
+        'ADVARSEL',
+        'Er du sikker på at du vil nulstille ALLE baner? Dette vil slette alle point og spiltilstande!',
+        [
+            {
+                text: 'Ja, Fortsæt',
+                callback: () => {
+                    showMessage(
+                        'SIDSTE ADVARSEL',
+                        'Dette vil nulstille alle baner. Er du helt sikker?',
+                        [
+                            {
+                                text: 'Ja, Nulstil Alt',
+                                callback: async () => {
+                                    try {
+                                        const settings = await api.getSettings();
+                                        const courtCount = settings.courtCount || 4;
+
+                                        // Reset all courts
                                         for (let i = 1; i <= courtCount; i++) {
-                                            try {
-                                                await api.resetGameState(i);
-                                            } catch (error) {
-                                                console.error(`Failed to reset court ${i}:`, error);
-                                            }
+                                            await api.resetGameState(i);
                                         }
 
-                                        showMessage('Succes', 'Alle banedata er blevet ryddet!');
+                                        showMessage('Succes', 'Alle baner er blevet nulstillet!');
                                         await loadCourtOverview();
                                     } catch (error) {
                                         console.error('Failed to clear all data:', error);
-                                        showMessage('Fejl', 'Kunne ikke rydde alle data. Tjek din forbindelse.');
+                                        showMessage('Fejl', 'Kunne ikke nulstille baner. Tjek din forbindelse.');
                                     }
                                 },
                                 style: 'danger'
@@ -519,49 +560,13 @@ function showCourtOverview() {
 async function loadAllMatches() {
     try {
         // Get all match history from API
-        const allMatches = await api.getAllMatchHistory();
+        allMatchesData = await api.getAllMatchHistory();
 
-        // Sort by date (most recent first)
-        allMatches.sort((a, b) => new Date(b.match_date) - new Date(a.match_date));
+        // Populate court filter dropdown
+        populateCourtFilter();
 
-        const container = document.getElementById('allMatchesContainer');
-
-        if (allMatches.length === 0) {
-            container.innerHTML = '<div style="color: #999; text-align: center; padding: 40px; font-size: 1.2em;">Ingen kamphistorik tilgængelig</div>';
-            return;
-        }
-
-        // Display matches (up to allMatchesDisplayCount)
-        const displayMatches = allMatches.slice(0, allMatchesDisplayCount);
-        const matchesHtml = displayMatches.map(match => `
-            <div style="padding: 15px; background: rgba(15, 52, 96, 0.5); border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #e94560;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <div style="font-weight: bold; font-size: 1.1em; color: #e94560; margin-bottom: 5px;">
-                            ${escapeHtml(match.winner_name)} besejrede ${escapeHtml(match.loser_name)}
-                        </div>
-                        <div style="color: #aaa; font-size: 0.9em;">
-                            Sæt Vundet: ${match.games_won}${match.set_scores ? ` (${match.set_scores})` : ''} | Varighed: ${match.duration} | Bane ${match.court_id}
-                        </div>
-                    </div>
-                    <div style="color: #999; font-size: 0.85em;">
-                        ${new Date(match.match_date).toLocaleDateString('da-DK')}
-                    </div>
-                </div>
-            </div>
-        `).join('');
-
-        container.innerHTML = matchesHtml;
-
-        // Add "Show More" button if there are more than allMatchesDisplayCount matches
-        if (allMatches.length > allMatchesDisplayCount) {
-            const showMoreBtn = `
-                <button onclick="showMoreMatches()" style="width: 100%; padding: 15px; background: #533483; color: white; border: none; border-radius: 10px; cursor: pointer; font-size: 1em; font-weight: bold; margin-top: 10px;">
-                    Vis Flere Kampe (${allMatches.length - allMatchesDisplayCount} flere)
-                </button>
-            `;
-            container.innerHTML += showMoreBtn;
-        }
+        // Apply current filters and display
+        displayFilteredMatches();
     } catch (error) {
         console.error('Failed to load match history:', error);
         const container = document.getElementById('allMatchesContainer');
@@ -569,9 +574,219 @@ async function loadAllMatches() {
     }
 }
 
+function populateCourtFilter() {
+    // Get unique court numbers from matches
+    const courtNumbers = [...new Set(allMatchesData.map(match => match.court_id))].sort((a, b) => a - b);
+
+    // Populate dropdown
+    const select = document.getElementById('courtFilterSelect');
+
+    // Keep "Alle baner" option and remove old court options
+    while (select.options.length > 1) {
+        select.remove(1);
+    }
+
+    // Add court number options
+    courtNumbers.forEach(courtNum => {
+        const option = document.createElement('option');
+        option.value = courtNum;
+        option.textContent = `Bane ${courtNum}`;
+        select.appendChild(option);
+    });
+}
+
+function displayFilteredMatches() {
+    const container = document.getElementById('allMatchesContainer');
+
+    if (allMatchesData.length === 0) {
+        container.innerHTML = '<div style="color: #999; text-align: center; padding: 40px; font-size: 1.2em;">Ingen kamphistorik tilgængelig</div>';
+        return;
+    }
+
+    // Filter matches by search term and court number
+    let filteredMatches = allMatchesData.filter(match => {
+        // Filter by search term
+        if (currentSearchTerm) {
+            const searchLower = currentSearchTerm.toLowerCase();
+            const matchesSearch = match.winner_name.toLowerCase().includes(searchLower) ||
+                                 match.loser_name.toLowerCase().includes(searchLower);
+            if (!matchesSearch) return false;
+        }
+
+        // Filter by court number
+        if (currentCourtFilter !== 'all') {
+            const courtId = parseInt(currentCourtFilter);
+            if (match.court_id !== courtId) return false;
+        }
+
+        return true;
+    });
+
+    // Always sort by date (newest first)
+    filteredMatches.sort((a, b) => new Date(b.match_date) - new Date(a.match_date));
+
+    // Clear container
+    container.innerHTML = '';
+
+    if (filteredMatches.length === 0) {
+        container.innerHTML = '<div style="color: #999; text-align: center; padding: 40px; font-size: 1.2em;">Ingen kampe fundet</div>';
+        return;
+    }
+
+    // Display matches (up to allMatchesDisplayCount)
+    const displayMatches = filteredMatches.slice(0, allMatchesDisplayCount);
+
+    displayMatches.forEach((match, index) => {
+        const matchCard = createMatchCard(match, index);
+        container.appendChild(matchCard);
+    });
+
+    // Add "Show More" button if there are more than allMatchesDisplayCount matches
+    if (filteredMatches.length > allMatchesDisplayCount) {
+        const showMoreBtn = document.createElement('button');
+        showMoreBtn.textContent = `Vis Flere Kampe (${filteredMatches.length - allMatchesDisplayCount} flere)`;
+        showMoreBtn.style.cssText = 'width: 100%; padding: 15px; background: #533483; color: white; border: none; border-radius: 10px; cursor: pointer; font-size: 1em; font-weight: bold; margin-top: 10px;';
+        showMoreBtn.onclick = showMoreMatches;
+        container.appendChild(showMoreBtn);
+    }
+}
+
+function handleMatchSearch(e) {
+    currentSearchTerm = e.target.value.trim();
+    allMatchesDisplayCount = 30; // Reset display count when searching
+    displayFilteredMatches();
+}
+
+function handleCourtFilter(e) {
+    currentCourtFilter = e.target.value;
+    displayFilteredMatches();
+}
+
+function formatSetScoreWithBold(scoreText) {
+    // Format can be either "21-19" or "Player1 21-19 Player2"
+    const trimmed = scoreText.trim();
+
+    // Try to match pattern: "Name Score-Score Name" or just "Score-Score"
+    const fullMatch = trimmed.match(/^(.+?)\s+(\d+)-(\d+)\s+(.+)$/);
+
+    if (fullMatch) {
+        // Format: "Player1 21-19 Player2"
+        const player1Name = fullMatch[1];
+        const score1 = parseInt(fullMatch[2]);
+        const score2 = parseInt(fullMatch[3]);
+        const player2Name = fullMatch[4];
+
+        if (isNaN(score1) || isNaN(score2)) {
+            return escapeHtml(trimmed);
+        }
+
+        // Put winner first (name and score in bold)
+        if (score1 > score2) {
+            return `<strong>${escapeHtml(player1Name)} ${score1}</strong>-${score2} ${escapeHtml(player2Name)}`;
+        } else if (score2 > score1) {
+            // Swap order so winner is first
+            return `<strong>${escapeHtml(player2Name)} ${score2}</strong>-${score1} ${escapeHtml(player1Name)}`;
+        } else {
+            return `${escapeHtml(player1Name)} ${score1}-${score2} ${escapeHtml(player2Name)}`;
+        }
+    } else {
+        // Try simpler format: just "Score-Score"
+        const scoreMatch = trimmed.match(/(\d+)-(\d+)/);
+
+        if (!scoreMatch) {
+            return escapeHtml(trimmed);
+        }
+
+        const score1 = parseInt(scoreMatch[1]);
+        const score2 = parseInt(scoreMatch[2]);
+
+        if (isNaN(score1) || isNaN(score2)) {
+            return escapeHtml(trimmed);
+        }
+
+        // Put higher score first
+        if (score1 > score2) {
+            return `<strong>${score1}</strong>-${score2}`;
+        } else if (score2 > score1) {
+            return `<strong>${score2}</strong>-${score1}`;
+        } else {
+            return `${score1}-${score2}`;
+        }
+    }
+}
+
+function createMatchCard(match, index) {
+    const card = document.createElement('div');
+    card.className = 'match-card';
+    card.dataset.matchId = index;
+
+    // Parse set scores if available
+    const setScoresArray = match.set_scores ? match.set_scores.split(', ') : [];
+    const hasSetDetails = setScoresArray.length > 0;
+
+    // Main match info (always visible)
+    const mainInfo = document.createElement('div');
+    mainInfo.className = 'match-main-info';
+    mainInfo.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; cursor: ${hasSetDetails ? 'pointer' : 'default'};">
+            <div style="flex: 1;">
+                <div style="font-weight: bold; font-size: 1.1em; color: #e94560; margin-bottom: 5px;">
+                    <strong>${escapeHtml(match.winner_name)}</strong> besejrede ${escapeHtml(match.loser_name)}
+                </div>
+                <div style="color: #aaa; font-size: 0.9em;">
+                    Sæt: ${match.games_won} | Varighed: ${match.duration} | Bane ${match.court_id}
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <div style="color: #999; font-size: 0.85em;">
+                    ${new Date(match.match_date).toLocaleDateString('da-DK')}
+                </div>
+                ${hasSetDetails ? '<div class="expand-icon" style="color: #e94560; font-size: 1.2em;">▼</div>' : ''}
+            </div>
+        </div>
+    `;
+
+    // Details section (hidden by default)
+    const details = document.createElement('div');
+    details.className = 'match-details';
+    details.style.display = 'none';
+
+    if (hasSetDetails) {
+        details.innerHTML = `
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(233, 69, 96, 0.3);">
+                <div style="font-weight: bold; margin-bottom: 10px; color: #eaeaea;">Sæt detaljer:</div>
+                ${setScoresArray.map((score, i) => {
+                    const formattedScore = formatSetScoreWithBold(score);
+                    return `
+                        <div style="padding: 8px 12px; background: rgba(83, 52, 131, 0.3); border-radius: 5px; margin-bottom: 5px; display: flex; justify-content: space-between;">
+                            <span style="color: #eaeaea;">Sæt ${i + 1}:</span>
+                            <span style="color: #e94560;">${formattedScore}</span>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+
+        // Add click handler to toggle details
+        mainInfo.addEventListener('click', () => {
+            const isExpanded = details.style.display === 'block';
+            details.style.display = isExpanded ? 'none' : 'block';
+            const icon = mainInfo.querySelector('.expand-icon');
+            if (icon) {
+                icon.textContent = isExpanded ? '▼' : '▲';
+            }
+        });
+    }
+
+    card.appendChild(mainInfo);
+    card.appendChild(details);
+
+    return card;
+}
+
 function showMoreMatches() {
     allMatchesDisplayCount += 30;
-    loadAllMatches();
+    displayFilteredMatches();
 }
 
 // Message overlay functions (replaces alert/confirm dialogs)

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
+const { authMiddleware } = require('../middleware/auth');
 
 // GET /api/match-history/all - Get all match history (public)
 // NOTE: This route must come BEFORE /:courtId to avoid matching "all" as a courtId
@@ -73,6 +74,20 @@ router.post('/', async (req, res, next) => {
         res.json({
             success: true,
             id: result.insertId
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// DELETE /api/match-history/all - Delete all match history (protected - requires authentication)
+router.delete('/all', authMiddleware, async (req, res, next) => {
+    try {
+        await query('DELETE FROM match_history');
+
+        res.json({
+            success: true,
+            message: 'Alt kamphistorik er blevet slettet'
         });
     } catch (error) {
         next(error);
