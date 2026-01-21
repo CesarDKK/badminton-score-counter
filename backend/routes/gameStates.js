@@ -21,7 +21,7 @@ router.get('/:courtId', async (req, res, next) => {
                     player2_name, player2_name2, player2_score, player2_games,
                     timer_seconds, deciding_game_switched,
                     rest_break_active, rest_break_seconds_left, rest_break_title,
-                    set_scores_history, match_start_time, match_end_time
+                    set_scores_history, match_start_time, match_end_time, match_completed
              FROM game_states WHERE court_id = ?`,
             [court.id]
         );
@@ -39,6 +39,7 @@ router.get('/:courtId', async (req, res, next) => {
                 setScoresHistory: [],
                 matchStartTime: null,
                 matchEndTime: null,
+                matchCompleted: false,
                 isActive: !!court.is_active,
                 isDoubles: !!court.is_doubles,
                 gameMode: court.game_mode
@@ -73,6 +74,7 @@ router.get('/:courtId', async (req, res, next) => {
             setScoresHistory: setScoresHistory,
             matchStartTime: gameState.match_start_time,
             matchEndTime: gameState.match_end_time,
+            matchCompleted: !!gameState.match_completed,
             isActive: !!court.is_active,
             isDoubles: !!court.is_doubles,
             gameMode: court.game_mode
@@ -86,7 +88,7 @@ router.get('/:courtId', async (req, res, next) => {
 router.put('/:courtId', async (req, res, next) => {
     try {
         const { courtId } = req.params;
-        const { player1, player2, timerSeconds, decidingGameSwitched, restBreakActive, restBreakSecondsLeft, restBreakTitle, isDoubles, setScoresHistory } = req.body;
+        const { player1, player2, timerSeconds, decidingGameSwitched, restBreakActive, restBreakSecondsLeft, restBreakTitle, isDoubles, setScoresHistory, matchStartTime, matchEndTime, matchCompleted } = req.body;
 
         // Check if we should skip auto-updating active status (for admin edits)
         const skipAutoActive = req.query.skipAutoActive === 'true';
@@ -117,10 +119,25 @@ router.put('/:courtId', async (req, res, next) => {
             (player2.score > 0) ||
             (player1.games > 0) ||
             (player2.games > 0) ||
-            (timerSeconds > 0);
+            (timerSeconds > 0) ||
+            (matchStartTime && matchStartTime !== null);  // Include if matchStartTime is explicitly set
 
-        // Check if this is a reset (no activity at all)
-        const isReset = !hasActivity;
+        // Check if this is a reset (no activity at all AND no matchStartTime)
+        const isReset = !hasActivity && !matchStartTime;
+
+        // Check if frontend explicitly wants to clear matchEndTime (undo scenario)
+        const shouldClearMatchEndTime = matchEndTime === null && req.body.hasOwnProperty('matchEndTime');
+
+        // Check if frontend explicitly provided matchStartTime
+        const hasExplicitStartTime = matchStartTime && matchStartTime !== null;
+
+        // Convert ISO 8601 timestamp to MySQL datetime format
+        let mysqlStartTime = null;
+        if (hasExplicitStartTime) {
+            const date = new Date(matchStartTime);
+            // Convert '2026-01-21T10:34:08.440Z' to '2026-01-21 10:34:08'
+            mysqlStartTime = date.toISOString().slice(0, 19).replace('T', ' ');
+        }
 
         // Upsert game state (insert or update) using actual court.id
         await query(
@@ -129,8 +146,8 @@ router.put('/:courtId', async (req, res, next) => {
                 player2_name, player2_name2, player2_score, player2_games,
                 timer_seconds, deciding_game_switched,
                 rest_break_active, rest_break_seconds_left, rest_break_title,
-                set_scores_history, match_start_time, match_end_time
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NULL)
+                set_scores_history, match_start_time, match_end_time, match_completed
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, IF(? = 1, ?, IF(? = 1, NOW(), NULL)), NULL, ?)
             ON DUPLICATE KEY UPDATE
                 player1_name = VALUES(player1_name),
                 player1_name2 = VALUES(player1_name2),
@@ -146,8 +163,9 @@ router.put('/:courtId', async (req, res, next) => {
                 rest_break_seconds_left = VALUES(rest_break_seconds_left),
                 rest_break_title = VALUES(rest_break_title),
                 set_scores_history = VALUES(set_scores_history),
-                match_start_time = IF(? = 1, NULL, COALESCE(match_start_time, IF(? = 1, NOW(), NULL))),
-                match_end_time = IF(? = 1, NULL, IF(? = 1, NOW(), match_end_time))`,
+                match_start_time = IF(? = 1, NULL, IF(? = 1, ?, COALESCE(match_start_time, IF(? = 1, NOW(), NULL)))),
+                match_end_time = IF(? = 1, NULL, IF(? = 1, NULL, IF(? = 1, NOW(), match_end_time))),
+                match_completed = VALUES(match_completed)`,
             [
                 court.id,  // Use actual database id, not court number
                 player1.name || 'Spiller 1',
@@ -164,10 +182,17 @@ router.put('/:courtId', async (req, res, next) => {
                 restBreakSecondsLeft || 0,
                 restBreakTitle || '',
                 setScoresHistoryJson,
-                isReset ? 1 : 0,       // For resetting match_start_time
-                hasActivity ? 1 : 0,   // For setting match_start_time on first activity
-                isReset ? 1 : 0,       // For resetting match_end_time
-                matchEnding ? 1 : 0    // For setting match_end_time when match ends
+                hasExplicitStartTime ? 1 : 0,    // For INSERT: check if frontend provided time
+                mysqlStartTime || null,          // For INSERT: use frontend time if provided (MySQL format)
+                hasActivity ? 1 : 0,             // For INSERT: or set NOW if activity
+                matchCompleted || false,
+                isReset ? 1 : 0,                 // For UPDATE: resetting match_start_time
+                hasExplicitStartTime ? 1 : 0,    // For UPDATE: check if frontend provided time
+                mysqlStartTime || null,          // For UPDATE: use frontend time if provided (MySQL format)
+                hasActivity ? 1 : 0,             // For UPDATE: or set NOW if activity
+                isReset ? 1 : 0,                 // For UPDATE: resetting match_end_time (full reset)
+                shouldClearMatchEndTime ? 1 : 0, // For UPDATE: clearing match_end_time (undo)
+                matchEnding ? 1 : 0              // For UPDATE: setting match_end_time when match ends
             ]
         );
 

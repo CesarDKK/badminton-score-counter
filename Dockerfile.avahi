@@ -1,0 +1,26 @@
+FROM alpine:latest
+
+# Install Avahi daemon and dbus
+RUN apk add --no-cache \
+    avahi \
+    avahi-tools \
+    dbus
+
+# Create Avahi service directory
+RUN mkdir -p /etc/avahi/services
+
+# Copy Avahi configuration
+COPY avahi-daemon.conf /etc/avahi/avahi-daemon.conf
+COPY badminton.service /etc/avahi/services/badminton.service
+
+# Create dbus directory
+RUN mkdir -p /var/run/dbus
+
+# Expose mDNS port
+EXPOSE 5353/udp
+
+# Start script
+COPY avahi-start.sh /avahi-start.sh
+RUN chmod +x /avahi-start.sh
+
+CMD ["/avahi-start.sh"]

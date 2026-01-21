@@ -66,11 +66,26 @@ services:
     container_name: badminton-frontend
     restart: unless-stopped
     ports:
+      - "80:80"
       - "8080:80"
     depends_on:
       - backend
     networks:
       - badminton-network
+
+  # Avahi mDNS Service
+  avahi:
+    build:
+      context: .
+      dockerfile: Dockerfile.avahi
+    container_name: badminton-avahi
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    environment:
+      - AVAHI_HOST_NAME=badmintonapp
+    depends_on:
+      - frontend
 
 networks:
   badminton-network:

@@ -193,6 +193,30 @@ header h1 {
     text-align: center;
 }
 
+.btn-start-match {
+    padding: 10px 25px;
+    font-size: 1em;
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+
+.btn-start-match:hover:not(:disabled) {
+    background: var(--color-accent);
+    transform: scale(1.05);
+}
+
+.btn-start-match:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #666;
+}
+
 #timerDisplay {
     font-size: 3em;
     font-weight: bold;

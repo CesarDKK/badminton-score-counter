@@ -460,6 +460,61 @@ async function saveCourtChanges() {
     const isDoubles = document.getElementById('editDoublesMode').checked;
     const gameMode = document.getElementById('editGameMode').checked ? '15' : '21';
 
+    // Check if any changes have been made (names entered or settings changed)
+    const hasChanges = player1Value || player2Value || player1Value2 || player2Value2;
+
+    // If changes were made but court is not marked as active, ask user
+    if (hasChanges && !isActive) {
+        showMessage(
+            'Markér banen som aktiv?',
+            'Du har lavet ændringer til banen. Vil du markere banen som aktiv?',
+            [
+                {
+                    text: 'Ja, Markér som Aktiv',
+                    callback: () => {
+                        // Set checkbox to checked and save
+                        document.getElementById('editCourtActive').checked = true;
+                        performSaveCourtChanges(true);
+                    },
+                    style: 'primary'
+                },
+                {
+                    text: 'Nej, Gem uden at Aktivere',
+                    callback: () => {
+                        performSaveCourtChanges(false);
+                    },
+                    style: 'secondary'
+                },
+                {
+                    text: 'Annuller',
+                    callback: null,
+                    style: 'secondary'
+                }
+            ]
+        );
+        return;
+    }
+
+    // No changes or already active - save directly
+    await performSaveCourtChanges(isActive);
+}
+
+async function performSaveCourtChanges(isActive) {
+    if (!currentEditingCourt) return;
+
+    // Get values again
+    const player1Value = document.getElementById('editPlayer1Name').value.trim();
+    const player2Value = document.getElementById('editPlayer2Name').value.trim();
+    const player1Value2 = document.getElementById('editPlayer1Name2').value.trim();
+    const player2Value2 = document.getElementById('editPlayer2Name2').value.trim();
+
+    const newPlayer1Name = player1Value || 'Spiller 1';
+    const newPlayer2Name = player2Value || 'Spiller 2';
+    const newPlayer1Name2 = player1Value2 || 'Makker 1';
+    const newPlayer2Name2 = player2Value2 || 'Makker 2';
+    const isDoubles = document.getElementById('editDoublesMode').checked;
+    const gameMode = document.getElementById('editGameMode').checked ? '15' : '21';
+
     console.log('[DEBUG] Saving court changes:', {
         courtId: currentEditingCourt,
         isActive,

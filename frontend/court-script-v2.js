@@ -35,7 +35,8 @@ let gameState = {
     restBreakInterval: null,  // Interval for rest break countdown
     restBreakCallback: null,  // Callback to execute when rest break ends
     restBreakSecondsLeft: 0,  // Seconds remaining in rest break
-    restBreakTitle: ''  // Title to display during rest break
+    restBreakTitle: '',  // Title to display during rest break
+    matchCompleted: false  // Track if match is completed and confirmed
 };
 
 // Debouncing variables
@@ -106,12 +107,18 @@ function setupEventListeners() {
     document.getElementById('switchSidesBtn').addEventListener('click', switchSides);
     document.getElementById('doublesToggle').addEventListener('click', toggleDoubles);
     document.getElementById('clearCourtBtn').addEventListener('click', clearCourt);
+    document.getElementById('startMatchBtn').addEventListener('click', manualStartMatch);
 
     // Rest break skip button
     document.getElementById('skipRestBreak').addEventListener('click', endRestBreak);
 }
 
 function addPoint(player) {
+    // Prevent adding points if match is completed
+    if (gameState.matchCompleted) {
+        return;
+    }
+
     // Auto-start timer on first point
     const isFirstPoint = gameState.player1.score === 0 &&
                         gameState.player2.score === 0 &&
@@ -127,6 +134,10 @@ function addPoint(player) {
 
     // Start timer automatically on first point
     if (isFirstPoint) {
+        // Set match start time if not already set
+        if (!gameState.matchStartTime) {
+            gameState.matchStartTime = new Date().toISOString();
+        }
         startTimer();
     }
 
@@ -149,10 +160,96 @@ function addPoint(player) {
 }
 
 function removePoint(player) {
+    // Prevent removing points if match is completed
+    if (gameState.matchCompleted) {
+        return;
+    }
+
+    // Check if we need to undo a completed set/match
+    const needsUndo = (player === 1 && gameState.player1.score === 0 && gameState.player1.games > 0) ||
+                      (player === 2 && gameState.player2.score === 0 && gameState.player2.games > 0);
+
+    if (needsUndo) {
+        // Undo the last completed set
+        showMessage(
+            'Fortryd Sæt?',
+            'Dette vil fortryde det sidste afsluttede sæt og gendanne scoren.',
+            [
+                {
+                    text: 'Ja, Fortryd',
+                    callback: () => {
+                        undoLastSet(player);
+                    },
+                    style: 'primary'
+                },
+                {
+                    text: 'Annuller',
+                    callback: null,
+                    style: 'secondary'
+                }
+            ]
+        );
+    } else {
+        // Normal point removal
+        if (player === 1 && gameState.player1.score > 0) {
+            gameState.player1.score--;
+        } else if (player === 2 && gameState.player2.score > 0) {
+            gameState.player2.score--;
+        }
+
+        updateDisplay();
+        saveGameState();
+    }
+}
+
+function undoLastSet(player) {
+    // Check if there's a set to undo
+    if (gameState.setScoresHistory.length === 0) {
+        return;
+    }
+
+    // Get the last completed set
+    const lastSet = gameState.setScoresHistory[gameState.setScoresHistory.length - 1];
+
+    // Parse the score from the last set
+    let p1Score, p2Score;
+    if (typeof lastSet === 'string') {
+        // Old format: "21-19"
+        const scores = lastSet.split('-');
+        p1Score = parseInt(scores[0]);
+        p2Score = parseInt(scores[1]);
+    } else {
+        // New format: {player1Name, player2Name, score: "21-19"}
+        const scores = lastSet.score.split('-');
+        p1Score = parseInt(scores[0]);
+        p2Score = parseInt(scores[1]);
+    }
+
+    // Restore the scores from the last set minus one point
+    gameState.player1.score = p1Score;
+    gameState.player2.score = p2Score;
+
+    // Remove one point from the player who won (to undo the winning point)
     if (player === 1 && gameState.player1.score > 0) {
         gameState.player1.score--;
     } else if (player === 2 && gameState.player2.score > 0) {
         gameState.player2.score--;
+    }
+
+    // Decrease the games counter for the winner
+    if (player === 1) {
+        gameState.player1.games--;
+    } else {
+        gameState.player2.games--;
+    }
+
+    // Remove the last set from history
+    gameState.setScoresHistory.pop();
+
+    // If match was ended (timer stopped), restart it
+    if (gameState.matchEndTime) {
+        gameState.matchEndTime = null;
+        startTimer();
     }
 
     updateDisplay();
@@ -182,32 +279,70 @@ function checkGameWin() {
             // Stop the timer display
             stopTimer();
 
-            saveMatchResult(gameState.player1.name, gameState.player2.name,
-                           gameState.player1.games, gameState.player2.games);
+            // Show message with option to save or undo
             showMessage(
                 'Kamp Vundet!',
                 `${gameState.player1.name} vinder kampen ${gameState.player1.games}-${gameState.player2.games}!`,
                 [
-                    { text: 'OK', callback: null, style: 'primary' }
+                    {
+                        text: 'OK',
+                        callback: () => {
+                            // Mark match as completed
+                            gameState.matchCompleted = true;
+                            // Disable all controls
+                            disableAllControls();
+                            // Save match result only when OK is clicked
+                            saveMatchResult(gameState.player1.name, gameState.player2.name,
+                                           gameState.player1.games, gameState.player2.games);
+                            // Save game state with matchCompleted flag
+                            saveGameState();
+                        },
+                        style: 'primary'
+                    },
+                    {
+                        text: 'Fortryd',
+                        callback: () => {
+                            undoLastSet(1);
+                        },
+                        style: 'secondary'
+                    }
                 ]
             );
             return;
         }
 
-        // Set won but not match - trigger 2-minute break for 21/30 mode
-        showMessage('Sæt Vundet!', `${gameState.player1.name} vinder dette sæt!`);
-        if (gameState.gameMode === '21') {
-            // Start 2-minute rest break with callback to reset and switch
-            startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', () => {
-                resetScores();
-                gameState.decidingGameSwitched = false;
-                switchSides();
-            });
-        } else {
-            resetScores();
-            gameState.decidingGameSwitched = false;
-            switchSides();
-        }
+        // Set won but not match - show message with undo option
+        showMessage(
+            'Sæt Vundet!',
+            `${gameState.player1.name} vinder dette sæt!`,
+            [
+                {
+                    text: 'Fortsæt',
+                    callback: () => {
+                        if (gameState.gameMode === '21') {
+                            // Start 2-minute rest break with callback to reset and switch
+                            startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', () => {
+                                resetScores();
+                                gameState.decidingGameSwitched = false;
+                                switchSides();
+                            });
+                        } else {
+                            resetScores();
+                            gameState.decidingGameSwitched = false;
+                            switchSides();
+                        }
+                    },
+                    style: 'primary'
+                },
+                {
+                    text: 'Fortryd',
+                    callback: () => {
+                        undoLastSet(1);
+                    },
+                    style: 'secondary'
+                }
+            ]
+        );
     } else if ((p2Score >= winScore && p2Score - p1Score >= 2) || p2Score === maxScore) {
         gameState.player2.games++;
         // Save the set score with player names
@@ -222,32 +357,70 @@ function checkGameWin() {
             // Stop the timer display
             stopTimer();
 
-            saveMatchResult(gameState.player2.name, gameState.player1.name,
-                           gameState.player2.games, gameState.player1.games);
+            // Show message with option to save or undo
             showMessage(
                 'Kamp Vundet!',
                 `${gameState.player2.name} vinder kampen ${gameState.player2.games}-${gameState.player1.games}!`,
                 [
-                    { text: 'OK', callback: null, style: 'primary' }
+                    {
+                        text: 'OK',
+                        callback: () => {
+                            // Mark match as completed
+                            gameState.matchCompleted = true;
+                            // Disable all controls
+                            disableAllControls();
+                            // Save match result only when OK is clicked
+                            saveMatchResult(gameState.player2.name, gameState.player1.name,
+                                           gameState.player2.games, gameState.player1.games);
+                            // Save game state with matchCompleted flag
+                            saveGameState();
+                        },
+                        style: 'primary'
+                    },
+                    {
+                        text: 'Fortryd',
+                        callback: () => {
+                            undoLastSet(2);
+                        },
+                        style: 'secondary'
+                    }
                 ]
             );
             return;
         }
 
-        // Set won but not match - trigger 2-minute break for 21/30 mode
-        showMessage('Sæt Vundet!', `${gameState.player2.name} vinder dette sæt!`);
-        if (gameState.gameMode === '21') {
-            // Start 2-minute rest break with callback to reset and switch
-            startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', () => {
-                resetScores();
-                gameState.decidingGameSwitched = false;
-                switchSides();
-            });
-        } else {
-            resetScores();
-            gameState.decidingGameSwitched = false;
-            switchSides();
-        }
+        // Set won but not match - show message with undo option
+        showMessage(
+            'Sæt Vundet!',
+            `${gameState.player2.name} vinder dette sæt!`,
+            [
+                {
+                    text: 'Fortsæt',
+                    callback: () => {
+                        if (gameState.gameMode === '21') {
+                            // Start 2-minute rest break with callback to reset and switch
+                            startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', () => {
+                                resetScores();
+                                gameState.decidingGameSwitched = false;
+                                switchSides();
+                            });
+                        } else {
+                            resetScores();
+                            gameState.decidingGameSwitched = false;
+                            switchSides();
+                        }
+                    },
+                    style: 'primary'
+                },
+                {
+                    text: 'Fortryd',
+                    callback: () => {
+                        undoLastSet(2);
+                    },
+                    style: 'secondary'
+                }
+            ]
+        );
     }
 }
 
@@ -284,7 +457,12 @@ function startNewMatch() {
                     gameState.player2.games = 0;
                     gameState.setScoresHistory = [];
                     gameState.restBreakTaken = false;
+                    gameState.matchCompleted = false;
                     resetTimer();
+
+                    // Re-enable all controls
+                    enableAllControls();
+
                     updateDisplay();
                     saveGameState();
 
@@ -325,7 +503,12 @@ function clearCourt() {
                         gameState.player2.games = 0;
                         gameState.setScoresHistory = [];
                         gameState.restBreakTaken = false;
+                        gameState.matchCompleted = false;
                         resetTimer();
+
+                        // Re-enable all controls
+                        enableAllControls();
+
                         updateDisplay();
                         await saveGameState();
 
@@ -360,6 +543,36 @@ function startTimer() {
             updateTimerDisplay();
         }, 1000);
         gameState.timerRunning = true;
+    }
+
+    // Disable start match button when timer is running
+    updateStartMatchButton();
+}
+
+function manualStartMatch() {
+    // Don't start if match is already started or completed
+    if (gameState.matchStartTime || gameState.matchCompleted) {
+        return;
+    }
+
+    // Set match start time to now
+    gameState.matchStartTime = new Date().toISOString();
+
+    // Start timer display
+    startTimer();
+
+    // Save state to database
+    saveGameState();
+
+    // Update button state
+    updateStartMatchButton();
+}
+
+function updateStartMatchButton() {
+    const startBtn = document.getElementById('startMatchBtn');
+    if (startBtn) {
+        // Disable button if match has started or is completed
+        startBtn.disabled = !!(gameState.matchStartTime || gameState.matchCompleted);
     }
 }
 
@@ -411,9 +624,15 @@ function updateDisplay() {
     document.getElementById('player2Games').textContent = gameState.player2.games;
     updateTimerDisplay();
     updateDoublesDisplay();
+    updateStartMatchButton();
 }
 
 function toggleDoubles() {
+    // Prevent toggling doubles if match is completed
+    if (gameState.matchCompleted) {
+        return;
+    }
+
     const newMode = gameState.isDoubles ? 'single' : 'double';
     showMessage(
         'Skift Tilstand?',
@@ -450,6 +669,11 @@ function updateDoublesDisplay() {
 }
 
 function switchSides() {
+    // Prevent switching sides if match is completed
+    if (gameState.matchCompleted) {
+        return;
+    }
+
     // Swap all player data
     const tempPlayer = {
         name: gameState.player1.name,
@@ -470,6 +694,70 @@ function switchSides() {
 
     updateDisplay();
     saveGameState();
+}
+
+function disableAllControls() {
+    // Disable all score buttons
+    const scoreButtons = document.querySelectorAll('.btn-score, .btn-score-minus');
+    scoreButtons.forEach(btn => {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'not-allowed';
+    });
+
+    // Disable action buttons
+    const switchSidesBtn = document.getElementById('switchSidesBtn');
+    const doublesToggleBtn = document.getElementById('doublesToggle');
+
+    if (switchSidesBtn) {
+        switchSidesBtn.disabled = true;
+        switchSidesBtn.style.opacity = '0.5';
+        switchSidesBtn.style.cursor = 'not-allowed';
+    }
+
+    if (doublesToggleBtn) {
+        doublesToggleBtn.disabled = true;
+        doublesToggleBtn.style.opacity = '0.5';
+        doublesToggleBtn.style.cursor = 'not-allowed';
+    }
+
+    // Disable player name inputs
+    document.getElementById('player1Name').disabled = true;
+    document.getElementById('player1Name2').disabled = true;
+    document.getElementById('player2Name').disabled = true;
+    document.getElementById('player2Name2').disabled = true;
+}
+
+function enableAllControls() {
+    // Enable all score buttons
+    const scoreButtons = document.querySelectorAll('.btn-score, .btn-score-minus');
+    scoreButtons.forEach(btn => {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+    });
+
+    // Enable action buttons
+    const switchSidesBtn = document.getElementById('switchSidesBtn');
+    const doublesToggleBtn = document.getElementById('doublesToggle');
+
+    if (switchSidesBtn) {
+        switchSidesBtn.disabled = false;
+        switchSidesBtn.style.opacity = '1';
+        switchSidesBtn.style.cursor = 'pointer';
+    }
+
+    if (doublesToggleBtn) {
+        doublesToggleBtn.disabled = false;
+        doublesToggleBtn.style.opacity = '1';
+        doublesToggleBtn.style.cursor = 'pointer';
+    }
+
+    // Enable player name inputs
+    document.getElementById('player1Name').disabled = false;
+    document.getElementById('player1Name2').disabled = false;
+    document.getElementById('player2Name').disabled = false;
+    document.getElementById('player2Name2').disabled = false;
 }
 
 // Debounced save function - saves max once per 0.5 seconds
@@ -506,12 +794,15 @@ async function performSave() {
             player1: gameState.player1,
             player2: gameState.player2,
             timerSeconds: gameState.timerSeconds,
+            matchStartTime: gameState.matchStartTime,
+            matchEndTime: gameState.matchEndTime,
             decidingGameSwitched: gameState.decidingGameSwitched,
             restBreakActive: gameState.restBreakActive,
             restBreakSecondsLeft: gameState.restBreakSecondsLeft,
             restBreakTitle: gameState.restBreakTitle,
             isDoubles: gameState.isDoubles,
-            setScoresHistory: gameState.setScoresHistory
+            setScoresHistory: gameState.setScoresHistory,
+            matchCompleted: gameState.matchCompleted
         };
 
         await api.updateGameState(courtId, stateToSave);
@@ -545,6 +836,8 @@ async function loadGameState() {
         gameState.decidingGameSwitched = loaded.decidingGameSwitched || false;
         gameState.matchStartTime = loaded.matchStartTime;
         gameState.matchEndTime = loaded.matchEndTime;
+        gameState.setScoresHistory = loaded.setScoresHistory || [];
+        gameState.matchCompleted = loaded.matchCompleted || false;
 
         // Ensure name2 exists for backwards compatibility
         if (!gameState.player1.name2) gameState.player1.name2 = 'Makker 1';
@@ -553,6 +846,11 @@ async function loadGameState() {
         // Start timer display if match is active and not ended
         if (gameState.matchStartTime && !gameState.matchEndTime) {
             startTimer();
+        }
+
+        // Disable all controls if match is completed
+        if (gameState.matchCompleted) {
+            disableAllControls();
         }
     } catch (error) {
         console.error('Failed to load game state:', error);
@@ -570,16 +868,16 @@ async function syncGameState() {
 
         const loaded = await api.getGameState(courtId);
 
-        // Check if court was reset by admin (all scores/games back to 0)
+        // Check if court was reset by admin (all scores/games back to 0 AND no matchStartTime)
         const wasReset = (
             loaded.player1.score === 0 &&
             loaded.player1.games === 0 &&
             loaded.player2.score === 0 &&
             loaded.player2.games === 0 &&
-            !loaded.matchStartTime &&
+            !loaded.matchStartTime &&  // Backend has no matchStartTime
             (gameState.player1.score > 0 || gameState.player1.games > 0 ||
              gameState.player2.score > 0 || gameState.player2.games > 0 ||
-             gameState.matchStartTime)
+             gameState.matchStartTime)  // But frontend has data
         );
 
         if (wasReset) {
@@ -607,6 +905,10 @@ async function syncGameState() {
             gameState.decidingGameSwitched = loaded.decidingGameSwitched || false;
             gameState.setScoresHistory = [];
             gameState.restBreakTaken = false;
+            gameState.matchCompleted = false;
+
+            // Re-enable all controls after reset
+            enableAllControls();
 
             // Ensure name2 exists
             if (!gameState.player1.name2) gameState.player1.name2 = 'Makker 1';
@@ -615,8 +917,15 @@ async function syncGameState() {
             // Update display
             updateDisplay();
 
-            console.log('Court was reset by admin - state synchronized');
+            console.log('Court was reset by admin - state synchronized and controls re-enabled');
         } else {
+            // Check if matchCompleted changed from true to false (e.g., admin reset)
+            if (gameState.matchCompleted && !loaded.matchCompleted) {
+                gameState.matchCompleted = false;
+                enableAllControls();
+                console.log('Match unlocked by admin - controls re-enabled');
+            }
+
             // Sync timestamps even if not reset (for timer continuity)
             if (loaded.matchStartTime && !gameState.matchStartTime) {
                 // Match started elsewhere, start timer display
