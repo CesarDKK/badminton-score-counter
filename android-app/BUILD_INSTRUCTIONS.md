@@ -6,9 +6,42 @@
    - Download fra: https://developer.android.com/studio
    - Installer med standard indstillinger
 
-2. **Installer Java JDK 17 eller nyere**
+2. **Installer Java JDK 17 eller nyere (PÅKRÆVET)**
    - Download fra: https://adoptium.net/
    - Eller brug den JDK der følger med Android Studio
+   - **Vigtigt**: Denne app kræver Java 17+ pga. Gradle 10 og Android Gradle Plugin 8.7+
+
+## Version Information
+
+- **Gradle**: 10.0
+- **Android Gradle Plugin**: 8.7.3
+- **Kotlin**: 2.0.21
+- **Minimum SDK**: 24 (Android 7.0)
+- **Target SDK**: 35 (Android 15)
+- **Java**: 17 (påkrævet)
+
+## Første Gang Opsætning (Hvis gradlew ikke virker)
+
+Hvis du får en fejl om manglende `gradle-wrapper.jar`, skal du først initialisere Gradle wrapper:
+
+### Windows
+```cmd
+cd android-app
+gradle wrapper --gradle-version 10.0
+```
+
+### Linux/Mac
+```bash
+cd android-app
+gradle wrapper --gradle-version 10.0
+```
+
+Dette downloader Gradle 10.0 og opretter de nødvendige wrapper filer.
+
+**Alternativ**: Download `gradle-wrapper.jar` manuelt fra:
+https://raw.githubusercontent.com/gradle/gradle/v10.0.0/gradle/wrapper/gradle-wrapper.jar
+
+Placer den i: `android-app/gradle/wrapper/gradle-wrapper.jar`
 
 ## Byg APK uden Android Studio (Command Line)
 

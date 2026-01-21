@@ -12,9 +12,13 @@ En dedikeret Android app der viser badminton tæller-siden i fuld skærm uden mu
 
 ## Krav
 
-- Android Studio Arctic Fox eller nyere
-- Android SDK 24 (Android 7.0) eller nyere
-- Kotlin 1.9.20 eller nyere
+- Android Studio Ladybug (2024.2.1) eller nyere
+- Java JDK 17 eller nyere (påkrævet for Gradle 10)
+- Gradle 10.0
+- Android Gradle Plugin 8.7.3
+- Kotlin 2.0.21
+- Android SDK 24 (Android 7.0) minimum
+- Android SDK 35 (Android 15) target
 
 ## Bygning af App
 
