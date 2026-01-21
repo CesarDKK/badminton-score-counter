@@ -38,7 +38,7 @@ body {
 .timer-large {
     font-size: 5em;
     font-weight: bold;
-    font-family: 'Courier New', monospace;
+    letter-spacing: 3px;
     text-shadow: 0 0 20px rgba(233, 69, 96, 0.8);
 }
 

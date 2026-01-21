@@ -288,10 +288,12 @@ function checkGameWin() {
     // Badminton rules: first to winScore, must win by 2, max maxScore
     if ((p1Score >= winScore && p1Score - p2Score >= 2) || p1Score === maxScore) {
         gameState.player1.games++;
-        // Save the set score with player names
+        // Save the set score with player names (including partners for doubles)
         gameState.setScoresHistory.push({
             player1Name: gameState.player1.name,
+            player1Name2: gameState.player1.name2 || null,
             player2Name: gameState.player2.name,
+            player2Name2: gameState.player2.name2 || null,
             score: `${p1Score}-${p2Score}`
         });
 
@@ -301,9 +303,10 @@ function checkGameWin() {
             stopTimer();
 
             // Show message with option to save or undo
+            const winnerNames = formatPlayerNames(gameState.player1.name, gameState.player1.name2);
             showMessage(
                 'Kamp Vundet!',
-                `${gameState.player1.name} vinder kampen ${gameState.player1.games}-${gameState.player2.games}!`,
+                `${winnerNames} vinder kampen ${gameState.player1.games}-${gameState.player2.games}!`,
                 [
                     {
                         text: 'OK',
@@ -333,9 +336,10 @@ function checkGameWin() {
         }
 
         // Set won but not match - show message with undo option
+        const winnerNames = formatPlayerNames(gameState.player1.name, gameState.player1.name2);
         showMessage(
             'Sæt Vundet!',
-            `${gameState.player1.name} vinder dette sæt!`,
+            `${winnerNames} vinder dette sæt!`,
             [
                 {
                     text: 'Fortsæt',
@@ -366,10 +370,12 @@ function checkGameWin() {
         );
     } else if ((p2Score >= winScore && p2Score - p1Score >= 2) || p2Score === maxScore) {
         gameState.player2.games++;
-        // Save the set score with player names
+        // Save the set score with player names (including partners for doubles)
         gameState.setScoresHistory.push({
             player1Name: gameState.player1.name,
+            player1Name2: gameState.player1.name2 || null,
             player2Name: gameState.player2.name,
+            player2Name2: gameState.player2.name2 || null,
             score: `${p1Score}-${p2Score}`
         });
 
@@ -379,9 +385,10 @@ function checkGameWin() {
             stopTimer();
 
             // Show message with option to save or undo
+            const winnerNames = formatPlayerNames(gameState.player2.name, gameState.player2.name2);
             showMessage(
                 'Kamp Vundet!',
-                `${gameState.player2.name} vinder kampen ${gameState.player2.games}-${gameState.player1.games}!`,
+                `${winnerNames} vinder kampen ${gameState.player2.games}-${gameState.player1.games}!`,
                 [
                     {
                         text: 'OK',
@@ -411,9 +418,10 @@ function checkGameWin() {
         }
 
         // Set won but not match - show message with undo option
+        const winnerNames = formatPlayerNames(gameState.player2.name, gameState.player2.name2);
         showMessage(
             'Sæt Vundet!',
-            `${gameState.player2.name} vinder dette sæt!`,
+            `${winnerNames} vinder dette sæt!`,
             [
                 {
                     text: 'Fortsæt',
@@ -689,6 +697,14 @@ function updateDoublesDisplay() {
     }
 }
 
+function formatPlayerNames(playerName, playerName2) {
+    // Format player names for display (includes partner if doubles)
+    if (playerName2 && playerName2.trim() !== '') {
+        return `${playerName} / ${playerName2}`;
+    }
+    return playerName;
+}
+
 function switchSides() {
     // Prevent switching sides if match is completed
     if (gameState.matchCompleted) {
@@ -945,6 +961,41 @@ async function syncGameState() {
                 gameState.matchCompleted = false;
                 enableAllControls();
                 console.log('Match unlocked by admin - controls re-enabled');
+            }
+
+            // Sync player names if changed in database (e.g., admin changed them)
+            // Only update if the input field is not currently focused
+            const player1NameInput = document.getElementById('player1Name');
+            const player1Name2Input = document.getElementById('player1Name2');
+            const player2NameInput = document.getElementById('player2Name');
+            const player2Name2Input = document.getElementById('player2Name2');
+
+            if (loaded.player1.name !== gameState.player1.name && document.activeElement !== player1NameInput) {
+                gameState.player1.name = loaded.player1.name;
+                player1NameInput.value = loaded.player1.name;
+                console.log('Player 1 name synced from admin:', loaded.player1.name);
+            }
+            if (loaded.player1.name2 !== gameState.player1.name2 && document.activeElement !== player1Name2Input) {
+                gameState.player1.name2 = loaded.player1.name2;
+                player1Name2Input.value = loaded.player1.name2;
+                console.log('Player 1 partner name synced from admin:', loaded.player1.name2);
+            }
+            if (loaded.player2.name !== gameState.player2.name && document.activeElement !== player2NameInput) {
+                gameState.player2.name = loaded.player2.name;
+                player2NameInput.value = loaded.player2.name;
+                console.log('Player 2 name synced from admin:', loaded.player2.name);
+            }
+            if (loaded.player2.name2 !== gameState.player2.name2 && document.activeElement !== player2Name2Input) {
+                gameState.player2.name2 = loaded.player2.name2;
+                player2Name2Input.value = loaded.player2.name2;
+                console.log('Player 2 partner name synced from admin:', loaded.player2.name2);
+            }
+
+            // Sync doubles mode if changed
+            if (loaded.isDoubles !== gameState.isDoubles) {
+                gameState.isDoubles = loaded.isDoubles;
+                updateDoublesDisplay();
+                console.log('Doubles mode synced from admin:', loaded.isDoubles);
             }
 
             // Sync timestamps even if not reset (for timer continuity)

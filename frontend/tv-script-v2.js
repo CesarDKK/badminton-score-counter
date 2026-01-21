@@ -10,11 +10,17 @@ let currentSlideIndex = 0;
 let isShowingSlideshow = false;
 let cachedSponsorImages = [];
 let cachedSlideDuration = 10000; // 10 seconds default
-let localTimerSeconds = 0;
 let timerInterval = null;
-let lastSyncedTimerSeconds = 0;
 let isMatchCurrentlyActive = false;
 let wasMatchPreviouslyActive = false;
+// Track original player names to keep consistent TV display
+let originalPlayer1Name = null;
+let originalPlayer1Name2 = null;
+let originalPlayer2Name = null;
+let originalPlayer2Name2 = null;
+// Store match start time from database
+let matchStartTime = null;
+let matchEndTime = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async function() {
@@ -52,24 +58,45 @@ async function initializeTVDisplay() {
 }
 
 function startAutoRefresh() {
-    // Refresh every 1 second for fast updates
-    refreshInterval = setInterval(loadCourtData, 1000);
+    // Refresh every 2 seconds for responsive updates
+    refreshInterval = setInterval(loadCourtData, 2000);
 }
 
 function startLocalTimer() {
-    // Update timer display every second
+    // Update timer display every second based on matchStartTime
     timerInterval = setInterval(function() {
         if (isMatchCurrentlyActive) {
-            localTimerSeconds++;
             updateTimerDisplay();
         }
     }, 1000);
 }
 
 function updateTimerDisplay() {
-    // Timer element removed from HTML, so this function does nothing
-    // Keeping function to avoid errors in other code that calls it
-    return;
+    const timerElement = document.getElementById('timerDisplay');
+    if (!timerElement) return;
+
+    let elapsedSeconds = 0;
+
+    if (matchStartTime) {
+        // Calculate elapsed time from server timestamp (same as court page)
+        const startTime = new Date(matchStartTime);
+        const endTime = matchEndTime ? new Date(matchEndTime) : new Date();
+        const elapsedMs = endTime - startTime;
+        elapsedSeconds = Math.floor(elapsedMs / 1000);
+    }
+
+    const hours = Math.floor(elapsedSeconds / 3600);
+    const minutes = Math.floor((elapsedSeconds % 3600) / 60);
+    const seconds = elapsedSeconds % 60;
+
+    // Show hours if match has been going for more than an hour
+    if (hours > 0) {
+        timerElement.textContent =
+            `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    } else {
+        timerElement.textContent =
+            `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
 }
 
 async function loadCourtData() {
@@ -95,9 +122,15 @@ async function loadCourtData() {
         // When admin deactivates the court, sponsors will show
         if (!isMatchActive) {
             // Court not active - show sponsor slideshow
-            localTimerSeconds = 0;
+            matchStartTime = null;
+            matchEndTime = null;
             isMatchCurrentlyActive = false;
             wasMatchPreviouslyActive = false;
+            // Reset original player names for next match
+            originalPlayer1Name = null;
+            originalPlayer1Name2 = null;
+            originalPlayer2Name = null;
+            originalPlayer2Name2 = null;
             hideMatchFinished(); // Hide match finished overlay if shown
             hideRestBreak(); // Hide rest break overlay if shown
             showSponsorSlideshow();
@@ -106,7 +139,13 @@ async function loadCourtData() {
 
         // Detect new match starting (transition from inactive to active)
         if (isMatchActive && !wasMatchPreviouslyActive) {
-            console.log('[TV] New match detected - reloading theme colors');
+            console.log('[TV] New match detected - reloading theme colors and storing original player positions');
+            // Store original player names for consistent TV display
+            originalPlayer1Name = gameState.player1.name;
+            originalPlayer1Name2 = gameState.player1.name2 || null;
+            originalPlayer2Name = gameState.player2.name;
+            originalPlayer2Name2 = gameState.player2.name2 || null;
+
             // Reload theme colors when a new match starts
             if (window.loadTheme) {
                 await window.loadTheme();
@@ -117,36 +156,65 @@ async function loadCourtData() {
         // Match is active - hide slideshow and show scores
         hideSponsorSlideshow();
 
+        // Check if players have been swapped on court page (for consistent TV display)
+        // If player1's current name matches original player2's name, they've been swapped
+        const playersSwapped = originalPlayer1Name &&
+                               gameState.player1.name === originalPlayer2Name;
+
         // Check if match is finished (someone won)
         const maxGames = gameState.gameMode === '15' ? 2 : 2; // Best of 3 in both modes
         const matchFinished = gameState.player1.games >= 2 || gameState.player2.games >= 2;
 
         if (matchFinished) {
-            showMatchFinished(gameState);
+            showMatchFinished(gameState, playersSwapped);
             return; // Don't update normal display if match is finished
         } else {
             hideMatchFinished();
         }
 
-        // Check for rest break
+        // Check for rest break (pass swapped status for consistent display)
         if (gameState.restBreakActive) {
-            showRestBreak(gameState.restBreakSecondsLeft, gameState.restBreakTitle, gameState);
+            showRestBreak(gameState.restBreakSecondsLeft, gameState.restBreakTitle, gameState, playersSwapped);
         } else {
             hideRestBreak();
         }
 
-        // Update display
-        document.getElementById('player1Name').textContent = gameState.player1.name;
-        document.getElementById('player2Name').textContent = gameState.player2.name;
+        // Determine display players based on swap status
+        let displayPlayer1, displayPlayer2;
+
+        if (playersSwapped) {
+            // Swap back for TV display only - keep original positions
+            displayPlayer1 = {
+                name: gameState.player2.name,
+                name2: gameState.player2.name2,
+                score: gameState.player2.score,
+                games: gameState.player2.games
+            };
+            displayPlayer2 = {
+                name: gameState.player1.name,
+                name2: gameState.player1.name2,
+                score: gameState.player1.score,
+                games: gameState.player1.games
+            };
+            console.log('[TV] Players swapped on court - displaying in original TV positions');
+        } else {
+            // No swap or first time - display as-is
+            displayPlayer1 = gameState.player1;
+            displayPlayer2 = gameState.player2;
+        }
+
+        // Update display with consistent player positions
+        document.getElementById('player1Name').textContent = displayPlayer1.name;
+        document.getElementById('player2Name').textContent = displayPlayer2.name;
 
         // Handle doubles mode
         const isDoubles = gameState.isDoubles || false;
         const player1Name2 = document.getElementById('player1Name2');
         const player2Name2 = document.getElementById('player2Name2');
 
-        if (isDoubles && gameState.player1.name2 && gameState.player2.name2) {
-            player1Name2.textContent = gameState.player1.name2;
-            player2Name2.textContent = gameState.player2.name2;
+        if (isDoubles && displayPlayer1.name2 && displayPlayer2.name2) {
+            player1Name2.textContent = displayPlayer1.name2;
+            player2Name2.textContent = displayPlayer2.name2;
             player1Name2.style.display = 'flex';
             player2Name2.style.display = 'flex';
         } else {
@@ -154,18 +222,17 @@ async function loadCourtData() {
             player2Name2.style.display = 'none';
         }
 
-        document.getElementById('player1Score').textContent = gameState.player1.score;
-        document.getElementById('player2Score').textContent = gameState.player2.score;
-        document.getElementById('player1Games').textContent = gameState.player1.games;
-        document.getElementById('player2Games').textContent = gameState.player2.games;
+        document.getElementById('player1Score').textContent = displayPlayer1.score;
+        document.getElementById('player2Score').textContent = displayPlayer2.score;
+        document.getElementById('player1Games').textContent = displayPlayer1.games;
+        document.getElementById('player2Games').textContent = displayPlayer2.games;
 
-        // Sync local timer with database timer
-        // Only update if database value is significantly different (more than 2 seconds drift)
-        if (Math.abs(gameState.timerSeconds - localTimerSeconds) > 2 || lastSyncedTimerSeconds === 0) {
-            localTimerSeconds = gameState.timerSeconds;
-            lastSyncedTimerSeconds = gameState.timerSeconds;
-            updateTimerDisplay();
-        }
+        // Update match timing from database (same as court page)
+        matchStartTime = gameState.matchStartTime;
+        matchEndTime = gameState.matchEndTime;
+
+        // Update timer display (calculates elapsed time from matchStartTime)
+        updateTimerDisplay();
     } catch (error) {
         console.error('Failed to load court data:', error);
         // Show sponsor slideshow on error (network issues)
@@ -317,7 +384,7 @@ function escapeHtml(text) {
 }
 
 // Rest break display functions
-function showRestBreak(secondsLeft, title, gameState) {
+function showRestBreak(secondsLeft, title, gameState, playersSwapped) {
     const overlay = document.getElementById('tvRestBreakOverlay');
     const timerDisplay = document.getElementById('tvRestBreakTimer');
     const titleElement = document.getElementById('tvRestBreakTitle');
@@ -327,14 +394,41 @@ function showRestBreak(secondsLeft, title, gameState) {
     titleElement.textContent = title || 'Pause';
     timerDisplay.textContent = secondsLeft || 0;
 
-    // Update score display in rest break overlay
+    // Update score display in rest break overlay with consistent player positions
     if (gameState) {
-        document.getElementById('tvRestBreakPlayer1').textContent = gameState.player1.name;
-        document.getElementById('tvRestBreakPlayer2').textContent = gameState.player2.name;
-        document.getElementById('tvRestBreakScore1').textContent = gameState.player1.score;
-        document.getElementById('tvRestBreakScore2').textContent = gameState.player2.score;
-        document.getElementById('tvRestBreakGames1').textContent = gameState.player1.games;
-        document.getElementById('tvRestBreakGames2').textContent = gameState.player2.games;
+        let displayPlayer1, displayPlayer2;
+        if (playersSwapped) {
+            displayPlayer1 = gameState.player2;
+            displayPlayer2 = gameState.player1;
+        } else {
+            displayPlayer1 = gameState.player1;
+            displayPlayer2 = gameState.player2;
+        }
+
+        // Update main player names
+        document.getElementById('tvRestBreakPlayer1').textContent = displayPlayer1.name;
+        document.getElementById('tvRestBreakPlayer2').textContent = displayPlayer2.name;
+
+        // Update partner names (show only for doubles)
+        const partner1Element = document.getElementById('tvRestBreakPlayer1Partner');
+        const partner2Element = document.getElementById('tvRestBreakPlayer2Partner');
+        const isDoubles = gameState.isDoubles && displayPlayer1.name2 && displayPlayer2.name2;
+
+        if (isDoubles) {
+            partner1Element.textContent = displayPlayer1.name2;
+            partner1Element.style.display = 'block';
+            partner2Element.textContent = displayPlayer2.name2;
+            partner2Element.style.display = 'block';
+        } else {
+            partner1Element.style.display = 'none';
+            partner2Element.style.display = 'none';
+        }
+
+        // Update scores and games
+        document.getElementById('tvRestBreakScore1').textContent = displayPlayer1.score;
+        document.getElementById('tvRestBreakScore2').textContent = displayPlayer2.score;
+        document.getElementById('tvRestBreakGames1').textContent = displayPlayer1.games;
+        document.getElementById('tvRestBreakGames2').textContent = displayPlayer2.games;
     }
 
     // Change color based on time remaining
@@ -356,10 +450,33 @@ function hideRestBreak() {
     }
 }
 
+// Helper function to format player names (includes partner if doubles)
+function formatPlayerNames(playerName, playerName2) {
+    if (playerName2 && playerName2.trim() !== '') {
+        return `${playerName} / ${playerName2}`;
+    }
+    return playerName;
+}
+
 // Match finished display functions
-function showMatchFinished(gameState) {
+function showMatchFinished(gameState, playersSwapped) {
     const overlay = document.getElementById('tvMatchFinishedOverlay');
     if (!overlay) return;
+
+    // Determine display player names (consistent with TV positions)
+    // Include partner names for doubles
+    let displayPlayer1Name, displayPlayer1Name2, displayPlayer2Name, displayPlayer2Name2;
+    if (playersSwapped) {
+        displayPlayer1Name = gameState.player2.name;
+        displayPlayer1Name2 = gameState.player2.name2;
+        displayPlayer2Name = gameState.player1.name;
+        displayPlayer2Name2 = gameState.player1.name2;
+    } else {
+        displayPlayer1Name = gameState.player1.name;
+        displayPlayer1Name2 = gameState.player1.name2;
+        displayPlayer2Name = gameState.player2.name;
+        displayPlayer2Name2 = gameState.player2.name2;
+    }
 
     // Display individual set scores with winner highlighted
     const setScoresContainer = document.getElementById('tvSetScoresContainer');
@@ -370,14 +487,31 @@ function showMatchFinished(gameState) {
             // Handle both old format (string) and new format (object)
             if (typeof setData === 'string') {
                 // Old format: just score like "21-15"
-                player1Name = gameState.player1.name;
-                player2Name = gameState.player2.name;
+                // Use original display names for consistency (include partners)
+                player1Name = formatPlayerNames(originalPlayer1Name || displayPlayer1Name,
+                                               originalPlayer1Name2 || displayPlayer1Name2);
+                player2Name = formatPlayerNames(originalPlayer2Name || displayPlayer2Name,
+                                               originalPlayer2Name2 || displayPlayer2Name2);
                 scoreText = setData;
             } else {
-                // New format: object with player names and score
-                player1Name = setData.player1Name;
-                player2Name = setData.player2Name;
-                scoreText = setData.score;
+                // New format: object with player names and score (now includes partner names)
+                // Map the stored names to original display positions
+                const storedPlayer1Name = setData.player1Name;
+                const storedPlayer2Name = setData.player2Name;
+                const scores = setData.score.split('-').map(s => parseInt(s.trim()));
+
+                // Check if stored names match original positions
+                if (storedPlayer1Name === originalPlayer1Name) {
+                    // Names are in original order
+                    player1Name = formatPlayerNames(originalPlayer1Name, originalPlayer1Name2);
+                    player2Name = formatPlayerNames(originalPlayer2Name, originalPlayer2Name2);
+                    scoreText = setData.score;
+                } else {
+                    // Names were swapped when set was saved - swap score back
+                    player1Name = formatPlayerNames(originalPlayer1Name, originalPlayer1Name2);
+                    player2Name = formatPlayerNames(originalPlayer2Name, originalPlayer2Name2);
+                    scoreText = `${scores[1]}-${scores[0]}`; // Reverse the score
+                }
             }
 
             // Parse score (e.g., "21-15")
@@ -412,10 +546,20 @@ function showMatchFinished(gameState) {
         setScoresContainer.innerHTML = '';
     }
 
-    // Determine winner
-    const winner = gameState.player1.games > gameState.player2.games
-        ? gameState.player1.name
-        : gameState.player2.name;
+    // Determine winner based on actual game state, then map to display names (include partners)
+    const player1WonMatch = gameState.player1.games > gameState.player2.games;
+    let winner;
+    if (playersSwapped) {
+        // When swapped: gameState.player1 -> displayPlayer2, gameState.player2 -> displayPlayer1
+        winner = player1WonMatch
+            ? formatPlayerNames(displayPlayer2Name, displayPlayer2Name2)
+            : formatPlayerNames(displayPlayer1Name, displayPlayer1Name2);
+    } else {
+        // When not swapped: gameState.player1 -> displayPlayer1, gameState.player2 -> displayPlayer2
+        winner = player1WonMatch
+            ? formatPlayerNames(displayPlayer1Name, displayPlayer1Name2)
+            : formatPlayerNames(displayPlayer2Name, displayPlayer2Name2);
+    }
     document.getElementById('tvFinishedWinner').textContent = winner;
 
     overlay.style.display = 'flex';
