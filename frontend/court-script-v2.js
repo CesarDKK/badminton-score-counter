@@ -70,10 +70,31 @@ async function initializeApp() {
             );
         }
 
-        // Show/hide reset button based on settings
+        // Show/hide elements based on tournament mode settings
+        const isTournamentMode = settings.showResetButton === false;
+
+        // Hide "Ryd Banen" button
         const clearBtn = document.getElementById('clearCourtBtn');
         if (clearBtn) {
-            clearBtn.style.display = settings.showResetButton === false ? 'none' : 'inline-block';
+            clearBtn.style.display = isTournamentMode ? 'none' : 'inline-block';
+        }
+
+        // Hide "Skift til Double" button
+        const doublesToggle = document.getElementById('doublesToggle');
+        if (doublesToggle) {
+            doublesToggle.style.display = isTournamentMode ? 'none' : 'inline-block';
+        }
+
+        // Hide "Tilbage" button
+        const backBtn = document.querySelector('.btn-back');
+        if (backBtn) {
+            backBtn.style.display = isTournamentMode ? 'none' : 'inline-block';
+        }
+
+        // Hide "Admin" button
+        const adminBtn = document.querySelector('a[href="admin.html"]');
+        if (adminBtn) {
+            adminBtn.style.display = isTournamentMode ? 'none' : 'inline-block';
         }
     } catch (error) {
         console.error('Failed to initialize app:', error);

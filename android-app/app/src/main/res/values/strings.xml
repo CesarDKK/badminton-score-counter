@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Badminton Tæller</string>
+    <string name="settings_title">Indstillinger</string>
+    <string name="action_settings">Indstillinger</string>
+    <string name="action_reload">Genindlæs</string>
+    <string name="action_show_menu">Vis Menu</string>
+</resources>

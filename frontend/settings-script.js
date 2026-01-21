@@ -155,7 +155,8 @@ async function loadSettings() {
     try {
         const settings = await api.getSettings();
         document.getElementById('courtCount').value = settings.courtCount;
-        document.getElementById('showResetButton').checked = settings.showResetButton !== false;
+        // Invert logic: checked = tournament mode ON (showResetButton false)
+        document.getElementById('showResetButton').checked = settings.showResetButton === false;
     } catch (error) {
         console.error('Failed to load settings:', error);
         showMessage('Fejl', 'Kunne ikke indlæse indstillinger');
@@ -261,18 +262,20 @@ async function changePassword() {
 }
 
 async function toggleResetButton() {
-    const showResetButton = document.getElementById('showResetButton').checked;
+    const tournamentModeChecked = document.getElementById('showResetButton').checked;
+    // Invert: checked = tournament mode ON, so send showResetButton = false
+    const showResetButton = !tournamentModeChecked;
 
     try {
         await api.updateResetButtonVisibility(showResetButton);
-        showMessage('Succes', showResetButton ?
-            '"Ryd Banen" knappen er nu synlig på banesiden' :
-            '"Ryd Banen" knappen er nu skjult på banesiden');
+        showMessage('Succes', tournamentModeChecked ?
+            'Turnerings tilstand aktiveret - kontrol knapper er nu skjult på banesiden' :
+            'Turnerings tilstand deaktiveret - alle knapper er nu synlige');
     } catch (error) {
         console.error('Failed to toggle reset button:', error);
         showMessage('Fejl', error.message);
         // Revert checkbox on error
-        document.getElementById('showResetButton').checked = !showResetButton;
+        document.getElementById('showResetButton').checked = !tournamentModeChecked;
     }
 }
 
