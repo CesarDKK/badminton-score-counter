@@ -3,7 +3,10 @@ package com.badminton.courtcounter
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.InputType
+import android.view.WindowManager
 import android.webkit.*
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -16,6 +19,8 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private lateinit var prefs: android.content.SharedPreferences
+    private val handler = Handler(Looper.getMainLooper())
+    private var screenTimeoutRunnable: Runnable? = null
 
     companion object {
         private const val PREF_NAME = "BadmintonCourtCounter"
@@ -24,6 +29,7 @@ class MainActivity : AppCompatActivity() {
         private const val PREF_FIRST_RUN = "first_run"
         private const val DEFAULT_SERVER_URL = "http://badmintonapp.local"
         private const val DEFAULT_COURT_ID = "1"
+        private const val SCREEN_TIMEOUT_MS = 10 * 60 * 1000L // 10 minutes
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -33,6 +39,9 @@ class MainActivity : AppCompatActivity() {
 
         // Hide action bar for fullscreen experience
         supportActionBar?.hide()
+
+        // Keep screen on initially
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         // Initialize preferences
         prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
@@ -54,6 +63,31 @@ class MainActivity : AppCompatActivity() {
             // Load the court page with saved settings
             loadCourtPage()
         }
+
+        // Start screen timeout timer
+        startScreenTimeoutTimer()
+    }
+
+    private fun startScreenTimeoutTimer() {
+        // Cancel any existing timer
+        screenTimeoutRunnable?.let { handler.removeCallbacks(it) }
+
+        // Create new runnable
+        screenTimeoutRunnable = Runnable {
+            // Turn off keep screen on after 10 minutes
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            Toast.makeText(this, "Skærm timeout aktiveret efter 10 minutter", Toast.LENGTH_SHORT).show()
+        }
+
+        // Schedule timeout after 10 minutes
+        screenTimeoutRunnable?.let { handler.postDelayed(it, SCREEN_TIMEOUT_MS) }
+    }
+
+    private fun resetScreenTimeout() {
+        // Re-enable keep screen on
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Restart the timer
+        startScreenTimeoutTimer()
     }
 
     private fun setupBackButtonHandler() {
@@ -65,7 +99,10 @@ class MainActivity : AppCompatActivity() {
                     .setPositiveButton("Ja") { _, _ ->
                         finish()
                     }
-                    .setNegativeButton("Nej", null)
+                    .setNegativeButton("Nej") { _, _ ->
+                        // Reset screen timeout when user interacts
+                        resetScreenTimeout()
+                    }
                     .show()
             }
         })
@@ -88,6 +125,9 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
+
+                // Reset screen timeout on any interaction
+                resetScreenTimeout()
 
                 // Only allow navigation within the court page
                 // Block navigation to landing.html, admin.html, etc.
@@ -200,6 +240,9 @@ class MainActivity : AppCompatActivity() {
 
                 // Load the court page
                 loadCourtPage()
+
+                // Start screen timeout timer after setup
+                startScreenTimeoutTimer()
             }
             .show()
     }
@@ -209,12 +252,20 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         webView.onResume()
         webView.resumeTimers()
+        // Reset screen timeout when app is resumed
+        resetScreenTimeout()
     }
 
     override fun onPause() {
         super.onPause()
         webView.onPause()
         webView.pauseTimers()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Clean up handler callbacks
+        screenTimeoutRunnable?.let { handler.removeCallbacks(it) }
     }
 
     private fun showErrorDialog(message: String) {
