@@ -4,8 +4,6 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Bundle
 import android.text.InputType
-import android.view.Menu
-import android.view.MenuItem
 import android.webkit.*
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -23,9 +21,9 @@ class MainActivity : AppCompatActivity() {
         private const val PREF_NAME = "BadmintonCourtCounter"
         private const val PREF_SERVER_URL = "server_url"
         private const val PREF_COURT_ID = "court_id"
+        private const val PREF_FIRST_RUN = "first_run"
         private const val DEFAULT_SERVER_URL = "http://badmintonapp.local"
         private const val DEFAULT_COURT_ID = "1"
-        private const val ADMIN_PASSWORD = "admin123"
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -33,9 +31,8 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Show action bar with menu
-        supportActionBar?.show()
-        supportActionBar?.setDisplayShowTitleEnabled(false)
+        // Hide action bar for fullscreen experience
+        supportActionBar?.hide()
 
         // Initialize preferences
         prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
@@ -47,8 +44,16 @@ class MainActivity : AppCompatActivity() {
         // Setup back button handler
         setupBackButtonHandler()
 
-        // Load the court page
-        loadCourtPage()
+        // Check if this is first run
+        val isFirstRun = prefs.getBoolean(PREF_FIRST_RUN, true)
+
+        if (isFirstRun) {
+            // Show setup dialog on first run
+            showFirstTimeSetup()
+        } else {
+            // Load the court page with saved settings
+            loadCourtPage()
+        }
     }
 
     private fun setupBackButtonHandler() {
@@ -116,60 +121,16 @@ class MainActivity : AppCompatActivity() {
         webView.loadUrl(url)
     }
 
-    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
-        menuInflater.inflate(R.menu.main_menu, menu)
-        return true
-    }
-
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            R.id.action_settings -> {
-                showPasswordDialog()
-                true
-            }
-            R.id.action_reload -> {
-                webView.reload()
-                true
-            }
-            else -> super.onOptionsItemSelected(item)
-        }
-    }
-
-    private fun showPasswordDialog() {
-        val passwordInput = EditText(this).apply {
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            hint = "Indtast adgangskode"
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle("Adgangskode påkrævet")
-            .setMessage("Indtast adgangskode for at ændre indstillinger")
-            .setView(passwordInput)
-            .setPositiveButton("OK") { _, _ ->
-                val enteredPassword = passwordInput.text.toString()
-                if (enteredPassword == ADMIN_PASSWORD) {
-                    showSettingsDialog()
-                } else {
-                    Toast.makeText(this, "Forkert adgangskode", Toast.LENGTH_SHORT).show()
-                }
-            }
-            .setNegativeButton("Annuller", null)
-            .show()
-    }
-
-    private fun showSettingsDialog() {
-        val currentServerUrl = prefs.getString(PREF_SERVER_URL, DEFAULT_SERVER_URL) ?: DEFAULT_SERVER_URL
-        val currentCourtId = prefs.getString(PREF_COURT_ID, DEFAULT_COURT_ID) ?: DEFAULT_COURT_ID
-
+    private fun showFirstTimeSetup() {
         // Create input fields
         val serverUrlInput = EditText(this).apply {
-            setText(currentServerUrl)
+            setText(DEFAULT_SERVER_URL)
             hint = "f.eks. http://192.168.1.100:8080"
             setSingleLine()
         }
 
         val courtIdInput = EditText(this).apply {
-            setText(currentCourtId)
+            setText(DEFAULT_COURT_ID)
             hint = "f.eks. 1"
             inputType = InputType.TYPE_CLASS_NUMBER
             setSingleLine()
@@ -179,6 +140,13 @@ class MainActivity : AppCompatActivity() {
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(60, 20, 60, 20)
+
+            addView(android.widget.TextView(this@MainActivity).apply {
+                text = "Velkommen til Badminton Tæller!"
+                textSize = 18f
+                setPadding(0, 0, 0, 30)
+                setTypeface(null, android.graphics.Typeface.BOLD)
+            })
 
             addView(android.widget.TextView(this@MainActivity).apply {
                 text = "Server URL:"
@@ -191,38 +159,48 @@ class MainActivity : AppCompatActivity() {
                 setPadding(0, 30, 0, 10)
             })
             addView(courtIdInput)
+
+            addView(android.widget.TextView(this@MainActivity).apply {
+                text = "\nDisse indstillinger kan kun ændres ved at slette app data."
+                textSize = 12f
+                setPadding(0, 20, 0, 0)
+                setTextColor(android.graphics.Color.GRAY)
+            })
         }
 
         AlertDialog.Builder(this)
-            .setTitle("Indstillinger")
+            .setTitle("Opsætning")
             .setView(layout)
-            .setPositiveButton("Gem") { _, _ ->
-                val newServerUrl = serverUrlInput.text.toString().trim()
-                val newCourtId = courtIdInput.text.toString().trim()
+            .setCancelable(false)
+            .setPositiveButton("Start") { _, _ ->
+                val serverUrl = serverUrlInput.text.toString().trim()
+                val courtId = courtIdInput.text.toString().trim()
 
-                if (newServerUrl.isEmpty()) {
+                if (serverUrl.isEmpty()) {
                     Toast.makeText(this, "Server URL må ikke være tom", Toast.LENGTH_SHORT).show()
+                    showFirstTimeSetup() // Show again
                     return@setPositiveButton
                 }
 
-                if (newCourtId.isEmpty()) {
+                if (courtId.isEmpty()) {
                     Toast.makeText(this, "Bane nummer må ikke være tomt", Toast.LENGTH_SHORT).show()
+                    showFirstTimeSetup() // Show again
                     return@setPositiveButton
                 }
 
-                // Save settings
+                // Save settings and mark as not first run
                 prefs.edit().apply {
-                    putString(PREF_SERVER_URL, newServerUrl)
-                    putString(PREF_COURT_ID, newCourtId)
+                    putString(PREF_SERVER_URL, serverUrl)
+                    putString(PREF_COURT_ID, courtId)
+                    putBoolean(PREF_FIRST_RUN, false)
                     apply()
                 }
 
-                Toast.makeText(this, "Indstillinger gemt. Genindlæser...", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Indstillinger gemt!", Toast.LENGTH_SHORT).show()
 
-                // Reload the page with new settings
+                // Load the court page
                 loadCourtPage()
             }
-            .setNegativeButton("Annuller", null)
             .show()
     }
 
@@ -242,12 +220,12 @@ class MainActivity : AppCompatActivity() {
     private fun showErrorDialog(message: String) {
         AlertDialog.Builder(this)
             .setTitle("Fejl")
-            .setMessage(message)
-            .setPositiveButton("Indstillinger") { _, _ ->
-                showPasswordDialog()
-            }
-            .setNegativeButton("Prøv Igen") { _, _ ->
+            .setMessage("$message\n\nFor at ændre indstillinger skal du slette app data i Android indstillinger.")
+            .setPositiveButton("Prøv Igen") { _, _ ->
                 loadCourtPage()
+            }
+            .setNegativeButton("Luk App") { _, _ ->
+                finish()
             }
             .setCancelable(false)
             .show()
