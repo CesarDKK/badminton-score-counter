@@ -94,7 +94,7 @@ if ($buildSuccess) {
     Write-Host "                   BUILD SUCCESSFUL!                          " -ForegroundColor Green
     Write-Host "================================================================" -ForegroundColor Cyan
 
-    $apkPath = "app\build\outputs\apk\$buildType\app-$buildType.apk"
+    $apkPath = "app\build\outputs\apk\$buildType\BadmintonApp.apk"
     if (Test-Path $apkPath) {
         $apk = Get-Item $apkPath
         $sizeMB = [math]::Round($apk.Length / 1MB, 2)

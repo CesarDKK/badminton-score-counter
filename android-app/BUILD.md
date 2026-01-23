@@ -28,7 +28,7 @@ ELLER åbn PowerShell og kør:
 
 Din færdige APK finder du her:
 ```
-app/build/outputs/apk/debug/app-debug.apk
+app/build/outputs/apk/debug/BadmintonApp.apk
 ```
 
 ---
@@ -42,7 +42,7 @@ app/build/outputs/apk/debug/app-debug.apk
 
 ### Metode 2: Via USB (ADB)
 ```cmd
-adb install app\build\outputs\apk\debug\app-debug.apk
+adb install app\build\outputs\apk\debug\BadmintonApp.apk
 ```
 
 ---
@@ -127,7 +127,7 @@ android-app/
 ├── app/
 │   └── build/outputs/apk/
 │       └── debug/
-│           └── app-debug.apk  ← DIN FÆRDIGE APK
+│           └── BadmintonApp.apk  ← DIN FÆRDIGE APK
 ├── java-17/              ← Auto-downloaded Java (git ignored)
 └── .gradle/              ← Build cache (git ignored)
 ```
