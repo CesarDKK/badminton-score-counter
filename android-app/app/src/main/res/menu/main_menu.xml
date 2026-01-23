@@ -5,10 +5,10 @@
         android:id="@+id/action_reload"
         android:title="@string/action_reload"
         android:icon="@android:drawable/ic_menu_rotate"
-        app:showAsAction="ifRoom" />
+        app:showAsAction="always" />
     <item
         android:id="@+id/action_settings"
         android:title="@string/action_settings"
         android:icon="@android:drawable/ic_menu_preferences"
-        app:showAsAction="ifRoom" />
+        app:showAsAction="never" />
 </menu>
