@@ -2,14 +2,15 @@ package com.badminton.courtcounter
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.content.Intent
 import android.os.Bundle
-import android.view.KeyEvent
+import android.text.InputType
 import android.view.Menu
 import android.view.MenuItem
-import android.view.View
 import android.webkit.*
+import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 
@@ -24,6 +25,7 @@ class MainActivity : AppCompatActivity() {
         private const val PREF_COURT_ID = "court_id"
         private const val DEFAULT_SERVER_URL = "http://badmintonapp.local"
         private const val DEFAULT_COURT_ID = "1"
+        private const val ADMIN_PASSWORD = "admin123"
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -31,8 +33,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Hide action bar for fullscreen experience
-        supportActionBar?.hide()
+        // Show action bar with menu
+        supportActionBar?.show()
+        supportActionBar?.setDisplayShowTitleEnabled(false)
 
         // Initialize preferences
         prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
@@ -41,8 +44,26 @@ class MainActivity : AppCompatActivity() {
         webView = findViewById(R.id.webView)
         setupWebView()
 
+        // Setup back button handler
+        setupBackButtonHandler()
+
         // Load the court page
         loadCourtPage()
+    }
+
+    private fun setupBackButtonHandler() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Afslut app")
+                    .setMessage("Vil du afslutte appen?")
+                    .setPositiveButton("Ja") { _, _ ->
+                        finish()
+                    }
+                    .setNegativeButton("Nej", null)
+                    .show()
+            }
+        })
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -50,7 +71,6 @@ class MainActivity : AppCompatActivity() {
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
-            databaseEnabled = true
             cacheMode = WebSettings.LOAD_DEFAULT
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             useWideViewPort = true
@@ -104,7 +124,7 @@ class MainActivity : AppCompatActivity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_settings -> {
-                startActivity(Intent(this, SettingsActivity::class.java))
+                showPasswordDialog()
                 true
             }
             R.id.action_reload -> {
@@ -115,17 +135,97 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Override back button to prevent navigation
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK) {
-            // Show action bar instead of going back
-            if (supportActionBar?.isShowing == false) {
-                supportActionBar?.show()
-                return true
-            }
+    private fun showPasswordDialog() {
+        val passwordInput = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            hint = "Indtast adgangskode"
         }
-        return super.onKeyDown(keyCode, event)
+
+        AlertDialog.Builder(this)
+            .setTitle("Adgangskode påkrævet")
+            .setMessage("Indtast adgangskode for at ændre indstillinger")
+            .setView(passwordInput)
+            .setPositiveButton("OK") { _, _ ->
+                val enteredPassword = passwordInput.text.toString()
+                if (enteredPassword == ADMIN_PASSWORD) {
+                    showSettingsDialog()
+                } else {
+                    Toast.makeText(this, "Forkert adgangskode", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Annuller", null)
+            .show()
     }
+
+    private fun showSettingsDialog() {
+        val currentServerUrl = prefs.getString(PREF_SERVER_URL, DEFAULT_SERVER_URL) ?: DEFAULT_SERVER_URL
+        val currentCourtId = prefs.getString(PREF_COURT_ID, DEFAULT_COURT_ID) ?: DEFAULT_COURT_ID
+
+        // Create input fields
+        val serverUrlInput = EditText(this).apply {
+            setText(currentServerUrl)
+            hint = "f.eks. http://192.168.1.100:8080"
+            setSingleLine()
+        }
+
+        val courtIdInput = EditText(this).apply {
+            setText(currentCourtId)
+            hint = "f.eks. 1"
+            inputType = InputType.TYPE_CLASS_NUMBER
+            setSingleLine()
+        }
+
+        // Create layout
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(60, 20, 60, 20)
+
+            addView(android.widget.TextView(this@MainActivity).apply {
+                text = "Server URL:"
+                setPadding(0, 10, 0, 10)
+            })
+            addView(serverUrlInput)
+
+            addView(android.widget.TextView(this@MainActivity).apply {
+                text = "Bane nummer:"
+                setPadding(0, 30, 0, 10)
+            })
+            addView(courtIdInput)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Indstillinger")
+            .setView(layout)
+            .setPositiveButton("Gem") { _, _ ->
+                val newServerUrl = serverUrlInput.text.toString().trim()
+                val newCourtId = courtIdInput.text.toString().trim()
+
+                if (newServerUrl.isEmpty()) {
+                    Toast.makeText(this, "Server URL må ikke være tom", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+
+                if (newCourtId.isEmpty()) {
+                    Toast.makeText(this, "Bane nummer må ikke være tomt", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+
+                // Save settings
+                prefs.edit().apply {
+                    putString(PREF_SERVER_URL, newServerUrl)
+                    putString(PREF_COURT_ID, newCourtId)
+                    apply()
+                }
+
+                Toast.makeText(this, "Indstillinger gemt. Genindlæser...", Toast.LENGTH_SHORT).show()
+
+                // Reload the page with new settings
+                loadCourtPage()
+            }
+            .setNegativeButton("Annuller", null)
+            .show()
+    }
+
 
     override fun onResume() {
         super.onResume()
@@ -144,7 +244,7 @@ class MainActivity : AppCompatActivity() {
             .setTitle("Fejl")
             .setMessage(message)
             .setPositiveButton("Indstillinger") { _, _ ->
-                startActivity(Intent(this, SettingsActivity::class.java))
+                showPasswordDialog()
             }
             .setNegativeButton("Prøv Igen") { _, _ ->
                 loadCourtPage()
