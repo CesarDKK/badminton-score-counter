@@ -698,8 +698,8 @@ function updateDoublesDisplay() {
 }
 
 function formatPlayerNames(playerName, playerName2) {
-    // Format player names for display (includes partner if doubles)
-    if (playerName2 && playerName2.trim() !== '') {
+    // Format player names for display (includes partner ONLY if doubles mode)
+    if (gameState.isDoubles && playerName2 && playerName2.trim() !== '') {
         return `${playerName} / ${playerName2}`;
     }
     return playerName;
