@@ -64,6 +64,7 @@ captures/
 # Keystore files
 *.jks
 *.keystore
+keystore.properties
 
 # External native build folder generated in Android Studio 2.2 and later
 .externalNativeBuild
@@ -97,3 +98,10 @@ lint-results.xml
 
 # Android Profiling
 *.hprof
+
+# Auto-downloaded dependencies (from build-android-auto scripts)
+java-17/
+android-sdk/
+*.zip
+build-output.txt
+ps-build.log

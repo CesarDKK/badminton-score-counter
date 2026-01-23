@@ -111,10 +111,6 @@ class MainActivity : AppCompatActivity() {
                 webView.reload()
                 true
             }
-            R.id.action_show_menu -> {
-                supportActionBar?.show()
-                true
-            }
             else -> super.onOptionsItemSelected(item)
         }
     }
