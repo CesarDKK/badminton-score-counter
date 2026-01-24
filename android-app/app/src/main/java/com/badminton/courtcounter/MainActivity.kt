@@ -157,7 +157,7 @@ class MainActivity : AppCompatActivity() {
     private fun loadCourtPage() {
         val serverUrl = prefs.getString(PREF_SERVER_URL, DEFAULT_SERVER_URL)
         val courtId = prefs.getString(PREF_COURT_ID, DEFAULT_COURT_ID)
-        val url = "$serverUrl/court.html?court=$courtId"
+        val url = "$serverUrl/court.html?id=$courtId"
         webView.loadUrl(url)
     }
 
