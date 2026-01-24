@@ -998,6 +998,39 @@ async function syncGameState() {
                 console.log('Doubles mode synced from admin:', loaded.isDoubles);
             }
 
+            // Sync scores and games from other instances
+            if (loaded.player1.score !== gameState.player1.score ||
+                loaded.player2.score !== gameState.player2.score ||
+                loaded.player1.games !== gameState.player1.games ||
+                loaded.player2.games !== gameState.player2.games) {
+
+                gameState.player1.score = loaded.player1.score;
+                gameState.player2.score = loaded.player2.score;
+                gameState.player1.games = loaded.player1.games;
+                gameState.player2.games = loaded.player2.games;
+
+                // Update display to show new scores
+                updateDisplay();
+
+                console.log('Scores synced from other instance:',
+                    `${loaded.player1.score}-${loaded.player2.score}`,
+                    `Games: ${loaded.player1.games}-${loaded.player2.games}`);
+            }
+
+            // Sync game mode if changed
+            if (loaded.gameMode && loaded.gameMode !== gameState.gameMode) {
+                gameState.gameMode = loaded.gameMode;
+                updateDisplay();
+                console.log('Game mode synced from other instance:', loaded.gameMode);
+            }
+
+            // Sync deciding game switch status
+            if (loaded.decidingGameSwitched !== undefined &&
+                loaded.decidingGameSwitched !== gameState.decidingGameSwitched) {
+                gameState.decidingGameSwitched = loaded.decidingGameSwitched;
+                console.log('Deciding game switch synced from other instance:', loaded.decidingGameSwitched);
+            }
+
             // Sync timestamps even if not reset (for timer continuity)
             if (loaded.matchStartTime && !gameState.matchStartTime) {
                 // Match started elsewhere, start timer display
