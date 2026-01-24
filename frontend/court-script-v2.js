@@ -43,6 +43,7 @@ let gameState = {
 let saveTimeout = null;
 let isSaving = false;
 let pendingSave = false;
+let lastScoreUpdateTime = 0; // Timestamp of last local score update
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', async function() {
@@ -177,6 +178,9 @@ function addPoint(player) {
 
     checkGameWin();
     updateDisplay();
+
+    // Mark that we just updated scores locally
+    lastScoreUpdateTime = Date.now();
     saveGameState();
 }
 
@@ -219,6 +223,9 @@ function removePoint(player) {
         }
 
         updateDisplay();
+
+        // Mark that we just updated scores locally
+        lastScoreUpdateTime = Date.now();
         saveGameState();
     }
 }
@@ -274,6 +281,9 @@ function undoLastSet(player) {
     }
 
     updateDisplay();
+
+    // Mark that we just updated scores locally
+    lastScoreUpdateTime = Date.now();
     saveGameState();
 }
 
@@ -458,6 +468,9 @@ function resetScores() {
     gameState.player2.score = 0;
     gameState.restBreakTaken = false;  // Reset rest break flag for new set
     updateDisplay();
+
+    // Mark that we just updated scores locally
+    lastScoreUpdateTime = Date.now();
     saveGameState();
 }
 
@@ -493,6 +506,9 @@ function startNewMatch() {
                     enableAllControls();
 
                     updateDisplay();
+
+                    // Mark that we just updated scores locally
+                    lastScoreUpdateTime = Date.now();
                     saveGameState();
 
                     // Set court as inactive after 20 seconds to show sponsors on TV
@@ -539,6 +555,9 @@ function clearCourt() {
                         enableAllControls();
 
                         updateDisplay();
+
+                        // Mark that we just updated scores locally
+                        lastScoreUpdateTime = Date.now();
                         await saveGameState();
 
                         // Immediately set court to inactive
@@ -999,10 +1018,16 @@ async function syncGameState() {
             }
 
             // Sync scores and games from other instances
-            if (loaded.player1.score !== gameState.player1.score ||
-                loaded.player2.score !== gameState.player2.score ||
-                loaded.player1.games !== gameState.player1.games ||
-                loaded.player2.games !== gameState.player2.games) {
+            // BUT: Don't sync if we just updated scores locally (within last 2 seconds)
+            // This prevents race conditions where local changes get overwritten by stale server data
+            const timeSinceLastUpdate = Date.now() - lastScoreUpdateTime;
+            const shouldSyncScores = timeSinceLastUpdate > 2000; // 2 second cooldown
+
+            if (shouldSyncScores &&
+                (loaded.player1.score !== gameState.player1.score ||
+                 loaded.player2.score !== gameState.player2.score ||
+                 loaded.player1.games !== gameState.player1.games ||
+                 loaded.player2.games !== gameState.player2.games)) {
 
                 gameState.player1.score = loaded.player1.score;
                 gameState.player2.score = loaded.player2.score;
