@@ -39,16 +39,59 @@
                 </div>
             </header>
 
-            <!-- Upload Section -->
+            <!-- Combined Upload Section -->
             <div class="upload-section">
-                <h2>Upload Sponsor Billeder</h2>
-                <div class="upload-container">
-                    <div class="upload-box">
-                        <input type="file" id="imageUpload" accept="image/*" multiple style="display: none;">
-                        <button id="uploadBtn" class="btn-primary">Vælg Billeder</button>
-                        <p class="upload-hint">Anbefalet opløsning: 1920x1080 (FullHD)</p>
-                        <div id="uploadPreview" class="upload-preview"></div>
+                <h2>Upload Billeder</h2>
+                <div class="upload-grid">
+                    <!-- Slideshow Upload Box -->
+                    <div class="upload-box-wrapper">
+                        <h3 class="upload-box-title">Slideshow Sponsorer</h3>
+                        <p class="section-description">Vises i fuldskærm på TV-skærmene</p>
+                        <div class="upload-box">
+                            <input type="file" id="slideshowImageUpload" accept="image/*" multiple style="display: none;">
+                            <button id="slideshowUploadBtn" class="btn-primary">Vælg Slideshow Billeder</button>
+                            <p class="upload-hint">Opløsning: 1920x1080 (FullHD)</p>
+                            <p class="upload-hint-secondary">Sideforhold bevares - ingen beskæring</p>
+                            <div id="slideshowUploadPreview" class="upload-preview"></div>
+                        </div>
                     </div>
+
+                    <!-- Court Banner Upload Box -->
+                    <div class="upload-box-wrapper">
+                        <h3 class="upload-box-title">Bane Sponsorer</h3>
+                        <p class="section-description">Banner format til baneoversigtsskærme</p>
+                        <div class="upload-box upload-box-banner">
+                            <input type="file" id="courtImageUpload" accept="image/*" multiple style="display: none;">
+                            <button id="courtUploadBtn" class="btn-primary">Vælg Bane Banner Billeder</button>
+                            <p class="upload-hint">Opløsning: 1920x216 (banner format)</p>
+                            <p class="upload-hint-secondary">Beskæres automatisk fra bunden</p>
+                            <div id="courtUploadPreview" class="upload-preview"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Slideshow Gallery Section -->
+            <div class="gallery-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>Slideshow Sponsor Galleri</h2>
+                    <button id="clearAllSlideshowBtn" class="btn-danger">Slet Alle Slideshow Billeder</button>
+                </div>
+                <div id="slideshowGalleryContainer" class="gallery-grid"></div>
+                <div id="emptySlideshowGallery" class="empty-gallery" style="display: none;">
+                    <p>Ingen slideshow billeder uploadet endnu</p>
+                </div>
+            </div>
+
+            <!-- Court Banner Gallery Section -->
+            <div class="gallery-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>Bane Sponsor Galleri</h2>
+                    <button id="clearAllCourtBtn" class="btn-danger">Slet Alle Bane Billeder</button>
+                </div>
+                <div id="courtGalleryContainer" class="gallery-grid"></div>
+                <div id="emptyCourtGallery" class="empty-gallery" style="display: none;">
+                    <p>Ingen bane banner billeder uploadet endnu</p>
                 </div>
             </div>
 
@@ -66,17 +109,16 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
 
-            <!-- Gallery Section -->
-            <div class="gallery-section">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h2>Sponsor Galleri</h2>
-                    <button id="clearAllBtn" class="btn-danger">Slet Alle Billeder</button>
-                </div>
-                <div id="galleryContainer" class="gallery-grid"></div>
-                <div id="emptyGallery" class="empty-gallery" style="display: none;">
-                    <p>Ingen sponsor billeder uploadet endnu</p>
-                </div>
+    <!-- Message Overlay -->
+    <div id="messageOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); z-index: 10000; justify-content: center; align-items: center;">
+        <div style="text-align: center; color: white; max-width: 600px; padding: 40px;">
+            <h1 id="messageTitle" style="font-size: 2.5em; margin-bottom: 30px; color: var(--color-accent);"></h1>
+            <p id="messageText" style="font-size: 1.5em; margin-bottom: 40px; line-height: 1.5;"></p>
+            <div id="messageButtons" style="display: flex; gap: 20px; justify-content: center;">
+                <!-- Buttons will be added dynamically -->
             </div>
         </div>
     </div>

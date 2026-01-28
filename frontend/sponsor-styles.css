@@ -78,8 +78,28 @@
 
 .upload-section h2 {
     color: var(--color-accent);
-    margin-bottom: 20px;
+    margin-bottom: 30px;
     font-size: 1.8em;
+}
+
+/* Upload Grid - Side by Side Layout */
+.upload-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-top: 20px;
+}
+
+.upload-box-wrapper {
+    display: flex;
+    flex-direction: column;
+}
+
+.upload-box-title {
+    color: #fff;
+    font-size: 1.3em;
+    margin-bottom: 10px;
+    font-weight: bold;
 }
 
 .upload-container {
@@ -93,7 +113,7 @@
     background: rgba(0, 20, 40, 0.5);
     border-radius: 10px;
     border: 2px dashed var(--color-primary);
-    min-width: 400px;
+    width: 100%;
 }
 
 .upload-box .btn-primary {
@@ -300,6 +320,11 @@
         gap: 15px;
     }
 
+    .upload-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+
     .upload-box {
         min-width: auto;
         width: 100%;
@@ -334,4 +359,96 @@
 .btn-danger:hover {
     background: #d63851;
     transform: scale(1.05);
+}
+
+/* Section Description Styles */
+.section-description {
+    color: #aaa;
+    font-size: 1em;
+    margin-bottom: 20px;
+    font-style: italic;
+    text-align: center;
+}
+
+/* Secondary Upload Hint */
+.upload-hint-secondary {
+    color: #888;
+    font-size: 0.85em;
+    margin-top: 5px;
+    font-style: italic;
+}
+
+/* Banner-specific Upload Box */
+.upload-box-banner {
+    border-color: var(--color-accent);
+    border-width: 3px;
+}
+
+/* Banner-specific Gallery Items */
+.gallery-item-banner {
+    border-color: var(--color-accent);
+}
+
+.gallery-item-banner:hover {
+    box-shadow: 0 8px 20px rgba(233, 69, 96, 0.5);
+}
+
+/* Banner-specific Gallery Image Container (shorter aspect ratio) */
+.gallery-image-container-banner {
+    height: 120px; /* Shorter to match banner aspect ratio */
+}
+
+/* Court Assignment Checkboxes */
+.court-assignments {
+    padding: 15px;
+    background: rgba(0, 20, 40, 0.3);
+    border-top: 2px solid var(--color-primary);
+}
+
+.court-assignments-label {
+    color: #fff;
+    font-size: 0.9em;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.court-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.court-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    background: rgba(0, 20, 40, 0.5);
+    border: 2px solid var(--color-primary);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+}
+
+.court-checkbox:hover {
+    background: rgba(0, 20, 40, 0.8);
+    border-color: var(--color-accent);
+}
+
+.court-checkbox input[type="checkbox"] {
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+}
+
+.court-checkbox span {
+    color: #fff;
+    font-size: 0.85em;
+    white-space: nowrap;
+}
+
+.court-checkbox input[type="checkbox"]:checked + span {
+    color: var(--color-accent);
+    font-weight: bold;
 }

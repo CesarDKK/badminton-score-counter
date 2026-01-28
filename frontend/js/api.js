@@ -267,10 +267,12 @@ class BadmintonAPI {
 
     /**
      * Get all sponsor images
+     * @param {string} type - Optional filter: 'slideshow' or 'court'
      * @returns {Promise<Array>} - Array of image objects
      */
-    async getSponsorImages() {
-        return this.request('/sponsors/images', { requiresAuth: false });
+    async getSponsorImages(type = null) {
+        const queryParam = type ? `?type=${type}` : '';
+        return this.request(`/sponsors/images${queryParam}`, { requiresAuth: false });
     }
 
     /**
@@ -338,6 +340,19 @@ class BadmintonAPI {
     async deleteAllSponsorImages() {
         return this.request('/sponsors/all', {
             method: 'DELETE'
+        });
+    }
+
+    /**
+     * Update court assignments for a sponsor image
+     * @param {number} imageId - Image ID
+     * @param {Array<number>} courts - Array of court numbers
+     * @returns {Promise<object>} - { success }
+     */
+    async updateSponsorImageCourts(imageId, courts) {
+        return this.request(`/sponsors/${imageId}/courts`, {
+            method: 'PUT',
+            body: JSON.stringify({ courts })
         });
     }
 

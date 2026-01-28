@@ -226,10 +226,12 @@ class BadmintonAPI {
 
     /**
      * Get all sponsor images
+     * @param {string} type - Optional filter: 'slideshow' or 'court'
      * @returns {Promise<Array>} - Array of image objects
      */
-    async getSponsorImages() {
-        return this.request('/sponsors/images', { requiresAuth: false });
+    async getSponsorImages(type = null) {
+        const queryParam = type ? `?type=${type}` : '';
+        return this.request(`/sponsors/images${queryParam}`, { requiresAuth: false });
     }
 
     /**

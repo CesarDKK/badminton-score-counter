@@ -28,8 +28,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     loadCourtData();
     startAutoRefresh();
     startLocalTimer();
-    // Refresh sponsor settings every 30 seconds
-    setInterval(refreshSponsorSettings, 30000);
+    // Refresh sponsor settings every 10 seconds to detect new/removed images
+    setInterval(refreshSponsorSettings, 10000);
 });
 
 async function initializeTVDisplay() {
@@ -242,16 +242,44 @@ async function loadCourtData() {
 
 async function refreshSponsorSettings() {
     try {
-        // Refresh sponsor images cache
-        const images = await api.getSponsorImages();
+        // Refresh sponsor images cache (only slideshow type for TV display)
+        const oldImages = cachedSponsorImages;
+        const images = await api.getSponsorImages('slideshow');
+
+        // Check if images have changed (different count or different IDs)
+        const imagesChanged = !oldImages ||
+                             oldImages.length !== images.length ||
+                             !oldImages.every((img, idx) => images[idx] && img.id === images[idx].id);
+
         cachedSponsorImages = images;
 
         // Refresh slide duration cache
         const settings = await api.getSponsorSettings();
         cachedSlideDuration = settings.slideDuration * 1000; // Convert to milliseconds
+
+        // If images changed and we're currently showing slideshow, restart it
+        if (imagesChanged && isShowingSlideshow) {
+            console.log('Sponsor images changed, restarting slideshow');
+            restartSlideshow();
+        }
     } catch (error) {
         console.error('Failed to refresh sponsor settings:', error);
     }
+}
+
+function restartSlideshow() {
+    // Stop current slideshow
+    if (slideshowInterval) {
+        clearInterval(slideshowInterval);
+        slideshowInterval = null;
+    }
+
+    // Reset and restart
+    isShowingSlideshow = false;
+    currentSlideIndex = 0;
+
+    // Show slideshow again with updated images
+    showSponsorSlideshow();
 }
 
 function getSponsorImages() {
@@ -285,15 +313,17 @@ function showSponsorSlideshow() {
         // Display first slide
         displayCurrentSlide(images);
 
-        // Start slideshow timer
-        const duration = getSlideDuration();
-        slideshowInterval = setInterval(function() {
-            const imgs = getSponsorImages();
-            if (imgs.length > 0) {
-                currentSlideIndex = (currentSlideIndex + 1) % imgs.length;
-                displayCurrentSlide(imgs);
-            }
-        }, duration);
+        // Only start slideshow timer if there are multiple images
+        if (images.length > 1) {
+            const duration = getSlideDuration();
+            slideshowInterval = setInterval(function() {
+                const imgs = getSponsorImages();
+                if (imgs.length > 1) {
+                    currentSlideIndex = (currentSlideIndex + 1) % imgs.length;
+                    displayCurrentSlide(imgs);
+                }
+            }, duration);
+        }
     }
     // If already showing slideshow, do nothing - let the interval handle slide changes
 }
