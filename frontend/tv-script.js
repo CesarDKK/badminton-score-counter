@@ -10,6 +10,7 @@ let currentSlideIndex = 0;
 let isShowingSlideshow = false;
 let cachedSponsorImages = [];
 let cachedSlideDuration = 10000; // 10 seconds default
+let cachedCourtBanner = null; // Court banner for this specific court
 let localTimerSeconds = 0;
 let timerInterval = null;
 let lastSyncedTimerSeconds = 0;
@@ -137,6 +138,9 @@ async function loadCourtData() {
             lastSyncedTimerSeconds = gameState.timerSeconds;
             updateTimerDisplay();
         }
+
+        // Update court banner in footer
+        updateCourtBanner();
     } catch (error) {
         console.error('Failed to load court data:', error);
         // Show sponsor slideshow on error (network issues)
@@ -157,6 +161,20 @@ async function refreshSponsorSettings() {
 
         cachedSponsorImages = images;
 
+        // Refresh court banner for this specific court
+        const courtBanners = await api.getSponsorImages('court');
+        const oldBanner = cachedCourtBanner;
+
+        // Find banner assigned to this court
+        cachedCourtBanner = courtBanners.find(banner =>
+            banner.assignedCourts && banner.assignedCourts.includes(courtId)
+        ) || null;
+
+        // Check if court banner changed
+        const bannerChanged = (!oldBanner && cachedCourtBanner) ||
+                             (oldBanner && !cachedCourtBanner) ||
+                             (oldBanner && cachedCourtBanner && oldBanner.id !== cachedCourtBanner.id);
+
         // Refresh slide duration cache
         const settings = await api.getSponsorSettings();
         cachedSlideDuration = settings.slideDuration * 1000; // Convert to milliseconds
@@ -165,6 +183,11 @@ async function refreshSponsorSettings() {
         if (imagesChanged && isShowingSlideshow) {
             console.log('Sponsor images changed, restarting slideshow');
             restartSlideshow();
+        }
+
+        // If banner changed and match is active, update footer
+        if (bannerChanged && isMatchCurrentlyActive) {
+            updateCourtBanner();
         }
     } catch (error) {
         console.error('Failed to refresh sponsor settings:', error);
@@ -186,6 +209,31 @@ function restartSlideshow() {
     showSponsorSlideshow();
 }
 
+function updateCourtBanner() {
+    const footer = document.querySelector('.tv-footer');
+    if (!footer) return;
+
+    // Show banner only if match is active (not showing slideshow) and banner exists
+    const isMatchActive = !isShowingSlideshow;
+
+    if (isMatchActive && cachedCourtBanner) {
+        // Show court banner image
+        footer.innerHTML = `
+            <img src="/uploads/${cachedCourtBanner.filename}"
+                 alt="Court Banner"
+                 class="court-banner-image">
+        `;
+    } else {
+        // Show default live indicator
+        footer.innerHTML = `
+            <div class="live-indicator">
+                <span class="live-dot"></span>
+                LIVE
+            </div>
+        `;
+    }
+}
+
 function getSponsorImages() {
     return cachedSponsorImages;
 }
@@ -203,6 +251,8 @@ function showSponsorSlideshow() {
             hideScoreboard();
             showDefaultMessage();
             isShowingSlideshow = true;
+            // Reset footer to live indicator when showing default message
+            updateCourtBanner();
         }
         return;
     }
@@ -216,6 +266,9 @@ function showSponsorSlideshow() {
 
         // Display first slide
         displayCurrentSlide(images);
+
+        // Reset footer to live indicator when showing slideshow
+        updateCourtBanner();
 
         // Only start slideshow timer if there are multiple images
         if (images.length > 1) {
@@ -249,6 +302,9 @@ function hideSponsorSlideshow() {
         // Show scoreboard
         showScoreboard();
         isShowingSlideshow = false;
+
+        // Update footer to show court banner if available
+        updateCourtBanner();
     }
 }
 

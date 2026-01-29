@@ -170,6 +170,15 @@ body {
     }
 }
 
+/* Court Banner in Footer */
+.court-banner-image {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
 /* Responsive adjustments */
 @media (max-width: 1200px) {
     .tv-header h1 {
