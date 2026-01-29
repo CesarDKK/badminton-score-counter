@@ -218,6 +218,7 @@ function updateCourtBanner() {
 
     if (isMatchActive && cachedCourtBanner) {
         // Show court banner image
+        footer.classList.add('has-banner');
         footer.innerHTML = `
             <img src="/uploads/${cachedCourtBanner.filename}"
                  alt="Court Banner"
@@ -225,6 +226,7 @@ function updateCourtBanner() {
         `;
     } else {
         // Show default live indicator
+        footer.classList.remove('has-banner');
         footer.innerHTML = `
             <div class="live-indicator">
                 <span class="live-dot"></span>
