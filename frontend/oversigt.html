@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oversigt - Alle Aktive Kampe</title>
+    <link rel="icon" type="image/png" href="/favicon.png?v=4">
+    <link rel="stylesheet" href="oversigt-styles.css">
+    <script src="js/theme-loader.js"></script>
+</head>
+<body>
+    <div class="overview-container">
+        <div class="overview-header">
+            <div class="header-left">
+                <h1>KAMPSTATUS OVERSIGT</h1>
+                <div class="page-indicator" id="pageIndicator" style="display: none;">
+                    <span id="pageInfo">Side 1 af 1</span>
+                </div>
+            </div>
+            <a href="landing.html" class="back-link">← Tilbage til Landing</a>
+        </div>
+
+        <div class="courts-grid" id="courtsGrid">
+            <!-- Court cards will be dynamically generated here -->
+        </div>
+
+        <!-- Loading indicator -->
+        <div id="loadingIndicator" class="loading-indicator">
+            <p>Indlæser kampstatus...</p>
+        </div>
+
+        <!-- No active matches message -->
+        <div id="noMatchesMessage" class="no-matches-message" style="display: none;">
+            <h2>Ingen Aktive Kampe</h2>
+            <p>Der er ingen kampe i gang i øjeblikket</p>
+        </div>
+    </div>
+
+    <script src="js/api.js?v=2"></script>
+    <script src="oversigt-script.js?v=2"></script>
+</body>
+</html>

@@ -1,0 +1,329 @@
+/* Overview Page Styles */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: var(--color-bg-dark);
+    color: #fff;
+    overflow: hidden;
+}
+
+.overview-container {
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header */
+.overview-header {
+    background: rgba(15, 52, 96, 0.8);
+    padding: 20px 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 3px solid var(--color-primary);
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+}
+
+.overview-header h1 {
+    font-size: 2.5em;
+    color: var(--color-accent);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.page-indicator {
+    background: rgba(0, 20, 40, 0.8);
+    padding: 10px 25px;
+    border-radius: 25px;
+    border: 2px solid var(--color-primary);
+}
+
+.page-indicator span {
+    font-size: 1.3em;
+    color: #fff;
+    font-weight: bold;
+}
+
+.back-link {
+    color: #fff;
+    text-decoration: none;
+    font-size: 1.2em;
+    padding: 10px 20px;
+    border: 2px solid var(--color-primary);
+    border-radius: 8px;
+    transition: all 0.3s;
+}
+
+.back-link:hover {
+    background: var(--color-primary);
+    transform: scale(1.05);
+}
+
+/* Courts Grid - 2x3 layout (6 courts) */
+.courts-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 20px;
+    padding: 20px;
+    overflow: hidden;
+}
+
+/* Court Card */
+.court-card {
+    background: rgba(0, 20, 40, 0.8);
+    border: 3px solid var(--color-primary);
+    border-radius: 15px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.court-card:hover {
+    transform: scale(1.02);
+    box-shadow: 0 0 30px rgba(233, 69, 96, 0.5);
+}
+
+/* Court Header */
+.court-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--color-primary);
+}
+
+.court-number {
+    font-size: 1.8em;
+    font-weight: bold;
+    color: var(--color-accent);
+}
+
+.court-timer {
+    font-size: 1.5em;
+    color: #4CAF50;
+    font-weight: bold;
+}
+
+/* Players Section */
+.court-players {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 20px;
+}
+
+.player-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background: rgba(0, 20, 40, 0.5);
+    border-radius: 8px;
+}
+
+.player-info {
+    flex: 1;
+}
+
+.player-name {
+    font-size: 1.3em;
+    font-weight: bold;
+    color: #fff;
+    margin-bottom: 3px;
+}
+
+.player-name-partner {
+    font-size: 1em;
+    color: #aaa;
+    font-weight: normal;
+}
+
+.player-stats {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.player-score {
+    font-size: 3em;
+    font-weight: bold;
+    color: var(--color-accent);
+    min-width: 80px;
+    text-align: center;
+}
+
+.player-games {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(15, 52, 96, 0.6);
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 2px solid var(--color-primary);
+}
+
+.vs-divider {
+    text-align: center;
+    font-size: 1.5em;
+    color: var(--color-primary);
+    font-weight: bold;
+    margin: 5px 0;
+}
+
+/* Games Score - now displayed next to each player */
+.games-label {
+    font-size: 0.8em;
+    color: #aaa;
+    text-transform: uppercase;
+}
+
+.games-value {
+    font-size: 1.3em;
+    font-weight: bold;
+    color: #4CAF50;
+    margin-top: 2px;
+}
+
+/* Inactive Court (No Match) */
+.court-card.inactive {
+    border-color: #555;
+    opacity: 0.6;
+}
+
+.court-card.inactive .court-inactive-message {
+    text-align: center;
+    color: #888;
+    font-size: 1.2em;
+    padding: 40px 0;
+}
+
+/* Loading Indicator */
+.loading-indicator {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    font-size: 2em;
+    color: var(--color-accent);
+}
+
+/* No Matches Message */
+.no-matches-message {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+
+.no-matches-message h2 {
+    font-size: 3em;
+    color: var(--color-accent);
+    margin-bottom: 20px;
+}
+
+.no-matches-message p {
+    font-size: 1.5em;
+    color: #aaa;
+}
+
+/* Page transitions - no animation, direct switch */
+
+/* Rest Break Indicator */
+.rest-break-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: #4CAF50;
+    color: white;
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-size: 0.9em;
+    font-weight: bold;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.7;
+        transform: scale(1.05);
+    }
+}
+
+/* Court Banner in Card Footer */
+.court-card-footer {
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 2px solid var(--color-primary);
+}
+
+.court-banner-small {
+    width: 100%;
+    height: auto;
+    border-radius: 5px;
+    display: block;
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 1400px) {
+    .courts-grid {
+        gap: 15px;
+        padding: 15px;
+    }
+
+    .court-card {
+        padding: 15px;
+    }
+
+    .player-name {
+        font-size: 1.1em;
+    }
+
+    .player-score {
+        font-size: 2.5em;
+    }
+
+    .player-games {
+        padding: 6px 10px;
+    }
+
+    .games-value {
+        font-size: 1.1em;
+    }
+}
+
+@media (max-width: 1024px) {
+    .courts-grid {
+        grid-template-columns: repeat(2, 1fr);
+        grid-template-rows: repeat(3, 1fr);
+    }
+
+    .overview-header h1 {
+        font-size: 2em;
+    }
+}

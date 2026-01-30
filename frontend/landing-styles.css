@@ -160,6 +160,52 @@ header h1 {
     opacity: 0.9;
 }
 
+/* Overview Section */
+.overview-section {
+    margin: 40px 0;
+    padding: 30px;
+    background: linear-gradient(135deg, rgba(15, 52, 96, 0.3) 0%, rgba(233, 69, 96, 0.2) 100%);
+    border-radius: 15px;
+    text-align: center;
+    border: 2px solid var(--color-primary);
+}
+
+.overview-section h2 {
+    color: var(--color-accent);
+    font-size: 1.8em;
+    margin-bottom: 10px;
+}
+
+.overview-description {
+    color: #aaa;
+    font-size: 1.1em;
+    margin-bottom: 20px;
+}
+
+.overview-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 15px;
+    padding: 20px 40px;
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+    color: white;
+    text-decoration: none;
+    border-radius: 12px;
+    font-size: 1.3em;
+    font-weight: bold;
+    transition: all 0.3s;
+    box-shadow: 0 5px 20px rgba(233, 69, 96, 0.3);
+}
+
+.overview-link:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 30px rgba(233, 69, 96, 0.5);
+}
+
+.overview-icon {
+    font-size: 1.5em;
+}
+
 .info-section {
     margin-top: 50px;
     padding: 25px;
