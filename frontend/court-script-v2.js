@@ -44,6 +44,7 @@ let saveTimeout = null;
 let isSaving = false;
 let pendingSave = false;
 let lastScoreUpdateTime = 0; // Timestamp of last local score update
+let lastDoublesModeUpdateTime = 0; // Timestamp of last local doubles mode change
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', async function() {
@@ -690,6 +691,7 @@ function toggleDoubles() {
                 text: 'Ja, Skift',
                 callback: () => {
                     gameState.isDoubles = !gameState.isDoubles;
+                    lastDoublesModeUpdateTime = Date.now(); // Track local doubles mode change
                     updateDoublesDisplay();
                     saveGameState();
                 },
@@ -1011,7 +1013,12 @@ async function syncGameState() {
             }
 
             // Sync doubles mode if changed
-            if (loaded.isDoubles !== gameState.isDoubles) {
+            // BUT: Don't sync if we just toggled doubles locally (within last 2 seconds)
+            // This prevents race conditions where local toggle gets overwritten by stale server data
+            const timeSinceLastDoublesUpdate = Date.now() - lastDoublesModeUpdateTime;
+            const shouldSyncDoubles = timeSinceLastDoublesUpdate > 2000; // 2 second cooldown
+
+            if (shouldSyncDoubles && loaded.isDoubles !== gameState.isDoubles) {
                 gameState.isDoubles = loaded.isDoubles;
                 updateDoublesDisplay();
                 console.log('Doubles mode synced from admin:', loaded.isDoubles);
