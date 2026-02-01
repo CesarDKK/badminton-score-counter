@@ -125,11 +125,6 @@ header h1 {
     color: #eaeaea;
 }
 
-.player-name-doubles {
-    font-size: 1.3em;
-    padding: 15px;
-}
-
 .score-display {
     font-size: 8em;
     font-weight: bold;
@@ -581,11 +576,6 @@ header h1 {
     }
 
     .player-name {
-        padding: 12px;
-        font-size: 1.1em;
-    }
-
-    .player-name-doubles {
         padding: 12px;
         font-size: 1.1em;
     }
