@@ -153,9 +153,10 @@ body {
 }
 
 .player-name-partner {
-    font-size: 1em;
-    color: #aaa;
-    font-weight: normal;
+    font-size: 1.3em;
+    font-weight: bold;
+    color: #fff;
+    margin-bottom: 3px;
 }
 
 .player-stats {
@@ -300,7 +301,8 @@ body {
         padding: 15px;
     }
 
-    .player-name {
+    .player-name,
+    .player-name-partner {
         font-size: 1.1em;
     }
 
