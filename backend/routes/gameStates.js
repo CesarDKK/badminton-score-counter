@@ -3,6 +3,91 @@ const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
 
+// GET /api/game-states/batch/all - Get all game states in one request (public, for overview page)
+// NOTE: This route must be defined BEFORE /:courtId to avoid matching "batch" as a courtId
+router.get('/batch/all', async (req, res, next) => {
+    try {
+        // Get all courts with their game states in a single optimized query
+        const results = await query(`
+            SELECT
+                c.court_number as courtId,
+                c.is_active as isActive,
+                c.is_doubles as isDoubles,
+                c.game_mode as gameMode,
+                gs.player1_name, gs.player1_name2, gs.player1_score, gs.player1_games,
+                gs.player2_name, gs.player2_name2, gs.player2_score, gs.player2_games,
+                gs.timer_seconds, gs.deciding_game_switched,
+                gs.rest_break_active, gs.rest_break_seconds_left, gs.rest_break_title,
+                gs.set_scores_history, gs.match_start_time, gs.match_end_time, gs.match_completed
+            FROM courts c
+            LEFT JOIN game_states gs ON c.id = gs.court_id
+            ORDER BY c.court_number ASC
+        `);
+
+        // Format results
+        const courtStates = results.map(row => {
+            const setScoresHistory = row.set_scores_history
+                ? (typeof row.set_scores_history === 'string'
+                    ? JSON.parse(row.set_scores_history)
+                    : row.set_scores_history)
+                : [];
+
+            // If no game state exists, return default values
+            if (!row.player1_name) {
+                return {
+                    courtId: row.courtId,
+                    player1: { name: 'Spiller 1', name2: 'Makker 1', score: 0, games: 0 },
+                    player2: { name: 'Spiller 2', name2: 'Makker 2', score: 0, games: 0 },
+                    timerSeconds: 0,
+                    decidingGameSwitched: false,
+                    restBreakActive: false,
+                    restBreakSecondsLeft: 0,
+                    restBreakTitle: '',
+                    setScoresHistory: [],
+                    matchStartTime: null,
+                    matchEndTime: null,
+                    matchCompleted: false,
+                    isActive: !!row.isActive,
+                    isDoubles: !!row.isDoubles,
+                    gameMode: row.gameMode
+                };
+            }
+
+            return {
+                courtId: row.courtId,
+                player1: {
+                    name: row.player1_name,
+                    name2: row.player1_name2,
+                    score: row.player1_score,
+                    games: row.player1_games
+                },
+                player2: {
+                    name: row.player2_name,
+                    name2: row.player2_name2,
+                    score: row.player2_score,
+                    games: row.player2_games
+                },
+                timerSeconds: row.timer_seconds,
+                decidingGameSwitched: !!row.deciding_game_switched,
+                restBreakActive: !!row.rest_break_active,
+                restBreakSecondsLeft: row.rest_break_seconds_left || 0,
+                restBreakTitle: row.rest_break_title || '',
+                setScoresHistory: setScoresHistory,
+                matchStartTime: row.match_start_time,
+                matchEndTime: row.match_end_time,
+                matchCompleted: !!row.match_completed,
+                isActive: !!row.isActive,
+                isDoubles: !!row.isDoubles,
+                gameMode: row.gameMode
+            };
+        });
+
+        res.json(courtStates);
+    } catch (error) {
+        next(error);
+    }
+});
+
 // GET /api/game-states/:courtId - Get current game state for court (public)
 router.get('/:courtId', async (req, res, next) => {
     try {

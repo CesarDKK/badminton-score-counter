@@ -260,6 +260,14 @@ class BadmintonAPI {
         });
     }
 
+    /**
+     * Get all game states in a single batch request (for overview page)
+     * @returns {Promise<Array>} - Array of game state objects with courtId
+     */
+    async getAllGameStates() {
+        return this.request('/game-states/batch/all', { requiresAuth: false });
+    }
+
     // ==================== Match History ====================
 
     /**

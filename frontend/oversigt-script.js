@@ -6,8 +6,8 @@ let allCourtData = [];
 let activeCourts = [];
 let currentPage = 0;
 const COURTS_PER_PAGE = 6;
-const REFRESH_INTERVAL = 2000; // 2 seconds
-const SCROLL_INTERVAL = 10000; // 10 seconds between page changes
+const REFRESH_INTERVAL = 10000; // 10 seconds (reduced API load to prevent rate limiting)
+const SCROLL_INTERVAL = 15000; // 15 seconds between page changes
 let scrollTimer = null;
 let refreshTimer = null;
 let localTimerInterval = null;
@@ -38,14 +38,22 @@ async function initialize() {
 
 async function loadAllCourts() {
     try {
-        const courtPromises = [];
+        // Fetch all court data in a single batch request (much more efficient!)
+        const allGameStates = await api.getAllGameStates();
 
-        // Fetch all court data in parallel
-        for (let i = 1; i <= courtCount; i++) {
-            courtPromises.push(loadCourtData(i));
-        }
+        // Add court banners to each court
+        const courtBanners = await api.getSponsorImages('court');
 
-        allCourtData = await Promise.all(courtPromises);
+        allCourtData = allGameStates.map(gameState => {
+            // Find banner for this court
+            const banner = courtBanners.find(b =>
+                b.assignedCourts && b.assignedCourts.includes(gameState.courtId)
+            );
+            return {
+                ...gameState,
+                courtBanner: banner || null
+            };
+        });
 
         // Filter only active courts with actual game activity
         activeCourts = allCourtData.filter(court => {
