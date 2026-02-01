@@ -12,14 +12,30 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function initializeSponsor() {
     // Check if already logged in (JWT token exists)
+    console.log('[Sponsor] Initializing...');
+    console.log('[Sponsor] API instance:', api);
+    console.log('[Sponsor] Token from API:', api.token);
+    console.log('[Sponsor] Token from sessionStorage:', sessionStorage.getItem('authToken'));
+
     if (api.token) {
+        console.log('[Sponsor] Token found, showing dashboard');
         showDashboard();
+    } else {
+        console.log('[Sponsor] No token found, showing login screen');
     }
 }
 
 function setupEventListeners() {
+    console.log('[Sponsor] Setting up event listeners...');
     // Login
-    document.getElementById('loginBtn').addEventListener('click', handleLogin);
+    const loginBtn = document.getElementById('loginBtn');
+    console.log('[Sponsor] Login button:', loginBtn);
+    if (loginBtn) {
+        loginBtn.addEventListener('click', handleLogin);
+        console.log('[Sponsor] Login button click listener added');
+    } else {
+        console.error('[Sponsor] Login button not found!');
+    }
     document.getElementById('adminPassword').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
             handleLogin();
@@ -58,18 +74,23 @@ function setupEventListeners() {
 }
 
 async function handleLogin() {
+    console.log('[Sponsor] handleLogin called');
     const password = document.getElementById('adminPassword').value;
+    console.log('[Sponsor] Password length:', password ? password.length : 0);
 
     if (!password) {
+        console.log('[Sponsor] No password entered');
         showMessage('Adgangskode påkrævet', 'Indtast venligst en adgangskode', [{ text: 'OK', style: 'primary' }]);
         return;
     }
 
     try {
+        console.log('[Sponsor] Calling api.login...');
         await api.login(password);
+        console.log('[Sponsor] Login successful, token:', api.token);
         showDashboard();
     } catch (error) {
-        console.error('Login failed:', error);
+        console.error('[Sponsor] Login failed:', error);
         showMessage('Login fejlede', 'Forkert adgangskode', [{ text: 'OK', style: 'primary' }]);
         document.getElementById('adminPassword').value = '';
     }
@@ -83,20 +104,26 @@ function handleLogout() {
 }
 
 async function showDashboard() {
+    console.log('[Sponsor] showDashboard called');
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('sponsorDashboard').style.display = 'block';
+    console.log('[Sponsor] Dashboard display set to block');
 
     // Load court count from settings
     try {
+        console.log('[Sponsor] Loading settings...');
         const settings = await api.getSettings();
         courtCount = settings.courtCount || 5;
+        console.log('[Sponsor] Court count:', courtCount);
     } catch (error) {
-        console.error('Failed to load court count:', error);
+        console.error('[Sponsor] Failed to load court count:', error);
         courtCount = 5; // Default fallback
     }
 
+    console.log('[Sponsor] Loading galleries...');
     await loadSlideDuration();
     await loadGalleries();
+    console.log('[Sponsor] Dashboard fully loaded');
 }
 
 async function handleImageUpload(event, type) {
@@ -235,6 +262,7 @@ async function loadGallery(type) {
             }
 
             // Add inactive/expired class for visual dimming (applies to both types)
+            // Also used for status controls below
             const now = new Date();
             const expirationDate = img.expiration_date ? new Date(img.expiration_date) : null;
             const isExpired = expirationDate && expirationDate <= now;
@@ -246,9 +274,7 @@ async function loadGallery(type) {
             }
 
             // Add status controls for both slideshow AND court images
-            const now = new Date();
-            const expirationDate = img.expiration_date ? new Date(img.expiration_date) : null;
-            const isExpired = expirationDate && expirationDate <= now;
+            // (using now, expirationDate, isExpired declared above)
 
             // Determine status badge
             let statusBadge = '';
