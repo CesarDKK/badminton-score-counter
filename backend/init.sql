@@ -110,6 +110,7 @@ CREATE TABLE IF NOT EXISTS match_history (
 CREATE TABLE IF NOT EXISTS sponsor_images (
   id INT PRIMARY KEY AUTO_INCREMENT,
   filename VARCHAR(255) UNIQUE NOT NULL,
+  type ENUM('slideshow', 'court') DEFAULT 'slideshow',
   original_name VARCHAR(255) NOT NULL,
   file_path VARCHAR(500) NOT NULL,
   file_size INT NOT NULL,
@@ -120,7 +121,20 @@ CREATE TABLE IF NOT EXISTS sponsor_images (
   display_order INT DEFAULT 0,
 
   INDEX idx_display_order (display_order),
-  INDEX idx_upload_date (upload_date DESC)
+  INDEX idx_upload_date (upload_date DESC),
+  INDEX idx_type (type)
+) ENGINE=InnoDB;
+
+-- Sponsor image to court assignments (for court banner images)
+CREATE TABLE IF NOT EXISTS sponsor_image_courts (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  sponsor_image_id INT NOT NULL,
+  court_number INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (sponsor_image_id) REFERENCES sponsor_images(id) ON DELETE CASCADE,
+  UNIQUE KEY unique_sponsor_court (sponsor_image_id, court_number),
+  INDEX idx_court_number (court_number)
 ) ENGINE=InnoDB;
 
 -- Sponsor settings table (replaces sponsorSlideDuration)
