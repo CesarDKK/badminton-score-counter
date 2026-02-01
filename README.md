@@ -11,6 +11,24 @@ A real-time badminton score tracking system with multi-device support, sponsor s
 - **Sponsor Slideshow**: Upload and display sponsor images with configurable duration
 - **Match History**: Automatic tracking of completed matches with statistics
 - **Timer Support**: Built-in timer for tracking match duration
+- **Security**: Rate limiting, JWT authentication, and password hashing
+
+## Recent Updates
+
+### Version 1.7.0 - Performance & Security Optimizations
+- **Performance**: Reduced admin panel polling by 60% (1s → 2.5s interval)
+- **Performance**: Eliminated N+1 database query problem in sponsor image loading
+- **Security**: Added comprehensive rate limiting to prevent brute force and DOS attacks
+- **Security**: Login attempts limited to 5 per 15 minutes
+- **Dependencies**: Added `express-rate-limit` for rate limiting functionality
+
+**Upgrading from previous versions:**
+```bash
+git pull
+docker-compose down
+docker-compose up -d --build
+```
+The `--build` flag ensures all new dependencies are installed automatically.
 
 ## 🍓 Raspberry Pi Support
 
@@ -749,6 +767,8 @@ docker-compose logs frontend
 ## Performance Notes
 
 - **Auto-save Debouncing**: Court page saves are debounced to maximum 1 save per 2 seconds
+- **Admin Panel Polling**: Admin overview refreshes every 2.5 seconds (optimized from 1 second)
+- **Database Optimization**: Efficient query batching eliminates N+1 query problems
 - **Image Optimization**: Uploaded images are automatically resized to 1920x1080 max and compressed to 90% quality
 - **Connection Pooling**: Backend uses MySQL connection pool (max 10 connections)
 - **Caching**: Static assets cached for 1 year, API responses not cached
@@ -757,6 +777,11 @@ docker-compose logs frontend
 
 - **Password Hashing**: Admin password stored with bcrypt (salt rounds: 10)
 - **JWT Authentication**: Protected endpoints require valid JWT token
+- **Rate Limiting**: Protection against brute force and DOS attacks
+  - Login attempts: Max 5 per 15 minutes
+  - Upload operations: Max 10 per 15 minutes
+  - Admin operations: Max 100 per 15 minutes
+  - Public endpoints: Max 200 per 15 minutes
 - **Input Validation**: All API inputs validated before processing
 - **File Upload Validation**: MIME type and file size checks
 - **SQL Injection Prevention**: Parameterized queries only
