@@ -13,6 +13,9 @@ const { loginLimiter, uploadLimiter, adminLimiter, publicLimiter } = require('./
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust proxy - required when behind nginx/reverse proxy for rate limiting and IP detection
+app.set('trust proxy', true);
+
 // Middleware
 app.use(helmet()); // Security headers
 app.use(cors()); // Enable CORS

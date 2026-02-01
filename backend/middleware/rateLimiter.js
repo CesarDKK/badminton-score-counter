@@ -9,6 +9,7 @@ const loginLimiter = rateLimit({
     },
     standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
     legacyHeaders: false, // Disable `X-RateLimit-*` headers
+    validate: { trustProxy: false }, // Disable validation when behind nginx proxy
 });
 
 // Moderate rate limit for upload endpoints
@@ -20,6 +21,7 @@ const uploadLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
+    validate: { trustProxy: false }, // Disable validation when behind nginx proxy
 });
 
 // General rate limit for authenticated admin endpoints
@@ -33,6 +35,7 @@ const adminLimiter = rateLimit({
     legacyHeaders: false,
     // Skip successful requests from count (optional - allows unlimited success, limits failures)
     skipSuccessfulRequests: false,
+    validate: { trustProxy: false }, // Disable validation when behind nginx proxy
 });
 
 // Lenient rate limit for public endpoints (TV displays, court pages)
@@ -44,6 +47,7 @@ const publicLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
+    validate: { trustProxy: false }, // Disable validation when behind nginx proxy
 });
 
 module.exports = {
