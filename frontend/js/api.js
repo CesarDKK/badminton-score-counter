@@ -11,12 +11,13 @@ class BadmintonAPI {
     }
 
     /**
-     * Make authenticated API request
+     * Make authenticated API request with retry logic
      * @param {string} endpoint - API endpoint (e.g., '/settings')
      * @param {object} options - Fetch options
+     * @param {number} retries - Number of retries (default: 3)
      * @returns {Promise} - Response JSON
      */
-    async request(endpoint, options = {}) {
+    async request(endpoint, options = {}, retries = 3) {
         const headers = {
             'Content-Type': 'application/json',
             ...options.headers
@@ -27,21 +28,63 @@ class BadmintonAPI {
             headers['Authorization'] = `Bearer ${this.token}`;
         }
 
-        try {
-            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-                ...options,
-                headers
-            });
+        const timeout = options.timeout || 30000; // 30 second default timeout
+        const maxRetries = retries;
 
-            if (!response.ok) {
-                const error = await response.json().catch(() => ({ error: response.statusText }));
-                throw new Error(error.error || `HTTP ${response.status}`);
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                // Create abort controller for timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                    ...options,
+                    headers,
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({ error: response.statusText }));
+                    const err = new Error(error.error || `HTTP ${response.status}`);
+                    err.status = response.status;
+                    err.endpoint = endpoint;
+
+                    // Don't retry on 4xx client errors (except 429 Too Many Requests)
+                    if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+                        throw err;
+                    }
+
+                    // On 5xx server errors or 429, retry
+                    if (attempt < maxRetries) {
+                        const delay = Math.pow(2, attempt - 1) * 1000; // Exponential backoff: 1s, 2s, 4s
+                        console.warn(`API Error [${endpoint}] (attempt ${attempt}/${maxRetries}): ${err.message}. Retrying in ${delay}ms...`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        continue;
+                    }
+
+                    throw err;
+                }
+
+                return await response.json();
+            } catch (error) {
+                // Handle timeout
+                if (error.name === 'AbortError') {
+                    error.message = `Request timeout after ${timeout}ms`;
+                }
+
+                // Handle network errors - retry
+                if (attempt < maxRetries && (error.name === 'AbortError' || error.message.includes('fetch'))) {
+                    const delay = Math.pow(2, attempt - 1) * 1000; // Exponential backoff
+                    console.warn(`Network error [${endpoint}] (attempt ${attempt}/${maxRetries}): ${error.message}. Retrying in ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    continue;
+                }
+
+                console.error(`API Error [${endpoint}] - All retries exhausted:`, error);
+                throw error;
             }
-
-            return await response.json();
-        } catch (error) {
-            console.error(`API Error [${endpoint}]:`, error);
-            throw error;
         }
     }
 

@@ -156,7 +156,7 @@ router.post('/upload', uploadLimiter, authMiddleware, upload.array('images', 10)
             return res.status(400).json({ error: 'Ugyldig billedtype. Skal være "slideshow" eller "court"' });
         }
 
-        const uploadedImages = [];
+        const uploadResults = []; // Track both successes and failures
 
         for (const file of req.files) {
             try {
@@ -239,29 +239,46 @@ router.post('/upload', uploadLimiter, authMiddleware, upload.array('images', 10)
                     ]
                 );
 
-                uploadedImages.push({
+                uploadResults.push({
+                    success: true,
                     id: result.insertId,
                     filename: file.filename,
+                    originalName: file.originalname,
                     url: `/uploads/${file.filename}`
                 });
             } catch (imageError) {
                 console.error(`Error processing ${file.originalname}:`, imageError);
+
+                // Add failure result with error message
+                uploadResults.push({
+                    success: false,
+                    originalName: file.originalname,
+                    error: imageError.message || 'Ukendt fejl ved behandling af billede'
+                });
+
                 // Clean up file if processing failed
                 try {
                     await fs.unlink(file.path);
                 } catch (unlinkError) {
-                    // Ignore unlink errors
+                    console.error('Failed to cleanup file:', unlinkError);
                 }
             }
         }
 
-        if (uploadedImages.length === 0) {
-            return res.status(500).json({ error: 'Alle uploads fejlede' });
-        }
+        const successCount = uploadResults.filter(r => r.success).length;
+        const failureCount = uploadResults.filter(r => !r.success).length;
 
+        // Return comprehensive results
         res.json({
-            success: true,
-            images: uploadedImages
+            success: successCount > 0,
+            results: uploadResults,
+            summary: {
+                total: uploadResults.length,
+                successful: successCount,
+                failed: failureCount
+            },
+            // Backwards compatibility - include images array
+            images: uploadResults.filter(r => r.success)
         });
     } catch (error) {
         // Clean up uploaded files on error

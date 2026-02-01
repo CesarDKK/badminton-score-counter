@@ -67,8 +67,8 @@ app.use(notFoundHandler);
 // Error handler (must be last)
 app.use(errorHandler);
 
-// Start server
-app.listen(PORT, '0.0.0.0', async () => {
+// Start server and store reference for graceful shutdown
+const server = app.listen(PORT, '0.0.0.0', async () => {
     console.log(`✓ Server running on port ${PORT}`);
     console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`✓ Health check: http://localhost:${PORT}/health`);
@@ -90,11 +90,35 @@ app.listen(PORT, '0.0.0.0', async () => {
     }
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM signal received: closing HTTP server');
-    server.close(() => {
-        console.log('HTTP server closed');
+// Graceful shutdown - handle SIGTERM and SIGINT
+const gracefulShutdown = async (signal) => {
+    console.log(`${signal} signal received: starting graceful shutdown`);
+
+    // Close HTTP server first (stop accepting new connections)
+    server.close(async () => {
+        console.log('✓ HTTP server closed');
+
+        try {
+            // Close database connection pool
+            const db = require('./config/database');
+            if (db.pool) {
+                await db.pool.end();
+                console.log('✓ Database pool closed');
+            }
+        } catch (error) {
+            console.error('✗ Error closing database pool:', error);
+        }
+
+        console.log('✓ Graceful shutdown complete');
         process.exit(0);
     });
-});
+
+    // Force shutdown after 10 seconds if graceful shutdown hangs
+    setTimeout(() => {
+        console.error('✗ Graceful shutdown timeout, forcing exit');
+        process.exit(1);
+    }, 10000);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT')); // Handle Ctrl+C

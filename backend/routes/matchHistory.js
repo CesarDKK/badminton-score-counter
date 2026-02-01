@@ -7,8 +7,14 @@ const { authMiddleware } = require('../middleware/auth');
 // NOTE: This route must come BEFORE /:courtId to avoid matching "all" as a courtId
 router.get('/all', async (req, res, next) => {
     try {
-        const limit = parseInt(req.query.limit) || 30;
-        const offset = parseInt(req.query.offset) || 0;
+        // Validate and sanitize limit/offset to prevent SQL injection via interpolation
+        const limit = Math.min(Math.max(parseInt(req.query.limit) || 30, 1), 1000); // 1-1000
+        const offset = Math.max(parseInt(req.query.offset) || 0, 0); // 0+
+
+        // Verify they are valid integers (not NaN)
+        if (!Number.isInteger(limit) || !Number.isInteger(offset)) {
+            return res.status(400).json({ error: 'Ugyldige limit/offset parametre' });
+        }
 
         // Use string interpolation for LIMIT/OFFSET as MySQL doesn't support placeholders for these
         const history = await query(
@@ -29,7 +35,14 @@ router.get('/all', async (req, res, next) => {
 router.get('/:courtId', async (req, res, next) => {
     try {
         const { courtId } = req.params;
-        const limit = parseInt(req.query.limit) || 10;
+
+        // Validate and sanitize limit to prevent SQL injection via interpolation
+        const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 1000); // 1-1000
+
+        // Verify it's a valid integer (not NaN)
+        if (!Number.isInteger(limit)) {
+            return res.status(400).json({ error: 'Ugyldig limit parameter' });
+        }
 
         // Use string interpolation for LIMIT as MySQL doesn't support placeholders for it
         const history = await query(
