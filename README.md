@@ -538,8 +538,9 @@ badminton-app/
 │   ├── config/          # Database & Multer configuration
 │   ├── middleware/      # Auth & error handling
 │   ├── routes/          # API route handlers
+│   ├── migrations/      # Database migrations (for existing installations)
 │   ├── uploads/         # Uploaded images storage
-│   ├── init.sql         # Database initialization
+│   ├── init.sql         # Database initialization (for NEW installations)
 │   ├── server.js        # Express entry point
 │   └── package.json
 ├── frontend/
@@ -560,6 +561,129 @@ badminton-app/
 ├── nginx.conf          # Nginx configuration
 └── README.md           # This file
 ```
+
+### Making Database Schema Changes
+
+**⚠️ CRITICAL: When adding new database columns or tables, you MUST update BOTH files:**
+
+1. **`backend/init.sql`** - For NEW installations
+   - This file creates the database schema from scratch
+   - Add new columns/tables directly to the CREATE TABLE statements
+   - Example: `ALTER TABLE` → `CREATE TABLE ... new_column TYPE`
+
+2. **`backend/migrations/XXX_description.sql`** - For EXISTING installations
+   - Create a new migration file with the next number (e.g., `004_add_new_feature.sql`)
+   - Use `ALTER TABLE` statements to add columns to existing tables
+   - Include comments explaining the purpose
+   - Example: `ALTER TABLE table_name ADD COLUMN new_column TYPE`
+
+**Why both files?**
+- `init.sql` runs ONLY on fresh installations (first time setup)
+- Migration files run on existing installations to update their schema
+- Without updating `init.sql`, new installations will be missing columns!
+
+**Example workflow:**
+
+If you add a new column `is_active` to the `sponsor_images` table:
+
+```sql
+-- backend/init.sql
+CREATE TABLE IF NOT EXISTS sponsor_images (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  filename VARCHAR(255) UNIQUE NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,  -- ← ADD HERE
+  ...
+);
+```
+
+```sql
+-- backend/migrations/004_add_sponsor_active.sql
+ALTER TABLE sponsor_images
+ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE;
+```
+
+**Running migrations on existing installations:**
+
+The `backend/migrations/` folder is mounted in the MySQL container, making it easy to run migrations:
+
+```bash
+# Option 1: Interactive (connect to MySQL shell)
+docker exec -it badminton-mysql mysql -u badminton_user -p badminton_counter
+
+# In MySQL prompt, run the migration:
+source /docker-entrypoint-initdb.d/migrations/004_add_sponsor_active.sql;
+exit;
+
+# Option 2: One-liner (replace 'password' with your DB password)
+docker exec -i badminton-mysql mysql -u badminton_user -pYOUR_PASSWORD badminton_counter \
+  -e "source /docker-entrypoint-initdb.d/migrations/004_add_sponsor_active.sql"
+```
+
+**Migration folder structure:**
+
+```
+backend/migrations/
+├── 001_add_match_completed.sql
+├── 002_add_sponsor_type.sql
+├── 003_add_sponsor_court_assignments.sql
+└── 004_add_sponsor_active_expiration.sql
+```
+
+All migration files are automatically available in the container at `/docker-entrypoint-initdb.d/migrations/`.
+
+## Deploying Updates
+
+When you pull new code changes or make modifications, follow these steps to deploy them:
+
+### For Code Changes (Backend/Frontend)
+
+```bash
+# 1. Pull latest changes (if from git)
+git pull
+
+# 2. Stop containers
+docker-compose down
+
+# 3. Rebuild and start with new code
+docker-compose up -d --build
+
+# The --build flag ensures Docker rebuilds images with your new code
+```
+
+### For Database Schema Changes
+
+If the update includes new migration files in `backend/migrations/`:
+
+```bash
+# 1. Deploy the code first (see above)
+docker-compose down
+docker-compose up -d --build
+
+# 2. Check which migrations need to be run
+# Compare migration files with your database state
+
+# 3. Run the new migration
+docker exec -it badminton-mysql mysql -u badminton_user -p badminton_counter
+
+# In MySQL prompt:
+source /docker-entrypoint-initdb.d/migrations/XXX_new_migration.sql;
+exit;
+```
+
+**Important Notes:**
+- `init.sql` only runs on FIRST database creation (new installations)
+- Existing installations MUST run migration files manually
+- Always backup your database before running migrations
+- Test migrations on a development copy first
+
+### Quick Deploy Checklist
+
+- [ ] Backup database: `docker-compose exec mysql mysqldump -u badminton_user -p badminton_counter > backup.sql`
+- [ ] Pull/update code: `git pull` or copy new files
+- [ ] Rebuild containers: `docker-compose down && docker-compose up -d --build`
+- [ ] Run migrations: Check `backend/migrations/` for new files and run them
+- [ ] Verify deployment: Check `/health` endpoint and test functionality
+- [ ] Clear browser cache: Hard refresh (Ctrl+Shift+R) on all devices
 
 ## Troubleshooting
 

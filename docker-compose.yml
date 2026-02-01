@@ -16,6 +16,7 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
       - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./backend/migrations:/docker-entrypoint-initdb.d/migrations:ro
     networks:
       - badminton-network
     healthcheck:

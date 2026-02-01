@@ -35,4 +35,47 @@ function startMidnightReset() {
     console.log('⏰ Scheduled midnight court reset at 00:00 (Europe/Copenhagen timezone)');
 }
 
-module.exports = { startMidnightReset };
+/**
+ * Scheduled task to check and deactivate expired sponsor images
+ * Runs every hour at minute 0
+ */
+function startExpirationCheck() {
+    // Schedule task to run every hour (at minute 0)
+    // Cron syntax: '0 * * * *' means minute=0, every hour, any day, any month, any day of week
+    cron.schedule('0 * * * *', async () => {
+        try {
+            console.log('===========================================');
+            console.log('🖼️  Running sponsor expiration check...');
+            console.log(`⏰ Time: ${new Date().toISOString()}`);
+
+            // Deactivate expired images
+            const result = await query(
+                `UPDATE sponsor_images
+                 SET is_active = FALSE
+                 WHERE is_active = TRUE
+                 AND expiration_date IS NOT NULL
+                 AND expiration_date <= NOW()`
+            );
+
+            const deactivatedCount = result.affectedRows || 0;
+
+            if (deactivatedCount > 0) {
+                console.log(`✅ Deactivated ${deactivatedCount} expired sponsor image(s)`);
+            } else {
+                console.log('✅ No expired sponsor images found');
+            }
+
+            console.log('🎉 Sponsor expiration check completed');
+            console.log('===========================================');
+        } catch (error) {
+            console.error('❌ Error during sponsor expiration check:', error);
+        }
+    }, {
+        scheduled: true,
+        timezone: "Europe/Copenhagen" // Danish timezone
+    });
+
+    console.log('⏰ Scheduled hourly sponsor expiration check at minute 0 (Europe/Copenhagen timezone)');
+}
+
+module.exports = { startMidnightReset, startExpirationCheck };

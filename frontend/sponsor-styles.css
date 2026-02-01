@@ -452,3 +452,225 @@
     color: var(--color-accent);
     font-weight: bold;
 }
+
+/* Image Status Controls */
+.image-status-controls {
+    padding: 15px;
+    background: rgba(0, 20, 40, 0.3);
+    border-top: 2px solid var(--color-primary);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Status Badge */
+.status-badge {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 5px;
+    font-size: 0.85em;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-badge.status-active {
+    background: rgba(76, 175, 80, 0.2);
+    color: #4CAF50;
+    border: 2px solid #4CAF50;
+}
+
+.status-badge.status-inactive {
+    background: rgba(158, 158, 158, 0.2);
+    color: #9e9e9e;
+    border: 2px solid #9e9e9e;
+}
+
+.status-badge.status-expired {
+    background: rgba(233, 69, 96, 0.2);
+    color: var(--color-accent);
+    border: 2px solid var(--color-accent);
+}
+
+/* Toggle Switch Container */
+.toggle-container {
+    display: flex;
+    align-items: center;
+}
+
+.toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #fff;
+    font-size: 0.9em;
+    cursor: pointer;
+    user-select: none;
+}
+
+.toggle-label span {
+    font-weight: bold;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 26px;
+}
+
+.toggle-switch input[type="checkbox"] {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(158, 158, 158, 0.3);
+    border: 2px solid #9e9e9e;
+    transition: 0.3s;
+    border-radius: 26px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 2px;
+    bottom: 2px;
+    background-color: #9e9e9e;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background-color: rgba(76, 175, 80, 0.3);
+    border-color: #4CAF50;
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(24px);
+    background-color: #4CAF50;
+}
+
+.toggle-switch input:disabled + .toggle-slider {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.toggle-switch input:focus + .toggle-slider {
+    box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+}
+
+/* Expiration Container */
+.expiration-container {
+    display: flex;
+    flex-direction: column;
+}
+
+.expiration-label {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    color: #fff;
+    font-size: 0.9em;
+}
+
+.expiration-label > span {
+    font-weight: bold;
+}
+
+.expiration-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.expiration-input {
+    flex: 1;
+    padding: 10px;
+    font-size: 0.95em;
+    border: 2px solid var(--color-primary);
+    border-radius: 5px;
+    background: rgba(0, 20, 40, 0.8);
+    color: #fff;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.expiration-input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 10px rgba(233, 69, 96, 0.3);
+}
+
+.expiration-input::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+}
+
+/* Clear Expiration Button */
+.btn-clear-expiration {
+    position: absolute;
+    right: 35px;
+    background: var(--color-accent);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    font-size: 1.2em;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    padding: 0;
+}
+
+.btn-clear-expiration:hover {
+    background: #d63851;
+    transform: scale(1.1);
+}
+
+/* Expiration Notice */
+.expiration-notice {
+    color: var(--color-accent);
+    font-size: 0.85em;
+    font-weight: bold;
+    padding: 8px;
+    background: rgba(233, 69, 96, 0.1);
+    border: 1px solid var(--color-accent);
+    border-radius: 5px;
+    text-align: center;
+}
+
+/* Responsive adjustments for status controls */
+@media (max-width: 768px) {
+    .image-status-controls {
+        padding: 12px;
+        gap: 10px;
+    }
+
+    .toggle-label {
+        font-size: 0.85em;
+    }
+
+    .expiration-label {
+        font-size: 0.85em;
+    }
+
+    .expiration-input {
+        font-size: 0.9em;
+        padding: 8px;
+    }
+}

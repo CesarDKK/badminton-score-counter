@@ -356,6 +356,32 @@ class BadmintonAPI {
         });
     }
 
+    /**
+     * Toggle active status for sponsor image
+     * @param {number} imageId - Image ID
+     * @param {boolean} isActive - Active status
+     * @returns {Promise<object>} - { success }
+     */
+    async toggleSponsorImageActive(imageId, isActive) {
+        return this.request(`/sponsors/${imageId}/active`, {
+            method: 'PUT',
+            body: JSON.stringify({ isActive })
+        });
+    }
+
+    /**
+     * Set expiration date for sponsor image
+     * @param {number} imageId - Image ID
+     * @param {string|null} expirationDate - ISO date string or null to clear
+     * @returns {Promise<object>} - { success }
+     */
+    async setSponsorImageExpiration(imageId, expirationDate) {
+        return this.request(`/sponsors/${imageId}/expiration`, {
+            method: 'PUT',
+            body: JSON.stringify({ expirationDate })
+        });
+    }
+
     // ==================== Player Info ====================
 
     /**

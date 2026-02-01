@@ -6,7 +6,7 @@ const path = require('path');
 require('dotenv').config();
 
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
-const { startMidnightReset } = require('./scheduler');
+const { startMidnightReset, startExpirationCheck } = require('./scheduler');
 
 // Initialize Express app
 const app = express();
@@ -72,6 +72,9 @@ app.listen(PORT, '0.0.0.0', async () => {
 
         // Start midnight reset scheduler
         startMidnightReset();
+
+        // Start sponsor expiration checker
+        startExpirationCheck();
     } catch (error) {
         console.error('✗ Database connection failed:', error.message);
         console.error('✗ Midnight reset scheduler not started');

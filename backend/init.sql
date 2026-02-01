@@ -120,10 +120,13 @@ CREATE TABLE IF NOT EXISTS sponsor_images (
   mime_type VARCHAR(50) NOT NULL,
   upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   display_order INT DEFAULT 0,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  expiration_date TIMESTAMP NULL DEFAULT NULL,
 
   INDEX idx_display_order (display_order),
   INDEX idx_upload_date (upload_date DESC),
-  INDEX idx_type (type)
+  INDEX idx_type (type),
+  INDEX idx_sponsor_active_filter (type, is_active, expiration_date)
 ) ENGINE=InnoDB;
 
 -- Sponsor image to court assignments (for court banner images)

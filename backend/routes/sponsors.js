@@ -7,19 +7,60 @@ const sharp = require('sharp');
 const fs = require('fs').promises;
 const path = require('path');
 
+/**
+ * Check and deactivate expired sponsor images
+ * Sets is_active = FALSE for images where expiration_date <= NOW()
+ * @returns {Promise<number>} - Number of images deactivated
+ */
+async function checkAndDeactivateExpiredImages() {
+    try {
+        const result = await query(
+            `UPDATE sponsor_images
+             SET is_active = FALSE
+             WHERE is_active = TRUE
+             AND expiration_date IS NOT NULL
+             AND expiration_date <= NOW()`
+        );
+
+        const deactivatedCount = result.affectedRows || 0;
+
+        if (deactivatedCount > 0) {
+            console.log(`[Sponsor Expiration] Deactivated ${deactivatedCount} expired image(s)`);
+        }
+
+        return deactivatedCount;
+    } catch (error) {
+        console.error('[Sponsor Expiration] Error checking expired images:', error);
+        return 0;
+    }
+}
+
 // GET /api/sponsors/images - Get all sponsor images (public)
 router.get('/images', async (req, res, next) => {
     try {
+        // Check and deactivate expired images on-demand
+        await checkAndDeactivateExpiredImages();
+
         const { type } = req.query;
         let sql = `SELECT id, filename, type, original_name, file_size, width, height,
-                    mime_type, upload_date, display_order
+                    mime_type, upload_date, display_order, is_active, expiration_date
              FROM sponsor_images`;
         const params = [];
+        const whereClauses = [];
 
         // Filter by type if provided
         if (type && (type === 'slideshow' || type === 'court')) {
-            sql += ` WHERE type = ?`;
+            whereClauses.push('type = ?');
             params.push(type);
+
+            // For slideshow type, only return active images (TV display filter)
+            if (type === 'slideshow') {
+                whereClauses.push('is_active = TRUE');
+            }
+        }
+
+        if (whereClauses.length > 0) {
+            sql += ` WHERE ${whereClauses.join(' AND ')}`;
         }
 
         sql += ` ORDER BY display_order, upload_date DESC`;
@@ -27,6 +68,7 @@ router.get('/images', async (req, res, next) => {
         const images = await query(sql, params);
 
         // For court type images, fetch assigned courts
+        // Also format expiration_date as ISO string
         for (const image of images) {
             if (image.type === 'court') {
                 const courts = await query(
@@ -36,6 +78,11 @@ router.get('/images', async (req, res, next) => {
                 image.assignedCourts = courts.map(c => c.court_number);
             } else {
                 image.assignedCourts = [];
+            }
+
+            // Format expiration_date as ISO string (null if not set)
+            if (image.expiration_date) {
+                image.expiration_date = new Date(image.expiration_date).toISOString();
             }
         }
 
@@ -267,6 +314,87 @@ router.delete('/all', authMiddleware, async (req, res, next) => {
             success: true,
             deletedCount: images.length
         });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// PUT /api/sponsors/:id/active - Toggle active status for sponsor image (requires auth)
+router.put('/:id/active', authMiddleware, async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { isActive } = req.body;
+
+        // Validate isActive is boolean
+        if (typeof isActive !== 'boolean') {
+            return res.status(400).json({ error: 'isActive skal være en boolean' });
+        }
+
+        // Validate that image exists
+        const image = await queryOne(
+            'SELECT id FROM sponsor_images WHERE id = ?',
+            [id]
+        );
+
+        if (!image) {
+            return res.status(404).json({ error: 'Billede ikke fundet' });
+        }
+
+        // Update is_active status
+        await query(
+            'UPDATE sponsor_images SET is_active = ? WHERE id = ?',
+            [isActive, id]
+        );
+
+        res.json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// PUT /api/sponsors/:id/expiration - Set expiration date for sponsor image (requires auth)
+router.put('/:id/expiration', authMiddleware, async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { expirationDate } = req.body;
+
+        // Validate that image exists
+        const image = await queryOne(
+            'SELECT id FROM sponsor_images WHERE id = ?',
+            [id]
+        );
+
+        if (!image) {
+            return res.status(404).json({ error: 'Billede ikke fundet' });
+        }
+
+        // Handle null (clear expiration)
+        if (expirationDate === null) {
+            await query(
+                'UPDATE sponsor_images SET expiration_date = NULL WHERE id = ?',
+                [id]
+            );
+            return res.json({ success: true });
+        }
+
+        // Validate date format
+        const expirationDateObj = new Date(expirationDate);
+        if (isNaN(expirationDateObj.getTime())) {
+            return res.status(400).json({ error: 'Ugyldig dato format' });
+        }
+
+        // Reject dates in the past
+        if (expirationDateObj <= new Date()) {
+            return res.status(400).json({ error: 'Udløbsdato skal være i fremtiden' });
+        }
+
+        // Update expiration_date
+        await query(
+            'UPDATE sponsor_images SET expiration_date = ? WHERE id = ?',
+            [expirationDateObj, id]
+        );
+
+        res.json({ success: true });
     } catch (error) {
         next(error);
     }

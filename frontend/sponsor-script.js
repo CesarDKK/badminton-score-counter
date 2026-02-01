@@ -225,6 +225,8 @@ async function loadGallery(type) {
 
         galleryContainer.innerHTML = images.map(img => {
             let courtCheckboxes = '';
+            let statusControls = '';
+
             if (type === 'court') {
                 // Generate checkboxes for court assignments
                 const checkboxes = [];
@@ -248,6 +250,60 @@ async function loadGallery(type) {
                         </div>
                     </div>
                 `;
+            } else if (type === 'slideshow') {
+                // Add status controls for slideshow images only
+                const now = new Date();
+                const expirationDate = img.expiration_date ? new Date(img.expiration_date) : null;
+                const isExpired = expirationDate && expirationDate <= now;
+
+                // Determine status badge
+                let statusBadge = '';
+                if (isExpired) {
+                    statusBadge = '<span class="status-badge status-expired">Udløbet</span>';
+                } else if (img.is_active) {
+                    statusBadge = '<span class="status-badge status-active">Aktiv</span>';
+                } else {
+                    statusBadge = '<span class="status-badge status-inactive">Inaktiv</span>';
+                }
+
+                // Format expiration date for datetime-local input (YYYY-MM-DDTHH:MM)
+                const expirationValue = expirationDate ?
+                    expirationDate.toISOString().slice(0, 16) : '';
+
+                // Disable toggle if expired
+                const toggleDisabled = isExpired ? 'disabled' : '';
+                const toggleChecked = img.is_active && !isExpired ? 'checked' : '';
+
+                statusControls = `
+                    <div class="image-status-controls">
+                        ${statusBadge}
+                        ${isExpired ? '<div class="expiration-notice">Dette billede er udløbet og vises ikke på TV</div>' : ''}
+                        <div class="toggle-container">
+                            <label class="toggle-label">
+                                <span>Vis på TV:</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox"
+                                           ${toggleChecked}
+                                           ${toggleDisabled}
+                                           onchange="toggleImageActive(${img.id}, this.checked)">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </label>
+                        </div>
+                        <div class="expiration-container">
+                            <label class="expiration-label">
+                                <span>Udløbsdato (valgfri):</span>
+                                <div class="expiration-input-wrapper">
+                                    <input type="datetime-local"
+                                           class="expiration-input"
+                                           value="${expirationValue}"
+                                           onchange="setImageExpiration(${img.id}, this.value)">
+                                    ${expirationValue ? `<button class="btn-clear-expiration" onclick="clearImageExpiration(${img.id}, event)" title="Ryd udløbsdato">&times;</button>` : ''}
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                `;
             }
 
             return `
@@ -263,6 +319,7 @@ async function loadGallery(type) {
                         <div class="gallery-name">${escapeHtml(img.original_name)}</div>
                         <div class="gallery-meta">${img.width}x${img.height} | ${formatDate(img.upload_date)}</div>
                     </div>
+                    ${statusControls}
                     ${courtCheckboxes}
                 </div>
             `;
@@ -296,6 +353,56 @@ function viewImage(id, filename, originalName, width, height) {
             document.body.removeChild(modal);
         }
     });
+}
+
+async function toggleImageActive(imageId, isActive) {
+    try {
+        await api.toggleSponsorImageActive(imageId, isActive);
+        // Reload gallery to reflect changes
+        await loadGallery('slideshow');
+    } catch (error) {
+        console.error('Failed to toggle image active status:', error);
+        showMessage('Fejl', 'Kunne ikke opdatere aktiv status', [{ text: 'OK', style: 'primary' }]);
+        // Reload to reset toggle state
+        await loadGallery('slideshow');
+    }
+}
+
+async function setImageExpiration(imageId, dateTimeValue) {
+    try {
+        // Convert datetime-local value to ISO string
+        // If empty, set to null
+        const expirationDate = dateTimeValue ? new Date(dateTimeValue).toISOString() : null;
+
+        await api.setSponsorImageExpiration(imageId, expirationDate);
+        // Reload gallery to reflect changes
+        await loadGallery('slideshow');
+    } catch (error) {
+        console.error('Failed to set expiration date:', error);
+        let errorMessage = 'Kunne ikke sætte udløbsdato';
+        if (error.message.includes('fremtiden')) {
+            errorMessage = 'Udløbsdato skal være i fremtiden';
+        }
+        showMessage('Fejl', errorMessage, [{ text: 'OK', style: 'primary' }]);
+        // Reload to reset input state
+        await loadGallery('slideshow');
+    }
+}
+
+async function clearImageExpiration(imageId, event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    try {
+        await api.setSponsorImageExpiration(imageId, null);
+        // Reload gallery to reflect changes
+        await loadGallery('slideshow');
+    } catch (error) {
+        console.error('Failed to clear expiration date:', error);
+        showMessage('Fejl', 'Kunne ikke rydde udløbsdato', [{ text: 'OK', style: 'primary' }]);
+        // Reload to reset state
+        await loadGallery('slideshow');
+    }
 }
 
 async function toggleCourtAssignment(imageId, courtNumber, isChecked) {
