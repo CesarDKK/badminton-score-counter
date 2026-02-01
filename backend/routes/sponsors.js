@@ -500,10 +500,12 @@ router.put('/:id/courts', authMiddleware, async (req, res, next) => {
             );
 
             // Step 3: Batch insert all new court assignments at once
-            const values = validCourts.map(courtNumber => [id, courtNumber]);
+            // Generate placeholders for bulk insert: (?, ?), (?, ?), ...
+            const insertPlaceholders = validCourts.map(() => '(?, ?)').join(', ');
+            const insertValues = validCourts.flatMap(courtNumber => [id, courtNumber]);
             await query(
-                'INSERT INTO sponsor_image_courts (sponsor_image_id, court_number) VALUES ?',
-                [values]
+                `INSERT INTO sponsor_image_courts (sponsor_image_id, court_number) VALUES ${insertPlaceholders}`,
+                insertValues
             );
         }
 
