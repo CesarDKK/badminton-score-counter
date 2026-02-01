@@ -458,8 +458,8 @@ async function clearImageExpiration(imageId, event, type) {
 
 async function toggleCourtAssignment(imageId, courtNumber, isChecked) {
     try {
-        // Get current image data
-        const images = await api.getSponsorImages('court');
+        // Get current image data (include inactive images for admin panel)
+        const images = await api.getSponsorImages('court', true);
         const currentImage = images.find(img => img.id === imageId);
 
         if (!currentImage) {
