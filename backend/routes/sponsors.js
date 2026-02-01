@@ -77,12 +77,14 @@ router.get('/images', async (req, res, next) => {
         // Fetch all court assignments in one query if there are court images
         let courtAssignments = {};
         if (courtImageIds.length > 0) {
+            // Generate placeholders for IN clause (?, ?, ?)
+            const placeholders = courtImageIds.map(() => '?').join(', ');
             const assignments = await query(
                 `SELECT sponsor_image_id, court_number
                  FROM sponsor_image_courts
-                 WHERE sponsor_image_id IN (?)
+                 WHERE sponsor_image_id IN (${placeholders})
                  ORDER BY sponsor_image_id, court_number`,
-                [courtImageIds]
+                courtImageIds
             );
 
             // Group assignments by image ID
