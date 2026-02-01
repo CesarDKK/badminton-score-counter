@@ -53,9 +53,10 @@ router.get('/images', async (req, res, next) => {
             whereClauses.push('type = ?');
             params.push(type);
 
-            // For slideshow type, filter by active status unless includeInactive is true
-            // TV display should only see active images, but admin panel should see all
-            if (type === 'slideshow' && includeInactive !== 'true') {
+            // Filter by active status unless includeInactive is true
+            // TV display and court pages should only see active images
+            // Admin panel can see all with includeInactive=true
+            if (includeInactive !== 'true') {
                 whereClauses.push('is_active = TRUE');
             }
         }

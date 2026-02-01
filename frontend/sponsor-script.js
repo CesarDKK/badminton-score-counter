@@ -228,22 +228,94 @@ async function loadGallery(type) {
             let itemClass = 'gallery-item';
             let containerClass = 'gallery-image-container';
 
+            // Add type-specific classes
             if (type === 'court') {
                 itemClass += ' gallery-item-banner';
                 containerClass += ' gallery-image-container-banner';
-            } else if (type === 'slideshow') {
-                // Add inactive/expired class for visual dimming
-                const now = new Date();
-                const expirationDate = img.expiration_date ? new Date(img.expiration_date) : null;
-                const isExpired = expirationDate && expirationDate <= now;
-
-                if (isExpired) {
-                    itemClass += ' gallery-item-expired';
-                } else if (!img.is_active) {
-                    itemClass += ' gallery-item-inactive';
-                }
             }
 
+            // Add inactive/expired class for visual dimming (applies to both types)
+            const now = new Date();
+            const expirationDate = img.expiration_date ? new Date(img.expiration_date) : null;
+            const isExpired = expirationDate && expirationDate <= now;
+
+            if (isExpired) {
+                itemClass += ' gallery-item-expired';
+            } else if (!img.is_active) {
+                itemClass += ' gallery-item-inactive';
+            }
+
+            // Add status controls for both slideshow AND court images
+            const now = new Date();
+            const expirationDate = img.expiration_date ? new Date(img.expiration_date) : null;
+            const isExpired = expirationDate && expirationDate <= now;
+
+            // Determine status badge
+            let statusBadge = '';
+            if (isExpired) {
+                statusBadge = '<span class="status-badge status-expired">Udløbet</span>';
+            } else if (img.is_active) {
+                statusBadge = '<span class="status-badge status-active">Aktiv</span>';
+            } else {
+                statusBadge = '<span class="status-badge status-inactive">Inaktiv</span>';
+            }
+
+            // Format expiration date for datetime-local input (YYYY-MM-DDTHH:MM)
+            // Convert from UTC to local time for display
+            let expirationValue = '';
+            if (expirationDate) {
+                // expirationDate is a Date object in UTC
+                // We need to format it as local time for the datetime-local input
+                const year = expirationDate.getFullYear();
+                const month = String(expirationDate.getMonth() + 1).padStart(2, '0');
+                const day = String(expirationDate.getDate()).padStart(2, '0');
+                const hours = String(expirationDate.getHours()).padStart(2, '0');
+                const minutes = String(expirationDate.getMinutes()).padStart(2, '0');
+                expirationValue = `${year}-${month}-${day}T${hours}:${minutes}`;
+            }
+
+            // Disable toggle if expired
+            const toggleDisabled = isExpired ? 'disabled' : '';
+            const toggleChecked = img.is_active && !isExpired ? 'checked' : '';
+
+            // Display text depends on type
+            const displayText = type === 'court' ? 'Vis på baner:' : 'Vis på TV:';
+            const expiredNotice = type === 'court'
+                ? 'Dette billede er udløbet og vises ikke på baner'
+                : 'Dette billede er udløbet og vises ikke på TV';
+
+            statusControls = `
+                <div class="image-status-controls">
+                    ${statusBadge}
+                    ${isExpired ? `<div class="expiration-notice">${expiredNotice}</div>` : ''}
+                    <div class="toggle-container">
+                        <label class="toggle-label">
+                            <span>${displayText}</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox"
+                                       ${toggleChecked}
+                                       ${toggleDisabled}
+                                       onchange="toggleImageActive(${img.id}, this.checked, '${type}')">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </label>
+                    </div>
+                    <div class="expiration-container">
+                        <label class="expiration-label">
+                            <span>Udløbsdato (valgfri):</span>
+                            <div class="expiration-input-wrapper">
+                                <input type="datetime-local"
+                                       class="expiration-input"
+                                       value="${expirationValue}"
+                                       onchange="setImageExpiration(${img.id}, this.value, '${type}')">
+                                ${expirationValue ? `<button class="btn-clear-expiration" onclick="clearImageExpiration(${img.id}, event, '${type}')" title="Ryd udløbsdato">&times;</button>` : ''}
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            `;
+
+            // Add court-specific checkboxes AFTER status controls
             if (type === 'court') {
                 // Generate checkboxes for court assignments
                 const checkboxes = [];
@@ -264,70 +336,6 @@ async function loadGallery(type) {
                         <div class="court-assignments-label">Tildel til baner:</div>
                         <div class="court-checkboxes">
                             ${checkboxes.join('')}
-                        </div>
-                    </div>
-                `;
-            } else if (type === 'slideshow') {
-                // Add status controls for slideshow images only
-                const now = new Date();
-                const expirationDate = img.expiration_date ? new Date(img.expiration_date) : null;
-                const isExpired = expirationDate && expirationDate <= now;
-
-                // Determine status badge
-                let statusBadge = '';
-                if (isExpired) {
-                    statusBadge = '<span class="status-badge status-expired">Udløbet</span>';
-                } else if (img.is_active) {
-                    statusBadge = '<span class="status-badge status-active">Aktiv</span>';
-                } else {
-                    statusBadge = '<span class="status-badge status-inactive">Inaktiv</span>';
-                }
-
-                // Format expiration date for datetime-local input (YYYY-MM-DDTHH:MM)
-                // Convert from UTC to local time for display
-                let expirationValue = '';
-                if (expirationDate) {
-                    // expirationDate is a Date object in UTC
-                    // We need to format it as local time for the datetime-local input
-                    const year = expirationDate.getFullYear();
-                    const month = String(expirationDate.getMonth() + 1).padStart(2, '0');
-                    const day = String(expirationDate.getDate()).padStart(2, '0');
-                    const hours = String(expirationDate.getHours()).padStart(2, '0');
-                    const minutes = String(expirationDate.getMinutes()).padStart(2, '0');
-                    expirationValue = `${year}-${month}-${day}T${hours}:${minutes}`;
-                }
-
-                // Disable toggle if expired
-                const toggleDisabled = isExpired ? 'disabled' : '';
-                const toggleChecked = img.is_active && !isExpired ? 'checked' : '';
-
-                statusControls = `
-                    <div class="image-status-controls">
-                        ${statusBadge}
-                        ${isExpired ? '<div class="expiration-notice">Dette billede er udløbet og vises ikke på TV</div>' : ''}
-                        <div class="toggle-container">
-                            <label class="toggle-label">
-                                <span>Vis på TV:</span>
-                                <label class="toggle-switch">
-                                    <input type="checkbox"
-                                           ${toggleChecked}
-                                           ${toggleDisabled}
-                                           onchange="toggleImageActive(${img.id}, this.checked)">
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </label>
-                        </div>
-                        <div class="expiration-container">
-                            <label class="expiration-label">
-                                <span>Udløbsdato (valgfri):</span>
-                                <div class="expiration-input-wrapper">
-                                    <input type="datetime-local"
-                                           class="expiration-input"
-                                           value="${expirationValue}"
-                                           onchange="setImageExpiration(${img.id}, this.value)">
-                                    ${expirationValue ? `<button class="btn-clear-expiration" onclick="clearImageExpiration(${img.id}, event)" title="Ryd udløbsdato">&times;</button>` : ''}
-                                </div>
-                            </label>
                         </div>
                     </div>
                 `;
@@ -382,20 +390,20 @@ function viewImage(id, filename, originalName, width, height) {
     });
 }
 
-async function toggleImageActive(imageId, isActive) {
+async function toggleImageActive(imageId, isActive, type) {
     try {
         await api.toggleSponsorImageActive(imageId, isActive);
         // Reload gallery to reflect changes
-        await loadGallery('slideshow');
+        await loadGallery(type);
     } catch (error) {
         console.error('Failed to toggle image active status:', error);
         showMessage('Fejl', 'Kunne ikke opdatere aktiv status', [{ text: 'OK', style: 'primary' }]);
         // Reload to reset toggle state
-        await loadGallery('slideshow');
+        await loadGallery(type);
     }
 }
 
-async function setImageExpiration(imageId, dateTimeValue) {
+async function setImageExpiration(imageId, dateTimeValue, type) {
     try {
         // Convert datetime-local value to ISO string
         // datetime-local gives us local time (e.g., "2026-02-01T18:00")
@@ -412,7 +420,7 @@ async function setImageExpiration(imageId, dateTimeValue) {
 
         await api.setSponsorImageExpiration(imageId, expirationDate);
         // Reload gallery to reflect changes
-        await loadGallery('slideshow');
+        await loadGallery(type);
     } catch (error) {
         console.error('Failed to set expiration date:', error);
         let errorMessage = 'Kunne ikke sætte udløbsdato';
@@ -421,23 +429,23 @@ async function setImageExpiration(imageId, dateTimeValue) {
         }
         showMessage('Fejl', errorMessage, [{ text: 'OK', style: 'primary' }]);
         // Reload to reset input state
-        await loadGallery('slideshow');
+        await loadGallery(type);
     }
 }
 
-async function clearImageExpiration(imageId, event) {
+async function clearImageExpiration(imageId, event, type) {
     event.preventDefault();
     event.stopPropagation();
 
     try {
         await api.setSponsorImageExpiration(imageId, null);
         // Reload gallery to reflect changes
-        await loadGallery('slideshow');
+        await loadGallery(type);
     } catch (error) {
         console.error('Failed to clear expiration date:', error);
         showMessage('Fejl', 'Kunne ikke rydde udløbsdato', [{ text: 'OK', style: 'primary' }]);
         // Reload to reset state
-        await loadGallery('slideshow');
+        await loadGallery(type);
     }
 }
 
