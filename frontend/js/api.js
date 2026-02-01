@@ -268,10 +268,19 @@ class BadmintonAPI {
     /**
      * Get all sponsor images
      * @param {string} type - Optional filter: 'slideshow' or 'court'
+     * @param {boolean} includeInactive - Include inactive images (for admin view)
      * @returns {Promise<Array>} - Array of image objects
      */
-    async getSponsorImages(type = null) {
-        const queryParam = type ? `?type=${type}` : '';
+    async getSponsorImages(type = null, includeInactive = false) {
+        let queryParam = '';
+        if (type) {
+            queryParam = `?type=${type}`;
+            if (includeInactive) {
+                queryParam += '&includeInactive=true';
+            }
+        } else if (includeInactive) {
+            queryParam = '?includeInactive=true';
+        }
         return this.request(`/sponsors/images${queryParam}`, { requiresAuth: false });
     }
 

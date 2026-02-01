@@ -206,7 +206,8 @@ async function loadGallery(type) {
     const emptyGallery = document.getElementById(emptyIdMap[type]);
 
     try {
-        const images = await api.getSponsorImages(type);
+        // Admin panel should see all images including inactive ones
+        const images = await api.getSponsorImages(type, true);
 
         if (images.length === 0) {
             galleryContainer.innerHTML = '';
@@ -219,13 +220,29 @@ async function loadGallery(type) {
         // Sort by upload date (newest first)
         images.sort((a, b) => new Date(b.upload_date) - new Date(a.upload_date));
 
-        // Add additional CSS class for court banner items
-        const itemClass = type === 'court' ? 'gallery-item gallery-item-banner' : 'gallery-item';
-        const containerClass = type === 'court' ? 'gallery-image-container gallery-image-container-banner' : 'gallery-image-container';
-
         galleryContainer.innerHTML = images.map(img => {
             let courtCheckboxes = '';
             let statusControls = '';
+
+            // Build item classes based on type and status
+            let itemClass = 'gallery-item';
+            let containerClass = 'gallery-image-container';
+
+            if (type === 'court') {
+                itemClass += ' gallery-item-banner';
+                containerClass += ' gallery-image-container-banner';
+            } else if (type === 'slideshow') {
+                // Add inactive/expired class for visual dimming
+                const now = new Date();
+                const expirationDate = img.expiration_date ? new Date(img.expiration_date) : null;
+                const isExpired = expirationDate && expirationDate <= now;
+
+                if (isExpired) {
+                    itemClass += ' gallery-item-expired';
+                } else if (!img.is_active) {
+                    itemClass += ' gallery-item-inactive';
+                }
+            }
 
             if (type === 'court') {
                 // Generate checkboxes for court assignments

@@ -165,6 +165,28 @@
     box-shadow: 0 8px 20px rgba(233, 69, 96, 0.3);
 }
 
+/* Inactive and expired gallery items - dimmed appearance */
+.gallery-item-inactive,
+.gallery-item-expired {
+    opacity: 0.5;
+    border-color: #666;
+}
+
+.gallery-item-inactive:hover,
+.gallery-item-expired:hover {
+    opacity: 0.7;
+    box-shadow: 0 8px 20px rgba(158, 158, 158, 0.3);
+}
+
+.gallery-item-inactive .gallery-image,
+.gallery-item-expired .gallery-image {
+    filter: grayscale(70%);
+}
+
+.gallery-item-expired {
+    border-color: rgba(233, 69, 96, 0.5);
+}
+
 .gallery-image-container {
     position: relative;
     width: 100%;

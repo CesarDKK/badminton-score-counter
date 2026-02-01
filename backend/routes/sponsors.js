@@ -41,7 +41,7 @@ router.get('/images', async (req, res, next) => {
         // Check and deactivate expired images on-demand
         await checkAndDeactivateExpiredImages();
 
-        const { type } = req.query;
+        const { type, includeInactive } = req.query;
         let sql = `SELECT id, filename, type, original_name, file_size, width, height,
                     mime_type, upload_date, display_order, is_active, expiration_date
              FROM sponsor_images`;
@@ -53,8 +53,9 @@ router.get('/images', async (req, res, next) => {
             whereClauses.push('type = ?');
             params.push(type);
 
-            // For slideshow type, only return active images (TV display filter)
-            if (type === 'slideshow') {
+            // For slideshow type, filter by active status unless includeInactive is true
+            // TV display should only see active images, but admin panel should see all
+            if (type === 'slideshow' && includeInactive !== 'true') {
                 whereClauses.push('is_active = TRUE');
             }
         }
