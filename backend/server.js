@@ -7,6 +7,7 @@ require('dotenv').config();
 
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { startMidnightReset, startExpirationCheck } = require('./scheduler');
+const { loginLimiter, uploadLimiter, adminLimiter, publicLimiter } = require('./middleware/rateLimiter');
 
 // Initialize Express app
 const app = express();
@@ -18,6 +19,9 @@ app.use(cors()); // Enable CORS
 app.use(compression()); // Gzip compression
 app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
+
+// Apply baseline rate limiting to all API routes
+app.use('/api/', publicLimiter);
 
 // Serve uploaded images statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -43,14 +47,19 @@ app.get('/health', async (req, res) => {
     }
 });
 
-// API Routes
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/settings', require('./routes/settings'));
+// API Routes with rate limiting
+// Auth routes - strict rate limit to prevent brute force
+app.use('/api/auth', loginLimiter, require('./routes/auth'));
+
+// Admin routes - moderate rate limiting
+app.use('/api/settings', adminLimiter, require('./routes/settings'));
+app.use('/api/player-info', adminLimiter, require('./routes/playerInfo'));
+
+// Public + Admin routes - use baseline public limiter (more specific limits in route files)
 app.use('/api/courts', require('./routes/courts'));
 app.use('/api/game-states', require('./routes/gameStates'));
 app.use('/api/match-history', require('./routes/matchHistory'));
 app.use('/api/sponsors', require('./routes/sponsors'));
-app.use('/api/player-info', require('./routes/playerInfo'));
 
 // 404 handler
 app.use(notFoundHandler);

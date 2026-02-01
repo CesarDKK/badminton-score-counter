@@ -137,9 +137,10 @@ async function showDashboard() {
 
 function startAutoRefresh() {
     loadCourtOverview();
-    refreshInterval = setInterval(loadCourtOverview, 1000);
+    // Reduced from 1000ms to 2500ms to decrease server load (saves 60% API calls)
+    refreshInterval = setInterval(loadCourtOverview, 2500);
 
-    // Start timer update interval (every second)
+    // Start timer update interval (every second for smooth display)
     if (!timerUpdateInterval) {
         timerUpdateInterval = setInterval(updateAllTimerDisplays, 1000);
     }

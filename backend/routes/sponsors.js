@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
+const { uploadLimiter } = require('../middleware/rateLimiter');
 const upload = require('../config/multer');
 const sharp = require('sharp');
 const fs = require('fs').promises;
@@ -69,18 +70,34 @@ router.get('/images', async (req, res, next) => {
 
         const images = await query(sql, params);
 
-        // For court type images, fetch assigned courts
-        // Also format expiration_date as ISO string
+        // Optimize: Fetch all court assignments in a single query instead of N queries
+        // Collect IDs of court-type images
+        const courtImageIds = images.filter(img => img.type === 'court').map(img => img.id);
+
+        // Fetch all court assignments in one query if there are court images
+        let courtAssignments = {};
+        if (courtImageIds.length > 0) {
+            const assignments = await query(
+                `SELECT sponsor_image_id, court_number
+                 FROM sponsor_image_courts
+                 WHERE sponsor_image_id IN (?)
+                 ORDER BY sponsor_image_id, court_number`,
+                [courtImageIds]
+            );
+
+            // Group assignments by image ID
+            assignments.forEach(assignment => {
+                if (!courtAssignments[assignment.sponsor_image_id]) {
+                    courtAssignments[assignment.sponsor_image_id] = [];
+                }
+                courtAssignments[assignment.sponsor_image_id].push(assignment.court_number);
+            });
+        }
+
+        // Map court assignments back to images and format dates
         for (const image of images) {
-            if (image.type === 'court') {
-                const courts = await query(
-                    'SELECT court_number FROM sponsor_image_courts WHERE sponsor_image_id = ? ORDER BY court_number',
-                    [image.id]
-                );
-                image.assignedCourts = courts.map(c => c.court_number);
-            } else {
-                image.assignedCourts = [];
-            }
+            // Assign courts (empty array if none assigned)
+            image.assignedCourts = courtAssignments[image.id] || [];
 
             // Format expiration_date as ISO string (null if not set)
             if (image.expiration_date) {
@@ -124,8 +141,8 @@ router.put('/settings', authMiddleware, async (req, res, next) => {
     }
 });
 
-// POST /api/sponsors/upload - Upload sponsor images (requires auth)
-router.post('/upload', authMiddleware, upload.array('images', 10), async (req, res, next) => {
+// POST /api/sponsors/upload - Upload sponsor images (requires auth + rate limiting)
+router.post('/upload', uploadLimiter, authMiddleware, upload.array('images', 10), async (req, res, next) => {
     try {
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ error: 'Ingen filer uploadet' });
