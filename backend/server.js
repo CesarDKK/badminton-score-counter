@@ -26,6 +26,9 @@ app.use('/api/', publicLimiter);
 // Serve uploaded images statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Serve frontend files statically
+app.use(express.static(path.join(__dirname, '..', 'frontend')));
+
 // Health check endpoint
 app.get('/health', async (req, res) => {
     try {
