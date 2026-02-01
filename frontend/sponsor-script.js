@@ -284,8 +284,18 @@ async function loadGallery(type) {
                 }
 
                 // Format expiration date for datetime-local input (YYYY-MM-DDTHH:MM)
-                const expirationValue = expirationDate ?
-                    expirationDate.toISOString().slice(0, 16) : '';
+                // Convert from UTC to local time for display
+                let expirationValue = '';
+                if (expirationDate) {
+                    // expirationDate is a Date object in UTC
+                    // We need to format it as local time for the datetime-local input
+                    const year = expirationDate.getFullYear();
+                    const month = String(expirationDate.getMonth() + 1).padStart(2, '0');
+                    const day = String(expirationDate.getDate()).padStart(2, '0');
+                    const hours = String(expirationDate.getHours()).padStart(2, '0');
+                    const minutes = String(expirationDate.getMinutes()).padStart(2, '0');
+                    expirationValue = `${year}-${month}-${day}T${hours}:${minutes}`;
+                }
 
                 // Disable toggle if expired
                 const toggleDisabled = isExpired ? 'disabled' : '';
@@ -388,8 +398,17 @@ async function toggleImageActive(imageId, isActive) {
 async function setImageExpiration(imageId, dateTimeValue) {
     try {
         // Convert datetime-local value to ISO string
-        // If empty, set to null
-        const expirationDate = dateTimeValue ? new Date(dateTimeValue).toISOString() : null;
+        // datetime-local gives us local time (e.g., "2026-02-01T18:00")
+        // We need to interpret this as local time and convert to ISO
+        let expirationDate = null;
+
+        if (dateTimeValue) {
+            // Parse as local time and convert to ISO string
+            // Add seconds and timezone offset to ensure correct interpretation
+            const localDate = new Date(dateTimeValue);
+            // Create ISO string: converts local time to UTC properly
+            expirationDate = localDate.toISOString();
+        }
 
         await api.setSponsorImageExpiration(imageId, expirationDate);
         // Reload gallery to reflect changes
