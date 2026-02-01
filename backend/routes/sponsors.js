@@ -403,8 +403,16 @@ router.put('/:id/expiration', authMiddleware, async (req, res, next) => {
         }
 
         // Reject dates in the past
-        if (expirationDateObj <= new Date()) {
+        const now = new Date();
+        if (expirationDateObj <= now) {
             return res.status(400).json({ error: 'Udløbsdato skal være i fremtiden' });
+        }
+
+        // Reject dates too far in the future (max 5 years)
+        const maxDate = new Date();
+        maxDate.setFullYear(maxDate.getFullYear() + 5);
+        if (expirationDateObj > maxDate) {
+            return res.status(400).json({ error: 'Udløbsdato kan ikke være mere end 5 år i fremtiden' });
         }
 
         // Update expiration_date
@@ -444,20 +452,36 @@ router.put('/:id/courts', authMiddleware, async (req, res, next) => {
             return res.status(400).json({ error: 'Courts skal være et array' });
         }
 
+        // Validate each court number
+        const MAX_COURTS = 20; // Maximum number of courts supported
+        const invalidCourts = courts.filter(c => {
+            const num = parseInt(c);
+            return !Number.isInteger(num) || num < 1 || num > MAX_COURTS;
+        });
+
+        if (invalidCourts.length > 0) {
+            return res.status(400).json({
+                error: `Ugyldige bane numre: ${invalidCourts.join(', ')}. Bane numre skal være mellem 1 og ${MAX_COURTS}.`
+            });
+        }
+
+        // Convert to integers for safety
+        const validCourts = courts.map(c => parseInt(c));
+
         // Optimized batch operations instead of N*2 individual queries
         // Step 1: Remove all existing assignments for this image
         await query('DELETE FROM sponsor_image_courts WHERE sponsor_image_id = ?', [id]);
 
         // Step 2 & 3: Only proceed if there are courts to assign
-        if (courts.length > 0) {
+        if (validCourts.length > 0) {
             // Step 2: Remove these courts from any other images (batch delete)
             await query(
                 'DELETE FROM sponsor_image_courts WHERE court_number IN (?)',
-                [courts]
+                [validCourts]
             );
 
             // Step 3: Batch insert all new court assignments at once
-            const values = courts.map(courtNumber => [id, courtNumber]);
+            const values = validCourts.map(courtNumber => [id, courtNumber]);
             await query(
                 'INSERT INTO sponsor_image_courts (sponsor_image_id, court_number) VALUES ?',
                 [values]

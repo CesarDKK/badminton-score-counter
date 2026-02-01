@@ -384,12 +384,17 @@ function viewImage(id, filename, originalName, width, height) {
 
     document.body.appendChild(modal);
 
-    // Close modal on click
-    modal.addEventListener('click', function(e) {
+    // Close modal on click with proper cleanup
+    const closeModal = (e) => {
         if (e.target === modal || e.target.className === 'image-modal-close') {
-            document.body.removeChild(modal);
+            modal.removeEventListener('click', closeModal);
+            if (modal.parentNode) {
+                document.body.removeChild(modal);
+            }
         }
-    });
+    };
+
+    modal.addEventListener('click', closeModal);
 }
 
 async function toggleImageActive(imageId, isActive, type) {
@@ -584,22 +589,9 @@ async function performClearAll(type, typeName) {
     }
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function formatDate(isoString) {
-    const date = new Date(isoString);
-    return date.toLocaleDateString('da-DK', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-}
+// escapeHtml and formatDate moved to utils.js
+const escapeHtml = window.BadmintonUtils.escapeHtml;
+const formatDate = window.BadmintonUtils.formatDate;
 
 async function loadSlideDuration() {
     try {

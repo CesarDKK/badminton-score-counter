@@ -298,11 +298,8 @@ async function createCourtCard(courtNumber) {
     }
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
+// escapeHtml moved to utils.js
+const escapeHtml = window.BadmintonUtils.escapeHtml;
 
 function formatDuration(seconds) {
     const minutes = Math.floor(seconds / 60);
@@ -888,6 +885,12 @@ function hideMessage() {
 // Cleanup on page unload
 window.addEventListener('beforeunload', function() {
     stopAutoRefresh();
+
+    // Clear autocomplete timeout to prevent memory leaks
+    if (autocompleteTimeout) {
+        clearTimeout(autocompleteTimeout);
+        autocompleteTimeout = null;
+    }
 });
 
 // ===== Player Name Autocomplete Functionality =====
@@ -924,8 +927,15 @@ function setupPlayerNameAutocomplete(inputId) {
         }
 
         // Debounce search - wait 300ms after user stops typing
-        autocompleteTimeout = setTimeout(() => {
-            searchPlayers(searchTerm, inputId);
+        autocompleteTimeout = setTimeout(async () => {
+            try {
+                await searchPlayers(searchTerm, inputId);
+            } catch (error) {
+                console.error('Autocomplete search failed:', error);
+                hideAutocomplete(inputId);
+            } finally {
+                autocompleteTimeout = null;
+            }
         }, 300);
     });
 
