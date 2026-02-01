@@ -492,9 +492,11 @@ router.put('/:id/courts', authMiddleware, async (req, res, next) => {
         // Step 2 & 3: Only proceed if there are courts to assign
         if (validCourts.length > 0) {
             // Step 2: Remove these courts from any other images (batch delete)
+            // Create placeholders for IN clause (?, ?, ?)
+            const placeholders = validCourts.map(() => '?').join(', ');
             await query(
-                'DELETE FROM sponsor_image_courts WHERE court_number IN (?)',
-                [validCourts]
+                `DELETE FROM sponsor_image_courts WHERE court_number IN (${placeholders})`,
+                validCourts
             );
 
             // Step 3: Batch insert all new court assignments at once
