@@ -444,19 +444,23 @@ router.put('/:id/courts', authMiddleware, async (req, res, next) => {
             return res.status(400).json({ error: 'Courts skal være et array' });
         }
 
-        // Remove all existing assignments for this image
+        // Optimized batch operations instead of N*2 individual queries
+        // Step 1: Remove all existing assignments for this image
         await query('DELETE FROM sponsor_image_courts WHERE sponsor_image_id = ?', [id]);
 
-        // Add new assignments
-        // For each court, first remove any existing assignment to other images
-        for (const courtNumber of courts) {
-            // Remove this court from any other image
-            await query('DELETE FROM sponsor_image_courts WHERE court_number = ?', [courtNumber]);
-
-            // Assign this court to the current image
+        // Step 2 & 3: Only proceed if there are courts to assign
+        if (courts.length > 0) {
+            // Step 2: Remove these courts from any other images (batch delete)
             await query(
-                'INSERT INTO sponsor_image_courts (sponsor_image_id, court_number) VALUES (?, ?)',
-                [id, courtNumber]
+                'DELETE FROM sponsor_image_courts WHERE court_number IN (?)',
+                [courts]
+            );
+
+            // Step 3: Batch insert all new court assignments at once
+            const values = courts.map(courtNumber => [id, courtNumber]);
+            await query(
+                'INSERT INTO sponsor_image_courts (sponsor_image_id, court_number) VALUES ?',
+                [values]
             );
         }
 
