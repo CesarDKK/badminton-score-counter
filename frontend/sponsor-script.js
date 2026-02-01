@@ -3,6 +3,7 @@ const api = window.BadmintonAPI;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per image
 const DEFAULT_DURATION = 10; // seconds
 let courtCount = 5; // Will be fetched from settings
+let isUpdatingCourtAssignment = false; // Track if court assignment save is in progress
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
@@ -457,7 +458,17 @@ async function clearImageExpiration(imageId, event, type) {
 }
 
 async function toggleCourtAssignment(imageId, courtNumber, isChecked) {
+    // Prevent race conditions: if already updating, ignore this click
+    if (isUpdatingCourtAssignment) {
+        console.log('Court assignment update already in progress, ignoring click');
+        return;
+    }
+
     try {
+        // Set flag and disable all court checkboxes to prevent concurrent updates
+        isUpdatingCourtAssignment = true;
+        setCourtCheckboxesDisabled(true);
+
         // Get current image data (include inactive images for admin panel)
         const images = await api.getSponsorImages('court', true);
         const currentImage = images.find(img => img.id === imageId);
@@ -490,7 +501,31 @@ async function toggleCourtAssignment(imageId, courtNumber, isChecked) {
         showMessage('Fejl', 'Kunne ikke opdatere bane tildeling', [{ text: 'OK', style: 'primary' }]);
         // Reload to reset checkbox state
         await loadGallery('court');
+    } finally {
+        // Always re-enable checkboxes and clear flag when done
+        isUpdatingCourtAssignment = false;
+        setCourtCheckboxesDisabled(false);
     }
+}
+
+/**
+ * Enable or disable all court assignment checkboxes
+ * Used to prevent race conditions during court assignment updates
+ * @param {boolean} disabled - Whether to disable the checkboxes
+ */
+function setCourtCheckboxesDisabled(disabled) {
+    const courtCheckboxes = document.querySelectorAll('.court-checkbox');
+    courtCheckboxes.forEach(checkbox => {
+        checkbox.disabled = disabled;
+        // Add visual feedback - slightly fade out when disabled
+        if (disabled) {
+            checkbox.parentElement.style.opacity = '0.5';
+            checkbox.parentElement.style.cursor = 'not-allowed';
+        } else {
+            checkbox.parentElement.style.opacity = '1';
+            checkbox.parentElement.style.cursor = 'pointer';
+        }
+    });
 }
 
 async function deleteImage(id, type) {
