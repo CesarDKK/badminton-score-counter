@@ -66,111 +66,13 @@
                     <button id="changePasswordBtn" class="btn-primary">Skift Adgangskode</button>
                 </div>
 
-                <!-- Theme Presets -->
-                <div class="setting-card theme-presets">
-                    <h3>Forudindstillede Temaer</h3>
-                    <p class="theme-description">Vælg et tema der passer til din klub</p>
-                    <div class="preset-grid">
-                        <button class="preset-btn active" data-theme="default">
-                            <div class="preset-preview">
-                                <span class="color-dot" style="background: #533483;"></span>
-                                <span class="color-dot" style="background: #e94560;"></span>
-                                <span class="color-dot" style="background: #1a1a2e;"></span>
-                            </div>
-                            <span class="preset-name">Standard</span>
-                        </button>
-                        <button class="preset-btn" data-theme="ocean">
-                            <div class="preset-preview">
-                                <span class="color-dot" style="background: #2563eb;"></span>
-                                <span class="color-dot" style="background: #06b6d4;"></span>
-                                <span class="color-dot" style="background: #0c1f2e;"></span>
-                            </div>
-                            <span class="preset-name">Ocean</span>
-                        </button>
-                        <button class="preset-btn" data-theme="forest">
-                            <div class="preset-preview">
-                                <span class="color-dot" style="background: #16a34a;"></span>
-                                <span class="color-dot" style="background: #84cc16;"></span>
-                                <span class="color-dot" style="background: #0f1f0f;"></span>
-                            </div>
-                            <span class="preset-name">Skov</span>
-                        </button>
-                        <button class="preset-btn" data-theme="sunset">
-                            <div class="preset-preview">
-                                <span class="color-dot" style="background: #dc2626;"></span>
-                                <span class="color-dot" style="background: #f97316;"></span>
-                                <span class="color-dot" style="background: #1f0f0f;"></span>
-                            </div>
-                            <span class="preset-name">Solnedgang</span>
-                        </button>
-                        <button class="preset-btn" data-theme="royal">
-                            <div class="preset-preview">
-                                <span class="color-dot" style="background: #7c3aed;"></span>
-                                <span class="color-dot" style="background: #ec4899;"></span>
-                                <span class="color-dot" style="background: #1a0f2e;"></span>
-                            </div>
-                            <span class="preset-name">Kongeligt</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Custom Colors -->
-                <div class="setting-card custom-colors">
-                    <h3>Tilpassede Farver</h3>
-                    <p class="theme-description">Vælg dine egne farver manuelt</p>
-
-                    <div class="color-picker-row">
-                        <label>Primær farve:</label>
-                        <div class="color-input-group">
-                            <input type="color" id="colorPrimary" value="#533483">
-                            <input type="text" id="colorPrimaryHex" value="#533483" pattern="^#[0-9A-Fa-f]{6}$">
-                        </div>
-                    </div>
-
-                    <div class="color-picker-row">
-                        <label>Accent farve:</label>
-                        <div class="color-input-group">
-                            <input type="color" id="colorAccent" value="#e94560">
-                            <input type="text" id="colorAccentHex" value="#e94560" pattern="^#[0-9A-Fa-f]{6}$">
-                        </div>
-                    </div>
-
-                    <div class="color-picker-row">
-                        <label>Mørk baggrund:</label>
-                        <div class="color-input-group">
-                            <input type="color" id="colorBgDark" value="#1a1a2e">
-                            <input type="text" id="colorBgDarkHex" value="#1a1a2e" pattern="^#[0-9A-Fa-f]{6}$">
-                        </div>
-                    </div>
-
-                    <div class="color-picker-row">
-                        <label>Container baggrund:</label>
-                        <div class="color-input-group">
-                            <input type="color" id="colorBgContainer" value="#16213e">
-                            <input type="text" id="colorBgContainerHex" value="#16213e" pattern="^#[0-9A-Fa-f]{6}$">
-                        </div>
-                    </div>
-
-                    <div class="color-picker-row">
-                        <label>Kort baggrund:</label>
-                        <div class="color-input-group">
-                            <input type="color" id="colorBgCard" value="#0f3460">
-                            <input type="text" id="colorBgCardHex" value="#0f3460" pattern="^#[0-9A-Fa-f]{6}$">
-                        </div>
-                    </div>
-
-                    <button id="saveCustomThemeBtn" class="btn-primary">Gem Tilpasset Tema</button>
-                    <button id="previewThemeBtn" class="btn-secondary">Forhåndsvisning</button>
-                    <p class="theme-hint">Bemærk: Farveændringer træder i kraft efter siden opdateres</p>
-                </div>
-
-                <!-- Current Theme Display -->
-                <div class="setting-card current-theme">
-                    <h3>Nuværende Tema</h3>
-                    <div id="currentThemeDisplay" class="theme-display">
-                        <p class="theme-name">Indlæser...</p>
-                        <div class="theme-colors"></div>
-                    </div>
+                <!-- Theme Link -->
+                <div class="setting-card">
+                    <h3>Tema</h3>
+                    <p style="color: #aaa; font-size: 0.9em; margin-bottom: 20px; line-height: 1.5;">
+                        Tilpas farverne og udseendet af applikationen
+                    </p>
+                    <a href="theme.html" class="btn-primary" style="text-decoration: none; display: inline-block;">Åbn Tema Indstillinger</a>
                 </div>
             </div>
 

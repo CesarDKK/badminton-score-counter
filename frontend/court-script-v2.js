@@ -36,7 +36,8 @@ let gameState = {
     restBreakCallback: null,  // Callback to execute when rest break ends
     restBreakSecondsLeft: 0,  // Seconds remaining in rest break
     restBreakTitle: '',  // Title to display during rest break
-    matchCompleted: false  // Track if match is completed and confirmed
+    matchCompleted: false,  // Track if match is completed and confirmed
+    history: []  // Track history of game state snapshots for undo functionality
 };
 
 // Debouncing variables
@@ -127,6 +128,7 @@ function setupEventListeners() {
     });
 
     // Action buttons
+    document.getElementById('undoBtn').addEventListener('click', undoLastAction);
     document.getElementById('switchSidesBtn').addEventListener('click', switchSides);
     document.getElementById('doublesToggle').addEventListener('click', toggleDoubles);
     document.getElementById('clearCourtBtn').addEventListener('click', clearCourt);
@@ -136,11 +138,115 @@ function setupEventListeners() {
     document.getElementById('skipRestBreak').addEventListener('click', endRestBreak);
 }
 
+// History management functions
+function saveStateToHistory() {
+    // Create a deep copy of the current game state (excluding non-serializable properties)
+    const snapshot = {
+        player1: {
+            name: gameState.player1.name,
+            name2: gameState.player1.name2,
+            score: gameState.player1.score,
+            games: gameState.player1.games
+        },
+        player2: {
+            name: gameState.player2.name,
+            name2: gameState.player2.name2,
+            score: gameState.player2.score,
+            games: gameState.player2.games
+        },
+        isDoubles: gameState.isDoubles,
+        gameMode: gameState.gameMode,
+        decidingGameSwitched: gameState.decidingGameSwitched,
+        setScoresHistory: JSON.parse(JSON.stringify(gameState.setScoresHistory)),
+        restBreakTaken: gameState.restBreakTaken,
+        matchStartTime: gameState.matchStartTime,
+        matchEndTime: gameState.matchEndTime,
+        matchCompleted: gameState.matchCompleted
+    };
+
+    // Add snapshot to history (limit to last 100 actions to prevent memory issues)
+    gameState.history.push(snapshot);
+    if (gameState.history.length > 100) {
+        gameState.history.shift(); // Remove oldest snapshot
+    }
+}
+
+function restoreStateFromHistory() {
+    if (gameState.history.length === 0) {
+        return false; // No history to restore
+    }
+
+    // Get the last snapshot and remove it from history
+    const snapshot = gameState.history.pop();
+
+    // Restore the game state from snapshot
+    gameState.player1.name = snapshot.player1.name;
+    gameState.player1.name2 = snapshot.player1.name2;
+    gameState.player1.score = snapshot.player1.score;
+    gameState.player1.games = snapshot.player1.games;
+
+    gameState.player2.name = snapshot.player2.name;
+    gameState.player2.name2 = snapshot.player2.name2;
+    gameState.player2.score = snapshot.player2.score;
+    gameState.player2.games = snapshot.player2.games;
+
+    gameState.isDoubles = snapshot.isDoubles;
+    gameState.gameMode = snapshot.gameMode;
+    gameState.decidingGameSwitched = snapshot.decidingGameSwitched;
+    gameState.setScoresHistory = snapshot.setScoresHistory;
+    gameState.restBreakTaken = snapshot.restBreakTaken;
+    gameState.matchStartTime = snapshot.matchStartTime;
+    gameState.matchEndTime = snapshot.matchEndTime;
+    gameState.matchCompleted = snapshot.matchCompleted;
+
+    return true; // Successfully restored
+}
+
+function undoLastAction() {
+    // Prevent undo if match is completed
+    if (gameState.matchCompleted) {
+        showMessage('Ikke Tilladt', 'Kan ikke fortryde efter kampen er afsluttet.');
+        return;
+    }
+
+    // Check if there's any history to undo
+    if (gameState.history.length === 0) {
+        showMessage('Ingen Historik', 'Der er ingen handlinger at fortryde.');
+        return;
+    }
+
+    // Cancel any active rest break
+    if (gameState.restBreakActive) {
+        gameState.restBreakCallback = null;
+        endRestBreak();
+    }
+
+    // Restore previous state
+    if (restoreStateFromHistory()) {
+        // Restart timer if match ended but now we're undoing
+        if (gameState.matchEndTime) {
+            gameState.matchEndTime = null;
+            if (!gameState.timerRunning && gameState.matchStartTime) {
+                startTimer();
+            }
+        }
+
+        updateDisplay();
+
+        // Mark that we just updated scores locally
+        lastScoreUpdateTime = Date.now();
+        saveGameState();
+    }
+}
+
 function addPoint(player) {
     // Prevent adding points if match is completed
     if (gameState.matchCompleted) {
         return;
     }
+
+    // Save current state to history before making changes
+    saveStateToHistory();
 
     // Auto-start timer on first point
     const isFirstPoint = gameState.player1.score === 0 &&
@@ -185,51 +291,7 @@ function addPoint(player) {
     saveGameState();
 }
 
-function removePoint(player) {
-    // Prevent removing points if match is completed
-    if (gameState.matchCompleted) {
-        return;
-    }
-
-    // Check if we need to undo a completed set/match
-    const needsUndo = (player === 1 && gameState.player1.score === 0 && gameState.player1.games > 0) ||
-                      (player === 2 && gameState.player2.score === 0 && gameState.player2.games > 0);
-
-    if (needsUndo) {
-        // Undo the last completed set
-        showMessage(
-            'Fortryd Sæt?',
-            'Dette vil fortryde det sidste afsluttede sæt og gendanne scoren.',
-            [
-                {
-                    text: 'Ja, Fortryd',
-                    callback: () => {
-                        undoLastSet(player);
-                    },
-                    style: 'primary'
-                },
-                {
-                    text: 'Annuller',
-                    callback: null,
-                    style: 'secondary'
-                }
-            ]
-        );
-    } else {
-        // Normal point removal
-        if (player === 1 && gameState.player1.score > 0) {
-            gameState.player1.score--;
-        } else if (player === 2 && gameState.player2.score > 0) {
-            gameState.player2.score--;
-        }
-
-        updateDisplay();
-
-        // Mark that we just updated scores locally
-        lastScoreUpdateTime = Date.now();
-        saveGameState();
-    }
-}
+// removePoint function removed - replaced by undoLastAction which uses history snapshots
 
 function undoLastSet(player) {
     // Check if there's a set to undo
@@ -288,7 +350,7 @@ function undoLastSet(player) {
     saveGameState();
 }
 
-function checkGameWin() {
+async function checkGameWin() {
     const p1Score = gameState.player1.score;
     const p2Score = gameState.player2.score;
 
@@ -346,8 +408,18 @@ function checkGameWin() {
             return;
         }
 
-        // Set won but not match - show message with undo option
+        // Set won but not match - start timer immediately and show message with undo option
         const winnerNames = formatPlayerNames(gameState.player1.name, gameState.player1.name2);
+
+        // Start 2-minute rest break immediately in 21/30 mode (in background, no overlay yet)
+        if (gameState.gameMode === '21') {
+            await startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', () => {
+                resetScores();
+                gameState.decidingGameSwitched = false;
+                switchSides();
+            }, false); // showOverlay = false, timer runs in background
+        }
+
         showMessage(
             'Sæt Vundet!',
             `${winnerNames} vinder dette sæt!`,
@@ -356,13 +428,10 @@ function checkGameWin() {
                     text: 'Fortsæt',
                     callback: () => {
                         if (gameState.gameMode === '21') {
-                            // Start 2-minute rest break with callback to reset and switch
-                            startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', () => {
-                                resetScores();
-                                gameState.decidingGameSwitched = false;
-                                switchSides();
-                            });
+                            // Show the rest break overlay (timer already running)
+                            showRestBreakOverlay();
                         } else {
+                            // In 15/21 mode, reset and switch when Fortsæt is clicked
                             resetScores();
                             gameState.decidingGameSwitched = false;
                             switchSides();
@@ -373,6 +442,14 @@ function checkGameWin() {
                 {
                     text: 'Fortryd',
                     callback: () => {
+                        // Cancel timer if running
+                        if (gameState.restBreakActive) {
+                            // Clear callback so it doesn't execute when we end the break
+                            gameState.restBreakCallback = null;
+                            // Stop the rest break timer
+                            endRestBreak();
+                        }
+                        // Undo the set
                         undoLastSet(1);
                     },
                     style: 'secondary'
@@ -428,8 +505,18 @@ function checkGameWin() {
             return;
         }
 
-        // Set won but not match - show message with undo option
+        // Set won but not match - start timer immediately and show message with undo option
         const winnerNames = formatPlayerNames(gameState.player2.name, gameState.player2.name2);
+
+        // Start 2-minute rest break immediately in 21/30 mode (in background, no overlay yet)
+        if (gameState.gameMode === '21') {
+            await startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', () => {
+                resetScores();
+                gameState.decidingGameSwitched = false;
+                switchSides();
+            }, false); // showOverlay = false, timer runs in background
+        }
+
         showMessage(
             'Sæt Vundet!',
             `${winnerNames} vinder dette sæt!`,
@@ -438,13 +525,10 @@ function checkGameWin() {
                     text: 'Fortsæt',
                     callback: () => {
                         if (gameState.gameMode === '21') {
-                            // Start 2-minute rest break with callback to reset and switch
-                            startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', () => {
-                                resetScores();
-                                gameState.decidingGameSwitched = false;
-                                switchSides();
-                            });
+                            // Show the rest break overlay (timer already running)
+                            showRestBreakOverlay();
                         } else {
+                            // In 15/21 mode, reset and switch when Fortsæt is clicked
                             resetScores();
                             gameState.decidingGameSwitched = false;
                             switchSides();
@@ -455,6 +539,14 @@ function checkGameWin() {
                 {
                     text: 'Fortryd',
                     callback: () => {
+                        // Cancel timer if running
+                        if (gameState.restBreakActive) {
+                            // Clear callback so it doesn't execute when we end the break
+                            gameState.restBreakCallback = null;
+                            // Stop the rest break timer
+                            endRestBreak();
+                        }
+                        // Undo the set
                         undoLastSet(2);
                     },
                     style: 'secondary'
@@ -1121,7 +1213,7 @@ function formatDuration(seconds) {
 }
 
 // Rest break functions
-async function startRestBreak(duration = 60, title = 'Pause 1 minut', callback = null) {
+async function startRestBreak(duration = 60, title = 'Pause 1 minut', callback = null, showOverlay = true) {
     gameState.restBreakActive = true;
     gameState.restBreakCallback = callback;
     gameState.restBreakSecondsLeft = duration;
@@ -1135,14 +1227,16 @@ async function startRestBreak(duration = 60, title = 'Pause 1 minut', callback =
     const titleElement = overlay.querySelector('h1');
 
     titleElement.textContent = title;
-    overlay.style.display = 'flex';
+
+    // Only show overlay if requested (can start timer in background)
+    if (showOverlay) {
+        overlay.style.display = 'flex';
+    }
 
     let secondsLeft = duration;
     timerDisplay.textContent = secondsLeft;
 
-    // Immediately save to database so TV page sees it right away
-    await performSave();
-
+    // Start the countdown interval IMMEDIATELY (before the async save)
     gameState.restBreakInterval = setInterval(() => {
         secondsLeft--;
         gameState.restBreakSecondsLeft = secondsLeft;
@@ -1162,6 +1256,9 @@ async function startRestBreak(duration = 60, title = 'Pause 1 minut', callback =
         // Save state to sync with TV page (debounced)
         saveGameState();
     }, 1000);
+
+    // Save to database so TV page sees it right away (after interval is started)
+    await performSave();
 }
 
 async function endRestBreak() {
@@ -1189,6 +1286,12 @@ async function endRestBreak() {
 
     // Immediately save to database so TV page sees it ended right away
     await performSave();
+}
+
+function showRestBreakOverlay() {
+    // Show the rest break overlay (timer should already be running)
+    const overlay = document.getElementById('restBreakOverlay');
+    overlay.style.display = 'flex';
 }
 
 function checkRestBreak() {

@@ -242,11 +242,16 @@ header h1 {
 
 .game-info {
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
 }
 
 .games {
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 10px;
 }
 
@@ -257,10 +262,29 @@ header h1 {
 
 .game-score {
     display: flex;
+    justify-content: center;
     gap: 15px;
     font-size: 2em;
     font-weight: bold;
     color: var(--color-accent);
+}
+
+.btn-undo {
+    padding: 12px 25px;
+    font-size: 1em;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-weight: bold;
+    background: #6b7280;
+    color: white;
+    margin-top: 5px;
+}
+
+.btn-undo:hover {
+    background: #9ca3af;
+    transform: scale(1.05);
 }
 
 /* Action Buttons */
