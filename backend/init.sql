@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS game_states (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   match_start_time TIMESTAMP NULL,
   match_end_time TIMESTAMP NULL,
+  match_completed BOOLEAN DEFAULT FALSE,
 
   FOREIGN KEY (court_id) REFERENCES courts(id) ON DELETE CASCADE,
   INDEX idx_court_id (court_id),
