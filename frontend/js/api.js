@@ -268,7 +268,8 @@ class BadmintonAPI {
      */
     async resetGameState(courtId) {
         return this.request(`/game-states/${courtId}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            requiresAuth: false // Allow public reset during gameplay
         });
     }
 

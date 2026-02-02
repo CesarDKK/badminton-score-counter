@@ -299,8 +299,8 @@ router.put('/:courtId', async (req, res, next) => {
     }
 });
 
-// DELETE /api/game-states/:courtId - Reset court (requires auth)
-router.delete('/:courtId', authMiddleware, async (req, res, next) => {
+// DELETE /api/game-states/:courtId - Reset court (public - used during gameplay)
+router.delete('/:courtId', async (req, res, next) => {
     try {
         const { courtId } = req.params;
 

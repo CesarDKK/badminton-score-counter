@@ -127,6 +127,7 @@ CREATE TABLE IF NOT EXISTS sponsor_images (
   INDEX idx_display_order (display_order),
   INDEX idx_upload_date (upload_date DESC),
   INDEX idx_type (type),
+  INDEX idx_sponsor_type (type, display_order, upload_date DESC),
   INDEX idx_sponsor_active_filter (type, is_active, expiration_date)
 ) ENGINE=InnoDB;
 
@@ -138,7 +139,8 @@ CREATE TABLE IF NOT EXISTS sponsor_image_courts (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
   FOREIGN KEY (sponsor_image_id) REFERENCES sponsor_images(id) ON DELETE CASCADE,
-  UNIQUE KEY unique_sponsor_court (sponsor_image_id, court_number),
+  UNIQUE KEY unique_court_assignment (court_number),
+  INDEX idx_sponsor_image_id (sponsor_image_id),
   INDEX idx_court_number (court_number)
 ) ENGINE=InnoDB;
 

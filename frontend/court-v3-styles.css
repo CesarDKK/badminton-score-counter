@@ -1,12 +1,317 @@
 /* Court V3 Styles - Badminton Court Top-Down View */
 /* Official dimensions: 44' (13.4m) long × 20' (6.1m) wide for doubles */
 
+/* Score Display Above Court */
+.score-display-top {
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+/* Court center overlay for timer and start button */
+.court-center-overlay {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 100;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.btn-start-match-center {
+    font-size: 2em;
+    padding: 20px 50px;
+    background: var(--color-accent);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.btn-start-match-center:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 30px rgba(0, 0, 0, 0.7);
+}
+
+.timer-display-center {
+    font-size: 1em;
+    font-weight: bold;
+    color: white;
+    text-shadow: 0 0 20px rgba(0, 0, 0, 0.8), 0 0 40px rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.6);
+    padding: 5px 10px;
+    border-radius: 8px;
+}
+
+.scores-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 0 20px;
+}
+
+.player-score-section {
+    flex: 1;
+    text-align: center;
+}
+
+.point-score {
+    font-size: 5em;
+    font-weight: bold;
+    color: var(--color-accent);
+}
+
+.set-score-section {
+    flex: 1;
+    text-align: center;
+    padding: 0 40px;
+}
+
+.set-label {
+    font-size: 1.2em;
+    color: #aaa;
+    margin-bottom: 10px;
+}
+
+.set-score {
+    font-size: 3em;
+    font-weight: bold;
+    color: var(--color-primary);
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+}
+
+.set-separator {
+    color: #666;
+}
+
+/* Control Buttons Below Court */
+.control-buttons-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    padding: 10px 20px;
+}
+
+.center-buttons {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.btn-add-point {
+    padding: 20px 40px;
+    font-size: 2em;
+    font-weight: bold;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    min-width: 160px;
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-add-left {
+    background: #22c55e;
+}
+
+.btn-add-left:hover {
+    transform: scale(1.1);
+    box-shadow: 0 0 20px #22c55e;
+}
+
+.btn-add-right {
+    background: #22c55e;
+}
+
+.btn-add-right:hover {
+    transform: scale(1.1);
+    box-shadow: 0 0 20px #22c55e;
+}
+
+.btn-undo {
+    padding: 15px 30px;
+    font-size: 1.2em;
+    background: #6b7280;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-undo:hover {
+    background: #9ca3af;
+    transform: scale(1.05);
+}
+
+.btn-primary {
+    padding: 15px 30px;
+    font-size: 1.2em;
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s;
+}
+
+.btn-primary:hover {
+    opacity: 0.9;
+    transform: scale(1.05);
+}
+
+.btn-mode {
+    padding: 15px 30px;
+    font-size: 1.2em;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s;
+}
+
+.btn-mode:hover {
+    background: #3b82f6;
+    transform: scale(1.05);
+}
+
+.btn-danger {
+    padding: 15px 30px;
+    font-size: 1.2em;
+    background: #dc2626;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s;
+}
+
+.btn-danger:hover {
+    background: #ef4444;
+    transform: scale(1.05);
+}
+
+.btn-settings {
+    padding: 15px 25px;
+    font-size: 1.8em;
+    background: #6b7280;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-settings:hover {
+    background: #9ca3af;
+    transform: scale(1.05);
+}
+
+/* Settings Menu */
+.settings-menu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.settings-menu-content {
+    background: var(--color-bg-card);
+    border-radius: 12px;
+    padding: 40px;
+    min-width: 400px;
+    box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5);
+}
+
+.settings-menu-content h3 {
+    font-size: 2em;
+    margin-bottom: 30px;
+    text-align: center;
+    color: var(--color-accent);
+}
+
+.menu-item {
+    display: block;
+    width: 100%;
+    padding: 20px;
+    margin-bottom: 15px;
+    font-size: 1.3em;
+    background: var(--color-bg-container);
+    color: white;
+    border: 2px solid var(--color-primary);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-align: center;
+    font-weight: bold;
+}
+
+.menu-item:hover {
+    background: var(--color-primary);
+    transform: translateX(5px);
+}
+
+.menu-link {
+    text-decoration: none;
+}
+
+.menu-close {
+    background: #6b7280;
+    border-color: #6b7280;
+    margin-top: 20px;
+}
+
+.menu-close:hover {
+    background: #9ca3af;
+}
+
+.menu-danger {
+    background: #7f1d1d;
+    border-color: #dc2626;
+}
+
+.menu-danger:hover {
+    background: #dc2626;
+}
+
 .court-view-container {
     display: flex;
     justify-content: center;
     align-items: center;
     padding: 0;
-    min-height: calc(100vh - 200px);
 }
 
 .badminton-court {
@@ -15,7 +320,7 @@
     max-width: none;
     aspect-ratio: 13.4 / 6.1; /* Doubles court proportions - landscape */
     background: #2a2a2a;
-    padding: 20px;
+    padding: 10px;
     border-radius: 8px;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
 }
@@ -113,6 +418,76 @@
     left: 0;
     right: 0;
     height: 3px;
+}
+
+/* Player name boxes in back court service areas */
+.player-name-box {
+    position: absolute;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none;
+    z-index: 10;
+    background: none;
+    border: none;
+}
+
+.player-name {
+    font-size: 2em;
+    font-weight: bold;
+    color: white;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+    text-align: center;
+    background: none !important;
+    border: none !important;
+    padding: 8px;
+    margin: 0;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.player-name:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.9);
+}
+
+.player-name[contenteditable="true"] {
+    background: rgba(255, 255, 255, 0.2) !important;
+    outline: 2px solid var(--color-accent);
+    cursor: text;
+}
+
+/* Left side top back court (Player 1 main) */
+.player-left-top {
+    left: 5.67%; /* Start after left doubles back line */
+    right: 64.78%; /* End at net (50%) */
+    top: 0;
+    bottom: 50%; /* Above center line */
+}
+
+/* Left side bottom back court (Player 1 partner) */
+.player-left-bottom {
+    left: 5.67%; /* Start after left doubles back line */
+    right: 64.78%; /* End at net (50%) */
+    top: 50%; /* Below center line */
+    bottom: 0;
+}
+
+/* Right side top back court (Player 2 main) */
+.player-right-top {
+    left: 64.78%; /* Start at net (50%) */
+    right: 5.67%; /* End before right doubles back line */
+    top: 0;
+    bottom: 50%; /* Above center line */
+}
+
+/* Right side bottom back court (Player 2 partner) */
+.player-right-bottom {
+    left: 64.78%; /* Start at net (50%) */
+    right: 5.67%; /* End before right doubles back line */
+    top: 50%; /* Below center line */
+    bottom: 0;
 }
 
 /* Responsive adjustments */

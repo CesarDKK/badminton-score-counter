@@ -22,6 +22,10 @@ let originalPlayer2Name2 = null;
 // Store match start time from database
 let matchStartTime = null;
 let matchEndTime = null;
+// Rest break timer tracking
+let restBreakInterval = null;
+let localRestBreakSecondsLeft = 0;
+let isRestBreakActive = false;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async function() {
@@ -481,7 +485,54 @@ function showRestBreak(secondsLeft, title, gameState, playersSwapped) {
     if (!overlay) return;
 
     titleElement.textContent = title || 'Pause';
-    timerDisplay.textContent = secondsLeft || 0;
+
+    // Only sync if rest break is starting for the first time
+    // Once started, trust the local countdown completely to avoid resets due to database lag
+    const isNewRestBreak = !isRestBreakActive;
+
+    if (isNewRestBreak) {
+        // First time showing rest break or a new one started - initialize from server
+        localRestBreakSecondsLeft = secondsLeft || 0;
+        isRestBreakActive = true;
+
+        // Clear any existing interval before starting new one
+        if (restBreakInterval) {
+            clearInterval(restBreakInterval);
+            restBreakInterval = null;
+        }
+
+        // Start local countdown
+        if (localRestBreakSecondsLeft > 0) {
+            restBreakInterval = setInterval(() => {
+                localRestBreakSecondsLeft--;
+                if (localRestBreakSecondsLeft < 0) {
+                    localRestBreakSecondsLeft = 0;
+                }
+                timerDisplay.textContent = localRestBreakSecondsLeft;
+
+                // Update color based on time remaining
+                if (localRestBreakSecondsLeft <= 10) {
+                    timerDisplay.style.color = '#e94560';
+                } else if (localRestBreakSecondsLeft <= 30) {
+                    timerDisplay.style.color = '#FFA500';
+                } else {
+                    timerDisplay.style.color = '#4CAF50';
+                }
+            }, 1000);
+        }
+    }
+
+    // Always update display with current local value
+    timerDisplay.textContent = localRestBreakSecondsLeft;
+
+    // Update color based on current time
+    if (localRestBreakSecondsLeft <= 10) {
+        timerDisplay.style.color = '#e94560';
+    } else if (localRestBreakSecondsLeft <= 30) {
+        timerDisplay.style.color = '#FFA500';
+    } else {
+        timerDisplay.style.color = '#4CAF50';
+    }
 
     // Update score display in rest break overlay with consistent player positions
     if (gameState) {
@@ -536,6 +587,22 @@ function hideRestBreak() {
     const overlay = document.getElementById('tvRestBreakOverlay');
     if (overlay) {
         overlay.style.display = 'none';
+    }
+
+    // Stop local countdown timer
+    if (restBreakInterval) {
+        clearInterval(restBreakInterval);
+        restBreakInterval = null;
+    }
+
+    // Reset state
+    isRestBreakActive = false;
+    localRestBreakSecondsLeft = 0;
+
+    // Reset timer color
+    const timerDisplay = document.getElementById('tvRestBreakTimer');
+    if (timerDisplay) {
+        timerDisplay.style.color = '#4CAF50';
     }
 }
 

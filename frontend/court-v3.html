@@ -14,15 +14,31 @@
 </head>
 <body>
     <div class="container">
-        <header>
-            <div class="header-left">
-                <a href="landing.html" class="btn-back">← Tilbage</a>
-                <h1>Bane <span id="courtNumber">1</span> <span style="color: var(--color-accent); font-size: 0.6em;">(NY VERSION)</span></h1>
+        <!-- Score Display Above Court -->
+        <div class="score-display-top">
+            <!-- Scores Container -->
+            <div class="scores-container">
+                <!-- Player 1 Score (Left) -->
+                <div class="player-score-section player-score-left">
+                    <div class="point-score" id="player1PointScore">0</div>
+                </div>
+
+                <!-- Set Score (Center) -->
+                <div class="set-score-section">
+                    <div class="set-label">Sæt Vundet</div>
+                    <div class="set-score">
+                        <span id="player1SetScore">0</span>
+                        <span class="set-separator">-</span>
+                        <span id="player2SetScore">0</span>
+                    </div>
+                </div>
+
+                <!-- Player 2 Score (Right) -->
+                <div class="player-score-section player-score-right">
+                    <div class="point-score" id="player2PointScore">0</div>
+                </div>
             </div>
-            <div class="header-controls">
-                <a href="admin.html" class="btn-secondary" style="text-decoration: none;">Admin</a>
-            </div>
-        </header>
+        </div>
 
         <!-- Badminton Court Visualization -->
         <div class="court-view-container">
@@ -45,7 +61,73 @@
                     <!-- Singles sidelines -->
                     <div class="court-line line-singles-sideline-top"></div>
                     <div class="court-line line-singles-sideline-bottom"></div>
+
+                    <!-- Player names in service boxes -->
+                    <!-- Left back court boxes (Player 1 side) -->
+                    <div class="player-name-box player-left-top">
+                        <div class="player-name" id="player1Name1Display"></div>
+                    </div>
+                    <div class="player-name-box player-left-bottom">
+                        <div class="player-name" id="player1Name2Display"></div>
+                    </div>
+
+                    <!-- Right back court boxes (Player 2 side) -->
+                    <div class="player-name-box player-right-top">
+                        <div class="player-name" id="player2Name1Display"></div>
+                    </div>
+                    <div class="player-name-box player-right-bottom">
+                        <div class="player-name" id="player2Name2Display"></div>
+                    </div>
+
+                    <!-- Timer and Start Button overlay on court center -->
+                    <div class="court-center-overlay">
+                        <button id="startMatchBtn" class="btn-start-match-center">Start Kamp</button>
+                        <div id="timerDisplay" class="timer-display-center" style="display: none;">00:00</div>
+                    </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Control Buttons Below Court -->
+        <div class="control-buttons-bottom">
+            <button id="addPointPlayer1" class="btn-add-point btn-add-left">+1</button>
+            <div class="center-buttons">
+                <button id="undoBtn" class="btn-undo">Fortryd</button>
+                <button id="settingsBtn" class="btn-settings">⚙️</button>
+            </div>
+            <button id="addPointPlayer2" class="btn-add-point btn-add-right">+1</button>
+        </div>
+
+        <!-- Settings Menu (hidden by default) -->
+        <div id="settingsMenu" class="settings-menu" style="display: none;">
+            <div class="settings-menu-content">
+                <h3>Indstillinger</h3>
+                <button id="switchSidesBtn" class="menu-item">Skift Sider</button>
+                <button id="doublesToggle" class="menu-item">Skift til Double</button>
+                <button id="clearCourtBtn" class="menu-item menu-danger">Ryd Banen</button>
+                <a href="admin.html" class="menu-item menu-link">Admin</a>
+                <a href="landing.html" class="menu-item menu-link">← Tilbage</a>
+                <button id="closeSettingsBtn" class="menu-item menu-close">Luk</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rest Break Overlay -->
+    <div id="restBreakOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); z-index: 9999; justify-content: center; align-items: center;">
+        <div style="text-align: center; color: white;">
+            <h1 id="restBreakTitle" style="font-size: 3em; margin-bottom: 20px;">Pause</h1>
+            <div id="restBreakTimer" style="font-size: 8em; font-weight: bold; margin: 40px 0; color: var(--color-accent);">60</div>
+            <button id="skipRestBreak" class="btn-primary" style="font-size: 1.5em; padding: 20px 40px; cursor: pointer;">Fortsæt Kamp</button>
+        </div>
+    </div>
+
+    <!-- Message Overlay -->
+    <div id="messageOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); z-index: 10000; justify-content: center; align-items: center;">
+        <div style="text-align: center; color: white; max-width: 600px; padding: 40px;">
+            <h1 id="messageTitle" style="font-size: 2.5em; margin-bottom: 30px; color: var(--color-accent);"></h1>
+            <p id="messageText" style="font-size: 1.5em; margin-bottom: 40px; line-height: 1.5;"></p>
+            <div id="messageButtons" style="display: flex; gap: 20px; justify-content: center;">
+                <!-- Buttons will be added dynamically -->
             </div>
         </div>
     </div>
