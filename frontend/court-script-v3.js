@@ -505,7 +505,7 @@ function updateTimer() {
     }
 }
 
-// Debounced save function - saves max once per 2 seconds
+// Debounced save function - saves max once per 0.5 seconds
 function saveGameState() {
     // Clear existing timeout
     if (saveTimeout) {
@@ -515,12 +515,12 @@ function saveGameState() {
     // Mark that we have a pending save
     pendingSave = true;
 
-    // Debounce: wait 2 seconds before saving
+    // Debounce: wait 0.5 seconds before saving (faster sync with TV/Admin)
     saveTimeout = setTimeout(async () => {
         if (pendingSave && !isSaving) {
             await performSave();
         }
-    }, 2000);
+    }, 500);
 }
 
 // Perform the actual API save
