@@ -42,6 +42,10 @@ let gameState = {
     servingTeam: null,  // 1 or 2, which team is serving (for doubles)
     servingPlayerOnTeam: null,  // 1 or 2, which player on the team (1=main player, 2=partner)
     firstServeAfterChange: false,  // Track if this is the first serve after serve changed teams (doubles)
+    lastServingPlayerOnTeam: {  // Track who was serving on each team before serve changed
+        team1: 1,  // Which player on team 1 was serving last
+        team2: 1   // Which player on team 2 was serving last
+    },
     history: []
 };
 
@@ -336,12 +340,14 @@ function resetScores() {
         if (gameState.isDoubles) {
             gameState.servingTeam = 1;
             gameState.servingPlayerOnTeam = 1; // Main player serves
+            gameState.lastServingPlayerOnTeam.team1 = 1;
         }
     } else if (gameState.player2.games > gameState.player1.games) {
         gameState.servingPlayer = 2;
         if (gameState.isDoubles) {
             gameState.servingTeam = 2;
             gameState.servingPlayerOnTeam = 1; // Main player serves
+            gameState.lastServingPlayerOnTeam.team2 = 1;
         }
     }
     // If tied (shouldn't happen in normal play), keep current server
@@ -416,6 +422,7 @@ function clearCourt() {
                     gameState.servingTeam = null;  // Reset doubles serving state
                     gameState.servingPlayerOnTeam = null;
                     gameState.firstServeAfterChange = false;
+                    gameState.lastServingPlayerOnTeam = { team1: 1, team2: 1 };
 
                     // Update display
                     updateDisplay();
@@ -593,6 +600,14 @@ function selectServer(team, playerOnTeam = 1) {
         gameState.servingPlayer = team; // For compatibility
         gameState.initialServer = team;
         gameState.firstServeAfterChange = false; // Initial serve is not after a change
+
+        // Initialize last serving player for the starting team
+        if (team === 1) {
+            gameState.lastServingPlayerOnTeam.team1 = playerOnTeam;
+        } else {
+            gameState.lastServingPlayerOnTeam.team2 = playerOnTeam;
+        }
+
         console.log(`Team ${team}, Player ${playerOnTeam} will serve first`);
     } else {
         // Singles mode
@@ -629,7 +644,22 @@ function updateServingPlayer(pointWinner) {
         if (winningTeam === gameState.servingTeam) {
             // Serving team won - they continue serving and switch sides based on new score
             gameState.firstServeAfterChange = false;
+
+            // Update last serving player for this team
+            if (gameState.servingTeam === 1) {
+                gameState.lastServingPlayerOnTeam.team1 = gameState.servingPlayerOnTeam;
+            } else {
+                gameState.lastServingPlayerOnTeam.team2 = gameState.servingPlayerOnTeam;
+            }
         } else {
+            // Save the current serving player BEFORE changing serve
+            const oldServingTeam = gameState.servingTeam;
+            if (oldServingTeam === 1) {
+                gameState.lastServingPlayerOnTeam.team1 = gameState.servingPlayerOnTeam;
+            } else {
+                gameState.lastServingPlayerOnTeam.team2 = gameState.servingPlayerOnTeam;
+            }
+
             // Serving team lost - serve goes to the other team
             gameState.servingTeam = winningTeam;
 
@@ -772,14 +802,30 @@ function updatePlayerNamePositions() {
                 // Team 2 just lost serve - they stay where they were (based on their last serving position)
                 const team2Score = gameState.player2.score;
                 const team2ServingSide = team2Score % 2 === 0 ? 'right' : 'left';
+                const lastServerOnTeam2 = gameState.lastServingPlayerOnTeam.team2;
+
                 if (team2ServingSide === 'right') {
                     // They were serving from right court = top field
-                    safeSetText(rightTop, gameState.player2.name);
-                    safeSetText(rightBottom, gameState.player2.name2);
+                    if (lastServerOnTeam2 === 1) {
+                        // Main player was serving from top
+                        safeSetText(rightTop, gameState.player2.name);
+                        safeSetText(rightBottom, gameState.player2.name2);
+                    } else {
+                        // Partner was serving from top
+                        safeSetText(rightTop, gameState.player2.name2);
+                        safeSetText(rightBottom, gameState.player2.name);
+                    }
                 } else {
                     // They were serving from left court = bottom field
-                    safeSetText(rightTop, gameState.player2.name2);
-                    safeSetText(rightBottom, gameState.player2.name);
+                    if (lastServerOnTeam2 === 1) {
+                        // Main player was serving from bottom
+                        safeSetText(rightTop, gameState.player2.name2);
+                        safeSetText(rightBottom, gameState.player2.name);
+                    } else {
+                        // Partner was serving from bottom
+                        safeSetText(rightTop, gameState.player2.name);
+                        safeSetText(rightBottom, gameState.player2.name2);
+                    }
                 }
             } else {
                 // Normal receiving - fixed positions (main=top, partner=bottom)
@@ -823,14 +869,30 @@ function updatePlayerNamePositions() {
                 // Team 1 just lost serve - they stay where they were (based on their last serving position)
                 const team1Score = gameState.player1.score;
                 const team1ServingSide = team1Score % 2 === 0 ? 'right' : 'left';
+                const lastServerOnTeam1 = gameState.lastServingPlayerOnTeam.team1;
+
                 if (team1ServingSide === 'right') {
                     // They were serving from right court = bottom field for left team
-                    safeSetText(leftTop, gameState.player1.name2);
-                    safeSetText(leftBottom, gameState.player1.name);
+                    if (lastServerOnTeam1 === 1) {
+                        // Main player was serving from bottom
+                        safeSetText(leftTop, gameState.player1.name2);
+                        safeSetText(leftBottom, gameState.player1.name);
+                    } else {
+                        // Partner was serving from bottom
+                        safeSetText(leftTop, gameState.player1.name);
+                        safeSetText(leftBottom, gameState.player1.name2);
+                    }
                 } else {
                     // They were serving from left court = top field for left team
-                    safeSetText(leftTop, gameState.player1.name);
-                    safeSetText(leftBottom, gameState.player1.name2);
+                    if (lastServerOnTeam1 === 1) {
+                        // Main player was serving from top
+                        safeSetText(leftTop, gameState.player1.name);
+                        safeSetText(leftBottom, gameState.player1.name2);
+                    } else {
+                        // Partner was serving from top
+                        safeSetText(leftTop, gameState.player1.name2);
+                        safeSetText(leftBottom, gameState.player1.name);
+                    }
                 }
             } else {
                 // Normal receiving - fixed positions (main=top, partner=bottom)
