@@ -71,6 +71,9 @@
                         <div class="player-name" id="player1Name2Display"></div>
                     </div>
 
+                    <!-- Swap button for Player 1 side -->
+                    <button id="swapPlayer1Btn" class="btn-swap-players btn-swap-left" style="display: none;">⇅</button>
+
                     <!-- Right back court boxes (Player 2 side) -->
                     <div class="player-name-box player-right-top">
                         <div class="player-name" id="player2Name1Display"></div>
@@ -78,6 +81,9 @@
                     <div class="player-name-box player-right-bottom">
                         <div class="player-name" id="player2Name2Display"></div>
                     </div>
+
+                    <!-- Swap button for Player 2 side -->
+                    <button id="swapPlayer2Btn" class="btn-swap-players btn-swap-right" style="display: none;">⇅</button>
 
                     <!-- Timer and Start Button overlay on court center -->
                     <div class="court-center-overlay">
@@ -91,12 +97,18 @@
         <!-- Control Buttons Below Court -->
         <div class="control-buttons-bottom">
             <button id="addPointPlayer1" class="btn-add-point btn-add-left" disabled>+1</button>
-            <button id="startServPlayer1" class="btn-start-serv">Start serv</button>
+            <div class="serve-buttons-group" id="servButtonsLeft">
+                <button id="startServPlayer1Main" class="btn-start-serv btn-start-serv-main">Start serv</button>
+                <button id="startServPlayer1Partner" class="btn-start-serv btn-start-serv-partner" style="display: none;">Start serv (Makker)</button>
+            </div>
             <div class="center-buttons">
                 <button id="undoBtn" class="btn-undo">Fortryd</button>
                 <button id="settingsBtn" class="btn-settings">⚙️</button>
             </div>
-            <button id="startServPlayer2" class="btn-start-serv">Start serv</button>
+            <div class="serve-buttons-group" id="servButtonsRight">
+                <button id="startServPlayer2Main" class="btn-start-serv btn-start-serv-main">Start serv</button>
+                <button id="startServPlayer2Partner" class="btn-start-serv btn-start-serv-partner" style="display: none;">Start serv (Makker)</button>
+            </div>
             <button id="addPointPlayer2" class="btn-add-point btn-add-right" disabled>+1</button>
         </div>
 

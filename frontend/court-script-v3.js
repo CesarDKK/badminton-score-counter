@@ -84,6 +84,10 @@ function setupEventListeners() {
     document.getElementById('startServPlayer2Main').addEventListener('click', () => selectServer(2, 1));
     document.getElementById('startServPlayer2Partner').addEventListener('click', () => selectServer(2, 2));
 
+    // Swap players buttons
+    document.getElementById('swapPlayer1Btn').addEventListener('click', () => swapPlayers(1));
+    document.getElementById('swapPlayer2Btn').addEventListener('click', () => swapPlayers(2));
+
     // Control buttons
     document.getElementById('startMatchBtn').addEventListener('click', startMatch);
     document.getElementById('undoBtn').addEventListener('click', undoLastAction);
@@ -147,6 +151,23 @@ function openSettingsMenu() {
 
 function closeSettingsMenu() {
     document.getElementById('settingsMenu').style.display = 'none';
+}
+
+function swapPlayers(team) {
+    // Can only swap before match starts and in doubles mode
+    if (gameState.matchStartTime || !gameState.isDoubles) {
+        return;
+    }
+
+    // Flip the right court position for the team
+    if (team === 1) {
+        gameState.team1RightCourt = gameState.team1RightCourt === 1 ? 2 : 1;
+    } else {
+        gameState.team2RightCourt = gameState.team2RightCourt === 1 ? 2 : 1;
+    }
+
+    updateDisplay();
+    saveGameState();
 }
 
 function addPoint(player) {
@@ -564,6 +585,17 @@ function updateDisplay() {
 
     // Update player name positions based on serve
     updatePlayerNamePositions();
+
+    // Show/hide swap players buttons (only in doubles mode before match starts)
+    const swapBtn1 = document.getElementById('swapPlayer1Btn');
+    const swapBtn2 = document.getElementById('swapPlayer2Btn');
+    if (gameState.isDoubles && !gameState.matchStartTime) {
+        swapBtn1.style.display = 'flex';
+        swapBtn2.style.display = 'flex';
+    } else {
+        swapBtn1.style.display = 'none';
+        swapBtn2.style.display = 'none';
+    }
 
     // Show/hide start button and timer
     const startBtn = document.getElementById('startMatchBtn');

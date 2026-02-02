@@ -189,6 +189,23 @@
     display: none;
 }
 
+.serve-buttons-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.btn-start-serv-main {
+    /* Main player serve button */
+}
+
+.btn-start-serv-partner {
+    /* Partner serve button - smaller */
+    font-size: 1em;
+    padding: 10px 20px;
+    height: auto;
+}
+
 .btn-undo {
     padding: 15px 30px;
     font-size: 1.2em;
@@ -612,4 +629,55 @@
 .serve-right-bottom {
     left: 57.5%; /* Between right short service line and net */
     top: 75%; /* In bottom service court */
+}
+
+
+/* Swap Players Buttons */
+.btn-swap-players {
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    background: var(--color-accent);
+    color: white;
+    border: 3px solid white;
+    border-radius: 50%;
+    font-size: 1.8em;
+    font-weight: bold;
+    cursor: pointer;
+    z-index: 50;
+    transition: all 0.3s;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-swap-players:hover {
+    transform: scale(1.1) rotate(180deg);
+    box-shadow: 0 6px 25px rgba(233, 69, 96, 0.8);
+}
+
+.btn-swap-players:active {
+    transform: scale(0.95);
+}
+
+/* Position swap buttons between player name boxes */
+.btn-swap-left {
+    left: 12.5%;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.btn-swap-right {
+    left: 87.5%;
+    top: 50%;
+    transform: translate(-100%, -50%);
+}
+
+.btn-swap-left:hover {
+    transform: translateY(-50%) scale(1.1) rotate(180deg);
+}
+
+.btn-swap-right:hover {
+    transform: translate(-100%, -50%) scale(1.1) rotate(180deg);
 }
