@@ -70,6 +70,15 @@ CREATE TABLE IF NOT EXISTS game_states (
   timer_seconds INT DEFAULT 0,
   deciding_game_switched BOOLEAN DEFAULT FALSE,
 
+  -- Serving state (for proper doubles and set transitions)
+  serving_player INT DEFAULT NULL COMMENT '1 or 2, which player/team is serving',
+  initial_server INT DEFAULT NULL COMMENT 'Who served first (for tracking)',
+  serving_team INT DEFAULT NULL COMMENT 'For doubles: which team is serving (1 or 2)',
+  serving_player_on_team INT DEFAULT NULL COMMENT 'For doubles: which player on team (1=main, 2=partner)',
+  team1_right_court INT DEFAULT 1 COMMENT 'For doubles: which player on team 1 is in right court (1=main, 2=partner)',
+  team2_right_court INT DEFAULT 1 COMMENT 'For doubles: which player on team 2 is in right court (1=main, 2=partner)',
+  between_sets BOOLEAN DEFAULT FALSE COMMENT 'True when between sets, allows position swapping in doubles',
+
   -- Rest break data
   rest_break_active BOOLEAN DEFAULT FALSE,
   rest_break_seconds_left INT DEFAULT 0,

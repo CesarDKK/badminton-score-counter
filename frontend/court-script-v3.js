@@ -47,6 +47,9 @@ let gameState = {
     team1RightCourt: 1,  // Player 1 main starts in right court
     team2RightCourt: 1,  // Player 2 main starts in right court
 
+    // Track if we're between sets (allows position swapping in doubles)
+    betweenSets: false,
+
     history: []
 };
 
@@ -79,10 +82,8 @@ function setupEventListeners() {
     document.getElementById('addPointPlayer2').addEventListener('click', () => addPoint(2));
 
     // Serve selection buttons
-    document.getElementById('startServPlayer1Main').addEventListener('click', () => selectServer(1, 1));
-    document.getElementById('startServPlayer1Partner').addEventListener('click', () => selectServer(1, 2));
-    document.getElementById('startServPlayer2Main').addEventListener('click', () => selectServer(2, 1));
-    document.getElementById('startServPlayer2Partner').addEventListener('click', () => selectServer(2, 2));
+    document.getElementById('startServPlayer1').addEventListener('click', () => selectServer(1));
+    document.getElementById('startServPlayer2').addEventListener('click', () => selectServer(2));
 
     // Swap players buttons
     document.getElementById('swapPlayer1Btn').addEventListener('click', () => swapPlayers(1));
@@ -154,8 +155,8 @@ function closeSettingsMenu() {
 }
 
 function swapPlayers(team) {
-    // Can only swap before match starts and in doubles mode
-    if (gameState.matchStartTime || !gameState.isDoubles) {
+    // Can only swap before match starts OR between sets (in doubles mode)
+    if (!gameState.isDoubles || (gameState.matchStartTime && !gameState.betweenSets)) {
         return;
     }
 
@@ -174,6 +175,24 @@ function addPoint(player) {
     // Cannot add points if match hasn't selected server yet
     if (!gameState.servingPlayer) {
         return;
+    }
+
+    // If we're between sets in doubles, lock in positions
+    if (gameState.betweenSets && gameState.isDoubles) {
+        gameState.betweenSets = false;
+
+        // Only determine server based on court positions if not already set
+        // (i.e., at the very start of the match)
+        if (gameState.servingPlayerOnTeam === null) {
+            // Score is 0 (even), so player in right court serves
+            const servingTeam = gameState.servingTeam;
+            if (servingTeam === 1) {
+                gameState.servingPlayerOnTeam = gameState.team1RightCourt;
+            } else {
+                gameState.servingPlayerOnTeam = gameState.team2RightCourt;
+            }
+        }
+        // Otherwise, keep the current server (same player continues from previous set)
     }
 
     // Auto-start timer on first point
@@ -355,20 +374,23 @@ function resetScores() {
     gameState.restBreakTaken = false; // Reset for next set
 
     // In badminton, the winner of the previous game serves first in the next game
+    // The same PLAYER who was serving at the end continues to serve
     // Determine who won the last game
     if (gameState.player1.games > gameState.player2.games) {
         gameState.servingPlayer = 1;
         if (gameState.isDoubles) {
             gameState.servingTeam = 1;
-            gameState.team1RightCourt = 1; // Main player serves first (right court for even score)
-            gameState.servingPlayerOnTeam = 1;
+            // In doubles, players can swap positions between sets
+            gameState.betweenSets = true;
+            // servingPlayerOnTeam is kept - same player continues serving
         }
     } else if (gameState.player2.games > gameState.player1.games) {
         gameState.servingPlayer = 2;
         if (gameState.isDoubles) {
             gameState.servingTeam = 2;
-            gameState.team2RightCourt = 1; // Main player serves first (right court for even score)
-            gameState.servingPlayerOnTeam = 1;
+            // In doubles, players can swap positions between sets
+            gameState.betweenSets = true;
+            // servingPlayerOnTeam is kept - same player continues serving
         }
     }
     // If tied (shouldn't happen in normal play), keep current server
@@ -395,6 +417,22 @@ function switchSides() {
     gameState.player2.name2 = tempPlayer.name2;
     gameState.player2.score = tempPlayer.score;
     gameState.player2.games = tempPlayer.games;
+
+    // Swap serving state to follow the teams to their new positions
+    if (gameState.servingPlayer === 1) {
+        gameState.servingPlayer = 2;
+    } else if (gameState.servingPlayer === 2) {
+        gameState.servingPlayer = 1;
+    }
+
+    if (gameState.servingTeam === 1) {
+        gameState.servingTeam = 2;
+    } else if (gameState.servingTeam === 2) {
+        gameState.servingTeam = 1;
+    }
+
+    // Court positions (team1RightCourt, team2RightCourt) stay the same
+    // because they're relative to each team's perspective, not the physical court
 
     updateDisplay();
     saveGameState();
@@ -512,6 +550,15 @@ async function loadGameState() {
         gameState.restBreakTitle = loaded.restBreakTitle || '';
         gameState.restBreakTaken = loaded.restBreakTaken || false;
 
+        // Load serving state
+        gameState.servingPlayer = loaded.servingPlayer || null;
+        gameState.initialServer = loaded.initialServer || null;
+        gameState.servingTeam = loaded.servingTeam || null;
+        gameState.servingPlayerOnTeam = loaded.servingPlayerOnTeam || null;
+        gameState.team1RightCourt = loaded.team1RightCourt || 1;
+        gameState.team2RightCourt = loaded.team2RightCourt || 1;
+        gameState.betweenSets = loaded.betweenSets || false;
+
         // Ensure name2 exists for backwards compatibility
         if (!gameState.player1.name2) gameState.player1.name2 = 'Makker 1';
         if (!gameState.player2.name2) gameState.player2.name2 = 'Makker 2';
@@ -544,10 +591,8 @@ function updateDisplay() {
     }
 
     // Show/hide serve selection buttons
-    const servBtn1Main = document.getElementById('startServPlayer1Main');
-    const servBtn1Partner = document.getElementById('startServPlayer1Partner');
-    const servBtn2Main = document.getElementById('startServPlayer2Main');
-    const servBtn2Partner = document.getElementById('startServPlayer2Partner');
+    const servBtn1 = document.getElementById('startServPlayer1');
+    const servBtn2 = document.getElementById('startServPlayer2');
     const addBtn1 = document.getElementById('addPointPlayer1');
     const addBtn2 = document.getElementById('addPointPlayer2');
 
@@ -555,27 +600,14 @@ function updateDisplay() {
 
     if (!serverSelected && !gameState.isActive) {
         // Before server is selected: show serve buttons, disable +1 buttons
-        servBtn1Main.classList.remove('hidden');
-        servBtn2Main.classList.remove('hidden');
+        servBtn1.classList.remove('hidden');
+        servBtn2.classList.remove('hidden');
         addBtn1.disabled = true;
         addBtn2.disabled = true;
-
-        // Show/hide partner buttons based on doubles mode
-        if (gameState.isDoubles) {
-            servBtn1Partner.style.display = 'block';
-            servBtn2Partner.style.display = 'block';
-        } else {
-            servBtn1Partner.style.display = 'none';
-            servBtn2Partner.style.display = 'none';
-        }
     } else {
         // After server is selected: hide serve buttons, enable +1 buttons
-        servBtn1Main.classList.add('hidden');
-        servBtn1Partner.classList.add('hidden');
-        servBtn1Partner.style.display = 'none';
-        servBtn2Main.classList.add('hidden');
-        servBtn2Partner.classList.add('hidden');
-        servBtn2Partner.style.display = 'none';
+        servBtn1.classList.add('hidden');
+        servBtn2.classList.add('hidden');
         addBtn1.disabled = false;
         addBtn2.disabled = false;
     }
@@ -586,10 +618,10 @@ function updateDisplay() {
     // Update player name positions based on serve
     updatePlayerNamePositions();
 
-    // Show/hide swap players buttons (only in doubles mode before match starts)
+    // Show/hide swap players buttons (in doubles: before match starts OR between sets)
     const swapBtn1 = document.getElementById('swapPlayer1Btn');
     const swapBtn2 = document.getElementById('swapPlayer2Btn');
-    if (gameState.isDoubles && !gameState.matchStartTime) {
+    if (gameState.isDoubles && (!gameState.matchStartTime || gameState.betweenSets)) {
         swapBtn1.style.display = 'flex';
         swapBtn2.style.display = 'flex';
     } else {
@@ -617,35 +649,29 @@ function updateDisplay() {
     }
 }
 
-// Select which player serves first
-// For singles: selectServer(team, playerOnTeam) where team=1 or 2, playerOnTeam=1 (ignored in singles)
-// For doubles: selectServer(team, playerOnTeam) where team=1 or 2, playerOnTeam=1 (main) or 2 (partner)
-function selectServer(team, playerOnTeam = 1) {
+// Select which team serves first
+function selectServer(team) {
     if (gameState.isActive) {
         return; // Cannot change server after match started
     }
 
+    gameState.servingTeam = team;
+    gameState.servingPlayer = team; // For compatibility
+    gameState.initialServer = team;
+
     if (gameState.isDoubles) {
-        // Doubles mode
-        gameState.servingTeam = team;
-        gameState.servingPlayer = team; // For compatibility
-        gameState.initialServer = team;
+        // Doubles mode: Determine who serves based on current court positions
+        // Score is 0 (even), so player in right court serves
+        const rightCourtPlayer = team === 1 ? gameState.team1RightCourt : gameState.team2RightCourt;
+        gameState.servingPlayerOnTeam = rightCourtPlayer;
 
-        // Set initial court positions based on who serves first
-        // The player who serves first should be in the right court (since score is 0 = even)
-        if (team === 1) {
-            gameState.team1RightCourt = playerOnTeam;  // Player selected is in right court
-            gameState.servingPlayerOnTeam = playerOnTeam;
-        } else {
-            gameState.team2RightCourt = playerOnTeam;  // Player selected is in right court
-            gameState.servingPlayerOnTeam = playerOnTeam;
-        }
+        const playerName = team === 1
+            ? (rightCourtPlayer === 1 ? gameState.player1.name : gameState.player1.name2)
+            : (rightCourtPlayer === 1 ? gameState.player2.name : gameState.player2.name2);
 
-        console.log(`Team ${team}, Player ${playerOnTeam} will serve first`);
+        console.log(`Team ${team} will serve first (${playerName} from right court)`);
     } else {
         // Singles mode
-        gameState.servingPlayer = team; // In singles, team is the player
-        gameState.initialServer = team;
         console.log(`Player ${team} will serve first`);
     }
 
@@ -960,7 +986,14 @@ async function performSave() {
             restBreakActive: gameState.restBreakActive,
             restBreakSecondsLeft: gameState.restBreakSecondsLeft,
             restBreakTitle: gameState.restBreakTitle,
-            restBreakTaken: gameState.restBreakTaken
+            restBreakTaken: gameState.restBreakTaken,
+            servingPlayer: gameState.servingPlayer,
+            initialServer: gameState.initialServer,
+            servingTeam: gameState.servingTeam,
+            servingPlayerOnTeam: gameState.servingPlayerOnTeam,
+            team1RightCourt: gameState.team1RightCourt,
+            team2RightCourt: gameState.team2RightCourt,
+            betweenSets: gameState.betweenSets
         };
 
         await api.updateGameState(courtId, stateToSave);

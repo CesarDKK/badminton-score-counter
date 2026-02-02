@@ -106,7 +106,9 @@ router.get('/:courtId', async (req, res, next) => {
                     player2_name, player2_name2, player2_score, player2_games,
                     timer_seconds, deciding_game_switched,
                     rest_break_active, rest_break_seconds_left, rest_break_title,
-                    set_scores_history, match_start_time, match_end_time, match_completed
+                    set_scores_history, match_start_time, match_end_time, match_completed,
+                    serving_player, initial_server, serving_team, serving_player_on_team,
+                    team1_right_court, team2_right_court, between_sets
              FROM game_states WHERE court_id = ?`,
             [court.id]
         );
@@ -127,7 +129,14 @@ router.get('/:courtId', async (req, res, next) => {
                 matchCompleted: false,
                 isActive: !!court.is_active,
                 isDoubles: !!court.is_doubles,
-                gameMode: court.game_mode
+                gameMode: court.game_mode,
+                servingPlayer: null,
+                initialServer: null,
+                servingTeam: null,
+                servingPlayerOnTeam: null,
+                team1RightCourt: 1,
+                team2RightCourt: 1,
+                betweenSets: false
             });
         }
 
@@ -162,7 +171,14 @@ router.get('/:courtId', async (req, res, next) => {
             matchCompleted: !!gameState.match_completed,
             isActive: !!court.is_active,
             isDoubles: !!court.is_doubles,
-            gameMode: court.game_mode
+            gameMode: court.game_mode,
+            servingPlayer: gameState.serving_player,
+            initialServer: gameState.initial_server,
+            servingTeam: gameState.serving_team,
+            servingPlayerOnTeam: gameState.serving_player_on_team,
+            team1RightCourt: gameState.team1_right_court || 1,
+            team2RightCourt: gameState.team2_right_court || 1,
+            betweenSets: !!gameState.between_sets
         });
     } catch (error) {
         next(error);
@@ -173,7 +189,7 @@ router.get('/:courtId', async (req, res, next) => {
 router.put('/:courtId', async (req, res, next) => {
     try {
         const { courtId } = req.params;
-        const { player1, player2, timerSeconds, decidingGameSwitched, restBreakActive, restBreakSecondsLeft, restBreakTitle, isDoubles, setScoresHistory, matchStartTime, matchEndTime, matchCompleted } = req.body;
+        const { player1, player2, timerSeconds, decidingGameSwitched, restBreakActive, restBreakSecondsLeft, restBreakTitle, isDoubles, setScoresHistory, matchStartTime, matchEndTime, matchCompleted, servingPlayer, initialServer, servingTeam, servingPlayerOnTeam, team1RightCourt, team2RightCourt, betweenSets } = req.body;
 
         // Check if we should skip auto-updating active status (for admin edits)
         const skipAutoActive = req.query.skipAutoActive === 'true';
@@ -231,8 +247,10 @@ router.put('/:courtId', async (req, res, next) => {
                 player2_name, player2_name2, player2_score, player2_games,
                 timer_seconds, deciding_game_switched,
                 rest_break_active, rest_break_seconds_left, rest_break_title,
-                set_scores_history, match_start_time, match_end_time, match_completed
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, IF(? = 1, ?, IF(? = 1, NOW(), NULL)), NULL, ?)
+                set_scores_history, match_start_time, match_end_time, match_completed,
+                serving_player, initial_server, serving_team, serving_player_on_team,
+                team1_right_court, team2_right_court, between_sets
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, IF(? = 1, ?, IF(? = 1, NOW(), NULL)), NULL, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 player1_name = VALUES(player1_name),
                 player1_name2 = VALUES(player1_name2),
@@ -250,7 +268,14 @@ router.put('/:courtId', async (req, res, next) => {
                 set_scores_history = VALUES(set_scores_history),
                 match_start_time = IF(? = 1, NULL, IF(? = 1, ?, COALESCE(match_start_time, IF(? = 1, NOW(), NULL)))),
                 match_end_time = IF(? = 1, NULL, IF(? = 1, NULL, IF(? = 1, NOW(), match_end_time))),
-                match_completed = VALUES(match_completed)`,
+                match_completed = VALUES(match_completed),
+                serving_player = VALUES(serving_player),
+                initial_server = VALUES(initial_server),
+                serving_team = VALUES(serving_team),
+                serving_player_on_team = VALUES(serving_player_on_team),
+                team1_right_court = VALUES(team1_right_court),
+                team2_right_court = VALUES(team2_right_court),
+                between_sets = VALUES(between_sets)`,
             [
                 court.id,  // Use actual database id, not court number
                 player1.name || 'Spiller 1',
@@ -271,6 +296,13 @@ router.put('/:courtId', async (req, res, next) => {
                 mysqlStartTime || null,          // For INSERT: use frontend time if provided (MySQL format)
                 hasActivity ? 1 : 0,             // For INSERT: or set NOW if activity
                 matchCompleted || false,
+                servingPlayer || null,           // Serving state fields
+                initialServer || null,
+                servingTeam || null,
+                servingPlayerOnTeam || null,
+                team1RightCourt || 1,
+                team2RightCourt || 1,
+                betweenSets || false,
                 isReset ? 1 : 0,                 // For UPDATE: resetting match_start_time
                 hasExplicitStartTime ? 1 : 0,    // For UPDATE: check if frontend provided time
                 mysqlStartTime || null,          // For UPDATE: use frontend time if provided (MySQL format)
