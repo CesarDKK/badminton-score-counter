@@ -785,17 +785,6 @@ function updatePlayerNamePositions() {
 
     if (gameState.isDoubles) {
         // === DOUBLES MODE ===
-        const serverSelected = gameState.servingTeam;
-
-        if (!serverSelected) {
-            // Before server selected: show all 4 names so they can be edited
-            safeSetText(leftTop, gameState.player1.name);
-            safeSetText(leftBottom, gameState.player1.name2);
-            safeSetText(rightTop, gameState.player2.name);
-            safeSetText(rightBottom, gameState.player2.name2);
-            return;
-        }
-
         // Position players based on who is in right court for each team
         // Team 1 (left side of court)
         if (gameState.team1RightCourt === 1) {
