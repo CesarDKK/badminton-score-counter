@@ -99,11 +99,11 @@ function setupEventListeners() {
         }
     });
 
-    // Editable player names
+    // Editable player names (in singles, all fields edit 'name', not 'name2')
     setupEditablePlayerName('player1Name1Display', 'player1', 'name');
-    setupEditablePlayerName('player1Name2Display', 'player1', 'name2');
+    setupEditablePlayerName('player1Name2Display', 'player1', 'name');
     setupEditablePlayerName('player2Name1Display', 'player2', 'name');
-    setupEditablePlayerName('player2Name2Display', 'player2', 'name2');
+    setupEditablePlayerName('player2Name2Display', 'player2', 'name');
 }
 
 function toggleDoubles() {
@@ -614,12 +614,19 @@ function updatePlayerNamePositions() {
     const rightTop = document.getElementById('player2Name1Display');
     const rightBottom = document.getElementById('player2Name2Display');
 
-    // If no server selected or match not started, show default positions
+    // Helper function to safely update text content (don't update if being edited)
+    function safeSetText(element, text) {
+        if (element.contentEditable !== 'true') {
+            element.textContent = text;
+        }
+    }
+
+    // If no server selected or match not started, show Player 1 in bottom left, Player 2 in top right
     if (!gameState.servingPlayer) {
-        leftTop.textContent = gameState.player1.name;
-        leftBottom.textContent = gameState.player1.name;
-        rightTop.textContent = gameState.player2.name;
-        rightBottom.textContent = gameState.player2.name;
+        safeSetText(leftTop, '');
+        safeSetText(leftBottom, gameState.player1.name);
+        safeSetText(rightTop, gameState.player2.name);
+        safeSetText(rightBottom, '');
         return;
     }
 
@@ -634,34 +641,34 @@ function updatePlayerNamePositions() {
         if (servingSide === 'right') {
             // Player 1 serves from right court (even score) = bottom field for left player
             // Player 1 bottom-left, Player 2 top-right (diagonal)
-            leftTop.textContent = '';
-            leftBottom.textContent = gameState.player1.name;
-            rightTop.textContent = gameState.player2.name;
-            rightBottom.textContent = '';
+            safeSetText(leftTop, '');
+            safeSetText(leftBottom, gameState.player1.name);
+            safeSetText(rightTop, gameState.player2.name);
+            safeSetText(rightBottom, '');
         } else {
             // Player 1 serves from left court (odd score) = top field for left player
             // Player 1 top-left, Player 2 bottom-right (diagonal)
-            leftTop.textContent = gameState.player1.name;
-            leftBottom.textContent = '';
-            rightTop.textContent = '';
-            rightBottom.textContent = gameState.player2.name;
+            safeSetText(leftTop, gameState.player1.name);
+            safeSetText(leftBottom, '');
+            safeSetText(rightTop, '');
+            safeSetText(rightBottom, gameState.player2.name);
         }
     } else {
         // Player 2 (right) is serving
         if (servingSide === 'right') {
             // Player 2 serves from right court (even score) = top field for right player
             // Player 2 top-right, Player 1 bottom-left (diagonal)
-            leftTop.textContent = '';
-            leftBottom.textContent = gameState.player1.name;
-            rightTop.textContent = gameState.player2.name;
-            rightBottom.textContent = '';
+            safeSetText(leftTop, '');
+            safeSetText(leftBottom, gameState.player1.name);
+            safeSetText(rightTop, gameState.player2.name);
+            safeSetText(rightBottom, '');
         } else {
             // Player 2 serves from left court (odd score) = bottom field for right player
             // Player 2 bottom-right, Player 1 top-left (diagonal)
-            leftTop.textContent = gameState.player1.name;
-            leftBottom.textContent = '';
-            rightTop.textContent = '';
-            rightBottom.textContent = gameState.player2.name;
+            safeSetText(leftTop, gameState.player1.name);
+            safeSetText(leftBottom, '');
+            safeSetText(rightTop, '');
+            safeSetText(rightBottom, gameState.player2.name);
         }
     }
 }

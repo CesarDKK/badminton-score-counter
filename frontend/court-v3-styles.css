@@ -492,6 +492,7 @@
     cursor: pointer;
     border-radius: 4px;
     transition: all 0.2s;
+    pointer-events: auto;
 }
 
 .player-name:hover {
