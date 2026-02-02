@@ -378,12 +378,14 @@ async function clearAllData() {
                                         const settings = await api.getSettings();
                                         const courtCount = settings.courtCount || 4;
 
-                                        // Reset all courts
+                                        // Reset all courts and set them to single mode
                                         for (let i = 1; i <= courtCount; i++) {
                                             await api.resetGameState(i);
+                                            // Set court to single mode (isDoubles = false)
+                                            await api.updateCourt(i, { isDoubles: false });
                                         }
 
-                                        showMessage('Succes', 'Alle baner er blevet nulstillet!');
+                                        showMessage('Succes', 'Alle baner er blevet nulstillet og sat til single!');
                                         await loadCourtOverview();
                                     } catch (error) {
                                         console.error('Failed to clear all data:', error);
