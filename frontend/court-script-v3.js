@@ -37,8 +37,10 @@ let gameState = {
     restBreakSecondsLeft: 0,
     restBreakTitle: '',
     matchCompleted: false,
-    servingPlayer: null,  // 1 or 2, null if not yet selected
+    servingPlayer: null,  // 1 or 2, null if not yet selected (used for singles)
     initialServer: null,  // Track who served first for set resets
+    servingTeam: null,  // 1 or 2, which team is serving (for doubles)
+    servingPlayerOnTeam: null,  // 1 or 2, which player on the team (1=main player, 2=partner)
     history: []
 };
 
@@ -71,8 +73,10 @@ function setupEventListeners() {
     document.getElementById('addPointPlayer2').addEventListener('click', () => addPoint(2));
 
     // Serve selection buttons
-    document.getElementById('startServPlayer1').addEventListener('click', () => selectServer(1));
-    document.getElementById('startServPlayer2').addEventListener('click', () => selectServer(2));
+    document.getElementById('startServPlayer1Main').addEventListener('click', () => selectServer(1, 1));
+    document.getElementById('startServPlayer1Partner').addEventListener('click', () => selectServer(1, 2));
+    document.getElementById('startServPlayer2Main').addEventListener('click', () => selectServer(2, 1));
+    document.getElementById('startServPlayer2Partner').addEventListener('click', () => selectServer(2, 2));
 
     // Control buttons
     document.getElementById('startMatchBtn').addEventListener('click', startMatch);
@@ -99,21 +103,36 @@ function setupEventListeners() {
         }
     });
 
-    // Editable player names (in singles, all fields edit 'name', not 'name2')
-    setupEditablePlayerName('player1Name1Display', 'player1', 'name');
-    setupEditablePlayerName('player1Name2Display', 'player1', 'name');
-    setupEditablePlayerName('player2Name1Display', 'player2', 'name');
-    setupEditablePlayerName('player2Name2Display', 'player2', 'name');
+    // Editable player names
+    // Top fields edit main player names, bottom fields can edit partner names in doubles
+    setupEditablePlayerName('player1Name1Display', 'player1', 'name', 'name2');
+    setupEditablePlayerName('player1Name2Display', 'player1', 'name2', 'name');
+    setupEditablePlayerName('player2Name1Display', 'player2', 'name', 'name2');
+    setupEditablePlayerName('player2Name2Display', 'player2', 'name2', 'name');
 }
 
 function toggleDoubles() {
     const newMode = gameState.isDoubles ? 'single' : 'double';
-    if (!confirm(`Er du sikker på at du vil skifte til ${newMode} tilstand?`)) {
-        return;
-    }
-    gameState.isDoubles = !gameState.isDoubles;
-    updateDisplay();
-    saveGameState();
+    showMessage(
+        'Skift Spil Tilstand',
+        `Er du sikker på at du vil skifte til ${newMode} tilstand?`,
+        [
+            {
+                text: 'Ja',
+                callback: () => {
+                    gameState.isDoubles = !gameState.isDoubles;
+                    updateDisplay();
+                    saveGameState();
+                },
+                style: 'primary'
+            },
+            {
+                text: 'Annuller',
+                callback: () => {},
+                style: 'secondary'
+            }
+        ]
+    );
 }
 
 function openSettingsMenu() {
@@ -312,8 +331,16 @@ function resetScores() {
     // Determine who won the last game
     if (gameState.player1.games > gameState.player2.games) {
         gameState.servingPlayer = 1;
+        if (gameState.isDoubles) {
+            gameState.servingTeam = 1;
+            gameState.servingPlayerOnTeam = 1; // Main player serves
+        }
     } else if (gameState.player2.games > gameState.player1.games) {
         gameState.servingPlayer = 2;
+        if (gameState.isDoubles) {
+            gameState.servingTeam = 2;
+            gameState.servingPlayerOnTeam = 1; // Main player serves
+        }
     }
     // If tied (shouldn't happen in normal play), keep current server
 
@@ -384,6 +411,8 @@ function clearCourt() {
                     gameState.restBreakTaken = false;
                     gameState.servingPlayer = null;  // Reset serving player
                     gameState.initialServer = null;
+                    gameState.servingTeam = null;  // Reset doubles serving state
+                    gameState.servingPlayerOnTeam = null;
 
                     // Update display
                     updateDisplay();
@@ -484,21 +513,38 @@ function updateDisplay() {
     }
 
     // Show/hide serve selection buttons
-    const servBtn1 = document.getElementById('startServPlayer1');
-    const servBtn2 = document.getElementById('startServPlayer2');
+    const servBtn1Main = document.getElementById('startServPlayer1Main');
+    const servBtn1Partner = document.getElementById('startServPlayer1Partner');
+    const servBtn2Main = document.getElementById('startServPlayer2Main');
+    const servBtn2Partner = document.getElementById('startServPlayer2Partner');
     const addBtn1 = document.getElementById('addPointPlayer1');
     const addBtn2 = document.getElementById('addPointPlayer2');
 
-    if (!gameState.servingPlayer && !gameState.isActive) {
+    const serverSelected = gameState.isDoubles ? gameState.servingTeam : gameState.servingPlayer;
+
+    if (!serverSelected && !gameState.isActive) {
         // Before server is selected: show serve buttons, disable +1 buttons
-        servBtn1.classList.remove('hidden');
-        servBtn2.classList.remove('hidden');
+        servBtn1Main.classList.remove('hidden');
+        servBtn2Main.classList.remove('hidden');
         addBtn1.disabled = true;
         addBtn2.disabled = true;
+
+        // Show/hide partner buttons based on doubles mode
+        if (gameState.isDoubles) {
+            servBtn1Partner.style.display = 'block';
+            servBtn2Partner.style.display = 'block';
+        } else {
+            servBtn1Partner.style.display = 'none';
+            servBtn2Partner.style.display = 'none';
+        }
     } else {
         // After server is selected: hide serve buttons, enable +1 buttons
-        servBtn1.classList.add('hidden');
-        servBtn2.classList.add('hidden');
+        servBtn1Main.classList.add('hidden');
+        servBtn1Partner.classList.add('hidden');
+        servBtn1Partner.style.display = 'none';
+        servBtn2Main.classList.add('hidden');
+        servBtn2Partner.classList.add('hidden');
+        servBtn2Partner.style.display = 'none';
         addBtn1.disabled = false;
         addBtn2.disabled = false;
     }
@@ -530,38 +576,75 @@ function updateDisplay() {
 }
 
 // Select which player serves first
-function selectServer(player) {
+// For singles: selectServer(team, playerOnTeam) where team=1 or 2, playerOnTeam=1 (ignored in singles)
+// For doubles: selectServer(team, playerOnTeam) where team=1 or 2, playerOnTeam=1 (main) or 2 (partner)
+function selectServer(team, playerOnTeam = 1) {
     if (gameState.isActive) {
         return; // Cannot change server after match started
     }
 
-    gameState.servingPlayer = player;
-    gameState.initialServer = player;
+    if (gameState.isDoubles) {
+        // Doubles mode
+        gameState.servingTeam = team;
+        gameState.servingPlayerOnTeam = playerOnTeam;
+        gameState.servingPlayer = team; // For compatibility
+        gameState.initialServer = team;
+        console.log(`Team ${team}, Player ${playerOnTeam} will serve first`);
+    } else {
+        // Singles mode
+        gameState.servingPlayer = team; // In singles, team is the player
+        gameState.initialServer = team;
+        console.log(`Player ${team} will serve first`);
+    }
 
     // Enable +1 buttons and Start Kamp button
     updateDisplay();
-
-    console.log(`Player ${player} will serve first`);
 }
 
-// Get serving side based on server's score (for singles)
+// Get serving side based on server's score
 function getServingSide() {
-    if (!gameState.servingPlayer) return null;
-
-    const serverScore = gameState.servingPlayer === 1 ? gameState.player1.score : gameState.player2.score;
-
-    // In singles: serve from right when score is even, left when odd
-    return serverScore % 2 === 0 ? 'right' : 'left';
+    if (gameState.isDoubles) {
+        // In doubles: based on serving TEAM's score
+        if (!gameState.servingTeam) return null;
+        const teamScore = gameState.servingTeam === 1 ? gameState.player1.score : gameState.player2.score;
+        return teamScore % 2 === 0 ? 'right' : 'left';
+    } else {
+        // In singles: based on serving player's score
+        if (!gameState.servingPlayer) return null;
+        const serverScore = gameState.servingPlayer === 1 ? gameState.player1.score : gameState.player2.score;
+        return serverScore % 2 === 0 ? 'right' : 'left';
+    }
 }
 
 // Update serving player after a point
 function updateServingPlayer(pointWinner) {
-    // In badminton, server only changes when server loses the rally
-    // If server wins, they keep serving
-    // If server loses, opponent becomes the server
+    if (gameState.isDoubles) {
+        // Doubles logic
+        const winningTeam = pointWinner; // Team 1 or 2
 
-    if (pointWinner !== gameState.servingPlayer) {
-        gameState.servingPlayer = pointWinner;
+        if (winningTeam === gameState.servingTeam) {
+            // Serving team won - same player continues serving (sides switch automatically via score)
+            // No change needed
+        } else {
+            // Serving team lost - serve goes to the other team
+            gameState.servingTeam = winningTeam;
+
+            // Determine which player on the new serving team should serve
+            // Based on their team score, figure out who is in the right court
+            const newTeamScore = winningTeam === 1 ? gameState.player1.score : gameState.player2.score;
+
+            // If score is even, player in right court serves (player 1 main)
+            // If score is odd, player in left court serves (player 2 partner)
+            // This is simplified - in reality we'd track positions, but for now use convention
+            gameState.servingPlayerOnTeam = newTeamScore % 2 === 0 ? 1 : 2;
+        }
+
+        gameState.servingPlayer = gameState.servingTeam; // For compatibility
+    } else {
+        // Singles logic: server only changes when server loses the rally
+        if (pointWinner !== gameState.servingPlayer) {
+            gameState.servingPlayer = pointWinner;
+        }
     }
 }
 
@@ -573,8 +656,9 @@ function updateServeIndicator() {
         existingIndicator.remove();
     }
 
-    // Only show indicator if server is selected and match is active or about to start
-    if (!gameState.servingPlayer) return;
+    // Check if server is selected
+    const serverSelected = gameState.isDoubles ? gameState.servingTeam : gameState.servingPlayer;
+    if (!serverSelected) return;
 
     const servingSide = getServingSide();
     if (!servingSide) return;
@@ -583,8 +667,11 @@ function updateServeIndicator() {
     const indicator = document.createElement('div');
     indicator.className = 'serve-indicator';
 
-    // Position based on serving player and serving side
-    if (gameState.servingPlayer === 1) {
+    // Determine which side of court is serving
+    const servingTeamSide = gameState.isDoubles ? gameState.servingTeam : gameState.servingPlayer;
+
+    // Position based on serving team/player and serving side
+    if (servingTeamSide === 1) {
         // Left side of court (opposite of right side)
         // Even score (right court) = bottom field, Odd score (left court) = top field
         if (servingSide === 'right') {
@@ -621,54 +708,134 @@ function updatePlayerNamePositions() {
         }
     }
 
-    // If no server selected or match not started, show Player 1 in bottom left, Player 2 in top right
-    if (!gameState.servingPlayer) {
-        safeSetText(leftTop, '');
-        safeSetText(leftBottom, gameState.player1.name);
-        safeSetText(rightTop, gameState.player2.name);
-        safeSetText(rightBottom, '');
-        return;
-    }
+    if (gameState.isDoubles) {
+        // === DOUBLES MODE ===
+        const serverSelected = gameState.servingTeam;
 
-    const servingSide = getServingSide();
-    if (!servingSide) return;
-
-    // Determine positions based on who is serving and from which side
-    // Server stands where they serve from, receiver stands diagonally opposite
-
-    if (gameState.servingPlayer === 1) {
-        // Player 1 (left) is serving
-        if (servingSide === 'right') {
-            // Player 1 serves from right court (even score) = bottom field for left player
-            // Player 1 bottom-left, Player 2 top-right (diagonal)
-            safeSetText(leftTop, '');
-            safeSetText(leftBottom, gameState.player1.name);
-            safeSetText(rightTop, gameState.player2.name);
-            safeSetText(rightBottom, '');
-        } else {
-            // Player 1 serves from left court (odd score) = top field for left player
-            // Player 1 top-left, Player 2 bottom-right (diagonal)
+        if (!serverSelected) {
+            // Before server selected: show all 4 names so they can be edited
             safeSetText(leftTop, gameState.player1.name);
-            safeSetText(leftBottom, '');
-            safeSetText(rightTop, '');
-            safeSetText(rightBottom, gameState.player2.name);
+            safeSetText(leftBottom, gameState.player1.name2);
+            safeSetText(rightTop, gameState.player2.name);
+            safeSetText(rightBottom, gameState.player2.name2);
+            return;
+        }
+
+        const servingSide = getServingSide();
+        if (!servingSide) return;
+
+        // In doubles: Server, server's partner (diagonal behind), receiver (diagonal), receiver's partner (diagonal behind)
+        if (gameState.servingTeam === 1) {
+            // Team 1 (left side) is serving
+            if (servingSide === 'right') {
+                // Serve from right court (even score) = bottom field for left team
+                if (gameState.servingPlayerOnTeam === 1) {
+                    // Player 1 main serves from bottom-left, partner top-left, receiver top-right, their partner bottom-right
+                    safeSetText(leftTop, gameState.player1.name2);
+                    safeSetText(leftBottom, gameState.player1.name);
+                    safeSetText(rightTop, gameState.player2.name);
+                    safeSetText(rightBottom, gameState.player2.name2);
+                } else {
+                    // Player 1 partner serves from bottom-left, main player top-left
+                    safeSetText(leftTop, gameState.player1.name);
+                    safeSetText(leftBottom, gameState.player1.name2);
+                    safeSetText(rightTop, gameState.player2.name);
+                    safeSetText(rightBottom, gameState.player2.name2);
+                }
+            } else {
+                // Serve from left court (odd score) = top field for left team
+                if (gameState.servingPlayerOnTeam === 1) {
+                    // Player 1 main serves from top-left, partner bottom-left, receiver bottom-right, their partner top-right
+                    safeSetText(leftTop, gameState.player1.name);
+                    safeSetText(leftBottom, gameState.player1.name2);
+                    safeSetText(rightTop, gameState.player2.name2);
+                    safeSetText(rightBottom, gameState.player2.name);
+                } else {
+                    // Player 1 partner serves from top-left, main player bottom-left
+                    safeSetText(leftTop, gameState.player1.name2);
+                    safeSetText(leftBottom, gameState.player1.name);
+                    safeSetText(rightTop, gameState.player2.name2);
+                    safeSetText(rightBottom, gameState.player2.name);
+                }
+            }
+        } else {
+            // Team 2 (right side) is serving
+            if (servingSide === 'right') {
+                // Serve from right court (even score) = top field for right team
+                if (gameState.servingPlayerOnTeam === 1) {
+                    // Player 2 main serves from top-right, partner bottom-right, receiver bottom-left, their partner top-left
+                    safeSetText(leftTop, gameState.player1.name2);
+                    safeSetText(leftBottom, gameState.player1.name);
+                    safeSetText(rightTop, gameState.player2.name);
+                    safeSetText(rightBottom, gameState.player2.name2);
+                } else {
+                    // Player 2 partner serves from top-right, main player bottom-right
+                    safeSetText(leftTop, gameState.player1.name2);
+                    safeSetText(leftBottom, gameState.player1.name);
+                    safeSetText(rightTop, gameState.player2.name2);
+                    safeSetText(rightBottom, gameState.player2.name);
+                }
+            } else {
+                // Serve from left court (odd score) = bottom field for right team
+                if (gameState.servingPlayerOnTeam === 1) {
+                    // Player 2 main serves from bottom-right, partner top-right, receiver top-left, their partner bottom-left
+                    safeSetText(leftTop, gameState.player1.name);
+                    safeSetText(leftBottom, gameState.player1.name2);
+                    safeSetText(rightTop, gameState.player2.name2);
+                    safeSetText(rightBottom, gameState.player2.name);
+                } else {
+                    // Player 2 partner serves from bottom-right, main player top-right
+                    safeSetText(leftTop, gameState.player1.name);
+                    safeSetText(leftBottom, gameState.player1.name2);
+                    safeSetText(rightTop, gameState.player2.name);
+                    safeSetText(rightBottom, gameState.player2.name2);
+                }
+            }
         }
     } else {
-        // Player 2 (right) is serving
-        if (servingSide === 'right') {
-            // Player 2 serves from right court (even score) = top field for right player
-            // Player 2 top-right, Player 1 bottom-left (diagonal)
+        // === SINGLES MODE ===
+        if (!gameState.servingPlayer) {
+            // Before server selected
             safeSetText(leftTop, '');
             safeSetText(leftBottom, gameState.player1.name);
             safeSetText(rightTop, gameState.player2.name);
             safeSetText(rightBottom, '');
+            return;
+        }
+
+        const servingSide = getServingSide();
+        if (!servingSide) return;
+
+        if (gameState.servingPlayer === 1) {
+            // Player 1 (left) is serving
+            if (servingSide === 'right') {
+                // Player 1 bottom-left, Player 2 top-right (diagonal)
+                safeSetText(leftTop, '');
+                safeSetText(leftBottom, gameState.player1.name);
+                safeSetText(rightTop, gameState.player2.name);
+                safeSetText(rightBottom, '');
+            } else {
+                // Player 1 top-left, Player 2 bottom-right (diagonal)
+                safeSetText(leftTop, gameState.player1.name);
+                safeSetText(leftBottom, '');
+                safeSetText(rightTop, '');
+                safeSetText(rightBottom, gameState.player2.name);
+            }
         } else {
-            // Player 2 serves from left court (odd score) = bottom field for right player
-            // Player 2 bottom-right, Player 1 top-left (diagonal)
-            safeSetText(leftTop, gameState.player1.name);
-            safeSetText(leftBottom, '');
-            safeSetText(rightTop, '');
-            safeSetText(rightBottom, gameState.player2.name);
+            // Player 2 (right) is serving
+            if (servingSide === 'right') {
+                // Player 2 top-right, Player 1 bottom-left (diagonal)
+                safeSetText(leftTop, '');
+                safeSetText(leftBottom, gameState.player1.name);
+                safeSetText(rightTop, gameState.player2.name);
+                safeSetText(rightBottom, '');
+            } else {
+                // Player 2 bottom-right, Player 1 top-left (diagonal)
+                safeSetText(leftTop, gameState.player1.name);
+                safeSetText(leftBottom, '');
+                safeSetText(rightTop, '');
+                safeSetText(rightBottom, gameState.player2.name);
+            }
         }
     }
 }
@@ -676,9 +843,13 @@ function updatePlayerNamePositions() {
 // Undo last action
 function undoLastAction() {
     // If server not yet selected and match hasn't started, reset server selection
-    if (!gameState.isActive && gameState.servingPlayer) {
+    const serverSelected = gameState.isDoubles ? gameState.servingTeam : gameState.servingPlayer;
+
+    if (!gameState.isActive && serverSelected) {
         gameState.servingPlayer = null;
         gameState.initialServer = null;
+        gameState.servingTeam = null;
+        gameState.servingPlayerOnTeam = null;
         updateDisplay();
         console.log('Server selection reset');
         return;
@@ -1039,7 +1210,8 @@ function startPeriodicSync() {
 }
 
 // Setup editable player name functionality
-function setupEditablePlayerName(elementId, player, nameField) {
+// primaryField is the main field to edit, fallbackField is used if primary is not displayed
+function setupEditablePlayerName(elementId, player, primaryField, fallbackField = null) {
     const element = document.getElementById(elementId);
 
     element.addEventListener('click', function() {
@@ -1047,6 +1219,23 @@ function setupEditablePlayerName(elementId, player, nameField) {
         if (gameState.restBreakActive) {
             return;
         }
+
+        // Skip if element is empty
+        if (!element.textContent.trim()) {
+            return;
+        }
+
+        // Determine which field to edit based on current displayed text
+        let fieldToEdit = primaryField;
+        const currentText = element.textContent.trim();
+
+        // Check if current text matches the fallback field (for dynamic positioning)
+        if (fallbackField && gameState[player][fallbackField] === currentText && gameState[player][primaryField] !== currentText) {
+            fieldToEdit = fallbackField;
+        }
+
+        // Store which field we're editing
+        element.dataset.editingField = fieldToEdit;
 
         // Make element editable
         element.contentEditable = true;
@@ -1061,7 +1250,9 @@ function setupEditablePlayerName(elementId, player, nameField) {
     });
 
     element.addEventListener('blur', function() {
-        finishEditingName(element, player, nameField);
+        const fieldToEdit = element.dataset.editingField || primaryField;
+        finishEditingName(element, player, fieldToEdit);
+        delete element.dataset.editingField;
     });
 
     element.addEventListener('keydown', function(e) {
@@ -1073,6 +1264,7 @@ function setupEditablePlayerName(elementId, player, nameField) {
             // Revert to original name
             updateDisplay();
             element.contentEditable = false;
+            delete element.dataset.editingField;
         }
     });
 }
