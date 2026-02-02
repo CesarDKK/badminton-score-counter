@@ -41,11 +41,12 @@ let gameState = {
     initialServer: null,  // Track who served first for set resets
     servingTeam: null,  // 1 or 2, which team is serving (for doubles)
     servingPlayerOnTeam: null,  // 1 or 2, which player on the team (1=main player, 2=partner)
-    firstServeAfterChange: false,  // Track if this is the first serve after serve changed teams (doubles)
-    lastServingPlayerOnTeam: {  // Track who was serving on each team before serve changed
-        team1: 1,  // Which player on team 1 was serving last
-        team2: 1   // Which player on team 2 was serving last
-    },
+
+    // Track which player is in right court for each team (1=main, 2=partner)
+    // This determines positions and who serves based on score
+    team1RightCourt: 1,  // Player 1 main starts in right court
+    team2RightCourt: 1,  // Player 2 main starts in right court
+
     history: []
 };
 
@@ -331,7 +332,6 @@ function resetScores() {
     gameState.player1.score = 0;
     gameState.player2.score = 0;
     gameState.restBreakTaken = false; // Reset for next set
-    gameState.firstServeAfterChange = false; // Reset for next set
 
     // In badminton, the winner of the previous game serves first in the next game
     // Determine who won the last game
@@ -339,15 +339,15 @@ function resetScores() {
         gameState.servingPlayer = 1;
         if (gameState.isDoubles) {
             gameState.servingTeam = 1;
-            gameState.servingPlayerOnTeam = 1; // Main player serves
-            gameState.lastServingPlayerOnTeam.team1 = 1;
+            gameState.team1RightCourt = 1; // Main player serves first (right court for even score)
+            gameState.servingPlayerOnTeam = 1;
         }
     } else if (gameState.player2.games > gameState.player1.games) {
         gameState.servingPlayer = 2;
         if (gameState.isDoubles) {
             gameState.servingTeam = 2;
-            gameState.servingPlayerOnTeam = 1; // Main player serves
-            gameState.lastServingPlayerOnTeam.team2 = 1;
+            gameState.team2RightCourt = 1; // Main player serves first (right court for even score)
+            gameState.servingPlayerOnTeam = 1;
         }
     }
     // If tied (shouldn't happen in normal play), keep current server
@@ -421,8 +421,8 @@ function clearCourt() {
                     gameState.initialServer = null;
                     gameState.servingTeam = null;  // Reset doubles serving state
                     gameState.servingPlayerOnTeam = null;
-                    gameState.firstServeAfterChange = false;
-                    gameState.lastServingPlayerOnTeam = { team1: 1, team2: 1 };
+                    gameState.team1RightCourt = 1;  // Reset court positions
+                    gameState.team2RightCourt = 1;
 
                     // Update display
                     updateDisplay();
@@ -596,16 +596,17 @@ function selectServer(team, playerOnTeam = 1) {
     if (gameState.isDoubles) {
         // Doubles mode
         gameState.servingTeam = team;
-        gameState.servingPlayerOnTeam = playerOnTeam;
         gameState.servingPlayer = team; // For compatibility
         gameState.initialServer = team;
-        gameState.firstServeAfterChange = false; // Initial serve is not after a change
 
-        // Initialize last serving player for the starting team
+        // Set initial court positions based on who serves first
+        // The player who serves first should be in the right court (since score is 0 = even)
         if (team === 1) {
-            gameState.lastServingPlayerOnTeam.team1 = playerOnTeam;
+            gameState.team1RightCourt = playerOnTeam;  // Player selected is in right court
+            gameState.servingPlayerOnTeam = playerOnTeam;
         } else {
-            gameState.lastServingPlayerOnTeam.team2 = playerOnTeam;
+            gameState.team2RightCourt = playerOnTeam;  // Player selected is in right court
+            gameState.servingPlayerOnTeam = playerOnTeam;
         }
 
         console.log(`Team ${team}, Player ${playerOnTeam} will serve first`);
@@ -638,43 +639,47 @@ function getServingSide() {
 // Update serving player after a point
 function updateServingPlayer(pointWinner) {
     if (gameState.isDoubles) {
-        // Doubles logic
+        // Doubles logic based on official badminton rules
         const winningTeam = pointWinner; // Team 1 or 2
 
         if (winningTeam === gameState.servingTeam) {
-            // Serving team won - they continue serving and switch sides based on new score
-            gameState.firstServeAfterChange = false;
-
-            // Update last serving player for this team
+            // Serving team won - they scored a point
+            // Rule: Same player continues serving, but they switch sides
+            // This means we flip who is in right court vs left court
             if (gameState.servingTeam === 1) {
-                gameState.lastServingPlayerOnTeam.team1 = gameState.servingPlayerOnTeam;
+                // Team 1 scored - flip their court positions
+                gameState.team1RightCourt = gameState.team1RightCourt === 1 ? 2 : 1;
             } else {
-                gameState.lastServingPlayerOnTeam.team2 = gameState.servingPlayerOnTeam;
+                // Team 2 scored - flip their court positions
+                gameState.team2RightCourt = gameState.team2RightCourt === 1 ? 2 : 1;
+            }
+
+            // Update servingPlayerOnTeam based on new positions
+            const newTeamScore = winningTeam === 1 ? gameState.player1.score : gameState.player2.score;
+            const rightCourtPlayer = winningTeam === 1 ? gameState.team1RightCourt : gameState.team2RightCourt;
+
+            // Who serves? Player in right court if score is even, player in left court if odd
+            if (newTeamScore % 2 === 0) {
+                gameState.servingPlayerOnTeam = rightCourtPlayer;
+            } else {
+                gameState.servingPlayerOnTeam = rightCourtPlayer === 1 ? 2 : 1;
             }
         } else {
-            // Save the current serving player BEFORE changing serve
-            const oldServingTeam = gameState.servingTeam;
-            if (oldServingTeam === 1) {
-                gameState.lastServingPlayerOnTeam.team1 = gameState.servingPlayerOnTeam;
-            } else {
-                gameState.lastServingPlayerOnTeam.team2 = gameState.servingPlayerOnTeam;
-            }
-
-            // Serving team lost - serve goes to the other team
+            // Receiving team won - serve changes
+            // Rule: Serve goes to the other team, they serve from the court matching their score
+            // Their positions don't change
             gameState.servingTeam = winningTeam;
 
-            // Mark that this is the first serve after serve changed
-            // The new serving team should NOT change position until they score
-            gameState.firstServeAfterChange = true;
-
-            // Determine which player on the new serving team should serve
-            // Based on their team score, figure out who is in the right court
+            // Determine who serves based on their score and court positions
             const newTeamScore = winningTeam === 1 ? gameState.player1.score : gameState.player2.score;
+            const rightCourtPlayer = winningTeam === 1 ? gameState.team1RightCourt : gameState.team2RightCourt;
 
-            // If score is even, player in right court serves (player 1 main)
-            // If score is odd, player in left court serves (player 2 partner)
-            // This is simplified - in reality we'd track positions, but for now use convention
-            gameState.servingPlayerOnTeam = newTeamScore % 2 === 0 ? 1 : 2;
+            // Who serves? Player in right court if score is even, player in left court if odd
+            if (newTeamScore % 2 === 0) {
+                gameState.servingPlayerOnTeam = rightCourtPlayer;
+            } else {
+                gameState.servingPlayerOnTeam = rightCourtPlayer === 1 ? 2 : 1;
+            }
         }
 
         gameState.servingPlayer = gameState.servingTeam; // For compatibility
@@ -759,134 +764,27 @@ function updatePlayerNamePositions() {
             return;
         }
 
-        const servingSide = getServingSide();
-        if (!servingSide) return;
-
-        // In doubles: Only the SERVING team changes position based on score
-        // The RECEIVING team stays in fixed positions
-        // EXCEPTION: On first serve after serve changes, BOTH teams stay in same position (until serving team scores)
-        if (gameState.servingTeam === 1) {
-            // Team 1 (left side) is serving
-            if (gameState.firstServeAfterChange) {
-                // First serve after getting serve back - Team 1 stays in fixed positions
-                safeSetText(leftTop, gameState.player1.name);
-                safeSetText(leftBottom, gameState.player1.name2);
-            } else {
-                // Normal serving - they change position based on score
-                if (servingSide === 'right') {
-                    // Serve from right court (even score) = bottom field for left team
-                    if (gameState.servingPlayerOnTeam === 1) {
-                        // Player 1 main serves from bottom-left, partner top-left
-                        safeSetText(leftTop, gameState.player1.name2);
-                        safeSetText(leftBottom, gameState.player1.name);
-                    } else {
-                        // Player 1 partner serves from bottom-left, main player top-left
-                        safeSetText(leftTop, gameState.player1.name);
-                        safeSetText(leftBottom, gameState.player1.name2);
-                    }
-                } else {
-                    // Serve from left court (odd score) = top field for left team
-                    if (gameState.servingPlayerOnTeam === 1) {
-                        // Player 1 main serves from top-left, partner bottom-left
-                        safeSetText(leftTop, gameState.player1.name);
-                        safeSetText(leftBottom, gameState.player1.name2);
-                    } else {
-                        // Player 1 partner serves from top-left, main player bottom-left
-                        safeSetText(leftTop, gameState.player1.name2);
-                        safeSetText(leftBottom, gameState.player1.name);
-                    }
-                }
-            }
-            // Team 2 (right side) is receiving
-            // They stay in their last serving position (based on their score when they last served)
-            const team2Score = gameState.player2.score;
-            const team2ServingSide = team2Score % 2 === 0 ? 'right' : 'left';
-            const lastServerOnTeam2 = gameState.lastServingPlayerOnTeam.team2;
-
-            if (team2ServingSide === 'right') {
-                // They were serving from right court = top field
-                if (lastServerOnTeam2 === 1) {
-                    // Main player was serving from top
-                    safeSetText(rightTop, gameState.player2.name);
-                    safeSetText(rightBottom, gameState.player2.name2);
-                } else {
-                    // Partner was serving from top
-                    safeSetText(rightTop, gameState.player2.name2);
-                    safeSetText(rightBottom, gameState.player2.name);
-                }
-            } else {
-                // They were serving from left court = bottom field
-                if (lastServerOnTeam2 === 1) {
-                    // Main player was serving from bottom
-                    safeSetText(rightTop, gameState.player2.name2);
-                    safeSetText(rightBottom, gameState.player2.name);
-                } else {
-                    // Partner was serving from bottom
-                    safeSetText(rightTop, gameState.player2.name);
-                    safeSetText(rightBottom, gameState.player2.name2);
-                }
-            }
+        // Position players based on who is in right court for each team
+        // Team 1 (left side of court)
+        if (gameState.team1RightCourt === 1) {
+            // Main player in right court = bottom position (because right court is bottom for left side)
+            safeSetText(leftTop, gameState.player1.name2);      // Partner in left court (top)
+            safeSetText(leftBottom, gameState.player1.name);    // Main in right court (bottom)
         } else {
-            // Team 2 (right side) is serving
-            if (gameState.firstServeAfterChange) {
-                // First serve after getting serve back - Team 2 stays in fixed positions
-                safeSetText(rightTop, gameState.player2.name);
-                safeSetText(rightBottom, gameState.player2.name2);
-            } else {
-                // Normal serving - they change position based on score
-                if (servingSide === 'right') {
-                    // Serve from right court (even score) = top field for right team
-                    if (gameState.servingPlayerOnTeam === 1) {
-                        // Player 2 main serves from top-right, partner bottom-right
-                        safeSetText(rightTop, gameState.player2.name);
-                        safeSetText(rightBottom, gameState.player2.name2);
-                    } else {
-                        // Player 2 partner serves from top-right, main player bottom-right
-                        safeSetText(rightTop, gameState.player2.name2);
-                        safeSetText(rightBottom, gameState.player2.name);
-                    }
-                } else {
-                    // Serve from left court (odd score) = bottom field for right team
-                    if (gameState.servingPlayerOnTeam === 1) {
-                        // Player 2 main serves from bottom-right, partner top-right
-                        safeSetText(rightTop, gameState.player2.name2);
-                        safeSetText(rightBottom, gameState.player2.name);
-                    } else {
-                        // Player 2 partner serves from bottom-right, main player top-right
-                        safeSetText(rightTop, gameState.player2.name);
-                        safeSetText(rightBottom, gameState.player2.name2);
-                    }
-                }
-            }
-            // Team 1 (left side) is receiving
-            // They stay in their last serving position (based on their score when they last served)
-            const team1Score = gameState.player1.score;
-            const team1ServingSide = team1Score % 2 === 0 ? 'right' : 'left';
-            const lastServerOnTeam1 = gameState.lastServingPlayerOnTeam.team1;
+            // Partner in right court = bottom position
+            safeSetText(leftTop, gameState.player1.name);       // Main in left court (top)
+            safeSetText(leftBottom, gameState.player1.name2);   // Partner in right court (bottom)
+        }
 
-            if (team1ServingSide === 'right') {
-                // They were serving from right court = bottom field for left team
-                if (lastServerOnTeam1 === 1) {
-                    // Main player was serving from bottom
-                    safeSetText(leftTop, gameState.player1.name2);
-                    safeSetText(leftBottom, gameState.player1.name);
-                } else {
-                    // Partner was serving from bottom
-                    safeSetText(leftTop, gameState.player1.name);
-                    safeSetText(leftBottom, gameState.player1.name2);
-                }
-            } else {
-                // They were serving from left court = top field for left team
-                if (lastServerOnTeam1 === 1) {
-                    // Main player was serving from top
-                    safeSetText(leftTop, gameState.player1.name);
-                    safeSetText(leftBottom, gameState.player1.name2);
-                } else {
-                    // Partner was serving from top
-                    safeSetText(leftTop, gameState.player1.name2);
-                    safeSetText(leftBottom, gameState.player1.name);
-                }
-            }
+        // Team 2 (right side of court)
+        if (gameState.team2RightCourt === 1) {
+            // Main player in right court = top position (because right court is top for right side)
+            safeSetText(rightTop, gameState.player2.name);      // Main in right court (top)
+            safeSetText(rightBottom, gameState.player2.name2);  // Partner in left court (bottom)
+        } else {
+            // Partner in right court = top position
+            safeSetText(rightTop, gameState.player2.name2);     // Partner in right court (top)
+            safeSetText(rightBottom, gameState.player2.name);   // Main in left court (bottom)
         }
     } else {
         // === SINGLES MODE ===
