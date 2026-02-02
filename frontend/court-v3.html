@@ -9,6 +9,7 @@
     <title>Badminton Pointtæller - Bane (Ny Version)</title>
     <link rel="icon" type="image/png" href="/favicon.png?v=4">
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="court-v3-styles.css">
     <script src="js/theme-loader.js"></script>
 </head>
 <body>
@@ -23,10 +24,29 @@
             </div>
         </header>
 
-        <!-- Content will be added here -->
-        <div class="score-container" style="padding: 60px; text-align: center;">
-            <h2 style="color: var(--color-accent); margin-bottom: 30px;">Ny Court Version</h2>
-            <p style="font-size: 1.2em; color: #aaa;">Indholdet kommer snart...</p>
+        <!-- Badminton Court Visualization -->
+        <div class="court-view-container">
+            <div class="badminton-court">
+                <!-- Court surface (green) -->
+                <div class="court-surface">
+                    <!-- White lines -->
+                    <div class="court-line line-outer"></div>
+                    <!-- Net line at center (50% width) -->
+                    <div class="court-line line-net"></div>
+                    <!-- Center horizontal lines (divides service courts in back court only) -->
+                    <div class="court-line line-center-horizontal-left"></div>
+                    <div class="court-line line-center-horizontal-right"></div>
+                    <!-- Short service lines (1.98m from net on each side) -->
+                    <div class="court-line line-short-service-left"></div>
+                    <div class="court-line line-short-service-right"></div>
+                    <!-- Long service lines for doubles (0.76m from back) -->
+                    <div class="court-line line-long-service-left"></div>
+                    <div class="court-line line-long-service-right"></div>
+                    <!-- Singles sidelines -->
+                    <div class="court-line line-singles-sideline-top"></div>
+                    <div class="court-line line-singles-sideline-bottom"></div>
+                </div>
+            </div>
         </div>
     </div>
 

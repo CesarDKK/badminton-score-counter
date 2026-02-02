@@ -1,0 +1,147 @@
+/* Court V3 Styles - Badminton Court Top-Down View */
+/* Official dimensions: 44' (13.4m) long × 20' (6.1m) wide for doubles */
+
+.court-view-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    min-height: calc(100vh - 200px);
+}
+
+.badminton-court {
+    position: relative;
+    width: 90vw;
+    max-width: 800px;
+    aspect-ratio: 13.4 / 6.1; /* Doubles court proportions - landscape */
+    background: #2a2a2a;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.court-surface {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: #2d7a3e; /* Badminton green */
+    border: 4px solid white;
+    box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.3);
+}
+
+/* White court lines */
+.court-line {
+    position: absolute;
+    background: white;
+}
+
+/* Outer boundary (already handled by border) */
+.line-outer {
+    display: none;
+}
+
+/* Net line - vertical line at exact center (50% of 13.4m = 6.7m) */
+.line-net {
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 3px;
+    transform: translateX(-50%);
+}
+
+/* Center horizontal line - LEFT back court (from left edge to left short service line) */
+.line-center-horizontal-left {
+    top: 50%; /* Middle of the 6.1m width */
+    left: 0;
+    width: 35.22%; /* Stop at left short service line */
+    height: 3px;
+    transform: translateY(-50%);
+}
+
+/* Center horizontal line - RIGHT back court (from right short service line to right edge) */
+.line-center-horizontal-right {
+    top: 50%; /* Middle of the 6.1m width */
+    left: 64.78%; /* Start at right short service line */
+    right: 0;
+    height: 3px;
+    transform: translateY(-50%);
+}
+
+/* Left short service line (1.98m from net = 6.7m - 1.98m = 4.72m from left) */
+.line-short-service-left {
+    top: 0;
+    bottom: 0;
+    left: 35.22%; /* 4.72m / 13.4m = 35.22% */
+    width: 3px;
+}
+
+/* Right short service line (1.98m from net = 6.7m + 1.98m = 8.68m from left) */
+.line-short-service-right {
+    top: 0;
+    bottom: 0;
+    left: 64.78%; /* 8.68m / 13.4m = 64.78% */
+    width: 3px;
+}
+
+/* Left doubles back line (long service line) - 0.76m from left edge */
+.line-long-service-left {
+    top: 0;
+    bottom: 0;
+    left: 5.67%; /* 0.76m / 13.4m = 5.67% */
+    width: 3px;
+}
+
+/* Right doubles back line (long service line) - 0.76m from right edge */
+.line-long-service-right {
+    top: 0;
+    bottom: 0;
+    left: 94.33%; /* (13.4 - 0.76) / 13.4 = 94.33% */
+    width: 3px;
+}
+
+/* Top singles sideline - 0.46m from top edge */
+.line-singles-sideline-top {
+    top: 7.54%; /* 0.46m / 6.1m = 7.54% */
+    left: 0;
+    right: 0;
+    height: 3px;
+}
+
+/* Bottom singles sideline - 0.46m from bottom edge */
+.line-singles-sideline-bottom {
+    top: 92.46%; /* (6.1 - 0.46) / 6.1 = 92.46% */
+    left: 0;
+    right: 0;
+    height: 3px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .badminton-court {
+        max-width: 600px;
+    }
+
+    /* Vertical lines */
+    .line-net,
+    .line-short-service-left,
+    .line-short-service-right,
+    .line-long-service-left,
+    .line-long-service-right {
+        width: 2px;
+    }
+
+    /* Horizontal lines */
+    .line-center-horizontal-left,
+    .line-center-horizontal-right,
+    .line-singles-sideline-top,
+    .line-singles-sideline-bottom {
+        height: 2px;
+    }
+}
+
+@media (max-width: 480px) {
+    .badminton-court {
+        max-width: 300px;
+        padding: 10px;
+    }
+}
