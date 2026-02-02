@@ -56,6 +56,18 @@
                             Når aktiveret, skjules "Ryd Banen", "Skift til Double", "Tilbage" og "Admin" knapperne på banesiden for at forhindre utilsigtede ændringer under turneringer.
                         </p>
                     </div>
+
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid rgba(255,255,255,0.1);">
+                        <label>Bane Side Version:</label>
+                        <select id="courtVersion" style="width: 100%; padding: 10px; font-size: 1em; margin-top: 10px; background: var(--color-bg-card); color: white; border: 2px solid var(--color-primary); border-radius: 8px; cursor: pointer;">
+                            <option value="v2">Klassisk (Standard)</option>
+                            <option value="v3">Ny Version (Udvikling)</option>
+                        </select>
+                        <button id="saveCourtVersionBtn" class="btn-primary" style="margin-top: 15px;">Gem Version</button>
+                        <p style="color: #aaa; font-size: 0.9em; margin-top: 10px; line-height: 1.5;">
+                            Vælg hvilken version af bane-siden der skal bruges. Ny version er under udvikling.
+                        </p>
+                    </div>
                 </div>
 
                 <!-- Security -->

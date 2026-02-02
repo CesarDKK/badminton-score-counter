@@ -17,9 +17,15 @@ router.get('/', async (req, res, next) => {
             ['show_reset_button']
         );
 
+        const courtVersionSetting = await queryOne(
+            'SELECT setting_value FROM settings WHERE setting_key = ?',
+            ['court_version']
+        );
+
         res.json({
             courtCount: parseInt(courtCountSetting?.setting_value || '4'),
-            showResetButton: showResetButtonSetting?.setting_value !== 'false'
+            showResetButton: showResetButtonSetting?.setting_value !== 'false',
+            courtVersion: courtVersionSetting?.setting_value || 'v2'
         });
     } catch (error) {
         next(error);
@@ -100,6 +106,27 @@ router.put('/reset-button', authMiddleware, async (req, res, next) => {
         await query(
             'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
             ['show_reset_button', showResetButton.toString(), showResetButton.toString()]
+        );
+
+        res.json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// PUT /api/settings/court-version - Update court page version (requires auth)
+router.put('/court-version', authMiddleware, async (req, res, next) => {
+    try {
+        const { courtVersion } = req.body;
+
+        if (courtVersion !== 'v2' && courtVersion !== 'v3') {
+            return res.status(400).json({ error: 'Court version skal være v2 eller v3' });
+        }
+
+        // Update setting (insert if not exists)
+        await query(
+            'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
+            ['court_version', courtVersion, courtVersion]
         );
 
         res.json({ success: true });

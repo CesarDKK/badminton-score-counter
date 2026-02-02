@@ -13,9 +13,10 @@ async function loadPage() {
         // Fetch settings from API
         const settings = await api.getSettings();
         const courtCount = settings.courtCount;
+        const courtVersion = settings.courtVersion || 'v2';
 
         // Load buttons
-        loadCourtButtons(courtCount);
+        loadCourtButtons(courtCount, courtVersion);
         loadTVButtons(courtCount);
 
         // Hide loading state
@@ -26,13 +27,16 @@ async function loadPage() {
     }
 }
 
-function loadCourtButtons(courtCount) {
+function loadCourtButtons(courtCount, courtVersion) {
     const courtButtons = document.getElementById('courtButtons');
     courtButtons.innerHTML = '';
 
+    // Determine which court page to use based on version setting
+    const courtPage = courtVersion === 'v3' ? 'court-v3.html' : 'court.html';
+
     for (let i = 1; i <= courtCount; i++) {
         const button = document.createElement('a');
-        button.href = `court.html?id=${i}`;
+        button.href = `${courtPage}?id=${i}`;
         button.className = 'court-button';
         button.innerHTML = `
             <div class="court-number">${i}</div>

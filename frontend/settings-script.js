@@ -32,6 +32,9 @@ function setupEventListeners() {
     // Password
     document.getElementById('changePasswordBtn').addEventListener('click', changePassword);
 
+    // Court Version
+    document.getElementById('saveCourtVersionBtn').addEventListener('click', saveCourtVersion);
+
     // Message overlay
     document.getElementById('messageOkBtn').addEventListener('click', hideMessage);
 }
@@ -74,6 +77,7 @@ async function loadSettings() {
         document.getElementById('courtCount').value = settings.courtCount;
         // Invert logic: checked = tournament mode ON (showResetButton false)
         document.getElementById('showResetButton').checked = settings.showResetButton === false;
+        document.getElementById('courtVersion').value = settings.courtVersion || 'v2';
     } catch (error) {
         console.error('Failed to load settings:', error);
         showMessage('Fejl', 'Kunne ikke indlæse indstillinger');
@@ -130,6 +134,18 @@ async function toggleResetButton() {
         showMessage('Fejl', error.message);
         // Revert checkbox on error
         document.getElementById('showResetButton').checked = !tournamentModeChecked;
+    }
+}
+
+async function saveCourtVersion() {
+    const courtVersion = document.getElementById('courtVersion').value;
+
+    try {
+        await api.updateCourtVersion(courtVersion);
+        showMessage('Succes', `Bane version opdateret til ${courtVersion === 'v2' ? 'Klassisk' : 'Ny Version'}!`);
+    } catch (error) {
+        console.error('Failed to update court version:', error);
+        showMessage('Fejl', error.message);
     }
 }
 

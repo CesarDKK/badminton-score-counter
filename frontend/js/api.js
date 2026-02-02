@@ -173,6 +173,18 @@ class BadmintonAPI {
     }
 
     /**
+     * Update court page version
+     * @param {string} courtVersion - Court version ('v2' or 'v3')
+     * @returns {Promise<object>} - { success }
+     */
+    async updateCourtVersion(courtVersion) {
+        return this.request('/settings/court-version', {
+            method: 'PUT',
+            body: JSON.stringify({ courtVersion })
+        });
+    }
+
+    /**
      * Get theme settings
      * @returns {Promise<object>} - Theme object with all colors
      */
