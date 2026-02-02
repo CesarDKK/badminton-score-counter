@@ -37,6 +37,8 @@ let gameState = {
     restBreakSecondsLeft: 0,
     restBreakTitle: '',
     matchCompleted: false,
+    servingPlayer: null,  // 1 or 2, null if not yet selected
+    initialServer: null,  // Track who served first for set resets
     history: []
 };
 
@@ -68,9 +70,13 @@ function setupEventListeners() {
     document.getElementById('addPointPlayer1').addEventListener('click', () => addPoint(1));
     document.getElementById('addPointPlayer2').addEventListener('click', () => addPoint(2));
 
+    // Serve selection buttons
+    document.getElementById('startServPlayer1').addEventListener('click', () => selectServer(1));
+    document.getElementById('startServPlayer2').addEventListener('click', () => selectServer(2));
+
     // Control buttons
     document.getElementById('startMatchBtn').addEventListener('click', startMatch);
-    document.getElementById('undoBtn').addEventListener('click', () => alert('Undo funktionalitet kommer snart'));
+    document.getElementById('undoBtn').addEventListener('click', undoLastAction);
     document.getElementById('skipRestBreak').addEventListener('click', endRestBreak);
     document.getElementById('clearCourtBtn').addEventListener('click', clearCourt);
 
@@ -119,6 +125,11 @@ function closeSettingsMenu() {
 }
 
 function addPoint(player) {
+    // Cannot add points if match hasn't selected server yet
+    if (!gameState.servingPlayer) {
+        return;
+    }
+
     // Auto-start timer on first point
     const isFirstPoint = gameState.player1.score === 0 &&
                         gameState.player2.score === 0 &&
@@ -131,6 +142,9 @@ function addPoint(player) {
     } else {
         gameState.player2.score++;
     }
+
+    // Update serving player based on who won the point
+    updateServingPlayer(player);
 
     // Start match automatically on first point
     if (isFirstPoint) {
@@ -293,6 +307,16 @@ function resetScores() {
     gameState.player1.score = 0;
     gameState.player2.score = 0;
     gameState.restBreakTaken = false; // Reset for next set
+
+    // In badminton, the winner of the previous game serves first in the next game
+    // Determine who won the last game
+    if (gameState.player1.games > gameState.player2.games) {
+        gameState.servingPlayer = 1;
+    } else if (gameState.player2.games > gameState.player1.games) {
+        gameState.servingPlayer = 2;
+    }
+    // If tied (shouldn't happen in normal play), keep current server
+
     updateDisplay();
     saveGameState();
 }
@@ -358,6 +382,8 @@ function clearCourt() {
                     gameState.decidingGameSwitched = false;
                     gameState.matchCompleted = false;
                     gameState.restBreakTaken = false;
+                    gameState.servingPlayer = null;  // Reset serving player
+                    gameState.initialServer = null;
 
                     // Update display
                     updateDisplay();
@@ -437,11 +463,13 @@ async function loadGameState() {
 
 // Update display with current game state
 function updateDisplay() {
-    // Update player names on court
-    document.getElementById('player1Name1Display').textContent = gameState.player1.name;
-    document.getElementById('player1Name2Display').textContent = gameState.isDoubles ? gameState.player1.name2 : gameState.player1.name;
-    document.getElementById('player2Name1Display').textContent = gameState.player2.name;
-    document.getElementById('player2Name2Display').textContent = gameState.isDoubles ? gameState.player2.name2 : gameState.player2.name;
+    // Update player names on court (for doubles only - singles names are set by updatePlayerNamePositions)
+    if (gameState.isDoubles) {
+        document.getElementById('player1Name1Display').textContent = gameState.player1.name;
+        document.getElementById('player1Name2Display').textContent = gameState.player1.name2;
+        document.getElementById('player2Name1Display').textContent = gameState.player2.name;
+        document.getElementById('player2Name2Display').textContent = gameState.player2.name2;
+    }
 
     // Update scores
     document.getElementById('player1PointScore').textContent = gameState.player1.score;
@@ -455,9 +483,39 @@ function updateDisplay() {
         doublesBtn.textContent = gameState.isDoubles ? 'Skift til Single' : 'Skift til Double';
     }
 
+    // Show/hide serve selection buttons
+    const servBtn1 = document.getElementById('startServPlayer1');
+    const servBtn2 = document.getElementById('startServPlayer2');
+    const addBtn1 = document.getElementById('addPointPlayer1');
+    const addBtn2 = document.getElementById('addPointPlayer2');
+
+    if (!gameState.servingPlayer && !gameState.isActive) {
+        // Before server is selected: show serve buttons, disable +1 buttons
+        servBtn1.classList.remove('hidden');
+        servBtn2.classList.remove('hidden');
+        addBtn1.disabled = true;
+        addBtn2.disabled = true;
+    } else {
+        // After server is selected: hide serve buttons, enable +1 buttons
+        servBtn1.classList.add('hidden');
+        servBtn2.classList.add('hidden');
+        addBtn1.disabled = false;
+        addBtn2.disabled = false;
+    }
+
+    // Update serve indicator
+    updateServeIndicator();
+
+    // Update player name positions based on serve
+    updatePlayerNamePositions();
+
     // Show/hide start button and timer
     const startBtn = document.getElementById('startMatchBtn');
     const timerDisplay = document.getElementById('timerDisplay');
+
+    // Disable start button if no server selected
+    startBtn.disabled = !gameState.servingPlayer;
+
     if (gameState.matchStartTime && !gameState.matchEndTime) {
         startBtn.style.display = 'none';
         timerDisplay.style.display = 'block';
@@ -471,7 +529,166 @@ function updateDisplay() {
     }
 }
 
+// Select which player serves first
+function selectServer(player) {
+    if (gameState.isActive) {
+        return; // Cannot change server after match started
+    }
+
+    gameState.servingPlayer = player;
+    gameState.initialServer = player;
+
+    // Enable +1 buttons and Start Kamp button
+    updateDisplay();
+
+    console.log(`Player ${player} will serve first`);
+}
+
+// Get serving side based on server's score (for singles)
+function getServingSide() {
+    if (!gameState.servingPlayer) return null;
+
+    const serverScore = gameState.servingPlayer === 1 ? gameState.player1.score : gameState.player2.score;
+
+    // In singles: serve from right when score is even, left when odd
+    return serverScore % 2 === 0 ? 'right' : 'left';
+}
+
+// Update serving player after a point
+function updateServingPlayer(pointWinner) {
+    // In badminton, server only changes when server loses the rally
+    // If server wins, they keep serving
+    // If server loses, opponent becomes the server
+
+    if (pointWinner !== gameState.servingPlayer) {
+        gameState.servingPlayer = pointWinner;
+    }
+}
+
+// Update serve indicator visual on court
+function updateServeIndicator() {
+    // Remove any existing serve indicator
+    const existingIndicator = document.querySelector('.serve-indicator');
+    if (existingIndicator) {
+        existingIndicator.remove();
+    }
+
+    // Only show indicator if server is selected and match is active or about to start
+    if (!gameState.servingPlayer) return;
+
+    const servingSide = getServingSide();
+    if (!servingSide) return;
+
+    // Create serve indicator element
+    const indicator = document.createElement('div');
+    indicator.className = 'serve-indicator';
+
+    // Position based on serving player and serving side
+    if (gameState.servingPlayer === 1) {
+        // Left side of court (opposite of right side)
+        // Even score (right court) = bottom field, Odd score (left court) = top field
+        if (servingSide === 'right') {
+            indicator.classList.add('serve-left-bottom');
+        } else {
+            indicator.classList.add('serve-left-top');
+        }
+    } else {
+        // Right side of court
+        // Even score (right court) = top field, Odd score (left court) = bottom field
+        if (servingSide === 'right') {
+            indicator.classList.add('serve-right-top');
+        } else {
+            indicator.classList.add('serve-right-bottom');
+        }
+    }
+
+    // Add to court surface
+    document.querySelector('.court-surface').appendChild(indicator);
+}
+
+// Update player name positions based on serving position
+function updatePlayerNamePositions() {
+    // Get all name display elements
+    const leftTop = document.getElementById('player1Name1Display');
+    const leftBottom = document.getElementById('player1Name2Display');
+    const rightTop = document.getElementById('player2Name1Display');
+    const rightBottom = document.getElementById('player2Name2Display');
+
+    // If no server selected or match not started, show default positions
+    if (!gameState.servingPlayer) {
+        leftTop.textContent = gameState.player1.name;
+        leftBottom.textContent = gameState.player1.name;
+        rightTop.textContent = gameState.player2.name;
+        rightBottom.textContent = gameState.player2.name;
+        return;
+    }
+
+    const servingSide = getServingSide();
+    if (!servingSide) return;
+
+    // Determine positions based on who is serving and from which side
+    // Server stands where they serve from, receiver stands diagonally opposite
+
+    if (gameState.servingPlayer === 1) {
+        // Player 1 (left) is serving
+        if (servingSide === 'right') {
+            // Player 1 serves from right court (even score) = bottom field for left player
+            // Player 1 bottom-left, Player 2 top-right (diagonal)
+            leftTop.textContent = '';
+            leftBottom.textContent = gameState.player1.name;
+            rightTop.textContent = gameState.player2.name;
+            rightBottom.textContent = '';
+        } else {
+            // Player 1 serves from left court (odd score) = top field for left player
+            // Player 1 top-left, Player 2 bottom-right (diagonal)
+            leftTop.textContent = gameState.player1.name;
+            leftBottom.textContent = '';
+            rightTop.textContent = '';
+            rightBottom.textContent = gameState.player2.name;
+        }
+    } else {
+        // Player 2 (right) is serving
+        if (servingSide === 'right') {
+            // Player 2 serves from right court (even score) = top field for right player
+            // Player 2 top-right, Player 1 bottom-left (diagonal)
+            leftTop.textContent = '';
+            leftBottom.textContent = gameState.player1.name;
+            rightTop.textContent = gameState.player2.name;
+            rightBottom.textContent = '';
+        } else {
+            // Player 2 serves from left court (odd score) = bottom field for right player
+            // Player 2 bottom-right, Player 1 top-left (diagonal)
+            leftTop.textContent = gameState.player1.name;
+            leftBottom.textContent = '';
+            rightTop.textContent = '';
+            rightBottom.textContent = gameState.player2.name;
+        }
+    }
+}
+
+// Undo last action
+function undoLastAction() {
+    // If server not yet selected and match hasn't started, reset server selection
+    if (!gameState.isActive && gameState.servingPlayer) {
+        gameState.servingPlayer = null;
+        gameState.initialServer = null;
+        updateDisplay();
+        console.log('Server selection reset');
+        return;
+    }
+
+    // TODO: Implement full undo for points (with history tracking)
+    showMessage('Fortryd', 'Fuld fortryd funktionalitet for point kommer snart. Du kan kun fortryde server-valg før kampen starter.');
+}
+
 async function startMatch() {
+    if (!gameState.servingPlayer) {
+        showMessage('Vælg Server', 'Du skal vælge hvem der server først før kampen kan startes.', [
+            { text: 'OK', style: 'primary' }
+        ]);
+        return;
+    }
+
     gameState.matchStartTime = Date.now();
     gameState.isActive = true;
     updateDisplay();

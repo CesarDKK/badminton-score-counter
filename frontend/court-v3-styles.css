@@ -37,6 +37,17 @@
     box-shadow: 0 6px 30px rgba(0, 0, 0, 0.7);
 }
 
+.btn-start-match-center:disabled {
+    background: #6b7280;
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.btn-start-match-center:disabled:hover {
+    transform: none;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
 .timer-display-center {
     font-size: 1em;
     font-weight: bold;
@@ -140,6 +151,42 @@
 .btn-add-right:hover {
     transform: scale(1.1);
     box-shadow: 0 0 20px #22c55e;
+}
+
+.btn-add-point:disabled {
+    background: #4b5563;
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.btn-add-point:disabled:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.btn-start-serv {
+    padding: 15px 30px;
+    font-size: 1.2em;
+    background: var(--color-accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-start-serv:hover {
+    opacity: 0.9;
+    transform: scale(1.05);
+}
+
+.btn-start-serv.hidden {
+    display: none;
 }
 
 .btn-undo {
@@ -519,4 +566,49 @@
         max-width: 300px;
         padding: 10px;
     }
+}
+
+/* Serve Indicator */
+.serve-indicator {
+    position: absolute;
+    width: 75px;
+    height: 75px;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3.75em;
+    z-index: 50;
+    pointer-events: none;
+    opacity: 0.7;
+    transform: translateX(-50%) translateY(-50%);
+}
+
+.serve-indicator::after {
+    content: '🏸';
+}
+
+/* Serve indicator positions for singles - between serve line and net */
+/* Left side, top service court (odd score from left player's perspective) */
+.serve-left-top {
+    left: 42.5%; /* Between left short service line and net */
+    top: 25%; /* In top service court */
+}
+
+/* Left side, bottom service court (even score from left player's perspective) */
+.serve-left-bottom {
+    left: 42.5%; /* Between left short service line and net */
+    top: 75%; /* In bottom service court */
+}
+
+/* Right side, top service court (even score from right player's perspective) */
+.serve-right-top {
+    left: 57.5%; /* Between right short service line and net */
+    top: 25%; /* In top service court */
+}
+
+/* Right side, bottom service court (odd score from right player's perspective) */
+.serve-right-bottom {
+    left: 57.5%; /* Between right short service line and net */
+    top: 75%; /* In bottom service court */
 }
