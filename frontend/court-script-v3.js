@@ -171,11 +171,44 @@ function swapPlayers(team) {
     saveGameState();
 }
 
+// Save current game state to history before making changes
+function saveToHistory() {
+    const snapshot = {
+        player1: {
+            score: gameState.player1.score,
+            games: gameState.player1.games
+        },
+        player2: {
+            score: gameState.player2.score,
+            games: gameState.player2.games
+        },
+        servingPlayer: gameState.servingPlayer,
+        servingTeam: gameState.servingTeam,
+        servingPlayerOnTeam: gameState.servingPlayerOnTeam,
+        team1RightCourt: gameState.team1RightCourt,
+        team2RightCourt: gameState.team2RightCourt,
+        betweenSets: gameState.betweenSets,
+        decidingGameSwitched: gameState.decidingGameSwitched,
+        timerSeconds: gameState.timerSeconds,
+        isActive: gameState.isActive
+    };
+
+    gameState.history.push(snapshot);
+
+    // Limit history to last 20 actions to prevent memory issues
+    if (gameState.history.length > 20) {
+        gameState.history.shift();
+    }
+}
+
 function addPoint(player) {
     // Cannot add points if match hasn't selected server yet
     if (!gameState.servingPlayer) {
         return;
     }
+
+    // Save state to history before adding point
+    saveToHistory();
 
     // If we're between sets in doubles, lock in positions
     if (gameState.betweenSets && gameState.isDoubles) {
@@ -482,6 +515,7 @@ function clearCourt() {
                     gameState.servingPlayerOnTeam = null;
                     gameState.team1RightCourt = 1;  // Reset court positions
                     gameState.team2RightCourt = 1;
+                    gameState.history = [];  // Clear undo history
 
                     // Update display
                     updateDisplay();
@@ -519,7 +553,36 @@ async function initializeApp() {
             window.location.href = 'landing.html';
         }
 
-        console.log('Court V3 ready');
+        // Show/hide elements based on tournament mode settings
+        const isTournamentMode = settings.showResetButton === false;
+
+        if (isTournamentMode) {
+            // Hide "Ryd Banen" button in settings menu
+            const clearBtn = document.getElementById('clearCourtBtn');
+            if (clearBtn) {
+                clearBtn.style.display = 'none';
+            }
+
+            // Hide "Skift til Double" button in settings menu
+            const doublesToggle = document.getElementById('doublesToggle');
+            if (doublesToggle) {
+                doublesToggle.style.display = 'none';
+            }
+
+            // Hide "Tilbage" link in settings menu
+            const backLink = document.querySelector('a[href="landing.html"]');
+            if (backLink) {
+                backLink.style.display = 'none';
+            }
+
+            // Hide "Admin" link in settings menu
+            const adminLink = document.querySelector('a[href="admin.html"]');
+            if (adminLink) {
+                adminLink.style.display = 'none';
+            }
+        }
+
+        console.log('Court V3 ready, tournament mode:', isTournamentMode);
     } catch (error) {
         console.error('Failed to initialize Court V3:', error);
     }
@@ -562,6 +625,9 @@ async function loadGameState() {
         // Ensure name2 exists for backwards compatibility
         if (!gameState.player1.name2) gameState.player1.name2 = 'Makker 1';
         if (!gameState.player2.name2) gameState.player2.name2 = 'Makker 2';
+
+        // Clear history when loading from database (can't undo server-side state)
+        gameState.history = [];
     } catch (error) {
         console.error('Failed to load game state:', error);
         // Continue with default state
@@ -896,8 +962,39 @@ function undoLastAction() {
         return;
     }
 
-    // TODO: Implement full undo for points (with history tracking)
-    showMessage('Fortryd', 'Fuld fortryd funktionalitet for point kommer snart. Du kan kun fortryde server-valg før kampen starter.');
+    // Check if there's history to undo
+    if (gameState.history.length === 0) {
+        showMessage('Fortryd', 'Der er ingen handlinger at fortryde.');
+        return;
+    }
+
+    // Pop last state from history
+    const previousState = gameState.history.pop();
+
+    // Restore all game state from snapshot
+    gameState.player1.score = previousState.player1.score;
+    gameState.player1.games = previousState.player1.games;
+    gameState.player2.score = previousState.player2.score;
+    gameState.player2.games = previousState.player2.games;
+
+    gameState.servingPlayer = previousState.servingPlayer;
+    gameState.servingTeam = previousState.servingTeam;
+    gameState.servingPlayerOnTeam = previousState.servingPlayerOnTeam;
+
+    // Restore player positions (important for doubles)
+    gameState.team1RightCourt = previousState.team1RightCourt;
+    gameState.team2RightCourt = previousState.team2RightCourt;
+
+    gameState.betweenSets = previousState.betweenSets;
+    gameState.decidingGameSwitched = previousState.decidingGameSwitched;
+    gameState.timerSeconds = previousState.timerSeconds;
+    gameState.isActive = previousState.isActive;
+
+    // Update display and save restored state
+    updateDisplay();
+    saveGameState();
+
+    console.log('Undid last action, history size:', gameState.history.length);
 }
 
 async function startMatch() {
