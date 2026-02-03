@@ -15,6 +15,10 @@ A real-time badminton score tracking system with multi-device support, sponsor s
 - **Tournament Mode**: Lock down controls during competitive play
 - **Admin Panel**: Manage courts, view match history, and configure settings
 - **Sponsor Slideshow**: Upload and display sponsor images with configurable duration
+  - Active/inactive status control for each image
+  - Automatic expiration dates for time-limited sponsorships
+  - Separate slideshow and court banner image types
+  - Court-specific banner assignments
 - **Match History**: Automatic tracking of completed matches with statistics
 - **Doubles Support**: Proper serving rules, position tracking, and player swapping
 - **Timer Support**: Built-in timer for tracking match duration
@@ -48,6 +52,21 @@ A real-time badminton score tracking system with multi-device support, sponsor s
 #### ⚙️ Settings Improvements
 - **Court Version Selection**: Choose between "Klassisk" (classic) and "Bane view" (court visualization)
 - **Tournament Mode Toggle**: One-click activation to lock down court controls
+
+#### 🖼️ Sponsor Management
+- **Active/Inactive Status**: Toggle visibility of sponsor images without deleting them
+  - Manual control via toggle switch in admin panel
+  - Visual indicators (Active/Inactive/Expired badges)
+  - Inactive images dimmed with grayscale filter
+- **Automatic Expiration**: Set expiration dates for time-limited sponsorships
+  - Datetime picker for easy date selection
+  - Images automatically deactivated after expiration
+  - Hourly background check ensures timely deactivation
+  - Expired images show red badge and warning notice
+  - Clear button to remove expiration dates
+- **Smart Filtering**: TV displays only show active, non-expired images
+- **Admin Visibility**: Admin panel shows all images including inactive/expired
+- **Backwards Compatible**: Existing images automatically set to active with no expiration
 
 #### 🔧 Performance & Security
 - **Performance**: Reduced admin panel polling by 60% (1s → 2.5s interval)
@@ -504,6 +523,24 @@ If you run into issues, check the logs with `docker-compose logs` and look for e
 
 ## Architecture
 
+### Automated Background Tasks
+
+The backend runs scheduled tasks using `node-cron`:
+
+1. **Midnight Court Reset** (Daily at 00:00 Europe/Copenhagen)
+   - Clears all game states
+   - Sets all courts to inactive
+   - Fresh start for each day
+
+2. **Sponsor Expiration Check** (Hourly at minute 0)
+   - Deactivates sponsor images past their expiration date
+   - Ensures expired sponsorships don't display
+   - Runs even when TV displays are off
+
+**Hybrid Expiration Strategy:**
+- On-demand: Checked on every `/api/sponsors/images` request (max 10 sec delay for TV)
+- Scheduled: Hourly background check as safety net
+
 ### Three-Tier System
 
 ```
@@ -556,7 +593,11 @@ If you run into issues, check the logs with `docker-compose logs` and look for e
 
 **match_history**: Completed match records with winner/loser and duration
 
-**sponsor_images**: Sponsor image metadata (filename, dimensions, upload date)
+**sponsor_images**: Sponsor image metadata
+- Basic: filename, dimensions, upload date, type (slideshow/court)
+- Status: `is_active` (manual visibility control), `expiration_date` (automatic deactivation)
+- Display: display_order for sorting
+- Court banners: separate table `sponsor_image_courts` for court assignments
 
 **sponsor_settings**: Slideshow configuration (slide duration)
 
@@ -602,6 +643,10 @@ All admin endpoints require JWT token in `Authorization: Bearer <token>` header.
 ### Sponsors
 
 **GET** `/api/sponsors/images` - Get all sponsor images (public)
+- Query params: `type` (slideshow/court), `includeInactive` (true/false)
+- Returns only active, non-expired images by default
+- Admin panel can use `includeInactive=true` to see all images
+- Automatically deactivates expired images on each request
 
 **GET** `/api/sponsors/settings` - Get slideshow settings (public)
 
@@ -611,9 +656,29 @@ All admin endpoints require JWT token in `Authorization: Bearer <token>` header.
 **POST** `/api/sponsors/upload` - Upload sponsor images (requires auth)
 - Content-Type: `multipart/form-data`
 - Field name: `images` (supports multiple files, max 10)
+- Field name: `type` (slideshow/court)
 - Max file size: 10MB per image
 - Supported formats: JPG, PNG, GIF
-- Images automatically resized to max 1920x1080 and EXIF rotation applied
+- Images automatically resized to max 1920x1080 (slideshow) or 1920x216 (court banners)
+- EXIF rotation applied automatically
+- New images default to active with no expiration
+
+**PUT** `/api/sponsors/:id/active` - Toggle active status (requires auth)
+- Body: `{ "isActive": boolean }`
+- Manual control over image visibility
+- Expired images cannot be reactivated via toggle
+
+**PUT** `/api/sponsors/:id/expiration` - Set expiration date (requires auth)
+- Body: `{ "expirationDate": "ISO-8601 string" | null }`
+- Set automatic deactivation date
+- Use `null` to remove expiration
+- Date must be in the future (max 5 years)
+- Images deactivate automatically after expiration
+
+**PUT** `/api/sponsors/:id/courts` - Update court assignments (requires auth)
+- Body: `{ "courts": [1, 2, 3] }`
+- Only applies to court banner type images
+- Assigns banner to specific court numbers
 
 **DELETE** `/api/sponsors/:id` - Delete sponsor image (requires auth)
 
@@ -791,10 +856,17 @@ backend/migrations/
 ├── 001_add_match_completed.sql
 ├── 002_add_sponsor_type.sql
 ├── 003_add_sponsor_court_assignments.sql
-└── 004_add_sponsor_active_expiration.sql
+└── 004_add_sponsor_active_expiration.sql  # Adds is_active and expiration_date
 ```
 
 All migration files are automatically available in the container at `/docker-entrypoint-initdb.d/migrations/`.
+
+**Recent Migrations:**
+- **004_add_sponsor_active_expiration.sql**: Adds active/inactive status and automatic expiration for sponsor images
+  - `is_active BOOLEAN NOT NULL DEFAULT TRUE` - Manual visibility control
+  - `expiration_date TIMESTAMP NULL` - Automatic deactivation date
+  - Creates index for efficient filtering
+  - Backwards compatible (existing images set to active, no expiration)
 
 ## Deploying Updates
 
