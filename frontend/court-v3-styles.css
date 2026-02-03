@@ -1,10 +1,17 @@
 /* Court V3 Styles - Badminton Court Top-Down View */
 /* Official dimensions: 44' (13.4m) long × 20' (6.1m) wide for doubles */
 
+/* Remove container padding/border for full-screen experience */
+.container {
+    padding: 0 !important;
+    border-radius: 0 !important;
+    max-width: none !important;
+}
+
 /* Score Display Above Court */
 .score-display-top {
     width: 100%;
-    margin-bottom: 10px;
+    margin-bottom: 5px;
 }
 
 /* Court center overlay for timer and start button */
@@ -63,7 +70,7 @@
     justify-content: space-between;
     align-items: center;
     width: 100%;
-    padding: 0 20px;
+    padding: 0 10px;
 }
 
 .player-score-section {
@@ -72,7 +79,7 @@
 }
 
 .point-score {
-    font-size: 5em;
+    font-size: 3.5em;
     font-weight: bold;
     color: var(--color-accent);
 }
@@ -80,22 +87,22 @@
 .set-score-section {
     flex: 1;
     text-align: center;
-    padding: 0 40px;
+    padding: 0 20px;
 }
 
 .set-label {
-    font-size: 1.2em;
+    font-size: 1em;
     color: #aaa;
-    margin-bottom: 10px;
+    margin-bottom: 5px;
 }
 
 .set-score {
-    font-size: 3em;
+    font-size: 2em;
     font-weight: bold;
     color: var(--color-primary);
     display: flex;
     justify-content: center;
-    gap: 15px;
+    gap: 10px;
 }
 
 .set-separator {
@@ -107,20 +114,20 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 10px;
-    padding: 10px 20px;
+    margin-top: 5px;
+    padding: 5px 15px;
 }
 
 .center-buttons {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 20px;
+    gap: 10px;
     flex-wrap: wrap;
 }
 
 .btn-add-point {
-    padding: 20px 40px;
+    padding: 18px 45px;
     font-size: 2em;
     font-weight: bold;
     color: white;
@@ -128,8 +135,8 @@
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.3s;
-    min-width: 160px;
-    min-height: 60px;
+    min-width: 140px;
+    min-height: 65px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -165,8 +172,8 @@
 }
 
 .btn-start-serv {
-    padding: 15px 30px;
-    font-size: 1.2em;
+    padding: 10px 20px;
+    font-size: 1em;
     background: var(--color-accent);
     color: white;
     border: none;
@@ -174,7 +181,7 @@
     cursor: pointer;
     font-weight: bold;
     transition: all 0.3s;
-    height: 60px;
+    height: 45px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -207,8 +214,8 @@
 }
 
 .btn-undo {
-    padding: 15px 30px;
-    font-size: 1.2em;
+    padding: 10px 20px;
+    font-size: 1em;
     background: #6b7280;
     color: white;
     border: none;
@@ -216,7 +223,7 @@
     cursor: pointer;
     font-weight: bold;
     transition: all 0.3s;
-    height: 60px;
+    height: 45px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -279,15 +286,15 @@
 }
 
 .btn-settings {
-    padding: 15px 25px;
-    font-size: 1.8em;
+    padding: 10px 20px;
+    font-size: 1.5em;
     background: #6b7280;
     color: white;
     border: none;
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.3s;
-    height: 60px;
+    height: 45px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -376,6 +383,7 @@
     justify-content: center;
     align-items: center;
     padding: 0;
+    margin: 0;
 }
 
 .badminton-court {
@@ -384,9 +392,9 @@
     max-width: none;
     aspect-ratio: 13.4 / 6.1; /* Doubles court proportions - landscape */
     background: #2a2a2a;
-    padding: 10px;
-    border-radius: 8px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
 }
 
 .court-surface {
