@@ -131,9 +131,9 @@ class MainActivity : AppCompatActivity() {
 
                 // Only allow navigation within the court page
                 // Block navigation to landing.html, admin.html, etc.
-                return if (url.contains("/court.html") || url.contains("/court-script") ||
-                          url.contains("/styles.css") || url.contains("/js/") ||
-                          url.contains("/api/")) {
+                return if (url.contains("/court.html") || url.contains("/court-v3.html") ||
+                          url.contains("/court-script") || url.contains("/styles.css") ||
+                          url.contains("/js/") || url.contains("/api/")) {
                     false // Allow loading
                 } else {
                     // Block navigation to other pages
@@ -157,8 +157,47 @@ class MainActivity : AppCompatActivity() {
     private fun loadCourtPage() {
         val serverUrl = prefs.getString(PREF_SERVER_URL, DEFAULT_SERVER_URL)
         val courtId = prefs.getString(PREF_COURT_ID, DEFAULT_COURT_ID)
-        val url = "$serverUrl/court.html?id=$courtId"
-        webView.loadUrl(url)
+
+        // Fetch court version from settings API
+        fetchCourtVersionAndLoad(serverUrl!!, courtId!!)
+    }
+
+    private fun fetchCourtVersionAndLoad(serverUrl: String, courtId: String) {
+        // Use a WebView to make an AJAX-like request to fetch settings
+        val tempWebView = WebView(this)
+        tempWebView.settings.javaScriptEnabled = true
+
+        tempWebView.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView?, url: String?) {
+                // Execute JavaScript to fetch settings from API
+                tempWebView.evaluateJavascript(
+                    """
+                    (async function() {
+                        try {
+                            const response = await fetch('$serverUrl/api/settings');
+                            const data = await response.json();
+                            return data.courtVersion || 'v2';
+                        } catch (e) {
+                            return 'v2'; // Default to v2 on error
+                        }
+                    })()
+                    """.trimIndent()
+                ) { result ->
+                    // Remove quotes from result
+                    val courtVersion = result?.replace("\"", "") ?: "v2"
+
+                    // Determine which court page to use
+                    val courtPage = if (courtVersion == "v3") "court-v3.html" else "court.html"
+                    val finalUrl = "$serverUrl/$courtPage?id=$courtId"
+
+                    // Load the appropriate court page
+                    webView.loadUrl(finalUrl)
+                }
+            }
+        }
+
+        // Load a minimal page to enable JavaScript execution
+        tempWebView.loadData("<html><body></body></html>", "text/html", "UTF-8")
     }
 
     private fun showFirstTimeSetup() {
