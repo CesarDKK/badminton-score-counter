@@ -6,16 +6,50 @@ A real-time badminton score tracking system with multi-device support, sponsor s
 
 - **Real-time Score Tracking**: Track scores for multiple courts simultaneously
 - **Multi-Device Sync**: All devices stay in sync via MySQL database
+- **Dual Court Views**:
+  - **Classic View**: Traditional scoring interface
+  - **Court V3 (Bane View)**: Visual court representation with player positioning
+- **Android App**: Native app with WebView for dedicated court displays
 - **TV Display Mode**: Full-screen display for showing current games
+- **Undo Functionality**: Full game state history with position-aware restore
+- **Tournament Mode**: Lock down controls during competitive play
 - **Admin Panel**: Manage courts, view match history, and configure settings
 - **Sponsor Slideshow**: Upload and display sponsor images with configurable duration
 - **Match History**: Automatic tracking of completed matches with statistics
+- **Doubles Support**: Proper serving rules, position tracking, and player swapping
 - **Timer Support**: Built-in timer for tracking match duration
 - **Security**: Rate limiting, JWT authentication, and password hashing
 
 ## Recent Updates
 
-### Version 1.7.0 - Performance & Security Optimizations
+### Version 1.7.0 - Android App, Court V3, & Optimizations
+
+#### 🤖 Android App Enhancements
+- **Dynamic Court Version**: App now fetches court version (Klassisk/Bane view) from server settings automatically
+- **New App Icon**: Improved shuttlecock icon with emoji-style design
+- **Signed Releases**: Secure release builds with keystore configuration
+- **Fix**: Reliable court version loading using native HTTP requests
+
+#### 🏸 Court V3 - Compact & Feature-Rich
+- **Compact Layout**: 30% smaller scores and buttons to fit smaller screens
+  - Point scores: 5em → 3.5em
+  - Set scores: 3em → 2em
+  - Buttons: 60px → 65px (larger touch targets)
+  - All margins/padding reduced by 50%
+- **Frameless Design**: Edge-to-edge display with no borders or padding
+- **Undo Functionality**: Full history tracking (last 20 actions)
+  - Restores scores, serving state, and player positions
+  - Works correctly for both singles and doubles modes
+  - Respects player court positions in doubles
+- **Tournament Mode**: Hides non-essential buttons during tournaments
+  - Hides: "Ryd Banen", "Skift til Double", "Tilbage", "Admin"
+  - Prevents accidental changes during competitive play
+
+#### ⚙️ Settings Improvements
+- **Court Version Selection**: Choose between "Klassisk" (classic) and "Bane view" (court visualization)
+- **Tournament Mode Toggle**: One-click activation to lock down court controls
+
+#### 🔧 Performance & Security
 - **Performance**: Reduced admin panel polling by 60% (1s → 2.5s interval)
 - **Performance**: Eliminated N+1 database query problem in sponsor image loading
 - **Security**: Added comprehensive rate limiting to prevent brute force and DOS attacks
@@ -49,6 +83,95 @@ docker-compose -f docker-compose.rpi.yml up -d
 - 🚀 [Quick Start Guide](QUICKSTART.RASPBERRY_PI.md) - Get running in 4 commands
 
 **Tested on**: Raspberry Pi 3B+, 4 (2GB/4GB/8GB), 5, and Pi 400
+
+---
+
+## 📱 Android App
+
+A dedicated Android app is available for court-side displays. The app provides a fullscreen WebView optimized for tablets and phones.
+
+### Features
+
+- **Dynamic Court Version**: Automatically loads Klassisk or Bane view based on server settings
+- **Fullscreen Mode**: Immersive display without navigation bars
+- **Keep Screen On**: Prevents screen from sleeping during matches (10-minute timeout)
+- **Navigation Lock**: Prevents accidental navigation away from court page
+- **Easy Setup**: Configure server URL and court number on first launch
+- **Cache Busting**: Always loads latest CSS and JavaScript updates
+
+### Building the Android App
+
+See [ANDROID_BUILD_GUIDE.md](ANDROID_BUILD_GUIDE.md) for detailed build instructions.
+
+**Quick build:**
+```bash
+cd android-app
+./gradlew assembleRelease  # or assembleDebug for testing
+```
+
+APK location: `android-app/app/build/outputs/apk/release/BadmintonApp.apk`
+
+**Requirements:**
+- Java 17 (configured in gradle.properties)
+- Android SDK with build tools 33.0.1+
+- Gradle 8.12+ (wrapper included)
+
+### Keystore Configuration
+
+The app uses `keystore.properties` (gitignored) for release signing:
+```properties
+storePassword=your_password
+keyPassword=your_password
+keyAlias=your_alias
+storeFile=../path/to/keystore.jks
+```
+
+---
+
+## 🏸 Court Views
+
+The app offers two court display modes, selectable in Admin → Settings:
+
+### Klassisk View (Classic)
+Traditional scoring interface optimized for quick score entry. Best for simple, fast-paced scoring.
+
+**Features:**
+- Large score displays
+- Quick +1 buttons
+- Timer and set tracking
+- Player name inputs
+- Doubles/singles toggle
+
+### Bane View (Court V3)
+Visual court representation showing player positions and serving zones.
+
+**Features:**
+- **Compact Layout**: Optimized for smaller screens with 30% size reduction
+- **Frameless Design**: Edge-to-edge display maximizes screen space
+- **Visual Court**: Top-down badminton court with accurate dimensions
+- **Player Positioning**: See player positions in doubles mode
+- **Serving Indicator**: Shuttlecock emoji shows current serving position
+- **Position Swapping**: Swap player positions between sets in doubles
+- **Undo System**: Full game state history tracking (last 20 actions)
+  - Restores scores, serving state, and player court positions
+  - Position-aware undo for doubles mode
+- **Tournament Mode**: Hides unnecessary controls during competitive play
+- **Settings Menu**: Collapsible gear menu keeps interface clean
+
+**Optimizations:**
+- Point scores: 3.5em (30% smaller than v2)
+- Set scores: 2em (33% smaller)
+- Buttons: 65px tall with 2em font (easier touch targets)
+- Zero padding/margins for maximum space efficiency
+
+**Tournament Mode:**
+When enabled in settings, Court V3 hides:
+- "Ryd Banen" (Clear Court)
+- "Skift til Double" (Toggle Doubles)
+- "Tilbage" (Back)
+- "Admin" (Admin Panel)
+
+This prevents accidental changes during tournaments while keeping essential controls like "Skift Sider" (Switch Sides) accessible.
 
 ---
 
@@ -416,11 +539,20 @@ If you run into issues, check the logs with `docker-compose logs` and look for e
 
 ### Database Schema
 
-**settings**: Global app settings (admin password, court count)
+**settings**: Global app settings
+- `admin_password_hash`: Bcrypt hashed admin password
+- `court_count`: Number of available courts
+- `show_reset_button`: Tournament mode toggle (false = tournament mode)
+- `court_version`: Court view version ('v2' = Klassisk, 'v3' = Bane view)
+- `theme_*`: Color theme settings
 
 **courts**: Court configurations (active status, doubles mode, game mode)
 
-**game_states**: Current game state per court (scores, timers, player names)
+**game_states**: Current game state per court
+- Scores, timers, player names
+- Serving state (servingPlayer, servingTeam, servingPlayerOnTeam)
+- Player positions (team1RightCourt, team2RightCourt)
+- Between sets flag for position swapping
 
 **match_history**: Completed match records with winner/loser and duration
 
@@ -552,6 +684,14 @@ npx http-server -p 8080
 
 ```
 badminton-app/
+├── android-app/         # Android WebView app
+│   ├── app/
+│   │   ├── src/main/java/com/badminton/courtcounter/
+│   │   │   └── MainActivity.kt
+│   │   └── build.gradle
+│   ├── build.gradle
+│   ├── keystore.properties  # Gitignored signing config
+│   └── badminton-release-key.jks  # Gitignored keystore
 ├── backend/
 │   ├── config/          # Database & Multer configuration
 │   ├── middleware/      # Auth & error handling
@@ -563,16 +703,23 @@ badminton-app/
 │   └── package.json
 ├── frontend/
 │   ├── js/
-│   │   └── api-v2.js    # Centralized API client
+│   │   ├── api.js       # Centralized API client (v4)
+│   │   └── api-v2.js    # Legacy API client
 │   ├── admin.html       # Admin panel
 │   ├── admin-script.js
-│   ├── court.html       # Court scoring page
+│   ├── court.html       # Court scoring page (Classic)
 │   ├── court-script-v2.js
+│   ├── court-v3.html    # Court scoring page (Bane View)
+│   ├── court-script-v3.js
+│   ├── court-v3-styles.css
+│   ├── settings.html    # Settings page
+│   ├── settings-script.js
 │   ├── tv.html          # TV display mode
-│   ├── tv-script.js
+│   ├── tv-script-v2.js
 │   ├── sponsor.html     # Sponsor management
 │   ├── sponsor-script.js
-│   └── index.html       # Landing page
+│   ├── landing.html     # Landing page
+│   └── styles.css       # Global styles
 ├── docker-compose.yml   # Multi-container orchestration
 ├── Dockerfile.backend   # Backend container
 ├── Dockerfile.frontend  # Frontend container (Nginx)
