@@ -14,6 +14,10 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
 
@@ -163,41 +167,38 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun fetchCourtVersionAndLoad(serverUrl: String, courtId: String) {
-        // Use a WebView to make an AJAX-like request to fetch settings
-        val tempWebView = WebView(this)
-        tempWebView.settings.javaScriptEnabled = true
+        // Fetch court version from API in background thread
+        thread {
+            var courtVersion = "v2" // Default fallback
+            try {
+                val url = URL("$serverUrl/api/settings")
+                val connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 5000
+                connection.readTimeout = 5000
 
-        tempWebView.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView?, url: String?) {
-                // Execute JavaScript to fetch settings from API
-                tempWebView.evaluateJavascript(
-                    """
-                    (async function() {
-                        try {
-                            const response = await fetch('$serverUrl/api/settings');
-                            const data = await response.json();
-                            return data.courtVersion || 'v2';
-                        } catch (e) {
-                            return 'v2'; // Default to v2 on error
-                        }
-                    })()
-                    """.trimIndent()
-                ) { result ->
-                    // Remove quotes from result
-                    val courtVersion = result?.replace("\"", "") ?: "v2"
-
-                    // Determine which court page to use
-                    val courtPage = if (courtVersion == "v3") "court-v3.html" else "court.html"
-                    val finalUrl = "$serverUrl/$courtPage?id=$courtId"
-
-                    // Load the appropriate court page
-                    webView.loadUrl(finalUrl)
+                val responseCode = connection.responseCode
+                if (responseCode == HttpURLConnection.HTTP_OK) {
+                    val response = connection.inputStream.bufferedReader().use { it.readText() }
+                    val json = JSONObject(response)
+                    courtVersion = json.optString("courtVersion", "v2")
                 }
+                connection.disconnect()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                // Keep default v2 on error
+            }
+
+            // Load the court page on main thread
+            val courtPage = if (courtVersion == "v3") "court-v3.html" else "court.html"
+            val finalUrl = "$serverUrl/$courtPage?id=$courtId"
+
+            runOnUiThread {
+                // Show which version is being loaded
+                Toast.makeText(this, "Indlæser: $courtPage", Toast.LENGTH_SHORT).show()
+                webView.loadUrl(finalUrl)
             }
         }
-
-        // Load a minimal page to enable JavaScript execution
-        tempWebView.loadData("<html><body></body></html>", "text/html", "UTF-8")
     }
 
     private fun showFirstTimeSetup() {

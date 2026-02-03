@@ -5,102 +5,56 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Badminton Shuttlecock -->
+    <!-- Simple, clean shuttlecock like emoji 🏸 -->
     <group
-        android:scaleX="0.65"
-        android:scaleY="0.65"
-        android:translateX="19"
-        android:translateY="19">
+        android:scaleX="0.7"
+        android:scaleY="0.7"
+        android:translateX="16"
+        android:translateY="16">
 
-        <!-- Cork/Base (rounded bottom) -->
+        <!-- White feather cone -->
         <path
             android:fillColor="#FFFFFF"
-            android:pathData="M 54,65
-                           C 54,65 48,70 48,75
-                           C 48,78 50,80 54,80
-                           C 58,80 60,78 60,75
-                           C 60,70 54,65 54,65 Z" />
-
-        <!-- Feather cone (main body) -->
-        <path
-            android:fillColor="#E8E8E8"
-            android:pathData="M 54,28
-                           L 44,65
-                           L 64,65
+            android:pathData="M 54,25
+                           L 40,70
+                           L 68,70
                            Z" />
 
-        <!-- Feather details (individual feathers) -->
+        <!-- Feather segments (simple vertical lines) -->
         <path
-            android:fillColor="#FFFFFF"
-            android:strokeWidth="1.5"
-            android:strokeColor="#533483"
-            android:pathData="M 54,28 L 44,65" />
-        <path
-            android:fillColor="#FFFFFF"
-            android:strokeWidth="1.5"
-            android:strokeColor="#533483"
-            android:pathData="M 54,28 L 47,65" />
-        <path
-            android:fillColor="#FFFFFF"
-            android:strokeWidth="1.5"
-            android:strokeColor="#533483"
-            android:pathData="M 54,28 L 50,65" />
-        <path
-            android:fillColor="#FFFFFF"
-            android:strokeWidth="1.5"
-            android:strokeColor="#533483"
-            android:pathData="M 54,28 L 54,65" />
-        <path
-            android:fillColor="#FFFFFF"
-            android:strokeWidth="1.5"
-            android:strokeColor="#533483"
-            android:pathData="M 54,28 L 58,65" />
-        <path
-            android:fillColor="#FFFFFF"
-            android:strokeWidth="1.5"
-            android:strokeColor="#533483"
-            android:pathData="M 54,28 L 61,65" />
-        <path
-            android:fillColor="#FFFFFF"
-            android:strokeWidth="1.5"
-            android:strokeColor="#533483"
-            android:pathData="M 54,28 L 64,65" />
+            android:strokeWidth="2"
+            android:strokeColor="#E0E0E0"
+            android:pathData="M 46,35 L 43,70
+                           M 50,30 L 48,70
+                           M 54,25 L 54,70
+                           M 58,30 L 60,70
+                           M 62,35 L 65,70" />
 
-        <!-- Horizontal feather lines for texture -->
-        <path
-            android:strokeWidth="1"
-            android:strokeColor="#CCCCCC"
-            android:pathData="M 50,35 L 58,35" />
-        <path
-            android:strokeWidth="1"
-            android:strokeColor="#CCCCCC"
-            android:pathData="M 48,42 L 60,42" />
-        <path
-            android:strokeWidth="1"
-            android:strokeColor="#CCCCCC"
-            android:pathData="M 46,49 L 62,49" />
-        <path
-            android:strokeWidth="1"
-            android:strokeColor="#CCCCCC"
-            android:pathData="M 45,56 L 63,56" />
-
-        <!-- Cork highlight -->
-        <path
+        <!-- Red cork base (rounded) -->
+        <ellipse
             android:fillColor="#E94560"
-            android:pathData="M 54,66
-                           C 54,66 49,70 49,74
-                           C 49,76.5 51,78 54,78
-                           C 57,78 59,76.5 59,74
-                           C 59,70 54,66 54,66 Z" />
+            android:pathData="M 38,70
+                           Q 38,75 40,78
+                           Q 45,82 54,82
+                           Q 63,82 68,78
+                           Q 70,75 70,70
+                           Z" />
 
-        <!-- Cork shine effect -->
-        <path
+        <!-- Cork bottom circle -->
+        <ellipse
+            android:fillColor="#D63851"
+            cx="54"
+            cy="70"
+            rx="16"
+            ry="4" />
+
+        <!-- Cork shine -->
+        <ellipse
             android:fillColor="#FFFFFF"
-            android:fillAlpha="0.5"
-            android:pathData="M 52,70
-                           C 52,70 51,72 51,73
-                           C 51,73.5 51.5,74 52,74
-                           C 52.5,74 53,73.5 53,73
-                           C 53,72 52,70 52,70 Z" />
+            android:fillAlpha="0.4"
+            cx="50"
+            cy="74"
+            rx="4"
+            ry="3" />
     </group>
 </vector>
