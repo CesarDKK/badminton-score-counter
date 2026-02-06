@@ -608,7 +608,8 @@ function hideRestBreak() {
 
 // Helper function to format player names (includes partner if doubles)
 function formatPlayerNames(playerName, playerName2) {
-    if (playerName2 && playerName2.trim() !== '') {
+    // Only show partner name if it exists and has actual content
+    if (playerName2 && typeof playerName2 === 'string' && playerName2.trim() !== '') {
         return `${playerName} / ${playerName2}`;
     }
     return playerName;
@@ -699,7 +700,34 @@ function showMatchFinished(gameState, playersSwapped) {
         }).join('');
         setScoresContainer.innerHTML = setScoresHtml;
     } else {
-        setScoresContainer.innerHTML = '';
+        // Show overall match result when set scores history is not available
+        const player1Games = gameState.player1.games;
+        const player2Games = gameState.player2.games;
+        const player1WonMatch = player1Games > player2Games;
+
+        // Use display names (respect swapping)
+        const player1DisplayName = formatPlayerNames(displayPlayer1Name, displayPlayer1Name2);
+        const player2DisplayName = formatPlayerNames(displayPlayer2Name, displayPlayer2Name2);
+
+        const winnerColor = '#4CAF50'; // Green for winner
+        const loserColor = '#e94560'; // Red for loser
+
+        setScoresContainer.innerHTML = `
+            <div style="margin: 30px 0; font-size: 1.3em;">
+                <div style="margin-bottom: 15px; color: #aaa; font-size: 0.9em;">Resultat</div>
+                <div style="font-size: 1.5em; display: flex; justify-content: center; align-items: center; gap: 30px;">
+                    <span style="color: ${player1WonMatch ? winnerColor : loserColor}; font-weight: ${player1WonMatch ? 'bold' : 'normal'};">
+                        ${player1DisplayName}
+                    </span>
+                    <span style="color: #fff; font-weight: bold; font-size: 1.2em;">
+                        ${player1Games} - ${player2Games}
+                    </span>
+                    <span style="color: ${!player1WonMatch ? winnerColor : loserColor}; font-weight: ${!player1WonMatch ? 'bold' : 'normal'};">
+                        ${player2DisplayName}
+                    </span>
+                </div>
+            </div>
+        `;
     }
 
     // Determine winner based on actual game state, then map to display names (include partners)
