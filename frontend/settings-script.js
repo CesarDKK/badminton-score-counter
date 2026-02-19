@@ -35,6 +35,9 @@ function setupEventListeners() {
     // Court Version
     document.getElementById('saveCourtVersionBtn').addEventListener('click', saveCourtVersion);
 
+    // TV Version
+    document.getElementById('saveTVVersionBtn').addEventListener('click', saveTVVersion);
+
     // Message overlay
     document.getElementById('messageOkBtn').addEventListener('click', hideMessage);
 }
@@ -78,6 +81,7 @@ async function loadSettings() {
         // Invert logic: checked = tournament mode ON (showResetButton false)
         document.getElementById('showResetButton').checked = settings.showResetButton === false;
         document.getElementById('courtVersion').value = settings.courtVersion || 'v2';
+        document.getElementById('tvVersion').value = settings.tvVersion || 'v2';
     } catch (error) {
         console.error('Failed to load settings:', error);
         showMessage('Fejl', 'Kunne ikke indlæse indstillinger');
@@ -145,6 +149,19 @@ async function saveCourtVersion() {
         showMessage('Succes', `Bane version opdateret til ${courtVersion === 'v2' ? 'Klassisk' : 'Ny Version'}!`);
     } catch (error) {
         console.error('Failed to update court version:', error);
+        showMessage('Fejl', error.message);
+    }
+}
+
+async function saveTVVersion() {
+    const tvVersion = document.getElementById('tvVersion').value;
+
+    try {
+        await api.updateTVVersion(tvVersion);
+        const versionName = tvVersion === 'v2' ? 'Klassisk' : 'Minimalistisk';
+        showMessage('Succes', `TV version opdateret til ${versionName}!`);
+    } catch (error) {
+        console.error('Failed to update TV version:', error);
         showMessage('Fejl', error.message);
     }
 }

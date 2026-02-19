@@ -1,0 +1,294 @@
+/* TV View V3 - Minimalist Design
+ * Clean layout with player names on left, 3 set boxes per player
+ * Serving team highlighted with lighter background
+ */
+
+/* Global resets */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: var(--color-bg-dark);
+    color: white;
+    overflow: hidden;
+}
+
+/* Container */
+.tv-container {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header */
+.tv-header {
+    padding: 35px 60px;
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.tv-header h1 {
+    font-size: 4.5em;
+    font-weight: bold;
+    letter-spacing: 3px;
+}
+
+.timer-display {
+    font-size: 4.5em;
+    font-weight: bold;
+    letter-spacing: 2px;
+}
+
+/* Scoreboard - main content area */
+.scoreboard {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 80px;
+    padding: 60px 0;
+    background: var(--color-bg-container);
+}
+
+/* Team row */
+.team-row {
+    display: flex;
+    align-items: center;
+    padding: 50px 0 50px 52px;
+    gap: 80px;
+    transition: background 0.3s ease, border-color 0.3s ease;
+    border-left: 12px solid transparent;
+}
+
+/* Serving highlight */
+.team-row.serving {
+    background: rgba(233, 69, 96, 0.15);
+    border-left-color: var(--color-accent);
+}
+
+/* Team names - left aligned, no margin */
+.team-names {
+    min-width: 550px;
+    padding-left: 60px;
+}
+
+.player-name {
+    font-size: 4.5em;
+    font-weight: bold;
+    color: #ffffff;
+    text-transform: uppercase;
+    line-height: 1.2;
+    text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.4);
+}
+
+.partner-name {
+    font-size: 4.5em;
+    color: #ffffff;
+    margin-top: 15px;
+    font-weight: bold;
+    text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* Set boxes */
+.set-boxes {
+    display: flex;
+    gap: 50px;
+    flex: 1;
+    justify-content: flex-start;
+}
+
+.set-box {
+    width: 200px;
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 6.5em;
+    font-weight: bold;
+    border: 5px solid var(--color-primary);
+    border-radius: 20px;
+    background: var(--color-bg-card);
+    color: #ffffff;
+    transition: all 0.3s ease;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Serving team set boxes - lighter color */
+.team-row.serving .set-box {
+    background: rgba(133, 82, 211, 0.25);
+    border-color: var(--color-accent);
+}
+
+/* Current set being played */
+.set-box.current {
+    border-width: 7px;
+}
+
+/* Won set */
+.set-box.won {
+    background: rgba(76, 175, 80, 0.25);
+    border-color: #4CAF50;
+}
+
+/* Lost set */
+.set-box.lost {
+    background: rgba(233, 69, 96, 0.2);
+    border-color: var(--color-accent);
+}
+
+/* Footer */
+.tv-footer {
+    padding: 30px;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100px;
+}
+
+.tv-footer.has-banner {
+    padding: 0;
+}
+
+.court-banner-image {
+    width: 100%;
+    height: auto;
+    display: block;
+    max-height: 180px;
+    object-fit: contain;
+}
+
+.live-indicator {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    font-size: 3em;
+    font-weight: bold;
+    letter-spacing: 3px;
+}
+
+.live-dot {
+    width: 28px;
+    height: 28px;
+    background: #e94560;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.4;
+        transform: scale(1.1);
+    }
+}
+
+/* Sponsor Slideshow Container */
+#sponsorSlideshowContainer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--color-bg-dark);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+}
+
+#sponsorSlideshowContainer.active {
+    display: flex;
+}
+
+.sponsor-slide-image {
+    max-width: 90%;
+    max-height: 90%;
+    object-fit: contain;
+    animation: fadeIn 1s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 1600px) {
+    .tv-header h1 {
+        font-size: 2.5em;
+    }
+
+    .timer-display {
+        font-size: 2.5em;
+    }
+
+    .player-name {
+        font-size: 2.5em;
+    }
+
+    .partner-name {
+        font-size: 2.5em;
+    }
+
+    .set-box {
+        width: 120px;
+        height: 120px;
+        font-size: 4em;
+    }
+
+    .team-names {
+        min-width: 350px;
+    }
+}
+
+@media (max-width: 1200px) {
+    .tv-header h1 {
+        font-size: 2em;
+    }
+
+    .timer-display {
+        font-size: 2em;
+    }
+
+    .player-name {
+        font-size: 2em;
+    }
+
+    .partner-name {
+        font-size: 2em;
+    }
+
+    .set-box {
+        width: 100px;
+        height: 100px;
+        font-size: 3.5em;
+    }
+
+    .team-names {
+        min-width: 300px;
+    }
+
+    .set-boxes {
+        gap: 20px;
+    }
+
+    .team-row {
+        gap: 40px;
+    }
+}

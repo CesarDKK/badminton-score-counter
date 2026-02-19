@@ -22,10 +22,16 @@ router.get('/', async (req, res, next) => {
             ['court_version']
         );
 
+        const tvVersionSetting = await queryOne(
+            'SELECT setting_value FROM settings WHERE setting_key = ?',
+            ['tv_version']
+        );
+
         res.json({
             courtCount: parseInt(courtCountSetting?.setting_value || '4'),
             showResetButton: showResetButtonSetting?.setting_value !== 'false',
-            courtVersion: courtVersionSetting?.setting_value || 'v2'
+            courtVersion: courtVersionSetting?.setting_value || 'v2',
+            tvVersion: tvVersionSetting?.setting_value || 'v2'
         });
     } catch (error) {
         next(error);
@@ -127,6 +133,30 @@ router.put('/court-version', authMiddleware, async (req, res, next) => {
         await query(
             'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
             ['court_version', courtVersion, courtVersion]
+        );
+
+        res.json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// PUT /api/settings/tv-version - Update TV view version (requires auth)
+router.put('/tv-version', authMiddleware, async (req, res, next) => {
+    try {
+        const { tvVersion } = req.body;
+
+        // Validate input
+        if (tvVersion !== 'v2' && tvVersion !== 'v3') {
+            return res.status(400).json({
+                error: 'TV version skal være v2 eller v3'
+            });
+        }
+
+        // Update database
+        await query(
+            'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
+            ['tv_version', tvVersion, tvVersion]
         );
 
         res.json({ success: true });

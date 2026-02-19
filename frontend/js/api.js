@@ -185,6 +185,18 @@ class BadmintonAPI {
     }
 
     /**
+     * Update TV view version
+     * @param {string} tvVersion - TV version ('v2' or 'v3')
+     * @returns {Promise<object>} - { success }
+     */
+    async updateTVVersion(tvVersion) {
+        return this.request('/settings/tv-version', {
+            method: 'PUT',
+            body: JSON.stringify({ tvVersion })
+        });
+    }
+
+    /**
      * Get theme settings
      * @returns {Promise<object>} - Theme object with all colors
      */

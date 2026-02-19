@@ -14,10 +14,11 @@ async function loadPage() {
         const settings = await api.getSettings();
         const courtCount = settings.courtCount;
         const courtVersion = settings.courtVersion || 'v2';
+        const tvVersion = settings.tvVersion || 'v2';
 
         // Load buttons
         loadCourtButtons(courtCount, courtVersion);
-        loadTVButtons(courtCount);
+        loadTVButtons(courtCount, tvVersion);
 
         // Hide loading state
         hideLoading();
@@ -46,13 +47,16 @@ function loadCourtButtons(courtCount, courtVersion) {
     }
 }
 
-function loadTVButtons(courtCount) {
+function loadTVButtons(courtCount, tvVersion) {
     const tvButtons = document.getElementById('tvButtons');
     tvButtons.innerHTML = '';
 
+    // Determine which TV page to use based on version setting
+    const tvPage = tvVersion === 'v3' ? 'tv-v3.html' : 'tv.html';
+
     for (let i = 1; i <= courtCount; i++) {
         const button = document.createElement('a');
-        button.href = `tv.html?id=${i}`;
+        button.href = `${tvPage}?id=${i}`;
         button.className = 'tv-button';
         button.target = '_blank'; // Open in new window/tab
         button.innerHTML = `

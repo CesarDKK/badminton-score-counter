@@ -24,6 +24,7 @@ INSERT INTO settings (setting_key, setting_value) VALUES
   ('court_count', '5'),
   ('show_reset_button', 'true'),
   ('court_version', 'v2'),
+  ('tv_version', 'v2'),
   ('theme_name', 'default'),
   ('color_primary', '#533483'),
   ('color_accent', '#e94560'),
