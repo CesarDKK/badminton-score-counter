@@ -701,13 +701,21 @@ function showMatchFinished(gameState, playersSwapped) {
         setScoresContainer.innerHTML = setScoresHtml;
     } else {
         // Show overall match result when set scores history is not available
-        const player1Games = gameState.player1.games;
-        const player2Games = gameState.player2.games;
-        const player1WonMatch = player1Games > player2Games;
-
         // Use display names (respect swapping)
         const player1DisplayName = formatPlayerNames(displayPlayer1Name, displayPlayer1Name2);
         const player2DisplayName = formatPlayerNames(displayPlayer2Name, displayPlayer2Name2);
+
+        // Use display player games (respect swapping for consistent display)
+        let displayPlayer1Games, displayPlayer2Games;
+        if (playersSwapped) {
+            displayPlayer1Games = gameState.player2.games;
+            displayPlayer2Games = gameState.player1.games;
+        } else {
+            displayPlayer1Games = gameState.player1.games;
+            displayPlayer2Games = gameState.player2.games;
+        }
+
+        const player1WonMatch = displayPlayer1Games > displayPlayer2Games;
 
         const winnerColor = '#4CAF50'; // Green for winner
         const loserColor = '#e94560'; // Red for loser
@@ -720,7 +728,7 @@ function showMatchFinished(gameState, playersSwapped) {
                         ${player1DisplayName}
                     </span>
                     <span style="color: #fff; font-weight: bold; font-size: 1.2em;">
-                        ${player1Games} - ${player2Games}
+                        ${displayPlayer1Games} - ${displayPlayer2Games}
                     </span>
                     <span style="color: ${!player1WonMatch ? winnerColor : loserColor}; font-weight: ${!player1WonMatch ? 'bold' : 'normal'};">
                         ${player2DisplayName}
