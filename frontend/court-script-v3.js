@@ -968,16 +968,24 @@ function updatePlayerNamePositions() {
 }
 
 // Undo last action
-function undoLastAction() {
-    // If server not yet selected and match hasn't started, reset server selection
+async function undoLastAction() {
+    // If server selected but no points scored yet, allow resetting server selection
     const serverSelected = gameState.isDoubles ? gameState.servingTeam : gameState.servingPlayer;
+    const noPointsScored = gameState.player1.score === 0 &&
+                          gameState.player2.score === 0 &&
+                          gameState.player1.games === 0 &&
+                          gameState.player2.games === 0 &&
+                          gameState.timerSeconds === 0;
 
-    if (!gameState.isActive && serverSelected) {
+    if (serverSelected && noPointsScored) {
+        // Reset server selection and deactivate match
         gameState.servingPlayer = null;
         gameState.initialServer = null;
         gameState.servingTeam = null;
         gameState.servingPlayerOnTeam = null;
+        gameState.isActive = false;
         updateDisplay();
+        await performSave();  // Save immediately so TV sees the change
         console.log('Server selection reset');
         return;
     }
