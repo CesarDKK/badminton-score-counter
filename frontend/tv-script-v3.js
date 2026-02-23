@@ -785,8 +785,9 @@ function hideRestBreak() {
 
 // ========== MATCH FINISHED FUNCTIONS (UNCHANGED FROM V2) ==========
 
-function formatPlayerNames(playerName, playerName2) {
-    if (playerName2 && typeof playerName2 === 'string' && playerName2.trim() !== '') {
+function formatPlayerNames(playerName, playerName2, isDoubles) {
+    // Only show partner name if it's a doubles match AND partner name exists
+    if (isDoubles && playerName2 && typeof playerName2 === 'string' && playerName2.trim() !== '') {
         return `${playerName} / ${playerName2}`;
     }
     return playerName;
@@ -816,21 +817,23 @@ function showMatchFinished(gameState, playersSwapped) {
 
             if (typeof setData === 'string') {
                 player1Name = formatPlayerNames(originalPlayer1Name || displayPlayer1Name,
-                                               originalPlayer1Name2 || displayPlayer1Name2);
+                                               originalPlayer1Name2 || displayPlayer1Name2,
+                                               gameState.isDoubles);
                 player2Name = formatPlayerNames(originalPlayer2Name || displayPlayer2Name,
-                                               originalPlayer2Name2 || displayPlayer2Name2);
+                                               originalPlayer2Name2 || displayPlayer2Name2,
+                                               gameState.isDoubles);
                 scoreText = setData;
             } else {
                 const storedPlayer1Name = setData.player1Name;
                 const scores = setData.score.split('-').map(s => parseInt(s.trim()));
 
                 if (storedPlayer1Name === originalPlayer1Name) {
-                    player1Name = formatPlayerNames(originalPlayer1Name, originalPlayer1Name2);
-                    player2Name = formatPlayerNames(originalPlayer2Name, originalPlayer2Name2);
+                    player1Name = formatPlayerNames(originalPlayer1Name, originalPlayer1Name2, gameState.isDoubles);
+                    player2Name = formatPlayerNames(originalPlayer2Name, originalPlayer2Name2, gameState.isDoubles);
                     scoreText = setData.score;
                 } else {
-                    player1Name = formatPlayerNames(originalPlayer1Name, originalPlayer1Name2);
-                    player2Name = formatPlayerNames(originalPlayer2Name, originalPlayer2Name2);
+                    player1Name = formatPlayerNames(originalPlayer1Name, originalPlayer1Name2, gameState.isDoubles);
+                    player2Name = formatPlayerNames(originalPlayer2Name, originalPlayer2Name2, gameState.isDoubles);
                     scoreText = `${scores[1]}-${scores[0]}`;
                 }
             }
@@ -863,8 +866,8 @@ function showMatchFinished(gameState, playersSwapped) {
         }).join('');
         setScoresContainer.innerHTML = setScoresHtml;
     } else {
-        const player1DisplayName = formatPlayerNames(displayPlayer1Name, displayPlayer1Name2);
-        const player2DisplayName = formatPlayerNames(displayPlayer2Name, displayPlayer2Name2);
+        const player1DisplayName = formatPlayerNames(displayPlayer1Name, displayPlayer1Name2, gameState.isDoubles);
+        const player2DisplayName = formatPlayerNames(displayPlayer2Name, displayPlayer2Name2, gameState.isDoubles);
 
         let displayPlayer1Games, displayPlayer2Games;
         if (playersSwapped) {
@@ -901,12 +904,12 @@ function showMatchFinished(gameState, playersSwapped) {
     let winner;
     if (playersSwapped) {
         winner = player1WonMatch
-            ? formatPlayerNames(displayPlayer2Name, displayPlayer2Name2)
-            : formatPlayerNames(displayPlayer1Name, displayPlayer1Name2);
+            ? formatPlayerNames(displayPlayer2Name, displayPlayer2Name2, gameState.isDoubles)
+            : formatPlayerNames(displayPlayer1Name, displayPlayer1Name2, gameState.isDoubles);
     } else {
         winner = player1WonMatch
-            ? formatPlayerNames(displayPlayer1Name, displayPlayer1Name2)
-            : formatPlayerNames(displayPlayer2Name, displayPlayer2Name2);
+            ? formatPlayerNames(displayPlayer1Name, displayPlayer1Name2, gameState.isDoubles)
+            : formatPlayerNames(displayPlayer2Name, displayPlayer2Name2, gameState.isDoubles);
     }
     document.getElementById('tvFinishedWinner').textContent = winner;
 

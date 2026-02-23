@@ -609,9 +609,9 @@ function hideRestBreak() {
 }
 
 // Helper function to format player names (includes partner if doubles)
-function formatPlayerNames(playerName, playerName2) {
-    // Only show partner name if it exists and has actual content
-    if (playerName2 && typeof playerName2 === 'string' && playerName2.trim() !== '') {
+function formatPlayerNames(playerName, playerName2, isDoubles) {
+    // Only show partner name if it's a doubles match AND partner name exists
+    if (isDoubles && playerName2 && typeof playerName2 === 'string' && playerName2.trim() !== '') {
         return `${playerName} / ${playerName2}`;
     }
     return playerName;
@@ -648,9 +648,11 @@ function showMatchFinished(gameState, playersSwapped) {
                 // Old format: just score like "21-15"
                 // Use original display names for consistency (include partners)
                 player1Name = formatPlayerNames(originalPlayer1Name || displayPlayer1Name,
-                                               originalPlayer1Name2 || displayPlayer1Name2);
+                                               originalPlayer1Name2 || displayPlayer1Name2,
+                                               gameState.isDoubles);
                 player2Name = formatPlayerNames(originalPlayer2Name || displayPlayer2Name,
-                                               originalPlayer2Name2 || displayPlayer2Name2);
+                                               originalPlayer2Name2 || displayPlayer2Name2,
+                                               gameState.isDoubles);
                 scoreText = setData;
             } else {
                 // New format: object with player names and score (now includes partner names)
@@ -662,13 +664,13 @@ function showMatchFinished(gameState, playersSwapped) {
                 // Check if stored names match original positions
                 if (storedPlayer1Name === originalPlayer1Name) {
                     // Names are in original order
-                    player1Name = formatPlayerNames(originalPlayer1Name, originalPlayer1Name2);
-                    player2Name = formatPlayerNames(originalPlayer2Name, originalPlayer2Name2);
+                    player1Name = formatPlayerNames(originalPlayer1Name, originalPlayer1Name2, gameState.isDoubles);
+                    player2Name = formatPlayerNames(originalPlayer2Name, originalPlayer2Name2, gameState.isDoubles);
                     scoreText = setData.score;
                 } else {
                     // Names were swapped when set was saved - swap score back
-                    player1Name = formatPlayerNames(originalPlayer1Name, originalPlayer1Name2);
-                    player2Name = formatPlayerNames(originalPlayer2Name, originalPlayer2Name2);
+                    player1Name = formatPlayerNames(originalPlayer1Name, originalPlayer1Name2, gameState.isDoubles);
+                    player2Name = formatPlayerNames(originalPlayer2Name, originalPlayer2Name2, gameState.isDoubles);
                     scoreText = `${scores[1]}-${scores[0]}`; // Reverse the score
                 }
             }
@@ -704,8 +706,8 @@ function showMatchFinished(gameState, playersSwapped) {
     } else {
         // Show overall match result when set scores history is not available
         // Use display names (respect swapping)
-        const player1DisplayName = formatPlayerNames(displayPlayer1Name, displayPlayer1Name2);
-        const player2DisplayName = formatPlayerNames(displayPlayer2Name, displayPlayer2Name2);
+        const player1DisplayName = formatPlayerNames(displayPlayer1Name, displayPlayer1Name2, gameState.isDoubles);
+        const player2DisplayName = formatPlayerNames(displayPlayer2Name, displayPlayer2Name2, gameState.isDoubles);
 
         // Use display player games (respect swapping for consistent display)
         let displayPlayer1Games, displayPlayer2Games;
@@ -746,13 +748,13 @@ function showMatchFinished(gameState, playersSwapped) {
     if (playersSwapped) {
         // When swapped: gameState.player1 -> displayPlayer2, gameState.player2 -> displayPlayer1
         winner = player1WonMatch
-            ? formatPlayerNames(displayPlayer2Name, displayPlayer2Name2)
-            : formatPlayerNames(displayPlayer1Name, displayPlayer1Name2);
+            ? formatPlayerNames(displayPlayer2Name, displayPlayer2Name2, gameState.isDoubles)
+            : formatPlayerNames(displayPlayer1Name, displayPlayer1Name2, gameState.isDoubles);
     } else {
         // When not swapped: gameState.player1 -> displayPlayer1, gameState.player2 -> displayPlayer2
         winner = player1WonMatch
-            ? formatPlayerNames(displayPlayer1Name, displayPlayer1Name2)
-            : formatPlayerNames(displayPlayer2Name, displayPlayer2Name2);
+            ? formatPlayerNames(displayPlayer1Name, displayPlayer1Name2, gameState.isDoubles)
+            : formatPlayerNames(displayPlayer2Name, displayPlayer2Name2, gameState.isDoubles);
     }
     document.getElementById('tvFinishedWinner').textContent = winner;
 
