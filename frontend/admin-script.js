@@ -515,31 +515,16 @@ async function performSaveCourtChanges(isActive) {
     const isDoubles = document.getElementById('editDoublesMode').checked;
     const gameMode = document.getElementById('editGameMode').checked ? '15' : '21';
 
-    console.log('[DEBUG] Saving court changes:', {
-        courtId: currentEditingCourt,
-        isActive,
-        isDoubles,
-        gameMode
-    });
-
     try {
         // Get current state
         const state = await api.getGameState(currentEditingCourt);
 
         // Update court settings (isActive, isDoubles, gameMode) - separate endpoint
-        console.log('[DEBUG] Calling api.updateCourt with:', {
-            isActive,
-            isDoubles,
-            gameMode
-        });
-
         const courtResult = await api.updateCourt(currentEditingCourt, {
             isActive: isActive,
             isDoubles: isDoubles,
             gameMode: gameMode
         });
-
-        console.log('[DEBUG] Court update result:', courtResult);
 
         // Update game state (player names, scores, etc.)
         // Use skipAutoActive=true to prevent overwriting the manually set isActive status
@@ -560,15 +545,13 @@ async function performSaveCourtChanges(isActive) {
             decidingGameSwitched: state?.decidingGameSwitched || false
         };
 
-        console.log('[DEBUG] Calling api.updateGameState with skipAutoActive=true');
         const stateResult = await api.updateGameState(currentEditingCourt, updatedState, true);
-        console.log('[DEBUG] Game state update result:', stateResult);
 
         document.getElementById('editCourtModal').style.display = 'none';
         currentEditingCourt = null;
         await loadCourtOverview();
     } catch (error) {
-        console.error('[DEBUG] Failed to save court changes:', error);
+        console.error('Failed to save court changes:', error);
         showMessage('Fejl', 'Kunne ikke gemme ændringer. Tjek din forbindelse.');
     }
 }

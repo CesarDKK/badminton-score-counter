@@ -119,8 +119,6 @@ async function loadCourtData() {
 
         isMatchCurrentlyActive = isMatchActive && hasGameActivity;
 
-        console.log('[TV V3 DEBUG] isActive:', isMatchActive, 'hasActivity:', hasGameActivity, 'serving:', gameState.servingPlayer, gameState.servingTeam, 'isShowingSlideshow:', isShowingSlideshow);
-
         if (!isMatchActive) {
             matchStartTime = null;
             matchEndTime = null;
@@ -160,7 +158,6 @@ async function loadCourtData() {
         }
 
         hideSponsorSlideshow();
-        console.log('[TV V3 DEBUG] After hideSponsorSlideshow, isShowingSlideshow:', isShowingSlideshow);
 
         // Check if players have been swapped
         const playersSwapped = originalPlayer1Name &&
