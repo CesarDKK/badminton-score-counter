@@ -753,6 +753,67 @@ function formatSetScoreWithBold(scoreText) {
     }
 }
 
+// Parse set score string into structured data
+function parseSetScore(setScoreStr) {
+    // Format: "Player1 21-19 Player2" or just "21-19"
+    const trimmed = setScoreStr.trim();
+    const match = trimmed.match(/^(.+?)\s+(\d+)-(\d+)\s+(.+)$/);
+
+    if (match) {
+        return {
+            player1: match[1],
+            score1: parseInt(match[2]),
+            score2: parseInt(match[3]),
+            player2: match[4],
+            winner: parseInt(match[2]) > parseInt(match[3]) ? match[1] : match[4]
+        };
+    } else {
+        // Just scores: "21-19"
+        const scores = trimmed.split('-');
+        if (scores.length === 2) {
+            return {
+                player1: null,
+                score1: parseInt(scores[0]),
+                score2: parseInt(scores[1]),
+                player2: null,
+                winner: parseInt(scores[0]) > parseInt(scores[1]) ? 'player1' : 'player2'
+            };
+        }
+    }
+    return null;
+}
+
+// Calculate match statistics
+function calculateMatchStats(setScoresArray) {
+    if (!setScoresArray || setScoresArray.length === 0) {
+        return null;
+    }
+
+    const parsedSets = setScoresArray.map(s => parseSetScore(s)).filter(s => s !== null);
+    if (parsedSets.length === 0) return null;
+
+    // Calculate point differences
+    const pointDifferences = parsedSets.map(set => Math.abs(set.score1 - set.score2));
+    const totalPoints = parsedSets.reduce((sum, set) => sum + set.score1 + set.score2, 0);
+
+    // Find closest and longest sets
+    const closestSetDiff = Math.min(...pointDifferences);
+    const closestSetIndex = pointDifferences.indexOf(closestSetDiff);
+    const longestSetPoints = Math.max(...parsedSets.map(set => Math.max(set.score1, set.score2)));
+
+    return {
+        parsedSets,
+        avgPointsPerSet: (totalPoints / parsedSets.length).toFixed(1),
+        closestSet: {
+            index: closestSetIndex + 1,
+            diff: closestSetDiff,
+            set: parsedSets[closestSetIndex]
+        },
+        longestSetPoints,
+        totalSets: parsedSets.length
+    };
+}
+
 function createMatchCard(match, index) {
     const card = document.createElement('div');
     card.className = 'match-card';
@@ -761,26 +822,50 @@ function createMatchCard(match, index) {
     // Parse set scores if available
     const setScoresArray = match.set_scores ? match.set_scores.split(', ') : [];
     const hasSetDetails = setScoresArray.length > 0;
+    const stats = calculateMatchStats(setScoresArray);
+
+    // Determine if doubles (check for "/" in names)
+    const isDoubles = match.winner_name.includes('/') || match.loser_name.includes('/');
+    const gameTypeIcon = isDoubles ? '👥' : '👤';
+    const gameTypeText = isDoubles ? 'Double' : 'Single';
+
+    // Create set overview badges
+    let setOverviewBadges = '';
+    if (stats && stats.parsedSets.length > 0) {
+        const winnerName = match.winner_name;
+        setOverviewBadges = stats.parsedSets.map((set, i) => {
+            const wonSet = set.winner === winnerName ||
+                          (set.winner === 'player1' && set.score1 > set.score2) ||
+                          (set.winner === 'player2' && set.score2 > set.score1);
+            const badgeColor = wonSet ? '#4CAF50' : '#e94560';
+            const badgeIcon = wonSet ? '✓' : '✗';
+            return `<span style="background: ${badgeColor}; color: white; padding: 4px 10px; border-radius: 5px; font-size: 0.85em; font-weight: bold; margin-right: 5px;">${badgeIcon} Sæt ${i + 1}</span>`;
+        }).join('');
+    }
 
     // Main match info (always visible)
     const mainInfo = document.createElement('div');
     mainInfo.className = 'match-main-info';
     mainInfo.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; cursor: ${hasSetDetails ? 'pointer' : 'default'};">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; cursor: ${hasSetDetails ? 'pointer' : 'default'}; gap: 15px;">
             <div style="flex: 1;">
-                <div style="font-weight: bold; font-size: 1.1em; color: #e94560; margin-bottom: 5px;">
-                    <strong>${escapeHtml(match.winner_name)}</strong> besejrede ${escapeHtml(match.loser_name)}
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <span style="font-size: 1.3em;">${gameTypeIcon}</span>
+                    <span style="background: rgba(83, 52, 131, 0.3); color: #e94560; padding: 3px 8px; border-radius: 5px; font-size: 0.8em; font-weight: bold;">${gameTypeText}</span>
                 </div>
-                <div style="color: #aaa; font-size: 0.9em;">
-                    Sæt: ${match.games_won} | Varighed: ${match.duration} | Bane ${match.court_id}
+                <div style="font-weight: bold; font-size: 1.2em; margin-bottom: 8px;">
+                    <span style="color: #4CAF50;">${escapeHtml(match.winner_name)}</span>
+                    <span style="color: #aaa; margin: 0 8px;">besejrede</span>
+                    <span style="color: #e94560;">${escapeHtml(match.loser_name)}</span>
+                </div>
+                ${setOverviewBadges ? `<div style="margin: 10px 0;">${setOverviewBadges}</div>` : ''}
+                <div style="color: #aaa; font-size: 0.9em; margin-top: 8px;">
+                    <span style="margin-right: 15px;">⏱️ ${match.duration}</span>
+                    <span style="margin-right: 15px;">🏸 Bane ${match.court_id}</span>
+                    <span>📅 ${new Date(match.match_date).toLocaleDateString('da-DK', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                 </div>
             </div>
-            <div style="display: flex; align-items: center; gap: 15px;">
-                <div style="color: #999; font-size: 0.85em;">
-                    ${new Date(match.match_date).toLocaleDateString('da-DK')}
-                </div>
-                ${hasSetDetails ? '<div class="expand-icon" style="color: #e94560; font-size: 1.2em;">▼</div>' : ''}
-            </div>
+            ${hasSetDetails ? '<div class="expand-icon" style="color: #e94560; font-size: 1.5em; padding: 10px;">▼</div>' : ''}
         </div>
     `;
 
@@ -789,19 +874,62 @@ function createMatchCard(match, index) {
     details.className = 'match-details';
     details.style.display = 'none';
 
-    if (hasSetDetails) {
+    if (hasSetDetails && stats) {
+        let setsHtml = '';
+
+        stats.parsedSets.forEach((set, i) => {
+            const player1Won = set.score1 > set.score2;
+            const player1Color = player1Won ? '#4CAF50' : '#e94560';
+            const player2Color = player1Won ? '#e94560' : '#4CAF50';
+            const player1Weight = player1Won ? 'bold' : 'normal';
+            const player2Weight = player1Won ? 'normal' : 'bold';
+
+            const player1Name = set.player1 || match.winner_name;
+            const player2Name = set.player2 || match.loser_name;
+
+            setsHtml += `
+                <div style="padding: 12px 15px; background: rgba(83, 52, 131, 0.2); border-radius: 8px; margin-bottom: 10px; border-left: 4px solid ${player1Won ? player1Color : player2Color};">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <span style="font-weight: bold; color: #eaeaea; font-size: 0.9em;">SÆT ${i + 1}</span>
+                        <span style="background: ${player1Won ? player1Color : player2Color}; color: white; padding: 3px 10px; border-radius: 5px; font-size: 0.85em; font-weight: bold;">
+                            ${player1Won ? '✓ ' + player1Name : '✓ ' + player2Name}
+                        </span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 1.1em;">
+                        <span style="color: ${player1Color}; font-weight: ${player1Weight};">${escapeHtml(player1Name)}</span>
+                        <span style="color: white; font-weight: bold; font-size: 1.3em; margin: 0 15px;">${set.score1} - ${set.score2}</span>
+                        <span style="color: ${player2Color}; font-weight: ${player2Weight};">${escapeHtml(player2Name)}</span>
+                    </div>
+                </div>
+            `;
+        });
+
+        // Statistics section
+        const statsHtml = `
+            <div style="margin-top: 15px; padding: 15px; background: rgba(83, 52, 131, 0.15); border-radius: 8px; border: 1px solid rgba(83, 52, 131, 0.3);">
+                <div style="font-weight: bold; margin-bottom: 12px; color: #e94560; font-size: 1em;">📊 KAMPSTATISTIK</div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                    <div style="background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 5px;">
+                        <div style="color: #aaa; font-size: 0.85em; margin-bottom: 3px;">Gennemsnitlige Point pr. Sæt</div>
+                        <div style="color: #eaeaea; font-weight: bold; font-size: 1.1em;">${stats.avgPointsPerSet} point</div>
+                    </div>
+                    <div style="background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 5px;">
+                        <div style="color: #aaa; font-size: 0.85em; margin-bottom: 3px;">Tættest Sæt</div>
+                        <div style="color: #eaeaea; font-weight: bold; font-size: 1.1em;">Sæt ${stats.closestSet.index} (${stats.closestSet.diff} points forskel)</div>
+                    </div>
+                    <div style="background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 5px;">
+                        <div style="color: #aaa; font-size: 0.85em; margin-bottom: 3px;">Højeste Score i et Sæt</div>
+                        <div style="color: #eaeaea; font-weight: bold; font-size: 1.1em;">${stats.longestSetPoints} point</div>
+                    </div>
+                </div>
+            </div>
+        `;
+
         details.innerHTML = `
-            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(233, 69, 96, 0.3);">
-                <div style="font-weight: bold; margin-bottom: 10px; color: #eaeaea;">Sæt detaljer:</div>
-                ${setScoresArray.map((score, i) => {
-                    const formattedScore = formatSetScoreWithBold(score);
-                    return `
-                        <div style="padding: 8px 12px; background: rgba(83, 52, 131, 0.3); border-radius: 5px; margin-bottom: 5px; display: flex; justify-content: space-between;">
-                            <span style="color: #eaeaea;">Sæt ${i + 1}:</span>
-                            <span style="color: #e94560;">${formattedScore}</span>
-                        </div>
-                    `;
-                }).join('')}
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid rgba(233, 69, 96, 0.3);">
+                <div style="font-weight: bold; margin-bottom: 15px; color: #eaeaea; font-size: 1.1em;">🏆 SÆT DETALJER</div>
+                ${setsHtml}
+                ${statsHtml}
             </div>
         `;
 
