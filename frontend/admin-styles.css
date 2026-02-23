@@ -5,7 +5,6 @@ body {
 }
 
 .container {
-    background: var(--color-bg-container);
     color: #eaeaea;
 }
 
@@ -24,27 +23,35 @@ body {
 .login-box {
     background: var(--color-bg-card);
     padding: 40px;
-    border-radius: 15px;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     max-width: 400px;
     width: 100%;
     text-align: center;
 }
 
 .login-box h2 {
-    color: var(--color-accent);
+    color: #ffffff;
     margin-bottom: 30px;
+    font-weight: 600;
 }
 
 .login-box input {
     width: 100%;
-    padding: 15px;
-    margin: 15px 0;
-    border: 2px solid var(--color-primary);
+    padding: 14px;
+    margin: 12px 0;
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 8px;
-    font-size: 1.1em;
+    font-size: 1em;
     background: var(--color-bg-container);
     color: #eaeaea;
+    transition: border-color 0.2s ease;
+}
+
+.login-box input:focus {
+    outline: none;
+    border-color: var(--color-primary);
 }
 
 .login-box button {
@@ -57,17 +64,19 @@ body {
 }
 
 .back-link a {
-    color: var(--color-accent);
+    color: rgba(255, 255, 255, 0.6);
     text-decoration: none;
-    font-weight: bold;
+    font-weight: 500;
+    transition: color 0.2s ease;
 }
 
 .back-link a:hover {
-    text-decoration: underline;
+    color: var(--color-accent);
 }
 
 header h1 {
-    color: var(--color-accent);
+    color: #ffffff;
+    font-weight: 600;
 }
 
 /* Court Overview Grid */
@@ -76,9 +85,10 @@ header h1 {
 }
 
 .overview-section h2 {
-    color: var(--color-accent);
+    color: #ffffff;
     margin-bottom: 20px;
-    font-size: 2em;
+    font-size: 1.8em;
+    font-weight: 600;
 }
 
 .court-grid {
@@ -89,17 +99,19 @@ header h1 {
 }
 
 .court-card {
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
-    border-radius: 15px;
+    background: var(--color-bg-card);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
     padding: 25px;
     color: white;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
-    transition: transform 0.3s;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
 }
 
 .court-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+    border-color: rgba(83, 52, 131, 0.4);
 }
 
 .court-header {
@@ -108,27 +120,33 @@ header h1 {
     align-items: center;
     margin-bottom: 20px;
     padding-bottom: 15px;
-    border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .court-header h3 {
-    font-size: 1.5em;
+    font-size: 1.4em;
     margin: 0;
+    font-weight: 600;
 }
 
 .court-status {
-    padding: 5px 15px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 20px;
-    font-size: 0.9em;
+    padding: 6px 14px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    font-size: 0.85em;
+    font-weight: 500;
 }
 
 .court-status.active {
-    background: #27ae60;
+    background: rgba(39, 174, 96, 0.2);
+    border: 1px solid #27ae60;
+    color: #4ade80;
 }
 
 .court-status.inactive {
-    background: #95a5a6;
+    background: rgba(149, 165, 166, 0.2);
+    border: 1px solid #95a5a6;
+    color: #cbd5e1;
 }
 
 .court-match {
@@ -141,8 +159,9 @@ header h1 {
     align-items: center;
     margin: 15px 0;
     padding: 15px;
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.05);
     border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .player-info {
@@ -151,20 +170,22 @@ header h1 {
 }
 
 .player-name {
-    font-weight: bold;
-    font-size: 1.1em;
+    font-weight: 600;
+    font-size: 1em;
     margin-bottom: 10px;
+    opacity: 0.9;
 }
 
 .player-score {
-    font-size: 2.5em;
-    font-weight: bold;
+    font-size: 2.2em;
+    font-weight: 700;
 }
 
 .vs-divider {
-    font-size: 1.5em;
-    font-weight: bold;
+    font-size: 1.3em;
+    font-weight: 500;
     margin: 0 20px;
+    opacity: 0.5;
 }
 
 .court-meta {
@@ -172,7 +193,7 @@ header h1 {
     justify-content: space-between;
     margin-top: 15px;
     padding-top: 15px;
-    border-top: 1px solid rgba(255, 255, 255, 0.3);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
     font-size: 0.9em;
 }
 
@@ -183,43 +204,45 @@ header h1 {
 }
 
 .meta-label {
-    opacity: 0.8;
+    opacity: 0.6;
     font-size: 0.85em;
 }
 
 .meta-value {
-    font-weight: bold;
-    font-size: 1.1em;
+    font-weight: 600;
+    font-size: 1.05em;
 }
 
 .court-empty {
     text-align: center;
     padding: 40px;
-    opacity: 0.7;
-    font-size: 1.1em;
+    opacity: 0.5;
+    font-size: 1em;
 }
 
 .court-actions {
     margin-top: 15px;
     padding-top: 15px;
-    border-top: 1px solid rgba(255, 255, 255, 0.3);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
     text-align: center;
 }
 
 .btn-edit {
-    padding: 10px 25px;
-    background: rgba(255, 255, 255, 0.2);
+    padding: 10px 24px;
+    background: rgba(83, 52, 131, 0.3);
     color: white;
-    border: 2px solid rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(83, 52, 131, 0.5);
     border-radius: 8px;
     cursor: pointer;
-    font-weight: bold;
-    transition: all 0.3s;
+    font-weight: 600;
+    font-size: 0.95em;
+    transition: all 0.2s ease;
 }
 
 .btn-edit:hover {
-    background: rgba(255, 255, 255, 0.3);
-    transform: scale(1.05);
+    background: rgba(83, 52, 131, 0.5);
+    border-color: var(--color-primary);
+    transform: translateY(-1px);
 }
 
 /* Settings Section */
@@ -233,32 +256,40 @@ header h1 {
 .setting-card {
     background: var(--color-bg-card);
     padding: 25px;
-    border-radius: 15px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .setting-card h3 {
-    color: var(--color-accent);
+    color: #ffffff;
     margin-bottom: 20px;
-    font-size: 1.3em;
+    font-size: 1.2em;
+    font-weight: 600;
 }
 
 .setting-card label {
     display: block;
     margin: 15px 0 10px 0;
-    font-weight: bold;
-    color: #eaeaea;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.8);
 }
 
 .setting-card input {
     width: 100%;
     padding: 12px;
-    border: 2px solid var(--color-primary);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 8px;
     font-size: 1em;
     margin-bottom: 15px;
     background: var(--color-bg-container);
     color: #eaeaea;
+    transition: border-color 0.2s ease;
+}
+
+.setting-card input:focus {
+    outline: none;
+    border-color: var(--color-primary);
 }
 
 .setting-card button {
@@ -267,27 +298,27 @@ header h1 {
 }
 
 .btn-danger {
-    padding: 15px 30px;
-    font-size: 1.1em;
+    padding: 14px 28px;
+    font-size: 1em;
     background: #e74c3c;
     color: white;
     border: none;
     border-radius: 8px;
     cursor: pointer;
-    transition: all 0.3s;
-    font-weight: bold;
+    transition: all 0.2s ease;
+    font-weight: 600;
 }
 
 .btn-danger:hover {
-    filter: brightness(0.85);
-    transform: scale(1.05);
+    background: #c0392b;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
 }
 
 .warning-text {
-    color: var(--color-accent);
+    color: rgba(233, 69, 96, 0.8);
     font-size: 0.9em;
     margin-top: 10px;
-    font-style: italic;
 }
 
 /* Edit Court Modal Styles */
@@ -299,28 +330,30 @@ header h1 {
     top: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
+    background-color: rgba(0, 0, 0, 0.8);
 }
 
 .modal .modal-content {
     background: var(--color-bg-card);
     color: #eaeaea;
-    margin: 10% auto;
+    margin: 8% auto;
     padding: 30px;
-    border-radius: 15px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
     width: 90%;
     max-width: 500px;
     max-height: 85vh;
     overflow-y: auto;
-    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .modal .close-modal {
-    color: #eaeaea;
+    color: rgba(255, 255, 255, 0.6);
     float: right;
     font-size: 28px;
-    font-weight: bold;
+    font-weight: 600;
     cursor: pointer;
+    transition: color 0.2s ease;
 }
 
 .modal .close-modal:hover {
@@ -328,33 +361,40 @@ header h1 {
 }
 
 .modal h2 {
-    color: var(--color-accent);
+    color: #ffffff;
     margin-bottom: 20px;
+    font-weight: 600;
 }
 
 .edit-form label {
     display: block;
     margin: 15px 0 8px 0;
-    font-weight: bold;
-    color: #eaeaea;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.8);
 }
 
 .edit-form input {
     width: 100%;
     padding: 12px;
-    border: 2px solid var(--color-primary);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 8px;
     font-size: 1em;
     background: var(--color-bg-container);
     color: #eaeaea;
     margin-bottom: 15px;
+    transition: border-color 0.2s ease;
+}
+
+.edit-form input:focus {
+    outline: none;
+    border-color: var(--color-primary);
 }
 
 .active-toggle {
-    margin: 25px 0;
-    padding: 20px;
-    background: rgba(233, 69, 96, 0.1);
-    border: 2px solid var(--color-primary);
+    margin: 20px 0;
+    padding: 18px;
+    background: rgba(83, 52, 131, 0.15);
+    border: 1px solid rgba(83, 52, 131, 0.3);
     border-radius: 10px;
 }
 
@@ -474,17 +514,20 @@ header h1 {
 
 /* Match History Card Styles */
 .match-card {
-    padding: 15px;
-    background: rgba(15, 52, 96, 0.5);
+    padding: 16px;
+    background: var(--color-bg-card);
     border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-left: 3px solid var(--color-accent);
     margin-bottom: 10px;
-    border-left: 5px solid #e94560;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
 }
 
 .match-card:hover {
-    background: rgba(15, 52, 96, 0.7);
-    transform: translateX(5px);
+    border-left-color: var(--color-primary);
+    border-color: rgba(83, 52, 131, 0.3);
+    transform: translateX(3px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .match-main-info {

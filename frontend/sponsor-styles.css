@@ -1,85 +1,90 @@
 /* Sponsor Page Styles */
 
 .upload-section {
-    background: rgba(15, 52, 96, 0.3);
-    border-radius: 15px;
-    padding: 30px;
-    margin-bottom: 30px;
+    background: var(--color-bg-card);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 25px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 /* Slideshow Settings Section */
 .slideshow-settings-section {
-    background: rgba(15, 52, 96, 0.3);
-    border-radius: 15px;
-    padding: 30px;
-    margin-bottom: 30px;
+    background: var(--color-bg-card);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 25px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .slideshow-settings-section h2 {
-    color: var(--color-accent);
+    color: #ffffff;
     margin-bottom: 20px;
-    font-size: 1.8em;
+    font-size: 1.6em;
+    font-weight: 600;
 }
 
 .settings-container {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 18px;
 }
 
 .setting-item {
-    background: rgba(0, 20, 40, 0.5);
+    background: rgba(255, 255, 255, 0.03);
     border-radius: 10px;
-    padding: 20px;
-    border: 2px solid var(--color-primary);
+    padding: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .setting-item label {
     display: block;
-    color: #fff;
-    font-weight: bold;
-    font-size: 1.1em;
-    margin-bottom: 15px;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 500;
+    font-size: 1em;
+    margin-bottom: 12px;
 }
 
 .duration-control {
     display: flex;
-    gap: 15px;
+    gap: 12px;
     align-items: center;
 }
 
 .duration-control input[type="number"] {
-    flex: 0 0 150px;
+    flex: 0 0 140px;
     padding: 12px;
-    font-size: 1.1em;
-    border: 2px solid var(--color-primary);
+    font-size: 1em;
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 8px;
-    background: rgba(0, 20, 40, 0.8);
+    background: var(--color-bg-container);
     color: #fff;
     text-align: center;
+    transition: border-color 0.2s ease;
 }
 
 .duration-control input[type="number"]:focus {
     outline: none;
-    border-color: var(--color-accent);
-    box-shadow: 0 0 10px rgba(233, 69, 96, 0.3);
+    border-color: var(--color-primary);
 }
 
 .duration-control .btn-primary {
-    padding: 12px 30px;
+    padding: 12px 28px;
 }
 
 .setting-hint {
-    color: #aaa;
+    color: rgba(255, 255, 255, 0.4);
     font-size: 0.9em;
     margin-top: 10px;
-    font-style: italic;
 }
 
 .upload-section h2 {
-    color: var(--color-accent);
-    margin-bottom: 30px;
-    font-size: 1.8em;
+    color: #ffffff;
+    margin-bottom: 25px;
+    font-size: 1.6em;
+    font-weight: 600;
 }
 
 /* Upload Grid - Side by Side Layout */
@@ -109,21 +114,26 @@
 
 .upload-box {
     text-align: center;
-    padding: 30px;
-    background: rgba(0, 20, 40, 0.5);
+    padding: 28px;
+    background: rgba(255, 255, 255, 0.03);
     border-radius: 10px;
-    border: 2px dashed var(--color-primary);
+    border: 2px dashed rgba(83, 52, 131, 0.5);
     width: 100%;
+    transition: border-color 0.2s ease;
+}
+
+.upload-box:hover {
+    border-color: var(--color-primary);
 }
 
 .upload-box .btn-primary {
-    font-size: 1.2em;
-    padding: 15px 40px;
+    font-size: 1.1em;
+    padding: 14px 36px;
     margin-bottom: 15px;
 }
 
 .upload-hint {
-    color: #aaa;
+    color: rgba(255, 255, 255, 0.4);
     font-size: 0.9em;
     margin-top: 10px;
 }
@@ -135,47 +145,52 @@
 
 /* Gallery Section */
 .gallery-section {
-    background: rgba(15, 52, 96, 0.3);
-    border-radius: 15px;
-    padding: 30px;
+    background: var(--color-bg-card);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 28px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .gallery-section h2 {
-    color: var(--color-accent);
-    font-size: 1.8em;
+    color: #ffffff;
+    font-size: 1.6em;
+    font-weight: 600;
 }
 
 .gallery-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
+    gap: 18px;
     margin-top: 20px;
 }
 
 .gallery-item {
-    background: rgba(0, 20, 40, 0.6);
+    background: var(--color-bg-container);
     border-radius: 10px;
     overflow: hidden;
-    border: 2px solid var(--color-primary);
-    transition: transform 0.2s, box-shadow 0.2s;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .gallery-item:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 20px rgba(233, 69, 96, 0.3);
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+    border-color: rgba(83, 52, 131, 0.4);
 }
 
 /* Inactive and expired gallery items - dimmed appearance */
 .gallery-item-inactive,
 .gallery-item-expired {
     opacity: 0.5;
-    border-color: #666;
+    border-color: rgba(255, 255, 255, 0.05);
 }
 
 .gallery-item-inactive:hover,
 .gallery-item-expired:hover {
     opacity: 0.7;
-    box-shadow: 0 8px 20px rgba(158, 158, 158, 0.3);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
 }
 
 .gallery-item-inactive .gallery-image,
@@ -184,7 +199,7 @@
 }
 
 .gallery-item-expired {
-    border-color: rgba(233, 69, 96, 0.5);
+    border-color: rgba(233, 69, 96, 0.3);
 }
 
 .gallery-image-container {

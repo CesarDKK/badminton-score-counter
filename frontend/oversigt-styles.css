@@ -22,53 +22,55 @@ body {
 
 /* Header */
 .overview-header {
-    background: rgba(15, 52, 96, 0.8);
+    background: var(--color-bg-container);
     padding: 20px 40px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 3px solid var(--color-primary);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .header-left {
     display: flex;
     align-items: center;
-    gap: 30px;
+    gap: 25px;
 }
 
 .overview-header h1 {
-    font-size: 2.5em;
-    color: var(--color-accent);
-    text-transform: uppercase;
-    letter-spacing: 2px;
+    font-size: 2.2em;
+    color: #ffffff;
+    font-weight: 600;
+    letter-spacing: -0.5px;
 }
 
 .page-indicator {
-    background: rgba(0, 20, 40, 0.8);
-    padding: 10px 25px;
-    border-radius: 25px;
-    border: 2px solid var(--color-primary);
+    background: var(--color-bg-card);
+    padding: 8px 20px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .page-indicator span {
-    font-size: 1.3em;
-    color: #fff;
-    font-weight: bold;
+    font-size: 1.1em;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 500;
 }
 
 .back-link {
     color: #fff;
     text-decoration: none;
-    font-size: 1.2em;
+    font-size: 1em;
     padding: 10px 20px;
-    border: 2px solid var(--color-primary);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 8px;
-    transition: all 0.3s;
+    transition: all 0.2s ease;
+    font-weight: 500;
 }
 
 .back-link:hover {
-    background: var(--color-primary);
-    transform: scale(1.05);
+    background: rgba(83, 52, 131, 0.3);
+    border-color: var(--color-primary);
+    transform: translateY(-1px);
 }
 
 /* Courts Grid - 2x3 layout (6 courts) */
@@ -84,21 +86,23 @@ body {
 
 /* Court Card */
 .court-card {
-    background: rgba(0, 20, 40, 0.8);
-    border: 3px solid var(--color-primary);
-    border-radius: 15px;
-    padding: 20px;
+    background: var(--color-bg-card);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 18px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     position: relative;
     overflow: hidden;
-    transition: transform 0.3s, box-shadow 0.3s;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .court-card:hover {
-    transform: scale(1.02);
-    box-shadow: 0 0 30px rgba(233, 69, 96, 0.5);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    border-color: rgba(83, 52, 131, 0.3);
 }
 
 /* Court Header */
@@ -108,19 +112,19 @@ body {
     align-items: center;
     margin-bottom: 15px;
     padding-bottom: 10px;
-    border-bottom: 2px solid var(--color-primary);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .court-number {
-    font-size: 1.8em;
-    font-weight: bold;
-    color: var(--color-accent);
+    font-size: 1.6em;
+    font-weight: 600;
+    color: #ffffff;
 }
 
 .court-timer {
-    font-size: 1.5em;
-    color: #4CAF50;
-    font-weight: bold;
+    font-size: 1.3em;
+    color: rgba(76, 175, 80, 0.9);
+    font-weight: 600;
 }
 
 /* Players Section */
@@ -129,16 +133,17 @@ body {
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 20px;
+    gap: 15px;
 }
 
 .player-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px;
-    background: rgba(0, 20, 40, 0.5);
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
     border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .player-info {
@@ -146,15 +151,15 @@ body {
 }
 
 .player-name {
-    font-size: 1.3em;
-    font-weight: bold;
+    font-size: 1.2em;
+    font-weight: 600;
     color: #fff;
     margin-bottom: 3px;
 }
 
 .player-name-partner {
-    font-size: 1.3em;
-    font-weight: bold;
+    font-size: 1.2em;
+    font-weight: 600;
     color: #fff;
     margin-bottom: 3px;
 }
@@ -162,14 +167,14 @@ body {
 .player-stats {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 12px;
 }
 
 .player-score {
-    font-size: 3em;
-    font-weight: bold;
-    color: var(--color-accent);
-    min-width: 80px;
+    font-size: 2.5em;
+    font-weight: 700;
+    color: #ffffff;
+    min-width: 70px;
     text-align: center;
 }
 
@@ -177,44 +182,44 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: rgba(15, 52, 96, 0.6);
-    padding: 8px 12px;
+    background: rgba(83, 52, 131, 0.2);
+    padding: 6px 10px;
     border-radius: 8px;
-    border: 2px solid var(--color-primary);
+    border: 1px solid rgba(83, 52, 131, 0.4);
 }
 
 .vs-divider {
     text-align: center;
-    font-size: 1.5em;
-    color: var(--color-primary);
-    font-weight: bold;
+    font-size: 1.3em;
+    color: rgba(255, 255, 255, 0.3);
+    font-weight: 500;
     margin: 5px 0;
 }
 
 /* Games Score - now displayed next to each player */
 .games-label {
-    font-size: 0.8em;
-    color: #aaa;
+    font-size: 0.75em;
+    color: rgba(255, 255, 255, 0.5);
     text-transform: uppercase;
 }
 
 .games-value {
-    font-size: 1.3em;
-    font-weight: bold;
-    color: #4CAF50;
+    font-size: 1.2em;
+    font-weight: 600;
+    color: rgba(76, 175, 80, 0.9);
     margin-top: 2px;
 }
 
 /* Inactive Court (No Match) */
 .court-card.inactive {
-    border-color: #555;
-    opacity: 0.6;
+    border-color: rgba(255, 255, 255, 0.05);
+    opacity: 0.5;
 }
 
 .court-card.inactive .court-inactive-message {
     text-align: center;
-    color: #888;
-    font-size: 1.2em;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 1.1em;
     padding: 40px 0;
 }
 
@@ -225,8 +230,8 @@ body {
     left: 50%;
     transform: translate(-50%, -50%);
     text-align: center;
-    font-size: 2em;
-    color: var(--color-accent);
+    font-size: 1.8em;
+    color: rgba(255, 255, 255, 0.6);
 }
 
 /* No Matches Message */
@@ -239,14 +244,15 @@ body {
 }
 
 .no-matches-message h2 {
-    font-size: 3em;
-    color: var(--color-accent);
+    font-size: 2.5em;
+    color: #ffffff;
     margin-bottom: 20px;
+    font-weight: 600;
 }
 
 .no-matches-message p {
-    font-size: 1.5em;
-    color: #aaa;
+    font-size: 1.3em;
+    color: rgba(255, 255, 255, 0.5);
 }
 
 /* Page transitions - no animation, direct switch */
@@ -256,37 +262,26 @@ body {
     position: absolute;
     top: 10px;
     right: 10px;
-    background: #4CAF50;
+    background: rgba(76, 175, 80, 0.9);
     color: white;
-    padding: 5px 15px;
-    border-radius: 20px;
-    font-size: 0.9em;
-    font-weight: bold;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% {
-        opacity: 1;
-        transform: scale(1);
-    }
-    50% {
-        opacity: 0.7;
-        transform: scale(1.05);
-    }
+    padding: 6px 14px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    font-weight: 600;
+    border: 1px solid rgba(76, 175, 80, 0.5);
 }
 
 /* Court Banner in Card Footer */
 .court-card-footer {
-    margin-top: 15px;
+    margin-top: 12px;
     padding-top: 10px;
-    border-top: 2px solid var(--color-primary);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .court-banner-small {
     width: 100%;
     height: auto;
-    border-radius: 5px;
+    border-radius: 6px;
     display: block;
 }
 

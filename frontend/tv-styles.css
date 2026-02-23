@@ -16,30 +16,29 @@ body {
     height: 100vh;
     display: flex;
     flex-direction: column;
-    background: linear-gradient(135deg, var(--color-bg-dark) 0%, var(--color-bg-container) 100%);
+    background: var(--color-bg-dark);
 }
 
 /* Header */
 .tv-header {
-    padding: 40px;
+    padding: 35px 50px;
     background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
 }
 
 .tv-header h1 {
-    font-size: 4em;
-    font-weight: bold;
-    letter-spacing: 3px;
+    font-size: 3.5em;
+    font-weight: 700;
+    letter-spacing: 1px;
 }
 
 .timer-large {
-    font-size: 5em;
-    font-weight: bold;
-    letter-spacing: 3px;
-    text-shadow: 0 0 20px rgba(233, 69, 96, 0.8);
+    font-size: 4.5em;
+    font-weight: 700;
+    letter-spacing: 2px;
 }
 
 /* Scoreboard */
@@ -48,8 +47,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-around;
-    padding: 60px;
-    gap: 80px;
+    padding: 50px;
+    gap: 60px;
 }
 
 .player-column {
@@ -59,27 +58,27 @@ body {
     align-items: center;
     gap: 30px;
     padding: 40px;
-    background: rgba(15, 52, 96, 0.5);
-    border-radius: 30px;
-    border: 3px solid var(--color-primary);
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    background: var(--color-bg-container);
+    border-radius: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
 .player-names-group {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 15px;
+    gap: 12px;
     width: 100%;
 }
 
 .player-name {
-    font-size: 3.5em;
-    font-weight: bold;
+    font-size: 3em;
+    font-weight: 700;
     text-align: center;
     color: #ffffff;
     text-transform: uppercase;
-    letter-spacing: 2px;
+    letter-spacing: 1px;
     min-height: 1.2em;
     display: flex;
     align-items: center;
@@ -88,16 +87,15 @@ body {
 }
 
 .player-name-partner {
-    font-size: 3.5em;
+    font-size: 3em;
     color: #ffffff;
 }
 
 .player-score {
-    font-size: 12em;
-    font-weight: bold;
+    font-size: 11em;
+    font-weight: 800;
     line-height: 1;
     color: #ffffff;
-    text-shadow: 0 0 30px rgba(233, 69, 96, 0.6);
 }
 
 .player-games {
