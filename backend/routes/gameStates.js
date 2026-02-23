@@ -189,7 +189,7 @@ router.get('/:courtId', async (req, res, next) => {
 router.put('/:courtId', async (req, res, next) => {
     try {
         const { courtId } = req.params;
-        const { player1, player2, timerSeconds, decidingGameSwitched, restBreakActive, restBreakSecondsLeft, restBreakTitle, isDoubles, setScoresHistory, matchStartTime, matchEndTime, matchCompleted, servingPlayer, initialServer, servingTeam, servingPlayerOnTeam, team1RightCourt, team2RightCourt, betweenSets } = req.body;
+        const { player1, player2, timerSeconds, decidingGameSwitched, restBreakActive, restBreakSecondsLeft, restBreakTitle, isActive, isDoubles, setScoresHistory, matchStartTime, matchEndTime, matchCompleted, servingPlayer, initialServer, servingTeam, servingPlayerOnTeam, team1RightCourt, team2RightCourt, betweenSets } = req.body;
 
         // Check if we should skip auto-updating active status (for admin edits)
         const skipAutoActive = req.query.skipAutoActive === 'true';
@@ -199,6 +199,14 @@ router.put('/:courtId', async (req, res, next) => {
 
         if (!court) {
             return res.status(404).json({ error: 'Bane ikke fundet' });
+        }
+
+        // Update court's is_active status if provided
+        if (typeof isActive === 'boolean') {
+            await query(
+                'UPDATE courts SET is_active = ? WHERE court_number = ?',
+                [isActive, courtId]
+            );
         }
 
         // Validate input

@@ -112,13 +112,15 @@ async function loadCourtData() {
         // Check if match is active
         const isMatchActive = gameState.isActive === true;
 
-        // Check if there's actual game activity (scoring has started)
+        // Check if there's actual game activity (scoring has started) OR if serving player is selected
         const hasGameActivity =
             gameState.player1.score > 0 ||
             gameState.player2.score > 0 ||
             gameState.player1.games > 0 ||
             gameState.player2.games > 0 ||
-            gameState.timerSeconds > 0;
+            gameState.timerSeconds > 0 ||
+            gameState.servingPlayer != null ||  // Serving player selected (singles)
+            gameState.servingTeam != null;      // Serving team selected (doubles)
 
         // Timer should only run when there's actual game activity
         isMatchCurrentlyActive = isMatchActive && hasGameActivity;

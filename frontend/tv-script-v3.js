@@ -25,8 +25,9 @@ let matchEndTime = null;
 let restBreakInterval = null;
 let localRestBreakSecondsLeft = 0;
 let isRestBreakActive = false;
-// Cache last seen scores to capture final point before reset
-let lastSeenScores = {
+let wasRestBreakActive = false; // Track previous rest break state
+// Cache scores we see during gameplay as fallback until database history updates
+let cachedSetScores = {
     team1: { set1: 0, set2: 0, set3: 0 },
     team2: { set1: 0, set2: 0, set3: 0 }
 };
@@ -106,14 +107,19 @@ async function loadCourtData() {
 
         const isMatchActive = gameState.isActive === true;
 
+        // Check if there's any game activity OR if a serving player has been selected
         const hasGameActivity =
             gameState.player1.score > 0 ||
             gameState.player2.score > 0 ||
             gameState.player1.games > 0 ||
             gameState.player2.games > 0 ||
-            gameState.timerSeconds > 0;
+            gameState.timerSeconds > 0 ||
+            gameState.servingPlayer != null ||  // Serving player selected (singles)
+            gameState.servingTeam != null;      // Serving team selected (doubles)
 
         isMatchCurrentlyActive = isMatchActive && hasGameActivity;
+
+        console.log('[TV V3 DEBUG] isActive:', isMatchActive, 'hasActivity:', hasGameActivity, 'serving:', gameState.servingPlayer, gameState.servingTeam, 'isShowingSlideshow:', isShowingSlideshow);
 
         if (!isMatchActive) {
             matchStartTime = null;
@@ -138,11 +144,14 @@ async function loadCourtData() {
             originalPlayer2Name = gameState.player2.name;
             originalPlayer2Name2 = gameState.player2.name2 || null;
 
-            // Reset score cache for new match
-            lastSeenScores = {
+            // Reset cached scores for new match
+            cachedSetScores = {
                 team1: { set1: 0, set2: 0, set3: 0 },
                 team2: { set1: 0, set2: 0, set3: 0 }
             };
+
+            // Reset rest break tracker
+            wasRestBreakActive = false;
 
             if (window.loadTheme) {
                 await window.loadTheme();
@@ -151,6 +160,7 @@ async function loadCourtData() {
         }
 
         hideSponsorSlideshow();
+        console.log('[TV V3 DEBUG] After hideSponsorSlideshow, isShowingSlideshow:', isShowingSlideshow);
 
         // Check if players have been swapped
         const playersSwapped = originalPlayer1Name &&
@@ -172,6 +182,32 @@ async function loadCourtData() {
         } else {
             hideRestBreak();
         }
+
+        // Detect when rest break ends (timer disappears)
+        // This is the perfect time to refresh data from database
+        // because backend has finished saving setScoresHistory by then
+        if (wasRestBreakActive && !gameState.restBreakActive) {
+            console.log('[TV V3] Rest break ended. Refreshing data from database to get updated set scores...');
+
+            // Immediately fetch fresh data from database
+            setTimeout(async () => {
+                try {
+                    const freshGameState = await api.getGameState(courtId);
+                    console.log(`[TV V3] Fresh data after rest break. setScoresHistory length: ${freshGameState.setScoresHistory?.length || 0}`);
+
+                    // Re-determine swap status
+                    const freshPlayersSwapped = originalPlayer1Name && freshGameState.player1.name === originalPlayer2Name;
+
+                    // Update display with fresh data from database
+                    updateSetScores(freshGameState, freshPlayersSwapped);
+                } catch (error) {
+                    console.error('[TV V3] Failed to refresh data after rest break:', error);
+                }
+            }, 100); // Small delay just to ensure database transaction is committed
+        }
+
+        // Track rest break state for next iteration
+        wasRestBreakActive = gameState.restBreakActive;
 
         // Update display elements with v3 layout
         updatePlayerNames(gameState, playersSwapped);
@@ -272,51 +308,46 @@ function updateTeamSetBoxes(teamId, playerData, setHistory, currentSetIndex, gam
     // Set 1
     const box1 = document.getElementById(`${teamId}Set1`);
     if (setHistory.length >= 1) {
-        // Set 1 is complete - show final score from history
+        // Set 1 is complete - show final score from history (AUTHORITATIVE SOURCE)
         const set1Score = extractTeamScore(setHistory[0], isTeam1, gameState, playersSwapped);
         box1.textContent = set1Score;
         box1.className = 'set-box'; // Reset classes
         markSetResult(teamId, 1, setHistory[0], isTeam1, gameState, playersSwapped);
     } else if (currentSetIndex === 0) {
-        // Set 1 is current ongoing set - cache the HIGHEST score seen
+        // Set 1 is current ongoing set - show and cache current score
         const currentScore = playerData.score;
-        if (currentScore > lastSeenScores[teamId].set1) {
-            console.log(`[TV V3] ${teamId} Set 1 score updated: ${lastSeenScores[teamId].set1} → ${currentScore}`);
-            lastSeenScores[teamId].set1 = currentScore;
+        // Cache maximum score we see (for fallback if history delayed)
+        if (currentScore > cachedSetScores[teamId].set1) {
+            cachedSetScores[teamId].set1 = currentScore;
         }
         box1.textContent = currentScore;
         box1.className = 'set-box current';
-    } else if (currentSetIndex >= 1 && lastSeenScores[teamId].set1 > 0) {
-        // Set 1 finished but history not updated yet - use cached final score
-        console.log(`[TV V3] ${teamId} Set 1 finished, using cached score: ${lastSeenScores[teamId].set1}`);
-        box1.textContent = lastSeenScores[teamId].set1;
-        box1.className = 'set-box'; // Remove 'current' class
     } else {
-        // Not started yet
-        box1.textContent = '-';
+        // Set 1 finished but history not updated yet - use cached score as fallback
+        box1.textContent = cachedSetScores[teamId].set1 || '-';
         box1.className = 'set-box';
     }
 
     // Set 2
     const box2 = document.getElementById(`${teamId}Set2`);
     if (setHistory.length >= 2) {
-        // Set 2 is complete - show final score from history
+        // Set 2 is complete - show final score from history (AUTHORITATIVE SOURCE)
         const set2Score = extractTeamScore(setHistory[1], isTeam1, gameState, playersSwapped);
         box2.textContent = set2Score;
         box2.className = 'set-box'; // Reset classes
         markSetResult(teamId, 2, setHistory[1], isTeam1, gameState, playersSwapped);
     } else if (currentSetIndex === 1) {
-        // Set 2 is current ongoing set - cache the HIGHEST score seen
+        // Set 2 is current ongoing set - show and cache current score
         const currentScore = playerData.score;
-        if (currentScore > lastSeenScores[teamId].set2) {
-            lastSeenScores[teamId].set2 = currentScore;
+        if (currentScore > cachedSetScores[teamId].set2) {
+            cachedSetScores[teamId].set2 = currentScore;
         }
         box2.textContent = currentScore;
         box2.className = 'set-box current';
-    } else if (currentSetIndex >= 2 && lastSeenScores[teamId].set2 > 0) {
-        // Set 2 finished but history not updated yet - use cached final score
-        box2.textContent = lastSeenScores[teamId].set2;
-        box2.className = 'set-box'; // Remove 'current' class
+    } else if (currentSetIndex >= 2) {
+        // Set 2 finished but history not updated yet - use cached score as fallback
+        box2.textContent = cachedSetScores[teamId].set2 || '-';
+        box2.className = 'set-box';
     } else {
         // Not started yet
         box2.textContent = '-';
@@ -326,16 +357,16 @@ function updateTeamSetBoxes(teamId, playerData, setHistory, currentSetIndex, gam
     // Set 3
     const box3 = document.getElementById(`${teamId}Set3`);
     if (setHistory.length >= 3) {
-        // Set 3 is complete - show final score from history
+        // Set 3 is complete - show final score from history (AUTHORITATIVE SOURCE)
         const set3Score = extractTeamScore(setHistory[2], isTeam1, gameState, playersSwapped);
         box3.textContent = set3Score;
         box3.className = 'set-box'; // Reset classes
         markSetResult(teamId, 3, setHistory[2], isTeam1, gameState, playersSwapped);
     } else if (currentSetIndex === 2) {
-        // Set 3 is current ongoing set - cache the HIGHEST score seen
+        // Set 3 is current ongoing set - show and cache current score
         const currentScore = playerData.score;
-        if (currentScore > lastSeenScores[teamId].set3) {
-            lastSeenScores[teamId].set3 = currentScore;
+        if (currentScore > cachedSetScores[teamId].set3) {
+            cachedSetScores[teamId].set3 = currentScore;
         }
         box3.textContent = currentScore;
         box3.className = 'set-box current';

@@ -144,6 +144,19 @@ body {
     border-color: var(--color-accent);
 }
 
+/* IMPORTANT: Won/Lost styling must override serving styling */
+/* When serving team has won a set - keep green border */
+.team-row.serving .set-box.won {
+    background: rgba(76, 175, 80, 0.25);
+    border-color: #4CAF50;
+}
+
+/* When serving team has lost a set - keep red border */
+.team-row.serving .set-box.lost {
+    background: rgba(233, 69, 96, 0.2);
+    border-color: var(--color-accent);
+}
+
 /* Footer */
 .tv-footer {
     padding: 30px;

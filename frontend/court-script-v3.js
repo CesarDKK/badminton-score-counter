@@ -279,6 +279,13 @@ async function checkGameWin() {
 
     // Badminton rules: first to winScore, must win by 2, max maxScore
     if ((p1Score >= winScore && p1Score - p2Score >= 2) || p1Score === maxScore) {
+        // Save set scores to history BEFORE incrementing games or resetting scores
+        gameState.setScoresHistory.push({
+            player1Name: gameState.player1.name,
+            player2Name: gameState.player2.name,
+            score: `${p1Score}-${p2Score}`
+        });
+
         gameState.player1.games++;
 
         // Check if player won the match (2 games)
@@ -339,6 +346,13 @@ async function checkGameWin() {
             ]
         );
     } else if ((p2Score >= winScore && p2Score - p1Score >= 2) || p2Score === maxScore) {
+        // Save set scores to history BEFORE incrementing games or resetting scores
+        gameState.setScoresHistory.push({
+            player1Name: gameState.player1.name,
+            player2Name: gameState.player2.name,
+            score: `${p1Score}-${p2Score}`
+        });
+
         gameState.player2.games++;
 
         // Check if player won the match (2 games)
@@ -716,7 +730,7 @@ function updateDisplay() {
 }
 
 // Select which team serves first
-function selectServer(team) {
+async function selectServer(team) {
     if (gameState.isActive) {
         return; // Cannot change server after match started
     }
@@ -741,8 +755,14 @@ function selectServer(team) {
         console.log(`Player ${team} will serve first`);
     }
 
+    // Set match as active so TV displays will show it immediately
+    gameState.isActive = true;
+
     // Enable +1 buttons and Start Kamp button
     updateDisplay();
+
+    // Save immediately without debounce so TV sees the change right away
+    await performSave();
 }
 
 // Get serving side based on server's score
