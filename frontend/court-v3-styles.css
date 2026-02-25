@@ -116,6 +116,8 @@
     align-items: center;
     margin-top: 5px;
     padding: 5px 15px;
+    flex-wrap: wrap;
+    gap: 5px;
 }
 
 .center-buttons {
@@ -182,9 +184,11 @@
     font-weight: bold;
     transition: all 0.3s;
     height: 45px;
+    min-width: 100px;
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 .btn-start-serv:hover {
@@ -752,6 +756,7 @@
         padding: 8px 15px;
         font-size: 0.9em;
         height: 38px;
+        min-width: 90px;
     }
 
     .btn-undo, .btn-settings {
@@ -885,6 +890,7 @@
         padding: 6px 12px;
         font-size: 0.8em;
         height: 32px;
+        min-width: 80px;
     }
 
     .btn-undo, .btn-settings {
