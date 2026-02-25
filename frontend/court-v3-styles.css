@@ -704,3 +704,271 @@
 .btn-swap-right:hover {
     transform: translate(-100%, -50%) scale(1.1) rotate(180deg);
 }
+
+/* Small Height Screens (1024x600, tablets in landscape) */
+@media (max-height: 700px) and (min-width: 800px) {
+    /* Remove container padding for more space */
+    .container {
+        padding: 0 !important;
+    }
+
+    /* Score display above court - more compact */
+    .score-display-top {
+        margin-bottom: 3px;
+    }
+
+    .scores-container {
+        padding: 0 8px;
+    }
+
+    .point-score {
+        font-size: 2.5em;
+    }
+
+    .set-label {
+        font-size: 0.8em;
+        margin-bottom: 3px;
+    }
+
+    .set-score {
+        font-size: 1.5em;
+        gap: 8px;
+    }
+
+    /* Control buttons - more compact */
+    .control-buttons-bottom {
+        margin-top: 3px;
+        padding: 3px 10px;
+    }
+
+    .btn-add-point {
+        padding: 12px 30px;
+        font-size: 1.5em;
+        min-width: 100px;
+        min-height: 50px;
+    }
+
+    .btn-start-serv {
+        padding: 8px 15px;
+        font-size: 0.9em;
+        height: 38px;
+    }
+
+    .btn-undo, .btn-settings {
+        padding: 8px 15px;
+        font-size: 0.9em;
+        height: 38px;
+    }
+
+    .center-buttons {
+        gap: 8px;
+    }
+
+    /* Court center overlay */
+    .btn-start-match-center {
+        font-size: 1.5em;
+        padding: 15px 35px;
+    }
+
+    .timer-display-center {
+        font-size: 0.9em;
+        padding: 4px 8px;
+    }
+
+    /* Player names on court - smaller */
+    .player-name {
+        font-size: 1.5em;
+    }
+
+    /* Swap buttons - smaller */
+    .btn-swap-players {
+        width: 40px;
+        height: 40px;
+        font-size: 1.5em;
+    }
+
+    /* Serve indicator - smaller */
+    .serve-indicator {
+        width: 60px;
+        height: 60px;
+        font-size: 3em;
+    }
+
+    /* Settings menu */
+    .settings-menu-content {
+        padding: 25px;
+        min-width: 300px;
+    }
+
+    .settings-menu-content h3 {
+        font-size: 1.5em;
+        margin-bottom: 20px;
+    }
+
+    .menu-item {
+        padding: 15px;
+        margin-bottom: 10px;
+        font-size: 1.1em;
+    }
+
+    /* Rest break overlay */
+    #restBreakOverlay h1 {
+        font-size: 2em !important;
+        margin-bottom: 10px !important;
+    }
+
+    #restBreakTimer {
+        font-size: 5em !important;
+        margin: 20px 0 !important;
+    }
+
+    #skipRestBreak {
+        font-size: 1.2em !important;
+        padding: 15px 30px !important;
+    }
+
+    /* Message overlay */
+    #messageOverlay h1 {
+        font-size: 2em !important;
+        margin-bottom: 20px !important;
+    }
+
+    #messageOverlay p {
+        font-size: 1.2em !important;
+        margin-bottom: 30px !important;
+    }
+}
+
+/* Extra small height (600px or less) - even more compact */
+@media (max-height: 600px) and (min-width: 800px) {
+    .container {
+        padding: 0 !important;
+    }
+
+    /* Score display - very compact */
+    .score-display-top {
+        margin-bottom: 2px;
+    }
+
+    .scores-container {
+        padding: 0 5px;
+    }
+
+    .point-score {
+        font-size: 2em;
+    }
+
+    .set-label {
+        font-size: 0.7em;
+        margin-bottom: 2px;
+    }
+
+    .set-score {
+        font-size: 1.2em;
+        gap: 5px;
+    }
+
+    /* Control buttons - very compact */
+    .control-buttons-bottom {
+        margin-top: 2px;
+        padding: 2px 8px;
+    }
+
+    .btn-add-point {
+        padding: 10px 25px;
+        font-size: 1.3em;
+        min-width: 80px;
+        min-height: 40px;
+    }
+
+    .btn-start-serv {
+        padding: 6px 12px;
+        font-size: 0.8em;
+        height: 32px;
+    }
+
+    .btn-undo, .btn-settings {
+        padding: 6px 12px;
+        font-size: 0.8em;
+        height: 32px;
+    }
+
+    .center-buttons {
+        gap: 6px;
+    }
+
+    /* Court center overlay */
+    .btn-start-match-center {
+        font-size: 1.2em;
+        padding: 12px 28px;
+    }
+
+    .timer-display-center {
+        font-size: 0.8em;
+        padding: 3px 6px;
+    }
+
+    /* Player names on court - smaller */
+    .player-name {
+        font-size: 1.2em;
+        padding: 5px;
+    }
+
+    /* Swap buttons - smaller */
+    .btn-swap-players {
+        width: 35px;
+        height: 35px;
+        font-size: 1.3em;
+        border-width: 2px;
+    }
+
+    /* Serve indicator - smaller */
+    .serve-indicator {
+        width: 50px;
+        height: 50px;
+        font-size: 2.5em;
+    }
+
+    /* Settings menu - more compact */
+    .settings-menu-content {
+        padding: 20px;
+        min-width: 280px;
+    }
+
+    .settings-menu-content h3 {
+        font-size: 1.3em;
+        margin-bottom: 15px;
+    }
+
+    .menu-item {
+        padding: 12px;
+        margin-bottom: 8px;
+        font-size: 1em;
+    }
+
+    /* Overlays - very compact */
+    #restBreakOverlay h1 {
+        font-size: 1.5em !important;
+        margin-bottom: 8px !important;
+    }
+
+    #restBreakTimer {
+        font-size: 4em !important;
+        margin: 15px 0 !important;
+    }
+
+    #skipRestBreak {
+        font-size: 1em !important;
+        padding: 12px 25px !important;
+    }
+
+    #messageOverlay h1 {
+        font-size: 1.5em !important;
+        margin-bottom: 15px !important;
+    }
+
+    #messageOverlay p {
+        font-size: 1em !important;
+        margin-bottom: 25px !important;
+    }
+}
