@@ -978,3 +978,139 @@
         margin-bottom: 25px !important;
     }
 }
+
+/* Ultra small height (550px or less) - for Android with navigation bar visible */
+@media (max-height: 550px) and (min-width: 800px) {
+    .container {
+        padding: 0 !important;
+    }
+
+    /* Score display - ultra compact */
+    .score-display-top {
+        margin-bottom: 1px;
+    }
+
+    .scores-container {
+        padding: 0 3px;
+    }
+
+    .point-score {
+        font-size: 1.8em;
+    }
+
+    .set-label {
+        font-size: 0.65em;
+        margin-bottom: 1px;
+    }
+
+    .set-score {
+        font-size: 1em;
+        gap: 4px;
+    }
+
+    /* Control buttons - ultra compact */
+    .control-buttons-bottom {
+        margin-top: 1px;
+        padding: 1px 5px;
+        gap: 3px;
+    }
+
+    .btn-add-point {
+        padding: 8px 20px;
+        font-size: 1.1em;
+        min-width: 70px;
+        min-height: 36px;
+    }
+
+    .btn-start-serv {
+        padding: 5px 10px;
+        font-size: 0.75em;
+        height: 28px;
+        min-width: 75px;
+    }
+
+    .btn-undo, .btn-settings {
+        padding: 5px 10px;
+        font-size: 0.75em;
+        height: 28px;
+    }
+
+    .center-buttons {
+        gap: 4px;
+    }
+
+    /* Court center overlay */
+    .btn-start-match-center {
+        font-size: 1em;
+        padding: 10px 22px;
+    }
+
+    .timer-display-center {
+        font-size: 0.7em;
+        padding: 2px 5px;
+    }
+
+    /* Player names on court */
+    .player-name {
+        font-size: 1em;
+        padding: 4px;
+    }
+
+    /* Swap buttons */
+    .btn-swap-players {
+        width: 30px;
+        height: 30px;
+        font-size: 1.2em;
+        border-width: 2px;
+    }
+
+    /* Serve indicator */
+    .serve-indicator {
+        width: 45px;
+        height: 45px;
+        font-size: 2.2em;
+    }
+
+    /* Settings menu */
+    .settings-menu-content {
+        padding: 15px;
+        min-width: 260px;
+    }
+
+    .settings-menu-content h3 {
+        font-size: 1.2em;
+        margin-bottom: 12px;
+    }
+
+    .menu-item {
+        padding: 10px;
+        margin-bottom: 6px;
+        font-size: 0.95em;
+    }
+
+    /* Overlays - ultra compact */
+    #restBreakOverlay h1 {
+        font-size: 1.3em !important;
+        margin-bottom: 6px !important;
+    }
+
+    #restBreakTimer {
+        font-size: 3.5em !important;
+        margin: 12px 0 !important;
+    }
+
+    #skipRestBreak {
+        font-size: 0.9em !important;
+        padding: 10px 20px !important;
+    }
+
+    #messageOverlay h1 {
+        font-size: 1.3em !important;
+        margin-bottom: 12px !important;
+    }
+
+    #messageOverlay p {
+        font-size: 0.9em !important;
+        margin-bottom: 20px !important;
+    }
+}

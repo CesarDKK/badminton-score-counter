@@ -909,3 +909,111 @@ header h1 {
         padding: 12px 25px !important;
     }
 }
+
+/* Ultra small height (550px or less) - for Android with navigation bar visible */
+@media (max-height: 550px) and (min-width: 800px) {
+    .container {
+        padding: 3px 8px;
+    }
+
+    header {
+        padding: 6px 8px;
+        margin-bottom: 3px;
+    }
+
+    header h1 {
+        font-size: 1.2em;
+    }
+
+    .btn-back, .btn-secondary {
+        padding: 6px 12px;
+        font-size: 0.85em;
+    }
+
+    .score-container {
+        gap: 8px;
+        margin: 8px 0;
+    }
+
+    .player-section {
+        gap: 6px;
+    }
+
+    .player-name {
+        font-size: 0.85em;
+        padding: 5px 8px;
+    }
+
+    .score-display {
+        font-size: 3em;
+        min-width: 90px;
+    }
+
+    .btn-score {
+        padding: 12px 25px;
+        font-size: 1.5em;
+    }
+
+    .match-info {
+        gap: 8px;
+        padding: 6px 10px;
+    }
+
+    .btn-start-match {
+        padding: 8px 16px;
+        font-size: 1em;
+    }
+
+    #timerDisplay {
+        font-size: 1.3em;
+    }
+
+    .games span {
+        font-size: 0.8em;
+    }
+
+    .game-score {
+        font-size: 1.3em;
+    }
+
+    .btn-undo {
+        padding: 6px 12px;
+        font-size: 0.85em;
+    }
+
+    .action-buttons {
+        gap: 8px;
+        margin: 8px 0;
+    }
+
+    .btn-primary, .btn-mode, .btn-danger {
+        padding: 6px 12px;
+        font-size: 0.9em;
+    }
+
+    /* Overlays - ultra compact */
+    #restBreakOverlay h1 {
+        font-size: 1.3em !important;
+        margin-bottom: 6px !important;
+    }
+
+    #restBreakTimer {
+        font-size: 3.5em !important;
+        margin: 12px 0 !important;
+    }
+
+    #skipRestBreak {
+        font-size: 0.9em !important;
+        padding: 10px 20px !important;
+    }
+
+    #messageOverlay h1 {
+        font-size: 1.8em !important;
+        margin-bottom: 15px !important;
+    }
+
+    #messageOverlay p {
+        font-size: 1.1em !important;
+        margin-bottom: 25px !important;
+    }
+}
