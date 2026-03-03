@@ -1288,12 +1288,21 @@ async function saveMatchResult(winner, loser, winnerGames, loserGames) {
             duration = formatDuration(durationSeconds);
         }
 
+        const setScoresText = gameState.setScoresHistory.map(set => {
+            if (typeof set === 'string') {
+                return set;
+            } else {
+                return `${set.player1Name} ${set.score} ${set.player2Name}`;
+            }
+        }).join(', ');
+
         const matchData = {
             courtId: courtId,
             winnerName: winner,
             loserName: loser,
             gamesWon: `${winnerGames}-${loserGames}`,
-            duration: duration
+            duration: duration,
+            setScores: setScoresText
         };
 
         await api.saveMatchResult(matchData);
