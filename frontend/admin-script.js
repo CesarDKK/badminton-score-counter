@@ -824,8 +824,9 @@ function createMatchCard(match, index) {
     const hasSetDetails = setScoresArray.length > 0;
     const stats = calculateMatchStats(setScoresArray);
 
-    // Determine if doubles (check for "/" in names)
-    const isDoubles = match.winner_name.includes('/') || match.loser_name.includes('/');
+    // Determine if doubles (check for "/" or " & " in names)
+    const isDoubles = match.winner_name.includes('/') || match.loser_name.includes('/') ||
+                      match.winner_name.includes(' & ') || match.loser_name.includes(' & ');
     const gameTypeIcon = isDoubles ? '👥' : '👤';
     const gameTypeText = isDoubles ? 'Double' : 'Single';
 
@@ -835,6 +836,7 @@ function createMatchCard(match, index) {
         const winnerName = match.winner_name;
         setOverviewBadges = stats.parsedSets.map((set, i) => {
             const wonSet = set.winner === winnerName ||
+                          winnerName.startsWith(set.winner) ||
                           (set.winner === 'player1' && set.score1 > set.score2) ||
                           (set.winner === 'player2' && set.score2 > set.score1);
             const badgeColor = wonSet ? '#4CAF50' : '#e94560';

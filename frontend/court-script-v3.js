@@ -282,7 +282,9 @@ async function checkGameWin() {
         // Save set scores to history BEFORE incrementing games or resetting scores
         gameState.setScoresHistory.push({
             player1Name: gameState.player1.name,
+            player1Name2: gameState.player1.name2 || null,
             player2Name: gameState.player2.name,
+            player2Name2: gameState.player2.name2 || null,
             score: `${p1Score}-${p2Score}`
         });
 
@@ -349,7 +351,9 @@ async function checkGameWin() {
         // Save set scores to history BEFORE incrementing games or resetting scores
         gameState.setScoresHistory.push({
             player1Name: gameState.player1.name,
+            player1Name2: gameState.player1.name2 || null,
             player2Name: gameState.player2.name,
+            player2Name2: gameState.player2.name2 || null,
             score: `${p1Score}-${p2Score}`
         });
 
@@ -1292,7 +1296,9 @@ async function saveMatchResult(winner, loser, winnerGames, loserGames) {
             if (typeof set === 'string') {
                 return set;
             } else {
-                return `${set.player1Name} ${set.score} ${set.player2Name}`;
+                const p1 = formatPlayerNames(set.player1Name, set.player1Name2);
+                const p2 = formatPlayerNames(set.player2Name, set.player2Name2);
+                return `${p1} ${set.score} ${p2}`;
             }
         }).join(', ');
 
