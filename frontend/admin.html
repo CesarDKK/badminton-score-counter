@@ -33,6 +33,7 @@
             <header>
                 <h1>Admin Oversigt</h1>
                 <div class="header-controls">
+                    <button id="holdkampBtn" class="btn-primary" style="margin-right: 10px;">Holdkamp</button>
                     <button id="matchHistoryBtn" class="btn-primary" style="margin-right: 10px;">Kamphistorik</button>
                     <a href="player-info.html" class="btn-primary" style="text-decoration: none; display: inline-block; margin-right: 10px;">Spiller Info</a>
                     <a href="settings.html" class="btn-primary" style="text-decoration: none; display: inline-block; margin-right: 10px;">Indstillinger</a>
@@ -55,28 +56,87 @@
                 </div>
             </div>
 
+            <!-- Holdkamp Section -->
+            <div id="holdkampSection" class="overview-section" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>Holdkamp</h2>
+                    <button id="backFromHoldkampBtn" class="btn-secondary">Tilbage til Oversigt</button>
+                </div>
+
+                <!-- Active team match display -->
+                <div id="activeHoldkampContainer" style="display: none; margin-bottom: 30px;"></div>
+
+                <!-- Create new holdkamp form -->
+                <div id="createHoldkampForm">
+                    <h3 style="margin-bottom: 15px; color: #e94560;">Opret ny Holdkamp</h3>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                        <div>
+                            <label>Hold 1 Navn:</label>
+                            <input type="text" id="holdkampTeam1Name" placeholder="Hold 1" style="width: 100%; padding: 10px; background: #1a1a2e; color: #eaeaea; border: 1px solid #533483; border-radius: 5px; margin-top: 5px;">
+                        </div>
+                        <div>
+                            <label>Hold 2 Navn:</label>
+                            <input type="text" id="holdkampTeam2Name" placeholder="Hold 2" style="width: 100%; padding: 10px; background: #1a1a2e; color: #eaeaea; border: 1px solid #533483; border-radius: 5px; margin-top: 5px;">
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label>Kampformat:</label>
+                        <select id="holdkampFormat" style="width: 100%; padding: 10px; background: #1a1a2e; color: #eaeaea; border: 1px solid #533483; border-radius: 5px; margin-top: 5px;">
+                            <option value="">-- Vælg format --</option>
+                            <option value="liga11">Liga-format (11 kampe): 2xMD, 2xDS, 3xHS, 2xDD, 3xHD</option>
+                            <option value="13kamps">13-kamps format: 4xHS, 2xDS, 3xHD, 2xDD, 2xMD</option>
+                            <option value="2plus2">2+2-format (8 kampe): 2xMD, 2xDS, 2xHS, 1xDD, 1xHD</option>
+                            <option value="4plus2">4+2-format (8 kampe): 1xMD, 1xDS, 3xHS, 1xDD, 2xHD</option>
+                            <option value="4plus3">4+3-format (9 kampe): 2xMD, 2xDS, 2xHS, 1xDD, 2xHD</option>
+                            <option value="4spillere">4-spillere-format (6 kampe): 4x Single, 2x Double</option>
+                        </select>
+                    </div>
+
+                    <!-- Player name inputs (generated dynamically) -->
+                    <div id="holdkampPlayerInputs" style="display: none;">
+                        <h4 style="margin-bottom: 15px; color: #aaa;">Spillernavne per delkamp</h4>
+                        <div id="holdkampGamesInputContainer"></div>
+                        <button id="startHoldkampBtn" class="btn-primary" style="margin-top: 20px; width: 100%; padding: 15px; font-size: 1.1em;">Start Holdkamp</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Match History Section -->
             <div id="matchHistorySection" class="overview-section" style="display: none;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h2>Kamphistorik - Alle Baner</h2>
+                    <h2>Kamphistorik</h2>
                     <button id="backToOverviewBtn" class="btn-secondary">Tilbage til Oversigt</button>
                 </div>
 
-                <!-- Search and Filter Controls -->
-                <div class="match-history-controls">
-                    <div class="search-box">
-                        <input type="text" id="matchSearchInput" placeholder="Søg på spillernavn..." />
-                    </div>
-                    <div class="sort-box">
-                        <label for="courtFilterSelect">Vælg bane:</label>
-                        <select id="courtFilterSelect">
-                            <option value="all">Alle baner</option>
-                            <!-- Court numbers will be populated dynamically -->
-                        </select>
-                    </div>
+                <!-- Tabs -->
+                <div style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 0;">
+                    <button id="tabSingleMatches" onclick="switchHistoryTab('single')" style="padding: 8px 18px; background: #533483; color: #fff; border: none; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 0.95em; margin-bottom: -2px; border-bottom: 2px solid #533483;">Enkelt kampe</button>
+                    <button id="tabTeamMatches" onclick="switchHistoryTab('team')" style="padding: 8px 18px; background: transparent; color: #aaa; border: none; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 0.95em; margin-bottom: -2px; border-bottom: 2px solid transparent;">Holdkampe</button>
                 </div>
 
-                <div id="allMatchesContainer"></div>
+                <!-- Single matches tab -->
+                <div id="singleMatchesTab">
+                    <!-- Search and Filter Controls -->
+                    <div class="match-history-controls">
+                        <div class="search-box">
+                            <input type="text" id="matchSearchInput" placeholder="Søg på spillernavn..." />
+                        </div>
+                        <div class="sort-box">
+                            <label for="courtFilterSelect">Vælg bane:</label>
+                            <select id="courtFilterSelect">
+                                <option value="all">Alle baner</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="allMatchesContainer"></div>
+                </div>
+
+                <!-- Team matches tab -->
+                <div id="teamMatchesTab" style="display: none;">
+                    <div id="teamMatchHistoryContainer"></div>
+                </div>
 
                 <!-- Delete Match History Section -->
                 <div style="margin-top: 40px; padding: 20px; background: rgba(231, 76, 60, 0.1); border: 2px solid #e74c3c; border-radius: 10px;">

@@ -57,6 +57,7 @@ app.use('/api/courts', require('./routes/courts'));
 app.use('/api/game-states', require('./routes/gameStates'));
 app.use('/api/match-history', require('./routes/matchHistory'));
 app.use('/api/sponsors', require('./routes/sponsors'));
+app.use('/api/team-matches', require('./routes/teamMatches'));
 
 // 404 handler
 app.use(notFoundHandler);

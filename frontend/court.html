@@ -19,6 +19,7 @@
                 <h1>Bane <span id="courtNumber">1</span></h1>
             </div>
             <div class="header-controls">
+                <button id="showHoldkampPanelBtn" style="display:none; padding:8px 14px; background:#533483; color:#fff; border:none; border-radius:5px; cursor:pointer; font-size:0.9em; margin-right:8px;">🏸 Holdkamp</button>
                 <a href="admin.html" class="btn-secondary" style="text-decoration: none;">Admin</a>
             </div>
         </header>
@@ -64,6 +65,19 @@
                     <button class="btn-score" onclick="addPoint(2)">+1</button>
                 </div>
             </div>
+        </div>
+
+        <!-- Holdkamp Panel -->
+        <div id="holdkampPanel" style="display:none; background:rgba(20,10,40,0.97); border:1px solid #533483; border-radius:8px; padding:12px 15px; margin-bottom:10px;">
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                <span style="color:#e94560; font-weight:bold; font-size:0.9em;">🏸 Holdkamp:</span>
+                <select id="holdkampGameSelect" style="flex:1; min-width:180px; padding:7px 10px; background:#1a1a2e; color:#eaeaea; border:1px solid #533483; border-radius:5px; font-size:0.85em;">
+                    <option value="">-- Vælg delkamp --</option>
+                </select>
+                <button id="assignHoldkampBtn" style="padding:7px 14px; background:#533483; color:#fff; border:none; border-radius:5px; cursor:pointer; font-size:0.85em;">Tilknyt</button>
+                <button id="closeHoldkampPanelBtn" style="padding:7px 10px; background:transparent; color:#aaa; border:1px solid #555; border-radius:5px; cursor:pointer; font-size:0.85em;">✕</button>
+            </div>
+            <div id="holdkampAssigned" style="display:none; margin-top:6px; color:#4CAF50; font-size:0.8em;"></div>
         </div>
 
         <!-- Action Buttons -->

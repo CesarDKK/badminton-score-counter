@@ -19,6 +19,22 @@
             </div>
         </div>
 
+        <!-- Holdkamp Panel (shown when active team match exists) -->
+        <div id="holdkampOverview" style="display:none; margin-bottom:20px; background:rgba(20,10,40,0.95); border:2px solid #533483; border-radius:12px; padding:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <div>
+                    <div style="color:#aaa; font-size:0.85em; margin-bottom:4px;" id="holdkampFormatLabel"></div>
+                    <div style="font-size:2em; font-weight:bold; color:#fff;">
+                        <span id="hk_team1Name" style="color:#4CAF50;"></span>
+                        <span id="hk_score" style="margin:0 20px; color:#fff;"></span>
+                        <span id="hk_team2Name" style="color:#e94560;"></span>
+                    </div>
+                </div>
+                <div style="color:#aaa; font-size:0.9em;">🏸 HOLDKAMP</div>
+            </div>
+            <div id="holdkampGamesGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:8px;"></div>
+        </div>
+
         <div class="courts-grid" id="courtsGrid">
             <!-- Court cards will be dynamically generated here -->
         </div>

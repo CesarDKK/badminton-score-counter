@@ -23,6 +23,93 @@ document.addEventListener('DOMContentLoaded', async function() {
     startLocalTimers();
 });
 
+// ==================== HOLDKAMP ====================
+
+let activeTeamMatch = null;
+
+async function loadHoldkamp() {
+    try {
+        activeTeamMatch = await api.getActiveTeamMatch();
+        const panel = document.getElementById('holdkampOverview');
+
+        if (!activeTeamMatch) {
+            panel.style.display = 'none';
+            return;
+        }
+
+        panel.style.display = 'block';
+
+        const team1Wins = activeTeamMatch.games.filter(g => g.winner_team === 1).length;
+        const team2Wins = activeTeamMatch.games.filter(g => g.winner_team === 2).length;
+
+        document.getElementById('hk_team1Name').textContent = activeTeamMatch.team1_name;
+        document.getElementById('hk_team2Name').textContent = activeTeamMatch.team2_name;
+        document.getElementById('hk_score').textContent = `${team1Wins} – ${team2Wins}`;
+
+        const formatNames = {
+            liga11: 'Liga-format (11 kampe)',
+            '13kamps': '13-kamps format',
+            '2plus2': '2+2-format (8 kampe)',
+            '4plus2': '4+2-format (8 kampe)',
+            '4plus3': '4+3-format (9 kampe)',
+            '4spillere': '4-spillere-format (6 kampe)'
+        };
+        document.getElementById('holdkampFormatLabel').textContent = formatNames[activeTeamMatch.format] || activeTeamMatch.format;
+
+        renderHoldkampGames(activeTeamMatch);
+    } catch (error) {
+        console.error('Failed to load holdkamp:', error);
+    }
+}
+
+function renderHoldkampGames(teamMatch) {
+    const container = document.getElementById('holdkampGamesGrid');
+    const DOUBLES = ['MD', 'DD', 'HD', 'Double'];
+
+    const counts = {};
+    container.innerHTML = teamMatch.games.map(g => {
+        counts[g.category] = (counts[g.category] || 0) + 1;
+        const num = counts[g.category];
+        const isDoubles = DOUBLES.includes(g.category);
+
+        const t1 = isDoubles
+            ? `${g.team1_player1 || '?'}${g.team1_player2 ? ' & ' + g.team1_player2 : ''}`
+            : (g.team1_player1 || '?');
+        const t2 = isDoubles
+            ? `${g.team2_player1 || '?'}${g.team2_player2 ? ' & ' + g.team2_player2 : ''}`
+            : (g.team2_player1 || '?');
+
+        let statusHtml = '';
+        let borderColor = '#555';
+
+        if (g.status === 'pending') {
+            statusHtml = '<span style="color:#aaa; font-size:0.8em;">Afventer</span>';
+        } else if (g.status === 'active') {
+            // Try to get live score from allCourtData
+            const courtData = allCourtData.find(c => c.courtId === g.court_number);
+            const liveScore = courtData
+                ? `${courtData.player1.score}-${courtData.player2.score} (${courtData.player1.games}-${courtData.player2.games} sæt)`
+                : '';
+            statusHtml = `<span style="color:#fff; font-size:0.8em;">▶ Bane ${g.court_number}${liveScore ? ' · ' + liveScore : ''}</span>`;
+            borderColor = '#533483';
+        } else if (g.status === 'finished') {
+            const winner = g.winner_team === 1 ? teamMatch.team1_name : teamMatch.team2_name;
+            statusHtml = `<span style="color:#4CAF50; font-size:0.8em;">✓ ${winner}</span>`;
+            borderColor = g.winner_team === 1 ? '#4CAF50' : '#e94560';
+        }
+
+        return `<div style="background:rgba(83,52,131,0.15); border-left:3px solid ${borderColor}; border-radius:6px; padding:10px 12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <span style="background:#e94560; color:#fff; padding:2px 7px; border-radius:4px; font-size:0.8em; font-weight:bold;">${g.category} ${num}</span>
+                ${statusHtml}
+            </div>
+            <div style="color:#eaeaea; font-size:0.9em;">${t1}</div>
+            <div style="color:#aaa; font-size:0.75em; margin:2px 0;">vs</div>
+            <div style="color:#eaeaea; font-size:0.9em;">${t2}</div>
+        </div>`;
+    }).join('');
+}
+
 async function initialize() {
     try {
         // Get court count from settings
@@ -30,6 +117,7 @@ async function initialize() {
         courtCount = settings.courtCount || 5;
 
         await loadAllCourts();
+        await loadHoldkamp();
     } catch (error) {
         console.error('Failed to initialize overview:', error);
         hideLoading();
@@ -272,6 +360,7 @@ function startAutoRefresh() {
     // Refresh court data every 2 seconds
     refreshTimer = setInterval(async () => {
         await loadAllCourts();
+        await loadHoldkamp();
     }, REFRESH_INTERVAL);
 }
 

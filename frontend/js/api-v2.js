@@ -301,6 +301,46 @@ class BadmintonAPI {
             method: 'DELETE'
         });
     }
+
+    /** Get active team match with all games */
+    async getActiveTeamMatch() {
+        return this.request('/team-matches/active');
+    }
+
+    /** Get all finished team matches with games */
+    async getTeamMatchHistory() {
+        return this.request('/team-matches/history');
+    }
+
+    /** Create a new team match */
+    async createTeamMatch(data) {
+        return this.request('/team-matches', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+    }
+
+    /** Update a specific game within a team match */
+    async updateTeamMatchGame(teamMatchId, gameId, data) {
+        return this.request(`/team-matches/${teamMatchId}/games/${gameId}`, {
+            method: 'PUT',
+            body: JSON.stringify(data)
+        });
+    }
+
+    /** Mark team match as finished */
+    async finishTeamMatch(teamMatchId) {
+        return this.request(`/team-matches/${teamMatchId}/finish`, {
+            method: 'PUT'
+        });
+    }
+
+    /** Delete a team match */
+    async deleteTeamMatch(teamMatchId) {
+        return this.request(`/team-matches/${teamMatchId}`, {
+            method: 'DELETE'
+        });
+    }
 }
 
 // Create and export singleton instance

@@ -9,6 +9,17 @@ let allMatchesData = []; // Store all matches for filtering/sorting
 let currentSearchTerm = '';
 let currentCourtFilter = 'all';
 
+// Holdkamp format definitions
+const HOLDKAMP_FORMATS = {
+    liga11:    { name: 'Liga (11 kampe)',         games: ['MD','MD','DS','DS','HS','HS','HS','DD','DD','HD','HD'] },
+    '13kamps': { name: '13-kamps format',          games: ['HS','HS','HS','HS','DS','DS','HD','HD','HD','DD','DD','MD','MD'] },
+    '2plus2':  { name: '2+2-format (8 kampe)',     games: ['MD','MD','DS','DS','HS','HS','DD','HD'] },
+    '4plus2':  { name: '4+2-format (8 kampe)',     games: ['MD','DS','HS','HS','HS','DD','HD','HD'] },
+    '4plus3':  { name: '4+3-format (9 kampe)',     games: ['MD','MD','DS','DS','HS','HS','DD','HD','HD'] },
+    '4spillere':{ name: '4-spillere (6 kampe)',    games: ['Single','Single','Single','Single','Double','Double'] }
+};
+const DOUBLES_CATEGORIES = ['MD', 'DD', 'HD', 'Double'];
+
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     initializeAdmin();
@@ -33,6 +44,12 @@ function setupEventListeners() {
 
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+
+    // Holdkamp
+    document.getElementById('holdkampBtn').addEventListener('click', showHoldkamp);
+    document.getElementById('backFromHoldkampBtn').addEventListener('click', showCourtOverview);
+    document.getElementById('holdkampFormat').addEventListener('change', onHoldkampFormatChange);
+    document.getElementById('startHoldkampBtn').addEventListener('click', startHoldkamp);
 
     // Match History
     document.getElementById('matchHistoryBtn').addEventListener('click', showMatchHistory);
@@ -584,15 +601,466 @@ async function resetCourtConfirm() {
     );
 }
 
+let activeHistoryTab = 'single';
+
 async function showMatchHistory() {
+    stopHoldkampRefresh();
     document.getElementById('courtOverviewSection').style.display = 'none';
+    document.getElementById('holdkampSection').style.display = 'none';
     document.getElementById('matchHistorySection').style.display = 'block';
-    await loadAllMatches();
+    await loadActiveHistoryTab();
+}
+
+function switchHistoryTab(tab) {
+    activeHistoryTab = tab;
+    const isSingle = tab === 'single';
+
+    document.getElementById('singleMatchesTab').style.display = isSingle ? 'block' : 'none';
+    document.getElementById('teamMatchesTab').style.display = isSingle ? 'none' : 'block';
+
+    document.getElementById('tabSingleMatches').style.background = isSingle ? '#533483' : 'transparent';
+    document.getElementById('tabSingleMatches').style.color = isSingle ? '#fff' : '#aaa';
+    document.getElementById('tabSingleMatches').style.borderBottomColor = isSingle ? '#533483' : 'transparent';
+
+    document.getElementById('tabTeamMatches').style.background = isSingle ? 'transparent' : '#533483';
+    document.getElementById('tabTeamMatches').style.color = isSingle ? '#aaa' : '#fff';
+    document.getElementById('tabTeamMatches').style.borderBottomColor = isSingle ? 'transparent' : '#533483';
+
+    loadActiveHistoryTab();
+}
+
+async function loadActiveHistoryTab() {
+    if (activeHistoryTab === 'single') {
+        await loadAllMatches();
+    } else {
+        await loadTeamMatchHistory();
+    }
+}
+
+async function loadTeamMatchHistory() {
+    const container = document.getElementById('teamMatchHistoryContainer');
+    try {
+        const matches = await api.getTeamMatchHistory();
+        if (!matches || matches.length === 0) {
+            container.innerHTML = '';
+            return;
+        }
+
+        const formatNames = {
+            liga11:      'Liga (11 kampe)',
+            '13kamps':   '13-kamps format',
+            '2plus2':    '2+2-format (8 kampe)',
+            '4plus2':    '4+2-format (8 kampe)',
+            '4plus3':    '4+3-format (9 kampe)',
+            '4spillere': '4-spillere (6 kampe)'
+        };
+        const DOUBLES = ['MD', 'DD', 'HD', 'Double'];
+
+        const cards = matches.map((tm, i) => {
+            const team1Wins = tm.games.filter(g => g.winner_team === 1).length;
+            const team2Wins = tm.games.filter(g => g.winner_team === 2).length;
+            const date = new Date(tm.created_at).toLocaleDateString('da-DK', { day: '2-digit', month: 'short', year: 'numeric' });
+            const formatLabel = formatNames[tm.format] || tm.format;
+
+            const counts = {};
+            const gameRows = tm.games.map(g => {
+                counts[g.category] = (counts[g.category] || 0) + 1;
+                const num = counts[g.category];
+                const isDoubles = DOUBLES.includes(g.category);
+                const t1 = isDoubles
+                    ? `${g.team1_player1 || '?'}${g.team1_player2 ? ' & ' + g.team1_player2 : ''}`
+                    : (g.team1_player1 || '?');
+                const t2 = isDoubles
+                    ? `${g.team2_player1 || '?'}${g.team2_player2 ? ' & ' + g.team2_player2 : ''}`
+                    : (g.team2_player1 || '?');
+
+                let resultHtml = '<span style="color:#aaa; font-size:0.8em;">Ikke spillet</span>';
+                let rowBorder = '#444';
+                if (g.status === 'finished' && g.winner_team) {
+                    const winnerName = g.winner_team === 1 ? tm.team1_name : tm.team2_name;
+                    const winnerColor = g.winner_team === 1 ? '#4CAF50' : '#e94560';
+                    const scores = g.set_scores ? `<span style="color:#aaa; font-size:0.8em; margin-left:6px;">${escapeHtml(g.set_scores)}</span>` : '';
+                    resultHtml = `<span style="color:${winnerColor}; font-size:0.85em; font-weight:bold;">✓ ${escapeHtml(winnerName)}</span>${scores}`;
+                    rowBorder = winnerColor;
+                }
+
+                return `<div style="display:flex; align-items:center; gap:10px; padding:7px 10px; border-left:3px solid ${rowBorder}; background:rgba(255,255,255,0.03); border-radius:4px; margin-bottom:4px; flex-wrap:wrap;">
+                    <span style="background:#e94560; color:#fff; padding:2px 7px; border-radius:4px; font-size:0.78em; font-weight:bold; white-space:nowrap;">${escapeHtml(g.category)} ${num}</span>
+                    <span style="color:#eaeaea; font-size:0.85em; flex:1; min-width:120px;">${escapeHtml(t1)} <span style="color:#aaa;">vs</span> ${escapeHtml(t2)}</span>
+                    ${resultHtml}
+                </div>`;
+            }).join('');
+
+            return `<div style="background:rgba(83,52,131,0.15); border:1px solid #533483; border-radius:8px; margin-bottom:12px; overflow:hidden;">
+                <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; cursor:pointer; flex-wrap:wrap; gap:8px;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                        <span style="font-size:1.1em; font-weight:bold; color:#eaeaea;">${escapeHtml(tm.team1_name)} <span style="color:#4CAF50;">${team1Wins}</span> – <span style="color:#e94560;">${team2Wins}</span> ${escapeHtml(tm.team2_name)}</span>
+                        <span style="color:#aaa; font-size:0.82em;">${formatLabel}</span>
+                        <span style="color:#666; font-size:0.8em;">${date}</span>
+                    </div>
+                    <span style="color:#aaa; font-size:0.85em;">▼ Se delkampe</span>
+                </div>
+                <div style="display:none; padding:0 16px 12px;">
+                    ${gameRows}
+                </div>
+            </div>`;
+        }).join('');
+
+        container.innerHTML = `
+            <h3 style="color:#eaeaea; margin-bottom:12px; font-size:1.1em; border-bottom:1px solid #333; padding-bottom:8px;">🏸 Holdkampe (${matches.length})</h3>
+            ${cards}`;
+    } catch (error) {
+        console.error('Failed to load team match history:', error);
+        container.innerHTML = '';
+    }
 }
 
 function showCourtOverview() {
+    stopHoldkampRefresh();
     document.getElementById('matchHistorySection').style.display = 'none';
+    document.getElementById('holdkampSection').style.display = 'none';
     document.getElementById('courtOverviewSection').style.display = 'block';
+}
+
+// ==================== HOLDKAMP ====================
+
+let holdkampRefreshTimer = null;
+let holdkampEditOpen = false;
+
+async function showHoldkamp() {
+    document.getElementById('courtOverviewSection').style.display = 'none';
+    document.getElementById('matchHistorySection').style.display = 'none';
+    document.getElementById('holdkampSection').style.display = 'block';
+    await loadActiveHoldkamp();
+    // Poll every 3 seconds for live scores
+    if (!holdkampRefreshTimer) {
+        holdkampRefreshTimer = setInterval(loadActiveHoldkamp, 3000);
+    }
+}
+
+function stopHoldkampRefresh() {
+    if (holdkampRefreshTimer) {
+        clearInterval(holdkampRefreshTimer);
+        holdkampRefreshTimer = null;
+    }
+}
+
+async function loadActiveHoldkamp() {
+    try {
+        const [teamMatch, allGameStates, settings] = await Promise.all([
+            api.getActiveTeamMatch(),
+            api.getAllGameStates(),
+            api.getSettings()
+        ]);
+        const container = document.getElementById('activeHoldkampContainer');
+        const createForm = document.getElementById('createHoldkampForm');
+        const courtCount = settings.courtCount || 5;
+
+        if (teamMatch) {
+            container.style.display = 'block';
+            createForm.style.display = 'none';
+            // Don't re-render while an edit form is open — it would clear the user's input
+            if (!holdkampEditOpen) {
+                renderActiveHoldkamp(teamMatch, container, allGameStates, courtCount);
+            }
+        } else {
+            stopHoldkampRefresh();
+            container.style.display = 'none';
+            createForm.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Failed to load holdkamp:', error);
+    }
+}
+
+function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCount = 5) {
+    const team1Wins = teamMatch.games.filter(g => g.winner_team === 1).length;
+    const team2Wins = teamMatch.games.filter(g => g.winner_team === 2).length;
+
+    const formatName = HOLDKAMP_FORMATS[teamMatch.format]?.name || teamMatch.format;
+
+    const counts = {};
+    let gamesHtml = teamMatch.games.map(g => {
+        counts[g.category] = (counts[g.category] || 0) + 1;
+        const num = counts[g.category];
+        const isDoubles = DOUBLES_CATEGORIES.includes(g.category);
+        const t1 = isDoubles
+            ? `${g.team1_player1 || '?'}${g.team1_player2 ? ' & ' + g.team1_player2 : ''}`
+            : (g.team1_player1 || '?');
+        const t2 = isDoubles
+            ? `${g.team2_player1 || '?'}${g.team2_player2 ? ' & ' + g.team2_player2 : ''}`
+            : (g.team2_player1 || '?');
+
+        let statusBadge = '';
+        let winnerBadge = '';
+        let editBtn = '';
+        let liveScore = '';
+        let courtAssign = '';
+
+        if (g.status === 'pending') {
+            statusBadge = '<span style="background:#555;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8em;">Afventer</span>';
+            editBtn = `<button onclick="toggleEditGame(${teamMatch.id}, ${g.id})" style="padding:3px 10px;background:transparent;color:#aaa;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:0.8em;">Rediger</button>`;
+
+            // Courts occupied by other active holdkamp games or active game states
+            const occupiedByCourts = new Set(
+                teamMatch.games
+                    .filter(og => og.status === 'active' && og.court_number)
+                    .map(og => og.court_number)
+            );
+            const occupiedByGameState = new Set(
+                allGameStates
+                    .filter(c => c.isActive && (c.player1.score > 0 || c.player2.score > 0 || c.player1.games > 0 || c.player2.games > 0 || c.timerSeconds > 0))
+                    .map(c => c.courtId)
+            );
+
+            const courtOptions = Array.from({length: courtCount}, (_, i) => {
+                const n = i + 1;
+                const inUse = occupiedByCourts.has(n) || occupiedByGameState.has(n);
+                return `<option value="${n}" ${inUse ? 'disabled' : ''}>Bane ${n}${inUse ? ' (optaget)' : ''}</option>`;
+            }).join('');
+
+            courtAssign = `
+                <div style="display:flex;align-items:center;gap:6px;margin-top:8px;">
+                    <select id="courtSelect_${g.id}" style="padding:5px 8px;background:#1a1a2e;color:#eaeaea;border:1px solid #533483;border-radius:4px;font-size:0.82em;">
+                        ${courtOptions}
+                    </select>
+                    <button onclick="assignCourtToGame(${teamMatch.id}, ${g.id})" style="padding:5px 12px;background:#533483;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.82em;">Tildel bane</button>
+                </div>`;
+        } else if (g.status === 'active') {
+            const courtData = allGameStates.find(c => c.courtId === g.court_number);
+            let scoreText = '';
+            if (courtData) {
+                scoreText = ` · ${courtData.player1.score}–${courtData.player2.score} (${courtData.player1.games}–${courtData.player2.games} sæt)`;
+            }
+            statusBadge = `<span style="background:#533483;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8em;">Bane ${g.court_number || '?'} ▶${scoreText}</span>`;
+        } else if (g.status === 'finished') {
+            const winner = g.winner_team === 1 ? teamMatch.team1_name : teamMatch.team2_name;
+            winnerBadge = `<span style="background:#4CAF50;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8em;">✓ ${escapeHtml(winner)}</span>`;
+        }
+
+        const editForm = g.status === 'pending' ? `
+        <div id="editGame_${g.id}" style="display:none; padding:12px; background:rgba(0,0,0,0.3); border-radius:6px; margin-top:8px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;">
+                <div>
+                    <div style="color:#4CAF50;font-size:0.82em;margin-bottom:6px;">${escapeHtml(teamMatch.team1_name)}</div>
+                    <input id="eg_${g.id}_t1p1" type="text" value="${escapeHtml(g.team1_player1 || '')}" placeholder="Spiller 1" style="width:100%;padding:7px;background:#1a1a2e;color:#eaeaea;border:1px solid #533483;border-radius:4px;box-sizing:border-box;margin-bottom:6px;">
+                    ${isDoubles ? `<input id="eg_${g.id}_t1p2" type="text" value="${escapeHtml(g.team1_player2 || '')}" placeholder="Makker" style="width:100%;padding:7px;background:#1a1a2e;color:#eaeaea;border:1px solid #533483;border-radius:4px;box-sizing:border-box;">` : ''}
+                </div>
+                <div>
+                    <div style="color:#e94560;font-size:0.82em;margin-bottom:6px;">${escapeHtml(teamMatch.team2_name)}</div>
+                    <input id="eg_${g.id}_t2p1" type="text" value="${escapeHtml(g.team2_player1 || '')}" placeholder="Spiller 1" style="width:100%;padding:7px;background:#1a1a2e;color:#eaeaea;border:1px solid #533483;border-radius:4px;box-sizing:border-box;margin-bottom:6px;">
+                    ${isDoubles ? `<input id="eg_${g.id}_t2p2" type="text" value="${escapeHtml(g.team2_player2 || '')}" placeholder="Makker" style="width:100%;padding:7px;background:#1a1a2e;color:#eaeaea;border:1px solid #533483;border-radius:4px;box-sizing:border-box;">` : ''}
+                </div>
+            </div>
+            <div style="display:flex;gap:8px;">
+                <button onclick="saveEditGame(${teamMatch.id}, ${g.id}, ${isDoubles})" style="padding:6px 16px;background:#533483;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.85em;">Gem</button>
+                <button onclick="toggleEditGame(${teamMatch.id}, ${g.id})" style="padding:6px 12px;background:transparent;color:#aaa;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:0.85em;">Annuller</button>
+            </div>
+        </div>` : '';
+
+        return `
+        <div style="padding:10px 15px;background:rgba(83,52,131,0.2);border-radius:8px;margin-bottom:6px;">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <span style="background:#e94560;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.85em;font-weight:bold;white-space:nowrap;">${escapeHtml(g.category)} ${num}</span>
+                <span style="color:#eaeaea;font-size:0.95em;flex:1;min-width:120px;">${escapeHtml(t1)} <span style="color:#aaa;">vs</span> ${escapeHtml(t2)}</span>
+                ${statusBadge}
+                ${winnerBadge}
+                ${editBtn}
+            </div>
+            ${courtAssign}
+            ${editForm}
+        </div>`;
+    }).join('');
+
+    container.innerHTML = `
+        <div style="background:rgba(83,52,131,0.15);border:1px solid #533483;border-radius:10px;padding:20px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <div>
+                    <div style="color:#aaa;font-size:0.85em;margin-bottom:4px;">${escapeHtml(formatName)}</div>
+                    <div style="font-size:1.8em;font-weight:bold;">
+                        <span style="color:#4CAF50;">${escapeHtml(teamMatch.team1_name)}</span>
+                        <span style="color:#fff;margin:0 15px;">${team1Wins} – ${team2Wins}</span>
+                        <span style="color:#e94560;">${escapeHtml(teamMatch.team2_name)}</span>
+                    </div>
+                </div>
+                <div style="display:flex;gap:10px;">
+                    <button onclick="finishHoldkamp(${teamMatch.id})" class="btn-secondary">Afslut Holdkamp</button>
+                    <button onclick="deleteHoldkamp(${teamMatch.id})" class="btn-danger">Slet</button>
+                </div>
+            </div>
+            <div>${gamesHtml}</div>
+        </div>
+    `;
+}
+
+function onHoldkampFormatChange() {
+    const format = document.getElementById('holdkampFormat').value;
+    const container = document.getElementById('holdkampGamesInputContainer');
+    const playerInputs = document.getElementById('holdkampPlayerInputs');
+
+    if (!format || !HOLDKAMP_FORMATS[format]) {
+        playerInputs.style.display = 'none';
+        return;
+    }
+
+    const games = HOLDKAMP_FORMATS[format].games;
+    const team1Name = document.getElementById('holdkampTeam1Name').value || 'Hold 1';
+    const team2Name = document.getElementById('holdkampTeam2Name').value || 'Hold 2';
+
+    // Count occurrences of each category for numbering
+    const counts = {};
+    container.innerHTML = games.map((cat, i) => {
+        counts[cat] = (counts[cat] || 0) + 1;
+        const num = counts[cat];
+        const isDoubles = DOUBLES_CATEGORIES.includes(cat);
+        const label = `${cat} ${num}`;
+
+        if (isDoubles) {
+            return `
+            <div style="background:rgba(83,52,131,0.1);border-radius:8px;padding:15px;margin-bottom:10px;">
+                <div style="font-weight:bold;color:#e94560;margin-bottom:10px;">${label}</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <div>
+                        <div style="color:#4CAF50;font-size:0.85em;margin-bottom:5px;">${escapeHtml(team1Name)}</div>
+                        <input type="text" placeholder="Spiller 1" data-game="${i}" data-field="t1p1" style="width:100%;padding:8px;background:#1a1a2e;color:#eaeaea;border:1px solid #533483;border-radius:4px;margin-bottom:6px;">
+                        <input type="text" placeholder="Makker" data-game="${i}" data-field="t1p2" style="width:100%;padding:8px;background:#1a1a2e;color:#eaeaea;border:1px solid #533483;border-radius:4px;">
+                    </div>
+                    <div>
+                        <div style="color:#e94560;font-size:0.85em;margin-bottom:5px;">${escapeHtml(team2Name)}</div>
+                        <input type="text" placeholder="Spiller 1" data-game="${i}" data-field="t2p1" style="width:100%;padding:8px;background:#1a1a2e;color:#eaeaea;border:1px solid #533483;border-radius:4px;margin-bottom:6px;">
+                        <input type="text" placeholder="Makker" data-game="${i}" data-field="t2p2" style="width:100%;padding:8px;background:#1a1a2e;color:#eaeaea;border:1px solid #533483;border-radius:4px;">
+                    </div>
+                </div>
+            </div>`;
+        } else {
+            return `
+            <div style="background:rgba(83,52,131,0.1);border-radius:8px;padding:15px;margin-bottom:10px;">
+                <div style="font-weight:bold;color:#e94560;margin-bottom:10px;">${label}</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <div>
+                        <div style="color:#4CAF50;font-size:0.85em;margin-bottom:5px;">${escapeHtml(team1Name)}</div>
+                        <input type="text" placeholder="Spillernavn" data-game="${i}" data-field="t1p1" style="width:100%;padding:8px;background:#1a1a2e;color:#eaeaea;border:1px solid #533483;border-radius:4px;">
+                    </div>
+                    <div>
+                        <div style="color:#e94560;font-size:0.85em;margin-bottom:5px;">${escapeHtml(team2Name)}</div>
+                        <input type="text" placeholder="Spillernavn" data-game="${i}" data-field="t2p1" style="width:100%;padding:8px;background:#1a1a2e;color:#eaeaea;border:1px solid #533483;border-radius:4px;">
+                    </div>
+                </div>
+            </div>`;
+        }
+    }).join('');
+
+    playerInputs.style.display = 'block';
+}
+
+async function startHoldkamp() {
+    const format = document.getElementById('holdkampFormat').value;
+    const team1Name = document.getElementById('holdkampTeam1Name').value.trim();
+    const team2Name = document.getElementById('holdkampTeam2Name').value.trim();
+
+    if (!format || !team1Name || !team2Name) {
+        alert('Udfyld venligst holdnavne og vælg format.');
+        return;
+    }
+
+    const formatDef = HOLDKAMP_FORMATS[format];
+    const inputs = document.getElementById('holdkampGamesInputContainer').querySelectorAll('input');
+
+    // Build games array from inputs
+    const gameData = {};
+    inputs.forEach(input => {
+        const gameIdx = input.dataset.game;
+        const field = input.dataset.field;
+        if (!gameData[gameIdx]) gameData[gameIdx] = {};
+        gameData[gameIdx][field] = input.value.trim();
+    });
+
+    const games = formatDef.games.map((cat, i) => ({
+        category: cat,
+        team1Player1: gameData[i]?.t1p1 || '',
+        team1Player2: gameData[i]?.t1p2 || '',
+        team2Player1: gameData[i]?.t2p1 || '',
+        team2Player2: gameData[i]?.t2p2 || ''
+    }));
+
+    try {
+        await api.createTeamMatch({ format, team1Name, team2Name, games });
+        await loadActiveHoldkamp();
+    } catch (error) {
+        console.error('Failed to create holdkamp:', error);
+        alert('Kunne ikke oprette holdkamp. Prøv igen.');
+    }
+}
+
+async function assignCourtToGame(teamMatchId, gameId) {
+    const select = document.getElementById(`courtSelect_${gameId}`);
+    const courtNumber = parseInt(select?.value);
+    if (!courtNumber) return;
+    if (select?.options[select.selectedIndex]?.disabled) {
+        alert('Denne bane er allerede i brug. Vælg en ledig bane.');
+        return;
+    }
+    try {
+        await api.updateTeamMatchGame(teamMatchId, gameId, {
+            courtNumber,
+            status: 'active'
+        });
+        await loadActiveHoldkamp();
+    } catch (error) {
+        console.error('Failed to assign court:', error);
+        alert('Kunne ikke tildele bane. Prøv igen.');
+    }
+}
+
+function toggleEditGame(teamMatchId, gameId) {
+    const form = document.getElementById(`editGame_${gameId}`);
+    if (form) {
+        const opening = form.style.display === 'none';
+        form.style.display = opening ? 'block' : 'none';
+        holdkampEditOpen = opening;
+    }
+}
+
+async function saveEditGame(teamMatchId, gameId, isDoubles) {
+    const t1p1 = document.getElementById(`eg_${gameId}_t1p1`)?.value.trim() || '';
+    const t1p2 = isDoubles ? (document.getElementById(`eg_${gameId}_t1p2`)?.value.trim() || '') : '';
+    const t2p1 = document.getElementById(`eg_${gameId}_t2p1`)?.value.trim() || '';
+    const t2p2 = isDoubles ? (document.getElementById(`eg_${gameId}_t2p2`)?.value.trim() || '') : '';
+
+    try {
+        await api.updateTeamMatchGame(teamMatchId, gameId, {
+            team1Player1: t1p1,
+            team1Player2: t1p2,
+            team2Player1: t2p1,
+            team2Player2: t2p2
+        });
+        holdkampEditOpen = false;
+        await loadActiveHoldkamp();
+    } catch (error) {
+        console.error('Failed to save game edit:', error);
+        alert('Kunne ikke gemme ændringerne. Prøv igen.');
+    }
+}
+
+async function finishHoldkamp(id) {
+    if (!confirm('Afslut holdkampen? Den kan ikke genoptages.')) return;
+    try {
+        await api.finishTeamMatch(id);
+        await loadActiveHoldkamp();
+    } catch (error) {
+        console.error('Failed to finish holdkamp:', error);
+    }
+}
+
+async function deleteHoldkamp(id) {
+    if (!confirm('Slet holdkampen? Al data slettes permanent.')) return;
+    try {
+        await api.deleteTeamMatch(id);
+        document.getElementById('activeHoldkampContainer').style.display = 'none';
+        document.getElementById('createHoldkampForm').style.display = 'block';
+    } catch (error) {
+        console.error('Failed to delete holdkamp:', error);
+    }
 }
 
 async function loadAllMatches() {

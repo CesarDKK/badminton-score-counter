@@ -5,6 +5,10 @@ const api = window.BadmintonAPI;
 const urlParams = new URLSearchParams(window.location.search);
 const courtId = parseInt(urlParams.get('id')) || 1;
 
+// Holdkamp state
+let activeTeamMatch = null;
+let assignedGameId = null;
+
 // Game state - specific to this court only
 let gameState = {
     player1: {
@@ -54,6 +58,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     updateDisplay();
     setupEventListeners();
     startPeriodicSync();
+    await initHoldkampPanel();
 });
 
 async function initializeApp() {
@@ -267,6 +272,7 @@ function addPoint(player) {
         if (!gameState.matchStartTime) {
             gameState.matchStartTime = new Date().toISOString();
         }
+        document.getElementById('holdkampPanel').style.display = 'none';
         startTimer();
     }
 
@@ -629,6 +635,19 @@ function clearCourt() {
             {
                 text: 'Ja, Ryd',
                 callback: async () => {
+                    // Release holdkamp game back to pending if assigned
+                    if (assignedGameId && activeTeamMatch) {
+                        try {
+                            await api.updateTeamMatchGame(activeTeamMatch.id, assignedGameId, {
+                                status: 'pending',
+                                courtNumber: null
+                            });
+                        } catch (e) {
+                            console.error('Failed to release holdkamp game:', e);
+                        }
+                        assignedGameId = null;
+                    }
+
                     try {
                         // Reset all game state values including player names
                         gameState.player1.name = 'Spiller 1';
@@ -698,6 +717,9 @@ function manualStartMatch() {
 
     // Set match start time to now
     gameState.matchStartTime = new Date().toISOString();
+
+    // Hide holdkamp panel once match starts
+    document.getElementById('holdkampPanel').style.display = 'none';
 
     // Start timer display
     startTimer();
@@ -1200,6 +1222,21 @@ async function saveMatchResult(winner, loser, winnerGames, loserGames) {
         };
 
         await api.saveMatchResult(matchData);
+
+        // Report holdkamp result if assigned
+        if (assignedGameId && activeTeamMatch) {
+            const game = activeTeamMatch.games.find(g => g.id === assignedGameId);
+            let winnerTeam = 2;
+            if (game) {
+                const team1Names = [game.team1_player1, game.team1_player2].filter(Boolean);
+                winnerTeam = team1Names.some(name => winner.includes(name)) ? 1 : 2;
+            }
+            await reportHoldkampResult(winnerTeam, setScoresText);
+            assignedGameId = null;
+        }
+
+        // Show holdkamp panel if there are more pending games
+        await refreshHoldkampPanel();
     } catch (error) {
         console.error('Failed to save match result:', error);
         showMessage('Advarsel', 'Kampresultatet kunne ikke gemmes.');
@@ -1372,3 +1409,169 @@ window.addEventListener('beforeunload', async function() {
         }
     }
 });
+
+// ==================== HOLDKAMP ====================
+
+async function initHoldkampPanel() {
+    try {
+        activeTeamMatch = await api.getActiveTeamMatch();
+        if (!activeTeamMatch) return;
+
+        const panel = document.getElementById('holdkampPanel');
+
+        // Register all button listeners once upfront, regardless of code path
+        document.getElementById('showHoldkampPanelBtn').style.display = 'inline-block';
+        document.getElementById('showHoldkampPanelBtn').addEventListener('click', () => {
+            panel.style.display = 'block';
+        });
+        document.getElementById('closeHoldkampPanelBtn').addEventListener('click', () => {
+            panel.style.display = 'none';
+        });
+        document.getElementById('assignHoldkampBtn').addEventListener('click', assignHoldkampGame);
+
+        const myGame = activeTeamMatch.games.find(g => g.court_number === courtId && g.status === 'active');
+        if (myGame) {
+            assignedGameId = myGame.id;
+            applyHoldkampGameToState(myGame);
+            showHoldkampAssigned(myGame);
+            return;
+        }
+
+        const pendingGames = activeTeamMatch.games.filter(g => g.status === 'pending');
+        if (pendingGames.length === 0) return;
+
+        const select = document.getElementById('holdkampGameSelect');
+        select.innerHTML = '<option value="">-- Vælg delkamp --</option>';
+        const pendingCounts = {};
+        pendingGames.forEach(g => {
+            pendingCounts[g.category] = (pendingCounts[g.category] || 0) + 1;
+            const num = pendingCounts[g.category];
+            const isDoubles = ['MD', 'DD', 'HD', 'Double'].includes(g.category);
+            const t1 = isDoubles
+                ? `${g.team1_player1 || '?'}${g.team1_player2 ? ' & ' + g.team1_player2 : ''}`
+                : (g.team1_player1 || '?');
+            const t2 = isDoubles
+                ? `${g.team2_player1 || '?'}${g.team2_player2 ? ' & ' + g.team2_player2 : ''}`
+                : (g.team2_player1 || '?');
+            const opt = document.createElement('option');
+            opt.value = g.id;
+            opt.textContent = `${g.category} ${num}: ${t1} vs ${t2}`;
+            select.appendChild(opt);
+        });
+
+        panel.style.display = 'block';
+    } catch (error) {
+        console.error('Failed to init holdkamp panel:', error);
+    }
+}
+
+function applyHoldkampGameToState(game) {
+    const isDoubles = ['MD', 'DD', 'HD', 'Double'].includes(game.category);
+    if (game.team1_player1) {
+        gameState.player1.name = game.team1_player1;
+        if (isDoubles && game.team1_player2) gameState.player1.name2 = game.team1_player2;
+    }
+    if (game.team2_player1) {
+        gameState.player2.name = game.team2_player1;
+        if (isDoubles && game.team2_player2) gameState.player2.name2 = game.team2_player2;
+    }
+    gameState.isDoubles = isDoubles;
+    updateDisplay();
+    saveGameState();
+}
+
+async function assignHoldkampGame() {
+    const gameId = parseInt(document.getElementById('holdkampGameSelect').value);
+    if (!gameId || !activeTeamMatch) return;
+
+    const game = activeTeamMatch.games.find(g => g.id === gameId);
+    if (!game) return;
+
+    try {
+        await api.updateTeamMatchGame(activeTeamMatch.id, gameId, {
+            courtNumber: courtId,
+            status: 'active'
+        });
+
+        assignedGameId = gameId;
+        applyHoldkampGameToState(game);
+        showHoldkampAssigned(game);
+    } catch (error) {
+        console.error('Failed to assign holdkamp game:', error);
+    }
+}
+
+function showHoldkampAssigned(game) {
+    const panel = document.getElementById('holdkampPanel');
+    document.getElementById('holdkampGameSelect').style.display = 'none';
+    document.getElementById('assignHoldkampBtn').style.display = 'none';
+
+    const isDoubles = ['MD', 'DD', 'HD', 'Double'].includes(game.category);
+    const t1 = isDoubles
+        ? `${game.team1_player1 || '?'}${game.team1_player2 ? ' & ' + game.team1_player2 : ''}`
+        : (game.team1_player1 || '?');
+    const t2 = isDoubles
+        ? `${game.team2_player1 || '?'}${game.team2_player2 ? ' & ' + game.team2_player2 : ''}`
+        : (game.team2_player1 || '?');
+
+    const assignedDiv = document.getElementById('holdkampAssigned');
+    assignedDiv.style.display = 'block';
+    assignedDiv.textContent = `✓ Tilknyttet: ${game.category} – ${t1} vs ${t2}`;
+    panel.style.display = 'none';
+}
+
+async function refreshHoldkampPanel() {
+    try {
+        activeTeamMatch = await api.getActiveTeamMatch();
+        if (!activeTeamMatch) return;
+
+        assignedGameId = null;
+
+        const panel = document.getElementById('holdkampPanel');
+        const select = document.getElementById('holdkampGameSelect');
+        const assignBtn = document.getElementById('assignHoldkampBtn');
+        const assignedDiv = document.getElementById('holdkampAssigned');
+
+        const pendingGames = activeTeamMatch.games.filter(g => g.status === 'pending');
+        if (pendingGames.length === 0) return;
+
+        assignedDiv.style.display = 'none';
+        select.style.display = '';
+        assignBtn.style.display = '';
+
+        select.innerHTML = '<option value="">-- Vælg delkamp --</option>';
+        const pendingCounts = {};
+        pendingGames.forEach(g => {
+            pendingCounts[g.category] = (pendingCounts[g.category] || 0) + 1;
+            const num = pendingCounts[g.category];
+            const isDoubles = ['MD', 'DD', 'HD', 'Double'].includes(g.category);
+            const t1 = isDoubles
+                ? `${g.team1_player1 || '?'}${g.team1_player2 ? ' & ' + g.team1_player2 : ''}`
+                : (g.team1_player1 || '?');
+            const t2 = isDoubles
+                ? `${g.team2_player1 || '?'}${g.team2_player2 ? ' & ' + g.team2_player2 : ''}`
+                : (g.team2_player1 || '?');
+            const opt = document.createElement('option');
+            opt.value = g.id;
+            opt.textContent = `${g.category} ${num}: ${t1} vs ${t2}`;
+            select.appendChild(opt);
+        });
+
+        panel.style.display = 'block';
+    } catch (error) {
+        console.error('Failed to refresh holdkamp panel:', error);
+    }
+}
+
+async function reportHoldkampResult(winnerTeam, setScores) {
+    if (!activeTeamMatch || !assignedGameId) return;
+    try {
+        await api.updateTeamMatchGame(activeTeamMatch.id, assignedGameId, {
+            status: 'finished',
+            winnerTeam,
+            setScores
+        });
+    } catch (error) {
+        console.error('Failed to report holdkamp result:', error);
+    }
+}
