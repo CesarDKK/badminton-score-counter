@@ -5,12 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sponsor Administration - Badminton Pointtæller</title>
     <link rel="icon" type="image/png" href="/favicon.png?v=4">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="admin-styles.css">
     <link rel="stylesheet" href="sponsor-styles.css">
     <script src="js/theme-loader.js"></script>
 </head>
 <body>
+    <div class="bg-glow"></div>
     <div class="container">
         <!-- Login Screen -->
         <div id="loginScreen" class="admin-section">
@@ -23,7 +27,7 @@
                     <input type="password" id="adminPassword" placeholder="Indtast admin adgangskode">
                     <button id="loginBtn" class="btn-primary">Log Ind</button>
                     <div class="back-link">
-                        <a href="admin.html">← Tilbage til Admin</a>
+                        <a href="admin.html">← Tilbage til Oversigt</a>
                     </div>
                 </div>
             </div>
@@ -34,8 +38,8 @@
             <header>
                 <h1>Sponsor Administration</h1>
                 <div class="header-controls">
+                    <a href="admin.html" class="btn-secondary" style="text-decoration: none; display: inline-block;">Tilbage til Oversigt</a>
                     <button id="logoutBtn" class="btn-secondary">Log Ud</button>
-                    <a href="admin.html" class="btn-secondary" style="text-decoration: none; display: inline-block;">Tilbage til Admin</a>
                 </div>
             </header>
 

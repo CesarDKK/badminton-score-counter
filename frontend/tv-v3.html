@@ -5,10 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bane TV Visning - V3</title>
     <link rel="icon" type="image/png" href="/favicon.png?v=4">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="tv-v3-styles.css">
     <script src="js/theme-loader.js"></script>
 </head>
 <body>
+    <div class="bg-glow"></div>
     <div class="tv-container">
         <!-- Header with court number and timer -->
         <div class="tv-header">
@@ -55,80 +59,54 @@
     </div>
 
     <!-- Rest Break Overlay -->
-    <div id="tvRestBreakOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--color-bg-dark); z-index: 9999; justify-content: center; align-items: center;">
-        <div style="text-align: center; color: white; width: 90%; max-width: 1600px;">
-            <!-- Title -->
-            <h1 id="tvRestBreakTitle" style="font-size: 3em; margin-bottom: 25px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; color: #ffffff;">⏸️ Pause 1 minut</h1>
-
-            <!-- Timer -->
-            <div style="position: relative; display: inline-block; margin-bottom: 30px;">
-                <div id="tvRestBreakTimer" style="font-size: 10em; font-weight: 900; color: #4CAF50;">60</div>
-                <div style="position: absolute; bottom: -15px; left: 50%; transform: translateX(-50%); font-size: 1.3em; color: #aaa; letter-spacing: 2px;">SEKUNDER</div>
+    <div id="tvRestBreakOverlay" class="tv-overlay">
+        <div class="overlay-glow"></div>
+        <div class="overlay-content">
+            <div class="overlay-title-row">
+                <h1 id="tvRestBreakTitle" class="overlay-heading">Pause 1 minut</h1>
             </div>
-
-            <!-- Score Display with Cards -->
-            <div style="display: flex; justify-content: center; align-items: center; gap: 40px; margin: 35px 0;">
-                <!-- Player 1 Card -->
-                <div style="background: var(--color-bg-card); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 25px 40px; min-width: 320px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);">
-                    <div style="font-size: 1.8em; margin-bottom: 12px; color: #eaeaea; font-weight: 600;" id="tvRestBreakPlayer1">Spiller 1</div>
-                    <div id="tvRestBreakPlayer1Partner" style="font-size: 1.4em; color: #aaa; margin-bottom: 18px; display: none;"></div>
-                    <div style="font-size: 6em; font-weight: 900; color: var(--color-accent);" id="tvRestBreakScore1">0</div>
-                    <div style="font-size: 1.2em; color: #888; margin-top: 8px; text-transform: uppercase; letter-spacing: 2px;">POINT</div>
+            <div class="overlay-timer-wrap">
+                <div id="tvRestBreakTimer" class="overlay-countdown">60</div>
+                <div class="overlay-timer-label">SEKUNDER</div>
+            </div>
+            <div class="overlay-score-row">
+                <div class="overlay-player-card">
+                    <div class="overlay-player-name" id="tvRestBreakPlayer1">Spiller 1</div>
+                    <div class="overlay-player-partner" id="tvRestBreakPlayer1Partner"></div>
+                    <div class="overlay-score" id="tvRestBreakScore1">0</div>
+                    <div class="overlay-score-label">POINT</div>
                 </div>
-
-                <!-- VS Divider -->
-                <div style="font-size: 3.5em; font-weight: bold; color: var(--color-primary);">VS</div>
-
-                <!-- Player 2 Card -->
-                <div style="background: var(--color-bg-card); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 25px 40px; min-width: 320px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);">
-                    <div style="font-size: 1.8em; margin-bottom: 12px; color: #eaeaea; font-weight: 600;" id="tvRestBreakPlayer2">Spiller 2</div>
-                    <div id="tvRestBreakPlayer2Partner" style="font-size: 1.4em; color: #aaa; margin-bottom: 18px; display: none;"></div>
-                    <div style="font-size: 6em; font-weight: 900; color: var(--color-accent);" id="tvRestBreakScore2">0</div>
-                    <div style="font-size: 1.2em; color: #888; margin-top: 8px; text-transform: uppercase; letter-spacing: 2px;">POINT</div>
+                <div class="overlay-vs">VS</div>
+                <div class="overlay-player-card">
+                    <div class="overlay-player-name" id="tvRestBreakPlayer2">Spiller 2</div>
+                    <div class="overlay-player-partner" id="tvRestBreakPlayer2Partner"></div>
+                    <div class="overlay-score" id="tvRestBreakScore2">0</div>
+                    <div class="overlay-score-label">POINT</div>
                 </div>
             </div>
-
-            <!-- Set Score Display with Badges -->
-            <div style="margin-top: 35px; padding: 20px; background: var(--color-bg-container); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
-                <div style="font-size: 1.4em; color: #aaa; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 2px;">Sæt Oversigt</div>
-                <div style="display: flex; justify-content: center; align-items: center; gap: 25px; font-size: 3em; font-weight: bold;">
-                    <div style="background: var(--color-bg-card); border: 2px solid var(--color-primary); border-radius: 12px; padding: 15px 40px; min-width: 120px;">
-                        <span id="tvRestBreakGames1" style="color: #ffffff;">0</span>
-                    </div>
-                    <div style="color: #666;">—</div>
-                    <div style="background: var(--color-bg-card); border: 2px solid var(--color-primary); border-radius: 12px; padding: 15px 40px; min-width: 120px;">
-                        <span id="tvRestBreakGames2" style="color: #ffffff;">0</span>
-                    </div>
+            <div class="overlay-sets-row">
+                <div class="overlay-sets-label">SÆT OVERSIGT</div>
+                <div class="overlay-sets-scores">
+                    <div class="overlay-set-badge"><span id="tvRestBreakGames1">0</span></div>
+                    <div class="overlay-sets-dash">—</div>
+                    <div class="overlay-set-badge"><span id="tvRestBreakGames2">0</span></div>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Match Finished Overlay -->
-    <div id="tvMatchFinishedOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--color-bg-dark); z-index: 9999; justify-content: center; align-items: center;">
-        <div style="text-align: center; color: white; max-width: 95%; width: 100%; padding: 40px 30px; display: flex; flex-direction: column; justify-content: center; gap: 25px; height: 100vh;">
-            <!-- Title -->
-            <h1 style="font-size: 4em; margin: 10px 0; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: 4px;">KAMP AFGJORT</h1>
-
-            <!-- Winner announcement -->
-            <div style="margin: 15px 0; padding: 30px 40px; background: var(--color-bg-card); border: 2px solid #4CAF50; border-radius: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);">
-                <div style="font-size: 2em; color: #4CAF50; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 2px; font-weight: 600;">🎉 VINDER 🎉</div>
-                <div id="tvFinishedWinner" style="font-size: 3.5em; color: #fff; font-weight: 700;">Spiller</div>
+    <div id="tvMatchFinishedOverlay" class="tv-overlay">
+        <div class="overlay-glow"></div>
+        <div class="overlay-content overlay-content--finished">
+            <div class="overlay-finished-title">KAMP AFGJORT</div>
+            <div class="overlay-winner-card">
+                <div class="overlay-winner-label">VINDER</div>
+                <div id="tvFinishedWinner" class="overlay-winner-name">Spiller</div>
             </div>
-
-            <!-- Set scores breakdown -->
-            <div id="tvSetScoresContainer" style="font-size: 1.6em; color: #aaa; margin: 15px 0; padding: 25px; background: var(--color-bg-container); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);">
-                <!-- Set scores will be inserted here -->
-            </div>
+            <div id="tvSetScoresContainer" class="overlay-set-history"></div>
         </div>
     </div>
-
-    <style>
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-    </style>
 
     <script src="js/api-v2.js"></script>
     <script src="tv-script-v3.js"></script>

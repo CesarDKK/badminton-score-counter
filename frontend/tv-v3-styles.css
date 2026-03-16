@@ -1,9 +1,5 @@
-/* TV View V3 - Minimalist Design
- * Clean layout with player names on left, 3 set boxes per player
- * Serving team highlighted with lighter background
- */
+/* TV View V3 — Arena Design */
 
-/* Global resets */
 * {
     margin: 0;
     padding: 0;
@@ -11,93 +7,150 @@
 }
 
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'DM Sans', 'Segoe UI', sans-serif;
     background: var(--color-bg-dark);
     color: white;
     overflow: hidden;
+    height: 100vh;
 }
 
-/* Container */
+/* Atmospheric glow */
+.bg-glow {
+    position: fixed;
+    top: -30%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100vw;
+    height: 80vh;
+    background: radial-gradient(ellipse, rgba(83, 52, 131, 0.2) 0%, transparent 65%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Subtle grid pattern */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+    background-size: 56px 56px;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* =================== CONTAINER =================== */
 .tv-container {
+    position: relative;
+    z-index: 1;
     width: 100vw;
     height: 100vh;
     display: flex;
     flex-direction: column;
 }
 
-/* Header */
+/* =================== HEADER =================== */
 .tv-header {
-    padding: 35px 60px;
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+    padding: 36px 80px;
+    background: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    flex-shrink: 0;
 }
 
 .tv-header h1 {
-    font-size: 4.5em;
-    font-weight: bold;
-    letter-spacing: 3px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 5.5em;
+    font-weight: 400;
+    letter-spacing: 8px;
+    color: #ffffff;
+}
+
+.tv-header h1 span {
+    color: var(--color-accent);
 }
 
 .timer-display {
-    font-size: 4.5em;
-    font-weight: bold;
-    letter-spacing: 2px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 5.5em;
+    font-weight: 400;
+    letter-spacing: 5px;
+    color: rgba(255, 255, 255, 0.7);
+    font-variant-numeric: tabular-nums;
 }
 
-/* Scoreboard - main content area */
+/* =================== SCOREBOARD =================== */
 .scoreboard {
     flex: 1;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 80px;
-    padding: 60px 0;
-    background: var(--color-bg-container);
+    gap: 0;
+    padding: 30px 0;
 }
 
-/* Team row */
+/* =================== TEAM ROW =================== */
 .team-row {
     display: flex;
     align-items: center;
-    padding: 50px 0 50px 52px;
-    gap: 80px;
-    transition: background 0.3s ease, border-color 0.3s ease;
-    border-left: 12px solid transparent;
+    padding: 56px 80px;
+    gap: 70px;
+    transition: background 0.3s ease, border-left-color 0.3s ease;
+    border-left: 10px solid transparent;
+    position: relative;
+}
+
+.team-row + .team-row {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 /* Serving highlight */
 .team-row.serving {
-    background: rgba(233, 69, 96, 0.15);
+    background: rgba(83, 52, 131, 0.1);
     border-left-color: var(--color-accent);
 }
 
-/* Team names - left aligned, no margin */
+.team-row.serving::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    background: var(--color-accent);
+    box-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+}
+
+/* =================== PLAYER NAMES =================== */
 .team-names {
-    min-width: 550px;
-    padding-left: 60px;
+    min-width: 620px;
+    flex-shrink: 0;
 }
 
 .player-name {
-    font-size: 4.5em;
-    font-weight: bold;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 6.5em;
+    font-weight: 400;
     color: #ffffff;
-    text-transform: uppercase;
-    line-height: 1.2;
-    text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.4);
+    letter-spacing: 4px;
+    line-height: 1.05;
 }
 
 .partner-name {
-    font-size: 4.5em;
-    color: #ffffff;
-    margin-top: 15px;
-    font-weight: bold;
-    text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.4);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 6.5em;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.75);
+    letter-spacing: 4px;
+    margin-top: 10px;
+    line-height: 1.05;
 }
 
-/* Set boxes */
+/* =================== SET BOXES =================== */
 .set-boxes {
     display: flex;
     gap: 50px;
@@ -106,65 +159,92 @@ body {
 }
 
 .set-box {
-    width: 200px;
-    height: 200px;
+    width: 240px;
+    height: 240px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 6.5em;
-    font-weight: bold;
-    border: 5px solid var(--color-primary);
-    border-radius: 20px;
-    background: var(--color-bg-card);
-    color: #ffffff;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 9em;
+    font-weight: 400;
+    letter-spacing: 2px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(255, 255, 255, 0.5);
     transition: all 0.3s ease;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    position: relative;
+    overflow: hidden;
 }
 
-/* Serving team set boxes - lighter color */
+/* Accent bottom line on set-box */
+.set-box::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 15%;
+    right: 15%;
+    height: 3px;
+    background: var(--color-accent);
+    border-radius: 3px 3px 0 0;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+/* Serving row set boxes */
 .team-row.serving .set-box {
-    background: rgba(133, 82, 211, 0.25);
-    border-color: var(--color-accent);
+    background: rgba(83, 52, 131, 0.15);
+    border-color: rgba(83, 52, 131, 0.4);
+    color: #ffffff;
 }
 
-/* Current set being played */
+/* Current set */
 .set-box.current {
-    border-width: 7px;
+    border-color: rgba(83, 52, 131, 0.6);
+    color: #ffffff;
+    background: rgba(83, 52, 131, 0.12);
+}
+
+.set-box.current::after {
+    opacity: 1;
 }
 
 /* Won set */
 .set-box.won {
-    background: rgba(76, 175, 80, 0.25);
-    border-color: #4CAF50;
+    background: rgba(76, 175, 80, 0.15);
+    border-color: rgba(76, 175, 80, 0.5);
+    color: rgba(76, 175, 80, 0.95);
 }
 
 /* Lost set */
 .set-box.lost {
-    background: rgba(233, 69, 96, 0.2);
-    border-color: var(--color-accent);
+    background: rgba(233, 69, 96, 0.1);
+    border-color: rgba(233, 69, 96, 0.3);
+    color: rgba(255, 255, 255, 0.4);
 }
 
-/* IMPORTANT: Won/Lost styling must override serving styling */
-/* When serving team has won a set - keep green border */
 .team-row.serving .set-box.won {
-    background: rgba(76, 175, 80, 0.25);
-    border-color: #4CAF50;
+    background: rgba(76, 175, 80, 0.15);
+    border-color: rgba(76, 175, 80, 0.5);
+    color: rgba(76, 175, 80, 0.95);
 }
 
-/* When serving team has lost a set - keep red border */
 .team-row.serving .set-box.lost {
-    background: rgba(233, 69, 96, 0.2);
-    border-color: var(--color-accent);
+    background: rgba(233, 69, 96, 0.1);
+    border-color: rgba(233, 69, 96, 0.3);
+    color: rgba(255, 255, 255, 0.4);
 }
 
-/* Footer */
+/* =================== FOOTER =================== */
 .tv-footer {
-    padding: 30px;
-    background: rgba(0, 0, 0, 0.5);
+    padding: 26px 80px;
+    background: rgba(0, 0, 0, 0.2);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 100px;
+    min-height: 90px;
+    flex-shrink: 0;
 }
 
 .tv-footer.has-banner {
@@ -175,45 +255,39 @@ body {
     width: 100%;
     height: auto;
     display: block;
-    max-height: 180px;
+    max-height: 140px;
     object-fit: contain;
 }
 
 .live-indicator {
     display: flex;
     align-items: center;
-    gap: 20px;
-    font-size: 3em;
-    font-weight: bold;
-    letter-spacing: 3px;
+    gap: 14px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2em;
+    font-weight: 400;
+    letter-spacing: 5px;
+    color: rgba(255, 255, 255, 0.4);
 }
 
 .live-dot {
-    width: 28px;
-    height: 28px;
-    background: #e94560;
+    width: 14px;
+    height: 14px;
+    background: var(--color-accent);
     border-radius: 50%;
+    box-shadow: 0 0 10px rgba(233, 69, 96, 0.6);
     animation: pulse 2s infinite;
 }
 
 @keyframes pulse {
-    0%, 100% {
-        opacity: 1;
-        transform: scale(1);
-    }
-    50% {
-        opacity: 0.4;
-        transform: scale(1.1);
-    }
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.4; transform: scale(1.15); }
 }
 
-/* Sponsor Slideshow Container */
+/* =================== SPONSOR SLIDESHOW =================== */
 #sponsorSlideshowContainer {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    inset: 0;
     background: var(--color-bg-dark);
     display: none;
     justify-content: center;
@@ -233,75 +307,286 @@ body {
 }
 
 @keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
-    to {
-        opacity: 1;
-    }
+    from { opacity: 0; }
+    to   { opacity: 1; }
 }
 
-/* Responsive adjustments for smaller screens */
+/* =================== OVERLAYS =================== */
+.tv-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 8, 20, 0.97);
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+}
+
+.tv-overlay.active {
+    display: flex;
+}
+
+.overlay-glow {
+    position: absolute;
+    top: -20%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100vw;
+    height: 80vh;
+    background: radial-gradient(ellipse, rgba(83, 52, 131, 0.25) 0%, transparent 65%);
+    pointer-events: none;
+}
+
+.overlay-content {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    width: 90%;
+    max-width: 1500px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 40px;
+}
+
+/* Rest Break overlay */
+.overlay-title-row {
+    width: 100%;
+}
+
+.overlay-heading {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3.5em;
+    font-weight: 400;
+    letter-spacing: 6px;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+}
+
+.overlay-timer-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.overlay-countdown {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 14em;
+    font-weight: 400;
+    color: rgba(76, 175, 80, 0.95);
+    letter-spacing: 6px;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 60px rgba(76, 175, 80, 0.3);
+}
+
+.overlay-timer-label {
+    font-size: 1.2em;
+    font-weight: 600;
+    letter-spacing: 5px;
+    color: rgba(255, 255, 255, 0.25);
+    text-transform: uppercase;
+}
+
+.overlay-score-row {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 50px;
+    width: 100%;
+}
+
+.overlay-player-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 30px 50px;
+    min-width: 300px;
+    flex: 1;
+    max-width: 500px;
+    position: relative;
+    overflow: hidden;
+}
+
+.overlay-player-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 15%;
+    right: 15%;
+    height: 2px;
+    background: var(--color-accent);
+    border-radius: 2px 2px 0 0;
+    opacity: 0.4;
+}
+
+.overlay-player-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.2em;
+    letter-spacing: 3px;
+    color: #ffffff;
+    margin-bottom: 8px;
+}
+
+.overlay-player-partner {
+    font-size: 1.4em;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 16px;
+}
+
+.overlay-player-partner:empty {
+    display: none;
+}
+
+.overlay-score {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 7em;
+    font-weight: 400;
+    color: var(--color-accent);
+    letter-spacing: 3px;
+    line-height: 1;
+}
+
+.overlay-score-label {
+    font-size: 1em;
+    font-weight: 600;
+    letter-spacing: 4px;
+    color: rgba(255, 255, 255, 0.25);
+    margin-top: 8px;
+    text-transform: uppercase;
+}
+
+.overlay-vs {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3em;
+    letter-spacing: 4px;
+    color: rgba(83, 52, 131, 0.7);
+    flex-shrink: 0;
+}
+
+.overlay-sets-row {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 16px;
+    padding: 20px 60px;
+    width: 100%;
+    max-width: 600px;
+}
+
+.overlay-sets-label {
+    font-size: 0.75em;
+    font-weight: 600;
+    letter-spacing: 4px;
+    color: rgba(255, 255, 255, 0.3);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+}
+
+.overlay-sets-scores {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 30px;
+}
+
+.overlay-set-badge {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3.5em;
+    letter-spacing: 3px;
+    color: #ffffff;
+    background: rgba(83, 52, 131, 0.15);
+    border: 1px solid rgba(83, 52, 131, 0.35);
+    border-radius: 12px;
+    padding: 8px 40px;
+    min-width: 110px;
+}
+
+.overlay-sets-dash {
+    font-size: 2em;
+    color: rgba(255, 255, 255, 0.2);
+}
+
+/* Match Finished overlay */
+.overlay-content--finished {
+    gap: 30px;
+}
+
+.overlay-finished-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 5em;
+    font-weight: 400;
+    letter-spacing: 8px;
+    color: #ffffff;
+    text-transform: uppercase;
+}
+
+.overlay-winner-card {
+    background: rgba(76, 175, 80, 0.08);
+    border: 1px solid rgba(76, 175, 80, 0.35);
+    border-radius: 20px;
+    padding: 30px 60px;
+    width: 100%;
+    max-width: 900px;
+}
+
+.overlay-winner-label {
+    font-size: 0.9em;
+    font-weight: 600;
+    letter-spacing: 5px;
+    color: rgba(76, 175, 80, 0.7);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+}
+
+.overlay-winner-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 4.5em;
+    font-weight: 400;
+    letter-spacing: 4px;
+    color: #ffffff;
+}
+
+.overlay-set-history {
+    font-size: 1.5em;
+    color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 16px;
+    padding: 24px 40px;
+    width: 100%;
+    max-width: 900px;
+    letter-spacing: 1px;
+}
+
+/* =================== RESPONSIVE =================== */
 @media (max-width: 1600px) {
-    .tv-header h1 {
-        font-size: 2.5em;
-    }
-
-    .timer-display {
-        font-size: 2.5em;
-    }
-
-    .player-name {
-        font-size: 2.5em;
-    }
-
-    .partner-name {
-        font-size: 2.5em;
-    }
-
-    .set-box {
-        width: 120px;
-        height: 120px;
-        font-size: 4em;
-    }
-
-    .team-names {
-        min-width: 350px;
-    }
+    .tv-header { padding: 28px 60px; }
+    .tv-header h1, .timer-display { font-size: 4em; }
+    .player-name, .partner-name { font-size: 5em; }
+    .set-box { width: 190px; height: 190px; font-size: 7em; }
+    .set-boxes { gap: 36px; }
+    .team-names { min-width: 500px; }
+    .team-row { padding: 46px 60px; gap: 60px; }
+    .overlay-countdown { font-size: 11em; }
 }
 
-@media (max-width: 1200px) {
-    .tv-header h1 {
-        font-size: 2em;
-    }
+@media (max-width: 1280px) {
+    .tv-header h1, .timer-display { font-size: 3em; }
+    .player-name, .partner-name { font-size: 3.8em; }
+    .set-box { width: 150px; height: 150px; font-size: 5.5em; }
+    .team-names { min-width: 380px; }
+    .set-boxes { gap: 24px; }
+    .team-row { gap: 44px; padding: 38px 50px; }
+    .overlay-countdown { font-size: 9em; }
+}
 
-    .timer-display {
-        font-size: 2em;
-    }
-
-    .player-name {
-        font-size: 2em;
-    }
-
-    .partner-name {
-        font-size: 2em;
-    }
-
-    .set-box {
-        width: 100px;
-        height: 100px;
-        font-size: 3.5em;
-    }
-
-    .team-names {
-        min-width: 300px;
-    }
-
-    .set-boxes {
-        gap: 20px;
-    }
-
-    .team-row {
-        gap: 40px;
-    }
+@media (max-width: 1024px) {
+    .tv-header h1, .timer-display { font-size: 2.4em; }
+    .player-name, .partner-name { font-size: 3em; }
+    .set-box { width: 120px; height: 120px; font-size: 4.5em; border-radius: 14px; }
+    .team-names { min-width: 280px; }
+    .set-boxes { gap: 18px; }
+    .team-row { gap: 32px; padding: 30px 36px; }
+    .overlay-countdown { font-size: 7em; }
 }

@@ -1,29 +1,30 @@
 /* Sponsor Page Styles */
 
 .upload-section {
-    background: var(--color-bg-card);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 16px;
     padding: 28px;
-    margin-bottom: 25px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    margin-bottom: 20px;
+    animation: fadeUp 0.4s ease 0.06s both;
 }
 
 /* Slideshow Settings Section */
 .slideshow-settings-section {
-    background: var(--color-bg-card);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 16px;
     padding: 28px;
-    margin-bottom: 25px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    margin-bottom: 20px;
 }
 
 .slideshow-settings-section h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.8em;
+    letter-spacing: 2px;
     color: #ffffff;
     margin-bottom: 20px;
-    font-size: 1.6em;
-    font-weight: 600;
+    font-weight: 400;
 }
 
 .settings-container {
@@ -81,10 +82,12 @@
 }
 
 .upload-section h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.8em;
+    letter-spacing: 2px;
     color: #ffffff;
-    margin-bottom: 25px;
-    font-size: 1.6em;
-    font-weight: 600;
+    margin-bottom: 24px;
+    font-weight: 400;
 }
 
 /* Upload Grid - Side by Side Layout */
@@ -115,15 +118,16 @@
 .upload-box {
     text-align: center;
     padding: 28px;
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 10px;
-    border: 2px dashed rgba(83, 52, 131, 0.5);
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 12px;
+    border: 1px dashed rgba(83, 52, 131, 0.4);
     width: 100%;
-    transition: border-color 0.2s ease;
+    transition: border-color 0.2s ease, background 0.2s ease;
 }
 
 .upload-box:hover {
     border-color: var(--color-primary);
+    background: rgba(83, 52, 131, 0.05);
 }
 
 .upload-box .btn-primary {
@@ -145,17 +149,19 @@
 
 /* Gallery Section */
 .gallery-section {
-    background: var(--color-bg-card);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 16px;
     padding: 28px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    margin-bottom: 20px;
 }
 
 .gallery-section h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.8em;
+    letter-spacing: 2px;
     color: #ffffff;
-    font-size: 1.6em;
-    font-weight: 600;
+    font-weight: 400;
 }
 
 .gallery-grid {
@@ -166,18 +172,17 @@
 }
 
 .gallery-item {
-    background: var(--color-bg-container);
-    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
     overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.07);
     transition: all 0.2s ease;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .gallery-item:hover {
     transform: translateY(-3px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
-    border-color: rgba(83, 52, 131, 0.4);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
+    border-color: rgba(83, 52, 131, 0.35);
 }
 
 /* Inactive and expired gallery items - dimmed appearance */

@@ -5,12 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Indstillinger - Badminton Admin</title>
     <link rel="icon" type="image/png" href="/favicon.png?v=4">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="admin-styles.css">
     <link rel="stylesheet" href="settings-styles.css">
     <script src="js/theme-loader.js"></script>
 </head>
 <body>
+    <div class="bg-glow"></div>
     <div class="container">
         <!-- Login Screen -->
         <div id="loginScreen" class="admin-section">
@@ -23,7 +27,7 @@
                     <input type="password" id="adminPassword" placeholder="Indtast admin adgangskode">
                     <button id="loginBtn" class="btn-primary">Log Ind</button>
                     <div class="back-link">
-                        <a href="admin.html">← Tilbage til Admin</a>
+                        <a href="admin.html">← Tilbage til Oversigt</a>
                     </div>
                 </div>
             </div>
@@ -34,8 +38,8 @@
             <header>
                 <h1>Indstillinger</h1>
                 <div class="header-controls">
+                    <a href="admin.html" class="btn-secondary" style="text-decoration: none; display: inline-block;">Tilbage til Oversigt</a>
                     <button id="logoutBtn" class="btn-secondary">Log Ud</button>
-                    <a href="admin.html" class="btn-secondary" style="text-decoration: none; display: inline-block;">Tilbage til Admin</a>
                 </div>
             </header>
 
@@ -83,21 +87,24 @@
                     </div>
                 </div>
 
-                <!-- Security -->
-                <div class="setting-card">
-                    <h3>Sikkerhed</h3>
-                    <label>Ny Admin Adgangskode:</label>
-                    <input type="password" id="newPassword" placeholder="Indtast ny adgangskode">
-                    <button id="changePasswordBtn" class="btn-primary">Skift Adgangskode</button>
-                </div>
+                <!-- Security + Theme stacked -->
+                <div style="display: flex; flex-direction: column; gap: 18px;">
+                    <!-- Security -->
+                    <div class="setting-card">
+                        <h3>Sikkerhed</h3>
+                        <label>Ny Admin Adgangskode:</label>
+                        <input type="password" id="newPassword" placeholder="Indtast ny adgangskode">
+                        <button id="changePasswordBtn" class="btn-primary">Skift Adgangskode</button>
+                    </div>
 
-                <!-- Theme Link -->
-                <div class="setting-card">
-                    <h3>Tema</h3>
-                    <p style="color: #aaa; font-size: 0.9em; margin-bottom: 20px; line-height: 1.5;">
-                        Tilpas farverne og udseendet af applikationen
-                    </p>
-                    <a href="theme.html" class="btn-primary" style="text-decoration: none; display: inline-block;">Åbn Tema Indstillinger</a>
+                    <!-- Theme Link -->
+                    <div class="setting-card">
+                        <h3>Tema</h3>
+                        <p style="color: #aaa; font-size: 0.9em; margin-bottom: 20px; line-height: 1.5;">
+                            Tilpas farverne og udseendet af applikationen
+                        </p>
+                        <a href="theme.html" class="btn-primary" style="text-decoration: none; display: inline-block;">Åbn Tema Indstillinger</a>
+                    </div>
                 </div>
             </div>
 

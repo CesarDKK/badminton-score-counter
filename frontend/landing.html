@@ -5,39 +5,50 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Badminton Pointtæller - Vælg Bane</title>
     <link rel="icon" type="image/png" href="/favicon.png?v=4">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="landing-styles.css">
     <script src="js/theme-loader.js"></script>
 </head>
 <body>
+    <div class="bg-glow"></div>
+
     <div class="container">
         <header>
-            <h1>Badminton Pointtæller</h1>
+            <div class="header-brand">
+                <div class="brand-icon">🏸</div>
+                <h1>Badminton<br><span>Pointtæller</span></h1>
+            </div>
             <a href="admin.html" class="admin-link">Admin Panel</a>
         </header>
 
-        <div class="court-selection">
-            <h2>Vælg en Bane</h2>
+        <section class="court-selection">
+            <div class="section-label">
+                <span class="section-tag">Vælg</span>
+                <h2>Bane</h2>
+            </div>
             <div id="courtButtons" class="court-grid"></div>
-        </div>
+        </section>
 
-        <div class="tv-section">
-            <h2>TV-Skærme</h2>
-            <p class="tv-description">Store skærme til tilskuere - opdateres automatisk, kun visning</p>
+        <section class="tv-section">
+            <div class="section-label">
+                <span class="section-tag">Display</span>
+                <h2>TV-Skærme</h2>
+            </div>
+            <p class="section-desc">Store skærme til tilskuere — kun visning</p>
             <div id="tvButtons" class="tv-grid"></div>
-        </div>
+        </section>
 
-        <div class="overview-section">
-            <h2>Kampstatus Oversigt</h2>
-            <p class="overview-description">Overblik over alle aktive kampe på én skærm</p>
+        <section class="overview-section">
             <a href="oversigt.html" class="overview-link">
-                <span class="overview-icon">📊</span>
-                <span>Åbn Oversigt</span>
+                <div class="overview-left">
+                    <span class="overview-tag">Oversigt</span>
+                    <span class="overview-title">Kampstatus</span>
+                </div>
+                <div class="overview-arrow">→</div>
             </a>
-        </div>
-
-        <div class="info-section">
-            <p>Vælg en bane for at begynde at tælle point. Hver bane fungerer uafhængigt med sine egne point, tidtager og kamphistorik.</p>
-        </div>
+        </section>
     </div>
 
     <script src="js/api.js?v=2"></script>

@@ -712,7 +712,7 @@ function updateDisplay() {
 
     const serverSelected = gameState.isDoubles ? gameState.servingTeam : gameState.servingPlayer;
 
-    if (!serverSelected && !gameState.isActive) {
+    if (!serverSelected && !gameState.matchStartTime) {
         // Before server is selected: show serve buttons, disable +1 buttons
         servBtn1.classList.remove('hidden');
         servBtn2.classList.remove('hidden');
@@ -765,7 +765,7 @@ function updateDisplay() {
 
 // Select which team serves first
 async function selectServer(team) {
-    if (gameState.isActive) {
+    if (gameState.matchStartTime) {
         return; // Cannot change server after match started
     }
 

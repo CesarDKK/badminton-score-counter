@@ -7,275 +7,346 @@
 }
 
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'DM Sans', 'Segoe UI', sans-serif;
     background: var(--color-bg-dark);
-    color: #fff;
+    color: #eaeaea;
     overflow: hidden;
+    height: 100vh;
+}
+
+/* Atmospheric glow */
+.bg-glow {
+    position: fixed;
+    top: -30%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90vw;
+    height: 70vh;
+    background: radial-gradient(ellipse, rgba(83, 52, 131, 0.18) 0%, transparent 65%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Subtle grid pattern */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+    background-size: 56px 56px;
+    pointer-events: none;
+    z-index: 0;
+}
+
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
 .overview-container {
+    position: relative;
+    z-index: 1;
     width: 100%;
     height: 100vh;
     display: flex;
     flex-direction: column;
 }
 
-/* Header */
+/* =================== HEADER =================== */
 .overview-header {
-    background: var(--color-bg-container);
-    padding: 20px 40px;
+    padding: 18px 32px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(0, 0, 0, 0.15);
+    backdrop-filter: blur(4px);
+    animation: fadeUp 0.4s ease both;
+    flex-shrink: 0;
 }
 
 .header-left {
     display: flex;
     align-items: center;
-    gap: 25px;
+    gap: 20px;
 }
 
 .overview-header h1 {
-    font-size: 2.2em;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2em;
     color: #ffffff;
-    font-weight: 600;
-    letter-spacing: -0.5px;
+    font-weight: 400;
+    letter-spacing: 4px;
 }
 
 .page-indicator {
-    background: var(--color-bg-card);
-    padding: 8px 20px;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(83, 52, 131, 0.15);
+    padding: 5px 16px;
+    border-radius: 100px;
+    border: 1px solid rgba(83, 52, 131, 0.3);
 }
 
 .page-indicator span {
-    font-size: 1.1em;
-    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.85em;
+    color: rgba(255, 255, 255, 0.55);
     font-weight: 500;
+    letter-spacing: 0.5px;
 }
 
-.back-link {
-    color: #fff;
-    text-decoration: none;
-    font-size: 1em;
-    padding: 10px 20px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 8px;
-    transition: all 0.2s ease;
-    font-weight: 500;
+/* =================== HOLDKAMP PANEL =================== */
+#holdkampOverview {
+    margin: 14px 20px 0;
+    background: rgba(20, 10, 40, 0.6) !important;
+    border: 1px solid rgba(83, 52, 131, 0.35) !important;
+    border-radius: 16px !important;
+    padding: 18px 22px !important;
+    backdrop-filter: blur(6px);
+    animation: fadeUp 0.4s ease 0.05s both;
 }
 
-.back-link:hover {
-    background: rgba(83, 52, 131, 0.3);
-    border-color: var(--color-primary);
-    transform: translateY(-1px);
-}
-
-/* Courts Grid - 2x3 layout (6 courts) */
+/* =================== COURTS GRID =================== */
 .courts-grid {
     flex: 1;
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     grid-template-rows: repeat(2, 1fr);
-    gap: 20px;
-    padding: 20px;
+    gap: 14px;
+    padding: 14px 20px 20px;
     overflow: hidden;
 }
 
-/* Court Card */
+/* =================== COURT CARD =================== */
 .court-card {
-    background: var(--color-bg-card);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    padding: 18px;
+    position: relative;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 18px;
+    padding: 18px 20px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    position: relative;
     overflow: hidden;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: border-color 0.3s ease, background 0.3s ease;
 }
 
-.court-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-    border-color: rgba(83, 52, 131, 0.3);
+/* Accent line at bottom */
+.court-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 15%;
+    right: 15%;
+    height: 2px;
+    background: var(--color-accent);
+    border-radius: 2px 2px 0 0;
+    opacity: 0;
+    transform: scaleX(0.4);
+    transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
-/* Court Header */
+.court-card:not(.inactive):hover::after {
+    opacity: 0.6;
+    transform: scaleX(1);
+}
+
+.court-card:not(.inactive) {
+    border-color: rgba(83, 52, 131, 0.2);
+    background: rgba(83, 52, 131, 0.05);
+}
+
+/* Stagger animations — only on initial render (.court-card--animate added by JS) */
+.court-card--animate { animation: fadeUp 0.45s ease both; }
+.court-card--animate:nth-child(1) { animation-delay: 0.08s; }
+.court-card--animate:nth-child(2) { animation-delay: 0.12s; }
+.court-card--animate:nth-child(3) { animation-delay: 0.16s; }
+.court-card--animate:nth-child(4) { animation-delay: 0.20s; }
+.court-card--animate:nth-child(5) { animation-delay: 0.24s; }
+.court-card--animate:nth-child(6) { animation-delay: 0.28s; }
+
+/* =================== COURT CARD HEADER =================== */
 .court-card-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 15px;
+    margin-bottom: 12px;
     padding-bottom: 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .court-number {
+    font-family: 'Bebas Neue', sans-serif;
     font-size: 1.6em;
-    font-weight: 600;
+    font-weight: 400;
     color: #ffffff;
+    letter-spacing: 2px;
 }
 
 .court-timer {
-    font-size: 1.3em;
+    font-size: 1.1em;
     color: rgba(76, 175, 80, 0.9);
     font-weight: 600;
+    font-variant-numeric: tabular-nums;
 }
 
-/* Players Section */
+/* =================== PLAYERS =================== */
 .court-players {
     flex: 1;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 15px;
+    gap: 10px;
 }
 
 .player-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px;
+    padding: 10px 14px;
     background: rgba(255, 255, 255, 0.03);
-    border-radius: 8px;
+    border-radius: 10px;
     border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .player-info {
     flex: 1;
+    min-width: 0;
 }
 
-.player-name {
-    font-size: 1.2em;
-    font-weight: 600;
-    color: #fff;
-    margin-bottom: 3px;
-}
-
+.player-name,
 .player-name-partner {
-    font-size: 1.2em;
+    font-size: 1.1em;
     font-weight: 600;
     color: #fff;
-    margin-bottom: 3px;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .player-stats {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
+    flex-shrink: 0;
 }
 
 .player-score {
-    font-size: 2.5em;
-    font-weight: 700;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.4em;
+    font-weight: 400;
     color: #ffffff;
-    min-width: 70px;
+    min-width: 56px;
     text-align: center;
+    letter-spacing: 2px;
 }
 
 .player-games {
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: rgba(83, 52, 131, 0.2);
-    padding: 6px 10px;
+    background: rgba(83, 52, 131, 0.15);
+    padding: 5px 9px;
     border-radius: 8px;
-    border: 1px solid rgba(83, 52, 131, 0.4);
+    border: 1px solid rgba(83, 52, 131, 0.3);
 }
 
 .vs-divider {
     text-align: center;
-    font-size: 1.3em;
-    color: rgba(255, 255, 255, 0.3);
-    font-weight: 500;
-    margin: 5px 0;
+    font-size: 0.72em;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.2);
+    margin: 2px 0;
 }
 
-/* Games Score - now displayed next to each player */
 .games-label {
-    font-size: 0.75em;
-    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.68em;
+    color: rgba(255, 255, 255, 0.4);
     text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .games-value {
-    font-size: 1.2em;
-    font-weight: 600;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.3em;
+    font-weight: 400;
     color: rgba(76, 175, 80, 0.9);
-    margin-top: 2px;
+    letter-spacing: 1px;
 }
 
-/* Inactive Court (No Match) */
+/* =================== PAUSE STATE =================== */
+.court-pause-header {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+}
+
+.court-card--paused .court-pause-header {
+    display: flex;
+}
+
+.court-card--paused .rest-break-badge {
+    display: none;
+}
+
+.pause-label {
+    font-size: 0.62em;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: rgba(76, 175, 80, 0.6);
+}
+
+.pause-timer {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.5em;
+    font-weight: 400;
+    color: rgba(76, 175, 80, 0.95);
+    letter-spacing: 3px;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+/* =================== INACTIVE COURT =================== */
 .court-card.inactive {
-    border-color: rgba(255, 255, 255, 0.05);
-    opacity: 0.5;
+    border-color: rgba(255, 255, 255, 0.04);
+    opacity: 0.4;
 }
 
 .court-card.inactive .court-inactive-message {
     text-align: center;
-    color: rgba(255, 255, 255, 0.4);
-    font-size: 1.1em;
-    padding: 40px 0;
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 0.95em;
+    padding: 30px 0;
+    letter-spacing: 1px;
 }
 
-/* Loading Indicator */
-.loading-indicator {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    text-align: center;
-    font-size: 1.8em;
-    color: rgba(255, 255, 255, 0.6);
-}
-
-/* No Matches Message */
-.no-matches-message {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    text-align: center;
-}
-
-.no-matches-message h2 {
-    font-size: 2.5em;
-    color: #ffffff;
-    margin-bottom: 20px;
-    font-weight: 600;
-}
-
-.no-matches-message p {
-    font-size: 1.3em;
-    color: rgba(255, 255, 255, 0.5);
-}
-
-/* Page transitions - no animation, direct switch */
-
-/* Rest Break Indicator */
+/* =================== REST BREAK =================== */
 .rest-break-badge {
     position: absolute;
     top: 10px;
     right: 10px;
-    background: rgba(76, 175, 80, 0.9);
-    color: white;
-    padding: 6px 14px;
-    border-radius: 12px;
-    font-size: 0.85em;
+    background: rgba(76, 175, 80, 0.15);
+    color: rgba(76, 175, 80, 0.9);
+    padding: 4px 12px;
+    border-radius: 100px;
+    font-size: 0.78em;
     font-weight: 600;
-    border: 1px solid rgba(76, 175, 80, 0.5);
+    border: 1px solid rgba(76, 175, 80, 0.3);
+    letter-spacing: 0.5px;
 }
 
-/* Court Banner in Card Footer */
+/* =================== CARD FOOTER =================== */
 .court-card-footer {
-    margin-top: 12px;
-    padding-top: 10px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .court-banner-small {
@@ -285,32 +356,60 @@ body {
     display: block;
 }
 
-/* Responsive adjustments for smaller screens */
+/* =================== LOADING / NO MATCHES =================== */
+.loading-indicator {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    font-size: 1.4em;
+    color: rgba(255, 255, 255, 0.4);
+    letter-spacing: 1px;
+}
+
+.no-matches-message {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+
+.no-matches-message h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3em;
+    color: #ffffff;
+    margin-bottom: 16px;
+    font-weight: 400;
+    letter-spacing: 4px;
+}
+
+.no-matches-message p {
+    font-size: 1.1em;
+    color: rgba(255, 255, 255, 0.35);
+    letter-spacing: 0.5px;
+}
+
+/* =================== RESPONSIVE =================== */
 @media (max-width: 1400px) {
     .courts-grid {
-        gap: 15px;
-        padding: 15px;
+        gap: 12px;
+        padding: 12px 16px 16px;
     }
 
     .court-card {
-        padding: 15px;
+        padding: 15px 16px;
     }
 
     .player-name,
     .player-name-partner {
-        font-size: 1.1em;
+        font-size: 1em;
     }
 
     .player-score {
-        font-size: 2.5em;
-    }
-
-    .player-games {
-        padding: 6px 10px;
-    }
-
-    .games-value {
-        font-size: 1.1em;
+        font-size: 2.1em;
+        min-width: 48px;
     }
 }
 
@@ -321,6 +420,6 @@ body {
     }
 
     .overview-header h1 {
-        font-size: 2em;
+        font-size: 1.7em;
     }
 }

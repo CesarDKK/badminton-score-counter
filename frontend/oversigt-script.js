@@ -15,6 +15,10 @@ let localTimerInterval = null;
 // Store match start times for each court (courtId -> {matchStartTime, matchEndTime})
 let courtMatchTimes = {};
 
+// Local pause countdown state — avoids relying on 2s API interval for accuracy
+// courtId -> { receivedAt: timestamp, secondsLeft: number }
+let pauseCountdownState = {};
+
 // Initialize
 document.addEventListener('DOMContentLoaded', async function() {
     await initialize();
@@ -143,6 +147,21 @@ async function loadAllCourts() {
             };
         });
 
+        // Sync pause countdown state from fresh API data
+        const now = Date.now();
+        allCourtData.forEach(court => {
+            if (court.restBreakActive && court.restBreakSecondsLeft > 0) {
+                const existing = pauseCountdownState[court.courtId];
+                // Re-sync if this is a new pause or API value differs significantly from local estimate
+                const localEstimate = existing ? getPauseSecondsLeft(court) : null;
+                if (!existing || Math.abs((localEstimate) - court.restBreakSecondsLeft) > 2) {
+                    pauseCountdownState[court.courtId] = { receivedAt: now, secondsLeft: court.restBreakSecondsLeft };
+                }
+            } else {
+                delete pauseCountdownState[court.courtId];
+            }
+        });
+
         // Filter only active courts with actual game activity
         activeCourts = allCourtData.filter(court => {
             if (!court.isActive) return false;
@@ -236,18 +255,89 @@ function displayCurrentPage() {
     const endIndex = startIndex + COURTS_PER_PAGE;
     const courtsToShow = activeCourts.slice(startIndex, endIndex);
 
-    // Render courts
-    grid.innerHTML = courtsToShow.map(court => renderCourtCard(court)).join('');
+    // Check if same courts are already rendered — if so, update in-place to avoid layout jump
+    const existingIds = Array.from(grid.querySelectorAll('.court-card')).map(el => el.dataset.courtId);
+    const newIds = courtsToShow.map(c => String(c.courtId));
+    const sameLayout = existingIds.length === newIds.length && newIds.every((id, i) => id === existingIds[i]);
+
+    if (sameLayout) {
+        courtsToShow.forEach(court => updateCourtCardData(court));
+    } else {
+        grid.innerHTML = courtsToShow.map(court => renderCourtCard(court)).join('');
+        // Add animation class only on full re-render
+        grid.querySelectorAll('.court-card').forEach(el => el.classList.add('court-card--animate'));
+    }
+}
+
+function updateCourtCardData(court) {
+    const card = document.querySelector(`.court-card[data-court-id="${court.courtId}"]`);
+    if (!card) return;
+
+    const isDoubles = court.isDoubles || false;
+    const isPaused = !!court.restBreakActive;
+
+    // Toggle paused class
+    card.classList.toggle('court-card--paused', isPaused);
+
+    // Update pause label and timer immediately when pause state changes
+    const pauseLabelEl = card.querySelector('.pause-label');
+    if (pauseLabelEl) {
+        pauseLabelEl.textContent = (court.restBreakTitle || '').toLowerCase().includes('sæt') ? 'SÆTHVIL' : 'PAUSE';
+    }
+    if (isPaused) {
+        const pauseTimerEl = document.getElementById(`pause-timer-${court.courtId}`);
+        if (pauseTimerEl) pauseTimerEl.textContent = formatTimer(getPauseSecondsLeft(court));
+    }
+
+    // Update scores
+    const scoreEls = card.querySelectorAll('.player-score');
+    if (scoreEls[0]) scoreEls[0].textContent = court.player1.score;
+    if (scoreEls[1]) scoreEls[1].textContent = court.player2.score;
+
+    // Update set counts
+    const gamesEls = card.querySelectorAll('.games-value');
+    if (gamesEls[0]) gamesEls[0].textContent = court.player1.games;
+    if (gamesEls[1]) gamesEls[1].textContent = court.player2.games;
+
+    // Update player names
+    const rows = card.querySelectorAll('.player-row');
+    if (rows[0]) {
+        const info = rows[0].querySelector('.player-info');
+        if (info) info.innerHTML = isDoubles && court.player1.name2
+            ? `<div class="player-name">${escapeHtml(court.player1.name)}</div><div class="player-name-partner">${escapeHtml(court.player1.name2)}</div>`
+            : `<div class="player-name">${escapeHtml(court.player1.name)}</div>`;
+    }
+    if (rows[1]) {
+        const info = rows[1].querySelector('.player-info');
+        if (info) info.innerHTML = isDoubles && court.player2.name2
+            ? `<div class="player-name">${escapeHtml(court.player2.name)}</div><div class="player-name-partner">${escapeHtml(court.player2.name2)}</div>`
+            : `<div class="player-name">${escapeHtml(court.player2.name)}</div>`;
+    }
+
+    // Update rest break badge
+    let badge = card.querySelector('.rest-break-badge');
+    if (court.restBreakActive) {
+        if (!badge) {
+            badge = document.createElement('div');
+            badge.className = 'rest-break-badge';
+            card.prepend(badge);
+        }
+        badge.textContent = `PAUSE ${court.restBreakSecondsLeft}s`;
+    } else if (badge) {
+        badge.remove();
+    }
 }
 
 function renderCourtCard(court) {
     const isDoubles = court.isDoubles || false;
+    const isPaused = !!court.restBreakActive;
 
     // Calculate elapsed time from matchStartTime (same as TV display)
     const timerSeconds = calculateElapsedTime(court.courtId);
-
-    // Format timer
     const timerDisplay = formatTimer(timerSeconds);
+
+    // Pause label based on restBreakTitle
+    const pauseLabel = (court.restBreakTitle || '').toLowerCase().includes('sæt') ? 'SÆTHVIL' : 'PAUSE';
 
     // Render player names (including doubles partner if applicable)
     const player1Names = isDoubles && court.player1.name2
@@ -260,7 +350,7 @@ function renderCourtCard(court) {
            <div class="player-name-partner">${escapeHtml(court.player2.name2)}</div>`
         : `<div class="player-name">${escapeHtml(court.player2.name)}</div>`;
 
-    // Rest break badge
+    // Rest break badge (only when restBreakActive, not betweenSets)
     const restBreakBadge = court.restBreakActive
         ? `<div class="rest-break-badge">PAUSE ${court.restBreakSecondsLeft}s</div>`
         : '';
@@ -275,10 +365,14 @@ function renderCourtCard(court) {
         : '';
 
     return `
-        <div class="court-card" data-court-id="${court.courtId}">
+        <div class="court-card${isPaused ? ' court-card--paused' : ''}" data-court-id="${court.courtId}">
             ${restBreakBadge}
             <div class="court-card-header">
                 <div class="court-number">BANE ${court.courtId}</div>
+                <div class="court-pause-header">
+                    <div class="pause-label">${pauseLabel}</div>
+                    <div class="pause-timer" id="pause-timer-${court.courtId}">${timerDisplay}</div>
+                </div>
                 <div class="court-timer" id="timer-${court.courtId}">${timerDisplay}</div>
             </div>
 
@@ -315,6 +409,13 @@ function renderCourtCard(court) {
             ${bannerHtml}
         </div>
     `;
+}
+
+function getPauseSecondsLeft(court) {
+    const state = pauseCountdownState[court.courtId];
+    if (!state) return court.restBreakSecondsLeft || 0;
+    const elapsed = (Date.now() - state.receivedAt) / 1000;
+    return Math.max(0, Math.round(state.secondsLeft - elapsed));
 }
 
 function calculateElapsedTime(courtId) {
@@ -381,14 +482,20 @@ function startLocalTimers() {
 }
 
 function updateTimerDisplays() {
-    // Update only the timer elements for visible courts
+    // Update match timer for all visible courts
     for (const courtId in courtMatchTimes) {
-        const timerElement = document.getElementById(`timer-${courtId}`);
-        if (timerElement) {
-            const elapsedSeconds = calculateElapsedTime(courtId);
-            timerElement.textContent = formatTimer(elapsedSeconds);
-        }
+        const elapsed = formatTimer(calculateElapsedTime(courtId));
+        const timerEl = document.getElementById(`timer-${courtId}`);
+        if (timerEl) timerEl.textContent = elapsed;
     }
+    // Update pause countdown timers using local state (no API lag)
+    activeCourts.forEach(court => {
+        if (!court.restBreakActive) return;
+        const pauseTimerEl = document.getElementById(`pause-timer-${court.courtId}`);
+        if (pauseTimerEl) {
+            pauseTimerEl.textContent = formatTimer(getPauseSecondsLeft(court));
+        }
+    });
 }
 
 function nextPage() {
