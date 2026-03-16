@@ -674,6 +674,14 @@ async function loadGameState() {
     }
 }
 
+// Returns true if any player name differs from the default placeholder names
+function hasCustomPlayerNames() {
+    return gameState.player1.name !== 'Spiller 1' ||
+           gameState.player1.name2 !== 'Makker 1' ||
+           gameState.player2.name !== 'Spiller 2' ||
+           gameState.player2.name2 !== 'Makker 2';
+}
+
 // Update display with current game state
 function updateDisplay() {
     // Update player names on court (for doubles only - singles names are set by updatePlayerNamePositions)
@@ -724,10 +732,10 @@ function updateDisplay() {
     // Update player name positions based on serve
     updatePlayerNamePositions();
 
-    // Show/hide swap players buttons (in doubles: before match starts OR between sets)
+    // Show/hide swap players buttons (in doubles: before match starts OR between sets, and only if custom names are used)
     const swapBtn1 = document.getElementById('swapPlayer1Btn');
     const swapBtn2 = document.getElementById('swapPlayer2Btn');
-    if (gameState.isDoubles && (!gameState.matchStartTime || gameState.betweenSets)) {
+    if (gameState.isDoubles && (!gameState.matchStartTime || gameState.betweenSets) && hasCustomPlayerNames()) {
         swapBtn1.style.display = 'flex';
         swapBtn2.style.display = 'flex';
     } else {
