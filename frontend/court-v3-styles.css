@@ -27,16 +27,17 @@
 }
 
 .btn-start-match-center {
+    font-family: 'Bebas Neue', sans-serif;
     font-size: 2em;
-    padding: 20px 50px;
+    letter-spacing: 0.06em;
+    padding: 18px 50px;
     background: var(--color-accent);
     color: white;
     border: none;
     border-radius: 12px;
     cursor: pointer;
-    font-weight: bold;
-    transition: all 0.3s;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    transition: all 0.2s;
+    box-shadow: 0 4px 24px rgba(233,69,96,0.45);
 }
 
 .btn-start-match-center:hover {
@@ -56,13 +57,16 @@
 }
 
 .timer-display-center {
-    font-size: 1em;
-    font-weight: bold;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.6em;
+    letter-spacing: 0.1em;
     color: white;
-    text-shadow: 0 0 20px rgba(0, 0, 0, 0.8), 0 0 40px rgba(0, 0, 0, 0.5);
-    background: rgba(0, 0, 0, 0.6);
-    padding: 5px 10px;
+    text-shadow: 0 0 20px rgba(0,0,0,0.9);
+    background: rgba(0,0,0,0.65);
+    backdrop-filter: blur(4px);
+    padding: 6px 14px;
     border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.12);
 }
 
 .scores-container {
@@ -79,9 +83,10 @@
 }
 
 .point-score {
-    font-size: 3.5em;
-    font-weight: bold;
-    color: var(--color-accent);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 4em;
+    letter-spacing: 0.04em;
+    color: #ffffff;
 }
 
 .set-score-section {
@@ -91,22 +96,26 @@
 }
 
 .set-label {
-    font-size: 1em;
-    color: #aaa;
-    margin-bottom: 5px;
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(255,255,255,0.45);
+    margin-bottom: 4px;
 }
 
 .set-score {
-    font-size: 2em;
-    font-weight: bold;
-    color: var(--color-primary);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.2em;
+    letter-spacing: 0.06em;
+    color: var(--color-accent);
     display: flex;
     justify-content: center;
-    gap: 10px;
+    gap: 8px;
 }
 
 .set-separator {
-    color: #666;
+    color: rgba(255,255,255,0.3);
 }
 
 /* Control Buttons Below Court */
@@ -130,13 +139,14 @@
 
 .btn-add-point {
     padding: 18px 45px;
-    font-size: 2em;
-    font-weight: bold;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.2em;
+    letter-spacing: 0.06em;
     color: white;
     border: none;
-    border-radius: 8px;
+    border-radius: 10px;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: all 0.2s;
     min-width: 140px;
     min-height: 65px;
     display: flex;
@@ -145,27 +155,27 @@
 }
 
 .btn-add-left {
-    background: #22c55e;
+    background: linear-gradient(135deg, #27ae60 0%, #1e8449 100%);
 }
 
 .btn-add-left:hover {
-    transform: scale(1.1);
-    box-shadow: 0 0 20px #22c55e;
+    transform: scale(1.07);
+    box-shadow: 0 6px 24px rgba(39,174,96,0.45);
 }
 
 .btn-add-right {
-    background: #22c55e;
+    background: linear-gradient(135deg, #27ae60 0%, #1e8449 100%);
 }
 
 .btn-add-right:hover {
-    transform: scale(1.1);
-    box-shadow: 0 0 20px #22c55e;
+    transform: scale(1.07);
+    box-shadow: 0 6px 24px rgba(39,174,96,0.45);
 }
 
 .btn-add-point:disabled {
-    background: #4b5563;
+    background: rgba(255,255,255,0.08);
     cursor: not-allowed;
-    opacity: 0.5;
+    opacity: 0.4;
 }
 
 .btn-add-point:disabled:hover {
@@ -175,25 +185,27 @@
 
 .btn-start-serv {
     padding: 10px 20px;
-    font-size: 1em;
-    background: var(--color-accent);
+    font-size: 0.9em;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.18);
     color: white;
-    border: none;
     border-radius: 8px;
     cursor: pointer;
-    font-weight: bold;
-    transition: all 0.3s;
+    transition: all 0.2s;
     height: 45px;
     min-width: 100px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    backdrop-filter: blur(6px);
 }
 
 .btn-start-serv:hover {
-    opacity: 0.9;
-    transform: scale(1.05);
+    background: rgba(255,255,255,0.14);
+    transform: scale(1.04);
 }
 
 .btn-start-serv.hidden {
@@ -219,14 +231,15 @@
 
 .btn-undo {
     padding: 10px 20px;
-    font-size: 1em;
-    background: #6b7280;
-    color: white;
-    border: none;
+    font-size: 0.9em;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.14);
+    color: #eaeaea;
     border-radius: 8px;
     cursor: pointer;
-    font-weight: bold;
-    transition: all 0.3s;
+    transition: all 0.2s;
     height: 45px;
     display: flex;
     align-items: center;
@@ -234,8 +247,8 @@
 }
 
 .btn-undo:hover {
-    background: #9ca3af;
-    transform: scale(1.05);
+    background: rgba(255,255,255,0.12);
+    transform: scale(1.04);
 }
 
 .btn-primary {
@@ -290,14 +303,14 @@
 }
 
 .btn-settings {
-    padding: 10px 20px;
-    font-size: 1.5em;
-    background: #6b7280;
+    padding: 10px 16px;
+    font-size: 1.3em;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.14);
     color: white;
-    border: none;
     border-radius: 8px;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: all 0.2s;
     height: 45px;
     display: flex;
     align-items: center;
@@ -305,8 +318,8 @@
 }
 
 .btn-settings:hover {
-    background: #9ca3af;
-    transform: scale(1.05);
+    background: rgba(255,255,255,0.12);
+    transform: scale(1.04);
 }
 
 /* Settings Menu */
@@ -316,7 +329,8 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.8);
+    background: rgba(0,0,0,0.75);
+    backdrop-filter: blur(6px);
     z-index: 1000;
     display: flex;
     justify-content: center;
@@ -324,16 +338,19 @@
 }
 
 .settings-menu-content {
-    background: var(--color-bg-card);
-    border-radius: 12px;
+    background: rgba(15,15,30,0.95);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
     padding: 40px;
     min-width: 400px;
-    box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 24px 80px rgba(0,0,0,0.6);
 }
 
 .settings-menu-content h3 {
-    font-size: 2em;
-    margin-bottom: 30px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.2em;
+    letter-spacing: 0.06em;
+    margin-bottom: 28px;
     text-align: center;
     color: var(--color-accent);
 }
@@ -341,22 +358,24 @@
 .menu-item {
     display: block;
     width: 100%;
-    padding: 20px;
-    margin-bottom: 15px;
-    font-size: 1.3em;
-    background: var(--color-bg-container);
+    padding: 16px 20px;
+    margin-bottom: 10px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1.1em;
+    font-weight: 600;
+    background: rgba(255,255,255,0.05);
     color: white;
-    border: 2px solid var(--color-primary);
-    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: all 0.2s;
     text-align: center;
-    font-weight: bold;
 }
 
 .menu-item:hover {
-    background: var(--color-primary);
-    transform: translateX(5px);
+    background: rgba(255,255,255,0.11);
+    border-color: rgba(255,255,255,0.25);
+    transform: translateX(4px);
 }
 
 .menu-link {
@@ -364,22 +383,27 @@
 }
 
 .menu-close {
-    background: #6b7280;
-    border-color: #6b7280;
-    margin-top: 20px;
+    background: transparent;
+    border-color: rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.55);
+    margin-top: 16px;
 }
 
 .menu-close:hover {
-    background: #9ca3af;
+    background: rgba(255,255,255,0.07);
+    color: white;
 }
 
 .menu-danger {
-    background: #7f1d1d;
-    border-color: #dc2626;
+    background: rgba(231,76,60,0.12);
+    border-color: rgba(231,76,60,0.3);
+    color: #e74c3c;
 }
 
 .menu-danger:hover {
-    background: #dc2626;
+    background: rgba(231,76,60,0.28);
+    border-color: rgba(231,76,60,0.6);
+    color: white;
 }
 
 .court-view-container {
@@ -726,17 +750,17 @@
     }
 
     .point-score {
-        font-size: 2.5em;
+        font-size: 2.8em;
     }
 
     .set-label {
-        font-size: 0.8em;
-        margin-bottom: 3px;
+        font-size: 0.7em;
+        margin-bottom: 2px;
     }
 
     .set-score {
-        font-size: 1.5em;
-        gap: 8px;
+        font-size: 1.6em;
+        gap: 6px;
     }
 
     /* Control buttons - more compact */
@@ -816,32 +840,11 @@
         font-size: 1.1em;
     }
 
-    /* Rest break overlay */
-    #restBreakOverlay h1 {
-        font-size: 2em !important;
-        margin-bottom: 10px !important;
-    }
-
-    #restBreakTimer {
-        font-size: 5em !important;
-        margin: 20px 0 !important;
-    }
-
-    #skipRestBreak {
-        font-size: 1.2em !important;
-        padding: 15px 30px !important;
-    }
-
-    /* Message overlay */
-    #messageOverlay h1 {
-        font-size: 2em !important;
-        margin-bottom: 20px !important;
-    }
-
-    #messageOverlay p {
-        font-size: 1.2em !important;
-        margin-bottom: 30px !important;
-    }
+    .court-overlay-title { font-size: 2.2em !important; margin-bottom: 8px !important; }
+    .court-overlay-countdown { font-size: 6em !important; margin: 14px 0 !important; }
+    .court-overlay-btn { font-size: 1.1em !important; padding: 14px 28px !important; }
+    .court-overlay-message-title { font-size: 2em !important; margin-bottom: 18px !important; }
+    .court-overlay-message-text { font-size: 1.1em !important; margin-bottom: 28px !important; }
 }
 
 /* Extra small height (600px or less) - even more compact */
@@ -860,17 +863,17 @@
     }
 
     .point-score {
-        font-size: 2em;
+        font-size: 2.2em;
     }
 
     .set-label {
-        font-size: 0.7em;
-        margin-bottom: 2px;
+        font-size: 0.65em;
+        margin-bottom: 1px;
     }
 
     .set-score {
         font-size: 1.2em;
-        gap: 5px;
+        gap: 4px;
     }
 
     /* Control buttons - very compact */
@@ -952,31 +955,11 @@
         font-size: 1em;
     }
 
-    /* Overlays - very compact */
-    #restBreakOverlay h1 {
-        font-size: 1.5em !important;
-        margin-bottom: 8px !important;
-    }
-
-    #restBreakTimer {
-        font-size: 4em !important;
-        margin: 15px 0 !important;
-    }
-
-    #skipRestBreak {
-        font-size: 1em !important;
-        padding: 12px 25px !important;
-    }
-
-    #messageOverlay h1 {
-        font-size: 1.5em !important;
-        margin-bottom: 15px !important;
-    }
-
-    #messageOverlay p {
-        font-size: 1em !important;
-        margin-bottom: 25px !important;
-    }
+    .court-overlay-title { font-size: 1.8em !important; margin-bottom: 6px !important; }
+    .court-overlay-countdown { font-size: 5em !important; margin: 12px 0 !important; }
+    .court-overlay-btn { font-size: 1em !important; padding: 12px 24px !important; }
+    .court-overlay-message-title { font-size: 1.5em !important; margin-bottom: 14px !important; }
+    .court-overlay-message-text { font-size: 1em !important; margin-bottom: 22px !important; }
 }
 
 /* Ultra small height (550px or less) - for Android with navigation bar visible */
@@ -999,13 +982,13 @@
     }
 
     .set-label {
-        font-size: 0.65em;
+        font-size: 0.6em;
         margin-bottom: 1px;
     }
 
     .set-score {
         font-size: 1em;
-        gap: 4px;
+        gap: 3px;
     }
 
     /* Control buttons - ultra compact */
@@ -1088,29 +1071,9 @@
         font-size: 0.95em;
     }
 
-    /* Overlays - ultra compact */
-    #restBreakOverlay h1 {
-        font-size: 1.3em !important;
-        margin-bottom: 6px !important;
-    }
-
-    #restBreakTimer {
-        font-size: 3.5em !important;
-        margin: 12px 0 !important;
-    }
-
-    #skipRestBreak {
-        font-size: 0.9em !important;
-        padding: 10px 20px !important;
-    }
-
-    #messageOverlay h1 {
-        font-size: 1.3em !important;
-        margin-bottom: 12px !important;
-    }
-
-    #messageOverlay p {
-        font-size: 0.9em !important;
-        margin-bottom: 20px !important;
-    }
+    .court-overlay-title { font-size: 1.5em !important; margin-bottom: 5px !important; }
+    .court-overlay-countdown { font-size: 4em !important; margin: 10px 0 !important; }
+    .court-overlay-btn { font-size: 0.9em !important; padding: 10px 20px !important; }
+    .court-overlay-message-title { font-size: 1.3em !important; margin-bottom: 12px !important; }
+    .court-overlay-message-text { font-size: 0.9em !important; margin-bottom: 18px !important; }
 }

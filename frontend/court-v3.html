@@ -8,11 +8,13 @@
     <meta http-equiv="Expires" content="0">
     <title>Badminton Pointtæller - Bane (Ny Version)</title>
     <link rel="icon" type="image/png" href="/favicon.png?v=4">
+    <link rel="stylesheet" href="fonts.css">
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="court-v3-styles.css?v=3">
+    <link rel="stylesheet" href="court-v3-styles.css?v=4">
     <script src="js/theme-loader.js"></script>
 </head>
 <body>
+    <div class="bg-glow"></div>
     <div class="container">
         <!-- Score Display Above Court -->
         <div class="score-display-top">
@@ -135,20 +137,20 @@
     </div>
 
     <!-- Rest Break Overlay -->
-    <div id="restBreakOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); z-index: 9999; justify-content: center; align-items: center;">
-        <div style="text-align: center; color: white;">
-            <h1 id="restBreakTitle" style="font-size: 3em; margin-bottom: 20px;">Pause</h1>
-            <div id="restBreakTimer" style="font-size: 8em; font-weight: bold; margin: 40px 0; color: var(--color-accent);">60</div>
-            <button id="skipRestBreak" class="btn-primary" style="font-size: 1.5em; padding: 20px 40px; cursor: pointer;">Fortsæt Kamp</button>
+    <div id="restBreakOverlay" class="court-overlay">
+        <div class="court-overlay-content">
+            <h1 id="restBreakTitle" class="court-overlay-title">Pause</h1>
+            <div id="restBreakTimer" class="court-overlay-countdown">60</div>
+            <button id="skipRestBreak" class="btn-primary court-overlay-btn">Fortsæt Kamp</button>
         </div>
     </div>
 
     <!-- Message Overlay -->
-    <div id="messageOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); z-index: 10000; justify-content: center; align-items: center;">
-        <div style="text-align: center; color: white; max-width: 600px; padding: 40px;">
-            <h1 id="messageTitle" style="font-size: 2.5em; margin-bottom: 30px; color: var(--color-accent);"></h1>
-            <p id="messageText" style="font-size: 1.5em; margin-bottom: 40px; line-height: 1.5;"></p>
-            <div id="messageButtons" style="display: flex; gap: 20px; justify-content: center;">
+    <div id="messageOverlay" class="court-overlay court-overlay--message">
+        <div class="court-overlay-content">
+            <h1 id="messageTitle" class="court-overlay-message-title"></h1>
+            <p id="messageText" class="court-overlay-message-text"></p>
+            <div id="messageButtons" class="court-overlay-message-buttons">
                 <!-- Buttons will be added dynamically -->
             </div>
         </div>
