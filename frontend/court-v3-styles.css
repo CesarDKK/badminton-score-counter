@@ -134,7 +134,7 @@
     justify-content: center;
     align-items: center;
     gap: 10px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
 }
 
 .btn-add-point {
@@ -432,9 +432,15 @@
 /* Modern browsers that support aspect-ratio */
 @supports (aspect-ratio: 1) {
     .badminton-court {
-        aspect-ratio: 13.4 / 6.1; /* Doubles court proportions - landscape */
+        /* Maintain 13.4:6.1 aspect ratio but cap width so the court never pushes
+           the control buttons below the fold. The formula derives the max width
+           from the available height: (100vh - 210px) × (13.4/6.1).
+           210px ≈ score display (~65px) + bottom buttons (~75px) + body padding + gaps. */
+        width: min(100%, calc((100vh - 220px) * (13.4 / 6.1)));
+        aspect-ratio: 13.4 / 6.1;
         padding-bottom: 0;
         height: auto;
+        margin: 0 auto;
     }
 }
 
