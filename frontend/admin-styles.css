@@ -1,5 +1,28 @@
 /* Admin Specific Styles */
 
+/* Header with title and logout button */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+/* Navigation button rows below header */
+.admin-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 24px;
+}
+
+.admin-nav-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
 body {
     background: var(--color-bg-dark);
 }

@@ -6,6 +6,7 @@ const courtId = parseInt(urlParams.get('id')) || 1;
 
 let refreshInterval = null;
 let slideshowInterval = null;
+let screensaverAnimFrame = null;
 let currentSlideIndex = 0;
 let isShowingSlideshow = false;
 let cachedSponsorImages = [];
@@ -147,11 +148,22 @@ async function loadCourtData() {
         // Detect new match starting (transition from inactive to active)
         if (isMatchActive && !wasMatchPreviouslyActive) {
             console.log('[TV] New match detected - reloading theme colors and storing original player positions');
-            // Store original player names for consistent TV display
-            originalPlayer1Name = gameState.player1.name;
-            originalPlayer1Name2 = gameState.player1.name2 || null;
-            originalPlayer2Name = gameState.player2.name;
-            originalPlayer2Name2 = gameState.player2.name2 || null;
+
+            // If set history exists, use it to determine the true original positions.
+            // This handles the case where the TV page loads mid-match after sides have switched.
+            const history = gameState.setScoresHistory;
+            if (history && history.length > 0 && typeof history[0] === 'object' && history[0].player1Name) {
+                originalPlayer1Name = history[0].player1Name;
+                originalPlayer1Name2 = history[0].player1Name2 || null;
+                originalPlayer2Name = history[0].player2Name;
+                originalPlayer2Name2 = history[0].player2Name2 || null;
+                console.log('[TV] Using set history for original positions:', originalPlayer1Name, 'vs', originalPlayer2Name);
+            } else {
+                originalPlayer1Name = gameState.player1.name;
+                originalPlayer1Name2 = gameState.player1.name2 || null;
+                originalPlayer2Name = gameState.player2.name;
+                originalPlayer2Name2 = gameState.player2.name2 || null;
+            }
 
             // Reload theme colors when a new match starts
             if (window.loadTheme) {
@@ -252,6 +264,13 @@ async function loadCourtData() {
 
 async function refreshSponsorSettings() {
     try {
+        // Check if TV version has changed - redirect if needed
+        const appSettings = await api.getSettings();
+        if (appSettings.tvVersion && appSettings.tvVersion !== 'v2') {
+            window.location.href = `tv-v3.html?id=${courtId}`;
+            return;
+        }
+
         // Refresh sponsor images cache (only slideshow type for TV display)
         const oldImages = cachedSponsorImages;
         const images = await api.getSponsorImages('slideshow');
@@ -392,23 +411,20 @@ function showSponsorSlideshow() {
 
 function hideSponsorSlideshow() {
     if (isShowingSlideshow) {
-        // Stop slideshow
         if (slideshowInterval) {
             clearInterval(slideshowInterval);
             slideshowInterval = null;
         }
 
-        // Remove slideshow container
+        stopScreensaver();
+
         const slideshowContainer = document.querySelector('.sponsor-slideshow');
         if (slideshowContainer) {
             slideshowContainer.remove();
         }
 
-        // Show scoreboard
         showScoreboard();
         isShowingSlideshow = false;
-
-        // Update footer to show court banner if available
         updateCourtBanner();
     }
 }
@@ -461,15 +477,73 @@ function displayCurrentSlide(images) {
 function showDefaultMessage() {
     const container = document.createElement('div');
     container.className = 'sponsor-slideshow';
+    container.style.cssText = 'position: relative; overflow: hidden;';
     container.innerHTML = `
-        <div class="sponsor-slide">
-            <div class="no-sponsors-message">
-                <h2>Ingen aktiv kamp</h2>
-                <p>Bane ${courtId}</p>
-            </div>
+        <div class="screensaver-text" style="position: absolute; text-align: center; color: white; white-space: nowrap;">
+            <h2 style="font-size: 4em; margin-bottom: 20px;">Ingen aktiv kamp</h2>
+            <p style="font-size: 2.5em; color: #aaa;">Bane ${courtId}</p>
         </div>
     `;
     document.querySelector('.tv-container').appendChild(container);
+    startScreensaver();
+}
+
+function startScreensaver() {
+    stopScreensaver();
+
+    let x = -1;
+    let y = -1;
+    let dx = 0;
+    let dy = 0;
+    let lastTime = null;
+
+    function animate(timestamp) {
+        const c = document.querySelector('.sponsor-slideshow');
+        const t = c ? c.querySelector('.screensaver-text') : null;
+        if (!c || !t) return;
+
+        if (x < 0) {
+            const maxX = c.offsetWidth - t.offsetWidth;
+            const maxY = c.offsetHeight - t.offsetHeight;
+            x = Math.max(0, maxX / 2);
+            y = Math.max(0, maxY / 2);
+            const speed = 40; // px/s
+            const angle = Math.random() * 2 * Math.PI;
+            dx = Math.cos(angle) * speed;
+            dy = Math.sin(angle) * speed;
+            if (Math.abs(dx) < 12) dx = dx < 0 ? -12 : 12;
+            if (Math.abs(dy) < 12) dy = dy < 0 ? -12 : 12;
+        }
+
+        if (!lastTime) lastTime = timestamp;
+        const delta = Math.min((timestamp - lastTime) / 1000, 0.1);
+        lastTime = timestamp;
+
+        x += dx * delta;
+        y += dy * delta;
+
+        const maxX = Math.max(0, c.offsetWidth - t.offsetWidth);
+        const maxY = Math.max(0, c.offsetHeight - t.offsetHeight);
+
+        if (x <= 0) { x = 0; dx = Math.abs(dx); }
+        if (x >= maxX) { x = maxX; dx = -Math.abs(dx); }
+        if (y <= 0) { y = 0; dy = Math.abs(dy); }
+        if (y >= maxY) { y = maxY; dy = -Math.abs(dy); }
+
+        t.style.left = Math.round(x) + 'px';
+        t.style.top = Math.round(y) + 'px';
+
+        screensaverAnimFrame = requestAnimationFrame(animate);
+    }
+
+    screensaverAnimFrame = requestAnimationFrame(animate);
+}
+
+function stopScreensaver() {
+    if (screensaverAnimFrame) {
+        cancelAnimationFrame(screensaverAnimFrame);
+        screensaverAnimFrame = null;
+    }
 }
 
 function escapeHtml(text) {
@@ -770,10 +844,7 @@ function hideMatchFinished() {
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', function() {
-    if (refreshInterval) {
-        clearInterval(refreshInterval);
-    }
-    if (slideshowInterval) {
-        clearInterval(slideshowInterval);
-    }
+    if (refreshInterval) clearInterval(refreshInterval);
+    if (slideshowInterval) clearInterval(slideshowInterval);
+    stopScreensaver();
 });
