@@ -2,5 +2,5 @@
 -- Follows the same pattern as court_version setting
 
 INSERT INTO settings (setting_key, setting_value)
-VALUES ('tv_version', 'v2')
+VALUES ('tv_version', 'v3')
 ON DUPLICATE KEY UPDATE setting_value = setting_value;
