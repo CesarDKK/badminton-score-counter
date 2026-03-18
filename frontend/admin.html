@@ -42,9 +42,10 @@
 
             <!-- Navigation Buttons -->
             <div class="admin-nav">
-                <div class="admin-nav-row">
-                    <button id="holdkampBtn" class="btn-primary">Holdkamp</button>
-                    <button id="matchHistoryBtn" class="btn-primary">Kamphistorik</button>
+                <div class="admin-nav-row" id="adminNavRow">
+                    <button id="backToOverviewNavBtn" class="btn-primary" data-section="overview" style="display:none;">← Oversigt</button>
+                    <button id="holdkampBtn" class="btn-primary" data-section="holdkamp">Holdkamp</button>
+                    <button id="matchHistoryBtn" class="btn-primary" data-section="history">Kamphistorik</button>
                     <a href="player-info.html" class="btn-primary" style="text-decoration: none; display: inline-block;">Spiller Info</a>
                     <a href="settings.html" class="btn-primary" style="text-decoration: none; display: inline-block;">Indstillinger</a>
                     <a href="sponsor.html" class="btn-primary" style="text-decoration: none; display: inline-block;">Sponsorer</a>
@@ -66,10 +67,10 @@
 
             <!-- Holdkamp Section -->
             <div id="holdkampSection" class="overview-section" style="display: none;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div style="margin-bottom: 20px;">
                     <h2>Holdkamp</h2>
-                    <button id="backFromHoldkampBtn" class="btn-secondary">Tilbage til Oversigt</button>
                 </div>
+                <button id="backFromHoldkampBtn" style="display:none;"></button>
 
                 <!-- Active team match display -->
                 <div id="activeHoldkampContainer" style="display: none; margin-bottom: 30px;"></div>
@@ -113,10 +114,10 @@
 
             <!-- Match History Section -->
             <div id="matchHistorySection" class="overview-section" style="display: none;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div style="margin-bottom: 20px;">
                     <h2>Kamphistorik</h2>
-                    <button id="backToOverviewBtn" class="btn-secondary">Tilbage til Oversigt</button>
                 </div>
+                <button id="backToOverviewBtn" style="display:none;"></button>
 
                 <!-- Tabs -->
                 <div style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 0;">

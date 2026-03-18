@@ -354,8 +354,8 @@ router.delete('/:courtId', async (req, res, next) => {
         // Delete game state
         await query('DELETE FROM game_states WHERE court_id = ?', [court.id]);
 
-        // Set court to inactive
-        await query('UPDATE courts SET is_active = FALSE WHERE id = ?', [court.id]);
+        // Set court to inactive and reset doubles mode
+        await query('UPDATE courts SET is_active = FALSE, is_doubles = FALSE WHERE id = ?', [court.id]);
 
         res.json({ success: true });
     } catch (error) {

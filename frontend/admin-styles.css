@@ -194,6 +194,14 @@ header > div {
     box-shadow: 0 3px 10px rgba(83, 52, 131, 0.22);
 }
 
+/* Active nav item */
+.admin-nav-row .admin-nav-active,
+.admin-nav-row a.admin-nav-active {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+}
+
 /* ---- Login ---- */
 .login-container {
     display: flex;

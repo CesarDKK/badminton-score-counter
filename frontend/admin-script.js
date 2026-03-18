@@ -45,6 +45,9 @@ function setupEventListeners() {
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', handleLogout);
 
+    // Nav overview button
+    document.getElementById('backToOverviewNavBtn').addEventListener('click', showCourtOverview);
+
     // Holdkamp
     document.getElementById('holdkampBtn').addEventListener('click', showHoldkamp);
     document.getElementById('backFromHoldkampBtn').addEventListener('click', showCourtOverview);
@@ -146,6 +149,14 @@ async function showDashboard() {
 
         // Start auto-refresh every 2 seconds
         startAutoRefresh();
+
+        // Navigate to section specified in URL hash (e.g. admin.html#holdkamp)
+        const hash = window.location.hash;
+        if (hash === '#holdkamp') {
+            await showHoldkamp();
+        } else if (hash === '#history') {
+            await showMatchHistory();
+        }
     } catch (error) {
         console.error('Failed to load dashboard:', error);
         showMessage('Fejl', 'Kunne ikke indlæse dashboard data. Tjek din forbindelse.');
@@ -608,6 +619,8 @@ async function showMatchHistory() {
     document.getElementById('courtOverviewSection').style.display = 'none';
     document.getElementById('holdkampSection').style.display = 'none';
     document.getElementById('matchHistorySection').style.display = 'block';
+    setNavActive('history');
+    history.replaceState(null, '', '#history');
     await loadActiveHistoryTab();
 }
 
@@ -720,6 +733,22 @@ function showCourtOverview() {
     document.getElementById('matchHistorySection').style.display = 'none';
     document.getElementById('holdkampSection').style.display = 'none';
     document.getElementById('courtOverviewSection').style.display = 'block';
+    setNavActive('overview');
+    history.replaceState(null, '', '#');
+}
+
+function setNavActive(section) {
+    document.querySelectorAll('#adminNavRow .btn-primary').forEach(btn => {
+        btn.classList.remove('admin-nav-active');
+    });
+    const overviewBtn = document.getElementById('backToOverviewNavBtn');
+    if (section === 'overview' || !section) {
+        if (overviewBtn) overviewBtn.style.display = 'none';
+    } else {
+        if (overviewBtn) overviewBtn.style.display = '';
+        const btn = document.querySelector(`#adminNavRow [data-section="${section}"]`);
+        if (btn) btn.classList.add('admin-nav-active');
+    }
 }
 
 // ==================== HOLDKAMP ====================
@@ -731,6 +760,8 @@ async function showHoldkamp() {
     document.getElementById('courtOverviewSection').style.display = 'none';
     document.getElementById('matchHistorySection').style.display = 'none';
     document.getElementById('holdkampSection').style.display = 'block';
+    setNavActive('holdkamp');
+    history.replaceState(null, '', '#holdkamp');
     await loadActiveHoldkamp();
     // Poll every 3 seconds for live scores
     if (!holdkampRefreshTimer) {
