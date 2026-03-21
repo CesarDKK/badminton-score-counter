@@ -571,6 +571,7 @@ function clearCourt() {
                     gameState.servingPlayerOnTeam = null;
                     gameState.team1RightCourt = 1;  // Reset court positions
                     gameState.team2RightCourt = 1;
+                    gameState.setScoresHistory = [];  // Clear set history so TV doesn't show old results
                     gameState.history = [];  // Clear undo history
 
                     // Update display
