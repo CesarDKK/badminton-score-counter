@@ -26,6 +26,46 @@ A real-time badminton score tracking system with multi-device support, sponsor s
 
 ## Recent Updates
 
+### Version 1.9.0 - Arena Design, Offline Fonts & Game Rules
+
+#### Arena Design (All Pages)
+- **Unified Arena Design**: All pages now share a consistent arena aesthetic — Bebas Neue as the display font for scores and headings, DM Sans as the body font, dark background with radial glow (`bg-glow`) and a subtle grid pattern, glass card styling with accent borders
+- **Court V3 Arena Design**: Court V3 fully updated to match — Bebas Neue for scores and buttons, glass settings menu, visually consistent with the rest of the app
+
+#### Offline Fonts
+- **Local Font Serving**: Removed Google Fonts CDN dependency entirely. All fonts are now served locally from `frontend/fonts/` (4 woff2 files: Bebas Neue latin/latin-ext, DM Sans latin/latin-ext)
+- **`frontend/fonts.css`**: New stylesheet containing all `@font-face` declarations
+- **Fully Offline**: The app now works completely without an internet connection
+
+#### Court V3 - Layout & Controls
+- **No-Scroll Layout**: Court height is now constrained using the CSS `min()` function so the court and buttons always fit on screen without scrolling
+- **"Skift side" on Court Surface**: Moved from the settings menu to an icon button (⇆) placed directly on the court surface at the bottom of the net area, matching the style of the doubles swap buttons. Only visible before the match starts
+- **"Bane X" Court Name Label**: Displays the court name (e.g. "Bane 1", "Bane 2") on the top 20% of the court surface before a match starts. The label is double the size of the "Start Kamp" button. Hidden when the match starts and reappears after a reset
+
+#### Game Rules & Controls
+- **Match-Active Guards** (Court V2 and V3): While a match is active, the "Skift til Double/Single" toggle and the "Skift side" button are both disabled/hidden. Automatic side switching at set boundaries and at 11 points in the 3rd set continues to work as before
+- **Doubles Between Sets**: When a new set starts, the winning team's right-court player is automatically set as the server. Players can still use the ⇅ swap button to change positions; the server updates automatically to reflect the new right-court player
+- **Reset Court Fix**: "Nulstil bane" (Reset Court) now also resets `is_doubles` — previously doubles mode persisted after a reset
+
+#### Admin Navigation
+- **Consistent Navigation Bar**: All admin sub-pages (Holdkamp, Kamphistorik, Spiller Info, Indstillinger, Sponsorer) now share the same full navigation bar
+- **"← Oversigt" Button**: Appears before "Holdkamp" in the nav on all sub-pages; hidden on the main Baneoversigt (overview) page
+- **Hash-Based Navigation**: `admin.html` supports `#holdkamp` and `#history` URL hashes for direct linking from other pages
+
+#### Bug Fixes
+- **TV V3 Screensaver Fix**: Fixed a blank screen issue when no active match was present — screensaver/sponsor slideshow CSS was missing after the redesign
+- **Database Defaults Fix**: `init.sql` defaults for `court_version` and `tv_version` corrected to `'v3'` (were incorrectly set to `'v2'`)
+
+**Upgrading from 1.7.0:**
+```bash
+git pull
+docker-compose down
+docker-compose up -d --build
+```
+Run any new migration files in `backend/migrations/` after rebuilding (see migration list below).
+
+---
+
 ### Version 1.7.0 - Android App, Court V3, & Optimizations
 
 #### 🤖 Android App Enhancements
@@ -165,12 +205,18 @@ Traditional scoring interface optimized for quick score entry. Best for simple, 
 Visual court representation showing player positions and serving zones.
 
 **Features:**
+- **Arena Design**: Bebas Neue display font for scores and buttons, glass settings menu, dark background with radial glow and grid pattern — consistent with the rest of the app
+- **No-Scroll Layout**: CSS `min()` constrains court height so court + buttons always fit on screen without scrolling
 - **Compact Layout**: Optimized for smaller screens with 30% size reduction
 - **Frameless Design**: Edge-to-edge display maximizes screen space
 - **Visual Court**: Top-down badminton court with accurate dimensions
+- **Court Name Label**: "Bane X" displayed on the court surface (top 20%) before the match starts; hidden during play and restored after reset
 - **Player Positioning**: See player positions in doubles mode
 - **Serving Indicator**: Shuttlecock emoji shows current serving position
-- **Position Swapping**: Swap player positions between sets in doubles
+- **"Skift side" on Court**: Side-switch button (⇆) placed directly on the court surface at the bottom of the net area; only visible before the match starts
+- **Position Swapping**: Swap player positions between sets in doubles; server updates automatically to reflect the right-court player
+- **Doubles Between Sets**: Winning team's right-court player is automatically set as server when a new set starts
+- **Match-Active Guards**: "Skift til Double/Single" toggle and "Skift side" button are disabled/hidden during an active match
 - **Undo System**: Full game state history tracking (last 20 actions)
   - Restores scores, serving state, and player court positions
   - Position-aware undo for doubles mode
@@ -190,7 +236,7 @@ When enabled in settings, Court V3 hides:
 - "Tilbage" (Back)
 - "Admin" (Admin Panel)
 
-This prevents accidental changes during tournaments while keeping essential controls like "Skift Sider" (Switch Sides) accessible.
+This prevents accidental changes during tournaments while keeping essential controls accessible.
 
 ---
 
@@ -767,6 +813,11 @@ badminton-app/
 │   ├── server.js        # Express entry point
 │   └── package.json
 ├── frontend/
+│   ├── fonts/           # Local woff2 font files (offline support)
+│   │   ├── bebas-neue-latin.woff2
+│   │   ├── bebas-neue-latin-ext.woff2
+│   │   ├── dm-sans-latin.woff2
+│   │   └── dm-sans-latin-ext.woff2
 │   ├── js/
 │   │   ├── api.js       # Centralized API client (v4)
 │   │   └── api-v2.js    # Legacy API client
@@ -777,6 +828,7 @@ badminton-app/
 │   ├── court-v3.html    # Court scoring page (Bane View)
 │   ├── court-script-v3.js
 │   ├── court-v3-styles.css
+│   ├── fonts.css        # @font-face declarations for local fonts
 │   ├── settings.html    # Settings page
 │   ├── settings-script.js
 │   ├── tv.html          # TV display mode
@@ -856,7 +908,11 @@ backend/migrations/
 ├── 001_add_match_completed.sql
 ├── 002_add_sponsor_type.sql
 ├── 003_add_sponsor_court_assignments.sql
-└── 004_add_sponsor_active_expiration.sql  # Adds is_active and expiration_date
+├── 004_add_sponsor_active_expiration.sql  # Adds is_active and expiration_date
+├── 005_add_court_version.sql              # Adds court_version to settings
+├── 006_add_tv_version.sql                 # Adds tv_version to settings
+├── 007_add_is_doubles_reset.sql           # Ensures is_doubles resets with court
+└── 008_fix_version_defaults.sql           # Corrects court_version/tv_version defaults to 'v3'
 ```
 
 All migration files are automatically available in the container at `/docker-entrypoint-initdb.d/migrations/`.
@@ -867,6 +923,10 @@ All migration files are automatically available in the container at `/docker-ent
   - `expiration_date TIMESTAMP NULL` - Automatic deactivation date
   - Creates index for efficient filtering
   - Backwards compatible (existing images set to active, no expiration)
+- **005_add_court_version.sql**: Adds `court_version` column to the settings table
+- **006_add_tv_version.sql**: Adds `tv_version` column to the settings table
+- **007_add_is_doubles_reset.sql**: Ensures `is_doubles` is included in court reset logic
+- **008_fix_version_defaults.sql**: Corrects `court_version` and `tv_version` default values from `'v2'` to `'v3'`
 
 ## Deploying Updates
 
