@@ -64,6 +64,10 @@ let pendingSave = false;
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', async function() {
+    // Set court name label
+    const courtNameDisplay = document.getElementById('courtNameDisplay');
+    if (courtNameDisplay) courtNameDisplay.textContent = 'Bane ' + courtId;
+
     await initializeApp();
     await loadGameState();
     updateDisplay();
@@ -109,6 +113,10 @@ function setupEventListeners() {
         switchSides();
         closeSettingsMenu();
     });
+    document.getElementById('switchSidesCourtBtn').addEventListener('click', () => {
+        if (gameState.matchStartTime && !gameState.matchEndTime) return;
+        switchSides();
+    });
     document.getElementById('doublesToggle').addEventListener('click', () => {
         toggleDoubles();
         closeSettingsMenu();
@@ -130,6 +138,9 @@ function setupEventListeners() {
 }
 
 function toggleDoubles() {
+    if (gameState.matchStartTime && !gameState.matchEndTime) {
+        return; // Cannot change during active match
+    }
     const newMode = gameState.isDoubles ? 'single' : 'double';
     showMessage(
         'Skift Spil Tilstand',
@@ -172,6 +183,12 @@ function swapPlayers(team) {
         gameState.team1RightCourt = gameState.team1RightCourt === 1 ? 2 : 1;
     } else {
         gameState.team2RightCourt = gameState.team2RightCourt === 1 ? 2 : 1;
+    }
+
+    // If swapping between sets, auto-update which player serves (right-court player)
+    if (gameState.betweenSets && gameState.isDoubles) {
+        const servingTeam = gameState.servingTeam;
+        gameState.servingPlayerOnTeam = servingTeam === 1 ? gameState.team1RightCourt : gameState.team2RightCourt;
     }
 
     updateDisplay();
@@ -439,17 +456,17 @@ function resetScores() {
         gameState.servingPlayer = 1;
         if (gameState.isDoubles) {
             gameState.servingTeam = 1;
-            // In doubles, players can swap positions between sets
+            // Auto-set server: right-court player of winning team (score is 0 = even)
+            gameState.servingPlayerOnTeam = gameState.team1RightCourt;
             gameState.betweenSets = true;
-            // servingPlayerOnTeam is kept - same player continues serving
         }
     } else if (gameState.player2.games > gameState.player1.games) {
         gameState.servingPlayer = 2;
         if (gameState.isDoubles) {
             gameState.servingTeam = 2;
-            // In doubles, players can swap positions between sets
+            // Auto-set server: right-court player of winning team (score is 0 = even)
+            gameState.servingPlayerOnTeam = gameState.team2RightCourt;
             gameState.betweenSets = true;
-            // servingPlayerOnTeam is kept - same player continues serving
         }
     }
     // If tied (shouldn't happen in normal play), keep current server
@@ -743,6 +760,16 @@ function updateDisplay() {
         swapBtn2.style.display = 'none';
     }
 
+    // Hide switch-sides and doubles toggle during active match
+    const matchActive = gameState.matchStartTime && !gameState.matchEndTime;
+    const switchSidesCourtBtn = document.getElementById('switchSidesCourtBtn');
+    if (switchSidesCourtBtn) {
+        switchSidesCourtBtn.style.display = matchActive ? 'none' : 'flex';
+    }
+    if (doublesBtn) {
+        doublesBtn.style.display = matchActive ? 'none' : 'block';
+    }
+
     // Show/hide start button and timer
     const startBtn = document.getElementById('startMatchBtn');
     const timerDisplay = document.getElementById('timerDisplay');
@@ -750,16 +777,21 @@ function updateDisplay() {
     // Disable start button if no server selected
     startBtn.disabled = !gameState.servingPlayer;
 
+    const courtNameEl = document.getElementById('courtNameDisplay');
+
     if (gameState.matchStartTime && !gameState.matchEndTime) {
         startBtn.style.display = 'none';
         timerDisplay.style.display = 'block';
+        if (courtNameEl) courtNameEl.style.display = 'none';
         updateTimer();
     } else if (!gameState.matchStartTime) {
         startBtn.style.display = 'block';
         timerDisplay.style.display = 'none';
+        if (courtNameEl) courtNameEl.style.display = 'block';
     } else {
         startBtn.style.display = 'none';
         timerDisplay.style.display = 'block';
+        if (courtNameEl) courtNameEl.style.display = 'none';
     }
 }
 

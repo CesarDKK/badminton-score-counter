@@ -26,6 +26,21 @@
     align-items: center;
 }
 
+.court-name-display {
+    position: absolute;
+    left: 50%;
+    top: 20%;
+    transform: translateX(-50%);
+    z-index: 100;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 4em;
+    letter-spacing: 0.06em;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
+    line-height: 1;
+    white-space: nowrap;
+}
+
 .btn-start-match-center {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 2em;
@@ -689,6 +704,55 @@
 }
 
 
+/* Switch Sides Button — on the net */
+.btn-switch-sides {
+    position: absolute;
+    left: 50%;
+    top: 80%;
+    transform: translate(-50%, -50%);
+    width: 180px;
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+    border: 3px solid rgba(255, 255, 255, 0.7);
+    border-radius: 16px;
+    cursor: pointer;
+    z-index: 50;
+    transition: all 0.3s;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 8px 10px;
+    gap: 4px;
+    backdrop-filter: blur(4px);
+}
+
+.btn-switch-sides-icon {
+    font-size: 4em;
+    line-height: 1;
+}
+
+.btn-switch-sides-label {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1.4em;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.btn-switch-sides:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: white;
+    transform: translate(-50%, -50%) scale(1.1);
+    box-shadow: 0 6px 25px rgba(255, 255, 255, 0.3);
+}
+
+.btn-switch-sides:active {
+    transform: translate(-50%, -50%) scale(0.95);
+}
+
 /* Swap Players Buttons */
 .btn-swap-players {
     position: absolute;
@@ -800,6 +864,7 @@
     }
 
     /* Court center overlay */
+    .court-name-display { font-size: 3em; }
     .btn-start-match-center {
         font-size: 1.5em;
         padding: 15px 35px;
@@ -820,6 +885,12 @@
         width: 40px;
         height: 40px;
         font-size: 1.5em;
+    }
+
+    .btn-switch-sides {
+        width: 40px;
+        height: 40px;
+        font-size: 1.3em;
     }
 
     /* Serve indicator - smaller */
@@ -913,6 +984,7 @@
     }
 
     /* Court center overlay */
+    .court-name-display { font-size: 2.4em; }
     .btn-start-match-center {
         font-size: 1.2em;
         padding: 12px 28px;
@@ -1029,6 +1101,7 @@
     }
 
     /* Court center overlay */
+    .court-name-display { font-size: 2em; }
     .btn-start-match-center {
         font-size: 1em;
         padding: 10px 22px;

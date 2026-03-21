@@ -87,6 +87,15 @@
                     <!-- Swap button for Player 2 side -->
                     <button id="swapPlayer2Btn" class="btn-swap-players btn-swap-right" style="display: none;">⇅</button>
 
+                    <!-- Switch Sides button on the net -->
+                    <button id="switchSidesCourtBtn" class="btn-switch-sides">
+                        <span class="btn-switch-sides-icon">⇆</span>
+                        <span class="btn-switch-sides-label">Skift side</span>
+                    </button>
+
+                    <!-- Court name display (before match) -->
+                    <div id="courtNameDisplay" class="court-name-display"></div>
+
                     <!-- Timer and Start Button overlay on court center -->
                     <div class="court-center-overlay">
                         <button id="startMatchBtn" class="btn-start-match-center">Start Kamp</button>
@@ -125,7 +134,7 @@
         <div id="settingsMenu" class="settings-menu" style="display: none;">
             <div class="settings-menu-content">
                 <h3>Indstillinger</h3>
-                <button id="switchSidesBtn" class="menu-item">Skift Sider</button>
+                <button id="switchSidesBtn" style="display:none;"></button>
                 <button id="doublesToggle" class="menu-item">Skift til Double</button>
                 <button id="showHoldkampPanelBtn" class="menu-item" style="display:none;">🏸 Holdkamp</button>
                 <button id="clearCourtBtn" class="menu-item menu-danger">Ryd Banen</button>

@@ -791,8 +791,8 @@ function updateDisplay() {
 }
 
 function toggleDoubles() {
-    // Prevent toggling doubles if match is completed
-    if (gameState.matchCompleted) {
+    // Prevent toggling doubles if match is active or completed
+    if (gameState.matchCompleted || (gameState.matchStartTime && !gameState.matchEndTime)) {
         return;
     }
 
@@ -830,6 +830,29 @@ function updateDoublesDisplay() {
         player2Name2.style.display = 'none';
         toggleBtn.textContent = 'Skift til Double';
     }
+
+    // Disable toggle and switch-sides during active match
+    const matchActive = gameState.matchStartTime && !gameState.matchEndTime && !gameState.matchCompleted;
+    const switchSidesBtn = document.getElementById('switchSidesBtn');
+    if (matchActive) {
+        toggleBtn.disabled = true;
+        toggleBtn.style.opacity = '0.4';
+        toggleBtn.style.cursor = 'not-allowed';
+        if (switchSidesBtn) {
+            switchSidesBtn.disabled = true;
+            switchSidesBtn.style.opacity = '0.4';
+            switchSidesBtn.style.cursor = 'not-allowed';
+        }
+    } else if (!gameState.matchCompleted) {
+        toggleBtn.disabled = false;
+        toggleBtn.style.opacity = '';
+        toggleBtn.style.cursor = '';
+        if (switchSidesBtn) {
+            switchSidesBtn.disabled = false;
+            switchSidesBtn.style.opacity = '';
+            switchSidesBtn.style.cursor = '';
+        }
+    }
 }
 
 function formatPlayerNames(playerName, playerName2) {
@@ -841,8 +864,8 @@ function formatPlayerNames(playerName, playerName2) {
 }
 
 function switchSides() {
-    // Prevent switching sides if match is completed
-    if (gameState.matchCompleted) {
+    // Prevent switching sides if match is active or completed
+    if (gameState.matchCompleted || (gameState.matchStartTime && !gameState.matchEndTime)) {
         return;
     }
 
