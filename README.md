@@ -123,6 +123,14 @@ docker-compose up -d --build
 ```
 The `--build` flag ensures all new dependencies are installed automatically.
 
+## 📋 Installationsvejledning
+
+Komplet trin-for-trin guide til installation på ny server (inkl. Git og Docker):
+
+**[→ INSTALL.md](INSTALL.md)** — Komplet installationsvejledning (Ubuntu/Debian + Windows)
+
+---
+
 ## 🍓 Raspberry Pi Support
 
 This app runs great on Raspberry Pi! We provide optimized Docker configurations for ARM architecture.
