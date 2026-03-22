@@ -864,12 +864,13 @@ function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCou
                 scoreText = ` · ${courtData.player1.score}–${courtData.player2.score} (${courtData.player1.games}–${courtData.player2.games} sæt)`;
             }
             statusBadge = `<span style="background:#533483;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8em;">Bane ${g.court_number || '?'} ▶${scoreText}</span>`;
+            editBtn = `<button onclick="toggleEditGame(${teamMatch.id}, ${g.id})" style="padding:3px 10px;background:transparent;color:#aaa;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:0.8em;">Rediger</button>`;
         } else if (g.status === 'finished') {
             const winner = g.winner_team === 1 ? teamMatch.team1_name : teamMatch.team2_name;
             winnerBadge = `<span style="background:#4CAF50;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8em;">✓ ${escapeHtml(winner)}</span>`;
         }
 
-        const editForm = g.status === 'pending' ? `
+        const editForm = g.status !== 'finished' ? `
         <div id="editGame_${g.id}" style="display:none; padding:12px; background:rgba(0,0,0,0.3); border-radius:6px; margin-top:8px;">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;">
                 <div>

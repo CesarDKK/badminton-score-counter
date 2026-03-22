@@ -1474,6 +1474,48 @@ function startPeriodicSync() {
         } catch (error) {
             console.error('Failed to sync game state:', error);
         }
+
+        // Holdkamp sync: detect new holdkamp OR sync names from holdkamp to court
+        try {
+            const tm = await api.getActiveTeamMatch();
+            if (tm) {
+                if (!activeTeamMatch && !assignedGameId) {
+                    // Holdkamp just started — initialize panel
+                    activeTeamMatch = tm;
+                    await initHoldkampPanel();
+                } else if (activeTeamMatch && !assignedGameId) {
+                    // Panel open but no game assigned yet — refresh dropdown to remove taken games
+                    // Skip if user has already selected a game to avoid resetting their selection
+                    const panel = document.getElementById('holdkampPanel');
+                    const select = document.getElementById('holdkampGameSelect');
+                    const userIsSelecting = select && select.value;
+                    if (panel && panel.style.display !== 'none' && !userIsSelecting) {
+                        await refreshHoldkampPanel();
+                    }
+                } else if (assignedGameId) {
+                    // Already assigned — sync player names from holdkamp game to court
+                    activeTeamMatch = tm;
+                    const myGame = tm.games.find(g => g.id === assignedGameId);
+                    if (myGame) {
+                        const namesChanged =
+                            (myGame.team1_player1 && gameState.player1.name !== myGame.team1_player1) ||
+                            (myGame.team1_player2 && gameState.player1.name2 !== myGame.team1_player2) ||
+                            (myGame.team2_player1 && gameState.player2.name !== myGame.team2_player1) ||
+                            (myGame.team2_player2 && gameState.player2.name2 !== myGame.team2_player2);
+                        if (namesChanged) {
+                            if (myGame.team1_player1) gameState.player1.name = myGame.team1_player1;
+                            if (myGame.team1_player2) gameState.player1.name2 = myGame.team1_player2;
+                            if (myGame.team2_player1) gameState.player2.name = myGame.team2_player1;
+                            if (myGame.team2_player2) gameState.player2.name2 = myGame.team2_player2;
+                            updateDisplay();
+                            saveGameState();
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Failed to sync holdkamp:', error);
+        }
     }, 5000); // Check every 5 seconds
 }
 
@@ -1565,6 +1607,16 @@ function finishEditingName(element, player, nameField) {
     // Save to database
     saveGameState();
 
+    // Sync name change back to holdkamp game if one is assigned
+    if (assignedGameId && activeTeamMatch) {
+        api.updateTeamMatchGame(activeTeamMatch.id, assignedGameId, {
+            team1Player1: gameState.player1.name,
+            team1Player2: gameState.player1.name2 || null,
+            team2Player1: gameState.player2.name,
+            team2Player2: gameState.player2.name2 || null,
+        }).catch(e => console.error('Failed to sync name to holdkamp:', e));
+    }
+
     console.log(`Updated ${player}.${nameField} to: ${newName}`);
 }
 
@@ -1579,9 +1631,9 @@ async function initHoldkampPanel() {
 
         // Register all button listeners once upfront, regardless of code path
         document.getElementById('showHoldkampPanelBtn').style.display = 'block';
-        document.getElementById('showHoldkampPanelBtn').addEventListener('click', () => {
-            panel.style.display = 'block';
+        document.getElementById('showHoldkampPanelBtn').addEventListener('click', async () => {
             document.getElementById('settingsMenu').style.display = 'none';
+            await refreshHoldkampPanel();
         });
         document.getElementById('closeHoldkampPanelBtn').addEventListener('click', () => {
             panel.style.display = 'none';
@@ -1603,10 +1655,7 @@ async function initHoldkampPanel() {
         if (pendingGames.length === 0) return;
 
         select.innerHTML = '<option value="">-- Vælg delkamp --</option>';
-        const pendingCounts = {};
         pendingGames.forEach(g => {
-            pendingCounts[g.category] = (pendingCounts[g.category] || 0) + 1;
-            const num = pendingCounts[g.category];
             const isDoubles = ['MD', 'DD', 'HD', 'Double'].includes(g.category);
             const t1 = isDoubles
                 ? `${g.team1_player1 || '?'}${g.team1_player2 ? ' & ' + g.team1_player2 : ''}`
@@ -1616,7 +1665,7 @@ async function initHoldkampPanel() {
                 : (g.team2_player1 || '?');
             const opt = document.createElement('option');
             opt.value = g.id;
-            opt.textContent = `${g.category} ${num}: ${t1} vs ${t2}`;
+            opt.textContent = `${g.category} ${g.game_number}: ${t1} vs ${t2}`;
             select.appendChild(opt);
         });
 
@@ -1628,13 +1677,14 @@ async function initHoldkampPanel() {
 
 function applyHoldkampGameToState(game) {
     const isDoubles = ['MD', 'DD', 'HD', 'Double'].includes(game.category);
-    if (game.team1_player1) {
-        gameState.player1.name = game.team1_player1;
-        if (isDoubles && game.team1_player2) gameState.player1.name2 = game.team1_player2;
-    }
-    if (game.team2_player1) {
-        gameState.player2.name = game.team2_player1;
-        if (isDoubles && game.team2_player2) gameState.player2.name2 = game.team2_player2;
+    const team1 = activeTeamMatch?.team1_name || 'Hold 1';
+    const team2 = activeTeamMatch?.team2_name || 'Hold 2';
+
+    gameState.player1.name = game.team1_player1 || `${team1} spiller`;
+    gameState.player2.name = game.team2_player1 || `${team2} spiller`;
+    if (isDoubles) {
+        gameState.player1.name2 = game.team1_player2 || `${team1} makker`;
+        gameState.player2.name2 = game.team2_player2 || `${team2} makker`;
     }
     gameState.isDoubles = isDoubles;
     updateDisplay();
@@ -1705,10 +1755,7 @@ async function refreshHoldkampPanel() {
         assignBtn.style.display = '';
 
         select.innerHTML = '<option value="">-- Vælg delkamp --</option>';
-        const pendingCounts = {};
         pendingGames.forEach(g => {
-            pendingCounts[g.category] = (pendingCounts[g.category] || 0) + 1;
-            const num = pendingCounts[g.category];
             const isDoubles = ['MD', 'DD', 'HD', 'Double'].includes(g.category);
             const t1 = isDoubles
                 ? `${g.team1_player1 || '?'}${g.team1_player2 ? ' & ' + g.team1_player2 : ''}`
@@ -1718,7 +1765,7 @@ async function refreshHoldkampPanel() {
                 : (g.team2_player1 || '?');
             const opt = document.createElement('option');
             opt.value = g.id;
-            opt.textContent = `${g.category} ${num}: ${t1} vs ${t2}`;
+            opt.textContent = `${g.category} ${g.game_number}: ${t1} vs ${t2}`;
             select.appendChild(opt);
         });
 
