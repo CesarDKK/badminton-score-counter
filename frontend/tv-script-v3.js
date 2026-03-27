@@ -686,8 +686,8 @@ function showDefaultMessage() {
     container.style.cssText = 'position: relative; overflow: hidden;';
     container.innerHTML = `
         <div class="screensaver-text" style="position: absolute; text-align: center; color: white; white-space: nowrap;">
-            <div style="font-size: 3.5em; font-weight: bold; margin-bottom: 15px;">Ingen aktiv kamp</div>
-            <div style="font-size: 2em; color: #aaa;">Bane ${courtId}</div>
+            <div style="font-size: 10.5em; font-weight: bold; margin-bottom: 15px;">Ingen aktiv kamp</div>
+            <div style="font-size: 6em; color: #aaa;">Bane ${courtId}</div>
         </div>
     `;
     document.querySelector('.tv-container').appendChild(container);
@@ -714,12 +714,12 @@ function startScreensaver() {
             const maxY = c.offsetHeight - t.offsetHeight;
             x = Math.max(0, maxX / 2);
             y = Math.max(0, maxY / 2);
-            const speed = 40; // px/s
+            const speed = 20; // px/s
             const angle = Math.random() * 2 * Math.PI;
             dx = Math.cos(angle) * speed;
             dy = Math.sin(angle) * speed;
-            if (Math.abs(dx) < 12) dx = dx < 0 ? -12 : 12;
-            if (Math.abs(dy) < 12) dy = dy < 0 ? -12 : 12;
+            if (Math.abs(dx) < 6) dx = dx < 0 ? -6 : 6;
+            if (Math.abs(dy) < 6) dy = dy < 0 ? -6 : 6;
         }
 
         if (!lastTime) lastTime = timestamp;
