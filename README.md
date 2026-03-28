@@ -10,6 +10,7 @@ A real-time badminton score tracking system with multi-device support, sponsor s
   - **Classic View**: Traditional scoring interface
   - **Court V3 (Bane View)**: Visual court representation with player positioning
 - **Android App**: Native app with WebView for dedicated court displays
+- **Smartwatch View**: Minimalistisk browser-side optimeret til Apple Watch og andre smartwatches
 - **TV Display Mode**: Full-screen display for showing current games
 - **Undo Functionality**: Full game state history with position-aware restore
 - **Tournament Mode**: Lock down controls during competitive play
@@ -25,6 +26,47 @@ A real-time badminton score tracking system with multi-device support, sponsor s
 - **Security**: Rate limiting, JWT authentication, and password hashing
 
 ## Recent Updates
+
+### Version 2.0.0 - Smartwatch Support, Holdkamp Sync & UI Improvements
+
+#### ⌚ Smartwatch / Mini Browser View (`watch.html`)
+- **Dedikeret mini-side** optimeret til meget små skærme — herunder Apple Watch via Safari
+- **URL:** `http://[server-ip]/watch.html?court=1` (skift `1` til ønsket banenummer)
+- **Fire knapper** fylder hele skærmen:
+  - Øverste halvdel styrer spiller 1, nederste halvdel styrer spiller 2
+  - Stort grønt felt (80% af bredden): tryk for at give et point
+  - Grå felt til venstre (20%): fortryd sidst registrerede point
+- **Første tryk** starter kampen og sætter den trykke spiller som server
+- **Servering** skifter automatisk efter badminton-reglerne
+- **Sæt- og kamplogik:** Første til 21 (skal vinde med 2, maks 30), bedst af 3 sæt
+- **Sætvisning:** Fyldte/tomme cirkler (●/○) viser vundne sæt
+- **Sæt vundet:** Besked vises — tryk "Fortsæt" for næste sæt
+- **Kamp vundet:** Besked med vinder — tryk "Ny kamp" for nulstilling
+- **Synkroniserer** i realtid med TV-view, admin og Court V3
+
+**Brug på Apple Watch:**
+1. Åbn Safari på Apple Watch
+2. Naviger til `http://[server-ip]/watch.html?court=[banenummer]`
+3. Gem siden som bogmærke for hurtig adgang
+
+#### 🏸 Holdkamp Forbedringer
+- **Automatisk opdagelse:** Court view opdager ny holdkamp inden for 5 sekunder uden sideopdatering
+- **Tovejs navne-sync:** Navne redigeret på holdkamp-siden synkroniseres til court view og omvendt (hvert 5 sek)
+- **Holdnavn-fallback:** Hvis spillernavne mangler, vises holdnavnet som placeholder (f.eks. "FC Køge spiller")
+- **Fix:** Delkamp-dropdown bruger korrekt spilnummer — MD2 vises ikke længere som MD1 efter MD1 er tildelt
+- **Fix:** Dropdown refreshes ikke mens bruger har valgt en delkamp
+- **Rediger aktive delkampe:** Navne kan nu redigeres fra holdkamp-siden også efter en kamp er startet
+
+#### 🖥️ TV View
+- "Ingen aktiv kamp" tekst 3× større
+- Bane-nummer under teksten 3× større
+- Bevægelseshastighed halveret for mere rolig screensaver
+
+#### 🔐 Admin
+- Password-feltet er nu auto-fokuseret ved siden load — man kan taste passwordet med det samme
+- Rettighedsmarkering tilføjet i bunden: © 2026 Jesper Brink Sørensen
+
+---
 
 ### Version 1.9.0 - Arena Design, Offline Fonts & Game Rules
 

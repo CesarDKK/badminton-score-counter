@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Bane</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+            font-family: -apple-system, sans-serif;
+        }
+
+        #app {
+            display: flex;
+            flex-direction: column;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .half {
+            display: flex;
+            flex: 1;
+            gap: 2px;
+        }
+
+        .half-top { border-bottom: 2px solid #111; }
+
+        /* Undo button — 20% wide */
+        .btn-undo {
+            flex: 0 0 20%;
+            background: #2a2a2a;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #888;
+            font-size: clamp(18px, 6vw, 28px);
+            user-select: none;
+            -webkit-user-select: none;
+            transition: background 0.1s;
+        }
+
+        .btn-undo:active { background: #444; }
+
+        /* +1 button — 80% wide */
+        .btn-point {
+            flex: 1;
+            background: #1a7a1a;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-evenly;
+            color: #fff;
+            user-select: none;
+            -webkit-user-select: none;
+            transition: background 0.15s;
+            padding: 6px 4px;
+        }
+
+        .btn-point:active { background: #145214; }
+        .btn-point.flash  { background: #55dd55 !important; }
+        .btn-point.won    { background: #333 !important; }
+
+        .btn-point .label {
+            font-size: clamp(12px, 6vw, 20px);
+            font-weight: 600;
+            color: #fff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 94%;
+            text-align: center;
+            line-height: 1.1;
+        }
+
+        .btn-point .score {
+            font-size: clamp(30px, 14vw, 60px);
+            font-weight: bold;
+            line-height: 1;
+        }
+
+        .btn-point .bottom-row {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .btn-point .sets {
+            font-size: clamp(10px, 4.5vw, 16px);
+            color: rgba(255,255,255,0.7);
+            letter-spacing: 3px;
+        }
+
+        .serve-dot {
+            width: clamp(6px, 2.5vw, 10px);
+            height: clamp(6px, 2.5vw, 10px);
+            border-radius: 50%;
+            background: #ffdd00;
+            display: none;
+        }
+
+        .serve-dot.visible { display: block; }
+
+        /* Full-screen message overlay */
+        #msg {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.92);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(13px, 5vw, 20px);
+            text-align: center;
+            padding: 12px;
+            z-index: 50;
+            gap: 10px;
+        }
+
+        #msg.hidden { display: none; }
+
+        #msg .msg-title {
+            font-size: clamp(16px, 7vw, 28px);
+            font-weight: bold;
+        }
+
+        #msg button {
+            margin-top: 10px;
+            background: #1a7a1a;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            padding: clamp(12px, 5vw, 20px) 0;
+            width: 90%;
+            font-size: clamp(15px, 7vw, 26px);
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        #msg button:active { background: #145214; }
+
+        #overlay {
+            position: fixed;
+            inset: 0;
+            background: #000;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            text-align: center;
+            padding: 10px;
+            z-index: 99;
+        }
+
+        #overlay.hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div id="overlay">Henter...</div>
+
+<div id="msg" class="hidden">
+    <div class="msg-title" id="msg-title"></div>
+    <div id="msg-body"></div>
+    <button id="msg-btn" onclick="dismissMsg()"></button>
+</div>
+
+<div id="app">
+    <!-- Top half — Player 1 -->
+    <div class="half half-top">
+        <button class="btn-undo" onclick="undo()">↩</button>
+        <button class="btn-point" id="point1" onclick="addPoint(1)">
+            <div class="label" id="name1">Spiller 1</div>
+            <div class="score" id="score1">0</div>
+            <div class="bottom-row">
+                <div class="sets" id="sets1">○ ○</div>
+                <div class="serve-dot" id="dot1"></div>
+            </div>
+        </button>
+    </div>
+
+    <!-- Bottom half — Player 2 -->
+    <div class="half half-bottom">
+        <button class="btn-undo" onclick="undo()">↩</button>
+        <button class="btn-point" id="point2" onclick="addPoint(2)">
+            <div class="label" id="name2">Spiller 2</div>
+            <div class="score" id="score2">0</div>
+            <div class="bottom-row">
+                <div class="sets" id="sets2">○ ○</div>
+                <div class="serve-dot" id="dot2"></div>
+            </div>
+        </button>
+    </div>
+</div>
+
+<script>
+    const params   = new URLSearchParams(location.search);
+    const courtId  = parseInt(params.get('court')) || 1;
+    const WIN_SCORE = 21, MAX_SCORE = 30;
+
+    let state      = null;
+    let history    = [];
+    let saveTimer  = null;
+    let msgCallback = null;
+
+    // ── Bootstrap ───────────────────────────────────────────
+    async function init() {
+        try {
+            await load();
+            document.getElementById('overlay').classList.add('hidden');
+        } catch (e) {
+            document.getElementById('overlay').textContent = 'Fejl: kunne ikke hente bane ' + courtId;
+        }
+    }
+
+    // ── API ──────────────────────────────────────────────────
+    async function apiGet(path) {
+        const r = await fetch('/api' + path);
+        if (!r.ok) throw new Error(r.status);
+        return r.json();
+    }
+
+    async function apiPut(path, body) {
+        const r = await fetch('/api' + path, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (!r.ok) throw new Error(r.status);
+        return r.json();
+    }
+
+    // ── Load ─────────────────────────────────────────────────
+    async function load() {
+        const raw = await apiGet('/game-states/' + courtId);
+        state = {
+            p1score:        raw.player1?.score  ?? 0,
+            p2score:        raw.player2?.score  ?? 0,
+            p1games:        raw.player1?.games  ?? 0,
+            p2games:        raw.player2?.games  ?? 0,
+            p1name:         raw.player1?.name   ?? 'Spiller 1',
+            p2name:         raw.player2?.name   ?? 'Spiller 2',
+            serving:        raw.servingPlayer   ?? null,
+            matchStarted:   !!raw.matchStartTime,
+            matchCompleted: !!raw.matchCompleted,
+            setScoresHistory: raw.setScoresHistory ?? [],
+            _raw: raw
+        };
+        history = [];
+        render();
+    }
+
+    // ── Render ───────────────────────────────────────────────
+    function setsDisplay(games) {
+        return ['●','●'].slice(0, games).concat(['○','○'].slice(games)).join(' ');
+    }
+
+    function render() {
+        document.getElementById('score1').textContent = state.p1score;
+        document.getElementById('score2').textContent = state.p2score;
+        document.getElementById('sets1').textContent  = setsDisplay(state.p1games);
+        document.getElementById('sets2').textContent  = setsDisplay(state.p2games);
+        document.getElementById('name1').textContent  = state.p1name;
+        document.getElementById('name2').textContent  = state.p2name;
+        document.getElementById('dot1').classList.toggle('visible', state.serving === 1);
+        document.getElementById('dot2').classList.toggle('visible', state.serving === 2);
+
+        // Grey out buttons if match is over
+        document.getElementById('point1').classList.toggle('won', !!state.matchCompleted);
+        document.getElementById('point2').classList.toggle('won', !!state.matchCompleted);
+    }
+
+    // ── Add point ────────────────────────────────────────────
+    function addPoint(player) {
+        if (state.matchCompleted) return;
+
+        // First press: set server and start match
+        if (!state.serving) {
+            state.serving      = player;
+            state.matchStarted = true;
+        }
+
+        history.push(snapshot());
+
+        if (player === 1) state.p1score++;
+        else              state.p2score++;
+
+        // Receiver wins point → they now serve
+        if (state.serving !== player) state.serving = player;
+
+        checkSetWon();
+        render();
+        scheduleSave();
+    }
+
+    // ── Set / match logic ─────────────────────────────────────
+    function checkSetWon() {
+        const p1 = state.p1score, p2 = state.p2score;
+
+        const p1won = (p1 >= WIN_SCORE && p1 - p2 >= 2) || p1 === MAX_SCORE;
+        const p2won = (p2 >= WIN_SCORE && p2 - p1 >= 2) || p2 === MAX_SCORE;
+
+        if (!p1won && !p2won) return;
+
+        const winner = p1won ? 1 : 2;
+
+        // Record set score
+        state.setScoresHistory.push({
+            player1Name: state.p1name,
+            player2Name: state.p2name,
+            score: `${p1}-${p2}`
+        });
+
+        if (winner === 1) state.p1games++;
+        else              state.p2games++;
+
+        // Reset scores
+        state.p1score = 0;
+        state.p2score = 0;
+
+        // Flash winner button briefly
+        flash(winner);
+
+        // Check match won (first to 2 sets)
+        if (state.p1games === 2 || state.p2games === 2) {
+            state.matchCompleted = true;
+            const wName = winner === 1 ? state.p1name : state.p2name;
+            const score = `${state.p1games}-${state.p2games}`;
+            showMsg('Kamp vundet!', `${wName}\nvinder ${score}`, 'Ny kamp', () => {
+                state.p1score = state.p2score = 0;
+                state.p1games = state.p2games = 0;
+                state.serving = null;
+                state.matchStarted  = false;
+                state.matchCompleted = false;
+                state.setScoresHistory = [];
+                history = [];
+                render();
+                scheduleSave();
+            });
+        } else {
+            const wName = winner === 1 ? state.p1name : state.p2name;
+            showMsg('Sæt vundet!', `${wName} vinder sættet`, 'Fortsæt', null);
+        }
+    }
+
+    // ── Flash animation ──────────────────────────────────────
+    function flash(player) {
+        const btn = document.getElementById('point' + player);
+        btn.classList.add('flash');
+        setTimeout(() => btn.classList.remove('flash'), 600);
+    }
+
+    // ── Message overlay ──────────────────────────────────────
+    function showMsg(title, body, btnLabel, callback) {
+        document.getElementById('msg-title').textContent = title;
+        document.getElementById('msg-body').textContent  = body;
+        document.getElementById('msg-btn').textContent   = btnLabel;
+        msgCallback = callback;
+        document.getElementById('msg').classList.remove('hidden');
+    }
+
+    function dismissMsg() {
+        document.getElementById('msg').classList.add('hidden');
+        if (msgCallback) { msgCallback(); msgCallback = null; }
+    }
+
+    // ── Undo ─────────────────────────────────────────────────
+    function undo() {
+        if (history.length === 0) return;
+        const prev = history.pop();
+        Object.assign(state, prev);
+        state.matchCompleted = false;
+        document.getElementById('msg').classList.add('hidden');
+        render();
+        scheduleSave();
+    }
+
+    // ── Snapshot ─────────────────────────────────────────────
+    function snapshot() {
+        return {
+            p1score:          state.p1score,
+            p2score:          state.p2score,
+            p1games:          state.p1games,
+            p2games:          state.p2games,
+            serving:          state.serving,
+            matchStarted:     state.matchStarted,
+            matchCompleted:   state.matchCompleted,
+            setScoresHistory: [...state.setScoresHistory]
+        };
+    }
+
+    // ── Save ─────────────────────────────────────────────────
+    function scheduleSave() {
+        if (saveTimer) clearTimeout(saveTimer);
+        saveTimer = setTimeout(save, 500);
+    }
+
+    async function save() {
+        const raw = state._raw;
+        try {
+            await apiPut('/game-states/' + courtId, {
+                player1: { ...raw.player1, score: state.p1score, games: state.p1games },
+                player2: { ...raw.player2, score: state.p2score, games: state.p2games },
+                servingPlayer:        state.serving,
+                initialServer:        raw.initialServer        ?? state.serving,
+                servingTeam:          raw.servingTeam          ?? state.serving,
+                servingPlayerOnTeam:  raw.servingPlayerOnTeam  ?? null,
+                matchStartTime:       state.matchStarted ? (raw.matchStartTime ?? Date.now()) : null,
+                matchEndTime:         state.matchCompleted ? (raw.matchEndTime ?? Date.now()) : null,
+                isActive:             state.matchStarted,
+                isDoubles:            raw.isDoubles             ?? false,
+                gameMode:             raw.gameMode              ?? '21',
+                timerSeconds:         raw.timerSeconds          ?? 0,
+                decidingGameSwitched: raw.decidingGameSwitched  ?? false,
+                setScoresHistory:     state.setScoresHistory,
+                matchCompleted:       state.matchCompleted,
+                restBreakActive:      raw.restBreakActive       ?? false,
+                restBreakSecondsLeft: raw.restBreakSecondsLeft  ?? 0,
+                restBreakTitle:       raw.restBreakTitle        ?? '',
+                restBreakTaken:       raw.restBreakTaken        ?? false,
+                team1RightCourt:      raw.team1RightCourt       ?? 1,
+                team2RightCourt:      raw.team2RightCourt       ?? 1,
+                betweenSets:          raw.betweenSets           ?? false
+            });
+        } catch (e) {
+            console.error('Save failed', e);
+        }
+    }
+
+    init();
+</script>
+</body>
+</html>
