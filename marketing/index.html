@@ -185,60 +185,294 @@
 
         .btn-secondary:hover { border-color: var(--purple-light); transform: translateY(-1px); }
 
-        /* ── Score mockup ── */
-        .mockup {
-            margin: 60px auto 0;
-            max-width: 420px;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
+        /* ── Court mockup ── */
+        .court-mockup-wrap {
+            margin: 56px auto 0;
+            max-width: 480px;
             border-radius: 16px;
-            padding: 28px 32px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+            background: #0d0d1a;
+            font-family: 'DM Sans', sans-serif;
+        }
+
+        /* Score bar top */
+        .cm-scorebar {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 16px;
+            padding: 10px 16px 6px;
+            background: rgba(0,0,0,0.3);
         }
 
-        .mockup-player {
-            text-align: center;
-            flex: 1;
-        }
+        .cm-player { flex: 1; text-align: center; }
 
-        .mockup-name {
-            font-size: 0.8em;
-            color: var(--muted);
-            margin-bottom: 6px;
+        .cm-name {
+            font-size: 0.72em;
+            font-weight: 600;
+            letter-spacing: 0.06em;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 2px;
         }
 
-        .mockup-score {
+        .cm-pts {
             font-family: 'Bebas Neue', sans-serif;
-            font-size: 5em;
+            font-size: 3.6em;
             line-height: 1;
             color: #fff;
+            letter-spacing: 0.04em;
         }
 
-        .mockup-sets {
-            font-size: 0.75em;
-            color: var(--purple-light);
-            margin-top: 4px;
-            letter-spacing: 4px;
+        .cm-center {
+            flex: 0 0 80px;
+            text-align: center;
         }
 
-        .mockup-divider {
+        .cm-sets-label {
+            font-size: 0.6em;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.3);
+            margin-bottom: 2px;
+        }
+
+        .cm-sets {
             font-family: 'Bebas Neue', sans-serif;
-            font-size: 2em;
-            color: var(--border);
+            font-size: 1.6em;
+            color: #e94560;
+            letter-spacing: 0.06em;
         }
 
-        .mockup-serve {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
+        /* Court surface */
+        .cm-court {
+            position: relative;
+            background: #1a472a;
+            height: 220px;
+            display: flex;
+            align-items: stretch;
+        }
+
+        /* Court lines */
+        .cm-court::before {
+            content: '';
+            position: absolute;
+            inset: 8px;
+            border: 2px solid rgba(255,255,255,0.55);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Net */
+        .cm-net {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: rgba(255,255,255,0.7);
+            transform: translateX(-50%);
+            z-index: 2;
+        }
+
+        .cm-net::before, .cm-net::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.15);
+            border: 2px solid rgba(255,255,255,0.4);
+        }
+
+        .cm-net::before { top: 6px; }
+        .cm-net::after  { bottom: 6px; }
+
+        /* Service lines */
+        .cm-sline-left {
+            position: absolute;
+            left: calc(50% - 22%);
+            top: 8px; bottom: 8px;
+            width: 2px;
+            background: rgba(255,255,255,0.3);
+            z-index: 1;
+        }
+
+        .cm-sline-right {
+            position: absolute;
+            left: calc(50% + 22%);
+            top: 8px; bottom: 8px;
+            width: 2px;
+            background: rgba(255,255,255,0.3);
+            z-index: 1;
+        }
+
+        /* Player tokens */
+        .cm-half {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .cm-token {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.85em;
+            letter-spacing: 0.02em;
+            z-index: 3;
+            position: relative;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+        }
+
+        .cm-token-1 {
+            background: linear-gradient(135deg, #533483, #6a45a8);
+            color: #fff;
+            border: 2px solid rgba(255,255,255,0.25);
+        }
+
+        .cm-token-2 {
+            background: linear-gradient(135deg, #e94560, #c0392b);
+            color: #fff;
+            border: 2px solid rgba(255,255,255,0.25);
+        }
+
+        .cm-serve-dot {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            width: 12px;
+            height: 12px;
             border-radius: 50%;
             background: #ffdd00;
-            margin-bottom: 4px;
+            border: 2px solid #0d0d1a;
+            z-index: 4;
+        }
+
+        .cm-pname {
+            position: absolute;
+            bottom: 10px;
+            left: 0; right: 0;
+            text-align: center;
+            font-size: 0.72em;
+            font-weight: 600;
+            color: rgba(255,255,255,0.8);
+            letter-spacing: 0.04em;
+            z-index: 3;
+        }
+
+        /* Timer */
+        .cm-timer {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.65);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 6px;
+            padding: 3px 10px;
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1em;
+            letter-spacing: 0.1em;
+            color: #fff;
+            z-index: 5;
+        }
+
+        /* Set history */
+        .cm-set-history {
+            font-size: 0.62em;
+            color: rgba(255,255,255,0.35);
+            text-align: center;
+            letter-spacing: 0.04em;
+            padding: 2px 0 0;
+        }
+
+        /* Buttons row */
+        .cm-buttons {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px 14px;
+            gap: 8px;
+            background: rgba(0,0,0,0.2);
+        }
+
+        .cm-btn-point {
+            flex: 1;
+            background: linear-gradient(135deg, #27ae60, #1e8449);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 0;
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.5em;
+            letter-spacing: 0.06em;
+            cursor: default;
+        }
+
+        .cm-btn-small {
+            background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: rgba(255,255,255,0.7);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 0.75em;
+            font-weight: 600;
+            cursor: default;
+            white-space: nowrap;
+        }
+
+        /* Browser chrome wrapper */
+        .browser-chrome {
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+            border: 1px solid var(--border);
+        }
+
+        .browser-bar {
+            background: #1a1a2e;
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .browser-dots {
+            display: flex;
+            gap: 5px;
+        }
+
+        .browser-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .browser-dot:nth-child(1) { background: #ff5f56; }
+        .browser-dot:nth-child(2) { background: #ffbd2e; }
+        .browser-dot:nth-child(3) { background: #27c93f; }
+
+        .browser-url {
+            flex: 1;
+            background: rgba(255,255,255,0.06);
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 0.72em;
+            color: rgba(255,255,255,0.4);
+            letter-spacing: 0.03em;
         }
 
         /* ── Section header ── */
@@ -363,9 +597,9 @@
         /* ── Responsive ── */
         @media (max-width: 600px) {
             .hero { padding: 60px 0 50px; }
-            .mockup { padding: 20px; }
-            .mockup-score { font-size: 3.5em; }
             .cta-box { padding: 40px 24px; }
+            .cm-pts { font-size: 2.8em; }
+            .cm-court { height: 180px; }
         }
     </style>
 </head>
@@ -393,21 +627,71 @@
             <a class="btn-secondary" href="#funktioner">Se funktioner</a>
         </div>
 
-        <!-- Score mockup -->
-        <div class="mockup">
-            <div class="mockup-player">
-                <div class="mockup-name">Hold 1</div>
-                <div class="mockup-score">18</div>
-                <div class="mockup-sets">● ○</div>
-            </div>
-            <div style="text-align:center;">
-                <div class="mockup-serve"></div>
-                <div class="mockup-divider">—</div>
-            </div>
-            <div class="mockup-player">
-                <div class="mockup-name">Hold 2</div>
-                <div class="mockup-score">14</div>
-                <div class="mockup-sets">○ ○</div>
+        <!-- Court V3 mockup -->
+        <div style="margin: 56px auto 0; max-width: 420px;">
+            <div class="browser-chrome">
+                <div class="browser-bar">
+                    <div class="browser-dots">
+                        <div class="browser-dot"></div>
+                        <div class="browser-dot"></div>
+                        <div class="browser-dot"></div>
+                    </div>
+                    <div class="browser-url">app.badmintonapp.dk/court?id=3</div>
+                </div>
+
+                <div class="court-mockup-wrap" style="border-radius:0; border:none; box-shadow:none; margin:0; max-width:none;">
+                    <!-- Score bar -->
+                    <div class="cm-scorebar">
+                        <div class="cm-player">
+                            <div class="cm-name">Vickey</div>
+                            <div class="cm-pts">13</div>
+                            <div class="cm-set-history">Sæt 1: 21–18</div>
+                        </div>
+                        <div class="cm-center">
+                            <div class="cm-sets-label">Sæt</div>
+                            <div class="cm-sets">1 – 0</div>
+                        </div>
+                        <div class="cm-player">
+                            <div class="cm-name">Helena</div>
+                            <div class="cm-pts">17</div>
+                            <div class="cm-set-history">Sæt 1: 18–21</div>
+                        </div>
+                    </div>
+
+                    <!-- Court surface -->
+                    <div class="cm-court">
+                        <div class="cm-net"></div>
+                        <div class="cm-sline-left"></div>
+                        <div class="cm-sline-right"></div>
+
+                        <!-- Vickey's half (left) -->
+                        <div class="cm-half">
+                            <div class="cm-token cm-token-1" style="position:relative;">
+                                V
+                            </div>
+                            <div class="cm-pname">Vickey</div>
+                        </div>
+
+                        <!-- Helena's half (right) -->
+                        <div class="cm-half">
+                            <div class="cm-token cm-token-2" style="position:relative;">
+                                H
+                                <div class="cm-serve-dot"></div>
+                            </div>
+                            <div class="cm-pname">Helena</div>
+                        </div>
+
+                        <!-- Timer -->
+                        <div class="cm-timer">24:13</div>
+                    </div>
+
+                    <!-- Point buttons -->
+                    <div class="cm-buttons">
+                        <button class="cm-btn-point">+ VICKEY</button>
+                        <button class="cm-btn-small">↩ Fortryd</button>
+                        <button class="cm-btn-point">+ HELENA</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
