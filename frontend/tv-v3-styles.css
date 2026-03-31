@@ -623,61 +623,99 @@ body::before {
     .overlay-countdown { font-size: 7em; }
 }
 
-/* ── Tablet portrait ── */
+/* ── Mobile (tablet + phone portrait) ── */
 @media (max-width: 767px) {
-    body { height: 100dvh; }
-    .tv-container { height: 100dvh; }
+    /* Allow scrolling on mobile */
+    body {
+        height: auto;
+        min-height: 100dvh;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
 
-    .tv-header { padding: 16px 20px; }
-    .tv-header h1, .timer-display { font-size: 1.8em; letter-spacing: 3px; }
+    .tv-container {
+        height: auto;
+        min-height: 100dvh;
+    }
 
-    .scoreboard { padding: 10px 0; gap: 0; }
+    /* Compact header */
+    .tv-header {
+        padding: 14px 16px;
+    }
 
-    .team-row { padding: 20px 20px; gap: 16px; }
-    .team-names { min-width: 0; flex: 1; }
-    .player-name, .partner-name { font-size: 2em; letter-spacing: 2px; }
-    .partner-name { margin-top: 4px; }
+    .tv-header h1, .timer-display {
+        font-size: 1.6em;
+        letter-spacing: 2px;
+    }
 
-    .set-boxes { gap: 10px; flex-wrap: wrap; }
-    .set-box { width: 80px; height: 80px; font-size: 3em; border-radius: 10px; }
+    .scoreboard {
+        padding: 0;
+        flex: none;
+    }
 
-    .tv-footer { padding: 14px 20px; min-height: 56px; }
-    .live-indicator { font-size: 1.2em; letter-spacing: 3px; }
+    /* Stack player name above set boxes */
+    .team-row {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 18px 16px;
+        gap: 12px;
+        border-left-width: 5px;
+    }
+
+    .team-names {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .player-name {
+        font-size: 2.2em;
+        letter-spacing: 2px;
+    }
+
+    .partner-name {
+        font-size: 2em;
+        letter-spacing: 2px;
+        margin-top: 4px;
+    }
+
+    .set-boxes {
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .set-box {
+        width: 72px;
+        height: 72px;
+        font-size: 2.8em;
+        border-radius: 10px;
+    }
+
+    /* Footer */
+    .tv-footer {
+        padding: 14px 16px;
+        min-height: 50px;
+    }
+
+    .live-indicator {
+        font-size: 1.1em;
+        letter-spacing: 3px;
+    }
+
     .live-dot { width: 10px; height: 10px; }
 
     /* Overlays */
-    .overlay-content { gap: 20px; }
-    .overlay-heading { font-size: 2em; letter-spacing: 3px; }
-    .overlay-countdown { font-size: 6em; }
-    .overlay-score-row { gap: 14px; flex-wrap: wrap; }
-    .overlay-player-card { padding: 20px 24px; min-width: 0; }
-    .overlay-player-name { font-size: 1.6em; }
-    .overlay-score { font-size: 4em; }
-    .overlay-set-badge { font-size: 2em; padding: 6px 20px; min-width: 0; }
-    .overlay-sets-row { padding: 14px 20px; }
-    .overlay-finished-title { font-size: 3em; letter-spacing: 4px; }
-    .overlay-winner-card { padding: 20px 28px; }
-    .overlay-winner-name { font-size: 2.8em; }
-}
-
-/* ── Phone portrait ── */
-@media (max-width: 480px) {
-    .tv-header { padding: 12px 14px; }
-    .tv-header h1, .timer-display { font-size: 1.4em; letter-spacing: 2px; }
-
-    .team-row { padding: 14px 14px; gap: 10px; }
-    .player-name, .partner-name { font-size: 1.5em; letter-spacing: 1px; }
-
-    .set-boxes { gap: 7px; }
-    .set-box { width: 60px; height: 60px; font-size: 2.2em; border-radius: 8px; }
-
-    .tv-footer { padding: 10px 14px; min-height: 44px; }
-    .live-indicator { font-size: 1em; }
-
-    .overlay-countdown { font-size: 4.5em; }
-    .overlay-heading { font-size: 1.5em; }
-    .overlay-player-name { font-size: 1.3em; }
-    .overlay-score { font-size: 3em; }
-    .overlay-winner-name { font-size: 2.2em; }
-    .overlay-finished-title { font-size: 2.2em; }
+    .overlay-content { gap: 18px; width: 96%; }
+    .overlay-heading { font-size: 1.8em; letter-spacing: 3px; }
+    .overlay-countdown { font-size: 5em; }
+    .overlay-score-row { gap: 12px; flex-wrap: wrap; }
+    .overlay-player-card { padding: 18px 20px; min-width: 0; flex: 1; }
+    .overlay-player-name { font-size: 1.5em; }
+    .overlay-score { font-size: 3.5em; }
+    .overlay-vs { font-size: 1.8em; }
+    .overlay-set-badge { font-size: 1.8em; padding: 5px 16px; min-width: 0; }
+    .overlay-sets-row { padding: 12px 16px; }
+    .overlay-finished-title { font-size: 2.8em; letter-spacing: 4px; }
+    .overlay-winner-card { padding: 18px 24px; }
+    .overlay-winner-name { font-size: 2.4em; }
+    .overlay-set-history { font-size: 1.1em; padding: 16px 20px; }
 }
