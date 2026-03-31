@@ -3,38 +3,480 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BadmintonApp.dk</title>
+    <meta name="description" content="BadmintonApp.dk — Gratis pointtælling til badmintonklubber. Realtidssynk, TV-visning, holdkamp og meget mere.">
+    <title>BadmintonApp.dk — Pointtælling til din klub</title>
+    <link rel="stylesheet" href="fonts.css">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --purple: #533483;
+            --purple-light: #6a45a8;
+            --red: #e94560;
+            --bg: #0d0d1a;
+            --bg-card: rgba(83, 52, 131, 0.12);
+            --border: rgba(83, 52, 131, 0.35);
+            --text: #eaeaea;
+            --muted: #888;
+        }
+
+        html { scroll-behavior: smooth; }
+
         body {
-            background: #0a0a1a;
-            color: #eaeaea;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text);
             min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ── Grid + glow background ── */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+            background-size: 56px 56px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .glow {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(83,52,131,0.4) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ── Layout ── */
+        .wrap {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 24px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ── Nav ── */
+        nav {
+            position: relative;
+            z-index: 1;
+            padding: 24px 0;
             display: flex;
             align-items: center;
+            justify-content: space-between;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding-left: 24px;
+            padding-right: 24px;
+        }
+
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+        }
+
+        .nav-brand .icon {
+            font-size: 1.6em;
+            line-height: 1;
+        }
+
+        .nav-brand .wordmark {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.5em;
+            letter-spacing: 1px;
+            color: #fff;
+            line-height: 1;
+        }
+
+        .nav-brand .wordmark span {
+            color: var(--purple-light);
+        }
+
+        .nav-cta {
+            background: var(--purple);
+            color: #fff;
+            text-decoration: none;
+            padding: 9px 20px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            font-weight: 600;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+
+        .nav-cta:hover { background: var(--purple-light); }
+
+        /* ── Hero ── */
+        .hero {
+            text-align: center;
+            padding: 80px 0 70px;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            background: rgba(83,52,131,0.25);
+            border: 1px solid var(--border);
+            color: #b89fe0;
+            font-size: 0.8em;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            padding: 5px 14px;
+            border-radius: 20px;
+            margin-bottom: 28px;
+        }
+
+        .hero h1 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: clamp(3em, 9vw, 6em);
+            line-height: 1;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+        }
+
+        .hero h1 .accent { color: var(--purple-light); }
+
+        .hero p {
+            font-size: clamp(1em, 2.5vw, 1.2em);
+            color: var(--muted);
+            max-width: 560px;
+            margin: 0 auto 40px;
+            line-height: 1.7;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 14px;
             justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-primary {
+            background: var(--purple);
+            color: #fff;
+            text-decoration: none;
+            padding: 14px 32px;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: 600;
+            transition: background 0.2s, transform 0.15s;
+        }
+
+        .btn-primary:hover { background: var(--purple-light); transform: translateY(-1px); }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text);
+            text-decoration: none;
+            padding: 14px 32px;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: 600;
+            border: 1px solid var(--border);
+            transition: border-color 0.2s, transform 0.15s;
+        }
+
+        .btn-secondary:hover { border-color: var(--purple-light); transform: translateY(-1px); }
+
+        /* ── Score mockup ── */
+        .mockup {
+            margin: 60px auto 0;
+            max-width: 420px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .mockup-player {
+            text-align: center;
+            flex: 1;
+        }
+
+        .mockup-name {
+            font-size: 0.8em;
+            color: var(--muted);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .mockup-score {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 5em;
+            line-height: 1;
+            color: #fff;
+        }
+
+        .mockup-sets {
+            font-size: 0.75em;
+            color: var(--purple-light);
+            margin-top: 4px;
+            letter-spacing: 4px;
+        }
+
+        .mockup-divider {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2em;
+            color: var(--border);
+        }
+
+        .mockup-serve {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ffdd00;
+            margin-bottom: 4px;
+        }
+
+        /* ── Section header ── */
+        .section-header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        .section-tag {
+            display: inline-block;
+            background: rgba(233,69,96,0.15);
+            color: var(--red);
+            font-size: 0.75em;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            padding: 4px 12px;
+            border-radius: 4px;
+            margin-bottom: 14px;
+        }
+
+        .section-header h2 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: clamp(2em, 5vw, 3em);
+            letter-spacing: 1px;
+        }
+
+        /* ── Features ── */
+        .features {
+            padding: 80px 0;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 28px;
+            transition: border-color 0.2s, transform 0.2s;
+        }
+
+        .feature-card:hover {
+            border-color: var(--purple-light);
+            transform: translateY(-2px);
+        }
+
+        .feature-icon {
+            font-size: 1.8em;
+            margin-bottom: 14px;
+        }
+
+        .feature-card h3 {
+            font-size: 1.05em;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #fff;
+        }
+
+        .feature-card p {
+            font-size: 0.9em;
+            color: var(--muted);
+            line-height: 1.65;
+        }
+
+        /* ── CTA section ── */
+        .cta-section {
+            padding: 80px 0;
             text-align: center;
         }
-        h1 { font-size: 2.5em; margin-bottom: 0.5em; color: #fff; }
-        p  { color: #aaa; margin-bottom: 1.5em; }
-        a  {
-            display: inline-block;
-            background: #533483;
-            color: #fff;
-            padding: 12px 28px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: bold;
+
+        .cta-box {
+            background: linear-gradient(135deg, rgba(83,52,131,0.3) 0%, rgba(233,69,96,0.15) 100%);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 60px 40px;
         }
-        a:hover { background: #6a45a8; }
+
+        .cta-box h2 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: clamp(2em, 5vw, 3em);
+            letter-spacing: 1px;
+            margin-bottom: 14px;
+        }
+
+        .cta-box p {
+            color: var(--muted);
+            margin-bottom: 32px;
+            font-size: 1em;
+            line-height: 1.6;
+        }
+
+        /* ── Footer ── */
+        footer {
+            position: relative;
+            z-index: 1;
+            border-top: 1px solid var(--border);
+            padding: 28px 0;
+            text-align: center;
+            color: var(--muted);
+            font-size: 0.82em;
+        }
+
+        footer a {
+            color: var(--muted);
+            text-decoration: none;
+        }
+
+        footer a:hover { color: var(--text); }
+
+        /* ── Divider ── */
+        .section-divider {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 0;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 600px) {
+            .hero { padding: 60px 0 50px; }
+            .mockup { padding: 20px; }
+            .mockup-score { font-size: 3.5em; }
+            .cta-box { padding: 40px 24px; }
+        }
     </style>
 </head>
 <body>
-    <div>
-        <h1>BadmintonApp.dk</h1>
-        <p>Kommende side — under opbygning.</p>
-        <a href="https://app.badmintonapp.dk">Gå til appen →</a>
+
+<div class="glow"></div>
+
+<!-- Nav -->
+<nav>
+    <a class="nav-brand" href="/">
+        <span class="icon">🏸</span>
+        <span class="wordmark">Badminton<span>App</span></span>
+    </a>
+    <a class="nav-cta" href="https://app.badmintonapp.dk">Prøv gratis →</a>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+    <div class="wrap">
+        <div class="hero-badge">Gratis · Ingen konto krævet</div>
+        <h1>Pointtælling til<br><span class="accent">din badmintonklub</span></h1>
+        <p>Et komplet system til at styre scorer, holdkampe og TV-visning — klar til brug på alle enheder.</p>
+        <div class="hero-actions">
+            <a class="btn-primary" href="https://app.badmintonapp.dk">Prøv systemet gratis</a>
+            <a class="btn-secondary" href="#funktioner">Se funktioner</a>
+        </div>
+
+        <!-- Score mockup -->
+        <div class="mockup">
+            <div class="mockup-player">
+                <div class="mockup-name">Hold 1</div>
+                <div class="mockup-score">18</div>
+                <div class="mockup-sets">● ○</div>
+            </div>
+            <div style="text-align:center;">
+                <div class="mockup-serve"></div>
+                <div class="mockup-divider">—</div>
+            </div>
+            <div class="mockup-player">
+                <div class="mockup-name">Hold 2</div>
+                <div class="mockup-score">14</div>
+                <div class="mockup-sets">○ ○</div>
+            </div>
+        </div>
     </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- Features -->
+<section class="features" id="funktioner">
+    <div class="wrap">
+        <div class="section-header">
+            <div class="section-tag">Funktioner</div>
+            <h2>Alt hvad klubben behøver</h2>
+        </div>
+
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="feature-icon">📡</div>
+                <h3>Realtidssynk</h3>
+                <p>Scores opdateres øjeblikkeligt på alle enheder — tablet, mobil og storskærm — uden at siden skal genindlæses.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📺</div>
+                <h3>TV-visning</h3>
+                <p>Tilslut et TV til en bane og vis resultater i fuld skærm. Automatisk skift til sponsor-slideshow når ingen kamp er aktiv.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🏆</div>
+                <h3>Holdkamp</h3>
+                <p>Opret holdkampe med automatisk spillerfordeling. Tildel delkampe til baner og følg resultater i realtid fra admin-panelet.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">👥</div>
+                <h3>Single og double</h3>
+                <p>Fuld støtte til både single og double med korrekte serverregler, positionering og automatisk sideskift.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">⌚</div>
+                <h3>Apple Watch</h3>
+                <p>Registrer points direkte fra håndleddet via en minimalistisk browser-side — ingen app installation nødvendig.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <h3>Kamphistorik</h3>
+                <p>Alle kampe gemmes automatisk med statistik. Se resultater og spillerinfo i admin-panelet.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- CTA -->
+<section class="cta-section">
+    <div class="wrap">
+        <div class="cta-box">
+            <h2>Klar til at prøve det?</h2>
+            <p>Systemet er gratis og kræver ingen oprettelse.<br>Gå direkte ind og begynd at tælle points.</p>
+            <a class="btn-primary" href="https://app.badmintonapp.dk">Åbn appen →</a>
+        </div>
+    </div>
+</section>
+
+<!-- Footer -->
+<footer>
+    <div class="wrap">
+        <p>© 2026 Jesper Brink Sørensen &nbsp;·&nbsp; <a href="https://app.badmintonapp.dk">app.badmintonapp.dk</a></p>
+    </div>
+</footer>
+
 </body>
 </html>

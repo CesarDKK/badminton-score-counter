@@ -9,6 +9,9 @@ COPY frontend/ /usr/share/nginx/html/
 # Copy marketing site files
 COPY marketing/ /usr/share/nginx/marketing/
 
+# Share fonts from app into marketing site
+RUN cp -r /usr/share/nginx/html/fonts /usr/share/nginx/marketing/fonts
+
 # Expose port 80
 EXPOSE 80
 
