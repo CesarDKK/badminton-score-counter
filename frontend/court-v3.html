@@ -42,7 +42,9 @@
             </div>
         </div>
 
-        <!-- Badminton Court Visualization -->
+        <!-- Court + side +1 buttons -->
+        <div class="court-middle-row">
+        <button id="addPointPlayer1" class="btn-add-point btn-add-left" disabled>+1</button>
         <div class="court-view-container">
             <div class="badminton-court">
                 <!-- Court surface (green) -->
@@ -104,17 +106,25 @@
                 </div>
             </div>
         </div>
+        <button id="addPointPlayer2" class="btn-add-point btn-add-right" disabled>+1</button>
+        </div><!-- end court-middle-row -->
 
         <!-- Control Buttons Below Court -->
         <div class="control-buttons-bottom">
-            <button id="addPointPlayer1" class="btn-add-point btn-add-left" disabled>+1</button>
             <button id="startServPlayer1" class="btn-start-serv">Start serv</button>
             <div class="center-buttons">
                 <button id="undoBtn" class="btn-undo">Fortryd</button>
                 <button id="settingsBtn" class="btn-settings">⚙️</button>
             </div>
             <button id="startServPlayer2" class="btn-start-serv">Start serv</button>
-            <button id="addPointPlayer2" class="btn-add-point btn-add-right" disabled>+1</button>
+        </div>
+
+        <!-- Portrait overlay -->
+        <div id="portraitOverlay">
+            <div class="portrait-overlay-inner">
+                <div class="portrait-rotate-icon">⟳</div>
+                <p>Vend telefonen til liggende tilstand for at bruge bane-visningen</p>
+            </div>
         </div>
 
         <!-- Holdkamp Panel (hidden until active team match) -->

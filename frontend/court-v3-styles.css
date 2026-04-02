@@ -153,20 +153,20 @@
 }
 
 .btn-add-point {
-    padding: 18px 45px;
+    width: 120px;
+    flex-shrink: 0;
     font-family: 'Bebas Neue', sans-serif;
     font-size: 2.2em;
     letter-spacing: 0.06em;
     color: white;
     border: none;
-    border-radius: 10px;
+    border-radius: 0;
     cursor: pointer;
     transition: all 0.2s;
-    min-width: 140px;
-    min-height: 65px;
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 0;
 }
 
 .btn-add-left {
@@ -421,7 +421,17 @@
     color: white;
 }
 
+/* Wrapper: +1 button | court | +1 button */
+.court-middle-row {
+    display: flex;
+    align-items: stretch;
+    flex: 1;
+    min-height: 0;
+}
+
 .court-view-container {
+    flex: 1;
+    min-width: 0;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -627,57 +637,92 @@
     bottom: 0;
 }
 
-/* ── Mobile portrait: full-height flex layout ── */
-@media (max-width: 767px) {
+/* ══════════════════════════════════════════
+   Portrait overlay
+   ══════════════════════════════════════════ */
+#portraitOverlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #0d0d1a;
+    z-index: 10000;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.portrait-overlay-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    padding: 40px;
+    text-align: center;
+}
+
+.portrait-rotate-icon {
+    font-size: 5em;
+    color: rgba(255,255,255,0.6);
+    animation: rotateHint 2.5s ease-in-out infinite;
+    display: block;
+    transform-origin: center;
+}
+
+@keyframes rotateHint {
+    0%, 35%  { transform: rotate(0deg); }
+    65%, 100% { transform: rotate(90deg); }
+}
+
+.portrait-overlay-inner p {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1.15em;
+    color: rgba(255,255,255,0.65);
+    max-width: 280px;
+    line-height: 1.6;
+}
+
+/* Show overlay in portrait on phone */
+@media (orientation: portrait) and (max-width: 767px) {
+    #portraitOverlay { display: flex; }
+}
+
+/* ══════════════════════════════════════════
+   Mobile landscape (phones rotated)
+   ══════════════════════════════════════════ */
+@media (orientation: landscape) and (max-height: 500px) {
     body {
         height: 100dvh;
-        display: flex;
-        flex-direction: column;
         overflow: hidden;
     }
 
     .bg-glow { position: fixed; }
 
     .container {
-        flex: 1;
+        height: 100dvh;
         display: flex;
         flex-direction: column;
-        min-height: 0;
         padding: 0 !important;
     }
 
-    /* Score bar — compact but readable */
-    .score-display-top {
-        flex-shrink: 0;
-        margin-bottom: 0;
+    /* Compact score bar */
+    .score-display-top { flex-shrink: 0; margin-bottom: 0; }
+    .scores-container { padding: 3px 10px; }
+    .point-score { font-size: 2.2em; }
+    .set-label { font-size: 0.6em; margin-bottom: 1px; }
+    .set-score { font-size: 1.3em; gap: 4px; }
+
+    /* Middle row fills remaining space */
+    .court-middle-row { flex: 1; min-height: 0; }
+
+    /* +1 side buttons — narrower on phone */
+    .btn-add-point {
+        width: 65px;
+        font-size: 1.8em;
     }
 
-    .scores-container {
-        padding: 6px 12px;
-    }
+    /* Court fills its container */
+    .court-view-container { min-height: 0; }
 
-    .point-score {
-        font-size: 3em;
-    }
-
-    .set-label {
-        font-size: 0.65em;
-        margin-bottom: 2px;
-    }
-
-    .set-score {
-        font-size: 1.6em;
-        gap: 6px;
-    }
-
-    /* Court fills remaining space */
-    .court-view-container {
-        flex: 1;
-        min-height: 0;
-        display: flex;
-    }
-
-    /* Use flex:1 (not height:100%) so the court fills flex space correctly */
     .badminton-court {
         flex: 1 !important;
         position: relative !important;
@@ -695,7 +740,7 @@
         }
     }
 
-    /* Thinner lines on small screens */
+    /* Thinner court lines */
     .line-net,
     .line-short-service-left,
     .line-short-service-right,
@@ -707,90 +752,45 @@
     .line-singles-sideline-top,
     .line-singles-sideline-bottom { height: 2px; }
 
-    /* Player names on court */
-    .player-name {
-        font-size: 1.3em;
-        padding: 6px;
-    }
+    /* Court interior elements — scaled down */
+    .player-name { font-size: 1em; padding: 4px; }
+    .court-name-display { font-size: 2em; top: 12%; }
+    .btn-start-match-center { font-size: 1.1em; padding: 10px 22px; }
+    .timer-display-center { font-size: 0.85em; padding: 4px 8px; }
+    .btn-switch-sides { width: 88px; }
+    .btn-switch-sides-icon { font-size: 2.4em; }
+    .btn-switch-sides-label { font-size: 0.82em; }
+    .btn-swap-players { width: 28px; height: 28px; font-size: 1.1em; border-width: 2px; }
+    .serve-indicator { width: 44px; height: 44px; font-size: 2.2em; }
 
-    /* Court name (bane nummer) */
-    .court-name-display {
-        font-size: 2.5em;
-        top: 14%;
-    }
-
-    /* Start match button */
-    .btn-start-match-center {
-        font-size: 1.4em;
-        padding: 14px 32px;
-    }
-
-    /* Timer */
-    .timer-display-center {
-        font-size: 1.1em;
-    }
-
-    /* Switch sides button on net — smaller */
-    .btn-switch-sides {
-        width: 110px;
-        padding: 8px 6px 7px;
-        border-radius: 10px;
-    }
-
-    .btn-switch-sides-icon {
-        font-size: 2.8em;
-    }
-
-    .btn-switch-sides-label {
-        font-size: 1em;
-    }
-
-    /* Swap buttons */
-    .btn-swap-players {
-        width: 36px;
-        height: 36px;
-        font-size: 1.4em;
-    }
-
-    /* Serve indicator */
-    .serve-indicator {
-        width: 52px;
-        height: 52px;
-        font-size: 2.6em;
-    }
-
-    /* Bottom buttons — large touch targets */
+    /* Compact bottom bar */
     .control-buttons-bottom {
         flex-shrink: 0;
         margin-top: 0;
-        padding: 8px 12px 12px;
+        padding: 5px 10px 6px;
         gap: 8px;
     }
 
-    .btn-add-point {
-        flex: 1;
-        min-width: 0;
-        padding: 16px 10px;
-        font-size: 2em;
-        min-height: 60px;
+    .btn-start-serv {
+        height: 38px;
+        padding: 6px 12px;
+        font-size: 0.82em;
+        min-width: 70px;
     }
 
-    .btn-start-serv,
-    .btn-undo,
-    .btn-settings {
-        height: 52px;
-        padding: 8px 14px;
-        font-size: 0.9em;
-        min-width: 72px;
+    .btn-undo, .btn-settings {
+        height: 38px;
+        padding: 6px 10px;
+        font-size: 0.82em;
     }
 
-    .center-buttons { gap: 8px; }
+    .center-buttons { gap: 6px; }
 
-    /* Settings menu full-width on mobile */
+    /* Settings menu full-width */
     .settings-menu-content {
         min-width: unset;
         width: 92vw;
-        padding: 28px 20px;
+        padding: 20px 18px;
     }
 }
 
