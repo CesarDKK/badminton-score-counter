@@ -727,20 +727,19 @@
         box-shadow: none !important;
     }
 
-    /* court-view-container: positioning context + padding creates gap to +1 buttons */
+    /* court-view-container: positioning context */
     .court-view-container {
         flex: 1;
         min-width: 0;
         position: relative;
-        padding: 0 8px;
     }
 
-    /* court fills 100% of its parent using absolute inset — most reliable on mobile */
+    /* court fills parent with 8px inset on sides = visible gap to +1 buttons */
     .badminton-court {
         position: absolute !important;
         top: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
+        left: 8px !important;
+        right: 8px !important;
         bottom: 0 !important;
         width: auto !important;
         height: auto !important;
@@ -778,21 +777,26 @@
     .btn-swap-players { width: 28px; height: 28px; font-size: 1.1em; border-width: 2px; }
     .serve-indicator { width: 44px; height: 44px; font-size: 2.2em; }
 
-    /* Compact bottom bar — serv buttons at edges, fortryd/settings always centered */
+    /* Grid: [serv 1 | center | serv 2] — center column always stays in the middle */
     .control-buttons-bottom {
         flex-shrink: 0;
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
         margin-top: 0;
         padding: 5px 10px 6px;
-        gap: 8px;
-        justify-content: space-between;
-        position: relative;
+        gap: 0;
     }
 
     .center-buttons {
-        position: absolute;
-        left: 50%;
-        transform: translateX(-50%);
+        grid-column: 2;
+        display: flex;
+        gap: 8px;
+        justify-content: center;
     }
+
+    #startServPlayer1 { grid-column: 1; }
+    #startServPlayer2 { grid-column: 3; justify-self: end; }
 
     .btn-start-serv {
         height: 38px;
