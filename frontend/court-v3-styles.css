@@ -712,11 +712,7 @@
     .set-score { font-size: 1.3em; gap: 4px; }
 
     /* Middle row fills remaining space */
-    .court-middle-row { flex: 1; min-height: 0; gap: 0; }
-
-    /* Visual gap between +1 buttons and court */
-    .btn-add-left  { margin-right: 8px; }
-    .btn-add-right { margin-left: 8px; }
+    .court-middle-row { flex: 1; min-height: 0; }
 
     /* +1 side buttons — narrower on phone, no hover scale (iOS Safari sticky-hover bug) */
     .btn-add-point {
@@ -731,11 +727,12 @@
         box-shadow: none !important;
     }
 
-    /* court-view-container fills the row and becomes a positioning context */
+    /* court-view-container: positioning context + padding creates gap to +1 buttons */
     .court-view-container {
         flex: 1;
         min-width: 0;
         position: relative;
+        padding: 0 8px;
     }
 
     /* court fills 100% of its parent using absolute inset — most reliable on mobile */
@@ -781,13 +778,20 @@
     .btn-swap-players { width: 28px; height: 28px; font-size: 1.1em; border-width: 2px; }
     .serve-indicator { width: 44px; height: 44px; font-size: 2.2em; }
 
-    /* Compact bottom bar — centered regardless of which buttons are visible */
+    /* Compact bottom bar — serv buttons at edges, fortryd/settings always centered */
     .control-buttons-bottom {
         flex-shrink: 0;
         margin-top: 0;
         padding: 5px 10px 6px;
         gap: 8px;
-        justify-content: center;
+        justify-content: space-between;
+        position: relative;
+    }
+
+    .center-buttons {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
     }
 
     .btn-start-serv {
