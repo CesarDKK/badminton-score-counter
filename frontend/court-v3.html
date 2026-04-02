@@ -10,7 +10,7 @@
     <link rel="icon" type="image/png" href="/favicon.png?v=4">
     <link rel="stylesheet" href="fonts.css">
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="court-v3-styles.css?v=4">
+    <link rel="stylesheet" href="court-v3-styles.css?v=5">
     <script src="js/theme-loader.js"></script>
 </head>
 <body>
@@ -119,13 +119,6 @@
             <button id="startServPlayer2" class="btn-start-serv">Start serv</button>
         </div>
 
-        <!-- Portrait overlay -->
-        <div id="portraitOverlay">
-            <div class="portrait-overlay-inner">
-                <div class="portrait-rotate-icon">⟳</div>
-                <p>Vend telefonen til liggende tilstand for at bruge bane-visningen</p>
-            </div>
-        </div>
 
         <!-- Holdkamp Panel (hidden until active team match) -->
         <div id="holdkampPanel" style="display:none; position:fixed; top:0; left:0; right:0; background:rgba(20,10,40,0.97); z-index:8000; padding:15px 20px; border-bottom:2px solid #533483;">
@@ -172,6 +165,14 @@
             <div id="messageButtons" class="court-overlay-message-buttons">
                 <!-- Buttons will be added dynamically -->
             </div>
+        </div>
+    </div>
+
+    <!-- Portrait overlay — direct child of body so position:fixed works correctly -->
+    <div id="portraitOverlay">
+        <div class="portrait-overlay-inner">
+            <div class="portrait-rotate-icon">⟳</div>
+            <p>Vend telefonen til liggende tilstand for at bruge bane-visningen</p>
         </div>
     </div>
 

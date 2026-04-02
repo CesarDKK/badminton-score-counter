@@ -720,23 +720,31 @@
         font-size: 1.8em;
     }
 
-    /* Court fills its container */
-    .court-view-container { min-height: 0; }
+    /* Court fills its container — column direction so flex:1 fills HEIGHT */
+    .court-view-container {
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: flex-start;
+        min-height: 0;
+    }
 
     .badminton-court {
         flex: 1 !important;
         position: relative !important;
         width: 100% !important;
         max-width: none !important;
-        height: unset !important;
+        height: 0 !important;        /* flex:1 overrides this to fill space */
         padding-bottom: 0 !important;
+        min-height: 0 !important;
     }
 
     @supports (aspect-ratio: 1) {
         .badminton-court {
             flex: 1 !important;
             aspect-ratio: unset !important;
-            height: unset !important;
+            height: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
         }
     }
 
