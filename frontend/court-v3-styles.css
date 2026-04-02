@@ -711,13 +711,24 @@
     .set-label { font-size: 0.6em; margin-bottom: 1px; }
     .set-score { font-size: 1.3em; gap: 4px; }
 
-    /* Middle row fills remaining space, gap creates visual separator */
-    .court-middle-row { flex: 1; min-height: 0; gap: 4px; }
+    /* Middle row fills remaining space */
+    .court-middle-row { flex: 1; min-height: 0; gap: 0; }
 
-    /* +1 side buttons — narrower on phone */
+    /* Visual gap between +1 buttons and court */
+    .btn-add-left  { margin-right: 8px; }
+    .btn-add-right { margin-left: 8px; }
+
+    /* +1 side buttons — narrower on phone, no hover scale (iOS Safari sticky-hover bug) */
     .btn-add-point {
         width: 65px;
         font-size: 1.8em;
+        touch-action: manipulation;
+    }
+
+    .btn-add-left:hover,
+    .btn-add-right:hover {
+        transform: none !important;
+        box-shadow: none !important;
     }
 
     /* court-view-container fills the row and becomes a positioning context */
