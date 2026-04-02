@@ -1041,8 +1041,7 @@ async function undoLastAction() {
     const noPointsScored = gameState.player1.score === 0 &&
                           gameState.player2.score === 0 &&
                           gameState.player1.games === 0 &&
-                          gameState.player2.games === 0 &&
-                          gameState.timerSeconds === 0;
+                          gameState.player2.games === 0;
 
     if (serverSelected && noPointsScored) {
         // Reset server selection and deactivate match
@@ -1051,6 +1050,12 @@ async function undoLastAction() {
         gameState.servingTeam = null;
         gameState.servingPlayerOnTeam = null;
         gameState.isActive = false;
+        gameState.matchStartTime = null;
+        gameState.timerSeconds = 0;
+        if (gameState.timerInterval) {
+            clearInterval(gameState.timerInterval);
+            gameState.timerInterval = null;
+        }
         updateDisplay();
         await performSave();  // Save immediately so TV sees the change
         console.log('Server selection reset');
