@@ -12,10 +12,20 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function initializeSponsor() {
-    // Check if already logged in (JWT token exists)
     if (api.token) {
         showDashboard();
     }
+    showDeviceTokensNavIfClubAdmin();
+}
+
+async function showDeviceTokensNavIfClubAdmin() {
+    try {
+        const mode = await api.getMode();
+        if (mode.mode === 'club' && api.isClubAdminSession()) {
+            const btn = document.getElementById('deviceTokensNavBtn');
+            if (btn) btn.style.display = 'inline-block';
+        }
+    } catch {}
 }
 
 function setupEventListeners() {

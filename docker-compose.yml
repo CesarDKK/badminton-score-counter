@@ -14,6 +14,7 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
       - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./backend/init.master.sql:/docker-entrypoint-initdb.d/init.master.sql:ro
       - ./backend/migrations:/docker-entrypoint-initdb.d/migrations:ro
     networks:
       - badminton-network
@@ -30,6 +31,8 @@ services:
       dockerfile: Dockerfile.backend
     container_name: badminton-backend
     restart: unless-stopped
+    env_file:
+      - installation.env
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -38,6 +41,7 @@ services:
       DB_USER: badminton_user
       DB_PASSWORD: ${MYSQL_PASSWORD:-secure_password_change_me}
       DB_NAME: badminton_counter
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password_change_me}
       JWT_SECRET: ${JWT_SECRET:-change_this_secret_key_min_32_chars}
       UPLOAD_DIR: /app/uploads
       MAX_FILE_SIZE: 10485760

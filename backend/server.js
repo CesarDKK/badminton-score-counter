@@ -8,32 +8,33 @@ require('dotenv').config();
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { startMidnightReset, startExpirationCheck } = require('./scheduler');
 
-// Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Trust proxy - required when behind nginx/reverse proxy for rate limiting and IP detection
 app.set('trust proxy', true);
 
-// Middleware
-app.use(helmet()); // Security headers
-app.use(cors()); // Enable CORS
-app.use(compression()); // Gzip compression
-app.use(express.json()); // Parse JSON bodies
-app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
+app.use(helmet());
+app.use(cors());
+app.use(compression());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Serve uploaded images statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Serve frontend files statically
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
 
-// Health check endpoint
+// Tenant middleware kører på alle requests og sætter req.accessMode
+app.use(require('./middleware/tenant'));
+
+// Mode endpoint — frontend bruger dette til at kende adgangskonteksten
+app.get('/api/mode', (req, res) => {
+    res.json({ mode: req.accessMode || 'direct' });
+});
+
+// Health check
 app.get('/health', async (req, res) => {
     try {
         const db = require('./config/database');
         await db.query('SELECT 1');
-
         res.json({
             status: 'healthy',
             timestamp: new Date().toISOString(),
@@ -41,16 +42,96 @@ app.get('/health', async (req, res) => {
             database: 'connected'
         });
     } catch (error) {
-        res.status(503).json({
-            status: 'unhealthy',
-            error: error.message,
-            database: 'disconnected'
-        });
+        res.status(503).json({ status: 'unhealthy', error: error.message, database: 'disconnected' });
     }
 });
 
-// API Routes
-app.use('/api/auth', require('./routes/auth'));
+// Routes
+const { loginLimiter } = require('./middleware/rateLimiter');
+
+app.use('/api/super-admin', require('./routes/superAdmin'));
+app.use('/api/auth', loginLimiter, require('./routes/auth'));
+app.use('/api/club-admin/login', loginLimiter);
+app.use('/api/club-admin', require('./routes/clubAdmin'));
+app.use('/api/device-tokens', require('./routes/deviceTokens'));
+
+// Device token entry point — tablet/TV åbner dette bogmærke-link
+app.get('/t/:token', async (req, res, next) => {
+    try {
+        const { query, queryOne } = require('./config/database');
+        const jwt = require('jsonwebtoken');
+
+        const deviceToken = await queryOne(
+            'SELECT id, name, destination, locked FROM device_tokens WHERE token = ? AND is_active = 1',
+            [req.params.token]
+        );
+
+        if (!deviceToken) {
+            return res.status(401).send('Ugyldigt eller deaktiveret adgangslink');
+        }
+
+        await query('UPDATE device_tokens SET last_used_at = NOW() WHERE id = ?', [deviceToken.id]);
+
+        const sessionToken = jwt.sign(
+            {
+                role: 'device',
+                tokenId: deviceToken.id,
+                destination: deviceToken.destination,
+                locked: deviceToken.locked,
+                clubSubdomain: req.clubSubdomain
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: '12h' }
+        );
+
+        // Byg destination URL — slår version op fra settings så versionsvalget er centralt
+        const { queryOne: settingsQueryOne } = require('./config/database');
+        let targetUrl;
+
+        if (deviceToken.destination.startsWith('tv/')) {
+            const courtNum = deviceToken.destination.split('/')[1];
+            const tvVersionRow = await settingsQueryOne(
+                "SELECT setting_value FROM settings WHERE setting_key = 'tv_version'"
+            );
+            const tvVersion = tvVersionRow?.setting_value || 'v3';
+            const tvPage = tvVersion === 'v2' ? 'tv.html' : 'tv-v3.html';
+            targetUrl = `/${tvPage}?court=${courtNum}&dt=${sessionToken}`;
+        } else if (deviceToken.destination.startsWith('court/')) {
+            const courtNum = deviceToken.destination.split('/')[1];
+            const courtVersionRow = await settingsQueryOne(
+                "SELECT setting_value FROM settings WHERE setting_key = 'court_version'"
+            );
+            const courtVersion = courtVersionRow?.setting_value || 'v3';
+            const courtPage = courtVersion === 'v2' ? 'court.html' : 'court-v3.html';
+            targetUrl = `/${courtPage}?court=${courtNum}&dt=${sessionToken}`;
+        } else {
+            // Legacy destinations
+            const legacyMap = { tv: '/tv.html', 'tv-v3': '/tv-v3.html', oversigt: '/oversigt.html' };
+            targetUrl = `${legacyMap[deviceToken.destination] || '/' + deviceToken.destination}?dt=${sessionToken}`;
+        }
+
+        res.redirect(targetUrl);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// QR-kode til oversigt — kun tilgængeligt i klub-mode
+app.get('/api/qr-code', async (req, res) => {
+    if (req.accessMode !== 'club') return res.status(404).end();
+    try {
+        const QRCode = require('qrcode');
+        const protocol = req.headers['x-forwarded-proto'] || 'https';
+        const url = `${protocol}://${req.hostname}/oversigt.html`;
+        const buffer = await QRCode.toBuffer(url, { width: 220, margin: 2, color: { dark: '#ffffff', light: '#00000000' } });
+        res.setHeader('Content-Type', 'image/png');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        res.end(buffer);
+    } catch (err) {
+        res.status(500).end();
+    }
+});
+
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/player-info', require('./routes/playerInfo'));
 app.use('/api/courts', require('./routes/courts'));
@@ -59,59 +140,62 @@ app.use('/api/match-history', require('./routes/matchHistory'));
 app.use('/api/sponsors', require('./routes/sponsors'));
 app.use('/api/team-matches', require('./routes/teamMatches'));
 
-// 404 handler
 app.use(notFoundHandler);
-
-// Error handler (must be last)
 app.use(errorHandler);
 
-// Start server and store reference for graceful shutdown
+// Venter på databasen er klar — retrier med eksponentiel backoff
+async function waitForDatabase(maxRetries = 10, initialDelayMs = 2000) {
+    const db = require('./config/database');
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            await db.query('SELECT 1');
+            return;
+        } catch (error) {
+            if (attempt === maxRetries) throw error;
+            const delay = Math.min(initialDelayMs * Math.pow(1.5, attempt - 1), 15000);
+            console.log(`⏳ Database ikke klar (forsøg ${attempt}/${maxRetries}) — prøver igen om ${Math.round(delay / 1000)}s...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+}
+
 const server = app.listen(PORT, '0.0.0.0', async () => {
     console.log(`✓ Server running on port ${PORT}`);
     console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`✓ APP_DOMAIN: ${process.env.APP_DOMAIN || '(ikke sat — lokal mode)'}`);
     console.log(`✓ Health check: http://localhost:${PORT}/health`);
 
-    // Test database connection before starting scheduler
     try {
-        const db = require('./config/database');
-        await db.query('SELECT 1');
+        await waitForDatabase();
         console.log('✓ Database connection successful');
 
-        // Start midnight reset scheduler
-        startMidnightReset();
+        const masterDb = require('./config/masterDatabase');
+        await masterDb.initialize();
 
-        // Start sponsor expiration checker
+        const { runMigrationsForAllDatabases } = require('./config/migrationRunner');
+        await runMigrationsForAllDatabases();
+
+        startMidnightReset();
         startExpirationCheck();
     } catch (error) {
         console.error('✗ Database connection failed:', error.message);
-        console.error('✗ Midnight reset scheduler not started');
     }
 });
 
-// Graceful shutdown - handle SIGTERM and SIGINT
 const gracefulShutdown = async (signal) => {
     console.log(`${signal} signal received: starting graceful shutdown`);
-
-    // Close HTTP server first (stop accepting new connections)
     server.close(async () => {
         console.log('✓ HTTP server closed');
-
         try {
-            // Close database connection pool
-            const db = require('./config/database');
-            if (db.pool) {
-                await db.pool.end();
-                console.log('✓ Database pool closed');
-            }
+            const { closeAll } = require('./config/tenantPools');
+            await closeAll();
+            console.log('✓ Database pools lukket');
         } catch (error) {
-            console.error('✗ Error closing database pool:', error);
+            console.error('✗ Fejl ved lukning af database pools:', error);
         }
-
         console.log('✓ Graceful shutdown complete');
         process.exit(0);
     });
-
-    // Force shutdown after 10 seconds if graceful shutdown hangs
     setTimeout(() => {
         console.error('✗ Graceful shutdown timeout, forcing exit');
         process.exit(1);
@@ -119,4 +203,4 @@ const gracefulShutdown = async (signal) => {
 };
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT')); // Handle Ctrl+C
+process.on('SIGINT',  () => gracefulShutdown('SIGINT'));

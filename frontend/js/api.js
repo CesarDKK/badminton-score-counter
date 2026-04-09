@@ -8,6 +8,48 @@ const API_BASE_URL = '/api';
 class BadmintonAPI {
     constructor() {
         this.token = sessionStorage.getItem('authToken');
+        this._initDeviceToken();
+    }
+
+    // Læser ?dt=<jwt> fra URL, gemmer i sessionStorage og renser URL
+    _initDeviceToken() {
+        const params = new URLSearchParams(window.location.search);
+        const dt = params.get('dt');
+        if (dt) {
+            sessionStorage.setItem('deviceToken', dt);
+            params.delete('dt');
+            const clean = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+            window.history.replaceState({}, '', clean);
+        }
+        // Brug device token som auth hvis ingen klub admin session findes
+        if (!this.token) {
+            const deviceToken = sessionStorage.getItem('deviceToken');
+            if (deviceToken) this.token = deviceToken;
+        }
+    }
+
+    // Returner decoded payload fra JWT uden verifikation (til client-side brug)
+    getTokenPayload() {
+        const token = this.token;
+        if (!token) return null;
+        try {
+            return JSON.parse(atob(token.split('.')[1]));
+        } catch { return null; }
+    }
+
+    isDeviceSession() {
+        const p = this.getTokenPayload();
+        return p && p.role === 'device';
+    }
+
+    isClubAdminSession() {
+        const p = this.getTokenPayload();
+        return p && p.role === 'club_admin';
+    }
+
+    isSuperAdminSession() {
+        const p = this.getTokenPayload();
+        return p && p.role === 'super_admin';
     }
 
     /**
@@ -585,6 +627,121 @@ class BadmintonAPI {
         return this.request(`/team-matches/${teamMatchId}`, {
             method: 'DELETE'
         });
+    }
+
+    // ==================== Club Admin Auth ====================
+
+    async loginAsClubAdmin(username, password) {
+        const result = await this.request('/club-admin/login', {
+            method: 'POST',
+            body: JSON.stringify({ username, password }),
+            requiresAuth: false
+        });
+        if (result.token) {
+            this.token = result.token;
+            sessionStorage.setItem('authToken', result.token);
+        }
+        return result;
+    }
+
+    async changeClubAdminPassword(currentPassword, newPassword) {
+        return this.request('/club-admin/password', {
+            method: 'PUT',
+            body: JSON.stringify({ currentPassword, newPassword })
+        });
+    }
+
+    // ==================== Device Tokens ====================
+
+    async getDeviceTokens() {
+        return this.request('/device-tokens');
+    }
+
+    async createDeviceToken(name, destination, locked) {
+        return this.request('/device-tokens', {
+            method: 'POST',
+            body: JSON.stringify({ name, destination, locked })
+        });
+    }
+
+    async updateDeviceToken(id, data) {
+        return this.request(`/device-tokens/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data)
+        });
+    }
+
+    async deleteDeviceToken(id) {
+        return this.request(`/device-tokens/${id}`, {
+            method: 'DELETE'
+        });
+    }
+
+    // ==================== Super Admin ====================
+
+    async loginAsSuperAdmin(username, password) {
+        const result = await this.request('/super-admin/login', {
+            method: 'POST',
+            body: JSON.stringify({ username, password }),
+            requiresAuth: false
+        });
+        if (result.token) {
+            this.token = result.token;
+            sessionStorage.setItem('superAdminToken', result.token);
+            sessionStorage.setItem('authToken', result.token);
+        }
+        return result;
+    }
+
+    async getSuperAdminClubs() {
+        return this.request('/super-admin/clubs');
+    }
+
+    async createClub(name, subdomain) {
+        return this.request('/super-admin/clubs', {
+            method: 'POST',
+            body: JSON.stringify({ name, subdomain })
+        });
+    }
+
+    async toggleClub(id) {
+        return this.request(`/super-admin/clubs/${id}/toggle`, {
+            method: 'PUT'
+        });
+    }
+
+    async getClubAdmins(clubId) {
+        return this.request(`/super-admin/clubs/${clubId}/admins`);
+    }
+
+    async createClubAdmin(clubId, username, password, email) {
+        return this.request(`/super-admin/clubs/${clubId}/admins`, {
+            method: 'POST',
+            body: JSON.stringify({ username, password, email })
+        });
+    }
+
+    async deleteClub(clubId) {
+        return this.request(`/super-admin/clubs/${clubId}`, { method: 'DELETE' });
+    }
+
+    async deleteClubAdmin(clubId, adminId) {
+        return this.request(`/super-admin/clubs/${clubId}/admins/${adminId}`, {
+            method: 'DELETE'
+        });
+    }
+
+    async changeClubAdminPassword(clubId, adminId, password) {
+        return this.request(`/super-admin/clubs/${clubId}/admins/${adminId}/password`, {
+            method: 'PUT',
+            body: JSON.stringify({ password })
+        });
+    }
+
+    // ==================== Mode ====================
+
+    async getMode() {
+        return this.request('/mode', { requiresAuth: false });
     }
 }
 

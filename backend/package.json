@@ -1,12 +1,14 @@
 {
   "name": "badminton-counter-backend",
-  "version": "2.0.0",
+  "version": "2.5.0",
   "description": "Backend API for Badminton Counter application",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "import-data": "node scripts/import-data.js"
+    "import-data": "node scripts/import-data.js",
+    "test": "node --test tests/*.test.js",
+    "test:verbose": "node --test --test-reporter=spec tests/*.test.js"
   },
   "keywords": ["badminton", "scoreboard", "api"],
   "author": "",
@@ -24,7 +26,8 @@
     "compression": "^1.7.4",
     "express-validator": "^7.0.1",
     "node-cron": "^3.0.3",
-    "express-rate-limit": "^7.1.5"
+    "express-rate-limit": "^7.1.5",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

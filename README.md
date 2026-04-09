@@ -27,6 +27,25 @@ A real-time badminton score tracking system with multi-device support, sponsor s
 
 ## Recent Updates
 
+### Version 2.5.0 - Multi-Tenant, Migration Runner & Rate Limit Fix
+
+#### 🏢 Multi-Tenant arkitektur
+- **Database-per-klub**: Hver klub får sin egen isolerede database (`klub.badmintonapp.dk`)
+- **Super admin panel**: Opret, aktiver/deaktiver og slet klubber samt administrer klub-admins
+- **Subdomain-routing**: Automatisk tenant-resolution via `APP_DOMAIN` miljøvariabel
+- **Club admin login**: Klubber kan logge ind med egne credentials via `club-login.html`
+
+#### 🔄 Automatisk migration runner
+- Ny `migrationRunner.js` kører migrations mod **alle** databaser (default + alle klub-databaser) ved opstart
+- Tracker applied migrations i en `migrations`-tabel per database
+- Nye klub-databaser markeres automatisk som up-to-date ved oprettelse
+- Håndterer ikke-idempotente migrations og MySQL/MariaDB syntaksforskelle
+
+#### 🚦 Rate limiting fjernet fra polling-endpoints
+- Fjernet `publicLimiter` og `adminLimiter` fra alle read/poll endpoints (`/api/game-states`, `/api/courts`, `/api/sponsors`, `/api/settings` m.fl.)
+- Beholder kun `loginLimiter` (brute-force beskyttelse) og `uploadLimiter` (fil-upload)
+- Løser problem med NAT: alle enheder på én klubs netværk deler offentlig IP og ville ramme grænsen ved skala (10 klubber × 20 baner × TV-skærme + tilskuere)
+
 ### Version 2.0.0 - Smartwatch Support, Holdkamp Sync & UI Improvements
 
 #### ⌚ Smartwatch / Mini Browser View (`watch.html`)

@@ -49,6 +49,7 @@
                     <a href="player-info.html" class="btn-primary" style="text-decoration: none; display: inline-block;">Spiller Info</a>
                     <a href="settings.html" class="btn-primary" style="text-decoration: none; display: inline-block;">Indstillinger</a>
                     <a href="sponsor.html" class="btn-primary" style="text-decoration: none; display: inline-block;">Sponsorer</a>
+                    <button id="deviceTokensBtn" class="btn-primary" data-section="deviceTokens" style="display:none;">Adgangslinks</button>
                 </div>
             </div>
 
@@ -212,6 +213,50 @@
                 <!-- Settings moved to settings.html -->
             </div>
 
+            <!-- Device Tokens Section -->
+            <div id="deviceTokensSection" class="overview-section" style="display: none;">
+                <h2>Adgangslinks <span style="font-family:'DM Sans';font-size:0.5em;font-weight:400;color:rgba(255,255,255,0.4);">Tablets og TV-skærme</span></h2>
+
+                <!-- Opret nyt link -->
+                <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:24px;margin-bottom:24px;">
+                    <h3 style="font-family:'Bebas Neue',sans-serif;letter-spacing:0.05em;margin-bottom:16px;font-size:1.2em;">Opret Nyt Link</h3>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;">
+                        <div>
+                            <label style="display:block;font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Navn</label>
+                            <input type="text" id="dtName" placeholder="fx Bane 1 TV" style="width:100%;background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:#eaeaea;font-family:'DM Sans',sans-serif;font-size:0.95em;box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block;font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Type</label>
+                            <select id="dtType" onchange="toggleDtCourt()" style="width:100%;background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:#eaeaea;font-family:'DM Sans',sans-serif;font-size:0.95em;">
+                                <option value="tv">TV visning</option>
+                                <option value="court">Bane visning</option>
+                                <option value="oversigt">Oversigt</option>
+                            </select>
+                        </div>
+                        <div id="dtCourtWrap">
+                            <label style="display:block;font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Bane</label>
+                            <select id="dtCourt" style="width:100%;background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:#eaeaea;font-family:'DM Sans',sans-serif;font-size:0.95em;">
+                                <!-- udfyldes dynamisk -->
+                            </select>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:12px;align-items:flex-end;">
+                        <div>
+                            <label style="display:block;font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Navigation</label>
+                            <select id="dtLocked" style="background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:#eaeaea;font-family:'DM Sans',sans-serif;font-size:0.95em;">
+                                <option value="0">Fri</option>
+                                <option value="1" selected>Låst</option>
+                            </select>
+                        </div>
+                        <button id="createDtBtn" class="btn-primary" style="height:42px;white-space:nowrap;">+ Opret Link</button>
+                    </div>
+                    <div id="dtCreateMsg" style="display:none;margin-top:12px;padding:10px 14px;border-radius:8px;font-size:0.88em;"></div>
+                </div>
+
+                <!-- Liste over tokens -->
+                <div id="deviceTokensList"></div>
+            </div>
+
             <!-- Version Footer -->
             <div class="version-footer">
                 <p>Version 2.0</p>
@@ -232,7 +277,8 @@
     </div>
 
     <script src="js/utils.js?v=2"></script>
-    <script src="js/api.js?v=2"></script>
-    <script src="admin-script.js?v=2"></script>
+    <script src="js/api.js?v=3"></script>
+    <script src="js/auth-guard.js?v=1"></script>
+    <script src="admin-script.js?v=3"></script>
 </body>
 </html>

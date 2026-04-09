@@ -1,37 +1,14 @@
-const mysql = require('mysql2/promise');
+const { getPool, closeAll } = require('./tenantPools');
 require('dotenv').config();
 
-// Create MySQL connection pool
-const pool = mysql.createPool({
-    host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT || 3306,
-    user: process.env.DB_USER || 'badminton_user',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'badminton_counter',
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-    enableKeepAlive: true,
-    keepAliveInitialDelay: 0
-});
-
-// Test database connection
-pool.getConnection()
-    .then(connection => {
-        console.log('✓ Database connection successful');
-        connection.release();
-    })
-    .catch(err => {
-        console.error('✗ Database connection failed:', err.message);
-        process.exit(1);
-    });
-
-// Helper function to execute queries
+// Helper function to execute queries — bruger automatisk den rigtige tenant-pool
 async function query(sql, params) {
     try {
-        const [results] = await pool.execute(sql, params);
+        const [results] = await getPool().execute(sql, params);
         return results;
     } catch (error) {
+        // Undgå verbose stacktrace under startup-retry
+        if (error.code === 'ECONNREFUSED') throw error;
         console.error('Database query error:', error);
         throw error;
     }
@@ -43,8 +20,11 @@ async function queryOne(sql, params) {
     return results[0] || null;
 }
 
+// pool eksporteres for bagudkompatibilitet (health check, graceful shutdown)
+// Bemærk: brug closeAll() ved shutdown for at lukke alle tenant-pools
 module.exports = {
-    pool,
+    get pool() { return getPool(); },
     query,
-    queryOne
+    queryOne,
+    closeAll
 };

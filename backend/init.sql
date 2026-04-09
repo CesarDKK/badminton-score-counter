@@ -192,6 +192,31 @@ CREATE TABLE IF NOT EXISTS team_match_games (
   FOREIGN KEY (team_match_id) REFERENCES team_matches(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+-- Device tokens table (adgangsnøgler til tablets og TV-skærme)
+CREATE TABLE IF NOT EXISTS device_tokens (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  token VARCHAR(64) UNIQUE NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  destination VARCHAR(100) NOT NULL COMMENT 'fx court/1, tv, oversigt',
+  locked BOOLEAN DEFAULT FALSE COMMENT 'true = låst til destination, false = fri navigation',
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_used_at TIMESTAMP NULL,
+  INDEX idx_token (token),
+  INDEX idx_is_active (is_active)
+) ENGINE=InnoDB;
+
+-- Club admins table (bruges i multi-tenant mode)
+CREATE TABLE IF NOT EXISTS club_admins (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  username VARCHAR(100) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  email VARCHAR(200) DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_username (username)
+) ENGINE=InnoDB;
+
 -- Player info table (stores player information)
 CREATE TABLE IF NOT EXISTS player_info (
   id INT PRIMARY KEY AUTO_INCREMENT,

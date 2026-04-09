@@ -106,7 +106,19 @@
         </div>
     </div>
 
+    <!-- QR-kode hjørne — kun synlig i klub-mode -->
+    <div id="qrCorner" style="display:none; position:fixed; bottom:18px; right:18px; background:rgba(0,0,0,0.55); border-radius:12px; padding:10px 10px 6px; text-align:center; backdrop-filter:blur(6px); z-index:50;">
+        <img src="/api/qr-code" style="width:90px; height:90px; display:block;">
+        <p style="color:rgba(255,255,255,0.75); font-size:0.62em; margin:5px 0 0; letter-spacing:0.12em; font-family:'Bebas Neue',sans-serif;">FØLG LIVE</p>
+    </div>
+
     <script src="js/api-v2.js"></script>
+    <script src="js/auth-guard.js?v=2"></script>
     <script src="tv-script-v3.js"></script>
+    <script>
+        fetch('/api/mode').then(r => r.json()).then(m => {
+            if (m.mode === 'club') document.getElementById('qrCorner').style.display = 'block';
+        }).catch(() => {});
+    </script>
 </body>
 </html>

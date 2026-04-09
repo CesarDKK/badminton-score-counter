@@ -26,8 +26,20 @@ document.addEventListener('DOMContentLoaded', function() {
     setupEventListeners();
 });
 
-function initializeAdmin() {
-    // Check if already logged in (JWT token exists)
+async function initializeAdmin() {
+    // Multi-tenant: klub admin login via club-login.html — redirect hertil hvis ikke logget ind
+    try {
+        const mode = await api.getMode();
+        if (mode.mode === 'club' && !api.token) {
+            window.location.href = '/club-login.html';
+            return;
+        }
+        // Vis "Adgangslinks" knap kun til klub admins på klub-subdomains
+        if (mode.mode === 'club' && api.isClubAdminSession()) {
+            document.getElementById('deviceTokensBtn').style.display = 'inline-block';
+        }
+    } catch {}
+
     if (api.token) {
         showDashboard();
     }
@@ -44,6 +56,10 @@ function setupEventListeners() {
 
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+
+    // Device Tokens
+    document.getElementById('deviceTokensBtn').addEventListener('click', showDeviceTokens);
+    document.getElementById('createDtBtn').addEventListener('click', handleCreateDeviceToken);
 
     // Nav overview button
     document.getElementById('backToOverviewNavBtn').addEventListener('click', showCourtOverview);
@@ -156,6 +172,8 @@ async function showDashboard() {
             await showHoldkamp();
         } else if (hash === '#history') {
             await showMatchHistory();
+        } else if (hash === '#device-tokens') {
+            showDeviceTokens();
         }
     } catch (error) {
         console.error('Failed to load dashboard:', error);
@@ -616,8 +634,7 @@ let activeHistoryTab = 'single';
 
 async function showMatchHistory() {
     stopHoldkampRefresh();
-    document.getElementById('courtOverviewSection').style.display = 'none';
-    document.getElementById('holdkampSection').style.display = 'none';
+    hideAllSections();
     document.getElementById('matchHistorySection').style.display = 'block';
     setNavActive('history');
     history.replaceState(null, '', '#history');
@@ -728,10 +745,19 @@ async function loadTeamMatchHistory() {
     }
 }
 
+function hideAllSections() {
+    ['courtOverviewSection', 'holdkampSection', 'matchHistorySection', 'deviceTokensSection']
+        .forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+}
+
 function showCourtOverview() {
     stopHoldkampRefresh();
     document.getElementById('matchHistorySection').style.display = 'none';
     document.getElementById('holdkampSection').style.display = 'none';
+    document.getElementById('deviceTokensSection').style.display = 'none';
     document.getElementById('courtOverviewSection').style.display = 'block';
     setNavActive('overview');
     history.replaceState(null, '', '#');
@@ -757,8 +783,7 @@ let holdkampRefreshTimer = null;
 let holdkampEditOpen = false;
 
 async function showHoldkamp() {
-    document.getElementById('courtOverviewSection').style.display = 'none';
-    document.getElementById('matchHistorySection').style.display = 'none';
+    hideAllSections();
     document.getElementById('holdkampSection').style.display = 'block';
     setNavActive('holdkamp');
     history.replaceState(null, '', '#holdkamp');
@@ -1639,4 +1664,173 @@ function hideAutocomplete(inputId) {
     if (activeAutocompleteField === inputId) {
         activeAutocompleteField = null;
     }
+}
+
+// ═══════════════════════════════════════════
+// DEVICE TOKENS (Adgangslinks)
+// ═══════════════════════════════════════════
+
+async function showDeviceTokens() {
+    hideAllSections();
+    document.getElementById('deviceTokensSection').style.display = 'block';
+    setNavActive('deviceTokens');
+    stopAutoRefresh();
+
+    // Udfyld bane-vælger dynamisk ud fra antal baner i indstillinger
+    try {
+        const settings = await api.getSettings();
+        const courtCount = settings.courtCount || 4;
+        const courtSelect = document.getElementById('dtCourt');
+        courtSelect.innerHTML = Array.from({ length: courtCount }, (_, i) =>
+            `<option value="${i + 1}">Bane ${i + 1}</option>`
+        ).join('');
+    } catch {}
+
+    loadDeviceTokens();
+}
+
+async function loadDeviceTokens() {
+    const listEl = document.getElementById('deviceTokensList');
+    listEl.innerHTML = '<p style="color:rgba(255,255,255,0.4);text-align:center;padding:20px;">Indlæser...</p>';
+
+    try {
+        const tokens = await api.getDeviceTokens();
+        renderDeviceTokens(tokens);
+    } catch (err) {
+        listEl.innerHTML = `<p style="color:#e94560;text-align:center;padding:20px;">Fejl: ${err.message}</p>`;
+    }
+}
+
+function renderDeviceTokens(tokens) {
+    const listEl = document.getElementById('deviceTokensList');
+    const baseUrl = window.location.origin;
+
+    if (tokens.length === 0) {
+        listEl.innerHTML = '<p style="color:rgba(255,255,255,0.4);text-align:center;padding:20px;">Ingen adgangslinks endnu</p>';
+        return;
+    }
+
+    const rows = tokens.map(t => {
+        const link = `${baseUrl}/t/${t.token}`;
+        const lastUsed = t.last_used_at
+            ? new Date(t.last_used_at).toLocaleString('da-DK')
+            : 'Aldrig';
+        const dest = t.destination;
+        const destLabel = dest === 'oversigt' ? 'Oversigt'
+            : dest.startsWith('tv/') ? `TV — Bane ${dest.split('/')[1]}`
+            : dest.startsWith('court/') ? `Bane visning — Bane ${dest.split('/')[1]}`
+            : dest;
+
+        return `
+        <div style="background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:16px 20px;margin-bottom:12px;${!t.is_active ? 'opacity:0.45;' : ''}">
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                <div style="flex:1;min-width:200px;">
+                    <div style="font-weight:600;margin-bottom:4px;">${escapeHtmlDt(t.name)}</div>
+                    <div style="font-size:0.8em;color:rgba(255,255,255,0.45);">
+                        📍 ${destLabel} &nbsp;•&nbsp;
+                        🔒 ${t.locked ? 'Låst' : 'Fri navigation'} &nbsp;•&nbsp;
+                        Sidst brugt: ${lastUsed}
+                    </div>
+                    <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
+                        <input readonly value="${link}"
+                            style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:6px 10px;color:rgba(255,255,255,0.6);font-size:0.78em;font-family:monospace;"
+                            onclick="this.select()">
+                        <button onclick="copyLink('${link}', this)"
+                            style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:6px 12px;color:#eaeaea;font-size:0.8em;cursor:pointer;white-space:nowrap;">
+                            Kopiér
+                        </button>
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;flex-shrink:0;">
+                    ${t.is_active
+                        ? `<button onclick="handleDeleteDeviceToken(${t.id})"
+                            style="background:rgba(233,69,96,0.12);border:1px solid rgba(233,69,96,0.25);border-radius:6px;padding:6px 14px;color:#e94560;font-size:0.85em;cursor:pointer;">
+                            Tilbagekald
+                           </button>`
+                        : `<span style="font-size:0.8em;color:rgba(255,255,255,0.3);padding:6px;">Tilbagekaldt</span>`
+                    }
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+
+    listEl.innerHTML = rows;
+}
+
+function toggleDtCourt() {
+    const type = document.getElementById('dtType').value;
+    document.getElementById('dtCourtWrap').style.visibility = type === 'oversigt' ? 'hidden' : 'visible';
+}
+
+async function handleCreateDeviceToken() {
+    const name = document.getElementById('dtName').value.trim();
+    const type = document.getElementById('dtType').value;
+    const court = document.getElementById('dtCourt').value;
+    const destination = type === 'oversigt' ? 'oversigt' : `${type}/${court}`;
+    const locked = document.getElementById('dtLocked').value === '1';
+    const btn = document.getElementById('createDtBtn');
+    const msgEl = document.getElementById('dtCreateMsg');
+
+    if (!name) {
+        showDtMsg(msgEl, 'Indtast et navn til linket', 'error');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Opretter...';
+
+    try {
+        await api.createDeviceToken(name, destination, locked);
+        document.getElementById('dtName').value = '';
+        showDtMsg(msgEl, '✓ Link oprettet', 'success');
+        await loadDeviceTokens();
+    } catch (err) {
+        showDtMsg(msgEl, err.message || 'Oprettelse mislykkedes', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '+ Opret Link';
+    }
+}
+
+async function handleDeleteDeviceToken(id) {
+    if (!confirm('Tilbagekald dette adgangslink? Enheder der bruger det mister adgang.')) return;
+    try {
+        await api.deleteDeviceToken(id);
+        await loadDeviceTokens();
+    } catch (err) {
+        alert('Fejl: ' + err.message);
+    }
+}
+
+function copyLink(link, btn) {
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(link).then(() => {
+            btn.textContent = '✓ Kopieret';
+            setTimeout(() => { btn.textContent = 'Kopiér'; }, 2000);
+        });
+    } else {
+        // Fallback til execCommand for HTTP
+        const ta = document.createElement('textarea');
+        ta.value = link;
+        ta.style.cssText = 'position:fixed;opacity:0;';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        btn.textContent = '✓ Kopieret';
+        setTimeout(() => { btn.textContent = 'Kopiér'; }, 2000);
+    }
+}
+
+function showDtMsg(el, msg, type) {
+    el.textContent = msg;
+    el.style.display = 'block';
+    el.style.background = type === 'error' ? 'rgba(233,69,96,0.12)' : 'rgba(39,174,96,0.1)';
+    el.style.border = type === 'error' ? '1px solid rgba(233,69,96,0.3)' : '1px solid rgba(39,174,96,0.25)';
+    el.style.color = type === 'error' ? '#e94560' : '#2ecc71';
+}
+
+function escapeHtmlDt(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }

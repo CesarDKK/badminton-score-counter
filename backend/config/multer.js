@@ -3,32 +3,35 @@ const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
 
-// Ensure uploads directory exists
-const uploadDir = process.env.UPLOAD_DIR || './uploads';
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
+const baseUploadDir = process.env.UPLOAD_DIR || './uploads';
+
+// Sikr at base-mappen eksisterer
+if (!fs.existsSync(baseUploadDir)) {
+    fs.mkdirSync(baseUploadDir, { recursive: true });
 }
 
-// Configure storage
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, uploadDir);
+        // Hver klub får sin egen undermappe — 'local' bruges ved direkte/lokal adgang
+        const clubDir = req.clubDbName || 'local';
+        const dir = path.join(baseUploadDir, clubDir);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        cb(null, dir);
     },
     filename: (req, file, cb) => {
-        // Generate unique filename: timestamp_randomhash_originalname
         const uniqueSuffix = Date.now() + '_' + crypto.randomBytes(8).toString('hex');
         const ext = path.extname(file.originalname);
         const basename = path.basename(file.originalname, ext)
-            .replace(/[^a-zA-Z0-9]/g, '_') // Sanitize filename
-            .substring(0, 50); // Limit basename length
+            .replace(/[^a-zA-Z0-9]/g, '_')
+            .substring(0, 50);
         cb(null, `${basename}_${uniqueSuffix}${ext}`);
     }
 });
 
-// File filter - accept images only
 const fileFilter = (req, file, cb) => {
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-
     if (allowedTypes.includes(file.mimetype)) {
         cb(null, true);
     } else {
@@ -36,13 +39,12 @@ const fileFilter = (req, file, cb) => {
     }
 };
 
-// Configure multer
 const upload = multer({
-    storage: storage,
-    fileFilter: fileFilter,
+    storage,
+    fileFilter,
     limits: {
-        fileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024, // 10MB default
-        files: 10 // Max 10 files per upload
+        fileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024,
+        files: 10
     }
 });
 

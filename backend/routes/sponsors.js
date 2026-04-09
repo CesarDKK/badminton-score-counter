@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
+const { uploadLimiter } = require('../middleware/rateLimiter');
 const upload = require('../config/multer');
 const sharp = require('sharp');
 const fs = require('fs').promises;
@@ -143,7 +144,7 @@ router.put('/settings', authMiddleware, async (req, res, next) => {
 });
 
 // POST /api/sponsors/upload - Upload sponsor images (requires auth)
-router.post('/upload', authMiddleware, upload.array('images', 10), async (req, res, next) => {
+router.post('/upload', uploadLimiter, authMiddleware, upload.array('images', 10), async (req, res, next) => {
     try {
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ error: 'Ingen filer uploadet' });
@@ -223,13 +224,17 @@ router.post('/upload', authMiddleware, upload.array('images', 10), async (req, r
                 // Get final file size
                 const stats = await fs.stat(file.path);
 
+                // Gem filename med klub-undermappe så URL altid er /uploads/{club}/{file}
+                const clubDir = req.clubDbName || 'local';
+                const storedFilename = `${clubDir}/${file.filename}`;
+
                 // Insert into database with type
                 const result = await query(
                     `INSERT INTO sponsor_images
                      (filename, type, original_name, file_path, file_size, width, height, mime_type)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
-                        file.filename,
+                        storedFilename,
                         imageType,
                         file.originalname,
                         file.path,
@@ -243,9 +248,9 @@ router.post('/upload', authMiddleware, upload.array('images', 10), async (req, r
                 uploadResults.push({
                     success: true,
                     id: result.insertId,
-                    filename: file.filename,
+                    filename: storedFilename,
                     originalName: file.originalname,
-                    url: `/uploads/${file.filename}`
+                    url: `/uploads/${storedFilename}`
                 });
             } catch (imageError) {
                 console.error(`Error processing ${file.originalname}:`, imageError);
