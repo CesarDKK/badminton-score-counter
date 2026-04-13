@@ -1,6 +1,26 @@
 // Court-specific script - gets court ID from URL parameter
 const api = window.BadmintonAPI;
 
+// PWA Install
+let _pwaPrompt = null;
+
+function _isStandalone() {
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    _pwaPrompt = e;
+    const btn = document.getElementById('installAppBtn');
+    if (btn && !_isStandalone()) btn.style.display = '';
+});
+
+window.addEventListener('appinstalled', () => {
+    _pwaPrompt = null;
+    const btn = document.getElementById('installAppBtn');
+    if (btn) btn.style.display = 'none';
+});
+
 // Get court ID from URL
 const urlParams = new URLSearchParams(window.location.search);
 const courtId = parseInt(urlParams.get('id')) || 1;
@@ -59,6 +79,26 @@ document.addEventListener('DOMContentLoaded', async function() {
     setupEventListeners();
     startPeriodicSync();
     await initHoldkampPanel();
+
+    // Register service worker for PWA support
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+
+    // Install button — vises kun hvis browser tilbyder installation og appen ikke allerede er installeret
+    const installBtn = document.getElementById('installAppBtn');
+    if (installBtn) {
+        if (_isStandalone()) installBtn.style.display = 'none';
+        installBtn.addEventListener('click', async () => {
+            if (!_pwaPrompt) return;
+            _pwaPrompt.prompt();
+            const { outcome } = await _pwaPrompt.userChoice;
+            if (outcome === 'accepted') {
+                _pwaPrompt = null;
+                installBtn.style.display = 'none';
+            }
+        });
+    }
 });
 
 async function initializeApp() {

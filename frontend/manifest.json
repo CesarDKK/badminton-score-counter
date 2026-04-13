@@ -1,0 +1,22 @@
+{
+    "name": "BadmintonApp",
+    "short_name": "Badminton",
+    "description": "Real-time badminton score tracking",
+    "start_url": "/landing.html",
+    "display": "standalone",
+    "background_color": "#0d0d1a",
+    "theme_color": "#533483",
+    "icons": [
+        {
+            "src": "/favicon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any"
+        },
+        {
+            "src": "/favicon.png",
+            "sizes": "32x32",
+            "type": "image/png"
+        }
+    ]
+}
