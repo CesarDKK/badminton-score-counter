@@ -76,6 +76,20 @@
                 <!-- Active team match display -->
                 <div id="activeHoldkampContainer" style="display: none; margin-bottom: 30px;"></div>
 
+                <!-- Import fra badmintonplayer.dk -->
+                <div id="bpImportSection" style="margin-bottom: 25px; padding: 20px; background: rgba(83,52,131,0.1); border: 1px solid #533483; border-radius: 10px;">
+                    <h3 style="color: #e94560; margin-bottom: 8px;">Importer fra badmintonplayer.dk</h3>
+                    <p style="color: #aaa; font-size: 0.88em; margin-bottom: 14px;">Indsæt et kamplink fra badmintonplayer.dk — hold og spillere importeres automatisk.</p>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <input type="text" id="bpImportUrl"
+                               placeholder="https://www.badmintonplayer.dk/DBF/HoldTurnering/Stilling/#5,2025,..."
+                               style="flex:1; min-width:200px; padding:10px; background:#1a1a2e; color:#eaeaea; border:1px solid #533483; border-radius:5px;">
+                        <button id="bpImportBtn" class="btn-primary" style="white-space:nowrap;">Hent kampdata</button>
+                    </div>
+                    <div id="bpImportStatus" style="display:none; margin-top:10px; padding:10px; border-radius:5px; font-size:0.9em;"></div>
+                    <div id="bpImportPreview" style="display:none; margin-top:20px;"></div>
+                </div>
+
                 <!-- Create new holdkamp form -->
                 <div id="createHoldkampForm">
                     <h3 style="margin-bottom: 15px; color: #e94560;">Opret ny Holdkamp</h3>

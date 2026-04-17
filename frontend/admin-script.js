@@ -70,6 +70,10 @@ function setupEventListeners() {
     document.getElementById('holdkampFormat').addEventListener('change', onHoldkampFormatChange);
     document.getElementById('startHoldkampBtn').addEventListener('click', startHoldkamp);
 
+    // badmintonplayer.dk import
+    document.getElementById('bpImportBtn').addEventListener('click', bpImport);
+    document.getElementById('bpImportUrl').addEventListener('keypress', e => { if (e.key === 'Enter') bpImport(); });
+
     // Match History
     document.getElementById('matchHistoryBtn').addEventListener('click', showMatchHistory);
     document.getElementById('backToOverviewBtn').addEventListener('click', showCourtOverview);
@@ -855,7 +859,8 @@ function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCou
 
         if (g.status === 'pending') {
             statusBadge = '<span style="background:#555;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8em;">Afventer</span>';
-            editBtn = `<button onclick="toggleEditGame(${teamMatch.id}, ${g.id})" style="padding:3px 10px;background:transparent;color:#aaa;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:0.8em;">Rediger</button>`;
+            editBtn = `<button onclick="toggleEditGame(${teamMatch.id}, ${g.id})" style="padding:3px 10px;background:transparent;color:#aaa;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:0.8em;">Rediger</button>
+                       <button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" style="padding:3px 10px;background:transparent;color:#f0a500;border:1px solid #f0a500;border-radius:4px;cursor:pointer;font-size:0.8em;">Manuel</button>`;
 
             // Courts occupied by other active holdkamp games or active game states
             const occupiedByCourts = new Set(
@@ -889,7 +894,8 @@ function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCou
                 scoreText = ` · ${courtData.player1.score}–${courtData.player2.score} (${courtData.player1.games}–${courtData.player2.games} sæt)`;
             }
             statusBadge = `<span style="background:#533483;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8em;">Bane ${g.court_number || '?'} ▶${scoreText}</span>`;
-            editBtn = `<button onclick="toggleEditGame(${teamMatch.id}, ${g.id})" style="padding:3px 10px;background:transparent;color:#aaa;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:0.8em;">Rediger</button>`;
+            editBtn = `<button onclick="toggleEditGame(${teamMatch.id}, ${g.id})" style="padding:3px 10px;background:transparent;color:#aaa;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:0.8em;">Rediger</button>
+                       <button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" style="padding:3px 10px;background:transparent;color:#f0a500;border:1px solid #f0a500;border-radius:4px;cursor:pointer;font-size:0.8em;">Manuel</button>`;
         } else if (g.status === 'finished') {
             const winner = g.winner_team === 1 ? teamMatch.team1_name : teamMatch.team2_name;
             winnerBadge = `<span style="background:#4CAF50;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8em;">✓ ${escapeHtml(winner)}</span>`;
@@ -915,6 +921,41 @@ function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCou
             </div>
         </div>` : '';
 
+        const manualForm = g.status !== 'finished' ? `
+        <div id="manualResult_${g.id}" style="display:none; padding:12px; background:rgba(240,165,0,0.07); border:1px solid rgba(240,165,0,0.3); border-radius:6px; margin-top:8px;">
+            <div style="color:#f0a500;font-size:0.82em;font-weight:bold;margin-bottom:10px;">Manuel resultat</div>
+            <div style="margin-bottom:10px;">
+                <div style="color:#aaa;font-size:0.8em;margin-bottom:6px;">Vinder</div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1px solid #4CAF50;border-radius:4px;color:#4CAF50;font-size:0.88em;">
+                        <input type="radio" name="manualWinner_${g.id}" value="1" style="accent-color:#4CAF50;"> ${escapeHtml(teamMatch.team1_name)}
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1px solid #e94560;border-radius:4px;color:#e94560;font-size:0.88em;">
+                        <input type="radio" name="manualWinner_${g.id}" value="2" style="accent-color:#e94560;"> ${escapeHtml(teamMatch.team2_name)}
+                    </label>
+                </div>
+            </div>
+            <div style="margin-bottom:10px;">
+                <div style="color:#aaa;font-size:0.8em;margin-bottom:8px;">Sætscore <span style="color:#666;">(valgfrit)</span></div>
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                    ${[1,2,3].map(s => `
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="color:#666;font-size:0.8em;width:38px;flex-shrink:0;">Sæt ${s}${s===3?' *':''}</span>
+                        <input id="manualS${s}t1_${g.id}" type="number" min="0" max="99" placeholder="–"
+                               style="width:52px;padding:6px;background:#1a1a2e;color:#4CAF50;border:1px solid #555;border-radius:4px;text-align:center;font-size:0.95em;">
+                        <span style="color:#555;font-size:1em;">–</span>
+                        <input id="manualS${s}t2_${g.id}" type="number" min="0" max="99" placeholder="–"
+                               style="width:52px;padding:6px;background:#1a1a2e;color:#e94560;border:1px solid #555;border-radius:4px;text-align:center;font-size:0.95em;">
+                    </div>`).join('')}
+                </div>
+                <div style="color:#666;font-size:0.75em;margin-top:5px;">* Sæt 3 kun hvis nødvendigt</div>
+            </div>
+            <div style="display:flex;gap:8px;">
+                <button onclick="saveManualResult(${teamMatch.id}, ${g.id})" style="padding:6px 16px;background:#f0a500;color:#000;font-weight:bold;border:none;border-radius:4px;cursor:pointer;font-size:0.85em;">Gem resultat</button>
+                <button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" style="padding:6px 12px;background:transparent;color:#aaa;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:0.85em;">Annuller</button>
+            </div>
+        </div>` : '';
+
         return `
         <div style="padding:10px 15px;background:rgba(83,52,131,0.2);border-radius:8px;margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -926,6 +967,7 @@ function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCou
             </div>
             ${courtAssign}
             ${editForm}
+            ${manualForm}
         </div>`;
     }).join('');
 
@@ -1096,6 +1138,47 @@ async function saveEditGame(teamMatchId, gameId, isDoubles) {
     } catch (error) {
         console.error('Failed to save game edit:', error);
         alert('Kunne ikke gemme ændringerne. Prøv igen.');
+    }
+}
+
+function toggleManualResult(teamMatchId, gameId) {
+    const form = document.getElementById(`manualResult_${gameId}`);
+    if (!form) return;
+    const opening = form.style.display === 'none';
+    // Close edit form if open
+    const editForm = document.getElementById(`editGame_${gameId}`);
+    if (editForm) editForm.style.display = 'none';
+    form.style.display = opening ? 'block' : 'none';
+    holdkampEditOpen = opening;
+}
+
+async function saveManualResult(teamMatchId, gameId) {
+    const winnerRadio = document.querySelector(`input[name="manualWinner_${gameId}"]:checked`);
+    if (!winnerRadio) {
+        alert('Vælg venligst en vinder.');
+        return;
+    }
+    const winnerTeam = parseInt(winnerRadio.value);
+
+    // Build set score string from individual fields
+    const sets = [1, 2, 3].map(s => {
+        const t1 = document.getElementById(`manualS${s}t1_${gameId}`)?.value.trim();
+        const t2 = document.getElementById(`manualS${s}t2_${gameId}`)?.value.trim();
+        return (t1 !== '' && t2 !== '') ? `${t1}-${t2}` : null;
+    }).filter(Boolean);
+    const setScores = sets.length > 0 ? sets.join(' ') : null;
+
+    try {
+        await api.updateTeamMatchGame(teamMatchId, gameId, {
+            status: 'finished',
+            winnerTeam,
+            ...(setScores ? { setScores } : {})
+        });
+        holdkampEditOpen = false;
+        await loadActiveHoldkamp();
+    } catch (error) {
+        console.error('Failed to save manual result:', error);
+        alert('Kunne ikke gemme resultatet. Prøv igen.');
     }
 }
 
@@ -1833,4 +1916,145 @@ function showDtMsg(el, msg, type) {
 
 function escapeHtmlDt(str) {
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ==================== BADMINTONPLAYER.DK IMPORT ====================
+
+async function bpImport() {
+    const url = document.getElementById('bpImportUrl').value.trim();
+    if (!url) { bpStatus('Indsæt venligst et link fra badmintonplayer.dk', 'error'); return; }
+
+    const btn = document.getElementById('bpImportBtn');
+    btn.disabled = true;
+    btn.textContent = 'Henter...';
+    bpStatus('Henter kampdata fra badmintonplayer.dk...', 'info');
+    document.getElementById('bpImportPreview').style.display = 'none';
+
+    try {
+        const data = await api.request('/import/holdkamp-url', {
+            method: 'POST',
+            body: JSON.stringify({ url })
+        });
+        bpRenderPreview(data);
+        bpStatus(`✓ Importeret: ${escapeHtml(data.team1Name)} vs ${escapeHtml(data.team2Name)} — ${data.games.length} kampe`, 'success');
+    } catch (err) {
+        bpStatus('Fejl: ' + err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Hent kampdata';
+    }
+}
+
+function bpStatus(msg, type) {
+    const el = document.getElementById('bpImportStatus');
+    if (!msg) { el.style.display = 'none'; return; }
+    el.textContent = msg;
+    el.style.display = 'block';
+    el.style.background = type === 'success' ? 'rgba(76,175,80,0.12)'
+                        : type === 'error'   ? 'rgba(233,69,96,0.12)'
+                        :                      'rgba(83,52,131,0.18)';
+    el.style.color     = type === 'success' ? '#4CAF50'
+                        : type === 'error'   ? '#e94560'
+                        :                      '#aaa';
+    el.style.border    = type === 'success' ? '1px solid rgba(76,175,80,0.25)'
+                        : type === 'error'   ? '1px solid rgba(233,69,96,0.25)'
+                        :                      '1px solid rgba(83,52,131,0.3)';
+}
+
+function bpRenderPreview(data) {
+    const { team1Name, team2Name, games } = data;
+    const preview = document.getElementById('bpImportPreview');
+
+    const inpStyle = 'width:100%;padding:8px;background:#1a1a2e;color:#eaeaea;border:1px solid #533483;border-radius:4px;margin-bottom:4px;box-sizing:border-box;';
+
+    const counts = {};
+    const gameRows = games.map((g, i) => {
+        counts[g.category] = (counts[g.category] || 0) + 1;
+        const label = `${g.category} ${counts[g.category]}`;
+        const isDoubles = ['MD', 'DD', 'HD', 'Double'].includes(g.category);
+        const inp = (id, val, ph) =>
+            `<input type="text" id="bp_${id}_${i}" value="${escapeHtml(val || '')}" placeholder="${ph}" style="${inpStyle}">`;
+
+        return `<div style="background:rgba(83,52,131,0.1);border-radius:8px;padding:14px;margin-bottom:8px;">
+            <div style="font-weight:bold;color:#e94560;margin-bottom:10px;">${label}</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div>
+                    <div style="color:#4CAF50;font-size:0.82em;margin-bottom:6px;">${escapeHtml(team1Name)}</div>
+                    ${inp('t1p1', g.team1Player1, 'Spiller')}
+                    ${isDoubles ? inp('t1p2', g.team1Player2, 'Makker') : ''}
+                </div>
+                <div>
+                    <div style="color:#e94560;font-size:0.82em;margin-bottom:6px;">${escapeHtml(team2Name)}</div>
+                    ${inp('t2p1', g.team2Player1, 'Spiller')}
+                    ${isDoubles ? inp('t2p2', g.team2Player2, 'Makker') : ''}
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+
+    preview.innerHTML = `
+        <div style="background:rgba(255,255,255,0.03);border:1px solid #533483;border-radius:10px;padding:20px;">
+            <h4 style="color:#eaeaea;margin-bottom:15px;">Gennemse og ret inden oprettelse</h4>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;">
+                <div>
+                    <label style="color:#aaa;font-size:0.85em;">Hold 1</label>
+                    <input id="bp_team1" value="${escapeHtml(team1Name)}"
+                           style="width:100%;padding:10px;background:#1a1a2e;color:#eaeaea;border:1px solid #4CAF50;border-radius:5px;margin-top:4px;box-sizing:border-box;">
+                </div>
+                <div>
+                    <label style="color:#aaa;font-size:0.85em;">Hold 2</label>
+                    <input id="bp_team2" value="${escapeHtml(team2Name)}"
+                           style="width:100%;padding:10px;background:#1a1a2e;color:#eaeaea;border:1px solid #e94560;border-radius:5px;margin-top:4px;box-sizing:border-box;">
+                </div>
+            </div>
+            ${gameRows}
+            <button onclick="bpCreate()" class="btn-primary"
+                    style="width:100%;padding:14px;font-size:1.05em;margin-top:8px;">
+                Opret Holdkamp
+            </button>
+        </div>`;
+
+    // Store original game structure for bpCreate
+    preview.dataset.games   = JSON.stringify(games);
+    preview.dataset.format  = data.format;
+    preview.style.display   = 'block';
+
+    // Scroll to preview
+    preview.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function bpCreate() {
+    const preview  = document.getElementById('bpImportPreview');
+    const games    = JSON.parse(preview.dataset.games);
+    const format   = preview.dataset.format;
+    const team1Name = document.getElementById('bp_team1').value.trim();
+    const team2Name = document.getElementById('bp_team2').value.trim();
+
+    if (!team1Name || !team2Name) {
+        alert('Udfyld venligst begge holdnavne.');
+        return;
+    }
+
+    const gamesData = games.map((g, i) => {
+        const isDoubles = ['MD', 'DD', 'HD', 'Double'].includes(g.category);
+        return {
+            category:     g.category,
+            team1Player1: document.getElementById(`bp_t1p1_${i}`)?.value.trim() || '',
+            team1Player2: isDoubles ? (document.getElementById(`bp_t1p2_${i}`)?.value.trim() || '') : '',
+            team2Player1: document.getElementById(`bp_t2p1_${i}`)?.value.trim() || '',
+            team2Player2: isDoubles ? (document.getElementById(`bp_t2p2_${i}`)?.value.trim() || '') : '',
+        };
+    });
+
+    try {
+        await api.createTeamMatch({ format, team1Name, team2Name, games: gamesData });
+        // Reset import section
+        document.getElementById('bpImportUrl').value = '';
+        preview.style.display = 'none';
+        bpStatus('', '');
+        // Reload active holdkamp view
+        await loadActiveHoldkamp();
+    } catch (err) {
+        alert('Kunne ikke oprette holdkamp: ' + err.message);
+    }
 }

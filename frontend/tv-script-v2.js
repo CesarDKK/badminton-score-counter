@@ -480,8 +480,8 @@ function showDefaultMessage() {
     container.style.cssText = 'position: relative; overflow: hidden;';
     container.innerHTML = `
         <div class="screensaver-text" style="position: absolute; text-align: center; color: white; white-space: nowrap;">
-            <h2 style="font-size: 4em; margin-bottom: 20px;">Ingen aktiv kamp</h2>
-            <p style="font-size: 2.5em; color: #aaa;">Bane ${courtId}</p>
+            <div style="font-size: 2.5em; font-weight: 600; color: #aaa; letter-spacing: 0.05em; margin-bottom: 5px;">Ingen aktiv kamp</div>
+            <div style="font-size: 8em; font-weight: bold; line-height: 1; color: white; letter-spacing: 0.02em;">BANE ${courtId}</div>
         </div>
     `;
     document.querySelector('.tv-container').appendChild(container);

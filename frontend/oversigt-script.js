@@ -38,6 +38,7 @@ async function loadHoldkamp() {
 
         if (!activeTeamMatch) {
             panel.style.display = 'none';
+            updateIdleState();
             return;
         }
 
@@ -61,6 +62,7 @@ async function loadHoldkamp() {
         document.getElementById('holdkampFormatLabel').textContent = formatNames[activeTeamMatch.format] || activeTeamMatch.format;
 
         renderHoldkampGames(activeTeamMatch);
+        updateIdleState();
     } catch (error) {
         console.error('Failed to load holdkamp:', error);
     }
@@ -120,8 +122,12 @@ async function initialize() {
         const settings = await api.getSettings();
         courtCount = settings.courtCount || 5;
 
+        await refreshIdleSettings();
         await loadAllCourts();
         await loadHoldkamp();
+
+        // Refresh sponsor images every 10 seconds
+        setInterval(refreshIdleSettings, 10000);
     } catch (error) {
         console.error('Failed to initialize overview:', error);
         hideLoading();
@@ -190,6 +196,7 @@ async function loadAllCourts() {
 
         hideLoading();
         displayCurrentPage();
+        updateIdleState();
     } catch (error) {
         console.error('Failed to load courts:', error);
         hideLoading();
@@ -231,7 +238,7 @@ function displayCurrentPage() {
 
     if (activeCourts.length === 0) {
         grid.style.display = 'none';
-        noMatchesMsg.style.display = 'block';
+        noMatchesMsg.style.display = 'none';
         pageIndicator.style.display = 'none';
         return;
     }
@@ -455,6 +462,174 @@ function escapeHtml(text) {
 function hideLoading() {
     const loadingIndicator = document.getElementById('loadingIndicator');
     loadingIndicator.style.display = 'none';
+}
+
+// ==================== IDLE SCREEN (screensaver / sponsor slideshow) ====================
+
+let _idleImages = [];
+let _idleSlideDuration = 10000;
+let _idleSlideshowTimer = null;
+let _idleAnimFrame = null;
+let _idleSlideIndex = 0;
+let _isIdleVisible = false;
+
+async function refreshIdleSettings() {
+    try {
+        const [images, settings] = await Promise.all([
+            api.getSponsorImages('general'),
+            api.getSettings()
+        ]);
+        const newImages = images || [];
+        const newDuration = (settings.slideDuration || 10) * 1000;
+
+        // If image list or duration changed while idle, restart the idle screen
+        const changed = newImages.length !== _idleImages.length || newDuration !== _idleSlideDuration;
+        _idleImages = newImages;
+        _idleSlideDuration = newDuration;
+
+        if (_isIdleVisible && changed) {
+            _stopIdleSlideshow();
+            _stopIdleScreensaver();
+            const screen = document.getElementById('idleScreen');
+            if (screen) screen.innerHTML = '';
+            _isIdleVisible = false;
+            _startIdleContent();
+        }
+    } catch (e) { /* keep cached values on error */ }
+}
+
+function updateIdleState() {
+    const hasActivity = activeCourts.length > 0 || !!activeTeamMatch;
+    if (hasActivity) {
+        _hideIdleScreen();
+    } else {
+        _showIdleScreen();
+    }
+}
+
+function _showIdleScreen() {
+    if (_isIdleVisible) return;
+    const screen = document.getElementById('idleScreen');
+    if (!screen) return;
+    screen.style.display = 'block';
+    _isIdleVisible = true;
+    _startIdleContent();
+}
+
+function _hideIdleScreen() {
+    if (!_isIdleVisible) return;
+    _stopIdleSlideshow();
+    _stopIdleScreensaver();
+    const screen = document.getElementById('idleScreen');
+    if (screen) {
+        screen.style.display = 'none';
+        screen.innerHTML = '';
+    }
+    _isIdleVisible = false;
+    _idleSlideIndex = 0;
+}
+
+function _startIdleContent() {
+    if (_idleImages.length > 0) {
+        _startIdleSlideshow();
+    } else {
+        _startIdleDefaultMessage();
+    }
+}
+
+// ── Sponsor slideshow ────────────────────────────────────────────────────────
+
+function _startIdleSlideshow() {
+    const screen = document.getElementById('idleScreen');
+    if (!screen) return;
+
+    screen.innerHTML = `<img id="idleSlideImg"
+        src="/uploads/${escapeHtml(_idleImages[0].filename)}"
+        style="width:100%;height:100%;object-fit:contain;display:block;" alt="">`;
+    _idleSlideIndex = 0;
+
+    if (_idleImages.length > 1) {
+        _idleSlideshowTimer = setInterval(() => {
+            _idleSlideIndex = (_idleSlideIndex + 1) % _idleImages.length;
+            const img = document.getElementById('idleSlideImg');
+            if (img) img.src = `/uploads/${escapeHtml(_idleImages[_idleSlideIndex].filename)}`;
+        }, _idleSlideDuration);
+    }
+}
+
+function _stopIdleSlideshow() {
+    if (_idleSlideshowTimer) {
+        clearInterval(_idleSlideshowTimer);
+        _idleSlideshowTimer = null;
+    }
+}
+
+// ── Screensaver (bouncing text) ───────────────────────────────────────────────
+
+function _startIdleDefaultMessage() {
+    const screen = document.getElementById('idleScreen');
+    if (!screen) return;
+
+    screen.innerHTML = `
+        <div id="idleBounceText" style="position:absolute; text-align:center; color:white; white-space:nowrap;">
+            <div style="font-size:10.5em; font-weight:bold; color:white; letter-spacing:0.02em;">Ingen aktive kampe</div>
+        </div>`;
+
+    _startIdleScreensaver();
+}
+
+function _startIdleScreensaver() {
+    _stopIdleScreensaver();
+
+    let x = -1, y = -1, dx = 0, dy = 0, lastTime = null;
+
+    function animate(timestamp) {
+        const screen = document.getElementById('idleScreen');
+        const text = screen ? screen.querySelector('#idleBounceText') : null;
+        if (!screen || !text) return;
+
+        if (x < 0) {
+            const maxX = screen.offsetWidth - text.offsetWidth;
+            const maxY = screen.offsetHeight - text.offsetHeight;
+            x = Math.max(0, maxX / 2);
+            y = Math.max(0, maxY / 2);
+            const speed = 20;
+            const angle = Math.random() * 2 * Math.PI;
+            dx = Math.cos(angle) * speed;
+            dy = Math.sin(angle) * speed;
+            if (Math.abs(dx) < 6) dx = dx < 0 ? -6 : 6;
+            if (Math.abs(dy) < 6) dy = dy < 0 ? -6 : 6;
+        }
+
+        if (!lastTime) lastTime = timestamp;
+        const delta = Math.min((timestamp - lastTime) / 1000, 0.1);
+        lastTime = timestamp;
+
+        x += dx * delta;
+        y += dy * delta;
+
+        const maxX = Math.max(0, screen.offsetWidth - text.offsetWidth);
+        const maxY = Math.max(0, screen.offsetHeight - text.offsetHeight);
+
+        if (x <= 0)    { x = 0;    dx =  Math.abs(dx); }
+        if (x >= maxX) { x = maxX; dx = -Math.abs(dx); }
+        if (y <= 0)    { y = 0;    dy =  Math.abs(dy); }
+        if (y >= maxY) { y = maxY; dy = -Math.abs(dy); }
+
+        text.style.left = Math.round(x) + 'px';
+        text.style.top  = Math.round(y) + 'px';
+
+        _idleAnimFrame = requestAnimationFrame(animate);
+    }
+
+    _idleAnimFrame = requestAnimationFrame(animate);
+}
+
+function _stopIdleScreensaver() {
+    if (_idleAnimFrame) {
+        cancelAnimationFrame(_idleAnimFrame);
+        _idleAnimFrame = null;
+    }
 }
 
 function startAutoRefresh() {
