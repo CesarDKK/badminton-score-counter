@@ -5,14 +5,17 @@ const jwt = require('jsonwebtoken');
 const { query, queryOne } = require('../config/database');
 const { clubAdminAuth } = require('../middleware/clubAdminAuth');
 
-// Gyldige destinations — frontend sider en device token kan pege på
-const VALID_DESTINATIONS = [
-    'oversigt',
-    'tv',
-    'tv-v3',
-    'court/1', 'court/2', 'court/3', 'court/4', 'court/5',
-    'court/6', 'court/7', 'court/8', 'court/9', 'court/10'
-];
+// Gyldige destinations — frontend sider en device token kan pege på.
+// 'tv' og 'tv-v3' er legacy uden bane-nummer; 'tv/N' og 'court/N' bruges af
+// det nuværende admin-UI og understøtter baner 1–20.
+const VALID_DESTINATIONS = (() => {
+    const list = ['oversigt', 'tv', 'tv-v3'];
+    for (let i = 1; i <= 20; i++) {
+        list.push(`tv/${i}`);
+        list.push(`court/${i}`);
+    }
+    return list;
+})();
 
 // GET /t/:token — valider device token og returner JWT
 // (dette endpoint bruges af frontend når tabletten åbner sit bogmærke-link)
