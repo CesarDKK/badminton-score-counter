@@ -1803,6 +1803,9 @@ function renderDeviceTokens(tokens) {
             : dest.startsWith('tv/') ? `TV — Bane ${dest.split('/')[1]}`
             : dest.startsWith('court/') ? `Bane visning — Bane ${dest.split('/')[1]}`
             : dest;
+        const qrBadge = dest.startsWith('tv/')
+            ? ` &nbsp;•&nbsp; 📱 ${t.show_qr_on_tv ? 'QR vises' : 'QR skjult'}`
+            : '';
 
         return `
         <div style="background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:16px 20px;margin-bottom:12px;${!t.is_active ? 'opacity:0.45;' : ''}">
@@ -1811,7 +1814,7 @@ function renderDeviceTokens(tokens) {
                     <div style="font-weight:600;margin-bottom:4px;">${escapeHtmlDt(t.name)}</div>
                     <div style="font-size:0.8em;color:rgba(255,255,255,0.45);">
                         📍 ${destLabel} &nbsp;•&nbsp;
-                        🔒 ${t.locked ? 'Låst' : 'Fri navigation'} &nbsp;•&nbsp;
+                        🔒 ${t.locked ? 'Låst' : 'Fri navigation'}${qrBadge} &nbsp;•&nbsp;
                         Sidst brugt: ${lastUsed}
                     </div>
                     <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
@@ -1843,6 +1846,9 @@ function renderDeviceTokens(tokens) {
 function toggleDtCourt() {
     const type = document.getElementById('dtType').value;
     document.getElementById('dtCourtWrap').style.visibility = type === 'oversigt' ? 'hidden' : 'visible';
+    // QR-flaget er kun relevant for TV-destinationer
+    const qrWrap = document.getElementById('dtQrWrap');
+    if (qrWrap) qrWrap.style.display = type === 'tv' ? 'flex' : 'none';
 }
 
 async function handleCreateDeviceToken() {
@@ -1851,6 +1857,7 @@ async function handleCreateDeviceToken() {
     const court = document.getElementById('dtCourt').value;
     const destination = type === 'oversigt' ? 'oversigt' : `${type}/${court}`;
     const locked = document.getElementById('dtLocked').value === '1';
+    const showQrOnTv = type === 'tv' ? document.getElementById('dtShowQr').checked : true;
     const btn = document.getElementById('createDtBtn');
     const msgEl = document.getElementById('dtCreateMsg');
 
@@ -1863,8 +1870,9 @@ async function handleCreateDeviceToken() {
     btn.textContent = 'Opretter...';
 
     try {
-        await api.createDeviceToken(name, destination, locked);
+        await api.createDeviceToken(name, destination, locked, showQrOnTv);
         document.getElementById('dtName').value = '';
+        document.getElementById('dtShowQr').checked = true;
         showDtMsg(msgEl, '✓ Link oprettet', 'success');
         await loadDeviceTokens();
     } catch (err) {

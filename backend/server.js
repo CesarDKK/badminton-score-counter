@@ -66,7 +66,7 @@ app.get('/t/:token', async (req, res, next) => {
         const jwt = require('jsonwebtoken');
 
         const deviceToken = await queryOne(
-            'SELECT id, name, destination, locked, token_type, consumed_at FROM device_tokens WHERE token = ? AND is_active = 1',
+            'SELECT id, name, destination, locked, token_type, consumed_at, show_qr_on_tv FROM device_tokens WHERE token = ? AND is_active = 1',
             [req.params.token]
         );
 
@@ -104,7 +104,9 @@ app.get('/t/:token', async (req, res, next) => {
             );
             const tvVersion = tvVersionRow?.setting_value || 'v3';
             const tvPage = tvVersion === 'v2' ? 'tv.html' : 'tv-v3.html';
-            targetUrl = `/${tvPage}?court=${courtNum}&dt=${sessionToken}`;
+            // QR-flag per-token: tilladelsen kombineres med klub-mode på TV-siden
+            const qrFlag = deviceToken.show_qr_on_tv ? '1' : '0';
+            targetUrl = `/${tvPage}?court=${courtNum}&dt=${sessionToken}&qr=${qrFlag}`;
         } else if (deviceToken.destination.startsWith('court/')) {
             const courtNum = deviceToken.destination.split('/')[1];
             const courtVersionRow = await settingsQueryOne(

@@ -63,7 +63,7 @@ router.get('/validate/:token', async (req, res, next) => {
 router.get('/', clubAdminAuth, async (req, res, next) => {
     try {
         const tokens = await query(
-            `SELECT id, token, name, destination, locked, is_active, created_at, last_used_at
+            `SELECT id, token, name, destination, locked, show_qr_on_tv, is_active, created_at, last_used_at
              FROM device_tokens ORDER BY created_at DESC`
         );
         res.json(tokens);
@@ -75,7 +75,7 @@ router.get('/', clubAdminAuth, async (req, res, next) => {
 // POST /api/device-tokens — opret nyt device token
 router.post('/', clubAdminAuth, async (req, res, next) => {
     try {
-        const { name, destination, locked } = req.body;
+        const { name, destination, locked, showQrOnTv } = req.body;
 
         if (!name || !destination) {
             return res.status(400).json({ error: 'Navn og destination er påkrævet' });
@@ -89,14 +89,16 @@ router.post('/', clubAdminAuth, async (req, res, next) => {
         }
 
         const token = crypto.randomBytes(32).toString('hex');
+        // Default TRUE — matcher DB default så eksisterende flow bevares
+        const qrFlag = showQrOnTv === undefined ? 1 : (showQrOnTv ? 1 : 0);
 
         const result = await query(
-            'INSERT INTO device_tokens (token, name, destination, locked) VALUES (?, ?, ?, ?)',
-            [token, name, destination, locked ? 1 : 0]
+            'INSERT INTO device_tokens (token, name, destination, locked, show_qr_on_tv) VALUES (?, ?, ?, ?, ?)',
+            [token, name, destination, locked ? 1 : 0, qrFlag]
         );
 
         const created = await queryOne(
-            'SELECT id, token, name, destination, locked, is_active, created_at FROM device_tokens WHERE id = ?',
+            'SELECT id, token, name, destination, locked, show_qr_on_tv, is_active, created_at FROM device_tokens WHERE id = ?',
             [result.insertId]
         );
 
@@ -106,10 +108,10 @@ router.post('/', clubAdminAuth, async (req, res, next) => {
     }
 });
 
-// PUT /api/device-tokens/:id — opdater navn, destination eller locked
+// PUT /api/device-tokens/:id — opdater navn, destination, locked eller show_qr_on_tv
 router.put('/:id', clubAdminAuth, async (req, res, next) => {
     try {
-        const { name, destination, locked } = req.body;
+        const { name, destination, locked, showQrOnTv } = req.body;
 
         const existing = await queryOne('SELECT id FROM device_tokens WHERE id = ?', [req.params.id]);
         if (!existing) {
@@ -124,13 +126,20 @@ router.put('/:id', clubAdminAuth, async (req, res, next) => {
             `UPDATE device_tokens
              SET name = COALESCE(?, name),
                  destination = COALESCE(?, destination),
-                 locked = COALESCE(?, locked)
+                 locked = COALESCE(?, locked),
+                 show_qr_on_tv = COALESCE(?, show_qr_on_tv)
              WHERE id = ?`,
-            [name || null, destination || null, locked !== undefined ? (locked ? 1 : 0) : null, req.params.id]
+            [
+                name || null,
+                destination || null,
+                locked !== undefined ? (locked ? 1 : 0) : null,
+                showQrOnTv !== undefined ? (showQrOnTv ? 1 : 0) : null,
+                req.params.id
+            ]
         );
 
         const updated = await queryOne(
-            'SELECT id, token, name, destination, locked, is_active, created_at, last_used_at FROM device_tokens WHERE id = ?',
+            'SELECT id, token, name, destination, locked, show_qr_on_tv, is_active, created_at, last_used_at FROM device_tokens WHERE id = ?',
             [req.params.id]
         );
 

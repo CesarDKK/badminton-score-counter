@@ -201,6 +201,7 @@ CREATE TABLE IF NOT EXISTS device_tokens (
   token_type ENUM('permanent', 'match_session') DEFAULT 'permanent' COMMENT 'permanent = manuelt oprettet, match_session = auto-genereret QR-token per kamp',
   court_number INT DEFAULT NULL COMMENT 'Bane-nummer for match-session tokens',
   locked BOOLEAN DEFAULT FALSE COMMENT 'true = låst til destination, false = fri navigation',
+  show_qr_on_tv BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'Vis QR-kode på TV (kun relevant for tv/*-destinationer)',
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   last_used_at TIMESTAMP NULL,

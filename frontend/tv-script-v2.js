@@ -45,11 +45,14 @@ async function initializeTVDisplay() {
     // Display court number
     document.getElementById('courtNumber').textContent = courtId;
 
-    // Spørg backend om QR-counter funktionen er tilgængelig (kun i klub-mode)
+    // Spørg backend om QR-counter funktionen er tilgængelig (kun i klub-mode).
+    // Tokenets show_qr_on_tv-flag leveres via &qr=0/1 på URL'en fra /t/:token redirect.
+    const qrParam = urlParams.get('qr');
+    const qrAllowedByToken = qrParam !== '0'; // default ON hvis param mangler
     try {
         const modeResp = await fetch('/api/mode');
         const modeData = await modeResp.json();
-        qrCounterEnabled = !!modeData.qrCounter;
+        qrCounterEnabled = !!modeData.qrCounter && qrAllowedByToken;
     } catch (e) {
         qrCounterEnabled = false;
     }

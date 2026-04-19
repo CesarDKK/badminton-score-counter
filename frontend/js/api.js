@@ -657,10 +657,12 @@ class BadmintonAPI {
         return this.request('/device-tokens');
     }
 
-    async createDeviceToken(name, destination, locked) {
+    async createDeviceToken(name, destination, locked, showQrOnTv) {
+        const body = { name, destination, locked };
+        if (showQrOnTv !== undefined) body.showQrOnTv = showQrOnTv;
         return this.request('/device-tokens', {
             method: 'POST',
-            body: JSON.stringify({ name, destination, locked })
+            body: JSON.stringify(body)
         });
     }
 

@@ -48,11 +48,15 @@ document.addEventListener('DOMContentLoaded', async function() {
 async function initializeTVDisplay() {
     document.getElementById('courtNumber').textContent = courtId;
 
-    // Spørg backend om QR-counter funktionen er tilgængelig (kun i klub-mode)
+    // Spørg backend om QR-counter funktionen er tilgængelig (kun i klub-mode).
+    // Ud over mode-flaget kan tokenet have slået QR fra via admin-siden;
+    // det flag kommer med som &qr=0/1 på URL'en fra /t/:token redirect.
+    const qrParam = urlParams.get('qr');
+    const qrAllowedByToken = qrParam !== '0'; // default ON hvis param mangler (fx direkte TV-adgang)
     try {
         const modeResp = await fetch('/api/mode');
         const modeData = await modeResp.json();
-        qrCounterEnabled = !!modeData.qrCounter;
+        qrCounterEnabled = !!modeData.qrCounter && qrAllowedByToken;
     } catch (e) {
         qrCounterEnabled = false;
     }
