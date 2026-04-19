@@ -1,5 +1,42 @@
 /* TV View V3 — Arena Design */
 
+/* =================== QR COUNTER (kun klub-mode, ledig bane) =================== */
+.qr-counter {
+    position: fixed;
+    bottom: 3vh;
+    right: 3vw;
+    z-index: 1000;
+    background: rgba(15, 52, 96, 0.92);
+    border: 2px solid var(--color-accent, #e94560);
+    border-radius: 16px;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.qr-counter__label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.6em;
+    letter-spacing: 0.08em;
+    color: var(--color-accent, #e94560);
+}
+
+.qr-counter__image {
+    width: 220px;
+    height: 220px;
+    display: block;
+    background: transparent;
+}
+
+.qr-counter__hint {
+    font-size: 0.95em;
+    color: rgba(255, 255, 255, 0.8);
+    letter-spacing: 0.03em;
+}
+
 /* =================== SCREENSAVER / SPONSOR SLIDESHOW =================== */
 .sponsor-slideshow {
     position: fixed;

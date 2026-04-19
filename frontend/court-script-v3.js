@@ -226,8 +226,8 @@ function swapPlayers(team) {
         gameState.team2RightCourt = gameState.team2RightCourt === 1 ? 2 : 1;
     }
 
-    // If swapping between sets, auto-update which player serves (right-court player)
-    if (gameState.betweenSets && gameState.isDoubles) {
+    // Update which player serves when the serving team's positions are swapped
+    if (gameState.isDoubles && gameState.servingTeam) {
         const servingTeam = gameState.servingTeam;
         gameState.servingPlayerOnTeam = servingTeam === 1 ? gameState.team1RightCourt : gameState.team2RightCourt;
     }
@@ -327,6 +327,7 @@ function addPoint(player) {
     if (isDecidingGame && scoredTo11 && !gameState.decidingGameSwitched) {
         gameState.decidingGameSwitched = true;
         switchSides();
+        fixDoublesServePosition();
         showMessage('Skift Sider!', 'Point har nået 11 i afgørende sæt. Spillere har skiftet side!');
     }
 
@@ -389,6 +390,8 @@ async function checkGameWin() {
                 resetScores();
                 gameState.decidingGameSwitched = false;
                 switchSides();
+                fixDoublesStartPosition();
+                showDoublesPositionMessage();
             }, false); // showOverlay = false, timer runs in background
         }
 
@@ -407,6 +410,8 @@ async function checkGameWin() {
                             resetScores();
                             gameState.decidingGameSwitched = false;
                             switchSides();
+                            fixDoublesStartPosition();
+                            showDoublesPositionMessage();
                         }
                     },
                     style: 'primary'
@@ -458,6 +463,8 @@ async function checkGameWin() {
                 resetScores();
                 gameState.decidingGameSwitched = false;
                 switchSides();
+                fixDoublesStartPosition();
+                showDoublesPositionMessage();
             }, false); // showOverlay = false, timer runs in background
         }
 
@@ -476,6 +483,8 @@ async function checkGameWin() {
                             resetScores();
                             gameState.decidingGameSwitched = false;
                             switchSides();
+                            fixDoublesStartPosition();
+                            showDoublesPositionMessage();
                         }
                     },
                     style: 'primary'
@@ -483,6 +492,44 @@ async function checkGameWin() {
             ]
         );
     }
+}
+
+function fixDoublesServePosition() {
+    // Correct serving player's court position based on current score (even=right, odd=left)
+    if (!gameState.isDoubles || !gameState.servingTeam || !gameState.servingPlayerOnTeam) return;
+    const st = gameState.servingTeam;
+    const score = st === 1 ? gameState.player1.score : gameState.player2.score;
+    const serverInRightCourt = score % 2 === 0;
+    const serverPlayer = gameState.servingPlayerOnTeam;
+    const otherPlayer = serverPlayer === 1 ? 2 : 1;
+    if (st === 1) {
+        gameState.team1RightCourt = serverInRightCourt ? serverPlayer : otherPlayer;
+    } else {
+        gameState.team2RightCourt = serverInRightCourt ? serverPlayer : otherPlayer;
+    }
+    updateDisplay();
+    saveGameState();
+}
+
+function fixDoublesStartPosition() {
+    if (!gameState.isDoubles || !gameState.betweenSets || !gameState.servingTeam) return;
+    if (!gameState.servingPlayerOnTeam) return;
+    if (gameState.servingTeam === 1) {
+        gameState.team1RightCourt = gameState.servingPlayerOnTeam;
+    } else {
+        gameState.team2RightCourt = gameState.servingPlayerOnTeam;
+    }
+    updateDisplay();
+    saveGameState();
+}
+
+function showDoublesPositionMessage() {
+    if (!gameState.isDoubles || !gameState.betweenSets) return;
+    showMessage(
+        'Tjek positioner',
+        'Tjek at spillerne på skærmen står på de samme pladser som på den rigtige bane. Brug ⇅ til at justere hvis det ikke passer.',
+        [{ text: 'OK', callback: null, style: 'primary' }]
+    );
 }
 
 function resetScores() {
@@ -497,20 +544,20 @@ function resetScores() {
         gameState.servingPlayer = 1;
         if (gameState.isDoubles) {
             gameState.servingTeam = 1;
-            // Auto-set server: right-court player of winning team (score is 0 = even)
-            gameState.servingPlayerOnTeam = gameState.team1RightCourt;
+            // servingPlayerOnTeam preserved — same player who served at end of set continues
             gameState.betweenSets = true;
         }
     } else if (gameState.player2.games > gameState.player1.games) {
         gameState.servingPlayer = 2;
         if (gameState.isDoubles) {
             gameState.servingTeam = 2;
-            // Auto-set server: right-court player of winning team (score is 0 = even)
-            gameState.servingPlayerOnTeam = gameState.team2RightCourt;
+            // servingPlayerOnTeam preserved — same player who served at end of set continues
             gameState.betweenSets = true;
         }
+    } else if (gameState.isDoubles) {
+        // Tied (1-1) = deciding set — keep current server, but still flag betweenSets
+        gameState.betweenSets = true;
     }
-    // If tied (shouldn't happen in normal play), keep current server
 
     updateDisplay();
     saveGameState();
@@ -548,8 +595,12 @@ function switchSides() {
         gameState.servingTeam = 1;
     }
 
-    // Court positions (team1RightCourt, team2RightCourt) stay the same
-    // because they're relative to each team's perspective, not the physical court
+    // Swap and mirror court positions — Team A's data follows Team A to its new slot, mirrored
+    if (gameState.isDoubles) {
+        const temp = gameState.team1RightCourt;
+        gameState.team1RightCourt = gameState.team2RightCourt === 1 ? 2 : 1;
+        gameState.team2RightCourt = temp === 1 ? 2 : 1;
+    }
 
     updateDisplay();
     saveGameState();
@@ -791,10 +842,10 @@ function updateDisplay() {
     // Update player name positions based on serve
     updatePlayerNamePositions();
 
-    // Show/hide swap players buttons (in doubles: before match starts OR between sets, and only if custom names are used)
+    // Show/hide swap players buttons (in doubles: before match starts OR between sets)
     const swapBtn1 = document.getElementById('swapPlayer1Btn');
     const swapBtn2 = document.getElementById('swapPlayer2Btn');
-    if (gameState.isDoubles && (!gameState.matchStartTime || gameState.betweenSets) && hasCustomPlayerNames()) {
+    if (gameState.isDoubles && (!gameState.matchStartTime || gameState.betweenSets)) {
         swapBtn1.style.display = 'flex';
         swapBtn2.style.display = 'flex';
     } else {

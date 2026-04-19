@@ -26,8 +26,12 @@ app.use(express.static(path.join(__dirname, '..', 'frontend')));
 app.use(require('./middleware/tenant'));
 
 // Mode endpoint — frontend bruger dette til at kende adgangskonteksten
+// qrCounter: kun tilgængelig i klub-mode (kræver at server og telefon ikke deler lokalt netværk)
 app.get('/api/mode', (req, res) => {
-    res.json({ mode: req.accessMode || 'direct' });
+    res.json({
+        mode: req.accessMode || 'direct',
+        qrCounter: req.accessMode === 'club'
+    });
 });
 
 // Health check
@@ -62,7 +66,7 @@ app.get('/t/:token', async (req, res, next) => {
         const jwt = require('jsonwebtoken');
 
         const deviceToken = await queryOne(
-            'SELECT id, name, destination, locked FROM device_tokens WHERE token = ? AND is_active = 1',
+            'SELECT id, name, destination, locked, token_type, consumed_at FROM device_tokens WHERE token = ? AND is_active = 1',
             [req.params.token]
         );
 
@@ -70,7 +74,12 @@ app.get('/t/:token', async (req, res, next) => {
             return res.status(401).send('Ugyldigt eller deaktiveret adgangslink');
         }
 
-        await query('UPDATE device_tokens SET last_used_at = NOW() WHERE id = ?', [deviceToken.id]);
+        // Sæt consumed_at første gang en match-session token bruges (sporing)
+        if (deviceToken.token_type === 'match_session' && !deviceToken.consumed_at) {
+            await query('UPDATE device_tokens SET last_used_at = NOW(), consumed_at = NOW() WHERE id = ?', [deviceToken.id]);
+        } else {
+            await query('UPDATE device_tokens SET last_used_at = NOW() WHERE id = ?', [deviceToken.id]);
+        }
 
         const sessionToken = jwt.sign(
             {
@@ -116,22 +125,7 @@ app.get('/t/:token', async (req, res, next) => {
     }
 });
 
-// QR-kode til oversigt — kun tilgængeligt i klub-mode
-app.get('/api/qr-code', async (req, res) => {
-    if (req.accessMode !== 'club') return res.status(404).end();
-    try {
-        const QRCode = require('qrcode');
-        const protocol = req.headers['x-forwarded-proto'] || 'https';
-        const url = `${protocol}://${req.hostname}/oversigt.html`;
-        const buffer = await QRCode.toBuffer(url, { width: 220, margin: 2, color: { dark: '#ffffff', light: '#00000000' } });
-        res.setHeader('Content-Type', 'image/png');
-        res.setHeader('Cache-Control', 'public, max-age=3600');
-        res.end(buffer);
-    } catch (err) {
-        res.status(500).end();
-    }
-});
-
+app.use('/api/qr-code', require('./routes/matchSessionTokens'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/player-info', require('./routes/playerInfo'));
 app.use('/api/courts', require('./routes/courts'));

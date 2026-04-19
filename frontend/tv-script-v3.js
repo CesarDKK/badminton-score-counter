@@ -32,6 +32,9 @@ let cachedSetScores = {
     team1: { set1: 0, set2: 0, set3: 0 },
     team2: { set1: 0, set2: 0, set3: 0 }
 };
+// QR counter — kun aktiv i klub-mode; vises når banen er ledig, gemmes når kampen starter
+let qrCounterEnabled = false;
+let qrCounterVisible = false;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async function() {
@@ -44,6 +47,15 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 async function initializeTVDisplay() {
     document.getElementById('courtNumber').textContent = courtId;
+
+    // Spørg backend om QR-counter funktionen er tilgængelig (kun i klub-mode)
+    try {
+        const modeResp = await fetch('/api/mode');
+        const modeData = await modeResp.json();
+        qrCounterEnabled = !!modeData.qrCounter;
+    } catch (e) {
+        qrCounterEnabled = false;
+    }
 
     try {
         const settings = await api.getSettings();
@@ -132,8 +144,11 @@ async function loadCourtData() {
             hideMatchFinished();
             hideRestBreak();
             showSponsorSlideshow();
+            showQrCounter();
             return;
         }
+
+        hideQrCounter();
 
         // Detect new match starting
         if (isMatchActive && !wasMatchPreviouslyActive) {
@@ -1003,6 +1018,32 @@ function hideMatchFinished() {
     const overlay = document.getElementById('tvMatchFinishedOverlay');
     if (overlay) {
         overlay.style.display = 'none';
+    }
+}
+
+// ========== QR COUNTER ==========
+
+function showQrCounter() {
+    if (!qrCounterEnabled) return;
+    const container = document.getElementById('qrCounter');
+    const img = document.getElementById('qrCounterImage');
+    if (!container || !img) return;
+
+    // Sæt kilden første gang banen går i idle — cache-busting via timestamp sikrer
+    // at en ny token hentes efter invalidering (gamle billeder kan ellers blive i browser-cachen)
+    if (!qrCounterVisible) {
+        img.src = `/api/qr-code/${courtId}?t=${Date.now()}`;
+        container.style.display = 'flex';
+        qrCounterVisible = true;
+    }
+}
+
+function hideQrCounter() {
+    const container = document.getElementById('qrCounter');
+    if (!container) return;
+    if (qrCounterVisible) {
+        container.style.display = 'none';
+        qrCounterVisible = false;
     }
 }
 

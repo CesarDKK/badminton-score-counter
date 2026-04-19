@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
+const { invalidateCourtTokens } = require('./matchSessionTokens');
 
 // GET /api/game-states/batch/all - Get all game states in one request (public, for overview page)
 // NOTE: This route must be defined BEFORE /:courtId to avoid matching "batch" as a courtId
@@ -201,6 +202,15 @@ router.put('/:courtId', async (req, res, next) => {
             return res.status(404).json({ error: 'Bane ikke fundet' });
         }
 
+        // Tjek nuværende match_start_time — hvis den ændres fra null til værdi, invalidér QR-tokens for banen
+        const previousState = await queryOne(
+            'SELECT match_start_time FROM game_states WHERE court_id = ?',
+            [court.id]
+        );
+        const matchIsStarting =
+            (!previousState || previousState.match_start_time === null) &&
+            (matchStartTime || (player1 && player2 && (player1.score > 0 || player2.score > 0)));
+
         // Update court's is_active status if provided
         if (typeof isActive === 'boolean') {
             await query(
@@ -333,6 +343,11 @@ router.put('/:courtId', async (req, res, next) => {
             await query('UPDATE courts SET is_doubles = ? WHERE id = ?', [isDoubles, court.id]);
         }
 
+        // Invalidér QR-tokens hvis kampen lige er startet
+        if (matchIsStarting) {
+            try { await invalidateCourtTokens(parseInt(courtId, 10)); } catch (e) { console.error('Token invalidation failed:', e); }
+        }
+
         res.json({ success: true });
     } catch (error) {
         next(error);
@@ -356,6 +371,9 @@ router.delete('/:courtId', async (req, res, next) => {
 
         // Set court to inactive and reset doubles mode
         await query('UPDATE courts SET is_active = FALSE, is_doubles = FALSE WHERE id = ?', [court.id]);
+
+        // Invalidér eventuelle aktive QR-tokens — næste TV-request genererer en ny
+        try { await invalidateCourtTokens(parseInt(courtId, 10)); } catch (e) { console.error('Token invalidation failed:', e); }
 
         res.json({ success: true });
     } catch (error) {

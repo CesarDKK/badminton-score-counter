@@ -198,12 +198,17 @@ CREATE TABLE IF NOT EXISTS device_tokens (
   token VARCHAR(64) UNIQUE NOT NULL,
   name VARCHAR(100) NOT NULL,
   destination VARCHAR(100) NOT NULL COMMENT 'fx court/1, tv, oversigt',
+  token_type ENUM('permanent', 'match_session') DEFAULT 'permanent' COMMENT 'permanent = manuelt oprettet, match_session = auto-genereret QR-token per kamp',
+  court_number INT DEFAULT NULL COMMENT 'Bane-nummer for match-session tokens',
   locked BOOLEAN DEFAULT FALSE COMMENT 'true = låst til destination, false = fri navigation',
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   last_used_at TIMESTAMP NULL,
+  consumed_at TIMESTAMP NULL DEFAULT NULL COMMENT 'Tidspunkt for første brug (sporing)',
   INDEX idx_token (token),
-  INDEX idx_is_active (is_active)
+  INDEX idx_is_active (is_active),
+  INDEX idx_court_number (court_number),
+  INDEX idx_token_type (token_type)
 ) ENGINE=InnoDB;
 
 -- Club admins table (bruges i multi-tenant mode)
