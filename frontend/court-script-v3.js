@@ -1590,10 +1590,15 @@ function startPeriodicSync() {
                         await refreshHoldkampPanel();
                     }
                 } else if (assignedGameId) {
-                    // Already assigned — sync player names from holdkamp game to court
+                    // Already assigned — sync player names from holdkamp game to court,
+                    // BUT only before any set has been decided. After the first set,
+                    // switchSides() has swapped the player slots; re-applying original
+                    // names from the holdkamp game would undo that swap and leave names
+                    // and scores in inconsistent positions.
                     activeTeamMatch = tm;
                     const myGame = tm.games.find(g => g.id === assignedGameId);
-                    if (myGame) {
+                    const sidesHaveBeenSwitched = gameState.player1.games > 0 || gameState.player2.games > 0;
+                    if (myGame && !sidesHaveBeenSwitched) {
                         const namesChanged =
                             (myGame.team1_player1 && gameState.player1.name !== myGame.team1_player1) ||
                             (myGame.team1_player2 && gameState.player1.name2 !== myGame.team1_player2) ||
