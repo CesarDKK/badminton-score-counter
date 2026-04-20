@@ -823,6 +823,10 @@ async function loadActiveHoldkamp() {
             if (!holdkampEditOpen) {
                 renderActiveHoldkamp(teamMatch, container, allGameStates, courtCount);
             }
+            // Polling may have been stopped when there was no active match; restart it.
+            if (!holdkampRefreshTimer) {
+                holdkampRefreshTimer = setInterval(loadActiveHoldkamp, 3000);
+            }
         } else {
             stopHoldkampRefresh();
             container.style.display = 'none';
