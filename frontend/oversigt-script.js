@@ -15,6 +15,11 @@ let localTimerInterval = null;
 // Store match start times for each court (courtId -> {matchStartTime, matchEndTime})
 let courtMatchTimes = {};
 
+// Recently finished matches — shown for 10 minutes after a match ends.
+// courtId -> { snapshot, finishedAt, matchStartTime }
+const finishedCourts = new Map();
+const FINISHED_DISPLAY_MS = 10 * 60 * 1000;
+
 // Local pause countdown state — avoids relying on 2s API interval for accuracy
 // courtId -> { receivedAt: timestamp, secondsLeft: number }
 let pauseCountdownState = {};
@@ -134,6 +139,11 @@ async function initialize() {
     }
 }
 
+function isHoldkampCourt(courtId) {
+    if (!activeTeamMatch) return false;
+    return activeTeamMatch.games.some(g => g.court_number === courtId);
+}
+
 async function loadAllCourts() {
     try {
         // Fetch all court data in a single batch request (much more efficient!)
@@ -168,9 +178,33 @@ async function loadAllCourts() {
             }
         });
 
-        // Filter only active courts with actual game activity
-        activeCourts = allCourtData.filter(court => {
-            if (!court.isActive) return false;
+        // Track recently finished matches (skip holdkamp courts — those are shown in their own panel)
+        allCourtData.forEach(court => {
+            if (court.matchCompleted && !isHoldkampCourt(court.courtId)) {
+                const existing = finishedCourts.get(court.courtId);
+                if (!existing || existing.matchStartTime !== court.matchStartTime) {
+                    finishedCourts.set(court.courtId, {
+                        snapshot: { ...court },
+                        finishedAt: court.matchEndTime ? new Date(court.matchEndTime).getTime() : now,
+                        matchStartTime: court.matchStartTime
+                    });
+                }
+            } else if (finishedCourts.has(court.courtId)) {
+                const entry = finishedCourts.get(court.courtId);
+                // New match started on same court — evict the finished entry
+                if (court.isActive && court.matchStartTime && court.matchStartTime !== entry.matchStartTime) {
+                    finishedCourts.delete(court.courtId);
+                }
+            }
+        });
+        // Expire entries older than 10 minutes
+        for (const [cid, entry] of finishedCourts) {
+            if (now - entry.finishedAt > FINISHED_DISPLAY_MS) finishedCourts.delete(cid);
+        }
+
+        // Filter only active courts with actual game activity (exclude completed — shown as finished cards)
+        const activeOnly = allCourtData.filter(court => {
+            if (!court.isActive || court.matchCompleted) return false;
 
             // Check if there's actual game activity (scoring has started)
             const hasGameActivity =
@@ -187,12 +221,21 @@ async function loadAllCourts() {
                     matchEndTime: court.matchEndTime
                 };
             } else {
-                // Remove match times if court becomes inactive
                 delete courtMatchTimes[court.courtId];
             }
 
             return hasGameActivity;
         });
+
+        // Merge active courts with recently-finished courts for display
+        activeCourts = [
+            ...activeOnly,
+            ...Array.from(finishedCourts.values()).map(e => ({
+                ...e.snapshot,
+                _isFinished: true,
+                _finishedAt: e.finishedAt
+            }))
+        ];
 
         hideLoading();
         displayCurrentPage();
@@ -263,8 +306,10 @@ function displayCurrentPage() {
     const courtsToShow = activeCourts.slice(startIndex, endIndex);
 
     // Check if same courts are already rendered — if so, update in-place to avoid layout jump
-    const existingIds = Array.from(grid.querySelectorAll('.court-card')).map(el => el.dataset.courtId);
-    const newIds = courtsToShow.map(c => String(c.courtId));
+    // Include _isFinished in the key so a transition active→finished triggers a full re-render
+    const existingIds = Array.from(grid.querySelectorAll('.court-card')).map(el =>
+        el.dataset.courtId + (el.dataset.finished ? '-f' : ''));
+    const newIds = courtsToShow.map(c => String(c.courtId) + (c._isFinished ? '-f' : ''));
     const sameLayout = existingIds.length === newIds.length && newIds.every((id, i) => id === existingIds[i]);
 
     if (sameLayout) {
@@ -277,6 +322,17 @@ function displayCurrentPage() {
 }
 
 function updateCourtCardData(court) {
+    if (court._isFinished) {
+        const card = document.querySelector(`.court-card[data-court-id="${court.courtId}"][data-finished="1"]`);
+        if (card) {
+            const timeEl = card.querySelector('.finished-time');
+            if (timeEl) {
+                const minutesAgo = Math.floor((Date.now() - court._finishedAt) / 60000);
+                timeEl.textContent = minutesAgo < 1 ? 'Lige afsluttet' : `${minutesAgo} min siden`;
+            }
+        }
+        return;
+    }
     const card = document.querySelector(`.court-card[data-court-id="${court.courtId}"]`);
     if (!card) return;
 
@@ -336,6 +392,7 @@ function updateCourtCardData(court) {
 }
 
 function renderCourtCard(court) {
+    if (court._isFinished) return renderFinishedCard(court);
     const isDoubles = court.isDoubles || false;
     const isPaused = !!court.restBreakActive;
 
@@ -414,6 +471,61 @@ function renderCourtCard(court) {
             </div>
 
             ${bannerHtml}
+        </div>
+    `;
+}
+
+function renderFinishedCard(court) {
+    const isDoubles = court.isDoubles || false;
+    const p1games = court.player1?.games ?? 0;
+    const p2games = court.player2?.games ?? 0;
+    const p1won = p1games > p2games;
+
+    const minutesAgo = Math.floor((Date.now() - court._finishedAt) / 60000);
+    const timeText = minutesAgo < 1 ? 'Lige afsluttet' : `${minutesAgo} min siden`;
+
+    const p1Names = isDoubles && court.player1?.name2
+        ? `${escapeHtml(court.player1.name)} / ${escapeHtml(court.player1.name2)}`
+        : escapeHtml(court.player1?.name || '?');
+    const p2Names = isDoubles && court.player2?.name2
+        ? `${escapeHtml(court.player2.name)} / ${escapeHtml(court.player2.name2)}`
+        : escapeHtml(court.player2?.name || '?');
+
+    const sets = court.setScoresHistory || [];
+    const setScoreHtml = sets.length
+        ? sets.map(s => `<span class="finished-set-score">${escapeHtml(s.score || '')}</span>`)
+               .join('<span class="finished-set-sep"> · </span>')
+        : '';
+
+    return `
+        <div class="court-card court-card--finished" data-court-id="${court.courtId}" data-finished="1">
+            <div class="court-card-header">
+                <div class="court-number">BANE ${court.courtId}</div>
+                <span class="finished-badge">AFSLUTTET</span>
+                <div class="finished-time">${timeText}</div>
+            </div>
+            <div class="court-players">
+                <div class="player-row${p1won ? ' player-row--winner' : ''}">
+                    <div class="player-info">
+                        <div class="player-name">${p1Names}</div>
+                    </div>
+                    <div class="player-stats">
+                        <div class="player-score${p1won ? ' player-score--winner' : ''}">${p1games}</div>
+                        <div class="player-games"><span class="games-label">sæt</span></div>
+                    </div>
+                </div>
+                <div class="vs-divider">VS</div>
+                <div class="player-row${!p1won ? ' player-row--winner' : ''}">
+                    <div class="player-info">
+                        <div class="player-name">${p2Names}</div>
+                    </div>
+                    <div class="player-stats">
+                        <div class="player-score${!p1won ? ' player-score--winner' : ''}">${p2games}</div>
+                        <div class="player-games"><span class="games-label">sæt</span></div>
+                    </div>
+                </div>
+            </div>
+            ${setScoreHtml ? `<div class="finished-set-scores">${setScoreHtml}</div>` : ''}
         </div>
     `;
 }
