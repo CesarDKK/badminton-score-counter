@@ -262,6 +262,15 @@ function extractFirstName(fullName) {
     return parts[0].trim();
 }
 
+// For singles: fjern mellemnavne så lange navne ikke presser pointene ud.
+// "Jens Peter Hansen-Olsen" → "Jens Hansen-Olsen"; "Jens Hansen" bevares.
+function shortenSinglesName(fullName) {
+    if (!fullName) return '';
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length <= 2) return fullName.trim();
+    return `${parts[0]} ${parts[parts.length - 1]}`;
+}
+
 // Update player names display
 function updatePlayerNames(gameState, playersSwapped) {
     const isDoubles = gameState.isDoubles || false;
@@ -289,7 +298,7 @@ function updatePlayerNames(gameState, playersSwapped) {
         document.getElementById('player1Name2').textContent = firstName2;
         document.getElementById('player1Name2').style.display = 'block';
     } else {
-        document.getElementById('player1Name').textContent = player1Name;
+        document.getElementById('player1Name').textContent = shortenSinglesName(player1Name);
         document.getElementById('player1Name2').style.display = 'none';
     }
 
@@ -305,7 +314,7 @@ function updatePlayerNames(gameState, playersSwapped) {
         document.getElementById('player2Name2').textContent = firstName2;
         document.getElementById('player2Name2').style.display = 'block';
     } else {
-        document.getElementById('player2Name').textContent = player2Name;
+        document.getElementById('player2Name').textContent = shortenSinglesName(player2Name);
         document.getElementById('player2Name2').style.display = 'none';
     }
 }

@@ -166,8 +166,8 @@ body::before {
 .team-row {
     display: flex;
     align-items: center;
-    padding: 56px 80px;
-    gap: 70px;
+    padding: clamp(24px, 4vh, 56px) clamp(32px, 4vw, 80px);
+    gap: clamp(24px, 3vw, 60px);
     transition: background 0.3s ease, border-left-color 0.3s ease;
     border-left: 10px solid transparent;
     position: relative;
@@ -195,55 +195,67 @@ body::before {
 }
 
 /* =================== PLAYER NAMES =================== */
+/* Navne-kolonnen må gerne skrumpe — long names får ellipsis i stedet for at
+   presse pointene ud. Set-boxene prioriteres som ikke-skrumpelige. */
 .team-names {
-    min-width: 620px;
-    flex-shrink: 0;
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .player-name {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 6.5em;
+    font-size: clamp(2.4em, 8.5vh, 6.5em);
     font-weight: 400;
     color: #ffffff;
-    letter-spacing: 4px;
+    letter-spacing: 3px;
     line-height: 1.05;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .partner-name {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 6.5em;
+    font-size: clamp(2em, 7vh, 6em);
     font-weight: 400;
     color: rgba(255, 255, 255, 0.75);
-    letter-spacing: 4px;
-    margin-top: 10px;
+    letter-spacing: 3px;
+    margin-top: 0.5vh;
     line-height: 1.05;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* =================== SET BOXES =================== */
+/* Pointene er scene-stjernen — skalerer med viewport men bevarer firkant-form. */
 .set-boxes {
     display: flex;
-    gap: 50px;
-    flex: 1;
-    justify-content: flex-start;
+    gap: clamp(14px, 2.5vw, 50px);
+    flex: 0 0 auto;
+    justify-content: flex-end;
+    align-items: center;
 }
 
 .set-box {
-    width: 240px;
-    height: 240px;
+    width: clamp(120px, min(24vh, 17vw), 280px);
+    height: clamp(120px, min(24vh, 17vw), 280px);
     display: flex;
     align-items: center;
     justify-content: center;
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 9em;
+    font-size: clamp(3em, min(14vh, 10vw), 10em);
     font-weight: 400;
     letter-spacing: 2px;
     border: 2px solid rgba(255, 255, 255, 0.1);
-    border-radius: 24px;
+    border-radius: clamp(14px, 2vh, 28px);
     background: rgba(255, 255, 255, 0.03);
     color: rgba(255, 255, 255, 0.5);
     transition: all 0.3s ease;
     position: relative;
     overflow: hidden;
+    flex-shrink: 0;
 }
 
 /* Accent bottom line on set-box */
@@ -629,34 +641,21 @@ body::before {
 }
 
 /* =================== RESPONSIVE =================== */
+/* Scoreboardet skalerer allerede via clamp/vh/vw; her finpudses kun
+   header og overlays. Navn/set-box styres udelukkende af clamp() ovenfor. */
 @media (max-width: 1600px) {
     .tv-header { padding: 28px 60px; }
     .tv-header h1, .timer-display { font-size: 4em; }
-    .player-name, .partner-name { font-size: 5em; }
-    .set-box { width: 190px; height: 190px; font-size: 7em; }
-    .set-boxes { gap: 36px; }
-    .team-names { min-width: 500px; }
-    .team-row { padding: 46px 60px; gap: 60px; }
     .overlay-countdown { font-size: 11em; }
 }
 
 @media (max-width: 1280px) {
     .tv-header h1, .timer-display { font-size: 3em; }
-    .player-name, .partner-name { font-size: 3.8em; }
-    .set-box { width: 150px; height: 150px; font-size: 5.5em; }
-    .team-names { min-width: 380px; }
-    .set-boxes { gap: 24px; }
-    .team-row { gap: 44px; padding: 38px 50px; }
     .overlay-countdown { font-size: 9em; }
 }
 
 @media (max-width: 1024px) {
     .tv-header h1, .timer-display { font-size: 2.4em; }
-    .player-name, .partner-name { font-size: 3em; }
-    .set-box { width: 120px; height: 120px; font-size: 4.5em; border-radius: 14px; }
-    .team-names { min-width: 280px; }
-    .set-boxes { gap: 18px; }
-    .team-row { gap: 32px; padding: 30px 36px; }
     .overlay-countdown { font-size: 7em; }
 }
 
