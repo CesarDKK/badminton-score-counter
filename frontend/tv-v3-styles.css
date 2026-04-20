@@ -216,11 +216,13 @@ body::before {
     text-overflow: ellipsis;
 }
 
+/* Doubles: makker vises identisk med hovedspilleren — samme font-size og farve,
+   fordi de er et hold og skal fremstå jævnbyrdigt. */
 .partner-name {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(1.5em, 5vh, 4.5em);
+    font-size: clamp(1.8em, 6.5vh, 5em);
     font-weight: 400;
-    color: rgba(255, 255, 255, 0.75);
+    color: #ffffff;
     letter-spacing: 3px;
     margin-top: 0.5vh;
     line-height: 1.05;
