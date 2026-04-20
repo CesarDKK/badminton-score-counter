@@ -118,7 +118,21 @@ router.put('/:id/games/:gameId', async (req, res, next) => {
         const fields = [];
         const values = [];
 
-        if (courtNumber !== undefined) { fields.push('court_number = ?'); values.push(courtNumber); }
+        if (courtNumber !== undefined) {
+            // Frigør banen fra enhver anden delkamp i samme holdkamp så den gamle
+            // kamp bliver tilgængelig igen hvis brugeren har valgt forkert. Status
+            // skal også tilbage til 'pending' så den vises i andre baners vælger.
+            if (courtNumber !== null) {
+                await query(
+                    `UPDATE team_match_games
+                     SET court_number = NULL, status = 'pending'
+                     WHERE team_match_id = ? AND court_number = ? AND id != ? AND status != 'finished'`,
+                    [id, courtNumber, gameId]
+                );
+            }
+            fields.push('court_number = ?');
+            values.push(courtNumber);
+        }
         if (status !== undefined) { fields.push('status = ?'); values.push(status); }
         if (winnerTeam !== undefined) { fields.push('winner_team = ?'); values.push(winnerTeam); }
         if (setScores !== undefined) { fields.push('set_scores = ?'); values.push(setScores); }
