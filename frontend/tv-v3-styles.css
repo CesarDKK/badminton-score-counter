@@ -120,8 +120,9 @@ body::before {
 }
 
 /* =================== HEADER =================== */
+/* Slankere chrome så scoreboardet får maksimalt plads — pointene er hovedsagen. */
 .tv-header {
-    padding: 36px 80px;
+    padding: clamp(10px, 2vh, 26px) clamp(20px, 3vw, 60px);
     background: rgba(0, 0, 0, 0.2);
     backdrop-filter: blur(8px);
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -133,9 +134,9 @@ body::before {
 
 .tv-header h1 {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 5.5em;
+    font-size: clamp(1.8em, 5vh, 4.5em);
     font-weight: 400;
-    letter-spacing: 8px;
+    letter-spacing: 5px;
     color: #ffffff;
 }
 
@@ -145,9 +146,9 @@ body::before {
 
 .timer-display {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 5.5em;
+    font-size: clamp(1.8em, 5vh, 4.5em);
     font-weight: 400;
-    letter-spacing: 5px;
+    letter-spacing: 4px;
     color: rgba(255, 255, 255, 0.7);
     font-variant-numeric: tabular-nums;
 }
@@ -159,15 +160,15 @@ body::before {
     flex-direction: column;
     justify-content: center;
     gap: 0;
-    padding: 30px 0;
+    padding: 0;
 }
 
 /* =================== TEAM ROW =================== */
 .team-row {
     display: flex;
     align-items: center;
-    padding: clamp(24px, 4vh, 56px) clamp(32px, 4vw, 80px);
-    gap: clamp(24px, 3vw, 60px);
+    padding: clamp(10px, 1.8vh, 28px) clamp(20px, 2.5vw, 50px);
+    gap: clamp(16px, 2vw, 40px);
     transition: background 0.3s ease, border-left-color 0.3s ease;
     border-left: 10px solid transparent;
     position: relative;
@@ -205,7 +206,7 @@ body::before {
 
 .player-name {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(2.4em, 8.5vh, 6.5em);
+    font-size: clamp(1.8em, 6.5vh, 5em);
     font-weight: 400;
     color: #ffffff;
     letter-spacing: 3px;
@@ -217,7 +218,7 @@ body::before {
 
 .partner-name {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(2em, 7vh, 6em);
+    font-size: clamp(1.5em, 5vh, 4.5em);
     font-weight: 400;
     color: rgba(255, 255, 255, 0.75);
     letter-spacing: 3px;
@@ -229,23 +230,25 @@ body::before {
 }
 
 /* =================== SET BOXES =================== */
-/* Pointene er scene-stjernen — skalerer med viewport men bevarer firkant-form. */
+/* Pointene er hovedsagen — fylder ~35vh på typiske skærme, dobbelt op
+   ift. den oprindelige layout. Bredde-caps på 22vw sikrer at 3 bokse +
+   navne-kolonne stadig kan være på rækken. */
 .set-boxes {
     display: flex;
-    gap: clamp(14px, 2.5vw, 50px);
+    gap: clamp(10px, 1.5vw, 30px);
     flex: 0 0 auto;
     justify-content: flex-end;
     align-items: center;
 }
 
 .set-box {
-    width: clamp(120px, min(24vh, 17vw), 280px);
-    height: clamp(120px, min(24vh, 17vw), 280px);
+    width: clamp(170px, min(36vh, 22vw), 480px);
+    height: clamp(170px, min(36vh, 22vw), 480px);
     display: flex;
     align-items: center;
     justify-content: center;
     font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(3em, min(14vh, 10vw), 10em);
+    font-size: clamp(4em, min(22vh, 14vw), 14em);
     font-weight: 400;
     letter-spacing: 2px;
     border: 2px solid rgba(255, 255, 255, 0.1);
@@ -318,13 +321,13 @@ body::before {
 
 /* =================== FOOTER =================== */
 .tv-footer {
-    padding: 26px 80px;
+    padding: clamp(8px, 1.5vh, 22px) clamp(20px, 3vw, 60px);
     background: rgba(0, 0, 0, 0.2);
     border-top: 1px solid rgba(255, 255, 255, 0.06);
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 90px;
+    min-height: clamp(46px, 7vh, 90px);
     flex-shrink: 0;
 }
 
@@ -641,21 +644,17 @@ body::before {
 }
 
 /* =================== RESPONSIVE =================== */
-/* Scoreboardet skalerer allerede via clamp/vh/vw; her finpudses kun
-   header og overlays. Navn/set-box styres udelukkende af clamp() ovenfor. */
+/* Scoreboard, navne, header og footer skalerer allerede via clamp/vh/vw.
+   Kun overlay-countdown finpudses pr. breakpoint. */
 @media (max-width: 1600px) {
-    .tv-header { padding: 28px 60px; }
-    .tv-header h1, .timer-display { font-size: 4em; }
     .overlay-countdown { font-size: 11em; }
 }
 
 @media (max-width: 1280px) {
-    .tv-header h1, .timer-display { font-size: 3em; }
     .overlay-countdown { font-size: 9em; }
 }
 
 @media (max-width: 1024px) {
-    .tv-header h1, .timer-display { font-size: 2.4em; }
     .overlay-countdown { font-size: 7em; }
 }
 
