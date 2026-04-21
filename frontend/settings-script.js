@@ -49,6 +49,14 @@ function setupEventListeners() {
     // TV Version
     document.getElementById('saveTVVersionBtn').addEventListener('click', saveTVVersion);
 
+    // Backup
+    document.getElementById('downloadBackupBtn').addEventListener('click', downloadBackup);
+    document.getElementById('chooseRestoreFileBtn').addEventListener('click', () =>
+        document.getElementById('restoreFileInput').click()
+    );
+    document.getElementById('restoreFileInput').addEventListener('change', onRestoreFileChosen);
+    document.getElementById('restoreBtn').addEventListener('click', doRestore);
+
     // Message overlay
     document.getElementById('messageOkBtn').addEventListener('click', hideMessage);
 }
@@ -174,6 +182,85 @@ async function saveTVVersion() {
     } catch (error) {
         console.error('Failed to update TV version:', error);
         showMessage('Fejl', error.message);
+    }
+}
+
+// ==================== BACKUP ====================
+
+async function downloadBackup() {
+    const btn = document.getElementById('downloadBackupBtn');
+    btn.disabled = true;
+    btn.textContent = 'Henter backup...';
+    try {
+        const token = api.token || sessionStorage.getItem('authToken');
+        const res = await fetch('/api/backup', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error(await res.text());
+
+        const blob = await res.blob();
+        const cd = res.headers.get('Content-Disposition') || '';
+        const match = cd.match(/filename="([^"]+)"/);
+        const filename = match ? match[1] : 'backup.json';
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename; a.click();
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        showMessage('Fejl', 'Backup fejlede: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Download Backup';
+    }
+}
+
+let restoreFile = null;
+
+function onRestoreFileChosen(e) {
+    restoreFile = e.target.files[0] || null;
+    const info = document.getElementById('restoreFileInfo');
+    const btn = document.getElementById('restoreBtn');
+    if (restoreFile) {
+        const kb = (restoreFile.size / 1024).toFixed(1);
+        info.textContent = `Valgt fil: ${restoreFile.name} (${kb} KB)`;
+        info.style.display = 'block';
+        btn.style.display = 'block';
+    } else {
+        info.style.display = 'none';
+        btn.style.display = 'none';
+    }
+}
+
+async function doRestore() {
+    if (!restoreFile) return;
+    if (!confirm('Er du sikker? Alle nuværende data vil blive overskrevet med data fra backup-filen. Denne handling kan ikke fortrydes.')) return;
+
+    const btn = document.getElementById('restoreBtn');
+    btn.disabled = true;
+    btn.textContent = 'Gendanner...';
+    try {
+        const token = api.token || sessionStorage.getItem('authToken');
+        const form = new FormData();
+        form.append('backup', restoreFile);
+
+        const res = await fetch('/api/backup/restore', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: form
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || res.statusText);
+
+        const rows = Object.entries(data.restored)
+            .map(([t, n]) => `${t}: ${n} rækker`)
+            .join('\n');
+        showMessage('Gendannelse fuldført', `Data er gendannet.\n\n${rows}\nBilleder: ${data.files}`, true);
+    } catch (err) {
+        showMessage('Fejl', 'Gendannelse fejlede: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Gendan Nu';
     }
 }
 

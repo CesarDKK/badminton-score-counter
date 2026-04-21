@@ -258,4 +258,121 @@ router.put('/clubs/:id/admins/:adminId/password', superAdminAuth, async (req, re
     } catch (error) { next(error); }
 });
 
+// ==================== BACKUP / RESTORE (super admin — per klub) ====================
+
+const backupFs = require('fs');
+const backupPath = require('path');
+const backupMulter = require('multer')({ storage: require('multer').memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
+
+const BACKUP_TABLES = [
+    'settings', 'sponsor_settings', 'courts',
+    'sponsor_images', 'sponsor_image_courts',
+    'game_states', 'match_history',
+    'team_matches', 'team_match_games',
+    'device_tokens', 'player_info',
+];
+
+// GET /api/super-admin/clubs/:id/backup — download backup for one club
+router.get('/clubs/:id/backup', superAdminAuth, async (req, res, next) => {
+    try {
+        const club = await masterDb.queryOne(
+            'SELECT name, subdomain, db_name FROM clubs WHERE id = ?',
+            [req.params.id]
+        );
+        if (!club) return res.status(404).json({ error: 'Klub ikke fundet' });
+
+        const conn = await clubConn(club.db_name);
+        const tables = {};
+        try {
+            for (const table of BACKUP_TABLES) {
+                const [rows] = await conn.execute(`SELECT * FROM \`${table}\``);
+                tables[table] = rows;
+            }
+        } finally {
+            await conn.end();
+        }
+
+        const files = {};
+        const uploadDir = process.env.UPLOAD_DIR || backupPath.join(__dirname, '..', 'uploads');
+        const clubDir = backupPath.join(uploadDir, club.db_name);
+        if (tables.sponsor_images?.length) {
+            for (const img of tables.sponsor_images) {
+                const fp = backupPath.join(clubDir, img.filename);
+                if (backupFs.existsSync(fp)) {
+                    files[img.filename] = backupFs.readFileSync(fp).toString('base64');
+                }
+            }
+        }
+
+        const backup = {
+            version: '1.0',
+            timestamp: new Date().toISOString(),
+            clubSubdomain: club.subdomain,
+            clubName: club.name,
+            tables,
+            files,
+        };
+
+        const filename = `backup_${club.subdomain}_${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.json`;
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(JSON.stringify(backup, null, 2));
+    } catch (error) { next(error); }
+});
+
+// POST /api/super-admin/clubs/:id/restore — restore backup for one club
+router.post('/clubs/:id/restore', superAdminAuth, backupMulter.single('backup'), async (req, res, next) => {
+    let backup;
+    try {
+        backup = JSON.parse(req.file.buffer.toString('utf8'));
+    } catch {
+        return res.status(400).json({ error: 'Ugyldig backup-fil — kunne ikke parse JSON' });
+    }
+    if (!backup.version || !backup.tables) {
+        return res.status(400).json({ error: 'Ugyldig backup-fil — mangler version eller tabeller' });
+    }
+
+    try {
+        const club = await masterDb.queryOne(
+            'SELECT db_name, subdomain FROM clubs WHERE id = ?',
+            [req.params.id]
+        );
+        if (!club) return res.status(404).json({ error: 'Klub ikke fundet' });
+
+        const conn = await clubConn(club.db_name);
+        try {
+            for (const table of BACKUP_TABLES) {
+                const rows = backup.tables[table];
+                if (!rows || rows.length === 0) { await conn.execute(`DELETE FROM \`${table}\``); continue; }
+                await conn.execute(`DELETE FROM \`${table}\``);
+                for (const row of rows) {
+                    const cols = Object.keys(row).map(c => `\`${c}\``).join(', ');
+                    const ph = Object.keys(row).map(() => '?').join(', ');
+                    const vals = Object.values(row).map(v =>
+                        v instanceof Object && !Buffer.isBuffer(v) ? JSON.stringify(v) : v
+                    );
+                    await conn.execute(`INSERT INTO \`${table}\` (${cols}) VALUES (${ph})`, vals);
+                }
+            }
+        } finally {
+            await conn.end();
+        }
+
+        if (backup.files && Object.keys(backup.files).length > 0) {
+            const uploadDir = process.env.UPLOAD_DIR || backupPath.join(__dirname, '..', 'uploads');
+            const clubDir = backupPath.join(uploadDir, club.db_name);
+            if (!backupFs.existsSync(clubDir)) backupFs.mkdirSync(clubDir, { recursive: true });
+            for (const [filename, b64] of Object.entries(backup.files)) {
+                backupFs.writeFileSync(backupPath.join(clubDir, filename), Buffer.from(b64, 'base64'));
+            }
+        }
+
+        res.json({
+            success: true,
+            restored: Object.fromEntries(BACKUP_TABLES.map(t => [t, backup.tables[t]?.length ?? 0])),
+            files: Object.keys(backup.files || {}).length,
+        });
+    } catch (error) { next(error); }
+});
+
 module.exports = router;

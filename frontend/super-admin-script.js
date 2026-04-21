@@ -113,6 +113,12 @@ function renderClubs() {
                 <button class="btn-secondary" onclick="openAdminModal(${club.id}, '${escapeHtml(club.name)}')">
                     Admins
                 </button>
+                <button class="btn-secondary" onclick="downloadClubBackup(${club.id}, '${escapeHtml(club.subdomain)}')">
+                    Backup
+                </button>
+                <button class="btn-secondary" onclick="triggerClubRestore(${club.id})">
+                    Gendan
+                </button>
                 <button class="btn-danger" onclick="handleToggleClub(${club.id})">
                     ${club.is_active ? 'Deaktiver' : 'Aktiver'}
                 </button>
@@ -361,6 +367,66 @@ async function handleCreateAdmin() {
     } finally {
         btn.disabled = false;
         btn.textContent = 'Opret Admin';
+    }
+}
+
+// ==================== BACKUP / RESTORE ====================
+
+let _restoreClubId = null;
+const _restoreInput = (() => {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = '.json';
+    inp.style.display = 'none';
+    document.body.appendChild(inp);
+    inp.addEventListener('change', () => {
+        if (inp.files[0] && _restoreClubId) doClubRestore(_restoreClubId, inp.files[0]);
+        inp.value = '';
+    });
+    return inp;
+})();
+
+async function downloadClubBackup(clubId, subdomain) {
+    const token = sessionStorage.getItem('superAdminToken') || sessionStorage.getItem('authToken');
+    try {
+        const res = await fetch(`/api/super-admin/clubs/${clubId}/backup`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const blob = await res.blob();
+        const cd = res.headers.get('Content-Disposition') || '';
+        const match = cd.match(/filename="([^"]+)"/);
+        const filename = match ? match[1] : `backup_${subdomain}.json`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename; a.click();
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        alert('Backup fejlede: ' + err.message);
+    }
+}
+
+function triggerClubRestore(clubId) {
+    if (!confirm(`Er du sikker? Alle data for denne klub vil blive overskrevet. Kan ikke fortrydes.`)) return;
+    _restoreClubId = clubId;
+    _restoreInput.click();
+}
+
+async function doClubRestore(clubId, file) {
+    const token = sessionStorage.getItem('superAdminToken') || sessionStorage.getItem('authToken');
+    const form = new FormData();
+    form.append('backup', file);
+    try {
+        const res = await fetch(`/api/super-admin/clubs/${clubId}/restore`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: form
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || res.statusText);
+        alert(`Gendannelse fuldført!\nBilleder: ${data.files}`);
+    } catch (err) {
+        alert('Gendannelse fejlede: ' + err.message);
     }
 }
 

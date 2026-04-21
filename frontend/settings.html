@@ -97,6 +97,28 @@
                     </div>
                 </div>
 
+                <!-- Backup & Restore -->
+                <div class="setting-card">
+                    <h3>Backup &amp; Gendannelse</h3>
+                    <p style="color:#aaa;font-size:0.9em;margin-bottom:20px;line-height:1.5;">
+                        Tag en fuld backup af alle dine data inkl. kamphistorik, holdkampe, adgangslinks og sponsorbilleder.
+                        Gem filen et sikkert sted og brug den til at gendanne ved behov.
+                    </p>
+
+                    <button id="downloadBackupBtn" class="btn-primary" style="width:100%;">Download Backup</button>
+
+                    <div style="margin-top:28px;padding-top:20px;border-top:2px solid rgba(255,255,255,0.1);">
+                        <label style="display:block;margin-bottom:10px;font-weight:600;">Gendan fra Backup</label>
+                        <p style="color:#e94560;font-size:0.85em;margin-bottom:14px;line-height:1.5;">
+                            Advarsel: Gendannelse overskriver alle nuværende data. Operationen kan ikke fortrydes.
+                        </p>
+                        <input type="file" id="restoreFileInput" accept=".json" style="display:none;">
+                        <button id="chooseRestoreFileBtn" class="btn-secondary" style="width:100%;margin-bottom:10px;">Vælg Backup-fil...</button>
+                        <div id="restoreFileInfo" style="display:none;padding:10px;background:rgba(255,255,255,0.05);border-radius:8px;font-size:0.9em;margin-bottom:12px;color:#aaa;"></div>
+                        <button id="restoreBtn" class="btn-primary" style="width:100%;display:none;background:var(--color-accent);">Gendan Nu</button>
+                    </div>
+                </div>
+
                 <!-- Security + Theme stacked -->
                 <div style="display: flex; flex-direction: column; gap: 18px;">
                     <!-- Security -->
@@ -135,6 +157,6 @@
     </div>
 
     <script src="js/api.js?v=4"></script>
-    <script src="settings-script.js?v=4"></script>
+    <script src="settings-script.js?v=5"></script>
 </body>
 </html>
