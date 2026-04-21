@@ -10,6 +10,17 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100
 
 const BACKUP_VERSION = '1.0';
 
+// Convert ISO 8601 timestamps to MySQL DATETIME format and handle JSON objects
+function normalizeValue(v) {
+    if (v === null || v === undefined) return v;
+    if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(v)) {
+        // "2026-04-09T18:34:24.000Z" → "2026-04-09 18:34:24"
+        return v.replace('T', ' ').replace(/\.\d{3}Z$/, '').replace('Z', '');
+    }
+    if (v instanceof Object && !Buffer.isBuffer(v)) return JSON.stringify(v);
+    return v;
+}
+
 // Tables to include in backup, in restoration order (respects FK constraints)
 const BACKUP_TABLES = [
     'settings',
@@ -93,9 +104,7 @@ router.post('/restore', authMiddleware, upload.single('backup'), async (req, res
             for (const row of rows) {
                 const cols = Object.keys(row).map(c => `\`${c}\``).join(', ');
                 const placeholders = Object.keys(row).map(() => '?').join(', ');
-                const vals = Object.values(row).map(v =>
-                    v instanceof Object && !Buffer.isBuffer(v) ? JSON.stringify(v) : v
-                );
+                const vals = Object.values(row).map(normalizeValue);
                 await query(
                     `INSERT INTO \`${table}\` (${cols}) VALUES (${placeholders})`,
                     vals

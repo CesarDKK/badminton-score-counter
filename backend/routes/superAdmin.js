@@ -260,6 +260,15 @@ router.put('/clubs/:id/admins/:adminId/password', superAdminAuth, async (req, re
 
 // ==================== BACKUP / RESTORE (super admin — per klub) ====================
 
+function saNormalizeValue(v) {
+    if (v === null || v === undefined) return v;
+    if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(v)) {
+        return v.replace('T', ' ').replace(/\.\d{3}Z$/, '').replace('Z', '');
+    }
+    if (v instanceof Object && !Buffer.isBuffer(v)) return JSON.stringify(v);
+    return v;
+}
+
 const backupFs = require('fs');
 const backupPath = require('path');
 const backupMulter = require('multer')({ storage: require('multer').memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
@@ -348,9 +357,7 @@ router.post('/clubs/:id/restore', superAdminAuth, backupMulter.single('backup'),
                 for (const row of rows) {
                     const cols = Object.keys(row).map(c => `\`${c}\``).join(', ');
                     const ph = Object.keys(row).map(() => '?').join(', ');
-                    const vals = Object.values(row).map(v =>
-                        v instanceof Object && !Buffer.isBuffer(v) ? JSON.stringify(v) : v
-                    );
+                    const vals = Object.values(row).map(saNormalizeValue);
                     await conn.execute(`INSERT INTO \`${table}\` (${cols}) VALUES (${ph})`, vals);
                 }
             }
