@@ -1519,6 +1519,13 @@ function startPeriodicSync() {
                 // Court was reset from admin while we had an active match
                 console.log('Court was reset from admin, resetting local state');
 
+                // Match-session tokens (QR-kode tæller) låses når banen nulstilles
+                // — brugeren skal scanne QR-koden igen for at tælle næste kamp.
+                if (isMatchSessionToken()) {
+                    showQrSessionExpired();
+                    return;
+                }
+
                 // Stop timer
                 if (gameState.timerInterval) {
                     clearInterval(gameState.timerInterval);
@@ -1875,6 +1882,48 @@ async function refreshHoldkampPanel() {
     } catch (error) {
         console.error('Failed to refresh holdkamp panel:', error);
     }
+}
+
+// ── QR match-session lock ────────────────────────────────────────────────────
+
+function getDeviceTokenPayload() {
+    const dt = sessionStorage.getItem('deviceToken');
+    if (!dt) return null;
+    try { return JSON.parse(atob(dt.split('.')[1])); } catch { return null; }
+}
+
+function isMatchSessionToken() {
+    const p = getDeviceTokenPayload();
+    return p && p.tokenType === 'match_session';
+}
+
+function showQrSessionExpired() {
+    // Fjern eksisterende overlay hvis det allerede vises
+    const existing = document.getElementById('qrSessionExpiredOverlay');
+    if (existing) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'qrSessionExpiredOverlay';
+    overlay.style.cssText = `
+        position: fixed; inset: 0; z-index: 9999;
+        background: rgba(0,0,0,0.92);
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        text-align: center; padding: 32px;
+        font-family: inherit; color: #fff;
+    `;
+    overlay.innerHTML = `
+        <div style="font-size: clamp(3em,10vw,6em); margin-bottom: 24px;">🏸</div>
+        <h1 style="font-size: clamp(1.4em,5vw,2.4em); margin-bottom: 16px; color: #4CAF50;">Kamp Afsluttet</h1>
+        <p style="font-size: clamp(1em,3vw,1.4em); color: rgba(255,255,255,0.65); max-width: 400px; line-height: 1.6;">
+            Banen er blevet nulstillet.<br>
+            Scan QR-koden igen for at tælle næste kamp.
+        </p>
+    `;
+    document.body.appendChild(overlay);
+
+    // Deaktiver alle knapinteraktioner
+    document.querySelectorAll('button').forEach(b => b.disabled = true);
 }
 
 async function reportHoldkampResult(winnerTeam, setScores) {

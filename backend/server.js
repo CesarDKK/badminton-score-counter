@@ -87,6 +87,7 @@ app.get('/t/:token', async (req, res, next) => {
                 tokenId: deviceToken.id,
                 destination: deviceToken.destination,
                 locked: deviceToken.locked,
+                tokenType: deviceToken.token_type || 'permanent',
                 clubSubdomain: req.clubSubdomain
             },
             process.env.JWT_SECRET,
