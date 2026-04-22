@@ -2,7 +2,7 @@
 const api = window.BadmintonAPI;
 
 const urlParams = new URLSearchParams(window.location.search);
-const courtId = parseInt(urlParams.get('id')) || 1;
+const courtId = parseInt(urlParams.get('id') || urlParams.get('court')) || 1;
 
 let refreshInterval = null;
 let slideshowInterval = null;

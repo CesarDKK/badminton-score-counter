@@ -23,7 +23,7 @@ window.addEventListener('appinstalled', () => {
 
 // Get court ID from URL
 const urlParams = new URLSearchParams(window.location.search);
-const courtId = parseInt(urlParams.get('id')) || 1;
+const courtId = parseInt(urlParams.get('id') || urlParams.get('court')) || 1;
 
 // Holdkamp state
 let activeTeamMatch = null;
