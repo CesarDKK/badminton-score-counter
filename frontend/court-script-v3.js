@@ -680,6 +680,11 @@ function clearCourt() {
                     }
 
                     closeSettingsMenu();
+
+                    // QR-tæller mister adgangen når banen ryddes
+                    if (isMatchSessionToken()) {
+                        showQrSessionExpired();
+                    }
                 },
                 style: 'primary'
             },
