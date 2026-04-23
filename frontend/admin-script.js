@@ -1193,6 +1193,7 @@ async function finishHoldkamp(id) {
         await loadActiveHoldkamp();
     } catch (error) {
         console.error('Failed to finish holdkamp:', error);
+        showMessage('Fejl', 'Kunne ikke afslutte holdkampen: ' + (error.message || 'Ukendt fejl'));
     }
 }
 
@@ -1204,6 +1205,7 @@ async function deleteHoldkamp(id) {
         document.getElementById('createHoldkampForm').style.display = 'block';
     } catch (error) {
         console.error('Failed to delete holdkamp:', error);
+        showMessage('Fejl', 'Kunne ikke slette holdkampen: ' + (error.message || 'Ukendt fejl'));
     }
 }
 

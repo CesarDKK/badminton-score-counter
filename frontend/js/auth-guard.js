@@ -28,19 +28,36 @@
     }
 
     const authToken   = sessionStorage.getItem('authToken');
-    const deviceToken = sessionStorage.getItem('deviceToken');
+    let   deviceToken = sessionStorage.getItem('deviceToken');
 
-    // Ingen auth — send til klub-login med redirect tilbage
-    if (!authToken && !deviceToken) {
+    // Ryd udløbne tokens så de ikke blokerer for korrekt re-auth
+    function isExpired(jwt) {
+        try {
+            const exp = JSON.parse(atob(jwt.split('.')[1])).exp;
+            return exp && Date.now() / 1000 > exp;
+        } catch { return true; }
+    }
+    if (authToken && isExpired(authToken)) {
+        sessionStorage.removeItem('authToken');
+    }
+    if (deviceToken && isExpired(deviceToken)) {
+        sessionStorage.removeItem('deviceToken');
+        deviceToken = null;
+    }
+
+    // Ingen gyldig auth — send til klub-login med redirect tilbage
+    const validAuth   = sessionStorage.getItem('authToken');
+    const validDevice = deviceToken;
+    if (!validAuth && !validDevice) {
         const redirect = encodeURIComponent(window.location.pathname + window.location.search);
         window.location.href = '/club-login.html?redirect=' + redirect;
         return;
     }
 
     // Device token: håndhæv locked destination
-    if (!authToken && deviceToken) {
+    if (!validAuth && validDevice) {
         try {
-            const payload = JSON.parse(atob(deviceToken.split('.')[1]));
+            const payload = JSON.parse(atob(validDevice.split('.')[1]));
             if (payload.locked) {
                 let expectedPath;
                 const dest = payload.destination;
