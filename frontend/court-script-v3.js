@@ -416,19 +416,16 @@ async function checkGameWin() {
             return;
         }
 
-        // Set won but not match - start rest break and show message
+        // Set won but not match - start 2-minute rest break in background, show on Fortsæt
         const winnerNames = formatPlayerNames(gameState.player1.name, gameState.player1.name2);
 
-        // Start 2-minute rest break immediately in 21/30 mode (in background)
-        if (gameState.gameMode === '21') {
-            await startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', () => {
-                resetScores();
-                gameState.decidingGameSwitched = false;
-                switchSides();
-                fixDoublesStartPosition();
-                showDoublesPositionMessage();
-            }, false); // showOverlay = false, timer runs in background
-        }
+        await startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', () => {
+            resetScores();
+            gameState.decidingGameSwitched = false;
+            switchSides();
+            fixDoublesStartPosition();
+            showDoublesPositionMessage();
+        }, false); // showOverlay = false, timer runs in background
 
         showMessage(
             'Sæt Vundet!',
@@ -436,19 +433,7 @@ async function checkGameWin() {
             [
                 {
                     text: 'Fortsæt',
-                    callback: () => {
-                        if (gameState.gameMode === '21') {
-                            // Show the rest break overlay (timer already running)
-                            showRestBreakOverlay();
-                        } else {
-                            // In 15/21 mode, reset and switch when Fortsæt is clicked
-                            resetScores();
-                            gameState.decidingGameSwitched = false;
-                            switchSides();
-                            fixDoublesStartPosition();
-                            showDoublesPositionMessage();
-                        }
-                    },
+                    callback: () => showRestBreakOverlay(),
                     style: 'primary'
                 }
             ]
@@ -489,19 +474,16 @@ async function checkGameWin() {
             return;
         }
 
-        // Set won but not match - start rest break and show message
+        // Set won but not match - start 2-minute rest break in background, show on Fortsæt
         const winnerNames = formatPlayerNames(gameState.player2.name, gameState.player2.name2);
 
-        // Start 2-minute rest break immediately in 21/30 mode (in background)
-        if (gameState.gameMode === '21') {
-            await startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', () => {
-                resetScores();
-                gameState.decidingGameSwitched = false;
-                switchSides();
-                fixDoublesStartPosition();
-                showDoublesPositionMessage();
-            }, false); // showOverlay = false, timer runs in background
-        }
+        await startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', () => {
+            resetScores();
+            gameState.decidingGameSwitched = false;
+            switchSides();
+            fixDoublesStartPosition();
+            showDoublesPositionMessage();
+        }, false); // showOverlay = false, timer runs in background
 
         showMessage(
             'Sæt Vundet!',
@@ -509,19 +491,7 @@ async function checkGameWin() {
             [
                 {
                     text: 'Fortsæt',
-                    callback: () => {
-                        if (gameState.gameMode === '21') {
-                            // Show the rest break overlay (timer already running)
-                            showRestBreakOverlay();
-                        } else {
-                            // In 15/21 mode, reset and switch when Fortsæt is clicked
-                            resetScores();
-                            gameState.decidingGameSwitched = false;
-                            switchSides();
-                            fixDoublesStartPosition();
-                            showDoublesPositionMessage();
-                        }
-                    },
+                    callback: () => showRestBreakOverlay(),
                     style: 'primary'
                 }
             ]
@@ -1435,12 +1405,10 @@ function showRestBreakOverlay() {
 }
 
 function checkRestBreak() {
-    // Check if either player has reached 11 points and break hasn't been taken yet
-    // Only trigger rest break in 21/30 mode (gameMode === '21'), not in 15/21 mode
-    if (!gameState.restBreakTaken && !gameState.restBreakActive && gameState.gameMode === '21') {
-        if (gameState.player1.score === 11 || gameState.player2.score === 11) {
-            startRestBreak();
-        }
+    if (gameState.restBreakTaken || gameState.restBreakActive) return;
+    const breakPoint = gameState.gameMode === '21' ? 11 : 8;
+    if (gameState.player1.score === breakPoint || gameState.player2.score === breakPoint) {
+        startRestBreak();
     }
 }
 
