@@ -27,11 +27,17 @@ router.get('/', async (req, res, next) => {
             ['tv_version']
         );
 
+        const defaultGameModeSetting = await queryOne(
+            'SELECT setting_value FROM settings WHERE setting_key = ?',
+            ['default_game_mode']
+        );
+
         res.json({
             courtCount: parseInt(courtCountSetting?.setting_value || '4'),
             showResetButton: showResetButtonSetting?.setting_value !== 'false',
             courtVersion: courtVersionSetting?.setting_value || 'v2',
-            tvVersion: tvVersionSetting?.setting_value || 'v2'
+            tvVersion: tvVersionSetting?.setting_value || 'v2',
+            defaultGameMode: defaultGameModeSetting?.setting_value || '21'
         });
     } catch (error) {
         next(error);
@@ -159,6 +165,23 @@ router.put('/tv-version', authMiddleware, async (req, res, next) => {
             ['tv_version', tvVersion, tvVersion]
         );
 
+        res.json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// PUT /api/settings/game-mode - Update default game mode (requires auth)
+router.put('/game-mode', authMiddleware, async (req, res, next) => {
+    try {
+        const { gameMode } = req.body;
+        if (gameMode !== '21' && gameMode !== '15') {
+            return res.status(400).json({ error: 'Ugyldig kamptilstand — brug "21" eller "15"' });
+        }
+        await query(
+            'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
+            ['default_game_mode', gameMode, gameMode]
+        );
         res.json({ success: true });
     } catch (error) {
         next(error);

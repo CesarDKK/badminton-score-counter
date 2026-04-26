@@ -238,6 +238,13 @@ class BadmintonAPI {
         });
     }
 
+    async updateDefaultGameMode(gameMode) {
+        return this.request('/settings/game-mode', {
+            method: 'PUT',
+            body: JSON.stringify({ gameMode })
+        });
+    }
+
     /**
      * Get theme settings
      * @returns {Promise<object>} - Theme object with all colors

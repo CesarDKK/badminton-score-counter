@@ -709,6 +709,8 @@ async function initializeApp() {
         // Verify court is valid
         const settings = await api.getSettings();
         const courtCount = settings.courtCount;
+        // Store default game mode for use when no game state exists yet
+        gameState._defaultGameMode = settings.defaultGameMode || '21';
 
         if (courtId < 1 || courtId > courtCount) {
             alert(`Bane ${courtId} findes ikke. Omdirigerer til landingsside.`);
@@ -761,7 +763,7 @@ async function loadGameState() {
         gameState.currentCourt = courtId;
         gameState.isActive = loaded.isActive;
         gameState.isDoubles = loaded.isDoubles || false;
-        gameState.gameMode = loaded.gameMode || '21';
+        gameState.gameMode = loaded.gameMode || gameState._defaultGameMode || '21';
         gameState.decidingGameSwitched = loaded.decidingGameSwitched || false;
 
         // Convert timestamps from string/ISO format to numbers

@@ -49,6 +49,9 @@ function setupEventListeners() {
     // TV Version
     document.getElementById('saveTVVersionBtn').addEventListener('click', saveTVVersion);
 
+    // Game Mode
+    document.getElementById('saveGameModeBtn').addEventListener('click', saveDefaultGameMode);
+
     // Backup
     document.getElementById('downloadBackupBtn').addEventListener('click', downloadBackup);
     document.getElementById('chooseRestoreFileBtn').addEventListener('click', () =>
@@ -101,6 +104,7 @@ async function loadSettings() {
         document.getElementById('showResetButton').checked = settings.showResetButton === false;
         document.getElementById('courtVersion').value = settings.courtVersion || 'v2';
         document.getElementById('tvVersion').value = settings.tvVersion || 'v2';
+        document.getElementById('defaultGameMode').value = settings.defaultGameMode || '21';
     } catch (error) {
         console.error('Failed to load settings:', error);
         showMessage('Fejl', 'Kunne ikke indlæse indstillinger');
@@ -181,6 +185,17 @@ async function saveTVVersion() {
         showMessage('Succes', `TV version opdateret til ${versionName}!`);
     } catch (error) {
         console.error('Failed to update TV version:', error);
+        showMessage('Fejl', error.message);
+    }
+}
+
+async function saveDefaultGameMode() {
+    const gameMode = document.getElementById('defaultGameMode').value;
+    try {
+        await api.updateDefaultGameMode(gameMode);
+        const label = gameMode === '21' ? '21/30 point' : '15/21 point';
+        showMessage('Succes', `Standard kamptilstand sat til ${label}!`);
+    } catch (error) {
         showMessage('Fejl', error.message);
     }
 }
