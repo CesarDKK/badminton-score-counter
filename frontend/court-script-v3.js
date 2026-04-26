@@ -355,15 +355,17 @@ function addPoint(player) {
     // Check for rest break at 11 points
     checkRestBreak();
 
-    // Check for side switch at 11 points in deciding game (when games are 1-1)
+    // Check for side switch at mid-point in deciding game (when games are 1-1)
+    // 21/30 format: 11 points · 15/21 format: 8 points
     const isDecidingGame = gameState.player1.games === 1 && gameState.player2.games === 1;
-    const scoredTo11 = gameState.player1.score === 11 || gameState.player2.score === 11;
+    const decidingMidPoint = gameState.gameMode === '21' ? 11 : 8;
+    const scoredToMid = gameState.player1.score === decidingMidPoint || gameState.player2.score === decidingMidPoint;
 
-    if (isDecidingGame && scoredTo11 && !gameState.decidingGameSwitched) {
+    if (isDecidingGame && scoredToMid && !gameState.decidingGameSwitched) {
         gameState.decidingGameSwitched = true;
         switchSides();
         fixDoublesServePosition();
-        showMessage('Skift Sider!', 'Point har nået 11 i afgørende sæt. Spillere har skiftet side!');
+        showMessage('Skift Sider!', `Point har nået ${decidingMidPoint} i afgørende sæt. Spillere har skiftet side!`);
     }
 
     checkGameWin();
