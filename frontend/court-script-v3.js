@@ -237,7 +237,7 @@ function toggleGameMode() {
 
 function updateGameModeButton() {
     const btn = document.getElementById('gameModeToggle');
-    if (btn) btn.textContent = gameState.gameMode === '21' ? 'Format: 21/30' : 'Format: 15/21';
+    if (btn) btn.textContent = gameState.gameMode === '21' ? 'Skift til 15/21' : 'Skift til 21/30';
 }
 
 function openSettingsMenu() {
