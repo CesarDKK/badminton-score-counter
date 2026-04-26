@@ -163,6 +163,11 @@ function setupEventListeners() {
         closeSettingsMenu();
     });
 
+    document.getElementById('gameModeToggle').addEventListener('click', () => {
+        toggleGameMode();
+        closeSettingsMenu();
+    });
+
     // Close settings menu when clicking outside
     document.getElementById('settingsMenu').addEventListener('click', (e) => {
         if (e.target.id === 'settingsMenu') {
@@ -203,6 +208,36 @@ function toggleDoubles() {
             }
         ]
     );
+}
+
+function toggleGameMode() {
+    if (gameState.matchStartTime && !gameState.matchEndTime) {
+        showMessage('Ikke muligt', 'Kamptilstand kan ikke ændres mens en kamp er i gang.');
+        return;
+    }
+    const newMode = gameState.gameMode === '21' ? '15' : '21';
+    const label   = newMode === '21' ? '21/30 point' : '15/21 point';
+    showMessage(
+        'Skift Kamptilstand',
+        `Skift til ${label} format?`,
+        [
+            {
+                text: 'Ja',
+                callback: () => {
+                    gameState.gameMode = newMode;
+                    updateGameModeButton();
+                    saveGameState();
+                },
+                style: 'primary'
+            },
+            { text: 'Annuller', callback: () => {}, style: 'secondary' }
+        ]
+    );
+}
+
+function updateGameModeButton() {
+    const btn = document.getElementById('gameModeToggle');
+    if (btn) btn.textContent = gameState.gameMode === '21' ? 'Format: 21/30' : 'Format: 15/21';
 }
 
 function openSettingsMenu() {
@@ -799,6 +834,7 @@ function hasCustomPlayerNames() {
 
 // Update display with current game state
 function updateDisplay() {
+    updateGameModeButton();
     // Update player names on court (for doubles only - singles names are set by updatePlayerNamePositions)
     if (gameState.isDoubles) {
         document.getElementById('player1Name1Display').textContent = gameState.player1.name;
