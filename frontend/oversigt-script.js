@@ -788,7 +788,7 @@ function updateTimerDisplays() {
         if (!court.restBreakActive) return;
         const pauseTimerEl = document.getElementById(`pause-timer-${court.courtId}`);
         if (pauseTimerEl) {
-            pauseTimerEl.textContent = formatTimer(getPauseSecondsLeft(court));
+            pauseTimerEl.textContent = getPauseSecondsLeft(court);
         }
     });
 }
