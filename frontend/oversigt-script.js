@@ -202,12 +202,13 @@ async function loadAllCourts() {
             if (now - entry.finishedAt > FINISHED_DISPLAY_MS) finishedCourts.delete(cid);
         }
 
-        // Filter only active courts with actual game activity (exclude completed — shown as finished cards)
+        // Filter active courts — vis banen så snart kampen er startet (matchStartTime sat)
+        // ikke først når det første point scores (exclude completed — shown as finished cards)
         const activeOnly = allCourtData.filter(court => {
             if (!court.isActive || court.matchCompleted) return false;
 
-            // Check if there's actual game activity (scoring has started)
             const hasGameActivity =
+                !!court.matchStartTime ||
                 court.player1.score > 0 ||
                 court.player2.score > 0 ||
                 court.player1.games > 0 ||
