@@ -438,6 +438,23 @@ function renderCourtCard(court) {
         histP2 += `<div class="set-hist-score" style="color:${row1Won ? '#e94560' : '#4CAF50'}">${row2Score}</div>`;
     });
 
+    // Når et sæt netop er afsluttet er restBreakActive=true men resetScores() er
+    // endnu ikke kørt — scorerne viser stadig sæt-slutresultatet i stedet for 0-0.
+    // Detektér dette ved at sammenligne med det sidst gemte sæt-resultat.
+    let currentP1Score = court.player1.score;
+    let currentP2Score = court.player2.score;
+    if (isPaused && history.length > 0) {
+        const last = history[history.length - 1];
+        const parts = (last.score || '0-0').split('-');
+        const hs1 = parseInt(parts[0]) || 0;
+        const hs2 = parseInt(parts[1]) || 0;
+        if ((currentP1Score === hs1 && currentP2Score === hs2) ||
+            (currentP1Score === hs2 && currentP2Score === hs1)) {
+            currentP1Score = 0;
+            currentP2Score = 0;
+        }
+    }
+
     const pauseSeconds = isPaused ? getPauseSecondsLeft(court) : 0;
 
     return `
@@ -462,7 +479,7 @@ function renderCourtCard(court) {
                         <div class="player-info">${player1Names}</div>
                         <div class="player-stats">
                             ${histP1}
-                            <div class="player-score">${court.player1.score}</div>
+                            <div class="player-score">${currentP1Score}</div>
                         </div>
                     </div>
 
@@ -472,7 +489,7 @@ function renderCourtCard(court) {
                         <div class="player-info">${player2Names}</div>
                         <div class="player-stats">
                             ${histP2}
-                            <div class="player-score">${court.player2.score}</div>
+                            <div class="player-score">${currentP2Score}</div>
                         </div>
                     </div>
                 </div>
