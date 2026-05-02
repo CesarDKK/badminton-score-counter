@@ -214,8 +214,12 @@ async function loadAllCourts() {
                 if (!existing || existing.matchStartTime !== court.matchStartTime) {
                     finishedCourts.set(court.courtId, {
                         finishedAt: court.matchEndTime ? new Date(court.matchEndTime).getTime() : now,
-                        matchStartTime: court.matchStartTime
+                        matchStartTime: court.matchStartTime,
+                        _snapshot: { ...court }  // altid gem snapshot så fallback virker efter clearCourt
                     });
+                } else if (!existing._snapshot) {
+                    // Opdater eksisterende entry med snapshot hvis det mangler
+                    existing._snapshot = { ...court };
                 }
             } else if (finishedCourts.has(court.courtId)) {
                 // Ny kamp startet på samme bane — fjern den afsluttede post
