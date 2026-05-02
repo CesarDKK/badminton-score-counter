@@ -2,15 +2,18 @@ package com.badminton.courtcounter
 
 import android.content.Context
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 
 class SettingsActivity : AppCompatActivity() {
 
-    private lateinit var serverUrlInput: EditText
+    private lateinit var linkInput: EditText
     private lateinit var courtIdInput: EditText
+    private lateinit var courtIdLabel: TextView
     private lateinit var saveButton: Button
     private lateinit var prefs: android.content.SharedPreferences
 
@@ -26,49 +29,56 @@ class SettingsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
 
-        // Enable back button in action bar
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
         prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
 
-        serverUrlInput = findViewById(R.id.serverUrlInput)
+        linkInput    = findViewById(R.id.serverUrlInput)
         courtIdInput = findViewById(R.id.courtIdInput)
-        saveButton = findViewById(R.id.saveButton)
+        courtIdLabel = findViewById(R.id.courtIdLabel)
+        saveButton   = findViewById(R.id.saveButton)
 
-        // Load current settings
         loadSettings()
 
-        // Save button click
-        saveButton.setOnClickListener {
-            saveSettings()
-        }
+        // Skjul banenummer-felt dynamisk ved adgangslink
+        linkInput.addTextChangedListener(object : android.text.TextWatcher {
+            override fun afterTextChanged(s: android.text.Editable?) = updateCourtVisibility()
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        })
+
+        saveButton.setOnClickListener { saveSettings() }
+    }
+
+    private fun updateCourtVisibility() {
+        val isToken = MainActivity.isTokenUrl(linkInput.text.toString().trim())
+        courtIdLabel.visibility = if (isToken) View.GONE else View.VISIBLE
+        courtIdInput.visibility = if (isToken) View.GONE else View.VISIBLE
     }
 
     private fun loadSettings() {
-        val serverUrl = prefs.getString(PREF_SERVER_URL, DEFAULT_SERVER_URL)
-        val courtId = prefs.getString(PREF_COURT_ID, DEFAULT_COURT_ID)
-
-        serverUrlInput.setText(serverUrl)
-        courtIdInput.setText(courtId)
+        linkInput.setText(prefs.getString(PREF_SERVER_URL, DEFAULT_SERVER_URL))
+        courtIdInput.setText(prefs.getString(PREF_COURT_ID, DEFAULT_COURT_ID))
+        updateCourtVisibility()
     }
 
     private fun saveSettings() {
-        val serverUrl = serverUrlInput.text.toString().trim()
+        val link   = linkInput.text.toString().trim()
         val courtId = courtIdInput.text.toString().trim()
 
-        if (serverUrl.isEmpty()) {
-            Toast.makeText(this, "Server URL må ikke være tom", Toast.LENGTH_SHORT).show()
+        if (link.isEmpty()) {
+            Toast.makeText(this, "Link/URL må ikke være tomt", Toast.LENGTH_SHORT).show()
             return
         }
 
-        if (courtId.isEmpty() || courtId.toIntOrNull() == null) {
+        if (!MainActivity.isTokenUrl(link) && (courtId.isEmpty() || courtId.toIntOrNull() == null)) {
             Toast.makeText(this, "Bane nummer skal være et tal", Toast.LENGTH_SHORT).show()
             return
         }
 
         prefs.edit().apply {
-            putString(PREF_SERVER_URL, serverUrl)
-            putString(PREF_COURT_ID, courtId)
+            putString(PREF_SERVER_URL, link)
+            putString(PREF_COURT_ID, courtId.ifEmpty { DEFAULT_COURT_ID })
             apply()
         }
 
