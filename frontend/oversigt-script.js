@@ -183,92 +183,112 @@ async function loadAllCourts() {
             }
         });
 
-        // Opdater snapshot af aktive baner (bruges som fallback hvis banen forsvinder)
+        // Opdater snapshot af aktive baner og spor afsluttede baner.
+        // Simpel tilgang: afsluttede baner (matchCompleted=true) vises direkte
+        // i activeOnly i op til 5 min. Snapshot-fallback håndterer race-condition
+        // hvor banen forsvinder (clearCourt) inden oversigt ser matchCompleted=true.
         const currentCourtIds = new Set(allCourtData.map(c => c.courtId));
+
         allCourtData.forEach(court => {
-            if (court.isActive && court.matchStartTime && !court.matchCompleted && !isHoldkampCourt(court.courtId)) {
+            if (court.isActive && court.matchStartTime && !isHoldkampCourt(court.courtId)) {
+                // Gem senest kendte tilstand — bruges som fallback hvis banen ryddes
                 lastKnownActiveState.set(court.courtId, { ...court });
-            }
-        });
 
-        // Track recently finished matches (skip holdkamp courts — those are shown in their own panel)
-        allCourtData.forEach(court => {
-            if (court.matchCompleted && !isHoldkampCourt(court.courtId)) {
-                const existing = finishedCourts.get(court.courtId);
-                if (!existing || existing.matchStartTime !== court.matchStartTime) {
-                    finishedCourts.set(court.courtId, {
-                        snapshot: { ...court },
-                        finishedAt: court.matchEndTime ? new Date(court.matchEndTime).getTime() : now,
-                        matchStartTime: court.matchStartTime
-                    });
-                }
-                lastKnownActiveState.delete(court.courtId);
-            } else if (finishedCourts.has(court.courtId)) {
-                const entry = finishedCourts.get(court.courtId);
-                // New match started on same court — evict the finished entry
-                if (court.isActive && court.matchStartTime && court.matchStartTime !== entry.matchStartTime) {
-                    finishedCourts.delete(court.courtId);
+                if (court.matchCompleted) {
+                    // Første gang vi ser matchCompleted=true: gem afslutnings-tidspunkt
+                    if (!finishedCourts.has(court.courtId) ||
+                        finishedCourts.get(court.courtId).matchStartTime !== court.matchStartTime) {
+                        finishedCourts.set(court.courtId, {
+                            finishedAt: court.matchEndTime ? new Date(court.matchEndTime).getTime() : now,
+                            matchStartTime: court.matchStartTime
+                        });
+                    }
+                } else if (finishedCourts.has(court.courtId)) {
+                    // Ny kamp startet — fjern den afsluttede post
+                    const entry = finishedCourts.get(court.courtId);
+                    if (court.matchStartTime !== entry.matchStartTime) {
+                        finishedCourts.delete(court.courtId);
+                        lastKnownActiveState.set(court.courtId, { ...court });
+                    }
                 }
             }
         });
 
-        // Fallback: baner der var aktive men nu er forsvundet/nulstillet uden at oversigt
-        // nåede at se matchCompleted=true (race condition ved hurtig 'Ny Kamp'-klik)
+        // Fallback: baner der var aktive men nu er forsvundet (clearCourt før oversigt
+        // nåede at se matchCompleted=true). Brug snapshot til at vise resultatet.
         for (const [courtId, snapshot] of lastKnownActiveState) {
-            if (!currentCourtIds.has(courtId) || !allCourtData.find(c => c.courtId === courtId)?.isActive) {
-                if (!finishedCourts.has(courtId)) {
-                    finishedCourts.set(courtId, {
-                        snapshot: { ...snapshot, matchCompleted: true },
-                        finishedAt: snapshot.matchEndTime
-                            ? new Date(snapshot.matchEndTime).getTime()
-                            : now,
-                        matchStartTime: snapshot.matchStartTime
-                    });
-                }
-                lastKnownActiveState.delete(courtId);
+            const current = allCourtData.find(c => c.courtId === courtId);
+            const isGone = !current?.isActive || !current?.matchStartTime;
+            if (isGone && !finishedCourts.has(courtId)) {
+                finishedCourts.set(courtId, {
+                    finishedAt: snapshot.matchEndTime
+                        ? new Date(snapshot.matchEndTime).getTime()
+                        : now,
+                    matchStartTime: snapshot.matchStartTime,
+                    _snapshot: { ...snapshot, matchCompleted: true }
+                });
             }
+            if (isGone) lastKnownActiveState.delete(courtId);
         }
 
         // Expire entries older than 5 minutes
         for (const [cid, entry] of finishedCourts) {
-            if (now - entry.finishedAt > FINISHED_DISPLAY_MS) finishedCourts.delete(cid);
+            if (now - entry.finishedAt > FINISHED_DISPLAY_MS) {
+                finishedCourts.delete(cid);
+                lastKnownActiveState.delete(cid);
+            }
         }
 
-        // Filter active courts — vis banen så snart kampen er startet (matchStartTime sat)
-        // ikke først når det første point scores (exclude completed — shown as finished cards)
+        // Filter: vis aktive baner + afsluttede i op til 5 min.
+        // matchCompleted=true baner inkluderes direkte — ingen separat snapshot-mekanisme.
         const activeOnly = allCourtData.filter(court => {
-            if (!court.isActive || court.matchCompleted) return false;
+            if (!court.isActive) return false;
+            if (isHoldkampCourt(court.courtId)) return false;
 
             const hasGameActivity =
-                court.isActive ||
                 !!court.matchStartTime ||
                 court.player1.score > 0 ||
                 court.player2.score > 0 ||
                 court.player1.games > 0 ||
                 court.player2.games > 0 ||
-                court.timerSeconds > 0;
+                court.timerSeconds > 0 ||
+                court.isActive;
 
-            // Store match timing from database
-            if (hasGameActivity) {
-                courtMatchTimes[court.courtId] = {
-                    matchStartTime: court.matchStartTime,
-                    matchEndTime: court.matchEndTime
-                };
-            } else {
+            if (!hasGameActivity) {
                 delete courtMatchTimes[court.courtId];
+                return false;
             }
 
-            return hasGameActivity;
+            // Vis afsluttet kamp i op til 5 min
+            if (court.matchCompleted) {
+                const entry = finishedCourts.get(court.courtId);
+                if (!entry) return false; // bør ikke ske, men vær sikker
+                if (now - entry.finishedAt > FINISHED_DISPLAY_MS) return false;
+            }
+
+            courtMatchTimes[court.courtId] = {
+                matchStartTime: court.matchStartTime,
+                matchEndTime: court.matchEndTime
+            };
+            return true;
         });
 
-        // Merge active courts with recently-finished courts for display
-        activeCourts = [
-            ...activeOnly,
-            ...Array.from(finishedCourts.values()).map(e => ({
-                ...e.snapshot,
+        // Merge: aktive/afsluttede baner fra DB + snapshot-fallback for ryddede baner
+        const activeIds = new Set(activeOnly.map(c => c.courtId));
+        const fallbackCourts = Array.from(finishedCourts.entries())
+            .filter(([cid, e]) => e._snapshot && !activeIds.has(cid))
+            .map(([, e]) => ({
+                ...e._snapshot,
                 _isFinished: true,
                 _finishedAt: e.finishedAt
-            }))
+            }));
+
+        // Mark completed courts in activeOnly as finished for rendering
+        activeCourts = [
+            ...activeOnly.map(c => c.matchCompleted
+                ? { ...c, _isFinished: true, _finishedAt: finishedCourts.get(c.courtId)?.finishedAt ?? now }
+                : c),
+            ...fallbackCourts
         ];
 
         hideLoading();
