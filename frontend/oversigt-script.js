@@ -190,32 +190,37 @@ async function loadAllCourts() {
         const currentCourtIds = new Set(allCourtData.map(c => c.courtId));
 
         allCourtData.forEach(court => {
-            if (court.isActive && court.matchStartTime && !isHoldkampCourt(court.courtId)) {
-                // Gem senest kendte tilstand — bruges som fallback hvis banen ryddes
-                lastKnownActiveState.set(court.courtId, { ...court });
-
-                if (court.matchCompleted) {
-                    // Første gang vi ser matchCompleted=true: gem afslutnings-tidspunkt
-                    if (!finishedCourts.has(court.courtId) ||
-                        finishedCourts.get(court.courtId).matchStartTime !== court.matchStartTime) {
-                        finishedCourts.set(court.courtId, {
-                            finishedAt: court.matchEndTime ? new Date(court.matchEndTime).getTime() : now,
-                            matchStartTime: court.matchStartTime
-                        });
-                    }
-                } else if (finishedCourts.has(court.courtId)) {
-                    // Ny kamp startet — fjern den afsluttede post
-                    const entry = finishedCourts.get(court.courtId);
-                    if (court.matchStartTime !== entry.matchStartTime) {
-                        finishedCourts.delete(court.courtId);
-                        lastKnownActiveState.set(court.courtId, { ...court });
-                    }
+            if (!court.isActive || !court.matchStartTime || isHoldkampCourt(court.courtId)) {
+                // Bane er aktiv uden matchStartTime → ny tildeling → fjern gammel post
+                if (court.isActive && finishedCourts.has(court.courtId)) {
+                    finishedCourts.delete(court.courtId);
+                    lastKnownActiveState.delete(court.courtId);
                 }
-            } else if (court.isActive && finishedCourts.has(court.courtId)) {
-                // Bane er aktiv men har ingen matchStartTime endnu (ny tildeling)
-                // Fjern den gamle afsluttede post så den nye kamp kan vises
-                finishedCourts.delete(court.courtId);
-                lastKnownActiveState.delete(court.courtId);
+                return;
+            }
+
+            // Kamp er "færdig" når en spiller har vundet 2 sæt — robust uanset matchCompleted-flag
+            const matchDone = court.matchCompleted ||
+                              court.player1.games >= 2 ||
+                              court.player2.games >= 2;
+
+            // Gem senest kendte tilstand — bruges som fallback hvis banen ryddes
+            lastKnownActiveState.set(court.courtId, { ...court });
+
+            if (matchDone) {
+                const existing = finishedCourts.get(court.courtId);
+                if (!existing || existing.matchStartTime !== court.matchStartTime) {
+                    finishedCourts.set(court.courtId, {
+                        finishedAt: court.matchEndTime ? new Date(court.matchEndTime).getTime() : now,
+                        matchStartTime: court.matchStartTime
+                    });
+                }
+            } else if (finishedCourts.has(court.courtId)) {
+                // Ny kamp startet på samme bane — fjern den afsluttede post
+                const entry = finishedCourts.get(court.courtId);
+                if (court.matchStartTime !== entry.matchStartTime) {
+                    finishedCourts.delete(court.courtId);
+                }
             }
         });
 
@@ -263,10 +268,13 @@ async function loadAllCourts() {
                 return false;
             }
 
-            // Vis afsluttet kamp i op til 5 min
-            if (court.matchCompleted) {
+            // Vis afsluttet kamp i op til 5 min (brug games-count som primær indikator)
+            const matchDone = court.matchCompleted ||
+                              court.player1.games >= 2 ||
+                              court.player2.games >= 2;
+            if (matchDone) {
                 const entry = finishedCourts.get(court.courtId);
-                if (!entry) return false; // bør ikke ske, men vær sikker
+                if (!entry) return false;
                 if (now - entry.finishedAt > FINISHED_DISPLAY_MS) return false;
             }
 
@@ -289,9 +297,12 @@ async function loadAllCourts() {
 
         // Mark completed courts in activeOnly as finished for rendering
         activeCourts = [
-            ...activeOnly.map(c => c.matchCompleted
-                ? { ...c, _isFinished: true, _finishedAt: finishedCourts.get(c.courtId)?.finishedAt ?? now }
-                : c),
+            ...activeOnly.map(c => {
+                const done = c.matchCompleted || c.player1.games >= 2 || c.player2.games >= 2;
+                return done
+                    ? { ...c, _isFinished: true, _finishedAt: finishedCourts.get(c.courtId)?.finishedAt ?? now }
+                    : c;
+            }),
             ...fallbackCourts
         ];
 
