@@ -229,7 +229,7 @@ body::before {
 .player-stats {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 10px;
     flex-shrink: 0;
 }
 
@@ -270,7 +270,8 @@ body::before {
     letter-spacing: 1px;
     line-height: 1;
     opacity: 0.9;
-    padding-right: 6px;
+    min-width: 1.6ch;
+    text-align: center;
 }
 
 /* =================== PAUSE OVERLAY =================== */
