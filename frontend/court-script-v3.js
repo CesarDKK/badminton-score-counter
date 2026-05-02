@@ -1485,6 +1485,13 @@ function hideMessage() {
 
 // Save match result to database
 async function saveMatchResult(winner, loser, winnerGames, loserGames) {
+    // Fang holdkamp-oplysninger med det samme og nulstil assignedGameId straks.
+    // saveMatchResult køres IKKE-afventet fra checkGameWin, så clearCourt() kan
+    // køre parallelt og overskrive assignedGameId inden vi når reportHoldkampResult.
+    const capturedGameId = assignedGameId;
+    const capturedTeamMatch = activeTeamMatch;
+    assignedGameId = null;
+
     try {
         // Calculate duration from timestamps
         let duration = '00:00';
@@ -1514,16 +1521,15 @@ async function saveMatchResult(winner, loser, winnerGames, loserGames) {
 
         await api.saveMatchResult(matchData);
 
-        // Report holdkamp result if assigned
-        if (assignedGameId && activeTeamMatch) {
-            const game = activeTeamMatch.games.find(g => g.id === assignedGameId);
+        // Report holdkamp result using captured values (assignedGameId may already be null)
+        if (capturedGameId && capturedTeamMatch) {
+            const game = capturedTeamMatch.games.find(g => g.id === capturedGameId);
             let winnerTeam = 2;
             if (game) {
                 const team1Names = [game.team1_player1, game.team1_player2].filter(Boolean);
                 winnerTeam = team1Names.some(name => winner.includes(name)) ? 1 : 2;
             }
             await reportHoldkampResult(winnerTeam, setScoresText);
-            assignedGameId = null;
         }
 
         // Show holdkamp panel if there are more pending games
