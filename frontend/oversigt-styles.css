@@ -238,10 +238,11 @@ body::before {
     font-size: clamp(3em, min(9vh, 6vw), 6em);
     font-weight: 400;
     color: #ffffff;
-    min-width: 1.6ch;
-    text-align: right;
+    width: 2.5ch;
+    text-align: center;
     letter-spacing: 1px;
     line-height: 1;
+    font-variant-numeric: tabular-nums;
 }
 
 .player-games {
@@ -270,8 +271,9 @@ body::before {
     letter-spacing: 1px;
     line-height: 1;
     opacity: 0.9;
-    min-width: 1.6ch;
+    width: 2.5ch;
     text-align: center;
+    font-variant-numeric: tabular-nums;
 }
 
 /* =================== PAUSE OVERLAY =================== */
