@@ -342,22 +342,20 @@ function updateCourtCardData(court) {
     // Toggle paused class
     card.classList.toggle('court-card--paused', isPaused);
 
-    // Update pause label and timer immediately when pause state changes
-    const pauseLabelEl = card.querySelector('.pause-label');
-    if (pauseLabelEl) {
-        pauseLabelEl.textContent = (court.restBreakTitle || '').toLowerCase().includes('sæt') ? 'SÆTHVIL' : 'PAUSE';
-    }
-    if (isPaused) {
-        const pauseTimerEl = document.getElementById(`pause-timer-${court.courtId}`);
-        if (pauseTimerEl) pauseTimerEl.textContent = formatTimer(getPauseSecondsLeft(court));
-    }
-
-    // Re-render entire card if set history changed OR player1 name changed (side switch)
+    // Re-render entire card if pause state, history or player name changed
     const history = court.setScoresHistory || [];
-    if (parseInt(card.dataset.sets || '0') !== history.length ||
+    const wasPaused = !!card.querySelector('.court-pause-overlay');
+    if (wasPaused !== isPaused ||
+        parseInt(card.dataset.sets || '0') !== history.length ||
         card.dataset.p1 !== court.player1.name) {
         card.outerHTML = renderCourtCard(court);
         return;
+    }
+
+    // Update pause overlay countdown
+    if (isPaused) {
+        const pauseTimerEl = document.getElementById(`pause-timer-${court.courtId}`);
+        if (pauseTimerEl) pauseTimerEl.textContent = getPauseSecondsLeft(court);
     }
 
     // Update current-set scores (always white — history badges handle colour)
@@ -378,19 +376,6 @@ function updateCourtCardData(court) {
         if (info) info.innerHTML = isDoubles && court.player2.name2
             ? `<div class="player-name">${escapeHtml(court.player2.name)}</div><div class="player-name-partner">${escapeHtml(court.player2.name2)}</div>`
             : `<div class="player-name">${escapeHtml(court.player2.name)}</div>`;
-    }
-
-    // Update rest break badge
-    let badge = card.querySelector('.rest-break-badge');
-    if (court.restBreakActive) {
-        if (!badge) {
-            badge = document.createElement('div');
-            badge.className = 'rest-break-badge';
-            card.prepend(badge);
-        }
-        badge.textContent = `PAUSE ${court.restBreakSecondsLeft}s`;
-    } else if (badge) {
-        badge.remove();
     }
 }
 
@@ -453,39 +438,47 @@ function renderCourtCard(court) {
         histP2 += `<div class="set-hist-score" style="color:${row1Won ? '#e94560' : '#4CAF50'}">${row2Score}</div>`;
     });
 
+    const pauseSeconds = isPaused ? getPauseSecondsLeft(court) : 0;
+
     return `
         <div class="court-card${isPaused ? ' court-card--paused' : ''}" data-court-id="${court.courtId}" data-sets="${history.length}" data-p1="${escapeHtml(court.player1.name)}">
-            ${restBreakBadge}
-            <div class="court-card-header">
-                <div class="court-number">BANE ${court.courtId}</div>
-                <div class="court-pause-header">
-                    <div class="pause-label">${pauseLabel}</div>
-                    <div class="pause-timer" id="pause-timer-${court.courtId}">${timerDisplay}</div>
-                </div>
-                <div class="court-timer" id="timer-${court.courtId}">${timerDisplay}</div>
-            </div>
 
-            <div class="court-players">
-                <div class="player-row">
-                    <div class="player-info">${player1Names}</div>
-                    <div class="player-stats">
-                        ${histP1}
-                        <div class="player-score">${court.player1.score}</div>
+            <!-- Pause overlay — dækker hele kortet når aktiv -->
+            ${isPaused ? `
+            <div class="court-pause-overlay">
+                <div class="court-pause-overlay__label">${pauseLabel}</div>
+                <div class="court-pause-overlay__timer" id="pause-timer-${court.courtId}">${pauseSeconds}</div>
+                <div class="court-pause-overlay__unit">SEK</div>
+            </div>` : ''}
+
+            <div class="court-card-content${isPaused ? ' court-card-content--paused' : ''}">
+                <div class="court-card-header">
+                    <div class="court-number">BANE ${court.courtId}</div>
+                    <div class="court-timer" id="timer-${court.courtId}">${timerDisplay}</div>
+                </div>
+
+                <div class="court-players">
+                    <div class="player-row">
+                        <div class="player-info">${player1Names}</div>
+                        <div class="player-stats">
+                            ${histP1}
+                            <div class="player-score">${court.player1.score}</div>
+                        </div>
+                    </div>
+
+                    <div class="vs-divider">VS</div>
+
+                    <div class="player-row">
+                        <div class="player-info">${player2Names}</div>
+                        <div class="player-stats">
+                            ${histP2}
+                            <div class="player-score">${court.player2.score}</div>
+                        </div>
                     </div>
                 </div>
 
-                <div class="vs-divider">VS</div>
-
-                <div class="player-row">
-                    <div class="player-info">${player2Names}</div>
-                    <div class="player-stats">
-                        ${histP2}
-                        <div class="player-score">${court.player2.score}</div>
-                    </div>
-                </div>
+                ${bannerHtml}
             </div>
-
-            ${bannerHtml}
         </div>
     `;
 }
