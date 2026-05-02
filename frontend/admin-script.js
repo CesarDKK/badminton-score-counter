@@ -1186,27 +1186,49 @@ async function saveManualResult(teamMatchId, gameId) {
     }
 }
 
-async function finishHoldkamp(id) {
-    if (!confirm('Afslut holdkampen? Den kan ikke genoptages.')) return;
-    try {
-        await api.finishTeamMatch(id);
-        await loadActiveHoldkamp();
-    } catch (error) {
-        console.error('Failed to finish holdkamp:', error);
-        showMessage('Fejl', 'Kunne ikke afslutte holdkampen: ' + (error.message || 'Ukendt fejl'));
-    }
+function finishHoldkamp(id) {
+    showMessage(
+        'Afslut Holdkamp',
+        'Holdkampen afsluttes og kan ikke genoptages.',
+        [
+            {
+                text: 'Afslut',
+                style: 'primary',
+                callback: async () => {
+                    try {
+                        await api.finishTeamMatch(id);
+                        await loadActiveHoldkamp();
+                    } catch (error) {
+                        showMessage('Fejl', 'Kunne ikke afslutte holdkampen: ' + (error.message || 'Ukendt fejl'));
+                    }
+                }
+            },
+            { text: 'Annuller', style: 'secondary', callback: null }
+        ]
+    );
 }
 
-async function deleteHoldkamp(id) {
-    if (!confirm('Slet holdkampen? Al data slettes permanent.')) return;
-    try {
-        await api.deleteTeamMatch(id);
-        document.getElementById('activeHoldkampContainer').style.display = 'none';
-        document.getElementById('createHoldkampForm').style.display = 'block';
-    } catch (error) {
-        console.error('Failed to delete holdkamp:', error);
-        showMessage('Fejl', 'Kunne ikke slette holdkampen: ' + (error.message || 'Ukendt fejl'));
-    }
+function deleteHoldkamp(id) {
+    showMessage(
+        'Slet Holdkamp',
+        'Holdkampen og al tilhørende data slettes permanent.',
+        [
+            {
+                text: 'Slet',
+                style: 'danger',
+                callback: async () => {
+                    try {
+                        await api.deleteTeamMatch(id);
+                        document.getElementById('activeHoldkampContainer').style.display = 'none';
+                        document.getElementById('createHoldkampForm').style.display = 'block';
+                    } catch (error) {
+                        showMessage('Fejl', 'Kunne ikke slette holdkampen: ' + (error.message || 'Ukendt fejl'));
+                    }
+                }
+            },
+            { text: 'Annuller', style: 'secondary', callback: null }
+        ]
+    );
 }
 
 async function loadAllMatches() {
