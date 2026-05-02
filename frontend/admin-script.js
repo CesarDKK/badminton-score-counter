@@ -1903,14 +1903,26 @@ async function handleDeleteDeviceToken(id) {
     }
 }
 
-async function handlePermanentDeleteDeviceToken(id) {
-    if (!confirm('Slet adgangslinket permanent? Det kan ikke gendannes.')) return;
-    try {
-        await api.permanentlyDeleteDeviceToken(id);
-        await loadDeviceTokens();
-    } catch (err) {
-        alert('Fejl: ' + err.message);
-    }
+function handlePermanentDeleteDeviceToken(id) {
+    showMessage(
+        'Slet permanent',
+        'Adgangslinket slettes permanent og kan ikke gendannes.',
+        [
+            {
+                text: 'Slet',
+                style: 'danger',
+                callback: async () => {
+                    try {
+                        await api.permanentlyDeleteDeviceToken(id);
+                        await loadDeviceTokens();
+                    } catch (err) {
+                        showMessage('Fejl', err.message);
+                    }
+                }
+            },
+            { text: 'Annuller', style: 'secondary', callback: null }
+        ]
+    );
 }
 
 function copyLink(link, btn) {
