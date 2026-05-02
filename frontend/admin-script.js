@@ -1959,14 +1959,26 @@ async function handleCreateDeviceToken() {
     }
 }
 
-async function handleDeleteDeviceToken(id) {
-    if (!confirm('Tilbagekald dette adgangslink? Enheder der bruger det mister adgang.')) return;
-    try {
-        await api.deleteDeviceToken(id);
-        await loadDeviceTokens();
-    } catch (err) {
-        alert('Fejl: ' + err.message);
-    }
+function handleDeleteDeviceToken(id) {
+    showMessage(
+        'Tilbagekald Adgangslink',
+        'Enheder der bruger dette link mister adgang med det samme.',
+        [
+            {
+                text: 'Tilbagekald',
+                style: 'danger',
+                callback: async () => {
+                    try {
+                        await api.deleteDeviceToken(id);
+                        await loadDeviceTokens();
+                    } catch (err) {
+                        showMessage('Fejl', err.message);
+                    }
+                }
+            },
+            { text: 'Annuller', style: 'secondary', callback: null }
+        ]
+    );
 }
 
 function handlePermanentDeleteDeviceToken(id) {
