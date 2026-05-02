@@ -240,6 +240,7 @@ async function loadAllCourts() {
             if (!court.isActive || court.matchCompleted) return false;
 
             const hasGameActivity =
+                court.isActive ||
                 !!court.matchStartTime ||
                 court.player1.score > 0 ||
                 court.player2.score > 0 ||

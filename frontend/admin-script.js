@@ -1108,6 +1108,49 @@ async function assignCourtToGame(teamMatchId, gameId) {
             courtNumber,
             status: 'active'
         });
+
+        // Pre-populate game state med spillernavne så banen vises på baneoversigten
+        const teamMatch = (await api.getActiveTeamMatch());
+        const game = teamMatch?.games?.find(g => g.id === gameId);
+        if (game) {
+            const isDoubles = DOUBLES_CATEGORIES.includes(game.category);
+            const currentState = await api.getGameState(courtNumber);
+            await api.updateGameState(courtNumber, {
+                ...(currentState || {}),
+                player1: {
+                    name: game.team1_player1 || `${teamMatch.team1_name} spiller`,
+                    name2: game.team1_player2 || '',
+                    score: 0, games: 0
+                },
+                player2: {
+                    name: game.team2_player1 || `${teamMatch.team2_name} spiller`,
+                    name2: game.team2_player2 || '',
+                    score: 0, games: 0
+                },
+                isActive: true,
+                isDoubles,
+                matchStartTime: null,
+                matchEndTime: null,
+                matchCompleted: false,
+                timerSeconds: 0,
+                servingPlayer: null,
+                initialServer: null,
+                servingTeam: null,
+                servingPlayerOnTeam: null,
+                setScoresHistory: [],
+                restBreakActive: false,
+                restBreakSecondsLeft: 0,
+                restBreakTitle: '',
+                restBreakTaken: false,
+                decidingGameSwitched: false,
+                team1RightCourt: 1,
+                team2RightCourt: 1,
+                betweenSets: false,
+                gameMode: currentState?.gameMode || '21',
+                isActive: true
+            });
+        }
+
         await loadActiveHoldkamp();
     } catch (error) {
         console.error('Failed to assign court:', error);
