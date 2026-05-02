@@ -146,8 +146,12 @@
                     <!-- Security -->
                     <div class="setting-card">
                         <h3>Sikkerhed</h3>
-                        <label>Ny Admin Adgangskode:</label>
-                        <input type="password" id="newPassword" placeholder="Indtast ny adgangskode">
+                        <div id="currentPasswordWrap" style="display:none;margin-bottom:12px;">
+                            <label>Nuværende Adgangskode:</label>
+                            <input type="password" id="currentPassword" placeholder="Nuværende adgangskode">
+                        </div>
+                        <label>Ny Adgangskode:</label>
+                        <input type="password" id="newPassword" placeholder="Ny adgangskode">
                         <button id="changePasswordBtn" class="btn-primary">Skift Adgangskode</button>
                     </div>
                 </div>
@@ -170,6 +174,6 @@
     </div>
 
     <script src="js/api.js?v=4"></script>
-    <script src="settings-script.js?v=6"></script>
+    <script src="settings-script.js?v=7"></script>
 </body>
 </html>

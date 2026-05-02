@@ -20,6 +20,9 @@ async function showDeviceTokensNavIfClubAdmin() {
         if (mode.mode === 'club' && api.isClubAdminSession()) {
             const btn = document.getElementById('deviceTokensNavBtn');
             if (btn) btn.style.display = 'inline-block';
+            // Club admin: vis "nuværende adgangskode"-felt
+            const wrap = document.getElementById('currentPasswordWrap');
+            if (wrap) wrap.style.display = 'block';
         }
     } catch {}
 }
@@ -130,6 +133,7 @@ async function saveCourtCount() {
 
 async function changePassword() {
     const newPassword = document.getElementById('newPassword').value;
+    const isClubAdmin = api.isClubAdminSession();
 
     if (!newPassword || newPassword.length < 4) {
         showMessage('Fejl', 'Adgangskode skal være mindst 4 tegn');
@@ -137,7 +141,19 @@ async function changePassword() {
     }
 
     try {
-        await api.updatePassword(newPassword);
+        if (isClubAdmin) {
+            // Club-mode: skift klub-adminens adgangskode (kræver nuværende)
+            const currentPassword = document.getElementById('currentPassword').value;
+            if (!currentPassword) {
+                showMessage('Fejl', 'Indtast venligst din nuværende adgangskode');
+                return;
+            }
+            await api.changeClubAdminPassword(currentPassword, newPassword);
+            document.getElementById('currentPassword').value = '';
+        } else {
+            // Lokal/direkte installation: skift simpel admin-adgangskode
+            await api.updatePassword(newPassword);
+        }
         showMessage('Succes', 'Adgangskode ændret!');
         document.getElementById('newPassword').value = '';
     } catch (error) {
