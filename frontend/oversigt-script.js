@@ -146,7 +146,9 @@ async function initialize() {
 
 function isHoldkampCourt(courtId) {
     if (!activeTeamMatch) return false;
-    return activeTeamMatch.games.some(g => g.court_number === courtId);
+    // Kun aktive spil — afsluttede holdkamp-spil har stadig court_number sat
+    // men banen skal ikke behandles som holdkamp-bane efter kampen er slut
+    return activeTeamMatch.games.some(g => g.court_number === courtId && g.status === 'active');
 }
 
 async function loadAllCourts() {
