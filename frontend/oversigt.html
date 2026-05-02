@@ -6,7 +6,7 @@
     <title>Oversigt - Alle Aktive Kampe</title>
     <link rel="icon" type="image/png" href="/favicon.png?v=4">
     <link rel="stylesheet" href="fonts.css">
-    <link rel="stylesheet" href="oversigt-styles.css?v=5">
+    <link rel="stylesheet" href="oversigt-styles.css?v=6">
     <script src="js/theme-loader.js"></script>
 </head>
 <body>
@@ -25,7 +25,7 @@
         <div id="holdkampOverview" style="display:none;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                 <div style="display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;">
-                    <div style="display:flex; align-items:baseline; gap:14px;">
+                    <div style="display:flex; align-items:baseline; gap:clamp(20px,3vw,60px);">
                         <span id="hk_team1Name" style="font-family:'Bebas Neue',sans-serif; font-size:clamp(4em,9vw,8em); color:#4CAF50; letter-spacing:2px; line-height:1;"></span>
                         <span id="hk_score" style="font-family:'Bebas Neue',sans-serif; font-size:clamp(4em,9vw,8em); color:#fff; letter-spacing:8px; line-height:1;"></span>
                         <span id="hk_team2Name" style="font-family:'Bebas Neue',sans-serif; font-size:clamp(4em,9vw,8em); color:#e94560; letter-spacing:2px; line-height:1;"></span>

@@ -262,15 +262,15 @@ body::before {
 .games-label { display: none; }
 .games-value { display: none; }
 
-/* Afsluttede sæt — lille farvet tal til venstre for nuværende score */
+/* Afsluttede sæt — farvet tal lidt mindre end nuværende score */
 .set-hist-score {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(1.4em, min(4vh, 2.8vw), 2.8em);
+    font-size: clamp(2.2em, min(7vh, 4.5vw), 4.5em);
     font-weight: 400;
     letter-spacing: 1px;
     line-height: 1;
     opacity: 0.9;
-    padding-right: 4px;
+    padding-right: 6px;
 }
 
 /* =================== PAUSE STATE =================== */
