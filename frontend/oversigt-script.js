@@ -352,15 +352,13 @@ function updateCourtCardData(court) {
         if (pauseTimerEl) pauseTimerEl.textContent = formatTimer(getPauseSecondsLeft(court));
     }
 
-    // Update scores
+    // Update scores + colour based on set lead
+    const g1 = court.player1.games, g2 = court.player2.games;
+    const p1Color = g1 > g2 ? '#4CAF50' : g1 < g2 ? '#e94560' : '#ffffff';
+    const p2Color = g2 > g1 ? '#4CAF50' : g2 < g1 ? '#e94560' : '#ffffff';
     const scoreEls = card.querySelectorAll('.player-score');
-    if (scoreEls[0]) scoreEls[0].textContent = court.player1.score;
-    if (scoreEls[1]) scoreEls[1].textContent = court.player2.score;
-
-    // Update set counts
-    const gamesEls = card.querySelectorAll('.games-value');
-    if (gamesEls[0]) gamesEls[0].textContent = court.player1.games;
-    if (gamesEls[1]) gamesEls[1].textContent = court.player2.games;
+    if (scoreEls[0]) { scoreEls[0].textContent = court.player1.score; scoreEls[0].style.color = p1Color; }
+    if (scoreEls[1]) { scoreEls[1].textContent = court.player2.score; scoreEls[1].style.color = p2Color; }
 
     // Update player names
     const rows = card.querySelectorAll('.player-row');
@@ -428,6 +426,11 @@ function renderCourtCard(court) {
            </div>`
         : '';
 
+    // Score colour: green for set leader, red for trailing, white when tied
+    const g1 = court.player1.games, g2 = court.player2.games;
+    const p1ScoreColor = g1 > g2 ? '#4CAF50' : g1 < g2 ? '#e94560' : '#ffffff';
+    const p2ScoreColor = g2 > g1 ? '#4CAF50' : g2 < g1 ? '#e94560' : '#ffffff';
+
     return `
         <div class="court-card${isPaused ? ' court-card--paused' : ''}" data-court-id="${court.courtId}">
             ${restBreakBadge}
@@ -446,11 +449,7 @@ function renderCourtCard(court) {
                         ${player1Names}
                     </div>
                     <div class="player-stats">
-                        <div class="player-score">${court.player1.score}</div>
-                        <div class="player-games">
-                            <span class="games-label">Sæt:</span>
-                            <span class="games-value">${court.player1.games}</span>
-                        </div>
+                        <div class="player-score" style="color:${p1ScoreColor}">${court.player1.score}</div>
                     </div>
                 </div>
 
@@ -461,11 +460,7 @@ function renderCourtCard(court) {
                         ${player2Names}
                     </div>
                     <div class="player-stats">
-                        <div class="player-score">${court.player2.score}</div>
-                        <div class="player-games">
-                            <span class="games-label">Sæt:</span>
-                            <span class="games-value">${court.player2.games}</span>
-                        </div>
+                        <div class="player-score" style="color:${p2ScoreColor}">${court.player2.score}</div>
                     </div>
                 </div>
             </div>
