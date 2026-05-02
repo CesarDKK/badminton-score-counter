@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS match_history (
   loser_name VARCHAR(100) NOT NULL,
   games_won VARCHAR(10) NOT NULL,
   duration VARCHAR(20) NOT NULL,
-  set_scores VARCHAR(200) DEFAULT NULL,
+  set_scores TEXT DEFAULT NULL,
 
   match_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
@@ -188,7 +188,7 @@ CREATE TABLE IF NOT EXISTS team_match_games (
   court_number INT NULL,
   status ENUM('pending', 'active', 'finished') DEFAULT 'pending',
   winner_team TINYINT NULL,
-  set_scores VARCHAR(200) NULL,
+  set_scores TEXT NULL,
   FOREIGN KEY (team_match_id) REFERENCES team_matches(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
