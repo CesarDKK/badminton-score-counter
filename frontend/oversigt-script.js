@@ -15,10 +15,15 @@ let localTimerInterval = null;
 // Store match start times for each court (courtId -> {matchStartTime, matchEndTime})
 let courtMatchTimes = {};
 
-// Recently finished matches — shown for 10 minutes after a match ends.
+// Recently finished matches — shown for 5 minutes after a match ends.
 // courtId -> { snapshot, finishedAt, matchStartTime }
 const finishedCourts = new Map();
-const FINISHED_DISPLAY_MS = 10 * 60 * 1000;
+const FINISHED_DISPLAY_MS = 5 * 60 * 1000;
+
+// Snapshot af sidst kendte aktive tilstand pr. bane — bruges som fallback
+// når en bane forsvinder fra API'et før oversigten når at se matchCompleted=true.
+// courtId -> court data snapshot
+const lastKnownActiveState = new Map();
 
 // Local pause countdown state — avoids relying on 2s API interval for accuracy
 // courtId -> { receivedAt: timestamp, secondsLeft: number }
@@ -178,6 +183,14 @@ async function loadAllCourts() {
             }
         });
 
+        // Opdater snapshot af aktive baner (bruges som fallback hvis banen forsvinder)
+        const currentCourtIds = new Set(allCourtData.map(c => c.courtId));
+        allCourtData.forEach(court => {
+            if (court.isActive && court.matchStartTime && !court.matchCompleted && !isHoldkampCourt(court.courtId)) {
+                lastKnownActiveState.set(court.courtId, { ...court });
+            }
+        });
+
         // Track recently finished matches (skip holdkamp courts — those are shown in their own panel)
         allCourtData.forEach(court => {
             if (court.matchCompleted && !isHoldkampCourt(court.courtId)) {
@@ -189,6 +202,7 @@ async function loadAllCourts() {
                         matchStartTime: court.matchStartTime
                     });
                 }
+                lastKnownActiveState.delete(court.courtId);
             } else if (finishedCourts.has(court.courtId)) {
                 const entry = finishedCourts.get(court.courtId);
                 // New match started on same court — evict the finished entry
@@ -197,7 +211,25 @@ async function loadAllCourts() {
                 }
             }
         });
-        // Expire entries older than 10 minutes
+
+        // Fallback: baner der var aktive men nu er forsvundet/nulstillet uden at oversigt
+        // nåede at se matchCompleted=true (race condition ved hurtig 'Ny Kamp'-klik)
+        for (const [courtId, snapshot] of lastKnownActiveState) {
+            if (!currentCourtIds.has(courtId) || !allCourtData.find(c => c.courtId === courtId)?.isActive) {
+                if (!finishedCourts.has(courtId)) {
+                    finishedCourts.set(courtId, {
+                        snapshot: { ...snapshot, matchCompleted: true },
+                        finishedAt: snapshot.matchEndTime
+                            ? new Date(snapshot.matchEndTime).getTime()
+                            : now,
+                        matchStartTime: snapshot.matchStartTime
+                    });
+                }
+                lastKnownActiveState.delete(courtId);
+            }
+        }
+
+        // Expire entries older than 5 minutes
         for (const [cid, entry] of finishedCourts) {
             if (now - entry.finishedAt > FINISHED_DISPLAY_MS) finishedCourts.delete(cid);
         }
