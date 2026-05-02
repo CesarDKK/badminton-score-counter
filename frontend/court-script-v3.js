@@ -1537,7 +1537,7 @@ async function saveMatchResult(winner, loser, winnerGames, loserGames) {
                 const team1Names = [game.team1_player1, game.team1_player2].filter(Boolean);
                 winnerTeam = team1Names.some(name => winner.includes(name)) ? 1 : 2;
             }
-            await reportHoldkampResult(winnerTeam, setScoresText);
+            await reportHoldkampResult(winnerTeam, setScoresText, capturedTeamMatch.id, capturedGameId);
         }
 
         // Show holdkamp panel if there are more pending games
@@ -1980,10 +1980,13 @@ function showQrSessionExpired() {
     document.querySelectorAll('button').forEach(b => b.disabled = true);
 }
 
-async function reportHoldkampResult(winnerTeam, setScores) {
-    if (!activeTeamMatch || !assignedGameId) return;
+async function reportHoldkampResult(winnerTeam, setScores, teamMatchId, gameId) {
+    // Brug eksplicitte IDs — assignedGameId kan allerede være null pga. race-condition-fix
+    const tmId = teamMatchId ?? activeTeamMatch?.id;
+    const gId  = gameId      ?? assignedGameId;
+    if (!tmId || !gId) return;
     try {
-        await api.updateTeamMatchGame(activeTeamMatch.id, assignedGameId, {
+        await api.updateTeamMatchGame(tmId, gId, {
             status: 'finished',
             winnerTeam,
             setScores
