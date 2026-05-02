@@ -352,9 +352,10 @@ function updateCourtCardData(court) {
         if (pauseTimerEl) pauseTimerEl.textContent = formatTimer(getPauseSecondsLeft(court));
     }
 
-    // Re-render entire card if set history changed (new set completed)
+    // Re-render entire card if set history changed OR player1 name changed (side switch)
     const history = court.setScoresHistory || [];
-    if (parseInt(card.dataset.sets || '0') !== history.length) {
+    if (parseInt(card.dataset.sets || '0') !== history.length ||
+        card.dataset.p1 !== court.player1.name) {
         card.outerHTML = renderCourtCard(court);
         return;
     }
@@ -453,7 +454,7 @@ function renderCourtCard(court) {
     });
 
     return `
-        <div class="court-card${isPaused ? ' court-card--paused' : ''}" data-court-id="${court.courtId}" data-sets="${history.length}">
+        <div class="court-card${isPaused ? ' court-card--paused' : ''}" data-court-id="${court.courtId}" data-sets="${history.length}" data-p1="${escapeHtml(court.player1.name)}">
             ${restBreakBadge}
             <div class="court-card-header">
                 <div class="court-number">BANE ${court.courtId}</div>
