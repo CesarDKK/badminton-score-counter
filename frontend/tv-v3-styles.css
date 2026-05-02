@@ -458,7 +458,7 @@ body::before {
 
 .overlay-countdown {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(12em, min(40vh, 28vw), 28em);
+    font-size: clamp(7em, min(22vh, 16vw), 16em);
     font-weight: 400;
     color: rgba(76, 175, 80, 0.95);
     letter-spacing: 6px;
@@ -527,7 +527,7 @@ body::before {
 
 .overlay-score {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 7em;
+    font-size: 14em;
     font-weight: 400;
     color: var(--color-accent);
     letter-spacing: 3px;
@@ -649,15 +649,18 @@ body::before {
 /* Scoreboard, navne, header og footer skalerer allerede via clamp/vh/vw.
    Kun overlay-countdown finpudses pr. breakpoint. */
 @media (max-width: 1600px) {
-    .overlay-countdown { font-size: clamp(10em, min(38vh, 26vw), 24em); }
+    .overlay-countdown { font-size: clamp(6em, min(20vh, 14vw), 14em); }
+    .overlay-score { font-size: 12em; }
 }
 
 @media (max-width: 1280px) {
-    .overlay-countdown { font-size: clamp(8em, min(36vh, 24vw), 20em); }
+    .overlay-countdown { font-size: clamp(5em, min(18vh, 12vw), 12em); }
+    .overlay-score { font-size: 10em; }
 }
 
 @media (max-width: 1024px) {
-    .overlay-countdown { font-size: clamp(6em, min(32vh, 22vw), 16em); }
+    .overlay-countdown { font-size: clamp(4em, min(16vh, 10vw), 10em); }
+    .overlay-score { font-size: 8em; }
 }
 
 /* ── Mobile (tablet + phone portrait) ── */
@@ -747,7 +750,7 @@ body::before {
     .overlay-score-row { gap: 12px; flex-wrap: wrap; }
     .overlay-player-card { padding: 18px 20px; min-width: 0; flex: 1; }
     .overlay-player-name { font-size: 1.5em; }
-    .overlay-score { font-size: 3.5em; }
+    .overlay-score { font-size: 7em; }
     .overlay-vs { font-size: 1.8em; }
     .overlay-set-badge { font-size: 1.8em; padding: 5px 16px; min-width: 0; }
     .overlay-sets-row { padding: 12px 16px; }
