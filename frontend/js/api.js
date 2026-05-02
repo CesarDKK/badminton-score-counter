@@ -686,6 +686,12 @@ class BadmintonAPI {
         });
     }
 
+    async permanentlyDeleteDeviceToken(id) {
+        return this.request(`/device-tokens/${id}/permanent`, {
+            method: 'DELETE'
+        });
+    }
+
     // ==================== Super Admin ====================
 
     async loginAsSuperAdmin(username, password) {

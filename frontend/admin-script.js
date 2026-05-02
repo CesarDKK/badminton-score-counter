@@ -1839,7 +1839,11 @@ function renderDeviceTokens(tokens) {
                             style="background:rgba(233,69,96,0.12);border:1px solid rgba(233,69,96,0.25);border-radius:6px;padding:6px 14px;color:#e94560;font-size:0.85em;cursor:pointer;">
                             Tilbagekald
                            </button>`
-                        : `<span style="font-size:0.8em;color:rgba(255,255,255,0.3);padding:6px;">Tilbagekaldt</span>`
+                        : `<span style="font-size:0.8em;color:rgba(255,255,255,0.3);padding:6px 10px;">Tilbagekaldt</span>
+                           <button onclick="handlePermanentDeleteDeviceToken(${t.id})"
+                            style="background:rgba(233,69,96,0.18);border:1px solid rgba(233,69,96,0.35);border-radius:6px;padding:6px 14px;color:#e94560;font-size:0.85em;cursor:pointer;">
+                            🗑 Slet
+                           </button>`
                     }
                 </div>
             </div>
@@ -1893,6 +1897,16 @@ async function handleDeleteDeviceToken(id) {
     if (!confirm('Tilbagekald dette adgangslink? Enheder der bruger det mister adgang.')) return;
     try {
         await api.deleteDeviceToken(id);
+        await loadDeviceTokens();
+    } catch (err) {
+        alert('Fejl: ' + err.message);
+    }
+}
+
+async function handlePermanentDeleteDeviceToken(id) {
+    if (!confirm('Slet adgangslinket permanent? Det kan ikke gendannes.')) return;
+    try {
+        await api.permanentlyDeleteDeviceToken(id);
         await loadDeviceTokens();
     } catch (err) {
         alert('Fejl: ' + err.message);

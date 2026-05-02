@@ -167,4 +167,24 @@ router.delete('/:id', clubAdminAuth, async (req, res, next) => {
     }
 });
 
+// DELETE /api/device-tokens/:id/permanent — slet token permanent (kun tilbagekaldte)
+router.delete('/:id/permanent', clubAdminAuth, async (req, res, next) => {
+    try {
+        const existing = await queryOne(
+            'SELECT id, is_active FROM device_tokens WHERE id = ?',
+            [req.params.id]
+        );
+        if (!existing) {
+            return res.status(404).json({ error: 'Token ikke fundet' });
+        }
+        if (existing.is_active) {
+            return res.status(400).json({ error: 'Tilbagekald linket først inden det slettes permanent' });
+        }
+        await query('DELETE FROM device_tokens WHERE id = ?', [req.params.id]);
+        res.json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+});
+
 module.exports = router;
