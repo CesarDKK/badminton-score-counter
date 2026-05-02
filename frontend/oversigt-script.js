@@ -352,13 +352,17 @@ function updateCourtCardData(court) {
         if (pauseTimerEl) pauseTimerEl.textContent = formatTimer(getPauseSecondsLeft(court));
     }
 
-    // Update scores + colour based on set lead
-    const g1 = court.player1.games, g2 = court.player2.games;
-    const p1Color = g1 > g2 ? '#4CAF50' : g1 < g2 ? '#e94560' : '#ffffff';
-    const p2Color = g2 > g1 ? '#4CAF50' : g2 < g1 ? '#e94560' : '#ffffff';
+    // Re-render entire card if set history changed (new set completed)
+    const history = court.setScoresHistory || [];
+    if (parseInt(card.dataset.sets || '0') !== history.length) {
+        card.outerHTML = renderCourtCard(court);
+        return;
+    }
+
+    // Update current-set scores (always white — history badges handle colour)
     const scoreEls = card.querySelectorAll('.player-score');
-    if (scoreEls[0]) { scoreEls[0].textContent = court.player1.score; scoreEls[0].style.color = p1Color; }
-    if (scoreEls[1]) { scoreEls[1].textContent = court.player2.score; scoreEls[1].style.color = p2Color; }
+    if (scoreEls[0]) scoreEls[0].textContent = court.player1.score;
+    if (scoreEls[1]) scoreEls[1].textContent = court.player2.score;
 
     // Update player names
     const rows = card.querySelectorAll('.player-row');
@@ -426,13 +430,19 @@ function renderCourtCard(court) {
            </div>`
         : '';
 
-    // Score colour: green for set leader, red for trailing, white when tied
-    const g1 = court.player1.games, g2 = court.player2.games;
-    const p1ScoreColor = g1 > g2 ? '#4CAF50' : g1 < g2 ? '#e94560' : '#ffffff';
-    const p2ScoreColor = g2 > g1 ? '#4CAF50' : g2 < g1 ? '#e94560' : '#ffffff';
+    // Build set-history score badges
+    const history = court.setScoresHistory || [];
+    let histP1 = '', histP2 = '';
+    history.forEach(set => {
+        const parts = (set.score || '0-0').split('-');
+        const s1 = parseInt(parts[0]) || 0, s2 = parseInt(parts[1]) || 0;
+        const p1Won = s1 > s2;
+        histP1 += `<div class="set-hist-score" style="color:${p1Won ? '#4CAF50' : '#e94560'}">${s1}</div>`;
+        histP2 += `<div class="set-hist-score" style="color:${p1Won ? '#e94560' : '#4CAF50'}">${s2}</div>`;
+    });
 
     return `
-        <div class="court-card${isPaused ? ' court-card--paused' : ''}" data-court-id="${court.courtId}">
+        <div class="court-card${isPaused ? ' court-card--paused' : ''}" data-court-id="${court.courtId}" data-sets="${history.length}">
             ${restBreakBadge}
             <div class="court-card-header">
                 <div class="court-number">BANE ${court.courtId}</div>
@@ -445,22 +455,20 @@ function renderCourtCard(court) {
 
             <div class="court-players">
                 <div class="player-row">
-                    <div class="player-info">
-                        ${player1Names}
-                    </div>
+                    <div class="player-info">${player1Names}</div>
                     <div class="player-stats">
-                        <div class="player-score" style="color:${p1ScoreColor}">${court.player1.score}</div>
+                        ${histP1}
+                        <div class="player-score">${court.player1.score}</div>
                     </div>
                 </div>
 
                 <div class="vs-divider">VS</div>
 
                 <div class="player-row">
-                    <div class="player-info">
-                        ${player2Names}
-                    </div>
+                    <div class="player-info">${player2Names}</div>
                     <div class="player-stats">
-                        <div class="player-score" style="color:${p2ScoreColor}">${court.player2.score}</div>
+                        ${histP2}
+                        <div class="player-score">${court.player2.score}</div>
                     </div>
                 </div>
             </div>
