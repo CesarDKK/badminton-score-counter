@@ -110,7 +110,10 @@ function renderHoldkampGames(teamMatch) {
             borderColor = '#533483';
         } else if (g.status === 'finished') {
             const winner = g.winner_team === 1 ? teamMatch.team1_name : teamMatch.team2_name;
-            statusHtml = `<span style="color:#4CAF50; font-size:0.8em;">✓ ${winner}</span>`;
+            const setScoresTxt = g.set_scores
+                ? `<span style="color:rgba(255,255,255,0.45); font-size:0.78em; margin-left:6px;">${escapeHtml(g.set_scores)}</span>`
+                : '';
+            statusHtml = `<span style="color:#4CAF50; font-size:0.8em;">✓ ${escapeHtml(winner)}${setScoresTxt}</span>`;
             borderColor = g.winner_team === 1 ? '#4CAF50' : '#e94560';
         }
 
@@ -594,11 +597,21 @@ function renderFinishedCard(court) {
         ? `${escapeHtml(court.player2.name)} / ${escapeHtml(court.player2.name2)}`
         : escapeHtml(court.player2?.name || '?');
 
-    const sets = court.setScoresHistory || [];
-    const setScoreHtml = sets.length
-        ? sets.map(s => `<span class="finished-set-score">${escapeHtml(s.score || '')}</span>`)
-               .join('<span class="finished-set-sep"> · </span>')
-        : '';
+    // Byg sæt-score badges med samme navn-matching som active-kortet
+    const history = court.setScoresHistory || [];
+    const p1Name = court.player1?.name || '';
+    let histP1 = '', histP2 = '';
+    history.forEach(set => {
+        const parts = (set.score || '0-0').split('-');
+        let sA = parseInt(parts[0]) || 0;
+        let sB = parseInt(parts[1]) || 0;
+        const swapped = set.player1Name && set.player1Name !== p1Name;
+        const r1 = swapped ? sB : sA;
+        const r2 = swapped ? sA : sB;
+        const r1won = r1 > r2;
+        histP1 += `<div class="set-hist-score" style="color:${r1won ? '#4CAF50' : '#e94560'}">${r1}</div>`;
+        histP2 += `<div class="set-hist-score" style="color:${r1won ? '#e94560' : '#4CAF50'}">${r2}</div>`;
+    });
 
     return `
         <div class="court-card court-card--finished" data-court-id="${court.courtId}" data-finished="1">
@@ -612,23 +625,16 @@ function renderFinishedCard(court) {
                     <div class="player-info">
                         <div class="player-name">${p1Names}</div>
                     </div>
-                    <div class="player-stats">
-                        <div class="player-score${p1won ? ' player-score--winner' : ''}">${p1games}</div>
-                        <div class="player-games"><span class="games-label">sæt</span></div>
-                    </div>
+                    <div class="player-stats">${histP1}</div>
                 </div>
                 <div class="vs-divider">VS</div>
                 <div class="player-row${!p1won ? ' player-row--winner' : ''}">
                     <div class="player-info">
                         <div class="player-name">${p2Names}</div>
                     </div>
-                    <div class="player-stats">
-                        <div class="player-score${!p1won ? ' player-score--winner' : ''}">${p2games}</div>
-                        <div class="player-games"><span class="games-label">sæt</span></div>
-                    </div>
+                    <div class="player-stats">${histP2}</div>
                 </div>
             </div>
-            ${setScoreHtml ? `<div class="finished-set-scores">${setScoreHtml}</div>` : ''}
         </div>
     `;
 }
