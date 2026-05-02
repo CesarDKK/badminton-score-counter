@@ -243,7 +243,6 @@ async function loadAllCourts() {
         // matchCompleted=true baner inkluderes direkte — ingen separat snapshot-mekanisme.
         const activeOnly = allCourtData.filter(court => {
             if (!court.isActive) return false;
-            if (isHoldkampCourt(court.courtId)) return false;
 
             const hasGameActivity =
                 !!court.matchStartTime ||
