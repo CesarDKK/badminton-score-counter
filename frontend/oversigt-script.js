@@ -430,15 +430,26 @@ function renderCourtCard(court) {
            </div>`
         : '';
 
-    // Build set-history score badges
+    // Build set-history score badges.
+    // After switchSides() player1/player2 slots swap, but setScoresHistory stores the
+    // names at the time the set ended. Match history names against current names to ensure
+    // each score is shown in the correct player row regardless of side switches.
     const history = court.setScoresHistory || [];
+    const p1Name = court.player1.name;
     let histP1 = '', histP2 = '';
     history.forEach(set => {
         const parts = (set.score || '0-0').split('-');
-        const s1 = parseInt(parts[0]) || 0, s2 = parseInt(parts[1]) || 0;
-        const p1Won = s1 > s2;
-        histP1 += `<div class="set-hist-score" style="color:${p1Won ? '#4CAF50' : '#e94560'}">${s1}</div>`;
-        histP2 += `<div class="set-hist-score" style="color:${p1Won ? '#e94560' : '#4CAF50'}">${s2}</div>`;
+        let sA = parseInt(parts[0]) || 0; // score of history-player1
+        let sB = parseInt(parts[1]) || 0; // score of history-player2
+
+        // Determine if history player1 maps to current player1 or player2
+        const swapped = set.player1Name && set.player1Name !== p1Name;
+        const row1Score = swapped ? sB : sA;
+        const row2Score = swapped ? sA : sB;
+        const row1Won = row1Score > row2Score;
+
+        histP1 += `<div class="set-hist-score" style="color:${row1Won ? '#4CAF50' : '#e94560'}">${row1Score}</div>`;
+        histP2 += `<div class="set-hist-score" style="color:${row1Won ? '#e94560' : '#4CAF50'}">${row2Score}</div>`;
     });
 
     return `
