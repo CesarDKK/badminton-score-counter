@@ -458,13 +458,13 @@ body::before {
 
 .overlay-countdown {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 14em;
+    font-size: clamp(12em, min(40vh, 28vw), 28em);
     font-weight: 400;
     color: rgba(76, 175, 80, 0.95);
     letter-spacing: 6px;
     line-height: 1;
     font-variant-numeric: tabular-nums;
-    text-shadow: 0 0 60px rgba(76, 175, 80, 0.3);
+    text-shadow: 0 0 80px rgba(76, 175, 80, 0.4);
 }
 
 .overlay-timer-label {
@@ -649,15 +649,15 @@ body::before {
 /* Scoreboard, navne, header og footer skalerer allerede via clamp/vh/vw.
    Kun overlay-countdown finpudses pr. breakpoint. */
 @media (max-width: 1600px) {
-    .overlay-countdown { font-size: 11em; }
+    .overlay-countdown { font-size: clamp(10em, min(38vh, 26vw), 24em); }
 }
 
 @media (max-width: 1280px) {
-    .overlay-countdown { font-size: 9em; }
+    .overlay-countdown { font-size: clamp(8em, min(36vh, 24vw), 20em); }
 }
 
 @media (max-width: 1024px) {
-    .overlay-countdown { font-size: 7em; }
+    .overlay-countdown { font-size: clamp(6em, min(32vh, 22vw), 16em); }
 }
 
 /* ── Mobile (tablet + phone portrait) ── */
