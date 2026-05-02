@@ -211,6 +211,11 @@ async function loadAllCourts() {
                         lastKnownActiveState.set(court.courtId, { ...court });
                     }
                 }
+            } else if (court.isActive && finishedCourts.has(court.courtId)) {
+                // Bane er aktiv men har ingen matchStartTime endnu (ny tildeling)
+                // Fjern den gamle afsluttede post så den nye kamp kan vises
+                finishedCourts.delete(court.courtId);
+                lastKnownActiveState.delete(court.courtId);
             }
         });
 
@@ -395,10 +400,13 @@ function updateCourtCardData(court) {
     // Toggle paused class
     card.classList.toggle('court-card--paused', isPaused);
 
-    // Re-render entire card if pause state, history or player name changed
+    // Re-render entire card if finished state, pause state, history or player name changed
     const history = court.setScoresHistory || [];
     const wasPaused = !!card.querySelector('.court-pause-overlay');
-    if (wasPaused !== isPaused ||
+    const wasFinished = !!card.dataset.finished;
+    const isFinishedNow = !!court._isFinished;
+    if (wasFinished !== isFinishedNow ||
+        wasPaused !== isPaused ||
         parseInt(card.dataset.sets || '0') !== history.length ||
         card.dataset.p1 !== court.player1.name) {
         card.outerHTML = renderCourtCard(court);
