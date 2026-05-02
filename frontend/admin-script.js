@@ -713,7 +713,8 @@ async function loadTeamMatchHistory() {
                 if (g.status === 'finished' && g.winner_team) {
                     const winnerName = g.winner_team === 1 ? tm.team1_name : tm.team2_name;
                     const winnerColor = g.winner_team === 1 ? '#4CAF50' : '#e94560';
-                    const scores = g.set_scores ? `<span style="color:#aaa; font-size:0.8em; margin-left:6px;">${escapeHtml(g.set_scores)}</span>` : '';
+                    const scoreNums = g.set_scores ? (g.set_scores.match(/\d+-\d+/g) || []).join(' · ') : '';
+                    const scores = scoreNums ? `<span style="color:#aaa; font-size:0.8em; margin-left:6px;">${scoreNums}</span>` : '';
                     resultHtml = `<span style="color:${winnerColor}; font-size:0.85em; font-weight:bold;">✓ ${escapeHtml(winnerName)}</span>${scores}`;
                     rowBorder = winnerColor;
                 }
