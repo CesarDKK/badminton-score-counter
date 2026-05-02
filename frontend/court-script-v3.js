@@ -403,6 +403,11 @@ async function checkGameWin() {
             const winnerNames = formatPlayerNames(gameState.player1.name, gameState.player1.name2);
             const loserNames = formatPlayerNames(gameState.player2.name, gameState.player2.name2);
 
+            // Gem øjeblikkeligt (afbryd debounced timer) så oversigt ser matchCompleted=true
+            // inden brugeren evt. klikker "Ny Kamp" og nulstiller tilstanden.
+            if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
+            performSave();
+
             // Save match result to database
             saveMatchResult(winnerNames, loserNames, gameState.player1.games, gameState.player2.games);
 
@@ -460,6 +465,9 @@ async function checkGameWin() {
             gameState.matchCompleted = true;
             const winnerNames = formatPlayerNames(gameState.player2.name, gameState.player2.name2);
             const loserNames = formatPlayerNames(gameState.player1.name, gameState.player1.name2);
+
+            if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
+            performSave();
 
             // Save match result to database
             saveMatchResult(winnerNames, loserNames, gameState.player2.games, gameState.player1.games);
