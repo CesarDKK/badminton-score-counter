@@ -60,6 +60,8 @@ let gameState = {
     restBreakCallback: null,
     restBreakSecondsLeft: 0,
     restBreakTitle: '',
+    restBreakStartedAt: null,
+    restBreakDuration: 60,
     matchCompleted: false,
     servingPlayer: null,  // 1 or 2, null if not yet selected (used for singles)
     initialServer: null,  // Track who served first for set resets
@@ -776,6 +778,8 @@ async function loadGameState() {
         gameState.restBreakSecondsLeft = loaded.restBreakSecondsLeft || 0;
         gameState.restBreakTitle = loaded.restBreakTitle || '';
         gameState.restBreakTaken = loaded.restBreakTaken || false;
+        gameState.restBreakStartedAt = loaded.restBreakStartedAt || null;
+        gameState.restBreakDuration = loaded.restBreakDuration || 60;
 
         // Load serving state
         gameState.servingPlayer = loaded.servingPlayer || null;
@@ -1292,6 +1296,8 @@ async function performSave() {
             restBreakSecondsLeft: gameState.restBreakSecondsLeft,
             restBreakTitle: gameState.restBreakTitle,
             restBreakTaken: gameState.restBreakTaken,
+            restBreakStartedAt: gameState.restBreakStartedAt,
+            restBreakDuration: gameState.restBreakDuration,
             servingPlayer: gameState.servingPlayer,
             initialServer: gameState.initialServer,
             servingTeam: gameState.servingTeam,
@@ -1327,9 +1333,43 @@ function formatPlayerNames(name1, name2) {
 }
 
 // Rest break functions
+
+// Beregn resterende sekunder fra vægur — korrekt selv hvis skærmen har været slukket.
+function _restBreakSecondsRemaining() {
+    if (!gameState.restBreakActive || !gameState.restBreakStartedAt) return 0;
+    const elapsed = (Date.now() - gameState.restBreakStartedAt) / 1000;
+    return Math.max(0, Math.round(gameState.restBreakDuration - elapsed));
+}
+
+function _updateRestBreakDisplay() {
+    if (!gameState.restBreakActive) return;
+    const timerDisplay = document.getElementById('restBreakTimer');
+    if (!timerDisplay) return;
+    const secondsLeft = _restBreakSecondsRemaining();
+    timerDisplay.textContent = secondsLeft;
+    if (secondsLeft <= 10) {
+        timerDisplay.style.color = '#e94560';
+    } else if (secondsLeft <= 30) {
+        timerDisplay.style.color = '#FFA500';
+    } else {
+        timerDisplay.style.color = 'var(--color-accent)';
+    }
+    return secondsLeft;
+}
+
+// Lyt på visibilitychange så vi reagerer straks når skærmen tændes igen
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && gameState.restBreakActive) {
+        const left = _updateRestBreakDisplay();
+        if (left === 0) endRestBreak();
+    }
+});
+
 async function startRestBreak(duration = 60, title = 'Pause 1 minut', callback = null, showOverlay = true) {
     gameState.restBreakActive = true;
     gameState.restBreakCallback = callback;
+    gameState.restBreakStartedAt = Date.now();
+    gameState.restBreakDuration = duration;
     gameState.restBreakSecondsLeft = duration;
     gameState.restBreakTitle = title;
     if (duration === 60) {
@@ -1342,36 +1382,23 @@ async function startRestBreak(duration = 60, title = 'Pause 1 minut', callback =
 
     titleElement.textContent = title;
 
-    // Only show overlay if requested (can start timer in background)
     if (showOverlay) {
         overlay.style.display = 'flex';
     }
 
-    let secondsLeft = duration;
-    timerDisplay.textContent = secondsLeft;
+    timerDisplay.textContent = duration;
 
-    // Start the countdown interval IMMEDIATELY (before the async save)
+    // Brug vægur-beregning i stedet for simpel decrement — robust mod slukket skærm
     gameState.restBreakInterval = setInterval(() => {
-        secondsLeft--;
+        const secondsLeft = _updateRestBreakDisplay();
         gameState.restBreakSecondsLeft = secondsLeft;
-        timerDisplay.textContent = secondsLeft;
-
-        // Change color as time runs out
-        if (secondsLeft <= 10) {
-            timerDisplay.style.color = '#e94560';
-        } else if (secondsLeft <= 30) {
-            timerDisplay.style.color = '#FFA500';
-        }
-
         if (secondsLeft <= 0) {
             endRestBreak();
+            return;
         }
-
-        // Save state to sync with TV page (debounced)
         saveGameState();
     }, 1000);
 
-    // Save to database so TV page sees it right away (after interval is started)
     await performSave();
 }
 
