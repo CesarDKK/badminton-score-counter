@@ -32,15 +32,14 @@ async function getOrCreateActiveToken(courtNumber) {
     return token;
 }
 
-// Invaliderer alle aktive match-session tokens for en bane.
+// Sletter alle match-session tokens for en bane permanent.
 // Kaldes når en kamp starter eller banen ryddes.
+// Match-session tokens (QR-kode) giver ingen værdi efter brug og ryddes straks.
 async function invalidateCourtTokens(courtNumber) {
     await query(
-        `UPDATE device_tokens
-         SET is_active = 0
+        `DELETE FROM device_tokens
          WHERE token_type = 'match_session'
-           AND court_number = ?
-           AND is_active = 1`,
+           AND court_number = ?`,
         [courtNumber]
     );
 }
