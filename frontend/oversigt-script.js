@@ -110,8 +110,10 @@ function renderHoldkampGames(teamMatch) {
             borderColor = '#533483';
         } else if (g.status === 'finished') {
             const winner = g.winner_team === 1 ? teamMatch.team1_name : teamMatch.team2_name;
-            const setScoresTxt = g.set_scores
-                ? `<span style="color:rgba(255,255,255,0.45); font-size:0.78em; margin-left:6px;">${escapeHtml(g.set_scores)}</span>`
+            // Ekstraher kun tal-par (f.eks. "21-15") — sæt_scores indeholder også spillernavne
+            const scoreNums = g.set_scores ? (g.set_scores.match(/\d+-\d+/g) || []).join(' · ') : '';
+            const setScoresTxt = scoreNums
+                ? `<span style="color:rgba(255,255,255,0.45); font-size:0.78em; margin-left:6px;">${scoreNums}</span>`
                 : '';
             statusHtml = `<span style="color:#4CAF50; font-size:0.8em;">✓ ${escapeHtml(winner)}${setScoresTxt}</span>`;
             borderColor = g.winner_team === 1 ? '#4CAF50' : '#e94560';
