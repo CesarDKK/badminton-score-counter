@@ -133,8 +133,8 @@ async function initialize() {
         courtCount = settings.courtCount || 5;
 
         await refreshIdleSettings();
-        await loadAllCourts();
         await loadHoldkamp();
+        await loadAllCourts();
 
         // Refresh sponsor images every 10 seconds
         setInterval(refreshIdleSettings, 10000);
@@ -844,10 +844,12 @@ function _stopIdleScreensaver() {
 }
 
 function startAutoRefresh() {
-    // Refresh court data every 2 seconds
+    // loadHoldkamp køres FØRST så activeTeamMatch er frisk når loadAllCourts
+    // kalder isHoldkampCourt() — ellers bruger den stale data hvor afsluttede
+    // holdkamp-spil stadig har status='active' og ekskluderer banen fra visning.
     refreshTimer = setInterval(async () => {
-        await loadAllCourts();
         await loadHoldkamp();
+        await loadAllCourts();
     }, REFRESH_INTERVAL);
 }
 
