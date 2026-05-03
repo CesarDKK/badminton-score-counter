@@ -76,6 +76,29 @@
                     <div class="empty-state"><div class="spinner"></div></div>
                 </div>
             </div>
+
+            <!-- Skift adgangskode -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Skift Adgangskode</span>
+                </div>
+                <div class="create-form">
+                    <div class="form-group" style="margin-bottom:0">
+                        <label>Nuværende adgangskode</label>
+                        <input type="password" id="currentPassword" placeholder="Nuværende adgangskode" autocomplete="current-password">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label>Ny adgangskode (min. 8 tegn)</label>
+                        <input type="password" id="newPassword" placeholder="Ny adgangskode" autocomplete="new-password">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label>Bekræft ny adgangskode</label>
+                        <input type="password" id="confirmPassword" placeholder="Gentag ny adgangskode" autocomplete="new-password">
+                    </div>
+                    <button id="changePasswordBtn" class="btn-primary" style="height:46px; margin-top:22px;">Skift Adgangskode</button>
+                </div>
+                <div id="changePasswordMsg" class="msg" style="display:none;"></div>
+            </div>
         </div>
     </div>
 
@@ -147,7 +170,7 @@
         </div>
     </div>
 
-    <script src="js/api.js?v=3"></script>
-    <script src="super-admin-script.js?v=5"></script>
+    <script src="js/api.js?v=4"></script>
+    <script src="super-admin-script.js?v=6"></script>
 </body>
 </html>

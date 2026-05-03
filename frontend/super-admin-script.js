@@ -36,6 +36,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Slet admin-modal
     document.getElementById('deleteAdminCancelBtn').addEventListener('click', closeDeleteAdminModal);
     document.getElementById('deleteAdminConfirmBtn').addEventListener('click', confirmDeleteAdmin);
+
+    // Skift adgangskode
+    document.getElementById('changePasswordBtn').addEventListener('click', handleChangeSuperAdminPassword);
 });
 
 async function handleLogin() {
@@ -367,6 +370,46 @@ async function handleCreateAdmin() {
     } finally {
         btn.disabled = false;
         btn.textContent = 'Opret Admin';
+    }
+}
+
+// ==================== SKIFT ADGANGSKODE ====================
+
+async function handleChangeSuperAdminPassword() {
+    const current = document.getElementById('currentPassword').value;
+    const newPw = document.getElementById('newPassword').value;
+    const confirm = document.getElementById('confirmPassword').value;
+    const btn = document.getElementById('changePasswordBtn');
+    const msgEl = document.getElementById('changePasswordMsg');
+
+    if (!current || !newPw || !confirm) {
+        showMsg(msgEl, 'Udfyld alle felter', 'error');
+        return;
+    }
+    if (newPw.length < 8) {
+        showMsg(msgEl, 'Ny adgangskode skal være mindst 8 tegn', 'error');
+        return;
+    }
+    if (newPw !== confirm) {
+        showMsg(msgEl, 'Ny adgangskode og bekræftelse stemmer ikke overens', 'error');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    msgEl.style.display = 'none';
+
+    try {
+        await api.changeSuperAdminPassword(current, newPw);
+        showMsg(msgEl, '✓ Adgangskode er skiftet', 'success');
+        document.getElementById('currentPassword').value = '';
+        document.getElementById('newPassword').value = '';
+        document.getElementById('confirmPassword').value = '';
+    } catch (err) {
+        showMsg(msgEl, err.message || 'Skift af adgangskode mislykkedes', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Skift Adgangskode';
     }
 }
 

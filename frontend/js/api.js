@@ -753,6 +753,13 @@ class BadmintonAPI {
         });
     }
 
+    async changeSuperAdminPassword(currentPassword, newPassword) {
+        return this.request('/super-admin/change-password', {
+            method: 'PUT',
+            body: JSON.stringify({ currentPassword, newPassword })
+        });
+    }
+
     // ==================== Mode ====================
 
     async getMode() {

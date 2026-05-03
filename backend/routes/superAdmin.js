@@ -35,6 +35,38 @@ router.post('/login', async (req, res, next) => {
     }
 });
 
+// PUT /api/super-admin/change-password — skift super admin's egen adgangskode
+router.put('/change-password', superAdminAuth, async (req, res, next) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ error: 'Nuværende og ny adgangskode er påkrævet' });
+        }
+        if (newPassword.length < 8) {
+            return res.status(400).json({ error: 'Ny adgangskode skal være mindst 8 tegn' });
+        }
+
+        const admin = await masterDb.queryOne(
+            'SELECT id, password_hash FROM super_admins WHERE id = ?',
+            [req.superAdmin.id]
+        );
+        if (!admin) return res.status(404).json({ error: 'Admin ikke fundet' });
+
+        const isValid = await bcrypt.compare(currentPassword, admin.password_hash);
+        if (!isValid) {
+            return res.status(401).json({ error: 'Nuværende adgangskode er forkert' });
+        }
+
+        const hash = await bcrypt.hash(newPassword, 10);
+        await masterDb.query(
+            'UPDATE super_admins SET password_hash = ? WHERE id = ?',
+            [hash, admin.id]
+        );
+
+        res.json({ success: true });
+    } catch (error) { next(error); }
+});
+
 // GET /api/super-admin/clubs
 router.get('/clubs', superAdminAuth, async (req, res, next) => {
     try {
