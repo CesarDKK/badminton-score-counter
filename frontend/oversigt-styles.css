@@ -464,6 +464,10 @@ body::before {
 
 /* =================== COMPACT MODE (holdkamp aktiv) =================== */
 /* Reducerer vertikal plads på banekortene uden at ændre skriftstørrelser */
+.has-holdkamp .overview-header {
+    display: none;
+}
+
 .has-holdkamp .courts-grid {
     gap: 6px;
     padding-top: 6px;
