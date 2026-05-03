@@ -462,6 +462,36 @@ body::before {
     letter-spacing: 0.5px;
 }
 
+/* =================== COMPACT MODE (holdkamp aktiv) =================== */
+/* Reducerer vertikal plads på banekortene uden at ændre skriftstørrelser */
+.has-holdkamp .courts-grid {
+    gap: 6px;
+    padding-top: 6px;
+    padding-bottom: 10px;
+}
+
+.has-holdkamp .court-card {
+    padding: 7px 12px;
+}
+
+.has-holdkamp .court-card-header {
+    margin-bottom: 4px;
+    padding-bottom: 4px;
+}
+
+.has-holdkamp .court-players {
+    gap: 2px;
+}
+
+.has-holdkamp .player-row {
+    padding: 3px 8px;
+}
+
+.has-holdkamp .vs-divider {
+    font-size: 0.52em;
+    margin: -1px 0;
+}
+
 /* =================== RESPONSIVE =================== */
 @media (max-width: 1400px) {
     .courts-grid {

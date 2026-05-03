@@ -46,13 +46,17 @@ async function loadHoldkamp() {
         activeTeamMatch = await api.getActiveTeamMatch();
         const panel = document.getElementById('holdkampOverview');
 
+        const container = document.querySelector('.overview-container');
+
         if (!activeTeamMatch) {
             panel.style.display = 'none';
+            if (container) container.classList.remove('has-holdkamp');
             updateIdleState();
             return;
         }
 
         panel.style.display = 'block';
+        if (container) container.classList.add('has-holdkamp');
 
         const team1Wins = activeTeamMatch.games.filter(g => g.winner_team === 1).length;
         const team2Wins = activeTeamMatch.games.filter(g => g.winner_team === 2).length;
