@@ -25,6 +25,8 @@ window.addEventListener('appinstalled', () => {
 const urlParams = new URLSearchParams(window.location.search);
 const courtId = parseInt(urlParams.get('id') || urlParams.get('court')) || 1;
 
+let isTournamentMode = false;
+
 // Holdkamp state
 let activeTeamMatch = null;
 let assignedGameId = null;
@@ -728,32 +730,28 @@ async function initializeApp() {
         }
 
         // Show/hide elements based on tournament mode settings
-        const isTournamentMode = settings.showResetButton === false;
+        isTournamentMode = settings.showResetButton === false;
 
         if (isTournamentMode) {
             // Hide "Ryd Banen" button in settings menu
             const clearBtn = document.getElementById('clearCourtBtn');
-            if (clearBtn) {
-                clearBtn.style.display = 'none';
-            }
+            if (clearBtn) clearBtn.style.display = 'none';
 
-            // Hide "Skift til Double" button in settings menu
+            // Hide "Skift til Double" button (updateDisplay may override — modul-variablen bruges dér)
             const doublesToggle = document.getElementById('doublesToggle');
-            if (doublesToggle) {
-                doublesToggle.style.display = 'none';
-            }
+            if (doublesToggle) doublesToggle.style.display = 'none';
+
+            // Hide "Skift til 15/21" button
+            const gameModeToggle = document.getElementById('gameModeToggle');
+            if (gameModeToggle) gameModeToggle.style.display = 'none';
 
             // Hide "Tilbage" link in settings menu
             const backLink = document.querySelector('a[href="landing.html"]');
-            if (backLink) {
-                backLink.style.display = 'none';
-            }
+            if (backLink) backLink.style.display = 'none';
 
             // Hide "Admin" link in settings menu
             const adminLink = document.querySelector('a[href="admin.html"]');
-            if (adminLink) {
-                adminLink.style.display = 'none';
-            }
+            if (adminLink) adminLink.style.display = 'none';
         }
 
         console.log('Court V3 ready, tournament mode:', isTournamentMode);
@@ -887,7 +885,7 @@ function updateDisplay() {
         switchSidesCourtBtn.style.display = matchActive ? 'none' : 'flex';
     }
     if (doublesBtn) {
-        doublesBtn.style.display = matchActive ? 'none' : 'block';
+        doublesBtn.style.display = (matchActive || isTournamentMode) ? 'none' : 'block';
     }
 
     // Show/hide start button and timer
