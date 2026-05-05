@@ -214,6 +214,13 @@ class BadmintonAPI {
         });
     }
 
+    async updateTvQrVisibility(hideTvQr) {
+        return this.request('/settings/tv-qr', {
+            method: 'PUT',
+            body: JSON.stringify({ hideTvQr })
+        });
+    }
+
     /**
      * Update court page version
      * @param {string} courtVersion - Court version ('v2' or 'v3')

@@ -43,6 +43,9 @@ function setupEventListeners() {
     // Reset Button Toggle
     document.getElementById('showResetButton').addEventListener('change', toggleResetButton);
 
+    // QR-kode på TV
+    document.getElementById('hideTvQr').addEventListener('change', toggleTvQr);
+
     // Password
     document.getElementById('changePasswordBtn').addEventListener('click', changePassword);
 
@@ -105,6 +108,7 @@ async function loadSettings() {
         document.getElementById('courtCount').value = settings.courtCount;
         // Invert logic: checked = tournament mode ON (showResetButton false)
         document.getElementById('showResetButton').checked = settings.showResetButton === false;
+        document.getElementById('hideTvQr').checked = settings.hideTvQr === true;
         document.getElementById('courtVersion').value = settings.courtVersion || 'v2';
         document.getElementById('tvVersion').value = settings.tvVersion || 'v2';
         document.getElementById('defaultGameMode').value = settings.defaultGameMode || '21';
@@ -177,6 +181,20 @@ async function toggleResetButton() {
         showMessage('Fejl', error.message);
         // Revert checkbox on error
         document.getElementById('showResetButton').checked = !tournamentModeChecked;
+    }
+}
+
+async function toggleTvQr() {
+    const hide = document.getElementById('hideTvQr').checked;
+    try {
+        await api.updateTvQrVisibility(hide);
+        showMessage('Succes', hide
+            ? 'QR-kode skjult på TV-siden'
+            : 'QR-kode vises igen på TV-siden');
+    } catch (error) {
+        console.error('Failed to toggle TV QR:', error);
+        showMessage('Fejl', error.message);
+        document.getElementById('hideTvQr').checked = !hide;
     }
 }
 

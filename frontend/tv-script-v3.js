@@ -63,6 +63,11 @@ async function initializeTVDisplay() {
 
     try {
         const settings = await api.getSettings();
+        if (settings.hideTvQr) qrCounterEnabled = false;
+    } catch (e) { /* behold eksisterende qrCounterEnabled ved fejl */ }
+
+    try {
+        const settings = await api.getSettings();
         const courtCount = settings.courtCount;
 
         if (courtId < 1 || courtId > courtCount) {

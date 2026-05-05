@@ -32,12 +32,18 @@ router.get('/', async (req, res, next) => {
             ['default_game_mode']
         );
 
+        const hideTvQrSetting = await queryOne(
+            'SELECT setting_value FROM settings WHERE setting_key = ?',
+            ['hide_tv_qr']
+        );
+
         res.json({
             courtCount: parseInt(courtCountSetting?.setting_value || '4'),
             showResetButton: showResetButtonSetting?.setting_value !== 'false',
             courtVersion: courtVersionSetting?.setting_value || 'v2',
             tvVersion: tvVersionSetting?.setting_value || 'v2',
-            defaultGameMode: defaultGameModeSetting?.setting_value || '21'
+            defaultGameMode: defaultGameModeSetting?.setting_value || '21',
+            hideTvQr: hideTvQrSetting?.setting_value === 'true'
         });
     } catch (error) {
         next(error);
@@ -120,6 +126,23 @@ router.put('/reset-button', authMiddleware, async (req, res, next) => {
             ['show_reset_button', showResetButton.toString(), showResetButton.toString()]
         );
 
+        res.json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// PUT /api/settings/tv-qr - Skjul/vis QR-kode på TV-siden (requires auth)
+router.put('/tv-qr', authMiddleware, async (req, res, next) => {
+    try {
+        const { hideTvQr } = req.body;
+        if (typeof hideTvQr !== 'boolean') {
+            return res.status(400).json({ error: 'hideTvQr skal være true eller false' });
+        }
+        await query(
+            'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
+            ['hide_tv_qr', hideTvQr.toString(), hideTvQr.toString()]
+        );
         res.json({ success: true });
     } catch (error) {
         next(error);
