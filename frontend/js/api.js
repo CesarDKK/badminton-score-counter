@@ -636,6 +636,13 @@ class BadmintonAPI {
         });
     }
 
+    /** Delete ALL team matches */
+    async deleteAllTeamMatches() {
+        return this.request('/team-matches', {
+            method: 'DELETE'
+        });
+    }
+
     // ==================== Club Admin Auth ====================
 
     async loginAsClubAdmin(username, password) {

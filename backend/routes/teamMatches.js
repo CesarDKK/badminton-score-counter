@@ -165,6 +165,16 @@ router.put('/:id/finish', authMiddleware, async (req, res, next) => {
     }
 });
 
+// DELETE /api/team-matches - Delete ALL team matches (requires auth)
+router.delete('/', authMiddleware, async (req, res, next) => {
+    try {
+        await query(`DELETE FROM team_matches`);
+        res.json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+});
+
 // DELETE /api/team-matches/:id - Delete team match (requires auth)
 router.delete('/:id', authMiddleware, async (req, res, next) => {
     try {

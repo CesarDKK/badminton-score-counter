@@ -373,27 +373,45 @@ function calculateElapsedTime(state) {
 // saveCourtCount and changePassword functions moved to settings-script.js
 
 async function deleteAllMatchHistory() {
+    const isTeam = activeHistoryTab === 'team';
+    const title = isTeam ? 'ADVARSEL' : 'ADVARSEL';
+    const msg1 = isTeam
+        ? 'Er du sikker på at du vil slette AL holdkamphistorik? Dette kan ikke fortrydes!'
+        : 'Er du sikker på at du vil slette ALT kamphistorik? Dette kan ikke fortrydes!';
+    const msg2 = isTeam
+        ? 'Dette vil permanent slette hele holdkamphistorikken. Er du helt sikker?'
+        : 'Dette vil permanent slette hele kamphistorikken. Er du helt sikker?';
+    const successMsg = isTeam
+        ? 'Al holdkamphistorik er blevet slettet!'
+        : 'Alt kamphistorik er blevet slettet!';
+
     showMessage(
-        'ADVARSEL',
-        'Er du sikker på at du vil slette ALT kamphistorik? Dette kan ikke fortrydes!',
+        title,
+        msg1,
         [
             {
                 text: 'Ja, Fortsæt',
                 callback: () => {
                     showMessage(
                         'SIDSTE ADVARSEL',
-                        'Dette vil permanent slette hele kamphistorikken. Er du helt sikker?',
+                        msg2,
                         [
                             {
                                 text: 'Ja, Slet Alt',
                                 callback: async () => {
                                     try {
-                                        await api.deleteAllMatchHistory();
-                                        showMessage('Succes', 'Alt kamphistorik er blevet slettet!');
-                                        await loadAllMatches();
+                                        if (isTeam) {
+                                            await api.deleteAllTeamMatches();
+                                            showMessage('Succes', successMsg);
+                                            await loadTeamMatchHistory();
+                                        } else {
+                                            await api.deleteAllMatchHistory();
+                                            showMessage('Succes', successMsg);
+                                            await loadAllMatches();
+                                        }
                                     } catch (error) {
                                         console.error('Failed to delete match history:', error);
-                                        showMessage('Fejl', 'Kunne ikke slette kamphistorik. Tjek din forbindelse.');
+                                        showMessage('Fejl', 'Kunne ikke slette historik. Tjek din forbindelse.');
                                     }
                                 },
                                 style: 'danger'
@@ -659,6 +677,10 @@ function switchHistoryTab(tab) {
     document.getElementById('tabTeamMatches').style.background = isSingle ? 'transparent' : '#533483';
     document.getElementById('tabTeamMatches').style.color = isSingle ? '#aaa' : '#fff';
     document.getElementById('tabTeamMatches').style.borderBottomColor = isSingle ? 'transparent' : '#533483';
+
+    const isTeam = tab === 'team';
+    const btn = document.getElementById('deleteAllMatchHistoryBtn');
+    if (btn) btn.textContent = isTeam ? 'Slet Alt Holdkamphistorik' : 'Slet Alt Kamphistorik';
 
     loadActiveHistoryTab();
 }
