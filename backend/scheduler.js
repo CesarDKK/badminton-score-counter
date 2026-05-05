@@ -94,4 +94,62 @@ function startExpirationCheck() {
     console.log('⏰ Scheduled hourly sponsor expiration check at minute 0 (Europe/Copenhagen timezone)');
 }
 
-module.exports = { startMidnightReset, startExpirationCheck };
+const INACTIVITY_MINUTES = 20;
+
+async function releaseInactiveCourts(dbLabel) {
+    // Find aktive baner hvor en kamp er startet men ikke afsluttet,
+    // og der ikke har været aktivitet i INACTIVITY_MINUTES minutter.
+    const staleCourts = await query(
+        `SELECT c.id, c.court_number
+         FROM courts c
+         JOIN game_states gs ON gs.court_id = c.id
+         WHERE c.is_active = TRUE
+           AND gs.match_start_time IS NOT NULL
+           AND gs.match_completed = FALSE
+           AND gs.updated_at < NOW() - INTERVAL ${INACTIVITY_MINUTES} MINUTE`
+    );
+
+    if (!staleCourts.length) return;
+
+    for (const court of staleCourts) {
+        await query('DELETE FROM game_states WHERE court_id = ?', [court.id]);
+        await query('UPDATE courts SET is_active = FALSE, is_doubles = FALSE WHERE id = ?', [court.id]);
+        await query(
+            `DELETE FROM device_tokens WHERE token_type = 'match_session' AND court_number = ?`,
+            [court.court_number]
+        );
+    }
+
+    console.log(`  ♻️  ${dbLabel}: frigivet ${staleCourts.length} inaktiv(e) bane(r) efter ${INACTIVITY_MINUTES} min uden aktivitet`);
+}
+
+function startInactivityCheck() {
+    cron.schedule('*/5 * * * *', async () => {
+        // 1. Standard/direkte database
+        try {
+            await releaseInactiveCourts('default');
+        } catch (err) {
+            console.error('❌ Inactivity check failed (default):', err.message);
+        }
+
+        // 2. Alle aktive klub-databaser (multi-tenant)
+        try {
+            const masterDb = require('./config/masterDatabase');
+            const clubs = await masterDb.query('SELECT db_name FROM clubs WHERE is_active = 1');
+            for (const club of clubs) {
+                try {
+                    await runWithTenant(club.db_name, () => releaseInactiveCourts(club.db_name));
+                } catch (err) {
+                    console.error(`❌ Inactivity check failed for ${club.db_name}:`, err.message);
+                }
+            }
+        } catch (err) { /* master DB ikke tilgængelig i direkte mode */ }
+    }, {
+        scheduled: true,
+        timezone: 'Europe/Copenhagen'
+    });
+
+    console.log(`⏰ Scheduled inactivity check every 5 minutes (releases courts idle for ${INACTIVITY_MINUTES}+ min)`);
+}
+
+module.exports = { startMidnightReset, startExpirationCheck, startInactivityCheck };

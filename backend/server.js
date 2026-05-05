@@ -6,7 +6,7 @@ const path = require('path');
 require('dotenv').config();
 
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
-const { startMidnightReset, startExpirationCheck } = require('./scheduler');
+const { startMidnightReset, startExpirationCheck, startInactivityCheck } = require('./scheduler');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -176,6 +176,7 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
 
         startMidnightReset();
         startExpirationCheck();
+        startInactivityCheck();
     } catch (error) {
         console.error('✗ Database connection failed:', error.message);
     }
