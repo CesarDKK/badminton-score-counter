@@ -124,7 +124,7 @@ async function releaseInactiveCourts(dbLabel) {
 }
 
 function startInactivityCheck() {
-    cron.schedule('*/5 * * * *', async () => {
+    cron.schedule('* * * * *', async () => {
         // 1. Standard/direkte database
         try {
             await releaseInactiveCourts('default');
@@ -149,7 +149,7 @@ function startInactivityCheck() {
         timezone: 'Europe/Copenhagen'
     });
 
-    console.log(`⏰ Scheduled inactivity check every 5 minutes (releases courts idle for ${INACTIVITY_MINUTES}+ min)`);
+    console.log(`⏰ Scheduled inactivity check every minute (releases courts idle for ${INACTIVITY_MINUTES}+ min)`);
 }
 
 module.exports = { startMidnightReset, startExpirationCheck, startInactivityCheck };
