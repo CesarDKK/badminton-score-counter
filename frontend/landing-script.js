@@ -1,4 +1,4 @@
-// Landing page JavaScript
+﻿// Landing page JavaScript
 const api = window.BadmintonAPI;
 
 document.addEventListener('DOMContentLoaded', async function() {
@@ -80,5 +80,5 @@ function hideLoading() {
 
 function showError(message) {
     const courtButtons = document.getElementById('courtButtons');
-    courtButtons.innerHTML = `<p style="text-align: center; color: #e94560;">${message}</p>`;
+    courtButtons.innerHTML = `<p style="text-align: center; color: var(--color-accent);">${message}</p>`;
 }
