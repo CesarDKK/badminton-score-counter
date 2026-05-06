@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Admin Panel - Badminton PointtÃ¦ller</title>
+    <title>Admin Panel - Badminton Pointtæller</title>
     <link rel="icon" type="image/png" href="/favicon.png?v=4">
     <link rel="stylesheet" href="fonts.css">
     <link rel="stylesheet" href="styles.css">
@@ -20,11 +20,11 @@
             </header>
             <div class="login-container">
                 <div class="login-box">
-                    <h2>Login PÃ¥krÃ¦vet</h2>
+                    <h2>Login Påkrævet</h2>
                     <input type="password" id="adminPassword" placeholder="Indtast admin adgangskode" autofocus>
                     <button id="loginBtn" class="btn-primary">Log Ind</button>
                     <div class="back-link">
-                        <a href="landing.html">â† Tilbage til Banevalg</a>
+                        <a href="landing.html">← Tilbage til Banevalg</a>
                     </div>
                 </div>
             </div>
@@ -43,7 +43,7 @@
             <!-- Navigation Buttons -->
             <div class="admin-nav">
                 <div class="admin-nav-row" id="adminNavRow">
-                    <button id="backToOverviewNavBtn" class="btn-primary" data-section="overview" style="display:none;">â† Oversigt</button>
+                    <button id="backToOverviewNavBtn" class="btn-primary" data-section="overview" style="display:none;">← Oversigt</button>
                     <button id="holdkampBtn" class="btn-primary" data-section="holdkamp">Holdkamp</button>
                     <button id="matchHistoryBtn" class="btn-primary" data-section="history">Kamphistorik</button>
                     <a href="player-info.html" class="btn-primary" style="text-decoration: none; display: inline-block;">Spiller Info</a>
@@ -79,7 +79,7 @@
                 <!-- Import fra badmintonplayer.dk -->
                 <div id="bpImportSection" style="margin-bottom: 25px; padding: 20px; background: rgba(var(--color-primary-rgb),0.1); border: 1px solid var(--color-primary); border-radius: 10px;">
                     <h3 style="color: var(--color-accent); margin-bottom: 8px;">Importer fra badmintonplayer.dk</h3>
-                    <p style="color: #aaa; font-size: 0.88em; margin-bottom: 14px;">IndsÃ¦t et kamplink fra badmintonplayer.dk â€” hold og spillere importeres automatisk.</p>
+                    <p style="color: #aaa; font-size: 0.88em; margin-bottom: 14px;">Indsæt et kamplink fra badmintonplayer.dk — hold og spillere importeres automatisk.</p>
                     <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                         <input type="text" id="bpImportUrl"
                                placeholder="https://www.badmintonplayer.dk/DBF/HoldTurnering/Stilling/#5,2025,..."
@@ -108,7 +108,7 @@
                     <div style="margin-bottom: 20px;">
                         <label>Kampformat:</label>
                         <select id="holdkampFormat" style="width: 100%; padding: 10px; background: var(--color-bg-dark); color: #eaeaea; border: 1px solid var(--color-primary); border-radius: 5px; margin-top: 5px;">
-                            <option value="">-- VÃ¦lg format --</option>
+                            <option value="">-- Vælg format --</option>
                             <option value="liga11">Liga-format (11 kampe): 2xMD, 2xDS, 3xHS, 2xDD, 3xHD</option>
                             <option value="13kamps">13-kamps format: 4xHS, 2xDS, 3xHD, 2xDD, 2xMD</option>
                             <option value="2plus2">2+2-format (8 kampe): 2xMD, 2xDS, 2xHS, 1xDD, 1xHD</option>
@@ -145,10 +145,10 @@
                     <!-- Search and Filter Controls -->
                     <div class="match-history-controls">
                         <div class="search-box">
-                            <input type="text" id="matchSearchInput" placeholder="SÃ¸g pÃ¥ spillernavn..." />
+                            <input type="text" id="matchSearchInput" placeholder="Søg på spillernavn..." />
                         </div>
                         <div class="sort-box">
-                            <label for="courtFilterSelect">VÃ¦lg bane:</label>
+                            <label for="courtFilterSelect">Vælg bane:</label>
                             <select id="courtFilterSelect">
                                 <option value="all">Alle baner</option>
                             </select>
@@ -174,15 +174,15 @@
             <div id="editCourtModal" class="modal">
                 <div class="modal-content">
                     <span class="close-modal">&times;</span>
-                    <h2>RedigÃ©r Bane <span id="editCourtNumber"></span></h2>
+                    <h2>Redigér Bane <span id="editCourtNumber"></span></h2>
                     <div class="edit-form">
-                        <!-- 1. MarkÃ©r som Aktiv -->
+                        <!-- 1. Markér som Aktiv -->
                         <div class="active-toggle" style="margin-bottom: 20px;">
                             <label class="toggle-label">
                                 <input type="checkbox" id="editCourtActive">
-                                <span class="toggle-text">MarkÃ©r som Aktiv (Bane i brug)</span>
+                                <span class="toggle-text">Markér som Aktiv (Bane i brug)</span>
                             </label>
-                            <p class="toggle-hint">AktivÃ©r dette for at angive at banen er optaget eller reserveret, selv fÃ¸r pointtÃ¦lling begynder.</p>
+                            <p class="toggle-hint">Aktivér dette for at angive at banen er optaget eller reserveret, selv før pointtælling begynder.</p>
                         </div>
 
                         <!-- 2. Spillernavne -->
@@ -215,7 +215,7 @@
                         </div>
 
                         <div class="modal-actions">
-                            <button id="saveCourtChanges" class="btn-primary">Gem Ã†ndringer</button>
+                            <button id="saveCourtChanges" class="btn-primary">Gem Ændringer</button>
                             <button id="resetCourt" class="btn-danger">Nulstil Bane</button>
                         </div>
                     </div>
@@ -229,7 +229,7 @@
 
             <!-- Device Tokens Section -->
             <div id="deviceTokensSection" class="overview-section" style="display: none;">
-                <h2>Adgangslinks <span style="font-family:'DM Sans';font-size:0.5em;font-weight:400;color:rgba(255,255,255,0.4);">Tablets og TV-skÃ¦rme</span></h2>
+                <h2>Adgangslinks <span style="font-family:'DM Sans';font-size:0.5em;font-weight:400;color:rgba(255,255,255,0.4);">Tablets og TV-skærme</span></h2>
 
                 <!-- Opret nyt link -->
                 <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:24px;margin-bottom:24px;">
@@ -259,12 +259,12 @@
                             <label style="display:block;font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Navigation</label>
                             <select id="dtLocked" style="background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:#eaeaea;font-family:'DM Sans',sans-serif;font-size:0.95em;">
                                 <option value="0">Fri</option>
-                                <option value="1" selected>LÃ¥st</option>
+                                <option value="1" selected>Låst</option>
                             </select>
                         </div>
                         <div id="dtQrWrap" style="display:flex;align-items:center;gap:8px;height:42px;">
                             <input type="checkbox" id="dtShowQr" checked style="width:18px;height:18px;cursor:pointer;accent-color:var(--color-accent,var(--color-accent));">
-                            <label for="dtShowQr" style="font-size:0.9em;color:rgba(255,255,255,0.75);cursor:pointer;user-select:none;">Vis QR-kode pÃ¥ TV</label>
+                            <label for="dtShowQr" style="font-size:0.9em;color:rgba(255,255,255,0.75);cursor:pointer;user-select:none;">Vis QR-kode på TV</label>
                         </div>
                         <button id="createDtBtn" class="btn-primary" style="height:42px;white-space:nowrap;">+ Opret Link</button>
                     </div>
@@ -278,7 +278,7 @@
             <!-- Version Footer -->
             <div class="version-footer">
                 <p>Version 2.0</p>
-                <p style="margin-top: 6px; font-size: 0.85em; color: #555;">Â© 2026 Jesper Brink SÃ¸rensen. Alle rettigheder forbeholdes.</p>
+                <p style="margin-top: 6px; font-size: 0.85em; color: #555;">© 2026 Jesper Brink Sørensen. Alle rettigheder forbeholdes.</p>
             </div>
         </div>
     </div>
@@ -295,10 +295,8 @@
     </div>
 
     <script src="js/utils.js?v=2"></script>
-    <script src="js/api.js?v=6"></script>
+    <script src="js/api.js?v=5"></script>
     <script src="js/auth-guard.js?v=1"></script>
-    <script src="admin-script.js?v=6"></script>
+    <script src="admin-script.js?v=5"></script>
 </body>
 </html>
-
-
