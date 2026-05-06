@@ -745,13 +745,6 @@ async function initializeApp() {
             const gameModeToggle = document.getElementById('gameModeToggle');
             if (gameModeToggle) gameModeToggle.style.display = 'none';
 
-            // Hide "Tilbage" link in settings menu
-            const backLink = document.querySelector('a[href="landing.html"]');
-            if (backLink) backLink.style.display = 'none';
-
-            // Hide "Admin" link in settings menu
-            const adminLink = document.querySelector('a[href="admin.html"]');
-            if (adminLink) adminLink.style.display = 'none';
         }
 
         console.log('Court V3 ready, tournament mode:', isTournamentMode);
