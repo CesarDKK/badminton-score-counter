@@ -1,4 +1,4 @@
-/* ========================================================
+﻿/* ========================================================
    ADMIN SHARED STYLES — Arena dark aesthetic
    Bebas Neue for headings, DM Sans for body
    ======================================================== */
@@ -25,7 +25,7 @@ body {
     transform: translateX(-50%);
     width: 90vw;
     height: 70vh;
-    background: radial-gradient(ellipse, rgba(83, 52, 131, 0.14) 0%, transparent 65%);
+    background: radial-gradient(ellipse, rgba(var(--color-primary-rgb), 0.14) 0%, transparent 65%);
     pointer-events: none;
     z-index: 0;
 }
@@ -106,7 +106,7 @@ header > div {
 .btn-primary:hover {
     background: color-mix(in srgb, var(--color-primary) 80%, white 20%);
     transform: translateY(-1px);
-    box-shadow: 0 4px 14px rgba(83, 52, 131, 0.35);
+    box-shadow: 0 4px 14px rgba(var(--color-primary-rgb), 0.35);
     filter: none;
 }
 
@@ -175,9 +175,9 @@ header > div {
 .admin-nav-row .btn-primary,
 .admin-nav-row a.btn-primary {
     padding: 9px 20px;
-    background: rgba(83, 52, 131, 0.18);
+    background: rgba(var(--color-primary-rgb), 0.18);
     color: rgba(255, 255, 255, 0.72);
-    border: 1px solid rgba(83, 52, 131, 0.28);
+    border: 1px solid rgba(var(--color-primary-rgb), 0.28);
     border-radius: 100px;
     font-size: 0.88em;
     font-weight: 500;
@@ -187,11 +187,11 @@ header > div {
 
 .admin-nav-row .btn-primary:hover,
 .admin-nav-row a.btn-primary:hover {
-    background: rgba(83, 52, 131, 0.38);
+    background: rgba(var(--color-primary-rgb), 0.38);
     color: white;
-    border-color: rgba(83, 52, 131, 0.55);
+    border-color: rgba(var(--color-primary-rgb), 0.55);
     transform: translateY(-1px);
-    box-shadow: 0 3px 10px rgba(83, 52, 131, 0.22);
+    box-shadow: 0 3px 10px rgba(var(--color-primary-rgb), 0.22);
 }
 
 /* Active nav item */
@@ -246,7 +246,7 @@ header > div {
 .login-box input:focus {
     outline: none;
     border-color: var(--color-primary);
-    background: rgba(83, 52, 131, 0.08);
+    background: rgba(var(--color-primary-rgb), 0.08);
 }
 
 .login-box button {
@@ -310,7 +310,7 @@ header > div {
 .court-card:hover {
     transform: translateY(-3px);
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
-    border-color: rgba(83, 52, 131, 0.3);
+    border-color: rgba(var(--color-primary-rgb), 0.3);
 }
 
 .court-header {
@@ -423,9 +423,9 @@ header > div {
 
 .btn-edit {
     padding: 9px 22px;
-    background: rgba(83, 52, 131, 0.2);
+    background: rgba(var(--color-primary-rgb), 0.2);
     color: rgba(255, 255, 255, 0.8);
-    border: 1px solid rgba(83, 52, 131, 0.35);
+    border: 1px solid rgba(var(--color-primary-rgb), 0.35);
     border-radius: 8px;
     cursor: pointer;
     font-family: 'DM Sans', sans-serif;
@@ -435,7 +435,7 @@ header > div {
 }
 
 .btn-edit:hover {
-    background: rgba(83, 52, 131, 0.38);
+    background: rgba(var(--color-primary-rgb), 0.38);
     border-color: var(--color-primary);
     transform: translateY(-1px);
 }
@@ -493,7 +493,7 @@ header > div {
 .setting-card select:focus {
     outline: none;
     border-color: var(--color-primary);
-    background: rgba(83, 52, 131, 0.08);
+    background: rgba(var(--color-primary-rgb), 0.08);
 }
 
 .setting-card button {
@@ -584,14 +584,14 @@ header > div {
 .edit-form input:focus {
     outline: none;
     border-color: var(--color-primary);
-    background: rgba(83, 52, 131, 0.08);
+    background: rgba(var(--color-primary-rgb), 0.08);
 }
 
 .active-toggle {
     margin: 16px 0;
     padding: 16px;
-    background: rgba(83, 52, 131, 0.08);
-    border: 1px solid rgba(83, 52, 131, 0.2);
+    background: rgba(var(--color-primary-rgb), 0.08);
+    border: 1px solid rgba(var(--color-primary-rgb), 0.2);
     border-radius: 12px;
 }
 
@@ -727,9 +727,9 @@ header > div {
 
 .match-card:hover {
     border-left-color: var(--color-primary);
-    border-color: rgba(83, 52, 131, 0.3);
+    border-color: rgba(var(--color-primary-rgb), 0.3);
     transform: translateX(3px);
-    box-shadow: 0 4px 14px rgba(83, 52, 131, 0.18);
+    box-shadow: 0 4px 14px rgba(var(--color-primary-rgb), 0.18);
 }
 
 .match-main-info {
@@ -762,7 +762,7 @@ header > div {
 .autocomplete-dropdown {
     position: absolute;
     background: var(--color-bg-container);
-    border: 1px solid rgba(83, 52, 131, 0.4);
+    border: 1px solid rgba(var(--color-primary-rgb), 0.4);
     border-radius: 10px;
     margin-top: -8px;
     max-height: 300px;
@@ -775,7 +775,7 @@ header > div {
 .autocomplete-item {
     padding: 12px 16px;
     cursor: pointer;
-    border-bottom: 1px solid rgba(83, 52, 131, 0.15);
+    border-bottom: 1px solid rgba(var(--color-primary-rgb), 0.15);
     transition: background 0.15s ease;
 }
 
@@ -784,7 +784,7 @@ header > div {
 }
 
 .autocomplete-item:hover {
-    background: rgba(83, 52, 131, 0.3);
+    background: rgba(var(--color-primary-rgb), 0.3);
 }
 
 .autocomplete-name {
@@ -855,3 +855,4 @@ header > div {
         justify-content: space-between;
     }
 }
+

@@ -1,4 +1,4 @@
-/* Court V3 Styles - Badminton Court Top-Down View */
+﻿/* Court V3 Styles - Badminton Court Top-Down View */
 /* Official dimensions: 44' (13.4m) long × 20' (6.1m) wide for doubles */
 
 /* Remove container padding/border for full-screen experience */
@@ -52,7 +52,7 @@
     border-radius: 12px;
     cursor: pointer;
     transition: all 0.2s;
-    box-shadow: 0 4px 24px rgba(233,69,96,0.45);
+    box-shadow: 0 4px 24px rgba(var(--color-accent-rgb),0.45);
 }
 
 .btn-start-match-center:hover {
@@ -960,7 +960,7 @@
 
 .btn-swap-players:hover {
     transform: scale(1.1) rotate(180deg);
-    box-shadow: 0 6px 25px rgba(233, 69, 96, 0.8);
+    box-shadow: 0 6px 25px rgba(var(--color-accent-rgb), 0.8);
 }
 
 .btn-swap-players:active {
@@ -1341,3 +1341,4 @@
     .court-overlay-message-title { font-size: 1.3em !important; margin-bottom: 12px !important; }
     .court-overlay-message-text { font-size: 0.9em !important; margin-bottom: 18px !important; }
 }
+

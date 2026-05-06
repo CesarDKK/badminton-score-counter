@@ -1,4 +1,4 @@
-// TV Display Script V3 - Minimalist layout with set score boxes
+﻿// TV Display Script V3 - Minimalist layout with set score boxes
 const api = window.BadmintonAPI;
 
 const urlParams = new URLSearchParams(window.location.search);
@@ -73,7 +73,7 @@ async function initializeTVDisplay() {
         if (courtId < 1 || courtId > courtCount) {
             document.querySelector('.tv-container').innerHTML = `
                 <div style="display: flex; align-items: center; justify-content: center; height: 100vh; flex-direction: column; gap: 20px;">
-                    <h1 style="font-size: 4em; color: #e94560;">Bane ${courtId} Ikke Fundet</h1>
+                    <h1 style="font-size: 4em; color: var(--color-accent);">Bane ${courtId} Ikke Fundet</h1>
                     <a href="landing.html" style="color: #fff; font-size: 2em; text-decoration: underline;">Tilbage til Landingsside</a>
                 </div>
             `;
@@ -823,7 +823,7 @@ function showRestBreak(secondsLeft, title, gameState, playersSwapped) {
                 timerDisplay.textContent = localRestBreakSecondsLeft;
 
                 if (localRestBreakSecondsLeft <= 10) {
-                    timerDisplay.style.color = '#e94560';
+                    timerDisplay.style.color = 'var(--color-accent)';
                 } else if (localRestBreakSecondsLeft <= 30) {
                     timerDisplay.style.color = '#FFA500';
                 } else {
@@ -836,7 +836,7 @@ function showRestBreak(secondsLeft, title, gameState, playersSwapped) {
     timerDisplay.textContent = localRestBreakSecondsLeft;
 
     if (localRestBreakSecondsLeft <= 10) {
-        timerDisplay.style.color = '#e94560';
+        timerDisplay.style.color = 'var(--color-accent)';
     } else if (localRestBreakSecondsLeft <= 30) {
         timerDisplay.style.color = '#FFA500';
     } else {
@@ -958,7 +958,7 @@ function showMatchFinished(gameState, playersSwapped) {
             const player1Won = scores[0] > scores[1];
             const winnerName = player1Won ? player1Name : player2Name;
             const winnerColor = '#4CAF50';
-            const loserColor = '#e94560';
+            const loserColor = 'var(--color-accent)';
 
             return `
                 <div style="margin: 20px 0; font-size: 1.1em;">
@@ -996,7 +996,7 @@ function showMatchFinished(gameState, playersSwapped) {
 
         const player1WonMatch = displayPlayer1Games > displayPlayer2Games;
         const winnerColor = '#4CAF50';
-        const loserColor = '#e94560';
+        const loserColor = 'var(--color-accent)';
 
         setScoresContainer.innerHTML = `
             <div style="margin: 30px 0; font-size: 1.3em;">
@@ -1071,3 +1071,4 @@ window.addEventListener('beforeunload', function() {
     if (slideshowInterval) clearInterval(slideshowInterval);
     stopScreensaver();
 });
+

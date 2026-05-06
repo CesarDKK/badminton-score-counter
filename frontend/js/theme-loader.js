@@ -11,14 +11,30 @@ window.loadTheme = async function() {
 
         // Apply theme colors to CSS custom properties
         const root = document.documentElement;
-        root.style.setProperty('--color-primary', theme.color_primary || '#533483');
-        root.style.setProperty('--color-accent', theme.color_accent || '#e94560');
-        root.style.setProperty('--color-bg-dark', theme.color_bg_dark || '#1a1a2e');
-        root.style.setProperty('--color-bg-container', theme.color_bg_container || '#16213e');
-        root.style.setProperty('--color-bg-card', theme.color_bg_card || '#0f3460');
+        const primary   = theme.color_primary    || '#533483';
+        const accent    = theme.color_accent     || '#e94560';
+        const bgDark    = theme.color_bg_dark    || '#1a1a2e';
+        const bgContainer = theme.color_bg_container || '#16213e';
+        const bgCard    = theme.color_bg_card    || '#0f3460';
+
+        root.style.setProperty('--color-primary',      primary);
+        root.style.setProperty('--color-accent',       accent);
+        root.style.setProperty('--color-bg-dark',      bgDark);
+        root.style.setProperty('--color-bg-container', bgContainer);
+        root.style.setProperty('--color-bg-card',      bgCard);
+
+        // RGB-komponent variabler — muliggør rgba(var(--color-primary-rgb), 0.15) i CSS og inline styles
+        const toRgb = hex => {
+            const h = hex.replace('#', '');
+            return `${parseInt(h.slice(0,2),16)}, ${parseInt(h.slice(2,4),16)}, ${parseInt(h.slice(4,6),16)}`;
+        };
+        root.style.setProperty('--color-primary-rgb',   toRgb(primary));
+        root.style.setProperty('--color-accent-rgb',    toRgb(accent));
+        root.style.setProperty('--color-bg-dark-rgb',   toRgb(bgDark));
+        root.style.setProperty('--color-bg-card-rgb',   toRgb(bgCard));
 
         // Update gradient
-        const gradient = `linear-gradient(135deg, ${theme.color_primary || '#533483'} 0%, ${theme.color_accent || '#e94560'} 100%)`;
+        const gradient = `linear-gradient(135deg, ${primary} 0%, ${accent} 100%)`;
         root.style.setProperty('--gradient-primary', gradient);
 
         console.log('Theme loaded:', theme.theme_name || 'default');
