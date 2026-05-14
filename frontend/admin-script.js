@@ -965,7 +965,7 @@ function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCou
             </div>
             <div style="margin-bottom:12px;">
                 <div style="color:#aaa;font-size:0.8em;margin-bottom:10px;">Sætscore <span style="color:#666;">(valgfrit)</span></div>
-                <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                <div style="display:flex;gap:32px;flex-wrap:wrap;">
                     ${[1,2,3].map(s => `
                     <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
                         <span style="color:#666;font-size:0.8em;">Sæt ${s}${s===3?' *':''}</span>
