@@ -963,26 +963,30 @@ function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCou
                     </label>
                 </div>
             </div>
-            <div style="margin-bottom:10px;">
-                <div style="color:#aaa;font-size:0.8em;margin-bottom:8px;">Sætscore <span style="color:#666;">(valgfrit)</span></div>
-                <div style="display:flex;flex-direction:column;gap:6px;">
+            <div style="margin-bottom:12px;">
+                <div style="color:#aaa;font-size:0.8em;margin-bottom:10px;">Sætscore <span style="color:#666;">(valgfrit)</span></div>
+                <div style="display:flex;gap:16px;flex-wrap:wrap;">
                     ${[1,2,3].map(s => `
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <span style="color:#666;font-size:0.8em;width:38px;flex-shrink:0;">Sæt ${s}${s===3?' *':''}</span>
-                        <input id="manualS${s}t1_${g.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="–"
-                               oninput="this.value=this.value.replace(/[^0-9]/g,''); determineHoldkampWinner(${g.id}, '${gameMode}')"
-                               style="width:52px;padding:6px;background:var(--color-bg-dark);color:#4CAF50;border:1px solid #555;border-radius:4px;text-align:center;font-size:0.95em;">
-                        <span style="color:#555;font-size:1em;">–</span>
-                        <input id="manualS${s}t2_${g.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="–"
-                               oninput="this.value=this.value.replace(/[^0-9]/g,''); determineHoldkampWinner(${g.id}, '${gameMode}')"
-                               style="width:52px;padding:6px;background:var(--color-bg-dark);color:var(--color-accent);border:1px solid #555;border-radius:4px;text-align:center;font-size:0.95em;">
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+                        <span style="color:#666;font-size:0.8em;">Sæt ${s}${s===3?' *':''}</span>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <input id="manualS${s}t1_${g.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="–"
+                                   oninput="this.value=this.value.replace(/[^0-9]/g,''); determineHoldkampWinner(${g.id}, '${gameMode}')"
+                                   style="width:64px;padding:12px 8px;background:var(--color-bg-dark);color:#4CAF50;border:1px solid #555;border-radius:4px;text-align:center;font-size:1.6em;">
+                            <span style="color:#555;font-size:1.2em;">–</span>
+                            <input id="manualS${s}t2_${g.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="–"
+                                   oninput="this.value=this.value.replace(/[^0-9]/g,''); determineHoldkampWinner(${g.id}, '${gameMode}')"
+                                   style="width:64px;padding:12px 8px;background:var(--color-bg-dark);color:var(--color-accent);border:1px solid #555;border-radius:4px;text-align:center;font-size:1.6em;">
+                        </div>
                     </div>`).join('')}
                 </div>
-                <div style="color:#666;font-size:0.75em;margin-top:5px;">* Sæt 3 kun hvis nødvendigt</div>
+                <div style="color:#666;font-size:0.75em;margin-top:6px;">* Sæt 3 kun hvis nødvendigt</div>
             </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-                <button onclick="saveManualResult(${teamMatch.id}, ${g.id}, '${gameMode}')" style="padding:6px 16px;background:#f0a500;color:#000;font-weight:bold;border:none;border-radius:4px;cursor:pointer;font-size:0.85em;">Gem resultat</button>
+            <div style="margin-bottom:8px;">
                 <button id="woToggle_${g.id}" onclick="toggleWO(${g.id})" style="padding:6px 14px;background:transparent;color:#aaa;border:1px solid #777;border-radius:4px;cursor:pointer;font-size:0.85em;">W.O.</button>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button onclick="saveManualResult(${teamMatch.id}, ${g.id}, '${gameMode}')" style="padding:6px 16px;background:#f0a500;color:#000;font-weight:bold;border:none;border-radius:4px;cursor:pointer;font-size:0.85em;">Gem resultat</button>
                 <button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" style="padding:6px 12px;background:transparent;color:#aaa;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:0.85em;">Annuller</button>
             </div>
         </div>` : '';
