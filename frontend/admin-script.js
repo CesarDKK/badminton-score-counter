@@ -926,7 +926,9 @@ function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCou
         } else if (g.status === 'finished') {
             const winner = g.winner_team === 1 ? teamMatch.team1_name : teamMatch.team2_name;
             const isWO = g.set_scores === 'W.O.';
-            winnerBadge = `<span style="background:#4CAF50;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8em;">✓ ${escapeHtml(winner)}${isWO ? ' (W.O.)' : ''}</span>`;
+            const scoreText = g.set_scores && !isWO ? `<span style="color:#aaa;font-size:0.82em;margin-left:4px;">${escapeHtml(g.set_scores)}</span>` : '';
+            winnerBadge = `<span style="background:#4CAF50;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8em;">✓ ${escapeHtml(winner)}${isWO ? ' (W.O.)' : ''}</span>${scoreText}`;
+            editBtn = `<button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" style="padding:3px 10px;background:transparent;color:#aaa;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:0.8em;">Rediger</button>`;
         }
 
         const editForm = g.status !== 'finished' ? `
@@ -949,32 +951,39 @@ function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCou
             </div>
         </div>` : '';
 
-        const manualForm = g.status !== 'finished' ? `
-        <div id="manualResult_${g.id}" style="display:none; padding:12px; background:rgba(240,165,0,0.07); border:1px solid rgba(240,165,0,0.3); border-radius:6px; margin-top:8px;">
-            <div style="color:#f0a500;font-size:0.82em;font-weight:bold;margin-bottom:10px;">Manuel resultat</div>
+        const rawScores = (g.set_scores && g.set_scores !== 'W.O.') ? g.set_scores.split(' ') : [];
+        const getScore = (si, ti) => rawScores[si] ? (rawScores[si].split('-')[ti] || '') : '';
+        const initWO = g.set_scores === 'W.O.';
+        const isFinished = g.status === 'finished';
+        const formTitle = isFinished ? 'Rediger resultat' : 'Manuel resultat';
+        const saveLabel = isFinished ? 'Gem ændringer' : 'Gem resultat';
+
+        const manualForm = `
+        <div id="manualResult_${g.id}" style="display:none; padding:12px; background:rgba(240,165,0,0.07); border:1px solid rgba(240,165,0,0.3); border-radius:6px; margin-top:8px;" data-wo="${initWO}">
+            <div style="color:#f0a500;font-size:0.82em;font-weight:bold;margin-bottom:10px;">${formTitle}</div>
             <div style="margin-bottom:10px;">
                 <div style="color:#aaa;font-size:0.8em;margin-bottom:6px;">Vinder</div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;">
                     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1px solid #4CAF50;border-radius:4px;color:#4CAF50;font-size:0.88em;">
-                        <input type="radio" name="manualWinner_${g.id}" value="1" style="accent-color:#4CAF50;"> ${escapeHtml(teamMatch.team1_name)}
+                        <input type="radio" name="manualWinner_${g.id}" value="1" ${g.winner_team === 1 ? 'checked' : ''} style="accent-color:#4CAF50;"> ${escapeHtml(teamMatch.team1_name)}
                     </label>
                     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1px solid var(--color-accent);border-radius:4px;color:var(--color-accent);font-size:0.88em;">
-                        <input type="radio" name="manualWinner_${g.id}" value="2" style="accent-color:var(--color-accent);"> ${escapeHtml(teamMatch.team2_name)}
+                        <input type="radio" name="manualWinner_${g.id}" value="2" ${g.winner_team === 2 ? 'checked' : ''} style="accent-color:var(--color-accent);"> ${escapeHtml(teamMatch.team2_name)}
                     </label>
                 </div>
             </div>
             <div style="margin-bottom:12px;">
-                <div style="color:#aaa;font-size:0.8em;margin-bottom:10px;">Sætscore <span style="color:#666;">(valgfrit)</span></div>
+                <div style="color:#aaa;font-size:0.8em;margin-bottom:10px;">Sætscore</div>
                 <div style="display:flex;gap:32px;flex-wrap:wrap;">
                     ${[1,2,3].map(s => `
                     <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
                         <span style="color:#666;font-size:0.8em;">Sæt ${s}${s===3?' *':''}</span>
                         <div style="display:flex;align-items:center;gap:6px;">
-                            <input id="manualS${s}t1_${g.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="–"
+                            <input id="manualS${s}t1_${g.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="–" value="${getScore(s-1, 0)}"
                                    oninput="this.value=this.value.replace(/[^0-9]/g,''); determineHoldkampWinner(${g.id}, '${gameMode}')"
                                    style="width:64px;padding:12px 8px;background:var(--color-bg-dark);color:#4CAF50;border:1px solid #555;border-radius:4px;text-align:center;font-size:1.6em;">
                             <span style="color:#555;font-size:1.2em;">–</span>
-                            <input id="manualS${s}t2_${g.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="–"
+                            <input id="manualS${s}t2_${g.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="–" value="${getScore(s-1, 1)}"
                                    oninput="this.value=this.value.replace(/[^0-9]/g,''); determineHoldkampWinner(${g.id}, '${gameMode}')"
                                    style="width:64px;padding:12px 8px;background:var(--color-bg-dark);color:var(--color-accent);border:1px solid #555;border-radius:4px;text-align:center;font-size:1.6em;">
                         </div>
@@ -983,13 +992,13 @@ function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCou
                 <div style="color:#666;font-size:0.75em;margin-top:6px;">* Sæt 3 kun hvis nødvendigt</div>
             </div>
             <div style="margin-bottom:8px;">
-                <button id="woToggle_${g.id}" onclick="toggleWO(${g.id})" style="padding:6px 14px;background:transparent;color:#aaa;border:1px solid #777;border-radius:4px;cursor:pointer;font-size:0.85em;">W.O.</button>
+                <button id="woToggle_${g.id}" onclick="toggleWO(${g.id})" style="padding:6px 14px;background:${initWO ? '#aaa' : 'transparent'};color:${initWO ? '#000' : '#aaa'};border:1px solid ${initWO ? '#aaa' : '#777'};border-radius:4px;cursor:pointer;font-size:0.85em;">W.O.</button>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <button onclick="saveManualResult(${teamMatch.id}, ${g.id}, '${gameMode}')" style="padding:6px 16px;background:#f0a500;color:#000;font-weight:bold;border:none;border-radius:4px;cursor:pointer;font-size:0.85em;">Gem resultat</button>
+                <button onclick="saveManualResult(${teamMatch.id}, ${g.id}, '${gameMode}')" style="padding:6px 16px;background:#f0a500;color:#000;font-weight:bold;border:none;border-radius:4px;cursor:pointer;font-size:0.85em;">${saveLabel}</button>
                 <button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" style="padding:6px 12px;background:transparent;color:#aaa;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:0.85em;">Annuller</button>
             </div>
-        </div>` : '';
+        </div>`;
 
         return `
         <div style="padding:10px 15px;background:rgba(var(--color-primary-rgb),0.2);border-radius:8px;margin-bottom:6px;">
