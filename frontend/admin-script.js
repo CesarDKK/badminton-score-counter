@@ -980,9 +980,9 @@ function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCou
                 </div>
                 <div style="color:#666;font-size:0.75em;margin-top:5px;">* Sæt 3 kun hvis nødvendigt</div>
             </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <button onclick="saveManualResult(${teamMatch.id}, ${g.id})" style="padding:6px 16px;background:#f0a500;color:#000;font-weight:bold;border:none;border-radius:4px;cursor:pointer;font-size:0.85em;">Gem resultat</button>
-                <button onclick="saveWalkover(${teamMatch.id}, ${g.id})" style="padding:6px 14px;background:transparent;color:#aaa;border:1px solid #777;border-radius:4px;cursor:pointer;font-size:0.85em;">W.O.</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                <button onclick="saveManualResult(${teamMatch.id}, ${g.id}, '${gameMode}')" style="padding:6px 16px;background:#f0a500;color:#000;font-weight:bold;border:none;border-radius:4px;cursor:pointer;font-size:0.85em;">Gem resultat</button>
+                <button id="woToggle_${g.id}" onclick="toggleWO(${g.id})" style="padding:6px 14px;background:transparent;color:#aaa;border:1px solid #777;border-radius:4px;cursor:pointer;font-size:0.85em;">W.O.</button>
                 <button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" style="padding:6px 12px;background:transparent;color:#aaa;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:0.85em;">Annuller</button>
             </div>
         </div>` : '';
@@ -1254,7 +1254,17 @@ function determineHoldkampWinner(gameId, gameMode) {
     }
 }
 
-async function saveManualResult(teamMatchId, gameId) {
+function toggleWO(gameId) {
+    const form = document.getElementById(`manualResult_${gameId}`);
+    const btn = document.getElementById(`woToggle_${gameId}`);
+    const isWO = form.dataset.wo === 'true';
+    form.dataset.wo = isWO ? 'false' : 'true';
+    btn.style.background = isWO ? 'transparent' : '#aaa';
+    btn.style.color = isWO ? '#aaa' : '#000';
+    btn.style.borderColor = isWO ? '#777' : '#aaa';
+}
+
+async function saveManualResult(teamMatchId, gameId, gameMode = '21') {
     const winnerRadio = document.querySelector(`input[name="manualWinner_${gameId}"]:checked`);
     if (!winnerRadio) {
         alert('Vælg venligst en vinder.');
@@ -1262,13 +1272,44 @@ async function saveManualResult(teamMatchId, gameId) {
     }
     const winnerTeam = parseInt(winnerRadio.value);
 
-    // Build set score string from individual fields
-    const sets = [1, 2, 3].map(s => {
-        const t1 = document.getElementById(`manualS${s}t1_${gameId}`)?.value.trim();
-        const t2 = document.getElementById(`manualS${s}t2_${gameId}`)?.value.trim();
-        return (t1 !== '' && t2 !== '') ? `${t1}-${t2}` : null;
-    }).filter(Boolean);
-    const setScores = sets.length > 0 ? sets.join(' ') : null;
+    const form = document.getElementById(`manualResult_${gameId}`);
+    const isWO = form?.dataset.wo === 'true';
+
+    let setScores = null;
+
+    if (isWO) {
+        setScores = 'W.O.';
+    } else {
+        const sets = [1, 2, 3].map(s => {
+            const t1 = document.getElementById(`manualS${s}t1_${gameId}`)?.value.trim();
+            const t2 = document.getElementById(`manualS${s}t2_${gameId}`)?.value.trim();
+            return (t1 !== '' && t2 !== '') ? `${t1}-${t2}` : null;
+        });
+
+        if (!sets[0] || !sets[1]) {
+            alert('Udfyld venligst sætscore for sæt 1 og 2.');
+            return;
+        }
+
+        const winTarget = gameMode === '15' ? 15 : 21;
+        const cap = gameMode === '15' ? 21 : 30;
+        function getSetWinner(score) {
+            const [a, b] = score.split('-').map(Number);
+            if (Math.max(a, b) >= cap) return a > b ? 1 : 2;
+            if (Math.max(a, b) >= winTarget && Math.abs(a - b) >= 2) return a > b ? 1 : 2;
+            return null;
+        }
+        const w1 = getSetWinner(sets[0]);
+        const w2 = getSetWinner(sets[1]);
+        if ((w1 === 1 && w2 === 2) || (w1 === 2 && w2 === 1)) {
+            if (!sets[2]) {
+                alert('Sæt 3 er påkrævet når sætstillingen er 1-1.');
+                return;
+            }
+        }
+
+        setScores = sets.filter(Boolean).join(' ');
+    }
 
     try {
         await api.updateTeamMatchGame(teamMatchId, gameId, {
@@ -1281,27 +1322,6 @@ async function saveManualResult(teamMatchId, gameId) {
     } catch (error) {
         console.error('Failed to save manual result:', error);
         alert('Kunne ikke gemme resultatet. Prøv igen.');
-    }
-}
-
-async function saveWalkover(teamMatchId, gameId) {
-    const winnerRadio = document.querySelector(`input[name="manualWinner_${gameId}"]:checked`);
-    if (!winnerRadio) {
-        alert('Vælg venligst en vinder.');
-        return;
-    }
-    const winnerTeam = parseInt(winnerRadio.value);
-    try {
-        await api.updateTeamMatchGame(teamMatchId, gameId, {
-            status: 'finished',
-            winnerTeam,
-            setScores: 'W.O.'
-        });
-        holdkampEditOpen = false;
-        await loadActiveHoldkamp();
-    } catch (error) {
-        console.error('Failed to save walkover:', error);
-        alert('Kunne ikke gemme W.O. Prøv igen.');
     }
 }
 
