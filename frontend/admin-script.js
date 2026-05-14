@@ -980,16 +980,10 @@ function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCou
                 </div>
                 <div style="color:#666;font-size:0.75em;margin-top:5px;">* Sæt 3 kun hvis nødvendigt</div>
             </div>
-            <div style="display:flex;gap:8px;">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <button onclick="saveManualResult(${teamMatch.id}, ${g.id})" style="padding:6px 16px;background:#f0a500;color:#000;font-weight:bold;border:none;border-radius:4px;cursor:pointer;font-size:0.85em;">Gem resultat</button>
+                <button onclick="saveWalkover(${teamMatch.id}, ${g.id})" style="padding:6px 14px;background:transparent;color:#aaa;border:1px solid #777;border-radius:4px;cursor:pointer;font-size:0.85em;">W.O.</button>
                 <button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" style="padding:6px 12px;background:transparent;color:#aaa;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:0.85em;">Annuller</button>
-            </div>
-            <div style="margin-top:10px;padding-top:10px;border-top:1px solid #444;">
-                <div style="color:#888;font-size:0.75em;margin-bottom:6px;">eller registrér walkover (W.O.)</div>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                    <button onclick="saveWalkover(${teamMatch.id}, ${g.id}, 1)" style="padding:5px 14px;background:transparent;color:#4CAF50;border:1px solid #4CAF50;border-radius:4px;cursor:pointer;font-size:0.82em;">W.O. → ${escapeHtml(teamMatch.team1_name)}</button>
-                    <button onclick="saveWalkover(${teamMatch.id}, ${g.id}, 2)" style="padding:5px 14px;background:transparent;color:var(--color-accent);border:1px solid var(--color-accent);border-radius:4px;cursor:pointer;font-size:0.82em;">W.O. → ${escapeHtml(teamMatch.team2_name)}</button>
-                </div>
             </div>
         </div>` : '';
 
@@ -1290,7 +1284,13 @@ async function saveManualResult(teamMatchId, gameId) {
     }
 }
 
-async function saveWalkover(teamMatchId, gameId, winnerTeam) {
+async function saveWalkover(teamMatchId, gameId) {
+    const winnerRadio = document.querySelector(`input[name="manualWinner_${gameId}"]:checked`);
+    if (!winnerRadio) {
+        alert('Vælg venligst en vinder.');
+        return;
+    }
+    const winnerTeam = parseInt(winnerRadio.value);
     try {
         await api.updateTeamMatchGame(teamMatchId, gameId, {
             status: 'finished',
