@@ -844,7 +844,7 @@ async function loadActiveHoldkamp() {
             createForm.style.display = 'none';
             // Don't re-render while an edit form is open — it would clear the user's input
             if (!holdkampEditOpen) {
-                renderActiveHoldkamp(teamMatch, container, allGameStates, courtCount);
+                renderActiveHoldkamp(teamMatch, container, allGameStates, courtCount, settings.defaultGameMode || '21');
             }
             // Polling may have been stopped when there was no active match; restart it.
             if (!holdkampRefreshTimer) {
@@ -860,7 +860,7 @@ async function loadActiveHoldkamp() {
     }
 }
 
-function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCount = 5) {
+function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCount = 5, gameMode = '21') {
     const team1Wins = teamMatch.games.filter(g => g.winner_team === 1).length;
     const team2Wins = teamMatch.games.filter(g => g.winner_team === 2).length;
 
@@ -969,11 +969,11 @@ function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCou
                     <div style="display:flex;align-items:center;gap:8px;">
                         <span style="color:#666;font-size:0.8em;width:38px;flex-shrink:0;">Sæt ${s}${s===3?' *':''}</span>
                         <input id="manualS${s}t1_${g.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="–"
-                               oninput="this.value=this.value.replace(/[^0-9]/g,'')"
+                               oninput="this.value=this.value.replace(/[^0-9]/g,''); determineHoldkampWinner(${g.id}, '${gameMode}')"
                                style="width:52px;padding:6px;background:var(--color-bg-dark);color:#4CAF50;border:1px solid #555;border-radius:4px;text-align:center;font-size:0.95em;">
                         <span style="color:#555;font-size:1em;">–</span>
                         <input id="manualS${s}t2_${g.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="–"
-                               oninput="this.value=this.value.replace(/[^0-9]/g,'')"
+                               oninput="this.value=this.value.replace(/[^0-9]/g,''); determineHoldkampWinner(${g.id}, '${gameMode}')"
                                style="width:52px;padding:6px;background:var(--color-bg-dark);color:var(--color-accent);border:1px solid #555;border-radius:4px;text-align:center;font-size:0.95em;">
                     </div>`).join('')}
                 </div>
@@ -1222,6 +1222,34 @@ function toggleManualResult(teamMatchId, gameId) {
     if (editForm) editForm.style.display = 'none';
     form.style.display = opening ? 'block' : 'none';
     holdkampEditOpen = opening;
+}
+
+function determineHoldkampWinner(gameId, gameMode) {
+    const winTarget = gameMode === '15' ? 15 : 21;
+    const cap = gameMode === '15' ? 21 : 30;
+
+    function setWinner(t1, t2) {
+        const a = parseInt(t1), b = parseInt(t2);
+        if (isNaN(a) || isNaN(b)) return null;
+        if (Math.max(a, b) >= cap) return a > b ? 1 : 2;
+        if (Math.max(a, b) >= winTarget && Math.abs(a - b) >= 2) return a > b ? 1 : 2;
+        return null;
+    }
+
+    let t1Sets = 0, t2Sets = 0;
+    for (let s = 1; s <= 3; s++) {
+        const t1 = document.getElementById(`manualS${s}t1_${gameId}`)?.value.trim() || '';
+        const t2 = document.getElementById(`manualS${s}t2_${gameId}`)?.value.trim() || '';
+        const w = setWinner(t1, t2);
+        if (w === 1) t1Sets++;
+        else if (w === 2) t2Sets++;
+    }
+
+    const winner = t1Sets >= 2 ? 1 : t2Sets >= 2 ? 2 : null;
+    if (winner !== null) {
+        const radio = document.querySelector(`input[name="manualWinner_${gameId}"][value="${winner}"]`);
+        if (radio) radio.checked = true;
+    }
 }
 
 async function saveManualResult(teamMatchId, gameId) {
