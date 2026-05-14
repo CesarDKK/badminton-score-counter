@@ -1089,7 +1089,7 @@ async function startHoldkamp() {
     const team2Name = document.getElementById('holdkampTeam2Name').value.trim();
 
     if (!format || !team1Name || !team2Name) {
-        alert('Udfyld venligst holdnavne og vælg format.');
+        showMessage('Mangler oplysninger', 'Udfyld venligst holdnavne og vælg format.');
         return;
     }
 
@@ -1118,7 +1118,7 @@ async function startHoldkamp() {
         await loadActiveHoldkamp();
     } catch (error) {
         console.error('Failed to create holdkamp:', error);
-        alert('Kunne ikke oprette holdkamp. Prøv igen.');
+        showMessage('Fejl', 'Kunne ikke oprette holdkamp. Prøv igen.');
     }
 }
 
@@ -1127,7 +1127,7 @@ async function assignCourtToGame(teamMatchId, gameId) {
     const courtNumber = parseInt(select?.value);
     if (!courtNumber) return;
     if (select?.options[select.selectedIndex]?.disabled) {
-        alert('Denne bane er allerede i brug. Vælg en ledig bane.');
+        showMessage('Bane optaget', 'Denne bane er allerede i brug. Vælg en ledig bane.');
         return;
     }
     try {
@@ -1181,7 +1181,7 @@ async function assignCourtToGame(teamMatchId, gameId) {
         await loadActiveHoldkamp();
     } catch (error) {
         console.error('Failed to assign court:', error);
-        alert('Kunne ikke tildele bane. Prøv igen.');
+        showMessage('Fejl', 'Kunne ikke tildele bane. Prøv igen.');
     }
 }
 
@@ -1211,7 +1211,7 @@ async function saveEditGame(teamMatchId, gameId, isDoubles) {
         await loadActiveHoldkamp();
     } catch (error) {
         console.error('Failed to save game edit:', error);
-        alert('Kunne ikke gemme ændringerne. Prøv igen.');
+        showMessage('Fejl', 'Kunne ikke gemme ændringerne. Prøv igen.');
     }
 }
 
@@ -1267,7 +1267,7 @@ function toggleWO(gameId) {
 async function saveManualResult(teamMatchId, gameId, gameMode = '21') {
     const winnerRadio = document.querySelector(`input[name="manualWinner_${gameId}"]:checked`);
     if (!winnerRadio) {
-        alert('Vælg venligst en vinder.');
+        showMessage('Mangler vinder', 'Vælg venligst en vinder.');
         return;
     }
     const winnerTeam = parseInt(winnerRadio.value);
@@ -1287,7 +1287,7 @@ async function saveManualResult(teamMatchId, gameId, gameMode = '21') {
         });
 
         if (!sets[0] || !sets[1]) {
-            alert('Udfyld venligst sætscore for sæt 1 og 2.');
+            showMessage('Mangler sætscore', 'Udfyld venligst sætscore for sæt 1 og 2.');
             return;
         }
 
@@ -1303,7 +1303,7 @@ async function saveManualResult(teamMatchId, gameId, gameMode = '21') {
         const w2 = getSetWinner(sets[1]);
         if ((w1 === 1 && w2 === 2) || (w1 === 2 && w2 === 1)) {
             if (!sets[2]) {
-                alert('Sæt 3 er påkrævet når sætstillingen er 1-1.');
+                showMessage('Mangler sætscore', 'Sæt 3 er påkrævet når sætstillingen er 1-1.');
                 return;
             }
         }
@@ -1321,7 +1321,7 @@ async function saveManualResult(teamMatchId, gameId, gameMode = '21') {
         await loadActiveHoldkamp();
     } catch (error) {
         console.error('Failed to save manual result:', error);
-        alert('Kunne ikke gemme resultatet. Prøv igen.');
+        showMessage('Fejl', 'Kunne ikke gemme resultatet. Prøv igen.');
     }
 }
 
@@ -2244,7 +2244,7 @@ async function bpCreate() {
     const team2Name = document.getElementById('bp_team2').value.trim();
 
     if (!team1Name || !team2Name) {
-        alert('Udfyld venligst begge holdnavne.');
+        showMessage('Mangler oplysninger', 'Udfyld venligst begge holdnavne.');
         return;
     }
 
@@ -2268,7 +2268,7 @@ async function bpCreate() {
         // Reload active holdkamp view
         await loadActiveHoldkamp();
     } catch (err) {
-        alert('Kunne ikke oprette holdkamp: ' + err.message);
+        showMessage('Fejl', 'Kunne ikke oprette holdkamp: ' + err.message);
     }
 }
 
