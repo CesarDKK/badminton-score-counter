@@ -141,6 +141,12 @@ tr.eliminated td { color: var(--muted); }
   width: 48px;
   text-align: center;
   font-weight: 600;
+  -moz-appearance: textfield;
+}
+.score-input::-webkit-outer-spin-button,
+.score-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .match-row {

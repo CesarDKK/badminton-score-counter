@@ -320,8 +320,14 @@
     }
   }
 
+  function isEditingScore() {
+    const el = document.activeElement;
+    return !!(el && el.classList && el.classList.contains('score-input'));
+  }
+
   async function refreshDetail(opts) {
     const silent = opts && opts.silent;
+    if (silent && isEditingScore()) return;
     const id = state.currentTournamentId;
     try {
       const [detail, standings, cups] = await Promise.all([
