@@ -696,12 +696,28 @@ input[type=number].score-input,
 .match-team .score {
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 22px;
+  font-size: clamp(22px, 3.6vw, 44px);
   color: var(--text-strong);
   letter-spacing: 0.04em;
-  min-width: 28px;
+  min-width: 32px;
   text-align: right;
   flex-shrink: 0;
+  line-height: 1;
+}
+
+@media (min-width: 720px) {
+  .match { padding: var(--sp-4) var(--sp-5); gap: var(--sp-3); }
+  .match-team { gap: var(--sp-4); }
+  .match-team .name { font-size: 17px; }
+  .match-team .score { min-width: 48px; }
+  .match-team .team-logo { width: 36px; height: 36px; font-size: 16px; }
+}
+
+@media (min-width: 1024px) {
+  .match-team .name { font-size: 18px; }
+  .match-team .score { min-width: 56px; }
+  .match-team .team-logo { width: 40px; height: 40px; font-size: 17px; }
+  .score-input { width: 72px; height: 56px; font-size: 28px; }
 }
 .match-team.winner .name { color: var(--text-strong); font-weight: 600; }
 .match-team.loser .name { color: var(--text-muted); }
