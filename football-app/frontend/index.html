@@ -2,44 +2,52 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0e14" />
   <title>Football Tournament</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <header class="app-header">
-    <h1>⚽ Football Tournament</h1>
-    <nav>
-      <a href="/login.html" class="btn secondary small">Admin</a>
-    </nav>
-  </header>
-
-  <main class="container">
-    <div id="view-list">
-      <h2>Tournaments</h2>
-      <div id="tournamentList" class="tournament-list">
-        <p class="muted">Loading…</p>
+  <div class="shell">
+    <header class="app-header">
+      <div class="app-header-inner">
+        <a href="/" class="brand-mark" style="text-decoration: none; color: inherit;">
+          <div class="brand-glyph">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 2 L14.5 9 L22 9 L16 13.5 L18.5 21 L12 16.5 L5.5 21 L8 13.5 L2 9 L9.5 9 Z"/>
+            </svg>
+          </div>
+          <div class="brand-title" id="brandTitle">Football</div>
+        </a>
+        <div class="app-header-actions">
+          <button class="btn-icon btn-ghost hidden" id="backToListBtn" data-back="list" aria-label="Back">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+          </button>
+          <a href="/login.html" class="btn-ghost btn-sm">Admin</a>
+        </div>
       </div>
-    </div>
+    </header>
 
-    <div id="view-detail" class="hidden">
-      <div class="row spread">
-        <h2 id="detail-title"></h2>
-        <button class="btn secondary hidden" id="backToListBtn" data-back="list">← Back to list</button>
-      </div>
-      <div id="detail-status" class="badge"></div>
-
-      <div class="card">
-        <h3 class="section-title">Pool standings</h3>
-        <div id="detail-pools"></div>
+    <main class="container">
+      <div id="view-list">
+        <div class="eyebrow fade-in" style="margin-bottom: var(--sp-2);">Live tournaments</div>
+        <h2 class="display-lg fade-in" style="margin: 0 0 var(--sp-5);">Tournaments</h2>
+        <div id="tournamentList" class="tournament-list"></div>
       </div>
 
-      <div class="card" id="cups-card">
-        <h3 class="section-title">Cups</h3>
-        <div id="detail-cups"></div>
+      <div id="view-detail" class="hidden">
+        <div id="tournament-hero" class="tournament-hero fade-in"></div>
+        <div id="detail-pools" class="fade-in"></div>
+        <div id="detail-cups-section" class="hidden">
+          <div class="eyebrow" style="margin: var(--sp-7) 0 var(--sp-3);">Cup stage</div>
+          <div id="detail-cups"></div>
+        </div>
       </div>
-    </div>
-  </main>
+    </main>
+  </div>
 
   <script src="/public.js"></script>
 </body>

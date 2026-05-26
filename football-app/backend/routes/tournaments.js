@@ -1,15 +1,39 @@
 const express = require('express');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const { pool, withTransaction } = require('../db');
 const { requireAdmin } = require('../middleware/auth');
 const { generateRoundRobin, computeStandings } = require('../utils/standings');
 const { buildBracketStructure, buildSeedsFromConfig } = require('../utils/bracket');
+
+const UPLOAD_DIR = process.env.UPLOAD_DIR || '/app/uploads';
+const LOGO_DIR = path.join(UPLOAD_DIR, 'logos');
+if (!fs.existsSync(LOGO_DIR)) fs.mkdirSync(LOGO_DIR, { recursive: true });
+
+const tournamentLogoUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, LOGO_DIR),
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase().replace(/[^a-z0-9.]/g, '') || '.png';
+      cb(null, `tournament_${req.params.id}_${Date.now()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!/^image\/(png|jpe?g|webp|svg\+xml|gif)$/.test(file.mimetype)) {
+      return cb(new Error('Only image files are allowed'));
+    }
+    cb(null, true);
+  },
+});
 
 const router = express.Router();
 
 router.get('/', async (req, res) => {
   try {
     const [rows] = await pool.query(
-      `SELECT id, name, status, num_pools, teams_per_pool, created_at
+      `SELECT id, name, logo_path, status, num_pools, teams_per_pool, created_at
          FROM tournaments
         ORDER BY created_at DESC`
     );
@@ -255,6 +279,40 @@ router.get('/:id/cups', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('cups', err);
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+router.post('/:id/logo', requireAdmin, tournamentLogoUpload.single('logo'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  try {
+    const [[existing]] = await pool.query('SELECT logo_path FROM tournaments WHERE id = ?', [id]);
+    if (existing && existing.logo_path) {
+      const oldPath = path.join(UPLOAD_DIR, existing.logo_path);
+      fs.promises.unlink(oldPath).catch(() => {});
+    }
+    const relPath = `logos/${req.file.filename}`;
+    await pool.query('UPDATE tournaments SET logo_path = ? WHERE id = ?', [relPath, id]);
+    res.json({ ok: true, logo_path: relPath });
+  } catch (err) {
+    console.error('upload tournament logo', err);
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+router.delete('/:id/logo', requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  try {
+    const [[existing]] = await pool.query('SELECT logo_path FROM tournaments WHERE id = ?', [id]);
+    if (existing && existing.logo_path) {
+      const oldPath = path.join(UPLOAD_DIR, existing.logo_path);
+      fs.promises.unlink(oldPath).catch(() => {});
+    }
+    await pool.query('UPDATE tournaments SET logo_path = NULL WHERE id = ?', [id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('delete tournament logo', err);
     res.status(500).json({ error: 'Internal error' });
   }
 });

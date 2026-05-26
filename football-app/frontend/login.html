@@ -2,22 +2,36 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0e14" />
   <title>Admin Login — Football Tournament</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <div class="login-page">
-    <form id="loginForm" class="login-card">
-      <h1>Admin Login</h1>
-      <div id="errorBox" class="error-msg hidden"></div>
+    <form id="loginForm" class="login-card fade-in">
+      <div class="login-brand">
+        <div class="symbol">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 2 L14.5 9 L22 9 L16 13.5 L18.5 21 L12 16.5 L5.5 21 L8 13.5 L2 9 L9.5 9 Z"/>
+          </svg>
+        </div>
+        <h1>Admin</h1>
+        <div class="eyebrow" style="margin-top: 4px;">Tournament Control</div>
+      </div>
+
+      <div id="errorBox" class="alert hidden"></div>
+
       <div class="field">
         <label for="password">Password</label>
         <input id="password" type="password" autocomplete="current-password" required />
       </div>
-      <button type="submit" class="btn">Sign in</button>
-      <p class="center muted" style="margin-top: 18px;">
-        <a href="/">← Back to public site</a>
+
+      <button type="submit" class="btn btn-block">Sign in</button>
+
+      <p class="center muted" style="margin-top: var(--sp-5); font-size: 13px;">
+        <a href="/" style="color: var(--text-muted);">← Back to public site</a>
       </p>
     </form>
   </div>

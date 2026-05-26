@@ -1,13 +1,17 @@
 (function () {
   const TOKEN_KEY = 'football_admin_token';
   const token = localStorage.getItem(TOKEN_KEY);
-  if (!token) {
-    window.location.href = '/login.html';
-    return;
-  }
+  if (!token) { window.location.href = '/login.html'; return; }
 
   const state = {
-    wizard: {
+    wizard: emptyWizard(),
+    pendingLogoFile: null,
+    currentTournamentId: null,
+    pollInterval: null,
+  };
+
+  function emptyWizard() {
+    return {
       step: 1,
       name: '',
       numPools: 2,
@@ -15,10 +19,8 @@
       pw: 3, pd: 1, pl: 0,
       pools: [],
       cups: [],
-    },
-    currentTournamentId: null,
-    pollInterval: null,
-  };
+    };
+  }
 
   function authHeaders(extra) {
     return Object.assign({ 'Authorization': 'Bearer ' + token }, extra || {});
@@ -49,79 +51,113 @@
       document.getElementById('view-' + v).classList.toggle('hidden', v !== view);
     });
     if (view !== 'detail') stopPolling();
-  }
-
-  function logoUrl(p) {
-    return p ? '/api/uploads/' + p : null;
-  }
-
-  function teamCell(team) {
-    const logo = team && team.logo_path
-      ? '<img class="team-logo" src="' + logoUrl(team.logo_path) + '" alt="" />'
-      : '<div class="team-logo"></div>';
-    const name = team ? escapeHtml(team.name) : '<span class="muted">TBD</span>';
-    return '<div class="team-cell">' + logo + '<span>' + name + '</span></div>';
+    if (view === 'list') document.getElementById('brandTitle').textContent = 'Admin';
   }
 
   function escapeHtml(s) {
-    return String(s || '').replace(/[&<>"']/g, (c) => ({
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     })[c]);
   }
 
-  /* ============= TOURNAMENT LIST ============= */
+  function logoUrl(p) { return p ? '/api/uploads/' + p : null; }
+
+  function initial(name) {
+    const trimmed = (name || '').trim();
+    return trimmed ? trimmed.charAt(0).toUpperCase() : '?';
+  }
+
+  function teamLogoHtml(team, size) {
+    const sizeClass = size === 'lg' ? ' lg' : '';
+    if (!team) return `<div class="team-logo${sizeClass}">?</div>`;
+    if (team.logo_path) {
+      return `<div class="team-logo${sizeClass}"><img src="${logoUrl(team.logo_path)}" alt="" /></div>`;
+    }
+    return `<div class="team-logo${sizeClass}">${escapeHtml(initial(team.name))}</div>`;
+  }
+
+  function tournamentLogoHtml(t) {
+    if (t && t.logo_path) {
+      return `<div class="logo"><img src="${logoUrl(t.logo_path)}" alt="" /></div>`;
+    }
+    return `<div class="logo"><span class="initial">${escapeHtml(initial(t && t.name))}</span></div>`;
+  }
+
+  function ordinal(n) {
+    const s = ['th','st','nd','rd'];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  }
+
+  /* ============= LIST ============= */
 
   async function loadList() {
     show('list');
     try {
       const list = await api('/api/tournaments');
-      const html = list.length === 0
-        ? '<p class="muted">No tournaments yet. Click "New tournament" to create one.</p>'
-        : list.map((t) => `
-          <div class="tournament-card" data-id="${t.id}">
-            <strong>${escapeHtml(t.name)}</strong>
-            <div class="muted" style="margin-top: 4px;">${t.num_pools} pools × ${t.teams_per_pool} teams</div>
-            <span class="status ${t.status}">${t.status.replace('_', ' ')}</span>
+      const container = document.getElementById('tournamentList');
+      if (list.length === 0) {
+        container.innerHTML = `
+          <div class="empty">
+            <div class="icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 2 L14.5 9 L22 9 L16 13.5 L18.5 21 L12 16.5 L5.5 21 L8 13.5 L2 9 L9.5 9 Z"/>
+              </svg>
+            </div>
+            <h3>No tournaments yet</h3>
+            <p>Tap "New tournament" to create your first one.</p>
+          </div>`;
+        return;
+      }
+      container.innerHTML = list.map((t, i) => `
+        <button class="tournament-card fade-in" data-id="${t.id}" style="animation-delay: ${i * 40}ms">
+          ${tournamentLogoHtml(t)}
+          <div class="info">
+            <div class="name">${escapeHtml(t.name)}</div>
+            <div class="meta">${t.num_pools} pools · ${t.teams_per_pool} teams per pool</div>
+            <span class="pill pill-${t.status}">${t.status.replace('_', ' ')}</span>
           </div>
-        `).join('');
-      document.getElementById('tournamentList').innerHTML = html;
-      document.querySelectorAll('.tournament-card').forEach((el) => {
+        </button>
+      `).join('');
+      container.querySelectorAll('.tournament-card').forEach((el) => {
         el.addEventListener('click', () => openTournament(parseInt(el.dataset.id, 10)));
       });
     } catch (err) {
       document.getElementById('tournamentList').innerHTML =
-        '<div class="error-msg">' + escapeHtml(err.message) + '</div>';
+        '<div class="alert">' + escapeHtml(err.message) + '</div>';
     }
   }
 
   /* ============= WIZARD ============= */
 
   function openWizard() {
-    state.wizard = {
-      step: 1, name: '', numPools: 2, teamsPerPool: 4,
-      pw: 3, pd: 1, pl: 0, pools: [], cups: [],
-    };
+    state.wizard = emptyWizard();
+    state.pendingLogoFile = null;
+    document.getElementById('wiz-logo-preview').classList.add('hidden');
+    document.getElementById('wiz-logo-preview').src = '';
+    document.getElementById('wiz-logo-placeholder').classList.remove('hidden');
     show('wizard');
     setWizStep(1);
-    document.getElementById('wiz-name').value = '';
-    document.getElementById('wiz-num-pools').value = 2;
-    document.getElementById('wiz-teams-per-pool').value = 4;
-    document.getElementById('wiz-pw').value = 3;
-    document.getElementById('wiz-pd').value = 1;
-    document.getElementById('wiz-pl').value = 0;
+    ['wiz-name', 'wiz-num-pools', 'wiz-teams-per-pool', 'wiz-pw', 'wiz-pd', 'wiz-pl'].forEach((id) => {
+      const defaults = { 'wiz-num-pools': 2, 'wiz-teams-per-pool': 4, 'wiz-pw': 3, 'wiz-pd': 1, 'wiz-pl': 0 };
+      const el = document.getElementById(id);
+      el.value = defaults[id] != null ? defaults[id] : '';
+    });
   }
 
   function setWizStep(n) {
     state.wizard.step = n;
-    [1,2,3,4].forEach((i) => {
+    [1, 2, 3, 4].forEach((i) => {
       document.getElementById('step-' + i).classList.toggle('hidden', i !== n);
-      const tab = document.querySelector('.wizard-step[data-step="' + i + '"]');
+      const tab = document.querySelector('.wizard-progress .step[data-step="' + i + '"]');
       tab.classList.toggle('active', i === n);
       tab.classList.toggle('done', i < n);
     });
     if (n === 2) buildPoolsStep();
     if (n === 3) buildCupsStep();
     if (n === 4) buildReviewStep();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function captureStep1() {
@@ -155,14 +191,10 @@
   function buildPoolsStep() {
     const container = document.getElementById('pools-builder');
     container.innerHTML = state.wizard.pools.map((p, pi) => `
-      <div class="card" style="margin: 0;">
-        <div class="row" style="margin-bottom: 8px;">
-          <input type="text" data-pool-name="${pi}" value="${escapeHtml(p.name)}" style="flex:1;" />
-        </div>
+      <div class="pool-builder-card">
+        <input type="text" class="pool-name-input" data-pool-name="${pi}" value="${escapeHtml(p.name)}" />
         ${p.teams.map((t, ti) => `
-          <div class="team-row">
-            <input type="text" data-team="${pi}-${ti}" placeholder="Team ${ti + 1}" value="${escapeHtml(t.name)}" />
-          </div>
+          <input type="text" class="team-input" data-team="${pi}-${ti}" placeholder="Team ${ti + 1}" value="${escapeHtml(t.name)}" />
         `).join('')}
       </div>
     `).join('');
@@ -184,13 +216,14 @@
     if (state.wizard.cups.length === 0) {
       const placements = [];
       for (let i = 1; i <= state.wizard.teamsPerPool; i += 1) placements.push(i);
+      const half = Math.ceil(placements.length / 2);
       state.wizard.cups = [
-        { name: 'Championship Cup', source_placements: placements.slice(0, Math.ceil(placements.length / 2)) },
+        { name: 'Championship Cup', source_placements: placements.slice(0, half) },
       ];
-      if (placements.length > Math.ceil(placements.length / 2)) {
+      if (placements.length > half) {
         state.wizard.cups.push({
           name: 'Plate Cup',
-          source_placements: placements.slice(Math.ceil(placements.length / 2)),
+          source_placements: placements.slice(half),
         });
       }
     }
@@ -203,20 +236,24 @@
     for (let i = 1; i <= state.wizard.teamsPerPool; i += 1) placements.push(i);
 
     container.innerHTML = state.wizard.cups.map((c, ci) => `
-      <div class="card" style="margin: 0 0 12px;">
-        <div class="row spread" style="margin-bottom: 8px;">
-          <input type="text" data-cup-name="${ci}" value="${escapeHtml(c.name)}" style="flex:1; max-width: 320px;" />
-          <button class="btn danger small" data-remove-cup="${ci}">Remove</button>
+      <div class="cup-builder-card">
+        <div class="row spread" style="margin-bottom: var(--sp-3);">
+          <input type="text" class="pool-name-input" style="margin: 0; flex: 1;" data-cup-name="${ci}" value="${escapeHtml(c.name)}" />
+          <button class="btn-icon btn-ghost" data-remove-cup="${ci}" style="color: var(--live);" aria-label="Remove">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+            </svg>
+          </button>
         </div>
-        <div class="muted" style="margin-bottom: 6px;">Pool placements feeding this cup:</div>
-        <div>
+        <div class="label">Pool placements feeding this cup</div>
+        <div class="placement-chips">
           ${placements.map((pl) => `
             <span class="placement-chip ${c.source_placements.includes(pl) ? 'selected' : ''}"
-                  data-toggle-placement="${ci}-${pl}">${ordinal(pl)} place</span>
+                  data-toggle-placement="${ci}-${pl}">${ordinal(pl)}</span>
           `).join('')}
         </div>
-        <div class="muted" style="margin-top: 8px; font-size: .85rem;">
-          ${c.source_placements.length * state.wizard.numPools} teams will enter this cup.
+        <div class="muted" style="margin-top: var(--sp-3); font-size: 13px;">
+          ${c.source_placements.length * state.wizard.numPools} teams will enter this cup
         </div>
       </div>
     `).join('');
@@ -245,30 +282,23 @@
     });
   }
 
-  function ordinal(n) {
-    const s = ['th','st','nd','rd'];
-    const v = n % 100;
-    return n + (s[(v - 20) % 10] || s[v] || s[0]);
-  }
-
   function buildReviewStep() {
     const w = state.wizard;
     const totalTeams = w.numPools * w.teamsPerPool;
     document.getElementById('review-summary').innerHTML = `
-      <p><strong>${escapeHtml(w.name)}</strong></p>
-      <p>${w.numPools} pools × ${w.teamsPerPool} teams = ${totalTeams} teams total</p>
-      <p>Scoring: ${w.pw} / ${w.pd} / ${w.pl} (Win / Draw / Loss)</p>
+      <p><strong>${escapeHtml(w.name)}</strong> · ${w.numPools} pools × ${w.teamsPerPool} teams (${totalTeams} total)</p>
+      <p class="muted" style="font-size: 13px;">Scoring: ${w.pw} / ${w.pd} / ${w.pl} (Win / Draw / Loss)</p>
       <h4>Pools</h4>
       <ul>
         ${w.pools.map((p) => `
-          <li><strong>${escapeHtml(p.name)}</strong>: ${p.teams.map((t) => escapeHtml(t.name || '(unnamed)')).join(', ')}</li>
+          <li><strong>${escapeHtml(p.name)}</strong> — ${p.teams.map((t) => escapeHtml(t.name || '(unnamed)')).join(', ')}</li>
         `).join('')}
       </ul>
       <h4>Cups</h4>
       ${w.cups.length === 0 ? '<p class="muted">No cups configured.</p>' : `
         <ul>
           ${w.cups.map((c) => `
-            <li><strong>${escapeHtml(c.name)}</strong> — placements: ${c.source_placements.map(ordinal).join(', ')} → ${c.source_placements.length * w.numPools} teams</li>
+            <li><strong>${escapeHtml(c.name)}</strong> — placements ${c.source_placements.map(ordinal).join(', ')} → ${c.source_placements.length * w.numPools} teams</li>
           `).join('')}
         </ul>
       `}
@@ -280,9 +310,7 @@
     const payload = {
       name: w.name,
       num_pools: w.numPools,
-      points_win: w.pw,
-      points_draw: w.pd,
-      points_loss: w.pl,
+      points_win: w.pw, points_draw: w.pd, points_loss: w.pl,
       pools: w.pools.map((p) => ({
         name: p.name,
         teams: p.teams.map((t) => ({ name: t.name || 'Team' })),
@@ -293,6 +321,16 @@
     errBox.classList.add('hidden');
     try {
       const result = await api('/api/tournaments', { method: 'POST', body: payload });
+      if (state.pendingLogoFile) {
+        const fd = new FormData();
+        fd.append('logo', state.pendingLogoFile);
+        try {
+          await api('/api/tournaments/' + result.id + '/logo', { method: 'POST', body: fd });
+        } catch (uploadErr) {
+          console.error('Logo upload failed:', uploadErr);
+        }
+      }
+      state.pendingLogoFile = null;
       openTournament(result.id);
     } catch (err) {
       errBox.textContent = err.message;
@@ -300,7 +338,7 @@
     }
   }
 
-  /* ============= TOURNAMENT DETAIL ============= */
+  /* ============= DETAIL ============= */
 
   async function openTournament(id) {
     state.currentTournamentId = id;
@@ -314,10 +352,7 @@
     state.pollInterval = setInterval(() => refreshDetail({ silent: true }), 5000);
   }
   function stopPolling() {
-    if (state.pollInterval) {
-      clearInterval(state.pollInterval);
-      state.pollInterval = null;
-    }
+    if (state.pollInterval) { clearInterval(state.pollInterval); state.pollInterval = null; }
   }
 
   function isEditingScore() {
@@ -335,9 +370,7 @@
         api('/api/tournaments/' + id + '/standings'),
         api('/api/tournaments/' + id + '/cups'),
       ]);
-      document.getElementById('detail-title').textContent = detail.tournament.name;
-      const status = document.getElementById('detail-status');
-      status.textContent = 'Status: ' + detail.tournament.status.replace('_', ' ');
+      renderHero(detail.tournament);
       renderPoolsDetail(detail, standings);
       renderCupsDetail(cups);
     } catch (err) {
@@ -345,94 +378,140 @@
     }
   }
 
+  function renderHero(t) {
+    const hero = document.getElementById('detail-hero');
+    hero.innerHTML = `
+      <label class="logo-upload" style="width: 72px; height: 72px;" for="hero-logo-input" title="Upload tournament logo">
+        ${t.logo_path
+          ? `<img src="${logoUrl(t.logo_path)}" alt="" />`
+          : `<div class="placeholder">
+               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+                 <rect x="3" y="3" width="18" height="18" rx="2"/>
+                 <circle cx="8.5" cy="8.5" r="1.5"/>
+                 <path d="M21 15l-5-5L5 21"/>
+               </svg>
+             </div>`}
+        <input type="file" id="hero-logo-input" accept="image/*" />
+      </label>
+      <div class="info">
+        <h1 class="name">${escapeHtml(t.name)}</h1>
+        <span class="pill pill-${t.status}">${t.status.replace('_', ' ')}</span>
+      </div>
+    `;
+    document.getElementById('brandTitle').textContent = t.name;
+    const input = document.getElementById('hero-logo-input');
+    input.addEventListener('change', async () => {
+      if (!input.files || input.files.length === 0) return;
+      const fd = new FormData();
+      fd.append('logo', input.files[0]);
+      try {
+        await api('/api/tournaments/' + state.currentTournamentId + '/logo', { method: 'POST', body: fd });
+        refreshDetail();
+      } catch (err) {
+        alert('Upload failed: ' + err.message);
+      }
+    });
+  }
+
   function renderPoolsDetail(detail, standingsData) {
     const container = document.getElementById('detail-pools');
-    container.innerHTML = standingsData.map((s) => {
-      const teamsById = new Map((detail.teams.filter((t) => t.pool_id === s.pool.id)).map((t) => [t.id, t]));
-      return `
-        <div style="margin-bottom: 24px;">
-          <h4>${escapeHtml(s.pool.name)} ${s.all_played ? '<span class="badge">Completed</span>' : ''}</h4>
-          <table>
-            <thead><tr>
-              <th>#</th><th>Team</th><th>P</th><th>W</th><th>D</th><th>L</th>
-              <th>GF</th><th>GA</th><th>GD</th><th>Pts</th><th></th>
-            </tr></thead>
-            <tbody>
+    container.innerHTML = `
+      <div class="eyebrow" style="margin-bottom: var(--sp-3);">Pool stage</div>
+      ${standingsData.map((s) => {
+        const teamsById = new Map(detail.teams.filter((t) => t.pool_id === s.pool.id).map((t) => [t.id, t]));
+        return `
+          <div class="pool-block">
+            <div class="pool-head">
+              <div class="pool-name">${escapeHtml(s.pool.name)}</div>
+              ${s.all_played ? '<span class="pill pill-completed">Completed</span>' : ''}
+            </div>
+            <div class="standings">
               ${s.standings.map((r) => {
                 const team = teamsById.get(r.team_id);
                 return `
-                  <tr>
-                    <td>${r.position}</td>
-                    <td>${teamCell(team)}</td>
-                    <td>${r.played}</td>
-                    <td>${r.wins}</td>
-                    <td>${r.draws}</td>
-                    <td>${r.losses}</td>
-                    <td>${r.goals_for}</td>
-                    <td>${r.goals_against}</td>
-                    <td>${r.goal_diff > 0 ? '+' + r.goal_diff : r.goal_diff}</td>
-                    <td><strong>${r.points}</strong></td>
-                    <td>
-                      <label class="btn secondary small" style="cursor: pointer;">
-                        Logo<input type="file" accept="image/*" data-upload="${r.team_id}" style="display: none;" />
+                  <div class="standing-row">
+                    <div class="pos">${r.position}</div>
+                    <div class="team">
+                      <label class="logo-upload" style="width: 28px; height: 28px; border-radius: var(--r-sm); border-style: solid;" for="team-logo-${r.team_id}" title="Upload team logo">
+                        ${teamLogoBareHtml(team)}
+                        <input type="file" id="team-logo-${r.team_id}" accept="image/*" data-team-upload="${r.team_id}" />
                       </label>
-                    </td>
-                  </tr>
+                      <span class="team-name">${escapeHtml(team ? team.name : '')}</span>
+                    </div>
+                    <div class="stats">P${r.played}·W${r.wins}·D${r.draws}·L${r.losses}·GD ${r.goal_diff > 0 ? '+' + r.goal_diff : r.goal_diff}</div>
+                    <div class="pts">${r.points}</div>
+                  </div>
                 `;
               }).join('')}
-            </tbody>
-          </table>
-          <div style="margin-top: 10px;">
-            <h5 class="muted">Matches</h5>
-            ${s.matches.map((m) => renderMatchRow(m, teamsById, 'pool')).join('')}
+            </div>
+            <div class="match-list">
+              ${s.matches.map((m) => renderEditableMatch(m, teamsById, 'pool')).join('')}
+            </div>
           </div>
-        </div>
-      `;
-    }).join('');
+        `;
+      }).join('')}
+    `;
 
-    container.querySelectorAll('input[type="file"][data-upload]').forEach((el) => {
+    container.querySelectorAll('input[type="file"][data-team-upload]').forEach((el) => {
       el.addEventListener('change', async () => {
         if (!el.files || el.files.length === 0) return;
-        const file = el.files[0];
         const fd = new FormData();
-        fd.append('logo', file);
+        fd.append('logo', el.files[0]);
         try {
-          await api('/api/teams/' + el.dataset.upload + '/logo', { method: 'POST', body: fd });
+          await api('/api/teams/' + el.dataset.teamUpload + '/logo', { method: 'POST', body: fd });
           refreshDetail();
         } catch (err) {
           alert('Upload failed: ' + err.message);
         }
       });
     });
+    wireMatchActions(container);
+  }
 
+  function teamLogoBareHtml(team) {
+    if (!team) return '<div class="team-logo" style="width:100%; height:100%; border: none;">?</div>';
+    if (team.logo_path) return `<img src="${logoUrl(team.logo_path)}" alt="" />`;
+    return `<div style="display:grid; place-items:center; width:100%; height:100%; font-family: var(--font-display); font-size: 14px; color: var(--text-muted);">${escapeHtml(initial(team.name))}</div>`;
+  }
+
+  function renderEditableMatch(m, teamsById, type) {
+    const home = teamsById ? teamsById.get(m.home_team_id) : m.home_team;
+    const away = teamsById ? teamsById.get(m.away_team_id) : m.away_team;
+    const homeScore = m.home_score == null ? '' : m.home_score;
+    const awayScore = m.away_score == null ? '' : m.away_score;
+    const enabled = home && away;
+    return `
+      <div class="match editable ${m.played ? 'played' : ''}">
+        <div class="side home">
+          <span class="name">${escapeHtml(home ? home.name : '')}</span>
+          ${teamLogoHtml(home)}
+        </div>
+        <div class="center">
+          <div class="score-input-group">
+            <input type="number" min="0" inputmode="numeric" class="score-input" data-input-home="${type}-${m.id}" value="${homeScore}" ${enabled ? '' : 'disabled'} />
+            <span class="sep">·</span>
+            <input type="number" min="0" inputmode="numeric" class="score-input" data-input-away="${type}-${m.id}" value="${awayScore}" ${enabled ? '' : 'disabled'} />
+          </div>
+        </div>
+        <div class="side away">
+          ${teamLogoHtml(away)}
+          <span class="name">${escapeHtml(away ? away.name : '')}</span>
+        </div>
+        <div class="actions">
+          <button class="btn btn-sm" data-save-match="${m.id}" data-match-type="${type}" ${enabled ? '' : 'disabled'}>Save</button>
+          ${m.played ? `<button class="btn btn-secondary btn-sm" data-clear-match="${m.id}" data-match-type="${type}">Clear</button>` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  function wireMatchActions(container) {
     container.querySelectorAll('[data-save-match]').forEach((btn) => {
       btn.addEventListener('click', () => saveMatch(btn.dataset.saveMatch, btn.dataset.matchType));
     });
     container.querySelectorAll('[data-clear-match]').forEach((btn) => {
       btn.addEventListener('click', () => clearMatch(btn.dataset.clearMatch, btn.dataset.matchType));
     });
-  }
-
-  function renderMatchRow(m, teamsById, type) {
-    const home = teamsById.get ? teamsById.get(m.home_team_id) : m.home_team;
-    const away = teamsById.get ? teamsById.get(m.away_team_id) : m.away_team;
-    const homeScore = m.home_score == null ? '' : m.home_score;
-    const awayScore = m.away_score == null ? '' : m.away_score;
-    return `
-      <div class="match-row ${m.played ? 'played' : ''}">
-        <div class="home">${teamCell(home)}</div>
-        <div class="scores">
-          <input type="number" min="0" class="score-input" data-input-home="${type}-${m.id}" value="${homeScore}" ${home ? '' : 'disabled'} />
-          <span>–</span>
-          <input type="number" min="0" class="score-input" data-input-away="${type}-${m.id}" value="${awayScore}" ${away ? '' : 'disabled'} />
-        </div>
-        <div class="away">${teamCell(away)}</div>
-        <div>
-          <button class="btn small" data-save-match="${m.id}" data-match-type="${type}" ${(home && away) ? '' : 'disabled'}>Save</button>
-          ${m.played ? `<button class="btn secondary small" data-clear-match="${m.id}" data-match-type="${type}">Clear</button>` : ''}
-        </div>
-      </div>
-    `;
   }
 
   async function saveMatch(matchId, type) {
@@ -464,34 +543,55 @@
   }
 
   function renderCupsDetail(cupsData) {
+    const section = document.getElementById('detail-cups-section');
     const container = document.getElementById('detail-cups');
-    if (cupsData.length === 0) {
-      container.innerHTML = '<p class="muted">No cups configured for this tournament.</p>';
-      return;
-    }
+    if (!cupsData || cupsData.length === 0) { section.classList.add('hidden'); return; }
+    section.classList.remove('hidden');
     container.innerHTML = cupsData.map((c) => {
       const rounds = groupByRound(c.matches);
       return `
-        <div style="margin-bottom: 24px;">
-          <h4>${escapeHtml(c.cup.name)}</h4>
+        <div class="cup-block">
+          <div class="cup-name">${escapeHtml(c.cup.name)}</div>
           <div class="bracket">
             ${rounds.map((round, ri) => `
               <div class="bracket-round">
-                <h4>${roundName(ri, rounds.length)}</h4>
-                ${round.map((m) => renderBracketMatch(m, true)).join('')}
+                <div class="bracket-round-name">${roundName(ri, rounds.length)}</div>
+                ${round.map((m) => renderEditableBracketMatch(m)).join('')}
               </div>
             `).join('')}
           </div>
         </div>
       `;
     }).join('');
+    wireMatchActions(container);
+  }
 
-    container.querySelectorAll('[data-save-match]').forEach((btn) => {
-      btn.addEventListener('click', () => saveMatch(btn.dataset.saveMatch, btn.dataset.matchType));
-    });
-    container.querySelectorAll('[data-clear-match]').forEach((btn) => {
-      btn.addEventListener('click', () => clearMatch(btn.dataset.clearMatch, btn.dataset.matchType));
-    });
+  function renderEditableBracketMatch(m) {
+    const hWin = m.played && m.home_score > m.away_score;
+    const aWin = m.played && m.away_score > m.home_score;
+    const home = m.home_team || null;
+    const away = m.away_team || null;
+    const homeCls = m.played ? (hWin ? 'winner' : 'loser') : '';
+    const awayCls = m.played ? (aWin ? 'winner' : 'loser') : '';
+    const enabled = home && away;
+    return `
+      <div class="bracket-match ${m.played ? 'played' : ''}">
+        <div class="bracket-team ${homeCls}">
+          ${teamLogoHtml(home)}
+          <span class="name">${home ? escapeHtml(home.name) : '<span class="dim">TBD</span>'}</span>
+          <input type="number" min="0" inputmode="numeric" class="score-input" style="width: 44px; height: 36px; font-size: 16px;" data-input-home="cup-${m.id}" value="${m.home_score == null ? '' : m.home_score}" ${enabled ? '' : 'disabled'} />
+        </div>
+        <div class="bracket-team ${awayCls}">
+          ${teamLogoHtml(away)}
+          <span class="name">${away ? escapeHtml(away.name) : '<span class="dim">TBD</span>'}</span>
+          <input type="number" min="0" inputmode="numeric" class="score-input" style="width: 44px; height: 36px; font-size: 16px;" data-input-away="cup-${m.id}" value="${m.away_score == null ? '' : m.away_score}" ${enabled ? '' : 'disabled'} />
+        </div>
+        <div class="bracket-actions">
+          <button class="btn btn-sm" data-save-match="${m.id}" data-match-type="cup" ${enabled ? '' : 'disabled'}>Save</button>
+          ${m.played ? `<button class="btn btn-secondary btn-sm" data-clear-match="${m.id}" data-match-type="cup">Clear</button>` : ''}
+        </div>
+      </div>
+    `;
   }
 
   function groupByRound(matches) {
@@ -510,38 +610,6 @@
     if (remaining === 2) return 'Semifinal';
     if (remaining === 3) return 'Quarterfinal';
     return 'Round ' + (idx + 1);
-  }
-
-  function renderBracketMatch(m, editable) {
-    const hWin = m.played && m.home_score > m.away_score;
-    const aWin = m.played && m.away_score > m.home_score;
-    const home = m.home_team || null;
-    const away = m.away_team || null;
-    const enabled = home && away;
-    return `
-      <div class="bracket-match ${m.played ? 'played' : ''}">
-        <div class="bracket-team ${hWin ? 'winner' : ''}">
-          ${home && home.logo_path ? `<img class="team-logo" src="${logoUrl(home.logo_path)}" alt=""/>` : '<div class="team-logo"></div>'}
-          <span class="name">${home ? escapeHtml(home.name) : '<span class="muted">TBD</span>'}</span>
-          ${editable
-            ? `<input type="number" min="0" class="score-input" data-input-home="cup-${m.id}" value="${m.home_score == null ? '' : m.home_score}" ${enabled ? '' : 'disabled'} />`
-            : `<span class="score">${m.home_score == null ? '' : m.home_score}</span>`}
-        </div>
-        <div class="bracket-team ${aWin ? 'winner' : ''}">
-          ${away && away.logo_path ? `<img class="team-logo" src="${logoUrl(away.logo_path)}" alt=""/>` : '<div class="team-logo"></div>'}
-          <span class="name">${away ? escapeHtml(away.name) : '<span class="muted">TBD</span>'}</span>
-          ${editable
-            ? `<input type="number" min="0" class="score-input" data-input-away="cup-${m.id}" value="${m.away_score == null ? '' : m.away_score}" ${enabled ? '' : 'disabled'} />`
-            : `<span class="score">${m.away_score == null ? '' : m.away_score}</span>`}
-        </div>
-        ${editable ? `
-          <div class="row" style="justify-content: flex-end; margin-top: 4px;">
-            <button class="btn small" data-save-match="${m.id}" data-match-type="cup" ${enabled ? '' : 'disabled'}>Save</button>
-            ${m.played ? `<button class="btn secondary small" data-clear-match="${m.id}" data-match-type="cup">Clear</button>` : ''}
-          </div>
-        ` : ''}
-      </div>
-    `;
   }
 
   /* ============= INIT ============= */
@@ -565,8 +633,17 @@
     });
   });
   document.querySelectorAll('[data-prev]').forEach((el) => {
+    el.addEventListener('click', () => setWizStep(parseInt(el.dataset.prev, 10)));
+  });
+
+  document.querySelectorAll('[data-step-delta]').forEach((el) => {
     el.addEventListener('click', () => {
-      setWizStep(parseInt(el.dataset.prev, 10));
+      const delta = parseInt(el.dataset.stepDelta, 10);
+      const input = document.getElementById(el.dataset.stepTarget);
+      const min = parseInt(input.min || '1', 10);
+      const max = parseInt(input.max || '99', 10);
+      const cur = parseInt(input.value, 10) || 0;
+      input.value = Math.min(max, Math.max(min, cur + delta));
     });
   });
 
@@ -585,6 +662,23 @@
     } catch (err) {
       alert('Delete failed: ' + err.message);
     }
+  });
+
+  // Wizard logo preview
+  const logoInput = document.getElementById('wiz-logo-input');
+  logoInput.addEventListener('change', () => {
+    if (!logoInput.files || logoInput.files.length === 0) return;
+    const file = logoInput.files[0];
+    state.pendingLogoFile = file;
+    const preview = document.getElementById('wiz-logo-preview');
+    const placeholder = document.getElementById('wiz-logo-placeholder');
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      preview.src = e.target.result;
+      preview.classList.remove('hidden');
+      placeholder.classList.add('hidden');
+    };
+    reader.readAsDataURL(file);
   });
 
   loadList();
