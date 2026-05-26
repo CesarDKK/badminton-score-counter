@@ -183,28 +183,31 @@
       const hWin = m.home_score > m.away_score;
       const aWin = m.away_score > m.home_score;
       return `
-        <div class="match played">
-          <div class="match-team ${hWin ? 'winner' : (aWin ? 'loser' : '')}">
+        <div class="match-public played">
+          <div class="mp-side home ${hWin ? 'winner' : (aWin ? 'loser' : '')}">
             ${teamLogoHtml(home)}
             <span class="name">${escapeHtml(home ? home.name : '')}</span>
-            <span class="score">${m.home_score}</span>
           </div>
-          <div class="match-team ${aWin ? 'winner' : (hWin ? 'loser' : '')}">
-            ${teamLogoHtml(away)}
+          <div class="mp-result">
+            <span>${m.home_score}</span>
+            <span class="sep">–</span>
+            <span>${m.away_score}</span>
+          </div>
+          <div class="mp-side away ${aWin ? 'winner' : (hWin ? 'loser' : '')}">
             <span class="name">${escapeHtml(away ? away.name : '')}</span>
-            <span class="score">${m.away_score}</span>
+            ${teamLogoHtml(away)}
           </div>
         </div>
       `;
     }
     return `
-      <div class="match">
-        <div class="match-team">
+      <div class="match-public">
+        <div class="mp-team-line">
           ${teamLogoHtml(home)}
           <span class="name">${escapeHtml(home ? home.name : '')}</span>
         </div>
         <div class="match-vs">vs</div>
-        <div class="match-team">
+        <div class="mp-team-line">
           ${teamLogoHtml(away)}
           <span class="name">${escapeHtml(away ? away.name : '')}</span>
         </div>

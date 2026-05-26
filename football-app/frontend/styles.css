@@ -724,6 +724,113 @@ input[type=number].score-input,
 .match-team.loser .name { color: var(--text-muted); }
 .match-team.loser .score { color: var(--pitch-dim); font-weight: 500; text-shadow: none; opacity: 0.7; }
 
+/* ===== PUBLIC match layout (separate from admin .match) =====
+   Unplayed: club names CENTERED, stacked with VS divider.
+   Played: home name LEFT, score CENTER (big & pitch-green), away name RIGHT. */
+
+.match-public {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-4);
+}
+.match-public.played {
+  background: var(--surface-2);
+  border-color: var(--border);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: var(--sp-2);
+  align-items: center;
+}
+
+.match-public:not(.played) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  align-items: stretch;
+}
+
+.mp-team-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  font-size: 15px;
+  font-weight: 500;
+  text-align: center;
+  min-width: 0;
+}
+.mp-team-line .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.mp-side {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.mp-side.home { justify-content: flex-end; }
+.mp-side.away { justify-content: flex-start; }
+.mp-side .name {
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.mp-side.winner .name { color: var(--text-strong); font-weight: 700; }
+.mp-side.loser .name { color: var(--text-muted); }
+
+.mp-result {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: clamp(32px, 8vw, 64px);
+  color: var(--pitch);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  line-height: 1;
+  padding: 0 var(--sp-3);
+  text-shadow: 0 0 24px var(--pitch-glow), 0 0 4px var(--pitch-glow);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.mp-result .sep {
+  color: var(--text-dim);
+  font-size: 0.6em;
+  font-weight: 500;
+  text-shadow: none;
+}
+
+@media (max-width: 480px) {
+  .match-public { padding: var(--sp-3); }
+  .match-public.played { gap: var(--sp-1); }
+  .mp-side .team-logo { width: 22px; height: 22px; font-size: 11px; }
+  .mp-side .name { font-size: 13px; }
+  .mp-result { padding: 0 var(--sp-2); gap: var(--sp-1); }
+}
+
+@media (min-width: 720px) {
+  .match-public { padding: var(--sp-4) var(--sp-5); }
+  .mp-side .team-logo { width: 36px; height: 36px; font-size: 16px; }
+  .mp-side .name { font-size: 17px; }
+  .mp-team-line { font-size: 17px; }
+  .mp-team-line .team-logo { width: 36px; height: 36px; font-size: 16px; }
+}
+
+@media (min-width: 1024px) {
+  .mp-side .team-logo { width: 40px; height: 40px; }
+  .mp-side .name { font-size: 19px; }
+  .mp-team-line { font-size: 19px; }
+}
+
 .match-vs {
   text-align: center;
   font-size: 10px;
