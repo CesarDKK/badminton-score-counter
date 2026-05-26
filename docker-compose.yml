@@ -73,6 +73,88 @@ services:
       - "8080:80"
     depends_on:
       - backend
+      - football-frontend
+    networks:
+      - badminton-network
+
+  # Football Tournament — One-shot DB initializer
+  # Creates database, tables, and football_user (idempotent — safe to re-run).
+  # Exits when done; football-backend depends on its successful completion.
+  football-db-init:
+    image: mysql:8.0
+    container_name: football-db-init
+    restart: "no"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password_change_me}
+      FOOTBALL_DB_PASSWORD: ${FOOTBALL_DB_PASSWORD:-football_password_change_me}
+    volumes:
+      - ./football-app/backend/init.sql:/init/schema.sql:ro
+    networks:
+      - badminton-network
+    entrypoint:
+      - bash
+      - -c
+      - |
+        set -e
+        echo "[football-db-init] Applying schema..."
+        mysql -h mysql -uroot -p"$$MYSQL_ROOT_PASSWORD" < /init/schema.sql
+        echo "[football-db-init] Ensuring football_user..."
+        mysql -h mysql -uroot -p"$$MYSQL_ROOT_PASSWORD" -e "
+          CREATE USER IF NOT EXISTS 'football_user'@'%' IDENTIFIED BY '$$FOOTBALL_DB_PASSWORD';
+          ALTER USER 'football_user'@'%' IDENTIFIED BY '$$FOOTBALL_DB_PASSWORD';
+          GRANT ALL PRIVILEGES ON football_tournament.* TO 'football_user'@'%';
+          FLUSH PRIVILEGES;
+        "
+        echo "[football-db-init] Done."
+
+  # Football Tournament — Backend
+  football-backend:
+    build:
+      context: ./football-app
+      dockerfile: Dockerfile.backend
+    container_name: football-backend
+    restart: unless-stopped
+    env_file:
+      - installation.env
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: football_user
+      DB_PASSWORD: ${FOOTBALL_DB_PASSWORD:-football_password_change_me}
+      DB_NAME: football_tournament
+      JWT_SECRET: ${FOOTBALL_JWT_SECRET:-change_this_football_jwt_secret_min_32_chars}
+      FOOTBALL_ADMIN_PASSWORD: ${FOOTBALL_ADMIN_PASSWORD:-change_me_football_admin}
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - football_uploads:/app/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+      football-db-init:
+        condition: service_completed_successfully
+    networks:
+      - badminton-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Football Tournament — Frontend (internal nginx, not exposed)
+  football-frontend:
+    build:
+      context: ./football-app
+      dockerfile: Dockerfile.frontend
+    container_name: football-frontend
+    restart: unless-stopped
+    depends_on:
+      - football-backend
     networks:
       - badminton-network
 
@@ -84,4 +166,6 @@ volumes:
   mysql_data:
     driver: local
   uploads_data:
+    driver: local
+  football_uploads:
     driver: local

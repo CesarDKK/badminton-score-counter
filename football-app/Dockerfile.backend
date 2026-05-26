@@ -1,0 +1,15 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY backend/package.json ./
+RUN npm install --omit=dev
+
+COPY backend/ ./
+
+RUN mkdir -p /app/uploads/logos
+
+ENV PORT=3001
+EXPOSE 3001
+
+CMD ["node", "server.js"]

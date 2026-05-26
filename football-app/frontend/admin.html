@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — Football Tournament</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>⚽ Football Tournament — Admin</h1>
+    <nav>
+      <a href="/" class="btn secondary small">Public site</a>
+      <button id="logoutBtn" class="btn secondary small">Log out</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <div id="view-list">
+      <div class="row spread" style="margin-bottom: 16px;">
+        <h2>Tournaments</h2>
+        <button id="newTournamentBtn" class="btn">+ New tournament</button>
+      </div>
+      <div id="tournamentList" class="tournament-list"></div>
+    </div>
+
+    <div id="view-wizard" class="hidden">
+      <div class="row spread">
+        <h2>Create tournament</h2>
+        <button class="btn secondary" data-back="list">← Back</button>
+      </div>
+      <div class="wizard-steps">
+        <div class="wizard-step active" data-step="1">1. Basics</div>
+        <div class="wizard-step" data-step="2">2. Pools &amp; Teams</div>
+        <div class="wizard-step" data-step="3">3. Cup setup</div>
+        <div class="wizard-step" data-step="4">4. Review</div>
+      </div>
+
+      <div class="card" id="step-1">
+        <h3 class="section-title">Tournament basics</h3>
+        <div class="field" style="margin-bottom: 12px;">
+          <label>Tournament name</label><br />
+          <input type="text" id="wiz-name" placeholder="Spring Cup 2026" style="width: 100%;" />
+        </div>
+        <div class="row">
+          <div>
+            <label class="muted">Pools</label><br />
+            <input type="number" id="wiz-num-pools" min="1" max="16" value="2" style="width: 80px;" />
+          </div>
+          <div>
+            <label class="muted">Teams per pool</label><br />
+            <input type="number" id="wiz-teams-per-pool" min="2" max="16" value="4" style="width: 80px;" />
+          </div>
+          <div>
+            <label class="muted">Points: Win / Draw / Loss</label><br />
+            <input type="number" id="wiz-pw" value="3" style="width: 60px;" />
+            <input type="number" id="wiz-pd" value="1" style="width: 60px;" />
+            <input type="number" id="wiz-pl" value="0" style="width: 60px;" />
+          </div>
+        </div>
+        <div class="row" style="margin-top: 16px; justify-content: flex-end;">
+          <button class="btn" data-next="2">Next →</button>
+        </div>
+      </div>
+
+      <div class="card hidden" id="step-2">
+        <h3 class="section-title">Pools and teams</h3>
+        <p class="muted">Add team names for each pool. You can add logos later after creating the tournament.</p>
+        <div id="pools-builder" class="pool-grid"></div>
+        <div class="row" style="margin-top: 16px; justify-content: space-between;">
+          <button class="btn secondary" data-prev="1">← Back</button>
+          <button class="btn" data-next="3">Next →</button>
+        </div>
+      </div>
+
+      <div class="card hidden" id="step-3">
+        <h3 class="section-title">Cup setup</h3>
+        <p class="muted">
+          Define how cups are seeded from pool placements. For example, with 2 pools of 4:
+          place 1+2 from each pool in "Championship Cup", and 3+4 in "Plate Cup".
+        </p>
+        <div id="cups-builder"></div>
+        <button class="btn secondary small" id="addCupBtn" style="margin-top: 12px;">+ Add cup</button>
+        <div class="row" style="margin-top: 16px; justify-content: space-between;">
+          <button class="btn secondary" data-prev="2">← Back</button>
+          <button class="btn" data-next="4">Next →</button>
+        </div>
+      </div>
+
+      <div class="card hidden" id="step-4">
+        <h3 class="section-title">Review &amp; create</h3>
+        <div id="review-summary"></div>
+        <div id="createError" class="error-msg hidden"></div>
+        <div class="row" style="margin-top: 16px; justify-content: space-between;">
+          <button class="btn secondary" data-prev="3">← Back</button>
+          <button class="btn" id="createTournamentBtn">Create tournament</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-detail" class="hidden">
+      <div class="row spread">
+        <h2 id="detail-title"></h2>
+        <div class="row">
+          <button class="btn secondary" data-back="list">← Back</button>
+          <button class="btn danger small" id="deleteTournamentBtn">Delete</button>
+        </div>
+      </div>
+      <div id="detail-status" class="badge"></div>
+
+      <div class="card">
+        <h3 class="section-title">Pools</h3>
+        <div id="detail-pools"></div>
+      </div>
+
+      <div class="card">
+        <h3 class="section-title">Cups</h3>
+        <div id="detail-cups"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/admin.js"></script>
+</body>
+</html>

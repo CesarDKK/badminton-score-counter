@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Football Tournament</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>⚽ Football Tournament</h1>
+    <nav>
+      <a href="/login.html" class="btn secondary small">Admin</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <div id="view-list">
+      <h2>Tournaments</h2>
+      <div id="tournamentList" class="tournament-list">
+        <p class="muted">Loading…</p>
+      </div>
+    </div>
+
+    <div id="view-detail" class="hidden">
+      <div class="row spread">
+        <h2 id="detail-title"></h2>
+        <button class="btn secondary hidden" id="backToListBtn" data-back="list">← Back to list</button>
+      </div>
+      <div id="detail-status" class="badge"></div>
+
+      <div class="card">
+        <h3 class="section-title">Pool standings</h3>
+        <div id="detail-pools"></div>
+      </div>
+
+      <div class="card" id="cups-card">
+        <h3 class="section-title">Cups</h3>
+        <div id="detail-cups"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/public.js"></script>
+</body>
+</html>
