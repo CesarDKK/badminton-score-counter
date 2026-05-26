@@ -422,9 +422,9 @@
       <div class="match-row ${m.played ? 'played' : ''}">
         <div class="home">${teamCell(home)}</div>
         <div class="scores">
-          <input type="number" min="0" class="score-input" data-input-home="${m.id}" value="${homeScore}" ${home ? '' : 'disabled'} />
+          <input type="number" min="0" class="score-input" data-input-home="${type}-${m.id}" value="${homeScore}" ${home ? '' : 'disabled'} />
           <span>–</span>
-          <input type="number" min="0" class="score-input" data-input-away="${m.id}" value="${awayScore}" ${away ? '' : 'disabled'} />
+          <input type="number" min="0" class="score-input" data-input-away="${type}-${m.id}" value="${awayScore}" ${away ? '' : 'disabled'} />
         </div>
         <div class="away">${teamCell(away)}</div>
         <div>
@@ -436,8 +436,8 @@
   }
 
   async function saveMatch(matchId, type) {
-    const hEl = document.querySelector('[data-input-home="' + matchId + '"]');
-    const aEl = document.querySelector('[data-input-away="' + matchId + '"]');
+    const hEl = document.querySelector('[data-input-home="' + type + '-' + matchId + '"]');
+    const aEl = document.querySelector('[data-input-away="' + type + '-' + matchId + '"]');
     const home = parseInt(hEl.value, 10);
     const away = parseInt(aEl.value, 10);
     if (!Number.isInteger(home) || !Number.isInteger(away) || home < 0 || away < 0) {
@@ -524,14 +524,14 @@
           ${home && home.logo_path ? `<img class="team-logo" src="${logoUrl(home.logo_path)}" alt=""/>` : '<div class="team-logo"></div>'}
           <span class="name">${home ? escapeHtml(home.name) : '<span class="muted">TBD</span>'}</span>
           ${editable
-            ? `<input type="number" min="0" class="score-input" data-input-home="${m.id}" value="${m.home_score == null ? '' : m.home_score}" ${enabled ? '' : 'disabled'} />`
+            ? `<input type="number" min="0" class="score-input" data-input-home="cup-${m.id}" value="${m.home_score == null ? '' : m.home_score}" ${enabled ? '' : 'disabled'} />`
             : `<span class="score">${m.home_score == null ? '' : m.home_score}</span>`}
         </div>
         <div class="bracket-team ${aWin ? 'winner' : ''}">
           ${away && away.logo_path ? `<img class="team-logo" src="${logoUrl(away.logo_path)}" alt=""/>` : '<div class="team-logo"></div>'}
           <span class="name">${away ? escapeHtml(away.name) : '<span class="muted">TBD</span>'}</span>
           ${editable
-            ? `<input type="number" min="0" class="score-input" data-input-away="${m.id}" value="${m.away_score == null ? '' : m.away_score}" ${enabled ? '' : 'disabled'} />`
+            ? `<input type="number" min="0" class="score-input" data-input-away="cup-${m.id}" value="${m.away_score == null ? '' : m.away_score}" ${enabled ? '' : 'disabled'} />`
             : `<span class="score">${m.away_score == null ? '' : m.away_score}</span>`}
         </div>
         ${editable ? `
