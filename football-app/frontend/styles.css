@@ -697,12 +697,13 @@ input[type=number].score-input,
   font-family: var(--font-mono);
   font-weight: 700;
   font-size: clamp(22px, 3.6vw, 44px);
-  color: var(--text-strong);
+  color: var(--pitch);
   letter-spacing: 0.04em;
   min-width: 32px;
   text-align: right;
   flex-shrink: 0;
   line-height: 1;
+  text-shadow: 0 0 24px var(--pitch-glow);
 }
 
 @media (min-width: 720px) {
@@ -721,7 +722,7 @@ input[type=number].score-input,
 }
 .match-team.winner .name { color: var(--text-strong); font-weight: 600; }
 .match-team.loser .name { color: var(--text-muted); }
-.match-team.loser .score { color: var(--text-muted); font-weight: 500; }
+.match-team.loser .score { color: var(--pitch-dim); font-weight: 500; text-shadow: none; opacity: 0.7; }
 
 .match-vs {
   text-align: center;
@@ -851,10 +852,12 @@ input[type=number].score-input,
   font-family: var(--font-mono);
   font-weight: 700;
   font-size: 18px;
-  color: var(--text-strong);
+  color: var(--pitch);
   min-width: 32px;
   text-align: right;
+  text-shadow: 0 0 16px var(--pitch-glow);
 }
+.bracket-team.loser .score { color: var(--pitch-dim); opacity: 0.7; text-shadow: none; }
 .bracket-team.loser .score { color: var(--text-dim); }
 
 .bracket-actions {
