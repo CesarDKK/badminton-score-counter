@@ -179,17 +179,32 @@
   function renderPoolMatch(m, teamsById) {
     const home = teamsById.get(m.home_team_id);
     const away = teamsById.get(m.away_team_id);
-    const scoreHtml = m.played
-      ? `<div class="score-display">${m.home_score}<span class="sep">·</span>${m.away_score}</div>`
-      : `<div class="score-display unplayed">vs</div>`;
-    return `
-      <div class="match ${m.played ? 'played' : ''}">
-        <div class="side home">
-          <span class="name">${escapeHtml(home ? home.name : '')}</span>
-          ${teamLogoHtml(home)}
+    if (m.played) {
+      const hWin = m.home_score > m.away_score;
+      const aWin = m.away_score > m.home_score;
+      return `
+        <div class="match played">
+          <div class="match-team ${hWin ? 'winner' : (aWin ? 'loser' : '')}">
+            ${teamLogoHtml(home)}
+            <span class="name">${escapeHtml(home ? home.name : '')}</span>
+            <span class="score">${m.home_score}</span>
+          </div>
+          <div class="match-team ${aWin ? 'winner' : (hWin ? 'loser' : '')}">
+            ${teamLogoHtml(away)}
+            <span class="name">${escapeHtml(away ? away.name : '')}</span>
+            <span class="score">${m.away_score}</span>
+          </div>
         </div>
-        <div class="center">${scoreHtml}</div>
-        <div class="side away">
+      `;
+    }
+    return `
+      <div class="match">
+        <div class="match-team">
+          ${teamLogoHtml(home)}
+          <span class="name">${escapeHtml(home ? home.name : '')}</span>
+        </div>
+        <div class="match-vs">vs</div>
+        <div class="match-team">
           ${teamLogoHtml(away)}
           <span class="name">${escapeHtml(away ? away.name : '')}</span>
         </div>

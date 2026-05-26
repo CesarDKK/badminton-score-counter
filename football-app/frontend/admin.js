@@ -481,23 +481,18 @@
     const awayScore = m.away_score == null ? '' : m.away_score;
     const enabled = home && away;
     return `
-      <div class="match editable ${m.played ? 'played' : ''}">
-        <div class="side home">
-          <span class="name">${escapeHtml(home ? home.name : '')}</span>
+      <div class="match ${m.played ? 'played' : ''}">
+        <div class="match-team">
           ${teamLogoHtml(home)}
+          <span class="name">${escapeHtml(home ? home.name : '')}</span>
+          <input type="number" min="0" inputmode="numeric" class="score-input" data-input-home="${type}-${m.id}" value="${homeScore}" ${enabled ? '' : 'disabled'} />
         </div>
-        <div class="center">
-          <div class="score-input-group">
-            <input type="number" min="0" inputmode="numeric" class="score-input" data-input-home="${type}-${m.id}" value="${homeScore}" ${enabled ? '' : 'disabled'} />
-            <span class="sep">·</span>
-            <input type="number" min="0" inputmode="numeric" class="score-input" data-input-away="${type}-${m.id}" value="${awayScore}" ${enabled ? '' : 'disabled'} />
-          </div>
-        </div>
-        <div class="side away">
+        <div class="match-team">
           ${teamLogoHtml(away)}
           <span class="name">${escapeHtml(away ? away.name : '')}</span>
+          <input type="number" min="0" inputmode="numeric" class="score-input" data-input-away="${type}-${m.id}" value="${awayScore}" ${enabled ? '' : 'disabled'} />
         </div>
-        <div class="actions">
+        <div class="match-actions">
           <button class="btn btn-sm" data-save-match="${m.id}" data-match-type="${type}" ${enabled ? '' : 'disabled'}>Save</button>
           ${m.played ? `<button class="btn btn-secondary btn-sm" data-clear-match="${m.id}" data-match-type="${type}">Clear</button>` : ''}
         </div>
