@@ -128,7 +128,7 @@ services:
       DB_PASSWORD: ${FOOTBALL_DB_PASSWORD:-football_password_change_me}
       DB_NAME: football_tournament
       JWT_SECRET: ${FOOTBALL_JWT_SECRET:-change_this_football_jwt_secret_min_32_chars}
-      FOOTBALL_ADMIN_PASSWORD: ${FOOTBALL_ADMIN_PASSWORD:-change_me_football_admin}
+      FOOTBALL_ADMIN_PASSWORD: ${FOOTBALL_ADMIN_PASSWORD:-admin123}
       UPLOAD_DIR: /app/uploads
     volumes:
       - football_uploads:/app/uploads
