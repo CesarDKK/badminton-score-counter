@@ -29,7 +29,11 @@ let isTournamentMode = false;
 
 // Holdkamp state
 let activeTeamMatch = null;
-let assignedGameId = null;
+let assignedHoldkampGameId = null;
+
+// Tournament (planlagte kampe) state
+let activeTournament = null;
+let assignedTournamentMatchId = null;
 
 // Game state
 let gameState = {
@@ -55,6 +59,10 @@ let gameState = {
     isDoubles: false,
     gameMode: '21',
     decidingGameSwitched: false,
+    // True når brugeren manuelt har trykket "Skift side" og swappet player1/player2.
+    // Beskytter swap'et mod at blive overskrevet af sync-loopet mens en holdkamp/
+    // turneringskamp er tildelt. Ephemeral — nulstilles ved ny tildeling/clearCourt/reset.
+    sidesManuallySwitched: false,
     setScoresHistory: [],
     restBreakTaken: false,
     restBreakActive: false,
@@ -107,6 +115,9 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Load holdkamp panel
     await initHoldkampPanel();
+
+    // Tournament-tildelinger sker udelukkende fra admin baneoversigt —
+    // sync-loopet detekterer når en kamp er sat på denne bane.
 
     console.log('Court V3 initialized for court', courtId);
 
@@ -621,8 +632,13 @@ function switchSides() {
         gameState.team2RightCourt = temp === 1 ? 2 : 1;
     }
 
+    // Marker swap'et så sync-loopet ikke ruller det tilbage på næste tick
+    gameState.sidesManuallySwitched = true;
+
     updateDisplay();
-    saveGameState();
+    // Øjeblikkelig save (ingen debounce) — ellers kan sync-loopet ramme det 500ms-vindue
+    // hvor serveren stadig har de gamle navne og overskrive det netop gennemførte swap
+    performSave();
 }
 
 function clearCourt() {
@@ -634,17 +650,33 @@ function clearCourt() {
                 text: 'Ja, Ryd Banen',
                 callback: async () => {
                     // Release holdkamp game back to pending if assigned
-                    if (assignedGameId && activeTeamMatch) {
+                    if (assignedHoldkampGameId && activeTeamMatch) {
                         try {
-                            await api.updateTeamMatchGame(activeTeamMatch.id, assignedGameId, {
+                            await api.updateTeamMatchGame(activeTeamMatch.id, assignedHoldkampGameId, {
                                 status: 'pending',
                                 courtNumber: null
                             });
                         } catch (e) {
                             console.error('Failed to release holdkamp game:', e);
                         }
-                        assignedGameId = null;
+                        assignedHoldkampGameId = null;
                     }
+
+                    // Release tournament match back to pending if assigned
+                    if (assignedTournamentMatchId && activeTournament) {
+                        try {
+                            await api.updateTournamentMatch(activeTournament.id, assignedTournamentMatchId, {
+                                status: 'pending',
+                                courtNumber: null
+                            });
+                        } catch (e) {
+                            console.error('Failed to release tournament match:', e);
+                        }
+                        assignedTournamentMatchId = null;
+                    }
+
+                    // Nulstil swap-flag når banen ryddes
+                    gameState.sidesManuallySwitched = false;
 
                     // Cancel any active rest break first
                     if (gameState.restBreakActive) {
@@ -1484,12 +1516,16 @@ function hideMessage() {
 
 // Save match result to database
 async function saveMatchResult(winner, loser, winnerGames, loserGames) {
-    // Fang holdkamp-oplysninger med det samme og nulstil assignedGameId straks.
+    // Fang state-oplysninger med det samme og nulstil assigned-IDs straks.
     // saveMatchResult køres IKKE-afventet fra checkGameWin, så clearCourt() kan
-    // køre parallelt og overskrive assignedGameId inden vi når reportHoldkampResult.
-    const capturedGameId = assignedGameId;
+    // køre parallelt og overskrive de globale assigned-vars inden vi når at rapportere.
+    const capturedGameId = assignedHoldkampGameId;
     const capturedTeamMatch = activeTeamMatch;
-    assignedGameId = null;
+    assignedHoldkampGameId = null;
+
+    const capturedTournamentMatchId = assignedTournamentMatchId;
+    const capturedTournament = activeTournament;
+    assignedTournamentMatchId = null;
 
     try {
         // Calculate duration from timestamps
@@ -1518,9 +1554,13 @@ async function saveMatchResult(winner, loser, winnerGames, loserGames) {
             setScores: setScoresText
         };
 
-        await api.saveMatchResult(matchData);
+        // Turneringskampe gemmes IKKE i enkelt-kamp-historikken — de findes kun
+        // under Turnering-fanen så historikken ikke duplikeres.
+        if (!capturedTournamentMatchId) {
+            await api.saveMatchResult(matchData);
+        }
 
-        // Report holdkamp result using captured values (assignedGameId may already be null)
+        // Report holdkamp result using captured values (assignedHoldkampGameId may already be null)
         if (capturedGameId && capturedTeamMatch) {
             const game = capturedTeamMatch.games.find(g => g.id === capturedGameId);
             let winnerTeam = 2;
@@ -1529,6 +1569,17 @@ async function saveMatchResult(winner, loser, winnerGames, loserGames) {
                 winnerTeam = team1Names.some(name => winner.includes(name)) ? 1 : 2;
             }
             await reportHoldkampResult(winnerTeam, setScoresText, capturedTeamMatch.id, capturedGameId);
+        }
+
+        // Report tournament result (parallel til holdkamp — uafhængigt resultat-flow)
+        if (capturedTournamentMatchId && capturedTournament) {
+            const match = (capturedTournament.matches || []).find(m => m.id === capturedTournamentMatchId);
+            let winnerTeam = 2;
+            if (match) {
+                const side1Names = [match.side1_player1, match.side1_player2].filter(Boolean);
+                winnerTeam = side1Names.some(name => winner.includes(name)) ? 1 : 2;
+            }
+            await reportTournamentResult(winnerTeam, setScoresText, capturedTournament.id, capturedTournamentMatchId);
         }
 
         // Show holdkamp panel if there are more pending games
@@ -1595,6 +1646,7 @@ function startPeriodicSync() {
                 gameState.timerSeconds = 0;
                 gameState.isActive = false;
                 gameState.decidingGameSwitched = false;
+                gameState.sidesManuallySwitched = false;
                 gameState.matchCompleted = false;
                 gameState.restBreakTaken = false;
 
@@ -1628,11 +1680,11 @@ function startPeriodicSync() {
         try {
             const tm = await api.getActiveTeamMatch();
             if (tm) {
-                if (!activeTeamMatch && !assignedGameId) {
+                if (!activeTeamMatch && !assignedHoldkampGameId) {
                     // Holdkamp just started — initialize panel
                     activeTeamMatch = tm;
                     await initHoldkampPanel();
-                } else if (activeTeamMatch && !assignedGameId) {
+                } else if (activeTeamMatch && !assignedHoldkampGameId) {
                     // Panel open but no game assigned yet — refresh dropdown to remove taken games
                     // Skip if user has already selected a game to avoid resetting their selection
                     const panel = document.getElementById('holdkampPanel');
@@ -1641,15 +1693,15 @@ function startPeriodicSync() {
                     if (panel && panel.style.display !== 'none' && !userIsSelecting) {
                         await refreshHoldkampPanel();
                     }
-                } else if (assignedGameId) {
+                } else if (assignedHoldkampGameId) {
                     // Already assigned — sync player names from holdkamp game to court,
                     // BUT only before any set has been decided. After the first set,
                     // switchSides() has swapped the player slots; re-applying original
                     // names from the holdkamp game would undo that swap and leave names
                     // and scores in inconsistent positions.
                     activeTeamMatch = tm;
-                    const myGame = tm.games.find(g => g.id === assignedGameId);
-                    const sidesHaveBeenSwitched = gameState.player1.games > 0 || gameState.player2.games > 0;
+                    const myGame = tm.games.find(g => g.id === assignedHoldkampGameId);
+                    const sidesHaveBeenSwitched = gameState.sidesManuallySwitched || gameState.player1.games > 0 || gameState.player2.games > 0;
                     if (myGame && !sidesHaveBeenSwitched) {
                         const namesChanged =
                             (myGame.team1_player1 && gameState.player1.name !== myGame.team1_player1) ||
@@ -1669,6 +1721,55 @@ function startPeriodicSync() {
             }
         } catch (error) {
             console.error('Failed to sync holdkamp:', error);
+        }
+
+        // Tournament sync: detect when admin har tildelt en planlagt kamp til DENNE bane,
+        // og sync spillernavne hvis admin redigerer kampen mens den kører.
+        try {
+            const tournaments = await api.getActiveTournaments();
+            let myMatch = null;
+            let parentTournament = null;
+            for (const t of (tournaments || [])) {
+                const found = (t.matches || []).find(m =>
+                    m.court_number === courtId && m.status === 'active'
+                );
+                if (found) {
+                    myMatch = found;
+                    parentTournament = t;
+                    break;
+                }
+            }
+
+            if (myMatch && parentTournament) {
+                // Første gang vi ser tildelingen — populér gameState og lås id'erne fast
+                if (!assignedTournamentMatchId) {
+                    assignedTournamentMatchId = myMatch.id;
+                    activeTournament = parentTournament;
+                    applyTournamentMatchToCourt(myMatch);
+                } else {
+                    // Allerede tildelt — opdatér state-referencen så reportTournamentResult
+                    // har frisk data, og sync navne ind hvis admin har redigeret dem.
+                    activeTournament = parentTournament;
+                    const sidesHaveBeenSwitched = gameState.sidesManuallySwitched || gameState.player1.games > 0 || gameState.player2.games > 0;
+                    if (!sidesHaveBeenSwitched) {
+                        const namesChanged =
+                            (myMatch.side1_player1 && gameState.player1.name !== myMatch.side1_player1) ||
+                            (myMatch.side1_player2 && gameState.player1.name2 !== myMatch.side1_player2) ||
+                            (myMatch.side2_player1 && gameState.player2.name !== myMatch.side2_player1) ||
+                            (myMatch.side2_player2 && gameState.player2.name2 !== myMatch.side2_player2);
+                        if (namesChanged) {
+                            if (myMatch.side1_player1) gameState.player1.name = myMatch.side1_player1;
+                            if (myMatch.side1_player2) gameState.player1.name2 = myMatch.side1_player2;
+                            if (myMatch.side2_player1) gameState.player2.name = myMatch.side2_player1;
+                            if (myMatch.side2_player2) gameState.player2.name2 = myMatch.side2_player2;
+                            updateDisplay();
+                            saveGameState();
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Failed to sync tournament:', error);
         }
     }, 5000); // Check every 5 seconds
 }
@@ -1762,8 +1863,8 @@ function finishEditingName(element, player, nameField) {
     saveGameState();
 
     // Sync name change back to holdkamp game if one is assigned
-    if (assignedGameId && activeTeamMatch) {
-        api.updateTeamMatchGame(activeTeamMatch.id, assignedGameId, {
+    if (assignedHoldkampGameId && activeTeamMatch) {
+        api.updateTeamMatchGame(activeTeamMatch.id, assignedHoldkampGameId, {
             team1Player1: gameState.player1.name,
             team1Player2: gameState.player1.name2 || null,
             team2Player1: gameState.player2.name,
@@ -1797,7 +1898,7 @@ async function initHoldkampPanel() {
         // Check if this court is already assigned to a game
         const myGame = activeTeamMatch.games.find(g => g.court_number === courtId && g.status === 'active');
         if (myGame) {
-            assignedGameId = myGame.id;
+            assignedHoldkampGameId = myGame.id;
             applyHoldkampGameToState(myGame);
             showHoldkampAssigned(myGame);
             return;
@@ -1841,6 +1942,8 @@ function applyHoldkampGameToState(game) {
         gameState.player2.name2 = game.team2_player2 || `${team2} makker`;
     }
     gameState.isDoubles = isDoubles;
+    // Frisk tildeling — eventuelt tidligere swap-flag nulstilles
+    gameState.sidesManuallySwitched = false;
     updateDisplay();
     saveGameState();
 }
@@ -1858,7 +1961,7 @@ async function assignHoldkampGame() {
             status: 'active'
         });
 
-        assignedGameId = gameId;
+        assignedHoldkampGameId = gameId;
         applyHoldkampGameToState(game);
         showHoldkampAssigned(game);
     } catch (error) {
@@ -1893,7 +1996,7 @@ async function refreshHoldkampPanel() {
         activeTeamMatch = await api.getActiveTeamMatch();
         if (!activeTeamMatch) return;
 
-        assignedGameId = null;
+        assignedHoldkampGameId = null;
 
         const panel = document.getElementById('holdkampPanel');
         const select = document.getElementById('holdkampGameSelect');
@@ -1972,9 +2075,9 @@ function showQrSessionExpired() {
 }
 
 async function reportHoldkampResult(winnerTeam, setScores, teamMatchId, gameId) {
-    // Brug eksplicitte IDs — assignedGameId kan allerede være null pga. race-condition-fix
+    // Brug eksplicitte IDs — assignedHoldkampGameId kan allerede være null pga. race-condition-fix
     const tmId = teamMatchId ?? activeTeamMatch?.id;
-    const gId  = gameId      ?? assignedGameId;
+    const gId  = gameId      ?? assignedHoldkampGameId;
     if (!tmId || !gId) return;
     try {
         await api.updateTeamMatchGame(tmId, gId, {
@@ -1984,5 +2087,41 @@ async function reportHoldkampResult(winnerTeam, setScores, teamMatchId, gameId) 
         });
     } catch (error) {
         console.error('Failed to report holdkamp result:', error);
+    }
+}
+
+// ==================== TOURNAMENT (Planlagte kampe) — passiv modtagelse ====================
+
+// Tildelinger sker fra admin baneoversigt. Court populerer kun gameState når sync-loopet
+// detekterer at en planlagt kamp er aktiv på denne bane, og rapporterer resultatet
+// tilbage når kampen afsluttes.
+
+function applyTournamentMatchToCourt(match) {
+    const isDoubles = !!match.doubles;
+    gameState.player1.name = match.side1_player1 || 'Spiller 1';
+    gameState.player2.name = match.side2_player1 || 'Spiller 2';
+    if (isDoubles) {
+        gameState.player1.name2 = match.side1_player2 || 'Makker 1';
+        gameState.player2.name2 = match.side2_player2 || 'Makker 2';
+    }
+    gameState.isDoubles = isDoubles;
+    // Frisk tildeling — eventuelt tidligere swap-flag nulstilles
+    gameState.sidesManuallySwitched = false;
+    updateDisplay();
+    saveGameState();
+}
+
+async function reportTournamentResult(winnerTeam, setScores, tournamentId, matchId) {
+    const tId = tournamentId ?? activeTournament?.id;
+    const mId = matchId      ?? assignedTournamentMatchId;
+    if (!tId || !mId) return;
+    try {
+        await api.updateTournamentMatch(tId, mId, {
+            status: 'finished',
+            winnerTeam,
+            setScores
+        });
+    } catch (error) {
+        console.error('Failed to report tournament result:', error);
     }
 }

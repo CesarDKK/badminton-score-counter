@@ -70,6 +70,13 @@ function setupEventListeners() {
     document.getElementById('holdkampFormat').addEventListener('change', onHoldkampFormatChange);
     document.getElementById('startHoldkampBtn').addEventListener('click', startHoldkamp);
 
+    // Tournament
+    document.getElementById('tournamentBtn').addEventListener('click', showTournament);
+    document.getElementById('createTournamentBtn').addEventListener('click', handleCreateTournament);
+    document.getElementById('tournamentNameInput').addEventListener('keypress', e => {
+        if (e.key === 'Enter') handleCreateTournament();
+    });
+
     // badmintonplayer.dk import
     document.getElementById('bpImportBtn').addEventListener('click', bpImport);
     document.getElementById('bpImportUrl').addEventListener('keypress', e => { if (e.key === 'Enter') bpImport(); });
@@ -105,6 +112,7 @@ function setupEventListeners() {
     document.getElementById('saveCourtChanges').addEventListener('click', saveCourtChanges);
     document.getElementById('resetCourt').addEventListener('click', resetCourtConfirm);
     document.getElementById('editDoublesMode').addEventListener('change', toggleEditDoublesMode);
+    document.getElementById('editTournamentMatchSelect').addEventListener('change', onEditTournamentMatchChange);
 
     // Setup autocomplete for player name fields
     setupPlayerNameAutocomplete('editPlayer1Name');
@@ -174,6 +182,8 @@ async function showDashboard() {
         const hash = window.location.hash;
         if (hash === '#holdkamp') {
             await showHoldkamp();
+        } else if (hash === '#tournament') {
+            await showTournament();
         } else if (hash === '#history') {
             await showMatchHistory();
         } else if (hash === '#device-tokens') {
@@ -504,10 +514,65 @@ async function openEditModal(courtNumber) {
         // Update visibility of partner fields
         toggleEditDoublesMode();
 
+        // Populér "Planlagt kamp" dropdown med pending matches fra aktive turneringer
+        await populateEditTournamentDropdown();
+
         document.getElementById('editCourtModal').style.display = 'block';
     } catch (error) {
         console.error(`Failed to load court ${courtNumber} for editing:`, error);
         showMessage('Fejl', 'Kunne ikke indlæse banedata. Tjek din forbindelse.');
+    }
+}
+
+async function populateEditTournamentDropdown() {
+    const wrap = document.getElementById('editTournamentMatchWrap');
+    const select = document.getElementById('editTournamentMatchSelect');
+    if (!wrap || !select) return;
+
+    try {
+        const tournaments = await api.getActiveTournaments();
+        // Saml alle pending matches på tværs af aktive turneringer
+        const items = [];
+        for (const t of (tournaments || [])) {
+            for (const m of (t.matches || [])) {
+                if (m.status === 'pending') {
+                    items.push({ tournament: t, match: m });
+                }
+            }
+        }
+
+        if (items.length === 0) {
+            wrap.style.display = 'none';
+            select.innerHTML = '<option value="">-- Manuel (skriv navne nedenfor) --</option>';
+            return;
+        }
+
+        select.innerHTML = '<option value="">-- Manuel (skriv navne nedenfor) --</option>';
+        for (const { tournament, match } of items) {
+            const side1 = match.doubles
+                ? `${match.side1_player1 || '?'}${match.side1_player2 ? ' & ' + match.side1_player2 : ''}`
+                : (match.side1_player1 || '?');
+            const side2 = match.doubles
+                ? `${match.side2_player1 || '?'}${match.side2_player2 ? ' & ' + match.side2_player2 : ''}`
+                : (match.side2_player1 || '?');
+            const labelPrefix = match.label ? `${match.label} — ` : '';
+            const opt = document.createElement('option');
+            opt.value = `${tournament.id}:${match.id}`;
+            opt.textContent = `${tournament.name}: ${labelPrefix}${side1} vs ${side2}`;
+            opt.dataset.match = JSON.stringify({
+                id: match.id,
+                doubles: !!match.doubles,
+                side1_player1: match.side1_player1 || '',
+                side1_player2: match.side1_player2 || '',
+                side2_player1: match.side2_player1 || '',
+                side2_player2: match.side2_player2 || ''
+            });
+            select.appendChild(opt);
+        }
+        wrap.style.display = 'block';
+    } catch (error) {
+        console.error('Failed to populate tournament dropdown:', error);
+        wrap.style.display = 'none';
     }
 }
 
@@ -567,8 +632,42 @@ async function saveCourtChanges() {
     await performSaveCourtChanges(isActive);
 }
 
+function onEditTournamentMatchChange() {
+    const sel = document.getElementById('editTournamentMatchSelect');
+    const value = sel?.value || '';
+    if (!value) return;
+
+    // Værdien er "tournamentId:matchId" og option text indeholder allerede spillerne.
+    // Vi har dog ikke direct adgang til match-objektet her, så vi henter den via et data-attr.
+    const opt = sel.options[sel.selectedIndex];
+    const matchData = opt?.dataset?.match;
+    if (!matchData) return;
+    try {
+        const match = JSON.parse(matchData);
+        document.getElementById('editPlayer1Name').value = match.side1_player1 || '';
+        document.getElementById('editPlayer1Name2').value = match.side1_player2 || '';
+        document.getElementById('editPlayer2Name').value = match.side2_player1 || '';
+        document.getElementById('editPlayer2Name2').value = match.side2_player2 || '';
+        document.getElementById('editDoublesMode').checked = !!match.doubles;
+        document.getElementById('editCourtActive').checked = true;
+        toggleEditDoublesMode();
+    } catch (e) {
+        console.error('Failed to parse match data:', e);
+    }
+}
+
 async function performSaveCourtChanges(isActive) {
     if (!currentEditingCourt) return;
+
+    // Tjek om en planlagt turneringskamp er valgt — skal i givet fald låses som aktiv på banen
+    const tSel = document.getElementById('editTournamentMatchSelect');
+    const tournamentSelection = tSel?.value || '';
+    let tournamentId = null;
+    let tournamentMatchId = null;
+    if (tournamentSelection) {
+        const [tId, mId] = tournamentSelection.split(':').map(Number);
+        if (tId && mId) { tournamentId = tId; tournamentMatchId = mId; }
+    }
 
     // Get values again
     const player1Value = document.getElementById('editPlayer1Name').value.trim();
@@ -614,6 +713,20 @@ async function performSaveCourtChanges(isActive) {
         };
 
         const stateResult = await api.updateGameState(currentEditingCourt, updatedState, true);
+
+        // Hvis brugeren valgte en planlagt kamp — tildel banen til kampen og marker den aktiv.
+        // Backend frigør automatisk samme bane fra andre matches i samme turnering.
+        if (tournamentId && tournamentMatchId) {
+            try {
+                await api.updateTournamentMatch(tournamentId, tournamentMatchId, {
+                    courtNumber: currentEditingCourt,
+                    status: 'active'
+                });
+            } catch (e) {
+                console.error('Failed to assign tournament match:', e);
+                showMessage('Advarsel', 'Banedata blev gemt, men turneringskampen kunne ikke tildeles. Prøv igen.');
+            }
+        }
 
         document.getElementById('editCourtModal').style.display = 'none';
         currentEditingCourt = null;
@@ -665,22 +778,31 @@ async function showMatchHistory() {
 
 function switchHistoryTab(tab) {
     activeHistoryTab = tab;
-    const isSingle = tab === 'single';
 
-    document.getElementById('singleMatchesTab').style.display = isSingle ? 'block' : 'none';
-    document.getElementById('teamMatchesTab').style.display = isSingle ? 'none' : 'block';
+    const tabs = [
+        { key: 'single', btnId: 'tabSingleMatches', paneId: 'singleMatchesTab' },
+        { key: 'team', btnId: 'tabTeamMatches', paneId: 'teamMatchesTab' },
+        { key: 'tournament', btnId: 'tabTournamentMatches', paneId: 'tournamentMatchesTab' }
+    ];
 
-    document.getElementById('tabSingleMatches').style.background = isSingle ? 'var(--color-primary)' : 'transparent';
-    document.getElementById('tabSingleMatches').style.color = isSingle ? '#fff' : '#aaa';
-    document.getElementById('tabSingleMatches').style.borderBottomColor = isSingle ? 'var(--color-primary)' : 'transparent';
+    for (const t of tabs) {
+        const isActive = t.key === tab;
+        const pane = document.getElementById(t.paneId);
+        if (pane) pane.style.display = isActive ? 'block' : 'none';
+        const btn = document.getElementById(t.btnId);
+        if (btn) {
+            btn.style.background = isActive ? 'var(--color-primary)' : 'transparent';
+            btn.style.color = isActive ? '#fff' : '#aaa';
+            btn.style.borderBottomColor = isActive ? 'var(--color-primary)' : 'transparent';
+        }
+    }
 
-    document.getElementById('tabTeamMatches').style.background = isSingle ? 'transparent' : 'var(--color-primary)';
-    document.getElementById('tabTeamMatches').style.color = isSingle ? '#aaa' : '#fff';
-    document.getElementById('tabTeamMatches').style.borderBottomColor = isSingle ? 'transparent' : 'var(--color-primary)';
-
-    const isTeam = tab === 'team';
     const btn = document.getElementById('deleteAllMatchHistoryBtn');
-    if (btn) btn.textContent = isTeam ? 'Slet Alt Holdkamphistorik' : 'Slet Alt Kamphistorik';
+    if (btn) {
+        if (tab === 'team') btn.textContent = 'Slet Alt Holdkamphistorik';
+        else if (tab === 'tournament') btn.textContent = 'Slet Alle Turneringer';
+        else btn.textContent = 'Slet Alt Kamphistorik';
+    }
 
     loadActiveHistoryTab();
 }
@@ -688,8 +810,89 @@ function switchHistoryTab(tab) {
 async function loadActiveHistoryTab() {
     if (activeHistoryTab === 'single') {
         await loadAllMatches();
-    } else {
+    } else if (activeHistoryTab === 'team') {
         await loadTeamMatchHistory();
+    } else if (activeHistoryTab === 'tournament') {
+        await loadTournamentMatchHistory();
+    }
+}
+
+async function loadTournamentMatchHistory() {
+    const container = document.getElementById('tournamentMatchHistoryContainer');
+    if (!container) return;
+    try {
+        // Hent BÅDE aktive og afsluttede turneringer — finished matches skal vises selv
+        // hvis deres turnering stadig er aktiv (ellers gemmer historikken først ved
+        // turneringens afslutning, hvilket ikke giver mening for løbende stævner).
+        const [active, history] = await Promise.all([
+            api.getActiveTournaments(),
+            api.getTournamentHistory()
+        ]);
+        const combined = [...(active || []), ...(history || [])];
+        // Kun turneringer der har mindst én afsluttet kamp
+        const tournaments = combined.filter(t => (t.matches || []).some(m => m.status === 'finished'));
+
+        if (tournaments.length === 0) {
+            container.innerHTML = '<p style="color:#aaa; font-style:italic;">Ingen afsluttede turneringskampe endnu.</p>';
+            return;
+        }
+
+        const cards = tournaments.map(t => {
+            // I historik-visning viser vi KUN færdige kampe (pending/active er irrelevant her)
+            const finishedMatches = (t.matches || []).filter(m => m.status === 'finished');
+            const playedCount = finishedMatches.length;
+            const totalCount = (t.matches || []).length;
+            const date = new Date(t.created_at).toLocaleDateString('da-DK', { day: '2-digit', month: 'short', year: 'numeric' });
+            const statusBadge = t.status === 'active'
+                ? '<span style="background:#2e8b57; color:#fff; padding:2px 7px; border-radius:4px; font-size:0.75em; margin-left:6px;">PÅGÅR</span>'
+                : '';
+
+            const matchRows = finishedMatches.map(m => {
+                const side1 = m.doubles
+                    ? `${m.side1_player1 || '?'}${m.side1_player2 ? ' & ' + m.side1_player2 : ''}`
+                    : (m.side1_player1 || '?');
+                const side2 = m.doubles
+                    ? `${m.side2_player1 || '?'}${m.side2_player2 ? ' & ' + m.side2_player2 : ''}`
+                    : (m.side2_player1 || '?');
+
+                const winnerLabel = m.winner_team === 1 ? side1 : (m.winner_team === 2 ? side2 : '?');
+                const winnerColor = m.winner_team === 1 ? '#4CAF50' : 'var(--color-accent)';
+                const scoreNums = m.set_scores ? (m.set_scores.match(/\d+-\d+/g) || []).join(' · ') : '';
+                const scores = scoreNums ? `<span style="color:#aaa; font-size:0.8em; margin-left:6px;">${scoreNums}</span>` : '';
+                const resultHtml = `<span style="color:${winnerColor}; font-size:0.85em; font-weight:bold;">✓ ${escapeHtml(winnerLabel)}</span>${scores}`;
+
+                const labelBadge = m.label
+                    ? `<span style="background:var(--color-accent); color:#fff; padding:2px 7px; border-radius:4px; font-size:0.78em; font-weight:bold; white-space:nowrap;">${escapeHtml(m.label)}</span>`
+                    : `<span style="background:#444; color:#fff; padding:2px 7px; border-radius:4px; font-size:0.78em; white-space:nowrap;">#${m.match_order}</span>`;
+
+                return `<div style="display:flex; align-items:center; gap:10px; padding:7px 10px; border-left:3px solid ${winnerColor}; background:rgba(255,255,255,0.03); border-radius:4px; margin-bottom:4px; flex-wrap:wrap;">
+                    ${labelBadge}
+                    <span style="color:#eaeaea; font-size:0.85em; flex:1; min-width:120px;">${escapeHtml(side1)} <span style="color:#aaa;">vs</span> ${escapeHtml(side2)}</span>
+                    ${resultHtml}
+                </div>`;
+            }).join('');
+
+            return `<div style="background:rgba(var(--color-primary-rgb),0.15); border:1px solid var(--color-primary); border-radius:8px; margin-bottom:12px; overflow:hidden;">
+                <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; cursor:pointer; flex-wrap:wrap; gap:8px;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                        <span style="font-size:1.1em; font-weight:bold; color:#eaeaea;">${escapeHtml(t.name)}${statusBadge}</span>
+                        <span style="color:#aaa; font-size:0.85em;">${playedCount}/${totalCount} kampe spillet</span>
+                        <span style="color:#666; font-size:0.8em;">${date}</span>
+                    </div>
+                    <span style="color:#aaa; font-size:0.85em;">▼ Se kampe</span>
+                </div>
+                <div style="display:none; padding:0 16px 12px;">
+                    ${matchRows}
+                </div>
+            </div>`;
+        }).join('');
+
+        container.innerHTML = `
+            <h3 style="color:#eaeaea; margin-bottom:12px; font-size:1.1em; border-bottom:1px solid #333; padding-bottom:8px;">🏆 Turneringer (${tournaments.length})</h3>
+            ${cards}`;
+    } catch (error) {
+        console.error('Failed to load tournament history:', error);
+        container.innerHTML = '<p style="color:#e74c3c;">Kunne ikke indlæse turneringshistorik.</p>';
     }
 }
 
@@ -773,7 +976,7 @@ async function loadTeamMatchHistory() {
 }
 
 function hideAllSections() {
-    ['courtOverviewSection', 'holdkampSection', 'matchHistorySection', 'deviceTokensSection']
+    ['courtOverviewSection', 'holdkampSection', 'tournamentSection', 'matchHistorySection', 'deviceTokensSection']
         .forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
@@ -782,8 +985,11 @@ function hideAllSections() {
 
 function showCourtOverview() {
     stopHoldkampRefresh();
+    stopTournamentRefresh();
     document.getElementById('matchHistorySection').style.display = 'none';
     document.getElementById('holdkampSection').style.display = 'none';
+    const tournamentSection = document.getElementById('tournamentSection');
+    if (tournamentSection) tournamentSection.style.display = 'none';
     document.getElementById('deviceTokensSection').style.display = 'none';
     document.getElementById('courtOverviewSection').style.display = 'block';
     setNavActive('overview');
@@ -830,10 +1036,11 @@ function stopHoldkampRefresh() {
 
 async function loadActiveHoldkamp() {
     try {
-        const [teamMatch, allGameStates, settings] = await Promise.all([
+        const [teamMatch, allGameStates, settings, activeTournaments] = await Promise.all([
             api.getActiveTeamMatch(),
             api.getAllGameStates(),
-            api.getSettings()
+            api.getSettings(),
+            api.getActiveTournaments()
         ]);
         const container = document.getElementById('activeHoldkampContainer');
         const createForm = document.getElementById('createHoldkampForm');
@@ -842,6 +1049,7 @@ async function loadActiveHoldkamp() {
         if (teamMatch) {
             container.style.display = 'block';
             createForm.style.display = 'none';
+            renderHoldkampBlocker(null);
             // Don't re-render while an edit form is open — it would clear the user's input
             if (!holdkampEditOpen) {
                 renderActiveHoldkamp(teamMatch, container, allGameStates, courtCount, settings.defaultGameMode || '21');
@@ -850,14 +1058,46 @@ async function loadActiveHoldkamp() {
             if (!holdkampRefreshTimer) {
                 holdkampRefreshTimer = setInterval(loadActiveHoldkamp, 3000);
             }
+        } else if (activeTournaments && activeTournaments.length > 0) {
+            // Aktiv turnering blokerer oprettelse af holdkamp
+            stopHoldkampRefresh();
+            container.style.display = 'none';
+            createForm.style.display = 'none';
+            renderHoldkampBlocker(activeTournaments[0]);
         } else {
             stopHoldkampRefresh();
             container.style.display = 'none';
             createForm.style.display = 'block';
+            renderHoldkampBlocker(null);
         }
     } catch (error) {
         console.error('Failed to load holdkamp:', error);
     }
+}
+
+function renderHoldkampBlocker(activeTournament) {
+    let blocker = document.getElementById('holdkampBlocker');
+    if (!activeTournament) {
+        if (blocker) blocker.remove();
+        return;
+    }
+    if (!blocker) {
+        blocker = document.createElement('div');
+        blocker.id = 'holdkampBlocker';
+        blocker.style.cssText = 'margin-bottom:25px; padding:20px; background:rgba(241,196,15,0.1); border:2px solid #f1c40f; border-radius:10px;';
+        const section = document.getElementById('holdkampSection');
+        // Indsæt øverst efter h2-headeren
+        const h2Wrap = section.querySelector('div');
+        h2Wrap.insertAdjacentElement('afterend', blocker);
+    }
+    blocker.innerHTML = `
+        <h3 style="color:#f1c40f; margin:0 0 10px 0;">⚠ Aktiv turnering findes</h3>
+        <p style="color:#ccc; margin:0 0 12px 0; line-height:1.5;">
+            Du har en aktiv turnering: <strong>${escapeHtml(activeTournament.name)}</strong>.<br>
+            Du kan kun have én aktiv holdkamp ELLER turnering ad gangen. Afslut eller slet turneringen først.
+        </p>
+        <a href="#tournament" onclick="event.preventDefault(); showTournament();" class="btn-primary" style="display:inline-block; text-decoration:none;">Gå til Turnering</a>
+    `;
 }
 
 function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCount = 5, gameMode = '21') {
@@ -1131,7 +1371,9 @@ async function startHoldkamp() {
         await loadActiveHoldkamp();
     } catch (error) {
         console.error('Failed to create holdkamp:', error);
-        showMessage('Fejl', 'Kunne ikke oprette holdkamp. Prøv igen.');
+        // 409: backend afviste fordi en turnering er aktiv — vis dens besked direkte
+        const friendly = error.status === 409 ? error.message : 'Kunne ikke oprette holdkamp. Prøv igen.';
+        showMessage(error.status === 409 ? 'Kan ikke oprette holdkamp' : 'Fejl', friendly);
     }
 }
 
@@ -2281,7 +2523,372 @@ async function bpCreate() {
         // Reload active holdkamp view
         await loadActiveHoldkamp();
     } catch (err) {
-        showMessage('Fejl', 'Kunne ikke oprette holdkamp: ' + err.message);
+        if (err.status === 409) {
+            showMessage('Kan ikke oprette holdkamp', err.message);
+        } else {
+            showMessage('Fejl', 'Kunne ikke oprette holdkamp: ' + err.message);
+        }
+    }
+}
+
+// ==================== TOURNAMENT (Planlagte kampe) ====================
+
+let tournamentRefreshTimer = null;
+let tournamentAutocompleteSetupIds = new Set();
+
+async function showTournament() {
+    hideAllSections();
+    document.getElementById('tournamentSection').style.display = 'block';
+    setNavActive('tournament');
+    history.replaceState(null, '', '#tournament');
+    await loadActiveTournaments();
+    if (!tournamentRefreshTimer) {
+        tournamentRefreshTimer = setInterval(loadActiveTournaments, 3000);
+    }
+}
+
+function stopTournamentRefresh() {
+    if (tournamentRefreshTimer) {
+        clearInterval(tournamentRefreshTimer);
+        tournamentRefreshTimer = null;
+    }
+}
+
+async function loadActiveTournaments() {
+    try {
+        const [tournaments, activeTeamMatch] = await Promise.all([
+            api.getActiveTournaments(),
+            api.getActiveTeamMatch()
+        ]);
+
+        const createForm = document.getElementById('createTournamentForm');
+        const container = document.getElementById('activeTournamentsContainer');
+
+        // Aktiv holdkamp blokerer oprettelse af ny turnering — men hvis der allerede
+        // findes aktive turneringer vises de stadig (de skal kunne administreres til ende).
+        if (activeTeamMatch && (!tournaments || tournaments.length === 0)) {
+            if (createForm) createForm.style.display = 'none';
+            renderTournamentBlocker(activeTeamMatch);
+            if (container) container.innerHTML = '';
+            return;
+        }
+
+        // Skjul blocker hvis tilstanden er normal igen
+        renderTournamentBlocker(null);
+        if (createForm) {
+            createForm.style.display = activeTeamMatch ? 'none' : 'block';
+        }
+
+        // Spring re-render over hvis brugeren skriver i et input i turnerings-sektionen.
+        // Vigtigt: tjek KUN for input/textarea — ellers blokerer et fokuseret button
+        // (efter klik på "Tilføj kamp" eller "Slet") også re-render.
+        const active = document.activeElement;
+        if (container && active && container.contains(active) &&
+            (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+            return;
+        }
+
+        renderTournaments(tournaments);
+    } catch (error) {
+        console.error('Failed to load tournaments:', error);
+    }
+}
+
+function renderTournamentBlocker(activeTeamMatch) {
+    let blocker = document.getElementById('tournamentBlocker');
+    if (!activeTeamMatch) {
+        if (blocker) blocker.remove();
+        return;
+    }
+    if (!blocker) {
+        blocker = document.createElement('div');
+        blocker.id = 'tournamentBlocker';
+        blocker.style.cssText = 'margin-bottom:25px; padding:20px; background:rgba(241,196,15,0.1); border:2px solid #f1c40f; border-radius:10px;';
+        const section = document.getElementById('tournamentSection');
+        const headerWrap = section.querySelector('div');
+        headerWrap.insertAdjacentElement('afterend', blocker);
+    }
+    blocker.innerHTML = `
+        <h3 style="color:#f1c40f; margin:0 0 10px 0;">⚠ Aktiv holdkamp findes</h3>
+        <p style="color:#ccc; margin:0 0 12px 0; line-height:1.5;">
+            Du har en aktiv holdkamp: <strong>${escapeHtml(activeTeamMatch.team1_name)} vs ${escapeHtml(activeTeamMatch.team2_name)}</strong>.<br>
+            Du kan kun have én aktiv holdkamp ELLER turnering ad gangen. Afslut eller slet holdkampen først.
+        </p>
+        <a href="#holdkamp" onclick="event.preventDefault(); showHoldkamp();" class="btn-primary" style="display:inline-block; text-decoration:none;">Gå til Holdkamp</a>
+    `;
+}
+
+async function handleCreateTournament() {
+    const input = document.getElementById('tournamentNameInput');
+    const name = input.value.trim();
+    if (!name) {
+        showMessage('Fejl', 'Indtast et navn til turneringen');
+        return;
+    }
+    try {
+        await api.createTournament(name);
+        input.value = '';
+        await loadActiveTournaments();
+    } catch (err) {
+        // 409: backend afviste fordi en holdkamp er aktiv — vis dens besked direkte
+        if (err.status === 409) {
+            showMessage('Kan ikke oprette turnering', err.message);
+        } else {
+            showMessage('Fejl', 'Kunne ikke oprette turnering: ' + (err.message || err));
+        }
+    }
+}
+
+// Bevarer åbne "tilføj kamp"-forms mellem refresh så brugerens input ikke forsvinder.
+// Map<tournamentId, { label, doubles, p1, p2, p3, p4 }>
+const tournamentDraftState = new Map();
+
+function captureTournamentDrafts() {
+    document.querySelectorAll('[data-tournament-add-form]').forEach(form => {
+        const tId = form.getAttribute('data-tournament-add-form');
+        const draft = {
+            label: form.querySelector(`#t${tId}_label`)?.value || '',
+            doubles: form.querySelector(`#t${tId}_doubles`)?.checked || false,
+            p1: form.querySelector(`#t${tId}_side1p1`)?.value || '',
+            p2: form.querySelector(`#t${tId}_side1p2`)?.value || '',
+            p3: form.querySelector(`#t${tId}_side2p1`)?.value || '',
+            p4: form.querySelector(`#t${tId}_side2p2`)?.value || ''
+        };
+        if (draft.label || draft.p1 || draft.p2 || draft.p3 || draft.p4) {
+            tournamentDraftState.set(tId, draft);
+        }
+    });
+}
+
+function renderTournaments(tournaments) {
+    captureTournamentDrafts();
+
+    const container = document.getElementById('activeTournamentsContainer');
+    if (!container) return;
+
+    if (!tournaments || tournaments.length === 0) {
+        container.innerHTML = '<p style="color:#aaa; font-style:italic;">Ingen aktive turneringer. Opret en ovenfor for at komme i gang.</p>';
+        return;
+    }
+
+    container.innerHTML = tournaments.map(t => renderTournamentBlock(t)).join('');
+
+    // DOM-elementer er lige genskabt — gamle autocomplete-listeners er bundet til
+    // forsvundne nodes. Nulstil cachen så bind sker på de NYE input-elementer.
+    tournamentAutocompleteSetupIds.clear();
+
+    // Re-attach event listeners + autocomplete on the newly rendered forms
+    tournaments.forEach(t => {
+        const addBtn = document.getElementById(`t${t.id}_addBtn`);
+        if (addBtn) addBtn.addEventListener('click', () => addTournamentMatchFromForm(t.id));
+
+        const doublesToggle = document.getElementById(`t${t.id}_doubles`);
+        if (doublesToggle) doublesToggle.addEventListener('change', () => toggleTournamentDoublesUI(t.id));
+        toggleTournamentDoublesUI(t.id);
+
+        const finishBtn = document.getElementById(`t${t.id}_finishBtn`);
+        if (finishBtn) finishBtn.addEventListener('click', () => handleFinishTournament(t.id, t.name));
+
+        const deleteBtn = document.getElementById(`t${t.id}_deleteBtn`);
+        if (deleteBtn) deleteBtn.addEventListener('click', () => handleDeleteTournament(t.id, t.name));
+
+        // Setup autocomplete én gang per input — undgå dobbelt-binding ved refresh
+        ['side1p1', 'side1p2', 'side2p1', 'side2p2'].forEach(slot => {
+            const inputId = `t${t.id}_${slot}`;
+            if (!tournamentAutocompleteSetupIds.has(inputId)) {
+                setupPlayerNameAutocomplete(inputId);
+                tournamentAutocompleteSetupIds.add(inputId);
+            }
+        });
+
+        // Genskab draft hvis brugeren havde påbegyndt input før refresh
+        const draft = tournamentDraftState.get(String(t.id));
+        if (draft) {
+            const labelEl = document.getElementById(`t${t.id}_label`);
+            const doublesEl = document.getElementById(`t${t.id}_doubles`);
+            if (labelEl) labelEl.value = draft.label;
+            if (doublesEl) doublesEl.checked = draft.doubles;
+            const p1 = document.getElementById(`t${t.id}_side1p1`);
+            const p2 = document.getElementById(`t${t.id}_side1p2`);
+            const p3 = document.getElementById(`t${t.id}_side2p1`);
+            const p4 = document.getElementById(`t${t.id}_side2p2`);
+            if (p1) p1.value = draft.p1;
+            if (p2) p2.value = draft.p2;
+            if (p3) p3.value = draft.p3;
+            if (p4) p4.value = draft.p4;
+            toggleTournamentDoublesUI(t.id);
+        }
+    });
+}
+
+function renderTournamentBlock(t) {
+    const matches = t.matches || [];
+    const matchesHtml = matches.length === 0
+        ? '<p style="color:#888; font-style:italic; padding: 8px 0;">Ingen kampe endnu — tilføj nedenfor.</p>'
+        : matches.map(m => renderTournamentMatchRow(t.id, m)).join('');
+
+    return `
+        <div style="margin-bottom: 25px; padding: 20px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;" data-tournament-id="${t.id}">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+                <h3 style="color: var(--color-accent); margin:0;">${escapeHtml(t.name)}</h3>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button id="t${t.id}_finishBtn" class="btn-secondary" style="padding:6px 14px; font-size:0.88em;">Afslut turnering</button>
+                    <button id="t${t.id}_deleteBtn" class="btn-danger" style="padding:6px 14px; font-size:0.88em;">Slet</button>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 18px;">
+                ${matchesHtml}
+            </div>
+
+            <div data-tournament-add-form="${t.id}" style="padding: 14px; background: rgba(0,0,0,0.25); border-radius: 8px;">
+                <h4 style="margin: 0 0 12px 0; color: #ccc; font-size: 0.95em;">Tilføj kamp</h4>
+
+                <div style="display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-bottom: 10px; align-items: center;">
+                    <input type="text" id="t${t.id}_label" placeholder="Label (valgfri) – fx 'U13 HS pulje A'"
+                           style="padding:8px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid #444; border-radius:4px;">
+                    <label style="display:flex; align-items:center; gap:6px; color:#ccc; font-size:0.9em; white-space:nowrap;">
+                        <input type="checkbox" id="t${t.id}_doubles" style="width:16px; height:16px; cursor:pointer;">
+                        Double
+                    </label>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                    <div>
+                        <label style="display:block; color:#aaa; font-size:0.82em; margin-bottom:4px;">Side 1 – spiller 1</label>
+                        <input type="text" id="t${t.id}_side1p1" placeholder="Spillernavn"
+                               style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid #444; border-radius:4px;">
+                    </div>
+                    <div>
+                        <label style="display:block; color:#aaa; font-size:0.82em; margin-bottom:4px;">Side 2 – spiller 1</label>
+                        <input type="text" id="t${t.id}_side2p1" placeholder="Spillernavn"
+                               style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid #444; border-radius:4px;">
+                    </div>
+                    <div id="t${t.id}_side1p2_wrap" style="display:none;">
+                        <label style="display:block; color:#aaa; font-size:0.82em; margin-bottom:4px;">Side 1 – makker</label>
+                        <input type="text" id="t${t.id}_side1p2" placeholder="Makker"
+                               style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid #444; border-radius:4px;">
+                    </div>
+                    <div id="t${t.id}_side2p2_wrap" style="display:none;">
+                        <label style="display:block; color:#aaa; font-size:0.82em; margin-bottom:4px;">Side 2 – makker</label>
+                        <input type="text" id="t${t.id}_side2p2" placeholder="Makker"
+                               style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid #444; border-radius:4px;">
+                    </div>
+                </div>
+
+                <button id="t${t.id}_addBtn" class="btn-primary" style="width:100%; padding:10px;">+ Tilføj Kamp</button>
+            </div>
+        </div>
+    `;
+}
+
+function renderTournamentMatchRow(tournamentId, m) {
+    const side1 = m.doubles
+        ? `${m.side1_player1 || '?'}${m.side1_player2 ? ' & ' + m.side1_player2 : ''}`
+        : (m.side1_player1 || '?');
+    const side2 = m.doubles
+        ? `${m.side2_player1 || '?'}${m.side2_player2 ? ' & ' + m.side2_player2 : ''}`
+        : (m.side2_player1 || '?');
+
+    let statusBadge = '';
+    let courtInfo = '';
+    if (m.status === 'pending') {
+        statusBadge = '<span style="background:#555;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.78em;">Afventer</span>';
+    } else if (m.status === 'active') {
+        statusBadge = `<span style="background:#2e8b57;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.78em;">I gang – Bane ${m.court_number ?? '?'}</span>`;
+    } else if (m.status === 'finished') {
+        const winnerLabel = m.winner_team === 1 ? side1 : (m.winner_team === 2 ? side2 : '?');
+        statusBadge = `<span style="background:#2e8b57;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.78em;">✓ ${escapeHtml(winnerLabel)} vandt</span>`;
+        if (m.set_scores) {
+            courtInfo = `<div style="color:#999; font-size:0.82em; margin-top:3px;">${escapeHtml(m.set_scores)}</div>`;
+        }
+    }
+
+    const labelHtml = m.label
+        ? `<span style="color:#aaa; font-size:0.85em; margin-right:8px;">${escapeHtml(m.label)}</span>`
+        : '';
+
+    return `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:rgba(0,0,0,0.2); border-radius:6px; margin-bottom:6px; gap:10px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:200px;">
+                <div style="color:#eaeaea;">
+                    ${labelHtml}<strong>${escapeHtml(side1)}</strong> <span style="color:#777;">vs</span> <strong>${escapeHtml(side2)}</strong>
+                </div>
+                ${courtInfo}
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                ${statusBadge}
+                ${m.status !== 'active' ? `<button onclick="confirmDeleteTournamentMatch(${tournamentId}, ${m.id})" style="padding:4px 10px; background:transparent; color:#e74c3c; border:1px solid #e74c3c; border-radius:4px; cursor:pointer; font-size:0.8em;">Slet</button>` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function toggleTournamentDoublesUI(tournamentId) {
+    const doublesEl = document.getElementById(`t${tournamentId}_doubles`);
+    const isDoubles = !!doublesEl?.checked;
+    const wrap1 = document.getElementById(`t${tournamentId}_side1p2_wrap`);
+    const wrap2 = document.getElementById(`t${tournamentId}_side2p2_wrap`);
+    if (wrap1) wrap1.style.display = isDoubles ? 'block' : 'none';
+    if (wrap2) wrap2.style.display = isDoubles ? 'block' : 'none';
+}
+
+async function addTournamentMatchFromForm(tournamentId) {
+    const label = document.getElementById(`t${tournamentId}_label`)?.value.trim() || '';
+    const doubles = !!document.getElementById(`t${tournamentId}_doubles`)?.checked;
+    const side1Player1 = document.getElementById(`t${tournamentId}_side1p1`)?.value.trim() || '';
+    const side1Player2 = doubles ? (document.getElementById(`t${tournamentId}_side1p2`)?.value.trim() || '') : '';
+    const side2Player1 = document.getElementById(`t${tournamentId}_side2p1`)?.value.trim() || '';
+    const side2Player2 = doubles ? (document.getElementById(`t${tournamentId}_side2p2`)?.value.trim() || '') : '';
+
+    if (!side1Player1 || !side2Player1) {
+        showMessage('Fejl', 'Begge sider skal mindst have spiller 1 udfyldt');
+        return;
+    }
+    if (doubles && (!side1Player2 || !side2Player2)) {
+        showMessage('Fejl', 'For double skal alle 4 spillerfelter udfyldes');
+        return;
+    }
+
+    try {
+        await api.addTournamentMatch(tournamentId, {
+            label, doubles, side1Player1, side1Player2, side2Player1, side2Player2
+        });
+        tournamentDraftState.delete(String(tournamentId));
+        await loadActiveTournaments();
+    } catch (err) {
+        showMessage('Fejl', 'Kunne ikke tilføje kamp: ' + (err.message || err));
+    }
+}
+
+async function confirmDeleteTournamentMatch(tournamentId, matchId) {
+    if (!confirm('Slet denne kamp?')) return;
+    try {
+        await api.deleteTournamentMatch(tournamentId, matchId);
+        await loadActiveTournaments();
+    } catch (err) {
+        showMessage('Fejl', 'Kunne ikke slette kamp: ' + (err.message || err));
+    }
+}
+
+async function handleFinishTournament(tournamentId, name) {
+    if (!confirm(`Afslut turneringen "${name}"? Den flyttes til historikken.`)) return;
+    try {
+        await api.finishTournament(tournamentId);
+        await loadActiveTournaments();
+    } catch (err) {
+        showMessage('Fejl', 'Kunne ikke afslutte turnering: ' + (err.message || err));
+    }
+}
+
+async function handleDeleteTournament(tournamentId, name) {
+    if (!confirm(`Slet turneringen "${name}" og alle dens kampe? Dette kan ikke fortrydes.`)) return;
+    try {
+        await api.deleteTournament(tournamentId);
+        tournamentDraftState.delete(String(tournamentId));
+        await loadActiveTournaments();
+    } catch (err) {
+        showMessage('Fejl', 'Kunne ikke slette turnering: ' + (err.message || err));
     }
 }
 

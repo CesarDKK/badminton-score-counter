@@ -69,6 +69,16 @@ router.post('/', authMiddleware, async (req, res, next) => {
             return res.status(400).json({ error: 'Alle felter er påkrævet' });
         }
 
+        // Bloker hvis der findes en aktiv turnering — én type ad gangen
+        const activeTournament = await queryOne(
+            `SELECT id, name FROM tournaments WHERE status = 'active' LIMIT 1`
+        );
+        if (activeTournament) {
+            return res.status(409).json({
+                error: `Du har en aktiv turnering ("${activeTournament.name}"). Afslut eller slet den før du opretter en holdkamp.`
+            });
+        }
+
         // Mark any existing active matches as finished
         await query(`UPDATE team_matches SET status = 'finished' WHERE status = 'active'`);
 

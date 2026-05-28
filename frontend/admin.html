@@ -45,6 +45,7 @@
                 <div class="admin-nav-row" id="adminNavRow">
                     <button id="backToOverviewNavBtn" class="btn-primary" data-section="overview" style="display:none;">← Oversigt</button>
                     <button id="holdkampBtn" class="btn-primary" data-section="holdkamp">Holdkamp</button>
+                    <button id="tournamentBtn" class="btn-primary" data-section="tournament">Turnering</button>
                     <button id="matchHistoryBtn" class="btn-primary" data-section="history">Kamphistorik</button>
                     <a href="player-info.html" class="btn-primary" style="text-decoration: none; display: inline-block;">Spiller Info</a>
                     <a href="settings.html" class="btn-primary" style="text-decoration: none; display: inline-block;">Indstillinger</a>
@@ -127,6 +128,27 @@
                 </div>
             </div>
 
+            <!-- Tournament Section -->
+            <div id="tournamentSection" class="overview-section" style="display: none;">
+                <div style="margin-bottom: 20px;">
+                    <h2>Turnering</h2>
+                    <p style="color: #aaa; font-size: 0.95em; margin-top: 6px;">Sæt planlagte kampe op på forhånd — spillernavne er klar når banen henter kampen.</p>
+                </div>
+
+                <!-- Create new tournament -->
+                <div id="createTournamentForm" style="margin-bottom: 25px; padding: 20px; background: rgba(var(--color-primary-rgb),0.1); border: 1px solid var(--color-primary); border-radius: 10px;">
+                    <h3 style="color: var(--color-accent); margin-bottom: 12px;">Opret Ny Turnering</h3>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <input type="text" id="tournamentNameInput" placeholder="Turneringens navn (fx U13 stævne 28. maj)"
+                               style="flex:1; min-width:240px; padding:10px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid var(--color-primary); border-radius:5px;">
+                        <button id="createTournamentBtn" class="btn-primary" style="white-space:nowrap;">Opret Turnering</button>
+                    </div>
+                </div>
+
+                <!-- Active tournaments list (rendered dynamically) -->
+                <div id="activeTournamentsContainer"></div>
+            </div>
+
             <!-- Match History Section -->
             <div id="matchHistorySection" class="overview-section" style="display: none;">
                 <div style="margin-bottom: 20px;">
@@ -138,6 +160,7 @@
                 <div style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 0;">
                     <button id="tabSingleMatches" onclick="switchHistoryTab('single')" style="padding: 8px 18px; background: var(--color-primary); color: #fff; border: none; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 0.95em; margin-bottom: -2px; border-bottom: 2px solid var(--color-primary);">Enkelt kampe</button>
                     <button id="tabTeamMatches" onclick="switchHistoryTab('team')" style="padding: 8px 18px; background: transparent; color: #aaa; border: none; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 0.95em; margin-bottom: -2px; border-bottom: 2px solid transparent;">Holdkampe</button>
+                    <button id="tabTournamentMatches" onclick="switchHistoryTab('tournament')" style="padding: 8px 18px; background: transparent; color: #aaa; border: none; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 0.95em; margin-bottom: -2px; border-bottom: 2px solid transparent;">Turnering</button>
                 </div>
 
                 <!-- Single matches tab -->
@@ -160,6 +183,11 @@
                 <!-- Team matches tab -->
                 <div id="teamMatchesTab" style="display: none;">
                     <div id="teamMatchHistoryContainer"></div>
+                </div>
+
+                <!-- Tournament matches tab -->
+                <div id="tournamentMatchesTab" style="display: none;">
+                    <div id="tournamentMatchHistoryContainer"></div>
                 </div>
 
                 <!-- Delete Match History Section -->
@@ -185,7 +213,16 @@
                             <p class="toggle-hint">Aktivér dette for at angive at banen er optaget eller reserveret, selv før pointtælling begynder.</p>
                         </div>
 
-                        <!-- 2. Spillernavne -->
+                        <!-- 2. Planlagt kamp fra turnering -->
+                        <div id="editTournamentMatchWrap" style="margin-bottom: 20px; display: none;">
+                            <label>Planlagt kamp fra turnering:</label>
+                            <select id="editTournamentMatchSelect" style="width:100%; padding:10px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid var(--color-primary); border-radius:5px; margin-top:5px;">
+                                <option value="">-- Manuel (skriv navne nedenfor) --</option>
+                            </select>
+                            <p style="color:#888; font-size:0.82em; margin-top:6px; margin-bottom:0;">Vælg en pending kamp fra en aktiv turnering for at fylde spillernavne ind og markere kampen som i gang på denne bane.</p>
+                        </div>
+
+                        <!-- 3. Spillernavne -->
                         <label>Spiller 1 Navn:</label>
                         <input type="text" id="editPlayer1Name" placeholder="Spiller 1">
 
@@ -297,6 +334,6 @@
     <script src="js/utils.js?v=2"></script>
     <script src="js/api.js?v=5"></script>
     <script src="js/auth-guard.js?v=1"></script>
-    <script src="admin-script.js?v=5"></script>
+    <script src="admin-script.js?v=12"></script>
 </body>
 </html>

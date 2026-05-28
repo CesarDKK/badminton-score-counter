@@ -650,6 +650,63 @@ class BadmintonAPI {
         });
     }
 
+    // ==================== Tournaments (Planlagte kampe) ====================
+
+    /** Get all active tournaments with their matches */
+    async getActiveTournaments() {
+        return this.request('/tournaments/active');
+    }
+
+    /** Get tournament history (finished) */
+    async getTournamentHistory() {
+        return this.request('/tournaments/history');
+    }
+
+    /** Create a new tournament */
+    async createTournament(name) {
+        return this.request('/tournaments', {
+            method: 'POST',
+            body: JSON.stringify({ name })
+        });
+    }
+
+    /** Add a match to a tournament */
+    async addTournamentMatch(tournamentId, match) {
+        return this.request(`/tournaments/${tournamentId}/matches`, {
+            method: 'POST',
+            body: JSON.stringify(match)
+        });
+    }
+
+    /** Update a match within a tournament */
+    async updateTournamentMatch(tournamentId, matchId, updates) {
+        return this.request(`/tournaments/${tournamentId}/matches/${matchId}`, {
+            method: 'PUT',
+            body: JSON.stringify(updates)
+        });
+    }
+
+    /** Mark a tournament as finished */
+    async finishTournament(tournamentId) {
+        return this.request(`/tournaments/${tournamentId}/finish`, {
+            method: 'PUT'
+        });
+    }
+
+    /** Delete a tournament (cascade removes matches) */
+    async deleteTournament(tournamentId) {
+        return this.request(`/tournaments/${tournamentId}`, {
+            method: 'DELETE'
+        });
+    }
+
+    /** Delete a single match from a tournament */
+    async deleteTournamentMatch(tournamentId, matchId) {
+        return this.request(`/tournaments/${tournamentId}/matches/${matchId}`, {
+            method: 'DELETE'
+        });
+    }
+
     // ==================== Club Admin Auth ====================
 
     async loginAsClubAdmin(username, password) {
