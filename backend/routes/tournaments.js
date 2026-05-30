@@ -126,6 +126,51 @@ router.post('/:id/matches', authMiddleware, async (req, res, next) => {
     }
 });
 
+// POST /api/tournaments/:id/matches/bulk - Tilføj mange kampe på én gang (kræver auth)
+// Bruges af import-flowet så vi ikke laver hundredvis af enkelt-kald.
+router.post('/:id/matches/bulk', authMiddleware, async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { matches } = req.body;
+
+        if (!Array.isArray(matches) || matches.length === 0) {
+            return res.status(400).json({ error: 'Ingen kampe at tilføje' });
+        }
+
+        const tournament = await queryOne('SELECT id FROM tournaments WHERE id = ?', [id]);
+        if (!tournament) {
+            return res.status(404).json({ error: 'Turnering ikke fundet' });
+        }
+
+        const maxRow = await queryOne(
+            'SELECT COALESCE(MAX(match_order), 0) AS max_order FROM tournament_matches WHERE tournament_id = ?',
+            [id]
+        );
+        let nextOrder = (maxRow?.max_order || 0) + 1;
+        let inserted = 0;
+
+        for (const m of matches) {
+            await query(
+                `INSERT INTO tournament_matches
+                 (tournament_id, match_order, label, doubles,
+                  side1_player1, side1_player2, side2_player1, side2_player2)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    id, nextOrder, m.label || null, m.doubles ? 1 : 0,
+                    m.side1Player1 || null, m.side1Player2 || null,
+                    m.side2Player1 || null, m.side2Player2 || null
+                ]
+            );
+            nextOrder++;
+            inserted++;
+        }
+
+        res.json({ success: true, inserted });
+    } catch (error) {
+        next(error);
+    }
+});
+
 // PUT /api/tournaments/:id/matches/:matchId - Opdater kamp (public — bruges fra court)
 router.put('/:id/matches/:matchId', async (req, res, next) => {
     try {

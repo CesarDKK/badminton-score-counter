@@ -138,6 +138,7 @@ app.use('/api/sponsors', require('./routes/sponsors'));
 app.use('/api/team-matches', require('./routes/teamMatches'));
 app.use('/api/tournaments', require('./routes/tournaments'));
 app.use('/api/import', require('./routes/importHoldkamp'));
+app.use('/api/import/tournament', require('./routes/importTournament'));
 app.use('/api/backup', require('./routes/backup'));
 
 app.use(notFoundHandler);

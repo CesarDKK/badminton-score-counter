@@ -707,6 +707,23 @@ class BadmintonAPI {
         });
     }
 
+    /** Bulk-add multiple matches to a tournament (used by import) */
+    async addTournamentMatchesBulk(tournamentId, matches) {
+        return this.request(`/tournaments/${tournamentId}/matches/bulk`, {
+            method: 'POST',
+            body: JSON.stringify({ matches })
+        });
+    }
+
+    /** Preview a tournament import from tournamentsoftware.com URL */
+    async previewTournamentImport(url) {
+        return this.request('/import/tournament/preview', {
+            method: 'POST',
+            body: JSON.stringify({ url }),
+            timeout: 45000 // scraping kan tage tid
+        });
+    }
+
     // ==================== Club Admin Auth ====================
 
     async loginAsClubAdmin(username, password) {

@@ -145,6 +145,22 @@
                     </div>
                 </div>
 
+                <!-- Import fra tournamentsoftware.com -->
+                <div id="tsImportForm" style="margin-bottom: 25px; padding: 20px; background: rgba(var(--color-primary-rgb),0.1); border: 1px solid var(--color-primary); border-radius: 10px;">
+                    <h3 style="color: var(--color-accent); margin-bottom: 8px;">Importer fra Tournament Software</h3>
+                    <p style="color: #aaa; font-size: 0.88em; margin-bottom: 14px;">
+                        Indsæt et turneringslink fra <code style="background:rgba(0,0,0,0.3); padding:1px 5px; border-radius:3px;">badmintondenmark.tournamentsoftware.com</code> — kampene hentes automatisk og du kan vælge hvilke der skal importeres.
+                    </p>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <input type="text" id="tsImportUrl"
+                               placeholder="https://badmintondenmark.tournamentsoftware.com/tournament/..."
+                               style="flex:1; min-width:240px; padding:10px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid var(--color-primary); border-radius:5px;">
+                        <button id="tsImportBtn" class="btn-primary" style="white-space:nowrap;">Hent kampdata</button>
+                    </div>
+                    <div id="tsImportStatus" style="display:none; margin-top:10px; padding:10px; border-radius:5px; font-size:0.9em;"></div>
+                    <div id="tsImportPreview" style="display:none; margin-top:20px;"></div>
+                </div>
+
                 <!-- Active tournaments list (rendered dynamically) -->
                 <div id="activeTournamentsContainer"></div>
             </div>
@@ -334,6 +350,6 @@
     <script src="js/utils.js?v=2"></script>
     <script src="js/api.js?v=5"></script>
     <script src="js/auth-guard.js?v=1"></script>
-    <script src="admin-script.js?v=12"></script>
+    <script src="admin-script.js?v=17"></script>
 </body>
 </html>
