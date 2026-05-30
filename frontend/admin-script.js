@@ -560,9 +560,10 @@ async function populateEditTournamentDropdown() {
                 ? `${match.side2_player1 || '?'}${match.side2_player2 ? ' & ' + match.side2_player2 : ''}`
                 : (match.side2_player1 || '?');
             const labelPrefix = match.label ? `${match.label} — ` : '';
+            const numPrefix = match.match_order != null ? `#${match.match_order}  ` : '';
             const opt = document.createElement('option');
             opt.value = `${tournament.id}:${match.id}`;
-            opt.textContent = `${tournament.name}: ${labelPrefix}${side1} vs ${side2}`;
+            opt.textContent = `${numPrefix}${tournament.name}: ${labelPrefix}${side1} vs ${side2}`;
             opt.dataset.match = JSON.stringify({
                 id: match.id,
                 doubles: !!match.doubles,
