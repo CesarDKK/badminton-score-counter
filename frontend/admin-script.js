@@ -387,42 +387,54 @@ function calculateElapsedTime(state) {
 // saveCourtCount and changePassword functions moved to settings-script.js
 
 async function deleteAllMatchHistory() {
-    const isTeam = activeHistoryTab === 'team';
-    const title = isTeam ? 'ADVARSEL' : 'ADVARSEL';
-    const msg1 = isTeam
-        ? 'Er du sikker på at du vil slette AL holdkamphistorik? Dette kan ikke fortrydes!'
-        : 'Er du sikker på at du vil slette ALT kamphistorik? Dette kan ikke fortrydes!';
-    const msg2 = isTeam
-        ? 'Dette vil permanent slette hele holdkamphistorikken. Er du helt sikker?'
-        : 'Dette vil permanent slette hele kamphistorikken. Er du helt sikker?';
-    const successMsg = isTeam
-        ? 'Al holdkamphistorik er blevet slettet!'
-        : 'Alt kamphistorik er blevet slettet!';
+    // Tre forskellige modes — én pr. tab. Tidligere faldt 'tournament' fejlagtigt i
+    // 'single'-grenen, hvilket sletter ALLE enkelt-kampe i stedet for turneringerne.
+    const mode = activeHistoryTab === 'team' ? 'team'
+               : activeHistoryTab === 'tournament' ? 'tournament'
+               : 'single';
+
+    const config = {
+        single: {
+            msg1: 'Er du sikker på at du vil slette ALT kamphistorik for enkelt-kampe? Dette kan ikke fortrydes!',
+            msg2: 'Dette vil permanent slette hele enkelt-kamphistorikken. Er du helt sikker?',
+            success: 'Alt enkelt-kamphistorik er blevet slettet!',
+            apiCall: () => api.deleteAllMatchHistory(),
+            refresh: () => loadAllMatches()
+        },
+        team: {
+            msg1: 'Er du sikker på at du vil slette AL holdkamphistorik? Dette kan ikke fortrydes!',
+            msg2: 'Dette vil permanent slette hele holdkamphistorikken. Er du helt sikker?',
+            success: 'Al holdkamphistorik er blevet slettet!',
+            apiCall: () => api.deleteAllTeamMatches(),
+            refresh: () => loadTeamMatchHistory()
+        },
+        tournament: {
+            msg1: 'Er du sikker på at du vil slette ALLE turneringer? Dette kan ikke fortrydes!',
+            msg2: 'Dette vil permanent slette alle turneringer og deres kampe. Er du helt sikker?',
+            success: 'Alle turneringer er blevet slettet!',
+            apiCall: () => api.deleteAllTournaments(),
+            refresh: () => loadTournamentMatchHistory()
+        }
+    }[mode];
 
     showMessage(
-        title,
-        msg1,
+        'ADVARSEL',
+        config.msg1,
         [
             {
                 text: 'Ja, Fortsæt',
                 callback: () => {
                     showMessage(
                         'SIDSTE ADVARSEL',
-                        msg2,
+                        config.msg2,
                         [
                             {
                                 text: 'Ja, Slet Alt',
                                 callback: async () => {
                                     try {
-                                        if (isTeam) {
-                                            await api.deleteAllTeamMatches();
-                                            showMessage('Succes', successMsg);
-                                            await loadTeamMatchHistory();
-                                        } else {
-                                            await api.deleteAllMatchHistory();
-                                            showMessage('Succes', successMsg);
-                                            await loadAllMatches();
-                                        }
+                                        await config.apiCall();
+                                        showMessage('Succes', config.success);
+                                        await config.refresh();
                                     } catch (error) {
                                         console.error('Failed to delete match history:', error);
                                         showMessage('Fejl', 'Kunne ikke slette historik. Tjek din forbindelse.');

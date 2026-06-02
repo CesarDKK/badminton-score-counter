@@ -700,6 +700,13 @@ class BadmintonAPI {
         });
     }
 
+    /** Delete ALL tournaments (used by Kamphistorik nuke button) */
+    async deleteAllTournaments() {
+        return this.request('/tournaments', {
+            method: 'DELETE'
+        });
+    }
+
     /** Delete a single match from a tournament */
     async deleteTournamentMatch(tournamentId, matchId) {
         return this.request(`/tournaments/${tournamentId}/matches/${matchId}`, {

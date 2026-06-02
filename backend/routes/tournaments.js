@@ -240,6 +240,17 @@ router.put('/:id/finish', authMiddleware, async (req, res, next) => {
     }
 });
 
+// DELETE /api/tournaments - Slet ALLE turneringer (kræver auth, cascade fjerner alle matches)
+// NB: skal stå FØR /:id-routen ellers fanger den ikke den tomme path.
+router.delete('/', authMiddleware, async (req, res, next) => {
+    try {
+        await query('DELETE FROM tournaments');
+        res.json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+});
+
 // DELETE /api/tournaments/:id/matches/:matchId - Slet enkelt kamp (kræver auth)
 router.delete('/:id/matches/:matchId', authMiddleware, async (req, res, next) => {
     try {
