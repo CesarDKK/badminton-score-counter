@@ -409,9 +409,9 @@ async function deleteAllMatchHistory() {
             refresh: () => loadTeamMatchHistory()
         },
         tournament: {
-            msg1: 'Er du sikker på at du vil slette ALLE turneringer? Dette kan ikke fortrydes!',
-            msg2: 'Dette vil permanent slette alle turneringer og deres kampe. Er du helt sikker?',
-            success: 'Alle turneringer er blevet slettet!',
+            msg1: 'Er du sikker på at du vil slette al turneringshistorik? (aktive turneringer bevares)',
+            msg2: 'Dette vil permanent slette alle AFSLUTTEDE turneringer og deres kampe. Aktive turneringer bevares. Er du helt sikker?',
+            success: 'Al turneringshistorik er blevet slettet!',
             apiCall: () => api.deleteAllTournaments(),
             refresh: () => loadTournamentMatchHistory()
         }
@@ -817,7 +817,7 @@ function switchHistoryTab(tab) {
     const btn = document.getElementById('deleteAllMatchHistoryBtn');
     if (btn) {
         if (tab === 'team') btn.textContent = 'Slet Alt Holdkamphistorik';
-        else if (tab === 'tournament') btn.textContent = 'Slet Alle Turneringer';
+        else if (tab === 'tournament') btn.textContent = 'Slet Al Turneringshistorik';
         else btn.textContent = 'Slet Alt Kamphistorik';
     }
 

@@ -240,12 +240,14 @@ router.put('/:id/finish', authMiddleware, async (req, res, next) => {
     }
 });
 
-// DELETE /api/tournaments - Slet ALLE turneringer (kræver auth, cascade fjerner alle matches)
+// DELETE /api/tournaments - Slet alle AFSLUTTEDE turneringer (kræver auth)
+// Bevarer aktive turneringer — det er en "ryd historik"-handling, ikke en nuke.
+// CASCADE på tournament_matches.tournament_id fjerner deres kampe automatisk.
 // NB: skal stå FØR /:id-routen ellers fanger den ikke den tomme path.
 router.delete('/', authMiddleware, async (req, res, next) => {
     try {
-        await query('DELETE FROM tournaments');
-        res.json({ success: true });
+        const result = await query(`DELETE FROM tournaments WHERE status = 'finished'`);
+        res.json({ success: true, deleted: result.affectedRows || 0 });
     } catch (error) {
         next(error);
     }
