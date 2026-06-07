@@ -8,6 +8,7 @@ const authRoutes = require('./routes/auth');
 const tournamentRoutes = require('./routes/tournaments');
 const matchRoutes = require('./routes/matches');
 const teamRoutes = require('./routes/teams');
+const logoRoutes = require('./routes/logos');
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -29,6 +30,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/tournaments', tournamentRoutes);
 app.use('/api', matchRoutes);
 app.use('/api/teams', teamRoutes);
+app.use('/api/logos', logoRoutes);
 
 app.use('/api/uploads', express.static(UPLOAD_DIR, {
   maxAge: '1d',
@@ -40,6 +42,14 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || 'Internal error' });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Football backend listening on port ${PORT}`);
+
+  // Seed landeflag i logo-biblioteket hvis ikke allerede tilstede
+  try {
+    const { seedFlags } = require('./utils/flagSeed');
+    await seedFlags();
+  } catch (err) {
+    console.error('[flagSeed] failed:', err.message);
+  }
 });

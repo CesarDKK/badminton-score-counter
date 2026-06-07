@@ -8,6 +8,7 @@
     pendingLogoFile: null,
     currentTournamentId: null,
     pollInterval: null,
+    club: null, // {id, name, subdomain} — hentes ved init via /api/auth/club-info
   };
 
   function emptyWizard() {
@@ -51,7 +52,10 @@
       document.getElementById('view-' + v).classList.toggle('hidden', v !== view);
     });
     if (view !== 'detail') stopPolling();
-    if (view === 'list') document.getElementById('brandTitle').textContent = 'Admin';
+    if (view === 'list') {
+      const title = state.club ? state.club.name + ' — Admin' : 'Admin';
+      document.getElementById('brandTitle').textContent = title;
+    }
   }
 
   function escapeHtml(s) {
@@ -381,7 +385,7 @@
   function renderHero(t) {
     const hero = document.getElementById('detail-hero');
     hero.innerHTML = `
-      <label class="logo-upload" style="width: 72px; height: 72px;" for="hero-logo-input" title="Upload tournament logo">
+      <button class="logo-upload" id="hero-logo-pick" type="button" style="width: 72px; height: 72px;" title="Vælg tournament logo">
         ${t.logo_path
           ? `<img src="${logoUrl(t.logo_path)}" alt="" />`
           : `<div class="placeholder">
@@ -391,25 +395,15 @@
                  <path d="M21 15l-5-5L5 21"/>
                </svg>
              </div>`}
-        <input type="file" id="hero-logo-input" accept="image/*" />
-      </label>
+      </button>
       <div class="info">
         <h1 class="name">${escapeHtml(t.name)}</h1>
         <span class="pill pill-${t.status}">${t.status.replace('_', ' ')}</span>
       </div>
     `;
-    document.getElementById('brandTitle').textContent = t.name;
-    const input = document.getElementById('hero-logo-input');
-    input.addEventListener('change', async () => {
-      if (!input.files || input.files.length === 0) return;
-      const fd = new FormData();
-      fd.append('logo', input.files[0]);
-      try {
-        await api('/api/tournaments/' + state.currentTournamentId + '/logo', { method: 'POST', body: fd });
-        refreshDetail();
-      } catch (err) {
-        alert('Upload failed: ' + err.message);
-      }
+    document.getElementById('brandTitle').textContent = (state.club ? state.club.name + ' — ' : '') + t.name;
+    document.getElementById('hero-logo-pick').addEventListener('click', () => {
+      pickAndAssignLogo({ kind: 'tournament', id: state.currentTournamentId });
     });
   }
 
@@ -432,10 +426,9 @@
                   <div class="standing-row">
                     <div class="pos">${r.position}</div>
                     <div class="team">
-                      <label class="logo-upload" style="width: 28px; height: 28px; border-radius: var(--r-sm); border-style: solid;" for="team-logo-${r.team_id}" title="Upload team logo">
+                      <button class="logo-upload" type="button" data-team-pick="${r.team_id}" style="width: 28px; height: 28px; border-radius: var(--r-sm); border-style: solid;" title="Vælg team logo">
                         ${teamLogoBareHtml(team)}
-                        <input type="file" id="team-logo-${r.team_id}" accept="image/*" data-team-upload="${r.team_id}" />
-                      </label>
+                      </button>
                       <span class="team-name">${escapeHtml(team ? team.name : '')}</span>
                     </div>
                     <div class="stats">P${r.played}·W${r.wins}·D${r.draws}·L${r.losses}·GD ${r.goal_diff > 0 ? '+' + r.goal_diff : r.goal_diff}</div>
@@ -452,17 +445,9 @@
       }).join('')}
     `;
 
-    container.querySelectorAll('input[type="file"][data-team-upload]').forEach((el) => {
-      el.addEventListener('change', async () => {
-        if (!el.files || el.files.length === 0) return;
-        const fd = new FormData();
-        fd.append('logo', el.files[0]);
-        try {
-          await api('/api/teams/' + el.dataset.teamUpload + '/logo', { method: 'POST', body: fd });
-          refreshDetail();
-        } catch (err) {
-          alert('Upload failed: ' + err.message);
-        }
+    container.querySelectorAll('button[data-team-pick]').forEach((el) => {
+      el.addEventListener('click', () => {
+        pickAndAssignLogo({ kind: 'team', id: parseInt(el.dataset.teamPick, 10) });
       });
     });
     wireMatchActions(container);
@@ -680,5 +665,178 @@
     reader.readAsDataURL(file);
   });
 
-  loadList();
+  // ═══════════════════════════════════════════════════════════════════════
+  // LOGO PICKER
+  // Generisk modal til at vælge et logo fra biblioteket (klub-egne + flag).
+  // openLogoPicker() returnerer en Promise<string|null> med valgt logoPath.
+  // ═══════════════════════════════════════════════════════════════════════
+  const logoPicker = {
+    modal: null,
+    grid: null,
+    search: null,
+    kind: null,
+    resolver: null,
+    debounce: null,
+  };
+
+  function initLogoPicker() {
+    logoPicker.modal = document.getElementById('logoPickerModal');
+    logoPicker.grid = document.getElementById('logoPickerGrid');
+    logoPicker.search = document.getElementById('logoPickerSearch');
+    logoPicker.kind = document.getElementById('logoPickerKind');
+
+    document.getElementById('logoPickerClose').addEventListener('click', closeLogoPicker);
+    logoPicker.modal.addEventListener('click', (e) => {
+      // Luk hvis bruger klikker på overlay-baggrund
+      if (e.target === logoPicker.modal) closeLogoPicker();
+    });
+
+    logoPicker.search.addEventListener('input', () => {
+      clearTimeout(logoPicker.debounce);
+      logoPicker.debounce = setTimeout(refreshLogoPickerGrid, 250);
+    });
+    logoPicker.kind.addEventListener('change', refreshLogoPickerGrid);
+
+    document.getElementById('logoPickerUploadToggle').addEventListener('click', () => {
+      document.getElementById('logoPickerUploadForm').classList.toggle('hidden');
+    });
+    document.getElementById('logoPickerUploadBtn').addEventListener('click', handleLogoPickerUpload);
+  }
+
+  function openLogoPicker() {
+    return new Promise((resolve) => {
+      logoPicker.resolver = resolve;
+      logoPicker.search.value = '';
+      logoPicker.kind.value = '';
+      document.getElementById('logoPickerUploadForm').classList.add('hidden');
+      document.getElementById('logoPickerUploadName').value = '';
+      document.getElementById('logoPickerUploadFile').value = '';
+      document.getElementById('logoPickerUploadMsg').textContent = '';
+      logoPicker.modal.classList.remove('hidden');
+      refreshLogoPickerGrid();
+    });
+  }
+
+  function closeLogoPicker(value) {
+    logoPicker.modal.classList.add('hidden');
+    if (logoPicker.resolver) {
+      logoPicker.resolver(value || null);
+      logoPicker.resolver = null;
+    }
+  }
+
+  async function refreshLogoPickerGrid() {
+    const params = new URLSearchParams();
+    if (logoPicker.kind.value) params.set('kind', logoPicker.kind.value);
+    if (logoPicker.search.value.trim()) params.set('search', logoPicker.search.value.trim());
+    try {
+      const res = await fetch('/api/logos?' + params.toString(), {
+        headers: { 'Authorization': 'Bearer ' + token },
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const logos = await res.json();
+      renderLogoPickerGrid(logos);
+    } catch (err) {
+      logoPicker.grid.innerHTML = `<div style="color:#f0867a; padding:30px; text-align:center; grid-column:1/-1;">Fejl: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  function renderLogoPickerGrid(logos) {
+    if (!logos || logos.length === 0) {
+      logoPicker.grid.innerHTML = '<div style="color:rgba(255,255,255,0.5); padding:30px; text-align:center; grid-column:1/-1;">Ingen logoer fundet</div>';
+      return;
+    }
+    logoPicker.grid.innerHTML = logos.map(l => `
+      <button class="logo-pick-card" data-url="${escapeHtml(l.url)}" type="button"
+              style="background:#0f1117; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:10px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:6px; transition:all 0.15s;">
+        <div style="width:64px; height:64px; display:flex; align-items:center; justify-content:center; background:#fff; border-radius:6px; overflow:hidden;">
+          <img src="/api/uploads/${escapeHtml(l.url)}" alt="${escapeHtml(l.name)}" style="max-width:100%; max-height:100%; object-fit:contain;">
+        </div>
+        <div style="font-size:0.75em; color:#eaeaea; text-align:center; word-break:break-word; line-height:1.2;">${escapeHtml(l.name)}</div>
+        ${l.club_id === null ? '<span style="font-size:0.65em; color:rgba(255,255,255,0.4);">Global</span>' : ''}
+      </button>
+    `).join('');
+
+    logoPicker.grid.querySelectorAll('.logo-pick-card').forEach(card => {
+      card.addEventListener('click', () => {
+        closeLogoPicker(card.dataset.url);
+      });
+      card.addEventListener('mouseenter', () => { card.style.borderColor = '#e94560'; });
+      card.addEventListener('mouseleave', () => { card.style.borderColor = 'rgba(255,255,255,0.08)'; });
+    });
+  }
+
+  async function handleLogoPickerUpload() {
+    const name = document.getElementById('logoPickerUploadName').value.trim();
+    const file = document.getElementById('logoPickerUploadFile').files[0];
+    const msg = document.getElementById('logoPickerUploadMsg');
+    if (!name || !file) {
+      msg.style.color = '#f0867a';
+      msg.textContent = 'Udfyld navn og vælg en fil';
+      return;
+    }
+    msg.style.color = 'rgba(255,255,255,0.6)';
+    msg.textContent = 'Uploader...';
+
+    const fd = new FormData();
+    fd.append('name', name);
+    fd.append('logo', file);
+
+    try {
+      const res = await fetch('/api/logos', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: fd,
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'HTTP ' + res.status);
+      }
+      const uploaded = await res.json();
+      msg.style.color = '#90df93';
+      msg.textContent = '✓ Logo tilføjet til biblioteket';
+      // Auto-pick det netop uploadede logo
+      setTimeout(() => closeLogoPicker(uploaded.url), 400);
+    } catch (err) {
+      msg.style.color = '#f0867a';
+      msg.textContent = 'Fejl: ' + err.message;
+    }
+  }
+
+  // Helper: gør et label/element til en logo-picker-knap der tildeler logo til
+  // en tournament eller team. Bruges af renderHero / renderPoolsDetail.
+  async function pickAndAssignLogo({ kind, id }) {
+    const url = await openLogoPicker();
+    if (!url) return;
+    try {
+      const endpoint = kind === 'tournament'
+        ? `/api/tournaments/${id}/logo`
+        : `/api/teams/${id}/logo`;
+      await api(endpoint, { method: 'PUT', body: { logoPath: url } });
+      if (kind === 'tournament' && state.currentTournamentId) refreshDetail();
+      else if (kind === 'team') refreshDetail();
+    } catch (err) {
+      alert('Logo-tildeling fejlede: ' + err.message);
+    }
+  }
+
+  // Bootstrap: hent klub-kontekst først så header viser klubnavnet
+  (async () => {
+    try {
+      const res = await fetch('/api/auth/club-info');
+      const data = await res.json();
+      if (!data.club) {
+        // Apex — admin på footballapp.dk uden subdomain giver ikke mening
+        localStorage.removeItem(TOKEN_KEY);
+        window.location.href = '/login.html';
+        return;
+      }
+      state.club = data.club;
+      document.title = state.club.name + ' — Admin';
+    } catch (err) {
+      console.warn('Could not load club context', err);
+    }
+    initLogoPicker();
+    loadList();
+  })();
 })();

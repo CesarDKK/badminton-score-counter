@@ -86,6 +86,35 @@ router.post('/:id/logo', requireClub, requireAdmin, upload.single('logo'), async
   }
 });
 
+// PUT /api/teams/:id/logo — tildel logo fra biblioteket (uden upload)
+router.put('/:id/logo', requireClub, requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const { logoPath } = req.body || {};
+  if (!logoPath || typeof logoPath !== 'string') {
+    return res.status(400).json({ error: 'logoPath er påkrævet' });
+  }
+  try {
+    const [[logo]] = await pool.query(
+      'SELECT id FROM football_logos WHERE url = ? AND (club_id = ? OR club_id IS NULL) LIMIT 1',
+      [logoPath, req.clubId]
+    );
+    if (!logo) {
+      return res.status(404).json({ error: 'Logo ikke fundet i biblioteket' });
+    }
+    const [result] = await pool.query(
+      'UPDATE teams SET logo_path = ? WHERE id = ? AND club_id = ?',
+      [logoPath, id, req.clubId]
+    );
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+    res.json({ ok: true, logo_path: logoPath });
+  } catch (err) {
+    console.error('assign team logo', err);
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
+
 router.delete('/:id/logo', requireClub, requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   try {

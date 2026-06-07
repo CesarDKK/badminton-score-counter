@@ -18,17 +18,26 @@
           </svg>
         </div>
         <h1>Admin</h1>
-        <div class="eyebrow" style="margin-top: 4px;">Tournament Control</div>
+        <div class="eyebrow" id="clubLabel" style="margin-top: 4px;">Tournament Control</div>
+      </div>
+
+      <div id="apexNotice" class="alert hidden" style="background:rgba(241,196,15,0.1); border-color:#f1c40f; color:#f1c40f;">
+        Login skal ske fra dit klub-subdomain — fx <code>dinklub.footballapp.dk/login.html</code>
       </div>
 
       <div id="errorBox" class="alert hidden"></div>
 
-      <div class="field">
+      <div class="field" id="usernameField">
+        <label for="username">Username</label>
+        <input id="username" type="text" autocomplete="username" autofocus required />
+      </div>
+
+      <div class="field" id="passwordField">
         <label for="password">Password</label>
         <input id="password" type="password" autocomplete="current-password" required />
       </div>
 
-      <button type="submit" class="btn btn-block">Sign in</button>
+      <button type="submit" id="loginBtn" class="btn btn-block">Sign in</button>
 
       <p class="center muted" style="margin-top: var(--sp-5); font-size: 13px;">
         <a href="/" style="color: var(--text-muted);">← Back to public site</a>
@@ -38,15 +47,45 @@
   <script>
     const form = document.getElementById('loginForm');
     const errorBox = document.getElementById('errorBox');
+    const apexNotice = document.getElementById('apexNotice');
+    const clubLabel = document.getElementById('clubLabel');
+    const usernameField = document.getElementById('usernameField');
+    const passwordField = document.getElementById('passwordField');
+    const loginBtn = document.getElementById('loginBtn');
+
+    // Hent klub-kontekst først — hvis vi er på apex (ingen klub) blokeres login
+    async function init() {
+      try {
+        const res = await fetch('/api/auth/club-info');
+        const data = await res.json();
+        if (!data.club) {
+          // Apex — vis blokker, skjul login-felter
+          apexNotice.classList.remove('hidden');
+          usernameField.classList.add('hidden');
+          passwordField.classList.add('hidden');
+          loginBtn.classList.add('hidden');
+          clubLabel.textContent = 'No club selected';
+          return;
+        }
+        clubLabel.textContent = data.club.name;
+        document.title = `Admin — ${data.club.name}`;
+      } catch (err) {
+        // Fail silently — bruger kan stadig forsøge login
+        console.warn('Could not fetch club-info', err);
+      }
+    }
+    init();
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       errorBox.classList.add('hidden');
+      const username = document.getElementById('username').value.trim();
       const password = document.getElementById('password').value;
       try {
         const res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password }),
+          body: JSON.stringify({ username, password }),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -54,6 +93,10 @@
         }
         const data = await res.json();
         localStorage.setItem('football_admin_token', data.token);
+        if (data.club) {
+          localStorage.setItem('football_club_name', data.club.name);
+          localStorage.setItem('football_club_subdomain', data.club.subdomain);
+        }
         window.location.href = '/admin.html';
       } catch (err) {
         errorBox.textContent = err.message;

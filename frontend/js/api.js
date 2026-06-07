@@ -855,6 +855,53 @@ class BadmintonAPI {
         });
     }
 
+    // ==================== Super Admin — Football Clubs ====================
+
+    async getFootballClubs() {
+        return this.request('/super-admin/football/clubs');
+    }
+
+    async createFootballClub(name, subdomain) {
+        return this.request('/super-admin/football/clubs', {
+            method: 'POST',
+            body: JSON.stringify({ name, subdomain })
+        });
+    }
+
+    async toggleFootballClub(id) {
+        return this.request(`/super-admin/football/clubs/${id}/toggle`, {
+            method: 'PUT'
+        });
+    }
+
+    async deleteFootballClub(clubId) {
+        return this.request(`/super-admin/football/clubs/${clubId}`, { method: 'DELETE' });
+    }
+
+    async getFootballClubAdmins(clubId) {
+        return this.request(`/super-admin/football/clubs/${clubId}/admins`);
+    }
+
+    async createFootballClubAdmin(clubId, username, password, email) {
+        return this.request(`/super-admin/football/clubs/${clubId}/admins`, {
+            method: 'POST',
+            body: JSON.stringify({ username, password, email })
+        });
+    }
+
+    async deleteFootballClubAdmin(clubId, adminId) {
+        return this.request(`/super-admin/football/clubs/${clubId}/admins/${adminId}`, {
+            method: 'DELETE'
+        });
+    }
+
+    async changeFootballClubAdminPassword(clubId, adminId, password) {
+        return this.request(`/super-admin/football/clubs/${clubId}/admins/${adminId}/password`, {
+            method: 'PUT',
+            body: JSON.stringify({ password })
+        });
+    }
+
     // ==================== Mode ====================
 
     async getMode() {

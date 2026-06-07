@@ -42,15 +42,30 @@
             <header>
                 <div>
                     <h1>Super Admin</h1>
-                    <div class="subtitle">Badminton App — Klub administration</div>
+                    <div class="subtitle">App administration</div>
                 </div>
                 <button id="saLogoutBtn" class="btn-secondary">Log Ud</button>
             </header>
 
+            <!-- App tabs -->
+            <div class="card" style="padding:0; overflow:hidden;">
+                <div style="display:flex; gap:0; border-bottom:1px solid rgba(255,255,255,0.08);">
+                    <button id="tabBadminton" class="app-tab app-tab-active" data-app="badminton">
+                        🏸 Badminton
+                    </button>
+                    <button id="tabFootball" class="app-tab" data-app="football">
+                        ⚽ Football
+                    </button>
+                </div>
+            </div>
+
+            <!-- ════════════════════ BADMINTON SECTION ════════════════════ -->
+            <div id="badmintonSection">
+
             <!-- Opret ny klub -->
             <div class="card">
                 <div class="card-header">
-                    <span class="card-title">Opret Ny Klub</span>
+                    <span class="card-title">Opret Ny Badminton-Klub</span>
                 </div>
                 <div class="create-form">
                     <div class="form-group" style="margin-bottom:0">
@@ -69,7 +84,7 @@
             <!-- Klub liste -->
             <div class="card">
                 <div class="card-header">
-                    <span class="card-title">Klubber</span>
+                    <span class="card-title">Badminton-Klubber</span>
                     <button id="refreshClubsBtn" class="btn-secondary">↻ Opdater</button>
                 </div>
                 <div id="clubList">
@@ -77,7 +92,47 @@
                 </div>
             </div>
 
-            <!-- Skift adgangskode -->
+            </div><!-- /badmintonSection -->
+
+            <!-- ════════════════════ FOOTBALL SECTION ════════════════════ -->
+            <div id="footballSection" style="display:none;">
+
+            <!-- Opret football-klub -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Opret Ny Football-Klub</span>
+                </div>
+                <div class="create-form">
+                    <div class="form-group" style="margin-bottom:0">
+                        <label>Klubnavn</label>
+                        <input type="text" id="newFootballClubName" placeholder="fx Lyngby BK">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label>Subdomain</label>
+                        <input type="text" id="newFootballClubSubdomain" placeholder="fx lyngby">
+                    </div>
+                    <button id="createFootballClubBtn" class="btn-primary" style="height:46px; margin-top:22px;">Opret Klub</button>
+                </div>
+                <p style="color:rgba(255,255,255,0.5); font-size:0.82em; margin-top:10px;">
+                    Klubben vises på <code style="background:rgba(0,0,0,0.3); padding:1px 5px; border-radius:3px;">&lt;subdomain&gt;.footballapp.dk</code>
+                </p>
+                <div id="createFootballClubMsg" class="msg" style="display:none;"></div>
+            </div>
+
+            <!-- Football klub liste -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Football-Klubber</span>
+                    <button id="refreshFootballClubsBtn" class="btn-secondary">↻ Opdater</button>
+                </div>
+                <div id="footballClubList">
+                    <div class="empty-state"><div class="spinner"></div></div>
+                </div>
+            </div>
+
+            </div><!-- /footballSection -->
+
+            <!-- Skift adgangskode (delt for begge apps) -->
             <div class="card">
                 <div class="card-header">
                     <span class="card-title">Skift Adgangskode</span>
@@ -142,6 +197,34 @@
         </div>
     </div>
 
+    <!-- MODAL: Football klub admin -->
+    <div id="footballAdminModal" class="modal-overlay" style="display:none;">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span class="modal-title" id="footballAdminModalTitle">Klub Admins</span>
+                <button class="modal-close" id="footballAdminModalClose">✕</button>
+            </div>
+            <div id="footballAdminModalList" class="admin-list"></div>
+            <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 20px; margin-top: 8px;">
+                <div class="card-title" style="font-size:1.1em; margin-bottom:16px;">Opret Admin Bruger</div>
+                <div class="form-group">
+                    <label>Brugernavn</label>
+                    <input type="text" id="newFootballAdminUsername" placeholder="brugernavn">
+                </div>
+                <div class="form-group">
+                    <label>Adgangskode (min. 8 tegn)</label>
+                    <input type="password" id="newFootballAdminPassword" placeholder="adgangskode">
+                </div>
+                <div class="form-group">
+                    <label>E-mail (valgfri)</label>
+                    <input type="email" id="newFootballAdminEmail" placeholder="email@klub.dk">
+                </div>
+                <button id="createFootballAdminBtn" class="btn-primary">Opret Admin</button>
+                <div id="createFootballAdminMsg" class="msg" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL: Klub admin -->
     <div id="adminModal" class="modal-overlay" style="display:none;">
         <div class="modal-box">
@@ -170,7 +253,7 @@
         </div>
     </div>
 
-    <script src="js/api.js?v=4"></script>
-    <script src="super-admin-script.js?v=6"></script>
+    <script src="js/api.js?v=5"></script>
+    <script src="super-admin-script.js?v=7"></script>
 </body>
 </html>

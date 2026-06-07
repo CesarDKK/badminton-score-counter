@@ -32,9 +32,24 @@
     </header>
 
     <main class="container">
-      <div id="view-list">
-        <div class="eyebrow fade-in" style="margin-bottom: var(--sp-2);">Live tournaments</div>
-        <h2 class="display-lg fade-in" style="margin: 0 0 var(--sp-5);">Tournaments</h2>
+      <!-- Apex landing — vises kun hvis ingen klub-subdomain -->
+      <div id="view-apex" class="hidden">
+        <div class="empty fade-in">
+          <div class="icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 2 L14.5 9 L22 9 L16 13.5 L18.5 21 L12 16.5 L5.5 21 L8 13.5 L2 9 L9.5 9 Z"/>
+            </svg>
+          </div>
+          <h3>FootballApp</h3>
+          <p>Hver klub har sit eget subdomain — fx <strong>dinklub.footballapp.dk</strong>.<br>
+            Kontakt din klubadministrator for adgang.</p>
+        </div>
+      </div>
+
+      <div id="view-list" class="hidden">
+        <div class="eyebrow fade-in" id="clubEyebrow" style="margin-bottom: var(--sp-2);">Live tournaments</div>
+        <h2 class="display-lg fade-in" id="clubHeading" style="margin: 0 0 var(--sp-5);">Tournaments</h2>
         <div id="tournamentList" class="tournament-list"></div>
       </div>
 

@@ -122,6 +122,23 @@ CREATE TABLE IF NOT EXISTS cups (
   FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+-- ──────────────────────────────────────────────────────────────────────
+-- Logo-bibliotek: klub-uploadede logoer + globale landeflag.
+-- club_id = NULL → globalt logo synligt for alle klubber (typisk flag).
+-- club_id sat → klub-privat logo (kun synligt og editérbart for ejer).
+-- ──────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS football_logos (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  club_id     INT NULL,
+  name        VARCHAR(150) NOT NULL,
+  url         VARCHAR(500) NOT NULL,
+  kind        ENUM('flag', 'club', 'sponsor', 'other') NOT NULL DEFAULT 'club',
+  created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_logos_club_kind (club_id, kind),
+  KEY idx_logos_name (name),
+  FOREIGN KEY (club_id) REFERENCES football_clubs(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS cup_matches (
   id                INT AUTO_INCREMENT PRIMARY KEY,
   club_id           INT NOT NULL,

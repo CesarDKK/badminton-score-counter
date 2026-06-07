@@ -2,6 +2,17 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# Hent landeflag-SVG'er fra hampusborgos/country-flags (CC-licens, ~250 lande).
+# wget+tar+sh skal være tilgængelige; alpine har dem indbygget.
+# Flagene ender i /app/static-flags/ — kopieres til volume ved første startup
+# da /app/uploads/ er et docker-volume der maskerer image-content.
+RUN apk add --no-cache wget tar \
+    && mkdir -p /app/static-flags \
+    && wget -q https://github.com/hampusborgos/country-flags/archive/refs/heads/main.tar.gz -O /tmp/flags.tar.gz \
+    && tar -xzf /tmp/flags.tar.gz -C /tmp \
+    && cp /tmp/country-flags-main/svg/*.svg /app/static-flags/ \
+    && rm -rf /tmp/flags.tar.gz /tmp/country-flags-main
+
 COPY backend/package.json ./
 RUN npm install --omit=dev
 

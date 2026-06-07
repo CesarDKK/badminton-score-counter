@@ -285,3 +285,28 @@ header .subtitle {
     animation: spin 0.7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* App-tabs til skift mellem badminton/football administration */
+.app-tab {
+    flex: 1;
+    background: transparent;
+    color: rgba(255,255,255,0.5);
+    border: none;
+    padding: 16px 20px;
+    font-family: inherit;
+    font-size: 1em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border-bottom: 2px solid transparent;
+}
+.app-tab:hover {
+    background: rgba(255,255,255,0.03);
+    color: rgba(255,255,255,0.8);
+}
+.app-tab-active {
+    color: #fff;
+    background: rgba(233, 69, 96, 0.08);
+    border-bottom-color: #e94560;
+}
+

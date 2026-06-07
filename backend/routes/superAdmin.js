@@ -414,4 +414,205 @@ router.post('/clubs/:id/restore', superAdminAuth, backupMulter.single('backup'),
     } catch (error) { next(error); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────
+// FOOTBALL CLUB MANAGEMENT
+// ─────────────────────────────────────────────────────────────────────────
+// Super admin styrer football-klubber + per-klub admins. Football bruger
+// shared DB med club_id-kolonne (anderledes end badminton's per-klub DB),
+// så her queryer vi direkte mod football_tournament-DB via footballDb.
+const footballDb = require('../config/footballDatabase');
+
+const FOOTBALL_SUBDOMAIN_REGEX = /^[a-z0-9-]+$/;
+const FOOTBALL_RESERVED_SUBDOMAINS = ['www', 'admin', 'api'];
+
+// GET /api/super-admin/football/clubs — list alle football-klubber
+router.get('/football/clubs', superAdminAuth, async (req, res, next) => {
+    try {
+        // Inkluderer antal admins som JOIN så UI kan vise count uden ekstra round-trip
+        const clubs = await footballDb.query(`
+            SELECT c.id, c.name, c.subdomain, c.is_active, c.created_at,
+                   (SELECT COUNT(*) FROM football_club_admins WHERE club_id = c.id) AS admin_count
+            FROM football_clubs c
+            ORDER BY c.created_at DESC
+        `);
+        res.json(clubs);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /api/super-admin/football/clubs — opret klub
+router.post('/football/clubs', superAdminAuth, async (req, res, next) => {
+    try {
+        const { name, subdomain } = req.body;
+        if (!name || !subdomain) {
+            return res.status(400).json({ error: 'Navn og subdomain er påkrævet' });
+        }
+        const sub = subdomain.trim().toLowerCase();
+        if (!FOOTBALL_SUBDOMAIN_REGEX.test(sub)) {
+            return res.status(400).json({
+                error: 'Subdomain må kun indeholde små bogstaver, tal og bindestreger'
+            });
+        }
+        if (FOOTBALL_RESERVED_SUBDOMAINS.includes(sub)) {
+            return res.status(400).json({ error: `Subdomain '${sub}' er reserveret` });
+        }
+
+        const existing = await footballDb.queryOne(
+            'SELECT id FROM football_clubs WHERE subdomain = ?',
+            [sub]
+        );
+        if (existing) {
+            return res.status(409).json({ error: `Subdomain '${sub}' er allerede i brug` });
+        }
+
+        const result = await footballDb.query(
+            'INSERT INTO football_clubs (name, subdomain) VALUES (?, ?)',
+            [name.trim(), sub]
+        );
+        const club = await footballDb.queryOne(
+            'SELECT id, name, subdomain, is_active, created_at FROM football_clubs WHERE id = ?',
+            [result.insertId]
+        );
+        res.json({ ...club, admin_count: 0 });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// PUT /api/super-admin/football/clubs/:id/toggle — aktiver/deaktiver
+router.put('/football/clubs/:id/toggle', superAdminAuth, async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const club = await footballDb.queryOne(
+            'SELECT is_active FROM football_clubs WHERE id = ?',
+            [id]
+        );
+        if (!club) return res.status(404).json({ error: 'Klub ikke fundet' });
+        const newState = !club.is_active;
+        await footballDb.query(
+            'UPDATE football_clubs SET is_active = ? WHERE id = ?',
+            [newState, id]
+        );
+        res.json({ success: true, is_active: newState });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// DELETE /api/super-admin/football/clubs/:id — slet klub
+// Kræver at klub er deaktiveret først, så vi ikke ved et uheld sletter en aktiv klub
+router.delete('/football/clubs/:id', superAdminAuth, async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const club = await footballDb.queryOne(
+            'SELECT id, name, is_active FROM football_clubs WHERE id = ?',
+            [id]
+        );
+        if (!club) return res.status(404).json({ error: 'Klub ikke fundet' });
+        if (club.is_active) {
+            return res.status(400).json({
+                error: 'Klub skal være deaktiveret før den kan slettes'
+            });
+        }
+        // CASCADE rydder admins, turneringer, kampe osv.
+        await footballDb.query('DELETE FROM football_clubs WHERE id = ?', [id]);
+        res.json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/super-admin/football/clubs/:id/admins — list admins for klub
+router.get('/football/clubs/:id/admins', superAdminAuth, async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const admins = await footballDb.query(
+            'SELECT id, username, email, created_at FROM football_club_admins WHERE club_id = ? ORDER BY created_at',
+            [id]
+        );
+        res.json(admins);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /api/super-admin/football/clubs/:id/admins — opret admin
+router.post('/football/clubs/:id/admins', superAdminAuth, async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { username, password, email } = req.body;
+
+        if (!username || !password) {
+            return res.status(400).json({ error: 'Brugernavn og adgangskode er påkrævet' });
+        }
+        if (password.length < 8) {
+            return res.status(400).json({ error: 'Adgangskode skal være mindst 8 tegn' });
+        }
+
+        const club = await footballDb.queryOne(
+            'SELECT id FROM football_clubs WHERE id = ?',
+            [id]
+        );
+        if (!club) return res.status(404).json({ error: 'Klub ikke fundet' });
+
+        const existing = await footballDb.queryOne(
+            'SELECT id FROM football_club_admins WHERE club_id = ? AND username = ?',
+            [id, username]
+        );
+        if (existing) {
+            return res.status(409).json({ error: `Brugernavnet '${username}' eksisterer allerede i denne klub` });
+        }
+
+        const hash = await footballDb.hashPassword(password);
+        const result = await footballDb.query(
+            'INSERT INTO football_club_admins (club_id, username, password_hash, email) VALUES (?, ?, ?, ?)',
+            [id, username, hash, email || null]
+        );
+        const admin = await footballDb.queryOne(
+            'SELECT id, username, email, created_at FROM football_club_admins WHERE id = ?',
+            [result.insertId]
+        );
+        res.json(admin);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// DELETE /api/super-admin/football/clubs/:id/admins/:adminId
+router.delete('/football/clubs/:id/admins/:adminId', superAdminAuth, async (req, res, next) => {
+    try {
+        const { id, adminId } = req.params;
+        await footballDb.query(
+            'DELETE FROM football_club_admins WHERE id = ? AND club_id = ?',
+            [adminId, id]
+        );
+        res.json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// PUT /api/super-admin/football/clubs/:id/admins/:adminId/password — reset password
+router.put('/football/clubs/:id/admins/:adminId/password', superAdminAuth, async (req, res, next) => {
+    try {
+        const { id, adminId } = req.params;
+        const { password } = req.body;
+        if (!password || password.length < 8) {
+            return res.status(400).json({ error: 'Adgangskode skal være mindst 8 tegn' });
+        }
+        const hash = await footballDb.hashPassword(password);
+        const result = await footballDb.query(
+            'UPDATE football_club_admins SET password_hash = ? WHERE id = ? AND club_id = ?',
+            [hash, adminId, id]
+        );
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Admin ikke fundet' });
+        }
+        res.json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+});
+
 module.exports = router;

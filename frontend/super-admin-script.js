@@ -2,6 +2,13 @@ const api = window.BadmintonAPI;
 let clubs = [];
 let selectedClubId = null;
 
+// Football-state — adskilt fra badminton-state så vi ikke krydsforurener
+let footballClubs = [];
+let selectedFootballClubId = null;
+let pendingDeleteFootballClubId = null;
+let pendingDeleteFootballAdminId = null;
+let activeApp = 'badminton'; // 'badminton' | 'football'
+
 document.addEventListener('DOMContentLoaded', function () {
     // Hvis allerede logget ind som super admin
     if (api.isSuperAdminSession()) {
@@ -39,6 +46,21 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Skift adgangskode
     document.getElementById('changePasswordBtn').addEventListener('click', handleChangeSuperAdminPassword);
+
+    // App-tabs (Badminton / Football)
+    document.getElementById('tabBadminton').addEventListener('click', () => switchApp('badminton'));
+    document.getElementById('tabFootball').addEventListener('click', () => switchApp('football'));
+
+    // Football-flow
+    document.getElementById('createFootballClubBtn').addEventListener('click', handleCreateFootballClub);
+    document.getElementById('refreshFootballClubsBtn').addEventListener('click', loadFootballClubs);
+    document.getElementById('footballAdminModalClose').addEventListener('click', closeFootballAdminModal);
+    document.getElementById('createFootballAdminBtn').addEventListener('click', handleCreateFootballAdmin);
+
+    // Auto-route based on hash so admin.footballapp.dk eller #football opens Football tab
+    const hostHasFootball = window.location.host.includes('footballapp.dk');
+    const hashWantsFootball = window.location.hash === '#football';
+    if (hostHasFootball || hashWantsFootball) activeApp = 'football';
 });
 
 async function handleLogin() {
@@ -76,7 +98,24 @@ function handleLogout() {
 function showDashboard() {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('dashboard').style.display = 'block';
-    loadClubs();
+    switchApp(activeApp);
+}
+
+function switchApp(app) {
+    activeApp = app;
+    const isBadminton = app === 'badminton';
+
+    document.getElementById('badmintonSection').style.display = isBadminton ? 'block' : 'none';
+    document.getElementById('footballSection').style.display = isBadminton ? 'none' : 'block';
+
+    document.getElementById('tabBadminton').classList.toggle('app-tab-active', isBadminton);
+    document.getElementById('tabFootball').classList.toggle('app-tab-active', !isBadminton);
+
+    if (isBadminton) {
+        loadClubs();
+    } else {
+        loadFootballClubs();
+    }
 }
 
 async function loadClubs() {
@@ -470,6 +509,257 @@ async function doClubRestore(clubId, file) {
         alert(`Gendannelse fuldført!\nBilleder: ${data.files}`);
     } catch (err) {
         alert('Gendannelse fejlede: ' + err.message);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FOOTBALL CLUB MANAGEMENT
+// Spejler badminton-flowet, men scoped til football_tournament-DB.
+// Klubber identificeres ved subdomain → footballapp.dk i stedet for
+// badmintonapp.dk. Football-klubber har ikke db_name (delt DB) eller
+// backup-funktionalitet — det er en simplere model.
+// ═══════════════════════════════════════════════════════════════════════
+
+async function loadFootballClubs() {
+    const listEl = document.getElementById('footballClubList');
+    listEl.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+    try {
+        footballClubs = await api.getFootballClubs();
+        renderFootballClubs();
+    } catch (err) {
+        listEl.innerHTML = `<div class="empty-state">Fejl: ${err.message}</div>`;
+    }
+}
+
+function renderFootballClubs() {
+    const listEl = document.getElementById('footballClubList');
+    if (footballClubs.length === 0) {
+        listEl.innerHTML = '<div class="empty-state">Ingen football-klubber endnu — opret den første ovenfor</div>';
+        return;
+    }
+    listEl.innerHTML = '<div class="club-list">' + footballClubs.map(club => `
+        <div class="club-item" id="football-club-${club.id}">
+            <div class="club-info">
+                <div class="club-name">${escapeHtml(club.name)}</div>
+                <div class="club-meta">
+                    <span>🌐 ${escapeHtml(club.subdomain)}.footballapp.dk</span>
+                    <span>👥 ${club.admin_count ?? 0} admin${(club.admin_count ?? 0) === 1 ? '' : 's'}</span>
+                    <span>📅 ${formatDate(club.created_at)}</span>
+                </div>
+            </div>
+            <div class="club-actions">
+                <span class="badge ${club.is_active ? 'badge-active' : 'badge-inactive'}">
+                    ${club.is_active ? 'Aktiv' : 'Inaktiv'}
+                </span>
+                <button class="btn-secondary" onclick="openFootballAdminModal(${club.id}, '${escapeHtml(club.name)}')">
+                    Admins
+                </button>
+                <button class="btn-danger" onclick="handleToggleFootballClub(${club.id})">
+                    ${club.is_active ? 'Deaktiver' : 'Aktiver'}
+                </button>
+                ${!club.is_active ? `
+                <button class="btn-danger" style="background:rgba(233,69,96,0.3);border-color:rgba(233,69,96,0.5);"
+                    onclick="handleDeleteFootballClub(${club.id}, '${escapeHtml(club.name)}')">
+                    🗑 Slet
+                </button>` : ''}
+            </div>
+        </div>
+    `).join('') + '</div>';
+}
+
+async function handleCreateFootballClub() {
+    const name = document.getElementById('newFootballClubName').value.trim();
+    const subdomain = document.getElementById('newFootballClubSubdomain').value.trim().toLowerCase();
+    const btn = document.getElementById('createFootballClubBtn');
+    const msgEl = document.getElementById('createFootballClubMsg');
+
+    if (!name || !subdomain) {
+        showMsg(msgEl, 'Udfyld navn og subdomain', 'error');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    msgEl.style.display = 'none';
+
+    try {
+        const club = await api.createFootballClub(name, subdomain);
+        footballClubs.unshift(club);
+        renderFootballClubs();
+        document.getElementById('newFootballClubName').value = '';
+        document.getElementById('newFootballClubSubdomain').value = '';
+        showMsg(msgEl, `✓ ${club.name} er oprettet (${club.subdomain}.footballapp.dk)`, 'success');
+    } catch (err) {
+        showMsg(msgEl, err.message || 'Oprettelse mislykkedes', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Opret Klub';
+    }
+}
+
+async function handleToggleFootballClub(id) {
+    try {
+        const result = await api.toggleFootballClub(id);
+        const club = footballClubs.find(c => c.id === id);
+        if (club) club.is_active = result.is_active;
+        renderFootballClubs();
+    } catch (err) {
+        alert('Fejl: ' + err.message);
+    }
+}
+
+async function handleDeleteFootballClub(id, name) {
+    if (!confirm(`Slet football-klubben "${name}" permanent? Dette sletter alle dens turneringer, kampe og admins. Denne handling kan ikke fortrydes.`)) return;
+    try {
+        await api.deleteFootballClub(id);
+        footballClubs = footballClubs.filter(c => c.id !== id);
+        renderFootballClubs();
+    } catch (err) {
+        alert('Fejl: ' + (err.message || err));
+    }
+}
+
+function openFootballAdminModal(clubId, clubName) {
+    selectedFootballClubId = clubId;
+    document.getElementById('footballAdminModalTitle').textContent = `Admins — ${clubName}`;
+    document.getElementById('newFootballAdminUsername').value = '';
+    document.getElementById('newFootballAdminPassword').value = '';
+    document.getElementById('newFootballAdminEmail').value = '';
+    document.getElementById('createFootballAdminMsg').style.display = 'none';
+    document.getElementById('footballAdminModal').style.display = 'flex';
+    loadFootballAdmins();
+}
+
+function closeFootballAdminModal() {
+    document.getElementById('footballAdminModal').style.display = 'none';
+    selectedFootballClubId = null;
+}
+
+async function loadFootballAdmins() {
+    const listEl = document.getElementById('footballAdminModalList');
+    listEl.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+    try {
+        const admins = await api.getFootballClubAdmins(selectedFootballClubId);
+        renderFootballAdmins(admins);
+    } catch (err) {
+        listEl.innerHTML = `<div class="empty-state">Fejl: ${err.message}</div>`;
+    }
+}
+
+function renderFootballAdmins(admins) {
+    const listEl = document.getElementById('footballAdminModalList');
+    if (admins.length === 0) {
+        listEl.innerHTML = '<div class="empty-state" style="padding:12px;">Ingen admins endnu</div>';
+        return;
+    }
+    listEl.innerHTML = admins.map(a => `
+        <div class="admin-item" id="football-admin-row-${a.id}">
+            <div>
+                <div class="admin-name">${escapeHtml(a.username)}</div>
+                ${a.email ? `<div class="admin-email">${escapeHtml(a.email)}</div>` : ''}
+            </div>
+            <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                <button class="btn-secondary" style="font-size:0.8em; padding:5px 10px;"
+                    onclick="showChangeFootballPassword(${a.id}, '${escapeHtml(a.username)}')">
+                    Skift kode
+                </button>
+                <button class="btn-danger" style="font-size:0.8em; padding:5px 10px;"
+                    onclick="handleDeleteFootballAdmin(${a.id}, '${escapeHtml(a.username)}')">
+                    Slet
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function showChangeFootballPassword(adminId, username) {
+    const existing = document.getElementById('football-change-pw-form');
+    if (existing) existing.remove();
+
+    const row = document.getElementById(`football-admin-row-${adminId}`);
+    const form = document.createElement('div');
+    form.id = 'football-change-pw-form';
+    form.style.cssText = 'background:rgba(255,255,255,0.04);border-radius:8px;padding:12px 14px;margin-top:4px;';
+    form.innerHTML = `
+        <div style="font-size:0.82em;color:rgba(255,255,255,0.5);margin-bottom:8px;">
+            Ny adgangskode til <strong>${escapeHtml(username)}</strong>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <input type="password" id="footballChangePwInput" placeholder="Min. 8 tegn"
+                style="flex:1;background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);
+                border-radius:6px;padding:8px 10px;color:#eaeaea;font-family:'DM Sans',sans-serif;font-size:0.9em;">
+            <button class="btn-primary" style="padding:8px 14px;font-size:0.85em;"
+                onclick="handleChangeFootballPassword(${adminId})">Gem</button>
+            <button class="btn-secondary" style="padding:8px 12px;font-size:0.85em;"
+                onclick="document.getElementById('football-change-pw-form').remove()">Annuller</button>
+        </div>
+        <div id="footballChangePwMsg" class="msg" style="display:none;margin-top:8px;"></div>
+    `;
+    row.insertAdjacentElement('afterend', form);
+    document.getElementById('footballChangePwInput').focus();
+}
+
+async function handleChangeFootballPassword(adminId) {
+    const pw = document.getElementById('footballChangePwInput').value;
+    const msgEl = document.getElementById('footballChangePwMsg');
+    if (!pw || pw.length < 8) {
+        showMsg(msgEl, 'Adgangskode skal være mindst 8 tegn', 'error');
+        return;
+    }
+    try {
+        await api.changeFootballClubAdminPassword(selectedFootballClubId, adminId, pw);
+        document.getElementById('football-change-pw-form').remove();
+    } catch (err) {
+        showMsg(msgEl, err.message || 'Fejl', 'error');
+    }
+}
+
+async function handleDeleteFootballAdmin(adminId, username) {
+    if (!confirm(`Slet admin "${username}"? Dette kan ikke fortrydes.`)) return;
+    try {
+        await api.deleteFootballClubAdmin(selectedFootballClubId, adminId);
+        loadFootballAdmins();
+    } catch (err) {
+        alert('Fejl: ' + (err.message || err));
+    }
+}
+
+async function handleCreateFootballAdmin() {
+    const username = document.getElementById('newFootballAdminUsername').value.trim();
+    const password = document.getElementById('newFootballAdminPassword').value;
+    const email = document.getElementById('newFootballAdminEmail').value.trim();
+    const btn = document.getElementById('createFootballAdminBtn');
+    const msgEl = document.getElementById('createFootballAdminMsg');
+
+    if (!username || !password) {
+        showMsg(msgEl, 'Udfyld brugernavn og adgangskode', 'error');
+        return;
+    }
+    if (password.length < 8) {
+        showMsg(msgEl, 'Adgangskode skal være mindst 8 tegn', 'error');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Opretter...';
+    try {
+        await api.createFootballClubAdmin(selectedFootballClubId, username, password, email || null);
+        document.getElementById('newFootballAdminUsername').value = '';
+        document.getElementById('newFootballAdminPassword').value = '';
+        document.getElementById('newFootballAdminEmail').value = '';
+        showMsg(msgEl, `✓ Admin '${username}' oprettet`, 'success');
+        loadFootballAdmins();
+        // Bump admin count i klub-listen
+        const club = footballClubs.find(c => c.id === selectedFootballClubId);
+        if (club) {
+            club.admin_count = (club.admin_count || 0) + 1;
+            renderFootballClubs();
+        }
+    } catch (err) {
+        showMsg(msgEl, err.message || 'Oprettelse mislykkedes', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Opret Admin';
     }
 }
 

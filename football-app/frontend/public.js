@@ -1,11 +1,22 @@
 (function () {
   const POLL_MS = 5000;
-  const state = { view: 'list', tournamentId: null, pollHandle: null, autoOpened: false };
+  const state = { view: 'list', tournamentId: null, pollHandle: null, autoOpened: false, club: null };
 
   async function api(path) {
     const res = await fetch(path);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     return res.json();
+  }
+
+  // Hent klub-kontekst først så vi ved om vi er på apex eller et klub-subdomain
+  async function loadClubContext() {
+    try {
+      const data = await api('/api/auth/club-info');
+      state.club = data.club; // null på apex, ellers {id, name, subdomain}
+    } catch (err) {
+      console.warn('Failed to load club context', err);
+      state.club = null;
+    }
   }
 
   function escapeHtml(s) {
@@ -39,10 +50,16 @@
 
   function show(view) {
     state.view = view;
+    const apex = document.getElementById('view-apex');
+    if (apex) apex.classList.toggle('hidden', view !== 'apex');
     document.getElementById('view-list').classList.toggle('hidden', view !== 'list');
     document.getElementById('view-detail').classList.toggle('hidden', view !== 'detail');
     if (view !== 'detail') stopPolling();
-    if (view === 'list') document.getElementById('brandTitle').textContent = 'Football';
+    if (view === 'list') {
+      // Brug klubnavn som brand-titel
+      const title = (state.club && state.club.name) ? state.club.name : 'Football';
+      document.getElementById('brandTitle').textContent = title;
+    }
   }
 
   function startPolling() {
@@ -297,5 +314,18 @@
     el.addEventListener('click', loadList);
   });
 
-  loadList();
+  // Bootstrap: hent klub-kontekst først, så loadList kan reagere på apex vs klub
+  (async () => {
+    await loadClubContext();
+    if (!state.club) {
+      // Apex — vis landing, skjul "Admin"-knap (login giver ikke mening uden klub)
+      show('apex');
+      document.getElementById('brandTitle').textContent = 'FootballApp';
+      const adminBtn = document.querySelector('.app-header-actions a[href="/login.html"]');
+      if (adminBtn) adminBtn.style.display = 'none';
+      return;
+    }
+    document.title = state.club.name + ' — Football';
+    loadList();
+  })();
 })();

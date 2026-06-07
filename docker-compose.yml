@@ -45,6 +45,10 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change_this_secret_key_min_32_chars}
       UPLOAD_DIR: /app/uploads
       MAX_FILE_SIZE: 10485760
+      # Super-admin har brug for adgang til football_tournament-DB for at administrere
+      # football-klubber + admins (Phase 2 feature)
+      FOOTBALL_DB_USER: football_user
+      FOOTBALL_DB_PASSWORD: ${FOOTBALL_DB_PASSWORD:-football_password_change_me}
     ports:
       - "3000:3000"
     volumes:
