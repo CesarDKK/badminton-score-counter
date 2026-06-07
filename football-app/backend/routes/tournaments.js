@@ -4,38 +4,54 @@ const fs = require('fs');
 const multer = require('multer');
 const { pool, withTransaction } = require('../db');
 const { requireAdmin } = require('../middleware/auth');
+const { requireClub } = require('../middleware/tenant');
 const { generateRoundRobin, computeStandings } = require('../utils/standings');
 const { buildBracketStructure, buildSeedsFromConfig } = require('../utils/bracket');
+const { tryAdvanceToCups } = require('../utils/advancement');
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || '/app/uploads';
-const LOGO_DIR = path.join(UPLOAD_DIR, 'logos');
-if (!fs.existsSync(LOGO_DIR)) fs.mkdirSync(LOGO_DIR, { recursive: true });
 
-const tournamentLogoUpload = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => cb(null, LOGO_DIR),
-    filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase().replace(/[^a-z0-9.]/g, '') || '.png';
-      cb(null, `tournament_${req.params.id}_${Date.now()}${ext}`);
+// Klub-isoleret upload: uploads/clubs/{clubId}/logos/
+function clubLogoDir(clubId) {
+  const dir = path.join(UPLOAD_DIR, 'clubs', String(clubId), 'logos');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function logoUploader(prefix) {
+  return multer({
+    storage: multer.diskStorage({
+      destination: (req, file, cb) => {
+        if (!req.clubId) return cb(new Error('Klub-kontekst mangler'));
+        cb(null, clubLogoDir(req.clubId));
+      },
+      filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase().replace(/[^a-z0-9.]/g, '') || '.png';
+        cb(null, `${prefix}_${req.params.id}_${Date.now()}${ext}`);
+      },
+    }),
+    limits: { fileSize: 2 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      if (!/^image\/(png|jpe?g|webp|svg\+xml|gif)$/.test(file.mimetype)) {
+        return cb(new Error('Only image files are allowed'));
+      }
+      cb(null, true);
     },
-  }),
-  limits: { fileSize: 2 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (!/^image\/(png|jpe?g|webp|svg\+xml|gif)$/.test(file.mimetype)) {
-      return cb(new Error('Only image files are allowed'));
-    }
-    cb(null, true);
-  },
-});
+  });
+}
+
+const tournamentLogoUpload = logoUploader('tournament');
 
 const router = express.Router();
 
-router.get('/', async (req, res) => {
+router.get('/', requireClub, async (req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT id, name, logo_path, status, num_pools, teams_per_pool, created_at
          FROM tournaments
-        ORDER BY created_at DESC`
+        WHERE club_id = ?
+        ORDER BY created_at DESC`,
+      [req.clubId]
     );
     res.json(rows);
   } catch (err) {
@@ -44,26 +60,29 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireClub, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const [[tournament]] = await pool.query('SELECT * FROM tournaments WHERE id = ?', [id]);
+    const [[tournament]] = await pool.query(
+      'SELECT * FROM tournaments WHERE id = ? AND club_id = ?',
+      [id, req.clubId]
+    );
     if (!tournament) return res.status(404).json({ error: 'Not found' });
 
     const [pools] = await pool.query(
-      'SELECT id, name, pool_index FROM pools WHERE tournament_id = ? ORDER BY pool_index',
-      [id]
+      'SELECT id, name, pool_index FROM pools WHERE tournament_id = ? AND club_id = ? ORDER BY pool_index',
+      [id, req.clubId]
     );
     const poolIds = pools.map((p) => p.id);
     const teams = poolIds.length
       ? (await pool.query(
-          'SELECT id, pool_id, name, logo_path, team_index FROM teams WHERE pool_id IN (?) ORDER BY team_index',
-          [poolIds]
+          'SELECT id, pool_id, name, logo_path, team_index FROM teams WHERE pool_id IN (?) AND club_id = ? ORDER BY team_index',
+          [poolIds, req.clubId]
         ))[0]
       : [];
     const cups = (await pool.query(
-      'SELECT id, name, cup_index, source_placements, total_teams FROM cups WHERE tournament_id = ? ORDER BY cup_index',
-      [id]
+      'SELECT id, name, cup_index, source_placements, total_teams FROM cups WHERE tournament_id = ? AND club_id = ? ORDER BY cup_index',
+      [id, req.clubId]
     ))[0];
 
     res.json({ tournament, pools, teams, cups });
@@ -73,7 +92,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/', requireAdmin, async (req, res) => {
+router.post('/', requireClub, requireAdmin, async (req, res) => {
   const { name, num_pools, pools: poolsInput, cups: cupsInput, points_win, points_draw, points_loss } = req.body || {};
   if (!name || !Array.isArray(poolsInput) || poolsInput.length === 0) {
     return res.status(400).json({ error: 'Missing name or pools' });
@@ -82,13 +101,16 @@ router.post('/', requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'Cups configuration required (can be empty array)' });
   }
 
+  const clubId = req.clubId;
+
   try {
     const result = await withTransaction(async (conn) => {
       const teamsPerPool = poolsInput[0].teams.length;
       const [tRes] = await conn.query(
-        `INSERT INTO tournaments (name, num_pools, teams_per_pool, points_win, points_draw, points_loss)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO tournaments (club_id, name, num_pools, teams_per_pool, points_win, points_draw, points_loss)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
+          clubId,
           name,
           num_pools || poolsInput.length,
           teamsPerPool,
@@ -103,8 +125,8 @@ router.post('/', requireAdmin, async (req, res) => {
         const poolDef = poolsInput[pi];
         const poolName = poolDef.name || `Pool ${String.fromCharCode(65 + pi)}`;
         const [pRes] = await conn.query(
-          'INSERT INTO pools (tournament_id, name, pool_index) VALUES (?, ?, ?)',
-          [tournamentId, poolName, pi]
+          'INSERT INTO pools (club_id, tournament_id, name, pool_index) VALUES (?, ?, ?, ?)',
+          [clubId, tournamentId, poolName, pi]
         );
         const poolId = pRes.insertId;
 
@@ -112,8 +134,8 @@ router.post('/', requireAdmin, async (req, res) => {
         for (let ti = 0; ti < poolDef.teams.length; ti += 1) {
           const teamName = poolDef.teams[ti].name || `Team ${ti + 1}`;
           const [teamRes] = await conn.query(
-            'INSERT INTO teams (pool_id, name, team_index) VALUES (?, ?, ?)',
-            [poolId, teamName, ti]
+            'INSERT INTO teams (club_id, pool_id, name, team_index) VALUES (?, ?, ?, ?)',
+            [clubId, poolId, teamName, ti]
           );
           insertedTeams.push({ id: teamRes.insertId, name: teamName });
         }
@@ -121,9 +143,9 @@ router.post('/', requireAdmin, async (req, res) => {
         const matches = generateRoundRobin(insertedTeams);
         for (const m of matches) {
           await conn.query(
-            `INSERT INTO pool_matches (pool_id, match_order, home_team_id, away_team_id)
-             VALUES (?, ?, ?, ?)`,
-            [poolId, m.match_order, m.home_team_id, m.away_team_id]
+            `INSERT INTO pool_matches (club_id, pool_id, match_order, home_team_id, away_team_id)
+             VALUES (?, ?, ?, ?, ?)`,
+            [clubId, poolId, m.match_order, m.home_team_id, m.away_team_id]
           );
         }
       }
@@ -134,9 +156,9 @@ router.post('/', requireAdmin, async (req, res) => {
         if (placements.length === 0) continue;
         const totalTeams = placements.length * poolsInput.length;
         const [cRes] = await conn.query(
-          `INSERT INTO cups (tournament_id, name, cup_index, source_placements, total_teams)
-           VALUES (?, ?, ?, ?, ?)`,
-          [tournamentId, cup.name || `Cup ${ci + 1}`, ci, JSON.stringify(placements), totalTeams]
+          `INSERT INTO cups (club_id, tournament_id, name, cup_index, source_placements, total_teams)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [clubId, tournamentId, cup.name || `Cup ${ci + 1}`, ci, JSON.stringify(placements), totalTeams]
         );
         const cupId = cRes.insertId;
 
@@ -149,9 +171,10 @@ router.post('/', requireAdmin, async (req, res) => {
           const ids = [];
           for (const m of round) {
             const [mRes] = await conn.query(
-              `INSERT INTO cup_matches (cup_id, round, bracket_position, home_seed, away_seed)
-               VALUES (?, ?, ?, ?, ?)`,
+              `INSERT INTO cup_matches (club_id, cup_id, round, bracket_position, home_seed, away_seed)
+               VALUES (?, ?, ?, ?, ?, ?)`,
               [
+                clubId,
                 cupId,
                 r + 1,
                 m.bracket_position,
@@ -171,8 +194,8 @@ router.post('/', requireAdmin, async (req, res) => {
             const nextIdx = Math.floor(i / 2);
             const slot = i % 2 === 0 ? 'home' : 'away';
             await conn.query(
-              'UPDATE cup_matches SET next_match_id = ?, next_match_slot = ? WHERE id = ?',
-              [next[nextIdx], slot, current[i]]
+              'UPDATE cup_matches SET next_match_id = ?, next_match_slot = ? WHERE id = ? AND club_id = ?',
+              [next[nextIdx], slot, current[i], clubId]
             );
           }
         }
@@ -188,10 +211,10 @@ router.post('/', requireAdmin, async (req, res) => {
   }
 });
 
-router.delete('/:id', requireAdmin, async (req, res) => {
+router.delete('/:id', requireClub, requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    await pool.query('DELETE FROM tournaments WHERE id = ?', [id]);
+    await pool.query('DELETE FROM tournaments WHERE id = ? AND club_id = ?', [id, req.clubId]);
     res.json({ ok: true });
   } catch (err) {
     console.error('delete tournament', err);
@@ -199,27 +222,30 @@ router.delete('/:id', requireAdmin, async (req, res) => {
   }
 });
 
-router.get('/:id/standings', async (req, res) => {
+router.get('/:id/standings', requireClub, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const [[tournament]] = await pool.query('SELECT * FROM tournaments WHERE id = ?', [id]);
+    const [[tournament]] = await pool.query(
+      'SELECT * FROM tournaments WHERE id = ? AND club_id = ?',
+      [id, req.clubId]
+    );
     if (!tournament) return res.status(404).json({ error: 'Not found' });
 
     const [pools] = await pool.query(
-      'SELECT id, name, pool_index FROM pools WHERE tournament_id = ? ORDER BY pool_index',
-      [id]
+      'SELECT id, name, pool_index FROM pools WHERE tournament_id = ? AND club_id = ? ORDER BY pool_index',
+      [id, req.clubId]
     );
     const poolIds = pools.map((p) => p.id);
     const allTeams = poolIds.length
       ? (await pool.query(
-          'SELECT id, pool_id, name, logo_path, team_index FROM teams WHERE pool_id IN (?)',
-          [poolIds]
+          'SELECT id, pool_id, name, logo_path, team_index FROM teams WHERE pool_id IN (?) AND club_id = ?',
+          [poolIds, req.clubId]
         ))[0]
       : [];
     const allMatches = poolIds.length
       ? (await pool.query(
-          'SELECT * FROM pool_matches WHERE pool_id IN (?)',
-          [poolIds]
+          'SELECT * FROM pool_matches WHERE pool_id IN (?) AND club_id = ?',
+          [poolIds, req.clubId]
         ))[0]
       : [];
 
@@ -238,18 +264,18 @@ router.get('/:id/standings', async (req, res) => {
   }
 });
 
-router.get('/:id/cups', async (req, res) => {
+router.get('/:id/cups', requireClub, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const [cups] = await pool.query(
-      'SELECT id, name, cup_index, source_placements, total_teams FROM cups WHERE tournament_id = ? ORDER BY cup_index',
-      [id]
+      'SELECT id, name, cup_index, source_placements, total_teams FROM cups WHERE tournament_id = ? AND club_id = ? ORDER BY cup_index',
+      [id, req.clubId]
     );
     const cupIds = cups.map((c) => c.id);
     const matches = cupIds.length
       ? (await pool.query(
-          'SELECT * FROM cup_matches WHERE cup_id IN (?) ORDER BY round, bracket_position',
-          [cupIds]
+          'SELECT * FROM cup_matches WHERE cup_id IN (?) AND club_id = ? ORDER BY round, bracket_position',
+          [cupIds, req.clubId]
         ))[0]
       : [];
     const teamIds = new Set();
@@ -259,8 +285,8 @@ router.get('/:id/cups', async (req, res) => {
     });
     const teams = teamIds.size
       ? (await pool.query(
-          'SELECT id, name, logo_path FROM teams WHERE id IN (?)',
-          [Array.from(teamIds)]
+          'SELECT id, name, logo_path FROM teams WHERE id IN (?) AND club_id = ?',
+          [Array.from(teamIds), req.clubId]
         ))[0]
       : [];
     const teamMap = new Map(teams.map((t) => [t.id, t]));
@@ -283,17 +309,29 @@ router.get('/:id/cups', async (req, res) => {
   }
 });
 
-router.post('/:id/logo', requireAdmin, tournamentLogoUpload.single('logo'), async (req, res) => {
+router.post('/:id/logo', requireClub, requireAdmin, tournamentLogoUpload.single('logo'), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {
-    const [[existing]] = await pool.query('SELECT logo_path FROM tournaments WHERE id = ?', [id]);
-    if (existing && existing.logo_path) {
+    const [[existing]] = await pool.query(
+      'SELECT logo_path FROM tournaments WHERE id = ? AND club_id = ?',
+      [id, req.clubId]
+    );
+    if (!existing) {
+      // Slet den lige uploadede fil — klubben ejer ikke turneringen
+      fs.promises.unlink(req.file.path).catch(() => {});
+      return res.status(404).json({ error: 'Tournament not found' });
+    }
+    if (existing.logo_path) {
       const oldPath = path.join(UPLOAD_DIR, existing.logo_path);
       fs.promises.unlink(oldPath).catch(() => {});
     }
-    const relPath = `logos/${req.file.filename}`;
-    await pool.query('UPDATE tournaments SET logo_path = ? WHERE id = ?', [relPath, id]);
+    // Relative sti gemt i DB inkluderer clubs/{id}/-prefix så uploads-routen kan finde den
+    const relPath = `clubs/${req.clubId}/logos/${req.file.filename}`;
+    await pool.query(
+      'UPDATE tournaments SET logo_path = ? WHERE id = ? AND club_id = ?',
+      [relPath, id, req.clubId]
+    );
     res.json({ ok: true, logo_path: relPath });
   } catch (err) {
     console.error('upload tournament logo', err);
@@ -301,15 +339,21 @@ router.post('/:id/logo', requireAdmin, tournamentLogoUpload.single('logo'), asyn
   }
 });
 
-router.delete('/:id/logo', requireAdmin, async (req, res) => {
+router.delete('/:id/logo', requireClub, requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   try {
-    const [[existing]] = await pool.query('SELECT logo_path FROM tournaments WHERE id = ?', [id]);
+    const [[existing]] = await pool.query(
+      'SELECT logo_path FROM tournaments WHERE id = ? AND club_id = ?',
+      [id, req.clubId]
+    );
     if (existing && existing.logo_path) {
       const oldPath = path.join(UPLOAD_DIR, existing.logo_path);
       fs.promises.unlink(oldPath).catch(() => {});
     }
-    await pool.query('UPDATE tournaments SET logo_path = NULL WHERE id = ?', [id]);
+    await pool.query(
+      'UPDATE tournaments SET logo_path = NULL WHERE id = ? AND club_id = ?',
+      [id, req.clubId]
+    );
     res.json({ ok: true });
   } catch (err) {
     console.error('delete tournament logo', err);

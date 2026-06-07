@@ -1,26 +1,30 @@
 const { computeStandings } = require('./standings');
 
-async function tryAdvanceToCups(conn, tournamentId) {
-  const [[tournament]] = await conn.query('SELECT * FROM tournaments WHERE id = ?', [tournamentId]);
+// Multi-tenant: alle queries scoped via clubId. Kald: tryAdvanceToCups(conn, tournamentId, clubId)
+async function tryAdvanceToCups(conn, tournamentId, clubId) {
+  const [[tournament]] = await conn.query(
+    'SELECT * FROM tournaments WHERE id = ? AND club_id = ?',
+    [tournamentId, clubId]
+  );
   if (!tournament) return;
 
   const [pools] = await conn.query(
-    'SELECT id, pool_index FROM pools WHERE tournament_id = ? ORDER BY pool_index',
-    [tournamentId]
+    'SELECT id, pool_index FROM pools WHERE tournament_id = ? AND club_id = ? ORDER BY pool_index',
+    [tournamentId, clubId]
   );
   const poolIds = pools.map((p) => p.id);
   if (poolIds.length === 0) return;
 
   const [allMatches] = await conn.query(
-    'SELECT * FROM pool_matches WHERE pool_id IN (?)',
-    [poolIds]
+    'SELECT * FROM pool_matches WHERE pool_id IN (?) AND club_id = ?',
+    [poolIds, clubId]
   );
   const allPlayed = allMatches.length > 0 && allMatches.every((m) => m.played);
   if (!allPlayed) return;
 
   const [allTeams] = await conn.query(
-    'SELECT id, pool_id, name, logo_path FROM teams WHERE pool_id IN (?)',
-    [poolIds]
+    'SELECT id, pool_id, name, logo_path FROM teams WHERE pool_id IN (?) AND club_id = ?',
+    [poolIds, clubId]
   );
 
   const placementByPoolIndex = new Map();
@@ -32,13 +36,13 @@ async function tryAdvanceToCups(conn, tournamentId) {
   }
 
   const [cups] = await conn.query(
-    'SELECT id FROM cups WHERE tournament_id = ?',
-    [tournamentId]
+    'SELECT id FROM cups WHERE tournament_id = ? AND club_id = ?',
+    [tournamentId, clubId]
   );
   for (const cup of cups) {
     const [firstRound] = await conn.query(
-      'SELECT * FROM cup_matches WHERE cup_id = ? AND round = 1',
-      [cup.id]
+      'SELECT * FROM cup_matches WHERE cup_id = ? AND club_id = ? AND round = 1',
+      [cup.id, clubId]
     );
     for (const cm of firstRound) {
       const homeSeed = cm.home_seed ? safeParse(cm.home_seed) : null;
@@ -46,16 +50,16 @@ async function tryAdvanceToCups(conn, tournamentId) {
       const homeTeamId = resolveSeed(homeSeed, placementByPoolIndex);
       const awayTeamId = resolveSeed(awaySeed, placementByPoolIndex);
       await conn.query(
-        'UPDATE cup_matches SET home_team_id = ?, away_team_id = ? WHERE id = ?',
-        [homeTeamId, awayTeamId, cm.id]
+        'UPDATE cup_matches SET home_team_id = ?, away_team_id = ? WHERE id = ? AND club_id = ?',
+        [homeTeamId, awayTeamId, cm.id, clubId]
       );
     }
   }
 
   if (tournament.status === 'pool_stage' || tournament.status === 'setup') {
     await conn.query(
-      "UPDATE tournaments SET status = 'cup_stage' WHERE id = ?",
-      [tournamentId]
+      "UPDATE tournaments SET status = 'cup_stage' WHERE id = ? AND club_id = ?",
+      [tournamentId, clubId]
     );
   }
 }
@@ -75,32 +79,44 @@ function resolveSeed(seed, placementByPoolIndex) {
   return row ? row.team_id : null;
 }
 
-async function advanceCupWinner(conn, matchId) {
-  const [[match]] = await conn.query('SELECT * FROM cup_matches WHERE id = ?', [matchId]);
+async function advanceCupWinner(conn, matchId, clubId) {
+  const [[match]] = await conn.query(
+    'SELECT * FROM cup_matches WHERE id = ? AND club_id = ?',
+    [matchId, clubId]
+  );
   if (!match || !match.played) return;
   if (!match.next_match_id) {
-    const [[cup]] = await conn.query('SELECT tournament_id FROM cups WHERE id = ?', [match.cup_id]);
-    if (cup) await maybeFinishTournament(conn, cup.tournament_id);
+    const [[cup]] = await conn.query(
+      'SELECT tournament_id FROM cups WHERE id = ? AND club_id = ?',
+      [match.cup_id, clubId]
+    );
+    if (cup) await maybeFinishTournament(conn, cup.tournament_id, clubId);
     return;
   }
   const winnerId = match.home_score > match.away_score ? match.home_team_id : match.away_team_id;
   const slotColumn = match.next_match_slot === 'home' ? 'home_team_id' : 'away_team_id';
   await conn.query(
-    `UPDATE cup_matches SET ${slotColumn} = ? WHERE id = ?`,
-    [winnerId, match.next_match_id]
+    `UPDATE cup_matches SET ${slotColumn} = ? WHERE id = ? AND club_id = ?`,
+    [winnerId, match.next_match_id, clubId]
   );
 }
 
-async function maybeFinishTournament(conn, tournamentId) {
-  const [cups] = await conn.query('SELECT id FROM cups WHERE tournament_id = ?', [tournamentId]);
+async function maybeFinishTournament(conn, tournamentId, clubId) {
+  const [cups] = await conn.query(
+    'SELECT id FROM cups WHERE tournament_id = ? AND club_id = ?',
+    [tournamentId, clubId]
+  );
   if (cups.length === 0) return;
   const cupIds = cups.map((c) => c.id);
   const [matches] = await conn.query(
-    'SELECT id, played FROM cup_matches WHERE cup_id IN (?)',
-    [cupIds]
+    'SELECT id, played FROM cup_matches WHERE cup_id IN (?) AND club_id = ?',
+    [cupIds, clubId]
   );
   if (matches.length > 0 && matches.every((m) => m.played)) {
-    await conn.query("UPDATE tournaments SET status = 'finished' WHERE id = ?", [tournamentId]);
+    await conn.query(
+      "UPDATE tournaments SET status = 'finished' WHERE id = ? AND club_id = ?",
+      [tournamentId, clubId]
+    );
   }
 }
 
