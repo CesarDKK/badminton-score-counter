@@ -9,8 +9,12 @@ COPY frontend/ /usr/share/nginx/html/
 # Copy marketing site files
 COPY marketing/ /usr/share/nginx/marketing/
 
-# Share fonts from app into marketing site
-RUN cp -r /usr/share/nginx/html/fonts /usr/share/nginx/marketing/fonts
+# Copy football marketing site
+COPY football-app/marketing/ /usr/share/nginx/football-marketing/
+
+# Share fonts from app into marketing sites
+RUN cp -r /usr/share/nginx/html/fonts /usr/share/nginx/marketing/fonts \
+    && cp -r /usr/share/nginx/html/fonts /usr/share/nginx/football-marketing/fonts
 
 # Expose port 80
 EXPOSE 80

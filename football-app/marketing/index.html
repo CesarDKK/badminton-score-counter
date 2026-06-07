@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="FootballApp.dk — Gratis turneringsstyring til fodboldklubber. Puljer, cup-brackets, live scoreboard og logo-bibliotek med 255 landeflag.">
+    <title>FootballApp.dk — Turneringsstyring til din klub</title>
+    <link rel="stylesheet" href="fonts.css">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --pitch: #14e8a3;
+            --pitch-deep: #0aa86f;
+            --pitch-soft: rgba(20, 232, 163, 0.08);
+            --live: #ff4d6d;
+            --bg: #0a0e14;
+            --bg-elev: #11161f;
+            --bg-card: rgba(20, 232, 163, 0.07);
+            --border: rgba(20, 232, 163, 0.28);
+            --text: #f4f1ec;
+            --muted: #95a0b3;
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+            background-size: 56px 56px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .glow {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(20,232,163,0.25) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .wrap {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 24px;
+            position: relative;
+            z-index: 1;
+        }
+
+        nav {
+            position: relative;
+            z-index: 1;
+            padding: 24px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding-left: 24px;
+            padding-right: 24px;
+        }
+
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+        }
+
+        .nav-brand .icon {
+            font-size: 1.6em;
+            line-height: 1;
+        }
+
+        .nav-brand .wordmark {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.5em;
+            letter-spacing: 1px;
+            color: #fff;
+            line-height: 1;
+        }
+
+        .nav-brand .wordmark span { color: var(--pitch); }
+
+        .nav-cta {
+            background: var(--pitch-deep);
+            color: #fff;
+            text-decoration: none;
+            padding: 9px 20px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            font-weight: 600;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+
+        .nav-cta:hover { background: var(--pitch); color: #0a0e14; }
+
+        .hero {
+            text-align: center;
+            padding: 80px 0 70px;
+        }
+
+        .hero h1 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: clamp(3em, 9vw, 6em);
+            line-height: 1;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+        }
+
+        .hero h1 .accent { color: var(--pitch); }
+
+        .hero p {
+            font-size: clamp(1em, 2.5vw, 1.2em);
+            color: var(--muted);
+            max-width: 580px;
+            margin: 0 auto 40px;
+            line-height: 1.7;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 14px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-primary {
+            background: var(--pitch-deep);
+            color: #fff;
+            text-decoration: none;
+            padding: 14px 32px;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: 600;
+            transition: background 0.2s, transform 0.15s;
+        }
+
+        .btn-primary:hover {
+            background: var(--pitch);
+            color: #0a0e14;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text);
+            text-decoration: none;
+            padding: 14px 32px;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: 600;
+            border: 1px solid var(--border);
+            transition: border-color 0.2s, transform 0.15s;
+        }
+
+        .btn-secondary:hover { border-color: var(--pitch); transform: translateY(-1px); }
+
+        /* ── Browser chrome wrapper ── */
+        .browser-chrome {
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+            border: 1px solid var(--border);
+        }
+
+        .browser-bar {
+            background: #1a1a2e;
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .browser-dots { display: flex; gap: 5px; }
+        .browser-dot { width: 10px; height: 10px; border-radius: 50%; }
+        .browser-dot:nth-child(1) { background: #ff5f56; }
+        .browser-dot:nth-child(2) { background: #ffbd2e; }
+        .browser-dot:nth-child(3) { background: #27c93f; }
+
+        .browser-url {
+            flex: 1;
+            background: rgba(255,255,255,0.06);
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 0.72em;
+            color: rgba(255,255,255,0.4);
+            letter-spacing: 0.03em;
+        }
+
+        /* ── Match scoreboard mockup ── */
+        .matchcard {
+            background: var(--bg-elev);
+            padding: 32px 28px;
+            font-family: 'DM Sans', sans-serif;
+        }
+
+        .matchcard-header {
+            text-align: center;
+            margin-bottom: 22px;
+        }
+
+        .matchcard-tournament {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.2em;
+            letter-spacing: 0.08em;
+            color: var(--pitch);
+            margin-bottom: 4px;
+        }
+
+        .matchcard-stage {
+            font-size: 0.72em;
+            letter-spacing: 0.18em;
+            color: var(--muted);
+            text-transform: uppercase;
+        }
+
+        .matchcard-row {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 18px;
+            align-items: center;
+        }
+
+        .mc-team {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .mc-team-logo {
+            width: 64px;
+            height: 64px;
+            background: #fff;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.8em;
+            color: var(--pitch-deep);
+            letter-spacing: 0.04em;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+        }
+
+        .mc-team-name {
+            font-size: 0.95em;
+            font-weight: 600;
+            color: #fff;
+            letter-spacing: 0.02em;
+        }
+
+        .mc-vs {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .mc-score {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 3em;
+            line-height: 1;
+            color: #fff;
+            letter-spacing: 0.05em;
+        }
+
+        .mc-live {
+            font-size: 0.65em;
+            color: var(--live);
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .mc-live::before {
+            content: '';
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: var(--live);
+            animation: pulse 1.6s ease-in-out infinite;
+        }
+
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        /* Pool standings teaser */
+        .mc-pool {
+            margin-top: 22px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .mc-pool-title {
+            font-size: 0.7em;
+            letter-spacing: 0.16em;
+            color: var(--muted);
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .mc-pool-row {
+            display: grid;
+            grid-template-columns: 24px 1fr auto auto;
+            gap: 10px;
+            align-items: center;
+            padding: 6px 8px;
+            font-size: 0.82em;
+            border-radius: 6px;
+        }
+
+        .mc-pool-row.qualified {
+            background: var(--pitch-soft);
+        }
+
+        .mc-pool-pos {
+            color: var(--muted);
+            text-align: center;
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1em;
+        }
+
+        .mc-pool-row.qualified .mc-pool-pos { color: var(--pitch); }
+
+        .mc-pool-name { font-weight: 500; }
+        .mc-pool-pts {
+            font-family: 'Bebas Neue', sans-serif;
+            color: #fff;
+            font-size: 1.05em;
+        }
+
+        .mc-pool-pld {
+            color: var(--muted);
+            font-size: 0.72em;
+        }
+
+        .section-divider {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 0;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        .section-header h2 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: clamp(2em, 5vw, 3em);
+            letter-spacing: 1px;
+        }
+
+        .features { padding: 80px 0; }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 28px;
+            transition: border-color 0.2s, transform 0.2s;
+        }
+
+        .feature-card:hover {
+            border-color: var(--pitch);
+            transform: translateY(-2px);
+        }
+
+        .feature-icon {
+            font-size: 1.8em;
+            margin-bottom: 14px;
+        }
+
+        .feature-card h3 {
+            font-size: 1.05em;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #fff;
+        }
+
+        .feature-card p {
+            font-size: 0.9em;
+            color: var(--muted);
+            line-height: 1.65;
+        }
+
+        .cta-section { padding: 80px 0; text-align: center; }
+
+        .cta-box {
+            background: linear-gradient(135deg, rgba(20,232,163,0.18) 0%, rgba(10,168,111,0.08) 100%);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 60px 40px;
+        }
+
+        .cta-box h2 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: clamp(2em, 5vw, 3em);
+            letter-spacing: 1px;
+            margin-bottom: 14px;
+        }
+
+        .cta-box p {
+            color: var(--muted);
+            margin-bottom: 32px;
+            font-size: 1em;
+            line-height: 1.6;
+        }
+
+        footer {
+            position: relative;
+            z-index: 1;
+            border-top: 1px solid var(--border);
+            padding: 28px 0;
+            text-align: center;
+            color: var(--muted);
+            font-size: 0.82em;
+        }
+
+        footer a { color: var(--muted); text-decoration: none; }
+        footer a:hover { color: var(--text); }
+
+        @media (max-width: 600px) {
+            .hero { padding: 60px 0 50px; }
+            .cta-box { padding: 40px 24px; }
+            .matchcard { padding: 22px 16px; }
+            .mc-team-logo { width: 52px; height: 52px; font-size: 1.5em; }
+            .mc-score { font-size: 2.4em; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="glow"></div>
+
+<!-- Nav -->
+<nav>
+    <a class="nav-brand" href="/">
+        <span class="icon">⚽</span>
+        <span class="wordmark">Football<span>App</span></span>
+    </a>
+    <a class="nav-cta" href="https://demo.footballapp.dk">Åben Demo →</a>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+    <div class="wrap">
+        <h1>Turneringsstyring til<br><span class="accent">din fodboldklub</span></h1>
+        <p>Et komplet og gratis system til at køre pulje- og cup-turneringer — fra registrering af hold over live scoreboard til automatisk advancement i brackets.</p>
+        <div class="hero-actions">
+            <a class="btn-primary" href="https://demo.footballapp.dk">Åben Demo</a>
+            <a class="btn-secondary" href="#funktioner">Se funktioner</a>
+        </div>
+
+        <!-- Match scoreboard mockup -->
+        <div style="margin: 56px auto 0; max-width: 580px;">
+            <div class="browser-chrome">
+                <div class="browser-bar">
+                    <div class="browser-dots">
+                        <div class="browser-dot"></div>
+                        <div class="browser-dot"></div>
+                        <div class="browser-dot"></div>
+                    </div>
+                    <div class="browser-url">lyngby.footballapp.dk</div>
+                </div>
+                <div class="matchcard">
+                    <div class="matchcard-header">
+                        <div class="matchcard-tournament">U13 Sommercup 2026</div>
+                        <div class="matchcard-stage">Semifinale · Pulje A</div>
+                    </div>
+                    <div class="matchcard-row">
+                        <div class="mc-team">
+                            <div class="mc-team-logo">LB</div>
+                            <div class="mc-team-name">Lyngby BK</div>
+                        </div>
+                        <div class="mc-vs">
+                            <div class="mc-score">2 – 1</div>
+                            <div class="mc-live">Live</div>
+                        </div>
+                        <div class="mc-team">
+                            <div class="mc-team-logo">BIF</div>
+                            <div class="mc-team-name">Brøndby IF</div>
+                        </div>
+                    </div>
+
+                    <div class="mc-pool">
+                        <div class="mc-pool-title">Pulje A — Stilling</div>
+                        <div class="mc-pool-row qualified">
+                            <div class="mc-pool-pos">1</div>
+                            <div class="mc-pool-name">Lyngby BK</div>
+                            <div class="mc-pool-pld">3 spillet</div>
+                            <div class="mc-pool-pts">9</div>
+                        </div>
+                        <div class="mc-pool-row qualified">
+                            <div class="mc-pool-pos">2</div>
+                            <div class="mc-pool-name">Brøndby IF</div>
+                            <div class="mc-pool-pld">3 spillet</div>
+                            <div class="mc-pool-pts">6</div>
+                        </div>
+                        <div class="mc-pool-row">
+                            <div class="mc-pool-pos">3</div>
+                            <div class="mc-pool-name">FC Roskilde</div>
+                            <div class="mc-pool-pld">3 spillet</div>
+                            <div class="mc-pool-pts">3</div>
+                        </div>
+                        <div class="mc-pool-row">
+                            <div class="mc-pool-pos">4</div>
+                            <div class="mc-pool-name">Hillerød Fodbold</div>
+                            <div class="mc-pool-pld">3 spillet</div>
+                            <div class="mc-pool-pts">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- Features -->
+<section class="features" id="funktioner">
+    <div class="wrap">
+        <div class="section-header">
+            <h2>Funktioner</h2>
+        </div>
+
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <h3>Puljer med automatisk stilling</h3>
+                <p>Opret vilkårligt antal puljer med hold per pulje. Round-robin-kampe genereres automatisk og stillingen opdateres live efter hver kamp.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🏆</div>
+                <h3>Cup-brackets med cross-pool seedning</h3>
+                <p>Definér flere cups (A-cup, B-cup, osv.) med valgfri seedning fra puljerne. Vindere rykker automatisk frem i bracketet når kampe afgøres.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📡</div>
+                <h3>Live scoreboard</h3>
+                <p>Tilskuere kan følge med på den offentlige side — resultater opdateres øjeblikkeligt på alle enheder uden at siden skal genindlæses.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🌐</div>
+                <h3>Eget klub-subdomain</h3>
+                <p>Hver klub får sit eget <code style="background:rgba(0,0,0,0.3); padding:1px 5px; border-radius:3px; color:var(--pitch); font-size:0.9em;">dinklub.footballapp.dk</code> — turneringer er adskilt og kun synlige for klubbens egne besøgende.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🏳️</div>
+                <h3>Logo-bibliotek med 255 landeflag</h3>
+                <p>Alle nationsflag ligger klar fra start — søg på navn og vælg. Upload også klubbens egne logoer med navne så de er nemme at finde igen.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">⚙️</div>
+                <h3>Multi-bruger admin</h3>
+                <p>Opret flere admin-brugere per klub. Super admin håndterer klub-oprettelse centralt — klubberne styrer selv deres turneringer.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📱</div>
+                <h3>Optimeret til alle enheder</h3>
+                <p>Indtast scorer fra mobil, tablet eller computer. Public scoreboard ser lige godt ud på storskærm som på din lommeenhed.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🔓</div>
+                <h3>Gratis og open source-grundlag</h3>
+                <p>Ingen abonnementer eller transaktionsgebyrer. Selvhoster I systemet, ejer I jeres egne data.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- Sådan kommer I igang -->
+<section class="features" id="igang">
+    <div class="wrap">
+        <div class="section-header">
+            <h2>Sådan kommer I igang</h2>
+        </div>
+        <div class="cta-box" style="text-align:left; padding: 40px 48px;">
+            <p style="font-size:1.05em; line-height:1.8; color:var(--text);">
+                Løsningen er gratis at bruge. Skriv til os på <a href="mailto:info@footballapp.dk" style="color:var(--pitch); text-decoration:none;">info@footballapp.dk</a> for at få vejledning til, hvordan I installerer den på jeres egen server.<br><br>
+                Hvis I ønsker hjælp til selve installationen eller til opsætning af jeres første turnering, er I også meget velkomne til at kontakte os — vi hjælper gerne.
+            </p>
+        </div>
+    </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- CTA -->
+<section class="cta-section">
+    <div class="wrap">
+        <div class="cta-box">
+            <h2>Klar til at prøve det?</h2>
+            <a class="btn-primary" href="https://demo.footballapp.dk">Åben Demo →</a>
+            <p style="margin-top: 24px; font-size: 0.9em; color: var(--muted);">Spørgsmål? Skriv til os på <a href="mailto:info@footballapp.dk" style="color:var(--pitch); text-decoration:none;">info@footballapp.dk</a></p>
+        </div>
+    </div>
+</section>
+
+<!-- Footer -->
+<footer>
+    <div class="wrap">
+        <p>© 2026 Jesper Brink Sørensen &nbsp;·&nbsp; <a href="https://demo.footballapp.dk">demo.footballapp.dk</a> &nbsp;·&nbsp; <a href="mailto:info@footballapp.dk">info@footballapp.dk</a></p>
+    </div>
+</footer>
+
+</body>
+</html>
