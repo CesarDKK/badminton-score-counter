@@ -415,6 +415,8 @@ async function checkGameWin() {
             gameState.matchCompleted = true;
             const winnerNames = formatPlayerNames(gameState.player1.name, gameState.player1.name2);
             const loserNames = formatPlayerNames(gameState.player2.name, gameState.player2.name2);
+            // Fang FOR saveMatchResult, fordi den synkront nuller de globale assigned-vars.
+            const isReportedMatch = !!(assignedHoldkampGameId || assignedTournamentMatchId);
 
             // Gem øjeblikkeligt (afbryd debounced timer) så oversigt ser matchCompleted=true
             // inden brugeren evt. klikker "Ny Kamp" og nulstiller tilstanden.
@@ -424,17 +426,7 @@ async function checkGameWin() {
             // Save match result to database
             saveMatchResult(winnerNames, loserNames, gameState.player1.games, gameState.player2.games);
 
-            showMessage(
-                'Kamp Vundet!',
-                `${winnerNames} vinder kampen ${gameState.player1.games}-${gameState.player2.games}!`,
-                [
-                    {
-                        text: 'Ny Kamp',
-                        callback: () => clearCourt(),
-                        style: 'primary'
-                    }
-                ]
-            );
+            showMatchWonMessage(winnerNames, gameState.player1.games, gameState.player2.games, isReportedMatch);
             return;
         }
 
@@ -478,6 +470,7 @@ async function checkGameWin() {
             gameState.matchCompleted = true;
             const winnerNames = formatPlayerNames(gameState.player2.name, gameState.player2.name2);
             const loserNames = formatPlayerNames(gameState.player1.name, gameState.player1.name2);
+            const isReportedMatch = !!(assignedHoldkampGameId || assignedTournamentMatchId);
 
             if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
             performSave();
@@ -485,17 +478,7 @@ async function checkGameWin() {
             // Save match result to database
             saveMatchResult(winnerNames, loserNames, gameState.player2.games, gameState.player1.games);
 
-            showMessage(
-                'Kamp Vundet!',
-                `${winnerNames} vinder kampen ${gameState.player2.games}-${gameState.player1.games}!`,
-                [
-                    {
-                        text: 'Ny Kamp',
-                        callback: () => clearCourt(),
-                        style: 'primary'
-                    }
-                ]
-            );
+            showMatchWonMessage(winnerNames, gameState.player2.games, gameState.player1.games, isReportedMatch);
             return;
         }
 
@@ -641,6 +624,98 @@ function switchSides() {
     performSave();
 }
 
+// Selve nulstillingen — kaldes baade fra "Er du sikker"-prompten i clearCourt()
+// og fra den 3-sekunders hold-knap der vises efter holdkamp/turneringskamp.
+async function performClearCourtNow() {
+    // Release holdkamp game back to pending if assigned
+    if (assignedHoldkampGameId && activeTeamMatch) {
+        try {
+            await api.updateTeamMatchGame(activeTeamMatch.id, assignedHoldkampGameId, {
+                status: 'pending',
+                courtNumber: null
+            });
+        } catch (e) {
+            console.error('Failed to release holdkamp game:', e);
+        }
+        assignedHoldkampGameId = null;
+    }
+
+    // Release tournament match back to pending if assigned
+    if (assignedTournamentMatchId && activeTournament) {
+        try {
+            await api.updateTournamentMatch(activeTournament.id, assignedTournamentMatchId, {
+                status: 'pending',
+                courtNumber: null
+            });
+        } catch (e) {
+            console.error('Failed to release tournament match:', e);
+        }
+        assignedTournamentMatchId = null;
+    }
+
+    // Nulstil swap-flag når banen ryddes
+    gameState.sidesManuallySwitched = false;
+
+    // Cancel any active rest break first
+    if (gameState.restBreakActive) {
+        gameState.restBreakCallback = null;
+        await endRestBreak();
+    }
+
+    // Stop timer if running
+    if (gameState.timerInterval) {
+        clearInterval(gameState.timerInterval);
+        gameState.timerInterval = null;
+    }
+
+    // Reset game state to defaults
+    gameState.player1.name = 'Spiller 1';
+    gameState.player1.name2 = 'Makker 1';
+    gameState.player1.score = 0;
+    gameState.player1.games = 0;
+
+    gameState.player2.name = 'Spiller 2';
+    gameState.player2.name2 = 'Makker 2';
+    gameState.player2.score = 0;
+    gameState.player2.games = 0;
+
+    gameState.matchStartTime = null;
+    gameState.matchEndTime = null;
+    gameState.timerSeconds = 0;
+    gameState.isActive = false;  // Set court as inactive
+    gameState.decidingGameSwitched = false;
+    gameState.matchCompleted = false;
+    gameState.restBreakTaken = false;
+    gameState.servingPlayer = null;  // Reset serving player
+    gameState.initialServer = null;
+    gameState.servingTeam = null;  // Reset doubles serving state
+    gameState.servingPlayerOnTeam = null;
+    gameState.team1RightCourt = 1;  // Reset court positions
+    gameState.team2RightCourt = 1;
+    gameState.setScoresHistory = [];  // Clear set history so TV doesn't show old results
+    gameState.history = [];  // Clear undo history
+
+    // Update display
+    updateDisplay();
+
+    // Delete game state from database completely
+    try {
+        await api.resetGameState(courtId);
+        console.log('Court cleared successfully');
+        await refreshHoldkampPanel();
+    } catch (error) {
+        console.error('Failed to clear court:', error);
+        showMessage('Fejl', 'Kunne ikke rydde banen i databasen.');
+    }
+
+    closeSettingsMenu();
+
+    // QR-tæller mister adgangen når banen ryddes
+    if (isMatchSessionToken()) {
+        showQrSessionExpired();
+    }
+}
+
 function clearCourt() {
     showMessage(
         'Ryd Banen',
@@ -648,95 +723,7 @@ function clearCourt() {
         [
             {
                 text: 'Ja, Ryd Banen',
-                callback: async () => {
-                    // Release holdkamp game back to pending if assigned
-                    if (assignedHoldkampGameId && activeTeamMatch) {
-                        try {
-                            await api.updateTeamMatchGame(activeTeamMatch.id, assignedHoldkampGameId, {
-                                status: 'pending',
-                                courtNumber: null
-                            });
-                        } catch (e) {
-                            console.error('Failed to release holdkamp game:', e);
-                        }
-                        assignedHoldkampGameId = null;
-                    }
-
-                    // Release tournament match back to pending if assigned
-                    if (assignedTournamentMatchId && activeTournament) {
-                        try {
-                            await api.updateTournamentMatch(activeTournament.id, assignedTournamentMatchId, {
-                                status: 'pending',
-                                courtNumber: null
-                            });
-                        } catch (e) {
-                            console.error('Failed to release tournament match:', e);
-                        }
-                        assignedTournamentMatchId = null;
-                    }
-
-                    // Nulstil swap-flag når banen ryddes
-                    gameState.sidesManuallySwitched = false;
-
-                    // Cancel any active rest break first
-                    if (gameState.restBreakActive) {
-                        gameState.restBreakCallback = null;
-                        await endRestBreak();
-                    }
-
-                    // Stop timer if running
-                    if (gameState.timerInterval) {
-                        clearInterval(gameState.timerInterval);
-                        gameState.timerInterval = null;
-                    }
-
-                    // Reset game state to defaults
-                    gameState.player1.name = 'Spiller 1';
-                    gameState.player1.name2 = 'Makker 1';
-                    gameState.player1.score = 0;
-                    gameState.player1.games = 0;
-
-                    gameState.player2.name = 'Spiller 2';
-                    gameState.player2.name2 = 'Makker 2';
-                    gameState.player2.score = 0;
-                    gameState.player2.games = 0;
-
-                    gameState.matchStartTime = null;
-                    gameState.matchEndTime = null;
-                    gameState.timerSeconds = 0;
-                    gameState.isActive = false;  // Set court as inactive
-                    gameState.decidingGameSwitched = false;
-                    gameState.matchCompleted = false;
-                    gameState.restBreakTaken = false;
-                    gameState.servingPlayer = null;  // Reset serving player
-                    gameState.initialServer = null;
-                    gameState.servingTeam = null;  // Reset doubles serving state
-                    gameState.servingPlayerOnTeam = null;
-                    gameState.team1RightCourt = 1;  // Reset court positions
-                    gameState.team2RightCourt = 1;
-                    gameState.setScoresHistory = [];  // Clear set history so TV doesn't show old results
-                    gameState.history = [];  // Clear undo history
-
-                    // Update display
-                    updateDisplay();
-
-                    // Delete game state from database completely
-                    try {
-                        await api.resetGameState(courtId);
-                        console.log('Court cleared successfully');
-                        await refreshHoldkampPanel();
-                    } catch (error) {
-                        console.error('Failed to clear court:', error);
-                        showMessage('Fejl', 'Kunne ikke rydde banen i databasen.');
-                    }
-
-                    closeSettingsMenu();
-
-                    // QR-tæller mister adgangen når banen ryddes
-                    if (isMatchSessionToken()) {
-                        showQrSessionExpired();
-                    }
-                },
+                callback: () => performClearCourtNow(),
                 style: 'primary'
             },
             {
@@ -1483,6 +1470,8 @@ function showMessage(title, text, buttons = [{ text: 'OK', callback: null, style
 
     titleElement.textContent = title;
     textElement.textContent = text;
+    // Stoet linjeskift i meddelelsens text (textContent rendre normalt \n som mellemrum)
+    textElement.style.whiteSpace = 'pre-line';
 
     // Clear existing buttons
     buttonsContainer.innerHTML = '';
@@ -1490,18 +1479,63 @@ function showMessage(title, text, buttons = [{ text: 'OK', callback: null, style
     // Add buttons
     buttons.forEach(button => {
         const btn = document.createElement('button');
-        btn.textContent = button.text;
         btn.className = button.style === 'secondary' ? 'btn-secondary' : 'btn-primary';
         btn.style.fontSize = '1.5em';
         btn.style.padding = '15px 40px';
         btn.style.cursor = 'pointer';
 
-        btn.onclick = () => {
-            hideMessage();
-            if (button.callback) {
-                button.callback();
-            }
-        };
+        if (button.holdDurationMs && button.holdDurationMs > 0) {
+            // Hold-to-confirm knap — kraever at brugeren holder museknappen/fingeren
+            // nede i holdDurationMs ms foer callback fires. Beskytter mod accidental
+            // clears, fx ved holdkamp hvor dommerbesked skal gives foerst.
+            btn.style.position = 'relative';
+            btn.style.overflow = 'hidden';
+
+            const fill = document.createElement('span');
+            fill.style.cssText = 'position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(255,255,255,0.3);pointer-events:none;';
+
+            const label = document.createElement('span');
+            label.textContent = button.text;
+            label.style.cssText = 'position:relative;z-index:1;';
+
+            btn.appendChild(fill);
+            btn.appendChild(label);
+
+            let holdTimer = null;
+            const cancelHold = () => {
+                if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+                fill.style.transition = 'width 150ms ease-out';
+                fill.style.width = '0';
+            };
+            const beginHold = (e) => {
+                if (e.cancelable) e.preventDefault();
+                cancelHold();
+                fill.style.transition = `width ${button.holdDurationMs}ms linear`;
+                void fill.offsetWidth; // tving reflow saa transitionen starter fra 0
+                fill.style.width = '100%';
+                holdTimer = setTimeout(() => {
+                    holdTimer = null;
+                    hideMessage();
+                    if (button.callback) button.callback();
+                }, button.holdDurationMs);
+            };
+
+            btn.addEventListener('mousedown', beginHold);
+            btn.addEventListener('touchstart', beginHold, { passive: false });
+            btn.addEventListener('mouseup', cancelHold);
+            btn.addEventListener('mouseleave', cancelHold);
+            btn.addEventListener('touchend', cancelHold);
+            btn.addEventListener('touchcancel', cancelHold);
+            btn.addEventListener('contextmenu', e => e.preventDefault());
+        } else {
+            btn.textContent = button.text;
+            btn.onclick = () => {
+                hideMessage();
+                if (button.callback) {
+                    button.callback();
+                }
+            };
+        }
 
         buttonsContainer.appendChild(btn);
     });
@@ -1512,6 +1546,45 @@ function showMessage(title, text, buttons = [{ text: 'OK', callback: null, style
 function hideMessage() {
     const overlay = document.getElementById('messageOverlay');
     overlay.style.display = 'none';
+}
+
+// Vis "kamp vundet" besked. Holdkamp/turneringskamp-kampe faar en 3-sek hold-knap
+// og en paamindelse om dommerbesked saa resultatet bliver staaende laenge nok
+// til at dommeren faar besked inden banen ryddes.
+function showMatchWonMessage(winnerNames, winnerGames, loserGames, isReportedMatch) {
+    if (isReportedMatch) {
+        const sets = (gameState.setScoresHistory || [])
+            .map(s => (typeof s === 'string' ? s : s.score))
+            .filter(Boolean);
+        const setsLine = sets.length ? `Sæt: ${sets.join(', ')}\n` : '';
+        const text =
+            `${winnerNames} vinder kampen ${winnerGames}-${loserGames}\n` +
+            setsLine +
+            '\n' +
+            'Husk at give dommerbesked om resultatet.\n' +
+            'Hold knappen inde i 3 sekunder for at rydde banen.';
+
+        showMessage(
+            'Kamp Vundet!',
+            text,
+            [{
+                text: 'Ryd Banen (hold 3 sek.)',
+                callback: () => performClearCourtNow(),
+                style: 'primary',
+                holdDurationMs: 3000
+            }]
+        );
+    } else {
+        showMessage(
+            'Kamp Vundet!',
+            `${winnerNames} vinder kampen ${winnerGames}-${loserGames}!`,
+            [{
+                text: 'Ny Kamp',
+                callback: () => clearCourt(),
+                style: 'primary'
+            }]
+        );
+    }
 }
 
 // Save match result to database
