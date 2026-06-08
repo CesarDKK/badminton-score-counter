@@ -100,6 +100,22 @@ CREATE TABLE IF NOT EXISTS game_states (
   UNIQUE KEY unique_court_state (court_id)
 ) ENGINE=InnoDB;
 
+-- Last finished match snapshot (vises på TV efter "Ryd bane" i nogle minutter)
+CREATE TABLE IF NOT EXISTS last_finished_matches (
+  court_id INT PRIMARY KEY,
+  player1_name VARCHAR(100),
+  player1_name2 VARCHAR(100),
+  player2_name VARCHAR(100),
+  player2_name2 VARCHAR(100),
+  player1_games INT DEFAULT 0,
+  player2_games INT DEFAULT 0,
+  set_scores_history JSON,
+  is_doubles BOOLEAN DEFAULT FALSE,
+  match_end_time DATETIME NULL,
+  cleared_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (court_id) REFERENCES courts(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 -- Match history table (replaces matchHistory_court{N})
 CREATE TABLE IF NOT EXISTS match_history (
   id INT PRIMARY KEY AUTO_INCREMENT,

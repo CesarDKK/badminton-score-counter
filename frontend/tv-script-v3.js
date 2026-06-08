@@ -146,12 +146,21 @@ async function loadCourtData() {
             matchEndTime = null;
             isMatchCurrentlyActive = false;
             wasMatchPreviouslyActive = false;
+            hideRestBreak();
+
+            // Når banen netop er ryddet beholder vi resultatet i 5 min — backend
+            // leverer et snapshot her indtil det udløber eller en ny kamp overtager.
+            if (gameState.lastFinishedMatch) {
+                hideQrCounter();
+                showFinishedSnapshot(gameState.lastFinishedMatch);
+                return;
+            }
+
             originalPlayer1Name = null;
             originalPlayer1Name2 = null;
             originalPlayer2Name = null;
             originalPlayer2Name2 = null;
             hideMatchFinished();
-            hideRestBreak();
             showSponsorSlideshow();
             showQrCounter();
             return;
@@ -1030,6 +1039,39 @@ function showMatchFinished(gameState, playersSwapped) {
     document.getElementById('tvFinishedWinner').textContent = winner;
 
     overlay.style.display = 'flex';
+}
+
+// Vis resultatet fra et snapshot (gemt da banen blev ryddet).
+// Genbruger showMatchFinished ved at konstruere et minimalt gameState-objekt
+// og sætte original-positions så set-historikkens swap-logik virker korrekt.
+function showFinishedSnapshot(snap) {
+    hideSponsorSlideshow();
+
+    // Snapshot lagrer den endelige position; den bruges også som "original"
+    // så scores i setScoresHistory ikke fejlagtigt byttes om i visningen.
+    originalPlayer1Name = snap.player1.name;
+    originalPlayer1Name2 = snap.player1.name2 || null;
+    originalPlayer2Name = snap.player2.name;
+    originalPlayer2Name2 = snap.player2.name2 || null;
+
+    const fakeGameState = {
+        player1: {
+            name: snap.player1.name,
+            name2: snap.player1.name2,
+            score: 0,
+            games: snap.player1.games || 0
+        },
+        player2: {
+            name: snap.player2.name,
+            name2: snap.player2.name2,
+            score: 0,
+            games: snap.player2.games || 0
+        },
+        setScoresHistory: snap.setScoresHistory || [],
+        isDoubles: !!snap.isDoubles
+    };
+
+    showMatchFinished(fakeGameState, false);
 }
 
 function hideMatchFinished() {

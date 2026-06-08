@@ -4,6 +4,51 @@ const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
 
+// Hvor længe (i minutter) et "last finished match" snapshot vises på TV efter Ryd bane
+const FINISHED_SNAPSHOT_TTL_MINUTES = 5;
+
+function parseSetScores(raw) {
+    if (!raw) return [];
+    if (typeof raw === 'string') {
+        try { return JSON.parse(raw); } catch { return []; }
+    }
+    return raw;
+}
+
+// Henter og auto-udløber snapshot for en bane. Returnerer null hvis intet/udløbet.
+async function fetchFinishedSnapshot(courtPk) {
+    const snap = await queryOne(
+        `SELECT player1_name, player1_name2, player2_name, player2_name2,
+                player1_games, player2_games, set_scores_history, is_doubles,
+                match_end_time, cleared_at,
+                TIMESTAMPDIFF(SECOND, cleared_at, NOW()) AS age_seconds
+         FROM last_finished_matches WHERE court_id = ?`,
+        [courtPk]
+    );
+    if (!snap) return null;
+    if (snap.age_seconds >= FINISHED_SNAPSHOT_TTL_MINUTES * 60) {
+        await query('DELETE FROM last_finished_matches WHERE court_id = ?', [courtPk]);
+        return null;
+    }
+    return {
+        player1: {
+            name: snap.player1_name,
+            name2: snap.player1_name2,
+            games: snap.player1_games
+        },
+        player2: {
+            name: snap.player2_name,
+            name2: snap.player2_name2,
+            games: snap.player2_games
+        },
+        setScoresHistory: parseSetScores(snap.set_scores_history),
+        isDoubles: !!snap.is_doubles,
+        matchEndTime: snap.match_end_time,
+        clearedAt: snap.cleared_at,
+        ttlSeconds: Math.max(0, FINISHED_SNAPSHOT_TTL_MINUTES * 60 - snap.age_seconds)
+    };
+}
+
 // GET /api/game-states/batch/all - Get all game states in one request (public, for overview page)
 // NOTE: This route must be defined BEFORE /:courtId to avoid matching "batch" as a courtId
 router.get('/batch/all', async (req, res, next) => {
@@ -115,7 +160,8 @@ router.get('/:courtId', async (req, res, next) => {
         );
 
         if (!gameState) {
-            // Return default state if no game state exists
+            // Return default state if no game state exists, men evt. med snapshot
+            const lastFinishedMatch = await fetchFinishedSnapshot(court.id);
             return res.json({
                 player1: { name: 'Spiller 1', name2: 'Makker 1', score: 0, games: 0 },
                 player2: { name: 'Spiller 2', name2: 'Makker 2', score: 0, games: 0 },
@@ -137,7 +183,8 @@ router.get('/:courtId', async (req, res, next) => {
                 servingPlayerOnTeam: null,
                 team1RightCourt: 1,
                 team2RightCourt: 1,
-                betweenSets: false
+                betweenSets: false,
+                lastFinishedMatch
             });
         }
 
@@ -147,6 +194,13 @@ router.get('/:courtId', async (req, res, next) => {
                 ? JSON.parse(gameState.set_scores_history)
                 : gameState.set_scores_history)
             : [];
+
+        // Snapshot er kun relevant når banen ikke længere er aktiv —
+        // mens en kamp kører ses snapshot ikke (og kan ikke eksistere samtidig
+        // med game_state, da PUT rydder snapshottet ved aktivitet).
+        const lastFinishedMatch = !court.is_active
+            ? await fetchFinishedSnapshot(court.id)
+            : null;
 
         res.json({
             player1: {
@@ -179,7 +233,8 @@ router.get('/:courtId', async (req, res, next) => {
             servingPlayerOnTeam: gameState.serving_player_on_team,
             team1RightCourt: gameState.team1_right_court || 1,
             team2RightCourt: gameState.team2_right_court || 1,
-            betweenSets: !!gameState.between_sets
+            betweenSets: !!gameState.between_sets,
+            lastFinishedMatch
         });
     } catch (error) {
         next(error);
@@ -243,6 +298,17 @@ router.put('/:courtId', async (req, res, next) => {
 
         // Check if this is a reset (no activity at all AND no matchStartTime)
         const isReset = !hasActivity && !matchStartTime;
+
+        // Ryd snapshot når en ny kamp/tildeling påvirker banen:
+        //  - der er reel aktivitet (point/games/start)
+        //  - eller navne er ikke længere defaults (typisk fordi en holdkamp/
+        //    turneringskamp er tildelt eller en bruger har indtastet spillere)
+        const hasRealPlayerNames =
+            (player1.name && player1.name !== 'Spiller 1') ||
+            (player2.name && player2.name !== 'Spiller 2');
+        if (hasActivity || hasRealPlayerNames) {
+            await query('DELETE FROM last_finished_matches WHERE court_id = ?', [court.id]);
+        }
 
         // Check if frontend explicitly wants to clear matchEndTime (undo scenario)
         const shouldClearMatchEndTime = matchEndTime === null && req.body.hasOwnProperty('matchEndTime');
@@ -364,6 +430,64 @@ router.delete('/:courtId', async (req, res, next) => {
 
         if (!court) {
             return res.status(404).json({ error: 'Bane ikke fundet' });
+        }
+
+        // Hvis en kamp er afsluttet (mindst én side vandt 2 sæt eller match_completed=true),
+        // gem et snapshot så TV kan vise resultatet i et par minutter efter Ryd bane.
+        const existing = await queryOne(
+            `SELECT player1_name, player1_name2, player1_games,
+                    player2_name, player2_name2, player2_games,
+                    set_scores_history, match_end_time, match_completed
+             FROM game_states WHERE court_id = ?`,
+            [court.id]
+        );
+
+        if (existing) {
+            const finished = !!existing.match_completed ||
+                             existing.player1_games >= 2 ||
+                             existing.player2_games >= 2;
+
+            if (finished) {
+                const courtRow = await queryOne(
+                    'SELECT is_doubles FROM courts WHERE id = ?',
+                    [court.id]
+                );
+                const setScoresJson = existing.set_scores_history
+                    ? (typeof existing.set_scores_history === 'string'
+                        ? existing.set_scores_history
+                        : JSON.stringify(existing.set_scores_history))
+                    : '[]';
+                await query(
+                    `INSERT INTO last_finished_matches
+                        (court_id, player1_name, player1_name2, player2_name, player2_name2,
+                         player1_games, player2_games, set_scores_history,
+                         is_doubles, match_end_time, cleared_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                     ON DUPLICATE KEY UPDATE
+                        player1_name = VALUES(player1_name),
+                        player1_name2 = VALUES(player1_name2),
+                        player2_name = VALUES(player2_name),
+                        player2_name2 = VALUES(player2_name2),
+                        player1_games = VALUES(player1_games),
+                        player2_games = VALUES(player2_games),
+                        set_scores_history = VALUES(set_scores_history),
+                        is_doubles = VALUES(is_doubles),
+                        match_end_time = VALUES(match_end_time),
+                        cleared_at = NOW()`,
+                    [
+                        court.id,
+                        existing.player1_name,
+                        existing.player1_name2,
+                        existing.player2_name,
+                        existing.player2_name2,
+                        existing.player1_games || 0,
+                        existing.player2_games || 0,
+                        setScoresJson,
+                        courtRow ? !!courtRow.is_doubles : false,
+                        existing.match_end_time
+                    ]
+                );
+            }
         }
 
         // Delete game state
