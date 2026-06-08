@@ -127,7 +127,13 @@ async function loadCourtData() {
     try {
         const gameState = await api.getGameState(courtId);
 
-        const isMatchActive = gameState.isActive === true;
+        // Vis kampen paa TV saa snart navne er sat — selv foer is_active flippes,
+        // saa holdkamp/turneringskamp/admin-redigering rammer skaermen straks.
+        const hasRealPlayerNames =
+            (gameState.player1 && gameState.player1.name && gameState.player1.name !== 'Spiller 1') ||
+            (gameState.player2 && gameState.player2.name && gameState.player2.name !== 'Spiller 2');
+
+        const isMatchActive = gameState.isActive === true || hasRealPlayerNames;
 
         // Check if there's any game activity OR if a serving player has been selected
         const hasGameActivity =
