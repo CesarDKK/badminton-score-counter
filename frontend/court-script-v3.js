@@ -1671,6 +1671,13 @@ function startPeriodicSync() {
                     gameState.isDoubles = loaded.isDoubles || false;
                     updateDisplay();
                 }
+
+                // Sync game mode (21/30 vs 15/21) når admin har aendret det
+                if (loaded.gameMode && loaded.gameMode !== gameState.gameMode) {
+                    gameState.gameMode = loaded.gameMode;
+                    updateGameModeButton();
+                    updateDisplay();
+                }
             }
         } catch (error) {
             console.error('Failed to sync game state:', error);

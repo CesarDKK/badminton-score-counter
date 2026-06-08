@@ -245,7 +245,7 @@ router.get('/:courtId', async (req, res, next) => {
 router.put('/:courtId', async (req, res, next) => {
     try {
         const { courtId } = req.params;
-        const { player1, player2, timerSeconds, decidingGameSwitched, restBreakActive, restBreakSecondsLeft, restBreakTitle, isActive, isDoubles, setScoresHistory, matchStartTime, matchEndTime, matchCompleted, servingPlayer, initialServer, servingTeam, servingPlayerOnTeam, team1RightCourt, team2RightCourt, betweenSets } = req.body;
+        const { player1, player2, timerSeconds, decidingGameSwitched, restBreakActive, restBreakSecondsLeft, restBreakTitle, isActive, isDoubles, gameMode, setScoresHistory, matchStartTime, matchEndTime, matchCompleted, servingPlayer, initialServer, servingTeam, servingPlayerOnTeam, team1RightCourt, team2RightCourt, betweenSets } = req.body;
 
         // Check if we should skip auto-updating active status (for admin edits)
         const skipAutoActive = req.query.skipAutoActive === 'true';
@@ -407,6 +407,12 @@ router.put('/:courtId', async (req, res, next) => {
         // Update court's isDoubles setting if provided
         if (isDoubles !== undefined && typeof isDoubles === 'boolean') {
             await query('UPDATE courts SET is_doubles = ? WHERE id = ?', [isDoubles, court.id]);
+        }
+
+        // Update court's gameMode (21/30 vs 15/21) if provided — synker court-sidens
+        // toggle med DB saa periodic sync ikke ruller den tilbage.
+        if (gameMode !== undefined && (gameMode === '15' || gameMode === '21')) {
+            await query('UPDATE courts SET game_mode = ? WHERE id = ?', [gameMode, court.id]);
         }
 
         // Invalidér QR-tokens hvis kampen lige er startet
