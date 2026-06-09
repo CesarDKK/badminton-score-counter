@@ -340,6 +340,7 @@ async function createCourtCard(courtNumber) {
             </div>
             <div class="court-actions">
                 <button class="btn-edit" onclick="openEditModal(${courtNumber})">Redigér Bane</button>
+                <button class="btn-latest-match" onclick="showLatestMatch(${courtNumber})">Seneste kamp</button>
             </div>
         `;
 
@@ -357,6 +358,7 @@ async function createCourtCard(courtNumber) {
             </div>
             <div class="court-actions">
                 <button class="btn-edit" onclick="openEditModal(${courtNumber})">Redigér Bane</button>
+                <button class="btn-latest-match" onclick="showLatestMatch(${courtNumber})">Seneste kamp</button>
             </div>
         `;
         return card;
