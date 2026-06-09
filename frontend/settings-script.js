@@ -111,7 +111,7 @@ async function loadSettings() {
         document.getElementById('hideTvQr').checked = settings.hideTvQr === true;
         document.getElementById('courtVersion').value = settings.courtVersion || 'v2';
         document.getElementById('tvVersion').value = settings.tvVersion || 'v2';
-        document.getElementById('defaultGameMode').value = settings.defaultGameMode || '21';
+        document.getElementById('defaultGameMode').value = settings.defaultGameMode || '15';
     } catch (error) {
         console.error('Failed to load settings:', error);
         showMessage('Fejl', 'Kunne ikke indlæse indstillinger');

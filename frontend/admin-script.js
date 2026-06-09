@@ -1083,7 +1083,7 @@ async function loadActiveHoldkamp() {
             renderHoldkampBlocker(null);
             // Don't re-render while an edit form is open — it would clear the user's input
             if (!holdkampEditOpen) {
-                renderActiveHoldkamp(teamMatch, container, allGameStates, courtCount, settings.defaultGameMode || '21');
+                renderActiveHoldkamp(teamMatch, container, allGameStates, courtCount, settings.defaultGameMode || '15');
             }
             // Polling may have been stopped when there was no active match; restart it.
             if (!holdkampRefreshTimer) {

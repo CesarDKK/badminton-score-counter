@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS courts (
   court_number INT UNIQUE NOT NULL,
   is_active BOOLEAN DEFAULT FALSE,
   is_doubles BOOLEAN DEFAULT FALSE,
-  game_mode ENUM('15', '21') DEFAULT '21',
+  game_mode ENUM('15', '21') DEFAULT '15',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_court_number (court_number),

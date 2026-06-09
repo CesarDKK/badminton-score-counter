@@ -42,7 +42,7 @@ router.get('/', async (req, res, next) => {
             showResetButton: showResetButtonSetting?.setting_value !== 'false',
             courtVersion: courtVersionSetting?.setting_value || 'v2',
             tvVersion: tvVersionSetting?.setting_value || 'v2',
-            defaultGameMode: defaultGameModeSetting?.setting_value || '21',
+            defaultGameMode: defaultGameModeSetting?.setting_value || '15',
             hideTvQr: hideTvQrSetting?.setting_value === 'true'
         });
     } catch (error) {
