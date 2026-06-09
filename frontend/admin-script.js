@@ -2078,22 +2078,21 @@ function formatHistoryDate(raw) {
 
 // Vis seneste kamp paa baneoversigtens kort. Henter den oeverste row fra
 // match_history for banen og rendrer den i message-overlayet med en lille
-// saet-tabel der fremhaever vinderen pr saet. Layout/farver/fonts kommer
-// fra .latest-match-*-klasserne i admin-styles.css.
+// saet-tabel der fremhaever vinderen pr saet.
 async function showLatestMatch(courtNumber) {
     try {
         const matches = await api.getCourtMatchHistory(courtNumber, 1);
         if (!matches || matches.length === 0) {
             showMessage(
                 `Seneste kamp — Bane ${courtNumber}`,
-                '',
-                [{ text: 'Luk', callback: null, style: 'primary' }],
-                { bodyHtml: '<div class="latest-match-empty">Der er ingen registrerede kampe på denne bane endnu.</div>' }
+                `Der er ingen registrerede kampe på denne bane endnu.`
             );
             return;
         }
         const m = matches[0];
         const sets = parseHistorySetScores(m.set_scores);
+        const WIN_GREEN = '#4CAF50';
+        const MUTED = '#9aa0a8';
 
         const winner = escapeHtml(m.winner_name || '');
         const loser = escapeHtml(m.loser_name || '');
@@ -2108,25 +2107,32 @@ async function showLatestMatch(courtNumber) {
                 const p1 = escapeHtml(s.player1 || '');
                 const p2 = escapeHtml(s.player2 || '');
                 const aWin = a > b;
+                const aStyle = aWin ? `color:${WIN_GREEN};font-weight:bold;` : `color:${MUTED};`;
+                const bStyle = !aWin ? `color:${WIN_GREEN};font-weight:bold;` : `color:${MUTED};`;
                 return `
                     <tr>
-                        <td class="set-label">Sæt ${i + 1}</td>
-                        <td class="player left${aWin ? ' win' : ''}">${p1}</td>
-                        <td class="score">${isNaN(a) ? '' : a}<span class="dash">–</span>${isNaN(b) ? '' : b}</td>
-                        <td class="player right${!aWin ? ' win' : ''}">${p2}</td>
+                        <td style="text-align:right;padding:6px 10px;${aStyle}">${p1}</td>
+                        <td style="text-align:center;padding:6px 8px;font-weight:bold;">${isNaN(a) ? '' : a} - ${isNaN(b) ? '' : b}</td>
+                        <td style="text-align:left;padding:6px 10px;${bStyle}">${p2}</td>
+                        <td style="text-align:center;padding:6px 10px;color:${MUTED};font-size:0.85em;">Sæt ${i + 1}</td>
                     </tr>`;
             }).join('');
-            setsHtml = `<table class="latest-match-table"><tbody>${rows}</tbody></table>`;
+            setsHtml = `
+                <table style="margin:14px auto 0;border-collapse:collapse;font-size:1em;">
+                    <tbody>${rows}</tbody>
+                </table>`;
         } else if (m.set_scores) {
-            setsHtml = `<div class="latest-match-empty">${escapeHtml(m.set_scores)}</div>`;
+            setsHtml = `<div style="margin-top:14px;color:${MUTED};font-size:0.9em;">${escapeHtml(m.set_scores)}</div>`;
         }
 
         const bodyHtml = `
-            <div class="latest-match-summary">
-                <div class="latest-match-winner">✓ ${winner} vinder ${games}</div>
-                <div class="latest-match-loser">mod ${loser}</div>
-                <div class="latest-match-meta">
-                    Varighed <strong>${duration}</strong><span class="dot">·</span>${dateText}
+            <div style="display:flex;flex-direction:column;align-items:center;">
+                <div style="font-size:1.2em;color:${WIN_GREEN};font-weight:bold;margin-bottom:6px;">
+                    ✓ ${winner} vinder ${games}
+                </div>
+                <div style="color:${MUTED};font-size:0.92em;">mod ${loser}</div>
+                <div style="color:${MUTED};font-size:0.85em;margin-top:8px;">
+                    Varighed ${duration} &nbsp;·&nbsp; ${dateText}
                 </div>
                 ${setsHtml}
             </div>`;
