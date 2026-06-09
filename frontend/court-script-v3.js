@@ -1462,16 +1462,23 @@ function checkRestBreak() {
 }
 
 // Message overlay functions (replaces alert/confirm dialogs)
-function showMessage(title, text, buttons = [{ text: 'OK', callback: null, style: 'primary' }]) {
+// options.bodyHtml: hvis sat, indsaettes som innerHTML i stedet for text — bruges
+// af showMatchWonMessage for at rendere en struktureret saet-tabel.
+function showMessage(title, text, buttons = [{ text: 'OK', callback: null, style: 'primary' }], options = {}) {
     const overlay = document.getElementById('messageOverlay');
     const titleElement = document.getElementById('messageTitle');
     const textElement = document.getElementById('messageText');
     const buttonsContainer = document.getElementById('messageButtons');
 
     titleElement.textContent = title;
-    textElement.textContent = text;
-    // Stoet linjeskift i meddelelsens text (textContent rendre normalt \n som mellemrum)
-    textElement.style.whiteSpace = 'pre-line';
+    if (options.bodyHtml) {
+        textElement.innerHTML = options.bodyHtml;
+        textElement.style.whiteSpace = 'normal';
+    } else {
+        textElement.textContent = text;
+        // Stoet linjeskift i meddelelsens text (textContent rendre normalt \n som mellemrum)
+        textElement.style.whiteSpace = 'pre-line';
+    }
 
     // Clear existing buttons
     buttonsContainer.innerHTML = '';
@@ -1548,43 +1555,116 @@ function hideMessage() {
     overlay.style.display = 'none';
 }
 
-// Vis "kamp vundet" besked. Holdkamp/turneringskamp-kampe faar en 3-sek hold-knap
-// og en paamindelse om dommerbesked saa resultatet bliver staaende laenge nok
-// til at dommeren faar besked inden banen ryddes.
-function showMatchWonMessage(winnerNames, winnerGames, loserGames, isReportedMatch) {
-    if (isReportedMatch) {
-        const sets = (gameState.setScoresHistory || [])
-            .map(s => (typeof s === 'string' ? s : s.score))
-            .filter(Boolean);
-        const setsLine = sets.length ? `Sæt: ${sets.join(', ')}\n` : '';
-        const text =
-            `${winnerNames} vinder kampen ${winnerGames}-${loserGames}\n` +
-            setsLine +
-            '\n' +
-            'Husk at give dommerbesked om resultatet.\n' +
-            'Hold knappen inde i 3 sekunder for at rydde banen.';
+// Lille html-escape saa spillernavne (brugerinput) ikke kan injicere markup.
+function escapeMessageHtml(s) {
+    if (s == null) return '';
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
 
-        showMessage(
-            'Kamp Vundet!',
-            text,
-            [{
-                text: 'Ryd Banen (hold 3 sek.)',
-                callback: () => performClearCourtNow(),
-                style: 'primary',
-                holdDurationMs: 3000
-            }]
-        );
+// Vis "kamp vundet" besked med en struktureret saet-tabel saa det er klart
+// hvilken spiller der fik hvilke point i hvert saet. Holdkamp/turneringskamp-
+// kampe faar derudover en 3-sek hold-knap og en dommerbesked-paamindelse.
+function showMatchWonMessage(winnerNames, winnerGames, loserGames, isReportedMatch) {
+    const history = gameState.setScoresHistory || [];
+    const isDoubles = !!gameState.isDoubles;
+
+    // Find kanonisk side A / side B fra det foerste saet — efterfoelgende saet
+    // kan have positionerne ombyttet (decider-skift). Det boejer vi op igen
+    // saa hver raekke i tabellen viser den samme side hele vejen ned.
+    let sideAName, sideAPartner, sideBName, sideBPartner;
+    if (history.length > 0 && typeof history[0] === 'object' && history[0].player1Name) {
+        sideAName = history[0].player1Name;
+        sideAPartner = history[0].player1Name2;
+        sideBName = history[0].player2Name;
+        sideBPartner = history[0].player2Name2;
     } else {
-        showMessage(
-            'Kamp Vundet!',
-            `${winnerNames} vinder kampen ${winnerGames}-${loserGames}!`,
-            [{
-                text: 'Ny Kamp',
-                callback: () => clearCourt(),
-                style: 'primary'
-            }]
-        );
+        sideAName = gameState.player1.name;
+        sideAPartner = gameState.player1.name2;
+        sideBName = gameState.player2.name;
+        sideBPartner = gameState.player2.name2;
     }
+
+    let sideAGames = 0;
+    let sideBGames = 0;
+    const setCells = history.map(set => {
+        const raw = typeof set === 'string' ? set : set.score;
+        const parts = String(raw || '').split('-').map(s => parseInt(s.trim(), 10));
+        let scoreA = parts[0];
+        let scoreB = parts[1];
+        if (typeof set === 'object' && set.player1Name && set.player1Name !== sideAName) {
+            // Positioner var byttet om i dette saet — flip score saa side A altid er side A.
+            scoreA = parts[1];
+            scoreB = parts[0];
+        }
+        const aWonSet = scoreA > scoreB;
+        if (aWonSet) sideAGames++; else sideBGames++;
+        return { scoreA, scoreB, aWonSet };
+    });
+
+    const labelA = isDoubles && sideAPartner ? `${sideAName} / ${sideAPartner}` : sideAName;
+    const labelB = isDoubles && sideBPartner ? `${sideBName} / ${sideBPartner}` : sideBName;
+    const sideAWinsMatch = sideAGames > sideBGames;
+
+    const WIN_GREEN = '#4CAF50';
+    const MUTED = '#9aa0a8';
+    const NAME_COL = 'text-align:left;padding:10px 14px;';
+    const SCORE_COL = 'text-align:center;padding:10px 14px;min-width:54px;';
+    const SETS_COL = 'text-align:center;padding:10px 14px;font-weight:bold;border-left:1px solid rgba(255,255,255,0.15);';
+
+    const headerCells = setCells.length
+        ? setCells.map((_, i) => `<th style="${SCORE_COL}font-weight:normal;color:${MUTED};">Sæt ${i + 1}</th>`).join('')
+        : '';
+
+    const rowA = `
+        <tr style="background:${sideAWinsMatch ? 'rgba(76,175,80,0.10)' : 'transparent'};color:${sideAWinsMatch ? '#fff' : MUTED};">
+            <td style="${NAME_COL}font-weight:${sideAWinsMatch ? 'bold' : 'normal'};">${escapeMessageHtml(labelA)}</td>
+            ${setCells.map(c => `<td style="${SCORE_COL}color:${c.aWonSet ? WIN_GREEN : MUTED};font-weight:${c.aWonSet ? 'bold' : 'normal'};">${c.scoreA}</td>`).join('')}
+            <td style="${SETS_COL}color:${sideAWinsMatch ? WIN_GREEN : MUTED};">${sideAGames}</td>
+        </tr>`;
+    const rowB = `
+        <tr style="background:${!sideAWinsMatch ? 'rgba(76,175,80,0.10)' : 'transparent'};color:${!sideAWinsMatch ? '#fff' : MUTED};">
+            <td style="${NAME_COL}font-weight:${!sideAWinsMatch ? 'bold' : 'normal'};">${escapeMessageHtml(labelB)}</td>
+            ${setCells.map(c => `<td style="${SCORE_COL}color:${!c.aWonSet ? WIN_GREEN : MUTED};font-weight:${!c.aWonSet ? 'bold' : 'normal'};">${c.scoreB}</td>`).join('')}
+            <td style="${SETS_COL}color:${!sideAWinsMatch ? WIN_GREEN : MUTED};">${sideBGames}</td>
+        </tr>`;
+
+    const tableHtml = setCells.length
+        ? `<table style="margin:0 auto;border-collapse:collapse;font-size:1.15em;">
+                <thead>
+                    <tr>
+                        <th style="${NAME_COL}"></th>
+                        ${headerCells}
+                        <th style="${SETS_COL}font-weight:normal;color:${MUTED};">Sæt</th>
+                    </tr>
+                </thead>
+                <tbody>${rowA}${rowB}</tbody>
+           </table>`
+        : '';
+
+    const winnerLine = `
+        <div style="text-align:center;margin-bottom:18px;font-size:1.25em;color:${WIN_GREEN};font-weight:bold;">
+            ${escapeMessageHtml(winnerNames)} vinder ${winnerGames}-${loserGames}
+        </div>`;
+
+    const noticeHtml = isReportedMatch
+        ? `<div style="margin-top:22px;color:#FFA500;line-height:1.55;text-align:center;font-size:0.95em;">
+                Husk at give dommerbesked om resultatet.<br>
+                Hold knappen inde i 3 sekunder for at rydde banen.
+           </div>`
+        : '';
+
+    const bodyHtml = `<div style="display:flex;flex-direction:column;align-items:center;">${winnerLine}${tableHtml}${noticeHtml}</div>`;
+
+    const buttons = isReportedMatch
+        ? [{ text: 'Ryd Banen (hold 3 sek.)', callback: () => performClearCourtNow(), style: 'primary', holdDurationMs: 3000 }]
+        : [{ text: 'Ny Kamp', callback: () => clearCourt(), style: 'primary' }];
+
+    showMessage('Kamp Vundet!', '', buttons, { bodyHtml });
 }
 
 // Save match result to database
