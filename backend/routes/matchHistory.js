@@ -32,6 +32,8 @@ router.get('/all', async (req, res, next) => {
 });
 
 // GET /api/match-history/:courtId - Get history for specific court (public)
+// courtId i URL'en er court_number — vi mapper til court.id (DB primary key),
+// da match_history.court_id altid lagrer den interne id (sat ved POST).
 router.get('/:courtId', async (req, res, next) => {
     try {
         const { courtId } = req.params;
@@ -44,6 +46,13 @@ router.get('/:courtId', async (req, res, next) => {
             return res.status(400).json({ error: 'Ugyldig limit parameter' });
         }
 
+        const court = await queryOne('SELECT id FROM courts WHERE court_number = ?', [courtId]);
+        if (!court) {
+            // Bane findes ikke — returner tomt array i stedet for 404,
+            // saa frontend kan vise "ingen kampe" uden at fejl-haandtere.
+            return res.json([]);
+        }
+
         // Use string interpolation for LIMIT as MySQL doesn't support placeholders for it
         const history = await query(
             `SELECT id, winner_name, loser_name, games_won, duration, set_scores, match_date
@@ -51,7 +60,7 @@ router.get('/:courtId', async (req, res, next) => {
              WHERE court_id = ?
              ORDER BY match_date DESC
              LIMIT ${limit}`,
-            [courtId]
+            [court.id]
         );
 
         res.json(history);
