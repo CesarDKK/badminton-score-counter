@@ -2110,20 +2110,36 @@ async function showLatestMatch(courtNumber) {
             return parts.map(p => escapeHtml(p)).join('<br>');
         };
 
+        // Match-vinderens fulde navn (formatPlayerNames-format, matcher set-historiens
+        // strings). Bruges til at orientere alle raekker, saa vinderen altid staar til
+        // venstre selv om siderne blev byttet mellem saet.
+        const winnerKey = (m.winner_name || '').trim();
+
         let setsHtml = '';
         if (sets.length) {
             const rows = sets.map((s, i) => {
-                const [a, b] = (s.score || '').split('-').map(n => parseInt(n.trim(), 10));
-                const p1 = stackPartnerNames(s.player1 || '');
-                const p2 = stackPartnerNames(s.player2 || '');
-                const aWin = a > b;
-                const aStyle = aWin ? `color:${WIN_GREEN};font-weight:bold;` : `color:${MUTED};`;
-                const bStyle = !aWin ? `color:${WIN_GREEN};font-weight:bold;` : `color:${MUTED};`;
+                const scoreParts = (s.score || '').split('-').map(n => parseInt(n.trim(), 10));
+                let leftName = (s.player1 || '').trim();
+                let rightName = (s.player2 || '').trim();
+                let leftScore = scoreParts[0];
+                let rightScore = scoreParts[1];
+
+                // Hvis vinderen var i positionsslot 2 da saettet blev gemt
+                // (typisk efter et sideskift), vendes baade navne og score saa
+                // visningen forbliver konsistent — vinder venstre, taber hoejre.
+                if (winnerKey && rightName === winnerKey && leftName !== winnerKey) {
+                    [leftName, rightName] = [rightName, leftName];
+                    [leftScore, rightScore] = [rightScore, leftScore];
+                }
+
+                const leftWonSet = leftScore > rightScore;
+                const leftStyle = leftWonSet ? `color:${WIN_GREEN};font-weight:bold;` : `color:${MUTED};`;
+                const rightStyle = !leftWonSet ? `color:${WIN_GREEN};font-weight:bold;` : `color:${MUTED};`;
                 return `
                     <tr>
-                        <td style="text-align:right;padding:8px 14px;line-height:1.35;${aStyle}">${p1}</td>
-                        <td style="text-align:center;padding:8px 18px;font-weight:bold;white-space:nowrap;min-width:90px;">${isNaN(a) ? '' : a} - ${isNaN(b) ? '' : b}</td>
-                        <td style="text-align:left;padding:8px 14px;line-height:1.35;${bStyle}">${p2}</td>
+                        <td style="text-align:right;padding:8px 14px;line-height:1.35;${leftStyle}">${stackPartnerNames(leftName)}</td>
+                        <td style="text-align:center;padding:8px 18px;font-weight:bold;white-space:nowrap;min-width:90px;">${isNaN(leftScore) ? '' : leftScore} - ${isNaN(rightScore) ? '' : rightScore}</td>
+                        <td style="text-align:left;padding:8px 14px;line-height:1.35;${rightStyle}">${stackPartnerNames(rightName)}</td>
                         <td style="text-align:center;padding:8px 12px;color:${MUTED};font-size:0.85em;white-space:nowrap;">Sæt ${i + 1}</td>
                     </tr>`;
             }).join('');
