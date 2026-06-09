@@ -877,7 +877,13 @@ async function loadTournamentMatchHistory() {
 
                 const winnerLabel = m.winner_team === 1 ? side1 : (m.winner_team === 2 ? side2 : '?');
                 const winnerColor = m.winner_team === 1 ? '#4CAF50' : 'var(--color-accent)';
-                const scoreNums = m.set_scores ? (m.set_scores.match(/\d+-\d+/g) || []).join(' · ') : '';
+                // Orienter scoren til side1 (visningens venstre kolonne) saa raekken
+                // matcher "side1 vs side2"-rækkefoelgen ovenfor uafhaengigt af
+                // hvilken side spillerne stod paa da saettet blev gemt.
+                const side1Key = m.doubles && m.side1_player2
+                    ? `${m.side1_player1 || ''} / ${m.side1_player2}`
+                    : (m.side1_player1 || '');
+                const scoreNums = orientHistorySetScoreNumbers(m.set_scores, side1Key).join(' · ');
                 const scores = scoreNums ? `<span style="color:#aaa; font-size:0.8em; margin-left:6px;">${scoreNums}</span>` : '';
                 const resultHtml = `<span style="color:${winnerColor}; font-size:0.85em; font-weight:bold;">✓ ${escapeHtml(winnerLabel)}</span>${scores}`;
 
@@ -958,7 +964,12 @@ async function loadTeamMatchHistory() {
                 if (g.status === 'finished' && g.winner_team) {
                     const winnerName = g.winner_team === 1 ? tm.team1_name : tm.team2_name;
                     const winnerColor = g.winner_team === 1 ? '#4CAF50' : 'var(--color-accent)';
-                    const scoreNums = g.set_scores ? (g.set_scores.match(/\d+-\d+/g) || []).join(' · ') : '';
+                    // Orienter scoren til team1 (raekkens venstre side) saa scoren matcher
+                    // navnene ovenfor uanset hvilken side spillerne stod paa pr saet.
+                    const side1Key = isDoubles && g.team1_player2
+                        ? `${g.team1_player1 || ''} / ${g.team1_player2}`
+                        : (g.team1_player1 || '');
+                    const scoreNums = orientHistorySetScoreNumbers(g.set_scores, side1Key).join(' · ');
                     const scores = scoreNums ? `<span style="color:#aaa; font-size:0.8em; margin-left:6px;">${scoreNums}</span>` : '';
                     resultHtml = `<span style="color:${winnerColor}; font-size:0.85em; font-weight:bold;">✓ ${escapeHtml(winnerName)}</span>${scores}`;
                     rowBorder = winnerColor;
@@ -2052,6 +2063,32 @@ function showMessage(title, text, buttons = [{ text: 'OK', callback: null, style
 function hideMessage() {
     const overlay = document.getElementById('messageOverlay');
     overlay.style.display = 'none';
+}
+
+// Returnerer saet-score-strings ("X-Y") orienteret saa side1Key altid staar paa
+// venstre side af tallene. Bruges i turnerings/holdkamp historik-listerne hvor
+// raw-scoren ellers ville flippe rundt pr saet hvis siderne blev byttet, og
+// brugeren ikke kan gennemskue hvem der fik hvilket sæt-resultat.
+//   rawSetScores: "Jens / Bo 21-15 Anders / Peter, Anders / Peter 21-19 Jens / Bo, ..."
+//   side1Key: "Jens / Bo" (turneringskampens side1 i samme format som
+//             formatPlayerNames laver). Tomt -> ingen orientering, kun raw scores.
+function orientHistorySetScoreNumbers(rawSetScores, side1Key) {
+    if (!rawSetScores) return [];
+    if (!side1Key) return rawSetScores.match(/\d+-\d+/g) || [];
+    const anchor = side1Key.trim();
+    return rawSetScores.split(', ').map(part => {
+        const m = part.match(/^(.*?)\s+(\d+)-(\d+)\s+(.*?)$/);
+        if (m) {
+            const p1 = m[1].trim();
+            const p2 = m[4].trim();
+            if (p1 === anchor) return `${m[2]}-${m[3]}`;
+            if (p2 === anchor) return `${m[3]}-${m[2]}`;
+            // Ingen navne-match — bevarer raekkefoelgen
+            return `${m[2]}-${m[3]}`;
+        }
+        const scoreOnly = part.trim().match(/^\d+-\d+$/);
+        return scoreOnly ? part.trim() : null;
+    }).filter(Boolean);
 }
 
 // Parser set_scores-strengen fra match_history (fx "Jens 21-15 Bo, Jens 19-21 Bo")
