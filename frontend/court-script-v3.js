@@ -2102,6 +2102,10 @@ function applyHoldkampGameToState(game) {
         gameState.player2.name2 = game.team2_player2 || `${team2} makker`;
     }
     gameState.isDoubles = isDoubles;
+    // Tildeling betragtes som aktiv — uden dette ville saveGameState saa langt
+    // herefter sende isActive=false og overskrive courts.is_active i DB, saa
+    // admin baneoversigt straks tabte navnene.
+    gameState.isActive = true;
     // Frisk tildeling — eventuelt tidligere swap-flag nulstilles
     gameState.sidesManuallySwitched = false;
     updateDisplay();
@@ -2265,6 +2269,9 @@ function applyTournamentMatchToCourt(match) {
         gameState.player2.name2 = match.side2_player2 || 'Makker 2';
     }
     gameState.isDoubles = isDoubles;
+    // Tildeling betragtes som aktiv — saa saveGameState ikke nedgraderer
+    // courts.is_active til false naar admin lige har aktiveret banen.
+    gameState.isActive = true;
     // Frisk tildeling — eventuelt tidligere swap-flag nulstilles
     gameState.sidesManuallySwitched = false;
     updateDisplay();

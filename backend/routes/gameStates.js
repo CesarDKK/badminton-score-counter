@@ -502,6 +502,27 @@ router.delete('/:courtId', async (req, res, next) => {
         // Set court to inactive and reset doubles mode
         await query('UPDATE courts SET is_active = FALSE, is_doubles = FALSE WHERE id = ?', [court.id]);
 
+        // Frigiv aktive tildelinger fra holdkamp/turnering — ellers vil court-sidens
+        // næste sync re-binde den samme tildeling og bringe navnene tilbage straks
+        // efter at admin har trykket Nulstil bane. Kun status='active' rammes; en
+        // 'finished' kamp må ikke nedgraderes til 'pending'.
+        try {
+            await query(
+                `UPDATE team_match_games
+                 SET status = 'pending', court_number = NULL
+                 WHERE court_number = ? AND status = 'active'`,
+                [parseInt(courtId, 10)]
+            );
+        } catch (e) { console.error('Failed to release team_match_games on court reset:', e); }
+        try {
+            await query(
+                `UPDATE tournament_matches
+                 SET status = 'pending', court_number = NULL
+                 WHERE court_number = ? AND status = 'active'`,
+                [parseInt(courtId, 10)]
+            );
+        } catch (e) { console.error('Failed to release tournament_matches on court reset:', e); }
+
         // Invalidér eventuelle aktive QR-tokens — næste TV-request genererer en ny
         try { await invalidateCourtTokens(parseInt(courtId, 10)); } catch (e) { console.error('Token invalidation failed:', e); }
 
