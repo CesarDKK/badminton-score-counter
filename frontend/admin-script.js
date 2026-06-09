@@ -2102,21 +2102,29 @@ async function showLatestMatch(courtNumber) {
         const duration = escapeHtml(m.duration || '');
         const dateText = escapeHtml(formatHistoryDate(m.match_date));
 
+        // Til doubles stacker vi makker under hovedspilleren, saa et hold staar
+        // paa to linjer i stedet for at presse alt paa en lang vandret raekke.
+        const stackPartnerNames = (rawName) => {
+            if (!rawName) return '';
+            const parts = String(rawName).split(' / ').map(p => p.trim()).filter(Boolean);
+            return parts.map(p => escapeHtml(p)).join('<br>');
+        };
+
         let setsHtml = '';
         if (sets.length) {
             const rows = sets.map((s, i) => {
                 const [a, b] = (s.score || '').split('-').map(n => parseInt(n.trim(), 10));
-                const p1 = escapeHtml(s.player1 || '');
-                const p2 = escapeHtml(s.player2 || '');
+                const p1 = stackPartnerNames(s.player1 || '');
+                const p2 = stackPartnerNames(s.player2 || '');
                 const aWin = a > b;
                 const aStyle = aWin ? `color:${WIN_GREEN};font-weight:bold;` : `color:${MUTED};`;
                 const bStyle = !aWin ? `color:${WIN_GREEN};font-weight:bold;` : `color:${MUTED};`;
                 return `
                     <tr>
-                        <td style="text-align:right;padding:6px 10px;${aStyle}">${p1}</td>
-                        <td style="text-align:center;padding:6px 8px;font-weight:bold;">${isNaN(a) ? '' : a} - ${isNaN(b) ? '' : b}</td>
-                        <td style="text-align:left;padding:6px 10px;${bStyle}">${p2}</td>
-                        <td style="text-align:center;padding:6px 10px;color:${MUTED};font-size:0.85em;">Sæt ${i + 1}</td>
+                        <td style="text-align:right;padding:8px 14px;line-height:1.35;${aStyle}">${p1}</td>
+                        <td style="text-align:center;padding:8px 18px;font-weight:bold;white-space:nowrap;min-width:90px;">${isNaN(a) ? '' : a} - ${isNaN(b) ? '' : b}</td>
+                        <td style="text-align:left;padding:8px 14px;line-height:1.35;${bStyle}">${p2}</td>
+                        <td style="text-align:center;padding:8px 12px;color:${MUTED};font-size:0.85em;white-space:nowrap;">Sæt ${i + 1}</td>
                     </tr>`;
             }).join('');
             setsHtml = `
