@@ -204,9 +204,14 @@ body::before {
     overflow: hidden;
 }
 
+/* Compact-visningen droppen efternavnet (se compactDisplayName), saa vi kan
+   ramme stoerre font: ~140px paa Full HD, ~256px paa 4K. JS auto-fit shrinker
+   per element hvis et navn alligevel er for langt. En periodisk marquee
+   (.is-marquee + .marquee-text) viser det fulde navn med efternavn engang
+   imellem. */
 .player-name {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(1.8em, 6.5vh, 5em);
+    font-size: calc(clamp(2.4em, 13vh, 16em) * var(--fit-scale, 1));
     font-weight: 400;
     color: #ffffff;
     letter-spacing: 3px;
@@ -217,10 +222,11 @@ body::before {
 }
 
 /* Doubles: makker vises identisk med hovedspilleren — samme font-size og farve,
-   fordi de er et hold og skal fremstå jævnbyrdigt. */
+   fordi de er et hold og skal fremstå jævnbyrdigt. Auto-fit virker per linje
+   saa makkeren kan shrinke uafhaengigt af hovedspilleren. */
 .partner-name {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(1.8em, 6.5vh, 5em);
+    font-size: calc(clamp(2.4em, 13vh, 16em) * var(--fit-scale, 1));
     font-weight: 400;
     color: #ffffff;
     letter-spacing: 3px;
@@ -229,6 +235,31 @@ body::before {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* Marquee: det fulde navn ruller fra hoejre mod venstre én gang. Inner span
+   er inline-block saa translateX(100%) baseres paa span'ets egen bredde
+   (= tekstens fulde bredde), ikke kolonnens — det giver en kontinuerlig
+   scroll der starter off-screen-right og slutter off-screen-left. */
+.player-name.is-marquee,
+.partner-name.is-marquee {
+    text-overflow: clip;
+}
+/* Animation-duration og --marquee-dx saettes per-element fra JS — distance er
+   span.scrollWidth, og varigheden er distance/PIXELS_PER_SECOND. Det giver
+   konstant scroll-fart paa tvaers af navne, saa lange navne ender senere end
+   korte selvom alle starter samtidig. */
+.player-name .marquee-text,
+.partner-name .marquee-text {
+    display: inline-block;
+    will-change: transform;
+    animation-name: marquee-scroll;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+}
+@keyframes marquee-scroll {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(var(--marquee-dx, 0)); }
 }
 
 /* =================== SET BOXES =================== */

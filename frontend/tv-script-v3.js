@@ -39,6 +39,10 @@ let qrCounterVisible = false;
 // Initialize
 document.addEventListener('DOMContentLoaded', async function() {
     await initializeTVDisplay();
+    setupPlayerNameAutoFit();
+    // Marquee-funktionen er midlertidigt slaaet fra mens UX'en revurderes.
+    // compactDisplayName (vis kun foerste 1-2 navne) er stadig aktiv.
+    // setupPlayerNameMarquee();
     loadCourtData();
     startAutoRefresh();
     startLocalTimer();
@@ -282,13 +286,19 @@ function extractFirstName(fullName) {
     return parts[0].trim();
 }
 
-// For singles: fjern mellemnavne så lange navne ikke presser pointene ud.
-// "Jens Peter Hansen-Olsen" → "Jens Hansen-Olsen"; "Jens Hansen" bevares.
-function shortenSinglesName(fullName) {
+// Kompakt visning til TV-scoreboardet: drop efternavnet saa fonten kan vaere
+// stoerre. 1 ord = som-er, 2 ord = foerste, 3+ ord = de to foerste.
+// Det fulde navn vises stadig via periodisk marquee-scroll (se runMarqueeOnce).
+//   "Jesper"                  -> "Jesper"
+//   "Jesper Soerensen"        -> "Jesper"
+//   "Hans Henrik Heidemann"   -> "Hans Henrik"
+//   "Jens Peter Hansen-Olsen" -> "Jens Peter"
+function compactDisplayName(fullName) {
     if (!fullName) return '';
-    const parts = fullName.trim().split(/\s+/);
-    if (parts.length <= 2) return fullName.trim();
-    return `${parts[0]} ${parts[parts.length - 1]}`;
+    const parts = fullName.trim().split(/\s+/).filter(Boolean);
+    if (parts.length <= 1) return parts.join(' ');
+    const keep = Math.min(parts.length - 1, 2);
+    return parts.slice(0, keep).join(' ');
 }
 
 // Update player names display
@@ -305,37 +315,205 @@ function updatePlayerNames(gameState, playersSwapped) {
         displayPlayer2 = gameState.player2;
     }
 
+    // VIGTIGT: loadCourtData() poller hver 2s og kalder os hver gang. Hvis vi
+    // bare skrev textContent og kaldte cancelAllMarquees ubetinget, ville en
+    // igangvaerende 5-sek marquee blive draebt efter ca. 2 sek (= "navnet
+    // blinker"). setName skriver kun til DOM hvis navnet faktisk har aendret
+    // sig — saa pollingen er en no-op for et stabilt scoreboard.
+    let anyChanged = false;
+    const setName = (el, full) => {
+        if (!el) return;
+        const trimmed = (full || '').trim();
+        // Vi sammenligner kun mod dataset.fullText (den raa kilde) — IKKE mod
+        // el.textContent, fordi en aktiv marquee laegger en <span> med det
+        // fulde navn ind, hvilket faar textContent til at returnere fuld-tekst
+        // mens compactDisplayName giver short-tekst. Et match-fail ville saa
+        // draebe marqueeen hvert 2. sek (= "navnet blinker").
+        if (el.dataset.fullText === trimmed) return;
+
+        // Aendret navn → annuller evt. marquee paa netop dette element
+        if (el.classList.contains('is-marquee')) {
+            el.classList.remove('is-marquee');
+            delete el.dataset.marqueeShort;
+        }
+        el.textContent = compactDisplayName(full);
+        if (trimmed) {
+            el.dataset.fullText = trimmed;
+        } else {
+            delete el.dataset.fullText;
+        }
+        anyChanged = true;
+    };
+
+    const p1 = document.getElementById('player1Name');
+    const p1m = document.getElementById('player1Name2');
+    const p2 = document.getElementById('player2Name');
+    const p2m = document.getElementById('player2Name2');
+
     // Player 1
-    const player1Name = displayPlayer1.name;
-    const player1Name2 = displayPlayer1.name2;
-
-    if (isDoubles && player1Name2) {
-        // Extract first name (before '/')
-        const firstName1 = extractFirstName(player1Name);
-        const firstName2 = extractFirstName(player1Name2);
-
-        document.getElementById('player1Name').textContent = firstName1;
-        document.getElementById('player1Name2').textContent = firstName2;
-        document.getElementById('player1Name2').style.display = 'block';
+    if (isDoubles && displayPlayer1.name2) {
+        // extractFirstName haandterer slash-separerede alias-navne, og
+        // compactDisplayName droppen efternavnet ovenpaa.
+        setName(p1, extractFirstName(displayPlayer1.name));
+        setName(p1m, extractFirstName(displayPlayer1.name2));
+        if (p1m.style.display !== 'block') p1m.style.display = 'block';
     } else {
-        document.getElementById('player1Name').textContent = shortenSinglesName(player1Name);
-        document.getElementById('player1Name2').style.display = 'none';
+        setName(p1, displayPlayer1.name);
+        if (p1m.style.display !== 'none') p1m.style.display = 'none';
     }
 
     // Player 2
-    const player2Name = displayPlayer2.name;
-    const player2Name2 = displayPlayer2.name2;
-
-    if (isDoubles && player2Name2) {
-        const firstName1 = extractFirstName(player2Name);
-        const firstName2 = extractFirstName(player2Name2);
-
-        document.getElementById('player2Name').textContent = firstName1;
-        document.getElementById('player2Name2').textContent = firstName2;
-        document.getElementById('player2Name2').style.display = 'block';
+    if (isDoubles && displayPlayer2.name2) {
+        setName(p2, extractFirstName(displayPlayer2.name));
+        setName(p2m, extractFirstName(displayPlayer2.name2));
+        if (p2m.style.display !== 'block') p2m.style.display = 'block';
     } else {
-        document.getElementById('player2Name').textContent = shortenSinglesName(player2Name);
-        document.getElementById('player2Name2').style.display = 'none';
+        setName(p2, displayPlayer2.name);
+        if (p2m.style.display !== 'none') p2m.style.display = 'none';
+    }
+
+    // Kun re-fit hvis noget faktisk aendrede sig — fit-loopet hver 2s ville
+    // ellers nulstille --fit-scale midt i en marquee.
+    if (anyChanged) {
+        requestAnimationFrame(fitAllPlayerNames);
+    }
+}
+
+// ===== Auto-fit player names =====
+// Default-fonten i CSS er stor (god til korte navne); naar et navn er for
+// langt til at faa plads i .team-names-kolonnen, saetter vi en CSS-variabel
+// der ganger fonten ned saa hele navnet vises uden ellipsis.
+const PLAYER_NAME_MIN_SCALE = 0.45; // under det her er teksten ulaeselig; tag ellipsis i stedet
+function fitPlayerName(el) {
+    if (!el || el.offsetParent === null) return;  // skjult (singles: partner-name)
+    if (el.classList.contains('is-marquee')) return;  // marquee styrer selv stoerrelsen
+    // Nulstil saa vi maaler unconstrained tekstbredde foer vi beslutter scale
+    el.style.setProperty('--fit-scale', '1');
+    const container = el.parentElement;  // .team-names
+    if (!container) return;
+    const containerW = container.clientWidth;
+    if (containerW === 0) return;
+    const textW = el.scrollWidth;
+    if (textW <= containerW) return;
+    // 0.98 marginal for at undgaa sub-pixel rounding der ellers stadig giver ellipsis
+    const scale = Math.max((containerW / textW) * 0.98, PLAYER_NAME_MIN_SCALE);
+    el.style.setProperty('--fit-scale', scale.toFixed(3));
+}
+
+function fitAllPlayerNames() {
+    document.querySelectorAll('.player-name').forEach(fitPlayerName);
+}
+
+let playerNameResizeObserver = null;
+function setupPlayerNameAutoFit() {
+    if (playerNameResizeObserver || typeof ResizeObserver === 'undefined') return;
+    let rafPending = false;
+    playerNameResizeObserver = new ResizeObserver(() => {
+        // Coalesce resize-stoejen (window-drag) til én maaling per frame
+        if (rafPending) return;
+        rafPending = true;
+        requestAnimationFrame(() => {
+            rafPending = false;
+            fitAllPlayerNames();
+        });
+    });
+    document.querySelectorAll('.team-names').forEach(el => playerNameResizeObserver.observe(el));
+}
+
+// ===== Marquee: scroll det fulde navn igennem en gang imellem =====
+// Compact-visningen viser kun fornavn(e); marqueen er den maade vi alligevel
+// faar vist efternavnet paa, uden permanent at ofre font-stoerrelsen.
+const MARQUEE_INTERVAL_MS = 10000;     // pause mellem at sidste scroll er faerdig og naeste starter
+const MARQUEE_PX_PER_SECOND = 104;     // konstant scroll-fart — lange navne tager laengere
+
+function runMarqueeOnce(el, fullText) {
+    if (!el || !fullText) return;
+    if (el.classList.contains('is-marquee')) return;
+    const shortText = el.textContent;
+    if (fullText === shortText) return;  // intet skjult — spring over
+
+    // Wrap teksten i en inline-block span. Animationen scroller fra
+    // translateX(0) (foerste bogstav lige hvor compact-versionens foerste
+    // bogstav stod) til translateX(-span.scrollWidth) (hele teksten passeret
+    // ud af venstre side). Distance + konstant fart = lange navne tager
+    // laengere tid, saa alle marquees starter samtidig men slutter forskudt.
+    el.dataset.marqueeShort = shortText;
+    el.innerHTML = '';
+    const span = document.createElement('span');
+    span.className = 'marquee-text';
+    span.textContent = fullText;
+    el.appendChild(span);
+    el.classList.add('is-marquee');
+    // Vi rorer IKKE --fit-scale her — marqueeen skal rendere ved samme font-
+    // stoerrelse som compact-versionen, ellers "hopper" teksten op/ned i
+    // stoerrelse i overgangen. Span'et arver parent's font-size via calc().
+
+    // scrollWidth maales efter span er i DOM (med den aktuelle fit-scale)
+    const distance = span.scrollWidth;
+    const durationS = Math.max(1.5, distance / MARQUEE_PX_PER_SECOND);
+    span.style.setProperty('--marquee-dx', `-${distance}px`);
+    span.style.animationDuration = `${durationS}s`;
+
+    span.addEventListener('animationend', () => {
+        // Hvis updatePlayerNames har koert imellemtiden, har den ryddet
+        // is-marquee og dataset — saa lader vi den nye state staa.
+        if (!el.classList.contains('is-marquee')) return;
+        el.classList.remove('is-marquee');
+        el.textContent = el.dataset.marqueeShort || shortText;
+        delete el.dataset.marqueeShort;
+        fitPlayerName(el);
+    }, { once: true });
+}
+
+function cancelAllMarquees() {
+    document.querySelectorAll('.player-name.is-marquee').forEach(el => {
+        el.classList.remove('is-marquee');
+        delete el.dataset.marqueeShort;
+        // innerHTML/textContent overskrives af kalderen (updatePlayerNames)
+    });
+}
+
+// Starter marquee paa alle synlige navne med skjult del og venter til hver
+// enkelt animation er faerdig. Returnerer naar alt er done.
+async function tickAndWaitForMarquees() {
+    const candidates = [];
+    document.querySelectorAll('.player-name').forEach(el => {
+        if (el.offsetParent === null) return;       // skjult (singles makker)
+        if (el.classList.contains('is-marquee')) return;
+        const fullText = el.dataset.fullText;
+        if (!fullText) return;
+        if (fullText === el.textContent) return;    // intet skjult
+        candidates.push(el);
+    });
+    if (!candidates.length) return;
+
+    const waits = candidates.map(el => new Promise(resolve => {
+        runMarqueeOnce(el, el.dataset.fullText);
+        const span = el.querySelector('.marquee-text');
+        if (!span) { resolve(); return; }
+        // Safety-net hvis marqueeen bliver annulleret mid-flight (textContent
+        // overskrevet af updatePlayerNames pga. navne-aendring) — vi skal
+        // ikke faa loopet til at haenge i evig venten.
+        const durationS = parseFloat(span.style.animationDuration) || 5;
+        let done = false;
+        const finish = () => { if (!done) { done = true; resolve(); } };
+        span.addEventListener('animationend', finish, { once: true });
+        setTimeout(finish, durationS * 1000 + 500);
+    }));
+
+    await Promise.all(waits);
+}
+
+let marqueeLoopStarted = false;
+async function setupPlayerNameMarquee() {
+    if (marqueeLoopStarted) return;
+    marqueeLoopStarted = true;
+    // Loop: pause -> scroll alt -> vent til faerdig -> pause -> ...
+    // Det giver eksakt MARQUEE_INTERVAL_MS mellem at sidste scroll slutter
+    // og naeste starter, i stedet for at intervallet talte fra start-tidspunkt.
+    while (true) {
+        await new Promise(r => setTimeout(r, MARQUEE_INTERVAL_MS));
+        await tickAndWaitForMarquees();
     }
 }
 
