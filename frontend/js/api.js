@@ -362,6 +362,16 @@ class BadmintonAPI {
     }
 
     /**
+     * Get the newest match on a court across match_history, tournament_matches
+     * and team_match_games (since turneringskampe ikke duplikeres i match_history).
+     * @param {number} courtId - Court number
+     * @returns {Promise<object|null>} - Normalized match object or null
+     */
+    async getLatestMatchForCourt(courtId) {
+        return this.request(`/match-history/${courtId}/latest`, { requiresAuth: false });
+    }
+
+    /**
      * Get all match history
      * @param {number} limit - Max results (default 30)
      * @param {number} offset - Offset for pagination (default 0)

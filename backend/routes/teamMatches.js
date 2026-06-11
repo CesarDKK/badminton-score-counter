@@ -143,7 +143,15 @@ router.put('/:id/games/:gameId', async (req, res, next) => {
             fields.push('court_number = ?');
             values.push(courtNumber);
         }
-        if (status !== undefined) { fields.push('status = ?'); values.push(status); }
+        if (status !== undefined) {
+            fields.push('status = ?'); values.push(status);
+            // Naar en delkamp markeres 'finished', stempler vi tidspunktet saa
+            // admin-baneoversigtens "Seneste kamp" kan sortere paa tvaers af
+            // match_history, team_match_games og tournament_matches.
+            if (status === 'finished') {
+                fields.push('finished_at = CURRENT_TIMESTAMP');
+            }
+        }
         if (winnerTeam !== undefined) { fields.push('winner_team = ?'); values.push(winnerTeam); }
         if (setScores !== undefined) { fields.push('set_scores = ?'); values.push(setScores); }
         if (team1Player1 !== undefined) { fields.push('team1_player1 = ?'); values.push(team1Player1 || null); }

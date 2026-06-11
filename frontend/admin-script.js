@@ -2120,15 +2120,17 @@ function formatHistoryDate(raw) {
 // saet-tabel der fremhaever vinderen pr saet.
 async function showLatestMatch(courtNumber) {
     try {
-        const matches = await api.getCourtMatchHistory(courtNumber, 1);
-        if (!matches || matches.length === 0) {
+        // Henter nyeste paa tvaers af match_history, tournament_matches og
+        // team_match_games — turneringskampe gemmes ikke i match_history saa
+        // et ren-historik-opslag ville misse dem.
+        const m = await api.getLatestMatchForCourt(courtNumber);
+        if (!m) {
             showMessage(
                 `Seneste kamp — Bane ${courtNumber}`,
                 `Der er ingen registrerede kampe på denne bane endnu.`
             );
             return;
         }
-        const m = matches[0];
         const sets = parseHistorySetScores(m.set_scores);
         const WIN_GREEN = '#4CAF50';
         const MUTED = '#9aa0a8';
@@ -2188,14 +2190,32 @@ async function showLatestMatch(courtNumber) {
             setsHtml = `<div style="margin-top:14px;color:${MUTED};font-size:0.9em;">${escapeHtml(m.set_scores)}</div>`;
         }
 
+        // Vis hvor kampen stammer fra, saa det er tydeligt at en turnerings-
+        // eller holdkamp er nyere end den seneste ad-hoc kamp i historikken.
+        let sourceBadgeHtml = '';
+        if (m.source === 'tournament') {
+            const label = m.label ? ` — ${escapeHtml(m.label)}` : '';
+            const name = m.tournament_name ? escapeHtml(m.tournament_name) : 'Turnering';
+            sourceBadgeHtml = `<div style="color:#7c4dff;font-size:0.85em;font-weight:bold;margin-bottom:4px;">Turnering: ${name}${label}</div>`;
+        } else if (m.source === 'team') {
+            const teams = [m.team1_name, m.team2_name].filter(Boolean).map(escapeHtml).join(' vs ');
+            const cat = m.category ? ` (${escapeHtml(m.category)})` : '';
+            sourceBadgeHtml = `<div style="color:#ff7043;font-size:0.85em;font-weight:bold;margin-bottom:4px;">Holdkamp: ${teams}${cat}</div>`;
+        }
+
+        // Turnerings- og holdkampe tracker ikke varighed, saa drop "Varighed"-
+        // prefikset hvis vi ikke har en vaerdi at vise.
+        const durationHtml = duration ? `Varighed ${duration} &nbsp;·&nbsp; ` : '';
+
         const bodyHtml = `
             <div style="display:flex;flex-direction:column;align-items:center;">
+                ${sourceBadgeHtml}
                 <div style="font-size:1.2em;color:${WIN_GREEN};font-weight:bold;margin-bottom:6px;">
                     ✓ ${winner} vinder ${games}
                 </div>
                 <div style="color:${MUTED};font-size:0.92em;">mod ${loser}</div>
                 <div style="color:${MUTED};font-size:0.85em;margin-top:8px;">
-                    Varighed ${duration} &nbsp;·&nbsp; ${dateText}
+                    ${durationHtml}${dateText}
                 </div>
                 ${setsHtml}
             </div>`;
