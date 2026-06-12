@@ -48,8 +48,10 @@ async function initializeAdmin() {
 function setupEventListeners() {
     // Login
     document.getElementById('loginBtn').addEventListener('click', handleLogin);
-    document.getElementById('adminPassword').addEventListener('keypress', function(e) {
+    // keydown (ikke det forældede keypress) saa Enter altid udloeser login.
+    document.getElementById('adminPassword').addEventListener('keydown', function(e) {
         if (e.key === 'Enter') {
+            e.preventDefault();
             handleLogin();
         }
     });

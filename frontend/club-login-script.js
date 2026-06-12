@@ -46,6 +46,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     loginBtn.addEventListener('click', handleLogin);
-    passwordInput.addEventListener('keypress', e => { if (e.key === 'Enter') handleLogin(); });
-    usernameInput.addEventListener('keypress', e => { if (e.key === 'Enter') passwordInput.focus(); });
+    // keydown (ikke det forældede keypress) saa Enter altid udloeser login —
+    // keypress fyrer ikke paalideligt i alle browsere/password-managere.
+    passwordInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); handleLogin(); } });
+    usernameInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); passwordInput.focus(); } });
 });

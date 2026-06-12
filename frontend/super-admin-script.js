@@ -17,8 +17,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Login
     document.getElementById('saLoginBtn').addEventListener('click', handleLogin);
-    document.getElementById('saPassword').addEventListener('keypress', e => { if (e.key === 'Enter') handleLogin(); });
-    document.getElementById('saUsername').addEventListener('keypress', e => { if (e.key === 'Enter') document.getElementById('saPassword').focus(); });
+    // keydown (ikke det forældede keypress) saa Enter altid udloeser login.
+    document.getElementById('saPassword').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); handleLogin(); } });
+    document.getElementById('saUsername').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('saPassword').focus(); } });
 
     // Logout
     document.getElementById('saLogoutBtn').addEventListener('click', handleLogout);
