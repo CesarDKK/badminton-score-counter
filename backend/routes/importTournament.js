@@ -195,6 +195,13 @@ function parseMatchesHtml(html) {
         const categoryMatch = header.match(/class="nav-link__value">\s*([^<]+?)\s*<\/span>/);
         const category = categoryMatch ? decodeHtmlEntities(categoryMatch[1]).trim() : '';
 
+        // Draw-id — TS eksponerer intet per-kamp GUID, men hver kamp-header linker til
+        // sin draw (pulje/lodtrækning) via draw.aspx?...&draw=NN. draw er globalt unikt
+        // pr. turnering, og sammen med runde + ordinal udgør det vores stabile join-nøgle
+        // ved gen-import. &amp; pga. HTML-escaping i href.
+        const drawMatch = header.match(/draw\.aspx\?id=[^"&]+&(?:amp;)?draw=(\d+)/);
+        const drawId = drawMatch ? drawMatch[1] : '';
+
         // Runde — round-spanet har strukturen <span title="X" class="nav-link"><span class="nav-link__value">
         // Dette mønster matcher KUN round-spanet og IKKE venue-spanet (venuen har class før title
         // og flere klasse-navne). Dækker "Runde 1/2/3", "1/8", "Kvartfinale", "Semifinale", "Finale" osv.
@@ -236,6 +243,7 @@ function parseMatchesHtml(html) {
         matches.push({
             category,
             round,
+            drawId,
             doubles: isDoubles,
             side1Player1: side1Players[0] || '',
             side1Player2: side1Players[1] || '',
@@ -260,6 +268,53 @@ function extractPlayerNames(section) {
     return names;
 }
 
+// Beregn en stabil sourceMatchId pr. kamp: "draw#runde#ordinal". ordinal er kampens
+// løbenummer indenfor (draw, runde) i kilde-rækkefølgen over HELE turneringen, så den er
+// ens ved import og senere gen-import (sync). Falder tilbage til kategori hvis draw mangler.
+// Muterer matches in-place (sætter m.sourceMatchId) og returnerer samme array.
+function assignSourceMatchIds(matches) {
+    const ordinalCounters = new Map();
+    for (const m of matches) {
+        const scope = `${m.drawId || m.category || '?'}#${m.round || '?'}`;
+        const ord = ordinalCounters.get(scope) || 0;
+        ordinalCounters.set(scope, ord + 1);
+        m.sourceMatchId = `${scope}#${ord}`;
+    }
+    return matches;
+}
+
+// Genbrugelig kerne: hent + parse alle kampe for en TS-turnering på tværs af alle dage.
+// Bruges både af /preview (import) og af tournaments.js' sync-import (gen-import).
+// Returnerer { tournamentName, days, matches } hvor hver match har sourceMatchId.
+async function fetchAndParseTournamentMatches(tournamentId) {
+    // Hent Matches-siden — bruges til at extrahere turneringsnavn + liste af dage.
+    // OBS: /Matches defaulter til dag 1's kampe, så vi henter eksplicit per-dag bagefter
+    // for at få ALLE kampe på tværs af multi-day turneringer.
+    const mainHtml = await fetchTournamentPage(tournamentId, 'Matches');
+    const tournamentName = parseTournamentName(mainHtml);
+    const days = parseTournamentDays(mainHtml);
+
+    let allMatches = [];
+
+    if (days.length === 0) {
+        // Ingen dag-tabs (måske kun én dag uden tab-UI) — parser main-siden direkte
+        allMatches = parseMatchesHtml(mainHtml);
+    } else {
+        // Hent hver dag parallelt og tag kampene med deres dag
+        const dayHtmls = await Promise.all(
+            days.map(d => fetchTournamentPage(tournamentId, `matches/${d.value}`))
+        );
+        for (let i = 0; i < days.length; i++) {
+            const dayMatches = parseMatchesHtml(dayHtmls[i]);
+            const tagged = dayMatches.map(m => ({ ...m, day: days[i].date, dayLabel: days[i].label }));
+            allMatches.push(...tagged);
+        }
+    }
+
+    assignSourceMatchIds(allMatches);
+    return { tournamentName, days, matches: allMatches };
+}
+
 // POST /api/import/tournament/preview
 // Body: { url } — URL fra tournamentsoftware.com (eller bare UUID)
 // Returnerer: { tournamentName, matchCount, matches: [...], days: [{date, value, label}] }
@@ -277,29 +332,7 @@ router.post('/preview', authMiddleware, async (req, res, next) => {
             });
         }
 
-        // Hent Matches-siden — bruges til at extrahere turneringsnavn + liste af dage.
-        // OBS: /Matches defaulter til dag 1's kampe, så vi henter eksplicit per-dag bagefter
-        // for at få ALLE kampe på tværs af multi-day turneringer.
-        const mainHtml = await fetchTournamentPage(tournamentId, 'Matches');
-        const tournamentName = parseTournamentName(mainHtml);
-        const days = parseTournamentDays(mainHtml);
-
-        let allMatches = [];
-
-        if (days.length === 0) {
-            // Ingen dag-tabs (måske kun én dag uden tab-UI) — parser main-siden direkte
-            allMatches = parseMatchesHtml(mainHtml);
-        } else {
-            // Hent hver dag parallelt og tag kampene med deres dag
-            const dayHtmls = await Promise.all(
-                days.map(d => fetchTournamentPage(tournamentId, `matches/${d.value}`))
-            );
-            for (let i = 0; i < days.length; i++) {
-                const dayMatches = parseMatchesHtml(dayHtmls[i]);
-                const tagged = dayMatches.map(m => ({ ...m, day: days[i].date, dayLabel: days[i].label }));
-                allMatches.push(...tagged);
-            }
-        }
+        const { tournamentName, days, matches: allMatches } = await fetchAndParseTournamentMatches(tournamentId);
 
         if (allMatches.length === 0) {
             return res.status(404).json({
@@ -324,3 +357,7 @@ router.post('/preview', authMiddleware, async (req, res, next) => {
 });
 
 module.exports = router;
+// Eksportér genbrugskernen som property på routeren (routeren er en funktion, så
+// app.use('/api/import/tournament', require(...)) virker stadig).
+module.exports.fetchAndParseTournamentMatches = fetchAndParseTournamentMatches;
+module.exports.extractTournamentId = extractTournamentId;

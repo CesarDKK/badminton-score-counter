@@ -2858,6 +2858,106 @@ async function handleCreateTournament() {
 // Map<tournamentId, { label, doubles, p1, p2, p3, p4 }>
 const tournamentDraftState = new Map();
 
+// Turneringer der lige nu opdateres fra Tournament Software (Set<string tournamentId>).
+// Bruges til at deaktivere knappen + genanvende "Opdaterer…"-tilstand efter 3-sek auto-refresh.
+const tournamentSyncInProgress = new Set();
+
+// Genhent TS-data og opdatér turneringen. Opdaterer pending-kampe automatisk og viser
+// eventuelle nye TS-kampe i en bekræftelses-liste før de tilføjes.
+async function handleSyncTournament(tournamentId, tournamentName) {
+    const key = String(tournamentId);
+    if (tournamentSyncInProgress.has(key)) return; // allerede i gang
+    tournamentSyncInProgress.add(key);
+
+    const btn = document.getElementById(`t${tournamentId}_syncBtn`);
+    if (btn) { btn.disabled = true; btn.textContent = '↻ Opdaterer…'; }
+
+    try {
+        const res = await api.syncTournamentImport(tournamentId);
+        const candidates = res.newCandidates || [];
+        const summary = `Opdaterede kampe: <strong>${res.updated}</strong><br>`
+            + `Uændrede: <strong>${res.unchanged}</strong><br>`
+            + `Sprunget over (aktive/afsluttede): <strong>${res.skipped}</strong><br>`
+            + `Nye kampe på Tournament Software: <strong>${candidates.length}</strong>`;
+
+        await loadActiveTournaments(); // vis de opdaterede navne med det samme
+
+        if (candidates.length > 0) {
+            showNewMatchCandidates(tournamentId, candidates, summary);
+        } else {
+            showMessage('Opdatering færdig', '', [{ text: 'OK', style: 'primary' }], { bodyHtml: summary });
+        }
+    } catch (err) {
+        const msg = err.status === 409
+            ? (err.message || 'Opdatering kører allerede.')
+            : ('Kunne ikke opdatere: ' + (err.message || err));
+        showMessage('Fejl', msg);
+    } finally {
+        tournamentSyncInProgress.delete(key);
+        const b = document.getElementById(`t${tournamentId}_syncBtn`);
+        if (b) { b.disabled = false; b.textContent = '↻ Opdater fra Tournament Software'; }
+    }
+}
+
+// Holder kandidaterne for det åbne bekræftelses-modal så "Tilføj valgte" kan finde dem.
+let pendingSyncCandidates = [];
+
+// Vis nye TS-kampe i en checkbox-liste (samme stil som import-preview) til bekræftelse.
+function showNewMatchCandidates(tournamentId, candidates, summaryHtml) {
+    pendingSyncCandidates = candidates;
+    const rows = candidates.map((m, idx) => {
+        const side1 = m.doubles
+            ? `${m.side1Player1 || '?'}${m.side1Player2 ? ' & ' + m.side1Player2 : ''}`
+            : (m.side1Player1 || '?');
+        const side2 = m.doubles
+            ? `${m.side2Player1 || '?'}${m.side2Player2 ? ' & ' + m.side2Player2 : ''}`
+            : (m.side2Player1 || '?');
+        const dayBadge = m.dayLabel ? `<span style="background:#3a3a4a; color:#bfa; padding:2px 7px; border-radius:4px; font-size:0.74em;">${escapeHtml(m.dayLabel)}</span>` : '';
+        const catBadge = m.label ? `<span style="background:var(--color-accent); color:#fff; padding:2px 7px; border-radius:4px; font-size:0.74em;">${escapeHtml(m.label)}</span>` : '';
+        return `<label style="display:flex; align-items:center; gap:8px; padding:6px 10px; background:rgba(0,0,0,0.2); border-radius:4px; margin-bottom:4px; cursor:pointer; flex-wrap:wrap;">
+            <input type="checkbox" class="sync-cand-check" data-idx="${idx}" checked style="width:16px; height:16px; cursor:pointer; flex-shrink:0;">
+            ${dayBadge}${catBadge}
+            <span style="color:#eaeaea; font-size:0.85em; flex:1; min-width:160px;">${escapeHtml(side1)} <span style="color:#777;">vs</span> ${escapeHtml(side2)}</span>
+        </label>`;
+    }).join('');
+
+    const bodyHtml = `
+        <div style="text-align:left;">
+            <div style="color:#ccc; font-size:0.9em; margin-bottom:12px; line-height:1.5;">${summaryHtml}</div>
+            <div style="color:#eaeaea; font-size:0.9em; margin-bottom:8px; font-weight:600;">Nye kampe på Tournament Software — vælg hvilke der skal tilføjes:</div>
+            <div style="max-height:340px; overflow-y:auto; padding-right:6px;">${rows}</div>
+        </div>`;
+
+    showMessage('Opdatering færdig', '', [
+        { text: 'Tilføj valgte', style: 'primary', callback: () => addSelectedNewCandidates(tournamentId) },
+        { text: 'Spring over', style: 'secondary' }
+    ], { bodyHtml });
+}
+
+async function addSelectedNewCandidates(tournamentId) {
+    // Checkbox-noderne lever stadig i message-overlayet (hideMessage skjuler kun).
+    const checks = Array.from(document.querySelectorAll('.sync-cand-check')).filter(cb => cb.checked);
+    const selected = checks
+        .map(cb => pendingSyncCandidates[parseInt(cb.getAttribute('data-idx'), 10)])
+        .filter(Boolean)
+        .map(m => ({
+            label: m.label,
+            doubles: !!m.doubles,
+            sourceMatchId: m.sourceMatchId || null,
+            side1Player1: m.side1Player1, side1Player2: m.side1Player2,
+            side2Player1: m.side2Player1, side2Player2: m.side2Player2
+        }));
+    pendingSyncCandidates = [];
+    if (selected.length === 0) return;
+    try {
+        await api.addTournamentMatchesBulk(tournamentId, selected);
+        await loadActiveTournaments();
+        showMessage('Tilføjet', `${selected.length} nye kampe blev tilføjet til turneringen.`);
+    } catch (err) {
+        showMessage('Fejl', 'Kunne ikke tilføje kampe: ' + (err.message || err));
+    }
+}
+
 function captureTournamentDrafts() {
     document.querySelectorAll('[data-tournament-add-form]').forEach(form => {
         const tId = form.getAttribute('data-tournament-add-form');
@@ -2900,6 +3000,16 @@ function renderTournaments(tournaments) {
         const doublesToggle = document.getElementById(`t${t.id}_doubles`);
         if (doublesToggle) doublesToggle.addEventListener('change', () => toggleTournamentDoublesUI(t.id));
         toggleTournamentDoublesUI(t.id);
+
+        const syncBtn = document.getElementById(`t${t.id}_syncBtn`);
+        if (syncBtn) {
+            syncBtn.addEventListener('click', () => handleSyncTournament(t.id, t.name));
+            // Genanvend "Opdaterer…"-tilstand hvis 3-sek auto-refresh genskabte knappen midt i et kald
+            if (tournamentSyncInProgress.has(String(t.id))) {
+                syncBtn.disabled = true;
+                syncBtn.textContent = '↻ Opdaterer…';
+            }
+        }
 
         const finishBtn = document.getElementById(`t${t.id}_finishBtn`);
         if (finishBtn) finishBtn.addEventListener('click', () => handleFinishTournament(t.id, t.name));
@@ -2963,6 +3073,7 @@ function renderTournamentBlock(t) {
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
                 <h3 style="color: var(--color-accent); margin:0;">${escapeHtml(t.name)}</h3>
                 <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    ${t.source_tournament_id ? `<button id="t${t.id}_syncBtn" class="btn-primary" style="padding:6px 14px; font-size:0.88em;">↻ Opdater fra Tournament Software</button>` : ''}
                     <button id="t${t.id}_finishBtn" class="btn-secondary" style="padding:6px 14px; font-size:0.88em;">Afslut turnering</button>
                     <button id="t${t.id}_deleteBtn" class="btn-danger" style="padding:6px 14px; font-size:0.88em;">Slet</button>
                 </div>
@@ -3438,13 +3549,15 @@ async function confirmTournamentImport() {
         return;
     }
 
-    // Byg matches-array med label = "kategori (runde)" så brugeren kan se hvad det er
+    // Byg matches-array med label = "kategori (runde)" så brugeren kan se hvad det er.
+    // sourceMatchId medsendes så turneringen senere kan opdateres ("Opdater"-knap).
     const matches = selectedIdxs.map(i => {
         const m = tsImportData.matches[i];
         const label = m.round ? `${m.category} — ${m.round}` : m.category;
         return {
             label,
             doubles: !!m.doubles,
+            sourceMatchId: m.sourceMatchId || null,
             side1Player1: m.side1Player1,
             side1Player2: m.side1Player2,
             side2Player1: m.side2Player1,
@@ -3457,7 +3570,7 @@ async function confirmTournamentImport() {
     tsImportStatus(`Opretter turnering og importerer ${matches.length} kampe...`, 'info');
 
     try {
-        const created = await api.createTournament(name);
+        const created = await api.createTournament(name, tsImportData.tournamentId || null);
         await api.addTournamentMatchesBulk(created.id, matches);
 
         tsImportStatus(`✓ Importeret: "${name}" med ${matches.length} kampe`, 'success');

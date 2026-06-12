@@ -2,11 +2,77 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
+const { fetchAndParseTournamentMatches } = require('./importTournament');
+
+// Et "rigtigt" navn er en faktisk spiller — ikke tomt, ikke en TS-placeholder.
+// Bruges både til indkommende TS-navne og til at afgøre om en DB-værdi allerede
+// er udfyldt (så vi ikke overskriver en rigtig spiller med "?"/tomt ved sync).
+function isRealName(s) {
+    if (!s) return false;
+    const t = String(s).trim();
+    if (!t || t === '?') return false;
+    const lower = t.toLowerCase();
+    if (lower === 'bye' || lower.startsWith('winner of') || lower.startsWith('vinder af')) return false;
+    // Kun et seed-mærke som "[1]" uden navn
+    if (/^\[\d+\]$/.test(t)) return false;
+    return true;
+}
+
+// Normaliser et navn til sammenligning: fjern seed-suffiks "[1]" og kollaps whitespace.
+function normalizeName(s) {
+    return String(s || '').replace(/\s*\[\d+\]\s*$/, '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+// Trunkér til kolonne-grænsen (VARCHAR(100)) så et langt navn ikke fejler hele UPDATE'en.
+function clampName(s) {
+    if (s == null) return s;
+    const t = String(s);
+    return t.length > 100 ? t.substring(0, 100) : t;
+}
+
+// Beregn hvilke navne-/doubles-kolonner der skal opdateres for en pending-kamp ved sync.
+// Regel (brugerens valg): skriv kun et indkommende TS-navn hvis det er RIGTIGT — så både
+// "?"→navn og spiller-udskiftninger propagerer. Overskriv ALDRIG et eksisterende navn med
+// tomt/"?" (ingen regression til placeholder). Returnerer {kolonne: ny værdi} for ændringer.
+function computeFillOnlyChanges(row, incoming) {
+    const dbS1 = [row.side1_player1, row.side1_player2];
+    const dbS2 = [row.side2_player1, row.side2_player2];
+    let inS1 = [incoming.side1Player1, incoming.side1Player2];
+    let inS2 = [incoming.side2Player1, incoming.side2Player2];
+
+    // Side-mapping: hvis DB allerede har rigtige navne, afgør via navne-overlap om TS
+    // viser siderne ombyttet, så vi ikke lander navne på den forkerte side. Ingen overlap
+    // (ren placeholder) → behold rækkefølgen (uskadeligt, der var intet at bytte om).
+    const overlap = (a, b) => {
+        const bset = new Set(b.filter(isRealName).map(normalizeName));
+        return a.filter(isRealName).map(normalizeName).filter(n => bset.has(n)).length;
+    };
+    if (overlap(inS1, dbS2) + overlap(inS2, dbS1) > overlap(inS1, dbS1) + overlap(inS2, dbS2)) {
+        const t = inS1; inS1 = inS2; inS2 = t;
+    }
+
+    const changes = {};
+    const apply = (dbVal, inVal, col) => {
+        if (isRealName(inVal) && String(inVal) !== String(dbVal || '')) {
+            changes[col] = clampName(inVal);
+        }
+    };
+    apply(dbS1[0], inS1[0], 'side1_player1');
+    apply(dbS1[1], inS1[1], 'side1_player2');
+    apply(dbS2[0], inS2[0], 'side2_player1');
+    apply(dbS2[1], inS2[1], 'side2_player2');
+
+    if (!!incoming.doubles !== !!row.doubles) changes.doubles = incoming.doubles ? 1 : 0;
+    return changes;
+}
+
+// Per-turnering in-flight guard mod samtidige sync-kald (dobbeltklik / overlap).
+const _syncingTournaments = new Set();
 
 // Hjælper: hent alle matches for en turnering (sorteret efter match_order)
 async function getMatchesForTournament(tournamentId) {
     return query(
-        `SELECT id, match_order, label, doubles,
+        `SELECT id, match_order, label, doubles, source_match_id,
                 side1_player1, side1_player2, side2_player1, side2_player2,
                 court_number, status, winner_team, set_scores, created_at
          FROM tournament_matches
@@ -20,7 +86,7 @@ async function getMatchesForTournament(tournamentId) {
 router.get('/active', async (req, res, next) => {
     try {
         const tournaments = await query(
-            `SELECT id, name, status, created_at
+            `SELECT id, name, status, source_tournament_id, created_at
              FROM tournaments WHERE status = 'active'
              ORDER BY created_at DESC`
         );
@@ -61,7 +127,7 @@ router.get('/history', async (req, res, next) => {
 // POST /api/tournaments - Opret turnering (kræver auth)
 router.post('/', authMiddleware, async (req, res, next) => {
     try {
-        const { name } = req.body;
+        const { name, sourceTournamentId } = req.body;
         if (!name || !name.trim()) {
             return res.status(400).json({ error: 'Navn er påkrævet' });
         }
@@ -77,8 +143,8 @@ router.post('/', authMiddleware, async (req, res, next) => {
         }
 
         const result = await query(
-            `INSERT INTO tournaments (name, status) VALUES (?, 'active')`,
-            [name.trim()]
+            `INSERT INTO tournaments (name, status, source_tournament_id) VALUES (?, 'active', ?)`,
+            [name.trim(), sourceTournamentId || null]
         );
 
         res.json({ success: true, id: result.insertId });
@@ -152,13 +218,13 @@ router.post('/:id/matches/bulk', authMiddleware, async (req, res, next) => {
         for (const m of matches) {
             await query(
                 `INSERT INTO tournament_matches
-                 (tournament_id, match_order, label, doubles,
+                 (tournament_id, match_order, label, doubles, source_match_id,
                   side1_player1, side1_player2, side2_player1, side2_player2)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
-                    id, nextOrder, m.label || null, m.doubles ? 1 : 0,
-                    m.side1Player1 || null, m.side1Player2 || null,
-                    m.side2Player1 || null, m.side2Player2 || null
+                    id, nextOrder, m.label || null, m.doubles ? 1 : 0, m.sourceMatchId || null,
+                    clampName(m.side1Player1) || null, clampName(m.side1Player2) || null,
+                    clampName(m.side2Player1) || null, clampName(m.side2Player2) || null
                 ]
             );
             nextOrder++;
@@ -168,6 +234,86 @@ router.post('/:id/matches/bulk', authMiddleware, async (req, res, next) => {
         res.json({ success: true, inserted });
     } catch (error) {
         next(error);
+    }
+});
+
+// POST /api/tournaments/:id/sync-import - Genhent TS-data og opdatér turneringen (kræver auth).
+// Opdaterer KUN pending-kampe (fill-only, jf. computeFillOnlyChanges), rører aldrig
+// aktive/afsluttede kampe, og returnerer nye TS-kampe som kandidater (indsættes ikke her —
+// brugeren bekræfter dem via det normale bulk-endpoint).
+router.post('/:id/sync-import', authMiddleware, async (req, res, next) => {
+    const { id } = req.params;
+    const key = String(id);
+    if (_syncingTournaments.has(key)) {
+        return res.status(409).json({ error: 'Opdatering kører allerede for denne turnering — vent til den er færdig.' });
+    }
+    _syncingTournaments.add(key);
+    try {
+        const tournament = await queryOne(
+            'SELECT id, source_tournament_id FROM tournaments WHERE id = ?', [id]
+        );
+        if (!tournament) return res.status(404).json({ error: 'Turnering ikke fundet' });
+        if (!tournament.source_tournament_id) {
+            return res.status(400).json({
+                error: 'Denne turnering er ikke importeret fra Tournament Software og kan ikke opdateres automatisk. Genimportér for at aktivere opdatering.'
+            });
+        }
+
+        const { matches: incoming } = await fetchAndParseTournamentMatches(tournament.source_tournament_id);
+        const existing = await getMatchesForTournament(id);
+
+        const byKey = new Map();
+        for (const row of existing) {
+            if (row.source_match_id) byKey.set(row.source_match_id, row);
+        }
+
+        let updated = 0, unchanged = 0, skipped = 0;
+        const newCandidates = [];
+
+        for (const m of incoming) {
+            const row = m.sourceMatchId ? byKey.get(m.sourceMatchId) : null;
+
+            if (!row) {
+                // Findes ikke i turneringen → ny kamp-kandidat (indsættes ikke automatisk).
+                newCandidates.push({
+                    sourceMatchId: m.sourceMatchId,
+                    label: m.round ? `${m.category} — ${m.round}` : m.category,
+                    category: m.category,
+                    round: m.round,
+                    dayLabel: m.dayLabel || '',
+                    doubles: !!m.doubles,
+                    side1Player1: m.side1Player1, side1Player2: m.side1Player2,
+                    side2Player1: m.side2Player1, side2Player2: m.side2Player2
+                });
+                continue;
+            }
+
+            if (row.status !== 'pending') { skipped++; continue; } // aktiv/afsluttet — rør aldrig
+
+            const changes = computeFillOnlyChanges(row, m);
+            if (Object.keys(changes).length === 0) { unchanged++; continue; }
+
+            const cols = Object.keys(changes);
+            const setSql = cols.map(c => `${c} = ?`).join(', ');
+            const vals = cols.map(c => changes[c]);
+            // status='pending'-guard: hvis en bane lige har aktiveret kampen midt i sync,
+            // rammer UPDATE'en 0 rækker → tæl som skipped i stedet for at overskrive.
+            const result = await query(
+                `UPDATE tournament_matches SET ${setSql} WHERE id = ? AND status = 'pending'`,
+                [...vals, row.id]
+            );
+            if (result.affectedRows > 0) updated++; else skipped++;
+        }
+
+        res.json({ updated, unchanged, skipped, newCandidates });
+    } catch (error) {
+        if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+            return res.status(504).json({ error: 'Forbindelsen til tournamentsoftware.com timed out — prøv igen' });
+        }
+        console.error('Tournament sync-import failed:', error);
+        res.status(502).json({ error: error.message || 'Opdatering fejlede' });
+    } finally {
+        _syncingTournaments.delete(key);
     }
 });
 

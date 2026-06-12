@@ -672,11 +672,18 @@ class BadmintonAPI {
         return this.request('/tournaments/history');
     }
 
-    /** Create a new tournament */
-    async createTournament(name) {
+    /** Create a new tournament. sourceTournamentId (valgfri) = TS-UUID, gør senere "Opdater" muligt. */
+    async createTournament(name, sourceTournamentId = null) {
         return this.request('/tournaments', {
             method: 'POST',
-            body: JSON.stringify({ name })
+            body: JSON.stringify({ name, sourceTournamentId })
+        });
+    }
+
+    /** Genhent TS-data og opdatér en importeret turnering (pending-kampe). */
+    async syncTournamentImport(tournamentId) {
+        return this.request(`/tournaments/${tournamentId}/sync-import`, {
+            method: 'POST'
         });
     }
 
