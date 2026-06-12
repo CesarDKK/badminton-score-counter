@@ -561,6 +561,13 @@ header h1 {
     text-align: center;
     color: white;
     padding: 40px;
+    /* Hold indholdet inden for skaermen og lad det scrolle internt, saa lange
+       resultater (fx doubles/3-saet + dommerbesked) ikke skubber knapperne
+       ud af billedet paa tablet/mobil. */
+    max-height: 100%;
+    overflow-y: auto;
+    box-sizing: border-box;
+    -webkit-overflow-scrolling: touch;
 }
 
 .court-overlay-title {

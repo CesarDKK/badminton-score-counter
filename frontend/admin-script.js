@@ -2075,12 +2075,16 @@ function hideMessage() {
 function orientHistorySetScoreNumbers(rawSetScores, side1Key) {
     if (!rawSetScores) return [];
     if (!side1Key) return rawSetScores.match(/\d+-\d+/g) || [];
-    const anchor = side1Key.trim();
+    // Normaliser doubles-separator: court-siden gemmer navne med " & " mens
+    // historik-visningen bygger side1Key med " / ". Uden dette fejler navne-
+    // matchet og scoren orienteres ikke (saet med ombyttede sider vises raat).
+    const normalizeNames = s => String(s).trim().replace(/\s*[/&]\s*/g, ' / ');
+    const anchor = normalizeNames(side1Key);
     return rawSetScores.split(', ').map(part => {
         const m = part.match(/^(.*?)\s+(\d+)-(\d+)\s+(.*?)$/);
         if (m) {
-            const p1 = m[1].trim();
-            const p2 = m[4].trim();
+            const p1 = normalizeNames(m[1]);
+            const p2 = normalizeNames(m[4]);
             if (p1 === anchor) return `${m[2]}-${m[3]}`;
             if (p2 === anchor) return `${m[3]}-${m[2]}`;
             // Ingen navne-match — bevarer raekkefoelgen

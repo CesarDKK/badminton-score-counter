@@ -1672,15 +1672,43 @@ async function saveMatchResult(winner, loser, winnerGames, loserGames) {
     // Fang state-oplysninger med det samme og nulstil assigned-IDs straks.
     // saveMatchResult køres IKKE-afventet fra checkGameWin, så clearCourt() kan
     // køre parallelt og overskrive de globale assigned-vars inden vi når at rapportere.
-    const capturedGameId = assignedHoldkampGameId;
-    const capturedTeamMatch = activeTeamMatch;
+    let capturedGameId = assignedHoldkampGameId;
+    let capturedTeamMatch = activeTeamMatch;
     assignedHoldkampGameId = null;
 
-    const capturedTournamentMatchId = assignedTournamentMatchId;
-    const capturedTournament = activeTournament;
+    let capturedTournamentMatchId = assignedTournamentMatchId;
+    let capturedTournament = activeTournament;
     assignedTournamentMatchId = null;
 
     try {
+        // Fallback-binding: de globale assigned-vars sættes KUN af den periodiske
+        // sync (hvert 5. sek). Hvis en turnerings-/holdkamp blev tildelt banen og
+        // spillet færdig inden for ét sync-interval (typisk ved hurtig test, eller
+        // hvis court-siden lige er åbnet), nåede syncen aldrig at binde — og så blev
+        // resultatet hverken rapporteret eller fjernet fra kamplisten. Vi slår derfor
+        // tildelingen op direkte her, så afslutningen altid registreres korrekt.
+        if (!capturedTournamentMatchId && !capturedGameId) {
+            try {
+                const tournaments = await api.getActiveTournaments();
+                for (const t of (tournaments || [])) {
+                    const m = (t.matches || []).find(mm => mm.court_number === courtId && mm.status === 'active');
+                    if (m) { capturedTournamentMatchId = m.id; capturedTournament = t; break; }
+                }
+            } catch (e) {
+                console.error('Fallback-opslag af turneringskamp fejlede:', e);
+            }
+
+            if (!capturedTournamentMatchId) {
+                try {
+                    const tm = await api.getActiveTeamMatch();
+                    const g = tm && (tm.games || []).find(gg => gg.court_number === courtId && gg.status === 'active');
+                    if (g) { capturedGameId = g.id; capturedTeamMatch = tm; }
+                } catch (e) {
+                    console.error('Fallback-opslag af holdkamp fejlede:', e);
+                }
+            }
+        }
+
         // Calculate duration from timestamps
         let duration = '00:00';
         if (gameState.matchStartTime && gameState.matchEndTime) {
