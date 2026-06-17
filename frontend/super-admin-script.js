@@ -15,38 +15,46 @@ const PAGE_OPTIONS = [
 ];
 
 // Bygger HTML for et rettigheds-vaelger-saet. permissions = null betyder alle sider.
+// De enkelte sider er altid synlige; "Alle sider" er blot en vælg-alle-knap.
 function permissionCheckboxesHtml(idPrefix, permissions) {
     const all = permissions === null || permissions === undefined;
     const allowed = new Set(all ? PAGE_OPTIONS.map(p => p.key) : permissions);
     const rows = PAGE_OPTIONS.map(p => `
         <label style="display:flex;align-items:center;gap:8px;font-size:0.9em;color:#eaeaea;cursor:pointer;">
-            <input type="checkbox" class="${idPrefix}-page" value="${p.key}" ${allowed.has(p.key) ? 'checked' : ''}>
+            <input type="checkbox" class="${idPrefix}-page" value="${p.key}" ${allowed.has(p.key) ? 'checked' : ''} onchange="syncPermAll('${idPrefix}')">
             ${p.label}
         </label>`).join('');
     return `
-        <label style="display:flex;align-items:center;gap:8px;font-size:0.9em;color:#eaeaea;cursor:pointer;margin-bottom:8px;font-weight:600;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:0.9em;color:#eaeaea;cursor:pointer;margin-bottom:8px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:8px;">
             <input type="checkbox" id="${idPrefix}-all" ${all ? 'checked' : ''} onchange="togglePermAll('${idPrefix}')">
             Alle sider
         </label>
-        <div id="${idPrefix}-list" style="display:${all ? 'none' : 'grid'};grid-template-columns:1fr 1fr;gap:6px 16px;padding-left:6px;">
+        <div id="${idPrefix}-list" style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;padding-left:6px;">
             ${rows}
         </div>`;
 }
 
-// Viser/skjuler enkeltside-listen når "Alle sider" slås til/fra.
+// "Alle sider" som vælg-alle: sætter alle enkeltbokse til samme tilstand.
 function togglePermAll(idPrefix) {
     const allEl = document.getElementById(`${idPrefix}-all`);
-    const list = document.getElementById(`${idPrefix}-list`);
-    if (!allEl || !list) return;
-    list.style.display = allEl.checked ? 'none' : 'grid';
+    if (!allEl) return;
+    document.querySelectorAll(`.${idPrefix}-page`).forEach(c => { c.checked = allEl.checked; });
 }
 
-// Læser valget: null = alle sider, ellers array af valgte side-nøgler.
-function readPermissionSelection(idPrefix) {
+// Når en enkeltboks ændres: hold "Alle sider" markeret kun hvis alle er valgt.
+function syncPermAll(idPrefix) {
     const allEl = document.getElementById(`${idPrefix}-all`);
-    if (allEl && allEl.checked) return null;
-    const checks = document.querySelectorAll(`.${idPrefix}-page`);
-    return Array.from(checks).filter(c => c.checked).map(c => c.value);
+    if (!allEl) return;
+    const checks = Array.from(document.querySelectorAll(`.${idPrefix}-page`));
+    allEl.checked = checks.length > 0 && checks.every(c => c.checked);
+}
+
+// Læser valget: null = alle sider (= fuld adgang), ellers array af valgte side-nøgler.
+function readPermissionSelection(idPrefix) {
+    const checks = Array.from(document.querySelectorAll(`.${idPrefix}-page`));
+    const selected = checks.filter(c => c.checked).map(c => c.value);
+    if (selected.length === PAGE_OPTIONS.length) return null;
+    return selected;
 }
 
 // Kort tekst-resumé af en admins adgang til visning i listen.
