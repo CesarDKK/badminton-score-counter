@@ -15,7 +15,7 @@ router.post('/login', async (req, res, next) => {
 
         // query() bruger automatisk den rigtige klub-database via tenant middleware
         const admin = await queryOne(
-            'SELECT id, username, password_hash FROM club_admins WHERE username = ?',
+            'SELECT id, username, password_hash, page_permissions FROM club_admins WHERE username = ?',
             [username]
         );
 
@@ -28,7 +28,13 @@ router.post('/login', async (req, res, next) => {
             return res.status(401).json({ error: 'Forkert brugernavn eller adgangskode' });
         }
 
-        const token = generateClubAdminToken(admin.id, admin.username, req.clubSubdomain);
+        // page_permissions: NULL = fuld adgang. Ellers JSON-array af side-noegler.
+        let permissions = null;
+        if (admin.page_permissions) {
+            try { permissions = JSON.parse(admin.page_permissions); } catch { permissions = null; }
+        }
+
+        const token = generateClubAdminToken(admin.id, admin.username, req.clubSubdomain, permissions);
         res.json({ success: true, token });
     } catch (error) {
         next(error);

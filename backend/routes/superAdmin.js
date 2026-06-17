@@ -5,6 +5,21 @@ const mysql = require('mysql2/promise');
 const masterDb = require('../config/masterDatabase');
 const { superAdminAuth, generateSuperAdminToken } = require('../middleware/superAdminAuth');
 
+// Gyldige side-noegler for klub-admins per-side adgangsstyring.
+const VALID_PAGE_KEYS = ['holdkamp', 'tournament', 'history', 'playerinfo', 'settings', 'sponsors'];
+
+// Normaliserer pagePermissions fra request til en gemt vaerdi.
+// null/undefined eller "alle valgt" -> null (= fuld adgang). Ellers JSON-array
+// med kun gyldige, unikke noegler. Returnerer { value } eller { error }.
+function normalizePagePermissions(input) {
+    if (input === null || input === undefined) return { value: null };
+    if (!Array.isArray(input)) return { error: 'pagePermissions skal være en liste' };
+    const filtered = [...new Set(input)].filter(k => VALID_PAGE_KEYS.includes(k));
+    // Alle sider valgt -> fuld adgang (null). Tom liste -> ingen af de 6 sider.
+    if (filtered.length === VALID_PAGE_KEYS.length) return { value: null };
+    return { value: JSON.stringify(filtered) };
+}
+
 // POST /api/super-admin/login
 router.post('/login', async (req, res, next) => {
     try {
@@ -195,9 +210,17 @@ router.get('/clubs/:id/admins', superAdminAuth, async (req, res, next) => {
         const conn = await clubConn(club.db_name);
         try {
             const [rows] = await conn.execute(
-                'SELECT id, username, email, created_at FROM club_admins ORDER BY created_at ASC'
+                'SELECT id, username, email, page_permissions, created_at FROM club_admins ORDER BY created_at ASC'
             );
-            res.json(rows);
+            // Parse page_permissions til array (eller null = fuld adgang) til frontend
+            const admins = rows.map(r => {
+                let permissions = null;
+                if (r.page_permissions) {
+                    try { permissions = JSON.parse(r.page_permissions); } catch { permissions = null; }
+                }
+                return { ...r, page_permissions: permissions };
+            });
+            res.json(admins);
         } finally {
             await conn.end();
         }
@@ -208,7 +231,7 @@ router.get('/clubs/:id/admins', superAdminAuth, async (req, res, next) => {
 router.post('/clubs/:id/admins', superAdminAuth, async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { username, password, email } = req.body;
+        const { username, password, email, pagePermissions } = req.body;
 
         if (!username || !password) {
             return res.status(400).json({ error: 'Brugernavn og adgangskode er påkrævet' });
@@ -217,6 +240,9 @@ router.post('/clubs/:id/admins', superAdminAuth, async (req, res, next) => {
         if (password.length < 8) {
             return res.status(400).json({ error: 'Adgangskode skal være mindst 8 tegn' });
         }
+
+        const perms = normalizePagePermissions(pagePermissions);
+        if (perms.error) return res.status(400).json({ error: perms.error });
 
         const club = await masterDb.queryOne(
             'SELECT id, db_name FROM clubs WHERE id = ?',
@@ -231,10 +257,15 @@ router.post('/clubs/:id/admins', superAdminAuth, async (req, res, next) => {
         try {
             const hash = await bcrypt.hash(password, 10);
             const [result] = await conn.execute(
-                'INSERT INTO club_admins (username, password_hash, email) VALUES (?, ?, ?)',
-                [username, hash, email || null]
+                'INSERT INTO club_admins (username, password_hash, email, page_permissions) VALUES (?, ?, ?, ?)',
+                [username, hash, email || null, perms.value]
             );
-            res.status(201).json({ id: result.insertId, username, email: email || null });
+            res.status(201).json({
+                id: result.insertId,
+                username,
+                email: email || null,
+                page_permissions: perms.value ? JSON.parse(perms.value) : null
+            });
         } finally {
             await conn.end();
         }
@@ -284,6 +315,29 @@ router.put('/clubs/:id/admins/:adminId/password', superAdminAuth, async (req, re
             );
             if (result.affectedRows === 0) return res.status(404).json({ error: 'Admin ikke fundet' });
             res.json({ success: true });
+        } finally {
+            await conn.end();
+        }
+    } catch (error) { next(error); }
+});
+
+// PUT /api/super-admin/clubs/:id/admins/:adminId/permissions — opdater side-adgang
+router.put('/clubs/:id/admins/:adminId/permissions', superAdminAuth, async (req, res, next) => {
+    try {
+        const perms = normalizePagePermissions(req.body.pagePermissions);
+        if (perms.error) return res.status(400).json({ error: perms.error });
+
+        const club = await masterDb.queryOne('SELECT db_name FROM clubs WHERE id = ?', [req.params.id]);
+        if (!club) return res.status(404).json({ error: 'Klub ikke fundet' });
+
+        const conn = await clubConn(club.db_name);
+        try {
+            const [result] = await conn.execute(
+                'UPDATE club_admins SET page_permissions = ? WHERE id = ?',
+                [perms.value, req.params.adminId]
+            );
+            if (result.affectedRows === 0) return res.status(404).json({ error: 'Admin ikke fundet' });
+            res.json({ success: true, page_permissions: perms.value ? JSON.parse(perms.value) : null });
         } finally {
             await conn.end();
         }

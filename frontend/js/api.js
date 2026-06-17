@@ -47,6 +47,13 @@ class BadmintonAPI {
         return p && p.role === 'club_admin';
     }
 
+    // Returnerer array af side-noegler klub-admin maa tilgaa, eller null = alle sider.
+    getPagePermissions() {
+        const p = this.getTokenPayload();
+        if (!p || p.role !== 'club_admin') return null;
+        return Array.isArray(p.permissions) ? p.permissions : null;
+    }
+
     isSuperAdminSession() {
         const p = this.getTokenPayload();
         return p && p.role === 'super_admin';
@@ -841,10 +848,17 @@ class BadmintonAPI {
         return this.request(`/super-admin/clubs/${clubId}/admins`);
     }
 
-    async createClubAdmin(clubId, username, password, email) {
+    async createClubAdmin(clubId, username, password, email, pagePermissions = null) {
         return this.request(`/super-admin/clubs/${clubId}/admins`, {
             method: 'POST',
-            body: JSON.stringify({ username, password, email })
+            body: JSON.stringify({ username, password, email, pagePermissions })
+        });
+    }
+
+    async updateClubAdminPermissions(clubId, adminId, pagePermissions) {
+        return this.request(`/super-admin/clubs/${clubId}/admins/${adminId}/permissions`, {
+            method: 'PUT',
+            body: JSON.stringify({ pagePermissions })
         });
     }
 

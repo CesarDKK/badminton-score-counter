@@ -1,6 +1,62 @@
 const api = window.BadmintonAPI;
 let clubs = [];
 let selectedClubId = null;
+let currentAdmins = []; // klub-admins vist i admin-modalen (til opslag ved redigering af adgang)
+
+// De Admin-sider der kan til-/fravælges pr. klub-admin. Nøgler matcher
+// data-page i admin.html og VALID_PAGE_KEYS i backend/routes/superAdmin.js.
+const PAGE_OPTIONS = [
+    { key: 'holdkamp',   label: 'Holdkamp' },
+    { key: 'tournament', label: 'Turnering' },
+    { key: 'history',    label: 'Kamphistorik' },
+    { key: 'playerinfo', label: 'Spiller info' },
+    { key: 'settings',   label: 'Indstillinger' },
+    { key: 'sponsors',   label: 'Sponsorer' }
+];
+
+// Bygger HTML for et rettigheds-vaelger-saet. permissions = null betyder alle sider.
+function permissionCheckboxesHtml(idPrefix, permissions) {
+    const all = permissions === null || permissions === undefined;
+    const allowed = new Set(all ? PAGE_OPTIONS.map(p => p.key) : permissions);
+    const rows = PAGE_OPTIONS.map(p => `
+        <label style="display:flex;align-items:center;gap:8px;font-size:0.9em;color:#eaeaea;cursor:pointer;">
+            <input type="checkbox" class="${idPrefix}-page" value="${p.key}" ${allowed.has(p.key) ? 'checked' : ''}>
+            ${p.label}
+        </label>`).join('');
+    return `
+        <label style="display:flex;align-items:center;gap:8px;font-size:0.9em;color:#eaeaea;cursor:pointer;margin-bottom:8px;font-weight:600;">
+            <input type="checkbox" id="${idPrefix}-all" ${all ? 'checked' : ''} onchange="togglePermAll('${idPrefix}')">
+            Alle sider
+        </label>
+        <div id="${idPrefix}-list" style="display:${all ? 'none' : 'grid'};grid-template-columns:1fr 1fr;gap:6px 16px;padding-left:6px;">
+            ${rows}
+        </div>`;
+}
+
+// Viser/skjuler enkeltside-listen når "Alle sider" slås til/fra.
+function togglePermAll(idPrefix) {
+    const allEl = document.getElementById(`${idPrefix}-all`);
+    const list = document.getElementById(`${idPrefix}-list`);
+    if (!allEl || !list) return;
+    list.style.display = allEl.checked ? 'none' : 'grid';
+}
+
+// Læser valget: null = alle sider, ellers array af valgte side-nøgler.
+function readPermissionSelection(idPrefix) {
+    const allEl = document.getElementById(`${idPrefix}-all`);
+    if (allEl && allEl.checked) return null;
+    const checks = document.querySelectorAll(`.${idPrefix}-page`);
+    return Array.from(checks).filter(c => c.checked).map(c => c.value);
+}
+
+// Kort tekst-resumé af en admins adgang til visning i listen.
+function permissionsSummary(permissions) {
+    if (permissions === null || permissions === undefined) return 'Alle sider';
+    if (permissions.length === 0) return 'Ingen sider';
+    return permissions
+        .map(k => (PAGE_OPTIONS.find(p => p.key === k) || {}).label || k)
+        .join(', ');
+}
 
 // Football-state — adskilt fra badminton-state så vi ikke krydsforurener
 let footballClubs = [];
@@ -258,6 +314,7 @@ function openAdminModal(clubId, clubName) {
     document.getElementById('newAdminUsername').value = '';
     document.getElementById('newAdminPassword').value = '';
     document.getElementById('newAdminEmail').value = '';
+    document.getElementById('newAdminPermissions').innerHTML = permissionCheckboxesHtml('newAdminPerm', null);
     document.getElementById('createAdminMsg').style.display = 'none';
     document.getElementById('adminModal').style.display = 'flex';
     loadAdmins();
@@ -275,6 +332,7 @@ async function loadAdmins() {
 }
 
 function renderAdmins(admins) {
+    currentAdmins = admins;
     const listEl = document.getElementById('adminModalList');
     if (admins.length === 0) {
         listEl.innerHTML = '<div class="empty-state" style="padding:12px;">Ingen admins endnu</div>';
@@ -285,8 +343,13 @@ function renderAdmins(admins) {
             <div>
                 <div class="admin-name">${escapeHtml(a.username)}</div>
                 ${a.email ? `<div class="admin-email">${escapeHtml(a.email)}</div>` : ''}
+                <div class="admin-email" style="opacity:0.8;">Adgang: ${escapeHtml(permissionsSummary(a.page_permissions))}</div>
             </div>
             <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                <button class="btn-secondary" style="font-size:0.8em; padding:5px 10px;"
+                    onclick="showEditPermissions(${a.id})">
+                    Adgang
+                </button>
                 <button class="btn-secondary" style="font-size:0.8em; padding:5px 10px;"
                     onclick="showChangePassword(${a.id}, '${escapeHtml(a.username)}')">
                     Skift kode
@@ -298,6 +361,46 @@ function renderAdmins(admins) {
             </div>
         </div>
     `).join('');
+}
+
+// Inline-formular til at redigere en eksisterende admins sideadgang.
+function showEditPermissions(adminId) {
+    const existing = document.getElementById('edit-perm-form');
+    if (existing) existing.remove();
+
+    const admin = currentAdmins.find(a => a.id === adminId);
+    if (!admin) return;
+
+    const row = document.getElementById(`admin-row-${adminId}`);
+    const form = document.createElement('div');
+    form.id = 'edit-perm-form';
+    form.style.cssText = 'background:rgba(255,255,255,0.04);border-radius:8px;padding:12px 14px;margin-top:4px;';
+    form.innerHTML = `
+        <div style="font-size:0.82em;color:rgba(255,255,255,0.5);margin-bottom:8px;">
+            Sideadgang for <strong>${escapeHtml(admin.username)}</strong>
+        </div>
+        ${permissionCheckboxesHtml('editPerm', admin.page_permissions)}
+        <div style="display:flex;gap:8px;align-items:center;margin-top:12px;">
+            <button class="btn-primary" style="padding:8px 14px;font-size:0.85em;"
+                onclick="handleSavePermissions(${adminId})">Gem adgang</button>
+            <button class="btn-secondary" style="padding:8px 12px;font-size:0.85em;"
+                onclick="document.getElementById('edit-perm-form').remove()">Annuller</button>
+        </div>
+        <div id="editPermMsg" class="msg" style="display:none;margin-top:8px;"></div>
+    `;
+    row.insertAdjacentElement('afterend', form);
+}
+
+async function handleSavePermissions(adminId) {
+    const msgEl = document.getElementById('editPermMsg');
+    const perms = readPermissionSelection('editPerm');
+    try {
+        await api.updateClubAdminPermissions(selectedClubId, adminId, perms);
+        document.getElementById('edit-perm-form').remove();
+        loadAdmins();
+    } catch (err) {
+        showMsg(msgEl, err.message || 'Kunne ikke gemme adgang', 'error');
+    }
 }
 
 function showChangePassword(adminId, username) {
@@ -399,11 +502,13 @@ async function handleCreateAdmin() {
     msgEl.style.display = 'none';
 
     try {
-        const admin = await api.createClubAdmin(selectedClubId, username, password, email || undefined);
+        const pagePermissions = readPermissionSelection('newAdminPerm');
+        const admin = await api.createClubAdmin(selectedClubId, username, password, email || undefined, pagePermissions);
         showMsg(msgEl, `✓ Admin "${admin.username}" er oprettet`, 'success');
         document.getElementById('newAdminUsername').value = '';
         document.getElementById('newAdminPassword').value = '';
         document.getElementById('newAdminEmail').value = '';
+        document.getElementById('newAdminPermissions').innerHTML = permissionCheckboxesHtml('newAdminPerm', null);
         loadAdmins();
     } catch (err) {
         showMsg(msgEl, err.message || 'Oprettelse mislykkedes', 'error');

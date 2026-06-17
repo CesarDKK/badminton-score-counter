@@ -24,9 +24,10 @@ function clubAdminAuth(req, res, next) {
     }
 }
 
-function generateClubAdminToken(adminId, username, clubSubdomain) {
+// permissions: array af side-noegler brugeren maa tilgaa, eller null = alle sider
+function generateClubAdminToken(adminId, username, clubSubdomain, permissions = null) {
     return jwt.sign(
-        { role: 'club_admin', id: adminId, username, clubSubdomain },
+        { role: 'club_admin', id: adminId, username, clubSubdomain, permissions },
         process.env.JWT_SECRET,
         { expiresIn: '24h' }
     );

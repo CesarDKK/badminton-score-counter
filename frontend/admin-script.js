@@ -174,9 +174,26 @@ function handleLogout() {
     document.getElementById('adminPassword').value = '';
 }
 
+// Skjuler de menu-punkter en klub-admin ikke har adgang til. Rettigheder
+// kommer fra JWT'en (null = alle sider). Gælder kun klub-admin-sessioner —
+// direkte-mode (ét fælles password) har uændret fuld adgang.
+function applyPagePermissions() {
+    const permissions = api.getPagePermissions();
+    if (!permissions) return; // null = alle sider (eller ikke klub-admin)
+    const allowed = new Set(permissions);
+    document.querySelectorAll('#adminNavRow [data-page]').forEach(el => {
+        if (!allowed.has(el.dataset.page)) el.style.display = 'none';
+    });
+    return allowed;
+}
+
 async function showDashboard() {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('adminDashboard').style.display = 'block';
+
+    // Skjul menu-punkter brugeren ikke må tilgå (klub-admin med begrænset adgang)
+    const allowedPages = applyPagePermissions();
+    const canAccess = page => !allowedPages || allowedPages.has(page);
 
     try {
         // Load and display court overview
@@ -185,13 +202,14 @@ async function showDashboard() {
         // Start auto-refresh every 2 seconds
         startAutoRefresh();
 
-        // Navigate to section specified in URL hash (e.g. admin.html#holdkamp)
+        // Navigate to section specified in URL hash (e.g. admin.html#holdkamp).
+        // Spring over hvis brugeren ikke har adgang til den side.
         const hash = window.location.hash;
-        if (hash === '#holdkamp') {
+        if (hash === '#holdkamp' && canAccess('holdkamp')) {
             await showHoldkamp();
-        } else if (hash === '#tournament') {
+        } else if (hash === '#tournament' && canAccess('tournament')) {
             await showTournament();
-        } else if (hash === '#history') {
+        } else if (hash === '#history' && canAccess('history')) {
             await showMatchHistory();
         } else if (hash === '#device-tokens') {
             showDeviceTokens();
