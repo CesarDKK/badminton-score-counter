@@ -1199,7 +1199,13 @@ function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCou
         } else if (g.status === 'finished') {
             const winner = g.winner_team === 1 ? teamMatch.team1_name : teamMatch.team2_name;
             const isWO = g.set_scores === 'W.O.';
-            const scoreText = g.set_scores && !isWO ? `<span style="color:#aaa;font-size:0.82em;margin-left:4px;">${escapeHtml(g.set_scores)}</span>` : '';
+            // Orienter scoren til team1 (venstre side) saa den matcher vinder-navnet,
+            // uanset hvilken side spillerne stod paa pr saet (samme som Kamphistorik).
+            const side1Key = isDoubles && g.team1_player2
+                ? `${g.team1_player1 || ''} / ${g.team1_player2}`
+                : (g.team1_player1 || '');
+            const scoreNums = (g.set_scores && !isWO) ? orientHistorySetScoreNumbers(g.set_scores, side1Key).join(' · ') : '';
+            const scoreText = scoreNums ? `<span style="color:#aaa;font-size:0.82em;margin-left:4px;">${scoreNums}</span>` : '';
             winnerBadge = `<span style="background:#4CAF50;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8em;">✓ ${escapeHtml(winner)}${isWO ? ' (W.O.)' : ''}</span>${scoreText}`;
             editBtn = `<button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" style="padding:3px 10px;background:transparent;color:#aaa;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:0.8em;">Rediger</button>`;
         }

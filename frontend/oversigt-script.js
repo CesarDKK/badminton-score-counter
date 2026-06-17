@@ -114,8 +114,12 @@ function renderHoldkampGames(teamMatch) {
             borderColor = '#533483';
         } else if (g.status === 'finished') {
             const winner = g.winner_team === 1 ? teamMatch.team1_name : teamMatch.team2_name;
-            // Ekstraher kun tal-par (f.eks. "21-15") — sæt_scores indeholder også spillernavne
-            const scoreNums = g.set_scores ? (g.set_scores.match(/\d+-\d+/g) || []).join(' · ') : '';
+            // Orienter scoren til team1 (venstre side) så tallene matcher navnene,
+            // uanset hvilken side spillerne stod på pr. sæt.
+            const side1Key = isDoubles && g.team1_player2
+                ? `${g.team1_player1 || ''} / ${g.team1_player2}`
+                : (g.team1_player1 || '');
+            const scoreNums = g.set_scores ? orientHistorySetScoreNumbers(g.set_scores, side1Key).join(' · ') : '';
             const setScoresTxt = scoreNums
                 ? `<span style="color:rgba(255,255,255,0.45); font-size:0.78em; margin-left:6px;">${scoreNums}</span>`
                 : '';
@@ -684,6 +688,29 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Orienterer sætscoren til team1 (række-venstre side) ud fra navnene i
+// set_scores-strengen, så tallene matcher hvilket hold der står hvor — uanset
+// hvilken side spillerne stod på pr. sæt. side1Key tomt -> kun rå tal.
+// (Samme logik som admin-script.js' orientHistorySetScoreNumbers.)
+function orientHistorySetScoreNumbers(rawSetScores, side1Key) {
+    if (!rawSetScores) return [];
+    if (!side1Key) return rawSetScores.match(/\d+-\d+/g) || [];
+    const normalizeNames = s => String(s).trim().replace(/\s*[/&]\s*/g, ' / ');
+    const anchor = normalizeNames(side1Key);
+    return rawSetScores.split(', ').map(part => {
+        const m = part.match(/^(.*?)\s+(\d+)-(\d+)\s+(.*?)$/);
+        if (m) {
+            const p1 = normalizeNames(m[1]);
+            const p2 = normalizeNames(m[4]);
+            if (p1 === anchor) return `${m[2]}-${m[3]}`;
+            if (p2 === anchor) return `${m[3]}-${m[2]}`;
+            return `${m[2]}-${m[3]}`;
+        }
+        const scoreOnly = part.trim().match(/^\d+-\d+$/);
+        return scoreOnly ? part.trim() : null;
+    }).filter(Boolean);
 }
 
 function hideLoading() {
