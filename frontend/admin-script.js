@@ -1066,6 +1066,7 @@ function setNavActive(section) {
 
 let holdkampRefreshTimer = null;
 let holdkampEditOpen = false;
+let holdkampCourtSelectOpen = false; // true mens en bane-dropdown er i fokus/aaben
 
 async function showHoldkamp() {
     hideAllSections();
@@ -1102,8 +1103,9 @@ async function loadActiveHoldkamp() {
             container.style.display = 'block';
             createForm.style.display = 'none';
             renderHoldkampBlocker(null);
-            // Don't re-render while an edit form is open — it would clear the user's input
-            if (!holdkampEditOpen) {
+            // Don't re-render while an edit form is open eller mens en bane-dropdown
+            // er aaben — re-render ville lukke dropdownen / rydde brugerens input.
+            if (!holdkampEditOpen && !holdkampCourtSelectOpen) {
                 // Bevar brugerens valgte baner i dropdowns, saa 3-sek refreshen ikke
                 // nulstiller dem til Bane 1 mens man er ved at tildele en bane.
                 const selectedCourts = {};
@@ -1211,7 +1213,7 @@ function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCou
 
             courtAssign = `
                 <div style="display:flex;align-items:center;gap:6px;margin-top:8px;">
-                    <select id="courtSelect_${g.id}" style="padding:5px 8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;font-size:0.82em;">
+                    <select id="courtSelect_${g.id}" onfocus="holdkampCourtSelectOpen=true" onblur="holdkampCourtSelectOpen=false" style="padding:5px 8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;font-size:0.82em;">
                         ${courtOptions}
                     </select>
                     <button onclick="assignCourtToGame(${teamMatch.id}, ${g.id})" style="padding:5px 12px;background:var(--color-primary);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.82em;">Tildel bane</button>
