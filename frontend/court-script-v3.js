@@ -2098,6 +2098,7 @@ async function initHoldkampPanel() {
         if (pendingGames.length === 0) return;
 
         select.innerHTML = '<option value="">-- Vælg delkamp --</option>';
+        const catNums = holdkampCategoryNumbers(activeTeamMatch.games);
         pendingGames.forEach(g => {
             const isDoubles = ['MD', 'DD', 'HD', 'Double'].includes(g.category);
             const t1 = isDoubles
@@ -2108,7 +2109,7 @@ async function initHoldkampPanel() {
                 : (g.team2_player1 || '?');
             const opt = document.createElement('option');
             opt.value = g.id;
-            opt.textContent = `${g.category} ${g.game_number}: ${t1} vs ${t2}`;
+            opt.textContent = `${g.category} ${catNums[g.id]}: ${t1} vs ${t2}`;
             select.appendChild(opt);
         });
 
@@ -2116,6 +2117,19 @@ async function initHoldkampPanel() {
     } catch (error) {
         console.error('Failed to init holdkamp panel:', error);
     }
+}
+
+// Bygger map game.id -> per-kategori-nummer (MD1, MD2, DS1, DS2 ...) saa numrene
+// matcher Holdkamp-siden. Taeller over ALLE kampe i raekkefoelge — ikke kun
+// pending — saa game_number (fortloebende) ikke laekker ind i visningen.
+function holdkampCategoryNumbers(games) {
+    const counts = {};
+    const map = {};
+    (games || []).forEach(g => {
+        counts[g.category] = (counts[g.category] || 0) + 1;
+        map[g.id] = counts[g.category];
+    });
+    return map;
 }
 
 function applyHoldkampGameToState(game) {
@@ -2204,6 +2218,7 @@ async function refreshHoldkampPanel() {
         assignBtn.style.display = '';
 
         select.innerHTML = '<option value="">-- Vælg delkamp --</option>';
+        const catNums = holdkampCategoryNumbers(activeTeamMatch.games);
         pendingGames.forEach(g => {
             const isDoubles = ['MD', 'DD', 'HD', 'Double'].includes(g.category);
             const t1 = isDoubles
@@ -2214,7 +2229,7 @@ async function refreshHoldkampPanel() {
                 : (g.team2_player1 || '?');
             const opt = document.createElement('option');
             opt.value = g.id;
-            opt.textContent = `${g.category} ${g.game_number}: ${t1} vs ${t2}`;
+            opt.textContent = `${g.category} ${catNums[g.id]}: ${t1} vs ${t2}`;
             select.appendChild(opt);
         });
 
