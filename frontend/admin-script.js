@@ -1104,7 +1104,17 @@ async function loadActiveHoldkamp() {
             renderHoldkampBlocker(null);
             // Don't re-render while an edit form is open — it would clear the user's input
             if (!holdkampEditOpen) {
+                // Bevar brugerens valgte baner i dropdowns, saa 3-sek refreshen ikke
+                // nulstiller dem til Bane 1 mens man er ved at tildele en bane.
+                const selectedCourts = {};
+                container.querySelectorAll('select[id^="courtSelect_"]').forEach(sel => {
+                    selectedCourts[sel.id] = sel.value;
+                });
                 renderActiveHoldkamp(teamMatch, container, allGameStates, courtCount, settings.defaultGameMode || '15');
+                Object.entries(selectedCourts).forEach(([id, val]) => {
+                    const sel = document.getElementById(id);
+                    if (sel && val && sel.querySelector(`option[value="${val}"]`)) sel.value = val;
+                });
             }
             // Polling may have been stopped when there was no active match; restart it.
             if (!holdkampRefreshTimer) {
