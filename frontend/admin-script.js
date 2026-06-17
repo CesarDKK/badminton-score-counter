@@ -211,7 +211,7 @@ async function showDashboard() {
             await showTournament();
         } else if (hash === '#history' && canAccess('history')) {
             await showMatchHistory();
-        } else if (hash === '#device-tokens') {
+        } else if (hash === '#device-tokens' && canAccess('devicetokens')) {
             showDeviceTokens();
         }
     } catch (error) {

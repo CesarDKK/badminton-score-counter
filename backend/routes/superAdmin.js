@@ -6,7 +6,7 @@ const masterDb = require('../config/masterDatabase');
 const { superAdminAuth, generateSuperAdminToken } = require('../middleware/superAdminAuth');
 
 // Gyldige side-noegler for klub-admins per-side adgangsstyring.
-const VALID_PAGE_KEYS = ['holdkamp', 'tournament', 'history', 'playerinfo', 'settings', 'sponsors'];
+const VALID_PAGE_KEYS = ['holdkamp', 'tournament', 'history', 'playerinfo', 'settings', 'sponsors', 'devicetokens'];
 
 // Normaliserer pagePermissions fra request til en gemt vaerdi.
 // null/undefined eller "alle valgt" -> null (= fuld adgang). Ellers JSON-array

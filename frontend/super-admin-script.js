@@ -11,7 +11,8 @@ const PAGE_OPTIONS = [
     { key: 'history',    label: 'Kamphistorik' },
     { key: 'playerinfo', label: 'Spiller info' },
     { key: 'settings',   label: 'Indstillinger' },
-    { key: 'sponsors',   label: 'Sponsorer' }
+    { key: 'sponsors',   label: 'Sponsorer' },
+    { key: 'devicetokens', label: 'Adgangslinks' }
 ];
 
 // Bygger HTML for et rettigheds-vaelger-saet. permissions = null betyder alle sider.
