@@ -30,6 +30,7 @@ let isTournamentMode = false;
 // Holdkamp state
 let activeTeamMatch = null;
 let assignedHoldkampGameId = null;
+let holdkampSelectFocused = false; // true mens delkamp-dropdownen er i fokus/aaben
 
 // Tournament (planlagte kampe) state
 let activeTournament = null;
@@ -1873,11 +1874,12 @@ function startPeriodicSync() {
                     activeTeamMatch = tm;
                     await initHoldkampPanel();
                 } else if (activeTeamMatch && !assignedHoldkampGameId) {
-                    // Panel open but no game assigned yet — refresh dropdown to remove taken games
-                    // Skip if user has already selected a game to avoid resetting their selection
+                    // Panel open but no game assigned yet — refresh dropdown to remove taken games.
+                    // Skip mens brugeren har valgt en delkamp ELLER har dropdownen i fokus/aaben,
+                    // saa listen ikke blinker/nulstilles midt i et valg.
                     const panel = document.getElementById('holdkampPanel');
                     const select = document.getElementById('holdkampGameSelect');
-                    const userIsSelecting = select && select.value;
+                    const userIsSelecting = select && (select.value || holdkampSelectFocused);
                     if (panel && panel.style.display !== 'none' && !userIsSelecting) {
                         await refreshHoldkampPanel();
                     }
