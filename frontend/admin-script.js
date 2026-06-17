@@ -71,6 +71,7 @@ function setupEventListeners() {
     document.getElementById('backFromHoldkampBtn').addEventListener('click', showCourtOverview);
     document.getElementById('holdkampFormat').addEventListener('change', onHoldkampFormatChange);
     document.getElementById('startHoldkampBtn').addEventListener('click', startHoldkamp);
+    document.getElementById('resetHoldkampFormBtn').addEventListener('click', resetHoldkampForm);
 
     // Tournament
     document.getElementById('tournamentBtn').addEventListener('click', showTournament);
@@ -1373,6 +1374,26 @@ function onHoldkampFormatChange() {
     }).join('');
 
     playerInputs.style.display = 'block';
+}
+
+// Nulstiller oprettelses-formularen så man kan starte forfra uden at oprette
+// og slette en kamp. Bekræfter kun hvis der allerede er indtastet noget.
+function resetHoldkampForm() {
+    const team1 = document.getElementById('holdkampTeam1Name');
+    const team2 = document.getElementById('holdkampTeam2Name');
+    const format = document.getElementById('holdkampFormat');
+    const container = document.getElementById('holdkampGamesInputContainer');
+    const playerInputs = document.getElementById('holdkampPlayerInputs');
+
+    const hasInput = team1.value.trim() || team2.value.trim() || format.value ||
+        Array.from(container.querySelectorAll('input')).some(i => i.value.trim());
+    if (hasInput && !confirm('Nulstil formularen og start forfra? Indtastede navne ryddes.')) return;
+
+    team1.value = '';
+    team2.value = '';
+    format.value = '';
+    container.innerHTML = '';
+    playerInputs.style.display = 'none';
 }
 
 async function startHoldkamp() {
