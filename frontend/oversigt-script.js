@@ -77,22 +77,41 @@ function hkKey(matches) {
     ).join('|');
 }
 
-// Roterer mellem sider af 2 holdkampe hvert 15. sek når der er mere end 2.
+// Nedtællings-løber i toppen: genstarter CSS-animationen så den tømmes på 15 sek.
+function startHkRotationBar() {
+    const bar = document.getElementById('hkRotationBar');
+    if (!bar) return;
+    const fill = bar.querySelector('.hk-rotation-fill');
+    bar.style.display = 'block';
+    bar.classList.remove('run');
+    void fill.offsetWidth; // tving reflow så animationen starter forfra
+    bar.classList.add('run');
+}
+
+function stopHkRotationBar() {
+    const bar = document.getElementById('hkRotationBar');
+    if (!bar) return;
+    bar.classList.remove('run');
+    bar.style.display = 'none';
+}
+
+// Roterer mellem holdkampe hvert 15. sek når der er mere end én.
 function ensureHkRotation() {
     if (activeTeamMatches.length > HK_PAGE_SIZE) {
         if (!hkRotateTimer) {
+            startHkRotationBar(); // nedtælling for den første side
             hkRotateTimer = setInterval(() => {
                 hkPage = (hkPage + 1) % hkPageCount();
                 const visible = visibleHkMatches();
                 renderHoldkampCards(visible);
                 _hkRenderedKey = hkKey(visible);
                 updateHkPageIndicator();
+                startHkRotationBar(); // nulstil nedtælling ved sideskift
             }, HK_ROTATE_MS);
         }
-    } else if (hkRotateTimer) {
-        clearInterval(hkRotateTimer);
-        hkRotateTimer = null;
-        hkPage = 0;
+    } else {
+        if (hkRotateTimer) { clearInterval(hkRotateTimer); hkRotateTimer = null; hkPage = 0; }
+        stopHkRotationBar();
     }
 }
 
@@ -110,6 +129,7 @@ async function loadHoldkamp() {
             if (hkRotateTimer) { clearInterval(hkRotateTimer); hkRotateTimer = null; }
             hkPage = 0;
             updateHkPageIndicator();
+            stopHkRotationBar();
             if (container) container.classList.remove('has-holdkamp');
             updateIdleState();
             return;
