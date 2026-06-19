@@ -141,13 +141,14 @@ function hkGameCellHtml(g, num) {
     const isDoubles = HK_DOUBLES.includes(g.category);
     const t1 = isDoubles ? `${g.team1_player1 || '?'}${g.team1_player2 ? ' & ' + g.team1_player2 : ''}` : (g.team1_player1 || '?');
     const t2 = isDoubles ? `${g.team2_player1 || '?'}${g.team2_player2 ? ' & ' + g.team2_player2 : ''}` : (g.team2_player1 || '?');
-    return `<div class="hk-game" data-game-id="${g.id}" style="background:rgba(83,52,131,0.15); border-left:3px solid #555; border-radius:6px; padding:9px 11px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-            <span style="background:#e94560; color:#fff; padding:2px 7px; border-radius:4px; font-size:0.85em; font-weight:bold;">${g.category} ${num}</span>
+    // Afstande i em så de skalerer med .hk-game's vw-baserede font (opløsnings-uafhængigt)
+    return `<div class="hk-game" data-game-id="${g.id}" style="background:rgba(83,52,131,0.15); border-left:0.2em solid #555; border-radius:0.4em; padding:0.6em 0.8em;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35em;">
+            <span style="background:#e94560; color:#fff; padding:0.12em 0.5em; border-radius:0.3em; font-size:0.85em; font-weight:bold;">${g.category} ${num}</span>
             <span class="hk-game-status" style="font-size:0.85em;"></span>
         </div>
         <div style="color:#eaeaea; font-size:0.95em;">${escapeHtml(t1)}</div>
-        <div style="color:#aaa; font-size:0.75em; margin:2px 0;">vs</div>
+        <div style="color:#aaa; font-size:0.75em; margin:0.15em 0;">vs</div>
         <div style="color:#eaeaea; font-size:0.95em;">${escapeHtml(t2)}</div>
     </div>`;
 }
