@@ -41,8 +41,46 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 let activeTeamMatches = []; // alle aktive holdkampe (multi-holdkamp)
 
-let _hkRenderedKey = ''; // signatur af struktur (match-ids + game-ids + status)
+let _hkRenderedKey = ''; // signatur af struktur (side + match-ids + game-ids + status)
 const HK_DOUBLES = ['MD', 'DD', 'HD', 'Double'];
+const HK_PAGE_SIZE = 2;       // antal holdkampe synlige ad gangen (stablet, 50% hver)
+const HK_ROTATE_MS = 15000;   // skift side hvert 15. sek når der er mere end 2
+let hkPage = 0;
+let hkRotateTimer = null;
+
+function hkPageCount() {
+    return Math.max(1, Math.ceil(activeTeamMatches.length / HK_PAGE_SIZE));
+}
+
+function visibleHkMatches() {
+    if (hkPage >= hkPageCount()) hkPage = 0;
+    const start = hkPage * HK_PAGE_SIZE;
+    return activeTeamMatches.slice(start, start + HK_PAGE_SIZE);
+}
+
+function hkKey(matches) {
+    return hkPage + '#' + matches.map(tm =>
+        `${tm.id}:${(tm.games || []).map(g => g.id + g.status).join(',')}`
+    ).join('|');
+}
+
+// Roterer mellem sider af 2 holdkampe hvert 15. sek når der er mere end 2.
+function ensureHkRotation() {
+    if (activeTeamMatches.length > HK_PAGE_SIZE) {
+        if (!hkRotateTimer) {
+            hkRotateTimer = setInterval(() => {
+                hkPage = (hkPage + 1) % hkPageCount();
+                const visible = visibleHkMatches();
+                renderHoldkampCards(visible);
+                _hkRenderedKey = hkKey(visible);
+            }, HK_ROTATE_MS);
+        }
+    } else if (hkRotateTimer) {
+        clearInterval(hkRotateTimer);
+        hkRotateTimer = null;
+        hkPage = 0;
+    }
+}
 
 async function loadHoldkamp() {
     try {
@@ -55,25 +93,27 @@ async function loadHoldkamp() {
             grid.style.display = 'none';
             grid.innerHTML = '';
             _hkRenderedKey = '';
+            if (hkRotateTimer) { clearInterval(hkRotateTimer); hkRotateTimer = null; }
+            hkPage = 0;
             if (container) container.classList.remove('has-holdkamp');
             updateIdleState();
             return;
         }
 
-        grid.style.display = 'grid';
+        grid.style.display = 'flex';
         if (container) container.classList.add('has-holdkamp');
 
-        // Struktur-signatur: fuld re-render kun når den ændrer sig (undgår flicker).
-        // Live score-ændringer patches uden at genskabe DOM (bevarer scroll).
-        const key = activeTeamMatches.map(tm =>
-            `${tm.id}:${(tm.games || []).map(g => g.id + g.status).join(',')}`
-        ).join('|');
+        ensureHkRotation();
 
+        // Fuld re-render kun når synlig side/struktur ændrer sig (undgår flicker).
+        // Live score-ændringer patches uden at genskabe DOM (bevarer scroll).
+        const visible = visibleHkMatches();
+        const key = hkKey(visible);
         if (key !== _hkRenderedKey) {
-            renderHoldkampCards(activeTeamMatches);
+            renderHoldkampCards(visible);
             _hkRenderedKey = key;
         } else {
-            patchHoldkampCards(activeTeamMatches);
+            patchHoldkampCards(visible);
         }
         updateIdleState();
     } catch (error) {
