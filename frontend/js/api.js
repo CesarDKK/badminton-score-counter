@@ -625,6 +625,16 @@ class BadmintonAPI {
         return this.request('/team-matches/active');
     }
 
+    /** Get ALL active team matches with games */
+    async getActiveTeamMatches() {
+        return this.request('/team-matches/active-all');
+    }
+
+    /** Get the active game on a given court (+ its team match), or null */
+    async getTeamMatchByCourt(courtId) {
+        return this.request(`/team-matches/by-court/${courtId}`);
+    }
+
     /** Get all finished team matches with games */
     async getTeamMatchHistory() {
         return this.request('/team-matches/history');

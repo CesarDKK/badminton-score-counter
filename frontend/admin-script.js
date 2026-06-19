@@ -1089,8 +1089,8 @@ function stopHoldkampRefresh() {
 
 async function loadActiveHoldkamp() {
     try {
-        const [teamMatch, allGameStates, settings, activeTournaments] = await Promise.all([
-            api.getActiveTeamMatch(),
+        const [teamMatches, allGameStates, settings, activeTournaments] = await Promise.all([
+            api.getActiveTeamMatches(),
             api.getAllGameStates(),
             api.getSettings(),
             api.getActiveTournaments()
@@ -1099,40 +1099,52 @@ async function loadActiveHoldkamp() {
         const createForm = document.getElementById('createHoldkampForm');
         const courtCount = settings.courtCount || 5;
 
-        if (teamMatch) {
-            container.style.display = 'block';
-            createForm.style.display = 'none';
-            renderHoldkampBlocker(null);
-            // Don't re-render while an edit form is open eller mens en bane-dropdown
-            // er aaben — re-render ville lukke dropdownen / rydde brugerens input.
-            if (!holdkampEditOpen && !holdkampCourtSelectOpen) {
-                // Bevar brugerens valgte baner i dropdowns, saa 3-sek refreshen ikke
-                // nulstiller dem til Bane 1 mens man er ved at tildele en bane.
-                const selectedCourts = {};
-                container.querySelectorAll('select[id^="courtSelect_"]').forEach(sel => {
-                    selectedCourts[sel.id] = sel.value;
-                });
-                renderActiveHoldkamp(teamMatch, container, allGameStates, courtCount, settings.defaultGameMode || '15');
-                Object.entries(selectedCourts).forEach(([id, val]) => {
-                    const sel = document.getElementById(id);
-                    if (sel && val && sel.querySelector(`option[value="${val}"]`)) sel.value = val;
-                });
-            }
-            // Polling may have been stopped when there was no active match; restart it.
-            if (!holdkampRefreshTimer) {
-                holdkampRefreshTimer = setInterval(loadActiveHoldkamp, 3000);
-            }
-        } else if (activeTournaments && activeTournaments.length > 0) {
-            // Aktiv turnering blokerer oprettelse af holdkamp
+        if (activeTournaments && activeTournaments.length > 0) {
+            // Aktiv turnering blokerer holdkampe
             stopHoldkampRefresh();
             container.style.display = 'none';
             createForm.style.display = 'none';
             renderHoldkampBlocker(activeTournaments[0]);
-        } else {
-            stopHoldkampRefresh();
+            return;
+        }
+
+        renderHoldkampBlocker(null);
+        createForm.style.display = 'block'; // opret-formular ALTID synlig
+
+        if (!teamMatches || teamMatches.length === 0) {
             container.style.display = 'none';
-            createForm.style.display = 'block';
-            renderHoldkampBlocker(null);
+            container.innerHTML = '';
+            stopHoldkampRefresh();
+            return;
+        }
+
+        container.style.display = 'block';
+
+        // Polling may have been stopped when there was no active match; restart it.
+        if (!holdkampRefreshTimer) {
+            holdkampRefreshTimer = setInterval(loadActiveHoldkamp, 3000);
+        }
+
+        // Don't re-render while an edit form is open eller mens en bane-dropdown
+        // er aaben — re-render ville lukke dropdownen / rydde brugerens input.
+        if (!holdkampEditOpen && !holdkampCourtSelectOpen) {
+            // Bevar brugerens valgte baner i dropdowns, saa 3-sek refreshen ikke
+            // nulstiller dem til Bane 1 mens man er ved at tildele en bane.
+            const selectedCourts = {};
+            container.querySelectorAll('select[id^="courtSelect_"]').forEach(sel => {
+                selectedCourts[sel.id] = sel.value;
+            });
+            // Optaget-baner beregnes på tværs af ALLE aktive holdkampe.
+            const allActiveGames = teamMatches.flatMap(tm => tm.games || []);
+            container.innerHTML = teamMatches.map(tm =>
+                `<div class="holdkamp-block" style="margin-bottom:18px;">` +
+                renderActiveHoldkampBlock(tm, allGameStates, courtCount, settings.defaultGameMode || '15', allActiveGames) +
+                `</div>`
+            ).join('');
+            Object.entries(selectedCourts).forEach(([id, val]) => {
+                const sel = document.getElementById(id);
+                if (sel && val && sel.querySelector(`option[value="${val}"]`)) sel.value = val;
+            });
         }
     } catch (error) {
         console.error('Failed to load holdkamp:', error);
@@ -1164,7 +1176,7 @@ function renderHoldkampBlocker(activeTournament) {
     `;
 }
 
-function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCount = 5, gameMode = '21') {
+function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5, gameMode = '21', allActiveGames = null) {
     const team1Wins = teamMatch.games.filter(g => g.winner_team === 1).length;
     const team2Wins = teamMatch.games.filter(g => g.winner_team === 2).length;
 
@@ -1193,9 +1205,10 @@ function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCou
             editBtn = `<button onclick="toggleEditGame(${teamMatch.id}, ${g.id})" style="padding:3px 10px;background:transparent;color:#aaa;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:0.8em;">Rediger</button>
                        <button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" style="padding:3px 10px;background:transparent;color:#f0a500;border:1px solid #f0a500;border-radius:4px;cursor:pointer;font-size:0.8em;">Manuel</button>`;
 
-            // Courts occupied by other active holdkamp games or active game states
+            // Courts occupied by other active holdkamp games or active game states.
+            // Beregn på tværs af ALLE aktive holdkampe når listen er tilgængelig.
             const occupiedByCourts = new Set(
-                teamMatch.games
+                (allActiveGames || teamMatch.games)
                     .filter(og => og.status === 'active' && og.court_number)
                     .map(og => og.court_number)
             );
@@ -1325,7 +1338,7 @@ function renderActiveHoldkamp(teamMatch, container, allGameStates = [], courtCou
         </div>`;
     }).join('');
 
-    container.innerHTML = `
+    return `
         <div style="background:rgba(var(--color-primary-rgb),0.15);border:1px solid var(--color-primary);border-radius:10px;padding:20px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
                 <div>
@@ -1482,7 +1495,8 @@ async function assignCourtToGame(teamMatchId, gameId) {
         });
 
         // Pre-populate game state med spillernavne så banen vises på baneoversigten
-        const teamMatch = (await api.getActiveTeamMatch());
+        const teamMatches = await api.getActiveTeamMatches();
+        const teamMatch = (teamMatches || []).find(tm => tm.id === teamMatchId);
         const game = teamMatch?.games?.find(g => g.id === gameId);
         if (game) {
             const isDoubles = DOUBLES_CATEGORIES.includes(game.category);
@@ -1526,7 +1540,8 @@ async function assignCourtToGame(teamMatchId, gameId) {
         await loadActiveHoldkamp();
     } catch (error) {
         console.error('Failed to assign court:', error);
-        showMessage('Fejl', 'Kunne ikke tildele bane. Prøv igen.');
+        const msg = error.status === 409 ? error.message : 'Kunne ikke tildele bane. Prøv igen.';
+        showMessage(error.status === 409 ? 'Bane optaget' : 'Fejl', msg);
     }
 }
 

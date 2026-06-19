@@ -39,104 +39,268 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 // ==================== HOLDKAMP ====================
 
-let activeTeamMatch = null;
+let activeTeamMatches = []; // alle aktive holdkampe (multi-holdkamp)
+
+let _hkRenderedKey = ''; // signatur af struktur (side + match-ids + game-ids + status)
+const HK_DOUBLES = ['MD', 'DD', 'HD', 'Double'];
+const HK_PAGE_SIZE = 1;       // én holdkamp pr. side (fylder hele skærmen)
+const HK_ROTATE_MS = 15000;   // hver holdkamp vises 15 sek, så roteres der
+let hkPage = 0;
+let hkRotateTimer = null;
+
+function hkPageCount() {
+    return Math.max(1, Math.ceil(activeTeamMatches.length / HK_PAGE_SIZE));
+}
+
+// Viser "Side X/Y" øverst til højre når der er mere end én holdkamp.
+function updateHkPageIndicator() {
+    const el = document.getElementById('hkPageIndicator');
+    if (!el) return;
+    const pages = hkPageCount();
+    if (pages > 1) {
+        el.textContent = `Side ${hkPage + 1}/${pages}`;
+        el.style.display = 'block';
+    } else {
+        el.style.display = 'none';
+    }
+}
+
+function visibleHkMatches() {
+    if (hkPage >= hkPageCount()) hkPage = 0;
+    const start = hkPage * HK_PAGE_SIZE;
+    return activeTeamMatches.slice(start, start + HK_PAGE_SIZE);
+}
+
+function hkKey(matches) {
+    return hkPage + '#' + matches.map(tm =>
+        `${tm.id}:${(tm.games || []).map(g => g.id + g.status).join(',')}`
+    ).join('|');
+}
+
+// Nedtællings-løber i toppen: genstarter CSS-animationen så den tømmes på 15 sek.
+function startHkRotationBar() {
+    const bar = document.getElementById('hkRotationBar');
+    if (!bar) return;
+    const fill = bar.querySelector('.hk-rotation-fill');
+    bar.style.display = 'block';
+    bar.classList.remove('run');
+    void fill.offsetWidth; // tving reflow så animationen starter forfra
+    bar.classList.add('run');
+}
+
+function stopHkRotationBar() {
+    const bar = document.getElementById('hkRotationBar');
+    if (!bar) return;
+    bar.classList.remove('run');
+    bar.style.display = 'none';
+}
+
+// Roterer mellem holdkampe hvert 15. sek når der er mere end én.
+function ensureHkRotation() {
+    if (activeTeamMatches.length > HK_PAGE_SIZE) {
+        if (!hkRotateTimer) {
+            startHkRotationBar(); // nedtælling for den første side
+            hkRotateTimer = setInterval(() => {
+                hkPage = (hkPage + 1) % hkPageCount();
+                const visible = visibleHkMatches();
+                renderHoldkampCards(visible);
+                _hkRenderedKey = hkKey(visible);
+                updateHkPageIndicator();
+                startHkRotationBar(); // nulstil nedtælling ved sideskift
+            }, HK_ROTATE_MS);
+        }
+    } else {
+        if (hkRotateTimer) { clearInterval(hkRotateTimer); hkRotateTimer = null; hkPage = 0; }
+        stopHkRotationBar();
+    }
+}
 
 async function loadHoldkamp() {
     try {
-        activeTeamMatch = await api.getActiveTeamMatch();
-        const panel = document.getElementById('holdkampOverview');
-
+        const matches = await api.getActiveTeamMatches();
+        activeTeamMatches = matches || [];
+        const grid = document.getElementById('holdkampCardsGrid');
         const container = document.querySelector('.overview-container');
 
-        if (!activeTeamMatch) {
-            panel.style.display = 'none';
+        if (!activeTeamMatches.length) {
+            grid.style.display = 'none';
+            grid.innerHTML = '';
+            _hkRenderedKey = '';
+            if (hkRotateTimer) { clearInterval(hkRotateTimer); hkRotateTimer = null; }
+            hkPage = 0;
+            updateHkPageIndicator();
+            stopHkRotationBar();
             if (container) container.classList.remove('has-holdkamp');
             updateIdleState();
             return;
         }
 
-        panel.style.display = 'block';
+        grid.style.display = 'flex';
         if (container) container.classList.add('has-holdkamp');
 
-        const team1Wins = activeTeamMatch.games.filter(g => g.winner_team === 1).length;
-        const team2Wins = activeTeamMatch.games.filter(g => g.winner_team === 2).length;
+        ensureHkRotation();
 
-        document.getElementById('hk_team1Name').textContent = activeTeamMatch.team1_name;
-        document.getElementById('hk_team2Name').textContent = activeTeamMatch.team2_name;
-        document.getElementById('hk_score').textContent = `${team1Wins} – ${team2Wins}`;
-
-        const formatNames = {
-            liga11: 'Liga-format (11 kampe)',
-            '13kamps': '13-kamps format',
-            '2plus2': '2+2-format (8 kampe)',
-            '4plus2': '4+2-format (8 kampe)',
-            '4plus3': '4+3-format (9 kampe)',
-            '4spillere': '4-spillere-format (6 kampe)'
-        };
-        document.getElementById('holdkampFormatLabel').textContent = formatNames[activeTeamMatch.format] || activeTeamMatch.format;
-
-        renderHoldkampGames(activeTeamMatch);
+        // Fuld re-render kun når synlig side/struktur ændrer sig (undgår flicker).
+        // Live score-ændringer patches uden at genskabe DOM (bevarer scroll).
+        const visible = visibleHkMatches();
+        const key = hkKey(visible);
+        if (key !== _hkRenderedKey) {
+            renderHoldkampCards(visible);
+            _hkRenderedKey = key;
+        } else {
+            patchHoldkampCards(visible);
+        }
+        updateHkPageIndicator();
         updateIdleState();
     } catch (error) {
         console.error('Failed to load holdkamp:', error);
     }
 }
 
-function renderHoldkampGames(teamMatch) {
-    const container = document.getElementById('holdkampGamesGrid');
-    const DOUBLES = ['MD', 'DD', 'HD', 'Double'];
+// Fornavn = første ord i navnet (bruges når kampen er i gang for at spare plads).
+function firstName(full) {
+    return (full || '').trim().split(/\s+/)[0] || '';
+}
 
-    const counts = {};
-    container.innerHTML = teamMatch.games.map(g => {
-        counts[g.category] = (counts[g.category] || 0) + 1;
-        const num = counts[g.category];
-        const isDoubles = DOUBLES.includes(g.category);
+function hkGameCellHtml(g, num) {
+    const isDoubles = HK_DOUBLES.includes(g.category);
+    // Kamp i gang: vis kun fornavn(e) så der er plads til stillingen. Ellers fuldt navn.
+    const short = g.status === 'active';
+    const nm = v => short ? firstName(v) : (v || '');
+    const t1 = isDoubles
+        ? `${nm(g.team1_player1) || '?'}${g.team1_player2 ? ' & ' + nm(g.team1_player2) : ''}`
+        : (nm(g.team1_player1) || '?');
+    const t2 = isDoubles
+        ? `${nm(g.team2_player1) || '?'}${g.team2_player2 ? ' & ' + nm(g.team2_player2) : ''}`
+        : (nm(g.team2_player1) || '?');
+    const topRow = `
+        <div class="hk-game-top">
+            <span class="hk-badge">${g.category} ${num}</span>
+            <span class="hk-game-status"></span>
+        </div>`;
 
-        const t1 = isDoubles
-            ? `${g.team1_player1 || '?'}${g.team1_player2 ? ' & ' + g.team1_player2 : ''}`
-            : (g.team1_player1 || '?');
-        const t2 = isDoubles
-            ? `${g.team2_player1 || '?'}${g.team2_player2 ? ' & ' + g.team2_player2 : ''}`
-            : (g.team2_player1 || '?');
-
-        let statusHtml = '';
-        let borderColor = '#555';
-
-        if (g.status === 'pending') {
-            statusHtml = '<span style="color:#aaa; font-size:0.8em;">Afventer</span>';
-        } else if (g.status === 'active') {
-            // Try to get live score from allCourtData
-            const courtData = allCourtData.find(c => c.courtId === g.court_number);
-            const liveScore = courtData
-                ? `${courtData.player1.score}-${courtData.player2.score} (${courtData.player1.games}-${courtData.player2.games} sæt)`
-                : '';
-            statusHtml = `<span style="color:#fff; font-size:0.8em;">▶ Bane ${g.court_number}${liveScore ? ' · ' + liveScore : ''}</span>`;
-            borderColor = '#533483';
-        } else if (g.status === 'finished') {
-            const winner = g.winner_team === 1 ? teamMatch.team1_name : teamMatch.team2_name;
-            // Orienter scoren til team1 (venstre side) så tallene matcher navnene,
-            // uanset hvilken side spillerne stod på pr. sæt.
-            const side1Key = isDoubles && g.team1_player2
-                ? `${g.team1_player1 || ''} / ${g.team1_player2}`
-                : (g.team1_player1 || '');
-            const scoreNums = g.set_scores ? orientHistorySetScoreNumbers(g.set_scores, side1Key).join(' · ') : '';
-            const setScoresTxt = scoreNums
-                ? `<span style="color:rgba(255,255,255,0.45); font-size:0.78em; margin-left:6px;">${scoreNums}</span>`
-                : '';
-            statusHtml = `<span style="color:#4CAF50; font-size:0.8em;">✓ ${escapeHtml(winner)}${setScoresTxt}</span>`;
-            borderColor = g.winner_team === 1 ? '#4CAF50' : '#e94560';
-        }
-
-        return `<div style="background:rgba(83,52,131,0.15); border-left:3px solid ${borderColor}; border-radius:6px; padding:10px 12px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                <span style="background:#e94560; color:#fff; padding:2px 7px; border-radius:4px; font-size:0.8em; font-weight:bold;">${g.category} ${num}</span>
-                ${statusHtml}
+    if (g.status === 'active') {
+        // Mini-scoreboard à la TV: navn + sæt + stort point-tal pr. hold.
+        // Tallene fyldes/opdateres live i patchHoldkampCards().
+        return `<div class="hk-game hk-game--active" data-game-id="${g.id}">
+            ${topRow}
+            <div class="hk-sb">
+                <div class="hk-sb-row">
+                    <span class="hk-sb-name">${escapeHtml(t1)}</span>
+                    <span class="hk-sb-sets" data-side="1"></span>
+                    <span class="hk-sb-pts" data-side="1">0</span>
+                </div>
+                <div class="hk-sb-row">
+                    <span class="hk-sb-name">${escapeHtml(t2)}</span>
+                    <span class="hk-sb-sets" data-side="2"></span>
+                    <span class="hk-sb-pts" data-side="2">0</span>
+                </div>
             </div>
-            <div style="color:#eaeaea; font-size:0.9em;">${t1}</div>
-            <div style="color:#aaa; font-size:0.75em; margin:2px 0;">vs</div>
-            <div style="color:#eaeaea; font-size:0.9em;">${t2}</div>
+        </div>`;
+    }
+
+    // Afventer / færdig: navne + status (navne på én linje med ellipsis).
+    const nameStyle = 'color:#eaeaea; font-size:0.9em; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
+    return `<div class="hk-game" data-game-id="${g.id}">
+        ${topRow}
+        <div style="${nameStyle}">${escapeHtml(t1)}</div>
+        <div style="color:#aaa; font-size:0.7em; line-height:1; margin:0.05em 0;">vs</div>
+        <div style="${nameStyle}">${escapeHtml(t2)}</div>
+    </div>`;
+}
+
+// Hvilken bane-spiller hører til team1 hhv. team2 (sider kan være byttet under spil).
+function holdkampCourtSides(cd, g) {
+    if (!cd) return null;
+    const t1 = [g.team1_player1, g.team1_player2].filter(Boolean);
+    const p1IsT1 = [cd.player1.name, cd.player1.name2].some(n => n && t1.includes(n));
+    const p2IsT1 = [cd.player2.name, cd.player2.name2].some(n => n && t1.includes(n));
+    if (p2IsT1 && !p1IsT1) return { team1: cd.player2, team2: cd.player1 };
+    return { team1: cd.player1, team2: cd.player2 };
+}
+
+function hkStatusFor(g, teamMatch) {
+    if (g.status === 'pending') return { html: '<span style="color:#aaa;">Afventer</span>', border: '#555' };
+    if (g.status === 'active') {
+        const cd = allCourtData.find(c => c.courtId === g.court_number);
+        // Pause/sæthvil vises i rubrikken når banen er på pause
+        if (cd && cd.restBreakActive) {
+            const label = (cd.restBreakTitle || '').toLowerCase().includes('sæt') ? 'Sæthvil' : 'Pause';
+            const left = formatTimer(getPauseSecondsLeft(cd));
+            return {
+                html: `<span style="color:#f1c40f;">⏸ ${label} ${left} · Bane ${g.court_number}</span>`,
+                border: '#f1c40f'
+            };
+        }
+        return { html: `<span style="color:#fff;">▶ Bane ${g.court_number}</span>`, border: '#533483' };
+    }
+    // finished — orienter scoren til team1 så tallene matcher navnene
+    const winner = g.winner_team === 1 ? teamMatch.team1_name : teamMatch.team2_name;
+    const isDoubles = HK_DOUBLES.includes(g.category);
+    const side1Key = isDoubles && g.team1_player2 ? `${g.team1_player1 || ''} / ${g.team1_player2}` : (g.team1_player1 || '');
+    const nums = g.set_scores ? orientHistorySetScoreNumbers(g.set_scores, side1Key).join(' · ') : '';
+    const sc = nums ? ` <span style="color:rgba(255,255,255,0.45);">${nums}</span>` : '';
+    return { html: `<span style="color:#4CAF50;">✓ ${escapeHtml(winner)}${sc}</span>`, border: g.winner_team === 1 ? '#4CAF50' : '#e94560' };
+}
+
+function renderHoldkampCards(matches) {
+    const grid = document.getElementById('holdkampCardsGrid');
+    grid.innerHTML = matches.map(tm => {
+        const t1w = tm.games.filter(g => g.winner_team === 1).length;
+        const t2w = tm.games.filter(g => g.winner_team === 2).length;
+        const counts = {};
+        const cells = tm.games.map(g => {
+            counts[g.category] = (counts[g.category] || 0) + 1;
+            return hkGameCellHtml(g, counts[g.category]);
+        }).join('');
+        // Vælg kolonner ud fra antal delkampe. Max 3 kolonner — bredere kasser så
+        // (især doubles-)navne kan stå på én linje uden at ombryde og overflyde.
+        const n = tm.games.length;
+        const cols = n <= 6 ? 2 : 3;
+        const rows = Math.ceil(n / cols);
+        return `<div class="hk-card" data-match-id="${tm.id}">
+            <div class="hk-card-header">
+                <span class="t1">${escapeHtml(tm.team1_name)}</span>
+                <span class="sc">${t1w} – ${t2w}</span>
+                <span class="t2">${escapeHtml(tm.team2_name)}</span>
+            </div>
+            <div class="hk-games" style="grid-template-columns: repeat(${cols}, 1fr); --hk-rows:${rows};">${cells}</div>
         </div>`;
     }).join('');
+    patchHoldkampCards(matches); // sæt status/score + border på de friske celler
+}
+
+function patchHoldkampCards(matches) {
+    matches.forEach(tm => {
+        const card = document.querySelector(`.hk-card[data-match-id="${tm.id}"]`);
+        if (!card) return;
+        const t1w = tm.games.filter(g => g.winner_team === 1).length;
+        const t2w = tm.games.filter(g => g.winner_team === 2).length;
+        const scEl = card.querySelector('.hk-card-header .sc');
+        if (scEl) scEl.textContent = `${t1w} – ${t2w}`;
+        tm.games.forEach(g => {
+            const cell = card.querySelector(`.hk-game[data-game-id="${g.id}"]`);
+            if (!cell) return;
+            const st = hkStatusFor(g, tm);
+            const statusEl = cell.querySelector('.hk-game-status');
+            if (statusEl) statusEl.innerHTML = st.html;
+            cell.style.borderLeftColor = st.border;
+
+            // Live scoreboard-tal for aktive delkampe (mappet til rette hold)
+            if (g.status === 'active') {
+                const cd = allCourtData.find(c => c.courtId === g.court_number);
+                const sides = holdkampCourtSides(cd, g);
+                if (sides) {
+                    [[1, sides.team1], [2, sides.team2]].forEach(([side, p]) => {
+                        const ptsEl = cell.querySelector(`.hk-sb-pts[data-side="${side}"]`);
+                        const setsEl = cell.querySelector(`.hk-sb-sets[data-side="${side}"]`);
+                        if (ptsEl) ptsEl.textContent = p.score;
+                        if (setsEl) setsEl.textContent = p.games;
+                    });
+                }
+            }
+        });
+    });
 }
 
 async function initialize() {
@@ -158,10 +322,13 @@ async function initialize() {
 }
 
 function isHoldkampCourt(courtId) {
-    if (!activeTeamMatch) return false;
+    if (!activeTeamMatches.length) return false;
     // Kun aktive spil — afsluttede holdkamp-spil har stadig court_number sat
-    // men banen skal ikke behandles som holdkamp-bane efter kampen er slut
-    return activeTeamMatch.games.some(g => g.court_number === courtId && g.status === 'active');
+    // men banen skal ikke behandles som holdkamp-bane efter kampen er slut.
+    // Søg på tværs af ALLE aktive holdkampe.
+    return activeTeamMatches.some(tm =>
+        (tm.games || []).some(g => g.court_number === courtId && g.status === 'active')
+    );
 }
 
 async function loadAllCourts() {
@@ -366,6 +533,16 @@ function displayCurrentPage() {
     const noMatchesMsg = document.getElementById('noMatchesMessage');
     const pageIndicator = document.getElementById('pageIndicator');
     const pageInfo = document.getElementById('pageInfo');
+
+    // Under holdkamp vises KUN holdkamp-visningen øverst — per-bane-grid'et
+    // (den nederste halvdel) skal være helt skjult.
+    if (activeTeamMatches.length > 0) {
+        grid.style.display = 'none';
+        grid.innerHTML = '';
+        noMatchesMsg.style.display = 'none';
+        pageIndicator.style.display = 'none';
+        return;
+    }
 
     if (activeCourts.length === 0) {
         grid.style.display = 'none';
@@ -753,7 +930,7 @@ async function refreshIdleSettings() {
 }
 
 function updateIdleState() {
-    const hasActivity = activeCourts.length > 0 || !!activeTeamMatch;
+    const hasActivity = activeCourts.length > 0 || activeTeamMatches.length > 0;
     if (hasActivity) {
         _hideIdleScreen();
     } else {

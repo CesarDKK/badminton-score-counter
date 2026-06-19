@@ -125,6 +125,9 @@
         <div id="holdkampPanel" style="display:none; position:fixed; top:0; left:0; right:0; background:rgba(20,10,40,0.97); z-index:8000; padding:15px 20px; border-bottom:2px solid #533483;">
             <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
                 <span style="color:#e94560; font-weight:bold; font-size:0.95em;">🏸 Holdkamp:</span>
+                <select id="holdkampMatchSelect" onfocus="holdkampSelectFocused=true" onblur="holdkampSelectFocused=false" style="flex:1; min-width:180px; padding:8px 10px; background:#1a1a2e; color:#eaeaea; border:1px solid #533483; border-radius:5px; font-size:0.9em;">
+                    <option value="">-- Vælg holdkamp --</option>
+                </select>
                 <select id="holdkampGameSelect" onfocus="holdkampSelectFocused=true" onblur="holdkampSelectFocused=false" style="flex:1; min-width:200px; padding:8px 10px; background:#1a1a2e; color:#eaeaea; border:1px solid #533483; border-radius:5px; font-size:0.9em;">
                     <option value="">-- Vælg delkamp --</option>
                 </select>
@@ -180,6 +183,6 @@
 
     <script src="js/api.js?v=4"></script>
     <script src="js/auth-guard.js?v=2"></script>
-    <script src="court-script-v3.js?v=10"></script>
+    <script src="court-script-v3.js?v=12"></script>
 </body>
 </html>
