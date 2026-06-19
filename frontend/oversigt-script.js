@@ -458,6 +458,16 @@ function displayCurrentPage() {
     const pageIndicator = document.getElementById('pageIndicator');
     const pageInfo = document.getElementById('pageInfo');
 
+    // Under holdkamp vises KUN holdkamp-visningen øverst — per-bane-grid'et
+    // (den nederste halvdel) skal være helt skjult.
+    if (activeTeamMatches.length > 0) {
+        grid.style.display = 'none';
+        grid.innerHTML = '';
+        noMatchesMsg.style.display = 'none';
+        pageIndicator.style.display = 'none';
+        return;
+    }
+
     if (activeCourts.length === 0) {
         grid.style.display = 'none';
         noMatchesMsg.style.display = 'none';
