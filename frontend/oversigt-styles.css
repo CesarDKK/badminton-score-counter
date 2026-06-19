@@ -129,13 +129,39 @@ body::before {
     line-height: 1;
     flex-shrink: 0;
 }
-#holdkampCardsGrid .hk-card-header .t1 { color: #4CAF50; font-size: clamp(1.4em, 2.6vw, 2.4em); }
-#holdkampCardsGrid .hk-card-header .sc { color: #fff; font-size: clamp(1.4em, 2.6vw, 2.4em); letter-spacing: 3px; }
-#holdkampCardsGrid .hk-card-header .t2 { color: var(--color-accent); font-size: clamp(1.4em, 2.6vw, 2.4em); }
+#holdkampCardsGrid .hk-card-header .t1 { color: #4CAF50; font-size: clamp(2em, 4vw, 4em); }
+#holdkampCardsGrid .hk-card-header .sc { color: #fff; font-size: clamp(2em, 4vw, 4em); letter-spacing: 4px; }
+#holdkampCardsGrid .hk-card-header .t2 { color: var(--color-accent); font-size: clamp(2em, 4vw, 4em); }
+/* Delkampene fylder den ledige højde — én holdkamp pr. side, så pladsen udnyttes */
 #holdkampCardsGrid .hk-games {
+    flex: 1;
+    min-height: 0;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    grid-auto-rows: 1fr;
+    gap: 10px;
+}
+#holdkampCardsGrid .hk-game {
+    font-size: clamp(1em, 1.7vw, 1.7em);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* Sideindikator (fx "Side 2/3") øverst til højre under holdkamp-rotation */
+#hkPageIndicator {
+    position: fixed;
+    top: 14px;
+    right: 22px;
+    z-index: 60;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    padding: 6px 16px;
+    border-radius: 100px;
+    font-size: 1.2em;
+    letter-spacing: 1px;
+    backdrop-filter: blur(4px);
 }
 
 /* =================== COURTS GRID =================== */

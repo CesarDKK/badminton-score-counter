@@ -43,13 +43,26 @@ let activeTeamMatches = []; // alle aktive holdkampe (multi-holdkamp)
 
 let _hkRenderedKey = ''; // signatur af struktur (side + match-ids + game-ids + status)
 const HK_DOUBLES = ['MD', 'DD', 'HD', 'Double'];
-const HK_PAGE_SIZE = 2;       // antal holdkampe synlige ad gangen (stablet, 50% hver)
-const HK_ROTATE_MS = 15000;   // skift side hvert 15. sek når der er mere end 2
+const HK_PAGE_SIZE = 1;       // én holdkamp pr. side (fylder hele skærmen)
+const HK_ROTATE_MS = 15000;   // hver holdkamp vises 15 sek, så roteres der
 let hkPage = 0;
 let hkRotateTimer = null;
 
 function hkPageCount() {
     return Math.max(1, Math.ceil(activeTeamMatches.length / HK_PAGE_SIZE));
+}
+
+// Viser "Side X/Y" øverst til højre når der er mere end én holdkamp.
+function updateHkPageIndicator() {
+    const el = document.getElementById('hkPageIndicator');
+    if (!el) return;
+    const pages = hkPageCount();
+    if (pages > 1) {
+        el.textContent = `Side ${hkPage + 1}/${pages}`;
+        el.style.display = 'block';
+    } else {
+        el.style.display = 'none';
+    }
 }
 
 function visibleHkMatches() {
@@ -73,6 +86,7 @@ function ensureHkRotation() {
                 const visible = visibleHkMatches();
                 renderHoldkampCards(visible);
                 _hkRenderedKey = hkKey(visible);
+                updateHkPageIndicator();
             }, HK_ROTATE_MS);
         }
     } else if (hkRotateTimer) {
@@ -95,6 +109,7 @@ async function loadHoldkamp() {
             _hkRenderedKey = '';
             if (hkRotateTimer) { clearInterval(hkRotateTimer); hkRotateTimer = null; }
             hkPage = 0;
+            updateHkPageIndicator();
             if (container) container.classList.remove('has-holdkamp');
             updateIdleState();
             return;
@@ -115,6 +130,7 @@ async function loadHoldkamp() {
         } else {
             patchHoldkampCards(visible);
         }
+        updateHkPageIndicator();
         updateIdleState();
     } catch (error) {
         console.error('Failed to load holdkamp:', error);
