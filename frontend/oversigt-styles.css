@@ -149,7 +149,7 @@ body::before {
 /* Skriften skaleres efter rækkeantal (--hk-rows) så indholdet passer i cellen,
    begrænset af bredden (vw). overflow:hidden er sikkerhedsnet mod scroll. */
 #holdkampCardsGrid .hk-game {
-    font-size: min(1.6vw, calc(80vh / var(--hk-rows, 3) / 5));
+    font-size: min(1.7vw, calc(82vh / var(--hk-rows, 3) / 5.5));
     overflow: hidden;
     min-height: 0;
     display: flex;

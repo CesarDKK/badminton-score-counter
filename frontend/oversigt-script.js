@@ -141,15 +141,18 @@ function hkGameCellHtml(g, num) {
     const isDoubles = HK_DOUBLES.includes(g.category);
     const t1 = isDoubles ? `${g.team1_player1 || '?'}${g.team1_player2 ? ' & ' + g.team1_player2 : ''}` : (g.team1_player1 || '?');
     const t2 = isDoubles ? `${g.team2_player1 || '?'}${g.team2_player2 ? ' & ' + g.team2_player2 : ''}` : (g.team2_player1 || '?');
-    // Afstande i em så de skalerer med .hk-game's vw-baserede font (opløsnings-uafhængigt)
-    return `<div class="hk-game" data-game-id="${g.id}" style="background:rgba(83,52,131,0.15); border-left:0.2em solid #555; border-radius:0.4em; padding:0.6em 0.8em;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35em;">
-            <span style="background:#e94560; color:#fff; padding:0.12em 0.5em; border-radius:0.3em; font-size:0.85em; font-weight:bold;">${g.category} ${num}</span>
-            <span class="hk-game-status" style="font-size:0.85em;"></span>
+    // Afstande i em så de skalerer med .hk-game's vw-baserede font (opløsnings-uafhængigt).
+    // Navne/status holdes på én linje (nowrap + ellipsis) så cellen har fast linjeantal
+    // og aldrig flyder over / klipper midt i teksten.
+    const nameStyle = 'color:#eaeaea; font-size:0.9em; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
+    return `<div class="hk-game" data-game-id="${g.id}" style="background:rgba(83,52,131,0.15); border-left:0.2em solid #555; border-radius:0.4em; padding:0.4em 0.6em;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:0.4em; margin-bottom:0.2em;">
+            <span style="background:#e94560; color:#fff; padding:0.1em 0.45em; border-radius:0.3em; font-size:0.8em; font-weight:bold; white-space:nowrap;">${g.category} ${num}</span>
+            <span class="hk-game-status" style="font-size:0.8em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1; text-align:right;"></span>
         </div>
-        <div style="color:#eaeaea; font-size:0.95em;">${escapeHtml(t1)}</div>
-        <div style="color:#aaa; font-size:0.75em; margin:0.15em 0;">vs</div>
-        <div style="color:#eaeaea; font-size:0.95em;">${escapeHtml(t2)}</div>
+        <div style="${nameStyle}">${escapeHtml(t1)}</div>
+        <div style="color:#aaa; font-size:0.7em; line-height:1; margin:0.05em 0;">vs</div>
+        <div style="${nameStyle}">${escapeHtml(t2)}</div>
     </div>`;
 }
 
@@ -179,10 +182,10 @@ function renderHoldkampCards(matches) {
             counts[g.category] = (counts[g.category] || 0) + 1;
             return hkGameCellHtml(g, counts[g.category]);
         }).join('');
-        // Vælg kolonner ud fra antal delkampe så rækkeantallet holdes lavt — så
-        // alt kan være på én skærm uden scroll (info-skærm uden mus).
+        // Vælg kolonner ud fra antal delkampe. Max 3 kolonner — bredere kasser så
+        // (især doubles-)navne kan stå på én linje uden at ombryde og overflyde.
         const n = tm.games.length;
-        const cols = n <= 6 ? 2 : (n <= 10 ? 3 : 4);
+        const cols = n <= 6 ? 2 : 3;
         const rows = Math.ceil(n / cols);
         return `<div class="hk-card" data-match-id="${tm.id}">
             <div class="hk-card-header">
