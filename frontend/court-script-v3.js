@@ -2118,10 +2118,24 @@ async function initHoldkampPanel() {
 function populateHoldkampMatchSelect(matches) {
     holdkampMatches = matches || [];
     const matchSel = document.getElementById('holdkampMatchSelect');
+    // Kun holdkampe der har ventende delkampe er relevante at vælge.
+    const selectable = holdkampMatches.filter(tm => (tm.games || []).some(g => g.status === 'pending'));
+
+    // Kun én holdkamp: spring holdkamp-valget over og vis kun delkampene.
+    if (selectable.length === 1) {
+        const tm = selectable[0];
+        matchSel.style.display = 'none';
+        matchSel.innerHTML = `<option value="${tm.id}">${tm.team1_name} vs ${tm.team2_name}</option>`;
+        matchSel.value = String(tm.id);
+        onHoldkampMatchChange();
+        return;
+    }
+
+    // Flere holdkampe: vis holdkamp-dropdownen (to-trins valg).
+    matchSel.style.display = '';
     const prev = matchSel.value;
     matchSel.innerHTML = '<option value="">-- Vælg holdkamp --</option>';
-    holdkampMatches.forEach(tm => {
-        if (!(tm.games || []).some(g => g.status === 'pending')) return;
+    selectable.forEach(tm => {
         const opt = document.createElement('option');
         opt.value = tm.id;
         opt.textContent = `${tm.team1_name} vs ${tm.team2_name}`;
