@@ -275,7 +275,7 @@ function patchHoldkampCards(matches) {
                         const ptsEl = cell.querySelector(`.hk-sb-pts[data-side="${side}"]`);
                         const setsEl = cell.querySelector(`.hk-sb-sets[data-side="${side}"]`);
                         if (ptsEl) ptsEl.textContent = p.score;
-                        if (setsEl) setsEl.textContent = p.games > 0 ? p.games : '';
+                        if (setsEl) setsEl.textContent = p.games;
                     });
                 }
             }
