@@ -60,6 +60,66 @@ router.get('/active', async (req, res, next) => {
     }
 });
 
+// GET /api/team-matches/active-all - Alle aktive holdkampe med delkampe (public)
+router.get('/active-all', async (req, res, next) => {
+    try {
+        const teamMatches = await query(
+            `SELECT id, format, team1_name, team2_name, status, created_at
+             FROM team_matches WHERE status = 'active'
+             ORDER BY created_at ASC`
+        );
+
+        const result = [];
+        for (const tm of teamMatches) {
+            const games = await query(
+                `SELECT id, game_number, category,
+                        team1_player1, team1_player2, team2_player1, team2_player2,
+                        court_number, status, winner_team, set_scores
+                 FROM team_match_games
+                 WHERE team_match_id = ?
+                 ORDER BY game_number ASC`,
+                [tm.id]
+            );
+            result.push({ ...tm, games });
+        }
+
+        res.json(result);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/team-matches/by-court/:courtId - Den aktive delkamp på en bane + dens holdkamp (public)
+router.get('/by-court/:courtId', async (req, res, next) => {
+    try {
+        const courtNumber = parseInt(req.params.courtId, 10);
+        if (!courtNumber) return res.json(null);
+
+        const game = await queryOne(
+            `SELECT g.id, g.team_match_id, g.game_number, g.category,
+                    g.team1_player1, g.team1_player2, g.team2_player1, g.team2_player2,
+                    g.court_number, g.status, g.winner_team, g.set_scores
+             FROM team_match_games g
+             JOIN team_matches tm ON tm.id = g.team_match_id
+             WHERE g.court_number = ? AND g.status = 'active' AND tm.status = 'active'
+             LIMIT 1`,
+            [courtNumber]
+        );
+        if (!game) return res.json(null);
+
+        const teamMatch = await queryOne(
+            `SELECT id, format, team1_name, team2_name, status, created_at
+             FROM team_matches WHERE id = ?`,
+            [game.team_match_id]
+        );
+        if (!teamMatch) return res.json(null);
+
+        res.json({ ...teamMatch, game });
+    } catch (error) {
+        next(error);
+    }
+});
+
 // POST /api/team-matches - Create new team match (requires auth)
 router.post('/', authMiddleware, async (req, res, next) => {
     try {
