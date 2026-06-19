@@ -139,9 +139,6 @@ router.post('/', authMiddleware, async (req, res, next) => {
             });
         }
 
-        // Mark any existing active matches as finished
-        await query(`UPDATE team_matches SET status = 'finished' WHERE status = 'active'`);
-
         // Create new team match
         const result = await query(
             `INSERT INTO team_matches (format, team1_name, team2_name, status) VALUES (?, ?, ?, 'active')`,
@@ -189,16 +186,44 @@ router.put('/:id/games/:gameId', async (req, res, next) => {
         const values = [];
 
         if (courtNumber !== undefined) {
-            // Frigør banen fra enhver anden delkamp i samme holdkamp så den gamle
-            // kamp bliver tilgængelig igen hvis brugeren har valgt forkert. Status
-            // skal også tilbage til 'pending' så den vises i andre baners vælger.
             if (courtNumber !== null) {
-                await query(
-                    `UPDATE team_match_games
-                     SET court_number = NULL, status = 'pending'
-                     WHERE team_match_id = ? AND court_number = ? AND id != ? AND status != 'finished'`,
-                    [id, courtNumber, gameId]
+                // Find enhver ANDEN aktiv delkamp på samme bane — også i andre holdkampe.
+                const occupant = await queryOne(
+                    `SELECT g.id, g.team_match_id
+                     FROM team_match_games g
+                     JOIN team_matches tm ON tm.id = g.team_match_id
+                     WHERE g.court_number = ? AND g.status = 'active'
+                       AND tm.status = 'active' AND g.id != ?`,
+                    [courtNumber, gameId]
                 );
+
+                if (occupant) {
+                    // Er banen i gang? (samme definition som admin-dropdownen)
+                    const gs = await queryOne(
+                        `SELECT gs.player1_score, gs.player2_score,
+                                gs.player1_games, gs.player2_games, gs.timer_seconds
+                         FROM courts c
+                         JOIN game_states gs ON c.id = gs.court_id
+                         WHERE c.court_number = ?`,
+                        [courtNumber]
+                    );
+                    const inProgress = gs && (
+                        gs.player1_score > 0 || gs.player2_score > 0 ||
+                        gs.player1_games > 0 || gs.player2_games > 0 ||
+                        gs.timer_seconds > 0
+                    );
+                    if (inProgress) {
+                        return res.status(409).json({
+                            error: 'Bane optaget — der spilles allerede en kamp på denne bane.'
+                        });
+                    }
+                    // Ikke startet: frigør den siddende delkamp (uanset holdkamp).
+                    await query(
+                        `UPDATE team_match_games SET court_number = NULL, status = 'pending'
+                         WHERE id = ?`,
+                        [occupant.id]
+                    );
+                }
             }
             fields.push('court_number = ?');
             values.push(courtNumber);
