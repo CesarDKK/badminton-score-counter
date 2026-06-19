@@ -155,6 +155,71 @@ body::before {
     display: flex;
     flex-direction: column;
     justify-content: center;
+    background: rgba(83, 52, 131, 0.15);
+    border-left: 0.2em solid #555;
+    border-radius: 0.4em;
+    padding: 0.4em 0.6em;
+}
+#holdkampCardsGrid .hk-game-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4em;
+    margin-bottom: 0.2em;
+}
+#holdkampCardsGrid .hk-badge {
+    background: #e94560;
+    color: #fff;
+    padding: 0.1em 0.45em;
+    border-radius: 0.3em;
+    font-size: 0.8em;
+    font-weight: bold;
+    white-space: nowrap;
+}
+#holdkampCardsGrid .hk-game-status {
+    font-size: 0.8em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1;
+    text-align: right;
+}
+/* Mini-scoreboard (aktiv delkamp) — store point-tal som på TV, men kompakt */
+#holdkampCardsGrid .hk-sb {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1em;
+}
+#holdkampCardsGrid .hk-sb-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+}
+#holdkampCardsGrid .hk-sb-name {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #eaeaea;
+    font-size: 0.95em;
+}
+#holdkampCardsGrid .hk-sb-sets {
+    min-width: 1.1em;
+    text-align: center;
+    color: #f0a500;
+    font-weight: bold;
+    font-size: 0.9em;
+}
+#holdkampCardsGrid .hk-sb-pts {
+    min-width: 1.6em;
+    text-align: right;
+    font-family: 'Bebas Neue', sans-serif;
+    font-weight: bold;
+    line-height: 0.9;
+    font-size: 2em;
+    color: #fff;
 }
 
 /* Sideindikator (fx "Side 2/3") øverst til højre under holdkamp-rotation */

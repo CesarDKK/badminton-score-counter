@@ -153,19 +153,50 @@ function hkGameCellHtml(g, num) {
     const t2 = isDoubles
         ? `${nm(g.team2_player1) || '?'}${g.team2_player2 ? ' & ' + nm(g.team2_player2) : ''}`
         : (nm(g.team2_player1) || '?');
-    // Afstande i em så de skalerer med .hk-game's vw-baserede font (opløsnings-uafhængigt).
-    // Navne/status holdes på én linje (nowrap + ellipsis) så cellen har fast linjeantal
-    // og aldrig flyder over / klipper midt i teksten.
+    const topRow = `
+        <div class="hk-game-top">
+            <span class="hk-badge">${g.category} ${num}</span>
+            <span class="hk-game-status"></span>
+        </div>`;
+
+    if (g.status === 'active') {
+        // Mini-scoreboard à la TV: navn + sæt + stort point-tal pr. hold.
+        // Tallene fyldes/opdateres live i patchHoldkampCards().
+        return `<div class="hk-game hk-game--active" data-game-id="${g.id}">
+            ${topRow}
+            <div class="hk-sb">
+                <div class="hk-sb-row">
+                    <span class="hk-sb-name">${escapeHtml(t1)}</span>
+                    <span class="hk-sb-sets" data-side="1"></span>
+                    <span class="hk-sb-pts" data-side="1">0</span>
+                </div>
+                <div class="hk-sb-row">
+                    <span class="hk-sb-name">${escapeHtml(t2)}</span>
+                    <span class="hk-sb-sets" data-side="2"></span>
+                    <span class="hk-sb-pts" data-side="2">0</span>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    // Afventer / færdig: navne + status (navne på én linje med ellipsis).
     const nameStyle = 'color:#eaeaea; font-size:0.9em; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
-    return `<div class="hk-game" data-game-id="${g.id}" style="background:rgba(83,52,131,0.15); border-left:0.2em solid #555; border-radius:0.4em; padding:0.4em 0.6em;">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:0.4em; margin-bottom:0.2em;">
-            <span style="background:#e94560; color:#fff; padding:0.1em 0.45em; border-radius:0.3em; font-size:0.8em; font-weight:bold; white-space:nowrap;">${g.category} ${num}</span>
-            <span class="hk-game-status" style="font-size:0.8em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1; text-align:right;"></span>
-        </div>
+    return `<div class="hk-game" data-game-id="${g.id}">
+        ${topRow}
         <div style="${nameStyle}">${escapeHtml(t1)}</div>
         <div style="color:#aaa; font-size:0.7em; line-height:1; margin:0.05em 0;">vs</div>
         <div style="${nameStyle}">${escapeHtml(t2)}</div>
     </div>`;
+}
+
+// Hvilken bane-spiller hører til team1 hhv. team2 (sider kan være byttet under spil).
+function holdkampCourtSides(cd, g) {
+    if (!cd) return null;
+    const t1 = [g.team1_player1, g.team1_player2].filter(Boolean);
+    const p1IsT1 = [cd.player1.name, cd.player1.name2].some(n => n && t1.includes(n));
+    const p2IsT1 = [cd.player2.name, cd.player2.name2].some(n => n && t1.includes(n));
+    if (p2IsT1 && !p1IsT1) return { team1: cd.player2, team2: cd.player1 };
+    return { team1: cd.player1, team2: cd.player2 };
 }
 
 function hkStatusFor(g, teamMatch) {
@@ -181,8 +212,7 @@ function hkStatusFor(g, teamMatch) {
                 border: '#f1c40f'
             };
         }
-        const live = cd ? ` · ${cd.player1.score}-${cd.player2.score} (${cd.player1.games}-${cd.player2.games} sæt)` : '';
-        return { html: `<span style="color:#fff;">▶ Bane ${g.court_number}${live}</span>`, border: '#533483' };
+        return { html: `<span style="color:#fff;">▶ Bane ${g.court_number}</span>`, border: '#533483' };
     }
     // finished — orienter scoren til team1 så tallene matcher navnene
     const winner = g.winner_team === 1 ? teamMatch.team1_name : teamMatch.team2_name;
@@ -235,6 +265,20 @@ function patchHoldkampCards(matches) {
             const statusEl = cell.querySelector('.hk-game-status');
             if (statusEl) statusEl.innerHTML = st.html;
             cell.style.borderLeftColor = st.border;
+
+            // Live scoreboard-tal for aktive delkampe (mappet til rette hold)
+            if (g.status === 'active') {
+                const cd = allCourtData.find(c => c.courtId === g.court_number);
+                const sides = holdkampCourtSides(cd, g);
+                if (sides) {
+                    [[1, sides.team1], [2, sides.team2]].forEach(([side, p]) => {
+                        const ptsEl = cell.querySelector(`.hk-sb-pts[data-side="${side}"]`);
+                        const setsEl = cell.querySelector(`.hk-sb-sets[data-side="${side}"]`);
+                        if (ptsEl) ptsEl.textContent = p.score;
+                        if (setsEl) setsEl.textContent = p.games > 0 ? p.games : '';
+                    });
+                }
+            }
         });
     });
 }
