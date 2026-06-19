@@ -1851,8 +1851,11 @@ function startPeriodicSync() {
                 if (!gameState.player2.name2) gameState.player2.name2 = 'Makker 2';
 
                 updateDisplay();
-            } else {
-                // Just sync player names (in case they were changed from another device)
+            } else if (!assignedHoldkampGameId && !assignedTournamentMatchId) {
+                // Just sync player names (in case they were changed from another device).
+                // Springes over når banen er bundet til en holdkamp/turnering — der er
+                // delkampen/kampen autoritativ (håndteres i holdkamp/turnerings-synken),
+                // så vi ikke kommer til at sætte banen tilbage til single via en stale læsning.
                 const namesChanged =
                     gameState.player1.name !== loaded.player1.name ||
                     gameState.player1.name2 !== loaded.player1.name2 ||
@@ -1889,6 +1892,21 @@ function startPeriodicSync() {
                 if (byCourt && byCourt.game) {
                     activeTeamMatch = byCourt;
                     const myGame = byCourt.game;
+
+                    // Håndhæv at banen står i samme single/double-tilstand som delkampen.
+                    // Game-state-synken kan ellers kortvarigt læse en stale server-tilstand
+                    // (lige efter tildeling) og sætte banen tilbage til single.
+                    const shouldBeDoubles = ['MD', 'DD', 'HD', 'Double'].includes(myGame.category);
+                    if (!gameState.matchStartTime && gameState.isDoubles !== shouldBeDoubles) {
+                        gameState.isDoubles = shouldBeDoubles;
+                        if (shouldBeDoubles) {
+                            if (myGame.team1_player2) gameState.player1.name2 = myGame.team1_player2;
+                            if (myGame.team2_player2) gameState.player2.name2 = myGame.team2_player2;
+                        }
+                        updateDisplay();
+                        saveGameState();
+                    }
+
                     const sidesHaveBeenSwitched = gameState.sidesManuallySwitched || gameState.player1.games > 0 || gameState.player2.games > 0;
                     if (myGame && !sidesHaveBeenSwitched) {
                         const namesChanged =
