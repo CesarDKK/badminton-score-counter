@@ -179,13 +179,18 @@ function renderHoldkampCards(matches) {
             counts[g.category] = (counts[g.category] || 0) + 1;
             return hkGameCellHtml(g, counts[g.category]);
         }).join('');
+        // Vælg kolonner ud fra antal delkampe så rækkeantallet holdes lavt — så
+        // alt kan være på én skærm uden scroll (info-skærm uden mus).
+        const n = tm.games.length;
+        const cols = n <= 6 ? 2 : (n <= 10 ? 3 : 4);
+        const rows = Math.ceil(n / cols);
         return `<div class="hk-card" data-match-id="${tm.id}">
             <div class="hk-card-header">
                 <span class="t1">${escapeHtml(tm.team1_name)}</span>
                 <span class="sc">${t1w} – ${t2w}</span>
                 <span class="t2">${escapeHtml(tm.team2_name)}</span>
             </div>
-            <div class="hk-games">${cells}</div>
+            <div class="hk-games" style="grid-template-columns: repeat(${cols}, 1fr); --hk-rows:${rows};">${cells}</div>
         </div>`;
     }).join('');
     patchHoldkampCards(matches); // sæt status/score + border på de friske celler

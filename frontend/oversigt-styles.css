@@ -114,7 +114,7 @@ body::before {
 #holdkampCardsGrid .hk-card {
     flex: 1 1 0;        /* fylder den tilgængelige højde */
     min-height: 0;
-    overflow-y: auto;   /* mange delkampe i ét kort scroller internt */
+    overflow: hidden;   /* info-skærm uden mus — må ALDRIG kræve scroll */
     display: flex;
     flex-direction: column;
     background: rgba(20, 10, 40, 0.5);
@@ -135,17 +135,23 @@ body::before {
 #holdkampCardsGrid .hk-card-header .t1 { color: #4CAF50; font-size: min(7vh, 4vw); }
 #holdkampCardsGrid .hk-card-header .sc { color: #fff; font-size: min(7vh, 4vw); letter-spacing: 0.4vw; }
 #holdkampCardsGrid .hk-card-header .t2 { color: var(--color-accent); font-size: min(7vh, 4vw); }
-/* Delkampene fylder den ledige højde — så pladsen udnyttes på store skærme */
+/* Delkampene fylder den ledige højde — alle rækker deler højden ligeligt
+   (minmax(0,1fr)) så de altid er på skærmen uden scroll, uanset antal. */
 #holdkampCardsGrid .hk-games {
     flex: 1;
     min-height: 0;
     display: grid;
+    /* grid-template-columns sættes inline pr. holdkamp ud fra antal delkampe */
     grid-template-columns: 1fr 1fr;
-    grid-auto-rows: 1fr;
-    gap: 1.2vh;
+    grid-auto-rows: minmax(0, 1fr);
+    gap: 1vh;
 }
+/* Skriften skaleres efter rækkeantal (--hk-rows) så indholdet passer i cellen,
+   begrænset af bredden (vw). overflow:hidden er sikkerhedsnet mod scroll. */
 #holdkampCardsGrid .hk-game {
-    font-size: min(2.6vh, 1.5vw);
+    font-size: min(1.6vw, calc(80vh / var(--hk-rows, 3) / 5));
+    overflow: hidden;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     justify-content: center;
