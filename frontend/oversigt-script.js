@@ -41,28 +41,181 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 let activeTeamMatches = []; // alle aktive holdkampe (multi-holdkamp)
 
-// Holdkamp vises IKKE som et separat panel på Oversigt — de aktive delkampe vises
-// i den eksisterende bane-grid som almindelige kampe (de har allerede navne +
-// live-score via game state). Vi henter blot de aktive holdkampe så
-// isHoldkampCourt() og idle-logikken kender dem. Ingen takeover, ingen rotation.
+let _hkRenderedKey = ''; // signatur af struktur (side + match-ids + game-ids + status)
+const HK_DOUBLES = ['MD', 'DD', 'HD', 'Double'];
+const HK_PAGE_SIZE = 1;       // én holdkamp pr. side (fylder hele skærmen)
+const HK_ROTATE_MS = 15000;   // hver holdkamp vises 15 sek, så roteres der
+let hkPage = 0;
+let hkRotateTimer = null;
+
+function hkPageCount() {
+    return Math.max(1, Math.ceil(activeTeamMatches.length / HK_PAGE_SIZE));
+}
+
+// Viser "Side X/Y" øverst til højre når der er mere end én holdkamp.
+function updateHkPageIndicator() {
+    const el = document.getElementById('hkPageIndicator');
+    if (!el) return;
+    const pages = hkPageCount();
+    if (pages > 1) {
+        el.textContent = `Side ${hkPage + 1}/${pages}`;
+        el.style.display = 'block';
+    } else {
+        el.style.display = 'none';
+    }
+}
+
+function visibleHkMatches() {
+    if (hkPage >= hkPageCount()) hkPage = 0;
+    const start = hkPage * HK_PAGE_SIZE;
+    return activeTeamMatches.slice(start, start + HK_PAGE_SIZE);
+}
+
+function hkKey(matches) {
+    return hkPage + '#' + matches.map(tm =>
+        `${tm.id}:${(tm.games || []).map(g => g.id + g.status).join(',')}`
+    ).join('|');
+}
+
+// Roterer mellem sider af 2 holdkampe hvert 15. sek når der er mere end 2.
+function ensureHkRotation() {
+    if (activeTeamMatches.length > HK_PAGE_SIZE) {
+        if (!hkRotateTimer) {
+            hkRotateTimer = setInterval(() => {
+                hkPage = (hkPage + 1) % hkPageCount();
+                const visible = visibleHkMatches();
+                renderHoldkampCards(visible);
+                _hkRenderedKey = hkKey(visible);
+                updateHkPageIndicator();
+            }, HK_ROTATE_MS);
+        }
+    } else if (hkRotateTimer) {
+        clearInterval(hkRotateTimer);
+        hkRotateTimer = null;
+        hkPage = 0;
+    }
+}
+
 async function loadHoldkamp() {
     try {
         const matches = await api.getActiveTeamMatches();
         activeTeamMatches = matches || [];
-
-        // Skjul evt. tidligere holdkamp-panel/sideindikator og fjern compact-mode,
-        // så bane-grid'et vises normalt og fylder skærmen.
         const grid = document.getElementById('holdkampCardsGrid');
-        if (grid) { grid.style.display = 'none'; grid.innerHTML = ''; }
-        const ind = document.getElementById('hkPageIndicator');
-        if (ind) ind.style.display = 'none';
         const container = document.querySelector('.overview-container');
-        if (container) container.classList.remove('has-holdkamp');
 
+        if (!activeTeamMatches.length) {
+            grid.style.display = 'none';
+            grid.innerHTML = '';
+            _hkRenderedKey = '';
+            if (hkRotateTimer) { clearInterval(hkRotateTimer); hkRotateTimer = null; }
+            hkPage = 0;
+            updateHkPageIndicator();
+            if (container) container.classList.remove('has-holdkamp');
+            updateIdleState();
+            return;
+        }
+
+        grid.style.display = 'flex';
+        if (container) container.classList.add('has-holdkamp');
+
+        ensureHkRotation();
+
+        // Fuld re-render kun når synlig side/struktur ændrer sig (undgår flicker).
+        // Live score-ændringer patches uden at genskabe DOM (bevarer scroll).
+        const visible = visibleHkMatches();
+        const key = hkKey(visible);
+        if (key !== _hkRenderedKey) {
+            renderHoldkampCards(visible);
+            _hkRenderedKey = key;
+        } else {
+            patchHoldkampCards(visible);
+        }
+        updateHkPageIndicator();
         updateIdleState();
     } catch (error) {
         console.error('Failed to load holdkamp:', error);
     }
+}
+
+function hkGameCellHtml(g, num) {
+    const isDoubles = HK_DOUBLES.includes(g.category);
+    const t1 = isDoubles ? `${g.team1_player1 || '?'}${g.team1_player2 ? ' & ' + g.team1_player2 : ''}` : (g.team1_player1 || '?');
+    const t2 = isDoubles ? `${g.team2_player1 || '?'}${g.team2_player2 ? ' & ' + g.team2_player2 : ''}` : (g.team2_player1 || '?');
+    // Afstande i em så de skalerer med .hk-game's vw-baserede font (opløsnings-uafhængigt).
+    // Navne/status holdes på én linje (nowrap + ellipsis) så cellen har fast linjeantal
+    // og aldrig flyder over / klipper midt i teksten.
+    const nameStyle = 'color:#eaeaea; font-size:0.9em; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
+    return `<div class="hk-game" data-game-id="${g.id}" style="background:rgba(83,52,131,0.15); border-left:0.2em solid #555; border-radius:0.4em; padding:0.4em 0.6em;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:0.4em; margin-bottom:0.2em;">
+            <span style="background:#e94560; color:#fff; padding:0.1em 0.45em; border-radius:0.3em; font-size:0.8em; font-weight:bold; white-space:nowrap;">${g.category} ${num}</span>
+            <span class="hk-game-status" style="font-size:0.8em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1; text-align:right;"></span>
+        </div>
+        <div style="${nameStyle}">${escapeHtml(t1)}</div>
+        <div style="color:#aaa; font-size:0.7em; line-height:1; margin:0.05em 0;">vs</div>
+        <div style="${nameStyle}">${escapeHtml(t2)}</div>
+    </div>`;
+}
+
+function hkStatusFor(g, teamMatch) {
+    if (g.status === 'pending') return { html: '<span style="color:#aaa;">Afventer</span>', border: '#555' };
+    if (g.status === 'active') {
+        const cd = allCourtData.find(c => c.courtId === g.court_number);
+        const live = cd ? ` · ${cd.player1.score}-${cd.player2.score} (${cd.player1.games}-${cd.player2.games} sæt)` : '';
+        return { html: `<span style="color:#fff;">▶ Bane ${g.court_number}${live}</span>`, border: '#533483' };
+    }
+    // finished — orienter scoren til team1 så tallene matcher navnene
+    const winner = g.winner_team === 1 ? teamMatch.team1_name : teamMatch.team2_name;
+    const isDoubles = HK_DOUBLES.includes(g.category);
+    const side1Key = isDoubles && g.team1_player2 ? `${g.team1_player1 || ''} / ${g.team1_player2}` : (g.team1_player1 || '');
+    const nums = g.set_scores ? orientHistorySetScoreNumbers(g.set_scores, side1Key).join(' · ') : '';
+    const sc = nums ? ` <span style="color:rgba(255,255,255,0.45);">${nums}</span>` : '';
+    return { html: `<span style="color:#4CAF50;">✓ ${escapeHtml(winner)}${sc}</span>`, border: g.winner_team === 1 ? '#4CAF50' : '#e94560' };
+}
+
+function renderHoldkampCards(matches) {
+    const grid = document.getElementById('holdkampCardsGrid');
+    grid.innerHTML = matches.map(tm => {
+        const t1w = tm.games.filter(g => g.winner_team === 1).length;
+        const t2w = tm.games.filter(g => g.winner_team === 2).length;
+        const counts = {};
+        const cells = tm.games.map(g => {
+            counts[g.category] = (counts[g.category] || 0) + 1;
+            return hkGameCellHtml(g, counts[g.category]);
+        }).join('');
+        // Vælg kolonner ud fra antal delkampe. Max 3 kolonner — bredere kasser så
+        // (især doubles-)navne kan stå på én linje uden at ombryde og overflyde.
+        const n = tm.games.length;
+        const cols = n <= 6 ? 2 : 3;
+        const rows = Math.ceil(n / cols);
+        return `<div class="hk-card" data-match-id="${tm.id}">
+            <div class="hk-card-header">
+                <span class="t1">${escapeHtml(tm.team1_name)}</span>
+                <span class="sc">${t1w} – ${t2w}</span>
+                <span class="t2">${escapeHtml(tm.team2_name)}</span>
+            </div>
+            <div class="hk-games" style="grid-template-columns: repeat(${cols}, 1fr); --hk-rows:${rows};">${cells}</div>
+        </div>`;
+    }).join('');
+    patchHoldkampCards(matches); // sæt status/score + border på de friske celler
+}
+
+function patchHoldkampCards(matches) {
+    matches.forEach(tm => {
+        const card = document.querySelector(`.hk-card[data-match-id="${tm.id}"]`);
+        if (!card) return;
+        const t1w = tm.games.filter(g => g.winner_team === 1).length;
+        const t2w = tm.games.filter(g => g.winner_team === 2).length;
+        const scEl = card.querySelector('.hk-card-header .sc');
+        if (scEl) scEl.textContent = `${t1w} – ${t2w}`;
+        tm.games.forEach(g => {
+            const cell = card.querySelector(`.hk-game[data-game-id="${g.id}"]`);
+            if (!cell) return;
+            const st = hkStatusFor(g, tm);
+            const statusEl = cell.querySelector('.hk-game-status');
+            if (statusEl) statusEl.innerHTML = st.html;
+            cell.style.borderLeftColor = st.border;
+        });
+    });
 }
 
 async function initialize() {
