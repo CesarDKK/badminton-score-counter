@@ -160,6 +160,15 @@ function hkStatusFor(g, teamMatch) {
     if (g.status === 'pending') return { html: '<span style="color:#aaa;">Afventer</span>', border: '#555' };
     if (g.status === 'active') {
         const cd = allCourtData.find(c => c.courtId === g.court_number);
+        // Pause/sæthvil vises i rubrikken når banen er på pause
+        if (cd && cd.restBreakActive) {
+            const label = (cd.restBreakTitle || '').toLowerCase().includes('sæt') ? 'Sæthvil' : 'Pause';
+            const left = formatTimer(getPauseSecondsLeft(cd));
+            return {
+                html: `<span style="color:#f1c40f;">⏸ ${label} ${left} · Bane ${g.court_number}</span>`,
+                border: '#f1c40f'
+            };
+        }
         const live = cd ? ` · ${cd.player1.score}-${cd.player2.score} (${cd.player1.games}-${cd.player2.games} sæt)` : '';
         return { html: `<span style="color:#fff;">▶ Bane ${g.court_number}${live}</span>`, border: '#533483' };
     }
