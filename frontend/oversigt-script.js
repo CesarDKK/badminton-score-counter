@@ -137,10 +137,22 @@ async function loadHoldkamp() {
     }
 }
 
+// Fornavn = første ord i navnet (bruges når kampen er i gang for at spare plads).
+function firstName(full) {
+    return (full || '').trim().split(/\s+/)[0] || '';
+}
+
 function hkGameCellHtml(g, num) {
     const isDoubles = HK_DOUBLES.includes(g.category);
-    const t1 = isDoubles ? `${g.team1_player1 || '?'}${g.team1_player2 ? ' & ' + g.team1_player2 : ''}` : (g.team1_player1 || '?');
-    const t2 = isDoubles ? `${g.team2_player1 || '?'}${g.team2_player2 ? ' & ' + g.team2_player2 : ''}` : (g.team2_player1 || '?');
+    // Kamp i gang: vis kun fornavn(e) så der er plads til stillingen. Ellers fuldt navn.
+    const short = g.status === 'active';
+    const nm = v => short ? firstName(v) : (v || '');
+    const t1 = isDoubles
+        ? `${nm(g.team1_player1) || '?'}${g.team1_player2 ? ' & ' + nm(g.team1_player2) : ''}`
+        : (nm(g.team1_player1) || '?');
+    const t2 = isDoubles
+        ? `${nm(g.team2_player1) || '?'}${g.team2_player2 ? ' & ' + nm(g.team2_player2) : ''}`
+        : (nm(g.team2_player1) || '?');
     // Afstande i em så de skalerer med .hk-game's vw-baserede font (opløsnings-uafhængigt).
     // Navne/status holdes på én linje (nowrap + ellipsis) så cellen har fast linjeantal
     // og aldrig flyder over / klipper midt i teksten.
