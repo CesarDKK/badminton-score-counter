@@ -1,6 +1,39 @@
 // Player Info Page JavaScript
 const api = window.BadmintonAPI;
 
+// --- Klub-logoer ---
+let _logoCache = [];
+async function ensureLogos() {
+    if (_logoCache.length) return _logoCache;
+    try { _logoCache = await api.getPublicLogos(); } catch (e) { _logoCache = []; }
+    return _logoCache;
+}
+function fillLogoSelect(selectEl, selectedId) {
+    selectEl.innerHTML = '<option value="">(Automatisk ud fra klub)</option>' +
+        _logoCache.map(l => `<option value="${l.id}">${l.club_name}</option>`).join('');
+    if (selectedId) selectEl.value = String(selectedId);
+}
+// Viser hvilket logo der bruges: valgt override, ellers auto-match paa klub
+function updateEditPlayerLogoPreview(club) {
+    const sel = document.getElementById('editPlayerLogo');
+    const img = document.getElementById('editPlayerLogoImg');
+    const hint = document.getElementById('editPlayerLogoHint');
+    let logo = null, auto = false;
+    if (sel.value) {
+        logo = _logoCache.find(l => String(l.id) === sel.value) || null;
+    } else {
+        logo = window.LogoMatch.matchLogo(club || '', _logoCache);
+        auto = !!logo;
+    }
+    if (logo) {
+        img.src = logo.url; img.style.display = '';
+        hint.textContent = auto ? `Automatisk: ${logo.club_name}` : `Valgt: ${logo.club_name}`;
+    } else {
+        img.style.display = 'none';
+        hint.textContent = 'Intet logo fundet — vælg manuelt';
+    }
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     initializePlayerInfo();
@@ -218,6 +251,14 @@ async function editPlayer(playerId) {
         document.getElementById('editPlayerGender').value = player.gender;
         document.getElementById('editPlayerAgeGroup').value = player.age_group;
 
+        await ensureLogos();
+        const playerLogos = await api.getPlayerLogos().catch(() => []);
+        const override = playerLogos.find(p => p.player_name === player.name);
+        fillLogoSelect(document.getElementById('editPlayerLogo'), override ? override.logo_id : '');
+        updateEditPlayerLogoPreview(player.club);
+        document.getElementById('editPlayerLogo').onchange = () => updateEditPlayerLogoPreview(player.club);
+        document.getElementById('editPlayerClub').oninput = () => updateEditPlayerLogoPreview(document.getElementById('editPlayerClub').value);
+
         document.getElementById('editPlayerModal').style.display = 'block';
     } catch (error) {
         console.error('Error loading player:', error);
@@ -246,6 +287,13 @@ async function handleEditPlayer(e) {
             gender: gender,
             ageGroup: ageGroup
         });
+
+        const logoSel = document.getElementById('editPlayerLogo');
+        if (logoSel.value) {
+            await api.setPlayerLogo(name, parseInt(logoSel.value, 10));
+        } else {
+            await api.clearPlayerLogo(name);
+        }
 
         showMessage('Succes', 'Spiller opdateret succesfuldt!');
 
