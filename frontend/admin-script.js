@@ -1068,11 +1068,33 @@ let holdkampRefreshTimer = null;
 let holdkampEditOpen = false;
 let holdkampCourtSelectOpen = false; // true mens en bane-dropdown er i fokus/aaben
 
+// --- Klub-logoer (delt med turnering) ---
+let _adminLogoCache = [];
+async function ensureAdminLogos() {
+    if (_adminLogoCache.length) return _adminLogoCache;
+    try { _adminLogoCache = await api.getPublicLogos(); } catch (e) { _adminLogoCache = []; }
+    return _adminLogoCache;
+}
+function fillHoldkampLogoSelect(selectEl) {
+    selectEl.innerHTML = '<option value="">Logo: automatisk</option>' +
+        _adminLogoCache.map(l => `<option value="${l.id}">${escapeHtml(l.club_name)}</option>`).join('');
+}
+function autoHoldkampLogoId(name) {
+    const m = window.LogoMatch.matchLogo(name || '', _adminLogoCache);
+    return m ? m.id : null;
+}
+
 async function showHoldkamp() {
     hideAllSections();
     document.getElementById('holdkampSection').style.display = 'block';
     setNavActive('holdkamp');
     history.replaceState(null, '', '#holdkamp');
+    ensureAdminLogos().then(() => {
+        const s1 = document.getElementById('holdkampTeam1Logo');
+        const s2 = document.getElementById('holdkampTeam2Logo');
+        if (s1) fillHoldkampLogoSelect(s1);
+        if (s2) fillHoldkampLogoSelect(s2);
+    });
     await loadActiveHoldkamp();
     // Poll every 3 seconds for live scores
     if (!holdkampRefreshTimer) {
@@ -1350,6 +1372,7 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
                     </div>
                 </div>
                 <div style="display:flex;gap:10px;">
+                    <button onclick="editHoldkampLogos(${teamMatch.id})" class="btn-secondary">Logoer</button>
                     <button onclick="finishHoldkamp(${teamMatch.id})" class="btn-secondary">Afslut Holdkamp</button>
                     <button onclick="deleteHoldkamp(${teamMatch.id})" class="btn-danger">Slet</button>
                 </div>
@@ -1470,7 +1493,11 @@ async function startHoldkamp() {
     }));
 
     try {
-        await api.createTeamMatch({ format, team1Name, team2Name, games });
+        const t1LogoSel = document.getElementById('holdkampTeam1Logo');
+        const t2LogoSel = document.getElementById('holdkampTeam2Logo');
+        const team1LogoId = t1LogoSel && t1LogoSel.value ? parseInt(t1LogoSel.value, 10) : autoHoldkampLogoId(team1Name);
+        const team2LogoId = t2LogoSel && t2LogoSel.value ? parseInt(t2LogoSel.value, 10) : autoHoldkampLogoId(team2Name);
+        await api.createTeamMatch({ format, team1Name, team2Name, games, team1LogoId, team2LogoId });
         await loadActiveHoldkamp();
     } catch (error) {
         console.error('Failed to create holdkamp:', error);
@@ -1683,6 +1710,112 @@ async function saveManualResult(teamMatchId, gameId, gameMode = '21') {
         console.error('Failed to save manual result:', error);
         showMessage('Fejl', 'Kunne ikke gemme resultatet. Prøv igen.');
     }
+}
+
+// ===== Genbrugelig logo-vælger modal =====
+// targets: [{ key, label, value, autoName }]
+// value-tilstande: null = auto (udled ud fra navn), 0 = intet logo, >0 = bestemt logo
+let _logoModalSave = null;
+function openLogoModal(title, targets, onSave) {
+    _logoModalSave = onSave;
+    document.getElementById('logoModalTitle').textContent = title;
+    const body = document.getElementById('logoModalBody');
+    const optionsHtml = [
+        '<option value="">Automatisk (ud fra navn)</option>',
+        '<option value="none">Intet logo (vis ikke)</option>',
+        ..._adminLogoCache.map(l => `<option value="${l.id}">${escapeHtml(l.club_name)}</option>`)
+    ].join('');
+    body.innerHTML = targets.map(t => `
+        <div class="logo-target" data-key="${escapeHtml(String(t.key))}" data-auto="${escapeHtml(t.autoName || '')}" style="display:flex; align-items:center; gap:14px; padding:12px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
+            <img class="logo-target-img" alt="" style="width:54px; height:54px; object-fit:contain; background:rgba(255,255,255,0.06); border-radius:8px; flex-shrink:0; display:none;">
+            <div style="flex:1; min-width:0;">
+                <div style="color:#eaeaea; font-weight:bold; margin-bottom:6px;">${escapeHtml(t.label)}</div>
+                <select class="logo-target-sel" style="width:100%; padding:9px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid var(--color-primary); border-radius:5px;">${optionsHtml}</select>
+                <div class="logo-target-hint" style="font-size:0.8em; color:#aaa; margin-top:4px;"></div>
+            </div>
+        </div>`).join('');
+
+    body.querySelectorAll('.logo-target').forEach(row => {
+        const t = targets.find(x => String(x.key) === row.dataset.key);
+        const sel = row.querySelector('.logo-target-sel');
+        sel.value = (t.value === 0) ? 'none' : (t.value ? String(t.value) : '');
+        sel.addEventListener('change', () => updateLogoModalRow(row));
+        updateLogoModalRow(row);
+    });
+
+    document.getElementById('logoModalCancel').onclick = closeLogoModal;
+    document.getElementById('logoModalSave').onclick = saveLogoModal;
+    document.getElementById('logoModal').style.display = 'flex';
+}
+function updateLogoModalRow(row) {
+    const sel = row.querySelector('.logo-target-sel');
+    const img = row.querySelector('.logo-target-img');
+    const hint = row.querySelector('.logo-target-hint');
+    const v = sel.value;
+    if (v === 'none') {
+        img.style.display = 'none';
+        hint.textContent = 'Der vises intet logo.';
+    } else if (v === '') {
+        const logo = window.LogoMatch.matchLogo(row.dataset.auto || '', _adminLogoCache);
+        if (logo) { img.src = logo.url; img.style.display = ''; hint.textContent = `Automatisk: ${logo.club_name}`; }
+        else { img.style.display = 'none'; hint.textContent = 'Automatisk (intet match endnu — udledes ved visning).'; }
+    } else {
+        const logo = _adminLogoCache.find(l => String(l.id) === v);
+        if (logo) { img.src = logo.url; img.style.display = ''; hint.textContent = `Valgt: ${logo.club_name}`; }
+    }
+}
+function closeLogoModal() {
+    document.getElementById('logoModal').style.display = 'none';
+    _logoModalSave = null;
+}
+async function saveLogoModal() {
+    const cb = _logoModalSave;
+    const result = {};
+    document.querySelectorAll('#logoModalBody .logo-target').forEach(row => {
+        const v = row.querySelector('.logo-target-sel').value;
+        result[row.dataset.key] = (v === 'none') ? 0 : (v === '' ? null : parseInt(v, 10));
+    });
+    closeLogoModal();
+    if (cb) await cb(result);
+}
+
+async function editHoldkampLogos(teamMatchId) {
+    await ensureAdminLogos();
+    const matches = await api.getActiveTeamMatches();
+    const tm = (matches || []).find(m => m.id === teamMatchId);
+    if (!tm) return;
+    openLogoModal(`Logoer — ${tm.team1_name} vs ${tm.team2_name}`, [
+        { key: 't1', label: tm.team1_name, value: tm.team1_logo_id, autoName: tm.team1_name },
+        { key: 't2', label: tm.team2_name, value: tm.team2_logo_id, autoName: tm.team2_name }
+    ], async (res) => {
+        await api.updateTeamMatchLogos(teamMatchId, res.t1, res.t2);
+        await loadActiveHoldkamp();
+    });
+}
+
+// 🏷-knap til en turneringsspiller (tom navn -> ingen knap)
+function tPlayerLogoBtn(name) {
+    if (!name) return '';
+    const safe = String(name).replace(/'/g, "\\'");
+    return `<button onclick="setTournamentPlayerLogo('${safe}')" title="Sæt klub-logo" style="padding:1px 5px; margin-left:3px; background:transparent; color:#888; border:1px solid #555; border-radius:3px; cursor:pointer; font-size:0.72em;">🏷</button>`;
+}
+
+// Saet/ret en turneringsspillers klub-logo (gemmes pr. navn i player_logos -> slaar
+// igennem alle kampe spilleren er i, og i Spiller info).
+async function setTournamentPlayerLogo(playerName) {
+    if (!playerName) return;
+    await ensureAdminLogos();
+    const existing = (await api.getPlayerLogos().catch(() => []))
+        .find(p => p.player_name === playerName);
+    const curVal = existing ? existing.logo_id : null; // null=auto, 0=intet, >0=bestemt
+    openLogoModal(`Logo — ${playerName}`, [
+        { key: 'p', label: playerName, value: curVal, autoName: playerName }
+    ], async (res) => {
+        const v = res.p;
+        if (v === null) await api.clearPlayerLogo(playerName);  // auto
+        else await api.setPlayerLogo(playerName, v);            // 0 = intet, >0 = bestemt
+        if (typeof loadActiveTournaments === 'function') await loadActiveTournaments();
+    });
 }
 
 function finishHoldkamp(id) {
@@ -3209,6 +3342,14 @@ function renderTournamentMatchRow(tournamentId, m) {
         ? `${m.side2_player1 || '?'}${m.side2_player2 ? ' & ' + m.side2_player2 : ''}`
         : (m.side2_player1 || '?');
 
+    // Navne med 🏷-knap til at sætte spillerens klub-logo (gemmes pr. navn)
+    const side1Html = m.doubles
+        ? `${escapeHtml(m.side1_player1 || '?')}${tPlayerLogoBtn(m.side1_player1)}${m.side1_player2 ? ' &amp; ' + escapeHtml(m.side1_player2) + tPlayerLogoBtn(m.side1_player2) : ''}`
+        : `${escapeHtml(m.side1_player1 || '?')}${tPlayerLogoBtn(m.side1_player1)}`;
+    const side2Html = m.doubles
+        ? `${escapeHtml(m.side2_player1 || '?')}${tPlayerLogoBtn(m.side2_player1)}${m.side2_player2 ? ' &amp; ' + escapeHtml(m.side2_player2) + tPlayerLogoBtn(m.side2_player2) : ''}`
+        : `${escapeHtml(m.side2_player1 || '?')}${tPlayerLogoBtn(m.side2_player1)}`;
+
     let statusBadge = '';
     let courtInfo = '';
     if (m.status === 'pending') {
@@ -3242,7 +3383,7 @@ function renderTournamentMatchRow(tournamentId, m) {
         <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:rgba(0,0,0,0.2); border-radius:6px; margin-bottom:6px; gap:10px; flex-wrap:wrap;">
             <div style="flex:1; min-width:200px;">
                 <div style="color:#eaeaea;">
-                    ${labelHtml}<strong>${escapeHtml(side1)}</strong> <span style="color:#777;">vs</span> <strong>${escapeHtml(side2)}</strong>
+                    ${labelHtml}<strong>${side1Html}</strong> <span style="color:#777;">vs</span> <strong>${side2Html}</strong>
                 </div>
                 ${courtInfo}
             </div>

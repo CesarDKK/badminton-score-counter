@@ -1,6 +1,81 @@
 // Player Info Page JavaScript
 const api = window.BadmintonAPI;
 
+// --- Klub-logoer ---
+let _logoCache = [];
+async function ensureLogos() {
+    if (_logoCache.length) return _logoCache;
+    try { _logoCache = await api.getPublicLogos(); } catch (e) { _logoCache = []; }
+    return _logoCache;
+}
+function fillLogoSelect(selectEl, selectedId) {
+    selectEl.innerHTML = '<option value="">(Automatisk ud fra klub)</option>' +
+        '<option value="none">Intet logo (vis ikke)</option>' +
+        _logoCache.map(l => `<option value="${l.id}">${escapeHtml(l.club_name)}</option>`).join('');
+    if (selectedId === 0) selectEl.value = 'none';
+    else if (selectedId) selectEl.value = String(selectedId);
+}
+// Viser hvilket logo der bruges: valgt override, ellers auto-match paa klub
+function updateEditPlayerLogoPreview(club) {
+    const sel = document.getElementById('editPlayerLogo');
+    const img = document.getElementById('editPlayerLogoImg');
+    const hint = document.getElementById('editPlayerLogoHint');
+    if (sel.value === 'none') {
+        document.getElementById('editPlayerLogoImg').style.display = 'none';
+        hint.textContent = 'Intet logo (vises ikke)';
+        return;
+    }
+    let logo = null, auto = false;
+    if (sel.value) {
+        logo = _logoCache.find(l => String(l.id) === sel.value) || null;
+    } else {
+        logo = window.LogoMatch.matchLogo(club || '', _logoCache);
+        auto = !!logo;
+    }
+    if (logo) {
+        img.src = logo.url; img.style.display = '';
+        hint.textContent = auto ? `Automatisk: ${logo.club_name}` : `Valgt: ${logo.club_name}`;
+    } else {
+        img.style.display = 'none';
+        hint.textContent = 'Intet logo fundet — vælg manuelt';
+    }
+}
+
+// Opret-spiller: forslag/forvalg af logo ud fra klubnavnet mens man skriver
+function updateAddPlayerLogoPreview() {
+    const club = document.getElementById('playerClub').value;
+    const sel = document.getElementById('addPlayerLogo');
+    const img = document.getElementById('addPlayerLogoImg');
+    const hint = document.getElementById('addPlayerLogoHint');
+    if (sel.value === 'none') {
+        document.getElementById('addPlayerLogoImg').style.display = 'none';
+        hint.textContent = 'Intet logo (vises ikke)';
+        return;
+    }
+    let logo = null, auto = false;
+    if (sel.value) {
+        logo = _logoCache.find(l => String(l.id) === sel.value) || null;
+    } else {
+        logo = window.LogoMatch.matchLogo(club || '', _logoCache);
+        auto = !!logo;
+    }
+    if (logo) {
+        img.src = logo.url; img.style.display = '';
+        hint.textContent = auto ? `Automatisk: ${logo.club_name}` : `Valgt: ${logo.club_name}`;
+    } else {
+        img.style.display = 'none';
+        hint.textContent = club ? 'Intet logo fundet — vælg manuelt' : '';
+    }
+}
+
+async function initAddPlayerLogoPicker() {
+    await ensureLogos();
+    fillLogoSelect(document.getElementById('addPlayerLogo'), '');
+    document.getElementById('playerClub').addEventListener('input', updateAddPlayerLogoPreview);
+    document.getElementById('addPlayerLogo').addEventListener('change', updateAddPlayerLogoPreview);
+    updateAddPlayerLogoPreview();
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     initializePlayerInfo();
@@ -105,6 +180,7 @@ async function showPlayerInfoDashboard() {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('playerInfoDashboard').style.display = 'block';
 
+    initAddPlayerLogoPicker();
     await loadPlayers();
 }
 
@@ -130,7 +206,7 @@ async function loadPlayers() {
 
         // Render grouped players
         let html = '';
-        const ageGroups = ['U9', 'U11', 'U13', 'U15', 'U17', 'U19'];
+        const ageGroups = ['U9', 'U11', 'U13', 'U15', 'U17', 'U19', 'U23', 'UNG', 'SEN', 'SEN+30', 'SEN+35', 'SEN+40', 'SEN+45', 'SEN+50', 'SEN+55', 'SEN+60', 'SEN+65', 'SEN+70', 'SEN+75', 'SEN+80'];
 
         ageGroups.forEach(ageGroup => {
             if (groupedPlayers[ageGroup] && groupedPlayers[ageGroup].length > 0) {
@@ -195,10 +271,19 @@ async function handleAddPlayer(e) {
             ageGroup: ageGroup
         });
 
+        // Gem evt. valgt logo for spillernavnet (tom = auto, gem intet)
+        const addLogoSel = document.getElementById('addPlayerLogo');
+        if (addLogoSel.value === 'none') {
+            await api.setPlayerLogo(name, 0);
+        } else if (addLogoSel.value) {
+            await api.setPlayerLogo(name, parseInt(addLogoSel.value, 10));
+        }
+
         showMessage('Succes', 'Spiller tilføjet succesfuldt!');
 
         // Clear form
         document.getElementById('addPlayerForm').reset();
+        updateAddPlayerLogoPreview();
 
         // Reload players list
         await loadPlayers();
@@ -217,6 +302,14 @@ async function editPlayer(playerId) {
         document.getElementById('editPlayerClub').value = player.club;
         document.getElementById('editPlayerGender').value = player.gender;
         document.getElementById('editPlayerAgeGroup').value = player.age_group;
+
+        await ensureLogos();
+        const playerLogos = await api.getPlayerLogos().catch(() => []);
+        const override = playerLogos.find(p => p.player_name === player.name);
+        fillLogoSelect(document.getElementById('editPlayerLogo'), override ? override.logo_id : '');
+        updateEditPlayerLogoPreview(player.club);
+        document.getElementById('editPlayerLogo').onchange = () => updateEditPlayerLogoPreview(player.club);
+        document.getElementById('editPlayerClub').oninput = () => updateEditPlayerLogoPreview(document.getElementById('editPlayerClub').value);
 
         document.getElementById('editPlayerModal').style.display = 'block';
     } catch (error) {
@@ -246,6 +339,15 @@ async function handleEditPlayer(e) {
             gender: gender,
             ageGroup: ageGroup
         });
+
+        const logoSel = document.getElementById('editPlayerLogo');
+        if (logoSel.value === 'none') {
+            await api.setPlayerLogo(name, 0);
+        } else if (logoSel.value) {
+            await api.setPlayerLogo(name, parseInt(logoSel.value, 10));
+        } else {
+            await api.clearPlayerLogo(name);
+        }
 
         showMessage('Succes', 'Spiller opdateret succesfuldt!');
 

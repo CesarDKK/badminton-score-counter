@@ -80,7 +80,30 @@
                             <option value="U15">U15</option>
                             <option value="U17">U17</option>
                             <option value="U19">U19</option>
+                            <option value="U23">U23</option>
+                            <option value="UNG">UNG</option>
+                            <option value="SEN">SEN</option>
+                            <option value="SEN+30">SEN+30</option>
+                            <option value="SEN+35">SEN+35</option>
+                            <option value="SEN+40">SEN+40</option>
+                            <option value="SEN+45">SEN+45</option>
+                            <option value="SEN+50">SEN+50</option>
+                            <option value="SEN+55">SEN+55</option>
+                            <option value="SEN+60">SEN+60</option>
+                            <option value="SEN+65">SEN+65</option>
+                            <option value="SEN+70">SEN+70</option>
+                            <option value="SEN+75">SEN+75</option>
+                            <option value="SEN+80">SEN+80</option>
                         </select>
+
+                        <label>Klub-logo:</label>
+                        <select id="addPlayerLogo">
+                            <option value="">(Automatisk ud fra klub)</option>
+                        </select>
+                        <div style="display:flex; align-items:center; gap:10px; margin:6px 0;">
+                            <img id="addPlayerLogoImg" alt="" style="width:40px; height:40px; object-fit:contain; background:rgba(255,255,255,0.06); border-radius:6px; display:none;">
+                            <span id="addPlayerLogoHint" style="font-size:0.85em; color:#aaa;"></span>
+                        </div>
 
                         <button type="submit" class="btn-primary">Tilføj Spiller</button>
                     </form>
@@ -152,7 +175,30 @@
                     <option value="U15">U15</option>
                     <option value="U17">U17</option>
                     <option value="U19">U19</option>
+                    <option value="U23">U23</option>
+                    <option value="UNG">UNG</option>
+                    <option value="SEN">SEN</option>
+                    <option value="SEN+30">SEN+30</option>
+                    <option value="SEN+35">SEN+35</option>
+                    <option value="SEN+40">SEN+40</option>
+                    <option value="SEN+45">SEN+45</option>
+                    <option value="SEN+50">SEN+50</option>
+                    <option value="SEN+55">SEN+55</option>
+                    <option value="SEN+60">SEN+60</option>
+                    <option value="SEN+65">SEN+65</option>
+                    <option value="SEN+70">SEN+70</option>
+                    <option value="SEN+75">SEN+75</option>
+                    <option value="SEN+80">SEN+80</option>
                 </select>
+
+                <label>Klub-logo:</label>
+                <select id="editPlayerLogo">
+                    <option value="">(Automatisk ud fra klub)</option>
+                </select>
+                <div id="editPlayerLogoPreview" style="display:flex; align-items:center; gap:10px; margin:6px 0;">
+                    <img id="editPlayerLogoImg" alt="" style="width:40px; height:40px; object-fit:contain; background:rgba(255,255,255,0.06); border-radius:6px; display:none;">
+                    <span id="editPlayerLogoHint" style="font-size:0.85em; color:#aaa;"></span>
+                </div>
 
                 <div class="modal-actions">
                     <button type="submit" class="btn-primary">Gem Ændringer</button>
@@ -183,7 +229,8 @@
         </div>
     </div>
 
-    <script src="js/api.js?v=5"></script>
-    <script src="player-info-script.js?v=6"></script>
+    <script src="js/api.js?v=8"></script>
+    <script src="js/logo-match.js?v=1"></script>
+    <script src="player-info-script.js?v=10"></script>
 </body>
 </html>

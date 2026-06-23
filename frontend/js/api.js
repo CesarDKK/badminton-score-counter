@@ -486,6 +486,28 @@ class BadmintonAPI {
         return this.request('/super-admin/logos');
     }
 
+    /** Offentlig liste over centrale klub-logoer (til matching/visning) */
+    async getPublicLogos() {
+        return this.request('/logos', { requiresAuth: false });
+    }
+
+    async getPlayerLogos() {
+        return this.request('/player-logos', { requiresAuth: false });
+    }
+
+    async setPlayerLogo(playerName, logoId) {
+        return this.request('/player-logos', {
+            method: 'PUT',
+            body: JSON.stringify({ playerName, logoId })
+        });
+    }
+
+    async clearPlayerLogo(playerName) {
+        return this.request(`/player-logos?name=${encodeURIComponent(playerName)}`, {
+            method: 'DELETE'
+        });
+    }
+
     async uploadLogo(file, clubName, aliases) {
         const fd = new FormData();
         fd.append('image', file);
@@ -667,6 +689,13 @@ class BadmintonAPI {
     /** Get the active game on a given court (+ its team match), or null */
     async getTeamMatchByCourt(courtId) {
         return this.request(`/team-matches/by-court/${courtId}`);
+    }
+
+    async updateTeamMatchLogos(id, team1LogoId, team2LogoId) {
+        return this.request(`/team-matches/${id}/logos`, {
+            method: 'PUT',
+            body: JSON.stringify({ team1LogoId, team2LogoId })
+        });
     }
 
     /** Get all finished team matches with games */

@@ -187,6 +187,8 @@ CREATE TABLE IF NOT EXISTS team_matches (
   format VARCHAR(20) NOT NULL,
   team1_name VARCHAR(100) NOT NULL,
   team2_name VARCHAR(100) NOT NULL,
+  team1_logo_id INT NULL,
+  team2_logo_id INT NULL,
   status ENUM('active', 'finished') DEFAULT 'active',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
@@ -247,11 +249,21 @@ CREATE TABLE IF NOT EXISTS player_info (
   name VARCHAR(100) NOT NULL,
   club VARCHAR(100) NOT NULL,
   gender ENUM('Herre', 'Dame') NOT NULL,
-  age_group ENUM('U9', 'U11', 'U13', 'U15', 'U17', 'U19') NOT NULL,
+  age_group ENUM('U9', 'U11', 'U13', 'U15', 'U17', 'U19', 'U23', 'UNG', 'SEN', 'SEN+30', 'SEN+35', 'SEN+40', 'SEN+45', 'SEN+50', 'SEN+55', 'SEN+60', 'SEN+65', 'SEN+70', 'SEN+75', 'SEN+80') NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_name (name),
   INDEX idx_club (club),
   INDEX idx_gender (gender),
   INDEX idx_age_group (age_group)
+) ENGINE=InnoDB;
+
+-- Spiller-logo overrides (en kilde pr. spillernavn)
+CREATE TABLE IF NOT EXISTS player_logos (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  player_name VARCHAR(100) NOT NULL,
+  logo_id INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_player_name (player_name)
 ) ENGINE=InnoDB;
