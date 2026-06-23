@@ -131,6 +131,7 @@ app.get('/t/:token', async (req, res, next) => {
 app.use('/api/qr-code', require('./routes/matchSessionTokens'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/player-info', require('./routes/playerInfo'));
+app.use('/api/logos', require('./routes/logos'));
 app.use('/api/courts', require('./routes/courts'));
 app.use('/api/game-states', require('./routes/gameStates'));
 app.use('/api/match-history', require('./routes/matchHistory'));

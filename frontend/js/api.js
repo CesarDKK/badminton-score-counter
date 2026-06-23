@@ -486,6 +486,11 @@ class BadmintonAPI {
         return this.request('/super-admin/logos');
     }
 
+    /** Offentlig liste over centrale klub-logoer (til matching/visning) */
+    async getPublicLogos() {
+        return this.request('/logos', { requiresAuth: false });
+    }
+
     async uploadLogo(file, clubName, aliases) {
         const fd = new FormData();
         fd.append('image', file);
