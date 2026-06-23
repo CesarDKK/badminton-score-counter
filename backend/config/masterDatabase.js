@@ -79,6 +79,31 @@ async function initialize() {
             ) ENGINE=InnoDB
         `);
 
+        // seed_key: stabil identitet for standard-seedede logoer (kildefilnavn).
+        // Manuelt uploadede logoer har NULL. Tilfoejes idempotent saa eksisterende
+        // master-DB ogsaa faar kolonnen. Bruges af seedClubLogos() til re-sync uden dubletter.
+        const seedKeyCol = await query(
+            `SELECT COUNT(*) AS c FROM information_schema.columns
+             WHERE table_schema = 'badminton_master'
+               AND table_name = 'club_logos'
+               AND column_name = 'seed_key'`
+        );
+        if (seedKeyCol[0].c === 0) {
+            await query(
+                `ALTER TABLE club_logos ADD COLUMN seed_key VARCHAR(255) NULL UNIQUE`
+            );
+            console.log('✓ club_logos.seed_key kolonne tilfoejet');
+        }
+
+        // Seed standard klub-logoer (idempotent). Lazy require for at undgaa
+        // cirkulaer afhaengighed (seedLogos kraever dette modul ved load).
+        try {
+            const { seedClubLogos } = require('./seedLogos');
+            await seedClubLogos();
+        } catch (e) {
+            console.error('✗ Logo-seed fejlede (opstart fortsaetter):', e.message);
+        }
+
         console.log('✓ Master database forbindelse OK');
     } catch (error) {
         console.error('✗ Master database fejl:', error.message);
