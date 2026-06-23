@@ -108,7 +108,7 @@ router.get('/by-court/:courtId', async (req, res, next) => {
         if (!game) return res.json(null);
 
         const teamMatch = await queryOne(
-            `SELECT id, format, team1_name, team2_name, status, created_at
+            `SELECT id, format, team1_name, team2_name, team1_logo_id, team2_logo_id, status, created_at
              FROM team_matches WHERE id = ?`,
             [game.team_match_id]
         );

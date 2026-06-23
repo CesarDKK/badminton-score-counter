@@ -15,6 +15,8 @@ let cachedSlideDuration = 10000;
 let timerInterval = null;
 let isMatchCurrentlyActive = false;
 let wasMatchPreviouslyActive = false;
+// Hold-logoer (kun holdkamp): central logo-liste caches én gang
+let _tvLogos = null;
 // Track original player names to keep consistent TV display
 let originalPlayer1Name = null;
 let originalPlayer1Name2 = null;
@@ -151,6 +153,9 @@ async function loadCourtData() {
 
         isMatchCurrentlyActive = isMatchActive && hasGameActivity;
 
+        // Hold-logoer (kun holdkamp-delkampe) — fire-and-forget, fejl skjuler logoer
+        updateTvTeamLogos(gameState, isMatchActive);
+
         if (!isMatchActive) {
             matchStartTime = null;
             matchEndTime = null;
@@ -276,6 +281,82 @@ async function loadCourtData() {
     } catch (error) {
         console.error('Failed to load court data:', error);
         showSponsorSlideshow();
+    }
+}
+
+// ---- Hold-logoer på TV (kun holdkamp-delkampe) ----
+function tvNormName(s) {
+    return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+// Hvilket hold (1/2) i delkampen tilhører en spiller med dette navn?
+function tvTeamForName(name, game) {
+    const n = tvNormName(name);
+    if (!n) return null;
+    const t1 = [game.team1_player1, game.team1_player2].map(tvNormName).filter(Boolean);
+    const t2 = [game.team2_player1, game.team2_player2].map(tvNormName).filter(Boolean);
+    if (t1.includes(n)) return 1;
+    if (t2.includes(n)) return 2;
+    return null;
+}
+
+// Sæt logo idempotent — skift kun src/visning når værdien ændrer sig (undgå flicker).
+function applyTvLogo(img, logo) {
+    if (!img) return;
+    const url = logo ? logo.url : '';
+    if (img.dataset.logoUrl === url) return;
+    img.dataset.logoUrl = url;
+    if (url) {
+        img.src = url;
+        img.style.display = '';
+    } else {
+        img.removeAttribute('src');
+        img.style.display = 'none';
+    }
+}
+
+// Vis hold-logoer hvis banen er en aktiv holdkamp-delkamp; ellers skjul dem.
+async function updateTvTeamLogos(gameState, isMatchActive) {
+    const imgLeft = document.getElementById('team1Logo');
+    const imgRight = document.getElementById('team2Logo');
+    if (!imgLeft || !imgRight) return;
+
+    if (!isMatchActive || !window.LogoMatch) {
+        applyTvLogo(imgLeft, null);
+        applyTvLogo(imgRight, null);
+        return;
+    }
+
+    try {
+        if (_tvLogos === null) _tvLogos = (await api.getPublicLogos()) || [];
+        const byCourt = await api.getTeamMatchByCourt(courtId);
+        if (!byCourt || !byCourt.game) {
+            // Ikke en holdkamp (turnering/individuel = C2) → ingen logoer.
+            applyTvLogo(imgLeft, null);
+            applyTvLogo(imgRight, null);
+            return;
+        }
+
+        const game = byCourt.game;
+        // Map TV'ets venstre/højre til delkampens hold via spillernavn (håndterer side-skift).
+        const playersSwapped = originalPlayer1Name &&
+                               gameState.player1.name === originalPlayer2Name;
+        const left = playersSwapped ? gameState.player2 : gameState.player1;
+        const right = playersSwapped ? gameState.player1 : gameState.player2;
+
+        let leftTeam = tvTeamForName(left.name, game) || tvTeamForName(left.name2, game);
+        let rightTeam = leftTeam === 1 ? 2 : (leftTeam === 2 ? 1 : null);
+        if (!leftTeam) {
+            rightTeam = tvTeamForName(right.name, game) || tvTeamForName(right.name2, game);
+            leftTeam = rightTeam === 1 ? 2 : (rightTeam === 2 ? 1 : 1);
+            if (!rightTeam) rightTeam = 2;
+        }
+
+        applyTvLogo(imgLeft, LogoMatch.resolveTeamLogo(byCourt, leftTeam, _tvLogos));
+        applyTvLogo(imgRight, LogoMatch.resolveTeamLogo(byCourt, rightTeam, _tvLogos));
+    } catch (e) {
+        applyTvLogo(imgLeft, null);
+        applyTvLogo(imgRight, null);
     }
 }
 

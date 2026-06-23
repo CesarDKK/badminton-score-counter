@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 // ==================== HOLDKAMP ====================
 
 let activeTeamMatches = []; // alle aktive holdkampe (multi-holdkamp)
+let _overviewLogos = []; // central logo-liste, hentet én gang ved init
 
 let _hkRenderedKey = ''; // signatur af struktur (side + match-ids + game-ids + status)
 const HK_DOUBLES = ['MD', 'DD', 'HD', 'Double'];
@@ -258,11 +259,18 @@ function renderHoldkampCards(matches) {
         const n = tm.games.length;
         const cols = n <= 6 ? 2 : 3;
         const rows = Math.ceil(n / cols);
+        const logo1 = window.LogoMatch && LogoMatch.resolveTeamLogo(tm, 1, _overviewLogos);
+        const logo2 = window.LogoMatch && LogoMatch.resolveTeamLogo(tm, 2, _overviewLogos);
+        const logoImg = (logo) => logo
+            ? `<img class="hk-card-logo" src="${escapeHtml(logo.url)}" alt="" onerror="this.style.display='none'">`
+            : '';
         return `<div class="hk-card" data-match-id="${tm.id}">
             <div class="hk-card-header">
+                ${logoImg(logo1)}
                 <span class="t1">${escapeHtml(tm.team1_name)}</span>
                 <span class="sc">${t1w} – ${t2w}</span>
                 <span class="t2">${escapeHtml(tm.team2_name)}</span>
+                ${logoImg(logo2)}
             </div>
             <div class="hk-games" style="grid-template-columns: repeat(${cols}, 1fr); --hk-rows:${rows};">${cells}</div>
         </div>`;
@@ -310,6 +318,14 @@ async function initialize() {
         courtCount = settings.courtCount || 5;
 
         await refreshIdleSettings();
+
+        // Hent central logo-liste én gang (bruges til holdkamp-kort-headere)
+        try {
+            _overviewLogos = await api.getPublicLogos() || [];
+        } catch (e) {
+            _overviewLogos = [];
+        }
+
         await loadHoldkamp();
         await loadAllCourts();
 

@@ -125,7 +125,7 @@ body::before {
 }
 #holdkampCardsGrid .hk-card-header {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 1.6vw;
     margin-bottom: 1.4vh;
     font-family: 'Bebas Neue', sans-serif;
@@ -135,6 +135,14 @@ body::before {
 #holdkampCardsGrid .hk-card-header .t1 { color: #4CAF50; font-size: min(7vh, 4vw); }
 #holdkampCardsGrid .hk-card-header .sc { color: #fff; font-size: min(7vh, 4vw); letter-spacing: 0.4vw; }
 #holdkampCardsGrid .hk-card-header .t2 { color: var(--color-accent); font-size: min(7vh, 4vw); }
+/* Klub-logoer flankerer holdnavnene — fremtrædende, bevarer aspekt. */
+#holdkampCardsGrid .hk-card-logo {
+    height: min(9vh, 6vw);
+    width: auto;
+    max-width: min(14vh, 9vw);
+    object-fit: contain;
+    flex-shrink: 0;
+}
 /* Delkampene fylder den ledige højde — alle rækker deler højden ligeligt
    (minmax(0,1fr)) så de altid er på skærmen uden scroll, uanset antal. */
 #holdkampCardsGrid .hk-games {
