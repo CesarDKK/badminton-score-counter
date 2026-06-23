@@ -33,3 +33,19 @@ CREATE TABLE IF NOT EXISTS clubs (
   INDEX idx_subdomain (subdomain),
   INDEX idx_is_active (is_active)
 ) ENGINE=InnoDB;
+
+-- Centralt klub-logo-bibliotek (delt paa tvaers af alle klubber, kun superadmin)
+CREATE TABLE IF NOT EXISTS club_logos (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  club_name VARCHAR(150) NOT NULL,
+  aliases TEXT NULL,
+  filename VARCHAR(255) NOT NULL,
+  original_name VARCHAR(255) NOT NULL,
+  file_path VARCHAR(500) NOT NULL,
+  file_size INT NOT NULL,
+  width INT NULL,
+  height INT NULL,
+  mime_type VARCHAR(50) NOT NULL,
+  upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_club_name (club_name)
+) ENGINE=InnoDB;
