@@ -92,6 +92,33 @@
                 </div>
             </div>
 
+            <!-- Klub-logoer (centralt bibliotek) -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Klub-logoer (centralt bibliotek)</span>
+                    <button id="refreshLogosBtn" class="btn-secondary">↻ Opdater</button>
+                </div>
+                <div class="create-form">
+                    <div class="form-group" style="margin-bottom:0">
+                        <label>Klubnavn</label>
+                        <input type="text" id="newLogoClubName" placeholder="fx Lyngby">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label>Aliasser (komma-separeret, valgfri)</label>
+                        <input type="text" id="newLogoAliases" placeholder="fx Lyngby Badminton, LBK">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label>Logo (PNG/WebP/JPG)</label>
+                        <input type="file" id="newLogoFile" accept="image/png,image/webp,image/jpeg">
+                    </div>
+                    <button id="uploadLogoBtn" class="btn-primary" style="height:46px; margin-top:22px;">Upload logo</button>
+                </div>
+                <div id="uploadLogoMsg" class="msg" style="display:none;"></div>
+                <div id="logoList" style="margin-top:16px;">
+                    <div class="empty-state"><div class="spinner"></div></div>
+                </div>
+            </div>
+
             </div><!-- /badmintonSection -->
 
             <!-- ════════════════════ FOOTBALL SECTION ════════════════════ -->
@@ -260,6 +287,6 @@
     </div>
 
     <script src="js/api.js?v=6"></script>
-    <script src="super-admin-script.js?v=10"></script>
+    <script src="super-admin-script.js?v=11"></script>
 </body>
 </html>

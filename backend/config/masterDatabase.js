@@ -61,6 +61,24 @@ async function initialize() {
             console.log('');
         }
 
+        // Centralt logo-bibliotek — oprettes idempotent saa eksisterende master-DB ogsaa faar tabellen
+        await query(`
+            CREATE TABLE IF NOT EXISTS club_logos (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                club_name VARCHAR(150) NOT NULL,
+                aliases TEXT NULL,
+                filename VARCHAR(255) NOT NULL,
+                original_name VARCHAR(255) NOT NULL,
+                file_path VARCHAR(500) NOT NULL,
+                file_size INT NOT NULL,
+                width INT NULL,
+                height INT NULL,
+                mime_type VARCHAR(50) NOT NULL,
+                upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_club_name (club_name)
+            ) ENGINE=InnoDB
+        `);
+
         console.log('✓ Master database forbindelse OK');
     } catch (error) {
         console.error('✗ Master database fejl:', error.message);

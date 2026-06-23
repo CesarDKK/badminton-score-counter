@@ -95,6 +95,10 @@ document.addEventListener('DOMContentLoaded', function () {
     // Opdater klubber
     document.getElementById('refreshClubsBtn').addEventListener('click', loadClubs);
 
+    // Klub-logoer
+    document.getElementById('uploadLogoBtn').addEventListener('click', handleUploadLogo);
+    document.getElementById('refreshLogosBtn').addEventListener('click', loadLogos);
+
     // Admin modal
     document.getElementById('adminModalClose').addEventListener('click', closeModal);
     document.getElementById('createAdminBtn').addEventListener('click', handleCreateAdmin);
@@ -179,6 +183,7 @@ function switchApp(app) {
 
     if (isBadminton) {
         loadClubs();
+        loadLogos();
     } else {
         loadFootballClubs();
     }
@@ -892,4 +897,124 @@ function escapeHtml(str) {
 function formatDate(dateStr) {
     const d = new Date(dateStr);
     return d.toLocaleDateString('da-DK', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+// ==================== KLUB-LOGOER ====================
+
+let logoCache = [];
+
+async function loadLogos() {
+    const listEl = document.getElementById('logoList');
+    if (!listEl) return;
+    listEl.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+    try {
+        const logos = await api.getLogos();
+        renderLogos(logos);
+    } catch (err) {
+        listEl.innerHTML = `<div class="empty-state">Fejl: ${escapeHtml(err.message || 'kunne ikke hente logoer')}</div>`;
+    }
+}
+
+function renderLogos(logos) {
+    const listEl = document.getElementById('logoList');
+    logoCache = logos || [];
+    if (!logos || logos.length === 0) {
+        listEl.innerHTML = '<div class="empty-state" style="padding:12px;">Ingen logoer endnu</div>';
+        return;
+    }
+    listEl.innerHTML = logos.map(l => `
+        <div class="admin-item" id="logo-row-${l.id}" style="gap:12px;">
+            <img src="${escapeHtml(l.url)}" alt="" style="width:48px;height:48px;object-fit:contain;background:rgba(255,255,255,0.06);border-radius:6px;flex-shrink:0;">
+            <div style="flex:1; min-width:0;">
+                <div class="admin-name">${escapeHtml(l.club_name)}</div>
+                ${l.aliases ? `<div class="admin-email">${escapeHtml(l.aliases)}</div>` : ''}
+            </div>
+            <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                <button class="btn-secondary" style="font-size:0.8em; padding:5px 10px;"
+                    onclick="showEditLogo(${l.id})">Rediger</button>
+                <button class="btn-danger" style="font-size:0.8em; padding:5px 10px;"
+                    onclick="handleDeleteLogo(${l.id})">Slet</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function handleUploadLogo() {
+    const clubName = document.getElementById('newLogoClubName').value.trim();
+    const aliases = document.getElementById('newLogoAliases').value.trim();
+    const fileInput = document.getElementById('newLogoFile');
+    const file = fileInput.files[0];
+    const msgEl = document.getElementById('uploadLogoMsg');
+    const btn = document.getElementById('uploadLogoBtn');
+
+    if (!file) { showMsg(msgEl, 'Vælg en logo-fil', 'error'); return; }
+    if (!clubName) { showMsg(msgEl, 'Klubnavn er påkrævet', 'error'); return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Uploader...';
+    msgEl.style.display = 'none';
+    try {
+        await api.uploadLogo(file, clubName, aliases);
+        showMsg(msgEl, '✓ Logo uploadet', 'success');
+        document.getElementById('newLogoClubName').value = '';
+        document.getElementById('newLogoAliases').value = '';
+        fileInput.value = '';
+        loadLogos();
+    } catch (err) {
+        showMsg(msgEl, err.message || 'Upload mislykkedes', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Upload logo';
+    }
+}
+
+function showEditLogo(id) {
+    const existing = document.getElementById('edit-logo-form');
+    if (existing) existing.remove();
+    const logo = logoCache.find(l => l.id === id);
+    if (!logo) return;
+    const row = document.getElementById(`logo-row-${id}`);
+    const form = document.createElement('div');
+    form.id = 'edit-logo-form';
+    form.style.cssText = 'background:rgba(255,255,255,0.04);border-radius:8px;padding:12px 14px;margin-top:4px;';
+    form.innerHTML = `
+        <div class="form-group" style="margin-bottom:8px;">
+            <label>Klubnavn</label>
+            <input type="text" id="editLogoClubName" value="${escapeHtml(logo.club_name)}">
+        </div>
+        <div class="form-group" style="margin-bottom:8px;">
+            <label>Aliasser (komma-separeret)</label>
+            <input type="text" id="editLogoAliases" value="${escapeHtml(logo.aliases || '')}">
+        </div>
+        <div style="display:flex; gap:8px;">
+            <button class="btn-primary" style="padding:8px 14px;font-size:0.85em;" onclick="handleSaveLogo(${id})">Gem</button>
+            <button class="btn-secondary" style="padding:8px 12px;font-size:0.85em;" onclick="document.getElementById('edit-logo-form').remove()">Annuller</button>
+        </div>
+        <div id="editLogoMsg" class="msg" style="display:none;margin-top:8px;"></div>
+    `;
+    row.insertAdjacentElement('afterend', form);
+}
+
+async function handleSaveLogo(id) {
+    const clubName = document.getElementById('editLogoClubName').value.trim();
+    const aliases = document.getElementById('editLogoAliases').value.trim();
+    const msgEl = document.getElementById('editLogoMsg');
+    if (!clubName) { showMsg(msgEl, 'Klubnavn er påkrævet', 'error'); return; }
+    try {
+        await api.updateLogo(id, clubName, aliases);
+        document.getElementById('edit-logo-form').remove();
+        loadLogos();
+    } catch (err) {
+        showMsg(msgEl, err.message || 'Kunne ikke gemme', 'error');
+    }
+}
+
+async function handleDeleteLogo(id) {
+    if (!confirm('Slet dette logo permanent?')) return;
+    try {
+        await api.deleteLogo(id);
+        loadLogos();
+    } catch (err) {
+        alert(err.message || 'Sletning mislykkedes');
+    }
 }
