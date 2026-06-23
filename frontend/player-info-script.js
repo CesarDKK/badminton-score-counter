@@ -194,7 +194,7 @@ async function loadPlayers() {
 
         // Render grouped players
         let html = '';
-        const ageGroups = ['U9', 'U11', 'U13', 'U15', 'U17', 'U19'];
+        const ageGroups = ['U9', 'U11', 'U13', 'U15', 'U17', 'U19', 'U23', 'UNG', 'SEN', 'SEN+30', 'SEN+35', 'SEN+40', 'SEN+45', 'SEN+50', 'SEN+55', 'SEN+60', 'SEN+65', 'SEN+70', 'SEN+75', 'SEN+80'];
 
         ageGroups.forEach(ageGroup => {
             if (groupedPlayers[ageGroup] && groupedPlayers[ageGroup].length > 0) {

@@ -81,9 +81,9 @@ router.post('/', authMiddleware, async (req, res, next) => {
         }
 
         // Validate age group
-        const validAgeGroups = ['U9', 'U11', 'U13', 'U15', 'U17', 'U19'];
+        const validAgeGroups = ['U9', 'U11', 'U13', 'U15', 'U17', 'U19', 'U23', 'UNG', 'SEN', 'SEN+30', 'SEN+35', 'SEN+40', 'SEN+45', 'SEN+50', 'SEN+55', 'SEN+60', 'SEN+65', 'SEN+70', 'SEN+75', 'SEN+80'];
         if (!validAgeGroups.includes(ageGroup)) {
-            return res.status(400).json({ error: 'Ugyldig årgang. Vælg mellem U9, U11, U13, U15, U17, U19' });
+            return res.status(400).json({ error: 'Ugyldig årgang.' });
         }
 
         // Insert new player
@@ -121,9 +121,9 @@ router.put('/:id', authMiddleware, async (req, res, next) => {
         }
 
         // Validate age group
-        const validAgeGroups = ['U9', 'U11', 'U13', 'U15', 'U17', 'U19'];
+        const validAgeGroups = ['U9', 'U11', 'U13', 'U15', 'U17', 'U19', 'U23', 'UNG', 'SEN', 'SEN+30', 'SEN+35', 'SEN+40', 'SEN+45', 'SEN+50', 'SEN+55', 'SEN+60', 'SEN+65', 'SEN+70', 'SEN+75', 'SEN+80'];
         if (!validAgeGroups.includes(ageGroup)) {
-            return res.status(400).json({ error: 'Ugyldig årgang. Vælg mellem U9, U11, U13, U15, U17, U19' });
+            return res.status(400).json({ error: 'Ugyldig årgang.' });
         }
 
         // Check if player exists
@@ -178,7 +178,7 @@ router.delete('/age-group/:ageGroup', authMiddleware, async (req, res, next) => 
         const { ageGroup } = req.params;
 
         // Validate age group
-        const validAgeGroups = ['U9', 'U11', 'U13', 'U15', 'U17', 'U19'];
+        const validAgeGroups = ['U9', 'U11', 'U13', 'U15', 'U17', 'U19', 'U23', 'UNG', 'SEN', 'SEN+30', 'SEN+35', 'SEN+40', 'SEN+45', 'SEN+50', 'SEN+55', 'SEN+60', 'SEN+65', 'SEN+70', 'SEN+75', 'SEN+80'];
         if (!validAgeGroups.includes(ageGroup)) {
             return res.status(400).json({ error: 'Ugyldig årgang' });
         }
@@ -216,7 +216,7 @@ router.post('/import', authMiddleware, async (req, res, next) => {
         }
 
         // Validate age groups and genders
-        const validAgeGroups = ['U9', 'U11', 'U13', 'U15', 'U17', 'U19'];
+        const validAgeGroups = ['U9', 'U11', 'U13', 'U15', 'U17', 'U19', 'U23', 'UNG', 'SEN', 'SEN+30', 'SEN+35', 'SEN+40', 'SEN+45', 'SEN+50', 'SEN+55', 'SEN+60', 'SEN+65', 'SEN+70', 'SEN+75', 'SEN+80'];
         const validGenders = ['Herre', 'Dame'];
 
         let imported = 0;
