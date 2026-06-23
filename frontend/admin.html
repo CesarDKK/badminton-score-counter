@@ -102,10 +102,16 @@
                         <div>
                             <label>Hold 1 Navn:</label>
                             <input type="text" id="holdkampTeam1Name" placeholder="Hold 1" style="width: 100%; padding: 10px; background: var(--color-bg-dark); color: #eaeaea; border: 1px solid var(--color-primary); border-radius: 5px; margin-top: 5px;">
+                            <select id="holdkampTeam1Logo" style="width: 100%; padding: 10px; margin-top: 8px; background: var(--color-bg-dark); color: #eaeaea; border: 1px solid var(--color-primary); border-radius: 5px;">
+                                <option value="">Logo: automatisk</option>
+                            </select>
                         </div>
                         <div>
                             <label>Hold 2 Navn:</label>
                             <input type="text" id="holdkampTeam2Name" placeholder="Hold 2" style="width: 100%; padding: 10px; background: var(--color-bg-dark); color: #eaeaea; border: 1px solid var(--color-primary); border-radius: 5px; margin-top: 5px;">
+                            <select id="holdkampTeam2Logo" style="width: 100%; padding: 10px; margin-top: 8px; background: var(--color-bg-dark); color: #eaeaea; border: 1px solid var(--color-primary); border-radius: 5px;">
+                                <option value="">Logo: automatisk</option>
+                            </select>
                         </div>
                     </div>
 
@@ -351,8 +357,9 @@
     </div>
 
     <script src="js/utils.js?v=2"></script>
-    <script src="js/api.js?v=7"></script>
+    <script src="js/api.js?v=8"></script>
     <script src="js/auth-guard.js?v=1"></script>
-    <script src="admin-script.js?v=30"></script>
+    <script src="js/logo-match.js?v=1"></script>
+    <script src="admin-script.js?v=31"></script>
 </body>
 </html>

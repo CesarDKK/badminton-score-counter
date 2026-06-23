@@ -1068,11 +1068,33 @@ let holdkampRefreshTimer = null;
 let holdkampEditOpen = false;
 let holdkampCourtSelectOpen = false; // true mens en bane-dropdown er i fokus/aaben
 
+// --- Klub-logoer (delt med turnering) ---
+let _adminLogoCache = [];
+async function ensureAdminLogos() {
+    if (_adminLogoCache.length) return _adminLogoCache;
+    try { _adminLogoCache = await api.getPublicLogos(); } catch (e) { _adminLogoCache = []; }
+    return _adminLogoCache;
+}
+function fillHoldkampLogoSelect(selectEl) {
+    selectEl.innerHTML = '<option value="">Logo: automatisk</option>' +
+        _adminLogoCache.map(l => `<option value="${l.id}">${escapeHtml(l.club_name)}</option>`).join('');
+}
+function autoHoldkampLogoId(name) {
+    const m = window.LogoMatch.matchLogo(name || '', _adminLogoCache);
+    return m ? m.id : null;
+}
+
 async function showHoldkamp() {
     hideAllSections();
     document.getElementById('holdkampSection').style.display = 'block';
     setNavActive('holdkamp');
     history.replaceState(null, '', '#holdkamp');
+    ensureAdminLogos().then(() => {
+        const s1 = document.getElementById('holdkampTeam1Logo');
+        const s2 = document.getElementById('holdkampTeam2Logo');
+        if (s1) fillHoldkampLogoSelect(s1);
+        if (s2) fillHoldkampLogoSelect(s2);
+    });
     await loadActiveHoldkamp();
     // Poll every 3 seconds for live scores
     if (!holdkampRefreshTimer) {
@@ -1350,6 +1372,7 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
                     </div>
                 </div>
                 <div style="display:flex;gap:10px;">
+                    <button onclick="editHoldkampLogos(${teamMatch.id})" class="btn-secondary">Logoer</button>
                     <button onclick="finishHoldkamp(${teamMatch.id})" class="btn-secondary">Afslut Holdkamp</button>
                     <button onclick="deleteHoldkamp(${teamMatch.id})" class="btn-danger">Slet</button>
                 </div>
@@ -1470,7 +1493,11 @@ async function startHoldkamp() {
     }));
 
     try {
-        await api.createTeamMatch({ format, team1Name, team2Name, games });
+        const t1LogoSel = document.getElementById('holdkampTeam1Logo');
+        const t2LogoSel = document.getElementById('holdkampTeam2Logo');
+        const team1LogoId = t1LogoSel && t1LogoSel.value ? parseInt(t1LogoSel.value, 10) : autoHoldkampLogoId(team1Name);
+        const team2LogoId = t2LogoSel && t2LogoSel.value ? parseInt(t2LogoSel.value, 10) : autoHoldkampLogoId(team2Name);
+        await api.createTeamMatch({ format, team1Name, team2Name, games, team1LogoId, team2LogoId });
         await loadActiveHoldkamp();
     } catch (error) {
         console.error('Failed to create holdkamp:', error);
@@ -1683,6 +1710,24 @@ async function saveManualResult(teamMatchId, gameId, gameMode = '21') {
         console.error('Failed to save manual result:', error);
         showMessage('Fejl', 'Kunne ikke gemme resultatet. Prøv igen.');
     }
+}
+
+async function editHoldkampLogos(teamMatchId) {
+    await ensureAdminLogos();
+    const matches = await api.getActiveTeamMatches();
+    const tm = (matches || []).find(m => m.id === teamMatchId);
+    if (!tm) return;
+    const opts = _adminLogoCache.map(l => `${l.id}: ${l.club_name}`).join('\n');
+    const cur1 = tm.team1_logo_id || autoHoldkampLogoId(tm.team1_name) || '';
+    const v1 = prompt(`Logo-id for ${tm.team1_name} (tom = auto):\n${opts}`, cur1);
+    if (v1 === null) return;
+    const cur2 = tm.team2_logo_id || autoHoldkampLogoId(tm.team2_name) || '';
+    const v2 = prompt(`Logo-id for ${tm.team2_name} (tom = auto):`, cur2);
+    if (v2 === null) return;
+    await api.updateTeamMatchLogos(teamMatchId,
+        v1 ? parseInt(v1, 10) : null,
+        v2 ? parseInt(v2, 10) : null);
+    await loadActiveHoldkamp();
 }
 
 function finishHoldkamp(id) {
