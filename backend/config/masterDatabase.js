@@ -95,6 +95,15 @@ async function initialize() {
             console.log('✓ club_logos.seed_key kolonne tilfoejet');
         }
 
+        // Seed standard klub-logoer (idempotent). Lazy require for at undgaa
+        // cirkulaer afhaengighed (seedLogos kraever dette modul ved load).
+        try {
+            const { seedClubLogos } = require('./seedLogos');
+            await seedClubLogos();
+        } catch (e) {
+            console.error('✗ Logo-seed fejlede (opstart fortsaetter):', e.message);
+        }
+
         console.log('✓ Master database forbindelse OK');
     } catch (error) {
         console.error('✗ Master database fejl:', error.message);
