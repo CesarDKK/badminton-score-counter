@@ -4,6 +4,9 @@ const bcrypt = require('bcrypt');
 const mysql = require('mysql2/promise');
 const masterDb = require('../config/masterDatabase');
 const { superAdminAuth, generateSuperAdminToken } = require('../middleware/superAdminAuth');
+const fs = require('fs');
+const sharp = require('sharp');
+const logoUpload = require('../config/logoUpload');
 
 // Gyldige side-noegler for klub-admins per-side adgangsstyring.
 const VALID_PAGE_KEYS = ['holdkamp', 'tournament', 'history', 'playerinfo', 'settings', 'sponsors', 'devicetokens'];
@@ -667,6 +670,86 @@ router.put('/football/clubs/:id/admins/:adminId/password', superAdminAuth, async
     } catch (error) {
         next(error);
     }
+});
+
+// ==================== KLUB-LOGO-BIBLIOTEK (centralt, master-DB) ====================
+
+// POST /api/super-admin/logos — upload nyt logo
+router.post('/logos', superAdminAuth, logoUpload.single('image'), async (req, res, next) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'Billede er påkrævet' });
+
+        const clubName = (req.body.clubName || '').trim();
+        const aliases = (req.body.aliases || '').trim();
+        if (!clubName) {
+            try { fs.unlinkSync(req.file.path); } catch (e) { /* ignore */ }
+            return res.status(400).json({ error: 'Klubnavn er påkrævet' });
+        }
+
+        let width = null, height = null;
+        try {
+            const meta = await sharp(req.file.path).metadata();
+            width = meta.width || null;
+            height = meta.height || null;
+        } catch (e) { /* metadata valgfri */ }
+
+        const storedFilename = `central_logos/${req.file.filename}`;
+        const result = await masterDb.query(
+            `INSERT INTO club_logos
+             (club_name, aliases, filename, original_name, file_path, file_size, width, height, mime_type)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [clubName, aliases || null, storedFilename, req.file.originalname,
+             req.file.path, req.file.size, width, height, req.file.mimetype]
+        );
+
+        res.status(201).json({
+            id: result.insertId,
+            club_name: clubName,
+            aliases: aliases || null,
+            original_name: req.file.originalname,
+            url: `/uploads/${storedFilename}`
+        });
+    } catch (error) { next(error); }
+});
+
+// GET /api/super-admin/logos — list alle logoer
+router.get('/logos', superAdminAuth, async (req, res, next) => {
+    try {
+        const rows = await masterDb.query(
+            `SELECT id, club_name, aliases, filename, original_name, upload_date
+             FROM club_logos ORDER BY club_name ASC`
+        );
+        res.json(rows.map(r => ({ ...r, url: `/uploads/${r.filename}` })));
+    } catch (error) { next(error); }
+});
+
+// PUT /api/super-admin/logos/:id — ret klubnavn/aliasser
+router.put('/logos/:id', superAdminAuth, async (req, res, next) => {
+    try {
+        const clubName = (req.body.clubName || '').trim();
+        const aliases = (req.body.aliases || '').trim();
+        if (!clubName) return res.status(400).json({ error: 'Klubnavn er påkrævet' });
+
+        const result = await masterDb.query(
+            'UPDATE club_logos SET club_name = ?, aliases = ? WHERE id = ?',
+            [clubName, aliases || null, req.params.id]
+        );
+        if (result.affectedRows === 0) return res.status(404).json({ error: 'Logo ikke fundet' });
+        res.json({ success: true });
+    } catch (error) { next(error); }
+});
+
+// DELETE /api/super-admin/logos/:id — slet række + fil
+router.delete('/logos/:id', superAdminAuth, async (req, res, next) => {
+    try {
+        const logo = await masterDb.queryOne('SELECT file_path FROM club_logos WHERE id = ?', [req.params.id]);
+        if (!logo) return res.status(404).json({ error: 'Logo ikke fundet' });
+
+        await masterDb.query('DELETE FROM club_logos WHERE id = ?', [req.params.id]);
+        try { fs.unlinkSync(logo.file_path); } catch (e) { console.error('Kunne ikke slette logo-fil:', e.message); }
+
+        res.json({ success: true });
+    } catch (error) { next(error); }
 });
 
 module.exports = router;
