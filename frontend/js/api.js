@@ -491,6 +491,23 @@ class BadmintonAPI {
         return this.request('/logos', { requiresAuth: false });
     }
 
+    async getPlayerLogos() {
+        return this.request('/player-logos', { requiresAuth: false });
+    }
+
+    async setPlayerLogo(playerName, logoId) {
+        return this.request('/player-logos', {
+            method: 'PUT',
+            body: JSON.stringify({ playerName, logoId })
+        });
+    }
+
+    async clearPlayerLogo(playerName) {
+        return this.request(`/player-logos?name=${encodeURIComponent(playerName)}`, {
+            method: 'DELETE'
+        });
+    }
+
     async uploadLogo(file, clubName, aliases) {
         const fd = new FormData();
         fd.append('image', file);
