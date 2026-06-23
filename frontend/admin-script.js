@@ -1712,22 +1712,85 @@ async function saveManualResult(teamMatchId, gameId, gameMode = '21') {
     }
 }
 
+// ===== Genbrugelig logo-vælger modal =====
+// targets: [{ key, label, value, autoName }]
+// value-tilstande: null = auto (udled ud fra navn), 0 = intet logo, >0 = bestemt logo
+let _logoModalSave = null;
+function openLogoModal(title, targets, onSave) {
+    _logoModalSave = onSave;
+    document.getElementById('logoModalTitle').textContent = title;
+    const body = document.getElementById('logoModalBody');
+    const optionsHtml = [
+        '<option value="">Automatisk (ud fra navn)</option>',
+        '<option value="none">Intet logo (vis ikke)</option>',
+        ..._adminLogoCache.map(l => `<option value="${l.id}">${escapeHtml(l.club_name)}</option>`)
+    ].join('');
+    body.innerHTML = targets.map(t => `
+        <div class="logo-target" data-key="${escapeHtml(String(t.key))}" data-auto="${escapeHtml(t.autoName || '')}" style="display:flex; align-items:center; gap:14px; padding:12px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
+            <img class="logo-target-img" alt="" style="width:54px; height:54px; object-fit:contain; background:rgba(255,255,255,0.06); border-radius:8px; flex-shrink:0; display:none;">
+            <div style="flex:1; min-width:0;">
+                <div style="color:#eaeaea; font-weight:bold; margin-bottom:6px;">${escapeHtml(t.label)}</div>
+                <select class="logo-target-sel" style="width:100%; padding:9px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid var(--color-primary); border-radius:5px;">${optionsHtml}</select>
+                <div class="logo-target-hint" style="font-size:0.8em; color:#aaa; margin-top:4px;"></div>
+            </div>
+        </div>`).join('');
+
+    body.querySelectorAll('.logo-target').forEach(row => {
+        const t = targets.find(x => String(x.key) === row.dataset.key);
+        const sel = row.querySelector('.logo-target-sel');
+        sel.value = (t.value === 0) ? 'none' : (t.value ? String(t.value) : '');
+        sel.addEventListener('change', () => updateLogoModalRow(row));
+        updateLogoModalRow(row);
+    });
+
+    document.getElementById('logoModalCancel').onclick = closeLogoModal;
+    document.getElementById('logoModalSave').onclick = saveLogoModal;
+    document.getElementById('logoModal').style.display = 'flex';
+}
+function updateLogoModalRow(row) {
+    const sel = row.querySelector('.logo-target-sel');
+    const img = row.querySelector('.logo-target-img');
+    const hint = row.querySelector('.logo-target-hint');
+    const v = sel.value;
+    if (v === 'none') {
+        img.style.display = 'none';
+        hint.textContent = 'Der vises intet logo.';
+    } else if (v === '') {
+        const logo = window.LogoMatch.matchLogo(row.dataset.auto || '', _adminLogoCache);
+        if (logo) { img.src = logo.url; img.style.display = ''; hint.textContent = `Automatisk: ${logo.club_name}`; }
+        else { img.style.display = 'none'; hint.textContent = 'Automatisk (intet match endnu — udledes ved visning).'; }
+    } else {
+        const logo = _adminLogoCache.find(l => String(l.id) === v);
+        if (logo) { img.src = logo.url; img.style.display = ''; hint.textContent = `Valgt: ${logo.club_name}`; }
+    }
+}
+function closeLogoModal() {
+    document.getElementById('logoModal').style.display = 'none';
+    _logoModalSave = null;
+}
+async function saveLogoModal() {
+    const cb = _logoModalSave;
+    const result = {};
+    document.querySelectorAll('#logoModalBody .logo-target').forEach(row => {
+        const v = row.querySelector('.logo-target-sel').value;
+        result[row.dataset.key] = (v === 'none') ? 0 : (v === '' ? null : parseInt(v, 10));
+    });
+    closeLogoModal();
+    if (cb) await cb(result);
+}
+
 async function editHoldkampLogos(teamMatchId) {
     await ensureAdminLogos();
     const matches = await api.getActiveTeamMatches();
     const tm = (matches || []).find(m => m.id === teamMatchId);
     if (!tm) return;
-    const opts = _adminLogoCache.map(l => `${l.id}: ${l.club_name}`).join('\n');
-    const cur1 = tm.team1_logo_id || autoHoldkampLogoId(tm.team1_name) || '';
-    const v1 = prompt(`Logo-id for ${tm.team1_name} (tom = auto):\n${opts}`, cur1);
-    if (v1 === null) return;
-    const cur2 = tm.team2_logo_id || autoHoldkampLogoId(tm.team2_name) || '';
-    const v2 = prompt(`Logo-id for ${tm.team2_name} (tom = auto):`, cur2);
-    if (v2 === null) return;
-    await api.updateTeamMatchLogos(teamMatchId,
-        v1 ? parseInt(v1, 10) : null,
-        v2 ? parseInt(v2, 10) : null);
-    await loadActiveHoldkamp();
+    openLogoModal(`Logoer — ${tm.team1_name} vs ${tm.team2_name}`, [
+        { key: 't1', label: tm.team1_name, value: tm.team1_logo_id, autoName: tm.team1_name },
+        { key: 't2', label: tm.team2_name, value: tm.team2_logo_id, autoName: tm.team2_name }
+    ], async (res) => {
+        await api.updateTeamMatchLogos(teamMatchId, res.t1, res.t2);
+        await loadActiveHoldkamp();
+    });
 }
 
 // 🏷-knap til en turneringsspiller (tom navn -> ingen knap)
@@ -1744,16 +1807,15 @@ async function setTournamentPlayerLogo(playerName) {
     await ensureAdminLogos();
     const existing = (await api.getPlayerLogos().catch(() => []))
         .find(p => p.player_name === playerName);
-    const opts = _adminLogoCache.map(l => `${l.id}: ${l.club_name}`).join('\n');
-    const cur = existing ? existing.logo_id : '';
-    const v = prompt(`Logo-id for ${playerName} (tom = automatisk/ryd):\n${opts}`, cur);
-    if (v === null) return;
-    if (v.trim() === '') {
-        await api.clearPlayerLogo(playerName);
-    } else {
-        await api.setPlayerLogo(playerName, parseInt(v, 10));
-    }
-    if (typeof loadActiveTournaments === 'function') await loadActiveTournaments();
+    const curVal = existing ? existing.logo_id : null; // null=auto, 0=intet, >0=bestemt
+    openLogoModal(`Logo — ${playerName}`, [
+        { key: 'p', label: playerName, value: curVal, autoName: playerName }
+    ], async (res) => {
+        const v = res.p;
+        if (v === null) await api.clearPlayerLogo(playerName);  // auto
+        else await api.setPlayerLogo(playerName, v);            // 0 = intet, >0 = bestemt
+        if (typeof loadActiveTournaments === 'function') await loadActiveTournaments();
+    });
 }
 
 function finishHoldkamp(id) {

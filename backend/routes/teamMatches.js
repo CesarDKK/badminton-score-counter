@@ -168,12 +168,13 @@ router.post('/', authMiddleware, async (req, res, next) => {
 });
 
 // PUT /api/team-matches/:id/logos - opdater hold-logoer (requires auth)
+// Tilstande pr. hold: null = auto-match paa holdnavn, 0 = intet logo, >0 = bestemt logo
 router.put('/:id/logos', authMiddleware, async (req, res, next) => {
     try {
-        const { team1LogoId, team2LogoId } = req.body;
+        const norm = v => (v === null || v === undefined || v === '') ? null : Number(v);
         const result = await query(
             'UPDATE team_matches SET team1_logo_id = ?, team2_logo_id = ? WHERE id = ?',
-            [team1LogoId || null, team2LogoId || null, req.params.id]
+            [norm(req.body.team1LogoId), norm(req.body.team2LogoId), req.params.id]
         );
         if (result.affectedRows === 0) return res.status(404).json({ error: 'Holdkamp ikke fundet' });
         res.json({ success: true });

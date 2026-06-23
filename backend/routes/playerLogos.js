@@ -15,9 +15,12 @@ router.get('/', async (req, res, next) => {
 router.put('/', authMiddleware, async (req, res, next) => {
     try {
         const playerName = (req.body.playerName || '').trim();
-        const logoId = parseInt(req.body.logoId, 10);
+        // logo_id: >0 = bestemt logo, 0 = intet logo (vis ikke). Fravaer af raekke = auto.
+        const logoId = Number(req.body.logoId);
         if (!playerName) return res.status(400).json({ error: 'Spillernavn er påkrævet' });
-        if (!logoId) return res.status(400).json({ error: 'logoId er påkrævet' });
+        if (req.body.logoId === undefined || req.body.logoId === null || Number.isNaN(logoId)) {
+            return res.status(400).json({ error: 'logoId er påkrævet' });
+        }
 
         await query(
             `INSERT INTO player_logos (player_name, logo_id) VALUES (?, ?)

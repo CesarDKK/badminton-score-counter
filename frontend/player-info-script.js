@@ -10,14 +10,21 @@ async function ensureLogos() {
 }
 function fillLogoSelect(selectEl, selectedId) {
     selectEl.innerHTML = '<option value="">(Automatisk ud fra klub)</option>' +
-        _logoCache.map(l => `<option value="${l.id}">${l.club_name}</option>`).join('');
-    if (selectedId) selectEl.value = String(selectedId);
+        '<option value="none">Intet logo (vis ikke)</option>' +
+        _logoCache.map(l => `<option value="${l.id}">${escapeHtml(l.club_name)}</option>`).join('');
+    if (selectedId === 0) selectEl.value = 'none';
+    else if (selectedId) selectEl.value = String(selectedId);
 }
 // Viser hvilket logo der bruges: valgt override, ellers auto-match paa klub
 function updateEditPlayerLogoPreview(club) {
     const sel = document.getElementById('editPlayerLogo');
     const img = document.getElementById('editPlayerLogoImg');
     const hint = document.getElementById('editPlayerLogoHint');
+    if (sel.value === 'none') {
+        document.getElementById('editPlayerLogoImg').style.display = 'none';
+        hint.textContent = 'Intet logo (vises ikke)';
+        return;
+    }
     let logo = null, auto = false;
     if (sel.value) {
         logo = _logoCache.find(l => String(l.id) === sel.value) || null;
@@ -40,6 +47,11 @@ function updateAddPlayerLogoPreview() {
     const sel = document.getElementById('addPlayerLogo');
     const img = document.getElementById('addPlayerLogoImg');
     const hint = document.getElementById('addPlayerLogoHint');
+    if (sel.value === 'none') {
+        document.getElementById('addPlayerLogoImg').style.display = 'none';
+        hint.textContent = 'Intet logo (vises ikke)';
+        return;
+    }
     let logo = null, auto = false;
     if (sel.value) {
         logo = _logoCache.find(l => String(l.id) === sel.value) || null;
@@ -259,9 +271,11 @@ async function handleAddPlayer(e) {
             ageGroup: ageGroup
         });
 
-        // Gem evt. valgt/auto-forvalgt logo for spillernavnet
+        // Gem evt. valgt logo for spillernavnet (tom = auto, gem intet)
         const addLogoSel = document.getElementById('addPlayerLogo');
-        if (addLogoSel.value) {
+        if (addLogoSel.value === 'none') {
+            await api.setPlayerLogo(name, 0);
+        } else if (addLogoSel.value) {
             await api.setPlayerLogo(name, parseInt(addLogoSel.value, 10));
         }
 
@@ -327,7 +341,9 @@ async function handleEditPlayer(e) {
         });
 
         const logoSel = document.getElementById('editPlayerLogo');
-        if (logoSel.value) {
+        if (logoSel.value === 'none') {
+            await api.setPlayerLogo(name, 0);
+        } else if (logoSel.value) {
             await api.setPlayerLogo(name, parseInt(logoSel.value, 10));
         } else {
             await api.clearPlayerLogo(name);
