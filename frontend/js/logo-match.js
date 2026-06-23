@@ -29,5 +29,13 @@
         }
         return best;
     }
-    global.LogoMatch = { normalizeName, matchLogo };
+    // Udleder et holds logo: 0 = intet logo, >0 = bestemt logo, null/undefined = auto (matchLogo paa holdnavn)
+    function resolveTeamLogo(teamMatch, n, logos) {
+        if (!teamMatch) return null;
+        const v = teamMatch['team' + n + '_logo_id'];
+        if (v === 0) return null;
+        if (v) return (logos || []).find(l => l.id === v) || null;
+        return matchLogo(teamMatch['team' + n + '_name'], logos);
+    }
+    global.LogoMatch = { normalizeName, matchLogo, resolveTeamLogo };
 })(window);
