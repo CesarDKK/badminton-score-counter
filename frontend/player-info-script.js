@@ -34,6 +34,36 @@ function updateEditPlayerLogoPreview(club) {
     }
 }
 
+// Opret-spiller: forslag/forvalg af logo ud fra klubnavnet mens man skriver
+function updateAddPlayerLogoPreview() {
+    const club = document.getElementById('playerClub').value;
+    const sel = document.getElementById('addPlayerLogo');
+    const img = document.getElementById('addPlayerLogoImg');
+    const hint = document.getElementById('addPlayerLogoHint');
+    let logo = null, auto = false;
+    if (sel.value) {
+        logo = _logoCache.find(l => String(l.id) === sel.value) || null;
+    } else {
+        logo = window.LogoMatch.matchLogo(club || '', _logoCache);
+        auto = !!logo;
+    }
+    if (logo) {
+        img.src = logo.url; img.style.display = '';
+        hint.textContent = auto ? `Automatisk: ${logo.club_name}` : `Valgt: ${logo.club_name}`;
+    } else {
+        img.style.display = 'none';
+        hint.textContent = club ? 'Intet logo fundet — vælg manuelt' : '';
+    }
+}
+
+async function initAddPlayerLogoPicker() {
+    await ensureLogos();
+    fillLogoSelect(document.getElementById('addPlayerLogo'), '');
+    document.getElementById('playerClub').addEventListener('input', updateAddPlayerLogoPreview);
+    document.getElementById('addPlayerLogo').addEventListener('change', updateAddPlayerLogoPreview);
+    updateAddPlayerLogoPreview();
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     initializePlayerInfo();
@@ -138,6 +168,7 @@ async function showPlayerInfoDashboard() {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('playerInfoDashboard').style.display = 'block';
 
+    initAddPlayerLogoPicker();
     await loadPlayers();
 }
 
@@ -228,10 +259,17 @@ async function handleAddPlayer(e) {
             ageGroup: ageGroup
         });
 
+        // Gem evt. valgt/auto-forvalgt logo for spillernavnet
+        const addLogoSel = document.getElementById('addPlayerLogo');
+        if (addLogoSel.value) {
+            await api.setPlayerLogo(name, parseInt(addLogoSel.value, 10));
+        }
+
         showMessage('Succes', 'Spiller tilføjet succesfuldt!');
 
         // Clear form
         document.getElementById('addPlayerForm').reset();
+        updateAddPlayerLogoPreview();
 
         // Reload players list
         await loadPlayers();
