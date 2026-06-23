@@ -1,0 +1,79 @@
+const fs = require('fs');
+const path = require('path');
+const sharp = require('sharp');
+const { query, queryOne } = require('./masterDatabase');
+
+// Mappen med bundtede standard-logoer (bages ind i imaget via COPY backend/ ./)
+const SEED_DIR = path.join(__dirname, '..', 'assets', 'seed_logos');
+// Samme placering som logoUpload.js skriver til (Docker uploads-volume)
+const baseUploadDir = process.env.UPLOAD_DIR || './uploads';
+const logoDir = path.join(baseUploadDir, 'central_logos');
+
+// Seeder standard klub-logoer idempotent. Re-sync: manglende logoer gen-indsaettes
+// ved hver opstart. Springer over hvis seed_key allerede findes (bevarer admins
+// redigeringer) eller hvis club_name allerede findes (undgaar dublet mod manuelt upload).
+async function seedClubLogos() {
+    if (!fs.existsSync(SEED_DIR)) {
+        console.warn('⚠ Seed-mappe ikke fundet, springer logo-seed over:', SEED_DIR);
+        return { seeded: 0, skipped: 0 };
+    }
+    if (!fs.existsSync(logoDir)) {
+        fs.mkdirSync(logoDir, { recursive: true });
+    }
+
+    const files = fs.readdirSync(SEED_DIR).filter(f => /\.png$/i.test(f));
+    let seeded = 0, skipped = 0;
+
+    for (const file of files) {
+        try {
+            const clubName = path.basename(file, path.extname(file))
+                .replace(/\s+/g, ' ')
+                .trim();
+            const seedKey = file;
+
+            // Allerede seeded (evt. redigeret af admin) -> bevar
+            const bySeed = await queryOne(
+                'SELECT id FROM club_logos WHERE seed_key = ?', [seedKey]
+            );
+            if (bySeed) { skipped++; continue; }
+
+            // Manuelt upload med samme navn -> undgaa dublet
+            const byName = await queryOne(
+                'SELECT id FROM club_logos WHERE club_name = ?', [clubName]
+            );
+            if (byName) { skipped++; continue; }
+
+            const slug = clubName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
+            const storedName = `seed_${slug}.png`;
+            const srcPath = path.join(SEED_DIR, file);
+            const destPath = path.join(logoDir, storedName);
+            fs.copyFileSync(srcPath, destPath);
+
+            let width = null, height = null;
+            try {
+                const meta = await sharp(destPath).metadata();
+                width = meta.width || null;
+                height = meta.height || null;
+            } catch (e) { /* metadata valgfri */ }
+
+            const fileSize = fs.statSync(destPath).size;
+
+            await query(
+                `INSERT INTO club_logos
+                 (club_name, aliases, filename, original_name, file_path, file_size,
+                  width, height, mime_type, seed_key)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [clubName, null, `central_logos/${storedName}`, file, destPath,
+                 fileSize, width, height, 'image/png', seedKey]
+            );
+            seeded++;
+        } catch (e) {
+            console.error(`✗ Kunne ikke seede logo "${file}":`, e.message);
+        }
+    }
+
+    console.log(`✓ Logo-seed: ${seeded} tilfoejet, ${skipped} sprunget over (${files.length} filer)`);
+    return { seeded, skipped };
+}
+
+module.exports = { seedClubLogos };
