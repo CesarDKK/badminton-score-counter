@@ -480,6 +480,40 @@ class BadmintonAPI {
         return await response.json();
     }
 
+    // ==================== Klub-logoer (Superadmin) ====================
+
+    async getLogos() {
+        return this.request('/super-admin/logos');
+    }
+
+    async uploadLogo(file, clubName, aliases) {
+        const fd = new FormData();
+        fd.append('image', file);
+        fd.append('clubName', clubName);
+        fd.append('aliases', aliases || '');
+        const headers = {};
+        if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+        const response = await fetch(`${API_BASE_URL}/super-admin/logos`, {
+            method: 'POST', headers, body: fd
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ error: response.statusText }));
+            throw new Error(error.error || `Upload Error: HTTP ${response.status}`);
+        }
+        return await response.json();
+    }
+
+    async updateLogo(id, clubName, aliases) {
+        return this.request(`/super-admin/logos/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ clubName, aliases })
+        });
+    }
+
+    async deleteLogo(id) {
+        return this.request(`/super-admin/logos/${id}`, { method: 'DELETE' });
+    }
+
     /**
      * Delete sponsor image
      * @param {number} imageId - Image ID
