@@ -149,6 +149,25 @@ class BadmintonAPI {
         });
     }
 
+    // ==================== Logoer / holdkamp (til TV-visning) ====================
+
+    /**
+     * Hent den centrale, offentlige logo-liste
+     * @returns {Promise<Array>} - [{ id, club_name, aliases, url, width, height }]
+     */
+    async getPublicLogos() {
+        return this.request('/logos', { requiresAuth: false });
+    }
+
+    /**
+     * Hent den aktive holdkamp-delkamp på en bane (hvis nogen) + dens holdkamp
+     * @param {number} courtId - Bane-nummer
+     * @returns {Promise<object|null>} - { ...teamMatch, game } eller null
+     */
+    async getTeamMatchByCourt(courtId) {
+        return this.request(`/team-matches/by-court/${courtId}`, { requiresAuth: false });
+    }
+
     // ==================== Game States ====================
 
     /**

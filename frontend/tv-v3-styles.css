@@ -178,6 +178,15 @@ body::before {
     border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+/* Klub-logo pr. hold-row — fremtrædende til venstre for navnet, bevarer aspekt. */
+.tv-team-logo {
+    height: clamp(60px, 16vh, 220px);
+    width: auto;
+    max-width: clamp(80px, 18vw, 320px);
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
 /* Serving highlight */
 .team-row.serving {
     background: rgba(var(--color-primary-rgb), 0.1);
