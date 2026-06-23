@@ -187,6 +187,8 @@ CREATE TABLE IF NOT EXISTS team_matches (
   format VARCHAR(20) NOT NULL,
   team1_name VARCHAR(100) NOT NULL,
   team2_name VARCHAR(100) NOT NULL,
+  team1_logo_id INT NULL,
+  team2_logo_id INT NULL,
   status ENUM('active', 'finished') DEFAULT 'active',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;

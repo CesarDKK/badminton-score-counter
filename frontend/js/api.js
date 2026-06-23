@@ -691,6 +691,13 @@ class BadmintonAPI {
         return this.request(`/team-matches/by-court/${courtId}`);
     }
 
+    async updateTeamMatchLogos(id, team1LogoId, team2LogoId) {
+        return this.request(`/team-matches/${id}/logos`, {
+            method: 'PUT',
+            body: JSON.stringify({ team1LogoId, team2LogoId })
+        });
+    }
+
     /** Get all finished team matches with games */
     async getTeamMatchHistory() {
         return this.request('/team-matches/history');

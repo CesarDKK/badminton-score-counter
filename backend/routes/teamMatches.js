@@ -36,7 +36,7 @@ router.get('/history', async (req, res, next) => {
 router.get('/active', async (req, res, next) => {
     try {
         const teamMatch = await queryOne(
-            `SELECT id, format, team1_name, team2_name, status, created_at
+            `SELECT id, format, team1_name, team2_name, team1_logo_id, team2_logo_id, status, created_at
              FROM team_matches WHERE status = 'active' ORDER BY created_at DESC LIMIT 1`
         );
 
@@ -64,7 +64,7 @@ router.get('/active', async (req, res, next) => {
 router.get('/active-all', async (req, res, next) => {
     try {
         const teamMatches = await query(
-            `SELECT id, format, team1_name, team2_name, status, created_at
+            `SELECT id, format, team1_name, team2_name, team1_logo_id, team2_logo_id, status, created_at
              FROM team_matches WHERE status = 'active'
              ORDER BY created_at ASC`
         );
@@ -123,7 +123,7 @@ router.get('/by-court/:courtId', async (req, res, next) => {
 // POST /api/team-matches - Create new team match (requires auth)
 router.post('/', authMiddleware, async (req, res, next) => {
     try {
-        const { format, team1Name, team2Name, games } = req.body;
+        const { format, team1Name, team2Name, games, team1LogoId, team2LogoId } = req.body;
 
         if (!format || !team1Name || !team2Name || !games || !Array.isArray(games)) {
             return res.status(400).json({ error: 'Alle felter er påkrævet' });
@@ -141,8 +141,9 @@ router.post('/', authMiddleware, async (req, res, next) => {
 
         // Create new team match
         const result = await query(
-            `INSERT INTO team_matches (format, team1_name, team2_name, status) VALUES (?, ?, ?, 'active')`,
-            [format, team1Name, team2Name]
+            `INSERT INTO team_matches (format, team1_name, team2_name, team1_logo_id, team2_logo_id, status)
+             VALUES (?, ?, ?, ?, ?, 'active')`,
+            [format, team1Name, team2Name, team1LogoId || null, team2LogoId || null]
         );
 
         const teamMatchId = result.insertId;
@@ -164,6 +165,19 @@ router.post('/', authMiddleware, async (req, res, next) => {
     } catch (error) {
         next(error);
     }
+});
+
+// PUT /api/team-matches/:id/logos - opdater hold-logoer (requires auth)
+router.put('/:id/logos', authMiddleware, async (req, res, next) => {
+    try {
+        const { team1LogoId, team2LogoId } = req.body;
+        const result = await query(
+            'UPDATE team_matches SET team1_logo_id = ?, team2_logo_id = ? WHERE id = ?',
+            [team1LogoId || null, team2LogoId || null, req.params.id]
+        );
+        if (result.affectedRows === 0) return res.status(404).json({ error: 'Holdkamp ikke fundet' });
+        res.json({ success: true });
+    } catch (error) { next(error); }
 });
 
 // PUT /api/team-matches/:id/games/:gameId - Update a game (public - used from court)
