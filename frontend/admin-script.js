@@ -1730,6 +1730,32 @@ async function editHoldkampLogos(teamMatchId) {
     await loadActiveHoldkamp();
 }
 
+// 🏷-knap til en turneringsspiller (tom navn -> ingen knap)
+function tPlayerLogoBtn(name) {
+    if (!name) return '';
+    const safe = String(name).replace(/'/g, "\\'");
+    return `<button onclick="setTournamentPlayerLogo('${safe}')" title="Sæt klub-logo" style="padding:1px 5px; margin-left:3px; background:transparent; color:#888; border:1px solid #555; border-radius:3px; cursor:pointer; font-size:0.72em;">🏷</button>`;
+}
+
+// Saet/ret en turneringsspillers klub-logo (gemmes pr. navn i player_logos -> slaar
+// igennem alle kampe spilleren er i, og i Spiller info).
+async function setTournamentPlayerLogo(playerName) {
+    if (!playerName) return;
+    await ensureAdminLogos();
+    const existing = (await api.getPlayerLogos().catch(() => []))
+        .find(p => p.player_name === playerName);
+    const opts = _adminLogoCache.map(l => `${l.id}: ${l.club_name}`).join('\n');
+    const cur = existing ? existing.logo_id : '';
+    const v = prompt(`Logo-id for ${playerName} (tom = automatisk/ryd):\n${opts}`, cur);
+    if (v === null) return;
+    if (v.trim() === '') {
+        await api.clearPlayerLogo(playerName);
+    } else {
+        await api.setPlayerLogo(playerName, parseInt(v, 10));
+    }
+    if (typeof loadActiveTournaments === 'function') await loadActiveTournaments();
+}
+
 function finishHoldkamp(id) {
     showMessage(
         'Afslut Holdkamp',
@@ -3254,6 +3280,14 @@ function renderTournamentMatchRow(tournamentId, m) {
         ? `${m.side2_player1 || '?'}${m.side2_player2 ? ' & ' + m.side2_player2 : ''}`
         : (m.side2_player1 || '?');
 
+    // Navne med 🏷-knap til at sætte spillerens klub-logo (gemmes pr. navn)
+    const side1Html = m.doubles
+        ? `${escapeHtml(m.side1_player1 || '?')}${tPlayerLogoBtn(m.side1_player1)}${m.side1_player2 ? ' &amp; ' + escapeHtml(m.side1_player2) + tPlayerLogoBtn(m.side1_player2) : ''}`
+        : `${escapeHtml(m.side1_player1 || '?')}${tPlayerLogoBtn(m.side1_player1)}`;
+    const side2Html = m.doubles
+        ? `${escapeHtml(m.side2_player1 || '?')}${tPlayerLogoBtn(m.side2_player1)}${m.side2_player2 ? ' &amp; ' + escapeHtml(m.side2_player2) + tPlayerLogoBtn(m.side2_player2) : ''}`
+        : `${escapeHtml(m.side2_player1 || '?')}${tPlayerLogoBtn(m.side2_player1)}`;
+
     let statusBadge = '';
     let courtInfo = '';
     if (m.status === 'pending') {
@@ -3287,7 +3321,7 @@ function renderTournamentMatchRow(tournamentId, m) {
         <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:rgba(0,0,0,0.2); border-radius:6px; margin-bottom:6px; gap:10px; flex-wrap:wrap;">
             <div style="flex:1; min-width:200px;">
                 <div style="color:#eaeaea;">
-                    ${labelHtml}<strong>${escapeHtml(side1)}</strong> <span style="color:#777;">vs</span> <strong>${escapeHtml(side2)}</strong>
+                    ${labelHtml}<strong>${side1Html}</strong> <span style="color:#777;">vs</span> <strong>${side2Html}</strong>
                 </div>
                 ${courtInfo}
             </div>
