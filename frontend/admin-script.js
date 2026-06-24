@@ -1743,10 +1743,10 @@ function openLogoModal(title, targets, onSave) {
         ..._adminLogoCache.map(l => `<option value="${l.id}">${escapeHtml(l.club_name)}</option>`)
     ].join('');
     body.innerHTML = targets.map(t => `
-        <div class="logo-target" data-key="${escapeHtml(String(t.key))}" data-auto="${escapeHtml(t.autoName || '')}" style="display:flex; align-items:center; gap:14px; padding:12px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
+        <div class="logo-target" data-key="${escapeHtml(String(t.key))}" data-auto="${escapeHtml(t.autoName || '')}" data-club="${escapeHtml(t.club || '')}" style="display:flex; align-items:center; gap:14px; padding:12px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
             <img class="logo-target-img" alt="" style="width:54px; height:54px; object-fit:contain; background:rgba(255,255,255,0.06); border-radius:8px; flex-shrink:0; display:none;">
             <div style="flex:1; min-width:0;">
-                <div style="color:#eaeaea; font-weight:bold; margin-bottom:6px;">${escapeHtml(t.label)}</div>
+                <div style="color:#eaeaea; font-weight:bold; margin-bottom:6px;">${escapeHtml(t.label)}${t.club ? `<span style="font-weight:normal; color:#9ab; font-size:0.85em;"> — ${escapeHtml(t.club)}</span>` : ''}</div>
                 <select class="logo-target-sel" style="width:100%; padding:9px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid var(--color-primary); border-radius:5px;">${optionsHtml}</select>
                 <div class="logo-target-hint" style="font-size:0.8em; color:#aaa; margin-top:4px;"></div>
             </div>
@@ -1769,13 +1769,19 @@ function updateLogoModalRow(row) {
     const img = row.querySelector('.logo-target-img');
     const hint = row.querySelector('.logo-target-hint');
     const v = sel.value;
+    const club = row.dataset.club || '';
     if (v === 'none') {
         img.style.display = 'none';
         hint.textContent = 'Der vises intet logo.';
     } else if (v === '') {
         const logo = window.LogoMatch.matchLogo(row.dataset.auto || '', _adminLogoCache);
         if (logo) { img.src = logo.url; img.style.display = ''; hint.textContent = `Automatisk: ${logo.club_name}`; }
-        else { img.style.display = 'none'; hint.textContent = 'Automatisk (intet match endnu — udledes ved visning).'; }
+        else {
+            img.style.display = 'none';
+            hint.textContent = club
+                ? `Klub: ${club} — intet logo i biblioteket endnu. Tilføj "${club}" i logo-biblioteket for fremtidig brug.`
+                : 'Automatisk (intet match endnu — udledes ved visning).';
+        }
     } else {
         const logo = _adminLogoCache.find(l => String(l.id) === v);
         if (logo) { img.src = logo.url; img.style.display = ''; hint.textContent = `Valgt: ${logo.club_name}`; }
@@ -1837,8 +1843,9 @@ async function setTournamentPlayerLogo(playerName) {
     const existing = (await api.getPlayerLogos().catch(() => []))
         .find(p => p.player_name === playerName);
     const curVal = existing ? existing.logo_id : null; // null=auto, 0=intet, >0=bestemt
+    const club = (_adminClubByName && LogoMatch && _adminClubByName[LogoMatch.normalizeName(playerName)]) || '';
     openLogoModal(`Logo — ${playerName}`, [
-        { key: 'p', label: playerName, value: curVal, autoName: playerName }
+        { key: 'p', label: playerName, value: curVal, autoName: playerName, club }
     ], async (res) => {
         const v = res.p;
         if (v === null) await api.clearPlayerLogo(playerName);  // auto
