@@ -229,8 +229,10 @@ function parseMatchesHtml(html) {
         }
         const side2Section = body.substring(rowPositions[1], side2End);
 
-        const side1Players = extractPlayerNames(side1Section);
-        const side2Players = extractPlayerNames(side2Section);
+        const side1Full = extractPlayers(side1Section);
+        const side2Full = extractPlayers(side2Section);
+        const side1Players = side1Full.map(p => p.name);
+        const side2Players = side2Full.map(p => p.name);
 
         // Vi importerer ALLE kampe — inkl. semi/finaler hvor spillerne endnu ikke er kendt
         // (TBD/placeholder-kampe). Brugeren kan så redigere navnene løbende når de afgøres.
@@ -248,7 +250,9 @@ function parseMatchesHtml(html) {
             side1Player1: side1Players[0] || '',
             side1Player2: side1Players[1] || '',
             side2Player1: side2Players[0] || '',
-            side2Player2: side2Players[1] || ''
+            side2Player2: side2Players[1] || '',
+            side1: side1Full,
+            side2: side2Full
         });
     }
 
@@ -257,15 +261,24 @@ function parseMatchesHtml(html) {
 
 // Træk spillernavne ud af en match__row-sektion. Kun navne i anchors med data-player-id —
 // det filtrerer "Bye"-tekster og lignende ud fordi de ikke har player-anchor.
-function extractPlayerNames(section) {
-    const names = [];
-    const re = /data-player-id="\d+"[^>]*>\s*<span class="nav-link__value">\s*([^<]+?)\s*<\/span>/g;
+// Træk spillere (navn + player-id + club-id) ud af en match__row-sektion.
+// club-id kan være tom (=> ingen klub for spilleren).
+function extractPlayers(section) {
+    const players = [];
+    const re = /data-player-id="(\d+)"[^>]*?data-club-id="(\d*)"[^>]*>\s*<span class="nav-link__value">\s*([^<]+?)\s*<\/span>/g;
     let m;
     while ((m = re.exec(section)) !== null) {
-        const name = decodeHtmlEntities(m[1]).trim();
-        if (name && !names.includes(name)) names.push(name);
+        const name = decodeHtmlEntities(m[3]).trim();
+        if (name && !players.some(p => p.name === name)) {
+            players.push({ name, playerId: m[1], clubId: m[2] || '' });
+        }
     }
-    return names;
+    return players;
+}
+
+// Bagudkompatibel: kun navne (bruges af den eksisterende flad-felt-mapping)
+function extractPlayerNames(section) {
+    return extractPlayers(section).map(p => p.name);
 }
 
 // Beregn en stabil sourceMatchId pr. kamp: "draw#runde#ordinal". ordinal er kampens
@@ -356,8 +369,55 @@ router.post('/preview', authMiddleware, async (req, res, next) => {
     }
 });
 
+// Slå klubnavne op for de distinkte club-id'er i en turnerings kampe.
+// TS' kampliste har kun club-id; klubnavnet hentes fra én repræsentativ
+// spillers profilside pr. club-id. Returnerer Map<clubId, clubName>.
+async function resolveClubNames(tournamentId, matches) {
+    const repByClub = new Map(); // clubId -> playerId (én repræsentant)
+    for (const m of matches) {
+        for (const p of [...(m.side1 || []), ...(m.side2 || [])]) {
+            if (p.clubId && p.playerId && !repByClub.has(p.clubId)) {
+                repByClub.set(p.clubId, p.playerId);
+            }
+        }
+    }
+
+    const entries = [...repByClub.entries()];
+    const results = await Promise.all(entries.map(async ([clubId, playerId]) => {
+        try {
+            const html = await fetchTournamentPage(tournamentId, `../../sport/player.aspx?id=${tournamentId}&player=${playerId}`);
+            const m = html.match(/media__title--large[\s\S]*?nav-link__value">\s*([^<]+?)\s*</);
+            const club = m ? decodeHtmlEntities(m[1]).trim() : '';
+            return [clubId, club];
+        } catch (e) {
+            console.error(`Klubnavn-opslag fejlede for club-id ${clubId}:`, e.message);
+            return [clubId, ''];
+        }
+    }));
+
+    const map = new Map();
+    for (const [clubId, club] of results) if (club) map.set(clubId, club);
+    return map;
+}
+
+// Byg name->club-rækker (dedup pr. player_name) ud fra kampe + clubId->navn-map.
+function buildPlayerClubRows(matches, clubIdToName) {
+    const byName = new Map();
+    for (const m of matches) {
+        for (const p of [...(m.side1 || []), ...(m.side2 || [])]) {
+            const club = p.clubId ? clubIdToName.get(p.clubId) : null;
+            if (p.name && club && !byName.has(p.name)) {
+                byName.set(p.name, { player_name: p.name, club, source_player_id: p.playerId || null });
+            }
+        }
+    }
+    return [...byName.values()];
+}
+
 module.exports = router;
 // Eksportér genbrugskernen som property på routeren (routeren er en funktion, så
 // app.use('/api/import/tournament', require(...)) virker stadig).
 module.exports.fetchAndParseTournamentMatches = fetchAndParseTournamentMatches;
 module.exports.extractTournamentId = extractTournamentId;
+module.exports.resolveClubNames = resolveClubNames;
+module.exports.buildPlayerClubRows = buildPlayerClubRows;
