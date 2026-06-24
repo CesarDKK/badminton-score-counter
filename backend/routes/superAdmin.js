@@ -723,6 +723,47 @@ router.get('/logos', superAdminAuth, async (req, res, next) => {
     } catch (error) { next(error); }
 });
 
+// GET /api/super-admin/known-club-names — distinkte klubnavne fra alle tenants
+// (turnering + holdkamp + spillere) til "mangler logo"-listen. Frontend filtrerer
+// dem der ikke auto-matcher et logo.
+router.get('/known-club-names', superAdminAuth, async (req, res, next) => {
+    try {
+        const clubs = await masterDb.query('SELECT db_name FROM clubs WHERE is_active = 1');
+        const agg = new Map(); // navn -> { name, sources:Set, count }
+        const add = (name, source) => {
+            const n = (name || '').trim();
+            if (!n || n === '?') return;
+            let e = agg.get(n);
+            if (!e) { e = { name: n, sources: new Set(), count: 0 }; agg.set(n, e); }
+            e.sources.add(source); e.count++;
+        };
+
+        await Promise.all(clubs.map(async (c) => {
+            let conn;
+            try {
+                conn = await clubConn(c.db_name);
+                const q = async (sql) => {
+                    try { const [rows] = await conn.execute(sql); return rows; }
+                    catch (e) { return []; } // tabel findes evt. ikke i ældre klub-DB
+                };
+                (await q('SELECT DISTINCT club FROM tournament_player_clubs')).forEach(r => add(r.club, 'turnering'));
+                (await q('SELECT DISTINCT team1_name FROM team_matches')).forEach(r => add(r.team1_name, 'holdkamp'));
+                (await q('SELECT DISTINCT team2_name FROM team_matches')).forEach(r => add(r.team2_name, 'holdkamp'));
+                (await q('SELECT DISTINCT club FROM player_info')).forEach(r => add(r.club, 'spiller'));
+            } catch (e) {
+                console.error(`known-club-names: tenant ${c.db_name} sprunget over:`, e.message);
+            } finally {
+                if (conn) { try { await conn.end(); } catch (e) { /* ignore */ } }
+            }
+        }));
+
+        const out = [...agg.values()]
+            .map(e => ({ name: e.name, sources: [...e.sources], count: e.count }))
+            .sort((a, b) => b.count - a.count);
+        res.json(out);
+    } catch (error) { next(error); }
+});
+
 // PUT /api/super-admin/logos/:id — ret klubnavn/aliasser
 router.put('/logos/:id', superAdminAuth, async (req, res, next) => {
     try {
