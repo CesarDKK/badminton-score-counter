@@ -21,7 +21,8 @@ async function seedClubLogos() {
         fs.mkdirSync(logoDir, { recursive: true });
     }
 
-    const files = fs.readdirSync(SEED_DIR).filter(f => /\.png$/i.test(f));
+    const files = fs.readdirSync(SEED_DIR).filter(f => /\.(png|jpe?g|webp)$/i.test(f));
+    const mimeFor = (ext) => ext === '.webp' ? 'image/webp' : (ext === '.png' ? 'image/png' : 'image/jpeg');
     let seeded = 0, skipped = 0;
 
     for (const file of files) {
@@ -43,8 +44,9 @@ async function seedClubLogos() {
             );
             if (byName) { skipped++; continue; }
 
+            const ext = path.extname(file).toLowerCase();
             const slug = clubName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
-            const storedName = `seed_${slug}.png`;
+            const storedName = `seed_${slug}${ext}`;
             const srcPath = path.join(SEED_DIR, file);
             const destPath = path.join(logoDir, storedName);
             fs.copyFileSync(srcPath, destPath);
@@ -64,7 +66,7 @@ async function seedClubLogos() {
                   width, height, mime_type, seed_key)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [clubName, null, `central_logos/${storedName}`, file, destPath,
-                 fileSize, width, height, 'image/png', seedKey]
+                 fileSize, width, height, mimeFor(ext), seedKey]
             );
             seeded++;
         } catch (e) {
