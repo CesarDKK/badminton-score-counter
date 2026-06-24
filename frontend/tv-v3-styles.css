@@ -187,6 +187,20 @@ body::before {
     flex-shrink: 0;
 }
 
+/* Spiller-logo pr. navn (individuelle/turneringskampe) */
+.tv-player-row {
+    display: flex;
+    align-items: center;
+    gap: clamp(8px, 1vw, 24px);
+}
+.tv-player-logo {
+    height: clamp(40px, 9vh, 130px);
+    width: auto;
+    max-width: clamp(50px, 10vw, 180px);
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
 /* Serving highlight */
 .team-row.serving {
     background: rgba(var(--color-primary-rgb), 0.1);

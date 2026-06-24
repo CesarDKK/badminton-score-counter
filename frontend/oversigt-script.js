@@ -41,6 +41,8 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 let activeTeamMatches = []; // alle aktive holdkampe (multi-holdkamp)
 let _overviewLogos = []; // central logo-liste, hentet én gang ved init
+let _overviewPlayerLogos = []; // player_logos overrides
+let _overviewClubByName = {};  // normaliseret spillernavn -> klub
 
 let _hkRenderedKey = ''; // signatur af struktur (side + match-ids + game-ids + status)
 const HK_DOUBLES = ['MD', 'DD', 'HD', 'Double'];
@@ -319,11 +321,20 @@ async function initialize() {
 
         await refreshIdleSettings();
 
-        // Hent central logo-liste én gang (bruges til holdkamp-kort-headere)
+        // Hent logo-relaterede lister én gang (holdkamp-headere + spiller-logoer)
         try {
             _overviewLogos = await api.getPublicLogos() || [];
         } catch (e) {
             _overviewLogos = [];
+        }
+        try {
+            _overviewPlayerLogos = await api.getPlayerLogos() || [];
+            const clubs = await api.getPlayerClubs() || [];
+            _overviewClubByName = {};
+            clubs.forEach(c => { if (c && c.name) _overviewClubByName[LogoMatch.normalizeName(c.name)] = c.club; });
+        } catch (e) {
+            _overviewPlayerLogos = [];
+            _overviewClubByName = {};
         }
 
         await loadHoldkamp();
@@ -676,15 +687,22 @@ function renderCourtCard(court) {
     const pauseLabel = (court.restBreakTitle || '').toLowerCase().includes('sæt') ? 'SÆTHVIL' : 'PAUSE';
 
     // Render player names (including doubles partner if applicable)
+    const plogo = (name) => {
+        const logo = window.LogoMatch && LogoMatch.resolvePlayerLogo(name, {
+            playerLogos: _overviewPlayerLogos, clubByName: _overviewClubByName, logos: _overviewLogos
+        });
+        return logo ? `<img class="player-logo" src="${escapeHtml(logo.url)}" alt="" onerror="this.style.display='none'">` : '';
+    };
+    const nameRow = (name) => `<div class="player-name-row">${plogo(name)}<div class="player-name">${escapeHtml(name)}</div></div>`;
+    const partnerRow = (name) => `<div class="player-name-row">${plogo(name)}<div class="player-name-partner">${escapeHtml(name)}</div></div>`;
+
     const player1Names = isDoubles && court.player1.name2
-        ? `<div class="player-name">${escapeHtml(court.player1.name)}</div>
-           <div class="player-name-partner">${escapeHtml(court.player1.name2)}</div>`
-        : `<div class="player-name">${escapeHtml(court.player1.name)}</div>`;
+        ? `${nameRow(court.player1.name)}${partnerRow(court.player1.name2)}`
+        : nameRow(court.player1.name);
 
     const player2Names = isDoubles && court.player2.name2
-        ? `<div class="player-name">${escapeHtml(court.player2.name)}</div>
-           <div class="player-name-partner">${escapeHtml(court.player2.name2)}</div>`
-        : `<div class="player-name">${escapeHtml(court.player2.name)}</div>`;
+        ? `${nameRow(court.player2.name)}${partnerRow(court.player2.name2)}`
+        : nameRow(court.player2.name);
 
     // Rest break badge (only when restBreakActive, not betweenSets)
     const restBreakBadge = court.restBreakActive

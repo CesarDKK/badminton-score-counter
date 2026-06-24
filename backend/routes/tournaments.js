@@ -2,7 +2,29 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
-const { fetchAndParseTournamentMatches } = require('./importTournament');
+const { fetchAndParseTournamentMatches, resolveClubNames, buildPlayerClubRows } = require('./importTournament');
+
+// Best-effort: hent klub pr. spiller fra TS og upsert i tournament_player_clubs.
+// Må ALDRIG kaste videre — klub-logoer er sekundære ift. selve importen.
+async function captureTournamentClubs(tournamentId, sourceTournamentId) {
+    if (!sourceTournamentId) return;
+    try {
+        const { matches } = await fetchAndParseTournamentMatches(sourceTournamentId);
+        const clubIdToName = await resolveClubNames(sourceTournamentId, matches);
+        const rows = buildPlayerClubRows(matches, clubIdToName);
+        for (const r of rows) {
+            await query(
+                `INSERT INTO tournament_player_clubs (tournament_id, player_name, club, source_player_id)
+                 VALUES (?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE club = VALUES(club), source_player_id = VALUES(source_player_id)`,
+                [tournamentId, r.player_name, r.club, r.source_player_id]
+            );
+        }
+        console.log(`✓ Klub-opsamling: ${rows.length} spiller-klubber for turnering ${tournamentId}`);
+    } catch (e) {
+        console.error(`Klub-opsamling fejlede for turnering ${tournamentId}:`, e.message);
+    }
+}
 
 // Et "rigtigt" navn er en faktisk spiller — ikke tomt, ikke en TS-placeholder.
 // Bruges både til indkommende TS-navne og til at afgøre om en DB-værdi allerede
@@ -231,6 +253,12 @@ router.post('/:id/matches/bulk', authMiddleware, async (req, res, next) => {
             inserted++;
         }
 
+        // Best-effort klub-opsamling hvis turneringen er TS-importeret (ikke-blokerende for svaret).
+        const t = await queryOne('SELECT source_tournament_id FROM tournaments WHERE id = ?', [id]);
+        if (t && t.source_tournament_id) {
+            await captureTournamentClubs(id, t.source_tournament_id);
+        }
+
         res.json({ success: true, inserted });
     } catch (error) {
         next(error);
@@ -304,6 +332,8 @@ router.post('/:id/sync-import', authMiddleware, async (req, res, next) => {
             );
             if (result.affectedRows > 0) updated++; else skipped++;
         }
+
+        await captureTournamentClubs(id, tournament.source_tournament_id);
 
         res.json({ updated, unchanged, skipped, newCandidates });
     } catch (error) {

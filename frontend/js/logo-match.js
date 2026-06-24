@@ -37,5 +37,19 @@
         if (v) return (logos || []).find(l => l.id === v) || null;
         return matchLogo(teamMatch['team' + n + '_name'], logos);
     }
-    global.LogoMatch = { normalizeName, matchLogo, resolveTeamLogo };
+    // Udleder en spillers logo. Override (player_logos) vinder: 0 = intet, >0 = bestemt.
+    // Ellers auto: spillerens klub (clubByName paa normaliseret navn) -> matchLogo.
+    function resolvePlayerLogo(playerName, opts) {
+        const o = opts || {};
+        const raw = String(playerName || '').trim();
+        if (!raw) return null;
+        const ov = (o.playerLogos || []).find(p => p.player_name === raw);
+        if (ov) {
+            if (Number(ov.logo_id) === 0) return null;
+            return (o.logos || []).find(l => l.id === Number(ov.logo_id)) || null;
+        }
+        const club = o.clubByName && o.clubByName[normalizeName(raw)];
+        return club ? matchLogo(club, o.logos) : null;
+    }
+    global.LogoMatch = { normalizeName, matchLogo, resolveTeamLogo, resolvePlayerLogo };
 })(window);
