@@ -1075,6 +1075,23 @@ async function ensureAdminLogos() {
     try { _adminLogoCache = await api.getPublicLogos(); } catch (e) { _adminLogoCache = []; }
     return _adminLogoCache;
 }
+
+// Spiller-logo-data til turnerings-listen. Hentes friskt (ikke cache-once) saa et
+// netop redigeret logo slaar igennem ved naeste render af listen.
+let _adminPlayerLogos = [];
+let _adminClubByName = {};
+async function refreshAdminPlayerLogoData() {
+    await ensureAdminLogos();
+    try {
+        _adminPlayerLogos = await api.getPlayerLogos() || [];
+        const clubs = await api.getPlayerClubs() || [];
+        _adminClubByName = {};
+        clubs.forEach(c => { if (c && c.name) _adminClubByName[LogoMatch.normalizeName(c.name)] = c.club; });
+    } catch (e) {
+        _adminPlayerLogos = [];
+        _adminClubByName = {};
+    }
+}
 function fillHoldkampLogoSelect(selectEl) {
     selectEl.innerHTML = '<option value="">Logo: automatisk</option>' +
         _adminLogoCache.map(l => `<option value="${l.id}">${escapeHtml(l.club_name)}</option>`).join('');
@@ -1797,7 +1814,19 @@ async function editHoldkampLogos(teamMatchId) {
 function tPlayerLogoBtn(name) {
     if (!name) return '';
     const safe = String(name).replace(/'/g, "\\'");
-    return `<button onclick="setTournamentPlayerLogo('${safe}')" title="Sæt klub-logo" style="padding:1px 5px; margin-left:3px; background:transparent; color:#888; border:1px solid #555; border-radius:3px; cursor:pointer; font-size:0.72em;">🏷</button>`;
+    // Resolve spillerens logo med de samme regler som TV/Oversigt (override -> klub -> matchLogo)
+    const logo = (window.LogoMatch && LogoMatch.resolvePlayerLogo)
+        ? LogoMatch.resolvePlayerLogo(name, {
+            playerLogos: _adminPlayerLogos, clubByName: _adminClubByName, logos: _adminLogoCache
+          })
+        : null;
+
+    if (logo) {
+        // Logo fundet → klikbart mini-logo (åbner samme redigerings-modal)
+        return `<img onclick="setTournamentPlayerLogo('${safe}')" src="${escapeHtml(logo.url)}" title="Skift klub-logo — ${escapeHtml(name)}" onerror="this.style.display='none'" style="height:22px; width:auto; max-width:40px; object-fit:contain; margin-left:4px; vertical-align:middle; cursor:pointer;">`;
+    }
+    // Intet logo → tydelig stiplet "mangler"-markør (klik for at tilføje)
+    return `<button onclick="setTournamentPlayerLogo('${safe}')" title="Tilføj klub-logo — ${escapeHtml(name)}" style="padding:1px 5px; margin-left:4px; background:transparent; color:#c9a23a; border:1px dashed #c9a23a; border-radius:3px; cursor:pointer; font-size:0.72em; vertical-align:middle;">🏷</button>`;
 }
 
 // Saet/ret en turneringsspillers klub-logo (gemmes pr. navn i player_logos -> slaar
@@ -3008,6 +3037,7 @@ async function loadActiveTournaments() {
             return;
         }
 
+        await refreshAdminPlayerLogoData();
         renderTournaments(tournaments);
     } catch (error) {
         console.error('Failed to load tournaments:', error);
