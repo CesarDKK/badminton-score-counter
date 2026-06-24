@@ -168,6 +168,14 @@ class BadmintonAPI {
         return this.request(`/team-matches/by-court/${courtId}`, { requiresAuth: false });
     }
 
+    async getPlayerLogos() {
+        return this.request('/player-logos', { requiresAuth: false });
+    }
+
+    async getPlayerClubs() {
+        return this.request('/player-clubs', { requiresAuth: false });
+    }
+
     // ==================== Game States ====================
 
     /**

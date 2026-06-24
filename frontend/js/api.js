@@ -495,6 +495,10 @@ class BadmintonAPI {
         return this.request('/player-logos', { requiresAuth: false });
     }
 
+    async getPlayerClubs() {
+        return this.request('/player-clubs', { requiresAuth: false });
+    }
+
     async setPlayerLogo(playerName, logoId) {
         return this.request('/player-logos', {
             method: 'PUT',
