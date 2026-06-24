@@ -370,23 +370,24 @@ router.post('/preview', authMiddleware, async (req, res, next) => {
 });
 
 // Slå klubnavne op for de distinkte club-id'er i en turnerings kampe.
-// TS' kampliste har kun club-id; klubnavnet hentes fra én repræsentativ
-// spillers profilside pr. club-id. Returnerer Map<clubId, clubName>.
+// TS' kampliste har kun et turnerings-lokalt club-id; klubnavnet hentes fra
+// klub-siden /tournament/<id>/club/<cid>, hvor <title> har formen
+// "... - Klub: <Klubnavn> (<nr>) - Oversigt". (Spillerens profilside dur IKKE:
+// dens overskrift er turneringens arrangoer-branding, ens for alle spillere.)
+// Returnerer Map<clubId, clubName>.
 async function resolveClubNames(tournamentId, matches) {
-    const repByClub = new Map(); // clubId -> playerId (én repræsentant)
+    const clubIds = new Set();
     for (const m of matches) {
         for (const p of [...(m.side1 || []), ...(m.side2 || [])]) {
-            if (p.clubId && p.playerId && !repByClub.has(p.clubId)) {
-                repByClub.set(p.clubId, p.playerId);
-            }
+            if (p.clubId) clubIds.add(p.clubId);
         }
     }
 
-    const entries = [...repByClub.entries()];
-    const results = await Promise.all(entries.map(async ([clubId, playerId]) => {
+    const ids = [...clubIds];
+    const results = await Promise.all(ids.map(async (clubId) => {
         try {
-            const html = await fetchTournamentPage(tournamentId, `../../sport/player.aspx?id=${tournamentId}&player=${playerId}`);
-            const m = html.match(/media__title--large[\s\S]*?nav-link__value">\s*([^<]+?)\s*</);
+            const html = await fetchTournamentPage(tournamentId, `club/${clubId}`);
+            const m = html.match(/<title>[^<]*\bKlub:\s*(.+?)\s*\(\d+\)/i);
             const club = m ? decodeHtmlEntities(m[1]).trim() : '';
             return [clubId, club];
         } catch (e) {
