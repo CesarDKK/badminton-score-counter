@@ -6,6 +6,7 @@ const masterDb = require('../config/masterDatabase');
 const { superAdminAuth, generateSuperAdminToken } = require('../middleware/superAdminAuth');
 const fs = require('fs');
 const sharp = require('sharp');
+const AdmZip = require('adm-zip');
 const logoUpload = require('../config/logoUpload');
 
 // Gyldige side-noegler for klub-admins per-side adgangsstyring.
@@ -761,6 +762,38 @@ router.get('/known-club-names', superAdminAuth, async (req, res, next) => {
             .map(e => ({ name: e.name, sources: [...e.sources], count: e.count }))
             .sort((a, b) => b.count - a.count);
         res.json(out);
+    } catch (error) { next(error); }
+});
+
+// GET /api/super-admin/logos/seed-bundle — download hele biblioteket som seed-zip
+// (billeder navngivet efter klub + aliases.json). Udpakkes i backend/assets/seed_logos.
+router.get('/logos/seed-bundle', superAdminAuth, async (req, res, next) => {
+    try {
+        const logos = await masterDb.query(
+            'SELECT club_name, aliases, filename, file_path FROM club_logos ORDER BY club_name ASC'
+        );
+        const zip = new AdmZip();
+        const used = new Set();
+        const aliasesManifest = {};
+        for (const l of logos) {
+            if (!l.file_path || !backupFs.existsSync(l.file_path)) {
+                console.error('seed-bundle: fil mangler paa disk:', l.file_path);
+                continue;
+            }
+            const ext = backupPath.extname(l.filename) || '.png';
+            const base = (String(l.club_name || '').trim()) || 'logo';
+            let name = `${base}${ext}`;
+            let i = 2;
+            while (used.has(name.toLowerCase())) { name = `${base}_${i}${ext}`; i++; }
+            used.add(name.toLowerCase());
+            zip.addLocalFile(l.file_path, '', name);
+            if (l.aliases) aliasesManifest[name] = l.aliases;
+        }
+        zip.addFile('aliases.json', Buffer.from(JSON.stringify(aliasesManifest, null, 2), 'utf8'));
+        const buf = zip.toBuffer();
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', 'attachment; filename="seed_logos_bundle.zip"');
+        res.send(buf);
     } catch (error) { next(error); }
 });
 
