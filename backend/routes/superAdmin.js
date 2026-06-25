@@ -730,6 +730,10 @@ router.get('/logos', superAdminAuth, async (req, res, next) => {
 router.get('/known-club-names', superAdminAuth, async (req, res, next) => {
     try {
         const clubs = await masterDb.query('SELECT db_name FROM clubs WHERE is_active = 1');
+        // Inkludér default/single-instance DB'en (direkte tilstand uden tenant) + alle
+        // registrerede aktive klubber. Dedup så samme DB ikke scannes to gange.
+        const defaultDb = process.env.DB_NAME || 'badminton_counter';
+        const dbNames = [...new Set([defaultDb, ...clubs.map(c => c.db_name)])];
         const agg = new Map(); // navn -> { name, sources:Set, count }
         const add = (name, source) => {
             const n = (name || '').trim();
@@ -739,10 +743,10 @@ router.get('/known-club-names', superAdminAuth, async (req, res, next) => {
             e.sources.add(source); e.count++;
         };
 
-        await Promise.all(clubs.map(async (c) => {
+        await Promise.all(dbNames.map(async (dbName) => {
             let conn;
             try {
-                conn = await clubConn(c.db_name);
+                conn = await clubConn(dbName);
                 const q = async (sql) => {
                     try { const [rows] = await conn.execute(sql); return rows; }
                     catch (e) { return []; } // tabel findes evt. ikke i ældre klub-DB
@@ -752,7 +756,7 @@ router.get('/known-club-names', superAdminAuth, async (req, res, next) => {
                 (await q('SELECT DISTINCT team2_name FROM team_matches')).forEach(r => add(r.team2_name, 'holdkamp'));
                 (await q('SELECT DISTINCT club FROM player_info')).forEach(r => add(r.club, 'spiller'));
             } catch (e) {
-                console.error(`known-club-names: tenant ${c.db_name} sprunget over:`, e.message);
+                console.error(`known-club-names: tenant ${dbName} sprunget over:`, e.message);
             } finally {
                 if (conn) { try { await conn.end(); } catch (e) { /* ignore */ } }
             }
