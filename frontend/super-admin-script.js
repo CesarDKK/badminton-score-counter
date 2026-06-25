@@ -98,6 +98,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // Klub-logoer
     document.getElementById('uploadLogoBtn').addEventListener('click', handleUploadLogo);
     document.getElementById('refreshLogosBtn').addEventListener('click', loadLogos);
+    document.getElementById('refreshMissingLogosBtn').addEventListener('click', loadMissingLogos);
+    document.getElementById('downloadSeedBundleBtn').addEventListener('click', downloadSeedBundle);
 
     // Admin modal
     document.getElementById('adminModalClose').addEventListener('click', closeModal);
@@ -184,6 +186,7 @@ function switchApp(app) {
     if (isBadminton) {
         loadClubs();
         loadLogos();
+        loadMissingLogos();
     } else {
         loadFootballClubs();
     }
@@ -937,6 +940,89 @@ function renderLogos(logos) {
             </div>
         </div>
     `).join('');
+}
+
+// ---- Klubber uden logo ----
+async function loadMissingLogos() {
+    const listEl = document.getElementById('missingLogoList');
+    if (!listEl) return;
+    listEl.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+    try {
+        const [names, logos] = await Promise.all([api.getKnownClubNames(), api.getLogos()]);
+        logoCache = logos || [];
+        const missing = (names || []).filter(c =>
+            !(window.LogoMatch && LogoMatch.matchLogo(c.name, logoCache)));
+        renderMissingLogos(missing);
+    } catch (err) {
+        listEl.innerHTML = `<div class="empty-state">Fejl: ${escapeHtml(err.message || 'kunne ikke hente klubber')}</div>`;
+    }
+}
+
+function renderMissingLogos(list) {
+    const listEl = document.getElementById('missingLogoList');
+    if (!list.length) {
+        listEl.innerHTML = '<div class="empty-state" style="padding:12px;">Alle kendte klubber har et logo 🎉</div>';
+        return;
+    }
+    const opts = logoCache.map(l => `<option value="${l.id}">${escapeHtml(l.club_name)}</option>`).join('');
+    listEl.innerHTML = list.map(c => {
+        const safe = escapeHtml(c.name);
+        const attr = c.name.replace(/'/g, "\\'");
+        return `
+        <div class="admin-item" style="gap:10px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:160px;">
+                <div class="admin-name">${safe}</div>
+                <div class="admin-email">${c.sources.join(', ')} · ${c.count}×</div>
+            </div>
+            <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                <button class="btn-primary" style="font-size:0.8em; padding:5px 10px;" onclick="prefillUploadLogo('${attr}')">Upload logo</button>
+                <select class="link-existing-sel" style="font-size:0.8em; padding:5px;">
+                    <option value="">Knyt til…</option>${opts}
+                </select>
+                <button class="btn-secondary" style="font-size:0.8em; padding:5px 10px;" onclick="linkClubToLogo('${attr}', this.previousElementSibling)">Knyt</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function prefillUploadLogo(name) {
+    const inp = document.getElementById('newLogoClubName');
+    if (inp) { inp.value = name; inp.focus(); inp.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+}
+
+async function linkClubToLogo(name, selectEl) {
+    const id = selectEl && selectEl.value ? parseInt(selectEl.value, 10) : 0;
+    if (!id) { alert('Vælg et logo at knytte til'); return; }
+    const logo = logoCache.find(l => l.id === id);
+    if (!logo) return;
+    const aliases = (logo.aliases || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (!aliases.some(a => a.toLowerCase() === name.toLowerCase())) aliases.push(name);
+    try {
+        await api.updateLogo(id, logo.club_name, aliases.join(', '));
+        await loadLogos();
+        await loadMissingLogos();
+    } catch (err) {
+        alert('Kunne ikke knytte: ' + (err.message || 'ukendt fejl'));
+    }
+}
+window.prefillUploadLogo = prefillUploadLogo;
+window.linkClubToLogo = linkClubToLogo;
+
+async function downloadSeedBundle() {
+    const token = sessionStorage.getItem('superAdminToken') || sessionStorage.getItem('authToken');
+    try {
+        const res = await fetch('/api/super-admin/logos/seed-bundle', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'seed_logos_bundle.zip'; a.click();
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        alert('Seed-bundle fejlede: ' + err.message);
+    }
 }
 
 async function handleUploadLogo() {
