@@ -100,6 +100,7 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('refreshLogosBtn').addEventListener('click', loadLogos);
     document.getElementById('refreshMissingLogosBtn').addEventListener('click', loadMissingLogos);
     document.getElementById('downloadSeedBundleBtn').addEventListener('click', downloadSeedBundle);
+    document.getElementById('importSeedBundleBtn').addEventListener('click', triggerImportSeedBundle);
 
     // Admin modal
     document.getElementById('adminModalClose').addEventListener('click', closeModal);
@@ -1022,6 +1023,45 @@ async function downloadSeedBundle() {
         URL.revokeObjectURL(url);
     } catch (err) {
         alert('Seed-bundle fejlede: ' + err.message);
+    }
+}
+
+// Skjult file-input til seed-bundle-import
+const _importBundleInput = (() => {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = '.zip,application/zip';
+    inp.style.display = 'none';
+    document.body.appendChild(inp);
+    inp.addEventListener('change', () => {
+        if (inp.files[0]) doImportSeedBundle(inp.files[0]);
+        inp.value = '';
+    });
+    return inp;
+})();
+
+function triggerImportSeedBundle() {
+    if (!confirm('Importer logoer fra seed-bundle?\n\nEksisterende klubber med samme navn FÅR overskrevet billede og aliasser.')) return;
+    _importBundleInput.click();
+}
+
+async function doImportSeedBundle(file) {
+    const token = sessionStorage.getItem('superAdminToken') || sessionStorage.getItem('authToken');
+    const form = new FormData();
+    form.append('bundle', file);
+    try {
+        const res = await fetch('/api/super-admin/logos/import-bundle', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: form
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || res.statusText);
+        alert(`✓ Import færdig\n${data.imported} nye, ${data.updated} opdateret, ${data.skipped} sprunget over, ${data.errors} fejl`);
+        await loadLogos();
+        await loadMissingLogos();
+    } catch (err) {
+        alert('Import fejlede: ' + (err.message || 'ukendt fejl'));
     }
 }
 

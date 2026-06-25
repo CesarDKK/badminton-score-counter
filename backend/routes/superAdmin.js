@@ -361,6 +361,7 @@ function saNormalizeValue(v) {
 
 const backupFs = require('fs');
 const backupPath = require('path');
+const crypto = require('crypto');
 const backupMulter = require('multer')({ storage: require('multer').memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
 const BACKUP_TABLES = [
@@ -785,19 +786,128 @@ router.get('/logos/seed-bundle', superAdminAuth, async (req, res, next) => {
                 continue;
             }
             const ext = backupPath.extname(l.filename) || '.png';
-            const base = (String(l.club_name || '').trim()) || 'logo';
+            // Saniter filnavnet: fjern sti-separatorer (klubnavne som "Skovsgaard/Brovst"
+            // maa ikke blive til undermapper i zip'en). Det rigtige club_name baeres i
+            // manifesten, saa navnet ikke gaar tabt selv om filnavnet saniteres.
+            const base = ((String(l.club_name || '').trim()) || 'logo').replace(/[\/\\]/g, '_');
             let name = `${base}${ext}`;
             let i = 2;
             while (used.has(name.toLowerCase())) { name = `${base}_${i}${ext}`; i++; }
             used.add(name.toLowerCase());
             zip.addLocalFile(l.file_path, '', name);
-            if (l.aliases) aliasesManifest[name] = l.aliases;
+            // Manifest pr. fil: baer det ægte club_name + aliasser (objekt-format).
+            aliasesManifest[name] = { club_name: l.club_name, aliases: l.aliases || null };
         }
         zip.addFile('aliases.json', Buffer.from(JSON.stringify(aliasesManifest, null, 2), 'utf8'));
         const buf = zip.toBuffer();
         res.setHeader('Content-Type', 'application/zip');
         res.setHeader('Content-Disposition', 'attachment; filename="seed_logos_bundle.zip"');
         res.send(buf);
+    } catch (error) { next(error); }
+});
+
+// POST /api/super-admin/logos/import-bundle — indlæs en seed-bundle-zip live i biblioteket.
+// Upsert pr. club_name: overskriv billede+aliasser for eksisterende, INSERT (seed_key=NULL)
+// for nye. Format: <club_name>.<ext>-filer + valgfri aliases.json ({filnavn: aliasser}).
+router.post('/logos/import-bundle', superAdminAuth, backupMulter.single('bundle'), async (req, res, next) => {
+    try {
+        if (!req.file || !req.file.buffer) {
+            return res.status(400).json({ error: 'Zip-fil er påkrævet (felt: bundle)' });
+        }
+
+        let zip;
+        try { zip = new AdmZip(req.file.buffer); }
+        catch (e) { return res.status(400).json({ error: 'Ugyldig eller beskadiget zip-fil' }); }
+
+        const entries = zip.getEntries();
+
+        // aliases.json (valgfri) -> { filnavn: aliasser }
+        let aliasesByFile = {};
+        const manifestEntry = entries.find(e => backupPath.basename(e.entryName) === 'aliases.json');
+        if (manifestEntry) {
+            try { aliasesByFile = JSON.parse(manifestEntry.getData().toString('utf8')) || {}; }
+            catch (e) { console.error('import-bundle: ugyldig aliases.json:', e.message); aliasesByFile = {}; }
+        }
+
+        const uploadDir = process.env.UPLOAD_DIR || backupPath.join(__dirname, '..', 'uploads');
+        const logoDir = backupPath.join(uploadDir, 'central_logos');
+        if (!backupFs.existsSync(logoDir)) backupFs.mkdirSync(logoDir, { recursive: true });
+
+        let imported = 0, updated = 0, skipped = 0, errors = 0;
+
+        for (const entry of entries) {
+            if (entry.isDirectory) continue;
+            const fileName = backupPath.basename(entry.entryName); // path-traversal-sikring
+            if (!/\.(png|jpe?g|webp)$/i.test(fileName)) continue;   // springer aliases.json m.m. over
+
+            let destPath = null;
+            try {
+                const ext = backupPath.extname(fileName).toLowerCase();
+                // Manifesten kan baere {club_name, aliases} (nyt format, bevarer navne med /)
+                // eller bare en alias-streng (gammelt format). Klubnavn falder tilbage til
+                // filnavnet hvis manifesten ikke har det.
+                const manifestVal = aliasesByFile[fileName];
+                let manClub = null, rawAlias = null;
+                if (manifestVal && typeof manifestVal === 'object' && !Array.isArray(manifestVal)) {
+                    manClub = manifestVal.club_name;
+                    rawAlias = manifestVal.aliases;
+                } else {
+                    rawAlias = manifestVal;
+                }
+                const clubName = ((manClub !== undefined && manClub !== null && String(manClub).trim())
+                    ? String(manClub)
+                    : backupPath.basename(fileName, backupPath.extname(fileName)))
+                    .replace(/\s+/g, ' ').trim();
+                if (!clubName) { skipped++; continue; }
+                const aliases = (rawAlias === undefined || rawAlias === null || rawAlias === '')
+                    ? null
+                    : (Array.isArray(rawAlias) ? rawAlias.join(', ') : String(rawAlias));
+                const mime = ext === '.webp' ? 'image/webp' : (ext === '.png' ? 'image/png' : 'image/jpeg');
+
+                const slug = clubName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
+                const storedName = `import_${slug}_${Date.now()}_${crypto.randomBytes(6).toString('hex')}${ext}`;
+                destPath = backupPath.join(logoDir, storedName);
+                backupFs.writeFileSync(destPath, entry.getData());
+
+                let width = null, height = null;
+                try { const meta = await sharp(destPath).metadata(); width = meta.width || null; height = meta.height || null; }
+                catch (e) { /* metadata valgfri */ }
+                const fileSize = backupFs.statSync(destPath).size;
+                const filename = `central_logos/${storedName}`;
+
+                const existing = await masterDb.queryOne(
+                    'SELECT id, file_path FROM club_logos WHERE club_name = ?', [clubName]
+                );
+                if (existing) {
+                    await masterDb.query(
+                        `UPDATE club_logos
+                         SET aliases = ?, filename = ?, original_name = ?, file_path = ?,
+                             file_size = ?, width = ?, height = ?, mime_type = ?
+                         WHERE id = ?`,
+                        [aliases, filename, fileName, destPath, fileSize, width, height, mime, existing.id]
+                    );
+                    if (existing.file_path && existing.file_path !== destPath) {
+                        try { backupFs.unlinkSync(existing.file_path); } catch (e) { /* gammel fil evt. væk */ }
+                    }
+                    updated++;
+                } else {
+                    await masterDb.query(
+                        `INSERT INTO club_logos
+                         (club_name, aliases, filename, original_name, file_path, file_size,
+                          width, height, mime_type, seed_key)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+                        [clubName, aliases, filename, fileName, destPath, fileSize, width, height, mime]
+                    );
+                    imported++;
+                }
+            } catch (e) {
+                console.error('import-bundle: fejl ved', fileName, e.message);
+                if (destPath) { try { backupFs.unlinkSync(destPath); } catch (er) { /* ignore */ } }
+                errors++;
+            }
+        }
+
+        res.json({ imported, updated, skipped, errors });
     } catch (error) { next(error); }
 });
 
