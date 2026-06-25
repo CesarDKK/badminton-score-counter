@@ -361,6 +361,7 @@ function saNormalizeValue(v) {
 
 const backupFs = require('fs');
 const backupPath = require('path');
+const crypto = require('crypto');
 const backupMulter = require('multer')({ storage: require('multer').memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
 const BACKUP_TABLES = [
@@ -809,7 +810,6 @@ router.post('/logos/import-bundle', superAdminAuth, backupMulter.single('bundle'
         if (!req.file || !req.file.buffer) {
             return res.status(400).json({ error: 'Zip-fil er påkrævet (felt: bundle)' });
         }
-        const crypto = require('crypto');
 
         let zip;
         try { zip = new AdmZip(req.file.buffer); }
@@ -842,7 +842,10 @@ router.post('/logos/import-bundle', superAdminAuth, backupMulter.single('bundle'
                 const clubName = backupPath.basename(fileName, backupPath.extname(fileName))
                     .replace(/\s+/g, ' ').trim();
                 if (!clubName) { skipped++; continue; }
-                const aliases = aliasesByFile[fileName] || null;
+                const rawAlias = aliasesByFile[fileName];
+                const aliases = (rawAlias === undefined || rawAlias === null || rawAlias === '')
+                    ? null
+                    : (Array.isArray(rawAlias) ? rawAlias.join(', ') : String(rawAlias));
                 const mime = ext === '.webp' ? 'image/webp' : (ext === '.png' ? 'image/png' : 'image/jpeg');
 
                 const slug = clubName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
