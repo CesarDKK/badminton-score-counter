@@ -786,13 +786,17 @@ router.get('/logos/seed-bundle', superAdminAuth, async (req, res, next) => {
                 continue;
             }
             const ext = backupPath.extname(l.filename) || '.png';
-            const base = (String(l.club_name || '').trim()) || 'logo';
+            // Saniter filnavnet: fjern sti-separatorer (klubnavne som "Skovsgaard/Brovst"
+            // maa ikke blive til undermapper i zip'en). Det rigtige club_name baeres i
+            // manifesten, saa navnet ikke gaar tabt selv om filnavnet saniteres.
+            const base = ((String(l.club_name || '').trim()) || 'logo').replace(/[\/\\]/g, '_');
             let name = `${base}${ext}`;
             let i = 2;
             while (used.has(name.toLowerCase())) { name = `${base}_${i}${ext}`; i++; }
             used.add(name.toLowerCase());
             zip.addLocalFile(l.file_path, '', name);
-            if (l.aliases) aliasesManifest[name] = l.aliases;
+            // Manifest pr. fil: baer det ægte club_name + aliasser (objekt-format).
+            aliasesManifest[name] = { club_name: l.club_name, aliases: l.aliases || null };
         }
         zip.addFile('aliases.json', Buffer.from(JSON.stringify(aliasesManifest, null, 2), 'utf8'));
         const buf = zip.toBuffer();
@@ -839,10 +843,22 @@ router.post('/logos/import-bundle', superAdminAuth, backupMulter.single('bundle'
             let destPath = null;
             try {
                 const ext = backupPath.extname(fileName).toLowerCase();
-                const clubName = backupPath.basename(fileName, backupPath.extname(fileName))
+                // Manifesten kan baere {club_name, aliases} (nyt format, bevarer navne med /)
+                // eller bare en alias-streng (gammelt format). Klubnavn falder tilbage til
+                // filnavnet hvis manifesten ikke har det.
+                const manifestVal = aliasesByFile[fileName];
+                let manClub = null, rawAlias = null;
+                if (manifestVal && typeof manifestVal === 'object' && !Array.isArray(manifestVal)) {
+                    manClub = manifestVal.club_name;
+                    rawAlias = manifestVal.aliases;
+                } else {
+                    rawAlias = manifestVal;
+                }
+                const clubName = ((manClub !== undefined && manClub !== null && String(manClub).trim())
+                    ? String(manClub)
+                    : backupPath.basename(fileName, backupPath.extname(fileName)))
                     .replace(/\s+/g, ' ').trim();
                 if (!clubName) { skipped++; continue; }
-                const rawAlias = aliasesByFile[fileName];
                 const aliases = (rawAlias === undefined || rawAlias === null || rawAlias === '')
                     ? null
                     : (Array.isArray(rawAlias) ? rawAlias.join(', ') : String(rawAlias));

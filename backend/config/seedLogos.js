@@ -35,10 +35,25 @@ async function seedClubLogos() {
 
     for (const file of files) {
         try {
-            const clubName = path.basename(file, path.extname(file))
+            const seedKey = file;
+            // Manifesten kan baere {club_name, aliases} (nyt format, bevarer navne med /)
+            // eller bare en alias-streng (gammelt format). Klubnavn falder tilbage til filnavnet.
+            const manifestVal = aliasesByFile[file];
+            let manClub = null, rawAlias = null;
+            if (manifestVal && typeof manifestVal === 'object' && !Array.isArray(manifestVal)) {
+                manClub = manifestVal.club_name;
+                rawAlias = manifestVal.aliases;
+            } else {
+                rawAlias = manifestVal;
+            }
+            const clubName = ((manClub !== undefined && manClub !== null && String(manClub).trim())
+                ? String(manClub)
+                : path.basename(file, path.extname(file)))
                 .replace(/\s+/g, ' ')
                 .trim();
-            const seedKey = file;
+            const aliases = (rawAlias === undefined || rawAlias === null || rawAlias === '')
+                ? null
+                : (Array.isArray(rawAlias) ? rawAlias.join(', ') : String(rawAlias));
 
             // Allerede seeded (evt. redigeret af admin) -> bevar
             const bySeed = await queryOne(
@@ -73,7 +88,7 @@ async function seedClubLogos() {
                  (club_name, aliases, filename, original_name, file_path, file_size,
                   width, height, mime_type, seed_key)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [clubName, aliasesByFile[file] || null, `central_logos/${storedName}`, file, destPath,
+                [clubName, aliases, `central_logos/${storedName}`, file, destPath,
                  fileSize, width, height, mimeFor(ext), seedKey]
             );
             seeded++;
