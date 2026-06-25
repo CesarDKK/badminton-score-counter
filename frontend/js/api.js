@@ -486,6 +486,10 @@ class BadmintonAPI {
         return this.request('/super-admin/logos');
     }
 
+    async getKnownClubNames() {
+        return this.request('/super-admin/known-club-names');
+    }
+
     /** Offentlig liste over centrale klub-logoer (til matching/visning) */
     async getPublicLogos() {
         return this.request('/logos', { requiresAuth: false });
