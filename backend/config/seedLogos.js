@@ -23,6 +23,14 @@ async function seedClubLogos() {
 
     const files = fs.readdirSync(SEED_DIR).filter(f => /\.(png|jpe?g|webp)$/i.test(f));
     const mimeFor = (ext) => ext === '.webp' ? 'image/webp' : (ext === '.png' ? 'image/png' : 'image/jpeg');
+
+    // Valgfri alias-manifest fra eksport (aliases.json springes selv over af filteret ovenfor).
+    let aliasesByFile = {};
+    const manifestPath = path.join(SEED_DIR, 'aliases.json');
+    if (fs.existsSync(manifestPath)) {
+        try { aliasesByFile = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) || {}; }
+        catch (e) { console.error('Kunne ikke laese aliases.json:', e.message); aliasesByFile = {}; }
+    }
     let seeded = 0, skipped = 0;
 
     for (const file of files) {
@@ -65,7 +73,7 @@ async function seedClubLogos() {
                  (club_name, aliases, filename, original_name, file_path, file_size,
                   width, height, mime_type, seed_key)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [clubName, null, `central_logos/${storedName}`, file, destPath,
+                [clubName, aliasesByFile[file] || null, `central_logos/${storedName}`, file, destPath,
                  fileSize, width, height, mimeFor(ext), seedKey]
             );
             seeded++;

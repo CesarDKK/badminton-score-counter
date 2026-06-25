@@ -6,6 +6,7 @@ const masterDb = require('../config/masterDatabase');
 const { superAdminAuth, generateSuperAdminToken } = require('../middleware/superAdminAuth');
 const fs = require('fs');
 const sharp = require('sharp');
+const AdmZip = require('adm-zip');
 const logoUpload = require('../config/logoUpload');
 
 // Gyldige side-noegler for klub-admins per-side adgangsstyring.
@@ -720,6 +721,83 @@ router.get('/logos', superAdminAuth, async (req, res, next) => {
              FROM club_logos ORDER BY club_name ASC`
         );
         res.json(rows.map(r => ({ ...r, url: `/uploads/${r.filename}` })));
+    } catch (error) { next(error); }
+});
+
+// GET /api/super-admin/known-club-names — distinkte klubnavne fra alle tenants
+// (turnering + holdkamp + spillere) til "mangler logo"-listen. Frontend filtrerer
+// dem der ikke auto-matcher et logo.
+router.get('/known-club-names', superAdminAuth, async (req, res, next) => {
+    try {
+        const clubs = await masterDb.query('SELECT db_name FROM clubs WHERE is_active = 1');
+        // Inkludér default/single-instance DB'en (direkte tilstand uden tenant) + alle
+        // registrerede aktive klubber. Dedup så samme DB ikke scannes to gange.
+        const defaultDb = process.env.DB_NAME || 'badminton_counter';
+        const dbNames = [...new Set([defaultDb, ...clubs.map(c => c.db_name)])];
+        const agg = new Map(); // navn -> { name, sources:Set, count }
+        const add = (name, source) => {
+            const n = (name || '').trim();
+            if (!n || n === '?') return;
+            let e = agg.get(n);
+            if (!e) { e = { name: n, sources: new Set(), count: 0 }; agg.set(n, e); }
+            e.sources.add(source); e.count++;
+        };
+
+        await Promise.all(dbNames.map(async (dbName) => {
+            let conn;
+            try {
+                conn = await clubConn(dbName);
+                const q = async (sql) => {
+                    try { const [rows] = await conn.execute(sql); return rows; }
+                    catch (e) { return []; } // tabel findes evt. ikke i ældre klub-DB
+                };
+                (await q('SELECT DISTINCT club FROM tournament_player_clubs')).forEach(r => add(r.club, 'turnering'));
+                (await q('SELECT DISTINCT team1_name FROM team_matches')).forEach(r => add(r.team1_name, 'holdkamp'));
+                (await q('SELECT DISTINCT team2_name FROM team_matches')).forEach(r => add(r.team2_name, 'holdkamp'));
+                (await q('SELECT DISTINCT club FROM player_info')).forEach(r => add(r.club, 'spiller'));
+            } catch (e) {
+                console.error(`known-club-names: tenant ${dbName} sprunget over:`, e.message);
+            } finally {
+                if (conn) { try { await conn.end(); } catch (e) { /* ignore */ } }
+            }
+        }));
+
+        const out = [...agg.values()]
+            .map(e => ({ name: e.name, sources: [...e.sources], count: e.count }))
+            .sort((a, b) => b.count - a.count);
+        res.json(out);
+    } catch (error) { next(error); }
+});
+
+// GET /api/super-admin/logos/seed-bundle — download hele biblioteket som seed-zip
+// (billeder navngivet efter klub + aliases.json). Udpakkes i backend/assets/seed_logos.
+router.get('/logos/seed-bundle', superAdminAuth, async (req, res, next) => {
+    try {
+        const logos = await masterDb.query(
+            'SELECT club_name, aliases, filename, file_path FROM club_logos ORDER BY club_name ASC'
+        );
+        const zip = new AdmZip();
+        const used = new Set();
+        const aliasesManifest = {};
+        for (const l of logos) {
+            if (!l.file_path || !backupFs.existsSync(l.file_path)) {
+                console.error('seed-bundle: fil mangler paa disk:', l.file_path);
+                continue;
+            }
+            const ext = backupPath.extname(l.filename) || '.png';
+            const base = (String(l.club_name || '').trim()) || 'logo';
+            let name = `${base}${ext}`;
+            let i = 2;
+            while (used.has(name.toLowerCase())) { name = `${base}_${i}${ext}`; i++; }
+            used.add(name.toLowerCase());
+            zip.addLocalFile(l.file_path, '', name);
+            if (l.aliases) aliasesManifest[name] = l.aliases;
+        }
+        zip.addFile('aliases.json', Buffer.from(JSON.stringify(aliasesManifest, null, 2), 'utf8'));
+        const buf = zip.toBuffer();
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', 'attachment; filename="seed_logos_bundle.zip"');
+        res.send(buf);
     } catch (error) { next(error); }
 });
 

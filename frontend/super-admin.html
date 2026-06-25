@@ -92,11 +92,24 @@
                 </div>
             </div>
 
+            <!-- Klubber uden logo -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Klubber uden logo</span>
+                    <button id="refreshMissingLogosBtn" class="btn-secondary">↻ Opdater</button>
+                </div>
+                <p style="color:rgba(255,255,255,0.5); font-size:0.82em; margin-bottom:10px;">Kendte klubnavne (turnering, holdkamp, spillere) der ikke auto-matcher et logo. Upload eller knyt til et eksisterende logo.</p>
+                <div id="missingLogoList"><div class="empty-state"><div class="spinner"></div></div></div>
+            </div>
+
             <!-- Klub-logoer (centralt bibliotek) -->
             <div class="card">
                 <div class="card-header">
                     <span class="card-title">Klub-logoer (centralt bibliotek)</span>
-                    <button id="refreshLogosBtn" class="btn-secondary">↻ Opdater</button>
+                    <div style="display:flex; gap:8px;">
+                        <button id="downloadSeedBundleBtn" class="btn-secondary">⬇ Seed-bundle</button>
+                        <button id="refreshLogosBtn" class="btn-secondary">↻ Opdater</button>
+                    </div>
                 </div>
                 <div class="create-form">
                     <div class="form-group" style="margin-bottom:0">
@@ -286,7 +299,8 @@
         </div>
     </div>
 
-    <script src="js/api.js?v=6"></script>
-    <script src="super-admin-script.js?v=11"></script>
+    <script src="js/api.js?v=7"></script>
+    <script src="js/logo-match.js?v=1"></script>
+    <script src="super-admin-script.js?v=12"></script>
 </body>
 </html>
