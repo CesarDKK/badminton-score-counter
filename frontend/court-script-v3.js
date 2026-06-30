@@ -398,7 +398,97 @@ function addPoint(player) {
 
     checkGameWin();
     updateDisplay();
+    flashPointFeedback(player);
     saveGameState();
+}
+
+// Visuel + haptisk feedback når et point gives (punkt 2).
+// player1 = venstre side, player2 = højre side (se switchSides, der bytter selve data'en).
+function flashPointFeedback(player) {
+    // Haptisk feedback på touch-enheder (tablet/telefon). Ignoreres lydløst på desktop.
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        try { navigator.vibrate(35); } catch (e) {}
+    }
+
+    // Respektér brugere der har slået bevægelse fra
+    const reduceMotion = typeof window !== 'undefined' && window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion) return;
+
+    // Puls på score-tallet for den side der scorede
+    const scoreEl = document.getElementById(player === 1 ? 'player1PointScore' : 'player2PointScore');
+    if (scoreEl) {
+        scoreEl.classList.remove('score-pulse');
+        void scoreEl.offsetWidth; // tving reflow så animationen kan starte forfra ved hurtige tap
+        scoreEl.classList.add('score-pulse');
+    }
+
+    // Kort lysglimt på den scorende banehalvdel
+    const surface = document.querySelector('.court-surface');
+    if (surface) {
+        const flash = document.createElement('div');
+        flash.className = 'court-half-flash ' + (player === 1 ? 'flash-left' : 'flash-right');
+        surface.appendChild(flash);
+        setTimeout(() => { flash.remove(); }, 500);
+    }
+}
+
+// Boldpoint-status (punkt 3): returnerer 'match' | 'set' | null for hver spiller.
+// En spiller er til boldpoint hvis ét point mere opfylder vinderbetingelsen
+// (jf. checkGameWin). Er det deres 2. sæt (games === 1) er det matchbold, ellers sætbold.
+function getBoldpointState() {
+    const none = { player1: null, player2: null };
+
+    // Kun relevant under en aktiv duel — ikke før server er valgt, mellem sæt eller når kampen er slut
+    const serverSelected = gameState.isDoubles ? gameState.servingTeam : gameState.servingPlayer;
+    if (!serverSelected || !gameState.matchStartTime || gameState.matchEndTime ||
+        gameState.matchCompleted || gameState.betweenSets) {
+        return none;
+    }
+
+    const winScore = gameState.gameMode === '21' ? 21 : 15;
+    const maxScore = gameState.gameMode === '21' ? 30 : 21;
+
+    const evaluate = (p, o) => {
+        const next = p.score + 1;
+        const wins = (next >= winScore && next - o.score >= 2) || next === maxScore;
+        if (!wins) return null;
+        return p.games === 1 ? 'match' : 'set';
+    };
+
+    return {
+        player1: evaluate(gameState.player1, gameState.player2),
+        player2: evaluate(gameState.player2, gameState.player1)
+    };
+}
+
+// Opdater score-fremhævning + label ud fra boldpoint-status
+function updateBoldpointIndicator() {
+    const state = getBoldpointState();
+    const sides = [
+        { key: 'player1', scoreId: 'player1PointScore', labelId: 'player1Boldpoint' },
+        { key: 'player2', scoreId: 'player2PointScore', labelId: 'player2Boldpoint' }
+    ];
+
+    sides.forEach(({ key, scoreId, labelId }) => {
+        const scoreEl = document.getElementById(scoreId);
+        const labelEl = document.getElementById(labelId);
+        const status = state[key];
+
+        if (scoreEl) {
+            scoreEl.classList.toggle('is-setpoint', status === 'set');
+            scoreEl.classList.toggle('is-matchpoint', status === 'match');
+        }
+        if (labelEl) {
+            if (status === 'match') {
+                labelEl.innerHTML = '<span class="boldpoint-pill boldpoint-match">Matchbold</span>';
+            } else if (status === 'set') {
+                labelEl.innerHTML = '<span class="boldpoint-pill boldpoint-set">Sætbold</span>';
+            } else {
+                labelEl.innerHTML = '';
+            }
+        }
+    });
 }
 
 async function checkGameWin() {
@@ -857,6 +947,9 @@ function updateDisplay() {
     document.getElementById('player2PointScore').textContent = gameState.player2.score;
     document.getElementById('player1SetScore').textContent = gameState.player1.games;
     document.getElementById('player2SetScore').textContent = gameState.player2.games;
+
+    // Boldpoint-indikator (punkt 3)
+    updateBoldpointIndicator();
 
     // Update doubles toggle button text
     const doublesBtn = document.getElementById('doublesToggle');
