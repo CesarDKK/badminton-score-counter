@@ -329,7 +329,12 @@ function saveToHistory() {
         betweenSets: gameState.betweenSets,
         decidingGameSwitched: gameState.decidingGameSwitched,
         timerSeconds: gameState.timerSeconds,
-        isActive: gameState.isActive
+        isActive: gameState.isActive,
+        // Så "Fortryd" kan genåbne en netop afsluttet kamp: gem også afslutnings-
+        // og sæthistorik-tilstanden fra FØR dette point (kopi, ikke reference).
+        matchCompleted: gameState.matchCompleted,
+        matchEndTime: gameState.matchEndTime,
+        setScoresHistory: gameState.setScoresHistory.map(s => (s && typeof s === 'object' ? { ...s } : s))
     };
 
     gameState.history.push(snapshot);
@@ -341,6 +346,13 @@ function saveToHistory() {
 }
 
 function addPoint(player) {
+    // Kampen er afgjort (2 sæt vundet): lås tælling, så man ikke kan spille
+    // videre til et 4. sæt hvis man annullerer "Ryd bane"-prompten. Brug "Fortryd"
+    // hvis point-vindet var en fejl, eller "Ryd bane" for at afslutte.
+    if (gameState.matchCompleted) {
+        return;
+    }
+
     // Cannot add points if match hasn't selected server yet
     if (!gameState.servingPlayer) {
         return;
@@ -991,11 +1003,13 @@ function updateDisplay() {
         addBtn1.disabled = true;
         addBtn2.disabled = true;
     } else {
-        // After server is selected: hide serve buttons, enable +1 buttons
+        // After server is selected: hide serve buttons
         servBtn1.classList.add('hidden');
         servBtn2.classList.add('hidden');
-        addBtn1.disabled = false;
-        addBtn2.disabled = false;
+        // +1 låses når kampen er afgjort — ingen ekstra point efter 2 vundne sæt.
+        // "Fortryd" og "Ryd bane" virker stadig.
+        addBtn1.disabled = gameState.matchCompleted;
+        addBtn2.disabled = gameState.matchCompleted;
     }
 
     // Update serve indicator
@@ -1343,6 +1357,20 @@ async function undoLastAction() {
     gameState.decidingGameSwitched = previousState.decidingGameSwitched;
     gameState.timerSeconds = previousState.timerSeconds;
     gameState.isActive = previousState.isActive;
+
+    // Genåbn en afsluttet kamp hvis point-vindet fortrydes (misklik): gendan
+    // afslutnings-flag, sluttidspunkt og sæthistorik fra snapshottet, så man kan
+    // spille videre til det rigtige resultat.
+    gameState.matchCompleted = previousState.matchCompleted || false;
+    gameState.matchEndTime = previousState.matchEndTime || null;
+    if (Array.isArray(previousState.setScoresHistory)) {
+        gameState.setScoresHistory = previousState.setScoresHistory;
+    }
+
+    // Kampen kører igen — genstart uret hvis det var stoppet ved kampafslutning
+    if (gameState.matchStartTime && !gameState.matchEndTime && !gameState.timerInterval) {
+        startTimer();
+    }
 
     // Update display and save restored state
     updateDisplay();
