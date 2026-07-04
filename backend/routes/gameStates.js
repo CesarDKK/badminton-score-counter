@@ -16,6 +16,45 @@ function parseSetScores(raw) {
     return raw;
 }
 
+// Formaterer en game_states-raekke til API-formatet — bruges af GET, 409-konflikt-
+// svar og PUT, saa klienterne altid ser praecis samme felt-struktur.
+function formatStateRow(row, court) {
+    return {
+        player1: {
+            name: row.player1_name,
+            name2: row.player1_name2,
+            score: row.player1_score,
+            games: row.player1_games
+        },
+        player2: {
+            name: row.player2_name,
+            name2: row.player2_name2,
+            score: row.player2_score,
+            games: row.player2_games
+        },
+        timerSeconds: row.timer_seconds,
+        decidingGameSwitched: !!row.deciding_game_switched,
+        restBreakActive: !!row.rest_break_active,
+        restBreakSecondsLeft: row.rest_break_seconds_left || 0,
+        restBreakTitle: row.rest_break_title || '',
+        setScoresHistory: parseSetScores(row.set_scores_history),
+        matchStartTime: row.match_start_time,
+        matchEndTime: row.match_end_time,
+        matchCompleted: !!row.match_completed,
+        isActive: !!court.is_active,
+        isDoubles: !!court.is_doubles,
+        gameMode: court.game_mode,
+        servingPlayer: row.serving_player,
+        initialServer: row.initial_server,
+        servingTeam: row.serving_team,
+        servingPlayerOnTeam: row.serving_player_on_team,
+        team1RightCourt: row.team1_right_court || 1,
+        team2RightCourt: row.team2_right_court || 1,
+        betweenSets: !!row.between_sets,
+        version: row.version || 0
+    };
+}
+
 // Henter og auto-udløber snapshot for en bane. Returnerer null hvis intet/udløbet.
 async function fetchFinishedSnapshot(courtPk) {
     const snap = await queryOne(
@@ -65,7 +104,8 @@ router.get('/batch/all', async (req, res, next) => {
                 gs.player2_name, gs.player2_name2, gs.player2_score, gs.player2_games,
                 gs.timer_seconds, gs.deciding_game_switched,
                 gs.rest_break_active, gs.rest_break_seconds_left, gs.rest_break_title,
-                gs.set_scores_history, gs.match_start_time, gs.match_end_time, gs.match_completed
+                gs.set_scores_history, gs.match_start_time, gs.match_end_time, gs.match_completed,
+                gs.version
             FROM courts c
             LEFT JOIN game_states gs ON c.id = gs.court_id
             ORDER BY c.court_number ASC
@@ -96,7 +136,8 @@ router.get('/batch/all', async (req, res, next) => {
                     matchCompleted: false,
                     isActive: !!row.isActive,
                     isDoubles: !!row.isDoubles,
-                    gameMode: row.gameMode
+                    gameMode: row.gameMode,
+                    version: 0
                 };
             }
 
@@ -125,7 +166,8 @@ router.get('/batch/all', async (req, res, next) => {
                 matchCompleted: !!row.match_completed,
                 isActive: !!row.isActive,
                 isDoubles: !!row.isDoubles,
-                gameMode: row.gameMode
+                gameMode: row.gameMode,
+                version: row.version || 0
             };
         });
 
@@ -192,14 +234,7 @@ router.get('/:courtId', async (req, res, next) => {
 
         // Get game state using the actual court id from database
         const gameState = await queryOne(
-            `SELECT player1_name, player1_name2, player1_score, player1_games,
-                    player2_name, player2_name2, player2_score, player2_games,
-                    timer_seconds, deciding_game_switched,
-                    rest_break_active, rest_break_seconds_left, rest_break_title,
-                    set_scores_history, match_start_time, match_end_time, match_completed,
-                    serving_player, initial_server, serving_team, serving_player_on_team,
-                    team1_right_court, team2_right_court, between_sets
-             FROM game_states WHERE court_id = ?`,
+            'SELECT * FROM game_states WHERE court_id = ?',
             [court.id]
         );
 
@@ -228,16 +263,10 @@ router.get('/:courtId', async (req, res, next) => {
                 team1RightCourt: 1,
                 team2RightCourt: 1,
                 betweenSets: false,
+                version: 0,
                 lastFinishedMatch
             });
         }
-
-        // Format response
-        const setScoresHistory = gameState.set_scores_history
-            ? (typeof gameState.set_scores_history === 'string'
-                ? JSON.parse(gameState.set_scores_history)
-                : gameState.set_scores_history)
-            : [];
 
         // Snapshot er kun relevant når banen ikke længere er aktiv —
         // mens en kamp kører ses snapshot ikke (og kan ikke eksistere samtidig
@@ -247,37 +276,7 @@ router.get('/:courtId', async (req, res, next) => {
             : null;
 
         res.json({
-            player1: {
-                name: gameState.player1_name,
-                name2: gameState.player1_name2,
-                score: gameState.player1_score,
-                games: gameState.player1_games
-            },
-            player2: {
-                name: gameState.player2_name,
-                name2: gameState.player2_name2,
-                score: gameState.player2_score,
-                games: gameState.player2_games
-            },
-            timerSeconds: gameState.timer_seconds,
-            decidingGameSwitched: !!gameState.deciding_game_switched,
-            restBreakActive: !!gameState.rest_break_active,
-            restBreakSecondsLeft: gameState.rest_break_seconds_left || 0,
-            restBreakTitle: gameState.rest_break_title || '',
-            setScoresHistory: setScoresHistory,
-            matchStartTime: gameState.match_start_time,
-            matchEndTime: gameState.match_end_time,
-            matchCompleted: !!gameState.match_completed,
-            isActive: !!court.is_active,
-            isDoubles: !!court.is_doubles,
-            gameMode: court.game_mode,
-            servingPlayer: gameState.serving_player,
-            initialServer: gameState.initial_server,
-            servingTeam: gameState.serving_team,
-            servingPlayerOnTeam: gameState.serving_player_on_team,
-            team1RightCourt: gameState.team1_right_court || 1,
-            team2RightCourt: gameState.team2_right_court || 1,
-            betweenSets: !!gameState.between_sets,
+            ...formatStateRow(gameState, court),
             lastFinishedMatch
         });
     } catch (error) {
@@ -286,62 +285,139 @@ router.get('/:courtId', async (req, res, next) => {
 });
 
 // PUT /api/game-states/:courtId - Update/create game state (public - used during gameplay)
+//
+// Merge-semantik: felter der IKKE er med i request body beholder deres nuvaerende
+// vaerdi, saa klienter kan noejes med at sende det de aendrer (fx admin: kun navne).
+// Tidligere overskrev PUT alle felter — en admin-navnerettelse midt i en kamp
+// nulstillede derfor saethistorik og servestatus til defaults.
+//
+// Optimistic concurrency: klienter medsender expectedVersion (fra seneste GET/PUT-svar).
+// Ved mismatch svares 409 + serverens aktuelle tilstand, saa klienten kan merge og
+// proeve igen i stedet for stiltiende at overskrive en anden enheds aendring.
+// Klienter uden expectedVersion (aeldre court/tv-sider) beholder last-write-wins.
 router.put('/:courtId', async (req, res, next) => {
     try {
         const { courtId } = req.params;
-        const { player1, player2, timerSeconds, decidingGameSwitched, restBreakActive, restBreakSecondsLeft, restBreakTitle, isActive, isDoubles, gameMode, setScoresHistory, matchStartTime, matchEndTime, matchCompleted, servingPlayer, initialServer, servingTeam, servingPlayerOnTeam, team1RightCourt, team2RightCourt, betweenSets } = req.body;
+        const body = req.body || {};
+        const has = (key) => Object.prototype.hasOwnProperty.call(body, key);
 
         // Check if we should skip auto-updating active status (for admin edits)
         const skipAutoActive = req.query.skipAutoActive === 'true';
 
         // Verify court exists by court_number
-        const court = await queryOne('SELECT id FROM courts WHERE court_number = ?', [courtId]);
+        const court = await queryOne(
+            'SELECT id, is_active, is_doubles, game_mode FROM courts WHERE court_number = ?',
+            [courtId]
+        );
 
         if (!court) {
             return res.status(404).json({ error: 'Bane ikke fundet' });
         }
 
-        // Tjek nuværende match_start_time — hvis den ændres fra null til værdi, invalidér QR-tokens for banen
-        const previousState = await queryOne(
-            'SELECT match_start_time FROM game_states WHERE court_id = ?',
-            [court.id]
-        );
-        const matchIsStarting =
-            (!previousState || previousState.match_start_time === null) &&
-            (matchStartTime || (player1 && player2 && (player1.score > 0 || player2.score > 0)));
+        const existing = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
 
-        // Update court's is_active status if provided
-        if (typeof isActive === 'boolean') {
-            await query(
-                'UPDATE courts SET is_active = ? WHERE court_number = ?',
-                [isActive, courtId]
-            );
+        const conflictResponse = (row) => res.status(409).json({
+            error: 'Banens tilstand er ændret af en anden enhed',
+            conflict: true,
+            version: row ? (row.version || 0) : 0,
+            state: row ? formatStateRow(row, court) : null
+        });
+
+        const expectedVersion = has('expectedVersion') ? Number(body.expectedVersion) : null;
+        if (expectedVersion !== null) {
+            if (!existing && expectedVersion > 0) {
+                // Rækken er slettet siden klientens seneste læsning — banen er nulstillet
+                return conflictResponse(null);
+            }
+            if (existing && (existing.version || 0) !== expectedVersion) {
+                return conflictResponse(existing);
+            }
         }
 
-        // Validate input
-        if (!player1 || !player2) {
+        // Ved oprettelse kræves spillerdata (som før); på eksisterende række er partiel opdatering ok
+        if (!existing && (!body.player1 || !body.player2)) {
             return res.status(400).json({ error: 'Spillerdata mangler' });
         }
 
-        // Serialize setScoresHistory for storage
-        const setScoresHistoryJson = setScoresHistory
-            ? JSON.stringify(setScoresHistory)
-            : '[]';
+        // Update court's is_active status if provided
+        if (typeof body.isActive === 'boolean') {
+            await query(
+                'UPDATE courts SET is_active = ? WHERE court_number = ?',
+                [body.isActive, courtId]
+            );
+        }
 
-        // Check if match is ending (someone won 2 games)
-        const matchEnding = (player1.games >= 2 || player2.games >= 2);
+        // ---- Merge body med eksisterende række ----
+        const mergePlayer = (provided, prefix, defName, defName2) => {
+            const p = provided || {};
+            const hasP = (k) => Object.prototype.hasOwnProperty.call(p, k);
+            const ex = (col, def) => existing ? existing[col] : def;
+            return {
+                name:  hasP('name')  ? (p.name  || defName)  : ex(`${prefix}_name`, defName),
+                name2: hasP('name2') ? (p.name2 || defName2) : ex(`${prefix}_name2`, defName2),
+                score: hasP('score') ? (p.score || 0) : ex(`${prefix}_score`, 0),
+                games: hasP('games') ? (p.games || 0) : ex(`${prefix}_games`, 0)
+            };
+        };
+        const player1 = mergePlayer(body.player1, 'player1', 'Spiller 1', 'Makker 1');
+        const player2 = mergePlayer(body.player2, 'player2', 'Spiller 2', 'Makker 2');
 
-        // Check for match activity to set start time
+        const timerSeconds = has('timerSeconds') ? (body.timerSeconds || 0) : (existing ? existing.timer_seconds : 0);
+        const decidingGameSwitched = has('decidingGameSwitched') ? (body.decidingGameSwitched || false) : (existing ? !!existing.deciding_game_switched : false);
+        const restBreakActive = has('restBreakActive') ? (body.restBreakActive || false) : (existing ? !!existing.rest_break_active : false);
+        const restBreakSecondsLeft = has('restBreakSecondsLeft') ? (body.restBreakSecondsLeft || 0) : (existing ? existing.rest_break_seconds_left : 0);
+        const restBreakTitle = has('restBreakTitle') ? (body.restBreakTitle || '') : (existing ? (existing.rest_break_title || '') : '');
+        const matchCompleted = has('matchCompleted') ? (body.matchCompleted || false) : (existing ? !!existing.match_completed : false);
+        const servingPlayer = has('servingPlayer') ? (body.servingPlayer || null) : (existing ? existing.serving_player : null);
+        const initialServer = has('initialServer') ? (body.initialServer || null) : (existing ? existing.initial_server : null);
+        const servingTeam = has('servingTeam') ? (body.servingTeam || null) : (existing ? existing.serving_team : null);
+        const servingPlayerOnTeam = has('servingPlayerOnTeam') ? (body.servingPlayerOnTeam || null) : (existing ? existing.serving_player_on_team : null);
+        const team1RightCourt = has('team1RightCourt') ? (body.team1RightCourt || 1) : (existing ? (existing.team1_right_court || 1) : 1);
+        const team2RightCourt = has('team2RightCourt') ? (body.team2RightCourt || 1) : (existing ? (existing.team2_right_court || 1) : 1);
+        const betweenSets = has('betweenSets') ? (body.betweenSets || false) : (existing ? !!existing.between_sets : false);
+        const setScoresHistoryJson = has('setScoresHistory')
+            ? (body.setScoresHistory ? JSON.stringify(body.setScoresHistory) : '[]')
+            : (existing && existing.set_scores_history
+                ? (typeof existing.set_scores_history === 'string'
+                    ? existing.set_scores_history
+                    : JSON.stringify(existing.set_scores_history))
+                : '[]');
+
+        // Check if frontend explicitly provided matchStartTime
+        const hasExplicitStartTime = has('matchStartTime') && !!body.matchStartTime;
+
+        // Convert ISO 8601 timestamp to MySQL datetime format
+        let mysqlStartTime = null;
+        if (hasExplicitStartTime) {
+            // Convert '2026-01-21T10:34:08.440Z' to '2026-01-21 10:34:08'
+            mysqlStartTime = new Date(body.matchStartTime).toISOString().slice(0, 19).replace('T', ' ');
+        }
+
+        // Check if frontend explicitly wants to clear matchEndTime (undo scenario)
+        const shouldClearMatchEndTime = has('matchEndTime') && body.matchEndTime === null;
+
+        // Aktivitet vurderes på den MERGEDE tilstand — en partiel opdatering
+        // (fx navnerettelse) midt i en kamp må ikke ligne et reset
+        const existingStartTime = existing ? existing.match_start_time : null;
         const hasActivity =
             (player1.score > 0) ||
             (player2.score > 0) ||
             (player1.games > 0) ||
             (player2.games > 0) ||
             (timerSeconds > 0) ||
-            (matchStartTime && matchStartTime !== null);  // Include if matchStartTime is explicitly set
+            hasExplicitStartTime ||
+            (!has('matchStartTime') && existingStartTime !== null);
 
-        // Check if this is a reset (no activity at all AND no matchStartTime)
-        const isReset = !hasActivity && !matchStartTime;
+        // Check if this is a reset (no activity at all)
+        const isReset = !hasActivity;
+
+        // Check if match is ending (someone won 2 games)
+        const matchEnding = (player1.games >= 2 || player2.games >= 2);
+
+        // Hvis match_start_time ændres fra null til værdi, invalidér QR-tokens for banen
+        const matchIsStarting =
+            (!existing || existing.match_start_time === null) &&
+            (hasExplicitStartTime || player1.score > 0 || player2.score > 0);
 
         // Ryd snapshot når en ny kamp/tildeling påvirker banen:
         //  - der er reel aktivitet (point/games/start)
@@ -354,92 +430,93 @@ router.put('/:courtId', async (req, res, next) => {
             await query('DELETE FROM last_finished_matches WHERE court_id = ?', [court.id]);
         }
 
-        // Check if frontend explicitly wants to clear matchEndTime (undo scenario)
-        const shouldClearMatchEndTime = matchEndTime === null && req.body.hasOwnProperty('matchEndTime');
+        // ---- Skriv rækken ----
+        // match_start_time/match_end_time har betinget logik — udtrykkene bygges
+        // som SQL-fragmenter så NOW() evalueres i databasen præcis som før
+        const columnValues = [
+            player1.name, player1.name2, player1.score, player1.games,
+            player2.name, player2.name2, player2.score, player2.games,
+            timerSeconds, decidingGameSwitched,
+            restBreakActive, restBreakSecondsLeft, restBreakTitle,
+            setScoresHistoryJson, matchCompleted,
+            servingPlayer, initialServer, servingTeam, servingPlayerOnTeam,
+            team1RightCourt, team2RightCourt, betweenSets
+        ];
 
-        // Check if frontend explicitly provided matchStartTime
-        const hasExplicitStartTime = matchStartTime && matchStartTime !== null;
+        if (existing) {
+            let startExpr;
+            let startParams = [];
+            if (isReset) {
+                startExpr = 'NULL';
+            } else if (hasExplicitStartTime) {
+                startExpr = '?';
+                startParams = [mysqlStartTime];
+            } else {
+                startExpr = `COALESCE(match_start_time, ${hasActivity ? 'NOW()' : 'NULL'})`;
+            }
 
-        // Convert ISO 8601 timestamp to MySQL datetime format
-        let mysqlStartTime = null;
-        if (hasExplicitStartTime) {
-            const date = new Date(matchStartTime);
-            // Convert '2026-01-21T10:34:08.440Z' to '2026-01-21 10:34:08'
-            mysqlStartTime = date.toISOString().slice(0, 19).replace('T', ' ');
+            let endExpr;
+            if (isReset || shouldClearMatchEndTime) {
+                endExpr = 'NULL';
+            } else if (matchEnding) {
+                endExpr = 'NOW()';
+            } else {
+                endExpr = 'match_end_time';
+            }
+
+            // Compare-and-swap: med expectedVersion opdateres kun hvis versionen
+            // stadig matcher — ellers har en anden enhed skrevet imellem, og vi
+            // svarer 409 i stedet for at overskrive dens ændring
+            const casClause = expectedVersion !== null ? ' AND version = ?' : '';
+            const casParams = expectedVersion !== null ? [expectedVersion] : [];
+
+            const result = await query(
+                `UPDATE game_states SET
+                    player1_name = ?, player1_name2 = ?, player1_score = ?, player1_games = ?,
+                    player2_name = ?, player2_name2 = ?, player2_score = ?, player2_games = ?,
+                    timer_seconds = ?, deciding_game_switched = ?,
+                    rest_break_active = ?, rest_break_seconds_left = ?, rest_break_title = ?,
+                    set_scores_history = ?, match_completed = ?,
+                    serving_player = ?, initial_server = ?, serving_team = ?, serving_player_on_team = ?,
+                    team1_right_court = ?, team2_right_court = ?, between_sets = ?,
+                    match_start_time = ${startExpr},
+                    match_end_time = ${endExpr},
+                    version = version + 1
+                 WHERE court_id = ?${casClause}`,
+                [...columnValues, ...startParams, court.id, ...casParams]
+            );
+
+            if (result.affectedRows === 0) {
+                const fresh = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
+                return conflictResponse(fresh);
+            }
+        } else {
+            const startExprInsert = hasExplicitStartTime ? '?' : (hasActivity ? 'NOW()' : 'NULL');
+            const startParamsInsert = hasExplicitStartTime ? [mysqlStartTime] : [];
+            try {
+                await query(
+                    `INSERT INTO game_states (
+                        court_id,
+                        player1_name, player1_name2, player1_score, player1_games,
+                        player2_name, player2_name2, player2_score, player2_games,
+                        timer_seconds, deciding_game_switched,
+                        rest_break_active, rest_break_seconds_left, rest_break_title,
+                        set_scores_history, match_completed,
+                        serving_player, initial_server, serving_team, serving_player_on_team,
+                        team1_right_court, team2_right_court, between_sets,
+                        match_start_time, match_end_time, version
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${startExprInsert}, NULL, 1)`,
+                    [court.id, ...columnValues, ...startParamsInsert]
+                );
+            } catch (error) {
+                if (error && error.code === 'ER_DUP_ENTRY') {
+                    // To klienter oprettede tilstanden samtidig — den anden vandt
+                    const fresh = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
+                    return conflictResponse(fresh);
+                }
+                throw error;
+            }
         }
-
-        // Upsert game state (insert or update) using actual court.id
-        await query(
-            `INSERT INTO game_states (
-                court_id, player1_name, player1_name2, player1_score, player1_games,
-                player2_name, player2_name2, player2_score, player2_games,
-                timer_seconds, deciding_game_switched,
-                rest_break_active, rest_break_seconds_left, rest_break_title,
-                set_scores_history, match_start_time, match_end_time, match_completed,
-                serving_player, initial_server, serving_team, serving_player_on_team,
-                team1_right_court, team2_right_court, between_sets
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, IF(? = 1, ?, IF(? = 1, NOW(), NULL)), NULL, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-                player1_name = VALUES(player1_name),
-                player1_name2 = VALUES(player1_name2),
-                player1_score = VALUES(player1_score),
-                player1_games = VALUES(player1_games),
-                player2_name = VALUES(player2_name),
-                player2_name2 = VALUES(player2_name2),
-                player2_score = VALUES(player2_score),
-                player2_games = VALUES(player2_games),
-                timer_seconds = VALUES(timer_seconds),
-                deciding_game_switched = VALUES(deciding_game_switched),
-                rest_break_active = VALUES(rest_break_active),
-                rest_break_seconds_left = VALUES(rest_break_seconds_left),
-                rest_break_title = VALUES(rest_break_title),
-                set_scores_history = VALUES(set_scores_history),
-                match_start_time = IF(? = 1, NULL, IF(? = 1, ?, COALESCE(match_start_time, IF(? = 1, NOW(), NULL)))),
-                match_end_time = IF(? = 1, NULL, IF(? = 1, NULL, IF(? = 1, NOW(), match_end_time))),
-                match_completed = VALUES(match_completed),
-                serving_player = VALUES(serving_player),
-                initial_server = VALUES(initial_server),
-                serving_team = VALUES(serving_team),
-                serving_player_on_team = VALUES(serving_player_on_team),
-                team1_right_court = VALUES(team1_right_court),
-                team2_right_court = VALUES(team2_right_court),
-                between_sets = VALUES(between_sets)`,
-            [
-                court.id,  // Use actual database id, not court number
-                player1.name || 'Spiller 1',
-                player1.name2 || 'Makker 1',
-                player1.score || 0,
-                player1.games || 0,
-                player2.name || 'Spiller 2',
-                player2.name2 || 'Makker 2',
-                player2.score || 0,
-                player2.games || 0,
-                timerSeconds || 0,
-                decidingGameSwitched || false,
-                restBreakActive || false,
-                restBreakSecondsLeft || 0,
-                restBreakTitle || '',
-                setScoresHistoryJson,
-                hasExplicitStartTime ? 1 : 0,    // For INSERT: check if frontend provided time
-                mysqlStartTime || null,          // For INSERT: use frontend time if provided (MySQL format)
-                hasActivity ? 1 : 0,             // For INSERT: or set NOW if activity
-                matchCompleted || false,
-                servingPlayer || null,           // Serving state fields
-                initialServer || null,
-                servingTeam || null,
-                servingPlayerOnTeam || null,
-                team1RightCourt || 1,
-                team2RightCourt || 1,
-                betweenSets || false,
-                isReset ? 1 : 0,                 // For UPDATE: resetting match_start_time
-                hasExplicitStartTime ? 1 : 0,    // For UPDATE: check if frontend provided time
-                mysqlStartTime || null,          // For UPDATE: use frontend time if provided (MySQL format)
-                hasActivity ? 1 : 0,             // For UPDATE: or set NOW if activity
-                isReset ? 1 : 0,                 // For UPDATE: resetting match_end_time (full reset)
-                shouldClearMatchEndTime ? 1 : 0, // For UPDATE: clearing match_end_time (undo)
-                matchEnding ? 1 : 0              // For UPDATE: setting match_end_time when match ends
-            ]
-        );
 
         // Auto-update court active status based on activity (unless skipped by admin)
         // Only set to active if there IS activity, never set to inactive
@@ -449,14 +526,14 @@ router.put('/:courtId', async (req, res, next) => {
         }
 
         // Update court's isDoubles setting if provided
-        if (isDoubles !== undefined && typeof isDoubles === 'boolean') {
-            await query('UPDATE courts SET is_doubles = ? WHERE id = ?', [isDoubles, court.id]);
+        if (body.isDoubles !== undefined && typeof body.isDoubles === 'boolean') {
+            await query('UPDATE courts SET is_doubles = ? WHERE id = ?', [body.isDoubles, court.id]);
         }
 
         // Update court's gameMode (21/30 vs 15/21) if provided — synker court-sidens
         // toggle med DB saa periodic sync ikke ruller den tilbage.
-        if (gameMode !== undefined && (gameMode === '15' || gameMode === '21')) {
-            await query('UPDATE courts SET game_mode = ? WHERE id = ?', [gameMode, court.id]);
+        if (body.gameMode !== undefined && (body.gameMode === '15' || body.gameMode === '21')) {
+            await query('UPDATE courts SET game_mode = ? WHERE id = ?', [body.gameMode, court.id]);
         }
 
         // Invalidér QR-tokens hvis kampen lige er startet
@@ -464,9 +541,11 @@ router.put('/:courtId', async (req, res, next) => {
             try { await invalidateCourtTokens(parseInt(courtId, 10)); } catch (e) { console.error('Token invalidation failed:', e); }
         }
 
+        const updatedRow = await queryOne('SELECT version FROM game_states WHERE court_id = ?', [court.id]);
+
         publishGameStateChange(req, courtId, 'update');
 
-        res.json({ success: true });
+        res.json({ success: true, version: updatedRow ? updatedRow.version : 1 });
     } catch (error) {
         next(error);
     }

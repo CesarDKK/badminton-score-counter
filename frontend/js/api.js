@@ -99,6 +99,9 @@ class BadmintonAPI {
                     const err = new Error(error.error || `HTTP ${response.status}`);
                     err.status = response.status;
                     err.endpoint = endpoint;
+                    // Hele svar-body'en følger med — 409-konflikter bærer
+                    // serverens aktuelle tilstand som kalderen skal bruge
+                    err.body = error;
 
                     // Don't retry on 4xx client errors (except 429 Too Many Requests)
                     if (response.status >= 400 && response.status < 500 && response.status !== 429) {
@@ -323,13 +326,16 @@ class BadmintonAPI {
     }
 
     /**
-     * Update game state
+     * Update game state. Felter der udelades i gameState bevares på serveren
+     * (merge-semantik), og gameState.expectedVersion giver 409 ved konflikt.
      * @param {number} courtId - Court ID
-     * @param {object} gameState - Complete game state object
-     * @returns {Promise<object>} - { success }
+     * @param {object} gameState - Game state object (helt eller delvist)
+     * @param {boolean} skipAutoActive - Undlad at auto-aktivere banen (admin-redigering)
+     * @returns {Promise<object>} - { success, version }
      */
-    async updateGameState(courtId, gameState) {
-        return this.request(`/game-states/${courtId}`, {
+    async updateGameState(courtId, gameState, skipAutoActive = false) {
+        const qs = skipAutoActive ? '?skipAutoActive=true' : '';
+        return this.request(`/game-states/${courtId}${qs}`, {
             method: 'PUT',
             body: JSON.stringify(gameState),
             requiresAuth: false // Allow public updates during gameplay
