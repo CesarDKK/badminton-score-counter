@@ -774,10 +774,21 @@ class BadmintonAPI {
         });
     }
 
-    /** Genhent TS-data og opdatér en importeret turnering (pending-kampe). */
-    async syncTournamentImport(tournamentId) {
-        return this.request(`/tournaments/${tournamentId}/sync-import`, {
+    /** Genhent TS-data og opdatér en importeret turnering (pending-kampe).
+     *  skipClubs: spring klub-opsamlingen over (bruges af auto-opdatering). */
+    async syncTournamentImport(tournamentId, { skipClubs = false } = {}) {
+        const qs = skipClubs ? '?skipClubs=true' : '';
+        return this.request(`/tournaments/${tournamentId}/sync-import${qs}`, {
             method: 'POST'
+        });
+    }
+
+    /** Slå serverbaseret auto-opdatering fra Tournament Software til/fra.
+     *  Kører i backendens scheduler hvert 4. minut — uafhængigt af browseren. */
+    async setTournamentAutoSync(tournamentId, enabled) {
+        return this.request(`/tournaments/${tournamentId}/auto-sync`, {
+            method: 'PUT',
+            body: JSON.stringify({ enabled: !!enabled })
         });
     }
 

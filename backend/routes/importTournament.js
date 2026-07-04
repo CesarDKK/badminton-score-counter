@@ -375,6 +375,16 @@ router.post('/preview', authMiddleware, async (req, res, next) => {
 // "... - Klub: <Klubnavn> (<nr>) - Oversigt". (Spillerens profilside dur IKKE:
 // dens overskrift er turneringens arrangoer-branding, ens for alle spillere.)
 // Returnerer Map<clubId, clubName>.
+//
+// Klubnavne ændrer sig ikke i løbet af en turnering, så opslag caches i 24t —
+// gentagne opdateringer rammer dermed kun TS' klubsider første gang. De opslag
+// der mangler, hentes i små hold med pause imellem: en parallel byge på 20-50
+// samtidige requests ligner bot-trafik og risikerer at TS rate-limiter os.
+const _clubNameCache = new Map(); // "tournamentId:clubId" -> { name, expires }
+const CLUB_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const CLUB_FETCH_BATCH_SIZE = 3;
+const CLUB_FETCH_BATCH_DELAY_MS = 300;
+
 async function resolveClubNames(tournamentId, matches) {
     const clubIds = new Set();
     for (const m of matches) {
@@ -383,21 +393,42 @@ async function resolveClubNames(tournamentId, matches) {
         }
     }
 
-    const ids = [...clubIds];
-    const results = await Promise.all(ids.map(async (clubId) => {
-        try {
-            const html = await fetchTournamentPage(tournamentId, `club/${clubId}`);
-            const m = html.match(/<title>[^<]*\bKlub:\s*(.+?)\s*\(\d+\)/i);
-            const club = m ? decodeHtmlEntities(m[1]).trim() : '';
-            return [clubId, club];
-        } catch (e) {
-            console.error(`Klubnavn-opslag fejlede for club-id ${clubId}:`, e.message);
-            return [clubId, ''];
-        }
-    }));
-
     const map = new Map();
-    for (const [clubId, club] of results) if (club) map.set(clubId, club);
+    const toFetch = [];
+    const now = Date.now();
+    for (const clubId of clubIds) {
+        const cached = _clubNameCache.get(`${tournamentId}:${clubId}`);
+        if (cached && now < cached.expires) {
+            if (cached.name) map.set(clubId, cached.name);
+        } else {
+            toFetch.push(clubId);
+        }
+    }
+
+    for (let i = 0; i < toFetch.length; i += CLUB_FETCH_BATCH_SIZE) {
+        const batch = toFetch.slice(i, i + CLUB_FETCH_BATCH_SIZE);
+        const results = await Promise.all(batch.map(async (clubId) => {
+            try {
+                const html = await fetchTournamentPage(tournamentId, `club/${clubId}`);
+                const m = html.match(/<title>[^<]*\bKlub:\s*(.+?)\s*\(\d+\)/i);
+                const club = m ? decodeHtmlEntities(m[1]).trim() : '';
+                return [clubId, club];
+            } catch (e) {
+                console.error(`Klubnavn-opslag fejlede for club-id ${clubId}:`, e.message);
+                return [clubId, null]; // null = fejl — caches ikke, prøves igen næste gang
+            }
+        }));
+        for (const [clubId, club] of results) {
+            if (club !== null) {
+                _clubNameCache.set(`${tournamentId}:${clubId}`, { name: club, expires: now + CLUB_CACHE_TTL_MS });
+            }
+            if (club) map.set(clubId, club);
+        }
+        if (i + CLUB_FETCH_BATCH_SIZE < toFetch.length) {
+            await new Promise(r => setTimeout(r, CLUB_FETCH_BATCH_DELAY_MS));
+        }
+    }
+
     return map;
 }
 

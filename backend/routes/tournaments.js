@@ -7,10 +7,13 @@ const { fetchAndParseTournamentMatches, resolveClubNames, buildPlayerClubRows } 
 
 // Best-effort: hent klub pr. spiller fra TS og upsert i tournament_player_clubs.
 // Må ALDRIG kaste videre — klub-logoer er sekundære ift. selve importen.
-async function captureTournamentClubs(tournamentId, sourceTournamentId) {
+// prefetchedMatches: genbrug allerede hentede kampe (sync-flowet har dem lige
+// ved hånden) i stedet for at hente alle kampsider fra TS én gang til.
+async function captureTournamentClubs(tournamentId, sourceTournamentId, prefetchedMatches = null) {
     if (!sourceTournamentId) return;
     try {
-        const { matches } = await fetchAndParseTournamentMatches(sourceTournamentId);
+        const matches = prefetchedMatches
+            || (await fetchAndParseTournamentMatches(sourceTournamentId)).matches;
         const clubIdToName = await resolveClubNames(sourceTournamentId, matches);
         const rows = buildPlayerClubRows(matches, clubIdToName);
         for (const r of rows) {
@@ -89,8 +92,19 @@ function computeFillOnlyChanges(row, incoming) {
     return changes;
 }
 
-// Per-turnering in-flight guard mod samtidige sync-kald (dobbeltklik / overlap).
+// Per-turnering in-flight guard mod samtidige sync-kald (dobbeltklik / overlap /
+// scheduler-kørsel). Keyet med tenant + id — samme turnerings-id kan findes i
+// flere klub-databaser.
 const _syncingTournaments = new Set();
+
+// Seneste auto-sync-resultat pr. turnering ("tenant:id" -> {at, updated,
+// newCandidates, error}). Vises i admin-UI'et så man kan se at serveren kører,
+// og få besked når der ligger nye TS-kampe der kræver manuel bekræftelse.
+const _autoSyncStatus = new Map();
+
+function tenantSyncKey(tenant, tournamentId) {
+    return `${tenant || 'direct'}:${tournamentId}`;
+}
 
 // Hjælper: hent alle matches for en turnering (sorteret efter match_order)
 async function getMatchesForTournament(tournamentId) {
@@ -109,15 +123,22 @@ async function getMatchesForTournament(tournamentId) {
 router.get('/active', async (req, res, next) => {
     try {
         const tournaments = await query(
-            `SELECT id, name, status, source_tournament_id, created_at
+            `SELECT id, name, status, source_tournament_id, auto_sync, created_at
              FROM tournaments WHERE status = 'active'
              ORDER BY created_at DESC`
         );
 
+        const tenant = req.clubDbName || 'direct';
         const result = [];
         for (const t of tournaments) {
             const matches = await getMatchesForTournament(t.id);
-            result.push({ ...t, matches });
+            result.push({
+                ...t,
+                auto_sync: !!t.auto_sync,
+                matches,
+                // Seneste serverbaserede auto-sync-kørsel (null hvis ingen endnu)
+                autoSyncStatus: _autoSyncStatus.get(tenantSyncKey(tenant, t.id)) || null
+            });
         }
 
         res.json(result);
@@ -270,9 +291,160 @@ router.post('/:id/matches/bulk', authMiddleware, async (req, res, next) => {
 // Opdaterer KUN pending-kampe (fill-only, jf. computeFillOnlyChanges), rører aldrig
 // aktive/afsluttede kampe, og returnerer nye TS-kampe som kandidater (indsættes ikke her —
 // brugeren bekræfter dem via det normale bulk-endpoint).
+// Draw-scopet er første segment af source_match_id ("draw#runde#ordinal") — dvs.
+// puljen/lodtrækningen. Bruges til at afgøre om en ny TS-kamp er bracket-
+// progression (samme draw som eksisterende kampe, fx en semifinale der får navne)
+// eller en genuint ny kategori der stadig kræver manuel godkendelse.
+function drawScopeOf(sourceMatchId) {
+    if (!sourceMatchId) return null;
+    const i = sourceMatchId.indexOf('#');
+    return i === -1 ? sourceMatchId : sourceMatchId.slice(0, i);
+}
+
+// Kerne for TS-opdatering: opdaterer pending-kampe og returnerer resultatet.
+// Bruges af sync-ruten (manuel opdatering fra UI) og af schedulerens
+// serverbaserede auto-opdatering. Kalderen ejer in-flight-guarden og skal
+// køre i korrekt tenant-kontekst.
+//
+// Navne-fills håndteres på TO måder, begge uden manuel godkendelse:
+//  1. Eksisterende pending-kamp får sit "?" udfyldt → computeFillOnlyChanges
+//  2. En bracket-kamp (fx semifinale) der først dukker op i TS-feedet når
+//     spillerne er afgjort → auto-tilføjes HVIS den hører til en draw/pulje
+//     vi allerede har kampe fra, og mindst ét rigtigt navn er kendt.
+// Genuint nye kategorier (draw vi ikke kender) forbliver manuelle kandidater.
+async function syncTournamentCore(tournament, { skipClubs = false } = {}) {
+    const { matches: incoming } = await fetchAndParseTournamentMatches(tournament.source_tournament_id);
+    const existing = await getMatchesForTournament(tournament.id);
+
+    const byKey = new Map();
+    const knownDraws = new Set();
+    for (const row of existing) {
+        if (row.source_match_id) {
+            byKey.set(row.source_match_id, row);
+            const scope = drawScopeOf(row.source_match_id);
+            if (scope) knownDraws.add(scope);
+        }
+    }
+
+    let updated = 0, unchanged = 0, skipped = 0, added = 0;
+    const newCandidates = []; // kræver manuel godkendelse (ny draw/kategori)
+    const autoAdd = [];       // bracket-progression i kendt draw → tilføjes automatisk
+
+    for (const m of incoming) {
+        const row = m.sourceMatchId ? byKey.get(m.sourceMatchId) : null;
+
+        if (!row) {
+            const cand = {
+                sourceMatchId: m.sourceMatchId,
+                label: m.round ? `${m.category} — ${m.round}` : m.category,
+                category: m.category,
+                round: m.round,
+                dayLabel: m.dayLabel || '',
+                doubles: !!m.doubles,
+                side1Player1: m.side1Player1, side1Player2: m.side1Player2,
+                side2Player1: m.side2Player1, side2Player2: m.side2Player2
+            };
+            // Auto-tilføj hvis: kampen har et matchbart source-id (så den ikke
+            // gen-tilføjes næste sync), hører til en draw vi allerede tracker,
+            // og mindst ét rigtigt spillernavn er kendt.
+            const inKnownDraw = m.sourceMatchId && knownDraws.has(drawScopeOf(m.sourceMatchId));
+            const hasName = [m.side1Player1, m.side1Player2, m.side2Player1, m.side2Player2].some(isRealName);
+            if (inKnownDraw && hasName) {
+                autoAdd.push(cand);
+            } else {
+                newCandidates.push(cand);
+            }
+            continue;
+        }
+
+        if (row.status !== 'pending') { skipped++; continue; } // aktiv/afsluttet — rør aldrig
+
+        const changes = computeFillOnlyChanges(row, m);
+        if (Object.keys(changes).length === 0) { unchanged++; continue; }
+
+        const cols = Object.keys(changes);
+        const setSql = cols.map(c => `${c} = ?`).join(', ');
+        const vals = cols.map(c => changes[c]);
+        // status='pending'-guard: hvis en bane lige har aktiveret kampen midt i sync,
+        // rammer UPDATE'en 0 rækker → tæl som skipped i stedet for at overskrive.
+        const result = await query(
+            `UPDATE tournament_matches SET ${setSql} WHERE id = ? AND status = 'pending'`,
+            [...vals, row.id]
+        );
+        if (result.affectedRows > 0) updated++; else skipped++;
+    }
+
+    // Auto-tilføj bracket-progressionskampe (fx semifinaler med udfyldte navne).
+    // Appendes efter eksisterende kampe i match_order.
+    if (autoAdd.length) {
+        const maxRow = await queryOne(
+            'SELECT COALESCE(MAX(match_order), 0) AS max_order FROM tournament_matches WHERE tournament_id = ?',
+            [tournament.id]
+        );
+        let nextOrder = (maxRow?.max_order || 0) + 1;
+        for (const c of autoAdd) {
+            await query(
+                `INSERT INTO tournament_matches
+                 (tournament_id, match_order, label, doubles, source_match_id,
+                  side1_player1, side1_player2, side2_player1, side2_player2)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    tournament.id, nextOrder++, c.label || null, c.doubles ? 1 : 0, c.sourceMatchId || null,
+                    clampName(c.side1Player1) || null, clampName(c.side1Player2) || null,
+                    clampName(c.side2Player1) || null, clampName(c.side2Player2) || null
+                ]
+            );
+            added++;
+        }
+    }
+
+    // Klub-opsamling genbruger de allerede hentede kampe. Auto-opdateringer
+    // (skipClubs) springer den helt over — klub-logoer ændrer sig ikke hvert
+    // 4. minut, og det sparer klubside-kald mod TS.
+    if (!skipClubs) {
+        await captureTournamentClubs(tournament.id, tournament.source_tournament_id, incoming);
+    }
+
+    return { updated, unchanged, skipped, added, newCandidates };
+}
+
+// Kør auto-sync for alle aktive turneringer med auto_sync slået til.
+// Kaldes af scheduleren hvert 4. minut — SKAL køres i tenant-kontekst
+// (runWithTenant) med dbLabel som matcher req.clubDbName-konventionen.
+async function runTournamentAutoSync(dbLabel) {
+    const tournaments = await query(
+        `SELECT id, source_tournament_id FROM tournaments
+         WHERE status = 'active' AND auto_sync = 1 AND source_tournament_id IS NOT NULL`
+    );
+
+    for (const t of tournaments) {
+        const key = tenantSyncKey(dbLabel, t.id);
+        if (_syncingTournaments.has(key)) continue; // manuel opdatering i gang
+        _syncingTournaments.add(key);
+        try {
+            const res = await syncTournamentCore(t, { skipClubs: true });
+            _autoSyncStatus.set(key, {
+                at: Date.now(),
+                updated: res.updated,
+                added: res.added,
+                newCandidates: res.newCandidates.length,
+                error: null
+            });
+            if (res.updated > 0 || res.added > 0 || res.newCandidates.length > 0) {
+                console.log(`  ↻ ${dbLabel}: turnering ${t.id} auto-opdateret — ${res.updated} opdateret, ${res.added} tilføjet, ${res.newCandidates.length} nye kandidater`);
+            }
+        } catch (e) {
+            _autoSyncStatus.set(key, { at: Date.now(), updated: 0, added: 0, newCandidates: 0, error: e.message || String(e) });
+            console.error(`❌ Auto-opdatering fejlede for turnering ${t.id} (${dbLabel}):`, e.message);
+        } finally {
+            _syncingTournaments.delete(key);
+        }
+    }
+}
+
 router.post('/:id/sync-import', authMiddleware, async (req, res, next) => {
     const { id } = req.params;
-    const key = String(id);
+    const key = tenantSyncKey(req.clubDbName, id);
     if (_syncingTournaments.has(key)) {
         return res.status(409).json({ error: 'Opdatering kører allerede for denne turnering — vent til den er færdig.' });
     }
@@ -288,55 +460,11 @@ router.post('/:id/sync-import', authMiddleware, async (req, res, next) => {
             });
         }
 
-        const { matches: incoming } = await fetchAndParseTournamentMatches(tournament.source_tournament_id);
-        const existing = await getMatchesForTournament(id);
+        const result = await syncTournamentCore(tournament, {
+            skipClubs: req.query.skipClubs === 'true'
+        });
 
-        const byKey = new Map();
-        for (const row of existing) {
-            if (row.source_match_id) byKey.set(row.source_match_id, row);
-        }
-
-        let updated = 0, unchanged = 0, skipped = 0;
-        const newCandidates = [];
-
-        for (const m of incoming) {
-            const row = m.sourceMatchId ? byKey.get(m.sourceMatchId) : null;
-
-            if (!row) {
-                // Findes ikke i turneringen → ny kamp-kandidat (indsættes ikke automatisk).
-                newCandidates.push({
-                    sourceMatchId: m.sourceMatchId,
-                    label: m.round ? `${m.category} — ${m.round}` : m.category,
-                    category: m.category,
-                    round: m.round,
-                    dayLabel: m.dayLabel || '',
-                    doubles: !!m.doubles,
-                    side1Player1: m.side1Player1, side1Player2: m.side1Player2,
-                    side2Player1: m.side2Player1, side2Player2: m.side2Player2
-                });
-                continue;
-            }
-
-            if (row.status !== 'pending') { skipped++; continue; } // aktiv/afsluttet — rør aldrig
-
-            const changes = computeFillOnlyChanges(row, m);
-            if (Object.keys(changes).length === 0) { unchanged++; continue; }
-
-            const cols = Object.keys(changes);
-            const setSql = cols.map(c => `${c} = ?`).join(', ');
-            const vals = cols.map(c => changes[c]);
-            // status='pending'-guard: hvis en bane lige har aktiveret kampen midt i sync,
-            // rammer UPDATE'en 0 rækker → tæl som skipped i stedet for at overskrive.
-            const result = await query(
-                `UPDATE tournament_matches SET ${setSql} WHERE id = ? AND status = 'pending'`,
-                [...vals, row.id]
-            );
-            if (result.affectedRows > 0) updated++; else skipped++;
-        }
-
-        await captureTournamentClubs(id, tournament.source_tournament_id);
-
-        res.json({ updated, unchanged, skipped, newCandidates });
+        res.json(result);
     } catch (error) {
         if (error.name === 'TimeoutError' || error.name === 'AbortError') {
             return res.status(504).json({ error: 'Forbindelsen til tournamentsoftware.com timed out — prøv igen' });
@@ -345,6 +473,45 @@ router.post('/:id/sync-import', authMiddleware, async (req, res, next) => {
         res.status(502).json({ error: error.message || 'Opdatering fejlede' });
     } finally {
         _syncingTournaments.delete(key);
+    }
+});
+
+// PUT /api/tournaments/:id/auto-sync - Slå serverbaseret auto-opdatering til/fra (kræver auth)
+// Flaget gemmes i databasen, så schedulerens 4-minutters job kører uafhængigt
+// af om admin-siden (eller browseren) er åben.
+router.put('/:id/auto-sync', authMiddleware, async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const enabled = !!(req.body && req.body.enabled === true);
+
+        const tournament = await queryOne(
+            `SELECT id, source_tournament_id FROM tournaments WHERE id = ? AND status = 'active'`,
+            [id]
+        );
+        if (!tournament) return res.status(404).json({ error: 'Turnering ikke fundet' });
+        if (enabled && !tournament.source_tournament_id) {
+            return res.status(400).json({ error: 'Denne turnering er ikke importeret fra Tournament Software.' });
+        }
+
+        await query('UPDATE tournaments SET auto_sync = ? WHERE id = ?', [enabled ? 1 : 0, id]);
+
+        // Kør første opdatering med det samme (fire-and-forget) så brugeren ikke
+        // skal vente op til 4 minutter på effekten. Tenant-konteksten følger med
+        // promise-kæden (AsyncLocalStorage).
+        if (enabled) {
+            const key = tenantSyncKey(req.clubDbName, tournament.id);
+            if (!_syncingTournaments.has(key)) {
+                _syncingTournaments.add(key);
+                syncTournamentCore(tournament, { skipClubs: true })
+                    .then(r => _autoSyncStatus.set(key, { at: Date.now(), updated: r.updated, added: r.added, newCandidates: r.newCandidates.length, error: null }))
+                    .catch(e => _autoSyncStatus.set(key, { at: Date.now(), updated: 0, added: 0, newCandidates: 0, error: e.message || String(e) }))
+                    .finally(() => _syncingTournaments.delete(key));
+            }
+        }
+
+        res.json({ success: true, autoSync: enabled });
+    } catch (error) {
+        next(error);
     }
 });
 
@@ -482,3 +649,6 @@ router.delete('/:id', authMiddleware, async (req, res, next) => {
 });
 
 module.exports = router;
+// Eksportér auto-sync-kørslen til scheduleren (routeren er en funktion,
+// så app.use(...) virker stadig — samme mønster som importTournament.js).
+module.exports.runTournamentAutoSync = runTournamentAutoSync;

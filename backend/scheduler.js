@@ -152,4 +152,41 @@ function startInactivityCheck() {
     console.log(`⏰ Scheduled inactivity check every minute (releases courts idle for ${INACTIVITY_MINUTES}+ min)`);
 }
 
-module.exports = { startMidnightReset, startExpirationCheck, startInactivityCheck };
+/**
+ * Serverbaseret auto-opdatering fra Tournament Software hvert 4. minut.
+ * Kører kun for turneringer hvor admin har slået auto_sync til — og kører
+ * uafhængigt af om admin-siden/browseren er åben.
+ */
+function startTournamentAutoSync() {
+    // Lazy require — undgår require-cyklus ved opstart
+    const { runTournamentAutoSync } = require('./routes/tournaments');
+
+    cron.schedule('*/4 * * * *', async () => {
+        // 1. Standard/direkte database
+        try {
+            await runTournamentAutoSync('direct');
+        } catch (err) {
+            console.error('❌ Tournament auto-sync failed (default):', err.message);
+        }
+
+        // 2. Alle aktive klub-databaser (multi-tenant)
+        try {
+            const masterDb = require('./config/masterDatabase');
+            const clubs = await masterDb.query('SELECT db_name FROM clubs WHERE is_active = 1');
+            for (const club of clubs) {
+                try {
+                    await runWithTenant(club.db_name, () => runTournamentAutoSync(club.db_name));
+                } catch (err) {
+                    console.error(`❌ Tournament auto-sync failed for ${club.db_name}:`, err.message);
+                }
+            }
+        } catch (err) { /* master DB ikke tilgængelig i direkte mode */ }
+    }, {
+        scheduled: true,
+        timezone: 'Europe/Copenhagen'
+    });
+
+    console.log('⏰ Scheduled tournament auto-sync every 4 minutes (TS-turneringer med auto_sync slået til)');
+}
+
+module.exports = { startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync };

@@ -3145,13 +3145,17 @@ async function handleSyncTournament(tournamentId, tournamentName) {
     try {
         const res = await api.syncTournamentImport(tournamentId);
         const candidates = res.newCandidates || [];
-        const summary = `Opdaterede kampe: <strong>${res.updated}</strong><br>`
+        const added = res.added || 0;
+        const summary = `Opdaterede navne: <strong>${res.updated}</strong><br>`
+            + `Automatisk tilføjede kampe: <strong>${added}</strong><br>`
             + `Uændrede: <strong>${res.unchanged}</strong><br>`
             + `Sprunget over (aktive/afsluttede): <strong>${res.skipped}</strong><br>`
-            + `Nye kampe på Tournament Software: <strong>${candidates.length}</strong>`;
+            + `Nye kampe i ny kategori: <strong>${candidates.length}</strong>`;
 
         await loadActiveTournaments(); // vis de opdaterede navne med det samme
 
+        // Kun genuint nye kategorier (draw vi ikke tracker) kræver godkendelse —
+        // navne-fills og bracket-progression (fx semifinaler) er allerede tilføjet
         if (candidates.length > 0) {
             showNewMatchCandidates(tournamentId, candidates, summary);
         } else {
@@ -3167,6 +3171,41 @@ async function handleSyncTournament(tournamentId, tournamentName) {
         const b = document.getElementById(`t${tournamentId}_syncBtn`);
         if (b) { b.disabled = false; b.textContent = '↻ Opdater fra Tournament Software'; }
     }
+}
+
+// ==================== AUTO-OPDATERING FRA TOURNAMENT SOFTWARE ====================
+// Flueben pr. turnering ("Auto-opdater hvert 4. minut", default FRA). Flaget
+// gemmes i databasen, og selve opdateringen kører i BACKENDens scheduler hvert
+// 4. minut — den fortsætter altså selv om admin-siden/browseren lukkes.
+// Nye TS-kampe tilføjes aldrig automatisk; statuslinjen viser når der ligger
+// nogle, og de bekræftes via den manuelle Opdater-knap som hidtil.
+
+async function toggleTournamentAutoSync(tournamentId, checkbox) {
+    const enabled = checkbox.checked;
+    try {
+        await api.setTournamentAutoSync(tournamentId, enabled);
+    } catch (err) {
+        checkbox.checked = !enabled; // rul UI'et tilbage — serveren afviste
+        showMessage('Fejl', 'Kunne ikke ændre auto-opdatering: ' + (err.message || err));
+    }
+}
+
+// Lille statuslinje under sync-knappen: seneste auto-kørsel. Navne-fills og
+// bracket-progression (semifinaler mv.) tilføjes automatisk; kun genuint nye
+// kategorier kræver manuel godkendelse og nævnes med en orange note.
+function autoSyncStatusHtml(t) {
+    if (!t.auto_sync) return '';
+    const s = t.autoSyncStatus;
+    if (!s) return `<div style="color:#777; font-size:0.78em; width:100%;">Auto-opdatering aktiv — venter på første kørsel…</div>`;
+    const time = new Date(s.at).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
+    if (s.error) {
+        return `<div style="color:#e74c3c; font-size:0.78em; width:100%;">Auto-opdatering fejlede kl. ${time} — prøver igen om lidt</div>`;
+    }
+    const added = s.added > 0 ? ` · ${s.added} nye kampe tilføjet` : '';
+    const candidates = s.newCandidates > 0
+        ? ` · <span style="color:#f0a500; font-weight:bold;">${s.newCandidates} kampe i ny kategori — tryk Opdater for at tilføje</span>`
+        : '';
+    return `<div style="color:#777; font-size:0.78em; width:100%;">Auto-opdateret kl. ${time}${added}${candidates}</div>`;
 }
 
 // Holder kandidaterne for det åbne bekræftelses-modal så "Tilføj valgte" kan finde dem.
@@ -3281,6 +3320,12 @@ function renderTournaments(tournaments) {
             }
         }
 
+        // Auto-opdaterings-flueben: afspejler server-flaget (auto_sync i DB)
+        const autoSyncCheck = document.getElementById(`t${t.id}_autoSync`);
+        if (autoSyncCheck) {
+            autoSyncCheck.addEventListener('change', () => toggleTournamentAutoSync(t.id, autoSyncCheck));
+        }
+
         const finishBtn = document.getElementById(`t${t.id}_finishBtn`);
         if (finishBtn) finishBtn.addEventListener('click', () => handleFinishTournament(t.id, t.name));
 
@@ -3342,10 +3387,15 @@ function renderTournamentBlock(t) {
         <div style="margin-bottom: 25px; padding: 20px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;" data-tournament-id="${t.id}">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
                 <h3 style="color: var(--color-accent); margin:0;">${escapeHtml(t.name)}</h3>
-                <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                    ${t.source_tournament_id ? `<button id="t${t.id}_syncBtn" class="btn-primary" style="padding:6px 14px; font-size:0.88em;">↻ Opdater fra Tournament Software</button>` : ''}
+                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                    ${t.source_tournament_id ? `<label style="display:flex; align-items:center; gap:6px; color:#ccc; font-size:0.85em; white-space:nowrap; cursor:pointer;">
+                        <input type="checkbox" id="t${t.id}_autoSync" ${t.auto_sync ? 'checked' : ''} style="width:16px; height:16px; cursor:pointer;">
+                        Auto-opdater hvert 4. minut
+                    </label>
+                    <button id="t${t.id}_syncBtn" class="btn-primary" style="padding:6px 14px; font-size:0.88em;">↻ Opdater fra Tournament Software</button>` : ''}
                     <button id="t${t.id}_finishBtn" class="btn-secondary" style="padding:6px 14px; font-size:0.88em;">Afslut turnering</button>
                     <button id="t${t.id}_deleteBtn" class="btn-danger" style="padding:6px 14px; font-size:0.88em;">Slet</button>
+                    ${autoSyncStatusHtml(t)}
                 </div>
             </div>
 
