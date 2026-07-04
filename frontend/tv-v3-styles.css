@@ -37,6 +37,24 @@
     letter-spacing: 0.03em;
 }
 
+/* Kompakt variant — vises under en aktiv kamp så en gæst der har lukket
+   browseren kan scanne igen og genoptage. Mindre og mere diskret end idle-QR'en. */
+.qr-counter--compact {
+    padding: 10px 12px;
+    gap: 5px;
+    opacity: 0.9;
+}
+.qr-counter--compact .qr-counter__image {
+    width: 104px;
+    height: 104px;
+}
+.qr-counter--compact .qr-counter__label {
+    font-size: 0.95em;
+}
+.qr-counter--compact .qr-counter__hint {
+    font-size: 0.72em;
+}
+
 /* =================== SCREENSAVER / SPONSOR SLIDESHOW =================== */
 .sponsor-slideshow {
     position: fixed;

@@ -537,10 +537,13 @@ router.put('/:courtId', requireWriteAuthInClubMode, async (req, res, next) => {
             await query('UPDATE courts SET game_mode = ? WHERE id = ?', [body.gameMode, court.id]);
         }
 
-        // Invalidér QR-tokens hvis kampen lige er startet
-        if (matchIsStarting) {
-            try { await invalidateCourtTokens(parseInt(courtId, 10)); } catch (e) { console.error('Token invalidation failed:', e); }
-        }
+        // NB: QR-token'et slettes IKKE ved kampstart mere. Det bevares under hele
+        // kampen, så en gæst der lukker browseren kan scanne QR'en på TV'et igen
+        // og genoptage kampen med stillingen intakt. Token'et ryddes først når
+        // banen nulstilles (DELETE) eller tildeles en holdkamp/turnering.
+        // matchIsStarting bruges ikke længere her, men beholdes hvis anden logik
+        // senere skal reagere på kampstart.
+        void matchIsStarting;
 
         const updatedRow = await queryOne('SELECT version FROM game_states WHERE court_id = ?', [court.id]);
 

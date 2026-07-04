@@ -3,6 +3,7 @@ const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
 const { publishGameStateChange } = require('../events/gameStateEvents');
+const { invalidateCourtTokens } = require('./matchSessionTokens');
 const { fetchAndParseTournamentMatches, resolveClubNames, buildPlayerClubRows } = require('./importTournament');
 
 // Best-effort: hent klub pr. spiller fra TS og upsert i tournament_player_clubs.
@@ -581,6 +582,12 @@ router.put('/:id/matches/:matchId', async (req, res, next) => {
         if (match.court_number) affectedCourts.add(match.court_number);
         if (courtNumber !== undefined && courtNumber !== null) affectedCourts.add(courtNumber);
         for (const c of affectedCourts) publishGameStateChange(req, c, 'assignment');
+
+        // Officiel kamp tildelt en bane → ryd evt. guest QR-session, så TV'et
+        // ikke viser en "overtag kampen"-QR under en turneringskamp
+        if (courtNumber !== undefined && courtNumber !== null) {
+            try { await invalidateCourtTokens(courtNumber); } catch (e) { console.error('QR-token oprydning fejlede:', e); }
+        }
 
         res.json({ success: true });
     } catch (error) {

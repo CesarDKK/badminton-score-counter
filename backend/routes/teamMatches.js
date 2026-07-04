@@ -3,6 +3,7 @@ const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
 const { publishGameStateChange } = require('../events/gameStateEvents');
+const { invalidateCourtTokens } = require('./matchSessionTokens');
 
 // GET /api/team-matches/history - Get all finished team matches with games (public)
 router.get('/history', async (req, res, next) => {
@@ -274,6 +275,12 @@ router.put('/:id/games/:gameId', async (req, res, next) => {
         if (game.court_number) affectedCourts.add(game.court_number);
         if (courtNumber !== undefined && courtNumber !== null) affectedCourts.add(courtNumber);
         for (const c of affectedCourts) publishGameStateChange(req, c, 'assignment');
+
+        // Officiel kamp tildelt en bane → ryd evt. guest QR-session, så TV'et
+        // ikke viser en "overtag kampen"-QR under en holdkamp
+        if (courtNumber !== undefined && courtNumber !== null) {
+            try { await invalidateCourtTokens(courtNumber); } catch (e) { console.error('QR-token oprydning fejlede:', e); }
+        }
 
         res.json({ success: true });
     } catch (error) {
