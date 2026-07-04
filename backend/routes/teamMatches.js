@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
+const { publishGameStateChange } = require('../events/gameStateEvents');
 
 // GET /api/team-matches/history - Get all finished team matches with games (public)
 router.get('/history', async (req, res, next) => {
@@ -189,7 +190,7 @@ router.put('/:id/games/:gameId', async (req, res, next) => {
 
         // Verify game belongs to this team match
         const game = await queryOne(
-            `SELECT id FROM team_match_games WHERE id = ? AND team_match_id = ?`,
+            `SELECT id, court_number FROM team_match_games WHERE id = ? AND team_match_id = ?`,
             [gameId, id]
         );
 
@@ -266,6 +267,14 @@ router.put('/:id/games/:gameId', async (req, res, next) => {
         values.push(gameId);
         await query(`UPDATE team_match_games SET ${fields.join(', ')} WHERE id = ?`, values);
 
+        // Poke SSE-lyttere for de baner tildelingen beroerer — baade den bane
+        // delkampen kom fra (frigivelse/flytning) og den den lander paa —
+        // saa taeller/TV/oversigt ser tildelingen med det samme
+        const affectedCourts = new Set();
+        if (game.court_number) affectedCourts.add(game.court_number);
+        if (courtNumber !== undefined && courtNumber !== null) affectedCourts.add(courtNumber);
+        for (const c of affectedCourts) publishGameStateChange(req, c, 'assignment');
+
         res.json({ success: true });
     } catch (error) {
         next(error);
@@ -276,7 +285,18 @@ router.put('/:id/games/:gameId', async (req, res, next) => {
 router.put('/:id/finish', authMiddleware, async (req, res, next) => {
     try {
         const { id } = req.params;
+
+        // Baner med aktive delkampe i denne holdkamp skal have besked
+        const activeGames = await query(
+            `SELECT DISTINCT court_number FROM team_match_games
+             WHERE team_match_id = ? AND court_number IS NOT NULL`,
+            [id]
+        );
+
         await query(`UPDATE team_matches SET status = 'finished' WHERE id = ?`, [id]);
+
+        for (const row of activeGames) publishGameStateChange(req, row.court_number, 'assignment');
+
         res.json({ success: true });
     } catch (error) {
         next(error);

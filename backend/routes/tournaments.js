@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
+const { publishGameStateChange } = require('../events/gameStateEvents');
 const { fetchAndParseTournamentMatches, resolveClubNames, buildPlayerClubRows } = require('./importTournament');
 
 // Best-effort: hent klub pr. spiller fra TS og upsert i tournament_player_clubs.
@@ -358,7 +359,7 @@ router.put('/:id/matches/:matchId', async (req, res, next) => {
         } = req.body;
 
         const match = await queryOne(
-            'SELECT id FROM tournament_matches WHERE id = ? AND tournament_id = ?',
+            'SELECT id, court_number FROM tournament_matches WHERE id = ? AND tournament_id = ?',
             [matchId, id]
         );
         if (!match) {
@@ -407,6 +408,13 @@ router.put('/:id/matches/:matchId', async (req, res, next) => {
         values.push(matchId);
         await query(`UPDATE tournament_matches SET ${fields.join(', ')} WHERE id = ?`, values);
 
+        // Poke SSE-lyttere for beroerte baner — baade den kampen kom fra
+        // (frigivelse/flytning) og den den lander paa
+        const affectedCourts = new Set();
+        if (match.court_number) affectedCourts.add(match.court_number);
+        if (courtNumber !== undefined && courtNumber !== null) affectedCourts.add(courtNumber);
+        for (const c of affectedCourts) publishGameStateChange(req, c, 'assignment');
+
         res.json({ success: true });
     } catch (error) {
         next(error);
@@ -417,7 +425,18 @@ router.put('/:id/matches/:matchId', async (req, res, next) => {
 router.put('/:id/finish', authMiddleware, async (req, res, next) => {
     try {
         const { id } = req.params;
+
+        // Baner med kampe i denne turnering skal have besked
+        const assignedMatches = await query(
+            `SELECT DISTINCT court_number FROM tournament_matches
+             WHERE tournament_id = ? AND court_number IS NOT NULL`,
+            [id]
+        );
+
         await query(`UPDATE tournaments SET status = 'finished' WHERE id = ?`, [id]);
+
+        for (const row of assignedMatches) publishGameStateChange(req, row.court_number, 'assignment');
+
         res.json({ success: true });
     } catch (error) {
         next(error);
