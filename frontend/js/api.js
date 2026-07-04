@@ -335,10 +335,11 @@ class BadmintonAPI {
      */
     async updateGameState(courtId, gameState, skipAutoActive = false) {
         const qs = skipAutoActive ? '?skipAutoActive=true' : '';
+        // Token vedhæftes når enheden har et (club-mode). I direct-mode er der
+        // ingen token, og serveren kræver den heller ikke — så begge virker.
         return this.request(`/game-states/${courtId}${qs}`, {
             method: 'PUT',
-            body: JSON.stringify(gameState),
-            requiresAuth: false // Allow public updates during gameplay
+            body: JSON.stringify(gameState)
         });
     }
 
@@ -349,8 +350,7 @@ class BadmintonAPI {
      */
     async resetGameState(courtId) {
         return this.request(`/game-states/${courtId}`, {
-            method: 'DELETE',
-            requiresAuth: false // Allow public reset during gameplay
+            method: 'DELETE'
         });
     }
 

@@ -1471,6 +1471,12 @@ async function performSave() {
             await handleSaveConflict(error.body);
             return;
         }
+        if (error && error.status === 401) {
+            // Adgangslinket er udløbet/afvist (kun club-mode). Genindlæs så
+            // auth-guard fornyer adgangen — droppes gemningen ikke i en løkke.
+            handleAuthExpired();
+            return;
+        }
         console.error('Failed to save game state:', error);
         // Retry after 5 seconds on error
         pendingSave = true;
@@ -1483,6 +1489,21 @@ async function performSave() {
             setTimeout(performSave, 100);
         }
     }
+}
+
+// 401 fra en skrivning (kun club-mode): adgangslinket er udløbet eller afvist.
+// Genindlæs siden så auth-guard kører og fornyer/omdirigerer. Reload-guard på
+// 30s forhindrer en løkke hvis tilstanden ikke retter sig ved genindlæsning.
+function handleAuthExpired() {
+    const now = Date.now();
+    const last = Number(sessionStorage.getItem('lastAuthReload') || 0);
+    if (now - last < 30000) {
+        console.warn('Adgang afvist (401) — reload-guard aktiv, venter');
+        return;
+    }
+    sessionStorage.setItem('lastAuthReload', String(now));
+    console.warn('Adgang udløbet (401) — genindlæser for at forny adgangslink');
+    window.location.reload();
 }
 
 // 409-konflikt fra performSave: en anden enhed har ændret banens tilstand
