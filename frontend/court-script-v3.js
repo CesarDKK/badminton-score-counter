@@ -98,6 +98,9 @@ let gameState = {
 let saveTimeout = null;
 let isSaving = false;
 let pendingSave = false;
+// Tidspunkt for seneste egen gemning — bruges til at ignorere SSE-events
+// udløst af vores egne skrivninger (se handleCourtEvent)
+let lastOwnSaveAt = 0;
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', async function() {
@@ -1460,6 +1463,7 @@ async function performSave() {
         if (result && typeof result.version === 'number') {
             gameState.version = result.version;
         }
+        lastOwnSaveAt = Date.now();
         console.log('Game state saved');
     } catch (error) {
         if (error && error.status === 409) {
@@ -2010,8 +2014,63 @@ function formatDuration(seconds) {
 }
 
 // Periodic sync to detect admin resets and update player names
+// Synken er event-drevet: SSE-events fra serveren udløser den med det samme
+// (admin-reset, navneændringer og holdkamp/turnerings-tildelinger rammer banen
+// på ~100ms). Intervallet er kun et sikkerhedsnet — 30s når SSE er forbundet,
+// 5s (som før) uden SSE. Selve sync-logikken i serverSyncTick() er uændret.
+const SYNC_FALLBACK_MS = 5000;
+const SYNC_SAFETY_MS = 30000;
+let syncInterval = null;
+let courtLiveUpdates = null;
+
 function startPeriodicSync() {
-    setInterval(async () => {
+    startSyncPolling(SYNC_FALLBACK_MS);
+
+    if (window.LiveUpdates) {
+        courtLiveUpdates = window.LiveUpdates.connect({
+            court: courtId,
+            onEvent: (event) => handleCourtEvent(event),
+            onStateChange: (connected) => startSyncPolling(connected ? SYNC_SAFETY_MS : SYNC_FALLBACK_MS)
+        });
+    }
+}
+
+function startSyncPolling(ms) {
+    if (syncInterval) clearInterval(syncInterval);
+    syncInterval = setInterval(runServerSync, ms);
+}
+
+// SSE-event for denne bane: kør synken med det samme. Egne gemninger udløser
+// også events (ét pr. point-gemning) — de springes over, så vi ikke henter
+// tilstand vi selv lige har skrevet. Reset-events køres altid; vores egen
+// "Ryd bane" er ufarlig at synke (wasReset-grenen kræver en aktiv kamp lokalt).
+function handleCourtEvent(event) {
+    const type = event && event.type;
+    if (type !== 'reset' && Date.now() - lastOwnSaveAt < 1200) return;
+    runServerSync();
+}
+
+// Kør én sync ad gangen — events der ankommer imens samles til én ekstra kørsel
+let _syncRunning = false;
+let _syncPending = false;
+async function runServerSync() {
+    if (_syncRunning) {
+        _syncPending = true;
+        return;
+    }
+    _syncRunning = true;
+    try {
+        await serverSyncTick();
+    } finally {
+        _syncRunning = false;
+        if (_syncPending) {
+            _syncPending = false;
+            runServerSync();
+        }
+    }
+}
+
+async function serverSyncTick() {
         try {
             const loaded = await api.getGameState(courtId);
 
@@ -2176,7 +2235,6 @@ function startPeriodicSync() {
         } catch (error) {
             console.error('Failed to sync tournament:', error);
         }
-    }, 5000); // Check every 5 seconds
 }
 
 // Setup editable player name functionality
