@@ -81,6 +81,10 @@ app.get('/t/:token', async (req, res, next) => {
             await query('UPDATE device_tokens SET last_used_at = NOW() WHERE id = ?', [deviceToken.id]);
         }
 
+        // Faste enheder (TV/bane-tablet) får en lang session så de ikke skal
+        // åbne adgangslinket igen midt i en turnering. Match-session (QR-tæller)
+        // er kortlivet pr. kamp og bevarer 12t.
+        const sessionTtl = deviceToken.token_type === 'match_session' ? '12h' : '7d';
         const sessionToken = jwt.sign(
             {
                 role: 'device',
@@ -91,7 +95,7 @@ app.get('/t/:token', async (req, res, next) => {
                 clubSubdomain: req.clubSubdomain
             },
             process.env.JWT_SECRET,
-            { expiresIn: '12h' }
+            { expiresIn: sessionTtl }
         );
 
         // Byg destination URL — slår version op fra settings så versionsvalget er centralt
