@@ -1,6 +1,7 @@
 ﻿// Admin Panel JavaScript
 const api = window.BadmintonAPI;
 let refreshInterval = null;
+let liveUpdatesHandle = null; // SSE-forbindelse til live game-state opdateringer
 let currentEditingCourt = null;
 let allMatchesDisplayCount = 30;
 let courtTimers = {}; // Store timer values and timestamps for each court
@@ -225,10 +226,28 @@ function startAutoRefresh() {
     // Reduced from 1000ms to 2500ms to decrease server load (saves 60% API calls)
     refreshInterval = setInterval(loadCourtOverview, 2500);
 
+    // SSE-poke: opdater med det samme naar en bane aendrer sig i stedet for
+    // at vente paa naeste poll. Pollingen beholdes uaendret som sikkerhedsnet.
+    if (window.LiveUpdates && !liveUpdatesHandle) {
+        liveUpdatesHandle = window.LiveUpdates.connect({
+            onEvent: () => scheduleOverviewRefresh()
+        });
+    }
+
     // Start timer update interval (every second for smooth display)
     if (!timerUpdateInterval) {
         timerUpdateInterval = setInterval(updateAllTimerDisplays, 1000);
     }
+}
+
+// Saml hurtige events til een opdatering (fx naar flere baner gemmer samtidig)
+let _overviewRefreshTimer = null;
+function scheduleOverviewRefresh() {
+    if (_overviewRefreshTimer) return;
+    _overviewRefreshTimer = setTimeout(() => {
+        _overviewRefreshTimer = null;
+        loadCourtOverview();
+    }, 150);
 }
 
 function stopAutoRefresh() {
@@ -239,6 +258,10 @@ function stopAutoRefresh() {
     if (timerUpdateInterval) {
         clearInterval(timerUpdateInterval);
         timerUpdateInterval = null;
+    }
+    if (liveUpdatesHandle) {
+        liveUpdatesHandle.close();
+        liveUpdatesHandle = null;
     }
 }
 

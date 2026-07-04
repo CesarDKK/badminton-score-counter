@@ -93,8 +93,47 @@ async function initializeTVDisplay() {
     }
 }
 
+// Med SSE er polling kun et sikkerhedsnet; uden SSE polles som hidtil
+const FALLBACK_POLL_MS = 2000;
+const SAFETY_POLL_MS = 15000;
+let liveUpdatesHandle = null;
+
 function startAutoRefresh() {
-    refreshInterval = setInterval(loadCourtData, 2000);
+    startPolling(FALLBACK_POLL_MS);
+
+    if (window.LiveUpdates) {
+        liveUpdatesHandle = window.LiveUpdates.connect({
+            court: courtId,
+            onEvent: () => scheduleCourtDataLoad(),
+            onStateChange: (connected) => startPolling(connected ? SAFETY_POLL_MS : FALLBACK_POLL_MS)
+        });
+    }
+}
+
+function startPolling(ms) {
+    if (refreshInterval) clearInterval(refreshInterval);
+    refreshInterval = setInterval(scheduleCourtDataLoad, ms);
+}
+
+// Saml hurtige SSE-events/poll-ticks til een fetch ad gangen — kommer der
+// events mens en fetch koerer, hentes der praecis een gang til bagefter
+let _loadRunning = false;
+let _loadPending = false;
+async function scheduleCourtDataLoad() {
+    if (_loadRunning) {
+        _loadPending = true;
+        return;
+    }
+    _loadRunning = true;
+    try {
+        await loadCourtData();
+    } finally {
+        _loadRunning = false;
+        if (_loadPending) {
+            _loadPending = false;
+            scheduleCourtDataLoad();
+        }
+    }
 }
 
 function startLocalTimer() {

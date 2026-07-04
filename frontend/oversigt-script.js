@@ -11,6 +11,7 @@ const SCROLL_INTERVAL = 10000; // 10 seconds between page changes
 let scrollTimer = null;
 let refreshTimer = null;
 let localTimerInterval = null;
+let liveUpdatesHandle = null; // SSE-forbindelse til live game-state opdateringer
 
 // Store match start times for each court (courtId -> {matchStartTime, matchEndTime})
 let courtMatchTimes = {};
@@ -1101,10 +1102,38 @@ function startAutoRefresh() {
     // loadHoldkamp køres FØRST så activeTeamMatch er frisk når loadAllCourts
     // kalder isHoldkampCourt() — ellers bruger den stale data hvor afsluttede
     // holdkamp-spil stadig har status='active' og ekskluderer banen fra visning.
-    refreshTimer = setInterval(async () => {
+    refreshTimer = setInterval(scheduleRefresh, REFRESH_INTERVAL);
+
+    // SSE-poke: opdater med det samme når en bane ændrer sig i stedet for at
+    // vente på næste poll. Pollingen beholdes uændret som sikkerhedsnet (og
+    // fanger holdkamp-ændringer der ikke udløser game-state events).
+    if (window.LiveUpdates) {
+        liveUpdatesHandle = window.LiveUpdates.connect({
+            onEvent: () => scheduleRefresh()
+        });
+    }
+}
+
+// Saml poll-ticks og SSE-events til én kørende opdatering ad gangen —
+// kommer der events mens en opdatering kører, køres der præcis én gang til.
+let _refreshRunning = false;
+let _refreshPending = false;
+async function scheduleRefresh() {
+    if (_refreshRunning) {
+        _refreshPending = true;
+        return;
+    }
+    _refreshRunning = true;
+    try {
         await loadHoldkamp();
         await loadAllCourts();
-    }, REFRESH_INTERVAL);
+    } finally {
+        _refreshRunning = false;
+        if (_refreshPending) {
+            _refreshPending = false;
+            scheduleRefresh();
+        }
+    }
 }
 
 function startAutoScroll() {

@@ -1374,22 +1374,31 @@ function updateTimer() {
     }
 }
 
-// Debounced save function - saves max once per 0.5 seconds
-function saveGameState() {
-    // Clear existing timeout
-    if (saveTimeout) {
-        clearTimeout(saveTimeout);
-    }
+// Leading-edge throttle: foerste tryk gemmes MED DET SAMME, efterfoelgende
+// tryk indenfor vinduet samles til een gemning. Tidligere var det en trailing
+// debounce paa 500ms der blev nulstillet ved hvert tryk — saa ventede TV'et
+// altid mindst 0,5s (og laengere ved hurtige tryk) foer point-trykket blev sendt.
+const SAVE_THROTTLE_MS = 150;
+let lastSaveStartedAt = 0;
 
+function saveGameState() {
     // Mark that we have a pending save
     pendingSave = true;
 
-    // Debounce: wait 0.5 seconds before saving (faster sync with TV/Admin)
+    // En gemning er allerede planlagt — den tager denne aendring med
+    if (saveTimeout) {
+        return;
+    }
+
+    const sinceLastSave = Date.now() - lastSaveStartedAt;
+    const wait = Math.max(0, SAVE_THROTTLE_MS - sinceLastSave);
+
     saveTimeout = setTimeout(async () => {
+        saveTimeout = null;
         if (pendingSave && !isSaving) {
             await performSave();
         }
-    }, 500);
+    }, wait);
 }
 
 // Perform the actual API save
@@ -1402,6 +1411,7 @@ async function performSave() {
 
     isSaving = true;
     pendingSave = false;
+    lastSaveStartedAt = Date.now();
 
     try {
         const stateToSave = {

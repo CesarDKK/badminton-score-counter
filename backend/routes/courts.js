@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
+const { publishGameStateChange } = require('../events/gameStateEvents');
 
 // GET /api/courts - Get all courts (public)
 router.get('/', async (req, res, next) => {
@@ -101,6 +102,10 @@ router.put('/:id', async (req, res, next) => {
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: 'Bane ikke fundet' });
         }
+
+        // Bane-indstillinger (aktiv/double/spilform) paavirker TV-visningen —
+        // poke lyttere saa aendringen slaar igennem uden at vente paa naeste poll
+        publishGameStateChange(req, id, 'update');
 
         res.json({ success: true });
     } catch (error) {
