@@ -113,6 +113,11 @@ document.addEventListener('DOMContentLoaded', async function() {
     updateDisplay();
     setupEventListeners();
 
+    // QR-gæst der scanner ind i en allerede afsluttet kamp (banen er endnu ikke
+    // ryddet): tilbyd at starte en frisk kamp i samme session — så man ikke skal
+    // vente på "Ryd bane" eller admin for at komme i gang.
+    promptStartFreshIfCompleted();
+
     // Start timer if match is already in progress
     if (gameState.matchStartTime && !gameState.matchEndTime) {
         startTimer();
@@ -1593,6 +1598,70 @@ async function adoptServerReset(loaded) {
     if (!gameState.player2.name2) gameState.player2.name2 = 'Makker 2';
 
     updateDisplay();
+}
+
+// Ved indlæsning: hvis banen står med en afsluttet QR-kamp (ikke ryddet endnu),
+// så tilbyd den scannende gæst at starte en frisk kamp. Kun for QR-sessioner —
+// holdkamp/turnering og direkte tilstand håndteres af admin/tablet som hidtil.
+function promptStartFreshIfCompleted() {
+    if (!gameState.matchCompleted) return;
+    if (!isMatchSessionToken()) return;
+
+    const p1Won = (gameState.player1.games || 0) > (gameState.player2.games || 0);
+    const winnerNames = p1Won
+        ? formatPlayerNames(gameState.player1.name, gameState.player1.name2)
+        : formatPlayerNames(gameState.player2.name, gameState.player2.name2);
+
+    showMessage(
+        'Banen er ledig',
+        '',
+        [{ text: 'Start ny kamp', style: 'primary', callback: () => startFreshMatchInSession() }],
+        { bodyHtml: `<div style="text-align:center;line-height:1.6;">Forrige kamp: <strong>${escapeMessageHtml(winnerNames)}</strong> vandt.<br>Tryk for at starte en ny kamp på banen.</div>` }
+    );
+}
+
+// Starter en frisk kamp UDEN at rydde banen via DELETE — for en QR-session ville
+// en DELETE nemlig udløbe adgangen ("scan igen"). I stedet nulstiller vi til
+// defaults og gemmer (PUT), så den samme session fortsætter på et rent scoreboard.
+async function startFreshMatchInSession() {
+    if (gameState.restBreakActive) {
+        gameState.restBreakCallback = null;
+        await endRestBreak();
+    }
+    if (gameState.timerInterval) {
+        clearInterval(gameState.timerInterval);
+        gameState.timerInterval = null;
+    }
+
+    gameState.player1.name = 'Spiller 1';
+    gameState.player1.name2 = 'Makker 1';
+    gameState.player1.score = 0;
+    gameState.player1.games = 0;
+    gameState.player2.name = 'Spiller 2';
+    gameState.player2.name2 = 'Makker 2';
+    gameState.player2.score = 0;
+    gameState.player2.games = 0;
+    gameState.matchStartTime = null;
+    gameState.matchEndTime = null;
+    gameState.timerSeconds = 0;
+    gameState.isActive = false;
+    gameState.decidingGameSwitched = false;
+    gameState.matchCompleted = false;
+    gameState.restBreakTaken = false;
+    gameState.servingPlayer = null;
+    gameState.initialServer = null;
+    gameState.servingTeam = null;
+    gameState.servingPlayerOnTeam = null;
+    gameState.team1RightCourt = 1;
+    gameState.team2RightCourt = 1;
+    gameState.setScoresHistory = [];
+    gameState.sidesManuallySwitched = false;
+    gameState.history = [];
+
+    updateDisplay();
+    // PUT med det samme så serverens afsluttede tilstand overskrives før
+    // sync-loopet når at læse de gamle navne tilbage. version bevares → ingen 409.
+    await performSave();
 }
 
 // Helper function to format player names

@@ -271,8 +271,11 @@ async function loadCourtData() {
         const matchFinished = gameState.player1.games >= 2 || gameState.player2.games >= 2;
 
         if (matchFinished) {
-            hideQrCounter();
             showMatchFinished(gameState, playersSwapped);
+            // Kampen er afgjort men banen ikke ryddet: vis "SCAN FOR NY KAMP"-QR
+            // med det samme (kun hvis banen kører i QR-selvbetjening) — så et nyt
+            // par kan gå i gang uden at nogen først skal trykke "Ryd bane".
+            showQrCounter('finished');
             return;
         } else {
             hideMatchFinished();
@@ -1410,35 +1413,52 @@ function hideMatchFinished() {
 
 // ========== QR COUNTER ==========
 
-// mode: 'idle' (fuld QR når banen er ledig) eller 'resume' (kompakt QR under
-// en aktiv kamp, så en gæst der har lukket browseren kan scanne igen).
-// I resume-mode henter backend KUN en QR hvis banen har en aktiv guest-session
-// (kampen blev startet via QR) — ellers svarer den 404 og vi skjuler QR'en,
-// så holdkamp/turneringskampe ikke viser en "overtag"-QR.
+// QR-tilstande:
+//  idle     — fuld QR når banen er ledig (opretter en token så en kamp kan startes)
+//  resume   — kompakt QR under aktivt spil (gæst der lukkede browseren kan scanne igen)
+//  finished — fuld QR når en kamp lige er afgjort men ikke ryddet endnu; et scan
+//             starter en frisk kamp, så man ikke behøver "Ryd bane" først
+// peek=true (resume/finished): backend henter KUN en QR hvis banen har en aktiv
+// guest-session (kampen kører i QR-selvbetjening). Ellers 404 → QR skjules, så
+// holdkamp/turneringskampe aldrig viser en overtag-/ny-kamp-QR.
+const QR_MODES = {
+    idle:     { peek: false, compact: false, label: 'TÆL MED DIN TELEFON', hint: 'Scan med telefon' },
+    resume:   { peek: true,  compact: true,  label: 'STYR KAMPEN',         hint: 'Scan for at genoptage' },
+    finished: { peek: true,  compact: false, label: 'SCAN FOR NY KAMP',    hint: 'Scan for at starte en ny kamp' }
+};
+
 function showQrCounter(mode = 'idle') {
     if (!qrCounterEnabled) return;
+    const cfg = QR_MODES[mode] || QR_MODES.idle;
     const container = document.getElementById('qrCounter');
     const img = document.getElementById('qrCounterImage');
     if (!container || !img) return;
 
-    const label = container.querySelector('.qr-counter__label');
-    const hint = container.querySelector('.qr-counter__hint');
-
     if (qrCounterMode === mode) return; // allerede vist i denne tilstand
     qrCounterMode = mode;
 
-    const compact = mode === 'resume';
-    container.classList.toggle('qr-counter--compact', compact);
-    if (label) label.textContent = compact ? 'STYR KAMPEN' : 'TÆL MED DIN TELEFON';
-    if (hint) hint.textContent = compact ? 'Scan for at genoptage' : 'Scan med telefon';
+    const label = container.querySelector('.qr-counter__label');
+    const hint = container.querySelector('.qr-counter__hint');
+    container.classList.toggle('qr-counter--compact', cfg.compact);
+    if (label) label.textContent = cfg.label;
+    if (hint) hint.textContent = cfg.hint;
 
     // Cache-busting via timestamp så en ny token hentes efter invalidering.
-    // resume=1 → backend svarer 404 hvis der ingen guest-session er (se onerror).
-    const q = compact ? 'resume=1&' : '';
-    img.onerror = () => { if (qrCounterMode === 'resume') hideQrCounter(); };
+    const q = cfg.peek ? 'resume=1&' : '';
+    if (cfg.peek) {
+        // Vent med at vise boksen til billedet faktisk loader — så en bane uden
+        // guest-session (fx holdkamp) ikke blinker en tom QR-ramme før 404'en.
+        container.style.display = 'none';
+        qrCounterVisible = false;
+        img.onload = () => { if (qrCounterMode === mode) { container.style.display = 'flex'; qrCounterVisible = true; } };
+        img.onerror = () => { if (qrCounterMode === mode) hideQrCounter(); };
+    } else {
+        img.onload = null;
+        img.onerror = null;
+        container.style.display = 'flex';
+        qrCounterVisible = true;
+    }
     img.src = `/api/qr-code/${courtId}?${q}t=${Date.now()}`;
-    container.style.display = 'flex';
-    qrCounterVisible = true;
 }
 
 function hideQrCounter() {
