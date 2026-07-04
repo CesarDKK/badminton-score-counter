@@ -2320,7 +2320,7 @@ function hideMessage() {
 }
 
 // Returnerer saet-score-strings ("X-Y") orienteret saa side1Key altid staar paa
-// venstre side af tallene. Bruges i turnerings/holdkamp historik-listerne hvor
+// venstre side af tallene. Bruges i turnerings/holdkamp-listerne hvor
 // raw-scoren ellers ville flippe rundt pr saet hvis siderne blev byttet, og
 // brugeren ikke kan gennemskue hvem der fik hvilket sæt-resultat.
 //   rawSetScores: "Jens / Bo 21-15 Anders / Peter, Anders / Peter 21-19 Jens / Bo, ..."
@@ -2328,25 +2328,42 @@ function hideMessage() {
 //             formatPlayerNames laver). Tomt -> ingen orientering, kun raw scores.
 function orientHistorySetScoreNumbers(rawSetScores, side1Key) {
     if (!rawSetScores) return [];
-    if (!side1Key) return rawSetScores.match(/\d+-\d+/g) || [];
-    // Normaliser doubles-separator: court-siden gemmer navne med " & " mens
-    // historik-visningen bygger side1Key med " / ". Uden dette fejler navne-
-    // matchet og scoren orienteres ikke (saet med ombyttede sider vises raat).
-    const normalizeNames = s => String(s).trim().replace(/\s*[/&]\s*/g, ' / ');
-    const anchor = normalizeNames(side1Key);
-    return rawSetScores.split(', ').map(part => {
+
+    // Del et holdnavn op i medlemmer — court-siden gemmer doubles med " & ",
+    // visningerne bygger side1Key med " / "; begge separatorer accepteres
+    const teamMembers = s => String(s).trim().split(/\s*[/&]\s*/).map(p => p.trim()).filter(Boolean);
+    // Sammenlign hold uafhaengigt af makker-raekkefoelge — court-sidens
+    // ⇅-knap kan bytte hovedspiller/makker, saa "A & B" og "B & A" er samme hold
+    const teamKey = s => teamMembers(s).sort().join(' / ');
+    const anchor = side1Key ? teamKey(side1Key) : null;
+    const anchorMembers = side1Key ? teamMembers(side1Key) : [];
+
+    const out = [];
+    for (const part of rawSetScores.split(', ')) {
         const m = part.match(/^(.*?)\s+(\d+)-(\d+)\s+(.*?)$/);
-        if (m) {
-            const p1 = normalizeNames(m[1]);
-            const p2 = normalizeNames(m[4]);
-            if (p1 === anchor) return `${m[2]}-${m[3]}`;
-            if (p2 === anchor) return `${m[3]}-${m[2]}`;
+        if (m && anchor) {
+            if (teamKey(m[1]) === anchor) { out.push(`${m[2]}-${m[3]}`); continue; }
+            if (teamKey(m[4]) === anchor) { out.push(`${m[3]}-${m[2]}`); continue; }
+            // Loes fallback: praecis ét af holdene indeholder en af side1's
+            // spillere (daekker navne der er redigeret let paa banen)
+            const p1Has = anchorMembers.some(n => n && m[1].includes(n));
+            const p2Has = anchorMembers.some(n => n && m[4].includes(n));
+            if (p1Has && !p2Has) { out.push(`${m[2]}-${m[3]}`); continue; }
+            if (p2Has && !p1Has) { out.push(`${m[3]}-${m[2]}`); continue; }
             // Ingen navne-match — bevarer raekkefoelgen
-            return `${m[2]}-${m[3]}`;
+            out.push(`${m[2]}-${m[3]}`);
+            continue;
         }
-        const scoreOnly = part.trim().match(/^\d+-\d+$/);
-        return scoreOnly ? part.trim() : null;
-    }).filter(Boolean);
+        if (m) {
+            out.push(`${m[2]}-${m[3]}`);
+            continue;
+        }
+        // Segment uden navne — manuelt resultat ("21-15 21-18") eller
+        // legacy-format ("21-15"); traek alle scores ud i raekkefoelge
+        const nums = part.match(/\d+-\d+/g);
+        if (nums) out.push(...nums);
+    }
+    return out;
 }
 
 // Parser set_scores-strengen fra match_history (fx "Jens 21-15 Bo, Jens 19-21 Bo")
@@ -3408,7 +3425,15 @@ function renderTournamentMatchRow(tournamentId, m) {
         const winnerLabel = m.winner_team === 1 ? side1 : (m.winner_team === 2 ? side2 : '?');
         statusBadge = `<span style="background:#2e8b57;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.78em;">✓ ${escapeHtml(winnerLabel)} vandt</span>`;
         if (m.set_scores) {
-            courtInfo = `<div style="color:#999; font-size:0.82em; margin-top:3px;">${escapeHtml(m.set_scores)}</div>`;
+            // Orienter sættene til side1 (venstre i "side1 vs side2"-rækken ovenfor).
+            // Raw-strengen har navnene som de stod på banen pr sæt — efter sideskift
+            // i 2./3. sæt flipper de rundt og man kan ikke se hvem der fik hvad.
+            const side1Key = m.doubles && m.side1_player2
+                ? `${m.side1_player1 || ''} / ${m.side1_player2}`
+                : (m.side1_player1 || '');
+            const nums = m.set_scores === 'W.O.' ? [] : orientHistorySetScoreNumbers(m.set_scores, side1Key);
+            const scoreText = nums.length ? nums.join(' · ') : m.set_scores;
+            courtInfo = `<div style="color:#999; font-size:0.82em; margin-top:3px;">${escapeHtml(scoreText)}</div>`;
         }
     }
 
