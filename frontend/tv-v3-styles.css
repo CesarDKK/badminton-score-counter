@@ -5,7 +5,10 @@
     position: fixed;
     bottom: 3vh;
     right: 3vw;
-    z-index: 1000;
+    /* Over .tv-overlay (9999) så QR'en er synlig oven på resultat-snapshottet —
+       en ledig bane med et vist resultat skal stadig kunne scannes til ny kamp.
+       QR skjules under pause-overlay og live "kamp afgjort", så ingen konflikt. */
+    z-index: 10000;
     background: rgba(var(--color-bg-card-rgb), 0.92);
     border: 2px solid var(--color-accent, var(--color-accent));
     border-radius: 16px;
