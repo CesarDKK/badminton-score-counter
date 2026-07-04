@@ -39,6 +39,7 @@ let cachedSetScores = {
 // QR counter — kun aktiv i klub-mode; vises når banen er ledig, gemmes når kampen starter
 let qrCounterEnabled = false;
 let qrCounterVisible = false;
+let qrCounterMode = null; // 'idle' | 'resume' | null
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async function() {
@@ -218,11 +219,9 @@ async function loadCourtData() {
             originalPlayer2Name2 = null;
             hideMatchFinished();
             showSponsorSlideshow();
-            showQrCounter();
+            showQrCounter('idle');
             return;
         }
-
-        hideQrCounter();
 
         // Detect new match starting
         if (isMatchActive && !wasMatchPreviouslyActive) {
@@ -269,6 +268,7 @@ async function loadCourtData() {
         const matchFinished = gameState.player1.games >= 2 || gameState.player2.games >= 2;
 
         if (matchFinished) {
+            hideQrCounter();
             showMatchFinished(gameState, playersSwapped);
             return;
         } else {
@@ -277,9 +277,12 @@ async function loadCourtData() {
 
         // Check for rest break
         if (gameState.restBreakActive) {
+            hideQrCounter(); // pause-overlay dækker skærmen — skjul QR imens
             showRestBreak(gameState.restBreakSecondsLeft, gameState.restBreakTitle, gameState, playersSwapped);
         } else {
             hideRestBreak();
+            // Aktivt spil: vis kompakt "genoptag"-QR hvis banen kører i QR-selvbetjening
+            showQrCounter('resume');
         }
 
         // Detect when rest break ends (timer disappears)
@@ -1404,19 +1407,35 @@ function hideMatchFinished() {
 
 // ========== QR COUNTER ==========
 
-function showQrCounter() {
+// mode: 'idle' (fuld QR når banen er ledig) eller 'resume' (kompakt QR under
+// en aktiv kamp, så en gæst der har lukket browseren kan scanne igen).
+// I resume-mode henter backend KUN en QR hvis banen har en aktiv guest-session
+// (kampen blev startet via QR) — ellers svarer den 404 og vi skjuler QR'en,
+// så holdkamp/turneringskampe ikke viser en "overtag"-QR.
+function showQrCounter(mode = 'idle') {
     if (!qrCounterEnabled) return;
     const container = document.getElementById('qrCounter');
     const img = document.getElementById('qrCounterImage');
     if (!container || !img) return;
 
-    // Sæt kilden første gang banen går i idle — cache-busting via timestamp sikrer
-    // at en ny token hentes efter invalidering (gamle billeder kan ellers blive i browser-cachen)
-    if (!qrCounterVisible) {
-        img.src = `/api/qr-code/${courtId}?t=${Date.now()}`;
-        container.style.display = 'flex';
-        qrCounterVisible = true;
-    }
+    const label = container.querySelector('.qr-counter__label');
+    const hint = container.querySelector('.qr-counter__hint');
+
+    if (qrCounterMode === mode) return; // allerede vist i denne tilstand
+    qrCounterMode = mode;
+
+    const compact = mode === 'resume';
+    container.classList.toggle('qr-counter--compact', compact);
+    if (label) label.textContent = compact ? 'STYR KAMPEN' : 'TÆL MED DIN TELEFON';
+    if (hint) hint.textContent = compact ? 'Scan for at genoptage' : 'Scan med telefon';
+
+    // Cache-busting via timestamp så en ny token hentes efter invalidering.
+    // resume=1 → backend svarer 404 hvis der ingen guest-session er (se onerror).
+    const q = compact ? 'resume=1&' : '';
+    img.onerror = () => { if (qrCounterMode === 'resume') hideQrCounter(); };
+    img.src = `/api/qr-code/${courtId}?${q}t=${Date.now()}`;
+    container.style.display = 'flex';
+    qrCounterVisible = true;
 }
 
 function hideQrCounter() {
@@ -1426,6 +1445,7 @@ function hideQrCounter() {
         container.style.display = 'none';
         qrCounterVisible = false;
     }
+    qrCounterMode = null;
 }
 
 // Cleanup on page unload

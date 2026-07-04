@@ -94,7 +94,7 @@ function startExpirationCheck() {
     console.log('⏰ Scheduled hourly sponsor expiration check at minute 0 (Europe/Copenhagen timezone)');
 }
 
-const INACTIVITY_MINUTES = 20;
+const INACTIVITY_MINUTES = 10;
 
 async function releaseInactiveCourts(dbLabel) {
     // Find aktive baner hvor en kamp er startet men ikke afsluttet,

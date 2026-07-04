@@ -4,9 +4,11 @@ const crypto = require('crypto');
 const QRCode = require('qrcode');
 const { query, queryOne } = require('../config/database');
 
-// Henter eller opretter en aktiv match-session token for en bane.
-// Returneres som raw streng (bruges internt af QR-endpointet).
-async function getOrCreateActiveToken(courtNumber) {
+// Henter den aktive match-session token for en bane, eller null hvis ingen findes.
+// Bruges i "resume"-mode hvor vi KUN vil vise QR hvis banen allerede kører i
+// QR-selvbetjening — vi opretter ikke en ny token (så officielle holdkamp-/
+// turneringskampe ikke får en "overtag"-QR).
+async function getActiveToken(courtNumber) {
     const existing = await queryOne(
         `SELECT token FROM device_tokens
          WHERE token_type = 'match_session'
@@ -15,8 +17,14 @@ async function getOrCreateActiveToken(courtNumber) {
          ORDER BY id DESC LIMIT 1`,
         [courtNumber]
     );
+    return existing ? existing.token : null;
+}
 
-    if (existing) return existing.token;
+// Henter eller opretter en aktiv match-session token for en bane.
+// Returneres som raw streng (bruges internt af QR-endpointet).
+async function getOrCreateActiveToken(courtNumber) {
+    const existing = await getActiveToken(courtNumber);
+    if (existing) return existing;
 
     const token = crypto.randomBytes(32).toString('hex');
     const destination = `court/${courtNumber}`;
@@ -54,7 +62,15 @@ router.get('/:courtId', async (req, res) => {
     }
 
     try {
-        const token = await getOrCreateActiveToken(courtNumber);
+        // resume=1: vis kun QR hvis banen allerede har en aktiv guest-session
+        // (kampen blev startet via QR). Opret aldrig en ny token her — så en
+        // holdkamp/turneringskamp uden guest-session ikke får en overtag-QR.
+        const token = req.query.resume
+            ? await getActiveToken(courtNumber)
+            : await getOrCreateActiveToken(courtNumber);
+
+        if (!token) return res.status(404).end();
+
         const protocol = req.headers['x-forwarded-proto'] || 'https';
         const url = `${protocol}://${req.hostname}/t/${token}`;
 
@@ -75,3 +91,4 @@ router.get('/:courtId', async (req, res) => {
 
 module.exports = router;
 module.exports.invalidateCourtTokens = invalidateCourtTokens;
+module.exports.getActiveToken = getActiveToken;
