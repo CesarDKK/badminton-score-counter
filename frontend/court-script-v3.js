@@ -88,6 +88,9 @@ let gameState = {
     // Track if we're between sets (allows position swapping in doubles)
     betweenSets: false,
 
+    // Optimistic concurrency — serverens version fra seneste GET/PUT
+    version: 0,
+
     history: []
 };
 
@@ -797,9 +800,14 @@ async function performClearCourtNow() {
     gameState.team2RightCourt = 1;
     gameState.setScoresHistory = [];  // Clear set history so TV doesn't show old results
     gameState.history = [];  // Clear undo history
+    gameState.version = 0;  // Rækken slettes — næste save opretter forfra
 
     // Update display
     updateDisplay();
+
+    // Annullér ventende gemninger — de ville genskabe rækken efter DELETE
+    if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
+    pendingSave = false;
 
     // Delete game state from database completely
     try {
@@ -914,6 +922,9 @@ async function loadGameState() {
         // Ensure name2 exists for backwards compatibility
         if (!gameState.player1.name2) gameState.player1.name2 = 'Makker 1';
         if (!gameState.player2.name2) gameState.player2.name2 = 'Makker 2';
+
+        // Version til optimistic concurrency — medsendes ved næste save
+        gameState.version = loaded.version || 0;
 
         // Clear history when loading from database (can't undo server-side state)
         gameState.history = [];
@@ -1438,12 +1449,24 @@ async function performSave() {
             servingPlayerOnTeam: gameState.servingPlayerOnTeam,
             team1RightCourt: gameState.team1RightCourt,
             team2RightCourt: gameState.team2RightCourt,
-            betweenSets: gameState.betweenSets
+            betweenSets: gameState.betweenSets,
+            // Optimistic concurrency: serveren afviser med 409 hvis en anden
+            // enhed har skrevet siden vores seneste læsning — i stedet for at
+            // vi stiltiende overskriver dens ændring
+            expectedVersion: typeof gameState.version === 'number' ? gameState.version : 0
         };
 
-        await api.updateGameState(courtId, stateToSave);
+        const result = await api.updateGameState(courtId, stateToSave);
+        if (result && typeof result.version === 'number') {
+            gameState.version = result.version;
+        }
         console.log('Game state saved');
     } catch (error) {
+        if (error && error.status === 409) {
+            // Konflikt — merge og lad finally-blokken genkøre gemningen
+            await handleSaveConflict(error.body);
+            return;
+        }
         console.error('Failed to save game state:', error);
         // Retry after 5 seconds on error
         pendingSave = true;
@@ -1456,6 +1479,95 @@ async function performSave() {
             setTimeout(performSave, 100);
         }
     }
+}
+
+// 409-konflikt fra performSave: en anden enhed har ændret banens tilstand
+// siden vores seneste læsning. conflict.state === null betyder at rækken er
+// slettet — banen er nulstillet (admin: Ryd bane) — og vores gemning droppes.
+// Ellers adopteres serverens version + navne og gemningen prøves igen:
+// tælleren er autoritativ for point/serve under spil, admin for navne.
+async function handleSaveConflict(conflict) {
+    if (!conflict || conflict.state === null || conflict.state === undefined) {
+        console.warn('Save-konflikt: banen er nulstillet af en anden enhed');
+        try {
+            const fresh = await api.getGameState(courtId);
+            await adoptServerReset(fresh);
+        } catch (e) {
+            console.error('Kunne ikke hente frisk tilstand efter reset-konflikt:', e);
+            gameState.version = 0;
+        }
+        return;
+    }
+
+    const server = conflict.state;
+    console.warn('Save-konflikt: adopterer serverversion', conflict.version, 'og prøver igen');
+    gameState.version = conflict.version || server.version || 0;
+
+    // Navne adopteres kun når de ikke styres af en holdkamp/turnering og
+    // siderne ikke er byttet lokalt — samme regler som periodic sync
+    const sidesSwitched = gameState.sidesManuallySwitched ||
+        gameState.player1.games > 0 || gameState.player2.games > 0;
+    if (!assignedHoldkampGameId && !assignedTournamentMatchId && !sidesSwitched) {
+        if (server.player1) {
+            gameState.player1.name = server.player1.name || gameState.player1.name;
+            gameState.player1.name2 = server.player1.name2 || gameState.player1.name2;
+        }
+        if (server.player2) {
+            gameState.player2.name = server.player2.name || gameState.player2.name;
+            gameState.player2.name2 = server.player2.name2 || gameState.player2.name2;
+        }
+        updateDisplay();
+    }
+
+    pendingSave = true; // finally-blokken i performSave genkører gemningen
+}
+
+// Banen er nulstillet på serveren (admin: Ryd bane / Nulstil) — adopter den
+// tomme servertilstand lokalt. Bruges af både periodic sync og 409-håndtering.
+async function adoptServerReset(loaded) {
+    // Version sættes FØR endRestBreak — dens save skal bruge den friske version
+    gameState.version = (loaded && loaded.version) || 0;
+
+    // Match-session tokens (QR-kode tæller) låses når banen nulstilles
+    // — brugeren skal scanne QR-koden igen for at tælle næste kamp.
+    if (isMatchSessionToken()) {
+        showQrSessionExpired();
+        return;
+    }
+
+    // Stop timer
+    if (gameState.timerInterval) {
+        clearInterval(gameState.timerInterval);
+        gameState.timerInterval = null;
+    }
+
+    // Cancel any active rest break
+    if (gameState.restBreakActive) {
+        gameState.restBreakCallback = null;
+        await endRestBreak();
+    }
+
+    // Reset to loaded state
+    gameState.player1 = loaded.player1;
+    gameState.player2 = loaded.player2;
+    gameState.player1.score = 0;
+    gameState.player2.score = 0;
+    gameState.player1.games = 0;
+    gameState.player2.games = 0;
+    gameState.matchStartTime = null;
+    gameState.matchEndTime = null;
+    gameState.timerSeconds = 0;
+    gameState.isActive = false;
+    gameState.decidingGameSwitched = false;
+    gameState.sidesManuallySwitched = false;
+    gameState.matchCompleted = false;
+    gameState.restBreakTaken = false;
+
+    // Ensure name2 exists
+    if (!gameState.player1.name2) gameState.player1.name2 = 'Makker 1';
+    if (!gameState.player2.name2) gameState.player2.name2 = 'Makker 2';
+
+    updateDisplay();
 }
 
 // Helper function to format player names
@@ -1913,47 +2025,8 @@ function startPeriodicSync() {
             if (wasReset && gameState.matchStartTime) {
                 // Court was reset from admin while we had an active match
                 console.log('Court was reset from admin, resetting local state');
-
-                // Match-session tokens (QR-kode tæller) låses når banen nulstilles
-                // — brugeren skal scanne QR-koden igen for at tælle næste kamp.
-                if (isMatchSessionToken()) {
-                    showQrSessionExpired();
-                    return;
-                }
-
-                // Stop timer
-                if (gameState.timerInterval) {
-                    clearInterval(gameState.timerInterval);
-                    gameState.timerInterval = null;
-                }
-
-                // Cancel any active rest break
-                if (gameState.restBreakActive) {
-                    gameState.restBreakCallback = null;
-                    await endRestBreak();
-                }
-
-                // Reset to loaded state
-                gameState.player1 = loaded.player1;
-                gameState.player2 = loaded.player2;
-                gameState.player1.score = 0;
-                gameState.player2.score = 0;
-                gameState.player1.games = 0;
-                gameState.player2.games = 0;
-                gameState.matchStartTime = null;
-                gameState.matchEndTime = null;
-                gameState.timerSeconds = 0;
-                gameState.isActive = false;
-                gameState.decidingGameSwitched = false;
-                gameState.sidesManuallySwitched = false;
-                gameState.matchCompleted = false;
-                gameState.restBreakTaken = false;
-
-                // Ensure name2 exists
-                if (!gameState.player1.name2) gameState.player1.name2 = 'Makker 1';
-                if (!gameState.player2.name2) gameState.player2.name2 = 'Makker 2';
-
-                updateDisplay();
+                await adoptServerReset(loaded);
+                if (isMatchSessionToken()) return;
             } else if (!assignedHoldkampGameId && !assignedTournamentMatchId) {
                 // Just sync player names (in case they were changed from another device).
                 // Springes over når banen er bundet til en holdkamp/turnering — der er

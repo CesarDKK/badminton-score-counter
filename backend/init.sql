@@ -88,6 +88,9 @@ CREATE TABLE IF NOT EXISTS game_states (
   -- Set scores history (JSON array stored as text)
   set_scores_history TEXT,
 
+  -- Optimistic concurrency — bumpes ved hver opdatering (se migration 022)
+  version INT NOT NULL DEFAULT 0,
+
   -- Timestamps
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

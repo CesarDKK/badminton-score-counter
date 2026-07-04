@@ -747,9 +747,6 @@ async function performSaveCourtChanges(isActive) {
     const gameMode = document.getElementById('editGameMode').checked ? '15' : '21';
 
     try {
-        // Get current state
-        const state = await api.getGameState(currentEditingCourt);
-
         // Update court settings (isActive, isDoubles, gameMode) - separate endpoint
         const courtResult = await api.updateCourt(currentEditingCourt, {
             isActive: isActive,
@@ -757,23 +754,14 @@ async function performSaveCourtChanges(isActive) {
             gameMode: gameMode
         });
 
-        // Update game state (player names, scores, etc.)
-        // Use skipAutoActive=true to prevent overwriting the manually set isActive status
+        // Opdater KUN spillernavne — backend merger med den eksisterende tilstand,
+        // så score/sæthistorik/servestatus ikke røres. Tidligere blev hele
+        // tilstanden sendt fra en frisk læsning: et point scoret imellem læsning
+        // og gem blev overskrevet, og sæthistorik + servestatus blev nulstillet.
+        // skipAutoActive=true: banens aktiv-status er netop sat via updateCourt.
         const updatedState = {
-            player1: {
-                name: newPlayer1Name,
-                name2: newPlayer1Name2,
-                score: state?.player1?.score || 0,
-                games: state?.player1?.games || 0
-            },
-            player2: {
-                name: newPlayer2Name,
-                name2: newPlayer2Name2,
-                score: state?.player2?.score || 0,
-                games: state?.player2?.games || 0
-            },
-            timerSeconds: state?.timerSeconds || 0,
-            decidingGameSwitched: state?.decidingGameSwitched || false
+            player1: { name: newPlayer1Name, name2: newPlayer1Name2 },
+            player2: { name: newPlayer2Name, name2: newPlayer2Name2 }
         };
 
         const stateResult = await api.updateGameState(currentEditingCourt, updatedState, true);
