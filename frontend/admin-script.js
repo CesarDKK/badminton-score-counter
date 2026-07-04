@@ -3145,13 +3145,17 @@ async function handleSyncTournament(tournamentId, tournamentName) {
     try {
         const res = await api.syncTournamentImport(tournamentId);
         const candidates = res.newCandidates || [];
-        const summary = `Opdaterede kampe: <strong>${res.updated}</strong><br>`
+        const added = res.added || 0;
+        const summary = `Opdaterede navne: <strong>${res.updated}</strong><br>`
+            + `Automatisk tilføjede kampe: <strong>${added}</strong><br>`
             + `Uændrede: <strong>${res.unchanged}</strong><br>`
             + `Sprunget over (aktive/afsluttede): <strong>${res.skipped}</strong><br>`
-            + `Nye kampe på Tournament Software: <strong>${candidates.length}</strong>`;
+            + `Nye kampe i ny kategori: <strong>${candidates.length}</strong>`;
 
         await loadActiveTournaments(); // vis de opdaterede navne med det samme
 
+        // Kun genuint nye kategorier (draw vi ikke tracker) kræver godkendelse —
+        // navne-fills og bracket-progression (fx semifinaler) er allerede tilføjet
         if (candidates.length > 0) {
             showNewMatchCandidates(tournamentId, candidates, summary);
         } else {
@@ -3186,8 +3190,9 @@ async function toggleTournamentAutoSync(tournamentId, checkbox) {
     }
 }
 
-// Lille statuslinje under sync-knappen: seneste auto-kørsel + advarsel om nye
-// kampe der venter på manuel bekræftelse.
+// Lille statuslinje under sync-knappen: seneste auto-kørsel. Navne-fills og
+// bracket-progression (semifinaler mv.) tilføjes automatisk; kun genuint nye
+// kategorier kræver manuel godkendelse og nævnes med en orange note.
 function autoSyncStatusHtml(t) {
     if (!t.auto_sync) return '';
     const s = t.autoSyncStatus;
@@ -3196,10 +3201,11 @@ function autoSyncStatusHtml(t) {
     if (s.error) {
         return `<div style="color:#e74c3c; font-size:0.78em; width:100%;">Auto-opdatering fejlede kl. ${time} — prøver igen om lidt</div>`;
     }
+    const added = s.added > 0 ? ` · ${s.added} nye kampe tilføjet` : '';
     const candidates = s.newCandidates > 0
-        ? ` · <span style="color:#f0a500; font-weight:bold;">${s.newCandidates} nye kampe på Tournament Software — tryk Opdater for at tilføje dem</span>`
+        ? ` · <span style="color:#f0a500; font-weight:bold;">${s.newCandidates} kampe i ny kategori — tryk Opdater for at tilføje</span>`
         : '';
-    return `<div style="color:#777; font-size:0.78em; width:100%;">Auto-opdateret kl. ${time}${candidates}</div>`;
+    return `<div style="color:#777; font-size:0.78em; width:100%;">Auto-opdateret kl. ${time}${added}${candidates}</div>`;
 }
 
 // Holder kandidaterne for det åbne bekræftelses-modal så "Tilføj valgte" kan finde dem.
