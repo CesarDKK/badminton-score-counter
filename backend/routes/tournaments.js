@@ -7,10 +7,13 @@ const { fetchAndParseTournamentMatches, resolveClubNames, buildPlayerClubRows } 
 
 // Best-effort: hent klub pr. spiller fra TS og upsert i tournament_player_clubs.
 // Må ALDRIG kaste videre — klub-logoer er sekundære ift. selve importen.
-async function captureTournamentClubs(tournamentId, sourceTournamentId) {
+// prefetchedMatches: genbrug allerede hentede kampe (sync-flowet har dem lige
+// ved hånden) i stedet for at hente alle kampsider fra TS én gang til.
+async function captureTournamentClubs(tournamentId, sourceTournamentId, prefetchedMatches = null) {
     if (!sourceTournamentId) return;
     try {
-        const { matches } = await fetchAndParseTournamentMatches(sourceTournamentId);
+        const matches = prefetchedMatches
+            || (await fetchAndParseTournamentMatches(sourceTournamentId)).matches;
         const clubIdToName = await resolveClubNames(sourceTournamentId, matches);
         const rows = buildPlayerClubRows(matches, clubIdToName);
         for (const r of rows) {
@@ -334,7 +337,12 @@ router.post('/:id/sync-import', authMiddleware, async (req, res, next) => {
             if (result.affectedRows > 0) updated++; else skipped++;
         }
 
-        await captureTournamentClubs(id, tournament.source_tournament_id);
+        // Klub-opsamling genbruger de allerede hentede kampe. Auto-opdateringer
+        // (skipClubs=true) springer den helt over — klub-logoer ændrer sig ikke
+        // hvert 10. minut, og det sparer klubside-kald mod TS.
+        if (req.query.skipClubs !== 'true') {
+            await captureTournamentClubs(id, tournament.source_tournament_id, incoming);
+        }
 
         res.json({ updated, unchanged, skipped, newCandidates });
     } catch (error) {

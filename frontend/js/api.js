@@ -774,9 +774,11 @@ class BadmintonAPI {
         });
     }
 
-    /** Genhent TS-data og opdatér en importeret turnering (pending-kampe). */
-    async syncTournamentImport(tournamentId) {
-        return this.request(`/tournaments/${tournamentId}/sync-import`, {
+    /** Genhent TS-data og opdatér en importeret turnering (pending-kampe).
+     *  skipClubs: spring klub-opsamlingen over (bruges af auto-opdatering). */
+    async syncTournamentImport(tournamentId, { skipClubs = false } = {}) {
+        const qs = skipClubs ? '?skipClubs=true' : '';
+        return this.request(`/tournaments/${tournamentId}/sync-import${qs}`, {
             method: 'POST'
         });
     }

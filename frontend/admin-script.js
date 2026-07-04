@@ -3153,7 +3153,9 @@ async function handleSyncTournament(tournamentId, tournamentName, { silent = fal
     if (btn) { btn.disabled = true; btn.textContent = '↻ Opdaterer…'; }
 
     try {
-        const res = await api.syncTournamentImport(tournamentId);
+        // Auto-opdateringer springer klub-opsamlingen over (skipClubs) —
+        // klub-logoer ændrer sig ikke hvert 10. minut, og det sparer TS-kald
+        const res = await api.syncTournamentImport(tournamentId, { skipClubs: silent });
         const candidates = res.newCandidates || [];
         const summary = `Opdaterede kampe: <strong>${res.updated}</strong><br>`
             + `Uændrede: <strong>${res.unchanged}</strong><br>`
