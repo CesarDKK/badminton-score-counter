@@ -207,9 +207,12 @@ async function loadCourtData() {
 
             // Når banen netop er ryddet beholder vi resultatet i 5 min — backend
             // leverer et snapshot her indtil det udløber eller en ny kamp overtager.
+            // Banen er reelt LEDIG imens, så vis idle-QR'en oven på resultatet:
+            // så kan næste par scanne og starte en ny kamp med det samme i stedet
+            // for at vente på at snapshottet udløber.
             if (gameState.lastFinishedMatch) {
-                hideQrCounter();
                 showFinishedSnapshot(gameState.lastFinishedMatch);
+                showQrCounter('idle');
                 return;
             }
 
