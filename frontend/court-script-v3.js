@@ -2495,7 +2495,13 @@ function populateHoldkampMatchSelect(matches) {
     if (selectable.length === 1) {
         const tm = selectable[0];
         matchSel.style.display = 'none';
-        matchSel.innerHTML = `<option value="${tm.id}">${tm.team1_name} vs ${tm.team2_name}</option>`;
+        // Byg option via textContent (ikke innerHTML) — holdnavne kommer fra
+        // API'et og må ikke tolkes som HTML (XSS). Samme mønster som nedenfor.
+        matchSel.innerHTML = '';
+        const opt = document.createElement('option');
+        opt.value = tm.id;
+        opt.textContent = `${tm.team1_name} vs ${tm.team2_name}`;
+        matchSel.appendChild(opt);
         matchSel.value = String(tm.id);
         onHoldkampMatchChange();
         return;
