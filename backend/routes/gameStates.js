@@ -3,6 +3,7 @@ const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
+const { publishGameStateChange, subscribeGameStateChanges } = require('../events/gameStateEvents');
 
 // Hvor længe (i minutter) et "last finished match" snapshot vises på TV efter Ryd bane
 const FINISHED_SNAPSHOT_TTL_MINUTES = 5;
@@ -132,6 +133,49 @@ router.get('/batch/all', async (req, res, next) => {
     } catch (error) {
         next(error);
     }
+});
+
+// GET /api/game-states/events/stream - Server-Sent Events med "poke"-events (public)
+// Klienter (TV/admin/oversigt) faar {courtId, type} ved hver aendring og henter
+// derefter selv frisk state via GET — saa er payload-formatet altid det samme
+// som ved almindelig polling, og eventet kan aldrig vise u-committet data.
+// ?court=N filtrerer til een bane (TV); uden filter sendes alle baner (admin/oversigt).
+// NOTE: Skal defineres FOER /:courtId saa "events" ikke matches som courtId.
+router.get('/events/stream', (req, res) => {
+    const courtFilter = req.query.court ? parseInt(req.query.court, 10) : null;
+
+    res.set({
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        // Beder nginx om ikke at buffere denne response — ellers naar events
+        // foerst frem naar bufferen er fuld
+        'X-Accel-Buffering': 'no'
+    });
+    res.flushHeaders();
+
+    // res.flush findes naar compression-middleware er aktiv — uden flush
+    // holder den paa dataene og eventet kommer aldrig ud
+    const send = (payload) => {
+        res.write(payload);
+        if (typeof res.flush === 'function') res.flush();
+    };
+
+    // Genforbind hurtigt ved tab af forbindelse (EventSource auto-reconnect)
+    send('retry: 2000\n\n');
+
+    const unsubscribe = subscribeGameStateChanges(req, (event) => {
+        if (courtFilter !== null && event.courtId !== courtFilter) return;
+        send(`data: ${JSON.stringify(event)}\n\n`);
+    });
+
+    // Heartbeat holder forbindelsen aaben gennem nginx' proxy_read_timeout (90s)
+    const heartbeat = setInterval(() => send(': ping\n\n'), 25000);
+
+    req.on('close', () => {
+        clearInterval(heartbeat);
+        unsubscribe();
+    });
 });
 
 // GET /api/game-states/:courtId - Get current game state for court (public)
@@ -420,6 +464,8 @@ router.put('/:courtId', async (req, res, next) => {
             try { await invalidateCourtTokens(parseInt(courtId, 10)); } catch (e) { console.error('Token invalidation failed:', e); }
         }
 
+        publishGameStateChange(req, courtId, 'update');
+
         res.json({ success: true });
     } catch (error) {
         next(error);
@@ -525,6 +571,8 @@ router.delete('/:courtId', async (req, res, next) => {
 
         // Invalidér eventuelle aktive QR-tokens — næste TV-request genererer en ny
         try { await invalidateCourtTokens(parseInt(courtId, 10)); } catch (e) { console.error('Token invalidation failed:', e); }
+
+        publishGameStateChange(req, courtId, 'reset');
 
         res.json({ success: true });
     } catch (error) {
