@@ -90,17 +90,17 @@
 .btn-secondary:hover { background: rgba(255,255,255,0.12); }
 
 .btn-danger {
-    background: rgba(233,69,96,0.15);
-    border: 1px solid rgba(233,69,96,0.3);
+    background: rgba(var(--color-danger-rgb, 217, 44, 63), 0.15);
+    border: 1px solid rgba(var(--color-danger-rgb, 217, 44, 63), 0.3);
     border-radius: 8px;
-    color: #e94560;
+    color: var(--color-danger, #d92c3f);
     font-family: 'DM Sans', sans-serif;
     font-size: 0.85em;
     padding: 6px 14px;
     cursor: pointer;
     transition: background 0.2s;
 }
-.btn-danger:hover { background: rgba(233,69,96,0.25); }
+.btn-danger:hover { background: rgba(var(--color-danger-rgb, 217, 44, 63), 0.25); }
 
 /* Dashboard layout */
 .dashboard { animation: fadeUp 0.3s ease both; }
@@ -183,14 +183,14 @@ header .subtitle {
     letter-spacing: 0.04em;
 }
 .badge-active {
-    background: rgba(39,174,96,0.15);
-    color: #2ecc71;
-    border: 1px solid rgba(39,174,96,0.25);
+    background: rgba(var(--color-win-rgb, 69, 209, 126), 0.15);
+    color: var(--color-win, #45d17e);
+    border: 1px solid rgba(var(--color-win-rgb, 69, 209, 126), 0.25);
 }
 .badge-inactive {
-    background: rgba(233,69,96,0.1);
-    color: rgba(233,69,96,0.7);
-    border: 1px solid rgba(233,69,96,0.2);
+    background: rgba(var(--color-danger-rgb, 217, 44, 63), 0.1);
+    color: rgba(var(--color-danger-rgb, 217, 44, 63), 0.8);
+    border: 1px solid rgba(var(--color-danger-rgb, 217, 44, 63), 0.2);
 }
 
 /* Create club form */
@@ -265,8 +265,8 @@ header .subtitle {
 
 /* Messages */
 .msg { padding: 10px 14px; border-radius: 8px; font-size: 0.88em; margin-top: 12px; }
-.msg-error { background: rgba(233,69,96,0.12); border: 1px solid rgba(233,69,96,0.3); color: #e94560; }
-.msg-success { background: rgba(39,174,96,0.1); border: 1px solid rgba(39,174,96,0.25); color: #2ecc71; }
+.msg-error { background: rgba(var(--color-danger-rgb, 217, 44, 63), 0.12); border: 1px solid rgba(var(--color-danger-rgb, 217, 44, 63), 0.3); color: var(--color-danger, #d92c3f); }
+.msg-success { background: rgba(var(--color-win-rgb, 69, 209, 126), 0.1); border: 1px solid rgba(var(--color-win-rgb, 69, 209, 126), 0.25); color: var(--color-win, #45d17e); }
 
 .empty-state {
     text-align: center;
@@ -306,7 +306,7 @@ header .subtitle {
 }
 .app-tab-active {
     color: #fff;
-    background: rgba(233, 69, 96, 0.08);
-    border-bottom-color: #e94560;
+    background: rgba(var(--color-accent-rgb, 233, 69, 96), 0.08);
+    border-bottom-color: var(--color-accent, #e94560);
 }
 

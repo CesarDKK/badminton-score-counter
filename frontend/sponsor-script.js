@@ -150,7 +150,7 @@ async function handleImageUpload(event, type) {
     }
 
     if (validFiles.length === 0) {
-        preview.innerHTML = `<p style="color: #e94560;">Ingen gyldige billeder at uploade</p>`;
+        preview.innerHTML = `<p style="color: var(--color-danger, #d92c3f);">Ingen gyldige billeder at uploade</p>`;
         setTimeout(() => {
             preview.innerHTML = '';
         }, 3000);
@@ -176,9 +176,9 @@ async function handleImageUpload(event, type) {
 
         // Show completion message
         if (successCount > 0) {
-            preview.innerHTML = `<p style="color: #4CAF50;">✓ ${successCount} ${typeName} billede(r) uploadet!</p>`;
+            preview.innerHTML = `<p style="color: var(--color-win, #45d17e);">✓ ${successCount} ${typeName} billede(r) uploadet!</p>`;
         } else {
-            preview.innerHTML = `<p style="color: #e94560;">Ingen billeder blev uploadet</p>`;
+            preview.innerHTML = `<p style="color: var(--color-danger, #d92c3f);">Ingen billeder blev uploadet</p>`;
         }
 
         setTimeout(() => {
@@ -189,7 +189,7 @@ async function handleImageUpload(event, type) {
         await loadGallery(type);
     } catch (error) {
         console.error('Failed to upload images:', error);
-        preview.innerHTML = `<p style="color: #e94560;">Upload fejlede: ${error.message}</p>`;
+        preview.innerHTML = `<p style="color: var(--color-danger, #d92c3f);">Upload fejlede: ${error.message}</p>`;
         setTimeout(() => {
             preview.innerHTML = '';
         }, 5000);
@@ -374,7 +374,7 @@ async function loadGallery(type) {
         }).join('');
     } catch (error) {
         console.error(`Failed to load ${type} gallery:`, error);
-        galleryContainer.innerHTML = '<p style="color: #e94560; text-align: center; padding: 40px;">Kunne ikke indlæse galleri. Tjek din forbindelse.</p>';
+        galleryContainer.innerHTML = '<p style="color: var(--color-danger, #d92c3f); text-align: center; padding: 40px;">Kunne ikke indlæse galleri. Tjek din forbindelse.</p>';
     }
 }
 

@@ -908,7 +908,7 @@ async function loadTournamentMatchHistory() {
                     : (m.side2_player1 || '?');
 
                 const winnerLabel = m.winner_team === 1 ? side1 : (m.winner_team === 2 ? side2 : '?');
-                const winnerColor = m.winner_team === 1 ? '#4CAF50' : 'var(--color-accent)';
+                const winnerColor = m.winner_team === 1 ? 'var(--color-win, #45d17e)' : 'var(--color-accent)';
                 // Orienter scoren til side1 (visningens venstre kolonne) saa raekken
                 // matcher "side1 vs side2"-rækkefoelgen ovenfor uafhaengigt af
                 // hvilken side spillerne stod paa da saettet blev gemt.
@@ -950,7 +950,7 @@ async function loadTournamentMatchHistory() {
             ${cards}`;
     } catch (error) {
         console.error('Failed to load tournament history:', error);
-        container.innerHTML = '<p style="color:#e74c3c;">Kunne ikke indlæse turneringshistorik.</p>';
+        container.innerHTML = '<p style="color:var(--color-danger, #d92c3f);">Kunne ikke indlæse turneringshistorik.</p>';
     }
 }
 
@@ -995,7 +995,7 @@ async function loadTeamMatchHistory() {
                 let rowBorder = '#444';
                 if (g.status === 'finished' && g.winner_team) {
                     const winnerName = g.winner_team === 1 ? tm.team1_name : tm.team2_name;
-                    const winnerColor = g.winner_team === 1 ? '#4CAF50' : 'var(--color-accent)';
+                    const winnerColor = g.winner_team === 1 ? 'var(--color-win, #45d17e)' : 'var(--color-accent)';
                     // Orienter scoren til team1 (raekkens venstre side) saa scoren matcher
                     // navnene ovenfor uanset hvilken side spillerne stod paa pr saet.
                     const side1Key = isDoubles && g.team1_player2
@@ -1017,7 +1017,7 @@ async function loadTeamMatchHistory() {
             return `<div style="background:rgba(var(--color-primary-rgb),0.15); border:1px solid var(--color-primary); border-radius:8px; margin-bottom:12px; overflow:hidden;">
                 <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; cursor:pointer; flex-wrap:wrap; gap:8px;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
                     <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-                        <span style="font-size:1.1em; font-weight:bold; color:#eaeaea;">${escapeHtml(tm.team1_name)} <span style="color:#4CAF50;">${team1Wins}</span> – <span style="color:var(--color-accent);">${team2Wins}</span> ${escapeHtml(tm.team2_name)}</span>
+                        <span style="font-size:1.1em; font-weight:bold; color:#eaeaea;">${escapeHtml(tm.team1_name)} <span style="color:var(--color-win, #45d17e);">${team1Wins}</span> – <span style="color:var(--color-accent);">${team2Wins}</span> ${escapeHtml(tm.team2_name)}</span>
                         <span style="color:#aaa; font-size:0.82em;">${formatLabel}</span>
                         <span style="color:#666; font-size:0.8em;">${date}</span>
                     </div>
@@ -1300,7 +1300,7 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
                 : (g.team1_player1 || '');
             const scoreNums = (g.set_scores && !isWO) ? orientHistorySetScoreNumbers(g.set_scores, side1Key).join(' · ') : '';
             const scoreText = scoreNums ? `<span style="color:#aaa;font-size:0.82em;margin-left:4px;">${scoreNums}</span>` : '';
-            winnerBadge = `<span style="background:#4CAF50;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8em;">✓ ${escapeHtml(winner)}${isWO ? ' (W.O.)' : ''}</span>${scoreText}`;
+            winnerBadge = `<span style="background:var(--color-win, #45d17e);color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8em;">✓ ${escapeHtml(winner)}${isWO ? ' (W.O.)' : ''}</span>${scoreText}`;
             editBtn = `<button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" style="padding:3px 10px;background:transparent;color:#aaa;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:0.8em;">Rediger</button>`;
         }
 
@@ -1308,7 +1308,7 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
         <div id="editGame_${g.id}" style="display:none; padding:12px; background:rgba(0,0,0,0.3); border-radius:6px; margin-top:8px;">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;">
                 <div>
-                    <div style="color:#4CAF50;font-size:0.82em;margin-bottom:6px;">${escapeHtml(teamMatch.team1_name)}</div>
+                    <div style="color:var(--color-win, #45d17e);font-size:0.82em;margin-bottom:6px;">${escapeHtml(teamMatch.team1_name)}</div>
                     <input id="eg_${g.id}_t1p1" type="text" value="${escapeHtml(g.team1_player1 || '')}" placeholder="Spiller 1" style="width:100%;padding:7px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;box-sizing:border-box;margin-bottom:6px;">
                     ${isDoubles ? `<input id="eg_${g.id}_t1p2" type="text" value="${escapeHtml(g.team1_player2 || '')}" placeholder="Makker" style="width:100%;padding:7px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;box-sizing:border-box;">` : ''}
                 </div>
@@ -1337,8 +1337,8 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
             <div style="margin-bottom:10px;">
                 <div style="color:#aaa;font-size:0.8em;margin-bottom:6px;">Vinder</div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1px solid #4CAF50;border-radius:4px;color:#4CAF50;font-size:0.88em;">
-                        <input type="radio" name="manualWinner_${g.id}" value="1" ${g.winner_team === 1 ? 'checked' : ''} style="accent-color:#4CAF50;"> ${escapeHtml(teamMatch.team1_name)}
+                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1px solid var(--color-win, #45d17e);border-radius:4px;color:var(--color-win, #45d17e);font-size:0.88em;">
+                        <input type="radio" name="manualWinner_${g.id}" value="1" ${g.winner_team === 1 ? 'checked' : ''} style="accent-color:var(--color-win, #45d17e);"> ${escapeHtml(teamMatch.team1_name)}
                     </label>
                     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1px solid var(--color-accent);border-radius:4px;color:var(--color-accent);font-size:0.88em;">
                         <input type="radio" name="manualWinner_${g.id}" value="2" ${g.winner_team === 2 ? 'checked' : ''} style="accent-color:var(--color-accent);"> ${escapeHtml(teamMatch.team2_name)}
@@ -1354,7 +1354,7 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
                         <div style="display:flex;align-items:center;gap:6px;">
                             <input id="manualS${s}t1_${g.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="–" value="${getScore(s-1, 0)}"
                                    oninput="this.value=this.value.replace(/[^0-9]/g,''); determineHoldkampWinner(${g.id}, '${gameMode}')"
-                                   style="width:64px;padding:12px 8px;background:var(--color-bg-dark);color:#4CAF50;border:1px solid #555;border-radius:4px;text-align:center;font-size:1.6em;">
+                                   style="width:64px;padding:12px 8px;background:var(--color-bg-dark);color:var(--color-win, #45d17e);border:1px solid #555;border-radius:4px;text-align:center;font-size:1.6em;">
                             <span style="color:#555;font-size:1.2em;">–</span>
                             <input id="manualS${s}t2_${g.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="–" value="${getScore(s-1, 1)}"
                                    oninput="this.value=this.value.replace(/[^0-9]/g,''); determineHoldkampWinner(${g.id}, '${gameMode}')"
@@ -1394,7 +1394,7 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
                 <div>
                     <div style="color:#aaa;font-size:0.85em;margin-bottom:4px;">${escapeHtml(formatName)}</div>
                     <div style="font-size:1.8em;font-weight:bold;">
-                        <span style="color:#4CAF50;">${escapeHtml(teamMatch.team1_name)}</span>
+                        <span style="color:var(--color-win, #45d17e);">${escapeHtml(teamMatch.team1_name)}</span>
                         <span style="color:#fff;margin:0 15px;">${team1Wins} – ${team2Wins}</span>
                         <span style="color:var(--color-accent);">${escapeHtml(teamMatch.team2_name)}</span>
                     </div>
@@ -1438,7 +1438,7 @@ function onHoldkampFormatChange() {
                 <div style="font-weight:bold;color:var(--color-accent);margin-bottom:10px;">${label}</div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                     <div>
-                        <div style="color:#4CAF50;font-size:0.85em;margin-bottom:5px;">${escapeHtml(team1Name)}</div>
+                        <div style="color:var(--color-win, #45d17e);font-size:0.85em;margin-bottom:5px;">${escapeHtml(team1Name)}</div>
                         <input type="text" placeholder="Spiller 1" data-game="${i}" data-field="t1p1" style="width:100%;padding:8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;margin-bottom:6px;">
                         <input type="text" placeholder="Makker" data-game="${i}" data-field="t1p2" style="width:100%;padding:8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;">
                     </div>
@@ -1455,7 +1455,7 @@ function onHoldkampFormatChange() {
                 <div style="font-weight:bold;color:var(--color-accent);margin-bottom:10px;">${label}</div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                     <div>
-                        <div style="color:#4CAF50;font-size:0.85em;margin-bottom:5px;">${escapeHtml(team1Name)}</div>
+                        <div style="color:var(--color-win, #45d17e);font-size:0.85em;margin-bottom:5px;">${escapeHtml(team1Name)}</div>
                         <input type="text" placeholder="Spillernavn" data-game="${i}" data-field="t1p1" style="width:100%;padding:8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;">
                     </div>
                     <div>
@@ -2154,7 +2154,7 @@ function createMatchCard(match, index) {
                           winnerName.startsWith(set.winner) ||
                           (set.winner === 'player1' && set.score1 > set.score2) ||
                           (set.winner === 'player2' && set.score2 > set.score1);
-            const badgeColor = wonSet ? '#4CAF50' : 'var(--color-accent)';
+            const badgeColor = wonSet ? 'var(--color-win, #45d17e)' : 'var(--color-accent)';
             const badgeIcon = wonSet ? '✓' : '✗';
             return `<span style="background: ${badgeColor}; color: white; padding: 4px 10px; border-radius: 5px; font-size: 0.85em; font-weight: bold; margin-right: 5px;">${badgeIcon} Sæt ${i + 1}</span>`;
         }).join('');
@@ -2171,7 +2171,7 @@ function createMatchCard(match, index) {
                     <span style="background: rgba(var(--color-primary-rgb), 0.3); color: var(--color-accent); padding: 3px 8px; border-radius: 5px; font-size: 0.8em; font-weight: bold;">${gameTypeText}</span>
                 </div>
                 <div style="font-weight: bold; font-size: 1.2em; margin-bottom: 8px;">
-                    <span style="color: #4CAF50;">${escapeHtml(match.winner_name)}</span>
+                    <span style="color: var(--color-win, #45d17e);">${escapeHtml(match.winner_name)}</span>
                     <span style="color: #aaa; margin: 0 8px;">besejrede</span>
                     <span style="color: var(--color-accent);">${escapeHtml(match.loser_name)}</span>
                 </div>
@@ -2196,8 +2196,8 @@ function createMatchCard(match, index) {
 
         stats.parsedSets.forEach((set, i) => {
             const player1Won = set.score1 > set.score2;
-            const player1Color = player1Won ? '#4CAF50' : 'var(--color-accent)';
-            const player2Color = player1Won ? 'var(--color-accent)' : '#4CAF50';
+            const player1Color = player1Won ? 'var(--color-win, #45d17e)' : 'var(--color-accent)';
+            const player2Color = player1Won ? 'var(--color-accent)' : 'var(--color-win, #45d17e)';
             const player1Weight = player1Won ? 'bold' : 'normal';
             const player2Weight = player1Won ? 'normal' : 'bold';
 
@@ -2407,7 +2407,7 @@ async function showLatestMatch(courtNumber) {
             return;
         }
         const sets = parseHistorySetScores(m.set_scores);
-        const WIN_GREEN = '#4CAF50';
+        const WIN_GREEN = 'var(--color-win, #45d17e)';
         const MUTED = '#9aa0a8';
 
         const winner = escapeHtml(m.winner_name || '');
@@ -2854,9 +2854,9 @@ function copyLink(link, btn) {
 function showDtMsg(el, msg, type) {
     el.textContent = msg;
     el.style.display = 'block';
-    el.style.background = type === 'error' ? 'rgba(var(--color-accent-rgb),0.12)' : 'rgba(39,174,96,0.1)';
-    el.style.border = type === 'error' ? '1px solid rgba(var(--color-accent-rgb),0.3)' : '1px solid rgba(39,174,96,0.25)';
-    el.style.color = type === 'error' ? 'var(--color-accent)' : '#2ecc71';
+    el.style.background = type === 'error' ? 'rgba(var(--color-danger-rgb, 217, 44, 63),0.12)' : 'rgba(var(--color-win-rgb, 69, 209, 126),0.1)';
+    el.style.border = type === 'error' ? '1px solid rgba(var(--color-danger-rgb, 217, 44, 63),0.3)' : '1px solid rgba(var(--color-win-rgb, 69, 209, 126),0.25)';
+    el.style.color = type === 'error' ? 'var(--color-danger, #d92c3f)' : 'var(--color-win, #45d17e)';
 }
 
 function escapeHtmlDt(str) {
@@ -2895,14 +2895,14 @@ function bpStatus(msg, type) {
     if (!msg) { el.style.display = 'none'; return; }
     el.textContent = msg;
     el.style.display = 'block';
-    el.style.background = type === 'success' ? 'rgba(76,175,80,0.12)'
-                        : type === 'error'   ? 'rgba(var(--color-accent-rgb),0.12)'
+    el.style.background = type === 'success' ? 'rgba(var(--color-win-rgb, 69, 209, 126),0.12)'
+                        : type === 'error'   ? 'rgba(var(--color-danger-rgb, 217, 44, 63),0.12)'
                         :                      'rgba(var(--color-primary-rgb),0.18)';
-    el.style.color     = type === 'success' ? '#4CAF50'
-                        : type === 'error'   ? 'var(--color-accent)'
+    el.style.color     = type === 'success' ? 'var(--color-win, #45d17e)'
+                        : type === 'error'   ? 'var(--color-danger, #d92c3f)'
                         :                      '#aaa';
-    el.style.border    = type === 'success' ? '1px solid rgba(76,175,80,0.25)'
-                        : type === 'error'   ? '1px solid rgba(var(--color-accent-rgb),0.25)'
+    el.style.border    = type === 'success' ? '1px solid rgba(var(--color-win-rgb, 69, 209, 126),0.25)'
+                        : type === 'error'   ? '1px solid rgba(var(--color-danger-rgb, 217, 44, 63),0.25)'
                         :                      '1px solid rgba(var(--color-primary-rgb),0.3)';
 }
 
@@ -2924,7 +2924,7 @@ function bpRenderPreview(data) {
             <div style="font-weight:bold;color:var(--color-accent);margin-bottom:10px;">${label}</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
                 <div>
-                    <div style="color:#4CAF50;font-size:0.82em;margin-bottom:6px;">${escapeHtml(team1Name)}</div>
+                    <div style="color:var(--color-win, #45d17e);font-size:0.82em;margin-bottom:6px;">${escapeHtml(team1Name)}</div>
                     ${inp('t1p1', g.team1Player1, 'Spiller')}
                     ${isDoubles ? inp('t1p2', g.team1Player2, 'Makker') : ''}
                 </div>
@@ -2944,7 +2944,7 @@ function bpRenderPreview(data) {
                 <div>
                     <label style="color:#aaa;font-size:0.85em;">Hold 1</label>
                     <input id="bp_team1" value="${escapeHtml(team1Name)}"
-                           style="width:100%;padding:10px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid #4CAF50;border-radius:5px;margin-top:4px;box-sizing:border-box;">
+                           style="width:100%;padding:10px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-win, #45d17e);border-radius:5px;margin-top:4px;box-sizing:border-box;">
                 </div>
                 <div>
                     <label style="color:#aaa;font-size:0.85em;">Hold 2</label>
@@ -3199,7 +3199,7 @@ function autoSyncStatusHtml(t) {
     if (!s) return `<div style="color:#777; font-size:0.78em; width:100%;">Auto-opdatering aktiv — venter på første kørsel…</div>`;
     const time = new Date(s.at).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
     if (s.error) {
-        return `<div style="color:#e74c3c; font-size:0.78em; width:100%;">Auto-opdatering fejlede kl. ${time} — prøver igen om lidt</div>`;
+        return `<div style="color:var(--color-danger, #d92c3f); font-size:0.78em; width:100%;">Auto-opdatering fejlede kl. ${time} — prøver igen om lidt</div>`;
     }
     const added = s.added > 0 ? ` · ${s.added} nye kampe tilføjet` : '';
     const candidates = s.newCandidates > 0
@@ -3499,7 +3499,7 @@ function renderTournamentMatchRow(tournamentId, m) {
         ? `<button onclick="startEditTournamentMatch(${tournamentId}, ${m.id})" style="padding:4px 10px; background:transparent; color:#aaa; border:1px solid #555; border-radius:4px; cursor:pointer; font-size:0.8em;">Rediger</button>`
         : '';
     const deleteBtn = canDelete
-        ? `<button onclick="confirmDeleteTournamentMatch(${tournamentId}, ${m.id})" style="padding:4px 10px; background:transparent; color:#e74c3c; border:1px solid #e74c3c; border-radius:4px; cursor:pointer; font-size:0.8em;">Slet</button>`
+        ? `<button onclick="confirmDeleteTournamentMatch(${tournamentId}, ${m.id})" style="padding:4px 10px; background:transparent; color:var(--color-danger, #d92c3f); border:1px solid var(--color-danger, #d92c3f); border-radius:4px; cursor:pointer; font-size:0.8em;">Slet</button>`
         : '';
 
     return `
@@ -3687,8 +3687,8 @@ function tsImportStatus(text, type) {
     }
     const colors = {
         info: { bg: 'rgba(52,152,219,0.15)', border: '#3498db', text: '#7fc7f0' },
-        success: { bg: 'rgba(76,175,80,0.15)', border: '#4CAF50', text: '#90df93' },
-        error: { bg: 'rgba(231,76,60,0.15)', border: '#e74c3c', text: '#f0867a' }
+        success: { bg: 'rgba(var(--color-win-rgb, 69, 209, 126),0.15)', border: 'var(--color-win, #45d17e)', text: '#90df93' },
+        error: { bg: 'rgba(var(--color-danger-rgb, 217, 44, 63),0.15)', border: 'var(--color-danger, #d92c3f)', text: '#f0867a' }
     };
     const c = colors[type] || colors.info;
     el.style.display = 'block';

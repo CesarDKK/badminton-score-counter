@@ -15,6 +15,15 @@
        mørk tekst hvis temaets farve er lys (fx lime) */
     --color-on-accent: #ffffff;
     --color-on-primary: #ffffff;
+    /* RGB-varianter — theme-loader.js overskriver med de aktuelle temafarver */
+    --color-primary-rgb: 83, 52, 131;
+    --color-accent-rgb: 233, 69, 96;
+    /* Semantiske farver — faste på tværs af temaer.
+       win/success = grøn, danger = rød (sletning, fejl) */
+    --color-win: #45d17e;
+    --color-win-rgb: 69, 209, 126;
+    --color-danger: #d92c3f;
+    --color-danger-rgb: 217, 44, 63;
     --gradient-primary: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
 }
 
@@ -587,7 +596,7 @@ header h1 {
     font-size: 10em;
     letter-spacing: 0.02em;
     margin: 20px 0;
-    color: #27ae60;
+    color: var(--color-accent);
     line-height: 1;
 }
 
@@ -606,7 +615,7 @@ header h1 {
     font-size: 3em;
     letter-spacing: 0.05em;
     margin-bottom: 24px;
-    color: #27ae60;
+    color: #ffffff;
 }
 
 .court-overlay-message-text {

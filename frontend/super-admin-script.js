@@ -240,7 +240,7 @@ function renderClubs() {
                     ${club.is_active ? 'Deaktiver' : 'Aktiver'}
                 </button>
                 ${!club.is_active ? `
-                <button class="btn-danger" style="background:rgba(233,69,96,0.3);border-color:rgba(233,69,96,0.5);"
+                <button class="btn-danger" style="background:rgba(var(--color-danger-rgb, 217, 44, 63),0.3);border-color:rgba(var(--color-danger-rgb, 217, 44, 63),0.5);"
                     onclick="handleDeleteClub(${club.id}, '${escapeHtml(club.name)}')">
                     🗑 Slet
                 </button>` : ''}
@@ -682,7 +682,7 @@ function renderFootballClubs() {
                     ${club.is_active ? 'Deaktiver' : 'Aktiver'}
                 </button>
                 ${!club.is_active ? `
-                <button class="btn-danger" style="background:rgba(233,69,96,0.3);border-color:rgba(233,69,96,0.5);"
+                <button class="btn-danger" style="background:rgba(var(--color-danger-rgb, 217, 44, 63),0.3);border-color:rgba(var(--color-danger-rgb, 217, 44, 63),0.5);"
                     onclick="handleDeleteFootballClub(${club.id}, '${escapeHtml(club.name)}')">
                     🗑 Slet
                 </button>` : ''}
