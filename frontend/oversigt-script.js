@@ -1037,8 +1037,9 @@ function _startIdleDefaultMessage() {
     if (!screen) return;
 
     screen.innerHTML = `
-        <div id="idleBounceText" style="position:absolute; text-align:center; color:white; white-space:nowrap;">
-            <div style="font-size:10.5em; font-weight:bold; color:white; letter-spacing:0.02em;">Ingen aktive kampe</div>
+        <div id="idleBounceText" class="idle-bounce-text">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><g transform="translate(0 1.2)"><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/><rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/><path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/></g></svg>
+            <span>Ingen aktive kampe</span>
         </div>`;
 
     _startIdleScreensaver();

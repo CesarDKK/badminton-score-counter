@@ -698,3 +698,36 @@ body::before {
     }
 }
 
+
+/* ══════════════════════════════════════════
+   Idle-pauseskærm — vises når ingen kampe er aktive.
+   Teksten skalerer med viewporten (clamp) så den aldrig
+   er bredere end skærmen og kan bounce frit.
+   ══════════════════════════════════════════ */
+.idle-screen {
+    position: fixed;
+    inset: 0;
+    background: var(--color-bg-dark, #0f0e17);
+    overflow: hidden;
+    z-index: 200;
+}
+
+.idle-bounce-text {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 0.3em;
+    white-space: nowrap;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(2.5em, 7vw, 9em);
+    letter-spacing: 0.05em;
+    line-height: 1;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.idle-bounce-text svg {
+    width: 0.85em;
+    height: 0.85em;
+    flex-shrink: 0;
+    opacity: 0.9;
+}
