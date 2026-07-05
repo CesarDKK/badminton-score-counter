@@ -68,7 +68,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--color-bg-dark);
+    /* Blød glød fra toppen (som landing-siden) + temaets mørke baggrund */
+    background:
+        radial-gradient(ellipse 80% 60% at 50% 0%,
+            rgba(var(--color-primary-rgb, 83, 52, 131), 0.18) 0%,
+            transparent 65%),
+        var(--color-bg-dark, #0d0d1a);
     z-index: 500;
     overflow: hidden;
 }
@@ -79,14 +84,38 @@
     object-fit: contain;
 }
 
-/* "Ingen aktiv kamp" screensaver text */
+/* "Ingen aktiv kamp" screensaver — skalerer med viewporten (clamp) så
+   teksten aldrig er bredere end skærmen og kan bounce frit */
 .screensaver-text {
-    font-family: 'Bebas Neue', sans-serif;
-    letter-spacing: 0.06em;
-    color: rgba(255, 255, 255, 0.85);
     text-align: center;
     white-space: nowrap;
     position: absolute;
+}
+
+.screensaver-text svg {
+    width: clamp(2.4em, 8vw, 7em);
+    height: clamp(2.4em, 8vw, 7em);
+    color: var(--color-accent, #e94560);
+    margin-bottom: 0.4em;
+}
+
+.screensaver-label {
+    font-family: 'DM Sans', sans-serif;
+    font-size: clamp(1em, 3.2vw, 2.6em);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    color: rgba(255, 255, 255, 0.45);
+    margin-bottom: 0.35em;
+}
+
+.screensaver-court {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(3.5em, 19vw, 15em);
+    letter-spacing: 0.04em;
+    line-height: 1;
+    color: #ffffff;
+    text-shadow: 0 0 60px rgba(var(--color-accent-rgb, 233, 69, 96), 0.35);
 }
 
 /* =================== RESET =================== */
