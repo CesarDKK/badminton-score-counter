@@ -90,7 +90,7 @@ html, body {
     letter-spacing: 0.06em;
     padding: 18px 50px;
     background: var(--color-accent);
-    color: white;
+    color: var(--color-on-accent, #ffffff);
     border: none;
     border-radius: 12px;
     cursor: pointer;
@@ -250,7 +250,7 @@ html, body {
 }
 
 .boldpoint-pill.boldpoint-match {
-    color: #fff;
+    color: var(--color-on-accent, #ffffff);
     background: var(--color-accent);
     animation: boldpointPulse 1.1s ease-in-out infinite;
 }
@@ -320,7 +320,7 @@ html, body {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 2.2em;
     letter-spacing: 0.06em;
-    color: white;
+    color: var(--color-on-accent, #ffffff);
     border: none;
     border-radius: var(--radius-md);
     cursor: pointer;
@@ -441,7 +441,7 @@ html, body {
     font-size: 1.2em;
     font-family: 'DM Sans', sans-serif;
     background: var(--color-accent);
-    color: white;
+    color: var(--color-on-accent, #ffffff);
     border: none;
     border-radius: var(--radius-pill);
     cursor: pointer;
@@ -451,6 +451,27 @@ html, body {
 }
 
 .btn-primary:hover {
+    filter: brightness(1.1);
+    transform: scale(1.04);
+}
+
+/* Destruktive bekræftelser (fx "Ja, Ryd Banen") — fast fare-rød,
+   uafhængig af tema, så "slet alle data" aldrig ligner en positiv handling */
+.btn-danger {
+    padding: 15px 30px;
+    font-size: 1.2em;
+    font-family: 'DM Sans', sans-serif;
+    background: #d92c3f;
+    color: #ffffff;
+    border: none;
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+    box-shadow: 0 8px 26px rgba(217, 44, 63, 0.3);
+}
+
+.btn-danger:hover {
     filter: brightness(1.1);
     transform: scale(1.04);
 }
@@ -1119,7 +1140,7 @@ html, body {
     width: 50px;
     height: 50px;
     background: var(--color-accent);
-    color: white;
+    color: var(--color-on-accent, #ffffff);
     border: 3px solid white;
     border-radius: 50%;
     font-size: 1.8em;
@@ -1575,7 +1596,7 @@ html, body {
 .holdkamp-assign {
     padding: 8px 18px;
     background: var(--color-primary);
-    color: #fff;
+    color: var(--color-on-primary, #ffffff);
     border: none;
     border-radius: var(--radius-pill);
     cursor: pointer;

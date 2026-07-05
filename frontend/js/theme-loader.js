@@ -33,6 +33,17 @@ window.loadTheme = async function() {
         root.style.setProperty('--color-bg-dark-rgb',   toRgb(bgDark));
         root.style.setProperty('--color-bg-card-rgb',   toRgb(bgCard));
 
+        // Kontrastfarve til tekst oven på accent/primary — mørk tekst på lyse
+        // farver (fx lime i Skov-temaet), hvid på mørke. YIQ-vægtet lysstyrke.
+        const onColor = hex => {
+            const h = hex.replace('#', '');
+            const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+            const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+            return yiq >= 150 ? '#0d1117' : '#ffffff';
+        };
+        root.style.setProperty('--color-on-accent',  onColor(accent));
+        root.style.setProperty('--color-on-primary', onColor(primary));
+
         // Update gradient
         const gradient = `linear-gradient(135deg, ${primary} 0%, ${accent} 100%)`;
         root.style.setProperty('--gradient-primary', gradient);

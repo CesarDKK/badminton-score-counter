@@ -11,6 +11,10 @@
     --color-bg-dark: #0d0d1a;
     --color-bg-container: #16213e;
     --color-bg-card: #0f3460;
+    /* Tekstfarve oven på accent/primary — theme-loader.js overskriver med
+       mørk tekst hvis temaets farve er lys (fx lime) */
+    --color-on-accent: #ffffff;
+    --color-on-primary: #ffffff;
     --gradient-primary: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
 }
 
@@ -383,7 +387,7 @@ header h1 {
 
 .btn-primary {
     background: var(--color-primary);
-    color: white;
+    color: var(--color-on-primary, #ffffff);
 }
 
 .btn-primary:hover {

@@ -856,7 +856,7 @@ function clearCourt() {
             {
                 text: 'Ja, Ryd Banen',
                 callback: () => performClearCourtNow(),
-                style: 'primary'
+                style: 'danger'
             },
             {
                 text: 'Annuller',
@@ -1837,7 +1837,9 @@ function showMessage(title, text, buttons = [{ text: 'OK', callback: null, style
     // Add buttons
     buttons.forEach(button => {
         const btn = document.createElement('button');
-        btn.className = button.style === 'secondary' ? 'btn-secondary' : 'btn-primary';
+        btn.className = button.style === 'secondary' ? 'btn-secondary'
+                      : button.style === 'danger'    ? 'btn-danger'
+                      : 'btn-primary';
         btn.style.fontSize = '1.5em';
         btn.style.padding = '15px 40px';
         btn.style.cursor = 'pointer';
@@ -2012,7 +2014,7 @@ function showMatchWonMessage(winnerNames, winnerGames, loserGames, isReportedMat
     const bodyHtml = `<div style="display:flex;flex-direction:column;align-items:center;">${winnerLine}${tableHtml}${noticeHtml}</div>`;
 
     const buttons = isReportedMatch
-        ? [{ text: 'Ryd Banen (hold 3 sek.)', callback: () => performClearCourtNow(), style: 'primary', holdDurationMs: 3000 }]
+        ? [{ text: 'Ryd Banen (hold 3 sek.)', callback: () => performClearCourtNow(), style: 'danger', holdDurationMs: 3000 }]
         : [{ text: 'Ny Kamp', callback: () => clearCourt(), style: 'primary' }];
 
     showMessage('Kamp Vundet!', '', buttons, { bodyHtml });
