@@ -971,7 +971,15 @@ html, body {
     .btn-switch-sides-icon { font-size: 1.1em; }
     .btn-switch-sides-label { font-size: 0.8em; }
     .btn-swap-players { width: 28px; height: 28px; font-size: 1.1em; border-width: 2px; }
-    .serve-indicator { width: 44px; height: 44px; font-size: 2.2em; }
+    /* Ca. halv størrelse på telefon — banen er lille, så en stor badge
+       åd for meget plads og gik ind over "Skift side"-knappen.
+       Pulsringen skaleres tilsvarende ned. */
+    .serve-indicator {
+        width: 24px;
+        height: 24px;
+        border-width: 1.5px;
+        animation-name: servePulseSmall;
+    }
 
     /* Grid: [serv 1 | center | serv 2] — center column always stays in the middle */
     .control-buttons-bottom {
@@ -1051,6 +1059,18 @@ html, body {
     100% {
         box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4),
                     0 0 0 14px rgba(var(--color-accent-rgb), 0);
+    }
+}
+
+/* Mindre ring til den lille telefon-badge */
+@keyframes servePulseSmall {
+    0% {
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4),
+                    0 0 0 0 rgba(var(--color-accent-rgb), 0.5);
+    }
+    100% {
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4),
+                    0 0 0 7px rgba(var(--color-accent-rgb), 0);
     }
 }
 
