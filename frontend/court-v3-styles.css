@@ -1006,9 +1006,9 @@
 
 .serve-indicator::after {
     content: '';
-    width: 58%;
-    height: 58%;
-    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'%3E%3Cpath d='M12 13.6 5.4 2.6l3.1 1.1L12 1.4l3.5 2.3 3.1-1.1z'/%3E%3Ccircle cx='12' cy='18.4' r='3.4'/%3E%3C/svg%3E") center / contain no-repeat;
+    width: 62%;
+    height: 62%;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'%3E%3Cg transform='translate(0 1.2)'%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-33 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(33 12 14.5)'/%3E%3Crect x='9.4' y='14.3' width='5.2' height='1.7' rx='0.85'/%3E%3Cpath d='M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z'/%3E%3C/g%3E%3C/svg%3E") center / contain no-repeat;
 }
 
 @keyframes servePulse {

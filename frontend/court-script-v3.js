@@ -2679,7 +2679,7 @@ function showQrSessionExpired() {
         font-family: inherit; color: #fff;
     `;
     overlay.innerHTML = `
-        <svg viewBox="0 0 24 24" fill="rgba(255,255,255,0.85)" style="width: clamp(60px,14vw,110px); height: clamp(60px,14vw,110px); margin-bottom: 24px;"><path d="M12 13.6 5.4 2.6l3.1 1.1L12 1.4l3.5 2.3 3.1-1.1z"/><circle cx="12" cy="18.4" r="3.4"/></svg>
+        <svg viewBox="0 0 24 24" fill="rgba(255,255,255,0.85)" style="width: clamp(60px,14vw,110px); height: clamp(60px,14vw,110px); margin-bottom: 24px;"><g transform="translate(0 1.2)"><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/><rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/><path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/></g></svg>
         <h1 style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.05em; font-size: clamp(1.8em,6vw,3em); margin-bottom: 16px; color: #fff;">Kamp Afsluttet</h1>
         <p style="font-size: clamp(1em,3vw,1.4em); color: rgba(255,255,255,0.65); max-width: 400px; line-height: 1.6;">
             Banen er blevet nulstillet.<br>
