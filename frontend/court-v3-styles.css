@@ -16,6 +16,14 @@
     --glass-border: rgba(255, 255, 255, 0.16);
 }
 
+/* Tælleren er en app-skærm — den må aldrig vise scrollbars.
+   100vh kan afvige fra den reelle viewport når browser-UI toggler,
+   hvilket gav scrollbars ved bestemte vindueshøjder. */
+html, body {
+    height: 100%;
+    overflow: hidden;
+}
+
 /* Remove container padding/border for full-screen experience */
 .container {
     padding: 0 !important;
@@ -598,6 +606,9 @@
            from the available height: (100vh - 210px) × (13.4/6.1).
            210px ≈ score display (~65px) + bottom buttons (~75px) + body padding + gaps. */
         width: min(100%, calc((100vh - 220px) * (13.4 / 6.1)));
+        /* dvh = den faktiske (dynamiske) viewport — undgår overflow når
+           browser-UI gør 100vh større end det synlige område */
+        width: min(100%, calc((100dvh - 220px) * (13.4 / 6.1)));
         aspect-ratio: 13.4 / 6.1;
         padding-bottom: 0;
         height: auto;
