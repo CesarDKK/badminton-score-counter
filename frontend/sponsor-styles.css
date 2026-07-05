@@ -120,14 +120,14 @@
     padding: 28px;
     background: rgba(255, 255, 255, 0.02);
     border-radius: 12px;
-    border: 1px dashed rgba(83, 52, 131, 0.4);
+    border: 1px dashed rgba(var(--color-primary-rgb, 83, 52, 131), 0.4);
     width: 100%;
     transition: border-color 0.2s ease, background 0.2s ease;
 }
 
 .upload-box:hover {
     border-color: var(--color-primary);
-    background: rgba(83, 52, 131, 0.05);
+    background: rgba(var(--color-primary-rgb, 83, 52, 131), 0.05);
 }
 
 .upload-box .btn-primary {
@@ -182,7 +182,7 @@
 .gallery-item:hover {
     transform: translateY(-3px);
     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
-    border-color: rgba(83, 52, 131, 0.35);
+    border-color: rgba(var(--color-primary-rgb, 83, 52, 131), 0.35);
 }
 
 /* Inactive and expired gallery items - dimmed appearance */
@@ -204,7 +204,7 @@
 }
 
 .gallery-item-expired {
-    border-color: rgba(233, 69, 96, 0.3);
+    border-color: rgba(var(--color-accent-rgb, 233, 69, 96), 0.3);
 }
 
 .gallery-image-container {
@@ -256,8 +256,8 @@
 }
 
 .btn-view {
-    background: #4CAF50;
-    color: white;
+    background: var(--color-win, #45d17e);
+    color: #0d1117;
 }
 
 .btn-delete {
@@ -339,7 +339,7 @@
     max-height: 80vh;
     object-fit: contain;
     border-radius: 10px;
-    box-shadow: 0 0 30px rgba(233, 69, 96, 0.5);
+    box-shadow: 0 0 30px rgba(var(--color-accent-rgb, 233, 69, 96), 0.5);
 }
 
 .image-modal-info {
@@ -432,7 +432,7 @@
 }
 
 .gallery-item-banner:hover {
-    box-shadow: 0 8px 20px rgba(233, 69, 96, 0.5);
+    box-shadow: 0 8px 20px rgba(var(--color-accent-rgb, 233, 69, 96), 0.5);
 }
 
 /* Banner-specific Gallery Image Container (shorter aspect ratio) */
@@ -517,9 +517,9 @@
 }
 
 .status-badge.status-active {
-    background: rgba(76, 175, 80, 0.2);
-    color: #4CAF50;
-    border: 2px solid #4CAF50;
+    background: rgba(var(--color-win-rgb, 69, 209, 126), 0.2);
+    color: var(--color-win, #45d17e);
+    border: 2px solid var(--color-win, #45d17e);
 }
 
 .status-badge.status-inactive {
@@ -529,7 +529,7 @@
 }
 
 .status-badge.status-expired {
-    background: rgba(233, 69, 96, 0.2);
+    background: rgba(var(--color-accent-rgb, 233, 69, 96), 0.2);
     color: var(--color-accent);
     border: 2px solid var(--color-accent);
 }
@@ -594,13 +594,13 @@
 }
 
 .toggle-switch input:checked + .toggle-slider {
-    background-color: rgba(76, 175, 80, 0.3);
-    border-color: #4CAF50;
+    background-color: rgba(var(--color-win-rgb, 69, 209, 126), 0.3);
+    border-color: var(--color-win, #45d17e);
 }
 
 .toggle-switch input:checked + .toggle-slider:before {
     transform: translateX(24px);
-    background-color: #4CAF50;
+    background-color: var(--color-win, #45d17e);
 }
 
 .toggle-switch input:disabled + .toggle-slider {
@@ -609,7 +609,7 @@
 }
 
 .toggle-switch input:focus + .toggle-slider {
-    box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+    box-shadow: 0 0 10px rgba(var(--color-win-rgb, 69, 209, 126), 0.5);
 }
 
 /* Expiration Container */
@@ -651,7 +651,7 @@
 .expiration-input:focus {
     outline: none;
     border-color: var(--color-accent);
-    box-shadow: 0 0 10px rgba(233, 69, 96, 0.3);
+    box-shadow: 0 0 10px rgba(var(--color-accent-rgb, 233, 69, 96), 0.3);
 }
 
 .expiration-input::-webkit-calendar-picker-indicator {
@@ -690,7 +690,7 @@
     font-size: 0.85em;
     font-weight: bold;
     padding: 8px;
-    background: rgba(233, 69, 96, 0.1);
+    background: rgba(var(--color-accent-rgb, 233, 69, 96), 0.1);
     border: 1px solid var(--color-accent);
     border-radius: 5px;
     text-align: center;

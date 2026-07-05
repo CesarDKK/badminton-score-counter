@@ -236,7 +236,7 @@ function hkStatusFor(g, teamMatch) {
                 border: '#f1c40f'
             };
         }
-        return { html: `<span style="color:#fff;">▶ Bane ${g.court_number}</span>`, border: '#533483' };
+        return { html: `<span style="color:#fff;">▶ Bane ${g.court_number}</span>`, border: 'var(--color-primary, #533483)' };
     }
     // finished — orienter scoren til team1 så tallene matcher navnene
     const winner = g.winner_team === 1 ? teamMatch.team1_name : teamMatch.team2_name;
@@ -244,7 +244,7 @@ function hkStatusFor(g, teamMatch) {
     const side1Key = isDoubles && g.team1_player2 ? `${g.team1_player1 || ''} / ${g.team1_player2}` : (g.team1_player1 || '');
     const nums = g.set_scores ? orientHistorySetScoreNumbers(g.set_scores, side1Key).join(' · ') : '';
     const sc = nums ? ` <span style="color:rgba(255,255,255,0.45);">${nums}</span>` : '';
-    return { html: `<span style="color:#4CAF50;">✓ ${escapeHtml(winner)}${sc}</span>`, border: g.winner_team === 1 ? '#4CAF50' : '#e94560' };
+    return { html: `<span style="color:var(--color-win, #45d17e);">✓ ${escapeHtml(winner)}${sc}</span>`, border: g.winner_team === 1 ? 'var(--color-win, #45d17e)' : '#e94560' };
 }
 
 function renderHoldkampCards(matches) {
@@ -737,8 +737,8 @@ function renderCourtCard(court) {
         const row2Score = swapped ? sA : sB;
         const row1Won = row1Score > row2Score;
 
-        histP1 += `<div class="set-hist-score" style="color:${row1Won ? '#4CAF50' : '#e94560'}">${row1Score}</div>`;
-        histP2 += `<div class="set-hist-score" style="color:${row1Won ? '#e94560' : '#4CAF50'}">${row2Score}</div>`;
+        histP1 += `<div class="set-hist-score" style="color:${row1Won ? 'var(--color-win, #45d17e)' : '#e94560'}">${row1Score}</div>`;
+        histP2 += `<div class="set-hist-score" style="color:${row1Won ? '#e94560' : 'var(--color-win, #45d17e)'}">${row2Score}</div>`;
     });
 
     // Når et sæt netop er afsluttet er restBreakActive=true men resetScores() er
@@ -831,8 +831,8 @@ function renderFinishedCard(court) {
         const r1 = swapped ? sB : sA;
         const r2 = swapped ? sA : sB;
         const r1won = r1 > r2;
-        histP1 += `<div class="set-hist-score" style="color:${r1won ? '#4CAF50' : '#e94560'}">${r1}</div>`;
-        histP2 += `<div class="set-hist-score" style="color:${r1won ? '#e94560' : '#4CAF50'}">${r2}</div>`;
+        histP1 += `<div class="set-hist-score" style="color:${r1won ? 'var(--color-win, #45d17e)' : '#e94560'}">${r1}</div>`;
+        histP2 += `<div class="set-hist-score" style="color:${r1won ? '#e94560' : 'var(--color-win, #45d17e)'}">${r2}</div>`;
     });
 
     return `
