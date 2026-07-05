@@ -31,10 +31,16 @@ html, body {
     max-width: none !important;
 }
 
+/* ── Responsiv skalering ──
+   Alle størrelser der varierer med skærmhøjden styres af --cv-* tokens.
+   Basereglerne bruger var() med desktop-værdien som fallback; media
+   queries nederst i filen sætter kun tokens (700/600/550 tablet-trin,
+   derefter telefon-landskab som vinder ved ≤500px høj). */
+
 /* Score Display Above Court */
 .score-display-top {
     width: 100%;
-    margin-bottom: 5px;
+    margin-bottom: var(--cv-score-mb, 5px);
 }
 
 /* Court center overlay for timer and start button */
@@ -72,11 +78,11 @@ html, body {
 .court-name-display {
     position: absolute;
     left: 50%;
-    top: 20%;
+    top: var(--cv-courtname-top, 20%);
     transform: translateX(-50%);
     z-index: 100;
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 4em;
+    font-size: var(--cv-courtname-fs, 4em);
     letter-spacing: 0.06em;
     color: rgba(255, 255, 255, 0.9);
     text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
@@ -86,9 +92,9 @@ html, body {
 
 .btn-start-match-center {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 2em;
+    font-size: var(--cv-start-fs, 2em);
     letter-spacing: 0.06em;
-    padding: 18px 50px;
+    padding: var(--cv-start-pad, 18px 50px);
     background: var(--color-accent);
     color: var(--color-on-accent, #ffffff);
     border: none;
@@ -119,13 +125,13 @@ html, body {
 
 .timer-display-center {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.6em;
+    font-size: var(--cv-timer-fs, 1.6em);
     letter-spacing: 0.1em;
     color: white;
     text-shadow: 0 0 20px rgba(0,0,0,0.9);
     background: rgba(0,0,0,0.55);
     backdrop-filter: blur(4px);
-    padding: 6px 20px;
+    padding: var(--cv-timer-pad, 6px 20px);
     border-radius: var(--radius-pill);
     border: 1px solid var(--glass-border);
 }
@@ -135,7 +141,7 @@ html, body {
     justify-content: space-between;
     align-items: center;
     width: 100%;
-    padding: 0 10px;
+    padding: var(--cv-scores-pad, 0 10px);
 }
 
 .player-score-section {
@@ -145,7 +151,7 @@ html, body {
 
 .point-score {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 4em;
+    font-size: var(--cv-point-fs, 4em);
     letter-spacing: 0.04em;
     color: #ffffff;
 }
@@ -157,22 +163,22 @@ html, body {
 }
 
 .set-label {
-    font-size: 0.75em;
+    font-size: var(--cv-setlabel-fs, 0.75em);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: rgba(255,255,255,0.45);
-    margin-bottom: 4px;
+    margin-bottom: var(--cv-setlabel-mb, 4px);
 }
 
 .set-score {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 2.2em;
+    font-size: var(--cv-setscore-fs, 2.2em);
     letter-spacing: 0.06em;
     color: var(--color-accent);
     display: flex;
     justify-content: center;
-    gap: 8px;
+    gap: var(--cv-setscore-gap, 8px);
 }
 
 .set-separator {
@@ -296,9 +302,9 @@ html, body {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    margin-top: 5px;
-    padding: 5px 15px;
-    gap: 5px;
+    margin-top: var(--cv-controls-mt, 5px);
+    padding: var(--cv-controls-pad, 5px 15px);
+    gap: var(--cv-controls-gap, 5px);
 }
 
 .center-buttons {
@@ -306,7 +312,7 @@ html, body {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 10px;
+    gap: var(--cv-center-gap, 10px);
     flex-wrap: nowrap;
 }
 
@@ -318,7 +324,7 @@ html, body {
     align-self: stretch;
     flex-shrink: 0;
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 2.2em;
+    font-size: var(--cv-add-fs, 2.2em);
     letter-spacing: 0.06em;
     color: var(--color-on-accent, #ffffff);
     border: none;
@@ -328,7 +334,9 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0;
+    padding: var(--cv-add-pad, 0);
+    min-width: var(--cv-add-minw, auto);
+    min-height: var(--cv-add-minh, auto);
     /* Temafarve + lys/skygge-lag ovenpå — følger klubbens accentfarve */
     background:
         linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(0,0,0,0.18) 100%),
@@ -368,8 +376,8 @@ html, body {
 }
 
 .btn-start-serv {
-    padding: 10px 52px;
-    font-size: 1.5em;
+    padding: var(--cv-serv-pad, 10px 52px);
+    font-size: var(--cv-serv-fs, 1.5em);
     font-family: 'DM Sans', sans-serif;
     font-weight: 600;
     background: rgba(255,255,255,0.07);
@@ -378,8 +386,8 @@ html, body {
     border-radius: var(--radius-pill);
     cursor: pointer;
     transition: all 0.2s;
-    height: 45px;
-    min-width: 100px;
+    height: var(--cv-ctrl-h, 45px);
+    min-width: var(--cv-serv-minw, 100px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -415,8 +423,8 @@ html, body {
 }
 
 .btn-undo {
-    padding: 10px 22px;
-    font-size: 0.9em;
+    padding: var(--cv-undo-pad, 10px 22px);
+    font-size: var(--cv-ctrl-fs, 0.9em);
     font-family: 'DM Sans', sans-serif;
     font-weight: 600;
     background: rgba(255,255,255,0.06);
@@ -425,7 +433,7 @@ html, body {
     border-radius: var(--radius-pill);
     cursor: pointer;
     transition: all 0.2s;
-    height: 45px;
+    height: var(--cv-ctrl-h, 45px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -477,23 +485,23 @@ html, body {
 }
 
 .btn-settings {
-    padding: 10px;
-    width: 45px;
+    padding: var(--cv-gear-pad, 10px);
+    width: var(--cv-ctrl-h, 45px);
     background: rgba(255,255,255,0.06);
     border: 1px solid rgba(255,255,255,0.14);
     color: rgba(255,255,255,0.75);
     border-radius: 50%;
     cursor: pointer;
     transition: all 0.2s;
-    height: 45px;
+    height: var(--cv-ctrl-h, 45px);
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
 .btn-settings svg {
-    width: 20px;
-    height: 20px;
+    width: var(--cv-gear-icon, 20px);
+    height: var(--cv-gear-icon, 20px);
     display: block;
 }
 
@@ -521,16 +529,16 @@ html, body {
     background: rgba(15,15,30,0.95);
     border: 1px solid rgba(255,255,255,0.1);
     border-radius: 16px;
-    padding: 40px;
-    min-width: 400px;
+    padding: var(--cv-menu-pad, 40px);
+    min-width: var(--cv-menu-minw, 400px);
     box-shadow: 0 24px 80px rgba(0,0,0,0.6);
 }
 
 .settings-menu-content h3 {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 2.2em;
+    font-size: var(--cv-menuh3-fs, 2.2em);
     letter-spacing: 0.06em;
-    margin-bottom: 28px;
+    margin-bottom: var(--cv-menuh3-mb, 28px);
     text-align: center;
     color: var(--color-accent);
 }
@@ -538,10 +546,10 @@ html, body {
 .menu-item {
     display: block;
     width: 100%;
-    padding: 16px 20px;
-    margin-bottom: 10px;
+    padding: var(--cv-item-pad, 16px 20px);
+    margin-bottom: var(--cv-item-mb, 10px);
     font-family: 'DM Sans', sans-serif;
-    font-size: 1.1em;
+    font-size: var(--cv-item-fs, 1.1em);
     font-weight: 600;
     background: rgba(255,255,255,0.05);
     color: white;
@@ -753,14 +761,14 @@ html, body {
 }
 
 .player-name {
-    font-size: 2em;
+    font-size: var(--cv-name-fs, 2em);
     font-weight: bold;
     color: white;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
     text-align: center;
     background: none !important;
     border: none !important;
-    padding: 8px;
+    padding: var(--cv-name-pad, 8px);
     margin: 0;
     cursor: pointer;
     border-radius: 4px;
@@ -877,159 +885,14 @@ html, body {
     #portraitOverlay { display: flex; }
 }
 
-/* ══════════════════════════════════════════
-   Mobile landscape (phones rotated)
-   ══════════════════════════════════════════ */
-@media (orientation: landscape) and (max-height: 500px) {
-    body {
-        height: 100dvh;
-        overflow: hidden;
-    }
-
-    .bg-glow { position: fixed; }
-
-    .container {
-        height: 100dvh;
-        display: flex;
-        flex-direction: column;
-        padding: 0 !important;
-    }
-
-    /* Compact score bar */
-    .score-display-top { flex-shrink: 0; margin-bottom: 0; }
-    .scores-container { padding: 3px 10px; }
-    .point-score { font-size: 2.2em; }
-    .set-label { font-size: 0.6em; margin-bottom: 1px; }
-    .set-score { font-size: 1.3em; gap: 4px; }
-
-    /* Middle row fills remaining space */
-    .court-middle-row { flex: 1; min-height: 0; }
-
-    /* +1 side buttons — narrower on phone, full height, no hover scale (iOS Safari sticky-hover bug) */
-    .btn-add-point {
-        width: 65px;
-        height: auto;
-        align-self: stretch;
-        border-radius: 10px;
-        font-size: 1.8em;
-        touch-action: manipulation;
-    }
-
-    .btn-add-point:hover {
-        transform: none !important;
-        filter: none !important;
-        box-shadow:
-            0 6px 22px rgba(var(--color-accent-rgb), 0.25),
-            inset 0 1px 0 rgba(255,255,255,0.25) !important;
-    }
-
-    /* court-view-container: positioning context */
-    .court-view-container {
-        flex: 1;
-        min-width: 0;
-        position: relative;
-    }
-
-    /* court fills parent with 8px inset on sides = visible gap to +1 buttons */
-    .badminton-court {
-        position: absolute !important;
-        top: 0 !important;
-        left: 8px !important;
-        right: 8px !important;
-        bottom: 0 !important;
-        width: auto !important;
-        height: auto !important;
-        max-width: none !important;
-        padding-bottom: 0 !important;
-        margin: 0 !important;
-    }
-
-    @supports (aspect-ratio: 1) {
-        .badminton-court {
-            aspect-ratio: unset !important;
-        }
-    }
-
-    /* Thinner court lines */
-    .line-net,
-    .line-short-service-left,
-    .line-short-service-right,
-    .line-long-service-left,
-    .line-long-service-right { width: 2px; }
-
-    .line-center-horizontal-left,
-    .line-center-horizontal-right,
-    .line-singles-sideline-top,
-    .line-singles-sideline-bottom { height: 2px; }
-
-    /* Court interior elements — scaled down */
-    .player-name { font-size: 1em; padding: 4px; }
-    .court-name-display { font-size: 2em; top: 12%; }
-    .btn-start-match-center { font-size: 1.1em; padding: 10px 22px; }
-    .timer-display-center { font-size: 0.85em; padding: 4px 8px; }
-    .btn-switch-sides { padding: 6px 12px; gap: 6px; }
-    .btn-switch-sides-icon { font-size: 1.1em; }
-    .btn-switch-sides-label { font-size: 0.8em; }
-    .btn-swap-players { width: 28px; height: 28px; font-size: 1.1em; border-width: 2px; }
-    /* Ca. halv størrelse på telefon — banen er lille, så en stor badge
-       åd for meget plads og gik ind over "Skift side"-knappen.
-       Pulsringen skaleres tilsvarende ned. */
-    .serve-indicator {
-        width: 24px;
-        height: 24px;
-        border-width: 1.5px;
-        animation-name: servePulseSmall;
-    }
-
-    /* Grid: [serv 1 | center | serv 2] — center column always stays in the middle */
-    .control-buttons-bottom {
-        flex-shrink: 0;
-        display: grid;
-        grid-template-columns: 1fr auto 1fr;
-        align-items: center;
-        margin-top: 0;
-        padding: 5px 10px 6px;
-        gap: 0;
-    }
-
-    .center-buttons {
-        grid-column: 2;
-        display: flex;
-        gap: 8px;
-        justify-content: center;
-    }
-
-    #startServPlayer1 { grid-column: 1; }
-    #startServPlayer2 { grid-column: 3; justify-self: end; }
-
-    .btn-start-serv {
-        height: 38px;
-        padding: 6px 12px;
-        font-size: 0.82em;
-        min-width: 70px;
-    }
-
-    .btn-undo, .btn-settings {
-        height: 38px;
-        padding: 6px 10px;
-        font-size: 0.82em;
-    }
-
-    .center-buttons { gap: 6px; }
-
-    /* Settings menu full-width */
-    .settings-menu-content {
-        min-width: unset;
-        width: 92vw;
-        padding: 20px 18px;
-    }
-}
+/* (Telefon-landskab-queryen ligger nederst i filen, efter tablet-trinnene,
+   så den vinder hele zonen ≤500px høj) */
 
 /* Serve Indicator — fjerbold-badge med blød puls i temaets accentfarve */
 .serve-indicator {
     position: absolute;
-    width: 64px;
-    height: 64px;
+    width: var(--cv-serve-size, 64px);
+    height: var(--cv-serve-size, 64px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1124,19 +987,19 @@ html, body {
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    padding: 10px 20px;
-    gap: 10px;
+    padding: var(--cv-switch-pad, 10px 20px);
+    gap: var(--cv-switch-gap, 10px);
     backdrop-filter: blur(4px);
 }
 
 .btn-switch-sides-icon {
-    font-size: 1.6em;
+    font-size: var(--cv-switch-icon, 1.6em);
     line-height: 1;
 }
 
 .btn-switch-sides-label {
     font-family: 'DM Sans', sans-serif;
-    font-size: 1.1em;
+    font-size: var(--cv-switch-label, 1.1em);
     font-weight: 600;
     letter-spacing: 0.03em;
     line-height: 1;
@@ -1157,13 +1020,13 @@ html, body {
 /* Swap Players Buttons */
 .btn-swap-players {
     position: absolute;
-    width: 50px;
-    height: 50px;
+    width: var(--cv-swap-size, 50px);
+    height: var(--cv-swap-size, 50px);
     background: var(--color-accent);
     color: var(--color-on-accent, #ffffff);
-    border: 3px solid white;
+    border: var(--cv-swap-bw, 3px) solid white;
     border-radius: 50%;
-    font-size: 1.8em;
+    font-size: var(--cv-swap-fs, 1.8em);
     font-weight: bold;
     cursor: pointer;
     z-index: 50;
@@ -1204,122 +1067,53 @@ html, body {
     transform: translate(-100%, -50%) scale(1.1) rotate(180deg);
 }
 
-/* Small Height Screens (1024x600, tablets in landscape) */
+/* Tablet-trin 1 (fx 1024x600 i landskab) */
 @media (max-height: 700px) and (min-width: 800px) {
-    /* Remove container padding for more space */
-    .container {
-        padding: 0 !important;
+    :root {
+        --cv-score-mb: 3px;
+        --cv-scores-pad: 0 8px;
+        --cv-point-fs: 2.8em;
+        --cv-setlabel-fs: 0.7em;
+        --cv-setlabel-mb: 2px;
+        --cv-setscore-fs: 1.6em;
+        --cv-setscore-gap: 6px;
+        --cv-controls-mt: 3px;
+        --cv-controls-pad: 3px 10px;
+        --cv-add-pad: 12px 30px;
+        --cv-add-fs: 1.5em;
+        --cv-add-minw: 100px;
+        --cv-add-minh: 50px;
+        --cv-serv-pad: 8px 15px;
+        --cv-serv-fs: 0.9em;
+        --cv-serv-minw: 90px;
+        --cv-ctrl-h: 38px;
+        --cv-undo-pad: 8px 15px;
+        --cv-ctrl-fs: 0.9em;
+        --cv-gear-pad: 8px;
+        --cv-gear-icon: 17px;
+        --cv-center-gap: 8px;
+        --cv-courtname-fs: 3em;
+        --cv-start-fs: 1.5em;
+        --cv-start-pad: 15px 35px;
+        --cv-timer-fs: 0.9em;
+        --cv-timer-pad: 4px 8px;
+        --cv-name-fs: 1.5em;
+        --cv-swap-size: 40px;
+        --cv-swap-fs: 1.5em;
+        --cv-switch-pad: 8px 16px;
+        --cv-switch-gap: 8px;
+        --cv-switch-icon: 1.3em;
+        --cv-switch-label: 0.95em;
+        --cv-serve-size: 60px;
+        --cv-menu-pad: 25px;
+        --cv-menu-minw: 300px;
+        --cv-menuh3-fs: 1.5em;
+        --cv-menuh3-mb: 20px;
+        --cv-item-pad: 15px;
+        --cv-item-fs: 1.1em;
     }
 
-    /* Score display above court - more compact */
-    .score-display-top {
-        margin-bottom: 3px;
-    }
-
-    .scores-container {
-        padding: 0 8px;
-    }
-
-    .point-score {
-        font-size: 2.8em;
-    }
-
-    .set-label {
-        font-size: 0.7em;
-        margin-bottom: 2px;
-    }
-
-    .set-score {
-        font-size: 1.6em;
-        gap: 6px;
-    }
-
-    /* Control buttons - more compact */
-    .control-buttons-bottom {
-        margin-top: 3px;
-        padding: 3px 10px;
-    }
-
-    .btn-add-point {
-        padding: 12px 30px;
-        font-size: 1.5em;
-        min-width: 100px;
-        min-height: 50px;
-    }
-
-    .btn-start-serv {
-        padding: 8px 15px;
-        font-size: 0.9em;
-        height: 38px;
-        min-width: 90px;
-    }
-
-    .btn-undo, .btn-settings {
-        padding: 8px 15px;
-        font-size: 0.9em;
-        height: 38px;
-    }
-
-    .center-buttons {
-        gap: 8px;
-    }
-
-    /* Court center overlay */
-    .court-name-display { font-size: 3em; }
-    .btn-start-match-center {
-        font-size: 1.5em;
-        padding: 15px 35px;
-    }
-
-    .timer-display-center {
-        font-size: 0.9em;
-        padding: 4px 8px;
-    }
-
-    /* Player names on court - smaller */
-    .player-name {
-        font-size: 1.5em;
-    }
-
-    /* Swap buttons - smaller */
-    .btn-swap-players {
-        width: 40px;
-        height: 40px;
-        font-size: 1.5em;
-    }
-
-    .btn-switch-sides {
-        padding: 8px 16px;
-        gap: 8px;
-    }
-
-    .btn-switch-sides-icon { font-size: 1.3em; }
-    .btn-switch-sides-label { font-size: 0.95em; }
-
-    /* Serve indicator - smaller */
-    .serve-indicator {
-        width: 60px;
-        height: 60px;
-        font-size: 3em;
-    }
-
-    /* Settings menu */
-    .settings-menu-content {
-        padding: 25px;
-        min-width: 300px;
-    }
-
-    .settings-menu-content h3 {
-        font-size: 1.5em;
-        margin-bottom: 20px;
-    }
-
-    .menu-item {
-        padding: 15px;
-        margin-bottom: 10px;
-        font-size: 1.1em;
-    }
-
+    /* Overlay-baserne ligger i styles.css — justeres direkte med !important */
     .court-overlay-title { font-size: 2.2em !important; margin-bottom: 8px !important; }
     .court-overlay-countdown { font-size: 6em !important; margin: 14px 0 !important; }
     .court-overlay-btn { font-size: 1.1em !important; padding: 14px 28px !important; }
@@ -1327,113 +1121,49 @@ html, body {
     .court-overlay-message-text { font-size: 1.1em !important; margin-bottom: 28px !important; }
 }
 
-/* Extra small height (600px or less) - even more compact */
+/* Tablet-trin 2 (600px eller lavere) */
 @media (max-height: 600px) and (min-width: 800px) {
-    .container {
-        padding: 0 !important;
-    }
-
-    /* Score display - very compact */
-    .score-display-top {
-        margin-bottom: 2px;
-    }
-
-    .scores-container {
-        padding: 0 5px;
-    }
-
-    .point-score {
-        font-size: 2.2em;
-    }
-
-    .set-label {
-        font-size: 0.65em;
-        margin-bottom: 1px;
-    }
-
-    .set-score {
-        font-size: 1.2em;
-        gap: 4px;
-    }
-
-    /* Control buttons - very compact */
-    .control-buttons-bottom {
-        margin-top: 2px;
-        padding: 2px 8px;
-    }
-
-    .btn-add-point {
-        padding: 10px 25px;
-        font-size: 1.3em;
-        min-width: 80px;
-        min-height: 40px;
-    }
-
-    .btn-start-serv {
-        padding: 6px 12px;
-        font-size: 0.8em;
-        height: 32px;
-        min-width: 80px;
-    }
-
-    .btn-undo, .btn-settings {
-        padding: 6px 12px;
-        font-size: 0.8em;
-        height: 32px;
-    }
-
-    .center-buttons {
-        gap: 6px;
-    }
-
-    /* Court center overlay */
-    .court-name-display { font-size: 2.4em; }
-    .btn-start-match-center {
-        font-size: 1.2em;
-        padding: 12px 28px;
-    }
-
-    .timer-display-center {
-        font-size: 0.8em;
-        padding: 3px 6px;
-    }
-
-    /* Player names on court - smaller */
-    .player-name {
-        font-size: 1.2em;
-        padding: 5px;
-    }
-
-    /* Swap buttons - smaller */
-    .btn-swap-players {
-        width: 35px;
-        height: 35px;
-        font-size: 1.3em;
-        border-width: 2px;
-    }
-
-    /* Serve indicator - smaller */
-    .serve-indicator {
-        width: 50px;
-        height: 50px;
-        font-size: 2.5em;
-    }
-
-    /* Settings menu - more compact */
-    .settings-menu-content {
-        padding: 20px;
-        min-width: 280px;
-    }
-
-    .settings-menu-content h3 {
-        font-size: 1.3em;
-        margin-bottom: 15px;
-    }
-
-    .menu-item {
-        padding: 12px;
-        margin-bottom: 8px;
-        font-size: 1em;
+    :root {
+        --cv-score-mb: 2px;
+        --cv-scores-pad: 0 5px;
+        --cv-point-fs: 2.2em;
+        --cv-setlabel-fs: 0.65em;
+        --cv-setlabel-mb: 1px;
+        --cv-setscore-fs: 1.2em;
+        --cv-setscore-gap: 4px;
+        --cv-controls-mt: 2px;
+        --cv-controls-pad: 2px 8px;
+        --cv-add-pad: 10px 25px;
+        --cv-add-fs: 1.3em;
+        --cv-add-minw: 80px;
+        --cv-add-minh: 40px;
+        --cv-serv-pad: 6px 12px;
+        --cv-serv-fs: 0.8em;
+        --cv-serv-minw: 80px;
+        --cv-ctrl-h: 32px;
+        --cv-undo-pad: 6px 12px;
+        --cv-ctrl-fs: 0.8em;
+        --cv-gear-pad: 6px;
+        --cv-gear-icon: 15px;
+        --cv-center-gap: 6px;
+        --cv-courtname-fs: 2.4em;
+        --cv-start-fs: 1.2em;
+        --cv-start-pad: 12px 28px;
+        --cv-timer-fs: 0.8em;
+        --cv-timer-pad: 3px 6px;
+        --cv-name-fs: 1.2em;
+        --cv-name-pad: 5px;
+        --cv-swap-size: 35px;
+        --cv-swap-fs: 1.3em;
+        --cv-swap-bw: 2px;
+        --cv-serve-size: 50px;
+        --cv-menu-pad: 20px;
+        --cv-menu-minw: 280px;
+        --cv-menuh3-fs: 1.3em;
+        --cv-menuh3-mb: 15px;
+        --cv-item-pad: 12px;
+        --cv-item-mb: 8px;
+        --cv-item-fs: 1em;
     }
 
     .court-overlay-title { font-size: 1.8em !important; margin-bottom: 6px !important; }
@@ -1443,114 +1173,50 @@ html, body {
     .court-overlay-message-text { font-size: 1em !important; margin-bottom: 22px !important; }
 }
 
-/* Ultra small height (550px or less) - for Android with navigation bar visible */
+/* Tablet-trin 3 (550px eller lavere — Android med synlig navigationsbar) */
 @media (max-height: 550px) and (min-width: 800px) {
-    .container {
-        padding: 0 !important;
-    }
-
-    /* Score display - ultra compact */
-    .score-display-top {
-        margin-bottom: 1px;
-    }
-
-    .scores-container {
-        padding: 0 3px;
-    }
-
-    .point-score {
-        font-size: 1.8em;
-    }
-
-    .set-label {
-        font-size: 0.6em;
-        margin-bottom: 1px;
-    }
-
-    .set-score {
-        font-size: 1em;
-        gap: 3px;
-    }
-
-    /* Control buttons - ultra compact */
-    .control-buttons-bottom {
-        margin-top: 1px;
-        padding: 1px 5px;
-        gap: 3px;
-    }
-
-    .btn-add-point {
-        padding: 8px 20px;
-        font-size: 1.1em;
-        min-width: 70px;
-        min-height: 36px;
-    }
-
-    .btn-start-serv {
-        padding: 5px 10px;
-        font-size: 0.75em;
-        height: 28px;
-        min-width: 75px;
-    }
-
-    .btn-undo, .btn-settings {
-        padding: 5px 10px;
-        font-size: 0.75em;
-        height: 28px;
-    }
-
-    .center-buttons {
-        gap: 4px;
-    }
-
-    /* Court center overlay */
-    .court-name-display { font-size: 2em; }
-    .btn-start-match-center {
-        font-size: 1em;
-        padding: 10px 22px;
-    }
-
-    .timer-display-center {
-        font-size: 0.7em;
-        padding: 2px 5px;
-    }
-
-    /* Player names on court */
-    .player-name {
-        font-size: 1em;
-        padding: 4px;
-    }
-
-    /* Swap buttons */
-    .btn-swap-players {
-        width: 30px;
-        height: 30px;
-        font-size: 1.2em;
-        border-width: 2px;
-    }
-
-    /* Serve indicator */
-    .serve-indicator {
-        width: 45px;
-        height: 45px;
-        font-size: 2.2em;
-    }
-
-    /* Settings menu */
-    .settings-menu-content {
-        padding: 15px;
-        min-width: 260px;
-    }
-
-    .settings-menu-content h3 {
-        font-size: 1.2em;
-        margin-bottom: 12px;
-    }
-
-    .menu-item {
-        padding: 10px;
-        margin-bottom: 6px;
-        font-size: 0.95em;
+    :root {
+        --cv-score-mb: 1px;
+        --cv-scores-pad: 0 3px;
+        --cv-point-fs: 1.8em;
+        --cv-setlabel-fs: 0.6em;
+        --cv-setlabel-mb: 1px;
+        --cv-setscore-fs: 1em;
+        --cv-setscore-gap: 3px;
+        --cv-controls-mt: 1px;
+        --cv-controls-pad: 1px 5px;
+        --cv-controls-gap: 3px;
+        --cv-add-pad: 8px 20px;
+        --cv-add-fs: 1.1em;
+        --cv-add-minw: 70px;
+        --cv-add-minh: 36px;
+        --cv-serv-pad: 5px 10px;
+        --cv-serv-fs: 0.75em;
+        --cv-serv-minw: 75px;
+        --cv-ctrl-h: 28px;
+        --cv-undo-pad: 5px 10px;
+        --cv-ctrl-fs: 0.75em;
+        --cv-gear-pad: 5px;
+        --cv-gear-icon: 13px;
+        --cv-center-gap: 4px;
+        --cv-courtname-fs: 2em;
+        --cv-start-fs: 1em;
+        --cv-start-pad: 10px 22px;
+        --cv-timer-fs: 0.7em;
+        --cv-timer-pad: 2px 5px;
+        --cv-name-fs: 1em;
+        --cv-name-pad: 4px;
+        --cv-swap-size: 30px;
+        --cv-swap-fs: 1.2em;
+        --cv-swap-bw: 2px;
+        --cv-serve-size: 45px;
+        --cv-menu-pad: 15px;
+        --cv-menu-minw: 260px;
+        --cv-menuh3-fs: 1.2em;
+        --cv-menuh3-mb: 12px;
+        --cv-item-pad: 10px;
+        --cv-item-mb: 6px;
+        --cv-item-fs: 0.95em;
     }
 
     .court-overlay-title { font-size: 1.5em !important; margin-bottom: 5px !important; }
@@ -1558,6 +1224,141 @@ html, body {
     .court-overlay-btn { font-size: 0.9em !important; padding: 10px 20px !important; }
     .court-overlay-message-title { font-size: 1.3em !important; margin-bottom: 12px !important; }
     .court-overlay-message-text { font-size: 0.9em !important; margin-bottom: 18px !important; }
+}
+
+/* ══════════════════════════════════════════
+   Telefon-landskab — sidste trin, vinder hele zonen ≤500px høj
+   (uanset bredde, så brede telefoner får ét sammenhængende udtryk)
+   ══════════════════════════════════════════ */
+@media (orientation: landscape) and (max-height: 500px) {
+    :root {
+        --cv-score-mb: 0;
+        --cv-scores-pad: 3px 10px;
+        --cv-point-fs: 2.2em;
+        --cv-setlabel-fs: 0.6em;
+        --cv-setlabel-mb: 1px;
+        --cv-setscore-fs: 1.3em;
+        --cv-setscore-gap: 4px;
+        --cv-controls-mt: 0;
+        --cv-controls-pad: 5px 10px 6px;
+        --cv-controls-gap: 0;
+        --cv-add-fs: 1.8em;
+        --cv-serv-pad: 6px 12px;
+        --cv-serv-fs: 0.82em;
+        --cv-serv-minw: 70px;
+        --cv-ctrl-h: 38px;
+        --cv-undo-pad: 6px 10px;
+        --cv-ctrl-fs: 0.82em;
+        --cv-gear-pad: 8px;
+        --cv-gear-icon: 16px;
+        --cv-center-gap: 6px;
+        --cv-courtname-fs: 2em;
+        --cv-courtname-top: 12%;
+        --cv-start-fs: 1.1em;
+        --cv-start-pad: 10px 22px;
+        --cv-timer-fs: 0.85em;
+        --cv-timer-pad: 4px 8px;
+        --cv-name-fs: 1em;
+        --cv-name-pad: 4px;
+        --cv-swap-size: 28px;
+        --cv-swap-fs: 1.1em;
+        --cv-swap-bw: 2px;
+        /* Ca. halv badge-størrelse — banen er lille, en stor badge gik
+           ind over "Skift side"-knappen */
+        --cv-serve-size: 24px;
+        --cv-switch-pad: 6px 12px;
+        --cv-switch-gap: 6px;
+        --cv-switch-icon: 1.1em;
+        --cv-switch-label: 0.8em;
+        --cv-menu-pad: 20px 18px;
+        --cv-menu-minw: 0;
+    }
+
+    body {
+        height: 100dvh;
+        overflow: hidden;
+    }
+
+    .bg-glow { position: fixed; }
+
+    .container {
+        height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        padding: 0 !important;
+    }
+
+    .score-display-top { flex-shrink: 0; }
+
+    /* Middle row fills remaining space */
+    .court-middle-row { flex: 1; min-height: 0; }
+
+    /* +1 side buttons — narrower on phone, full height, no hover scale (iOS Safari sticky-hover bug) */
+    .btn-add-point {
+        width: 65px;
+        height: auto;
+        align-self: stretch;
+        border-radius: 10px;
+        touch-action: manipulation;
+    }
+
+    .btn-add-point:hover {
+        transform: none !important;
+        filter: none !important;
+        box-shadow:
+            0 6px 22px rgba(var(--color-accent-rgb), 0.25),
+            inset 0 1px 0 rgba(255,255,255,0.25) !important;
+    }
+
+    /* court-view-container: positioning context */
+    .court-view-container {
+        flex: 1;
+        min-width: 0;
+        position: relative;
+    }
+
+    /* court fills parent with 8px inset on sides = visible gap to +1 buttons */
+    .badminton-court {
+        position: absolute !important;
+        top: 0 !important;
+        left: 8px !important;
+        right: 8px !important;
+        bottom: 0 !important;
+        width: auto !important;
+        height: auto !important;
+        max-width: none !important;
+        padding-bottom: 0 !important;
+        margin: 0 !important;
+    }
+
+    @supports (aspect-ratio: 1) {
+        .badminton-court {
+            aspect-ratio: unset !important;
+        }
+    }
+
+    /* Netlinjen matcher de øvrige linjers 2px på telefon */
+    .line-net { width: 2px; }
+
+    .serve-indicator {
+        border-width: 1.5px;
+        animation-name: servePulseSmall;
+    }
+
+    /* Grid: [serv 1 | center | serv 2] — center column always stays in the middle */
+    .control-buttons-bottom { flex-shrink: 0; }
+
+    #startServPlayer2 { justify-self: end; }
+
+    /* Settings menu full-width */
+    .settings-menu-content { width: 92vw; }
+
+    .start-hint {
+        font-size: 0.72em;
+        padding: 5px 12px;
+    }
+
+    .court-center-overlay { gap: 8px; }
 }
 
 /* ══════════════════════════════════════════
@@ -1657,33 +1458,6 @@ html, body {
     border-radius: var(--radius-pill);
 }
 
-/* ══════════════════════════════════════════
-   Tandhjulet er rundt — hold bredde = højde på kompakte skærme
-   ══════════════════════════════════════════ */
-@media (max-height: 700px) and (min-width: 800px) {
-    .btn-settings { width: 38px; padding: 8px; }
-    .btn-settings svg { width: 17px; height: 17px; }
-}
-
-@media (max-height: 600px) and (min-width: 800px) {
-    .btn-settings { width: 32px; padding: 6px; }
-    .btn-settings svg { width: 15px; height: 15px; }
-}
-
-@media (max-height: 550px) and (min-width: 800px) {
-    .btn-settings { width: 28px; padding: 5px; }
-    .btn-settings svg { width: 13px; height: 13px; }
-}
-
-@media (orientation: landscape) and (max-height: 500px) {
-    .btn-settings { width: 38px; padding: 8px; }
-    .btn-settings svg { width: 16px; height: 16px; }
-
-    .start-hint {
-        font-size: 0.72em;
-        padding: 5px 12px;
-    }
-
-    .court-center-overlay { gap: 8px; }
-}
+/* (Tandhjulets størrelser pr. breakpoint styres af --cv-ctrl-h /
+   --cv-gear-pad / --cv-gear-icon tokens i media-blokkene ovenfor) */
 
