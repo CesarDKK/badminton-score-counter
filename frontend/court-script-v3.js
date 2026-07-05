@@ -848,6 +848,7 @@ async function performClearCourtNow() {
 }
 
 function clearCourt() {
+    closeSettingsMenu();
     showMessage(
         'Ryd Banen',
         'Er du sikker på at du vil rydde banen? Alle data vil blive slettet.',
@@ -855,7 +856,7 @@ function clearCourt() {
             {
                 text: 'Ja, Ryd Banen',
                 callback: () => performClearCourtNow(),
-                style: 'primary'
+                style: 'danger'
             },
             {
                 text: 'Annuller',
@@ -1836,7 +1837,9 @@ function showMessage(title, text, buttons = [{ text: 'OK', callback: null, style
     // Add buttons
     buttons.forEach(button => {
         const btn = document.createElement('button');
-        btn.className = button.style === 'secondary' ? 'btn-secondary' : 'btn-primary';
+        btn.className = button.style === 'secondary' ? 'btn-secondary'
+                      : button.style === 'danger'    ? 'btn-danger'
+                      : 'btn-primary';
         btn.style.fontSize = '1.5em';
         btn.style.padding = '15px 40px';
         btn.style.cursor = 'pointer';
@@ -1960,7 +1963,7 @@ function showMatchWonMessage(winnerNames, winnerGames, loserGames, isReportedMat
     const labelB = isDoubles && sideBPartner ? `${sideBName} / ${sideBPartner}` : sideBName;
     const sideAWinsMatch = sideAGames > sideBGames;
 
-    const WIN_GREEN = '#4CAF50';
+    const WIN_GREEN = 'var(--color-win, #4CAF50)';
     const MUTED = '#9aa0a8';
     const NAME_COL = 'text-align:left;padding:10px 14px;';
     const SCORE_COL = 'text-align:center;padding:10px 14px;min-width:54px;';
@@ -2011,7 +2014,7 @@ function showMatchWonMessage(winnerNames, winnerGames, loserGames, isReportedMat
     const bodyHtml = `<div style="display:flex;flex-direction:column;align-items:center;">${winnerLine}${tableHtml}${noticeHtml}</div>`;
 
     const buttons = isReportedMatch
-        ? [{ text: 'Ryd Banen (hold 3 sek.)', callback: () => performClearCourtNow(), style: 'primary', holdDurationMs: 3000 }]
+        ? [{ text: 'Ryd Banen (hold 3 sek.)', callback: () => performClearCourtNow(), style: 'danger', holdDurationMs: 3000 }]
         : [{ text: 'Ny Kamp', callback: () => clearCourt(), style: 'primary' }];
 
     showMessage('Kamp Vundet!', '', buttons, { bodyHtml });
@@ -2678,8 +2681,8 @@ function showQrSessionExpired() {
         font-family: inherit; color: #fff;
     `;
     overlay.innerHTML = `
-        <div style="font-size: clamp(3em,10vw,6em); margin-bottom: 24px;">🏸</div>
-        <h1 style="font-size: clamp(1.4em,5vw,2.4em); margin-bottom: 16px; color: #4CAF50;">Kamp Afsluttet</h1>
+        <svg viewBox="0 0 24 24" fill="rgba(255,255,255,0.85)" style="width: clamp(60px,14vw,110px); height: clamp(60px,14vw,110px); margin-bottom: 24px;"><g transform="translate(0 1.2)"><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/><rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/><path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/></g></svg>
+        <h1 style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.05em; font-size: clamp(1.8em,6vw,3em); margin-bottom: 16px; color: #fff;">Kamp Afsluttet</h1>
         <p style="font-size: clamp(1em,3vw,1.4em); color: rgba(255,255,255,0.65); max-width: 400px; line-height: 1.6;">
             Banen er blevet nulstillet.<br>
             Scan QR-koden igen for at tælle næste kamp.

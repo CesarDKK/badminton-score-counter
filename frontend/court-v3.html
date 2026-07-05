@@ -11,8 +11,8 @@
     <link rel="manifest" href="/manifest.json">
     <link rel="stylesheet" href="fonts.css">
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="court-v3-styles.css?v=20">
-    <script src="js/theme-loader.js?v=2"></script>
+    <link rel="stylesheet" href="court-v3-styles.css?v=24">
+    <script src="js/theme-loader.js?v=3"></script>
 </head>
 <body>
     <div class="bg-glow"></div>
@@ -79,7 +79,9 @@
                     </div>
 
                     <!-- Swap button for Player 1 side -->
-                    <button id="swapPlayer1Btn" class="btn-swap-players btn-swap-left" style="display: none;">⇅</button>
+                    <button id="swapPlayer1Btn" class="btn-swap-players btn-swap-left" style="display: none;" aria-label="Byt spillere">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21V7"/><path d="m4 11 4-4 4 4"/><path d="M16 3v14"/><path d="m20 13-4 4-4-4"/></svg>
+                    </button>
 
                     <!-- Right back court boxes (Player 2 side) -->
                     <div class="player-name-box player-right-top">
@@ -90,11 +92,13 @@
                     </div>
 
                     <!-- Swap button for Player 2 side -->
-                    <button id="swapPlayer2Btn" class="btn-swap-players btn-swap-right" style="display: none;">⇅</button>
+                    <button id="swapPlayer2Btn" class="btn-swap-players btn-swap-right" style="display: none;" aria-label="Byt spillere">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21V7"/><path d="m4 11 4-4 4 4"/><path d="M16 3v14"/><path d="m20 13-4 4-4-4"/></svg>
+                    </button>
 
                     <!-- Switch Sides button on the net -->
                     <button id="switchSidesCourtBtn" class="btn-switch-sides">
-                        <span class="btn-switch-sides-icon">⇆</span>
+                        <span class="btn-switch-sides-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m17 4 4 4-4 4"/><path d="M21 8H7"/><path d="m7 12-4 4 4 4"/><path d="M3 16h14"/></svg></span>
                         <span class="btn-switch-sides-label">Skift side</span>
                     </button>
 
@@ -104,6 +108,7 @@
                     <!-- Timer and Start Button overlay on court center -->
                     <div class="court-center-overlay">
                         <button id="startMatchBtn" class="btn-start-match-center">Start Kamp</button>
+                        <div class="start-hint">Vælg først hvem der server — tryk på "Start serv"</div>
                         <div id="timerDisplay" class="timer-display-center" style="display: none;">00:00</div>
                     </div>
                 </div>
@@ -117,26 +122,28 @@
             <button id="startServPlayer1" class="btn-start-serv">Start serv</button>
             <div class="center-buttons">
                 <button id="undoBtn" class="btn-undo">Fortryd</button>
-                <button id="settingsBtn" class="btn-settings">⚙️</button>
+                <button id="settingsBtn" class="btn-settings" aria-label="Indstillinger">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </button>
             </div>
             <button id="startServPlayer2" class="btn-start-serv">Start serv</button>
         </div>
 
 
         <!-- Holdkamp Panel (hidden until active team match) -->
-        <div id="holdkampPanel" style="display:none; position:fixed; top:0; left:0; right:0; background:rgba(20,10,40,0.97); z-index:8000; padding:15px 20px; border-bottom:2px solid #533483;">
-            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-                <span style="color:#e94560; font-weight:bold; font-size:0.95em;">🏸 Holdkamp:</span>
-                <select id="holdkampMatchSelect" onfocus="holdkampSelectFocused=true" onblur="holdkampSelectFocused=false" style="flex:1; min-width:180px; padding:8px 10px; background:#1a1a2e; color:#eaeaea; border:1px solid #533483; border-radius:5px; font-size:0.9em;">
+        <div id="holdkampPanel" class="holdkamp-panel" style="display:none;">
+            <div class="holdkamp-row">
+                <span class="holdkamp-label">Holdkamp:</span>
+                <select id="holdkampMatchSelect" class="holdkamp-select" onfocus="holdkampSelectFocused=true" onblur="holdkampSelectFocused=false">
                     <option value="">-- Vælg holdkamp --</option>
                 </select>
-                <select id="holdkampGameSelect" onfocus="holdkampSelectFocused=true" onblur="holdkampSelectFocused=false" style="flex:1; min-width:200px; padding:8px 10px; background:#1a1a2e; color:#eaeaea; border:1px solid #533483; border-radius:5px; font-size:0.9em;">
+                <select id="holdkampGameSelect" class="holdkamp-select holdkamp-select--game" onfocus="holdkampSelectFocused=true" onblur="holdkampSelectFocused=false">
                     <option value="">-- Vælg delkamp --</option>
                 </select>
-                <button id="assignHoldkampBtn" style="padding:8px 16px; background:#533483; color:#fff; border:none; border-radius:5px; cursor:pointer; font-size:0.9em;">Tilknyt</button>
-                <button id="closeHoldkampPanelBtn" style="padding:8px 12px; background:transparent; color:#aaa; border:1px solid #555; border-radius:5px; cursor:pointer; font-size:0.9em;">✕</button>
+                <button id="assignHoldkampBtn" class="holdkamp-assign">Tilknyt</button>
+                <button id="closeHoldkampPanelBtn" class="holdkamp-dismiss" aria-label="Luk">✕</button>
             </div>
-            <div id="holdkampAssigned" style="display:none; margin-top:8px; color:#4CAF50; font-size:0.85em;"></div>
+            <div id="holdkampAssigned" class="holdkamp-assigned" style="display:none;"></div>
         </div>
 
         <!-- Settings Menu (hidden by default) -->
@@ -146,10 +153,10 @@
                 <button id="switchSidesBtn" style="display:none;"></button>
                 <button id="doublesToggle" class="menu-item">Skift til Double</button>
                 <button id="gameModeToggle" class="menu-item">Format: 21/30</button>
-                <button id="showHoldkampPanelBtn" class="menu-item" style="display:none;">🏸 Holdkamp</button>
+                <button id="showHoldkampPanelBtn" class="menu-item" style="display:none;">Holdkamp</button>
                 <button id="clearCourtBtn" class="menu-item menu-danger">Ryd Banen</button>
 
-                <button id="installAppBtn" class="menu-item" style="display: none;">📲 Installer som App</button>
+                <button id="installAppBtn" class="menu-item" style="display: none;">Installer som App</button>
                 <button id="closeSettingsBtn" class="menu-item menu-close">Luk</button>
             </div>
         </div>
@@ -186,6 +193,6 @@
     <script src="js/api.js?v=6"></script>
     <script src="js/auth-guard.js?v=2"></script>
     <script src="js/live-updates.js?v=1"></script>
-    <script src="court-script-v3.js?v=22"></script>
+    <script src="court-script-v3.js?v=25"></script>
 </body>
 </html>

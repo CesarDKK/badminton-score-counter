@@ -1,6 +1,29 @@
 ﻿/* Court V3 Styles - Badminton Court Top-Down View */
 /* Official dimensions: 44' (13.4m) long × 20' (6.1m) wide for doubles */
 
+/* ── Design tokens (kun denne side) ──
+   Banens grønne er bevidst dæmpet og mørk, så den lever i samme
+   natlige univers som resten af temaet i stedet for at lyse op som klipart. */
+:root {
+    --court-surface-light: #256b40;
+    --court-surface-dark: #16371f;
+    --court-line: rgba(255, 255, 255, 0.82);
+    --color-win: #45d17e;
+    --radius-md: 14px;
+    --radius-pill: 100px;
+    --glass-bg: rgba(255, 255, 255, 0.06);
+    --glass-bg-hover: rgba(255, 255, 255, 0.12);
+    --glass-border: rgba(255, 255, 255, 0.16);
+}
+
+/* Tælleren er en app-skærm — den må aldrig vise scrollbars.
+   100vh kan afvige fra den reelle viewport når browser-UI toggler,
+   hvilket gav scrollbars ved bestemte vindueshøjder. */
+html, body {
+    height: 100%;
+    overflow: hidden;
+}
+
 /* Remove container padding/border for full-screen experience */
 .container {
     padding: 0 !important;
@@ -22,8 +45,28 @@
     transform: translate(-50%, -50%);
     z-index: 100;
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
+    gap: 12px;
+}
+
+/* Hint under Start Kamp — vises kun mens knappen er deaktiveret (ingen server valgt) */
+.start-hint {
+    display: none;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.92em;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.75);
+    background: rgba(0, 0, 0, 0.45);
+    padding: 7px 16px;
+    border-radius: var(--radius-pill);
+    backdrop-filter: blur(4px);
+    white-space: nowrap;
+}
+
+#startMatchBtn:disabled ~ .start-hint {
+    display: block;
 }
 
 .court-name-display {
@@ -47,7 +90,7 @@
     letter-spacing: 0.06em;
     padding: 18px 50px;
     background: var(--color-accent);
-    color: white;
+    color: var(--color-on-accent, #ffffff);
     border: none;
     border-radius: 12px;
     cursor: pointer;
@@ -61,14 +104,17 @@
 }
 
 .btn-start-match-center:disabled {
-    background: #6b7280;
+    background: rgba(13, 13, 26, 0.5);
+    border: 1px solid var(--glass-border);
+    color: rgba(255, 255, 255, 0.45);
+    backdrop-filter: blur(4px);
     cursor: not-allowed;
-    opacity: 0.5;
+    box-shadow: none;
 }
 
 .btn-start-match-center:disabled:hover {
     transform: none;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    box-shadow: none;
 }
 
 .timer-display-center {
@@ -77,11 +123,11 @@
     letter-spacing: 0.1em;
     color: white;
     text-shadow: 0 0 20px rgba(0,0,0,0.9);
-    background: rgba(0,0,0,0.65);
+    background: rgba(0,0,0,0.55);
     backdrop-filter: blur(4px);
-    padding: 6px 14px;
-    border-radius: 8px;
-    border: 1px solid rgba(255,255,255,0.12);
+    padding: 6px 20px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--glass-border);
 }
 
 .scores-container {
@@ -204,7 +250,7 @@
 }
 
 .boldpoint-pill.boldpoint-match {
-    color: #fff;
+    color: var(--color-on-accent, #ffffff);
     background: var(--color-accent);
     animation: boldpointPulse 1.1s ease-in-out infinite;
 }
@@ -274,44 +320,51 @@
     font-family: 'Bebas Neue', sans-serif;
     font-size: 2.2em;
     letter-spacing: 0.06em;
-    color: white;
+    color: var(--color-on-accent, #ffffff);
     border: none;
-    border-radius: 0;
+    border-radius: var(--radius-md);
     cursor: pointer;
-    transition: all 0.2s;
+    transition: filter 0.15s ease, transform 0.15s ease, box-shadow 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 0;
+    /* Temafarve + lys/skygge-lag ovenpå — følger klubbens accentfarve */
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(0,0,0,0.18) 100%),
+        var(--color-accent);
+    box-shadow:
+        0 6px 22px rgba(var(--color-accent-rgb), 0.25),
+        inset 0 1px 0 rgba(255,255,255,0.25);
+    text-shadow: 0 2px 8px rgba(0,0,0,0.35);
 }
 
-.btn-add-left {
-    background: linear-gradient(135deg, #27ae60 0%, #1e8449 100%);
+.btn-add-point:hover {
+    filter: brightness(1.1);
+    transform: translateY(-2px);
+    box-shadow:
+        0 10px 30px rgba(var(--color-accent-rgb), 0.4),
+        inset 0 1px 0 rgba(255,255,255,0.25);
 }
 
-.btn-add-left:hover {
-    transform: scale(1.07);
-    box-shadow: 0 6px 24px rgba(39,174,96,0.45);
-}
-
-.btn-add-right {
-    background: linear-gradient(135deg, #27ae60 0%, #1e8449 100%);
-}
-
-.btn-add-right:hover {
-    transform: scale(1.07);
-    box-shadow: 0 6px 24px rgba(39,174,96,0.45);
+.btn-add-point:active {
+    transform: scale(0.97);
+    filter: brightness(0.92);
 }
 
 .btn-add-point:disabled {
-    background: rgba(255,255,255,0.08);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: rgba(255,255,255,0.25);
     cursor: not-allowed;
-    opacity: 0.4;
+    box-shadow: none;
+    text-shadow: none;
 }
 
 .btn-add-point:disabled:hover {
     transform: none;
     box-shadow: none;
+    filter: none;
 }
 
 .btn-start-serv {
@@ -322,7 +375,7 @@
     background: rgba(255,255,255,0.07);
     border: 1px solid rgba(255,255,255,0.18);
     color: white;
-    border-radius: 8px;
+    border-radius: var(--radius-pill);
     cursor: pointer;
     transition: all 0.2s;
     height: 45px;
@@ -336,6 +389,7 @@
 
 .btn-start-serv:hover {
     background: rgba(255,255,255,0.14);
+    border-color: rgba(var(--color-accent-rgb), 0.5);
     transform: scale(1.04);
 }
 
@@ -361,14 +415,14 @@
 }
 
 .btn-undo {
-    padding: 10px 20px;
+    padding: 10px 22px;
     font-size: 0.9em;
     font-family: 'DM Sans', sans-serif;
     font-weight: 600;
     background: rgba(255,255,255,0.06);
     border: 1px solid rgba(255,255,255,0.14);
     color: #eaeaea;
-    border-radius: 8px;
+    border-radius: var(--radius-pill);
     cursor: pointer;
     transition: all 0.2s;
     height: 45px;
@@ -385,67 +439,62 @@
 .btn-primary {
     padding: 15px 30px;
     font-size: 1.2em;
-    background: var(--color-primary);
-    color: white;
+    font-family: 'DM Sans', sans-serif;
+    background: var(--color-accent);
+    color: var(--color-on-accent, #ffffff);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--radius-pill);
     cursor: pointer;
-    font-weight: bold;
-    transition: all 0.3s;
+    font-weight: 600;
+    transition: all 0.2s;
+    box-shadow: 0 8px 26px rgba(var(--color-accent-rgb), 0.3);
 }
 
 .btn-primary:hover {
-    opacity: 0.9;
-    transform: scale(1.05);
+    filter: brightness(1.1);
+    transform: scale(1.04);
 }
 
-.btn-mode {
-    padding: 15px 30px;
-    font-size: 1.2em;
-    background: #2563eb;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: bold;
-    transition: all 0.3s;
-}
-
-.btn-mode:hover {
-    background: #3b82f6;
-    transform: scale(1.05);
-}
-
+/* Destruktive bekræftelser (fx "Ja, Ryd Banen") — fast fare-rød,
+   uafhængig af tema, så "slet alle data" aldrig ligner en positiv handling */
 .btn-danger {
     padding: 15px 30px;
     font-size: 1.2em;
-    background: #dc2626;
-    color: white;
+    font-family: 'DM Sans', sans-serif;
+    background: #d92c3f;
+    color: #ffffff;
     border: none;
-    border-radius: 8px;
+    border-radius: var(--radius-pill);
     cursor: pointer;
-    font-weight: bold;
-    transition: all 0.3s;
+    font-weight: 600;
+    transition: all 0.2s;
+    box-shadow: 0 8px 26px rgba(217, 44, 63, 0.3);
 }
 
 .btn-danger:hover {
-    background: #ef4444;
-    transform: scale(1.05);
+    filter: brightness(1.1);
+    transform: scale(1.04);
 }
 
 .btn-settings {
-    padding: 10px 16px;
-    font-size: 1.3em;
+    padding: 10px;
+    width: 45px;
     background: rgba(255,255,255,0.06);
     border: 1px solid rgba(255,255,255,0.14);
-    color: white;
-    border-radius: 8px;
+    color: rgba(255,255,255,0.75);
+    border-radius: 50%;
     cursor: pointer;
     transition: all 0.2s;
     height: 45px;
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+.btn-settings svg {
+    width: 20px;
+    height: 20px;
+    display: block;
 }
 
 .btn-settings:hover {
@@ -559,7 +608,7 @@
     position: relative;
     width: 100%;
     max-width: none;
-    background: #2a2a2a;
+    background: transparent;
     padding: 0;
     border-radius: 0;
     box-shadow: none;
@@ -578,6 +627,9 @@
            from the available height: (100vh - 210px) × (13.4/6.1).
            210px ≈ score display (~65px) + bottom buttons (~75px) + body padding + gaps. */
         width: min(100%, calc((100vh - 220px) * (13.4 / 6.1)));
+        /* dvh = den faktiske (dynamiske) viewport — undgår overflow når
+           browser-UI gør 100vh større end det synlige område */
+        width: min(100%, calc((100dvh - 220px) * (13.4 / 6.1)));
         aspect-ratio: 13.4 / 6.1;
         padding-bottom: 0;
         height: auto;
@@ -591,15 +643,21 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: #2d7a3e; /* Badminton green */
-    border: 4px solid white;
-    box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.3);
+    /* Lampelys-effekt: lysest midt over nettet, mørkere ud mod kanterne */
+    background: radial-gradient(ellipse 85% 140% at 50% 45%,
+        var(--court-surface-light) 0%,
+        var(--court-surface-dark) 85%);
+    border: 2px solid var(--court-line);
+    border-radius: 6px;
+    box-shadow:
+        inset 0 0 70px rgba(0, 0, 0, 0.4),
+        0 18px 50px rgba(0, 0, 0, 0.45);
 }
 
 /* White court lines */
 .court-line {
     position: absolute;
-    background: white;
+    background: var(--court-line);
 }
 
 /* Outer boundary (already handled by border) */
@@ -621,7 +679,7 @@
     top: 50%; /* Middle of the 6.1m width */
     left: 0;
     width: 35.22%; /* Stop at left short service line */
-    height: 3px;
+    height: 2px;
     transform: translateY(-50%);
 }
 
@@ -630,7 +688,7 @@
     top: 50%; /* Middle of the 6.1m width */
     left: 64.78%; /* Start at right short service line */
     right: 0;
-    height: 3px;
+    height: 2px;
     transform: translateY(-50%);
 }
 
@@ -639,7 +697,7 @@
     top: 0;
     bottom: 0;
     left: 35.22%; /* 4.72m / 13.4m = 35.22% */
-    width: 3px;
+    width: 2px;
 }
 
 /* Right short service line (1.98m from net = 6.7m + 1.98m = 8.68m from left) */
@@ -647,7 +705,7 @@
     top: 0;
     bottom: 0;
     left: 64.78%; /* 8.68m / 13.4m = 64.78% */
-    width: 3px;
+    width: 2px;
 }
 
 /* Left doubles back line (long service line) - 0.76m from left edge */
@@ -655,7 +713,7 @@
     top: 0;
     bottom: 0;
     left: 5.67%; /* 0.76m / 13.4m = 5.67% */
-    width: 3px;
+    width: 2px;
 }
 
 /* Right doubles back line (long service line) - 0.76m from right edge */
@@ -663,7 +721,7 @@
     top: 0;
     bottom: 0;
     left: 94.33%; /* (13.4 - 0.76) / 13.4 = 94.33% */
-    width: 3px;
+    width: 2px;
 }
 
 /* Top singles sideline - 0.46m from top edge */
@@ -671,7 +729,7 @@
     top: 7.54%; /* 0.46m / 6.1m = 7.54% */
     left: 0;
     right: 0;
-    height: 3px;
+    height: 2px;
 }
 
 /* Bottom singles sideline - 0.46m from bottom edge */
@@ -679,7 +737,7 @@
     top: 92.46%; /* (6.1 - 0.46) / 6.1 = 92.46% */
     left: 0;
     right: 0;
-    height: 3px;
+    height: 2px;
 }
 
 /* Player name boxes in back court service areas */
@@ -757,10 +815,12 @@
    Touch devices — disable sticky hover effects
    ══════════════════════════════════════════ */
 @media (hover: none) {
-    .btn-add-left:hover,
-    .btn-add-right:hover {
+    .btn-add-point:hover {
         transform: none !important;
-        box-shadow: none !important;
+        filter: none !important;
+        box-shadow:
+            0 6px 22px rgba(var(--color-accent-rgb), 0.25),
+            inset 0 1px 0 rgba(255,255,255,0.25) !important;
     }
     .btn-start-serv:hover {
         transform: none !important;
@@ -850,15 +910,17 @@
         width: 65px;
         height: auto;
         align-self: stretch;
-        border-radius: 0;
+        border-radius: 10px;
         font-size: 1.8em;
         touch-action: manipulation;
     }
 
-    .btn-add-left:hover,
-    .btn-add-right:hover {
+    .btn-add-point:hover {
         transform: none !important;
-        box-shadow: none !important;
+        filter: none !important;
+        box-shadow:
+            0 6px 22px rgba(var(--color-accent-rgb), 0.25),
+            inset 0 1px 0 rgba(255,255,255,0.25) !important;
     }
 
     /* court-view-container: positioning context */
@@ -905,9 +967,9 @@
     .court-name-display { font-size: 2em; top: 12%; }
     .btn-start-match-center { font-size: 1.1em; padding: 10px 22px; }
     .timer-display-center { font-size: 0.85em; padding: 4px 8px; }
-    .btn-switch-sides { width: 88px; }
-    .btn-switch-sides-icon { font-size: 2.4em; }
-    .btn-switch-sides-label { font-size: 0.82em; }
+    .btn-switch-sides { padding: 6px 12px; gap: 6px; }
+    .btn-switch-sides-icon { font-size: 1.1em; }
+    .btn-switch-sides-label { font-size: 0.8em; }
     .btn-swap-players { width: 28px; height: 28px; font-size: 1.1em; border-width: 2px; }
     .serve-indicator { width: 44px; height: 44px; font-size: 2.2em; }
 
@@ -955,48 +1017,70 @@
     }
 }
 
-/* Serve Indicator */
+/* Serve Indicator — fjerbold-badge med blød puls i temaets accentfarve */
 .serve-indicator {
     position: absolute;
-    width: 75px;
-    height: 75px;
-    background: transparent;
+    width: 64px;
+    height: 64px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 3.75em;
     z-index: 50;
     pointer-events: none;
-    opacity: 0.7;
     transform: translateX(-50%) translateY(-50%);
+    background: rgba(10, 12, 24, 0.55);
+    border: 2px solid var(--color-accent);
+    border-radius: 50%;
+    backdrop-filter: blur(3px);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+    animation: servePulse 2.2s ease-out infinite;
 }
 
 .serve-indicator::after {
-    content: '🏸';
+    content: '';
+    width: 62%;
+    height: 62%;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'%3E%3Cg transform='translate(0 1.2)'%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-33 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(33 12 14.5)'/%3E%3Crect x='9.4' y='14.3' width='5.2' height='1.7' rx='0.85'/%3E%3Cpath d='M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z'/%3E%3C/g%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+@keyframes servePulse {
+    0% {
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4),
+                    0 0 0 0 rgba(var(--color-accent-rgb), 0.5);
+    }
+    100% {
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4),
+                    0 0 0 14px rgba(var(--color-accent-rgb), 0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .serve-indicator { animation: none; }
 }
 
 /* Serve indicator positions for singles - between serve line and net */
+/* Trukket lidt mod servelinjen så badgen ikke rammer "Skift side"-knappen på nettet */
 /* Left side, top service court (odd score from left player's perspective) */
 .serve-left-top {
-    left: 42.5%; /* Between left short service line and net */
+    left: 38.5%; /* Between left short service line and net */
     top: 25%; /* In top service court */
 }
 
 /* Left side, bottom service court (even score from left player's perspective) */
 .serve-left-bottom {
-    left: 42.5%; /* Between left short service line and net */
+    left: 38.5%; /* Between left short service line and net */
     top: 75%; /* In bottom service court */
 }
 
 /* Right side, top service court (even score from right player's perspective) */
 .serve-right-top {
-    left: 57.5%; /* Between right short service line and net */
+    left: 61.5%; /* Between right short service line and net */
     top: 25%; /* In top service court */
 }
 
 /* Right side, bottom service court (odd score from right player's perspective) */
 .serve-right-bottom {
-    left: 57.5%; /* Between right short service line and net */
+    left: 61.5%; /* Between right short service line and net */
     top: 75%; /* In bottom service court */
 }
 
@@ -1007,32 +1091,32 @@
     left: 50%;
     top: 80%;
     transform: translate(-50%, -50%);
-    width: 180px;
-    background: rgba(255, 255, 255, 0.15);
+    width: auto;
+    background: rgba(0, 0, 0, 0.35);
     color: white;
-    border: 3px solid rgba(255, 255, 255, 0.7);
-    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: var(--radius-pill);
     cursor: pointer;
     z-index: 50;
     transition: all 0.3s;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
     justify-content: center;
-    padding: 12px 8px 10px;
-    gap: 4px;
+    padding: 10px 20px;
+    gap: 10px;
     backdrop-filter: blur(4px);
 }
 
 .btn-switch-sides-icon {
-    font-size: 4em;
+    font-size: 1.6em;
     line-height: 1;
 }
 
 .btn-switch-sides-label {
     font-family: 'DM Sans', sans-serif;
-    font-size: 1.4em;
+    font-size: 1.1em;
     font-weight: 600;
     letter-spacing: 0.03em;
     line-height: 1;
@@ -1056,7 +1140,7 @@
     width: 50px;
     height: 50px;
     background: var(--color-accent);
-    color: white;
+    color: var(--color-on-accent, #ffffff);
     border: 3px solid white;
     border-radius: 50%;
     font-size: 1.8em;
@@ -1185,10 +1269,12 @@
     }
 
     .btn-switch-sides {
-        width: 40px;
-        height: 40px;
-        font-size: 1.3em;
+        padding: 8px 16px;
+        gap: 8px;
     }
+
+    .btn-switch-sides-icon { font-size: 1.3em; }
+    .btn-switch-sides-label { font-size: 0.95em; }
 
     /* Serve indicator - smaller */
     .serve-indicator {
@@ -1452,5 +1538,132 @@
     .court-overlay-btn { font-size: 0.9em !important; padding: 10px 20px !important; }
     .court-overlay-message-title { font-size: 1.3em !important; margin-bottom: 12px !important; }
     .court-overlay-message-text { font-size: 0.9em !important; margin-bottom: 18px !important; }
+}
+
+/* ══════════════════════════════════════════
+   SVG-ikoner i knapper — skalerer med knappens font-size
+   ══════════════════════════════════════════ */
+.btn-switch-sides-icon svg,
+.btn-swap-players svg {
+    width: 1em;
+    height: 1em;
+    display: block;
+}
+
+/* ══════════════════════════════════════════
+   Holdkamp-panel (styles flyttet fra inline HTML)
+   ══════════════════════════════════════════ */
+.holdkamp-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: rgba(13, 13, 26, 0.97);
+    z-index: 8000;
+    padding: 15px 20px;
+    border-bottom: 2px solid var(--color-primary);
+}
+
+.holdkamp-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.holdkamp-label {
+    color: var(--color-accent);
+    font-weight: 600;
+    font-size: 0.95em;
+}
+
+.holdkamp-select {
+    flex: 1;
+    min-width: 180px;
+    padding: 8px 12px;
+    background: #1a1a2e;
+    color: #eaeaea;
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    font-size: 0.9em;
+    font-family: 'DM Sans', sans-serif;
+}
+
+.holdkamp-select--game {
+    min-width: 200px;
+}
+
+.holdkamp-assign {
+    padding: 8px 18px;
+    background: var(--color-primary);
+    color: var(--color-on-primary, #ffffff);
+    border: none;
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+}
+
+.holdkamp-dismiss {
+    padding: 8px 14px;
+    background: transparent;
+    color: #aaa;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.holdkamp-assigned {
+    margin-top: 8px;
+    color: var(--color-win);
+    font-size: 0.85em;
+}
+
+/* ══════════════════════════════════════════
+   Overlay-tilpasninger — ét farvesprog i dialoger
+   (overstyrer de grønne hardcodede farver i styles.css)
+   ══════════════════════════════════════════ */
+.court-overlay-message-title {
+    color: #ffffff;
+}
+
+.court-overlay-countdown {
+    color: var(--color-accent);
+}
+
+.court-overlay .btn-secondary {
+    border-radius: var(--radius-pill);
+}
+
+/* ══════════════════════════════════════════
+   Tandhjulet er rundt — hold bredde = højde på kompakte skærme
+   ══════════════════════════════════════════ */
+@media (max-height: 700px) and (min-width: 800px) {
+    .btn-settings { width: 38px; padding: 8px; }
+    .btn-settings svg { width: 17px; height: 17px; }
+}
+
+@media (max-height: 600px) and (min-width: 800px) {
+    .btn-settings { width: 32px; padding: 6px; }
+    .btn-settings svg { width: 15px; height: 15px; }
+}
+
+@media (max-height: 550px) and (min-width: 800px) {
+    .btn-settings { width: 28px; padding: 5px; }
+    .btn-settings svg { width: 13px; height: 13px; }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+    .btn-settings { width: 38px; padding: 8px; }
+    .btn-settings svg { width: 16px; height: 16px; }
+
+    .start-hint {
+        font-size: 0.72em;
+        padding: 5px 12px;
+    }
+
+    .court-center-overlay { gap: 8px; }
 }
 
