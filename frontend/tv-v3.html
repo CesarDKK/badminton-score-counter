@@ -6,7 +6,7 @@
     <title>Bane TV Visning - V3</title>
     <link rel="icon" type="image/png" href="/favicon.png?v=4">
     <link rel="stylesheet" href="fonts.css">
-    <link rel="stylesheet" href="tv-v3-styles.css?v=15">
+    <link rel="stylesheet" href="tv-v3-styles.css?v=16">
     <script src="js/theme-loader.js?v=3"></script>
 </head>
 <body>
@@ -58,39 +58,40 @@
         </div>
     </div>
 
-    <!-- Rest Break Overlay -->
+    <!-- Rest Break Overlay — broadcast-layout: spillerne fylder siderne, countdown-ring i midten -->
     <div id="tvRestBreakOverlay" class="tv-overlay">
         <div class="overlay-glow"></div>
-        <div class="overlay-content">
-            <div class="overlay-title-row">
-                <h1 id="tvRestBreakTitle" class="overlay-heading">Pause 1 minut</h1>
+        <div class="pause-layout">
+            <div class="pause-player">
+                <div class="pause-player-name" id="tvRestBreakPlayer1">Spiller 1</div>
+                <div class="pause-player-partner" id="tvRestBreakPlayer1Partner"></div>
+                <div class="pause-score" id="tvRestBreakScore1">0</div>
+                <div class="pause-score-label">Point</div>
             </div>
-            <div class="overlay-timer-wrap">
-                <div id="tvRestBreakTimer" class="overlay-countdown">60</div>
-                <div class="overlay-timer-label">SEKUNDER</div>
+            <div class="pause-center">
+                <h1 id="tvRestBreakTitle" class="pause-title">Pause 1 minut</h1>
+                <div class="pause-ring-wrap">
+                    <svg class="pause-ring" viewBox="0 0 200 200" aria-hidden="true">
+                        <circle class="pause-ring-track" cx="100" cy="100" r="90"/>
+                        <circle class="pause-ring-fill" id="tvRestBreakRing" cx="100" cy="100" r="90"/>
+                    </svg>
+                    <div class="pause-ring-inner">
+                        <div id="tvRestBreakTimer" class="pause-countdown">60</div>
+                        <div class="pause-countdown-label">Tilbage</div>
+                    </div>
+                </div>
+                <div class="pause-sets">
+                    <span class="pause-sets-label">Sæt</span>
+                    <span class="pause-set-badge" id="tvRestBreakGames1">0</span>
+                    <span class="pause-sets-dash">–</span>
+                    <span class="pause-set-badge" id="tvRestBreakGames2">0</span>
+                </div>
             </div>
-            <div class="overlay-score-row">
-                <div class="overlay-player-card">
-                    <div class="overlay-player-name" id="tvRestBreakPlayer1">Spiller 1</div>
-                    <div class="overlay-player-partner" id="tvRestBreakPlayer1Partner"></div>
-                    <div class="overlay-score" id="tvRestBreakScore1">0</div>
-                    <div class="overlay-score-label">POINT</div>
-                </div>
-                <div class="overlay-vs">VS</div>
-                <div class="overlay-player-card">
-                    <div class="overlay-player-name" id="tvRestBreakPlayer2">Spiller 2</div>
-                    <div class="overlay-player-partner" id="tvRestBreakPlayer2Partner"></div>
-                    <div class="overlay-score" id="tvRestBreakScore2">0</div>
-                    <div class="overlay-score-label">POINT</div>
-                </div>
-            </div>
-            <div class="overlay-sets-row">
-                <div class="overlay-sets-label">SÆT OVERSIGT</div>
-                <div class="overlay-sets-scores">
-                    <div class="overlay-set-badge"><span id="tvRestBreakGames1">0</span></div>
-                    <div class="overlay-sets-dash">—</div>
-                    <div class="overlay-set-badge"><span id="tvRestBreakGames2">0</span></div>
-                </div>
+            <div class="pause-player">
+                <div class="pause-player-name" id="tvRestBreakPlayer2">Spiller 2</div>
+                <div class="pause-player-partner" id="tvRestBreakPlayer2Partner"></div>
+                <div class="pause-score" id="tvRestBreakScore2">0</div>
+                <div class="pause-score-label">Point</div>
             </div>
         </div>
     </div>
@@ -119,6 +120,6 @@
     <script src="js/auth-guard.js?v=2"></script>
     <script src="js/logo-match.js?v=1"></script>
     <script src="js/live-updates.js?v=1"></script>
-    <script src="tv-script-v3.js?v=21"></script>
+    <script src="tv-script-v3.js?v=22"></script>
 </body>
 </html>

@@ -1163,9 +1163,37 @@ function escapeHtml(text) {
 
 // ========== REST BREAK FUNCTIONS (UNCHANGED FROM V2) ==========
 
+// Samlet pauselængde — bruges til progress-ringen. Kendes fra secondsLeft ved
+// pausens start; loader TV'et midt i en pause, gættes den ud fra titlen
+// ("Pause 1 minut" / "Pause mellem sæt - 2 minutter").
+let localRestBreakTotal = 0;
+
+function guessRestBreakTotal(title, secondsLeft) {
+    const m = /(\d+)\s*minut/i.exec(title || '');
+    if (m) return parseInt(m[1], 10) * 60;
+    return Math.max(secondsLeft || 0, 60);
+}
+
+function renderRestBreakCountdown() {
+    const timerDisplay = document.getElementById('tvRestBreakTimer');
+    const ring = document.getElementById('tvRestBreakRing');
+    if (!timerDisplay) return;
+
+    const s = Math.max(0, localRestBreakSecondsLeft);
+    timerDisplay.textContent = s >= 60
+        ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+        : String(s);
+    timerDisplay.classList.toggle('is-final', s <= 10);
+
+    if (ring) {
+        const CIRCUMFERENCE = 2 * Math.PI * 90; // matcher r=90 i SVG'en
+        const fraction = localRestBreakTotal > 0 ? Math.min(1, s / localRestBreakTotal) : 0;
+        ring.style.strokeDashoffset = String(CIRCUMFERENCE * (1 - fraction));
+    }
+}
+
 function showRestBreak(secondsLeft, title, gameState, playersSwapped) {
     const overlay = document.getElementById('tvRestBreakOverlay');
-    const timerDisplay = document.getElementById('tvRestBreakTimer');
     const titleElement = document.getElementById('tvRestBreakTitle');
 
     if (!overlay) return;
@@ -1176,6 +1204,7 @@ function showRestBreak(secondsLeft, title, gameState, playersSwapped) {
 
     if (isNewRestBreak) {
         localRestBreakSecondsLeft = secondsLeft || 0;
+        localRestBreakTotal = guessRestBreakTotal(title, secondsLeft);
         isRestBreakActive = true;
 
         if (restBreakInterval) {
@@ -1189,28 +1218,16 @@ function showRestBreak(secondsLeft, title, gameState, playersSwapped) {
                 if (localRestBreakSecondsLeft < 0) {
                     localRestBreakSecondsLeft = 0;
                 }
-                timerDisplay.textContent = localRestBreakSecondsLeft;
-
-                if (localRestBreakSecondsLeft <= 10) {
-                    timerDisplay.style.color = 'var(--color-accent)';
-                } else if (localRestBreakSecondsLeft <= 30) {
-                    timerDisplay.style.color = '#FFA500';
-                } else {
-                    timerDisplay.style.color = '#4CAF50';
-                }
+                renderRestBreakCountdown();
             }, 1000);
         }
+    } else if (typeof secondsLeft === 'number' && Math.abs(secondsLeft - localRestBreakSecondsLeft) > 2) {
+        // Drift-korrektion: serverens nedtælling er sandheden — hop kun hvis
+        // den lokale tælling er kommet mere end 2 sek. ud af trit
+        localRestBreakSecondsLeft = secondsLeft;
     }
 
-    timerDisplay.textContent = localRestBreakSecondsLeft;
-
-    if (localRestBreakSecondsLeft <= 10) {
-        timerDisplay.style.color = 'var(--color-accent)';
-    } else if (localRestBreakSecondsLeft <= 30) {
-        timerDisplay.style.color = '#FFA500';
-    } else {
-        timerDisplay.style.color = '#4CAF50';
-    }
+    renderRestBreakCountdown();
 
     if (gameState) {
         let displayPlayer1, displayPlayer2;
@@ -1261,10 +1278,11 @@ function hideRestBreak() {
 
     isRestBreakActive = false;
     localRestBreakSecondsLeft = 0;
+    localRestBreakTotal = 0;
 
     const timerDisplay = document.getElementById('tvRestBreakTimer');
     if (timerDisplay) {
-        timerDisplay.style.color = '#4CAF50';
+        timerDisplay.classList.remove('is-final');
     }
 }
 
