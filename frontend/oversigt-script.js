@@ -492,9 +492,29 @@ async function loadAllCourts() {
                 if (now - entry.finishedAt > FINISHED_DISPLAY_MS) return false;
             }
 
+            // Timer-anker: serverens elapsedSeconds (samme ur som starttiden)
+            // tælles videre lokalt med performance.now() (monotonisk). Ankeret
+            // genbruges hvis driften er ≤ 1,5 sek. så tallet ikke flimrer ved
+            // hver poll; ellers re-ankres til serverens værdi.
+            const prev = courtMatchTimes[court.courtId];
+            const frozen = !!court.matchEndTime;
+            let anchor = prev ? prev.anchor : null;
+            if (typeof court.elapsedSeconds === 'number') {
+                const localNow = anchor
+                    ? (anchor.frozen ? anchor.base : anchor.base + (performance.now() - anchor.at) / 1000)
+                    : null;
+                if (!anchor || anchor.frozen !== frozen ||
+                    localNow === null || Math.abs(localNow - court.elapsedSeconds) > 1.5) {
+                    anchor = { base: court.elapsedSeconds, at: performance.now(), frozen };
+                }
+            } else {
+                anchor = null; // ældre backend — calculateElapsedTime falder tilbage til dato-math
+            }
+
             courtMatchTimes[court.courtId] = {
                 matchStartTime: court.matchStartTime,
-                matchEndTime: court.matchEndTime
+                matchEndTime: court.matchEndTime,
+                anchor
             };
             return true;
         });
@@ -875,7 +895,14 @@ function calculateElapsedTime(courtId) {
         return 0;
     }
 
-    // Calculate elapsed time from server timestamp (same as TV display)
+    // Server-forankret tid (samme ur som starttiden, monotonisk lokal tælling)
+    const anchor = matchTimes.anchor;
+    if (anchor) {
+        if (anchor.frozen) return Math.max(0, Math.floor(anchor.base));
+        return Math.max(0, Math.floor(anchor.base + (performance.now() - anchor.at) / 1000));
+    }
+
+    // Fallback (ældre backend uden elapsedSeconds): dato-math med clamp
     const startTime = new Date(matchTimes.matchStartTime);
     const endTime = matchTimes.matchEndTime ? new Date(matchTimes.matchEndTime) : new Date();
     const elapsedMs = endTime - startTime;

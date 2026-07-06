@@ -138,25 +138,53 @@ async function scheduleCourtDataLoad() {
 }
 
 function startLocalTimer() {
+    // 500 ms-tick så et sekundskifte aldrig springes over ved interval-jitter;
+    // DOM'en opdateres kun når det viste tal faktisk ændrer sig
     timerInterval = setInterval(function() {
         if (isMatchCurrentlyActive) {
             updateTimerDisplay();
         }
-    }, 1000);
+    }, 500);
+}
+
+/* ── Kamp-timer: server-forankret og monotonisk ──
+   TV'ets eget ur kan være skævt ift. serverens (og tælleren, der startede
+   kampen) — så i stedet for at regne "lokal tid minus starttid" ankres
+   visningen i serverens elapsedSeconds og tælles videre lokalt med
+   performance.now(), som er monotonisk og ikke kan hoppe. Re-ankres kun
+   ved drift > 1,5 sek. så tallet ikke flimrer ved hver dataopdatering. */
+let timerAnchor = null; // { base: sekunder, at: performance.now(), frozen: bool }
+
+function anchoredElapsedSeconds() {
+    if (!timerAnchor) return null;
+    if (timerAnchor.frozen) return Math.max(0, Math.floor(timerAnchor.base));
+    return Math.max(0, Math.floor(timerAnchor.base + (performance.now() - timerAnchor.at) / 1000));
+}
+
+function syncTimerAnchor(gameState) {
+    if (!gameState.matchStartTime) {
+        timerAnchor = null;
+        return;
+    }
+    let serverElapsed = (typeof gameState.elapsedSeconds === 'number') ? gameState.elapsedSeconds : null;
+    if (serverElapsed === null) {
+        // Ældre backend uden elapsedSeconds — fald tilbage til dato-math, men clamp ≥ 0
+        const end = gameState.matchEndTime ? new Date(gameState.matchEndTime) : new Date();
+        serverElapsed = Math.max(0, (end - new Date(gameState.matchStartTime)) / 1000);
+    }
+    const frozen = !!gameState.matchEndTime;
+    if (timerAnchor && timerAnchor.frozen === frozen && !frozen) {
+        const local = anchoredElapsedSeconds();
+        if (local !== null && Math.abs(local - serverElapsed) <= 1.5) return; // behold glat lokal tælling
+    }
+    timerAnchor = { base: serverElapsed, at: performance.now(), frozen };
 }
 
 function updateTimerDisplay() {
     const timerElement = document.getElementById('timerDisplay');
     if (!timerElement) return;
 
-    let elapsedSeconds = 0;
-
-    if (matchStartTime) {
-        const startTime = new Date(matchStartTime);
-        const endTime = matchEndTime ? new Date(matchEndTime) : new Date();
-        const elapsedMs = endTime - startTime;
-        elapsedSeconds = Math.floor(elapsedMs / 1000);
-    }
+    const elapsedSeconds = anchoredElapsedSeconds() ?? 0;
 
     const hours = Math.floor(elapsedSeconds / 3600);
     const minutes = Math.floor((elapsedSeconds % 3600) / 60);
@@ -201,6 +229,7 @@ async function loadCourtData() {
         if (!isMatchActive) {
             matchStartTime = null;
             matchEndTime = null;
+            timerAnchor = null;
             isMatchCurrentlyActive = false;
             wasMatchPreviouslyActive = false;
             hideRestBreak();
@@ -325,6 +354,7 @@ async function loadCourtData() {
         // Update match timing
         matchStartTime = gameState.matchStartTime;
         matchEndTime = gameState.matchEndTime;
+        syncTimerAnchor(gameState);
 
         updateTimerDisplay();
         updateCourtBanner();

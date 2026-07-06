@@ -398,6 +398,8 @@ function addPoint(player) {
     // Start match automatically on first point
     if (isFirstPoint) {
         gameState.matchStartTime = Date.now();
+        gameState._sendStartNow = true; // serveren stempler starttiden med sit eget ur
+        anchorTimer(0);
         gameState.isActive = true;
         document.getElementById('holdkampPanel').style.display = 'none';
         startTimer();
@@ -920,6 +922,7 @@ async function loadGameState() {
 
         // Convert timestamps from string/ISO format to numbers
         gameState.matchStartTime = loaded.matchStartTime ? (typeof loaded.matchStartTime === 'number' ? loaded.matchStartTime : new Date(loaded.matchStartTime).getTime()) : null;
+        syncTimerAnchor(loaded);
         gameState.matchEndTime = loaded.matchEndTime ? (typeof loaded.matchEndTime === 'number' ? loaded.matchEndTime : new Date(loaded.matchEndTime).getTime()) : null;
 
         gameState.setScoresHistory = loaded.setScoresHistory || [];
@@ -1389,6 +1392,8 @@ async function startMatch() {
     }
 
     gameState.matchStartTime = Date.now();
+    gameState._sendStartNow = true; // serveren stempler starttiden med sit eget ur
+    anchorTimer(0);
     gameState.isActive = true;
     document.getElementById('holdkampPanel').style.display = 'none';
     updateDisplay();
@@ -1407,11 +1412,56 @@ function startTimer() {
     }, 1000);
 }
 
+/* ── Kamp-timer: server-forankret og monotonisk ──
+   Den forløbne tid ankres i serverens elapsedSeconds (samme ur som
+   starttiden i databasen) og tælles lokalt videre med performance.now(),
+   som er monotonisk — den kan ikke hoppe, selv hvis maskinens vægur
+   justeres. Re-ankres kun ved drift > 2 sek. så visningen ikke flimrer
+   ±1 sek. ved hver dataopdatering. */
+let _timerAnchor = null;   // { base: sekunder, at: performance.now() }
+let _timerFrozen = null;   // fastfrosset visning mens matchEndTime er sat
+
+function anchorTimer(baseSeconds) {
+    _timerAnchor = { base: baseSeconds, at: performance.now() };
+    _timerFrozen = null;
+}
+
+function anchoredElapsed() {
+    if (!_timerAnchor) return null;
+    return Math.max(0, Math.floor(_timerAnchor.base + (performance.now() - _timerAnchor.at) / 1000));
+}
+
+// Kaldes fra loadGameState med serverens tilstand
+function syncTimerAnchor(loaded) {
+    if (!loaded.matchStartTime) {
+        _timerAnchor = null;
+        _timerFrozen = null;
+        return;
+    }
+    if (typeof loaded.elapsedSeconds !== 'number') return; // ældre backend — behold lokal
+    const local = anchoredElapsed();
+    if (local === null || Math.abs(local - loaded.elapsedSeconds) > 2) {
+        anchorTimer(loaded.elapsedSeconds);
+    }
+}
+
 function updateTimer() {
     if (!gameState.matchStartTime) return;
 
-    const now = gameState.matchEndTime || Date.now();
-    const elapsed = Math.floor((now - gameState.matchStartTime) / 1000);
+    // Fallback hvis der endnu ikke er et anker (fx side genindlæst mod ældre backend)
+    let elapsed;
+    if (_timerAnchor) {
+        if (gameState.matchEndTime) {
+            if (_timerFrozen === null) _timerFrozen = anchoredElapsed();
+            elapsed = _timerFrozen;
+        } else {
+            _timerFrozen = null;
+            elapsed = anchoredElapsed();
+        }
+    } else {
+        const now = gameState.matchEndTime || Date.now();
+        elapsed = Math.max(0, Math.floor((now - gameState.matchStartTime) / 1000));
+    }
 
     const minutes = Math.floor(elapsed / 60);
     const seconds = elapsed % 60;
@@ -1466,7 +1516,11 @@ async function performSave() {
             player1: gameState.player1,
             player2: gameState.player2,
             timerSeconds: gameState.timerSeconds,
-            matchStartTime: gameState.matchStartTime,
+            // Starttid: 'now' ved kampstart (serveren stempler med sit eget ur),
+            // null ved eksplicit rydning — ellers udelades feltet helt, så
+            // serverens starttid aldrig overskrives med tablettens klokkeslæt
+            matchStartTime: (gameState._sendStartNow && gameState.matchStartTime) ? 'now'
+                          : (gameState.matchStartTime === null ? null : undefined),
             matchEndTime: gameState.matchEndTime,
             isActive: gameState.isActive,
             isDoubles: gameState.isDoubles,
@@ -1497,6 +1551,7 @@ async function performSave() {
         if (result && typeof result.version === 'number') {
             gameState.version = result.version;
         }
+        if (gameState._sendStartNow) gameState._sendStartNow = false; // starttid er nu sat af serveren
         lastOwnSaveAt = Date.now();
         console.log('Game state saved');
     } catch (error) {
