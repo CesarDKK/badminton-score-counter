@@ -40,6 +40,9 @@ function formatStateRow(row, court) {
         setScoresHistory: parseSetScores(row.set_scores_history),
         matchStartTime: row.match_start_time,
         matchEndTime: row.match_end_time,
+        // Serverberegnet forløbet tid (sekunder) — samme ur som match_start_time,
+        // så klienter slipper for at sammenligne serverens og eget ur
+        elapsedSeconds: typeof row.elapsed_seconds === 'number' ? row.elapsed_seconds : null,
         matchCompleted: !!row.match_completed,
         isActive: !!court.is_active,
         isDoubles: !!court.is_doubles,
@@ -105,7 +108,8 @@ router.get('/batch/all', async (req, res, next) => {
                 gs.timer_seconds, gs.deciding_game_switched,
                 gs.rest_break_active, gs.rest_break_seconds_left, gs.rest_break_title,
                 gs.set_scores_history, gs.match_start_time, gs.match_end_time, gs.match_completed,
-                gs.version
+                gs.version,
+                TIMESTAMPDIFF(SECOND, gs.match_start_time, COALESCE(gs.match_end_time, NOW())) AS elapsed_seconds
             FROM courts c
             LEFT JOIN game_states gs ON c.id = gs.court_id
             ORDER BY c.court_number ASC
@@ -163,6 +167,7 @@ router.get('/batch/all', async (req, res, next) => {
                 setScoresHistory: setScoresHistory,
                 matchStartTime: row.match_start_time,
                 matchEndTime: row.match_end_time,
+                elapsedSeconds: typeof row.elapsed_seconds === 'number' ? row.elapsed_seconds : null,
                 matchCompleted: !!row.match_completed,
                 isActive: !!row.isActive,
                 isDoubles: !!row.isDoubles,
@@ -232,9 +237,13 @@ router.get('/:courtId', async (req, res, next) => {
             return res.status(404).json({ error: 'Bane ikke fundet' });
         }
 
-        // Get game state using the actual court id from database
+        // Get game state using the actual court id from database.
+        // elapsed_seconds beregnes af databasen så starttid og "nu" måles
+        // med samme ur — klientens ur kan være skævt ift. serverens.
         const gameState = await queryOne(
-            'SELECT * FROM game_states WHERE court_id = ?',
+            `SELECT *,
+                    TIMESTAMPDIFF(SECOND, match_start_time, COALESCE(match_end_time, NOW())) AS elapsed_seconds
+             FROM game_states WHERE court_id = ?`,
             [court.id]
         );
 
@@ -387,9 +396,14 @@ router.put('/:courtId', requireWriteAuthInClubMode, async (req, res, next) => {
         // Check if frontend explicitly provided matchStartTime
         const hasExplicitStartTime = has('matchStartTime') && !!body.matchStartTime;
 
+        // Sentinel 'now': klienten beder serveren stemple starttiden med sit
+        // eget ur (NOW()) — klient-ure kan være skæve, og skævheden ville ellers
+        // lande direkte i den viste kamptid på TV/oversigt.
+        const startTimeIsNow = hasExplicitStartTime && body.matchStartTime === 'now';
+
         // Convert ISO 8601 timestamp to MySQL datetime format
         let mysqlStartTime = null;
-        if (hasExplicitStartTime) {
+        if (hasExplicitStartTime && !startTimeIsNow) {
             // Convert '2026-01-21T10:34:08.440Z' to '2026-01-21 10:34:08'
             mysqlStartTime = new Date(body.matchStartTime).toISOString().slice(0, 19).replace('T', ' ');
         }
@@ -449,6 +463,10 @@ router.put('/:courtId', requireWriteAuthInClubMode, async (req, res, next) => {
             let startParams = [];
             if (isReset) {
                 startExpr = 'NULL';
+            } else if (startTimeIsNow) {
+                // Bevar en allerede sat starttid — 'now' må ikke nulstille et
+                // gentaget/forsinket start-kald midt i en kamp
+                startExpr = 'COALESCE(match_start_time, NOW())';
             } else if (hasExplicitStartTime) {
                 startExpr = '?';
                 startParams = [mysqlStartTime];
@@ -492,8 +510,10 @@ router.put('/:courtId', requireWriteAuthInClubMode, async (req, res, next) => {
                 return conflictResponse(fresh);
             }
         } else {
-            const startExprInsert = hasExplicitStartTime ? '?' : (hasActivity ? 'NOW()' : 'NULL');
-            const startParamsInsert = hasExplicitStartTime ? [mysqlStartTime] : [];
+            const startExprInsert = startTimeIsNow ? 'NOW()'
+                : hasExplicitStartTime ? '?'
+                : (hasActivity ? 'NOW()' : 'NULL');
+            const startParamsInsert = (hasExplicitStartTime && !startTimeIsNow) ? [mysqlStartTime] : [];
             try {
                 await query(
                     `INSERT INTO game_states (
