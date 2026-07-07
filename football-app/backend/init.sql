@@ -131,6 +131,7 @@ CREATE TABLE IF NOT EXISTS football_logos (
   id          INT AUTO_INCREMENT PRIMARY KEY,
   club_id     INT NULL,
   name        VARCHAR(150) NOT NULL,
+  aliases     VARCHAR(255) NULL,
   url         VARCHAR(500) NOT NULL,
   kind        ENUM('flag', 'club', 'sponsor', 'other') NOT NULL DEFAULT 'club',
   created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
