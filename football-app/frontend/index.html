@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="da">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -21,12 +21,13 @@
           <div class="brand-title" id="brandTitle">Football</div>
         </a>
         <div class="app-header-actions">
-          <button class="btn-icon btn-ghost hidden" id="backToListBtn" data-back="list" aria-label="Back">
+          <span id="langToggle"></span>
+          <button class="btn-icon btn-ghost hidden" id="backToListBtn" data-back="list" data-i18n-aria="common.back" aria-label="Tilbage">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 12H5M12 19l-7-7 7-7"/>
             </svg>
           </button>
-          <a href="/login.html" class="btn-ghost btn-sm">Admin</a>
+          <a href="/login.html" class="btn-ghost btn-sm" data-i18n="common.admin">Admin</a>
         </div>
       </div>
     </header>
@@ -42,14 +43,14 @@
             </svg>
           </div>
           <h3>FootballApp</h3>
-          <p>Hver klub har sit eget subdomain — fx <strong>dinklub.footballapp.dk</strong>.<br>
+          <p data-i18n-html="public.apexText">Hver klub har sit eget subdomæne — fx <strong>jeresklub.footballapp.dk</strong>.<br>
             Kontakt din klubadministrator for adgang.</p>
         </div>
       </div>
 
       <div id="view-list" class="hidden">
-        <div class="eyebrow fade-in" id="clubEyebrow" style="margin-bottom: var(--sp-2);">Live tournaments</div>
-        <h2 class="display-lg fade-in" id="clubHeading" style="margin: 0 0 var(--sp-5);">Tournaments</h2>
+        <div class="eyebrow fade-in" id="clubEyebrow" data-i18n="public.liveTournaments" style="margin-bottom: var(--sp-2);">Live-turneringer</div>
+        <h2 class="display-lg fade-in" id="clubHeading" data-i18n="public.tournaments" style="margin: 0 0 var(--sp-5);">Turneringer</h2>
         <div id="tournamentList" class="tournament-list"></div>
       </div>
 
@@ -57,13 +58,14 @@
         <div id="tournament-hero" class="tournament-hero fade-in"></div>
         <div id="detail-pools" class="fade-in"></div>
         <div id="detail-cups-section" class="hidden">
-          <div class="eyebrow" style="margin: var(--sp-7) 0 var(--sp-3);">Cup stage</div>
+          <div class="eyebrow" data-i18n="public.cupStage" style="margin: var(--sp-7) 0 var(--sp-3);">Cup-fase</div>
           <div id="detail-cups"></div>
         </div>
       </div>
     </main>
   </div>
 
+  <script src="/i18n.js"></script>
   <script src="/public.js"></script>
 </body>
 </html>

@@ -1,14 +1,15 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="da">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#0a0e14" />
-  <title>Admin Login — Football Tournament</title>
+  <title>Admin — Football</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <div class="login-page">
+    <span id="langToggle" style="position: absolute; top: 18px; right: 18px;"></span>
     <form id="loginForm" class="login-card fade-in">
       <div class="login-brand">
         <div class="symbol">
@@ -18,32 +19,33 @@
           </svg>
         </div>
         <h1>Admin</h1>
-        <div class="eyebrow" id="clubLabel" style="margin-top: 4px;">Tournament Control</div>
+        <div class="eyebrow" id="clubLabel" style="margin-top: 4px;">Turneringsstyring</div>
       </div>
 
-      <div id="apexNotice" class="alert hidden" style="background:rgba(241,196,15,0.1); border-color:#f1c40f; color:#f1c40f;">
-        Login skal ske fra dit klub-subdomain — fx <code>dinklub.footballapp.dk/login.html</code>
+      <div id="apexNotice" class="alert hidden" data-i18n-html="login.apexNotice" style="background:rgba(241,196,15,0.1); border-color:#f1c40f; color:#f1c40f;">
+        Login skal ske fra jeres klub-subdomæne — fx <code>jeresklub.footballapp.dk/login.html</code>
       </div>
 
       <div id="errorBox" class="alert hidden"></div>
 
       <div class="field" id="usernameField">
-        <label for="username">Username</label>
+        <label for="username" data-i18n="login.username">Brugernavn</label>
         <input id="username" type="text" autocomplete="username" autofocus required />
       </div>
 
       <div class="field" id="passwordField">
-        <label for="password">Password</label>
+        <label for="password" data-i18n="login.password">Kodeord</label>
         <input id="password" type="password" autocomplete="current-password" required />
       </div>
 
-      <button type="submit" id="loginBtn" class="btn btn-block">Sign in</button>
+      <button type="submit" id="loginBtn" class="btn btn-block" data-i18n="login.signIn">Log ind</button>
 
       <p class="center muted" style="margin-top: var(--sp-5); font-size: 13px;">
-        <a href="/" style="color: var(--text-muted);">← Back to public site</a>
+        <a href="/" data-i18n="login.backToPublic" style="color: var(--text-muted);">← Tilbage til forsiden</a>
       </p>
     </form>
   </div>
+  <script src="/i18n.js"></script>
   <script>
     const form = document.getElementById('loginForm');
     const errorBox = document.getElementById('errorBox');
@@ -52,6 +54,14 @@
     const usernameField = document.getElementById('usernameField');
     const passwordField = document.getElementById('passwordField');
     const loginBtn = document.getElementById('loginBtn');
+
+    let clubName = null;
+    function applyLabels() {
+      document.title = clubName ? `Admin — ${clubName}` : FI18N.t('login.title');
+      if (!clubName) clubLabel.textContent = FI18N.t(apexNotice.classList.contains('hidden') ? 'login.control' : 'login.noClub');
+    }
+    FI18N.onChange(applyLabels);
+    applyLabels();
 
     // Hent klub-kontekst først — hvis vi er på apex (ingen klub) blokeres login
     async function init() {
@@ -64,11 +74,12 @@
           usernameField.classList.add('hidden');
           passwordField.classList.add('hidden');
           loginBtn.classList.add('hidden');
-          clubLabel.textContent = 'No club selected';
+          applyLabels();
           return;
         }
-        clubLabel.textContent = data.club.name;
-        document.title = `Admin — ${data.club.name}`;
+        clubName = data.club.name;
+        clubLabel.textContent = clubName;
+        applyLabels();
       } catch (err) {
         // Fail silently — bruger kan stadig forsøge login
         console.warn('Could not fetch club-info', err);
@@ -89,7 +100,7 @@
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || 'Login failed');
+          throw new Error(data.error || FI18N.t('login.failed'));
         }
         const data = await res.json();
         localStorage.setItem('football_admin_token', data.token);

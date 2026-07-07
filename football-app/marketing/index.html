@@ -550,6 +550,37 @@
         footer a { color: var(--muted); text-decoration: none; }
         footer a:hover { color: var(--text); }
 
+        /* ── Sprogskifter ── */
+        .lang-switch {
+            display: inline-flex;
+            gap: 2px;
+            border: 1px solid var(--border);
+            border-radius: 100px;
+            padding: 3px;
+            margin-right: 10px;
+        }
+
+        .lang-switch button {
+            border: none;
+            background: transparent;
+            color: var(--muted);
+            font: inherit;
+            font-size: 0.78em;
+            font-weight: 700;
+            letter-spacing: 1px;
+            padding: 6px 12px;
+            border-radius: 100px;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+        }
+
+        .lang-switch button.active {
+            background: rgba(20,232,163,0.14);
+            color: var(--green);
+        }
+
+        .nav-right { display: flex; align-items: center; }
+
         /* ── Responsivt ── */
         @media (max-width: 760px) {
             .hero { padding: 52px 0 64px; }
@@ -582,18 +613,21 @@
         </svg>
         <span class="wordmark">Football<span>App</span></span>
     </a>
-    <a class="nav-cta" href="https://demo.footballapp.dk">Åben demo →</a>
+    <div class="nav-right">
+        <span class="lang-switch" id="langSwitch" aria-label="Sprog / Language"></span>
+        <a class="nav-cta" href="https://demo.footballapp.dk" data-i18n="nav.demo">Åben demo →</a>
+    </div>
 </nav>
 
 <!-- Hero -->
 <section class="hero">
     <div class="wrap">
-        <div class="hero-badge"><span class="dot"></span>Bygget til fodboldklubber</div>
-        <h1>Turneringsstyring til<br><span class="accent">din fodboldklub</span></h1>
-        <p>Opret puljer og cups på få minutter, tast resultater fra telefonen og lad spillere og tilskuere følge <strong>stillinger og brackets live</strong> — på klubbens eget scoreboard.</p>
+        <div class="hero-badge"><span class="dot"></span><span data-i18n="hero.badge">Bygget til fodboldklubber</span></div>
+        <h1 data-i18n-html="hero.h1">Turneringsstyring til<br><span class="accent">din fodboldklub</span></h1>
+        <p data-i18n-html="hero.p">Opret puljer og cups på få minutter, tast resultater fra telefonen og lad spillere og tilskuere følge <strong>stillinger og brackets live</strong> — på klubbens eget scoreboard.</p>
         <div class="hero-actions">
-            <a class="btn-primary" href="https://demo.footballapp.dk">Prøv demoen</a>
-            <a class="btn-secondary" href="#funktioner">Se funktioner</a>
+            <a class="btn-primary" href="https://demo.footballapp.dk" data-i18n="cta.tryDemo">Prøv demoen</a>
+            <a class="btn-secondary" href="#funktioner" data-i18n="cta.seeFeatures">Se funktioner</a>
         </div>
 
         <div class="hero-shot">
@@ -604,7 +638,7 @@
                         <div class="browser-dot"></div>
                         <div class="browser-dot"></div>
                     </div>
-                    <div class="browser-url">jeresklub.footballapp.dk</div>
+                    <div class="browser-url" data-i18n="hero.url">jeresklub.footballapp.dk</div>
                 </div>
                 <img src="hero-tournament.jpg" alt="Turneringssiden — Mini-VM 2026 med puljetabel og resultater" width="1264" height="778">
             </div>
@@ -618,17 +652,17 @@
 <section class="section-pad" id="turnering">
     <div class="wrap">
         <div class="section-header">
-            <div class="section-tag">Turneringsdagen</div>
-            <h2>Fra puljespil til pokal</h2>
-            <p class="sub">Programmet genereres automatisk, stillingerne regner sig selv ud, og vinderne rykker videre i bracketet — I skal bare taste resultaterne.</p>
+            <div class="section-tag" data-i18n="show.tag">Turneringsdagen</div>
+            <h2 data-i18n="show.h2">Fra puljespil til pokal</h2>
+            <p class="sub" data-i18n="show.sub">Programmet genereres automatisk, stillingerne regner sig selv ud, og vinderne rykker videre i bracketet — I skal bare taste resultaterne.</p>
         </div>
 
         <div class="show-row">
             <div class="show-text">
-                <div class="kicker">Puljespil</div>
-                <h3>Stillingen regner sig selv ud</h3>
-                <p>Alle puljekampe genereres automatisk, når turneringen oprettes. Tast et resultat, og tabellen opdaterer point, målforskel og placeringer med det samme.</p>
-                <p>Står to hold lige, afgør det indbyrdes opgør rækkefølgen — helt som i de store turneringer.</p>
+                <div class="kicker" data-i18n="show.pools.kicker">Puljespil</div>
+                <h3 data-i18n="show.pools.h3">Stillingen regner sig selv ud</h3>
+                <p data-i18n="show.pools.p1">Alle puljekampe genereres automatisk, når turneringen oprettes. Tast et resultat, og tabellen opdaterer point, målforskel og placeringer med det samme.</p>
+                <p data-i18n="show.pools.p2">Står to hold lige, afgør det indbyrdes opgør rækkefølgen — helt som i de store turneringer.</p>
             </div>
             <div class="show-media">
                 <img src="pool-results.jpg" alt="Pulje B — færdig tabel med point og målforskel samt resultatkort" width="1264" height="705" loading="lazy">
@@ -637,10 +671,10 @@
 
         <div class="show-row flip">
             <div class="show-text">
-                <div class="kicker">Cup-fasen</div>
-                <h3>Vinderne rykker selv videre</h3>
-                <p>Definér flere cups — A-cup til de bedste, B-cup til resten — og lad systemet seede holdene ud fra deres puljeplaceringer.</p>
-                <p>Når en kamp afgøres, rykker vinderen automatisk frem til næste runde i bracketet, hele vejen til finalen.</p>
+                <div class="kicker" data-i18n="show.cups.kicker">Cup-fasen</div>
+                <h3 data-i18n="show.cups.h3">Vinderne rykker selv videre</h3>
+                <p data-i18n="show.cups.p1">Definér flere cups — A-cup til de bedste, B-cup til resten — og lad systemet seede holdene ud fra deres puljeplaceringer.</p>
+                <p data-i18n="show.cups.p2">Når en kamp afgøres, rykker vinderen automatisk frem til næste runde i bracketet, hele vejen til finalen.</p>
             </div>
             <div class="show-media">
                 <img src="cup-bracket.jpg" alt="A-cup og B-cup — brackets med semifinaler og finaler" width="1264" height="710" loading="lazy">
@@ -655,122 +689,122 @@
 <section class="section-pad" id="funktioner">
     <div class="wrap">
         <div class="section-header">
-            <div class="section-tag">Funktioner</div>
-            <h2>Bygget til stævnedagen</h2>
+            <div class="section-tag" data-i18n="feat.tag">Funktioner</div>
+            <h2 data-i18n="feat.h2">Bygget til stævnedagen</h2>
         </div>
 
         <div class="feature-group">
-            <div class="feature-group-title"><h3>Turneringen</h3></div>
+            <div class="feature-group-title"><h3 data-i18n="feat.g1">Turneringen</h3></div>
             <div class="feature-grid">
                 <div class="feature-card">
                     <div class="feature-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l1.5 1.5L8.5 4.5M4 12l1.5 1.5L8.5 10.5M4 18l1.5 1.5L8.5 16.5M12 6h8M12 12h8M12 18h8"/></svg>
                     </div>
-                    <h4>Opret alt i ét flow</h4>
-                    <p>En guidet opsætning tager jer gennem navn, puljer, hold og cups — hele turneringen står klar på få minutter.</p>
+                    <h4 data-i18n="feat.wizard.h">Opret alt i ét flow</h4>
+                    <p data-i18n="feat.wizard.p">En guidet opsætning tager jer gennem navn, puljer, hold og cups — hele turneringen står klar på få minutter.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="6" cy="6" r="1.6" fill="currentColor" stroke="none"/><circle cx="6" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="6" cy="18" r="1.6" fill="currentColor" stroke="none"/></svg>
                     </div>
-                    <h4>Puljer med automatisk stilling</h4>
-                    <p>Round robin-programmet genereres automatisk, og tabellen viser kampe, sejre, målforskel og point — opdateret efter hvert resultat.</p>
+                    <h4 data-i18n="feat.pools.h">Puljer med automatisk stilling</h4>
+                    <p data-i18n="feat.pools.p">Round robin-programmet genereres automatisk, og tabellen viser kampe, sejre, målforskel og point — opdateret efter hvert resultat.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v5h5M4 15v5h5M9 6.5h4M9 17.5h4M13 6.5v11M13 12h6"/></svg>
                     </div>
-                    <h4>Cup-brackets med seedning</h4>
-                    <p>Vælg hvilke puljeplaceringer der går i hvilken cup. Holdene seedes efter turneringsprincippet, så de bedste først kan mødes sent.</p>
+                    <h4 data-i18n="feat.brackets.h">Cup-brackets med seedning</h4>
+                    <p data-i18n="feat.brackets.p">Vælg hvilke puljeplaceringer der går i hvilken cup. Holdene seedes efter turneringsprincippet, så de bedste først kan mødes sent.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M17 7h-8M17 7v8"/></svg>
                     </div>
-                    <h4>Automatisk avancement</h4>
-                    <p>Når en cup-kamp afgøres, sættes vinderen automatisk ind i næste runde. Ingen manuel flytning — og ingen uafgjorte i knockout-fasen.</p>
+                    <h4 data-i18n="feat.advance.h">Automatisk avancement</h4>
+                    <p data-i18n="feat.advance.p">Når en cup-kamp afgøres, sættes vinderen automatisk ind i næste runde. Ingen manuel flytning — og ingen uafgjorte i knockout-fasen.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h10M18 8h2M4 16h2M10 16h10"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/></svg>
                     </div>
-                    <h4>Jeres eget pointsystem</h4>
-                    <p>Standard er 3-1-0, men I bestemmer selv, hvor mange point en sejr, uafgjort og et nederlag giver.</p>
+                    <h4 data-i18n="feat.points.h">Jeres eget pointsystem</h4>
+                    <p data-i18n="feat.points.p">Standard er 3-1-0, men I bestemmer selv, hvor mange point en sejr, uafgjort og et nederlag giver.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l3 5H3zM18 4l3 5h-6zM6 9v8M18 9v8M4 20h16"/></svg>
                     </div>
-                    <h4>Indbyrdes opgør afgør</h4>
-                    <p>Står to hold lige på point og målforskel, bruges deres indbyrdes kamp som tiebreak — fair og gennemskueligt.</p>
+                    <h4 data-i18n="feat.h2h.h">Indbyrdes opgør afgør</h4>
+                    <p data-i18n="feat.h2h.p">Står to hold lige på point og målforskel, bruges deres indbyrdes kamp som tiebreak — fair og gennemskueligt.</p>
                 </div>
             </div>
         </div>
 
         <div class="feature-group">
-            <div class="feature-group-title"><h3>Live på dagen</h3></div>
+            <div class="feature-group-title"><h3 data-i18n="feat.g2">Live på dagen</h3></div>
             <div class="feature-grid cols-2">
                 <div class="feature-card">
                     <div class="feature-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
                     </div>
-                    <h4>Offentligt scoreboard</h4>
-                    <p>Del ét link, og alle kan følge puljetabeller, resultater og brackets — uden login. Hæng en skærm op i klubhuset, eller lad folk kigge med på telefonen.</p>
+                    <h4 data-i18n="feat.scoreboard.h">Offentligt scoreboard</h4>
+                    <p data-i18n="feat.scoreboard.p">Del ét link, og alle kan følge puljetabeller, resultater og brackets — uden login. Hæng en skærm op i klubhuset, eller lad folk kigge med på telefonen.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h6l-1 8 9-12h-6z"/></svg>
                     </div>
-                    <h4>Opdateres live</h4>
-                    <p>Resultater slår igennem på alle skærme få sekunder efter, de er tastet — ingen genindlæsning, ingen ventetid.</p>
+                    <h4 data-i18n="feat.live.h">Opdateres live</h4>
+                    <p data-i18n="feat.live.p">Resultater slår igennem på alle skærme få sekunder efter, de er tastet — ingen genindlæsning, ingen ventetid.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18.5h2"/></svg>
                     </div>
-                    <h4>Tast fra telefonen</h4>
-                    <p>Resultater registreres direkte fra mobilen ved banen. Admin-siden fungerer lige godt på telefon, tablet og computer.</p>
+                    <h4 data-i18n="feat.phone.h">Tast fra telefonen</h4>
+                    <p data-i18n="feat.phone.p">Resultater registreres direkte fra mobilen ved banen. Admin-siden fungerer lige godt på telefon, tablet og computer.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/></svg>
                     </div>
-                    <h4>Læseligt på storskærm</h4>
-                    <p>Det mørke design med store tal og holdlogoer står skarpt på projektor og TV — også fra den anden ende af hallen.</p>
+                    <h4 data-i18n="feat.bigscreen.h">Læseligt på storskærm</h4>
+                    <p data-i18n="feat.bigscreen.p">Det mørke design med store tal og holdlogoer står skarpt på projektor og TV — også fra den anden ende af hallen.</p>
                 </div>
             </div>
         </div>
 
         <div class="feature-group">
-            <div class="feature-group-title"><h3>Jeres klub</h3></div>
+            <div class="feature-group-title"><h3 data-i18n="feat.g3">Jeres klub</h3></div>
             <div class="feature-grid cols-2">
                 <div class="feature-card">
                     <div class="feature-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.7 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.7-3.8-9S9.5 5.6 12 3z"/></svg>
                     </div>
-                    <h4>Eget klub-subdomæne</h4>
-                    <p>Klubben får sit eget <code>jeresklub.footballapp.dk</code> med egne turneringer og egne admin-brugere — helt adskilt fra andre klubber.</p>
+                    <h4 data-i18n="feat.subdomain.h">Eget klub-subdomæne</h4>
+                    <p data-i18n-html="feat.subdomain.p">Klubben får sit eget <code>jeresklub.footballapp.dk</code> med egne turneringer og egne admin-brugere — helt adskilt fra andre klubber.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4c1.5-1 3.5-1 5 0s3.5 1 5 0v9c-1.5 1-3.5 1-5 0s-3.5-1-5 0"/></svg>
                     </div>
-                    <h4>255 landeflag med fra start</h4>
-                    <p>Holder I mini-VM, ligger alle nationsflag klar i logo-biblioteket. Upload også klubbens egne holdlogoer, så de er lige ved hånden næste gang.</p>
+                    <h4 data-i18n="feat.flags.h">255 landeflag med fra start</h4>
+                    <p data-i18n="feat.flags.p">Holder I mini-VM, ligger alle nationsflag klar i logo-biblioteket. Upload også klubbens egne holdlogoer, så de er lige ved hånden næste gang.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><circle cx="17" cy="9" r="2.5"/><path d="M16.5 15.5c2.5 0 4.5 1.8 4.5 4.5"/></svg>
                     </div>
-                    <h4>Flere administratorer</h4>
-                    <p>Opret flere admin-brugere, så I kan dele arbejdet på stævnedagen — én ved hver bane, alle taster i samme turnering.</p>
+                    <h4 data-i18n="feat.admins.h">Flere administratorer</h4>
+                    <p data-i18n="feat.admins.p">Opret flere admin-brugere, så I kan dele arbejdet på stævnedagen — én ved hver bane, alle taster i samme turnering.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
                     </div>
-                    <h4>Sikker klub-login</h4>
-                    <p>Kun klubbens egne administratorer kan oprette turneringer og taste resultater. Tilskuere ser alt — men kan ikke ændre noget.</p>
+                    <h4 data-i18n="feat.login.h">Sikker klub-login</h4>
+                    <p data-i18n="feat.login.p">Kun klubbens egne administratorer kan oprette turneringer og taste resultater. Tilskuere ser alt — men kan ikke ændre noget.</p>
                 </div>
             </div>
         </div>
@@ -783,29 +817,29 @@
 <section class="section-pad" id="igang">
     <div class="wrap">
         <div class="section-header">
-            <div class="section-tag">Kom igang</div>
-            <h2>Klar før næste stævne</h2>
+            <div class="section-tag" data-i18n="start.tag">Kom igang</div>
+            <h2 data-i18n="start.h2">Klar før næste stævne</h2>
         </div>
 
         <div class="steps">
             <div class="step-card">
                 <div class="step-num">1</div>
-                <h4>Skriv til os</h4>
-                <p>Send en mail til <a href="mailto:info@footballapp.dk">info@footballapp.dk</a>, så opretter vi klubben med jeres eget subdomæne og admin-login.</p>
+                <h4 data-i18n="start.s1.h">Skriv til os</h4>
+                <p data-i18n-html="start.s1.p">Send en mail til <a href="mailto:info@footballapp.dk">info@footballapp.dk</a>, så opretter vi klubben med jeres eget subdomæne og admin-login.</p>
             </div>
             <div class="step-card">
                 <div class="step-num">2</div>
-                <h4>Opret turneringen</h4>
-                <p>Den guidede opsætning tager jer gennem puljer, hold og cups. Tilføj logoer fra biblioteket — eller upload jeres egne.</p>
+                <h4 data-i18n="start.s2.h">Opret turneringen</h4>
+                <p data-i18n="start.s2.p">Den guidede opsætning tager jer gennem puljer, hold og cups. Tilføj logoer fra biblioteket — eller upload jeres egne.</p>
             </div>
             <div class="step-card">
                 <div class="step-num">3</div>
-                <h4>Spil</h4>
-                <p>Del scoreboard-linket, tast resultaterne fra banen, og lad stillinger og brackets køre sig selv — hele vejen til finalen.</p>
+                <h4 data-i18n="start.s3.h">Spil</h4>
+                <p data-i18n="start.s3.p">Del scoreboard-linket, tast resultaterne fra banen, og lad stillinger og brackets køre sig selv — hele vejen til finalen.</p>
             </div>
         </div>
 
-        <p class="selfhost-note">Løsningen er gratis at bruge, hvis I kører den på jeres egen server. Ønsker I fuld funktionalitet, skal I oprettes på vores centrale løsning. Vi hjælper også gerne med installation og valg af hardware — <a href="mailto:info@footballapp.dk">skriv til os</a>.</p>
+        <p class="selfhost-note" data-i18n-html="start.selfhost">Løsningen er gratis at bruge, hvis I kører den på jeres egen server. Ønsker I fuld funktionalitet, skal I oprettes på vores centrale løsning. Vi hjælper også gerne med installation og valg af hardware — <a href="mailto:info@footballapp.dk">skriv til os</a>.</p>
     </div>
 </section>
 
@@ -815,13 +849,13 @@
 <section class="section-pad">
     <div class="wrap">
         <div class="cta-box">
-            <h2>Klar til næste turnering?</h2>
-            <p class="cta-sub">Prøv demoen med det samme — eller skriv til os, så er klubben i gang på ingen tid.</p>
+            <h2 data-i18n="cta.h2">Klar til næste turnering?</h2>
+            <p class="cta-sub" data-i18n="cta.sub">Prøv demoen med det samme — eller skriv til os, så er klubben i gang på ingen tid.</p>
             <div class="hero-actions">
-                <a class="btn-primary" href="https://demo.footballapp.dk">Prøv demoen</a>
-                <a class="btn-secondary" href="mailto:info@footballapp.dk">Skriv til os</a>
+                <a class="btn-primary" href="https://demo.footballapp.dk" data-i18n="cta.tryDemo">Prøv demoen</a>
+                <a class="btn-secondary" href="mailto:info@footballapp.dk" data-i18n="cta.writeUs">Skriv til os</a>
             </div>
-            <p class="cta-mail">Spørgsmål? <a href="mailto:info@footballapp.dk">info@footballapp.dk</a></p>
+            <p class="cta-mail" data-i18n-html="cta.mail">Spørgsmål? <a href="mailto:info@footballapp.dk">info@footballapp.dk</a></p>
         </div>
     </div>
 </section>
@@ -832,6 +866,182 @@
         <p>© 2026 Jesper Brink Sørensen &nbsp;·&nbsp; <a href="https://demo.footballapp.dk">demo.footballapp.dk</a> &nbsp;·&nbsp; <a href="mailto:info@footballapp.dk">info@footballapp.dk</a></p>
     </div>
 </footer>
+
+<script>
+/* ── Sproglag (da/en) — dansk er standard, valget gemmes i localStorage ── */
+(function () {
+    const STORAGE_KEY = 'football_lang';
+    const M = {
+        'meta.title': {
+            da: 'FootballApp.dk — Turneringsstyring til din klub',
+            en: 'FootballApp.dk — Tournament management for your club' },
+        'meta.desc': {
+            da: 'FootballApp.dk — Turneringsstyring til fodboldklubber. Puljer med automatisk stilling, cup-brackets med seedning, live scoreboard og eget klub-subdomæne.',
+            en: "FootballApp.dk — Tournament management for football clubs. Pools with automatic standings, seeded cup brackets, a live scoreboard and your club's own subdomain." },
+        'nav.demo': { da: 'Åben demo →', en: 'Open demo →' },
+        'hero.badge': { da: 'Bygget til fodboldklubber', en: 'Built for football clubs' },
+        'hero.h1': {
+            da: 'Turneringsstyring til<br><span class="accent">din fodboldklub</span>',
+            en: 'Tournament management<br><span class="accent">for your football club</span>' },
+        'hero.p': {
+            da: 'Opret puljer og cups på få minutter, tast resultater fra telefonen og lad spillere og tilskuere følge <strong>stillinger og brackets live</strong> — på klubbens eget scoreboard.',
+            en: "Set up pools and cups in minutes, enter results from your phone, and let players and spectators follow <strong>standings and brackets live</strong> — on your club's own scoreboard." },
+        'hero.url': { da: 'jeresklub.footballapp.dk', en: 'yourclub.footballapp.dk' },
+        'cta.tryDemo': { da: 'Prøv demoen', en: 'Try the demo' },
+        'cta.seeFeatures': { da: 'Se funktioner', en: 'See features' },
+        'show.tag': { da: 'Turneringsdagen', en: 'Tournament day' },
+        'show.h2': { da: 'Fra puljespil til pokal', en: 'From group stage to trophy' },
+        'show.sub': {
+            da: 'Programmet genereres automatisk, stillingerne regner sig selv ud, og vinderne rykker videre i bracketet — I skal bare taste resultaterne.',
+            en: 'The schedule generates itself, the standings compute themselves, and winners advance through the bracket — all you do is enter the results.' },
+        'show.pools.kicker': { da: 'Puljespil', en: 'Group stage' },
+        'show.pools.h3': { da: 'Stillingen regner sig selv ud', en: 'Standings compute themselves' },
+        'show.pools.p1': {
+            da: 'Alle puljekampe genereres automatisk, når turneringen oprettes. Tast et resultat, og tabellen opdaterer point, målforskel og placeringer med det samme.',
+            en: 'All pool matches are generated automatically when the tournament is created. Enter a result, and the table updates points, goal difference and positions instantly.' },
+        'show.pools.p2': {
+            da: 'Står to hold lige, afgør det indbyrdes opgør rækkefølgen — helt som i de store turneringer.',
+            en: 'If two teams are level, the head-to-head result decides the order — just like the big tournaments.' },
+        'show.cups.kicker': { da: 'Cup-fasen', en: 'Cup stage' },
+        'show.cups.h3': { da: 'Vinderne rykker selv videre', en: 'Winners advance on their own' },
+        'show.cups.p1': {
+            da: 'Definér flere cups — A-cup til de bedste, B-cup til resten — og lad systemet seede holdene ud fra deres puljeplaceringer.',
+            en: 'Define multiple cups — an A cup for the best, a B cup for the rest — and let the system seed the teams from their pool placements.' },
+        'show.cups.p2': {
+            da: 'Når en kamp afgøres, rykker vinderen automatisk frem til næste runde i bracketet, hele vejen til finalen.',
+            en: 'When a match is decided, the winner automatically moves on to the next round of the bracket, all the way to the final.' },
+        'feat.tag': { da: 'Funktioner', en: 'Features' },
+        'feat.h2': { da: 'Bygget til stævnedagen', en: 'Built for match day' },
+        'feat.g1': { da: 'Turneringen', en: 'The tournament' },
+        'feat.wizard.h': { da: 'Opret alt i ét flow', en: 'Set up everything in one flow' },
+        'feat.wizard.p': {
+            da: 'En guidet opsætning tager jer gennem navn, puljer, hold og cups — hele turneringen står klar på få minutter.',
+            en: 'A guided setup takes you through name, pools, teams and cups — the whole tournament is ready in minutes.' },
+        'feat.pools.h': { da: 'Puljer med automatisk stilling', en: 'Pools with automatic standings' },
+        'feat.pools.p': {
+            da: 'Round robin-programmet genereres automatisk, og tabellen viser kampe, sejre, målforskel og point — opdateret efter hvert resultat.',
+            en: 'The round-robin schedule is generated automatically, and the table shows games, wins, goal difference and points — updated after every result.' },
+        'feat.brackets.h': { da: 'Cup-brackets med seedning', en: 'Seeded cup brackets' },
+        'feat.brackets.p': {
+            da: 'Vælg hvilke puljeplaceringer der går i hvilken cup. Holdene seedes efter turneringsprincippet, så de bedste først kan mødes sent.',
+            en: 'Choose which pool placements go into which cup. Teams are seeded tournament-style, so the best can only meet late.' },
+        'feat.advance.h': { da: 'Automatisk avancement', en: 'Automatic advancement' },
+        'feat.advance.p': {
+            da: 'Når en cup-kamp afgøres, sættes vinderen automatisk ind i næste runde. Ingen manuel flytning — og ingen uafgjorte i knockout-fasen.',
+            en: 'When a cup match is decided, the winner is placed in the next round automatically. No manual moving — and no draws in the knockout stage.' },
+        'feat.points.h': { da: 'Jeres eget pointsystem', en: 'Your own points system' },
+        'feat.points.p': {
+            da: 'Standard er 3-1-0, men I bestemmer selv, hvor mange point en sejr, uafgjort og et nederlag giver.',
+            en: 'The default is 3-1-0, but you decide how many points a win, a draw and a loss are worth.' },
+        'feat.h2h.h': { da: 'Indbyrdes opgør afgør', en: 'Head-to-head tiebreak' },
+        'feat.h2h.p': {
+            da: 'Står to hold lige på point og målforskel, bruges deres indbyrdes kamp som tiebreak — fair og gennemskueligt.',
+            en: 'If two teams are level on points and goal difference, their head-to-head match decides — fair and transparent.' },
+        'feat.g2': { da: 'Live på dagen', en: 'Live on the day' },
+        'feat.scoreboard.h': { da: 'Offentligt scoreboard', en: 'Public scoreboard' },
+        'feat.scoreboard.p': {
+            da: 'Del ét link, og alle kan følge puljetabeller, resultater og brackets — uden login. Hæng en skærm op i klubhuset, eller lad folk kigge med på telefonen.',
+            en: 'Share one link and everyone can follow pool tables, results and brackets — no login. Hang a screen in the clubhouse, or let people follow along on their phones.' },
+        'feat.live.h': { da: 'Opdateres live', en: 'Updates live' },
+        'feat.live.p': {
+            da: 'Resultater slår igennem på alle skærme få sekunder efter, de er tastet — ingen genindlæsning, ingen ventetid.',
+            en: "Results show up on every screen seconds after they're entered — no reloading, no waiting." },
+        'feat.phone.h': { da: 'Tast fra telefonen', en: 'Enter from your phone' },
+        'feat.phone.p': {
+            da: 'Resultater registreres direkte fra mobilen ved banen. Admin-siden fungerer lige godt på telefon, tablet og computer.',
+            en: 'Results are entered straight from a phone at the pitch. The admin page works just as well on phone, tablet and computer.' },
+        'feat.bigscreen.h': { da: 'Læseligt på storskærm', en: 'Readable on the big screen' },
+        'feat.bigscreen.p': {
+            da: 'Det mørke design med store tal og holdlogoer står skarpt på projektor og TV — også fra den anden ende af hallen.',
+            en: 'The dark design with large numbers and team logos stands out on projectors and TVs — even from the far end of the hall.' },
+        'feat.g3': { da: 'Jeres klub', en: 'Your club' },
+        'feat.subdomain.h': { da: 'Eget klub-subdomæne', en: 'Your own club subdomain' },
+        'feat.subdomain.p': {
+            da: 'Klubben får sit eget <code>jeresklub.footballapp.dk</code> med egne turneringer og egne admin-brugere — helt adskilt fra andre klubber.',
+            en: 'Your club gets its own <code>yourclub.footballapp.dk</code> with its own tournaments and admin users — fully separated from other clubs.' },
+        'feat.flags.h': { da: '255 landeflag med fra start', en: '255 national flags included' },
+        'feat.flags.p': {
+            da: 'Holder I mini-VM, ligger alle nationsflag klar i logo-biblioteket. Upload også klubbens egne holdlogoer, så de er lige ved hånden næste gang.',
+            en: "Hosting a mini World Cup? Every national flag is ready in the logo library. Upload your own team logos too, so they're at hand next time." },
+        'feat.admins.h': { da: 'Flere administratorer', en: 'Multiple admins' },
+        'feat.admins.p': {
+            da: 'Opret flere admin-brugere, så I kan dele arbejdet på stævnedagen — én ved hver bane, alle taster i samme turnering.',
+            en: 'Create several admin users and share the work on match day — one at every pitch, all entering into the same tournament.' },
+        'feat.login.h': { da: 'Sikker klub-login', en: 'Secure club login' },
+        'feat.login.p': {
+            da: 'Kun klubbens egne administratorer kan oprette turneringer og taste resultater. Tilskuere ser alt — men kan ikke ændre noget.',
+            en: "Only your club's own admins can create tournaments and enter results. Spectators see everything — but can't change anything." },
+        'start.tag': { da: 'Kom igang', en: 'Get started' },
+        'start.h2': { da: 'Klar før næste stævne', en: 'Ready before your next tournament' },
+        'start.s1.h': { da: 'Skriv til os', en: 'Write to us' },
+        'start.s1.p': {
+            da: 'Send en mail til <a href="mailto:info@footballapp.dk">info@footballapp.dk</a>, så opretter vi klubben med jeres eget subdomæne og admin-login.',
+            en: 'Send an email to <a href="mailto:info@footballapp.dk">info@footballapp.dk</a> and we\'ll set up your club with its own subdomain and admin login.' },
+        'start.s2.h': { da: 'Opret turneringen', en: 'Create the tournament' },
+        'start.s2.p': {
+            da: 'Den guidede opsætning tager jer gennem puljer, hold og cups. Tilføj logoer fra biblioteket — eller upload jeres egne.',
+            en: 'The guided setup takes you through pools, teams and cups. Add logos from the library — or upload your own.' },
+        'start.s3.h': { da: 'Spil', en: 'Play' },
+        'start.s3.p': {
+            da: 'Del scoreboard-linket, tast resultaterne fra banen, og lad stillinger og brackets køre sig selv — hele vejen til finalen.',
+            en: 'Share the scoreboard link, enter results from the pitch, and let standings and brackets run themselves — all the way to the final.' },
+        'start.selfhost': {
+            da: 'Løsningen er gratis at bruge, hvis I kører den på jeres egen server. Ønsker I fuld funktionalitet, skal I oprettes på vores centrale løsning. Vi hjælper også gerne med installation og valg af hardware — <a href="mailto:info@footballapp.dk">skriv til os</a>.',
+            en: "The solution is free to use if you run it on your own server. For full functionality, you'll need an account on our hosted service. We're also happy to help with installation and choice of hardware — <a href=\"mailto:info@footballapp.dk\">write to us</a>." },
+        'cta.h2': { da: 'Klar til næste turnering?', en: 'Ready for your next tournament?' },
+        'cta.sub': {
+            da: 'Prøv demoen med det samme — eller skriv til os, så er klubben i gang på ingen tid.',
+            en: 'Try the demo right away — or write to us, and your club will be up and running in no time.' },
+        'cta.writeUs': { da: 'Skriv til os', en: 'Write to us' },
+        'cta.mail': {
+            da: 'Spørgsmål? <a href="mailto:info@footballapp.dk">info@footballapp.dk</a>',
+            en: 'Questions? <a href="mailto:info@footballapp.dk">info@footballapp.dk</a>' },
+    };
+
+    let lang = localStorage.getItem(STORAGE_KEY);
+    const urlLang = new URLSearchParams(window.location.search).get('lang');
+    if (urlLang === 'da' || urlLang === 'en') lang = urlLang;
+    if (lang !== 'da' && lang !== 'en') lang = 'da';
+
+    function t(key) {
+        const e = M[key];
+        return e ? (e[lang] || e.da) : key;
+    }
+
+    function apply() {
+        document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+        document.querySelectorAll('[data-i18n-html]').forEach((el) => { el.innerHTML = t(el.dataset.i18nHtml); });
+        document.title = t('meta.title');
+        const desc = document.querySelector('meta[name="description"]');
+        if (desc) desc.setAttribute('content', t('meta.desc'));
+        document.documentElement.lang = lang;
+        renderSwitch();
+    }
+
+    function set(l) {
+        lang = l;
+        localStorage.setItem(STORAGE_KEY, l);
+        apply();
+    }
+
+    function renderSwitch() {
+        const host = document.getElementById('langSwitch');
+        if (!host) return;
+        host.innerHTML = '';
+        ['da', 'en'].forEach((l) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = l.toUpperCase();
+            btn.className = l === lang ? 'active' : '';
+            btn.setAttribute('aria-pressed', l === lang ? 'true' : 'false');
+            btn.addEventListener('click', () => set(l));
+            host.appendChild(btn);
+        });
+    }
+
+    apply();
+})();
+</script>
 
 </body>
 </html>

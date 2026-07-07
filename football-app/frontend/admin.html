@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="da">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#0a0e14" />
-  <title>Admin — Football Tournament</title>
+  <title>Admin — Football</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -21,8 +21,9 @@
           <div class="brand-title" id="brandTitle">Admin</div>
         </div>
         <div class="app-header-actions">
-          <a href="/" class="btn-ghost btn-sm" title="Public site">View</a>
-          <button id="logoutBtn" class="btn-ghost btn-sm">Log out</button>
+          <span id="langToggle"></span>
+          <a href="/" class="btn-ghost btn-sm" data-i18n="admin.view" data-i18n-title="admin.viewTitle" title="Offentlig side">Vis</a>
+          <button id="logoutBtn" class="btn-ghost btn-sm" data-i18n="admin.logout">Log ud</button>
         </div>
       </div>
     </header>
@@ -32,14 +33,14 @@
       <div id="view-list">
         <div class="row spread" style="margin-bottom: var(--sp-5);">
           <div>
-            <div class="eyebrow fade-in">Tournament control</div>
-            <h2 class="display-lg fade-in" style="margin: 0;">Tournaments</h2>
+            <div class="eyebrow fade-in" data-i18n="admin.control">Turneringsstyring</div>
+            <h2 class="display-lg fade-in" data-i18n="admin.tournaments" style="margin: 0;">Turneringer</h2>
           </div>
           <button id="newTournamentBtn" class="btn fade-in">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 5v14M5 12h14"/>
             </svg>
-            New tournament
+            <span data-i18n="admin.newTournament">Ny turnering</span>
           </button>
         </div>
         <div id="tournamentList" class="tournament-list"></div>
@@ -48,8 +49,8 @@
       <!-- WIZARD -->
       <div id="view-wizard" class="hidden">
         <div class="row spread" style="margin-bottom: var(--sp-4);">
-          <h2 class="display-md" style="margin: 0;">Create tournament</h2>
-          <button class="btn-ghost btn-sm" data-back="list">Cancel</button>
+          <h2 class="display-md" data-i18n="wizard.create" style="margin: 0;">Opret turnering</h2>
+          <button class="btn-ghost btn-sm" data-back="list" data-i18n="common.cancel">Annuller</button>
         </div>
 
         <div class="wizard-progress">
@@ -60,8 +61,8 @@
         </div>
 
         <div class="card" id="step-1">
-          <div class="eyebrow" style="margin-bottom: var(--sp-2);">Step 1 of 4</div>
-          <h3 class="display-md" style="margin: 0 0 var(--sp-5);">Basics</h3>
+          <div class="eyebrow" data-i18n-step="1" style="margin-bottom: var(--sp-2);">Trin 1 af 4</div>
+          <h3 class="display-md" data-i18n="wizard.basics" style="margin: 0 0 var(--sp-5);">Grundoplysninger</h3>
 
           <div class="logo-upload-row">
             <label class="logo-upload" for="wiz-logo-input">
@@ -71,25 +72,25 @@
                   <circle cx="8.5" cy="8.5" r="1.5"/>
                   <path d="M21 15l-5-5L5 21"/>
                 </svg>
-                <span>Add logo</span>
+                <span data-i18n="wizard.addLogo">Tilføj logo</span>
               </div>
               <img id="wiz-logo-preview" class="hidden" alt="" />
               <input type="file" id="wiz-logo-input" accept="image/*" />
             </label>
-            <div class="help">
-              Optional. Square images work best.<br />
-              Max 2MB. PNG, JPG, WebP, SVG.
+            <div class="help" data-i18n-html="wizard.logoHelp">
+              Valgfrit. Kvadratiske billeder fungerer bedst.<br />
+              Max 2 MB. PNG, JPG, WebP, SVG.
             </div>
           </div>
 
           <div class="field">
-            <label for="wiz-name">Tournament name</label>
-            <input type="text" id="wiz-name" placeholder="Spring Cup 2026" />
+            <label for="wiz-name" data-i18n="wizard.tournamentName">Turneringens navn</label>
+            <input type="text" id="wiz-name" data-i18n-placeholder="wizard.namePlaceholder" placeholder="Forårscup 2026" />
           </div>
 
           <div class="field-inline">
             <div>
-              <label>Pools</label>
+              <label data-i18n="wizard.pools">Puljer</label>
               <div class="input-stepper">
                 <button type="button" data-step-delta="-1" data-step-target="wiz-num-pools">−</button>
                 <input type="number" id="wiz-num-pools" min="1" max="16" value="2" />
@@ -97,7 +98,7 @@
               </div>
             </div>
             <div>
-              <label>Teams per pool</label>
+              <label data-i18n="wizard.teamsPerPool">Hold pr. pulje</label>
               <div class="input-stepper">
                 <button type="button" data-step-delta="-1" data-step-target="wiz-teams-per-pool">−</button>
                 <input type="number" id="wiz-teams-per-pool" min="2" max="16" value="4" />
@@ -107,69 +108,68 @@
           </div>
 
           <div class="divider"></div>
-          <div class="eyebrow" style="margin-bottom: var(--sp-2);">Scoring</div>
+          <div class="eyebrow" data-i18n="wizard.scoring" style="margin-bottom: var(--sp-2);">Point</div>
           <div class="field-inline">
             <div>
-              <label>Win</label>
+              <label data-i18n="wizard.win">Sejr</label>
               <input type="number" id="wiz-pw" value="3" />
             </div>
             <div>
-              <label>Draw</label>
+              <label data-i18n="wizard.draw">Uafgjort</label>
               <input type="number" id="wiz-pd" value="1" />
             </div>
             <div>
-              <label>Loss</label>
+              <label data-i18n="wizard.loss">Nederlag</label>
               <input type="number" id="wiz-pl" value="0" />
             </div>
           </div>
 
           <div class="wizard-nav">
             <div></div>
-            <button class="btn" data-next="2">Next →</button>
+            <button class="btn" data-next="2" data-i18n="wizard.next">Næste →</button>
           </div>
         </div>
 
         <div class="card hidden" id="step-2">
-          <div class="eyebrow" style="margin-bottom: var(--sp-2);">Step 2 of 4</div>
-          <h3 class="display-md" style="margin: 0 0 var(--sp-3);">Pools & teams</h3>
-          <p class="muted" style="margin: 0 0 var(--sp-4); font-size: 14px;">
-            Enter team names for each pool. You can upload team logos later.
+          <div class="eyebrow" data-i18n-step="2" style="margin-bottom: var(--sp-2);">Trin 2 af 4</div>
+          <h3 class="display-md" data-i18n="wizard.poolsTeams" style="margin: 0 0 var(--sp-3);">Puljer og hold</h3>
+          <p class="muted" data-i18n="wizard.poolsTeamsHint" style="margin: 0 0 var(--sp-4); font-size: 14px;">
+            Skriv holdnavne for hver pulje. I kan tilføje holdlogoer senere.
           </p>
           <div id="pools-builder" class="pools-builder"></div>
           <div class="wizard-nav">
-            <button class="btn btn-secondary" data-prev="1">← Back</button>
-            <button class="btn" data-next="3">Next →</button>
+            <button class="btn btn-secondary" data-prev="1" data-i18n="wizard.prev">← Tilbage</button>
+            <button class="btn" data-next="3" data-i18n="wizard.next">Næste →</button>
           </div>
         </div>
 
         <div class="card hidden" id="step-3">
-          <div class="eyebrow" style="margin-bottom: var(--sp-2);">Step 3 of 4</div>
-          <h3 class="display-md" style="margin: 0 0 var(--sp-3);">Cup setup</h3>
-          <p class="muted" style="margin: 0 0 var(--sp-4); font-size: 14px;">
-            Define which pool placements feed each cup. E.g. with 2 pools of 4:
-            place 1+2 from each pool in "Championship Cup", and 3+4 in "Plate Cup".
+          <div class="eyebrow" data-i18n-step="3" style="margin-bottom: var(--sp-2);">Trin 3 af 4</div>
+          <h3 class="display-md" data-i18n="wizard.cupSetup" style="margin: 0 0 var(--sp-3);">Cup-opsætning</h3>
+          <p class="muted" data-i18n="wizard.cupSetupHint" style="margin: 0 0 var(--sp-4); font-size: 14px;">
+            Vælg hvilke puljeplaceringer der går i hvilken cup. Fx med 2 puljer à 4 hold: nr. 1+2 fra hver pulje i "A-Cup" og nr. 3+4 i "B-Cup".
           </p>
           <div id="cups-builder"></div>
           <button class="btn btn-secondary btn-sm" id="addCupBtn" style="margin-top: var(--sp-3);">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 5v14M5 12h14"/>
             </svg>
-            Add cup
+            <span data-i18n="wizard.addCup">Tilføj cup</span>
           </button>
           <div class="wizard-nav">
-            <button class="btn btn-secondary" data-prev="2">← Back</button>
-            <button class="btn" data-next="4">Next →</button>
+            <button class="btn btn-secondary" data-prev="2" data-i18n="wizard.prev">← Tilbage</button>
+            <button class="btn" data-next="4" data-i18n="wizard.next">Næste →</button>
           </div>
         </div>
 
         <div class="card hidden" id="step-4">
-          <div class="eyebrow" style="margin-bottom: var(--sp-2);">Step 4 of 4</div>
-          <h3 class="display-md" style="margin: 0 0 var(--sp-4);">Review &amp; create</h3>
+          <div class="eyebrow" data-i18n-step="4" style="margin-bottom: var(--sp-2);">Trin 4 af 4</div>
+          <h3 class="display-md" data-i18n="wizard.review" style="margin: 0 0 var(--sp-4);">Gennemse og opret</h3>
           <div id="review-summary" class="review-summary"></div>
           <div id="createError" class="alert hidden"></div>
           <div class="wizard-nav">
-            <button class="btn btn-secondary" data-prev="3">← Back</button>
-            <button class="btn" id="createTournamentBtn">Create tournament</button>
+            <button class="btn btn-secondary" data-prev="3" data-i18n="wizard.prev">← Tilbage</button>
+            <button class="btn" id="createTournamentBtn" data-i18n="wizard.create">Opret turnering</button>
           </div>
         </div>
       </div>
@@ -181,9 +181,9 @@
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 12H5M12 19l-7-7 7-7"/>
             </svg>
-            All tournaments
+            <span data-i18n="admin.allTournaments">Alle turneringer</span>
           </button>
-          <button class="btn-ghost btn-sm" id="deleteTournamentBtn" style="color: var(--live);">Delete</button>
+          <button class="btn-ghost btn-sm" id="deleteTournamentBtn" data-i18n="common.delete" style="color: var(--live);">Slet</button>
         </div>
 
         <div id="detail-hero" class="tournament-hero fade-in"></div>
@@ -191,7 +191,7 @@
         <div id="detail-pools" class="fade-in"></div>
 
         <div id="detail-cups-section" class="hidden">
-          <div class="eyebrow" style="margin: var(--sp-7) 0 var(--sp-3);">Cup stage</div>
+          <div class="eyebrow" data-i18n="public.cupStage" style="margin: var(--sp-7) 0 var(--sp-3);">Cup-fase</div>
           <div id="detail-cups"></div>
         </div>
       </div>
@@ -202,47 +202,48 @@
   <div id="logoPickerModal" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:9999; display:flex; align-items:center; justify-content:center; padding:20px;">
     <div style="background:#1a1a2e; border-radius:12px; max-width:760px; width:100%; max-height:88vh; display:flex; flex-direction:column; overflow:hidden;">
       <div style="padding:16px 20px; display:flex; align-items:center; gap:12px; border-bottom:1px solid rgba(255,255,255,0.08);">
-        <h3 style="margin:0; flex:1; color:#eaeaea;">Vælg Logo</h3>
-        <button id="logoPickerClose" class="btn-ghost btn-sm" type="button">Luk</button>
+        <h3 data-i18n="logo.choose" style="margin:0; flex:1; color:#eaeaea;">Vælg logo</h3>
+        <button id="logoPickerClose" class="btn-ghost btn-sm" type="button" data-i18n="common.close">Luk</button>
       </div>
 
       <div style="padding:14px 20px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-        <input type="text" id="logoPickerSearch" placeholder="Søg logoer..."
+        <input type="text" id="logoPickerSearch" data-i18n-placeholder="logo.search" placeholder="Søg logoer..."
                style="flex:1; min-width:200px; padding:9px 12px; background:#0f1117; border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#eaeaea; font-size:0.95em;">
         <select id="logoPickerKind"
                 style="padding:9px 12px; background:#0f1117; border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#eaeaea; font-size:0.9em;">
-          <option value="">Alle typer</option>
-          <option value="club">Klub-logoer</option>
-          <option value="flag">Landeflag</option>
-          <option value="sponsor">Sponsorer</option>
+          <option value="" data-i18n="logo.allTypes">Alle typer</option>
+          <option value="club" data-i18n="logo.kindClub">Klublogoer</option>
+          <option value="flag" data-i18n="logo.kindFlag">Landeflag</option>
+          <option value="sponsor" data-i18n="logo.kindSponsor">Sponsorer</option>
         </select>
-        <button id="logoPickerUploadToggle" class="btn-sm" type="button"
+        <button id="logoPickerUploadToggle" class="btn-sm" type="button" data-i18n="logo.uploadNew"
                 style="background:#e94560; color:#fff; border:none; padding:9px 14px; border-radius:6px; cursor:pointer; font-size:0.9em;">+ Upload nyt</button>
       </div>
 
       <!-- Upload-form (skjult som default, toggles via knap) -->
       <div id="logoPickerUploadForm" class="hidden" style="padding:14px 20px; background:rgba(233,69,96,0.05); border-bottom:1px solid rgba(255,255,255,0.05); display:flex; gap:10px; flex-wrap:wrap; align-items:end;">
         <div style="flex:1; min-width:160px;">
-          <label style="display:block; font-size:0.78em; color:rgba(255,255,255,0.6); margin-bottom:5px;">Navn (søgbart)</label>
-          <input type="text" id="logoPickerUploadName" placeholder="fx Lyngby BK"
+          <label data-i18n="logo.uploadName" style="display:block; font-size:0.78em; color:rgba(255,255,255,0.6); margin-bottom:5px;">Navn (søgbart)</label>
+          <input type="text" id="logoPickerUploadName" data-i18n-placeholder="logo.uploadNamePlaceholder" placeholder="fx Lyngby BK"
                  style="width:100%; box-sizing:border-box; padding:8px 10px; background:#0f1117; border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#eaeaea; font-size:0.9em;">
         </div>
         <div>
-          <label style="display:block; font-size:0.78em; color:rgba(255,255,255,0.6); margin-bottom:5px;">Fil</label>
+          <label data-i18n="logo.uploadFile" style="display:block; font-size:0.78em; color:rgba(255,255,255,0.6); margin-bottom:5px;">Fil</label>
           <input type="file" id="logoPickerUploadFile" accept="image/*"
                  style="color:#eaeaea; font-size:0.85em;">
         </div>
-        <button id="logoPickerUploadBtn" class="btn-sm" type="button"
+        <button id="logoPickerUploadBtn" class="btn-sm" type="button" data-i18n="common.upload"
                 style="background:#4CAF50; color:#fff; border:none; padding:9px 14px; border-radius:6px; cursor:pointer; font-size:0.9em;">Upload</button>
         <div id="logoPickerUploadMsg" style="width:100%; font-size:0.85em;"></div>
       </div>
 
       <div id="logoPickerGrid" style="flex:1; overflow-y:auto; padding:16px 20px; display:grid; grid-template-columns:repeat(auto-fill, minmax(110px, 1fr)); gap:10px;">
-        <div style="color:rgba(255,255,255,0.5); padding:30px; text-align:center; grid-column:1/-1;">Indlæser...</div>
+        <div data-i18n="common.loading" style="color:rgba(255,255,255,0.5); padding:30px; text-align:center; grid-column:1/-1;">Indlæser...</div>
       </div>
     </div>
   </div>
 
+  <script src="/i18n.js"></script>
   <script src="/admin.js"></script>
 </body>
 </html>

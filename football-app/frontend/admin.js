@@ -3,6 +3,13 @@
   const token = localStorage.getItem(TOKEN_KEY);
   if (!token) { window.location.href = '/login.html'; return; }
 
+  const tr = window.FI18N.t;
+  const ordinal = window.FI18N.ordinal;
+
+  function statusLabel(status) {
+    return tr('status.' + status);
+  }
+
   const state = {
     wizard: emptyWizard(),
     pendingLogoFile: null,
@@ -87,12 +94,6 @@
     return `<div class="logo"><span class="initial">${escapeHtml(initial(t && t.name))}</span></div>`;
   }
 
-  function ordinal(n) {
-    const s = ['th','st','nd','rd'];
-    const v = n % 100;
-    return n + (s[(v - 20) % 10] || s[v] || s[0]);
-  }
-
   /* ============= LIST ============= */
 
   async function loadList() {
@@ -109,8 +110,8 @@
                 <path d="M12 2 L14.5 9 L22 9 L16 13.5 L18.5 21 L12 16.5 L5.5 21 L8 13.5 L2 9 L9.5 9 Z"/>
               </svg>
             </div>
-            <h3>No tournaments yet</h3>
-            <p>Tap "New tournament" to create your first one.</p>
+            <h3>${tr('admin.noTournaments')}</h3>
+            <p>${tr('admin.noTournamentsHint')}</p>
           </div>`;
         return;
       }
@@ -119,8 +120,8 @@
           ${tournamentLogoHtml(t)}
           <div class="info">
             <div class="name">${escapeHtml(t.name)}</div>
-            <div class="meta">${t.num_pools} pools · ${t.teams_per_pool} teams per pool</div>
-            <span class="pill pill-${t.status}">${t.status.replace('_', ' ')}</span>
+            <div class="meta">${tr('public.meta', { pools: t.num_pools, teams: t.teams_per_pool })}</div>
+            <span class="pill pill-${t.status}">${statusLabel(t.status)}</span>
           </div>
         </button>
       `).join('');
@@ -172,7 +173,7 @@
     state.wizard.pd = parseInt(document.getElementById('wiz-pd').value, 10);
     state.wizard.pl = parseInt(document.getElementById('wiz-pl').value, 10);
     if (!state.wizard.name) {
-      alert('Please enter a tournament name');
+      alert(tr('wizard.nameRequired'));
       return false;
     }
     const existingPools = state.wizard.pools;
@@ -185,7 +186,7 @@
         teams.push(oldTeams[j] || { name: '' });
       }
       state.wizard.pools.push({
-        name: old.name || ('Pool ' + String.fromCharCode(65 + i)),
+        name: old.name || (tr('wizard.defaultPoolPrefix') + String.fromCharCode(65 + i)),
         teams,
       });
     }
@@ -198,7 +199,7 @@
       <div class="pool-builder-card">
         <input type="text" class="pool-name-input" data-pool-name="${pi}" value="${escapeHtml(p.name)}" />
         ${p.teams.map((t, ti) => `
-          <input type="text" class="team-input" data-team="${pi}-${ti}" placeholder="Team ${ti + 1}" value="${escapeHtml(t.name)}" />
+          <input type="text" class="team-input" data-team="${pi}-${ti}" placeholder="${tr('wizard.teamPlaceholder', { n: ti + 1 })}" value="${escapeHtml(t.name)}" />
         `).join('')}
       </div>
     `).join('');
@@ -222,11 +223,11 @@
       for (let i = 1; i <= state.wizard.teamsPerPool; i += 1) placements.push(i);
       const half = Math.ceil(placements.length / 2);
       state.wizard.cups = [
-        { name: 'Championship Cup', source_placements: placements.slice(0, half) },
+        { name: tr('wizard.defaultCupA'), source_placements: placements.slice(0, half) },
       ];
       if (placements.length > half) {
         state.wizard.cups.push({
-          name: 'Plate Cup',
+          name: tr('wizard.defaultCupB'),
           source_placements: placements.slice(half),
         });
       }
@@ -249,7 +250,7 @@
             </svg>
           </button>
         </div>
-        <div class="label">Pool placements feeding this cup</div>
+        <div class="label">${tr('wizard.placementsLabel')}</div>
         <div class="placement-chips">
           ${placements.map((pl) => `
             <span class="placement-chip ${c.source_placements.includes(pl) ? 'selected' : ''}"
@@ -257,7 +258,7 @@
           `).join('')}
         </div>
         <div class="muted" style="margin-top: var(--sp-3); font-size: 13px;">
-          ${c.source_placements.length * state.wizard.numPools} teams will enter this cup
+          ${tr('wizard.teamsWillEnter', { n: c.source_placements.length * state.wizard.numPools })}
         </div>
       </div>
     `).join('');
@@ -290,19 +291,19 @@
     const w = state.wizard;
     const totalTeams = w.numPools * w.teamsPerPool;
     document.getElementById('review-summary').innerHTML = `
-      <p><strong>${escapeHtml(w.name)}</strong> · ${w.numPools} pools × ${w.teamsPerPool} teams (${totalTeams} total)</p>
-      <p class="muted" style="font-size: 13px;">Scoring: ${w.pw} / ${w.pd} / ${w.pl} (Win / Draw / Loss)</p>
-      <h4>Pools</h4>
+      <p><strong>${escapeHtml(w.name)}</strong> · ${tr('wizard.reviewMeta', { pools: w.numPools, teams: w.teamsPerPool, total: totalTeams })}</p>
+      <p class="muted" style="font-size: 13px;">${tr('wizard.reviewScoring', { pw: w.pw, pd: w.pd, pl: w.pl })}</p>
+      <h4>${tr('wizard.reviewPools')}</h4>
       <ul>
         ${w.pools.map((p) => `
-          <li><strong>${escapeHtml(p.name)}</strong> — ${p.teams.map((t) => escapeHtml(t.name || '(unnamed)')).join(', ')}</li>
+          <li><strong>${escapeHtml(p.name)}</strong> — ${p.teams.map((t) => escapeHtml(t.name || tr('wizard.unnamed'))).join(', ')}</li>
         `).join('')}
       </ul>
-      <h4>Cups</h4>
-      ${w.cups.length === 0 ? '<p class="muted">No cups configured.</p>' : `
+      <h4>${tr('wizard.reviewCups')}</h4>
+      ${w.cups.length === 0 ? '<p class="muted">' + tr('wizard.noCups') + '</p>' : `
         <ul>
           ${w.cups.map((c) => `
-            <li><strong>${escapeHtml(c.name)}</strong> — placements ${c.source_placements.map(ordinal).join(', ')} → ${c.source_placements.length * w.numPools} teams</li>
+            <li><strong>${escapeHtml(c.name)}</strong> — ${tr('wizard.reviewCupLine', { placements: c.source_placements.map(ordinal).join(', '), n: c.source_placements.length * w.numPools })}</li>
           `).join('')}
         </ul>
       `}
@@ -317,7 +318,7 @@
       points_win: w.pw, points_draw: w.pd, points_loss: w.pl,
       pools: w.pools.map((p) => ({
         name: p.name,
-        teams: p.teams.map((t) => ({ name: t.name || 'Team' })),
+        teams: p.teams.map((t) => ({ name: t.name || tr('wizard.defaultTeamName') })),
       })),
       cups: w.cups,
     };
@@ -378,14 +379,14 @@
       renderPoolsDetail(detail, standings);
       renderCupsDetail(cups);
     } catch (err) {
-      if (!silent) alert('Failed to load: ' + err.message);
+      if (!silent) alert(tr('admin.loadFailed', { msg: err.message }));
     }
   }
 
   function renderHero(t) {
     const hero = document.getElementById('detail-hero');
     hero.innerHTML = `
-      <button class="logo-upload" id="hero-logo-pick" type="button" style="width: 72px; height: 72px;" title="Vælg tournament logo">
+      <button class="logo-upload" id="hero-logo-pick" type="button" style="width: 72px; height: 72px;" title="${tr('logo.chooseTournament')}">
         ${t.logo_path
           ? `<img src="${logoUrl(t.logo_path)}" alt="" />`
           : `<div class="placeholder">
@@ -398,7 +399,7 @@
       </button>
       <div class="info">
         <h1 class="name">${escapeHtml(t.name)}</h1>
-        <span class="pill pill-${t.status}">${t.status.replace('_', ' ')}</span>
+        <span class="pill pill-${t.status}">${statusLabel(t.status)}</span>
       </div>
     `;
     document.getElementById('brandTitle').textContent = (state.club ? state.club.name + ' — ' : '') + t.name;
@@ -410,14 +411,14 @@
   function renderPoolsDetail(detail, standingsData) {
     const container = document.getElementById('detail-pools');
     container.innerHTML = `
-      <div class="eyebrow" style="margin-bottom: var(--sp-3);">Pool stage</div>
+      <div class="eyebrow" style="margin-bottom: var(--sp-3);">${tr('public.poolStage')}</div>
       ${standingsData.map((s) => {
         const teamsById = new Map(detail.teams.filter((t) => t.pool_id === s.pool.id).map((t) => [t.id, t]));
         return `
           <div class="pool-block">
             <div class="pool-head">
               <div class="pool-name">${escapeHtml(s.pool.name)}</div>
-              ${s.all_played ? '<span class="pill pill-completed">Completed</span>' : ''}
+              ${s.all_played ? '<span class="pill pill-completed">' + tr('status.completed') + '</span>' : ''}
             </div>
             <div class="standings">
               ${s.standings.map((r) => {
@@ -426,12 +427,12 @@
                   <div class="standing-row">
                     <div class="pos">${r.position}</div>
                     <div class="team">
-                      <button class="logo-upload" type="button" data-team-pick="${r.team_id}" style="width: 28px; height: 28px; border-radius: var(--r-sm); border-style: solid;" title="Vælg team logo">
+                      <button class="logo-upload" type="button" data-team-pick="${r.team_id}" style="width: 28px; height: 28px; border-radius: var(--r-sm); border-style: solid;" title="${tr('logo.chooseTeam')}">
                         ${teamLogoBareHtml(team)}
                       </button>
                       <span class="team-name">${escapeHtml(team ? team.name : '')}</span>
                     </div>
-                    <div class="stats">P${r.played}·W${r.wins}·D${r.draws}·L${r.losses}·GD ${r.goal_diff > 0 ? '+' + r.goal_diff : r.goal_diff}</div>
+                    <div class="stats">${tr('public.statsCompact', { p: r.played, w: r.wins, d: r.draws, l: r.losses, gd: r.goal_diff > 0 ? '+' + r.goal_diff : r.goal_diff })}</div>
                     <div class="pts">${r.points}</div>
                   </div>
                 `;
@@ -482,8 +483,8 @@
           <input type="number" min="0" maxlength="2" inputmode="numeric" class="score-input" data-input-away="${type}-${m.id}" value="${awayScore}" ${enabled ? '' : 'disabled'} />
         </div>
         <div class="me-actions">
-          <button class="btn btn-sm" data-save-match="${m.id}" data-match-type="${type}" ${enabled ? '' : 'disabled'}>Save</button>
-          ${m.played ? `<button class="btn btn-secondary btn-sm" data-clear-match="${m.id}" data-match-type="${type}">Clear</button>` : ''}
+          <button class="btn btn-sm" data-save-match="${m.id}" data-match-type="${type}" ${enabled ? '' : 'disabled'}>${tr('common.save')}</button>
+          ${m.played ? `<button class="btn btn-secondary btn-sm" data-clear-match="${m.id}" data-match-type="${type}">${tr('common.clear')}</button>` : ''}
         </div>
       </div>
     `;
@@ -504,7 +505,7 @@
     const home = parseInt(hEl.value, 10);
     const away = parseInt(aEl.value, 10);
     if (!Number.isInteger(home) || !Number.isInteger(away) || home < 0 || away < 0) {
-      alert('Enter valid non-negative scores');
+      alert(tr('match.invalidScores'));
       return;
     }
     const url = type === 'cup' ? '/api/cup-matches/' + matchId : '/api/pool-matches/' + matchId;
@@ -512,7 +513,7 @@
       await api(url, { method: 'PUT', body: { home_score: home, away_score: away } });
       refreshDetail();
     } catch (err) {
-      alert('Save failed: ' + err.message);
+      alert(tr('match.saveFailed', { msg: err.message }));
     }
   }
 
@@ -522,7 +523,7 @@
       await api(url, { method: 'PUT', body: { clear: true } });
       refreshDetail();
     } catch (err) {
-      alert('Clear failed: ' + err.message);
+      alert(tr('match.clearFailed', { msg: err.message }));
     }
   }
 
@@ -562,17 +563,17 @@
       <div class="bracket-match ${m.played ? 'played' : ''}">
         <div class="bracket-team ${homeCls}">
           ${teamLogoHtml(home)}
-          <span class="name">${home ? escapeHtml(home.name) : '<span class="dim">TBD</span>'}</span>
+          <span class="name">${home ? escapeHtml(home.name) : '<span class="dim">' + tr('common.tbd') + '</span>'}</span>
           <input type="number" min="0" inputmode="numeric" class="score-input" style="width: 44px; height: 36px; font-size: 16px;" data-input-home="cup-${m.id}" value="${m.home_score == null ? '' : m.home_score}" ${enabled ? '' : 'disabled'} />
         </div>
         <div class="bracket-team ${awayCls}">
           ${teamLogoHtml(away)}
-          <span class="name">${away ? escapeHtml(away.name) : '<span class="dim">TBD</span>'}</span>
+          <span class="name">${away ? escapeHtml(away.name) : '<span class="dim">' + tr('common.tbd') + '</span>'}</span>
           <input type="number" min="0" inputmode="numeric" class="score-input" style="width: 44px; height: 36px; font-size: 16px;" data-input-away="cup-${m.id}" value="${m.away_score == null ? '' : m.away_score}" ${enabled ? '' : 'disabled'} />
         </div>
         <div class="bracket-actions">
-          <button class="btn btn-sm" data-save-match="${m.id}" data-match-type="cup" ${enabled ? '' : 'disabled'}>Save</button>
-          ${m.played ? `<button class="btn btn-secondary btn-sm" data-clear-match="${m.id}" data-match-type="cup">Clear</button>` : ''}
+          <button class="btn btn-sm" data-save-match="${m.id}" data-match-type="cup" ${enabled ? '' : 'disabled'}>${tr('common.save')}</button>
+          ${m.played ? `<button class="btn btn-secondary btn-sm" data-clear-match="${m.id}" data-match-type="cup">${tr('common.clear')}</button>` : ''}
         </div>
       </div>
     `;
@@ -590,10 +591,10 @@
 
   function roundName(idx, total) {
     const remaining = total - idx;
-    if (remaining === 1) return 'Final';
-    if (remaining === 2) return 'Semifinal';
-    if (remaining === 3) return 'Quarterfinal';
-    return 'Round ' + (idx + 1);
+    if (remaining === 1) return tr('round.final');
+    if (remaining === 2) return tr('round.semifinal');
+    if (remaining === 3) return tr('round.quarterfinal');
+    return tr('round.n', { n: idx + 1 });
   }
 
   /* ============= INIT ============= */
@@ -639,12 +640,12 @@
   document.getElementById('createTournamentBtn').addEventListener('click', createTournament);
 
   document.getElementById('deleteTournamentBtn').addEventListener('click', async () => {
-    if (!confirm('Delete this tournament? This cannot be undone.')) return;
+    if (!confirm(tr('admin.confirmDelete'))) return;
     try {
       await api('/api/tournaments/' + state.currentTournamentId, { method: 'DELETE' });
       loadList();
     } catch (err) {
-      alert('Delete failed: ' + err.message);
+      alert(tr('admin.deleteFailed', { msg: err.message }));
     }
   });
 
@@ -737,13 +738,13 @@
       const logos = await res.json();
       renderLogoPickerGrid(logos);
     } catch (err) {
-      logoPicker.grid.innerHTML = `<div style="color:#f0867a; padding:30px; text-align:center; grid-column:1/-1;">Fejl: ${escapeHtml(err.message)}</div>`;
+      logoPicker.grid.innerHTML = `<div style="color:#f0867a; padding:30px; text-align:center; grid-column:1/-1;">${tr('common.error')}: ${escapeHtml(err.message)}</div>`;
     }
   }
 
   function renderLogoPickerGrid(logos) {
     if (!logos || logos.length === 0) {
-      logoPicker.grid.innerHTML = '<div style="color:rgba(255,255,255,0.5); padding:30px; text-align:center; grid-column:1/-1;">Ingen logoer fundet</div>';
+      logoPicker.grid.innerHTML = '<div style="color:rgba(255,255,255,0.5); padding:30px; text-align:center; grid-column:1/-1;">' + tr('logo.none') + '</div>';
       return;
     }
     logoPicker.grid.innerHTML = logos.map(l => `
@@ -753,7 +754,7 @@
           <img src="/api/uploads/${escapeHtml(l.url)}" alt="${escapeHtml(l.name)}" style="max-width:100%; max-height:100%; object-fit:contain;">
         </div>
         <div style="font-size:0.75em; color:#eaeaea; text-align:center; word-break:break-word; line-height:1.2;">${escapeHtml(l.name)}</div>
-        ${l.club_id === null ? '<span style="font-size:0.65em; color:rgba(255,255,255,0.4);">Global</span>' : ''}
+        ${l.club_id === null ? '<span style="font-size:0.65em; color:rgba(255,255,255,0.4);">' + tr('logo.global') + '</span>' : ''}
       </button>
     `).join('');
 
@@ -772,11 +773,11 @@
     const msg = document.getElementById('logoPickerUploadMsg');
     if (!name || !file) {
       msg.style.color = '#f0867a';
-      msg.textContent = 'Udfyld navn og vælg en fil';
+      msg.textContent = tr('logo.fillNameAndFile');
       return;
     }
     msg.style.color = 'rgba(255,255,255,0.6)';
-    msg.textContent = 'Uploader...';
+    msg.textContent = tr('logo.uploading');
 
     const fd = new FormData();
     fd.append('name', name);
@@ -794,12 +795,12 @@
       }
       const uploaded = await res.json();
       msg.style.color = '#90df93';
-      msg.textContent = '✓ Logo tilføjet til biblioteket';
+      msg.textContent = tr('logo.added');
       // Auto-pick det netop uploadede logo
       setTimeout(() => closeLogoPicker(uploaded.url), 400);
     } catch (err) {
       msg.style.color = '#f0867a';
-      msg.textContent = 'Fejl: ' + err.message;
+      msg.textContent = tr('common.error') + ': ' + err.message;
     }
   }
 
@@ -816,9 +817,25 @@
       if (kind === 'tournament' && state.currentTournamentId) refreshDetail();
       else if (kind === 'team') refreshDetail();
     } catch (err) {
-      alert('Logo-tildeling fejlede: ' + err.message);
+      alert(tr('logo.assignFailed', { msg: err.message }));
     }
   }
+
+  // Re-render den aktive visning når sproget skiftes
+  window.FI18N.onChange(() => {
+    const wizardVisible = !document.getElementById('view-wizard').classList.contains('hidden');
+    const detailVisible = !document.getElementById('view-detail').classList.contains('hidden');
+    if (wizardVisible) {
+      const step = state.wizard.step;
+      if (step === 2) buildPoolsStep();
+      if (step === 3) renderCupsBuilder();
+      if (step === 4) buildReviewStep();
+    } else if (detailVisible) {
+      refreshDetail({ silent: true });
+    } else {
+      loadList();
+    }
+  });
 
   // Bootstrap: hent klub-kontekst først så header viser klubnavnet
   (async () => {
