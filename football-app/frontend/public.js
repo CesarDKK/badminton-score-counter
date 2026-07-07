@@ -1,5 +1,10 @@
 (function () {
   const POLL_MS = 5000;
+  const tr = window.FI18N.t;
+
+  function statusLabel(status) {
+    return tr('status.' + status);
+  }
   const state = { view: 'list', tournamentId: null, pollHandle: null, autoOpened: false, club: null };
 
   async function api(path) {
@@ -88,8 +93,8 @@
                 <path d="M12 2 L14.5 9 L22 9 L16 13.5 L18.5 21 L12 16.5 L5.5 21 L8 13.5 L2 9 L9.5 9 Z"/>
               </svg>
             </div>
-            <h3>No tournaments yet</h3>
-            <p>Tournaments will appear here once they're created.</p>
+            <h3>${tr('public.noTournaments')}</h3>
+            <p>${tr('public.noTournamentsHint')}</p>
           </div>`;
         return;
       }
@@ -98,8 +103,8 @@
           ${tournamentLogoHtml(t)}
           <div class="info">
             <div class="name">${escapeHtml(t.name)}</div>
-            <div class="meta">${t.num_pools} pools · ${t.teams_per_pool} teams per pool</div>
-            <span class="pill pill-${t.status}">${t.status.replace('_', ' ')}</span>
+            <div class="meta">${tr('public.meta', { pools: t.num_pools, teams: t.teams_per_pool })}</div>
+            <span class="pill pill-${t.status}">${statusLabel(t.status)}</span>
           </div>
         </button>
       `).join('');
@@ -148,7 +153,7 @@
       ${tournamentLogoHtml(t)}
       <div class="info">
         <h1 class="name">${escapeHtml(t.name)}</h1>
-        <span class="pill pill-${t.status}">${t.status.replace('_', ' ')}</span>
+        <span class="pill pill-${t.status}">${statusLabel(t.status)}</span>
       </div>
     `;
     document.getElementById('brandTitle').textContent = t.name;
@@ -158,14 +163,14 @@
     const container = document.getElementById('detail-pools');
     const qualifyingPlacements = computeQualifyingPlacements(detail);
     container.innerHTML = `
-      <div class="eyebrow" style="margin-bottom: var(--sp-3);">Pool stage</div>
+      <div class="eyebrow" style="margin-bottom: var(--sp-3);">${tr('public.poolStage')}</div>
       ${standingsData.map((s) => {
         const teamsById = new Map(detail.teams.filter((t) => t.pool_id === s.pool.id).map((t) => [t.id, t]));
         return `
           <div class="pool-block">
             <div class="pool-head">
               <div class="pool-name">${escapeHtml(s.pool.name)}</div>
-              ${s.all_played ? '<span class="pill pill-completed">Completed</span>' : ''}
+              ${s.all_played ? '<span class="pill pill-completed">' + tr('status.completed') + '</span>' : ''}
             </div>
             <div class="standings">
               ${s.standings.map((r) => {
@@ -178,7 +183,7 @@
                       ${teamLogoHtml(team)}
                       <span class="team-name">${escapeHtml(team ? team.name : '')}</span>
                     </div>
-                    <div class="stats">P${r.played} · W${r.wins} · D${r.draws} · L${r.losses} · GD ${r.goal_diff > 0 ? '+' + r.goal_diff : r.goal_diff}</div>
+                    <div class="stats">${tr('public.stats', { p: r.played, w: r.wins, d: r.draws, l: r.losses, gd: r.goal_diff > 0 ? '+' + r.goal_diff : r.goal_diff })}</div>
                     <div class="pts">${r.points}</div>
                   </div>
                 `;
@@ -223,7 +228,7 @@
           ${teamLogoHtml(home)}
           <span class="name">${escapeHtml(home ? home.name : '')}</span>
         </div>
-        <div class="match-vs">vs</div>
+        <div class="match-vs">${tr('common.vs')}</div>
         <div class="mp-team-line">
           ${teamLogoHtml(away)}
           <span class="name">${escapeHtml(away ? away.name : '')}</span>
@@ -281,10 +286,10 @@
 
   function roundName(idx, total) {
     const remaining = total - idx;
-    if (remaining === 1) return 'Final';
-    if (remaining === 2) return 'Semifinal';
-    if (remaining === 3) return 'Quarterfinal';
-    return 'Round ' + (idx + 1);
+    if (remaining === 1) return tr('round.final');
+    if (remaining === 2) return tr('round.semifinal');
+    if (remaining === 3) return tr('round.quarterfinal');
+    return tr('round.n', { n: idx + 1 });
   }
 
   function renderBracketMatch(m) {
@@ -298,12 +303,12 @@
       <div class="bracket-match ${m.played ? 'played' : ''}">
         <div class="bracket-team ${homeCls}">
           ${teamLogoHtml(home)}
-          <span class="name">${home ? escapeHtml(home.name) : '<span class="dim">TBD</span>'}</span>
+          <span class="name">${home ? escapeHtml(home.name) : '<span class="dim">' + tr('common.tbd') + '</span>'}</span>
           <span class="score">${m.home_score == null ? '' : m.home_score}</span>
         </div>
         <div class="bracket-team ${awayCls}">
           ${teamLogoHtml(away)}
-          <span class="name">${away ? escapeHtml(away.name) : '<span class="dim">TBD</span>'}</span>
+          <span class="name">${away ? escapeHtml(away.name) : '<span class="dim">' + tr('common.tbd') + '</span>'}</span>
           <span class="score">${m.away_score == null ? '' : m.away_score}</span>
         </div>
       </div>
@@ -312,6 +317,12 @@
 
   document.querySelectorAll('[data-back="list"]').forEach((el) => {
     el.addEventListener('click', loadList);
+  });
+
+  // Re-render den aktive visning når sproget skiftes
+  window.FI18N.onChange(() => {
+    if (state.view === 'detail') refreshDetail({ silent: true });
+    else if (state.view === 'list') loadList();
   });
 
   // Bootstrap: hent klub-kontekst først, så loadList kan reagere på apex vs klub
