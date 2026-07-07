@@ -8,10 +8,31 @@ const { requireClub } = require('../middleware/tenant');
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || '/app/uploads';
 
+// TheSportsDB — gratis test-nøgle '123' virker for klubsøgning (30 kald/min).
+// Sæt THESPORTSDB_KEY i miljøet for at bruge en premium-nøgle.
+const THESPORTSDB_KEY = process.env.THESPORTSDB_KEY || '123';
+const THESPORTSDB_HOST_SUFFIX = 'thesportsdb.com';
+
 function clubLogosLibDir(clubId) {
   const dir = path.join(UPLOAD_DIR, 'clubs', String(clubId), 'logos-library');
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return dir;
+}
+
+const CONTENT_TYPE_EXT = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/webp': '.webp',
+  'image/svg+xml': '.svg',
+  'image/gif': '.gif',
+};
+
+function slugify(s) {
+  return (s || 'logo')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .substring(0, 40) || 'logo';
 }
 
 const storage = multer.diskStorage({
@@ -71,6 +92,81 @@ router.get('/', requireClub, async (req, res) => {
   } catch (err) {
     console.error('list logos', err);
     res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// GET /api/logos/search-external?q=<navn> — søg klubber i TheSportsDB.
+// Returnerer forenklede resultater (kun fodbold, kun med badge). Selve
+// billedet importeres først når brugeren vælger et resultat.
+router.get('/search-external', requireClub, requireAdmin, async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (q.length < 2) return res.json([]);
+  try {
+    const url = `https://www.thesportsdb.com/api/v1/json/${THESPORTSDB_KEY}/searchteams.php?t=${encodeURIComponent(q)}`;
+    const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!resp.ok) throw new Error('TheSportsDB HTTP ' + resp.status);
+    const data = await resp.json();
+    const teams = Array.isArray(data.teams) ? data.teams : [];
+    const results = teams
+      .filter((t) => t.strSport === 'Soccer' && t.strBadge)
+      .slice(0, 24)
+      .map((t) => ({
+        name: t.strTeam,
+        league: t.strLeague || null,
+        country: t.strCountry || null,
+        aliases: t.strTeamAlternate || null,
+        badge: t.strBadge,
+        thumb: t.strBadge + '/tiny',
+      }));
+    res.json(results);
+  } catch (err) {
+    console.error('search external logos', err.message);
+    res.status(502).json({ error: 'Kunne ikke søge i TheSportsDB' });
+  }
+});
+
+// POST /api/logos/import-external — hent en valgt badge fra TheSportsDB,
+// gem den i klubbens eget bibliotek og opret en football_logos-række.
+// Body: { name, badge, aliases? }. Kun URLs fra thesportsdb.com accepteres.
+router.post('/import-external', requireClub, requireAdmin, async (req, res) => {
+  const name = (req.body.name || '').trim();
+  const badge = (req.body.badge || '').trim();
+  const aliases = (req.body.aliases || '').trim() || null;
+  if (!name || !badge) {
+    return res.status(400).json({ error: 'Navn og badge er påkrævet' });
+  }
+  // SSRF-værn: kun billeder fra TheSportsDB må hentes
+  let host;
+  try { host = new URL(badge).hostname; } catch (_) { host = ''; }
+  if (host !== THESPORTSDB_HOST_SUFFIX && !host.endsWith('.' + THESPORTSDB_HOST_SUFFIX)) {
+    return res.status(400).json({ error: 'Ugyldig badge-kilde' });
+  }
+  try {
+    const resp = await fetch(badge, { signal: AbortSignal.timeout(10000) });
+    if (!resp.ok) throw new Error('badge HTTP ' + resp.status);
+    const contentType = (resp.headers.get('content-type') || '').split(';')[0].trim();
+    const ext = CONTENT_TYPE_EXT[contentType];
+    if (!ext) return res.status(400).json({ error: 'Badge er ikke et gyldigt billede' });
+    const buf = Buffer.from(await resp.arrayBuffer());
+    if (buf.length === 0 || buf.length > 3 * 1024 * 1024) {
+      return res.status(400).json({ error: 'Badge er for stor eller tom' });
+    }
+    const filename = `${slugify(name)}_${Date.now()}${ext}`;
+    const dir = clubLogosLibDir(req.clubId);
+    await fs.promises.writeFile(path.join(dir, filename), buf);
+    const url = `clubs/${req.clubId}/logos-library/${filename}`;
+    const [result] = await pool.query(
+      'INSERT INTO football_logos (club_id, name, aliases, url, kind) VALUES (?, ?, ?, ?, ?)',
+      [req.clubId, name, aliases, url, 'club']
+    );
+    const [[logo]] = await pool.query(
+      'SELECT id, club_id, name, aliases, url, kind, created_at FROM football_logos WHERE id = ?',
+      [result.insertId]
+    );
+    res.json(logo);
+  } catch (err) {
+    console.error('import external logo', err.message);
+    res.status(502).json({ error: 'Kunne ikke importere logo' });
   }
 });
 
