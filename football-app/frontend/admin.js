@@ -692,6 +692,7 @@
     logoPicker.grid = document.getElementById('logoPickerGrid');
     logoPicker.search = document.getElementById('logoPickerSearch');
     logoPicker.kind = document.getElementById('logoPickerKind');
+    logoPicker.source = 'library';
 
     document.getElementById('logoPickerClose').addEventListener('click', closeLogoPicker);
     logoPicker.modal.addEventListener('click', (e) => {
@@ -701,14 +702,37 @@
 
     logoPicker.search.addEventListener('input', () => {
       clearTimeout(logoPicker.debounce);
-      logoPicker.debounce = setTimeout(refreshLogoPickerGrid, 250);
+      const delay = logoPicker.source === 'online' ? 450 : 250;
+      logoPicker.debounce = setTimeout(refreshLogoPickerGrid, delay);
     });
     logoPicker.kind.addEventListener('change', refreshLogoPickerGrid);
+
+    document.querySelectorAll('.logo-source-tab').forEach((tab) => {
+      tab.addEventListener('click', () => setLogoSource(tab.dataset.source));
+    });
 
     document.getElementById('logoPickerUploadToggle').addEventListener('click', () => {
       document.getElementById('logoPickerUploadForm').classList.toggle('hidden');
     });
     document.getElementById('logoPickerUploadBtn').addEventListener('click', handleLogoPickerUpload);
+  }
+
+  function setLogoSource(source) {
+    logoPicker.source = source;
+    document.querySelectorAll('.logo-source-tab').forEach((tab) => {
+      const active = tab.dataset.source === source;
+      tab.style.background = active ? 'rgba(20,232,163,0.14)' : 'transparent';
+      tab.style.color = active ? '#14e8a3' : 'rgba(255,255,255,0.55)';
+      tab.style.borderColor = active ? 'rgba(20,232,163,0.3)' : 'rgba(255,255,255,0.1)';
+    });
+    // Online-søgning: skjul type-filter og upload, vis kildehenvisning
+    const online = source === 'online';
+    logoPicker.kind.classList.toggle('hidden', online);
+    document.getElementById('logoPickerUploadToggle').classList.toggle('hidden', online);
+    document.getElementById('logoPickerUploadForm').classList.add('hidden');
+    document.getElementById('logoPickerOnlineHint').classList.toggle('hidden', !online);
+    logoPicker.search.placeholder = online ? tr('logo.onlineSearch') : tr('logo.search');
+    refreshLogoPickerGrid();
   }
 
   function openLogoPicker(opts) {
@@ -723,7 +747,7 @@
       document.getElementById('logoPickerUploadFile').value = '';
       document.getElementById('logoPickerUploadMsg').textContent = '';
       logoPicker.modal.classList.remove('hidden');
-      refreshLogoPickerGrid();
+      setLogoSource('library');
     });
   }
 
@@ -736,6 +760,7 @@
   }
 
   async function refreshLogoPickerGrid() {
+    if (logoPicker.source === 'online') return refreshOnlineGrid();
     const params = new URLSearchParams();
     if (logoPicker.kind.value) params.set('kind', logoPicker.kind.value);
     if (logoPicker.search.value.trim()) params.set('search', logoPicker.search.value.trim());
@@ -748,6 +773,75 @@
       renderLogoPickerGrid(logos);
     } catch (err) {
       logoPicker.grid.innerHTML = `<div style="color:#f0867a; padding:30px; text-align:center; grid-column:1/-1;">${tr('common.error')}: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  // ── Online-søgning i TheSportsDB ──
+  async function refreshOnlineGrid() {
+    const q = logoPicker.search.value.trim();
+    if (q.length < 2) {
+      logoPicker.grid.innerHTML = `<div style="color:rgba(255,255,255,0.4); padding:30px; text-align:center; grid-column:1/-1;">${tr('logo.onlinePrompt')}</div>`;
+      return;
+    }
+    logoPicker.grid.innerHTML = `<div style="color:rgba(255,255,255,0.5); padding:30px; text-align:center; grid-column:1/-1;">${tr('common.loading')}</div>`;
+    const reqId = (logoPicker.onlineReq = (logoPicker.onlineReq || 0) + 1);
+    try {
+      const res = await fetch('/api/logos/search-external?q=' + encodeURIComponent(q), {
+        headers: { 'Authorization': 'Bearer ' + token },
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const results = await res.json();
+      if (reqId !== logoPicker.onlineReq) return; // forældet svar
+      renderOnlineGrid(results);
+    } catch (err) {
+      if (reqId !== logoPicker.onlineReq) return;
+      logoPicker.grid.innerHTML = `<div style="color:#f0867a; padding:30px; text-align:center; grid-column:1/-1;">${tr('common.error')}: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  function renderOnlineGrid(results) {
+    if (!results || results.length === 0) {
+      logoPicker.grid.innerHTML = `<div style="color:rgba(255,255,255,0.5); padding:30px; text-align:center; grid-column:1/-1;">${tr('logo.none')}</div>`;
+      return;
+    }
+    logoPicker.grid.innerHTML = results.map((r, i) => `
+      <button class="logo-online-card" data-idx="${i}" type="button"
+              style="background:#0f1117; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:10px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:6px; transition:all 0.15s;">
+        <div style="width:64px; height:64px; display:flex; align-items:center; justify-content:center; background:#fff; border-radius:6px; overflow:hidden;">
+          <img src="${escapeHtml(r.thumb)}" alt="${escapeHtml(r.name)}" loading="lazy" style="max-width:100%; max-height:100%; object-fit:contain;">
+        </div>
+        <div style="font-size:0.75em; color:#eaeaea; text-align:center; word-break:break-word; line-height:1.2;">${escapeHtml(r.name)}</div>
+        ${r.league ? `<div style="font-size:0.62em; color:rgba(255,255,255,0.4); text-align:center; line-height:1.1;">${escapeHtml(r.league)}</div>` : ''}
+      </button>
+    `).join('');
+
+    logoPicker.grid.querySelectorAll('.logo-online-card').forEach((card) => {
+      card.addEventListener('click', () => importOnlineLogo(results[parseInt(card.dataset.idx, 10)], card));
+      card.addEventListener('mouseenter', () => { card.style.borderColor = '#14e8a3'; });
+      card.addEventListener('mouseleave', () => { card.style.borderColor = 'rgba(255,255,255,0.08)'; });
+    });
+  }
+
+  async function importOnlineLogo(result, card) {
+    if (!result) return;
+    card.style.opacity = '0.5';
+    card.style.pointerEvents = 'none';
+    try {
+      const res = await fetch('/api/logos/import-external', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: result.name, badge: result.badge, aliases: result.aliases }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'HTTP ' + res.status);
+      }
+      const logo = await res.json();
+      closeLogoPicker(logo.url);
+    } catch (err) {
+      card.style.opacity = '1';
+      card.style.pointerEvents = 'auto';
+      alert(tr('logo.importFailed', { msg: err.message }));
     }
   }
 

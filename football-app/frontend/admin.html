@@ -206,6 +206,14 @@
         <button id="logoPickerClose" class="btn-ghost btn-sm" type="button" data-i18n="common.close">Luk</button>
       </div>
 
+      <!-- Kilde-skifter: eget bibliotek vs. online klubsøgning (TheSportsDB) -->
+      <div style="padding:12px 20px 0; display:flex; gap:6px;">
+        <button id="logoSourceLibrary" class="logo-source-tab" data-source="library" type="button" data-i18n="logo.sourceLibrary"
+                style="flex:1; padding:8px 12px; background:rgba(20,232,163,0.14); color:#14e8a3; border:1px solid rgba(20,232,163,0.3); border-radius:6px; cursor:pointer; font-size:0.85em; font-weight:600;">Bibliotek</button>
+        <button id="logoSourceOnline" class="logo-source-tab" data-source="online" type="button" data-i18n="logo.sourceOnline"
+                style="flex:1; padding:8px 12px; background:transparent; color:rgba(255,255,255,0.55); border:1px solid rgba(255,255,255,0.1); border-radius:6px; cursor:pointer; font-size:0.85em; font-weight:600;">Søg klubber online</button>
+      </div>
+
       <div style="padding:14px 20px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
         <input type="text" id="logoPickerSearch" data-i18n-placeholder="logo.search" placeholder="Søg logoer..."
                style="flex:1; min-width:200px; padding:9px 12px; background:#0f1117; border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#eaeaea; font-size:0.95em;">
@@ -218,6 +226,12 @@
         </select>
         <button id="logoPickerUploadToggle" class="btn-sm" type="button" data-i18n="logo.uploadNew"
                 style="background:#e94560; color:#fff; border:none; padding:9px 14px; border-radius:6px; cursor:pointer; font-size:0.9em;">+ Upload nyt</button>
+      </div>
+
+      <!-- Kildehenvisning ved online-søgning -->
+      <div id="logoPickerOnlineHint" class="hidden" data-i18n="logo.onlineHint"
+           style="padding:8px 20px; font-size:0.72em; color:rgba(255,255,255,0.4); border-bottom:1px solid rgba(255,255,255,0.05);">
+        Logoer hentes fra TheSportsDB og gemmes i klubbens eget bibliotek.
       </div>
 
       <!-- Upload-form (skjult som default, toggles via knap) -->
