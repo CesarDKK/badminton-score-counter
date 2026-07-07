@@ -55,12 +55,12 @@ router.get('/', requireClub, async (req, res) => {
     params.push(kind);
   }
   if (search) {
-    filters.push('name LIKE ?');
-    params.push(`%${search}%`);
+    filters.push('(name LIKE ? OR aliases LIKE ?)');
+    params.push(`%${search}%`, `%${search}%`);
   }
   try {
     const [rows] = await pool.query(
-      `SELECT id, club_id, name, url, kind, created_at
+      `SELECT id, club_id, name, aliases, url, kind, created_at
          FROM football_logos
         WHERE ${filters.join(' AND ')}
         ORDER BY kind ASC, name ASC
@@ -88,14 +88,15 @@ router.post('/', requireClub, requireAdmin, upload.single('logo'), async (req, r
     fs.promises.unlink(req.file.path).catch(() => {});
     return res.status(400).json({ error: 'Ugyldig kind — flag kan ikke uploades manuelt' });
   }
+  const aliases = (req.body.aliases || '').trim() || null;
   try {
     const url = `clubs/${req.clubId}/logos-library/${req.file.filename}`;
     const [result] = await pool.query(
-      'INSERT INTO football_logos (club_id, name, url, kind) VALUES (?, ?, ?, ?)',
-      [req.clubId, name, url, kind]
+      'INSERT INTO football_logos (club_id, name, aliases, url, kind) VALUES (?, ?, ?, ?, ?)',
+      [req.clubId, name, aliases, url, kind]
     );
     const [[logo]] = await pool.query(
-      'SELECT id, club_id, name, url, kind, created_at FROM football_logos WHERE id = ?',
+      'SELECT id, club_id, name, aliases, url, kind, created_at FROM football_logos WHERE id = ?',
       [result.insertId]
     );
     res.json(logo);
@@ -105,17 +106,23 @@ router.post('/', requireClub, requireAdmin, upload.single('logo'), async (req, r
   }
 });
 
-// PUT /api/logos/:id — omdøb klub-eget logo
+// PUT /api/logos/:id — omdøb klub-eget logo (navn og/eller aliasser)
 router.put('/:id', requireClub, requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const name = (req.body.name || '').trim();
   if (!name) return res.status(400).json({ error: 'Navn er påkrævet' });
+  const aliases = req.body.aliases !== undefined ? ((req.body.aliases || '').trim() || null) : undefined;
   try {
     // Kun klub-egne logoer kan omdøbes — ikke globale flag
-    const [result] = await pool.query(
-      'UPDATE football_logos SET name = ? WHERE id = ? AND club_id = ?',
-      [name, id, req.clubId]
-    );
+    const [result] = aliases !== undefined
+      ? await pool.query(
+          'UPDATE football_logos SET name = ?, aliases = ? WHERE id = ? AND club_id = ?',
+          [name, aliases, id, req.clubId]
+        )
+      : await pool.query(
+          'UPDATE football_logos SET name = ? WHERE id = ? AND club_id = ?',
+          [name, id, req.clubId]
+        );
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Logo ikke fundet (eller globalt logo — kan ikke omdøbes)' });
     }

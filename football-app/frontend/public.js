@@ -5,7 +5,7 @@
   function statusLabel(status) {
     return tr('status.' + status);
   }
-  const state = { view: 'list', tournamentId: null, pollHandle: null, autoOpened: false, club: null };
+  const state = { view: 'list', tournamentId: null, pollHandle: null, autoOpened: false, club: null, logos: [] };
 
   async function api(path) {
     const res = await fetch(path);
@@ -40,8 +40,9 @@
   function teamLogoHtml(team, size) {
     const sizeClass = size === 'lg' ? ' lg' : '';
     if (!team) return `<div class="team-logo${sizeClass}">?</div>`;
-    if (team.logo_path) {
-      return `<div class="team-logo${sizeClass}"><img src="${logoUrl(team.logo_path)}" alt="" /></div>`;
+    const url = window.FLogoMatch.resolveTeamLogoUrl(team, state.logos);
+    if (url) {
+      return `<div class="team-logo${sizeClass}"><img src="${logoUrl(url)}" alt="" /></div>`;
     }
     return `<div class="team-logo${sizeClass}">${escapeHtml(initial(team.name))}</div>`;
   }
@@ -337,6 +338,8 @@
       return;
     }
     document.title = state.club.name + ' — Football';
+    // Logo-biblioteket bruges til automatisk navne-matching af holdlogoer
+    try { state.logos = await api('/api/logos'); } catch (err) { state.logos = []; }
     loadList();
   })();
 })();

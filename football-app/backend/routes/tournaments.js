@@ -309,6 +309,12 @@ router.get('/:id/cups', requireClub, async (req, res) => {
   }
 });
 
+// Kun filer fra klubbens egen upload-mappe må slettes fra disken —
+// biblioteks-logoer og flag er delte og må ALDRIG unlinkes her.
+function isOwnUpload(logoPath, clubId) {
+  return typeof logoPath === 'string' && logoPath.startsWith(`clubs/${clubId}/logos/`);
+}
+
 router.post('/:id/logo', requireClub, requireAdmin, tournamentLogoUpload.single('logo'), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -322,7 +328,7 @@ router.post('/:id/logo', requireClub, requireAdmin, tournamentLogoUpload.single(
       fs.promises.unlink(req.file.path).catch(() => {});
       return res.status(404).json({ error: 'Tournament not found' });
     }
-    if (existing.logo_path) {
+    if (isOwnUpload(existing.logo_path, req.clubId)) {
       const oldPath = path.join(UPLOAD_DIR, existing.logo_path);
       fs.promises.unlink(oldPath).catch(() => {});
     }
@@ -377,7 +383,7 @@ router.delete('/:id/logo', requireClub, requireAdmin, async (req, res) => {
       'SELECT logo_path FROM tournaments WHERE id = ? AND club_id = ?',
       [id, req.clubId]
     );
-    if (existing && existing.logo_path) {
+    if (existing && isOwnUpload(existing.logo_path, req.clubId)) {
       const oldPath = path.join(UPLOAD_DIR, existing.logo_path);
       fs.promises.unlink(oldPath).catch(() => {});
     }

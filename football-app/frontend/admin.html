@@ -227,6 +227,11 @@
           <input type="text" id="logoPickerUploadName" data-i18n-placeholder="logo.uploadNamePlaceholder" placeholder="fx Lyngby BK"
                  style="width:100%; box-sizing:border-box; padding:8px 10px; background:#0f1117; border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#eaeaea; font-size:0.9em;">
         </div>
+        <div style="flex:1; min-width:160px;">
+          <label data-i18n="logo.aliases" style="display:block; font-size:0.78em; color:rgba(255,255,255,0.6); margin-bottom:5px;">Aliasser (valgfrit, kommasepareret)</label>
+          <input type="text" id="logoPickerUploadAliases" data-i18n-placeholder="logo.aliasesPlaceholder" placeholder="fx LBK, Lyngby"
+                 style="width:100%; box-sizing:border-box; padding:8px 10px; background:#0f1117; border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#eaeaea; font-size:0.9em;">
+        </div>
         <div>
           <label data-i18n="logo.uploadFile" style="display:block; font-size:0.78em; color:rgba(255,255,255,0.6); margin-bottom:5px;">Fil</label>
           <input type="file" id="logoPickerUploadFile" accept="image/*"
@@ -244,6 +249,7 @@
   </div>
 
   <script src="/i18n.js"></script>
+  <script src="/logo-match.js"></script>
   <script src="/admin.js"></script>
 </body>
 </html>
