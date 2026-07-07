@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="BadmintonApp.dk — Gratis pointtælling til badmintonklubber. Realtidssynk, TV-visning, holdkamp og meget mere.">
+    <meta name="description" content="BadmintonApp.dk — Gratis pointtælling til badmintonklubber. Tæl på tablet, vis kampen på TV og følg hele hallen på én skærm. Holdkamp, turnering og klubbens egne farver.">
     <title>BadmintonApp.dk — Pointtælling til din klub</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23e94560' transform='translate(0 1.2)'%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-33 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(33 12 14.5)'/%3E%3Crect x='9.4' y='14.3' width='5.2' height='1.7' rx='0.85'/%3E%3Cpath d='M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z'/%3E%3C/g%3E%3C/svg%3E">
     <link rel="stylesheet" href="fonts.css">
     <style>
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -12,12 +13,16 @@
         :root {
             --purple: #533483;
             --purple-light: #6a45a8;
+            --purple-soft: #b89fe0;
             --red: #e94560;
             --bg: #0d0d1a;
-            --bg-card: rgba(83, 52, 131, 0.12);
+            --bg-raise: #14142a;
+            --card: rgba(83, 52, 131, 0.12);
             --border: rgba(83, 52, 131, 0.35);
+            --border-soft: rgba(255, 255, 255, 0.08);
             --text: #eaeaea;
-            --muted: #888;
+            --muted: #9494a6;
+            --radius: 16px;
         }
 
         html { scroll-behavior: smooth; }
@@ -30,14 +35,16 @@
             overflow-x: hidden;
         }
 
-        /* ── Grid + glow background ── */
+        ::selection { background: rgba(233,69,96,0.35); }
+
+        /* ── Baggrund: gitter + glow ── */
         body::before {
             content: '';
             position: fixed;
             inset: 0;
             background-image:
-                linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+                linear-gradient(rgba(255,255,255,0.022) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.022) 1px, transparent 1px);
             background-size: 56px 56px;
             pointer-events: none;
             z-index: 0;
@@ -45,16 +52,16 @@
 
         .glow {
             position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(83,52,131,0.4) 0%, transparent 70%);
+            inset: 0;
+            background:
+                radial-gradient(ellipse 80% 50% at 50% -10%, rgba(83,52,131,0.45) 0%, transparent 70%),
+                radial-gradient(ellipse 40% 30% at 85% 20%, rgba(233,69,96,0.10) 0%, transparent 70%);
             pointer-events: none;
             z-index: 0;
         }
 
-        /* ── Layout ── */
         .wrap {
-            max-width: 1000px;
+            max-width: 1060px;
             margin: 0 auto;
             padding: 0 24px;
             position: relative;
@@ -64,15 +71,13 @@
         /* ── Nav ── */
         nav {
             position: relative;
-            z-index: 1;
-            padding: 24px 0;
+            z-index: 2;
+            padding: 22px 24px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            max-width: 1000px;
+            max-width: 1060px;
             margin: 0 auto;
-            padding-left: 24px;
-            padding-right: 24px;
         }
 
         .nav-brand {
@@ -82,363 +87,142 @@
             text-decoration: none;
         }
 
-        .nav-brand .icon {
-            font-size: 1.6em;
-            line-height: 1;
-        }
+        .nav-brand svg { width: 30px; height: 30px; }
 
         .nav-brand .wordmark {
             font-family: 'Bebas Neue', sans-serif;
-            font-size: 1.5em;
-            letter-spacing: 1px;
+            font-size: 1.55em;
+            letter-spacing: 1.5px;
             color: #fff;
             line-height: 1;
         }
 
-        .nav-brand .wordmark span {
-            color: var(--purple-light);
-        }
+        .nav-brand .wordmark span { color: var(--red); }
 
         .nav-cta {
-            background: var(--purple);
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border);
             color: #fff;
             text-decoration: none;
-            padding: 9px 20px;
-            border-radius: 8px;
+            padding: 10px 22px;
+            border-radius: 100px;
             font-size: 0.9em;
             font-weight: 600;
-            transition: background 0.2s;
+            transition: border-color 0.2s, background 0.2s;
             white-space: nowrap;
         }
 
-        .nav-cta:hover { background: var(--purple-light); }
+        .nav-cta:hover { border-color: var(--purple-light); background: rgba(83,52,131,0.25); }
 
         /* ── Hero ── */
         .hero {
             text-align: center;
-            padding: 80px 0 70px;
+            padding: 72px 0 90px;
         }
 
         .hero-badge {
-            display: inline-block;
-            background: rgba(83,52,131,0.25);
-            border: 1px solid var(--border);
-            color: #b89fe0;
-            font-size: 0.8em;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(233,69,96,0.10);
+            border: 1px solid rgba(233,69,96,0.35);
+            color: #f2879a;
+            font-size: 0.78em;
             font-weight: 600;
-            letter-spacing: 1px;
+            letter-spacing: 1.5px;
             text-transform: uppercase;
-            padding: 5px 14px;
-            border-radius: 20px;
-            margin-bottom: 28px;
+            padding: 6px 16px;
+            border-radius: 100px;
+            margin-bottom: 26px;
+            animation: rise 0.6s ease-out both;
+        }
+
+        .hero-badge .dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: var(--red);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(233,69,96,0.5); }
+            50% { box-shadow: 0 0 0 6px rgba(233,69,96,0); }
         }
 
         .hero h1 {
             font-family: 'Bebas Neue', sans-serif;
-            font-size: clamp(3em, 9vw, 6em);
-            line-height: 1;
+            font-size: clamp(3.2em, 9vw, 6.4em);
+            line-height: 0.98;
             letter-spacing: 2px;
-            margin-bottom: 20px;
+            margin-bottom: 22px;
+            animation: rise 0.6s 0.08s ease-out both;
         }
 
-        .hero h1 .accent { color: var(--purple-light); }
+        .hero h1 .accent {
+            color: transparent;
+            background: linear-gradient(120deg, var(--purple-soft), var(--red));
+            -webkit-background-clip: text;
+            background-clip: text;
+        }
 
         .hero p {
-            font-size: clamp(1em, 2.5vw, 1.2em);
+            font-size: clamp(1em, 2.5vw, 1.18em);
             color: var(--muted);
-            max-width: 560px;
-            margin: 0 auto 40px;
+            max-width: 620px;
+            margin: 0 auto 38px;
             line-height: 1.7;
+            animation: rise 0.6s 0.16s ease-out both;
         }
+
+        .hero p strong { color: var(--text); font-weight: 600; }
 
         .hero-actions {
             display: flex;
             gap: 14px;
             justify-content: center;
             flex-wrap: wrap;
+            animation: rise 0.6s 0.24s ease-out both;
+        }
+
+        @keyframes rise {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .btn-primary {
-            background: var(--purple);
+            background: linear-gradient(135deg, var(--red), #c93350);
             color: #fff;
             text-decoration: none;
-            padding: 14px 32px;
-            border-radius: 10px;
+            padding: 15px 34px;
+            border-radius: 100px;
             font-size: 1em;
-            font-weight: 600;
-            transition: background 0.2s, transform 0.15s;
+            font-weight: 700;
+            transition: transform 0.15s, box-shadow 0.2s;
+            box-shadow: 0 8px 28px rgba(233,69,96,0.28);
         }
 
-        .btn-primary:hover { background: var(--purple-light); transform: translateY(-1px); }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 34px rgba(233,69,96,0.4); }
 
         .btn-secondary {
             background: transparent;
             color: var(--text);
             text-decoration: none;
-            padding: 14px 32px;
-            border-radius: 10px;
+            padding: 15px 34px;
+            border-radius: 100px;
             font-size: 1em;
             font-weight: 600;
             border: 1px solid var(--border);
             transition: border-color 0.2s, transform 0.15s;
         }
 
-        .btn-secondary:hover { border-color: var(--purple-light); transform: translateY(-1px); }
+        .btn-secondary:hover { border-color: var(--purple-light); transform: translateY(-2px); }
 
-        /* ── Court mockup ── */
-        .court-mockup-wrap {
-            margin: 56px auto 0;
-            max-width: 480px;
-            border-radius: 16px;
-            overflow: hidden;
-            border: 1px solid var(--border);
-            box-shadow: 0 24px 80px rgba(0,0,0,0.6);
-            background: #0d0d1a;
-            font-family: 'DM Sans', sans-serif;
-        }
-
-        /* Score bar top */
-        .cm-scorebar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px 16px 6px;
-            background: rgba(0,0,0,0.3);
-        }
-
-        .cm-player { flex: 1; text-align: center; }
-
-        .cm-name {
-            font-size: 0.72em;
-            font-weight: 600;
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
-            color: rgba(255,255,255,0.5);
-            margin-bottom: 2px;
-        }
-
-        .cm-pts {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 3.6em;
-            line-height: 1;
-            color: #fff;
-            letter-spacing: 0.04em;
-        }
-
-        .cm-center {
-            flex: 0 0 80px;
-            text-align: center;
-        }
-
-        .cm-sets-label {
-            font-size: 0.6em;
-            font-weight: 600;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            color: rgba(255,255,255,0.3);
-            margin-bottom: 2px;
-        }
-
-        .cm-sets {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 1.6em;
-            color: #e94560;
-            letter-spacing: 0.06em;
-        }
-
-        /* Court surface */
-        .cm-court {
-            position: relative;
-            background: #1a472a;
-            height: 220px;
-            display: flex;
-            align-items: stretch;
-        }
-
-        /* Court lines */
-        .cm-court::before {
-            content: '';
-            position: absolute;
-            inset: 8px;
-            border: 2px solid rgba(255,255,255,0.55);
-            pointer-events: none;
-            z-index: 1;
-        }
-
-        /* Net */
-        .cm-net {
-            position: absolute;
-            left: 50%;
-            top: 0;
-            bottom: 0;
-            width: 4px;
-            background: rgba(255,255,255,0.7);
-            transform: translateX(-50%);
-            z-index: 2;
-        }
-
-        .cm-net::before, .cm-net::after {
-            content: '';
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: rgba(255,255,255,0.15);
-            border: 2px solid rgba(255,255,255,0.4);
-        }
-
-        .cm-net::before { top: 6px; }
-        .cm-net::after  { bottom: 6px; }
-
-        /* Service lines */
-        .cm-sline-left {
-            position: absolute;
-            left: calc(50% - 22%);
-            top: 8px; bottom: 8px;
-            width: 2px;
-            background: rgba(255,255,255,0.3);
-            z-index: 1;
-        }
-
-        .cm-sline-right {
-            position: absolute;
-            left: calc(50% + 22%);
-            top: 8px; bottom: 8px;
-            width: 2px;
-            background: rgba(255,255,255,0.3);
-            z-index: 1;
-        }
-
-        /* Player tokens */
-        .cm-half {
-            flex: 1;
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .cm-token {
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 0.85em;
-            letter-spacing: 0.02em;
-            z-index: 3;
-            position: relative;
-            box-shadow: 0 4px 14px rgba(0,0,0,0.5);
-        }
-
-        .cm-token-1 {
-            background: linear-gradient(135deg, #533483, #6a45a8);
-            color: #fff;
-            border: 2px solid rgba(255,255,255,0.25);
-        }
-
-        .cm-token-2 {
-            background: linear-gradient(135deg, #e94560, #c0392b);
-            color: #fff;
-            border: 2px solid rgba(255,255,255,0.25);
-        }
-
-        .cm-serve-dot {
-            position: absolute;
-            top: -4px;
-            right: -4px;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #ffdd00;
-            border: 2px solid #0d0d1a;
-            z-index: 4;
-        }
-
-        .cm-pname {
-            position: absolute;
-            bottom: 10px;
-            left: 0; right: 0;
-            text-align: center;
-            font-size: 0.72em;
-            font-weight: 600;
-            color: rgba(255,255,255,0.8);
-            letter-spacing: 0.04em;
-            z-index: 3;
-        }
-
-        /* Timer */
-        .cm-timer {
-            position: absolute;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,0,0,0.65);
-            backdrop-filter: blur(4px);
-            border: 1px solid rgba(255,255,255,0.12);
-            border-radius: 6px;
-            padding: 3px 10px;
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 1em;
-            letter-spacing: 0.1em;
-            color: #fff;
-            z-index: 5;
-        }
-
-        /* Set history */
-        .cm-set-history {
-            font-size: 0.62em;
-            color: rgba(255,255,255,0.35);
-            text-align: center;
-            letter-spacing: 0.04em;
-            padding: 2px 0 0;
-        }
-
-        /* Buttons row */
-        .cm-buttons {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px 14px 14px;
-            gap: 8px;
-            background: rgba(0,0,0,0.2);
-        }
-
-        .cm-btn-point {
-            flex: 1;
-            background: linear-gradient(135deg, #27ae60, #1e8449);
-            color: #fff;
-            border: none;
-            border-radius: 8px;
-            padding: 12px 0;
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 1.5em;
-            letter-spacing: 0.06em;
-            cursor: default;
-        }
-
-        .cm-btn-small {
-            background: rgba(255,255,255,0.07);
-            border: 1px solid rgba(255,255,255,0.15);
-            color: rgba(255,255,255,0.7);
-            border-radius: 8px;
-            padding: 10px 12px;
-            font-size: 0.75em;
-            font-weight: 600;
-            cursor: default;
-            white-space: nowrap;
-        }
-
-        /* Browser chrome wrapper */
+        /* ── Browser-ramme ── */
         .browser-chrome {
-            border-radius: 16px;
+            border-radius: var(--radius);
             overflow: hidden;
-            box-shadow: 0 24px 80px rgba(0,0,0,0.6);
-            border: 1px solid var(--border);
+            box-shadow: 0 30px 90px rgba(0,0,0,0.65), 0 0 0 1px var(--border);
+            background: var(--bg-raise);
         }
 
         .browser-bar {
@@ -450,156 +234,339 @@
             border-bottom: 1px solid rgba(255,255,255,0.06);
         }
 
-        .browser-dots {
-            display: flex;
-            gap: 5px;
-        }
+        .browser-dots { display: flex; gap: 5px; }
 
-        .browser-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-        }
-
+        .browser-dot { width: 10px; height: 10px; border-radius: 50%; }
         .browser-dot:nth-child(1) { background: #ff5f56; }
         .browser-dot:nth-child(2) { background: #ffbd2e; }
         .browser-dot:nth-child(3) { background: #27c93f; }
 
         .browser-url {
             flex: 1;
+            max-width: 340px;
+            margin: 0 auto;
             background: rgba(255,255,255,0.06);
             border-radius: 6px;
-            padding: 4px 10px;
+            padding: 4px 12px;
             font-size: 0.72em;
-            color: rgba(255,255,255,0.4);
+            text-align: center;
+            color: rgba(255,255,255,0.45);
             letter-spacing: 0.03em;
         }
 
-        /* ── Section header ── */
-        .section-header {
-            text-align: center;
-            margin-bottom: 48px;
+        .browser-chrome img { display: block; width: 100%; height: auto; }
+
+        .hero-shot {
+            margin: 60px auto 0;
+            max-width: 780px;
+            animation: rise 0.7s 0.34s ease-out both;
         }
+
+        /* ── Sektioner ── */
+        section { position: relative; z-index: 1; }
+
+        .section-pad { padding: 90px 0; }
+
+        .section-header { text-align: center; margin-bottom: 54px; }
 
         .section-tag {
             display: inline-block;
-            background: rgba(233,69,96,0.15);
             color: var(--red);
-            font-size: 0.75em;
-            font-weight: 600;
-            letter-spacing: 2px;
+            font-size: 0.78em;
+            font-weight: 700;
+            letter-spacing: 3px;
             text-transform: uppercase;
-            padding: 4px 12px;
-            border-radius: 4px;
-            margin-bottom: 14px;
+            margin-bottom: 12px;
         }
 
         .section-header h2 {
             font-family: 'Bebas Neue', sans-serif;
-            font-size: clamp(2em, 5vw, 3em);
-            letter-spacing: 1px;
+            font-size: clamp(2.2em, 5vw, 3.4em);
+            letter-spacing: 1.5px;
+            line-height: 1.05;
         }
 
-        /* ── Features ── */
-        .features {
-            padding: 80px 0;
+        .section-header .sub {
+            color: var(--muted);
+            max-width: 560px;
+            margin: 14px auto 0;
+            line-height: 1.7;
+        }
+
+        .section-divider {
+            border: none;
+            border-top: 1px solid var(--border-soft);
+            margin: 0;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ── Showcase (I hallen) ── */
+        .show-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 54px;
+            align-items: center;
+            margin-bottom: 84px;
+        }
+
+        .show-row:last-child { margin-bottom: 0; }
+
+        .show-row.flip .show-text { order: 2; }
+        .show-row.flip .show-media { order: 1; }
+
+        .show-text .kicker {
+            color: var(--purple-soft);
+            font-size: 0.78em;
+            font-weight: 700;
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        .show-text h3 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: clamp(1.9em, 4vw, 2.6em);
+            letter-spacing: 1px;
+            line-height: 1.05;
+            margin-bottom: 14px;
+        }
+
+        .show-text p {
+            color: var(--muted);
+            line-height: 1.75;
+            font-size: 0.98em;
+        }
+
+        .show-text p + p { margin-top: 10px; }
+
+        .show-media img {
+            display: block;
+            width: 100%;
+            height: auto;
+            border-radius: var(--radius);
+            box-shadow: 0 24px 70px rgba(0,0,0,0.55), 0 0 0 1px var(--border-soft);
+        }
+
+        .show-wide { margin-top: 84px; }
+
+        .show-wide .show-text { text-align: center; max-width: 620px; margin: 0 auto 34px; }
+
+        .show-wide img {
+            display: block;
+            width: 100%;
+            height: auto;
+            border-radius: var(--radius);
+            box-shadow: 0 24px 70px rgba(0,0,0,0.55), 0 0 0 1px var(--border-soft);
+        }
+
+        /* ── Feature-grupper ── */
+        .feature-group { margin-bottom: 56px; }
+        .feature-group:last-child { margin-bottom: 0; }
+
+        .feature-group-title {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 22px;
+        }
+
+        .feature-group-title h3 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.5em;
+            letter-spacing: 1.5px;
+            color: #fff;
+            white-space: nowrap;
+        }
+
+        .feature-group-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border-soft);
         }
 
         .feature-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
+            gap: 18px;
+        }
+
+        .feature-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+
+        @media (max-width: 640px) {
+            .feature-grid.cols-2 { grid-template-columns: 1fr; }
         }
 
         .feature-card {
-            background: var(--bg-card);
+            background: var(--card);
             border: 1px solid var(--border);
             border-radius: 14px;
-            padding: 28px;
-            transition: border-color 0.2s, transform 0.2s;
+            padding: 24px;
+            transition: border-color 0.2s, transform 0.2s, background 0.2s;
         }
 
         .feature-card:hover {
             border-color: var(--purple-light);
-            transform: translateY(-2px);
+            background: rgba(83, 52, 131, 0.18);
+            transform: translateY(-3px);
         }
 
         .feature-icon {
-            font-size: 1.8em;
+            width: 42px;
+            height: 42px;
+            border-radius: 11px;
+            background: rgba(233,69,96,0.10);
+            border: 1px solid rgba(233,69,96,0.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
             margin-bottom: 14px;
+            color: #f2879a;
         }
 
-        .feature-card h3 {
-            font-size: 1.05em;
+        .feature-icon svg { width: 22px; height: 22px; }
+
+        .feature-card h4 {
+            font-size: 1.02em;
             font-weight: 600;
-            margin-bottom: 8px;
+            margin-bottom: 7px;
             color: #fff;
         }
 
         .feature-card p {
+            font-size: 0.89em;
+            color: var(--muted);
+            line-height: 1.65;
+        }
+
+        /* ── Kom igang ── */
+        .steps {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 18px;
+            margin-bottom: 26px;
+        }
+
+        .step-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 30px 26px;
+            position: relative;
+        }
+
+        .step-num {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2.6em;
+            line-height: 1;
+            color: transparent;
+            background: linear-gradient(135deg, var(--purple-soft), var(--red));
+            -webkit-background-clip: text;
+            background-clip: text;
+            margin-bottom: 12px;
+        }
+
+        .step-card h4 {
+            font-size: 1.05em;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+
+        .step-card p {
             font-size: 0.9em;
             color: var(--muted);
             line-height: 1.65;
         }
 
-        /* ── CTA section ── */
-        .cta-section {
-            padding: 80px 0;
+        .step-card a { color: var(--purple-soft); text-decoration: none; }
+        .step-card a:hover { color: #fff; }
+
+        .selfhost-note {
             text-align: center;
+            color: var(--muted);
+            font-size: 0.9em;
+            line-height: 1.7;
+            max-width: 560px;
+            margin: 0 auto;
         }
 
+        .selfhost-note a { color: var(--purple-soft); text-decoration: none; }
+        .selfhost-note a:hover { color: #fff; }
+
+        /* ── CTA ── */
         .cta-box {
-            background: linear-gradient(135deg, rgba(83,52,131,0.3) 0%, rgba(233,69,96,0.15) 100%);
+            background: linear-gradient(135deg, rgba(83,52,131,0.32) 0%, rgba(233,69,96,0.14) 100%);
             border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 60px 40px;
+            border-radius: 22px;
+            padding: 64px 40px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cta-box::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse 60% 80% at 50% -20%, rgba(233,69,96,0.12), transparent 70%);
+            pointer-events: none;
         }
 
         .cta-box h2 {
             font-family: 'Bebas Neue', sans-serif;
             font-size: clamp(2em, 5vw, 3em);
-            letter-spacing: 1px;
-            margin-bottom: 14px;
+            letter-spacing: 1.5px;
+            margin-bottom: 10px;
+            position: relative;
         }
 
-        .cta-box p {
+        .cta-box .cta-sub {
             color: var(--muted);
-            margin-bottom: 32px;
-            font-size: 1em;
-            line-height: 1.6;
+            margin-bottom: 30px;
+            position: relative;
         }
+
+        .cta-box .hero-actions { animation: none; position: relative; }
+
+        .cta-mail {
+            margin-top: 24px;
+            font-size: 0.9em;
+            color: var(--muted);
+            position: relative;
+        }
+
+        .cta-mail a { color: var(--purple-soft); text-decoration: none; }
+        .cta-mail a:hover { color: #fff; }
 
         /* ── Footer ── */
         footer {
             position: relative;
             z-index: 1;
-            border-top: 1px solid var(--border);
-            padding: 28px 0;
+            border-top: 1px solid var(--border-soft);
+            padding: 30px 0;
             text-align: center;
             color: var(--muted);
             font-size: 0.82em;
         }
 
-        footer a {
-            color: var(--muted);
-            text-decoration: none;
-        }
-
+        footer a { color: var(--muted); text-decoration: none; }
         footer a:hover { color: var(--text); }
 
-        /* ── Divider ── */
-        .section-divider {
-            border: none;
-            border-top: 1px solid var(--border);
-            margin: 0;
-        }
-
-        /* ── Responsive ── */
-        @media (max-width: 600px) {
-            .hero { padding: 60px 0 50px; }
-            .cta-box { padding: 40px 24px; }
-            .cm-pts { font-size: 2.8em; }
-            .cm-court { height: 180px; }
+        /* ── Responsivt ── */
+        @media (max-width: 760px) {
+            .hero { padding: 52px 0 64px; }
+            .section-pad { padding: 64px 0; }
+            .show-row {
+                grid-template-columns: 1fr;
+                gap: 22px;
+                margin-bottom: 56px;
+            }
+            .show-row.flip .show-text { order: 1; }
+            .show-row.flip .show-media { order: 2; }
+            .steps { grid-template-columns: 1fr; }
+            .cta-box { padding: 44px 24px; }
         }
     </style>
 </head>
@@ -610,24 +577,34 @@
 <!-- Nav -->
 <nav>
     <a class="nav-brand" href="/">
-        <span class="icon">🏸</span>
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <g fill="#e94560" transform="translate(0 1.2)">
+                <ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/>
+                <ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/>
+                <ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/>
+                <ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/>
+                <ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/>
+                <rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/>
+                <path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/>
+            </g>
+        </svg>
         <span class="wordmark">Badminton<span>App</span></span>
     </a>
-    <a class="nav-cta" href="https://app.badmintonapp.dk">Åben Demo →</a>
+    <a class="nav-cta" href="https://app.badmintonapp.dk">Åben demo →</a>
 </nav>
 
 <!-- Hero -->
 <section class="hero">
     <div class="wrap">
+        <div class="hero-badge"><span class="dot"></span>Gratis for badmintonklubber</div>
         <h1>Pointtælling til<br><span class="accent">din badmintonklub</span></h1>
-        <p>Et komplet og gratis system til at styre scorer, holdkampe og TV-visning — optimeret til computer og tablets.</p>
+        <p>Tæl på tablet eller telefon, vis kampen <strong>live på TV</strong> og følg hele hallen på én skærm. Holdkamp, turnering og klubbens egne farver — alt samlet ét sted.</p>
         <div class="hero-actions">
-            <a class="btn-primary" href="https://app.badmintonapp.dk">Åben Demo</a>
+            <a class="btn-primary" href="https://app.badmintonapp.dk">Prøv demoen</a>
             <a class="btn-secondary" href="#funktioner">Se funktioner</a>
         </div>
 
-        <!-- Court V3 screenshot -->
-        <div style="margin: 56px auto 0; max-width: 680px;">
+        <div class="hero-shot">
             <div class="browser-chrome">
                 <div class="browser-bar">
                     <div class="browser-dots">
@@ -635,9 +612,9 @@
                         <div class="browser-dot"></div>
                         <div class="browser-dot"></div>
                     </div>
-                    <div class="browser-url">app.badmintonapp.dk/court?id=3</div>
+                    <div class="browser-url">jeresklub.badmintonapp.dk</div>
                 </div>
-                <img src="court-mockup.jpg" alt="Court V3 — Vicki vs Helena" style="display:block; width:100%; height:auto;">
+                <img src="hero-court.jpg" alt="Tælleren — banevisning med Mathilde mod Freja, 15-12" width="1280" height="700">
             </div>
         </div>
     </div>
@@ -645,53 +622,173 @@
 
 <hr class="section-divider">
 
-<!-- Features -->
-<section class="features" id="funktioner">
+<!-- I hallen -->
+<section class="section-pad" id="ihallen">
     <div class="wrap">
         <div class="section-header">
-            <h2>Funktioner</h2>
+            <div class="section-tag">I hallen</div>
+            <h2>Fra tælleren til storskærmen</h2>
+            <p class="sub">Alt opdateres i samme sekund, der tælles — på TV'et ved banen, på oversigtsskærmen og på tilskuernes telefoner.</p>
         </div>
 
-        <div class="feature-grid">
-            <div class="feature-card">
-                <div class="feature-icon">📡</div>
-                <h3>Realtidssynk</h3>
-                <p>Scores opdateres øjeblikkeligt på alle enheder — tablet, mobil og storskærm — uden at siden skal genindlæses.</p>
+        <div class="show-row">
+            <div class="show-text">
+                <div class="kicker">TV-visning</div>
+                <h3>Kampen på storskærm</h3>
+                <p>Tilslut et TV til banen og vis stillingen sæt for sæt med spillernavne, klublogoer og servemarkering — læseligt fra den anden ende af hallen.</p>
+                <p>Når banen er ledig, skifter skærmen automatisk til klubbens sponsor-slideshow.</p>
             </div>
-            <div class="feature-card">
-                <div class="feature-icon">📺</div>
-                <h3>TV-visning</h3>
-                <p>Tilslut et TV til en bane og vis resultater i fuld skærm. Automatisk skift til sponsor-slideshow når ingen kamp er aktiv.</p>
+            <div class="show-media">
+                <img src="tv-scoreboard.jpg" alt="TV-visning — Mathilde mod Freja, sætstilling 21-18 og 15-12" width="1920" height="1080" loading="lazy">
             </div>
-            <div class="feature-card">
-                <div class="feature-icon">🏆</div>
-                <h3>Holdkamp</h3>
-                <p>Opret holdkampe og tildel delkampe til baner og følg resultater i realtid fra admin-panelet.</p>
+        </div>
+
+        <div class="show-row flip">
+            <div class="show-text">
+                <div class="kicker">Sætpause</div>
+                <h3>Pauserne styrer sig selv</h3>
+                <p>Efter hvert sæt viser TV'et automatisk en nedtælling med stillingen, så spillere og tilskuere altid ved, hvornår næste sæt går i gang.</p>
+                <p>Tælleren fortsætter selv kampen, når pausen er slut — eller når spillerne springer den over.</p>
             </div>
-            <div class="feature-card">
-                <div class="feature-icon">👥</div>
-                <h3>Single og double</h3>
-                <p>Fuld støtte til både single og double med korrekte serverregler, positionering og automatisk sideskift.</p>
+            <div class="show-media">
+                <img src="tv-pause.jpg" alt="Pauseskærm — nedtællingsring med 1:18 tilbage, Line mod Katrine" width="1920" height="1080" loading="lazy">
             </div>
-            <div class="feature-card">
-                <div class="feature-icon">📱</div>
-                <h3>QR-kode tæller</h3>
-                <p>Scan en QR-kode på TV-skærmen og tæl med direkte på din mobil — perfekt til tilskuere eller hjælpere på sidelinjen. Ingen app nødvendig.</p>
+        </div>
+
+        <div class="show-wide">
+            <div class="show-text">
+                <div class="kicker" style="text-align:center;">Oversigt</div>
+                <h3 style="text-align:center;">Hele hallen på én skærm</h3>
+                <p style="text-align:center;">Hæng en skærm op i foyeren og vis alle baners kampe live — med sætstillinger og kamptid. Under holdkampe ruller oversigten automatisk gennem delkampene.</p>
             </div>
-            <div class="feature-card">
-                <div class="feature-icon">🖼️</div>
-                <h3>Sponsorvisning</h3>
-                <p>Upload sponsor-logoer der automatisk vises på TV-skærme og bane-bannere. Sæt udløbsdatoer og styr hvornår hvilke sponsorer vises.</p>
+            <img src="oversigt.jpg" alt="Kampstatus-oversigt — tre baner med live-stillinger" width="1920" height="560" loading="lazy">
+        </div>
+    </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- Funktioner -->
+<section class="section-pad" id="funktioner">
+    <div class="wrap">
+        <div class="section-header">
+            <div class="section-tag">Funktioner</div>
+            <h2>Bygget til klubbens hverdag</h2>
+        </div>
+
+        <div class="feature-group">
+            <div class="feature-group-title"><h3>På banen</h3></div>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>
+                    </div>
+                    <h4>Realtidssynk</h4>
+                    <p>Point opdateres øjeblikkeligt på alle enheder — tablet, telefon og storskærm — uden genindlæsning.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6"/><circle cx="17" cy="9" r="3"/><path d="M12.5 20c0-3 2-5.5 4.5-5.5s4.5 2.5 4.5 5.5"/></svg>
+                    </div>
+                    <h4>Single og double</h4>
+                    <p>Korrekt servetæller, spillerplacering og automatisk sideskift — også i tredje sæt. Reglerne passer sig selv.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14h1M14 20h1M18 18h3v3h-3z"/></svg>
+                    </div>
+                    <h4>Tæl med telefonen</h4>
+                    <p>Scan QR-koden på TV-skærmen og tæl kampen direkte fra din egen telefon. Ingen app, intet login.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+                    </div>
+                    <h4>Fortryd alt</h4>
+                    <p>Et forkert tryk er aldrig et problem — fortryd-knappen ruller point, server og sideskift tilbage, skridt for skridt.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+                    </div>
+                    <h4>Turneringstilstand</h4>
+                    <p>Lås tælleren under stævner, så knapper til nulstilling og opsætning er skjult for spillerne.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M9 2h6"/></svg>
+                    </div>
+                    <h4>Kamptid og pauser</h4>
+                    <p>Kamptimeren kører på serverens ur, så TV, oversigt og tæller altid viser præcis samme tid.</p>
+                </div>
             </div>
-            <div class="feature-card">
-                <div class="feature-icon">🔗</div>
-                <h3>Sikre adgangslinks</h3>
-                <p>Opret unikke links til tablets og TV-skærme uden at de har adgang til admin-funktioner. Kan låses til en specifik bane.</p>
+        </div>
+
+        <div class="feature-group">
+            <div class="feature-group-title"><h3>Holdkamp og turnering</h3></div>
+            <div class="feature-grid cols-2">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0z"/><path d="M7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3"/></svg>
+                    </div>
+                    <h4>Holdkamp</h4>
+                    <p>Opret holdkampe i alle gængse formater — eller hent dem direkte fra badmintonplayer.dk. Fordel delkampene på banerne og følg med i realtid.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h5v4H3zM3 15h5v4H3zM16 10h5v4h-5zM8 7h3a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H8M13 12h3"/></svg>
+                    </div>
+                    <h4>Turnering</h4>
+                    <p>Importer stævnekampe fra tournamentsoftware.com og send dem ud på banerne — uden at taste ét navn selv.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+                    </div>
+                    <h4>Spillerdatabase</h4>
+                    <p>Opret spillere manuelt eller importer fra turneringsprogrammet. Klublogoer matches automatisk på navnet.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><path d="M3.5 12a8.5 8.5 0 1 0 2-5.5"/><path d="M3 4v4h4"/></svg>
+                    </div>
+                    <h4>Kamphistorik</h4>
+                    <p>Alle kampe gemmes automatisk — enkeltkampe, holdkampe og stævner kan søges frem med resultater og kamptid.</p>
+                </div>
             </div>
-            <div class="feature-card">
-                <div class="feature-icon">📊</div>
-                <h3>Kamphistorik</h3>
-                <p>Alle kampe gemmes automatisk med statistik. Se resultater og spillerinfo i admin-panelet.</p>
+        </div>
+
+        <div class="feature-group">
+            <div class="feature-group-title"><h3>Jeres klub på skærmene</h3></div>
+            <div class="feature-grid cols-2">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a9 9 0 1 1 9-9c0 2-1.5 3-3 3h-2.5a2.5 2.5 0 0 0-2 4c.5.7 0 2-1.5 2z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16.5" cy="10.5" r="1"/></svg>
+                    </div>
+                    <h4>Klubbens farver</h4>
+                    <p>Vælg mellem seks færdige temaer eller sammensæt jeres egne klubfarver — de slår igennem på tæller, TV og oversigt.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m5 16 4.5-4.5L13 15l2.5-2.5L21 18"/></svg>
+                    </div>
+                    <h4>Sponsorvisning</h4>
+                    <p>Upload sponsorernes logoer og styr, hvornår de vises på TV-skærmene — med visningstid og udløbsdato pr. billede.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v5c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10V6z"/><path d="m9 12 2 2 4-4"/></svg>
+                    </div>
+                    <h4>Sikre adgangslinks</h4>
+                    <p>Giv tablets og TV-skærme deres egne links uden admin-adgang — låst til en bestemt bane, hvis I vil.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>
+                    </div>
+                    <h4>Flere administratorer</h4>
+                    <p>Opret logins til trænere og frivillige, og bestem hvem der har adgang til hvad — fra sponsorer til indstillinger.</p>
+                </div>
             </div>
         </div>
     </div>
@@ -700,29 +797,46 @@
 <hr class="section-divider">
 
 <!-- Sådan kommer I igang -->
-<section class="features" id="igang">
+<section class="section-pad" id="igang">
     <div class="wrap">
         <div class="section-header">
-            <h2>Sådan kommer I igang</h2>
+            <div class="section-tag">Kom igang</div>
+            <h2>Jeres egen klub-side på få dage</h2>
+            <p class="sub">Vi hoster løsningen for jer — klubben skal hverken have server eller IT-udvalg.</p>
         </div>
-        <div class="cta-box" style="text-align:left; padding: 40px 48px;">
-            <p style="font-size:1.05em; line-height:1.8; color:var(--text);">
-                Løsningen er gratis at bruge. Skriv til os på <a href="mailto:info@badmintonapp.dk" style="color:#b89fe0; text-decoration:none;">info@badmintonapp.dk</a> for at få vejledning til, hvordan I installerer den på jeres egen server.<br><br>
-                Hvis I ønsker hjælp til selve installationen eller til valg af hardware, er I også meget velkomne til at kontakte os — vi hjælper gerne.
-            </p>
+
+        <div class="steps">
+            <div class="step-card">
+                <div class="step-num">1</div>
+                <h4>Skriv til os</h4>
+                <p>Send en mail til <a href="mailto:info@badmintonapp.dk">info@badmintonapp.dk</a> med klubbens navn — så opretter vi jer.</p>
+            </div>
+            <div class="step-card">
+                <div class="step-num">2</div>
+                <h4>Få jeres egen side</h4>
+                <p>I får <strong>jeresklub.badmintonapp.dk</strong> med eget login, egne data og klubbens farver og logo.</p>
+            </div>
+            <div class="step-card">
+                <div class="step-num">3</div>
+                <h4>Tænd skærmene</h4>
+                <p>Åbn tælleren på en tablet og TV-visningen på storskærmen — så er I klar til første kamp.</p>
+            </div>
         </div>
+
+        <p class="selfhost-note">Løsningen er gratis at bruge. Vil I hellere køre den på jeres egen server, hjælper vi også gerne med installation og valg af hardware — <a href="mailto:info@badmintonapp.dk">skriv til os</a>.</p>
     </div>
 </section>
 
-<hr class="section-divider">
-
 <!-- CTA -->
-<section class="cta-section">
+<section class="section-pad" style="padding-top: 20px;">
     <div class="wrap">
         <div class="cta-box">
             <h2>Klar til at prøve det?</h2>
-            <a class="btn-primary" href="https://app.badmintonapp.dk">Åben Demo →</a>
-            <p style="margin-top: 24px; font-size: 0.9em; color: var(--muted);">Spørgsmål? Skriv til os på <a href="mailto:info@badmintonapp.dk" style="color: #b89fe0; text-decoration: none;">info@badmintonapp.dk</a></p>
+            <p class="cta-sub">Demoen kører i browseren — ingen oprettelse, ingen installation.</p>
+            <div class="hero-actions">
+                <a class="btn-primary" href="https://app.badmintonapp.dk">Prøv demoen</a>
+            </div>
+            <p class="cta-mail">Spørgsmål? Skriv til os på <a href="mailto:info@badmintonapp.dk">info@badmintonapp.dk</a></p>
         </div>
     </div>
 </section>
