@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Det klassiske danske prøvebillede — PM5544-testbilledet som ren vektorgrafik, med levende ur.">
+<title>Prøvebillede — provebillede.dk</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%237a7a7a'/%3E%3Ccircle cx='16' cy='16' r='13' fill='%23fff'/%3E%3Ccircle cx='16' cy='16' r='11' fill='%237a7a7a'/%3E%3Crect x='5' y='10' width='3.7' height='6' fill='%23bfbf00'/%3E%3Crect x='8.7' y='10' width='3.7' height='6' fill='%2300bfbf'/%3E%3Crect x='12.4' y='10' width='3.7' height='6' fill='%2300bf00'/%3E%3Crect x='16.1' y='10' width='3.7' height='6' fill='%23bf00bf'/%3E%3Crect x='19.8' y='10' width='3.7' height='6' fill='%23bf0000'/%3E%3Crect x='23.5' y='10' width='3.7' height='6' fill='%230000bf'/%3E%3Crect x='9' y='18' width='14' height='4' fill='%23000'/%3E%3C/svg%3E">
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; background: #000; overflow: hidden; }
+    body { display: flex; align-items: center; justify-content: center; }
+    svg { width: min(100vw, calc(100vh * 4 / 3)); height: auto; display: block; }
+    #clock { font-family: 'Courier New', Courier, monospace; font-weight: 700; }
+    .station { font-family: Arial, Helvetica, sans-serif; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     Prøvebilledet — vektor-genskabelse af PM5544-testmønsteret i DR-stil.
+     Gitter på 48px-celler (16×12), cirkel centreret (384,288) r=240.
+     ═══════════════════════════════════════════════════════════════════ -->
+<svg viewBox="0 0 768 576" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Dansk prøvebillede — PM5544-testmønster med DANMARK og levende ur">
+  <defs>
+    <!-- Kant-kasteller: 48px-blokke sort/hvid -->
+    <pattern id="castH" width="96" height="24" patternUnits="userSpaceOnUse">
+      <rect width="48" height="24" fill="#000"/>
+      <rect x="48" width="48" height="24" fill="#fff"/>
+    </pattern>
+    <pattern id="castV" width="24" height="96" patternUnits="userSpaceOnUse">
+      <rect width="24" height="48" fill="#fff"/>
+      <rect y="48" width="24" height="48" fill="#000"/>
+    </pattern>
+    <!-- Kasteller inde i cirklen (større blokke) -->
+    <pattern id="castTop" width="96" height="48" patternUnits="userSpaceOnUse">
+      <rect width="48" height="48" fill="#fff"/>
+      <rect x="48" width="48" height="48" fill="#000"/>
+    </pattern>
+    <pattern id="castBottom" width="96" height="48" patternUnits="userSpaceOnUse" patternTransform="translate(48,0)">
+      <rect width="48" height="48" fill="#fff"/>
+      <rect x="48" width="48" height="48" fill="#000"/>
+    </pattern>
+    <!-- Frekvens-gitre: lodrette streger i stigende finhed -->
+    <pattern id="f1" width="26" height="48" patternUnits="userSpaceOnUse">
+      <rect width="26" height="48" fill="#fff"/><rect width="13" height="48" fill="#000"/>
+    </pattern>
+    <pattern id="f2" width="16" height="48" patternUnits="userSpaceOnUse">
+      <rect width="16" height="48" fill="#fff"/><rect width="8" height="48" fill="#000"/>
+    </pattern>
+    <pattern id="f3" width="10" height="48" patternUnits="userSpaceOnUse">
+      <rect width="10" height="48" fill="#fff"/><rect width="5" height="48" fill="#000"/>
+    </pattern>
+    <pattern id="f4" width="6" height="48" patternUnits="userSpaceOnUse">
+      <rect width="6" height="48" fill="#fff"/><rect width="3" height="48" fill="#000"/>
+    </pattern>
+    <pattern id="f5" width="4" height="48" patternUnits="userSpaceOnUse">
+      <rect width="4" height="48" fill="#fff"/><rect width="2" height="48" fill="#000"/>
+    </pattern>
+    <clipPath id="circleClip"><circle cx="384" cy="288" r="240"/></clipPath>
+  </defs>
+
+  <!-- Grå baggrund -->
+  <rect width="768" height="576" fill="#7a7a7a"/>
+
+  <!-- Gitter af hvide linjer (48px-celler) -->
+  <g stroke="#fff" stroke-width="3">
+    <path d="M48 0V576 M96 0V576 M144 0V576 M192 0V576 M240 0V576 M288 0V576 M336 0V576 M384 0V576 M432 0V576 M480 0V576 M528 0V576 M576 0V576 M624 0V576 M672 0V576 M720 0V576"/>
+    <path d="M0 48H768 M0 96H768 M0 144H768 M0 192H768 M0 240H768 M0 288H768 M0 336H768 M0 384H768 M0 432H768 M0 480H768 M0 528H768"/>
+  </g>
+
+  <!-- Kant-kasteller hele vejen rundt -->
+  <rect x="0" y="0" width="768" height="24" fill="url(#castH)"/>
+  <rect x="0" y="552" width="768" height="24" fill="url(#castH)"/>
+  <rect x="0" y="0" width="24" height="576" fill="url(#castV)"/>
+  <rect x="744" y="0" width="24" height="576" fill="url(#castV)"/>
+
+  <!-- ── Cirklens indhold (klippet til cirklen) ── -->
+  <g clip-path="url(#circleClip)">
+    <!-- Bund-flade -->
+    <rect x="144" y="48" width="480" height="480" fill="#fff"/>
+
+    <!-- 1: Kasteller top -->
+    <rect x="144" y="48" width="480" height="48" fill="url(#castTop)"/>
+
+    <!-- 2: Stationsboks: DANMARK -->
+    <rect x="144" y="96" width="480" height="48" fill="#fff"/>
+    <rect x="264" y="99" width="240" height="42" fill="#000"/>
+    <text class="station" x="384" y="130" font-size="28" letter-spacing="5" fill="#fff" text-anchor="middle">DANMARK</text>
+
+    <!-- 3: 75% farvebjælker -->
+    <g>
+      <rect x="144" y="144" width="80" height="48" fill="#bfbf00"/>
+      <rect x="224" y="144" width="80" height="48" fill="#00bfbf"/>
+      <rect x="304" y="144" width="80" height="48" fill="#00bf00"/>
+      <rect x="384" y="144" width="80" height="48" fill="#bf00bf"/>
+      <rect x="464" y="144" width="80" height="48" fill="#bf0000"/>
+      <rect x="544" y="144" width="80" height="48" fill="#0000bf"/>
+    </g>
+
+    <!-- 4: Frekvens-gitre (grovere -> finere) -->
+    <rect x="144" y="192" width="96" height="48" fill="url(#f1)"/>
+    <rect x="240" y="192" width="96" height="48" fill="url(#f2)"/>
+    <rect x="336" y="192" width="96" height="48" fill="url(#f3)"/>
+    <rect x="432" y="192" width="96" height="48" fill="url(#f4)"/>
+    <rect x="528" y="192" width="96" height="48" fill="url(#f5)"/>
+
+    <!-- 5: Midterfelt med kryds og tick-markeringer -->
+    <rect x="144" y="240" width="480" height="96" fill="#fff"/>
+    <path d="M144 288H624" stroke="#000" stroke-width="4"/>
+    <path d="M384 240V336" stroke="#000" stroke-width="4"/>
+    <g stroke="#000" stroke-width="3">
+      <path d="M192 280v16 M240 280v16 M288 280v16 M336 280v16 M432 280v16 M480 280v16 M528 280v16 M576 280v16"/>
+    </g>
+
+    <!-- 6: Gråtone-trappe (sort ramme så det hvide trin står frit) -->
+    <g>
+      <rect x="144" y="336" width="80" height="48" fill="#000"/>
+      <rect x="224" y="336" width="80" height="48" fill="#333"/>
+      <rect x="304" y="336" width="80" height="48" fill="#666"/>
+      <rect x="384" y="336" width="80" height="48" fill="#999"/>
+      <rect x="464" y="336" width="80" height="48" fill="#ccc"/>
+      <rect x="544" y="336" width="80" height="48" fill="#fff"/>
+      <rect x="144" y="336" width="480" height="48" fill="none" stroke="#000" stroke-width="3"/>
+    </g>
+
+    <!-- 7: Farvereference: gul/rød -->
+    <rect x="144" y="384" width="240" height="48" fill="#bfbf00"/>
+    <rect x="384" y="384" width="240" height="48" fill="#bf0000"/>
+
+    <!-- 8: Urboks -->
+    <rect x="144" y="432" width="480" height="48" fill="#fff"/>
+    <rect x="264" y="435" width="240" height="42" fill="#000"/>
+    <text id="clock" x="384" y="466" font-size="28" fill="#fff" text-anchor="middle">--:--:--</text>
+
+    <!-- 9: Kasteller bund (forskudt fase) -->
+    <rect x="144" y="480" width="480" height="48" fill="url(#castBottom)"/>
+  </g>
+
+  <!-- Cirkelring -->
+  <circle cx="384" cy="288" r="240" fill="none" stroke="#fff" stroke-width="5"/>
+</svg>
+
+<script>
+    // Levende ur i urboksen — opdateres hvert sekund (dansk lokal tid)
+    (function () {
+        var el = document.getElementById('clock');
+        function tick() {
+            var d = new Date();
+            var p = function (n) { return (n < 10 ? '0' : '') + n; };
+            el.textContent = p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+        }
+        tick();
+        setInterval(tick, 1000);
+    })();
+</script>
+
+</body>
+</html>

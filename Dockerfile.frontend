@@ -12,6 +12,9 @@ COPY marketing/ /usr/share/nginx/marketing/
 # Copy football marketing site
 COPY football-app/marketing/ /usr/share/nginx/football-marketing/
 
+# Copy provebillede.dk (statisk SVG-prøvebillede)
+COPY provebillede/ /usr/share/nginx/provebillede/
+
 # Share fonts from app into marketing sites (fonts.css lives in marketing/ and is reused by football)
 RUN cp -r /usr/share/nginx/html/fonts /usr/share/nginx/marketing/fonts \
     && cp -r /usr/share/nginx/html/fonts /usr/share/nginx/football-marketing/fonts \
