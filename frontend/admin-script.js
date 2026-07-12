@@ -1030,7 +1030,7 @@ async function loadTeamMatchHistory() {
         }).join('');
 
         container.innerHTML = `
-            <h3 style="color:#eaeaea; margin-bottom:12px; font-size:1.1em; border-bottom:1px solid #333; padding-bottom:8px;">🏸 Holdkampe (${matches.length})</h3>
+            <h3 style="color:#eaeaea; margin-bottom:12px; font-size:1.1em; border-bottom:1px solid #333; padding-bottom:8px;"><svg viewBox="0 0 24 24" fill="currentColor" style="width:1em;height:1em;vertical-align:-0.12em;" aria-hidden="true"><g transform="translate(0 1.2)"><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/><rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/><path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/></g></svg> Holdkampe (${matches.length})</h3>
             ${cards}`;
     } catch (error) {
         console.error('Failed to load team match history:', error);
@@ -2178,7 +2178,7 @@ function createMatchCard(match, index) {
                 ${setOverviewBadges ? `<div style="margin: 10px 0;">${setOverviewBadges}</div>` : ''}
                 <div style="color: #aaa; font-size: 0.9em; margin-top: 8px;">
                     <span style="margin-right: 15px;">⏱️ ${match.duration}</span>
-                    <span style="margin-right: 15px;">🏸 Bane ${match.court_id}</span>
+                    <span style="margin-right: 15px;"><svg viewBox="0 0 24 24" fill="currentColor" style="width:1em;height:1em;vertical-align:-0.12em;" aria-hidden="true"><g transform="translate(0 1.2)"><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/><rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/><path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/></g></svg> Bane ${match.court_id}</span>
                     <span>📅 ${new Date(match.match_date).toLocaleDateString('da-DK', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                 </div>
             </div>
