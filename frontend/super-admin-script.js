@@ -69,6 +69,7 @@ function permissionsSummary(permissions) {
 
 // Football-state — adskilt fra badminton-state så vi ikke krydsforurener
 let footballClubs = [];
+let currentFootballAdmins = [];
 let selectedFootballClubId = null;
 let pendingDeleteFootballClubId = null;
 let pendingDeleteFootballAdminId = null;
@@ -227,10 +228,10 @@ function renderClubs() {
                 <span class="badge ${club.is_active ? 'badge-active' : 'badge-inactive'}">
                     ${club.is_active ? 'Aktiv' : 'Inaktiv'}
                 </span>
-                <button class="btn-secondary" onclick="openAdminModal(${club.id}, '${escapeHtml(club.name)}')">
+                <button class="btn-secondary" onclick="openAdminModal(${club.id})">
                     Admins
                 </button>
-                <button class="btn-secondary" onclick="downloadClubBackup(${club.id}, '${escapeHtml(club.subdomain)}')">
+                <button class="btn-secondary" onclick="downloadClubBackup(${club.id})">
                     Backup
                 </button>
                 <button class="btn-secondary" onclick="triggerClubRestore(${club.id})">
@@ -241,7 +242,7 @@ function renderClubs() {
                 </button>
                 ${!club.is_active ? `
                 <button class="btn-danger" style="background:rgba(var(--color-danger-rgb, 217, 44, 63),0.3);border-color:rgba(var(--color-danger-rgb, 217, 44, 63),0.5);"
-                    onclick="handleDeleteClub(${club.id}, '${escapeHtml(club.name)}')">
+                    onclick="handleDeleteClub(${club.id})">
                     🗑 Slet
                 </button>` : ''}
             </div>
@@ -281,10 +282,13 @@ async function handleCreateClub() {
 
 let pendingDeleteId = null;
 
-function handleDeleteClub(id, name) {
+function handleDeleteClub(id) {
+    // Navnet slås op i stedet for at blive sendt gennem onclick-strengen —
+    // et navn med ' eller " ville ellers bryde/injecte JS i inline-handleren.
+    const club = clubs.find(c => c.id === id);
     pendingDeleteId = id;
     document.getElementById('deleteModalText').textContent =
-        `Du er ved at slette klubben "${name}" permanent. Denne handling kan ikke fortrydes.`;
+        `Du er ved at slette klubben "${club ? club.name : ''}" permanent. Denne handling kan ikke fortrydes.`;
     document.getElementById('deleteConfirmInput').value = '';
     document.getElementById('deleteConfirmBtn').disabled = true;
     document.getElementById('deleteModalMsg').style.display = 'none';
@@ -326,9 +330,10 @@ async function handleToggleClub(id) {
     }
 }
 
-function openAdminModal(clubId, clubName) {
+function openAdminModal(clubId) {
+    const club = clubs.find(c => c.id === clubId);
     selectedClubId = clubId;
-    document.getElementById('adminModalTitle').textContent = `Admins — ${clubName}`;
+    document.getElementById('adminModalTitle').textContent = `Admins — ${club ? club.name : ''}`;
     document.getElementById('newAdminUsername').value = '';
     document.getElementById('newAdminPassword').value = '';
     document.getElementById('newAdminEmail').value = '';
@@ -369,11 +374,11 @@ function renderAdmins(admins) {
                     Adgang
                 </button>
                 <button class="btn-secondary" style="font-size:0.8em; padding:5px 10px;"
-                    onclick="showChangePassword(${a.id}, '${escapeHtml(a.username)}')">
+                    onclick="showChangePassword(${a.id})">
                     Skift kode
                 </button>
                 <button class="btn-danger" style="font-size:0.8em; padding:5px 10px;"
-                    onclick="handleDeleteAdmin(${a.id}, '${escapeHtml(a.username)}')">
+                    onclick="handleDeleteAdmin(${a.id})">
                     Slet
                 </button>
             </div>
@@ -421,7 +426,9 @@ async function handleSavePermissions(adminId) {
     }
 }
 
-function showChangePassword(adminId, username) {
+function showChangePassword(adminId) {
+    const admin = currentAdmins.find(a => a.id === adminId);
+    const username = admin ? admin.username : '';
     // Fjern evt. eksisterende inline-formular
     const existing = document.getElementById('change-pw-form');
     if (existing) existing.remove();
@@ -457,7 +464,7 @@ async function handleChangePassword(adminId) {
         return;
     }
     try {
-        await api.changeClubAdminPassword(selectedClubId, adminId, pw);
+        await api.setClubAdminPassword(selectedClubId, adminId, pw);
         document.getElementById('change-pw-form').remove();
     } catch (err) {
         showMsg(msgEl, err.message || 'Fejl', 'error');
@@ -466,10 +473,11 @@ async function handleChangePassword(adminId) {
 
 let pendingDeleteAdminId = null;
 
-function handleDeleteAdmin(adminId, username) {
+function handleDeleteAdmin(adminId) {
+    const admin = currentAdmins.find(a => a.id === adminId);
     pendingDeleteAdminId = adminId;
     document.getElementById('deleteAdminModalText').textContent =
-        `Er du sikker på at du vil slette admin "${username}"? Dette kan ikke fortrydes.`;
+        `Er du sikker på at du vil slette admin "${admin ? admin.username : ''}"? Dette kan ikke fortrydes.`;
     document.getElementById('deleteAdminModalMsg').style.display = 'none';
     document.getElementById('deleteAdminConfirmBtn').disabled = false;
     document.getElementById('deleteAdminConfirmBtn').textContent = 'Slet';
@@ -512,6 +520,10 @@ async function handleCreateAdmin() {
 
     if (!username || !password) {
         showMsg(msgEl, 'Brugernavn og adgangskode er påkrævet', 'error');
+        return;
+    }
+    if (password.length < 8) {
+        showMsg(msgEl, 'Adgangskode skal være mindst 8 tegn', 'error');
         return;
     }
 
@@ -592,7 +604,9 @@ const _restoreInput = (() => {
     return inp;
 })();
 
-async function downloadClubBackup(clubId, subdomain) {
+async function downloadClubBackup(clubId) {
+    const club = clubs.find(c => c.id === clubId);
+    const subdomain = club ? club.subdomain : clubId;
     const token = sessionStorage.getItem('superAdminToken') || sessionStorage.getItem('authToken');
     try {
         const res = await fetch(`/api/super-admin/clubs/${clubId}/backup`, {
@@ -675,7 +689,7 @@ function renderFootballClubs() {
                 <span class="badge ${club.is_active ? 'badge-active' : 'badge-inactive'}">
                     ${club.is_active ? 'Aktiv' : 'Inaktiv'}
                 </span>
-                <button class="btn-secondary" onclick="openFootballAdminModal(${club.id}, '${escapeHtml(club.name)}')">
+                <button class="btn-secondary" onclick="openFootballAdminModal(${club.id})">
                     Admins
                 </button>
                 <button class="btn-danger" onclick="handleToggleFootballClub(${club.id})">
@@ -683,7 +697,7 @@ function renderFootballClubs() {
                 </button>
                 ${!club.is_active ? `
                 <button class="btn-danger" style="background:rgba(var(--color-danger-rgb, 217, 44, 63),0.3);border-color:rgba(var(--color-danger-rgb, 217, 44, 63),0.5);"
-                    onclick="handleDeleteFootballClub(${club.id}, '${escapeHtml(club.name)}')">
+                    onclick="handleDeleteFootballClub(${club.id})">
                     🗑 Slet
                 </button>` : ''}
             </div>
@@ -732,8 +746,9 @@ async function handleToggleFootballClub(id) {
     }
 }
 
-async function handleDeleteFootballClub(id, name) {
-    if (!confirm(`Slet football-klubben "${name}" permanent? Dette sletter alle dens turneringer, kampe og admins. Denne handling kan ikke fortrydes.`)) return;
+async function handleDeleteFootballClub(id) {
+    const club = footballClubs.find(c => c.id === id);
+    if (!confirm(`Slet football-klubben "${club ? club.name : ''}" permanent? Dette sletter alle dens turneringer, kampe og admins. Denne handling kan ikke fortrydes.`)) return;
     try {
         await api.deleteFootballClub(id);
         footballClubs = footballClubs.filter(c => c.id !== id);
@@ -743,9 +758,10 @@ async function handleDeleteFootballClub(id, name) {
     }
 }
 
-function openFootballAdminModal(clubId, clubName) {
+function openFootballAdminModal(clubId) {
+    const club = footballClubs.find(c => c.id === clubId);
     selectedFootballClubId = clubId;
-    document.getElementById('footballAdminModalTitle').textContent = `Admins — ${clubName}`;
+    document.getElementById('footballAdminModalTitle').textContent = `Admins — ${club ? club.name : ''}`;
     document.getElementById('newFootballAdminUsername').value = '';
     document.getElementById('newFootballAdminPassword').value = '';
     document.getElementById('newFootballAdminEmail').value = '';
@@ -771,6 +787,7 @@ async function loadFootballAdmins() {
 }
 
 function renderFootballAdmins(admins) {
+    currentFootballAdmins = admins;
     const listEl = document.getElementById('footballAdminModalList');
     if (admins.length === 0) {
         listEl.innerHTML = '<div class="empty-state" style="padding:12px;">Ingen admins endnu</div>';
@@ -784,11 +801,11 @@ function renderFootballAdmins(admins) {
             </div>
             <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
                 <button class="btn-secondary" style="font-size:0.8em; padding:5px 10px;"
-                    onclick="showChangeFootballPassword(${a.id}, '${escapeHtml(a.username)}')">
+                    onclick="showChangeFootballPassword(${a.id})">
                     Skift kode
                 </button>
                 <button class="btn-danger" style="font-size:0.8em; padding:5px 10px;"
-                    onclick="handleDeleteFootballAdmin(${a.id}, '${escapeHtml(a.username)}')">
+                    onclick="handleDeleteFootballAdmin(${a.id})">
                     Slet
                 </button>
             </div>
@@ -796,7 +813,9 @@ function renderFootballAdmins(admins) {
     `).join('');
 }
 
-function showChangeFootballPassword(adminId, username) {
+function showChangeFootballPassword(adminId) {
+    const admin = currentFootballAdmins.find(a => a.id === adminId);
+    const username = admin ? admin.username : '';
     const existing = document.getElementById('football-change-pw-form');
     if (existing) existing.remove();
 
@@ -838,8 +857,9 @@ async function handleChangeFootballPassword(adminId) {
     }
 }
 
-async function handleDeleteFootballAdmin(adminId, username) {
-    if (!confirm(`Slet admin "${username}"? Dette kan ikke fortrydes.`)) return;
+async function handleDeleteFootballAdmin(adminId) {
+    const admin = currentFootballAdmins.find(a => a.id === adminId);
+    if (!confirm(`Slet admin "${admin ? admin.username : ''}"? Dette kan ikke fortrydes.`)) return;
     try {
         await api.deleteFootballClubAdmin(selectedFootballClubId, adminId);
         loadFootballAdmins();
@@ -895,7 +915,7 @@ function showMsg(el, msg, type) {
 }
 
 function escapeHtml(str) {
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 function formatDate(dateStr) {
@@ -906,6 +926,7 @@ function formatDate(dateStr) {
 // ==================== KLUB-LOGOER ====================
 
 let logoCache = [];
+let missingLogoCache = [];
 
 async function loadLogos() {
     const listEl = document.getElementById('logoList');
@@ -966,9 +987,11 @@ function renderMissingLogos(list) {
         return;
     }
     const opts = logoCache.map(l => `<option value="${l.id}">${escapeHtml(l.club_name)}</option>`).join('');
-    listEl.innerHTML = list.map(c => {
+    // Navnene sendes ikke gennem onclick-strengen (JS-injektion via ' og \) —
+    // knapperne refererer i stedet et indeks i den cachede liste.
+    missingLogoCache = list;
+    listEl.innerHTML = list.map((c, i) => {
         const safe = escapeHtml(c.name);
-        const attr = c.name.replace(/'/g, "\\'");
         return `
         <div class="admin-item" style="gap:10px; flex-wrap:wrap;">
             <div style="flex:1; min-width:160px;">
@@ -976,22 +999,27 @@ function renderMissingLogos(list) {
                 <div class="admin-email">${c.sources.join(', ')} · ${c.count}×</div>
             </div>
             <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-                <button class="btn-primary" style="font-size:0.8em; padding:5px 10px;" onclick="prefillUploadLogo('${attr}')">Upload logo</button>
+                <button class="btn-primary" style="font-size:0.8em; padding:5px 10px;" onclick="prefillUploadLogo(${i})">Upload logo</button>
                 <select class="link-existing-sel" style="font-size:0.8em; padding:5px;">
                     <option value="">Knyt til…</option>${opts}
                 </select>
-                <button class="btn-secondary" style="font-size:0.8em; padding:5px 10px;" onclick="linkClubToLogo('${attr}', this.previousElementSibling)">Knyt</button>
+                <button class="btn-secondary" style="font-size:0.8em; padding:5px 10px;" onclick="linkClubToLogo(${i}, this.previousElementSibling)">Knyt</button>
             </div>
         </div>`;
     }).join('');
 }
 
-function prefillUploadLogo(name) {
+function prefillUploadLogo(index) {
+    const entry = missingLogoCache[index];
+    if (!entry) return;
     const inp = document.getElementById('newLogoClubName');
-    if (inp) { inp.value = name; inp.focus(); inp.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    if (inp) { inp.value = entry.name; inp.focus(); inp.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 }
 
-async function linkClubToLogo(name, selectEl) {
+async function linkClubToLogo(index, selectEl) {
+    const entry = missingLogoCache[index];
+    if (!entry) return;
+    const name = entry.name;
     const id = selectEl && selectEl.value ? parseInt(selectEl.value, 10) : 0;
     if (!id) { alert('Vælg et logo at knytte til'); return; }
     const logo = logoCache.find(l => l.id === id);

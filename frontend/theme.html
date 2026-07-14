@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="admin-styles.css">
     <link rel="stylesheet" href="settings-styles.css">
-    <script src="js/theme-loader.js?v=2"></script>
+    <script src="js/theme-loader.js?v=5"></script>
 </head>
 <body>
     <div class="bg-glow"></div>
@@ -146,7 +146,7 @@
 
                     <button id="saveCustomThemeBtn" class="btn-primary">Gem Tilpasset Tema</button>
                     <button id="previewThemeBtn" class="btn-secondary">Forhåndsvisning</button>
-                    <p class="theme-hint">Bemærk: Farveændringer træder i kraft efter siden opdateres</p>
+                    <p class="theme-hint">Bemærk: Andre åbne skærme (TV, oversigt) opdaterer temaet ved næste genindlæsning.</p>
                 </div>
 
                 <!-- Current Theme Display -->
@@ -166,6 +166,15 @@
         </div>
     </div>
 
+    <!-- Preview-bjælke: vises mens et tema forhåndsvises (preset-klik eller
+         "Forhåndsvisning"). Temaet gemmes IKKE før man aktivt klikker "Gem" —
+         så et enkelt klik ikke ændrer temaet på alle hallens skærme. -->
+    <div id="previewBar" style="display:none; position:fixed; left:0; right:0; bottom:0; z-index:9500; padding:16px 20px; background:rgba(15,15,30,0.97); border-top:1px solid rgba(255,255,255,0.12); backdrop-filter:blur(6px); align-items:center; justify-content:center; gap:16px; flex-wrap:wrap;">
+        <span style="color:#eaeaea; font-size:1.05em;">Forhåndsvisning — temaet er ikke gemt endnu</span>
+        <button id="previewSaveBtn" class="btn-primary" style="padding:10px 24px;">Gem på alle skærme</button>
+        <button id="previewCancelBtn" class="btn-secondary" style="padding:10px 24px;">Fortryd</button>
+    </div>
+
     <!-- Message Overlay -->
     <div id="messageOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); z-index: 10000; justify-content: center; align-items: center;">
         <div style="text-align: center; color: white; max-width: 600px; padding: 40px;">
@@ -175,7 +184,8 @@
         </div>
     </div>
 
-    <script src="js/api.js?v=4"></script>
-    <script src="theme-script.js?v=4"></script>
+    <script src="js/api.js?v=5"></script>
+    <script src="js/auth-guard.js?v=3"></script>
+    <script src="theme-script.js?v=6"></script>
 </body>
 </html>

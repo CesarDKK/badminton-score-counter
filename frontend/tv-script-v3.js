@@ -199,9 +199,20 @@ function updateTimerDisplay() {
     }
 }
 
+// Tæller på hinanden følgende fetch-fejl. Ét blip (fx flaky hal-wifi) må ikke
+// rive stillingen ned og skifte til sponsor-slideshow — vi beholder sidste
+// kendte skærmbillede og viser en diskret "forbindelse mistet"-badge, indtil
+// flere forsøg i træk fejler.
+let _loadFailCount = 0;
+const LOAD_FAILS_BEFORE_SLIDESHOW = 4; // ved ~2s poll ≈ 8s tolerance
+
 async function loadCourtData() {
     try {
         const gameState = await api.getGameState(courtId);
+
+        // Succesfuldt hentet — nulstil fejltæller og skjul evt. forbindelsesbadge
+        _loadFailCount = 0;
+        setTvConnectionLost(false);
 
         // Vis kampen paa TV saa snart navne er sat — selv foer is_active flippes,
         // saa holdkamp/turneringskamp/admin-redigering rammer skaermen straks.
@@ -360,7 +371,36 @@ async function loadCourtData() {
         updateCourtBanner();
     } catch (error) {
         console.error('Failed to load court data:', error);
-        showSponsorSlideshow();
+        _loadFailCount++;
+        // Behold sidste kendte skærmbillede og vis en diskret badge. Først når
+        // flere forsøg i træk fejler antager vi et reelt udfald og falder tilbage
+        // til slideshow (så en tom/frossen skærm ikke bare står med gammel score).
+        setTvConnectionLost(true);
+        if (_loadFailCount >= LOAD_FAILS_BEFORE_SLIDESHOW) {
+            showSponsorSlideshow();
+        }
+    }
+}
+
+// Diskret "forbindelse mistet"-badge på TV — bygges/vises on demand, så den
+// ikke kræver ændringer i alle tv-v3.html varianter.
+let _tvConnBadge = null;
+function setTvConnectionLost(lost) {
+    if (lost) {
+        if (!_tvConnBadge) {
+            _tvConnBadge = document.createElement('div');
+            _tvConnBadge.id = 'tvConnectionBadge';
+            _tvConnBadge.textContent = '⚠ Forbindelse mistet';
+            _tvConnBadge.style.cssText =
+                'position:fixed;bottom:16px;left:16px;z-index:9000;padding:8px 16px;' +
+                'border-radius:999px;background:rgba(255,176,46,0.15);' +
+                'border:1px solid rgba(255,176,46,0.5);color:#ffb02e;' +
+                'font-size:1rem;font-weight:600;backdrop-filter:blur(4px);';
+            document.body.appendChild(_tvConnBadge);
+        }
+        _tvConnBadge.style.display = 'block';
+    } else if (_tvConnBadge) {
+        _tvConnBadge.style.display = 'none';
     }
 }
 
@@ -897,13 +937,6 @@ function updateServingHighlight(gameState, playersSwapped) {
 
 async function refreshSponsorSettings() {
     try {
-        // Check if TV version has changed - redirect if needed
-        const appSettings = await api.getSettings();
-        if (appSettings.tvVersion && appSettings.tvVersion !== 'v3') {
-            window.location.href = `tv.html?id=${courtId}`;
-            return;
-        }
-
         const oldImages = cachedSponsorImages;
         const images = await api.getSponsorImages('slideshow');
 
@@ -1156,9 +1189,13 @@ function stopScreensaver() {
 }
 
 function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    // Escaper også anførselstegn — sikkert i både tekst- og attribut-kontekster
+    return String(text ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 // ========== REST BREAK FUNCTIONS (UNCHANGED FROM V2) ==========
@@ -1347,22 +1384,24 @@ function showMatchFinished(gameState, playersSwapped) {
             const winnerColor = '#4CAF50';
             const loserColor = 'var(--color-accent)';
 
+            // Spillernavne kommer fra brugerinput (tæller/QR-gæster) — skal
+            // escapes før innerHTML, ellers kan et navn køre script på TV'et
             return `
                 <div style="margin: 20px 0; font-size: 1.1em;">
                     <div style="margin-bottom: 8px; color: #aaa;">Sæt ${index + 1}</div>
                     <div style="font-size: 1.3em;">
                         <span style="color: ${player1Won ? winnerColor : loserColor}; font-weight: ${player1Won ? 'bold' : 'normal'};">
-                            ${player1Name}
+                            ${escapeHtml(player1Name)}
                         </span>
                         <span style="color: #fff; margin: 0 15px; font-weight: bold;">
-                            ${scoreText}
+                            ${escapeHtml(scoreText)}
                         </span>
                         <span style="color: ${!player1Won ? winnerColor : loserColor}; font-weight: ${!player1Won ? 'bold' : 'normal'};">
-                            ${player2Name}
+                            ${escapeHtml(player2Name)}
                         </span>
                     </div>
                     <div style="color: ${winnerColor}; font-size: 0.9em; margin-top: 5px; font-weight: bold;">
-                        ✓ ${winnerName}
+                        ✓ ${escapeHtml(winnerName)}
                     </div>
                 </div>
             `;
@@ -1390,13 +1429,13 @@ function showMatchFinished(gameState, playersSwapped) {
                 <div style="margin-bottom: 15px; color: #aaa; font-size: 0.9em;">Resultat</div>
                 <div style="font-size: 1.5em; display: flex; justify-content: center; align-items: center; gap: 30px;">
                     <span style="color: ${player1WonMatch ? winnerColor : loserColor}; font-weight: ${player1WonMatch ? 'bold' : 'normal'};">
-                        ${player1DisplayName}
+                        ${escapeHtml(player1DisplayName)}
                     </span>
                     <span style="color: #fff; font-weight: bold; font-size: 1.2em;">
                         ${displayPlayer1Games} - ${displayPlayer2Games}
                     </span>
                     <span style="color: ${!player1WonMatch ? winnerColor : loserColor}; font-weight: ${!player1WonMatch ? 'bold' : 'normal'};">
-                        ${player2DisplayName}
+                        ${escapeHtml(player2DisplayName)}
                     </span>
                 </div>
             </div>

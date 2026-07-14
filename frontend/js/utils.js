@@ -11,9 +11,14 @@ window.BadmintonUtils = window.BadmintonUtils || {};
  * @returns {string} Escaped HTML
  */
 window.BadmintonUtils.escapeHtml = function(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    // Escaper også anførselstegn — outputtet bruges i HTML-attributter
+    // (value="...", title="...", data-*), hvor " og ' ellers kan bryde ud.
+    return String(text ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 };
 
 /**

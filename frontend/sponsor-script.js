@@ -4,6 +4,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per image
 const DEFAULT_DURATION = 10; // seconds
 let courtCount = 5; // Will be fetched from settings
 let isUpdatingCourtAssignment = false; // Track if court assignment save is in progress
+const galleryImageCache = {}; // id -> billede, til viewImage-opslag uden navne i onclick
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
@@ -234,6 +235,10 @@ async function loadGallery(type) {
         // Sort by upload date (newest first)
         images.sort((a, b) => new Date(b.upload_date) - new Date(a.upload_date));
 
+        // Cache til viewImage-opslag — filnavn/originalnavn må ikke interpoleres
+        // i onclick-strenge (brugerstyret filnavn kan bryde/injecte JS dér)
+        images.forEach(img => { galleryImageCache[img.id] = img; });
+
         galleryContainer.innerHTML = images.map(img => {
             let courtCheckboxes = '';
             let statusControls = '';
@@ -359,7 +364,7 @@ async function loadGallery(type) {
                     <div class="${containerClass}">
                         <img src="/uploads/${img.filename}" alt="${escapeHtml(img.original_name)}" class="gallery-image">
                         <div class="gallery-overlay">
-                            <button class="btn-view" onclick="viewImage(${img.id}, '${img.filename}', '${escapeHtml(img.original_name)}', ${img.width}, ${img.height})">👁️ Vis</button>
+                            <button class="btn-view" onclick="viewImage(${img.id})">👁️ Vis</button>
                             <button class="btn-delete" onclick="deleteImage(${img.id}, '${type}')">🗑️ Slet</button>
                         </div>
                     </div>
@@ -378,7 +383,10 @@ async function loadGallery(type) {
     }
 }
 
-function viewImage(id, filename, originalName, width, height) {
+function viewImage(id) {
+    const img = galleryImageCache[id];
+    if (!img) return;
+    const { filename, original_name: originalName, width, height } = img;
     // Create modal to view full-size image
     const modal = document.createElement('div');
     modal.className = 'image-modal';

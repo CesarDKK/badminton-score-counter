@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="admin-styles.css">
     <link rel="stylesheet" href="settings-styles.css">
-    <script src="js/theme-loader.js?v=2"></script>
+    <script src="js/theme-loader.js?v=5"></script>
 </head>
 <body>
     <div class="bg-glow"></div>
@@ -82,31 +82,6 @@
                         </p>
                     </div>
 
-                    <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid rgba(255,255,255,0.1);">
-                        <label>Bane Side Version:</label>
-                        <select id="courtVersion" style="width: 100%; padding: 10px; font-size: 1em; margin-top: 10px; background: var(--color-bg-card); color: white; border: 2px solid var(--color-primary); border-radius: 8px; cursor: pointer;">
-                            <option value="v2">Klassisk</option>
-                            <option value="v3">Bane view</option>
-                        </select>
-                        <button id="saveCourtVersionBtn" class="btn-primary" style="margin-top: 15px;">Gem Version</button>
-                        <p style="color: #aaa; font-size: 0.9em; margin-top: 10px; line-height: 1.5;">
-                            Vælg hvilken version af bane-siden der skal bruges. "Klassisk" er standard, "Bane view" viser bane-layout.
-                        </p>
-                    </div>
-
-                    <!-- TV Version Setting -->
-                    <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid rgba(255,255,255,0.1);">
-                        <label>TV Skærm Version:</label>
-                        <select id="tvVersion" style="width: 100%; padding: 10px; font-size: 1em; margin-top: 10px; background: var(--color-bg-card); color: white; border: 2px solid var(--color-primary); border-radius: 8px; cursor: pointer;">
-                            <option value="v2">Klassisk</option>
-                            <option value="v3">Minimalistisk</option>
-                        </select>
-                        <button id="saveTVVersionBtn" class="btn-primary" style="margin-top: 15px;">Gem TV Version</button>
-                        <p style="color: #aaa; font-size: 0.9em; margin-top: 10px; line-height: 1.5;">
-                            Vælg hvilken version af TV-skærmen der skal bruges. Klassisk viser traditionel layout, mens Minimalistisk viser et renere design med sæt-scoringer.
-                        </p>
-                    </div>
-
                     <!-- Default Game Mode -->
                     <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid rgba(255,255,255,0.1);">
                         <label>Standard Kamptilstand:</label>
@@ -153,7 +128,9 @@
                             <input type="password" id="currentPassword" placeholder="Nuværende adgangskode">
                         </div>
                         <label>Ny Adgangskode:</label>
-                        <input type="password" id="newPassword" placeholder="Ny adgangskode">
+                        <input type="password" id="newPassword" placeholder="Ny adgangskode (min. 8 tegn)" autocomplete="new-password">
+                        <label>Gentag Ny Adgangskode:</label>
+                        <input type="password" id="newPasswordConfirm" placeholder="Gentag ny adgangskode" autocomplete="new-password">
                         <button id="changePasswordBtn" class="btn-primary">Skift Adgangskode</button>
                     </div>
                 </div>
@@ -175,7 +152,8 @@
         </div>
     </div>
 
-    <script src="js/api.js?v=6"></script>
-    <script src="settings-script.js?v=10"></script>
+    <script src="js/api.js?v=8"></script>
+    <script src="js/auth-guard.js?v=3"></script>
+    <script src="settings-script.js?v=12"></script>
 </body>
 </html>

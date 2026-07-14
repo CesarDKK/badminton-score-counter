@@ -888,20 +888,17 @@ badminton-app/
 │   │   ├── dm-sans-latin.woff2
 │   │   └── dm-sans-latin-ext.woff2
 │   ├── js/
-│   │   ├── api.js       # Centralized API client (v4)
-│   │   └── api-v2.js    # Legacy API client
+│   │   └── api.js       # Centralized API client
 │   ├── admin.html       # Admin panel
 │   ├── admin-script.js
-│   ├── court.html       # Court scoring page (Classic)
-│   ├── court-script-v2.js
-│   ├── court-v3.html    # Court scoring page (Bane View)
+│   ├── court-v3.html    # Court scoring page (Tælleren)
 │   ├── court-script-v3.js
 │   ├── court-v3-styles.css
 │   ├── fonts.css        # @font-face declarations for local fonts
 │   ├── settings.html    # Settings page
 │   ├── settings-script.js
-│   ├── tv.html          # TV display mode
-│   ├── tv-script-v2.js
+│   ├── tv-v3.html       # TV display mode
+│   ├── tv-script-v3.js
 │   ├── sponsor.html     # Sponsor management
 │   ├── sponsor-script.js
 │   ├── landing.html     # Landing page
