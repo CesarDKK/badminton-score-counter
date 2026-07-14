@@ -1,0 +1,125 @@
+# Frontend-gennemgang — status og videre arbejde
+
+**Sidst opdateret:** 14. juli 2026
+**Grundlag:** Fuld gennemgang af alle frontend-sider (~130 forslag).
+**Dagens arbejde er committet på branchen `frontend-gennemgang-fixes`** (commit `481ed73`,
+43 filer, +708/−5530). Branchen er IKKE pushet/merget endnu. Backend-ændringer
+(`server.js`, `routes/settings.js`, `init.sql`) kræver image-rebuild ved permanent deploy.
+
+---
+
+## ✅ Færdigt (committet på branch)
+
+**Fejlrettelser**
+- `changeClubAdminPassword`-dublet i api.js (klub-admin kan skifte eget kodeord igen)
+- Fortryd i Tælleren: navne i snapshot + aktiv pause annulleres (kunne bytte score/navne)
+- Kamphistorik-søgning dækker nu hele historikken (var kun seneste 30)
+- Kodeord ensrettet til min. 8 tegn (frontend + backend)
+
+**Sikkerhed**
+- escapeHtml hærdet (escaper nu " og ') — lukker attribut-injektion
+- Navne/filnavne fjernet fra inline onclick (super-admin, sponsor, player-info, admin)
+- XSS i TV'ets "Kamp afgjort"-overlay lukket
+- Open redirect i klub-login lukket
+- auth-guard tilføjet på settings, sponsor, player-info, theme
+- POST/DELETE retries ikke længere (kunne duplikere kampresultater)
+- JWT-decode håndterer base64url
+- Tema-visning hex-validerer DB-værdier
+
+**UX**
+- Tælleren: Screen Wake Lock, offline-indikator, pagehide-flush (fetch keepalive)
+- TV: netværksblip skjuler ikke længere scoreboardet (badge + slideshow først efter 4 fejl)
+- theme-loader: localStorage-cache + synkron anvendelse → ingen tema-flash (FOUC)
+- settings: bekræftelsesfelt til nyt kodeord
+- landing: fejl rydder begge sektioner + "Prøv igen"-knap + tom-tilstand
+- theme-siden: preset forhåndsviser (Gem/Fortryd-bjælke), login verificeres, fejl vises med retry
+
+**Oprydning**
+- v2 udfaset (court.html/tv.html + v2-scripts + tv-styles.css + api-v2.js slettet;
+  versionsvælger fjernet fra UI + api + backend + tests + init.sql)
+- Døde v1-filer, watch.html og forældet rod-Dockerfile slettet
+
+**Bortfaldet automatisk med v2-oprydningen:** inkonsistent v2/v3-default, v2-TV'ets XSS-hul,
+qr-parameter-tab ved versionsskift, v2's clock-skew-timer, "TV på svageste API-klient",
+api.js/api-v2-navneforvirring.
+
+---
+
+## ⚠️ Åbne beslutninger (kræver stillingtagen)
+
+1. **Push/merge af `frontend-gennemgang-fixes`** + image-rebuild til permanent drift.
+2. **auth-guard på `super-admin` og `oversigt`** — bevidst sprunget over (super-admin er
+   andet auth-realm med eget login; oversigt er offentlig storskærm hvor login kan bryde
+   ubemandede skærme). Skal de have det alligevel?
+3. **Backend-afhængige fund** — SSE-staleness (server-ping + watchdog) og server-side
+   skalering af sponsorbilleder kan ikke løses i frontenden alene. Tager vi backend med?
+4. **Store refaktoreringer** — `admin-script.js`-split (~3900 linjer) og fælles farve-tokens.
+   Værd at gøre, men bevidst valg om hvornår.
+
+---
+
+## ⬜ Udestående arbejde (prioriteret)
+
+### Robusthed ved langtidskørsel (TV/oversigt)
+- [MELLEM] Logo-caches på TV opdateres aldrig (`_tvLogos` m.fl.) — nulstil ved ny kamp / TTL ~10 min
+- [MELLEM] Idle-QR-koden fornys aldrig — genindlæs periodisk (kan blive død hvis token udløber)
+- [MELLEM] Ingen staleness-detektion i SSE-klienten (`live-updates.js`) — server-ping ~30 s + klient-watchdog *(kræver backend)*
+- [MELLEM] Oversigt henter banner-listen hver 2. sekund — flyt til 10 s-cyklus og cache
+- [LILLE] Ufuldstændig `beforeunload`-oprydning (tv-v3 + oversigt), `courtMatchTimes` mini-leak,
+  pause-nedtælling på vægur (`Date.now()` → `performance.now()`), burn-in (pixel-shift)
+
+### Performance
+- [MELLEM] Tællerens `serverSyncTick` fyrer op til 4 API-kald pr. tick — kombinér / spring over uden SSE-signal
+- [MELLEM] Admin-baneoversigt: N+1-kald (`getGameState` pr. bane) + polling fortsætter i skjulte sektioner
+- [MELLEM] TV: `getTeamMatchByCourt` kaldes ved hver poll — cache, re-check kun ved ny kamp/SSE
+- [LILLE] Pausen gemmer hvert sekund (TV kan selv regne nedtælling); dobbelt `getSettings()` ved TV-opstart;
+  slideshow re-renderer img pr. slide; index.html meta-refresh → server-302
+
+### PWA / service worker / cache
+- [LILLE] SW-cachen (`badminton-v1`) ryddes aldrig — slet gamle caches i `activate`
+- [LILLE] Offline-fallback kan returnere `undefined`; manifest/SW kun på court-sider;
+  manifest mangler 512px + maskable ikon; fonte bør være cache-first
+- [MELLEM] Central `?v=`-versionsstrategi (manuel/inkonsistent i dag) — hash-stempling i build
+
+### Kodekvalitet / oprydning
+- [STOR] Split `admin-script.js` (~3900 linjer → moduler: oversigt, holdkamp, historik,
+  autocomplete, device tokens, bp-import, turnering)
+- [MELLEM] Farve-tokens: `--color-danger`, `--color-warning`, `--color-info`, `--color-win-rgb`
+  (tre fare-røde, to oranger, inkonsistent vinder-grøn, hardkodede statusfarver i JS)
+- [MELLEM] Fire `showMessage`-implementationer → én fælles i utils.js; utils.js på alle sider (kun 2 af ~12 nu)
+- [MELLEM] Native `alert()`/`confirm()` i super-admin (16+ steder) og admin-turnering → temastylede modaler
+- [MELLEM] `checkGameWin()` duplikeret ×2 (tælleren); TV'ets swap-logik ×3, set-bokse ×3
+- [LILLE] Død kode: marquee-rester i tv-v3, `loadCourtData()`/`noMatchesMessage` i oversigt,
+  dummy `switchSidesBtn`, `TV_V3_IMPLEMENTATION_SUMMARY.md` i roden
+- [LILLE] `?dt=`-håndtering duplikeret (api.js + auth-guard); default-temafarver uenige 3-4 steder;
+  theme-script.js vs theme-loader.js navneforvirring
+
+### Tilgængelighed (tværgående)
+- [MELLEM] Synligt tastaturfokus (`:focus-visible`) app-bredt; modaler som rigtige dialoger
+  (`role="dialog"`, Escape, fokusfælde); labels bundet med `for=`; touch-mål under 44 px i Tælleren;
+  contenteditable navnefelter usynlige for tastatur/skærmlæser
+- [LILLE] `user-scalable=no` (behold evt. kun på tælleren); `prefers-reduced-motion` på landing/login;
+  lav kontrast på hint-tekster (#666/#777) og `.set-label`
+
+### Småting (hale)
+- Landing: `rel="noopener"` på TV-knapper, stagger-animation stopper ved knap 12/8, emoji-TV-ikon,
+  "Display"/"Admin Panel" på engelsk
+- Klub-login: intet `<form>`-element (password managers), labels uden `for=`, rå serverfejl vises
+- Tema-siden: preset-farver duplikeret i HTML+JS, hardkodet "Version 2.0" i footer, `pattern`-attributter uden virkning
+- Settings: NaN-tjek på baneantal, inkonsistent gem-model (toggles vs Gem-knapper)
+- Sponsor: "Slet alle" sletter serielt og ignorerer fejl, checkbox-selektor rammer labels, upload uden fremskridt
+- Player-info: ingen søgning i spillerlisten, debug-console.log efterladt, logo-override følger ikke med ved navneændring
+- Super-admin: succes-feedback ved "Skift kode", subdomain-validering client-side, Enter-submit på opret-felter
+- Tælleren: dobbelttryk-værn på +1, `touch-action: manipulation` på alle knapper, timer-interval stoppes ikke ved kampslut,
+  `alert()` i initializeApp, sidetitlen "(Ny Version)"
+- TV: cached score 0 vises som "-", timer skriver DOM hver 500 ms, console-spam hver 2. sek.
+- Fælles: fonts.css vægt 500/600 peger på samme fil, `beforeunload` dræber bfcache (→ `pagehide`),
+  fjerbold-SVG duplikeret inline, `@keyframes fadeUp` defineret 4 gange
+
+---
+
+## Anbefalet næste skridt
+
+1. Push/merge branchen (efter din gennemgang) + image-rebuild.
+2. Tag **PWA/SW + cache-strategien** som næste blok — afgrænset, fjerner en reel driftsirritation.
+3. Gem de store refaktoreringer (admin-script.js, farve-tokens) til der ikke er lavthængende frugt tilbage.
