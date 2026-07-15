@@ -123,18 +123,23 @@ super-admins centrale logo-ændringer (som ikke pushes pr. tenant).
   opdages straks. Bemærk: JS var allerede `no-store` i nginx, så JS-`?v=` er reelt kun relevant for SW-cachen.
   Fuld hash-stempling i build udestår stadig som [MELLEM] hvis ønsket, men er nu mindre presserende.
 
-### Kodekvalitet / oprydning
-- [STOR] Split `admin-script.js` (~3900 linjer → moduler: oversigt, holdkamp, historik,
-  autocomplete, device tokens, bp-import, turnering)
-- [MELLEM] Farve-tokens: `--color-danger`, `--color-warning`, `--color-info`, `--color-win-rgb`
-  (tre fare-røde, to oranger, inkonsistent vinder-grøn, hardkodede statusfarver i JS)
-- [MELLEM] Fire `showMessage`-implementationer → én fælles i utils.js; utils.js på alle sider (kun 2 af ~12 nu)
-- [MELLEM] Native `alert()`/`confirm()` i super-admin (16+ steder) og admin-turnering → temastylede modaler
-- [MELLEM] `checkGameWin()` duplikeret ×2 (tælleren); TV'ets swap-logik ×3, set-bokse ×3
-- [LILLE] Død kode: marquee-rester i tv-v3, `loadCourtData()`/`noMatchesMessage` i oversigt,
-  dummy `switchSidesBtn`, `TV_V3_IMPLEMENTATION_SUMMARY.md` i roden
-- [LILLE] `?dt=`-håndtering duplikeret (api.js + auth-guard); default-temafarver uenige 3-4 steder;
-  theme-script.js vs theme-loader.js navneforvirring
+### Kodekvalitet / oprydning ✅ FÆRDIG pånær split (15. juli 2026)
+- ~~Farve-tokens~~ → `--color-info/-rgb` tilføjet i theme-loader (tilgængeligt overalt inkl. TV);
+  bare hex-værdier i admin-toast/player-info erstattet med tokens.
+- ~~Fire `showMessage`-implementationer~~ → delt showMessage/hideMessage/confirmDialog i utils.js;
+  admin + sponsor bruger den. Tælleren (kritisk hold-to-confirm) og settings/theme (requireReload) beholder egne.
+- ~~Native `alert()`/`confirm()`~~ → super-admin (18 steder) + admin-turnering (4) erstattet af temastylede
+  modaler (`confirmModal`, `notify`-toast, `confirmDialog`). Verificeret.
+- ~~`checkGameWin()` duplikeret~~ → samlet i `handleSetWin()` (verificeret begge grene + maxScore-sejr).
+- ~~TV swap-logik ×3, set-bokse ×3~~ → `orientSetScore()` + loopede set-bokse (verificeret orientering/won-lost).
+- ~~Død kode~~ → `loadCourtData()`/`noMatchesMessage` (oversigt), dummy `switchSidesBtn` (court-v3),
+  `TV_V3_IMPLEMENTATION_SUMMARY.md` fjernet.
+- ~~default-temafarver uenige~~ → bg-dark ensrettet til #1a1a2e (styles.css + manifest = init.sql/Standard).
+- ~~JWT-decode duplikeret~~ → delt `window.decodeJwtPayload` (api.js) brugt af api.js + auth-guard.
+- **Udestår bevidst:**
+  - [STOR] Split `admin-script.js` (~3900 linjer) — eneste tilbageværende, gemt til sidst efter ønske.
+  - [LILLE] `?dt=`-dubletten (api.js/auth-guard, forskellige sidesæt — dedup = høj risiko/nul gevinst).
+  - [LILLE] marquee-rester i tv-v3 (parkeret feature, ikke død kode); theme-script vs theme-loader navn.
 
 ### Tilgængelighed (tværgående)
 - [MELLEM] Synligt tastaturfokus (`:focus-visible`) app-bredt; modaler som rigtige dialoger
