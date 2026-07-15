@@ -220,10 +220,6 @@ function setupEventListeners() {
     // Settings menu
     document.getElementById('settingsBtn').addEventListener('click', openSettingsMenu);
     document.getElementById('closeSettingsBtn').addEventListener('click', closeSettingsMenu);
-    document.getElementById('switchSidesBtn').addEventListener('click', () => {
-        switchSides();
-        closeSettingsMenu();
-    });
     document.getElementById('switchSidesCourtBtn').addEventListener('click', () => {
         if (gameState.matchStartTime && !gameState.matchEndTime) return;
         switchSides();
@@ -575,115 +571,75 @@ async function checkGameWin() {
     const winScore = gameState.gameMode === '21' ? 21 : 15;
     const maxScore = gameState.gameMode === '21' ? 30 : 21;
 
-    // Badminton rules: first to winScore, must win by 2, max maxScore
+    // Badminton rules: first to winScore, must win by 2, max maxScore.
+    // De to grene var før identiske pånær hvem der vinder — samlet i handleSetWin.
     if ((p1Score >= winScore && p1Score - p2Score >= 2) || p1Score === maxScore) {
-        // Save set scores to history BEFORE incrementing games or resetting scores
-        gameState.setScoresHistory.push({
-            player1Name: gameState.player1.name,
-            player1Name2: gameState.player1.name2 || null,
-            player2Name: gameState.player2.name,
-            player2Name2: gameState.player2.name2 || null,
-            score: `${p1Score}-${p2Score}`
-        });
-
-        gameState.player1.games++;
-
-        // Check if player won the match (2 games)
-        if (gameState.player1.games === 2) {
-            gameState.matchEndTime = Date.now();
-            gameState.matchCompleted = true;
-            const winnerNames = formatPlayerNames(gameState.player1.name, gameState.player1.name2);
-            const loserNames = formatPlayerNames(gameState.player2.name, gameState.player2.name2);
-            // Fang FOR saveMatchResult, fordi den synkront nuller de globale assigned-vars.
-            const isReportedMatch = !!(assignedHoldkampGameId || assignedTournamentMatchId);
-
-            // Gem øjeblikkeligt (afbryd debounced timer) så oversigt ser matchCompleted=true
-            // inden brugeren evt. klikker "Ny Kamp" og nulstiller tilstanden.
-            if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
-            performSave();
-
-            // Save match result to database
-            saveMatchResult(winnerNames, loserNames, gameState.player1.games, gameState.player2.games);
-
-            showMatchWonMessage(winnerNames, gameState.player1.games, gameState.player2.games, isReportedMatch);
-            return;
-        }
-
-        // Set won but not match - start 2-minute rest break in background, show on Fortsæt
-        const winnerNames = formatPlayerNames(gameState.player1.name, gameState.player1.name2);
-
-        await startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', () => {
-            resetScores();
-            gameState.decidingGameSwitched = false;
-            switchSides();
-            fixDoublesStartPosition();
-            showDoublesPositionMessage();
-        }, false); // showOverlay = false, timer runs in background
-
-        showMessage(
-            'Sæt Vundet!',
-            `${winnerNames} vinder dette sæt!`,
-            [
-                {
-                    text: 'Fortsæt',
-                    callback: () => showRestBreakOverlay(),
-                    style: 'primary'
-                }
-            ]
-        );
+        await handleSetWin('player1', 'player2', p1Score, p2Score);
     } else if ((p2Score >= winScore && p2Score - p1Score >= 2) || p2Score === maxScore) {
-        // Save set scores to history BEFORE incrementing games or resetting scores
-        gameState.setScoresHistory.push({
-            player1Name: gameState.player1.name,
-            player1Name2: gameState.player1.name2 || null,
-            player2Name: gameState.player2.name,
-            player2Name2: gameState.player2.name2 || null,
-            score: `${p1Score}-${p2Score}`
-        });
-
-        gameState.player2.games++;
-
-        // Check if player won the match (2 games)
-        if (gameState.player2.games === 2) {
-            gameState.matchEndTime = Date.now();
-            gameState.matchCompleted = true;
-            const winnerNames = formatPlayerNames(gameState.player2.name, gameState.player2.name2);
-            const loserNames = formatPlayerNames(gameState.player1.name, gameState.player1.name2);
-            const isReportedMatch = !!(assignedHoldkampGameId || assignedTournamentMatchId);
-
-            if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
-            performSave();
-
-            // Save match result to database
-            saveMatchResult(winnerNames, loserNames, gameState.player2.games, gameState.player1.games);
-
-            showMatchWonMessage(winnerNames, gameState.player2.games, gameState.player1.games, isReportedMatch);
-            return;
-        }
-
-        // Set won but not match - start 2-minute rest break in background, show on Fortsæt
-        const winnerNames = formatPlayerNames(gameState.player2.name, gameState.player2.name2);
-
-        await startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', () => {
-            resetScores();
-            gameState.decidingGameSwitched = false;
-            switchSides();
-            fixDoublesStartPosition();
-            showDoublesPositionMessage();
-        }, false); // showOverlay = false, timer runs in background
-
-        showMessage(
-            'Sæt Vundet!',
-            `${winnerNames} vinder dette sæt!`,
-            [
-                {
-                    text: 'Fortsæt',
-                    callback: () => showRestBreakOverlay(),
-                    style: 'primary'
-                }
-            ]
-        );
+        await handleSetWin('player2', 'player1', p1Score, p2Score);
     }
+}
+
+// Håndterer at 'winnerKey' (player1/player2) netop vandt et sæt. p1Score/p2Score
+// er scoren FØR nulstilling (til sæt-historikken, som altid gemmer player1 først).
+async function handleSetWin(winnerKey, loserKey, p1Score, p2Score) {
+    const winner = gameState[winnerKey];
+    const loser = gameState[loserKey];
+
+    // Gem sæt-score i historik FØR games øges/scores nulstilles
+    gameState.setScoresHistory.push({
+        player1Name: gameState.player1.name,
+        player1Name2: gameState.player1.name2 || null,
+        player2Name: gameState.player2.name,
+        player2Name2: gameState.player2.name2 || null,
+        score: `${p1Score}-${p2Score}`
+    });
+
+    winner.games++;
+
+    // Kampen vundet (2 sæt)?
+    if (winner.games === 2) {
+        gameState.matchEndTime = Date.now();
+        gameState.matchCompleted = true;
+        const winnerNames = formatPlayerNames(winner.name, winner.name2);
+        const loserNames = formatPlayerNames(loser.name, loser.name2);
+        // Fang FOR saveMatchResult, fordi den synkront nuller de globale assigned-vars.
+        const isReportedMatch = !!(assignedHoldkampGameId || assignedTournamentMatchId);
+
+        // Gem øjeblikkeligt (afbryd debounced timer) så oversigt ser matchCompleted=true
+        // inden brugeren evt. klikker "Ny Kamp" og nulstiller tilstanden.
+        if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
+        performSave();
+
+        // Save match result to database
+        saveMatchResult(winnerNames, loserNames, winner.games, loser.games);
+
+        showMatchWonMessage(winnerNames, winner.games, loser.games, isReportedMatch);
+        return;
+    }
+
+    // Set won but not match - start 2-minute rest break in background, show on Fortsæt
+    const winnerNames = formatPlayerNames(winner.name, winner.name2);
+
+    await startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', () => {
+        resetScores();
+        gameState.decidingGameSwitched = false;
+        switchSides();
+        fixDoublesStartPosition();
+        showDoublesPositionMessage();
+    }, false); // showOverlay = false, timer runs in background
+
+    showMessage(
+        'Sæt Vundet!',
+        `${winnerNames} vinder dette sæt!`,
+        [
+            {
+                text: 'Fortsæt',
+                callback: () => showRestBreakOverlay(),
+                style: 'primary'
+            }
+        ]
+    );
 }
 
 function fixDoublesServePosition() {

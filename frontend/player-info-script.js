@@ -600,7 +600,7 @@ async function handleXmlImport() {
     } catch (error) {
         console.error('XML import error:', error);
         document.getElementById('importStatusText').textContent = `Fejl: ${error.message}`;
-        document.getElementById('importStatusText').style.color = '#e74c3c';
+        document.getElementById('importStatusText').style.color = 'var(--color-danger, #d92c3f)';
         document.getElementById('importXmlBtn').disabled = false;
         document.getElementById('importXmlBtn').textContent = 'Importér Spillere';
     }

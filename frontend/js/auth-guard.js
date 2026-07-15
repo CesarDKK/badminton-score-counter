@@ -30,12 +30,12 @@
     const authToken   = sessionStorage.getItem('authToken');
     let   deviceToken = sessionStorage.getItem('deviceToken');
 
-    // JWT-payload er base64URL (kan indeholde - og _) — normalisér før atob,
-    // ellers kaster atob og et GYLDIGT token bliver fejlagtigt kasseret
-    function decodeJwtPayload(jwt) {
+    // Delt decoder fra api.js (loades altid før auth-guard); lokal fallback for
+    // en sikkerheds skyld hvis api.js mod forventning mangler.
+    const decodeJwtPayload = window.decodeJwtPayload || function (jwt) {
         const b64 = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
         return JSON.parse(atob(b64));
-    }
+    };
 
     // Ryd udløbne tokens så de ikke blokerer for korrekt re-auth
     function isExpired(jwt) {

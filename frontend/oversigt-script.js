@@ -571,35 +571,8 @@ async function loadAllCourts() {
     }
 }
 
-async function loadCourtData(courtId) {
-    try {
-        const gameState = await api.getGameState(courtId);
-
-        // Add court ID to the game state
-        gameState.courtId = courtId;
-
-        // Bane-banner fra cachen (opdateres via config-event), ikke pr. kald
-        const banner = _courtBanners.find(b =>
-            b.assignedCourts && b.assignedCourts.includes(courtId)
-        );
-        gameState.courtBanner = banner || null;
-
-        return gameState;
-    } catch (error) {
-        console.error(`Failed to load court ${courtId}:`, error);
-        return {
-            courtId: courtId,
-            isActive: false,
-            player1: { name: 'N/A', score: 0, games: 0 },
-            player2: { name: 'N/A', score: 0, games: 0 },
-            timerSeconds: 0
-        };
-    }
-}
-
 function displayCurrentPage() {
     const grid = document.getElementById('courtsGrid');
-    const noMatchesMsg = document.getElementById('noMatchesMessage');
     const pageIndicator = document.getElementById('pageIndicator');
     const pageInfo = document.getElementById('pageInfo');
 
@@ -608,19 +581,16 @@ function displayCurrentPage() {
     if (activeTeamMatches.length > 0) {
         grid.style.display = 'none';
         grid.innerHTML = '';
-        noMatchesMsg.style.display = 'none';
         pageIndicator.style.display = 'none';
         return;
     }
 
     if (activeCourts.length === 0) {
         grid.style.display = 'none';
-        noMatchesMsg.style.display = 'none';
         pageIndicator.style.display = 'none';
         return;
     }
 
-    noMatchesMsg.style.display = 'none';
     grid.style.display = 'grid';
 
     // Calculate total pages

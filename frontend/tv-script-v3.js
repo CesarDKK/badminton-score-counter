@@ -817,137 +817,65 @@ function updateTeamSetBoxes(teamId, playerData, setHistory, currentSetIndex, gam
     // Determine which team we're displaying (1 or 2)
     const isTeam1 = teamId === 'team1';
 
-    // Set 1
-    const box1 = document.getElementById(`${teamId}Set1`);
-    if (setHistory.length >= 1) {
-        // Set 1 is complete - show final score from history (AUTHORITATIVE SOURCE)
-        const set1Score = extractTeamScore(setHistory[0], isTeam1, gameState, playersSwapped);
-        box1.textContent = set1Score;
-        box1.className = 'set-box'; // Reset classes
-        markSetResult(teamId, 1, setHistory[0], isTeam1, gameState, playersSwapped);
-    } else if (currentSetIndex === 0) {
-        // Set 1 is current ongoing set - show and cache current score
-        const currentScore = playerData.score;
-        // Cache maximum score we see (for fallback if history delayed)
-        if (currentScore > cachedSetScores[teamId].set1) {
-            cachedSetScores[teamId].set1 = currentScore;
-        }
-        box1.textContent = currentScore;
-        box1.className = 'set-box current';
-    } else {
-        // Set 1 finished but history not updated yet - use cached score as fallback
-        box1.textContent = cachedSetScores[teamId].set1 || '-';
-        box1.className = 'set-box';
-    }
+    // Set 1/2/3 håndteres ens (var før tre copy-paste-blokke)
+    for (let setNum = 1; setNum <= 3; setNum++) {
+        const idx = setNum - 1;
+        const box = document.getElementById(`${teamId}Set${setNum}`);
+        const cacheKey = 'set' + setNum;
 
-    // Set 2
-    const box2 = document.getElementById(`${teamId}Set2`);
-    if (setHistory.length >= 2) {
-        // Set 2 is complete - show final score from history (AUTHORITATIVE SOURCE)
-        const set2Score = extractTeamScore(setHistory[1], isTeam1, gameState, playersSwapped);
-        box2.textContent = set2Score;
-        box2.className = 'set-box'; // Reset classes
-        markSetResult(teamId, 2, setHistory[1], isTeam1, gameState, playersSwapped);
-    } else if (currentSetIndex === 1) {
-        // Set 2 is current ongoing set - show and cache current score
-        const currentScore = playerData.score;
-        if (currentScore > cachedSetScores[teamId].set2) {
-            cachedSetScores[teamId].set2 = currentScore;
-        }
-        box2.textContent = currentScore;
-        box2.className = 'set-box current';
-    } else if (currentSetIndex >= 2) {
-        // Set 2 finished but history not updated yet - use cached score as fallback
-        box2.textContent = cachedSetScores[teamId].set2 || '-';
-        box2.className = 'set-box';
-    } else {
-        // Not started yet
-        box2.textContent = '-';
-        box2.className = 'set-box';
-    }
-
-    // Set 3
-    const box3 = document.getElementById(`${teamId}Set3`);
-    if (setHistory.length >= 3) {
-        // Set 3 is complete - show final score from history (AUTHORITATIVE SOURCE)
-        const set3Score = extractTeamScore(setHistory[2], isTeam1, gameState, playersSwapped);
-        box3.textContent = set3Score;
-        box3.className = 'set-box'; // Reset classes
-        markSetResult(teamId, 3, setHistory[2], isTeam1, gameState, playersSwapped);
-    } else if (currentSetIndex === 2) {
-        // Set 3 is current ongoing set - show and cache current score
-        const currentScore = playerData.score;
-        if (currentScore > cachedSetScores[teamId].set3) {
-            cachedSetScores[teamId].set3 = currentScore;
-        }
-        box3.textContent = currentScore;
-        box3.className = 'set-box current';
-    } else {
-        // Not started yet
-        box3.textContent = '-';
-        box3.className = 'set-box';
-    }
-}
-
-function extractTeamScore(setData, isTeam1, gameState, playersSwapped) {
-    let scoreText;
-
-    if (typeof setData === 'string') {
-        // Old format: "21-15"
-        scoreText = setData;
-    } else {
-        // New format: object with player names and score
-        const storedPlayer1Name = setData.player1Name;
-
-        // Check if stored names match original positions
-        if (storedPlayer1Name === originalPlayer1Name) {
-            // Names are in original order
-            scoreText = setData.score;
+        if (setHistory.length >= setNum) {
+            // Sættet er færdigt — vis autoritativ score fra historikken
+            box.textContent = extractTeamScore(setHistory[idx], isTeam1);
+            box.className = 'set-box';
+            markSetResult(teamId, setNum, setHistory[idx], isTeam1);
+        } else if (currentSetIndex === idx) {
+            // Igangværende sæt — vis og cache aktuel score (max, som fallback)
+            const currentScore = playerData.score;
+            if (currentScore > cachedSetScores[teamId][cacheKey]) {
+                cachedSetScores[teamId][cacheKey] = currentScore;
+            }
+            box.textContent = currentScore;
+            box.className = 'set-box current';
+        } else if (currentSetIndex > idx) {
+            // Sættet er slut men historikken ikke opdateret endnu — cachet fallback
+            box.textContent = cachedSetScores[teamId][cacheKey] || '-';
+            box.className = 'set-box';
         } else {
-            // Names were swapped when set was saved - swap score back
-            const scores = setData.score.split('-').map(s => s.trim());
-            scoreText = `${scores[1]}-${scores[0]}`;
+            // Ikke startet endnu
+            box.textContent = '-';
+            box.className = 'set-box';
         }
     }
-
-    // Parse score and return appropriate team's score
-    const scores = scoreText.split('-').map(s => parseInt(s.trim()));
-    return isTeam1 ? scores[0] : scores[1];
 }
 
-function markSetResult(teamId, setNum, setData, isTeam1, gameState, playersSwapped) {
+// Orientér et sæts score til [team1Score, team2Score] — team1 er altid den
+// oprindelige player1-side, uanset om siderne var byttet da sættet blev gemt.
+// Delt af extractTeamScore og markSetResult (var før tredobbelt-dupleret).
+function orientSetScore(setData) {
+    let scoreText;
+    if (typeof setData === 'string') {
+        scoreText = setData; // gammelt format: "21-15"
+    } else if (setData.player1Name === originalPlayer1Name) {
+        scoreText = setData.score; // navne i original rækkefølge
+    } else {
+        // Navnene var byttet da sættet blev gemt — vend scoren tilbage
+        const s = setData.score.split('-').map(x => x.trim());
+        scoreText = `${s[1]}-${s[0]}`;
+    }
+    const scores = scoreText.split('-').map(s => parseInt(s.trim()));
+    return [scores[0], scores[1]];
+}
+
+function extractTeamScore(setData, isTeam1) {
+    const [t1, t2] = orientSetScore(setData);
+    return isTeam1 ? t1 : t2;
+}
+
+function markSetResult(teamId, setNum, setData, isTeam1) {
     const box = document.getElementById(`${teamId}Set${setNum}`);
-
-    let scoreText;
-    if (typeof setData === 'string') {
-        scoreText = setData;
-    } else {
-        const storedPlayer1Name = setData.player1Name;
-        if (storedPlayer1Name === originalPlayer1Name) {
-            scoreText = setData.score;
-        } else {
-            const scores = setData.score.split('-').map(s => s.trim());
-            scoreText = `${scores[1]}-${scores[0]}`;
-        }
-    }
-
-    const scores = scoreText.split('-').map(s => parseInt(s.trim()));
-    const team1Score = scores[0];
-    const team2Score = scores[1];
-
-    if (isTeam1) {
-        if (team1Score > team2Score) {
-            box.classList.add('won');
-        } else {
-            box.classList.add('lost');
-        }
-    } else {
-        if (team2Score > team1Score) {
-            box.classList.add('won');
-        } else {
-            box.classList.add('lost');
-        }
-    }
+    const [t1, t2] = orientSetScore(setData);
+    const won = isTeam1 ? t1 > t2 : t2 > t1;
+    box.classList.add(won ? 'won' : 'lost');
 }
 
 // Update serving team highlight
@@ -1424,18 +1352,11 @@ function showMatchFinished(gameState, playersSwapped) {
                                                gameState.isDoubles);
                 scoreText = setData;
             } else {
-                const storedPlayer1Name = setData.player1Name;
-                const scores = setData.score.split('-').map(s => parseInt(s.trim()));
-
-                if (storedPlayer1Name === originalPlayer1Name) {
-                    player1Name = formatPlayerNames(originalPlayer1Name, originalPlayer1Name2, gameState.isDoubles);
-                    player2Name = formatPlayerNames(originalPlayer2Name, originalPlayer2Name2, gameState.isDoubles);
-                    scoreText = setData.score;
-                } else {
-                    player1Name = formatPlayerNames(originalPlayer1Name, originalPlayer1Name2, gameState.isDoubles);
-                    player2Name = formatPlayerNames(originalPlayer2Name, originalPlayer2Name2, gameState.isDoubles);
-                    scoreText = `${scores[1]}-${scores[0]}`;
-                }
+                // Navnene er altid original-siderne; kun scoren orienteres (delt helper)
+                player1Name = formatPlayerNames(originalPlayer1Name, originalPlayer1Name2, gameState.isDoubles);
+                player2Name = formatPlayerNames(originalPlayer2Name, originalPlayer2Name2, gameState.isDoubles);
+                const [t1, t2] = orientSetScore(setData);
+                scoreText = `${t1}-${t2}`;
             }
 
             const scores = scoreText.split('-').map(s => parseInt(s.trim()));

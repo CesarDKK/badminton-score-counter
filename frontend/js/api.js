@@ -5,6 +5,15 @@
 
 const API_BASE_URL = '/api';
 
+// Decode et JWT-payload uden verifikation (client-side brug). JWT-payload er
+// base64URL (kan indeholde - og _), som skal normaliseres før atob — ellers
+// kaster den på gyldige tokens. Global så auth-guard.js kan bruge samme kopi
+// (api.js loades altid før auth-guard). Kaster ved ugyldigt input.
+window.decodeJwtPayload = function (token) {
+    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(b64));
+};
+
 class BadmintonAPI {
     constructor() {
         this.token = sessionStorage.getItem('authToken');
@@ -29,14 +38,11 @@ class BadmintonAPI {
     }
 
     // Returner decoded payload fra JWT uden verifikation (til client-side brug).
-    // JWT-payload er base64URL — normalisér - og _ før atob, ellers kaster den
-    // på gyldige tokens.
     getTokenPayload() {
         const token = this.token;
         if (!token) return null;
         try {
-            const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-            return JSON.parse(atob(b64));
+            return window.decodeJwtPayload(token);
         } catch { return null; }
     }
 

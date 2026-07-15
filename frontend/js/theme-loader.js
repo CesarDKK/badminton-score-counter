@@ -61,12 +61,14 @@
         root.style.setProperty('--color-on-accent',  onColor(accent));
         root.style.setProperty('--color-on-primary', onColor(primary));
 
-        // Semantisk advarselsfarve (offline-/forbindelsesbadges) — fast, uafhængig
-        // af klub-tema. Sættes her (ikke i styles.css) fordi det er det ENESTE
-        // stylesheet-uafhængige sted alle sider inkl. TV loader; tv-v3.html
-        // loader ikke styles.css, så et token dér ville være udefineret på TV.
+        // Semantiske status-farver (offline-/forbindelsesbadges, info-toasts) —
+        // faste, uafhængige af klub-tema. Sættes her (ikke kun i styles.css) fordi
+        // det er det ENESTE stylesheet-uafhængige sted alle sider inkl. TV loader;
+        // tv-v3.html loader ikke styles.css, så et token dér ville være udefineret.
         root.style.setProperty('--color-warning', '#ffb02e');
         root.style.setProperty('--color-warning-rgb', '255, 176, 46');
+        root.style.setProperty('--color-info', '#3498db');
+        root.style.setProperty('--color-info-rgb', '52, 152, 219');
 
         root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${primary} 0%, ${accent} 100%)`);
     }

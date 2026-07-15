@@ -3714,7 +3714,7 @@ function tsImportStatus(text, type) {
         return;
     }
     const colors = {
-        info: { bg: 'rgba(52,152,219,0.15)', border: '#3498db', text: '#7fc7f0' },
+        info: { bg: 'rgba(var(--color-info-rgb, 52, 152, 219),0.15)', border: 'var(--color-info, #3498db)', text: '#7fc7f0' },
         success: { bg: 'rgba(var(--color-win-rgb, 69, 209, 126),0.15)', border: 'var(--color-win, #45d17e)', text: '#90df93' },
         error: { bg: 'rgba(var(--color-danger-rgb, 217, 44, 63),0.15)', border: 'var(--color-danger, #d92c3f)', text: '#f0867a' }
     };
