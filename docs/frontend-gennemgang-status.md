@@ -1,6 +1,6 @@
 # Frontend-gennemgang — status og videre arbejde
 
-**Sidst opdateret:** 14. juli 2026
+**Sidst opdateret:** 15. juli 2026 — **GENNEMGANG LUKKET** (se status nederst)
 **Grundlag:** Fuld gennemgang af alle frontend-sider (~130 forslag).
 **Dagens arbejde er committet på branchen `frontend-gennemgang-fixes`** (commit `481ed73`,
 43 filer, +708/−5530). Branchen er IKKE pushet/merget endnu. Backend-ændringer
@@ -152,7 +152,7 @@ Oprindelige punkter til reference:
 - ~~[LILLE] `user-scalable=no`; `prefers-reduced-motion` på landing/login;
   lav kontrast på hint-tekster (#666/#777) og `.set-label`~~
 
-### Småting (hale) — branch `smaating-hale` (afventer merge-godkendelse)
+### Småting (hale) — MERGET til main (branch `smaating-hale`)
 **RETTET (verificeret i browser hvor relevant):**
 - Landing: ✅ `rel="noopener"` på TV-knapper
 - Klub-login: ✅ rigtigt `<form>` (password managers + Enter), `for=` på labels, brugervenlig fejlbesked (401/429/5xx/netværk)
@@ -167,7 +167,7 @@ Oprindelige punkter til reference:
 - Sponsor: ✅ upload-fremskridt — `uploadSponsorImages` er nu XHR-baseret med `upload.onprogress`; sponsor-siden viser en progress-bar (0→100 %, derefter "Behandler…")
 - Note: succes-feedback ved "Skift kode" (super-admin) var allerede rettet tidligere
 
-**BEVIDST UDELADT (afventer Jespers beslutning — mest subjektivt/kosmetisk el. kræver build-step):**
+**PARKERET (gennemgang lukket — se nedenfor):**
 - Landing: stagger-animation stopper ved knap 12/8; emoji-TV-ikon (📺); "Display"/"Admin Panel" på engelsk
 - Tema: preset-farver duplikeret i HTML+JS; `pattern`-attributter uden virkning
 - Settings: inkonsistent gem-model (toggles gemmer straks vs Gem-knapper) — UX-designvalg
@@ -175,8 +175,19 @@ Oprindelige punkter til reference:
 
 ---
 
-## Anbefalet næste skridt
+## Status: GENNEMGANG LUKKET (Jesper, 2026-07-15)
 
-1. Push/merge branchen (efter din gennemgang) + image-rebuild.
-2. Tag **PWA/SW + cache-strategien** som næste blok — afgrænset, fjerner en reel driftsirritation.
-3. Gem de store refaktoreringer (admin-script.js, farve-tokens) til der ikke er lavthængende frugt tilbage.
+Frontend-gennemgangen er afsluttet og to-do-listen lukket for nu. Alle blokke med
+reel værdi (fejl/sikkerhed, UX, PWA/cache, SSE-push, performance, kodekvalitet,
+småting) er gennemført, merget til `main` og pushet. En evt. ny gennemgang kan
+tages op på et senere tidspunkt.
+
+**Bevidst parkeret (ikke planlagt):**
+- **[STOR] Split af `admin-script.js`** (~3900 linjer) — stor refaktorering uden
+  funktionel gevinst; høj risiko/lav belønning. Tages kun op hvis filen bliver et
+  konkret problem at arbejde i.
+- **Småting-halens rest** (ovenfor) — subjektivt/kosmetisk eller kræver et build-step.
+- **Tilgængelighed** — fravalgt (se egen sektion ovenfor).
+
+**Ved permanent produktion:** frontend + backend-image skal rebuildes
+(`docker compose build frontend backend && docker compose up -d frontend backend`).
