@@ -25,6 +25,16 @@ function publishGameStateChange(req, courtId, type = 'update') {
     emitter.emit(tenantKey(req), { courtId: Number(courtId), type });
 }
 
+// Config-events: hjaelpe-data der ikke er bundet til een bane (sponsorer,
+// settings, tema, spiller-logoer). TV/oversigt invaliderer deres cache og
+// henter kun det relevante paa ny — saa de slipper for at polle det jaevnligt.
+// courtId er null: SSE-endpointet sender config-events til ALLE skaerme uanset
+// deres ?court=-filter.
+// scope: 'sponsors' | 'settings' | 'theme' | 'logos'
+function publishConfigChange(req, scope) {
+    emitter.emit(tenantKey(req), { courtId: null, type: 'config', scope });
+}
+
 // Returnerer en unsubscribe-funktion
 function subscribeGameStateChanges(req, handler) {
     const key = tenantKey(req);
@@ -32,4 +42,4 @@ function subscribeGameStateChanges(req, handler) {
     return () => emitter.removeListener(key, handler);
 }
 
-module.exports = { publishGameStateChange, subscribeGameStateChanges };
+module.exports = { publishGameStateChange, publishConfigChange, subscribeGameStateChanges };

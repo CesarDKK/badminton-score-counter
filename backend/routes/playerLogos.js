@@ -2,6 +2,20 @@ const express = require('express');
 const router = express.Router();
 const { query } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
+const { publishConfigChange } = require('../events/gameStateEvents');
+
+// Efter en vellykket ændring af et spiller-logo pushes et 'logos'-config-event,
+// så TV/oversigt invaliderer deres logo-cache og henter på ny.
+router.use((req, res, next) => {
+    if (req.method !== 'GET') {
+        res.on('finish', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+                publishConfigChange(req, 'logos');
+            }
+        });
+    }
+    next();
+});
 
 // GET /api/player-logos — alle spiller-logo overrides (offentlig)
 router.get('/', async (req, res, next) => {

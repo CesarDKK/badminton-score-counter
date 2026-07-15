@@ -51,8 +51,45 @@ document.addEventListener('DOMContentLoaded', async function() {
     loadCourtData();
     startAutoRefresh();
     startLocalTimer();
-    setInterval(refreshSponsorSettings, 10000);
+    // Sponsorer/logoer/settings/tema opdateres nu via SSE-config-events (push).
+    // Et langsomt sikkerhedsnet (5 min) selvheler ved missede events (SSE-
+    // reconnect-huller) og fanger super-admins centrale logo-ændringer, som
+    // ikke pushes pr. tenant. Erstatter den gamle 10 s-sponsor-timer.
+    setInterval(() => {
+        refreshSponsorSettings();
+        invalidateTvLogoCache();
+        scheduleCourtDataLoad();
+    }, 5 * 60 * 1000);
 });
+
+// Nulstil logo-caches så de hentes på ny ved næste render (fx efter et
+// 'logos'-config-event eller sikkerhedsnettets tick).
+function invalidateTvLogoCache() {
+    _tvLogos = null;
+    _tvPlayerLogos = null;
+    _tvClubByName = null;
+}
+
+// Reager på et SSE config-event (hjælpe-data ændret et andet sted end game-state)
+async function handleTvConfigEvent(scope) {
+    if (scope === 'sponsors') {
+        await refreshSponsorSettings();
+    } else if (scope === 'logos') {
+        invalidateTvLogoCache();
+        scheduleCourtDataLoad(); // gen-render med friske logoer
+    } else if (scope === 'theme') {
+        if (window.loadTheme) await window.loadTheme();
+    } else if (scope === 'settings') {
+        // hideTvQr / courtCount kan være ændret — genlæs settings + gen-render
+        try {
+            const settings = await api.getSettings();
+            const qrParam = urlParams.get('qr');
+            qrCounterEnabled = !!(await (await fetch('/api/mode')).json()).qrCounter
+                && qrParam !== '0' && !settings.hideTvQr;
+        } catch {}
+        scheduleCourtDataLoad();
+    }
+}
 
 async function initializeTVDisplay() {
     document.getElementById('courtNumber').textContent = courtId;
@@ -105,7 +142,15 @@ function startAutoRefresh() {
     if (window.LiveUpdates) {
         liveUpdatesHandle = window.LiveUpdates.connect({
             court: courtId,
-            onEvent: () => scheduleCourtDataLoad(),
+            onEvent: (event) => {
+                // Config-events (sponsorer/logoer/settings/tema) håndteres målrettet;
+                // alt andet er en game-state-poke → hent frisk banestilstand.
+                if (event && event.type === 'config') {
+                    handleTvConfigEvent(event.scope);
+                } else {
+                    scheduleCourtDataLoad();
+                }
+            },
             onStateChange: (connected) => startPolling(connected ? SAFETY_POLL_MS : FALLBACK_POLL_MS)
         });
     }

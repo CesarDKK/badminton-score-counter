@@ -84,13 +84,22 @@ api.js/api-v2-navneforvirring.
 
 ## ⬜ Udestående arbejde (prioriteret)
 
-### Robusthed ved langtidskørsel (TV/oversigt)
-- [MELLEM] Logo-caches på TV opdateres aldrig (`_tvLogos` m.fl.) — nulstil ved ny kamp / TTL ~10 min
-- [MELLEM] Idle-QR-koden fornys aldrig — genindlæs periodisk (kan blive død hvis token udløber)
-- [MELLEM] Ingen staleness-detektion i SSE-klienten (`live-updates.js`) — server-ping ~30 s + klient-watchdog *(kræver backend)*
-- [MELLEM] Oversigt henter banner-listen hver 2. sekund — flyt til 10 s-cyklus og cache
-- [LILLE] Ufuldstændig `beforeunload`-oprydning (tv-v3 + oversigt), `courtMatchTimes` mini-leak,
-  pause-nedtælling på vægur (`Date.now()` → `performance.now()`), burn-in (pixel-shift)
+### Robusthed ved langtidskørsel (TV/oversigt) — DELVIST FÆRDIG (15. juli 2026)
+Løst via **push af hjælpe-data** (SSE-config-events): backend broadcaster nu
+`{type:'config', scope}` ved ændring af sponsorer/settings/tema/spiller-logoer
+(DRY finish-hooks i sponsors.js/settings.js/playerLogos.js). TV/oversigt lytter,
+invaliderer den relevante cache og henter kun da. Config-events passerer bane-
+filteret. Et langsomt sikkerhedsnet (5 min) selvheler ved missede events + fanger
+super-admins centrale logo-ændringer (som ikke pushes pr. tenant).
+- ~~Logo-caches på TV/oversigt opdateres aldrig~~ → invalideres på 'logos'-event + sikkerhedsnet
+- ~~Oversigt henter banner-listen hver 2. sekund~~ → cachet, opdateres kun på 'sponsors'-event (0 fetches i 2s-loopet)
+- ~~10 s sponsor/idle-timere på TV+oversigt~~ → erstattet af push + 5-min sikkerhedsnet
+- **Udestår stadig:**
+  - [MELLEM] Idle-QR-koden fornys aldrig — genindlæs periodisk (kan blive død hvis token udløber)
+  - [MELLEM] Staleness-detektion i SSE-klienten (`live-updates.js`) — server sender allerede `: ping` hvert 25s;
+    mangler en klient-watchdog der genforbinder ved lang stilhed
+  - [MELLEM] Super-admins centrale logo-bibliotek pushes ikke pr. tenant (kræver cross-tenant broadcast) — dækkes af 5-min sikkerhedsnettet
+  - [LILLE] Ufuldstændig `beforeunload`-oprydning, `courtMatchTimes` mini-leak, pause-nedtælling på vægur, burn-in
 
 ### Performance
 - [MELLEM] Tællerens `serverSyncTick` fyrer op til 4 API-kald pr. tick — kombinér / spring over uden SSE-signal

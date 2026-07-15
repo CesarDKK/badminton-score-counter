@@ -4,9 +4,24 @@ const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
 const { uploadLimiter } = require('../middleware/rateLimiter');
 const upload = require('../config/multer');
+const { publishConfigChange } = require('../events/gameStateEvents');
 const sharp = require('sharp');
 const fs = require('fs').promises;
 const path = require('path');
+
+// Efter enhver vellykket mutation (upload/slet/toggle/udløb/bane-tildeling/
+// varighed) pushes et 'sponsors'-config-event, så TV/oversigt henter de nye
+// sponsorbilleder med det samme i stedet for at polle hvert 10. sekund.
+router.use((req, res, next) => {
+    if (req.method !== 'GET') {
+        res.on('finish', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+                publishConfigChange(req, 'sponsors');
+            }
+        });
+    }
+    next();
+});
 
 /**
  * Check and deactivate expired sponsor images

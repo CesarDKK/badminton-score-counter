@@ -212,7 +212,9 @@ router.get('/events/stream', (req, res) => {
     send('retry: 2000\n\n');
 
     const unsubscribe = subscribeGameStateChanges(req, (event) => {
-        if (courtFilter !== null && event.courtId !== courtFilter) return;
+        // Config-events (sponsorer/settings/tema/logoer) gaelder alle skaerme og
+        // filtreres ikke pr. bane — kun bane-specifikke game-state-events goer.
+        if (event.type !== 'config' && courtFilter !== null && event.courtId !== courtFilter) return;
         send(`data: ${JSON.stringify(event)}\n\n`);
     });
 

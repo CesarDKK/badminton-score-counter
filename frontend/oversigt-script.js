@@ -44,6 +44,31 @@ let activeTeamMatches = []; // alle aktive holdkampe (multi-holdkamp)
 let _overviewLogos = []; // central logo-liste, hentet én gang ved init
 let _overviewPlayerLogos = []; // player_logos overrides
 let _overviewClubByName = {};  // normaliseret spillernavn -> klub
+let _courtBanners = []; // bane-sponsorbannere — caches, opdateres via config-event (før: hentet hvert 2. sek)
+
+// Genhent bane-bannerne. Kaldes ved init, ved 'sponsors'-config-event og af
+// sikkerhedsnettet — så loadAllCourts ikke fetcher listen i hvert 2s-refresh.
+async function refreshCourtBanners() {
+    try {
+        _courtBanners = await api.getSponsorImages('court') || [];
+    } catch (e) {
+        _courtBanners = [];
+    }
+}
+
+// Nulstil + genhent logo-listerne (efter et 'logos'-config-event / sikkerhedsnet)
+async function refreshOverviewLogos() {
+    try { _overviewLogos = await api.getPublicLogos() || []; } catch (e) { _overviewLogos = []; }
+    try {
+        _overviewPlayerLogos = await api.getPlayerLogos() || [];
+        const clubs = await api.getPlayerClubs() || [];
+        _overviewClubByName = {};
+        clubs.forEach(c => { if (c && c.name) _overviewClubByName[LogoMatch.normalizeName(c.name)] = c.club; });
+    } catch (e) {
+        _overviewPlayerLogos = [];
+        _overviewClubByName = {};
+    }
+}
 
 let _hkRenderedKey = ''; // signatur af struktur (side + match-ids + game-ids + status)
 const HK_DOUBLES = ['MD', 'DD', 'HD', 'Double'];
@@ -322,27 +347,23 @@ async function initialize() {
 
         await refreshIdleSettings();
 
-        // Hent logo-relaterede lister én gang (holdkamp-headere + spiller-logoer)
-        try {
-            _overviewLogos = await api.getPublicLogos() || [];
-        } catch (e) {
-            _overviewLogos = [];
-        }
-        try {
-            _overviewPlayerLogos = await api.getPlayerLogos() || [];
-            const clubs = await api.getPlayerClubs() || [];
-            _overviewClubByName = {};
-            clubs.forEach(c => { if (c && c.name) _overviewClubByName[LogoMatch.normalizeName(c.name)] = c.club; });
-        } catch (e) {
-            _overviewPlayerLogos = [];
-            _overviewClubByName = {};
-        }
+        // Hent logo-lister + bane-bannere én gang; herefter opdateres de via
+        // SSE-config-events (push) i stedet for timere.
+        await refreshOverviewLogos();
+        await refreshCourtBanners();
 
         await loadHoldkamp();
         await loadAllCourts();
 
-        // Refresh sponsor images every 10 seconds
-        setInterval(refreshIdleSettings, 10000);
+        // Sponsorer/logoer/settings opdateres nu via SSE-config-events. Et
+        // langsomt sikkerhedsnet (5 min) selvheler ved missede events og fanger
+        // super-admins centrale logo-ændringer. Erstatter den gamle 10 s-timer.
+        setInterval(async () => {
+            await refreshIdleSettings();
+            await refreshCourtBanners();
+            await refreshOverviewLogos();
+            scheduleRefresh();
+        }, 5 * 60 * 1000);
     } catch (error) {
         console.error('Failed to initialize overview:', error);
         hideLoading();
@@ -364,8 +385,9 @@ async function loadAllCourts() {
         // Fetch all court data in a single batch request (much more efficient!)
         const allGameStates = await api.getAllGameStates();
 
-        // Add court banners to each court
-        const courtBanners = await api.getSponsorImages('court');
+        // Bane-bannere fra cachen (opdateres via 'sponsors'-config-event), ikke
+        // et fetch pr. refresh — sparer ~30 kald/min på en skærm der kører døgnet rundt.
+        const courtBanners = _courtBanners;
 
         allCourtData = allGameStates.map(gameState => {
             // Find banner for this court
@@ -556,9 +578,8 @@ async function loadCourtData(courtId) {
         // Add court ID to the game state
         gameState.courtId = courtId;
 
-        // Fetch court banner if court type
-        const courtBanners = await api.getSponsorImages('court');
-        const banner = courtBanners.find(b =>
+        // Bane-banner fra cachen (opdateres via config-event), ikke pr. kald
+        const banner = _courtBanners.find(b =>
             b.assignedCourts && b.assignedCourts.includes(courtId)
         );
         gameState.courtBanner = banner || null;
@@ -1141,8 +1162,35 @@ function startAutoRefresh() {
     // fanger holdkamp-ændringer der ikke udløser game-state events).
     if (window.LiveUpdates) {
         liveUpdatesHandle = window.LiveUpdates.connect({
-            onEvent: () => scheduleRefresh()
+            onEvent: (event) => {
+                if (event && event.type === 'config') {
+                    handleOversigtConfigEvent(event.scope);
+                } else {
+                    scheduleRefresh();
+                }
+            }
         });
+    }
+}
+
+// Reager på et SSE config-event: invalidér den relevante cache og gen-render.
+async function handleOversigtConfigEvent(scope) {
+    if (scope === 'sponsors') {
+        await refreshIdleSettings();
+        await refreshCourtBanners();
+        scheduleRefresh();
+    } else if (scope === 'logos') {
+        await refreshOverviewLogos();
+        scheduleRefresh();
+    } else if (scope === 'theme') {
+        if (window.loadTheme) await window.loadTheme();
+    } else if (scope === 'settings') {
+        try {
+            const settings = await api.getSettings();
+            courtCount = settings.courtCount || courtCount;
+        } catch {}
+        await refreshIdleSettings();
+        scheduleRefresh();
     }
 }
 

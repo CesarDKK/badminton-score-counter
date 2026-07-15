@@ -3,6 +3,22 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
+const { publishConfigChange } = require('../events/gameStateEvents');
+
+// Efter enhver vellykket settings-mutation pushes et config-event, så TV/
+// oversigt henter de nye værdier straks. Tema-ændringer får scope 'theme'
+// (så tema-loaderen kan gen-anvende farverne), resten 'settings'. Kodeord-
+// ændringen pusher også, men det er harmløst (skærmene henter blot settings).
+router.use((req, res, next) => {
+    if (req.method !== 'GET') {
+        res.on('finish', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+                publishConfigChange(req, req.path === '/theme' ? 'theme' : 'settings');
+            }
+        });
+    }
+    next();
+});
 
 // GET /api/settings - Get all settings (public)
 router.get('/', async (req, res, next) => {
