@@ -675,44 +675,9 @@ async function saveSlideDuration() {
 }
 
 // Message overlay functions (replaces alert/confirm dialogs)
-function showMessage(title, text, buttons = [{ text: 'OK', callback: null, style: 'primary' }]) {
-    const overlay = document.getElementById('messageOverlay');
-    const titleElement = document.getElementById('messageTitle');
-    const textElement = document.getElementById('messageText');
-    const buttonsContainer = document.getElementById('messageButtons');
-
-    titleElement.textContent = title;
-    textElement.textContent = text;
-
-    // Clear existing buttons
-    buttonsContainer.innerHTML = '';
-
-    // Add buttons
-    buttons.forEach(button => {
-        const btn = document.createElement('button');
-        btn.textContent = button.text;
-        btn.className = button.style === 'secondary' ? 'btn-secondary' : (button.style === 'danger' ? 'btn-danger' : 'btn-primary');
-        btn.style.fontSize = '1.5em';
-        btn.style.padding = '15px 40px';
-        btn.style.cursor = 'pointer';
-
-        btn.onclick = () => {
-            hideMessage();
-            if (button.callback) {
-                button.callback();
-            }
-        };
-
-        buttonsContainer.appendChild(btn);
-    });
-
-    overlay.style.display = 'flex';
-}
-
-function hideMessage() {
-    const overlay = document.getElementById('messageOverlay');
-    overlay.style.display = 'none';
-}
+// Besked-overlay er nu delt i js/utils.js (samme markup + adfærd)
+const showMessage = window.BadmintonUtils.showMessage;
+const hideMessage = window.BadmintonUtils.hideMessage;
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', function() {

@@ -326,7 +326,7 @@ async function handleToggleClub(id) {
         if (club) club.is_active = result.is_active;
         renderClubs();
     } catch (err) {
-        alert('Fejl: ' + err.message);
+        notify('Fejl: ' + err.message, 'error');
     }
 }
 
@@ -622,12 +622,12 @@ async function downloadClubBackup(clubId) {
         a.href = url; a.download = filename; a.click();
         URL.revokeObjectURL(url);
     } catch (err) {
-        alert('Backup fejlede: ' + err.message);
+        notify('Backup fejlede: ' + err.message, 'error');
     }
 }
 
-function triggerClubRestore(clubId) {
-    if (!confirm(`Er du sikker? Alle data for denne klub vil blive overskrevet. Kan ikke fortrydes.`)) return;
+async function triggerClubRestore(clubId) {
+    if (!await confirmModal('Gendan klub', 'Er du sikker? Alle data for denne klub vil blive overskrevet. Kan ikke fortrydes.', { danger: true, okText: 'Gendan' })) return;
     _restoreClubId = clubId;
     _restoreInput.click();
 }
@@ -644,9 +644,9 @@ async function doClubRestore(clubId, file) {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || res.statusText);
-        alert(`Gendannelse fuldført!\nBilleder: ${data.files}`);
+        notify(`Gendannelse fuldført! Billeder: ${data.files}`, 'success');
     } catch (err) {
-        alert('Gendannelse fejlede: ' + err.message);
+        notify('Gendannelse fejlede: ' + err.message, 'error');
     }
 }
 
@@ -742,19 +742,19 @@ async function handleToggleFootballClub(id) {
         if (club) club.is_active = result.is_active;
         renderFootballClubs();
     } catch (err) {
-        alert('Fejl: ' + err.message);
+        notify('Fejl: ' + err.message, 'error');
     }
 }
 
 async function handleDeleteFootballClub(id) {
     const club = footballClubs.find(c => c.id === id);
-    if (!confirm(`Slet football-klubben "${club ? club.name : ''}" permanent? Dette sletter alle dens turneringer, kampe og admins. Denne handling kan ikke fortrydes.`)) return;
+    if (!await confirmModal('Slet football-klub', `Slet football-klubben "${club ? club.name : ''}" permanent? Dette sletter alle dens turneringer, kampe og admins. Denne handling kan ikke fortrydes.`, { danger: true, okText: 'Slet' })) return;
     try {
         await api.deleteFootballClub(id);
         footballClubs = footballClubs.filter(c => c.id !== id);
         renderFootballClubs();
     } catch (err) {
-        alert('Fejl: ' + (err.message || err));
+        notify('Fejl: ' + (err.message || err), 'error');
     }
 }
 
@@ -859,12 +859,12 @@ async function handleChangeFootballPassword(adminId) {
 
 async function handleDeleteFootballAdmin(adminId) {
     const admin = currentFootballAdmins.find(a => a.id === adminId);
-    if (!confirm(`Slet admin "${admin ? admin.username : ''}"? Dette kan ikke fortrydes.`)) return;
+    if (!await confirmModal('Slet admin', `Slet admin "${admin ? admin.username : ''}"? Dette kan ikke fortrydes.`, { danger: true, okText: 'Slet' })) return;
     try {
         await api.deleteFootballClubAdmin(selectedFootballClubId, adminId);
         loadFootballAdmins();
     } catch (err) {
-        alert('Fejl: ' + (err.message || err));
+        notify('Fejl: ' + (err.message || err), 'error');
     }
 }
 
@@ -912,6 +912,53 @@ function showMsg(el, msg, type) {
     el.textContent = msg;
     el.className = 'msg msg-' + type;
     el.style.display = 'block';
+}
+
+// Temastylet bekræftelse (erstatter native confirm) — returnerer Promise<boolean>.
+function confirmModal(title, text, opts = {}) {
+    return new Promise(resolve => {
+        const modal = document.getElementById('genericConfirmModal');
+        document.getElementById('genericConfirmTitle').textContent = title;
+        document.getElementById('genericConfirmText').textContent = text;
+        const okBtn = document.getElementById('genericConfirmOk');
+        const cancelBtn = document.getElementById('genericConfirmCancel');
+        okBtn.className = (opts.danger ? 'btn-danger' : 'btn-primary');
+        okBtn.textContent = opts.okText || 'OK';
+        const cleanup = (result) => {
+            modal.style.display = 'none';
+            okBtn.onclick = null; cancelBtn.onclick = null;
+            document.removeEventListener('keydown', onKey);
+            resolve(result);
+        };
+        const onKey = (e) => {
+            if (e.key === 'Escape') cleanup(false);
+            else if (e.key === 'Enter') cleanup(true);
+        };
+        okBtn.onclick = () => cleanup(true);
+        cancelBtn.onclick = () => cleanup(false);
+        document.addEventListener('keydown', onKey);
+        modal.style.display = 'flex';
+        okBtn.focus();
+    });
+}
+
+// Temastylet besked (erstatter native alert). type: 'info' | 'success' | 'error'.
+let _toastTimer = null;
+function notify(text, type = 'info') {
+    const el = document.getElementById('toast');
+    if (!el) return;
+    el.textContent = text;
+    const palette = {
+        info:    { bg: 'rgba(var(--color-info-rgb, 52,152,219), 0.96)',   fg: '#fff' },
+        success: { bg: 'rgba(var(--color-win-rgb, 69,209,126), 0.96)',    fg: '#0d1117' },
+        error:   { bg: 'rgba(var(--color-danger-rgb, 217,44,63), 0.96)',  fg: '#fff' }
+    };
+    const c = palette[type] || palette.info;
+    el.style.background = c.bg;
+    el.style.color = c.fg;
+    el.style.display = 'block';
+    if (_toastTimer) clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => { el.style.display = 'none'; }, type === 'error' ? 6000 : 3500);
 }
 
 function escapeHtml(str) {
@@ -1023,7 +1070,7 @@ async function linkClubToLogo(index, selectEl) {
     if (!entry) return;
     const name = entry.name;
     const id = selectEl && selectEl.value ? parseInt(selectEl.value, 10) : 0;
-    if (!id) { alert('Vælg et logo at knytte til'); return; }
+    if (!id) { notify('Vælg et logo at knytte til', 'error'); return; }
     const logo = logoCache.find(l => l.id === id);
     if (!logo) return;
     const aliases = (logo.aliases || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -1033,7 +1080,7 @@ async function linkClubToLogo(index, selectEl) {
         await loadLogos();
         await loadMissingLogos();
     } catch (err) {
-        alert('Kunne ikke knytte: ' + (err.message || 'ukendt fejl'));
+        notify('Kunne ikke knytte: ' + (err.message || 'ukendt fejl'), 'error');
     }
 }
 window.prefillUploadLogo = prefillUploadLogo;
@@ -1052,7 +1099,7 @@ async function downloadSeedBundle() {
         a.href = url; a.download = 'seed_logos_bundle.zip'; a.click();
         URL.revokeObjectURL(url);
     } catch (err) {
-        alert('Seed-bundle fejlede: ' + err.message);
+        notify('Seed-bundle fejlede: ' + err.message, 'error');
     }
 }
 
@@ -1070,8 +1117,8 @@ const _importBundleInput = (() => {
     return inp;
 })();
 
-function triggerImportSeedBundle() {
-    if (!confirm('Importer logoer fra seed-bundle?\n\nEksisterende klubber med samme navn FÅR overskrevet billede og aliasser.')) return;
+async function triggerImportSeedBundle() {
+    if (!await confirmModal('Importer seed-bundle', 'Importer logoer fra seed-bundle?\n\nEksisterende klubber med samme navn FÅR overskrevet billede og aliasser.', { okText: 'Importer' })) return;
     _importBundleInput.click();
 }
 
@@ -1087,11 +1134,11 @@ async function doImportSeedBundle(file) {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || res.statusText);
-        alert(`✓ Import færdig\n${data.imported} nye, ${data.updated} opdateret, ${data.skipped} sprunget over, ${data.errors} fejl`);
+        notify(`✓ Import færdig: ${data.imported} nye, ${data.updated} opdateret, ${data.skipped} sprunget over, ${data.errors} fejl`, 'success');
         await loadLogos();
         await loadMissingLogos();
     } catch (err) {
-        alert('Import fejlede: ' + (err.message || 'ukendt fejl'));
+        notify('Import fejlede: ' + (err.message || 'ukendt fejl'), 'error');
     }
 }
 
@@ -1166,11 +1213,11 @@ async function handleSaveLogo(id) {
 }
 
 async function handleDeleteLogo(id) {
-    if (!confirm('Slet dette logo permanent?')) return;
+    if (!await confirmModal('Slet logo', 'Slet dette logo permanent?', { danger: true, okText: 'Slet' })) return;
     try {
         await api.deleteLogo(id);
         loadLogos();
     } catch (err) {
-        alert(err.message || 'Sletning mislykkedes');
+        notify(err.message || 'Sletning mislykkedes', 'error');
     }
 }

@@ -230,4 +230,65 @@ window.BadmintonUtils.TimeoutRegistry = class {
     }
 };
 
+/**
+ * Delt besked-overlay. Kræver #messageOverlay/#messageTitle/#messageText/
+ * #messageButtons i HTML'en (findes på admin + sponsor). buttons:
+ * [{text, style:'primary'|'secondary'|'danger', callback}].
+ * options.bodyHtml: indsæt rå HTML i stedet for tekst (fx en tabel).
+ *
+ * Bemærk: tælleren (court-v3) har sin EGEN showMessage med "hold-for-at-bekræfte"
+ * (hold-to-confirm), og settings/theme har requireReload-adfærd — de bruger
+ * bevidst ikke denne delte version.
+ */
+window.BadmintonUtils.hideMessage = function() {
+    const overlay = document.getElementById('messageOverlay');
+    if (overlay) overlay.style.display = 'none';
+};
+
+window.BadmintonUtils.showMessage = function(title, text, buttons = [{ text: 'OK', callback: null, style: 'primary' }], options = {}) {
+    const overlay = document.getElementById('messageOverlay');
+    const titleElement = document.getElementById('messageTitle');
+    const textElement = document.getElementById('messageText');
+    const buttonsContainer = document.getElementById('messageButtons');
+
+    titleElement.textContent = title;
+    if (options.bodyHtml) {
+        textElement.innerHTML = options.bodyHtml;
+        textElement.style.whiteSpace = 'normal';
+    } else {
+        textElement.textContent = text;
+        textElement.style.whiteSpace = 'pre-line'; // bevar linjeskift i beskeden
+    }
+
+    buttonsContainer.innerHTML = '';
+    buttons.forEach(button => {
+        const btn = document.createElement('button');
+        btn.textContent = button.text;
+        btn.className = button.style === 'secondary' ? 'btn-secondary'
+                      : button.style === 'danger'    ? 'btn-danger'
+                      : 'btn-primary';
+        btn.style.fontSize = '1.5em';
+        btn.style.padding = '15px 40px';
+        btn.style.cursor = 'pointer';
+        btn.onclick = () => {
+            window.BadmintonUtils.hideMessage();
+            if (button.callback) button.callback();
+        };
+        buttonsContainer.appendChild(btn);
+    });
+
+    overlay.style.display = 'flex';
+};
+
+// Ét-trins bekræftelse bygget på det delte overlay — returnerer Promise<boolean>.
+// Erstatter native confirm() på sider der har besked-overlayet (admin/sponsor).
+window.BadmintonUtils.confirmDialog = function(title, text, opts = {}) {
+    return new Promise(resolve => {
+        window.BadmintonUtils.showMessage(title, text, [
+            { text: opts.cancelText || 'Annuller', style: 'secondary', callback: () => resolve(false) },
+            { text: opts.okText || 'OK', style: opts.danger ? 'danger' : 'primary', callback: () => resolve(true) }
+        ]);
+    });
+};
+
 console.log('✓ BadmintonUtils loaded');

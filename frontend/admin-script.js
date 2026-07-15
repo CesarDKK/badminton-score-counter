@@ -1493,7 +1493,7 @@ function onHoldkampFormatChange() {
 
 // Nulstiller oprettelses-formularen så man kan starte forfra uden at oprette
 // og slette en kamp. Bekræfter kun hvis der allerede er indtastet noget.
-function resetHoldkampForm() {
+async function resetHoldkampForm() {
     const team1 = document.getElementById('holdkampTeam1Name');
     const team2 = document.getElementById('holdkampTeam2Name');
     const format = document.getElementById('holdkampFormat');
@@ -1502,7 +1502,7 @@ function resetHoldkampForm() {
 
     const hasInput = team1.value.trim() || team2.value.trim() || format.value ||
         Array.from(container.querySelectorAll('input')).some(i => i.value.trim());
-    if (hasInput && !confirm('Nulstil formularen og start forfra? Indtastede navne ryddes.')) return;
+    if (hasInput && !await BadmintonUtils.confirmDialog('Nulstil formular', 'Nulstil formularen og start forfra? Indtastede navne ryddes.')) return;
 
     team1.value = '';
     team2.value = '';
@@ -2306,50 +2306,9 @@ function showMoreMatches() {
 
 // Message overlay functions (replaces alert/confirm dialogs)
 // options.bodyHtml: hvis sat indsaettes som innerHTML i stedet for text.
-function showMessage(title, text, buttons = [{ text: 'OK', callback: null, style: 'primary' }], options = {}) {
-    const overlay = document.getElementById('messageOverlay');
-    const titleElement = document.getElementById('messageTitle');
-    const textElement = document.getElementById('messageText');
-    const buttonsContainer = document.getElementById('messageButtons');
-
-    titleElement.textContent = title;
-    if (options.bodyHtml) {
-        textElement.innerHTML = options.bodyHtml;
-        textElement.style.whiteSpace = 'normal';
-    } else {
-        textElement.textContent = text;
-        textElement.style.whiteSpace = '';
-    }
-
-    // Clear existing buttons
-    buttonsContainer.innerHTML = '';
-
-    // Add buttons
-    buttons.forEach(button => {
-        const btn = document.createElement('button');
-        btn.textContent = button.text;
-        btn.className = button.style === 'secondary' ? 'btn-secondary' : (button.style === 'danger' ? 'btn-danger' : 'btn-primary');
-        btn.style.fontSize = '1.5em';
-        btn.style.padding = '15px 40px';
-        btn.style.cursor = 'pointer';
-
-        btn.onclick = () => {
-            hideMessage();
-            if (button.callback) {
-                button.callback();
-            }
-        };
-
-        buttonsContainer.appendChild(btn);
-    });
-
-    overlay.style.display = 'flex';
-}
-
-function hideMessage() {
-    const overlay = document.getElementById('messageOverlay');
-    overlay.style.display = 'none';
-}
+// Besked-overlay er nu delt i js/utils.js (samme markup + adfærd)
+const showMessage = window.BadmintonUtils.showMessage;
+const hideMessage = window.BadmintonUtils.hideMessage;
 
 // Returnerer saet-score-strings ("X-Y") orienteret saa side1Key altid staar paa
 // venstre side af tallene. Bruges i turnerings/holdkamp-listerne hvor
@@ -3631,7 +3590,7 @@ async function addTournamentMatchFromForm(tournamentId) {
 }
 
 async function confirmDeleteTournamentMatch(tournamentId, matchId) {
-    if (!confirm('Slet denne kamp?')) return;
+    if (!await BadmintonUtils.confirmDialog('Slet kamp', 'Slet denne kamp?', { danger: true, okText: 'Slet' })) return;
     try {
         await api.deleteTournamentMatch(tournamentId, matchId);
         await loadActiveTournaments();
@@ -3641,7 +3600,7 @@ async function confirmDeleteTournamentMatch(tournamentId, matchId) {
 }
 
 async function handleFinishTournament(tournamentId, name) {
-    if (!confirm(`Afslut turneringen "${name}"? Den flyttes til historikken.`)) return;
+    if (!await BadmintonUtils.confirmDialog('Afslut turnering', `Afslut turneringen ""? Den flyttes til historikken.`, { okText: 'Afslut' })) return;
     try {
         await api.finishTournament(tournamentId);
         await loadActiveTournaments();
@@ -3651,7 +3610,7 @@ async function handleFinishTournament(tournamentId, name) {
 }
 
 async function handleDeleteTournament(tournamentId, name) {
-    if (!confirm(`Slet turneringen "${name}" og alle dens kampe? Dette kan ikke fortrydes.`)) return;
+    if (!await BadmintonUtils.confirmDialog('Slet turnering', `Slet turneringen "" og alle dens kampe? Dette kan ikke fortrydes.`, { danger: true, okText: 'Slet' })) return;
     try {
         await api.deleteTournament(tournamentId);
         tournamentDraftState.delete(String(tournamentId));
