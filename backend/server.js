@@ -98,31 +98,20 @@ app.get('/t/:token', async (req, res, next) => {
             { expiresIn: sessionTtl }
         );
 
-        // Byg destination URL — slår version op fra settings så versionsvalget er centralt
-        const { queryOne: settingsQueryOne } = require('./config/database');
+        // Byg destination URL — v2-siderne er udfaset, alt peger på v3
         let targetUrl;
 
         if (deviceToken.destination.startsWith('tv/')) {
             const courtNum = deviceToken.destination.split('/')[1];
-            const tvVersionRow = await settingsQueryOne(
-                "SELECT setting_value FROM settings WHERE setting_key = 'tv_version'"
-            );
-            const tvVersion = tvVersionRow?.setting_value || 'v3';
-            const tvPage = tvVersion === 'v2' ? 'tv.html' : 'tv-v3.html';
             // QR-flag per-token: tilladelsen kombineres med klub-mode på TV-siden
             const qrFlag = deviceToken.show_qr_on_tv ? '1' : '0';
-            targetUrl = `/${tvPage}?court=${courtNum}&dt=${sessionToken}&qr=${qrFlag}`;
+            targetUrl = `/tv-v3.html?court=${courtNum}&dt=${sessionToken}&qr=${qrFlag}`;
         } else if (deviceToken.destination.startsWith('court/')) {
             const courtNum = deviceToken.destination.split('/')[1];
-            const courtVersionRow = await settingsQueryOne(
-                "SELECT setting_value FROM settings WHERE setting_key = 'court_version'"
-            );
-            const courtVersion = courtVersionRow?.setting_value || 'v3';
-            const courtPage = courtVersion === 'v2' ? 'court.html' : 'court-v3.html';
-            targetUrl = `/${courtPage}?court=${courtNum}&dt=${sessionToken}`;
+            targetUrl = `/court-v3.html?court=${courtNum}&dt=${sessionToken}`;
         } else {
             // Legacy destinations
-            const legacyMap = { tv: '/tv.html', 'tv-v3': '/tv-v3.html', oversigt: '/oversigt.html' };
+            const legacyMap = { tv: '/tv-v3.html', 'tv-v3': '/tv-v3.html', oversigt: '/oversigt.html' };
             targetUrl = `${legacyMap[deviceToken.destination] || '/' + deviceToken.destination}?dt=${sessionToken}`;
         }
 

@@ -49,12 +49,6 @@ function setupEventListeners() {
     // Password
     document.getElementById('changePasswordBtn').addEventListener('click', changePassword);
 
-    // Court Version
-    document.getElementById('saveCourtVersionBtn').addEventListener('click', saveCourtVersion);
-
-    // TV Version
-    document.getElementById('saveTVVersionBtn').addEventListener('click', saveTVVersion);
-
     // Game Mode
     document.getElementById('saveGameModeBtn').addEventListener('click', saveDefaultGameMode);
 
@@ -109,8 +103,6 @@ async function loadSettings() {
         // Invert logic: checked = tournament mode ON (showResetButton false)
         document.getElementById('showResetButton').checked = settings.showResetButton === false;
         document.getElementById('hideTvQr').checked = settings.hideTvQr === true;
-        document.getElementById('courtVersion').value = settings.courtVersion || 'v2';
-        document.getElementById('tvVersion').value = settings.tvVersion || 'v2';
         document.getElementById('defaultGameMode').value = settings.defaultGameMode || '15';
     } catch (error) {
         console.error('Failed to load settings:', error);
@@ -137,10 +129,16 @@ async function saveCourtCount() {
 
 async function changePassword() {
     const newPassword = document.getElementById('newPassword').value;
+    const newPasswordConfirm = document.getElementById('newPasswordConfirm').value;
     const isClubAdmin = api.isClubAdminSession();
 
-    if (!newPassword || newPassword.length < 4) {
-        showMessage('Fejl', 'Adgangskode skal være mindst 4 tegn');
+    if (!newPassword || newPassword.length < 8) {
+        showMessage('Fejl', 'Adgangskode skal være mindst 8 tegn');
+        return;
+    }
+    // Bekræftelsesfelt: fanger en tastefejl, så admin ikke låser sig selv ude
+    if (newPassword !== newPasswordConfirm) {
+        showMessage('Fejl', 'De to adgangskoder er ikke ens');
         return;
     }
 
@@ -160,6 +158,7 @@ async function changePassword() {
         }
         showMessage('Succes', 'Adgangskode ændret!');
         document.getElementById('newPassword').value = '';
+        document.getElementById('newPasswordConfirm').value = '';
     } catch (error) {
         console.error('Failed to change password:', error);
         showMessage('Fejl', error.message);
@@ -195,31 +194,6 @@ async function toggleTvQr() {
         console.error('Failed to toggle TV QR:', error);
         showMessage('Fejl', error.message);
         document.getElementById('hideTvQr').checked = !hide;
-    }
-}
-
-async function saveCourtVersion() {
-    const courtVersion = document.getElementById('courtVersion').value;
-
-    try {
-        await api.updateCourtVersion(courtVersion);
-        showMessage('Succes', `Bane version opdateret til ${courtVersion === 'v2' ? 'Klassisk' : 'Ny Version'}!`);
-    } catch (error) {
-        console.error('Failed to update court version:', error);
-        showMessage('Fejl', error.message);
-    }
-}
-
-async function saveTVVersion() {
-    const tvVersion = document.getElementById('tvVersion').value;
-
-    try {
-        await api.updateTVVersion(tvVersion);
-        const versionName = tvVersion === 'v2' ? 'Klassisk' : 'Minimalistisk';
-        showMessage('Succes', `TV version opdateret til ${versionName}!`);
-    } catch (error) {
-        console.error('Failed to update TV version:', error);
-        showMessage('Fejl', error.message);
     }
 }
 

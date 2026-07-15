@@ -7,8 +7,7 @@ test('Settings: GET returnerer alle felter', async () => {
     assert.equal(status, 200);
     assert.ok(typeof body.courtCount === 'number');
     assert.ok(typeof body.showResetButton === 'boolean');
-    assert.ok(['v2', 'v3'].includes(body.courtVersion));
-    assert.ok(['v2', 'v3'].includes(body.tvVersion));
+    assert.ok(['15', '21'].includes(body.defaultGameMode));
 });
 
 test('Settings: GET theme returnerer objekt', async () => {
@@ -55,33 +54,3 @@ test('Settings: ugyldigt bane antal afvises', { skip: !ADMIN_PASSWORD }, async (
     assert.equal(status, 400);
 });
 
-test('Settings: opdater court version med auth virker', { skip: !ADMIN_PASSWORD }, async (t) => {
-    if (!ADMIN_PASSWORD) return t.skip('TEST_ADMIN_PASSWORD ikke sat');
-    const token = await adminLogin();
-    const original = (await req('/api/settings')).body.courtVersion;
-
-    const newVersion = original === 'v2' ? 'v3' : 'v2';
-    const { status } = await req('/api/settings/court-version', {
-        method: 'PUT',
-        body: { courtVersion: newVersion }
-    }, { token });
-    assert.equal(status, 200);
-
-    const after = (await req('/api/settings')).body.courtVersion;
-    assert.equal(after, newVersion);
-
-    await req('/api/settings/court-version', {
-        method: 'PUT',
-        body: { courtVersion: original }
-    }, { token });
-});
-
-test('Settings: ugyldigt court version afvises', { skip: !ADMIN_PASSWORD }, async (t) => {
-    if (!ADMIN_PASSWORD) return t.skip('TEST_ADMIN_PASSWORD ikke sat');
-    const token = await adminLogin();
-    const { status } = await req('/api/settings/court-version', {
-        method: 'PUT',
-        body: { courtVersion: 'v99' }
-    }, { token });
-    assert.equal(status, 400);
-});

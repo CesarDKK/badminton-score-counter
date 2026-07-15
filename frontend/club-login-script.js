@@ -1,10 +1,19 @@
 const api = window.BadmintonAPI;
 
+// Open redirect-værn: accepter kun interne stier ("/..."), aldrig "//evil.dk"
+// eller absolutte URL'er — ellers kan et phishing-link sende brugeren til et
+// fremmed site EFTER korrekt login.
+function safeRedirectTarget() {
+    const redirect = new URLSearchParams(window.location.search).get('redirect');
+    if (redirect && redirect.startsWith('/') && !redirect.startsWith('//') && !redirect.startsWith('/\\')) {
+        return redirect;
+    }
+    return '/landing.html';
+}
+
 // Hvis allerede logget ind som klub admin — gå til redirect eller landing
 if (api.isClubAdminSession()) {
-    const params = new URLSearchParams(window.location.search);
-    const redirect = params.get('redirect');
-    window.location.href = redirect || '/landing.html';
+    window.location.href = safeRedirectTarget();
 }
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -28,9 +37,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         try {
             await api.loginAsClubAdmin(username, password);
-            const params = new URLSearchParams(window.location.search);
-            const redirect = params.get('redirect');
-            window.location.href = redirect || '/landing.html';
+            window.location.href = safeRedirectTarget();
         } catch (err) {
             showError(err.message || 'Login mislykkedes');
             loginBtn.disabled = false;

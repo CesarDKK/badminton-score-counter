@@ -1,6 +1,9 @@
 // Player Info Page JavaScript
 const api = window.BadmintonAPI;
 
+// Senest indlæste spillere — bruges til opslag fra onclick-handlers (kun id sendes)
+let playersCache = [];
+
 // --- Klub-logoer ---
 let _logoCache = [];
 async function ensureLogos() {
@@ -189,6 +192,9 @@ async function loadPlayers() {
 
     try {
         const players = await api.getPlayers();
+        // Cache til deletePlayer-opslag — navne må ikke interpoleres i onclick
+        // (et navn med ' som "O'Neill" brækker handleren; konstrueret navn = XSS)
+        playersCache = players;
 
         if (players.length === 0) {
             container.innerHTML = '<p style="color: #aaa;">Ingen spillere endnu. Tilføj en spiller for at komme i gang.</p>';
@@ -234,7 +240,7 @@ async function loadPlayers() {
                     html += `<td style="padding: 12px;">${escapeHtml(player.club)}</td>`;
                     html += `<td style="padding: 12px; text-align: right;">`;
                     html += `<button class="btn-secondary" style="margin-right: 10px; padding: 8px 16px;" onclick="editPlayer(${player.id})">Redigér</button>`;
-                    html += `<button class="btn-danger" style="padding: 8px 16px;" onclick="deletePlayer(${player.id}, '${escapeHtml(player.name)}')">Slet</button>`;
+                    html += `<button class="btn-danger" style="padding: 8px 16px;" onclick="deletePlayer(${player.id})">Slet</button>`;
                     html += `</td>`;
                     html += `</tr>`;
                 });
@@ -362,10 +368,11 @@ async function handleEditPlayer(e) {
     }
 }
 
-async function deletePlayer(playerId, playerName) {
+async function deletePlayer(playerId) {
+    const player = playersCache.find(p => p.id === playerId);
     const confirmed = await showConfirm(
         'Slet Spiller',
-        `Er du sikker på, at du vil slette ${playerName}?`
+        `Er du sikker på, at du vil slette ${player ? player.name : 'spilleren'}?`
     );
 
     if (!confirmed) {
@@ -443,9 +450,13 @@ function hideConfirm(result) {
 }
 
 function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    // Escaper også anførselstegn — bruges i HTML-attributter
+    return String(text ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 // XML Import handling

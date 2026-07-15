@@ -1830,7 +1830,9 @@ async function editHoldkampLogos(teamMatchId) {
 // 🏷-knap til en turneringsspiller (tom navn -> ingen knap)
 function tPlayerLogoBtn(name) {
     if (!name) return '';
-    const safe = String(name).replace(/'/g, "\\'");
+    // Navnet lægges i en data-attribut (attribut-sikkert via escapeHtml) og læses
+    // med this.dataset — interpolation i selve onclick-JS'en kan brydes af ' og \
+    const safe = escapeHtml(name);
     // Resolve spillerens logo med de samme regler som TV/Oversigt (override -> klub -> matchLogo)
     const logo = (window.LogoMatch && LogoMatch.resolvePlayerLogo)
         ? LogoMatch.resolvePlayerLogo(name, {
@@ -1840,10 +1842,10 @@ function tPlayerLogoBtn(name) {
 
     if (logo) {
         // Logo fundet → klikbart mini-logo (åbner samme redigerings-modal)
-        return `<img onclick="setTournamentPlayerLogo('${safe}')" src="${escapeHtml(logo.url)}" title="Skift klub-logo — ${escapeHtml(name)}" onerror="this.style.display='none'" style="height:22px; width:auto; max-width:40px; object-fit:contain; margin-left:4px; vertical-align:middle; cursor:pointer;">`;
+        return `<img data-player="${safe}" onclick="setTournamentPlayerLogo(this.dataset.player)" src="${escapeHtml(logo.url)}" title="Skift klub-logo — ${safe}" onerror="this.style.display='none'" style="height:22px; width:auto; max-width:40px; object-fit:contain; margin-left:4px; vertical-align:middle; cursor:pointer;">`;
     }
     // Intet logo → tydelig stiplet "mangler"-markør (klik for at tilføje)
-    return `<button onclick="setTournamentPlayerLogo('${safe}')" title="Tilføj klub-logo — ${escapeHtml(name)}" style="padding:1px 5px; margin-left:4px; background:transparent; color:#c9a23a; border:1px dashed #c9a23a; border-radius:3px; cursor:pointer; font-size:0.72em; vertical-align:middle;">🏷</button>`;
+    return `<button data-player="${safe}" onclick="setTournamentPlayerLogo(this.dataset.player)" title="Tilføj klub-logo — ${safe}" style="padding:1px 5px; margin-left:4px; background:transparent; color:#c9a23a; border:1px dashed #c9a23a; border-radius:3px; cursor:pointer; font-size:0.72em; vertical-align:middle;">🏷</button>`;
 }
 
 // Saet/ret en turneringsspillers klub-logo (gemmes pr. navn i player_logos -> slaar
@@ -1912,8 +1914,17 @@ function deleteHoldkamp(id) {
 
 async function loadAllMatches() {
     try {
-        // Get all match history from API
-        allMatchesData = await api.getAllMatchHistory();
+        // Hent HELE historikken i sider a 1000 (backendens max pr. kald).
+        // API'ets default-limit er 30, så uden eksplicit paging dækkede
+        // søgning og filtre kun de seneste 30 kampe. Sikkerhedsloft på 20
+        // sider (20.000 kampe) mod runaway-loop.
+        const pageSize = 1000;
+        allMatchesData = [];
+        for (let offset = 0; offset < 20000; offset += pageSize) {
+            const page = await api.getAllMatchHistory(pageSize, offset);
+            allMatchesData.push(...page);
+            if (page.length < pageSize) break;
+        }
 
         // Populate court filter dropdown
         populateCourtFilter();
@@ -2710,7 +2721,7 @@ function renderDeviceTokens(tokens) {
         <div style="background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:16px 20px;margin-bottom:12px;${!t.is_active ? 'opacity:0.45;' : ''}">
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
                 <div style="flex:1;min-width:200px;">
-                    <div style="font-weight:600;margin-bottom:4px;">${escapeHtmlDt(t.name)}</div>
+                    <div style="font-weight:600;margin-bottom:4px;">${escapeHtml(t.name)}</div>
                     <div style="font-size:0.8em;color:rgba(255,255,255,0.45);">
                         📍 ${destLabel} &nbsp;•&nbsp;
                         🔒 ${t.locked ? 'Låst' : 'Fri navigation'}${qrBadge} &nbsp;•&nbsp;
@@ -2720,7 +2731,7 @@ function renderDeviceTokens(tokens) {
                         <input readonly value="${link}"
                             style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:6px 10px;color:rgba(255,255,255,0.6);font-size:0.78em;font-family:monospace;"
                             onclick="this.select()">
-                        <button onclick="copyLink('${link}', this)"
+                        <button onclick="copyLink(this.parentElement.querySelector('input').value, this)"
                             style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:6px 12px;color:#eaeaea;font-size:0.8em;cursor:pointer;white-space:nowrap;">
                             Kopiér
                         </button>
@@ -2859,10 +2870,6 @@ function showDtMsg(el, msg, type) {
     el.style.color = type === 'error' ? 'var(--color-danger, #d92c3f)' : 'var(--color-win, #45d17e)';
 }
 
-function escapeHtmlDt(str) {
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
 // ==================== BADMINTONPLAYER.DK IMPORT ====================
 
 async function bpImport() {
@@ -2881,7 +2888,7 @@ async function bpImport() {
             body: JSON.stringify({ url })
         });
         bpRenderPreview(data);
-        bpStatus(`✓ Importeret: ${escapeHtml(data.team1Name)} vs ${escapeHtml(data.team2Name)} — ${data.games.length} kampe`, 'success');
+        bpStatus(`✓ Importeret: ${data.team1Name} vs ${data.team2Name} — ${data.games.length} kampe`, 'success');
     } catch (err) {
         bpStatus('Fejl: ' + err.message, 'error');
     } finally {

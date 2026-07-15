@@ -464,3 +464,29 @@ header {
         font-size: 3.8em;
     }
 }
+
+/* ── Status-, fejl- og tom-tilstande (dynamisk indsat af landing-script) ── */
+.landing-status {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.45);
+    padding: 20px;
+    line-height: 1.5;
+}
+.landing-error {
+    grid-column: 1 / -1;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    color: var(--color-accent);
+    padding: 20px;
+}
+.landing-retry {
+    cursor: pointer;
+    border: none;
+    font: inherit;
+    padding: 12px 28px;
+    min-height: auto;
+}

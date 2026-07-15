@@ -49,6 +49,8 @@ A real-time badminton score tracking system with multi-device support, sponsor s
 ### Version 2.0.0 - Smartwatch Support, Holdkamp Sync & UI Improvements
 
 #### ⌚ Smartwatch / Mini Browser View (`watch.html`)
+> **Udfaset (juli 2026):** `watch.html` er fjernet — siden manglede live-sync og
+> ignorerede kamptilstand (15/21). Beskrivelsen nedenfor er historisk.
 - **Dedikeret mini-side** optimeret til meget små skærme — herunder Apple Watch via Safari
 - **URL:** `http://[server-ip]/watch.html?court=1` (skift `1` til ønsket banenummer)
 - **Fire knapper** fylder hele skærmen:
@@ -695,8 +697,9 @@ The backend runs scheduled tasks using `node-cron`:
 - `admin_password_hash`: Bcrypt hashed admin password
 - `court_count`: Number of available courts
 - `show_reset_button`: Tournament mode toggle (false = tournament mode)
-- `court_version`: Court view version ('v2' = Klassisk, 'v3' = Bane view)
+- `default_game_mode`: Default game mode for new courts ('15' or '21')
 - `theme_*`: Color theme settings
+- _(`court_version`/`tv_version` udfaset juli 2026 — kun v3 findes nu)_
 
 **courts**: Court configurations (active status, doubles mode, game mode)
 
@@ -888,20 +891,17 @@ badminton-app/
 │   │   ├── dm-sans-latin.woff2
 │   │   └── dm-sans-latin-ext.woff2
 │   ├── js/
-│   │   ├── api.js       # Centralized API client (v4)
-│   │   └── api-v2.js    # Legacy API client
+│   │   └── api.js       # Centralized API client
 │   ├── admin.html       # Admin panel
 │   ├── admin-script.js
-│   ├── court.html       # Court scoring page (Classic)
-│   ├── court-script-v2.js
-│   ├── court-v3.html    # Court scoring page (Bane View)
+│   ├── court-v3.html    # Court scoring page (Tælleren)
 │   ├── court-script-v3.js
 │   ├── court-v3-styles.css
 │   ├── fonts.css        # @font-face declarations for local fonts
 │   ├── settings.html    # Settings page
 │   ├── settings-script.js
-│   ├── tv.html          # TV display mode
-│   ├── tv-script-v2.js
+│   ├── tv-v3.html       # TV display mode
+│   ├── tv-script-v3.js
 │   ├── sponsor.html     # Sponsor management
 │   ├── sponsor-script.js
 │   ├── landing.html     # Landing page

@@ -28,12 +28,15 @@ class BadmintonAPI {
         }
     }
 
-    // Returner decoded payload fra JWT uden verifikation (til client-side brug)
+    // Returner decoded payload fra JWT uden verifikation (til client-side brug).
+    // JWT-payload er base64URL — normalisér - og _ før atob, ellers kaster den
+    // på gyldige tokens.
     getTokenPayload() {
         const token = this.token;
         if (!token) return null;
         try {
-            return JSON.parse(atob(token.split('.')[1]));
+            const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+            return JSON.parse(atob(b64));
         } catch { return null; }
     }
 
@@ -78,7 +81,12 @@ class BadmintonAPI {
         }
 
         const timeout = options.timeout || 30000; // 30 second default timeout
-        const maxRetries = retries;
+        // Retry KUN idempotente metoder. En POST/DELETE der faktisk nåede
+        // serveren, men hvis svar gik tabt, ville ellers blive sendt igen og
+        // fx gemme en kamp to gange. GET/PUT/HEAD er sikre at gentage.
+        const method = (options.method || 'GET').toUpperCase();
+        const isIdempotent = method === 'GET' || method === 'HEAD' || method === 'PUT';
+        const maxRetries = isIdempotent ? retries : 1;
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
@@ -126,8 +134,9 @@ class BadmintonAPI {
                     error.message = `Request timeout after ${timeout}ms`;
                 }
 
-                // Handle network errors - retry
-                if (attempt < maxRetries && (error.name === 'AbortError' || error.message.includes('fetch'))) {
+                // Handle network errors - retry (kun idempotente, jf. maxRetries).
+                // TypeError dækker fetch-netværksfejl mere robust end message-tekst.
+                if (attempt < maxRetries && (error.name === 'AbortError' || error instanceof TypeError || error.message.includes('fetch'))) {
                     const delay = Math.pow(2, attempt - 1) * 1000; // Exponential backoff
                     console.warn(`Network error [${endpoint}] (attempt ${attempt}/${maxRetries}): ${error.message}. Retrying in ${delay}ms...`);
                     await new Promise(resolve => setTimeout(resolve, delay));
@@ -228,30 +237,6 @@ class BadmintonAPI {
         return this.request('/settings/tv-qr', {
             method: 'PUT',
             body: JSON.stringify({ hideTvQr })
-        });
-    }
-
-    /**
-     * Update court page version
-     * @param {string} courtVersion - Court version ('v2' or 'v3')
-     * @returns {Promise<object>} - { success }
-     */
-    async updateCourtVersion(courtVersion) {
-        return this.request('/settings/court-version', {
-            method: 'PUT',
-            body: JSON.stringify({ courtVersion })
-        });
-    }
-
-    /**
-     * Update TV view version
-     * @param {string} tvVersion - TV version ('v2' or 'v3')
-     * @returns {Promise<object>} - { success }
-     */
-    async updateTVVersion(tvVersion) {
-        return this.request('/settings/tv-version', {
-            method: 'PUT',
-            body: JSON.stringify({ tvVersion })
         });
     }
 
@@ -702,7 +687,7 @@ class BadmintonAPI {
 
     /** Get the active game on a given court (+ its team match), or null */
     async getTeamMatchByCourt(courtId) {
-        return this.request(`/team-matches/by-court/${courtId}`);
+        return this.request(`/team-matches/by-court/${courtId}`, { requiresAuth: false });
     }
 
     async updateTeamMatchLogos(id, team1LogoId, team2LogoId) {
@@ -970,7 +955,7 @@ class BadmintonAPI {
         });
     }
 
-    async changeClubAdminPassword(clubId, adminId, password) {
+    async setClubAdminPassword(clubId, adminId, password) {
         return this.request(`/super-admin/clubs/${clubId}/admins/${adminId}/password`, {
             method: 'PUT',
             body: JSON.stringify({ password })

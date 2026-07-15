@@ -924,9 +924,13 @@ function formatTimer(seconds) {
 }
 
 function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    // Escaper også anførselstegn — bruges i HTML-attributter (data-p1, src, ...)
+    return String(text ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 // Orienterer sætscoren til team1 (række-venstre side) ud fra navnene i

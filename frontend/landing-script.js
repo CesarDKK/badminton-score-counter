@@ -12,32 +12,31 @@ async function loadPage() {
 
         // Fetch settings from API
         const settings = await api.getSettings();
-        const courtCount = settings.courtCount;
-        const courtVersion = settings.courtVersion || 'v2';
-        const tvVersion = settings.tvVersion || 'v2';
+        const courtCount = Number(settings.courtCount) || 0;
+
+        // Ingen baner konfigureret — vis en forklarende tom-tilstand i stedet
+        // for et tomt grid uden kontekst
+        if (courtCount < 1) {
+            showEmptyState();
+            return;
+        }
 
         // Load buttons
-        loadCourtButtons(courtCount, courtVersion);
-        loadTVButtons(courtCount, tvVersion);
-
-        // Hide loading state
-        hideLoading();
+        loadCourtButtons(courtCount);
+        loadTVButtons(courtCount);
     } catch (error) {
         console.error('Failed to load page:', error);
-        showError('Kunne ikke indlæse baner. Tjek din forbindelse.');
+        showError();
     }
 }
 
-function loadCourtButtons(courtCount, courtVersion) {
+function loadCourtButtons(courtCount) {
     const courtButtons = document.getElementById('courtButtons');
     courtButtons.innerHTML = '';
 
-    // Determine which court page to use based on version setting
-    const courtPage = courtVersion === 'v3' ? 'court-v3.html' : 'court.html';
-
     for (let i = 1; i <= courtCount; i++) {
         const button = document.createElement('a');
-        button.href = `${courtPage}?id=${i}`;
+        button.href = `court-v3.html?id=${i}`;
         button.className = 'court-button';
         button.innerHTML = `
             <div class="court-number">${i}</div>
@@ -47,16 +46,13 @@ function loadCourtButtons(courtCount, courtVersion) {
     }
 }
 
-function loadTVButtons(courtCount, tvVersion) {
+function loadTVButtons(courtCount) {
     const tvButtons = document.getElementById('tvButtons');
     tvButtons.innerHTML = '';
 
-    // Determine which TV page to use based on version setting
-    const tvPage = tvVersion === 'v3' ? 'tv-v3.html' : 'tv.html';
-
     for (let i = 1; i <= courtCount; i++) {
         const button = document.createElement('a');
-        button.href = `${tvPage}?id=${i}`;
+        button.href = `tv-v3.html?id=${i}`;
         button.className = 'tv-button';
         button.target = '_blank'; // Open in new window/tab
         button.innerHTML = `
@@ -70,15 +66,31 @@ function loadTVButtons(courtCount, tvVersion) {
 function showLoading() {
     const courtButtons = document.getElementById('courtButtons');
     const tvButtons = document.getElementById('tvButtons');
-    courtButtons.innerHTML = '<p style="text-align: center; color: #999;">Indlæser...</p>';
-    tvButtons.innerHTML = '<p style="text-align: center; color: #999;">Indlæser...</p>';
+    courtButtons.innerHTML = '<p class="landing-status" role="status">Indlæser...</p>';
+    tvButtons.innerHTML = '<p class="landing-status" role="status">Indlæser...</p>';
 }
 
-function hideLoading() {
-    // Loading elements are replaced by actual buttons
-}
-
-function showError(message) {
+// Fejl: ryd BEGGE sektioner (før hang TV-sektionen i evig "Indlæser...") og
+// tilbyd en "Prøv igen"-knap i stedet for kun en statisk fejltekst.
+function showError() {
     const courtButtons = document.getElementById('courtButtons');
-    courtButtons.innerHTML = `<p style="text-align: center; color: var(--color-accent);">${message}</p>`;
+    const tvButtons = document.getElementById('tvButtons');
+    tvButtons.innerHTML = '';
+    courtButtons.innerHTML = `
+        <div class="landing-error" role="alert">
+            <p>Kunne ikke indlæse baner. Tjek din forbindelse.</p>
+            <button type="button" id="retryBtn" class="court-button landing-retry">Prøv igen</button>
+        </div>
+    `;
+    const btn = document.getElementById('retryBtn');
+    if (btn) btn.addEventListener('click', loadPage);
+}
+
+function showEmptyState() {
+    const courtButtons = document.getElementById('courtButtons');
+    const tvButtons = document.getElementById('tvButtons');
+    tvButtons.innerHTML = '';
+    courtButtons.innerHTML = `
+        <p class="landing-status">Ingen baner konfigureret endnu. Opsæt antal baner i Admin Panel under Indstillinger.</p>
+    `;
 }

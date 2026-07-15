@@ -1,7 +1,7 @@
 /**
  * Auth Guard — beskytter sider der tilgås via et klub-subdomain.
  * Inkludér dette script på sider der kræver auth.
- * Kompatibel med både api.js og api-v2.js.
+ * Kompatibel med api.js.
  */
 (async function authGuard() {
     // Hent mode direkte fra backend (fungerer uanset hvilken api.js version der bruges)
@@ -30,10 +30,17 @@
     const authToken   = sessionStorage.getItem('authToken');
     let   deviceToken = sessionStorage.getItem('deviceToken');
 
+    // JWT-payload er base64URL (kan indeholde - og _) — normalisér før atob,
+    // ellers kaster atob og et GYLDIGT token bliver fejlagtigt kasseret
+    function decodeJwtPayload(jwt) {
+        const b64 = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        return JSON.parse(atob(b64));
+    }
+
     // Ryd udløbne tokens så de ikke blokerer for korrekt re-auth
     function isExpired(jwt) {
         try {
-            const exp = JSON.parse(atob(jwt.split('.')[1])).exp;
+            const exp = decodeJwtPayload(jwt).exp;
             return exp && Date.now() / 1000 > exp;
         } catch { return true; }
     }
@@ -57,7 +64,7 @@
     // Device token: håndhæv locked destination
     if (!validAuth && validDevice) {
         try {
-            const payload = JSON.parse(atob(validDevice.split('.')[1]));
+            const payload = decodeJwtPayload(validDevice);
             if (payload.locked) {
                 let expectedPath;
                 const dest = payload.destination;
@@ -66,7 +73,7 @@
                 } else if (dest.startsWith('tv/')) {
                     expectedPath = `/tv-v3.html?court=${dest.split('/')[1]}`;
                 } else {
-                    const legacyMap = { tv: '/tv.html', 'tv-v3': '/tv-v3.html', oversigt: '/oversigt.html' };
+                    const legacyMap = { tv: '/tv-v3.html', 'tv-v3': '/tv-v3.html', oversigt: '/oversigt.html' };
                     expectedPath = legacyMap[dest] || '/';
                 }
                 const currentBase  = window.location.pathname;

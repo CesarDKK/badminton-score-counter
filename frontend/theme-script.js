@@ -60,17 +60,31 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function initializeTheme() {
-    if (api.token) {
+    // Verificér tokenet før dashboardet vises — et device-token eller et udløbet
+    // token åbnede før dashboardet, hvorefter alle skrivninger fejlede stille.
+    if (hasValidAdminToken()) {
         showThemeDashboard();
     }
 }
 
+function hasValidAdminToken() {
+    const p = api.getTokenPayload && api.getTokenPayload();
+    if (!p) return false;
+    if (p.role === 'device') return false;                 // device-token må ikke redigere tema
+    if (p.exp && Date.now() / 1000 > p.exp) return false;  // udløbet
+    return true;
+}
+
 function setupEventListeners() {
-    // Login
+    // Login (keydown — keypress er forældet og upålideligt med password managers)
     document.getElementById('loginBtn').addEventListener('click', handleLogin);
-    document.getElementById('adminPassword').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') handleLogin();
+    document.getElementById('adminPassword').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); handleLogin(); }
     });
+
+    // Preview-bjælkens knapper
+    document.getElementById('previewSaveBtn').addEventListener('click', commitPreview);
+    document.getElementById('previewCancelBtn').addEventListener('click', cancelPreview);
 
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', handleLogout);
@@ -87,8 +101,9 @@ function setupEventListeners() {
     // Color picker sync
     syncColorPickers();
 
-    // Message overlay
-    document.getElementById('messageOkBtn').addEventListener('click', hideMessage);
+    // Message overlay: OK-knappens handler sættes i showMessage() (så en evt.
+    // reload-parameter respekteres) — ingen ekstra listener her, ellers kørte
+    // hideMessage to gange.
 }
 
 function syncColorPickers() {
@@ -177,6 +192,24 @@ async function loadCurrentTheme() {
         displayCurrentTheme(theme);
     } catch (error) {
         console.error('Failed to load theme:', error);
+        // 401: token er udløbet/ugyldigt — tilbage til login i stedet for at
+        // vise et dashboard hvor alt fejler stille
+        if (error && error.status === 401) {
+            handleLogout();
+            showMessage('Session udløbet', 'Log venligst ind igen.');
+            return;
+        }
+        // Andre fejl: vis en synlig fejl med genforsøg i stedet for evig "Indlæser..."
+        const display = document.getElementById('currentThemeDisplay');
+        if (display) {
+            display.innerHTML = '<p class="theme-name">Kunne ikke indlæse tema</p>';
+            const retry = document.createElement('button');
+            retry.className = 'btn-secondary';
+            retry.textContent = 'Prøv igen';
+            retry.style.marginTop = '12px';
+            retry.addEventListener('click', loadCurrentTheme);
+            display.appendChild(retry);
+        }
     }
 }
 
@@ -184,35 +217,47 @@ function displayCurrentTheme(theme) {
     const display = document.getElementById('currentThemeDisplay');
     const themeName = THEME_PRESETS[theme.theme_name]?.name || 'Tilpasset';
 
+    // Farveværdierne kommer fra databasen og indsættes i innerHTML (både i
+    // style="..." og som tekst). En ugyldig/manipuleret værdi som
+    // '#fff"><img src=x onerror=...>' ville ellers køre script — vis kun rene
+    // 6-cifrede hex, fald tilbage til '#000000' ved alt andet.
+    const safeHex = (v) => /^#[0-9A-Fa-f]{6}$/.test(v) ? v : '#000000';
+    const primary = safeHex(theme.color_primary);
+    const accent = safeHex(theme.color_accent);
+    const bgDark = safeHex(theme.color_bg_dark);
+
     display.innerHTML = `
         <p class="theme-name">${themeName}</p>
         <div class="theme-colors">
             <div class="theme-color-item">
-                <div class="theme-color-swatch" style="background: ${theme.color_primary};"></div>
+                <div class="theme-color-swatch" style="background: ${primary};"></div>
                 <div>
                     <div class="theme-color-label">Primær</div>
-                    <div class="theme-color-value">${theme.color_primary}</div>
+                    <div class="theme-color-value">${primary}</div>
                 </div>
             </div>
             <div class="theme-color-item">
-                <div class="theme-color-swatch" style="background: ${theme.color_accent};"></div>
+                <div class="theme-color-swatch" style="background: ${accent};"></div>
                 <div>
                     <div class="theme-color-label">Accent</div>
-                    <div class="theme-color-value">${theme.color_accent}</div>
+                    <div class="theme-color-value">${accent}</div>
                 </div>
             </div>
             <div class="theme-color-item">
-                <div class="theme-color-swatch" style="background: ${theme.color_bg_dark};"></div>
+                <div class="theme-color-swatch" style="background: ${bgDark};"></div>
                 <div>
                     <div class="theme-color-label">Baggrund</div>
-                    <div class="theme-color-value">${theme.color_bg_dark}</div>
+                    <div class="theme-color-value">${bgDark}</div>
                 </div>
             </div>
         </div>
     `;
 }
 
-async function applyPreset(presetName) {
+// Klik på et preset GEMMER ikke længere med det samme — det starter en
+// forhåndsvisning. Temaet gemmes først når man klikker "Gem på alle skærme" i
+// preview-bjælken, så ét klik ikke ændrer temaet på hele hallens skærme.
+function applyPreset(presetName) {
     const preset = THEME_PRESETS[presetName];
     if (!preset) return;
 
@@ -228,8 +273,73 @@ async function applyPreset(presetName) {
     document.getElementById('colorBgCard').value = preset.colorBgCard;
     document.getElementById('colorBgCardHex').value = preset.colorBgCard;
 
-    // Save preset and wait for completion
-    await saveTheme(presetName, preset);
+    // Markér preset visuelt og start forhåndsvisning (ingen gemning)
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.theme === presetName);
+    });
+    enterPreviewMode(presetName, preset);
+}
+
+// ── Forhåndsvisnings-tilstand ──
+// Anvender farver lokalt på CSS-variablerne og viser preview-bjælken. Selve
+// gemningen sker først via commitPreview(); cancelPreview() ruller tilbage.
+let _pendingPreview = null;
+function enterPreviewMode(themeName, colors) {
+    _pendingPreview = { themeName, colors };
+    applyColorsLocally(colors);
+    document.getElementById('previewBar').style.display = 'flex';
+}
+
+function applyColorsLocally(colors) {
+    // Gå gennem theme-loaderens applyTheme, så preview også sætter de afledte
+    // variabler (--color-*-rgb, --color-on-accent/-primary). Ellers viste
+    // forhåndsvisningen blandet gammelt/nyt tema (fx hvid tekst på lys accent).
+    const theme = {
+        color_primary: colors.colorPrimary,
+        color_accent: colors.colorAccent,
+        color_bg_dark: colors.colorBgDark,
+        color_bg_container: colors.colorBgContainer,
+        color_bg_card: colors.colorBgCard
+    };
+    if (window.applyTheme) {
+        window.applyTheme(theme);
+    } else {
+        // Fallback hvis theme-loader ikke er indlæst
+        const root = document.documentElement;
+        root.style.setProperty('--color-primary', colors.colorPrimary);
+        root.style.setProperty('--color-accent', colors.colorAccent);
+        root.style.setProperty('--color-bg-dark', colors.colorBgDark);
+        root.style.setProperty('--color-bg-container', colors.colorBgContainer);
+        root.style.setProperty('--color-bg-card', colors.colorBgCard);
+    }
+}
+
+async function commitPreview() {
+    if (!_pendingPreview) return;
+    const { themeName, colors } = _pendingPreview;
+    // Behold preview-tilstanden indtil gemningen FAKTISK lykkes — ellers står
+    // siden malet med ugemte farver og bjælken er væk (ingen vej til at gemme).
+    const ok = await saveTheme(themeName, colors);
+    if (ok) {
+        _pendingPreview = null;
+        document.getElementById('previewBar').style.display = 'none';
+    }
+    // Ved fejl: saveTheme har vist fejlbeskeden; bjælken bliver, så man kan
+    // prøve igen eller fortryde.
+}
+
+// Fortryd: rul tilbage til det gemte tema. Anvend cachen som øjeblikkelig
+// baseline (virker også offline, hvor loadTheme-fetch ville fejle), og
+// revalidér derefter mod API'et.
+async function cancelPreview() {
+    _pendingPreview = null;
+    document.getElementById('previewBar').style.display = 'none';
+    try {
+        const cached = localStorage.getItem('cachedTheme');
+        if (cached && window.applyTheme) window.applyTheme(JSON.parse(cached));
+    } catch {}
+    if (window.loadTheme) await window.loadTheme();
+    await loadCurrentTheme(); // gendan farveinputs + aktiv-markering
 }
 
 async function saveCustomTheme() {
@@ -253,6 +363,7 @@ async function saveCustomTheme() {
     await saveTheme('custom', theme);
 }
 
+// Returnerer true ved succes, false ved fejl (commitPreview afhænger af det).
 async function saveTheme(themeName, colors) {
     try {
         await api.updateTheme({
@@ -264,59 +375,43 @@ async function saveTheme(themeName, colors) {
             colorBgCard: colors.colorBgCard
         });
 
-        // Apply theme immediately
-        const root = document.documentElement;
-        root.style.setProperty('--color-primary', colors.colorPrimary);
-        root.style.setProperty('--color-accent', colors.colorAccent);
-        root.style.setProperty('--color-bg-dark', colors.colorBgDark);
-        root.style.setProperty('--color-bg-container', colors.colorBgContainer);
-        root.style.setProperty('--color-bg-card', colors.colorBgCard);
-        const gradient = `linear-gradient(135deg, ${colors.colorPrimary} 0%, ${colors.colorAccent} 100%)`;
-        root.style.setProperty('--gradient-primary', gradient);
+        // Anvend + cache via den kanoniske sti (theme-loader) — genhenter det
+        // netop gemte tema og sætter alle CSS-variabler + localStorage-cachen ét
+        // sted, i stedet for tre håndholdte kopier der kan drive fra hinanden.
+        if (window.loadTheme) await window.loadTheme();
 
-        // Update preset button active states
-        document.querySelectorAll('.preset-btn').forEach(btn => {
-            btn.classList.remove('active');
-            if (btn.dataset.theme === themeName) {
-                btn.classList.add('active');
-            }
-        });
+        // Genopfrisk farveinputs, preset-markering og "Nuværende Tema"-visning
+        // fra serveren (samme kilde) i stedet for at duplikere logikken her.
+        await loadCurrentTheme();
 
-        // Update current theme display
-        const theme = {
-            theme_name: themeName,
-            color_primary: colors.colorPrimary,
-            color_accent: colors.colorAccent,
-            color_bg_dark: colors.colorBgDark
-        };
-        displayCurrentTheme(theme);
-
-        showMessage('Succes', 'Tema gemt og anvendt! Ændringerne er nu aktive på alle sider.');
+        showMessage('Succes', 'Tema gemt! Åbne TV- og oversigtsskærme opdaterer ved næste genindlæsning.');
+        return true;
     } catch (error) {
         console.error('Failed to save theme:', error);
         showMessage('Fejl', 'Kunne ikke gemme tema: ' + error.message);
+        return false;
     }
 }
 
 function previewTheme() {
-    const primary = document.getElementById('colorPrimaryHex').value;
-    const accent = document.getElementById('colorAccentHex').value;
-    const bgDark = document.getElementById('colorBgDarkHex').value;
-    const bgContainer = document.getElementById('colorBgContainerHex').value;
-    const bgCard = document.getElementById('colorBgCardHex').value;
+    const colors = {
+        colorPrimary: document.getElementById('colorPrimaryHex').value,
+        colorAccent: document.getElementById('colorAccentHex').value,
+        colorBgDark: document.getElementById('colorBgDarkHex').value,
+        colorBgContainer: document.getElementById('colorBgContainerHex').value,
+        colorBgCard: document.getElementById('colorBgCardHex').value
+    };
 
-    // Apply temporarily to CSS variables
-    const root = document.documentElement;
-    root.style.setProperty('--color-primary', primary);
-    root.style.setProperty('--color-accent', accent);
-    root.style.setProperty('--color-bg-dark', bgDark);
-    root.style.setProperty('--color-bg-container', bgContainer);
-    root.style.setProperty('--color-bg-card', bgCard);
+    // Validér før forhåndsvisning så ugyldige hex ikke giver NaN-farver
+    const hexRegex = /^#[0-9A-Fa-f]{6}$/;
+    if (Object.values(colors).some(c => !hexRegex.test(c))) {
+        showMessage('Fejl', 'Nogle farveværdier er ugyldige. Brug formatet #RRGGBB');
+        return;
+    }
 
-    const gradient = `linear-gradient(135deg, ${primary} 0%, ${accent} 100%)`;
-    root.style.setProperty('--gradient-primary', gradient);
-
-    showMessage('Forhåndsvisning', 'Denne forhåndsvisning er midlertidig. Klik "Gem Tilpasset Tema" for at gemme ændringerne permanent.');
+    // Custom-farver: intet navngivet preset er aktivt
+    document.querySelectorAll('.preset-btn').forEach(btn => btn.classList.remove('active'));
+    enterPreviewMode('custom', colors);
 }
 
 function showMessage(title, text, requireReload = false) {

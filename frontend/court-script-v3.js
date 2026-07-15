@@ -1,6 +1,48 @@
 // Court V3 Script - New version of court page
 const api = window.BadmintonAPI;
 
+// ── Screen Wake Lock ──
+// Holder tablettens skærm tændt under en kamp, så den ikke går i dvale mellem
+// point. Frigives ved kampslut/rydning. Genanskaffes på visibilitychange, fordi
+// systemet automatisk slipper wake lock'en når fanen skjules/skærmen låses.
+let _wakeLock = null;
+async function acquireWakeLock() {
+    if (!('wakeLock' in navigator)) return; // ikke understøttet (fx iOS < 16.4)
+    try {
+        _wakeLock = await navigator.wakeLock.request('screen');
+        _wakeLock.addEventListener('release', () => { _wakeLock = null; });
+    } catch (e) {
+        // Afvises fx hvis fanen ikke er synlig — prøves igen ved visibilitychange
+        console.warn('Wake Lock kunne ikke aktiveres:', e && e.message);
+    }
+}
+async function releaseWakeLock() {
+    if (_wakeLock) {
+        try { await _wakeLock.release(); } catch {}
+        _wakeLock = null;
+    }
+}
+// Er kampen i gang (skærmen bør holdes vågen)?
+function matchIsLive() {
+    return gameState && gameState.isActive && !gameState.matchEndTime;
+}
+
+// ── Sync-status (offline-indikator) ──
+// Vises kun efter gentagne fejlede gemninger, så et enkelt blip ikke blinker.
+let _saveFailCount = 0;
+function setSyncStatus(ok) {
+    const badge = document.getElementById('syncStatusBadge');
+    if (!badge) return;
+    if (ok) {
+        _saveFailCount = 0;
+        badge.style.display = 'none';
+    } else {
+        _saveFailCount++;
+        // Vis først efter 2 fejl i træk (ét kortvarigt blip skjules)
+        if (_saveFailCount >= 2) badge.style.display = 'flex';
+    }
+}
+
 // PWA Install
 let _pwaPrompt = null;
 
@@ -122,6 +164,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (gameState.matchStartTime && !gameState.matchEndTime) {
         startTimer();
     }
+
+    // Genindlæst midt i en aktiv kamp — hold skærmen vågen med det samme
+    if (matchIsLive()) acquireWakeLock();
 
     // Start periodic sync to detect admin resets
     startPeriodicSync();
@@ -313,14 +358,23 @@ function swapPlayers(team) {
 // Save current game state to history before making changes
 function saveToHistory() {
     const snapshot = {
+        // Navne skal med i snapshottet: switchSides() (efter sætafslutning) bytter
+        // player1/player2-navnene, så uden dem gendanner Fortryd scoren til den
+        // gamle orientering mens navnene forbliver byttede — point på forkert side.
         player1: {
+            name: gameState.player1.name,
+            name2: gameState.player1.name2,
             score: gameState.player1.score,
             games: gameState.player1.games
         },
         player2: {
+            name: gameState.player2.name,
+            name2: gameState.player2.name2,
             score: gameState.player2.score,
             games: gameState.player2.games
         },
+        sidesManuallySwitched: gameState.sidesManuallySwitched,
+        restBreakTaken: gameState.restBreakTaken,
         servingPlayer: gameState.servingPlayer,
         servingTeam: gameState.servingTeam,
         servingPlayerOnTeam: gameState.servingPlayerOnTeam,
@@ -755,6 +809,7 @@ function switchSides() {
 // Selve nulstillingen — kaldes baade fra "Er du sikker"-prompten i clearCourt()
 // og fra den 3-sekunders hold-knap der vises efter holdkamp/turneringskamp.
 async function performClearCourtNow() {
+    releaseWakeLock(); // banen ryddes — ingen aktiv kamp at holde skærmen vågen for
     // Release holdkamp game back to pending if assigned
     if (assignedHoldkampGameId && activeTeamMatch) {
         try {
@@ -1343,11 +1398,26 @@ async function undoLastAction() {
     // Pop last state from history
     const previousState = gameState.history.pop();
 
+    // Fortrydes sætbolden mens sætpausen stadig kører, skal pausen annulleres —
+    // ellers fyrer dens callback (resetScores + switchSides) senere oven i den
+    // gendannede tilstand og bytter score/navne.
+    if (gameState.restBreakActive) {
+        gameState.restBreakCallback = null;
+        await endRestBreak();
+    }
+
     // Restore all game state from snapshot
+    gameState.player1.name = previousState.player1.name;
+    gameState.player1.name2 = previousState.player1.name2;
     gameState.player1.score = previousState.player1.score;
     gameState.player1.games = previousState.player1.games;
+    gameState.player2.name = previousState.player2.name;
+    gameState.player2.name2 = previousState.player2.name2;
     gameState.player2.score = previousState.player2.score;
     gameState.player2.games = previousState.player2.games;
+
+    gameState.sidesManuallySwitched = previousState.sidesManuallySwitched || false;
+    gameState.restBreakTaken = previousState.restBreakTaken || false;
 
     gameState.servingPlayer = previousState.servingPlayer;
     gameState.servingTeam = previousState.servingTeam;
@@ -1376,6 +1446,10 @@ async function undoLastAction() {
         startTimer();
     }
 
+    // Fortrydes det match-afgørende point, genåbnes kampen — showMatchWonMessage
+    // frigav wake lock'en, så genanskaf den hvis kampen kører igen.
+    if (matchIsLive() && !_wakeLock) acquireWakeLock();
+
     // Update display and save restored state
     updateDisplay();
     saveGameState();
@@ -1398,6 +1472,7 @@ async function startMatch() {
     document.getElementById('holdkampPanel').style.display = 'none';
     updateDisplay();
     startTimer();
+    acquireWakeLock(); // hold skærmen tændt mens kampen spilles
     await performSave(); // Save immediately without debouncing
     console.log('Match started');
 }
@@ -1500,6 +1575,47 @@ function saveGameState() {
 }
 
 // Perform the actual API save
+// Byg det fulde save-payload fra gameState. Deles af performSave og
+// pagehide-flushen, så flushen ikke sender en delmængde (backend merger
+// per-felt, så manglende felter ville efterlade en inkonsistent tilstand —
+// fx forkert servende makker/side for den gemte score).
+function buildSavePayload() {
+    return {
+        player1: gameState.player1,
+        player2: gameState.player2,
+        timerSeconds: gameState.timerSeconds,
+        // Starttid: 'now' ved kampstart (serveren stempler med sit eget ur),
+        // null ved eksplicit rydning — ellers udelades feltet helt, så
+        // serverens starttid aldrig overskrives med tablettens klokkeslæt
+        matchStartTime: (gameState._sendStartNow && gameState.matchStartTime) ? 'now'
+                      : (gameState.matchStartTime === null ? null : undefined),
+        matchEndTime: gameState.matchEndTime,
+        isActive: gameState.isActive,
+        isDoubles: gameState.isDoubles,
+        gameMode: gameState.gameMode,
+        decidingGameSwitched: gameState.decidingGameSwitched,
+        setScoresHistory: gameState.setScoresHistory,
+        matchCompleted: gameState.matchCompleted,
+        restBreakActive: gameState.restBreakActive,
+        restBreakSecondsLeft: gameState.restBreakSecondsLeft,
+        restBreakTitle: gameState.restBreakTitle,
+        restBreakTaken: gameState.restBreakTaken,
+        restBreakStartedAt: gameState.restBreakStartedAt,
+        restBreakDuration: gameState.restBreakDuration,
+        servingPlayer: gameState.servingPlayer,
+        initialServer: gameState.initialServer,
+        servingTeam: gameState.servingTeam,
+        servingPlayerOnTeam: gameState.servingPlayerOnTeam,
+        team1RightCourt: gameState.team1RightCourt,
+        team2RightCourt: gameState.team2RightCourt,
+        betweenSets: gameState.betweenSets,
+        // Optimistic concurrency: serveren afviser med 409 hvis en anden
+        // enhed har skrevet siden vores seneste læsning — i stedet for at
+        // vi stiltiende overskriver dens ændring
+        expectedVersion: typeof gameState.version === 'number' ? gameState.version : 0
+    };
+}
+
 async function performSave() {
     if (isSaving) {
         // Already saving, will retry
@@ -1512,40 +1628,7 @@ async function performSave() {
     lastSaveStartedAt = Date.now();
 
     try {
-        const stateToSave = {
-            player1: gameState.player1,
-            player2: gameState.player2,
-            timerSeconds: gameState.timerSeconds,
-            // Starttid: 'now' ved kampstart (serveren stempler med sit eget ur),
-            // null ved eksplicit rydning — ellers udelades feltet helt, så
-            // serverens starttid aldrig overskrives med tablettens klokkeslæt
-            matchStartTime: (gameState._sendStartNow && gameState.matchStartTime) ? 'now'
-                          : (gameState.matchStartTime === null ? null : undefined),
-            matchEndTime: gameState.matchEndTime,
-            isActive: gameState.isActive,
-            isDoubles: gameState.isDoubles,
-            gameMode: gameState.gameMode,
-            decidingGameSwitched: gameState.decidingGameSwitched,
-            setScoresHistory: gameState.setScoresHistory,
-            matchCompleted: gameState.matchCompleted,
-            restBreakActive: gameState.restBreakActive,
-            restBreakSecondsLeft: gameState.restBreakSecondsLeft,
-            restBreakTitle: gameState.restBreakTitle,
-            restBreakTaken: gameState.restBreakTaken,
-            restBreakStartedAt: gameState.restBreakStartedAt,
-            restBreakDuration: gameState.restBreakDuration,
-            servingPlayer: gameState.servingPlayer,
-            initialServer: gameState.initialServer,
-            servingTeam: gameState.servingTeam,
-            servingPlayerOnTeam: gameState.servingPlayerOnTeam,
-            team1RightCourt: gameState.team1RightCourt,
-            team2RightCourt: gameState.team2RightCourt,
-            betweenSets: gameState.betweenSets,
-            // Optimistic concurrency: serveren afviser med 409 hvis en anden
-            // enhed har skrevet siden vores seneste læsning — i stedet for at
-            // vi stiltiende overskriver dens ændring
-            expectedVersion: typeof gameState.version === 'number' ? gameState.version : 0
-        };
+        const stateToSave = buildSavePayload();
 
         const result = await api.updateGameState(courtId, stateToSave);
         if (result && typeof result.version === 'number') {
@@ -1553,10 +1636,13 @@ async function performSave() {
         }
         if (gameState._sendStartNow) gameState._sendStartNow = false; // starttid er nu sat af serveren
         lastOwnSaveAt = Date.now();
+        setSyncStatus(true); // gemning lykkedes — skjul evt. offline-badge
         console.log('Game state saved');
     } catch (error) {
         if (error && error.status === 409) {
-            // Konflikt — merge og lad finally-blokken genkøre gemningen
+            // Konflikt — merge og lad finally-blokken genkøre gemningen.
+            // En 409 er et svar fra serveren, ikke et forbindelsestab.
+            setSyncStatus(true);
             await handleSaveConflict(error.body);
             return;
         }
@@ -1567,6 +1653,7 @@ async function performSave() {
             return;
         }
         console.error('Failed to save game state:', error);
+        setSyncStatus(false); // forbindelses-/serverfejl — vis offline-badge
         // Retry after 5 seconds on error
         pendingSave = true;
         setTimeout(performSave, 5000);
@@ -1783,10 +1870,32 @@ function _updateRestBreakDisplay() {
 
 // Lyt på visibilitychange så vi reagerer straks når skærmen tændes igen
 document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && gameState.restBreakActive) {
-        const left = _updateRestBreakDisplay();
-        if (left === 0) endRestBreak();
+    if (document.visibilityState === 'visible') {
+        // Systemet slipper wake lock'en når fanen skjules/skærmen låses —
+        // genanskaf den hvis en kamp stadig er i gang
+        if (matchIsLive() && !_wakeLock) acquireWakeLock();
+        if (gameState.restBreakActive) {
+            const left = _updateRestBreakDisplay();
+            if (left === 0) endRestBreak();
+        }
     }
+});
+
+// Flush ventende gemninger når siden lukkes/skjules, så et point givet lige før
+// fanen lukkes ikke går tabt. fetch med keepalive:true overlever unload (modsat
+// en almindelig fetch der afbrydes) og kan — i modsætning til sendBeacon — bruge
+// PUT + Authorization-header, så samme rute og auth som en normal gemning.
+// pagehide (ikke beforeunload) bevarer browserens bfcache.
+window.addEventListener('pagehide', () => {
+    if (!pendingSave && !saveTimeout) return;
+    try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (api.token) headers['Authorization'] = `Bearer ${api.token}`;
+        // Samme fulde payload som performSave — ellers merger backend per-felt og
+        // efterlader serve-position/sider/pause uændret for den flushede score.
+        const body = JSON.stringify(buildSavePayload());
+        fetch(`/api/game-states/${courtId}`, { method: 'PUT', headers, body, keepalive: true });
+    } catch { /* bedst muligt — intet at gøre hvis flush fejler under unload */ }
 });
 
 async function startRestBreak(duration = 60, title = 'Pause 1 minut', callback = null, showOverlay = true) {
@@ -1978,6 +2087,7 @@ function escapeMessageHtml(s) {
 // hvilken spiller der fik hvilke point i hvert saet. Holdkamp/turneringskamp-
 // kampe faar derudover en 3-sek hold-knap og en dommerbesked-paamindelse.
 function showMatchWonMessage(winnerNames, winnerGames, loserGames, isReportedMatch) {
+    releaseWakeLock(); // kampen er afgjort — skærmen må gerne gå i dvale igen
     const history = gameState.setScoresHistory || [];
     const isDoubles = !!gameState.isDoubles;
 
