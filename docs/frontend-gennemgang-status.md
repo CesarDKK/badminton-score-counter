@@ -101,12 +101,17 @@ super-admins centrale logo-ændringer (som ikke pushes pr. tenant).
   - [MELLEM] Super-admins centrale logo-bibliotek pushes ikke pr. tenant (kræver cross-tenant broadcast) — dækkes af 5-min sikkerhedsnettet
   - [LILLE] Ufuldstændig `beforeunload`-oprydning, `courtMatchTimes` mini-leak, pause-nedtælling på vægur, burn-in
 
-### Performance
-- [MELLEM] Tællerens `serverSyncTick` fyrer op til 4 API-kald pr. tick — kombinér / spring over uden SSE-signal
-- [MELLEM] Admin-baneoversigt: N+1-kald (`getGameState` pr. bane) + polling fortsætter i skjulte sektioner
-- [MELLEM] TV: `getTeamMatchByCourt` kaldes ved hver poll — cache, re-check kun ved ny kamp/SSE
-- [LILLE] Pausen gemmer hvert sekund (TV kan selv regne nedtælling); dobbelt `getSettings()` ved TV-opstart;
-  slideshow re-renderer img pr. slide; index.html meta-refresh → server-302
+### Performance ✅ FÆRDIG (15. juli 2026)
+- ~~Tællerens `serverSyncTick` fyrer op til 4 API-kald pr. tick~~ → "grund" trådes gennem sync-kæden;
+  almindelige point-events laver nu **1 kald** (kun getGameState), fuld holdkamp/turnerings-detektion
+  kun ved sikkerhedspoll + `'assignment'`-events. Verificeret: update=1, poll/assignment=4.
+- ~~Admin-baneoversigt N+1~~ → ét `getAllGameStates`-batch i stedet for `getGameState` pr. bane (9→1 kald/tick);
+  `courtCount` cachet (nulstilles ved `'settings'`-event); polling springer helt over når sektionen er skjult (0 kald).
+- ~~TV: `getTeamMatchByCourt` ved hver poll~~ → holdkamp-bindingen cachet, genhentes kun ved ny kamp,
+  `'assignment'`-event og 5-min sikkerhedsnet (verificeret: 1 kald over 5 loads).
+- ~~Pausen gemmer hvert sekund~~ → gemmer hvert 10. sekund (TV tæller selv ned; kun drift-korrektion) — 90% færre SSE-events.
+- ~~Dobbelt `getSettings()` ved TV-opstart~~ → slået sammen til ét kald.
+- **Udestår (LILLE):** slideshow re-renderer img pr. slide; index.html meta-refresh → server-302.
 
 ### PWA / service worker / cache ✅ FÆRDIG (15. juli 2026)
 - ~~SW-cachen ryddes aldrig~~ → cache versioneret (`badminton-v2`) + `activate` sletter alle ikke-aktuelle caches (bevist end-to-end)

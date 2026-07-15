@@ -16,6 +16,10 @@ let timerInterval = null;
 let isMatchCurrentlyActive = false;
 let wasMatchPreviouslyActive = false;
 // Logo-lister caches én gang (hold-logoer del C + spiller-logoer C2)
+// Holdkamp-binding pr. bane: cachet, så getTeamMatchByCourt ikke kaldes ved
+// hvert point-event. _tvByCourtDirty sættes ved ny kamp / assignment / sikkerhedsnet.
+let _tvByCourt = null;
+let _tvByCourtDirty = true;
 let _tvLogos = null;
 let _tvPlayerLogos = null;
 let _tvClubByName = null;
@@ -58,6 +62,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     setInterval(() => {
         refreshSponsorSettings();
         invalidateTvLogoCache();
+        _tvByCourtDirty = true; // genhent også holdkamp-bindingen som sikkerhedsnet
         scheduleCourtDataLoad();
     }, 5 * 60 * 1000);
 });
@@ -108,14 +113,12 @@ async function initializeTVDisplay() {
     }
 
     try {
+        // Ét getSettings-kald (før: to back-to-back) — bruges til både QR-flag
+        // og bane-validering.
         const settings = await api.getSettings();
         if (settings.hideTvQr) qrCounterEnabled = false;
-    } catch (e) { /* behold eksisterende qrCounterEnabled ved fejl */ }
 
-    try {
-        const settings = await api.getSettings();
         const courtCount = settings.courtCount;
-
         if (courtId < 1 || courtId > courtCount) {
             document.querySelector('.tv-container').innerHTML = `
                 <div style="display: flex; align-items: center; justify-content: center; height: 100vh; flex-direction: column; gap: 20px;">
@@ -148,6 +151,9 @@ function startAutoRefresh() {
                 if (event && event.type === 'config') {
                     handleTvConfigEvent(event.scope);
                 } else {
+                    // 'assignment': admin har (af)tildelt en holdkamp til banen →
+                    // genhent bindingen så hold-logoerne opdateres.
+                    if (event && event.type === 'assignment') _tvByCourtDirty = true;
                     scheduleCourtDataLoad();
                 }
             },
@@ -314,6 +320,7 @@ async function loadCourtData() {
         // Detect new match starting
         if (isMatchActive && !wasMatchPreviouslyActive) {
             console.log('[TV V3] New match detected - storing original player positions');
+            _tvByCourtDirty = true; // ny kamp — genhent holdkamp-bindingen én gang
 
             // If set history exists, use it to determine the true original positions.
             // This handles the case where the TV page loads mid-match after sides have switched.
@@ -501,7 +508,13 @@ async function updateTvTeamLogos(gameState, isMatchActive) {
 
     try {
         if (_tvLogos === null) _tvLogos = (await api.getPublicLogos()) || [];
-        const byCourt = await api.getTeamMatchByCourt(courtId);
+        // Holdkamp-bindingen ændres kun ved tildeling (fyrer et 'assignment'-event)
+        // eller ny kamp — hent kun da, brug ellers cachen (før: kald pr. point-event).
+        if (_tvByCourtDirty) {
+            _tvByCourt = await api.getTeamMatchByCourt(courtId);
+            _tvByCourtDirty = false;
+        }
+        const byCourt = _tvByCourt;
 
         // Bestem viste venstre/højre spiller (samme swap-logik som updatePlayerNames)
         const playersSwapped = originalPlayer1Name && gameState.player1.name === originalPlayer2Name;

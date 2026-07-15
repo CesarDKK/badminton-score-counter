@@ -2,6 +2,7 @@
 const api = window.BadmintonAPI;
 let refreshInterval = null;
 let liveUpdatesHandle = null; // SSE-forbindelse til live game-state opdateringer
+let _overviewCourtCount = null; // cachet courtCount til baneoversigten (nulstilles ved 'settings'-event)
 let currentEditingCourt = null;
 let allMatchesDisplayCount = 30;
 let courtTimers = {}; // Store timer values and timestamps for each court
@@ -230,7 +231,13 @@ function startAutoRefresh() {
     // at vente paa naeste poll. Pollingen beholdes uaendret som sikkerhedsnet.
     if (window.LiveUpdates && !liveUpdatesHandle) {
         liveUpdatesHandle = window.LiveUpdates.connect({
-            onEvent: () => scheduleOverviewRefresh()
+            onEvent: (event) => {
+                // 'settings'-config-event: courtCount kan være ændret — nulstil cachen
+                if (event && event.type === 'config' && event.scope === 'settings') {
+                    _overviewCourtCount = null;
+                }
+                scheduleOverviewRefresh();
+            }
         });
     }
 
@@ -285,17 +292,31 @@ function updateAllTimerDisplays() {
 }
 
 async function loadCourtOverview() {
+    // Baneoversigten poller (+ SSE) kører hele tiden, men skal ikke hente og
+    // rendere når dens sektion er skjult (admin er på Holdkamp/Turnering/Historik).
+    const section = document.getElementById('courtOverviewSection');
+    if (!section || section.style.display === 'none') return;
     try {
-        const settings = await api.getSettings();
-        const courtCount = settings.courtCount;
+        // courtCount cachet — det ændres sjældent (og et 'settings'-config-event
+        // nulstiller cachen). Undgår et getSettings-kald i hvert 2,5s-tick.
+        if (_overviewCourtCount == null) {
+            const settings = await api.getSettings();
+            _overviewCourtCount = settings.courtCount;
+        }
+        const courtCount = _overviewCourtCount;
         const courtOverview = document.getElementById('courtOverview');
+
+        // Ét batch-kald til alle baner i stedet for ét getGameState pr. bane
+        // (før: N+1 sekventielle requests hver 2,5 sek — 8 baner = 8 kald/tick).
+        const allStates = await api.getAllGameStates();
+        const byCourt = {};
+        (allStates || []).forEach(s => { if (s && s.courtId != null) byCourt[s.courtId] = s; });
 
         // Build all cards first before updating DOM (prevents flickering)
         const fragment = document.createDocumentFragment();
 
         for (let i = 1; i <= courtCount; i++) {
-            const courtCard = await createCourtCard(i);
-            fragment.appendChild(courtCard);
+            fragment.appendChild(createCourtCard(i, byCourt[i]));
         }
 
         // Update DOM in one operation
@@ -307,13 +328,11 @@ async function loadCourtOverview() {
     }
 }
 
-async function createCourtCard(courtNumber) {
+function createCourtCard(courtNumber, state) {
     const card = document.createElement('div');
     card.className = 'court-card';
 
     try {
-        const state = await api.getGameState(courtNumber);
-
         if (!state || !state.isActive) {
             // Remove from active timers if court is inactive
             if (courtTimers[courtNumber]) {
@@ -1057,6 +1076,8 @@ function showCourtOverview() {
     document.getElementById('courtOverviewSection').style.display = 'block';
     setNavActive('overview');
     history.replaceState(null, '', '#');
+    // Render straks ved retur (loadCourtOverview springer over mens skjult)
+    loadCourtOverview();
 }
 
 function setNavActive(section) {

@@ -1926,7 +1926,10 @@ async function startRestBreak(duration = 60, title = 'Pause 1 minut', callback =
             endRestBreak();
             return;
         }
-        saveGameState();
+        // Gem kun hvert 10. sekund. TV tæller selv ned lokalt og bruger kun
+        // serverens sekundtal til drift-korrektion (>2s) — så hvert-sekund-
+        // gemning var unødig og fyrede et SSE-event til alle skærme hvert sekund.
+        if (secondsLeft % 10 === 0) saveGameState();
     }, 1000);
 
     await performSave();
@@ -2320,40 +2323,49 @@ function startPeriodicSync() {
 
 function startSyncPolling(ms) {
     if (syncInterval) clearInterval(syncInterval);
-    syncInterval = setInterval(runServerSync, ms);
+    // Sikkerhedspollen kører altid en FULD sync (detekterer også holdkamp/
+    // turnerings-tildelinger som et fallback, hvis et 'assignment'-event blev misset).
+    syncInterval = setInterval(() => runServerSync('poll'), ms);
 }
 
 // SSE-event for denne bane: kør synken med det samme. Egne gemninger udløser
 // også events (ét pr. point-gemning) — de springes over, så vi ikke henter
-// tilstand vi selv lige har skrevet. Reset-events køres altid; vores egen
-// "Ryd bane" er ufarlig at synke (wasReset-grenen kræver en aktiv kamp lokalt).
+// tilstand vi selv lige har skrevet. Reset- og assignment-events køres altid
+// (de kan ikke stamme fra vores egen point-gemning og er vigtige at reagere på).
 function handleCourtEvent(event) {
     const type = event && event.type;
-    if (type !== 'reset' && Date.now() - lastOwnSaveAt < 1200) return;
-    runServerSync();
+    if (type !== 'reset' && type !== 'assignment' && Date.now() - lastOwnSaveAt < 1200) return;
+    runServerSync(type);
 }
 
-// Kør én sync ad gangen — events der ankommer imens samles til én ekstra kørsel
+// Kør én sync ad gangen — events der ankommer imens samles til én ekstra kørsel.
+// reason: 'poll' | 'assignment' | 'update' | 'reset' | 'config' (SSE-event-type).
+// Kun 'poll'/'assignment' (og ukendt) kører den dyre holdkamp/turnerings-
+// detektion; almindelige point-events ('update') henter kun game-state.
 let _syncRunning = false;
 let _syncPending = false;
-async function runServerSync() {
+async function runServerSync(reason) {
     if (_syncRunning) {
         _syncPending = true;
         return;
     }
     _syncRunning = true;
     try {
-        await serverSyncTick();
+        await serverSyncTick(reason);
     } finally {
         _syncRunning = false;
         if (_syncPending) {
             _syncPending = false;
-            runServerSync();
+            // Opsamlingskørslen er fuld ('poll') så en evt. misset tildeling fanges
+            runServerSync('poll');
         }
     }
 }
 
-async function serverSyncTick() {
+async function serverSyncTick(reason) {
+        // Fuld detektion (holdkamp/turnerings-tildeling) kun ved sikkerhedspoll,
+        // assignment-events og ukendt grund — ikke ved almindelige point-events.
+        const checkAssignments = reason !== 'update' && reason !== 'reset' && reason !== 'config';
         try {
             const loaded = await api.getGameState(courtId);
 
@@ -2442,8 +2454,9 @@ async function serverSyncTick() {
                         }
                     }
                 }
-            } else {
+            } else if (!assignedTournamentMatchId && checkAssignments) {
                 // Ikke bundet: er denne bane lige blevet bundet (af denne enhed eller admin)?
+                // Kun ved poll/assignment — ikke ved hvert point-event.
                 const byCourt = await api.getTeamMatchByCourt(courtId);
                 if (byCourt && byCourt.game) {
                     activeTeamMatch = byCourt;
@@ -2472,7 +2485,11 @@ async function serverSyncTick() {
 
         // Tournament sync: detect when admin har tildelt en planlagt kamp til DENNE bane,
         // og sync spillernavne hvis admin redigerer kampen mens den kører.
+        // Springes helt over hvis banen er bundet til en holdkamp (kan ikke være
+        // begge), og — når ubundet — kun ved poll/assignment, ikke ved point-events.
         try {
+            if (assignedHoldkampGameId) return;
+            if (!assignedTournamentMatchId && !checkAssignments) return;
             const tournaments = await api.getActiveTournaments();
             let myMatch = null;
             let parentTournament = null;
