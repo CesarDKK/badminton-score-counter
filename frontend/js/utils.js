@@ -145,7 +145,8 @@ window.BadmintonUtils.ListenerRegistry = class {
      * Setup automatic cleanup on page unload
      */
     setupCleanup() {
-        window.addEventListener('beforeunload', () => this.cleanup());
+        // pagehide (ikke beforeunload) bevarer browserens bfcache
+        window.addEventListener('pagehide', () => this.cleanup());
     }
 
     /**
@@ -226,7 +227,8 @@ window.BadmintonUtils.TimeoutRegistry = class {
      * Setup automatic cleanup on page unload
      */
     setupCleanup() {
-        window.addEventListener('beforeunload', () => this.cleanup());
+        // pagehide (ikke beforeunload) bevarer browserens bfcache
+        window.addEventListener('pagehide', () => this.cleanup());
     }
 };
 

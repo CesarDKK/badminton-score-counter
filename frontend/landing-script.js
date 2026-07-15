@@ -55,6 +55,7 @@ function loadTVButtons(courtCount) {
         button.href = `tv-v3.html?id=${i}`;
         button.className = 'tv-button';
         button.target = '_blank'; // Open in new window/tab
+        button.rel = 'noopener'; // afskær window.opener-adgang fra ny fane
         button.innerHTML = `
             <div class="tv-icon">📺</div>
             <div class="tv-label">Bane ${i} TV</div>

@@ -141,27 +141,37 @@ super-admins centrale logo-ændringer (som ikke pushes pr. tenant).
   - [LILLE] `?dt=`-dubletten (api.js/auth-guard, forskellige sidesæt — dedup = høj risiko/nul gevinst).
   - [LILLE] marquee-rester i tv-v3 (parkeret feature, ikke død kode); theme-script vs theme-loader navn.
 
-### Tilgængelighed (tværgående)
-- [MELLEM] Synligt tastaturfokus (`:focus-visible`) app-bredt; modaler som rigtige dialoger
-  (`role="dialog"`, Escape, fokusfælde); labels bundet med `for=`; touch-mål under 44 px i Tælleren;
-  contenteditable navnefelter usynlige for tastatur/skærmlæser
-- [LILLE] `user-scalable=no` (behold evt. kun på tælleren); `prefers-reduced-motion` på landing/login;
-  lav kontrast på hint-tekster (#666/#777) og `.set-label`
+### Tilgængelighed (tværgående) — FRAVALGT
+Fravalgt bevidst (Jesper, 2026-07-15): giver ikke mening for målgruppen (hal-skærme +
+dommere med tablet/mus, ikke offentligt website med lovkrav), og det tunge punkt
+(contenteditable-navnefelter) rører selve navne-redigeringen i Tælleren, som virker.
+Oprindelige punkter til reference:
+- ~~[MELLEM] Synligt tastaturfokus (`:focus-visible`); modaler som rigtige dialoger
+  (`role="dialog"`, Escape, fokusfælde); labels bundet med `for=`; touch-mål under 44 px;
+  contenteditable navnefelter usynlige for tastatur/skærmlæser~~
+- ~~[LILLE] `user-scalable=no`; `prefers-reduced-motion` på landing/login;
+  lav kontrast på hint-tekster (#666/#777) og `.set-label`~~
 
-### Småting (hale)
-- Landing: `rel="noopener"` på TV-knapper, stagger-animation stopper ved knap 12/8, emoji-TV-ikon,
-  "Display"/"Admin Panel" på engelsk
-- Klub-login: intet `<form>`-element (password managers), labels uden `for=`, rå serverfejl vises
-- Tema-siden: preset-farver duplikeret i HTML+JS, hardkodet "Version 2.0" i footer, `pattern`-attributter uden virkning
-- Settings: NaN-tjek på baneantal, inkonsistent gem-model (toggles vs Gem-knapper)
-- Sponsor: "Slet alle" sletter serielt og ignorerer fejl, checkbox-selektor rammer labels, upload uden fremskridt
-- Player-info: ingen søgning i spillerlisten, debug-console.log efterladt, logo-override følger ikke med ved navneændring
-- Super-admin: succes-feedback ved "Skift kode", subdomain-validering client-side, Enter-submit på opret-felter
-- Tælleren: dobbelttryk-værn på +1, `touch-action: manipulation` på alle knapper, timer-interval stoppes ikke ved kampslut,
-  `alert()` i initializeApp, sidetitlen "(Ny Version)"
-- TV: cached score 0 vises som "-", timer skriver DOM hver 500 ms, console-spam hver 2. sek.
-- Fælles: fonts.css vægt 500/600 peger på samme fil, `beforeunload` dræber bfcache (→ `pagehide`),
-  fjerbold-SVG duplikeret inline, `@keyframes fadeUp` defineret 4 gange
+### Småting (hale) — branch `smaating-hale` (afventer merge-godkendelse)
+**RETTET (verificeret i browser hvor relevant):**
+- Landing: ✅ `rel="noopener"` på TV-knapper
+- Klub-login: ✅ rigtigt `<form>` (password managers + Enter), `for=` på labels, brugervenlig fejlbesked (401/429/5xx/netværk)
+- Settings: ✅ `isNaN`-tjek på baneantal
+- Sponsor: ✅ "Slet alle" sletter parallelt (Promise.allSettled) og melder faktiske fejl; ✅ checkbox-selektor rammer nu `input` ikke `<label>`
+- Player-info: ✅ søgning i spillerlisten (navn/klub, lokal filtrering), ✅ debug-`console.log` fjernet, ✅ logo-override flyttes/ryddes ved navneændring
+- Super-admin: ✅ client-side subdomæne-format-validering (DNS-label regex), ✅ Enter-submit på alle opret-/skift-felter (badminton + football)
+- Tælleren: ✅ dobbelttryk-værn på +1 (250 ms pr. spiller), ✅ `touch-action: manipulation` på alle knapper, ✅ timer-interval stoppes ved kampsejr, ✅ `alert()` fjernet + manglende `return` rettet, ✅ titel uden "(Ny Version)"
+- TV: ✅ cached score 0 vises korrekt (null-sentinel), ✅ timer skriver kun DOM ved tekstændring, ✅ console-spam fjernet
+- Fælles: ✅ `beforeunload` → `pagehide` (6 steder — bevarer bfcache)
+- Footer: ✅ forældet hardkodet "Version 2.0" fjernet på alle 4 sider (admin beholder copyright-linjen)
+- Sponsor: ✅ upload-fremskridt — `uploadSponsorImages` er nu XHR-baseret med `upload.onprogress`; sponsor-siden viser en progress-bar (0→100 %, derefter "Behandler…")
+- Note: succes-feedback ved "Skift kode" (super-admin) var allerede rettet tidligere
+
+**BEVIDST UDELADT (afventer Jespers beslutning — mest subjektivt/kosmetisk el. kræver build-step):**
+- Landing: stagger-animation stopper ved knap 12/8; emoji-TV-ikon (📺); "Display"/"Admin Panel" på engelsk
+- Tema: preset-farver duplikeret i HTML+JS; `pattern`-attributter uden virkning
+- Settings: inkonsistent gem-model (toggles gemmer straks vs Gem-knapper) — UX-designvalg
+- Fælles: fonts.css vægt 500/600 = samme fil (typografi); fjerbold-SVG duplikeret (kræver komponent/build); `@keyframes fadeUp` ×4 (kræver delt CSS)
 
 ---
 

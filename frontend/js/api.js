@@ -455,26 +455,37 @@ class BadmintonAPI {
      * @param {FormData} formData - FormData with 'images' field
      * @returns {Promise<object>} - { success, images: [{ id, filename, url }] }
      */
-    async uploadSponsorImages(formData) {
-        // Special handling for multipart/form-data
-        const headers = {};
-        if (this.token) {
-            headers['Authorization'] = `Bearer ${this.token}`;
-        }
-        // Don't set Content-Type header - browser will set it with boundary
+    uploadSponsorImages(formData, onProgress) {
+        // XHR (ikke fetch): kun XHR eksponerer upload-fremskridt via upload.onprogress.
+        // Returformatet er uændret ({ success, images: [...] }).
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `${API_BASE_URL}/sponsors/upload`);
+            if (this.token) {
+                xhr.setRequestHeader('Authorization', `Bearer ${this.token}`);
+            }
+            // Content-Type sættes IKKE manuelt — browseren tilføjer multipart-boundary selv.
 
-        const response = await fetch(`${API_BASE_URL}/sponsors/upload`, {
-            method: 'POST',
-            headers,
-            body: formData
+            if (typeof onProgress === 'function' && xhr.upload) {
+                xhr.upload.onprogress = (e) => {
+                    if (e.lengthComputable) {
+                        onProgress(Math.round((e.loaded / e.total) * 100));
+                    }
+                };
+            }
+
+            xhr.onload = () => {
+                let body = null;
+                try { body = JSON.parse(xhr.responseText); } catch (_) { /* ignoreret */ }
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve(body);
+                } else {
+                    reject(new Error((body && body.error) || `Upload Error: HTTP ${xhr.status}`));
+                }
+            };
+            xhr.onerror = () => reject(new Error('Netværksfejl under upload'));
+            xhr.send(formData);
         });
-
-        if (!response.ok) {
-            const error = await response.json().catch(() => ({ error: response.statusText }));
-            throw new Error(error.error || `Upload Error: HTTP ${response.status}`);
-        }
-
-        return await response.json();
     }
 
     // ==================== Klub-logoer (Superadmin) ====================

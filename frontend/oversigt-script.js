@@ -1229,8 +1229,8 @@ function nextPage() {
     displayCurrentPage();
 }
 
-// Cleanup on page unload
-window.addEventListener('beforeunload', function() {
+// Cleanup on page unload — pagehide (ikke beforeunload) bevarer browserens bfcache
+window.addEventListener('pagehide', function() {
     if (refreshTimer) clearInterval(refreshTimer);
     if (scrollTimer) clearInterval(scrollTimer);
     if (localTimerInterval) clearInterval(localTimerInterval);

@@ -168,10 +168,27 @@ async function handleImageUpload(event, type) {
         // Add type parameter
         formData.append('type', type);
 
-        preview.innerHTML = `<p style="color: #fff;">Uploader ${validFiles.length} ${typeName} billede(r)...</p>`;
+        // Fremskridts-bar under upload (procent fra XHR upload.onprogress).
+        // Ved 100 % skifter teksten til "Behandler…" mens serveren kører sharp.
+        preview.innerHTML = `
+            <p style="color: #fff; margin-bottom: 8px;" id="uploadProgressLabel">Uploader ${validFiles.length} ${typeName} billede(r)… 0%</p>
+            <div style="height: 8px; background: rgba(255,255,255,0.12); border-radius: 4px; overflow: hidden;">
+                <div id="uploadProgressBar" style="height: 100%; width: 0%; background: var(--color-accent, #e94560); transition: width 0.15s ease;"></div>
+            </div>`;
+
+        const onProgress = (pct) => {
+            const bar = document.getElementById('uploadProgressBar');
+            const label = document.getElementById('uploadProgressLabel');
+            if (bar) bar.style.width = `${pct}%`;
+            if (label) {
+                label.textContent = pct >= 100
+                    ? `Behandler ${validFiles.length} ${typeName} billede(r)…`
+                    : `Uploader ${validFiles.length} ${typeName} billede(r)… ${pct}%`;
+            }
+        };
 
         // Upload all images at once
-        const result = await api.uploadSponsorImages(formData);
+        const result = await api.uploadSponsorImages(formData, onProgress);
 
         const successCount = result.images ? result.images.length : 0;
 
@@ -532,16 +549,16 @@ async function toggleCourtAssignment(imageId, courtNumber, isChecked) {
  * @param {boolean} disabled - Whether to disable the checkboxes
  */
 function setCourtCheckboxesDisabled(disabled) {
-    const courtCheckboxes = document.querySelectorAll('.court-checkbox');
-    courtCheckboxes.forEach(checkbox => {
+    // .court-checkbox er <label>-elementet — vælg selve <input> indeni, ellers
+    // gør .disabled ingenting og checkboxene forbliver klikbare under en opdatering.
+    const checkboxes = document.querySelectorAll('.court-checkbox input[type="checkbox"]');
+    checkboxes.forEach(checkbox => {
         checkbox.disabled = disabled;
-        // Add visual feedback - slightly fade out when disabled
-        if (disabled) {
-            checkbox.parentElement.style.opacity = '0.5';
-            checkbox.parentElement.style.cursor = 'not-allowed';
-        } else {
-            checkbox.parentElement.style.opacity = '1';
-            checkbox.parentElement.style.cursor = 'pointer';
+        // Add visual feedback - slightly fade out when disabled (label = parent)
+        const label = checkbox.closest('.court-checkbox');
+        if (label) {
+            label.style.opacity = disabled ? '0.5' : '1';
+            label.style.cursor = disabled ? 'not-allowed' : 'pointer';
         }
     });
 }
@@ -625,17 +642,20 @@ async function performClearAll(type, typeName) {
             return;
         }
 
-        // Delete each image
-        for (const img of images) {
-            try {
-                await api.deleteSponsorImage(img.id);
-            } catch (error) {
-                console.error(`Failed to delete image ${img.id}:`, error);
-            }
-        }
+        // Slet parallelt og hold øje med fejl — så vi ikke melder "alle slettet"
+        // hvis nogle reelt fejlede (før blev fejl kun logget til konsollen).
+        const results = await Promise.allSettled(
+            images.map(img => api.deleteSponsorImage(img.id))
+        );
+        const failed = results.filter(r => r.status === 'rejected').length;
 
         await loadGallery(type);
-        showMessage('Slettet', `Alle ${typeName} billeder er blevet slettet`, [{ text: 'OK', style: 'primary' }]);
+
+        if (failed === 0) {
+            showMessage('Slettet', `Alle ${typeName} billeder er blevet slettet`, [{ text: 'OK', style: 'primary' }]);
+        } else {
+            showMessage('Delvist slettet', `${images.length - failed} af ${images.length} ${typeName} billeder blev slettet. ${failed} fejlede — prøv igen.`, [{ text: 'OK', style: 'primary' }]);
+        }
     } catch (error) {
         console.error(`Failed to clear all ${typeName} images:`, error);
         showMessage('Fejl', 'Kunne ikke slette alle billeder. Tjek din forbindelse', [{ text: 'OK', style: 'primary' }]);
@@ -679,7 +699,7 @@ async function saveSlideDuration() {
 const showMessage = window.BadmintonUtils.showMessage;
 const hideMessage = window.BadmintonUtils.hideMessage;
 
-// Cleanup on page unload
-window.addEventListener('beforeunload', function() {
+// Cleanup on page unload — pagehide (ikke beforeunload) bevarer browserens bfcache
+window.addEventListener('pagehide', function() {
     // Any cleanup if needed
 });

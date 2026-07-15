@@ -184,6 +184,14 @@ async function showPlayerInfoDashboard() {
     document.getElementById('playerInfoDashboard').style.display = 'block';
 
     initAddPlayerLogoPicker();
+
+    // Søgning i spillerlisten — filtrerer den cachede liste lokalt (intet API-kald)
+    const searchInput = document.getElementById('playerSearch');
+    if (searchInput && !searchInput.dataset.bound) {
+        searchInput.dataset.bound = '1';
+        searchInput.addEventListener('input', filterPlayers);
+    }
+
     await loadPlayers();
 }
 
@@ -195,12 +203,44 @@ async function loadPlayers() {
         // Cache til deletePlayer-opslag — navne må ikke interpoleres i onclick
         // (et navn med ' som "O'Neill" brækker handleren; konstrueret navn = XSS)
         playersCache = players;
-
-        if (players.length === 0) {
-            container.innerHTML = '<p style="color: #aaa;">Ingen spillere endnu. Tilføj en spiller for at komme i gang.</p>';
-            return;
+        // Bevar en aktiv søgning på tværs af genindlæsninger (efter tilføj/redigér/slet)
+        const searchInput = document.getElementById('playerSearch');
+        if (searchInput && searchInput.value.trim()) {
+            filterPlayers();
+        } else {
+            renderPlayersList(players);
         }
+    } catch (error) {
+        console.error('Error loading players:', error);
+        container.innerHTML = '<p style="color: #e94560;">Fejl ved indlæsning af spillere. Prøv igen.</p>';
+    }
+}
 
+// Filtrer den cachede spillerliste på navn/klub og gen-render (uden nyt API-kald)
+function filterPlayers() {
+    const term = (document.getElementById('playerSearch')?.value || '').trim().toLowerCase();
+    if (!term) {
+        renderPlayersList(playersCache);
+        return;
+    }
+    const filtered = playersCache.filter(p =>
+        (p.name || '').toLowerCase().includes(term) ||
+        (p.club || '').toLowerCase().includes(term)
+    );
+    renderPlayersList(filtered, term);
+}
+
+function renderPlayersList(players, searchTerm) {
+    const container = document.getElementById('playersListContainer');
+
+    if (players.length === 0) {
+        container.innerHTML = searchTerm
+            ? `<p style="color: #aaa;">Ingen spillere matcher "${escapeHtml(searchTerm)}".</p>`
+            : '<p style="color: #aaa;">Ingen spillere endnu. Tilføj en spiller for at komme i gang.</p>';
+        return;
+    }
+
+    {
         // Group players by age group
         const groupedPlayers = {};
         players.forEach(player => {
@@ -250,9 +290,6 @@ async function loadPlayers() {
         });
 
         container.innerHTML = html;
-    } catch (error) {
-        console.error('Error loading players:', error);
-        container.innerHTML = '<p style="color: #e94560;">Fejl ved indlæsning af spillere. Prøv igen.</p>';
     }
 }
 
@@ -305,6 +342,9 @@ async function editPlayer(playerId) {
 
         document.getElementById('editPlayerId').value = player.id;
         document.getElementById('editPlayerName').value = player.name;
+        // Husk det oprindelige navn: logo-overrides nøgles på navn, så ved en
+        // navneændring skal den gamle override flyttes/ryddes (ellers forældreløs).
+        document.getElementById('editPlayerName').dataset.originalName = player.name;
         document.getElementById('editPlayerClub').value = player.club;
         document.getElementById('editPlayerGender').value = player.gender;
         document.getElementById('editPlayerAgeGroup').value = player.age_group;
@@ -353,6 +393,13 @@ async function handleEditPlayer(e) {
             await api.setPlayerLogo(name, parseInt(logoSel.value, 10));
         } else {
             await api.clearPlayerLogo(name);
+        }
+
+        // Blev navnet ændret, ryd den nu forældreløse override under det gamle navn,
+        // så der ikke ligger en logo-binding tilbage på et navn der ikke findes mere.
+        const originalName = document.getElementById('editPlayerName').dataset.originalName;
+        if (originalName && originalName !== name) {
+            await api.clearPlayerLogo(originalName).catch(() => {});
         }
 
         showMessage('Succes', 'Spiller opdateret succesfuldt!');
@@ -463,20 +510,15 @@ function escapeHtml(text) {
 let selectedXmlFile = null;
 
 function handleXmlFileSelect(event) {
-    console.log('handleXmlFileSelect called', event);
     const file = event.target.files[0];
-    console.log('Selected file:', file);
 
     if (file && file.name.endsWith('.xml')) {
         selectedXmlFile = file;
-        console.log('Valid XML file selected:', file.name);
         document.getElementById('selectedFileName').textContent = `Valgt: ${file.name}`;
         document.getElementById('selectedFileName').style.display = 'block';
         document.getElementById('importXmlBtn').disabled = false;
-        console.log('Import button enabled');
         document.getElementById('importStatus').style.display = 'none';
     } else {
-        console.log('Invalid file or no file selected');
         selectedXmlFile = null;
         document.getElementById('selectedFileName').style.display = 'none';
         document.getElementById('importXmlBtn').disabled = true;
@@ -487,9 +529,6 @@ function handleXmlFileSelect(event) {
 }
 
 async function handleXmlImport() {
-    console.log('handleXmlImport called');
-    console.log('selectedXmlFile:', selectedXmlFile);
-
     if (!selectedXmlFile) {
         showMessage('Fejl', 'Vælg venligst en XML fil først');
         return;
@@ -502,7 +541,6 @@ async function handleXmlImport() {
     document.getElementById('importStatusText').style.color = '#aaa';
 
     try {
-        console.log('Starting XML parsing...');
         const xmlText = await selectedXmlFile.text();
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
@@ -579,9 +617,7 @@ async function handleXmlImport() {
         document.getElementById('importStatusText').textContent = `Importerer ${playersToImport.length} spillere...`;
 
         // Import players to backend
-        console.log('Calling api.importPlayers with', playersToImport.length, 'players');
         const result = await api.importPlayers(playersToImport);
-        console.log('Import result:', result);
 
         document.getElementById('importStatusText').textContent = result.message || `${result.imported} spillere importeret succesfuldt! (${result.skipped} duplikater sprunget over)`;
         document.getElementById('importStatusText').style.color = 'var(--color-accent)';

@@ -131,11 +131,38 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('footballAdminModalClose').addEventListener('click', closeFootballAdminModal);
     document.getElementById('createFootballAdminBtn').addEventListener('click', handleCreateFootballAdmin);
 
+    // Enter-submit på opret-/skift-felter, så man ikke skal klikke knappen med musen.
+    // Sidste felt i hver gruppe udløser handleren; øvrige felter springer til næste.
+    bindEnterSubmit(['newClubName', 'newClubSubdomain'], handleCreateClub);
+    bindEnterSubmit(['newAdminUsername', 'newAdminPassword', 'newAdminEmail'], handleCreateAdmin);
+    bindEnterSubmit(['currentPassword', 'newPassword', 'confirmPassword'], handleChangeSuperAdminPassword);
+    bindEnterSubmit(['newFootballClubName', 'newFootballClubSubdomain'], handleCreateFootballClub);
+    bindEnterSubmit(['newFootballAdminUsername', 'newFootballAdminPassword', 'newFootballAdminEmail'], handleCreateFootballAdmin);
+
     // Auto-route based on hash so admin.footballapp.dk eller #football opens Football tab
     const hostHasFootball = window.location.host.includes('footballapp.dk');
     const hashWantsFootball = window.location.hash === '#football';
     if (hostHasFootball || hashWantsFootball) activeApp = 'football';
 });
+
+// Bind Enter på en række felter: sidste felt kalder submit-handleren, de
+// øvrige flytter fokus til næste felt. Manglende felter springes stille over.
+function bindEnterSubmit(ids, handler) {
+    ids.forEach((id, i) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('keydown', e => {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            if (i < ids.length - 1) {
+                const next = document.getElementById(ids[i + 1]);
+                if (next) next.focus();
+            } else {
+                handler();
+            }
+        });
+    });
+}
 
 async function handleLogin() {
     const username = document.getElementById('saUsername').value.trim();
@@ -258,6 +285,13 @@ async function handleCreateClub() {
 
     if (!name || !subdomain) {
         showMsg(msgEl, 'Udfyld navn og subdomain', 'error');
+        return;
+    }
+
+    // Client-side format-tjek (serveren validerer også): kun små bogstaver, tal
+    // og bindestreg, må ikke starte/slutte med bindestreg, 2-63 tegn (DNS-label).
+    if (!/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(subdomain)) {
+        showMsg(msgEl, 'Subdomæne må kun indeholde små bogstaver, tal og bindestreg (ikke først/sidst)', 'error');
         return;
     }
 
