@@ -157,12 +157,12 @@ gradlew.bat assembleDebug
 
 ## 📖 Yderligere Dokumentation
 
-- [BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md) - Detaljeret build guide
-- [README.md](README.md) - App funktionalitet og features
+- [../ANDROID_BUILD_GUIDE.md](../ANDROID_BUILD_GUIDE.md) - Detaljeret build guide (inkl. CLI/Android Studio)
+- [ICON_NOTE.md](ICON_NOTE.md) - Sådan skiftes app-ikonet
 
 ---
 
-**Senest opdateret:** Januar 2025
-**App Version:** 1.6.2
+**Senest opdateret:** Juli 2026
+**App Version:** 1.7.2 (versionCode 10)
 **Min Android Version:** 7.0 (API 24)
 **Target Android Version:** 15 (API 35)
