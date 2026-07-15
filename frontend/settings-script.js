@@ -111,10 +111,12 @@ async function loadSettings() {
 }
 
 async function saveCourtCount() {
-    const courtCount = parseInt(document.getElementById('courtCount').value);
+    const courtCount = parseInt(document.getElementById('courtCount').value, 10);
 
-    if (courtCount < 1 || courtCount > 20) {
-        showMessage('Fejl', 'Antal baner skal være mellem 1 og 20');
+    // isNaN-tjek først: uden det passerer et tomt/ugyldigt felt valideringen
+    // (NaN < 1 og NaN > 20 er begge false) og sender NaN videre til serveren.
+    if (isNaN(courtCount) || courtCount < 1 || courtCount > 20) {
+        showMessage('Fejl', 'Antal baner skal være et tal mellem 1 og 20');
         return;
     }
 

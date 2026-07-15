@@ -21,19 +21,21 @@
                 <h1>Klub Admin</h1>
                 <p class="subtitle">Log ind for at administrere din klub</p>
             </div>
-            <div class="form-group">
-                <label>Brugernavn</label>
-                <input type="text" id="username" placeholder="Indtast brugernavn" autocomplete="username" autofocus>
-            </div>
-            <div class="form-group">
-                <label>Adgangskode</label>
-                <input type="password" id="password" placeholder="Indtast adgangskode" autocomplete="current-password">
-            </div>
-            <button id="loginBtn" class="btn-login">Log Ind</button>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username">Brugernavn</label>
+                    <input type="text" id="username" placeholder="Indtast brugernavn" autocomplete="username" autofocus>
+                </div>
+                <div class="form-group">
+                    <label for="password">Adgangskode</label>
+                    <input type="password" id="password" placeholder="Indtast adgangskode" autocomplete="current-password">
+                </div>
+                <button type="submit" id="loginBtn" class="btn-login">Log Ind</button>
+            </form>
             <div id="errorMsg" class="error-msg"></div>
         </div>
     </div>
     <script src="js/api.js?v=4"></script>
-    <script src="club-login-script.js?v=2"></script>
+    <script src="club-login-script.js?v=3"></script>
 </body>
 </html>

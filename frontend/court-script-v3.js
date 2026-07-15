@@ -392,6 +392,12 @@ function saveToHistory() {
     }
 }
 
+// Dobbelttryk-værn: to point på SAMME spiller inden for 250 ms er næsten altid
+// et utilsigtet dobbelttryk (touch+click eller fed finger) — ægte point kan ikke
+// falde så hurtigt. Vagten er pr. spiller, så hurtig 1→2-veksling stadig tæller.
+let _lastPointTime = 0;
+let _lastPointPlayer = null;
+
 function addPoint(player) {
     // Kampen er afgjort (2 sæt vundet): lås tælling, så man ikke kan spille
     // videre til et 4. sæt hvis man annullerer "Ryd bane"-prompten. Brug "Fortryd"
@@ -404,6 +410,13 @@ function addPoint(player) {
     if (!gameState.servingPlayer) {
         return;
     }
+
+    const now = Date.now();
+    if (player === _lastPointPlayer && (now - _lastPointTime) < 250) {
+        return;
+    }
+    _lastPointTime = now;
+    _lastPointPlayer = player;
 
     // Save state to history before adding point
     saveToHistory();
@@ -601,6 +614,13 @@ async function handleSetWin(winnerKey, loserKey, p1Score, p2Score) {
     if (winner.games === 2) {
         gameState.matchEndTime = Date.now();
         gameState.matchCompleted = true;
+        // Frys den forløbne tid og stop interval'et — tiden ændrer sig ikke mere,
+        // så det er spild at lade timeren tikke videre og skrive samme tal hvert sek.
+        updateTimer();
+        if (gameState.timerInterval) {
+            clearInterval(gameState.timerInterval);
+            gameState.timerInterval = null;
+        }
         const winnerNames = formatPlayerNames(winner.name, winner.name2);
         const loserNames = formatPlayerNames(loser.name, loser.name2);
         // Fang FOR saveMatchResult, fordi den synkront nuller de globale assigned-vars.
@@ -886,8 +906,10 @@ async function initializeApp() {
         gameState._defaultGameMode = settings.defaultGameMode || '15';
 
         if (courtId < 1 || courtId > courtCount) {
-            alert(`Bane ${courtId} findes ikke. Omdirigerer til landingsside.`);
+            // Ugyldig bane — send til landing uden blokerende alert, og stop
+            // resten af initialiseringen (kørte før videre på en ugyldig bane).
             window.location.href = 'landing.html';
+            return;
         }
 
         // Show/hide elements based on tournament mode settings

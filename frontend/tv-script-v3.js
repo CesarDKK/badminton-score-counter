@@ -36,9 +36,11 @@ let localRestBreakSecondsLeft = 0;
 let isRestBreakActive = false;
 let wasRestBreakActive = false; // Track previous rest break state
 // Cache scores we see during gameplay as fallback until database history updates
+// null = sættet er endnu ikke observeret (skelnes fra en ægte score på 0,
+// så fx et sæt tabt 0-21 vises som "0" og ikke "-")
 let cachedSetScores = {
-    team1: { set1: 0, set2: 0, set3: 0 },
-    team2: { set1: 0, set2: 0, set3: 0 }
+    team1: { set1: null, set2: null, set3: null },
+    team2: { set1: null, set2: null, set3: null }
 };
 // QR counter — kun aktiv i klub-mode; vises når banen er ledig, gemmes når kampen starter
 let qrCounterEnabled = false;
@@ -231,6 +233,7 @@ function syncTimerAnchor(gameState) {
     timerAnchor = { base: serverElapsed, at: performance.now(), frozen };
 }
 
+let _lastTimerText = null;
 function updateTimerDisplay() {
     const timerElement = document.getElementById('timerDisplay');
     if (!timerElement) return;
@@ -241,12 +244,15 @@ function updateTimerDisplay() {
     const minutes = Math.floor((elapsedSeconds % 3600) / 60);
     const seconds = elapsedSeconds % 60;
 
-    if (hours > 0) {
-        timerElement.textContent =
-            `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-    } else {
-        timerElement.textContent =
-            `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    const text = hours > 0
+        ? `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+        : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+    // Timeren tikker hvert 500 ms, men tallet ændrer sig kun hvert sekund —
+    // skriv kun til DOM når teksten faktisk skifter (undgår unødig reflow).
+    if (text !== _lastTimerText) {
+        _lastTimerText = text;
+        timerElement.textContent = text;
     }
 }
 
@@ -340,8 +346,8 @@ async function loadCourtData() {
 
             // Reset cached scores for new match
             cachedSetScores = {
-                team1: { set1: 0, set2: 0, set3: 0 },
-                team2: { set1: 0, set2: 0, set3: 0 }
+                team1: { set1: null, set2: null, set3: null },
+                team2: { set1: null, set2: null, set3: null }
             };
 
             // Reset rest break tracker
@@ -831,14 +837,15 @@ function updateTeamSetBoxes(teamId, playerData, setHistory, currentSetIndex, gam
         } else if (currentSetIndex === idx) {
             // Igangværende sæt — vis og cache aktuel score (max, som fallback)
             const currentScore = playerData.score;
-            if (currentScore > cachedSetScores[teamId][cacheKey]) {
+            if (currentScore > (cachedSetScores[teamId][cacheKey] ?? -1)) {
                 cachedSetScores[teamId][cacheKey] = currentScore;
             }
             box.textContent = currentScore;
             box.className = 'set-box current';
         } else if (currentSetIndex > idx) {
             // Sættet er slut men historikken ikke opdateret endnu — cachet fallback
-            box.textContent = cachedSetScores[teamId][cacheKey] || '-';
+            const cached = cachedSetScores[teamId][cacheKey];
+            box.textContent = (cached == null) ? '-' : cached;
             box.className = 'set-box';
         } else {
             // Ikke startet endnu
@@ -902,7 +909,6 @@ function updateServingHighlight(gameState, playersSwapped) {
     // Validate serving team
     if (!servingTeam || (servingTeam !== 1 && servingTeam !== 2)) {
         // No valid serving team - don't highlight anything
-        console.log('[TV V3] No valid serving info. Doubles:', gameState.isDoubles, 'servingTeam:', gameState.servingTeam, 'servingPlayer:', gameState.servingPlayer);
         return;
     }
 
@@ -910,8 +916,6 @@ function updateServingHighlight(gameState, playersSwapped) {
     if (playersSwapped) {
         servingTeam = servingTeam === 1 ? 2 : 1;
     }
-
-    console.log('[TV V3] Serving team:', servingTeam, 'Doubles:', gameState.isDoubles, 'Players swapped:', playersSwapped);
 
     // Add serving highlight to correct team
     if (servingTeam === 1) {
@@ -1539,8 +1543,8 @@ function hideQrCounter() {
     qrCounterMode = null;
 }
 
-// Cleanup on page unload
-window.addEventListener('beforeunload', function() {
+// Cleanup on page unload — pagehide (ikke beforeunload) bevarer browserens bfcache
+window.addEventListener('pagehide', function() {
     if (refreshInterval) clearInterval(refreshInterval);
     if (slideshowInterval) clearInterval(slideshowInterval);
     stopScreensaver();

@@ -24,6 +24,13 @@ html, body {
     overflow: hidden;
 }
 
+/* Alle knapper på tælleren: undgå browserens 300 ms dobbelttryk-zoom-forsinkelse
+   og utilsigtet zoom ved hurtige tryk — kritisk på en touch-scoreskærm. */
+.container button,
+.court-overlay button {
+    touch-action: manipulation;
+}
+
 /* Remove container padding/border for full-screen experience */
 .container {
     padding: 0 !important;

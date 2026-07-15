@@ -2495,8 +2495,8 @@ async function showLatestMatch(courtNumber) {
     }
 }
 
-// Cleanup on page unload
-window.addEventListener('beforeunload', function() {
+// Cleanup on page unload — pagehide (ikke beforeunload) bevarer browserens bfcache
+window.addEventListener('pagehide', function() {
     stopAutoRefresh();
 
     // Clear autocomplete timeout to prevent memory leaks
