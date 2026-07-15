@@ -1446,6 +1446,10 @@ async function undoLastAction() {
         startTimer();
     }
 
+    // Fortrydes det match-afgørende point, genåbnes kampen — showMatchWonMessage
+    // frigav wake lock'en, så genanskaf den hvis kampen kører igen.
+    if (matchIsLive() && !_wakeLock) acquireWakeLock();
+
     // Update display and save restored state
     updateDisplay();
     saveGameState();
@@ -1571,6 +1575,47 @@ function saveGameState() {
 }
 
 // Perform the actual API save
+// Byg det fulde save-payload fra gameState. Deles af performSave og
+// pagehide-flushen, så flushen ikke sender en delmængde (backend merger
+// per-felt, så manglende felter ville efterlade en inkonsistent tilstand —
+// fx forkert servende makker/side for den gemte score).
+function buildSavePayload() {
+    return {
+        player1: gameState.player1,
+        player2: gameState.player2,
+        timerSeconds: gameState.timerSeconds,
+        // Starttid: 'now' ved kampstart (serveren stempler med sit eget ur),
+        // null ved eksplicit rydning — ellers udelades feltet helt, så
+        // serverens starttid aldrig overskrives med tablettens klokkeslæt
+        matchStartTime: (gameState._sendStartNow && gameState.matchStartTime) ? 'now'
+                      : (gameState.matchStartTime === null ? null : undefined),
+        matchEndTime: gameState.matchEndTime,
+        isActive: gameState.isActive,
+        isDoubles: gameState.isDoubles,
+        gameMode: gameState.gameMode,
+        decidingGameSwitched: gameState.decidingGameSwitched,
+        setScoresHistory: gameState.setScoresHistory,
+        matchCompleted: gameState.matchCompleted,
+        restBreakActive: gameState.restBreakActive,
+        restBreakSecondsLeft: gameState.restBreakSecondsLeft,
+        restBreakTitle: gameState.restBreakTitle,
+        restBreakTaken: gameState.restBreakTaken,
+        restBreakStartedAt: gameState.restBreakStartedAt,
+        restBreakDuration: gameState.restBreakDuration,
+        servingPlayer: gameState.servingPlayer,
+        initialServer: gameState.initialServer,
+        servingTeam: gameState.servingTeam,
+        servingPlayerOnTeam: gameState.servingPlayerOnTeam,
+        team1RightCourt: gameState.team1RightCourt,
+        team2RightCourt: gameState.team2RightCourt,
+        betweenSets: gameState.betweenSets,
+        // Optimistic concurrency: serveren afviser med 409 hvis en anden
+        // enhed har skrevet siden vores seneste læsning — i stedet for at
+        // vi stiltiende overskriver dens ændring
+        expectedVersion: typeof gameState.version === 'number' ? gameState.version : 0
+    };
+}
+
 async function performSave() {
     if (isSaving) {
         // Already saving, will retry
@@ -1583,40 +1628,7 @@ async function performSave() {
     lastSaveStartedAt = Date.now();
 
     try {
-        const stateToSave = {
-            player1: gameState.player1,
-            player2: gameState.player2,
-            timerSeconds: gameState.timerSeconds,
-            // Starttid: 'now' ved kampstart (serveren stempler med sit eget ur),
-            // null ved eksplicit rydning — ellers udelades feltet helt, så
-            // serverens starttid aldrig overskrives med tablettens klokkeslæt
-            matchStartTime: (gameState._sendStartNow && gameState.matchStartTime) ? 'now'
-                          : (gameState.matchStartTime === null ? null : undefined),
-            matchEndTime: gameState.matchEndTime,
-            isActive: gameState.isActive,
-            isDoubles: gameState.isDoubles,
-            gameMode: gameState.gameMode,
-            decidingGameSwitched: gameState.decidingGameSwitched,
-            setScoresHistory: gameState.setScoresHistory,
-            matchCompleted: gameState.matchCompleted,
-            restBreakActive: gameState.restBreakActive,
-            restBreakSecondsLeft: gameState.restBreakSecondsLeft,
-            restBreakTitle: gameState.restBreakTitle,
-            restBreakTaken: gameState.restBreakTaken,
-            restBreakStartedAt: gameState.restBreakStartedAt,
-            restBreakDuration: gameState.restBreakDuration,
-            servingPlayer: gameState.servingPlayer,
-            initialServer: gameState.initialServer,
-            servingTeam: gameState.servingTeam,
-            servingPlayerOnTeam: gameState.servingPlayerOnTeam,
-            team1RightCourt: gameState.team1RightCourt,
-            team2RightCourt: gameState.team2RightCourt,
-            betweenSets: gameState.betweenSets,
-            // Optimistic concurrency: serveren afviser med 409 hvis en anden
-            // enhed har skrevet siden vores seneste læsning — i stedet for at
-            // vi stiltiende overskriver dens ændring
-            expectedVersion: typeof gameState.version === 'number' ? gameState.version : 0
-        };
+        const stateToSave = buildSavePayload();
 
         const result = await api.updateGameState(courtId, stateToSave);
         if (result && typeof result.version === 'number') {
@@ -1879,20 +1891,9 @@ window.addEventListener('pagehide', () => {
     try {
         const headers = { 'Content-Type': 'application/json' };
         if (api.token) headers['Authorization'] = `Bearer ${api.token}`;
-        const body = JSON.stringify({
-            player1: gameState.player1,
-            player2: gameState.player2,
-            timerSeconds: gameState.timerSeconds,
-            matchEndTime: gameState.matchEndTime,
-            isActive: gameState.isActive,
-            isDoubles: gameState.isDoubles,
-            gameMode: gameState.gameMode,
-            setScoresHistory: gameState.setScoresHistory,
-            matchCompleted: gameState.matchCompleted,
-            servingPlayer: gameState.servingPlayer,
-            servingTeam: gameState.servingTeam,
-            expectedVersion: typeof gameState.version === 'number' ? gameState.version : 0
-        });
+        // Samme fulde payload som performSave — ellers merger backend per-felt og
+        // efterlader serve-position/sider/pause uændret for den flushede score.
+        const body = JSON.stringify(buildSavePayload());
         fetch(`/api/game-states/${courtId}`, { method: 'PUT', headers, body, keepalive: true });
     } catch { /* bedst muligt — intet at gøre hvis flush fejler under unload */ }
 });

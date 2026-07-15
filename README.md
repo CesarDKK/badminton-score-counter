@@ -49,6 +49,8 @@ A real-time badminton score tracking system with multi-device support, sponsor s
 ### Version 2.0.0 - Smartwatch Support, Holdkamp Sync & UI Improvements
 
 #### ⌚ Smartwatch / Mini Browser View (`watch.html`)
+> **Udfaset (juli 2026):** `watch.html` er fjernet — siden manglede live-sync og
+> ignorerede kamptilstand (15/21). Beskrivelsen nedenfor er historisk.
 - **Dedikeret mini-side** optimeret til meget små skærme — herunder Apple Watch via Safari
 - **URL:** `http://[server-ip]/watch.html?court=1` (skift `1` til ønsket banenummer)
 - **Fire knapper** fylder hele skærmen:
@@ -695,8 +697,9 @@ The backend runs scheduled tasks using `node-cron`:
 - `admin_password_hash`: Bcrypt hashed admin password
 - `court_count`: Number of available courts
 - `show_reset_button`: Tournament mode toggle (false = tournament mode)
-- `court_version`: Court view version ('v2' = Klassisk, 'v3' = Bane view)
+- `default_game_mode`: Default game mode for new courts ('15' or '21')
 - `theme_*`: Color theme settings
+- _(`court_version`/`tv_version` udfaset juli 2026 — kun v3 findes nu)_
 
 **courts**: Court configurations (active status, doubles mode, game mode)
 

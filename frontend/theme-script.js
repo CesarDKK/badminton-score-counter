@@ -291,29 +291,53 @@ function enterPreviewMode(themeName, colors) {
 }
 
 function applyColorsLocally(colors) {
-    const root = document.documentElement;
-    root.style.setProperty('--color-primary', colors.colorPrimary);
-    root.style.setProperty('--color-accent', colors.colorAccent);
-    root.style.setProperty('--color-bg-dark', colors.colorBgDark);
-    root.style.setProperty('--color-bg-container', colors.colorBgContainer);
-    root.style.setProperty('--color-bg-card', colors.colorBgCard);
-    root.style.setProperty('--gradient-primary',
-        `linear-gradient(135deg, ${colors.colorPrimary} 0%, ${colors.colorAccent} 100%)`);
+    // Gå gennem theme-loaderens applyTheme, så preview også sætter de afledte
+    // variabler (--color-*-rgb, --color-on-accent/-primary). Ellers viste
+    // forhåndsvisningen blandet gammelt/nyt tema (fx hvid tekst på lys accent).
+    const theme = {
+        color_primary: colors.colorPrimary,
+        color_accent: colors.colorAccent,
+        color_bg_dark: colors.colorBgDark,
+        color_bg_container: colors.colorBgContainer,
+        color_bg_card: colors.colorBgCard
+    };
+    if (window.applyTheme) {
+        window.applyTheme(theme);
+    } else {
+        // Fallback hvis theme-loader ikke er indlæst
+        const root = document.documentElement;
+        root.style.setProperty('--color-primary', colors.colorPrimary);
+        root.style.setProperty('--color-accent', colors.colorAccent);
+        root.style.setProperty('--color-bg-dark', colors.colorBgDark);
+        root.style.setProperty('--color-bg-container', colors.colorBgContainer);
+        root.style.setProperty('--color-bg-card', colors.colorBgCard);
+    }
 }
 
 async function commitPreview() {
     if (!_pendingPreview) return;
     const { themeName, colors } = _pendingPreview;
-    _pendingPreview = null;
-    document.getElementById('previewBar').style.display = 'none';
-    await saveTheme(themeName, colors);
+    // Behold preview-tilstanden indtil gemningen FAKTISK lykkes — ellers står
+    // siden malet med ugemte farver og bjælken er væk (ingen vej til at gemme).
+    const ok = await saveTheme(themeName, colors);
+    if (ok) {
+        _pendingPreview = null;
+        document.getElementById('previewBar').style.display = 'none';
+    }
+    // Ved fejl: saveTheme har vist fejlbeskeden; bjælken bliver, så man kan
+    // prøve igen eller fortryde.
 }
 
-// Fortryd: rul tilbage til det gemte tema. window.loadTheme() (fra
-// theme-loader.js) genhenter og genanvender det aktuelt gemte tema.
+// Fortryd: rul tilbage til det gemte tema. Anvend cachen som øjeblikkelig
+// baseline (virker også offline, hvor loadTheme-fetch ville fejle), og
+// revalidér derefter mod API'et.
 async function cancelPreview() {
     _pendingPreview = null;
     document.getElementById('previewBar').style.display = 'none';
+    try {
+        const cached = localStorage.getItem('cachedTheme');
+        if (cached && window.applyTheme) window.applyTheme(JSON.parse(cached));
+    } catch {}
     if (window.loadTheme) await window.loadTheme();
     await loadCurrentTheme(); // gendan farveinputs + aktiv-markering
 }
@@ -339,6 +363,7 @@ async function saveCustomTheme() {
     await saveTheme('custom', theme);
 }
 
+// Returnerer true ved succes, false ved fejl (commitPreview afhænger af det).
 async function saveTheme(themeName, colors) {
     try {
         await api.updateTheme({
@@ -350,48 +375,21 @@ async function saveTheme(themeName, colors) {
             colorBgCard: colors.colorBgCard
         });
 
-        // Apply theme immediately
-        const root = document.documentElement;
-        root.style.setProperty('--color-primary', colors.colorPrimary);
-        root.style.setProperty('--color-accent', colors.colorAccent);
-        root.style.setProperty('--color-bg-dark', colors.colorBgDark);
-        root.style.setProperty('--color-bg-container', colors.colorBgContainer);
-        root.style.setProperty('--color-bg-card', colors.colorBgCard);
-        const gradient = `linear-gradient(135deg, ${colors.colorPrimary} 0%, ${colors.colorAccent} 100%)`;
-        root.style.setProperty('--gradient-primary', gradient);
+        // Anvend + cache via den kanoniske sti (theme-loader) — genhenter det
+        // netop gemte tema og sætter alle CSS-variabler + localStorage-cachen ét
+        // sted, i stedet for tre håndholdte kopier der kan drive fra hinanden.
+        if (window.loadTheme) await window.loadTheme();
 
-        // Update preset button active states
-        document.querySelectorAll('.preset-btn').forEach(btn => {
-            btn.classList.remove('active');
-            if (btn.dataset.theme === themeName) {
-                btn.classList.add('active');
-            }
-        });
-
-        // Update current theme display
-        const theme = {
-            theme_name: themeName,
-            color_primary: colors.colorPrimary,
-            color_accent: colors.colorAccent,
-            color_bg_dark: colors.colorBgDark
-        };
-        displayCurrentTheme(theme);
-
-        // Opdatér også theme-loader-cachen så denne side ikke selv flasher
-        // det gamle tema ved næste navigation
-        try { localStorage.setItem('cachedTheme', JSON.stringify({
-            theme_name: themeName,
-            color_primary: colors.colorPrimary,
-            color_accent: colors.colorAccent,
-            color_bg_dark: colors.colorBgDark,
-            color_bg_container: colors.colorBgContainer,
-            color_bg_card: colors.colorBgCard
-        })); } catch {}
+        // Genopfrisk farveinputs, preset-markering og "Nuværende Tema"-visning
+        // fra serveren (samme kilde) i stedet for at duplikere logikken her.
+        await loadCurrentTheme();
 
         showMessage('Succes', 'Tema gemt! Åbne TV- og oversigtsskærme opdaterer ved næste genindlæsning.');
+        return true;
     } catch (error) {
         console.error('Failed to save theme:', error);
         showMessage('Fejl', 'Kunne ikke gemme tema: ' + error.message);
+        return false;
     }
 }
 

@@ -12,10 +12,6 @@ import android.widget.*
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
-import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
 
@@ -67,32 +63,11 @@ class MainActivity : AppCompatActivity() {
             // Adgangslink — indlæs direkte, siden håndterer redirect selv
             runOnUiThread { webView.loadUrl(serverUrl) }
         } else {
-            // Legacy: server URL + banenummer
-            fetchCourtVersionAndLoad(serverUrl, courtId)
-        }
-    }
-
-    private fun fetchCourtVersionAndLoad(serverUrl: String, courtId: String) {
-        thread {
-            var courtVersion = "v2"
-            try {
-                val conn = URL("$serverUrl/api/settings").openConnection() as HttpURLConnection
-                conn.requestMethod = "GET"
-                conn.connectTimeout = 5000
-                conn.readTimeout = 5000
-                if (conn.responseCode == HttpURLConnection.HTTP_OK) {
-                    val json = JSONObject(conn.inputStream.bufferedReader().readText())
-                    courtVersion = json.optString("courtVersion", "v2")
-                }
-                conn.disconnect()
-            } catch (_: Exception) {}
-
-            val courtPage = if (courtVersion == "v3") "court-v3.html" else "court.html"
-            val url = "$serverUrl/$courtPage?id=$courtId"
-            runOnUiThread {
-                Toast.makeText(this, "Indlæser: $courtPage", Toast.LENGTH_SHORT).show()
-                webView.loadUrl(url)
-            }
+            // Legacy: server URL + banenummer. Tælleren findes kun i én version
+            // (court-v3.html) — den gamle version-vælger og court.html er udfaset,
+            // så vi loader v3 direkte uden at slå version op i /api/settings.
+            val url = "$serverUrl/court-v3.html?id=$courtId"
+            runOnUiThread { webView.loadUrl(url) }
         }
     }
 

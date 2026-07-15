@@ -1464,7 +1464,7 @@ html, body {
 
 /* ── Sync-status badge (offline-indikator) ──
    Vises kun når en gemning fejler. Fast, diskret placering øverst til højre
-   så den ikke dækker score/knapper. Farve fra --color-warning-token. */
+   så den ikke dækker score/knapper. Farve fra --color-warning (styles.css). */
 #syncStatusBadge {
     position: fixed;
     top: 10px;
@@ -1475,9 +1475,9 @@ html, body {
     gap: 8px;
     padding: 6px 12px;
     border-radius: 999px;
-    background: rgba(255, 176, 46, 0.15);
-    border: 1px solid rgba(255, 176, 46, 0.5);
-    color: #ffb02e;
+    background: rgba(var(--color-warning-rgb), 0.15);
+    border: 1px solid rgba(var(--color-warning-rgb), 0.5);
+    color: var(--color-warning);
     font-size: 0.8rem;
     font-weight: 600;
     letter-spacing: 0.02em;
@@ -1488,7 +1488,7 @@ html, body {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #ffb02e;
+    background: var(--color-warning);
     animation: syncPulse 1.4s ease-in-out infinite;
 }
 @keyframes syncPulse {

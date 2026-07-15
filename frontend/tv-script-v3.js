@@ -391,10 +391,12 @@ function setTvConnectionLost(lost) {
             _tvConnBadge = document.createElement('div');
             _tvConnBadge.id = 'tvConnectionBadge';
             _tvConnBadge.textContent = '⚠ Forbindelse mistet';
+            // Farver fra --color-warning-tokenet (styles.css) i stedet for
+            // hårdkodede literaler — holder tema-reglen for TV-fladen.
             _tvConnBadge.style.cssText =
                 'position:fixed;bottom:16px;left:16px;z-index:9000;padding:8px 16px;' +
-                'border-radius:999px;background:rgba(255,176,46,0.15);' +
-                'border:1px solid rgba(255,176,46,0.5);color:#ffb02e;' +
+                'border-radius:999px;background:rgba(var(--color-warning-rgb),0.15);' +
+                'border:1px solid rgba(var(--color-warning-rgb),0.5);color:var(--color-warning);' +
                 'font-size:1rem;font-weight:600;backdrop-filter:blur(4px);';
             document.body.appendChild(_tvConnBadge);
         }

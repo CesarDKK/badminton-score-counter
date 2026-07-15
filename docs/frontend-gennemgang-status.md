@@ -8,6 +8,30 @@
 
 ---
 
+## 🔁 Selv-review-runde (15. juli 2026) — fejl i selve gennemgangen fundet + rettet
+
+En efterfølgende 8-vinkel code-review af branchen fandt ægte fejl indført af selve
+rettelserne. Alle rettet og testet live:
+- **Android-appen loadede den slettede court.html** (legacy-tilstand læste fjernet
+  courtVersion-felt) → loader nu court-v3.html direkte. **Vigtigst.**
+- **theme-loader tjekkede ikke response.ok** → en 500-fejlbody overskrev en gyldig
+  tema-cache. Tjekker nu response.ok.
+- **pagehide-flushen sendte kun en delmængde** af spiltilstanden (serve-position/sider/
+  pause manglede) → udtrukket fælles buildSavePayload(); flushen sender nu alt.
+- **Wake Lock blev ikke genanskaffet** når man fortrød det vindende point → gør det nu.
+- **Tema-preview satte færre CSS-variabler** end den rigtige applyTheme (--color-*-rgb,
+  on-accent) → preview gik gennem theme-loaderens applyTheme; forhåndsvisningen er nu
+  farve-korrekt.
+- **commitPreview ryddede tilstand før gemning** → fejlet gemning efterlod ugemte farver
+  uden bjælke; beholder nu bjælken ved fejl.
+- **Hårdkodede badge-farver** (#ffb02e) brød tema-reglen → nyt `--color-warning`-token i
+  theme-loader (tilgængeligt på alle sider inkl. TV, som ikke loader styles.css).
+- README/docs opdateret (watch.html/court_version udfaset); TV_V3_IMPLEMENTATION_SUMMARY.md
+  slettet; super-admins escapeHtml fik nullish-guard.
+- **Kendt afvejning (ikke rettet):** POST-retry er fjernet for at undgå dublet-gemte
+  kampe, men saveMatchResult har nu intet sikkerhedsnet ved et blip. Idempotens-nøgle/kø
+  er den rigtige løsning — udestår som beslutning.
+
 ## ✅ Færdigt (committet på branch)
 
 **Fejlrettelser**

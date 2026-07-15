@@ -61,6 +61,13 @@
         root.style.setProperty('--color-on-accent',  onColor(accent));
         root.style.setProperty('--color-on-primary', onColor(primary));
 
+        // Semantisk advarselsfarve (offline-/forbindelsesbadges) — fast, uafhængig
+        // af klub-tema. Sættes her (ikke i styles.css) fordi det er det ENESTE
+        // stylesheet-uafhængige sted alle sider inkl. TV loader; tv-v3.html
+        // loader ikke styles.css, så et token dér ville være udefineret på TV.
+        root.style.setProperty('--color-warning', '#ffb02e');
+        root.style.setProperty('--color-warning-rgb', '255, 176, 46');
+
         root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${primary} 0%, ${accent} 100%)`);
     }
 
@@ -75,6 +82,10 @@
     window.loadTheme = async function () {
         try {
             const response = await fetch('/api/settings/theme');
+            // Tjek response.ok — en 500 med fejl-body ville ellers blive parset
+            // som JSON, anvendt (→ default-farver) og skrevet i cachen, så en
+            // forbigående backend-fejl overskrev et gyldigt cachet tema.
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const theme = await response.json();
             applyTheme(theme);
             try { localStorage.setItem(CACHE_KEY, JSON.stringify(theme)); } catch {}
@@ -84,6 +95,10 @@
             return null;
         }
     };
+
+    // Eksponér applyTheme så tema-siden kan forhåndsvise med SAMME variabelsæt
+    // (inkl. --color-*-rgb og --color-on-*) i stedet for en delmængde.
+    window.applyTheme = applyTheme;
 
     window.loadTheme();
 })();

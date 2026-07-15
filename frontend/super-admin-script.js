@@ -915,7 +915,9 @@ function showMsg(el, msg, type) {
 }
 
 function escapeHtml(str) {
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    // ?? '' så null/undefined ikke renderer teksten 'null'/'undefined' (samme
+    // som js/utils.js — bør på sigt konsolideres til den ene delte kopi).
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 function formatDate(dateStr) {
