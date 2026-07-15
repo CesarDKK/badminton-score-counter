@@ -163,13 +163,14 @@ Oprindelige punkter til reference:
 - Tælleren: ✅ dobbelttryk-værn på +1 (250 ms pr. spiller), ✅ `touch-action: manipulation` på alle knapper, ✅ timer-interval stoppes ved kampsejr, ✅ `alert()` fjernet + manglende `return` rettet, ✅ titel uden "(Ny Version)"
 - TV: ✅ cached score 0 vises korrekt (null-sentinel), ✅ timer skriver kun DOM ved tekstændring, ✅ console-spam fjernet
 - Fælles: ✅ `beforeunload` → `pagehide` (6 steder — bevarer bfcache)
+- Footer: ✅ forældet hardkodet "Version 2.0" fjernet på alle 4 sider (admin beholder copyright-linjen)
+- Sponsor: ✅ upload-fremskridt — `uploadSponsorImages` er nu XHR-baseret med `upload.onprogress`; sponsor-siden viser en progress-bar (0→100 %, derefter "Behandler…")
 - Note: succes-feedback ved "Skift kode" (super-admin) var allerede rettet tidligere
 
 **BEVIDST UDELADT (afventer Jespers beslutning — mest subjektivt/kosmetisk el. kræver build-step):**
 - Landing: stagger-animation stopper ved knap 12/8; emoji-TV-ikon (📺); "Display"/"Admin Panel" på engelsk
-- Tema/footer: preset-farver duplikeret i HTML+JS; hardkodet "Version 2.0" (3 sider); `pattern`-attributter uden virkning
+- Tema: preset-farver duplikeret i HTML+JS; `pattern`-attributter uden virkning
 - Settings: inkonsistent gem-model (toggles gemmer straks vs Gem-knapper) — UX-designvalg
-- Sponsor: upload uden fremskridt (kræver XHR i stedet for fetch)
 - Fælles: fonts.css vægt 500/600 = samme fil (typografi); fjerbold-SVG duplikeret (kræver komponent/build); `@keyframes fadeUp` ×4 (kræver delt CSS)
 
 ---

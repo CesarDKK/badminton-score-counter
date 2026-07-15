@@ -168,10 +168,27 @@ async function handleImageUpload(event, type) {
         // Add type parameter
         formData.append('type', type);
 
-        preview.innerHTML = `<p style="color: #fff;">Uploader ${validFiles.length} ${typeName} billede(r)...</p>`;
+        // Fremskridts-bar under upload (procent fra XHR upload.onprogress).
+        // Ved 100 % skifter teksten til "Behandler…" mens serveren kører sharp.
+        preview.innerHTML = `
+            <p style="color: #fff; margin-bottom: 8px;" id="uploadProgressLabel">Uploader ${validFiles.length} ${typeName} billede(r)… 0%</p>
+            <div style="height: 8px; background: rgba(255,255,255,0.12); border-radius: 4px; overflow: hidden;">
+                <div id="uploadProgressBar" style="height: 100%; width: 0%; background: var(--color-accent, #e94560); transition: width 0.15s ease;"></div>
+            </div>`;
+
+        const onProgress = (pct) => {
+            const bar = document.getElementById('uploadProgressBar');
+            const label = document.getElementById('uploadProgressLabel');
+            if (bar) bar.style.width = `${pct}%`;
+            if (label) {
+                label.textContent = pct >= 100
+                    ? `Behandler ${validFiles.length} ${typeName} billede(r)…`
+                    : `Uploader ${validFiles.length} ${typeName} billede(r)… ${pct}%`;
+            }
+        };
 
         // Upload all images at once
-        const result = await api.uploadSponsorImages(formData);
+        const result = await api.uploadSponsorImages(formData, onProgress);
 
         const successCount = result.images ? result.images.length : 0;
 
