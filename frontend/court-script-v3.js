@@ -179,10 +179,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     console.log('Court V3 initialized for court', courtId);
 
-    // Register service worker for PWA support
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
-    }
+    // Service worker registreres nu centralt i js/theme-loader.js (alle sider).
 
     // Install button — vises kun hvis browser tilbyder installation og appen ikke allerede er installeret
     const installBtn = document.getElementById('installAppBtn');

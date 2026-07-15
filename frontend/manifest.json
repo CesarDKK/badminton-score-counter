@@ -14,9 +14,16 @@
             "purpose": "any"
         },
         {
+            "src": "/favicon-maskable.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "maskable"
+        },
+        {
             "src": "/favicon.png",
             "sizes": "256x256",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any"
         }
     ]
 }

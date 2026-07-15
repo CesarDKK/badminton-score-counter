@@ -99,11 +99,15 @@ api.js/api-v2-navneforvirring.
 - [LILLE] Pausen gemmer hvert sekund (TV kan selv regne nedtælling); dobbelt `getSettings()` ved TV-opstart;
   slideshow re-renderer img pr. slide; index.html meta-refresh → server-302
 
-### PWA / service worker / cache
-- [LILLE] SW-cachen (`badminton-v1`) ryddes aldrig — slet gamle caches i `activate`
-- [LILLE] Offline-fallback kan returnere `undefined`; manifest/SW kun på court-sider;
-  manifest mangler 512px + maskable ikon; fonte bør være cache-first
-- [MELLEM] Central `?v=`-versionsstrategi (manuel/inkonsistent i dag) — hash-stempling i build
+### PWA / service worker / cache ✅ FÆRDIG (15. juli 2026)
+- ~~SW-cachen ryddes aldrig~~ → cache versioneret (`badminton-v2`) + `activate` sletter alle ikke-aktuelle caches (bevist end-to-end)
+- ~~Offline-fallback kan returnere `undefined`~~ → returnerer nu altid en rigtig `Response` (503/504)
+- ~~manifest/SW kun på court-sider~~ → SW-registrering + manifest-link centraliseret i `theme-loader.js` (alle sider)
+- ~~manifest mangler 512px + maskable ikon~~ → tilføjet `favicon-maskable.svg` (maskable) + SVG "any" skalerer til 512+
+- ~~fonte bør være cache-first~~ → SW er nu cache-first for fonte + billeder, network-first for HTML/CSS/JS
+- **Central cache-strategi:** HTML får nu `Cache-Control: no-cache` i nginx (revalidér altid), så nye `?v=`-referencer
+  opdages straks. Bemærk: JS var allerede `no-store` i nginx, så JS-`?v=` er reelt kun relevant for SW-cachen.
+  Fuld hash-stempling i build udestår stadig som [MELLEM] hvis ønsket, men er nu mindre presserende.
 
 ### Kodekvalitet / oprydning
 - [STOR] Split `admin-script.js` (~3900 linjer → moduler: oversigt, holdkamp, historik,

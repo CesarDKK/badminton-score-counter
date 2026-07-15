@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- Maskable-variant: fuld-bleed firkantet baggrund (ingen afrundede hjørner,
+       ingen transparente kanter) så adaptive launchere kan maske til enhver form.
+       Fjerbolden er skaleret ned (0.60) så den ligger i den indre 80% safe-zone. -->
+  <rect width="24" height="24" fill="#0f0e17"/>
+  <g transform="translate(12 12) scale(0.60) translate(-12 -11.35) translate(0 1.2)">
+    <g fill="#ffffff">
+      <ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/>
+      <ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/>
+      <ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/>
+      <ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/>
+      <ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/>
+    </g>
+    <g fill="#e94560">
+      <rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/>
+      <path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/>
+    </g>
+  </g>
+</svg>

@@ -101,4 +101,24 @@
     window.applyTheme = applyTheme;
 
     window.loadTheme();
+
+    // ── PWA-bootstrap (kører på alle sider, da theme-loader inkluderes overalt) ──
+    // Sørger for at manifest-linket og service worker-registreringen findes på
+    // enhver side, ikke kun court-v3 — så PWA-installation kan udløses fra fx
+    // landing (manifestets start_url) og admin-siderne.
+    (function initPwa() {
+        // Injicér <link rel="manifest"> hvis den ikke allerede står i HTML'en
+        if (!document.querySelector('link[rel="manifest"]')) {
+            const link = document.createElement('link');
+            link.rel = 'manifest';
+            link.href = '/manifest.json';
+            document.head.appendChild(link);
+        }
+        // Registrér service worker (idempotent — samme URL registreres kun én gang)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(() => {});
+            });
+        }
+    })();
 })();
