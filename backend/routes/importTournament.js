@@ -385,7 +385,10 @@ const CLUB_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const CLUB_FETCH_BATCH_SIZE = 3;
 const CLUB_FETCH_BATCH_DELAY_MS = 300;
 
-async function resolveClubNames(tournamentId, matches) {
+// onProgress (valgfri): kaldes med (fetchedCount, totalToFetch) efter hvert hold,
+// så et import-flow kan vise en progressbar. totalToFetch er kun de klubber der
+// faktisk hentes over nettet (cache-hits tæller ikke, de er øjeblikkelige).
+async function resolveClubNames(tournamentId, matches, onProgress = null) {
     const clubIds = new Set();
     for (const m of matches) {
         for (const p of [...(m.side1 || []), ...(m.side2 || [])]) {
@@ -405,6 +408,9 @@ async function resolveClubNames(tournamentId, matches) {
         }
     }
 
+    if (typeof onProgress === 'function') onProgress(0, toFetch.length);
+
+    let fetched = 0;
     for (let i = 0; i < toFetch.length; i += CLUB_FETCH_BATCH_SIZE) {
         const batch = toFetch.slice(i, i + CLUB_FETCH_BATCH_SIZE);
         const results = await Promise.all(batch.map(async (clubId) => {
@@ -424,6 +430,8 @@ async function resolveClubNames(tournamentId, matches) {
             }
             if (club) map.set(clubId, club);
         }
+        fetched += batch.length;
+        if (typeof onProgress === 'function') onProgress(fetched, toFetch.length);
         if (i + CLUB_FETCH_BATCH_SIZE < toFetch.length) {
             await new Promise(r => setTimeout(r, CLUB_FETCH_BATCH_DELAY_MS));
         }

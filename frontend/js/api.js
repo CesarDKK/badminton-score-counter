@@ -846,6 +846,11 @@ class BadmintonAPI {
         });
     }
 
+    /** Status for baggrunds-klub-opsamling under import (til progressbar) */
+    async getTournamentImportProgress(tournamentId) {
+        return this.request(`/tournaments/${tournamentId}/import-progress`);
+    }
+
     /** Preview a tournament import from tournamentsoftware.com URL */
     async previewTournamentImport(url) {
         return this.request('/import/tournament/preview', {

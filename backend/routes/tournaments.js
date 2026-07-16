@@ -6,17 +6,48 @@ const { publishGameStateChange } = require('../events/gameStateEvents');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
 const { fetchAndParseTournamentMatches, resolveClubNames, buildPlayerClubRows } = require('./importTournament');
 
+// ── Import-fremskridt (in-memory) ──
+// Klub-opsamlingen kører i baggrunden efter kampene er indsat; frontend poller
+// GET /:id/import-progress for at vise en progressbar. Nøgle = tournamentId (som
+// streng). Ryddes ~2 min efter færdig, så polling efter et afsluttet job svarer
+// { phase: 'done' } uanset.
+const importProgress = new Map();
+
+function setImportProgress(tournamentId, data) {
+    importProgress.set(String(tournamentId), { ...data, updatedAt: Date.now() });
+}
+
+function clearImportProgressLater(tournamentId, delayMs = 120000) {
+    const key = String(tournamentId);
+    setTimeout(() => {
+        const p = importProgress.get(key);
+        // Ryd kun hvis den er i en slut-tilstand (undgå at rydde et nyt job der er startet igen)
+        if (p && (p.phase === 'done' || p.phase === 'error')) {
+            importProgress.delete(key);
+        }
+    }, delayMs).unref?.();
+}
+
 // Best-effort: hent klub pr. spiller fra TS og upsert i tournament_player_clubs.
 // Må ALDRIG kaste videre — klub-logoer er sekundære ift. selve importen.
 // prefetchedMatches: genbrug allerede hentede kampe (sync-flowet har dem lige
 // ved hånden) i stedet for at hente alle kampsider fra TS én gang til.
-async function captureTournamentClubs(tournamentId, sourceTournamentId, prefetchedMatches = null) {
+// trackProgress: hvis true, opdateres importProgress-storen undervejs så frontend
+// kan vise en progressbar. Kaldes uden (false) fra sync-flows der ikke har brug for det.
+async function captureTournamentClubs(tournamentId, sourceTournamentId, prefetchedMatches = null, trackProgress = false) {
     if (!sourceTournamentId) return;
+    if (trackProgress) setImportProgress(tournamentId, { phase: 'fetching-matches', current: 0, total: 0 });
     try {
         const matches = prefetchedMatches
             || (await fetchAndParseTournamentMatches(sourceTournamentId)).matches;
-        const clubIdToName = await resolveClubNames(sourceTournamentId, matches);
+
+        const onProgress = trackProgress
+            ? (done, total) => setImportProgress(tournamentId, { phase: 'fetching-clubs', current: done, total })
+            : null;
+        const clubIdToName = await resolveClubNames(sourceTournamentId, matches, onProgress);
+
         const rows = buildPlayerClubRows(matches, clubIdToName);
+        if (trackProgress) setImportProgress(tournamentId, { phase: 'saving', current: rows.length, total: rows.length });
         for (const r of rows) {
             await query(
                 `INSERT INTO tournament_player_clubs (tournament_id, player_name, club, source_player_id)
@@ -26,8 +57,16 @@ async function captureTournamentClubs(tournamentId, sourceTournamentId, prefetch
             );
         }
         console.log(`✓ Klub-opsamling: ${rows.length} spiller-klubber for turnering ${tournamentId}`);
+        if (trackProgress) {
+            setImportProgress(tournamentId, { phase: 'done', current: rows.length, total: rows.length });
+            clearImportProgressLater(tournamentId);
+        }
     } catch (e) {
         console.error(`Klub-opsamling fejlede for turnering ${tournamentId}:`, e.message);
+        if (trackProgress) {
+            setImportProgress(tournamentId, { phase: 'error', error: e.message || 'Klub-opsamling fejlede' });
+            clearImportProgressLater(tournamentId);
+        }
     }
 }
 
@@ -276,16 +315,32 @@ router.post('/:id/matches/bulk', authMiddleware, async (req, res, next) => {
             inserted++;
         }
 
-        // Best-effort klub-opsamling hvis turneringen er TS-importeret (ikke-blokerende for svaret).
+        // Klub-opsamling hvis turneringen er TS-importeret. Kører nu i BAGGRUNDEN
+        // (ikke await'et) så HTTP-svaret returnerer straks — det er den langsomme,
+        // netværkstunge del (henter klubsider fra TS). Frontend viser en progressbar
+        // ved at polle GET /:id/import-progress mens den kører.
         const t = await queryOne('SELECT source_tournament_id FROM tournaments WHERE id = ?', [id]);
-        if (t && t.source_tournament_id) {
-            await captureTournamentClubs(id, t.source_tournament_id);
+        const clubCapture = !!(t && t.source_tournament_id);
+        if (clubCapture) {
+            // Sæt en initial status FØR svaret, så en poll umiddelbart efter altid ser et job
+            setImportProgress(id, { phase: 'fetching-matches', current: 0, total: 0 });
+            // Ingen await — fejl fanges internt i captureTournamentClubs
+            captureTournamentClubs(id, t.source_tournament_id, null, true);
         }
 
-        res.json({ success: true, inserted });
+        res.json({ success: true, inserted, clubCapture });
     } catch (error) {
         next(error);
     }
+});
+
+// GET /api/tournaments/:id/import-progress - Status for baggrunds-klub-opsamling.
+// Bruges af frontend til at vise en progressbar under import. Ukendt/ryddet id
+// (fx job færdigt og udløbet) svarer { phase: 'done' } så polling altid kan stoppe.
+router.get('/:id/import-progress', authMiddleware, (req, res) => {
+    const p = importProgress.get(String(req.params.id));
+    if (!p) return res.json({ phase: 'done' });
+    res.json(p);
 });
 
 // POST /api/tournaments/:id/sync-import - Genhent TS-data og opdatér turneringen (kræver auth).
