@@ -400,14 +400,25 @@ async function loadAllCourts() {
             };
         });
 
-        // Sync pause countdown state from fresh API data
+        // Sync pause countdown state from fresh API data.
+        // Serveren gemmer kun restBreakSecondsLeft hvert ~10. sekund, så værdien er
+        // forældet (for høj) imellem gemninger. Vores lokale Date.now()-nedtælling er
+        // den præcise kilde. Vi re-synkroniserer derfor KUN når:
+        //   - der ikke er en lokal nedtælling endnu (ny pause), ELLER
+        //   - serveren viser MINDRE tid tilbage end vores skøn (vi er bagud — spring
+        //     frem, fx efter tab-throttling), ELLER
+        //   - serveren viser MEGET mere tid (>15s over skønnet) => en ny pause er
+        //     startet (ikke bare en forældet værdi; staleness maxer ved ~10s).
+        // Tidligere re-synkede vi ved enhver afvigelse >2s, hvilket fik nedtællingen
+        // til at hoppe OPAD til den forældede serverværdi hvert par sekunder.
         const now = Date.now();
         allCourtData.forEach(court => {
             if (court.restBreakActive && court.restBreakSecondsLeft > 0) {
                 const existing = pauseCountdownState[court.courtId];
-                // Re-sync if this is a new pause or API value differs significantly from local estimate
                 const localEstimate = existing ? getPauseSecondsLeft(court) : null;
-                if (!existing || Math.abs((localEstimate) - court.restBreakSecondsLeft) > 2) {
+                if (!existing ||
+                    court.restBreakSecondsLeft < localEstimate - 1 ||
+                    court.restBreakSecondsLeft > localEstimate + 15) {
                     pauseCountdownState[court.courtId] = { receivedAt: now, secondsLeft: court.restBreakSecondsLeft };
                 }
             } else {
@@ -964,7 +975,10 @@ let _isIdleVisible = false;
 async function refreshIdleSettings() {
     try {
         const [images, settings] = await Promise.all([
-            api.getSponsorImages('general'),
+            // 'slideshow' (ikke 'general' — den type findes ikke; backend
+            // ignorerede filteret og returnerede ALLE billeder, også bane-bannere
+            // og inaktive). Idle-skærmen skal vise samme slideshow som TV'et.
+            api.getSponsorImages('slideshow'),
             api.getSettings()
         ]);
         const newImages = images || [];
