@@ -1250,9 +1250,12 @@ function showRestBreak(secondsLeft, title, gameState, playersSwapped) {
                 renderRestBreakCountdown();
             }, 1000);
         }
-    } else if (typeof secondsLeft === 'number' && Math.abs(secondsLeft - localRestBreakSecondsLeft) > 2) {
-        // Drift-korrektion: serverens nedtælling er sandheden — hop kun hvis
-        // den lokale tælling er kommet mere end 2 sek. ud af trit
+    } else if (typeof secondsLeft === 'number' && secondsLeft < localRestBreakSecondsLeft - 1) {
+        // Drift-korrektion KUN nedad. Serverens restBreakSecondsLeft gemmes kun
+        // hvert ~10. sek og er forældet (for høj) imellem — den lokale nedtælling
+        // er derfor mere præcis. Vi synker kun når serveren viser MINDRE tid
+        // tilbage (fx efter at fanen har været throttlet). Tidligere re-synkede
+        // vi ved enhver afvigelse >2s og hoppede så OPAD til den forældede værdi.
         localRestBreakSecondsLeft = secondsLeft;
     }
 
