@@ -3685,6 +3685,48 @@ function tsImportStatus(text, type) {
     el.textContent = text;
 }
 
+// Render en progressbar i import-status-boksen. total<=0 => vis kun label (fx mens
+// turneringsdata hentes, før antal klubber er kendt).
+function tsImportProgress(label, current, total) {
+    const el = document.getElementById('tsImportStatus');
+    if (!el) return;
+    el.style.display = 'block';
+    el.style.background = 'rgba(var(--color-info-rgb, 52, 152, 219),0.12)';
+    el.style.border = '1px solid var(--color-info, #3498db)';
+    el.style.color = '#7fc7f0';
+    if (total > 0) {
+        const pct = Math.min(100, Math.round((current / total) * 100));
+        el.innerHTML = `
+            <div style="margin-bottom:8px;">${escapeHtml(label)} (${current}/${total}) — ${pct}%</div>
+            <div style="height:8px;background:rgba(255,255,255,0.12);border-radius:4px;overflow:hidden;">
+                <div style="height:100%;width:${pct}%;background:var(--color-info, #3498db);transition:width .3s ease;"></div>
+            </div>`;
+    } else {
+        el.innerHTML = `<div>${escapeHtml(label)}</div>`;
+    }
+}
+
+// Poll baggrunds-klub-opsamlingen og opdatér progressbaren indtil den er færdig.
+// Klub-opsamling er best-effort, så ved poll-fejl stopper vi bare pænt.
+async function pollClubCaptureProgress(tournamentId) {
+    const phaseLabels = {
+        'fetching-matches': 'Henter turneringsdata…',
+        'fetching-clubs': 'Henter klubinfo',
+        'saving': 'Gemmer klubinfo'
+    };
+    while (true) {
+        let p;
+        try {
+            p = await api.getTournamentImportProgress(tournamentId);
+        } catch (e) {
+            return; // best-effort — stop stille ved fejl
+        }
+        if (p.phase === 'done' || p.phase === 'error' || !p.phase) return;
+        tsImportProgress(phaseLabels[p.phase] || 'Behandler…', p.current || 0, p.total || 0);
+        await new Promise(r => setTimeout(r, 700));
+    }
+}
+
 async function handleTournamentImportPreview() {
     const url = document.getElementById('tsImportUrl').value.trim();
     if (!url) {
@@ -3894,7 +3936,15 @@ async function confirmTournamentImport() {
 
     try {
         const created = await api.createTournament(name, tsImportData.tournamentId || null);
-        await api.addTournamentMatchesBulk(created.id, matches);
+        const bulkResult = await api.addTournamentMatchesBulk(created.id, matches);
+
+        // Kampene er oprettet. Er turneringen TS-importeret, henter serveren nu
+        // klubinfo (til logoer) i baggrunden — vis en progressbar mens det kører,
+        // så det ikke ligner at importen hænger.
+        if (bulkResult && bulkResult.clubCapture) {
+            if (btn) btn.textContent = 'Henter klubinfo...';
+            await pollClubCaptureProgress(created.id);
+        }
 
         tsImportStatus(`✓ Importeret: "${name}" med ${matches.length} kampe`, 'success');
         // Nulstil import-state
