@@ -402,23 +402,23 @@ async function loadAllCourts() {
 
         // Sync pause countdown state from fresh API data.
         // Serveren gemmer kun restBreakSecondsLeft hvert ~10. sekund, så værdien er
-        // forældet (for høj) imellem gemninger. Vores lokale Date.now()-nedtælling er
-        // den præcise kilde. Vi re-synkroniserer derfor KUN når:
-        //   - der ikke er en lokal nedtælling endnu (ny pause), ELLER
-        //   - serveren viser MINDRE tid tilbage end vores skøn (vi er bagud — spring
-        //     frem, fx efter tab-throttling), ELLER
-        //   - serveren viser MEGET mere tid (>15s over skønnet) => en ny pause er
-        //     startet (ikke bare en forældet værdi; staleness maxer ved ~10s).
-        // Tidligere re-synkede vi ved enhver afvigelse >2s, hvilket fik nedtællingen
-        // til at hoppe OPAD til den forældede serverværdi hvert par sekunder.
+        // grov og forældet (for høj) imellem gemninger. Vores lokale Date.now()-
+        // baserede nedtælling (getPauseSecondsLeft) er derimod præcis OG selv-
+        // korrigerende ved tab-throttling. ENHVER re-sync til serverens grove værdi
+        // giver et synligt hop — og da oversigten re-renderer hvert 2. sek (REFRESH_
+        // INTERVAL), hoppede den løbende. Derfor anker vi KUN ved en ny pause og
+        // stoler ellers udelukkende på den lokale nedtælling. Pausen forsvinder
+        // korrekt af sig selv når serveren sætter restBreakActive=false (banen ryddes
+        // i else-grenen), så vi behøver aldrig at "rette" nedtællingen mod serveren.
+        // Sikkerhedsventil: hvis serveren viser MEGET mere tid (>30s over skønnet),
+        // er en helt ny pause startet uden at vi nåede at se restBreakActive=false —
+        // så re-ankrer vi. (Normal staleness er ≤ ~10-20s og udløser den aldrig.)
         const now = Date.now();
         allCourtData.forEach(court => {
             if (court.restBreakActive && court.restBreakSecondsLeft > 0) {
                 const existing = pauseCountdownState[court.courtId];
                 const localEstimate = existing ? getPauseSecondsLeft(court) : null;
-                if (!existing ||
-                    court.restBreakSecondsLeft < localEstimate - 1 ||
-                    court.restBreakSecondsLeft > localEstimate + 15) {
+                if (!existing || court.restBreakSecondsLeft > localEstimate + 30) {
                     pauseCountdownState[court.courtId] = { receivedAt: now, secondsLeft: court.restBreakSecondsLeft };
                 }
             } else {

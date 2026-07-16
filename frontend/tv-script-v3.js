@@ -33,6 +33,7 @@ let matchEndTime = null;
 // Rest break timer tracking
 let restBreakInterval = null;
 let localRestBreakSecondsLeft = 0;
+let restBreakEndAt = 0; // vægur-anker (ms): pausens forventede sluttidspunkt
 let isRestBreakActive = false;
 let wasRestBreakActive = false; // Track previous rest break state
 // Cache scores we see during gameplay as fallback until database history updates
@@ -1235,6 +1236,11 @@ function showRestBreak(secondsLeft, title, gameState, playersSwapped) {
         localRestBreakSecondsLeft = secondsLeft || 0;
         localRestBreakTotal = guessRestBreakTotal(title, secondsLeft);
         isRestBreakActive = true;
+        // Vægur-anker: regn nedtællingen ud fra et fast sluttidspunkt i stedet for
+        // at dekrementere en tæller. Det er selv-korrigerende (immunt mod at fanen
+        // throttles/skærmen slukkes) og betyder at vi ALDRIG behøver at "rette"
+        // visningen mod serverens grove værdi — hvilket ellers gav synlige hop.
+        restBreakEndAt = Date.now() + (secondsLeft || 0) * 1000;
 
         if (restBreakInterval) {
             clearInterval(restBreakInterval);
@@ -1243,20 +1249,18 @@ function showRestBreak(secondsLeft, title, gameState, playersSwapped) {
 
         if (localRestBreakSecondsLeft > 0) {
             restBreakInterval = setInterval(() => {
-                localRestBreakSecondsLeft--;
-                if (localRestBreakSecondsLeft < 0) {
-                    localRestBreakSecondsLeft = 0;
-                }
+                localRestBreakSecondsLeft = Math.max(0, Math.round((restBreakEndAt - Date.now()) / 1000));
                 renderRestBreakCountdown();
             }, 1000);
         }
-    } else if (typeof secondsLeft === 'number' && secondsLeft < localRestBreakSecondsLeft - 1) {
-        // Drift-korrektion KUN nedad. Serverens restBreakSecondsLeft gemmes kun
-        // hvert ~10. sek og er forældet (for høj) imellem — den lokale nedtælling
-        // er derfor mere præcis. Vi synker kun når serveren viser MINDRE tid
-        // tilbage (fx efter at fanen har været throttlet). Tidligere re-synkede
-        // vi ved enhver afvigelse >2s og hoppede så OPAD til den forældede værdi.
+    } else if (typeof secondsLeft === 'number' && secondsLeft > localRestBreakSecondsLeft + 30) {
+        // Sikkerhedsventil: serveren viser MEGET mere tid => en helt ny pause er
+        // startet uden at vi nåede at se restBreakActive=false. Re-ankr. Normal
+        // staleness (serverværdien er ≤ ~10-20s forældet) udløser den aldrig, så
+        // den glatte vægur-nedtælling forstyrres ikke.
         localRestBreakSecondsLeft = secondsLeft;
+        localRestBreakTotal = guessRestBreakTotal(title, secondsLeft);
+        restBreakEndAt = Date.now() + secondsLeft * 1000;
     }
 
     renderRestBreakCountdown();
@@ -1311,6 +1315,7 @@ function hideRestBreak() {
     isRestBreakActive = false;
     localRestBreakSecondsLeft = 0;
     localRestBreakTotal = 0;
+    restBreakEndAt = 0;
 
     const timerDisplay = document.getElementById('tvRestBreakTimer');
     if (timerDisplay) {
