@@ -44,46 +44,6 @@
 }
 </script>
 
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  "inLanguage": "da-DK",
-  "mainEntity": [
-    {
-      "@type": "Question",
-      "name": "Hvad er et prøvebillede?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Et fast testbillede som tv-stationerne sendte ud, når der ikke var programmer. Det bestod af geometriske figurer, farvebjælker og gråtoner, som teknikere og seere kunne bruge til at kontrollere og justere billedet. I Danmark kendes det især fra DR's sendepauser." }
-    },
-    {
-      "@type": "Question",
-      "name": "Hvad betyder PM5544?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Det er typenummeret på den testbilledgenerator fra Philips, der frembragte mønsteret. Apparatet blev standardudstyr hos europæiske tv-stationer fra slutningen af 1960'erne, og mønsteret har siden båret dets navn." }
-    },
-    {
-      "@type": "Question",
-      "name": "Hvorfor er der en cirkel i midten af prøvebilledet?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Cirklen afslører, om billedet har det rigtige højde/bredde-forhold. En cirkel er kun rund, hvis geometrien er korrekt — blev den til en ægform, var billedet trukket skævt." }
-    },
-    {
-      "@type": "Question",
-      "name": "Hvorfor lå der en tone på 1000 Hz sammen med prøvebilledet?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Tonen var en lydreference. Den lod teknikerne kontrollere, at lydsiden fungerede og lå på det rigtige niveau, mens der ikke var andet at sende." }
-    },
-    {
-      "@type": "Question",
-      "name": "Hvornår forsvandt prøvebilledet fra dansk tv?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Det forsvandt gradvist, i takt med at fjernsynet gik fra begrænset sendetid til døgnsendeflade med flere kanaler i løbet af 1980'erne og 90'erne." }
-    },
-    {
-      "@type": "Question",
-      "name": "Kan jeg bruge prøvebilledet til at teste min skærm i dag?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Ja. Mønstrene afslører stadig båndering, forkert sortniveau, overscan og døde pixels. Brug piletasterne til at skifte mellem gråtoneramp, SMPTE-bjælker, konvergensgitter, overscan-rammer og helfarvede flader." }
-    }
-  ]
-}
-</script>
-
 <style>
 /* ══════════════════════════════════════════════════════════════════════
    provebillede.dk — siden ER testbilledgeneratorens frontpanel.
@@ -572,33 +532,6 @@ body::before {
   color: #cdc6b8; text-align: right;
 }
 
-/* FAQ — foldes ud, men svarene står i HTML'en så de kan indekseres */
-.faq { max-width: 66ch; border-top: 1px solid #2a2620; }
-.faq details { border-bottom: 1px solid #2a2620; }
-.faq summary {
-  list-style: none; cursor: pointer;
-  display: flex; align-items: baseline; gap: .8rem;
-  padding: 1rem .2rem;
-  font-family: var(--panelfont); font-weight: 600;
-  font-size: 1.06rem; letter-spacing: .04em;
-  color: #ddd6ca;
-  transition: color .15s;
-}
-.faq summary::-webkit-details-marker { display: none; }
-.faq summary::before {
-  content: "+";
-  font-family: var(--mono); font-weight: 600;
-  color: var(--amber); flex: none; width: 1ch;
-  transition: transform .18s;
-}
-.faq details[open] summary::before { content: "−"; }
-.faq summary:hover { color: var(--amber); }
-.faq summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
-.faq details p {
-  padding: 0 .2rem 1.1rem 2rem;
-  margin: 0; font-size: 1rem; color: var(--paper-dim);
-}
-
 .note {
   border-left: 2px solid #2a2620;
   padding: .2rem 0 .2rem 1.3rem; margin: 2.4rem 0 0;
@@ -990,48 +923,6 @@ body::before {
         <li><b>Overscan</b><span>Rammer ved 90, 95 og 100 %. Kan du ikke se den yderste ramme, beskærer skærmen billedet.</span></li>
         <li><b>Døde pixels</b><span>Helfarvede flader i rød, grøn, blå, hvid og sort. En død pixel står frem som en prik, der ikke skifter med.</span></li>
       </ul>
-
-      <h3>Ofte stillede spørgsmål</h3>
-
-      <div class="faq">
-        <details>
-          <summary>Hvad er et prøvebillede?</summary>
-          <p>Et fast testbillede som tv-stationerne sendte ud, når der ikke var programmer.
-          Det bestod af geometriske figurer, farvebjælker og gråtoner, som teknikere og seere
-          kunne bruge til at kontrollere og justere billedet. I Danmark kendes det især fra
-          DR's sendepauser.</p>
-        </details>
-        <details>
-          <summary>Hvad betyder PM5544?</summary>
-          <p>Det er typenummeret på den testbilledgenerator fra Philips, der frembragte
-          mønsteret. Apparatet blev standardudstyr hos europæiske tv-stationer fra slutningen
-          af 1960'erne, og mønsteret har siden båret dets navn.</p>
-        </details>
-        <details>
-          <summary>Hvorfor er der en cirkel i midten?</summary>
-          <p>Cirklen afslører, om billedet har det rigtige højde/bredde-forhold. En cirkel er
-          kun rund, hvis geometrien er korrekt — blev den til en ægform, var billedet trukket
-          skævt, og så ville ansigter være det samme.</p>
-        </details>
-        <details>
-          <summary>Hvorfor lå der en tone på 1000 Hz?</summary>
-          <p>Tonen var en lydreference. Den lod teknikerne kontrollere, at lydsiden fungerede
-          og lå på det rigtige niveau, mens der ikke var andet at sende. Du kan tænde for den
-          på panelet øverst på siden.</p>
-        </details>
-        <details>
-          <summary>Hvornår forsvandt prøvebilledet?</summary>
-          <p>Det forsvandt gradvist, i takt med at fjernsynet gik fra begrænset sendetid til
-          døgnsendeflade med flere kanaler i løbet af 1980'erne og 90'erne. Da hullerne i
-          sendefladen forsvandt, var der ikke længere brug for noget at fylde dem med.</p>
-        </details>
-        <details>
-          <summary>Kan jeg bruge prøvebilledet til at teste min skærm i dag?</summary>
-          <p>Ja. Mønstrene afslører stadig båndering, forkert sortniveau, overscan og døde
-          pixels. Brug piletasterne til at skifte mellem gråtoneramp, SMPTE-bjælker,
-          konvergensgitter, overscan-rammer og helfarvede flader.</p>
-        </details>
-      </div>
 
       <div class="note">
         <p>
