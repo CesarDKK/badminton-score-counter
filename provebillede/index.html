@@ -6,7 +6,7 @@
 <title>Prøvebillede — PM5544 | DR's gamle testbillede i fuld opløsning</title>
 <meta name="description" content="Det danske prøvebillede (Philips PM5544) som skarp vektorgrafik med levende ur og 1000 Hz-tone. Skift mellem testmønstre, kør i fuldskærm, og hent billedet i 4K. Plus historien om hvorfor prøvebilledet så sådan ud.">
 <link rel="canonical" href="https://provebillede.dk/">
-<meta name="theme-color" content="#08090b">
+<meta name="theme-color" content="#14120f">
 
 <meta property="og:type" content="website">
 <meta property="og:locale" content="da_DK">
@@ -20,7 +20,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
 
 <script type="application/ld+json">
 {
@@ -39,24 +39,41 @@
 </script>
 
 <style>
-/* ══════════════════════════════════════════════════════════════
-   provebillede.dk — kontrolrums-æstetik.
-   Farverne er hentet ud af selve testbilledet (cyan #00bfbf,
-   gul #bfbf00) så siden og kortet hører sammen.
-   ══════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════════
+   provebillede.dk — siden ER testbilledgeneratorens frontpanel.
+   Skærmen er outputmonitoren; betjeningen er et instrument med graverede
+   etiketter og kontrollamper. Varme, anodiserede metaltoner mod skærmens
+   kolde fosforskær — så det eneste farverige på siden er prøvebilledet selv.
+   ══════════════════════════════════════════════════════════════════════ */
 :root {
-  --ink:        #08090b;
-  --ink-soft:   #101216;
-  --surface:    #16181d;
-  --line:       #26292f;
-  --text:       #e6e4de;
-  --text-dim:   #8e908f;
-  --cyan:       #00bfbf;
-  --amber:      #bfbf00;
-  --red:        #bf3a3a;
+  /* Kabinet — varmt anodiseret metal */
+  --room:       #0b0a09;
+  --panel-hi:   #2f2b25;
+  --panel:      #22201b;
+  --panel-lo:   #171511;
+  --bezel:      #0a0908;
+  --edge:       #443f37;
+  --groove:     #0d0c0a;
+
+  /* Graverede etiketter */
+  --engrave:    #9c9488;
+  --engrave-dim:#6a635a;
+
+  /* Kontrollamper */
+  --amber:      #ffb020;
+  --red:        #ff4a32;
+  --green:      #57e08a;
+
+  /* Skærmens fosfor */
+  --phosphor:   #7fd4d4;
+
+  /* Artikel */
+  --paper:      #e0dbd2;
+  --paper-dim:  #a9a297;
+
+  --panelfont: 'Barlow Condensed', 'Arial Narrow', sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, 'Courier New', monospace;
   --serif: 'IBM Plex Serif', Georgia, 'Times New Roman', serif;
-  --measure: 68ch;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -65,104 +82,135 @@ html { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 
 body {
-  background: var(--ink);
-  color: var(--text);
+  min-height: 100%;
+  background:
+    radial-gradient(ellipse 120% 60% at 50% -10%, rgba(255,214,150,.05), transparent 60%),
+    var(--room);
+  color: var(--paper);
   font-family: var(--serif);
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
 }
 
-/* ── Atmosfære: scanlines + korn over hele siden ───────────── */
-.fx {
-  position: fixed; inset: 0;
-  pointer-events: none;
-  z-index: 90;
-}
-.fx--scan {
-  background: repeating-linear-gradient(
-    to bottom,
-    rgba(255,255,255,.028) 0px,
-    rgba(255,255,255,.028) 1px,
-    transparent 1px,
-    transparent 3px
-  );
-  mix-blend-mode: overlay;
-}
-.fx--grain {
-  opacity: .16;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
-}
-.fx--vig {
-  background: radial-gradient(ellipse at 50% 42%, transparent 45%, rgba(0,0,0,.72) 100%);
+/* Kornstruktur over hele rummet — giver metallet liv */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: 100;
+  pointer-events: none; opacity: .22;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
 }
 
-/* ── Topbjælke ─────────────────────────────────────────────── */
-.topbar {
-  position: relative; z-index: 20;
-  display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap;
-  padding: 1.15rem clamp(1rem, 4vw, 2.6rem) .9rem;
-  border-bottom: 1px solid var(--line);
+/* ══ KABINET ═══════════════════════════════════════════════════════════ */
+.rack {
+  position: relative;
+  max-width: 1320px;
+  margin: clamp(.6rem, 2vw, 1.8rem) auto;
+  border-radius: 8px;
+  padding: clamp(.9rem, 2vw, 1.6rem);
+  /* Børstet metal: lodret lysfald + fine lodrette riller */
+  background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,.014) 0 1px, transparent 1px 4px),
+    linear-gradient(180deg, var(--panel-hi) 0%, var(--panel) 22%, var(--panel-lo) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,236,208,.14),
+    inset 0 -1px 0 rgba(0,0,0,.7),
+    0 2px 0 rgba(0,0,0,.5),
+    0 26px 70px rgba(0,0,0,.8);
+  border: 1px solid var(--groove);
 }
-.topbar h1 {
-  font-family: var(--mono);
-  font-weight: 600;
-  font-size: clamp(.95rem, 1.5vw, 1.1rem);
-  letter-spacing: .3em;
-  text-transform: uppercase;
-  color: var(--text);
+
+/* Skruer i hjørnerne */
+.screw {
+  position: absolute; width: 13px; height: 13px; border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%, #56504620, #12100e 78%), #2a2620;
+  box-shadow: inset 0 1px 1px rgba(255,236,208,.22), inset 0 -1px 1px rgba(0,0,0,.9), 0 1px 2px rgba(0,0,0,.6);
 }
-.topbar h1 .dot {
-  display: inline-block;
-  width: .5em; height: .5em;
-  margin-right: .7em;
+.screw::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent 44%, rgba(0,0,0,.75) 44%, rgba(0,0,0,.75) 56%, transparent 56%);
   border-radius: 50%;
-  background: var(--cyan);
-  box-shadow: 0 0 10px var(--cyan), 0 0 26px rgba(0,191,191,.55);
-  animation: pulse 3.4s ease-in-out infinite;
 }
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .38; } }
-.topbar .tag {
-  font-family: var(--mono);
-  font-size: .72rem;
-  letter-spacing: .18em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-.topbar .spacer { flex: 1; }
+.screw.tl { top: 9px; left: 9px; }  .screw.tr { top: 9px; right: 9px; }
+.screw.bl { bottom: 9px; left: 9px; } .screw.br { bottom: 9px; right: 9px; }
+@media (max-width: 640px) { .screw { display: none; } }
 
-/* ── Scenen med kortet ─────────────────────────────────────── */
-.stage {
-  position: relative; z-index: 10;
-  min-height: calc(100dvh - 4rem);
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 1.05rem;
-  padding: clamp(.8rem, 2.5vw, 1.6rem) clamp(.8rem, 3vw, 2rem) 1.8rem;
+/* ══ MÆRKEPLADE ════════════════════════════════════════════════════════ */
+.brand {
+  display: flex; align-items: flex-end; gap: 1rem; flex-wrap: wrap;
+  padding: .1rem .6rem 1rem;
+  border-bottom: 1px solid var(--groove);
+  box-shadow: 0 1px 0 rgba(255,236,208,.06);
+  margin-bottom: 1.15rem;
+}
+.brand h1 {
+  font-family: var(--panelfont);
+  font-weight: 700;
+  font-size: clamp(1.6rem, 4.4vw, 2.6rem);
+  line-height: .9;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: #e9e2d6;
+  text-shadow: 0 1px 0 rgba(0,0,0,.9), 0 -1px 0 rgba(255,236,208,.12);
+}
+.brand .model {
+  font-family: var(--mono);
+  font-size: .68rem; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--engrave-dim);
+  padding-bottom: .22rem;
+}
+.brand .spacer { flex: 1 1 auto; }
+.brand .tz {
+  font-family: var(--mono);
+  font-size: .64rem; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--engrave-dim);
+  padding-bottom: .22rem;
+}
+
+/* ══ MONITOR ═══════════════════════════════════════════════════════════ */
+.monitor {
+  position: relative;
+  padding: clamp(.5rem, 1.4vw, 1rem);
+  border-radius: 6px;
+  background: linear-gradient(180deg, #131110, var(--bezel));
+  box-shadow:
+    inset 0 2px 6px rgba(0,0,0,.95),
+    inset 0 -1px 0 rgba(255,236,208,.05),
+    0 1px 0 rgba(255,236,208,.07);
 }
 
 .screen {
   position: relative;
-  /* 21rem = plads til topbjælke, aflæsning, panel, tastatur-hint og scroll-pil,
-     så hele hero'en kan være i skærmen uden at man skal scrolle for at se knapperne */
-  width: min(100%, calc((100dvh - 21rem) * 4 / 3));
-  max-width: 1180px;
+  width: min(100%, calc((100dvh - 25rem) * 4 / 3));
+  min-width: 0;
+  margin: 0 auto;
   aspect-ratio: 4 / 3;
-  border-radius: 5px;
+  border-radius: 3px;
   overflow: hidden;
   background: #000;
   box-shadow:
-    0 0 0 1px rgba(255,255,255,.09),
-    0 0 60px rgba(0,191,191,.10),
-    0 26px 70px rgba(0,0,0,.85);
+    0 0 0 1px #000,
+    0 0 34px rgba(127,212,212,.16),
+    0 0 90px rgba(127,212,212,.07);
 }
 .screen svg { width: 100%; height: 100%; display: block; }
 
-/* CRT-tænd: billedet folder sig ud fra en lysstribe */
+/* CRT-glas: scanlines + skær. SLÅS FRA ved fuldflade-mønstre og i
+   fuldskærm — en dødpixel-test med striber henover er værdiløs. */
+.screen::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background:
+    /* Linjerne skal ANTYDE et billedrør, ikke sløre mønsteret. Stærkere end
+       dette gør de grå flader stribede og æder skarpheden i frekvensgitrene. */
+    repeating-linear-gradient(to bottom, rgba(0,0,0,.14) 0 1px, transparent 1px 4px),
+    radial-gradient(ellipse 130% 120% at 50% 0%, rgba(255,255,255,.05), transparent 55%),
+    radial-gradient(ellipse 100% 100% at 50% 50%, transparent 62%, rgba(0,0,0,.34) 100%);
+}
+.screen.is-bleed::after { display: none; }
+.screen:fullscreen::after, .screen:-webkit-full-screen::after { display: none; }
+
 @media (prefers-reduced-motion: no-preference) {
   /* Bevidst UDEN fill-mode: hvile-tilstanden er det synlige billede. Med "both"
-     ville et browser-tilfælde hvor animationen aldrig kører (fx en fane der
-     aldrig tegnes) efterlade prøvebilledet klappet sammen til en usynlig streg
-     — og billedet er hele sidens indhold. */
+     ville et browser-tilfælde hvor animationen aldrig kører efterlade
+     prøvebilledet klappet sammen til en usynlig streg. */
   .screen { animation: crtOn .62s cubic-bezier(.2,.85,.3,1); }
   @keyframes crtOn {
     0%   { transform: scaleY(.004) scaleX(.7); filter: brightness(6); opacity: 0; }
@@ -171,259 +219,303 @@ body {
   }
 }
 
-/* Fuldskærm: kun kortet, intet andet */
-.screen:fullscreen,
-.screen:-webkit-full-screen {
-  width: 100vw; max-width: none; height: 100vh;
-  aspect-ratio: auto;
-  border-radius: 0; box-shadow: none;
+.screen:fullscreen, .screen:-webkit-full-screen {
+  width: 100vw; height: 100vh; max-width: none;
+  aspect-ratio: auto; border-radius: 0; box-shadow: none;
   display: flex; align-items: center; justify-content: center;
   animation: none;
 }
-.screen:fullscreen svg,
-.screen:-webkit-full-screen svg { width: auto; height: 100%; max-width: 100vw; }
-/* Fuldflade-mønstre (dødpixel/overscan) skal fylde ALT i fuldskærm */
+.screen:fullscreen svg, .screen:-webkit-full-screen svg { width: auto; height: 100%; max-width: 100vw; }
 .screen.is-bleed:fullscreen svg { width: 100vw; height: 100vh; }
 .screen.is-bleed { aspect-ratio: 16 / 9; }
 
-/* ── Mønsternavn ───────────────────────────────────────────── */
-.readout {
-  display: flex; align-items: center; gap: .8rem; flex-wrap: wrap;
-  justify-content: center;
-  font-family: var(--mono);
-  font-size: .78rem;
-  letter-spacing: .16em;
-  text-transform: uppercase;
+/* ══ KONSOL ════════════════════════════════════════════════════════════ */
+.console {
+  display: flex; flex-wrap: wrap; align-items: stretch;
+  gap: 0;
+  margin-top: 1.15rem;
+  border-radius: 5px;
+  background: linear-gradient(180deg, rgba(255,236,208,.045), transparent 40%), var(--panel-lo);
+  box-shadow: inset 0 1px 0 rgba(255,236,208,.10), inset 0 -2px 5px rgba(0,0,0,.65), 0 1px 0 rgba(255,236,208,.05);
+  border: 1px solid var(--groove);
+  overflow: hidden;
 }
-.readout .idx { color: var(--cyan); }
-.readout .nm  { color: var(--text); }
-.readout .ds  { color: var(--text-dim); text-transform: none; letter-spacing: .04em; font-family: var(--serif); font-size: .92rem; }
 
-/* ── Betjeningspanel ───────────────────────────────────────── */
-.panel {
-  display: flex; flex-wrap: wrap; gap: .5rem;
-  align-items: center; justify-content: center;
-  max-width: 940px;
+.grp {
+  display: flex; flex-direction: column; gap: .5rem;
+  padding: .62rem .95rem .75rem;
+  border-right: 1px solid var(--groove);
+  box-shadow: 1px 0 0 rgba(255,236,208,.05);
+  flex: 0 0 auto;
 }
+.grp:last-child { border-right: none; box-shadow: none; }
+.grp.wide { flex: 1 1 auto; }
+
+/* Graveret sektionsetiket */
+.legend {
+  font-family: var(--panelfont);
+  font-weight: 600;
+  font-size: .78rem;
+  letter-spacing: .26em;
+  text-transform: uppercase;
+  color: var(--engrave);
+  text-shadow: 0 1px 0 rgba(0,0,0,.85);
+  white-space: nowrap;
+}
+.row { display: flex; align-items: center; gap: .42rem; flex-wrap: wrap; }
+
+/* Fysiske knapper */
 .btn {
   appearance: none;
-  font-family: var(--mono);
-  font-size: .74rem;
-  letter-spacing: .13em;
+  display: inline-flex; align-items: center; gap: .5rem;
+  font-family: var(--panelfont);
+  font-weight: 600;
+  font-size: .95rem;
+  letter-spacing: .1em;
   text-transform: uppercase;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--line);
+  color: #d8d1c4;
+  background: linear-gradient(180deg, #35312a, #211f1a);
+  border: 1px solid #0b0a09;
   border-radius: 3px;
-  padding: .62rem .95rem;
+  padding: .46rem .8rem;
+  min-height: 38px;
   cursor: pointer;
-  transition: border-color .16s, color .16s, background .16s, transform .1s;
   touch-action: manipulation;
+  box-shadow: inset 0 1px 0 rgba(255,236,208,.15), inset 0 -1px 0 rgba(0,0,0,.5), 0 2px 3px rgba(0,0,0,.55);
+  transition: color .14s, background .14s, box-shadow .12s, transform .08s;
 }
-.btn:hover { border-color: var(--cyan); color: var(--cyan); }
-.btn:active { transform: translateY(1px); }
-.btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
-.btn[aria-pressed="true"] {
-  background: rgba(0,191,191,.13);
-  border-color: var(--cyan);
-  color: var(--cyan);
+.btn:hover { color: #fff3dd; background: linear-gradient(180deg, #3d3831, #262319); }
+.btn:active, .btn[aria-pressed="true"] {
+  transform: translateY(1px);
+  background: linear-gradient(180deg, #1b1915, #262219);
+  box-shadow: inset 0 2px 5px rgba(0,0,0,.8), 0 0 0 rgba(0,0,0,0);
 }
+.btn:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.btn[disabled] { opacity: .38; cursor: not-allowed; }
 .btn .k {
-  display: inline-block;
-  margin-left: .55em;
-  color: var(--text-dim);
-  font-size: .9em;
+  font-family: var(--mono);
+  font-size: .62rem; letter-spacing: .06em;
+  color: var(--engrave-dim);
 }
-.btn:hover .k { color: inherit; opacity: .7; }
+.btn.step { font-size: 1.05rem; padding: .46rem .95rem; }
 
-.field {
-  display: flex; align-items: center; gap: .5rem;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  padding: .3rem .3rem .3rem .8rem;
+/* Kontrollampe — mørk glasperle der tændes */
+.lamp {
+  width: 9px; height: 9px; border-radius: 50%; flex: none;
+  background: #171512;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.95), inset 0 -1px 1px rgba(255,255,255,.05);
+  transition: background .18s, box-shadow .18s;
 }
-.field label {
-  font-family: var(--mono); font-size: .68rem;
-  letter-spacing: .14em; text-transform: uppercase;
-  color: var(--text-dim); white-space: nowrap;
+.btn[aria-pressed="true"] .lamp {
+  background: var(--lampcolor, var(--amber));
+  box-shadow:
+    0 0 6px var(--lampcolor, var(--amber)),
+    0 0 16px var(--lampcolor, var(--amber)),
+    inset 0 0 2px rgba(255,255,255,.9);
 }
-.field input {
-  font-family: var(--mono); font-size: .8rem;
-  letter-spacing: .12em; text-transform: uppercase;
-  color: var(--cyan);
-  background: var(--ink); border: 1px solid var(--line);
-  border-radius: 2px; padding: .34rem .55rem;
-  width: 10ch;
+.btn.lamp-red   { --lampcolor: var(--red); }
+.btn.lamp-green { --lampcolor: var(--green); }
+
+/* Digital aflæsning — bagbelyst display */
+.display {
+  display: flex; align-items: baseline; gap: .6rem;
+  padding: .34rem .7rem;
+  border-radius: 2px;
+  background: #0a0d0d;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,.95), 0 0 0 1px #000, 0 0 12px rgba(127,212,212,.10);
+  min-width: 190px;
 }
-.field input:focus { outline: none; border-color: var(--cyan); }
+.display .idx {
+  font-family: var(--mono); font-weight: 600; font-size: .78rem;
+  color: var(--phosphor);
+  text-shadow: 0 0 7px rgba(127,212,212,.75);
+}
+.display .nm {
+  font-family: var(--panelfont); font-weight: 600;
+  font-size: 1rem; letter-spacing: .1em; text-transform: uppercase;
+  color: #d8f2f2;
+  text-shadow: 0 0 8px rgba(127,212,212,.5);
+}
+.desc {
+  font-family: var(--serif);
+  font-size: .86rem; color: #8d867b;
+  font-style: italic;
+}
+
+/* Stationstekst-felt */
+.grp input {
+  font-family: var(--mono); font-weight: 500;
+  font-size: .82rem; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--amber);
+  background: #0a0908;
+  border: 1px solid #000;
+  border-radius: 2px;
+  padding: .42rem .6rem;
+  width: 11ch;
+  box-shadow: inset 0 2px 5px rgba(0,0,0,.9), 0 0 9px rgba(255,176,32,.10);
+}
+.grp input:focus { outline: none; border-color: var(--amber); box-shadow: inset 0 2px 5px rgba(0,0,0,.9), 0 0 12px rgba(255,176,32,.3); }
 
 .hint {
   font-family: var(--mono);
-  font-size: .68rem; letter-spacing: .1em;
-  color: var(--text-dim);
+  font-size: .7rem; letter-spacing: .08em;
+  color: #857e73;
   text-align: center;
+  margin-top: .9rem;
 }
 .hint kbd {
   font-family: var(--mono);
-  border: 1px solid var(--line);
-  border-bottom-width: 2px;
-  border-radius: 3px;
-  padding: .1em .42em;
-  color: var(--text);
+  background: linear-gradient(180deg,#302c26,#1d1b17);
+  border: 1px solid #0b0a09; border-radius: 3px;
+  padding: .1em .42em; color: #cdc6b8;
+  box-shadow: inset 0 1px 0 rgba(255,236,208,.12);
 }
+.hint .lit { color: var(--amber); }
 
-/* Panelet gemmer sig under dødpixel-test så fladen er helt ren */
-.stage.is-hidden .panel,
-.stage.is-hidden .readout,
-.stage.is-hidden .hint,
-.stage.is-hidden .scrollcue { opacity: 0; pointer-events: none; }
-.panel, .readout, .hint, .scrollcue { transition: opacity .45s; }
+/* Under helflade-test forsvinder alt andet, så fladen er ren */
+.rack.is-hidden .console,
+.rack.is-hidden .hint,
+.rack.is-hidden .brand { opacity: .06; }
+.console, .hint, .brand { transition: opacity .5s; }
 
-.scrollcue {
-  font-family: var(--mono); font-size: .68rem;
-  letter-spacing: .2em; text-transform: uppercase;
-  color: var(--text-dim); text-decoration: none;
-  display: inline-flex; align-items: center; gap: .6rem;
-}
-.scrollcue:hover { color: var(--cyan); }
-.scrollcue::after {
-  content: "↓";
-  animation: bob 2.6s ease-in-out infinite;
-}
-@keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
-@media (prefers-reduced-motion: reduce) { .scrollcue::after { animation: none; } }
-
-/* ── Artiklen ──────────────────────────────────────────────── */
+/* ══ ARTIKEL ═══════════════════════════════════════════════════════════ */
 .article {
-  position: relative; z-index: 10;
-  border-top: 1px solid var(--line);
-  background: linear-gradient(180deg, var(--ink-soft), var(--ink) 60%);
-  padding: clamp(3rem, 8vw, 6rem) clamp(1.1rem, 5vw, 2.6rem) 4rem;
+  position: relative;
+  max-width: 1320px;
+  margin: 0 auto clamp(2rem, 5vw, 4rem);
+  padding: clamp(2.4rem, 6vw, 4.5rem) clamp(1rem, 3vw, 2.4rem) 0;
 }
-.article-inner { max-width: 1160px; margin: 0 auto; }
+.article-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: clamp(2rem, 5vw, 4rem);
+  align-items: start;
+}
+@media (max-width: 940px) { .article-grid { grid-template-columns: 1fr; } }
 
 .eyebrow {
-  font-family: var(--mono); font-size: .7rem;
-  letter-spacing: .3em; text-transform: uppercase;
-  color: var(--cyan); margin-bottom: 1.1rem;
+  font-family: var(--panelfont); font-weight: 600;
+  font-size: .82rem; letter-spacing: .3em; text-transform: uppercase;
+  color: var(--amber); margin-bottom: 1rem;
 }
 .article h2 {
-  font-family: var(--serif);
-  font-weight: 600;
-  font-size: clamp(1.9rem, 4.6vw, 3.1rem);
-  line-height: 1.12;
-  letter-spacing: -.015em;
-  margin-bottom: 1.4rem;
-  max-width: 22ch;
+  font-family: var(--serif); font-weight: 600;
+  font-size: clamp(2rem, 4.6vw, 3.2rem);
+  line-height: 1.1; letter-spacing: -.018em;
+  margin-bottom: 1.5rem; max-width: 20ch;
+  color: #f2ede4;
 }
 .article h3 {
-  font-family: var(--mono);
-  font-weight: 600;
-  font-size: .84rem;
-  letter-spacing: .2em;
-  text-transform: uppercase;
-  color: var(--cyan);
-  margin: 3rem 0 1rem;
-  padding-top: 1.2rem;
-  border-top: 1px solid var(--line);
+  font-family: var(--panelfont); font-weight: 600;
+  font-size: 1.02rem; letter-spacing: .24em; text-transform: uppercase;
+  color: var(--amber);
+  margin: 3.2rem 0 1.1rem; padding-top: 1.3rem;
+  border-top: 1px solid #2a2620;
+  box-shadow: 0 -1px 0 rgba(255,236,208,.05) inset;
 }
 .article p {
-  font-size: 1.045rem;
-  line-height: 1.72;
-  color: #cfcdc7;
-  max-width: var(--measure);
-  margin-bottom: 1.15rem;
+  font-size: 1.06rem; line-height: 1.75;
+  color: var(--paper-dim); max-width: 66ch; margin-bottom: 1.2rem;
 }
 .article p.lede {
-  font-size: 1.24rem;
-  line-height: 1.6;
-  color: var(--text);
-  max-width: 60ch;
-  margin-bottom: 2rem;
+  font-size: 1.3rem; line-height: 1.6;
+  color: var(--paper); max-width: 58ch; margin-bottom: 2rem;
 }
-.article strong { color: var(--text); font-weight: 600; }
+.article strong { color: #f2ede4; font-weight: 600; }
 .article em { color: var(--amber); font-style: italic; }
 
-/* Element-liste: sat som et teknisk datablad */
-.spec {
-  list-style: none;
-  margin: 1.6rem 0 2rem;
-  border-top: 1px solid var(--line);
-  max-width: 1000px;
-}
+/* Elementliste som datablad */
+.spec { list-style: none; margin: 1.5rem 0 2rem; border-top: 1px solid #2a2620; }
 .spec li {
-  display: grid;
-  grid-template-columns: minmax(160px, 230px) 1fr;
-  gap: 1.6rem;
-  padding: 1.05rem .2rem;
-  border-bottom: 1px solid var(--line);
+  display: grid; grid-template-columns: minmax(150px, 210px) 1fr;
+  gap: 1.5rem; padding: 1rem .2rem;
+  border-bottom: 1px solid #2a2620;
 }
 .spec b {
-  font-family: var(--mono);
-  font-weight: 500;
-  font-size: .76rem;
-  letter-spacing: .14em;
-  text-transform: uppercase;
-  color: var(--amber);
-  padding-top: .18rem;
+  font-family: var(--panelfont); font-weight: 600;
+  font-size: .92rem; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--engrave); padding-top: .1rem;
 }
-.spec span { color: #cfcdc7; line-height: 1.62; font-size: 1rem; }
-@media (max-width: 620px) {
-  .spec li { grid-template-columns: 1fr; gap: .4rem; }
+.spec span { color: var(--paper-dim); line-height: 1.65; font-size: 1rem; }
+@media (max-width: 620px) { .spec li { grid-template-columns: 1fr; gap: .35rem; } }
+
+/* Sidepanel: typeskilt som på bagsiden af apparatet */
+.plate {
+  position: sticky; top: 1.4rem;
+  border-radius: 5px;
+  padding: 1.15rem 1.2rem 1.3rem;
+  background: linear-gradient(180deg, var(--panel-hi), var(--panel-lo));
+  border: 1px solid var(--groove);
+  box-shadow: inset 0 1px 0 rgba(255,236,208,.12), 0 10px 26px rgba(0,0,0,.55);
+}
+@media (max-width: 940px) { .plate { position: static; } }
+.plate h4 {
+  font-family: var(--panelfont); font-weight: 700;
+  font-size: .84rem; letter-spacing: .26em; text-transform: uppercase;
+  color: var(--engrave);
+  padding-bottom: .7rem; margin-bottom: .85rem;
+  border-bottom: 1px solid var(--groove);
+  box-shadow: 0 1px 0 rgba(255,236,208,.06);
+}
+.plate dl { display: grid; grid-template-columns: auto 1fr; gap: .5rem .9rem; }
+.plate dt {
+  font-family: var(--panelfont); font-weight: 500;
+  font-size: .82rem; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--engrave-dim); white-space: nowrap;
+}
+.plate dd {
+  font-family: var(--mono); font-size: .76rem;
+  color: #cdc6b8; text-align: right;
 }
 
 .note {
-  border-left: 2px solid var(--line);
-  padding: .2rem 0 .2rem 1.3rem;
-  margin: 2rem 0;
-  max-width: var(--measure);
+  border-left: 2px solid #2a2620;
+  padding: .2rem 0 .2rem 1.3rem; margin: 2.4rem 0 0;
+  max-width: 66ch;
 }
-.note p { font-size: .95rem; color: var(--text-dim); margin: 0; }
+.note p { font-size: .94rem; color: var(--engrave-dim); margin: 0; }
 
 .footer {
-  position: relative; z-index: 10;
-  border-top: 1px solid var(--line);
-  padding: 2.2rem clamp(1.1rem, 5vw, 2.6rem) 3rem;
-  font-family: var(--mono);
-  font-size: .72rem;
-  letter-spacing: .1em;
-  color: var(--text-dim);
+  max-width: 1320px; margin: 0 auto;
+  padding: 1.8rem clamp(1rem, 3vw, 2.4rem) 3rem;
+  border-top: 1px solid #2a2620;
+  font-family: var(--mono); font-size: .7rem; letter-spacing: .1em;
+  color: var(--engrave-dim);
   display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
 }
-.footer a { color: var(--text-dim); }
-.footer a:hover { color: var(--cyan); }
+.footer a { color: var(--engrave-dim); }
+.footer a:hover { color: var(--amber); }
 
 .sr-only {
-  position: absolute; width: 1px; height: 1px;
-  padding: 0; margin: -1px; overflow: hidden;
-  clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+/* Smalle skærme: konsollen bliver til stablede rækker */
+@media (max-width: 720px) {
+  .grp { border-right: none; box-shadow: none; border-bottom: 1px solid var(--groove); flex: 1 1 100%; }
+  .grp:last-child { border-bottom: none; }
+  .display { min-width: 0; flex: 1; }
 }
 </style>
-</head>
+
 <body>
 
-<div class="fx fx--scan"></div>
-<div class="fx fx--grain"></div>
-<div class="fx fx--vig"></div>
+<!-- Hele siden er apparatets frontpanel. Scriptets stage-reference bruges til at
+     tone panelet ned under helflade-testene. -->
+<div class="rack" id="stage">
+  <span class="screw tl"></span><span class="screw tr"></span>
+  <span class="screw bl"></span><span class="screw br"></span>
 
-<header class="topbar">
-  <h1><span class="dot"></span>Prøvebillede</h1>
-  <span class="tag">PM5544 · 768×576 · 4:3</span>
-  <span class="spacer"></span>
-  <span class="tag" id="tzTag">Europe/Copenhagen</span>
-</header>
+  <header class="brand">
+    <h1>Prøvebillede</h1>
+    <span class="model">Philips PM5544 · 768×576 · 4:3</span>
+    <span class="spacer"></span>
+    <span class="tz">Ur: Europe/Copenhagen</span>
+  </header>
 
-<main>
-<section class="stage" id="stage">
-
-  <div class="screen" id="screen">
-    <!-- ═══════════════════════════════════════════════════════════════════
-         Prøvebilledet — vektor-genskabelse af PM5544-testmønsteret i DR-stil.
-         Gitter på 48px-celler (16×12), cirkel centreret (384,288) r=240.
-         Fontene er sat i en <style> HERINDE (ikke i sidens CSS), så SVG'en er
-         selvbærende og eksporten til SVG/PNG bliver identisk.
-         ═══════════════════════════════════════════════════════════════════ -->
+  <div class="monitor">
+    <div class="screen" id="screen">
     <svg id="card" viewBox="0 0 768 576" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Dansk prøvebillede — PM5544-testmønster med stationstekst og levende ur">
       <style>
         .station { font-family: Arial, Helvetica, sans-serif; font-weight: 700; }
@@ -547,165 +639,222 @@ body {
       <!-- Cirkelring -->
       <circle cx="384" cy="288" r="240" fill="none" stroke="#fff" stroke-width="5"/>
     </svg>
-  </div>
+    </div><!-- /screen -->
+  </div><!-- /monitor -->
 
-  <div class="readout">
-    <span class="idx" id="roIdx">01/10</span>
-    <span class="nm"  id="roName">PM5544</span>
-    <span class="ds"  id="roDesc">Det klassiske prøvebillede</span>
-  </div>
+  <!-- ══ KONSOL — sektioner med graverede etiketter og kontrollamper ══ -->
+  <div class="console">
 
-  <div class="panel">
-    <button class="btn" id="btnPrev" aria-label="Forrige mønster">◀<span class="k">←</span></button>
-    <button class="btn" id="btnNext" aria-label="Næste mønster">▶<span class="k">→</span></button>
-    <button class="btn" id="btnTone" aria-pressed="false">Tone 1 kHz<span class="k">T</span></button>
-    <button class="btn" id="btnFull" aria-pressed="false">Fuldskærm<span class="k">F</span></button>
-    <button class="btn" id="btnWake" aria-pressed="false">Skærm vågen<span class="k">W</span></button>
-    <button class="btn" id="btnSvg">Hent SVG</button>
-    <button class="btn" id="btnPng">Hent PNG 4K</button>
-    <div class="field">
-      <label for="stationInput">Tekst</label>
-      <input id="stationInput" type="text" maxlength="12" value="DANMARK" spellcheck="false" autocomplete="off">
+    <div class="grp">
+      <span class="legend">Mønster</span>
+      <div class="row">
+        <button class="btn step" id="btnPrev" aria-label="Forrige mønster">◀<span class="k">←</span></button>
+        <div class="display">
+          <span class="idx" id="roIdx">01/10</span>
+          <span class="nm" id="roName">PM5544</span>
+        </div>
+        <button class="btn step" id="btnNext" aria-label="Næste mønster">▶<span class="k">→</span></button>
+      </div>
+      <span class="desc" id="roDesc">Det klassiske prøvebillede</span>
     </div>
+
+    <div class="grp">
+      <span class="legend">Lyd</span>
+      <div class="row">
+        <button class="btn" id="btnTone" aria-pressed="false">
+          <span class="lamp"></span>1 kHz<span class="k">T</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="grp">
+      <span class="legend">Skærm</span>
+      <div class="row">
+        <button class="btn lamp-green" id="btnFull" aria-pressed="false">
+          <span class="lamp"></span>Fuld<span class="k">F</span>
+        </button>
+        <button class="btn lamp-red" id="btnWake" aria-pressed="false">
+          <span class="lamp"></span>Vågen<span class="k">W</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="grp">
+      <span class="legend">Station</span>
+      <div class="row">
+        <label class="sr-only" for="stationInput">Stationstekst</label>
+        <input id="stationInput" type="text" maxlength="12" value="DANMARK" spellcheck="false" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="grp wide">
+      <span class="legend">Eksport</span>
+      <div class="row">
+        <button class="btn" id="btnSvg">SVG</button>
+        <button class="btn" id="btnPng">PNG 4K</button>
+      </div>
+    </div>
+
   </div>
 
   <p class="hint">
     <kbd>←</kbd> <kbd>→</kbd> skifter mønster · <kbd>T</kbd> tone · <kbd>F</kbd> fuldskærm ·
-    del med <span style="color:var(--cyan)">?tekst=DIT&nbsp;NAVN</span>
+    del med <span class="lit">?tekst=DIT&nbsp;NAVN</span>
   </p>
+</div><!-- /rack -->
 
-  <a class="scrollcue" href="#om">Om prøvebilledet</a>
-</section>
-
+<main>
 <article class="article" id="om">
-  <div class="article-inner">
-    <p class="eyebrow">Baggrund</p>
-    <h2>Billedet der fyldte, når der ikke var noget at sende</h2>
+  <div class="article-grid">
 
-    <p class="lede">
-      I årtier var prøvebilledet det mest sete billede i dansk fjernsyn. Ikke fordi nogen
-      ville se det — men fordi det stod der, tålmodigt og uforanderligt, i alle de timer
-      hvor DR ikke sendte. For en hel generation er det lyden af en ren tone og synet af
-      en cirkel med farvede bjælker, der betyder <em>der er ikke noget i fjernsynet lige nu</em>.
-    </p>
+    <div>
+      <p class="eyebrow">Baggrund</p>
+      <h2>Billedet der fyldte, når der ikke var noget at sende</h2>
 
-    <p>
-      Mønsteret her på siden er en vektorgenskabelse af <strong>Philips PM5544</strong> — det
-      testbillede der blev standard hos europæiske tv-stationer fra slutningen af 1960'erne.
-      Det er opkaldt efter det apparat, der frembragte det: en testbilledgenerator fra Philips,
-      som stationerne kunne stille op i kontrolrummet og sende ud, når sendefladen var slut.
-      Fordi så mange lande brugte den samme generator, ligner de europæiske prøvebilleder
-      hinanden til forveksling — det er typisk kun teksten i den sorte boks, der afslører,
-      hvilket land man sad i.
-    </p>
-
-    <h3>Hvorfor så det sådan ud?</h3>
-
-    <p>
-      Prøvebilledet er ikke pynt. Hvert eneste element er et måleinstrument, og det er derfor
-      det ser så mærkeligt sammensat ud. En tv-tekniker kunne kigge på skærmen og på få
-      sekunder se, om apparatet var stillet rigtigt ind. Sådan læses billedet:
-    </p>
-
-    <ul class="spec">
-      <li>
-        <b>Cirklen</b>
-        <span>Den vigtigste af dem alle. En cirkel er kun rund, hvis billedet har det rigtige
-        højde/bredde-forhold. Blev cirklen til en ægform, var billedet trukket skævt — og så
-        ville alle ansigter også være det.</span>
-      </li>
-      <li>
-        <b>Gitteret</b>
-        <span>De hvide linjer danner kvadrater. Var kvadraterne større i midten end i hjørnerne,
-        var billedrøret ikke lineært, og geometrien skulle justeres.</span>
-      </li>
-      <li>
-        <b>Kastellerne</b>
-        <span>De sort/hvide blokke langs kanten viste, hvor meget af billedet der forsvandt ud
-        over skærmkanten. Kunne man ikke se dem, var der skåret for meget af.</span>
-      </li>
-      <li>
-        <b>Farvebjælkerne</b>
-        <span>Gul, cyan, grøn, magenta, rød og blå ved 75 % styrke. De afslørede, om farverne
-        blev afkodet korrekt, og om mætningen var, som den skulle være.</span>
-      </li>
-      <li>
-        <b>Frekvensgitrene</b>
-        <span>De fem felter med stadig finere striber måler opløsning. Kunne man kun skelne
-        stregerne i de første felter, manglede signalet båndbredde — de fine detaljer var væk.</span>
-      </li>
-      <li>
-        <b>Gråtonetrappen</b>
-        <span>Trinene fra sort til hvid viser, om lysstyrken stiger jævnt. Klumpede trinene
-        sig sammen i den mørke ende, var kontrast og gamma forkert indstillet.</span>
-      </li>
-      <li>
-        <b>Midterkrydset</b>
-        <span>Til centrering og konvergens. På et farvebillederør tegnes billedet af tre
-        stråler, og ramte de ikke samme punkt, fik krydset farvede skygger.</span>
-      </li>
-      <li>
-        <b>Uret</b>
-        <span>Den praktiske detalje: seeren kunne se, hvor længe der var til udsendelserne
-        begyndte igen.</span>
-      </li>
-    </ul>
-
-    <h3>Sendefladen — og hullerne i den</h3>
-
-    <p>
-      I dag er det svært at forestille sig, men fjernsynet havde lukketid. DR sendte ikke i
-      døgndrift, og der var lange stræk af dagen uden programmer — formiddagen var typisk
-      tom, og om natten sluttede sendefladen simpelthen. I de huller kørte prøvebilledet.
-    </p>
-
-    <p>
-      Det havde en teknisk grund. Et sendenet skulle holdes i gang og justeres, og et fast,
-      kendt billede gav teknikerne noget at måle på hele vejen fra studiet ud til senderne.
-      Samtidig kunne seeren bruge det til at stille sit eget apparat ind — datidens fjernsyn
-      havde knapper til lysstyrke, kontrast, farve og billedhold, som løb fra hinanden med
-      tiden. Prøvebilledet var facitlisten.
-    </p>
-
-    <p>
-      Da fjernsynet i løbet af 1980'erne og 90'erne blev til døgnsendeflade med flere kanaler,
-      forsvandt hullerne — og dermed prøvebilledet. Det blev afløst af natteprogrammer,
-      musikvideoer og til sidst af en sendeflade uden ende.
-    </p>
-
-    <h3>Tonen</h3>
-
-    <p>
-      Halvdelen af erindringen sidder i øret. Sammen med billedet lå en ren, konstant tone på
-      <strong>1000 hertz</strong> — en referencetone, der lod teknikerne kontrollere, at
-      lydsiden fungerede og lå på det rigtige niveau, mens der ikke var andet lyd at sende.
-      Du kan tænde for den øverst på siden. Vær varsom med lydstyrken: en ren sinustone er
-      mere gennemtrængende, end man husker.
-    </p>
-
-    <h3>Prøvebilledet som værktøj i dag</h3>
-
-    <p>
-      Mønstrene har overlevet deres oprindelige formål. En moderne skærm skal ikke justeres
-      med skruetrækker, men den kan stadig have fejl — og til det er testmønstre stadig det
-      hurtigste værktøj. Brug piletasterne til at skifte mellem dem:
-    </p>
-
-    <ul class="spec">
-      <li><b>Gråtoneramp</b><span>Afslører båndering og forkert gammakurve — overgangen skal være helt jævn.</span></li>
-      <li><b>SMPTE-bjælker</b><span>Klassisk farvereference med PLUGE-felter nederst til at sætte sortniveauet korrekt.</span></li>
-      <li><b>Konvergensgitter</b><span>Fine hvide linjer på sort. Farvede kanter langs stregerne afslører konvergens- eller skarphedsfejl.</span></li>
-      <li><b>Overscan</b><span>Rammer ved 90, 95 og 100 %. Kan du ikke se den yderste ramme, beskærer skærmen billedet.</span></li>
-      <li><b>Døde pixels</b><span>Helfarvede flader i rød, grøn, blå, hvid og sort. En død pixel står frem som en prik, der ikke skifter med.</span></li>
-    </ul>
-
-    <div class="note">
-      <p>
-        Bemærk: gengivelsen her er tegnet på frihånd i vektor og følger PM5544-mønsterets
-        opbygning og proportioner, men er ikke en måleteknisk nøjagtig kopi. Til rigtige
-        målinger bør man bruge et kalibreret testsignal.
+      <p class="lede">
+        I årtier var prøvebilledet det mest sete billede i dansk fjernsyn. Ikke fordi nogen
+        ville se det — men fordi det stod der, tålmodigt og uforanderligt, i alle de timer
+        hvor DR ikke sendte. For en hel generation er det lyden af en ren tone og synet af
+        en cirkel med farvede bjælker, der betyder <em>der er ikke noget i fjernsynet lige nu</em>.
       </p>
+
+      <p>
+        Mønsteret her på siden er en vektorgenskabelse af <strong>Philips PM5544</strong> — det
+        testbillede der blev standard hos europæiske tv-stationer fra slutningen af 1960'erne.
+        Det er opkaldt efter det apparat, der frembragte det: en testbilledgenerator fra Philips,
+        som stationerne kunne stille op i kontrolrummet og sende ud, når sendefladen var slut.
+        Fordi så mange lande brugte den samme generator, ligner de europæiske prøvebilleder
+        hinanden til forveksling — det er typisk kun teksten i den sorte boks, der afslører,
+        hvilket land man sad i.
+      </p>
+
+      <h3>Hvorfor så det sådan ud?</h3>
+
+      <p>
+        Prøvebilledet er ikke pynt. Hvert eneste element er et måleinstrument, og det er derfor
+        det ser så mærkeligt sammensat ud. En tv-tekniker kunne kigge på skærmen og på få
+        sekunder se, om apparatet var stillet rigtigt ind. Sådan læses billedet:
+      </p>
+
+      <ul class="spec">
+        <li>
+          <b>Cirklen</b>
+          <span>Den vigtigste af dem alle. En cirkel er kun rund, hvis billedet har det rigtige
+          højde/bredde-forhold. Blev cirklen til en ægform, var billedet trukket skævt — og så
+          ville alle ansigter også være det.</span>
+        </li>
+        <li>
+          <b>Gitteret</b>
+          <span>De hvide linjer danner kvadrater. Var kvadraterne større i midten end i hjørnerne,
+          var billedrøret ikke lineært, og geometrien skulle justeres.</span>
+        </li>
+        <li>
+          <b>Kastellerne</b>
+          <span>De sort/hvide blokke langs kanten viste, hvor meget af billedet der forsvandt ud
+          over skærmkanten. Kunne man ikke se dem, var der skåret for meget af.</span>
+        </li>
+        <li>
+          <b>Farvebjælkerne</b>
+          <span>Gul, cyan, grøn, magenta, rød og blå ved 75 % styrke. De afslørede, om farverne
+          blev afkodet korrekt, og om mætningen var, som den skulle være.</span>
+        </li>
+        <li>
+          <b>Frekvensgitrene</b>
+          <span>De fem felter med stadig finere striber måler opløsning. Kunne man kun skelne
+          stregerne i de første felter, manglede signalet båndbredde — de fine detaljer var væk.</span>
+        </li>
+        <li>
+          <b>Gråtonetrappen</b>
+          <span>Trinene fra sort til hvid viser, om lysstyrken stiger jævnt. Klumpede trinene
+          sig sammen i den mørke ende, var kontrast og gamma forkert indstillet.</span>
+        </li>
+        <li>
+          <b>Midterkrydset</b>
+          <span>Til centrering og konvergens. På et farvebillederør tegnes billedet af tre
+          stråler, og ramte de ikke samme punkt, fik krydset farvede skygger.</span>
+        </li>
+        <li>
+          <b>Uret</b>
+          <span>Den praktiske detalje: seeren kunne se, hvor længe der var til udsendelserne
+          begyndte igen.</span>
+        </li>
+      </ul>
+
+      <h3>Sendefladen — og hullerne i den</h3>
+
+      <p>
+        I dag er det svært at forestille sig, men fjernsynet havde lukketid. DR sendte ikke i
+        døgndrift, og der var lange stræk af dagen uden programmer — formiddagen var typisk
+        tom, og om natten sluttede sendefladen simpelthen. I de huller kørte prøvebilledet.
+      </p>
+
+      <p>
+        Det havde en teknisk grund. Et sendenet skulle holdes i gang og justeres, og et fast,
+        kendt billede gav teknikerne noget at måle på hele vejen fra studiet ud til senderne.
+        Samtidig kunne seeren bruge det til at stille sit eget apparat ind — datidens fjernsyn
+        havde knapper til lysstyrke, kontrast, farve og billedhold, som løb fra hinanden med
+        tiden. Prøvebilledet var facitlisten.
+      </p>
+
+      <p>
+        Da fjernsynet i løbet af 1980'erne og 90'erne blev til døgnsendeflade med flere kanaler,
+        forsvandt hullerne — og dermed prøvebilledet. Det blev afløst af natteprogrammer,
+        musikvideoer og til sidst af en sendeflade uden ende.
+      </p>
+
+      <h3>Tonen</h3>
+
+      <p>
+        Halvdelen af erindringen sidder i øret. Sammen med billedet lå en ren, konstant tone på
+        <strong>1000 hertz</strong> — en referencetone, der lod teknikerne kontrollere, at
+        lydsiden fungerede og lå på det rigtige niveau, mens der ikke var andet lyd at sende.
+        Du kan tænde for den på panelet foroven. Vær varsom med lydstyrken: en ren sinustone er
+        mere gennemtrængende, end man husker.
+      </p>
+
+      <h3>Prøvebilledet som værktøj i dag</h3>
+
+      <p>
+        Mønstrene har overlevet deres oprindelige formål. En moderne skærm skal ikke justeres
+        med skruetrækker, men den kan stadig have fejl — og til det er testmønstre stadig det
+        hurtigste værktøj. Brug piletasterne til at skifte mellem dem:
+      </p>
+
+      <ul class="spec">
+        <li><b>Gråtoneramp</b><span>Afslører båndering og forkert gammakurve — overgangen skal være helt jævn.</span></li>
+        <li><b>SMPTE-bjælker</b><span>Klassisk farvereference med PLUGE-felter nederst til at sætte sortniveauet korrekt.</span></li>
+        <li><b>Konvergensgitter</b><span>Fine hvide linjer på sort. Farvede kanter langs stregerne afslører konvergens- eller skarphedsfejl.</span></li>
+        <li><b>Overscan</b><span>Rammer ved 90, 95 og 100 %. Kan du ikke se den yderste ramme, beskærer skærmen billedet.</span></li>
+        <li><b>Døde pixels</b><span>Helfarvede flader i rød, grøn, blå, hvid og sort. En død pixel står frem som en prik, der ikke skifter med.</span></li>
+      </ul>
+
+      <div class="note">
+        <p>
+          Bemærk: gengivelsen her er tegnet på frihånd i vektor og følger PM5544-mønsterets
+          opbygning og proportioner, men er ikke en måleteknisk nøjagtig kopi. Til rigtige
+          målinger bør man bruge et kalibreret testsignal.
+        </p>
+      </div>
     </div>
+
+    <!-- Typeskilt som på bagsiden af apparatet -->
+    <aside class="plate">
+      <h4>Datablad</h4>
+      <dl>
+        <dt>Mønster</dt><dd>PM5544</dd>
+        <dt>Format</dt><dd>4:3</dd>
+        <dt>Opløsning</dt><dd>768 × 576</dd>
+        <dt>Linjer</dt><dd>625 / PAL</dd>
+        <dt>Farvebjælker</dt><dd>75 %</dd>
+        <dt>Gråtonetrin</dt><dd>6</dd>
+        <dt>Frekvensfelter</dt><dd>5</dd>
+        <dt>Referencetone</dt><dd>1000 Hz</dd>
+        <dt>Ur</dt><dd>CET / CEST</dd>
+        <dt>Eksport</dt><dd>SVG · PNG 4K</dd>
+        <dt>Mønstre</dt><dd>10</dd>
+      </dl>
+    </aside>
+
   </div>
 </article>
 </main>
