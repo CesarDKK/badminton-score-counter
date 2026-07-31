@@ -218,8 +218,12 @@ router.get('/events/stream', (req, res) => {
         send(`data: ${JSON.stringify(event)}\n\n`);
     });
 
-    // Heartbeat holder forbindelsen aaben gennem nginx' proxy_read_timeout (90s)
-    const heartbeat = setInterval(() => send(': ping\n\n'), 25000);
+    // Heartbeat holder forbindelsen aaben gennem nginx' proxy_read_timeout (90s).
+    // Sendes som NAVNGIVET event (ikke ": ping"-kommentar) fordi browseren aldrig
+    // leverer kommentarer til klienten — og klientens vagthund skal kunne se at
+    // forbindelsen stadig lever. Et navngivet event rammer ikke onmessage, saa
+    // eksisterende poke-haandtering er uaendret.
+    const heartbeat = setInterval(() => send('event: ping\ndata: {}\n\n'), 25000);
 
     req.on('close', () => {
         clearInterval(heartbeat);

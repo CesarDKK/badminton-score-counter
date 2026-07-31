@@ -1139,7 +1139,11 @@ function startAutoRefresh() {
     // loadHoldkamp køres FØRST så activeTeamMatch er frisk når loadAllCourts
     // kalder isHoldkampCourt() — ellers bruger den stale data hvor afsluttede
     // holdkamp-spil stadig har status='active' og ekskluderer banen fra visning.
-    refreshTimer = setInterval(scheduleRefresh, REFRESH_INTERVAL);
+    // Lille tilfældigt offset så oversigten ikke rammer serveren i præcis samme
+    // sekund som TV-skærmene efter en fælles genstart/udfald (spredning).
+    setTimeout(() => {
+        refreshTimer = setInterval(scheduleRefresh, REFRESH_INTERVAL);
+    }, Math.floor(Math.random() * 1000));
 
     // SSE-poke: opdater med det samme når en bane ændrer sig i stedet for at
     // vente på næste poll. Pollingen beholdes uændret som sikkerhedsnet (og

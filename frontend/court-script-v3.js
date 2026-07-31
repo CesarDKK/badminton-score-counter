@@ -2280,10 +2280,12 @@ function formatDuration(seconds) {
 // Periodic sync to detect admin resets and update player names
 // Synken er event-drevet: SSE-events fra serveren udløser den med det samme
 // (admin-reset, navneændringer og holdkamp/turnerings-tildelinger rammer banen
-// på ~100ms). Intervallet er kun et sikkerhedsnet — 30s når SSE er forbundet,
+// på ~100ms). Intervallet er kun et sikkerhedsnet — 10s når SSE er forbundet,
 // 5s (som før) uden SSE. Selve sync-logikken i serverSyncTick() er uændret.
+// Sikkerhedspollen var 30s, men det er for længe at være uvidende om fx en
+// admin-nulstilling hvis SSE-forbindelsen er tavs.
 const SYNC_FALLBACK_MS = 5000;
-const SYNC_SAFETY_MS = 30000;
+const SYNC_SAFETY_MS = 10000;
 let syncInterval = null;
 let courtLiveUpdates = null;
 
@@ -2299,11 +2301,27 @@ function startPeriodicSync() {
     }
 }
 
+let _syncTimeout = null;
+let _currentSyncMs = null;
+
 function startSyncPolling(ms) {
-    if (syncInterval) clearInterval(syncInterval);
-    // Sikkerhedspollen kører altid en FULD sync (detekterer også holdkamp/
-    // turnerings-tildelinger som et fallback, hvis et 'assignment'-event blev misset).
-    syncInterval = setInterval(() => runServerSync('poll'), ms);
+    // Uændret interval? Lad den køre. onStateChange kan fyre gentagne gange mens
+    // EventSource genforbinder — genstartede vi timeren hver gang, ville synken
+    // blive nulstillet igen og igen og i værste fald aldrig fyre.
+    if (_currentSyncMs === ms && (syncInterval || _syncTimeout)) return;
+    _currentSyncMs = ms;
+    if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
+    if (_syncTimeout) { clearTimeout(_syncTimeout); _syncTimeout = null; }
+
+    // Spredning så alle tablets ikke synker i præcis samme sekund efter et udfald
+    const offset = Math.floor(Math.random() * Math.min(ms, 2000));
+    _syncTimeout = setTimeout(() => {
+        _syncTimeout = null;
+        // Sikkerhedspollen kører altid en FULD sync (detekterer også holdkamp/
+        // turnerings-tildelinger som et fallback, hvis et 'assignment'-event blev misset).
+        runServerSync('poll');
+        syncInterval = setInterval(() => runServerSync('poll'), ms);
+    }, offset);
 }
 
 // SSE-event for denne bane: kør synken med det samme. Egne gemninger udløser
