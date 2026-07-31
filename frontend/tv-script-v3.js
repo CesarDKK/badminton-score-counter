@@ -137,9 +137,12 @@ async function initializeTVDisplay() {
     }
 }
 
-// Med SSE er polling kun et sikkerhedsnet; uden SSE polles som hidtil
+// Med SSE er polling kun et sikkerhedsnet; uden SSE polles som hidtil.
+// Sikkerhedspollen er 5s (var 15s): selv med vagthunden i LiveUpdates kan en
+// forbindelse nå at være tavs et stykke tid, og på en scoreboard er 15s gammel
+// stilling meget synligt. 5s koster stadig kun ~1/7 af fallback-lasten.
 const FALLBACK_POLL_MS = 2000;
-const SAFETY_POLL_MS = 15000;
+const SAFETY_POLL_MS = 5000;
 let liveUpdatesHandle = null;
 
 function startAutoRefresh() {
@@ -165,9 +168,31 @@ function startAutoRefresh() {
     }
 }
 
+let _pollTimeout = null;
+let _currentPollMs = null;
+
+function stopPolling() {
+    if (refreshInterval) { clearInterval(refreshInterval); refreshInterval = null; }
+    if (_pollTimeout) { clearTimeout(_pollTimeout); _pollTimeout = null; }
+}
+
 function startPolling(ms) {
-    if (refreshInterval) clearInterval(refreshInterval);
-    refreshInterval = setInterval(scheduleCourtDataLoad, ms);
+    // Uændret interval? Lad den køre. onStateChange kan fyre gentagne gange mens
+    // EventSource forsøger at genforbinde — og genstartede vi timeren hver gang,
+    // ville pollen blive nulstillet igen og igen og i værste fald aldrig fyre.
+    if (_currentPollMs === ms && (refreshInterval || _pollTimeout)) return;
+    _currentPollMs = ms;
+    stopPolling();
+
+    // Spredning: efter et fælles udfald starter alle skærme deres interval i
+    // præcis samme sekund og rammer så serveren som en mur. Et tilfældigt offset
+    // fordeler dem ud over intervallet.
+    const offset = Math.floor(Math.random() * Math.min(ms, 2000));
+    _pollTimeout = setTimeout(() => {
+        _pollTimeout = null;
+        scheduleCourtDataLoad();
+        refreshInterval = setInterval(scheduleCourtDataLoad, ms);
+    }, offset);
 }
 
 // Saml hurtige SSE-events/poll-ticks til een fetch ad gangen — kommer der
@@ -1553,7 +1578,7 @@ function hideQrCounter() {
 
 // Cleanup on page unload — pagehide (ikke beforeunload) bevarer browserens bfcache
 window.addEventListener('pagehide', function() {
-    if (refreshInterval) clearInterval(refreshInterval);
+    stopPolling();
     if (slideshowInterval) clearInterval(slideshowInterval);
     stopScreensaver();
 });

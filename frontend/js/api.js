@@ -86,7 +86,11 @@ class BadmintonAPI {
             headers['Authorization'] = `Bearer ${this.token}`;
         }
 
-        const timeout = options.timeout || 30000; // 30 second default timeout
+        // 12s standard. Var 30s, men et kald der hænger i en halv minut hjælper
+        // ingen: brugeren ser bare "timeout" længe efter at det reelt var gået galt,
+        // og forbindelsen holdes optaget imens. Tunge endpoints (TS-scraping,
+        // klub-oprettelse, XML-import) sætter selv en længere timeout.
+        const timeout = options.timeout || 12000;
         // Retry KUN idempotente metoder. En POST/DELETE der faktisk nåede
         // serveren, men hvis svar gik tabt, ville ellers blive sendt igen og
         // fx gemme en kamp to gange. GET/PUT/HEAD er sikre at gentage.
@@ -313,7 +317,10 @@ class BadmintonAPI {
      * @returns {Promise<object>} - Game state object
      */
     async getGameState(courtId) {
-        return this.request(`/game-states/${courtId}`, { requiresAuth: false });
+        // Live-poll: kort timeout og INGEN retry — næste poll er selv gentagelsen.
+        // Retries her ville lægge ekstra last oveni netop når serveren er presset
+        // (og et svar der er 20s gammelt er alligevel værdiløst på en scoreboard).
+        return this.request(`/game-states/${courtId}`, { requiresAuth: false, timeout: 8000 }, 1);
     }
 
     /**
@@ -350,7 +357,8 @@ class BadmintonAPI {
      * @returns {Promise<Array>} - Array of game state objects with courtId
      */
     async getAllGameStates() {
-        return this.request('/game-states/batch/all', { requiresAuth: false });
+        // Live-poll (oversigt, hvert 2. sek) — fail fast uden retry, jf. getGameState
+        return this.request('/game-states/batch/all', { requiresAuth: false, timeout: 8000 }, 1);
     }
 
     // ==================== Match History ====================
@@ -686,7 +694,8 @@ class BadmintonAPI {
     async importPlayers(players) {
         return this.request('/player-info/import', {
             method: 'POST',
-            body: JSON.stringify({ players })
+            body: JSON.stringify({ players }),
+            timeout: 60000 // XML-import kan indeholde hundredvis af spillere
         });
     }
 
@@ -781,7 +790,8 @@ class BadmintonAPI {
     async syncTournamentImport(tournamentId, { skipClubs = false } = {}) {
         const qs = skipClubs ? '?skipClubs=true' : '';
         return this.request(`/tournaments/${tournamentId}/sync-import${qs}`, {
-            method: 'POST'
+            method: 'POST',
+            timeout: 60000 // genhenter alle kampsider fra tournamentsoftware.com
         });
     }
 
@@ -842,7 +852,8 @@ class BadmintonAPI {
     async addTournamentMatchesBulk(tournamentId, matches) {
         return this.request(`/tournaments/${tournamentId}/matches/bulk`, {
             method: 'POST',
-            body: JSON.stringify({ matches })
+            body: JSON.stringify({ matches }),
+            timeout: 30000 // indsætter mange kampe i én omgang
         });
     }
 
@@ -939,7 +950,8 @@ class BadmintonAPI {
     async createClub(name, subdomain) {
         return this.request('/super-admin/clubs', {
             method: 'POST',
-            body: JSON.stringify({ name, subdomain })
+            body: JSON.stringify({ name, subdomain }),
+            timeout: 45000 // opretter og seeder en hel klub-database
         });
     }
 
@@ -1000,7 +1012,8 @@ class BadmintonAPI {
     async createFootballClub(name, subdomain) {
         return this.request('/super-admin/football/clubs', {
             method: 'POST',
-            body: JSON.stringify({ name, subdomain })
+            body: JSON.stringify({ name, subdomain }),
+            timeout: 45000 // opretter og seeder en hel klub-database
         });
     }
 
