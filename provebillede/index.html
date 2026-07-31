@@ -405,7 +405,9 @@ body::before {
 /* Advarsel før blinkende lys */
 .warn {
   display: none;
-  position: absolute; inset: 0; z-index: 5;
+  /* Over vækkeren (z-index 6) — ellers ville advarslen kunne havne BAG en
+     kørende flade og være usynlig. */
+  position: absolute; inset: 0; z-index: 7;
   background: rgba(6,6,8,.94);
   align-items: center; justify-content: center;
   padding: 1.2rem;
@@ -842,7 +844,9 @@ body::before {
     <div class="grp">
       <span class="legend">Værktøj</span>
       <div class="row">
-        <button class="btn" id="btnFix">Pixel-vækker</button>
+        <button class="btn" id="btnFix" aria-pressed="false">
+          <span class="lamp"></span>Pixel-vækker
+        </button>
       </div>
     </div>
 
@@ -1585,9 +1589,15 @@ body::before {
   var fixTimer = null;
   var FIX_COLORS = ['#ff0000', '#00ff00', '#0000ff', '#ffffff', '#000000'];
 
+  var btnFix = document.getElementById('btnFix');
+
+  function fixerRunning() { return fixTimer !== null; }
+  function warnOpen() { return fixWarn.classList.contains('on'); }
+
   function startFixer() {
     fixWarn.classList.remove('on');
     fixer.classList.add('on');
+    btnFix.setAttribute('aria-pressed', 'true');
     var i = 0;
     fixTimer = setInterval(function () {
       fixer.style.background = FIX_COLORS[i++ % FIX_COLORS.length];
@@ -1597,19 +1607,28 @@ body::before {
     if (fixTimer) { clearInterval(fixTimer); fixTimer = null; }
     fixer.classList.remove('on');
     fixer.style.background = '';
+    btnFix.setAttribute('aria-pressed', 'false');
+  }
+  function closeWarn() {
+    fixWarn.classList.remove('on');
+    if (!fixerRunning()) btnFix.setAttribute('aria-pressed', 'false');
   }
 
-  document.getElementById('btnFix').addEventListener('click', function () {
+  // Knappen er en tænd/sluk: kører vækkeren, slukker et tryk den igen.
+  // Står advarslen åben, lukker trykket den. Ellers åbner den advarslen.
+  btnFix.addEventListener('click', function () {
+    if (fixerRunning()) { stopFixer(); return; }
+    if (warnOpen()) { closeWarn(); return; }
     fixWarn.classList.add('on');
+    btnFix.setAttribute('aria-pressed', 'true'); // lampen lyser mens man vælger
     document.getElementById('fixStart').focus();
   });
-  document.getElementById('fixCancel').addEventListener('click', function () {
-    fixWarn.classList.remove('on');
-  });
+
+  document.getElementById('fixCancel').addEventListener('click', closeWarn);
   document.getElementById('fixStart').addEventListener('click', startFixer);
   fixer.addEventListener('click', stopFixer);
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') { stopFixer(); fixWarn.classList.remove('on'); }
+    if (e.key === 'Escape') { stopFixer(); closeWarn(); }
   });
 
   show(0);
