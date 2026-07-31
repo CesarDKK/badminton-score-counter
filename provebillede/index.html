@@ -14,13 +14,19 @@
 <meta property="og:title" content="Prøvebillede — PM5544, DR's gamle testbillede">
 <meta property="og:description" content="Prøvebilledet som ren vektorgrafik med levende ur, 1000 Hz-tone og testmønstre til skærmkalibrering. Hent det i 4K.">
 <meta property="og:url" content="https://provebillede.dk/">
+<meta property="og:image" content="https://provebillede.dk/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Det danske prøvebillede — PM5544-testmønster med teksten DANMARK og et ur.">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://provebillede.dk/og.png">
 
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%237a7a7a'/%3E%3Ccircle cx='16' cy='16' r='13' fill='%23fff'/%3E%3Ccircle cx='16' cy='16' r='11' fill='%237a7a7a'/%3E%3Crect x='5' y='10' width='3.7' height='6' fill='%23bfbf00'/%3E%3Crect x='8.7' y='10' width='3.7' height='6' fill='%2300bfbf'/%3E%3Crect x='12.4' y='10' width='3.7' height='6' fill='%2300bf00'/%3E%3Crect x='16.1' y='10' width='3.7' height='6' fill='%23bf00bf'/%3E%3Crect x='19.8' y='10' width='3.7' height='6' fill='%23bf0000'/%3E%3Crect x='23.5' y='10' width='3.7' height='6' fill='%230000bf'/%3E%3Crect x='9' y='18' width='14' height='4' fill='%23000'/%3E%3C/svg%3E">
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<!-- Skrifterne ligger lokalt (fonts/ + fonts.css). Hentet fra Google Fonts ville
+     sende hver besøgendes IP-adresse til Google — en GDPR-risiko en dansk side
+     ikke behøver at løbe. Kun latin/latin-ext-undersæt, i alt ~300 kB. -->
+<link rel="stylesheet" href="fonts.css?v=1">
 
 <script type="application/ld+json">
 {
@@ -34,6 +40,46 @@
     { "@type": "Thing", "name": "Prøvebillede" },
     { "@type": "Thing", "name": "Philips PM5544" },
     { "@type": "Organization", "name": "DR (Danmarks Radio)" }
+  ]
+}
+</script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "inLanguage": "da-DK",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Hvad er et prøvebillede?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Et fast testbillede som tv-stationerne sendte ud, når der ikke var programmer. Det bestod af geometriske figurer, farvebjælker og gråtoner, som teknikere og seere kunne bruge til at kontrollere og justere billedet. I Danmark kendes det især fra DR's sendepauser." }
+    },
+    {
+      "@type": "Question",
+      "name": "Hvad betyder PM5544?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Det er typenummeret på den testbilledgenerator fra Philips, der frembragte mønsteret. Apparatet blev standardudstyr hos europæiske tv-stationer fra slutningen af 1960'erne, og mønsteret har siden båret dets navn." }
+    },
+    {
+      "@type": "Question",
+      "name": "Hvorfor er der en cirkel i midten af prøvebilledet?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Cirklen afslører, om billedet har det rigtige højde/bredde-forhold. En cirkel er kun rund, hvis geometrien er korrekt — blev den til en ægform, var billedet trukket skævt." }
+    },
+    {
+      "@type": "Question",
+      "name": "Hvorfor lå der en tone på 1000 Hz sammen med prøvebilledet?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Tonen var en lydreference. Den lod teknikerne kontrollere, at lydsiden fungerede og lå på det rigtige niveau, mens der ikke var andet at sende." }
+    },
+    {
+      "@type": "Question",
+      "name": "Hvornår forsvandt prøvebilledet fra dansk tv?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Det forsvandt gradvist, i takt med at fjernsynet gik fra begrænset sendetid til døgnsendeflade med flere kanaler i løbet af 1980'erne og 90'erne." }
+    },
+    {
+      "@type": "Question",
+      "name": "Kan jeg bruge prøvebilledet til at teste min skærm i dag?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Ja. Mønstrene afslører stadig båndering, forkert sortniveau, overscan og døde pixels. Brug piletasterne til at skifte mellem gråtoneramp, SMPTE-bjælker, konvergensgitter, overscan-rammer og helfarvede flader." }
+    }
   ]
 }
 </script>
@@ -356,6 +402,52 @@ body::before {
 }
 .grp input:focus { outline: none; border-color: var(--amber); box-shadow: inset 0 2px 5px rgba(0,0,0,.9), 0 0 12px rgba(255,176,32,.3); }
 
+/* Advarsel før blinkende lys */
+.warn {
+  display: none;
+  position: absolute; inset: 0; z-index: 5;
+  background: rgba(6,6,8,.94);
+  align-items: center; justify-content: center;
+  padding: 1.2rem;
+}
+.warn.on { display: flex; }
+.warn-box { max-width: 42ch; text-align: left; }
+.warn-box h3 {
+  font-family: var(--panelfont); font-weight: 700;
+  font-size: 1.3rem; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--red); margin-bottom: .9rem;
+}
+.warn-box p {
+  font-family: var(--serif); font-size: 1rem; line-height: 1.6;
+  color: var(--paper); margin-bottom: .8rem;
+}
+.warn-box .warn-sub { font-size: .88rem; color: var(--paper-dim); }
+.warn-btns { display: flex; gap: .5rem; margin-top: 1.2rem; }
+.btn-go { color: #0d0c0a; background: linear-gradient(180deg, var(--amber), #d68f10); border-color: #000; }
+.btn-go:hover { color: #0d0c0a; background: linear-gradient(180deg, #ffc44d, var(--amber)); }
+
+/* Pixel-vækker: fylder skærmen mens den kører */
+.fixer { display: none; position: absolute; inset: 0; z-index: 6; cursor: pointer; }
+.fixer.on { display: block; }
+
+/* Landeforvalg — små trykknapper under stationsfeltet */
+.presets { gap: .28rem; }
+.chip {
+  appearance: none;
+  font-family: var(--mono); font-weight: 500;
+  font-size: .66rem; letter-spacing: .1em;
+  color: #a09889;
+  background: linear-gradient(180deg, #2c2822, #1c1a16);
+  border: 1px solid #0b0a09; border-radius: 2px;
+  padding: .2rem .42rem;
+  cursor: pointer; touch-action: manipulation;
+  box-shadow: inset 0 1px 0 rgba(255,236,208,.1);
+  transition: color .14s, border-color .14s;
+}
+.chip:hover { color: var(--amber); }
+.chip[aria-pressed="true"] { color: var(--amber); border-color: var(--amber); }
+.chip:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+
 .hint {
   font-family: var(--mono);
   font-size: .7rem; letter-spacing: .08em;
@@ -439,16 +531,26 @@ body::before {
 .spec span { color: var(--paper-dim); line-height: 1.65; font-size: 1rem; }
 @media (max-width: 620px) { .spec li { grid-template-columns: 1fr; gap: .35rem; } }
 
-/* Sidepanel: typeskilt som på bagsiden af apparatet */
+/* Sidepanel: typeskilt som på bagsiden af apparatet.
+   Skinnen klæber — ikke pladerne hver for sig, ellers ville de overlappe. */
+.rail { position: sticky; top: 1.4rem; display: flex; flex-direction: column; gap: 1rem; }
+@media (max-width: 940px) { .rail { position: static; } }
+.plate-note {
+  font-family: var(--serif);
+  font-size: .82rem; line-height: 1.5;
+  color: var(--engrave-dim);
+  margin-top: .9rem; padding-top: .8rem;
+  border-top: 1px solid var(--groove);
+}
+.plate--live dd { color: var(--phosphor); }
+
 .plate {
-  position: sticky; top: 1.4rem;
   border-radius: 5px;
   padding: 1.15rem 1.2rem 1.3rem;
   background: linear-gradient(180deg, var(--panel-hi), var(--panel-lo));
   border: 1px solid var(--groove);
   box-shadow: inset 0 1px 0 rgba(255,236,208,.12), 0 10px 26px rgba(0,0,0,.55);
 }
-@media (max-width: 940px) { .plate { position: static; } }
 .plate h4 {
   font-family: var(--panelfont); font-weight: 700;
   font-size: .84rem; letter-spacing: .26em; text-transform: uppercase;
@@ -466,6 +568,33 @@ body::before {
 .plate dd {
   font-family: var(--mono); font-size: .76rem;
   color: #cdc6b8; text-align: right;
+}
+
+/* FAQ — foldes ud, men svarene står i HTML'en så de kan indekseres */
+.faq { max-width: 66ch; border-top: 1px solid #2a2620; }
+.faq details { border-bottom: 1px solid #2a2620; }
+.faq summary {
+  list-style: none; cursor: pointer;
+  display: flex; align-items: baseline; gap: .8rem;
+  padding: 1rem .2rem;
+  font-family: var(--panelfont); font-weight: 600;
+  font-size: 1.06rem; letter-spacing: .04em;
+  color: #ddd6ca;
+  transition: color .15s;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::before {
+  content: "+";
+  font-family: var(--mono); font-weight: 600;
+  color: var(--amber); flex: none; width: 1ch;
+  transition: transform .18s;
+}
+.faq details[open] summary::before { content: "−"; }
+.faq summary:hover { color: var(--amber); }
+.faq summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.faq details p {
+  padding: 0 .2rem 1.1rem 2rem;
+  margin: 0; font-size: 1rem; color: var(--paper-dim);
 }
 
 .note {
@@ -639,6 +768,21 @@ body::before {
       <!-- Cirkelring -->
       <circle cx="384" cy="288" r="240" fill="none" stroke="#fff" stroke-width="5"/>
     </svg>
+      <!-- Advarsel FØR blinkende lys. Vises inde i skærmen, så den ikke kan
+           overses, og værktøjet kan aldrig starte af sig selv. -->
+      <div class="warn" id="fixWarn" role="dialog" aria-modal="true" aria-labelledby="fixWarnTitle">
+        <div class="warn-box">
+          <h3 id="fixWarnTitle">Blinkende lys</h3>
+          <p>Pixel-vækkeren skifter farve mange gange i sekundet for at vække en
+             fastlåst pixel. Start den ikke, hvis du er lysfølsom eller har epilepsi.</p>
+          <p class="warn-sub">Kør den 10–30 minutter på det område hvor pixelen sidder.
+             Tryk et vilkårligt sted eller på Esc for at stoppe.</p>
+          <div class="warn-btns">
+            <button class="btn" id="fixCancel">Annullér</button>
+            <button class="btn btn-go" id="fixStart">Start</button>
+          </div>
+        </div>
+      </div>
     </div><!-- /screen -->
   </div><!-- /monitor -->
 
@@ -684,6 +828,21 @@ body::before {
       <div class="row">
         <label class="sr-only" for="stationInput">Stationstekst</label>
         <input id="stationInput" type="text" maxlength="12" value="DANMARK" spellcheck="false" autocomplete="off">
+      </div>
+      <!-- PM5544 var fælles i Europa — forskellen var teksten i den sorte boks -->
+      <div class="row presets" id="presets">
+        <button class="chip" data-txt="DANMARK" title="DR — Danmark">DK</button>
+        <button class="chip" data-txt="NORGE" title="NRK — Norge">NO</button>
+        <button class="chip" data-txt="SVERIGE" title="SVT — Sverige">SE</button>
+        <button class="chip" data-txt="SUOMI" title="YLE — Finland">FI</button>
+        <button class="chip" data-txt="NEDERLAND" title="NOS — Holland">NL</button>
+      </div>
+    </div>
+
+    <div class="grp">
+      <span class="legend">Værktøj</span>
+      <div class="row">
+        <button class="btn" id="btnFix">Pixel-vækker</button>
       </div>
     </div>
 
@@ -828,6 +987,48 @@ body::before {
         <li><b>Døde pixels</b><span>Helfarvede flader i rød, grøn, blå, hvid og sort. En død pixel står frem som en prik, der ikke skifter med.</span></li>
       </ul>
 
+      <h3>Ofte stillede spørgsmål</h3>
+
+      <div class="faq">
+        <details>
+          <summary>Hvad er et prøvebillede?</summary>
+          <p>Et fast testbillede som tv-stationerne sendte ud, når der ikke var programmer.
+          Det bestod af geometriske figurer, farvebjælker og gråtoner, som teknikere og seere
+          kunne bruge til at kontrollere og justere billedet. I Danmark kendes det især fra
+          DR's sendepauser.</p>
+        </details>
+        <details>
+          <summary>Hvad betyder PM5544?</summary>
+          <p>Det er typenummeret på den testbilledgenerator fra Philips, der frembragte
+          mønsteret. Apparatet blev standardudstyr hos europæiske tv-stationer fra slutningen
+          af 1960'erne, og mønsteret har siden båret dets navn.</p>
+        </details>
+        <details>
+          <summary>Hvorfor er der en cirkel i midten?</summary>
+          <p>Cirklen afslører, om billedet har det rigtige højde/bredde-forhold. En cirkel er
+          kun rund, hvis geometrien er korrekt — blev den til en ægform, var billedet trukket
+          skævt, og så ville ansigter være det samme.</p>
+        </details>
+        <details>
+          <summary>Hvorfor lå der en tone på 1000 Hz?</summary>
+          <p>Tonen var en lydreference. Den lod teknikerne kontrollere, at lydsiden fungerede
+          og lå på det rigtige niveau, mens der ikke var andet at sende. Du kan tænde for den
+          på panelet øverst på siden.</p>
+        </details>
+        <details>
+          <summary>Hvornår forsvandt prøvebilledet?</summary>
+          <p>Det forsvandt gradvist, i takt med at fjernsynet gik fra begrænset sendetid til
+          døgnsendeflade med flere kanaler i løbet af 1980'erne og 90'erne. Da hullerne i
+          sendefladen forsvandt, var der ikke længere brug for noget at fylde dem med.</p>
+        </details>
+        <details>
+          <summary>Kan jeg bruge prøvebilledet til at teste min skærm i dag?</summary>
+          <p>Ja. Mønstrene afslører stadig båndering, forkert sortniveau, overscan og døde
+          pixels. Brug piletasterne til at skifte mellem gråtoneramp, SMPTE-bjælker,
+          konvergensgitter, overscan-rammer og helfarvede flader.</p>
+        </details>
+      </div>
+
       <div class="note">
         <p>
           Bemærk: gengivelsen her er tegnet på frihånd i vektor og følger PM5544-mønsterets
@@ -836,6 +1037,9 @@ body::before {
         </p>
       </div>
     </div>
+
+    <!-- Begge plader i ÉN grid-celle — ellers ryger den anden ned i tekstkolonnen -->
+    <div class="rail">
 
     <!-- Typeskilt som på bagsiden af apparatet -->
     <aside class="plate">
@@ -854,6 +1058,23 @@ body::before {
         <dt>Mønstre</dt><dd>10</dd>
       </dl>
     </aside>
+
+    <!-- Apparatet måler nu den besøgendes egen skærm -->
+    <aside class="plate plate--live">
+      <h4>Din skærm</h4>
+      <dl>
+        <dt>Opløsning</dt><dd id="mScreen">–</dd>
+        <dt>Vindue</dt><dd id="mView">–</dd>
+        <dt>Format</dt><dd id="mRatio">–</dd>
+        <dt>Pixelforhold</dt><dd id="mDpr">–</dd>
+        <dt>Farvedybde</dt><dd id="mDepth">–</dd>
+        <dt>Frekvens</dt><dd id="mHz">måler…</dd>
+      </dl>
+      <p class="plate-note">Opløsningen er den skærmen melder til browseren — på en
+      skaleret skærm kan den afvige fra panelets fysiske pixelantal.</p>
+    </aside>
+
+    </div><!-- /rail -->
 
   </div>
 </article>
@@ -951,6 +1172,24 @@ body::before {
   });
   // Piletaster må ikke skifte mønster mens man skriver
   input.addEventListener('keydown', function (e) { e.stopPropagation(); });
+
+  // Landeforvalg. PM5544 var fælles i Europa — kun teksten i boksen skiftede,
+  // så et forvalg er blot en genvej til stationsfeltet.
+  var chips = [].slice.call(document.querySelectorAll('#presets .chip'));
+  function markChips(txt) {
+    chips.forEach(function (c) {
+      c.setAttribute('aria-pressed', c.getAttribute('data-txt') === txt ? 'true' : 'false');
+    });
+  }
+  chips.forEach(function (c) {
+    c.addEventListener('click', function () {
+      var txt = c.getAttribute('data-txt');
+      input.value = txt;
+      input.dispatchEvent(new Event('input'));
+    });
+  });
+  markChips(initial);
+  input.addEventListener('input', function () { markChips(setStation(input.value)); });
 
   /* ══════════════════════════════════════════════════════════════
      3) TESTMØNSTRE — piletaster skifter.
@@ -1270,6 +1509,107 @@ body::before {
       case 'w': case 'W': btnWake.click(); break;
       case 'Home': show(0); break;
     }
+  });
+
+  /* ══════════════════════════════════════════════════════════════
+     8) SKÆRM-AFLÆSNING — apparatet måler den besøgendes egen skærm
+     ══════════════════════════════════════════════════════════════ */
+  function gcd(a, b) { return b ? gcd(b, a % b) : a; }
+
+  // Skærmformat i læseligt sprog. Ren gcd-reduktion duer ikke: 1366×768 giver
+  // 683:384, og en stående telefon giver "0,46:1". Vi rammer derfor først de
+  // kendte formater og falder først derefter tilbage til tal.
+  function ratioLabel(w, h) {
+    var long = Math.max(w, h), short = Math.min(w, h), r = long / short;
+    var common = [[16,9],[16,10],[4,3],[21,9],[3,2],[5,4],[32,9],[5,3]];
+    for (var i = 0; i < common.length; i++) {
+      if (Math.abs(r - common[i][0] / common[i][1]) < 0.02) {
+        return w >= h ? common[i][0] + ':' + common[i][1] : common[i][1] + ':' + common[i][0];
+      }
+    }
+    var g = gcd(w, h) || 1;
+    if (w / g <= 64 && h / g <= 64) return (w / g) + ':' + (h / g);
+    return r.toFixed(2) + ':1' + (w < h ? ' (stående)' : '');
+  }
+
+  function measureScreen() {
+    var sw = screen.width, sh = screen.height;
+    var set = function (id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+    set('mScreen', sw + ' × ' + sh);
+    set('mView', innerWidth + ' × ' + innerHeight);
+    set('mRatio', ratioLabel(sw, sh));
+    set('mDpr', (window.devicePixelRatio || 1).toFixed(2) + '×');
+    set('mDepth', (screen.colorDepth || 24) + ' bit');
+  }
+  measureScreen();
+  addEventListener('resize', measureScreen);
+
+  // Opdateringsfrekvens: tæl billeder over ~1 sekund. Kan ikke aflæses direkte,
+  // så den måles — og rundes til nærmeste kendte trin så 59,7 bliver til 60.
+  (function measureHz() {
+    var el = document.getElementById('mHz');
+    if (!el) return;
+    var frames = 0, t0 = performance.now(), done = false;
+
+    // Sikkerhedsnet: fyrer rAF slet ikke (skjult fane, throttlet browser),
+    // skal feltet ikke stå og hænge på "måler…" for evigt.
+    var giveUp = setTimeout(function () {
+      if (!done) { done = true; el.textContent = 'ukendt'; }
+    }, 4000);
+
+    function step(now) {
+      if (done) return;
+      frames++;
+      if (now - t0 < 1000) { requestAnimationFrame(step); return; }
+      done = true; clearTimeout(giveUp);
+      var hz = frames / ((now - t0) / 1000);
+      var known = [24, 30, 48, 50, 60, 72, 75, 90, 100, 120, 144, 165, 240, 360];
+      var best = known.reduce(function (a, b) { return Math.abs(b - hz) < Math.abs(a - hz) ? b : a; });
+      el.textContent = (Math.abs(best - hz) < 3 ? best : Math.round(hz)) + ' Hz';
+    }
+    requestAnimationFrame(step);
+  })();
+
+  /* ══════════════════════════════════════════════════════════════
+     9) PIXEL-VÆKKER
+     Blinkende lys er en reel risiko for lysfølsomme, så værktøjet
+     ligger BEVIDST uden for piletast-rotationen: man kan ikke ramme
+     det ved et uheld, og der advares før start.
+     ══════════════════════════════════════════════════════════════ */
+  var fixWarn = document.getElementById('fixWarn');
+  var fixer = document.createElement('div');
+  fixer.className = 'fixer';
+  fixer.setAttribute('aria-hidden', 'true');
+  screenEl.appendChild(fixer);
+
+  var fixTimer = null;
+  var FIX_COLORS = ['#ff0000', '#00ff00', '#0000ff', '#ffffff', '#000000'];
+
+  function startFixer() {
+    fixWarn.classList.remove('on');
+    fixer.classList.add('on');
+    var i = 0;
+    fixTimer = setInterval(function () {
+      fixer.style.background = FIX_COLORS[i++ % FIX_COLORS.length];
+    }, 100);
+  }
+  function stopFixer() {
+    if (fixTimer) { clearInterval(fixTimer); fixTimer = null; }
+    fixer.classList.remove('on');
+    fixer.style.background = '';
+  }
+
+  document.getElementById('btnFix').addEventListener('click', function () {
+    fixWarn.classList.add('on');
+    document.getElementById('fixStart').focus();
+  });
+  document.getElementById('fixCancel').addEventListener('click', function () {
+    fixWarn.classList.remove('on');
+  });
+  document.getElementById('fixStart').addEventListener('click', startFixer);
+  fixer.addEventListener('click', stopFixer);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { stopFixer(); fixWarn.classList.remove('on'); }
   });
 
   show(0);
