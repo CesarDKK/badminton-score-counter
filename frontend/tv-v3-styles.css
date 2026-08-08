@@ -11,51 +11,43 @@
     z-index: 10000;
     background: rgba(var(--color-bg-card-rgb), 0.92);
     border: 2px solid var(--color-accent, var(--color-accent));
-    border-radius: 16px;
-    padding: 20px 24px;
+    border-radius: 8px;
+    padding: 10px 12px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    gap: 5px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
 }
 
+/* Alle mål herunder er halveret i forhold til den oprindelige QR-boks —
+   den fyldte for meget af skærmen, især oven på et sponsorbillede. */
 .qr-counter__label {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.6em;
+    font-size: 0.8em;
     letter-spacing: 0.08em;
     color: var(--color-accent, var(--color-accent));
 }
 
 .qr-counter__image {
-    width: 220px;
-    height: 220px;
+    width: 110px;
+    height: 110px;
     display: block;
     background: transparent;
 }
 
 .qr-counter__hint {
-    font-size: 0.95em;
+    font-size: 0.48em;
     color: rgba(255, 255, 255, 0.8);
     letter-spacing: 0.03em;
 }
 
 /* Kompakt variant — vises under en aktiv kamp så en gæst der har lukket
-   browseren kan scanne igen og genoptage. Mindre og mere diskret end idle-QR'en. */
+   browseren kan scanne igen og genoptage. Basis-QR'en er nu selv lille
+   (104 px-varianten var større end den), så her skal kun diskretionen
+   tilbage: lidt lavere opacitet. */
 .qr-counter--compact {
-    padding: 10px 12px;
-    gap: 5px;
     opacity: 0.9;
-}
-.qr-counter--compact .qr-counter__image {
-    width: 104px;
-    height: 104px;
-}
-.qr-counter--compact .qr-counter__label {
-    font-size: 0.95em;
-}
-.qr-counter--compact .qr-counter__hint {
-    font-size: 0.72em;
 }
 
 /* =================== SCREENSAVER / SPONSOR SLIDESHOW =================== */
