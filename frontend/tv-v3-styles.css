@@ -36,11 +36,6 @@
     background: transparent;
 }
 
-.qr-counter__hint {
-    font-size: 0.48em;
-    color: rgba(255, 255, 255, 0.8);
-    letter-spacing: 0.03em;
-}
 
 /* Kompakt variant — vises under en aktiv kamp så en gæst der har lukket
    browseren kan scanne igen og genoptage. Basis-QR'en er nu selv lille

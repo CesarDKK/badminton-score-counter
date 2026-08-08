@@ -1527,9 +1527,9 @@ function hideMatchFinished() {
 // guest-session (kampen kører i QR-selvbetjening). Ellers 404 → QR skjules, så
 // holdkamp/turneringskampe aldrig viser en overtag-/ny-kamp-QR.
 const QR_MODES = {
-    idle:     { peek: false, compact: false, label: 'TÆL MED DIN TELEFON', hint: 'Scan med telefon' },
-    resume:   { peek: true,  compact: true,  label: 'STYR KAMPEN',         hint: 'Scan for at genoptage' },
-    finished: { peek: true,  compact: false, label: 'SCAN FOR NY KAMP',    hint: 'Scan for at starte en ny kamp' }
+    idle:     { peek: false, compact: false, label: 'TÆL MED DIN TELEFON' },
+    resume:   { peek: true,  compact: true,  label: 'STYR KAMPEN'         },
+    finished: { peek: true,  compact: false, label: 'SCAN FOR NY KAMP'    }
 };
 
 function showQrCounter(mode = 'idle') {
@@ -1543,10 +1543,8 @@ function showQrCounter(mode = 'idle') {
     qrCounterMode = mode;
 
     const label = container.querySelector('.qr-counter__label');
-    const hint = container.querySelector('.qr-counter__hint');
     container.classList.toggle('qr-counter--compact', cfg.compact);
     if (label) label.textContent = cfg.label;
-    if (hint) hint.textContent = cfg.hint;
 
     // Cache-busting via timestamp så en ny token hentes efter invalidering.
     const q = cfg.peek ? 'resume=1&' : '';
