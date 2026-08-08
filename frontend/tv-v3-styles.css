@@ -78,10 +78,14 @@
     overflow: hidden;
 }
 
+/* Sponsorbilledet fylder hele skærmen — samme opførsel som Oversigt.
+   (Tidligere gjorde en dublet-regel længere nede billedet 90 %, hvilket gav
+   en synlig ramme rundt om billedet på TV-visningen.) */
 .sponsor-slide-image {
     width: 100%;
     height: 100%;
     object-fit: contain;
+    animation: fadeIn 1s ease-in-out;
 }
 
 /* "Ingen aktiv kamp" screensaver — skalerer med viewporten (clamp) så
@@ -489,12 +493,8 @@ body::before {
     display: flex;
 }
 
-.sponsor-slide-image {
-    max-width: 90%;
-    max-height: 90%;
-    object-fit: contain;
-    animation: fadeIn 1s ease-in-out;
-}
+/* .sponsor-slide-image er defineret én gang i SCREENSAVER/SPONSOR-sektionen
+   øverst — ingen dublet her. */
 
 @keyframes fadeIn {
     from { opacity: 0; }
