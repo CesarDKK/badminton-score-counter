@@ -78,6 +78,7 @@ services:
     depends_on:
       - backend
       - football-frontend
+      - stats-backend
     networks:
       - badminton-network
 
@@ -162,6 +163,34 @@ services:
     networks:
       - badminton-network
 
+  # Klubstatistik — statistik.badmintonapp.dk
+  # Egen service, adskilt fra pointtællingen, så en langvarig indsamling fra
+  # badmintonplayer.dk aldrig kan påvirke en kamp der er i gang.
+  stats-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.stats
+    container_name: badminton-stats
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      CACHE_DIR: /data/cache
+      CACHE_TTL_HOURS: 24
+      # Pause mellem hvert kald mod badmintonplayer.dk
+      BP_MIN_DELAY_MS: 700
+      BP_JITTER_MS: 400
+    volumes:
+      - stats_cache:/data
+    networks:
+      - badminton-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3002/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
 networks:
   badminton-network:
     driver: bridge
@@ -172,4 +201,6 @@ volumes:
   uploads_data:
     driver: local
   football_uploads:
+    driver: local
+  stats_cache:
     driver: local

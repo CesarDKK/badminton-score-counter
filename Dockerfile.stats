@@ -1,0 +1,21 @@
+FROM node:18-alpine
+
+ENV TZ=Europe/Copenhagen
+RUN apk add --no-cache tzdata
+
+WORKDIR /app
+
+COPY stats/backend/package*.json ./
+RUN npm install --omit=dev
+
+COPY stats/backend/ ./
+
+# Diskcache for hentede sæsoner (monteres som volume i compose)
+RUN mkdir -p /data/cache
+
+EXPOSE 3002
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD node -e "require('http').get('http://127.0.0.1:3002/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+
+CMD ["node", "server.js"]
