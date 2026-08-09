@@ -79,6 +79,27 @@ docker-compose -f docker-compose.rpi.yml up -d
 
 ---
 
+### `KIOSK.RASPBERRY_PI.md`
+**Purpose**: Setting up a Raspberry Pi as a **TV display** in the hall (not as a server)
+
+**Contents**:
+- Hardware recommendations for the display Pi
+- Why no desktop environment is needed (`cage` instead)
+- Step-by-step install via `setup-kiosk-rpi.sh`
+- HDMI-CEC: turning the TV on/off from the Pi
+- SD card protection with overlay filesystem
+- Troubleshooting table (black screen, overscan, undervoltage, CEC)
+- Manual setup without the script
+
+**When to use**: When a screen in the hall should boot straight into `tv-v3.html`
+or `oversigt.html` in fullscreen.
+
+> **Note**: This is a *different role* from the other Raspberry Pi documents.
+> The others cover running the **server** (Docker, backend, database).
+> Don't put both roles on the same Pi.
+
+---
+
 ### `RASPBERRY_PI_FILES.md` (this file)
 **Purpose**: Overview of all Raspberry Pi-specific files
 
@@ -118,6 +139,27 @@ chmod +x stop-rpi.sh
 
 ---
 
+### `setup-kiosk-rpi.sh`
+**Purpose**: One-shot setup of a Raspberry Pi as a fullscreen **TV display**
+
+**Features**:
+- Installs `cage` + `chromium` (no desktop environment)
+- Writes `/etc/badminton-kiosk.conf` so the URL can be changed without touching systemd
+- Creates a systemd service that starts at boot and restarts on crash
+- Forces the HDMI resolution so the picture is right even if the TV was off at boot
+- Optional HDMI-CEC schedule for turning the TV on/off
+- Nightly browser restart
+
+**Usage**:
+```bash
+chmod +x setup-kiosk-rpi.sh
+sudo ./setup-kiosk-rpi.sh --url "http://SERVER-IP:8080/tv-v3.html?id=1"
+```
+
+**Note**: Runs on the *display* Pi, not on the server Pi. See `KIOSK.RASPBERRY_PI.md`.
+
+---
+
 ## File Structure
 
 ```
@@ -131,9 +173,11 @@ badminton-app/
 ├── README.md                       # Main documentation (updated with Pi info)
 ├── README.RASPBERRY_PI.md          # Full Raspberry Pi guide ⭐
 ├── QUICKSTART.RASPBERRY_PI.md      # Quick start guide ⭐
+├── KIOSK.RASPBERRY_PI.md           # TV display guide (different role) ⭐
 ├── RASPBERRY_PI_FILES.md           # This file ⭐
 ├── start-rpi.sh                    # Start script ⭐
 ├── stop-rpi.sh                     # Stop script ⭐
+├── setup-kiosk-rpi.sh              # TV display setup ⭐
 ├── .env.example                    # Environment variables template
 ├── .env                            # Your actual environment file (create this)
 ├── backend/                        # Backend source code
