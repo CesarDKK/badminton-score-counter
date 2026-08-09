@@ -2,6 +2,10 @@
 
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* hidden-attributten skal vinde over vores egne display-regler. Uden det her
+   bliver fx .filterbjaelke (display: flex) stående synlig selvom den er skjult. */
+[hidden] { display: none !important; }
+
 :root {
     --purple: #533483;
     --purple-light: #6a45a8;

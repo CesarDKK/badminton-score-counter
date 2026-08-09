@@ -428,7 +428,7 @@
 
     function opdaterFilterbjaelke() {
         vis(el.filterbjaelke, !!groft);
-        if (!groft) return;
+        if (!groft) { el.filterTekst.textContent = ''; return; }
         el.filterTekst.textContent = groft.type === 'aargang'
             ? `Viser kun ${groft.vaerdi}`
             : `Viser kun spillere der har spillet for ${groft.vaerdi === 1 ? 'ét hold' : groft.vaerdi + ' hold'}`;
