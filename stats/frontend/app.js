@@ -17,6 +17,7 @@
     };
 
     let data = null;
+    let holdKort = new Map();   // holdnøgle → spillerne på holdet
     let sorter = { felt: 'kampe', ned: true };
     let pollTimer = null;
 
@@ -349,14 +350,50 @@
     function kort(s, n) { return s.length > n ? s.slice(0, n - 1) + '…' : s; }
 
     // ── Tabeller ────────────────────────────────────────────────────────────
+    /** Holdnøgle → spillerne på holdet, flest kampe først. Udledt af spillerlisten. */
+    function spillerePrHold() {
+        const kort = new Map();
+        for (const s of data.spillere) {
+            for (const h of s.hold) {
+                if (!kort.has(h.navn)) kort.set(h.navn, []);
+                kort.get(h.navn).push({ navn: s.navn, kampe: h.kampe });
+            }
+        }
+        for (const liste of kort.values()) {
+            liste.sort((a, b) => b.kampe - a.kampe || a.navn.localeCompare(b.navn, 'da'));
+        }
+        return kort;
+    }
+
     function tegnHoldTabel() {
-        el.holdTabel.tBodies[0].innerHTML = data.hold.map((h) => `<tr>
+        holdKort = spillerePrHold();
+        el.holdTabel.tBodies[0].innerHTML = data.hold.map((h) => `<tr class="hold" data-noegle="${esc(h.noegle)}">
             <td>${esc(h.aargang)}</td>
             <td>${esc(h.hold)}</td>
             <td class="navn">${esc(h.raekker.join(' · '))}</td>
             <td class="tal">${h.spillere}</td>
             <td class="tal">${h.kampe}</td></tr>`).join('');
     }
+
+    el.holdTabel.tBodies[0].addEventListener('click', (e) => {
+        const tr = e.target.closest('tr.hold');
+        if (!tr) return;
+        const naeste = tr.nextElementSibling;
+        const aaben = naeste && naeste.classList.contains('detaljer');
+        [...el.holdTabel.tBodies[0].querySelectorAll('tr.detaljer')].forEach((r) => r.remove());
+        [...el.holdTabel.tBodies[0].querySelectorAll('tr.hold')].forEach((r) => r.classList.remove('aaben'));
+        if (aaben) return;
+
+        const spillere = holdKort.get(tr.dataset.noegle) || [];
+        const chips = spillere.length
+            ? spillere.map((s) => `<span class="hold-chip">${esc(s.navn)} <b>${s.kampe}</b></span>`).join('')
+            : '<span class="ingen">Ingen holdsedler indtastet for dette hold.</span>';
+        const rad = document.createElement('tr');
+        rad.className = 'detaljer';
+        rad.innerHTML = `<td colspan="5"><span class="detalje-hoved">${esc(tr.dataset.noegle)} — ${spillere.length} spillere</span>${chips}</td>`;
+        tr.classList.add('aaben');
+        tr.after(rad);
+    });
 
     function tegnSpillere() {
         const filter = el.filter.value.trim().toLowerCase();
