@@ -124,6 +124,41 @@ function parseClubOverview(html) {
     return ud;
 }
 
+// ── subPage 2: puljestillingen ───────────────────────────────────────────────
+/**
+ * Selve stillingstabellen, som vi alligevel henter når vi leder efter hold-id'er.
+ * → [{ plads, hold, kampe, vundne, point }]
+ */
+function parsePoolStandings(html) {
+    const tabel = extractTables(html).find((t) => /groupstandings/i.test(tableClass(t.attrs)));
+    if (!tabel) return [];
+    const raekker = extractRows(tabel.inner);
+    if (raekker.length < 2) return [];
+
+    const hoved = extractCells(raekker[0]).map((c) => text(c));
+    const find = (m) => hoved.findIndex((h) => m.test(h));
+    const iHold = find(/hold/i);
+    const iKampe = find(/kampe/i);
+    const iVundne = find(/vundne/i);
+    const iPoint = find(/point/i);
+
+    const ud = [];
+    for (let i = 1; i < raekker.length; i++) {
+        const c = extractCells(raekker[i]).map((x) => text(x));
+        const navn = iHold >= 0 ? c[iHold] : c[1];
+        if (!navn) continue;
+        const tal = (idx) => { const n = Number(String(c[idx] || '').replace(/\D/g, '')); return Number.isFinite(n) ? n : null; };
+        ud.push({
+            plads: Number(String(c[0] || '').replace(/\D/g, '')) || (ud.length + 1),
+            hold: navn,
+            kampe: iKampe >= 0 ? tal(iKampe) : null,
+            vundne: iVundne >= 0 ? tal(iVundne) : null,
+            point: iPoint >= 0 ? tal(iPoint) : null
+        });
+    }
+    return ud;
+}
+
 // ── subPage 2: puljestilling → holdenes id'er ────────────────────────────────
 /** → [{ navn, teamID, leagueGroupID, ageGroupID, regionID }] for hold hvis navn matcher. */
 function parsePoolTeams(html, matchNavn) {
@@ -198,17 +233,54 @@ function parseMatch(html, erKlub) {
         if (!/^\d+\.\s*\S/.test(disciplin)) continue;
         const celle = celler[kolonne];
         if (!celle) continue;
+
+        const afgoerelse = afgoerRaekke(celler, hjemme, ude);
+        const vundet = afgoerelse.vinder ? afgoerelse.vinder === (kolonne === 1 ? 'hjemme' : 'ude') : null;
+
         for (const a of links(celle)) {
             if (!/VisSpiller/i.test(a.href)) continue;
             const id = (a.href.split('#')[1] || '').trim();
             if (!id) continue;
-            kamp.spillere.push({ id, navn: a.tekst, disciplin });
+            kamp.spillere.push({ id, navn: a.tekst, disciplin, vundet, wo: afgoerelse.wo });
         }
     }
     return kamp;
 }
 
+/**
+ * Hvem vandt en enkelt disciplin?
+ *
+ * Sidste kolonne ("Vinder W.O.") afgør det, når den er udfyldt: der står et
+ * bogstav med det vindende holds navn i title-attributten,
+ *   <span title='Lyngby 1'>L</span>
+ * Den vejer tungest — også når der står sætcifre. En spiller kan nå at tabe et
+ * par sæt og så udgå, og så tilfalder disciplinen modstanderen uanset cifrene.
+ *
+ * Ellers afgøres det af sætcifrene ("21 - 9"), som altid står set fra
+ * hjemmeholdet. Er ingen af delene til stede, er disciplinen ikke afgjort på
+ * banen, og vi lader den stå som ukendt frem for at gætte.
+ */
+function afgoerRaekke(celler, hjemme, ude) {
+    const sidste = celler[celler.length - 1] || '';
+    const titel = attr((/<span\b([^>]*)>/i.exec(sidste) || [])[1] || '', 'title').trim();
+    if (titel) {
+        if (titel === hjemme.trim()) return { vinder: 'hjemme', wo: true };
+        if (titel === ude.trim()) return { vinder: 'ude', wo: true };
+    }
+
+    let hjemmeSaet = 0, udeSaet = 0;
+    for (let i = 3; i < celler.length - 1; i++) {
+        const m = /^\s*(\d+)\s*-\s*(\d+)\s*$/.exec(text(celler[i]));
+        if (!m) continue;
+        if (Number(m[1]) > Number(m[2])) hjemmeSaet++;
+        else if (Number(m[2]) > Number(m[1])) udeSaet++;
+    }
+    if (hjemmeSaet !== udeSaet) return { vinder: hjemmeSaet > udeSaet ? 'hjemme' : 'ude', wo: false };
+
+    return { vinder: null, wo: false };
+}
+
 module.exports = {
     extractTables, extractRows, extractCells, text, links, showStandingArgs, attr,
-    parseClubOverview, parsePoolTeams, parseTeamMatches, parseMatch
+    parseClubOverview, parsePoolTeams, parseTeamMatches, parseMatch, parsePoolStandings
 };

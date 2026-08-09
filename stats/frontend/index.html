@@ -7,7 +7,7 @@
     <title>Klubstatistik — BadmintonApp.dk</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23e94560' transform='translate(0 1.2)'%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-33 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(33 12 14.5)'/%3E%3Crect x='9.4' y='14.3' width='5.2' height='1.7' rx='0.85'/%3E%3Cpath d='M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z'/%3E%3C/g%3E%3C/svg%3E">
     <link rel="stylesheet" href="fonts.css">
-    <link rel="stylesheet" href="styles.css?v=5">
+    <link rel="stylesheet" href="styles.css?v=7">
 </head>
 <body>
 
@@ -84,6 +84,7 @@
             <div class="eksport">
                 <a class="knap knap--sekundaer" id="csvSpillere" href="#" download>Spillere (CSV)</a>
                 <a class="knap knap--sekundaer" id="csvSpillerHold" href="#" download>Spiller × hold (CSV)</a>
+                <a class="knap knap--sekundaer" id="csvMakkere" href="#" download>Makkerpar (CSV)</a>
                 <a class="knap knap--sekundaer" id="csvHold" href="#" download>Hold (CSV)</a>
             </div>
         </section>
@@ -116,6 +117,18 @@
             </article>
 
             <article class="kort kort--bred">
+                <h3>Bedste sejrsprocent</h3>
+                <p class="kort-sub">Spillere med mindst 10 afgjorte discipliner. Klik på søjlen for at åbne spilleren.</p>
+                <div class="graf" id="grafSejr"></div>
+            </article>
+
+            <article class="kort">
+                <h3>Single, double og mix</h3>
+                <p class="kort-sub">Hvor disciplinerne er spillet, og hvordan det gik.</p>
+                <div class="graf" id="grafDiscipliner"></div>
+            </article>
+
+            <article class="kort">
                 <h3>Sæsonen måned for måned</h3>
                 <p class="kort-sub">Antal holdkampe.</p>
                 <div class="graf" id="grafMaaned"></div>
@@ -126,7 +139,7 @@
                 <p class="kort-sub">Klik på et hold for at se spillerne og holdets kampe — og klik en kamp for at se opstillingen.</p>
                 <div class="tabel-hylster">
                     <table class="tabel" id="holdTabel">
-                        <thead><tr><th>Årgang</th><th>Hold</th><th>Række</th><th class="tal">Spillere</th><th class="tal">Kampe</th></tr></thead>
+                        <thead><tr><th>Årgang</th><th>Hold</th><th>Række</th><th>Placering</th><th class="tal">Spillere</th><th class="tal">Kampe</th></tr></thead>
                         <tbody></tbody>
                     </table>
                 </div>
@@ -149,6 +162,9 @@
                         <th data-sort="antalHold" class="tal">Hold</th>
                         <th data-sort="single" class="tal">Single</th>
                         <th data-sort="double" class="tal">Double</th>
+                        <th data-sort="mix" class="tal">Mix</th>
+                        <th data-sort="vundet" class="tal">V–T</th>
+                        <th data-sort="sejrspct" class="tal">Sejr&nbsp;%</th>
                     </tr></thead>
                     <tbody></tbody>
                 </table>
@@ -170,6 +186,6 @@
     </div>
 </footer>
 
-<script src="app.js?v=5"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

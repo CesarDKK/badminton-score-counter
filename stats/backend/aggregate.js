@@ -4,6 +4,8 @@
  * En "kamp" er en holdkamp. En spiller tælles én gang pr. holdkamp, også hvis
  * vedkommende spillede både single og double i den — det er sådan man taler om
  * det i klubben ("han har spillet 12 kampe for 3. holdet").
+ *
+ * Sejre tælles derimod pr. disciplin, for det er der de bliver vundet.
  */
 
 const { AARGANG_ORDEN } = require('./harvest');
@@ -13,6 +15,21 @@ const { AARGANG_ORDEN } = require('./harvest');
  * Vi nøgler derfor altid på årgang + holdnavn.
  */
 const holdNoegle = (d) => `${d.aargang} ${d.hold}`;
+
+/**
+ * Disciplinkoden står efter nummeret: "1. HS" → HS.
+ *   S, HS, DS  → single      (S bruges i ungdomsrækker uden kønsopdeling)
+ *   D, HD, DD  → double
+ *   MD         → mix
+ */
+function disciplinType(disciplin) {
+    const m = /^\d+\.\s*([A-ZÆØÅ]+)/i.exec(String(disciplin || ''));
+    const kode = m ? m[1].toUpperCase() : '';
+    if (kode === 'MD') return 'mix';
+    if (kode === 'S' || kode === 'HS' || kode === 'DS') return 'single';
+    if (kode === 'D' || kode === 'HD' || kode === 'DD') return 'double';
+    return 'double';
+}
 
 /** Vælger den pæneste navneform — kilden blander versaler og normal skrivemåde. */
 function bedsteNavn(nuvaerende, kandidat) {
@@ -34,19 +51,25 @@ function datoAf(tid) {
     return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
 }
 
+const nyTaeller = () => ({ single: 0, double: 0, mix: 0, vundet: 0, tabt: 0, uafgjort: 0 });
+
 function aggregate(raw) {
     const { deltagelser = [], kampe = [], hold = [] } = raw;
 
     const navne = new Map();
     const spillerKampe = new Map();     // spillerId -> Set(kampnr)
     const spillerHold = new Map();      // spillerId -> Map(holdnøgle -> Set(kampnr))
-    const spillerDiscipliner = new Map(); // spillerId -> {single, double}
-    const holdSpillere = new Map();     // holdnøgle -> Set(spillerId)
-    const holdKampe = new Map();        // holdnøgle -> Set(kampnr)
-    const holdMeta = new Map();         // holdnøgle -> {aargang, hold, raekker:Set}
+    const taellere = new Map();         // spillerId -> nyTaeller()
+    const makkere = new Map();          // spillerId -> Map(makkerId -> {kampe, vundet})
+    const holdSpillere = new Map();
+    const holdKampe = new Map();
+    const holdMeta = new Map();
     const aargangKampe = new Map();
     const aargangSpillere = new Map();
     const maaned = new Map();
+
+    // Til makkerparrene: hvem stod sammen i samme disciplin i samme holdkamp.
+    const disciplinHold = new Map();    // "kampnr|disciplin" -> [deltagelse]
 
     for (const d of deltagelser) {
         const hk = holdNoegle(d);
@@ -60,9 +83,16 @@ function aggregate(raw) {
         if (!hm.has(hk)) hm.set(hk, new Set());
         hm.get(hk).add(d.kampnr);
 
-        if (!spillerDiscipliner.has(d.spillerId)) spillerDiscipliner.set(d.spillerId, { single: 0, double: 0 });
-        const disc = spillerDiscipliner.get(d.spillerId);
-        if (/\bS\b|\bHS\b|\bDS\b/.test(d.disciplin)) disc.single++; else disc.double++;
+        if (!taellere.has(d.spillerId)) taellere.set(d.spillerId, nyTaeller());
+        const t = taellere.get(d.spillerId);
+        t[disciplinType(d.disciplin)]++;
+        if (d.vundet === true) t.vundet++;
+        else if (d.vundet === false) t.tabt++;
+        else t.uafgjort++;
+
+        const dk = `${d.kampnr}|${d.disciplin}`;
+        if (!disciplinHold.has(dk)) disciplinHold.set(dk, []);
+        disciplinHold.get(dk).push(d);
 
         if (!holdSpillere.has(hk)) {
             holdSpillere.set(hk, new Set());
@@ -78,6 +108,21 @@ function aggregate(raw) {
         aargangSpillere.get(d.aargang).add(d.spillerId);
     }
 
+    // Makkerpar — to spillere i samme disciplin i samme holdkamp
+    for (const par of disciplinHold.values()) {
+        if (par.length !== 2) continue;
+        const [a, b] = par;
+        if (a.spillerId === b.spillerId) continue;
+        for (const [x, y] of [[a, b], [b, a]]) {
+            if (!makkere.has(x.spillerId)) makkere.set(x.spillerId, new Map());
+            const m = makkere.get(x.spillerId);
+            if (!m.has(y.spillerId)) m.set(y.spillerId, { kampe: 0, vundet: 0 });
+            const post = m.get(y.spillerId);
+            post.kampe++;
+            if (x.vundet === true) post.vundet++;
+        }
+    }
+
     for (const k of kampe) {
         const dato = datoAf(k.tid);
         if (!dato) continue;
@@ -87,19 +132,46 @@ function aggregate(raw) {
 
     const spillere = [...spillerKampe.entries()].map(([id, set]) => {
         const holdMap = spillerHold.get(id);
-        const disc = spillerDiscipliner.get(id) || { single: 0, double: 0 };
+        const t = taellere.get(id) || nyTaeller();
+        const afgjorte = t.vundet + t.tabt;
+        const mk = makkere.get(id) || new Map();
         return {
             id,
             navn: navne.get(id) || id,
             kampe: set.size,
             antalHold: holdMap.size,
-            single: disc.single,
-            double: disc.double,
+            single: t.single,
+            double: t.double,
+            mix: t.mix,
+            vundet: t.vundet,
+            tabt: t.tabt,
+            uafgjort: t.uafgjort,
+            sejrspct: afgjorte ? Math.round((t.vundet / afgjorte) * 100) : null,
             hold: [...holdMap.entries()]
                 .map(([navn, s]) => ({ navn, kampe: s.size }))
+                .sort((a, b) => b.kampe - a.kampe || a.navn.localeCompare(b.navn, 'da')),
+            makkere: [...mk.entries()]
+                .map(([mid, v]) => ({ id: mid, navn: navne.get(mid) || mid, kampe: v.kampe, vundet: v.vundet }))
                 .sort((a, b) => b.kampe - a.kampe || a.navn.localeCompare(b.navn, 'da'))
+                .slice(0, 12)
         };
     }).sort((a, b) => b.kampe - a.kampe || a.navn.localeCompare(b.navn, 'da'));
+
+    // Placeringer pr. hold — et hold kan optræde i både pulje og slutspil
+    const placeringer = new Map();
+    for (const h of hold) {
+        if (!h.placering) continue;
+        const noegle = `${h.aargang} ${h.navn}`;
+        if (!placeringer.has(noegle)) placeringer.set(noegle, []);
+        placeringer.get(noegle).push({
+            raekke: h.raekke,
+            plads: h.placering.plads,
+            antalHold: h.placering.antalHold,
+            kampe: h.placering.kampe,
+            vundne: h.placering.vundne,
+            point: h.placering.point
+        });
+    }
 
     const holdListe = [...holdMeta.entries()].map(([noegle, meta]) => ({
         noegle,
@@ -107,7 +179,8 @@ function aggregate(raw) {
         aargang: meta.aargang,
         raekker: [...meta.raekker],
         spillere: holdSpillere.get(noegle).size,
-        kampe: holdKampe.get(noegle).size
+        kampe: holdKampe.get(noegle).size,
+        placeringer: placeringer.get(noegle) || []
     })).sort((a, b) => aargangOrden(a.aargang) - aargangOrden(b.aargang) || a.hold.localeCompare(b.hold, 'da'));
 
     const aargange = [...aargangKampe.keys()].map((a) => ({
@@ -122,7 +195,18 @@ function aggregate(raw) {
     const perMaaned = [...maaned.entries()].sort((a, b) => a[0].localeCompare(b[0]))
         .map(([m, n]) => ({ maaned: m, kampe: n }));
 
+    // Single / double / mix — spillet og vundet, til grafen
+    const perType = { single: { spillet: 0, vundet: 0, tabt: 0 }, double: { spillet: 0, vundet: 0, tabt: 0 }, mix: { spillet: 0, vundet: 0, tabt: 0 } };
+    for (const d of deltagelser) {
+        const t = perType[disciplinType(d.disciplin)];
+        t.spillet++;
+        if (d.vundet === true) t.vundet++;
+        else if (d.vundet === false) t.tabt++;
+    }
+    const disciplinFordeling = Object.entries(perType).map(([type, v]) => ({ type, ...v }));
+
     const spilledeKampe = new Set(deltagelser.map((d) => d.kampnr)).size;
+    const iAlt = spillere.reduce((a, s) => ({ vundet: a.vundet + s.vundet, tabt: a.tabt + s.tabt }), { vundet: 0, tabt: 0 });
 
     return {
         klub: raw.klub,
@@ -135,14 +219,18 @@ function aggregate(raw) {
             kampeFundet: kampe.length,
             kampeMedHoldseddel: spilledeKampe,
             deltagelser: deltagelser.length,
-            raekker: new Set(hold.map((h) => h.raekke)).size
+            raekker: new Set(hold.map((h) => h.raekke)).size,
+            discipliner: iAlt.vundet + iAlt.tabt,
+            vundet: iAlt.vundet,
+            sejrspct: (iAlt.vundet + iAlt.tabt) ? Math.round((iAlt.vundet / (iAlt.vundet + iAlt.tabt)) * 100) : null
         },
         spillere,
         hold: holdListe,
         aargange,
         holdFordeling: fordeling,
+        disciplinFordeling,
         perMaaned
     };
 }
 
-module.exports = { aggregate, holdNoegle, datoAf };
+module.exports = { aggregate, holdNoegle, datoAf, disciplinType };

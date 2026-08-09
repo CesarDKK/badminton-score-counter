@@ -395,7 +395,35 @@ nav {
     text-transform: uppercase;
     margin-bottom: 6px;
 }
-.detaljer .ingen { color: var(--muted); font-style: italic; }
+.detaljer .ingen, .ingen { color: var(--muted); font-style: italic; }
+.facit { color: var(--text); font-size: 0.95em; margin: 2px 0 10px; }
+
+/* Placering i puljen */
+.plads {
+    display: inline-block;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border-soft);
+    border-radius: 100px;
+    padding: 2px 10px;
+    margin-right: 5px;
+    font-size: 0.9em;
+    color: var(--text);
+}
+.plads--guld {
+    background: rgba(233,69,96,0.14);
+    border-color: rgba(233,69,96,0.4);
+    color: #f2879a;
+    font-weight: 600;
+}
+
+/* Vundet–tabt i spillertabellen */
+.tabel .vt { color: var(--muted); }
+.tabel .vt b { color: #fff; font-weight: 600; }
+
+/* Opstillingens chips farves efter udfaldet */
+.chip--vundet { border-color: rgba(120,200,140,0.5); background: rgba(120,200,140,0.14); }
+.chip--vundet:hover { background: rgba(120,200,140,0.26); }
+.chip--tabt { opacity: 0.72; }
 .chips { margin-top: 2px; }
 
 /* Spillernavne er links til profilen på badmintonplayer.dk — pilen viser at

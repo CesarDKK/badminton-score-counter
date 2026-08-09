@@ -82,6 +82,29 @@ allerede fra `/api/stats` og slår op på spiller-id.
 
 ## Tælleregler
 
+**Sejre tælles pr. disciplin**, ikke pr. holdkamp. Vinderen udledes af sætcifrene
+på holdsedlen, som altid står set fra hjemmeholdet. Er kolonnen "Vinder W.O."
+udfyldt, vejer den tungest — også når der er sætcifre, for en spiller kan nå at
+tabe et par sæt og så udgå. Discipliner uden nogen af delene indgår ikke i
+sejrsprocenten.
+
+Kontrolleret mod kilden: for 204 af 216 holdkampe rammer vores optælling af
+vundne discipliner præcis det officielle holdresultat. De 12 resterende er
+egenskaber ved kilden, ikke ved parsningen:
+
+* **8 ungdomskampe** hvor holdkampens samlede pointtal er én højere end antallet
+  af discipliner på holdsedlen (fx 6 discipliner, men 4-3). Rækken giver et point
+  ud over disciplinerne.
+* **4 kampe vundet på walkover i deres helhed** (13-0, 8-0, 8-0, 6-0), hvor ingen
+  disciplin har noget resultat. De tæller ikke som sejre for de enkelte spillere —
+  der blev ikke spillet.
+
+**Disciplintyper** aflæses af koden efter nummeret: `S`, `HS`, `DS` er single,
+`D`, `HD`, `DD` er double, og `MD` er mix. Mix holdes adskilt fra double, fordi
+det er to forskellige discipliner. `S` og `D` uden køn bruges i ungdomsrækker.
+
+
+
 En **kamp** er en holdkamp. En spiller tælles én gang pr. holdkamp, også hvis
 vedkommende spillede både single og double i den — det er sådan man taler om det
 i klubben.
