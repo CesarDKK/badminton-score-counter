@@ -1,5 +1,10 @@
 /* statistik.badmintonapp.dk — klientlogik og grafer.
-   Ingen eksterne biblioteker: graferne tegnes som SVG direkte. */
+   Ingen eksterne biblioteker: graferne tegnes som SVG direkte.
+
+   Alt hænger sammen: man kan klikke sig fra en søjle til en spiller, fra en
+   spiller til et hold, fra et hold til en kamp og fra kampen tilbage til en
+   spiller. Navigationen går gennem aabnSpiller() og aabnHold(), så det er de to
+   steder tilstanden styres. */
 
 (() => {
     'use strict';
@@ -13,12 +18,18 @@
         resultat: $('resultat'), klubNavn: $('klubNavn'), klubMeta: $('klubMeta'),
         noegletal: $('noegletal'), holdTabel: $('holdTabel'), spillerTabel: $('spillerTabel'),
         filter: $('filter'), tabelTom: $('tabelTom'), kilde: $('kilde'),
+        filterbjaelke: $('filterbjaelke'), filterTekst: $('filterTekst'), filterRyd: $('filterRyd'),
         csvSpillere: $('csvSpillere'), csvSpillerHold: $('csvSpillerHold'), csvHold: $('csvHold')
     };
 
     let data = null;
+    let aktuel = null;          // { klub, season }
     let holdKort = new Map();   // holdnøgle → spillerne på holdet
+    let navneKort = new Map();  // spiller-id → navn
+    let kampeKort = null;       // holdnøgle → kampene
+    let kampeHenter = null;     // igangværende hentning af kampe
     let sorter = { felt: 'kampe', ned: true };
+    let groft = null;           // aktivt filter sat ved klik i en graf
     let pollTimer = null;
 
     const nf = new Intl.NumberFormat('da-DK');
@@ -115,7 +126,10 @@
 
         vis(el.fremdrift, false);
         data = json.data;
-        render(klub, season, json);
+        aktuel = { klub, season };
+        kampeKort = null;
+        kampeHenter = null;
+        render(json);
     }
 
     const FASER = {
@@ -176,12 +190,18 @@
     }
 
     // ── Visning ─────────────────────────────────────────────────────────────
-    function render(klub, season, svar) {
+    function render(svar) {
+        const { klub, season } = aktuel;
+        groft = null;
+        el.filter.value = '';
+
         el.klubNavn.textContent = data.klub;
         const alder = svar.forældet
             ? ` · hentet for ${svar.alderTimer} timer siden`
             : (svar.alderTimer ? ` · opdateret for ${svar.alderTimer} timer siden` : ' · lige hentet');
         el.klubMeta.textContent = `Sæson ${sæsonNavn(season)}${alder}`;
+
+        navneKort = new Map(data.spillere.map((s) => [s.id, s.navn]));
 
         const n = data.noegletal;
         const snit = n.spillere ? nf1.format(sumKampe() / n.spillere) : '0';
@@ -199,6 +219,7 @@
         tegnMaaned();
         tegnHoldTabel();
         tegnSpillere();
+        opdaterFilterbjaelke();
 
         const q = `clubId=${encodeURIComponent(klub.id)}&season=${encodeURIComponent(season)}`;
         el.csvSpillere.href = `/api/export?${q}&type=spillere`;
@@ -224,7 +245,7 @@
 
     function tom(node, tekst) { node.innerHTML = `<p class="graf-tom">${esc(tekst)}</p>`; }
 
-    /** Vandrette søjler — bruges til top-listen. */
+    /** Vandrette søjler — klik åbner spilleren i tabellen. */
     function tegnTop() {
         const node = $('grafTop');
         const raekker = data.spillere.slice(0, 20);
@@ -239,16 +260,19 @@
         const dele = raekker.map((s, i) => {
             const y = pad + i * H;
             const w = Math.max(2, (s.kampe / maks) * sporBredde);
-            return `<text class="etiket" x="0" y="${y + 15}">${esc(kort(s.navn, 30))}</text>`
-                + `<rect class="soejle" x="${navnBredde}" y="${y + 4}" width="${w}" height="15" rx="4"></rect>`
-                + `<text class="vaerdi" x="${navnBredde + w + 8}" y="${y + 16}">${s.kampe}</text>`;
+            return `<g class="klikbar" data-spiller="${esc(s.id)}">
+                <rect class="ramme" x="0" y="${y}" width="${bredde}" height="${H - 2}" rx="4"></rect>
+                <text class="etiket" x="0" y="${y + 15}">${esc(kort(s.navn, 30))}</text>
+                <rect class="soejle" x="${navnBredde}" y="${y + 4}" width="${w}" height="15" rx="4"></rect>
+                <text class="vaerdi" x="${navnBredde + w + 8}" y="${y + 16}">${s.kampe}</text>
+                <title>${esc(s.navn)} — ${s.kampe} kampe på ${s.antalHold} hold</title></g>`;
         }).join('');
 
         node.innerHTML = `<svg viewBox="0 0 ${bredde} ${hoejde}" role="img"
             aria-label="De 20 spillere med flest kampe">${FORLOEB}${dele}</svg>`;
     }
 
-    /** Grupperede lodrette søjler — kampe og spillere pr. årgang. */
+    /** Grupperede søjler — klik filtrerer til én årgang. */
     function tegnAargang() {
         const node = $('grafAargang');
         const raekker = data.aargange;
@@ -269,10 +293,13 @@
 
         const dele = raekker.map((r, i) => {
             const x = venstre + i * spor + spor / 2;
-            return `<rect class="soejle" x="${x - bw - 2}" y="${y(r.kampe)}" width="${bw}" height="${hoejde - bund - y(r.kampe)}" rx="3"></rect>`
-                + `<rect class="soejle--alt" x="${x + 2}" y="${y(r.spillere)}" width="${bw}" height="${hoejde - bund - y(r.spillere)}" rx="3"></rect>`
-                + `<text class="akse" x="${x}" y="${hoejde - bund + 16}" text-anchor="middle"
-                    transform="rotate(-40 ${x} ${hoejde - bund + 16})">${esc(r.aargang)}</text>`;
+            return `<g class="klikbar" data-aargang="${esc(r.aargang)}">
+                <rect class="ramme" x="${x - spor / 2}" y="${top - 8}" width="${spor}" height="${hoejde - bund - top + 8}" rx="4"></rect>
+                <rect class="soejle" x="${x - bw - 2}" y="${y(r.kampe)}" width="${bw}" height="${hoejde - bund - y(r.kampe)}" rx="3"></rect>
+                <rect class="soejle--alt" x="${x + 2}" y="${y(r.spillere)}" width="${bw}" height="${hoejde - bund - y(r.spillere)}" rx="3"></rect>
+                <text class="akse" x="${x}" y="${hoejde - bund + 16}" text-anchor="middle"
+                    transform="rotate(-40 ${x} ${hoejde - bund + 16})">${esc(r.aargang)}</text>
+                <title>${esc(r.aargang)} — ${r.kampe} kampe, ${r.spillere} spillere</title></g>`;
         }).join('');
 
         node.innerHTML = `<svg viewBox="0 0 ${bredde} ${hoejde}" role="img"
@@ -281,7 +308,7 @@
             + `<span><i style="background:rgba(83,52,131,0.75)"></i>Spillere</span></div>`;
     }
 
-    /** Hvor mange hold den enkelte spiller har været brugt på. */
+    /** Klik viser netop de spillere der er brugt på så mange hold. */
     function tegnFordeling() {
         const node = $('grafFordeling');
         const poster = Object.entries(data.holdFordeling)
@@ -304,9 +331,12 @@
 
         const dele = poster.map((p, i) => {
             const x = venstre + i * spor + spor / 2;
-            return `<rect fill="url(#stat-lodret)" x="${x - bw / 2}" y="${y(p.spillere)}" width="${bw}" height="${hoejde - bund - y(p.spillere)}" rx="4"></rect>`
-                + `<text class="vaerdi" x="${x}" y="${y(p.spillere) - 6}" text-anchor="middle">${p.spillere}</text>`
-                + `<text class="akse" x="${x}" y="${hoejde - bund + 18}" text-anchor="middle">${p.antal} hold</text>`;
+            return `<g class="klikbar" data-antalhold="${p.antal}">
+                <rect class="ramme" x="${x - spor / 2}" y="${top - 12}" width="${spor}" height="${hoejde - bund - top + 12}" rx="4"></rect>
+                <rect fill="url(#stat-lodret)" x="${x - bw / 2}" y="${y(p.spillere)}" width="${bw}" height="${hoejde - bund - y(p.spillere)}" rx="4"></rect>
+                <text class="vaerdi" x="${x}" y="${y(p.spillere) - 6}" text-anchor="middle">${p.spillere}</text>
+                <text class="akse" x="${x}" y="${hoejde - bund + 18}" text-anchor="middle">${p.antal} hold</text>
+                <title>${p.spillere} spillere har spillet for ${p.antal} hold</title></g>`;
         }).join('');
 
         node.innerHTML = `<svg viewBox="0 0 ${bredde} ${hoejde}" role="img"
@@ -346,17 +376,99 @@
     const MAANEDER_KORT = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
     function maanedNavn(m) { const [a, b] = m.split('-'); return `${MAANEDER[Number(b) - 1]} ${a}`; }
     function maanedKort(m) { const [a, b] = m.split('-'); return `${MAANEDER_KORT[Number(b) - 1]} ${a.slice(2)}`; }
-
     function kort(s, n) { return s.length > n ? s.slice(0, n - 1) + '…' : s; }
 
-    // ── Tabeller ────────────────────────────────────────────────────────────
+    // Klik i graferne
+    $('grafTop').addEventListener('click', (e) => {
+        const g = e.target.closest('[data-spiller]');
+        if (g) aabnSpiller(g.dataset.spiller);
+    });
+    $('grafAargang').addEventListener('click', (e) => {
+        const g = e.target.closest('[data-aargang]');
+        if (g) saetFilter({ type: 'aargang', vaerdi: g.dataset.aargang });
+    });
+    $('grafFordeling').addEventListener('click', (e) => {
+        const g = e.target.closest('[data-antalhold]');
+        if (g) saetFilter({ type: 'antalHold', vaerdi: Number(g.dataset.antalhold) });
+    });
+
+    // ── Filter sat fra en graf ──────────────────────────────────────────────
+    function saetFilter(nyt) {
+        const samme = groft && groft.type === nyt.type && groft.vaerdi === nyt.vaerdi;
+        groft = samme ? null : nyt;
+        opdaterFilterbjaelke();
+        tegnHoldTabel();
+        tegnSpillere();
+        if (groft) el.filterbjaelke.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function rydFilter() {
+        if (!groft) return;
+        groft = null;
+        opdaterFilterbjaelke();
+        tegnHoldTabel();
+        tegnSpillere();
+    }
+
+    el.filterRyd.addEventListener('click', rydFilter);
+
+    function opdaterFilterbjaelke() {
+        vis(el.filterbjaelke, !!groft);
+        if (!groft) return;
+        el.filterTekst.textContent = groft.type === 'aargang'
+            ? `Viser kun ${groft.vaerdi}`
+            : `Viser kun spillere der har spillet for ${groft.vaerdi === 1 ? 'ét hold' : groft.vaerdi + ' hold'}`;
+    }
+
+    function spillerePassererFilter(s) {
+        if (!groft) return true;
+        if (groft.type === 'antalHold') return s.antalHold === groft.vaerdi;
+        return s.hold.some((h) => holdAargang(h.navn) === groft.vaerdi);
+    }
+
+    /** Holdnøglen er "ÅRGANG Holdnavn" — årgangen er alt før første mellemrum. */
+    function holdAargang(noegle) { return String(noegle).split(' ')[0]; }
+
+    // ── Kampe (hentes først når nogen folder et hold ud) ────────────────────
+    function sikrKampe() {
+        if (kampeKort) return Promise.resolve(kampeKort);
+        if (kampeHenter) return kampeHenter;
+        const q = `clubId=${encodeURIComponent(aktuel.klub.id)}&season=${encodeURIComponent(aktuel.season)}`;
+        kampeHenter = hentJson('/api/matches?' + q).then(({ ok, json }) => {
+            kampeKort = new Map();
+            if (ok) {
+                for (const k of json.kampe || []) {
+                    if (!kampeKort.has(k.hold)) kampeKort.set(k.hold, []);
+                    kampeKort.get(k.hold).push(k);
+                }
+                for (const liste of kampeKort.values()) liste.sort((a, b) => datoTal(a.tid) - datoTal(b.tid));
+            }
+            kampeHenter = null;
+            return kampeKort;
+        });
+        return kampeHenter;
+    }
+
+    /** "lø 11-04-2026 10:30" → sorterbart tal. */
+    function datoTal(tid) {
+        const m = /(\d{2})[-.](\d{2})[-.](\d{4})(?:\s+(\d{2}):(\d{2}))?/.exec(String(tid || ''));
+        if (!m) return 0;
+        return Number(`${m[3]}${m[2]}${m[1]}${m[4] || '00'}${m[5] || '00'}`);
+    }
+
+    function kortDato(tid) {
+        const m = /(\w{2})\s+(\d{2})[-.](\d{2})[-.](\d{4})\s*(\d{2}:\d{2})?/.exec(String(tid || ''));
+        return m ? `${m[1]} ${m[2]}-${m[3]} ${m[5] || ''}`.trim() : (tid || '—');
+    }
+
+    // ── Holdtabellen ────────────────────────────────────────────────────────
     /** Holdnøgle → spillerne på holdet, flest kampe først. Udledt af spillerlisten. */
     function spillerePrHold() {
         const kort = new Map();
         for (const s of data.spillere) {
             for (const h of s.hold) {
                 if (!kort.has(h.navn)) kort.set(h.navn, []);
-                kort.get(h.navn).push({ navn: s.navn, kampe: h.kampe });
+                kort.get(h.navn).push({ id: s.id, navn: s.navn, kampe: h.kampe });
             }
         }
         for (const liste of kort.values()) {
@@ -367,7 +479,11 @@
 
     function tegnHoldTabel() {
         holdKort = spillerePrHold();
-        el.holdTabel.tBodies[0].innerHTML = data.hold.map((h) => `<tr class="hold" data-noegle="${esc(h.noegle)}">
+        const raekker = groft && groft.type === 'aargang'
+            ? data.hold.filter((h) => h.aargang === groft.vaerdi)
+            : data.hold;
+
+        el.holdTabel.tBodies[0].innerHTML = raekker.map((h) => `<tr class="hold" data-noegle="${esc(h.noegle)}">
             <td>${esc(h.aargang)}</td>
             <td>${esc(h.hold)}</td>
             <td class="navn">${esc(h.raekker.join(' · '))}</td>
@@ -375,29 +491,94 @@
             <td class="tal">${h.kampe}</td></tr>`).join('');
     }
 
-    el.holdTabel.tBodies[0].addEventListener('click', (e) => {
-        const tr = e.target.closest('tr.hold');
-        if (!tr) return;
-        const naeste = tr.nextElementSibling;
-        const aaben = naeste && naeste.classList.contains('detaljer');
-        [...el.holdTabel.tBodies[0].querySelectorAll('tr.detaljer')].forEach((r) => r.remove());
-        [...el.holdTabel.tBodies[0].querySelectorAll('tr.hold')].forEach((r) => r.classList.remove('aaben'));
-        if (aaben) return;
+    function lukAlle(tbody) {
+        [...tbody.querySelectorAll('tr.detaljer')].forEach((r) => r.remove());
+        [...tbody.querySelectorAll('tr.aaben')].forEach((r) => r.classList.remove('aaben'));
+    }
 
-        const spillere = holdKort.get(tr.dataset.noegle) || [];
+    async function aabnHold(noegle, scroll) {
+        // Er holdet filtreret væk, ryddes filteret — ellers klikker man i blinde.
+        if (groft && groft.type === 'aargang' && holdAargang(noegle) !== groft.vaerdi) rydFilter();
+        const tbody = el.holdTabel.tBodies[0];
+        const tr = [...tbody.querySelectorAll('tr.hold')].find((t) => t.dataset.noegle === noegle);
+        if (!tr) return;
+        lukAlle(tbody);
+        tr.classList.add('aaben');
+
+        const spillere = holdKort.get(noegle) || [];
         const chips = spillere.length
-            ? spillere.map((s) => `<span class="hold-chip">${esc(s.navn)} <b>${s.kampe}</b></span>`).join('')
+            ? spillere.map((s) => `<button type="button" class="hold-chip" data-spiller="${esc(s.id)}">${esc(s.navn)} <b>${s.kampe}</b></button>`).join('')
             : '<span class="ingen">Ingen holdsedler indtastet for dette hold.</span>';
+
         const rad = document.createElement('tr');
         rad.className = 'detaljer';
-        rad.innerHTML = `<td colspan="5"><span class="detalje-hoved">${esc(tr.dataset.noegle)} — ${spillere.length} spillere</span>${chips}</td>`;
-        tr.classList.add('aaben');
+        rad.innerHTML = `<td colspan="5">
+            <span class="detalje-hoved">${esc(noegle)} — ${spillere.length} spillere</span>
+            <div class="chips">${chips}</div>
+            <div class="kamp-blok" data-hold="${esc(noegle)}"><span class="ingen">Henter kampene …</span></div></td>`;
         tr.after(rad);
+        if (scroll) tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        const kort = await sikrKampe();
+        const blok = rad.querySelector('.kamp-blok');
+        if (!blok || !document.body.contains(blok)) return;
+        const kampe = kort.get(noegle) || [];
+        blok.innerHTML = kampe.length
+            ? `<span class="detalje-hoved">${kampe.length} kampe — klik for opstillingen</span>
+               <table class="minitabel"><tbody>${kampe.map((k) => `<tr class="kamp" data-nr="${esc(k.nr)}">
+                    <td class="dato">${esc(kortDato(k.tid))}</td>
+                    <td class="modstander">${esc(k.hjemme)} <span class="mod">–</span> ${esc(k.ude)}</td>
+                    <td class="tal res">${esc(k.resultat || '')}</td>
+                    <td class="tal antal">${k.spillere.length} spillere</td></tr>`).join('')}</tbody></table>`
+            : '<span class="ingen">Ingen kampe med holdseddel.</span>';
+    }
+
+    el.holdTabel.tBodies[0].addEventListener('click', (e) => {
+        // Klik på en spiller-chip inde i udfoldningen
+        const chip = e.target.closest('.hold-chip[data-spiller]');
+        if (chip) { aabnSpiller(chip.dataset.spiller); return; }
+
+        // Klik på en kamp → vis opstillingen
+        const kamp = e.target.closest('tr.kamp');
+        if (kamp) { visOpstilling(kamp); return; }
+
+        const tr = e.target.closest('tr.hold');
+        if (!tr) return;
+        if (tr.classList.contains('aaben')) { lukAlle(el.holdTabel.tBodies[0]); return; }
+        aabnHold(tr.dataset.noegle, false);
     });
 
+    function visOpstilling(tr) {
+        const tbody = tr.parentElement;
+        const naeste = tr.nextElementSibling;
+        const aaben = naeste && naeste.classList.contains('opstilling');
+        [...tbody.querySelectorAll('tr.opstilling')].forEach((r) => r.remove());
+        [...tbody.querySelectorAll('tr.kamp')].forEach((r) => r.classList.remove('aaben'));
+        if (aaben) return;
+
+        const holdNoegle = tr.closest('.kamp-blok').dataset.hold;
+        const kamp = (kampeKort.get(holdNoegle) || []).find((k) => k.nr === tr.dataset.nr);
+        if (!kamp) return;
+
+        const chips = kamp.spillere.length
+            ? kamp.spillere.map(([id, disc]) =>
+                `<button type="button" class="hold-chip hold-chip--lille" data-spiller="${esc(id)}">
+                    <span class="disc">${esc(disc)}</span> ${esc(navneKort.get(id) || id)}</button>`).join('')
+            : '<span class="ingen">Ingen opstilling indtastet.</span>';
+
+        const rad = document.createElement('tr');
+        rad.className = 'opstilling';
+        rad.innerHTML = `<td colspan="4">
+            <span class="detalje-hoved">Kamp ${esc(kamp.nr)} · ${esc(kamp.hjemme)} – ${esc(kamp.ude)} ${esc(kamp.resultat || '')}</span>
+            <div class="chips">${chips}</div></td>`;
+        tr.classList.add('aaben');
+        tr.after(rad);
+    }
+
+    // ── Spillertabellen ─────────────────────────────────────────────────────
     function tegnSpillere() {
         const filter = el.filter.value.trim().toLowerCase();
-        let raekker = data.spillere;
+        let raekker = data.spillere.filter(spillerePassererFilter);
         if (filter) {
             raekker = raekker.filter((s) => s.navn.toLowerCase().includes(filter)
                 || s.hold.some((h) => h.navn.toLowerCase().includes(filter)));
@@ -419,6 +600,34 @@
         [...el.spillerTabel.tHead.rows[0].cells].forEach((th) => th.classList.toggle('aktiv', th.dataset.sort === f));
     }
 
+    function aabnSpiller(id, scroll = true) {
+        // Er spilleren filtreret væk, ryddes filteret så man ikke klikker i blinde.
+        const s = data.spillere.find((x) => x.id === id);
+        if (!s) return;
+        if (!spillerePassererFilter(s) || el.filter.value.trim()) {
+            el.filter.value = '';
+            groft = null;
+            opdaterFilterbjaelke();
+            tegnHoldTabel();
+            tegnSpillere();
+        }
+        const tbody = el.spillerTabel.tBodies[0];
+        const tr = [...tbody.querySelectorAll('tr.spiller')].find((t) => t.dataset.id === id);
+        if (!tr) return;
+        lukAlle(tbody);
+        tr.classList.add('aaben');
+
+        const chips = s.hold.map((h) =>
+            `<button type="button" class="hold-chip" data-hold="${esc(h.navn)}">${esc(h.navn)} <b>${h.kampe}</b></button>`).join('');
+        const rad = document.createElement('tr');
+        rad.className = 'detaljer';
+        rad.innerHTML = `<td colspan="5">
+            <span class="detalje-hoved">${esc(s.navn)} — ${s.kampe} kampe, ${s.single} single og ${s.double} double</span>
+            <div class="chips">${chips}</div></td>`;
+        tr.after(rad);
+        if (scroll) tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
     el.spillerTabel.tHead.addEventListener('click', (e) => {
         const th = e.target.closest('th[data-sort]');
         if (!th) return;
@@ -429,18 +638,14 @@
     });
 
     el.spillerTabel.tBodies[0].addEventListener('click', (e) => {
+        // Klik på en holdchip → hop til holdet i holdtabellen
+        const chip = e.target.closest('.hold-chip[data-hold]');
+        if (chip) { aabnHold(chip.dataset.hold, true); return; }
+
         const tr = e.target.closest('tr.spiller');
         if (!tr) return;
-        const naeste = tr.nextElementSibling;
-        if (naeste && naeste.classList.contains('detaljer')) { naeste.remove(); return; }
-        [...el.spillerTabel.tBodies[0].querySelectorAll('tr.detaljer')].forEach((r) => r.remove());
-        const s = data.spillere.find((x) => x.id === tr.dataset.id);
-        if (!s) return;
-        const chips = s.hold.map((h) => `<span class="hold-chip">${esc(h.navn)} <b>${h.kampe}</b></span>`).join('');
-        const rad = document.createElement('tr');
-        rad.className = 'detaljer';
-        rad.innerHTML = `<td colspan="5">${chips}</td>`;
-        tr.after(rad);
+        if (tr.classList.contains('aaben')) { lukAlle(el.spillerTabel.tBodies[0]); return; }
+        aabnSpiller(tr.dataset.id, false);
     });
 
     let filterTimer = null;

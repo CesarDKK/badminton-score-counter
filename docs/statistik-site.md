@@ -50,6 +50,30 @@ spillere fordelt på 37 hold.
 * Vi henter ikke holdledernes mail og telefonnummer, selvom de står på
   kampsiderne. De hører ikke til statistikken.
 
+## Klik ned i data
+
+Alt hænger sammen, så man kan følge en tråd hele vejen igennem:
+
+| Klik på | Sker der |
+|---|---|
+| En søjle i "Flest kampe" | Spilleren åbnes i spillertabellen |
+| En årgang i "Kampe pr. årgang" | Begge tabeller filtreres til den årgang |
+| En søjle i "Spillere pr. antal hold" | Kun de spillere vises |
+| En spiller i tabellen | Fordelingen på hold foldes ud |
+| En holdchip under en spiller | Der hoppes til holdet, som foldes ud |
+| Et hold i holdtabellen | Spillerne og holdets kampe foldes ud |
+| En kamp under et hold | Opstillingen vises, disciplin for disciplin |
+| En spiller i en opstilling | Der hoppes tilbage til spilleren |
+
+Filtre sat fra en graf vises i en bjælke øverst og kan ryddes derfra. Klikker man
+sig hen til noget der er filtreret væk, rydder filteret sig selv — ellers ville
+man klikke i blinde.
+
+Kampene med opstilling ligger på `/api/matches` og hentes først når nogen folder
+et hold ud. De fylder 84 KB rå (14 KB gzippet) mod forsidens 35 KB, så de skal
+ikke slæbes med fra start. Spillernavne sendes ikke med — klienten har dem
+allerede fra `/api/stats` og slår op på spiller-id.
+
 ## Tælleregler
 
 En **kamp** er en holdkamp. En spiller tælles én gang pr. holdkamp, også hvis
