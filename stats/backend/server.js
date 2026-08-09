@@ -194,10 +194,11 @@ app.get('/api/matches', (req, res) => {
     const cached = cache.laes(clubId, season);
     if (!cached) return res.status(404).json({ fejl: 'Ingen data hentet for den klub og sæson endnu.' });
 
+    // [spiller-id, disciplin, resultat] hvor resultat er 1 vundet, 0 tabt, null ukendt
     const efterKamp = new Map();
     for (const d of cached.data.deltagelser || []) {
         if (!efterKamp.has(d.kampnr)) efterKamp.set(d.kampnr, []);
-        efterKamp.get(d.kampnr).push([d.spillerId, d.disciplin]);
+        efterKamp.get(d.kampnr).push([d.spillerId, d.disciplin, d.vundet === true ? 1 : (d.vundet === false ? 0 : null)]);
     }
 
     const kampe = (cached.data.kampe || [])
@@ -229,16 +230,24 @@ app.get('/api/export', (req, res) => {
     let linjer;
 
     if (type === 'hold') {
-        linjer = ['aargang;hold;raekker;spillere;kampe',
-            ...data.hold.map((h) => [q(h.aargang), q(h.hold), q(h.raekker.join(' | ')), h.spillere, h.kampe].join(';'))];
+        linjer = ['aargang;hold;raekker;placering;spillere;kampe',
+            ...data.hold.map((h) => [q(h.aargang), q(h.hold), q(h.raekker.join(' | ')),
+                q(h.placeringer.map((p) => `${p.raekke}: nr. ${p.plads} af ${p.antalHold}`).join(' | ')),
+                h.spillere, h.kampe].join(';'))];
     } else if (type === 'spiller-hold') {
         linjer = ['spiller;spiller_id;hold;kampe'];
         for (const s of data.spillere) {
             for (const h of s.hold) linjer.push([q(s.navn), q(s.id), q(h.navn), h.kampe].join(';'));
         }
+    } else if (type === 'makkere') {
+        linjer = ['spiller;spiller_id;makker;makker_id;sammen;vundet'];
+        for (const s of data.spillere) {
+            for (const m of s.makkere) linjer.push([q(s.navn), q(s.id), q(m.navn), q(m.id), m.kampe, m.vundet].join(';'));
+        }
     } else {
-        linjer = ['spiller;spiller_id;kampe_i_alt;antal_hold;single;double;hold',
-            ...data.spillere.map((s) => [q(s.navn), q(s.id), s.kampe, s.antalHold, s.single, s.double,
+        linjer = ['spiller;spiller_id;kampe_i_alt;antal_hold;single;double;mix;vundet;tabt;sejrspct;hold',
+            ...data.spillere.map((s) => [q(s.navn), q(s.id), s.kampe, s.antalHold, s.single, s.double, s.mix,
+                s.vundet, s.tabt, s.sejrspct == null ? '' : s.sejrspct,
                 q(s.hold.map((h) => `${h.navn} (${h.kampe})`).join(', '))].join(';'))];
     }
 

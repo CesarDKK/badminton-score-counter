@@ -12,6 +12,13 @@ const path = require('path');
 const DIR = process.env.CACHE_DIR || '/data/cache';
 const TTL_TIMER = Number(process.env.CACHE_TTL_HOURS) || 24;
 
+/**
+ * Hæves når indsamlingen begynder at gemme noget nyt (fx sejr/nederlag pr.
+ * disciplin). Gamle filer regnes så for forældede: de vises stadig med det
+ * samme, men hentes forfra i baggrunden i stedet for at mangle felter.
+ */
+const DATA_VERSION = 3;
+
 function sikreMappe() {
     if (!fs.existsSync(DIR)) fs.mkdirSync(DIR, { recursive: true });
 }
@@ -26,7 +33,8 @@ function laes(clubId, season) {
         if (!fs.existsSync(p)) return null;
         const data = JSON.parse(fs.readFileSync(p, 'utf8'));
         const alder = Date.now() - new Date(data.hentet).getTime();
-        return { data, alderMs: alder, frisk: alder < TTL_TIMER * 3600 * 1000 };
+        const nyNok = (data.version || 1) >= DATA_VERSION;
+        return { data, alderMs: alder, frisk: nyNok && alder < TTL_TIMER * 3600 * 1000 };
     } catch {
         return null;
     }
@@ -34,9 +42,9 @@ function laes(clubId, season) {
 
 function skriv(clubId, season, raw) {
     sikreMappe();
-    const data = { ...raw, hentet: new Date().toISOString() };
+    const data = { ...raw, version: DATA_VERSION, hentet: new Date().toISOString() };
     fs.writeFileSync(fil(clubId, season), JSON.stringify(data), 'utf8');
     return data;
 }
 
-module.exports = { laes, skriv, TTL_TIMER, DIR };
+module.exports = { laes, skriv, TTL_TIMER, DIR, DATA_VERSION };

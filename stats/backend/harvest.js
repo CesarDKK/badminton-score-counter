@@ -67,9 +67,13 @@ async function harvestClub({ clubId, clubName, season, onProgress = () => {} }) 
             subPage: 2, seasonID: season, leagueGroupID: r.leagueGroupID,
             ageGroupID: r.ageGroupID, regionID: r.regionID, clubID: clubId
         });
+        // Stillingstabellen står på samme side — den tager vi med, nu hvor vi
+        // alligevel har hentet den.
+        const stilling = P.parsePoolStandings(html);
         for (const t of P.parsePoolTeams(html, erKlub)) {
             if (setteHold.has(t.teamID)) continue;
             setteHold.add(t.teamID);
+            const egen = stilling.find((s) => s.hold === t.navn) || null;
             hold.push({
                 teamID: t.teamID,
                 navn: t.navn,
@@ -77,7 +81,8 @@ async function harvestClub({ clubId, clubName, season, onProgress = () => {} }) 
                 aargang: AARGANG[Number(r.ageGroupID)] || `Årgang ${r.ageGroupID}`,
                 leagueGroupID: r.leagueGroupID,
                 ageGroupID: r.ageGroupID,
-                regionID: r.regionID
+                regionID: r.regionID,
+                placering: egen ? { ...egen, antalHold: stilling.length } : null
             });
         }
         rapport('hold', i + 1, raekker.length);
@@ -118,7 +123,8 @@ async function harvestClub({ clubId, clubName, season, onProgress = () => {} }) 
                 for (const s of kamp.spillere) {
                     deltagelser.push({
                         kampnr: nr, tid: kamp.tid, spillerId: s.id, navn: s.navn,
-                        disciplin: s.disciplin, hold: eget, raekke: t.raekke, aargang: t.aargang
+                        disciplin: s.disciplin, vundet: s.vundet, wo: s.wo,
+                        hold: eget, raekke: t.raekke, aargang: t.aargang
                     });
                 }
             }

@@ -19,7 +19,8 @@
         noegletal: $('noegletal'), holdTabel: $('holdTabel'), spillerTabel: $('spillerTabel'),
         filter: $('filter'), tabelTom: $('tabelTom'), kilde: $('kilde'),
         filterbjaelke: $('filterbjaelke'), filterTekst: $('filterTekst'), filterRyd: $('filterRyd'),
-        csvSpillere: $('csvSpillere'), csvSpillerHold: $('csvSpillerHold'), csvHold: $('csvHold')
+        csvSpillere: $('csvSpillere'), csvSpillerHold: $('csvSpillerHold'),
+        csvMakkere: $('csvMakkere'), csvHold: $('csvHold')
     };
 
     let data = null;
@@ -218,13 +219,16 @@
             ['Spillere', nf.format(n.spillere)],
             ['Hold', nf.format(n.hold)],
             ['Holdkampe', nf.format(n.kampeMedHoldseddel)],
-            ['Rækker', nf.format(n.raekker)],
+            ['Discipliner', nf.format(n.discipliner || 0)],
+            ['Sejrsprocent', n.sejrspct == null ? '—' : n.sejrspct + ' %'],
             ['Kampe pr. spiller', snit]
         ].map(([etiket, v]) => `<div class="tal-kort"><span class="vaerdi">${esc(v)}</span><span class="etiket">${esc(etiket)}</span></div>`).join('');
 
         tegnTop();
         tegnAargang();
         tegnFordeling();
+        tegnSejr();
+        tegnDdiscipliner();
         tegnMaaned();
         tegnHoldTabel();
         tegnSpillere();
@@ -233,11 +237,14 @@
         const q = `clubId=${encodeURIComponent(klub.id)}&season=${encodeURIComponent(season)}`;
         el.csvSpillere.href = `/api/export?${q}&type=spillere`;
         el.csvSpillerHold.href = `/api/export?${q}&type=spiller-hold`;
+        el.csvMakkere.href = `/api/export?${q}&type=makkere`;
         el.csvHold.href = `/api/export?${q}&type=hold`;
 
         el.kilde.textContent = `Kilde: badmintonplayer.dk, holdturneringen. ${nf.format(n.kampeFundet)} kampe fundet, `
             + `heraf ${nf.format(n.kampeMedHoldseddel)} med holdseddel. En spiller tælles én gang pr. holdkamp, `
-            + 'også hvis vedkommende spillede flere kampe i den. Tal opdateres højst én gang i døgnet.';
+            + 'også hvis vedkommende spillede flere discipliner i den — sejre tælles derimod pr. disciplin, '
+            + 'udregnet af sætcifrene, og walkover tæller med. Discipliner uden resultat indgår ikke i sejrsprocenten. '
+            + 'Tal opdateres højst én gang i døgnet.';
 
         vis(el.resultat, true);
         besked('');
@@ -357,6 +364,87 @@
             aria-label="Antal spillere fordelt på hvor mange hold de har spillet for">${FORLOEB}${gitter}${dele}</svg>`;
     }
 
+    /** Bedste sejrsprocent blandt dem der har spillet nok til at tallet siger noget. */
+    const MIN_AFGJORTE = 10;
+    function tegnSejr() {
+        const node = $('grafSejr');
+        const raekker = data.spillere
+            .filter((s) => s.sejrspct != null && (s.vundet + s.tabt) >= MIN_AFGJORTE)
+            .sort((a, b) => b.sejrspct - a.sejrspct || (b.vundet + b.tabt) - (a.vundet + a.tabt))
+            .slice(0, 20);
+        if (!raekker.length) {
+            return tom(node, `Ingen spillere har ${MIN_AFGJORTE} afgjorte discipliner endnu.`);
+        }
+
+        const H = 26, pad = 8, navnBredde = 210, talBredde = 60;
+        const bredde = 760;
+        const hoejde = raekker.length * H + pad * 2;
+        const sporBredde = bredde - navnBredde - talBredde;
+
+        const dele = raekker.map((s, i) => {
+            const y = pad + i * H;
+            const w = Math.max(2, (s.sejrspct / 100) * sporBredde);
+            return `<a class="navn-link" href="${esc(profilUrl(s.id))}" target="_blank" rel="noopener">
+                    <rect class="ramme" x="0" y="${y}" width="${navnBredde - 8}" height="${H - 2}" rx="4"></rect>
+                    <text class="etiket" x="0" y="${y + 15}">${esc(kort(s.navn, 28))}</text>
+                    <title>Åbn ${esc(s.navn)} på badmintonplayer.dk</title></a>
+                <g class="klikbar" data-spiller="${esc(s.id)}">
+                    <rect class="ramme" x="${navnBredde - 6}" y="${y}" width="${bredde - navnBredde + 6}" height="${H - 2}" rx="4"></rect>
+                    <rect class="soejle" x="${navnBredde}" y="${y + 4}" width="${w}" height="15" rx="4"></rect>
+                    <text class="vaerdi" x="${navnBredde + w + 8}" y="${y + 16}">${s.sejrspct} %</text>
+                    <title>${esc(s.navn)} — ${s.vundet} vundet, ${s.tabt} tabt</title></g>`;
+        }).join('');
+
+        node.innerHTML = `<svg viewBox="0 0 ${bredde} ${hoejde}" role="img"
+            aria-label="Spillere med højest sejrsprocent">${FORLOEB}${dele}</svg>`;
+    }
+
+    /** Single, double og mix — antal spillede og hvor mange der blev vundet. */
+    function tegnDdiscipliner() {
+        const node = $('grafDiscipliner');
+        const typer = [['Single', 'single'], ['Double', 'double'], ['Mix', 'mix']];
+        const poster = typer.map(([navn, noegle]) => {
+            let spillet = 0, vundet = 0, tabt = 0;
+            for (const d of data.disciplinFordeling || []) {
+                if (d.type !== noegle) continue;
+                spillet += d.spillet; vundet += d.vundet; tabt += d.tabt;
+            }
+            return { navn, spillet, vundet, tabt, pct: (vundet + tabt) ? Math.round(vundet / (vundet + tabt) * 100) : null };
+        }).filter((p) => p.spillet > 0);
+
+        if (!poster.length) return tom(node, 'Ingen discipliner fundet.');
+
+        const bredde = 520, hoejde = 260, bund = 52, top = 20, venstre = 34;
+        const maks = Math.max(...poster.map((p) => p.spillet), 1);
+        const spor = (bredde - venstre - 8) / poster.length;
+        const bw = Math.min(46, spor * 0.42);
+        const y = (v) => hoejde - bund - (v / maks) * (hoejde - bund - top);
+
+        let gitter = '';
+        for (let i = 0; i <= 4; i++) {
+            const v = Math.round(maks * i / 4);
+            gitter += `<line class="gitter" x1="${venstre}" y1="${y(v)}" x2="${bredde - 4}" y2="${y(v)}"></line>`
+                + `<text class="akse" x="0" y="${y(v) + 4}">${v}</text>`;
+        }
+
+        const dele = poster.map((p, i) => {
+            const x = venstre + i * spor + spor / 2;
+            return `<g>
+                <rect class="soejle" x="${x - bw - 3}" y="${y(p.spillet)}" width="${bw}" height="${hoejde - bund - y(p.spillet)}" rx="4"></rect>
+                <rect class="soejle--alt" x="${x + 3}" y="${y(p.vundet)}" width="${bw}" height="${hoejde - bund - y(p.vundet)}" rx="4"></rect>
+                <text class="vaerdi" x="${x - bw / 2 - 3}" y="${y(p.spillet) - 6}" text-anchor="middle">${p.spillet}</text>
+                <text class="vaerdi" x="${x + bw / 2 + 3}" y="${y(p.vundet) - 6}" text-anchor="middle">${p.vundet}</text>
+                <text class="akse" x="${x}" y="${hoejde - bund + 18}" text-anchor="middle">${esc(p.navn)}</text>
+                <text class="akse" x="${x}" y="${hoejde - bund + 34}" text-anchor="middle">${p.pct == null ? '' : p.pct + ' %'}</text>
+                <title>${esc(p.navn)}: ${p.spillet} spillet, ${p.vundet} vundet, ${p.tabt} tabt</title></g>`;
+        }).join('');
+
+        node.innerHTML = `<svg viewBox="0 0 ${bredde} ${hoejde}" role="img"
+            aria-label="Antal discipliner spillet og vundet">${FORLOEB}${gitter}${dele}</svg>`
+            + `<div class="forklaring"><span><i style="background:linear-gradient(90deg,#533483,#e94560)"></i>Spillet</span>`
+            + `<span><i style="background:rgba(83,52,131,0.75)"></i>Vundet</span></div>`;
+    }
+
     /** Kampe måned for måned. */
     function tegnMaaned() {
         const node = $('grafMaaned');
@@ -404,6 +492,10 @@
     $('grafFordeling').addEventListener('click', (e) => {
         const g = e.target.closest('[data-antalhold]');
         if (g) saetFilter({ type: 'antalHold', vaerdi: Number(g.dataset.antalhold) });
+    });
+    $('grafSejr').addEventListener('click', (e) => {
+        const g = e.target.closest('[data-spiller]');
+        if (g) aabnSpiller(g.dataset.spiller);
     });
 
     // ── Filter sat fra en graf ──────────────────────────────────────────────
@@ -491,6 +583,16 @@
         return kort;
     }
 
+    /** "nr. 1 af 4" pr. række — et hold kan stå i både pulje og slutspil. */
+    function placeringTekst(placeringer) {
+        if (!placeringer || !placeringer.length) return '<span class="ingen">—</span>';
+        return placeringer.map((p) => {
+            const guld = p.plads === 1 ? ' plads--guld' : '';
+            const titel = `${p.raekke}${p.point == null ? '' : ` · ${p.point} point`}`;
+            return `<span class="plads${guld}" title="${esc(titel)}">nr. ${p.plads}${p.antalHold ? ' af ' + p.antalHold : ''}</span>`;
+        }).join(' ');
+    }
+
     function tegnHoldTabel() {
         holdKort = spillerePrHold();
         const raekker = groft && groft.type === 'aargang'
@@ -501,6 +603,7 @@
             <td>${esc(h.aargang)}</td>
             <td>${esc(h.hold)}</td>
             <td class="navn">${esc(h.raekker.join(' · '))}</td>
+            <td class="navn">${placeringTekst(h.placeringer)}</td>
             <td class="tal">${h.spillere}</td>
             <td class="tal">${h.kampe}</td></tr>`).join('');
     }
@@ -527,7 +630,7 @@
 
         const rad = document.createElement('tr');
         rad.className = 'detaljer';
-        rad.innerHTML = `<td colspan="5">
+        rad.innerHTML = `<td colspan="6">
             <span class="detalje-hoved">${esc(noegle)} — ${spillere.length} spillere</span>
             <div class="chips">${chips}</div>
             <div class="kamp-blok" data-hold="${esc(noegle)}"><span class="ingen">Henter kampene …</span></div></td>`;
@@ -575,10 +678,12 @@
         if (!kamp) return;
 
         const chips = kamp.spillere.length
-            ? kamp.spillere.map(([id, disc]) => {
+            ? kamp.spillere.map(([id, disc, res]) => {
                 const navn = navneKort.get(id) || id;
-                return `<a class="hold-chip hold-chip--lille" href="${esc(profilUrl(id))}" target="_blank" rel="noopener"
-                    title="Åbn ${esc(navn)} på badmintonplayer.dk">
+                const klasse = res === 1 ? ' chip--vundet' : (res === 0 ? ' chip--tabt' : '');
+                const facit = res === 1 ? 'vundet' : (res === 0 ? 'tabt' : 'uden resultat');
+                return `<a class="hold-chip hold-chip--lille${klasse}" href="${esc(profilUrl(id))}" target="_blank" rel="noopener"
+                    title="${esc(navn)} — ${esc(disc)} ${facit}. Åbner profilen på badmintonplayer.dk">
                     <span class="disc">${esc(disc)}</span> ${esc(navn)}<span class="ud" aria-hidden="true">↗</span></a>`;
             }).join('')
             : '<span class="ingen">Ingen opstilling indtastet.</span>';
@@ -601,9 +706,16 @@
                 || s.hold.some((h) => h.navn.toLowerCase().includes(filter)));
         }
         const f = sorter.felt, ned = sorter.ned;
+        const afgjorte = (s) => s.vundet + s.tabt;
         raekker = [...raekker].sort((a, b) => {
             if (f === 'navn') return (ned ? -1 : 1) * a.navn.localeCompare(b.navn, 'da');
-            return (ned ? -1 : 1) * (a[f] - b[f]) || a.navn.localeCompare(b.navn, 'da');
+            const av = a[f] == null ? -1 : a[f];
+            const bv = b[f] == null ? -1 : b[f];
+            // Ved sejrsprocent er 100 % af to kampe mindre interessant end 90 % af
+            // tredive — derfor afgøres lige procenter af hvem der har spillet mest.
+            return (ned ? -1 : 1) * (av - bv)
+                || (f === 'sejrspct' ? afgjorte(b) - afgjorte(a) : 0)
+                || a.navn.localeCompare(b.navn, 'da');
         });
 
         el.spillerTabel.tBodies[0].innerHTML = raekker.map((s) => `<tr class="spiller" data-id="${esc(s.id)}">
@@ -611,7 +723,10 @@
             <td class="tal">${s.kampe}</td>
             <td class="tal">${s.antalHold}</td>
             <td class="tal">${s.single}</td>
-            <td class="tal">${s.double}</td></tr>`).join('');
+            <td class="tal">${s.double}</td>
+            <td class="tal">${s.mix}</td>
+            <td class="tal vt"><b>${s.vundet}</b>–${s.tabt}</td>
+            <td class="tal">${s.sejrspct == null ? '—' : s.sejrspct + '&nbsp;%'}</td></tr>`).join('');
 
         vis(el.tabelTom, raekker.length === 0);
         [...el.spillerTabel.tHead.rows[0].cells].forEach((th) => th.classList.toggle('aktiv', th.dataset.sort === f));
@@ -636,11 +751,31 @@
 
         const chips = s.hold.map((h) =>
             `<button type="button" class="hold-chip" data-hold="${esc(h.navn)}">${esc(h.navn)} <b>${h.kampe}</b></button>`).join('');
+
+        const disc = [
+            s.single ? `${s.single} single` : '',
+            s.double ? `${s.double} double` : '',
+            s.mix ? `${s.mix} mix` : ''
+        ].filter(Boolean).join(', ');
+        const facit = s.sejrspct == null
+            ? 'ingen afgjorte discipliner'
+            : `${s.vundet} vundet og ${s.tabt} tabt — ${s.sejrspct} %`
+              + (s.uafgjort ? ` (${s.uafgjort} uden resultat)` : '');
+
+        const makkere = s.makkere && s.makkere.length
+            ? `<span class="detalje-hoved">Faste makkere</span><div class="chips">${
+                s.makkere.map((m) => `<a class="hold-chip hold-chip--lille" href="${esc(profilUrl(m.id))}"
+                    target="_blank" rel="noopener" title="${esc(m.navn)} — ${m.kampe} sammen, ${m.vundet} vundet">${esc(m.navn)}
+                    <b>${m.kampe}</b><span class="ud" aria-hidden="true">↗</span></a>`).join('')}</div>`
+            : '';
+
         const rad = document.createElement('tr');
         rad.className = 'detaljer';
-        rad.innerHTML = `<td colspan="5">
-            <span class="detalje-hoved">${spillerLink(s.id, s.navn, 'hoved-link')} — ${s.kampe} kampe, ${s.single} single og ${s.double} double</span>
-            <div class="chips">${chips}</div></td>`;
+        rad.innerHTML = `<td colspan="8">
+            <span class="detalje-hoved">${spillerLink(s.id, s.navn, 'hoved-link')} — ${s.kampe} kampe${disc ? ': ' + esc(disc) : ''}</span>
+            <p class="facit">${esc(facit)}</p>
+            <div class="chips">${chips}</div>
+            ${makkere}</td>`;
         tr.after(rad);
         if (scroll) tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
