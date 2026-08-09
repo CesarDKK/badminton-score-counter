@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Klubstatistik for dansk holdbadminton. Slå din klub op og se hvilke spillere der har spillet for hvilke hold, hvor mange kampe de har spillet, og hvordan sæsonen har fordelt sig.">
+    <title>Klubstatistik — BadmintonApp.dk</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23e94560' transform='translate(0 1.2)'%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-33 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(33 12 14.5)'/%3E%3Crect x='9.4' y='14.3' width='5.2' height='1.7' rx='0.85'/%3E%3Cpath d='M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z'/%3E%3C/g%3E%3C/svg%3E">
+    <link rel="stylesheet" href="fonts.css">
+    <link rel="stylesheet" href="styles.css?v=2">
+</head>
+<body>
+
+<div class="glow" aria-hidden="true"></div>
+
+<nav>
+    <a class="nav-brand" href="https://badmintonapp.dk">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <g fill="#e94560" transform="translate(0 1.2)">
+                <ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/>
+                <ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/>
+                <ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/>
+                <ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/>
+                <ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/>
+                <rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/>
+                <path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/>
+            </g>
+        </svg>
+        <span class="wordmark">Badminton<span>App</span></span>
+    </a>
+    <a class="nav-cta" href="https://badmintonapp.dk">Til forsiden →</a>
+</nav>
+
+<header class="hero wrap">
+    <span class="hero-badge">Holdturnering · badmintonplayer.dk</span>
+    <h1>Klub&shy;statistik</h1>
+    <p class="hero-sub">Slå din klub op og se hvem der har spillet for hvilke hold i løbet af sæsonen — og hvor mange kampe det er blevet til.</p>
+
+    <form class="soeg" id="soegForm" autocomplete="off">
+        <div class="felt">
+            <label for="klub">Klub</label>
+            <input type="text" id="klub" name="klub" placeholder="fx Lyngby" required minlength="2" spellcheck="false">
+        </div>
+        <div class="felt felt--smal">
+            <label for="saeson">Sæson</label>
+            <select id="saeson" name="saeson"></select>
+        </div>
+        <button type="submit" class="knap" id="soegKnap">Hent statistik</button>
+    </form>
+
+    <p class="hero-note" id="besked" role="status" aria-live="polite"></p>
+</header>
+
+<main class="wrap" id="main">
+
+    <!-- Klubvælger når søgningen giver flere træf -->
+    <section class="panel" id="klubValg" hidden>
+        <h2>Hvilken klub?</h2>
+        <p class="panel-sub">Søgningen gav flere træf. Vælg den rigtige.</p>
+        <div class="klubliste" id="klubliste"></div>
+    </section>
+
+    <!-- Fremdrift under indsamling -->
+    <section class="panel" id="fremdrift" hidden>
+        <h2 id="fremdriftTitel">Henter data</h2>
+        <p class="panel-sub" id="fremdriftTekst">Kontakter badmintonplayer.dk …</p>
+        <div class="bar"><div class="bar-fill" id="barFill"></div></div>
+        <p class="fremdrift-meta" id="fremdriftMeta"></p>
+        <p class="fremdrift-hint">
+            Første gang en klub hentes, læses hele sæsonen kamp for kamp hos badmintonplayer.dk.
+            Det tager typisk 4–7 minutter for en stor klub. Bagefter ligger det klar med det samme i et døgn.
+            Du kan roligt lade fanen stå åben.
+        </p>
+    </section>
+
+    <!-- Resultatet -->
+    <div id="resultat" hidden>
+
+        <section class="klubhoved">
+            <div>
+                <h2 id="klubNavn"></h2>
+                <p class="klubhoved-sub" id="klubMeta"></p>
+            </div>
+            <div class="eksport">
+                <a class="knap knap--sekundaer" id="csvSpillere" href="#" download>Spillere (CSV)</a>
+                <a class="knap knap--sekundaer" id="csvSpillerHold" href="#" download>Spiller × hold (CSV)</a>
+                <a class="knap knap--sekundaer" id="csvHold" href="#" download>Hold (CSV)</a>
+            </div>
+        </section>
+
+        <section class="noegletal" id="noegletal"></section>
+
+        <section class="graf-grid">
+            <article class="kort kort--bred">
+                <h3>Flest kampe</h3>
+                <p class="kort-sub">De 20 spillere med flest holdkampe i sæsonen.</p>
+                <div class="graf" id="grafTop"></div>
+            </article>
+
+            <article class="kort">
+                <h3>Kampe pr. årgang</h3>
+                <p class="kort-sub">Hvor aktiviteten ligger.</p>
+                <div class="graf" id="grafAargang"></div>
+            </article>
+
+            <article class="kort">
+                <h3>Spillere pr. antal hold</h3>
+                <p class="kort-sub">Hvor mange der bliver brugt på tværs af hold.</p>
+                <div class="graf" id="grafFordeling"></div>
+            </article>
+
+            <article class="kort kort--bred">
+                <h3>Sæsonen måned for måned</h3>
+                <p class="kort-sub">Antal holdkampe.</p>
+                <div class="graf" id="grafMaaned"></div>
+            </article>
+
+            <article class="kort kort--bred">
+                <h3>Holdene</h3>
+                <p class="kort-sub">Klik på et hold for at se hvem der har spillet på det, og hvor mange kampe hver især har spillet.</p>
+                <div class="tabel-hylster">
+                    <table class="tabel" id="holdTabel">
+                        <thead><tr><th>Årgang</th><th>Hold</th><th>Række</th><th class="tal">Spillere</th><th class="tal">Kampe</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </article>
+        </section>
+
+        <section class="kort">
+            <div class="kort-hoved">
+                <div>
+                    <h3>Alle spillere</h3>
+                    <p class="kort-sub">Klik på en spiller for at se fordelingen på hold.</p>
+                </div>
+                <input type="search" id="filter" class="filter" placeholder="Søg spiller eller hold …" aria-label="Filtrér spillere">
+            </div>
+            <div class="tabel-hylster">
+                <table class="tabel tabel--spillere" id="spillerTabel">
+                    <thead><tr>
+                        <th data-sort="navn">Spiller</th>
+                        <th data-sort="kampe" class="tal aktiv">Kampe</th>
+                        <th data-sort="antalHold" class="tal">Hold</th>
+                        <th data-sort="single" class="tal">Single</th>
+                        <th data-sort="double" class="tal">Double</th>
+                    </tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <p class="tabel-tom" id="tabelTom" hidden>Ingen spillere matcher filteret.</p>
+        </section>
+
+        <p class="kilde" id="kilde"></p>
+    </div>
+</main>
+
+<footer>
+    <div class="wrap">
+        <p>
+            Data fra <a href="https://www.badmintonplayer.dk/DBF/HoldTurnering/Stilling/" rel="noopener">badmintonplayer.dk</a>
+            &nbsp;·&nbsp; © 2026 Jesper Brink Sørensen
+            &nbsp;·&nbsp; <a href="https://badmintonapp.dk">badmintonapp.dk</a>
+        </p>
+    </div>
+</footer>
+
+<script src="app.js?v=2"></script>
+</body>
+</html>

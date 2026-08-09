@@ -1,0 +1,432 @@
+/* statistik.badmintonapp.dk — samme visuelle identitet som badmintonapp.dk */
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --purple: #533483;
+    --purple-light: #6a45a8;
+    --purple-soft: #b89fe0;
+    --red: #e94560;
+    --bg: #0d0d1a;
+    --bg-raise: #14142a;
+    --card: rgba(83, 52, 131, 0.12);
+    --border: rgba(83, 52, 131, 0.35);
+    --border-soft: rgba(255, 255, 255, 0.08);
+    --text: #eaeaea;
+    --muted: #9494a6;
+    --radius: 16px;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+::selection { background: rgba(233, 69, 96, 0.35); }
+
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(255,255,255,0.022) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.022) 1px, transparent 1px);
+    background-size: 56px 56px;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.glow {
+    position: fixed;
+    inset: 0;
+    background:
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(83,52,131,0.45) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 30% at 85% 20%, rgba(233,69,96,0.10) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.wrap {
+    max-width: 1160px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 1;
+}
+
+a { color: var(--purple-soft); }
+
+/* ── Nav ── */
+nav {
+    position: relative;
+    z-index: 2;
+    padding: 22px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 1160px;
+    margin: 0 auto;
+}
+
+.nav-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.nav-brand svg { width: 30px; height: 30px; }
+.nav-brand .wordmark {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.55em;
+    letter-spacing: 1.5px;
+    color: #fff;
+    line-height: 1;
+}
+.nav-brand .wordmark span { color: var(--red); }
+
+.nav-cta {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    color: #fff;
+    text-decoration: none;
+    padding: 10px 22px;
+    border-radius: 100px;
+    font-size: 0.9em;
+    font-weight: 600;
+    transition: border-color 0.2s, background 0.2s;
+    white-space: nowrap;
+}
+.nav-cta:hover { border-color: var(--purple-light); background: rgba(83,52,131,0.25); }
+
+/* ── Hero ── */
+.hero { text-align: center; padding: 56px 24px 46px; }
+
+.hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(233,69,96,0.10);
+    border: 1px solid rgba(233,69,96,0.35);
+    color: #f2879a;
+    font-size: 0.78em;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border-radius: 100px;
+    margin-bottom: 22px;
+}
+
+.hero h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(2.8em, 8vw, 5em);
+    letter-spacing: 2px;
+    line-height: 0.95;
+    color: #fff;
+}
+
+.hero-sub {
+    color: var(--muted);
+    max-width: 620px;
+    margin: 16px auto 0;
+    font-size: 1.05em;
+    line-height: 1.6;
+}
+
+.hero-note { margin-top: 18px; color: var(--muted); font-size: 0.92em; min-height: 1.4em; }
+.hero-note.fejl { color: #f2879a; }
+
+/* ── Søgefelt ── */
+.soeg {
+    margin: 34px auto 0;
+    max-width: 720px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.felt { flex: 1 1 240px; text-align: left; }
+.felt--smal { flex: 0 1 160px; }
+
+.felt label {
+    display: block;
+    font-size: 0.78em;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 7px;
+}
+
+.felt input, .felt select {
+    width: 100%;
+    background: var(--bg-raise);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    font: inherit;
+    padding: 13px 15px;
+    transition: border-color 0.2s;
+}
+.felt input:focus, .felt select:focus { outline: none; border-color: var(--purple-light); }
+.felt input::placeholder { color: #5b5b70; }
+
+.knap {
+    background: var(--red);
+    border: 1px solid var(--red);
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    padding: 13px 26px;
+    border-radius: 12px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: filter 0.2s, opacity 0.2s;
+}
+.knap:hover { filter: brightness(1.1); }
+.knap:disabled { opacity: 0.5; cursor: default; }
+
+.knap--sekundaer {
+    background: rgba(255,255,255,0.05);
+    border-color: var(--border);
+    color: #fff;
+    font-weight: 500;
+    font-size: 0.88em;
+    padding: 10px 16px;
+}
+.knap--sekundaer:hover { background: rgba(83,52,131,0.3); filter: none; }
+
+/* ── Paneler og kort ── */
+.panel, .kort {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 22px;
+}
+
+.panel h2, .kort h3 { font-size: 1.15em; color: #fff; font-weight: 600; }
+.panel-sub, .kort-sub { color: var(--muted); font-size: 0.9em; margin-top: 5px; }
+
+.kort-hoved {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+/* ── Klubvælger ── */
+.klubliste { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.klubvalg {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    color: #fff;
+    font: inherit;
+    padding: 9px 18px;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+}
+.klubvalg:hover { background: rgba(83,52,131,0.35); border-color: var(--purple-light); }
+
+/* ── Fremdrift ── */
+.bar {
+    margin-top: 18px;
+    height: 10px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 100px;
+    overflow: hidden;
+}
+.bar-fill {
+    height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, var(--purple), var(--red));
+    border-radius: 100px;
+    transition: width 0.4s ease;
+}
+.fremdrift-meta { margin-top: 10px; font-size: 0.88em; color: var(--purple-soft); }
+.fremdrift-hint { margin-top: 14px; font-size: 0.85em; color: var(--muted); line-height: 1.6; max-width: 640px; }
+
+/* ── Klubhoved ── */
+.klubhoved {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+}
+.klubhoved h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.4em;
+    letter-spacing: 1.5px;
+    color: #fff;
+    line-height: 1;
+}
+.klubhoved-sub { color: var(--muted); font-size: 0.92em; margin-top: 6px; }
+.eksport { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ── Nøgletal ── */
+.noegletal {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+    margin-bottom: 22px;
+}
+.noegletal .tal-kort {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+}
+.noegletal .vaerdi {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.6em;
+    line-height: 1;
+    color: #fff;
+}
+.noegletal .etiket {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.8em;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+/* ── Grafer ── */
+.graf-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px;
+    margin-bottom: 22px;
+}
+.graf-grid > .kort { margin-bottom: 0; }
+.kort--bred { grid-column: 1 / -1; }
+
+.graf { margin-top: 18px; overflow-x: auto; }
+.graf svg { display: block; width: 100%; height: auto; }
+
+.graf .akse { fill: var(--muted); font-size: 11px; }
+.graf .etiket { fill: var(--text); font-size: 12px; }
+.graf .vaerdi { fill: #fff; font-size: 12px; font-weight: 600; }
+.graf .gitter { stroke: rgba(255,255,255,0.07); stroke-width: 1; }
+.graf .soejle { fill: url(#stat-forloeb); }
+.graf .soejle--alt { fill: rgba(83,52,131,0.55); }
+.graf .linje { fill: none; stroke: var(--red); stroke-width: 2.5; }
+.graf .flade { fill: rgba(233,69,96,0.14); }
+.graf .prik { fill: var(--red); }
+.graf-tom { color: var(--muted); font-size: 0.9em; padding: 12px 0; }
+
+.forklaring { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; font-size: 0.82em; color: var(--muted); }
+.forklaring span { display: inline-flex; align-items: center; gap: 6px; }
+.forklaring i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+/* ── Tabeller ── */
+.tabel-hylster { margin-top: 16px; overflow-x: auto; }
+.tabel { width: 100%; border-collapse: collapse; font-size: 0.92em; }
+.tabel th, .tabel td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-soft);
+    white-space: nowrap;
+}
+.tabel th {
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 0.82em;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    position: sticky;
+    top: 0;
+    background: #131324;
+}
+.tabel .tal { text-align: right; }
+.tabel tbody tr:hover { background: rgba(83,52,131,0.16); }
+
+.tabel--spillere th[data-sort] { cursor: pointer; user-select: none; }
+.tabel--spillere th[data-sort]:hover { color: var(--purple-soft); }
+.tabel--spillere th.aktiv { color: var(--red); }
+.tabel .navn { white-space: normal; }
+
+/* Rækker man kan klikke op — både spillere og hold */
+.tabel tbody tr.spiller, .tabel tbody tr.hold { cursor: pointer; }
+.tabel tbody tr.aaben { background: rgba(83,52,131,0.22); }
+.tabel tbody tr.hold td:first-child { position: relative; padding-left: 24px; }
+.tabel tbody tr.hold td:first-child::before {
+    content: '';
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    width: 6px;
+    height: 6px;
+    border-right: 2px solid var(--purple-soft);
+    border-bottom: 2px solid var(--purple-soft);
+    transform: translateY(-60%) rotate(-45deg);
+    transition: transform 0.15s;
+}
+.tabel tbody tr.hold.aaben td:first-child::before { transform: translateY(-20%) rotate(45deg); }
+
+.tabel tr.detaljer td {
+    background: rgba(0,0,0,0.22);
+    white-space: normal;
+    color: var(--muted);
+    font-size: 0.92em;
+    padding-top: 6px;
+}
+.detalje-hoved {
+    display: block;
+    color: var(--purple-soft);
+    font-size: 0.9em;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+.detaljer .ingen { color: var(--muted); font-style: italic; }
+.hold-chip {
+    display: inline-block;
+    background: rgba(83,52,131,0.35);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 3px 11px;
+    margin: 3px 5px 3px 0;
+    color: var(--text);
+    font-size: 0.92em;
+}
+.hold-chip b { color: #fff; font-weight: 600; }
+
+.filter {
+    background: var(--bg-raise);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font: inherit;
+    font-size: 0.9em;
+    padding: 9px 13px;
+    min-width: 220px;
+}
+.filter:focus { outline: none; border-color: var(--purple-light); }
+
+.tabel-tom { color: var(--muted); font-size: 0.9em; padding: 14px 2px 2px; }
+
+.kilde { color: var(--muted); font-size: 0.84em; line-height: 1.6; margin: 4px 0 40px; }
+
+/* ── Footer ── */
+footer {
+    border-top: 1px solid var(--border-soft);
+    padding: 26px 0;
+    margin-top: 30px;
+    position: relative;
+    z-index: 1;
+}
+footer p { color: var(--muted); font-size: 0.88em; text-align: center; }
+
+@media (max-width: 860px) {
+    .graf-grid { grid-template-columns: minmax(0, 1fr); }
+    .kort--bred { grid-column: auto; }
+    .hero { padding-top: 30px; }
+    .klubhoved { align-items: flex-start; }
+}
