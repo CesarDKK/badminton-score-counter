@@ -316,9 +316,11 @@ nav {
 .graf .gitter { stroke: rgba(255,255,255,0.07); stroke-width: 1; }
 .graf .soejle { fill: url(#stat-forloeb); }
 /* Klikbare søjlegrupper — den usynlige ramme gør hele sporet til et klikmål */
-.graf .klikbar { cursor: pointer; }
-.graf .klikbar .ramme { fill: transparent; }
-.graf .klikbar:hover .ramme { fill: rgba(255,255,255,0.06); }
+.graf .klikbar, .graf .navn-link { cursor: pointer; }
+.graf .klikbar .ramme, .graf .navn-link .ramme { fill: transparent; }
+.graf .klikbar:hover .ramme, .graf .navn-link:hover .ramme { fill: rgba(255,255,255,0.06); }
+/* Navnet i topgrafen fører til profilen — søjlen åbner spilleren i tabellen */
+.graf .navn-link:hover .etiket { fill: #fff; text-decoration: underline; }
 .graf .soejle--alt { fill: rgba(83,52,131,0.55); }
 .graf .linje { fill: none; stroke: var(--red); stroke-width: 2.5; }
 .graf .flade { fill: rgba(233,69,96,0.14); }
@@ -392,8 +394,28 @@ nav {
 .detaljer .ingen { color: var(--muted); font-style: italic; }
 .chips { margin-top: 2px; }
 
+/* Spillernavne er links til profilen på badmintonplayer.dk — pilen viser at
+   den åbner i en ny fane. Resten af rækken folder ud som før. */
+.spiller-link {
+    color: var(--text);
+    text-decoration: none;
+    border-bottom: 1px dotted rgba(184,159,224,0.45);
+}
+.spiller-link:hover { color: #fff; border-bottom-color: var(--purple-soft); }
+.spiller-link .ud,
+.hold-chip .ud {
+    color: var(--purple-soft);
+    font-size: 0.85em;
+    margin-left: 4px;
+    opacity: 0.55;
+}
+.spiller-link:hover .ud, .hold-chip:hover .ud { opacity: 1; }
+.detalje-hoved .spiller-link { color: var(--purple-soft); border-bottom-color: rgba(184,159,224,0.35); }
+.detalje-hoved .spiller-link:hover { color: #fff; }
+
 .hold-chip {
     display: inline-block;
+    text-decoration: none;
     background: rgba(83,52,131,0.35);
     border: 1px solid var(--border);
     border-radius: 100px;

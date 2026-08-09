@@ -44,6 +44,15 @@
 
     function vis(node, synlig) { node.hidden = !synlig; }
 
+    /** Spillerens profil hos badmintonplayer. Åbnes altid i en ny fane. */
+    const profilUrl = (id) => `https://www.badmintonplayer.dk/DBF/Spiller/VisSpiller/#${encodeURIComponent(id)}`;
+
+    /** Et spillernavn er altid et link til profilen — resten af feltet folder ud. */
+    function spillerLink(id, navn, ekstraKlasse = '') {
+        return `<a class="spiller-link ${ekstraKlasse}" href="${esc(profilUrl(id))}" target="_blank" rel="noopener"
+            title="Åbn ${esc(navn)} på badmintonplayer.dk">${esc(navn)}<span class="ud" aria-hidden="true">↗</span></a>`;
+    }
+
     async function hentJson(url) {
         const res = await fetch(url, { headers: { Accept: 'application/json' } });
         let json = null;
@@ -257,15 +266,20 @@
         const maks = raekker[0].kampe || 1;
         const sporBredde = bredde - navnBredde - talBredde;
 
+        // Navnet og søjlen er adskilt: navnet linker til profilen, søjlen åbner
+        // spilleren i tabellen nedenfor.
         const dele = raekker.map((s, i) => {
             const y = pad + i * H;
             const w = Math.max(2, (s.kampe / maks) * sporBredde);
-            return `<g class="klikbar" data-spiller="${esc(s.id)}">
-                <rect class="ramme" x="0" y="${y}" width="${bredde}" height="${H - 2}" rx="4"></rect>
-                <text class="etiket" x="0" y="${y + 15}">${esc(kort(s.navn, 30))}</text>
-                <rect class="soejle" x="${navnBredde}" y="${y + 4}" width="${w}" height="15" rx="4"></rect>
-                <text class="vaerdi" x="${navnBredde + w + 8}" y="${y + 16}">${s.kampe}</text>
-                <title>${esc(s.navn)} — ${s.kampe} kampe på ${s.antalHold} hold</title></g>`;
+            return `<a class="navn-link" href="${esc(profilUrl(s.id))}" target="_blank" rel="noopener">
+                    <rect class="ramme" x="0" y="${y}" width="${navnBredde - 8}" height="${H - 2}" rx="4"></rect>
+                    <text class="etiket" x="0" y="${y + 15}">${esc(kort(s.navn, 28))}</text>
+                    <title>Åbn ${esc(s.navn)} på badmintonplayer.dk</title></a>
+                <g class="klikbar" data-spiller="${esc(s.id)}">
+                    <rect class="ramme" x="${navnBredde - 6}" y="${y}" width="${bredde - navnBredde + 6}" height="${H - 2}" rx="4"></rect>
+                    <rect class="soejle" x="${navnBredde}" y="${y + 4}" width="${w}" height="15" rx="4"></rect>
+                    <text class="vaerdi" x="${navnBredde + w + 8}" y="${y + 16}">${s.kampe}</text>
+                    <title>${esc(s.navn)} — ${s.kampe} kampe på ${s.antalHold} hold</title></g>`;
         }).join('');
 
         node.innerHTML = `<svg viewBox="0 0 ${bredde} ${hoejde}" role="img"
@@ -507,7 +521,8 @@
 
         const spillere = holdKort.get(noegle) || [];
         const chips = spillere.length
-            ? spillere.map((s) => `<button type="button" class="hold-chip" data-spiller="${esc(s.id)}">${esc(s.navn)} <b>${s.kampe}</b></button>`).join('')
+            ? spillere.map((s) => `<a class="hold-chip" href="${esc(profilUrl(s.id))}" target="_blank" rel="noopener"
+                title="Åbn ${esc(s.navn)} på badmintonplayer.dk">${esc(s.navn)} <b>${s.kampe}</b><span class="ud" aria-hidden="true">↗</span></a>`).join('')
             : '<span class="ingen">Ingen holdsedler indtastet for dette hold.</span>';
 
         const rad = document.createElement('tr');
@@ -534,9 +549,8 @@
     }
 
     el.holdTabel.tBodies[0].addEventListener('click', (e) => {
-        // Klik på en spiller-chip inde i udfoldningen
-        const chip = e.target.closest('.hold-chip[data-spiller]');
-        if (chip) { aabnSpiller(chip.dataset.spiller); return; }
+        // Spillernavne er links til badmintonplayer — lad browseren om dem.
+        if (e.target.closest('a')) return;
 
         // Klik på en kamp → vis opstillingen
         const kamp = e.target.closest('tr.kamp');
@@ -561,9 +575,12 @@
         if (!kamp) return;
 
         const chips = kamp.spillere.length
-            ? kamp.spillere.map(([id, disc]) =>
-                `<button type="button" class="hold-chip hold-chip--lille" data-spiller="${esc(id)}">
-                    <span class="disc">${esc(disc)}</span> ${esc(navneKort.get(id) || id)}</button>`).join('')
+            ? kamp.spillere.map(([id, disc]) => {
+                const navn = navneKort.get(id) || id;
+                return `<a class="hold-chip hold-chip--lille" href="${esc(profilUrl(id))}" target="_blank" rel="noopener"
+                    title="Åbn ${esc(navn)} på badmintonplayer.dk">
+                    <span class="disc">${esc(disc)}</span> ${esc(navn)}<span class="ud" aria-hidden="true">↗</span></a>`;
+            }).join('')
             : '<span class="ingen">Ingen opstilling indtastet.</span>';
 
         const rad = document.createElement('tr');
@@ -590,7 +607,7 @@
         });
 
         el.spillerTabel.tBodies[0].innerHTML = raekker.map((s) => `<tr class="spiller" data-id="${esc(s.id)}">
-            <td class="navn">${esc(s.navn)}</td>
+            <td class="navn">${spillerLink(s.id, s.navn)}</td>
             <td class="tal">${s.kampe}</td>
             <td class="tal">${s.antalHold}</td>
             <td class="tal">${s.single}</td>
@@ -622,7 +639,7 @@
         const rad = document.createElement('tr');
         rad.className = 'detaljer';
         rad.innerHTML = `<td colspan="5">
-            <span class="detalje-hoved">${esc(s.navn)} — ${s.kampe} kampe, ${s.single} single og ${s.double} double</span>
+            <span class="detalje-hoved">${spillerLink(s.id, s.navn, 'hoved-link')} — ${s.kampe} kampe, ${s.single} single og ${s.double} double</span>
             <div class="chips">${chips}</div></td>`;
         tr.after(rad);
         if (scroll) tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -638,6 +655,9 @@
     });
 
     el.spillerTabel.tBodies[0].addEventListener('click', (e) => {
+        // Spillernavnet er et link til badmintonplayer — lad browseren om det.
+        if (e.target.closest('a')) return;
+
         // Klik på en holdchip → hop til holdet i holdtabellen
         const chip = e.target.closest('.hold-chip[data-hold]');
         if (chip) { aabnHold(chip.dataset.hold, true); return; }

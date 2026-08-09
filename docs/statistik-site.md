@@ -59,11 +59,17 @@ Alt hænger sammen, så man kan følge en tråd hele vejen igennem:
 | En søjle i "Flest kampe" | Spilleren åbnes i spillertabellen |
 | En årgang i "Kampe pr. årgang" | Begge tabeller filtreres til den årgang |
 | En søjle i "Spillere pr. antal hold" | Kun de spillere vises |
-| En spiller i tabellen | Fordelingen på hold foldes ud |
+| En række i spillertabellen | Fordelingen på hold foldes ud |
 | En holdchip under en spiller | Der hoppes til holdet, som foldes ud |
 | Et hold i holdtabellen | Spillerne og holdets kampe foldes ud |
 | En kamp under et hold | Opstillingen vises, disciplin for disciplin |
-| En spiller i en opstilling | Der hoppes tilbage til spilleren |
+| **Et spillernavn — hvor som helst** | Profilen på badmintonplayer.dk åbnes i en ny fane |
+
+Spillernavne er altid links (`.../DBF/Spiller/VisSpiller/#<spiller-id>`), markeret
+med en ↗. Det gælder både tabellen, chips under et hold, opstillingen i en kamp
+og navnene i topgrafen. Resten af feltet folder ud som før — i topgrafen er
+navnet og søjlen adskilt, så navnet fører til profilen og søjlen åbner spilleren
+i tabellen.
 
 Filtre sat fra en graf vises i en bjælke øverst og kan ryddes derfra. Klikker man
 sig hen til noget der er filtreret væk, rydder filteret sig selv — ellers ville
