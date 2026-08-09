@@ -182,6 +182,40 @@ app.get('/api/jobs/:id', (req, res) => {
     res.json({ job });
 });
 
+/**
+ * Kampene med holdopstilling — hentes først når nogen folder et hold ud, så
+ * forsiden ikke skal slæbe rundt på et par tusinde spillernavne.
+ * Navnene sendes ikke med: klienten har dem allerede fra /api/stats og slår op
+ * på spiller-id.
+ */
+app.get('/api/matches', (req, res) => {
+    const clubId = String(req.query.clubId || '');
+    const season = String(req.query.season || '');
+    const cached = cache.laes(clubId, season);
+    if (!cached) return res.status(404).json({ fejl: 'Ingen data hentet for den klub og sæson endnu.' });
+
+    const efterKamp = new Map();
+    for (const d of cached.data.deltagelser || []) {
+        if (!efterKamp.has(d.kampnr)) efterKamp.set(d.kampnr, []);
+        efterKamp.get(d.kampnr).push([d.spillerId, d.disciplin]);
+    }
+
+    const kampe = (cached.data.kampe || [])
+        .filter((k) => !k.fejl)
+        .map((k) => ({
+            nr: k.kampnr,
+            tid: k.tid || '',
+            hjemme: k.hjemme || '',
+            ude: k.ude || '',
+            resultat: k.resultat || '',
+            side: k.side || null,
+            hold: `${k.aargang} ${k.hold}`,
+            spillere: efterKamp.get(k.kampnr) || []
+        }));
+
+    res.json({ kampe });
+});
+
 /** CSV-eksport af det viste. */
 app.get('/api/export', (req, res) => {
     const clubId = String(req.query.clubId || '');
