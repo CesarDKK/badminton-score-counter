@@ -10,6 +10,7 @@ const ALREADY_EXISTS_ERRORS = new Set([
     1060, // Duplicate column name
     1061, // Duplicate key name
     1062, // Duplicate entry
+    1091, // Can't DROP; doesn't exist — at droppe noget der allerede er væk er ikke en fejl
 ]);
 
 async function getConnection(dbName) {
