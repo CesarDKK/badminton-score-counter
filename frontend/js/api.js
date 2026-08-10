@@ -440,21 +440,23 @@ class BadmintonAPI {
 
     /**
      * Get sponsor settings
-     * @returns {Promise<object>} - { slideDuration }
+     * @returns {Promise<object>} - { slideDuration, bannerDuration }
      */
     async getSponsorSettings() {
         return this.request('/sponsors/settings', { requiresAuth: false });
     }
 
     /**
-     * Update sponsor settings
-     * @param {number} slideDuration - Slide duration in seconds (3-60)
+     * Update sponsor settings. Begge varigheder kan sættes hver for sig —
+     * slideDuration gælder fuldskærms-slideshowet, bannerDuration bane-bannerne.
+     * @param {object} settings - { slideDuration?, bannerDuration? } i sekunder
      * @returns {Promise<object>} - { success }
      */
-    async updateSponsorSettings(slideDuration) {
+    async updateSponsorSettings(settings) {
+        const body = typeof settings === 'number' ? { slideDuration: settings } : settings;
         return this.request('/sponsors/settings', {
             method: 'PUT',
-            body: JSON.stringify({ slideDuration })
+            body: JSON.stringify(body)
         });
     }
 
@@ -582,15 +584,16 @@ class BadmintonAPI {
     }
 
     /**
-     * Update court assignments for a sponsor image
+     * Hvilke baner et bane-banner vises på.
      * @param {number} imageId - Image ID
-     * @param {Array<number>} courts - Array of court numbers
+     * @param {Array<number>} courts - Banenumre (bruges kun ved scope 'valgte')
+     * @param {string} [scope] - 'alle' eller 'valgte'
      * @returns {Promise<object>} - { success }
      */
-    async updateSponsorImageCourts(imageId, courts) {
+    async updateSponsorImageCourts(imageId, courts, scope) {
         return this.request(`/sponsors/${imageId}/courts`, {
             method: 'PUT',
-            body: JSON.stringify({ courts })
+            body: JSON.stringify(scope ? { courts, scope } : { courts })
         });
     }
 

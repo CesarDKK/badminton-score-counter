@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="fonts.css">
     <link rel="stylesheet" href="styles.css?v=5">
     <link rel="stylesheet" href="admin-styles.css?v=5">
-    <link rel="stylesheet" href="sponsor-styles.css?v=5">
+    <link rel="stylesheet" href="sponsor-styles.css?v=6">
     <script src="js/theme-loader.js?v=8"></script>
 </head>
 <body>
@@ -112,15 +112,23 @@
 
             <!-- Slideshow Settings Section -->
             <div class="slideshow-settings-section">
-                <h2>TV Slideshow Indstillinger</h2>
+                <h2>Visningstider</h2>
                 <div class="settings-container">
                     <div class="setting-item">
-                        <label for="slideDuration">Varighed pr. billede (sekunder):</label>
+                        <label for="slideDuration">Slideshow — varighed pr. billede (sekunder):</label>
                         <div class="duration-control">
-                            <input type="number" id="slideDuration" min="3" max="60" value="10">
+                            <input type="number" id="slideDuration" min="3" max="120" value="10">
                             <button id="saveDurationBtn" class="btn-primary">Gem</button>
                         </div>
-                        <p class="setting-hint">Hver sponsor billede vises i denne varighed på TV-skærmene når der ikke er aktive kampe</p>
+                        <p class="setting-hint">Gælder fuldskærms-slideshowet, som kører på TV-skærmene og Oversigten når der ikke er aktive kampe</p>
+                    </div>
+                    <div class="setting-item">
+                        <label for="bannerDuration">Bane-banner — varighed pr. billede (sekunder):</label>
+                        <div class="duration-control">
+                            <input type="number" id="bannerDuration" min="3" max="120" value="20">
+                            <button id="saveBannerDurationBtn" class="btn-primary">Gem</button>
+                        </div>
+                        <p class="setting-hint">Gælder bjælken nederst på TV-visningen under en igangværende kamp. Er der kun ét banner til banen, skiftes der ikke</p>
                     </div>
                 </div>
             </div>
@@ -139,8 +147,8 @@
     </div>
 
     <script src="js/utils.js?v=4"></script>
-    <script src="js/api.js?v=5"></script>
+    <script src="js/api.js?v=11"></script>
     <script src="js/auth-guard.js?v=3"></script>
-    <script src="sponsor-script.js?v=5"></script>
+    <script src="sponsor-script.js?v=6"></script>
 </body>
 </html>

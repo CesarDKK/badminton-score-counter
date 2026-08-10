@@ -495,6 +495,55 @@
     font-weight: bold;
 }
 
+/* Valg mellem alle baner og udvalgte baner */
+.court-scope {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.court-scope-valg {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.court-scope-valg input[type="radio"] {
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+}
+
+.court-scope-valg span {
+    color: #fff;
+    font-size: 0.9em;
+}
+
+/* Ved "alle baner" står fluebenene markerede men slået fra — de viser
+   tilstanden, man ændrer den ikke dér. */
+.court-checkbox--laast {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.court-checkbox--laast:hover {
+    background: rgba(0, 20, 40, 0.5);
+    border-color: var(--color-primary);
+}
+
+.court-checkbox--laast input[type="checkbox"] {
+    cursor: default;
+}
+
+.court-assignments-status {
+    margin-top: 10px;
+    color: var(--color-accent);
+    font-size: 0.85em;
+}
+
 /* Image Status Controls */
 .image-status-controls {
     padding: 15px;

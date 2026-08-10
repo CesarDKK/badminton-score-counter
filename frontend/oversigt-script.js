@@ -44,17 +44,10 @@ let activeTeamMatches = []; // alle aktive holdkampe (multi-holdkamp)
 let _overviewLogos = []; // central logo-liste, hentet én gang ved init
 let _overviewPlayerLogos = []; // player_logos overrides
 let _overviewClubByName = {};  // normaliseret spillernavn -> klub
-let _courtBanners = []; // bane-sponsorbannere — caches, opdateres via config-event (før: hentet hvert 2. sek)
-
-// Genhent bane-bannerne. Kaldes ved init, ved 'sponsors'-config-event og af
-// sikkerhedsnettet — så loadAllCourts ikke fetcher listen i hvert 2s-refresh.
-async function refreshCourtBanners() {
-    try {
-        _courtBanners = await api.getSponsorImages('court') || [];
-    } catch (e) {
-        _courtBanners = [];
-    }
-}
+// Bane-sponsorbannere vises ikke på Oversigten — de fyldte for meget på et
+// kort der i forvejen skal rumme fire navne og en stilling. Sponsorerne kører
+// i stedet som fuldskærms-slideshow når ingen kampe er i gang (se idleScreen),
+// og som roterende banner i footeren på TV-visningen.
 
 // Nulstil + genhent logo-listerne (efter et 'logos'-config-event / sikkerhedsnet)
 async function refreshOverviewLogos() {
@@ -347,10 +340,9 @@ async function initialize() {
 
         await refreshIdleSettings();
 
-        // Hent logo-lister + bane-bannere én gang; herefter opdateres de via
+        // Hent logo-listerne én gang; herefter opdateres de via
         // SSE-config-events (push) i stedet for timere.
         await refreshOverviewLogos();
-        await refreshCourtBanners();
 
         await loadHoldkamp();
         await loadAllCourts();
@@ -360,7 +352,6 @@ async function initialize() {
         // super-admins centrale logo-ændringer. Erstatter den gamle 10 s-timer.
         setInterval(async () => {
             await refreshIdleSettings();
-            await refreshCourtBanners();
             await refreshOverviewLogos();
             scheduleRefresh();
         }, 5 * 60 * 1000);
@@ -385,20 +376,7 @@ async function loadAllCourts() {
         // Fetch all court data in a single batch request (much more efficient!)
         const allGameStates = await api.getAllGameStates();
 
-        // Bane-bannere fra cachen (opdateres via 'sponsors'-config-event), ikke
-        // et fetch pr. refresh — sparer ~30 kald/min på en skærm der kører døgnet rundt.
-        const courtBanners = _courtBanners;
-
-        allCourtData = allGameStates.map(gameState => {
-            // Find banner for this court
-            const banner = courtBanners.find(b =>
-                b.assignedCourts && b.assignedCourts.includes(gameState.courtId)
-            );
-            return {
-                ...gameState,
-                courtBanner: banner || null
-            };
-        });
+        allCourtData = allGameStates.map(gameState => ({ ...gameState }));
 
         // Sync pause countdown state from fresh API data.
         // Serveren gemmer kun restBreakSecondsLeft hvert ~10. sekund, så værdien er
@@ -732,15 +710,6 @@ function renderCourtCard(court) {
         ? `<div class="rest-break-badge">PAUSE ${court.restBreakSecondsLeft}s</div>`
         : '';
 
-    // Court banner
-    const bannerHtml = court.courtBanner
-        ? `<div class="court-card-footer">
-               <img src="/uploads/${court.courtBanner.filename}"
-                    alt="Court Banner"
-                    class="court-banner-small">
-           </div>`
-        : '';
-
     // Build set-history score badges.
     // After switchSides() player1/player2 slots swap, but setScoresHistory stores the
     // names at the time the set ended. Match history names against current names to ensure
@@ -818,8 +787,6 @@ function renderCourtCard(court) {
                         </div>
                     </div>
                 </div>
-
-                ${bannerHtml}
             </div>
         </div>
     `;

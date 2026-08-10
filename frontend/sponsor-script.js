@@ -70,6 +70,7 @@ function setupEventListeners() {
 
     // Duration setting
     document.getElementById('saveDurationBtn').addEventListener('click', saveSlideDuration);
+    document.getElementById('saveBannerDurationBtn').addEventListener('click', saveBannerDuration);
 }
 
 async function handleLogin() {
@@ -352,26 +353,48 @@ async function loadGallery(type) {
 
             // Add court-specific checkboxes AFTER status controls
             if (type === 'court') {
-                // Generate checkboxes for court assignments
+                // 'alle' er standard for nye bannere. Ældre bannere uden feltet
+                // behandles som 'valgte', så de bliver hvor de er.
+                const scope = img.court_scope || 'valgte';
+                const alleValgt = scope === 'alle';
+
+                // Ved "alle baner" vises fluebenene markerede og slået fra, så det
+                // er tydeligt at banneret kører overalt — man skifter til "udvalgte"
+                // for at fravælge enkelte baner.
                 const checkboxes = [];
                 for (let i = 1; i <= courtCount; i++) {
-                    const isChecked = img.assignedCourts && img.assignedCourts.includes(i) ? 'checked' : '';
+                    const isChecked = alleValgt || (img.assignedCourts && img.assignedCourts.includes(i));
                     checkboxes.push(`
-                        <label class="court-checkbox">
+                        <label class="court-checkbox${alleValgt ? ' court-checkbox--laast' : ''}">
                             <input type="checkbox"
                                    value="${i}"
-                                   ${isChecked}
+                                   ${isChecked ? 'checked' : ''}
+                                   ${alleValgt ? 'disabled' : ''}
                                    onchange="toggleCourtAssignment(${img.id}, ${i}, this.checked)">
                             <span>Bane ${i}</span>
                         </label>
                     `);
                 }
+
                 courtCheckboxes = `
                     <div class="court-assignments">
-                        <div class="court-assignments-label">Tildel til baner:</div>
+                        <div class="court-assignments-label">Vises på:</div>
+                        <div class="court-scope">
+                            <label class="court-scope-valg">
+                                <input type="radio" name="scope-${img.id}" value="alle" ${alleValgt ? 'checked' : ''}
+                                       onchange="setCourtScope(${img.id}, 'alle')">
+                                <span>Alle baner</span>
+                            </label>
+                            <label class="court-scope-valg">
+                                <input type="radio" name="scope-${img.id}" value="valgte" ${alleValgt ? '' : 'checked'}
+                                       onchange="setCourtScope(${img.id}, 'valgte')">
+                                <span>Udvalgte baner</span>
+                            </label>
+                        </div>
                         <div class="court-checkboxes">
                             ${checkboxes.join('')}
                         </div>
+                        <div class="court-assignments-status">${beskrivVisning(scope, img.assignedCourts || [])}</div>
                     </div>
                 `;
             }
@@ -492,6 +515,51 @@ async function clearImageExpiration(imageId, event, type) {
     }
 }
 
+/** Kort forklaring under fluebenene, så man kan se resultatet uden at regne efter. */
+function beskrivVisning(scope, baner) {
+    if (scope === 'alle') return 'Vises på alle baner';
+    if (!baner.length) return 'Vises ikke på nogen baner';
+
+    const fravalgte = [];
+    for (let i = 1; i <= courtCount; i++) if (!baner.includes(i)) fravalgte.push(i);
+
+    const liste = (n) => n.length === 1 ? `bane ${n[0]}` : `bane ${n.slice(0, -1).join(', ')} og ${n[n.length - 1]}`;
+    if (!fravalgte.length) return 'Vises på alle baner';
+    if (fravalgte.length <= baner.length) return `Vises på alle baner undtagen ${liste(fravalgte)}`;
+    return `Vises kun på ${liste([...baner].sort((a, b) => a - b))}`;
+}
+
+/** Skift mellem "alle baner" og "udvalgte baner". */
+async function setCourtScope(imageId, scope) {
+    if (isUpdatingCourtAssignment) return;
+    try {
+        isUpdatingCourtAssignment = true;
+        setCourtCheckboxesDisabled(true);
+
+        const images = await api.getSponsorImages('court', true);
+        const currentImage = images.find(img => img.id === imageId);
+        if (!currentImage) return;
+
+        // Skifter man til "udvalgte" uden at have valgt noget, starter vi med alle
+        // baner markeret — så fravælger man derfra, i stedet for at banneret
+        // forsvinder fra skærmene i det øjeblik man klikker.
+        let courts = currentImage.assignedCourts || [];
+        if (scope === 'valgte' && courts.length === 0) {
+            courts = Array.from({ length: courtCount }, (_, i) => i + 1);
+        }
+
+        await api.updateSponsorImageCourts(imageId, courts, scope);
+        await loadGallery('court');
+    } catch (error) {
+        console.error('Failed to update court scope:', error);
+        showMessage('Fejl', 'Kunne ikke gemme visningen. Tjek din forbindelse', [{ text: 'OK', style: 'primary' }]);
+        await loadGallery('court');
+    } finally {
+        isUpdatingCourtAssignment = false;
+        setCourtCheckboxesDisabled(false);
+    }
+}
+
 async function toggleCourtAssignment(imageId, courtNumber, isChecked) {
     // Prevent race conditions: if already updating, ignore this click
     if (isUpdatingCourtAssignment) {
@@ -526,10 +594,9 @@ async function toggleCourtAssignment(imageId, courtNumber, isChecked) {
             newCourts = newCourts.filter(c => c !== courtNumber);
         }
 
-        // Update court assignments on server
-        await api.updateSponsorImageCourts(imageId, newCourts);
+        // Fluebenene betjenes kun i "udvalgte"-tilstand, så scope følger med
+        await api.updateSponsorImageCourts(imageId, newCourts, 'valgte');
 
-        // Reload gallery to reflect changes (including removing from other images)
         await loadGallery('court');
     } catch (error) {
         console.error('Failed to update court assignment:', error);
@@ -553,14 +620,20 @@ function setCourtCheckboxesDisabled(disabled) {
     // gør .disabled ingenting og checkboxene forbliver klikbare under en opdatering.
     const checkboxes = document.querySelectorAll('.court-checkbox input[type="checkbox"]');
     checkboxes.forEach(checkbox => {
-        checkbox.disabled = disabled;
-        // Add visual feedback - slightly fade out when disabled (label = parent)
         const label = checkbox.closest('.court-checkbox');
+        // Bannere sat til "alle baner" har permanent slukkede flueben — de skal
+        // ikke vækkes til live når en opdatering er færdig.
+        if (label && label.classList.contains('court-checkbox--laast')) return;
+        checkbox.disabled = disabled;
         if (label) {
-            label.style.opacity = disabled ? '0.5' : '1';
-            label.style.cursor = disabled ? 'not-allowed' : 'pointer';
+            label.style.opacity = disabled ? '0.5' : '';
+            label.style.cursor = disabled ? 'not-allowed' : '';
         }
     });
+
+    // Radioknapperne skal heller ikke kunne klikkes midt i en opdatering
+    document.querySelectorAll('.court-scope-valg input[type="radio"]')
+        .forEach(radio => { radio.disabled = disabled; });
 }
 
 async function deleteImage(id, type) {
@@ -666,33 +739,40 @@ async function performClearAll(type, typeName) {
 const escapeHtml = window.BadmintonUtils.escapeHtml;
 const formatDate = window.BadmintonUtils.formatDate;
 
+const DEFAULT_BANNER_DURATION = 20;
+
 async function loadSlideDuration() {
     try {
         const settings = await api.getSponsorSettings();
-        const duration = settings.slideDuration || DEFAULT_DURATION;
-        document.getElementById('slideDuration').value = duration;
+        document.getElementById('slideDuration').value = settings.slideDuration || DEFAULT_DURATION;
+        document.getElementById('bannerDuration').value = settings.bannerDuration || DEFAULT_BANNER_DURATION;
     } catch (error) {
         console.error('Failed to load slide duration:', error);
         document.getElementById('slideDuration').value = DEFAULT_DURATION;
+        document.getElementById('bannerDuration').value = DEFAULT_BANNER_DURATION;
     }
 }
 
-async function saveSlideDuration() {
-    const duration = parseInt(document.getElementById('slideDuration').value);
+/** Fælles gemmefunktion for de to varigheder — de valideres ens. */
+async function gemVarighed(feltId, noegle, navn) {
+    const duration = parseInt(document.getElementById(feltId).value);
 
-    if (isNaN(duration) || duration < 3 || duration > 60) {
-        showMessage('Ugyldig varighed', 'Varighed skal være mellem 3 og 60 sekunder', [{ text: 'OK', style: 'primary' }]);
+    if (isNaN(duration) || duration < 3 || duration > 120) {
+        showMessage('Ugyldig varighed', 'Varighed skal være mellem 3 og 120 sekunder', [{ text: 'OK', style: 'primary' }]);
         return;
     }
 
     try {
-        await api.updateSponsorSettings(duration);
-        showMessage('Gemt', `Slideshow varighed opdateret til ${duration} sekunder`, [{ text: 'OK', style: 'primary' }]);
+        await api.updateSponsorSettings({ [noegle]: duration });
+        showMessage('Gemt', `${navn} opdateret til ${duration} sekunder`, [{ text: 'OK', style: 'primary' }]);
     } catch (error) {
-        console.error('Failed to save slide duration:', error);
+        console.error('Failed to save duration:', error);
         showMessage('Fejl', 'Kunne ikke gemme varighed. Tjek din forbindelse', [{ text: 'OK', style: 'primary' }]);
     }
 }
+
+const saveSlideDuration = () => gemVarighed('slideDuration', 'slideDuration', 'Slideshow-varighed');
+const saveBannerDuration = () => gemVarighed('bannerDuration', 'bannerDuration', 'Bane-banner-varighed');
 
 // Message overlay functions (replaces alert/confirm dialogs)
 // Besked-overlay er nu delt i js/utils.js (samme markup + adfærd)

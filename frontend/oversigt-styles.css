@@ -549,19 +549,8 @@ body::before {
     letter-spacing: 0.5px;
 }
 
-/* =================== CARD FOOTER =================== */
-.court-card-footer {
-    margin-top: 10px;
-    padding-top: 8px;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.court-banner-small {
-    width: 100%;
-    height: auto;
-    border-radius: 6px;
-    display: block;
-}
+/* Bane-sponsorbanneret er fjernet fra kortene — sponsorerne vises i stedet som
+   fuldskærms-slideshow når ingen kampe er i gang. */
 
 /* =================== FINISHED MATCH CARD =================== */
 .court-card--finished {

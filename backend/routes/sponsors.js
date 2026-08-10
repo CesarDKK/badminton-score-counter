@@ -59,7 +59,8 @@ router.get('/images', async (req, res, next) => {
 
         const { type, includeInactive } = req.query;
         let sql = `SELECT id, filename, type, original_name, file_size, width, height,
-                    mime_type, upload_date, display_order, is_active, expiration_date
+                    mime_type, upload_date, display_order, is_active, expiration_date,
+                    court_scope
              FROM sponsor_images`;
         const params = [];
         const whereClauses = [];
@@ -131,10 +132,11 @@ router.get('/images', async (req, res, next) => {
 // GET /api/sponsors/settings - Get sponsor settings (public)
 router.get('/settings', async (req, res, next) => {
     try {
-        const settings = await queryOne('SELECT slide_duration FROM sponsor_settings LIMIT 1');
+        const settings = await queryOne('SELECT slide_duration, banner_duration FROM sponsor_settings LIMIT 1');
 
         res.json({
-            slideDuration: settings?.slide_duration || 10
+            slideDuration: settings?.slide_duration || 10,
+            bannerDuration: settings?.banner_duration || 20
         });
     } catch (error) {
         next(error);
@@ -142,15 +144,29 @@ router.get('/settings', async (req, res, next) => {
 });
 
 // PUT /api/sponsors/settings - Update sponsor settings (requires auth)
+// Begge varigheder kan sættes hver for sig — bane-bannerne kører typisk
+// langsommere end fuldskærms-slideshowet.
 router.put('/settings', authMiddleware, async (req, res, next) => {
     try {
-        const { slideDuration } = req.body;
+        const { slideDuration, bannerDuration } = req.body;
+        const gyldig = (v) => Number.isFinite(Number(v)) && Number(v) >= 3 && Number(v) <= 120;
 
-        if (!slideDuration || slideDuration < 3 || slideDuration > 60) {
-            return res.status(400).json({ error: 'Varighed skal være mellem 3 og 60 sekunder' });
+        if (slideDuration === undefined && bannerDuration === undefined) {
+            return res.status(400).json({ error: 'Ingen varighed angivet' });
+        }
+        if (slideDuration !== undefined && !gyldig(slideDuration)) {
+            return res.status(400).json({ error: 'Varighed skal være mellem 3 og 120 sekunder' });
+        }
+        if (bannerDuration !== undefined && !gyldig(bannerDuration)) {
+            return res.status(400).json({ error: 'Varighed skal være mellem 3 og 120 sekunder' });
         }
 
-        await query('UPDATE sponsor_settings SET slide_duration = ?', [slideDuration]);
+        if (slideDuration !== undefined) {
+            await query('UPDATE sponsor_settings SET slide_duration = ?', [Number(slideDuration)]);
+        }
+        if (bannerDuration !== undefined) {
+            await query('UPDATE sponsor_settings SET banner_duration = ?', [Number(bannerDuration)]);
+        }
 
         res.json({ success: true });
     } catch (error) {
@@ -465,11 +481,24 @@ router.put('/:id/expiration', authMiddleware, async (req, res, next) => {
     }
 });
 
-// PUT /api/sponsors/:id/courts - Update court assignments for a sponsor image (requires auth)
+/**
+ * PUT /api/sponsors/:id/courts — hvilke baner et bane-banner vises på.
+ *
+ * scope = 'alle'   → vises på alle baner (standard for nye bannere)
+ * scope = 'valgte' → vises kun på banerne i courts
+ *
+ * Flere bannere må gerne dele samme bane; de roterer som slideshow på TV-siden.
+ * Tidligere blev en bane revet væk fra andre bannere her, fordi databasen kun
+ * tillod ét banner pr. bane — det er væk nu.
+ */
 router.put('/:id/courts', authMiddleware, async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { courts } = req.body; // Array of court numbers
+        const { courts, scope } = req.body; // courts: array of court numbers
+
+        if (scope !== undefined && scope !== 'alle' && scope !== 'valgte') {
+            return res.status(400).json({ error: 'scope skal være "alle" eller "valgte"' });
+        }
 
         // Validate that image exists and is of type 'court'
         const image = await queryOne(
@@ -503,25 +532,17 @@ router.put('/:id/courts', authMiddleware, async (req, res, next) => {
             });
         }
 
-        // Convert to integers for safety
-        const validCourts = courts.map(c => parseInt(c));
+        // Convert to integers for safety, uden dubletter
+        const validCourts = [...new Set(courts.map(c => parseInt(c)))];
 
-        // Optimized batch operations instead of N*2 individual queries
-        // Step 1: Remove all existing assignments for this image
+        if (scope !== undefined) {
+            await query('UPDATE sponsor_images SET court_scope = ? WHERE id = ?', [scope, id]);
+        }
+
+        // Listen erstattes helt — den gælder kun når scope er 'valgte'
         await query('DELETE FROM sponsor_image_courts WHERE sponsor_image_id = ?', [id]);
 
-        // Step 2 & 3: Only proceed if there are courts to assign
         if (validCourts.length > 0) {
-            // Step 2: Remove these courts from any other images (batch delete)
-            // Create placeholders for IN clause (?, ?, ?)
-            const placeholders = validCourts.map(() => '?').join(', ');
-            await query(
-                `DELETE FROM sponsor_image_courts WHERE court_number IN (${placeholders})`,
-                validCourts
-            );
-
-            // Step 3: Batch insert all new court assignments at once
-            // Generate placeholders for bulk insert: (?, ?), (?, ?), ...
             const insertPlaceholders = validCourts.map(() => '(?, ?)').join(', ');
             const insertValues = validCourts.flatMap(courtNumber => [id, courtNumber]);
             await query(

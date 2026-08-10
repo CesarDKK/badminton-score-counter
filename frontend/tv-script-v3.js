@@ -10,8 +10,11 @@ let screensaverAnimFrame = null;
 let currentSlideIndex = 0;
 let isShowingSlideshow = false;
 let cachedSponsorImages = [];
-let cachedCourtBanner = null;
+let cachedCourtBanners = [];      // bane-bannere for netop denne bane, i visningsrækkefølge
+let currentBannerIndex = 0;
+let bannerInterval = null;
 let cachedSlideDuration = 10000;
+let cachedBannerDuration = 20000; // bane-bannerne skifter langsommere end slideshowet
 let timerInterval = null;
 let isMatchCurrentlyActive = false;
 let wasMatchPreviouslyActive = false;
@@ -965,26 +968,32 @@ async function refreshSponsorSettings() {
         cachedSponsorImages = images;
 
         const courtBanners = await api.getSponsorImages('court');
-        const oldBanner = cachedCourtBanner;
+        const oldBanners = cachedCourtBanners;
 
-        cachedCourtBanner = courtBanners.find(banner =>
-            banner.assignedCourts && banner.assignedCourts.includes(courtId)
-        ) || null;
+        // 'alle' er standard for nye bannere; 'valgte' begrænser til bane-listen.
+        // Ældre bannere uden court_scope behandles som 'valgte' — samme som før.
+        cachedCourtBanners = courtBanners.filter(banner => {
+            const scope = banner.court_scope || 'valgte';
+            if (scope === 'alle') return true;
+            return Array.isArray(banner.assignedCourts) && banner.assignedCourts.includes(courtId);
+        });
 
-        const bannerChanged = (!oldBanner && cachedCourtBanner) ||
-                             (oldBanner && !cachedCourtBanner) ||
-                             (oldBanner && cachedCourtBanner && oldBanner.id !== cachedCourtBanner.id);
+        const bannersChanged = oldBanners.length !== cachedCourtBanners.length ||
+                              !oldBanners.every((b, i) => cachedCourtBanners[i] && b.id === cachedCourtBanners[i].id);
 
         const settings = await api.getSponsorSettings();
         cachedSlideDuration = settings.slideDuration * 1000;
+        const nyBannerVarighed = (settings.bannerDuration || 20) * 1000;
+        const varighedAendret = nyBannerVarighed !== cachedBannerDuration;
+        cachedBannerDuration = nyBannerVarighed;
 
         if (imagesChanged && isShowingSlideshow) {
             console.log('Sponsor images changed, restarting slideshow');
             restartSlideshow();
         }
 
-        if (bannerChanged && isMatchCurrentlyActive) {
-            console.log('Court banner changed, updating footer');
+        if ((bannersChanged || varighedAendret) && isMatchCurrentlyActive) {
+            currentBannerIndex = 0;
             updateCourtBanner();
         }
     } catch (error) {
@@ -992,19 +1001,29 @@ async function refreshSponsorSettings() {
     }
 }
 
+/**
+ * Bane-banneret i footeren. Er der flere bannere til banen, roterer de med
+ * bannerDuration imellem. Ét banner står bare stille — ingen timer, ingen
+ * flimmer. Uden bannere vises LIVE-indikatoren som før.
+ */
 function updateCourtBanner() {
     const footer = document.querySelector('.tv-footer');
     if (!footer) return;
 
+    stopBannerRotation();
+
     const isMatchActive = !isShowingSlideshow;
 
-    if (isMatchActive && cachedCourtBanner) {
+    if (isMatchActive && cachedCourtBanners.length > 0) {
+        if (currentBannerIndex >= cachedCourtBanners.length) currentBannerIndex = 0;
         footer.classList.add('has-banner');
         footer.innerHTML = `
-            <img src="/uploads/${cachedCourtBanner.filename}"
-                 alt="Court Banner"
+            <img id="courtBannerImage"
+                 src="/uploads/${cachedCourtBanners[currentBannerIndex].filename}"
+                 alt="Bane-sponsor"
                  class="court-banner-image">
         `;
+        if (cachedCourtBanners.length > 1) startBannerRotation();
     } else {
         footer.classList.remove('has-banner');
         footer.innerHTML = `
@@ -1013,6 +1032,31 @@ function updateCourtBanner() {
                 LIVE
             </div>
         `;
+    }
+}
+
+function startBannerRotation() {
+    forudindlaesBannere();
+    bannerInterval = setInterval(() => {
+        const img = document.getElementById('courtBannerImage');
+        if (!img) return stopBannerRotation();
+        currentBannerIndex = (currentBannerIndex + 1) % cachedCourtBanners.length;
+        img.src = `/uploads/${cachedCourtBanners[currentBannerIndex].filename}`;
+    }, cachedBannerDuration);
+}
+
+function stopBannerRotation() {
+    if (bannerInterval) {
+        clearInterval(bannerInterval);
+        bannerInterval = null;
+    }
+}
+
+/** Henter billederne på forhånd, så skiftet ikke blinker på en langsom hal-wifi. */
+function forudindlaesBannere() {
+    for (const banner of cachedCourtBanners) {
+        const img = new Image();
+        img.src = `/uploads/${banner.filename}`;
     }
 }
 
@@ -1578,6 +1622,7 @@ function hideQrCounter() {
 window.addEventListener('pagehide', function() {
     stopPolling();
     if (slideshowInterval) clearInterval(slideshowInterval);
+    stopBannerRotation();
     stopScreensaver();
 });
 

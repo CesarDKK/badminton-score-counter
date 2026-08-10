@@ -150,6 +150,9 @@ CREATE TABLE IF NOT EXISTS sponsor_images (
   display_order INT DEFAULT 0,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   expiration_date TIMESTAMP NULL DEFAULT NULL,
+  -- Kun for type='court': 'alle' viser banneret på alle baner, 'valgte' kun på
+  -- dem der står i sponsor_image_courts.
+  court_scope ENUM('alle','valgte') NOT NULL DEFAULT 'alle',
 
   INDEX idx_display_order (display_order),
   INDEX idx_upload_date (upload_date DESC),
@@ -158,7 +161,8 @@ CREATE TABLE IF NOT EXISTS sponsor_images (
   INDEX idx_sponsor_active_filter (type, is_active, expiration_date)
 ) ENGINE=InnoDB;
 
--- Sponsor image to court assignments (for court banner images)
+-- Hvilke baner et bane-banner er valgt til (bruges når court_scope='valgte').
+-- Flere bannere må gerne dele samme bane — de roterer som slideshow.
 CREATE TABLE IF NOT EXISTS sponsor_image_courts (
   id INT PRIMARY KEY AUTO_INCREMENT,
   sponsor_image_id INT NOT NULL,
@@ -166,7 +170,7 @@ CREATE TABLE IF NOT EXISTS sponsor_image_courts (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
   FOREIGN KEY (sponsor_image_id) REFERENCES sponsor_images(id) ON DELETE CASCADE,
-  UNIQUE KEY unique_court_assignment (court_number),
+  UNIQUE KEY unique_image_court (sponsor_image_id, court_number),
   INDEX idx_sponsor_image_id (sponsor_image_id),
   INDEX idx_court_number (court_number)
 ) ENGINE=InnoDB;
@@ -175,11 +179,14 @@ CREATE TABLE IF NOT EXISTS sponsor_image_courts (
 CREATE TABLE IF NOT EXISTS sponsor_settings (
   id INT PRIMARY KEY AUTO_INCREMENT,
   slide_duration INT DEFAULT 10,
+  -- Bane-bannerne skifter langsommere end fuldskærms-slideshowet, så de ikke
+  -- stjæler opmærksomhed fra stillingen under en igangværende kamp.
+  banner_duration INT DEFAULT 20,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 -- Insert default sponsor settings
-INSERT INTO sponsor_settings (slide_duration) VALUES (10)
+INSERT INTO sponsor_settings (slide_duration, banner_duration) VALUES (10, 20)
 ON DUPLICATE KEY UPDATE id=id;
 
 -- Team matches table (holdkamp)
