@@ -994,6 +994,7 @@ async function refreshSponsorSettings() {
 
         if ((bannersChanged || varighedAendret) && isMatchCurrentlyActive) {
             currentBannerIndex = 0;
+            _bannerSignatur = null;   // tving en genopbygning med den nye liste
             updateCourtBanner();
         }
     } catch (error) {
@@ -1005,16 +1006,32 @@ async function refreshSponsorSettings() {
  * Bane-banneret i footeren. Er der flere bannere til banen, roterer de med
  * bannerDuration imellem. Ét banner står bare stille — ingen timer, ingen
  * flimmer. Uden bannere vises LIVE-indikatoren som før.
+ *
+ * VIGTIGT: funktionen kaldes fra loadCourtData(), altså ved hver eneste
+ * opdatering af stillingen. Derfor bygges footeren kun om når indholdet
+ * faktisk ændrer sig — ellers ville rotationstimeren blive nulstillet hvert
+ * par sekunder og aldrig nå at tikke.
  */
+let _bannerSignatur = null;
+
 function updateCourtBanner() {
     const footer = document.querySelector('.tv-footer');
     if (!footer) return;
 
+    const isMatchActive = !isShowingSlideshow;
+    const viserBanner = isMatchActive && cachedCourtBanners.length > 0;
+    const signatur = viserBanner
+        ? cachedCourtBanners.map(b => b.id).join(',') + '@' + cachedBannerDuration
+        : 'live';
+
+    // Uændret indhold og footeren står som vi forlod den → lad den være
+    const forventetElement = viserBanner ? '#courtBannerImage' : '.live-indicator';
+    if (signatur === _bannerSignatur && footer.querySelector(forventetElement)) return;
+
+    _bannerSignatur = signatur;
     stopBannerRotation();
 
-    const isMatchActive = !isShowingSlideshow;
-
-    if (isMatchActive && cachedCourtBanners.length > 0) {
+    if (viserBanner) {
         if (currentBannerIndex >= cachedCourtBanners.length) currentBannerIndex = 0;
         footer.classList.add('has-banner');
         footer.innerHTML = `
