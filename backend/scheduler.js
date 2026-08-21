@@ -189,4 +189,42 @@ function startTournamentAutoSync() {
     console.log('⏰ Scheduled tournament auto-sync every 4 minutes (TS-turneringer med auto_sync slået til)');
 }
 
-module.exports = { startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync };
+/**
+ * Automatisk hentning af holdsammensaetningen fra badmintonplayer.dk.
+ *
+ * Koerer hvert minut, men rammer kun badmintonplayer for de kampe der faktisk
+ * er inde i vinduet omkring kampstart og ikke er tjekket de sidste 5 minutter.
+ * Er der ingen kampe under overvaagning, er det en ren databaseforespoergsel.
+ */
+function startHoldkampWatch() {
+    const { runHoldkampWatchers } = require('./routes/importHoldkamp');
+
+    cron.schedule('* * * * *', async () => {
+        // 1. Standard/direkte database
+        try {
+            await runHoldkampWatchers();
+        } catch (err) {
+            console.error('❌ Holdkamp-overvågning fejlede (default):', err.message);
+        }
+
+        // 2. Alle aktive klub-databaser (multi-tenant)
+        try {
+            const masterDb = require('./config/masterDatabase');
+            const clubs = await masterDb.query('SELECT db_name FROM clubs WHERE is_active = 1');
+            for (const club of clubs) {
+                try {
+                    await runWithTenant(club.db_name, () => runHoldkampWatchers());
+                } catch (err) {
+                    console.error(`❌ Holdkamp-overvågning fejlede for ${club.db_name}:`, err.message);
+                }
+            }
+        } catch (err) { /* master DB ikke tilgængelig i direkte mode */ }
+    }, {
+        scheduled: true,
+        timezone: 'Europe/Copenhagen'
+    });
+
+    console.log('⏰ Scheduled holdkamp-overvågning hvert minut (henter holdsedlen når den frigives)');
+}
+
+module.exports = { startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch };
