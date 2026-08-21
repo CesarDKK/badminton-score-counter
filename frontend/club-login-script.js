@@ -74,4 +74,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Et rigtigt <form> giver password managers og Enter-tasten native submit.
     loginForm.addEventListener('submit', e => { e.preventDefault(); handleLogin(); });
+
+    // Browserens implicitte submit (Enter i et felt) svigter i praksis i nogle
+    // kombinationer af browser og password manager. Derfor lytter vi ogsaa
+    // direkte efter Enter: fra brugernavn springer vi til adgangskoden, fra
+    // adgangskoden logger vi ind.
+    usernameInput.addEventListener('keydown', e => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        if (passwordInput.value) handleLogin(); else passwordInput.focus();
+    });
+
+    passwordInput.addEventListener('keydown', e => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        handleLogin();
+    });
 });
