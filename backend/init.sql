@@ -189,6 +189,28 @@ CREATE TABLE IF NOT EXISTS sponsor_settings (
 INSERT INTO sponsor_settings (slide_duration, banner_duration) VALUES (10, 20)
 ON DUPLICATE KEY UPDATE id=id;
 
+
+-- Automatisk hentning af holdsammensaetningen fra badmintonplayer.dk.
+-- Holdsedlen frigives foerst ca. 60 min foer kampstart; starttidspunktet er
+-- kendt fra kampen saettes. Vi gemmer linket og henter selv naar tiden er inde.
+CREATE TABLE IF NOT EXISTS holdkamp_watchers (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  league_match_id VARCHAR(32) NOT NULL,
+  url VARCHAR(500) NOT NULL,
+  team1_name VARCHAR(200) NOT NULL DEFAULT '',
+  team2_name VARCHAR(200) NOT NULL DEFAULT '',
+  venue VARCHAR(300) NULL,
+  start_time DATETIME NULL,
+  status ENUM('venter','oprettet','opgivet','fejl') NOT NULL DEFAULT 'venter',
+  last_checked_at DATETIME NULL,
+  last_error VARCHAR(400) NULL,
+  team_match_id INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  UNIQUE KEY unique_league_match (league_match_id),
+  INDEX idx_status_start (status, start_time)
+) ENGINE=InnoDB;
 -- Team matches table (holdkamp)
 CREATE TABLE IF NOT EXISTS team_matches (
   id INT PRIMARY KEY AUTO_INCREMENT,

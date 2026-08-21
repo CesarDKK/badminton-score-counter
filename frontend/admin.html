@@ -81,7 +81,7 @@
                 <!-- Import fra badmintonplayer.dk -->
                 <div id="bpImportSection" style="margin-bottom: 25px; padding: 20px; background: rgba(var(--color-primary-rgb),0.1); border: 1px solid var(--color-primary); border-radius: 10px;">
                     <h3 style="color: var(--color-accent); margin-bottom: 8px;">Importer fra badmintonplayer.dk</h3>
-                    <p style="color: #aaa; font-size: 0.88em; margin-bottom: 14px;">Indsæt et kamplink fra badmintonplayer.dk — hold og spillere importeres automatisk.</p>
+                    <p style="color: #aaa; font-size: 0.88em; margin-bottom: 14px;">Indsæt et kamplink fra badmintonplayer.dk — hold og spillere importeres automatisk. Er holdsammensætningen ikke frigivet endnu, holder systemet selv øje og opretter holdkampen, så snart den kommer.</p>
                     <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                         <input type="text" id="bpImportUrl"
                                placeholder="https://www.badmintonplayer.dk/DBF/HoldTurnering/Stilling/#5,2025,..."
@@ -90,6 +90,8 @@
                     </div>
                     <div id="bpImportStatus" style="display:none; margin-top:10px; padding:10px; border-radius:5px; font-size:0.9em;"></div>
                     <div id="bpImportPreview" style="display:none; margin-top:20px;"></div>
+                    <!-- Kampe der venter på at holdsammensætningen bliver frigivet -->
+                    <div id="bpWatchers" style="display:none; margin-top:18px;"></div>
                 </div>
 
                 <!-- Create new holdkamp form -->
@@ -369,10 +371,10 @@
         </div>
     </div>
 
-    <script src="js/api.js?v=15"></script>
+    <script src="js/api.js?v=16"></script>
     <script src="js/auth-guard.js?v=3"></script>
     <script src="js/logo-match.js?v=1"></script>
     <script src="js/live-updates.js?v=2"></script>
-    <script src="admin-script.js?v=47"></script>
+    <script src="admin-script.js?v=48"></script>
 </body>
 </html>

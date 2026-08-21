@@ -623,6 +623,18 @@ class BadmintonAPI {
         });
     }
 
+    // ==================== Holdkamp-import fra badmintonplayer.dk ============
+
+    /** Kampe der venter på at holdsammensætningen bliver frigivet. */
+    async getHoldkampWatchers() {
+        return this.request('/import/holdkamp-watchers');
+    }
+
+    /** Stop overvågningen af en kamp. */
+    async deleteHoldkampWatcher(id) {
+        return this.request(`/import/holdkamp-watchers/${id}`, { method: 'DELETE' });
+    }
+
     // ==================== Player Info ====================
 
     /**

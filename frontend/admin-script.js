@@ -1145,6 +1145,7 @@ async function showHoldkamp() {
         if (s2) fillHoldkampLogoSelect(s2);
     });
     await loadActiveHoldkamp();
+    bpStartWatcherRefresh();
     // Poll every 3 seconds for live scores
     if (!holdkampRefreshTimer) {
         holdkampRefreshTimer = setInterval(loadActiveHoldkamp, 3000);
@@ -1156,6 +1157,7 @@ function stopHoldkampRefresh() {
         clearInterval(holdkampRefreshTimer);
         holdkampRefreshTimer = null;
     }
+    bpStopWatcherRefresh();
 }
 
 async function loadActiveHoldkamp() {
@@ -2867,6 +2869,18 @@ async function bpImport() {
             method: 'POST',
             body: JSON.stringify({ url })
         });
+
+        if (data.pending) {
+            // Holdsammensætningen er ikke frigivet endnu — den frigives typisk
+            // omkring en time før kampstart, og så henter serveren den selv.
+            document.getElementById('bpImportUrl').value = '';
+            bpStatus(`${data.team1Name} – ${data.team2Name} spiller ${bpFormatStart(data.startTime)}. `
+                   + 'Holdsammensætningen er ikke frigivet endnu — den hentes automatisk, når den kommer, '
+                   + 'og holdkampen bliver oprettet af sig selv.', 'info');
+            await bpLoadWatchers();
+            return;
+        }
+
         bpRenderPreview(data);
         bpStatus(`✓ Importeret: ${data.team1Name} vs ${data.team2Name} — ${data.games.length} kampe`, 'success');
     } catch (err) {
@@ -2875,6 +2889,97 @@ async function bpImport() {
         btn.disabled = false;
         btn.textContent = 'Hent kampdata';
     }
+}
+
+// ── Kampe der venter på holdsammensætningen ─────────────────────────────────
+
+let bpWatcherTimer = null;
+
+function bpFormatStart(iso) {
+    if (!iso) return 'på et ukendt tidspunkt';
+    const d = new Date(iso);
+    if (isNaN(d)) return 'på et ukendt tidspunkt';
+    const dag = d.toLocaleDateString('da-DK', { weekday: 'long', day: 'numeric', month: 'long' });
+    const kl = d.toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
+    return `${dag} kl. ${kl}`;
+}
+
+async function bpLoadWatchers() {
+    const box = document.getElementById('bpWatchers');
+    if (!box) return;
+
+    let liste;
+    try {
+        liste = await api.getHoldkampWatchers();
+    } catch (err) {
+        box.style.display = 'none';
+        return;
+    }
+
+    if (!liste || liste.length === 0) {
+        box.style.display = 'none';
+        box.innerHTML = '';
+        return;
+    }
+
+    const badge = (tekst, farve) =>
+        `<span style="background:rgba(${farve},0.15);color:rgb(${farve});border:1px solid rgba(${farve},0.35);`
+        + `border-radius:100px;padding:2px 10px;font-size:0.82em;white-space:nowrap;">${tekst}</span>`;
+
+    const raekker = liste.map(w => {
+        const status =
+            w.status === 'venter'   ? badge('Venter på holdsammensætning', '170,170,170') :
+            w.status === 'oprettet' ? badge('Holdkamp oprettet', '69,209,126') :
+            w.status === 'opgivet'  ? badge('Kom aldrig', '170,170,170') :
+                                      badge('Kunne ikke oprettes', '217,44,63');
+
+        const fejl = w.last_error && w.status !== 'opgivet'
+            ? `<div style="color:var(--color-danger,#d92c3f);font-size:0.82em;margin-top:4px;">${escapeHtml(w.last_error)}</div>`
+            : '';
+
+        const slet = w.status === 'venter'
+            ? `<button onclick="bpStopWatcher(${w.id})" class="btn-secondary"
+                       style="padding:4px 12px;font-size:0.82em;white-space:nowrap;">Stop</button>`
+            : '';
+
+        return `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;
+                            padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.06);">
+                    <div style="min-width:0;">
+                        <div style="color:#eaeaea;">${escapeHtml(w.team1_name || '?')} – ${escapeHtml(w.team2_name || '?')}</div>
+                        <div style="color:#aaa;font-size:0.84em;">${bpFormatStart(w.start_time_local)}</div>
+                        ${fejl}
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px;">${status}${slet}</div>
+                </div>`;
+    }).join('');
+
+    box.innerHTML = `
+        <h4 style="color:var(--color-accent);margin-bottom:6px;font-size:0.95em;">Venter på holdsammensætning</h4>
+        <p style="color:#aaa;font-size:0.84em;margin-bottom:8px;">
+            Systemet tjekker badmintonplayer.dk fra ca. en time før kampstart og opretter holdkampen, så snart holdsedlen er frigivet.
+        </p>
+        <div style="background:rgba(0,0,0,0.2);border-radius:8px;">${raekker}</div>`;
+    box.style.display = 'block';
+}
+
+async function bpStopWatcher(id) {
+    try {
+        await api.deleteHoldkampWatcher(id);
+        await bpLoadWatchers();
+    } catch (err) {
+        showMessage('Fejl', 'Kunne ikke stoppe overvågningen: ' + err.message);
+    }
+}
+
+/** Holder listen frisk mens holdkamp-fanen er åben. */
+function bpStartWatcherRefresh() {
+    bpStopWatcherRefresh();
+    bpLoadWatchers();
+    bpWatcherTimer = setInterval(bpLoadWatchers, 60000);
+}
+
+function bpStopWatcherRefresh() {
+    if (bpWatcherTimer) { clearInterval(bpWatcherTimer); bpWatcherTimer = null; }
 }
 
 function bpStatus(msg, type) {

@@ -5,6 +5,48 @@ const { authMiddleware } = require('../middleware/auth');
 const { publishGameStateChange } = require('../events/gameStateEvents');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
 
+/**
+ * Opretter en holdkamp med dens delkampe.
+ *
+ * Ligger som funktion og ikke kun i ruten, fordi den automatiske hentning af
+ * holdsedler (importHoldkamp.js) opretter holdkampe uden om HTTP-laget. Begge
+ * veje skal have samme regler — herunder at der ikke maa koere en turnering
+ * samtidig.
+ *
+ * Kaster en fejl med .status = 409 hvis en turnering blokerer.
+ */
+async function opretHoldkamp({ format, team1Name, team2Name, games, team1LogoId, team2LogoId }) {
+    const activeTournament = await queryOne(
+        `SELECT id, name FROM tournaments WHERE status = 'active' LIMIT 1`
+    );
+    if (activeTournament) {
+        const err = new Error(`Du har en aktiv turnering ("${activeTournament.name}"). Afslut eller slet den før du opretter en holdkamp.`);
+        err.status = 409;
+        throw err;
+    }
+
+    const result = await query(
+        `INSERT INTO team_matches (format, team1_name, team2_name, team1_logo_id, team2_logo_id, status)
+         VALUES (?, ?, ?, ?, ?, 'active')`,
+        [format, team1Name, team2Name, team1LogoId || null, team2LogoId || null]
+    );
+    const teamMatchId = result.insertId;
+
+    for (let i = 0; i < games.length; i++) {
+        const g = games[i];
+        await query(
+            `INSERT INTO team_match_games
+             (team_match_id, game_number, category, team1_player1, team1_player2, team2_player1, team2_player2)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [teamMatchId, i + 1, g.category,
+             g.team1Player1 || null, g.team1Player2 || null,
+             g.team2Player1 || null, g.team2Player2 || null]
+        );
+    }
+
+    return teamMatchId;
+}
+
 // GET /api/team-matches/history - Get all finished team matches with games (public)
 router.get('/history', async (req, res, next) => {
     try {
@@ -131,40 +173,10 @@ router.post('/', authMiddleware, async (req, res, next) => {
             return res.status(400).json({ error: 'Alle felter er påkrævet' });
         }
 
-        // Bloker hvis der findes en aktiv turnering — én type ad gangen
-        const activeTournament = await queryOne(
-            `SELECT id, name FROM tournaments WHERE status = 'active' LIMIT 1`
-        );
-        if (activeTournament) {
-            return res.status(409).json({
-                error: `Du har en aktiv turnering ("${activeTournament.name}"). Afslut eller slet den før du opretter en holdkamp.`
-            });
-        }
-
-        // Create new team match
-        const result = await query(
-            `INSERT INTO team_matches (format, team1_name, team2_name, team1_logo_id, team2_logo_id, status)
-             VALUES (?, ?, ?, ?, ?, 'active')`,
-            [format, team1Name, team2Name, team1LogoId || null, team2LogoId || null]
-        );
-
-        const teamMatchId = result.insertId;
-
-        // Insert all games
-        for (let i = 0; i < games.length; i++) {
-            const g = games[i];
-            await query(
-                `INSERT INTO team_match_games
-                 (team_match_id, game_number, category, team1_player1, team1_player2, team2_player1, team2_player2)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                [teamMatchId, i + 1, g.category,
-                 g.team1Player1 || null, g.team1Player2 || null,
-                 g.team2Player1 || null, g.team2Player2 || null]
-            );
-        }
-
+        const teamMatchId = await opretHoldkamp({ format, team1Name, team2Name, games, team1LogoId, team2LogoId });
         res.json({ success: true, id: teamMatchId });
     } catch (error) {
+        if (error.status === 409) return res.status(409).json({ error: error.message });
         next(error);
     }
 });
@@ -332,3 +344,4 @@ router.delete('/:id', authMiddleware, async (req, res, next) => {
 });
 
 module.exports = router;
+module.exports.opretHoldkamp = opretHoldkamp;
