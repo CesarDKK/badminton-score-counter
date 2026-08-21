@@ -30,8 +30,13 @@ async function showDeviceTokensNavIfClubAdmin() {
 function setupEventListeners() {
     // Login
     document.getElementById('loginBtn').addEventListener('click', handleLogin);
-    document.getElementById('adminPassword').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') handleLogin();
+    // keydown (ikke det forældede keypress) saa Enter altid udloeser login,
+    // ogsaa naar felterne er udfyldt af en password manager.
+    document.getElementById('adminPassword').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleLogin();
+        }
     });
 
     // Logout
