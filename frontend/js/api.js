@@ -1012,10 +1012,18 @@ class BadmintonAPI {
     }
 
     async changeSuperAdminPassword(currentPassword, newPassword) {
-        return this.request('/super-admin/change-password', {
+        const result = await this.request('/super-admin/change-password', {
             method: 'PUT',
             body: JSON.stringify({ currentPassword, newPassword })
         });
+        // Backend udsteder et nyt token uden must-change — gem det, saa et evt.
+        // tvunget skift ikke laaser resten af sessionen ude.
+        if (result.token) {
+            this.token = result.token;
+            sessionStorage.setItem('superAdminToken', result.token);
+            sessionStorage.setItem('authToken', result.token);
+        }
+        return result;
     }
 
     // ==================== Super Admin — Football Clubs ====================
