@@ -34,10 +34,22 @@ fra_container() {
         | sed -n "s/^$2=//p" | head -n1
 }
 
-# tilfoej <ENV_NAVN> <container|-> <container_var|-> <laengde>
-#   container = "-" betyder: forsøg ikke at genskabe, generér altid
+# Findes der allerede en initialiseret database? (data-volume til stede)
+# Bruges som sikkerhedsspærre: er databasen der, må vi ALDRIG finde på en ny
+# adgangskode — den ville ikke matche den, databasen blev oprettet med.
+eksisterende_db() {
+    docker volume ls --format '{{.Name}}' 2>/dev/null | grep -q 'mysql_data$'
+}
+
+# tilfoej <ENV_NAVN> <container|-> <container_var|-> <laengde> <kritisk>
+#   Rækkefølge: 1) findes den allerede i .env → rør den ikke.
+#              2) genskab den nuværende værdi fra containeren (intet ændres).
+#              3) kun hvis den ikke kunne genskabes: generér en ny.
+#   kritisk=1 (MySQL-adgangskoder): en forkert værdi ville låse databasen ude,
+#     så hvis den ikke kan genskabes OG der findes en database, STOPPER vi hellere
+#     end at gætte. kritisk=0: en ny værdi er ufarlig (self-healing / re-login).
 tilfoej() {
-    navn=$1; container=$2; cvar=$3; laengde=$4
+    navn=$1; container=$2; cvar=$3; laengde=$4; kritisk=${5:-0}
     if har_variabel "$navn"; then
         echo "  = $navn findes allerede — uændret"
         return 0
@@ -45,9 +57,16 @@ tilfoej() {
     vaerdi=""
     if [ "$container" != "-" ]; then
         vaerdi=$(fra_container "$container" "$cvar" || true)
-        [ -n "$vaerdi" ] && echo "  ~ $navn genskabt fra kørende container"
+        [ -n "$vaerdi" ] && echo "  ~ $navn genskabt fra kørende container (uændret)"
     fi
     if [ -z "$vaerdi" ]; then
+        if [ "$kritisk" = "1" ] && eksisterende_db; then
+            echo "" >&2
+            echo "STOP: Kunne ikke hente $navn fra en kørende container, men der findes" >&2
+            echo "      en eksisterende database. En ny værdi ville låse databasen ude." >&2
+            echo "      Sæt $navn manuelt i .env (den nuværende værdi), og kør igen." >&2
+            exit 1
+        fi
         vaerdi=$(generer "$laengde")
         echo "  + $navn genereret (ny tilfældig værdi)"
     fi
@@ -60,13 +79,14 @@ tilfoej() {
 
 echo "Sikrer hemmeligheder i $(pwd)/$ENV_FILE ..."
 
-# Stabile værdier — genskabes fra containere så intet brydes
-tilfoej MYSQL_ROOT_PASSWORD  badminton-mysql   MYSQL_ROOT_PASSWORD 24
-tilfoej MYSQL_PASSWORD       badminton-mysql   MYSQL_PASSWORD      24
-tilfoej JWT_SECRET           badminton-backend JWT_SECRET         32
-
-# Football — frisk tilfældig værdi hvis den mangler (self-healing)
-tilfoej FOOTBALL_DB_PASSWORD  -  -  24
-tilfoej FOOTBALL_JWT_SECRET   -  -  32
+# Alle fem genskabes fra de kørende containere, så INTET password ændres på en
+# eksisterende installation — vi skriver bare de nuværende værdier ned i .env.
+# På en frisk installation (ingen containere) genereres de i stedet.
+# NB: inde i football-containeren hedder variablerne DB_PASSWORD / JWT_SECRET.
+tilfoej MYSQL_ROOT_PASSWORD  badminton-mysql   MYSQL_ROOT_PASSWORD 24 1
+tilfoej MYSQL_PASSWORD       badminton-mysql   MYSQL_PASSWORD      24 1
+tilfoej JWT_SECRET           badminton-backend JWT_SECRET         32 0
+tilfoej FOOTBALL_DB_PASSWORD football-backend  DB_PASSWORD        24 0
+tilfoej FOOTBALL_JWT_SECRET  football-backend  JWT_SECRET         32 0
 
 echo "Færdig. .env er komplet."
