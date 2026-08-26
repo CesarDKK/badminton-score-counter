@@ -37,6 +37,33 @@
         </div>
     </div>
 
+    <!-- TVUNGET PASSWORD-SKIFT (vises ved første login med standard-adgangskode) -->
+    <div id="forcedPwScreen" style="display:none;">
+        <div class="login-wrap">
+            <div class="login-card">
+                <div class="brand">
+                    <div class="brand-icon">🔒</div>
+                    <h1>Skift adgangskode</h1>
+                    <p class="subtitle">Standard-adgangskoden skal skiftes, før du kan fortsætte</p>
+                </div>
+                <div class="form-group">
+                    <label>Nuværende adgangskode</label>
+                    <input type="password" id="fpCurrent" placeholder="Nuværende adgangskode" autocomplete="current-password">
+                </div>
+                <div class="form-group">
+                    <label>Ny adgangskode (min. 8 tegn)</label>
+                    <input type="password" id="fpNew" placeholder="Ny adgangskode" autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label>Gentag ny adgangskode</label>
+                    <input type="password" id="fpConfirm" placeholder="Gentag ny adgangskode" autocomplete="new-password">
+                </div>
+                <button id="fpSubmitBtn" class="btn-primary full">Skift og fortsæt</button>
+                <div id="fpError" class="msg msg-error" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- DASHBOARD -->
     <div id="dashboard" style="display:none;">
         <div class="container">
@@ -320,6 +347,6 @@
 
     <script src="js/api.js?v=17"></script>
     <script src="js/logo-match.js?v=1"></script>
-    <script src="super-admin-script.js?v=16"></script>
+    <script src="super-admin-script.js?v=17"></script>
 </body>
 </html>

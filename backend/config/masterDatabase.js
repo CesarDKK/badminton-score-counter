@@ -43,12 +43,28 @@ async function initialize() {
     try {
         await pool.getConnection().then(c => c.release());
 
+        // must_change_password: tilfoejes idempotent saa eksisterende master-DB
+        // ogsaa faar kolonnen (init.master.sql kun paa friske installationer).
+        const mustChangeCol = await query(
+            `SELECT COUNT(*) AS c FROM information_schema.columns
+             WHERE table_schema = 'badminton_master'
+               AND table_name = 'super_admins'
+               AND column_name = 'must_change_password'`
+        );
+        if (mustChangeCol[0].c === 0) {
+            await query(
+                `ALTER TABLE super_admins ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT FALSE`
+            );
+            console.log('✓ super_admins.must_change_password kolonne tilfoejet');
+        }
+
         const existing = await queryOne('SELECT id FROM super_admins LIMIT 1');
         if (!existing) {
             const defaultPassword = 'superadmin123';
             const hash = await bcrypt.hash(defaultPassword, 10);
+            // must_change_password = TRUE: skift tvinges ved foerste login
             await query(
-                'INSERT INTO super_admins (username, password_hash) VALUES (?, ?)',
+                'INSERT INTO super_admins (username, password_hash, must_change_password) VALUES (?, ?, TRUE)',
                 ['superadmin', hash]
             );
             console.log('');
@@ -56,9 +72,19 @@ async function initialize() {
             console.log('║  STANDARD SUPER ADMIN OPRETTET               ║');
             console.log('║  Brugernavn: superadmin                      ║');
             console.log('║  Adgangskode: superadmin123                  ║');
-            console.log('║  SKIFT ADGANGSKODEN VED FØRSTE LOGIN!        ║');
+            console.log('║  SKAL SKIFTES VED FØRSTE LOGIN               ║');
             console.log('╚══════════════════════════════════════════════╝');
             console.log('');
+        }
+
+        // Tving et skift for enhver super-admin der STADIG har standard-adgangskoden
+        // (fanger ogsaa en eksisterende installation der aldrig fik skiftet den).
+        // Naar den er skiftet, fejler sammenligningen, og flaget saettes ikke igen.
+        const alleAdmins = await query('SELECT id, password_hash FROM super_admins');
+        for (const a of alleAdmins) {
+            if (await bcrypt.compare('superadmin123', a.password_hash)) {
+                await query('UPDATE super_admins SET must_change_password = TRUE WHERE id = ?', [a.id]);
+            }
         }
 
         // Centralt logo-bibliotek — oprettes idempotent saa eksisterende master-DB ogsaa faar tabellen

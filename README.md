@@ -194,28 +194,6 @@ Komplet trin-for-trin guide til installation på ny server (inkl. Git og Docker)
 
 ---
 
-## 🍓 Raspberry Pi Support
-
-This app runs great on Raspberry Pi! We provide optimized Docker configurations for ARM architecture.
-
-**Quick Start for Raspberry Pi**:
-```bash
-./start-rpi.sh
-```
-
-**Or manually**:
-```bash
-docker-compose -f docker-compose.rpi.yml up -d
-```
-
-**Full guides available**:
-- 📘 [Raspberry Pi Installation Guide](README.RASPBERRY_PI.md) - Complete setup instructions
-- 🚀 [Quick Start Guide](QUICKSTART.RASPBERRY_PI.md) - Get running in 4 commands
-
-**Tested on**: Raspberry Pi 3B+, 4 (2GB/4GB/8GB), 5, and Pi 400
-
----
-
 ## 📱 Android App
 
 A dedicated Android app is available for court-side displays. The app provides a fullscreen WebView optimized for tablets and phones.

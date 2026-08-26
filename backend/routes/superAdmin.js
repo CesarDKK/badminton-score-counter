@@ -35,7 +35,7 @@ router.post('/login', async (req, res, next) => {
         }
 
         const admin = await masterDb.queryOne(
-            'SELECT id, username, password_hash FROM super_admins WHERE username = ?',
+            'SELECT id, username, password_hash, must_change_password FROM super_admins WHERE username = ?',
             [username]
         );
 
@@ -48,8 +48,9 @@ router.post('/login', async (req, res, next) => {
             return res.status(401).json({ error: 'Forkert brugernavn eller adgangskode' });
         }
 
-        const token = generateSuperAdminToken(admin.id, admin.username);
-        res.json({ success: true, token });
+        const mustChange = !!admin.must_change_password;
+        const token = generateSuperAdminToken(admin.id, admin.username, mustChange);
+        res.json({ success: true, token, mustChangePassword: mustChange });
     } catch (error) {
         next(error);
     }
@@ -79,11 +80,13 @@ router.put('/change-password', superAdminAuth, async (req, res, next) => {
 
         const hash = await bcrypt.hash(newPassword, 10);
         await masterDb.query(
-            'UPDATE super_admins SET password_hash = ? WHERE id = ?',
+            'UPDATE super_admins SET password_hash = ?, must_change_password = FALSE WHERE id = ?',
             [hash, admin.id]
         );
 
-        res.json({ success: true });
+        // Nyt token uden must-change, saa brugeren kan fortsaette uden at logge ind igen.
+        const token = generateSuperAdminToken(admin.id, req.superAdmin.username, false);
+        res.json({ success: true, token });
     } catch (error) { next(error); }
 });
 

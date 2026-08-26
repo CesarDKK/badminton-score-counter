@@ -78,7 +78,15 @@ let activeApp = 'badminton'; // 'badminton' | 'football'
 document.addEventListener('DOMContentLoaded', function () {
     // Hvis allerede logget ind som super admin
     if (api.isSuperAdminSession()) {
-        showDashboard();
+        // Et must-change-token (fx efter genindlæsning midt i skiftet) skal
+        // sende brugeren til skift-skærmen, ikke til dashboardet (som ville
+        // fejle med 403 på alle kald).
+        const payload = api.getTokenPayload && api.getTokenPayload();
+        if (payload && payload.mustChange) {
+            showForcedPasswordChange('');
+        } else {
+            showDashboard();
+        }
     }
 
     // Login
@@ -86,6 +94,10 @@ document.addEventListener('DOMContentLoaded', function () {
     // keydown (ikke det forældede keypress) saa Enter altid udloeser login.
     document.getElementById('saPassword').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); handleLogin(); } });
     document.getElementById('saUsername').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('saPassword').focus(); } });
+
+    // Tvunget password-skift
+    document.getElementById('fpSubmitBtn').addEventListener('click', handleForcedPasswordChange);
+    document.getElementById('fpConfirm').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); handleForcedPasswordChange(); } });
 
     // Logout
     document.getElementById('saLogoutBtn').addEventListener('click', handleLogout);
@@ -180,13 +192,54 @@ async function handleLogin() {
     errEl.style.display = 'none';
 
     try {
-        await api.loginAsSuperAdmin(username, password);
-        showDashboard();
+        const result = await api.loginAsSuperAdmin(username, password);
+        if (result && result.mustChangePassword) {
+            showForcedPasswordChange(password);
+        } else {
+            showDashboard();
+        }
     } catch (err) {
         showMsg(errEl, err.message || 'Login mislykkedes', 'error');
         btn.disabled = false;
         btn.textContent = 'Log Ind';
         document.getElementById('saPassword').value = '';
+    }
+}
+
+// Tvunget password-skift: vises når man logger ind med standard-adgangskoden.
+// Kan ikke springes over — backenden afviser alle andre kald indtil skiftet.
+function showForcedPasswordChange(currentPassword) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('forcedPwScreen').style.display = 'block';
+    const cur = document.getElementById('fpCurrent');
+    if (currentPassword) cur.value = currentPassword; // forudfyld fra login
+    document.getElementById('fpNew').focus();
+}
+
+async function handleForcedPasswordChange() {
+    const current = document.getElementById('fpCurrent').value;
+    const nyt = document.getElementById('fpNew').value;
+    const gentag = document.getElementById('fpConfirm').value;
+    const btn = document.getElementById('fpSubmitBtn');
+    const errEl = document.getElementById('fpError');
+    errEl.style.display = 'none';
+
+    if (!current || !nyt) { return showMsg(errEl, 'Udfyld alle felter', 'error'); }
+    if (nyt.length < 8) { return showMsg(errEl, 'Ny adgangskode skal være mindst 8 tegn', 'error'); }
+    if (nyt !== gentag) { return showMsg(errEl, 'De to nye adgangskoder er ikke ens', 'error'); }
+    if (nyt === current) { return showMsg(errEl, 'Vælg en anden adgangskode end den nuværende', 'error'); }
+
+    btn.disabled = true;
+    btn.textContent = 'Skifter...';
+    try {
+        await api.changeSuperAdminPassword(current, nyt);
+        document.getElementById('forcedPwScreen').style.display = 'none';
+        showDashboard();
+    } catch (err) {
+        showMsg(errEl, err.message || 'Skift mislykkedes', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Skift og fortsæt';
     }
 }
 
