@@ -1,7 +1,6 @@
 # Badminton App — Komplet Installationsvejledning
 
 Denne guide dækker komplet installation fra bunden på en ny server eller PC med **Ubuntu/Debian Linux**.
-For Raspberry Pi: se [`README.RASPBERRY_PI.md`](README.RASPBERRY_PI.md).
 For Windows: se afsnittet [Installation på Windows](#installation-på-windows) nederst.
 
 ---
@@ -312,31 +311,51 @@ Hard-refresh i browseren: `Ctrl+Shift+R` (Windows/Linux) eller `Cmd+Shift+R` (Ma
 
 ## 12. Backup og gendannelse
 
-### Backup
+### Automatisk backup (kører af sig selv)
+
+`backup`-servicen tager automatisk en fuld backup **hver 24. time** og beholder
+dem i **14 dage**. Hver backup dækker:
+
+- **Alle** databaser i én dump (`badminton_counter`, alle klub-databaser,
+  `badminton_master` og `football_tournament`) — filen `db-<tidsstempel>.sql.gz`.
+- Alle uploadede billeder (badminton + football) — filen `uploads-<tidsstempel>.tar.gz`.
+
+Backup'erne ligger i Docker-volumet `badminton-app_backups`. Se dem, og find
+host-stien:
 
 ```bash
-cd ~/badminton-score-counter
-
-# Backup database
-docker-compose exec mysql mysqldump -u badminton_user -p badminton_counter > backup-$(date +%Y%m%d).sql
-# Indtast database-adgangskoden fra din .env (MYSQL_PASSWORD)
-
-# Backup uploadede billeder (sponsorer)
-docker cp badminton-backend:/app/uploads ./uploads-backup-$(date +%Y%m%d)
-
-# Lav en samlet arkivfil
-tar -czf badminton-backup-$(date +%Y%m%d).tar.gz backup-$(date +%Y%m%d).sql uploads-backup-$(date +%Y%m%d)
+docker run --rm -v badminton-app_backups:/b alpine ls -lh /b
 ```
+
+```bash
+docker volume inspect badminton-app_backups
+```
+
+Kopiér de nyeste backups ud til den mappe du står i (fx før du flytter serveren):
+
+```bash
+docker run --rm -v badminton-app_backups:/b -v "$PWD":/ud alpine sh -c 'cp /b/db-* /b/uploads-* /ud/'
+```
+
+> Interval og opbevaring kan ændres i `.env` med `BACKUP_INTERVAL_HOURS` og
+> `BACKUP_RETENTION_DAYS` (standard 24 og 14).
 
 ### Gendannelse
 
 ```bash
-# Gendan database
-docker-compose exec -T mysql mysql -u badminton_user -p badminton_counter < backup-YYYYMMDD.sql
-
-# Gendan billeder
-docker cp ./uploads-backup-YYYYMMDD/. badminton-backend:/app/uploads
+# Gendan ALLE databaser fra en dump (erstatter nuværende data)
+gunzip -c db-YYYYMMDD-HHMMSS.sql.gz | docker exec -i badminton-mysql \
+  sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD"'
 ```
+
+```bash
+# Gendan billeder (pak arkivet ud i uploads-volumet)
+docker run --rm -v badminton-app_uploads_data:/data -v "$PWD":/ind alpine \
+  sh -c 'tar xzf /ind/uploads-YYYYMMDD-HHMMSS.tar.gz -C /data --strip-components=1 uploads'
+```
+
+> Vil du hellere gendanne én enkelt klub via admin-fladen, findes der stadig en
+> per-klub backup/restore under super-admin.
 
 ---
 

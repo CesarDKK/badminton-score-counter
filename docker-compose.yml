@@ -1,9 +1,18 @@
+# Delt log-rotation: uden dette vokser container-loggene ubegrænset på en
+# server der kører i månedsvis (default json-file uden grænser).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   # MySQL Database
   mysql:
     image: mysql:8.0
     container_name: badminton-mysql
     restart: unless-stopped
+    logging: *default-logging
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?sæt MYSQL_ROOT_PASSWORD i .env}
       MYSQL_DATABASE: badminton_counter
@@ -34,6 +43,7 @@ services:
       dockerfile: Dockerfile.backend
     container_name: badminton-backend
     restart: unless-stopped
+    logging: *default-logging
     env_file:
       - installation.env
     environment:
@@ -77,6 +87,7 @@ services:
       dockerfile: Dockerfile.frontend
     container_name: badminton-frontend
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "80:80"
       - "8080:80"
@@ -94,6 +105,7 @@ services:
     image: mysql:8.0
     container_name: football-db-init
     restart: "no"
+    logging: *default-logging
     depends_on:
       mysql:
         condition: service_healthy
@@ -127,6 +139,7 @@ services:
       dockerfile: Dockerfile.backend
     container_name: football-backend
     restart: unless-stopped
+    logging: *default-logging
     env_file:
       - installation.env
     environment:
@@ -162,6 +175,7 @@ services:
       dockerfile: Dockerfile.frontend
     container_name: football-frontend
     restart: unless-stopped
+    logging: *default-logging
     depends_on:
       - football-backend
     networks:
@@ -176,6 +190,7 @@ services:
       dockerfile: Dockerfile.stats
     container_name: badminton-stats
     restart: unless-stopped
+    logging: *default-logging
     environment:
       NODE_ENV: production
       PORT: 3002
@@ -195,6 +210,31 @@ services:
       retries: 3
       start_period: 15s
 
+  # Automatisk backup af ALLE databaser + uploadede billeder.
+  # Tager en dump hver ${BACKUP_INTERVAL_HOURS}. time og beholder dem i
+  # ${BACKUP_RETENTION_DAYS} dage. Backup'erne ligger i det navngivne volume
+  # "backups" (host-sti fås med: docker volume inspect badminton-app_backups).
+  backup:
+    image: mysql:8.0
+    container_name: badminton-backup
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?sæt MYSQL_ROOT_PASSWORD i .env}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+    volumes:
+      - backups:/backups
+      - uploads_data:/data/uploads:ro
+      - football_uploads:/data/football_uploads:ro
+      - ./scripts/backup-loop.sh:/backup-loop.sh:ro
+    networks:
+      - badminton-network
+    entrypoint: ["bash", "/backup-loop.sh"]
+
 networks:
   badminton-network:
     driver: bridge
@@ -207,4 +247,6 @@ volumes:
   football_uploads:
     driver: local
   stats_cache:
+    driver: local
+  backups:
     driver: local
