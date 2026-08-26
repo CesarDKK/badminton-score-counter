@@ -19,7 +19,18 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3002;
 
 app.disable('x-powered-by');
+// Bag nginx + Cloudflare — så req.ip ikke bare er proxyens adresse.
+app.set('trust proxy', true);
 app.use(express.json({ limit: '32kb' }));
+
+// Klientens rigtige IP. Cloudflare sætter CF-Connecting-IP til den sande klient
+// og kan ikke forfalskes (Cloudflare overskriver headeren), så den bruges først.
+// Ellers falder vi tilbage på req.ip. Uden dette delte alle brugere ét rate-
+// limit-budget, fordi req.ip var proxyens adresse.
+function klientIp(req) {
+    const cf = req.headers['cf-connecting-ip'];
+    return (typeof cf === 'string' && cf.trim()) ? cf.trim() : req.ip;
+}
 
 // ── Jobs ────────────────────────────────────────────────────────────────────
 // Ét job ad gangen. Resten venter i kø, så vi aldrig kører to indsamlinger
@@ -28,6 +39,10 @@ const jobs = new Map();
 const koe = [];
 let koerer = false;
 let jobTaeller = 0;
+
+// Loft på køen, så en byge af forskellige klub/sæson-par ikke kan hobe sig op
+// i det uendelige og holde servicen i gang med indsamlinger i dagevis.
+const KOE_MAKS = Number(process.env.KOE_MAKS) || 30;
 
 function jobNoegle(clubId, season) { return `${clubId}:${season}`; }
 
@@ -42,6 +57,9 @@ function findJob(clubId, season) {
 function opretJob({ clubId, clubName, season }) {
     const eksisterende = findJob(clubId, season);
     if (eksisterende) return eksisterende;
+
+    // Køen er fuld — afvis frem for at vokse uhæmmet.
+    if (koe.length >= KOE_MAKS) return null;
 
     const job = {
         id: `j${++jobTaeller}`,
@@ -114,6 +132,16 @@ function maaStarte(ip) {
     return true;
 }
 
+// Ryd gamle IP-nøgler væk så kortet ikke vokser (poster udløber efter vinduet).
+setInterval(() => {
+    const nu = Date.now();
+    for (const [ip, liste] of startTider) {
+        const friske = liste.filter((t) => nu - t < START_VINDUE_MS);
+        if (friske.length) startTider.set(ip, friske);
+        else startTider.delete(ip);
+    }
+}, 600 * 1000).unref();
+
 // ── Ruter ───────────────────────────────────────────────────────────────────
 
 app.get('/health', (req, res) => res.json({ ok: true, koerer, iKoe: koe.length }));
@@ -157,7 +185,14 @@ app.get('/api/stats', (req, res) => {
         // Er data blevet gamle, sendes de alligevel med det samme — og en ny
         // indsamling sættes i gang i baggrunden, så næste besøgende får friske
         // tal uden at nogen skal vente i fem minutter.
-        if (!cached.frisk && !findJob(clubId, season)) opretJob({ clubId, clubName, season });
+        //
+        // Klubnavnet tages fra de GEMTE data (ikke fra requesten), så et forkert
+        // navn i URL'en ikke kan starte en indsamling der matcher de forkerte hold
+        // og overskriver gode data. Baggrunds-genindsamlingen tæller også med i
+        // rate-limitet, så den ikke kan misbruges til at hamre badmintonplayer.
+        if (!cached.frisk && !findJob(clubId, season) && maaStarte(klientIp(req))) {
+            opretJob({ clubId, clubName: cached.data.klub || clubName, season });
+        }
         return res.json({
             status: 'klar',
             forældet: !cached.frisk,
@@ -169,10 +204,13 @@ app.get('/api/stats', (req, res) => {
     const igangvaerende = findJob(clubId, season);
     if (igangvaerende) return res.status(202).json({ status: 'i gang', job: igangvaerende });
 
-    if (!maaStarte(req.ip)) {
+    if (!maaStarte(klientIp(req))) {
         return res.status(429).json({ fejl: 'Der er hentet mange klubber fra denne forbindelse den seneste time. Prøv igen senere.' });
     }
     const job = opretJob({ clubId, clubName, season });
+    if (!job) {
+        return res.status(503).json({ fejl: 'Der er mange indsamlinger i kø lige nu. Prøv igen om lidt.' });
+    }
     res.status(202).json({ status: 'i gang', job });
 });
 
@@ -226,7 +264,14 @@ app.get('/api/export', (req, res) => {
     if (!cached) return res.status(404).json({ fejl: 'Ingen data at eksportere endnu.' });
 
     const data = aggregate(cached.data);
-    const q = (s) => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
+    // CSV-injektion: et navn fra badmintonplayer der starter med = + - @ ville
+    // ellers blive udført som en formel når filen åbnes i Excel. Vi sætter en
+    // apostrof foran, så det altid læses som tekst.
+    const q = (s) => {
+        let v = String(s == null ? '' : s);
+        if (/^[=+\-@\t\r]/.test(v)) v = "'" + v;
+        return '"' + v.replace(/"/g, '""') + '"';
+    };
     let linjer;
 
     if (type === 'hold') {

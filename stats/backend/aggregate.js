@@ -90,7 +90,10 @@ function aggregate(raw) {
         else if (d.vundet === false) t.tabt++;
         else t.uafgjort++;
 
-        const dk = `${d.kampnr}|${d.disciplin}`;
+        // Siden med i nøglen: i en intern klubkamp spiller BEGGE hold samme
+        // disciplin (fx "1. HD"), og uden siden ville de fire spillere havne i
+        // samme "par" og ødelægge makker-optællingen.
+        const dk = `${d.kampnr}|${d.disciplin}|${d.side || ''}`;
         if (!disciplinHold.has(dk)) disciplinHold.set(dk, []);
         disciplinHold.get(dk).push(d);
 

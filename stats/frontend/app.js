@@ -32,6 +32,9 @@
     let sorter = { felt: 'kampe', ned: true };
     let groft = null;           // aktivt filter sat ved klik i en graf
     let pollTimer = null;
+    let hentGen = 0;            // øges ved hver ny hentning; svar fra en ældre
+                               // hentning kasseres, så to hurtige klik ikke
+                               // ender med at vise den forkerte klubs data
 
     const nf = new Intl.NumberFormat('da-DK');
     const nf1 = new Intl.NumberFormat('da-DK', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -126,12 +129,13 @@
     }
 
     // ── Hentning + fremdrift ────────────────────────────────────────────────
-    async function hentStatistik(klub, season) {
+    async function hentStatistik(klub, season, gen = ++hentGen) {
         const q = `clubId=${encodeURIComponent(klub.id)}&clubName=${encodeURIComponent(klub.navn)}&season=${encodeURIComponent(season)}`;
         const { ok, status, json } = await hentJson('/api/stats?' + q);
+        if (gen !== hentGen) return; // en nyere hentning er startet — kassér dette svar
 
         if (status === 429) { vis(el.fremdrift, false); return besked(json.fejl, true); }
-        if (status === 202 && json.job) { visFremdrift(json.job); return følgJob(json.job.id, klub, season); }
+        if (status === 202 && json.job) { visFremdrift(json.job); return følgJob(json.job.id, klub, season, gen); }
         if (!ok) { vis(el.fremdrift, false); return besked(json.fejl || 'Noget gik galt.', true); }
 
         vis(el.fremdrift, false);
@@ -179,16 +183,17 @@
 
     function stopPoll() { if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; } }
 
-    function følgJob(jobId, klub, season) {
+    function følgJob(jobId, klub, season, gen = hentGen) {
         stopPoll();
         const tik = async () => {
             const { ok, json } = await hentJson('/api/jobs/' + encodeURIComponent(jobId));
+            if (gen !== hentGen) return; // en nyere hentning har overhalet denne
             if (!ok) { vis(el.fremdrift, false); return besked(json.fejl || 'Mistede forbindelsen til jobbet.', true); }
             const job = json.job;
             opdaterFremdrift(job);
             if (job.status === 'færdig') {
                 el.barFill.style.width = '100%';
-                return hentStatistik(klub, season);
+                return hentStatistik(klub, season, gen);
             }
             if (job.status === 'fejlet') {
                 vis(el.fremdrift, false);

@@ -5,20 +5,27 @@ const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/au
 const { publishGameStateChange } = require('../events/gameStateEvents');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
 const { fetchAndParseTournamentMatches, resolveClubNames, buildPlayerClubRows } = require('./importTournament');
+const { currentTenant } = require('../config/tenantPools');
 
 // ── Import-fremskridt (in-memory) ──
 // Klub-opsamlingen kører i baggrunden efter kampene er indsat; frontend poller
-// GET /:id/import-progress for at vise en progressbar. Nøgle = tournamentId (som
-// streng). Ryddes ~2 min efter færdig, så polling efter et afsluttet job svarer
-// { phase: 'done' } uanset.
+// GET /:id/import-progress for at vise en progressbar. Ryddes ~2 min efter færdig.
+// Nøgle = "tenant:tournamentId" — to klubber kan have samme turnerings-id
+// (auto-increment pr. klub-database), så uden tenant ville de kollidere.
 const importProgress = new Map();
 
+function progressKey(tournamentId) {
+    return `${currentTenant()}:${tournamentId}`;
+}
+
 function setImportProgress(tournamentId, data) {
-    importProgress.set(String(tournamentId), { ...data, updatedAt: Date.now() });
+    importProgress.set(progressKey(tournamentId), { ...data, updatedAt: Date.now() });
 }
 
 function clearImportProgressLater(tournamentId, delayMs = 120000) {
-    const key = String(tournamentId);
+    // Nøglen beregnes NU, mens tenant-konteksten er aktiv — timeout-callbacken
+    // kører senere uden for konteksten, hvor currentTenant() ikke længere gælder.
+    const key = progressKey(tournamentId);
     setTimeout(() => {
         const p = importProgress.get(key);
         // Ryd kun hvis den er i en slut-tilstand (undgå at rydde et nyt job der er startet igen)
@@ -338,7 +345,7 @@ router.post('/:id/matches/bulk', authMiddleware, async (req, res, next) => {
 // Bruges af frontend til at vise en progressbar under import. Ukendt/ryddet id
 // (fx job færdigt og udløbet) svarer { phase: 'done' } så polling altid kan stoppe.
 router.get('/:id/import-progress', authMiddleware, (req, res) => {
-    const p = importProgress.get(String(req.params.id));
+    const p = importProgress.get(progressKey(req.params.id));
     if (!p) return res.json({ phase: 'done' });
     res.json(p);
 });

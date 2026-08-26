@@ -1058,6 +1058,14 @@ async function loadTeamMatchHistory() {
 }
 
 function hideAllSections() {
+    // Stop ALLE sektions-pollere når vi skifter væk. Tidligere stoppede hver
+    // show*-funktion kun nogle af dem, så fx holdkamp- og turnerings-pollerne
+    // (3 sek.) kunne blive ved med at køre — og hobe sig op — resten af sessionen.
+    // showCourtOverview kalder ikke denne funktion og styrer selv sin egen poller.
+    stopHoldkampRefresh();
+    stopTournamentRefresh();
+    stopAutoRefresh();
+
     ['courtOverviewSection', 'holdkampSection', 'tournamentSection', 'matchHistorySection', 'deviceTokensSection']
         .forEach(id => {
             const el = document.getElementById(id);
@@ -2946,7 +2954,7 @@ async function bpLoadWatchers() {
                             padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.06);">
                     <div style="min-width:0;">
                         <div style="color:#eaeaea;">${escapeHtml(w.team1_name || '?')} – ${escapeHtml(w.team2_name || '?')}</div>
-                        <div style="color:#aaa;font-size:0.84em;">${bpFormatStart(w.start_time_local)}</div>
+                        <div style="color:#aaa;font-size:0.84em;">${bpFormatStart(w.start_time_iso)}</div>
                         ${fejl}
                     </div>
                     <div style="display:flex;align-items:center;gap:10px;">${status}${slet}</div>

@@ -161,22 +161,49 @@ function holdNavnAf(cellHtml) {
     return textOf(cellHtml.split(/<br\s*\/?>/i)[0] || '');
 }
 
-/** "lø 05-09-2026 16:00" → Date i serverens tidszone (Europe/Copenhagen). */
+// Badmintonplayer angiver tider som dansk vægur (Europe/Copenhagen). Vi gemmer
+// dem i UTC, så de kan sammenlignes med MySQL NOW() (UTC i containeren) og med
+// de øvrige tidsstempler i appen, uafhængigt af serverens egen tidszone.
+
+/** Tidszone-offset (ms, positiv = foran UTC) for en zone på et givet tidspunkt. */
+function tzOffsetMs(tz, dato) {
+    const dtf = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz, hourCycle: 'h23',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+    const del = {};
+    for (const p of dtf.formatToParts(dato)) if (p.type !== 'literal') del[p.type] = p.value;
+    const somUtc = Date.UTC(+del.year, +del.month - 1, +del.day, +del.hour, +del.minute, +del.second);
+    return somUtc - dato.getTime();
+}
+
+/** Dansk vægur (Y, 0-indekseret måned, D, t, m) → UTC-instant (Date). */
+function danskVaeggurTilUtc(Y, Mo, D, t, mi) {
+    const gaet = Date.UTC(Y, Mo, D, t, mi, 0);
+    // Ét pas rammer rigtigt undtagen i selve DST-skiftetimen; et ekstra pas med
+    // offset målt på det foreløbige instant håndterer også den kant.
+    let off = tzOffsetMs('Europe/Copenhagen', new Date(gaet));
+    off = tzOffsetMs('Europe/Copenhagen', new Date(gaet - off));
+    return new Date(gaet - off);
+}
+
+/** "lø 05-09-2026 16:00" → UTC-instant (Date). */
 function parseDanskTid(s) {
     const m = String(s || '').match(/(\d{2})[-.](\d{2})[-.](\d{4})(?:\s+(\d{1,2})[:.](\d{2}))?/);
     if (!m) return null;
-    const d = new Date(
+    const d = danskVaeggurTilUtc(
         Number(m[3]), Number(m[2]) - 1, Number(m[1]),
-        m[4] ? Number(m[4]) : 0, m[5] ? Number(m[5]) : 0, 0, 0
+        m[4] ? Number(m[4]) : 0, m[5] ? Number(m[5]) : 0
     );
     return isNaN(d.getTime()) ? null : d;
 }
 
-/** MySQL DATETIME i lokal tid — samme zone som NOW() i containeren. */
+/** MySQL DATETIME i UTC — samme zone som NOW() i containeren. */
 function tilMysqlDato(d) {
     if (!d) return null;
     const p = n => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:00`;
+    return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:00`;
 }
 
 function parseMatchHtml(html) {
@@ -318,7 +345,7 @@ router.post('/holdkamp-url', authMiddleware, async (req, res, next) => {
         );
 
         const watcher = await queryOne(
-            `SELECT *, DATE_FORMAT(start_time, '%Y-%m-%dT%H:%i:00') AS start_time_local
+            `SELECT *, DATE_FORMAT(start_time, '%Y-%m-%dT%H:%i:00Z') AS start_time_iso
                FROM holdkamp_watchers WHERE league_match_id = ?`,
             [params.leagueMatchID]
         );
@@ -345,11 +372,10 @@ router.post('/holdkamp-url', authMiddleware, async (req, res, next) => {
 // GET /api/import/holdkamp-watchers — kampe der venter på holdsammensætningen
 router.get('/holdkamp-watchers', authMiddleware, async (req, res, next) => {
     try {
-        // start_time_local sendes som tekst uden tidszone. En DATETIME bliver
-        // ellers til en Date som JSON stempler med Z, og så rykker klokkeslættet
-        // sig to timer i browseren.
+        // start_time gemmes i UTC; vi sender det med et eksplicit 'Z', så
+        // browseren selv omregner til dansk tid ved visning.
         const raekker = await query(
-            `SELECT *, DATE_FORMAT(start_time, '%Y-%m-%dT%H:%i:00') AS start_time_local
+            `SELECT *, DATE_FORMAT(start_time, '%Y-%m-%dT%H:%i:00Z') AS start_time_iso
                FROM holdkamp_watchers
               WHERE status = 'venter'
                  OR updated_at > DATE_SUB(NOW(), INTERVAL 12 HOUR)

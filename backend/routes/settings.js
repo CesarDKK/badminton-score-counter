@@ -104,10 +104,10 @@ router.put('/court-count', authMiddleware, async (req, res, next) => {
             }
         }
 
-        // Remove courts if needed (courts beyond courtCount)
-        if (courtCount < currentCourts.length) {
-            await query('DELETE FROM courts WHERE court_number > ?', [courtCount]);
-        }
+        // Fjern baner ud over antallet. Gates IKKE på rækkeantal: med et hul i
+        // banenumrene (fx 1,2,4) kunne "courtCount < antal rækker" være falsk,
+        // så en bane med højt nummer blev hængende. DELETE'et er korrekt alene.
+        await query('DELETE FROM courts WHERE court_number > ?', [courtCount]);
 
         res.json({ success: true });
     } catch (error) {

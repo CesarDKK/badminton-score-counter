@@ -214,34 +214,44 @@ function parseMatch(html, erKlub) {
     const hoved = extractCells(raekker[0]);
     const hjemme = text(hoved[1] || '');
     const ude = text(hoved[2] || '');
-    const kolonne = erKlub(hjemme) ? 1 : (erKlub(ude) ? 2 : 0);
+    const hjemmeErKlub = erKlub(hjemme);
+    const udeErKlub = erKlub(ude);
 
+    // Møder to af klubbens egne hold hinanden (fx "Lyngby 3" mod "Lyngby 5"),
+    // hører BEGGE siders spillere til klubben og skal tælles — hver på sit hold.
+    // Tidligere blev kun hjemmeholdet talt, så udeholdets spillere manglede kampe.
     const kamp = {
         kampnr: info['Kampnr'] || '',
         tid: info['Tid'] || '',
         resultat: info['Resultat'] || '',
         hjemme,
         ude,
-        side: kolonne === 1 ? 'hjemme' : (kolonne === 2 ? 'ude' : null),
+        side: hjemmeErKlub && udeErKlub ? 'begge' : (hjemmeErKlub ? 'hjemme' : (udeErKlub ? 'ude' : null)),
         spillere: []
     };
-    if (!kolonne) return kamp;
+    if (!hjemmeErKlub && !udeErKlub) return kamp;
+
+    const sider = [];
+    if (hjemmeErKlub) sider.push(['hjemme', 1]);
+    if (udeErKlub) sider.push(['ude', 2]);
 
     for (let i = 1; i < raekker.length; i++) {
         const celler = extractCells(raekker[i]);
         const disciplin = text(celler[0] || '');
         if (!/^\d+\.\s*\S/.test(disciplin)) continue;
-        const celle = celler[kolonne];
-        if (!celle) continue;
 
         const afgoerelse = afgoerRaekke(celler, hjemme, ude);
-        const vundet = afgoerelse.vinder ? afgoerelse.vinder === (kolonne === 1 ? 'hjemme' : 'ude') : null;
 
-        for (const a of links(celle)) {
-            if (!/VisSpiller/i.test(a.href)) continue;
-            const id = (a.href.split('#')[1] || '').trim();
-            if (!id) continue;
-            kamp.spillere.push({ id, navn: a.tekst, disciplin, vundet, wo: afgoerelse.wo });
+        for (const [side, kolonne] of sider) {
+            const celle = celler[kolonne];
+            if (!celle) continue;
+            const vundet = afgoerelse.vinder ? afgoerelse.vinder === side : null;
+            for (const a of links(celle)) {
+                if (!/VisSpiller/i.test(a.href)) continue;
+                const id = (a.href.split('#')[1] || '').trim();
+                if (!id) continue;
+                kamp.spillere.push({ id, navn: a.tekst, disciplin, vundet, wo: afgoerelse.wo, side });
+            }
         }
     }
     return kamp;
