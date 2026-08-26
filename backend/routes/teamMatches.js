@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
 const { publishGameStateChange } = require('../events/gameStateEvents');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
 
@@ -195,8 +195,10 @@ router.put('/:id/logos', authMiddleware, async (req, res, next) => {
     } catch (error) { next(error); }
 });
 
-// PUT /api/team-matches/:id/games/:gameId - Update a game (public - used from court)
-router.put('/:id/games/:gameId', async (req, res, next) => {
+// PUT /api/team-matches/:id/games/:gameId - Update a game (bruges fra court-siden;
+// i club-mode kræves device/club_admin-token ligesom game-states — åben var den
+// et hul hvor enhver kunne omskrive spillere og vindere i en igangværende holdkamp)
+router.put('/:id/games/:gameId', requireWriteAuthInClubMode, async (req, res, next) => {
     try {
         const { id, gameId } = req.params;
         const { courtNumber, status, winnerTeam, setScores, team1Player1, team1Player2, team2Player1, team2Player2 } = req.body;

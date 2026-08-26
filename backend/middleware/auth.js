@@ -1,6 +1,19 @@
 const jwt = require('jsonwebtoken');
 
-// Middleware to verify JWT token
+// Admin-auth til beskyttede endpoints (backup, indstillinger, sponsorer, sletning m.m.).
+//
+// En gyldig signatur er IKKE nok: token-typen og klubben skal også passe.
+// Uden det kan et device-token (som TV/tablets bærer i deres bogmærke-links)
+// eller et token udstedt til klub A kalde admin-endpoints hos klub B.
+//
+// Accepteres:
+//   - super_admin: altid (styrer alle klubber)
+//   - club_admin:  kun på den klub tokenet er udstedt til
+//   - { admin: true } (simpelt admin-login): kun uden for club-mode — i club-mode
+//     udstedes den slags tokens slet ikke (se routes/auth.js), og et gammelt/
+//     fremmed et af slagsen må ikke give adgang på tværs af klubber
+// Afvises altid:
+//   - device-tokens: de er visnings-/tælleradgang, ikke administration
 function authMiddleware(req, res, next) {
     try {
         // Get token from Authorization header
@@ -14,6 +27,22 @@ function authMiddleware(req, res, next) {
 
         // Verify token
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+        if (decoded.role === 'device') {
+            return res.status(403).json({ error: 'Adgangslinket giver ikke admin-adgang' });
+        }
+
+        if (req.accessMode === 'club') {
+            const erKlubbensAdmin = decoded.role === 'club_admin'
+                && decoded.clubSubdomain === req.clubSubdomain;
+            if (!erKlubbensAdmin && decoded.role !== 'super_admin') {
+                return res.status(403).json({ error: 'Token giver ikke adgang til denne klub' });
+            }
+        } else if (decoded.admin !== true
+            && decoded.role !== 'club_admin'
+            && decoded.role !== 'super_admin') {
+            return res.status(403).json({ error: 'Token giver ikke admin-adgang' });
+        }
 
         // Attach decoded payload to request
         req.user = decoded;
@@ -71,9 +100,11 @@ function requireWriteAuthInClubMode(req, res, next) {
         });
     }
 
-    // Token udstedt til en anden klub må ikke skrive her. Super-admin har ingen
-    // clubSubdomain og er betroet — den passerer.
-    if (decoded.clubSubdomain && req.clubSubdomain && decoded.clubSubdomain !== req.clubSubdomain) {
+    // Kun tokens udstedt til DENNE klub (device/club_admin bærer clubSubdomain)
+    // eller super-admin. Et token uden klub-tilknytning — fx det simple
+    // { admin: true }-login fra en lokal installation — er bevidst IKKE nok:
+    // ellers ville standardadgangskoden på én installation åbne alle klubber.
+    if (decoded.role !== 'super_admin' && decoded.clubSubdomain !== req.clubSubdomain) {
         return res.status(403).json({ error: 'Adgangslink hører til en anden klub', authRequired: true });
     }
 

@@ -131,43 +131,35 @@ Du bør se filer som: `docker-compose.yml`, `backend/`, `frontend/`, `.env.examp
 
 ---
 
-## 6. Konfigurer miljøvariabler
+## 6. Konfigurer miljøvariabler (automatisk)
 
-Appen kræver en `.env`-fil med adgangskoder og hemmeligheder:
+Appen kræver en `.env`-fil med adgangskoder og hemmeligheder — men du behøver
+**ikke** oprette eller redigere den i hånden. `deploy.sh` (næste trin) kører
+`scripts/ensure-env.sh`, som selv sørger for en komplet `.env`:
 
-```bash
-# Kopiér eksempelfilen
-cp .env.example .env
+- Værdier der allerede står i `.env` røres aldrig.
+- Kører appen allerede, genskabes de nuværende hemmeligheder fra containerne,
+  så databasen bliver ved med at forbinde.
+- Alt der mangler, får en stærk tilfældig værdi.
 
-# Åbn filen til redigering
-nano .env
-```
+Der er bevidst **ingen** standardværdier i koden, og `.env` er i `.gitignore`,
+så hemmeligheder aldrig havner på GitHub.
 
-Indholdet ser sådan ud — **skift alle tre værdier til noget sikkert**:
-
-```env
-MYSQL_ROOT_PASSWORD=SkiftMigTilNogetSikkert123!
-MYSQL_PASSWORD=OgsåSkiftMigTilNogetSikkert456!
-JWT_SECRET=EnMegetLangHemmeligNøglePåMindst32TegnHerErDen
-```
-
-Regler for sikre værdier:
-- Brug mindst 20 tegn
-- Brug store/små bogstaver, tal og specialtegn (`!`, `@`, `#`)
-- `JWT_SECRET` **skal** være mindst 32 tegn
-
-Gem og luk filen: tryk `Ctrl+X`, derefter `Y`, derefter `Enter`.
-
-> **Vigtigt**: `.env`-filen er i `.gitignore` og uploades aldrig til GitHub. Den indeholder dine adgangskoder.
+Vil du hellere sætte værdierne selv, kan du oprette `.env` ud fra `.env.example`
+først — så bevarer scriptet dine værdier og udfylder kun resten. Football-admins
+oprettes separat med `seedClub.js` (ikke via en env-variabel).
 
 ---
 
 ## 7. Start appen
 
 ```bash
-# Byg og start alle containere i baggrunden
-docker-compose up -d --build
+./deploy.sh
 ```
+
+`deploy.sh` sikrer `.env` og bygger + starter alle containere. Den er sikker at
+køre igen og igen. (Vil du køre det manuelt: `sh scripts/ensure-env.sh` og
+derefter `docker compose up -d --build`.)
 
 **Første gang** tager dette 5–10 minutter da Docker skal:
 1. Downloade base-images (MySQL, Node.js, Nginx)

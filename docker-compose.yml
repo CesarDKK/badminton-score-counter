@@ -5,12 +5,15 @@ services:
     container_name: badminton-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password_change_me}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?sæt MYSQL_ROOT_PASSWORD i .env}
       MYSQL_DATABASE: badminton_counter
       MYSQL_USER: badminton_user
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-secure_password_change_me}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?sæt MYSQL_PASSWORD i .env}
+    # Kun tilgængelig fra selve serveren (host-side mysqldump/fejlsøgning).
+    # Docker's egne iptables-regler omgår ufw, så "0.0.0.0:3306" ville udstille
+    # databasen på den offentlige IP uanset firewall — bind derfor til localhost.
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -19,7 +22,7 @@ services:
     networks:
       - badminton-network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root_password_change_me}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -39,18 +42,20 @@ services:
       DB_HOST: mysql
       DB_PORT: 3306
       DB_USER: badminton_user
-      DB_PASSWORD: ${MYSQL_PASSWORD:-secure_password_change_me}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?sæt MYSQL_PASSWORD i .env}
       DB_NAME: badminton_counter
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password_change_me}
-      JWT_SECRET: ${JWT_SECRET:-change_this_secret_key_min_32_chars}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?sæt MYSQL_ROOT_PASSWORD i .env}
+      JWT_SECRET: ${JWT_SECRET:?sæt JWT_SECRET i .env (mindst 32 tegn)}
       UPLOAD_DIR: /app/uploads
       MAX_FILE_SIZE: 10485760
       # Super-admin har brug for adgang til football_tournament-DB for at administrere
       # football-klubber + admins (Phase 2 feature)
       FOOTBALL_DB_USER: football_user
-      FOOTBALL_DB_PASSWORD: ${FOOTBALL_DB_PASSWORD:-football_password_change_me}
+      FOOTBALL_DB_PASSWORD: ${FOOTBALL_DB_PASSWORD:?sæt FOOTBALL_DB_PASSWORD i .env}
+    # Kun localhost: nginx-containeren når backenden internt via docker-netværket
+    # (backend:3000), så host-porten behøver ikke være åben mod internettet.
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - uploads_data:/app/uploads
     depends_on:
@@ -93,8 +98,8 @@ services:
       mysql:
         condition: service_healthy
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password_change_me}
-      FOOTBALL_DB_PASSWORD: ${FOOTBALL_DB_PASSWORD:-football_password_change_me}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?sæt MYSQL_ROOT_PASSWORD i .env}
+      FOOTBALL_DB_PASSWORD: ${FOOTBALL_DB_PASSWORD:?sæt FOOTBALL_DB_PASSWORD i .env}
     volumes:
       - ./football-app/backend/init.sql:/init/schema.sql:ro
     networks:
@@ -130,10 +135,9 @@ services:
       DB_HOST: mysql
       DB_PORT: 3306
       DB_USER: football_user
-      DB_PASSWORD: ${FOOTBALL_DB_PASSWORD:-football_password_change_me}
+      DB_PASSWORD: ${FOOTBALL_DB_PASSWORD:?sæt FOOTBALL_DB_PASSWORD i .env}
       DB_NAME: football_tournament
-      JWT_SECRET: ${FOOTBALL_JWT_SECRET:-change_this_football_jwt_secret_min_32_chars}
-      FOOTBALL_ADMIN_PASSWORD: ${FOOTBALL_ADMIN_PASSWORD:-admin123}
+      JWT_SECRET: ${FOOTBALL_JWT_SECRET:?sæt FOOTBALL_JWT_SECRET i .env (mindst 32 tegn)}
       UPLOAD_DIR: /app/uploads
     volumes:
       - football_uploads:/app/uploads
