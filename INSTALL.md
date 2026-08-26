@@ -143,18 +143,26 @@ cp .env.example .env
 nano .env
 ```
 
-Indholdet ser sådan ud — **skift alle tre værdier til noget sikkert**:
+Indholdet ser sådan ud — **skift ALLE værdier til noget sikkert**:
 
 ```env
+# Badminton (hoved-app)
 MYSQL_ROOT_PASSWORD=SkiftMigTilNogetSikkert123!
 MYSQL_PASSWORD=OgsåSkiftMigTilNogetSikkert456!
 JWT_SECRET=EnMegetLangHemmeligNøglePåMindst32TegnHerErDen
+
+# Football-modul (footballapp.dk) — har sit EGET JWT-secret og sin egen DB-bruger
+FOOTBALL_DB_PASSWORD=EtAndetSikkertDatabasePassword789!
+FOOTBALL_JWT_SECRET=EtHeltAndetLangtSecretTilFootballPåMindst32Tegn
 ```
 
 Regler for sikre værdier:
 - Brug mindst 20 tegn
 - Brug store/små bogstaver, tal og specialtegn (`!`, `@`, `#`)
-- `JWT_SECRET` **skal** være mindst 32 tegn
+- De to `*_JWT_SECRET` **skal** være mindst 32 tegn og må ikke være ens
+- Alle fem er **påkrævede**: `docker compose` nægter at starte med en tydelig
+  fejl, hvis en mangler — der er bevidst ingen usikre standardværdier
+- Football-admins oprettes bagefter med `seedClub.js` (ikke via en env-variabel)
 
 Gem og luk filen: tryk `Ctrl+X`, derefter `Y`, derefter `Enter`.
 

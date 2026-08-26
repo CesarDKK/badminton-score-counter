@@ -7,6 +7,15 @@ const { generateToken } = require('../middleware/auth');
 // POST /api/auth/login - Verify password and return JWT token
 router.post('/login', async (req, res, next) => {
     try {
+        // I club-mode logger admins ind via klub-login (club_admin-tokens bundet
+        // til klubben). Det simple login udsteder et token UDEN klub-tilknytning
+        // og tjekker mod tenant-databasens admin_password_hash — som i nye
+        // klubber stadig er standardværdien fra init.sql. Åbent ville det være
+        // en bagdør med kendt adgangskode på hvert klub-subdomain.
+        if (req.accessMode === 'club') {
+            return res.status(403).json({ error: 'Brug klub-login på denne adresse' });
+        }
+
         const { password } = req.body;
 
         if (!password) {

@@ -2,6 +2,7 @@ const multer = require('multer');
 const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
+const { billedFilnavn, billedFileFilter } = require('./imageUpload');
 
 const baseUploadDir = process.env.UPLOAD_DIR || './uploads';
 
@@ -20,28 +21,16 @@ const storage = multer.diskStorage({
         }
         cb(null, dir);
     },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '_' + crypto.randomBytes(8).toString('hex');
-        const ext = path.extname(file.originalname);
-        const basename = path.basename(file.originalname, ext)
-            .replace(/[^a-zA-Z0-9]/g, '_')
-            .substring(0, 50);
-        cb(null, `${basename}_${uniqueSuffix}${ext}`);
-    }
+    // Endelsen udledes af mimetype (whitelist), ikke af originalname — ellers
+    // kunne en .html-fil forklædt som billede gemmes med .html-endelse og
+    // serveres som HTML fra /uploads. Magic bytes valideres efter upload med
+    // validateImageMagic i den enkelte rute.
+    filename: billedFilnavn(crypto)
 });
-
-const fileFilter = (req, file, cb) => {
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    if (allowedTypes.includes(file.mimetype)) {
-        cb(null, true);
-    } else {
-        cb(new Error('Kun billedfiler er tilladt (JPEG, PNG, GIF, WebP)'), false);
-    }
-};
 
 const upload = multer({
     storage,
-    fileFilter,
+    fileFilter: billedFileFilter,
     limits: {
         fileSize: parseInt(process.env.MAX_FILE_SIZE) || 10 * 1024 * 1024,
         files: 10

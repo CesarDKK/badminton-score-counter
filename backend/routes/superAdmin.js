@@ -8,6 +8,7 @@ const fs = require('fs');
 const sharp = require('sharp');
 const AdmZip = require('adm-zip');
 const logoUpload = require('../config/logoUpload');
+const { validateImageMagic } = require('../config/imageUpload');
 
 // Gyldige side-noegler for klub-admins per-side adgangsstyring.
 const VALID_PAGE_KEYS = ['holdkamp', 'tournament', 'history', 'playerinfo', 'settings', 'sponsors', 'devicetokens'];
@@ -372,6 +373,18 @@ const BACKUP_TABLES = [
     'device_tokens', 'player_info',
 ];
 
+// Se backup.js: filnavne og kolonnenavne i en uploadet backup er
+// angriberkontrollerede og valideres mod en whitelist før noget skrives.
+const SA_SIKKERT_FILNAVN = /^[A-Za-z0-9_.-]+$/;
+const SA_TILLADTE_ENDELSER = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
+const SA_SIKKERT_KOLONNENAVN = /^[A-Za-z0-9_]+$/;
+function saUgyldigtFilnavn(filename) {
+    return filename !== backupPath.basename(filename)
+        || !SA_SIKKERT_FILNAVN.test(filename)
+        || filename.includes('..')
+        || !SA_TILLADTE_ENDELSER.has(backupPath.extname(filename).toLowerCase());
+}
+
 // GET /api/super-admin/clubs/:id/backup — download backup for one club
 router.get('/clubs/:id/backup', superAdminAuth, async (req, res, next) => {
     try {
@@ -432,6 +445,26 @@ router.post('/clubs/:id/restore', superAdminAuth, backupMulter.single('backup'),
         return res.status(400).json({ error: 'Ugyldig backup-fil — mangler version eller tabeller' });
     }
 
+    // Validér alt før noget skrives (se backup.js for begrundelsen)
+    for (const table of BACKUP_TABLES) {
+        const rows = backup.tables[table];
+        if (!Array.isArray(rows)) continue;
+        for (const row of rows) {
+            for (const col of Object.keys(row)) {
+                if (!SA_SIKKERT_KOLONNENAVN.test(col)) {
+                    return res.status(400).json({ error: `Ugyldigt kolonnenavn i backup: ${col}` });
+                }
+            }
+        }
+    }
+    if (backup.files && typeof backup.files === 'object') {
+        for (const filename of Object.keys(backup.files)) {
+            if (saUgyldigtFilnavn(filename)) {
+                return res.status(400).json({ error: `Ugyldigt filnavn i backup: ${filename}` });
+            }
+        }
+    }
+
     try {
         const club = await masterDb.queryOne(
             'SELECT db_name, subdomain FROM clubs WHERE id = ?',
@@ -441,6 +474,7 @@ router.post('/clubs/:id/restore', superAdminAuth, backupMulter.single('backup'),
 
         const conn = await clubConn(club.db_name);
         try {
+            await conn.beginTransaction();
             for (const table of BACKUP_TABLES) {
                 const rows = backup.tables[table];
                 if (!rows || rows.length === 0) { await conn.execute(`DELETE FROM \`${table}\``); continue; }
@@ -452,6 +486,10 @@ router.post('/clubs/:id/restore', superAdminAuth, backupMulter.single('backup'),
                     await conn.execute(`INSERT INTO \`${table}\` (${cols}) VALUES (${ph})`, vals);
                 }
             }
+            await conn.commit();
+        } catch (dbErr) {
+            try { await conn.rollback(); } catch {}
+            throw dbErr;
         } finally {
             await conn.end();
         }
@@ -677,7 +715,7 @@ router.put('/football/clubs/:id/admins/:adminId/password', superAdminAuth, async
 // ==================== KLUB-LOGO-BIBLIOTEK (centralt, master-DB) ====================
 
 // POST /api/super-admin/logos — upload nyt logo
-router.post('/logos', superAdminAuth, logoUpload.single('image'), async (req, res, next) => {
+router.post('/logos', superAdminAuth, logoUpload.single('image'), validateImageMagic, async (req, res, next) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'Billede er påkrævet' });
 

@@ -3,10 +3,26 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const { query, queryOne } = require('../config/database');
+const db = require('../config/database');
+const { query, queryOne } = db;
 const { authMiddleware } = require('../middleware/auth');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
+
+// Filnavne og kolonnenavne i en backup-fil er angriberkontrollerede: filnavnet
+// ender i fs.writeFileSync (path traversal → vilkårlig filskrivning) og
+// kolonnenavnet i backticks i SQL (identifier injection). Begge valideres mod
+// en stram whitelist FØR noget skrives. Multer-genererede filnavne (basename_
+// timestamp_hex.ext) passerer altid.
+const SIKKERT_FILNAVN = /^[A-Za-z0-9_.-]+$/;
+const TILLADTE_ENDELSER = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
+function ugyldigtBackupFilnavn(filename) {
+    return filename !== path.basename(filename)
+        || !SIKKERT_FILNAVN.test(filename)
+        || filename.includes('..')
+        || !TILLADTE_ENDELSER.has(path.extname(filename).toLowerCase());
+}
+const SIKKERT_KOLONNENAVN = /^[A-Za-z0-9_]+$/;
 
 const BACKUP_VERSION = '1.0';
 
@@ -93,26 +109,63 @@ router.post('/restore', authMiddleware, upload.single('backup'), async (req, res
         return res.status(400).json({ error: 'Ugyldig backup-fil — mangler version eller tabeller' });
     }
 
+    // Validér ALT før noget skrives: én dårlig kolonne/filnavn må ikke føre til
+    // at tabeller allerede er slettet, når vi opdager problemet.
+    for (const table of BACKUP_TABLES) {
+        const rows = backup.tables[table];
+        if (!Array.isArray(rows)) continue;
+        for (const row of rows) {
+            for (const col of Object.keys(row)) {
+                if (!SIKKERT_KOLONNENAVN.test(col)) {
+                    return res.status(400).json({ error: `Ugyldigt kolonnenavn i backup: ${col}` });
+                }
+            }
+        }
+    }
+    if (backup.files && typeof backup.files === 'object') {
+        for (const filename of Object.keys(backup.files)) {
+            if (ugyldigtBackupFilnavn(filename)) {
+                return res.status(400).json({ error: `Ugyldigt filnavn i backup: ${filename}` });
+            }
+        }
+    }
+
+    // Gendannelse i én transaktion: fejler et INSERT, rulles alt tilbage, så
+    // klubbens data ikke efterlades halvt slettet. Filerne skrives først bagefter.
+    // db.pool er en getter der returnerer den aktuelle tenants pool — læses her
+    // (i request-konteksten), ikke ved modul-load hvor tenanten ikke er sat.
+    const conn = await db.pool.getConnection();
     try {
+        await conn.beginTransaction();
+
         // Restore tables in FK-safe order
         for (const table of BACKUP_TABLES) {
             const rows = backup.tables[table];
             if (!rows || rows.length === 0) continue;
 
-            await query(`DELETE FROM \`${table}\``);
+            await conn.query(`DELETE FROM \`${table}\``);
 
             for (const row of rows) {
                 const cols = Object.keys(row).map(c => `\`${c}\``).join(', ');
                 const placeholders = Object.keys(row).map(() => '?').join(', ');
                 const vals = Object.values(row).map(normalizeValue);
-                await query(
+                await conn.query(
                     `INSERT INTO \`${table}\` (${cols}) VALUES (${placeholders})`,
                     vals
                 );
             }
         }
 
-        // Restore image files
+        await conn.commit();
+    } catch (error) {
+        try { await conn.rollback(); } catch {}
+        conn.release();
+        return next(error);
+    }
+    conn.release();
+
+    try {
+        // Restore image files (efter commit — kun validerede filnavne)
         if (backup.files && Object.keys(backup.files).length > 0) {
             const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
             const clubDir = req.clubSubdomain
