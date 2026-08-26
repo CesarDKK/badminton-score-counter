@@ -24,7 +24,9 @@ function erTomt(data) {
  * disciplin). Gamle filer regnes så for forældede: de vises stadig med det
  * samme, men hentes forfra i baggrunden i stedet for at mangle felter.
  */
-const DATA_VERSION = 3;
+// 4: interne klubkampe tæller nu begge holds spillere, og entitets-afkodningen
+// er rettet. Gamle filer (v3) regnes som forældede og genhentes i baggrunden.
+const DATA_VERSION = 4;
 
 function sikreMappe() {
     if (!fs.existsSync(DIR)) fs.mkdirSync(DIR, { recursive: true });
