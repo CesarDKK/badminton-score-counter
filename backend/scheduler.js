@@ -199,26 +199,38 @@ function startTournamentAutoSync() {
 function startHoldkampWatch() {
     const { runHoldkampWatchers } = require('./routes/importHoldkamp');
 
-    cron.schedule('* * * * *', async () => {
-        // 1. Standard/direkte database
-        try {
-            await runHoldkampWatchers();
-        } catch (err) {
-            console.error('❌ Holdkamp-overvågning fejlede (default):', err.message);
-        }
+    // Overlap-værn: badmintonplayer kan være langsom, og et gennemløb over mange
+    // klubber kan tage over et minut. Uden dette ville næste minuts kørsel starte
+    // oven i den forrige, vælge de samme 'venter'-watchers og oprette holdkampen
+    // to gange. Springer vi bare over, til den igangværende er færdig.
+    let koererNu = false;
 
-        // 2. Alle aktive klub-databaser (multi-tenant)
+    cron.schedule('* * * * *', async () => {
+        if (koererNu) return;
+        koererNu = true;
         try {
-            const masterDb = require('./config/masterDatabase');
-            const clubs = await masterDb.query('SELECT db_name FROM clubs WHERE is_active = 1');
-            for (const club of clubs) {
-                try {
-                    await runWithTenant(club.db_name, () => runHoldkampWatchers());
-                } catch (err) {
-                    console.error(`❌ Holdkamp-overvågning fejlede for ${club.db_name}:`, err.message);
-                }
+            // 1. Standard/direkte database
+            try {
+                await runHoldkampWatchers();
+            } catch (err) {
+                console.error('❌ Holdkamp-overvågning fejlede (default):', err.message);
             }
-        } catch (err) { /* master DB ikke tilgængelig i direkte mode */ }
+
+            // 2. Alle aktive klub-databaser (multi-tenant)
+            try {
+                const masterDb = require('./config/masterDatabase');
+                const clubs = await masterDb.query('SELECT db_name FROM clubs WHERE is_active = 1');
+                for (const club of clubs) {
+                    try {
+                        await runWithTenant(club.db_name, () => runHoldkampWatchers());
+                    } catch (err) {
+                        console.error(`❌ Holdkamp-overvågning fejlede for ${club.db_name}:`, err.message);
+                    }
+                }
+            } catch (err) { /* master DB ikke tilgængelig i direkte mode */ }
+        } finally {
+            koererNu = false;
+        }
     }, {
         scheduled: true,
         timezone: 'Europe/Copenhagen'

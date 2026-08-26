@@ -2946,7 +2946,7 @@ async function bpLoadWatchers() {
                             padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.06);">
                     <div style="min-width:0;">
                         <div style="color:#eaeaea;">${escapeHtml(w.team1_name || '?')} – ${escapeHtml(w.team2_name || '?')}</div>
-                        <div style="color:#aaa;font-size:0.84em;">${bpFormatStart(w.start_time_local)}</div>
+                        <div style="color:#aaa;font-size:0.84em;">${bpFormatStart(w.start_time_iso)}</div>
                         ${fejl}
                     </div>
                     <div style="display:flex;align-items:center;gap:10px;">${status}${slet}</div>
