@@ -78,7 +78,9 @@ async function harvestClub({ clubId, clubName, season, onProgress = () => {} }) 
                 teamID: t.teamID,
                 navn: t.navn,
                 raekke: r.raekke,
-                aargang: AARGANG[Number(r.ageGroupID)] || `Årgang ${r.ageGroupID}`,
+                // Årgangs-etiketten må ikke indeholde mellemrum: holdnøglen er
+                // "<aargang> <holdnavn>", og frontenden deler på første mellemrum.
+                aargang: AARGANG[Number(r.ageGroupID)] || `Årgang-${r.ageGroupID}`,
                 leagueGroupID: r.leagueGroupID,
                 ageGroupID: r.ageGroupID,
                 regionID: r.regionID,
@@ -107,6 +109,7 @@ async function harvestClub({ clubId, clubName, season, onProgress = () => {} }) 
     const kampe = [];
     const deltagelser = [];
     const numre = [...kampRef.keys()];
+    let fejlede = 0;
     for (let i = 0; i < numre.length; i++) {
         const nr = numre[i];
         const t = kampRef.get(nr);
@@ -114,25 +117,41 @@ async function harvestClub({ clubId, clubName, season, onProgress = () => {} }) 
             const html = await bp.standing({ subPage: 5, seasonID: season, leagueMatchID: nr, clubID: clubId });
             const kamp = P.parseMatch(html, erKlub);
             if (kamp) {
-                const eget = kamp.side === 'hjemme' ? kamp.hjemme : (kamp.side === 'ude' ? kamp.ude : t.navn);
+                const eget = kamp.side === 'hjemme' ? kamp.hjemme
+                    : kamp.side === 'ude' ? kamp.ude
+                    : kamp.side === 'begge' ? `${kamp.hjemme} / ${kamp.ude}`
+                    : t.navn;
                 kampe.push({
                     kampnr: nr, tid: kamp.tid, resultat: kamp.resultat,
                     hjemme: kamp.hjemme, ude: kamp.ude, side: kamp.side,
                     hold: eget, raekke: t.raekke, aargang: t.aargang
                 });
                 for (const s of kamp.spillere) {
+                    // Hver spiller tildeles sit eget holds navn ud fra hvilken side
+                    // vedkommende spillede på — vigtigt i interne klubkampe.
+                    const spillerHold = s.side === 'hjemme' ? kamp.hjemme
+                        : s.side === 'ude' ? kamp.ude
+                        : eget;
                     deltagelser.push({
                         kampnr: nr, tid: kamp.tid, spillerId: s.id, navn: s.navn,
-                        disciplin: s.disciplin, vundet: s.vundet, wo: s.wo,
-                        hold: eget, raekke: t.raekke, aargang: t.aargang
+                        disciplin: s.disciplin, vundet: s.vundet, wo: s.wo, side: s.side,
+                        hold: spillerHold, raekke: t.raekke, aargang: t.aargang
                     });
                 }
             }
         } catch (e) {
             // En enkelt kamp der fejler må ikke vælte hele indsamlingen.
+            fejlede++;
             kampe.push({ kampnr: nr, fejl: String(e.message || e), hold: t.navn, raekke: t.raekke, aargang: t.aargang });
         }
         rapport('holdsedler', i + 1, numre.length);
+    }
+
+    // Systematisk fejl opstrøms (fx badmintonplayer begynder at svare 500 midt i):
+    // så er resultatet ubrugeligt og må IKKE gemmes som gyldigt oven i gode data.
+    // Vi kaster, så jobbet markeres fejlet og cachen ikke røres.
+    if (numre.length >= 10 && fejlede > numre.length / 2) {
+        throw new Error(`For mange kampe fejlede (${fejlede} af ${numre.length}) — badmintonplayer svarer ustabilt. Prøv igen senere.`);
     }
 
     return { klub: clubName, clubId, season, hold, kampe, deltagelser };

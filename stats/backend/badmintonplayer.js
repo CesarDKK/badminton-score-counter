@@ -103,11 +103,15 @@ async function standing({ subPage, seasonID = '', leagueGroupID = '', ageGroupID
 }
 
 function decodeEntities(s) {
+    // &amp; afkodes SIDST. Ellers bliver "&amp;lt;" (som betyder teksten "&lt;")
+    // fejlagtigt til "<" i to trin. Hex-entiteter (&#x26;) understøttes også.
     return String(s)
-        .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
-        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+        .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+        .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'")
-        .replace(/&nbsp;/g, ' ');
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&');
 }
 
 module.exports = { searchClub, standing, decodeEntities, refreshContextKey, MIN_DELAY_MS };
