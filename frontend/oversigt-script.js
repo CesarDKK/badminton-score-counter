@@ -1131,8 +1131,10 @@ function startAutoRefresh() {
 // Reager på et SSE config-event: invalidér den relevante cache og gen-render.
 async function handleOversigtConfigEvent(scope) {
     if (scope === 'sponsors') {
+        // Bane-bannere blev fjernet fra Oversigten; kun idle-slideshowets
+        // indstillinger skal genindlæses her. (Tidligere kaldtes en fjernet
+        // refreshCourtBanners(), som kastede ReferenceError ved hver ændring.)
         await refreshIdleSettings();
-        await refreshCourtBanners();
         scheduleRefresh();
     } else if (scope === 'logos') {
         await refreshOverviewLogos();

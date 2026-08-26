@@ -54,4 +54,10 @@ async function closeAll() {
     pools.clear();
 }
 
-module.exports = { getPool, runWithTenant, closeAll };
+// Navnet på den aktuelle tenant-database (eller 'direct' uden for tenant-kontekst).
+// Bruges til at nøgle in-memory state pr. klub, så to klubber ikke kolliderer.
+function currentTenant() {
+    return tenantStorage.getStore() || 'direct';
+}
+
+module.exports = { getPool, runWithTenant, closeAll, currentTenant };

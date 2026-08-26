@@ -1058,6 +1058,14 @@ async function loadTeamMatchHistory() {
 }
 
 function hideAllSections() {
+    // Stop ALLE sektions-pollere når vi skifter væk. Tidligere stoppede hver
+    // show*-funktion kun nogle af dem, så fx holdkamp- og turnerings-pollerne
+    // (3 sek.) kunne blive ved med at køre — og hobe sig op — resten af sessionen.
+    // showCourtOverview kalder ikke denne funktion og styrer selv sin egen poller.
+    stopHoldkampRefresh();
+    stopTournamentRefresh();
+    stopAutoRefresh();
+
     ['courtOverviewSection', 'holdkampSection', 'tournamentSection', 'matchHistorySection', 'deviceTokensSection']
         .forEach(id => {
             const el = document.getElementById(id);
