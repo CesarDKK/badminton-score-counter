@@ -508,6 +508,44 @@ nav {
 }
 .filter-ryd:hover { background: rgba(83,52,131,0.4); }
 
+/* ── Årgangsfilter — styrer hele siden ── */
+.aargang-filter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+}
+.aargang-filter .etiket {
+    font-size: 0.78em;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-right: 4px;
+}
+.aargang-knap {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    color: var(--text);
+    font: inherit;
+    font-size: 0.9em;
+    font-weight: 500;
+    padding: 7px 16px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.aargang-knap:hover { background: rgba(83,52,131,0.35); border-color: var(--purple-light); color: #fff; }
+.aargang-knap.aktiv {
+    background: rgba(233,69,96,0.16);
+    border-color: rgba(233,69,96,0.55);
+    color: #f2879a;
+    font-weight: 600;
+}
+/* Den valgte årgang fremhæves også i grafen "Kampe pr. årgang" */
+.graf .klikbar.aktiv .ramme { fill: rgba(233,69,96,0.10); }
+.graf .klikbar.aktiv .akse { fill: #f2879a; font-weight: 600; }
+
 .filter {
     background: var(--bg-raise);
     border: 1px solid var(--border);
