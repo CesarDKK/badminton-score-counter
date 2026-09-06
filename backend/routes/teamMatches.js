@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
+const { currentTenant } = require('../config/tenantPools');
 const { publishGameStateChange } = require('../events/gameStateEvents');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
 
@@ -115,10 +116,12 @@ router.get('/active-all', async (req, res, next) => {
 
         const result = [];
         for (const tm of teamMatches) {
+            // finished_at sendes med, så Oversigten kan skjule en færdigspillet
+            // holdkamp 10 min efter sidste delkamp (se HK_FINISHED_DISPLAY_MS).
             const games = await query(
                 `SELECT id, game_number, category,
                         team1_player1, team1_player2, team2_player1, team2_player2,
-                        court_number, status, winner_team, set_scores
+                        court_number, status, winner_team, set_scores, finished_at
                  FROM team_match_games
                  WHERE team_match_id = ?
                  ORDER BY game_number ASC`,
@@ -305,24 +308,64 @@ router.put('/:id/games/:gameId', requireWriteAuthInClubMode, async (req, res, ne
 // PUT /api/team-matches/:id/finish - Mark team match as finished (requires auth)
 router.put('/:id/finish', authMiddleware, async (req, res, next) => {
     try {
-        const { id } = req.params;
-
-        // Baner med aktive delkampe i denne holdkamp skal have besked
-        const activeGames = await query(
-            `SELECT DISTINCT court_number FROM team_match_games
-             WHERE team_match_id = ? AND court_number IS NOT NULL`,
-            [id]
-        );
-
-        await query(`UPDATE team_matches SET status = 'finished' WHERE id = ?`, [id]);
-
-        for (const row of activeGames) publishGameStateChange(req, row.court_number, 'assignment');
-
+        await afslutHoldkamp(req.params.id, req);
         res.json({ success: true });
     } catch (error) {
         next(error);
     }
 });
+
+/**
+ * Afslutter en holdkamp og giver de involverede baner besked (SSE 'assignment'),
+ * så en bane med en delkamp fra holdkampen slipper bindingen. Deles af den
+ * manuelle "Afslut Holdkamp" i admin og den automatiske lukning nedenfor, så de
+ * to aldrig kan komme til at opføre sig forskelligt.
+ * `req` bruges kun til at finde tenanten for SSE — baggrundsjobbet giver et
+ * minimalt objekt med clubDbName.
+ */
+async function afslutHoldkamp(id, req) {
+    const courts = await query(
+        `SELECT DISTINCT court_number FROM team_match_games
+         WHERE team_match_id = ? AND court_number IS NOT NULL`,
+        [id]
+    );
+    await query(`UPDATE team_matches SET status = 'finished' WHERE id = ?`, [id]);
+    for (const row of courts) publishGameStateChange(req, row.court_number, 'assignment');
+}
+
+// Automatisk lukning: når ALLE delkampe i en holdkamp er færdige, lukkes den
+// af sig selv 30 minutter efter den sidste delkamp — tid nok til at rette et
+// resultat i admin, og bagefter ligger den under Kamphistorik. Oversigten
+// skjuler den allerede efter 10 min (frontend), det her er selve status-skiftet.
+//
+// Konservativt: en holdkamp uden delkampe, med en delkamp der ikke er
+// 'finished', eller med en delkamp uden finished_at, røres ALDRIG — så en
+// walkover der aldrig blev tastet, eller gamle rækker uden tidsstempel, kræver
+// stadig et manuelt tryk på "Afslut Holdkamp".
+const AUTO_AFSLUT_EFTER_MIN = 30;
+
+async function autoAfslutHoldkampe() {
+    const klar = await query(
+        `SELECT tm.id, tm.team1_name, tm.team2_name
+           FROM team_matches tm
+           JOIN team_match_games g ON g.team_match_id = tm.id
+          WHERE tm.status = 'active'
+          GROUP BY tm.id, tm.team1_name, tm.team2_name
+         HAVING SUM(g.status <> 'finished') = 0
+            AND SUM(g.finished_at IS NULL) = 0
+            AND MAX(g.finished_at) <= DATE_SUB(NOW(), INTERVAL ? MINUTE)`,
+        [AUTO_AFSLUT_EFTER_MIN]
+    );
+    if (!klar.length) return 0;
+
+    // Samme tenant-nøgle som et rigtigt request ville give (se gameStateEvents.tenantKey)
+    const req = { clubDbName: currentTenant() };
+    for (const tm of klar) {
+        await afslutHoldkamp(tm.id, req);
+        console.log(`✓ Holdkamp afsluttet automatisk (${AUTO_AFSLUT_EFTER_MIN} min efter sidste delkamp): ${tm.team1_name} – ${tm.team2_name} (#${tm.id})`);
+    }
+    return klar.length;
+}
 
 // DELETE /api/team-matches - Delete ALL team matches (requires auth)
 router.delete('/', authMiddleware, async (req, res, next) => {
@@ -347,3 +390,7 @@ router.delete('/:id', authMiddleware, async (req, res, next) => {
 
 module.exports = router;
 module.exports.opretHoldkamp = opretHoldkamp;
+
+// Bruges af scheduleren (automatisk lukning af faerdigspillede holdkampe)
+module.exports.autoAfslutHoldkampe = autoAfslutHoldkampe;
+module.exports.AUTO_AFSLUT_EFTER_MIN = AUTO_AFSLUT_EFTER_MIN;
