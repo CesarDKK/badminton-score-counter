@@ -1,5 +1,7 @@
 # Badminton Counter App
 
+[![Tests](https://github.com/CesarDKK/badminton-score-counter/actions/workflows/tests.yml/badge.svg)](https://github.com/CesarDKK/badminton-score-counter/actions/workflows/tests.yml)
+
 A real-time badminton score tracking system with multi-device support, sponsor slideshow, and match history tracking.
 
 ## Features
@@ -819,6 +821,30 @@ docker-compose exec -T mysql mysql -u badminton_user -p badminton_app < backup.s
 
 # Restore uploads
 docker cp ./uploads-backup/. badminton-app-backend-1:/app/uploads
+```
+
+## Tests
+
+Der er to slags tests:
+
+| Type | Hvor | Kræver | Kører |
+|------|------|--------|-------|
+| **Unit-tests** | `backend/tests/unit/`, `stats/backend/tests/unit/` | Kun Node — ingen database, intet netværk | Automatisk i GitHub Actions ved hvert push (`.github/workflows/tests.yml`) |
+| **Integrationstests** | `backend/tests/*.test.js` | En kørende server + database | Manuelt efter deploy |
+
+Unit-testene dækker den logik, hvor en fejl gør mest ondt: auth-modellen (hvem må hvad), upload-validering, migrations-splitteren, tidszoner i holdkamp-hentningen, og statistik-parsning/-aggregering.
+
+```bash
+# Lokalt (kræver Node 18+ og npm install i mappen)
+cd backend && npm run test:unit
+cd stats/backend && npm run test:unit
+
+# Inde i containerne (uden Node på værtsmaskinen)
+docker exec badminton-backend npm run test:unit
+docker exec badminton-stats npm run test:unit
+
+# Integrationstests mod en kørende stack
+docker exec badminton-backend npm test
 ```
 
 ## Development

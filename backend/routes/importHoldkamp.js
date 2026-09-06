@@ -482,3 +482,7 @@ async function runHoldkampWatchers() {
 
 module.exports = router;
 module.exports.runHoldkampWatchers = runHoldkampWatchers;
+// Rene hjælpefunktioner eksporteres til unit-tests (tests/unit/holdkamp-tid.test.js)
+module.exports.parseDanskTid = parseDanskTid;
+module.exports.tilMysqlDato = tilMysqlDato;
+module.exports.danskVaeggurTilUtc = danskVaeggurTilUtc;
