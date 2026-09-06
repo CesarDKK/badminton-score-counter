@@ -67,6 +67,34 @@ let _hkRenderedKey = ''; // signatur af struktur (side + match-ids + game-ids + 
 const HK_DOUBLES = ['MD', 'DD', 'HD', 'Double'];
 const HK_PAGE_SIZE = 1;       // én holdkamp pr. side (fylder hele skærmen)
 const HK_ROTATE_MS = 15000;   // hver holdkamp vises 15 sek, så roteres der
+
+// En færdigspillet holdkamp (alle delkampe afsluttet) vises i 10 min efter den
+// sidste delkamp og skjules så — ellers optager den en fuld side i rotationen,
+// indtil nogen husker at trykke "Afslut Holdkamp". Den forbliver "aktiv" i
+// admin; backend'en lukker den selv efter 30 min (se autoAfslutHoldkampe).
+// Bevidst højere end de 5 min for en enkelt bane (FINISHED_DISPLAY_MS).
+const HK_FINISHED_DISPLAY_MS = 10 * 60 * 1000;
+
+// Millisekunder siden holdkampens sidste delkamp blev afsluttet — eller null
+// hvis den ikke er færdigspillet (ingen delkampe, en delkamp der ikke er
+// 'finished', eller en uden finished_at). null = skal vises som hidtil.
+function hkFaerdigSiden(tm, nu = Date.now()) {
+    const games = tm.games || [];
+    if (!games.length) return null;
+    let sidst = 0;
+    for (const g of games) {
+        if (g.status !== 'finished' || !g.finished_at) return null;
+        const t = new Date(g.finished_at).getTime();
+        if (!Number.isFinite(t)) return null;
+        if (t > sidst) sidst = t;
+    }
+    return nu - sidst;
+}
+
+function hkSkalVises(tm) {
+    const siden = hkFaerdigSiden(tm);
+    return siden === null || siden < HK_FINISHED_DISPLAY_MS;
+}
 let hkPage = 0;
 let hkRotateTimer = null;
 
@@ -140,7 +168,8 @@ function ensureHkRotation() {
 async function loadHoldkamp() {
     try {
         const matches = await api.getActiveTeamMatches();
-        activeTeamMatches = matches || [];
+        // Skjul færdigspillede holdkampe efter HK_FINISHED_DISPLAY_MS
+        activeTeamMatches = (matches || []).filter(hkSkalVises);
         const grid = document.getElementById('holdkampCardsGrid');
         const container = document.querySelector('.overview-container');
 

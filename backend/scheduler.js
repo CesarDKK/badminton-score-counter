@@ -239,4 +239,43 @@ function startHoldkampWatch() {
     console.log('⏰ Scheduled holdkamp-overvågning hvert minut (henter holdsedlen når den frigives)');
 }
 
-module.exports = { startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch };
+/**
+ * Automatisk lukning af faerdigspillede holdkampe.
+ *
+ * Koerer hvert minut. En holdkamp hvor ALLE delkampe er faerdige, lukkes
+ * 30 minutter efter den sidste delkamp (se AUTO_AFSLUT_EFTER_MIN i
+ * routes/teamMatches.js) — saa admin har tid til at rette et resultat, og
+ * bagefter ligger den under Kamphistorik. Ren databaseforespoergsel; intet net.
+ */
+function startHoldkampAutoAfslut() {
+    const { autoAfslutHoldkampe, AUTO_AFSLUT_EFTER_MIN } = require('./routes/teamMatches');
+
+    cron.schedule('* * * * *', async () => {
+        // 1. Standard/direkte database
+        try {
+            await autoAfslutHoldkampe();
+        } catch (err) {
+            console.error('❌ Auto-afslutning af holdkampe fejlede (default):', err.message);
+        }
+
+        // 2. Alle aktive klub-databaser (multi-tenant)
+        try {
+            const masterDb = require('./config/masterDatabase');
+            const clubs = await masterDb.query('SELECT db_name FROM clubs WHERE is_active = 1');
+            for (const club of clubs) {
+                try {
+                    await runWithTenant(club.db_name, () => autoAfslutHoldkampe());
+                } catch (err) {
+                    console.error(`❌ Auto-afslutning af holdkampe fejlede for ${club.db_name}:`, err.message);
+                }
+            }
+        } catch (err) { /* master DB ikke tilgængelig i direkte mode */ }
+    }, {
+        scheduled: true,
+        timezone: 'Europe/Copenhagen'
+    });
+
+    console.log(`⏰ Scheduled auto-afslutning af holdkampe hvert minut (${AUTO_AFSLUT_EFTER_MIN} min efter sidste delkamp)`);
+}
+
+module.exports = { startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut };
