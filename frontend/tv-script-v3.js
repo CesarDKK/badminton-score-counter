@@ -56,7 +56,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     await initializeTVDisplay();
     setupPlayerNameAutoFit();
     // Marquee-funktionen er midlertidigt slaaet fra mens UX'en revurderes.
-    // compactDisplayName (vis kun foerste 1-2 navne) er stadig aktiv.
+    // Navnene vises som fornavn (NameDisplay.visningsnavne) — efternavnet
+    // vises derfor ikke, saa laenge marqueen er slaaet fra.
     // setupPlayerNameMarquee();
     loadCourtData();
     startAutoRefresh();
@@ -591,26 +592,8 @@ async function updateTvTeamLogos(gameState, isMatchActive) {
 }
 
 // Extract first name (before '/') for doubles display
-function extractFirstName(fullName) {
-    if (!fullName) return '';
-    const parts = fullName.split('/');
-    return parts[0].trim();
-}
-
-// Kompakt visning til TV-scoreboardet: drop efternavnet saa fonten kan vaere
-// stoerre. 1 ord = som-er, 2 ord = foerste, 3+ ord = de to foerste.
-// Det fulde navn vises stadig via periodisk marquee-scroll (se runMarqueeOnce).
-//   "Jesper"                  -> "Jesper"
-//   "Jesper Soerensen"        -> "Jesper"
-//   "Hans Henrik Heidemann"   -> "Hans Henrik"
-//   "Jens Peter Hansen-Olsen" -> "Jens Peter"
-function compactDisplayName(fullName) {
-    if (!fullName) return '';
-    const parts = fullName.trim().split(/\s+/).filter(Boolean);
-    if (parts.length <= 1) return parts.join(' ');
-    const keep = Math.min(parts.length - 1, 2);
-    return parts.slice(0, keep).join(' ');
-}
+// Visningsnavne (kun fornavn, forbogstav ved sammenfald) ligger i
+// js/name-display.js (window.NameDisplay), saa de kan unit-testes i CI.
 
 // Update player names display
 function updatePlayerNames(gameState, playersSwapped) {
@@ -632,26 +615,27 @@ function updatePlayerNames(gameState, playersSwapped) {
     // blinker"). setName skriver kun til DOM hvis navnet faktisk har aendret
     // sig — saa pollingen er en no-op for et stabilt scoreboard.
     let anyChanged = false;
-    const setName = (el, full) => {
+    // setName skriver kun til DOM hvis kilden (fullText) ELLER visningen
+    // (displayText) er aendret. Visningen kan aendre sig uden at kilden goer
+    // det — fx naar en modstander med samme fornavn kommer til, saa "Anna"
+    // bliver til "Anna J." (se NameDisplay.visningsnavne).
+    const setName = (el, full, display) => {
         if (!el) return;
         const trimmed = (full || '').trim();
-        // Vi sammenligner kun mod dataset.fullText (den raa kilde) — IKKE mod
-        // el.textContent, fordi en aktiv marquee laegger en <span> med det
-        // fulde navn ind, hvilket faar textContent til at returnere fuld-tekst
-        // mens compactDisplayName giver short-tekst. Et match-fail ville saa
-        // draebe marqueeen hvert 2. sek (= "navnet blinker").
-        if (el.dataset.fullText === trimmed) return;
+        if (el.dataset.fullText === trimmed && el.dataset.displayText === display) return;
 
         // Aendret navn → annuller evt. marquee paa netop dette element
         if (el.classList.contains('is-marquee')) {
             el.classList.remove('is-marquee');
             delete el.dataset.marqueeShort;
         }
-        el.textContent = compactDisplayName(full);
+        el.textContent = display;
         if (trimmed) {
             el.dataset.fullText = trimmed;
+            el.dataset.displayText = display;
         } else {
             delete el.dataset.fullText;
+            delete el.dataset.displayText;
         }
         anyChanged = true;
     };
@@ -661,26 +645,32 @@ function updatePlayerNames(gameState, playersSwapped) {
     const p2 = document.getElementById('player2Name');
     const p2m = document.getElementById('player2Name2');
 
+    const d1 = isDoubles && displayPlayer1.name2;
+    const d2 = isDoubles && displayPlayer2.name2;
+
+    // Kun fornavn paa TV-skaermen; forbogstav ved sammenfald paa tvaers af
+    // alle fire pladser (ogsaa modstandere). Tom streng = pladsen er ikke i brug.
+    const [v1, v1m, v2, v2m] = NameDisplay.visningsnavne([
+        displayPlayer1.name, d1 ? displayPlayer1.name2 : '',
+        displayPlayer2.name, d2 ? displayPlayer2.name2 : ''
+    ]);
+
     // Player 1
-    if (isDoubles && displayPlayer1.name2) {
-        // extractFirstName haandterer slash-separerede alias-navne, og
-        // compactDisplayName droppen efternavnet ovenpaa.
-        setName(p1, extractFirstName(displayPlayer1.name));
-        setName(p1m, extractFirstName(displayPlayer1.name2));
+    setName(p1, displayPlayer1.name, v1);
+    if (d1) {
+        setName(p1m, displayPlayer1.name2, v1m);
         if (p1m.style.display !== 'block') p1m.style.display = 'block';
-    } else {
-        setName(p1, displayPlayer1.name);
-        if (p1m.style.display !== 'none') p1m.style.display = 'none';
+    } else if (p1m.style.display !== 'none') {
+        p1m.style.display = 'none';
     }
 
     // Player 2
-    if (isDoubles && displayPlayer2.name2) {
-        setName(p2, extractFirstName(displayPlayer2.name));
-        setName(p2m, extractFirstName(displayPlayer2.name2));
+    setName(p2, displayPlayer2.name, v2);
+    if (d2) {
+        setName(p2m, displayPlayer2.name2, v2m);
         if (p2m.style.display !== 'block') p2m.style.display = 'block';
-    } else {
-        setName(p2, displayPlayer2.name);
-        if (p2m.style.display !== 'none') p2m.style.display = 'none';
+    } else if (p2m.style.display !== 'none') {
+        p2m.style.display = 'none';
     }
 
     // Kun re-fit hvis noget faktisk aendrede sig — fit-loopet hver 2s ville
@@ -692,27 +682,47 @@ function updatePlayerNames(gameState, playersSwapped) {
 
 // ===== Auto-fit player names =====
 // Default-fonten i CSS er stor (god til korte navne); naar et navn er for
-// langt til at faa plads i .team-names-kolonnen, saetter vi en CSS-variabel
-// der ganger fonten ned saa hele navnet vises uden ellipsis.
+// langt til at faa plads i sin raekke, saetter vi en CSS-variabel der ganger
+// fonten ned saa hele navnet vises uden ellipsis.
+//
+// Skaleringen beregnes PR. HOLD (.team-names), ikke pr. navn: i double/mix
+// faar begge navne den samme --fit-scale (den mindste der er noedvendig), saa
+// makkerne staar i samme stoerrelse. Tidligere skalerede hver linje for sig,
+// og saa stod "Bo" i fuld stoerrelse over en krympet "Christoffer".
 const PLAYER_NAME_MIN_SCALE = 0.45; // under det her er teksten ulaeselig; tag ellipsis i stedet
+
+function fitTeamNames(teamNames) {
+    if (!teamNames) return;
+    const navne = [...teamNames.querySelectorAll('.player-name')]
+        .filter(el => el.offsetParent !== null && !el.classList.contains('is-marquee'));
+    if (!navne.length) return;
+
+    // Nulstil ALLE foerst, saa vi maaler unconstrained tekstbredde
+    navne.forEach(el => el.style.setProperty('--fit-scale', '1'));
+
+    let scale = 1;
+    for (const el of navne) {
+        const row = el.parentElement;  // .tv-player-row (logo + navn)
+        const containerW = row ? row.clientWidth : 0;
+        if (!containerW) continue;
+        const textW = el.scrollWidth;
+        if (textW > containerW) {
+            // 0.98 marginal for at undgaa sub-pixel rounding der ellers stadig giver ellipsis
+            scale = Math.min(scale, (containerW / textW) * 0.98);
+        }
+    }
+    scale = Math.max(scale, PLAYER_NAME_MIN_SCALE);
+    if (scale < 1) navne.forEach(el => el.style.setProperty('--fit-scale', scale.toFixed(3)));
+}
+
+// Bagudkompatibel: fit et enkelt navn = fit hele holdet det hoerer til
 function fitPlayerName(el) {
-    if (!el || el.offsetParent === null) return;  // skjult (singles: partner-name)
-    if (el.classList.contains('is-marquee')) return;  // marquee styrer selv stoerrelsen
-    // Nulstil saa vi maaler unconstrained tekstbredde foer vi beslutter scale
-    el.style.setProperty('--fit-scale', '1');
-    const container = el.parentElement;  // .team-names
-    if (!container) return;
-    const containerW = container.clientWidth;
-    if (containerW === 0) return;
-    const textW = el.scrollWidth;
-    if (textW <= containerW) return;
-    // 0.98 marginal for at undgaa sub-pixel rounding der ellers stadig giver ellipsis
-    const scale = Math.max((containerW / textW) * 0.98, PLAYER_NAME_MIN_SCALE);
-    el.style.setProperty('--fit-scale', scale.toFixed(3));
+    if (!el) return;
+    fitTeamNames(el.closest('.team-names'));
 }
 
 function fitAllPlayerNames() {
-    document.querySelectorAll('.player-name').forEach(fitPlayerName);
+    document.querySelectorAll('.team-names').forEach(fitTeamNames);
 }
 
 let playerNameResizeObserver = null;
@@ -1361,17 +1371,22 @@ function showRestBreak(secondsLeft, title, gameState, playersSwapped) {
             displayPlayer2 = gameState.player2;
         }
 
-        document.getElementById('tvRestBreakPlayer1').textContent = displayPlayer1.name;
-        document.getElementById('tvRestBreakPlayer2').textContent = displayPlayer2.name;
-
         const partner1Element = document.getElementById('tvRestBreakPlayer1Partner');
         const partner2Element = document.getElementById('tvRestBreakPlayer2Partner');
         const isDoubles = gameState.isDoubles && displayPlayer1.name2 && displayPlayer2.name2;
 
+        // Samme navneregel som scoreboardet: kun fornavn, forbogstav ved sammenfald
+        const [v1, v1m, v2, v2m] = NameDisplay.visningsnavne([
+            displayPlayer1.name, isDoubles ? displayPlayer1.name2 : '',
+            displayPlayer2.name, isDoubles ? displayPlayer2.name2 : ''
+        ]);
+        document.getElementById('tvRestBreakPlayer1').textContent = v1;
+        document.getElementById('tvRestBreakPlayer2').textContent = v2;
+
         if (isDoubles) {
-            partner1Element.textContent = displayPlayer1.name2;
+            partner1Element.textContent = v1m;
             partner1Element.style.display = 'block';
-            partner2Element.textContent = displayPlayer2.name2;
+            partner2Element.textContent = v2m;
             partner2Element.style.display = 'block';
         } else {
             partner1Element.style.display = 'none';

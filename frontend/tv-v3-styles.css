@@ -286,8 +286,8 @@ body::before {
 }
 
 /* Doubles: makker vises identisk med hovedspilleren — samme font-size og farve,
-   fordi de er et hold og skal fremstå jævnbyrdigt. Auto-fit virker per linje
-   saa makkeren kan shrinke uafhaengigt af hovedspilleren. */
+   fordi de er et hold og skal fremstå jævnbyrdigt. Auto-fit beregnes PR. HOLD
+   (fitTeamNames i JS), saa begge navne faar samme --fit-scale. */
 .partner-name {
     font-family: 'Bebas Neue', sans-serif;
     font-size: calc(clamp(2.4em, 13vh, 16em) * var(--fit-scale, 1));
@@ -560,12 +560,14 @@ body::before {
     overflow-wrap: anywhere;
 }
 
+/* Makkeren i pause-overlayet: samme stoerrelse og farve som hovedspilleren —
+   de er et hold. (Var foer 3.4em og nedtonet til 55 %.) */
 .pause-player-partner {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(1.6em, 3.2vw, 3.4em);
-    letter-spacing: 0.05em;
+    font-size: clamp(2.5em, 6vw, 6.5em);
+    letter-spacing: 0.04em;
     line-height: 1.05;
-    color: rgba(255, 255, 255, 0.55);
+    color: #ffffff;
     overflow-wrap: anywhere;
 }
 
