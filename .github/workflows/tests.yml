@@ -1,0 +1,37 @@
+# Unit-tests ved hvert push og pull request.
+#
+# Kører KUN de rene unit-tests (ingen database, intet netværk) — de tager under
+# et sekund. Integrationstestene i backend/tests/*.test.js kræver en kørende
+# server og køres stadig manuelt efter deploy.
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unit:
+    name: Unit-tests (backend + statistik)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18   # samme major som containerne (node:18-alpine)
+
+      - name: Backend — installer afhængigheder
+        working-directory: backend
+        run: npm install --no-audit --no-fund
+
+      - name: Backend — unit-tests
+        working-directory: backend
+        run: npm run test:unit
+
+      - name: Statistik — installer afhængigheder
+        working-directory: stats/backend
+        run: npm install --no-audit --no-fund
+
+      - name: Statistik — unit-tests
+        working-directory: stats/backend
+        run: npm run test:unit

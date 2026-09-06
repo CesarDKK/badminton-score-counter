@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "test:unit": "node --test tests/unit/*.test.js",
+    "test:smoke": "node tests/smoke.js"
   },
   "license": "MIT",
   "dependencies": {
