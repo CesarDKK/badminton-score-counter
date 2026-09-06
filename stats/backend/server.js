@@ -12,7 +12,7 @@
 const express = require('express');
 const bp = require('./badmintonplayer');
 const { harvestClub } = require('./harvest');
-const { aggregate } = require('./aggregate');
+const { aggregate, aargangOversigt, filtrerAargang } = require('./aggregate');
 const cache = require('./cache');
 
 const app = express();
@@ -168,8 +168,20 @@ app.get('/api/clubs', async (req, res) => {
 });
 
 /**
+ * Årgangsfilteret fra querystringen (fx aargang=U15). Godkendes kun hvis
+ * årgangen faktisk findes i klubbens data — ellers ignoreres den stille, så en
+ * forkert værdi i URL'en bare viser hele klubben.
+ */
+function aargangFra(req, raw) {
+    const oenske = String(req.query.aargang || '').trim();
+    if (!oenske) return null;
+    return aargangOversigt(raw.deltagelser || []).some((a) => a.aargang === oenske) ? oenske : null;
+}
+
+/**
  * Statistik for en klub og sæson.
  * 200 → data ligger klar. 202 → indsamling er sat i gang, spørg /api/jobs/:id.
+ * Med ?aargang=U15 begrænses alt på siden til den ene årgang.
  */
 app.get('/api/stats', (req, res) => {
     const clubId = String(req.query.clubId || '').trim();
@@ -193,11 +205,17 @@ app.get('/api/stats', (req, res) => {
         if (!cached.frisk && !findJob(clubId, season) && maaStarte(klientIp(req))) {
             opretJob({ clubId, clubName: cached.data.klub || clubName, season });
         }
+        const aargang = aargangFra(req, cached.data);
+        const data = aggregate(filtrerAargang(cached.data, aargang));
+        // Filteret må ikke fjerne selve valgmulighederne: klubbens fulde liste af
+        // årgange sendes altid med, så filterknapperne og årgangsgrafen viser dem alle.
+        data.aargange = aargangOversigt(cached.data.deltagelser || []);
+        data.aargangFilter = aargang;
         return res.json({
             status: 'klar',
             forældet: !cached.frisk,
             alderTimer: Math.round(cached.alderMs / 3600000),
-            data: aggregate(cached.data)
+            data
         });
     }
 
@@ -263,7 +281,8 @@ app.get('/api/export', (req, res) => {
     const cached = cache.laes(clubId, season);
     if (!cached) return res.status(404).json({ fejl: 'Ingen data at eksportere endnu.' });
 
-    const data = aggregate(cached.data);
+    const aargang = aargangFra(req, cached.data);
+    const data = aggregate(filtrerAargang(cached.data, aargang));
     // CSV-injektion: et navn fra badmintonplayer der starter med = + - @ ville
     // ellers blive udført som en formel når filen åbnes i Excel. Vi sætter en
     // apostrof foran, så det altid læses som tekst.
@@ -296,7 +315,7 @@ app.get('/api/export', (req, res) => {
                 q(s.hold.map((h) => `${h.navn} (${h.kampe})`).join(', '))].join(';'))];
     }
 
-    const navn = `${data.klub}-${season}-${type}.csv`.replace(/[^\w.\-]+/g, '_');
+    const navn = `${data.klub}-${season}${aargang ? '-' + aargang : ''}-${type}.csv`.replace(/[^\w.\-]+/g, '_');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${navn}"`);
     res.send('﻿' + linjer.join('\n'));

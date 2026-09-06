@@ -50,6 +50,26 @@ spillere fordelt på 37 hold.
 * Vi henter ikke holdledernes mail og telefonnummer, selvom de står på
   kampsiderne. De hører ikke til statistikken.
 
+## Årgangsfilter
+
+Øverst i resultatet sidder en række knapper — "Alle" plus klubbens faktiske
+årgange (U09, U11, U13, U15, SEN, SEN+40 …). Vælger man én, viser **hele siden**
+kun den årgang: nøgletal, alle grafer, begge tabeller og CSV-eksporterne.
+
+Filteret lægges på **serveren, før aggregeringen** (`filtrerAargang` i
+`aggregate.js`). Det er nødvendigt for at tallene bliver rigtige: en spillers
+discipliner, sejre og sejrsprocent findes kun som samlede tal pr. spiller, så
+et filter i browseren ville blande U15- og seniorkampe sammen for en spiller
+der har spillet begge dele. Med serverfilteret tælles vedkommende kun med sine
+U15-kampe når U15 er valgt.
+
+API'et tager `?aargang=U15` på både `/api/stats` og `/api/export`. Ukendte
+årgange ignoreres stille, så en forkert URL bare viser hele klubben. Svaret
+indeholder altid klubbens *fulde* liste af årgange, så knapperne og grafen
+"Kampe pr. årgang" bliver ved med at vise dem alle — den valgte fremhæves.
+Filteret gemmes i URL'en (`?klub=Lyngby&saeson=2025&aargang=U15`), så et link
+kan deles færdigfiltreret.
+
 ## Klik ned i data
 
 Alt hænger sammen, så man kan følge en tråd hele vejen igennem:
@@ -57,7 +77,7 @@ Alt hænger sammen, så man kan følge en tråd hele vejen igennem:
 | Klik på | Sker der |
 |---|---|
 | En søjle i "Flest kampe" | Spilleren åbnes i spillertabellen |
-| En årgang i "Kampe pr. årgang" | Begge tabeller filtreres til den årgang |
+| En årgang i "Kampe pr. årgang" | Hele siden filtreres til den årgang — samme som knapperne øverst |
 | En søjle i "Spillere pr. antal hold" | Kun de spillere vises |
 | En række i spillertabellen | Fordelingen på hold foldes ud |
 | En holdchip under en spiller | Der hoppes til holdet, som foldes ud |

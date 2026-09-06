@@ -53,6 +53,37 @@ function datoAf(tid) {
 
 const nyTaeller = () => ({ single: 0, double: 0, mix: 0, vundet: 0, tabt: 0, uafgjort: 0 });
 
+/** Kampe og spillere pr. årgang — bruges både i aggregeringen og til årgangsfilteret. */
+function aargangOversigt(deltagelser) {
+    const kampe = new Map(), spillere = new Map();
+    for (const d of deltagelser) {
+        if (!kampe.has(d.aargang)) { kampe.set(d.aargang, new Set()); spillere.set(d.aargang, new Set()); }
+        kampe.get(d.aargang).add(d.kampnr);
+        spillere.get(d.aargang).add(d.spillerId);
+    }
+    return [...kampe.keys()].map((a) => ({
+        aargang: a,
+        kampe: kampe.get(a).size,
+        spillere: spillere.get(a).size
+    })).sort((a, b) => aargangOrden(a.aargang) - aargangOrden(b.aargang));
+}
+
+/**
+ * Rådata begrænset til én årgang. Der filtreres FØR aggregeringen, så en spiller
+ * der både har spillet U15 og senior kun tælles med sine U15-kampe, -discipliner
+ * og -sejre når U15 er valgt. Uden filter returneres rådata uændret.
+ */
+function filtrerAargang(raw, aargang) {
+    if (!aargang) return raw;
+    const passer = (x) => x.aargang === aargang;
+    return {
+        ...raw,
+        deltagelser: (raw.deltagelser || []).filter(passer),
+        kampe: (raw.kampe || []).filter(passer),
+        hold: (raw.hold || []).filter(passer)
+    };
+}
+
 function aggregate(raw) {
     const { deltagelser = [], kampe = [], hold = [] } = raw;
 
@@ -64,8 +95,6 @@ function aggregate(raw) {
     const holdSpillere = new Map();
     const holdKampe = new Map();
     const holdMeta = new Map();
-    const aargangKampe = new Map();
-    const aargangSpillere = new Map();
     const maaned = new Map();
 
     // Til makkerparrene: hvem stod sammen i samme disciplin i samme holdkamp.
@@ -105,10 +134,6 @@ function aggregate(raw) {
         holdSpillere.get(hk).add(d.spillerId);
         holdKampe.get(hk).add(d.kampnr);
         holdMeta.get(hk).raekker.add(d.raekke);
-
-        if (!aargangKampe.has(d.aargang)) { aargangKampe.set(d.aargang, new Set()); aargangSpillere.set(d.aargang, new Set()); }
-        aargangKampe.get(d.aargang).add(d.kampnr);
-        aargangSpillere.get(d.aargang).add(d.spillerId);
     }
 
     // Makkerpar — to spillere i samme disciplin i samme holdkamp
@@ -186,11 +211,7 @@ function aggregate(raw) {
         placeringer: placeringer.get(noegle) || []
     })).sort((a, b) => aargangOrden(a.aargang) - aargangOrden(b.aargang) || a.hold.localeCompare(b.hold, 'da'));
 
-    const aargange = [...aargangKampe.keys()].map((a) => ({
-        aargang: a,
-        kampe: aargangKampe.get(a).size,
-        spillere: aargangSpillere.get(a).size
-    })).sort((a, b) => aargangOrden(a.aargang) - aargangOrden(b.aargang));
+    const aargange = aargangOversigt(deltagelser);
 
     const fordeling = {};
     for (const s of spillere) fordeling[s.antalHold] = (fordeling[s.antalHold] || 0) + 1;
@@ -236,4 +257,4 @@ function aggregate(raw) {
     };
 }
 
-module.exports = { aggregate, holdNoegle, datoAf, disciplinType };
+module.exports = { aggregate, holdNoegle, datoAf, disciplinType, aargangOversigt, filtrerAargang };

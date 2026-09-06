@@ -19,6 +19,7 @@
         noegletal: $('noegletal'), holdTabel: $('holdTabel'), spillerTabel: $('spillerTabel'),
         filter: $('filter'), tabelTom: $('tabelTom'), kilde: $('kilde'),
         filterbjaelke: $('filterbjaelke'), filterTekst: $('filterTekst'), filterRyd: $('filterRyd'),
+        aargangFilter: $('aargangFilter'),
         csvSpillere: $('csvSpillere'), csvSpillerHold: $('csvSpillerHold'),
         csvMakkere: $('csvMakkere'), csvHold: $('csvHold')
     };
@@ -31,6 +32,8 @@
     let kampeHenter = null;     // igangværende hentning af kampe
     let sorter = { felt: 'kampe', ned: true };
     let groft = null;           // aktivt filter sat ved klik i en graf
+    let aargangFilter = null;   // valgt årgang — styrer hele siden; serveren filtrerer før aggregering
+    let startAargang = null;    // årgang fra URL'en ved opstart, bruges én gang ved første klubvalg
     let pollTimer = null;
     let hentGen = 0;            // øges ved hver ny hentning; svar fra en ældre
                                // hentning kasseres, så to hurtige klik ikke
@@ -75,6 +78,7 @@
 
         const p = new URLSearchParams(location.search);
         if (p.get('saeson') && seasons.some((s) => s.id === p.get('saeson'))) el.saeson.value = p.get('saeson');
+        startAargang = p.get('aargang') || null;
         if (p.get('klub')) { el.klub.value = p.get('klub'); el.form.requestSubmit(); }
     }
 
@@ -116,11 +120,21 @@
     async function vaelgKlub(klub, season) {
         vis(el.klubValg, false);
         besked(`${klub.navn} — sæson ${sæsonNavn(season)}`);
+        // En ny klub starter ufiltreret — medmindre URL'en ved opstart bad om en årgang.
+        aargangFilter = startAargang;
+        startAargang = null;
+        opdaterUrl(klub, season);
+        hentStatistik(klub, season);
+    }
+
+    /** Holder URL'en i sync, så et link til klub, sæson og årgang kan deles. */
+    function opdaterUrl(klub, season) {
         const url = new URL(location.href);
         url.searchParams.set('klub', klub.navn);
         url.searchParams.set('saeson', season);
+        if (aargangFilter) url.searchParams.set('aargang', aargangFilter);
+        else url.searchParams.delete('aargang');
         history.replaceState(null, '', url);
-        hentStatistik(klub, season);
     }
 
     function sæsonNavn(id) {
@@ -130,7 +144,8 @@
 
     // ── Hentning + fremdrift ────────────────────────────────────────────────
     async function hentStatistik(klub, season, gen = ++hentGen) {
-        const q = `clubId=${encodeURIComponent(klub.id)}&clubName=${encodeURIComponent(klub.navn)}&season=${encodeURIComponent(season)}`;
+        let q = `clubId=${encodeURIComponent(klub.id)}&clubName=${encodeURIComponent(klub.navn)}&season=${encodeURIComponent(season)}`;
+        if (aargangFilter) q += `&aargang=${encodeURIComponent(aargangFilter)}`;
         const { ok, status, json } = await hentJson('/api/stats?' + q);
         if (gen !== hentGen) return; // en nyere hentning er startet — kassér dette svar
 
@@ -139,11 +154,16 @@
         if (!ok) { vis(el.fremdrift, false); return besked(json.fejl || 'Noget gik galt.', true); }
 
         vis(el.fremdrift, false);
+        // Skifter man kun årgang, er kampene (der er klubdækkende) stadig gyldige —
+        // de hentes kun forfra når klub eller sæson skifter.
+        const sammeKlub = !!aktuel && aktuel.klub.id === klub.id && aktuel.season === season;
+        if (!sammeKlub) { kampeKort = null; kampeHenter = null; }
         data = json.data;
+        // Serveren ignorerer ukendte årgange stille — følg dens svar, så knapper og URL ikke lyver.
+        aargangFilter = data.aargangFilter || null;
         aktuel = { klub, season };
-        kampeKort = null;
-        kampeHenter = null;
-        render(json);
+        opdaterUrl(klub, season);
+        render(json, sammeKlub);
     }
 
     const FASER = {
@@ -205,7 +225,7 @@
     }
 
     // ── Visning ─────────────────────────────────────────────────────────────
-    function render(svar) {
+    function render(svar, behold) {
         const { klub, season } = aktuel;
         groft = null;
         el.filter.value = '';
@@ -214,7 +234,8 @@
         const alder = svar.forældet
             ? ` · hentet for ${svar.alderTimer} timer siden`
             : (svar.alderTimer ? ` · opdateret for ${svar.alderTimer} timer siden` : ' · lige hentet');
-        el.klubMeta.textContent = `Sæson ${sæsonNavn(season)}${alder}`;
+        const kun = aargangFilter ? ` · kun ${aargangFilter}` : '';
+        el.klubMeta.textContent = `Sæson ${sæsonNavn(season)}${kun}${alder}`;
 
         navneKort = new Map(data.spillere.map((s) => [s.id, s.navn]));
 
@@ -229,6 +250,7 @@
             ['Kampe pr. spiller', snit]
         ].map(([etiket, v]) => `<div class="tal-kort"><span class="vaerdi">${esc(v)}</span><span class="etiket">${esc(etiket)}</span></div>`).join('');
 
+        tegnAargangFilter();
         tegnTop();
         tegnAargang();
         tegnFordeling();
@@ -239,7 +261,8 @@
         tegnSpillere();
         opdaterFilterbjaelke();
 
-        const q = `clubId=${encodeURIComponent(klub.id)}&season=${encodeURIComponent(season)}`;
+        let q = `clubId=${encodeURIComponent(klub.id)}&season=${encodeURIComponent(season)}`;
+        if (aargangFilter) q += `&aargang=${encodeURIComponent(aargangFilter)}`;
         el.csvSpillere.href = `/api/export?${q}&type=spillere`;
         el.csvSpillerHold.href = `/api/export?${q}&type=spiller-hold`;
         el.csvMakkere.href = `/api/export?${q}&type=makkere`;
@@ -253,10 +276,45 @@
 
         vis(el.resultat, true);
         besked('');
-        el.resultat.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Ved et årgangsskift bliver man stående — kun en ny klub ruller op til resultatet.
+        if (!behold) el.resultat.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function sumKampe() { return data.spillere.reduce((s, p) => s + p.kampe, 0); }
+
+    // ── Årgangsfilter — styrer hele siden ───────────────────────────────────
+    /** Knapperne bygges af klubbens faktiske årgange — altid den fulde liste, også når der er filtreret. */
+    function tegnAargangFilter() {
+        const node = el.aargangFilter;
+        const aargange = data.aargange || [];
+        if (aargange.length < 2) { node.innerHTML = ''; vis(node, false); return; }
+
+        const knap = (vaerdi, tekst, titel) => {
+            const aktiv = (vaerdi || null) === aargangFilter;
+            return `<button type="button" class="aargang-knap${aktiv ? ' aktiv' : ''}" data-aargang="${esc(vaerdi)}"
+                aria-pressed="${aktiv}" title="${esc(titel)}">${esc(tekst)}</button>`;
+        };
+
+        node.innerHTML = '<span class="etiket">Vis</span>'
+            + knap('', 'Alle', 'Hele klubben')
+            + aargange.map((a) => knap(a.aargang, a.aargang, `${a.aargang} — ${a.kampe} kampe, ${a.spillere} spillere`)).join('');
+        vis(node, true);
+    }
+
+    el.aargangFilter.addEventListener('click', (e) => {
+        const knap = e.target.closest('[data-aargang]');
+        if (knap) vaelgAargang(knap.dataset.aargang || null);
+    });
+
+    /** Vælger en årgang (null = alle). Klik på den valgte igen slår filteret fra. */
+    function vaelgAargang(aargang) {
+        if (!aktuel) return;
+        const ny = aargang && aargang !== aargangFilter ? aargang : null;
+        if (ny === aargangFilter) return;
+        aargangFilter = ny;
+        opdaterUrl(aktuel.klub, aktuel.season);
+        hentStatistik(aktuel.klub, aktuel.season);
+    }
 
     // ── Grafer ──────────────────────────────────────────────────────────────
     const FORLOEB = `<defs><linearGradient id="stat-forloeb" x1="0" y1="0" x2="1" y2="0">
@@ -319,7 +377,8 @@
 
         const dele = raekker.map((r, i) => {
             const x = venstre + i * spor + spor / 2;
-            return `<g class="klikbar" data-aargang="${esc(r.aargang)}">
+            const aktiv = r.aargang === aargangFilter ? ' aktiv' : '';
+            return `<g class="klikbar${aktiv}" data-aargang="${esc(r.aargang)}">
                 <rect class="ramme" x="${x - spor / 2}" y="${top - 8}" width="${spor}" height="${hoejde - bund - top + 8}" rx="4"></rect>
                 <rect class="soejle" x="${x - bw - 2}" y="${y(r.kampe)}" width="${bw}" height="${hoejde - bund - y(r.kampe)}" rx="3"></rect>
                 <rect class="soejle--alt" x="${x + 2}" y="${y(r.spillere)}" width="${bw}" height="${hoejde - bund - y(r.spillere)}" rx="3"></rect>
@@ -492,7 +551,7 @@
     });
     $('grafAargang').addEventListener('click', (e) => {
         const g = e.target.closest('[data-aargang]');
-        if (g) saetFilter({ type: 'aargang', vaerdi: g.dataset.aargang });
+        if (g) vaelgAargang(g.dataset.aargang);
     });
     $('grafFordeling').addEventListener('click', (e) => {
         const g = e.target.closest('[data-antalhold]');
@@ -526,19 +585,14 @@
     function opdaterFilterbjaelke() {
         vis(el.filterbjaelke, !!groft);
         if (!groft) { el.filterTekst.textContent = ''; return; }
-        el.filterTekst.textContent = groft.type === 'aargang'
-            ? `Viser kun ${groft.vaerdi}`
-            : `Viser kun spillere der har spillet for ${groft.vaerdi === 1 ? 'ét hold' : groft.vaerdi + ' hold'}`;
+        el.filterTekst.textContent = `Viser kun spillere der har spillet for ${groft.vaerdi === 1 ? 'ét hold' : groft.vaerdi + ' hold'}`;
     }
 
+    /** Årgang filtreres på serveren — her er det kun "antal hold"-filteret fra grafen. */
     function spillerePassererFilter(s) {
         if (!groft) return true;
-        if (groft.type === 'antalHold') return s.antalHold === groft.vaerdi;
-        return s.hold.some((h) => holdAargang(h.navn) === groft.vaerdi);
+        return s.antalHold === groft.vaerdi;
     }
-
-    /** Holdnøglen er "ÅRGANG Holdnavn" — årgangen er alt før første mellemrum. */
-    function holdAargang(noegle) { return String(noegle).split(' ')[0]; }
 
     // ── Kampe (hentes først når nogen folder et hold ud) ────────────────────
     function sikrKampe() {
@@ -600,9 +654,7 @@
 
     function tegnHoldTabel() {
         holdKort = spillerePrHold();
-        const raekker = groft && groft.type === 'aargang'
-            ? data.hold.filter((h) => h.aargang === groft.vaerdi)
-            : data.hold;
+        const raekker = data.hold; // årgang er allerede filtreret fra serverens side
 
         el.holdTabel.tBodies[0].innerHTML = raekker.map((h) => `<tr class="hold" data-noegle="${esc(h.noegle)}">
             <td>${esc(h.aargang)}</td>
@@ -619,8 +671,6 @@
     }
 
     async function aabnHold(noegle, scroll) {
-        // Er holdet filtreret væk, ryddes filteret — ellers klikker man i blinde.
-        if (groft && groft.type === 'aargang' && holdAargang(noegle) !== groft.vaerdi) rydFilter();
         const tbody = el.holdTabel.tBodies[0];
         const tr = [...tbody.querySelectorAll('tr.hold')].find((t) => t.dataset.noegle === noegle);
         if (!tr) return;
