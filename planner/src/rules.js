@@ -5,7 +5,7 @@
 //               dag?, slot?, noegle? }
 // `noegle` sættes på advarsler, brugeren kan kvittere (projekt.kvitteret).
 import { minutter } from './tp-reader.js';
-import { slotsForDag, banerISlot } from './kapacitet.js';
+import { slotsForDag, puljeKapacitet, puljeFor } from './kapacitet.js';
 import { reglerFor, STANDARD_REGLER } from './store.js';
 
 /** Min. tid pr. kamp (§ 4 stk. 5): standard ungdom ABCD 20, EM 25; senior ABCD 25, EM 30. */
@@ -97,12 +97,24 @@ export function tjekPlan(projekt) {
         if (!gyldige.has(slot)) {
             tilfoej({ type: 'uden-for-dagen', alvor: 'fejl', tekst: `${kampe.length} ${kampe.length === 1 ? 'kamp' : 'kampe'} kl. ${slot} ligger uden for dagens slots (${dag.start}–${dag.slut}).`, kampe: kampe.map((k) => k.id), dag: dato, slot });
         }
-        const halve = kampe.filter((k) => kat(k)?.halvBane).length;
-        const hele = kampe.length - halve;
-        const brugt = hele + Math.ceil(halve / 2);
-        const baner = banerISlot(dag, slot);
-        if (brugt > baner) {
-            tilfoej({ type: 'kapacitet', alvor: 'fejl', tekst: `Kl. ${slot}: ${kampe.length} kampe${halve ? ` (${halve} på halv bane)` : ''} kræver ${brugt} baner, men der er ${baner}.`, kampe: kampe.map((k) => k.id), dag: dato, slot });
+        // Kapacitet pr. pulje: rækker med reserverede baner i tidsrummet har egen
+        // pulje; alle andre deler de fælles baner.
+        const { faelles, reserveret } = puljeKapacitet(dag, slot, projekt.raekker);
+        const prPulje = new Map();
+        for (const k of kampe) {
+            const pulje = puljeFor(kat(k)?.raekke, reserveret);
+            if (!prPulje.has(pulje)) prPulje.set(pulje, []);
+            prPulje.get(pulje).push(k);
+        }
+        for (const [pulje, liste] of prPulje) {
+            const halve = liste.filter((k) => kat(k)?.halvBane).length;
+            const hele = liste.length - halve;
+            const brugt = hele + Math.ceil(halve / 2);
+            const baner = pulje === 'faelles' ? faelles : reserveret.get(pulje);
+            if (brugt > baner) {
+                const hvor = pulje === 'faelles' ? (reserveret.size ? ' på de fælles baner' : '') : ` på ${pulje}'s reserverede baner`;
+                tilfoej({ type: 'kapacitet', alvor: 'fejl', tekst: `Kl. ${slot}: ${liste.length} kampe${halve ? ` (${halve} på halv bane)` : ''} kræver ${brugt} baner, men der er ${baner}${hvor}.`, kampe: liste.map((k) => k.id), dag: dato, slot });
+            }
         }
     }
 

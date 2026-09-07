@@ -7,7 +7,7 @@
 // max kampe pr. dag og rækkens dage. Låste kampe (projekt.laast) beholder
 // deres tid; alt andet placeres forfra.
 import { minutter } from './tp-reader.js';
-import { slotsForDag, banerISlot } from './kapacitet.js';
+import { slotsForDag, puljeKapacitet, puljeFor } from './kapacitet.js';
 import { reglerFor } from './store.js';
 import { minKampMin, pauseForRaekke, tidsvindue } from './rules.js';
 
@@ -15,7 +15,7 @@ const AARGANG_ORDEN = ['U09', 'U11', 'U13', 'U15', 'U17', 'U19', 'SEN'];
 
 // Hvilken årsag der vises for en kamp, der ikke kunne placeres: den mest sigende vinder.
 const AARSAG_RANG = {
-    'ingen ledig bane': 6,
+    'ingen ledig bane': 6, 'ingen ledig reserveret bane': 6,
     'spiller mangler pause': 5, 'spiller er i en anden kamp i slottet': 5, 'spiller har max kampe den dag': 5,
     'uden for tidsvinduet': 4, 'før rækkens tidligste start': 4, 'efter rækkens seneste slut': 4,
     'rækken spiller ikke den dag': 3,
@@ -84,10 +84,23 @@ export function lavForslag(projekt, valg = {}) {
     const tidFor = new Map();        // kampId → { dag, min }
     const historik = new Map();      // spillerId → [{ kamp, dag, min, kendt }]
     const kendteKampePrDag = new Map(); // `${spiller}|${dag}` → antal
-    const slotBrug = new Map();      // `${dag}|${slot}` → { hele, halve, kampe: [] }
+    const slotBrug = new Map();      // `${dag}|${slot}|${pulje}` → { hele, halve, kampe: [] }
+    const dagMap = new Map(dage.map((d) => [d.dato, d]));
+    const kapCache = new Map();      // `${dag}|${slot}` → { faelles, reserveret }
+    const kapFor = (dagDato, slot) => {
+        const n = `${dagDato}|${slot}`;
+        if (!kapCache.has(n)) kapCache.set(n, puljeKapacitet(dagMap.get(dagDato), slot, projekt.raekker));
+        return kapCache.get(n);
+    };
+    // Pulje for en kamp i et slot: rækkens egne reserverede baner eller de fælles
+    const puljeForKamp = (k, dagDato, slot) => puljeFor(kat(k)?.raekke, kapFor(dagDato, slot).reserveret);
+    const banerIPulje = (dagDato, slot, pulje) => {
+        const kap = kapFor(dagDato, slot);
+        return pulje === 'faelles' ? kap.faelles : kap.reserveret.get(pulje);
+    };
 
-    const brugFor = (dag, slot) => {
-        const n = `${dag}|${slot}`;
+    const brugFor = (dag, slot, pulje = 'faelles') => {
+        const n = `${dag}|${slot}|${pulje}`;
         if (!slotBrug.has(n)) slotBrug.set(n, { hele: 0, halve: 0, kampe: [] });
         return slotBrug.get(n);
     };
@@ -95,7 +108,7 @@ export function lavForslag(projekt, valg = {}) {
         const min = minutter(slot);
         plan[k.id] = { dag, slot };
         tidFor.set(k.id, { dag, min });
-        const brug = brugFor(dag, slot);
+        const brug = brugFor(dag, slot, puljeForKamp(k, dag, slot));
         if (kat(k)?.halvBane) brug.halve += 1; else brug.hele += 1;
         brug.kampe.push(k);
         const kendte = new Set(k.spillere);
@@ -134,11 +147,12 @@ export function lavForslag(projekt, valg = {}) {
             if (!t) return 'bygger på en kamp uden tid';
             if (t.dag > dag.dato || (t.dag === dag.dato && t.min >= slotStart)) return 'bygger på en senere kamp';
         }
-        const brug = brugFor(dag.dato, slot);
+        const pulje = puljeForKamp(k, dag.dato, slot);
+        const brug = brugFor(dag.dato, slot, pulje);
         const halv = !!kat(k)?.halvBane;
         const hele = brug.hele + (halv ? 0 : 1);
         const halve = brug.halve + (halv ? 1 : 0);
-        if (hele + Math.ceil(halve / 2) > baner) return 'ingen ledig bane';
+        if (hele + Math.ceil(halve / 2) > banerIPulje(dag.dato, slot, pulje)) return pulje === 'faelles' ? 'ingen ledig bane' : 'ingen ledig reserveret bane';
         const varighed = varighedFor(k);
         const pause = pauseFor(k);
         const kendte = new Set(k.spillere);
@@ -218,7 +232,8 @@ export function lavForslag(projekt, valg = {}) {
         spilletIDag.set(dag.dato, dagSet);
         for (const { k, p } of faste) if (p.dag === dag.dato) for (const s of k.spillere) dagSet.add(s);
         for (const slot of slotsForDag(dag, slotMin)) {
-            const baner = banerISlot(dag, slot);
+            const kap = kapFor(dag.dato, slot);
+            const baner = kap.faelles + [...kap.reserveret.values()].reduce((a, b) => a + b, 0);
             if (!baner) continue;
             const slotStart = minutter(slot);
             // Kandidater i prioriteret rækkefølge
@@ -227,10 +242,10 @@ export function lavForslag(projekt, valg = {}) {
                 .map((k) => ({ k, noegle: prioritet.map((n) => noegler[n](k, dagSet, dag.dato, dag)) }))
                 .sort((a, b) => sammenlign(a.noegle, b.noegle));
             for (const { k } of kandidater) {
-                const brug = brugFor(dag.dato, slot);
-                const fuld = brug.hele + Math.ceil(brug.halve / 2) >= baner;
-                if (fuld && brug.halve % 2 === 0) break;          // intet kan komme ind
-                if (fuld && !kat(k)?.halvBane) continue;         // kun en halv bane er ledig
+                const pulje = puljeForKamp(k, dag.dato, slot);
+                const brug = brugFor(dag.dato, slot, pulje);
+                const fuld = brug.hele + Math.ceil(brug.halve / 2) >= banerIPulje(dag.dato, slot, pulje);
+                if (fuld && (brug.halve % 2 === 0 || !kat(k)?.halvBane)) continue; // puljen er fuld (evt. kun en halv bane ledig)
                 const aarsag = aarsagFor(k, dag, slot, slotStart, baner);
                 if (aarsag) {
                     // Gem den mest sigende årsag (kapacitet og pause frem for "bygger på …")

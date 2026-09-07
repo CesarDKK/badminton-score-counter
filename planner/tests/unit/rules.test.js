@@ -352,3 +352,29 @@ describe('rules: raekkens eget tidsrum (valgfrit)', () => {
         assert.equal(tjekPlan(kvitter(p, adv[0].noegle)).problemer.filter((x) => x.type === 'raekke-tidsrum').length, 0);
     });
 });
+
+describe('rules: kapacitet pr. pulje med reserverede baner', () => {
+    test('raekken bruger kun sine reserverede baner, de andre deler resten', () => {
+        // 2 baner; U09 D reserverer 1 bane kl. 13–15
+        let p = opdaterRaekke(projekt(), 'U09 D', { tidligst: '13:00', senest: '15:00', reserveredeBaner: 1 });
+        p = flytKamp(p, 's1', '2026-11-21', '13:00');
+        p = flytKamp(p, 's2', '2026-11-21', '13:00'); // 2 halve = 1 reserveret bane: ok
+        p = flytKamp(p, 'p1', '2026-11-21', '13:00'); // 1 faelles bane: ok
+        assert.equal(tjekPlan(p).problemer.filter((x) => x.type === 'kapacitet').length, 0);
+        const p2 = flytKamp(p, 'q1', '2026-11-21', '13:00'); // 2 kampe paa 1 faelles bane
+        const f = tjekPlan(p2).problemer.filter((x) => x.type === 'kapacitet');
+        assert.equal(f.length, 1);
+        assert.match(f[0].tekst, /paa de faelles baner|på de fælles baner/);
+        assert.deepEqual(f[0].kampe.sort(), ['p1', 'q1']);
+        const p3 = flytKamp(p, 's3', '2026-11-21', '13:00'); // 3 halve = 2 baner > 1 reserveret
+        const f3 = tjekPlan(p3).problemer.filter((x) => x.type === 'kapacitet');
+        assert.equal(f3.length, 1);
+        assert.match(f3[0].tekst, /reserverede baner/);
+    });
+    test('uden for tidsrummet deler alle banerne', () => {
+        let p = opdaterRaekke(projekt(), 'U09 D', { tidligst: '13:00', senest: '15:00', reserveredeBaner: 1 });
+        p = flytKamp(p, 'p1', '2026-11-21', '10:00');
+        p = flytKamp(p, 'q1', '2026-11-21', '10:00');
+        assert.equal(tjekPlan(p).problemer.filter((x) => x.type === 'kapacitet').length, 0);
+    });
+});

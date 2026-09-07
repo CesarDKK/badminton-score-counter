@@ -3,7 +3,7 @@
 // forfra ved hver ændring; UI-tilstanden (valgt dag, filter, søgning) ligger i
 // app.js og gives med som `tilstand`.
 import { esc, datoTekst } from './dom.js';
-import { slotsForDag, banerISlot } from '../kapacitet.js';
+import { slotsForDag, banerISlot, puljeKapacitet } from '../kapacitet.js';
 import { alvorForKamp } from '../rules.js';
 import { bedoemPlan } from '../scheduler.js';
 
@@ -134,12 +134,19 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
         const halve = kampe.filter((k) => katMap.get(k.kategori)?.halvBane).length;
         const brugt = (kampe.length - halve) + Math.ceil(halve / 2);
         const baner = slots.includes(slot) ? banerISlot(dag, slot) : 0;
+        const { reserveret } = slots.includes(slot) ? puljeKapacitet(dag, slot, projekt.raekker) : { reserveret: new Map() };
+        // Reserverede puljer vises for sig: "U09 D 4/5"
+        const puljeTekst = [...reserveret.entries()].map(([rid, b]) => {
+            const egne = kampe.filter((k) => katMap.get(k.kategori)?.raekke === rid);
+            const h = egne.filter((k) => katMap.get(k.kategori)?.halvBane).length;
+            return `${esc(rid)} ${(egne.length - h) + Math.ceil(h / 2)}/${b}`;
+        }).join(' · ');
         const problemer = tjek.prSlot.get(`${dag.dato}|${slot}`) || [];
         const fejl = problemer.some((p) => p.alvor === 'fejl');
         const klasse = brugt > baner ? 'er-over' : fejl ? 'er-fejl' : brugt === baner && baner ? 'er-fuld' : '';
         return `
         <tr class="slot ${klasse}" data-slot="${slot}">
-            <th scope="row"><span class="tid">${slot}</span><span class="fyld">${brugt}/${baner}</span></th>
+            <th scope="row"><span class="tid">${slot}</span><span class="fyld">${brugt}/${baner}</span>${puljeTekst ? `<span class="fyld fyld--pulje">${puljeTekst}</span>` : ''}</th>
             <td class="celle" data-slot="${slot}" data-dag="${dag.dato}">${grupper(kampe).map(({ k, ids }) => kort(k, ids)).join('')}</td>
         </tr>`;
     }).join('');

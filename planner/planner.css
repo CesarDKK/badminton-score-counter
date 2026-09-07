@@ -400,3 +400,4 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
     .tabel--liste td { border-bottom: 1px solid #ccc; padding: 3px 8px; }
     .tabel--liste tr.er-uden-tid td { color: #b00; }
 }
+.gitter th .fyld--pulje { color: var(--purple-soft); }

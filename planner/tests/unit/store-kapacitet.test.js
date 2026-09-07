@@ -5,7 +5,7 @@ import {
     nytProjekt, genindlaes, saetSlotMin, opdaterDag, opdaterRaekke, opdaterPause, validerProjekt,
     gemLokalt, hentLokalt, projektFilnavn, STANDARD_PAUSE,
 } from '../../src/store.js';
-import { slotsForDag, banerISlot, baneSlots, kapacitetPrDag, kampePrKategori } from '../../src/kapacitet.js';
+import { slotsForDag, banerISlot, baneSlots, kapacitetPrDag, kampePrKategori, reservationerISlot, puljeKapacitet, puljeFor } from '../../src/kapacitet.js';
 
 function model({ tider = true } = {}) {
     const tid = (dag, slot) => (tider ? { dag, slot } : null);
@@ -148,5 +148,33 @@ describe('kapacitet', () => {
         const pr = kampePrKategori(p);
         assert.deepEqual(pr.get('U13 M HS'), { pulje: 2, cup: 1, swiss: 0, ialt: 3, medTid: 2 });
         assert.deepEqual(pr.get('U09 D HS'), { pulje: 0, cup: 0, swiss: 2, ialt: 2, medTid: 2 });
+    });
+});
+
+describe('kapacitet: reserverede baner pr. raekke', () => {
+    const dag = { dato: '2025-11-22', start: '09:00', slut: '18:00', baner: 10, spaerret: [] };
+    const raekker = [
+        { id: 'U09 D', dage: ['2025-11-22'], tidligst: '12:00', senest: '16:00', reserveredeBaner: 5 },
+        { id: 'U11 D', dage: ['2025-11-22'], reserveredeBaner: 0 },
+        { id: 'U11 B', dage: ['2025-11-23'], reserveredeBaner: 3 },
+    ];
+    test('reservationen gaelder kun i raekkens tidsrum og paa dens dage', () => {
+        assert.deepEqual([...reservationerISlot(raekker, dag, '11:30')], []);
+        assert.deepEqual([...reservationerISlot(raekker, dag, '12:00')], [['U09 D', 5]]);
+        assert.deepEqual([...reservationerISlot(raekker, dag, '15:30')], [['U09 D', 5]]);
+        assert.deepEqual([...reservationerISlot(raekker, dag, '16:00')], []);
+    });
+    test('puljekapacitet: faelles = baner minus reserverede', () => {
+        const k = puljeKapacitet(dag, '13:00', raekker);
+        assert.equal(k.faelles, 5);
+        assert.equal(k.reserveret.get('U09 D'), 5);
+        assert.equal(puljeFor('U09 D', k.reserveret), 'U09 D');
+        assert.equal(puljeFor('U11 D', k.reserveret), 'faelles');
+        assert.equal(puljeKapacitet(dag, '10:00', raekker).faelles, 10);
+    });
+    test('uden tidsrum gaelder reservationen hele dagen', () => {
+        const r2 = [{ id: 'U09 D', dage: ['2025-11-22'], reserveredeBaner: 2 }];
+        assert.equal(puljeKapacitet(dag, '09:00', r2).faelles, 8);
+        assert.equal(puljeKapacitet(dag, '17:30', r2).faelles, 8);
     });
 });

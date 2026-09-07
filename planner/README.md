@@ -132,3 +132,16 @@ egne kampe. Forslaget tager ca. 25 ms for 300 kampe.
   Alle 19 spillere skal være fri i rundens slot (TP sætter én tid), så U9-
   drengenes doubler lægges mellem runderne; 6 runder + doubler kræver mere
   end 10 slots — planneren melder de overskydende som "ikke placeret".
+
+## Reserverede baner pr. række (U9-vinduet)
+
+En række kan få `reserveredeBaner` (fane 1, ved siden af tidsrummet). I rækkens
+tidsrum bruger den kun de baner, og alle andre rækker deler resten — fx U9 med
+5 af 10 baner kl. 12–16:30, delt i 10 halve, mens U11 spiller på de 5 andre.
+Standard fra TP-filen: det tidsrum, hvor TP's gitter har flere baner end
+normalt, og antallet af ekstra baner (Lyngby 2025: 12:00–17:00, 5 baner).
+Kapacitetstjekket, gitterets "brugt/baner" og planlæggeren regner pr. pulje
+(reserveret pr. række + fælles). Sådan bliver U9-kampene liggende lige efter
+hinanden i deres vindue i stedet for at blive spredt mellem U11-kampene:
+målt på Lyngby 2025 falder U9-spillernes største hul fra op til 3½ time til
+gennemsnitligt 16 minutter, og Swiss-runderne ligger hver time.

@@ -105,15 +105,29 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
         kampDage.get(kat.raekke).add(plan[k.id].dag);
     }
     const alleDage = dage.map((d) => d.dato);
-    const raekker = model.raekker.map((r) => ({
-        id: r.id,
-        aargang: r.aargang,
-        raekke: r.raekke,
-        pauseKlasse: r.pauseKlasse,
-        dage: kampDage.has(r.id) ? [...kampDage.get(r.id)].sort() : [...alleDage],
-        dispensationFlereDage: false,
-        raekkefoelge: [...STANDARD_RAEKKEFOELGE],
-    }));
+    // Rækker med halve baner (U9) får som standard TP's ekstra-vindue som eget
+    // tidsrum og reserverede baner (halve baner / 2, rundet op), så deres kampe
+    // ligger samlet på egne baner. Brugeren retter det i fane 1.
+    const halve = model.tpGitter.baner?.halve || 0;
+    const raekker = model.raekker.map((r) => {
+        const rDage = kampDage.has(r.id) ? [...kampDage.get(r.id)].sort() : [...alleDage];
+        const harHalvBane = model.kategorier.some((k) => k.raekke === r.id && k.halvBane);
+        const ekstra = harHalvBane ? rDage.map((d) => model.tpGitter.dage.find((x) => x.dato === d)?.ekstra).find(Boolean) : null;
+        return {
+            id: r.id,
+            aargang: r.aargang,
+            raekke: r.raekke,
+            pauseKlasse: r.pauseKlasse,
+            dage: rDage,
+            dispensationFlereDage: false,
+            raekkefoelge: [...STANDARD_RAEKKEFOELGE],
+            tidligst: ekstra ? ekstra.fra : null,
+            senest: ekstra ? ekstra.til : null,
+            // TP's ekstra baner i vinduet er de baner, der deles i halve (Lyngby 2025:
+            // 5 af 10 baner kl. 12–16:30); uden vindue gættes ud fra antal halve baner.
+            reserveredeBaner: ekstra ? ekstra.baner : (harHalvBane && halve ? Math.ceil(halve / 2) : 0),
+        };
+    });
     const kategorier = model.kategorier.map((k) => ({
         id: k.id, raekke: k.raekke, aargang: k.aargang, kat: k.kat, type: k.type, mix: k.mix,
         form: k.form, halvBane: k.halvBane, tilmelde: k.tilmeldte, antalKampe: k.kampe, runder: k.runder,
