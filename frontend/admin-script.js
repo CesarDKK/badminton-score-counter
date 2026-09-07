@@ -437,6 +437,15 @@ function formatDuration(seconds) {
     return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
+// Varighed for holdkamp-delkampe og turneringskampe ud fra started_at/finished_at
+// (migration 026). Tom streng hvis en af dem mangler — fx kampe spillet før
+// starttiden blev gemt.
+function varighedFra(startedAt, finishedAt) {
+    if (!startedAt || !finishedAt) return '';
+    const s = Math.round((new Date(finishedAt).getTime() - new Date(startedAt).getTime()) / 1000);
+    return Number.isFinite(s) && s >= 0 ? formatDuration(s) : '';
+}
+
 function calculateElapsedTime(state) {
     if (!state.matchStartTime) {
         return '00:00';
@@ -937,6 +946,8 @@ async function loadTournamentMatchHistory() {
                 const scoreNums = orientHistorySetScoreNumbers(m.set_scores, side1Key).join(' · ');
                 const scores = scoreNums ? `<span style="color:#aaa; font-size:0.8em; margin-left:6px;">${scoreNums}</span>` : '';
                 const resultHtml = `<span style="color:${winnerColor}; font-size:0.85em; font-weight:bold;">✓ ${escapeHtml(winnerLabel)}</span>${scores}`;
+                const varighed = varighedFra(m.started_at, m.finished_at);
+                const varighedHtml = varighed ? `<span style="color:#aaa; font-size:0.8em; white-space:nowrap;">⏱️ ${varighed}</span>` : '';
 
                 const labelBadge = m.label
                     ? `<span style="background:var(--color-accent); color:#fff; padding:2px 7px; border-radius:4px; font-size:0.78em; font-weight:bold; white-space:nowrap;">${escapeHtml(m.label)}</span>`
@@ -946,6 +957,7 @@ async function loadTournamentMatchHistory() {
                     ${labelBadge}
                     <span style="color:#eaeaea; font-size:0.85em; flex:1; min-width:120px;">${escapeHtml(side1)} <span style="color:#aaa;">vs</span> ${escapeHtml(side2)}</span>
                     ${resultHtml}
+                    ${varighedHtml}
                 </div>`;
             }).join('');
 
@@ -1025,11 +1037,14 @@ async function loadTeamMatchHistory() {
                     resultHtml = `<span style="color:${winnerColor}; font-size:0.85em; font-weight:bold;">✓ ${escapeHtml(winnerName)}</span>${scores}`;
                     rowBorder = winnerColor;
                 }
+                const varighed = g.status === 'finished' ? varighedFra(g.started_at, g.finished_at) : '';
+                const varighedHtml = varighed ? `<span style="color:#aaa; font-size:0.8em; white-space:nowrap;">⏱️ ${varighed}</span>` : '';
 
                 return `<div style="display:flex; align-items:center; gap:10px; padding:7px 10px; border-left:3px solid ${rowBorder}; background:rgba(255,255,255,0.03); border-radius:4px; margin-bottom:4px; flex-wrap:wrap;">
                     <span style="background:var(--color-accent); color:#fff; padding:2px 7px; border-radius:4px; font-size:0.78em; font-weight:bold; white-space:nowrap;">${escapeHtml(g.category)} ${num}</span>
                     <span style="color:#eaeaea; font-size:0.85em; flex:1; min-width:120px;">${escapeHtml(t1)} <span style="color:#aaa;">vs</span> ${escapeHtml(t2)}</span>
                     ${resultHtml}
+                    ${varighedHtml}
                 </div>`;
             }).join('');
 

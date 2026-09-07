@@ -3,6 +3,7 @@ const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
 const { currentTenant } = require('../config/tenantPools');
+const { banensStartTid } = require('../config/matchTiming');
 const { publishGameStateChange } = require('../events/gameStateEvents');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
 
@@ -62,7 +63,8 @@ router.get('/history', async (req, res, next) => {
             const games = await query(
                 `SELECT id, game_number, category,
                         team1_player1, team1_player2, team2_player1, team2_player2,
-                        court_number, status, winner_team, set_scores
+                        court_number, status, winner_team, set_scores,
+                        started_at, finished_at
                  FROM team_match_games
                  WHERE team_match_id = ?
                  ORDER BY game_number ASC`,
@@ -208,7 +210,7 @@ router.put('/:id/games/:gameId', requireWriteAuthInClubMode, async (req, res, ne
 
         // Verify game belongs to this team match
         const game = await queryOne(
-            `SELECT id, court_number FROM team_match_games WHERE id = ? AND team_match_id = ?`,
+            `SELECT id, court_number, started_at FROM team_match_games WHERE id = ? AND team_match_id = ?`,
             [gameId, id]
         );
 
@@ -264,11 +266,19 @@ router.put('/:id/games/:gameId', requireWriteAuthInClubMode, async (req, res, ne
         }
         if (status !== undefined) {
             fields.push('status = ?'); values.push(status);
+            if (status === 'active') {
+                // Starttid = tildelingen til banen (fallback). Ved afslutning
+                // erstattes den af banens rigtige starttid (foerste serv).
+                fields.push('started_at = COALESCE(started_at, CURRENT_TIMESTAMP)');
+            }
             // Naar en delkamp markeres 'finished', stempler vi tidspunktet saa
             // admin-baneoversigtens "Seneste kamp" kan sortere paa tvaers af
-            // match_history, team_match_games og tournament_matches.
+            // match_history, team_match_games og tournament_matches — og saa
+            // Kamphistorik kan vise varighed (finished_at - started_at).
             if (status === 'finished') {
                 fields.push('finished_at = CURRENT_TIMESTAMP');
+                const start = await banensStartTid(game.court_number, game.started_at);
+                if (start) { fields.push('started_at = ?'); values.push(start); }
             }
         }
         if (winnerTeam !== undefined) { fields.push('winner_team = ?'); values.push(winnerTeam); }

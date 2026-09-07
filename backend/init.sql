@@ -238,6 +238,7 @@ CREATE TABLE IF NOT EXISTS team_match_games (
   winner_team TINYINT NULL,
   set_scores TEXT NULL,
   finished_at TIMESTAMP NULL,
+  started_at TIMESTAMP NULL,
   FOREIGN KEY (team_match_id) REFERENCES team_matches(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
