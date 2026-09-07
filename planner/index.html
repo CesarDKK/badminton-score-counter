@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Tidsplanlægger til individuelle badmintonturneringer. Åbn din Tournament Planner-fil, få et forslag til spilleprogrammet og ret det med træk-og-slip — alt sker i din browser.">
+    <meta name="robots" content="noindex">
+    <title>Planner — BadmintonApp.dk</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23e94560' transform='translate(0 1.2)'%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-33 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(33 12 14.5)'/%3E%3Crect x='9.4' y='14.3' width='5.2' height='1.7' rx='0.85'/%3E%3Cpath d='M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z'/%3E%3C/g%3E%3C/svg%3E">
+    <link rel="stylesheet" href="fonts.css">
+    <link rel="stylesheet" href="planner.css?v=4">
+</head>
+<body>
+
+<div class="glow" aria-hidden="true"></div>
+
+<nav>
+    <a class="nav-brand" href="https://badmintonapp.dk">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <g fill="#e94560" transform="translate(0 1.2)">
+                <ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/>
+                <ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/>
+                <ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/>
+                <ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/>
+                <ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/>
+                <rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/>
+                <path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/>
+            </g>
+        </svg>
+        <span class="wordmark">Badminton<span>App</span> <em>Planner</em></span>
+    </a>
+    <span class="nav-status" id="navStatus" role="status" aria-live="polite"></span>
+</nav>
+
+<main class="wrap">
+    <div class="faner" role="tablist" aria-label="Sider">
+        <button class="fane er-aktiv" role="tab" data-fane="opsaetning" aria-selected="true">Fil og opsætning</button>
+        <button class="fane" role="tab" data-fane="plan" aria-selected="false">Plan</button>
+        <button class="fane" role="tab" data-fane="tjek" aria-selected="false">Tjek</button>
+        <button class="fane" role="tab" data-fane="liste" aria-selected="false">Liste</button>
+    </div>
+
+    <section id="fane-opsaetning" class="fane-indhold" role="tabpanel"></section>
+    <section id="fane-plan" class="fane-indhold fane-indhold--bred" role="tabpanel" hidden></section>
+    <section id="fane-tjek" class="fane-indhold" role="tabpanel" hidden></section>
+    <section id="fane-liste" class="fane-indhold" role="tabpanel" hidden></section>
+</main>
+
+<!-- Valg ved indlæsning af en .TP-fil (design § 6) -->
+<dialog id="importValg" class="dialog">
+    <form method="dialog">
+        <h2 id="importTitel">Tidsplanen i filen</h2>
+        <p class="panel-sub" id="importTekst"></p>
+        <div class="dialog-valg" id="importKnapper"></div>
+    </form>
+</dialog>
+
+<footer class="wrap sidefod">
+    <p>Filen læses i din browser og sendes ikke til nogen server. Projektet gemmes i browseren og kan hentes som fil.</p>
+</footer>
+
+<script src="tp-bundle.js"></script>
+<script type="module" src="src/app.js?v=4"></script>
+</body>
+</html>

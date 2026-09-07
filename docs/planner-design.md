@@ -1,7 +1,10 @@
 # planner.badmintonapp.dk — tidsplanlægger til individuelle turneringer
 
-Status: **design, intet bygget** (2026-09-07). Dokumentet er grundlaget for at
-bygge; ændringer i design aftales her først.
+Status: design 2026-09-07; **alle fire faser bygget 2026-09-07** på branchen `planner-fase1` (`planner/`, se `planner/README.md`).
+Afvigelse fra § 7.3 nr. 3: pausen regnes som standard oven i reglementets
+minimumstid (ikke et helt slot), fordi Jespers egne planer lægger samme
+spillers kampe i naboslots; det kan slås om i opsætningen. Dokumentet er grundlaget
+for at bygge; ændringer i design aftales her først.
 
 ## 1. Formål
 
