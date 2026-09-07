@@ -168,9 +168,14 @@ async function createClubDatabase(dbName) {
 
         console.log(`✓ Klub database oprettet: ${dbName}`);
 
-        // Markér alle eksisterende migrations som applied — init.sql har allerede fuldt skema
-        const { markAllMigrationsApplied } = require('./migrationRunner');
-        await markAllMigrationsApplied(dbName);
+        // Koer migrationerne paa den nye database — praecis som hoved-databasen
+        // goer ved foerste opstart. init.sql er IKKE et komplet skema (fx findes
+        // turneringstabellerne kun i migration 012/021), saa at markere
+        // migrationerne som koerte uden at koere dem efterlod nye klubber uden
+        // turneringsfunktion. Migrationskoereren ignorerer "findes allerede"
+        // for alt det init.sql daekker, og opretter kun det der mangler.
+        const { runMigrationsForDatabase } = require('./migrationRunner');
+        await runMigrationsForDatabase(dbName);
     } finally {
         await conn.end();
     }

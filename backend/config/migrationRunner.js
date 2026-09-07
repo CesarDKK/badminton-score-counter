@@ -183,27 +183,6 @@ async function runMigrationsForDatabase(dbName) {
     }
 }
 
-// Bruges ved oprettelse af ny klub-database: init.sql har allerede fuldt skema,
-// så vi markerer blot alle eksisterende migrations som applied uden at køre dem.
-async function markAllMigrationsApplied(dbName) {
-    const conn = await getConnection(dbName);
-    try {
-        await ensureMigrationsTable(conn);
-        const files = getMigrationFiles();
-        for (const file of files) {
-            await conn.query(
-                'INSERT IGNORE INTO migrations (filename) VALUES (?)',
-                [file]
-            );
-        }
-        if (files.length > 0) {
-            console.log(`✓ ${files.length} migrations markeret som applied for ${dbName}`);
-        }
-    } finally {
-        await conn.end();
-    }
-}
-
 async function runMigrationsForAllDatabases() {
     const defaultDb = process.env.DB_NAME || 'badminton_counter';
     console.log('⏳ Kører database migrationer...');
@@ -232,4 +211,4 @@ async function runMigrationsForAllDatabases() {
     console.log('✓ Database migrationer gennemført');
 }
 
-module.exports = { runMigrationsForDatabase, runMigrationsForAllDatabases, markAllMigrationsApplied, splitStatements };
+module.exports = { runMigrationsForDatabase, runMigrationsForAllDatabases, splitStatements };
