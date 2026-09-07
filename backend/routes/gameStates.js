@@ -664,7 +664,7 @@ router.delete('/:courtId', requireWriteAuthInClubMode, async (req, res, next) =>
         try {
             await query(
                 `UPDATE team_match_games
-                 SET status = 'pending', court_number = NULL
+                 SET status = 'pending', court_number = NULL, started_at = NULL
                  WHERE court_number = ? AND status = 'active'`,
                 [parseInt(courtId, 10)]
             );
@@ -672,7 +672,7 @@ router.delete('/:courtId', requireWriteAuthInClubMode, async (req, res, next) =>
         try {
             await query(
                 `UPDATE tournament_matches
-                 SET status = 'pending', court_number = NULL
+                 SET status = 'pending', court_number = NULL, started_at = NULL
                  WHERE court_number = ? AND status = 'active'`,
                 [parseInt(courtId, 10)]
             );

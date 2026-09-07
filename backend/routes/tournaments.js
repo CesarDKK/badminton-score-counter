@@ -6,6 +6,7 @@ const { publishGameStateChange } = require('../events/gameStateEvents');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
 const { fetchAndParseTournamentMatches, resolveClubNames, buildPlayerClubRows } = require('./importTournament');
 const { currentTenant } = require('../config/tenantPools');
+const { banensStartTid } = require('../config/matchTiming');
 
 // ── Import-fremskridt (in-memory) ──
 // Klub-opsamlingen kører i baggrunden efter kampene er indsat; frontend poller
@@ -158,7 +159,8 @@ async function getMatchesForTournament(tournamentId) {
     return query(
         `SELECT id, match_order, label, doubles, source_match_id,
                 side1_player1, side1_player2, side2_player1, side2_player2,
-                court_number, status, winner_team, set_scores, created_at
+                court_number, status, winner_team, set_scores, created_at,
+                started_at, finished_at
          FROM tournament_matches
          WHERE tournament_id = ?
          ORDER BY match_order ASC`,
@@ -590,7 +592,7 @@ router.put('/:id/matches/:matchId', requireWriteAuthInClubMode, async (req, res,
         } = req.body;
 
         const match = await queryOne(
-            'SELECT id, court_number FROM tournament_matches WHERE id = ? AND tournament_id = ?',
+            'SELECT id, court_number, started_at FROM tournament_matches WHERE id = ? AND tournament_id = ?',
             [matchId, id]
         );
         if (!match) {
@@ -615,11 +617,19 @@ router.put('/:id/matches/:matchId', requireWriteAuthInClubMode, async (req, res,
         }
         if (status !== undefined) {
             fields.push('status = ?'); values.push(status);
+            if (status === 'active') {
+                // Starttid = tildelingen til banen (fallback). Ved afslutning
+                // erstattes den af banens rigtige starttid (foerste serv).
+                fields.push('started_at = COALESCE(started_at, CURRENT_TIMESTAMP)');
+            }
             // Naar en kamp markeres 'finished', stempler vi tidspunktet saa
             // admin-baneoversigtens "Seneste kamp" kan sortere paa tvaers af
-            // match_history, tournament_matches og team_match_games.
+            // match_history, tournament_matches og team_match_games — og saa
+            // Kamphistorik kan vise varighed (finished_at - started_at).
             if (status === 'finished') {
                 fields.push('finished_at = CURRENT_TIMESTAMP');
+                const start = await banensStartTid(match.court_number, match.started_at);
+                if (start) { fields.push('started_at = ?'); values.push(start); }
             }
         }
         if (winnerTeam !== undefined) { fields.push('winner_team = ?'); values.push(winnerTeam); }

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
+const { varighedTekst } = require('../config/matchTiming');
 
 // GET /api/match-history/all - Get all match history (public)
 // NOTE: This route must come BEFORE /:courtId to avoid matching "all" as a courtId
@@ -60,7 +61,7 @@ router.get('/:courtId/latest', async (req, res, next) => {
             `SELECT tm.id, tm.doubles, tm.label,
                     tm.side1_player1, tm.side1_player2,
                     tm.side2_player1, tm.side2_player2,
-                    tm.winner_team, tm.set_scores, tm.finished_at,
+                    tm.winner_team, tm.set_scores, tm.finished_at, tm.started_at,
                     t.name AS tournament_name
              FROM tournament_matches tm
              LEFT JOIN tournaments t ON t.id = tm.tournament_id
@@ -73,7 +74,7 @@ router.get('/:courtId/latest', async (req, res, next) => {
             `SELECT tmg.id, tmg.category,
                     tmg.team1_player1, tmg.team1_player2,
                     tmg.team2_player1, tmg.team2_player2,
-                    tmg.winner_team, tmg.set_scores, tmg.finished_at,
+                    tmg.winner_team, tmg.set_scores, tmg.finished_at, tmg.started_at,
                     tm.team1_name, tm.team2_name
              FROM team_match_games tmg
              LEFT JOIN team_matches tm ON tm.id = tmg.team_match_id
@@ -149,7 +150,7 @@ router.get('/:courtId/latest', async (req, res, next) => {
                 winner_name: winnerName,
                 loser_name: loserName,
                 games_won: `${setsCount.w}-${setsCount.l}`,
-                duration: '',
+                duration: varighedTekst(r.started_at, r.finished_at),
                 set_scores: r.set_scores,
                 match_date: r.finished_at,
                 tournament_name: r.tournament_name,
@@ -168,7 +169,7 @@ router.get('/:courtId/latest', async (req, res, next) => {
                 winner_name: winnerName,
                 loser_name: loserName,
                 games_won: `${setsCount.w}-${setsCount.l}`,
-                duration: '',
+                duration: varighedTekst(r.started_at, r.finished_at),
                 set_scores: r.set_scores,
                 match_date: r.finished_at,
                 team1_name: r.team1_name,
