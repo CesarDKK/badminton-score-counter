@@ -5,6 +5,7 @@
 import { esc, datoTekst } from './dom.js';
 import { slotsForDag, banerISlot } from '../kapacitet.js';
 import { alvorForKamp } from '../rules.js';
+import { bedoemPlan } from '../scheduler.js';
 
 const FASE_KORT = { pulje: 'P', cup: '', swiss: 'R' };
 const RUNDE_KORT = { 'Finale': 'Finale', 'Semifinale': 'Semi', 'Kvartfinale': 'Kvart', '1/8-finale': '1/8' };
@@ -52,6 +53,8 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
     const soeg = (tilstand.soeg || '').trim().toLowerCase();
     const soegSpillere = new Set();
     if (soeg) for (const s of Object.values(projekt.spillere)) if (`${s.fornavn} ${s.efternavn} ${s.klub}`.toLowerCase().includes(soeg)) soegSpillere.add(s.id);
+    const laaste = new Set(projekt.laast || []);
+    const statistik = bedoemPlan(projekt);
     const valgt = projekt.kampe.find((k) => k.id === tilstand.valgtKamp);
     const valgtSpillere = new Set(valgt ? valgt.spillere : []);
     const fremhaev = new Set(tilstand.fremhaev || []);
@@ -76,7 +79,9 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
         else if (valgtSpillere.size && k.spillere.some((s) => valgtSpillere.has(s))) klasser.push('er-relateret');
         if (fremhaev.has(k.id)) klasser.push('er-fremhaevet');
         if (!k.spillere.length) klasser.push('er-ukendt');
-        return `<div class="${klasser.join(' ')}" draggable="true" data-kamp="${esc(k.id)}" style="--hue:${hueFor(projekt, k.kategori)}" title="${esc(tooltip(projekt, tjek, k))}"><b>${esc(k.kategori)}</b><span>${esc(kortNavn(k))}</span></div>`;
+        const laast = laaste.has(k.id);
+        if (laast) klasser.push('er-laast');
+        return `<div class="${klasser.join(' ')}" draggable="true" data-kamp="${esc(k.id)}" style="--hue:${hueFor(projekt, k.kategori)}" title="${esc(tooltip(projekt, tjek, k))}${laast ? '\n🔒 Låst — dobbeltklik for at låse op' : ''}"><b>${esc(k.kategori)}${laast ? ' 🔒' : ''}</b><span>${esc(kortNavn(k))}</span></div>`;
     };
 
     // Kampe pr. slot på den valgte dag
@@ -148,15 +153,20 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
                 ${projekt.kategorier.map((k) => `<option value="${esc(k.id)}" ${tilstand.filter === k.id ? 'selected' : ''}>${esc(k.id)}</option>`).join('')}
             </select>
             <input type="search" data-felt="soeg" placeholder="Søg spiller, klub eller kamp" value="${esc(tilstand.soeg || '')}" aria-label="Søg">
+            ${tilstand.filter ? `<button class="knap knap--sekundaer" data-handling="laas-kategori" title="Lås alle placerede kampe i ${esc(tilstand.filter)}, så forslaget ikke flytter dem">Lås ${esc(tilstand.filter)}</button>
+            <button class="knap knap--sekundaer" data-handling="laas-op-kategori">Lås op</button>` : ''}
             <button class="knap knap--sekundaer" data-handling="ryd-dag">Ryd dag</button>
-            <button class="knap" disabled title="Kommer i fase 3">Lav forslag</button>
+            <button class="knap knap--sekundaer" data-handling="forslag-dag" title="Planlægger kun denne dag om; andre dage og låste kampe røres ikke">Forslag for dagen</button>
+            <button class="knap" data-handling="forslag" title="Planlægger alle kampe forfra; låste kampe beholder deres tid">Lav forslag</button>
         </div>
     </div>
     <p class="plan-status">
         <span class="maerke ${antalFejl ? 'maerke--fejl' : 'maerke--ok'}">${antalFejl} fejl</span>
         <span class="maerke ${antalAdv ? 'maerke--advarsel' : ''}">${antalAdv} advarsler</span>
-        <span class="daempet">${placeret.size} af ${projekt.kampe.length} kampe har tid · ${ikkePlacerede.length} mangler. Træk et kort til et slot; træk det til listen til højre for at fjerne tiden. Klik på et kort for at se spillerens andre kampe.</span>
+        ${laaste.size ? `<span class="maerke">🔒 ${laaste.size} låst</span>` : ''}
+        <span class="daempet">${placeret.size} af ${projekt.kampe.length} kampe har tid · ${ikkePlacerede.length} mangler · haltid gns. ${statistik.haltidGnsMin} min pr. spiller pr. dag${Object.keys(statistik.slutPrDag).length ? ` · slut ${Object.entries(statistik.slutPrDag).map(([d, t]) => `${datoTekst(d, { kort: true })} ${t}`).join(', ')}` : ''}. Træk et kort til et slot, eller til listen til højre for at fjerne tiden. Klik viser spillerens andre kampe; dobbeltklik låser.</span>
     </p>
+    ${tilstand.forslag ? `<p class="plan-status forslag-info">${esc(tilstand.forslag.tekst)}${tilstand.forslag.ikkePlaceret.length ? ` Ikke placeret: ${tilstand.forslag.ikkePlaceret.slice(0, 6).map((x) => `${esc(x.kategori)} ${esc(x.navn)} (${esc(x.aarsag)})`).join('; ')}${tilstand.forslag.ikkePlaceret.length > 6 ? ' …' : ''}` : ''}</p>` : ''}
     <div class="plan-layout">
         <div class="gitter-hylster">
             <table class="gitter">
@@ -194,11 +204,23 @@ function bind(container, h) {
         const dagKnap = e.target.closest('[data-dag]');
         if (dagKnap && dagKnap.classList.contains('dagfane')) { h.vaelgDag(dagKnap.dataset.dag); return; }
         const knap = e.target.closest('[data-handling]');
-        if (knap?.dataset.handling === 'ryd-dag') { h.rydDag(); return; }
+        if (knap) {
+            const hd = knap.dataset.handling;
+            if (hd === 'ryd-dag') h.rydDag();
+            else if (hd === 'forslag') h.lavForslag(false);
+            else if (hd === 'forslag-dag') h.lavForslag(true);
+            else if (hd === 'laas-kategori') h.laasKategori(true);
+            else if (hd === 'laas-op-kategori') h.laasKategori(false);
+            return;
+        }
         const li = e.target.closest('li[data-kamp]');
         if (li) { h.visKamp(li.dataset.kamp); return; }
         const kort = e.target.closest('.kort[data-kamp]');
         if (kort) h.vaelgKamp(kort.dataset.kamp);
+    });
+    container.addEventListener('dblclick', (e) => {
+        const kort = e.target.closest('.kort[data-kamp]');
+        if (kort) { e.preventDefault(); h.laasKamp(kort.dataset.kamp); }
     });
     container.addEventListener('change', (e) => {
         if (e.target.dataset.felt === 'filter') h.filter(e.target.value);

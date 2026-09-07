@@ -274,3 +274,27 @@ export function kvitter(projekt, noegle, vaerdi = true) {
     if (vaerdi) set.add(noegle); else set.delete(noegle);
     return { ...projekt, kvitteret: [...set] };
 }
+
+// ── Lås og forslag (fane 2, fase 3) ───────────────────────────
+
+/** Låser eller frigiver en kamp; "Lav forslag" og "Ryd dag" rører ikke låste kampe. */
+export function laasKamp(projekt, kampId, vaerdi = true) {
+    const set = new Set(projekt.laast || []);
+    if (vaerdi && projekt.plan[kampId]) set.add(kampId); else set.delete(kampId);
+    return { ...projekt, laast: [...set] };
+}
+
+/** Låser eller frigiver alle placerede kampe i en kategori. */
+export function laasKategori(projekt, kategoriId, vaerdi = true) {
+    const set = new Set(projekt.laast || []);
+    for (const k of projekt.kampe) {
+        if (k.kategori !== kategoriId) continue;
+        if (vaerdi && projekt.plan[k.id]) set.add(k.id); else set.delete(k.id);
+    }
+    return { ...projekt, laast: [...set] };
+}
+
+/** Lægger et forslag fra scheduler.js ind som planen. */
+export function anvendForslag(projekt, forslag) {
+    return { ...projekt, plan: { ...forslag.plan } };
+}

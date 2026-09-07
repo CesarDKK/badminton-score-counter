@@ -3,6 +3,7 @@
 import { laesTP, tabellerFraMDB } from './tp-reader.js';
 import * as store from './store.js';
 import { tjekPlan } from './rules.js';
+import { lavForslag } from './scheduler.js';
 import { renderOpsaetning } from './ui/opsaetning.js';
 import { renderPlan } from './ui/plan.js';
 import { renderTjek } from './ui/tjek.js';
@@ -211,8 +212,25 @@ const planHandlers = {
     fjern(id) { saet(store.fjernFraPlan(projekt, id)); },
     rydDag() {
         if (!window.confirm(`Fjern tiden på alle kampe ${tilstand.dag}?`)) return;
+        tilstand.forslag = null;
         saet(store.rydDag(projekt, tilstand.dag));
     },
+    lavForslag(kunDenneDag) {
+        const antalLaast = (projekt.laast || []).length;
+        const hvad = kunDenneDag ? `alle kampe ${tilstand.dag}` : 'alle kampe';
+        if (Object.keys(projekt.plan).length > antalLaast && !window.confirm(`Planlæg ${hvad} forfra? Kun låste kampe (${antalLaast}) beholder deres tid.`)) return;
+        const t0 = performance.now();
+        const f = lavForslag(projekt, kunDenneDag ? { kunDage: [tilstand.dag] } : {});
+        const ms = Math.round(performance.now() - t0);
+        const katMap = new Map(projekt.kampe.map((k) => [k.id, k]));
+        tilstand.forslag = {
+            tekst: `Forslag lavet på ${ms} ms: ${Object.keys(f.plan).length} kampe har tid, ${f.ikkePlaceret.length} kunne ikke placeres.`,
+            ikkePlaceret: f.ikkePlaceret.map((x) => ({ ...x, kategori: katMap.get(x.id)?.kategori || '', navn: katMap.get(x.id)?.navn || x.id })),
+        };
+        saet(store.anvendForslag(projekt, f));
+    },
+    laasKamp(id) { saet(store.laasKamp(projekt, id, !(projekt.laast || []).includes(id))); },
+    laasKategori(vaerdi) { if (tilstand.filter) saet(store.laasKategori(projekt, tilstand.filter, vaerdi)); },
 };
 
 const tjekHandlers = {

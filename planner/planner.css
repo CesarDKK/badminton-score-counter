@@ -371,3 +371,8 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 .regel.er-aendret .etiket { color: var(--amber); }
 .tabel--smal { width: auto; }
 .tabel--smal td { padding: 4px 12px; }
+
+/* ── Lås og forslag ── */
+.kort.er-laast { border-style: dashed; }
+.kort.er-laast b { color: #fff; }
+.forslag-info { color: var(--purple-soft); }

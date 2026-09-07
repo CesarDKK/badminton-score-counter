@@ -18,6 +18,7 @@ Der er ingen backend, og persondata forlader aldrig brugerens maskine.
 | `src/store.js` | Projektfil: nyt projekt, genindlæsning, ændringer, persistens |
 | `src/kapacitet.js` | Slots og bane-slots pr. dag mod kampe |
 | `src/rules.js` | Reglerne (design § 5): `tjekPlan(projekt)` → fejl/advarsler pr. kamp og slot |
+| `src/scheduler.js` | Planlæggeren (design § 7.4): `lavForslag(projekt)` → plan, ikke placerede med årsag, statistik; `bedoemPlan` |
 | `src/ui/opsaetning.js` | Fane 1: fil og opsætning |
 | `src/ui/plan.js` | Fane 2: gitter pr. dag, træk-og-slip, ikke placerede kampe, spillervisning |
 | `src/ui/tjek.js` | Fane 3: fejl og advarsler med "Vis" og "Kvittér" |
@@ -89,3 +90,25 @@ Opsætningen "En kamp regnes til" styrer pausetjekket:
 
 Swiss Ladder-runder 2+ er pladsholdere uden spillere; de tjekkes samlet pr.
 runde (runde r+1 tidligst når runde r er slut plus pause).
+
+## Planlæggeren ("Lav forslag")
+
+`scheduler.js` placerer kampene grådigt slot for slot og håndhæver de samme
+hårde regler som `rules.js` (kapacitet med halve baner, spiller i ét slot,
+pause med samme fortolkning, afhængigheder, tidsvindue, max kampe pr. dag,
+rækkens dage). Låste kampe (dobbeltklik på et kort, eller "Lås <kategori>")
+beholder deres tid; "Forslag for dagen" planlægger kun den valgte dag om.
+
+Prioriteten blandt kampe, der kan spilles i et slot, er i rækkefølge: spillere
+der allerede har spillet i dag (kortest haltid), længden af kæden af kampe der
+bygger på kampen (så sidste kategori ikke løber tør for dag), rækkens
+rækkefølge (mix → single → double), runde. Målt 2026-09-07 mod Jespers egne
+planer med samme lodtrækning:
+
+| | Jesper haltid/vent | Forslag haltid/vent | Slut pr. dag |
+|---|---|---|---|
+| U13/U15 CD 2026 | 206 / 82 min | 162 / 39 min | 16:30, 15:30 (Jesper 18:00, 16:30) |
+| U9/U11 BCD 2025 | 255 / 135 min | 138 / 18 min | 17:30, 17:00 (Jesper 19:30, 17:30) |
+
+Haltid = sidste kamp minus første kamp pr. spiller pr. dag; vent = haltid minus
+egne kampe. Forslaget tager ca. 25 ms for 300 kampe.
