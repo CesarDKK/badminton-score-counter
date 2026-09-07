@@ -16,6 +16,53 @@ export const TIDSVINDUE = {
     U17: ['09:00', '21:00'], U19: ['09:00', '21:00'], SEN: ['09:00', '21:00'],
 };
 
+/**
+ * Reglementets grænser som parametre (design § 5: "alle grænser er parametre med
+ * reglementets værdi som standard"). Ligger i projekt.opsaetning.regler og kan
+ * ændres i fane 1; manglende felter i ældre projekter falder tilbage på disse.
+ */
+export const STANDARD_REGLER = {
+    tidsvindue: TIDSVINDUE,          // pr. årgang: [start, slut]
+    foerSkoledagTimer: 2,            // så mange timer tidligere slutter vinduet dagen før en skoledag
+    maxKampePrDag: 10,               // ved flere dage
+    maxKampePrDagEnDag: 12,          // ved én dag
+    minKampMin: { ungdomABCD: 20, ungdomEM: 25, seniorABCD: 25, seniorEM: 30 },
+    eFinale: ['10:00', '13:00'],       // E-finaler skal ligge i dette vindue
+    seniorMaxPrKategori: 3,          // senior E/M: max kampe pr. kategori pr. dag
+    minKampe: { MA: 2, BCDSingle: 3, BCDDouble: 2, U9U11Single: 4, swissRunder: 4 },
+};
+
+const klon = (x) => JSON.parse(JSON.stringify(x));
+
+/** Reglerne for et projekt: standard med projektets ændringer lagt ovenpå. */
+export function reglerFor(projekt) {
+    const egne = projekt?.opsaetning?.regler || {};
+    return {
+        ...STANDARD_REGLER,
+        ...egne,
+        tidsvindue: { ...STANDARD_REGLER.tidsvindue, ...(egne.tidsvindue || {}) },
+        minKampMin: { ...STANDARD_REGLER.minKampMin, ...(egne.minKampMin || {}) },
+        minKampe: { ...STANDARD_REGLER.minKampe, ...(egne.minKampe || {}) },
+    };
+}
+
+/** Ændrer én grænse: sti som "maxKampePrDag", "minKampMin.ungdomABCD" eller "tidsvindue.U11.1". */
+export function opdaterRegler(projekt, sti, vaerdi) {
+    const regler = reglerFor(projekt);
+    const dele = sti.split('.');
+    let m = regler;
+    for (const d of dele.slice(0, -1)) { m[d] = Array.isArray(m[d]) ? [...m[d]] : { ...m[d] }; m = m[d]; }
+    m[dele.at(-1)] = vaerdi;
+    return { ...projekt, opsaetning: { ...projekt.opsaetning, regler } };
+}
+
+/** Sætter alle grænser og pauser tilbage til reglementet. */
+export function nulstilRegler(projekt) {
+    const harM = projekt.raekker.some((r) => r.raekke === 'M');
+    const harABCD = projekt.raekker.some((r) => r.pauseKlasse === 'ABCD');
+    return { ...projekt, opsaetning: { ...projekt.opsaetning, regler: klon(STANDARD_REGLER), pauseMin: { ...STANDARD_PAUSE, faelles: harM && harABCD ? STANDARD_PAUSE.faelles : null } } };
+}
+
 /** Standardrækkefølge inden for en række: mix, single, double (Jespers ønske). */
 export const STANDARD_RAEKKEFOELGE = ['MD', 'HS', 'DS', 'HD', 'DD'];
 
@@ -82,6 +129,7 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
         opsaetning: {
             slotMin: model.tpGitter.slotMin || 30,
             kampVarighed: 'minimum', // 'minimum' = reglementets minimumstid (som TP), 'slot' = et helt slot
+            regler: klon(STANDARD_REGLER),
             pauseMin: { ...STANDARD_PAUSE, faelles: harM && harABCD ? STANDARD_PAUSE.faelles : null },
             dage,
         },

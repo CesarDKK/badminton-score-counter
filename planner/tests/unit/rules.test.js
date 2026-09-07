@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tjekPlan, alvorForKamp, minKampMin, pauseForRaekke, foerSkoledag, tidsvindue } from '../../src/rules.js';
-import { nytProjekt, flytKamp, fjernFraPlan, rydDag, kvitter, opdaterRaekke, opdaterPause, saetSlotMin, opdaterDag, opdaterOpsaetning } from '../../src/store.js';
+import { nytProjekt, flytKamp, fjernFraPlan, rydDag, kvitter, opdaterRaekke, opdaterPause, saetSlotMin, opdaterDag, opdaterOpsaetning, opdaterRegler, nulstilRegler, reglerFor, STANDARD_REGLER } from '../../src/store.js';
 
 const her = path.dirname(fileURLToPath(import.meta.url));
 
@@ -279,5 +279,60 @@ describe('rules: benchmark Lyngby U9/U11 BCD 2025 (lokal fil)', { skip: !u9 && '
         assert.deepEqual(fejl.map((x) => x.type), ['tidsvindue', 'tidsvindue']);
         assert.equal(t.problemer.filter((x) => x.type === 'uden-tid')[0].kampe.length, 45, 'Swiss-pladsholdere runde 2–6');
         assert.equal(t.problemer.filter((x) => x.type === 'swiss-runde').length, 0);
+    });
+});
+
+// ── Reglementets grænser som parametre ────────────────────────
+
+describe('rules: grænser kan ændres og nulstilles', () => {
+    const grund = () => {
+        let p = projekt();
+        p = flytKamp(p, 'p1', '2026-11-21', '09:00');
+        p = flytKamp(p, 'p2', '2026-11-21', '09:30');
+        return p;
+    };
+    const fejl = (p, type) => tjekPlan(p).problemer.filter((x) => x.type === type);
+
+    test('pause 0 minutter er tilladt: naboslots giver ingen fejl', () => {
+        const p = opdaterPause(grund(), 'ABCD', 0);
+        assert.equal(p.opsaetning.pauseMin.ABCD, 0);
+        assert.equal(fejl(p, 'pause').length, 0, 'slot 30 + pause 0 = 30');
+        assert.equal(fejl(grund(), 'pause').length, 1, 'med reglementets 10 min er det for tæt');
+    });
+    test('nyt projekt har reglementets grænser', () => {
+        assert.deepEqual(projekt().opsaetning.regler, STANDARD_REGLER);
+        assert.deepEqual(reglerFor({ opsaetning: {} }), STANDARD_REGLER, 'ældre projekter uden regler falder tilbage på standard');
+    });
+    test('tidsvindue og skoledag-forskydning kan ændres', () => {
+        let p = flytKamp(grund(), 'f1', '2026-11-22', '18:30');
+        assert.equal(fejl(p, 'tidsvindue').length, 1);
+        p = opdaterRegler(p, 'foerSkoledagTimer', 0);
+        assert.equal(fejl(p, 'tidsvindue').length, 0);
+        p = opdaterRegler(p, 'tidsvindue.U11.1', '18:00');
+        assert.equal(fejl(p, 'tidsvindue').length, 1);
+        assert.deepEqual(p.opsaetning.regler.tidsvindue.U13, ['09:00', '20:00'], 'andre årgange er urørte');
+    });
+    test('minimumstid og max kampe kan ændres', () => {
+        let p = opdaterOpsaetning(grund(), { kampVarighed: 'minimum' });
+        assert.equal(fejl(p, 'pause').length, 0, '20 + 10 = 30');
+        p = opdaterRegler(p, 'minKampMin.ungdomABCD', 25);
+        assert.equal(fejl(p, 'pause').length, 1, '25 + 10 = 35 > 30');
+        p = opdaterRegler(p, 'maxKampePrDag', 1);
+        assert.equal(fejl(p, 'max-kampe').length, 1, 'Anton har 2 kampe');
+    });
+    test('min. antal kampe og Swiss-runder kan ændres', () => {
+        let p = projekt();
+        assert.equal(fejl(p, 'form').length, 4);
+        p = opdaterRegler(p, 'minKampe.U9U11Single', 2);
+        p = opdaterRegler(p, 'minKampe.swissRunder', 2);
+        assert.equal(fejl(p, 'form').length, 3, 'B–D single kræver stadig 3 (også for U09 D HS med 2 runder)');
+        p = opdaterRegler(p, 'minKampe.BCDSingle', 2);
+        assert.equal(fejl(p, 'form').length, 0);
+    });
+    test('nulstil sætter grænser og pauser tilbage', () => {
+        let p = opdaterRegler(opdaterPause(grund(), 'ABCD', 0), 'maxKampePrDag', 3);
+        p = nulstilRegler(p);
+        assert.deepEqual(p.opsaetning.regler, STANDARD_REGLER);
+        assert.equal(p.opsaetning.pauseMin.ABCD, 10);
     });
 });

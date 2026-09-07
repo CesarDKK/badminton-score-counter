@@ -6,14 +6,15 @@
 // `noegle` sættes på advarsler, brugeren kan kvittere (projekt.kvitteret).
 import { minutter } from './tp-reader.js';
 import { slotsForDag, banerISlot } from './kapacitet.js';
-import { TIDSVINDUE } from './store.js';
+import { reglerFor, STANDARD_REGLER } from './store.js';
 
-/** Min. tid pr. kamp (§ 4 stk. 5): ungdom ABCD 20, EM 25; senior ABCD 25, EM 30. */
-export function minKampMin(aargang, raekke) {
+/** Min. tid pr. kamp (§ 4 stk. 5): standard ungdom ABCD 20, EM 25; senior ABCD 25, EM 30. */
+export function minKampMin(aargang, raekke, regler = STANDARD_REGLER) {
     const senior = aargang === 'SEN' || /^\+/.test(aargang);
     const em = raekke === 'E' || raekke === 'M';
-    if (senior) return em ? 30 : 25;
-    return em ? 25 : 20;
+    const m = regler.minKampMin;
+    if (senior) return em ? m.seniorEM : m.seniorABCD;
+    return em ? m.ungdomEM : m.ungdomABCD;
 }
 
 /** Rækkens pause i minutter ud fra opsætningen (fælles pause erstatter ABCD/M). */
@@ -32,9 +33,9 @@ export function foerSkoledag(dag) {
 }
 
 /** Tidsvinduet for en årgang på en dag: { fra, til } i minutter. */
-export function tidsvindue(aargang, dag) {
-    const [fra, til] = TIDSVINDUE[aargang] || TIDSVINDUE.SEN;
-    return { fra: minutter(fra), til: minutter(til) - (foerSkoledag(dag) ? 120 : 0) };
+export function tidsvindue(aargang, dag, regler = STANDARD_REGLER) {
+    const [fra, til] = regler.tidsvindue[aargang] || regler.tidsvindue.SEN;
+    return { fra: minutter(fra), til: minutter(til) - (foerSkoledag(dag) ? Math.round(regler.foerSkoledagTimer * 60) : 0) };
 }
 
 const FINALERUNDER = new Set(['Kvartfinale', 'Semifinale', 'Finale']);
@@ -44,10 +45,11 @@ const FINALERUNDER = new Set(['Kvartfinale', 'Semifinale', 'Finale']);
  */
 export function tjekPlan(projekt) {
     const { slotMin, pauseMin, dage } = projekt.opsaetning;
+    const regler = reglerFor(projekt);
     // Hvor lang en kamp regnes for i pausetjekket: et helt slot (streng) eller
     // reglementets minimumstid (som TP — så to 20-min-kampe kan ligge i naboslots ved 30-min slots).
     const kampVarighed = projekt.opsaetning.kampVarighed || 'minimum';
-    const varighedFor = (k) => { const r = raekke(k); return kampVarighed === 'slot' || !r ? slotMin : Math.min(slotMin, minKampMin(r.aargang, r.raekke)); };
+    const varighedFor = (k) => { const r = raekke(k); return kampVarighed === 'slot' || !r ? slotMin : Math.min(slotMin, minKampMin(r.aargang, r.raekke, regler)); };
     const katMap = new Map(projekt.kategorier.map((k) => [k.id, k]));
     const raekkeMap = new Map(projekt.raekker.map((r) => [r.id, r]));
     const dagMap = new Map(dage.map((d) => [d.dato, d]));
@@ -77,7 +79,7 @@ export function tjekPlan(projekt) {
 
     // ── Slotlængde mod reglementets minimum ──
     for (const r of projekt.raekker) {
-        const min = minKampMin(r.aargang, r.raekke);
+        const min = minKampMin(r.aargang, r.raekke, regler);
         if (slotMin < min) tilfoej({ type: 'slot-for-kort', alvor: 'fejl', tekst: `Slotlængden er ${slotMin} min, men ${r.id} kræver mindst ${min} min pr. kamp.`, kampe: [] });
     }
 
@@ -108,7 +110,7 @@ export function tjekPlan(projekt) {
     for (const { k, p, min } of placerede) {
         const r = raekke(k);
         if (!r) continue;
-        const v = tidsvindue(r.aargang, dagMap.get(p.dag));
+        const v = tidsvindue(r.aargang, dagMap.get(p.dag), regler);
         if (min < v.fra || min + slotMin > v.til) {
             tilfoej({ type: 'tidsvindue', alvor: 'fejl', tekst: `${navn(k)} kl. ${p.slot} ligger uden for ${r.aargang}'s tidsvindue ${klokke(v.fra)}–${klokke(v.til)}${foerSkoledag(dagMap.get(p.dag)) ? ' (dagen før en skoledag)' : ''}.`, kampe: [k.id], dag: p.dag, slot: p.slot });
         }
@@ -147,7 +149,7 @@ export function tjekPlan(projekt) {
     };
     const set = new Set();
     const parNoegle = (a, b, type) => [type, ...[a, b].sort()].join('|');
-    const maxPrDag = enDag ? 12 : 10;
+    const maxPrDag = enDag ? regler.maxKampePrDagEnDag : regler.maxKampePrDag;
 
     for (const [s, liste] of prSpiller) {
         liste.sort((a, b) => a.p.dag.localeCompare(b.p.dag) || a.min - b.min);
@@ -252,7 +254,7 @@ export function tjekPlan(projekt) {
                 for (const k of kampe) {
                     if (k.rundeNavn !== 'Finale') continue;
                     const min = tidMin(projekt.plan[k.id]);
-                    if (min < minutter('10:00') || min > minutter('13:00')) tilfoej({ type: 'e-finale-tid', alvor: 'fejl', tekst: `${navn(k)} kl. ${projekt.plan[k.id].slot}: E-finaler skal ligge mellem 10:00 og 13:00.`, kampe: [k.id], dag, slot: projekt.plan[k.id].slot });
+                    if (min < minutter(regler.eFinale[0]) || min > minutter(regler.eFinale[1])) tilfoej({ type: 'e-finale-tid', alvor: 'fejl', tekst: `${navn(k)} kl. ${projekt.plan[k.id].slot}: E-finaler skal ligge mellem ${regler.eFinale[0]} og ${regler.eFinale[1]}.`, kampe: [k.id], dag, slot: projekt.plan[k.id].slot });
                 }
             }
         }
@@ -264,7 +266,7 @@ export function tjekPlan(projekt) {
                     prKatSpiller.set(n, (prKatSpiller.get(n) || 0) + 1);
                 }
                 for (const [n, antal] of prKatSpiller) {
-                    if (antal > 3) { const [katId, s] = n.split('|'); tilfoej({ type: 'senior-max-3', alvor: 'fejl', tekst: `${spillerNavn(s)} har ${antal} kampe i ${katId} ${datoKort(dag)} (senior E/M: max 3 pr. kategori pr. dag).`, kampe: kampe.filter((k) => k.kategori === katId && k.spillere.includes(s)).map((k) => k.id), dag }); }
+                    if (antal > regler.seniorMaxPrKategori) { const [katId, s] = n.split('|'); tilfoej({ type: 'senior-max-3', alvor: 'fejl', tekst: `${spillerNavn(s)} har ${antal} kampe i ${katId} ${datoKort(dag)} (senior E/M: max ${regler.seniorMaxPrKategori} pr. kategori pr. dag).`, kampe: kampe.filter((k) => k.kategori === katId && k.spillere.includes(s)).map((k) => k.id), dag }); }
                 }
                 const prKat = new Map();
                 for (const k of kampe) if (k.fase === 'cup' && FINALERUNDER.has(k.rundeNavn)) { if (!prKat.has(k.kategori)) prKat.set(k.kategori, new Set()); prKat.get(k.kategori).add(k.rundeNavn); }
@@ -288,7 +290,7 @@ export function tjekPlan(projekt) {
         const ungdom = /^U/.test(r.aargang);
         const kampe = projekt.kampe.filter((x) => x.kategori === k.id);
         if (!kampe.length) continue;
-        if (k.form === 'swiss' && k.runder < 4) tilfoej({ type: 'form', alvor: 'advarsel', noegle: `${k.id}:swiss-runder`, tekst: `${k.id}: Swiss Ladder med ${k.runder} runder — reglementet kræver mindst 4.`, kampe: [] });
+        if (k.form === 'swiss' && k.runder < regler.minKampe.swissRunder) tilfoej({ type: 'form', alvor: 'advarsel', noegle: `${k.id}:swiss-runder`, tekst: `${k.id}: Swiss Ladder med ${k.runder} runder — reglementet kræver mindst ${regler.minKampe.swissRunder}.`, kampe: [] });
         // sikre kampe pr. spiller = puljekampe (cup afhænger af resultatet)
         const prSpillerAntal = new Map();
         for (const x of kampe) if (x.fase !== 'cup' || x.spillere.length) for (const s of x.spillere) prSpillerAntal.set(s, (prSpillerAntal.get(s) || 0) + 1);
@@ -296,9 +298,9 @@ export function tjekPlan(projekt) {
         if (!prSpillerAntal.size) continue;
         const faerrest = Math.min(...prSpillerAntal.values());
         let krav = 0;
-        if (ungdom && (r.raekke === 'M' || r.raekke === 'A')) krav = 2;
-        else if (ungdom && ['B', 'C', 'D'].includes(r.raekke)) krav = k.type === 'single' ? 3 : 2;
-        if (ungdom && ['U09', 'U11'].includes(r.aargang) && k.type === 'single') krav = Math.max(krav, 4);
+        if (ungdom && (r.raekke === 'M' || r.raekke === 'A')) krav = regler.minKampe.MA;
+        else if (ungdom && ['B', 'C', 'D'].includes(r.raekke)) krav = k.type === 'single' ? regler.minKampe.BCDSingle : regler.minKampe.BCDDouble;
+        if (ungdom && ['U09', 'U11'].includes(r.aargang) && k.type === 'single') krav = Math.max(krav, regler.minKampe.U9U11Single);
         if (krav && faerrest < krav) {
             const ramte = [...prSpillerAntal].filter(([, n]) => n < krav).map(([s]) => spillerNavn(s));
             tilfoej({ type: 'form', alvor: 'advarsel', noegle: `${k.id}:min-kampe`, tekst: `${k.id}: ${ramte.length} spillere er kun sikret ${faerrest} kampe (krav ${krav}): ${ramte.slice(0, 4).join(', ')}${ramte.length > 4 ? ' …' : ''}. Rettes i TP.`, kampe: [] });

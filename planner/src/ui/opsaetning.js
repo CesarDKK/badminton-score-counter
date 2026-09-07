@@ -3,6 +3,7 @@
 import { esc, datoTekst, procent, tal } from './dom.js';
 import { kapacitetPrDag, kampePrKategori, slotsForDag, baneSlots } from '../kapacitet.js';
 import { foerSkoledag } from '../rules.js';
+import { reglerFor, STANDARD_REGLER } from '../store.js';
 
 const FORM_TEKST = {
     'pulje': 'Pulje', 'pulje-cup': 'Pulje + cup', 'cup': 'Cup', 'dobbelt-pulje': 'Dobbelt pulje',
@@ -10,7 +11,7 @@ const FORM_TEKST = {
 };
 
 export function renderOpsaetning(container, projekt, handlers) {
-    container.innerHTML = [filPanel(projekt), ...(projekt ? [turneringPanel(projekt), dagePanel(projekt), raekkePanel(projekt), kapacitetPanel(projekt)] : [])].join('');
+    container.innerHTML = [filPanel(projekt), ...(projekt ? [turneringPanel(projekt), dagePanel(projekt), reglerPanel(projekt), raekkePanel(projekt), kapacitetPanel(projekt)] : [])].join('');
     // Lytterne sættes på beholderen én gang og læser det aktuelle projekt herfra,
     // så de ikke hober sig op ved hver gentegning.
     container._projekt = projekt;
@@ -125,6 +126,69 @@ function dagePanel(p) {
     </section>`;
 }
 
+function reglerPanel(p) {
+    const r = reglerFor(p);
+    const std = STANDARD_REGLER;
+    const aargange = [...new Set(p.raekker.map((x) => x.aargang))].sort();
+    const alleAargange = [...new Set([...aargange, ...Object.keys(std.tidsvindue)])];
+    const aendret = (sti, v) => {
+        const s = sti.split('.').reduce((o, k) => o?.[k], std);
+        return JSON.stringify(s) !== JSON.stringify(v) ? ' er-aendret' : '';
+    };
+    const tal = (sti, v, tekst, enhed = '') => `
+        <label class="felt regel${aendret(sti, v)}"><span class="etiket">${tekst}</span>
+            <input type="number" min="0" max="999" step="1" value="${v}" data-regel="${sti}" data-type="tal"> ${enhed}</label>`;
+    const tid = (sti, v, tekst) => `
+        <label class="felt regel${aendret(sti, v)}"><span class="etiket">${tekst}</span>
+            <input type="time" step="300" value="${esc(v)}" data-regel="${sti}" data-type="tid"></label>`;
+    const vinduer = alleAargange.map((a) => `
+        <tr class="${aargange.includes(a) ? '' : 'daempet'}">
+            <td>${a}${aargange.includes(a) ? '' : ' <span class="daempet">(ikke i turneringen)</span>'}</td>
+            <td>${tid(`tidsvindue.${a}.0`, r.tidsvindue[a][0], '')}</td>
+            <td>${tid(`tidsvindue.${a}.1`, r.tidsvindue[a][1], '')}</td>
+        </tr>`).join('');
+    return `
+    <section class="panel">
+        <div class="panel-hoved">
+            <div>
+                <h2>Reglementets grænser</h2>
+                <p class="panel-sub">Standardværdierne er reglementets. Ret dem, hvis du har dispensation eller vil planlægge strammere/løsere; ændrede felter markeres. Pauserne står under dage og tider.</p>
+            </div>
+            <button class="knap knap--sekundaer" data-handling="nulstil-regler">Nulstil til reglementet</button>
+        </div>
+        <details ${Object.keys(p.opsaetning.regler || {}).length && JSON.stringify(r) !== JSON.stringify(std) ? 'open' : ''}>
+            <summary>Vis grænserne</summary>
+            <div class="raekke-knapper" style="margin-top:14px; gap:22px">
+                ${tal('maxKampePrDag', r.maxKampePrDag, 'Max kampe pr. dag')}
+                ${tal('maxKampePrDagEnDag', r.maxKampePrDagEnDag, 'Max kampe, éndagsturnering')}
+                ${tal('foerSkoledagTimer', r.foerSkoledagTimer, 'Tidligere før skoledag', 'timer')}
+                ${tal('seniorMaxPrKategori', r.seniorMaxPrKategori, 'Senior E/M pr. kategori pr. dag')}
+            </div>
+            <div class="raekke-knapper" style="margin-top:14px; gap:22px">
+                ${tal('minKampMin.ungdomABCD', r.minKampMin.ungdomABCD, 'Min. kamptid ungdom A–D', 'min')}
+                ${tal('minKampMin.ungdomEM', r.minKampMin.ungdomEM, 'Ungdom E/M', 'min')}
+                ${tal('minKampMin.seniorABCD', r.minKampMin.seniorABCD, 'Senior A–D', 'min')}
+                ${tal('minKampMin.seniorEM', r.minKampMin.seniorEM, 'Senior E/M', 'min')}
+            </div>
+            <div class="raekke-knapper" style="margin-top:14px; gap:22px">
+                ${tal('minKampe.MA', r.minKampe.MA, 'Min. kampe M/A')}
+                ${tal('minKampe.BCDSingle', r.minKampe.BCDSingle, 'B–D single')}
+                ${tal('minKampe.BCDDouble', r.minKampe.BCDDouble, 'B–D double')}
+                ${tal('minKampe.U9U11Single', r.minKampe.U9U11Single, 'U9/U11 single')}
+                ${tal('minKampe.swissRunder', r.minKampe.swissRunder, 'Swiss Ladder-runder')}
+                ${tid('eFinale.0', r.eFinale[0], 'E-finaler fra')}
+                ${tid('eFinale.1', r.eFinale[1], 'E-finaler til')}
+            </div>
+            <div class="tabel-hylster">
+                <table class="tabel tabel--smal">
+                    <thead><tr><th>Tidsvindue pr. årgang</th><th>Fra</th><th>Til</th></tr></thead>
+                    <tbody>${vinduer}</tbody>
+                </table>
+            </div>
+        </details>
+    </section>`;
+}
+
 function raekkePanel(p) {
     const prKat = kampePrKategori(p);
     const dage = p.turnering.dage;
@@ -228,6 +292,7 @@ function bind(container, projekt, h) {
         const { handling, dato, index } = knap.dataset;
         if (handling === 'gem-projekt') h.gemProjekt();
         else if (handling === 'start-forfra') h.startForfra();
+        else if (handling === 'nulstil-regler') h.nulstilRegler();
         else if (handling === 'fjern-spaerring') {
             const dag = projekt().opsaetning.dage.find((d) => d.dato === dato);
             h.dag(dato, { spaerret: dag.spaerret.filter((_, i) => i !== Number(index)) });
@@ -254,6 +319,11 @@ function bind(container, projekt, h) {
             return;
         }
         const d = el.dataset;
+        if (d.regel) {
+            if (d.type === 'tal') h.regler(d.regel, Math.max(0, Number(el.value) || 0));
+            else if (el.value) h.regler(d.regel, el.value);
+            return;
+        }
         if (d.skoledag) h.dag(d.skoledag, { foerSkoledag: el.checked });
         else if (d.felt === 'slotMin') h.slotMin(el.value);
         else if (d.felt && d.dato) {

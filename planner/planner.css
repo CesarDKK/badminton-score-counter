@@ -365,3 +365,9 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
     .plan-layout { grid-template-columns: 1fr; }
     .sidepanel { position: static; max-height: none; }
 }
+
+/* ── Reglementets grænser ── */
+.regel.er-aendret input { border-color: var(--amber); }
+.regel.er-aendret .etiket { color: var(--amber); }
+.tabel--smal { width: auto; }
+.tabel--smal td { padding: 4px 12px; }

@@ -178,6 +178,8 @@ const handlers = {
     raekke: (id, aendringer) => saet(store.opdaterRaekke(projekt, id, aendringer)),
     kategori: (id, aendringer) => saet(store.opdaterKategori(projekt, id, aendringer)),
     pause: (klasse, v) => saet(store.opdaterPause(projekt, klasse, v)),
+    regler: (sti, v) => saet(store.opdaterRegler(projekt, sti, v)),
+    nulstilRegler: () => saet(store.nulstilRegler(projekt)),
 };
 
 // ── Handlinger: fane 2 og 3 ───────────────────────────────────
