@@ -207,9 +207,9 @@ describe('tp-reader: syntetisk turnering', () => {
     test('TP-gitter: slotlængde, dage, baner og halve baner', () => {
         assert.equal(model.tpGitter.slotMin, 30);
         assert.deepEqual(model.tpGitter.dage, [
-            { dato: '2025-11-22', start: '09:00', slut: '19:00', baner: 10 },
-            { dato: '2025-11-23', start: null, slut: null, baner: null },
-        ]);
+            { dato: '2025-11-22', start: '09:00', slut: '19:00', baner: 10, ekstra: { fra: '12:00', til: '14:00', baner: 5 } },
+            { dato: '2025-11-23', start: null, slut: null, baner: null, ekstra: null },
+        ], 'ekstra = tidsrum hvor TP har flere baner end normalt (U9-vinduet)');
         assert.deepEqual(model.tpGitter.baner, { hele: 2, halve: 2, navne: ['01-B', '02-B', '01-B½', '02-B½'] });
         assert.equal(model.tpGitter.harTider, true);
         assert.equal(model.tpGitter.advarsler, 0);

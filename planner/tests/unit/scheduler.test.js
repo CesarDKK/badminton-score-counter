@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { lavForslag, bedoemPlan } from '../../src/scheduler.js';
+import { lavForslag, bedoemPlan, lavAlternativer, ALTERNATIV_VARIANTER } from '../../src/scheduler.js';
 import { tjekPlan } from '../../src/rules.js';
 import { nytProjekt, opdaterDag, opdaterRaekke, flytKamp, laasKamp, laasKategori, anvendForslag, opdaterOpsaetning } from '../../src/store.js';
 
@@ -161,8 +161,26 @@ for (const [navn, moenster] of [['U13/U15 CD 2026', /U13/i], ['U9/U11 BCD 2025',
             console.log(`  ${navn}:`, JSON.stringify(stat));
             if (f.ikkePlaceret.length) console.log('  ikke placeret:', f.ikkePlaceret.slice(0, 5).map((x) => `${x.id} ${x.aarsag}`).join(' | '));
             assert.deepEqual(fejlMit.map((x) => `${x.type}: ${x.tekst}`), []);
-            assert.equal(f.ikkePlaceret.length, 0, 'alle kampe kunne placeres');
             assert.ok(ms < 3000, `forslag på ${ms} ms`);
+            const u9 = jesper.raekker.find((r) => r.id === 'U09 D');
+            if (!u9) {
+                assert.equal(f.ikkePlaceret.length, 0, 'alle kampe kunne placeres');
+            } else {
+                // U9 har som standard TP's vindue 12:00–17:00 og 5 reserverede baner. 6 Swiss-runder
+                // (alle 19 drenge fri i rundens slot) plus deres doubler kræver mere end 10 slots,
+                // så nogle U9-kampe mangler plads — som i Jespers egen plan, der løb til 17:30.
+                assert.deepEqual([u9.tidligst, u9.senest, u9.reserveredeBaner], ['12:00', '17:00', 5]);
+                const katMap = new Map(jesper.kampe.map((k) => [k.id, k.kategori]));
+                assert.ok(f.ikkePlaceret.every((x) => katMap.get(x.id).startsWith('U09')), 'kun U9-kampe mangler');
+                assert.ok(f.ikkePlaceret.length <= 12);
+                const laengere = lavForslag(opdaterRaekke(jesper, 'U09 D', { senest: '18:00' }));
+                assert.equal(laengere.ikkePlaceret.length, 0, 'med vindue til 18:00 placeres alt');
+                assert.deepEqual(fejl(anvendForslag(jesper, laengere)), []);
+                // U9-runderne ligger lige efter hinanden: runde r+1 senest 60 min efter runde r
+                const swiss = jesper.kampe.filter((k) => k.kategori === 'U09 D HS');
+                const rundeTid = (r) => Math.min(...swiss.filter((k) => k.runde === r).map((k) => Number(laengere.plan[k.id].slot.replace(':', ''))));
+                for (let r = 2; r <= 6; r += 1) assert.ok(rundeTid(r) - rundeTid(r - 1) <= 100, `runde ${r} følger runde ${r - 1}`);
+            }
         });
     });
 }
@@ -179,5 +197,56 @@ describe('scheduler: raekkens eget tidsrum', () => {
         assert.ok(f2.ikkePlaceret.length > 0, 'for lille tidsrum giver ikke placerede');
         assert.ok(f2.ikkePlaceret.every((x) => x.aarsag), 'alle har en årsag');
         assert.ok(f2.ikkePlaceret.some((x) => /rækkens/.test(x.aarsag)), 'mindst én skyldes tidsrummet');
+    });
+});
+
+describe('scheduler: reserverede baner', () => {
+    test('U9 faar sine egne baner i vinduet og de andre raekker deler resten', () => {
+        let p = opdaterRaekke(projekt(), 'U09 D', { tidligst: '12:00', senest: '14:00', reserveredeBaner: 1 });
+        const f = lavForslag(p);
+        const q = anvendForslag(p, f);
+        assert.deepEqual(fejl(q), []);
+        assert.deepEqual(f.ikkePlaceret, []);
+        const u9 = q.kampe.filter((k) => k.kategori === 'U09 D HS');
+        assert.ok(u9.every((k) => q.plan[k.id].slot >= '12:00' && q.plan[k.id].slot < '14:00'));
+        // i vinduet maa de andre raekker hoejst bruge 2 baner pr. slot
+        for (const slot of ['12:00', '12:30', '13:00', '13:30']) {
+            const andre = q.kampe.filter((k) => k.kategori !== 'U09 D HS' && q.plan[k.id].dag === '2026-11-21' && q.plan[k.id].slot === slot);
+            assert.ok(andre.length <= 2, `${slot}: ${andre.length} kampe paa faelles baner`);
+        }
+        // Swiss-runderne foelger lige efter hinanden
+        const t = (id) => { const [h, m] = q.plan[id].slot.split(':').map(Number); return h * 60 + m; };
+        assert.equal(t('5:r2:1') - t('5:1'), 30);
+        assert.equal(t('5:r3:1') - t('5:r2:1'), 30);
+    });
+});
+
+describe('scheduler: alternative forslag', () => {
+    test('flere forskellige lovlige forslag, sorteret bedst foerst, deterministisk', () => {
+        const p = projekt();
+        const alt = lavAlternativer(p);
+        assert.ok(alt.length >= 2 && alt.length <= ALTERNATIV_VARIANTER.length, `${alt.length} forslag`);
+        const noegler = new Set(alt.map((a) => JSON.stringify(Object.entries(a.plan).sort())));
+        assert.equal(noegler.size, alt.length, 'ingen dubletter');
+        for (const a of alt) {
+            assert.deepEqual(fejl(anvendForslag(p, a)), [], a.navn);
+            assert.ok(a.navn && a.beskrivelse && a.statistik);
+        }
+        for (let i = 1; i < alt.length; i += 1) {
+            assert.ok(alt[i - 1].ikkePlaceret.length < alt[i].ikkePlaceret.length || alt[i - 1].statistik.haltidMin <= alt[i].statistik.haltidMin, 'sorteret');
+        }
+        assert.deepEqual(lavAlternativer(p).map((a) => a.plan), alt.map((a) => a.plan), 'samme input giver samme alternativer');
+    });
+    test('seed giver anden, men reproducerbar raekkefoelge', () => {
+        const p = projekt();
+        const a = lavForslag(p, { prioritet: ['frist', 'spillet', 'tilfaeldig', 'id'], seed: 11 });
+        const b = lavForslag(p, { prioritet: ['frist', 'spillet', 'tilfaeldig', 'id'], seed: 11 });
+        assert.deepEqual(a.plan, b.plan);
+        assert.deepEqual(fejl(anvendForslag(p, a)), []);
+    });
+    test('laaste kampe beholdes i alle alternativer', () => {
+        let p = flytKamp(projekt(), '4:1', '2026-11-21', '12:00');
+        p = laasKamp(p, '4:1');
+        for (const a of lavAlternativer(p)) assert.deepEqual(a.plan['4:1'], { dag: '2026-11-21', slot: '12:00' }, a.navn);
     });
 });

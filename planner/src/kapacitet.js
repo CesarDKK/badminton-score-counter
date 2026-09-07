@@ -20,6 +20,37 @@ export function banerISlot(dag, slot) {
     return Math.max(0, baner);
 }
 
+/**
+ * Reserverede baner i et slot: rækker med `reserveredeBaner` > 0, der spiller
+ * den dag, og hvis eget tidsrum (tidligst–senest, ellers hele dagen) dækker
+ * slottet. En række med reservation bruger KUN sine egne baner i tidsrummet
+ * (fx U9 på 5 delte baner kl. 12–16), og de øvrige rækker deler resten.
+ * Returnerer Map(raekkeId → baner).
+ */
+export function reservationerISlot(raekker, dag, slot) {
+    const m = minutter(slot);
+    const ud = new Map();
+    for (const r of raekker) {
+        if (!(r.reserveredeBaner > 0) || !r.dage?.includes(dag.dato)) continue;
+        const fra = minutter(r.tidligst || dag.start), til = minutter(r.senest || dag.slut);
+        if (m >= fra && m < til) ud.set(r.id, r.reserveredeBaner);
+    }
+    return ud;
+}
+
+/** Kapacitet pr. pulje i et slot: { faelles, reserveret: Map(raekkeId → baner) }. */
+export function puljeKapacitet(dag, slot, raekker) {
+    const reserveret = reservationerISlot(raekker, dag, slot);
+    let sum = 0;
+    for (const b of reserveret.values()) sum += b;
+    return { faelles: Math.max(0, banerISlot(dag, slot) - sum), reserveret };
+}
+
+/** Hvilken pulje en kamp hører til i et slot: rækkens id (reserveret) eller 'faelles'. */
+export function puljeFor(raekkeId, reserveret) {
+    return reserveret.has(raekkeId) ? raekkeId : 'faelles';
+}
+
 /** Bane-slots i alt på en dag. */
 export function baneSlots(dag, slotMin) {
     return slotsForDag(dag, slotMin).reduce((sum, slot) => sum + banerISlot(dag, slot), 0);

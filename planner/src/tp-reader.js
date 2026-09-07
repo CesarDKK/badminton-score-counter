@@ -473,12 +473,19 @@ export function laesTP(tabeller, valg = {}) {
     const slotMin = hyppigst(alleDiff.filter((d) => d > 0), 30);
     const gitterDage = dage.map((dag) => {
         const tider = tiderPrDag.get(dag);
-        if (!tider || !tider.length) return { dato: dag, start: null, slut: null, baner: null };
+        if (!tider || !tider.length) return { dato: dag, start: null, slut: null, baner: null, ekstra: null };
+        const baner = hyppigst(tider.map((t) => t.baner), hele);
+        // Tidsrum hvor TP har flere baner end normalt (fx U9-vinduet med halve baner)
+        const med = tider.filter((t) => t.baner > baner);
+        const ekstra = med.length
+            ? { fra: klokkeFraMinutter(med[0].min), til: klokkeFraMinutter(med[med.length - 1].min + slotMin), baner: Math.max(...med.map((t) => t.baner)) - baner }
+            : null;
         return {
             dato: dag,
             start: klokkeFraMinutter(tider[0].min),
             slut: klokkeFraMinutter(tider[tider.length - 1].min + slotMin),
-            baner: hyppigst(tider.map((t) => t.baner), hele),
+            baner,
+            ekstra,
         };
     });
 
