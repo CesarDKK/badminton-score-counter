@@ -19,12 +19,18 @@ COPY provebillede/ /usr/share/nginx/provebillede/
 # Copy statistik.badmintonapp.dk (klubstatistik — backend er stats-backend)
 COPY stats/frontend/ /usr/share/nginx/statistik/
 
+# Copy planner.badmintonapp.dk (tidsplanlægger — rent statisk, se docs/planner-design.md)
+COPY planner/index.html planner/planner.css planner/tp-bundle.js /usr/share/nginx/planner/
+COPY planner/src/ /usr/share/nginx/planner/src/
+
 # Share fonts from app into marketing sites (fonts.css lives in marketing/ and is reused by football)
 RUN cp -r /usr/share/nginx/html/fonts /usr/share/nginx/marketing/fonts \
     && cp -r /usr/share/nginx/html/fonts /usr/share/nginx/football-marketing/fonts \
     && cp /usr/share/nginx/marketing/fonts.css /usr/share/nginx/football-marketing/fonts.css \
     && cp -r /usr/share/nginx/html/fonts /usr/share/nginx/statistik/fonts \
-    && cp /usr/share/nginx/marketing/fonts.css /usr/share/nginx/statistik/fonts.css
+    && cp /usr/share/nginx/marketing/fonts.css /usr/share/nginx/statistik/fonts.css \
+    && cp -r /usr/share/nginx/html/fonts /usr/share/nginx/planner/fonts \
+    && cp /usr/share/nginx/marketing/fonts.css /usr/share/nginx/planner/fonts.css
 
 # Expose port 80
 EXPOSE 80

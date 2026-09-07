@@ -23,3 +23,6 @@ backend/uploads/
 # Docker volumes
 mysql_data/
 uploads_data/
+
+# Planner: lokale TP-testfiler (persondata — aldrig i repoet)
+planner/testdata/

@@ -1,7 +1,8 @@
 # planner.badmintonapp.dk — tidsplanlægger til individuelle turneringer
 
-Status: **design, intet bygget** (2026-09-07). Dokumentet er grundlaget for at
-bygge; ændringer i design aftales her først.
+Status: design 2026-09-07; **fase 1 (læs og vis) bygget 2026-09-07** på branchen
+`planner-fase1` (`planner/`, se `planner/README.md`). Dokumentet er grundlaget
+for at bygge; ændringer i design aftales her først.
 
 ## 1. Formål
 

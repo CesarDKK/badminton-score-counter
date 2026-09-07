@@ -11,7 +11,7 @@ on:
 
 jobs:
   unit:
-    name: Unit-tests (backend + statistik)
+    name: Unit-tests (backend + statistik + planner)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,4 +34,13 @@ jobs:
 
       - name: Statistik — unit-tests
         working-directory: stats/backend
+        run: npm run test:unit
+
+      - name: Planner — installer afhængigheder
+        working-directory: planner
+        run: npm install --no-audit --no-fund
+
+      # TP-testfilerne ligger ikke i repoet (persondata) — de tests springes over.
+      - name: Planner — unit-tests
+        working-directory: planner
         run: npm run test:unit

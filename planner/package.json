@@ -1,0 +1,22 @@
+{
+  "name": "badmintonapp-planner",
+  "version": "0.1.0",
+  "description": "Tidsplanlægger til individuelle turneringer — planner.badmintonapp.dk (statisk site, alt sker i browseren)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build/build.mjs",
+    "test": "node --test tests/unit/*.test.js",
+    "test:unit": "node --test tests/unit/*.test.js"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "buffer": "^6.0.3",
+    "esbuild": "^0.24.2",
+    "esbuild-plugin-polyfill-node": "^0.3.0",
+    "mdb-reader": "^3.2.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
