@@ -145,3 +145,14 @@ Kapacitetstjekket, gitterets "brugt/baner" og planlæggeren regner pr. pulje
 hinanden i deres vindue i stedet for at blive spredt mellem U11-kampene:
 målt på Lyngby 2025 falder U9-spillernes største hul fra op til 3½ time til
 gennemsnitligt 16 minutter, og Swiss-runderne ligger hver time.
+
+## Alternative forslag
+
+"Alternativer" i Plan-fanen laver op til 8 forslag med forskellige
+prioriteringer (`ALTERNATIV_VARIANTER` i `scheduler.js`): kortest haltid,
+rækkens rækkefølge, lange kæder først, puljer samlet, og fire varianter med
+en fast "tilfældig" nøgle (seed) blandt ligestillede kampe. Dubletter fjernes,
+og listen sorteres bedst først (færrest uden plads, kortest haltid, tidligst
+slut). Bjælken viser nøgletal pr. forslag; ◀ ▶ skifter planen i gitteret med
+det samme, "Brug dette" beholder den, "Fortryd" går tilbage til planen før.
+Låste kampe beholdes i alle forslag. Samme input giver samme alternativer.

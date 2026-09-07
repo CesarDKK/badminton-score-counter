@@ -3,7 +3,7 @@
 import { laesTP, tabellerFraMDB } from './tp-reader.js';
 import * as store from './store.js';
 import { tjekPlan } from './rules.js';
-import { lavForslag } from './scheduler.js';
+import { lavForslag, lavAlternativer } from './scheduler.js';
 import { renderOpsaetning } from './ui/opsaetning.js';
 import { renderPlan } from './ui/plan.js';
 import { renderTjek } from './ui/tjek.js';
@@ -241,6 +241,54 @@ const planHandlers = {
         saet(p);
     },
     laasKategori(vaerdi) { if (tilstand.filter) saet(store.laasKategori(projekt, tilstand.filter, vaerdi)); },
+
+    // Alternative forslag: bladr mellem dem (planen skiftes med det samme, så
+    // gitteret viser forslaget), "Brug dette" beholder det, "Fortryd" går tilbage.
+    lavAlternativer() {
+        const antalLaast = (projekt.laast || []).length;
+        if (Object.keys(projekt.plan).length > antalLaast && !window.confirm(`Lav alternative forslag for alle kampe? Kun låste kampe (${antalLaast}) beholder deres tid. Du kan fortryde bagefter.`)) return;
+        const t0 = performance.now();
+        const liste = lavAlternativer(projekt);
+        const ms = Math.round(performance.now() - t0);
+        if (!liste.length) { visBesked('Kunne ikke lave forslag.', true); return; }
+        tilstand.forslag = { tekst: `${liste.length} forskellige forslag lavet på ${ms} ms. Bladr med ◀ ▶ og vælg "Brug dette".`, ikkePlaceret: [] };
+        tilstand.alternativer = { liste, index: 0, foer: { ...projekt.plan } };
+        planHandlers.visAlternativ();
+    },
+    visAlternativ() {
+        const alt = tilstand.alternativer;
+        const a = alt.liste[alt.index];
+        const nyt = store.anvendForslag(projekt, a);
+        const t = tjekPlan(nyt);
+        alt.fejl = t.antal.fejl;
+        alt.advarsler = t.antal.advarsel;
+        saet(nyt);
+    },
+    bladreAlternativ(retning) {
+        const alt = tilstand.alternativer;
+        if (!alt) return;
+        alt.index = Math.max(0, Math.min(alt.liste.length - 1, alt.index + retning));
+        planHandlers.visAlternativ();
+    },
+    brugAlternativ() {
+        const alt = tilstand.alternativer;
+        if (!alt) return;
+        const a = alt.liste[alt.index];
+        const katMap = new Map(projekt.kampe.map((k) => [k.id, k]));
+        tilstand.forslag = {
+            tekst: `Forslaget "${a.navn}" er valgt: ${Object.keys(a.plan).length} kampe har tid, ${a.ikkePlaceret.length} kunne ikke placeres.`,
+            ikkePlaceret: a.ikkePlaceret.map((x) => ({ ...x, kategori: katMap.get(x.id)?.kategori || '', navn: katMap.get(x.id)?.navn || x.id })),
+        };
+        tilstand.alternativer = null;
+        render();
+    },
+    fortrydAlternativ() {
+        const alt = tilstand.alternativer;
+        if (!alt) return;
+        tilstand.alternativer = null;
+        tilstand.forslag = null;
+        saet({ ...projekt, plan: alt.foer });
+    },
 };
 
 const tjekHandlers = {

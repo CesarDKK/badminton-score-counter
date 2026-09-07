@@ -401,3 +401,9 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
     .tabel--liste tr.er-uden-tid td { color: #b00; }
 }
 .gitter th .fyld--pulje { color: var(--purple-soft); }
+
+/* ── Alternative forslag ── */
+.alternativer { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; }
+.alternativ-tekst { display: flex; flex-direction: column; gap: 2px; font-size: 0.88em; flex: 1 1 320px; }
+.alternativ-tekst b { color: #fff; font-weight: 600; }
+.alternativ-tekst .er-roed { color: var(--red-soft); }

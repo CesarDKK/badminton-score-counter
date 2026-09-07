@@ -195,8 +195,10 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
             <button class="knap knap--sekundaer" data-handling="ryd-dag">Ryd dag</button>
             <button class="knap knap--sekundaer" data-handling="forslag-dag" title="Planlægger kun denne dag om; andre dage og låste kampe røres ikke">Forslag for dagen</button>
             <button class="knap" data-handling="forslag" title="Planlægger alle kampe forfra; låste kampe beholder deres tid">Lav forslag</button>
+            <button class="knap knap--sekundaer" data-handling="alternativer" title="Laver op til 8 forskellige forslag med forskellige prioriteringer, som du kan bladre imellem">Alternativer</button>
         </div>
     </div>
+    ${tilstand.alternativer ? alternativBjaelke(tilstand.alternativer) : ''}
     <p class="plan-status">
         <span class="maerke ${antalFejl ? 'maerke--fejl' : 'maerke--ok'}">${antalFejl} fejl</span>
         <span class="maerke ${antalAdv ? 'maerke--advarsel' : ''}">${antalAdv} advarsler</span>
@@ -230,6 +232,28 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
     }
 }
 
+/** Bjælken til at bladre mellem alternative forslag (tilstand.alternativer = { liste, index, foer }). */
+function alternativBjaelke(alt) {
+    const a = alt.liste[alt.index];
+    if (!a) return '';
+    const s = a.statistik;
+    const slut = Object.entries(s.slutPrDag).map(([d, t]) => `${datoTekst(d, { kort: true })} ${t}`).join(', ');
+    return `
+    <div class="alternativer">
+        <button class="knap knap--sekundaer knap--lille" data-handling="alt-forrige" ${alt.index === 0 ? 'disabled' : ''} aria-label="Forrige forslag">◀</button>
+        <div class="alternativ-tekst">
+            <strong>Forslag ${alt.index + 1} af ${alt.liste.length}: ${esc(a.navn)}</strong>
+            <span class="daempet">${esc(a.beskrivelse)}</span>
+            <span>haltid gns. <b>${s.haltidGnsMin} min</b> · ventetid gns. <b>${s.ventetidGnsMin} min</b> · slut ${esc(slut)} · <b class="${a.ikkePlaceret.length ? 'er-roed' : ''}">${a.ikkePlaceret.length} uden plads</b>${alt.fejl != null ? ` · <b class="${alt.fejl ? 'er-roed' : ''}">${alt.fejl} fejl</b>, ${alt.advarsler} advarsler` : ''}</span>
+        </div>
+        <button class="knap knap--sekundaer knap--lille" data-handling="alt-naeste" ${alt.index >= alt.liste.length - 1 ? 'disabled' : ''} aria-label="Næste forslag">▶</button>
+        <span class="raekke-knapper">
+            <button class="knap knap--lille" data-handling="alt-brug">Brug dette</button>
+            <button class="knap knap--sekundaer knap--lille" data-handling="alt-fortryd">Fortryd</button>
+        </span>
+    </div>`;
+}
+
 function plusMin(slot, min) {
     const [t, m] = slot.split(':').map(Number);
     const sum = t * 60 + m + min;
@@ -248,6 +272,11 @@ function bind(container, h) {
             else if (hd === 'forslag-dag') h.lavForslag(true);
             else if (hd === 'laas-kategori') h.laasKategori(true);
             else if (hd === 'laas-op-kategori') h.laasKategori(false);
+            else if (hd === 'alternativer') h.lavAlternativer();
+            else if (hd === 'alt-forrige') h.bladreAlternativ(-1);
+            else if (hd === 'alt-naeste') h.bladreAlternativ(1);
+            else if (hd === 'alt-brug') h.brugAlternativ();
+            else if (hd === 'alt-fortryd') h.fortrydAlternativ();
             return;
         }
         const li = e.target.closest('li[data-kamp]');

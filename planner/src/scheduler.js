@@ -215,8 +215,22 @@ export function lavForslag(projekt, valg = {}) {
         if (!r) return 9999;
         return r.senest ? minutter(r.senest) : tidsvindue(r.aargang, dagObj, regler).til;
     };
+    // Fast "tilfældig" nøgle pr. kamp ud fra valg.seed — giver alternative, men
+    // reproducerbare forslag (samme seed → samme plan).
+    const seed = valg.seed || 0;
+    const hashCache = new Map();
+    const tilfaeldig = (id) => {
+        if (!seed) return 0;
+        if (!hashCache.has(id)) {
+            let h = 2166136261 ^ seed;
+            for (let i = 0; i < id.length; i += 1) { h ^= id.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+            hashCache.set(id, h / 4294967296);
+        }
+        return hashCache.get(id);
+    };
     const noegler = {
         frist: (k, dagSet, dagDato, dagObj) => fristFor(k, dagObj),
+        tilfaeldig: (k) => tilfaeldig(k.id),
         rang: (k) => rang.get(k.kategori) ?? 999,
         spillet: (k, dagSet, dagDato) => -spilletAndel(k, dagSet, dagDato),
         dybde: (k) => -dybde(k.id),
@@ -310,4 +324,42 @@ export function bedoemPlan(projekt) {
         slutPrDag: Object.fromEntries([...slutPrDag.entries()].map(([d, m]) => [d, `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`])),
         udenTid,
     };
+}
+
+// ── Alternative forslag ───────────────────────────────────────
+
+/**
+ * De prioriteringer, alternativerne bygges af. Alle er lovlige planer; de
+ * adskiller sig i, hvad der vægtes, når flere kampe kan spilles i et slot.
+ */
+export const ALTERNATIV_VARIANTER = [
+    { navn: 'Kortest haltid', beskrivelse: 'Spillere, der allerede er i gang, får deres næste kamp først (standard).', prioritet: ['frist', 'spillet', 'dybde', 'rang', 'runde', 'gruppe', 'id'] },
+    { navn: 'Rækkens rækkefølge', beskrivelse: 'Mix, single, double tages færdig i rækkefølge, før nye kategorier starter.', prioritet: ['frist', 'rang', 'spillet', 'dybde', 'runde', 'gruppe', 'id'] },
+    { navn: 'Lange kæder først', beskrivelse: 'Puljer, der fører til lange cupper, kommer i gang først.', prioritet: ['frist', 'dybde', 'spillet', 'rang', 'runde', 'gruppe', 'id'] },
+    { navn: 'Puljer samlet', beskrivelse: 'Hver pulje spilles færdig i sammenhæng.', prioritet: ['frist', 'spillet', 'gruppe', 'runde', 'rang', 'dybde', 'id'] },
+    { navn: 'Variation A', beskrivelse: 'Som "Kortest haltid" med anden rækkefølge blandt ligestillede kampe.', prioritet: ['frist', 'spillet', 'dybde', 'tilfaeldig', 'id'], seed: 11 },
+    { navn: 'Variation B', beskrivelse: 'Som "Kortest haltid" med anden rækkefølge blandt ligestillede kampe.', prioritet: ['frist', 'spillet', 'dybde', 'tilfaeldig', 'id'], seed: 23 },
+    { navn: 'Variation C', beskrivelse: 'Som "Kortest haltid" med anden rækkefølge blandt ligestillede kampe.', prioritet: ['frist', 'spillet', 'tilfaeldig', 'id'], seed: 37 },
+    { navn: 'Variation D', beskrivelse: 'Rækkens rækkefølge med anden rækkefølge blandt ligestillede kampe.', prioritet: ['frist', 'rang', 'spillet', 'tilfaeldig', 'id'], seed: 53 },
+];
+
+/**
+ * Laver flere forslag med forskellige prioriteringer, fjerner dubletter og
+ * sorterer dem bedst først: færrest kampe uden plads, dernæst kortest haltid,
+ * dernæst tidligste sluttid. Hvert forslag: { navn, beskrivelse, plan,
+ * ikkePlaceret, statistik }. Låste kampe og kunDage respekteres som i lavForslag.
+ */
+export function lavAlternativer(projekt, valg = {}) {
+    const set = new Set();
+    const ud = [];
+    for (const v of ALTERNATIV_VARIANTER) {
+        const f = lavForslag(projekt, { ...valg, prioritet: v.prioritet, seed: v.seed || 0 });
+        const noegle = JSON.stringify(Object.entries(f.plan).sort(([a], [b]) => a.localeCompare(b)));
+        if (set.has(noegle)) continue;
+        set.add(noegle);
+        ud.push({ navn: v.navn, beskrivelse: v.beskrivelse, plan: f.plan, ikkePlaceret: f.ikkePlaceret, statistik: f.statistik });
+    }
+    const slutSum = (s) => Object.values(s.slutPrDag).reduce((sum, t) => sum + minutter(t), 0);
+    ud.sort((a, b) => a.ikkePlaceret.length - b.ikkePlaceret.length || a.statistik.haltidMin - b.statistik.haltidMin || slutSum(a.statistik) - slutSum(b.statistik));
+    return ud;
 }

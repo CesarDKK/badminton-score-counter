@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { lavForslag, bedoemPlan } from '../../src/scheduler.js';
+import { lavForslag, bedoemPlan, lavAlternativer, ALTERNATIV_VARIANTER } from '../../src/scheduler.js';
 import { tjekPlan } from '../../src/rules.js';
 import { nytProjekt, opdaterDag, opdaterRaekke, flytKamp, laasKamp, laasKategori, anvendForslag, opdaterOpsaetning } from '../../src/store.js';
 
@@ -218,5 +218,35 @@ describe('scheduler: reserverede baner', () => {
         const t = (id) => { const [h, m] = q.plan[id].slot.split(':').map(Number); return h * 60 + m; };
         assert.equal(t('5:r2:1') - t('5:1'), 30);
         assert.equal(t('5:r3:1') - t('5:r2:1'), 30);
+    });
+});
+
+describe('scheduler: alternative forslag', () => {
+    test('flere forskellige lovlige forslag, sorteret bedst foerst, deterministisk', () => {
+        const p = projekt();
+        const alt = lavAlternativer(p);
+        assert.ok(alt.length >= 2 && alt.length <= ALTERNATIV_VARIANTER.length, `${alt.length} forslag`);
+        const noegler = new Set(alt.map((a) => JSON.stringify(Object.entries(a.plan).sort())));
+        assert.equal(noegler.size, alt.length, 'ingen dubletter');
+        for (const a of alt) {
+            assert.deepEqual(fejl(anvendForslag(p, a)), [], a.navn);
+            assert.ok(a.navn && a.beskrivelse && a.statistik);
+        }
+        for (let i = 1; i < alt.length; i += 1) {
+            assert.ok(alt[i - 1].ikkePlaceret.length < alt[i].ikkePlaceret.length || alt[i - 1].statistik.haltidMin <= alt[i].statistik.haltidMin, 'sorteret');
+        }
+        assert.deepEqual(lavAlternativer(p).map((a) => a.plan), alt.map((a) => a.plan), 'samme input giver samme alternativer');
+    });
+    test('seed giver anden, men reproducerbar raekkefoelge', () => {
+        const p = projekt();
+        const a = lavForslag(p, { prioritet: ['frist', 'spillet', 'tilfaeldig', 'id'], seed: 11 });
+        const b = lavForslag(p, { prioritet: ['frist', 'spillet', 'tilfaeldig', 'id'], seed: 11 });
+        assert.deepEqual(a.plan, b.plan);
+        assert.deepEqual(fejl(anvendForslag(p, a)), []);
+    });
+    test('laaste kampe beholdes i alle alternativer', () => {
+        let p = flytKamp(projekt(), '4:1', '2026-11-21', '12:00');
+        p = laasKamp(p, '4:1');
+        for (const a of lavAlternativer(p)) assert.deepEqual(a.plan['4:1'], { dag: '2026-11-21', slot: '12:00' }, a.navn);
     });
 });
