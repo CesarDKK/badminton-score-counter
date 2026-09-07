@@ -1,15 +1,26 @@
 // planner.badmintonapp.dk — indgang. Holder projektet i hukommelsen, gemmer det
-// i localStorage ved hver ændring og tegner den aktive fane.
+// i localStorage ved hver ændring, kører reglerne og tegner den aktive fane.
 import { laesTP, tabellerFraMDB } from './tp-reader.js';
 import * as store from './store.js';
+import { tjekPlan } from './rules.js';
 import { renderOpsaetning } from './ui/opsaetning.js';
+import { renderPlan } from './ui/plan.js';
+import { renderTjek } from './ui/tjek.js';
 import { esc } from './ui/dom.js';
 
 let projekt = store.hentLokalt();
+let tjek = null;
 let besked = { tekst: '', fejl: false };
+// UI-tilstand der ikke gemmes: aktiv fane, valgt dag, filter, søgning, valgt kamp, fremhævede kampe
+const tilstand = { fane: 'opsaetning', dag: null, filter: '', soeg: '', valgtKamp: null, fremhaev: [] };
 
 const faneKnapper = document.querySelectorAll('.fane');
-const opsaetningEl = document.getElementById('fane-opsaetning');
+const sektioner = {
+    opsaetning: document.getElementById('fane-opsaetning'),
+    plan: document.getElementById('fane-plan'),
+    tjek: document.getElementById('fane-tjek'),
+    liste: document.getElementById('fane-liste'),
+};
 const navStatus = document.getElementById('navStatus');
 const dialog = document.getElementById('importValg');
 
@@ -20,14 +31,14 @@ for (const knap of faneKnapper) {
 }
 
 function vaelgFane(navn) {
+    tilstand.fane = navn;
     for (const knap of faneKnapper) {
         const aktiv = knap.dataset.fane === navn;
         knap.classList.toggle('er-aktiv', aktiv);
         knap.setAttribute('aria-selected', String(aktiv));
     }
-    for (const sektion of document.querySelectorAll('.fane-indhold')) {
-        sektion.hidden = sektion.id !== `fane-${navn}`;
-    }
+    for (const [n, sektion] of Object.entries(sektioner)) sektion.hidden = n !== navn;
+    render();
 }
 
 // ── Tilstand ──────────────────────────────────────────────────
@@ -45,10 +56,22 @@ function visBesked(tekst, fejl = false) {
 }
 
 function render() {
-    renderOpsaetning(opsaetningEl, projekt, handlers);
-    visBesked(besked.tekst, besked.fejl);
+    tjek = projekt ? tjekPlan(projekt) : null;
+    if (projekt && !projekt.opsaetning.dage.some((d) => d.dato === tilstand.dag)) tilstand.dag = projekt.opsaetning.dage[0]?.dato || null;
+    if (tilstand.fane === 'opsaetning') {
+        renderOpsaetning(sektioner.opsaetning, projekt, handlers);
+        visBesked(besked.tekst, besked.fejl);
+    } else if (tilstand.fane === 'plan') {
+        renderPlan(sektioner.plan, projekt, tjek, tilstand, planHandlers);
+        tilstand.fremhaev = [];
+    } else if (tilstand.fane === 'tjek') {
+        renderTjek(sektioner.tjek, projekt, tjek, tjekHandlers);
+    }
+    for (const knap of faneKnapper) {
+        if (knap.dataset.fane === 'tjek') knap.textContent = tjek && (tjek.antal.fejl || tjek.antal.advarsel) ? `Tjek (${tjek.antal.fejl}/${tjek.antal.advarsel})` : 'Tjek';
+    }
     navStatus.textContent = projekt
-        ? `${projekt.turnering.navn || 'Turnering'} · ${projekt.kampe.length} kampe · gemt i browseren`
+        ? `${projekt.turnering.navn || 'Turnering'} · ${projekt.kampe.length} kampe · ${tjek.antal.fejl} fejl, ${tjek.antal.advarsel} advarsler · gemt i browseren`
         : 'Intet projekt åbnet';
 }
 
@@ -88,7 +111,7 @@ async function vaelgImport(model) {
     return spoerg('Der er allerede et projekt åbent', `Hvad skal der ske med "${projekt.turnering.navn || 'det åbne projekt'}"?`, valg);
 }
 
-// ── Handlinger ────────────────────────────────────────────────
+// ── Handlinger: fane 1 ────────────────────────────────────────
 
 const handlers = {
     async aabnTP(fil) {
@@ -150,10 +173,57 @@ const handlers = {
 
     besked: visBesked,
     slotMin: (v) => saet(store.saetSlotMin(projekt, v)),
+    opsaetning: (aendringer) => saet(store.opdaterOpsaetning(projekt, aendringer)),
     dag: (dato, aendringer) => saet(store.opdaterDag(projekt, dato, aendringer)),
     raekke: (id, aendringer) => saet(store.opdaterRaekke(projekt, id, aendringer)),
     kategori: (id, aendringer) => saet(store.opdaterKategori(projekt, id, aendringer)),
     pause: (klasse, v) => saet(store.opdaterPause(projekt, klasse, v)),
+};
+
+// ── Handlinger: fane 2 og 3 ───────────────────────────────────
+
+const planHandlers = {
+    vaelgDag(dag) { tilstand.dag = dag; render(); },
+    filter(kat) { tilstand.filter = kat; render(); },
+    soeg(tekst) {
+        tilstand.soeg = tekst;
+        // Kun kortene opdateres, så søgefeltet beholder fokus
+        clearTimeout(planHandlers._t);
+        planHandlers._t = setTimeout(() => {
+            const felt = sektioner.plan.querySelector('[data-felt="soeg"]');
+            const pos = felt?.selectionStart;
+            render();
+            const nyt = sektioner.plan.querySelector('[data-felt="soeg"]');
+            if (nyt) { nyt.focus(); if (pos != null) nyt.setSelectionRange(pos, pos); }
+        }, 150);
+    },
+    vaelgKamp(id) { tilstand.valgtKamp = tilstand.valgtKamp === id ? null : id; render(); },
+    visKamp(id) {
+        const p = projekt.plan[id];
+        if (p) tilstand.dag = p.dag;
+        tilstand.valgtKamp = id;
+        tilstand.fremhaev = [id];
+        render();
+    },
+    flyt(id, dag, slot) { saet(store.flytKamp(projekt, id, dag, slot)); },
+    fjern(id) { saet(store.fjernFraPlan(projekt, id)); },
+    rydDag() {
+        if (!window.confirm(`Fjern tiden på alle kampe ${tilstand.dag}?`)) return;
+        saet(store.rydDag(projekt, tilstand.dag));
+    },
+};
+
+const tjekHandlers = {
+    visKampe(ids, dag) {
+        const foerste = ids.find((id) => projekt.plan[id]);
+        tilstand.dag = dag || (foerste ? projekt.plan[foerste].dag : tilstand.dag);
+        tilstand.fremhaev = ids;
+        tilstand.valgtKamp = null;
+        tilstand.filter = '';
+        tilstand.soeg = '';
+        vaelgFane('plan');
+    },
+    kvitter(noegle, vaerdi) { saet(store.kvitter(projekt, noegle, vaerdi)); },
 };
 
 render();

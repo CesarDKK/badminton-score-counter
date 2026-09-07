@@ -8,7 +8,7 @@
     <title>Planner — BadmintonApp.dk</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23e94560' transform='translate(0 1.2)'%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-33 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(33 12 14.5)'/%3E%3Crect x='9.4' y='14.3' width='5.2' height='1.7' rx='0.85'/%3E%3Cpath d='M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z'/%3E%3C/g%3E%3C/svg%3E">
     <link rel="stylesheet" href="fonts.css">
-    <link rel="stylesheet" href="planner.css?v=1">
+    <link rel="stylesheet" href="planner.css?v=2">
 </head>
 <body>
 
@@ -35,18 +35,14 @@
 <main class="wrap">
     <div class="faner" role="tablist" aria-label="Sider">
         <button class="fane er-aktiv" role="tab" data-fane="opsaetning" aria-selected="true">Fil og opsætning</button>
-        <button class="fane" role="tab" data-fane="plan" aria-selected="false" title="Kommer i fase 2">Plan</button>
-        <button class="fane" role="tab" data-fane="tjek" aria-selected="false" title="Kommer i fase 2">Tjek</button>
+        <button class="fane" role="tab" data-fane="plan" aria-selected="false">Plan</button>
+        <button class="fane" role="tab" data-fane="tjek" aria-selected="false">Tjek</button>
         <button class="fane" role="tab" data-fane="liste" aria-selected="false" title="Kommer i fase 4">Liste</button>
     </div>
 
     <section id="fane-opsaetning" class="fane-indhold" role="tabpanel"></section>
-    <section id="fane-plan" class="fane-indhold" role="tabpanel" hidden>
-        <div class="panel"><h2>Plan</h2><p class="panel-sub">Gitteret pr. dag med træk-og-slip kommer i fase 2.</p></div>
-    </section>
-    <section id="fane-tjek" class="fane-indhold" role="tabpanel" hidden>
-        <div class="panel"><h2>Tjek</h2><p class="panel-sub">Fejl og advarsler efter reglementet kommer i fase 2.</p></div>
-    </section>
+    <section id="fane-plan" class="fane-indhold fane-indhold--bred" role="tabpanel" hidden></section>
+    <section id="fane-tjek" class="fane-indhold" role="tabpanel" hidden></section>
     <section id="fane-liste" class="fane-indhold" role="tabpanel" hidden>
         <div class="panel"><h2>Liste</h2><p class="panel-sub">Listen til indtastning i TP kommer i fase 4.</p></div>
     </section>
@@ -66,6 +62,6 @@
 </footer>
 
 <script src="tp-bundle.js"></script>
-<script type="module" src="src/app.js?v=1"></script>
+<script type="module" src="src/app.js?v=2"></script>
 </body>
 </html>

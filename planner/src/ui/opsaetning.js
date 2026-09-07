@@ -2,6 +2,7 @@
 // projektet og sender ændringer tilbage gennem "handlers". Ingen tilstand her.
 import { esc, datoTekst, procent, tal } from './dom.js';
 import { kapacitetPrDag, kampePrKategori, slotsForDag, baneSlots } from '../kapacitet.js';
+import { foerSkoledag } from '../rules.js';
 
 const FORM_TEKST = {
     'pulje': 'Pulje', 'pulje-cup': 'Pulje + cup', 'cup': 'Cup', 'dobbelt-pulje': 'Dobbelt pulje',
@@ -10,7 +11,13 @@ const FORM_TEKST = {
 
 export function renderOpsaetning(container, projekt, handlers) {
     container.innerHTML = [filPanel(projekt), ...(projekt ? [turneringPanel(projekt), dagePanel(projekt), raekkePanel(projekt), kapacitetPanel(projekt)] : [])].join('');
-    bind(container, projekt, handlers);
+    // Lytterne sættes på beholderen én gang og læser det aktuelle projekt herfra,
+    // så de ikke hober sig op ved hver gentegning.
+    container._projekt = projekt;
+    if (!container.dataset.bundet) {
+        bind(container, () => container._projekt, handlers);
+        container.dataset.bundet = '1';
+    }
 }
 
 // ── Paneler ───────────────────────────────────────────────────
@@ -75,6 +82,7 @@ function dagePanel(p) {
             <td><input type="time" step="300" value="${esc(d.start)}" data-felt="start" data-dato="${d.dato}" aria-label="Start"></td>
             <td><input type="time" step="300" value="${esc(d.slut)}" data-felt="slut" data-dato="${d.dato}" aria-label="Slut"></td>
             <td><input type="number" min="1" max="60" value="${d.baner}" data-felt="baner" data-dato="${d.dato}" aria-label="Baner"></td>
+            <td><label class="valg" title="Dagen før en skoledag slutter tidsvinduet 2 timer tidligere (§ 4 stk. 5.1)"><input type="checkbox" data-skoledag="${d.dato}" ${foerSkoledag(d) ? 'checked' : ''}> før skoledag</label></td>
             <td class="tal">${slots}</td>
             <td class="tal">${baneSlots(d, slotMin)}</td>
             <td>${spaerringer}
@@ -96,7 +104,7 @@ function dagePanel(p) {
         <p class="panel-sub">Tiderne fra TP-filens gitter er foreslået. Kapaciteten er antal hele baner pr. slot; spær baner i et tidsrum, hvis de ikke kan bruges.</p>
         <div class="tabel-hylster">
             <table class="tabel">
-                <thead><tr><th>Dag</th><th>Start</th><th>Slut</th><th>Baner</th><th class="tal">Slots</th><th class="tal">Bane-slots</th><th>Spærrede baner</th></tr></thead>
+                <thead><tr><th>Dag</th><th>Start</th><th>Slut</th><th>Baner</th><th></th><th class="tal">Slots</th><th class="tal">Bane-slots</th><th>Spærrede baner</th></tr></thead>
                 <tbody>${raekker}</tbody>
             </table>
         </div>
@@ -107,8 +115,13 @@ function dagePanel(p) {
             ${pause('M', 'Pause M')}
             ${pause('E', 'Pause E')}
             ${pause('faelles', 'Fælles pause (M + ABCD)')}
+            <label class="felt"><span class="etiket">En kamp regnes til</span>
+                <select data-felt="kampVarighed">
+                    <option value="minimum" ${(p.opsaetning.kampVarighed || 'minimum') === 'minimum' ? 'selected' : ''}>reglementets minimumstid (som TP)</option>
+                    <option value="slot" ${p.opsaetning.kampVarighed === 'slot' ? 'selected' : ''}>et helt slot (streng)</option>
+                </select></label>
         </div>
-        <p class="panel-sub">Reglementet: mindst 10 min pause i A–D-rækker, 15 i M, 20 i E, og 12 når M og A–D spilles i samme turnering. Kampen regnes til ét slot, så to kampe for samme spiller ligger mindst slot + pause fra hinanden.</p>
+        <p class="panel-sub">Reglementet: mindst 10 min pause i A–D-rækker, 15 i M, 20 i E, og 12 når M og A–D spilles i samme turnering. Med "minimumstid" må to 20-min-kampe for samme spiller ligge i naboslots ved 30-min slots (20 + 10 = 30); med "et helt slot" skal der være slot + pause mellem starttiderne.</p>
     </section>`;
 }
 
@@ -195,22 +208,19 @@ function kapacitetPanel(p) {
 // ── Hændelser ─────────────────────────────────────────────────
 
 function bind(container, projekt, h) {
-    const zone = container.querySelector('#filzone');
-    const tpFil = container.querySelector('#tpFil');
-    const projektFil = container.querySelector('#projektFil');
-    tpFil?.addEventListener('change', () => { if (tpFil.files[0]) h.aabnTP(tpFil.files[0]); tpFil.value = ''; });
-    projektFil?.addEventListener('change', () => { if (projektFil.files[0]) h.aabnProjekt(projektFil.files[0]); projektFil.value = ''; });
-    if (zone) {
-        zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('er-over'); });
-        zone.addEventListener('dragleave', () => zone.classList.remove('er-over'));
-        zone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            zone.classList.remove('er-over');
-            const fil = e.dataTransfer.files[0];
-            if (!fil) return;
-            if (/\.json$/i.test(fil.name)) h.aabnProjekt(fil); else h.aabnTP(fil);
-        });
-    }
+    // Filzonen og filfelterne gentegnes, så alt går via delegering på beholderen.
+    const zone = (e) => e.target.closest?.('#filzone');
+    container.addEventListener('dragover', (e) => { const z = zone(e); if (z) { e.preventDefault(); z.classList.add('er-over'); } });
+    container.addEventListener('dragleave', (e) => { const z = zone(e); if (z && !z.contains(e.relatedTarget)) z.classList.remove('er-over'); });
+    container.addEventListener('drop', (e) => {
+        const z = zone(e);
+        if (!z) return;
+        e.preventDefault();
+        z.classList.remove('er-over');
+        const fil = e.dataTransfer.files[0];
+        if (!fil) return;
+        if (/\.json$/i.test(fil.name)) h.aabnProjekt(fil); else h.aabnTP(fil);
+    });
 
     container.addEventListener('click', (e) => {
         const knap = e.target.closest('[data-handling]');
@@ -219,28 +229,39 @@ function bind(container, projekt, h) {
         if (handling === 'gem-projekt') h.gemProjekt();
         else if (handling === 'start-forfra') h.startForfra();
         else if (handling === 'fjern-spaerring') {
-            const dag = projekt.opsaetning.dage.find((d) => d.dato === dato);
+            const dag = projekt().opsaetning.dage.find((d) => d.dato === dato);
             h.dag(dato, { spaerret: dag.spaerret.filter((_, i) => i !== Number(index)) });
         } else if (handling === 'tilfoej-spaerring') {
             const felt = (navn) => container.querySelector(`[data-ny="${navn}"][data-dato="${dato}"]`);
             const fra = felt('fra').value, til = felt('til').value, baner = Number(felt('baner').value) || 1;
             if (!fra || !til || til <= fra) { h.besked('Angiv fra og til for spærringen (til skal være efter fra).', true); return; }
-            const dag = projekt.opsaetning.dage.find((d) => d.dato === dato);
+            const dag = projekt().opsaetning.dage.find((d) => d.dato === dato);
             h.dag(dato, { spaerret: [...(dag.spaerret || []), { fra, til, baner }].sort((a, b) => a.fra.localeCompare(b.fra)) });
         }
     });
 
     container.addEventListener('change', (e) => {
         const el = e.target;
+        if (el instanceof HTMLSelectElement) {
+            if (el.dataset.felt === 'kampVarighed') h.opsaetning({ kampVarighed: el.value });
+            return;
+        }
         if (!(el instanceof HTMLInputElement)) return;
+        if (el.id === 'tpFil' || el.id === 'projektFil') {
+            const fil = el.files[0];
+            if (fil) (el.id === 'tpFil' ? h.aabnTP : h.aabnProjekt)(fil);
+            el.value = '';
+            return;
+        }
         const d = el.dataset;
-        if (d.felt === 'slotMin') h.slotMin(el.value);
+        if (d.skoledag) h.dag(d.skoledag, { foerSkoledag: el.checked });
+        else if (d.felt === 'slotMin') h.slotMin(el.value);
         else if (d.felt && d.dato) {
             if (d.felt === 'baner') h.dag(d.dato, { baner: Math.max(1, Number(el.value) || 1) });
             else if (el.value) h.dag(d.dato, { [d.felt]: el.value });
         } else if (d.pause) h.pause(d.pause, el.value);
         else if (d.raekkeDag) {
-            const r = projekt.raekker.find((x) => x.id === d.raekke);
+            const r = projekt().raekker.find((x) => x.id === d.raekke);
             const dage = el.checked ? [...new Set([...r.dage, d.raekkeDag])].sort() : r.dage.filter((x) => x !== d.raekkeDag);
             h.raekke(d.raekke, { dage });
         } else if (d.disp) h.raekke(d.disp, { dispensationFlereDage: el.checked });

@@ -81,6 +81,7 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
         turnering: { navn: model.turnering.navn, hal: model.turnering.hal, dage: alleDage },
         opsaetning: {
             slotMin: model.tpGitter.slotMin || 30,
+            kampVarighed: 'minimum', // 'minimum' = reglementets minimumstid (som TP), 'slot' = et helt slot
             pauseMin: { ...STANDARD_PAUSE, faelles: harM && harABCD ? STANDARD_PAUSE.faelles : null },
             dage,
         },
@@ -148,6 +149,11 @@ export function opdaterKategori(projekt, kategoriId, aendringer) {
     return { ...projekt, kategorier };
 }
 
+/** Generel ændring af opsætningen (fx kampVarighed). */
+export function opdaterOpsaetning(projekt, aendringer) {
+    return { ...projekt, opsaetning: { ...projekt.opsaetning, ...aendringer } };
+}
+
 export function opdaterPause(projekt, klasse, min) {
     const v = min === null || min === '' ? null : Math.max(0, Number(min) || 0);
     return { ...projekt, opsaetning: { ...projekt.opsaetning, pauseMin: { ...projekt.opsaetning.pauseMin, [klasse]: v } } };
@@ -190,4 +196,33 @@ export function projektFilnavn(projekt) {
     const navn = (projekt.turnering.navn || 'turnering').replace(/[^\wæøåÆØÅ -]+/g, '').trim() || 'turnering';
     const dag = projekt.turnering.dage[0] || '';
     return `${navn}${dag ? ' ' + dag : ''}.planner.json`;
+}
+
+// ── Planen (fane 2) ───────────────────────────────────────────
+
+/** Lægger en kamp i et slot (eller flytter den). */
+export function flytKamp(projekt, kampId, dag, slot) {
+    return { ...projekt, plan: { ...projekt.plan, [kampId]: { dag, slot } } };
+}
+
+/** Fjerner kampens tid, så den ligger i "ikke placeret". */
+export function fjernFraPlan(projekt, kampId) {
+    const plan = { ...projekt.plan };
+    delete plan[kampId];
+    return { ...projekt, plan, laast: (projekt.laast || []).filter((id) => id !== kampId) };
+}
+
+/** Rydder alle tider på en dag (låste kampe bliver). */
+export function rydDag(projekt, dag) {
+    const laast = new Set(projekt.laast || []);
+    const plan = {};
+    for (const [id, p] of Object.entries(projekt.plan)) if (p.dag !== dag || laast.has(id)) plan[id] = p;
+    return { ...projekt, plan };
+}
+
+/** Kvitterer en advarsel (noegle fra rules.js), eller fjerner kvitteringen igen. */
+export function kvitter(projekt, noegle, vaerdi = true) {
+    const set = new Set(projekt.kvitteret || []);
+    if (vaerdi) set.add(noegle); else set.delete(noegle);
+    return { ...projekt, kvitteret: [...set] };
 }

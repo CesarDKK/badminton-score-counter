@@ -17,7 +17,10 @@ Der er ingen backend, og persondata forlader aldrig brugerens maskine.
 | `src/tp-reader.js` | `.TP`-tabeller → projektmodel (rene funktioner) |
 | `src/store.js` | Projektfil: nyt projekt, genindlæsning, ændringer, persistens |
 | `src/kapacitet.js` | Slots og bane-slots pr. dag mod kampe |
+| `src/rules.js` | Reglerne (design § 5): `tjekPlan(projekt)` → fejl/advarsler pr. kamp og slot |
 | `src/ui/opsaetning.js` | Fane 1: fil og opsætning |
+| `src/ui/plan.js` | Fane 2: gitter pr. dag, træk-og-slip, ikke placerede kampe, spillervisning |
+| `src/ui/tjek.js` | Fane 3: fejl og advarsler med "Vis" og "Kvittér" |
 | `tp-bundle.js` | Bygget bundle af `mdb-reader` + Buffer-polyfill (**committes**) |
 | `build/` | esbuild-script til `tp-bundle.js` |
 | `tests/unit/` | Node `--test`-tests |
@@ -69,3 +72,20 @@ Permanent deploy: `docker compose build frontend` som for de øvrige sites.
   spillet først). Bye-kampe i cupper udelades.
 - Datoer fra `mdb-reader` er UTC-`Date` med vægurets tid; læs altid med
   `getUTC*`.
+
+## Regler og pause-fortolkning
+
+`rules.js` skelner mellem kendte spillere (puljekampe: fejl) og mulige spillere
+(cupkampe: advarsel), og springer par af kampe i samme lodtrækning over, hvor
+den ene ikke bygger på den anden (to semifinaler kan ikke dele spillere).
+
+Opsætningen "En kamp regnes til" styrer pausetjekket:
+
+- **reglementets minimumstid (som TP)** — standard. Ungdom A–D: 20 min +
+  10 min pause = 30, så samme spiller må stå i naboslots ved 30-min slots.
+  Jespers egne planer fra 2025/2026 følger denne praksis.
+- **et helt slot (streng)** — slot + pause mellem starttiderne, dvs. mindst
+  60 min ved 30-min slots.
+
+Swiss Ladder-runder 2+ er pladsholdere uden spillere; de tjekkes samlet pr.
+runde (runde r+1 tidligst når runde r er slut plus pause).
