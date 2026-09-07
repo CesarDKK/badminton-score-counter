@@ -376,3 +376,27 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 .kort.er-laast { border-style: dashed; }
 .kort.er-laast b { color: #fff; }
 .forslag-info { color: var(--purple-soft); }
+
+/* ── Swiss Ladder-blokke ── */
+.kort.er-blok { width: auto; min-width: 150px; max-width: 240px; border-left-width: 6px; }
+.raekke-tid { display: inline-flex; align-items: center; gap: 4px; margin-left: 10px; font-size: 0.85em; color: var(--muted); }
+.raekke-tid input[type="time"] { width: 6.6em; padding: 4px 6px; font-size: 0.9em; }
+
+/* ── Liste (fane 4) ── */
+.liste-kategori h3 { font-size: 0.95em; color: var(--purple-soft); margin-top: 14px; }
+.tabel--liste td { padding: 5px 10px; white-space: normal; }
+.tabel--liste tr { cursor: pointer; }
+.tabel--liste tr.er-uden-tid td { color: var(--red-soft); }
+.udskrift-hoved { display: none; }
+
+@media print {
+    body { background: #fff; color: #000; font-size: 11px; }
+    body::before, .glow, nav, .faner, .sidefod, .udskriv-skjul, .fane-indhold[hidden] { display: none !important; }
+    .wrap { max-width: none; padding: 0; }
+    .udskrift-hoved { display: block; margin-bottom: 12px; }
+    .udskrift-hoved h1 { font-size: 18px; }
+    .panel { background: none; border: none; padding: 0; margin: 0 0 14px; break-inside: avoid; }
+    .panel h2, .liste-kategori h3, .daempet, .tabel--liste td { color: #000; }
+    .tabel--liste td { border-bottom: 1px solid #ccc; padding: 3px 8px; }
+    .tabel--liste tr.er-uden-tid td { color: #b00; }
+}

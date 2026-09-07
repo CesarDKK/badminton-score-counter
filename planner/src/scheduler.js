@@ -13,6 +13,15 @@ import { minKampMin, pauseForRaekke, tidsvindue } from './rules.js';
 
 const AARGANG_ORDEN = ['U09', 'U11', 'U13', 'U15', 'U17', 'U19', 'SEN'];
 
+// Hvilken årsag der vises for en kamp, der ikke kunne placeres: den mest sigende vinder.
+const AARSAG_RANG = {
+    'ingen ledig bane': 6,
+    'spiller mangler pause': 5, 'spiller er i en anden kamp i slottet': 5, 'spiller har max kampe den dag': 5,
+    'uden for tidsvinduet': 4, 'før rækkens tidligste start': 4, 'efter rækkens seneste slut': 4,
+    'rækken spiller ikke den dag': 3,
+    'bygger på en senere kamp': 2, 'bygger på en kamp uden tid': 1,
+};
+
 /**
  * @param {object} projekt
  * @param {{ kunDage?: string[] }} [valg]  begræns forslaget til bestemte dage (andre dage røres ikke)
@@ -115,6 +124,9 @@ export function lavForslag(projekt, valg = {}) {
         const r = raekke(k);
         if (!r) return 'ingen række';
         if (!r.dage.includes(dag.dato)) return 'rækken spiller ikke den dag';
+        // Rækkens eget tidsrum (valgfrit, fx U9 kun 12–17)
+        if (r.tidligst && slotStart < minutter(r.tidligst)) return 'før rækkens tidligste start';
+        if (r.senest && slotStart + slotMin > minutter(r.senest)) return 'efter rækkens seneste slut';
         const v = tidsvindue(r.aargang, dag, regler);
         if (slotStart < v.fra || slotStart + slotMin > v.til) return 'uden for tidsvinduet';
         for (const dep of k.afhaengerAf) {
@@ -148,7 +160,15 @@ export function lavForslag(projekt, valg = {}) {
     // ── Grådig placering ──
     const ventende = projekt.kampe.filter((k) => !plan[k.id]);
     const spilletIDag = new Map(); // dag → Set(spiller) med kendt kamp
-    const spilletAndel = (k, dagSet) => {
+    // Andel af kampens spillere, der allerede har spillet i dag. Swiss-runder 2+
+    // (uden kendte spillere) bruger de mulige spillere, så en Swiss Ladder, der er
+    // i gang, holder tempoet i stedet for at blive strakt ud over dagen. Cupkampe
+    // gør ikke (målt: det gav længere haltid og kampe uden plads).
+    const spilletAndel = (k, dagSet, dagDato) => {
+        if (k.fase === 'swiss' && !k.spillere.length) {
+            // Runden er i gang, når forrige runde ligger i dag: alle spillere er i hallen
+            return k.afhaengerAf.length && k.afhaengerAf.every((dep) => tidFor.get(dep)?.dag === dagDato) ? 1 : 0;
+        }
         if (!k.spillere.length || !dagSet) return 0;
         let n = 0;
         for (const s of k.spillere) if (dagSet.has(s)) n += 1;
@@ -173,15 +193,24 @@ export function lavForslag(projekt, valg = {}) {
     // sidste kategori ikke løber tør for dag), dernæst rækkens rækkefølge, runde.
     // Målt mod Jespers planer 2026-09-07: haltid 162/138 min mod 206/255,
     // alt placeret — varianten med rækkefølgen først efterlod 5 kampe uden plads.
+    // Frist: rækkens seneste sluttid på dagen (eget tidsrum eller årgangens
+    // tidsvindue) — tidligste frist først, så fx et U9-vindue 12–17 fyldes med
+    // U9, mens U11 med frist 19 venter.
+    const fristFor = (k, dagObj) => {
+        const r = raekke(k);
+        if (!r) return 9999;
+        return r.senest ? minutter(r.senest) : tidsvindue(r.aargang, dagObj, regler).til;
+    };
     const noegler = {
+        frist: (k, dagSet, dagDato, dagObj) => fristFor(k, dagObj),
         rang: (k) => rang.get(k.kategori) ?? 999,
-        spillet: (k, dagSet) => -spilletAndel(k, dagSet),
+        spillet: (k, dagSet, dagDato) => -spilletAndel(k, dagSet, dagDato),
         dybde: (k) => -dybde(k.id),
         runde: (k) => k.runde || 0,
         gruppe: (k) => k.gruppe || '',
         id: (k) => k.id,
     };
-    const prioritet = valg.prioritet || ['spillet', 'dybde', 'rang', 'runde', 'gruppe', 'id'];
+    const prioritet = valg.prioritet || ['frist', 'spillet', 'dybde', 'rang', 'runde', 'gruppe', 'id'];
 
     for (const dag of dage) {
         if (kunDage && !kunDage.has(dag.dato)) continue;
@@ -195,7 +224,7 @@ export function lavForslag(projekt, valg = {}) {
             // Kandidater i prioriteret rækkefølge
             const kandidater = ventende
                 .filter((k) => !plan[k.id])
-                .map((k) => ({ k, noegle: prioritet.map((n) => noegler[n](k, dagSet)) }))
+                .map((k) => ({ k, noegle: prioritet.map((n) => noegler[n](k, dagSet, dag.dato, dag)) }))
                 .sort((a, b) => sammenlign(a.noegle, b.noegle));
             for (const { k } of kandidater) {
                 const brug = brugFor(dag.dato, slot);
@@ -203,7 +232,11 @@ export function lavForslag(projekt, valg = {}) {
                 if (fuld && brug.halve % 2 === 0) break;          // intet kan komme ind
                 if (fuld && !kat(k)?.halvBane) continue;         // kun en halv bane er ledig
                 const aarsag = aarsagFor(k, dag, slot, slotStart, baner);
-                if (aarsag) { aarsager.set(k.id, aarsag); continue; }
+                if (aarsag) {
+                    // Gem den mest sigende årsag (kapacitet og pause frem for "bygger på …")
+                    if ((AARSAG_RANG[aarsag] || 0) >= (AARSAG_RANG[aarsager.get(k.id)] || 0)) aarsager.set(k.id, aarsag);
+                    continue;
+                }
                 registrer(k, dag.dato, slot);
                 for (const s of k.spillere) dagSet.add(s);
             }

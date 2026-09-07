@@ -14,6 +14,7 @@ const TYPE_TEKST = {
     'max-kampe': 'For mange kampe pr. dag',
     'flere-dage': 'Række over flere dage',
     'uden-for-raekkens-dage': 'Uden for rækkens dage',
+    'raekke-tidsrum': 'Uden for rækkens eget tidsrum',
     'e-sidste-dag': 'E-række: sidste dag',
     'e-finale-tid': 'E-finale uden for 10–13',
     'senior-max-3': 'Senior E/M: over 3 kampe',

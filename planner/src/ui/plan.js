@@ -68,20 +68,50 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
         return true;
     };
 
-    const kort = (k) => {
+    // Swiss Ladder-runder vises som én blok pr. runde i et slot (design § 7.2):
+    // TP har én tid pr. runde, og blokken trækkes, låses og fjernes samlet.
+    const kampMap = new Map(projekt.kampe.map((k) => [k.id, k]));
+    const grupper = (kampe) => {
+        const ud = [];
+        const blokke = new Map();
+        for (const k of kampe) {
+            if (k.fase !== 'swiss') { ud.push({ k, ids: [k.id] }); continue; }
+            const n = `${k.kategori}|${k.tpRef.draw}|${k.runde}`;
+            if (!blokke.has(n)) { const g = { k, ids: [] }; blokke.set(n, g); ud.push(g); }
+            blokke.get(n).ids.push(k.id);
+        }
+        return ud;
+    };
+    const rang = { fejl: 3, advarsel: 2, info: 1 };
+    const kort = (k, ids = [k.id]) => {
         const kat = katMap.get(k.kategori);
-        const alvor = alvorForKamp(tjek, k.id);
+        const blok = ids.length > 1 || k.fase === 'swiss';
+        const alle = ids.map((id) => kampMap.get(id)).filter(Boolean);
+        let alvor = null;
+        for (const id of ids) { const a = alvorForKamp(tjek, id); if (a && (!alvor || rang[a] > rang[alvor])) alvor = a; }
         const klasser = ['kort'];
-        if (kat?.halvBane) klasser.push('er-halv');
+        if (kat?.halvBane && !blok) klasser.push('er-halv');
+        if (blok) klasser.push('er-blok');
         if (alvor) klasser.push(`er-${alvor}`);
-        if (!passer(k)) klasser.push('er-daempet');
-        if (k.id === tilstand.valgtKamp) klasser.push('er-valgt');
-        else if (valgtSpillere.size && k.spillere.some((s) => valgtSpillere.has(s))) klasser.push('er-relateret');
-        if (fremhaev.has(k.id)) klasser.push('er-fremhaevet');
+        if (!alle.some(passer)) klasser.push('er-daempet');
+        if (ids.includes(tilstand.valgtKamp)) klasser.push('er-valgt');
+        else if (valgtSpillere.size && alle.some((x) => x.spillere.some((s) => valgtSpillere.has(s)))) klasser.push('er-relateret');
+        if (ids.some((id) => fremhaev.has(id))) klasser.push('er-fremhaevet');
         if (!k.spillere.length) klasser.push('er-ukendt');
-        const laast = laaste.has(k.id);
+        const laast = ids.every((id) => laaste.has(id));
         if (laast) klasser.push('er-laast');
-        return `<div class="${klasser.join(' ')}" draggable="true" data-kamp="${esc(k.id)}" style="--hue:${hueFor(projekt, k.kategori)}" title="${esc(tooltip(projekt, tjek, k))}${laast ? '\n🔒 Låst — dobbeltklik for at låse op' : ''}"><b>${esc(k.kategori)}${laast ? ' 🔒' : ''}</b><span>${esc(kortNavn(k))}</span></div>`;
+        let titel, tekst;
+        if (blok) {
+            const kendte = alle.filter((x) => x.spillere.length);
+            titel = [`${k.kategori} — Swiss Ladder runde ${k.runde}, ${ids.length} kampe i dette slot`,
+                ...kendte.map((x) => '• ' + x.spillere.map((s) => spillerTekst(projekt, s)).join(' – ')),
+                ...[...new Set(ids.flatMap((id) => (tjek.prKamp.get(id) || []).map((p) => `${p.alvor === 'fejl' ? '✖' : '▲'} ${p.tekst}`)))]].join('\n');
+            tekst = `Runde ${k.runde} · ${ids.length} ${ids.length === 1 ? 'kamp' : 'kampe'}${kat?.halvBane ? ' · halve baner' : ''}`;
+        } else {
+            titel = tooltip(projekt, tjek, k);
+            tekst = kortNavn(k);
+        }
+        return `<div class="${klasser.join(' ')}" draggable="true" data-kamp="${esc(ids.join(','))}" style="--hue:${hueFor(projekt, k.kategori)}" title="${esc(titel)}${laast ? '\n🔒 Låst — dobbeltklik for at låse op' : ''}"><b>${esc(k.kategori)}${laast ? ' 🔒' : ''}</b><span>${esc(tekst)}</span></div>`;
     };
 
     // Kampe pr. slot på den valgte dag
@@ -110,7 +140,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
         return `
         <tr class="slot ${klasse}" data-slot="${slot}">
             <th scope="row"><span class="tid">${slot}</span><span class="fyld">${brugt}/${baner}</span></th>
-            <td class="celle" data-slot="${slot}" data-dag="${dag.dato}">${kampe.map(kort).join('')}</td>
+            <td class="celle" data-slot="${slot}" data-dag="${dag.dato}">${grupper(kampe).map(({ k, ids }) => kort(k, ids)).join('')}</td>
         </tr>`;
     }).join('');
 
@@ -121,7 +151,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
     const sidepanel = [...prKat.entries()].map(([kat, kampe]) => `
         <details open>
             <summary><span class="prik" style="--hue:${hueFor(projekt, kat)}"></span>${esc(kat)} <span class="daempet">${kampe.length}</span></summary>
-            <div class="kortliste">${sortKampe(kampe).map(kort).join('')}</div>
+            <div class="kortliste">${grupper(sortKampe(kampe)).map(({ k, ids }) => kort(k, ids)).join('')}</div>
         </details>`).join('');
 
     // Spillerpanel: den valgte kamps spillere med alle deres kampe og haltid
@@ -216,7 +246,7 @@ function bind(container, h) {
         const li = e.target.closest('li[data-kamp]');
         if (li) { h.visKamp(li.dataset.kamp); return; }
         const kort = e.target.closest('.kort[data-kamp]');
-        if (kort) h.vaelgKamp(kort.dataset.kamp);
+        if (kort) h.vaelgKamp(kort.dataset.kamp.split(',')[0]);
     });
     container.addEventListener('dblclick', (e) => {
         const kort = e.target.closest('.kort[data-kamp]');

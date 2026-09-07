@@ -202,6 +202,9 @@ function raekkePanel(p) {
         <tr class="raekke-hoved">
             <td colspan="2">${esc(r.id)} <span class="maerke">pause ${r.pauseKlasse}</span></td>
             <td colspan="5">${dagValg}
+                <span class="raekke-tid" title="Valgfrit: rækkens eget tidsrum på dagen (fx U9 kun 12:00–17:00). Forslaget holder sig inden for det; Tjek advarer, hvis kampe ligger udenfor.">
+                    <input type="time" step="300" value="${esc(r.tidligst || '')}" data-raekke-tid="tidligst" data-raekke="${esc(r.id)}" aria-label="Tidligst">–<input type="time" step="300" value="${esc(r.senest || '')}" data-raekke-tid="senest" data-raekke="${esc(r.id)}" aria-label="Senest">
+                </span>
                 ${kraeverDisp ? `<label class="valg"><input type="checkbox" data-disp="${esc(r.id)}" ${r.dispensationFlereDage ? 'checked' : ''}> dispensation til flere dage</label>
                 ${r.dispensationFlereDage ? '<span class="maerke maerke--ok">dispensation givet</span>' : '<span class="maerke maerke--advarsel">kræver dispensation</span>'}` : ''}
                 ${!r.dage.length ? '<span class="maerke maerke--fejl">ingen dag valgt</span>' : ''}
@@ -324,6 +327,7 @@ function bind(container, projekt, h) {
             else if (el.value) h.regler(d.regel, el.value);
             return;
         }
+        if (d.raekkeTid) { h.raekke(d.raekke, { [d.raekkeTid]: el.value || null }); return; }
         if (d.skoledag) h.dag(d.skoledag, { foerSkoledag: el.checked });
         else if (d.felt === 'slotMin') h.slotMin(el.value);
         else if (d.felt && d.dato) {

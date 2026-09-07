@@ -166,3 +166,18 @@ for (const [navn, moenster] of [['U13/U15 CD 2026', /U13/i], ['U9/U11 BCD 2025',
         });
     });
 }
+
+describe('scheduler: raekkens eget tidsrum', () => {
+    test('forslaget holder sig inden for raekkens tidsrum', () => {
+        const p = opdaterRaekke(projekt(), 'U09 D', { tidligst: '12:00', senest: '14:00' });
+        const f = lavForslag(p);
+        const u9 = p.kampe.filter((k) => k.kategori === 'U09 D HS');
+        assert.ok(u9.every((k) => f.plan[k.id] && f.plan[k.id].slot >= '12:00' && f.plan[k.id].slot < '14:00'));
+        assert.deepEqual(fejl(anvendForslag(p, f)), []);
+        const p2 = opdaterRaekke(projekt(), 'U09 D', { tidligst: '14:30', senest: '15:00' });
+        const f2 = lavForslag(p2);
+        assert.ok(f2.ikkePlaceret.length > 0, 'for lille tidsrum giver ikke placerede');
+        assert.ok(f2.ikkePlaceret.every((x) => x.aarsag), 'alle har en årsag');
+        assert.ok(f2.ikkePlaceret.some((x) => /rækkens/.test(x.aarsag)), 'mindst én skyldes tidsrummet');
+    });
+});

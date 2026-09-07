@@ -336,3 +336,19 @@ describe('rules: grænser kan ændres og nulstilles', () => {
         assert.equal(p.opsaetning.pauseMin.ABCD, 10);
     });
 });
+
+describe('rules: raekkens eget tidsrum (valgfrit)', () => {
+    test('kampe uden for raekkens tidsrum giver en kvitterbar advarsel', () => {
+        let p = projekt();
+        p = flytKamp(p, 'p1', '2026-11-21', '09:00');
+        p = flytKamp(p, 'p2', '2026-11-21', '12:00');
+        assert.equal(tjekPlan(p).problemer.filter((x) => x.type === 'raekke-tidsrum').length, 0);
+        p = opdaterRaekke(p, 'U11 D', { tidligst: '10:00', senest: '12:30' });
+        const adv = tjekPlan(p).problemer.filter((x) => x.type === 'raekke-tidsrum');
+        assert.equal(adv.length, 1);
+        assert.equal(adv[0].alvor, 'advarsel');
+        assert.deepEqual(adv[0].kampe, ['p1']);
+        assert.match(adv[0].tekst, /10:00.12:30/);
+        assert.equal(tjekPlan(kvitter(p, adv[0].noegle)).problemer.filter((x) => x.type === 'raekke-tidsrum').length, 0);
+    });
+});

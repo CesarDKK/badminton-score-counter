@@ -7,6 +7,7 @@ import { lavForslag } from './scheduler.js';
 import { renderOpsaetning } from './ui/opsaetning.js';
 import { renderPlan } from './ui/plan.js';
 import { renderTjek } from './ui/tjek.js';
+import { renderListe } from './ui/liste.js';
 import { esc } from './ui/dom.js';
 
 let projekt = store.hentLokalt();
@@ -67,6 +68,8 @@ function render() {
         tilstand.fremhaev = [];
     } else if (tilstand.fane === 'tjek') {
         renderTjek(sektioner.tjek, projekt, tjek, tjekHandlers);
+    } else if (tilstand.fane === 'liste') {
+        renderListe(sektioner.liste, projekt, { gemProjekt: () => handlers.gemProjekt(), visKampe: (ids) => tjekHandlers.visKampe(ids, null) });
     }
     for (const knap of faneKnapper) {
         if (knap.dataset.fane === 'tjek') knap.textContent = tjek && (tjek.antal.fejl || tjek.antal.advarsel) ? `Tjek (${tjek.antal.fejl}/${tjek.antal.advarsel})` : 'Tjek';
@@ -208,8 +211,9 @@ const planHandlers = {
         tilstand.fremhaev = [id];
         render();
     },
-    flyt(id, dag, slot) { saet(store.flytKamp(projekt, id, dag, slot)); },
-    fjern(id) { saet(store.fjernFraPlan(projekt, id)); },
+    // id kan være flere kampe adskilt af komma (Swiss Ladder-runder flyttes samlet)
+    flyt(id, dag, slot) { let p = projekt; for (const x of id.split(',')) p = store.flytKamp(p, x, dag, slot); saet(p); },
+    fjern(id) { let p = projekt; for (const x of id.split(',')) p = store.fjernFraPlan(p, x); saet(p); },
     rydDag() {
         if (!window.confirm(`Fjern tiden på alle kampe ${tilstand.dag}?`)) return;
         tilstand.forslag = null;
@@ -229,7 +233,13 @@ const planHandlers = {
         };
         saet(store.anvendForslag(projekt, f));
     },
-    laasKamp(id) { saet(store.laasKamp(projekt, id, !(projekt.laast || []).includes(id))); },
+    laasKamp(id) {
+        const ids = id.split(',');
+        const vaerdi = !(projekt.laast || []).includes(ids[0]);
+        let p = projekt;
+        for (const x of ids) p = store.laasKamp(p, x, vaerdi);
+        saet(p);
+    },
     laasKategori(vaerdi) { if (tilstand.filter) saet(store.laasKategori(projekt, tilstand.filter, vaerdi)); },
 };
 

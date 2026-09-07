@@ -22,6 +22,7 @@ Der er ingen backend, og persondata forlader aldrig brugerens maskine.
 | `src/ui/opsaetning.js` | Fane 1: fil og opsætning |
 | `src/ui/plan.js` | Fane 2: gitter pr. dag, træk-og-slip, ikke placerede kampe, spillervisning |
 | `src/ui/tjek.js` | Fane 3: fejl og advarsler med "Vis" og "Kvittér" |
+| `src/ui/liste.js` | Fane 4: listen til indtastning i TP (`byggListe` er ren), kopiér som tekst, udskrift |
 | `tp-bundle.js` | Bygget bundle af `mdb-reader` + Buffer-polyfill (**committes**) |
 | `build/` | esbuild-script til `tp-bundle.js` |
 | `tests/unit/` | Node `--test`-tests |
@@ -112,3 +113,22 @@ planer med samme lodtrækning:
 
 Haltid = sidste kamp minus første kamp pr. spiller pr. dag; vent = haltid minus
 egne kampe. Forslaget tager ca. 25 ms for 300 kampe.
+
+## Fase 4: Swiss-blokke, liste og tidsrum pr. række
+
+- **Swiss Ladder-runder** vises i gitteret som én blok pr. runde pr. slot
+  ("Runde 3 · 9 kampe · halve baner"). Blokken trækkes, låses og fjernes samlet.
+  Runde 1 har kendte parringer (hover). TP har én tid pr. runde, så listen
+  giver rundens første slot og bemærker, hvis runden fylder flere slots.
+- **Fane 4 Liste**: pr. kategori i TP's rækkefølge (puljer, derefter
+  cup-runder) med TP's kampnummer, dag og klokkeslæt; klik på en linje hopper
+  til kampen i gitteret. "Kopiér som tekst" og "Udskriv" (print-stylesheet).
+- **Tidsrum pr. række** (valgfrit, fane 1): fx U9 kun 12:00–17:00. Forslaget
+  holder sig inden for det, og Tjek advarer (kvitterbart), hvis kampe ligger
+  udenfor. Planlæggeren prioriterer rækker med den tidligste frist først
+  (eget tidsrum eller årgangens tidsvindue), så et U9-vindue fyldes med U9.
+- En Swiss-runde, der er i gang (forrige runde ligger samme dag), får samme
+  prioritet som spillere, der allerede har spillet, så runderne følger tæt.
+  Alle 19 spillere skal være fri i rundens slot (TP sætter én tid), så U9-
+  drengenes doubler lægges mellem runderne; 6 runder + doubler kræver mere
+  end 10 slots — planneren melder de overskydende som "ikke placeret".

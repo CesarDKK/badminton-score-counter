@@ -241,6 +241,14 @@ export function tjekPlan(projekt) {
             tilfoej({ type: 'flere-dage', alvor: 'advarsel', noegle: `${r.id}:flere-dage`, tekst: `${r.id} spiller over ${m.size} dage (${[...m.keys()].sort().map(datoKort).join(', ')}). B-, C- og D-rækker og U11 A skal afvikles på én dag, medmindre der er givet dispensation.`, kampe: [...m.values()].flat().map((k) => k.id) });
         }
         for (const [dag, kampe] of m) {
+            // Rækkens eget tidsrum (valgfrit) — brugerens ønske, ikke reglementet: advarsel
+            if (r.tidligst || r.senest) {
+                const udenfor = kampe.filter((k) => {
+                    const min = tidMin(projekt.plan[k.id]);
+                    return (r.tidligst && min < minutter(r.tidligst)) || (r.senest && min + slotMin > minutter(r.senest));
+                });
+                if (udenfor.length) tilfoej({ type: 'raekke-tidsrum', alvor: 'advarsel', noegle: `${r.id}:${dag}:tidsrum`, tekst: `${udenfor.length} kampe i ${r.id} ligger ${datoKort(dag)} uden for rækkens eget tidsrum ${r.tidligst || dagMap.get(dag).start}–${r.senest || dagMap.get(dag).slut}.`, kampe: udenfor.map((k) => k.id), dag });
+            }
             const uPlaceret = kampe.filter((k) => !r.dage.includes(dag));
             if (uPlaceret.length) tilfoej({ type: 'uden-for-raekkens-dage', alvor: 'advarsel', noegle: `${r.id}:${dag}:uden-for-dage`, tekst: `${uPlaceret.length} kampe i ${r.id} ligger ${datoKort(dag)}, som ikke er valgt som rækkens dag.`, kampe: uPlaceret.map((k) => k.id), dag });
         }
