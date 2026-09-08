@@ -131,6 +131,7 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
     const kategorier = model.kategorier.map((k) => ({
         id: k.id, raekke: k.raekke, aargang: k.aargang, kat: k.kat, type: k.type, mix: k.mix,
         form: k.form, halvBane: k.halvBane, tilmelde: k.tilmeldte, antalKampe: k.kampe, runder: k.runder,
+        prioritet: 0, // forrang i forslaget: 1 = høj, 0 = normal, -1 = lav
     }));
 
     const harM = model.raekker.some((r) => r.raekke === 'M');
@@ -143,6 +144,8 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
         opsaetning: {
             slotMin: model.tpGitter.slotMin || 30,
             kampVarighed: 'minimum', // 'minimum' = reglementets minimumstid (som TP), 'slot' = et helt slot
+            antiSamtidighed: true,   // HS/HD, DS/DD og MD i samme række ikke samtidig (advarsel + undgås i forslag)
+            puljerunderSynkront: false, // alle puljers runde 1 før runde 2 … (blødt mål i forslaget)
             regler: klon(STANDARD_REGLER),
             pauseMin: { ...STANDARD_PAUSE, faelles: harM && harABCD ? STANDARD_PAUSE.faelles : null },
             dage,
@@ -175,7 +178,7 @@ export function genindlaes(projekt, model, valg = { behold: true }) {
     const raekker = nyt.raekker.map((r) => projekt.raekker.find((x) => x.id === r.id) || r);
     const kategorier = nyt.kategorier.map((k) => {
         const gammel = projekt.kategorier.find((x) => x.id === k.id);
-        return gammel ? { ...k, halvBane: gammel.halvBane } : k;
+        return gammel ? { ...k, halvBane: gammel.halvBane, prioritet: gammel.prioritet || 0 } : k;
     });
     const dage = nyt.opsaetning.dage.map((d) => projekt.opsaetning.dage.find((x) => x.dato === d.dato) || d);
     return {

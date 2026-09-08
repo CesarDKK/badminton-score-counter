@@ -51,6 +51,20 @@ export function puljeFor(raekkeId, reserveret) {
     return reserveret.has(raekkeId) ? raekkeId : 'faelles';
 }
 
+/**
+ * Anti-samtidighed (fra Jespers gamle prompt, regel A3): i samme række må
+ * HS og HD ikke ligge samtidig, DS og DD ikke, og MD ikke sammen med nogen af
+ * dem. U9's kønsblandede double ("D") regnes som både HD og DD.
+ * Samme kategori konflikter aldrig (puljekampe spilles parallelt).
+ */
+export function katKonflikt(katA, katB) {
+    if (!katA || !katB || katA === katB) return false;
+    const mix = (k) => k === 'MD' || k === 'D';
+    if (mix(katA) || mix(katB)) return true;
+    const par = [['HS', 'HD'], ['DS', 'DD']];
+    return par.some(([a, b]) => (katA === a && katB === b) || (katA === b && katB === a));
+}
+
 /** Bane-slots i alt på en dag. */
 export function baneSlots(dag, slotMin) {
     return slotsForDag(dag, slotMin).reduce((sum, slot) => sum + banerISlot(dag, slot), 0);

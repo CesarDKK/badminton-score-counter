@@ -231,7 +231,7 @@ const planHandlers = {
             tekst: `Forslag lavet på ${ms} ms: ${Object.keys(f.plan).length} kampe har tid, ${f.ikkePlaceret.length} kunne ikke placeres.`,
             ikkePlaceret: f.ikkePlaceret.map((x) => ({ ...x, kategori: katMap.get(x.id)?.kategori || '', navn: katMap.get(x.id)?.navn || x.id })),
         };
-        saet(store.anvendForslag(projekt, f));
+        saet({ ...store.anvendForslag(projekt, f), sidsteForslag: { ikkePlaceret: f.ikkePlaceret } });
     },
     laasKamp(id) {
         const ids = id.split(',');
@@ -280,7 +280,7 @@ const planHandlers = {
             ikkePlaceret: a.ikkePlaceret.map((x) => ({ ...x, kategori: katMap.get(x.id)?.kategori || '', navn: katMap.get(x.id)?.navn || x.id })),
         };
         tilstand.alternativer = null;
-        render();
+        saet({ ...projekt, sidsteForslag: { ikkePlaceret: a.ikkePlaceret } });
     },
     fortrydAlternativ() {
         const alt = tilstand.alternativer;

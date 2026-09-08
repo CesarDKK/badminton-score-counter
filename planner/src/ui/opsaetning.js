@@ -122,6 +122,10 @@ function dagePanel(p) {
                     <option value="slot" ${p.opsaetning.kampVarighed === 'slot' ? 'selected' : ''}>et helt slot (streng)</option>
                 </select></label>
         </div>
+        <div class="raekke-knapper" style="margin-top:14px; gap:22px">
+            <label class="valg" title="Fra din gamle prompt (regel A3): i samme række må HS og HD ikke ligge samtidig, DS og DD ikke, og MD ikke sammen med nogen af dem. Tjek advarer, og forslaget undgår det."><input type="checkbox" data-opsaetning="antiSamtidighed" ${p.opsaetning.antiSamtidighed !== false ? 'checked' : ''}> undgå single og double samtidig i samme række</label>
+            <label class="valg" title="Blødt mål i forslaget: alle puljers runde 1 spilles før runde 2 osv. inden for hvert event. Giver et mere overskueligt program, men ofte lidt længere haltid."><input type="checkbox" data-opsaetning="puljerunderSynkront" ${p.opsaetning.puljerunderSynkront ? 'checked' : ''}> puljerunder synkront på tværs af puljer</label>
+        </div>
         <p class="panel-sub">Reglementet: mindst 10 min pause i A–D-rækker, 15 i M, 20 i E, og 12 når M og A–D spilles i samme turnering. Med "minimumstid" må to 20-min-kampe for samme spiller ligge i naboslots ved 30-min slots (20 + 10 = 30); med "et helt slot" skal der være slot + pause mellem starttiderne.</p>
     </section>`;
 }
@@ -226,7 +230,12 @@ function raekkePanel(p) {
                 <td class="tal">${t.ialt}</td>
                 <td class="daempet">${fordeling}</td>
                 <td class="tal">${t.medTid}</td>
-                <td>${k.type === 'single' ? `<label class="valg"><input type="checkbox" data-halv="${esc(k.id)}" ${k.halvBane ? 'checked' : ''}> halv bane</label>` : ''}</td>
+                <td>${k.type === 'single' ? `<label class="valg"><input type="checkbox" data-halv="${esc(k.id)}" ${k.halvBane ? 'checked' : ''}> halv bane</label>` : ''}
+                    <select data-prioritet="${esc(k.id)}" title="Forrang i forslaget: kategorier med høj prioritet får plads først, lav prioritet fylder op til sidst">
+                        <option value="1" ${k.prioritet === 1 ? 'selected' : ''}>høj prioritet</option>
+                        <option value="0" ${!k.prioritet ? 'selected' : ''}>normal</option>
+                        <option value="-1" ${k.prioritet === -1 ? 'selected' : ''}>lav prioritet</option>
+                    </select></td>
             </tr>`);
         }
     }
@@ -316,9 +325,11 @@ function bind(container, projekt, h) {
         const el = e.target;
         if (el instanceof HTMLSelectElement) {
             if (el.dataset.felt === 'kampVarighed') h.opsaetning({ kampVarighed: el.value });
+            else if (el.dataset.prioritet) h.kategori(el.dataset.prioritet, { prioritet: Number(el.value) || 0 });
             return;
         }
         if (!(el instanceof HTMLInputElement)) return;
+        if (el.dataset.opsaetning) { h.opsaetning({ [el.dataset.opsaetning]: el.checked }); return; }
         if (el.id === 'tpFil' || el.id === 'projektFil') {
             const fil = el.files[0];
             if (fil) (el.id === 'tpFil' ? h.aabnTP : h.aabnProjekt)(fil);

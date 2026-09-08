@@ -7,7 +7,7 @@
 // max kampe pr. dag og rækkens dage. Låste kampe (projekt.laast) beholder
 // deres tid; alt andet placeres forfra.
 import { minutter } from './tp-reader.js';
-import { slotsForDag, puljeKapacitet, puljeFor } from './kapacitet.js';
+import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt, baneSlots } from './kapacitet.js';
 import { reglerFor } from './store.js';
 import { minKampMin, pauseForRaekke, tidsvindue } from './rules.js';
 
@@ -18,7 +18,7 @@ const AARSAG_RANG = {
     'ingen ledig bane': 6, 'ingen ledig reserveret bane': 6,
     'spiller mangler pause': 5, 'spiller er i en anden kamp i slottet': 5, 'spiller har max kampe den dag': 5,
     'uden for tidsvinduet': 4, 'før rækkens tidligste start': 4, 'efter rækkens seneste slut': 4,
-    'rækken spiller ikke den dag': 3,
+    'rækken spiller ikke den dag': 3, 'single og double samtidig i rækken': 3,
     'bygger på en senere kamp': 2, 'bygger på en kamp uden tid': 1,
 };
 
@@ -85,6 +85,8 @@ export function lavForslag(projekt, valg = {}) {
     const historik = new Map();      // spillerId → [{ kamp, dag, min, kendt }]
     const kendteKampePrDag = new Map(); // `${spiller}|${dag}` → antal
     const slotBrug = new Map();      // `${dag}|${slot}|${pulje}` → { hele, halve, kampe: [] }
+    const slotKampe = new Map();     // `${dag}|${slot}` → [kampe] på tværs af puljer (til anti-samtidighed)
+    const antiSamtidighed = projekt.opsaetning.antiSamtidighed !== false;
     const dagMap = new Map(dage.map((d) => [d.dato, d]));
     const kapCache = new Map();      // `${dag}|${slot}` → { faelles, reserveret }
     const kapFor = (dagDato, slot) => {
@@ -111,6 +113,9 @@ export function lavForslag(projekt, valg = {}) {
         const brug = brugFor(dag, slot, puljeForKamp(k, dag, slot));
         if (kat(k)?.halvBane) brug.halve += 1; else brug.hele += 1;
         brug.kampe.push(k);
+        const sn = `${dag}|${slot}`;
+        if (!slotKampe.has(sn)) slotKampe.set(sn, []);
+        slotKampe.get(sn).push(k);
         const kendte = new Set(k.spillere);
         for (const s of k.muligeSpillere) {
             if (!historik.has(s)) historik.set(s, []);
@@ -142,6 +147,14 @@ export function lavForslag(projekt, valg = {}) {
         if (r.senest && slotStart + slotMin > minutter(r.senest)) return 'efter rækkens seneste slut';
         const v = tidsvindue(r.aargang, dag, regler);
         if (slotStart < v.fra || slotStart + slotMin > v.til) return 'uden for tidsvinduet';
+        // Anti-samtidighed: HS/HD, DS/DD og MD i samme række ikke i samme slot
+        if (antiSamtidighed) {
+            const egenKat = kat(k);
+            for (const x of slotKampe.get(`${dag.dato}|${slot}`) || []) {
+                const xk = kat(x);
+                if (xk && egenKat && xk.raekke === egenKat.raekke && katKonflikt(egenKat.kat, xk.kat)) return 'single og double samtidig i rækken';
+            }
+        }
         for (const dep of k.afhaengerAf) {
             const t = tidFor.get(dep);
             if (!t) return 'bygger på en kamp uden tid';
@@ -230,6 +243,8 @@ export function lavForslag(projekt, valg = {}) {
     };
     const noegler = {
         frist: (k, dagSet, dagDato, dagObj) => fristFor(k, dagObj),
+        prioritet: (k) => -(kat(k)?.prioritet || 0),           // kategoriens forrang (fane 1): høj = 1, lav = -1
+        rundeIEvent: (k) => (k.fase === 'pulje' ? k.runde || 0 : 0), // puljerunder synkront: alle R1 før R2 …
         tilfaeldig: (k) => tilfaeldig(k.id),
         rang: (k) => rang.get(k.kategori) ?? 999,
         spillet: (k, dagSet, dagDato) => -spilletAndel(k, dagSet, dagDato),
@@ -238,7 +253,10 @@ export function lavForslag(projekt, valg = {}) {
         gruppe: (k) => k.gruppe || '',
         id: (k) => k.id,
     };
-    const prioritet = valg.prioritet || ['frist', 'spillet', 'dybde', 'rang', 'runde', 'gruppe', 'id'];
+    const synkront = projekt.opsaetning.puljerunderSynkront === true;
+    const prioritet = valg.prioritet
+        ? ['frist', 'prioritet', ...valg.prioritet.filter((n) => n !== 'frist' && n !== 'prioritet')]
+        : ['frist', 'prioritet', ...(synkront ? ['rundeIEvent'] : []), 'spillet', 'dybde', 'rang', 'runde', 'gruppe', 'id'];
 
     for (const dag of dage) {
         if (kunDage && !kunDage.has(dag.dato)) continue;
@@ -337,6 +355,7 @@ export const ALTERNATIV_VARIANTER = [
     { navn: 'Rækkens rækkefølge', beskrivelse: 'Mix, single, double tages færdig i rækkefølge, før nye kategorier starter.', prioritet: ['frist', 'rang', 'spillet', 'dybde', 'runde', 'gruppe', 'id'] },
     { navn: 'Lange kæder først', beskrivelse: 'Puljer, der fører til lange cupper, kommer i gang først.', prioritet: ['frist', 'dybde', 'spillet', 'rang', 'runde', 'gruppe', 'id'] },
     { navn: 'Puljer samlet', beskrivelse: 'Hver pulje spilles færdig i sammenhæng.', prioritet: ['frist', 'spillet', 'gruppe', 'runde', 'rang', 'dybde', 'id'] },
+    { navn: 'Puljerunder synkront', beskrivelse: 'Alle puljers runde 1 før runde 2 osv. inden for hvert event.', prioritet: ['frist', 'rundeIEvent', 'spillet', 'dybde', 'rang', 'runde', 'gruppe', 'id'] },
     { navn: 'Variation A', beskrivelse: 'Som "Kortest haltid" med anden rækkefølge blandt ligestillede kampe.', prioritet: ['frist', 'spillet', 'dybde', 'tilfaeldig', 'id'], seed: 11 },
     { navn: 'Variation B', beskrivelse: 'Som "Kortest haltid" med anden rækkefølge blandt ligestillede kampe.', prioritet: ['frist', 'spillet', 'dybde', 'tilfaeldig', 'id'], seed: 23 },
     { navn: 'Variation C', beskrivelse: 'Som "Kortest haltid" med anden rækkefølge blandt ligestillede kampe.', prioritet: ['frist', 'spillet', 'tilfaeldig', 'id'], seed: 37 },
@@ -362,4 +381,62 @@ export function lavAlternativer(projekt, valg = {}) {
     const slutSum = (s) => Object.values(s.slutPrDag).reduce((sum, t) => sum + minutter(t), 0);
     ud.sort((a, b) => a.ikkePlaceret.length - b.ikkePlaceret.length || a.statistik.haltidMin - b.statistik.haltidMin || slutSum(a.statistik) - slutSum(b.statistik));
     return ud;
+}
+
+// ── Løsningsforslag ───────────────────────────────────────────
+
+/**
+ * Konkrete forslag ud fra kampe uden plads (fra lavForslag): pr. årsag og dag
+ * regnes ud, hvor meget der mangler — flere slots, flere baner, længere
+ * tidsrum for rækken eller færre kampe. Returnerer [{ tekst }].
+ */
+export function loesningsforslag(projekt, ikkePlaceret) {
+    if (!ikkePlaceret?.length) return [];
+    const { slotMin, dage } = projekt.opsaetning;
+    const katMap = new Map(projekt.kategorier.map((k) => [k.id, k]));
+    const raekkeMap = new Map(projekt.raekker.map((r) => [r.id, r]));
+    const kampMap = new Map(projekt.kampe.map((k) => [k.id, k]));
+    const ud = [];
+    const grupper = new Map(); // `${aarsag}|${raekke}` → [kamp]
+    for (const x of ikkePlaceret) {
+        const k = kampMap.get(x.id);
+        if (!k) continue;
+        const n = `${x.aarsag}|${katMap.get(k.kategori)?.raekke || ''}`;
+        if (!grupper.has(n)) grupper.set(n, []);
+        grupper.get(n).push(k);
+    }
+    const plusMin = (klokke, min) => klokkeFraMin(minutter(klokke) + min);
+    for (const [n, kampe] of grupper) {
+        const [aarsag, raekkeId] = n.split('|');
+        const r = raekkeMap.get(raekkeId);
+        const halve = kampe.filter((k) => katMap.get(k.kategori)?.halvBane).length;
+        const baneSlotsNoedvendige = (kampe.length - halve) + Math.ceil(halve / 2);
+        const rDage = (r?.dage || []).map((d) => dage.find((x) => x.dato === d)).filter(Boolean);
+        const sidsteDag = rDage[rDage.length - 1];
+        const baner = r?.reserveredeBaner || sidsteDag?.baner || 1;
+        const slots = Math.ceil(baneSlotsNoedvendige / baner);
+        const hvem = `${kampe.length} ${kampe.length === 1 ? 'kamp' : 'kampe'} i ${raekkeId}`;
+        if (aarsag === 'efter rækkens seneste slut' || aarsag === 'før rækkens tidligste start') {
+            if (r?.senest) ud.push({ tekst: `${hvem}: udvid rækkens tidsrum til ${plusMin(r.senest, slots * slotMin)} (nu ${r.tidligst || '–'}–${r.senest}), eller giv rækken flere reserverede baner.` });
+            else ud.push({ tekst: `${hvem}: rækkens tidsrum er for kort — udvid det med ca. ${slots} slots.` });
+        } else if (aarsag === 'ingen ledig reserveret bane') {
+            ud.push({ tekst: `${hvem}: giv rækken ${Math.ceil(baneSlotsNoedvendige / Math.max(1, rDage.length * 4))} reserverede baner mere, eller udvid dens tidsrum.` });
+        } else if (aarsag === 'ingen ledig bane' || aarsag === 'ingen ledig plads' || aarsag === 'uden for tidsvinduet') {
+            if (sidsteDag) ud.push({ tekst: `${hvem}: forlæng ${sidsteDag.dato} til ${plusMin(sidsteDag.slut, slots * slotMin)}, tilføj ${Math.ceil(baneSlotsNoedvendige / Math.max(1, baneSlots(sidsteDag, slotMin) / sidsteDag.baner))} bane${baneSlotsNoedvendige > 1 ? 'r' : ''} den dag, eller flyt rækken til en anden dag.` });
+            else ud.push({ tekst: `${hvem}: der mangler ${baneSlotsNoedvendige} bane-slots.` });
+        } else if (aarsag === 'rækken spiller ikke den dag' || aarsag === 'rækken har ingen dage') {
+            ud.push({ tekst: `${hvem}: rækken har ingen dag valgt under "Rækker og kategorier".` });
+        } else if (aarsag === 'spiller mangler pause' || aarsag === 'spiller er i en anden kamp i slottet' || aarsag === 'spiller har max kampe den dag') {
+            ud.push({ tekst: `${hvem}: spillernes pauser og kampe pr. dag fylder dagen — forlæng dagen, sænk pausen, eller lad rækken spille over flere dage.` });
+        } else if (aarsag === 'single og double samtidig i rækken') {
+            ud.push({ tekst: `${hvem}: single og double i rækken må ikke ligge samtidig — forlæng dagen, eller slå "undgå single og double samtidig" fra.` });
+        } else {
+            ud.push({ tekst: `${hvem}: ${aarsag}.` });
+        }
+    }
+    return ud;
+}
+
+function klokkeFraMin(min) {
+    return `${String(Math.floor(min / 60) % 24).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 }

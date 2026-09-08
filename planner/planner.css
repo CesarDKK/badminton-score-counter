@@ -407,3 +407,4 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 .alternativ-tekst { display: flex; flex-direction: column; gap: 2px; font-size: 0.88em; flex: 1 1 320px; }
 .alternativ-tekst b { color: #fff; font-weight: 600; }
 .alternativ-tekst .er-roed { color: var(--red-soft); }
+.loesninger { margin: 0 0 12px 18px; font-size: 0.88em; color: var(--amber); line-height: 1.5; }

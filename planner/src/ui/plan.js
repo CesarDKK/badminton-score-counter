@@ -5,7 +5,7 @@
 import { esc, datoTekst } from './dom.js';
 import { slotsForDag, banerISlot, puljeKapacitet } from '../kapacitet.js';
 import { alvorForKamp } from '../rules.js';
-import { bedoemPlan } from '../scheduler.js';
+import { bedoemPlan, loesningsforslag } from '../scheduler.js';
 
 const FASE_KORT = { pulje: 'P', cup: '', swiss: 'R' };
 const RUNDE_KORT = { 'Finale': 'Finale', 'Semifinale': 'Semi', 'Kvartfinale': 'Kvart', '1/8-finale': '1/8' };
@@ -205,7 +205,8 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
         ${laaste.size ? `<span class="maerke">🔒 ${laaste.size} låst</span>` : ''}
         <span class="daempet">${placeret.size} af ${projekt.kampe.length} kampe har tid · ${ikkePlacerede.length} mangler · haltid gns. ${statistik.haltidGnsMin} min pr. spiller pr. dag${Object.keys(statistik.slutPrDag).length ? ` · slut ${Object.entries(statistik.slutPrDag).map(([d, t]) => `${datoTekst(d, { kort: true })} ${t}`).join(', ')}` : ''}. Træk et kort til et slot, eller til listen til højre for at fjerne tiden. Klik viser spillerens andre kampe; dobbeltklik låser.</span>
     </p>
-    ${tilstand.forslag ? `<p class="plan-status forslag-info">${esc(tilstand.forslag.tekst)}${tilstand.forslag.ikkePlaceret.length ? ` Ikke placeret: ${tilstand.forslag.ikkePlaceret.slice(0, 6).map((x) => `${esc(x.kategori)} ${esc(x.navn)} (${esc(x.aarsag)})`).join('; ')}${tilstand.forslag.ikkePlaceret.length > 6 ? ' …' : ''}` : ''}</p>` : ''}
+    ${tilstand.forslag ? `<p class="plan-status forslag-info">${esc(tilstand.forslag.tekst)}${tilstand.forslag.ikkePlaceret.length ? ` Ikke placeret: ${tilstand.forslag.ikkePlaceret.slice(0, 6).map((x) => `${esc(x.kategori)} ${esc(x.navn)} (${esc(x.aarsag)})`).join('; ')}${tilstand.forslag.ikkePlaceret.length > 6 ? ' …' : ''}` : ''}</p>
+    ${tilstand.forslag.ikkePlaceret.length ? `<ul class="loesninger">${loesningsforslag(projekt, tilstand.forslag.ikkePlaceret).map((f) => `<li>${esc(f.tekst)}</li>`).join('')}</ul>` : ''}` : ''}
     <div class="plan-layout">
         <div class="gitter-hylster">
             <table class="gitter">
