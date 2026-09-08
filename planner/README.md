@@ -199,3 +199,21 @@ Pr. Swiss Ladder-kategori (fane 1, flueben "runder lige efter hinanden",
 forrige rundes sidste kamp uden pause imellem. Gælder både Tjek
 (swiss-runde-reglen) og forslaget. Pausen mod spillernes kampe i andre
 kategorier gælder stadig, og alle rundens spillere skal være fri i slottet.
+
+## Turneringsform pr. kategori (form.js)
+
+Ud for hver kategori i fane 1 vælges kilden til turneringsformen: **fra TP**
+(filens lodtrækning, standard), **automatisk**, **Swiss Ladder**, **pulje +
+cup** eller **pulje**. For alt andet end "fra TP" bygger planneren selv
+kampene ud fra kategoriens tilmeldinger i filen (`projekt.tilmeldinger`):
+puljer á 3–5 med slangeseedning efter ranglistepoint fra filen
+(`RankingEntry`/`RankingCategory`), cup for puljevinderne (eller de to bedste,
+valg pr. kategori) med standardseedning og byes, eller Swiss Ladder 4–6 runder
+med runde 1 parret efter seedning. "Automatisk" vælger den form, der opfylder
+reglementets minimum kampe pr. spiller med færrest bane-slots (eller "flest
+kampe" op til 6, valg under "Opskrift til lodtrækningen i TP"); kan intet
+opfylde minimum, vælges den form, der giver flest kampe til de færreste, og
+det markeres. TP's egne kampe gemmes i `projekt.tpKampe`, så "fra TP" kan
+vælges igen. Panelet "Opskrift til lodtrækningen i TP" viser, hvordan
+lodtrækningen skal laves. Åbnes en nyere fil, hvor TP nu har en lodtrækning
+for kategorien, sættes den automatisk tilbage til "fra TP".

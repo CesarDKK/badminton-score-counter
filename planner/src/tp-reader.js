@@ -141,6 +141,17 @@ export function laesTP(tabeller, valg = {}) {
     }
     const entryNavn = (entryId) => (entrySpillere.get(entryId) || []).map((id) => spillerNavn.get(id)).join(' / ') || `Tilmelding ${entryId}`;
 
+    // Ranglistepoint pr. spiller pr. kategori (RankingCategory: HS, DS, HD, DD, MD) — til seedning,
+    // når planneren selv bygger puljer (form.js).
+    const rankKat = new Map(tabeller.hent('RankingCategory').map((c) => [c.ID ?? c.id, c.name]));
+    for (const r of tabeller.hent('RankingEntry')) {
+        const s = spillere[`p${r.playerid}`];
+        if (!s) continue;
+        const navn = rankKat.get(r.rankingcategory) || `kat${r.rankingcategory}`;
+        if (!s.point) s.point = {};
+        if (r.points != null) s.point[navn] = r.points;
+    }
+
     // ── Kategorier (Event) og rækker ──
     const events = tabeller.hent('Event');
     const kategorier = [];
@@ -174,9 +185,13 @@ export function laesTP(tabeller, valg = {}) {
     // Tilmeldinger uden lodtrækning tælles direkte; ellers tælles positionerne
     // i lodtrækningen (reserver og udelukkede har ingen position), se nedenfor.
     const tilmeldingerUdenDraw = new Map();
+    const tilmeldinger = {}; // kategoriId → [{ entry, spillere }] — alle gyldige tilmeldinger (til form.js)
     for (const e of tabeller.hent('Entry')) {
         const k = kategoriPrEvent.get(e.event);
-        if (k && !e.exclude && (entrySpillere.get(e.id) || []).length) tilmeldingerUdenDraw.set(k.id, (tilmeldingerUdenDraw.get(k.id) || 0) + 1);
+        if (k && !e.exclude && (entrySpillere.get(e.id) || []).length) {
+            tilmeldingerUdenDraw.set(k.id, (tilmeldingerUdenDraw.get(k.id) || 0) + 1);
+            (tilmeldinger[k.id] = tilmeldinger[k.id] || []).push({ entry: e.id, spillere: entrySpillere.get(e.id) });
+        }
     }
 
     // ── Lodtrækninger (Draw) og kampe (PlayerMatch) ──
@@ -511,6 +526,7 @@ export function laesTP(tabeller, valg = {}) {
         kategorier,
         spillere,
         kampe,
+        tilmeldinger,
         bemaerkninger,
     };
 }

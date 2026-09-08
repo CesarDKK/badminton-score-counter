@@ -184,6 +184,8 @@ const handlers = {
     pause: (klasse, v) => saet(store.opdaterPause(projekt, klasse, v)),
     regler: (sti, v) => saet(store.opdaterRegler(projekt, sti, v)),
     nulstilRegler: () => saet(store.nulstilRegler(projekt)),
+    form: (id, aendringer) => saet(store.saetForm(projekt, id, aendringer)),
+    formKriterie: (v) => saet(store.opdaterFormKriterie(projekt, v)),
 };
 
 // ── Handlinger: fane 2 og 3 ───────────────────────────────────

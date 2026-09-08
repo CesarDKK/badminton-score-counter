@@ -4,6 +4,7 @@ import { esc, datoTekst, procent, tal } from './dom.js';
 import { kapacitetPrDag, kampePrKategori, slotsForDag, baneSlots } from '../kapacitet.js';
 import { foerSkoledag } from '../rules.js';
 import { reglerFor, STANDARD_REGLER } from '../store.js';
+import { FORM_VALG, FORM_VALG_TEKST, formTekst } from '../form.js';
 
 const FORM_TEKST = {
     'pulje': 'Pulje', 'pulje-cup': 'Pulje + cup', 'cup': 'Cup', 'dobbelt-pulje': 'Dobbelt pulje',
@@ -11,7 +12,7 @@ const FORM_TEKST = {
 };
 
 export function renderOpsaetning(container, projekt, handlers) {
-    container.innerHTML = [filPanel(projekt), ...(projekt ? [turneringPanel(projekt), dagePanel(projekt), reglerPanel(projekt), raekkePanel(projekt), kapacitetPanel(projekt)] : [])].join('');
+    container.innerHTML = [filPanel(projekt), ...(projekt ? [turneringPanel(projekt), dagePanel(projekt), reglerPanel(projekt), raekkePanel(projekt), opskriftPanel(projekt), kapacitetPanel(projekt)] : [])].join('');
     // Lytterne sættes på beholderen én gang og læser det aktuelle projekt herfra,
     // så de ikke hober sig op ved hver gentegning.
     container._projekt = projekt;
@@ -225,7 +226,15 @@ function raekkePanel(p) {
             rows.push(`
             <tr>
                 <td class="indrykket">${esc(k.id)}</td>
-                <td>${esc(FORM_TEKST[k.form] || k.form)}${k.runder ? ` <span class="daempet">· ${k.runder} runder</span>` : ''}</td>
+                <td>
+                    <select data-form="${esc(k.id)}" title="Turneringsform: 'fra TP' bruger filens lodtrækning. Ellers bygger planneren selv kampene ud fra tilmeldingerne — 'automatisk' vælger den form, der opfylder reglementets minimum med færrest bane-slots.">
+                        ${FORM_VALG.map((v) => `<option value="${v}" ${(k.formValg || 'tp') === v ? 'selected' : ''}>${esc(FORM_VALG_TEKST[v])}</option>`).join('')}
+                    </select>
+                    ${(k.formValg || 'tp') === 'tp'
+                        ? `<span class="daempet">${esc(FORM_TEKST[k.form] || k.form)}${k.runder ? ` · ${k.runder} runder` : ''}</span>`
+                        : `${k.formForslag?.form === 'pulje-cup' || (k.formValg === 'auto' && k.formForslag?.form === 'pulje-cup') ? `<select data-cuptop="${esc(k.id)}" title="Hvem går videre fra puljerne til cuppen"><option value="1" ${(k.cupTop || 1) === 1 ? 'selected' : ''}>cup for vinderne</option><option value="2" ${k.cupTop === 2 ? 'selected' : ''}>cup for de to bedste</option></select>` : ''}
+                           <span class="${k.formForslag?.opfylderKrav === false ? 'maerke maerke--advarsel' : 'daempet'}">${esc(formTekst(k.formForslag))}</span>`}
+                </td>
                 <td class="tal">${k.tilmelde}</td>
                 <td class="tal">${t.ialt}</td>
                 <td class="daempet">${fordeling}</td>
@@ -248,6 +257,58 @@ function raekkePanel(p) {
             <table class="tabel">
                 <thead><tr><th>Kategori</th><th>Form</th><th class="tal">Tilmeldte</th><th class="tal">Kampe</th><th>Fordeling</th><th class="tal">Med tid</th><th></th></tr></thead>
                 <tbody>${rows.join('')}</tbody>
+            </table>
+        </div>
+    </section>`;
+}
+
+/** Opskrift til lodtrækningen i TP for kategorier, hvor planneren selv har bygget kampene. */
+function opskriftPanel(p) {
+    const egne = p.kategorier.filter((k) => (k.formValg || 'tp') !== 'tp');
+    const kriterie = p.opsaetning.formKriterie || 'faerrest';
+    const valg = `
+        <label class="felt"><span class="etiket">Automatisk form vælger</span>
+            <select data-felt="formKriterie">
+                <option value="faerrest" ${kriterie === 'faerrest' ? 'selected' : ''}>færrest bane-slots, der opfylder minimum</option>
+                <option value="flest" ${kriterie === 'flest' ? 'selected' : ''}>flest kampe pr. spiller (op til 6)</option>
+            </select></label>`;
+    if (!egne.length) {
+        return `
+    <section class="panel">
+        <div class="panel-hoved">
+            <div>
+                <h2>Turneringsform</h2>
+                <p class="panel-sub">Alle kategorier bruger TP's lodtrækning. Vælg "automatisk", Swiss Ladder, pulje + cup eller pulje ud for en kategori ovenfor, så bygger planneren selv kampene ud fra tilmeldingerne (puljer á 3–5 seedet efter ranglistepoint, Swiss Ladder 4–6 runder) og viser her, hvordan lodtrækningen skal laves i TP.</p>
+            </div>
+            ${valg}
+        </div>
+    </section>`;
+    }
+    return `
+    <section class="panel">
+        <div class="panel-hoved">
+            <div>
+                <h2>Opskrift til lodtrækningen i TP <span class="maerke">${egne.length}</span></h2>
+                <p class="panel-sub">Disse kategorier bruger planneren-byggede kampe. Lav lodtrækningen sådan i TP, gem filen og åbn den igen — så bruges TP's kampe, og "Lav forslag" laver planen forfra for dem.</p>
+            </div>
+            ${valg}
+        </div>
+        <div class="tabel-hylster">
+            <table class="tabel">
+                <thead><tr><th>Kategori</th><th>Valg</th><th class="tal">Tilmeldte</th><th>Sådan i TP</th><th class="tal">Kampe</th><th class="tal">Bane-slots</th><th>Kampe pr. spiller</th></tr></thead>
+                <tbody>${egne.map((k) => {
+                    const f = k.formForslag;
+                    const n = (p.tilmeldinger?.[k.id] || []).length;
+                    return `<tr>
+                        <td>${esc(k.id)}</td>
+                        <td>${esc(FORM_VALG_TEKST[k.formValg])}</td>
+                        <td class="tal">${n}</td>
+                        <td>${f ? esc(f.tekst) : '<span class="daempet">ingen kampe (under 2 tilmeldte)</span>'}</td>
+                        <td class="tal">${f ? f.kampe : 0}</td>
+                        <td class="tal">${f ? tal(f.baneSlots, f.baneSlots % 1 ? 1 : 0) : 0}</td>
+                        <td>${f ? `${f.minKampe}–${f.maxKampe}${f.opfylderKrav ? ` <span class="maerke maerke--ok">≥ ${f.krav}</span>` : ` <span class="maerke maerke--advarsel">under kravet på ${f.krav}</span>`}` : ''}</td>
+                    </tr>`;
+                }).join('')}</tbody>
             </table>
         </div>
     </section>`;
@@ -326,7 +387,10 @@ function bind(container, projekt, h) {
         const el = e.target;
         if (el instanceof HTMLSelectElement) {
             if (el.dataset.felt === 'kampVarighed') h.opsaetning({ kampVarighed: el.value });
+            else if (el.dataset.felt === 'formKriterie') h.formKriterie(el.value);
             else if (el.dataset.prioritet) h.kategori(el.dataset.prioritet, { prioritet: Number(el.value) || 0 });
+            else if (el.dataset.form) h.form(el.dataset.form, { formValg: el.value });
+            else if (el.dataset.cuptop) h.form(el.dataset.cuptop, { cupTop: Number(el.value) || 1 });
             return;
         }
         if (!(el instanceof HTMLInputElement)) return;
