@@ -61,7 +61,7 @@ export function formMuligheder(n, { halvBane = false, cupTop = 1, minSwissRunder
             const ck = cupKampe(videre);
             const runder = Math.ceil(Math.log2(videre));
             ud.push({ form: 'pulje-cup', stoerrelse: s, puljer, cupTop, cupDeltagere: videre, cupRunder: runder, kampe: pk + ck, baneSlots: slots(pk + ck), minKampe: min, maxKampe: Math.max(...puljer) - 1 + runder,
-                tekst: `${puljer.length} puljer (${puljer.join(', ')}) + cup for ${cupTop === 1 ? 'vinderne' : 'de to bedste'} (${videre} deltagere, ${runder} runder)` });
+                tekst: `${puljer.length} puljer (${puljer.join(', ')}) + cup for ${cupTop === 1 ? 'vinderne' : 'de to bedste'} (${videre} deltagere, ${runder} ${runder === 1 ? 'runde' : 'runder'})` });
         }
     }
     if (n === 2) ud.push({ form: 'pulje', stoerrelse: 2, puljer: [2], kampe: 1, baneSlots: slots(1), minKampe: 1, maxKampe: 1, tekst: 'én kamp' });
