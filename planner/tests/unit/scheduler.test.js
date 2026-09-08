@@ -323,3 +323,27 @@ describe('scheduler: anti-samtidighed, prioritet, synkrone puljerunder, loesning
         if (f3.brud.some((x) => x.brud === 'pause')) assert.ok(l3.some((x) => /Sæt pausen for .* til \d+ min/.test(x.tekst)), l3.map((x) => x.tekst).join(' | '));
     });
 });
+
+describe('scheduler/rules: Swiss Ladder med runder lige efter hinanden', () => {
+    const medValg = (p, vaerdi) => ({ ...p, kategorier: p.kategorier.map((k) => (k.id === 'U09 D HS' ? { ...k, swissUdenPause: vaerdi } : k)) });
+    test('streng pausefortolkning: uden valget hver anden slot, med valget naboslots', () => {
+        const p = opdaterOpsaetning(projekt(), { kampVarighed: 'slot' }); // slot 30 + pause 10 → 60 min mellem runder
+        const t = (f, id) => { const [h, m] = f.plan[id].slot.split(':').map(Number); return h * 60 + m; };
+        const f0 = lavForslag(p);
+        assert.ok(t(f0, '5:r2:1') - t(f0, '5:1') >= 60, 'runde 2 mindst 60 min efter runde 1');
+        const p1 = medValg(p, true);
+        const f1 = lavForslag(p1);
+        assert.equal(t(f1, '5:r2:1') - t(f1, '5:1'), 30, 'runde 2 i slottet lige efter');
+        assert.equal(t(f1, '5:r3:1') - t(f1, '5:r2:1'), 30);
+        assert.deepEqual(fejl(anvendForslag(p1, f1)), [], 'Tjek accepterer det med valget');
+        // Samme plan uden valget: Tjek melder swiss-runde-fejl
+        const q = anvendForslag(medValg(p, false), f1);
+        assert.ok(fejl(q).some((x) => x.type === 'swiss-runde'));
+    });
+    test('valget bevares ved genindlaesning', async () => {
+        const { genindlaes } = await import('../../src/store.js');
+        const p = medValg(projekt(), true);
+        const p2 = genindlaes(p, model(), { behold: true });
+        assert.equal(p2.kategorier.find((k) => k.id === 'U09 D HS').swissUdenPause, true);
+    });
+});

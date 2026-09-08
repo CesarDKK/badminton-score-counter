@@ -132,6 +132,7 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
         id: k.id, raekke: k.raekke, aargang: k.aargang, kat: k.kat, type: k.type, mix: k.mix,
         form: k.form, halvBane: k.halvBane, tilmelde: k.tilmeldte, antalKampe: k.kampe, runder: k.runder,
         prioritet: 0, // forrang i forslaget: 1 = høj, 0 = normal, -1 = lav
+        swissUdenPause: false, // Swiss Ladder: runder lige efter hinanden uden pause imellem
     }));
 
     const harM = model.raekker.some((r) => r.raekke === 'M');
@@ -178,7 +179,7 @@ export function genindlaes(projekt, model, valg = { behold: true }) {
     const raekker = nyt.raekker.map((r) => projekt.raekker.find((x) => x.id === r.id) || r);
     const kategorier = nyt.kategorier.map((k) => {
         const gammel = projekt.kategorier.find((x) => x.id === k.id);
-        return gammel ? { ...k, halvBane: gammel.halvBane, prioritet: gammel.prioritet || 0 } : k;
+        return gammel ? { ...k, halvBane: gammel.halvBane, prioritet: gammel.prioritet || 0, swissUdenPause: !!gammel.swissUdenPause } : k;
     });
     const dage = nyt.opsaetning.dage.map((d) => projekt.opsaetning.dage.find((x) => x.dato === d.dato) || d);
     return {

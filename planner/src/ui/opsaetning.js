@@ -231,6 +231,7 @@ function raekkePanel(p) {
                 <td class="daempet">${fordeling}</td>
                 <td class="tal">${t.medTid}</td>
                 <td>${k.type === 'single' ? `<label class="valg"><input type="checkbox" data-halv="${esc(k.id)}" ${k.halvBane ? 'checked' : ''}> halv bane</label>` : ''}
+                    ${k.form === 'swiss' ? `<label class="valg" title="Swiss Ladder: næste runde må begynde i slottet lige efter forrige rundes sidste kamp, uden pause imellem. Pausen mod kampe i andre kategorier gælder stadig."><input type="checkbox" data-swiss-uden-pause="${esc(k.id)}" ${k.swissUdenPause ? 'checked' : ''}> runder lige efter hinanden</label>` : ''}
                     <select data-prioritet="${esc(k.id)}" title="Forrang i forslaget: kategorier med høj prioritet får plads først, lav prioritet fylder op til sidst">
                         <option value="1" ${k.prioritet === 1 ? 'selected' : ''}>høj prioritet</option>
                         <option value="0" ${!k.prioritet ? 'selected' : ''}>normal</option>
@@ -356,5 +357,6 @@ function bind(container, projekt, h) {
             h.raekke(d.raekke, { dage });
         } else if (d.disp) h.raekke(d.disp, { dispensationFlereDage: el.checked });
         else if (d.halv) h.kategori(d.halv, { halvBane: el.checked });
+        else if (d.swissUdenPause) h.kategori(d.swissUdenPause, { swissUdenPause: el.checked });
     });
 }
