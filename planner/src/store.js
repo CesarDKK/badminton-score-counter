@@ -2,6 +2,7 @@
 // Persistens (localStorage, JSON-fil) ligger i gem/hent-hjælperne nederst og
 // kan bruges fra app.js; alt andet er testbart i Node.
 import { planFraTP, minutter } from './tp-reader.js';
+import { foreslaaForm, byggKampe, seedTilmeldinger } from './form.js';
 
 export const PROJEKT_VERSION = 1;
 export const GEM_NOEGLE = 'planner.projekt.v1';
@@ -133,6 +134,8 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
         form: k.form, halvBane: k.halvBane, tilmelde: k.tilmeldte, antalKampe: k.kampe, runder: k.runder,
         prioritet: 0, // forrang i forslaget: 1 = høj, 0 = normal, -1 = lav
         swissUdenPause: false, // Swiss Ladder: runder lige efter hinanden uden pause imellem
+        formValg: 'tp',        // 'tp' = TP's lodtrækning; ellers bygger planneren selv kampene (form.js)
+        cupTop: 1,             // pulje + cup: 1 = vinderne, 2 = de to bedste
     }));
 
     const harM = model.raekker.some((r) => r.raekke === 'M');
@@ -147,6 +150,7 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
             kampVarighed: 'minimum', // 'minimum' = reglementets minimumstid (som TP), 'slot' = et helt slot
             antiSamtidighed: true,   // HS/HD, DS/DD og MD i samme række ikke samtidig (advarsel + undgås i forslag)
             puljerunderSynkront: false, // alle puljers runde 1 før runde 2 … (blødt mål i forslaget)
+            formKriterie: 'faerrest', // 'faerrest' bane-slots eller 'flest' kampe pr. spiller (form.js)
             regler: klon(STANDARD_REGLER),
             pauseMin: { ...STANDARD_PAUSE, faelles: harM && harABCD ? STANDARD_PAUSE.faelles : null },
             dage,
@@ -155,6 +159,8 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
         kategorier,
         spillere: model.spillere,
         kampe: model.kampe,
+        tpKampe: model.kampe,                    // TP's egne kampe — bruges når en kategori sættes tilbage til "fra TP"
+        tilmeldinger: model.tilmeldinger || {},  // tilmeldinger pr. kategori — til at bygge kampe selv (form.js)
         plan,
         vinduer: [],
         kvitteret: [],
@@ -179,10 +185,13 @@ export function genindlaes(projekt, model, valg = { behold: true }) {
     const raekker = nyt.raekker.map((r) => projekt.raekker.find((x) => x.id === r.id) || r);
     const kategorier = nyt.kategorier.map((k) => {
         const gammel = projekt.kategorier.find((x) => x.id === k.id);
-        return gammel ? { ...k, halvBane: gammel.halvBane, prioritet: gammel.prioritet || 0, swissUdenPause: !!gammel.swissUdenPause } : k;
+        if (!gammel) return k;
+        // Har den nye fil en lodtrækning for kategorien, er den lavet i TP → tilbage til "fra TP"
+        const harTpKampe = model.kampe.some((x) => x.kategori === k.id);
+        return { ...k, halvBane: gammel.halvBane, prioritet: gammel.prioritet || 0, swissUdenPause: !!gammel.swissUdenPause, formValg: harTpKampe ? 'tp' : (gammel.formValg || 'tp'), cupTop: gammel.cupTop || 1 };
     });
     const dage = nyt.opsaetning.dage.map((d) => projekt.opsaetning.dage.find((x) => x.dato === d.dato) || d);
-    return {
+    return genberegnKampe({
         ...nyt,
         opsaetning: { ...projekt.opsaetning, dage },
         raekker,
@@ -191,7 +200,7 @@ export function genindlaes(projekt, model, valg = { behold: true }) {
         vinduer: projekt.vinduer || [],
         kvitteret: projekt.kvitteret || [],
         laast: (projekt.laast || []).filter((id) => plan[id]),
-    };
+    });
 }
 
 /** Sætter slotlængden (5-min trin, mindst 5). */
@@ -315,4 +324,51 @@ export function laasKategori(projekt, kategoriId, vaerdi = true) {
 /** Lægger et forslag fra scheduler.js ind som planen. */
 export function anvendForslag(projekt, forslag) {
     return { ...projekt, plan: { ...forslag.plan } };
+}
+
+// ── Turneringsform pr. kategori (form.js) ─────────────────────
+
+/**
+ * Genberegner projektets kampe: kategorier med formValg 'tp' bruger TP's
+ * kampe (tpKampe); de øvrige får kampe bygget af form.js ud fra
+ * tilmeldingerne. Plan, lås og sidste forslag renses for kampe, der forsvinder.
+ */
+export function genberegnKampe(projekt) {
+    const tp = projekt.tpKampe || projekt.kampe;
+    const regler = reglerFor(projekt);
+    const raekkeMap = new Map(projekt.raekker.map((r) => [r.id, r]));
+    const kampe = [];
+    const kategorier = projekt.kategorier.map((k) => {
+        const valg = k.formValg || 'tp';
+        if (valg === 'tp') {
+            kampe.push(...tp.filter((x) => x.kategori === k.id));
+            return { ...k, formForslag: null };
+        }
+        const raa = projekt.tilmeldinger?.[k.id] || [];
+        const seedet = seedTilmeldinger(raa, projekt.spillere, k.kat);
+        const form = foreslaaForm(seedet.length, k, raekkeMap.get(k.raekke), regler, { form: valg, cupTop: k.cupTop || 1, kriterie: projekt.opsaetning.formKriterie || 'faerrest' });
+        kampe.push(...byggKampe(k, seedet, form));
+        return { ...k, formForslag: form };
+    });
+    const ids = new Set(kampe.map((k) => k.id));
+    const plan = {};
+    for (const [id, p] of Object.entries(projekt.plan || {})) if (ids.has(id)) plan[id] = p;
+    return {
+        ...projekt,
+        kategorier,
+        kampe,
+        plan,
+        laast: (projekt.laast || []).filter((id) => ids.has(id)),
+        sidsteForslag: projekt.sidsteForslag ? { ikkePlaceret: (projekt.sidsteForslag.ikkePlaceret || []).filter((x) => ids.has(x.id)) } : projekt.sidsteForslag,
+    };
+}
+
+/** Sætter turneringsform (og evt. cupTop) for en kategori og genberegner kampene. */
+export function saetForm(projekt, kategoriId, aendringer) {
+    return genberegnKampe(opdaterKategori(projekt, kategoriId, aendringer));
+}
+
+/** Kriterie for automatisk form: 'faerrest' bane-slots eller 'flest' kampe. */
+export function opdaterFormKriterie(projekt, kriterie) {
+    return genberegnKampe(opdaterOpsaetning(projekt, { formKriterie: kriterie }));
 }
