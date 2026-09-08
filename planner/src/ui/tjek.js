@@ -64,8 +64,8 @@ export function renderTjek(container, projekt, tjek, handlers) {
     container.innerHTML = `
         ${forslag.length ? `
         <section class="panel">
-            <h2>Kampe uden plads i sidste forslag <span class="maerke maerke--advarsel">${sidste.ikkePlaceret.length}</span></h2>
-            <p class="panel-sub">Planlæggeren kunne ikke finde plads til alle kampe. Sådan kan det løses:</p>
+            <h2>Kampe placeret med regelbrud i sidste forslag <span class="maerke maerke--advarsel">${sidste.ikkePlaceret.length}</span></h2>
+            <p class="panel-sub">Alle kampe har fået en tid, men disse kunne kun placeres ved at bryde en regel. Sådan kan det løses:</p>
             <ul class="problemer">${forslag.map((f) => `<li><span>${esc(f.tekst)}</span></li>`).join('')}</ul>
         </section>` : ''}
         ${afsnit('fejl', 'Fejl', 'Ingen fejl — planen overholder de hårde regler.')}

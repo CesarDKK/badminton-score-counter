@@ -91,16 +91,22 @@ describe('scheduler: syntetisk turnering', () => {
         assert.ok(p.kampe.filter((k) => k.kategori !== 'U09 D HS').every((k) => f.plan[k.id].dag === '2026-11-21'), 'U11 D fylder lørdag først');
         p = opdaterRaekke(projekt(), 'U11 D', { dage: [] });
         f = lavForslag(p);
-        assert.equal(f.ikkePlaceret.length, 10);
-        assert.equal(f.ikkePlaceret[0].aarsag, 'rækken spiller ikke den dag');
+        assert.equal(f.ikkePlaceret.length, 0, 'alle kampe placeres alligevel');
+        assert.equal(f.brud.length, 10);
+        assert.ok(f.brud.every((x) => x.brud === 'dag'), 'bruddet er rækkens dage');
+        assert.equal(Object.keys(f.plan).length, p.kampe.length);
     });
     test('for lidt kapacitet giver "ikke placeret"', () => {
         let p = opdaterDag(projekt(), '2026-11-21', { baner: 1, slut: '10:00' });
         p = opdaterDag(p, '2026-11-22', { baner: 1, slut: '10:00' });
         const f = lavForslag(p);
-        assert.ok(f.ikkePlaceret.length > 0);
-        assert.ok(f.ikkePlaceret.every((x) => x.aarsag));
-        assert.deepEqual(fejl(anvendForslag(p, f)), [], 'det der er placeret, er lovligt');
+        assert.equal(f.ikkePlaceret.length, 0, 'alle kampe placeres');
+        assert.equal(Object.keys(f.plan).length, p.kampe.length);
+        assert.ok(f.brud.length > 0, 'men nogle med regelbrud');
+        assert.ok(f.brud.every((x) => x.brud && x.id));
+        assert.ok(fejl(anvendForslag(p, f)).length > 0, 'Tjek viser bruddene som fejl');
+        const l = loesningsforslag(p, f.brud);
+        assert.ok(l.length > 0 && l.every((x) => /forlæng|bane|dag|pause|tidsrum/i.test(x.tekst)), l.map((x) => x.tekst).join(' | '));
     });
     test('låste kampe beholder deres tid, og forslaget planlægger uden om dem', () => {
         let p = flytKamp(projekt(), '4:1', '2026-11-21', '12:00');
@@ -171,10 +177,11 @@ for (const [navn, moenster] of [['U13/U15 CD 2026', /U13/i], ['U9/U11 BCD 2025',
                 // så nogle U9-kampe mangler plads — som i Jespers egen plan, der løb til 17:30.
                 assert.deepEqual([u9.tidligst, u9.senest, u9.reserveredeBaner], ['12:00', '17:00', 5]);
                 const katMap = new Map(jesper.kampe.map((k) => [k.id, k.kategori]));
-                assert.ok(f.ikkePlaceret.every((x) => katMap.get(x.id).startsWith('U09')), 'kun U9-kampe mangler');
-                assert.ok(f.ikkePlaceret.length <= 12);
+                assert.equal(f.ikkePlaceret.length, 0, 'alle kampe placeres');
+                assert.ok(f.brud.every((x) => katMap.get(x.id).startsWith('U09')), 'kun U9-kampe med regelbrud');
+                assert.ok(f.brud.length <= 12 && f.brud.every((x) => x.brud === 'tidsrum'), 'bruddet er rækkens eget tidsrum');
                 const laengere = lavForslag(opdaterRaekke(jesper, 'U09 D', { senest: '18:00' }));
-                assert.equal(laengere.ikkePlaceret.length, 0, 'med vindue til 18:00 placeres alt');
+                assert.equal(laengere.ikkePlaceret.length + laengere.brud.length, 0, 'med vindue til 18:00 placeres alt uden brud');
                 assert.deepEqual(fejl(anvendForslag(jesper, laengere)), []);
                 // U9-runderne ligger lige efter hinanden: runde r+1 senest 60 min efter runde r
                 const swiss = jesper.kampe.filter((k) => k.kategori === 'U09 D HS');
@@ -192,11 +199,11 @@ describe('scheduler: raekkens eget tidsrum', () => {
         const u9 = p.kampe.filter((k) => k.kategori === 'U09 D HS');
         assert.ok(u9.every((k) => f.plan[k.id] && f.plan[k.id].slot >= '12:00' && f.plan[k.id].slot < '14:00'));
         assert.deepEqual(fejl(anvendForslag(p, f)), []);
-        const p2 = opdaterRaekke(projekt(), 'U09 D', { tidligst: '14:30', senest: '15:00' });
+        const p2 = opdaterRaekke(projekt(), 'U09 D', { dage: ['2026-11-21'], tidligst: '12:00', senest: '13:00' });
         const f2 = lavForslag(p2);
-        assert.ok(f2.ikkePlaceret.length > 0, 'for lille tidsrum giver ikke placerede');
-        assert.ok(f2.ikkePlaceret.every((x) => x.aarsag), 'alle har en årsag');
-        assert.ok(f2.ikkePlaceret.some((x) => /rækkens/.test(x.aarsag)), 'mindst én skyldes tidsrummet');
+        assert.equal(f2.ikkePlaceret.length, 0, 'alle placeres alligevel');
+        assert.ok(f2.brud.length > 0, 'for lille tidsrum giver regelbrud');
+        assert.ok(f2.brud.every((x) => x.brud === 'tidsrum'), 'bruddet er rækkens tidsrum');
     });
 });
 
@@ -295,13 +302,24 @@ describe('scheduler: anti-samtidighed, prioritet, synkrone puljerunder, loesning
         let p = opdaterDag(projekt(), '2026-11-21', { baner: 1, slut: '10:00' });
         p = opdaterDag(p, '2026-11-22', { baner: 1, slut: '10:00' });
         const f = lavForslag(p);
-        const l = loesningsforslag(p, f.ikkePlaceret);
+        const l = loesningsforslag(p, [...f.brud, ...f.ikkePlaceret]);
         assert.ok(l.length >= 1);
         assert.ok(l.every((x) => x.tekst.length > 10));
-        assert.ok(l.some((x) => /forlæng|tidsrum|bane/.test(x.tekst)), l.map((x) => x.tekst).join(' | '));
+        assert.ok(l.some((x) => /forlæng|tidsrum|bane/i.test(x.tekst)), l.map((x) => x.tekst).join(' | '));
         assert.deepEqual(loesningsforslag(p, []), []);
-        const p2 = opdaterRaekke(projekt(), 'U09 D', { tidligst: '14:30', senest: '15:00' });
-        const l2 = loesningsforslag(p2, lavForslag(p2).ikkePlaceret);
-        assert.ok(l2.some((x) => /udvid rækkens tidsrum til/.test(x.tekst)), l2.map((x) => x.tekst).join(' | '));
+        const p2 = opdaterRaekke(projekt(), 'U09 D', { dage: ['2026-11-21'], tidligst: '12:00', senest: '13:00' });
+        const f2 = lavForslag(p2);
+        assert.equal(f2.ikkePlaceret.length, 0);
+        assert.ok(f2.brud.some((x) => x.brud === 'tidsrum'));
+        const l2 = loesningsforslag(p2, f2.brud);
+        assert.ok(l2.some((x) => /Udvid tidsrummet til \d\d:\d\d/.test(x.tekst)), l2.map((x) => x.tekst).join(' | '));
+        // pause-brud: én bane, kort dag, streng pausefortolkning → nogle kampe faar for kort pause
+        let p3 = opdaterOpsaetning(projekt(), { kampVarighed: 'slot' });
+        p3 = opdaterDag(p3, '2026-11-21', { baner: 2, slut: '11:30' });
+        p3 = opdaterDag(p3, '2026-11-22', { baner: 2, slut: '11:30' });
+        const f3 = lavForslag(p3);
+        assert.equal(f3.ikkePlaceret.length, 0);
+        const l3 = loesningsforslag(p3, f3.brud);
+        if (f3.brud.some((x) => x.brud === 'pause')) assert.ok(l3.some((x) => /Sæt pausen for .* til \d+ min/.test(x.tekst)), l3.map((x) => x.tekst).join(' | '));
     });
 });
