@@ -196,6 +196,8 @@ export function lavForslag(projekt, valg = {}) {
             for (const x of h) {
                 if (x.dag !== dag.dato || !kanDeleSpillere(k, x.kamp)) continue;
                 if (x.min === slotStart) { if (lemp.samtidig) continue; return 'spiller er i en anden kamp i slottet'; }
+                // Swiss Ladder med "runder lige efter hinanden": ingen pause mellem rundens kampe, kun et senere slot
+                if (k.fase === 'swiss' && x.kamp.fase === 'swiss' && k.tpRef.draw === x.kamp.tpRef.draw && kat(k)?.swissUdenPause) continue;
                 const v2 = Math.max(varighed, varighedFor(x.kamp));
                 const p2 = Math.max(pause, pauseFor(x.kamp));
                 const gab = Math.abs(x.min - slotStart) - v2;

@@ -191,3 +191,11 @@ alvorlige først: anti-samtidighed → rækkens eget tidsrum → reserverede ban
 til 17:30", "tilføj 1 bane" osv. Tjek viser samtidig bruddene som fejl eller
 advarsler efter de almindelige regler. Alternativerne sorteres efter færrest
 brud, dernæst haltid.
+
+## Swiss Ladder: runder lige efter hinanden
+
+Pr. Swiss Ladder-kategori (fane 1, flueben "runder lige efter hinanden",
+`kategorier[].swissUdenPause`): næste runde må begynde i slottet lige efter
+forrige rundes sidste kamp uden pause imellem. Gælder både Tjek
+(swiss-runde-reglen) og forslaget. Pausen mod spillernes kampe i andre
+kategorier gælder stadig, og alle rundens spillere skal være fri i slottet.

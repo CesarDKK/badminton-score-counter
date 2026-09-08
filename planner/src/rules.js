@@ -213,9 +213,12 @@ export function tjekPlan(projekt) {
             const forrige = m.get(runde - 1);
             if (!forrige) continue;
             const k0 = kampMap.get(r.kampe[0]);
-            const pause = pauseForRaekke(pauseMin, raekke(k0)?.pauseKlasse);
-            const forSent = forrige.sidsteDag > r.dag || (forrige.sidsteDag === r.dag && r.foersteMin < forrige.sidsteMin + varighedFor(k0) + pause);
-            if (forSent) tilfoej({ type: 'swiss-runde', alvor: 'fejl', tekst: `${k0.kategori}: runde ${runde} begynder kl. ${r.foerste.slice(11)}, men runde ${runde - 1} slutter først kl. ${klokke(forrige.sidsteMin + varighedFor(k0))} (plus ${pause} min pause).`, kampe: [...r.kampe, ...forrige.kampe], dag: r.dag, slot: r.foerste.slice(11) });
+            // "Runder lige efter hinanden" (pr. Swiss-kategori): ingen pause, næste runde blot i et senere slot
+            const udenPause = !!kat(k0)?.swissUdenPause;
+            const pause = udenPause ? 0 : pauseForRaekke(pauseMin, raekke(k0)?.pauseKlasse);
+            const varighed = udenPause ? slotMin : varighedFor(k0);
+            const forSent = forrige.sidsteDag > r.dag || (forrige.sidsteDag === r.dag && r.foersteMin < forrige.sidsteMin + varighed + pause);
+            if (forSent) tilfoej({ type: 'swiss-runde', alvor: 'fejl', tekst: `${k0.kategori}: runde ${runde} begynder kl. ${r.foerste.slice(11)}, men runde ${runde - 1} slutter først kl. ${klokke(forrige.sidsteMin + varighed)}${pause ? ` (plus ${pause} min pause)` : ''}.`, kampe: [...r.kampe, ...forrige.kampe], dag: r.dag, slot: r.foerste.slice(11) });
         }
     }
 
