@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { lavForslag, bedoemPlan, lavAlternativer, ALTERNATIV_VARIANTER } from '../../src/scheduler.js';
+import { lavForslag, bedoemPlan, lavAlternativer, ALTERNATIV_VARIANTER, loesningsforslag } from '../../src/scheduler.js';
 import { tjekPlan } from '../../src/rules.js';
 import { nytProjekt, opdaterDag, opdaterRaekke, flytKamp, laasKamp, laasKategori, anvendForslag, opdaterOpsaetning } from '../../src/store.js';
 
@@ -248,5 +248,60 @@ describe('scheduler: alternative forslag', () => {
         let p = flytKamp(projekt(), '4:1', '2026-11-21', '12:00');
         p = laasKamp(p, '4:1');
         for (const a of lavAlternativer(p)) assert.deepEqual(a.plan['4:1'], { dag: '2026-11-21', slot: '12:00' }, a.navn);
+    });
+});
+
+describe('scheduler: anti-samtidighed, prioritet, synkrone puljerunder, loesningsforslag', () => {
+    test('anti-samtidighed: HS og DS i samme raekke maa gerne, HS og HD i samme raekke ikke i samme slot', () => {
+        // Byg en HD-kategori i U11 D med to nye spillere
+        const p0 = projekt();
+        p0.kategorier.push({ id: 'U11 D HD', eventId: 9, raekke: 'U11 D', aargang: 'U11', kat: 'HD', type: 'double', mix: false, form: 'pulje', tilmeldte: 2, kampe: 1, runder: 0, halvBane: false, prioritet: 0 });
+        p0.kampe.push({ id: 'hd1', kategori: 'U11 D HD', fase: 'pulje', gruppe: 'Pulje 1', runde: 1, navn: 'Pulje 1 #1 – #2', spillere: ['x1', 'x2', 'x3', 'x4'], muligeSpillere: ['x1', 'x2', 'x3', 'x4'], afhaengerAf: [], tpRef: { draw: 9 }, tpTid: null, varighed: 0 });
+        const f = lavForslag(p0);
+        const q = anvendForslag(p0, f);
+        const hd = q.plan.hd1;
+        const hsSamme = q.kampe.filter((k) => k.kategori === 'U11 D HS' && q.plan[k.id].dag === hd.dag && q.plan[k.id].slot === hd.slot);
+        assert.equal(hsSamme.length, 0, 'ingen HS i samme slot som HD');
+        assert.equal(tjekPlan(q).problemer.filter((x) => x.type === 'anti-samtidighed').length, 0);
+        // Slaas fra: reglen gaelder ikke, og advarslen udloeses hvis de ligger samtidig
+        const p1 = opdaterOpsaetning(p0, { antiSamtidighed: false });
+        const hs = p1.kampe.find((k) => k.kategori === 'U11 D HS');
+        let p2 = flytKamp(p1, 'hd1', '2026-11-21', '09:00');
+        p2 = flytKamp(p2, hs.id, '2026-11-21', '09:00');
+        assert.equal(tjekPlan(p2).problemer.filter((x) => x.type === 'anti-samtidighed').length, 0, 'slaaet fra');
+        const adv = tjekPlan(opdaterOpsaetning(p2, { antiSamtidighed: true })).problemer.filter((x) => x.type === 'anti-samtidighed');
+        assert.equal(adv.length, 1);
+        assert.equal(adv[0].alvor, 'advarsel');
+        assert.equal(adv[0].noegle, 'U11 D:2026-11-21:samtidig');
+    });
+    test('prioritet pr. kategori: hoej prioritet faar plads foerst', () => {
+        const p = projekt();
+        const f0 = lavForslag(p);
+        const p2 = { ...p, kategorier: p.kategorier.map((k) => (k.id === 'U11 D DS' ? { ...k, prioritet: 1 } : k)) };
+        const f1 = lavForslag(p2);
+        assert.equal(f1.plan['4:1'].slot, '09:00', 'DS runde 1 foerst med hoej prioritet');
+        assert.notDeepEqual(f0.plan, f1.plan);
+        assert.deepEqual(fejl(anvendForslag(p2, f1)), []);
+    });
+    test('puljerunder synkront: alle puljers runde 1 foer runde 2 i eventet', () => {
+        const p = opdaterOpsaetning(projekt(), { puljerunderSynkront: true });
+        const f = lavForslag(p);
+        const t = (id) => `${f.plan[id].dag}T${f.plan[id].slot}`;
+        assert.ok(t('1:1') <= t('2:2') && t('2:1') <= t('1:2'), 'begge puljers R1 foer nogen R2');
+        assert.deepEqual(fejl(anvendForslag(p, f)), []);
+        assert.ok(ALTERNATIV_VARIANTER.some((v) => v.navn === 'Puljerunder synkront'));
+    });
+    test('loesningsforslag ud fra kampe uden plads', () => {
+        let p = opdaterDag(projekt(), '2026-11-21', { baner: 1, slut: '10:00' });
+        p = opdaterDag(p, '2026-11-22', { baner: 1, slut: '10:00' });
+        const f = lavForslag(p);
+        const l = loesningsforslag(p, f.ikkePlaceret);
+        assert.ok(l.length >= 1);
+        assert.ok(l.every((x) => x.tekst.length > 10));
+        assert.ok(l.some((x) => /forlæng|tidsrum|bane/.test(x.tekst)), l.map((x) => x.tekst).join(' | '));
+        assert.deepEqual(loesningsforslag(p, []), []);
+        const p2 = opdaterRaekke(projekt(), 'U09 D', { tidligst: '14:30', senest: '15:00' });
+        const l2 = loesningsforslag(p2, lavForslag(p2).ikkePlaceret);
+        assert.ok(l2.some((x) => /udvid rækkens tidsrum til/.test(x.tekst)), l2.map((x) => x.tekst).join(' | '));
     });
 });

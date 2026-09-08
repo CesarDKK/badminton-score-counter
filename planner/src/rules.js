@@ -5,7 +5,7 @@
 //               dag?, slot?, noegle? }
 // `noegle` sættes på advarsler, brugeren kan kvittere (projekt.kvitteret).
 import { minutter } from './tp-reader.js';
-import { slotsForDag, puljeKapacitet, puljeFor } from './kapacitet.js';
+import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt } from './kapacitet.js';
 import { reglerFor, STANDARD_REGLER } from './store.js';
 
 /** Min. tid pr. kamp (§ 4 stk. 5): standard ungdom ABCD 20, EM 25; senior ABCD 25, EM 30. */
@@ -296,6 +296,36 @@ export function tjekPlan(projekt) {
         if (senior && (r.raekke === 'A' || r.raekke === 'B') && m.size > 1 && m.has(sidsteDag)) {
             const forkerte = m.get(sidsteDag).filter((k) => !(k.fase === 'cup' && FINALERUNDER.has(k.rundeNavn)));
             if (forkerte.length) tilfoej({ type: 'senior-finaledag', alvor: 'fejl', tekst: `${r.id}: ${forkerte.length} kampe på finaledagen er hverken kvart-, semi- eller finaler.`, kampe: forkerte.map((k) => k.id), dag: sidsteDag });
+        }
+    }
+
+    // ── Anti-samtidighed (advarsel): HS/HD, DS/DD og MD i samme række i samme slot ──
+    if (projekt.opsaetning.antiSamtidighed !== false) {
+        const prRaekkeDag = new Map(); // `${raekke}|${dag}` → Map(slot → [kampe])
+        for (const [n, kampe] of prSlotKampe) {
+            const [dato, slot] = n.split('|');
+            for (const k of kampe) {
+                const r = raekke(k);
+                if (!r) continue;
+                const rn = `${r.id}|${dato}`;
+                if (!prRaekkeDag.has(rn)) prRaekkeDag.set(rn, new Map());
+                const m = prRaekkeDag.get(rn);
+                if (!m.has(slot)) m.set(slot, []);
+                m.get(slot).push(k);
+            }
+        }
+        for (const [rn, m] of prRaekkeDag) {
+            const [raekkeId, dato] = rn.split('|');
+            const ramte = new Set();
+            const slots = [];
+            for (const [slot, kampe] of m) {
+                let konflikt = false;
+                for (let i = 0; i < kampe.length && !konflikt; i += 1) for (let j = i + 1; j < kampe.length; j += 1) {
+                    if (katKonflikt(kat(kampe[i])?.kat, kat(kampe[j])?.kat)) { konflikt = true; break; }
+                }
+                if (konflikt) { slots.push(slot); for (const k of kampe) ramte.add(k.id); }
+            }
+            if (slots.length) tilfoej({ type: 'anti-samtidighed', alvor: 'advarsel', noegle: `${raekkeId}:${dato}:samtidig`, tekst: `${raekkeId}: single og double (eller mix) ligger samtidig ${datoKort(dato)} kl. ${slots.sort().join(', ')}. Spillere i flere kategorier får kortere pauser, og programmet bliver sværere at følge.`, kampe: [...ramte], dag: dato, slot: slots.sort()[0] });
         }
     }
 

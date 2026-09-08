@@ -1,6 +1,7 @@
 // Fane 3: Tjek (design § 8). Alle fejl og advarsler fra rules.js som liste;
 // klik hopper til kampen i gitteret, advarsler med nøgle kan kvitteres.
 import { esc, datoTekst } from './dom.js';
+import { loesningsforslag } from '../scheduler.js';
 
 const TYPE_TEKST = {
     'kapacitet': 'For mange kampe i et slot',
@@ -15,6 +16,7 @@ const TYPE_TEKST = {
     'flere-dage': 'Række over flere dage',
     'uden-for-raekkens-dage': 'Uden for rækkens dage',
     'raekke-tidsrum': 'Uden for rækkens eget tidsrum',
+    'anti-samtidighed': 'Single og double samtidig i samme række',
     'e-sidste-dag': 'E-række: sidste dag',
     'e-finale-tid': 'E-finale uden for 10–13',
     'senior-max-3': 'Senior E/M: over 3 kampe',
@@ -57,7 +59,15 @@ export function renderTjek(container, projekt, tjek, handlers) {
         </section>`;
     };
     const kvitterede = projekt.kvitteret || [];
+    const sidste = projekt.sidsteForslag;
+    const forslag = sidste?.ikkePlaceret?.length ? loesningsforslag(projekt, sidste.ikkePlaceret) : [];
     container.innerHTML = `
+        ${forslag.length ? `
+        <section class="panel">
+            <h2>Kampe uden plads i sidste forslag <span class="maerke maerke--advarsel">${sidste.ikkePlaceret.length}</span></h2>
+            <p class="panel-sub">Planlæggeren kunne ikke finde plads til alle kampe. Sådan kan det løses:</p>
+            <ul class="problemer">${forslag.map((f) => `<li><span>${esc(f.tekst)}</span></li>`).join('')}</ul>
+        </section>` : ''}
         ${afsnit('fejl', 'Fejl', 'Ingen fejl — planen overholder de hårde regler.')}
         ${afsnit('advarsel', 'Advarsler', 'Ingen advarsler.')}
         ${afsnit('info', 'Til orientering', 'Alle kampe har en tid.')}

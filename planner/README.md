@@ -156,3 +156,24 @@ og listen sorteres bedst først (færrest uden plads, kortest haltid, tidligst
 slut). Bjælken viser nøgletal pr. forslag; ◀ ▶ skifter planen i gitteret med
 det samme, "Brug dette" beholder den, "Fortryd" går tilbage til planen før.
 Låste kampe beholdes i alle forslag. Samme input giver samme alternativer.
+
+## Fra Jespers gamle AI-prompt (v22)
+
+Gennemgået 2026-09-08. Tilføjet som valg:
+
+- **Undgå single og double samtidig i samme række** (regel A3: HS/HD, DS/DD,
+  MD mod alle; U9's "D" regnes som begge doubler). Til som standard. Tjek giver
+  en kvitterbar advarsel pr. række og dag, og forslaget undgår det (koster lidt
+  haltid: Lyngby 2025 gik fra 139 til 149 min i gennemsnit).
+- **Puljerunder synkront på tværs af puljer** (blødt mål: alle R1 før R2 …).
+  Fra som standard; findes også som variant under "Alternativer".
+- **Prioritet pr. kategori** (høj/normal/lav) i fane 1: kategorier med høj
+  prioritet får plads først i forslaget.
+- **Løsningsforslag**: når forslaget efterlader kampe uden plads, viser Plan-
+  og Tjek-fanen konkrete forslag pr. årsag (forlæng dagen til kl. X, tilføj N
+  baner, udvid rækkens tidsrum til kl. Y, giv flere reserverede baner …).
+  Sidste forslags "ikke placeret" gemmes i projektet (`sidsteForslag`).
+
+Bevidst udeladt: A0/A1 (hele eventets puljer/runder som barriere — vi bruger
+kampenes faktiske afhængigheder), fail-fast (vi leverer altid en plan), X-makker
+og "videre fra pulje" (ligger i TP), Excel-faner.
