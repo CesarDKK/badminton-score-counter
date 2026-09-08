@@ -217,3 +217,19 @@ det markeres. TP's egne kampe gemmes i `projekt.tpKampe`, så "fra TP" kan
 vælges igen. Panelet "Opskrift til lodtrækningen i TP" viser, hvordan
 lodtrækningen skal laves. Åbnes en nyere fil, hvor TP nu har en lodtrækning
 for kategorien, sættes den automatisk tilbage til "fra TP".
+
+## Ventetid pr. spiller (2026-09-08)
+
+- "Undgå single og double samtidig i samme række" er **fra** som standard.
+  Målt på Lyngby 2025 gav den rene double-spillere huller på op til 2½ time,
+  fordi doublen ikke måtte spille, mens singlen kørte. Planneren tjekker
+  alligevel de faktiske spillersammenfald kamp for kamp.
+- **Dobbeltbooking er altid en fejl**, også for mulige spillere i cupkampe:
+  samme spiller kan nå finalen i to kategorier, så to cupkampe med fælles
+  mulige spillere må ikke ligge i samme slot. Forslaget overholder det altid;
+  kun fase 2's allersidste udvej ("dobbeltbooket") kan bryde det, og det
+  meldes som regelbrud.
+- **Advarsel "lang ventetid"** (kvitterbar), når en spiller venter over
+  `opsaetning.maxVentetidMin` (standard 90 min, fane 1) mellem egne kampe.
+  Antal spillerdage med sådan et hul står i Plan-fanens statuslinje og i
+  alternativ-bjælken (`statistik.langeHuller`).

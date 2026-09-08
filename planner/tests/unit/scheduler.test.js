@@ -262,6 +262,7 @@ describe('scheduler: anti-samtidighed, prioritet, synkrone puljerunder, loesning
     test('anti-samtidighed: HS og DS i samme raekke maa gerne, HS og HD i samme raekke ikke i samme slot', () => {
         // Byg en HD-kategori i U11 D med to nye spillere
         const p0 = projekt();
+        p0.opsaetning.antiSamtidighed = true; // fra som standard siden 2026-09-08 — slås til her
         p0.kategorier.push({ id: 'U11 D HD', eventId: 9, raekke: 'U11 D', aargang: 'U11', kat: 'HD', type: 'double', mix: false, form: 'pulje', tilmeldte: 2, kampe: 1, runder: 0, halvBane: false, prioritet: 0 });
         p0.kampe.push({ id: 'hd1', kategori: 'U11 D HD', fase: 'pulje', gruppe: 'Pulje 1', runde: 1, navn: 'Pulje 1 #1 – #2', spillere: ['x1', 'x2', 'x3', 'x4'], muligeSpillere: ['x1', 'x2', 'x3', 'x4'], afhaengerAf: [], tpRef: { draw: 9 }, tpTid: null, varighed: 0 });
         const f = lavForslag(p0);
@@ -345,5 +346,24 @@ describe('scheduler/rules: Swiss Ladder med runder lige efter hinanden', () => {
         const p = medValg(projekt(), true);
         const p2 = genindlaes(p, model(), { behold: true });
         assert.equal(p2.kategorier.find((k) => k.id === 'U09 D HS').swissUdenPause, true);
+    });
+});
+
+describe('scheduler: lange huller i statistikken og standarder', () => {
+    test('bedoemPlan taeller spillerdage med hul over graensen', () => {
+        let p = projekt();
+        p = flytKamp(p, '1:1', '2026-11-21', '09:00');
+        p = flytKamp(p, '1:2', '2026-11-21', '12:00'); // a venter 150 min
+        const s = bedoemPlan(p);
+        assert.equal(s.langeHuller, 1);
+        assert.equal(s.maxVentetidMin, 90);
+        assert.equal(bedoemPlan(opdaterOpsaetning(p, { maxVentetidMin: 200 })).langeHuller, 0);
+    });
+    test('nyt projekt: anti-samtidighed er fra som standard, ventetidsgraense 90', () => {
+        const p = projekt();
+        assert.equal(p.opsaetning.antiSamtidighed, false);
+        assert.equal(p.opsaetning.maxVentetidMin, 90);
+        const f = lavForslag(p);
+        assert.equal(f.statistik.langeHuller, 0, 'ingen lange huller i den lille turnering');
     });
 });
