@@ -227,11 +227,12 @@ const planHandlers = {
         const f = lavForslag(projekt, kunDenneDag ? { kunDage: [tilstand.dag] } : {});
         const ms = Math.round(performance.now() - t0);
         const katMap = new Map(projekt.kampe.map((k) => [k.id, k]));
+        const brud = [...f.brud, ...f.ikkePlaceret];
         tilstand.forslag = {
-            tekst: `Forslag lavet på ${ms} ms: ${Object.keys(f.plan).length} kampe har tid, ${f.ikkePlaceret.length} kunne ikke placeres.`,
-            ikkePlaceret: f.ikkePlaceret.map((x) => ({ ...x, kategori: katMap.get(x.id)?.kategori || '', navn: katMap.get(x.id)?.navn || x.id })),
+            tekst: `Forslag lavet på ${ms} ms: alle ${Object.keys(f.plan).length} kampe har tid${brud.length ? `, men ${brud.length} kunne kun placeres ved at bryde en regel — se forslagene nedenfor og fejlene i Tjek.` : ' uden regelbrud.'}`,
+            ikkePlaceret: brud.map((x) => ({ ...x, kategori: katMap.get(x.id)?.kategori || '', navn: katMap.get(x.id)?.navn || x.id })),
         };
-        saet({ ...store.anvendForslag(projekt, f), sidsteForslag: { ikkePlaceret: f.ikkePlaceret } });
+        saet({ ...store.anvendForslag(projekt, f), sidsteForslag: { ikkePlaceret: brud } });
     },
     laasKamp(id) {
         const ids = id.split(',');
@@ -275,12 +276,13 @@ const planHandlers = {
         if (!alt) return;
         const a = alt.liste[alt.index];
         const katMap = new Map(projekt.kampe.map((k) => [k.id, k]));
+        const brud = [...(a.brud || []), ...a.ikkePlaceret];
         tilstand.forslag = {
-            tekst: `Forslaget "${a.navn}" er valgt: ${Object.keys(a.plan).length} kampe har tid, ${a.ikkePlaceret.length} kunne ikke placeres.`,
-            ikkePlaceret: a.ikkePlaceret.map((x) => ({ ...x, kategori: katMap.get(x.id)?.kategori || '', navn: katMap.get(x.id)?.navn || x.id })),
+            tekst: `Forslaget "${a.navn}" er valgt: alle ${Object.keys(a.plan).length} kampe har tid${brud.length ? `, ${brud.length} med regelbrud — se forslagene nedenfor og Tjek.` : ' uden regelbrud.'}`,
+            ikkePlaceret: brud.map((x) => ({ ...x, kategori: katMap.get(x.id)?.kategori || '', navn: katMap.get(x.id)?.navn || x.id })),
         };
         tilstand.alternativer = null;
-        saet({ ...projekt, sidsteForslag: { ikkePlaceret: a.ikkePlaceret } });
+        saet({ ...projekt, sidsteForslag: { ikkePlaceret: brud } });
     },
     fortrydAlternativ() {
         const alt = tilstand.alternativer;

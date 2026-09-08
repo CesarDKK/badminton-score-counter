@@ -205,7 +205,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
         ${laaste.size ? `<span class="maerke">🔒 ${laaste.size} låst</span>` : ''}
         <span class="daempet">${placeret.size} af ${projekt.kampe.length} kampe har tid · ${ikkePlacerede.length} mangler · haltid gns. ${statistik.haltidGnsMin} min pr. spiller pr. dag${Object.keys(statistik.slutPrDag).length ? ` · slut ${Object.entries(statistik.slutPrDag).map(([d, t]) => `${datoTekst(d, { kort: true })} ${t}`).join(', ')}` : ''}. Træk et kort til et slot, eller til listen til højre for at fjerne tiden. Klik viser spillerens andre kampe; dobbeltklik låser.</span>
     </p>
-    ${tilstand.forslag ? `<p class="plan-status forslag-info">${esc(tilstand.forslag.tekst)}${tilstand.forslag.ikkePlaceret.length ? ` Ikke placeret: ${tilstand.forslag.ikkePlaceret.slice(0, 6).map((x) => `${esc(x.kategori)} ${esc(x.navn)} (${esc(x.aarsag)})`).join('; ')}${tilstand.forslag.ikkePlaceret.length > 6 ? ' …' : ''}` : ''}</p>
+    ${tilstand.forslag ? `<p class="plan-status forslag-info">${esc(tilstand.forslag.tekst)}${tilstand.forslag.ikkePlaceret.length ? ` Berørte kampe: ${tilstand.forslag.ikkePlaceret.slice(0, 6).map((x) => `${esc(x.kategori)} ${esc(x.navn)} (${esc(x.brud || x.aarsag)})`).join('; ')}${tilstand.forslag.ikkePlaceret.length > 6 ? ' …' : ''}` : ''}</p>
     ${tilstand.forslag.ikkePlaceret.length ? `<ul class="loesninger">${loesningsforslag(projekt, tilstand.forslag.ikkePlaceret).map((f) => `<li>${esc(f.tekst)}</li>`).join('')}</ul>` : ''}` : ''}
     <div class="plan-layout">
         <div class="gitter-hylster">
@@ -245,7 +245,7 @@ function alternativBjaelke(alt) {
         <div class="alternativ-tekst">
             <strong>Forslag ${alt.index + 1} af ${alt.liste.length}: ${esc(a.navn)}</strong>
             <span class="daempet">${esc(a.beskrivelse)}</span>
-            <span>haltid gns. <b>${s.haltidGnsMin} min</b> · ventetid gns. <b>${s.ventetidGnsMin} min</b> · slut ${esc(slut)} · <b class="${a.ikkePlaceret.length ? 'er-roed' : ''}">${a.ikkePlaceret.length} uden plads</b>${alt.fejl != null ? ` · <b class="${alt.fejl ? 'er-roed' : ''}">${alt.fejl} fejl</b>, ${alt.advarsler} advarsler` : ''}</span>
+            <span>haltid gns. <b>${s.haltidGnsMin} min</b> · ventetid gns. <b>${s.ventetidGnsMin} min</b> · slut ${esc(slut)} · <b class="${(a.brud?.length || 0) + a.ikkePlaceret.length ? 'er-roed' : ''}">${(a.brud?.length || 0) + a.ikkePlaceret.length} med regelbrud</b>${alt.fejl != null ? ` · <b class="${alt.fejl ? 'er-roed' : ''}">${alt.fejl} fejl</b>, ${alt.advarsler} advarsler` : ''}</span>
         </div>
         <button class="knap knap--sekundaer knap--lille" data-handling="alt-naeste" ${alt.index >= alt.liste.length - 1 ? 'disabled' : ''} aria-label="Næste forslag">▶</button>
         <span class="raekke-knapper">

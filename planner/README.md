@@ -177,3 +177,17 @@ Gennemgået 2026-09-08. Tilføjet som valg:
 Bevidst udeladt: A0/A1 (hele eventets puljer/runder som barriere — vi bruger
 kampenes faktiske afhængigheder), fail-fast (vi leverer altid en plan), X-makker
 og "videre fra pulje" (ligger i TP), Excel-faner.
+
+## Alle kampe placeres altid (fase 2 i planlæggeren)
+
+Jespers krav 2026-09-08: et forslag må aldrig efterlade kampe uden tid. Efter
+den grådige placering placeres resten med gradvist lempede regler, mindst
+alvorlige først: anti-samtidighed → rækkens eget tidsrum → reserverede baner
+→ pause → årgangens tidsvindue → max kampe pr. dag → rækkens dage → kapacitet
+→ rækkefølge → dobbeltbooking. Hvert brud registreres (`forslag.brud` med
+`brud`, `aarsag` og `detalje`), vises i Plan-fanen, gemmes som
+`projekt.sidsteForslag` og giver konkrete løsningsforslag på Plan og Tjek:
+"Sæt pausen for A–D til 5 min", "Udvid tidsrummet til 18:00", "Forlæng dagen
+til 17:30", "tilføj 1 bane" osv. Tjek viser samtidig bruddene som fejl eller
+advarsler efter de almindelige regler. Alternativerne sorteres efter færrest
+brud, dernæst haltid.
