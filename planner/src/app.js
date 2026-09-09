@@ -151,7 +151,7 @@ const handlers = {
             if (fejl) { visBesked(fejl, true); return; }
             if (projekt && !window.confirm(`Erstat det åbne projekt "${projekt.turnering.navn}" med ${fil.name}?`)) return;
             besked = { tekst: `${fil.name} åbnet.`, fejl: false };
-            saet(obj);
+            saet(store.normaliserHalvBane(obj));
         } catch (err) {
             visBesked(`Kunne ikke åbne ${fil.name}: ${err.message || err}`, true);
         }

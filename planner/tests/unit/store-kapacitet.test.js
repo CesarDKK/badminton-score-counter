@@ -3,7 +3,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     nytProjekt, genindlaes, saetSlotMin, opdaterDag, opdaterRaekke, opdaterPause, validerProjekt,
-    gemLokalt, hentLokalt, projektFilnavn, STANDARD_PAUSE,
+    gemLokalt, hentLokalt, projektFilnavn, STANDARD_PAUSE, opdaterKategori, normaliserHalvBane, GEM_NOEGLE,
 } from '../../src/store.js';
 import { slotsForDag, banerISlot, baneSlots, kapacitetPrDag, kampePrKategori, reservationerISlot, puljeKapacitet, puljeFor } from '../../src/kapacitet.js';
 
@@ -176,5 +176,23 @@ describe('kapacitet: reserverede baner pr. raekke', () => {
         const r2 = [{ id: 'U09 D', dage: ['2025-11-22'], reserveredeBaner: 2 }];
         assert.equal(puljeKapacitet(dag, '09:00', r2).faelles, 8);
         assert.equal(puljeKapacitet(dag, '17:30', r2).faelles, 8);
+    });
+});
+
+describe('store: halv bane kun for U9', () => {
+    test('opdaterKategori ignorerer halv bane for andre aargange, og aeldre projekter normaliseres', () => {
+        const p = nytProjekt(model());
+        const u13 = opdaterKategori(p, 'U13 M HS', { halvBane: true });
+        assert.equal(u13.kategorier.find((k) => k.id === 'U13 M HS').halvBane, false);
+        const u9 = opdaterKategori(p, 'U09 D HS', { halvBane: false });
+        assert.equal(u9.kategorier.find((k) => k.id === 'U09 D HS').halvBane, false);
+        const igen = opdaterKategori(u9, 'U09 D HS', { halvBane: true });
+        assert.equal(igen.kategorier.find((k) => k.id === 'U09 D HS').halvBane, true);
+        const gammelt = { ...p, kategorier: p.kategorier.map((k) => ({ ...k, halvBane: true })) };
+        const n = normaliserHalvBane(gammelt);
+        assert.deepEqual(n.kategorier.map((k) => [k.id, k.halvBane]), [['U09 D HS', true], ['U13 M HS', false]]);
+        const lager = new Map([[GEM_NOEGLE, JSON.stringify(gammelt)]]);
+        const hentet = hentLokalt({ getItem: (k) => lager.get(k) ?? null });
+        assert.equal(hentet.kategorier.find((k) => k.id === 'U13 M HS').halvBane, false, 'hentLokalt normaliserer');
     });
 });

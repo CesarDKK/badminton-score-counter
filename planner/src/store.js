@@ -221,8 +221,20 @@ export function opdaterRaekke(projekt, raekkeId, aendringer) {
 }
 
 export function opdaterKategori(projekt, kategoriId, aendringer) {
-    const kategorier = projekt.kategorier.map((k) => (k.id === kategoriId ? { ...k, ...aendringer } : k));
+    const kategorier = projekt.kategorier.map((k) => {
+        if (k.id !== kategoriId) return k;
+        const ny = { ...k, ...aendringer };
+        // Kun U9 spiller på halv bane (Jesper 2026-09-09); alle andre altid på hel bane
+        if (k.aargang !== 'U09') ny.halvBane = false;
+        return ny;
+    });
     return { ...projekt, kategorier };
+}
+
+/** Sikrer at kun U9-kategorier har halv bane — bruges ved indlæsning af ældre projekter. */
+export function normaliserHalvBane(projekt) {
+    if (!projekt?.kategorier?.some((k) => k.halvBane && k.aargang !== 'U09')) return projekt;
+    return { ...projekt, kategorier: projekt.kategorier.map((k) => (k.aargang !== 'U09' && k.halvBane ? { ...k, halvBane: false } : k)) };
 }
 
 /** Generel ændring af opsætningen (fx kampVarighed). */
@@ -259,7 +271,7 @@ export function hentLokalt(storage = globalThis.localStorage) {
         const raa = storage.getItem(GEM_NOEGLE);
         if (!raa) return null;
         const obj = JSON.parse(raa);
-        return validerProjekt(obj) ? null : obj;
+        return validerProjekt(obj) ? null : normaliserHalvBane(obj);
     } catch { return null; }
 }
 

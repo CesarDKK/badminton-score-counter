@@ -241,7 +241,7 @@ function raekkePanel(p) {
                 <td class="tal">${t.ialt}</td>
                 <td class="daempet">${fordeling}</td>
                 <td class="tal">${t.medTid}</td>
-                <td>${k.type === 'single' ? `<label class="valg"><input type="checkbox" data-halv="${esc(k.id)}" ${k.halvBane ? 'checked' : ''}> halv bane</label>` : ''}
+                <td>${k.aargang === 'U09' ? `<label class="valg" title="Kun U9 spiller på halv bane (single som standard). En hel bane deles i to halve."><input type="checkbox" data-halv="${esc(k.id)}" ${k.halvBane ? 'checked' : ''}> halv bane</label>` : ''}
                     ${k.form === 'swiss' ? `<label class="valg" title="Swiss Ladder: næste runde må begynde i slottet lige efter forrige rundes sidste kamp, uden pause imellem. Pausen mod kampe i andre kategorier gælder stadig."><input type="checkbox" data-swiss-uden-pause="${esc(k.id)}" ${k.swissUdenPause ? 'checked' : ''}> runder lige efter hinanden</label>` : ''}
                     <select data-prioritet="${esc(k.id)}" title="Forrang i forslaget: kategorier med høj prioritet får plads først, lav prioritet fylder op til sidst">
                         <option value="1" ${k.prioritet === 1 ? 'selected' : ''}>høj prioritet</option>
