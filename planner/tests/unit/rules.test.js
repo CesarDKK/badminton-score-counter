@@ -378,3 +378,34 @@ describe('rules: kapacitet pr. pulje med reserverede baner', () => {
         assert.equal(tjekPlan(p).problemer.filter((x) => x.type === 'kapacitet').length, 0);
     });
 });
+
+describe('rules: lang ventetid og dobbeltbooking af mulige spillere', () => {
+    test('en spiller, der venter over graensen, giver en kvitterbar advarsel', () => {
+        let p = projekt();
+        p = flytKamp(p, 'p1', '2026-11-21', '09:00');
+        p = flytKamp(p, 'p2', '2026-11-21', '11:30'); // Anton: 09:00 → 11:30 = 120 min ventetid
+        const adv = tjekPlan(p).problemer.filter((x) => x.type === 'lang-ventetid');
+        assert.equal(adv.length, 1);
+        assert.equal(adv[0].alvor, 'advarsel');
+        assert.match(adv[0].tekst, /Anton X venter 120 min/);
+        assert.equal(tjekPlan(kvitter(p, adv[0].noegle)).problemer.filter((x) => x.type === 'lang-ventetid').length, 0);
+        assert.equal(tjekPlan(opdaterOpsaetning(p, { maxVentetidMin: 150 })).problemer.filter((x) => x.type === 'lang-ventetid').length, 0, 'graensen kan haeves');
+        assert.equal(tjekPlan(opdaterOpsaetning(p, { maxVentetidMin: 0 })).problemer.filter((x) => x.type === 'lang-ventetid').length, 0, '0 slaar advarslen fra');
+    });
+    test('mulige spillere i samme slot er en fejl (finaler i to kategorier)', () => {
+        let p = projekt();
+        p = flytKamp(p, 'p1', '2026-11-21', '09:00');
+        p = flytKamp(p, 'p2', '2026-11-21', '10:00');
+        p = flytKamp(p, 'p3', '2026-11-21', '11:00');
+        p = flytKamp(p, 'f1', '2026-11-21', '12:00'); // finalen: mulige a, b, c
+        p = flytKamp(p, 'q1', '2026-11-21', '12:00'); // d, e — ingen overlap
+        assert.equal(tjekPlan(p).problemer.filter((x) => x.type === 'dobbeltbooket').length, 0);
+        // en anden kategoris kamp med Anton (a) i samme slot som finalen, hvor Anton er mulig
+        p.kampe.push({ id: 'x1', kategori: 'U11 D DS', fase: 'pulje', gruppe: 'Pulje 9', runde: 1, navn: 'x1', spillere: ['a', 'd'], muligeSpillere: ['a', 'd'], afhaengerAf: [], tpRef: { draw: 77 }, tpTid: null, varighed: 0 });
+        p = flytKamp(p, 'x1', '2026-11-21', '12:00');
+        const f = tjekPlan(p).problemer.filter((x) => x.type === 'dobbeltbooket');
+        assert.ok(f.length >= 1);
+        assert.ok(f.every((x) => x.alvor === 'fejl'), 'ogsaa mulige spillere er fejl');
+        assert.ok(f.some((x) => /kan være i to kampe/.test(x.tekst)));
+    });
+});

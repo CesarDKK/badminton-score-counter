@@ -126,6 +126,8 @@ function dagePanel(p) {
         <div class="raekke-knapper" style="margin-top:14px; gap:22px">
             <label class="valg" title="Fra din gamle prompt (regel A3): i samme række må HS og HD ikke ligge samtidig, DS og DD ikke, og MD ikke sammen med nogen af dem. Tjek advarer, og forslaget undgår det."><input type="checkbox" data-opsaetning="antiSamtidighed" ${p.opsaetning.antiSamtidighed !== false ? 'checked' : ''}> undgå single og double samtidig i samme række</label>
             <label class="valg" title="Blødt mål i forslaget: alle puljers runde 1 spilles før runde 2 osv. inden for hvert event. Giver et mere overskueligt program, men ofte lidt længere haltid."><input type="checkbox" data-opsaetning="puljerunderSynkront" ${p.opsaetning.puljerunderSynkront ? 'checked' : ''}> puljerunder synkront på tværs af puljer</label>
+            <label class="felt" title="Tjek advarer, når en spiller venter længere end dette mellem to af sine egne kampe samme dag. Tallet vises også i statuslinjen og under Alternativer."><span class="etiket">Advar ved ventetid over</span>
+                <input type="number" min="0" max="600" step="5" value="${p.opsaetning.maxVentetidMin ?? 90}" data-opsaetning-tal="maxVentetidMin"> min</label>
         </div>
         <p class="panel-sub">Reglementet: mindst 10 min pause i A–D-rækker, 15 i M, 20 i E, og 12 når M og A–D spilles i samme turnering. Med "minimumstid" må to 20-min-kampe for samme spiller ligge i naboslots ved 30-min slots (20 + 10 = 30); med "et helt slot" skal der være slot + pause mellem starttiderne.</p>
     </section>`;
@@ -395,6 +397,7 @@ function bind(container, projekt, h) {
         }
         if (!(el instanceof HTMLInputElement)) return;
         if (el.dataset.opsaetning) { h.opsaetning({ [el.dataset.opsaetning]: el.checked }); return; }
+        if (el.dataset.opsaetningTal) { h.opsaetning({ [el.dataset.opsaetningTal]: Math.max(0, Number(el.value) || 0) }); return; }
         if (el.id === 'tpFil' || el.id === 'projektFil') {
             const fil = el.files[0];
             if (fil) (el.id === 'tpFil' ? h.aabnTP : h.aabnProjekt)(fil);

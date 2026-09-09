@@ -388,18 +388,22 @@ export function bedoemPlan(projekt) {
         slutPrDag.set(p.dag, Math.max(slutPrDag.get(p.dag) || 0, min + slotMin));
         for (const s of k.spillere) {
             const n = `${s}|${p.dag}`;
-            const x = prSpillerDag.get(n) || { foerste: min, sidste: min, kampe: 0 };
+            const x = prSpillerDag.get(n) || { foerste: min, sidste: min, kampe: 0, tider: [] };
             x.foerste = Math.min(x.foerste, min);
             x.sidste = Math.max(x.sidste, min);
             x.kampe += 1;
+            x.tider.push(min);
             prSpillerDag.set(n, x);
         }
     }
-    let haltidMin = 0, spillerDage = 0, ventetid = 0;
+    const maxVent = projekt.opsaetning.maxVentetidMin ?? 90;
+    let haltidMin = 0, spillerDage = 0, ventetid = 0, langeHuller = 0;
     for (const x of prSpillerDag.values()) {
         haltidMin += x.sidste - x.foerste + slotMin;
         ventetid += x.sidste - x.foerste + slotMin - x.kampe * slotMin;
         spillerDage += 1;
+        x.tider.sort((a, b) => a - b);
+        if (maxVent > 0) for (let i = 1; i < x.tider.length; i += 1) if (x.tider[i] - x.tider[i - 1] - slotMin > maxVent) { langeHuller += 1; break; }
     }
     return {
         haltidMin,
@@ -408,6 +412,8 @@ export function bedoemPlan(projekt) {
         spillerDage,
         slutPrDag: Object.fromEntries([...slutPrDag.entries()].map(([d, m]) => [d, `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`])),
         udenTid,
+        langeHuller,       // spillerdage med et hul på maxVentetidMin eller mere mellem egne kampe
+        maxVentetidMin: maxVent,
     };
 }
 

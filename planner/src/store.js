@@ -148,7 +148,8 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
         opsaetning: {
             slotMin: model.tpGitter.slotMin || 30,
             kampVarighed: 'minimum', // 'minimum' = reglementets minimumstid (som TP), 'slot' = et helt slot
-            antiSamtidighed: true,   // HS/HD, DS/DD og MD i samme række ikke samtidig (advarsel + undgås i forslag)
+            antiSamtidighed: false,  // HS/HD, DS/DD og MD i samme række ikke samtidig — fra som standard (Jesper 2026-09-08: gav rene double-spillere lange huller)
+            maxVentetidMin: 90,      // Tjek advarer, når en spiller venter længere end dette mellem egne kampe
             puljerunderSynkront: false, // alle puljers runde 1 før runde 2 … (blødt mål i forslaget)
             formKriterie: 'faerrest', // 'faerrest' bane-slots eller 'flest' kampe pr. spiller (form.js)
             regler: klon(STANDARD_REGLER),

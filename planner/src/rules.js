@@ -178,7 +178,9 @@ export function tjekPlan(projekt) {
                     const n = parNoegle(a.k.id, b.k.id, 'dobbelt');
                     if (set.has(n)) continue;
                     set.add(n);
-                    tilfoej({ type: 'dobbeltbooket', alvor: begge ? 'fejl' : 'advarsel', tekst: `${spillerNavn(s)} ${begge ? 'er' : 'kan være'} i to kampe kl. ${a.p.slot}: ${navn(a.k)} og ${navn(b.k)}.`, kampe: [a.k.id, b.k.id], dag: a.p.dag, slot: a.p.slot });
+                    // Altid fejl — også for mulige spillere (cup): samme spiller kan nå begge finaler,
+                    // og ingen må nogensinde skulle spille to steder samtidig (Jesper 2026-09-08).
+                    tilfoej({ type: 'dobbeltbooket', alvor: 'fejl', tekst: `${spillerNavn(s)} ${begge ? 'er' : 'kan være'} i to kampe kl. ${a.p.slot}: ${navn(a.k)} og ${navn(b.k)}.`, kampe: [a.k.id, b.k.id], dag: a.p.dag, slot: a.p.slot });
                 } else if (gab < varighed + pause) {
                     const n = parNoegle(a.k.id, b.k.id, 'pause');
                     if (set.has(n)) continue;
@@ -219,6 +221,20 @@ export function tjekPlan(projekt) {
             const varighed = udenPause ? slotMin : varighedFor(k0);
             const forSent = forrige.sidsteDag > r.dag || (forrige.sidsteDag === r.dag && r.foersteMin < forrige.sidsteMin + varighed + pause);
             if (forSent) tilfoej({ type: 'swiss-runde', alvor: 'fejl', tekst: `${k0.kategori}: runde ${runde} begynder kl. ${r.foerste.slice(11)}, men runde ${runde - 1} slutter først kl. ${klokke(forrige.sidsteMin + varighed)}${pause ? ` (plus ${pause} min pause)` : ''}.`, kampe: [...r.kampe, ...forrige.kampe], dag: r.dag, slot: r.foerste.slice(11) });
+        }
+    }
+
+    // ── Lang ventetid: en spiller venter længere end grænsen mellem egne (kendte) kampe ──
+    const maxVent = projekt.opsaetning.maxVentetidMin ?? 90;
+    if (maxVent > 0) {
+        for (const [s, liste] of prSpiller) {
+            const kendte = liste.filter((x) => x.kendt).sort((a, b) => a.p.dag.localeCompare(b.p.dag) || a.min - b.min);
+            for (let i = 1; i < kendte.length; i += 1) {
+                const a = kendte[i - 1], b = kendte[i];
+                if (a.p.dag !== b.p.dag) continue;
+                const vent = b.min - a.min - slotMin;
+                if (vent > maxVent) tilfoej({ type: 'lang-ventetid', alvor: 'advarsel', noegle: `${s}:${b.p.dag}:${b.k.id}:ventetid`, tekst: `${spillerNavn(s)} venter ${vent} min mellem ${navn(a.k)} kl. ${a.p.slot} og ${navn(b.k)} kl. ${b.p.slot} (grænse ${maxVent} min).`, kampe: [a.k.id, b.k.id], dag: b.p.dag, slot: b.p.slot });
+            }
         }
     }
 
