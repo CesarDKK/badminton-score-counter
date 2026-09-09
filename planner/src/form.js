@@ -40,7 +40,7 @@ function cupKampe(deltagere) {
  * Alle mulige former for n deltagere med nøgletal:
  * { form, stoerrelse?, runder?, puljer: [..], kampe, baneSlots, minKampe, maxKampe, tekst }
  */
-export function formMuligheder(n, { halvBane = false, cupTop = 1, minSwissRunder = 4 } = {}) {
+export function formMuligheder(n, { halvBane = false, cupTop = 1, minSwissRunder = 4, swissRunder = 0 } = {}) {
     const ud = [];
     if (n < 2) return ud;
     const slots = (kampe) => (halvBane ? kampe / 2 : kampe);
@@ -66,12 +66,15 @@ export function formMuligheder(n, { halvBane = false, cupTop = 1, minSwissRunder
     }
     if (n === 2) ud.push({ form: 'pulje', stoerrelse: 2, puljer: [2], kampe: 1, baneSlots: slots(1), minKampe: 1, maxKampe: 1, tekst: 'én kamp' });
     if (n >= 4) {
-        for (const r of SWISS_RUNDER) {
-            if (r < minSwissRunder) continue;
-            if (r > n - 1) continue;
+        // Valgt antal runder (2–8) eller automatisk 4–6; færre end reglementets
+        // minimum markeres som nedskåret (bruges kun når kapaciteten ikke rækker).
+        const runder = swissRunder ? [swissRunder] : [2, 3, ...SWISS_RUNDER, 7, 8];
+        for (const r of runder) {
+            if (r > n - 1 || r < 2) continue;
             const prRunde = Math.floor(n / 2);
             const kampe = prRunde * r;
             ud.push({ form: 'swiss', runder: r, kampe, baneSlots: slots(kampe), minKampe: n % 2 ? r - 1 : r, maxKampe: r,
+                nedskaaret: r < minSwissRunder, valgtRunder: !!swissRunder,
                 tekst: `Swiss Ladder, ${r} runder á ${prRunde} kampe${n % 2 ? ' (én oversidder pr. runde)' : ''}` });
         }
     }
@@ -85,26 +88,51 @@ export function formMuligheder(n, { halvBane = false, cupTop = 1, minSwissRunder
  */
 export function foreslaaForm(n, kategori, raekke, regler, valg = {}) {
     const krav = minKampeKrav(kategori, raekke, regler);
-    const alle = formMuligheder(n, { halvBane: !!kategori.halvBane, cupTop: valg.cupTop || 1, minSwissRunder: regler.minKampe.swissRunder });
+    const minSwiss = regler.minKampe.swissRunder;
+    const swissRunder = Number(valg.swissRunder) > 0 ? Number(valg.swissRunder) : 0;
+    const alle = formMuligheder(n, { halvBane: !!kategori.halvBane, cupTop: valg.cupTop || 1, minSwissRunder: minSwiss, swissRunder });
     if (!alle.length) return null;
     const oenske = valg.form && valg.form !== 'auto' ? alle.filter((x) => x.form === valg.form) : alle;
     const kandidater = oenske.length ? oenske : alle;
-    const opfylder = kandidater.filter((x) => x.minKampe >= krav);
     const formRang = { 'pulje-cup': 0, pulje: 1, swiss: 2 };
-    let valgt;
-    if (opfylder.length) {
-        if (valg.kriterie === 'flest') {
-            // flest kampe pr. spiller op til målet, dernæst færrest bane-slots
-            opfylder.sort((a, b) => Math.min(b.minKampe, MAAL_KAMPE) - Math.min(a.minKampe, MAAL_KAMPE) || a.baneSlots - b.baneSlots || formRang[a.form] - formRang[b.form]);
-        } else {
-            opfylder.sort((a, b) => a.baneSlots - b.baneSlots || formRang[a.form] - formRang[b.form] || b.minKampe - a.minKampe);
-        }
-        valgt = opfylder[0];
-    } else {
-        // intet opfylder kravet: tag den der giver flest kampe til de færreste
-        valgt = [...kandidater].sort((a, b) => b.minKampe - a.minKampe || a.baneSlots - b.baneSlots)[0];
+    // Valgt antal runder: tag den, uanset krav og kapacitet
+    if (swissRunder && kandidater.some((x) => x.form === 'swiss')) {
+        const v = kandidater.find((x) => x.form === 'swiss');
+        return { ...v, krav, opfylderKrav: v.minKampe >= krav, deltagere: n };
     }
-    return { ...valgt, krav, opfylderKrav: valgt.minKampe >= krav, deltagere: n };
+    // Automatisk: ikke-nedskårne muligheder, der opfylder kravet
+    const normale = kandidater.filter((x) => !x.nedskaaret);
+    const opfylder = normale.filter((x) => x.minKampe >= krav);
+    const ledig = valg.ledigeBaneSlots; // bane-slots til rådighed for kategorien (ellers ubegrænset)
+    const passer = (x) => ledig == null || x.baneSlots <= ledig;
+    const sortFaerrest = (a, b) => a.baneSlots - b.baneSlots || formRang[a.form] - formRang[b.form] || b.minKampe - a.minKampe;
+    const sortFlest = (a, b) => Math.min(b.minKampe, MAAL_KAMPE) - Math.min(a.minKampe, MAAL_KAMPE) || a.baneSlots - b.baneSlots || formRang[a.form] - formRang[b.form];
+    let valgt = null;
+    if (opfylder.length) {
+        const derPasser = opfylder.filter(passer);
+        if (derPasser.length) {
+            derPasser.sort(valg.kriterie === 'flest' ? sortFlest : sortFaerrest);
+            valgt = derPasser[0];
+        }
+    }
+    if (!valgt) {
+        // Kapaciteten rækker ikke (eller intet opfylder kravet). Swiss Ladder kan skæres
+        // ned i runder: vælg det største antal runder, der passer, hvor spillerne stadig
+        // når kravet, når deres kampe i andre kategorier (double, mix) tælles med.
+        const andre = valg.andreKampe || new Map(); // spillerId → kampe i andre kategorier
+        const deltagere = valg.deltagere || [];       // [{ spillere }] — til kravet inkl. andre kampe
+        const faerrestAndre = deltagere.length ? Math.min(...deltagere.map((t) => Math.min(...t.spillere.map((s) => andre.get(s) || 0)))) : 0;
+        const swiss = kandidater.filter((x) => x.form === 'swiss' && passer(x)).sort((a, b) => b.runder - a.runder);
+        const medKravInklAndre = swiss.find((x) => x.minKampe + faerrestAndre >= krav);
+        if (medKravInklAndre) valgt = { ...medKravInklAndre, nedskaaret: medKravInklAndre.nedskaaret || medKravInklAndre.minKampe < krav, kravInklAndre: true, faerrestAndre };
+        else if (swiss.length) valgt = { ...swiss[0], nedskaaret: true, faerrestAndre };
+        else {
+            // ingen Swiss-mulighed passer: den mulighed der giver flest kampe til de færreste (helst inden for kapaciteten)
+            const pool = kandidater.filter(passer).length ? kandidater.filter(passer) : kandidater;
+            valgt = [...pool].sort((a, b) => b.minKampe - a.minKampe || a.baneSlots - b.baneSlots)[0];
+        }
+    }
+    return { ...valgt, krav, opfylderKrav: valgt.minKampe >= krav || (valgt.kravInklAndre === true), deltagere: n, ledigeBaneSlots: ledig ?? null };
 }
 
 // ── Bygning af kampe ──────────────────────────────────────────
@@ -263,5 +291,9 @@ export function seedTilmeldinger(tilmeldinger, spillere, kat) {
 /** Kort beskrivelse af en valgt form til fane 1 og "opskriften" til TP. */
 export function formTekst(form) {
     if (!form) return 'ingen kampe (under 2 tilmeldte)';
-    return `${form.tekst} · ${form.kampe} kampe · ${form.minKampe}–${form.maxKampe} kampe pr. spiller${form.opfylderKrav ? '' : ` (under kravet på ${form.krav})`}`;
+    let bem = '';
+    if (form.kravInklAndre) bem = ` (skåret ned pga. kapacitet; kravet på ${form.krav} nås inkl. mindst ${form.faerrestAndre} kampe i andre kategorier)`;
+    else if (form.nedskaaret && !form.valgtRunder) bem = ` (skåret ned pga. kapacitet — under kravet på ${form.krav})`;
+    else if (!form.opfylderKrav) bem = ` (under kravet på ${form.krav})`;
+    return `${form.tekst} · ${form.kampe} kampe · ${form.minKampe}–${form.maxKampe} kampe pr. spiller${bem}`;
 }

@@ -233,3 +233,15 @@ for kategorien, sættes den automatisk tilbage til "fra TP".
   `opsaetning.maxVentetidMin` (standard 90 min, fane 1) mellem egne kampe.
   Antal spillerdage med sådan et hul står i Plan-fanens statuslinje og i
   alternativ-bjælken (`statistik.langeHuller`).
+
+## Swiss Ladder: antal runder (2026-09-09)
+
+Pr. Swiss-kategori kan antallet af runder vælges (2–8, `kategorier[].swissRunder`),
+og så bruges det uanset krav og kapacitet. Med "automatisk" (0) vælges 4–6
+runder efter reglementet, men i `genberegnKampe` regnes kategoriens kapacitet
+ud (`kapacitetTilKategori`: rækkens reserverede baner i dens tidsrum, ellers de
+fælles baner på dens dage, gange fyldningsgrad 0,85) minus de andre kategoriers
+bane-slots i samme pulje (`delerKapacitet`). Rækker den ikke, skæres runderne
+ned til det største antal, der passer, hvor spillerne stadig når kravet, når
+deres kampe i andre kategorier (double, mix) tælles med
+(`form.kravInklAndre`); ellers markeres forslaget som nedskåret og under kravet.

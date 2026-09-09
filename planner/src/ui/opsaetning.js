@@ -235,6 +235,10 @@ function raekkePanel(p) {
                     ${(k.formValg || 'tp') === 'tp'
                         ? `<span class="daempet">${esc(FORM_TEKST[k.form] || k.form)}${k.runder ? ` · ${k.runder} runder` : ''}</span>`
                         : `${k.formForslag?.form === 'pulje-cup' || (k.formValg === 'auto' && k.formForslag?.form === 'pulje-cup') ? `<select data-cuptop="${esc(k.id)}" title="Hvem går videre fra puljerne til cuppen"><option value="1" ${(k.cupTop || 1) === 1 ? 'selected' : ''}>cup for vinderne</option><option value="2" ${k.cupTop === 2 ? 'selected' : ''}>cup for de to bedste</option></select>` : ''}
+                           ${k.formValg === 'swiss' || k.formForslag?.form === 'swiss' ? `<select data-swissrunder="${esc(k.id)}" title="Antal runder i Swiss Ladder. 'automatisk' vælger 4–6 efter reglementet og skærer ned, hvis kapaciteten ikke rækker — men holder øje med, at spillerne når minimum, når deres double- og mixkampe tælles med.">
+                               <option value="0" ${!(k.swissRunder > 0) ? 'selected' : ''}>runder: automatisk</option>
+                               ${[2, 3, 4, 5, 6, 7, 8].map((n) => `<option value="${n}" ${k.swissRunder === n ? 'selected' : ''}>${n} runder</option>`).join('')}
+                           </select>` : ''}
                            <span class="${k.formForslag?.opfylderKrav === false ? 'maerke maerke--advarsel' : 'daempet'}">${esc(formTekst(k.formForslag))}</span>`}
                 </td>
                 <td class="tal">${k.tilmelde}</td>
@@ -393,6 +397,7 @@ function bind(container, projekt, h) {
             else if (el.dataset.prioritet) h.kategori(el.dataset.prioritet, { prioritet: Number(el.value) || 0 });
             else if (el.dataset.form) h.form(el.dataset.form, { formValg: el.value });
             else if (el.dataset.cuptop) h.form(el.dataset.cuptop, { cupTop: Number(el.value) || 1 });
+            else if (el.dataset.swissrunder) h.form(el.dataset.swissrunder, { swissRunder: Number(el.value) || 0 });
             return;
         }
         if (!(el instanceof HTMLInputElement)) return;
