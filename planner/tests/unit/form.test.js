@@ -1,7 +1,7 @@
 // Tests af turneringsform (form.js) og genberegning af kampe (store.js).
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { formMuligheder, foreslaaForm, byggKampe, puljeRunder, puljeFordeling, fordelIPuljer, seedOrden, seedTilmeldinger, minKampeKrav } from '../../src/form.js';
+import { formMuligheder, foreslaaForm, byggKampe, puljeRunder, puljeFordeling, fordelIPuljer, seedOrden, seedTilmeldinger, minKampeKrav, formTekst } from '../../src/form.js';
 import { STANDARD_REGLER, nytProjekt, saetForm, opdaterFormKriterie, genindlaes, anvendForslag } from '../../src/store.js';
 import { tjekPlan } from '../../src/rules.js';
 import { lavForslag } from '../../src/scheduler.js';
@@ -189,5 +189,67 @@ describe('form: i projektet', () => {
         const p3 = genindlaes(p, m, { behold: true });
         assert.equal(p3.kategorier[0].formValg, 'swiss', 'ingen lodtrækning i filen → valget bevares');
         assert.ok(p3.kampe.length > 1);
+    });
+});
+
+describe('form: Swiss Ladder-runder — valgt antal og nedskaering efter kapacitet', () => {
+    const tilm = (n) => Array.from({ length: n }, (_, i) => ({ spillere: [`s${i + 1}`] }));
+    test('valgt antal runder bruges uanset krav', () => {
+        const f3 = foreslaaForm(20, u9HS, u9d, regler, { form: 'swiss', swissRunder: 3 });
+        assert.equal(f3.form, 'swiss');
+        assert.equal(f3.runder, 3);
+        assert.equal(f3.opfylderKrav, false, '3 < kravet paa 4');
+        assert.equal(f3.valgtRunder, true);
+        const f7 = foreslaaForm(20, u9HS, u9d, regler, { form: 'swiss', swissRunder: 7 });
+        assert.equal(f7.runder, 7);
+        assert.equal(byggKampe(u9HS, tilm(20), f7).length, 70);
+    });
+    test('automatisk: rigeligt plads → 4 runder; for lidt plads → skaeres ned, hvis andre kampe daekker kravet', () => {
+        const rigeligt = foreslaaForm(20, u9HS, u9d, regler, { form: 'swiss', ledigeBaneSlots: 100, deltagere: tilm(20), andreKampe: new Map() });
+        assert.equal(rigeligt.runder, 4);
+        assert.equal(rigeligt.nedskaaret, false);
+        // plads til 25 bane-slots = 50 halve kampe = 5 runder á 10; men kun 12 bane-slots → 2 runder
+        const andre = new Map(Array.from({ length: 20 }, (_, i) => [`s${i + 1}`, 2])); // alle har 2 doublekampe
+        const lidt = foreslaaForm(20, u9HS, u9d, regler, { form: 'swiss', ledigeBaneSlots: 12, deltagere: tilm(20), andreKampe: andre });
+        assert.equal(lidt.form, 'swiss');
+        assert.equal(lidt.runder, 2, '2 runder á 10 kampe = 10 bane-slots (halve baner)');
+        assert.equal(lidt.kravInklAndre, true, '2 + 2 doublekampe = 4');
+        assert.equal(lidt.opfylderKrav, true);
+        assert.match(formTekst(lidt), /skåret ned pga\. kapacitet/);
+        // uden andre kampe naas kravet ikke → stadig faerrest mulige runder inden for pladsen, markeret
+        const uden = foreslaaForm(20, u9HS, u9d, regler, { form: 'swiss', ledigeBaneSlots: 12, deltagere: tilm(20), andreKampe: new Map() });
+        assert.equal(uden.runder, 2);
+        assert.equal(uden.opfylderKrav, false);
+        assert.equal(uden.nedskaaret, true);
+    });
+    test('automatisk med "flest": flest runder der passer', () => {
+        const f = foreslaaForm(20, u9HS, u9d, regler, { form: 'swiss', kriterie: 'flest', ledigeBaneSlots: 100, deltagere: tilm(20), andreKampe: new Map() });
+        assert.equal(f.runder, 6);
+        const f5 = foreslaaForm(20, u9HS, u9d, regler, { form: 'swiss', kriterie: 'flest', ledigeBaneSlots: 27, deltagere: tilm(20), andreKampe: new Map() });
+        assert.equal(f5.runder, 5, '5 runder = 25 bane-slots passer, 6 = 30 goer ikke');
+    });
+});
+
+describe('form: kapacitet i projektet', () => {
+    test('kapacitetTilKategori og delerKapacitet', async () => {
+        const { kapacitetTilKategori, delerKapacitet, opdaterRaekke, opdaterDag } = await import('../../src/store.js');
+        const p0 = nytProjekt({
+            version: 1, kilde: {}, turnering: { navn: 'T', hal: '', dage: ['2026-11-21'] },
+            tpGitter: { slotMin: 30, dage: [], baner: { hele: 4, halve: 0, navne: [] }, harTider: false, advarsler: 0 },
+            raekker: [{ id: 'U09 D', aargang: 'U09', raekke: 'D', pauseKlasse: 'ABCD', kategorier: ['U09 D HS'] }, { id: 'U11 D', aargang: 'U11', raekke: 'D', pauseKlasse: 'ABCD', kategorier: ['U11 D HS'] }],
+            kategorier: [
+                { id: 'U09 D HS', eventId: 1, raekke: 'U09 D', aargang: 'U09', kat: 'HS', type: 'single', mix: false, form: 'ingen lodtrækning', tilmeldte: 0, kampe: 0, runder: 0, halvBane: true },
+                { id: 'U11 D HS', eventId: 2, raekke: 'U11 D', aargang: 'U11', kat: 'HS', type: 'single', mix: false, form: 'ingen lodtrækning', tilmeldte: 0, kampe: 0, runder: 0, halvBane: false },
+            ],
+            spillere: {}, kampe: [], tilmeldinger: {}, bemaerkninger: [],
+        });
+        let p = opdaterDag(p0, '2026-11-21', { baner: 4, start: '09:00', slut: '13:00' }); // 8 slots x 4 baner = 32
+        const u9 = p.kategorier[0], u11 = p.kategorier[1];
+        assert.ok(Math.abs(kapacitetTilKategori(p, u11) - 32 * 0.85) < 1e-9);
+        assert.equal(delerKapacitet(p, u9, u11), true, 'ingen reservation, samme dag');
+        p = opdaterRaekke(p, 'U09 D', { tidligst: '11:00', senest: '13:00', reserveredeBaner: 2 }); // 4 slots x 2 = 8 til U9; faelles: 4 slots x 4 + 4 slots x 2 = 24
+        assert.ok(Math.abs(kapacitetTilKategori(p, u9) - 8 * 0.85) < 1e-9);
+        assert.ok(Math.abs(kapacitetTilKategori(p, u11) - 24 * 0.85) < 1e-9);
+        assert.equal(delerKapacitet(p, u9, u11), false, 'U9 har egen pulje');
     });
 });
