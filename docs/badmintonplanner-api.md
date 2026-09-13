@@ -63,16 +63,16 @@ planen lige nu.
 |---|---|---|
 | `roundId` | valgfri, ≤ 100 tegn | Jeres id for runden. Sendes samme `roundId` igen (genforsøg), svarer vi med det samme resultat som første gang uden at røre banerne. |
 | `sequence` | valgfri, heltal ≥ 0 | Løbenummer. Et kald med lavere nummer end den senest modtagne runde afvises med 409, så et forsinket kald fra runde 1 ikke overskriver runde 2. |
-| `label` | valgfri, ≤ 100 tegn | Rundens navn. Vises på oversigt og TV (kommer i næste udgave). |
-| `nextRoundStartsAt` | valgfri, `tt:mm` dansk tid, tom i sidste runde | Bruges til "Næste runde kl. 19.30" (kommer i næste udgave). |
-| `note` | valgfri, ≤ 500 tegn | Fritekst til hele runden. |
+| `label` | valgfri, ≤ 100 tegn | Rundens navn. Vises som overskrift på oversigten og i headeren på hver banes TV. |
+| `nextRoundStartsAt` | valgfri, `tt:mm` dansk tid, tom i sidste runde | Vises som "Næste runde 19.30 · om 12 min" på oversigt og TV, med nedtælling. |
+| `note` | valgfri, ≤ 500 tegn | Fritekst til hele runden. Vises på oversigten sammen med rundenavnet (ikke på banens TV). |
 | `forceNewMatch` | valgfri, standard `true` | `true`: banen skifter til de nye navne, også hvis der tælles på den. `false`: en bane, hvor der tælles (point er scoret og kampen ikke afsluttet), afvises med `match_in_progress`; prøv igen senere. Navne alene spærrer aldrig. |
 | `matches` | påkrævet, ≤ 20 poster | Én post pr. bane i brug. Åbnede baner, som ikke er med, ryddes. |
 | `courtNumber` | 1–20, unik i listen | Hallens banenummer, samme som klubbens TV-links. |
 | `side1Player1`, `side2Player1` | påkrævet, ≤ 100 tegn | Første spiller på hver side af nettet. |
 | `side1Player2`, `side2Player2` | valgfri | Makkere. Er de udfyldt, vises banen som double. |
-| `substitutes` | valgfri, ≤ 8 navne | Udskiftere på banen (vises i næste udgave). |
-| `note` (på kampen) | valgfri, ≤ 200 tegn | Fritekst til banen, fx halvbane (vises i næste udgave). |
+| `substitutes` | valgfri, ≤ 8 navne | Udskiftere på banen. Vises under navnene på banens TV (fornavne, som spillerne) og på banekortet i oversigten. |
+| `note` (på kampen) | valgfri, ≤ 200 tegn | Fritekst til banen, fx halvbane. Vises på banens TV og på banekortet i oversigten. |
 
 Navne er kun til visning. Styretegn fjernes og gentagne mellemrum
 sammenfoldes; for lange værdier klippes.

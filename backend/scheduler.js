@@ -5,6 +5,8 @@ const { runWithTenant } = require('./config/tenantPools');
 async function resetDatabase(dbLabel) {
     const deleteResult = await query('DELETE FROM game_states');
     const updateResult = await query('UPDATE courts SET is_active = FALSE');
+    // badmintonplanner-runden hører til aftenen — væk ved midnat (tildelinger følger med via FK)
+    try { await query('DELETE FROM planner_rounds'); } catch (e) { /* før migration 027 */ }
     console.log(`  ✅ ${dbLabel}: cleared ${deleteResult.affectedRows} game states, set ${updateResult.affectedRows} courts inactive`);
 }
 

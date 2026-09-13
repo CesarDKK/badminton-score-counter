@@ -4,6 +4,8 @@ const { query, queryOne } = require('../config/database');
 const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
 const { publishGameStateChange, subscribeGameStateChanges } = require('../events/gameStateEvents');
+// badmintonplanner.dk: rundenavn/næste runde/udskiftere/note pr. bane (fase 2-visning)
+const { hentPlannerVisning, plannerForBane } = require('./plannerIntegration');
 
 // Hvor længe (i minutter) et "last finished match" snapshot vises på TV efter Ryd bane
 const FINISHED_SNAPSHOT_TTL_MINUTES = 5;
@@ -115,6 +117,9 @@ router.get('/batch/all', async (req, res, next) => {
             ORDER BY c.court_number ASC
         `);
 
+        let visning = null;
+        try { visning = await hentPlannerVisning(); } catch { /* visning uden planner */ }
+
         // Format results
         const courtStates = results.map(row => {
             const setScoresHistory = row.set_scores_history
@@ -141,7 +146,8 @@ router.get('/batch/all', async (req, res, next) => {
                     isActive: !!row.isActive,
                     isDoubles: !!row.isDoubles,
                     gameMode: row.gameMode,
-                    version: 0
+                    version: 0,
+                    planner: null
                 };
             }
 
@@ -172,7 +178,8 @@ router.get('/batch/all', async (req, res, next) => {
                 isActive: !!row.isActive,
                 isDoubles: !!row.isDoubles,
                 gameMode: row.gameMode,
-                version: row.version || 0
+                version: row.version || 0,
+                planner: plannerForBane(visning, row.courtId)
             };
         });
 
@@ -279,7 +286,8 @@ router.get('/:courtId', async (req, res, next) => {
                 team2RightCourt: 1,
                 betweenSets: false,
                 version: 0,
-                lastFinishedMatch
+                lastFinishedMatch,
+                planner: null
             });
         }
 
@@ -290,9 +298,15 @@ router.get('/:courtId', async (req, res, next) => {
             ? await fetchFinishedSnapshot(court.id)
             : null;
 
+        // Planner-blok kun mens banen faktisk viser noget — en tildeling der
+        // hænger efter "Ryd bane" må ikke tegne rundedata på en tom skærm.
+        let planner = null;
+        try { planner = plannerForBane(await hentPlannerVisning(), parseInt(courtId, 10)); } catch { /* visning uden planner */ }
+
         res.json({
             ...formatStateRow(gameState, court),
-            lastFinishedMatch
+            lastFinishedMatch,
+            planner
         });
     } catch (error) {
         next(error);
@@ -677,6 +691,12 @@ router.delete('/:courtId', requireWriteAuthInClubMode, async (req, res, next) =>
                 [parseInt(courtId, 10)]
             );
         } catch (e) { console.error('Failed to release tournament_matches on court reset:', e); }
+
+        // badmintonplanner-tildeling på banen fjernes, så rundedata ikke bliver
+        // hængende på en bane admin har ryddet (ny runde skriver den igen)
+        try {
+            await query('DELETE FROM planner_court_assignments WHERE court_number = ?', [parseInt(courtId, 10)]);
+        } catch (e) { /* tabellen findes først efter migration 027 */ }
 
         // Invalidér eventuelle aktive QR-tokens — næste TV-request genererer en ny
         try { await invalidateCourtTokens(parseInt(courtId, 10)); } catch (e) { console.error('Token invalidation failed:', e); }

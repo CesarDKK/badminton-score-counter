@@ -227,6 +227,7 @@ function startLocalTimer() {
         if (isMatchCurrentlyActive) {
             updateTimerDisplay();
         }
+        updatePlannerCountdown(); // no-op uden planner-runde; skriver kun ved ændring
     }, 500);
 }
 
@@ -348,6 +349,7 @@ async function loadCourtData() {
             originalPlayer2Name = null;
             originalPlayer2Name2 = null;
             hideMatchFinished();
+            updatePlannerDisplay(null, false);
             showSponsorSlideshow();
             showQrCounter('idle');
             return;
@@ -449,6 +451,8 @@ async function loadCourtData() {
         updatePlayerNames(gameState, playersSwapped);
         updateSetScores(gameState, playersSwapped);
         updateServingHighlight(gameState, playersSwapped);
+        // badmintonplanner.dk: rundenavn/næste runde i headeren, udskiftere/noter i strip
+        updatePlannerDisplay(gameState.planner, hasGameActivity);
 
         // Update match timing
         matchStartTime = gameState.matchStartTime;
@@ -650,10 +654,17 @@ function updatePlayerNames(gameState, playersSwapped) {
 
     // Kun fornavn paa TV-skaermen; forbogstav ved sammenfald paa tvaers af
     // alle fire pladser (ogsaa modstandere). Tom streng = pladsen er ikke i brug.
-    const [v1, v1m, v2, v2m] = NameDisplay.visningsnavne([
+    // Udskiftere (badmintonplanner.dk) koeres med i samme beregning, saa et
+    // sammenfald mellem en udskifter og en spiller ogsaa faar forbogstav.
+    const subs = (gameState.planner && Array.isArray(gameState.planner.substitutes))
+        ? gameState.planner.substitutes : [];
+    const visning = NameDisplay.visningsnavne([
         displayPlayer1.name, d1 ? displayPlayer1.name2 : '',
-        displayPlayer2.name, d2 ? displayPlayer2.name2 : ''
+        displayPlayer2.name, d2 ? displayPlayer2.name2 : '',
+        ...subs
     ]);
+    const [v1, v1m, v2, v2m] = visning;
+    _plannerSubsDisplay = visning.slice(4);
 
     // Player 1
     setName(p1, displayPlayer1.name, v1);
@@ -1658,3 +1669,114 @@ window.addEventListener('pagehide', function() {
     stopScreensaver();
 });
 
+
+
+// ===== badmintonplanner.dk: runde-visning =====
+// Backend leverer gameState.planner = { label, note, nextRoundAt (ISO/UTC),
+// substitutes[], courtNote } naar banen viser en runde fra badmintonplanner.dk.
+// Headeren faar rundenavn + "Naeste runde 19.30 · om 12 min", og en strip over
+// footeren viser udskiftere (fornavne, samme regel som spillerne), banenote og
+// rundenote. Uden planner-blok skjules det hele — scoreboardet er som foer.
+
+let _plannerSubsDisplay = [];      // visningsnavne for udskiftere (sat i updatePlayerNames)
+let _plannerNextRoundAt = null;    // Date eller null
+let _plannerSignatur = null;
+let _plannerNextText = null;
+
+function plannerKlokkeslaet(date) {
+    return new Intl.DateTimeFormat('da-DK', {
+        timeZone: 'Europe/Copenhagen', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+    }).format(date).replace(':', '.');
+}
+
+// Strippen tager ~7vh — .has-planner skalerer saet-bokse og navne lidt ned
+// (se CSS), saa alt stadig passer i 100vh. Re-fit navnene naar fonten skifter.
+let _plannerLayoutOn = false;
+function setPlannerLayout(on) {
+    if (on === _plannerLayoutOn) return;
+    _plannerLayoutOn = on;
+    const c = document.querySelector('.tv-container');
+    if (c) c.classList.toggle('has-planner', on);
+    if (typeof fitAllPlayerNames === 'function') requestAnimationFrame(fitAllPlayerNames);
+}
+
+function updatePlannerDisplay(planner, hasGameActivity) {
+    const head = document.getElementById('tvPlannerHead');
+    const strip = document.getElementById('tvPlannerStrip');
+    const header = document.querySelector('.tv-header');
+    if (!head || !strip) return;
+
+    if (!planner) {
+        if (head.style.display !== 'none') head.style.display = 'none';
+        if (strip.style.display !== 'none') strip.style.display = 'none';
+        if (header) header.classList.remove('planner-idle');
+        setPlannerLayout(false);
+        _plannerNextRoundAt = null;
+        _plannerSignatur = null;
+        _plannerNextText = null;
+        return;
+    }
+
+    // Timeren staar paa 00:00 indtil der taelles — i planner-tilstand er den
+    // bare stoej, saa den skjules til foerste point.
+    if (header) header.classList.toggle('planner-idle', !hasGameActivity);
+
+    const next = planner.nextRoundAt ? new Date(planner.nextRoundAt) : null;
+    _plannerNextRoundAt = next && !isNaN(next.getTime()) ? next : null;
+
+    const signatur = JSON.stringify([
+        planner.label, planner.note, planner.nextRoundAt, planner.courtNote, _plannerSubsDisplay
+    ]);
+    if (signatur === _plannerSignatur) {
+        updatePlannerCountdown();
+        return;
+    }
+    _plannerSignatur = signatur;
+
+    // Header: rundenavn (+ naeste runde via countdown)
+    const labelEl = document.getElementById('tvPlannerLabel');
+    labelEl.textContent = planner.label || '';
+    labelEl.style.display = planner.label ? '' : 'none';
+    head.style.display = (planner.label || _plannerNextRoundAt) ? 'flex' : 'none';
+    _plannerNextText = null;
+    updatePlannerCountdown();
+
+    // Strip (een linje): udskiftere og banenote. Rundenoten vises kun paa
+    // oversigten sammen med rundenavnet — ikke paa banens TV.
+    const subsWrap = document.getElementById('tvPlannerSubs');
+    const subsNames = document.getElementById('tvPlannerSubsNames');
+    const courtNote = document.getElementById('tvPlannerCourtNote');
+
+    const harSubs = _plannerSubsDisplay.length > 0;
+    subsNames.textContent = _plannerSubsDisplay.join('  ·  ');
+    subsWrap.style.display = harSubs ? 'flex' : 'none';
+
+    courtNote.textContent = planner.courtNote || '';
+    courtNote.style.display = planner.courtNote ? 'block' : 'none';
+
+    const visStrip = !!(harSubs || planner.courtNote);
+    strip.style.display = visStrip ? 'flex' : 'none';
+    setPlannerLayout(visStrip);
+}
+
+// "Naeste runde 19.30 · om 12 min" — kaldes hvert halve sekund fra timer-loopet,
+// men skriver kun til DOM naar teksten aendrer sig (dvs. hvert minut).
+function updatePlannerCountdown() {
+    const el = document.getElementById('tvPlannerNext');
+    if (!el || _plannerSignatur === null) return;
+    let text = '';
+    let due = false;
+    if (_plannerNextRoundAt) {
+        const diffMin = Math.ceil((_plannerNextRoundAt.getTime() - Date.now()) / 60000);
+        const kl = plannerKlokkeslaet(_plannerNextRoundAt);
+        if (diffMin > 1) text = `Næste runde ${kl} · om ${diffMin} min`;
+        else if (diffMin === 1) text = `Næste runde ${kl} · om 1 min`;
+        else { text = `Næste runde ${kl} · nu`; due = true; }
+    }
+    if (text !== _plannerNextText) {
+        _plannerNextText = text;
+        el.textContent = text;
+        el.style.display = text ? '' : 'none';
+        el.classList.toggle('is-due', due);
+    }
+}

@@ -7,7 +7,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=5">
     <link rel="icon" type="image/png" href="/favicon.png?v=5">
     <link rel="stylesheet" href="fonts.css?v=2">
-    <link rel="stylesheet" href="tv-v3-styles.css?v=9">
+    <link rel="stylesheet" href="tv-v3-styles.css?v=10">
     <script src="js/theme-loader.js?v=8"></script>
 </head>
 <body>
@@ -16,6 +16,11 @@
         <!-- Header with court number and timer -->
         <div class="tv-header">
             <h1>BANE <span id="courtNumber">1</span></h1>
+            <!-- badmintonplanner.dk: rundenavn + næste runde (skjult uden runde) -->
+            <div class="tv-planner-head" id="tvPlannerHead" style="display:none;">
+                <span class="tv-planner-label" id="tvPlannerLabel"></span>
+                <span class="tv-planner-next" id="tvPlannerNext"></span>
+            </div>
             <div class="timer-display" id="timerDisplay">00:00</div>
         </div>
 
@@ -48,6 +53,16 @@
                     <div class="set-box" id="team2Set3">-</div>
                 </div>
             </div>
+        </div>
+
+        <!-- badmintonplanner.dk: udskiftere og banenote på én linje (skjult uden runde).
+             Rundenoten hører til oversigten, ikke banens TV. -->
+        <div class="tv-planner-strip" id="tvPlannerStrip" style="display:none;">
+            <div class="tv-planner-subs" id="tvPlannerSubs" style="display:none;">
+                <span class="tv-planner-strip-label">Udskiftere</span>
+                <span class="tv-planner-subs-names" id="tvPlannerSubsNames"></span>
+            </div>
+            <div class="tv-planner-note" id="tvPlannerCourtNote" style="display:none;"></div>
         </div>
 
         <!-- Footer with sponsor banner or LIVE indicator -->
@@ -121,6 +136,6 @@
     <script src="js/logo-match.js?v=1"></script>
     <script src="js/live-updates.js?v=2"></script>
     <script src="js/name-display.js?v=1"></script>
-    <script src="tv-script-v3.js?v=36"></script>
+    <script src="tv-script-v3.js?v=37"></script>
 </body>
 </html>

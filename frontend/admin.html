@@ -426,6 +426,54 @@
                     </div>
                 </div>
 
+                <!-- Testværktøj -->
+                <div class="pl-card">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                        <h3 style="margin:0;">Testværktøj</h3>
+                        <button id="togglePlannerTestBtn" class="pl-btn-sm">Vis testværktøj</button>
+                    </div>
+                    <p class="pl-help" style="margin:8px 0 0;">
+                        Send en testrunde præcis som badmintonplanner.dk ville gøre det — med nøglen ovenfor, gennem det rigtige API
+                        og med ugeplanens regler. Navnene kommer op på TV og oversigt med det samme.
+                    </p>
+                    <div id="plannerTestPanel" style="display:none;margin-top:16px;">
+                        <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;margin-bottom:12px;">
+                            <div>
+                                <label class="pl-label">Nøgle</label>
+                                <select id="ptToken" class="pl-input" style="width:100%;"></select>
+                            </div>
+                            <div>
+                                <label class="pl-label">Rundenavn</label>
+                                <input type="text" id="ptLabel" class="pl-input" value="Runde 1 (test)" style="width:100%;">
+                            </div>
+                            <div>
+                                <label class="pl-label">Næste runde kl.</label>
+                                <input type="text" id="ptNext" class="pl-input" placeholder="fx 19:30" style="width:100%;">
+                            </div>
+                        </div>
+                        <div style="margin-bottom:12px;">
+                            <label class="pl-label">Note til runden</label>
+                            <input type="text" id="ptNote" class="pl-input" value="Testrunde fra admin" style="width:100%;">
+                        </div>
+                        <div style="overflow-x:auto;margin-bottom:12px;">
+                            <table class="pl-week">
+                                <thead><tr><th>Bane</th><th>Side 1</th><th>Side 2</th><th>Udskiftere</th><th>Note</th></tr></thead>
+                                <tbody id="ptCourts"></tbody>
+                            </table>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9em;">
+                                <input type="checkbox" id="ptForce" class="pl-check" checked> Skift også baner hvor der tælles (forceNewMatch)
+                            </label>
+                            <span style="flex:1;"></span>
+                            <button id="ptStatusBtn" class="pl-btn-sm">Tjek status</button>
+                            <button id="ptClearBtn" class="pl-btn-sm">Send tom runde (ryd)</button>
+                            <button id="ptSendBtn" class="btn-primary">Send runde</button>
+                        </div>
+                        <div id="ptResult" style="display:none;margin-top:14px;padding:12px 14px;border-radius:8px;font-size:0.88em;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);line-height:1.5;"></div>
+                    </div>
+                </div>
+
                 <!-- Log -->
                 <div class="pl-card">
                     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
@@ -475,6 +523,6 @@
     <script src="js/auth-guard.js?v=3"></script>
     <script src="js/logo-match.js?v=1"></script>
     <script src="js/live-updates.js?v=2"></script>
-    <script src="admin-script.js?v=50"></script>
+    <script src="admin-script.js?v=51"></script>
 </body>
 </html>

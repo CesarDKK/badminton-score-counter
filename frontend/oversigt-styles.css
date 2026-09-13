@@ -734,3 +734,79 @@ body::before {
     flex-shrink: 0;
     opacity: 0.9;
 }
+
+
+/* =================== BADMINTONPLANNER.DK (runde-visning) =================== */
+.planner-banner {
+    flex-shrink: 0;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.6vh 2.5vw;
+    padding: 1.2vh 32px;
+    background: rgba(var(--color-primary-rgb), 0.12);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.planner-banner-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: min(4.2vh, 3.4vw);
+    letter-spacing: 3px;
+    color: #ffffff;
+    line-height: 1.1;
+}
+
+.planner-banner-next {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: min(3.2vh, 2.6vw);
+    letter-spacing: 2px;
+    color: var(--color-accent);
+    font-variant-numeric: tabular-nums;
+}
+
+.planner-banner-next:empty { display: none; }
+
+.planner-banner-note {
+    font-size: min(2.4vh, 1.9vw);
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.75);
+    flex-basis: 100%;
+}
+
+.planner-banner-note:empty { display: none; }
+
+.court-planner-info {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.9em;
+    line-height: 1.25;
+}
+
+.court-planner-label {
+    font-size: 0.72em;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.45);
+    margin-right: 8px;
+}
+
+.court-planner-subs {
+    color: rgba(255, 255, 255, 0.85);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.court-planner-note {
+    color: var(--color-accent);
+    font-weight: 600;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}

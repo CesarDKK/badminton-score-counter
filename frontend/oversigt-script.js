@@ -503,6 +503,9 @@ async function loadAllCourts() {
             }
         }
 
+        // badmintonplanner.dk: banner med rundenavn/næste runde/note (data følger med pr. bane)
+        updatePlannerBanner(allCourtData);
+
         // Filter: vis aktive baner + afsluttede i op til 5 min.
         // matchCompleted=true baner inkluderes direkte — ingen separat snapshot-mekanisme.
         const activeOnly = allCourtData.filter(court => {
@@ -672,7 +675,8 @@ function updateCourtCardData(court) {
     if (wasFinished !== isFinishedNow ||
         wasPaused !== isPaused ||
         parseInt(card.dataset.sets || '0') !== history.length ||
-        card.dataset.p1 !== court.player1.name) {
+        card.dataset.p1 !== court.player1.name ||
+        (card.dataset.planner || '') !== plannerSignatur(court)) {
         card.outerHTML = renderCourtCard(court);
         return;
     }
@@ -781,7 +785,7 @@ function renderCourtCard(court) {
     const pauseSeconds = isPaused ? getPauseSecondsLeft(court) : 0;
 
     return `
-        <div class="court-card${isPaused ? ' court-card--paused' : ''}" data-court-id="${court.courtId}" data-sets="${history.length}" data-p1="${escapeHtml(court.player1.name)}">
+        <div class="court-card${isPaused ? ' court-card--paused' : ''}" data-court-id="${court.courtId}" data-sets="${history.length}" data-p1="${escapeHtml(court.player1.name)}" data-planner="${escapeHtml(plannerSignatur(court))}">
 
             <!-- Pause overlay — dækker hele kortet når aktiv -->
             ${isPaused ? `
@@ -816,6 +820,7 @@ function renderCourtCard(court) {
                         </div>
                     </div>
                 </div>
+                ${plannerInfoHtml(court)}
             </div>
         </div>
     `;
@@ -1251,3 +1256,82 @@ window.addEventListener('pagehide', function() {
     if (scrollTimer) clearInterval(scrollTimer);
     if (localTimerInterval) clearInterval(localTimerInterval);
 });
+
+
+// ===== badmintonplanner.dk: runde-visning =====
+// Hver bane i batch/all bærer court.planner = { label, note, nextRoundAt,
+// substitutes[], courtNote } når banen viser en runde fra badmintonplanner.dk.
+// Banneret øverst viser rundenavn, næste runde og rundenote; banekortet får
+// udskiftere og banenote under spillerne.
+
+let _plannerBannerSignatur = null;
+let _plannerBannerNext = null;
+let _plannerBannerTimer = null;
+
+function plannerKlokkeslaet(date) {
+    return new Intl.DateTimeFormat('da-DK', {
+        timeZone: 'Europe/Copenhagen', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+    }).format(date).replace(':', '.');
+}
+
+function plannerNaesteTekst(next) {
+    if (!next) return '';
+    const diffMin = Math.ceil((next.getTime() - Date.now()) / 60000);
+    const kl = plannerKlokkeslaet(next);
+    if (diffMin > 1) return `Næste runde ${kl} · om ${diffMin} min`;
+    if (diffMin === 1) return `Næste runde ${kl} · om 1 min`;
+    return `Næste runde ${kl} · nu`;
+}
+
+function updatePlannerBanner(courts) {
+    const banner = document.getElementById('plannerBanner');
+    if (!banner) return;
+    const p = (courts || []).map(c => c.planner).find(Boolean) || null;
+    const signatur = p ? JSON.stringify([p.label, p.note, p.nextRoundAt]) : null;
+
+    if (!p) {
+        if (banner.style.display !== 'none') banner.style.display = 'none';
+        _plannerBannerSignatur = null;
+        _plannerBannerNext = null;
+        if (_plannerBannerTimer) { clearInterval(_plannerBannerTimer); _plannerBannerTimer = null; }
+        return;
+    }
+    const next = p.nextRoundAt ? new Date(p.nextRoundAt) : null;
+    _plannerBannerNext = next && !isNaN(next.getTime()) ? next : null;
+
+    if (signatur !== _plannerBannerSignatur) {
+        _plannerBannerSignatur = signatur;
+        document.getElementById('plannerBannerLabel').textContent = p.label || '';
+        document.getElementById('plannerBannerNote').textContent = p.note || '';
+        banner.style.display = (p.label || p.note || _plannerBannerNext) ? 'flex' : 'none';
+    }
+    const nextEl = document.getElementById('plannerBannerNext');
+    const tekst = plannerNaesteTekst(_plannerBannerNext);
+    if (nextEl.textContent !== tekst) nextEl.textContent = tekst;
+    if (!_plannerBannerTimer) {
+        _plannerBannerTimer = setInterval(() => {
+            const el = document.getElementById('plannerBannerNext');
+            const t = plannerNaesteTekst(_plannerBannerNext);
+            if (el && el.textContent !== t) el.textContent = t;
+        }, 15000);
+    }
+}
+
+// Signatur til at afgøre om banekortet skal gen-renderes (udskiftere/note ændret)
+function plannerSignatur(court) {
+    const p = court && court.planner;
+    if (!p) return '';
+    return [(p.substitutes || []).join('|'), p.courtNote || ''].join('#');
+}
+
+function plannerInfoHtml(court) {
+    const p = court && court.planner;
+    if (!p) return '';
+    const subs = (p.substitutes || []).filter(Boolean);
+    if (!subs.length && !p.courtNote) return '';
+    return `
+        <div class="court-planner-info">
+            ${subs.length ? `<div class="court-planner-subs"><span class="court-planner-label">Udskiftere</span>${escapeHtml(subs.join(' · '))}</div>` : ''}
+            ${p.courtNote ? `<div class="court-planner-note">${escapeHtml(p.courtNote)}</div>` : ''}
+        </div>`;
+}

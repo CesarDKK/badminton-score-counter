@@ -282,6 +282,48 @@ async function plannerVindueLuk() {
     });
 }
 
+/**
+ * Den aktuelle runde til visning på TV og oversigt (fase 2), eller null.
+ * { label, note, nextRoundAt (ISO/UTC), receivedAt, courts: { [nr]: { substitutes, note } } }
+ */
+async function hentPlannerVisning() {
+    const r = await queryOne(
+        'SELECT id, label, note, next_round_at, received_at FROM planner_rounds ORDER BY id DESC LIMIT 1'
+    );
+    if (!r) return null;
+    const rows = await query(
+        'SELECT court_number, substitutes, note FROM planner_court_assignments WHERE round_id = ?',
+        [r.id]
+    );
+    const courts = {};
+    for (const a of rows) {
+        let subs = [];
+        if (a.substitutes) { try { subs = JSON.parse(a.substitutes) || []; } catch { /* tomt */ } }
+        courts[a.court_number] = { substitutes: subs, note: a.note || '' };
+    }
+    return {
+        label: r.label || '',
+        note: r.note || '',
+        nextRoundAt: r.next_round_at ? new Date(r.next_round_at).toISOString() : null,
+        receivedAt: r.received_at ? new Date(r.received_at).toISOString() : null,
+        courts
+    };
+}
+
+/** Planner-blokken for én bane (til game-state-svaret), eller null. */
+function plannerForBane(visning, courtNumber) {
+    if (!visning) return null;
+    const c = visning.courts[courtNumber];
+    if (!c) return null;
+    return {
+        label: visning.label,
+        note: visning.note,
+        nextRoundAt: visning.nextRoundAt,
+        substitutes: c.substitutes,
+        courtNote: c.note
+    };
+}
+
 // ---------- Middleware ----------
 
 async function plannerAuth(req, res, next) {
@@ -380,7 +422,19 @@ router.post('/planned-round', plannerIpLimiter, plannerAuth, plannerTokenLimiter
     }
 });
 
+// GET /api/integrations/current-round — offentlig (som game-states): oversigten
+// viser rundenavn, næste runde og note som banner. null når ingen runde vises.
+router.get('/current-round', async (req, res, next) => {
+    try {
+        res.json(await hentPlannerVisning());
+    } catch (e) {
+        next(e);
+    }
+});
+
 module.exports = router;
+module.exports.hentPlannerVisning = hentPlannerVisning;
+module.exports.plannerForBane = plannerForBane;
 module.exports.hentConfig = hentConfig;
 module.exports.gemConfig = gemConfig;
 module.exports.statusFor = statusFor;
