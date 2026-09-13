@@ -65,6 +65,18 @@ function setupEventListeners() {
     document.getElementById('deviceTokensBtn').addEventListener('click', showDeviceTokens);
     document.getElementById('createDtBtn').addEventListener('click', handleCreateDeviceToken);
 
+    // Badmintonplanner
+    document.getElementById('plannerBtn').addEventListener('click', showPlanner);
+    document.getElementById('createPlannerTokenBtn').addEventListener('click', handleCreatePlannerToken);
+    document.getElementById('savePlannerConfigBtn').addEventListener('click', () => savePlannerConfig(false));
+    document.getElementById('plannerEnabled').addEventListener('change', () => savePlannerConfig(true));
+    document.getElementById('togglePlannerLogBtn').addEventListener('click', togglePlannerLog);
+    document.getElementById('refreshPlannerLogBtn').addEventListener('click', loadPlannerLog);
+    document.getElementById('togglePlannerTestBtn').addEventListener('click', togglePlannerTest);
+    document.getElementById('ptStatusBtn').addEventListener('click', () => ptKald('status', null));
+    document.getElementById('ptSendBtn').addEventListener('click', () => ptKald('planned-round', ptByg(false)));
+    document.getElementById('ptClearBtn').addEventListener('click', () => ptKald('planned-round', ptByg(true)));
+
     // Nav overview button
     document.getElementById('backToOverviewNavBtn').addEventListener('click', showCourtOverview);
 
@@ -207,7 +219,9 @@ async function showDashboard() {
         // Navigate to section specified in URL hash (e.g. admin.html#holdkamp).
         // Spring over hvis brugeren ikke har adgang til den side.
         const hash = window.location.hash;
-        if (hash === '#holdkamp' && canAccess('holdkamp')) {
+        if (hash === '#planner' && canAccess('planner')) {
+            await showPlanner();
+        } else if (hash === '#holdkamp' && canAccess('holdkamp')) {
             await showHoldkamp();
         } else if (hash === '#tournament' && canAccess('tournament')) {
             await showTournament();
@@ -1081,7 +1095,7 @@ function hideAllSections() {
     stopTournamentRefresh();
     stopAutoRefresh();
 
-    ['courtOverviewSection', 'holdkampSection', 'tournamentSection', 'matchHistorySection', 'deviceTokensSection']
+    ['courtOverviewSection', 'holdkampSection', 'tournamentSection', 'matchHistorySection', 'deviceTokensSection', 'plannerSection']
         .forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
@@ -1096,6 +1110,8 @@ function showCourtOverview() {
     const tournamentSection = document.getElementById('tournamentSection');
     if (tournamentSection) tournamentSection.style.display = 'none';
     document.getElementById('deviceTokensSection').style.display = 'none';
+    const plannerSection = document.getElementById('plannerSection');
+    if (plannerSection) plannerSection.style.display = 'none';
     document.getElementById('courtOverviewSection').style.display = 'block';
     setNavActive('overview');
     history.replaceState(null, '', '#');
@@ -4091,3 +4107,433 @@ async function confirmTournamentImport() {
     }
 }
 
+
+// ==================== BADMINTONPLANNER (integration) ====================
+//
+// Fanen Badmintonplanner: tænd/sluk, API-nøgler, ugeplan (tidsrum + baner pr.
+// ugedag) og kald-log. Selve API'et ligger i backend/routes/plannerIntegration.js.
+
+const PL_DAGE = [[1, 'Mandag'], [2, 'Tirsdag'], [3, 'Onsdag'], [4, 'Torsdag'], [5, 'Fredag'], [6, 'Lørdag'], [7, 'Søndag']];
+const PL_TIDLIGST = 7 * 60;
+const PL_SENEST = 23 * 60;
+let plannerCourtCount = 4;
+let plannerLogVisible = false;
+
+async function showPlanner() {
+    hideAllSections();
+    document.getElementById('plannerSection').style.display = 'block';
+    setNavActive('planner');
+    history.replaceState(null, '', '#planner');
+
+    try {
+        const settings = await api.getSettings();
+        plannerCourtCount = settings.courtCount || 4;
+    } catch {}
+
+    await Promise.all([loadPlannerConfig(), loadPlannerTokens()]);
+    if (plannerLogVisible) loadPlannerLog();
+}
+
+function plTid(min) {
+    return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+}
+
+function plDagNavn(n) {
+    const d = PL_DAGE.find(x => x[0] === Number(n));
+    return d ? d[1] : '';
+}
+
+function plVindueTekst(v) {
+    return `${plDagNavn(v.ugedag).toLowerCase()} ${v.from.replace(':', '.')}–${v.to.replace(':', '.')}`;
+}
+
+// Kvarter-trin mellem 07:00 og 23:00 (fra: til og med 22:45, til: fra 07:15)
+function plTidOptions(fraMin, tilMin, valgt) {
+    const out = [];
+    for (let m = fraMin; m <= tilMin; m += 15) {
+        out.push(`<option value="${plTid(m)}"${plTid(m) === valgt ? ' selected' : ''}>${plTid(m).replace(':', '.')}</option>`);
+    }
+    return out.join('');
+}
+
+function renderPlannerWeek(config) {
+    const body = document.getElementById('plannerWeekBody');
+    const days = (config && config.days) || {};
+    const alleBaner = Array.from({ length: plannerCourtCount }, (_, i) => i + 1);
+    body.innerHTML = PL_DAGE.map(([n, navn]) => {
+        const d = days[n];
+        const on = !!d;
+        const from = d ? d.from : '18:00';
+        const to = d ? d.to : '21:00';
+        const courts = new Set(d ? d.courts : alleBaner);
+        const courtBoxes = alleBaner.map(c =>
+            `<label><input type="checkbox" class="pl-check pl-court" value="${c}" ${courts.has(c) ? 'checked' : ''}> ${c}</label>`
+        ).join('');
+        return `
+        <tr class="${on ? '' : 'pl-off'}" data-day="${n}">
+            <td><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;">
+                <input type="checkbox" class="pl-check pl-day" ${on ? 'checked' : ''} onchange="plToggleDay(${n})"> ${navn}
+            </label></td>
+            <td><select class="pl-select pl-from">${plTidOptions(PL_TIDLIGST, PL_SENEST - 15, from)}</select></td>
+            <td><select class="pl-select pl-to">${plTidOptions(PL_TIDLIGST + 15, PL_SENEST, to)}</select></td>
+            <td><div class="pl-courts">${courtBoxes}</div></td>
+        </tr>`;
+    }).join('');
+}
+
+function plToggleDay(n) {
+    const row = document.querySelector(`#plannerWeekBody tr[data-day="${n}"]`);
+    if (!row) return;
+    row.classList.toggle('pl-off', !row.querySelector('.pl-day').checked);
+}
+
+function readPlannerConfig() {
+    const days = {};
+    document.querySelectorAll('#plannerWeekBody tr[data-day]').forEach(row => {
+        if (!row.querySelector('.pl-day').checked) return;
+        days[row.dataset.day] = {
+            from: row.querySelector('.pl-from').value,
+            to: row.querySelector('.pl-to').value,
+            courts: Array.from(row.querySelectorAll('.pl-court:checked')).map(c => Number(c.value))
+        };
+    });
+    return { enabled: document.getElementById('plannerEnabled').checked, days };
+}
+
+function renderPlannerStatus(status) {
+    const badge = document.getElementById('plannerStatusBadge');
+    const text = document.getElementById('plannerStatusText');
+    if (!status) { badge.textContent = ''; text.textContent = ''; return; }
+    if (!status.integrationEnabled) {
+        badge.className = 'pl-badge off';
+        badge.textContent = 'Slået fra';
+        text.textContent = 'badmintonplanner.dk afvises på alle kald, indtil integrationen slås til.';
+    } else if (status.openNow) {
+        badge.className = 'pl-badge open';
+        badge.textContent = 'Åbent nu';
+        text.textContent = `badmintonplanner.dk må sende data nu (${plVindueTekst(status.window)}) til bane ${status.courtsNow.join(', ')}.`;
+    } else {
+        badge.className = 'pl-badge closed';
+        badge.textContent = 'Lukket';
+        text.textContent = status.nextWindow
+            ? `Næste åbne tidsrum: ${plVindueTekst(status.nextWindow)}, bane ${status.nextWindow.courts.join(', ')}.`
+            : 'Ingen dage er valgt i ugeplanen endnu.';
+    }
+}
+
+async function loadPlannerConfig() {
+    try {
+        const config = await api.getPlannerConfig();
+        document.getElementById('plannerEnabled').checked = !!config.enabled;
+        renderPlannerWeek(config);
+        renderPlannerStatus(config.status);
+    } catch (err) {
+        showDtMsg(document.getElementById('plannerConfigMsg'), `Kunne ikke hente opsætningen: ${err.message}`, 'error');
+    }
+}
+
+// kunTaendSluk: kaldt fra "Integration aktiv"-boksen — gemmer hele opsætningen
+// som den står, så ændringen slår igennem med det samme.
+async function savePlannerConfig(kunTaendSluk) {
+    const msgEl = document.getElementById('plannerConfigMsg');
+    const btn = document.getElementById('savePlannerConfigBtn');
+    const config = readPlannerConfig();
+    const tomDag = Object.entries(config.days).find(([, d]) => d.courts.length === 0);
+    if (tomDag) {
+        showDtMsg(msgEl, `${plDagNavn(tomDag[0])}: vælg mindst én bane`, 'error');
+        if (kunTaendSluk) document.getElementById('plannerEnabled').checked = !config.enabled;
+        return;
+    }
+    btn.disabled = true;
+    try {
+        const saved = await api.savePlannerConfig(config);
+        renderPlannerStatus(saved.status);
+        showDtMsg(msgEl, kunTaendSluk ? (config.enabled ? '✓ Integrationen er slået til' : '✓ Integrationen er slået fra') : '✓ Ugeplan gemt', 'success');
+    } catch (err) {
+        showDtMsg(msgEl, err.message || 'Kunne ikke gemme', 'error');
+        if (kunTaendSluk) document.getElementById('plannerEnabled').checked = !config.enabled;
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function loadPlannerTokens() {
+    const listEl = document.getElementById('plannerTokensList');
+    try {
+        const tokens = await api.getPlannerTokens();
+        renderPlannerTokens(tokens);
+    } catch (err) {
+        listEl.innerHTML = `<p style="color:var(--color-accent);padding:12px 0;">Fejl: ${escapeHtml(err.message)}</p>`;
+    }
+}
+
+function renderPlannerTokens(tokens) {
+    const listEl = document.getElementById('plannerTokensList');
+    const url = `${window.location.origin}/api/integrations/planned-round`;
+    if (!tokens.length) {
+        listEl.innerHTML = '<p style="color:rgba(255,255,255,0.4);padding:12px 0;">Ingen nøgle oprettet endnu. Opret én og sæt den ind i badmintonplanner.dk.</p>';
+        ptFillTokens(tokens);
+        return;
+    }
+    const copyRow = (label, value) => `
+        <div class="pl-copy">
+            <span style="font-size:0.72em;text-transform:uppercase;letter-spacing:0.06em;color:rgba(255,255,255,0.45);width:70px;flex-shrink:0;">${label}</span>
+            <input readonly value="${escapeHtml(value)}" onclick="this.select()">
+            <button class="pl-btn-sm" onclick="copyLink(this.parentElement.querySelector('input').value, this)">Kopiér</button>
+        </div>`;
+    listEl.innerHTML = tokens.map(t => {
+        const lastUsed = t.last_used_at ? new Date(t.last_used_at).toLocaleString('da-DK') : 'Aldrig';
+        return `
+        <div style="background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:16px 20px;margin-bottom:12px;${t.is_active ? '' : 'opacity:0.45;'}">
+            <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+                <div style="flex:1;min-width:240px;">
+                    <div style="font-weight:600;margin-bottom:2px;">${escapeHtml(t.name)}</div>
+                    <div style="font-size:0.8em;color:rgba(255,255,255,0.45);">Oprettet ${new Date(t.created_at).toLocaleDateString('da-DK')} &nbsp;•&nbsp; Sidst brugt: ${lastUsed}</div>
+                    ${t.is_active ? copyRow('Adresse', url) + copyRow('Nøgle', t.token) : ''}
+                </div>
+                <div style="display:flex;gap:8px;flex-shrink:0;">
+                    ${t.is_active
+                        ? `<button class="pl-btn-danger" onclick="handleRevokePlannerToken(${t.id})">Tilbagekald</button>`
+                        : `<span style="font-size:0.8em;color:rgba(255,255,255,0.3);padding:6px 10px;">Tilbagekaldt</span>
+                           <button class="pl-btn-danger" onclick="handlePermanentDeletePlannerToken(${t.id})">🗑 Slet</button>`}
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+    ptFillTokens(tokens);
+}
+
+async function handleCreatePlannerToken() {
+    const nameEl = document.getElementById('plannerTokenName');
+    const msgEl = document.getElementById('plannerTokenMsg');
+    const btn = document.getElementById('createPlannerTokenBtn');
+    const name = nameEl.value.trim();
+    if (!name) { showDtMsg(msgEl, 'Giv nøglen et navn', 'error'); return; }
+    btn.disabled = true;
+    try {
+        await api.createPlannerToken(name);
+        nameEl.value = '';
+        showDtMsg(msgEl, '✓ Nøgle oprettet — kopiér adresse og nøgle ind i badmintonplanner.dk', 'success');
+        await loadPlannerTokens();
+    } catch (err) {
+        showDtMsg(msgEl, err.message || 'Oprettelse mislykkedes', 'error');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function handleRevokePlannerToken(id) {
+    showMessage(
+        'Tilbagekald API-nøgle',
+        'badmintonplanner.dk mister adgang med det samme. Du kan oprette en ny nøgle bagefter.',
+        [
+            { text: 'Tilbagekald', style: 'danger', callback: async () => {
+                try { await api.revokePlannerToken(id); await loadPlannerTokens(); }
+                catch (err) { showMessage('Fejl', err.message); }
+            } },
+            { text: 'Annuller', style: 'secondary', callback: null }
+        ]
+    );
+}
+
+function handlePermanentDeletePlannerToken(id) {
+    showMessage(
+        'Slet nøgle',
+        'Nøglen slettes permanent.',
+        [
+            { text: 'Slet', style: 'danger', callback: async () => {
+                try { await api.permanentlyDeletePlannerToken(id); await loadPlannerTokens(); }
+                catch (err) { showMessage('Fejl', err.message); }
+            } },
+            { text: 'Annuller', style: 'secondary', callback: null }
+        ]
+    );
+}
+
+function togglePlannerLog() {
+    plannerLogVisible = !plannerLogVisible;
+    document.getElementById('plannerLogPanel').style.display = plannerLogVisible ? 'block' : 'none';
+    document.getElementById('refreshPlannerLogBtn').style.display = plannerLogVisible ? 'inline-block' : 'none';
+    document.getElementById('togglePlannerLogBtn').textContent = plannerLogVisible ? 'Skjul log' : 'Vis log';
+    if (plannerLogVisible) loadPlannerLog();
+}
+
+async function loadPlannerLog() {
+    const panel = document.getElementById('plannerLogPanel');
+    panel.innerHTML = '<p style="color:rgba(255,255,255,0.4);">Indlæser…</p>';
+    try {
+        const rows = await api.getPlannerLog(100);
+        renderPlannerLog(rows);
+    } catch (err) {
+        panel.innerHTML = `<p style="color:var(--color-accent);">Fejl: ${escapeHtml(err.message)}</p>`;
+    }
+}
+
+const PL_AARSAG = {
+    match_in_progress: 'kamp i gang',
+    court_not_allowed: 'bane ikke åben i dag',
+    court_not_found: 'banen findes ikke'
+};
+
+function renderPlannerLog(rows) {
+    const panel = document.getElementById('plannerLogPanel');
+    if (!rows.length) {
+        panel.innerHTML = '<p style="color:rgba(255,255,255,0.4);">Ingen kald endnu.</p>';
+        return;
+    }
+    const linjer = rows.map(r => {
+        const ok = r.http_status >= 200 && r.http_status < 300;
+        let resultat = '';
+        if (Array.isArray(r.result)) {
+            const t = { shown: 0, cleared: 0, rejected: 0 };
+            r.result.forEach(x => { if (t[x.status] !== undefined) t[x.status]++; });
+            const detaljer = r.result.map(x =>
+                `Bane ${x.courtNumber}: ${x.status === 'shown' ? 'vist' : x.status === 'cleared' ? 'ryddet' : 'afvist'}${x.reason ? ` (${PL_AARSAG[x.reason] || x.reason})` : ''}`
+            ).join('<br>');
+            resultat = `<details><summary>${t.shown} vist · ${t.cleared} ryddet · ${t.rejected} afvist</summary><div style="padding:6px 0 0 12px;color:rgba(255,255,255,0.6);">${detaljer}</div></details>`;
+        } else if (r.result && Array.isArray(r.result.cleared)) {
+            resultat = r.result.cleared.length ? `Ryddet bane ${r.result.cleared.join(', ')}` : 'Ingen baner at rydde';
+        }
+        const antal = (r.endpoint === 'planned-round' && r.match_count !== null && r.match_count !== undefined)
+            ? ` <span style="color:rgba(255,255,255,0.4);">(${r.match_count} baner)</span>` : '';
+        return `
+        <tr>
+            <td style="white-space:nowrap;">${new Date(r.received_at).toLocaleString('da-DK')}</td>
+            <td class="${ok ? 'pl-status-ok' : 'pl-status-err'}">${r.http_status}</td>
+            <td>${escapeHtml(r.endpoint || '')}</td>
+            <td>${escapeHtml(r.label || '')}${antal}</td>
+            <td>${resultat}</td>
+            <td style="color:${ok ? 'rgba(255,255,255,0.6)' : 'var(--color-danger,#d92c3f)'};">${escapeHtml(r.error_text || '')}</td>
+        </tr>`;
+    }).join('');
+    panel.innerHTML = `
+        <table class="pl-log">
+            <thead><tr><th>Tidspunkt</th><th>Svar</th><th>Kald</th><th>Runde</th><th>Baner</th><th>Besked</th></tr></thead>
+            <tbody>${linjer}</tbody>
+        </table>`;
+}
+
+
+// ==================== BADMINTONPLANNER — TESTVÆRKTØJ ====================
+//
+// Sender en runde gennem det RIGTIGE integrations-API (Bearer = klubbens
+// planner-nøgle), præcis som badmintonplanner.dk gør — så tidsvindue, baner,
+// rate limit og visning på TV/oversigt kan prøves af i produktion uden konsol.
+
+const PT_NAVNE = [
+    ['Anders Jensen / Bo Nielsen', 'Carsten Hansen / Dan Petersen', 'Erik Larsen', ''],
+    ['Finn Madsen / Hans Berg', 'Gert Olsen / Ib Kruse', '', 'Halvbane: Finn–Gert og Hans–Ib'],
+    ['Jens Holm', 'Kim Lund', '', ''],
+    ['Lars Poulsen / Mads Friis', 'Niels Aagaard / Ole Bak', 'Per Kjær', ''],
+];
+let plannerTestVisible = false;
+
+function togglePlannerTest() {
+    plannerTestVisible = !plannerTestVisible;
+    document.getElementById('plannerTestPanel').style.display = plannerTestVisible ? 'block' : 'none';
+    document.getElementById('togglePlannerTestBtn').textContent = plannerTestVisible ? 'Skjul testværktøj' : 'Vis testværktøj';
+    if (plannerTestVisible) renderPlannerTestCourts();
+}
+
+function ptFillTokens(tokens) {
+    const sel = document.getElementById('ptToken');
+    if (!sel) return;
+    const aktive = (tokens || []).filter(t => t.is_active);
+    sel.innerHTML = aktive.length
+        ? aktive.map(t => `<option value="${escapeHtml(t.token)}">${escapeHtml(t.name)}</option>`).join('')
+        : '<option value="">Ingen aktiv nøgle — opret én ovenfor</option>';
+}
+
+function renderPlannerTestCourts() {
+    const body = document.getElementById('ptCourts');
+    if (!body || body.children.length) return; // behold brugerens indtastning
+    body.innerHTML = Array.from({ length: plannerCourtCount }, (_, i) => {
+        const n = i + 1;
+        const d = PT_NAVNE[i % PT_NAVNE.length];
+        const inp = (cls, val, ph) => `<input type="text" class="pl-input ${cls}" value="${escapeHtml(val)}" placeholder="${ph}" style="width:100%;padding:6px 8px;font-size:0.88em;">`;
+        return `
+        <tr data-court="${n}">
+            <td><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;white-space:nowrap;">
+                <input type="checkbox" class="pl-check pt-on" ${n <= 3 ? 'checked' : ''}> Bane ${n}
+            </label></td>
+            <td style="min-width:180px;">${inp('pt-s1', d[0], 'Navn / Makker')}</td>
+            <td style="min-width:180px;">${inp('pt-s2', d[1], 'Navn / Makker')}</td>
+            <td style="min-width:140px;">${inp('pt-subs', d[2], 'Navn, Navn')}</td>
+            <td style="min-width:160px;">${inp('pt-note', d[3], 'fx Halvbane')}</td>
+        </tr>`;
+    }).join('');
+}
+
+function ptByg(tom) {
+    const split = (s, sep) => String(s || '').split(sep).map(x => x.trim()).filter(Boolean);
+    const matches = [];
+    if (!tom) {
+        document.querySelectorAll('#ptCourts tr[data-court]').forEach(row => {
+            if (!row.querySelector('.pt-on').checked) return;
+            const s1 = split(row.querySelector('.pt-s1').value, '/');
+            const s2 = split(row.querySelector('.pt-s2').value, '/');
+            const m = { courtNumber: Number(row.dataset.court), side1Player1: s1[0] || '', side2Player1: s2[0] || '' };
+            if (s1[1]) m.side1Player2 = s1[1];
+            if (s2[1]) m.side2Player2 = s2[1];
+            const subs = split(row.querySelector('.pt-subs').value, ',');
+            if (subs.length) m.substitutes = subs;
+            const note = row.querySelector('.pt-note').value.trim();
+            if (note) m.note = note;
+            matches.push(m);
+        });
+    }
+    return {
+        roundId: `admin-test-${Date.now()}`,
+        label: tom ? '' : document.getElementById('ptLabel').value.trim(),
+        nextRoundStartsAt: tom ? '' : document.getElementById('ptNext').value.trim(),
+        note: tom ? '' : document.getElementById('ptNote').value.trim(),
+        forceNewMatch: document.getElementById('ptForce').checked,
+        matches
+    };
+}
+
+async function ptKald(sti, body) {
+    const token = document.getElementById('ptToken').value;
+    const out = document.getElementById('ptResult');
+    out.style.display = 'block';
+    if (!token) { out.innerHTML = '<span class="pl-status-err">Opret først en API-nøgle ovenfor.</span>'; return; }
+    out.textContent = 'Sender…';
+    const t0 = performance.now();
+    try {
+        const res = await fetch(`/api/integrations/${sti}`, {
+            method: body ? 'POST' : 'GET',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: body ? JSON.stringify(body) : undefined
+        });
+        const ms = Math.round(performance.now() - t0);
+        let data = null;
+        try { data = await res.json(); } catch { /* tomt svar */ }
+        out.innerHTML = ptSvarHtml(res.status, ms, data);
+        if (plannerLogVisible) loadPlannerLog();
+    } catch (err) {
+        out.innerHTML = `<span class="pl-status-err">Netværksfejl: ${escapeHtml(err.message)}</span>`;
+    }
+}
+
+function ptSvarHtml(status, ms, data) {
+    const ok = status >= 200 && status < 300;
+    let html = `<div><span class="${ok ? 'pl-status-ok' : 'pl-status-err'}">HTTP ${status}</span> <span style="color:rgba(255,255,255,0.4);">· ${ms} ms</span></div>`;
+    if (!data) return html;
+    if (data.error) html += `<div style="margin-top:6px;">${escapeHtml(data.error)}${data.code ? ` <span style="color:rgba(255,255,255,0.4);">(${escapeHtml(data.code)})</span>` : ''}</div>`;
+    if (Array.isArray(data.details)) html += `<div style="color:rgba(255,255,255,0.6);">${data.details.map(escapeHtml).join('<br>')}</div>`;
+    if (Array.isArray(data.results)) {
+        html += '<div style="margin-top:8px;">' + data.results.map(r => {
+            const s = r.status === 'shown' ? '✓ vist' : r.status === 'cleared' ? '– ryddet' : `✗ afvist (${PL_AARSAG[r.reason] || r.reason})`;
+            const prev = r.previous ? ` <span style="color:rgba(255,255,255,0.45);">før: ${escapeHtml(r.previous.side1)} vs ${escapeHtml(r.previous.side2)}${r.previous.counted ? `, ${escapeHtml(r.previous.sets)} sæt` : ''}</span>` : '';
+            return `<div>Bane ${r.courtNumber}: ${s}${prev}</div>`;
+        }).join('') + '</div>';
+        if (data.replayed) html += '<div style="color:rgba(255,255,255,0.5);">Gentaget kald — samme roundId som sidst, banerne blev ikke rørt.</div>';
+    }
+    if (data.integrationEnabled !== undefined && !Array.isArray(data.results)) {
+        const v = w => w ? `${plDagNavn(w.ugedag).toLowerCase()} ${w.from.replace(':', '.')}–${w.to.replace(':', '.')}` : '';
+        html += `<div style="margin-top:8px;">Integration: ${data.integrationEnabled ? 'aktiv' : 'slået fra'} · ${data.openNow ? `<span class="pl-status-ok">åbent nu</span> (${v(data.window)}), bane ${data.courtsNow.join(', ')}` : `lukket${data.nextWindow ? `, næste: ${v(data.nextWindow)}` : ''}`}</div>`;
+        if (data.currentRound) html += `<div>Vist runde: ${escapeHtml(data.currentRound.label || data.currentRound.roundId || '')} (modtaget ${new Date(data.currentRound.receivedAt).toLocaleTimeString('da-DK')})</div>`;
+        else html += '<div style="color:rgba(255,255,255,0.5);">Ingen runde vises lige nu.</div>';
+    }
+    return html;
+}

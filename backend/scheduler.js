@@ -5,6 +5,8 @@ const { runWithTenant } = require('./config/tenantPools');
 async function resetDatabase(dbLabel) {
     const deleteResult = await query('DELETE FROM game_states');
     const updateResult = await query('UPDATE courts SET is_active = FALSE');
+    // badmintonplanner-runden hører til aftenen — væk ved midnat (tildelinger følger med via FK)
+    try { await query('DELETE FROM planner_rounds'); } catch (e) { /* før migration 027 */ }
     console.log(`  ✅ ${dbLabel}: cleared ${deleteResult.affectedRows} game states, set ${updateResult.affectedRows} courts inactive`);
 }
 
@@ -278,4 +280,39 @@ function startHoldkampAutoAfslut() {
     console.log(`⏰ Scheduled auto-afslutning af holdkampe hvert minut (${AUTO_AFSLUT_EFTER_MIN} min efter sidste delkamp)`);
 }
 
-module.exports = { startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut };
+/**
+ * badmintonplanner.dk: når klubbens tidsvindue lukker (eller integrationen
+ * slås fra), ryddes de baner planner-runden viste, så klubben er tilbage i
+ * normal drift. Kører hvert minut; ren databaseforespørgsel. Se
+ * plannerVindueLuk i routes/plannerIntegration.js.
+ */
+function startPlannerVindueLuk() {
+    const { plannerVindueLuk } = require('./routes/plannerIntegration');
+
+    cron.schedule('* * * * *', async () => {
+        try {
+            await plannerVindueLuk();
+        } catch (err) {
+            console.error('❌ Planner-oprydning fejlede (default):', err.message);
+        }
+
+        try {
+            const masterDb = require('./config/masterDatabase');
+            const clubs = await masterDb.query('SELECT db_name FROM clubs WHERE is_active = 1');
+            for (const club of clubs) {
+                try {
+                    await runWithTenant(club.db_name, () => plannerVindueLuk());
+                } catch (err) {
+                    console.error(`❌ Planner-oprydning fejlede for ${club.db_name}:`, err.message);
+                }
+            }
+        } catch (err) { /* master DB ikke tilgængelig i direkte mode */ }
+    }, {
+        scheduled: true,
+        timezone: 'Europe/Copenhagen'
+    });
+
+    console.log('⏰ Scheduled oprydning af badmintonplanner-baner ved vindue-luk (hvert minut)');
+}
+
+module.exports = { startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk };

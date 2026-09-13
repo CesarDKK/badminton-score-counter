@@ -56,9 +56,43 @@ const publicLimiter = rateLimit({
     validate: { trustProxy: false },
 });
 
+// Klientens rigtige IP bag Cloudflare. X-Forwarded-For kan forfalskes af
+// klienten (trust proxy: true stoler paa hele kaeden), CF-Connecting-IP saettes
+// af Cloudflare selv. Uden Cloudflare (lokalt) falder vi tilbage til req.ip.
+const klientIp = (req) => String(req.headers['cf-connecting-ip'] || req.ip || '').replace('::ffff:', '');
+
+// badmintonplanner.dk-integrationen: eet kald pr. runde er normalen, saa 30 kald
+// i minuttet pr. noegle er rigeligt til genforsoeg og stopper et loebsk system.
+// Noeglen kendes foerst efter token-opslaget (req.plannerToken); indtil da
+// taelles paa IP. Ingen fritagelse for private net — kaldene kommer udefra.
+const plannerTokenLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    keyGenerator: (req) => 'planner-token:' + (req.plannerToken ? req.plannerToken.id : klientIp(req)),
+    message: { error: 'For mange kald. Vent lidt og prøv igen.', code: 'rate_limited' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: false,
+});
+
+// Ydre graense pr. IP (ogsaa for kald med ugyldig noegle), saa en gaettende
+// klient ikke kan hamre paa token-opslaget.
+const plannerIpLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000,
+    max: 120,
+    keyGenerator: (req) => 'planner-ip:' + klientIp(req),
+    message: { error: 'For mange kald fra denne adresse. Prøv igen om lidt.', code: 'rate_limited' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: false,
+});
+
 module.exports = {
     loginLimiter,
     uploadLimiter,
     adminLimiter,
-    publicLimiter
+    publicLimiter,
+    plannerTokenLimiter,
+    plannerIpLimiter,
+    klientIp
 };

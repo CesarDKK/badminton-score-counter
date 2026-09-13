@@ -12,7 +12,8 @@ const PAGE_OPTIONS = [
     { key: 'playerinfo', label: 'Spiller info' },
     { key: 'settings',   label: 'Indstillinger' },
     { key: 'sponsors',   label: 'Sponsorer' },
-    { key: 'devicetokens', label: 'Adgangslinks' }
+    { key: 'devicetokens', label: 'Adgangslinks' },
+    { key: 'planner',    label: 'Badmintonplanner' }
 ];
 
 // Bygger HTML for et rettigheds-vaelger-saet. permissions = null betyder alle sider.

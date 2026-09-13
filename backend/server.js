@@ -6,7 +6,7 @@ const path = require('path');
 require('dotenv').config();
 
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
-const { startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut } = require('./scheduler');
+const { startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk } = require('./scheduler');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -136,6 +136,9 @@ app.use('/api/tournaments', require('./routes/tournaments'));
 app.use('/api/import', require('./routes/importHoldkamp'));
 app.use('/api/import/tournament', require('./routes/importTournament'));
 app.use('/api/backup', require('./routes/backup'));
+// badmintonplanner.dk: eksternt API (API-nøgle) + admin-opsætning (fanen Badmintonplanner)
+app.use('/api/integrations', require('./routes/plannerIntegration'));
+app.use('/api/planner', require('./routes/plannerAdmin'));
 
 app.use(notFoundHandler);
 app.use(errorHandler);
@@ -178,6 +181,7 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
         startTournamentAutoSync();
         startHoldkampWatch();
         startHoldkampAutoAfslut();
+        startPlannerVindueLuk();
     } catch (error) {
         console.error('✗ Database connection failed:', error.message);
     }

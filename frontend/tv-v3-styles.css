@@ -871,3 +871,126 @@ body::before {
     .overlay-set-history { font-size: 1.1em; padding: 16px 20px; }
 }
 
+
+
+/* =================== BADMINTONPLANNER.DK (runde-visning) ===================
+   Når badmintonplanner.dk har sendt en runde, viser headeren rundenavn og
+   "Næste runde", og en strip over footeren viser udskiftere og noter. Alt
+   skjules igen uden runde, så det almindelige scoreboard er uændret. */
+.tv-planner-head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0 clamp(12px, 2vw, 40px);
+    line-height: 1.05;
+    text-align: center;
+}
+
+.tv-planner-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(1.6em, 4.5vh, 4em);
+    letter-spacing: 4px;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.tv-planner-next {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(1.1em, 3vh, 2.6em);
+    letter-spacing: 3px;
+    color: var(--color-accent);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.tv-planner-next.is-due {
+    animation: plannerPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes plannerPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+}
+
+/* Mens der ikke tælles, er timeren 00:00 og støjer — skjul den i planner-tilstand */
+.tv-header.planner-idle .timer-display {
+    visibility: hidden;
+}
+
+/* Scoreboardet skal kunne afgive plads til strippen (flex-boern har ellers
+   min-height:auto og skubber footeren ud af skaermen) */
+.tv-container .scoreboard {
+    min-height: 0;
+}
+
+/* Med strip i bunden er der ~7vh mindre til scoreboardet: saet-bokse og navne
+   skaleres lidt ned, saa header + 2 raekker + strip + footer altid passer i
+   100vh (ogsaa med bane-sponsorbanner i footeren). Uden strip er alt som foer. */
+.tv-container.has-planner .set-box {
+    width: clamp(150px, min(30vh, 22vw), 480px);
+    height: clamp(150px, min(30vh, 22vw), 480px);
+    font-size: clamp(3.4em, min(18vh, 14vw), 14em);
+}
+
+.tv-container.has-planner .player-name,
+.tv-container.has-planner .partner-name {
+    font-size: calc(clamp(2.2em, 11vh, 16em) * var(--fit-scale, 1));
+}
+
+.tv-planner-strip {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    gap: clamp(12px, 2vw, 48px);
+    min-width: 0;
+    padding: clamp(6px, 1.2vh, 16px) clamp(20px, 3vw, 60px);
+    background: rgba(var(--color-primary-rgb), 0.10);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.tv-planner-subs {
+    display: flex;
+    align-items: baseline;
+    gap: clamp(10px, 1.2vw, 24px);
+    min-width: 0;
+}
+
+.tv-planner-strip-label {
+    font-family: 'DM Sans', sans-serif;
+    font-size: clamp(0.8em, 2vh, 1.6em);
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.5);
+    flex-shrink: 0;
+}
+
+.tv-planner-subs-names {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(1.4em, 4.2vh, 3.6em);
+    letter-spacing: 3px;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.1;
+}
+
+.tv-planner-note {
+    font-family: 'DM Sans', sans-serif;
+    font-size: clamp(1em, 3vh, 2.4em);
+    font-weight: 600;
+    color: var(--color-accent);
+    line-height: 1.2;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
