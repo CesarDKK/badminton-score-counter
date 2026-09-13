@@ -942,6 +942,42 @@ class BadmintonAPI {
         });
     }
 
+    // ==================== Badmintonplanner (integration) ====================
+
+    async getPlannerConfig() {
+        return this.request('/planner/config');
+    }
+
+    async savePlannerConfig(config) {
+        return this.request('/planner/config', {
+            method: 'PUT',
+            body: JSON.stringify(config)
+        });
+    }
+
+    async getPlannerTokens() {
+        return this.request('/planner/tokens');
+    }
+
+    async createPlannerToken(name) {
+        return this.request('/planner/tokens', {
+            method: 'POST',
+            body: JSON.stringify({ name })
+        });
+    }
+
+    async revokePlannerToken(id) {
+        return this.request(`/planner/tokens/${id}`, { method: 'DELETE' });
+    }
+
+    async permanentlyDeletePlannerToken(id) {
+        return this.request(`/planner/tokens/${id}/permanent`, { method: 'DELETE' });
+    }
+
+    async getPlannerLog(limit = 50) {
+        return this.request(`/planner/log?limit=${limit}`);
+    }
+
     // ==================== Super Admin ====================
 
     async loginAsSuperAdmin(username, password) {
