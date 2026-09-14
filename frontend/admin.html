@@ -420,22 +420,22 @@
 
                 <!-- Tidsrum -->
                 <div class="pl-card">
-                    <h3>Tidsrum</h3>
-                    <p class="pl-help">
-                        Hvert tidsrum siger, hvornår badmintonplanner.dk må sende data (tidligst 07:00, senest 23:00), på hvilke baner,
-                        og med hvilken nøgle. Ét tidsrum kan dække flere ugedage, og en dag kan have flere tidsrum, fx nøgle A kl. 18–20 og
-                        nøgle B kl. 20–22. Uden for tidsrummene afvises alle kald, og når et tidsrum slutter, ryddes banerne automatisk.
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                        <h3 style="margin:0;">Tidsrum</h3>
+                        <button id="addPlannerSlotBtn" class="btn-primary" style="padding:8px 16px;font-size:0.9em;">+ Tilføj tidsrum</button>
+                    </div>
+                    <p class="pl-help" style="margin-top:8px;">
+                        Én linje pr. tidsrum: dag, fra, til (tidligst 07:00, senest 23:00), nøgle og baner. Tilføj så mange linjer, du vil,
+                        også for samme nøgle, fx Senior mandag 12–14 og igen mandag 16–17, eller Ungdom mandag 18–20 og Senior mandag 20–22.
+                        Uden for tidsrummene afvises alle kald, og når et tidsrum slutter, ryddes banerne automatisk. Husk "Gem tidsrum".
                     </p>
                     <div style="overflow-x:auto;">
                         <table class="pl-week">
                             <thead>
-                                <tr><th>Dage</th><th>Fra</th><th>Til</th><th>Baner</th><th>Nøgle</th><th></th></tr>
+                                <tr><th>Dag</th><th>Fra</th><th>Til</th><th>Baner</th><th>Nøgle</th><th></th></tr>
                             </thead>
                             <tbody id="plannerSlotsBody"></tbody>
                         </table>
-                    </div>
-                    <div style="margin-top:10px;">
-                        <button id="addPlannerSlotBtn" class="pl-btn-sm">+ Tilføj tidsrum</button>
                     </div>
                     <div id="plannerWeekOverview" class="pl-overview"></div>
                     <div style="display:flex;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap;">
@@ -541,6 +541,6 @@
     <script src="js/auth-guard.js?v=3"></script>
     <script src="js/logo-match.js?v=1"></script>
     <script src="js/live-updates.js?v=2"></script>
-    <script src="admin-script.js?v=52"></script>
+    <script src="admin-script.js?v=53"></script>
 </body>
 </html>
