@@ -4189,17 +4189,20 @@ function plTokenOptions(valgt) {
 
 function plSlotRowHtml(slot) {
     const alleBaner = Array.from({ length: plannerCourtCount }, (_, i) => i + 1);
-    const days = new Set(slot.days || []);
+    // Én dag pr. række — samme nøgle kan optræde i flere rækker (fx mandag
+    // 12–14 og mandag 16–17). Nøgle-vælgeren står lige efter dagen, så en
+    // række læses "mandag 12.00–14.00, Senior, bane 1–4".
+    const dag = (slot.days && slot.days[0]) || 1;
     const courts = new Set(slot.courts || alleBaner);
-    const dayPills = PL_DAGE.map(([n, navn]) =>
-        `<label class="pl-pill${days.has(n) ? ' on' : ''}"><input type="checkbox" class="pl-slot-day" value="${n}" ${days.has(n) ? 'checked' : ''} onchange="this.parentElement.classList.toggle('on', this.checked); renderPlannerOverview()">${navn.slice(0, 2)}</label>`
+    const dayOptions = PL_DAGE.map(([n, navn]) =>
+        `<option value="${n}"${n === dag ? ' selected' : ''}>${navn}</option>`
     ).join('');
     const courtBoxes = alleBaner.map(c =>
         `<label><input type="checkbox" class="pl-check pl-court" value="${c}" ${courts.has(c) ? 'checked' : ''} onchange="renderPlannerOverview()"> ${c}</label>`
     ).join('');
     return `
         <tr class="pl-slot">
-            <td><div class="pl-days">${dayPills}</div></td>
+            <td><select class="pl-select pl-slot-day" onchange="renderPlannerOverview()">${dayOptions}</select></td>
             <td><select class="pl-select pl-from" onchange="renderPlannerOverview()">${plTidOptions(PL_TIDLIGST, PL_SENEST - 15, slot.from || '18:00')}</select></td>
             <td><select class="pl-select pl-to" onchange="renderPlannerOverview()">${plTidOptions(PL_TIDLIGST + 15, PL_SENEST, slot.to || '20:00')}</select></td>
             <td><div class="pl-courts">${courtBoxes}</div></td>
@@ -4211,7 +4214,11 @@ function plSlotRowHtml(slot) {
 function renderPlannerSlots(config) {
     const body = document.getElementById('plannerSlotsBody');
     const slots = (config && Array.isArray(config.slots)) ? config.slots : [];
-    body.innerHTML = slots.map(plSlotRowHtml).join('');
+    // Et gemt tidsrum med flere dage (ældre opsætning) vises som én række pr. dag;
+    // rækkerne sorteres efter dag og starttid, så ugen læses oppefra og ned.
+    const rows = slots.flatMap(s => (s.days && s.days.length ? s.days : [1]).map(d => ({ ...s, days: [d] })));
+    rows.sort((a, b) => a.days[0] - b.days[0] || a.from.localeCompare(b.from));
+    body.innerHTML = rows.map(plSlotRowHtml).join('');
     renderPlannerOverview();
 }
 
@@ -4233,7 +4240,7 @@ function readPlannerConfig() {
     document.querySelectorAll('#plannerSlotsBody tr.pl-slot').forEach(row => {
         const tokenVal = row.querySelector('.pl-token').value;
         slots.push({
-            days: Array.from(row.querySelectorAll('.pl-slot-day:checked')).map(c => Number(c.value)),
+            days: [Number(row.querySelector('.pl-slot-day').value)],
             from: row.querySelector('.pl-from').value,
             to: row.querySelector('.pl-to').value,
             courts: Array.from(row.querySelectorAll('.pl-court:checked')).map(c => Number(c.value)),
