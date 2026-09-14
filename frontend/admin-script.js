@@ -4164,6 +4164,16 @@ function plTidOptions(fraMin, tilMin, valgt) {
 // hver sin nøgle. Ugeoversigten under tabellen tegner fordelingen.
 
 let plannerTokensCache = [];
+
+// "Gem tidsrum" er kun aktiv når tabellen afviger fra det senest gemte.
+// Snapshot = JSON af tidsrummene som de stod efter indlæsning/gem.
+let plannerGemtSnapshot = null;
+function plUpdateSaveState() {
+    const btn = document.getElementById('savePlannerConfigBtn');
+    if (!btn) return;
+    const nu = JSON.stringify(readPlannerConfig().slots);
+    btn.disabled = plannerGemtSnapshot !== null && nu === plannerGemtSnapshot;
+}
 const PL_FARVER = ['#7c5cbf', '#2f9e8f', '#d98a2c', '#3b7dd8', '#c94f7c', '#5f9e3b', '#8a6d3b', '#4b6a9b'];
 
 function plTokenNavn(tokenId) {
@@ -4219,6 +4229,8 @@ function renderPlannerSlots(config) {
     const rows = slots.flatMap(s => (s.days && s.days.length ? s.days : [1]).map(d => ({ ...s, days: [d] })));
     rows.sort((a, b) => a.days[0] - b.days[0] || a.from.localeCompare(b.from));
     body.innerHTML = rows.map(plSlotRowHtml).join('');
+    // Det viste (én række pr. dag) ER det gemte — snapshot tages fra tabellen
+    plannerGemtSnapshot = JSON.stringify(readPlannerConfig().slots);
     renderPlannerOverview();
 }
 
@@ -4252,6 +4264,7 @@ function readPlannerConfig() {
 
 // Ugeoversigt: 7 kolonner (man–søn), 07–23, ét farvet felt pr. tidsrum og dag
 function renderPlannerOverview() {
+    plUpdateSaveState(); // kaldes ved enhver ændring i tabellen (også tilføj/fjern)
     const el = document.getElementById('plannerWeekOverview');
     if (!el) return;
     const slots = readPlannerConfig().slots;
@@ -4326,13 +4339,14 @@ async function savePlannerConfig(kunTaendSluk) {
     btn.disabled = true;
     try {
         const saved = await api.savePlannerConfig(config);
+        plannerGemtSnapshot = JSON.stringify(config.slots);
         renderPlannerStatus(saved.status);
         showDtMsg(msgEl, kunTaendSluk ? (config.enabled ? '✓ Integrationen er slået til' : '✓ Integrationen er slået fra') : '✓ Tidsrum gemt', 'success');
     } catch (err) {
         showDtMsg(msgEl, err.message || 'Kunne ikke gemme', 'error');
         if (kunTaendSluk) document.getElementById('plannerEnabled').checked = !config.enabled;
     } finally {
-        btn.disabled = false;
+        plUpdateSaveState(); // grå igen efter gem; aktiv igen hvis gem fejlede
     }
 }
 
