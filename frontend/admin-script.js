@@ -72,6 +72,7 @@ function setupEventListeners() {
     document.getElementById('plannerEnabled').addEventListener('change', () => savePlannerConfig(true));
     document.getElementById('togglePlannerLogBtn').addEventListener('click', togglePlannerLog);
     document.getElementById('refreshPlannerLogBtn').addEventListener('click', loadPlannerLog);
+    document.getElementById('addPlannerSlotBtn').addEventListener('click', addPlannerSlot);
     document.getElementById('togglePlannerTestBtn').addEventListener('click', togglePlannerTest);
     document.getElementById('ptStatusBtn').addEventListener('click', () => ptKald('status', null));
     document.getElementById('ptSendBtn').addEventListener('click', () => ptKald('planned-round', ptByg(false)));
@@ -4130,7 +4131,9 @@ async function showPlanner() {
         plannerCourtCount = settings.courtCount || 4;
     } catch {}
 
-    await Promise.all([loadPlannerConfig(), loadPlannerTokens()]);
+    // Nøglerne først: tidsrummene har en nøgle-vælger, der skal kende dem
+    await loadPlannerTokens();
+    await loadPlannerConfig();
     if (plannerLogVisible) loadPlannerLog();
 }
 
@@ -4156,48 +4159,111 @@ function plTidOptions(fraMin, tilMin, valgt) {
     return out.join('');
 }
 
-function renderPlannerWeek(config) {
-    const body = document.getElementById('plannerWeekBody');
-    const days = (config && config.days) || {};
-    const alleBaner = Array.from({ length: plannerCourtCount }, (_, i) => i + 1);
-    body.innerHTML = PL_DAGE.map(([n, navn]) => {
-        const d = days[n];
-        const on = !!d;
-        const from = d ? d.from : '18:00';
-        const to = d ? d.to : '21:00';
-        const courts = new Set(d ? d.courts : alleBaner);
-        const courtBoxes = alleBaner.map(c =>
-            `<label><input type="checkbox" class="pl-check pl-court" value="${c}" ${courts.has(c) ? 'checked' : ''}> ${c}</label>`
-        ).join('');
-        return `
-        <tr class="${on ? '' : 'pl-off'}" data-day="${n}">
-            <td><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;">
-                <input type="checkbox" class="pl-check pl-day" ${on ? 'checked' : ''} onchange="plToggleDay(${n})"> ${navn}
-            </label></td>
-            <td><select class="pl-select pl-from">${plTidOptions(PL_TIDLIGST, PL_SENEST - 15, from)}</select></td>
-            <td><select class="pl-select pl-to">${plTidOptions(PL_TIDLIGST + 15, PL_SENEST, to)}</select></td>
-            <td><div class="pl-courts">${courtBoxes}</div></td>
-        </tr>`;
-    }).join('');
+// ---- Tidsrum (én række pr. tidsrum: dage, fra, til, baner, nøgle) ----
+// Ét tidsrum kan dække flere ugedage, og en dag kan have flere tidsrum med
+// hver sin nøgle. Ugeoversigten under tabellen tegner fordelingen.
+
+let plannerTokensCache = [];
+const PL_FARVER = ['#7c5cbf', '#2f9e8f', '#d98a2c', '#3b7dd8', '#c94f7c', '#5f9e3b', '#8a6d3b', '#4b6a9b'];
+
+function plTokenNavn(tokenId) {
+    if (tokenId === null || tokenId === undefined) return 'Alle nøgler';
+    const t = plannerTokensCache.find(x => x.id === Number(tokenId));
+    return t ? t.name + (t.is_active ? '' : ' (tilbagekaldt)') : `Nøgle #${tokenId}`;
 }
 
-function plToggleDay(n) {
-    const row = document.querySelector(`#plannerWeekBody tr[data-day="${n}"]`);
-    if (!row) return;
-    row.classList.toggle('pl-off', !row.querySelector('.pl-day').checked);
+function plTokenFarve(tokenId) {
+    if (tokenId === null || tokenId === undefined) return 'rgba(255,255,255,0.28)';
+    const i = plannerTokensCache.findIndex(x => x.id === Number(tokenId));
+    return PL_FARVER[(i >= 0 ? i : Number(tokenId)) % PL_FARVER.length];
+}
+
+function plTokenOptions(valgt) {
+    const opts = [`<option value=""${valgt === null || valgt === undefined ? ' selected' : ''}>Alle nøgler</option>`];
+    plannerTokensCache.forEach(t => {
+        if (!t.is_active && Number(valgt) !== t.id) return; // tilbagekaldte vises kun hvis de allerede er valgt
+        opts.push(`<option value="${t.id}"${Number(valgt) === t.id ? ' selected' : ''}>${escapeHtml(t.name)}${t.is_active ? '' : ' (tilbagekaldt)'}</option>`);
+    });
+    return opts.join('');
+}
+
+function plSlotRowHtml(slot) {
+    const alleBaner = Array.from({ length: plannerCourtCount }, (_, i) => i + 1);
+    const days = new Set(slot.days || []);
+    const courts = new Set(slot.courts || alleBaner);
+    const dayPills = PL_DAGE.map(([n, navn]) =>
+        `<label class="pl-pill${days.has(n) ? ' on' : ''}"><input type="checkbox" class="pl-slot-day" value="${n}" ${days.has(n) ? 'checked' : ''} onchange="this.parentElement.classList.toggle('on', this.checked); renderPlannerOverview()">${navn.slice(0, 2)}</label>`
+    ).join('');
+    const courtBoxes = alleBaner.map(c =>
+        `<label><input type="checkbox" class="pl-check pl-court" value="${c}" ${courts.has(c) ? 'checked' : ''} onchange="renderPlannerOverview()"> ${c}</label>`
+    ).join('');
+    return `
+        <tr class="pl-slot">
+            <td><div class="pl-days">${dayPills}</div></td>
+            <td><select class="pl-select pl-from" onchange="renderPlannerOverview()">${plTidOptions(PL_TIDLIGST, PL_SENEST - 15, slot.from || '18:00')}</select></td>
+            <td><select class="pl-select pl-to" onchange="renderPlannerOverview()">${plTidOptions(PL_TIDLIGST + 15, PL_SENEST, slot.to || '20:00')}</select></td>
+            <td><div class="pl-courts">${courtBoxes}</div></td>
+            <td><select class="pl-select pl-token" onchange="renderPlannerOverview()">${plTokenOptions(slot.tokenId)}</select></td>
+            <td><button type="button" class="pl-slot-del" title="Fjern tidsrum" onclick="this.closest('tr').remove(); renderPlannerOverview()">✕</button></td>
+        </tr>`;
+}
+
+function renderPlannerSlots(config) {
+    const body = document.getElementById('plannerSlotsBody');
+    const slots = (config && Array.isArray(config.slots)) ? config.slots : [];
+    body.innerHTML = slots.map(plSlotRowHtml).join('');
+    renderPlannerOverview();
+}
+
+function addPlannerSlot() {
+    const body = document.getElementById('plannerSlotsBody');
+    const sidste = readPlannerConfig().slots.slice(-1)[0];
+    // Nyt tidsrum starter hvor det sidste sluttede — det typiske er "næste hold samme aften"
+    const from = sidste && sidste.to < '23:00' ? sidste.to : '18:00';
+    const toMin = Math.min(PL_SENEST, (Number(from.slice(0, 2)) * 60 + Number(from.slice(3))) + 120);
+    body.insertAdjacentHTML('beforeend', plSlotRowHtml({
+        days: sidste ? sidste.days : [1], from, to: plTid(toMin),
+        courts: Array.from({ length: plannerCourtCount }, (_, i) => i + 1), tokenId: null
+    }));
+    renderPlannerOverview();
 }
 
 function readPlannerConfig() {
-    const days = {};
-    document.querySelectorAll('#plannerWeekBody tr[data-day]').forEach(row => {
-        if (!row.querySelector('.pl-day').checked) return;
-        days[row.dataset.day] = {
+    const slots = [];
+    document.querySelectorAll('#plannerSlotsBody tr.pl-slot').forEach(row => {
+        const tokenVal = row.querySelector('.pl-token').value;
+        slots.push({
+            days: Array.from(row.querySelectorAll('.pl-slot-day:checked')).map(c => Number(c.value)),
             from: row.querySelector('.pl-from').value,
             to: row.querySelector('.pl-to').value,
-            courts: Array.from(row.querySelectorAll('.pl-court:checked')).map(c => Number(c.value))
-        };
+            courts: Array.from(row.querySelectorAll('.pl-court:checked')).map(c => Number(c.value)),
+            tokenId: tokenVal === '' ? null : Number(tokenVal)
+        });
     });
-    return { enabled: document.getElementById('plannerEnabled').checked, days };
+    return { enabled: document.getElementById('plannerEnabled').checked, slots };
+}
+
+// Ugeoversigt: 7 kolonner (man–søn), 07–23, ét farvet felt pr. tidsrum og dag
+function renderPlannerOverview() {
+    const el = document.getElementById('plannerWeekOverview');
+    if (!el) return;
+    const slots = readPlannerConfig().slots;
+    if (!slots.length) { el.innerHTML = ''; return; }
+    const span = PL_SENEST - PL_TIDLIGST;
+    const min = t => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
+    const timer = [];
+    for (let h = 7; h <= 23; h += 4) timer.push(`<span style="top:${((h * 60 - PL_TIDLIGST) / span) * 100}%">${h}</span>`);
+    const cols = PL_DAGE.map(([n]) => {
+        const blocks = slots.filter(s => s.days.includes(n) && min(s.to) > min(s.from)).map(s => {
+            const top = ((min(s.from) - PL_TIDLIGST) / span) * 100;
+            const h = ((min(s.to) - min(s.from)) / span) * 100;
+            return `<div class="pl-ov-block" style="top:${top}%;height:${h}%;background:${plTokenFarve(s.tokenId)};" title="${escapeHtml(plTokenNavn(s.tokenId))} ${s.from.replace(':', '.')}–${s.to.replace(':', '.')}, bane ${s.courts.join(', ')}">
+                ${escapeHtml(plTokenNavn(s.tokenId))}<small>${s.from.replace(':', '.')}–${s.to.replace(':', '.')} · bane ${s.courts.join(',')}</small></div>`;
+        }).join('');
+        return `<div class="pl-ov-col">${blocks}</div>`;
+    }).join('');
+    el.innerHTML = `<div></div>${PL_DAGE.map(([, navn]) => `<div class="pl-ov-head">${navn.slice(0, 3)}</div>`).join('')}
+        <div class="pl-ov-hours">${timer.join('')}</div>${cols}`;
 }
 
 function renderPlannerStatus(status) {
@@ -4211,13 +4277,17 @@ function renderPlannerStatus(status) {
     } else if (status.openNow) {
         badge.className = 'pl-badge open';
         badge.textContent = 'Åbent nu';
-        text.textContent = `badmintonplanner.dk må sende data nu (${plVindueTekst(status.window)}) til bane ${status.courtsNow.join(', ')}.`;
+        const dele = (status.openSlots || []).map(s =>
+            `${plTokenNavn(s.tokenId)} ${s.from.replace(':', '.')}–${s.to.replace(':', '.')} på bane ${s.courts.join(', ')}`);
+        text.textContent = dele.length
+            ? `Åbent nu: ${dele.join(' · ')}.`
+            : `badmintonplanner.dk må sende data nu (${plVindueTekst(status.window)}) til bane ${status.courtsNow.join(', ')}.`;
     } else {
         badge.className = 'pl-badge closed';
         badge.textContent = 'Lukket';
         text.textContent = status.nextWindow
-            ? `Næste åbne tidsrum: ${plVindueTekst(status.nextWindow)}, bane ${status.nextWindow.courts.join(', ')}.`
-            : 'Ingen dage er valgt i ugeplanen endnu.';
+            ? `Næste åbne tidsrum: ${plVindueTekst(status.nextWindow)}, bane ${status.nextWindow.courts.join(', ')} (${plTokenNavn(status.nextWindow.tokenId).toLowerCase()}).`
+            : 'Ingen tidsrum er oprettet endnu.';
     }
 }
 
@@ -4225,7 +4295,7 @@ async function loadPlannerConfig() {
     try {
         const config = await api.getPlannerConfig();
         document.getElementById('plannerEnabled').checked = !!config.enabled;
-        renderPlannerWeek(config);
+        renderPlannerSlots(config);
         renderPlannerStatus(config.status);
     } catch (err) {
         showDtMsg(document.getElementById('plannerConfigMsg'), `Kunne ikke hente opsætningen: ${err.message}`, 'error');
@@ -4238,9 +4308,11 @@ async function savePlannerConfig(kunTaendSluk) {
     const msgEl = document.getElementById('plannerConfigMsg');
     const btn = document.getElementById('savePlannerConfigBtn');
     const config = readPlannerConfig();
-    const tomDag = Object.entries(config.days).find(([, d]) => d.courts.length === 0);
-    if (tomDag) {
-        showDtMsg(msgEl, `${plDagNavn(tomDag[0])}: vælg mindst én bane`, 'error');
+    const daarlig = config.slots.findIndex(s => !s.days.length || !s.courts.length || s.from >= s.to);
+    if (daarlig >= 0) {
+        const s = config.slots[daarlig];
+        const hvorfor = !s.days.length ? 'vælg mindst én ugedag' : !s.courts.length ? 'vælg mindst én bane' : 'sluttid skal være efter starttid';
+        showDtMsg(msgEl, `Tidsrum ${daarlig + 1}: ${hvorfor}`, 'error');
         if (kunTaendSluk) document.getElementById('plannerEnabled').checked = !config.enabled;
         return;
     }
@@ -4248,7 +4320,7 @@ async function savePlannerConfig(kunTaendSluk) {
     try {
         const saved = await api.savePlannerConfig(config);
         renderPlannerStatus(saved.status);
-        showDtMsg(msgEl, kunTaendSluk ? (config.enabled ? '✓ Integrationen er slået til' : '✓ Integrationen er slået fra') : '✓ Ugeplan gemt', 'success');
+        showDtMsg(msgEl, kunTaendSluk ? (config.enabled ? '✓ Integrationen er slået til' : '✓ Integrationen er slået fra') : '✓ Tidsrum gemt', 'success');
     } catch (err) {
         showDtMsg(msgEl, err.message || 'Kunne ikke gemme', 'error');
         if (kunTaendSluk) document.getElementById('plannerEnabled').checked = !config.enabled;
@@ -4261,7 +4333,14 @@ async function loadPlannerTokens() {
     const listEl = document.getElementById('plannerTokensList');
     try {
         const tokens = await api.getPlannerTokens();
+        plannerTokensCache = tokens;
         renderPlannerTokens(tokens);
+        // Nøgle-vælgerne i tidsrummene skal kende nye/tilbagekaldte nøgler
+        document.querySelectorAll('#plannerSlotsBody .pl-token').forEach(sel => {
+            const valgt = sel.value === '' ? null : Number(sel.value);
+            sel.innerHTML = plTokenOptions(valgt);
+        });
+        renderPlannerOverview();
     } catch (err) {
         listEl.innerHTML = `<p style="color:var(--color-accent);padding:12px 0;">Fejl: ${escapeHtml(err.message)}</p>`;
     }

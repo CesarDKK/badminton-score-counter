@@ -35,6 +35,10 @@ router.put('/config', async (req, res, next) => {
     try {
         const n = tid.normaliserConfig(req.body);
         if (n.error) return res.status(400).json({ error: n.error });
+        // Et tidsrum må kun pege på en nøgle der findes i denne klub
+        const ids = new Set((await query('SELECT id FROM planner_tokens')).map(r => r.id));
+        const ukendt = n.value.slots.findIndex(s => s.tokenId !== null && !ids.has(s.tokenId));
+        if (ukendt >= 0) return res.status(400).json({ error: `Tidsrum ${ukendt + 1}: nøglen findes ikke` });
         await gemConfig(n.value);
         res.json({ ...n.value, status: statusFor(n.value), endpointPath: ENDPOINT_STI });
     } catch (e) { next(e); }

@@ -370,6 +370,19 @@
                 .pl-log details summary { cursor:pointer; color:rgba(255,255,255,0.7); }
                 .pl-status-ok { color:var(--color-win,#45d17e); font-weight:600; }
                 .pl-status-err { color:var(--color-danger,#d92c3f); font-weight:600; }
+                .pl-days { display:flex; gap:3px; }
+                .pl-pill { display:inline-flex; align-items:center; justify-content:center; min-width:30px; padding:4px 6px; border-radius:6px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.45); font-size:0.78em; font-weight:600; cursor:pointer; user-select:none; }
+                .pl-pill input { display:none; }
+                .pl-pill.on { background:rgba(var(--color-accent-rgb),0.22); border-color:rgba(var(--color-accent-rgb),0.5); color:#fff; }
+                .pl-slot-del { background:none; border:none; color:rgba(255,255,255,0.4); font-size:1.1em; cursor:pointer; padding:4px 8px; }
+                .pl-slot-del:hover { color:var(--color-danger,#d92c3f); }
+                .pl-overview { display:grid; grid-template-columns:32px repeat(7, 1fr); gap:4px; margin-top:18px; font-size:0.72em; }
+                .pl-overview .pl-ov-head { text-align:center; color:rgba(255,255,255,0.5); font-weight:600; text-transform:uppercase; letter-spacing:0.06em; padding-bottom:2px; }
+                .pl-overview .pl-ov-hours { position:relative; height:180px; color:rgba(255,255,255,0.35); }
+                .pl-overview .pl-ov-hours span { position:absolute; right:4px; transform:translateY(-50%); }
+                .pl-overview .pl-ov-col { position:relative; height:180px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:6px; overflow:hidden; }
+                .pl-overview .pl-ov-block { position:absolute; left:2px; right:2px; border-radius:4px; padding:2px 4px; overflow:hidden; line-height:1.2; color:#fff; white-space:nowrap; text-overflow:ellipsis; }
+                .pl-overview .pl-ov-block small { display:block; opacity:0.75; font-size:0.9em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
                 @media (max-width: 720px) { .pl-week th:nth-child(4), .pl-week td:nth-child(4) { display:none; } }
             </style>
             <div id="plannerSection" class="overview-section" style="display: none;">
@@ -405,23 +418,28 @@
                     <div id="plannerTokensList" style="margin-top:16px;"></div>
                 </div>
 
-                <!-- Ugeplan -->
+                <!-- Tidsrum -->
                 <div class="pl-card">
-                    <h3>Ugeplan</h3>
+                    <h3>Tidsrum</h3>
                     <p class="pl-help">
-                        Vælg de dage og tidsrum, hvor badmintonplanner.dk må sende data (tidligst 07:00, senest 23:00), og hvilke baner
-                        der må bruges den dag. Uden for tidsrummet afvises alle kald, og når tidsrummet slutter, ryddes banerne automatisk.
+                        Hvert tidsrum siger, hvornår badmintonplanner.dk må sende data (tidligst 07:00, senest 23:00), på hvilke baner,
+                        og med hvilken nøgle. Ét tidsrum kan dække flere ugedage, og en dag kan have flere tidsrum, fx nøgle A kl. 18–20 og
+                        nøgle B kl. 20–22. Uden for tidsrummene afvises alle kald, og når et tidsrum slutter, ryddes banerne automatisk.
                     </p>
                     <div style="overflow-x:auto;">
                         <table class="pl-week">
                             <thead>
-                                <tr><th>Dag</th><th>Fra</th><th>Til</th><th>Baner</th></tr>
+                                <tr><th>Dage</th><th>Fra</th><th>Til</th><th>Baner</th><th>Nøgle</th><th></th></tr>
                             </thead>
-                            <tbody id="plannerWeekBody"></tbody>
+                            <tbody id="plannerSlotsBody"></tbody>
                         </table>
                     </div>
+                    <div style="margin-top:10px;">
+                        <button id="addPlannerSlotBtn" class="pl-btn-sm">+ Tilføj tidsrum</button>
+                    </div>
+                    <div id="plannerWeekOverview" class="pl-overview"></div>
                     <div style="display:flex;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap;">
-                        <button id="savePlannerConfigBtn" class="btn-primary">Gem ugeplan</button>
+                        <button id="savePlannerConfigBtn" class="btn-primary">Gem tidsrum</button>
                         <div id="plannerConfigMsg" style="display:none;padding:8px 14px;border-radius:8px;font-size:0.88em;"></div>
                     </div>
                 </div>
@@ -523,6 +541,6 @@
     <script src="js/auth-guard.js?v=3"></script>
     <script src="js/logo-match.js?v=1"></script>
     <script src="js/live-updates.js?v=2"></script>
-    <script src="admin-script.js?v=51"></script>
+    <script src="admin-script.js?v=52"></script>
 </body>
 </html>
