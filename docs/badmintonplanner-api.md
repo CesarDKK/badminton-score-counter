@@ -6,10 +6,13 @@ hos badmintonplanner.dk.
 
 ## Sådan hænger det sammen
 
-- Klubbens admin opretter en **API-nøgle** under fanen *Badmintonplanner* i
-  badmintonapp.dk og sætter en **ugeplan** op: hvilke ugedage og tidsrum
-  (07.00–23.00, kvarter-trin) badmintonplanner.dk må sende data, og hvilke
-  baner der må bruges den dag.
+- Klubbens admin opretter en eller flere **API-nøgler** under fanen
+  *Badmintonplanner* i badmintonapp.dk og sætter **tidsrum** op: hvilke
+  ugedage og klokkeslæt (07.00–23.00, kvarter-trin) der må sendes data, på
+  hvilke baner, og med hvilken nøgle. En aften kan være delt, fx nøgle A
+  kl. 18–20 og nøgle B kl. 20–22 (typisk to hold med hver sin træning hos
+  jer). Uden for nøglens egne tidsrum svares 403, også selv om en anden
+  nøgle har åbent.
 - Admin kopierer adressen og nøglen ind i badmintonplanner.dk. Der udveksles
   aldrig et password.
 - Ved hver rundestart sender badmintonplanner.dk **ét kald** med rundens

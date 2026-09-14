@@ -230,8 +230,10 @@ async function anvendRunde(runde, tilladteBaner) {
 
 /** Gem runden som "aktuel runde" (kun én ad gangen) med bane-tildelinger. */
 async function gemRunde(runde, tokenId, results) {
-    await query('DELETE FROM planner_rounds');
-    const naeste = runde.nextRoundStartsAt ? tid.klokkeslaetIDagTilUtc(runde.nextRoundStartsAt) : null;
+    // Én aktuel runde PR. NØGLE: to nøgler kan dele en aften på hver sine baner
+    // uden at overskrive hinandens rundedata (label, udskiftere, noter).
+    await query('DELETE FROM planner_rounds WHERE token_id = ? OR token_id IS NULL', [tokenId]);
+    const naeste =runde.nextRoundStartsAt ? tid.klokkeslaetIDagTilUtc(runde.nextRoundStartsAt) : null;
     const r = await query(
         `INSERT INTO planner_rounds (round_id, sequence, label, note, next_round_at, token_id, result_json)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -260,26 +262,37 @@ async function gemRunde(runde, tokenId, results) {
  * spille færdig — den rydder inaktivitets- og midnats-oprydningen som i dag.
  */
 async function plannerVindueLuk() {
-    const runde = await queryOne('SELECT id FROM planner_rounds ORDER BY id DESC LIMIT 1');
-    if (!runde) return;
+    const runder = await query('SELECT id, token_id FROM planner_rounds ORDER BY id');
+    if (!runder.length) return;
     const config = await hentConfig();
-    if (tid.aabneBaner(config).aaben) return;
+    for (const runde of runder) {
+        // Vinduet vurderes for den nøgle der sendte runden: er dens tidsrum forbi
+        // (eller nøglen tilbagekaldt), ryddes dens baner — også selv om en anden
+        // nøgle har et åbent tidsrum og endnu ikke har sendt sin første runde.
+        const token = runde.token_id
+            ? await queryOne('SELECT id, name FROM planner_tokens WHERE id = ? AND is_active = 1', [runde.token_id])
+            : null;
+        if (token && tid.aabneBaner(config, new Date(), token.id).aaben) continue;
 
-    const baner = await query('SELECT court_number FROM planner_court_assignments');
-    const ryddet = [];
-    for (const { court_number } of baner) {
-        const court = await queryOne('SELECT id, court_number, is_active, is_doubles FROM courts WHERE court_number = ?', [court_number]);
-        if (!court) continue;
-        const gs = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
-        if (kampIGang(gs)) continue;
-        if (gs || court.is_active) await rydBane(court);
-        ryddet.push(court_number);
+        const baner = await query('SELECT court_number FROM planner_court_assignments WHERE round_id = ?', [runde.id]);
+        const ryddet = [];
+        for (const { court_number } of baner) {
+            const court = await queryOne('SELECT id, court_number, is_active, is_doubles FROM courts WHERE court_number = ?', [court_number]);
+            if (!court) continue;
+            const gs = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
+            if (kampIGang(gs)) continue;
+            if (gs || court.is_active) await rydBane(court);
+            ryddet.push(court_number);
+        }
+        await query('DELETE FROM planner_rounds WHERE id = ?', [runde.id]);
+        await gemLog({
+            endpoint: 'auto-clear', status: 200, tokenName: token ? token.name : null, matchCount: ryddet.length,
+            result: { cleared: ryddet },
+            error: !config.enabled ? 'Integration slået fra — baner ryddet'
+                : !token ? 'Nøglen er tilbagekaldt — baner ryddet'
+                : 'Tidsrum slut — baner ryddet'
+        });
     }
-    await query('DELETE FROM planner_rounds');
-    await gemLog({
-        endpoint: 'auto-clear', status: 200, matchCount: ryddet.length,
-        result: { cleared: ryddet }, error: config.enabled ? 'Tidsvindue lukket — baner ryddet' : 'Integration slået fra — baner ryddet'
-    });
 }
 
 /**
@@ -287,25 +300,36 @@ async function plannerVindueLuk() {
  * { label, note, nextRoundAt (ISO/UTC), receivedAt, courts: { [nr]: { substitutes, note } } }
  */
 async function hentPlannerVisning() {
-    const r = await queryOne(
-        'SELECT id, label, note, next_round_at, received_at FROM planner_rounds ORDER BY id DESC LIMIT 1'
+    // Der kan være én runde pr. nøgle samtidig (to hold deler aftenen på hver
+    // sine baner). Hver bane bærer sin egen rundes label/note/næste runde;
+    // topniveau (oversigtens banner) er den senest modtagne runde.
+    const runder = await query(
+        'SELECT id, label, note, next_round_at, received_at FROM planner_rounds ORDER BY id DESC'
     );
-    if (!r) return null;
+    if (!runder.length) return null;
     const rows = await query(
-        'SELECT court_number, substitutes, note FROM planner_court_assignments WHERE round_id = ?',
-        [r.id]
+        `SELECT a.court_number, a.substitutes, a.note, a.round_id
+           FROM planner_court_assignments a`
     );
+    const iso = d => (d ? new Date(d).toISOString() : null);
+    const prRunde = new Map(runder.map(r => [r.id, r]));
     const courts = {};
     for (const a of rows) {
+        const r = prRunde.get(a.round_id);
+        if (!r) continue;
         let subs = [];
         if (a.substitutes) { try { subs = JSON.parse(a.substitutes) || []; } catch { /* tomt */ } }
-        courts[a.court_number] = { substitutes: subs, note: a.note || '' };
+        courts[a.court_number] = {
+            substitutes: subs, note: a.note || '',
+            label: r.label || '', roundNote: r.note || '', nextRoundAt: iso(r.next_round_at)
+        };
     }
+    const r = runder[0];
     return {
         label: r.label || '',
         note: r.note || '',
-        nextRoundAt: r.next_round_at ? new Date(r.next_round_at).toISOString() : null,
-        receivedAt: r.received_at ? new Date(r.received_at).toISOString() : null,
+        nextRoundAt: iso(r.next_round_at),
+        receivedAt: iso(r.received_at),
         courts
     };
 }
@@ -316,9 +340,9 @@ function plannerForBane(visning, courtNumber) {
     const c = visning.courts[courtNumber];
     if (!c) return null;
     return {
-        label: visning.label,
-        note: visning.note,
-        nextRoundAt: visning.nextRoundAt,
+        label: c.label,
+        note: c.roundNote,
+        nextRoundAt: c.nextRoundAt,
         substitutes: c.substitutes,
         courtNote: c.note
     };
@@ -345,14 +369,18 @@ async function plannerAuth(req, res, next) {
     }
 }
 
-function statusFor(config, nu = new Date()) {
-    const aaben = tid.aabneBaner(config, nu);
-    const naeste = tid.naesteVindue(config, nu);
+// tokenId: kun tidsrum for denne nøgle (eller alle nøgler); undefined = alle
+// tidsrum (admin-status). Tidsrum kan være knyttet til én bestemt nøgle, så
+// fx nøgle A må sende 18–20 og nøgle B 20–22 samme aften.
+function statusFor(config, nu = new Date(), tokenId) {
+    const aaben = tid.aabneBaner(config, nu, tokenId);
+    const naeste = tid.naesteVindue(config, nu, tokenId);
     return {
         integrationEnabled: !!config.enabled,
         openNow: aaben.aaben,
         courtsNow: aaben.baner,
         window: aaben.vindue,
+        openSlots: aaben.slots.map(s => ({ from: s.from, to: s.to, courts: s.courts, tokenId: s.tokenId })),
         nextWindow: naeste,
         serverTime: nu.toISOString()
     };
@@ -364,9 +392,12 @@ function statusFor(config, nu = new Date()) {
 router.get('/status', plannerIpLimiter, plannerAuth, plannerTokenLimiter, async (req, res, next) => {
     try {
         const config = await hentConfig();
-        const runde = await queryOne('SELECT round_id, label, received_at FROM planner_rounds ORDER BY id DESC LIMIT 1');
+        const runde = await queryOne(
+            'SELECT round_id, label, received_at FROM planner_rounds WHERE token_id = ? ORDER BY id DESC LIMIT 1',
+            [req.plannerToken.id]
+        );
         res.json({
-            ...statusFor(config),
+            ...statusFor(config, new Date(), req.plannerToken.id),
             tokenName: req.plannerToken.name,
             currentRound: runde ? { roundId: runde.round_id, label: runde.label, receivedAt: runde.received_at } : null
         });
@@ -389,7 +420,7 @@ router.post('/planned-round', plannerIpLimiter, plannerAuth, plannerTokenLimiter
         const logFelter = { roundId: runde.roundId, label: runde.label, matchCount: runde.matches.length };
 
         const config = await hentConfig();
-        const status = statusFor(config);
+        const status = statusFor(config, new Date(), req.plannerToken.id);
         if (!config.enabled) {
             await log(403, { ...logFelter, error: 'Integrationen er slået fra' });
             return res.status(403).json({ error: 'Integrationen er slået fra i klubbens opsætning', code: 'integration_disabled', ...status });
@@ -400,7 +431,10 @@ router.post('/planned-round', plannerIpLimiter, plannerAuth, plannerTokenLimiter
         }
 
         // Idempotens: samme roundId som sidst → samme svar, banerne røres ikke.
-        const sidste = await queryOne('SELECT round_id, sequence, result_json FROM planner_rounds ORDER BY id DESC LIMIT 1');
+        const sidste = await queryOne(
+            'SELECT round_id, sequence, result_json FROM planner_rounds WHERE token_id = ? ORDER BY id DESC LIMIT 1',
+            [req.plannerToken.id]
+        );
         if (sidste && runde.roundId && sidste.round_id === runde.roundId) {
             let results = [];
             try { results = JSON.parse(sidste.result_json) || []; } catch { /* tomt */ }
