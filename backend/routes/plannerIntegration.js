@@ -152,11 +152,17 @@ async function gemAfbrudtIKamphistorik(courtPk, gs, court) {
 
 // Frigiv holdkamp-/turneringstildelinger på banen (som "Ryd bane" gør) —
 // ellers re-binder bane-siden dem og navnene kommer tilbage.
+// Hver frigivelse for sig, som i "Ryd bane": et manglende skema-element på én
+// klub (fx turneringstabeller, se migration 028) må ikke vælte hele runden.
 async function frigivTildelinger(courtNumber) {
-    await query(`UPDATE team_match_games SET status = 'pending', court_number = NULL, started_at = NULL
-                 WHERE court_number = ? AND status = 'active'`, [courtNumber]);
-    await query(`UPDATE tournament_matches SET status = 'pending', court_number = NULL, started_at = NULL
-                 WHERE court_number = ? AND status = 'active'`, [courtNumber]);
+    try {
+        await query(`UPDATE team_match_games SET status = 'pending', court_number = NULL, started_at = NULL
+                     WHERE court_number = ? AND status = 'active'`, [courtNumber]);
+    } catch (e) { console.error('Planner: frigivelse af holdkamp-delkamp fejlede:', e.message); }
+    try {
+        await query(`UPDATE tournament_matches SET status = 'pending', court_number = NULL, started_at = NULL
+                     WHERE court_number = ? AND status = 'active'`, [courtNumber]);
+    } catch (e) { console.error('Planner: frigivelse af turneringskamp fejlede:', e.message); }
 }
 
 /** Skriv rundens navne på banen — frisk game_state, banen aktiv, ingen snapshot. */
