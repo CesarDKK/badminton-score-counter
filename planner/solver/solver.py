@@ -15,6 +15,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import select
+import socket
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -22,7 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from ortools.sat.python import cp_model
 
 DAG = 1440
-MAX_SEKUNDER = int(os.environ.get("SOLVER_MAX_SEKUNDER", "120"))
+MAX_SEKUNDER = int(os.environ.get("SOLVER_MAX_SEKUNDER", "360"))
 MAX_BYTES = int(os.environ.get("SOLVER_MAX_BYTES", str(5 * 1024 * 1024)))
 MAX_KAMPE = int(os.environ.get("SOLVER_MAX_KAMPE", "2000"))
 ARBEJDERE = int(os.environ.get("SOLVER_ARBEJDERE", "2"))
@@ -30,7 +33,7 @@ SAMTIDIGE = threading.Semaphore(int(os.environ.get("SOLVER_SAMTIDIGE", "1")))
 SKALA = 6000  # vægte ganges op til heltal pr. minut (vægt 1 pr. time = 100 pr. minut); tidlig-start-trækket er 1 pr. minut
 
 
-def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None) -> dict:
+def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, stop: threading.Event | None = None) -> dict:
     t0 = time.time()
     slot = int(problem["slotMin"])
     kampe = problem["kampe"]
@@ -234,9 +237,22 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None) ->
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = max(1.0, min(float(sekunder), MAX_SEKUNDER))
     solver.parameters.num_workers = arbejdere or ARBEJDERE
-    status = solver.Solve(m)
+    # Stop udefra (brugeren trykker "Stop", eller forbindelsen forsvinder): søgningen afbrydes,
+    # og den bedste plan indtil da afleveres som FEASIBLE.
+    faerdig = threading.Event()
+    if stop is not None:
+        def vagt():
+            while not faerdig.is_set():
+                if stop.wait(0.2):
+                    solver.stop_search()
+                    return
+        threading.Thread(target=vagt, daemon=True).start()
+    try:
+        status = solver.Solve(m)
+    finally:
+        faerdig.set()
     navn = {cp_model.OPTIMAL: "OPTIMAL", cp_model.FEASIBLE: "FEASIBLE", cp_model.INFEASIBLE: "INFEASIBLE"}.get(status, "UNKNOWN")
-    svar = {"status": navn, "sekunder": round(time.time() - t0, 2), "tider": {}}
+    svar = {"status": navn, "sekunder": round(time.time() - t0, 2), "tider": {}, "stoppet": bool(stop is not None and stop.is_set())}
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         svar["tider"] = {k["id"]: int(solver.Value(T[i])) for i, k in enumerate(kampe)}
         svar["maal"] = solver.ObjectiveValue()
@@ -244,8 +260,23 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None) ->
     elif status == cp_model.INFEASIBLE:
         svar["besked"] = "Der findes ingen plan, der overholder alle de hårde regler med de nuværende dage, baner og tidsrum."
     else:
-        svar["besked"] = "Løseren fandt ingen plan inden for tidsgrænsen."
+        svar["besked"] = "Løseren nåede ikke at finde en plan, før den blev stoppet." if svar["stoppet"] else "Løseren fandt ingen plan inden for tidsgrænsen."
     return svar
+
+
+# Igangværende løsninger: job-id (valgt af klienten) → stop-signal
+JOBS: dict[str, threading.Event] = {}
+JOBS_LAAS = threading.Lock()
+JOB_ID = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+
+
+def forbindelse_lukket(conn: socket.socket) -> bool:
+    """True når klienten (nginx) har lukket forbindelsen — fx fordi brugeren lukkede fanen."""
+    try:
+        laesbar, _, _ = select.select([conn], [], [], 0)
+        return bool(laesbar) and conn.recv(1, socket.MSG_PEEK) == b""
+    except (OSError, ValueError):
+        return True
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -265,7 +296,22 @@ class Handler(BaseHTTPRequestHandler):
             return self._svar(200, {"ok": True})
         self._svar(404, {"fejl": "ukendt sti"})
 
+    def _stop(self):
+        try:
+            laengde = int(self.headers.get("Content-Length") or 0)
+            job = str(json.loads(self.rfile.read(min(laengde, 1024))).get("job", ""))
+        except Exception:
+            return self._svar(400, {"fejl": "ugyldig JSON"})
+        with JOBS_LAAS:
+            signal = JOBS.get(job)
+        if signal is None:
+            return self._svar(404, {"fejl": "ukendt job"})
+        signal.set()
+        self._svar(200, {"ok": True})
+
     def do_POST(self):
+        if self.path.rstrip("/").endswith("/stop"):
+            return self._stop()
         if not self.path.rstrip("/").endswith("/solve"):
             return self._svar(404, {"fejl": "ukendt sti"})
         laengde = int(self.headers.get("Content-Length") or 0)
@@ -275,17 +321,38 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(self.rfile.read(laengde))
             problem = data["problem"]
             sekunder = float(data.get("sekunder", 30))
+            job = str(data.get("job") or "")
         except Exception:
             return self._svar(400, {"fejl": "ugyldig JSON"})
         if not SAMTIDIGE.acquire(blocking=False):
             return self._svar(429, {"fejl": "løseren er optaget"})
+        stop = threading.Event()
+        har_job = bool(JOB_ID.match(job))
+        if har_job:
+            with JOBS_LAAS:
+                JOBS[job] = stop
+        # Lukker klienten forbindelsen, mens der regnes, stoppes søgningen, så løseren bliver fri
+        faerdig = threading.Event()
+
+        def hold_oeje():
+            while not faerdig.wait(0.5):
+                if forbindelse_lukket(self.connection):
+                    stop.set()
+                    return
+        threading.Thread(target=hold_oeje, daemon=True).start()
         try:
-            self._svar(200, loes(problem, sekunder))
+            self._svar(200, loes(problem, sekunder, stop=stop))
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # klienten er væk
         except (KeyError, TypeError, ValueError) as e:  # problemet har ikke den form, bygProblem() laver
             self._svar(400, {"fejl": f"ugyldigt problem: {type(e).__name__} {e}"})
         except Exception as e:  # pragma: no cover — fejl i modellen må ikke vælte tjenesten
             self._svar(500, {"fejl": f"løseren fejlede: {type(e).__name__}"})
         finally:
+            faerdig.set()
+            if har_job:
+                with JOBS_LAAS:
+                    JOBS.pop(job, None)
             SAMTIDIGE.release()
 
     def log_message(self, fmt, *args):  # kun metode, sti og status — aldrig indhold

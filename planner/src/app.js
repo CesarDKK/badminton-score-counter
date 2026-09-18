@@ -4,7 +4,7 @@ import { laesTP, tabellerFraMDB } from './tp-reader.js';
 import * as store from './store.js';
 import { tjekPlan } from './rules.js';
 import { lavForslag, lavAlternativer, bedoemPlan } from './scheduler.js';
-import { optimer } from './solver-klient.js';
+import { optimer, stopLoeser, nytJobId } from './solver-klient.js';
 import { scorePlan } from './kriterier.js';
 import { renderOpsaetning } from './ui/opsaetning.js';
 import { renderPlan } from './ui/plan.js';
@@ -260,16 +260,24 @@ const planHandlers = {
         const sekunder = tilstand.optimerSek || 60;
         const foer = { ...projekt.plan };
         const graadig = lavForslag(projekt);
+        const job = nytJobId();
         tilstand.optimerer = true;
-        tilstand.forslag = { tekst: `Løseren regner i op til ${sekunder} sekunder …`, ikkePlaceret: [] };
+        tilstand.optimerJob = job;
+        tilstand.optimerStopper = false;
+        tilstand.forslag = { tekst: `Løseren regner i op til ${sekunder >= 120 ? `${sekunder / 60} minutter` : `${sekunder} sekunder`}. Du kan stoppe undervejs og bruge den bedste plan, den har fundet.`, ikkePlaceret: [] };
         render();
+        // Uret opdateres direkte i knappen, så gitteret ikke tegnes om hvert sekund
+        const start = Date.now();
+        const visUr = () => { const el = document.querySelector('[data-optimer-ur]'); if (el) el.textContent = `${Math.round((Date.now() - start) / 1000)} s`; };
+        const ur = setInterval(visUr, 1000);
+        const faerdig = () => { clearInterval(ur); tilstand.optimerer = false; tilstand.optimerJob = null; tilstand.optimerStopper = false; };
         try {
-            const svar = await optimer(projekt, { sekunder, hintPlan: graadig.brud.length ? null : graadig.plan });
-            tilstand.optimerer = false;
+            const svar = await optimer(projekt, { sekunder, hintPlan: graadig.brud.length ? null : graadig.plan, job });
+            faerdig();
             const graadigAlt = { navn: 'Grådig planlægger', beskrivelse: 'Det hurtige forslag fra "Lav forslag" — til sammenligning.', plan: graadig.plan, ikkePlaceret: graadig.ikkePlaceret, brud: graadig.brud, statistik: graadig.statistik, score: scorePlan({ ...projekt, plan: graadig.plan }).total };
             if (svar.status === 'OPTIMAL' || svar.status === 'FEASIBLE') {
                 const p2 = { ...projekt, plan: svar.plan };
-                const opt = { navn: svar.status === 'OPTIMAL' ? 'Optimeret (bevist bedst mulig)' : 'Optimeret (CP-SAT)', beskrivelse: `Løseren minimerede scoren under alle hårde regler på ${svar.sekunder} s.`, plan: svar.plan, ikkePlaceret: [], brud: [], statistik: bedoemPlan(p2), score: scorePlan(p2).total };
+                const opt = { navn: svar.status === 'OPTIMAL' ? 'Optimeret (bevist bedst mulig)' : 'Optimeret (CP-SAT)', beskrivelse: svar.stoppet ? `Stoppet efter ${svar.sekunder} s — den bedste plan, løseren havde fundet. Alle hårde regler er overholdt.` : `Løseren minimerede scoren under alle hårde regler på ${svar.sekunder} s.`, plan: svar.plan, ikkePlaceret: [], brud: [], statistik: bedoemPlan(p2), score: scorePlan(p2).total };
                 const liste = [opt, graadigAlt].sort((a, b) => (a.brud.length - b.brud.length) || (a.score - b.score));
                 tilstand.forslag = { tekst: `Løseren fandt en plan med score ${opt.score} på ${svar.sekunder} s (grådig: ${graadigAlt.score}). Bladr med ◀ ▶ og vælg "Brug dette".`, ikkePlaceret: [] };
                 tilstand.alternativer = { liste, index: 0, foer };
@@ -282,10 +290,17 @@ const planHandlers = {
                 render();
             }
         } catch (err) {
-            tilstand.optimerer = false;
+            faerdig();
             tilstand.forslag = { tekst: `Løseren kunne ikke nås (${err.message || err}). "Lav forslag" og "Alternativer" virker uden den.`, ikkePlaceret: [] };
             render();
         }
+    },
+
+    async stopOptimer() {
+        if (!tilstand.optimerer || !tilstand.optimerJob || tilstand.optimerStopper) return;
+        tilstand.optimerStopper = true;
+        render();
+        try { await stopLoeser(tilstand.optimerJob); } catch { /* svaret på optimer() afgør resten */ }
     },
 
     // Alternative forslag: bladr mellem dem (planen skiftes med det samme, så

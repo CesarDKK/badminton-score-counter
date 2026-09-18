@@ -222,7 +222,7 @@ services:
     logging: *default-logging
     environment:
       PORT: 8000
-      SOLVER_MAX_SEKUNDER: 120
+      SOLVER_MAX_SEKUNDER: 360
       SOLVER_SAMTIDIGE: ${PLANNER_SOLVER_SAMTIDIGE:-1}
       SOLVER_ARBEJDERE: ${PLANNER_SOLVER_ARBEJDERE:-2}
     # Løseren bruger al den CPU, den får, mens den regner. Den må ikke sulte tælleren:

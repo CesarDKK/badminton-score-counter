@@ -1,4 +1,6 @@
 """Tests af CP-SAT-løseren på små håndlavede problemer. Køres med: python -m unittest -v"""
+import threading
+import time
 import unittest
 
 from solver import DAG, loes
@@ -86,6 +88,93 @@ class SolverTest(unittest.TestCase):
         tom = loes(problem([kamp(0, tilladte=[])]), 5)
         self.assertEqual(tom["status"], "INFEASIBLE")
         self.assertIn("k0", tom["besked"])
+
+
+def stort_problem(spillere=40, kampe_pr_spiller=6):
+    """Et problem, der er for stort til at blive bevist optimalt på få sekunder."""
+    tider = list(range(540, 1080, 30))
+    kap = {"faelles": [{"t": t, "baner": 8} for t in tider]}
+    kampe, grupper, konflikter = [], {s: [] for s in range(spillere)}, []
+    n = 0
+    for runde in range(kampe_pr_spiller):
+        for a in range(0, spillere, 2):
+            b = (a + 1 + 2 * runde) % spillere
+            kampe.append(kamp(n, tilladte=tider, spillere=[a, b]))
+            grupper[a].append(n)
+            grupper[b].append(n)
+            n += 1
+    for liste in grupper.values():
+        for i in range(len(liste)):
+            for j in range(i + 1, len(liste)):
+                konflikter.append([liste[i], liste[j], 30, 0])
+    return problem(kampe, kapacitet=kap, konflikter=konflikter, dage=[{"index": 0, "start": 540, "slut": 1080, "baner": 8}],
+                   spillerGrupper=[{"kampe": l, "vaegt": 1} for l in grupper.values()])
+
+
+class StopTest(unittest.TestCase):
+    def test_stop_afbryder_og_afleverer_bedste_plan(self):
+        stop = threading.Event()
+        threading.Timer(3.0, stop.set).start()
+        t0 = time.time()
+        r = loes(stort_problem(), 60, stop=stop)
+        self.assertLess(time.time() - t0, 15, "søgningen stopper kort efter signalet, ikke efter 60 s")
+        if r["status"] != "OPTIMAL":
+            self.assertTrue(r["stoppet"])
+        self.assertIn(r["status"], ("FEASIBLE", "OPTIMAL"))
+        self.assertEqual(len(r["tider"]), 120, "den bedste plan indtil da afleveres")
+
+    def test_uden_stop_er_stoppet_falsk(self):
+        r = loes(problem([kamp(0), kamp(1)]), 5)
+        self.assertFalse(r["stoppet"])
+
+    def test_http_stop_og_lukket_forbindelse(self):
+        import json
+        import socket
+        import urllib.request
+        from http.server import ThreadingHTTPServer
+        from solver import Handler
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        port = server.server_address[1]
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            def post(sti, data):
+                req = urllib.request.Request(f"http://127.0.0.1:{port}{sti}", data=json.dumps(data).encode(), headers={"Content-Type": "application/json"})
+                try:
+                    with urllib.request.urlopen(req, timeout=90) as svar:
+                        return svar.status, json.loads(svar.read())
+                except urllib.error.HTTPError as e:
+                    return e.code, json.loads(e.read())
+
+            # 1) /stop afslutter et job og giver den bedste plan tilbage i det oprindelige kald
+            resultat = {}
+            traad = threading.Thread(target=lambda: resultat.update(svar=post("/solve", {"problem": stort_problem(), "sekunder": 60, "job": "testjob-12345"})))
+            t0 = time.time()
+            traad.start()
+            time.sleep(3)
+            self.assertEqual(post("/stop", {"job": "ukendt-job-999"})[0], 404)
+            self.assertEqual(post("/stop", {"job": "testjob-12345"})[0], 200)
+            traad.join(30)
+            self.assertLess(time.time() - t0, 20)
+            kode, svar = resultat["svar"]
+            self.assertEqual(kode, 200)
+            self.assertEqual(len(svar["tider"]), 120)
+
+            # 2) Lukkes forbindelsen midt i en løsning, bliver løseren fri igen inden tidsgrænsen
+            raa = json.dumps({"problem": stort_problem(), "sekunder": 60}).encode()
+            s = socket.create_connection(("127.0.0.1", port))
+            s.sendall(b"POST /solve HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nContent-Length: " + str(len(raa)).encode() + b"\r\n\r\n" + raa)
+            time.sleep(2)
+            self.assertEqual(post("/solve", {"problem": problem([kamp(0)]), "sekunder": 5})[0], 429, "optaget, mens den første regner")
+            s.close()
+            frist = time.time() + 15
+            kode = 429
+            while kode == 429 and time.time() < frist:
+                time.sleep(1)
+                kode = post("/solve", {"problem": problem([kamp(0)]), "sekunder": 5})[0]
+            self.assertEqual(kode, 200, "løseren blev fri kort efter, at forbindelsen blev lukket")
+        finally:
+            server.shutdown()
+            server.server_close()
 
 
 if __name__ == "__main__":

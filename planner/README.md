@@ -333,3 +333,15 @@ samme score som `scorePlan`.
 Målt i prod (2 kerner, loft 1,5; U9/U11 2025, alle planer uden fejl): 30 s → score
 337, 60 s → 142, 120 s → 126 (lokalt med 4 kerner: 117 på 30 s). Standardtiden i
 "Optimér" er derfor 60 s. Et samtidigt kald nr. 2 afvises med "Løseren er optaget".
+
+### Lange kørsler og "Stop og brug det bedste" (2026-09-18)
+
+- Tidsvalg i "Optimér": 10, 30, 60 s (standard), 2, 4 og 6 min. `SOLVER_MAX_SEKUNDER`
+  er 360, og nginx venter 420 s på svaret.
+- Klienten vælger et tilfældigt job-id (`nytJobId`) og sender det med. Knappen
+  "Stop og brug det bedste" kalder `POST /api/solve/stop { job }` (`stopLoeser`);
+  løseren afbryder søgningen (`stop_search`) og svarer i det oprindelige kald med den
+  bedste plan indtil da (`stoppet: true`) — alle hårde regler er stadig overholdt.
+- Lukker brugeren fanen, lukker nginx forbindelsen til løseren, som opdager det inden
+  for et halvt sekund og stopper, så den ikke er optaget i flere minutter.
+- Et ur i knappen viser, hvor længe løseren har regnet (opdateres uden at tegne gitteret om).
