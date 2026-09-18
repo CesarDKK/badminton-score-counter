@@ -432,3 +432,12 @@ max haltid eller en række, der ikke kan være på én dag), men sagde ikke hvor
 - Målt på Lyngby U9/U11: filen som den er → "U09 D kan ikke være på én dag" (8 s); Jespers dage
   uden reservation → "max haltid 240: med 300 min findes der en plan" (2 s); alt som Swiss →
   "ikke plads" (5 s), som henviser til nedskæringsforslagene.
+
+### Dobbelt pulje som form (2026-09-18)
+
+`formValg: 'dobbelt-pulje'` — alle møder alle to gange (TP's drawtype 4). `formMuligheder` giver
+en dobbelt udgave af hver puljefordeling (dobbelt så mange kampe, minKampe × 2), og `byggKampe`
+lægger anden omgang som rundeplanen én gang til efter første omgang (`#b – #a (2. møde)`).
+"Automatisk" bruger den kun til små felter (én pulje), hvor intet andet når minimum — fx 3–4
+U9-spillere med krav om 4 kampe. Tæller doublerne med (samlet tælling), vælges den billigere
+enkelte pulje i stedet. Valgt direkte gælder den for alle feltstørrelser.

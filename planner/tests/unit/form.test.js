@@ -46,7 +46,7 @@ describe('form: valg af turneringsform', () => {
     test('muligheder for 39 spillere indeholder puljer, pulje+cup og Swiss', () => {
         const m = formMuligheder(39, { cupTop: 1 });
         const former = new Set(m.map((x) => x.form));
-        assert.deepEqual([...former].sort(), ['pulje', 'pulje-cup', 'swiss']);
+        assert.deepEqual([...former].sort(), ['dobbelt-pulje', 'pulje', 'pulje-cup', 'swiss']);
         const pc3 = m.find((x) => x.form === 'pulje-cup' && x.stoerrelse === 3);
         assert.equal(pc3.puljer.length, 13);
         assert.equal(pc3.kampe, 39 + 12, '39 puljekampe + cup for 13 vindere');
@@ -59,7 +59,7 @@ describe('form: valg af turneringsform', () => {
         const f = foreslaaForm(39, u11dHS, u11d, regler, { form: 'auto', kriterie: 'faerrest' });
         assert.ok(f.opfylderKrav, f.tekst);
         assert.ok(f.minKampe >= 4);
-        const alle = formMuligheder(39).filter((x) => x.minKampe >= 4);
+        const alle = formMuligheder(39).filter((x) => x.minKampe >= 4 && x.form !== 'dobbelt-pulje'); // automatisk bruger kun dobbelt pulje til små felter
         assert.equal(f.baneSlots, Math.min(...alle.map((x) => x.baneSlots)));
     });
     test('automatisk: U9-single med 19 → Swiss Ladder på halve baner, U11 D HD med 9 par → puljer', () => {
@@ -80,9 +80,12 @@ describe('form: valg af turneringsform', () => {
         assert.ok(flest.baneSlots >= faerrest.baneSlots);
     });
     test('kan kravet ikke opfyldes, vælges flest kampe til de færreste', () => {
-        const f = foreslaaForm(3, u11dHS, u11d, regler, { form: 'auto' });
+        const f = foreslaaForm(2, u11dHS, u11d, regler, { form: 'auto' });
         assert.equal(f.opfylderKrav, false);
-        assert.equal(f.minKampe, 2, 'én pulje á 3');
+        assert.equal(f.minKampe, 2, 'to kampe mod hinanden er det meste, to spillere kan få');
+        const tre = foreslaaForm(3, u11dHS, u11d, regler, { form: 'auto' });
+        assert.equal(tre.form, 'dobbelt-pulje', 'tre spillere når kravet på 4 med dobbelt pulje');
+        assert.equal(tre.opfylderKrav, true);
         assert.equal(foreslaaForm(1, u11dHS, u11d, regler), null);
     });
 });
@@ -261,5 +264,64 @@ describe('form: kapacitet i projektet', () => {
         assert.ok(Math.abs(kapacitetTilKategori(p, u9) - 8 * 0.85) < 1e-9);
         assert.ok(Math.abs(kapacitetTilKategori(p, u11) - 24 * 0.85) < 1e-9);
         assert.equal(delerKapacitet(p, u9, u11), false, 'U9 har egen pulje');
+    });
+});
+
+describe('form: dobbelt pulje (alle møder alle to gange)', () => {
+    const u9DS = { id: 'U09 D DS', kat: 'DS', type: 'single', halvBane: true };
+    const tilm4 = ['a', 'b', 'c', 'd'].map((s, i) => ({ entry: i + 1, spillere: [s] }));
+    test('muligheder: dobbelt pulje giver dobbelt så mange kampe som en enkelt', () => {
+        const m = formMuligheder(4);
+        const enkelt = m.find((x) => x.form === 'pulje' && x.puljer.join() === '4');
+        const dobbelt = m.find((x) => x.form === 'dobbelt-pulje' && x.puljer.join() === '4');
+        assert.equal(dobbelt.kampe, enkelt.kampe * 2);
+        assert.equal(dobbelt.minKampe, 6);
+        assert.match(dobbelt.tekst, /dobbelt pulje á 4 — alle møder alle to gange/);
+        assert.equal(formMuligheder(2).find((x) => x.form === 'dobbelt-pulje').kampe, 2);
+    });
+    test('automatisk: 4 U9-spillere kan kun nå 4 kampe med dobbelt pulje; 3 spillere ligeså', () => {
+        const f4 = foreslaaForm(4, u9DS, u9d, regler, { form: 'auto', deltagere: tilm4 });
+        assert.equal(f4.form, 'dobbelt-pulje');
+        assert.equal(f4.opfylderKrav, true);
+        assert.equal(f4.kampe, 12);
+        const f3 = foreslaaForm(3, u9DS, u9d, regler, { form: 'auto', deltagere: tilm4.slice(0, 3) });
+        assert.equal(f3.form, 'dobbelt-pulje');
+        assert.equal(f3.minKampe, 4);
+    });
+    test('automatisk: store felter vælger IKKE dobbelt pulje, når noget billigere når kravet', () => {
+        const f = foreslaaForm(39, u11dHS, u11d, regler, { form: 'auto', kriterie: 'faerrest' });
+        assert.notEqual(f.form, 'dobbelt-pulje');
+        assert.notEqual(foreslaaForm(12, u11dHD, u11d, regler, { form: 'auto' }).form, 'dobbelt-pulje', 'doubler (krav 2) klarer sig med en enkelt pulje');
+    });
+    test('valgt direkte: kampene bygges som to omgange, anden omgang efter første', () => {
+        const f = foreslaaForm(4, u9DS, u9d, regler, { form: 'dobbelt-pulje', deltagere: tilm4 });
+        const kampe = byggKampe(u9DS, tilm4, f);
+        assert.equal(kampe.length, 12);
+        assert.equal(new Set(kampe.map((k) => k.id)).size, 12, 'unikke id\'er');
+        const prSpiller = new Map();
+        for (const k of kampe) for (const s of k.spillere) prSpiller.set(s, (prSpiller.get(s) || 0) + 1);
+        assert.deepEqual([...prSpiller.values()], [6, 6, 6, 6]);
+        const anden = kampe.filter((k) => /2\. møde/.test(k.navn));
+        assert.equal(anden.length, 6);
+        assert.ok(anden.every((k) => k.runde > 3 && k.afhaengerAf.length > 0));
+        const par = (k) => [...k.spillere].sort().join('-');
+        assert.deepEqual(kampe.filter((k) => !/2\. møde/.test(k.navn)).map(par).sort(), anden.map(par).sort(), 'samme par mødes igen');
+    });
+    test('i projektet: kan planlægges uden fejl, og Tjek tæller 6 sikre kampe', () => {
+        let p = nytProjekt({
+            version: 1, kilde: {}, turnering: { navn: 'T', hal: '', dage: ['2026-11-21'] },
+            tpGitter: { slotMin: 30, dage: [], baner: { hele: 2, halve: 0, navne: [] }, harTider: false, advarsler: 0 },
+            raekker: [{ id: 'U09 D', aargang: 'U09', raekke: 'D', pauseKlasse: 'ABCD', kategorier: ['U09 D DS'] }],
+            kategorier: [{ id: 'U09 D DS', eventId: 1, raekke: 'U09 D', aargang: 'U09', kat: 'DS', type: 'single', mix: false, form: 'ingen lodtrækning', tilmeldte: 0, kampe: 0, runder: 0, halvBane: false }],
+            spillere: Object.fromEntries(['a', 'b', 'c', 'd'].map((id) => [id, { id, fornavn: id, efternavn: 'X', koen: 'D', foedt: null, klub: 'K', memberid: null, niveau: {}, point: {} }])),
+            kampe: [], tilmeldinger: { 'U09 D DS': tilm4 }, bemaerkninger: [],
+        });
+        p = saetForm(p, 'U09 D DS', { formValg: 'dobbelt-pulje' });
+        assert.equal(p.kampe.length, 12);
+        const f = lavForslag(p);
+        assert.equal(f.brud.length, 0);
+        const t = tjekPlan(anvendForslag(p, f));
+        assert.deepEqual(t.problemer.filter((x) => x.alvor === 'fejl'), []);
+        assert.equal(t.problemer.some((x) => (x.noegle || '').endsWith(':min-kampe')), false);
     });
 });

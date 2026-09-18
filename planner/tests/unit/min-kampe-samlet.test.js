@@ -32,9 +32,10 @@ function model({ pigerIDouble = true } = {}) {
     };
 }
 
+/** Pigesinglen som Swiss Ladder (4 spillere → højst 3 runder, så kravet på 4 kun nås via doublen); resten automatisk. */
 function projekt(valg) {
     let p = nytProjekt(model(valg));
-    for (const k of p.kategorier) p = saetForm(p, k.id, { formValg: 'auto' });
+    for (const k of p.kategorier) p = saetForm(p, k.id, { formValg: k.id === 'U09 D DS' ? 'swiss' : 'auto' });
     return p;
 }
 
@@ -67,22 +68,24 @@ describe('min. kampe samlet: hjælpere', () => {
 
 describe('min. kampe samlet: valg af form', () => {
     const deltagere = ['g1', 'g2', 'g3', 'g4'].map((id) => ({ spillere: [id] }));
-    test('4 piger alene: ingen form giver 4 singler → under kravet', () => {
-        const f = foreslaaForm(4, u9DS, u9d, regler, { form: 'auto', deltagere, samlet: true });
+    test('4 piger alene: Swiss Ladder kan ikke give 4 singler → under kravet (automatisk ville vælge dobbelt pulje)', () => {
+        const f = foreslaaForm(4, u9DS, u9d, regler, { form: 'swiss', deltagere, samlet: true });
         assert.equal(f.opfylderKrav, false, formTekst(f));
+        assert.equal(foreslaaForm(4, u9DS, u9d, regler, { form: 'auto', deltagere, samlet: true }).form, 'dobbelt-pulje');
     });
     test('4 piger med mindst 1 sikker doublekamp hver: 3 singler + 1 double = 4 → kravet er nået', () => {
         const andreKampe = new Map(deltagere.map((t) => [t.spillere[0], 1]));
         const f = foreslaaForm(4, u9DS, u9d, regler, { form: 'auto', deltagere, andreKampe, samlet: true });
         assert.equal(f.opfylderKrav, true, formTekst(f));
+        assert.equal(f.form, 'pulje', 'en enkelt pulje er nok, når doublen tæller med — billigere end dobbelt pulje');
         assert.equal(f.kravInklAndre, true);
         assert.match(formTekst(f), /nås inkl\. mindst 1 kamp i double\/mix/);
         const uden = foreslaaForm(4, u9DS, u9d, regler, { form: 'auto', deltagere, andreKampe, samlet: false });
-        assert.equal(uden.opfylderKrav, false, 'uden samlet tælling hjælper doublerne ikke');
+        assert.equal(uden.form, 'dobbelt-pulje', 'uden samlet tælling hjælper doublerne ikke — så skal der dobbelt pulje til');
     });
     test('den spiller, der har færrest andre kampe, bestemmer', () => {
         const andreKampe = new Map([['g1', 2], ['g2', 2], ['g3', 2]]); // g4 spiller ikke double
-        const f = foreslaaForm(4, u9DS, u9d, regler, { form: 'auto', deltagere, andreKampe, samlet: true });
+        const f = foreslaaForm(4, u9DS, u9d, regler, { form: 'swiss', deltagere, andreKampe, samlet: true });
         assert.equal(f.opfylderKrav, false);
     });
 });
