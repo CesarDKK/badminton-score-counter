@@ -192,7 +192,9 @@ export function planFraSvar(projekt, svar) {
 /** Tilfældigt job-id, så en igangværende løsning kan stoppes med stopLoeser(). */
 export function nytJobId() {
     const b = new Uint8Array(12);
-    globalThis.crypto.getRandomValues(b);
+    // Ældre Node (CI kører 18) har ikke crypto som global; id'et er kun et håndtag til "Stop", ikke en hemmelighed
+    if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(b);
+    else for (let i = 0; i < b.length; i += 1) b[i] = Math.floor(Math.random() * 256);
     return [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
 
