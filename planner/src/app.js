@@ -182,6 +182,7 @@ const handlers = {
     opsaetning: (aendringer) => saet(store.opdaterOpsaetning(projekt, aendringer)),
     dag: (dato, aendringer) => saet(store.opdaterDag(projekt, dato, aendringer)),
     raekke: (id, aendringer) => saet(store.opdaterRaekke(projekt, id, aendringer)),
+    minKampeSamlet: (id, vaerdi) => saet(store.genberegnKampe(store.opdaterRaekke(projekt, id, { minKampeSamlet: vaerdi }))),
     kategori: (id, aendringer) => saet(store.opdaterKategori(projekt, id, aendringer)),
     pause: (klasse, v) => saet(store.opdaterPause(projekt, klasse, v)),
     regler: (sti, v) => saet(store.opdaterRegler(projekt, sti, v)),

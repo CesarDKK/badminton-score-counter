@@ -7,6 +7,7 @@
 import { minutter } from './tp-reader.js';
 import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt } from './kapacitet.js';
 import { reglerFor, STANDARD_REGLER } from './store.js';
+import { effektivForm, minKampeSamlet, sikreKampe } from './form.js';
 
 /** Min. tid pr. kamp (§ 4 stk. 5): standard ungdom ABCD 20, EM 25; senior ABCD 25, EM 30. */
 export function minKampMin(aargang, raekke, regler = STANDARD_REGLER) {
@@ -395,17 +396,20 @@ export function tjekPlan(projekt) {
     if (udenTid.length) tilfoej({ type: 'uden-tid', alvor: 'info', tekst: `${udenTid.length} kampe har ingen tid endnu.`, kampe: udenTid.map((k) => k.id) });
 
     // ── Turneringsform (§ 5.2) — regnes fra lodtrækningen ──
+    // Sikre kampe pr. spiller pr. kategori (puljekampe og Swiss-runder; cup afhænger af resultatet)
+    const sikrePrKat = new Map(projekt.kategorier.map((k) => [k.id, sikreKampe(k, projekt.kampe.filter((x) => x.kategori === k.id))]));
     for (const k of projekt.kategorier) {
         const r = raekkeMap.get(k.raekke);
         if (!r) continue;
         const ungdom = /^U/.test(r.aargang);
         const kampe = projekt.kampe.filter((x) => x.kategori === k.id);
         if (!kampe.length) continue;
-        if (k.form === 'swiss' && k.runder < regler.minKampe.swissRunder) tilfoej({ type: 'form', alvor: 'advarsel', noegle: `${k.id}:swiss-runder`, tekst: `${k.id}: Swiss Ladder med ${k.runder} runder — reglementet kræver mindst ${regler.minKampe.swissRunder}.`, kampe: [] });
-        // sikre kampe pr. spiller = puljekampe (cup afhænger af resultatet)
-        const prSpillerAntal = new Map();
-        for (const x of kampe) if (x.fase !== 'cup' || x.spillere.length) for (const s of x.spillere) prSpillerAntal.set(s, (prSpillerAntal.get(s) || 0) + 1);
-        if (k.form === 'swiss') for (const s of prSpillerAntal.keys()) prSpillerAntal.set(s, k.runder);
+        const ef = effektivForm(k);
+        if (ef.form === 'swiss' && ef.runder < regler.minKampe.swissRunder) tilfoej({ type: 'form', alvor: 'advarsel', noegle: `${k.id}:swiss-runder`, tekst: `${k.id}: Swiss Ladder med ${ef.runder} ${ef.runder === 1 ? 'runde' : 'runder'} — reglementet kræver mindst ${regler.minKampe.swissRunder}.`, kampe: [] });
+        // Tælles kravet samlet for rækken (U9), regnes spillerens sikre kampe i andre kategorier med
+        const samlet = minKampeSamlet(r);
+        const prSpillerAntal = new Map(sikrePrKat.get(k.id));
+        if (samlet) for (const [id, andre] of sikrePrKat) if (id !== k.id) for (const s of prSpillerAntal.keys()) if (andre.has(s)) prSpillerAntal.set(s, prSpillerAntal.get(s) + andre.get(s));
         if (!prSpillerAntal.size) continue;
         const faerrest = Math.min(...prSpillerAntal.values());
         let krav = 0;
@@ -414,7 +418,7 @@ export function tjekPlan(projekt) {
         if (ungdom && ['U09', 'U11'].includes(r.aargang) && k.type === 'single') krav = Math.max(krav, regler.minKampe.U9U11Single);
         if (krav && faerrest < krav) {
             const ramte = [...prSpillerAntal].filter(([, n]) => n < krav).map(([s]) => spillerNavn(s));
-            tilfoej({ type: 'form', alvor: 'advarsel', noegle: `${k.id}:min-kampe`, tekst: `${k.id}: ${ramte.length} spillere er kun sikret ${faerrest} kampe (krav ${krav}): ${ramte.slice(0, 4).join(', ')}${ramte.length > 4 ? ' …' : ''}. Rettes i TP.`, kampe: [] });
+            tilfoej({ type: 'form', alvor: 'advarsel', noegle: `${k.id}:min-kampe`, tekst: `${k.id}: ${ramte.length} spillere er kun sikret ${faerrest} ${faerrest === 1 ? 'kamp' : 'kampe'}${samlet ? ' i alt (single + double/mix)' : ''} (krav ${krav}): ${ramte.slice(0, 4).join(', ')}${ramte.length > 4 ? ' …' : ''}. ${(k.formValg || 'tp') === 'tp' ? 'Rettes i TP.' : 'Vælg en anden form i fane 1.'}`, kampe: [] });
         }
     }
 

@@ -95,14 +95,23 @@ export function foreslaaForm(n, kategori, raekke, regler, valg = {}) {
     const oenske = valg.form && valg.form !== 'auto' ? alle.filter((x) => x.form === valg.form) : alle;
     const kandidater = oenske.length ? oenske : alle;
     const formRang = { 'pulje-cup': 0, pulje: 1, swiss: 2 };
+    // Spillernes sikre kampe i andre kategorier (double, mix): den der har færrest, bestemmer
+    const andre = valg.andreKampe || new Map(); // spillerId → sikre kampe i andre kategorier
+    const deltagere = valg.deltagere || [];       // [{ spillere }]
+    const faerrestAndre = deltagere.length ? Math.min(...deltagere.map((t) => Math.min(...t.spillere.map((s) => andre.get(s) || 0)))) : 0;
+    // Tælles kravet samlet (U9), opfylder en form kravet, når egne + andre sikre kampe når op på det
+    // — i singlerne; double/mix afgøres for sig, så de to ikke skærer ned på hinanden.
+    const medregnet = valg.samlet && kategori.type === 'single' ? faerrestAndre : 0;
+    const medVedNedskaering = valg.samlet ? faerrestAndre : 0;
     // Valgt antal runder: tag den, uanset krav og kapacitet
     if (swissRunder && kandidater.some((x) => x.form === 'swiss')) {
         const v = kandidater.find((x) => x.form === 'swiss');
-        return { ...v, krav, opfylderKrav: v.minKampe >= krav, deltagere: n };
+        const inkl = !!valg.samlet && v.minKampe < krav && v.minKampe + faerrestAndre >= krav;
+        return { ...v, krav, opfylderKrav: v.minKampe >= krav || inkl, ...(inkl ? { kravInklAndre: true, faerrestAndre } : {}), deltagere: n };
     }
     // Automatisk: ikke-nedskårne muligheder, der opfylder kravet
     const normale = kandidater.filter((x) => !x.nedskaaret);
-    const opfylder = normale.filter((x) => x.minKampe >= krav);
+    const opfylder = normale.filter((x) => x.minKampe + medregnet >= krav);
     const ledig = valg.ledigeBaneSlots; // bane-slots til rådighed for kategorien (ellers ubegrænset)
     const passer = (x) => ledig == null || x.baneSlots <= ledig;
     const sortFaerrest = (a, b) => a.baneSlots - b.baneSlots || formRang[a.form] - formRang[b.form] || b.minKampe - a.minKampe;
@@ -113,18 +122,16 @@ export function foreslaaForm(n, kategori, raekke, regler, valg = {}) {
         if (derPasser.length) {
             derPasser.sort(valg.kriterie === 'flest' ? sortFlest : sortFaerrest);
             valgt = derPasser[0];
+            if (valgt.minKampe < krav) valgt = { ...valgt, kravInklAndre: true, faerrestAndre };
         }
     }
     if (!valgt) {
         // Kapaciteten rækker ikke (eller intet opfylder kravet). Swiss Ladder kan skæres
         // ned i runder: vælg det største antal runder, der passer, hvor spillerne stadig
         // når kravet, når deres kampe i andre kategorier (double, mix) tælles med.
-        const andre = valg.andreKampe || new Map(); // spillerId → kampe i andre kategorier
-        const deltagere = valg.deltagere || [];       // [{ spillere }] — til kravet inkl. andre kampe
-        const faerrestAndre = deltagere.length ? Math.min(...deltagere.map((t) => Math.min(...t.spillere.map((s) => andre.get(s) || 0)))) : 0;
         const swiss = kandidater.filter((x) => x.form === 'swiss' && passer(x)).sort((a, b) => b.runder - a.runder);
-        const medKravInklAndre = swiss.find((x) => x.minKampe + faerrestAndre >= krav);
-        if (medKravInklAndre) valgt = { ...medKravInklAndre, nedskaaret: medKravInklAndre.nedskaaret || medKravInklAndre.minKampe < krav, kravInklAndre: true, faerrestAndre };
+        const medKravInklAndre = swiss.find((x) => x.minKampe + medVedNedskaering >= krav);
+        if (medKravInklAndre) valgt = { ...medKravInklAndre, nedskaaret: medKravInklAndre.nedskaaret || medKravInklAndre.minKampe < krav, ...(medKravInklAndre.minKampe < krav ? { kravInklAndre: true } : {}), faerrestAndre };
         else if (swiss.length) valgt = { ...swiss[0], nedskaaret: true, faerrestAndre };
         else {
             // ingen Swiss-mulighed passer: den mulighed der giver flest kampe til de færreste (helst inden for kapaciteten)
@@ -288,11 +295,40 @@ export function seedTilmeldinger(tilmeldinger, spillere, kat) {
     return tilmeldinger.map((t, i) => ({ t, i, p: point(t) })).sort((a, b) => b.p - a.p || a.i - b.i).map((x) => x.t);
 }
 
+/** Formen der faktisk gælder: plannerens egen (formForslag), når kategorien ikke følger TP. */
+export function effektivForm(kategori) {
+    const f = (kategori.formValg || 'tp') !== 'tp' ? kategori.formForslag : null;
+    return f ? { form: f.form, runder: f.runder || 0, sikreSwiss: f.minKampe } : { form: kategori.form, runder: kategori.runder || 0, sikreSwiss: kategori.runder || 0 };
+}
+
+/** Tælles rækkens minimumskrav samlet på tværs af spillerens kategorier (single + double/mix)? U9: ja som standard. */
+export function minKampeSamlet(raekke) {
+    return raekke ? (raekke.minKampeSamlet ?? raekke.aargang === 'U09') : false;
+}
+
+/**
+ * Sikre kampe pr. spiller i én kategori: Swiss Ladder = antal runder (en færre ved
+ * ulige antal, når planneren selv har bygget den), ellers kampe med kendte spillere
+ * (puljekampe; cupkampe afhænger af resultatet).
+ */
+export function sikreKampe(kategori, kampe) {
+    const ud = new Map();
+    const e = effektivForm(kategori);
+    if (e.form === 'swiss') {
+        for (const x of kampe) for (const s of [...x.spillere, ...(x.muligeSpillere || [])]) ud.set(s, e.sikreSwiss);
+        return ud;
+    }
+    for (const x of kampe) if (x.fase !== 'cup' || x.spillere.length) for (const s of x.spillere) ud.set(s, (ud.get(s) || 0) + 1);
+    return ud;
+}
+
 /** Kort beskrivelse af en valgt form til fane 1 og "opskriften" til TP. */
 export function formTekst(form) {
     if (!form) return 'ingen kampe (under 2 tilmeldte)';
     let bem = '';
-    if (form.kravInklAndre) bem = ` (skåret ned pga. kapacitet; kravet på ${form.krav} nås inkl. mindst ${form.faerrestAndre} kampe i andre kategorier)`;
+    if (form.kravInklAndre && !form.nedskaaret) bem = ` (kravet på ${form.krav} nås inkl. mindst ${form.faerrestAndre} ${form.faerrestAndre === 1 ? 'kamp' : 'kampe'} i double/mix)`;
+    else if (form.kravInklAndre) bem = ` (skåret ned pga. kapacitet; kravet på ${form.krav} nås inkl. mindst ${form.faerrestAndre} kampe i andre kategorier)`;
+    else if (form.nedskaaret && !form.valgtRunder && form.form === 'swiss' && form.runder >= form.deltagere - 1) bem = ` (kun ${form.deltagere} deltagere — under kravet på ${form.krav})`;
     else if (form.nedskaaret && !form.valgtRunder) bem = ` (skåret ned pga. kapacitet — under kravet på ${form.krav})`;
     else if (!form.opfylderKrav) bem = ` (under kravet på ${form.krav})`;
     return `${form.tekst} · ${form.kampe} kampe · ${form.minKampe}–${form.maxKampe} kampe pr. spiller${bem}`;

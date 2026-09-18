@@ -4,7 +4,7 @@ import { esc, datoTekst, procent, tal } from './dom.js';
 import { kapacitetPrDag, kampePrKategori, slotsForDag, baneSlots } from '../kapacitet.js';
 import { foerSkoledag } from '../rules.js';
 import { reglerFor, STANDARD_REGLER } from '../store.js';
-import { FORM_VALG, FORM_VALG_TEKST, formTekst } from '../form.js';
+import { FORM_VALG, FORM_VALG_TEKST, formTekst, effektivForm, minKampeSamlet } from '../form.js';
 import { KRITERIER, VAEGT_SKABELONER, vaegteFor } from '../kriterier.js';
 
 const FORM_TEKST = {
@@ -247,6 +247,7 @@ function raekkePanel(p) {
                     max haltid <input type="number" min="0" max="900" step="30" value="${r.maxHaltidMin ?? ''}" data-raekke-tal="maxHaltidMin" data-raekke="${esc(r.id)}" aria-label="Max haltid i minutter"> min ·
                     max dage <input type="number" min="0" max="9" step="1" value="${r.maxDage ?? ''}" data-raekke-tal="maxDage" data-raekke="${esc(r.id)}" aria-label="Max dage">
                 </span>
+                <label class="valg" title="Minimum antal kampe tælles samlet for spillerens single og double/mix i stedet for pr. kategori. Standard for U9. Bruges af Tjek, og når planneren selv vælger turneringsform."><input type="checkbox" data-min-samlet="${esc(r.id)}" ${minKampeSamlet(r) ? 'checked' : ''}> min. kampe tælles samlet</label>
                 ${r.reserveredeBaner > 0 ? `<span class="maerke">${r.reserveredeBaner} ${r.reserveredeBaner === 1 ? 'bane' : 'baner'} reserveret${p.kategorier.some((k) => k.raekke === r.id && k.halvBane) ? ` = ${r.reserveredeBaner * 2} halve` : ''}</span>` : ''}
                 ${kraeverDisp ? `<label class="valg"><input type="checkbox" data-disp="${esc(r.id)}" ${r.dispensationFlereDage ? 'checked' : ''}> dispensation til flere dage</label>
                 ${r.dispensationFlereDage ? '<span class="maerke maerke--ok">dispensation givet</span>' : '<span class="maerke maerke--advarsel">kræver dispensation</span>'}` : ''}
@@ -278,7 +279,7 @@ function raekkePanel(p) {
                 <td class="daempet">${fordeling}</td>
                 <td class="tal">${t.medTid}</td>
                 <td>${k.aargang === 'U09' ? `<label class="valg" title="Kun U9 spiller på halv bane (single som standard). En hel bane deles i to halve."><input type="checkbox" data-halv="${esc(k.id)}" ${k.halvBane ? 'checked' : ''}> halv bane</label>` : ''}
-                    ${k.form === 'swiss' ? `<label class="valg" title="Swiss Ladder: næste runde må begynde i slottet lige efter forrige rundes sidste kamp, uden pause imellem. Pausen mod kampe i andre kategorier gælder stadig."><input type="checkbox" data-swiss-uden-pause="${esc(k.id)}" ${k.swissUdenPause ? 'checked' : ''}> runder lige efter hinanden</label>` : ''}
+                    ${effektivForm(k).form === 'swiss' ? `<label class="valg" title="Swiss Ladder: næste runde må begynde i slottet lige efter forrige rundes sidste kamp, uden pause imellem. Pausen mod kampe i andre kategorier gælder stadig."><input type="checkbox" data-swiss-uden-pause="${esc(k.id)}" ${k.swissUdenPause ? 'checked' : ''}> runder lige efter hinanden</label>` : ''}
                     <select data-prioritet="${esc(k.id)}" title="Forrang i forslaget: kategorier med høj prioritet får plads først, lav prioritet fylder op til sidst">
                         <option value="1" ${k.prioritet === 1 ? 'selected' : ''}>høj prioritet</option>
                         <option value="0" ${!k.prioritet ? 'selected' : ''}>normal</option>
@@ -463,6 +464,7 @@ function bind(container, projekt, h) {
             const dage = el.checked ? [...new Set([...r.dage, d.raekkeDag])].sort() : r.dage.filter((x) => x !== d.raekkeDag);
             h.raekke(d.raekke, { dage });
         } else if (d.disp) h.raekke(d.disp, { dispensationFlereDage: el.checked });
+        else if (d.minSamlet) h.minKampeSamlet(d.minSamlet, el.checked);
         else if (d.halv) h.kategori(d.halv, { halvBane: el.checked });
         else if (d.swissUdenPause) h.kategori(d.swissUdenPause, { swissUdenPause: el.checked });
     });
