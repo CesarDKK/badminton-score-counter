@@ -288,7 +288,13 @@ samme score som `scorePlan`.
   `POST /solve` → `{ status, tider, sekunder }`. Én løsning ad gangen (429
   ellers), højst 120 s, logger aldrig indhold. `solver/test_solver.py` køres i CI.
 - Drift: tjenesten `planner-solver` i `docker-compose.yml` (`Dockerfile.solver`,
-  4 CPU / 2 GB, ingen porte udadtil). nginx sender
+  1,5 CPU / 2 GB, ingen porte udadtil). Prod har kun 2 kerner, og Docker afviser
+  et `cpus`-loft over værtens antal kerner. Loftet, antal arbejdere og samtidige
+  løsninger styres af `PLANNER_SOLVER_CPUS` (1.5), `PLANNER_SOLVER_ARBEJDERE` (2)
+  og `PLANNER_SOLVER_SAMTIDIGE` (1) i `.env`; `cpu_shares: 256` lader tælleren
+  vinde, når der er kamp om kernerne. Målt: 1,5 kerne med 2 arbejdere er kun
+  3–4 % dårligere end 4 kerner med 8 — men 4 arbejdere på 1,5 kerne er 15–30 %
+  dårligere, så hold arbejdere ≈ antal kerner. nginx sender
   `planner.badmintonapp.dk/api/solve` videre med rate limit (6/min) og slår
   navnet op ved hvert kald, så siden virker, selv om løseren er nede.
 - UI: vælg 10–120 s og tryk "Optimér". Den grådige plan er startløsning (hint).
