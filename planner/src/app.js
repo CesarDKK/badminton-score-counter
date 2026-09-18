@@ -257,7 +257,7 @@ const planHandlers = {
         if (tilstand.optimerer) return;
         const antalLaast = (projekt.laast || []).length;
         if (Object.keys(projekt.plan).length > antalLaast && !window.confirm(`Optimér alle kampe? Kun låste kampe (${antalLaast}) beholder deres tid. Du kan fortryde bagefter.`)) return;
-        const sekunder = tilstand.optimerSek || 30;
+        const sekunder = tilstand.optimerSek || 60;
         const foer = { ...projekt.plan };
         const graadig = lavForslag(projekt);
         tilstand.optimerer = true;

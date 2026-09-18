@@ -329,3 +329,7 @@ samme score som `scorePlan`.
   kør den på compose-netværket med `--network-alias planner-solver`, og
   `docker cp nginx.conf badminton-frontend:/etc/nginx/conf.d/default.conf` +
   `nginx -s reload`. Python-tests: `python -m unittest test_solver.py` i imaget.
+
+Målt i prod (2 kerner, loft 1,5; U9/U11 2025, alle planer uden fejl): 30 s → score
+337, 60 s → 142, 120 s → 126 (lokalt med 4 kerner: 117 på 30 s). Standardtiden i
+"Optimér" er derfor 60 s. Et samtidigt kald nr. 2 afvises med "Løseren er optaget".

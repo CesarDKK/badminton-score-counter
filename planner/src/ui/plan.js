@@ -200,7 +200,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
             <button class="knap" data-handling="forslag" title="Planlægger alle kampe forfra; låste kampe beholder deres tid">Lav forslag</button>
             <span class="optimer">
                 <select data-felt="optimerSek" aria-label="Tid til løseren" title="Hvor længe løseren må regne. Længere tid giver som regel en bedre plan.">
-                    ${[10, 30, 60, 120].map((n) => `<option value="${n}" ${(tilstand.optimerSek || 30) === n ? 'selected' : ''}>${n} sek</option>`).join('')}
+                    ${[10, 30, 60, 120].map((n) => `<option value="${n}" ${(tilstand.optimerSek || 60) === n ? 'selected' : ''}>${n} sek</option>`).join('')}
                 </select>
                 <button class="knap" data-handling="optimer" ${tilstand.optimerer ? 'disabled' : ''} title="Sender et anonymiseret planlægningsproblem (kun kamp-id'er og spillernumre) til CP-SAT-løseren, som minimerer scoren under alle hårde regler. Låste kampe beholder deres tid.">${tilstand.optimerer ? 'Løseren regner …' : 'Optimér'}</button>
             </span>
@@ -302,7 +302,7 @@ function bind(container, h) {
     });
     container.addEventListener('change', (e) => {
         if (e.target.dataset.felt === 'filter') h.filter(e.target.value);
-        else if (e.target.dataset.felt === 'optimerSek') h.optimerSek(Number(e.target.value) || 30);
+        else if (e.target.dataset.felt === 'optimerSek') h.optimerSek(Number(e.target.value) || 60);
     });
     container.addEventListener('input', (e) => {
         if (e.target.dataset.felt === 'soeg') h.soeg(e.target.value);
