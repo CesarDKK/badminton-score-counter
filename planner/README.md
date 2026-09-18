@@ -345,3 +345,41 @@ Målt i prod (2 kerner, loft 1,5; U9/U11 2025, alle planer uden fejl): 30 s → 
 - Lukker brugeren fanen, lukker nginx forbindelsen til løseren, som opdager det inden
   for et halvt sekund og stopper, så den ikke er optaget i flere minutter.
 - Et ur i knappen viser, hvor længe løseren har regnet (opdateres uden at tegne gitteret om).
+
+## "Et hav af alarmer": årsager og forslag, der får kabalen til at gå op (2026-09-18)
+
+Jespers forsøg med alle U9/U11-kategorier som Swiss Ladder gav 611 kampe og 301 regelbrud.
+Tre årsager, fundet ved måling på Lyngby U9/U11 2025:
+
+1. **Fejl i formvalget:** når pladsen ikke rakte til noget, valgte den automatiske Swiss-logik
+   formen med FLEST kampe (8 runder), og det forplantede sig kategori for kategori. Nu vælges
+   den mindste form, der opfylder kravet, markeret `passerIkke` ("der er ikke plads nok").
+   Planneren går aldrig selv under kravet — det er brugerens valg (se nedenfor). 611 → 377 kampe.
+2. **Alle én-dags-rækker endte på første dag:** `maxDage` er en hård regel, og den grådige
+   placering bandt rækken til den dag, dens første kamp landede på. `lavForslag` fordeler nu
+   rækkerne på dagene FØR placeringen (`raekkeDagValg`): størst først, til den første dag hvor
+   rækken kan være under 85 % fyldning (inden for årgangens tidsvindue), ellers dagen med mest
+   plads. Låste kampe bestemmer dagen. TP's egen lodtrækning: 87 → 33 regelbrud uden dagvalg,
+   og 0 med Jespers dage (U9 + U11 D lørdag, U11 B + C søndag) og U9 max haltid 360.
+3. **Reelt for lidt plads:** med alt som Swiss kræver kampene 323 bane-slots på de fælles baner
+   mod højst 300 lovlige (ca. 85 % kan bruges).
+
+`src/nedskaering.js` — forslag på oplyst grundlag, afprøvet med den rigtige planlægger:
+
+- `alleNedskaeringer(projekt)` prøver tre strategier: **Jævnt fordelt** (flest runder mister én
+  ad gangen), **Skån singlerne** (double/mix først, ned til 2 runder) og **To dage i stedet for
+  færre kampe** (dispensation til de ramte rækker; skærer kun, hvis det ikke er nok). Hvert trin
+  bygger kampene og kører `lavForslag`; et forslag er først "løst" ved 0 regelbrud. Bagefter
+  gives runder tilbage, hvor der alligevel er plads. Ca. 2–3 s for 377 kampe.
+- Hvert forslag viser kampe før → efter, regelbrud før → efter, og pr. kategori: runder, kampe,
+  sikrede kampe pr. spiller, krav og antal spillere under kravet (`underKrav`, samme tælling
+  som Tjek inkl. "min. kampe tælles samlet").
+- `kapacitetsRegnskab(projekt)`: behov og lovlig plads i bane-slots på de fælles baner, og pr.
+  række med reserverede baner hvor meget der står ubrugt (Lyngby: U9 reserverede 100, brugte 31).
+- `anvendNedskaering`: rundetallene sættes som `swissRunder` på kategorierne (synlige og
+  rettelige i fane 1), kampene bygges igen, og planen lægges. Spillere under minimum står
+  bagefter som advarsler i Tjek, der kan kvitteres.
+- UI: knappen "Find forslag, der får kabalen til at gå op" i Plan-fanen, når et forslag har
+  regelbrud. Kampe fra TP's lodtrækning kan planneren ikke skære i — det siges tydeligt.
+- Med Jespers dage: "Skån singlerne" 377 → 339 kampe (37 spillere under minimum),
+  "Jævnt fordelt" 377 → 329 (73 under). Begge 0 regelbrud og 0 fejl i Tjek.

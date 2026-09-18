@@ -8,6 +8,26 @@ import { alvorForKamp } from '../rules.js';
 import { bedoemPlan, loesningsforslag } from '../scheduler.js';
 import { scorePlan } from '../kriterier.js';
 
+/** Panelet med forslag, der får kabalen til at gå op (nedskaering.js) — valget træffes på oplyst grundlag. */
+function nedskaeringPanel(ned) {
+    const tal = (n) => String(Math.round(n * 10) / 10).replace('.', ',');
+    const r = ned.regnskab;
+    const regnskab = r ? `<p class="ned-regnskab">På de fælles baner kræver kampene <b>${tal(r.faelles.behov)} bane-slots</b>, og der er højst <b>${tal(r.faelles.plads)}</b> lovlige — i praksis kan ca. 85 % (${tal(r.faelles.plads * 0.85)}) bruges, fordi pauser og runder giver huller.${r.reserveret.filter((x) => x.ubrugt >= 1).map((x) => ` <b>${esc(x.raekke)}</b> har reserveret ${tal(x.plads)} bane-slots, men bruger ${tal(x.behov)} — ${tal(x.ubrugt)} står ubrugt. Færre reserverede baner, et kortere tidsrum eller kun den dag, rækken spiller (fane 1), giver plads til de andre uden at skære i kampene.`).join('')}</p>` : '';
+    if (!ned.liste.length) return `<div class="panel nedskaering"><h3>Forslag, der får kabalen til at gå op</h3>${regnskab}<p class="panel-sub">${esc(ned.besked || 'Planneren kan ikke selv skære ned her.')}</p><button class="knap knap--sekundaer" data-handling="ned-luk">Luk</button></div>`;
+    const kort = ned.liste.map((f, i) => `
+        <div class="ned-kort">
+            <h4>${esc(f.navn)} <span class="maerke ${f.loest ? 'maerke--ok' : 'maerke--advarsel'}">${f.loest ? 'går op: 0 regelbrud' : `${f.brudEfter} regelbrud tilbage`}</span></h4>
+            <p class="daempet">${esc(f.beskrivelse)}</p>
+            <p><b>${f.kampeFoer} → ${f.kampeEfter} kampe</b> · regelbrud ${f.brudFoer} → ${f.brudEfter} · <span class="${f.spillereUnderKravEfter > f.spillereUnderKravFoer ? 'er-roed' : ''}">${f.spillereUnderKravEfter} spillere får færre kampe end reglementets minimum</span> (før: ${f.spillereUnderKravFoer})${f.raekkerToDage?.length ? ` · <b>${f.raekkerToDage.map(esc).join(', ')}</b> spiller over to dage (kræver dispensation)` : ''}</p>
+            ${f.aendringer.length ? `<table class="ned-tabel"><thead><tr><th>Kategori</th><th>Runder</th><th>Kampe</th><th>Sikret pr. spiller</th><th>Krav</th><th>Under kravet</th></tr></thead><tbody>${f.aendringer.map((a) => `<tr><td>${esc(a.kategori)}</td><td>${a.fra} → <b>${a.til}</b></td><td>${a.kampeFoer} → ${a.kampeEfter}</td><td>${a.faerrestFoer} → ${a.faerrestEfter}</td><td>${a.krav}</td><td class="${a.underKravEfter ? 'er-roed' : ''}">${a.underKravEfter} spillere</td></tr>`).join('')}</tbody></table>` : '<p class="daempet">Ingen runder skæres.</p>'}
+            <button class="knap" data-handling="ned-brug" data-index="${i}">Brug dette</button>
+        </div>`).join('');
+    return `<div class="panel nedskaering"><h3>Forslag, der får kabalen til at gå op</h3>
+        <p class="panel-sub">Hvert forslag er afprøvet med planlæggeren. "Brug dette" sætter rundetallene på kategorierne (de kan ses og rettes i fane 1), bygger kampene igen og lægger planen. Spillere under minimum vises bagefter som advarsler i Tjek, som du kan kvittere.</p>
+        ${regnskab}${kort}
+        <button class="knap knap--sekundaer" data-handling="ned-luk">Luk uden at ændre</button></div>`;
+}
+
 const OPTIMER_TIDER = [10, 30, 60, 120, 240, 360];
 const FASE_KORT = { pulje: 'P', cup: '', swiss: 'R' };
 const RUNDE_KORT = { 'Finale': 'Finale', 'Semifinale': 'Semi', 'Kvartfinale': 'Kvart', '1/8-finale': '1/8' };
@@ -218,7 +238,9 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
         <span class="daempet">${placeret.size} af ${projekt.kampe.length} kampe har tid · ${ikkePlacerede.length} mangler · haltid gns. ${statistik.haltidGnsMin} min pr. spiller pr. dag · <span class="${statistik.langeHuller ? 'er-roed' : ''}">${statistik.langeHuller} spillere med hul over ${statistik.maxVentetidMin} min</span>${Object.keys(statistik.slutPrDag).length ? ` · slut ${Object.entries(statistik.slutPrDag).map(([d, t]) => `${datoTekst(d, { kort: true })} ${t}`).join(', ')}` : ''}. Træk et kort til et slot, eller til listen til højre for at fjerne tiden. Klik viser spillerens andre kampe; dobbeltklik låser.</span>
     </p>
     ${tilstand.forslag ? `<p class="plan-status forslag-info">${esc(tilstand.forslag.tekst)}${tilstand.forslag.ikkePlaceret.length ? ` Berørte kampe: ${tilstand.forslag.ikkePlaceret.slice(0, 6).map((x) => `${esc(x.kategori)} ${esc(x.navn)} (${esc(x.brud || x.aarsag)})`).join('; ')}${tilstand.forslag.ikkePlaceret.length > 6 ? ' …' : ''}` : ''}</p>
-    ${tilstand.forslag.ikkePlaceret.length ? `<ul class="loesninger">${loesningsforslag(projekt, tilstand.forslag.ikkePlaceret).map((f) => `<li>${esc(f.tekst)}</li>`).join('')}</ul>` : ''}` : ''}
+    ${tilstand.forslag.ikkePlaceret.length ? `<ul class="loesninger">${loesningsforslag(projekt, tilstand.forslag.ikkePlaceret).map((f) => `<li>${esc(f.tekst)}</li>`).join('')}</ul>
+    ${tilstand.nedskaering ? '' : `<p><button class="knap" data-handling="ned-find" title="Afprøver færre Swiss Ladder-runder og spil over to dage med planlæggeren, og viser hvad hvert forslag koster i kampe pr. spiller. Intet ændres, før du vælger.">Find forslag, der får kabalen til at gå op</button></p>`}` : ''}` : ''}
+    ${tilstand.nedskaering ? nedskaeringPanel(tilstand.nedskaering) : ''}
     <div class="plan-layout">
         <div class="gitter-hylster">
             <table class="gitter">
@@ -292,6 +314,9 @@ function bind(container, h) {
             else if (hd === 'alt-naeste') h.bladreAlternativ(1);
             else if (hd === 'alt-brug') h.brugAlternativ();
             else if (hd === 'alt-fortryd') h.fortrydAlternativ();
+            else if (hd === 'ned-find') h.findNedskaering();
+            else if (hd === 'ned-brug') h.brugNedskaering(Number(knap.dataset.index));
+            else if (hd === 'ned-luk') h.lukNedskaering();
             return;
         }
         const li = e.target.closest('li[data-kamp]');

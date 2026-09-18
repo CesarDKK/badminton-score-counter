@@ -148,6 +148,52 @@ export function lavForslag(projekt, valg = {}) {
     }
     for (const { k, p } of faste) registrer(k, p.dag, p.slot);
 
+    // ── Dagfordeling: rækker med max dage fordeles på dagene, FØR kampene lægges ──
+    // Den grådige placering fylder op forfra, så uden en fordeling ender alle én-dags-rækker
+    // på første dag, mens de øvrige dage står tomme. Rækkerne fordeles efter belastning, størst
+    // først: til den første dag, hvor rækken kan være uden at dagen fyldes over 85 %, ellers til
+    // den dag, der har mest plads tilbage. Dage, rækken allerede har faste kampe på, tæller med. valg.dagOrden = 'omvendt' giver den modsatte præference (alternativer).
+    const raekkeDagValg = new Map(); // raekkeId → Set(dato)
+    {
+        const muligeDage = (r) => dage.filter((d) => r.dage.includes(d.dato) && (!kunDage || kunDage.has(d.dato)));
+        const FYLD = 0.85; // samme pakkefaktor som kapacitetTilKategori i store.js
+        // Plads til rækken på en dag: fælles bane-slots inden for årgangens tidsvindue og rækkens eget tidsrum
+        const pladsFor = (r, d) => {
+            const v = tidsvindue(r.aargang, d, regler);
+            const fra = Math.max(v.fra, r.tidligst ? minutter(r.tidligst) : 0), til = Math.min(v.til, r.senest ? minutter(r.senest) : 9999);
+            return FYLD * slotsForDag(d, slotMin).reduce((sum, slot) => { const m = minutter(slot); return m >= fra && m + slotMin <= til ? sum + kapFor(d.dato, slot).faelles : sum; }, 0);
+        };
+        const brugt = new Map(dage.map((d) => [d.dato, 0]));
+        const rest = { get: (dato, r) => pladsFor(r, dagMap.get(dato)) - brugt.get(dato) };
+        const last = new Map(); // raekkeId → bane-slots på de fælles baner
+        for (const k of projekt.kampe) {
+            const r = raekke(k);
+            if (!r || r.reserveredeBaner > 0) continue; // rækker med egne baner belaster ikke de fælles
+            last.set(r.id, (last.get(r.id) || 0) + (kat(k)?.halvBane ? 0.5 : 1));
+        }
+        const bundne = projekt.raekker.filter((r) => r.maxDage && !r.dispensationFlereDage && muligeDage(r).length > r.maxDage);
+        // Rækker uden grænse breder sig over deres dage
+        for (const r of projekt.raekker) {
+            if (bundne.includes(r) || !last.has(r.id)) continue;
+            const md = muligeDage(r);
+            for (const d of md) brugt.set(d.dato, brugt.get(d.dato) + last.get(r.id) / md.length);
+        }
+        const foretruk = (a, b) => (valg.dagOrden === 'omvendt' ? b.dato.localeCompare(a.dato) : a.dato.localeCompare(b.dato));
+        for (const r of [...bundne].sort((a, b) => (last.get(b.id) || 0) - (last.get(a.id) || 0) || a.id.localeCompare(b.id))) {
+            const valgte = new Set([...(raekkeDage.get(r.id) || [])].slice(0, r.maxDage));
+            const behov = (last.get(r.id) || 0) / r.maxDage;
+            const kandidater = muligeDage(r).filter((d) => !valgte.has(d.dato)).sort(foretruk);
+            while (valgte.size < r.maxDage && kandidater.length) {
+                const passer = kandidater.find((d) => rest.get(d.dato, r) >= behov);
+                const dag = passer || [...kandidater].sort((a, b) => rest.get(b.dato, r) - rest.get(a.dato, r) || foretruk(a, b))[0];
+                kandidater.splice(kandidater.indexOf(dag), 1);
+                valgte.add(dag.dato);
+            }
+            for (const d of valgte) brugt.set(d, brugt.get(d) + (last.get(r.id) || 0) / valgte.size);
+            raekkeDagValg.set(r.id, valgte);
+        }
+    }
+
     // ── Kan kampen ligge i dette slot? Returnerer null eller årsag ──
     // lemp = lempelser i fase 2 (se nedenfor): hvilke regler der må brydes for
     // at få kampen placeret. sidsteGab sættes, når pausen brydes, til det
@@ -158,6 +204,7 @@ export function lavForslag(projekt, valg = {}) {
         if (!r) return 'ingen række';
         if (!lemp.dag && !r.dage.includes(dag.dato)) return 'rækken spiller ikke den dag';
         // Max dage pr. række (hård regel som data): en ny dag må kun tages i brug, hvis grænsen ikke er nået
+        if (!lemp.dag && raekkeDagValg.has(r.id) && !raekkeDagValg.get(r.id).has(dag.dato)) return 'rækken er lagt på en anden dag';
         if (!lemp.dag && r.maxDage && !r.dispensationFlereDage) {
             const brugte = raekkeDage.get(r.id);
             if (brugte && !brugte.has(dag.dato) && brugte.size >= r.maxDage) return 'rækken må ikke spille flere dage';

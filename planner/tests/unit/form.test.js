@@ -212,7 +212,9 @@ describe('form: Swiss Ladder-runder — valgt antal og nedskaering efter kapacit
         const andre = new Map(Array.from({ length: 20 }, (_, i) => [`s${i + 1}`, 2])); // alle har 2 doublekampe
         const lidt = foreslaaForm(20, u9HS, u9d, regler, { form: 'swiss', ledigeBaneSlots: 12, deltagere: tilm(20), andreKampe: andre, samlet: true });
         const ikkeSamlet = foreslaaForm(20, u9HS, u9d, regler, { form: 'swiss', ledigeBaneSlots: 12, deltagere: tilm(20), andreKampe: andre, samlet: false });
-        assert.equal(ikkeSamlet.opfylderKrav, false, 'tæller rækken ikke samlet, hjælper doublerne ikke');
+        assert.equal(ikkeSamlet.runder, 4, 'tæller rækken ikke samlet, hjælper doublerne ikke: planneren går ikke selv under kravet');
+        assert.equal(ikkeSamlet.passerIkke, true);
+        assert.match(formTekst(ikkeSamlet), /ikke plads nok/);
         assert.equal(lidt.form, 'swiss');
         assert.equal(lidt.runder, 2, '2 runder á 10 kampe = 10 bane-slots (halve baner)');
         assert.equal(lidt.kravInklAndre, true, '2 + 2 doublekampe = 4');
@@ -220,9 +222,9 @@ describe('form: Swiss Ladder-runder — valgt antal og nedskaering efter kapacit
         assert.match(formTekst(lidt), /skåret ned pga\. kapacitet/);
         // uden andre kampe naas kravet ikke → stadig faerrest mulige runder inden for pladsen, markeret
         const uden = foreslaaForm(20, u9HS, u9d, regler, { form: 'swiss', ledigeBaneSlots: 12, deltagere: tilm(20), andreKampe: new Map() });
-        assert.equal(uden.runder, 2);
-        assert.equal(uden.opfylderKrav, false);
-        assert.equal(uden.nedskaaret, true);
+        assert.equal(uden.runder, 4, 'mindste form der opfylder kravet — aldrig den største');
+        assert.equal(uden.opfylderKrav, true);
+        assert.equal(uden.passerIkke, true, 'markeret: passer ikke i kapaciteten');
     });
     test('automatisk med "flest": flest runder der passer', () => {
         const f = foreslaaForm(20, u9HS, u9d, regler, { form: 'swiss', kriterie: 'flest', ledigeBaneSlots: 100, deltagere: tilm(20), andreKampe: new Map() });
