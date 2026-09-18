@@ -25,11 +25,12 @@ DAG = 1440
 MAX_SEKUNDER = int(os.environ.get("SOLVER_MAX_SEKUNDER", "120"))
 MAX_BYTES = int(os.environ.get("SOLVER_MAX_BYTES", str(5 * 1024 * 1024)))
 MAX_KAMPE = int(os.environ.get("SOLVER_MAX_KAMPE", "2000"))
-SAMTIDIGE = threading.Semaphore(int(os.environ.get("SOLVER_SAMTIDIGE", "2")))
+ARBEJDERE = int(os.environ.get("SOLVER_ARBEJDERE", "2"))
+SAMTIDIGE = threading.Semaphore(int(os.environ.get("SOLVER_SAMTIDIGE", "1")))
 SKALA = 6000  # vægte ganges op til heltal pr. minut (vægt 1 pr. time = 100 pr. minut); tidlig-start-trækket er 1 pr. minut
 
 
-def loes(problem: dict, sekunder: float = 30.0, arbejdere: int = 8) -> dict:
+def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None) -> dict:
     t0 = time.time()
     slot = int(problem["slotMin"])
     kampe = problem["kampe"]
@@ -232,7 +233,7 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int = 8) -> dict:
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = max(1.0, min(float(sekunder), MAX_SEKUNDER))
-    solver.parameters.num_workers = arbejdere
+    solver.parameters.num_workers = arbejdere or ARBEJDERE
     status = solver.Solve(m)
     navn = {cp_model.OPTIMAL: "OPTIMAL", cp_model.FEASIBLE: "FEASIBLE", cp_model.INFEASIBLE: "INFEASIBLE"}.get(status, "UNKNOWN")
     svar = {"status": navn, "sekunder": round(time.time() - t0, 2), "tider": {}}

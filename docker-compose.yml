@@ -223,9 +223,13 @@ services:
     environment:
       PORT: 8000
       SOLVER_MAX_SEKUNDER: 120
-      SOLVER_SAMTIDIGE: 2
-    # Løseren bruger alle kerner, mens den regner — hold den fra at sulte resten
-    cpus: 4
+      SOLVER_SAMTIDIGE: ${PLANNER_SOLVER_SAMTIDIGE:-1}
+      SOLVER_ARBEJDERE: ${PLANNER_SOLVER_ARBEJDERE:-2}
+    # Løseren bruger al den CPU, den får, mens den regner. Den må ikke sulte tælleren:
+    # loftet skal være under værtens antal kerner (Docker afviser et højere tal), og
+    # cpu_shares gør, at de andre containere vinder, når der er kamp om kernerne.
+    cpus: ${PLANNER_SOLVER_CPUS:-1.5}
+    cpu_shares: 256
     mem_limit: 2g
     networks:
       - badminton-network
