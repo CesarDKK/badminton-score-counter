@@ -9,8 +9,8 @@
 // kriterie "færrest bane-slots" (alternativ "flest kampe" op til 6),
 // seedning efter ranglistepoint fra filen (ellers tilmeldingsrækkefølge).
 
-export const FORM_VALG = ['tp', 'auto', 'pulje-cup', 'pulje', 'swiss'];
-export const FORM_VALG_TEKST = { tp: 'fra TP', auto: 'automatisk', 'pulje-cup': 'pulje + cup', pulje: 'pulje', swiss: 'Swiss Ladder' };
+export const FORM_VALG = ['tp', 'auto', 'pulje-cup', 'pulje', 'dobbelt-pulje', 'swiss'];
+export const FORM_VALG_TEKST = { tp: 'fra TP', auto: 'automatisk', 'pulje-cup': 'pulje + cup', pulje: 'pulje', 'dobbelt-pulje': 'dobbelt pulje', swiss: 'Swiss Ladder' };
 export const PULJE_STOERRELSER = [3, 4, 5];
 export const SWISS_RUNDER = [4, 5, 6];
 export const MAAL_KAMPE = 6; // reglementets anbefaling ved 3 kategorier
@@ -55,6 +55,11 @@ export function formMuligheder(n, { halvBane = false, cupTop = 1, minSwissRunder
             ud.push({ form: 'pulje', stoerrelse: s, puljer, kampe: pk, baneSlots: slots(pk), minKampe: min, maxKampe: Math.max(...puljer) - 1,
                 tekst: puljer.length === 1 ? `én pulje á ${n}` : `${puljer.length} puljer (${puljer.join(', ')})` });
         }
+        // dobbelt pulje: alle møder alle to gange — til små felter, hvor en enkelt pulje ikke når minimum
+        if (!ud.some((x) => x.form === 'dobbelt-pulje' && x.puljer.join() === puljer.join())) {
+            ud.push({ form: 'dobbelt-pulje', stoerrelse: s, puljer, kampe: pk * 2, baneSlots: slots(pk * 2), minKampe: min * 2, maxKampe: (Math.max(...puljer) - 1) * 2,
+                tekst: `${puljer.length === 1 ? `én dobbelt pulje á ${n}` : `${puljer.length} dobbelte puljer (${puljer.join(', ')})`} — alle møder alle to gange` });
+        }
         // pulje + cup for de bedste
         if (puljer.length >= 2) {
             const videre = Math.min(puljer.length * cupTop, n);
@@ -64,7 +69,10 @@ export function formMuligheder(n, { halvBane = false, cupTop = 1, minSwissRunder
                 tekst: `${puljer.length} puljer (${puljer.join(', ')}) + cup for ${cupTop === 1 ? 'vinderne' : 'de to bedste'} (${videre} deltagere, ${runder} ${runder === 1 ? 'runde' : 'runder'})` });
         }
     }
-    if (n === 2) ud.push({ form: 'pulje', stoerrelse: 2, puljer: [2], kampe: 1, baneSlots: slots(1), minKampe: 1, maxKampe: 1, tekst: 'én kamp' });
+    if (n === 2) {
+        ud.push({ form: 'pulje', stoerrelse: 2, puljer: [2], kampe: 1, baneSlots: slots(1), minKampe: 1, maxKampe: 1, tekst: 'én kamp' });
+        ud.push({ form: 'dobbelt-pulje', stoerrelse: 2, puljer: [2], kampe: 2, baneSlots: slots(2), minKampe: 2, maxKampe: 2, tekst: 'to kampe mod hinanden' });
+    }
     if (n >= 4) {
         // Valgt antal runder (1–8) eller automatisk 4–6; færre end reglementets
         // minimum markeres som nedskåret (bruges kun når kapaciteten ikke rækker).
@@ -92,9 +100,11 @@ export function foreslaaForm(n, kategori, raekke, regler, valg = {}) {
     const swissRunder = Number(valg.swissRunder) > 0 ? Number(valg.swissRunder) : 0;
     const alle = formMuligheder(n, { halvBane: !!kategori.halvBane, cupTop: valg.cupTop || 1, minSwissRunder: minSwiss, swissRunder });
     if (!alle.length) return null;
-    const oenske = valg.form && valg.form !== 'auto' ? alle.filter((x) => x.form === valg.form) : alle;
+    // Automatisk bruger kun dobbelt pulje til små felter (én pulje), hvor intet andet når minimum.
+    // Valgt direkte gælder den for alle feltstørrelser.
+    const oenske = valg.form && valg.form !== 'auto' ? alle.filter((x) => x.form === valg.form) : alle.filter((x) => x.form !== 'dobbelt-pulje' || x.puljer.length === 1);
     const kandidater = oenske.length ? oenske : alle;
-    const formRang = { 'pulje-cup': 0, pulje: 1, swiss: 2 };
+    const formRang = { 'pulje-cup': 0, pulje: 1, swiss: 2, 'dobbelt-pulje': 3 };
     // Spillernes sikre kampe i andre kategorier (double, mix): den der har færrest, bestemmer
     const andre = valg.andreKampe || new Map(); // spillerId → sikre kampe i andre kategorier
     const deltagere = valg.deltagere || [];       // [{ spillere }]
@@ -241,6 +251,23 @@ export function byggKampe(kategori, tilmeldinger, form) {
                 prRunde.get(ri + 1).push(k.id);
             }
         });
+        if (form.form === 'dobbelt-pulje') {
+            // Anden omgang: samme rundeplan én gang til, efter første omgang (som TP's dobbelte pulje: #b – #a)
+            const R = puljeRunder(deltagere.length).length;
+            puljeRunder(deltagere.length).forEach((par, ri) => {
+                const runde = R + ri + 1;
+                for (const [a, b] of par) {
+                    matchnr += 1;
+                    const k = { id: `${draw}:${b * 1000 + a}`, kategori: kategori.id, fase: 'pulje', gruppe, runde, navn: `${gruppe} #${b} – #${a} (2. møde)`,
+                        spillere: [...deltagere[b - 1].spillere, ...deltagere[a - 1].spillere], muligeSpillere: [...deltagere[b - 1].spillere, ...deltagere[a - 1].spillere],
+                        afhaengerAf: [...(prRunde.get(runde - 1) || [])], tpRef: { draw, planning: b * 1000 + a, van1: b * 1000, van2: a * 1000, matchnr }, tpTid: null, varighed: 0, genereret: true };
+                    kampe.push(k);
+                    ids.push(k.id);
+                    if (!prRunde.has(runde)) prRunde.set(runde, []);
+                    prRunde.get(runde).push(k.id);
+                }
+            });
+        }
         puljeKampeIds.push(ids);
     });
     if (form.form !== 'pulje-cup' || !form.cupDeltagere || form.cupDeltagere < 2) return kampe;

@@ -33,7 +33,7 @@ SAMTIDIGE = threading.Semaphore(int(os.environ.get("SOLVER_SAMTIDIGE", "1")))
 SKALA = 6000  # vægte ganges op til heltal pr. minut (vægt 1 pr. time = 100 pr. minut); tidlig-start-trækket er 1 pr. minut
 
 
-def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, stop: threading.Event | None = None) -> dict:
+def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, stop: threading.Event | None = None, foerste: bool = False) -> dict:
     t0 = time.time()
     slot = int(problem["slotMin"])
     kampe = problem["kampe"]
@@ -237,6 +237,8 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, st
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = max(1.0, min(float(sekunder), MAX_SEKUNDER))
     solver.parameters.num_workers = arbejdere or ARBEJDERE
+    if foerste:  # diagnosen skal kun vide, OM der findes en plan
+        solver.parameters.stop_after_first_solution = True
     # Stop udefra (brugeren trykker "Stop", eller forbindelsen forsvinder): søgningen afbrydes,
     # og den bedste plan indtil da afleveres som FEASIBLE.
     faerdig = threading.Event()
@@ -264,6 +266,56 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, st
     return svar
 
 
+DIAGNOSE_SEKUNDER = float(os.environ.get("SOLVER_DIAGNOSE_SEKUNDER", "45"))
+DIAGNOSE_PR_FORSOEG = float(os.environ.get("SOLVER_DIAGNOSE_PR_FORSOEG", "8"))
+
+
+def diagnose(problem: dict, stop: threading.Event | None = None) -> list[dict]:
+    """Hvorfor findes der ingen lovlig plan? Prøver at lempe én hård regel ad gangen.
+
+    Returnerer de lempelser, der hver for sig gør problemet løsbart:
+      {"regel": "haltid", "raekke": "U09 D", "graense": 240, "forslag": 360}   (forslag None = kun uden grænse)
+      {"regel": "maxDage", "raekke": "U11 D"}
+      {"regel": "maxKampePrDag"}
+      {"regel": "flere"}   — først løsbart, når alle tre slags lempes samtidig
+      {"regel": "plads"}   — ikke løsbart selv uden dem: for mange kampe til baner og tidsrum (eller låste kampe i konflikt)
+    """
+    frist = time.time() + DIAGNOSE_SEKUNDER
+    fund: list[dict] = []
+
+    def loesbar(p):
+        if time.time() > frist or (stop is not None and stop.is_set()):
+            return None
+        r = loes(p, min(DIAGNOSE_PR_FORSOEG, max(1.0, frist - time.time())), stop=stop, foerste=True)
+        return True if r["status"] in ("OPTIMAL", "FEASIBLE") else False if r["status"] == "INFEASIBLE" else None
+
+    haltid = problem.get("haltid", [])
+    for raekke in sorted({h.get("raekke") or "" for h in haltid}):
+        egne = [h for h in haltid if (h.get("raekke") or "") == raekke]
+        andre = [h for h in haltid if (h.get("raekke") or "") != raekke]
+        if not loesbar({**problem, "haltid": andre}):
+            continue
+        graense = min(int(h["graense"]) for h in egne)
+        forslag = None
+        for ekstra in (60, 120, 180):
+            if loesbar({**problem, "haltid": andre + [{**h, "graense": int(h["graense"]) + ekstra} for h in egne]}):
+                forslag = graense + ekstra
+                break
+        fund.append({"regel": "haltid", "raekke": raekke, "graense": graense, "forslag": forslag})
+    for r in problem.get("maxDage", []):
+        if loesbar({**problem, "maxDage": [x for x in problem["maxDage"] if x is not r]}):
+            fund.append({"regel": "maxDage", "raekke": r.get("raekke", "")})
+    if problem.get("mangeKampe") and loesbar({**problem, "mangeKampe": []}):
+        fund.append({"regel": "maxKampePrDag"})
+    if not fund:
+        uden = loesbar({**problem, "haltid": [], "maxDage": [], "mangeKampe": []})
+        if uden is True:
+            fund.append({"regel": "flere"})
+        elif uden is False:
+            fund.append({"regel": "plads"})
+    return fund
+
+
 # Løsninger i gang og nyligt afsluttede: job-id → Job.
 # Klienten starter et job (asynkron: true), spørger til status hvert par sekunder og kan stoppe
 # det undervejs. Sådan holdes ingen forbindelse åben i flere minutter — proxyer foran tjenesten
@@ -280,6 +332,7 @@ class Job:
         self.start = time.time()
         self.sidst_set = time.time()
         self.slut = None
+        self.fase = "loeser"  # "loeser" | "diagnose" — vises i status
         self.kode = None      # HTTP-kode for det færdige svar
         self.svar = None      # det færdige svar
 
@@ -298,7 +351,12 @@ def ryd_gamle_jobs():
 def koer(problem: dict, sekunder: float, job: Job):
     """Løser problemet og returnerer (HTTP-kode, svar). Fejl i modellen må ikke vælte tjenesten."""
     try:
-        return 200, loes(problem, sekunder, stop=job.stop)
+        svar = loes(problem, sekunder, stop=job.stop)
+        if svar["status"] == "INFEASIBLE" and not job.stop.is_set() and problem.get("diagnose", True):
+            job.fase = "diagnose"
+            svar["diagnose"] = diagnose(problem, job.stop)
+            svar["sekunder"] = round(time.time() - job.start, 2)
+        return 200, svar
     except (KeyError, TypeError, ValueError) as e:  # problemet har ikke den form, bygProblem() laver
         return 400, {"fejl": f"ugyldigt problem: {type(e).__name__} {e}"}
     except Exception as e:  # pragma: no cover
@@ -343,7 +401,7 @@ class Handler(BaseHTTPRequestHandler):
         if job is None:
             return self._svar(404, {"fejl": "ukendt job"})
         if job.slut is None:
-            return self._svar(200, {"status": "REGNER", "sekunder": round(time.time() - job.start, 1), "stopper": job.stop.is_set()})
+            return self._svar(200, {"status": "REGNER", "fase": job.fase, "sekunder": round(time.time() - job.start, 1), "stopper": job.stop.is_set()})
         self._svar(job.kode, job.svar)
 
     def _stop(self):

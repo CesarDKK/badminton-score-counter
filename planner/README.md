@@ -415,3 +415,29 @@ alle doublespillere stiller også op i single (Lyngby U9/U11 2025: 85 af 87).
   Skån singlerne 373 → 312 kampe, 33 under minimum · Jævnt 373 → 298, 37 under ·
   Kun double/mix 373 → 328, 4 under, men 24 regelbrud tilbage (ikke nok alene her).
   Med samlet tælling faldt "Jævnt" fra 73 til 37 spillere under minimum.
+
+### Diagnose, når løseren melder "ingen lovlig plan" (2026-09-18)
+
+Jesper oplevede, at "Optimér" stoppede efter 3 s. Løseren havde bevist INFEASIBLE (typisk U9's
+max haltid eller en række, der ikke kan være på én dag), men sagde ikke hvorfor.
+
+- `solver.py: diagnose(problem)` lemper én hård regel ad gangen (stop ved første løsning, højst
+  8 s pr. forsøg, 45 s i alt): max haltid pr. række (prøver +60/+120/+180 min og foreslår den
+  mindste, der virker), max dage pr. række, max kampe pr. dag. Hjælper ingen enkelt regel,
+  prøves alle på én gang: `flere` (kun i kombination) eller `plads` (for mange kampe til baner
+  og tidsvinduer). Resultatet følger med svaret som `diagnose: [...]`; status viser `fase: 'diagnose'`.
+- `bygProblem` sender rækkens id med på hver haltid-gruppe, så diagnosen kan pege på rækken.
+- `diagnoseTekst()` oversætter til klart sprog og til handlinger. I Plan-fanen vises årsagen,
+  og knapper som "Sæt U09 D til max 300 min i hallen, og optimér igen" retter rækken og kører igen.
+- Målt på Lyngby U9/U11: filen som den er → "U09 D kan ikke være på én dag" (8 s); Jespers dage
+  uden reservation → "max haltid 240: med 300 min findes der en plan" (2 s); alt som Swiss →
+  "ikke plads" (5 s), som henviser til nedskæringsforslagene.
+
+### Dobbelt pulje som form (2026-09-18)
+
+`formValg: 'dobbelt-pulje'` — alle møder alle to gange (TP's drawtype 4). `formMuligheder` giver
+en dobbelt udgave af hver puljefordeling (dobbelt så mange kampe, minKampe × 2), og `byggKampe`
+lægger anden omgang som rundeplanen én gang til efter første omgang (`#b – #a (2. møde)`).
+"Automatisk" bruger den kun til små felter (én pulje), hvor intet andet når minimum — fx 3–4
+U9-spillere med krav om 4 kampe. Tæller doublerne med (samlet tælling), vælges den billigere
+enkelte pulje i stedet. Valgt direkte gælder den for alle feltstørrelser.

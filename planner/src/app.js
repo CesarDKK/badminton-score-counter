@@ -4,7 +4,7 @@ import { laesTP, tabellerFraMDB } from './tp-reader.js';
 import * as store from './store.js';
 import { tjekPlan } from './rules.js';
 import { lavForslag, lavAlternativer, bedoemPlan } from './scheduler.js';
-import { optimer, stopLoeser, stopVedLukning, nytJobId } from './solver-klient.js';
+import { optimer, stopLoeser, stopVedLukning, nytJobId, diagnoseTekst } from './solver-klient.js';
 import { scorePlan } from './kriterier.js';
 import { alleNedskaeringer, anvendNedskaering, kapacitetsRegnskab, swissKandidater } from './nedskaering.js';
 import { renderOpsaetning } from './ui/opsaetning.js';
@@ -254,10 +254,10 @@ const planHandlers = {
     // Optimér: CP-SAT-løseren (planner-solver) minimerer scoren under alle hårde regler.
     // Den grådige plan bruges som startløsning og vises ved siden af til sammenligning.
     optimerSek(n) { tilstand.optimerSek = n; },
-    async optimer() {
+    async optimer({ udenSpoergsmaal = false } = {}) {
         if (tilstand.optimerer) return;
         const antalLaast = (projekt.laast || []).length;
-        if (Object.keys(projekt.plan).length > antalLaast && !window.confirm(`Optimér alle kampe? Kun låste kampe (${antalLaast}) beholder deres tid. Du kan fortryde bagefter.`)) return;
+        if (!udenSpoergsmaal && Object.keys(projekt.plan).length > antalLaast && !window.confirm(`Optimér alle kampe? Kun låste kampe (${antalLaast}) beholder deres tid. Du kan fortryde bagefter.`)) return;
         const sekunder = tilstand.optimerSek || 60;
         const foer = { ...projekt.plan };
         const graadig = lavForslag(projekt);
@@ -271,9 +271,10 @@ const planHandlers = {
         const start = Date.now();
         const visUr = () => { const el = document.querySelector('[data-optimer-ur]'); if (el) el.textContent = `${Math.round((Date.now() - start) / 1000)} s`; };
         const ur = setInterval(visUr, 1000);
-        const faerdig = () => { clearInterval(ur); tilstand.optimerer = false; tilstand.optimerJob = null; tilstand.optimerStopper = false; };
+        const faerdig = () => { clearInterval(ur); tilstand.optimerer = false; tilstand.optimerJob = null; tilstand.optimerStopper = false; tilstand.optimerDiagnose = false; };
         try {
-            const svar = await optimer(projekt, { sekunder, hintPlan: graadig.brud.length ? null : graadig.plan, job });
+            const vedStatus = (s) => { if (s.fase === 'diagnose' && !tilstand.optimerDiagnose) { tilstand.optimerDiagnose = true; render(); visUr(); } };
+            const svar = await optimer(projekt, { sekunder, hintPlan: graadig.brud.length ? null : graadig.plan, job, vedStatus });
             faerdig();
             const graadigAlt = { navn: 'Grådig planlægger', beskrivelse: 'Det hurtige forslag fra "Lav forslag" — til sammenligning.', plan: graadig.plan, ikkePlaceret: graadig.ikkePlaceret, brud: graadig.brud, statistik: graadig.statistik, score: scorePlan({ ...projekt, plan: graadig.plan }).total };
             if (svar.status === 'OPTIMAL' || svar.status === 'FEASIBLE') {
@@ -284,7 +285,8 @@ const planHandlers = {
                 tilstand.alternativer = { liste, index: 0, foer };
                 planHandlers.visAlternativ();
             } else if (svar.status === 'INFEASIBLE') {
-                tilstand.forslag = { tekst: `Løseren har bevist, at der ikke findes en plan, der overholder alle hårde regler med de nuværende dage, baner og tidsrum. Her er den grådige plan med de nødvendige regelbrud og forslag til ændringer:`, ikkePlaceret: graadigAlt.brud.map((x) => ({ ...x, kategori: projekt.kampe.find((k) => k.id === x.id)?.kategori || '', navn: projekt.kampe.find((k) => k.id === x.id)?.navn || x.id })) };
+                const diag = diagnoseTekst(svar.diagnose);
+                tilstand.forslag = { tekst: `Løseren regnede kun ${svar.sekunder} s, fordi den hurtigt kunne bevise, at der IKKE findes en plan, der overholder alle hårde regler. Årsag: ${diag.tekst} Herunder er den hurtige plan med de nødvendige regelbrud:`, handlinger: diag.handlinger, ikkePlaceret: graadigAlt.brud.map((x) => ({ ...x, kategori: projekt.kampe.find((k) => k.id === x.id)?.kategori || '', navn: projekt.kampe.find((k) => k.id === x.id)?.navn || x.id })) };
                 saet({ ...store.anvendForslag(projekt, graadig), sidsteForslag: { ikkePlaceret: graadigAlt.brud } });
             } else {
                 tilstand.forslag = { tekst: `${svar.besked || 'Løseren fandt ingen plan inden for tiden.'} Prøv med længere tid, eller brug "Lav forslag".`, ikkePlaceret: [] };
@@ -323,6 +325,16 @@ const planHandlers = {
         saet({ ...r.projekt, sidsteForslag: { ikkePlaceret: brud } });
     },
     lukNedskaering() { tilstand.nedskaering = null; render(); },
+
+    // Knapperne under løserens diagnose: ret rækkens indstilling og optimér igen
+    diagnoseHandling(index) {
+        const h = tilstand.forslag?.handlinger?.[index];
+        if (!h) return;
+        projekt = store.opdaterRaekke(projekt, h.raekke, h.aendring);
+        tilstand.forslag = null;
+        saet(projekt);
+        planHandlers.optimer({ udenSpoergsmaal: true });
+    },
 
     async stopOptimer() {
         if (!tilstand.optimerer || !tilstand.optimerJob || tilstand.optimerStopper) return;
