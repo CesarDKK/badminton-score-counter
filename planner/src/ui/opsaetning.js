@@ -247,7 +247,7 @@ function raekkePanel(p) {
                     max haltid <input type="number" min="0" max="900" step="30" value="${r.maxHaltidMin ?? ''}" data-raekke-tal="maxHaltidMin" data-raekke="${esc(r.id)}" aria-label="Max haltid i minutter"> min ·
                     max dage <input type="number" min="0" max="9" step="1" value="${r.maxDage ?? ''}" data-raekke-tal="maxDage" data-raekke="${esc(r.id)}" aria-label="Max dage">
                 </span>
-                <label class="valg" title="Minimum antal kampe tælles samlet for spillerens single og double/mix i stedet for pr. kategori. Standard for U9. Bruges af Tjek, og når planneren selv vælger turneringsform."><input type="checkbox" data-min-samlet="${esc(r.id)}" ${minKampeSamlet(r) ? 'checked' : ''}> min. kampe tælles samlet</label>
+                <label class="valg" title="Minimum antal kampe tælles samlet for spillerens single, double og mix i stedet for pr. kategori. Standard for alle rækker. Bruges af Tjek, af nedskæringsforslagene, og når planneren selv vælger turneringsform."><input type="checkbox" data-min-samlet="${esc(r.id)}" ${minKampeSamlet(r) ? 'checked' : ''}> min. kampe tælles samlet</label>
                 ${r.reserveredeBaner > 0 ? `<span class="maerke">${r.reserveredeBaner} ${r.reserveredeBaner === 1 ? 'bane' : 'baner'} reserveret${p.kategorier.some((k) => k.raekke === r.id && k.halvBane) ? ` = ${r.reserveredeBaner * 2} halve` : ''}</span>` : ''}
                 ${kraeverDisp ? `<label class="valg"><input type="checkbox" data-disp="${esc(r.id)}" ${r.dispensationFlereDage ? 'checked' : ''}> dispensation til flere dage</label>
                 ${r.dispensationFlereDage ? '<span class="maerke maerke--ok">dispensation givet</span>' : '<span class="maerke maerke--advarsel">kræver dispensation</span>'}` : ''}
@@ -270,7 +270,7 @@ function raekkePanel(p) {
                         : `${k.formForslag?.form === 'pulje-cup' || (k.formValg === 'auto' && k.formForslag?.form === 'pulje-cup') ? `<select data-cuptop="${esc(k.id)}" title="Hvem går videre fra puljerne til cuppen"><option value="1" ${(k.cupTop || 1) === 1 ? 'selected' : ''}>cup for vinderne</option><option value="2" ${k.cupTop === 2 ? 'selected' : ''}>cup for de to bedste</option></select>` : ''}
                            ${k.formValg === 'swiss' || k.formForslag?.form === 'swiss' ? `<select data-swissrunder="${esc(k.id)}" title="Antal runder i Swiss Ladder. 'automatisk' vælger 4–6 efter reglementet og skærer ned, hvis kapaciteten ikke rækker — men holder øje med, at spillerne når minimum, når deres double- og mixkampe tælles med.">
                                <option value="0" ${!(k.swissRunder > 0) ? 'selected' : ''}>runder: automatisk</option>
-                               ${[2, 3, 4, 5, 6, 7, 8].map((n) => `<option value="${n}" ${k.swissRunder === n ? 'selected' : ''}>${n} runder</option>`).join('')}
+                               ${[1, 2, 3, 4, 5, 6, 7, 8].map((n) => `<option value="${n}" ${k.swissRunder === n ? 'selected' : ''}>${n} ${n === 1 ? 'runde' : 'runder'}</option>`).join('')}
                            </select>` : ''}
                            <span class="${k.formForslag?.opfylderKrav === false ? 'maerke maerke--advarsel' : 'daempet'}">${esc(formTekst(k.formForslag))}</span>`}
                 </td>

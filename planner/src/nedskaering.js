@@ -14,12 +14,18 @@ import { tidsvindue } from './rules.js';
 import { minutter } from './tp-reader.js';
 import { slotsForDag, puljeKapacitet } from './kapacitet.js';
 
-/** Swiss Ladder skæres aldrig under 2 runder. */
+/**
+ * Swiss Ladder skæres aldrig under 2 runder — bortset fra double/mix, der må gå ned til 1, når
+ * singlerne skånes (de fleste doublespillere når minimum via deres singler). Ved ulige antal par
+ * er gulvet dog 2: med én runde ville oversidderen få 0 kampe.
+ */
 export const MIN_RUNDER = 2;
+export const MIN_RUNDER_DOUBLE = 1;
 
 export const STRATEGIER = [
+    { id: 'kunDouble', navn: 'Skær kun i double og mix', beskrivelse: 'Singlerne røres ikke. Double og mix mister runder (ned til 1), til alle kampe har lovlig plads. Minimum tælles samlet, så de spillere, der også stiller op i single, når stadig kravet — det er kun dem, der alene spiller double eller mix, som kan komme under.' },
     { id: 'jaevnt', navn: 'Jævnt fordelt', beskrivelse: 'De kategorier, der har flest runder, mister én runde ad gangen, til alle kampe har lovlig plads. Bagefter gives runder tilbage, hvor der alligevel er plads.' },
-    { id: 'skaanSingle', navn: 'Skån singlerne', beskrivelse: 'Double og mix skæres først (ned til 2 runder), og singlerne røres kun, hvis det ikke er nok.' },
+    { id: 'skaanSingle', navn: 'Skån singlerne', beskrivelse: 'Double og mix skæres først (ned til 1 runde), og singlerne røres kun, hvis det ikke er nok.' },
     { id: 'toDage', navn: 'To dage i stedet for færre kampe', beskrivelse: 'De rækker, der ikke kan være på én dag, får lov at spille over to dage. Det kræver dispensation efter reglementet, og spillerne skal møde begge dage. Der skæres kun i runderne, hvis det stadig ikke er nok.' },
 ];
 
@@ -63,14 +69,23 @@ export function underKrav(projekt) {
     return ud;
 }
 
+/** Laveste antal runder en kategori må skæres til. I "kunDouble" røres singlerne slet ikke. */
+function gulvFor(kategori, strategi) {
+    if (kategori.type === 'single') return strategi === 'kunDouble' ? Infinity : MIN_RUNDER;
+    if (strategi !== 'kunDouble' && strategi !== 'skaanSingle') return MIN_RUNDER;
+    const ulige = (kategori.formForslag?.deltagere || 0) % 2 === 1;
+    return ulige ? MIN_RUNDER : MIN_RUNDER_DOUBLE;
+}
+
 /** Hvem der står for tur til at miste en runde. Returnerer [] når der ikke er mere at skære. */
 function naesteNed(projekt, runder, brudKategorier, strategi) {
     const katMap = new Map(projekt.kategorier.map((k) => [k.id, k]));
     const ramte = [...brudKategorier].map((id) => katMap.get(id)).filter(Boolean);
     // Kun kategorier, der deler baner (eller række) med de kampe, der ikke fik lovlig plads
-    const relevante = [...runder.keys()].map((id) => katMap.get(id)).filter((k) => runder.get(k.id) > MIN_RUNDER
-        && ramte.some((x) => x.id === k.id || x.raekke === k.raekke || delerKapacitet(projekt, k, x)));
-    const pulje = relevante.length ? relevante : [...runder.keys()].map((id) => katMap.get(id)).filter((k) => runder.get(k.id) > MIN_RUNDER);
+    const gulv = (k) => gulvFor(k, strategi);
+    const mulige = [...runder.keys()].map((id) => katMap.get(id)).filter((k) => runder.get(k.id) > gulv(k));
+    const relevante = mulige.filter((k) => ramte.some((x) => x.id === k.id || x.raekke === k.raekke || delerKapacitet(projekt, k, x)));
+    const pulje = relevante.length ? relevante : mulige;
     if (!pulje.length) return [];
     let gruppe = pulje;
     if (strategi === 'skaanSingle') { const dobbelt = pulje.filter((k) => k.type !== 'single'); if (dobbelt.length) gruppe = dobbelt; }
@@ -104,7 +119,8 @@ export function nedskaeringsForslag(projekt, { strategi = 'jaevnt', maxAfproevni
     }
     const start = runderFor(projekt);
     const basis = { strategi: info.id, navn: info.navn, beskrivelse: info.beskrivelse, brudFoer: foer.brud, kampeFoer: projekt.kampe.length, raekkerToDage };
-    if (efterDage.brud && ![...start.values()].some((r) => r > MIN_RUNDER)) {
+    const katMapStart = new Map(projekt.kategorier.map((k) => [k.id, k]));
+    if (efterDage.brud && ![...start].some(([id, r]) => r > gulvFor(katMapStart.get(id), info.id))) {
         return { ...basis, ingenKandidater: true, loest: false, brudEfter: efterDage.brud, kampeEfter: projekt.kampe.length, aendringer: [], runder: {}, spillereUnderKravFoer: 0, spillereUnderKravEfter: 0 };
     }
     let runder = new Map(start);
@@ -144,7 +160,10 @@ export function nedskaeringsForslag(projekt, { strategi = 'jaevnt', maxAfproevni
     }
 
     const uFoer = underKrav(oprindeligt), uEfter = underKrav(p);
-    const aendringer = [...runder].filter(([id, r]) => r !== start.get(id)).map(([id, r]) => ({
+    // Med i tabellen: kategorier der har mistet runder — og kategorier, hvor flere spillere kommer under
+    // minimum, fordi deres kampe i ANDRE kategorier er skåret (minimum tælles samlet).
+    const beroert = (id) => (uEfter.get(id)?.spillere.length ?? 0) !== (uFoer.get(id)?.spillere.length ?? 0);
+    const aendringer = [...runder].filter(([id, r]) => r !== start.get(id) || beroert(id)).map(([id, r]) => ({
         kategori: id, fra: start.get(id), til: r,
         kampeFoer: projekt.kampe.filter((k) => k.kategori === id).length, kampeEfter: p.kampe.filter((k) => k.kategori === id).length,
         krav: uEfter.get(id)?.krav ?? 0, faerrestFoer: uFoer.get(id)?.faerrest ?? 0, faerrestEfter: uEfter.get(id)?.faerrest ?? 0,
@@ -154,7 +173,7 @@ export function nedskaeringsForslag(projekt, { strategi = 'jaevnt', maxAfproevni
     return {
         ...basis, loest: nu.brud === 0, brudEfter: nu.brud, kampeEfter: p.kampe.length, aendringer,
         spillereUnderKravFoer: alleUnder(uFoer), spillereUnderKravEfter: alleUnder(uEfter),
-        runder: Object.fromEntries(aendringer.map((a) => [a.kategori, a.til])), afproevninger,
+        runder: Object.fromEntries(aendringer.filter((a) => a.fra !== a.til).map((a) => [a.kategori, a.til])), afproevninger,
     };
 }
 
@@ -167,6 +186,9 @@ export function alleNedskaeringer(projekt) {
         if (s.id === 'toDage' && !f) continue;
         if (!ud.some((x) => JSON.stringify([x.runder, x.raekkerToDage]) === JSON.stringify([f.runder, f.raekkerToDage]))) ud.push(f);
     }
+    // Strategier uden noget at skære i (fx ingen double-kategorier) vises kun, hvis der ikke er andet
+    const medIndhold = ud.filter((x) => !x.ingenKandidater);
+    if (medIndhold.length) ud.splice(0, ud.length, ...medIndhold);
     return ud.sort((a, b) => (b.loest - a.loest) || a.brudEfter - b.brudEfter || a.spillereUnderKravEfter - b.spillereUnderKravEfter || b.kampeEfter - a.kampeEfter);
 }
 

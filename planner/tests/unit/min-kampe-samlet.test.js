@@ -39,12 +39,22 @@ function projekt(valg) {
 }
 
 describe('min. kampe samlet: hjælpere', () => {
-    test('U9 tæller samlet som standard, andre årgange ikke; rækkens eget valg vinder', () => {
+    test('alle årgange tæller samlet som standard; rækkens eget valg vinder', () => {
         assert.equal(minKampeSamlet(u9d), true);
-        assert.equal(minKampeSamlet({ aargang: 'U11', raekke: 'D' }), false);
+        for (const aargang of ['U11', 'U13', 'U15', 'U17', 'U19', 'SEN']) assert.equal(minKampeSamlet({ aargang, raekke: 'D' }), true, aargang);
         assert.equal(minKampeSamlet({ aargang: 'U09', raekke: 'D', minKampeSamlet: false }), false);
         assert.equal(minKampeSamlet({ aargang: 'U11', raekke: 'D', minKampeSamlet: true }), true);
         assert.equal(nytProjekt(model()).raekker[0].minKampeSamlet, true);
+    });
+    test('ældre gemte projekter (kun U9 samlet) opgraderes én gang til alle rækker', async () => {
+        const { normaliserHalvBane } = await import('../../src/store.js');
+        const p = nytProjekt(model());
+        const gammelt = { ...p, opsaetning: { ...p.opsaetning, minKampeSamletV2: undefined }, raekker: [{ ...p.raekker[0], id: 'U11 D', aargang: 'U11', minKampeSamlet: false }] };
+        const ny = normaliserHalvBane(gammelt);
+        assert.equal(ny.raekker[0].minKampeSamlet, true);
+        assert.equal(ny.opsaetning.minKampeSamletV2, true);
+        const fravalgt = { ...ny, raekker: [{ ...ny.raekker[0], minKampeSamlet: false }] };
+        assert.equal(normaliserHalvBane(fravalgt).raekker[0].minKampeSamlet, false, 'brugerens senere fravalg bevares');
     });
     test('effektivForm og sikreKampe: plannerens egen Swiss tæller runder, ikke kun runde 1', () => {
         const k = { id: 'X', form: 'dobbelt-pulje', runder: 0, formValg: 'auto', formForslag: { form: 'swiss', runder: 4, minKampe: 4 } };
