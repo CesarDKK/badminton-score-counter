@@ -199,6 +199,11 @@ export function nytJobId() {
 }
 
 /** Beder løseren stoppe nu og aflevere den bedste plan hidtil (svaret kommer i det oprindelige optimer()-kald). */
+/** Som stopLoeser, men til når siden lukkes: sendBeacon overlever, at fanen forsvinder. */
+export function stopVedLukning(job, url = '/api/solve/stop') {
+    try { return !!globalThis.navigator?.sendBeacon?.(url, new Blob([JSON.stringify({ job })], { type: 'application/json' })); } catch { return false; }
+}
+
 export async function stopLoeser(job, url = '/api/solve/stop') {
     const svar = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ job }) });
     return svar.ok;
@@ -208,10 +213,32 @@ export async function stopLoeser(job, url = '/api/solve/stop') {
  * Kalder løseren. Returnerer { status, plan, sekunder, maal, graense } eller kaster ved netværksfejl.
  * status: 'OPTIMAL' | 'FEASIBLE' | 'INFEASIBLE' | 'UNKNOWN'
  */
-export async function optimer(projekt, { sekunder = 30, hintPlan = null, url = '/api/solve', signal, job = null } = {}) {
+export async function optimer(projekt, { sekunder = 30, hintPlan = null, url = '/api/solve', signal, job = null, pollMs = 3000 } = {}) {
     const problem = bygProblem(projekt, hintPlan);
-    const svar = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ problem, sekunder, ...(job ? { job } : {}) }), signal });
+    // Jobbet startes og hentes med korte kald (start → status hvert par sekunder), så ingen
+    // forbindelse står åben i flere minutter — proxyer som Cloudflare afbryder dem efter ca. 100 s.
+    const svar = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ problem, sekunder, asynkron: true, ...(job ? { job } : {}) }), signal });
     if (!svar.ok) throw new Error(svar.status === 429 ? 'Løseren er optaget — prøv igen om lidt.' : `Løseren svarede ${svar.status}`);
-    const data = await svar.json();
+    let data = await svar.json();
+    const jobId = data.job || job;
+    let fejlIRap = 0;
+    const frist = Date.now() + (sekunder + 90) * 1000;
+    while (data.status === 'REGNER') {
+        if (Date.now() > frist) throw new Error('Løseren svarede ikke inden for tiden.');
+        await new Promise((r) => setTimeout(r, pollMs));
+        if (signal?.aborted) throw new Error('Afbrudt.');
+        try {
+            const s = await fetch(`${url}/status?job=${encodeURIComponent(jobId)}`, { signal });
+            if (s.status === 404) throw Object.assign(new Error('Løseren kender ikke længere jobbet (den er måske blevet genstartet).'), { endelig: true });
+            if (s.status >= 500 || s.status === 429) throw new Error(`Løseren svarede ${s.status}`); // forbigående: prøv igen
+            data = await s.json();
+            if (!s.ok) throw Object.assign(new Error(data.fejl || `Løseren svarede ${s.status}`), { endelig: true });
+            fejlIRap = 0;
+        } catch (err) {
+            fejlIRap += 1;
+            if (err.endelig || fejlIRap >= 5) throw err;
+            data = { status: 'REGNER' };
+        }
+    }
     return { ...data, plan: planFraSvar(projekt, data) };
 }

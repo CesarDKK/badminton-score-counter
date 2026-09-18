@@ -132,3 +132,37 @@ describe('solver-klient: job-id og stop', () => {
         } finally { globalThis.fetch = gammel; }
     });
 });
+
+describe('solver-klient: asynkront job (start → status → svar)', () => {
+    const medFetch = async (svarListe, koer) => {
+        const kald = [];
+        const gammel = globalThis.fetch;
+        globalThis.fetch = async (url, opt = {}) => { kald.push({ url, body: opt.body ? JSON.parse(opt.body) : null }); const s = svarListe.shift(); if (s instanceof Error) throw s; return { ok: s.kode < 400, status: s.kode, json: async () => s.data }; };
+        try { return { resultat: await koer(), kald }; } finally { globalThis.fetch = gammel; }
+    };
+    test('starter jobbet asynkront og spørger til status, til det er færdigt', async () => {
+        const { optimer } = await import('../../src/solver-klient.js');
+        const { resultat, kald } = await medFetch([
+            { kode: 202, data: { status: 'REGNER', job: 'jobjobjob123' } },
+            { kode: 200, data: { status: 'REGNER', sekunder: 3 } },
+            { kode: 502, data: {} }, // forbigående fejl (fx genstart af proxy) tåles
+            { kode: 200, data: { status: 'FEASIBLE', sekunder: 9, stoppet: false, tider: { '1:1': 540 } } },
+        ], () => optimer(projekt(), { sekunder: 240, job: 'jobjobjob123', pollMs: 1 }));
+        assert.equal(kald[0].body.asynkron, true);
+        assert.deepEqual(kald.slice(1).map((k) => k.url), Array(3).fill('/api/solve/status?job=jobjobjob123'));
+        assert.equal(resultat.status, 'FEASIBLE');
+        assert.deepEqual(resultat.plan['1:1'], { dag: '2026-11-21', slot: '09:00' });
+    });
+    test('ukendt job (løseren genstartet) og ugyldigt problem giver en klar fejl', async () => {
+        const { optimer } = await import('../../src/solver-klient.js');
+        await assert.rejects(medFetch([{ kode: 202, data: { status: 'REGNER', job: 'jobjobjob123' } }, { kode: 404, data: { fejl: 'ukendt job' } }], () => optimer(projekt(), { pollMs: 1 })), /kender ikke længere jobbet/);
+        await assert.rejects(medFetch([{ kode: 202, data: { status: 'REGNER', job: 'jobjobjob123' } }, { kode: 400, data: { fejl: 'ugyldigt problem: KeyError' } }], () => optimer(projekt(), { pollMs: 1 })), /ugyldigt problem/);
+        await assert.rejects(medFetch([{ kode: 429, data: {} }], () => optimer(projekt(), { pollMs: 1 })), /optaget/);
+    });
+    test('en ældre løser, der svarer med det samme, virker stadig', async () => {
+        const { optimer } = await import('../../src/solver-klient.js');
+        const { resultat, kald } = await medFetch([{ kode: 200, data: { status: 'OPTIMAL', sekunder: 1, tider: {} } }], () => optimer(projekt(), { pollMs: 1 }));
+        assert.equal(kald.length, 1);
+        assert.equal(resultat.status, 'OPTIMAL');
+    });
+});

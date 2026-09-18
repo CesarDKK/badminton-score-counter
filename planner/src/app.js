@@ -4,8 +4,9 @@ import { laesTP, tabellerFraMDB } from './tp-reader.js';
 import * as store from './store.js';
 import { tjekPlan } from './rules.js';
 import { lavForslag, lavAlternativer, bedoemPlan } from './scheduler.js';
-import { optimer, stopLoeser, nytJobId } from './solver-klient.js';
+import { optimer, stopLoeser, stopVedLukning, nytJobId } from './solver-klient.js';
 import { scorePlan } from './kriterier.js';
+import { alleNedskaeringer, anvendNedskaering, kapacitetsRegnskab, swissKandidater } from './nedskaering.js';
 import { renderOpsaetning } from './ui/opsaetning.js';
 import { renderPlan } from './ui/plan.js';
 import { renderTjek } from './ui/tjek.js';
@@ -296,6 +297,33 @@ const planHandlers = {
         }
     },
 
+    // Forslag, der får kabalen til at gå op: færre Swiss-runder eller to dage — afprøvet med planlæggeren
+    findNedskaering() {
+        const regnskab = kapacitetsRegnskab(projekt);
+        const liste = alleNedskaeringer(projekt);
+        let besked = '';
+        if (!liste.length) besked = swissKandidater(projekt).length
+            ? 'Planlæggeren kan lægge alle kampe uden regelbrud, som opsætningen er nu — tryk "Lav forslag".'
+            : 'Kampene kommer fra TP\'s lodtrækning, så planneren kan ikke selv ændre antallet. Sæt kategorierne til "Swiss Ladder" eller "automatisk" i fane 1 — eller ret lodtrækningen i TP.';
+        tilstand.nedskaering = { liste, regnskab, besked };
+        render();
+    },
+    brugNedskaering(index) {
+        const f = tilstand.nedskaering?.liste[index];
+        if (!f) return;
+        const r = anvendNedskaering(projekt, f);
+        const brud = [...r.forslag.brud, ...r.forslag.ikkePlaceret];
+        const katMap = new Map(r.projekt.kampe.map((k) => [k.id, k]));
+        tilstand.nedskaering = null;
+        tilstand.alternativer = null;
+        tilstand.forslag = {
+            tekst: `"${f.navn}" er taget i brug: ${f.kampeFoer} → ${r.projekt.kampe.length} kampe, og alle har tid${brud.length ? `, men ${brud.length} med regelbrud.` : ' uden regelbrud.'} ${f.spillereUnderKravEfter} spillere får færre kampe end reglementets minimum — se advarslerne i Tjek. Rundetallene står nu på kategorierne i fane 1.`,
+            ikkePlaceret: brud.map((x) => ({ ...x, kategori: katMap.get(x.id)?.kategori || '', navn: katMap.get(x.id)?.navn || x.id })),
+        };
+        saet({ ...r.projekt, sidsteForslag: { ikkePlaceret: brud } });
+    },
+    lukNedskaering() { tilstand.nedskaering = null; render(); },
+
     async stopOptimer() {
         if (!tilstand.optimerer || !tilstand.optimerJob || tilstand.optimerStopper) return;
         tilstand.optimerStopper = true;
@@ -365,5 +393,8 @@ const tjekHandlers = {
     },
     kvitter(noegle, vaerdi) { saet(store.kvitter(projekt, noegle, vaerdi)); },
 };
+
+// Lukkes siden, mens løseren regner, får den besked med det samme (ellers opdager den det selv efter ca. 30 s)
+window.addEventListener('pagehide', () => { if (tilstand.optimerer && tilstand.optimerJob) stopVedLukning(tilstand.optimerJob); });
 
 render();

@@ -412,3 +412,14 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 /* ── Optimér (CP-SAT) ── */
 .optimer { display: inline-flex; gap: 4px; align-items: center; }
 .optimer select { padding: 8px 6px; }
+
+/* ── Forslag, der får kabalen til at gå op (nedskæring) ── */
+.nedskaering { margin: 12px 0 16px; }
+.nedskaering h3 { margin: 0 0 6px; }
+.ned-regnskab { font-size: 0.9em; line-height: 1.55; border-left: 3px solid var(--amber); padding: 6px 0 6px 12px; margin: 8px 0 14px; }
+.ned-kort { border: 1px solid var(--border, rgba(255,255,255,0.12)); border-radius: 12px; padding: 12px 14px; margin: 0 0 12px; }
+.ned-kort h4 { margin: 0 0 4px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ned-kort p { margin: 4px 0 8px; font-size: 0.9em; line-height: 1.5; }
+.ned-tabel { width: 100%; border-collapse: collapse; font-size: 0.86em; margin: 6px 0 10px; }
+.ned-tabel th, .ned-tabel td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border, rgba(255,255,255,0.08)); }
+.ned-tabel th { font-weight: 600; opacity: 0.75; }

@@ -131,12 +131,18 @@ export function foreslaaForm(n, kategori, raekke, regler, valg = {}) {
         // når kravet, når deres kampe i andre kategorier (double, mix) tælles med.
         const swiss = kandidater.filter((x) => x.form === 'swiss' && passer(x)).sort((a, b) => b.runder - a.runder);
         const medKravInklAndre = swiss.find((x) => x.minKampe + medVedNedskaering >= krav);
+        const opfylderUdenPlads = kandidater.filter((x) => !x.nedskaaret && x.minKampe + medregnet >= krav).sort(sortFaerrest);
         if (medKravInklAndre) valgt = { ...medKravInklAndre, nedskaaret: medKravInklAndre.nedskaaret || medKravInklAndre.minKampe < krav, ...(medKravInklAndre.minKampe < krav ? { kravInklAndre: true } : {}), faerrestAndre };
-        else if (swiss.length) valgt = { ...swiss[0], nedskaaret: true, faerrestAndre };
-        else {
-            // ingen Swiss-mulighed passer: den mulighed der giver flest kampe til de færreste (helst inden for kapaciteten)
-            const pool = kandidater.filter(passer).length ? kandidater.filter(passer) : kandidater;
-            valgt = [...pool].sort((a, b) => b.minKampe - a.minKampe || a.baneSlots - b.baneSlots)[0];
+        else if (opfylderUdenPlads.length) {
+            // Pladsen rækker ikke, men planneren går ikke selv under kravet: den vælger den MINDSTE
+            // form, der opfylder det, og markerer at den ikke passer. At gå under kravet er
+            // brugerens valg på oplyst grundlag (nedskæringsforslagene i Plan-fanen).
+            const v = opfylderUdenPlads[0];
+            valgt = { ...v, passerIkke: true, ...(v.minKampe < krav ? { kravInklAndre: true, faerrestAndre } : {}) };
+        } else {
+            // intet kan opfylde kravet (få deltagere): flest kampe til dem, der får færrest — med færrest bane-slots
+            valgt = [...kandidater].sort((a, b) => b.minKampe - a.minKampe || a.baneSlots - b.baneSlots)[0];
+            if (!passer(valgt)) valgt = { ...valgt, passerIkke: true };
         }
     }
     return { ...valgt, krav, opfylderKrav: valgt.minKampe >= krav || (valgt.kravInklAndre === true), deltagere: n, ledigeBaneSlots: ledig ?? null };
@@ -328,8 +334,9 @@ export function formTekst(form) {
     let bem = '';
     if (form.kravInklAndre && !form.nedskaaret) bem = ` (kravet på ${form.krav} nås inkl. mindst ${form.faerrestAndre} ${form.faerrestAndre === 1 ? 'kamp' : 'kampe'} i double/mix)`;
     else if (form.kravInklAndre) bem = ` (skåret ned pga. kapacitet; kravet på ${form.krav} nås inkl. mindst ${form.faerrestAndre} kampe i andre kategorier)`;
-    else if (form.nedskaaret && !form.valgtRunder && form.form === 'swiss' && form.runder >= form.deltagere - 1) bem = ` (kun ${form.deltagere} deltagere — under kravet på ${form.krav})`;
+    else if (form.nedskaaret && !form.valgtRunder && form.form === 'swiss' && form.runder >= form.deltagere - 1) bem = form.opfylderKrav ? ` (kun ${form.deltagere} deltagere — alle møder alle)` : ` (kun ${form.deltagere} deltagere — under kravet på ${form.krav})`;
     else if (form.nedskaaret && !form.valgtRunder) bem = ` (skåret ned pga. kapacitet — under kravet på ${form.krav})`;
     else if (!form.opfylderKrav) bem = ` (under kravet på ${form.krav})`;
+    if (form.passerIkke) bem += ' — der er ikke plads nok; se forslagene i Plan-fanen';
     return `${form.tekst} · ${form.kampe} kampe · ${form.minKampe}–${form.maxKampe} kampe pr. spiller${bem}`;
 }

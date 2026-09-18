@@ -264,10 +264,45 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, st
     return svar
 
 
-# Igangværende løsninger: job-id (valgt af klienten) → stop-signal
-JOBS: dict[str, threading.Event] = {}
-JOBS_LAAS = threading.Lock()
+# Løsninger i gang og nyligt afsluttede: job-id → Job.
+# Klienten starter et job (asynkron: true), spørger til status hvert par sekunder og kan stoppe
+# det undervejs. Sådan holdes ingen forbindelse åben i flere minutter — proxyer foran tjenesten
+# (Cloudflare) afbryder kald efter ca. 100 s. Hører løseren ikke fra klienten i FORLADT_SEKUNDER,
+# regnes fanen for lukket, og søgningen stoppes, så løseren bliver fri.
+FORLADT_SEKUNDER = float(os.environ.get("SOLVER_FORLADT_SEKUNDER", "30"))
+GEM_SEKUNDER = float(os.environ.get("SOLVER_GEM_SEKUNDER", "600"))
 JOB_ID = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+
+
+class Job:
+    def __init__(self):
+        self.stop = threading.Event()
+        self.start = time.time()
+        self.sidst_set = time.time()
+        self.slut = None
+        self.kode = None      # HTTP-kode for det færdige svar
+        self.svar = None      # det færdige svar
+
+
+JOBS: dict[str, Job] = {}
+JOBS_LAAS = threading.Lock()
+
+
+def ryd_gamle_jobs():
+    nu = time.time()
+    with JOBS_LAAS:
+        for jid in [j for j, x in JOBS.items() if x.slut is not None and nu - x.slut > GEM_SEKUNDER]:
+            del JOBS[jid]
+
+
+def koer(problem: dict, sekunder: float, job: Job):
+    """Løser problemet og returnerer (HTTP-kode, svar). Fejl i modellen må ikke vælte tjenesten."""
+    try:
+        return 200, loes(problem, sekunder, stop=job.stop)
+    except (KeyError, TypeError, ValueError) as e:  # problemet har ikke den form, bygProblem() laver
+        return 400, {"fejl": f"ugyldigt problem: {type(e).__name__} {e}"}
+    except Exception as e:  # pragma: no cover
+        return 500, {"fejl": f"løseren fejlede: {type(e).__name__}"}
 
 
 def forbindelse_lukket(conn: socket.socket) -> bool:
@@ -280,7 +315,7 @@ def forbindelse_lukket(conn: socket.socket) -> bool:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "planner-solver/1"
+    server_version = "planner-solver/2"
 
     def _svar(self, kode, data):
         raa = json.dumps(data).encode("utf-8")
@@ -292,21 +327,36 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(raa)
 
     def do_GET(self):
-        if self.path.rstrip("/").endswith("/health") or self.path == "/health":
+        sti, _, query = self.path.partition("?")
+        if sti.rstrip("/").endswith("/health"):
             return self._svar(200, {"ok": True})
+        if sti.rstrip("/").endswith("/status"):
+            return self._status(query)
         self._svar(404, {"fejl": "ukendt sti"})
+
+    def _status(self, query):
+        jid = dict(p.partition("=")[::2] for p in query.split("&") if p).get("job", "")
+        with JOBS_LAAS:
+            job = JOBS.get(jid)
+            if job is not None:
+                job.sidst_set = time.time()
+        if job is None:
+            return self._svar(404, {"fejl": "ukendt job"})
+        if job.slut is None:
+            return self._svar(200, {"status": "REGNER", "sekunder": round(time.time() - job.start, 1), "stopper": job.stop.is_set()})
+        self._svar(job.kode, job.svar)
 
     def _stop(self):
         try:
             laengde = int(self.headers.get("Content-Length") or 0)
-            job = str(json.loads(self.rfile.read(min(laengde, 1024))).get("job", ""))
+            jid = str(json.loads(self.rfile.read(min(laengde, 1024))).get("job", ""))
         except Exception:
             return self._svar(400, {"fejl": "ugyldig JSON"})
         with JOBS_LAAS:
-            signal = JOBS.get(job)
-        if signal is None:
+            job = JOBS.get(jid)
+        if job is None or job.slut is not None:
             return self._svar(404, {"fejl": "ukendt job"})
-        signal.set()
+        job.stop.set()
         self._svar(200, {"ok": True})
 
     def do_POST(self):
@@ -321,41 +371,61 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(self.rfile.read(laengde))
             problem = data["problem"]
             sekunder = float(data.get("sekunder", 30))
-            job = str(data.get("job") or "")
+            jid = str(data.get("job") or "")
+            asynkron = bool(data.get("asynkron"))
         except Exception:
             return self._svar(400, {"fejl": "ugyldig JSON"})
+        if not JOB_ID.match(jid):
+            jid = os.urandom(12).hex()
+        ryd_gamle_jobs()
         if not SAMTIDIGE.acquire(blocking=False):
             return self._svar(429, {"fejl": "løseren er optaget"})
-        stop = threading.Event()
-        har_job = bool(JOB_ID.match(job))
-        if har_job:
-            with JOBS_LAAS:
-                JOBS[job] = stop
-        # Lukker klienten forbindelsen, mens der regnes, stoppes søgningen, så løseren bliver fri
-        faerdig = threading.Event()
+        job = Job()
+        with JOBS_LAAS:
+            JOBS[jid] = job
 
+        if asynkron:
+            def arbejd():
+                try:
+                    job.kode, job.svar = koer(problem, sekunder, job)
+                finally:
+                    job.slut = time.time()
+                    SAMTIDIGE.release()
+
+            def forladt():  # ingen statuskald i et stykke tid = fanen er lukket
+                while job.slut is None:
+                    time.sleep(0.5)
+                    if time.time() - job.sidst_set > FORLADT_SEKUNDER:
+                        job.stop.set()
+                        return
+            threading.Thread(target=arbejd, daemon=True).start()
+            threading.Thread(target=forladt, daemon=True).start()
+            return self._svar(202, {"status": "REGNER", "job": jid})
+
+        # Synkront (korte kørsler og ældre klienter): svaret kommer i samme kald.
+        # Lukker klienten forbindelsen imens, stoppes søgningen, så løseren bliver fri.
         def hold_oeje():
-            while not faerdig.wait(0.5):
+            while job.slut is None:
+                time.sleep(0.5)
                 if forbindelse_lukket(self.connection):
-                    stop.set()
+                    job.stop.set()
                     return
         threading.Thread(target=hold_oeje, daemon=True).start()
         try:
-            self._svar(200, loes(problem, sekunder, stop=stop))
+            kode, svar = koer(problem, sekunder, job)
+            job.slut = time.time()
+            self._svar(kode, svar)
         except (BrokenPipeError, ConnectionResetError):
             pass  # klienten er væk
-        except (KeyError, TypeError, ValueError) as e:  # problemet har ikke den form, bygProblem() laver
-            self._svar(400, {"fejl": f"ugyldigt problem: {type(e).__name__} {e}"})
-        except Exception as e:  # pragma: no cover — fejl i modellen må ikke vælte tjenesten
-            self._svar(500, {"fejl": f"løseren fejlede: {type(e).__name__}"})
         finally:
-            faerdig.set()
-            if har_job:
-                with JOBS_LAAS:
-                    JOBS.pop(job, None)
+            job.slut = job.slut or time.time()
+            with JOBS_LAAS:
+                JOBS.pop(jid, None)
             SAMTIDIGE.release()
 
     def log_message(self, fmt, *args):  # kun metode, sti og status — aldrig indhold
+        if "/status" in getattr(self, "path", ""):
+            return  # statuskald kommer hvert par sekunder
         print("%s %s" % (self.address_string(), fmt % args), flush=True)
 
 
