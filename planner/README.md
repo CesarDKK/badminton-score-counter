@@ -245,3 +245,62 @@ bane-slots i samme pulje (`delerKapacitet`). Rækker den ikke, skæres runderne
 ned til det største antal, der passer, hvor spillerne stadig når kravet, når
 deres kampe i andre kategorier (double, mix) tælles med
 (`form.kravInklAndre`); ellers markeres forslaget som nedskåret og under kravet.
+
+## Bløde kriterier med vægte, og hårde rækkeregler som data (2026-09-18)
+
+Efter input fra udvikleren af Badminton Planner: bløde ønsker er små isolerede
+kriterier med vægte som data, hårde regler er constraints og aldrig store straffe.
+
+- `src/kriterier.js`: `KRITERIER` (ventetid, lange huller, sen sluttid, tomme
+  baner midt på dagen, puljerunder ude af takt, finaler spredt), navngivne
+  `VAEGT_SKABELONER` og `scorePlan(projekt)` → vægtet sum, lavere er bedre.
+  Vægtene ligger i `opsaetning.vaegte` og rettes i fane 1 ("Bløde ønsker og
+  vægte"). Scoren vises i Plan-fanen (hover viser bidragene), rangerer
+  alternativerne efter antal regelbrud, og er målet for løseren.
+  Et nyt ønske = ét nyt kriterie + en vægt; ingen ændring i planlæggeren.
+- Hårde regler pr. række som data: `raekker[].maxHaltidMin` (U9: 240 min fra en
+  spillers første til sidste kamp samme dag) og `raekker[].maxDage`
+  (reglementets én-dags-rækker: 1). Begge rettes i fane 1, overholdes af
+  forslaget, og brud meldes som fejl (`max-haltid`) hhv. advarsel med
+  dispensation (`flere-dage`). Kan de ikke overholdes, placeres kampen
+  alligevel i fase 2 med regelbruddet `max-haltid`.
+- Fund på Lyngby U9/U11 2025: Jespers egen plan scorer 457,6 mod forslagets
+  133. Med U9's 240 min er 6 Swiss-runder plus doubler ikke muligt — 8 spillere
+  i Jespers plan og 6 i forslaget er over 4 timer; med 360 min går det op.
+
+## Løseren: "Optimér" med CP-SAT (2026-09-18)
+
+Den grådige planlægger er hurtig, men lægger én kamp ad gangen og kan ikke
+fortryde. "Optimér" i Plan-fanen sender i stedet hele problemet til en løser
+(Google OR-Tools CP-SAT), der overholder alle hårde regler og minimerer den
+samme score som `scorePlan`.
+
+- `src/solver-klient.js`: `bygProblem(projekt, hintPlan)` oversætter projektet
+  til tal: global tid `T = dagIndex * 1440 + minut`, tilladte starttider pr.
+  kamp (dage, tidsvindue, rækkens tidsrum; låste kampe har kun deres egen tid),
+  kapacitet pr. pulje og slot, `foer` (afhængigheder), `konflikter`
+  (fælles mulig spiller → varighed + pause), `haltid`, `maxDage`,
+  `maxKampePrDag` og vægtene. **Alt regelkendskab ligger i JS**; løseren kender
+  kun tal og par. Der sendes kamp-id'er og spillere som løbenumre — ingen
+  navne, klubber, fødselsdatoer eller e-mails (testet).
+- `solver/solver.py`: modellen (`AddCumulative` pr. kapacitetspulje, halve
+  baner tæller 1 af 2) og en lille HTTP-tjeneste: `GET /health`,
+  `POST /solve` → `{ status, tider, sekunder }`. Én løsning ad gangen (429
+  ellers), højst 120 s, logger aldrig indhold. `solver/test_solver.py` køres i CI.
+- Drift: tjenesten `planner-solver` i `docker-compose.yml` (`Dockerfile.solver`,
+  4 CPU / 2 GB, ingen porte udadtil). nginx sender
+  `planner.badmintonapp.dk/api/solve` videre med rate limit (6/min) og slår
+  navnet op ved hvert kald, så siden virker, selv om løseren er nede.
+- UI: vælg 10–120 s og tryk "Optimér". Den grådige plan er startløsning (hint).
+  Resultatet vises som forslag ved siden af den grådige plan med score, og
+  vælges med "Brug dette" / "Fortryd". Beviser løseren, at der ingen lovlig plan
+  findes, vises den grådige plan med regelbrud og løsningsforslag. Er løseren
+  nede eller optaget, siges det, og resten af siden virker som før.
+- Målt (score, standardvægte, alle planer uden fejl i `tjekPlan`):
+  U13/U15 2026 — Jesper 220,3 · grådig 144,6 · CP-SAT 10 s 88,4 · 60 s 63,8.
+  U9/U11 2025 (U9 senest 18:00, max haltid 360) — Jesper 457,6 · grådig 133 ·
+  CP-SAT 10 s 74,1 · 60 s 61,2.
+- Lokal test: `docker build -f Dockerfile.solver -t badminton-planner-solver .`,
+  kør den på compose-netværket med `--network-alias planner-solver`, og
+  `docker cp nginx.conf badminton-frontend:/etc/nginx/conf.d/default.conf` +
+  `nginx -s reload`. Python-tests: `python -m unittest test_solver.py` i imaget.

@@ -6,6 +6,7 @@ import { esc, datoTekst } from './dom.js';
 import { slotsForDag, banerISlot, puljeKapacitet } from '../kapacitet.js';
 import { alvorForKamp } from '../rules.js';
 import { bedoemPlan, loesningsforslag } from '../scheduler.js';
+import { scorePlan } from '../kriterier.js';
 
 const FASE_KORT = { pulje: 'P', cup: '', swiss: 'R' };
 const RUNDE_KORT = { 'Finale': 'Finale', 'Semifinale': 'Semi', 'Kvartfinale': 'Kvart', '1/8-finale': '1/8' };
@@ -55,6 +56,8 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
     if (soeg) for (const s of Object.values(projekt.spillere)) if (`${s.fornavn} ${s.efternavn} ${s.klub}`.toLowerCase().includes(soeg)) soegSpillere.add(s.id);
     const laaste = new Set(projekt.laast || []);
     const statistik = bedoemPlan(projekt);
+    const score = scorePlan(projekt);
+    const scoreTitel = score.dele.map((d) => `${d.navn}: ${d.vaerdi} ${d.enhed} × ${d.vaegt} = ${d.bidrag}`).join('\n');
     const valgt = projekt.kampe.find((k) => k.id === tilstand.valgtKamp);
     const valgtSpillere = new Set(valgt ? valgt.spillere : []);
     const fremhaev = new Set(tilstand.fremhaev || []);
@@ -195,6 +198,12 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
             <button class="knap knap--sekundaer" data-handling="ryd-dag">Ryd dag</button>
             <button class="knap knap--sekundaer" data-handling="forslag-dag" title="Planlægger kun denne dag om; andre dage og låste kampe røres ikke">Forslag for dagen</button>
             <button class="knap" data-handling="forslag" title="Planlægger alle kampe forfra; låste kampe beholder deres tid">Lav forslag</button>
+            <span class="optimer">
+                <select data-felt="optimerSek" aria-label="Tid til løseren" title="Hvor længe løseren må regne. Længere tid giver som regel en bedre plan.">
+                    ${[10, 30, 60, 120].map((n) => `<option value="${n}" ${(tilstand.optimerSek || 30) === n ? 'selected' : ''}>${n} sek</option>`).join('')}
+                </select>
+                <button class="knap" data-handling="optimer" ${tilstand.optimerer ? 'disabled' : ''} title="Sender et anonymiseret planlægningsproblem (kun kamp-id'er og spillernumre) til CP-SAT-løseren, som minimerer scoren under alle hårde regler. Låste kampe beholder deres tid.">${tilstand.optimerer ? 'Løseren regner …' : 'Optimér'}</button>
+            </span>
             <button class="knap knap--sekundaer" data-handling="alternativer" title="Laver op til 8 forskellige forslag med forskellige prioriteringer, som du kan bladre imellem">Alternativer</button>
         </div>
     </div>
@@ -203,6 +212,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
         <span class="maerke ${antalFejl ? 'maerke--fejl' : 'maerke--ok'}">${antalFejl} fejl</span>
         <span class="maerke ${antalAdv ? 'maerke--advarsel' : ''}">${antalAdv} advarsler</span>
         ${laaste.size ? `<span class="maerke">🔒 ${laaste.size} låst</span>` : ''}
+        <span class="maerke" title="${esc('Vægtet sum af de bløde kriterier — lavere er bedre. Vægtene rettes i fane 1.\n' + scoreTitel)}">score ${score.total}</span>
         <span class="daempet">${placeret.size} af ${projekt.kampe.length} kampe har tid · ${ikkePlacerede.length} mangler · haltid gns. ${statistik.haltidGnsMin} min pr. spiller pr. dag · <span class="${statistik.langeHuller ? 'er-roed' : ''}">${statistik.langeHuller} spillere med hul over ${statistik.maxVentetidMin} min</span>${Object.keys(statistik.slutPrDag).length ? ` · slut ${Object.entries(statistik.slutPrDag).map(([d, t]) => `${datoTekst(d, { kort: true })} ${t}`).join(', ')}` : ''}. Træk et kort til et slot, eller til listen til højre for at fjerne tiden. Klik viser spillerens andre kampe; dobbeltklik låser.</span>
     </p>
     ${tilstand.forslag ? `<p class="plan-status forslag-info">${esc(tilstand.forslag.tekst)}${tilstand.forslag.ikkePlaceret.length ? ` Berørte kampe: ${tilstand.forslag.ikkePlaceret.slice(0, 6).map((x) => `${esc(x.kategori)} ${esc(x.navn)} (${esc(x.brud || x.aarsag)})`).join('; ')}${tilstand.forslag.ikkePlaceret.length > 6 ? ' …' : ''}` : ''}</p>
@@ -245,7 +255,7 @@ function alternativBjaelke(alt) {
         <div class="alternativ-tekst">
             <strong>Forslag ${alt.index + 1} af ${alt.liste.length}: ${esc(a.navn)}</strong>
             <span class="daempet">${esc(a.beskrivelse)}</span>
-            <span>haltid gns. <b>${s.haltidGnsMin} min</b> · ventetid gns. <b>${s.ventetidGnsMin} min</b> · <b class="${s.langeHuller ? 'er-roed' : ''}">${s.langeHuller} med hul over ${s.maxVentetidMin} min</b> · slut ${esc(slut)} · <b class="${(a.brud?.length || 0) + a.ikkePlaceret.length ? 'er-roed' : ''}">${(a.brud?.length || 0) + a.ikkePlaceret.length} med regelbrud</b>${alt.fejl != null ? ` · <b class="${alt.fejl ? 'er-roed' : ''}">${alt.fejl} fejl</b>, ${alt.advarsler} advarsler` : ''}</span>
+            <span>score <b>${a.score ?? '–'}</b> · haltid gns. <b>${s.haltidGnsMin} min</b> · ventetid gns. <b>${s.ventetidGnsMin} min</b> · <b class="${s.langeHuller ? 'er-roed' : ''}">${s.langeHuller} med hul over ${s.maxVentetidMin} min</b> · slut ${esc(slut)} · <b class="${(a.brud?.length || 0) + a.ikkePlaceret.length ? 'er-roed' : ''}">${(a.brud?.length || 0) + a.ikkePlaceret.length} med regelbrud</b>${alt.fejl != null ? ` · <b class="${alt.fejl ? 'er-roed' : ''}">${alt.fejl} fejl</b>, ${alt.advarsler} advarsler` : ''}</span>
         </div>
         <button class="knap knap--sekundaer knap--lille" data-handling="alt-naeste" ${alt.index >= alt.liste.length - 1 ? 'disabled' : ''} aria-label="Næste forslag">▶</button>
         <span class="raekke-knapper">
@@ -274,6 +284,7 @@ function bind(container, h) {
             else if (hd === 'laas-kategori') h.laasKategori(true);
             else if (hd === 'laas-op-kategori') h.laasKategori(false);
             else if (hd === 'alternativer') h.lavAlternativer();
+            else if (hd === 'optimer') h.optimer();
             else if (hd === 'alt-forrige') h.bladreAlternativ(-1);
             else if (hd === 'alt-naeste') h.bladreAlternativ(1);
             else if (hd === 'alt-brug') h.brugAlternativ();
@@ -291,6 +302,7 @@ function bind(container, h) {
     });
     container.addEventListener('change', (e) => {
         if (e.target.dataset.felt === 'filter') h.filter(e.target.value);
+        else if (e.target.dataset.felt === 'optimerSek') h.optimerSek(Number(e.target.value) || 30);
     });
     container.addEventListener('input', (e) => {
         if (e.target.dataset.felt === 'soeg') h.soeg(e.target.value);

@@ -5,6 +5,7 @@ import { kapacitetPrDag, kampePrKategori, slotsForDag, baneSlots } from '../kapa
 import { foerSkoledag } from '../rules.js';
 import { reglerFor, STANDARD_REGLER } from '../store.js';
 import { FORM_VALG, FORM_VALG_TEKST, formTekst } from '../form.js';
+import { KRITERIER, VAEGT_SKABELONER, vaegteFor } from '../kriterier.js';
 
 const FORM_TEKST = {
     'pulje': 'Pulje', 'pulje-cup': 'Pulje + cup', 'cup': 'Cup', 'dobbelt-pulje': 'Dobbelt pulje',
@@ -12,7 +13,7 @@ const FORM_TEKST = {
 };
 
 export function renderOpsaetning(container, projekt, handlers) {
-    container.innerHTML = [filPanel(projekt), ...(projekt ? [turneringPanel(projekt), dagePanel(projekt), reglerPanel(projekt), raekkePanel(projekt), opskriftPanel(projekt), kapacitetPanel(projekt)] : [])].join('');
+    container.innerHTML = [filPanel(projekt), ...(projekt ? [turneringPanel(projekt), dagePanel(projekt), reglerPanel(projekt), vaegtPanel(projekt), raekkePanel(projekt), opskriftPanel(projekt), kapacitetPanel(projekt)] : [])].join('');
     // Lytterne sættes på beholderen én gang og læser det aktuelle projekt herfra,
     // så de ikke hober sig op ved hver gentegning.
     container._projekt = projekt;
@@ -196,6 +197,33 @@ function reglerPanel(p) {
     </section>`;
 }
 
+/** Bløde kriterier med vægte (kriterier.js): skabelon + enkeltvægte. */
+function vaegtPanel(p) {
+    const v = vaegteFor(p);
+    const skabelon = p.opsaetning.vaegtSkabelon || 'standard';
+    return `
+    <section class="panel">
+        <div class="panel-hoved">
+            <div>
+                <h2>Bløde ønsker og vægte</h2>
+                <p class="panel-sub">Planens score er den vægtede sum af disse kriterier — lavere er bedre. Scoren vises i Plan-fanen, rangerer alternativerne og er målet for "Optimér". Hårde regler (pauser, max haltid, tidsvinduer) er ikke vægte; de må aldrig brydes.</p>
+            </div>
+            <label class="felt"><span class="etiket">Skabelon</span>
+                <select data-felt="vaegtSkabelon">
+                    ${Object.entries(VAEGT_SKABELONER).map(([id, s]) => `<option value="${id}" ${skabelon === id ? 'selected' : ''}>${esc(s.navn)}</option>`).join('')}
+                    ${skabelon === 'egen' ? '<option value="egen" selected>egne vægte</option>' : ''}
+                </select></label>
+        </div>
+        <details ${skabelon === 'egen' ? 'open' : ''}>
+            <summary>Vis vægtene</summary>
+            <div class="raekke-knapper" style="margin-top:14px; gap:22px">
+                ${KRITERIER.map((k) => `<label class="felt" title="${esc(k.beskrivelse)}"><span class="etiket">${esc(k.navn)} (${esc(k.enhed)})</span>
+                    <input type="number" min="0" max="100" step="0.1" value="${v[k.id] ?? 0}" data-vaegt="${k.id}"></label>`).join('')}
+            </div>
+        </details>
+    </section>`;
+}
+
 function raekkePanel(p) {
     const prKat = kampePrKategori(p);
     const dage = p.turnering.dage;
@@ -214,6 +242,10 @@ function raekkePanel(p) {
                 </span>
                 <span class="raekke-tid" title="Valgfrit: baner der er reserveret til rækken i dens tidsrum (hele dagen, hvis intet tidsrum). Rækken bruger kun dem, og de øvrige rækker deler resten — fx 5 baner til U9, der deles i 10 halve.">
                     <input type="number" min="0" max="60" value="${r.reserveredeBaner || 0}" data-raekke-baner="${esc(r.id)}" aria-label="Reserverede baner"> reserverede baner
+                </span>
+                <span class="raekke-tid" title="Hårde regler for rækken: højst så mange minutter fra en spillers første til sidste kamp samme dag (U9: 240), og højst så mange spilledage (tomt = ingen grænse). Forslaget og løseren overholder dem; Tjek melder brud som fejl.">
+                    max haltid <input type="number" min="0" max="900" step="30" value="${r.maxHaltidMin ?? ''}" data-raekke-tal="maxHaltidMin" data-raekke="${esc(r.id)}" aria-label="Max haltid i minutter"> min ·
+                    max dage <input type="number" min="0" max="9" step="1" value="${r.maxDage ?? ''}" data-raekke-tal="maxDage" data-raekke="${esc(r.id)}" aria-label="Max dage">
                 </span>
                 ${r.reserveredeBaner > 0 ? `<span class="maerke">${r.reserveredeBaner} ${r.reserveredeBaner === 1 ? 'bane' : 'baner'} reserveret${p.kategorier.some((k) => k.raekke === r.id && k.halvBane) ? ` = ${r.reserveredeBaner * 2} halve` : ''}</span>` : ''}
                 ${kraeverDisp ? `<label class="valg"><input type="checkbox" data-disp="${esc(r.id)}" ${r.dispensationFlereDage ? 'checked' : ''}> dispensation til flere dage</label>
@@ -394,6 +426,7 @@ function bind(container, projekt, h) {
         if (el instanceof HTMLSelectElement) {
             if (el.dataset.felt === 'kampVarighed') h.opsaetning({ kampVarighed: el.value });
             else if (el.dataset.felt === 'formKriterie') h.formKriterie(el.value);
+            else if (el.dataset.felt === 'vaegtSkabelon') { if (el.value !== 'egen') h.vaegtSkabelon(el.value); }
             else if (el.dataset.prioritet) h.kategori(el.dataset.prioritet, { prioritet: Number(el.value) || 0 });
             else if (el.dataset.form) h.form(el.dataset.form, { formValg: el.value });
             else if (el.dataset.cuptop) h.form(el.dataset.cuptop, { cupTop: Number(el.value) || 1 });
@@ -415,6 +448,8 @@ function bind(container, projekt, h) {
             else if (el.value) h.regler(d.regel, el.value);
             return;
         }
+        if (d.vaegt) { h.vaegt(d.vaegt, el.value); return; }
+        if (d.raekkeTal) { h.raekke(d.raekke, { [d.raekkeTal]: el.value === '' || Number(el.value) <= 0 ? null : Number(el.value) }); return; }
         if (d.raekkeTid) { h.raekke(d.raekke, { [d.raekkeTid]: el.value || null }); return; }
         if (d.raekkeBaner) { h.raekke(d.raekkeBaner, { reserveredeBaner: Math.max(0, Number(el.value) || 0) }); return; }
         if (d.skoledag) h.dag(d.skoledag, { foerSkoledag: el.checked });

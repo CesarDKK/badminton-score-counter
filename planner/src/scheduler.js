@@ -10,13 +10,14 @@ import { minutter } from './tp-reader.js';
 import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt, baneSlots } from './kapacitet.js';
 import { reglerFor } from './store.js';
 import { minKampMin, pauseForRaekke, tidsvindue } from './rules.js';
+import { scorePlan } from './kriterier.js';
 
 const AARGANG_ORDEN = ['U09', 'U11', 'U13', 'U15', 'U17', 'U19', 'SEN'];
 
 // Hvilken årsag der vises for en kamp, der ikke kunne placeres: den mest sigende vinder.
 const AARSAG_RANG = {
     'ingen ledig bane': 6, 'ingen ledig reserveret bane': 6,
-    'spiller mangler pause': 5, 'spiller er i en anden kamp i slottet': 5, 'spiller har max kampe den dag': 5,
+    'spiller mangler pause': 5, 'spiller over max haltid': 5, 'rækken må ikke spille flere dage': 3, 'spiller er i en anden kamp i slottet': 5, 'spiller har max kampe den dag': 5,
     'uden for tidsvinduet': 4, 'før rækkens tidligste start': 4, 'efter rækkens seneste slut': 4,
     'rækken spiller ikke den dag': 3, 'single og double samtidig i rækken': 3,
     'bygger på en senere kamp': 2, 'bygger på en kamp uden tid': 1,
@@ -85,6 +86,8 @@ export function lavForslag(projekt, valg = {}) {
     const historik = new Map();      // spillerId → [{ kamp, dag, min, kendt }]
     const kendteKampePrDag = new Map(); // `${spiller}|${dag}` → antal
     const slotBrug = new Map();      // `${dag}|${slot}|${pulje}` → { hele, halve, kampe: [] }
+    const swissSpaend = new Map();   // `${draw}|${dag}` → { foerste, sidste } — Swiss-rundernes spænd til max haltid
+    const raekkeDage = new Map();    // raekkeId → Set(dage rækken allerede spiller på) — til maxDage
     const slotKampe = new Map();     // `${dag}|${slot}` → [kampe] på tværs af puljer (til anti-samtidighed)
     const antiSamtidighed = projekt.opsaetning.antiSamtidighed !== false;
     const dagMap = new Map(dage.map((d) => [d.dato, d]));
@@ -116,6 +119,14 @@ export function lavForslag(projekt, valg = {}) {
         const sn = `${dag}|${slot}`;
         if (!slotKampe.has(sn)) slotKampe.set(sn, []);
         slotKampe.get(sn).push(k);
+        if (k.fase === 'swiss') {
+            const n = `${k.tpRef.draw}|${dag}`;
+            const x = swissSpaend.get(n) || { foerste: min, sidste: min };
+            x.foerste = Math.min(x.foerste, min); x.sidste = Math.max(x.sidste, min);
+            swissSpaend.set(n, x);
+        }
+        const rid = kat(k)?.raekke;
+        if (rid) { if (!raekkeDage.has(rid)) raekkeDage.set(rid, new Set()); raekkeDage.get(rid).add(dag); }
         const kendte = new Set(k.spillere);
         for (const s of k.muligeSpillere) {
             if (!historik.has(s)) historik.set(s, []);
@@ -146,6 +157,11 @@ export function lavForslag(projekt, valg = {}) {
         const r = raekke(k);
         if (!r) return 'ingen række';
         if (!lemp.dag && !r.dage.includes(dag.dato)) return 'rækken spiller ikke den dag';
+        // Max dage pr. række (hård regel som data): en ny dag må kun tages i brug, hvis grænsen ikke er nået
+        if (!lemp.dag && r.maxDage && !r.dispensationFlereDage) {
+            const brugte = raekkeDage.get(r.id);
+            if (brugte && !brugte.has(dag.dato) && brugte.size >= r.maxDage) return 'rækken må ikke spille flere dage';
+        }
         // Rækkens eget tidsrum (valgfrit, fx U9 kun 12–17)
         if (!lemp.tidsrum) {
             if (r.tidligst && slotStart < minutter(r.tidligst)) return 'før rækkens tidligste start';
@@ -153,6 +169,11 @@ export function lavForslag(projekt, valg = {}) {
         }
         const v = tidsvindue(r.aargang, dag, regler);
         if (!lemp.tidsvindue && (slotStart < v.fra || slotStart + slotMin > v.til)) return 'uden for tidsvinduet';
+        // Max haltid for Swiss Ladder: alle er med i hver runde, så rundernes samlede spænd tæller
+        if (!lemp.maxHaltid && k.fase === 'swiss' && r.maxHaltidMin) {
+            const x = swissSpaend.get(`${k.tpRef.draw}|${dag.dato}`);
+            if (x && Math.max(x.sidste, slotStart) - Math.min(x.foerste, slotStart) + slotMin > r.maxHaltidMin) return 'spiller over max haltid';
+        }
         // Anti-samtidighed: HS/HD, DS/DD og MD i samme række ikke i samme slot
         if (antiSamtidighed && !lemp.antiSamtidighed) {
             const egenKat = kat(k);
@@ -190,6 +211,18 @@ export function lavForslag(projekt, valg = {}) {
         const kendte = new Set(k.spillere);
         let mindsteGab = null;
         for (const s of k.muligeSpillere) {
+            if (!lemp.maxHaltid && kendte.has(s)) {
+                // Max haltid (hård regel som data, fx U9 240 min): første til sidste kamp samme dag
+                let graense = r.maxHaltidMin || null, foerste = slotStart, sidste = slotStart;
+                for (const x of historik.get(s) || []) {
+                    if (x.dag !== dag.dato || !x.kendt) continue;
+                    const g = raekke(x.kamp)?.maxHaltidMin;
+                    if (g && (!graense || g < graense)) graense = g;
+                    if (x.min < foerste) foerste = x.min;
+                    if (x.min > sidste) sidste = x.min;
+                }
+                if (graense && sidste - foerste + slotMin > graense) return 'spiller over max haltid';
+            }
             if (!lemp.maxKampe && kendte.has(s) && (kendteKampePrDag.get(`${s}|${dag.dato}`) || 0) >= maxPrDag) return 'spiller har max kampe den dag';
             const h = historik.get(s);
             if (!h) continue;
@@ -321,20 +354,14 @@ export function lavForslag(projekt, valg = {}) {
     // gradvist lempede regler; bruddet registreres, så Tjek viser det og
     // løsningsforslagene kan sige, hvad der skal ændres. Rækkefølgen af
     // lempelser: det mindst alvorlige først.
-    const LEMPELSER = [
-        { brud: 'anti-samtidighed', lemp: { antiSamtidighed: true } },
-        { brud: 'tidsrum', lemp: { antiSamtidighed: true, tidsrum: true } },
-        { brud: 'reserveret', lemp: { antiSamtidighed: true, tidsrum: true, reserveret: true } },
-        { brud: 'pause', lemp: { antiSamtidighed: true, tidsrum: true, reserveret: true, pause: true } },
-        { brud: 'tidsvindue', lemp: { antiSamtidighed: true, tidsrum: true, reserveret: true, pause: true, tidsvindue: true } },
-        { brud: 'max-kampe', lemp: { antiSamtidighed: true, tidsrum: true, reserveret: true, pause: true, tidsvindue: true, maxKampe: true } },
-        { brud: 'dag', lemp: { antiSamtidighed: true, tidsrum: true, reserveret: true, pause: true, tidsvindue: true, maxKampe: true, dag: true } },
-        { brud: 'kapacitet', lemp: { antiSamtidighed: true, tidsrum: true, reserveret: true, pause: true, tidsvindue: true, maxKampe: true, dag: true, kapacitet: true } },
-        // Sidste udvej: ignorér også rækkefølgen (fx en finale, hvis semifinalen ligger i dagens sidste slot)
-        { brud: 'raekkefoelge', lemp: { antiSamtidighed: true, tidsrum: true, reserveret: true, pause: true, tidsvindue: true, maxKampe: true, dag: true, kapacitet: true, afhaengighed: true } },
-        // Allersidste udvej: spilleren står i to kampe i samme slot (kun når dagene slet ikke rækker)
-        { brud: 'dobbeltbooket', lemp: { antiSamtidighed: true, tidsrum: true, reserveret: true, pause: true, tidsvindue: true, maxKampe: true, dag: true, kapacitet: true, afhaengighed: true, samtidig: true } },
+    // Hver lempelse inkluderer alle de foregående (kumulativt), mindst alvorlige først.
+    const LEMPELSE_ORDEN = [
+        ['anti-samtidighed', 'antiSamtidighed'], ['tidsrum', 'tidsrum'], ['reserveret', 'reserveret'], ['pause', 'pause'],
+        ['max-haltid', 'maxHaltid'], ['tidsvindue', 'tidsvindue'], ['max-kampe', 'maxKampe'], ['dag', 'dag'], ['kapacitet', 'kapacitet'],
+        ['raekkefoelge', 'afhaengighed'],  // sidste udvej: fx en finale, hvis semifinalen ligger i dagens sidste slot
+        ['dobbeltbooket', 'samtidig'],     // allersidste udvej: kun når dagene slet ikke rækker
     ];
+    const LEMPELSER = LEMPELSE_ORDEN.map(([brudNavn], i) => ({ brud: brudNavn, lemp: Object.fromEntries(LEMPELSE_ORDEN.slice(0, i + 1).map(([, n]) => [n, true])) }));
     const brud = [];
     const rest = ventende.filter((k) => !plan[k.id]);
     // Afhængigheder først (færrest forfædre først), så kæderne kan placeres i rækkefølge
@@ -449,11 +476,11 @@ export function lavAlternativer(projekt, valg = {}) {
         const noegle = JSON.stringify(Object.entries(f.plan).sort(([a], [b]) => a.localeCompare(b)));
         if (set.has(noegle)) continue;
         set.add(noegle);
-        ud.push({ navn: v.navn, beskrivelse: v.beskrivelse, plan: f.plan, ikkePlaceret: f.ikkePlaceret, brud: f.brud, statistik: f.statistik });
+        ud.push({ navn: v.navn, beskrivelse: v.beskrivelse, plan: f.plan, ikkePlaceret: f.ikkePlaceret, brud: f.brud, statistik: f.statistik, score: scorePlan({ ...projekt, plan: f.plan }).total });
     }
     const slutSum = (s) => Object.values(s.slutPrDag).reduce((sum, t) => sum + minutter(t), 0);
-    // Bedst først: færrest regelbrud, dernæst kortest haltid, dernæst tidligst slut
-    ud.sort((a, b) => (a.ikkePlaceret.length + a.brud.length) - (b.ikkePlaceret.length + b.brud.length) || a.statistik.haltidMin - b.statistik.haltidMin || slutSum(a.statistik) - slutSum(b.statistik));
+    // Bedst først: færrest regelbrud, dernæst lavest score (vægtede kriterier), dernæst tidligst slut
+    ud.sort((a, b) => (a.ikkePlaceret.length + a.brud.length) - (b.ikkePlaceret.length + b.brud.length) || a.score - b.score || slutSum(a.statistik) - slutSum(b.statistik));
     return ud;
 }
 
@@ -552,6 +579,8 @@ function forslagFraBrud(projekt, liste) {
             const klasse = r?.pauseKlasse || 'ABCD';
             const nu = pauseMin.faelles != null && klasse !== 'E' ? pauseMin.faelles : pauseMin[klasse];
             ud.push({ tekst: `${hvem} har kortere pause end de ${nu} min (ned til ${Math.max(0, gab)} min). Sæt pausen for ${klasse === 'ABCD' ? 'A–D' : klasse} til ${Math.max(0, gab)} min, forlæng dagen, eller lad rækken spille over flere dage.` });
+        } else if (brud === 'max-haltid') {
+            ud.push({ tekst: `${hvem} giver spillere længere haltid end rækkens ${r?.maxHaltidMin || '?'} min. Giv rækken flere (reserverede) baner, saml dens kampe i et kortere tidsrum, skær i antal kampe/runder, eller hæv grænsen i fane 1.` });
         } else if (brud === 'tidsvindue') {
             const s = senesteSlot(xs);
             ud.push({ tekst: `${hvem} ligger uden for ${r?.aargang || 'årgangens'} tidsvindue${s ? ` (senest kl. ${s})` : ''}. Kræver dispensation: ret tidsvinduet under "Reglementets grænser", eller flyt kampe til en anden dag.` });

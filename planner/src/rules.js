@@ -224,6 +224,47 @@ export function tjekPlan(projekt) {
         }
     }
 
+    // ── Max haltid pr. række (hård regel som data, fx U9: 240 min): første til sidste kamp samme dag ──
+    for (const [s, liste] of prSpiller) {
+        const prDag = new Map();
+        for (const x of liste) {
+            if (!x.kendt) continue;
+            const graense = raekke(x.k)?.maxHaltidMin;
+            if (!prDag.has(x.p.dag)) prDag.set(x.p.dag, { foerste: x, sidste: x, graense: null, kampe: [] });
+            const d = prDag.get(x.p.dag);
+            if (x.min < d.foerste.min) d.foerste = x;
+            if (x.min > d.sidste.min) d.sidste = x;
+            if (graense && (d.graense === null || graense < d.graense)) d.graense = graense;
+            d.kampe.push(x.k.id);
+        }
+        for (const [dag, d] of prDag) {
+            if (!d.graense) continue;
+            const haltid = d.sidste.min - d.foerste.min + slotMin;
+            if (haltid > d.graense) tilfoej({ type: 'max-haltid', alvor: 'fejl', tekst: `${spillerNavn(s)} er i hallen ${haltid} min ${datoKort(dag)} (kl. ${d.foerste.p.slot}–${klokke(d.sidste.min + slotMin)}); rækken tillader højst ${d.graense} min.`, kampe: d.kampe, dag, slot: d.sidste.p.slot });
+        }
+    }
+
+    // Swiss Ladder: alle spillere er med i hver runde, så haltiden er fra første rundes første
+    // kamp til sidste rundes sidste kamp samme dag — også selvom runde 2+ ikke har kendte spillere.
+    {
+        const prDrawDag = new Map();
+        for (const { k, p, min } of placerede) {
+            if (k.fase !== 'swiss') continue;
+            const graense = raekke(k)?.maxHaltidMin;
+            if (!graense) continue;
+            const n = `${k.tpRef.draw}|${p.dag}`;
+            if (!prDrawDag.has(n)) prDrawDag.set(n, { foerste: min, sidste: min, graense, kampe: [], kategori: k.kategori, dag: p.dag });
+            const d = prDrawDag.get(n);
+            d.foerste = Math.min(d.foerste, min);
+            d.sidste = Math.max(d.sidste, min);
+            d.kampe.push(k.id);
+        }
+        for (const d of prDrawDag.values()) {
+            const haltid = d.sidste - d.foerste + slotMin;
+            if (haltid > d.graense) tilfoej({ type: 'max-haltid', alvor: 'fejl', tekst: `${d.kategori}: Swiss Ladder-runderne strækker sig over ${haltid} min ${datoKort(d.dag)} (kl. ${klokke(d.foerste)}–${klokke(d.sidste + slotMin)}); rækken tillader højst ${d.graense} min i hallen.`, kampe: d.kampe, dag: d.dag, slot: klokke(d.sidste) });
+        }
+    }
+
     // ── Lang ventetid: en spiller venter længere end grænsen mellem egne (kendte) kampe ──
     const maxVent = projekt.opsaetning.maxVentetidMin ?? 90;
     if (maxVent > 0) {
@@ -267,8 +308,9 @@ export function tjekPlan(projekt) {
     for (const r of projekt.raekker) {
         const m = dagePrRaekke.get(r.id);
         if (!m) continue;
-        const kraeverDisp = ['B', 'C', 'D'].includes(r.raekke) || (r.aargang === 'U11' && r.raekke === 'A');
-        if (kraeverDisp && m.size > 1 && !r.dispensationFlereDage) {
+        // Max dage pr. række som data (r.maxDage); ældre projekter uden feltet bruger reglementets rækker
+        const maxDage = r.maxDage !== undefined ? r.maxDage : (['B', 'C', 'D'].includes(r.raekke) || (r.aargang === 'U11' && r.raekke === 'A') ? 1 : null);
+        if (maxDage && m.size > maxDage && !r.dispensationFlereDage) {
             tilfoej({ type: 'flere-dage', alvor: 'advarsel', noegle: `${r.id}:flere-dage`, tekst: `${r.id} spiller over ${m.size} dage (${[...m.keys()].sort().map(datoKort).join(', ')}). B-, C- og D-rækker og U11 A skal afvikles på én dag, medmindre der er givet dispensation.`, kampe: [...m.values()].flat().map((k) => k.id) });
         }
         for (const [dag, kampe] of m) {

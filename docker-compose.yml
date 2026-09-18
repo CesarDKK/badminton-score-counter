@@ -210,6 +210,32 @@ services:
       retries: 3
       start_period: 15s
 
+  # CP-SAT-løser til planner.badmintonapp.dk (Google OR-Tools). Får kun
+  # anonymiserede planlægningsproblemer (kamp-id'er og spillernumre) — ingen
+  # database, ingen volumes. nginx proxier /api/solve hertil.
+  planner-solver:
+    build:
+      context: .
+      dockerfile: Dockerfile.solver
+    container_name: planner-solver
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      PORT: 8000
+      SOLVER_MAX_SEKUNDER: 120
+      SOLVER_SAMTIDIGE: 2
+    # Løseren bruger alle kerner, mens den regner — hold den fra at sulte resten
+    cpus: 4
+    mem_limit: 2g
+    networks:
+      - badminton-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
   # Automatisk backup af ALLE databaser + uploadede billeder.
   # Tager en dump hver ${BACKUP_INTERVAL_HOURS}. time og beholder dem i
   # ${BACKUP_RETENTION_DAYS} dage. Backup'erne ligger i det navngivne volume

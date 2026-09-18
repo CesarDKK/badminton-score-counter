@@ -408,3 +408,7 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 .alternativ-tekst b { color: #fff; font-weight: 600; }
 .alternativ-tekst .er-roed { color: var(--red-soft); }
 .loesninger { margin: 0 0 12px 18px; font-size: 0.88em; color: var(--amber); line-height: 1.5; }
+
+/* ── Optimér (CP-SAT) ── */
+.optimer { display: inline-flex; gap: 4px; align-items: center; }
+.optimer select { padding: 8px 6px; }

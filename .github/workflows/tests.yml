@@ -44,3 +44,16 @@ jobs:
       - name: Planner — unit-tests
         working-directory: planner
         run: npm run test:unit
+
+      # CP-SAT-løseren (Python + OR-Tools) bag planner.badmintonapp.dk/api/solve
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Planner-løser — installer afhængigheder
+        working-directory: planner/solver
+        run: pip install --no-cache-dir -r requirements.txt
+
+      - name: Planner-løser — unit-tests
+        working-directory: planner/solver
+        run: python -m unittest -v test_solver.py

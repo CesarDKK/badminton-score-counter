@@ -36,6 +36,10 @@ tider på de kampe, TP har skabt.
 - **Alt sker i browseren.** TP-filen indeholder e-mails og fødselsdatoer på
   børn. Intet af det må forlade brugerens maskine. Tilstand gemmes i
   `localStorage` og som en projektfil (JSON), man kan hente og åbne igen.
+  Eneste undtagelse (2026-09-18): "Optimér" sender et anonymiseret
+  planlægningsproblem — kamp-id'er, spillere som løbenumre, tider og vægte —
+  til CP-SAT-løseren `planner-solver` bag `/api/solve`. Navne, klubber,
+  fødselsdatoer og e-mails sendes aldrig. Se `planner/README.md`.
 - **Til alle klubber.** Ingen klub-specifik logik; alt konfigureres pr. projekt.
 - **Deterministisk planlægger, ikke AI.** Forslaget laves af en algoritme i
   browseren og er altid gyldigt. Samme input giver samme plan.

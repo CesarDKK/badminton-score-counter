@@ -26,3 +26,7 @@ uploads_data/
 
 # Planner: lokale TP-testfiler (persondata — aldrig i repoet)
 planner/testdata/
+
+# Planner-solver: lokale benchmarkfiler (persondata) og Python-cache
+planner/solver/_bench/
+__pycache__/
