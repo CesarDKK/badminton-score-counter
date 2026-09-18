@@ -130,7 +130,7 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
             // 5 af 10 baner kl. 12–16:30); uden vindue gættes ud fra antal halve baner.
             reserveredeBaner: ekstra ? ekstra.baner : (harHalvBane && halve ? Math.ceil(halve / 2) : 0),
             // Hårde regler pr. række som data (rettes i fane 1; null = ingen grænse):
-            minKampeSamlet: r.aargang === 'U09', // U9: minimumskravet tælles samlet for single + double
+            minKampeSamlet: true, // minimumskravet tælles samlet for single, double og mix (alle årgange)
             maxHaltidMin: r.aargang === 'U09' ? 240 : null, // U9: højst 4 timer i hallen pr. spiller pr. dag
             maxDage: ['B', 'C', 'D'].includes(r.raekke) || (r.aargang === 'U11' && r.raekke === 'A') ? 1 : null, // reglementet: én dag uden dispensation
         };
@@ -161,6 +161,7 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
             formKriterie: 'faerrest', // 'faerrest' bane-slots eller 'flest' kampe pr. spiller (form.js)
             vaegte: { ...VAEGT_SKABELONER.standard.vaegte }, // bløde kriterier (kriterier.js) — tunes i fane 1
             vaegtSkabelon: 'standard',
+            minKampeSamletV2: true,
             regler: klon(STANDARD_REGLER),
             pauseMin: { ...STANDARD_PAUSE, faelles: harM && harABCD ? STANDARD_PAUSE.faelles : null },
             dage,
@@ -242,6 +243,11 @@ export function opdaterKategori(projekt, kategoriId, aendringer) {
 
 /** Sikrer at kun U9-kategorier har halv bane — bruges ved indlæsning af ældre projekter. */
 export function normaliserHalvBane(projekt) {
+    // Ældre projekter: "min. kampe tælles samlet" var kun slået til for U9. Det gælder alle årgange,
+    // så rækkerne opgraderes én gang (derefter er det brugerens eget valg pr. række).
+    if (projekt?.opsaetning && projekt.raekker && !projekt.opsaetning.minKampeSamletV2) {
+        projekt = { ...projekt, opsaetning: { ...projekt.opsaetning, minKampeSamletV2: true }, raekker: projekt.raekker.map((r) => ({ ...r, minKampeSamlet: true })) };
+    }
     if (!projekt?.kategorier?.some((k) => k.halvBane && k.aargang !== 'U09')) return projekt;
     return { ...projekt, kategorier: projekt.kategorier.map((k) => (k.aargang !== 'U09' && k.halvBane ? { ...k, halvBane: false } : k)) };
 }

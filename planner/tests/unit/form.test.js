@@ -194,6 +194,12 @@ describe('form: i projektet', () => {
 
 describe('form: Swiss Ladder-runder — valgt antal og nedskaering efter kapacitet', () => {
     const tilm = (n) => Array.from({ length: n }, (_, i) => ({ spillere: [`s${i + 1}`] }));
+    test('Swiss Ladder kan vælges med 1 runde (double/mix, når pladsen er knap)', () => {
+        const f = foreslaaForm(6, u11dHD, u11d, regler, { form: 'swiss', swissRunder: 1 });
+        assert.equal(f.runder, 1);
+        assert.equal(f.kampe, 3);
+        assert.match(formTekst(f), /1 runde á 3 kampe/);
+    });
     test('valgt antal runder bruges uanset krav', () => {
         const f3 = foreslaaForm(20, u9HS, u9d, regler, { form: 'swiss', swissRunder: 3 });
         assert.equal(f3.form, 'swiss');

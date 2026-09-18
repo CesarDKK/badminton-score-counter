@@ -94,7 +94,23 @@ describe('nedskæring: forslag der får kabalen til at gå op', () => {
         const hd = f.aendringer.find((x) => x.kategori === 'U11 D HD');
         assert.ok(hd && hd.til < hd.fra, 'doublen er skåret');
         const hs = f.aendringer.find((x) => x.kategori === 'U11 D HS');
-        if (hs) assert.equal(hd.til, MIN_RUNDER, 'singlen røres først, når doublen er i bund');
+        if (hs && hs.til < hs.fra) assert.equal(hd.til, 1, 'singlen røres først, når doublen er i bund (6 par = lige antal → gulv 1)');
+    });
+    test('"Skær kun i double og mix": singlerne røres ikke, doublen må gå ned til 1 runde, og kun rene doublespillere kommer under kravet', () => {
+        // 8 i single (16 kampe) + 4 doublepar (4 runder er ikke muligt med 4 par → 3 runder = 6 kampe). 4 af de 8 doublespillere spiller også single.
+        let p = nytProjekt(model([{ id: 'U13 D', aargang: 'U13', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', antal: 8 }, { kat: 'HD', type: 'double', antal: 4 }] }], ['2026-11-21']));
+        const single = p.tilmeldinger['U13 D HS'].map((t) => t.spillere[0]);
+        p = { ...p, tilmeldinger: { ...p.tilmeldinger, 'U13 D HD': p.tilmeldinger['U13 D HD'].map((t, i) => (i < 2 ? { ...t, spillere: [single[i * 2], single[i * 2 + 1]] } : t)) } };
+        p = opdaterDag(p, '2026-11-21', { baner: 2, start: '09:00', slut: '14:00' }); // 20 bane-slots til 16 + 6 kampe
+        for (const k of p.kategorier) p = saetForm(p, k.id, { formValg: 'swiss' });
+        assert.ok(lavForslag(p).brud.length > 0, 'udgangspunktet har regelbrud');
+        const f = nedskaeringsForslag(p, { strategi: 'kunDouble' });
+        assert.deepEqual(f.aendringer.filter((a) => a.til !== a.fra).map((a) => a.kategori), ['U13 D HD'], 'kun doublen er ændret');
+        assert.deepEqual(Object.keys(f.runder), ['U13 D HD']);
+        const hd = f.aendringer.find((a) => a.kategori === 'U13 D HD');
+        assert.ok(hd.til < hd.fra && hd.til >= 1);
+        if (hd.til < 2) assert.equal(hd.underKravEfter, 4, 'de 4 rene doublespillere er under kravet på 2 — de 4, der også spiller single, er ikke');
+        assert.equal(alleNedskaeringer(p).some((x) => x.strategi === 'kunDouble'), true);
     });
     test('"To dage": rækken får dispensation i stedet for færre kampe, når det er nok', () => {
         const p = lille0();
@@ -165,5 +181,35 @@ describe('scheduler: dagfordeling af én-dags-rækker', () => {
         p = laasKamp(flytKamp(p, k.id, '2026-11-22', '09:00'), k.id, true);
         const f = lavForslag(p);
         assert.deepEqual([...new Set(p.kampe.filter((x) => x.kategori === 'U11 C HS').map((x) => f.plan[x.id].dag))], ['2026-11-22']);
+    });
+});
+
+describe('nedskæring: gulv for double og berørte kategorier', () => {
+    test('ulige antal par skæres aldrig til 1 runde (oversidderen ville få 0 kampe)', () => {
+        let p = nytProjekt(model([{ id: 'U13 D', aargang: 'U13', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', antal: 8 }, { kat: 'HD', type: 'double', antal: 5 }] }], ['2026-11-21']));
+        p = opdaterDag(p, '2026-11-21', { baner: 2, start: '09:00', slut: '13:00' });
+        for (const k of p.kategorier) p = saetForm(p, k.id, { formValg: 'swiss' });
+        assert.ok(lavForslag(p).brud.length > 0);
+        const f = nedskaeringsForslag(p, { strategi: 'kunDouble' });
+        const hd = f.aendringer.find((a) => a.kategori === 'U13 D HD');
+        assert.ok(hd.til >= 2, `5 par: gulv 2, fik ${hd.til}`);
+    });
+    test('en single-kategori kommer med i tabellen, når spillerne kommer under minimum, fordi deres doubler er skåret', () => {
+        // U11: single-kravet er 4. 5 i single (ulige → 3 runder sikrer kun 2); fire af dem spiller også double og når kun 4 via doublens 3 runder.
+        let p = nytProjekt(model([{ id: 'U11 D', aargang: 'U11', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', antal: 5 }, { kat: 'HD', type: 'double', antal: 4 }] }], ['2026-11-21']));
+        const s = p.tilmeldinger['U11 D HS'].map((t) => t.spillere[0]);
+        p = { ...p, tilmeldinger: { ...p.tilmeldinger, 'U11 D HD': p.tilmeldinger['U11 D HD'].map((t, i) => (i < 2 ? { ...t, spillere: [s[i * 2], s[i * 2 + 1]] } : t)) } };
+        p = opdaterDag(p, '2026-11-21', { baner: 1, start: '09:00', slut: '13:00' }); // 8 bane-slots til 6 + 6 kampe → doublen må ned på 1 runde
+        p = saetForm(saetForm(p, 'U11 D HS', { formValg: 'swiss', swissRunder: 3 }), 'U11 D HD', { formValg: 'swiss', swissRunder: 3 });
+        assert.ok(lavForslag(p).brud.length > 0, 'udgangspunktet har regelbrud');
+        const f = nedskaeringsForslag(p, { strategi: 'kunDouble' });
+        const hs = f.aendringer.find((a) => a.kategori === 'U11 D HS');
+        assert.ok(f.aendringer.find((a) => a.kategori === 'U11 D HD').til < 3, 'doublen er skåret');
+        {
+            assert.ok(hs, 'singlen står i tabellen, selv om dens runder er uændrede');
+            assert.equal(hs.fra, hs.til);
+            assert.ok(hs.underKravEfter > hs.underKravFoer);
+            assert.equal(f.runder['U11 D HS'], undefined, 'og der sættes ikke noget rundetal på den');
+        }
     });
 });

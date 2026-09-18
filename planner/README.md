@@ -397,3 +397,21 @@ lange tidsvalg virkede ikke med ét langt kald. Nu:
 - Forbigående fejl i statuskald (502/429, netværk) tåles op til 5 gange i træk. Kender løseren
   ikke jobbet (genstartet), får brugeren en klar besked.
 - Det synkrone kald (uden `asynkron`) findes stadig til korte kørsler, tests og ældre klienter.
+
+### Minimum tælles samlet for alle årgange, og "Skær kun i double og mix" (2026-09-18)
+
+Jesper: minimum antal kampe tæller på tværs af single, double og mix uanset årgang, og næsten
+alle doublespillere stiller også op i single (Lyngby U9/U11 2025: 85 af 87).
+
+- `minKampeSamlet(raekke)` er nu `true` som standard for alle rækker (før kun U9). Gemte
+  projekter opgraderes én gang (`opsaetning.minKampeSamletV2`); derefter er fravalg pr. række
+  brugerens eget.
+- Ny strategi **Skær kun i double og mix**: singlerne røres ikke, double/mix må ned til 1 runde.
+  **Skån singlerne** bruger samme gulv, før den rører singlerne. Ved ulige antal par er gulvet
+  2 runder (med 1 runde ville oversidderen få 0 kampe). Swiss Ladder kan nu vælges med 1 runde.
+- Tabellen i forslaget viser også kategorier med uændrede runder, når flere af deres spillere
+  kommer under minimum, fordi deres kampe i andre kategorier er skåret.
+- Målt (Jespers dage, ingen reservation, alt som Swiss; 373 kampe, 32 regelbrud):
+  Skån singlerne 373 → 312 kampe, 33 under minimum · Jævnt 373 → 298, 37 under ·
+  Kun double/mix 373 → 328, 4 under, men 24 regelbrud tilbage (ikke nok alene her).
+  Med samlet tælling faldt "Jævnt" fra 73 til 37 spillere under minimum.

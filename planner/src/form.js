@@ -66,16 +66,16 @@ export function formMuligheder(n, { halvBane = false, cupTop = 1, minSwissRunder
     }
     if (n === 2) ud.push({ form: 'pulje', stoerrelse: 2, puljer: [2], kampe: 1, baneSlots: slots(1), minKampe: 1, maxKampe: 1, tekst: 'én kamp' });
     if (n >= 4) {
-        // Valgt antal runder (2–8) eller automatisk 4–6; færre end reglementets
+        // Valgt antal runder (1–8) eller automatisk 4–6; færre end reglementets
         // minimum markeres som nedskåret (bruges kun når kapaciteten ikke rækker).
         const runder = swissRunder ? [swissRunder] : [2, 3, ...SWISS_RUNDER, 7, 8];
         for (const r of runder) {
-            if (r > n - 1 || r < 2) continue;
+            if (r > n - 1 || r < 1) continue;
             const prRunde = Math.floor(n / 2);
             const kampe = prRunde * r;
             ud.push({ form: 'swiss', runder: r, kampe, baneSlots: slots(kampe), minKampe: n % 2 ? r - 1 : r, maxKampe: r,
                 nedskaaret: r < minSwissRunder, valgtRunder: !!swissRunder,
-                tekst: `Swiss Ladder, ${r} runder á ${prRunde} kampe${n % 2 ? ' (én oversidder pr. runde)' : ''}` });
+                tekst: `Swiss Ladder, ${r} ${r === 1 ? 'runde' : 'runder'} á ${prRunde} kampe${n % 2 ? ' (én oversidder pr. runde)' : ''}` });
         }
     }
     return ud;
@@ -307,9 +307,12 @@ export function effektivForm(kategori) {
     return f ? { form: f.form, runder: f.runder || 0, sikreSwiss: f.minKampe } : { form: kategori.form, runder: kategori.runder || 0, sikreSwiss: kategori.runder || 0 };
 }
 
-/** Tælles rækkens minimumskrav samlet på tværs af spillerens kategorier (single + double/mix)? U9: ja som standard. */
+/**
+ * Tælles rækkens minimumskrav samlet på tværs af spillerens kategorier (single, double og mix)?
+ * Ja som standard for alle årgange (Jesper 2026-09-18) — kan slås fra pr. række.
+ */
 export function minKampeSamlet(raekke) {
-    return raekke ? (raekke.minKampeSamlet ?? raekke.aargang === 'U09') : false;
+    return raekke ? (raekke.minKampeSamlet ?? true) : false;
 }
 
 /**
