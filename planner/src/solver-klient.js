@@ -189,13 +189,26 @@ export function planFraSvar(projekt, svar) {
     return plan;
 }
 
+/** Tilfældigt job-id, så en igangværende løsning kan stoppes med stopLoeser(). */
+export function nytJobId() {
+    const b = new Uint8Array(12);
+    globalThis.crypto.getRandomValues(b);
+    return [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+}
+
+/** Beder løseren stoppe nu og aflevere den bedste plan hidtil (svaret kommer i det oprindelige optimer()-kald). */
+export async function stopLoeser(job, url = '/api/solve/stop') {
+    const svar = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ job }) });
+    return svar.ok;
+}
+
 /**
  * Kalder løseren. Returnerer { status, plan, sekunder, maal, graense } eller kaster ved netværksfejl.
  * status: 'OPTIMAL' | 'FEASIBLE' | 'INFEASIBLE' | 'UNKNOWN'
  */
-export async function optimer(projekt, { sekunder = 30, hintPlan = null, url = '/api/solve', signal } = {}) {
+export async function optimer(projekt, { sekunder = 30, hintPlan = null, url = '/api/solve', signal, job = null } = {}) {
     const problem = bygProblem(projekt, hintPlan);
-    const svar = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ problem, sekunder }), signal });
+    const svar = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ problem, sekunder, ...(job ? { job } : {}) }), signal });
     if (!svar.ok) throw new Error(svar.status === 429 ? 'Løseren er optaget — prøv igen om lidt.' : `Løseren svarede ${svar.status}`);
     const data = await svar.json();
     return { ...data, plan: planFraSvar(projekt, data) };

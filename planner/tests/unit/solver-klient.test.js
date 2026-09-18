@@ -107,3 +107,28 @@ describe('solver-klient: bygProblem', () => {
         assert.deepEqual(plan['3:1'], { dag: '2026-11-22', slot: '13:30' });
     });
 });
+
+describe('solver-klient: job-id og stop', () => {
+    test('nytJobId er 24 hex-tegn og forskelligt hver gang (passer til løserens mønster)', async () => {
+        const { nytJobId } = await import('../../src/solver-klient.js');
+        const a = nytJobId(), b = nytJobId();
+        assert.match(a, /^[0-9a-f]{24}$/);
+        assert.notEqual(a, b);
+    });
+    test('optimer sender job-id med, og stopLoeser rammer /api/solve/stop', async () => {
+        const { optimer, stopLoeser } = await import('../../src/solver-klient.js');
+        const kald = [];
+        const gammel = globalThis.fetch;
+        globalThis.fetch = async (url, opt) => { kald.push({ url, body: JSON.parse(opt.body) }); return { ok: true, status: 200, json: async () => ({ status: 'FEASIBLE', stoppet: true, sekunder: 3, tider: { '1:1': 540 } }) }; };
+        try {
+            const svar = await optimer(projekt(), { sekunder: 240, job: 'abc12345abc12345' });
+            assert.equal(kald[0].url, '/api/solve');
+            assert.equal(kald[0].body.job, 'abc12345abc12345');
+            assert.equal(kald[0].body.sekunder, 240);
+            assert.equal(svar.stoppet, true);
+            assert.deepEqual(svar.plan['1:1'], { dag: '2026-11-21', slot: '09:00' });
+            assert.equal(await stopLoeser('abc12345abc12345'), true);
+            assert.deepEqual(kald[1], { url: '/api/solve/stop', body: { job: 'abc12345abc12345' } });
+        } finally { globalThis.fetch = gammel; }
+    });
+});

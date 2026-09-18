@@ -8,6 +8,7 @@ import { alvorForKamp } from '../rules.js';
 import { bedoemPlan, loesningsforslag } from '../scheduler.js';
 import { scorePlan } from '../kriterier.js';
 
+const OPTIMER_TIDER = [10, 30, 60, 120, 240, 360];
 const FASE_KORT = { pulje: 'P', cup: '', swiss: 'R' };
 const RUNDE_KORT = { 'Finale': 'Finale', 'Semifinale': 'Semi', 'Kvartfinale': 'Kvart', '1/8-finale': '1/8' };
 
@@ -200,9 +201,10 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
             <button class="knap" data-handling="forslag" title="Planlægger alle kampe forfra; låste kampe beholder deres tid">Lav forslag</button>
             <span class="optimer">
                 <select data-felt="optimerSek" aria-label="Tid til løseren" title="Hvor længe løseren må regne. Længere tid giver som regel en bedre plan.">
-                    ${[10, 30, 60, 120].map((n) => `<option value="${n}" ${(tilstand.optimerSek || 60) === n ? 'selected' : ''}>${n} sek</option>`).join('')}
+                    ${OPTIMER_TIDER.map((n) => `<option value="${n}" ${(tilstand.optimerSek || 60) === n ? 'selected' : ''}>${n < 120 ? `${n} sek` : `${n / 60} min`}</option>`).join('')}
                 </select>
-                <button class="knap" data-handling="optimer" ${tilstand.optimerer ? 'disabled' : ''} title="Sender et anonymiseret planlægningsproblem (kun kamp-id'er og spillernumre) til CP-SAT-løseren, som minimerer scoren under alle hårde regler. Låste kampe beholder deres tid.">${tilstand.optimerer ? 'Løseren regner …' : 'Optimér'}</button>
+                <button class="knap" data-handling="optimer" ${tilstand.optimerer ? 'disabled' : ''} title="Sender et anonymiseret planlægningsproblem (kun kamp-id'er og spillernumre) til CP-SAT-løseren, som minimerer scoren under alle hårde regler. Låste kampe beholder deres tid.">${tilstand.optimerer ? 'Løseren regner … <span data-optimer-ur></span>' : 'Optimér'}</button>
+                ${tilstand.optimerer ? `<button class="knap knap--sekundaer" data-handling="stopOptimer" ${tilstand.optimerStopper ? 'disabled' : ''} title="Løseren stopper nu og afleverer den bedste plan, den har fundet indtil nu.">${tilstand.optimerStopper ? 'Stopper …' : 'Stop og brug det bedste'}</button>` : ''}
             </span>
             <button class="knap knap--sekundaer" data-handling="alternativer" title="Laver op til 8 forskellige forslag med forskellige prioriteringer, som du kan bladre imellem">Alternativer</button>
         </div>
@@ -285,6 +287,7 @@ function bind(container, h) {
             else if (hd === 'laas-op-kategori') h.laasKategori(false);
             else if (hd === 'alternativer') h.lavAlternativer();
             else if (hd === 'optimer') h.optimer();
+            else if (hd === 'stopOptimer') h.stopOptimer();
             else if (hd === 'alt-forrige') h.bladreAlternativ(-1);
             else if (hd === 'alt-naeste') h.bladreAlternativ(1);
             else if (hd === 'alt-brug') h.brugAlternativ();
