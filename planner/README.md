@@ -268,6 +268,25 @@ kriterier med vægte som data, hårde regler er constraints og aldrig store stra
   133. Med U9's 240 min er 6 Swiss-runder plus doubler ikke muligt — 8 spillere
   i Jespers plan og 6 i forslaget er over 4 timer; med 360 min går det op.
 
+## Minimum antal kampe tælles samlet i U9 (2026-09-18)
+
+I U9 tæller en spillers single- og double/mix-kampe tilsammen mod minimumskravet.
+`raekker[].minKampeSamlet` (standard: til for U09, fra ellers; afkrydsning i fane 1).
+
+- `form.js`: `minKampeSamlet(raekke)`, `sikreKampe(kategori, kampe)` (Swiss = runder,
+  ellers kampe med kendte spillere) og `effektivForm(kategori)` (plannerens egen form,
+  når kategorien ikke følger TP).
+- Tjek (`min-kampe`): i samlede rækker lægges spillerens sikre kampe i andre kategorier
+  til, og advarslen nævner kun dem, der stadig er under kravet.
+- Valg af form: singlerne må vælge en mindre form, når egne + sikre double/mix-kampe når
+  kravet — den spiller, der har færrest andre kampe, bestemmer. Double/mix afgøres først
+  og for sig, singlerne bagefter, så de ikke skærer ned på hinanden. Nedskæring af
+  Swiss-runder ved for lidt plads tæller kun andre kampe med i samlede rækker.
+- Rettet fejl: Tjek brugte TP's form, også når planneren selv havde valgt Swiss Ladder,
+  og advarede derfor falsk om "kun sikret 1 kamp".
+- Lyngby U9 2025: 22 spillere, 8 spiller både single og double, 14 kun single — for
+  dem skal singlerne alene give 4 kampe, så drengesinglen ændres ikke af reglen.
+
 ## Løseren: "Optimér" med CP-SAT (2026-09-18)
 
 Den grådige planlægger er hurtig, men lægger én kamp ad gangen og kan ikke

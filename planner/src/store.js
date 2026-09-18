@@ -2,7 +2,7 @@
 // Persistens (localStorage, JSON-fil) ligger i gem/hent-hjælperne nederst og
 // kan bruges fra app.js; alt andet er testbart i Node.
 import { planFraTP, minutter } from './tp-reader.js';
-import { foreslaaForm, byggKampe, seedTilmeldinger } from './form.js';
+import { foreslaaForm, byggKampe, seedTilmeldinger, minKampeSamlet, sikreKampe } from './form.js';
 import { slotsForDag, puljeKapacitet } from './kapacitet.js';
 import { VAEGT_SKABELONER } from './kriterier.js';
 
@@ -130,6 +130,7 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
             // 5 af 10 baner kl. 12–16:30); uden vindue gættes ud fra antal halve baner.
             reserveredeBaner: ekstra ? ekstra.baner : (harHalvBane && halve ? Math.ceil(halve / 2) : 0),
             // Hårde regler pr. række som data (rettes i fane 1; null = ingen grænse):
+            minKampeSamlet: r.aargang === 'U09', // U9: minimumskravet tælles samlet for single + double
             maxHaltidMin: r.aargang === 'U09' ? 240 : null, // U9: højst 4 timer i hallen pr. spiller pr. dag
             maxDage: ['B', 'C', 'D'].includes(r.raekke) || (r.aargang === 'U11' && r.raekke === 'A') ? 1 : null, // reglementet: én dag uden dispensation
         };
@@ -373,22 +374,29 @@ export function genberegnKampe(projekt) {
     // får kapaciteten, der er tilbage, når alle andre kategorier har fyldt, samt
     // spillernes kampe i andre kategorier (double, mix), så runder kan skæres ned
     // uden at spillerne kommer under kravet.
+    //
+    // Rækker hvor kravet tælles samlet (U9): singlerne får også spillernes sikre kampe i
+    // double/mix med, så formen kan vælges mindre. Double/mix afgøres først og for sig,
+    // og singlerne bagefter ud fra de endelige doubler — så de to ikke skærer ned på hinanden.
+    const aktuel = new Map(foerste);
+    const autoSwiss = (k) => ['auto', 'swiss'].includes(k.formValg || 'tp') && !(k.swissRunder > 0);
+    const samletSingle = (k) => (k.formValg || 'tp') !== 'tp' && k.type === 'single' && minKampeSamlet(raekkeMap.get(k.raekke));
+    const andetPas = projekt.kategorier.filter((k) => autoSwiss(k) || samletSingle(k)).sort((a, b) => (a.type === 'single') - (b.type === 'single'));
+    for (const k of andetPas) {
+        const andreKampe = new Map();
+        let andresBaneSlots = 0;
+        for (const [id, r2] of aktuel) {
+            if (id === k.id) continue;
+            const k2 = projekt.kategorier.find((x) => x.id === id);
+            for (const [s, n] of sikreKampe({ ...k2, formForslag: r2.form }, r2.kampe)) andreKampe.set(s, (andreKampe.get(s) || 0) + n);
+            if (delerKapacitet(projekt, k, k2)) andresBaneSlots += r2.kampe.reduce((sum) => sum + (k2.halvBane ? 0.5 : 1), 0);
+        }
+        const ledig = Math.max(0, kapacitetTilKategori(projekt, k) - andresBaneSlots);
+        aktuel.set(k.id, byg(k, { ...(autoSwiss(k) ? { ledigeBaneSlots: ledig } : {}), andreKampe, samlet: minKampeSamlet(raekkeMap.get(k.raekke)) }));
+    }
     const kampe = [];
     const kategorier = projekt.kategorier.map((k) => {
-        const valg = k.formValg || 'tp';
-        let res = foerste.get(k.id);
-        if ((valg === 'auto' || valg === 'swiss') && !(k.swissRunder > 0)) {
-            const andreKampe = new Map();
-            let andresBaneSlots = 0;
-            for (const [id, r2] of foerste) {
-                if (id === k.id) continue;
-                const k2 = projekt.kategorier.find((x) => x.id === id);
-                for (const m of r2.kampe) for (const s of m.spillere) andreKampe.set(s, (andreKampe.get(s) || 0) + 1);
-                if (delerKapacitet(projekt, k, k2)) andresBaneSlots += r2.kampe.reduce((sum, m) => sum + (k2.halvBane ? 0.5 : 1), 0);
-            }
-            const ledig = Math.max(0, kapacitetTilKategori(projekt, k) - andresBaneSlots);
-            res = byg(k, { ledigeBaneSlots: ledig, andreKampe });
-        }
+        const res = aktuel.get(k.id);
         kampe.push(...res.kampe);
         return { ...k, formForslag: res.form };
     });

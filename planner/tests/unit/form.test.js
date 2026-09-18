@@ -210,7 +210,9 @@ describe('form: Swiss Ladder-runder — valgt antal og nedskaering efter kapacit
         assert.equal(rigeligt.nedskaaret, false);
         // plads til 25 bane-slots = 50 halve kampe = 5 runder á 10; men kun 12 bane-slots → 2 runder
         const andre = new Map(Array.from({ length: 20 }, (_, i) => [`s${i + 1}`, 2])); // alle har 2 doublekampe
-        const lidt = foreslaaForm(20, u9HS, u9d, regler, { form: 'swiss', ledigeBaneSlots: 12, deltagere: tilm(20), andreKampe: andre });
+        const lidt = foreslaaForm(20, u9HS, u9d, regler, { form: 'swiss', ledigeBaneSlots: 12, deltagere: tilm(20), andreKampe: andre, samlet: true });
+        const ikkeSamlet = foreslaaForm(20, u9HS, u9d, regler, { form: 'swiss', ledigeBaneSlots: 12, deltagere: tilm(20), andreKampe: andre, samlet: false });
+        assert.equal(ikkeSamlet.opfylderKrav, false, 'tæller rækken ikke samlet, hjælper doublerne ikke');
         assert.equal(lidt.form, 'swiss');
         assert.equal(lidt.runder, 2, '2 runder á 10 kampe = 10 bane-slots (halve baner)');
         assert.equal(lidt.kravInklAndre, true, '2 + 2 doublekampe = 4');
