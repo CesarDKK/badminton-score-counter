@@ -179,3 +179,89 @@ class StopTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AsynkronTest(unittest.TestCase):
+    """Start job → spørg til status → hent svaret. Ingen forbindelse holdes åben imens."""
+
+    def setUp(self):
+        import json
+        import urllib.request
+        from http.server import ThreadingHTTPServer
+        import solver
+        self.solver = solver
+        self.gammel_forladt = solver.FORLADT_SEKUNDER
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), solver.Handler)
+        port = self.server.server_address[1]
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+        def kald(sti, data=None):
+            req = urllib.request.Request(f"http://127.0.0.1:{port}{sti}", data=None if data is None else json.dumps(data).encode(), headers={"Content-Type": "application/json"})
+            try:
+                with urllib.request.urlopen(req, timeout=30) as svar:
+                    return svar.status, json.loads(svar.read())
+            except urllib.error.HTTPError as e:
+                return e.code, json.loads(e.read())
+        self.kald = kald
+
+    def tearDown(self):
+        self.solver.FORLADT_SEKUNDER = self.gammel_forladt
+        self.server.shutdown()
+        self.server.server_close()
+
+    def vent(self, job, frist=30):
+        slut = time.time() + frist
+        while time.time() < slut:
+            kode, svar = self.kald(f"/status?job={job}")
+            if svar.get("status") != "REGNER":
+                return kode, svar
+            time.sleep(0.3)
+        self.fail("jobbet blev ikke færdigt")
+
+    def test_start_status_og_svar(self):
+        t0 = time.time()
+        kode, svar = self.kald("/solve", {"problem": problem([kamp(i) for i in range(5)]), "sekunder": 5, "asynkron": True, "job": "asynk-job-0001"})
+        self.assertEqual((kode, svar["status"], svar["job"]), (202, "REGNER", "asynk-job-0001"))
+        self.assertLess(time.time() - t0, 2, "svaret kommer med det samme")
+        kode, svar = self.vent("asynk-job-0001")
+        self.assertEqual((kode, svar["status"]), (200, "OPTIMAL"))
+        self.assertEqual(len(svar["tider"]), 5)
+        self.assertEqual(self.kald("/status?job=findes-ikke-123")[0], 404)
+        self.assertEqual(self.kald("/status?job=asynk-job-0001")[1]["status"], "OPTIMAL", "svaret kan hentes igen")
+
+    def test_uden_job_id_vaelger_loeseren_et(self):
+        kode, svar = self.kald("/solve", {"problem": problem([kamp(0)]), "sekunder": 5, "asynkron": True})
+        self.assertEqual(kode, 202)
+        self.assertRegex(svar["job"], r"^[0-9a-f]{24}$")
+        self.assertEqual(self.vent(svar["job"])[1]["status"], "OPTIMAL")
+
+    def test_ugyldigt_problem_giver_400_i_status(self):
+        kode, svar = self.kald("/solve", {"problem": {"slotMin": 30}, "sekunder": 5, "asynkron": True, "job": "asynk-job-0002"})
+        self.assertEqual(kode, 202)
+        kode, svar = self.vent("asynk-job-0002")
+        self.assertEqual(kode, 400)
+        self.assertIn("kampe", svar["fejl"])
+
+    def test_stop_og_optaget(self):
+        kode, _ = self.kald("/solve", {"problem": stort_problem(), "sekunder": 60, "asynkron": True, "job": "asynk-job-0003"})
+        self.assertEqual(kode, 202)
+        time.sleep(2)
+        self.assertEqual(self.kald("/status?job=asynk-job-0003")[1]["status"], "REGNER")
+        self.assertEqual(self.kald("/solve", {"problem": problem([kamp(0)]), "sekunder": 5, "asynkron": True})[0], 429, "én ad gangen")
+        t0 = time.time()
+        self.assertEqual(self.kald("/stop", {"job": "asynk-job-0003"})[0], 200)
+        kode, svar = self.vent("asynk-job-0003")
+        self.assertLess(time.time() - t0, 10)
+        self.assertEqual(kode, 200)
+        self.assertTrue(svar["stoppet"])
+        self.assertEqual(len(svar["tider"]), 120)
+        self.assertEqual(self.kald("/stop", {"job": "asynk-job-0003"})[0], 404, "et færdigt job kan ikke stoppes")
+
+    def test_forladt_job_stopper_selv(self):
+        self.solver.FORLADT_SEKUNDER = 2
+        self.assertEqual(self.kald("/solve", {"problem": stort_problem(), "sekunder": 60, "asynkron": True, "job": "asynk-job-0004"})[0], 202)
+        time.sleep(6)  # ingen statuskald = fanen er lukket
+        kode, svar = self.kald("/status?job=asynk-job-0004")
+        self.assertEqual(kode, 200)
+        self.assertNotEqual(svar["status"], "REGNER", "løseren stoppede af sig selv")
+        self.assertEqual(self.kald("/solve", {"problem": problem([kamp(0)]), "sekunder": 5})[0], 200, "og er fri igen")

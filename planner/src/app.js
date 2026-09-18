@@ -4,7 +4,7 @@ import { laesTP, tabellerFraMDB } from './tp-reader.js';
 import * as store from './store.js';
 import { tjekPlan } from './rules.js';
 import { lavForslag, lavAlternativer, bedoemPlan } from './scheduler.js';
-import { optimer, stopLoeser, nytJobId } from './solver-klient.js';
+import { optimer, stopLoeser, stopVedLukning, nytJobId } from './solver-klient.js';
 import { scorePlan } from './kriterier.js';
 import { alleNedskaeringer, anvendNedskaering, kapacitetsRegnskab, swissKandidater } from './nedskaering.js';
 import { renderOpsaetning } from './ui/opsaetning.js';
@@ -393,5 +393,8 @@ const tjekHandlers = {
     },
     kvitter(noegle, vaerdi) { saet(store.kvitter(projekt, noegle, vaerdi)); },
 };
+
+// Lukkes siden, mens løseren regner, får den besked med det samme (ellers opdager den det selv efter ca. 30 s)
+window.addEventListener('pagehide', () => { if (tilstand.optimerer && tilstand.optimerJob) stopVedLukning(tilstand.optimerJob); });
 
 render();

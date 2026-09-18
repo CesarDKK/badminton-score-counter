@@ -383,3 +383,17 @@ Tre årsager, fundet ved måling på Lyngby U9/U11 2025:
   regelbrud. Kampe fra TP's lodtrækning kan planneren ikke skære i — det siges tydeligt.
 - Med Jespers dage: "Skån singlerne" 377 → 339 kampe (37 spillere under minimum),
   "Jævnt fordelt" 377 → 329 (73 under). Begge 0 regelbrud og 0 fejl i Tjek.
+
+### Asynkrone job: lange kørsler bag Cloudflare (2026-09-18)
+
+Målt i prod: et kald, der varer over ca. 100–125 s, afbrydes af Cloudflare (fejl 524), så de
+lange tidsvalg virkede ikke med ét langt kald. Nu:
+
+- `POST /api/solve { problem, sekunder, job, asynkron: true }` svarer straks `202 { status: 'REGNER', job }`.
+- `GET /api/solve/status?job=…` hvert 3. sekund: `{ status: 'REGNER', sekunder }`, og til sidst
+  det færdige svar (gemmes i 10 min). Egen rate limit-zone (`planner_status`, 60/min).
+- `POST /api/solve/stop { job }` som før. Lukkes siden, sender den selv et stop (`sendBeacon`);
+  og hører løseren ikke fra klienten i 30 s (`SOLVER_FORLADT_SEKUNDER`), stopper den af sig selv.
+- Forbigående fejl i statuskald (502/429, netværk) tåles op til 5 gange i træk. Kender løseren
+  ikke jobbet (genstartet), får brugeren en klar besked.
+- Det synkrone kald (uden `asynkron`) findes stadig til korte kørsler, tests og ældre klienter.
