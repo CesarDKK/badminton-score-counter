@@ -198,6 +198,12 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
             <button class="knap knap--sekundaer" data-handling="ryd-dag">Ryd dag</button>
             <button class="knap knap--sekundaer" data-handling="forslag-dag" title="Planlægger kun denne dag om; andre dage og låste kampe røres ikke">Forslag for dagen</button>
             <button class="knap" data-handling="forslag" title="Planlægger alle kampe forfra; låste kampe beholder deres tid">Lav forslag</button>
+            <span class="optimer">
+                <select data-felt="optimerSek" aria-label="Tid til løseren" title="Hvor længe løseren må regne. Længere tid giver som regel en bedre plan.">
+                    ${[10, 30, 60, 120].map((n) => `<option value="${n}" ${(tilstand.optimerSek || 30) === n ? 'selected' : ''}>${n} sek</option>`).join('')}
+                </select>
+                <button class="knap" data-handling="optimer" ${tilstand.optimerer ? 'disabled' : ''} title="Sender et anonymiseret planlægningsproblem (kun kamp-id'er og spillernumre) til CP-SAT-løseren, som minimerer scoren under alle hårde regler. Låste kampe beholder deres tid.">${tilstand.optimerer ? 'Løseren regner …' : 'Optimér'}</button>
+            </span>
             <button class="knap knap--sekundaer" data-handling="alternativer" title="Laver op til 8 forskellige forslag med forskellige prioriteringer, som du kan bladre imellem">Alternativer</button>
         </div>
     </div>
@@ -278,6 +284,7 @@ function bind(container, h) {
             else if (hd === 'laas-kategori') h.laasKategori(true);
             else if (hd === 'laas-op-kategori') h.laasKategori(false);
             else if (hd === 'alternativer') h.lavAlternativer();
+            else if (hd === 'optimer') h.optimer();
             else if (hd === 'alt-forrige') h.bladreAlternativ(-1);
             else if (hd === 'alt-naeste') h.bladreAlternativ(1);
             else if (hd === 'alt-brug') h.brugAlternativ();
@@ -295,6 +302,7 @@ function bind(container, h) {
     });
     container.addEventListener('change', (e) => {
         if (e.target.dataset.felt === 'filter') h.filter(e.target.value);
+        else if (e.target.dataset.felt === 'optimerSek') h.optimerSek(Number(e.target.value) || 30);
     });
     container.addEventListener('input', (e) => {
         if (e.target.dataset.felt === 'soeg') h.soeg(e.target.value);

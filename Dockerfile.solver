@@ -1,0 +1,16 @@
+# planner-solver: CP-SAT-løser (Google OR-Tools) til planner.badmintonapp.dk.
+# Modtager anonymiserede planlægningsproblemer på POST /solve — ingen persondata, ingen database.
+FROM python:3.12-slim
+
+WORKDIR /app
+COPY planner/solver/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY planner/solver/solver.py ./
+
+# Kør som almindelig bruger
+RUN useradd --system --no-create-home solver
+USER solver
+
+ENV PORT=8000
+EXPOSE 8000
+CMD ["python", "solver.py"]

@@ -86,6 +86,7 @@ export function lavForslag(projekt, valg = {}) {
     const historik = new Map();      // spillerId → [{ kamp, dag, min, kendt }]
     const kendteKampePrDag = new Map(); // `${spiller}|${dag}` → antal
     const slotBrug = new Map();      // `${dag}|${slot}|${pulje}` → { hele, halve, kampe: [] }
+    const swissSpaend = new Map();   // `${draw}|${dag}` → { foerste, sidste } — Swiss-rundernes spænd til max haltid
     const raekkeDage = new Map();    // raekkeId → Set(dage rækken allerede spiller på) — til maxDage
     const slotKampe = new Map();     // `${dag}|${slot}` → [kampe] på tværs af puljer (til anti-samtidighed)
     const antiSamtidighed = projekt.opsaetning.antiSamtidighed !== false;
@@ -118,6 +119,12 @@ export function lavForslag(projekt, valg = {}) {
         const sn = `${dag}|${slot}`;
         if (!slotKampe.has(sn)) slotKampe.set(sn, []);
         slotKampe.get(sn).push(k);
+        if (k.fase === 'swiss') {
+            const n = `${k.tpRef.draw}|${dag}`;
+            const x = swissSpaend.get(n) || { foerste: min, sidste: min };
+            x.foerste = Math.min(x.foerste, min); x.sidste = Math.max(x.sidste, min);
+            swissSpaend.set(n, x);
+        }
         const rid = kat(k)?.raekke;
         if (rid) { if (!raekkeDage.has(rid)) raekkeDage.set(rid, new Set()); raekkeDage.get(rid).add(dag); }
         const kendte = new Set(k.spillere);
@@ -162,6 +169,11 @@ export function lavForslag(projekt, valg = {}) {
         }
         const v = tidsvindue(r.aargang, dag, regler);
         if (!lemp.tidsvindue && (slotStart < v.fra || slotStart + slotMin > v.til)) return 'uden for tidsvinduet';
+        // Max haltid for Swiss Ladder: alle er med i hver runde, så rundernes samlede spænd tæller
+        if (!lemp.maxHaltid && k.fase === 'swiss' && r.maxHaltidMin) {
+            const x = swissSpaend.get(`${k.tpRef.draw}|${dag.dato}`);
+            if (x && Math.max(x.sidste, slotStart) - Math.min(x.foerste, slotStart) + slotMin > r.maxHaltidMin) return 'spiller over max haltid';
+        }
         // Anti-samtidighed: HS/HD, DS/DD og MD i samme række ikke i samme slot
         if (antiSamtidighed && !lemp.antiSamtidighed) {
             const egenKat = kat(k);

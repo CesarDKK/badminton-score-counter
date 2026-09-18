@@ -3,7 +3,9 @@
 import { laesTP, tabellerFraMDB } from './tp-reader.js';
 import * as store from './store.js';
 import { tjekPlan } from './rules.js';
-import { lavForslag, lavAlternativer } from './scheduler.js';
+import { lavForslag, lavAlternativer, bedoemPlan } from './scheduler.js';
+import { optimer } from './solver-klient.js';
+import { scorePlan } from './kriterier.js';
 import { renderOpsaetning } from './ui/opsaetning.js';
 import { renderPlan } from './ui/plan.js';
 import { renderTjek } from './ui/tjek.js';
@@ -246,6 +248,44 @@ const planHandlers = {
         saet(p);
     },
     laasKategori(vaerdi) { if (tilstand.filter) saet(store.laasKategori(projekt, tilstand.filter, vaerdi)); },
+
+    // Optimér: CP-SAT-løseren (planner-solver) minimerer scoren under alle hårde regler.
+    // Den grådige plan bruges som startløsning og vises ved siden af til sammenligning.
+    optimerSek(n) { tilstand.optimerSek = n; },
+    async optimer() {
+        if (tilstand.optimerer) return;
+        const antalLaast = (projekt.laast || []).length;
+        if (Object.keys(projekt.plan).length > antalLaast && !window.confirm(`Optimér alle kampe? Kun låste kampe (${antalLaast}) beholder deres tid. Du kan fortryde bagefter.`)) return;
+        const sekunder = tilstand.optimerSek || 30;
+        const foer = { ...projekt.plan };
+        const graadig = lavForslag(projekt);
+        tilstand.optimerer = true;
+        tilstand.forslag = { tekst: `Løseren regner i op til ${sekunder} sekunder …`, ikkePlaceret: [] };
+        render();
+        try {
+            const svar = await optimer(projekt, { sekunder, hintPlan: graadig.brud.length ? null : graadig.plan });
+            tilstand.optimerer = false;
+            const graadigAlt = { navn: 'Grådig planlægger', beskrivelse: 'Det hurtige forslag fra "Lav forslag" — til sammenligning.', plan: graadig.plan, ikkePlaceret: graadig.ikkePlaceret, brud: graadig.brud, statistik: graadig.statistik, score: scorePlan({ ...projekt, plan: graadig.plan }).total };
+            if (svar.status === 'OPTIMAL' || svar.status === 'FEASIBLE') {
+                const p2 = { ...projekt, plan: svar.plan };
+                const opt = { navn: svar.status === 'OPTIMAL' ? 'Optimeret (bevist bedst mulig)' : 'Optimeret (CP-SAT)', beskrivelse: `Løseren minimerede scoren under alle hårde regler på ${svar.sekunder} s.`, plan: svar.plan, ikkePlaceret: [], brud: [], statistik: bedoemPlan(p2), score: scorePlan(p2).total };
+                const liste = [opt, graadigAlt].sort((a, b) => (a.brud.length - b.brud.length) || (a.score - b.score));
+                tilstand.forslag = { tekst: `Løseren fandt en plan med score ${opt.score} på ${svar.sekunder} s (grådig: ${graadigAlt.score}). Bladr med ◀ ▶ og vælg "Brug dette".`, ikkePlaceret: [] };
+                tilstand.alternativer = { liste, index: 0, foer };
+                planHandlers.visAlternativ();
+            } else if (svar.status === 'INFEASIBLE') {
+                tilstand.forslag = { tekst: `Løseren har bevist, at der ikke findes en plan, der overholder alle hårde regler med de nuværende dage, baner og tidsrum. Her er den grådige plan med de nødvendige regelbrud og forslag til ændringer:`, ikkePlaceret: graadigAlt.brud.map((x) => ({ ...x, kategori: projekt.kampe.find((k) => k.id === x.id)?.kategori || '', navn: projekt.kampe.find((k) => k.id === x.id)?.navn || x.id })) };
+                saet({ ...store.anvendForslag(projekt, graadig), sidsteForslag: { ikkePlaceret: graadigAlt.brud } });
+            } else {
+                tilstand.forslag = { tekst: `${svar.besked || 'Løseren fandt ingen plan inden for tiden.'} Prøv med længere tid, eller brug "Lav forslag".`, ikkePlaceret: [] };
+                render();
+            }
+        } catch (err) {
+            tilstand.optimerer = false;
+            tilstand.forslag = { tekst: `Løseren kunne ikke nås (${err.message || err}). "Lav forslag" og "Alternativer" virker uden den.`, ikkePlaceret: [] };
+            render();
+        }
+    },
 
     // Alternative forslag: bladr mellem dem (planen skiftes med det samme, så
     // gitteret viser forslaget), "Brug dette" beholder det, "Fortryd" går tilbage.

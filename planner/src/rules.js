@@ -244,6 +244,27 @@ export function tjekPlan(projekt) {
         }
     }
 
+    // Swiss Ladder: alle spillere er med i hver runde, så haltiden er fra første rundes første
+    // kamp til sidste rundes sidste kamp samme dag — også selvom runde 2+ ikke har kendte spillere.
+    {
+        const prDrawDag = new Map();
+        for (const { k, p, min } of placerede) {
+            if (k.fase !== 'swiss') continue;
+            const graense = raekke(k)?.maxHaltidMin;
+            if (!graense) continue;
+            const n = `${k.tpRef.draw}|${p.dag}`;
+            if (!prDrawDag.has(n)) prDrawDag.set(n, { foerste: min, sidste: min, graense, kampe: [], kategori: k.kategori, dag: p.dag });
+            const d = prDrawDag.get(n);
+            d.foerste = Math.min(d.foerste, min);
+            d.sidste = Math.max(d.sidste, min);
+            d.kampe.push(k.id);
+        }
+        for (const d of prDrawDag.values()) {
+            const haltid = d.sidste - d.foerste + slotMin;
+            if (haltid > d.graense) tilfoej({ type: 'max-haltid', alvor: 'fejl', tekst: `${d.kategori}: Swiss Ladder-runderne strækker sig over ${haltid} min ${datoKort(d.dag)} (kl. ${klokke(d.foerste)}–${klokke(d.sidste + slotMin)}); rækken tillader højst ${d.graense} min i hallen.`, kampe: d.kampe, dag: d.dag, slot: klokke(d.sidste) });
+        }
+    }
+
     // ── Lang ventetid: en spiller venter længere end grænsen mellem egne (kendte) kampe ──
     const maxVent = projekt.opsaetning.maxVentetidMin ?? 90;
     if (maxVent > 0) {
