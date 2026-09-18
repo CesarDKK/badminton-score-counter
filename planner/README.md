@@ -245,3 +245,25 @@ bane-slots i samme pulje (`delerKapacitet`). Rækker den ikke, skæres runderne
 ned til det største antal, der passer, hvor spillerne stadig når kravet, når
 deres kampe i andre kategorier (double, mix) tælles med
 (`form.kravInklAndre`); ellers markeres forslaget som nedskåret og under kravet.
+
+## Bløde kriterier med vægte, og hårde rækkeregler som data (2026-09-18)
+
+Efter input fra udvikleren af Badminton Planner: bløde ønsker er små isolerede
+kriterier med vægte som data, hårde regler er constraints og aldrig store straffe.
+
+- `src/kriterier.js`: `KRITERIER` (ventetid, lange huller, sen sluttid, tomme
+  baner midt på dagen, puljerunder ude af takt, finaler spredt), navngivne
+  `VAEGT_SKABELONER` og `scorePlan(projekt)` → vægtet sum, lavere er bedre.
+  Vægtene ligger i `opsaetning.vaegte` og rettes i fane 1 ("Bløde ønsker og
+  vægte"). Scoren vises i Plan-fanen (hover viser bidragene), rangerer
+  alternativerne efter antal regelbrud, og er målet for løseren.
+  Et nyt ønske = ét nyt kriterie + en vægt; ingen ændring i planlæggeren.
+- Hårde regler pr. række som data: `raekker[].maxHaltidMin` (U9: 240 min fra en
+  spillers første til sidste kamp samme dag) og `raekker[].maxDage`
+  (reglementets én-dags-rækker: 1). Begge rettes i fane 1, overholdes af
+  forslaget, og brud meldes som fejl (`max-haltid`) hhv. advarsel med
+  dispensation (`flere-dage`). Kan de ikke overholdes, placeres kampen
+  alligevel i fase 2 med regelbruddet `max-haltid`.
+- Fund på Lyngby U9/U11 2025: Jespers egen plan scorer 457,6 mod forslagets
+  133. Med U9's 240 min er 6 Swiss-runder plus doubler ikke muligt — 8 spillere
+  i Jespers plan og 6 i forslaget er over 4 timer; med 360 min går det op.

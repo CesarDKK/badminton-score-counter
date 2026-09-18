@@ -4,6 +4,7 @@
 import { planFraTP, minutter } from './tp-reader.js';
 import { foreslaaForm, byggKampe, seedTilmeldinger } from './form.js';
 import { slotsForDag, puljeKapacitet } from './kapacitet.js';
+import { VAEGT_SKABELONER } from './kriterier.js';
 
 export const PROJEKT_VERSION = 1;
 export const GEM_NOEGLE = 'planner.projekt.v1';
@@ -128,6 +129,9 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
             // TP's ekstra baner i vinduet er de baner, der deles i halve (Lyngby 2025:
             // 5 af 10 baner kl. 12–16:30); uden vindue gættes ud fra antal halve baner.
             reserveredeBaner: ekstra ? ekstra.baner : (harHalvBane && halve ? Math.ceil(halve / 2) : 0),
+            // Hårde regler pr. række som data (rettes i fane 1; null = ingen grænse):
+            maxHaltidMin: r.aargang === 'U09' ? 240 : null, // U9: højst 4 timer i hallen pr. spiller pr. dag
+            maxDage: ['B', 'C', 'D'].includes(r.raekke) || (r.aargang === 'U11' && r.raekke === 'A') ? 1 : null, // reglementet: én dag uden dispensation
         };
     });
     const kategorier = model.kategorier.map((k) => ({
@@ -154,6 +158,8 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
             maxVentetidMin: 90,      // Tjek advarer, når en spiller venter længere end dette mellem egne kampe
             puljerunderSynkront: false, // alle puljers runde 1 før runde 2 … (blødt mål i forslaget)
             formKriterie: 'faerrest', // 'faerrest' bane-slots eller 'flest' kampe pr. spiller (form.js)
+            vaegte: { ...VAEGT_SKABELONER.standard.vaegte }, // bløde kriterier (kriterier.js) — tunes i fane 1
+            vaegtSkabelon: 'standard',
             regler: klon(STANDARD_REGLER),
             pauseMin: { ...STANDARD_PAUSE, faelles: harM && harABCD ? STANDARD_PAUSE.faelles : null },
             dage,
@@ -445,4 +451,19 @@ export function delerKapacitet(projekt, a, b) {
     if (!ra || !rb) return false;
     if (ra.reserveredeBaner > 0 || rb.reserveredeBaner > 0) return false;
     return (ra.dage || []).some((d) => (rb.dage || []).includes(d));
+}
+
+// ── Vægte for de bløde kriterier (kriterier.js) ───────────────
+
+/** Ændrer én vægt; skabelonen markeres som "egen". */
+export function opdaterVaegt(projekt, kriterieId, vaerdi) {
+    const v = Math.max(0, Number(vaerdi) || 0);
+    return opdaterOpsaetning(projekt, { vaegte: { ...VAEGT_SKABELONER.standard.vaegte, ...(projekt.opsaetning.vaegte || {}), [kriterieId]: v }, vaegtSkabelon: 'egen' });
+}
+
+/** Vælger en navngiven skabelon med vægte. */
+export function saetVaegtSkabelon(projekt, navn) {
+    const s = VAEGT_SKABELONER[navn];
+    if (!s) return projekt;
+    return opdaterOpsaetning(projekt, { vaegte: { ...s.vaegte }, vaegtSkabelon: navn });
 }

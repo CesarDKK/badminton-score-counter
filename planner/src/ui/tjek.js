@@ -17,6 +17,7 @@ const TYPE_TEKST = {
     'uden-for-raekkens-dage': 'Uden for rækkens dage',
     'raekke-tidsrum': 'Uden for rækkens eget tidsrum',
     'lang-ventetid': 'Spiller venter længe mellem egne kampe',
+    'max-haltid': 'Spiller over rækkens max haltid',
     'anti-samtidighed': 'Single og double samtidig i samme række',
     'e-sidste-dag': 'E-række: sidste dag',
     'e-finale-tid': 'E-finale uden for 10–13',

@@ -276,7 +276,9 @@ describe('rules: benchmark Lyngby U9/U11 BCD 2025 (lokal fil)', { skip: !u9 && '
         const p = await projektFraFil(u9);
         const t = tjekPlan(p);
         const fejl = t.problemer.filter((x) => x.alvor === 'fejl');
-        assert.deepEqual(fejl.map((x) => x.type), ['tidsvindue', 'tidsvindue']);
+        // To finaler uden for tidsvinduet, og U9-spillere over rækkens max haltid på 240 min (U9 lå kl. 12:00–17:30)
+        assert.deepEqual([...new Set(fejl.map((x) => x.type))].sort(), ['max-haltid', 'tidsvindue']);
+        assert.equal(fejl.filter((x) => x.type === 'tidsvindue').length, 2);
         assert.equal(t.problemer.filter((x) => x.type === 'uden-tid')[0].kampe.length, 45, 'Swiss-pladsholdere runde 2–6');
         assert.equal(t.problemer.filter((x) => x.type === 'swiss-runde').length, 0);
     });

@@ -166,7 +166,7 @@ for (const [navn, moenster] of [['U13/U15 CD 2026', /U13/i], ['U9/U11 BCD 2025',
             const stat = { jesper: bedoemPlan(jesper), forslag: f.statistik, ms, ikkePlaceret: f.ikkePlaceret.length };
             console.log(`  ${navn}:`, JSON.stringify(stat));
             if (f.ikkePlaceret.length) console.log('  ikke placeret:', f.ikkePlaceret.slice(0, 5).map((x) => `${x.id} ${x.aarsag}`).join(' | '));
-            assert.deepEqual(fejlMit.map((x) => `${x.type}: ${x.tekst}`), []);
+            assert.deepEqual(fejlMit.filter((x) => x.type !== 'max-haltid').map((x) => `${x.type}: ${x.tekst}`), [], 'ud over U9 max haltid (meldt som regelbrud) er der ingen fejl');
             assert.ok(ms < 3000, `forslag på ${ms} ms`);
             const u9 = jesper.raekker.find((r) => r.id === 'U09 D');
             if (!u9) {
@@ -179,10 +179,11 @@ for (const [navn, moenster] of [['U13/U15 CD 2026', /U13/i], ['U9/U11 BCD 2025',
                 const katMap = new Map(jesper.kampe.map((k) => [k.id, k.kategori]));
                 assert.equal(f.ikkePlaceret.length, 0, 'alle kampe placeres');
                 assert.ok(f.brud.every((x) => katMap.get(x.id).startsWith('U09')), 'kun U9-kampe med regelbrud');
-                assert.ok(f.brud.length <= 12 && f.brud.every((x) => x.brud === 'tidsrum'), 'bruddet er rækkens eget tidsrum');
-                const laengere = lavForslag(opdaterRaekke(jesper, 'U09 D', { senest: '18:00' }));
+                assert.ok(f.brud.length <= 12 && f.brud.every((x) => x.brud === 'tidsrum' || x.brud === 'max-haltid'), 'bruddet er rækkens tidsrum eller max haltid (240 min)');
+                // 6 Swiss-runder plus doubler kan ikke nås på 4 timer pr. spiller; med 6 timer og vindue til 18:00 går det op
+                const laengere = lavForslag(opdaterRaekke(jesper, 'U09 D', { senest: '18:00', maxHaltidMin: 360 }));
                 assert.equal(laengere.ikkePlaceret.length + laengere.brud.length, 0, 'med vindue til 18:00 placeres alt uden brud');
-                assert.deepEqual(fejl(anvendForslag(jesper, laengere)), []);
+                assert.deepEqual(fejl(anvendForslag(opdaterRaekke(jesper, 'U09 D', { senest: '18:00', maxHaltidMin: 360 }), laengere)), []);
                 // U9-runderne ligger lige efter hinanden: runde r+1 senest 60 min efter runde r
                 const swiss = jesper.kampe.filter((k) => k.kategori === 'U09 D HS');
                 const rundeTid = (r) => Math.min(...swiss.filter((k) => k.runde === r).map((k) => Number(laengere.plan[k.id].slot.replace(':', ''))));
@@ -240,7 +241,8 @@ describe('scheduler: alternative forslag', () => {
             assert.ok(a.navn && a.beskrivelse && a.statistik);
         }
         for (let i = 1; i < alt.length; i += 1) {
-            assert.ok(alt[i - 1].ikkePlaceret.length < alt[i].ikkePlaceret.length || alt[i - 1].statistik.haltidMin <= alt[i].statistik.haltidMin, 'sorteret');
+            const ba = alt[i - 1].ikkePlaceret.length + alt[i - 1].brud.length, bb = alt[i].ikkePlaceret.length + alt[i].brud.length;
+            assert.ok(ba < bb || (ba === bb && alt[i - 1].score <= alt[i].score), 'sorteret efter brud og score');
         }
         assert.deepEqual(lavAlternativer(p).map((a) => a.plan), alt.map((a) => a.plan), 'samme input giver samme alternativer');
     });
