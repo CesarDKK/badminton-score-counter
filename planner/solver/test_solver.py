@@ -265,3 +265,43 @@ class AsynkronTest(unittest.TestCase):
         self.assertEqual(kode, 200)
         self.assertNotEqual(svar["status"], "REGNER", "løseren stoppede af sig selv")
         self.assertEqual(self.kald("/solve", {"problem": problem([kamp(0)]), "sekunder": 5})[0], 200, "og er fri igen")
+
+
+class DiagnoseTest(unittest.TestCase):
+    """Når der ingen lovlig plan findes, skal løseren sige hvilken hård regel der spærrer."""
+
+    def test_max_haltid_er_aarsagen_og_der_foreslaas_en_graense(self):
+        from solver import diagnose
+        kampe = [kamp(0, raekke="U09 D"), kamp(1, raekke="U09 D"), kamp(2, raekke="U09 D")]
+        konf = [[0, 1, 90, 0], [1, 2, 90, 0], [0, 2, 90, 0]]  # tre kampe med 90 min imellem → mindst 210 min i hallen
+        p = problem(kampe, konflikter=konf, haltid=[{"kampe": [0, 1, 2], "graense": 120, "raekke": "U09 D"}],
+                    kapacitet={"faelles": [{"t": t, "baner": 2} for t in range(540, 900, 30)]}, dage=[{"index": 0, "start": 540, "slut": 900, "baner": 2}])
+        for k in p["kampe"]:
+            k["tilladte"] = list(range(540, 900, 30))
+        self.assertEqual(loes(p, 5)["status"], "INFEASIBLE")
+        fund = diagnose(p)
+        self.assertEqual(fund, [{"regel": "haltid", "raekke": "U09 D", "graense": 120, "forslag": 240}])
+
+    def test_max_dage_er_aarsagen(self):
+        from solver import diagnose
+        tider = list(range(540, 600, 30)) + [DAG + t for t in range(540, 600, 30)]
+        kap = {"faelles": [{"t": t, "baner": 1} for t in tider]}
+        dage = [{"index": 0, "start": 540, "slut": 600, "baner": 1}, {"index": 1, "start": 540, "slut": 600, "baner": 1}]
+        p = problem([kamp(i, tilladte=tider) for i in range(3)], kapacitet=kap, dage=dage, maxDage=[{"raekke": "U11 D", "max": 1, "kampe": [0, 1, 2]}])
+        self.assertEqual(diagnose(p), [{"regel": "maxDage", "raekke": "U11 D"}])
+
+    def test_for_lidt_plads(self):
+        from solver import diagnose
+        p = problem([kamp(i, tilladte=[540]) for i in range(3)])  # tre kampe, to baner, ét slot
+        self.assertEqual(diagnose(p), [{"regel": "plads"}])
+
+    def test_diagnosen_foelger_med_i_svaret_og_status_viser_fasen(self):
+        import solver
+        job = solver.Job()
+        p = problem([kamp(i, tilladte=[540]) for i in range(3)])
+        kode, svar = solver.koer(p, 5, job)
+        self.assertEqual((kode, svar["status"]), (200, "INFEASIBLE"))
+        self.assertEqual(svar["diagnose"], [{"regel": "plads"}])
+        self.assertEqual(job.fase, "diagnose")
+        kode, svar = solver.koer({**p, "diagnose": False}, 5, solver.Job())
+        self.assertNotIn("diagnose", svar)

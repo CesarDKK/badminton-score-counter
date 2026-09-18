@@ -223,7 +223,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
                 <select data-felt="optimerSek" aria-label="Tid til løseren" title="Hvor længe løseren må regne. Længere tid giver som regel en bedre plan.">
                     ${OPTIMER_TIDER.map((n) => `<option value="${n}" ${(tilstand.optimerSek || 60) === n ? 'selected' : ''}>${n < 120 ? `${n} sek` : `${n / 60} min`}</option>`).join('')}
                 </select>
-                <button class="knap" data-handling="optimer" ${tilstand.optimerer ? 'disabled' : ''} title="Sender et anonymiseret planlægningsproblem (kun kamp-id'er og spillernumre) til CP-SAT-løseren, som minimerer scoren under alle hårde regler. Låste kampe beholder deres tid.">${tilstand.optimerer ? 'Løseren regner … <span data-optimer-ur></span>' : 'Optimér'}</button>
+                <button class="knap" data-handling="optimer" ${tilstand.optimerer ? 'disabled' : ''} title="Sender et anonymiseret planlægningsproblem (kun kamp-id'er og spillernumre) til CP-SAT-løseren, som minimerer scoren under alle hårde regler. Låste kampe beholder deres tid.">${tilstand.optimerer ? `${tilstand.optimerDiagnose ? 'Ingen lovlig plan — undersøger hvorfor …' : 'Løseren regner …'} <span data-optimer-ur></span>` : 'Optimér'}</button>
                 ${tilstand.optimerer ? `<button class="knap knap--sekundaer" data-handling="stopOptimer" ${tilstand.optimerStopper ? 'disabled' : ''} title="Løseren stopper nu og afleverer den bedste plan, den har fundet indtil nu.">${tilstand.optimerStopper ? 'Stopper …' : 'Stop og brug det bedste'}</button>` : ''}
             </span>
             <button class="knap knap--sekundaer" data-handling="alternativer" title="Laver op til 8 forskellige forslag med forskellige prioriteringer, som du kan bladre imellem">Alternativer</button>
@@ -238,6 +238,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
         <span class="daempet">${placeret.size} af ${projekt.kampe.length} kampe har tid · ${ikkePlacerede.length} mangler · haltid gns. ${statistik.haltidGnsMin} min pr. spiller pr. dag · <span class="${statistik.langeHuller ? 'er-roed' : ''}">${statistik.langeHuller} spillere med hul over ${statistik.maxVentetidMin} min</span>${Object.keys(statistik.slutPrDag).length ? ` · slut ${Object.entries(statistik.slutPrDag).map(([d, t]) => `${datoTekst(d, { kort: true })} ${t}`).join(', ')}` : ''}. Træk et kort til et slot, eller til listen til højre for at fjerne tiden. Klik viser spillerens andre kampe; dobbeltklik låser.</span>
     </p>
     ${tilstand.forslag ? `<p class="plan-status forslag-info">${esc(tilstand.forslag.tekst)}${tilstand.forslag.ikkePlaceret.length ? ` Berørte kampe: ${tilstand.forslag.ikkePlaceret.slice(0, 6).map((x) => `${esc(x.kategori)} ${esc(x.navn)} (${esc(x.brud || x.aarsag)})`).join('; ')}${tilstand.forslag.ikkePlaceret.length > 6 ? ' …' : ''}` : ''}</p>
+    ${tilstand.forslag.handlinger?.length ? `<p class="diagnose-knapper">${tilstand.forslag.handlinger.map((x, i) => `<button class="knap" data-handling="diagnose" data-index="${i}">${esc(x.tekst)}</button>`).join(' ')}</p>` : ''}
     ${tilstand.forslag.ikkePlaceret.length ? `<ul class="loesninger">${loesningsforslag(projekt, tilstand.forslag.ikkePlaceret).map((f) => `<li>${esc(f.tekst)}</li>`).join('')}</ul>
     ${tilstand.nedskaering ? '' : `<p><button class="knap" data-handling="ned-find" title="Afprøver færre Swiss Ladder-runder og spil over to dage med planlæggeren, og viser hvad hvert forslag koster i kampe pr. spiller. Intet ændres, før du vælger.">Find forslag, der får kabalen til at gå op</button></p>`}` : ''}` : ''}
     ${tilstand.nedskaering ? nedskaeringPanel(tilstand.nedskaering) : ''}
@@ -314,6 +315,7 @@ function bind(container, h) {
             else if (hd === 'alt-naeste') h.bladreAlternativ(1);
             else if (hd === 'alt-brug') h.brugAlternativ();
             else if (hd === 'alt-fortryd') h.fortrydAlternativ();
+            else if (hd === 'diagnose') h.diagnoseHandling(Number(knap.dataset.index));
             else if (hd === 'ned-find') h.findNedskaering();
             else if (hd === 'ned-brug') h.brugNedskaering(Number(knap.dataset.index));
             else if (hd === 'ned-luk') h.lukNedskaering();

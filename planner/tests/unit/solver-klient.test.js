@@ -166,3 +166,24 @@ describe('solver-klient: asynkront job (start → status → svar)', () => {
         assert.equal(resultat.status, 'OPTIMAL');
     });
 });
+
+describe('solver-klient: diagnose når der ingen lovlig plan findes', () => {
+    test('haltid-grupper bærer rækkens id, så diagnosen kan pege på den', async () => {
+        const { opdaterRaekke } = await import('../../src/store.js');
+        const pr = bygProblem(opdaterRaekke(projekt(), 'U09 D', { maxHaltidMin: 240 }));
+        assert.ok(pr.haltid.length > 0);
+        assert.ok(pr.haltid.every((h) => h.raekke === 'U09 D' && h.graense === 240));
+    });
+    test('diagnoseTekst: tekst og handlinger pr. regel', async () => {
+        const { diagnoseTekst } = await import('../../src/solver-klient.js');
+        const d = diagnoseTekst([{ regel: 'haltid', raekke: 'U09 D', graense: 240, forslag: 300 }, { regel: 'maxDage', raekke: 'U11 D' }]);
+        assert.match(d.tekst, /U09 D: max haltid på 240 min kan ikke overholdes — med 300 min/);
+        assert.match(d.tekst, /U11 D: kampene kan ikke være på én dag/);
+        assert.deepEqual(d.handlinger.map((h) => [h.raekke, h.aendring]), [['U09 D', { maxHaltidMin: 300 }], ['U11 D', { dispensationFlereDage: true }]]);
+        assert.deepEqual(diagnoseTekst([{ regel: 'haltid', raekke: 'U09 D', graense: 240, forslag: null }]).handlinger[0].aendring, { maxHaltidMin: null });
+        assert.match(diagnoseTekst([{ regel: 'plads' }]).tekst, /ikke plads/);
+        assert.deepEqual(diagnoseTekst([{ regel: 'plads' }]).handlinger, []);
+        assert.match(diagnoseTekst([]).tekst, /kunne ikke pege/);
+        assert.match(diagnoseTekst(undefined).tekst, /kunne ikke pege/);
+    });
+});

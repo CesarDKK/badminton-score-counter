@@ -144,11 +144,15 @@ export function bygProblem(projekt, hintPlan = null) {
     for (const k of projekt.kampe) { if (!indeks.has(k.id)) continue; for (const s of k.spillere) { if (!prKendt.has(s)) prKendt.set(s, []); prKendt.get(s).push(k); } }
     for (const liste of prKendt.values()) {
         const graenser = liste.map((k) => raekke(k)?.maxHaltidMin).filter(Boolean);
-        if (graenser.length && liste.length > 1) haltid.push({ kampe: liste.map((k) => indeks.get(k.id)), graense: Math.min(...graenser) });
+        if (graenser.length && liste.length > 1) {
+            const graense = Math.min(...graenser);
+            // rækken følger med, så løserens diagnose kan sige, HVIS grænse der spærrer
+            haltid.push({ kampe: liste.map((k) => indeks.get(k.id)), graense, raekke: raekke(liste.find((k) => raekke(k)?.maxHaltidMin === graense)).id });
+        }
     }
     const prSwiss = new Map();
     for (const k of projekt.kampe) { if (k.fase !== 'swiss' || !indeks.has(k.id) || !raekke(k)?.maxHaltidMin) continue; if (!prSwiss.has(k.tpRef.draw)) prSwiss.set(k.tpRef.draw, []); prSwiss.get(k.tpRef.draw).push(k); }
-    for (const liste of prSwiss.values()) haltid.push({ kampe: liste.map((k) => indeks.get(k.id)), graense: raekke(liste[0]).maxHaltidMin });
+    for (const liste of prSwiss.values()) haltid.push({ kampe: liste.map((k) => indeks.get(k.id)), graense: raekke(liste[0]).maxHaltidMin, raekke: raekke(liste[0]).id });
 
     // Ventetid (blødt): kendte spilleres kampe som grupper; Swiss-lodtrækninger vægtes med antal spillere
     const spillerGrupper = [];
@@ -189,6 +193,37 @@ export function planFraSvar(projekt, svar) {
     return plan;
 }
 
+/**
+ * Oversætter løserens diagnose ("hvorfor findes der ingen lovlig plan?") til tekst og til
+ * handlinger, brugeren kan vælge: { tekst, handlinger: [{ tekst, raekke, aendring }] }.
+ * aendring er felter til opdaterRaekke (fx { maxHaltidMin: 300 }).
+ */
+export function diagnoseTekst(diagnose) {
+    const linjer = [], handlinger = [];
+    for (const d of diagnose || []) {
+        if (d.regel === 'haltid') {
+            if (d.forslag) {
+                linjer.push(`${d.raekke}: max haltid på ${d.graense} min kan ikke overholdes — med ${d.forslag} min findes der en lovlig plan.`);
+                handlinger.push({ tekst: `Sæt ${d.raekke} til max ${d.forslag} min i hallen, og optimér igen`, raekke: d.raekke, aendring: { maxHaltidMin: d.forslag } });
+            } else {
+                linjer.push(`${d.raekke}: max haltid på ${d.graense} min kan ikke overholdes, heller ikke med 3 timer mere — kun helt uden grænsen findes der en plan.`);
+                handlinger.push({ tekst: `Fjern grænsen for haltid i ${d.raekke}, og optimér igen`, raekke: d.raekke, aendring: { maxHaltidMin: null } });
+            }
+        } else if (d.regel === 'maxDage') {
+            linjer.push(`${d.raekke}: kampene kan ikke være på én dag inden for rækkens tidsrum og baner. Over flere dage findes der en lovlig plan (kræver dispensation) — eller giv rækken et længere tidsrum, flere baner eller færre kampe.`);
+            handlinger.push({ tekst: `Giv ${d.raekke} dispensation til flere dage, og optimér igen`, raekke: d.raekke, aendring: { dispensationFlereDage: true } });
+        } else if (d.regel === 'maxKampePrDag') {
+            linjer.push('Grænsen for antal kampe pr. spiller pr. dag kan ikke overholdes — hæv den under "Reglementets grænser" i fane 1, eller fordel kategorierne på flere dage.');
+        } else if (d.regel === 'flere') {
+            linjer.push('Ingen enkelt regel er årsagen: først når max haltid, max dage og max kampe pr. dag lempes samtidig, findes der en plan. Brug "Find forslag, der får kabalen til at gå op".');
+        } else if (d.regel === 'plads') {
+            linjer.push('Der er ikke plads: selv uden max haltid, max dage og max kampe pr. dag kan kampene ikke være på banerne inden for tidsvinduerne (eller låste kampe står i vejen). Brug "Find forslag, der får kabalen til at gå op", eller giv flere baner, længere dage eller flere spilledage.');
+        }
+    }
+    if (!linjer.length) linjer.push('Løseren kunne ikke pege på én bestemt regel inden for tiden.');
+    return { tekst: linjer.join(' '), handlinger };
+}
+
 /** Tilfældigt job-id, så en igangværende løsning kan stoppes med stopLoeser(). */
 export function nytJobId() {
     const b = new Uint8Array(12);
@@ -213,7 +248,7 @@ export async function stopLoeser(job, url = '/api/solve/stop') {
  * Kalder løseren. Returnerer { status, plan, sekunder, maal, graense } eller kaster ved netværksfejl.
  * status: 'OPTIMAL' | 'FEASIBLE' | 'INFEASIBLE' | 'UNKNOWN'
  */
-export async function optimer(projekt, { sekunder = 30, hintPlan = null, url = '/api/solve', signal, job = null, pollMs = 3000 } = {}) {
+export async function optimer(projekt, { sekunder = 30, hintPlan = null, url = '/api/solve', signal, job = null, pollMs = 3000, vedStatus = null } = {}) {
     const problem = bygProblem(projekt, hintPlan);
     // Jobbet startes og hentes med korte kald (start → status hvert par sekunder), så ingen
     // forbindelse står åben i flere minutter — proxyer som Cloudflare afbryder dem efter ca. 100 s.
@@ -232,6 +267,7 @@ export async function optimer(projekt, { sekunder = 30, hintPlan = null, url = '
             if (s.status === 404) throw Object.assign(new Error('Løseren kender ikke længere jobbet (den er måske blevet genstartet).'), { endelig: true });
             if (s.status >= 500 || s.status === 429) throw new Error(`Løseren svarede ${s.status}`); // forbigående: prøv igen
             data = await s.json();
+            if (s.ok && data.status === 'REGNER' && vedStatus) vedStatus(data);
             if (!s.ok) throw Object.assign(new Error(data.fejl || `Løseren svarede ${s.status}`), { endelig: true });
             fejlIRap = 0;
         } catch (err) {
