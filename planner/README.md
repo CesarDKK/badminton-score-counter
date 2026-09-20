@@ -441,3 +441,11 @@ lægger anden omgang som rundeplanen én gang til efter første omgang (`#b – 
 "Automatisk" bruger den kun til små felter (én pulje), hvor intet andet når minimum — fx 3–4
 U9-spillere med krav om 4 kampe. Tæller doublerne med (samlet tælling), vælges den billigere
 enkelte pulje i stedet. Valgt direkte gælder den for alle feltstørrelser.
+
+## Gennemgang 2026-09-20 og pakke 1
+
+Hele planneren er gennemlæst (regler fire steder, data/formvalg, brugerflade/drift). Listen med
+fund og status står i `docs/planner-gennemgang-2026-09.md`. Pakke 1 er rettet: Tjek fanger Swiss-runder
+mod spillernes andre kampe; "Optimér" overskriver ikke ændringer lavet imens; genindlæsning beholder
+tider og låse på uændrede kampe; stop går ikke tabt; gemmefejl vises, og defekte projektfiler afvises
+med typekontrol; max haltid i løserens problem gælder pr. dag som i Tjek (`udloesere`).

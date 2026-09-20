@@ -148,9 +148,44 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, st
         spaend_cache[noegle] = ud
         return ud
 
+    paa_cache = {}
+    def paa_dag(i, d):
+        """Bool: kamp i ligger på dag d (kun for kampe, der kan ligge på flere dage)."""
+        if (i, d) not in paa_cache:
+            b = m.NewBoolVar("")
+            m.Add(dag_var(i) == d).OnlyEnforceIf(b)
+            m.Add(dag_var(i) != d).OnlyEnforceIf(b.Not())
+            paa_cache[(i, d)] = b
+        return paa_cache[(i, d)]
+
     for h in problem.get("haltid", []):
-        for s in spaend(h["kampe"]):
-            m.Add(s + slot <= int(h["graense"]))
+        gruppe = h["kampe"]
+        udloesere = set(h.get("udloesere") or gruppe)
+        if udloesere >= set(gruppe):
+            for s in spaend(gruppe):
+                m.Add(s + slot <= int(h["graense"]))
+            continue
+        # Grænsen gælder kun de dage, hvor mindst én udløser (kamp i rækken med grænsen) ligger
+        for d in sorted({t // DAG for i in gruppe for t in kampe[i]["tilladte"]}):
+            kandidater = [i for i in gruppe if any(t // DAG == d for t in kampe[i]["tilladte"])]
+            udl = [i for i in kandidater if i in udloesere]
+            if len(kandidater) < 2 or not udl:
+                continue
+            tidligst = m.NewIntVar(d * DAG, (d + 1) * DAG, "")
+            senest = m.NewIntVar(d * DAG, (d + 1) * DAG, "")
+            for i in kandidater:
+                if enkeltDag[i]:
+                    m.Add(senest >= T[i])
+                    m.Add(tidligst <= T[i])
+                else:
+                    m.Add(senest >= T[i]).OnlyEnforceIf(paa_dag(i, d))
+                    m.Add(tidligst <= T[i]).OnlyEnforceIf(paa_dag(i, d))
+            if any(enkeltDag[i] for i in udl):
+                m.Add(senest - tidligst + slot <= int(h["graense"]))
+            else:
+                udloest = m.NewBoolVar("")
+                m.AddMaxEquality(udloest, [paa_dag(i, d) for i in udl])
+                m.Add(senest - tidligst + slot <= int(h["graense"])).OnlyEnforceIf(udloest)
 
     # ── Max dage pr. række ──
     for r in problem.get("maxDage", []):
@@ -244,13 +279,20 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, st
     faerdig = threading.Event()
     if stop is not None:
         def vagt():
+            # stop_search() virker kun, mens Solve() kører — et stop, der kommer under opbygningen af
+            # modellen, ville ellers gå tabt, og løseren regne hele tiden ud. Derfor gentages kaldet,
+            # til Solve() er færdig.
             while not faerdig.is_set():
                 if stop.wait(0.2):
-                    solver.stop_search()
+                    while not faerdig.wait(0.1):
+                        solver.stop_search()
                     return
         threading.Thread(target=vagt, daemon=True).start()
     try:
-        status = solver.Solve(m)
+        if stop is not None and stop.is_set():
+            status = cp_model.UNKNOWN  # stoppet, før søgningen overhovedet gik i gang
+        else:
+            status = solver.Solve(m)
     finally:
         faerdig.set()
     navn = {cp_model.OPTIMAL: "OPTIMAL", cp_model.FEASIBLE: "FEASIBLE", cp_model.INFEASIBLE: "INFEASIBLE"}.get(status, "UNKNOWN")

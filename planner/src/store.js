@@ -184,15 +184,18 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
 /**
  * Genindlæser en (nyere) TP-fil i et eksisterende projekt: opsætning og
  * rækker bevares, kampe udskiftes, og planen beholdes for de kampe der stadig
- * findes (tpRef) — eller ryddes, hvis valg.behold er false.
+ * findes — eller ryddes, hvis valg.behold er false. Det gælder både TP's kampe og dem,
+ * planneren selv har bygget. En tid eller lås følger kun med, når kampen stadig er DEN SAMME
+ * (samme kategori, fase, runde og spillere): id'erne følger positionen i lodtrækningen, så efter
+ * en ny lodtrækning kan samme id dække en helt anden kamp.
  */
+const kampSignatur = (k) => [k.kategori, k.fase, k.runde, k.gruppe || '', [...k.spillere].sort().join(',')].join('|');
+
 export function genindlaes(projekt, model, valg = { behold: true }) {
     const nyt = nytProjekt(model, { tagTiderMed: false });
     const gamleIds = new Set(projekt.kampe.map((k) => k.id));
     const plan = {};
-    if (valg.behold) {
-        for (const k of model.kampe) if (gamleIds.has(k.id) && projekt.plan[k.id]) plan[k.id] = { ...projekt.plan[k.id] };
-    }
+    if (valg.behold) for (const [id, p] of Object.entries(projekt.plan || {})) if (gamleIds.has(id)) plan[id] = { ...p };
     const raekker = nyt.raekker.map((r) => projekt.raekker.find((x) => x.id === r.id) || r);
     const kategorier = nyt.kategorier.map((k) => {
         const gammel = projekt.kategorier.find((x) => x.id === k.id);
@@ -202,7 +205,7 @@ export function genindlaes(projekt, model, valg = { behold: true }) {
         return { ...k, halvBane: gammel.halvBane, prioritet: gammel.prioritet || 0, swissUdenPause: !!gammel.swissUdenPause, formValg: harTpKampe ? 'tp' : (gammel.formValg || 'tp'), cupTop: gammel.cupTop || 1, swissRunder: gammel.swissRunder || 0 };
     });
     const dage = nyt.opsaetning.dage.map((d) => projekt.opsaetning.dage.find((x) => x.dato === d.dato) || d);
-    return genberegnKampe({
+    const resultat = genberegnKampe({
         ...nyt,
         opsaetning: { ...projekt.opsaetning, dage },
         raekker,
@@ -212,6 +215,11 @@ export function genindlaes(projekt, model, valg = { behold: true }) {
         kvitteret: projekt.kvitteret || [],
         laast: (projekt.laast || []).filter((id) => plan[id]),
     });
+    // Kun kampe, der stadig er de samme, beholder tid og lås
+    const foer = new Map(projekt.kampe.map((k) => [k.id, kampSignatur(k)]));
+    const beholdt = {};
+    for (const k of resultat.kampe) if (resultat.plan[k.id] && foer.get(k.id) === kampSignatur(k)) beholdt[k.id] = resultat.plan[k.id];
+    return { ...resultat, plan: beholdt, laast: (resultat.laast || []).filter((id) => beholdt[id]) };
 }
 
 /** Sætter slotlængden (5-min trin, mindst 5). */
@@ -269,7 +277,37 @@ export function validerProjekt(obj) {
     for (const felt of ['turnering', 'opsaetning', 'raekker', 'kategorier', 'spillere', 'kampe', 'plan']) {
         if (!(felt in obj)) return `Projektfilen mangler "${felt}".`;
     }
-    if (!Array.isArray(obj.kampe) || !Array.isArray(obj.opsaetning.dage)) return 'Projektfilen har et uventet format.';
+    if (!Array.isArray(obj.kampe) || !Array.isArray(obj.opsaetning?.dage)) return 'Projektfilen har et uventet format.';
+    // Grundig kontrol af de felter, brugerfladen regner med: en defekt (eller håndlavet) fil må hverken
+    // kunne vælte siden eller smugle andet end datoer, klokkeslæt og tal ind, hvor de forventes.
+    const erObjekt = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
+    const DATO = /^\d{4}-\d{2}-\d{2}$/, KLOKKE = /^([01]\d|2[0-3]):[0-5]\d$/;
+    const erKlokke = (x) => typeof x === 'string' && KLOKKE.test(x);
+    const erTalEllerTomt = (x) => x === undefined || x === null || (typeof x === 'number' && Number.isFinite(x));
+    const fejl = (hvad) => `Projektfilen har et uventet format (${hvad}).`;
+    if (!erObjekt(obj.turnering) || !Array.isArray(obj.turnering.dage) || !obj.turnering.dage.every((d) => DATO.test(d))) return fejl('turnering');
+    if (obj.kilde !== undefined && !erObjekt(obj.kilde)) return fejl('kilde');
+    if (!Number.isFinite(obj.opsaetning.slotMin) || obj.opsaetning.slotMin < 5) return fejl('slotlængde');
+    for (const d of obj.opsaetning.dage) {
+        if (!erObjekt(d) || !DATO.test(d.dato) || !erKlokke(d.start) || !erKlokke(d.slut) || !erTalEllerTomt(d.baner)) return fejl('spilledage');
+        for (const s of d.spaerret || []) if (!erObjekt(s) || !erKlokke(s.fra) || !erKlokke(s.til) || !erTalEllerTomt(s.baner)) return fejl('spærrede baner');
+    }
+    if (!Array.isArray(obj.raekker) || !Array.isArray(obj.kategorier) || !erObjekt(obj.spillere) || !erObjekt(obj.plan)) return fejl('rækker, kategorier, spillere eller plan');
+    for (const r of obj.raekker) {
+        if (!erObjekt(r) || typeof r.id !== 'string' || !Array.isArray(r.dage) || !r.dage.every((d) => DATO.test(d))) return fejl('række');
+        if ((r.tidligst && !erKlokke(r.tidligst)) || (r.senest && !erKlokke(r.senest))) return fejl(`tidsrum for ${r.id}`);
+        if (r.pauseKlasse !== undefined && !['ABCD', 'M', 'E'].includes(r.pauseKlasse)) return fejl(`pauseklasse for ${r.id}`);
+        if (!erTalEllerTomt(r.reserveredeBaner) || !erTalEllerTomt(r.maxHaltidMin) || !erTalEllerTomt(r.maxDage)) return fejl(`tal for ${r.id}`);
+    }
+    for (const k of obj.kategorier) {
+        if (!erObjekt(k) || typeof k.id !== 'string' || typeof k.raekke !== 'string') return fejl('kategori');
+        if (!erTalEllerTomt(k.tilmeldte) || !erTalEllerTomt(k.kampe) || !erTalEllerTomt(k.runder) || !erTalEllerTomt(k.prioritet) || !erTalEllerTomt(k.swissRunder) || !erTalEllerTomt(k.cupTop)) return fejl(`tal for ${k.id}`);
+    }
+    for (const k of obj.kampe) {
+        if (!erObjekt(k) || typeof k.id !== 'string' || typeof k.kategori !== 'string' || !Array.isArray(k.spillere) || !Array.isArray(k.muligeSpillere) || !Array.isArray(k.afhaengerAf) || !erObjekt(k.tpRef)) return fejl('kamp');
+    }
+    for (const p of Object.values(obj.plan)) if (!erObjekt(p) || !DATO.test(p.dag) || !erKlokke(p.slot)) return fejl('plan');
+    if (obj.laast !== undefined && !Array.isArray(obj.laast)) return fejl('låste kampe');
     return null;
 }
 
@@ -281,13 +319,19 @@ export function gemLokalt(projekt, storage = globalThis.localStorage) {
 }
 
 export function hentLokalt(storage = globalThis.localStorage) {
-    if (!storage) return null;
+    return hentLokaltMedStatus(storage).projekt;
+}
+
+/** Som hentLokalt, men fortæller også HVORFOR et gemt projekt ikke kunne åbnes: { projekt, fejl }. */
+export function hentLokaltMedStatus(storage = globalThis.localStorage) {
+    if (!storage) return { projekt: null, fejl: null };
     try {
         const raa = storage.getItem(GEM_NOEGLE);
-        if (!raa) return null;
+        if (!raa) return { projekt: null, fejl: null };
         const obj = JSON.parse(raa);
-        return validerProjekt(obj) ? null : normaliserHalvBane(obj);
-    } catch { return null; }
+        const fejl = validerProjekt(obj);
+        return fejl ? { projekt: null, fejl } : { projekt: normaliserHalvBane(obj), fejl: null };
+    } catch (err) { return { projekt: null, fejl: `Det gemte projekt kunne ikke læses (${err.message || err}).` }; }
 }
 
 export function rydLokalt(storage = globalThis.localStorage) {

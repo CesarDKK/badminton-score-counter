@@ -4,7 +4,7 @@ import { laesTP, tabellerFraMDB } from './tp-reader.js';
 import * as store from './store.js';
 import { tjekPlan } from './rules.js';
 import { lavForslag, lavAlternativer, bedoemPlan } from './scheduler.js';
-import { optimer, stopLoeser, stopVedLukning, nytJobId, diagnoseTekst } from './solver-klient.js';
+import { optimer, stopLoeser, stopVedLukning, nytJobId, diagnoseTekst, aendretUnderOptimering, flettetPlan } from './solver-klient.js';
 import { scorePlan } from './kriterier.js';
 import { alleNedskaeringer, anvendNedskaering, kapacitetsRegnskab, swissKandidater } from './nedskaering.js';
 import { renderOpsaetning } from './ui/opsaetning.js';
@@ -13,7 +13,9 @@ import { renderTjek } from './ui/tjek.js';
 import { renderListe } from './ui/liste.js';
 import { esc } from './ui/dom.js';
 
-let projekt = store.hentLokalt();
+const gemtVedStart = store.hentLokaltMedStatus();
+let projekt = gemtVedStart.projekt;
+let gemt = true; // blev seneste ændring gemt i browseren?
 let tjek = null;
 let besked = { tekst: '', fejl: false };
 // UI-tilstand der ikke gemmes: aktiv fane, valgt dag, filter, søgning, valgt kamp, fremhævede kampe
@@ -49,9 +51,19 @@ function vaelgFane(navn) {
 // ── Tilstand ──────────────────────────────────────────────────
 
 function saet(nyt) {
+    const forrige = projekt;
     projekt = nyt;
-    if (projekt) store.gemLokalt(projekt); else store.rydLokalt();
-    render();
+    // Tegn først, gem bagefter: et projekt, der ikke kan vises, må aldrig blive gemt — ellers starter
+    // siden tom næste gang og kan kun reddes ved at rydde browserdata.
+    try { render(); } catch (err) {
+        console.error(err);
+        projekt = forrige;
+        try { render(); } catch { /* vis i det mindste beskeden */ }
+        visBesked(`Projektet kunne ikke vises (${err.message || err}). Ændringen er ikke gemt.`, true);
+        return;
+    }
+    if (projekt) gemt = store.gemLokalt(projekt); else { store.rydLokalt(); gemt = true; }
+    visStatus();
 }
 
 function visBesked(tekst, fejl = false) {
@@ -77,9 +89,14 @@ function render() {
     for (const knap of faneKnapper) {
         if (knap.dataset.fane === 'tjek') knap.textContent = tjek && (tjek.antal.fejl || tjek.antal.advarsel) ? `Tjek (${tjek.antal.fejl}/${tjek.antal.advarsel})` : 'Tjek';
     }
+    visStatus();
+}
+
+function visStatus() {
     navStatus.textContent = projekt
-        ? `${projekt.turnering.navn || 'Turnering'} · ${projekt.kampe.length} kampe · ${tjek.antal.fejl} fejl, ${tjek.antal.advarsel} advarsler · gemt i browseren`
+        ? `${projekt.turnering.navn || 'Turnering'} · ${projekt.kampe.length} kampe · ${tjek.antal.fejl} fejl, ${tjek.antal.advarsel} advarsler · ${gemt ? 'gemt i browseren' : 'IKKE gemt i browseren — hent projektfilen under "Fil og opsætning"'}`
         : 'Intet projekt åbnet';
+    navStatus.classList.toggle('er-ikke-gemt', !!projekt && !gemt);
 }
 
 // ── Import-valg (design § 6) ──────────────────────────────────
@@ -259,8 +276,11 @@ const planHandlers = {
         const antalLaast = (projekt.laast || []).length;
         if (!udenSpoergsmaal && Object.keys(projekt.plan).length > antalLaast && !window.confirm(`Optimér alle kampe? Kun låste kampe (${antalLaast}) beholder deres tid. Du kan fortryde bagefter.`)) return;
         const sekunder = tilstand.optimerSek || 60;
-        const foer = { ...projekt.plan };
-        const graadig = lavForslag(projekt);
+        // Løseren regner på projektet, som det er NU. Ændrer brugeren noget imens (op til 6 min), må
+        // resultatet ikke bare lægges ind oven i det — se aendretUnderOptimering nedenfor.
+        const udgangspunkt = projekt;
+        const graadig = lavForslag(udgangspunkt);
+        tilstand.ventendeOptimering = null;
         const job = nytJobId();
         tilstand.optimerer = true;
         tilstand.optimerJob = job;
@@ -274,20 +294,48 @@ const planHandlers = {
         const faerdig = () => { clearInterval(ur); tilstand.optimerer = false; tilstand.optimerJob = null; tilstand.optimerStopper = false; tilstand.optimerDiagnose = false; };
         try {
             const vedStatus = (s) => { if (s.fase === 'diagnose' && !tilstand.optimerDiagnose) { tilstand.optimerDiagnose = true; render(); visUr(); } };
-            const svar = await optimer(projekt, { sekunder, hintPlan: graadig.brud.length ? null : graadig.plan, job, vedStatus });
+            const svar = await optimer(udgangspunkt, { sekunder, hintPlan: graadig.brud.length ? null : graadig.plan, job, vedStatus });
             faerdig();
-            const graadigAlt = { navn: 'Grådig planlægger', beskrivelse: 'Det hurtige forslag fra "Lav forslag" — til sammenligning.', plan: graadig.plan, ikkePlaceret: graadig.ikkePlaceret, brud: graadig.brud, statistik: graadig.statistik, score: scorePlan({ ...projekt, plan: graadig.plan }).total };
-            if (svar.status === 'OPTIMAL' || svar.status === 'FEASIBLE') {
-                const p2 = { ...projekt, plan: svar.plan };
-                const opt = { navn: svar.status === 'OPTIMAL' ? 'Optimeret (bevist bedst mulig)' : 'Optimeret (CP-SAT)', beskrivelse: svar.stoppet ? `Stoppet efter ${svar.sekunder} s — den bedste plan, løseren havde fundet. Alle hårde regler er overholdt.` : `Løseren minimerede scoren under alle hårde regler på ${svar.sekunder} s.`, plan: svar.plan, ikkePlaceret: [], brud: [], statistik: bedoemPlan(p2), score: scorePlan(p2).total };
-                const liste = [opt, graadigAlt].sort((a, b) => (a.brud.length - b.brud.length) || (a.score - b.score));
+            const lovlig = svar.status === 'OPTIMAL' || svar.status === 'FEASIBLE';
+            const aendring = aendretUnderOptimering(udgangspunkt, projekt);
+            if (aendring === 'lukket' || aendring === 'andet-projekt') {
+                // Projektet er lukket eller skiftet ud imens: resultatet hører til en anden turnering
+                tilstand.forslag = projekt ? { tekst: 'Løseren blev færdig, men du har åbnet et andet projekt imens, så dens plan er kasseret.', ikkePlaceret: [] } : null;
+                render();
+                return;
+            }
+            // Lægger løserens plan ind i projektet, som det ser ud NU: kampe, der er låst, beholder deres tid,
+            // og "Fortryd" går tilbage til planen, som den var lige før — også det, brugeren nåede at flytte.
+            const visLoeserensPlan = () => {
+                const foer = { ...projekt.plan };
+                const plan = flettetPlan(projekt, svar.plan);
+                const graadigAlt = { navn: 'Grådig planlægger', beskrivelse: 'Det hurtige forslag fra "Lav forslag" — til sammenligning.', plan: flettetPlan(projekt, graadig.plan), ikkePlaceret: graadig.ikkePlaceret, brud: graadig.brud, statistik: graadig.statistik, score: scorePlan({ ...projekt, plan: flettetPlan(projekt, graadig.plan) }).total };
+                const p2 = { ...projekt, plan };
+                const opt = { navn: svar.status === 'OPTIMAL' ? 'Optimeret (bevist bedst mulig)' : 'Optimeret (CP-SAT)', beskrivelse: svar.stoppet ? `Stoppet efter ${svar.sekunder} s — den bedste plan, løseren havde fundet. Se Tjek for regler, løseren ikke kender (fx senior-reglerne).` : `Løseren minimerede scoren under de hårde regler på ${svar.sekunder} s.`, plan, ikkePlaceret: [], brud: [], statistik: bedoemPlan(p2), score: scorePlan(p2).total };
+                const liste = [opt, graadigAlt].sort((x, y) => (x.brud.length - y.brud.length) || (x.score - y.score));
                 tilstand.forslag = { tekst: `Løseren fandt en plan med score ${opt.score} på ${svar.sekunder} s (grådig: ${graadigAlt.score}). Bladr med ◀ ▶ og vælg "Brug dette".`, ikkePlaceret: [] };
                 tilstand.alternativer = { liste, index: 0, foer };
                 planHandlers.visAlternativ();
-            } else if (svar.status === 'INFEASIBLE') {
+            };
+            if (aendring === 'aendret') {
+                // Brugeren har flyttet, låst eller rettet opsætningen, mens løseren regnede: intet overskrives uden et valg
+                tilstand.ventendeOptimering = lovlig ? visLoeserensPlan : null;
+                tilstand.forslag = {
+                    tekst: lovlig
+                        ? `Løseren er færdig (${svar.sekunder} s), men du har ændret projektet, mens den regnede. Dens plan er derfor IKKE lagt ind. Den bygger på projektet, som det var, da du trykkede "Optimér" — viser du den alligevel, beholder låste kampe deres tid, og "Fortryd" bringer dig tilbage til din nuværende plan.`
+                        : 'Løseren blev færdig uden en plan, og du har ændret projektet imens. Din plan er ikke rørt — tryk "Optimér" igen for at regne på det, du har nu.',
+                    handlinger: lovlig ? [{ tekst: 'Vis løserens plan alligevel', type: 'vis-ventende' }, { tekst: 'Kassér løserens plan', type: 'kasser-ventende' }] : [],
+                    ikkePlaceret: [],
+                };
+                render();
+                return;
+            }
+            if (lovlig) visLoeserensPlan();
+            else if (svar.status === 'INFEASIBLE') {
                 const diag = diagnoseTekst(svar.diagnose);
-                tilstand.forslag = { tekst: `Løseren regnede kun ${svar.sekunder} s, fordi den hurtigt kunne bevise, at der IKKE findes en plan, der overholder alle hårde regler. Årsag: ${diag.tekst} Herunder er den hurtige plan med de nødvendige regelbrud:`, handlinger: diag.handlinger, ikkePlaceret: graadigAlt.brud.map((x) => ({ ...x, kategori: projekt.kampe.find((k) => k.id === x.id)?.kategori || '', navn: projekt.kampe.find((k) => k.id === x.id)?.navn || x.id })) };
-                saet({ ...store.anvendForslag(projekt, graadig), sidsteForslag: { ikkePlaceret: graadigAlt.brud } });
+                const brud = [...graadig.brud, ...graadig.ikkePlaceret];
+                tilstand.forslag = { tekst: `Løseren regnede kun ${svar.sekunder} s, fordi den hurtigt kunne bevise, at der IKKE findes en plan, der overholder alle hårde regler. Årsag: ${diag.tekst} Herunder er den hurtige plan med de nødvendige regelbrud:`, handlinger: diag.handlinger, ikkePlaceret: brud.map((x) => ({ ...x, kategori: projekt.kampe.find((k) => k.id === x.id)?.kategori || '', navn: projekt.kampe.find((k) => k.id === x.id)?.navn || x.id })) };
+                saet({ ...store.anvendForslag(projekt, graadig), sidsteForslag: { ikkePlaceret: brud } });
             } else {
                 tilstand.forslag = { tekst: `${svar.besked || 'Løseren fandt ingen plan inden for tiden.'} Prøv med længere tid, eller brug "Lav forslag".`, ikkePlaceret: [] };
                 render();
@@ -330,6 +378,13 @@ const planHandlers = {
     diagnoseHandling(index) {
         const h = tilstand.forslag?.handlinger?.[index];
         if (!h) return;
+        if (h.type === 'vis-ventende' || h.type === 'kasser-ventende') {
+            const vis = h.type === 'vis-ventende' ? tilstand.ventendeOptimering : null;
+            tilstand.ventendeOptimering = null;
+            tilstand.forslag = null;
+            if (vis) vis(); else render();
+            return;
+        }
         projekt = store.opdaterRaekke(projekt, h.raekke, h.aendring);
         tilstand.forslag = null;
         saet(projekt);
@@ -409,4 +464,10 @@ const tjekHandlers = {
 // Lukkes siden, mens løseren regner, får den besked med det samme (ellers opdager den det selv efter ca. 30 s)
 window.addEventListener('pagehide', () => { if (tilstand.optimerer && tilstand.optimerJob) stopVedLukning(tilstand.optimerJob); });
 
-render();
+if (gemtVedStart.fejl) besked = { tekst: `Det projekt, der lå gemt i browseren, kunne ikke åbnes: ${gemtVedStart.fejl} Det bliver liggende, til du åbner en ny fil.`, fejl: true };
+try { render(); } catch (err) {
+    console.error(err);
+    projekt = null; // det gemte bliver liggende i browseren, til brugeren åbner noget nyt
+    besked = { tekst: `Det gemte projekt kunne ikke vises (${err.message || err}). Åbn .TP-filen eller projektfilen igen.`, fejl: true };
+    render();
+}
