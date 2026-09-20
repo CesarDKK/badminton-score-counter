@@ -424,3 +424,4 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 .ned-tabel th, .ned-tabel td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border, rgba(255,255,255,0.08)); }
 .ned-tabel th { font-weight: 600; opacity: 0.75; }
 .diagnose-knapper { margin: 0 0 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+.nav-status.er-ikke-gemt { color: var(--amber); font-weight: 600; }

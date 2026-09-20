@@ -133,7 +133,8 @@ export function tjekPlan(projekt) {
     // Kendte spillere giver fejl; mulige spillere (cup) giver advarsel.
     // To kampe i samme lodtrækning, hvor den ene ikke bygger på den anden, kan
     // aldrig have fælles spillere (positionerne er forskellige) — de springes over.
-    // Swiss-pladsholdere (runde 2+) har ingen spillere; de tjekkes samlet pr. runde nedenfor.
+    // Swiss-pladsholdere (runde 2+) har ingen kendte spillere; de tjekkes samlet pr. runde nedenfor —
+    // både mod forrige runde og mod spillernes kampe i ANDRE kategorier.
     const prSpiller = new Map(); // spillerId → [{ k, p, min, kendt }]
     for (const { k, p, min } of placerede) {
         if (k.fase === 'swiss' && !k.spillere.length) continue;
@@ -195,6 +196,43 @@ export function tjekPlan(projekt) {
         for (const x of liste) if (x.kendt) prDag.set(x.p.dag, (prDag.get(x.p.dag) || 0) + 1);
         for (const [dag, n] of prDag) {
             if (n > maxPrDag) tilfoej({ type: 'max-kampe', alvor: 'fejl', tekst: `${spillerNavn(s)} har ${n} kampe ${datoKort(dag)} (max ${maxPrDag}).`, kampe: liste.filter((x) => x.kendt && x.p.dag === dag).map((x) => x.k.id), dag });
+        }
+    }
+
+    // ── Swiss Ladder runde 2+ mod spillernes øvrige kampe ──
+    // Alle i lodtrækningen spiller (eller sidder over) i hver runde, så en runde i et slot optager dem
+    // alle. Samme tid som en anden kamp = dobbeltbooket (fejl); for tæt på = pause (advarsel, da
+    // parringen ikke kendes endnu). Én melding pr. runde-slot og anden kamp, ikke én pr. spiller.
+    const swissEnheder = new Map(); // draw|runde|dag|min → { k0, ids, dag, min, slot, spillere }
+    for (const { k, p, min } of placerede) {
+        if (k.fase !== 'swiss' || k.spillere.length) continue;
+        const n = `${k.tpRef.draw}|${k.runde}|${p.dag}|${min}`;
+        if (!swissEnheder.has(n)) swissEnheder.set(n, { k0: k, ids: [], dag: p.dag, min, slot: p.slot, spillere: new Set() });
+        const e = swissEnheder.get(n);
+        e.ids.push(k.id);
+        for (const s of k.muligeSpillere) e.spillere.add(s);
+    }
+    for (const e of swissEnheder.values()) {
+        const fund = new Map(); // anden kamp-id + type → { x, type, gab, spillere }
+        for (const s of e.spillere) {
+            for (const x of prSpiller.get(s) || []) {
+                if (x.p.dag !== e.dag || x.k.tpRef.draw === e.k0.tpRef.draw) continue;
+                const gab = Math.abs(x.min - e.min);
+                const varighed = Math.max(varighedFor(x.k), varighedFor(e.k0));
+                const pause = Math.max(pauseForRaekke(pauseMin, raekke(x.k)?.pauseKlasse), pauseForRaekke(pauseMin, raekke(e.k0)?.pauseKlasse));
+                const type = gab === 0 ? 'dobbeltbooket' : gab < varighed + pause ? 'pause' : null;
+                if (!type) continue;
+                const n = `${x.k.id}|${type}`;
+                if (!fund.has(n)) fund.set(n, { x, type, gab, varighed, pause, kendt: false, spillere: [] });
+                if (x.kendt) fund.get(n).kendt = true;
+                fund.get(n).spillere.push(s);
+            }
+        }
+        for (const f of fund.values()) {
+            const hvem = `${f.spillere.slice(0, 3).map(spillerNavn).join(', ')}${f.spillere.length > 3 ? ` og ${f.spillere.length - 3} andre` : ''}`;
+            const runde = `${e.k0.kategori} runde ${e.k0.runde}`;
+            if (f.type === 'dobbeltbooket') tilfoej({ type: 'dobbeltbooket', alvor: 'fejl', tekst: `${hvem} skal spille ${runde} kl. ${e.slot} (alle er med i hver Swiss-runde), men ${f.kendt ? 'er samtidig sat til' : 'kan samtidig skulle spille'} ${navn(f.x.k)}.`, kampe: [f.x.k.id, ...e.ids], dag: e.dag, slot: e.slot });
+            else tilfoej({ type: 'pause', alvor: 'advarsel', tekst: `${hvem} kan have kun ${f.gab - f.varighed} min pause mellem ${runde} kl. ${e.slot} og ${navn(f.x.k)} kl. ${f.x.p.slot} (krav ${f.pause} min).`, kampe: [f.x.k.id, ...e.ids], dag: e.dag, slot: f.x.min > e.min ? f.x.p.slot : e.slot });
         }
     }
 

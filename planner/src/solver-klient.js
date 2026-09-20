@@ -142,12 +142,19 @@ export function bygProblem(projekt, hintPlan = null) {
     const haltid = [];
     const prKendt = new Map();
     for (const k of projekt.kampe) { if (!indeks.has(k.id)) continue; for (const s of k.spillere) { if (!prKendt.has(s)) prKendt.set(s, []); prKendt.get(s).push(k); } }
+    // Samme regel som Tjek: på en dag, hvor spilleren har en kamp i en række MED grænse, gælder
+    // grænsen for alle spillerens kampe den dag. Kampene i rækken "udløser" grænsen; spillerens
+    // kampe i andre rækker er kun bundet de dage, hvor en udløser også ligger. (Før blev den
+    // mindste grænse lagt på alle dage — U9 om lørdagen begrænsede også søndagen.)
     for (const liste of prKendt.values()) {
-        const graenser = liste.map((k) => raekke(k)?.maxHaltidMin).filter(Boolean);
-        if (graenser.length && liste.length > 1) {
-            const graense = Math.min(...graenser);
+        if (liste.length < 2) continue;
+        const prRaekke = new Map(); // rækker med grænse → spillerens kampe i rækken
+        for (const k of liste) { const r = raekke(k); if (r?.maxHaltidMin) { if (!prRaekke.has(r.id)) prRaekke.set(r.id, { r, kampe: [] }); prRaekke.get(r.id).kampe.push(k); } }
+        for (const { r, kampe: egne } of prRaekke.values()) {
             // rækken følger med, så løserens diagnose kan sige, HVIS grænse der spærrer
-            haltid.push({ kampe: liste.map((k) => indeks.get(k.id)), graense, raekke: raekke(liste.find((k) => raekke(k)?.maxHaltidMin === graense)).id });
+            const h = { kampe: liste.map((k) => indeks.get(k.id)), graense: r.maxHaltidMin, raekke: r.id };
+            if (egne.length < liste.length) h.udloesere = egne.map((k) => indeks.get(k.id));
+            haltid.push(h);
         }
     }
     const prSwiss = new Map();
@@ -222,6 +229,30 @@ export function diagnoseTekst(diagnose) {
     }
     if (!linjer.length) linjer.push('Løseren kunne ikke pege på én bestemt regel inden for tiden.');
     return { tekst: linjer.join(' '), handlinger };
+}
+
+/**
+ * Hvad er der sket med projektet, mens løseren regnede?
+ *   'uaendret'       — intet af betydning (kvitteringer tæller ikke)
+ *   'aendret'        — samme kampe, men plan, låse eller opsætning er rettet → spørg, før resultatet lægges ind
+ *   'andet-projekt'  — andre kampe eller en anden fil → resultatet hører ikke til her
+ *   'lukket'         — projektet er lukket
+ */
+export function aendretUnderOptimering(start, nu) {
+    if (!nu) return 'lukket';
+    if (nu === start) return 'uaendret';
+    const sammeKampe = (nu.kilde?.filnavn || '') === (start.kilde?.filnavn || '') && nu.kampe.length === start.kampe.length
+        && nu.kampe.every((x, i) => x.id === start.kampe[i].id && x.spillere.join() === start.kampe[i].spillere.join());
+    if (!sammeKampe) return 'andet-projekt';
+    const del = (p) => JSON.stringify([p.plan, [...(p.laast || [])].sort(), p.opsaetning, p.raekker, p.kategorier]);
+    return del(nu) === del(start) ? 'uaendret' : 'aendret';
+}
+
+/** Løserens plan lagt ind i projektet, som det er NU: kampe, der er låst, beholder deres nuværende tid. */
+export function flettetPlan(nu, loeserPlan) {
+    const plan = { ...loeserPlan };
+    for (const id of nu.laast || []) if (nu.plan[id]) plan[id] = nu.plan[id];
+    return plan;
 }
 
 /** Tilfældigt job-id, så en igangværende løsning kan stoppes med stopLoeser(). */
