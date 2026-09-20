@@ -449,3 +449,33 @@ fund og status står i `docs/planner-gennemgang-2026-09.md`. Pakke 1 er rettet: 
 mod spillernes andre kampe; "Optimér" overskriver ikke ændringer lavet imens; genindlæsning beholder
 tider og låse på uændrede kampe; stop går ikke tabt; gemmefejl vises, og defekte projektfiler afvises
 med typekontrol; max haltid i løserens problem gælder pr. dag som i Tjek (`udloesere`).
+
+## Pakke 2: ét fælles regelmodul (2026-09-20)
+
+`src/regelmodel.js` er nu det ENE sted, reglernes byggesten står. `lavRegelmodel(projekt)` giver bl.a.
+`varighedFor`, `pauseFor`, `mellemrum`, `kanDeleSpillere`, `aargangsVindue`/`raekkeVindue`/`iVindue`, `maxDageFor`,
+`antiSamtidighed`, `kampForbud` (E-/senior-regler for dag og tid) og `seniorEM`. `rules.js`, `scheduler.js` og
+`solver-klient.js` bruger dem alle — tilføj nye regler dér, ikke tre steder. `kapacitet.js: banebrugISlot` er på
+samme måde den ene regel for banebrug (inkl. overløb fra reserverede baner).
+
+Kontrakt-testen (`node tests/kontrakt/kontrakt.mjs byg|tjek`, `python solver/kontrakt.py`) kører i CI og kræver, at
+løserens planer har 0 fejl i Tjek. Kør den lokalt efter enhver ændring af regler eller problemformat:
+
+    node tests/kontrakt/kontrakt.mjs byg tests/kontrakt/_ud
+    (i løser-imaget, fra planner/solver)  python kontrakt.py ../tests/kontrakt/_ud
+    node tests/kontrakt/kontrakt.mjs tjek tests/kontrakt/_ud
+
+Status og detaljer: `docs/planner-gennemgang-2026-09.md`.
+
+## Krydstjek mod reglementet (2026-09-20)
+
+Kilder (badminton.dk/individuelle-turneringer): Reglement for Individuelle Turneringer, Appendiks 1 (turneringsformer),
+Appendiks 2 (sammenlægning) og "U9-U11 turneringer – Vejledning". Reglementet går forud for tidligere antagelser:
+
+- Minimum antal kampe gælder PR. KATEGORI (ikke samlet for single + double). `minKampeSamlet` er et tilvalg, fra som standard.
+- `raekker[].maxHaltidMin` = max varighed for afviklingen af rækkens SINGLEKAMPE pr. dag (U9 240, U11 360); doubler tæller ikke med.
+- Rækkefølge: U9/U11 single → double → mix; U13+ mix → double → single.
+- E-rækker: ingen kampe før kl. 10 (`regler.eTidligst`), sidste dag kun semi og finale, finaler 10–13.
+- Senior E/M: max 3 kampe pr. kategori pr. dag; kvartfinaler ikke samme dag som semi- og finaler. Senior: max 10 kampe pr. dag.
+- Senior A/B og Senior+ E/A: kun kvart-, semi- og finaler på finaledagen.
+`tests/unit/reglement.test.js` låser standarderne til reglementets tal. Detaljer: `docs/planner-gennemgang-2026-09.md`.

@@ -52,6 +52,33 @@ export function puljeFor(raekkeId, reserveret) {
 }
 
 /**
+ * Banebrug i ét slot, fordelt på puljer — DEN regel, Tjek og planlæggeren deler.
+ * En række med reserverede baner bruger sine egne først. Har den flere kampe, end de rækker til,
+ * "løber de over" på de fælles baner: står en fælles bane fri, bruger man den. Først når også de
+ * fælles baner er fulde, er der for mange kampe i slottet.
+ *   kampe: [{ raekkeId, halv }]
+ * Returnerer { faellesBrugt, faellesBaner, overloeb: Map(raekkeId → baner), prPulje: Map(pulje → { hele, halve, brugt, baner }), forMange }.
+ */
+export function banebrugISlot(kampe, kapacitet) {
+    const prPulje = new Map();
+    for (const k of kampe) {
+        const pulje = puljeFor(k.raekkeId, kapacitet.reserveret);
+        if (!prPulje.has(pulje)) prPulje.set(pulje, { hele: 0, halve: 0 });
+        const p = prPulje.get(pulje);
+        if (k.halv) p.halve += 1; else p.hele += 1;
+    }
+    const overloeb = new Map();
+    let faellesBrugt = 0;
+    for (const [pulje, p] of prPulje) {
+        p.brugt = p.hele + Math.ceil(p.halve / 2);
+        p.baner = pulje === 'faelles' ? kapacitet.faelles : kapacitet.reserveret.get(pulje);
+        if (pulje === 'faelles') faellesBrugt += p.brugt;
+        else if (p.brugt > p.baner) { overloeb.set(pulje, p.brugt - p.baner); faellesBrugt += p.brugt - p.baner; }
+    }
+    return { faellesBrugt, faellesBaner: kapacitet.faelles, overloeb, prPulje, forMange: faellesBrugt > kapacitet.faelles };
+}
+
+/**
  * Anti-samtidighed (fra Jespers gamle prompt, regel A3): i samme række må
  * HS og HD ikke ligge samtidig, DS og DD ikke, og MD ikke sammen med nogen af
  * dem. U9's kønsblandede double ("D") regnes som både HD og DD.

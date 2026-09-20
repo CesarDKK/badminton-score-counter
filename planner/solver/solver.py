@@ -221,6 +221,23 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, st
                     led.append(paa)
             m.Add(sum(led) <= int(problem["maxKampePrDag"]))
 
+    # ── Grupper med egen grænse pr. dag (senior E/M: max kampe pr. kategori pr. spiller pr. dag) ──
+    for g in problem.get("maxPrGruppe", []):
+        ids = g["kampe"]
+        for d in sorted({t // DAG for i in ids for t in kampe[i]["tilladte"]}):
+            led = [1 if dagFor[i] == d else 0 for i in ids if enkeltDag[i]] + [paa_dag(i, d) for i in ids if not enkeltDag[i]]
+            m.Add(sum(led) <= int(g["max"]))
+
+    # ── Par, der ikke må ligge samme dag (senior E/M: finalen ikke samme dag som en kvartfinale) ──
+    for a, b in problem.get("ikkeSammeDag", []):
+        if enkeltDag[a] and enkeltDag[b]:
+            if dagFor[a] == dagFor[b]:
+                umulig = m.NewBoolVar("")  # begge kampe kan kun ligge på samme dag → ingen løsning
+                m.Add(umulig == 1)
+                m.Add(umulig == 0)
+        else:
+            m.Add(dag_var(a) != dag_var(b))
+
     # ── Målfunktion: vægtet sum (minutter x vægt x SKALA) ──
     v = problem.get("vaegte", {})
     led = []
@@ -318,6 +335,8 @@ def diagnose(problem: dict, stop: threading.Event | None = None) -> list[dict]:
     Returnerer de lempelser, der hver for sig gør problemet løsbart:
       {"regel": "haltid", "raekke": "U09 D", "graense": 240, "forslag": 360}   (forslag None = kun uden grænse)
       {"regel": "maxDage", "raekke": "U11 D"}
+      {"regel": "tidsrum", "raekke": "U09 D"}   — rækkens eget tidsrum er for snævert (løseren holder det hårdt; Tjek advarer kun)
+      {"regel": "dage", "raekke": "U11 D"}      — rækken kan ikke være på de dage, den er sat til
       {"regel": "maxKampePrDag"}
       {"regel": "flere"}   — først løsbart, når alle tre slags lempes samtidig
       {"regel": "plads"}   — ikke løsbart selv uden dem: for mange kampe til baner og tidsrum (eller låste kampe i konflikt)
@@ -347,6 +366,12 @@ def diagnose(problem: dict, stop: threading.Event | None = None) -> list[dict]:
     for r in problem.get("maxDage", []):
         if loesbar({**problem, "maxDage": [x for x in problem["maxDage"] if x is not r]}):
             fund.append({"regel": "maxDage", "raekke": r.get("raekke", "")})
+    # Rækkens tidsrum og rækkens dage: klienten sender de bredere tilladte tider med (problem["alternativer"])
+    for alt in problem.get("alternativer", []):
+        bredere = set(alt["kampe"])
+        kampe2 = [({**k, "tilladte": alt["tilladte"]} if i in bredere and len(k["tilladte"]) != 1 else k) for i, k in enumerate(problem["kampe"])]
+        if loesbar({**problem, "kampe": kampe2}):
+            fund.append({"regel": alt["regel"], "raekke": alt.get("raekke", "")})
     if problem.get("mangeKampe") and loesbar({**problem, "mangeKampe": []}):
         fund.append({"regel": "maxKampePrDag"})
     if not fund:

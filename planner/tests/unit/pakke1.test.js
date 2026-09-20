@@ -72,31 +72,27 @@ describe('Tjek: Swiss-runde 2+ mod spillernes kampe i andre kategorier', () => {
     });
 });
 
-describe('løserens problem: max haltid gælder pr. dag og pr. række', () => {
-    test('en spillers grænse i én række smitter ikke af på kampe i en anden række', () => {
-        // Samme spiller i U09 (max 240 min) og i U11 (ingen grænse)
+describe('løserens problem: max varighed gælder rækkens singlekampe', () => {
+    test('én gruppe pr. række med grænse — kun rækkens egne singlekampe, ikke spillernes kampe i andre rækker', () => {
+        // Samme spillere i U09 (max 240 min) og i U11 (ingen grænse sat)
         let p = nytProjekt(model([{ id: 'U09 D', aargang: 'U09', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', antal: 3 }] }], ['2026-11-21', '2026-11-22']));
         const s = Object.keys(p.spillere);
         p = nytProjekt(model([
-            { id: 'U09 D', aargang: 'U09', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', spillere: s.map((x) => [x]) }] },
+            { id: 'U09 D', aargang: 'U09', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', spillere: s.map((x) => [x]) }, { kat: 'HD', type: 'double', spillere: [[s[0], s[1]], [s[2], s[0]]] }] },
             { id: 'U11 D', aargang: 'U11', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', spillere: s.map((x) => [x]) }] },
         ]));
         for (const k of p.kategorier) p = saetForm(p, k.id, { formValg: 'pulje' });
         p = opdaterRaekke(p, 'U09 D', { maxHaltidMin: 240 });
         p = opdaterRaekke(p, 'U11 D', { maxHaltidMin: null });
         const pr = bygProblem(p);
-        const u9 = new Set(pr.kampe.map((k, i) => (k.raekke === 'U09 D' ? i : -1)).filter((i) => i >= 0));
-        assert.equal(pr.haltid.length, 3, 'én gruppe pr. spiller');
-        for (const h of pr.haltid) {
-            assert.equal(h.raekke, 'U09 D');
-            assert.equal(h.graense, 240);
-            assert.equal(h.kampe.length, 4, 'alle spillerens kampe er med (samme dag tæller de alle)');
-            assert.equal(h.udloesere.length, 2);
-            assert.ok(h.udloesere.every((i) => u9.has(i)), 'men kun U09-kampene udløser grænsen');
-        }
-        // Spiller kun i rækker med grænse → ingen særskilt udløserliste (hele gruppen udløser)
-        const kunU9 = bygProblem({ ...p, kampe: p.kampe.filter((k) => k.kategori.startsWith('U09')) });
-        assert.ok(kunU9.haltid.every((h) => h.udloesere === undefined));
+        assert.equal(pr.haltid.length, 1);
+        const h = pr.haltid[0];
+        assert.equal(h.raekke, 'U09 D');
+        assert.equal(h.graense, 240);
+        const kampe = h.kampe.map((i) => p.kampe.find((k) => k.id === pr.kampe[i].id));
+        assert.ok(kampe.every((k) => k.kategori === 'U09 D HS'), 'kun U09-singlerne — hverken doublen eller U11');
+        assert.equal(kampe.length, p.kampe.filter((k) => k.kategori === 'U09 D HS').length);
+        assert.equal(h.udloesere, undefined);
     });
 });
 

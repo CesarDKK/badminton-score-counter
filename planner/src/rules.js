@@ -5,39 +5,13 @@
 //               dag?, slot?, noegle? }
 // `noegle` sættes på advarsler, brugeren kan kvittere (projekt.kvitteret).
 import { minutter } from './tp-reader.js';
-import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt } from './kapacitet.js';
-import { reglerFor, STANDARD_REGLER } from './store.js';
-import { effektivForm, minKampeSamlet, sikreKampe } from './form.js';
+import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt, banebrugISlot, banerISlot } from './kapacitet.js';
+import { lavRegelmodel, minKampMin, pauseForRaekke, foerSkoledag, tidsvindue, banerBrugt } from './regelmodel.js';
+import { effektivForm, minKampeSamlet, sikreKampe, minKampeKrav } from './form.js';
 
-/** Min. tid pr. kamp (§ 4 stk. 5): standard ungdom ABCD 20, EM 25; senior ABCD 25, EM 30. */
-export function minKampMin(aargang, raekke, regler = STANDARD_REGLER) {
-    const senior = aargang === 'SEN' || /^\+/.test(aargang);
-    const em = raekke === 'E' || raekke === 'M';
-    const m = regler.minKampMin;
-    if (senior) return em ? m.seniorEM : m.seniorABCD;
-    return em ? m.ungdomEM : m.ungdomABCD;
-}
-
-/** Rækkens pause i minutter ud fra opsætningen (fælles pause erstatter ABCD/M). */
-export function pauseForRaekke(pauseMin, pauseKlasse) {
-    if (pauseKlasse === 'E') return pauseMin.E ?? 20;
-    if (pauseMin.faelles != null) return pauseMin.faelles;
-    return pauseMin[pauseKlasse] ?? 10;
-}
-
-/** Er datoen (ISO) dagen før en skoledag? Søndag–torsdag, medmindre andet er sat. */
-export function foerSkoledag(dag) {
-    if (typeof dag.foerSkoledag === 'boolean') return dag.foerSkoledag;
-    const [aar, md, d] = dag.dato.split('-').map(Number);
-    const ugedag = new Date(Date.UTC(aar, md - 1, d)).getUTCDay();
-    return ugedag !== 5 && ugedag !== 6; // fredag og lørdag er ikke før en skoledag
-}
-
-/** Tidsvinduet for en årgang på en dag: { fra, til } i minutter. */
-export function tidsvindue(aargang, dag, regler = STANDARD_REGLER) {
-    const [fra, til] = regler.tidsvindue[aargang] || regler.tidsvindue.SEN;
-    return { fra: minutter(fra), til: minutter(til) - (foerSkoledag(dag) ? Math.round(regler.foerSkoledagTimer * 60) : 0) };
-}
+// Byggestenene (kampvarighed, pause, tidsvindue, hvem der kan dele spillere …) ligger i regelmodel.js,
+// så Tjek, planlæggeren og løseren bruger de samme. De eksporteres videre herfra af hensyn til eksisterende import.
+export { minKampMin, pauseForRaekke, foerSkoledag, tidsvindue };
 
 const FINALERUNDER = new Set(['Kvartfinale', 'Semifinale', 'Finale']);
 
@@ -45,25 +19,14 @@ const FINALERUNDER = new Set(['Kvartfinale', 'Semifinale', 'Finale']);
  * Tjekker planen. Returnerer { problemer, prKamp: Map, prSlot: Map, antal: {fejl, advarsel, info} }.
  */
 export function tjekPlan(projekt) {
-    const { slotMin, pauseMin, dage } = projekt.opsaetning;
-    const regler = reglerFor(projekt);
-    // Hvor lang en kamp regnes for i pausetjekket: et helt slot (streng) eller
-    // reglementets minimumstid (som TP — så to 20-min-kampe kan ligge i naboslots ved 30-min slots).
-    const kampVarighed = projekt.opsaetning.kampVarighed || 'minimum';
-    const varighedFor = (k) => { const r = raekke(k); return kampVarighed === 'slot' || !r ? slotMin : Math.min(slotMin, minKampMin(r.aargang, r.raekke, regler)); };
-    const katMap = new Map(projekt.kategorier.map((k) => [k.id, k]));
-    const raekkeMap = new Map(projekt.raekker.map((r) => [r.id, r]));
-    const dagMap = new Map(dage.map((d) => [d.dato, d]));
+    const M = lavRegelmodel(projekt);
+    const { slotMin, dage, regler, katMap, raekkeMap, dagMap, kampMap, kat, raekke, varighedFor, kanDeleSpillere, maxPrDag } = M;
     const kvitteret = new Set(projekt.kvitteret || []);
-    const kampMap = new Map(projekt.kampe.map((k) => [k.id, k]));
     const problemer = [];
     const tilfoej = (p) => { if (!p.noegle || !kvitteret.has(p.noegle)) problemer.push(p); };
     const navn = (k) => `${k.kategori}: ${k.navn}`;
     const spillerNavn = (id) => { const s = projekt.spillere[id]; return s ? `${s.fornavn} ${s.efternavn}`.trim() : id; };
-    const kat = (k) => katMap.get(k.kategori);
-    const raekke = (k) => raekkeMap.get(kat(k)?.raekke);
     const tidMin = (p) => minutter(p.slot);
-    const enDag = dage.length === 1;
     const sidsteDag = dage.map((d) => d.dato).sort().at(-1);
 
     // Placerede kampe
@@ -98,24 +61,18 @@ export function tjekPlan(projekt) {
         if (!gyldige.has(slot)) {
             tilfoej({ type: 'uden-for-dagen', alvor: 'fejl', tekst: `${kampe.length} ${kampe.length === 1 ? 'kamp' : 'kampe'} kl. ${slot} ligger uden for dagens slots (${dag.start}–${dag.slut}).`, kampe: kampe.map((k) => k.id), dag: dato, slot });
         }
-        // Kapacitet pr. pulje: rækker med reserverede baner i tidsrummet har egen
-        // pulje; alle andre deler de fælles baner.
-        const { faelles, reserveret } = puljeKapacitet(dag, slot, projekt.raekker);
-        const prPulje = new Map();
-        for (const k of kampe) {
-            const pulje = puljeFor(kat(k)?.raekke, reserveret);
-            if (!prPulje.has(pulje)) prPulje.set(pulje, []);
-            prPulje.get(pulje).push(k);
-        }
-        for (const [pulje, liste] of prPulje) {
-            const halve = liste.filter((k) => kat(k)?.halvBane).length;
-            const hele = liste.length - halve;
-            const brugt = hele + Math.ceil(halve / 2);
-            const baner = pulje === 'faelles' ? faelles : reserveret.get(pulje);
-            if (brugt > baner) {
-                const hvor = pulje === 'faelles' ? (reserveret.size ? ' på de fælles baner' : '') : ` på ${pulje}'s reserverede baner`;
-                tilfoej({ type: 'kapacitet', alvor: 'fejl', tekst: `Kl. ${slot}: ${liste.length} kampe${halve ? ` (${halve} på halv bane)` : ''} kræver ${brugt} baner, men der er ${baner}${hvor}.`, kampe: liste.map((k) => k.id), dag: dato, slot });
-            }
+        // Rækker med reserverede baner bruger deres egne først og løber over på de fælles, hvis de ikke
+        // rækker. Først når de fælles baner også er fulde, er der for mange kampe (banebrugISlot).
+        const kapacitet = puljeKapacitet(dag, slot, projekt.raekker);
+        const brug = banebrugISlot(kampe.map((k) => ({ raekkeId: kat(k)?.raekke, halv: !!kat(k)?.halvBane })), kapacitet);
+        if (brug.forMange) {
+            const halve = kampe.filter((k) => kat(k)?.halvBane).length;
+            const iAlt = banerISlot(dag, slot);
+            const brugtIAlt = [...brug.prPulje].reduce((sum, [pulje, p]) => sum + (pulje === 'faelles' ? p.brugt : Math.min(p.brugt, p.baner)), 0) + [...brug.overloeb.values()].reduce((x, y) => x + y, 0);
+            const reserveret = [...brug.prPulje].filter(([pulje]) => pulje !== 'faelles').map(([pulje, p]) => `${pulje}: ${Math.min(p.brugt, p.baner)} af ${p.baner} reserverede baner${brug.overloeb.has(pulje) ? ` + ${brug.overloeb.get(pulje)} fælles` : ''}`);
+            // Kampene på de fælles baner (og dem, der løber over) er dem, der kan flyttes
+            const beroerte = kampe.filter((k) => { const pulje = puljeFor(kat(k)?.raekke, kapacitet.reserveret); return pulje === 'faelles' || brug.overloeb.has(pulje); });
+            tilfoej({ type: 'kapacitet', alvor: 'fejl', tekst: `Kl. ${slot}: ${kampe.length} kampe${halve ? ` (${halve} på halv bane)` : ''} kræver ${brugtIAlt} baner, men der er ${iAlt}${reserveret.length ? ` — de fælles baner er fulde (${reserveret.join('; ')})` : ''}.`, kampe: beroerte.map((k) => k.id), dag: dato, slot });
         }
     }
 
@@ -144,26 +101,8 @@ export function tjekPlan(projekt) {
             prSpiller.get(s).push({ k, p, min, kendt: kendte.has(s) });
         }
     }
-    const forfaedre = new Map(); // kampId → Set af alle kampe den bygger på (transitivt)
-    const alleForfaedre = (id, set = new Set(), dybde = 0) => {
-        if (forfaedre.has(id)) { for (const x of forfaedre.get(id)) set.add(x); return set; }
-        const egen = new Set();
-        for (const dep of kampMap.get(id)?.afhaengerAf || []) {
-            egen.add(dep);
-            if (dybde < 50) alleForfaedre(dep, egen, dybde + 1);
-        }
-        forfaedre.set(id, egen);
-        for (const x of egen) set.add(x);
-        return set;
-    };
-    const kanDeleSpillere = (a, b) => {
-        if (a.tpRef.draw !== b.tpRef.draw) return true;
-        if (a.fase === 'swiss' && b.fase === 'swiss') return a.runde !== b.runde;
-        return alleForfaedre(a.id).has(b.id) || alleForfaedre(b.id).has(a.id);
-    };
     const set = new Set();
     const parNoegle = (a, b, type) => [type, ...[a, b].sort()].join('|');
-    const maxPrDag = enDag ? regler.maxKampePrDagEnDag : regler.maxKampePrDag;
 
     for (const [s, liste] of prSpiller) {
         liste.sort((a, b) => a.p.dag.localeCompare(b.p.dag) || a.min - b.min);
@@ -173,9 +112,8 @@ export function tjekPlan(projekt) {
                 if (a.p.dag !== b.p.dag) break;
                 if (!kanDeleSpillere(a.k, b.k)) continue;
                 const begge = a.kendt && b.kendt;
-                const pause = Math.max(pauseForRaekke(pauseMin, raekke(a.k)?.pauseKlasse), pauseForRaekke(pauseMin, raekke(b.k)?.pauseKlasse));
+                const { varighed, pause } = M.mellemrum(a.k, b.k);
                 const gab = b.min - a.min;
-                const varighed = Math.max(varighedFor(a.k), varighedFor(b.k));
                 if (gab === 0) {
                     const n = parNoegle(a.k.id, b.k.id, 'dobbelt');
                     if (set.has(n)) continue;
@@ -195,7 +133,8 @@ export function tjekPlan(projekt) {
         const prDag = new Map();
         for (const x of liste) if (x.kendt) prDag.set(x.p.dag, (prDag.get(x.p.dag) || 0) + 1);
         for (const [dag, n] of prDag) {
-            if (n > maxPrDag) tilfoej({ type: 'max-kampe', alvor: 'fejl', tekst: `${spillerNavn(s)} har ${n} kampe ${datoKort(dag)} (max ${maxPrDag}).`, kampe: liste.filter((x) => x.kendt && x.p.dag === dag).map((x) => x.k.id), dag });
+            const graense = M.maxPrDagForKampe(liste.filter((x) => x.kendt && x.p.dag === dag).map((x) => x.k)); // senior: 10 også på én dag
+            if (n > graense) tilfoej({ type: 'max-kampe', alvor: 'fejl', tekst: `${spillerNavn(s)} har ${n} kampe ${datoKort(dag)} (max ${graense}).`, kampe: liste.filter((x) => x.kendt && x.p.dag === dag).map((x) => x.k.id), dag });
         }
     }
 
@@ -218,8 +157,7 @@ export function tjekPlan(projekt) {
             for (const x of prSpiller.get(s) || []) {
                 if (x.p.dag !== e.dag || x.k.tpRef.draw === e.k0.tpRef.draw) continue;
                 const gab = Math.abs(x.min - e.min);
-                const varighed = Math.max(varighedFor(x.k), varighedFor(e.k0));
-                const pause = Math.max(pauseForRaekke(pauseMin, raekke(x.k)?.pauseKlasse), pauseForRaekke(pauseMin, raekke(e.k0)?.pauseKlasse));
+                const { varighed, pause } = M.mellemrum(x.k, e.k0);
                 const type = gab === 0 ? 'dobbeltbooket' : gab < varighed + pause ? 'pause' : null;
                 if (!type) continue;
                 const n = `${x.k.id}|${type}`;
@@ -256,51 +194,33 @@ export function tjekPlan(projekt) {
             const k0 = kampMap.get(r.kampe[0]);
             // "Runder lige efter hinanden" (pr. Swiss-kategori): ingen pause, næste runde blot i et senere slot
             const udenPause = !!kat(k0)?.swissUdenPause;
-            const pause = udenPause ? 0 : pauseForRaekke(pauseMin, raekke(k0)?.pauseKlasse);
+            const pause = udenPause ? 0 : M.pauseFor(k0);
             const varighed = udenPause ? slotMin : varighedFor(k0);
             const forSent = forrige.sidsteDag > r.dag || (forrige.sidsteDag === r.dag && r.foersteMin < forrige.sidsteMin + varighed + pause);
             if (forSent) tilfoej({ type: 'swiss-runde', alvor: 'fejl', tekst: `${k0.kategori}: runde ${runde} begynder kl. ${r.foerste.slice(11)}, men runde ${runde - 1} slutter først kl. ${klokke(forrige.sidsteMin + varighed)}${pause ? ` (plus ${pause} min pause)` : ''}.`, kampe: [...r.kampe, ...forrige.kampe], dag: r.dag, slot: r.foerste.slice(11) });
         }
     }
 
-    // ── Max haltid pr. række (hård regel som data, fx U9: 240 min): første til sidste kamp samme dag ──
-    for (const [s, liste] of prSpiller) {
-        const prDag = new Map();
-        for (const x of liste) {
-            if (!x.kendt) continue;
-            const graense = raekke(x.k)?.maxHaltidMin;
-            if (!prDag.has(x.p.dag)) prDag.set(x.p.dag, { foerste: x, sidste: x, graense: null, kampe: [] });
-            const d = prDag.get(x.p.dag);
-            if (x.min < d.foerste.min) d.foerste = x;
-            if (x.min > d.sidste.min) d.sidste = x;
-            if (graense && (d.graense === null || graense < d.graense)) d.graense = graense;
-            d.kampe.push(x.k.id);
-        }
-        for (const [dag, d] of prDag) {
-            if (!d.graense) continue;
-            const haltid = d.sidste.min - d.foerste.min + slotMin;
-            if (haltid > d.graense) tilfoej({ type: 'max-haltid', alvor: 'fejl', tekst: `${spillerNavn(s)} er i hallen ${haltid} min ${datoKort(dag)} (kl. ${d.foerste.p.slot}–${klokke(d.sidste.min + slotMin)}); rækken tillader højst ${d.graense} min.`, kampe: d.kampe, dag, slot: d.sidste.p.slot });
-        }
-    }
-
-    // Swiss Ladder: alle spillere er med i hver runde, så haltiden er fra første rundes første
-    // kamp til sidste rundes sidste kamp samme dag — også selvom runde 2+ ikke har kendte spillere.
+    // ── Max varighed for afviklingen af rækkens singlekampe (U9: 4 timer, U11: 6 timer) ──
+    // Pr. række og dag: fra første singlekamp starter, til den sidste er slut. Doublerne tæller ikke med.
     {
-        const prDrawDag = new Map();
+        const prRaekkeDag = new Map();
         for (const { k, p, min } of placerede) {
-            if (k.fase !== 'swiss') continue;
-            const graense = raekke(k)?.maxHaltidMin;
+            const graense = M.singleVarighedGraense(k);
             if (!graense) continue;
-            const n = `${k.tpRef.draw}|${p.dag}`;
-            if (!prDrawDag.has(n)) prDrawDag.set(n, { foerste: min, sidste: min, graense, kampe: [], kategori: k.kategori, dag: p.dag });
-            const d = prDrawDag.get(n);
+            const n = `${raekke(k).id}|${p.dag}`;
+            if (!prRaekkeDag.has(n)) prRaekkeDag.set(n, { raekkeId: raekke(k).id, dag: p.dag, graense, foerste: min, sidste: min, kampe: [] });
+            const d = prRaekkeDag.get(n);
             d.foerste = Math.min(d.foerste, min);
             d.sidste = Math.max(d.sidste, min);
-            d.kampe.push(k.id);
+            d.kampe.push({ id: k.id, min });
         }
-        for (const d of prDrawDag.values()) {
-            const haltid = d.sidste - d.foerste + slotMin;
-            if (haltid > d.graense) tilfoej({ type: 'max-haltid', alvor: 'fejl', tekst: `${d.kategori}: Swiss Ladder-runderne strækker sig over ${haltid} min ${datoKort(d.dag)} (kl. ${klokke(d.foerste)}–${klokke(d.sidste + slotMin)}); rækken tillader højst ${d.graense} min i hallen.`, kampe: d.kampe, dag: d.dag, slot: klokke(d.sidste) });
+        for (const d of prRaekkeDag.values()) {
+            const varighed = d.sidste - d.foerste + slotMin;
+            if (varighed <= d.graense) continue;
+            // De kampe, der ligger uden for grænsen regnet fra dagens første singlekamp, er dem, der skal flyttes
+            const forSent = d.kampe.filter((x) => x.min + slotMin > d.foerste + d.graense).map((x) => x.id);
+            tilfoej({ type: 'max-haltid', alvor: 'fejl', tekst: `${d.raekkeId}: singlekampene strækker sig over ${varighed} min ${datoKort(d.dag)} (kl. ${klokke(d.foerste)}–${klokke(d.sidste + slotMin)}); afviklingen af singlekampene må højst vare ${d.graense} min.`, kampe: forSent, dag: d.dag });
         }
     }
 
@@ -347,9 +267,9 @@ export function tjekPlan(projekt) {
     for (const r of projekt.raekker) {
         const m = dagePrRaekke.get(r.id);
         if (!m) continue;
-        // Max dage pr. række som data (r.maxDage); ældre projekter uden feltet bruger reglementets rækker
-        const maxDage = r.maxDage !== undefined ? r.maxDage : (['B', 'C', 'D'].includes(r.raekke) || (r.aargang === 'U11' && r.raekke === 'A') ? 1 : null);
-        if (maxDage && m.size > maxDage && !r.dispensationFlereDage) {
+        // Max dage pr. række som data (r.maxDage); dispensation og ældre projekter håndteres i regelmodellen
+        const maxDage = M.maxDageFor(r);
+        if (maxDage && m.size > maxDage) {
             tilfoej({ type: 'flere-dage', alvor: 'advarsel', noegle: `${r.id}:flere-dage`, tekst: `${r.id} spiller over ${m.size} dage (${[...m.keys()].sort().map(datoKort).join(', ')}). B-, C- og D-rækker og U11 A skal afvikles på én dag, medmindre der er givet dispensation.`, kampe: [...m.values()].flat().map((k) => k.id) });
         }
         for (const [dag, kampe] of m) {
@@ -367,10 +287,13 @@ export function tjekPlan(projekt) {
         const senior = r.aargang === 'SEN' || /^\+/.test(r.aargang);
         if (r.raekke === 'E') {
             for (const [dag, kampe] of m) {
-                if (dag === sidsteDag) {
+                if (dag === sidsteDag && dage.length > 1) { // en endagsturnering kan ikke have "kun semi og finale sidste dag"
                     const forkerte = kampe.filter((k) => !(k.fase === 'cup' && (k.rundeNavn === 'Semifinale' || k.rundeNavn === 'Finale')));
                     if (forkerte.length) tilfoej({ type: 'e-sidste-dag', alvor: 'fejl', tekst: `${r.id}: ${forkerte.length} kampe på sidste dag er hverken semifinaler eller finaler.`, kampe: forkerte.map((k) => k.id), dag });
                 }
+                // § 4 stk. 5.1: i E-rækker må ingen kampe programsættes før kl. 10
+                const forTidlige = kampe.filter((k) => tidMin(projekt.plan[k.id]) < minutter(regler.eTidligst));
+                if (forTidlige.length) tilfoej({ type: 'e-tidligst', alvor: 'fejl', tekst: `${r.id}: ${forTidlige.length} ${forTidlige.length === 1 ? 'kamp' : 'kampe'} ${datoKort(dag)} ligger før kl. ${regler.eTidligst}; i E-rækker må kampe tidligst programsættes fra kl. ${regler.eTidligst}.`, kampe: forTidlige.map((k) => k.id), dag });
                 for (const k of kampe) {
                     if (k.rundeNavn !== 'Finale') continue;
                     const min = tidMin(projekt.plan[k.id]);
@@ -390,17 +313,19 @@ export function tjekPlan(projekt) {
                 }
                 const prKat = new Map();
                 for (const k of kampe) if (k.fase === 'cup' && FINALERUNDER.has(k.rundeNavn)) { if (!prKat.has(k.kategori)) prKat.set(k.kategori, new Set()); prKat.get(k.kategori).add(k.rundeNavn); }
-                for (const [katId, runder] of prKat) if (runder.size > 1) tilfoej({ type: 'senior-finalerunder', alvor: 'fejl', tekst: `${katId}: ${[...runder].join(' og ')} ligger samme dag (${datoKort(dag)}); senior E/M må ikke spille kvart-, semi- og finale samme dag.`, kampe: kampe.filter((k) => k.kategori === katId && FINALERUNDER.has(k.rundeNavn)).map((k) => k.id), dag });
+                // Jesper 2026-09-20: semifinale og finale må gerne spilles samme dag, men kvartfinalen skal ligge
+                // en tidligere dag — altså må en kvartfinale ikke dele dag med kategoriens semifinale eller finale.
+                for (const [katId, runder] of prKat) if (runder.has('Kvartfinale') && runder.size > 1) tilfoej({ type: 'senior-finalerunder', alvor: 'fejl', tekst: `${katId}: ${[...runder].join(', ')} ligger samme dag (${datoKort(dag)}); i senior E/M må semifinale og finale spilles samme dag, men kvartfinalen skal ligge en tidligere dag.`, kampe: kampe.filter((k) => k.kategori === katId && FINALERUNDER.has(k.rundeNavn)).map((k) => k.id), dag });
             }
         }
-        if (senior && (r.raekke === 'A' || r.raekke === 'B') && m.size > 1 && m.has(sidsteDag)) {
+        if (M.kunFinalerunderPaaFinaledagen(r) && m.size > 1 && m.has(sidsteDag)) { // Senior A/B og Senior+ E/A
             const forkerte = m.get(sidsteDag).filter((k) => !(k.fase === 'cup' && FINALERUNDER.has(k.rundeNavn)));
             if (forkerte.length) tilfoej({ type: 'senior-finaledag', alvor: 'fejl', tekst: `${r.id}: ${forkerte.length} kampe på finaledagen er hverken kvart-, semi- eller finaler.`, kampe: forkerte.map((k) => k.id), dag: sidsteDag });
         }
     }
 
     // ── Anti-samtidighed (advarsel): HS/HD, DS/DD og MD i samme række i samme slot ──
-    if (projekt.opsaetning.antiSamtidighed !== false) {
+    if (M.antiSamtidighed) {
         const prRaekkeDag = new Map(); // `${raekke}|${dag}` → Map(slot → [kampe])
         for (const [n, kampe] of prSlotKampe) {
             const [dato, slot] = n.split('|');
@@ -450,10 +375,7 @@ export function tjekPlan(projekt) {
         if (samlet) for (const [id, andre] of sikrePrKat) if (id !== k.id) for (const s of prSpillerAntal.keys()) if (andre.has(s)) prSpillerAntal.set(s, prSpillerAntal.get(s) + andre.get(s));
         if (!prSpillerAntal.size) continue;
         const faerrest = Math.min(...prSpillerAntal.values());
-        let krav = 0;
-        if (ungdom && (r.raekke === 'M' || r.raekke === 'A')) krav = regler.minKampe.MA;
-        else if (ungdom && ['B', 'C', 'D'].includes(r.raekke)) krav = k.type === 'single' ? regler.minKampe.BCDSingle : regler.minKampe.BCDDouble;
-        if (ungdom && ['U09', 'U11'].includes(r.aargang) && k.type === 'single') krav = Math.max(krav, regler.minKampe.U9U11Single);
+        const krav = minKampeKrav(k, r, regler);
         if (krav && faerrest < krav) {
             const ramte = [...prSpillerAntal].filter(([, n]) => n < krav).map(([s]) => spillerNavn(s));
             tilfoej({ type: 'form', alvor: 'advarsel', noegle: `${k.id}:min-kampe`, tekst: `${k.id}: ${ramte.length} spillere er kun sikret ${faerrest} ${faerrest === 1 ? 'kamp' : 'kampe'}${samlet ? ' i alt (single + double/mix)' : ''} (krav ${krav}): ${ramte.slice(0, 4).join(', ')}${ramte.length > 4 ? ' …' : ''}. ${(k.formValg || 'tp') === 'tp' ? 'Rettes i TP.' : 'Vælg en anden form i fane 1.'}`, kampe: [] });

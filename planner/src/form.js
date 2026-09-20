@@ -15,7 +15,7 @@ export const PULJE_STOERRELSER = [3, 4, 5];
 export const SWISS_RUNDER = [4, 5, 6];
 export const MAAL_KAMPE = 6; // reglementets anbefaling ved 3 kategorier
 
-/** Reglementets minimum kampe pr. spiller for kategorien (samme logik som rules.js). */
+/** Reglementets minimum kampe pr. spiller for kategorien — det ENE sted reglen står (bruges også af Tjek og nedskæringsforslagene). */
 export function minKampeKrav(kategori, raekke, regler) {
     const ungdom = /^U/.test(raekke?.aargang || '');
     let krav = 0;
@@ -336,10 +336,13 @@ export function effektivForm(kategori) {
 
 /**
  * Tælles rækkens minimumskrav samlet på tværs af spillerens kategorier (single, double og mix)?
- * Ja som standard for alle årgange (Jesper 2026-09-18) — kan slås fra pr. række.
+ * NEJ som standard: reglementet (Appendiks 1) stiller kravet pr. kategori — "minimum 2 kampe i hver tilmeldt
+ * kategori" (M/A), "minimum 3 kampe i single og minimum 2 kampe i double" (B/C/D), U9/U11 "minimum 4 kampe i
+ * single" — og U9/U11-vejledningen siger "4–6 singlekampe og 2–5 doublekampe". Turneringslederen kan slå
+ * samlet tælling til pr. række som et bevidst valg, men det afviger fra reglementet.
  */
 export function minKampeSamlet(raekke) {
-    return raekke ? (raekke.minKampeSamlet ?? true) : false;
+    return raekke ? raekke.minKampeSamlet === true : false;
 }
 
 /**

@@ -1,4 +1,5 @@
-// Tests af "minimum antal kampe tælles samlet" (U9: single + double/mix tilsammen)
+// Tests af "minimum antal kampe tælles samlet" (single + double/mix tilsammen) — et bevidst TILVALG pr. række.
+// Standarden er reglementets: kravet gælder pr. kategori (Appendiks 1 og U9/U11-vejledningen).
 // i form.js (valg af form), store.js (genberegning) og rules.js (advarslen i Tjek).
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -34,28 +35,34 @@ function model({ pigerIDouble = true } = {}) {
 
 /** Pigesinglen som Swiss Ladder (4 spillere → højst 3 runder, så kravet på 4 kun nås via doublen); resten automatisk. */
 function projekt(valg) {
-    let p = nytProjekt(model(valg));
+    let p = opdaterRaekke(nytProjekt(model(valg)), 'U09 D', { minKampeSamlet: true }); // tilvalgt i disse tests
     for (const k of p.kategorier) p = saetForm(p, k.id, { formValg: k.id === 'U09 D DS' ? 'swiss' : 'auto' });
     return p;
 }
 
 describe('min. kampe samlet: hjælpere', () => {
-    test('alle årgange tæller samlet som standard; rækkens eget valg vinder', () => {
-        assert.equal(minKampeSamlet(u9d), true);
-        for (const aargang of ['U11', 'U13', 'U15', 'U17', 'U19', 'SEN']) assert.equal(minKampeSamlet({ aargang, raekke: 'D' }), true, aargang);
-        assert.equal(minKampeSamlet({ aargang: 'U09', raekke: 'D', minKampeSamlet: false }), false);
-        assert.equal(minKampeSamlet({ aargang: 'U11', raekke: 'D', minKampeSamlet: true }), true);
-        assert.equal(nytProjekt(model()).raekker[0].minKampeSamlet, true);
+    test('standarden er reglementets: kravet gælder pr. kategori i alle årgange; samlet tælling er et tilvalg', () => {
+        for (const aargang of ['U09', 'U11', 'U13', 'U15', 'U17', 'U19', 'SEN']) assert.equal(minKampeSamlet({ aargang, raekke: 'D' }), false, aargang);
+        assert.equal(minKampeSamlet({ aargang: 'U09', raekke: 'D', minKampeSamlet: true }), true);
+        assert.equal(nytProjekt(model()).raekker[0].minKampeSamlet, false);
     });
-    test('ældre gemte projekter (kun U9 samlet) opgraderes én gang til alle rækker', async () => {
+    test('standard: 4 piger i Swiss Ladder når ikke single-kravet på 4, selv om de også spiller double', () => {
+        let p = nytProjekt(model());
+        for (const k of p.kategorier) p = saetForm(p, k.id, { formValg: k.id === 'U09 D DS' ? 'swiss' : 'auto' });
+        assert.equal(p.kategorier.find((k) => k.id === 'U09 D DS').formForslag.opfylderKrav, false);
+        const a = tjekPlan(p).problemer.find((x) => (x.noegle || '') === 'U09 D DS:min-kampe');
+        assert.ok(a, 'Tjek advarer');
+        assert.doesNotMatch(a.tekst, /i alt/);
+    });
+    test('ældre gemte projekter (samlet tælling slået til af tidligere udgaver) sættes én gang tilbage til reglementet', async () => {
         const { normaliserHalvBane } = await import('../../src/store.js');
         const p = nytProjekt(model());
-        const gammelt = { ...p, opsaetning: { ...p.opsaetning, minKampeSamletV2: undefined }, raekker: [{ ...p.raekker[0], id: 'U11 D', aargang: 'U11', minKampeSamlet: false }] };
+        const gammelt = { ...p, opsaetning: { ...p.opsaetning, minKampeSamletV3: undefined, minKampeSamletV2: true }, raekker: [{ ...p.raekker[0], minKampeSamlet: true }] };
         const ny = normaliserHalvBane(gammelt);
-        assert.equal(ny.raekker[0].minKampeSamlet, true);
-        assert.equal(ny.opsaetning.minKampeSamletV2, true);
-        const fravalgt = { ...ny, raekker: [{ ...ny.raekker[0], minKampeSamlet: false }] };
-        assert.equal(normaliserHalvBane(fravalgt).raekker[0].minKampeSamlet, false, 'brugerens senere fravalg bevares');
+        assert.equal(ny.raekker[0].minKampeSamlet, false);
+        assert.equal(ny.opsaetning.minKampeSamletV3, true);
+        const tilvalgt = { ...ny, raekker: [{ ...ny.raekker[0], minKampeSamlet: true }] };
+        assert.equal(normaliserHalvBane(tilvalgt).raekker[0].minKampeSamlet, true, 'brugerens senere tilvalg bevares');
     });
     test('effektivForm og sikreKampe: plannerens egen Swiss tæller runder, ikke kun runde 1', () => {
         const k = { id: 'X', form: 'dobbelt-pulje', runder: 0, formValg: 'auto', formForslag: { form: 'swiss', runder: 4, minKampe: 4 } };
