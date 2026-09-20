@@ -186,7 +186,14 @@ export function bygProblem(projekt, hintPlan = null) {
         .map((r) => ({ raekke: r.id, max: M.maxDageFor(r), kampe: kampe.map((k, i) => (k.raekke === r.id ? i : -1)).filter((i) => i >= 0) }));
 
     // Max kampe pr. spiller pr. dag
-    const mangeKampe = [...prKendt.values()].filter((l) => l.length > maxPrDag).map((l) => l.map((k) => indeks.get(k.id)));
+    // Spillere med en strengere grænse end turneringens (senior på én dag: 10 i stedet for 12) får deres egen gruppe
+    const mangeKampe = [], egenGraense = [];
+    for (const l of prKendt.values()) {
+        const graense = M.maxPrDagForKampe(l);
+        if (l.length <= graense) continue;
+        if (graense === maxPrDag) mangeKampe.push(l.map((k) => indeks.get(k.id)));
+        else egenGraense.push({ kampe: l.map((k) => indeks.get(k.id)), max: graense });
+    }
 
     // Senior E/M: max kampe pr. kategori pr. spiller pr. dag, og kvartfinalen ikke samme dag som kategoriens
     // semifinale eller finale (de to må gerne dele dag)
@@ -202,6 +209,7 @@ export function bygProblem(projekt, hintPlan = null) {
                 finaler.get(k.kategori)[k.rundeNavn].push(indeks.get(k.id));
             }
         }
+        maxPrGruppe.push(...egenGraense);
         for (const liste of prSpillerKat.values()) if (liste.length > M.regler.seniorMaxPrKategori) maxPrGruppe.push({ kampe: liste, max: M.regler.seniorMaxPrKategori });
         for (const f of finaler.values()) for (const a of f.Kvartfinale) for (const b of [...f.Semifinale, ...f.Finale]) ikkeSammeDag.push([a, b]);
     }

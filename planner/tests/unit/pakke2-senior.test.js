@@ -43,6 +43,44 @@ describe('regelmodellen: hvilken dag og tid en kamp må ligge', () => {
     });
 });
 
+describe('reglementet § 4 stk. 5.1 og 5.2: E-rækker tidligst kl. 10, og senior max 10 kampe også på én dag', () => {
+    test('E-række: ingen kampe før kl. 10 — i regelmodel, Tjek, planlægger og løserens problem', () => {
+        const p = seniorE();
+        const M = lavRegelmodel(p);
+        const pulje = p.kampe.find((k) => k.fase === 'pulje');
+        assert.match(M.kampForbud(pulje, LOER, 9 * 60 + 30), /tidligst kl. 10:00/);
+        assert.equal(M.kampForbud(pulje, LOER, 10 * 60), null);
+        const forTidlig = flytKamp(p, pulje.id, LOER, '09:00');
+        assert.deepEqual(tjekPlan(forTidlig).problemer.filter((x) => x.type === 'e-tidligst').map((x) => x.alvor), ['fejl']);
+        const f = lavForslag(p);
+        assert.ok(Object.values(f.plan).every((x) => x.slot >= '10:00'), 'forslaget lægger intet før kl. 10');
+        assert.ok(bygProblem(p).kampe.every((k) => k.tilladte.every((t) => t % 1440 >= 600)));
+    });
+    test('en anden række i samme turnering må gerne starte kl. 9', () => {
+        let p = nytProjekt(model([{ id: 'SEN A', aargang: 'SEN', raekke: 'A', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('a', 4) }] }], [LOER]));
+        p = saetForm(p, 'SEN A HS', { formValg: 'pulje' });
+        assert.equal(lavRegelmodel(p).kampForbud(p.kampe[0], LOER, 9 * 60), null);
+    });
+    test('max kampe pr. dag: ungdom 12 på én dag og 10 over flere; senior altid 10', () => {
+        const enDag = (aargang) => lavRegelmodel(nytProjekt(model([{ id: `${aargang} A`, aargang, raekke: 'A', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('x', 4) }] }], [LOER])));
+        assert.equal(enDag('U13').maxPrDagFor({ aargang: 'U13', raekke: 'A' }), 12);
+        assert.equal(enDag('SEN').maxPrDagFor({ aargang: 'SEN', raekke: 'A' }), 10);
+        assert.equal(enDag('+40').maxPrDagFor({ aargang: '+40', raekke: 'A' }), 10);
+        const toDage = lavRegelmodel(seniorE());
+        assert.equal(toDage.maxPrDagFor({ aargang: 'U13', raekke: 'A' }), 10);
+    });
+    test('Senior+ E og A: kun kvart-, semi- og finaler på finaledagen (som Senior A og B)', () => {
+        const M = lavRegelmodel(seniorE());
+        assert.equal(M.kunFinalerunderPaaFinaledagen({ aargang: 'SEN', raekke: 'A' }), true);
+        assert.equal(M.kunFinalerunderPaaFinaledagen({ aargang: 'SEN', raekke: 'B' }), true);
+        assert.equal(M.kunFinalerunderPaaFinaledagen({ aargang: '+40', raekke: 'E' }), true);
+        assert.equal(M.kunFinalerunderPaaFinaledagen({ aargang: '+40', raekke: 'A' }), true);
+        assert.equal(M.kunFinalerunderPaaFinaledagen({ aargang: '+40', raekke: 'B' }), false);
+        assert.equal(M.kunFinalerunderPaaFinaledagen({ aargang: 'SEN', raekke: 'E' }), false, 'Senior E har sin egen regel (kun semi og finale sidste dag)');
+        assert.equal(M.kunFinalerunderPaaFinaledagen({ aargang: 'U15', raekke: 'A' }), false);
+    });
+});
+
 describe('Tjek: semifinale og finale må dele dag, kvartfinalen skal ligge en tidligere dag', () => {
     const laeg = (p, kampe, dag, slot) => kampe.reduce((q, k) => flytKamp(q, k.id, dag, slot), p);
     test('semifinale og finale samme dag er tilladt (for E-rækker er det ligefrem kravet på sidste dag)', () => {

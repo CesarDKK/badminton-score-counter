@@ -184,6 +184,7 @@ function reglerPanel(p) {
                 ${tal('minKampe.BCDDouble', r.minKampe.BCDDouble, 'B–D double')}
                 ${tal('minKampe.U9U11Single', r.minKampe.U9U11Single, 'U9/U11 single')}
                 ${tal('minKampe.swissRunder', r.minKampe.swissRunder, 'Swiss Ladder-runder')}
+                ${tid('eTidligst', r.eTidligst, 'E-rækker tidligst')}
                 ${tid('eFinale.0', r.eFinale[0], 'E-finaler fra')}
                 ${tid('eFinale.1', r.eFinale[1], 'E-finaler til')}
             </div>

@@ -28,8 +28,9 @@ export const STANDARD_REGLER = {
     tidsvindue: TIDSVINDUE,          // pr. årgang: [start, slut]
     foerSkoledagTimer: 2,            // så mange timer tidligere slutter vinduet dagen før en skoledag
     maxKampePrDag: 10,               // ved flere dage
-    maxKampePrDagEnDag: 12,          // ved én dag
+    maxKampePrDagEnDag: 12,          // ungdom, når hele turneringen afvikles på én dag (§ 4 stk. 5.1); senior: 10 (stk. 5.2)
     minKampMin: { ungdomABCD: 20, ungdomEM: 25, seniorABCD: 25, seniorEM: 30 },
+    eTidligst: '10:00',              // E-rækker: ingen kampe (indledende, kvart-, semifinaler, finaler) før dette tidspunkt (§ 4 stk. 5.1)
     eFinale: ['10:00', '13:00'],       // E-finaler skal ligge i dette vindue
     seniorMaxPrKategori: 3,          // senior E/M: max kampe pr. kategori pr. dag
     minKampe: { MA: 2, BCDSingle: 3, BCDDouble: 2, U9U11Single: 4, swissRunder: 4 },

@@ -57,6 +57,27 @@ konsekvens og fordelt på fire pakker. Kryds af, efterhånden som de rettes.
 - [x] **14. Ældre projekter** uden `maxDage` / `antiSamtidighed` / `pauseKlasse` tolkes ens alle steder (regelmodellen).
 - [x] Løserens problem: en låst kamp uden for rækkens tidsrum ligger på de fælles baner (gav før falsk "umuligt").
 
+### Krydstjek mod reglementet (2026-09-20)
+
+Kilder: Reglement for Individuelle Turneringer § 3 stk. 8 og § 4 stk. 5–5.2, Appendiks 1 (turneringsformer),
+Appendiks 2 (sammenlægning) og "U9-U11 turneringer 2026-2027 Vejledning" — alle fra badminton.dk/individuelle-turneringer.
+
+- [x] Stemmer: min. tid pr. kamp (20/25/25/30), pauser (E 20, M 15, ABCD 10, fælles 12), tidsvinduer (U9/U11 til 19,
+      U13/U15 til 20, U17+ til 21; 2 timer tidligere før skoledag), max 12/10 kampe pr. dag for ungdom, B/C/D og
+      U11 A på én dag uden dispensation, E-række kun semi og finale sidste dag, E-finaler 10–13, senior E/M max 3
+      kampe pr. kategori pr. dag, minimumskravene (M/A 2 pr. kategori; B/C/D 3 i single og 2 i double; U9/U11 4 i single).
+- [x] Rettet: "Kvartfinaler må ikke afvikles samme dag som semi- og finaler" (Appendiks 1) — se punkt 10.
+- [x] Rettet: E-rækker må tidligst programsættes fra kl. 10 — også indledende kampe, kvart- og semifinaler
+      (`regler.eTidligst`, ny fejl `e-tidligst`; planlægger og løser overholder den).
+- [x] Rettet: senior må højst spille 10 kampe pr. dag, også når turneringen er på én dag (ungdom: 12).
+- [x] Rettet: finaledags-reglen gælder også Senior+ E- og A-rækker, ikke kun Senior A og B.
+- [ ] **Afventer Jesper:** minimum antal kampe står i teksterne PR. KATEGORI (single for sig, double for sig) og for
+      alle ungdomsrækker — ikke samlet på tværs. `minKampeSamlet` er i dag slået til for alle rækker.
+- [ ] **Afventer Jesper:** "max 4 timer" (U9) og "max 6 timer" (U11) gælder ifølge vejledningen AFVIKLINGEN AF
+      SINGLEKAMPENE, ikke spillerens samlede tid i hallen inkl. double. U11 har i dag ingen grænse som standard.
+- [ ] **Afventer Jesper:** anbefalet rækkefølge er U9/U11: single → double (→ mix); U13 og op: mix → double → single.
+      Planneren bruger mix → single → double for alle.
+
 ## Pakke 3 — én kapacitetsberegning, stabilt formvalg og stabile kamp-id'er
 
 - [ ] 6. Kamp-id'er følger positionen: efter ny puljeinddeling eller ændret `cupTop` kan en gammel tid

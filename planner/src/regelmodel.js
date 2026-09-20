@@ -114,29 +114,50 @@ export function lavRegelmodel(projekt) {
     // ── E-rækker og senior: regler om, HVILKEN dag og tid en kamp må ligge ──
     const sidsteDag = dage.map((d) => d.dato).sort().at(-1);
     const erFinalerunde = (k) => k.fase === 'cup' && FINALERUNDER.has(k.rundeNavn);
-    /** Senior E/M: max kampe pr. kategori pr. dag; semifinale og finale må dele dag, men kvartfinalen skal ligge en tidligere dag. */
+    /**
+     * Reglementet § 4 stk. 5.2: "I individuelle Senior E- og M-rækketurneringer må ingen spiller spille mere end
+     * 3 kampe pr. dag i hver enkelt kategori. Kvart-, semi- og finaler må ikke afvikles samme dag." Jesper
+     * (2026-09-20) og den tidligere udgave af teksten ("Kvartfinaler må ikke afvikles samme dag som semi- og
+     * finaler"): semifinale og finale må dele dag, kvartfinalen skal ligge en tidligere dag.
+     */
     const seniorEM = (r) => !!r && erSenior(r.aargang) && (r.raekke === 'E' || r.raekke === 'M');
+    /**
+     * Reglementet: "I individuelle Senior A- og B-rækketurneringer, samt i alle individuelle Senior+ E- og
+     * A-rækketurneringer må der maksimalt på finaledagen spilles kvart-, semi- og finaler."
+     */
+    const kunFinalerunderPaaFinaledagen = (r) => !!r && ((r.aargang === 'SEN' && (r.raekke === 'A' || r.raekke === 'B')) || ((r.aargang || '').startsWith('+') && (r.raekke === 'E' || r.raekke === 'A')));
     /** Kan rækken komme til at spille over flere dage? (bruges af planlægger og løser; Tjek ser på den faktiske plan) */
     const kanSpilleFlereDage = (r) => (r.dage || []).length > 1 && maxDageFor(r) !== 1;
     /**
      * Må kampen ligge på denne dag (og starte kl. min)? Returnerer null eller årsagen.
      *  - E-rækker: på turneringens sidste dag kun semifinaler og finaler (når turneringen har flere dage),
      *    og E-finaler skal starte i finalevinduet (regler.eFinale).
-     *  - Senior A/B over flere dage: på finaledagen kun kvart-, semi- og finaler.
+     *  - Senior A/B og Senior+ E/A over flere dage: på finaledagen kun kvart-, semi- og finaler.
      */
     const kampForbud = (k, dato, min = null, { flereDage } = {}) => {
         const r = raekke(k);
         if (!r) return null;
         if (r.raekke === 'E') {
+            // § 4 stk. 5.1: indledende kampe inkl. kvartfinaler, semifinaler og finaler må tidligst programsættes fra kl. 10
+            if (min !== null && regler.eTidligst && min < minutter(regler.eTidligst)) return 'E-række: tidligst kl. ' + regler.eTidligst;
             if (dage.length > 1 && dato === sidsteDag && !(k.fase === 'cup' && (k.rundeNavn === 'Semifinale' || k.rundeNavn === 'Finale'))) return 'E-række: kun semifinaler og finaler på sidste dag';
             if (k.rundeNavn === 'Finale' && min !== null && (min < minutter(regler.eFinale[0]) || min > minutter(regler.eFinale[1]))) return 'E-finale uden for finalevinduet';
         }
-        if (erSenior(r.aargang) && (r.raekke === 'A' || r.raekke === 'B') && (flereDage ?? kanSpilleFlereDage(r)) && dato === sidsteDag && !erFinalerunde(k)) return 'senior A/B: kun kvart-, semi- og finaler på finaledagen';
+        if (kunFinalerunderPaaFinaledagen(r) && (flereDage ?? kanSpilleFlereDage(r)) && dato === sidsteDag && !erFinalerunde(k)) return 'senior A/B: kun kvart-, semi- og finaler på finaledagen';
         return null;
     };
 
+    /**
+     * Max kampe pr. spiller pr. dag. Ungdom: 12, når hele turneringen afvikles på én dag, ellers 10 (§ 4 stk. 5.1).
+     * Senior: altid 10 — "Dog må en spiller ikke spille mere end 10 kampe på én dag" (stk. 5.2).
+     * For en spiller gælder den strengeste grænse blandt rækkerne for dagens kampe.
+     */
+    const maxPrDagFor = (r) => (dage.length === 1 && !(r && erSenior(r.aargang)) ? regler.maxKampePrDagEnDag : regler.maxKampePrDag);
+    const maxPrDagForKampe = (kampe) => Math.min(...kampe.map((k) => maxPrDagFor(raekke(k))));
+
     return {
-        sidsteDag, erFinalerunde, seniorEM, kanSpilleFlereDage, kampForbud,
+        maxPrDagFor, maxPrDagForKampe,
+        sidsteDag, erFinalerunde, seniorEM, kunFinalerunderPaaFinaledagen, kanSpilleFlereDage, kampForbud,
         regler, slotMin, pauseMin, dage, dagMap, katMap, raekkeMap, kampMap, kat, raekke,
         enDag: dage.length === 1,
         maxPrDag: dage.length === 1 ? regler.maxKampePrDagEnDag : regler.maxKampePrDag,

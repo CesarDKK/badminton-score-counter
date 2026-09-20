@@ -133,7 +133,8 @@ export function tjekPlan(projekt) {
         const prDag = new Map();
         for (const x of liste) if (x.kendt) prDag.set(x.p.dag, (prDag.get(x.p.dag) || 0) + 1);
         for (const [dag, n] of prDag) {
-            if (n > maxPrDag) tilfoej({ type: 'max-kampe', alvor: 'fejl', tekst: `${spillerNavn(s)} har ${n} kampe ${datoKort(dag)} (max ${maxPrDag}).`, kampe: liste.filter((x) => x.kendt && x.p.dag === dag).map((x) => x.k.id), dag });
+            const graense = M.maxPrDagForKampe(liste.filter((x) => x.kendt && x.p.dag === dag).map((x) => x.k)); // senior: 10 også på én dag
+            if (n > graense) tilfoej({ type: 'max-kampe', alvor: 'fejl', tekst: `${spillerNavn(s)} har ${n} kampe ${datoKort(dag)} (max ${graense}).`, kampe: liste.filter((x) => x.kendt && x.p.dag === dag).map((x) => x.k.id), dag });
         }
     }
 
@@ -318,6 +319,9 @@ export function tjekPlan(projekt) {
                     const forkerte = kampe.filter((k) => !(k.fase === 'cup' && (k.rundeNavn === 'Semifinale' || k.rundeNavn === 'Finale')));
                     if (forkerte.length) tilfoej({ type: 'e-sidste-dag', alvor: 'fejl', tekst: `${r.id}: ${forkerte.length} kampe på sidste dag er hverken semifinaler eller finaler.`, kampe: forkerte.map((k) => k.id), dag });
                 }
+                // § 4 stk. 5.1: i E-rækker må ingen kampe programsættes før kl. 10
+                const forTidlige = kampe.filter((k) => tidMin(projekt.plan[k.id]) < minutter(regler.eTidligst));
+                if (forTidlige.length) tilfoej({ type: 'e-tidligst', alvor: 'fejl', tekst: `${r.id}: ${forTidlige.length} ${forTidlige.length === 1 ? 'kamp' : 'kampe'} ${datoKort(dag)} ligger før kl. ${regler.eTidligst}; i E-rækker må kampe tidligst programsættes fra kl. ${regler.eTidligst}.`, kampe: forTidlige.map((k) => k.id), dag });
                 for (const k of kampe) {
                     if (k.rundeNavn !== 'Finale') continue;
                     const min = tidMin(projekt.plan[k.id]);
@@ -342,7 +346,7 @@ export function tjekPlan(projekt) {
                 for (const [katId, runder] of prKat) if (runder.has('Kvartfinale') && runder.size > 1) tilfoej({ type: 'senior-finalerunder', alvor: 'fejl', tekst: `${katId}: ${[...runder].join(', ')} ligger samme dag (${datoKort(dag)}); i senior E/M må semifinale og finale spilles samme dag, men kvartfinalen skal ligge en tidligere dag.`, kampe: kampe.filter((k) => k.kategori === katId && FINALERUNDER.has(k.rundeNavn)).map((k) => k.id), dag });
             }
         }
-        if (senior && (r.raekke === 'A' || r.raekke === 'B') && m.size > 1 && m.has(sidsteDag)) {
+        if (M.kunFinalerunderPaaFinaledagen(r) && m.size > 1 && m.has(sidsteDag)) { // Senior A/B og Senior+ E/A
             const forkerte = m.get(sidsteDag).filter((k) => !(k.fase === 'cup' && FINALERUNDER.has(k.rundeNavn)));
             if (forkerte.length) tilfoej({ type: 'senior-finaledag', alvor: 'fejl', tekst: `${r.id}: ${forkerte.length} kampe på finaledagen er hverken kvart-, semi- eller finaler.`, kampe: forkerte.map((k) => k.id), dag: sidsteDag });
         }

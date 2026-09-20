@@ -17,7 +17,7 @@ const AARGANG_ORDEN = ['U09', 'U11', 'U13', 'U15', 'U17', 'U19', 'SEN'];
 const AARSAG_RANG = {
     'ingen ledig bane': 6, 'ingen ledig reserveret bane': 6,
     'spiller mangler pause': 5, 'spiller over max haltid': 5, 'rækken må ikke spille flere dage': 3, 'spiller er i en anden kamp i slottet': 5, 'spiller har max kampe den dag': 5,
-    'uden for tidsvinduet': 4, 'E-række: kun semifinaler og finaler på sidste dag': 4, 'E-finale uden for finalevinduet': 4, 'senior A/B: kun kvart-, semi- og finaler på finaledagen': 4,
+    'uden for tidsvinduet': 4, 'E-række: tidligst kl. 10:00': 4, 'E-række: kun semifinaler og finaler på sidste dag': 4, 'E-finale uden for finalevinduet': 4, 'senior A/B: kun kvart-, semi- og finaler på finaledagen': 4,
     'kvartfinale samme dag som semifinale eller finale': 4, 'spiller har max kampe i kategorien den dag': 5, 'rækken er lagt på en anden dag': 3,
     'før rækkens tidligste start': 4, 'efter rækkens seneste slut': 4,
     'rækken spiller ikke den dag': 3, 'single og double samtidig i rækken': 3,
@@ -297,7 +297,7 @@ function lavForslagEnGang(projekt, valg = {}) {
                 }
                 if (graense && sidste - foerste + slotMin > graense) return 'spiller over max haltid';
             }
-            if (!lemp.maxKampe && kendte.has(s) && (kendteKampePrDag.get(`${s}|${dag.dato}`) || 0) >= maxPrDag) return 'spiller har max kampe den dag';
+            if (!lemp.maxKampe && kendte.has(s) && (kendteKampePrDag.get(`${s}|${dag.dato}`) || 0) >= Math.min(M.maxPrDagFor(r), maxPrDag)) return 'spiller har max kampe den dag';
             if (!lemp.maxKampe && kendte.has(s) && M.seniorEM(r) && (katKampePrDag.get(`${s}|${k.kategori}|${dag.dato}`) || 0) >= M.regler.seniorMaxPrKategori) return 'spiller har max kampe i kategorien den dag';
             const h = historik.get(s);
             if (!h) continue;
