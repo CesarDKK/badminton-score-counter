@@ -48,6 +48,8 @@ export function standardMaxDage(raekke) {
     return ['B', 'C', 'D'].includes(raekke.raekke) || (raekke.aargang === 'U11' && raekke.raekke === 'A') ? 1 : null;
 }
 
+export const FINALERUNDER = new Set(['Kvartfinale', 'Semifinale', 'Finale']);
+
 /** Baner, en gruppe kampe fylder: to kampe på halv bane deler én bane. */
 export function banerBrugt(hele, halve) {
     return hele + Math.ceil(halve / 2);
@@ -109,7 +111,32 @@ export function lavRegelmodel(projekt) {
         return max || null;
     };
 
+    // ── E-rækker og senior: regler om, HVILKEN dag og tid en kamp må ligge ──
+    const sidsteDag = dage.map((d) => d.dato).sort().at(-1);
+    const erFinalerunde = (k) => k.fase === 'cup' && FINALERUNDER.has(k.rundeNavn);
+    /** Senior E/M: max kampe pr. kategori pr. dag, og kvart-, semi- og finale ikke alle samme dag. */
+    const seniorEM = (r) => !!r && erSenior(r.aargang) && (r.raekke === 'E' || r.raekke === 'M');
+    /** Kan rækken komme til at spille over flere dage? (bruges af planlægger og løser; Tjek ser på den faktiske plan) */
+    const kanSpilleFlereDage = (r) => (r.dage || []).length > 1 && maxDageFor(r) !== 1;
+    /**
+     * Må kampen ligge på denne dag (og starte kl. min)? Returnerer null eller årsagen.
+     *  - E-rækker: på turneringens sidste dag kun semifinaler og finaler (når turneringen har flere dage),
+     *    og E-finaler skal starte i finalevinduet (regler.eFinale).
+     *  - Senior A/B over flere dage: på finaledagen kun kvart-, semi- og finaler.
+     */
+    const kampForbud = (k, dato, min = null, { flereDage } = {}) => {
+        const r = raekke(k);
+        if (!r) return null;
+        if (r.raekke === 'E') {
+            if (dage.length > 1 && dato === sidsteDag && !(k.fase === 'cup' && (k.rundeNavn === 'Semifinale' || k.rundeNavn === 'Finale'))) return 'E-række: kun semifinaler og finaler på sidste dag';
+            if (k.rundeNavn === 'Finale' && min !== null && (min < minutter(regler.eFinale[0]) || min > minutter(regler.eFinale[1]))) return 'E-finale uden for finalevinduet';
+        }
+        if (erSenior(r.aargang) && (r.raekke === 'A' || r.raekke === 'B') && (flereDage ?? kanSpilleFlereDage(r)) && dato === sidsteDag && !erFinalerunde(k)) return 'senior A/B: kun kvart-, semi- og finaler på finaledagen';
+        return null;
+    };
+
     return {
+        sidsteDag, erFinalerunde, seniorEM, kanSpilleFlereDage, kampForbud,
         regler, slotMin, pauseMin, dage, dagMap, katMap, raekkeMap, kampMap, kat, raekke,
         enDag: dage.length === 1,
         maxPrDag: dage.length === 1 ? regler.maxKampePrDagEnDag : regler.maxKampePrDag,

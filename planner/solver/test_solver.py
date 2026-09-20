@@ -306,6 +306,19 @@ class DiagnoseTest(unittest.TestCase):
         p = problem([kamp(i, tilladte=tider) for i in range(3)], kapacitet=kap, dage=dage, maxDage=[{"raekke": "U11 D", "max": 1, "kampe": [0, 1, 2]}])
         self.assertEqual(diagnose(p), [{"regel": "maxDage", "raekke": "U11 D"}])
 
+    def test_raekkens_tidsrum_eller_dage_er_aarsagen(self):
+        from solver import diagnose
+        # Tre kampe, én bane. Rækkens tidsrum giver kun to slots (540, 570); uden tidsrummet er der fire.
+        kap = {"faelles": [{"t": t, "baner": 1} for t in range(540, 660, 30)]}
+        p = problem([kamp(i, tilladte=[540, 570]) for i in range(3)], kapacitet=kap,
+                    alternativer=[{"regel": "tidsrum", "raekke": "U11 D", "kampe": [0, 1, 2], "tilladte": [540, 570, 600, 630]}])
+        self.assertEqual(loes(p, 5)["status"], "INFEASIBLE")
+        self.assertEqual(diagnose(p), [{"regel": "tidsrum", "raekke": "U11 D"}])
+        # En låst kamp (kun én tilladt tid) flyttes ikke af lempelsen
+        laast = problem([kamp(0, tilladte=[540]), kamp(1, tilladte=[540])], kapacitet=kap,
+                        alternativer=[{"regel": "dage", "raekke": "U11 D", "kampe": [0, 1], "tilladte": [540, 570]}])
+        self.assertEqual(diagnose(laast), [{"regel": "plads"}])
+
     def test_for_lidt_plads(self):
         from solver import diagnose
         p = problem([kamp(i, tilladte=[540]) for i in range(3)])  # tre kampe, to baner, ét slot
@@ -321,6 +334,34 @@ class DiagnoseTest(unittest.TestCase):
         self.assertEqual(job.fase, "diagnose")
         kode, svar = solver.koer({**p, "diagnose": False}, 5, solver.Job())
         self.assertNotIn("diagnose", svar)
+
+
+class SeniorReglerTest(unittest.TestCase):
+    """Senior E/M: max kampe pr. kategori pr. dag (maxPrGruppe) og finale ikke samme dag som kvartfinale (ikkeSammeDag)."""
+
+    def to_dage(self, kampe, **ekstra):
+        tider = list(range(540, 720, 30)) + [DAG + t for t in range(540, 720, 30)]
+        kap = {"faelles": [{"t": t, "baner": 2} for t in tider]}
+        dage = [{"index": 0, "start": 540, "slut": 720, "baner": 2}, {"index": 1, "start": 540, "slut": 720, "baner": 2}]
+        for k in kampe:
+            if k["tilladte"] == list(range(540, 720, 30)):
+                k["tilladte"] = tider
+        return problem(kampe, kapacitet=kap, dage=dage, **ekstra)
+
+    def test_max_pr_gruppe_fordeler_kampene_paa_dagene(self):
+        p = self.to_dage([kamp(i) for i in range(4)], maxPrGruppe=[{"kampe": [0, 1, 2, 3], "max": 3}])
+        r = loes(p, 5)
+        self.assertIn(r["status"], ("OPTIMAL", "FEASIBLE"))
+        pr_dag = [sum(1 for t in r["tider"].values() if t // DAG == d) for d in (0, 1)]
+        self.assertLessEqual(max(pr_dag), 3, "højst tre af gruppens kampe samme dag")
+        self.assertEqual(sum(pr_dag), 4)
+        kun_en_dag = problem([kamp(i) for i in range(4)], maxPrGruppe=[{"kampe": [0, 1, 2, 3], "max": 3}])
+        self.assertEqual(loes(kun_en_dag, 5)["status"], "INFEASIBLE", "fire kampe på én dag med max 3")
+
+    def test_ikke_samme_dag(self):
+        r = loes(self.to_dage([kamp(0), kamp(1)], ikkeSammeDag=[[0, 1]]), 5)
+        self.assertNotEqual(r["tider"]["k0"] // DAG, r["tider"]["k1"] // DAG)
+        self.assertEqual(loes(problem([kamp(0), kamp(1)], ikkeSammeDag=[[0, 1]]), 5)["status"], "INFEASIBLE", "begge kan kun ligge på samme dag")
 
 
 class HaltidUdloesereTest(unittest.TestCase):

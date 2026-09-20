@@ -17,7 +17,9 @@ const AARGANG_ORDEN = ['U09', 'U11', 'U13', 'U15', 'U17', 'U19', 'SEN'];
 const AARSAG_RANG = {
     'ingen ledig bane': 6, 'ingen ledig reserveret bane': 6,
     'spiller mangler pause': 5, 'spiller over max haltid': 5, 'rækken må ikke spille flere dage': 3, 'spiller er i en anden kamp i slottet': 5, 'spiller har max kampe den dag': 5,
-    'uden for tidsvinduet': 4, 'før rækkens tidligste start': 4, 'efter rækkens seneste slut': 4,
+    'uden for tidsvinduet': 4, 'E-række: kun semifinaler og finaler på sidste dag': 4, 'E-finale uden for finalevinduet': 4, 'senior A/B: kun kvart-, semi- og finaler på finaledagen': 4,
+    'kvart-, semi- og finale samme dag': 4, 'spiller har max kampe i kategorien den dag': 5, 'rækken er lagt på en anden dag': 3,
+    'før rækkens tidligste start': 4, 'efter rækkens seneste slut': 4,
     'rækken spiller ikke den dag': 3, 'single og double samtidig i rækken': 3,
     'bygger på en senere kamp': 2, 'bygger på en kamp uden tid': 1,
 };
@@ -81,6 +83,8 @@ function lavForslagEnGang(projekt, valg = {}) {
     const tidFor = new Map();        // kampId → { dag, min }
     const historik = new Map();      // spillerId → [{ kamp, dag, min, kendt }]
     const kendteKampePrDag = new Map(); // `${spiller}|${dag}` → antal
+    const katKampePrDag = new Map();    // `${spiller}|${kategori}|${dag}` → antal (senior E/M: max pr. kategori pr. dag)
+    const finalerunderPrDag = new Map(); // `${kategori}|${dag}` → Set(rundeNavn) for cup-finalerunder
     const slotBrug = new Map();      // `${dag}|${slot}|${pulje}` → { hele, halve, kampe: [] }
     const swissSpaend = new Map();   // `${draw}|${dag}` → { foerste, sidste } — Swiss-rundernes spænd til max haltid
     const raekkeDage = new Map();    // raekkeId → Set(dage rækken allerede spiller på) — til maxDage
@@ -129,6 +133,7 @@ function lavForslagEnGang(projekt, valg = {}) {
             x.foerste = Math.min(x.foerste, min); x.sidste = Math.max(x.sidste, min);
             swissSpaend.set(n, x);
         }
+        if (M.erFinalerunde(k)) { const fn = `${k.kategori}|${dag}`; if (!finalerunderPrDag.has(fn)) finalerunderPrDag.set(fn, new Set()); finalerunderPrDag.get(fn).add(k.rundeNavn); }
         const rid = kat(k)?.raekke;
         if (rid) { if (!raekkeDage.has(rid)) raekkeDage.set(rid, new Set()); raekkeDage.get(rid).add(dag); }
         const kendte = new Set(k.spillere);
@@ -138,6 +143,8 @@ function lavForslagEnGang(projekt, valg = {}) {
             if (kendte.has(s)) {
                 const n = `${s}|${dag}`;
                 kendteKampePrDag.set(n, (kendteKampePrDag.get(n) || 0) + 1);
+                const kn = `${s}|${k.kategori}|${dag}`;
+                katKampePrDag.set(kn, (katKampePrDag.get(kn) || 0) + 1);
             }
         }
     };
@@ -227,6 +234,13 @@ function lavForslagEnGang(projekt, valg = {}) {
         }
         const v = M.aargangsVindue(r, dag);
         if (!lemp.tidsvindue && (slotStart < v.fra || slotStart + slotMin > v.til)) return 'uden for tidsvinduet';
+        // E-rækker og senior: hvilken dag og tid kampen må ligge (samme byggesten som Tjek og løseren)
+        if (!lemp.tidsvindue) {
+            const forbud = M.kampForbud(k, dag.dato, slotStart);
+            if (forbud) return forbud;
+            // Senior E/M: kvart-, semi- og finale ikke alle samme dag = finalen ikke samme dag som en kvartfinale
+            if (M.seniorEM(r) && k.rundeNavn === 'Finale' && (finalerunderPrDag.get(`${k.kategori}|${dag.dato}`) || new Set()).has('Kvartfinale')) return 'kvart-, semi- og finale samme dag';
+        }
         // Max haltid for Swiss Ladder: alle er med i hver runde, så rundernes samlede spænd tæller
         if (!lemp.maxHaltid && k.fase === 'swiss' && r.maxHaltidMin) {
             const x = swissSpaend.get(`${k.tpRef.draw}|${dag.dato}`);
@@ -280,6 +294,7 @@ function lavForslagEnGang(projekt, valg = {}) {
                 if (graense && sidste - foerste + slotMin > graense) return 'spiller over max haltid';
             }
             if (!lemp.maxKampe && kendte.has(s) && (kendteKampePrDag.get(`${s}|${dag.dato}`) || 0) >= maxPrDag) return 'spiller har max kampe den dag';
+            if (!lemp.maxKampe && kendte.has(s) && M.seniorEM(r) && (katKampePrDag.get(`${s}|${k.kategori}|${dag.dato}`) || 0) >= M.regler.seniorMaxPrKategori) return 'spiller har max kampe i kategorien den dag';
             const h = historik.get(s);
             if (!h) continue;
             for (const x of h) {

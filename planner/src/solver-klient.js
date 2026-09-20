@@ -60,7 +60,7 @@ export function bygProblem(projekt, hintPlan = null) {
                 const v = M.raekkeVindue(r, dag);
                 for (const slot of slotsForDag(dag, slotMin)) {
                     const m = minutter(slot);
-                    if (M.iVindue(v, m)) tilladte.push(dagIndex.get(dato) * DAG_MIN + m);
+                    if (M.iVindue(v, m) && !M.kampForbud(k, dato, m)) tilladte.push(dagIndex.get(dato) * DAG_MIN + m); // inkl. E- og senior-reglerne for dagen
                 }
             }
         }
@@ -73,6 +73,27 @@ export function bygProblem(projekt, hintPlan = null) {
             spillere: k.spillere.map(nr), erFinale: k.rundeNavn === 'Finale',
             hint: hintPlan?.[k.id] && dagIndex.has(hintPlan[k.id].dag) ? dagIndex.get(hintPlan[k.id].dag) * DAG_MIN + minutter(hintPlan[k.id].slot) : null,
         });
+    }
+
+    // Til diagnosen ("hvorfor findes der ingen plan?"): hvad rækken måtte, hvis dens eget tidsrum eller dens
+    // dage ikke gjaldt. Løseren holder begge dele hårdt, mens Tjek kun advarer — så de skal kunne udpeges.
+    // Rækker med reserverede baner er ikke med: deres egne baner findes kun i tidsrummet på rækkens dage.
+    const alternativer = [];
+    for (const r of projekt.raekker) {
+        if (r.reserveredeBaner > 0) continue;
+        const egne = kampe.map((k, i) => (k.raekke === r.id ? i : -1)).filter((i) => i >= 0);
+        if (!egne.length) continue;
+        const tider = (datoer, medTidsrum) => {
+            const ud = [];
+            for (const dag of dage) {
+                if (!datoer.includes(dag.dato)) continue;
+                const v = medTidsrum ? M.raekkeVindue(r, dag) : M.aargangsVindue(r, dag);
+                for (const slot of slotsForDag(dag, slotMin)) { const m = minutter(slot); if (M.iVindue(v, m)) ud.push(dagIndex.get(dag.dato) * DAG_MIN + m); }
+            }
+            return ud;
+        };
+        if (r.tidligst || r.senest) alternativer.push({ regel: 'tidsrum', raekke: r.id, kampe: egne, tilladte: tider(r.dage || [], false) });
+        if ((r.dage || []).length < dage.length) alternativer.push({ regel: 'dage', raekke: r.id, kampe: egne, tilladte: tider(dage.map((d) => d.dato), true) });
     }
 
     // Afhængigheder: efterfølger skal starte mindst ét slot senere
@@ -167,12 +188,30 @@ export function bygProblem(projekt, hintPlan = null) {
     // Max kampe pr. spiller pr. dag
     const mangeKampe = [...prKendt.values()].filter((l) => l.length > maxPrDag).map((l) => l.map((k) => indeks.get(k.id)));
 
+    // Senior E/M: max kampe pr. kategori pr. spiller pr. dag, og finalen ikke samme dag som en kvartfinale
+    // (= kvart-, semi- og finale ikke alle samme dag)
+    const maxPrGruppe = [], ikkeSammeDag = [];
+    {
+        const prSpillerKat = new Map();
+        const finaler = new Map(); // kategori → { kvart: [i], finale: [i] }
+        for (const k of projekt.kampe) {
+            if (!indeks.has(k.id) || !M.seniorEM(raekke(k))) continue;
+            for (const s of k.spillere) { const n = `${s}|${k.kategori}`; if (!prSpillerKat.has(n)) prSpillerKat.set(n, []); prSpillerKat.get(n).push(indeks.get(k.id)); }
+            if (M.erFinalerunde(k) && k.rundeNavn !== 'Semifinale') {
+                if (!finaler.has(k.kategori)) finaler.set(k.kategori, { Kvartfinale: [], Finale: [] });
+                finaler.get(k.kategori)[k.rundeNavn].push(indeks.get(k.id));
+            }
+        }
+        for (const liste of prSpillerKat.values()) if (liste.length > M.regler.seniorMaxPrKategori) maxPrGruppe.push({ kampe: liste, max: M.regler.seniorMaxPrKategori });
+        for (const f of finaler.values()) for (const a of f.Kvartfinale) for (const b of f.Finale) ikkeSammeDag.push([a, b]);
+    }
+
     return {
         version: 1,
         slotMin,
         dage: dage.map((d, i) => ({ index: i, start: minutter(d.start), slut: minutter(d.slut), baner: d.baner })),
         kapacitet, kampe, foer, konflikter, ikkeSamtidig, haltid, spillerGrupper, maxDage,
-        maxKampePrDag: maxPrDag, mangeKampe,
+        maxKampePrDag: maxPrDag, mangeKampe, maxPrGruppe, ikkeSammeDag, alternativer,
         vaegte: vaegteFor(projekt),
     };
 }
@@ -193,7 +232,7 @@ export function planFraSvar(projekt, svar) {
  * handlinger, brugeren kan vælge: { tekst, handlinger: [{ tekst, raekke, aendring }] }.
  * aendring er felter til opdaterRaekke (fx { maxHaltidMin: 300 }).
  */
-export function diagnoseTekst(diagnose) {
+export function diagnoseTekst(diagnose, alleDage = []) {
     const linjer = [], handlinger = [];
     for (const d of diagnose || []) {
         if (d.regel === 'haltid') {
@@ -207,12 +246,18 @@ export function diagnoseTekst(diagnose) {
         } else if (d.regel === 'maxDage') {
             linjer.push(`${d.raekke}: kampene kan ikke være på én dag inden for rækkens tidsrum og baner. Over flere dage findes der en lovlig plan (kræver dispensation) — eller giv rækken et længere tidsrum, flere baner eller færre kampe.`);
             handlinger.push({ tekst: `Giv ${d.raekke} dispensation til flere dage, og optimér igen`, raekke: d.raekke, aendring: { dispensationFlereDage: true } });
+        } else if (d.regel === 'tidsrum') {
+            linjer.push(`${d.raekke}: rækkens eget tidsrum er for snævert til kampene — uden det (kun årgangens tidsvindue) findes der en lovlig plan.`);
+            handlinger.push({ tekst: `Fjern tidsrummet for ${d.raekke}, og optimér igen`, raekke: d.raekke, aendring: { tidligst: null, senest: null } });
+        } else if (d.regel === 'dage') {
+            linjer.push(`${d.raekke}: kampene kan ikke være på de dage, rækken er sat til — må rækken bruge alle turneringens dage, findes der en lovlig plan.`);
+            if (alleDage.length) handlinger.push({ tekst: `Lad ${d.raekke} spille alle turneringens dage, og optimér igen`, raekke: d.raekke, aendring: { dage: [...alleDage] } });
         } else if (d.regel === 'maxKampePrDag') {
             linjer.push('Grænsen for antal kampe pr. spiller pr. dag kan ikke overholdes — hæv den under "Reglementets grænser" i fane 1, eller fordel kategorierne på flere dage.');
         } else if (d.regel === 'flere') {
             linjer.push('Ingen enkelt regel er årsagen: først når max haltid, max dage og max kampe pr. dag lempes samtidig, findes der en plan. Brug "Find forslag, der får kabalen til at gå op".');
         } else if (d.regel === 'plads') {
-            linjer.push('Der er ikke plads: selv uden max haltid, max dage og max kampe pr. dag kan kampene ikke være på banerne inden for tidsvinduerne (eller låste kampe står i vejen). Brug "Find forslag, der får kabalen til at gå op", eller giv flere baner, længere dage eller flere spilledage.');
+            linjer.push('Der er ikke plads: hverken max haltid, max dage, max kampe pr. dag eller en enkelt rækkes tidsrum eller dage er årsagen — kampene kan ikke være på banerne inden for tidsvinduerne (eller låste kampe står i vejen). Brug "Find forslag, der får kabalen til at gå op", eller giv flere baner, længere dage eller flere spilledage.');
         }
     }
     if (!linjer.length) linjer.push('Løseren kunne ikke pege på én bestemt regel inden for tiden.');

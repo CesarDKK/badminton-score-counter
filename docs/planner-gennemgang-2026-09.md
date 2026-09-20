@@ -28,21 +28,33 @@ konsekvens og fordelt på fire pakker. Kryds af, efterhånden som de rettes.
       (`haltid[].udloesere`). `solver-klient.js`, `solver.py`.
 - [x] Teksten "Alle hårde regler er overholdt" er blødt op (løseren kender ikke senior-reglerne, se 10).
 
-## Pakke 2 — ét fælles regelmodul + kontrakt-test JS ↔ Python
+## Pakke 2 — ét fælles regelmodul + kontrakt-test JS ↔ Python (rettet 2026-09-20)
 
-- [ ] 9. Løseren er strengere end Tjek på fire regler (pause for mulige cupspillere, rækkens tidsrum,
-      rækkens dage, max dage er advarsler i Tjek men hårde i løseren) → falsk "umuligt", og
-      diagnosen siger misvisende "plads".
-- [ ] 10. Senior-reglerne (E/M finalerunder, max 3 kampe, finaledag, slot for kort) håndhæves
-      hverken af planlægger eller løser.
-- [ ] 11. Lempelsen "reserveret" i fase 2 bogfører den lånte bane i rækkens egen pulje → altid kapacitetsfejl.
-- [ ] 12. Dagfordelingen: rækker med reserverede baner får altid første dag; reserverede baner
-      trækkes fra alle rækkens dage; fordelingen slippes sent i lempelsesrækkefølgen; `dagOrden` bruges ikke.
-- [ ] 13. Swiss-runde 2+ tælles ikke sammen med spillerens øvrige kampe i max kampe pr. dag og haltid.
-- [ ] 14. Ældre projekter uden `maxDage` / `antiSamtidighed` / `pauseKlasse` tolkes forskelligt i Tjek, planlægger og løser.
-- [ ] 21. Ingen test sender et rigtigt `bygProblem()`-problem gennem `loes()`; `nginx -t` køres ikke i CI.
-- [ ] 24. Tre kopier af `kanDeleSpillere`/`alleForfaedre`, `varighedFor`, `pauseFor`, tilladt tidsvindue,
-      banetælling og haltid-grupper; to af minimumskravet (`minKampeKrav` er kopieret ind i `rules.js`).
+- [x] **24. Ét regelmodul.** `src/regelmodel.js` (`lavRegelmodel`) har byggestenene: kampvarighed, pause, hvem der
+      kan dele spillere, tidsvinduer, banetælling, max dage, anti-samtidighed og E-/senior-reglerne. Tjek,
+      planlægger og løser-oversættelse bruger dem alle; `minKampeKrav` står kun i `form.js`. Omlægningen blev
+      bevist neutral (identisk plan, regelbrud, Tjek og løser-problem for 10 varianter af de to rigtige filer),
+      før adfærden blev ændret.
+- [x] **21. Kontrakt-test i CI.** `tests/kontrakt/kontrakt.mjs` + `solver/kontrakt.py`: 7 syntetiske projekter bygges
+      med `bygProblem()`, løses af CP-SAT, og svaret skal give 0 fejl i `tjekPlan()`. (`nginx -t` i CI er ikke lavet.)
+- [x] **13. Tid i hallen tæller Swiss-runderne med** — i Tjek, planlægger og løser (double kl. 9 + Swiss 12–16 = 7 timer).
+      Max kampe pr. dag tæller stadig kun kendte kampe (grænsen på 10 er sjældent bindende).
+- [x] **11. Reserverede baner: overløb.** `kapacitet.js: banebrugISlot` — en række bruger sine reserverede baner først og
+      løber over på en FRI fælles bane; kun når de fælles også er fulde, er det en fejl. Tjek og planlægger deler
+      reglen, og lånet er ikke længere et regelbrud. (Løseren er strengere: kun egne baner i tidsrummet.)
+- [x] **12. Dagfordeling.** Rækker med reserverede baner vurderes mod egne baner; giver skønnet regelbrud, prøves de
+      ramte rækker på deres anden dag (`dagTvang`, højst 6 forsøg); forslaget oplyser `dagValg`. Fase 2 bryder ÉN
+      regel ad gangen og først det, Tjek kun regner for advarsler. Lyngby U9/U11 som filen er: 30 → 0 fejl.
+      (Reserverede baner trækkes stadig fra alle rækkens dage — sæt rækkens dage i fane 1.)
+- [x] **9. Diagnosen** kan nu også pege på rækkens tidsrum og rækkens dage (`problem.alternativer`), så den ikke
+      misvisende siger "ikke plads". Pause for mulige cupspillere er stadig hård i begge planlæggere.
+- [x] **10. E- og senior-reglerne** håndhæves af planlægger og løser: E-række sidste dag kun semi/finale (ved flere
+      dage), E-finaler i finalevinduet, senior A/B kun finalerunder på finaledagen, senior E/M max 3 kampe pr.
+      kategori pr. dag (`maxPrGruppe`) og finale ikke samme dag som kvartfinale (`ikkeSammeDag`).
+      **Til bekræftelse:** Tjek meldte før fejl ved TO finalerunder samme dag; det modsiger "E-rækker: semi og
+      finale sidste dag", så reglen er nu "ikke alle tre samme dag".
+- [x] **14. Ældre projekter** uden `maxDage` / `antiSamtidighed` / `pauseKlasse` tolkes ens alle steder (regelmodellen).
+- [x] Løserens problem: en låst kamp uden for rækkens tidsrum ligger på de fælles baner (gav før falsk "umuligt").
 
 ## Pakke 3 — én kapacitetsberegning, stabilt formvalg og stabile kamp-id'er
 

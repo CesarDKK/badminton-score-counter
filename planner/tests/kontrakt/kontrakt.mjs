@@ -27,7 +27,7 @@ function model(raekker, dage) {
     return {
         version: 1, kilde: { filnavn: 'kontrakt.tp', laestUtc: '', tpVersion: null }, turnering: { navn: 'Kontrakt', hal: '', dage },
         tpGitter: { slotMin: 30, dage: [], baner: { hele: 6, halve: 0, navne: [] }, harTider: false, advarsler: 0 },
-        raekker: raekker.map((r) => ({ id: r.id, aargang: r.aargang, raekke: r.raekke, pauseKlasse: r.raekke === 'M' ? 'M' : 'ABCD', kategorier: r.kategorier.map((k) => `${r.id} ${k.kat}`) })),
+        raekker: raekker.map((r) => ({ id: r.id, aargang: r.aargang, raekke: r.raekke, pauseKlasse: r.raekke === 'E' ? 'E' : r.raekke === 'M' ? 'M' : 'ABCD', kategorier: r.kategorier.map((k) => `${r.id} ${k.kat}`) })),
         kategorier, spillere, kampe: [], tilmeldinger, bemaerkninger: [],
     };
 }
@@ -53,6 +53,19 @@ function grundprojekt() {
     return opdaterRaekke(p, 'U09 D', { dage: ['2026-11-21'], tidligst: '10:00', senest: '16:00', reserveredeBaner: 2, maxHaltidMin: 300 });
 }
 
+/** Senior: E-række med kvart-, semi- og finale (sidste dag kun semi/finale, finalen 10–13) og M-række med max 3 kampe pr. kategori pr. dag. */
+function seniorprojekt() {
+    const dage = ['2026-11-21', '2026-11-22'];
+    let p = nytProjekt(model([
+        { id: 'SEN E', aargang: 'SEN', raekke: 'E', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('se-', 12) }] },
+        { id: 'SEN M', aargang: 'SEN', raekke: 'M', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('sm-', 3) }] },
+    ], dage));
+    for (const d of dage) p = opdaterDag(p, d, { baner: 4, start: '09:00', slut: '20:00', foerSkoledag: false });
+    p = opdaterOpsaetning(p, { pauseMin: { ...p.opsaetning.pauseMin, faelles: null } });
+    p = saetForm(p, 'SEN E HS', { formValg: 'pulje-cup', cupTop: 2 });
+    return saetForm(p, 'SEN M HS', { formValg: 'dobbelt-pulje' });
+}
+
 export function projekter() {
     const grund = grundprojekt();
     const laast = (() => { let p = grund; const k = p.kampe.find((x) => x.kategori === 'U13 M HS' && x.fase === 'pulje'); p = flytKamp(p, k.id, '2026-11-22', '11:00'); return laasKamp(p, k.id, true); })();
@@ -65,6 +78,7 @@ export function projekter() {
         anti: opdaterOpsaetning(grund, { antiSamtidighed: true }),
         laast,
         dispensation: opdaterRaekke(grund, 'U11 D', { dispensationFlereDage: true }),
+        senior: seniorprojekt(),
         faellesPause: rummelig(opdaterOpsaetning(grund, { pauseMin: { ...grund.opsaetning.pauseMin, faelles: 12 } })),
     };
 }

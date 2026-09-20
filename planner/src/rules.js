@@ -314,7 +314,7 @@ export function tjekPlan(projekt) {
         const senior = r.aargang === 'SEN' || /^\+/.test(r.aargang);
         if (r.raekke === 'E') {
             for (const [dag, kampe] of m) {
-                if (dag === sidsteDag) {
+                if (dag === sidsteDag && dage.length > 1) { // en endagsturnering kan ikke have "kun semi og finale sidste dag"
                     const forkerte = kampe.filter((k) => !(k.fase === 'cup' && (k.rundeNavn === 'Semifinale' || k.rundeNavn === 'Finale')));
                     if (forkerte.length) tilfoej({ type: 'e-sidste-dag', alvor: 'fejl', tekst: `${r.id}: ${forkerte.length} kampe på sidste dag er hverken semifinaler eller finaler.`, kampe: forkerte.map((k) => k.id), dag });
                 }
@@ -337,7 +337,9 @@ export function tjekPlan(projekt) {
                 }
                 const prKat = new Map();
                 for (const k of kampe) if (k.fase === 'cup' && FINALERUNDER.has(k.rundeNavn)) { if (!prKat.has(k.kategori)) prKat.set(k.kategori, new Set()); prKat.get(k.kategori).add(k.rundeNavn); }
-                for (const [katId, runder] of prKat) if (runder.size > 1) tilfoej({ type: 'senior-finalerunder', alvor: 'fejl', tekst: `${katId}: ${[...runder].join(' og ')} ligger samme dag (${datoKort(dag)}); senior E/M må ikke spille kvart-, semi- og finale samme dag.`, kampe: kampe.filter((k) => k.kategori === katId && FINALERUNDER.has(k.rundeNavn)).map((k) => k.id), dag });
+                // Alle tre runder samme dag er forbudt. Semifinale og finale samme dag er tilladt — for E-rækker er det
+                // ligefrem kravet på sidste dag (design § 5), så reglen kan ikke betyde "to runder samme dag".
+                for (const [katId, runder] of prKat) if (runder.size >= 3) tilfoej({ type: 'senior-finalerunder', alvor: 'fejl', tekst: `${katId}: ${[...runder].join(', ')} ligger samme dag (${datoKort(dag)}); senior E/M må ikke spille kvart-, semi- og finale samme dag.`, kampe: kampe.filter((k) => k.kategori === katId && FINALERUNDER.has(k.rundeNavn)).map((k) => k.id), dag });
             }
         }
         if (senior && (r.raekke === 'A' || r.raekke === 'B') && m.size > 1 && m.has(sidsteDag)) {

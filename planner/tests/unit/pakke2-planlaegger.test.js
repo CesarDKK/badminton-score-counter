@@ -7,7 +7,7 @@ import { tjekPlan } from '../../src/rules.js';
 import { lavForslag } from '../../src/scheduler.js';
 import { bygProblem } from '../../src/solver-klient.js';
 import { banebrugISlot } from '../../src/kapacitet.js';
-import { model } from './pakke2.test.js';
+import { model } from '../hjaelp/model.js';
 
 const fejl = (p) => tjekPlan(p).problemer.filter((x) => x.alvor === 'fejl');
 const enkelt = (praefiks, n) => Array.from({ length: n }, (_, i) => [`${praefiks}${i + 1}`]);

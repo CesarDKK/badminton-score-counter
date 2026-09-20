@@ -332,7 +332,7 @@ const planHandlers = {
             }
             if (lovlig) visLoeserensPlan();
             else if (svar.status === 'INFEASIBLE') {
-                const diag = diagnoseTekst(svar.diagnose);
+                const diag = diagnoseTekst(svar.diagnose, projekt.opsaetning.dage.map((d) => d.dato));
                 const brud = [...graadig.brud, ...graadig.ikkePlaceret];
                 tilstand.forslag = { tekst: `Løseren regnede kun ${svar.sekunder} s, fordi den hurtigt kunne bevise, at der IKKE findes en plan, der overholder alle hårde regler. Årsag: ${diag.tekst} Herunder er den hurtige plan med de nødvendige regelbrud:`, handlinger: diag.handlinger, ikkePlaceret: brud.map((x) => ({ ...x, kategori: projekt.kampe.find((k) => k.id === x.id)?.kategori || '', navn: projekt.kampe.find((k) => k.id === x.id)?.navn || x.id })) };
                 saet({ ...store.anvendForslag(projekt, graadig), sidsteForslag: { ikkePlaceret: brud } });
