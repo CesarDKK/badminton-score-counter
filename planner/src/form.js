@@ -15,7 +15,7 @@ export const PULJE_STOERRELSER = [3, 4, 5];
 export const SWISS_RUNDER = [4, 5, 6];
 export const MAAL_KAMPE = 6; // reglementets anbefaling ved 3 kategorier
 
-/** Reglementets minimum kampe pr. spiller for kategorien (samme logik som rules.js). */
+/** Reglementets minimum kampe pr. spiller for kategorien — det ENE sted reglen står (bruges også af Tjek og nedskæringsforslagene). */
 export function minKampeKrav(kategori, raekke, regler) {
     const ungdom = /^U/.test(raekke?.aargang || '');
     let krav = 0;

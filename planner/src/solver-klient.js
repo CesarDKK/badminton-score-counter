@@ -7,8 +7,7 @@
 // kan dele spillere) ligger her i JS, så løseren kun kender tal og par.
 import { minutter, klokkeFraMinutter } from './tp-reader.js';
 import { slotsForDag, puljeKapacitet, katKonflikt } from './kapacitet.js';
-import { reglerFor } from './store.js';
-import { minKampMin, pauseForRaekke, tidsvindue } from './rules.js';
+import { lavRegelmodel } from './regelmodel.js';
 import { vaegteFor } from './kriterier.js';
 
 const DAG_MIN = 1440;
@@ -20,18 +19,11 @@ const DAG_MIN = 1440;
  * @param {object} [hintPlan]  en lovlig plan (fra lavForslag) som startløsning
  */
 export function bygProblem(projekt, hintPlan = null) {
-    const { slotMin, pauseMin, dage } = projekt.opsaetning;
-    const regler = reglerFor(projekt);
-    const kampVarighed = projekt.opsaetning.kampVarighed || 'minimum';
-    const katMap = new Map(projekt.kategorier.map((k) => [k.id, k]));
-    const raekkeMap = new Map(projekt.raekker.map((r) => [r.id, r]));
-    const kampMap = new Map(projekt.kampe.map((k) => [k.id, k]));
+    // Reglernes byggesten kommer fra regelmodellen — de samme, som Tjek og planlæggeren bruger
+    const M = lavRegelmodel(projekt);
+    const { slotMin, dage, kampMap, kat, raekke, kanDeleSpillere, alleForfaedre, maxPrDag } = M;
     const laast = new Set(projekt.laast || []);
     const dagIndex = new Map(dage.map((d, i) => [d.dato, i]));
-    const kat = (k) => katMap.get(k.kategori);
-    const raekke = (k) => raekkeMap.get(kat(k)?.raekke);
-    const varighedFor = (k) => { const r = raekke(k); return kampVarighed === 'slot' || !r ? slotMin : Math.min(slotMin, minKampMin(r.aargang, r.raekke, regler)); };
-    const pauseFor = (k) => pauseForRaekke(pauseMin, raekke(k)?.pauseKlasse || 'ABCD');
 
     // Puljer: rækker med reserverede baner har egen pulje (altid), resten deler 'faelles'
     const puljeForRaekke = (r) => (r?.reserveredeBaner > 0 ? r.id : 'faelles');
@@ -65,12 +57,10 @@ export function bygProblem(projekt, hintPlan = null) {
             for (const dato of r.dage || []) {
                 const dag = dage.find((d) => d.dato === dato);
                 if (!dag) continue;
-                const v = tidsvindue(r.aargang, dag, regler);
-                const fra = Math.max(v.fra, r.tidligst ? minutter(r.tidligst) : 0);
-                const til = Math.min(v.til, r.senest ? minutter(r.senest) : 9999);
+                const v = M.raekkeVindue(r, dag);
                 for (const slot of slotsForDag(dag, slotMin)) {
                     const m = minutter(slot);
-                    if (m >= fra && m + slotMin <= til) tilladte.push(dagIndex.get(dato) * DAG_MIN + m);
+                    if (M.iVindue(v, m)) tilladte.push(dagIndex.get(dato) * DAG_MIN + m);
                 }
             }
         }
@@ -87,19 +77,6 @@ export function bygProblem(projekt, hintPlan = null) {
     for (const k of projekt.kampe) for (const dep of k.afhaengerAf) if (indeks.has(k.id) && indeks.has(dep)) foer.push([indeks.get(dep), indeks.get(k.id), slotMin]);
 
     // Konfliktpar: to kampe med en fælles (mulig) spiller skal ligge mindst varighed + pause fra hinanden
-    const forfaedre = new Map();
-    const alleForfaedre = (id, dybde = 0) => {
-        if (forfaedre.has(id)) return forfaedre.get(id);
-        const set = new Set();
-        for (const dep of kampMap.get(id)?.afhaengerAf || []) { set.add(dep); if (dybde < 50) for (const x of alleForfaedre(dep, dybde + 1)) set.add(x); }
-        forfaedre.set(id, set);
-        return set;
-    };
-    const kanDeleSpillere = (a, b) => {
-        if (a.tpRef.draw !== b.tpRef.draw) return true;
-        if (a.fase === 'swiss' && b.fase === 'swiss') return a.runde !== b.runde;
-        return alleForfaedre(a.id).has(b.id) || alleForfaedre(b.id).has(a.id);
-    };
     const prSpiller = new Map();
     for (const k of projekt.kampe) {
         if (!indeks.has(k.id)) continue;
@@ -111,7 +88,8 @@ export function bygProblem(projekt, hintPlan = null) {
             const a = liste[i], b = liste[j];
             if (!kanDeleSpillere(a, b)) continue;
             const udenPause = a.fase === 'swiss' && b.fase === 'swiss' && a.tpRef.draw === b.tpRef.draw && kat(a)?.swissUdenPause;
-            const gab = udenPause ? slotMin : Math.max(slotMin, Math.max(varighedFor(a), varighedFor(b)) + Math.max(pauseFor(a), pauseFor(b)));
+            const mr = M.mellemrum(a, b);
+            const gab = udenPause ? slotMin : Math.max(slotMin, mr.varighed + mr.pause);
             const ia = indeks.get(a.id), ib = indeks.get(b.id);
             const n = ia < ib ? `${ia}|${ib}` : `${ib}|${ia}`;
             if (!par.has(n) || par.get(n) < gab) par.set(n, gab);
@@ -129,7 +107,7 @@ export function bygProblem(projekt, hintPlan = null) {
 
     // Anti-samtidighed (valgfri): HS/HD, DS/DD, MD i samme række ikke i samme slot
     const ikkeSamtidig = [];
-    if (projekt.opsaetning.antiSamtidighed === true) {
+    if (M.antiSamtidighed) {
         const prRaekke = new Map();
         for (const k of projekt.kampe) { if (!indeks.has(k.id)) continue; const rid = kat(k)?.raekke; if (!prRaekke.has(rid)) prRaekke.set(rid, []); prRaekke.get(rid).push(k); }
         for (const liste of prRaekke.values()) for (let i = 0; i < liste.length; i += 1) for (let j = i + 1; j < liste.length; j += 1) {
@@ -172,11 +150,10 @@ export function bygProblem(projekt, hintPlan = null) {
     }
 
     // Max dage pr. række
-    const maxDage = projekt.raekker.filter((r) => r.maxDage && !r.dispensationFlereDage && (r.dage || []).length > r.maxDage)
-        .map((r) => ({ raekke: r.id, max: r.maxDage, kampe: kampe.map((k, i) => (k.raekke === r.id ? i : -1)).filter((i) => i >= 0) }));
+    const maxDage = projekt.raekker.filter((r) => M.maxDageFor(r) && (r.dage || []).length > M.maxDageFor(r))
+        .map((r) => ({ raekke: r.id, max: M.maxDageFor(r), kampe: kampe.map((k, i) => (k.raekke === r.id ? i : -1)).filter((i) => i >= 0) }));
 
     // Max kampe pr. spiller pr. dag
-    const maxPrDag = dage.length === 1 ? regler.maxKampePrDagEnDag : regler.maxKampePrDag;
     const mangeKampe = [...prKendt.values()].filter((l) => l.length > maxPrDag).map((l) => l.map((k) => indeks.get(k.id)));
 
     return {
