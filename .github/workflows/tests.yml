@@ -57,3 +57,17 @@ jobs:
       - name: Planner-løser — unit-tests
         working-directory: planner/solver
         run: python -m unittest -v test_solver.py
+
+      # Kontrakt JS ↔ Python: rigtige problemer fra bygProblem() løses af CP-SAT, og svaret skal have
+      # 0 fejl i tjekPlan(). Fanger, at de to sider glider fra hinanden (omdøbt felt, forskellig regel).
+      - name: Planner — kontrakt (byg problemer i JS)
+        working-directory: planner
+        run: node tests/kontrakt/kontrakt.mjs byg tests/kontrakt/_ud
+
+      - name: Planner — kontrakt (løs i Python)
+        working-directory: planner/solver
+        run: python kontrakt.py ../tests/kontrakt/_ud
+
+      - name: Planner — kontrakt (tjek svarene i JS)
+        working-directory: planner
+        run: node tests/kontrakt/kontrakt.mjs tjek tests/kontrakt/_ud
