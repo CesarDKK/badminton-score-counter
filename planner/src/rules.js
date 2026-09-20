@@ -207,20 +207,30 @@ export function tjekPlan(projekt) {
     }
 
     // ── Max haltid pr. række (hård regel som data, fx U9: 240 min): første til sidste kamp samme dag ──
-    for (const [s, liste] of prSpiller) {
+    // Tiden i hallen går fra spillerens første til sidste kamp samme dag. Det er de kendte kampe OG
+    // Swiss-runderne i de lodtrækninger, spilleren er med i (alle er med i hver runde). Double kl. 9 og
+    // Swiss kl. 12–16 er altså 7 timer — ikke 4. Hele Swiss-forløbets egen længde meldes samlet nedenfor.
+    const swissPrSpiller = new Map(); // spillerId → [{ k, p, min }] for Swiss-runde 2+ (pladsholdere)
+    for (const x of placerede) {
+        if (x.k.fase !== 'swiss' || x.k.spillere.length) continue;
+        for (const s of x.k.muligeSpillere) { if (!swissPrSpiller.has(s)) swissPrSpiller.set(s, []); swissPrSpiller.get(s).push(x); }
+    }
+    for (const s of new Set([...prSpiller.keys(), ...swissPrSpiller.keys()])) {
         const prDag = new Map();
-        for (const x of liste) {
-            if (!x.kendt) continue;
+        const med = (x, erSwissRunde) => {
             const graense = raekke(x.k)?.maxHaltidMin;
-            if (!prDag.has(x.p.dag)) prDag.set(x.p.dag, { foerste: x, sidste: x, graense: null, kampe: [] });
+            if (!prDag.has(x.p.dag)) prDag.set(x.p.dag, { foerste: x, sidste: x, graense: null, kampe: [], andet: false, swissLodtraekninger: new Set() });
             const d = prDag.get(x.p.dag);
             if (x.min < d.foerste.min) d.foerste = x;
             if (x.min > d.sidste.min) d.sidste = x;
             if (graense && (d.graense === null || graense < d.graense)) d.graense = graense;
+            if (erSwissRunde) d.swissLodtraekninger.add(x.k.tpRef.draw); else d.andet = true;
             d.kampe.push(x.k.id);
-        }
+        };
+        for (const x of prSpiller.get(s) || []) if (x.kendt) med(x, x.k.fase === 'swiss');
+        for (const x of swissPrSpiller.get(s) || []) med(x, true);
         for (const [dag, d] of prDag) {
-            if (!d.graense) continue;
+            if (!d.graense || (!d.andet && d.swissLodtraekninger.size < 2)) continue; // kun ét Swiss-forløb den dag: dækket af den samlede melding nedenfor
             const haltid = d.sidste.min - d.foerste.min + slotMin;
             if (haltid > d.graense) tilfoej({ type: 'max-haltid', alvor: 'fejl', tekst: `${spillerNavn(s)} er i hallen ${haltid} min ${datoKort(dag)} (kl. ${d.foerste.p.slot}–${klokke(d.sidste.min + slotMin)}); rækken tillader højst ${d.graense} min.`, kampe: d.kampe, dag, slot: d.sidste.p.slot });
         }

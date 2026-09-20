@@ -124,8 +124,16 @@ export function bygProblem(projekt, hintPlan = null) {
     // grænsen for alle spillerens kampe den dag. Kampene i rækken "udløser" grænsen; spillerens
     // kampe i andre rækker er kun bundet de dage, hvor en udløser også ligger. (Før blev den
     // mindste grænse lagt på alle dage — U9 om lørdagen begrænsede også søndagen.)
-    for (const liste of prKendt.values()) {
+    // Med i spillerens haltid: de kendte kampe OG Swiss-runde 2+ i spillerens lodtrækninger
+    const prHaltid = new Map();
+    for (const [s, liste] of prKendt) prHaltid.set(s, [...liste]);
+    for (const k of projekt.kampe) {
+        if (k.fase !== 'swiss' || k.spillere.length || !indeks.has(k.id)) continue;
+        for (const s of k.muligeSpillere) { if (!prHaltid.has(s)) prHaltid.set(s, []); prHaltid.get(s).push(k); }
+    }
+    for (const liste of prHaltid.values()) {
         if (liste.length < 2) continue;
+        if (liste.every((k) => k.fase === 'swiss' && k.tpRef.draw === liste[0].tpRef.draw)) continue; // kun ét Swiss-forløb: dækket af gruppen for lodtrækningen nedenfor
         const prRaekke = new Map(); // rækker med grænse → spillerens kampe i rækken
         for (const k of liste) { const r = raekke(k); if (r?.maxHaltidMin) { if (!prRaekke.has(r.id)) prRaekke.set(r.id, { r, kampe: [] }); prRaekke.get(r.id).kampe.push(k); } }
         for (const { r, kampe: egne } of prRaekke.values()) {

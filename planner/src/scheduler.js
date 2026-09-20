@@ -225,11 +225,12 @@ export function lavForslag(projekt, valg = {}) {
         const kendte = new Set(k.spillere);
         let mindsteGab = null;
         for (const s of k.muligeSpillere) {
-            if (!lemp.maxHaltid && kendte.has(s)) {
-                // Max haltid (hård regel som data, fx U9 240 min): første til sidste kamp samme dag
+            if (!lemp.maxHaltid && (kendte.has(s) || k.fase === 'swiss')) {
+                // Max haltid (hård regel som data, fx U9 240 min): første til sidste kamp samme dag —
+                // de kendte kampe og Swiss-runderne i spillerens lodtrækninger (alle er med i hver runde)
                 let graense = r.maxHaltidMin || null, foerste = slotStart, sidste = slotStart;
                 for (const x of historik.get(s) || []) {
-                    if (x.dag !== dag.dato || !x.kendt) continue;
+                    if (x.dag !== dag.dato || !(x.kendt || x.kamp.fase === 'swiss')) continue;
                     const g = raekke(x.kamp)?.maxHaltidMin;
                     if (g && (!graense || g < graense)) graense = g;
                     if (x.min < foerste) foerste = x.min;
