@@ -43,7 +43,7 @@ describe('regelmodellen: hvilken dag og tid en kamp må ligge', () => {
     });
 });
 
-describe('Tjek: kvart-, semi- og finale samme dag', () => {
+describe('Tjek: semifinale og finale må dele dag, kvartfinalen skal ligge en tidligere dag', () => {
     const laeg = (p, kampe, dag, slot) => kampe.reduce((q, k) => flytKamp(q, k.id, dag, slot), p);
     test('semifinale og finale samme dag er tilladt (for E-rækker er det ligefrem kravet på sidste dag)', () => {
         let p = seniorE();
@@ -51,6 +51,15 @@ describe('Tjek: kvart-, semi- og finale samme dag', () => {
         p = laeg(p, runde(p, 'Semifinale'), SOEN, '10:00');
         p = laeg(p, runde(p, 'Finale'), SOEN, '12:00');
         assert.equal(fejltyper(p).includes('senior-finalerunder'), false);
+    });
+    test('kvartfinale samme dag som semifinalen er en fejl — også når finalen ligger dagen efter', () => {
+        let p = seniorE();
+        p = laeg(p, runde(p, 'Kvartfinale'), LOER, '10:00');
+        p = laeg(p, runde(p, 'Semifinale'), LOER, '13:00');
+        p = laeg(p, runde(p, 'Finale'), SOEN, '11:00');
+        const f = tjekPlan(p).problemer.filter((x) => x.type === 'senior-finalerunder');
+        assert.equal(f.length, 1);
+        assert.match(f[0].tekst, /kvartfinalen skal ligge en tidligere dag/);
     });
     test('alle tre runder samme dag er en fejl', () => {
         let p = seniorE();
@@ -72,15 +81,30 @@ describe('planlægger og løser overholder E- og senior-reglerne', () => {
         for (const k of [...runde(p, 'Kvartfinale'), ...p.kampe.filter((x) => x.fase === 'pulje')]) assert.equal(f.plan[k.id].dag, LOER, k.navn);
         for (const k of runde(p, 'Finale')) { assert.equal(f.plan[k.id].dag, SOEN); assert.ok(f.plan[k.id].slot >= '10:00' && f.plan[k.id].slot <= '13:00', f.plan[k.id].slot); }
     });
-    test('løserens problem: tilladte tider følger reglerne, og finalen må ikke ligge samme dag som en kvartfinale', () => {
+    test('løserens problem: tilladte tider følger reglerne, og kvartfinalerne må ikke dele dag med semifinaler eller finale', () => {
         const p = seniorE();
         const pr = bygProblem(p);
         const i = (k) => pr.kampe.findIndex((x) => x.id === k.id);
         const pulje = p.kampe.find((k) => k.fase === 'pulje'), finale = runde(p, 'Finale')[0], kvart = runde(p, 'Kvartfinale');
         assert.ok(pr.kampe[i(pulje)].tilladte.every((t) => t < 1440), 'puljekampe kun lørdag');
         assert.ok(pr.kampe[i(finale)].tilladte.every((t) => t % 1440 >= 600 && t % 1440 <= 780), 'finalen kun 10:00–13:00');
-        assert.deepEqual(pr.ikkeSammeDag.sort(), kvart.map((k) => [i(k), i(finale)]).sort());
+        const semi = runde(p, 'Semifinale');
+        const forventet = kvart.flatMap((k) => [...semi, finale].map((x) => [i(k), i(x)]));
+        assert.deepEqual([...pr.ikkeSammeDag].sort(), forventet.sort(), 'hver kvartfinale mod hver semifinale og finalen');
         assert.deepEqual(pr.maxPrGruppe, [], 'ingen spiller har over 3 sikre kampe i kategorien');
+    });
+    test('senior M (uden E-rækkens dagsregel): planlæggeren lægger selv kvartfinalerne en tidligere dag end semifinalerne', () => {
+        let p = nytProjekt(model([{ id: 'SEN M', aargang: 'SEN', raekke: 'M', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('m', 12) }] }], [LOER, SOEN]));
+        for (const d of p.opsaetning.dage) p = opdaterDag(p, d.dato, { baner: 4, start: '09:00', slut: '20:00', foerSkoledag: false });
+        p = opdaterOpsaetning(p, { pauseMin: { ...p.opsaetning.pauseMin, faelles: null } });
+        p = saetForm(p, 'SEN M HS', { formValg: 'pulje-cup', cupTop: 2 });
+        const f = lavForslag(p);
+        assert.deepEqual(f.brud, []);
+        assert.deepEqual(fejltyper(anvendForslag(p, f)), []);
+        const dage = (navn) => new Set(runde(p, navn).map((k) => f.plan[k.id].dag));
+        assert.deepEqual([...dage('Kvartfinale')], [LOER]);
+        assert.deepEqual([...dage('Semifinale')], [SOEN]);
+        assert.deepEqual([...dage('Finale')], [SOEN], 'semifinale og finale deler dag');
     });
     test('senior E/M: højst 3 kampe pr. kategori pr. dag (dobbelt pulje á 3 = 4 kampe skal deles over to dage)', () => {
         let p = nytProjekt(model([{ id: 'SEN M', aargang: 'SEN', raekke: 'M', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('m', 3) }] }], [LOER, SOEN]));

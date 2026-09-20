@@ -50,9 +50,10 @@ konsekvens og fordelt på fire pakker. Kryds af, efterhånden som de rettes.
       misvisende siger "ikke plads". Pause for mulige cupspillere er stadig hård i begge planlæggere.
 - [x] **10. E- og senior-reglerne** håndhæves af planlægger og løser: E-række sidste dag kun semi/finale (ved flere
       dage), E-finaler i finalevinduet, senior A/B kun finalerunder på finaledagen, senior E/M max 3 kampe pr.
-      kategori pr. dag (`maxPrGruppe`) og finale ikke samme dag som kvartfinale (`ikkeSammeDag`).
-      **Til bekræftelse:** Tjek meldte før fejl ved TO finalerunder samme dag; det modsiger "E-rækker: semi og
-      finale sidste dag", så reglen er nu "ikke alle tre samme dag".
+      kategori pr. dag (`maxPrGruppe`) og kvartfinale ikke samme dag som semifinale/finale (`ikkeSammeDag`).
+      **Bekræftet af Jesper 2026-09-20:** semifinale og finale må spilles samme dag, men kvartfinalen skal ligge
+      en tidligere dag — Tjek melder fejl, hvis en kvartfinale deler dag med kategoriens semifinale eller finale,
+      og planlægger og løser overholder det (`ikkeSammeDag`: hver kvartfinale mod hver semifinale og finalen).
 - [x] **14. Ældre projekter** uden `maxDage` / `antiSamtidighed` / `pauseKlasse` tolkes ens alle steder (regelmodellen).
 - [x] Løserens problem: en låst kamp uden for rækkens tidsrum ligger på de fælles baner (gav før falsk "umuligt").
 

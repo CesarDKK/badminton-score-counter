@@ -114,7 +114,7 @@ export function lavRegelmodel(projekt) {
     // ── E-rækker og senior: regler om, HVILKEN dag og tid en kamp må ligge ──
     const sidsteDag = dage.map((d) => d.dato).sort().at(-1);
     const erFinalerunde = (k) => k.fase === 'cup' && FINALERUNDER.has(k.rundeNavn);
-    /** Senior E/M: max kampe pr. kategori pr. dag, og kvart-, semi- og finale ikke alle samme dag. */
+    /** Senior E/M: max kampe pr. kategori pr. dag; semifinale og finale må dele dag, men kvartfinalen skal ligge en tidligere dag. */
     const seniorEM = (r) => !!r && erSenior(r.aargang) && (r.raekke === 'E' || r.raekke === 'M');
     /** Kan rækken komme til at spille over flere dage? (bruges af planlægger og løser; Tjek ser på den faktiske plan) */
     const kanSpilleFlereDage = (r) => (r.dage || []).length > 1 && maxDageFor(r) !== 1;

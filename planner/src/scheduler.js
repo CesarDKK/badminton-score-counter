@@ -18,7 +18,7 @@ const AARSAG_RANG = {
     'ingen ledig bane': 6, 'ingen ledig reserveret bane': 6,
     'spiller mangler pause': 5, 'spiller over max haltid': 5, 'rækken må ikke spille flere dage': 3, 'spiller er i en anden kamp i slottet': 5, 'spiller har max kampe den dag': 5,
     'uden for tidsvinduet': 4, 'E-række: kun semifinaler og finaler på sidste dag': 4, 'E-finale uden for finalevinduet': 4, 'senior A/B: kun kvart-, semi- og finaler på finaledagen': 4,
-    'kvart-, semi- og finale samme dag': 4, 'spiller har max kampe i kategorien den dag': 5, 'rækken er lagt på en anden dag': 3,
+    'kvartfinale samme dag som semifinale eller finale': 4, 'spiller har max kampe i kategorien den dag': 5, 'rækken er lagt på en anden dag': 3,
     'før rækkens tidligste start': 4, 'efter rækkens seneste slut': 4,
     'rækken spiller ikke den dag': 3, 'single og double samtidig i rækken': 3,
     'bygger på en senere kamp': 2, 'bygger på en kamp uden tid': 1,
@@ -238,8 +238,12 @@ function lavForslagEnGang(projekt, valg = {}) {
         if (!lemp.tidsvindue) {
             const forbud = M.kampForbud(k, dag.dato, slotStart);
             if (forbud) return forbud;
-            // Senior E/M: kvart-, semi- og finale ikke alle samme dag = finalen ikke samme dag som en kvartfinale
-            if (M.seniorEM(r) && k.rundeNavn === 'Finale' && (finalerunderPrDag.get(`${k.kategori}|${dag.dato}`) || new Set()).has('Kvartfinale')) return 'kvart-, semi- og finale samme dag';
+            // Senior E/M: semifinale og finale må spilles samme dag, men kvartfinalen skal ligge en tidligere dag
+            if (M.seniorEM(r) && M.erFinalerunde(k)) {
+                const samme = finalerunderPrDag.get(`${k.kategori}|${dag.dato}`) || new Set();
+                const kvartHer = k.rundeNavn === 'Kvartfinale' ? (samme.has('Semifinale') || samme.has('Finale')) : samme.has('Kvartfinale');
+                if (kvartHer) return 'kvartfinale samme dag som semifinale eller finale';
+            }
         }
         // Max haltid for Swiss Ladder: alle er med i hver runde, så rundernes samlede spænd tæller
         if (!lemp.maxHaltid && k.fase === 'swiss' && r.maxHaltidMin) {

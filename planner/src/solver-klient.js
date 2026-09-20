@@ -188,22 +188,22 @@ export function bygProblem(projekt, hintPlan = null) {
     // Max kampe pr. spiller pr. dag
     const mangeKampe = [...prKendt.values()].filter((l) => l.length > maxPrDag).map((l) => l.map((k) => indeks.get(k.id)));
 
-    // Senior E/M: max kampe pr. kategori pr. spiller pr. dag, og finalen ikke samme dag som en kvartfinale
-    // (= kvart-, semi- og finale ikke alle samme dag)
+    // Senior E/M: max kampe pr. kategori pr. spiller pr. dag, og kvartfinalen ikke samme dag som kategoriens
+    // semifinale eller finale (de to må gerne dele dag)
     const maxPrGruppe = [], ikkeSammeDag = [];
     {
         const prSpillerKat = new Map();
-        const finaler = new Map(); // kategori → { kvart: [i], finale: [i] }
+        const finaler = new Map(); // kategori → { Kvartfinale: [i], Semifinale: [i], Finale: [i] }
         for (const k of projekt.kampe) {
             if (!indeks.has(k.id) || !M.seniorEM(raekke(k))) continue;
             for (const s of k.spillere) { const n = `${s}|${k.kategori}`; if (!prSpillerKat.has(n)) prSpillerKat.set(n, []); prSpillerKat.get(n).push(indeks.get(k.id)); }
-            if (M.erFinalerunde(k) && k.rundeNavn !== 'Semifinale') {
-                if (!finaler.has(k.kategori)) finaler.set(k.kategori, { Kvartfinale: [], Finale: [] });
+            if (M.erFinalerunde(k)) {
+                if (!finaler.has(k.kategori)) finaler.set(k.kategori, { Kvartfinale: [], Semifinale: [], Finale: [] });
                 finaler.get(k.kategori)[k.rundeNavn].push(indeks.get(k.id));
             }
         }
         for (const liste of prSpillerKat.values()) if (liste.length > M.regler.seniorMaxPrKategori) maxPrGruppe.push({ kampe: liste, max: M.regler.seniorMaxPrKategori });
-        for (const f of finaler.values()) for (const a of f.Kvartfinale) for (const b of f.Finale) ikkeSammeDag.push([a, b]);
+        for (const f of finaler.values()) for (const a of f.Kvartfinale) for (const b of [...f.Semifinale, ...f.Finale]) ikkeSammeDag.push([a, b]);
     }
 
     return {
