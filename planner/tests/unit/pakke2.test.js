@@ -54,45 +54,45 @@ describe('regelmodellen: byggestenene står ét sted', () => {
     });
 });
 
-describe('tid i hallen tæller Swiss-runderne med — i Tjek, planlægger og løser', () => {
-    const opstil = () => {
-        let p = laeg(u9(), (k) => k.kategori === 'U09 D HD', '09:00');
-        p = laeg(p, (k) => k.fase === 'swiss' && k.runde === 1, '12:00');
-        p = laeg(p, (k) => k.fase === 'swiss' && k.runde === 2, '13:00');
-        return laeg(p, (k) => k.fase === 'swiss' && k.runde === 3, '14:00');
-    };
-    test('Tjek: double kl. 9 og Swiss kl. 12–14:30 er 330 min i hallen — fejl ved grænse 240', () => {
-        const fund = tjekPlan(opstil()).problemer.filter((x) => x.type === 'max-haltid');
-        assert.equal(fund.length, 4, 'alle fire spillere');
-        assert.match(fund[0].tekst, /330 min/);
-        assert.equal(fund[0].alvor, 'fejl');
+describe('max varighed gælder afviklingen af rækkens SINGLEKAMPE (U9 4 timer, U11 6 timer) — i Tjek, planlægger og løser', () => {
+    const swiss = (p, slots) => slots.reduce((q, slot, i) => laeg(q, (k) => k.fase === 'swiss' && k.runde === i + 1, slot), p);
+    test('standard: U9 240 min og U11 360 min (vejledningen), andre årgange ingen grænse', () => {
+        const p = nytProjekt(model([
+            { id: 'U09 D', aargang: 'U09', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', spillere: [['a'], ['b']] }] },
+            { id: 'U11 D', aargang: 'U11', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', spillere: [['c'], ['d']] }] },
+            { id: 'U13 D', aargang: 'U13', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', spillere: [['e'], ['f']] }] },
+        ]));
+        assert.deepEqual(p.raekker.map((r) => r.maxHaltidMin), [240, 360, null]);
     });
-    test('Tjek: et Swiss-forløb alene meldes én gang samlet, ikke pr. spiller', () => {
-        let p = laeg(u9(60), (k) => k.fase === 'swiss' && k.runde === 1, '12:00');
-        p = laeg(p, (k) => k.fase === 'swiss' && k.runde === 2, '13:00');
-        p = laeg(p, (k) => k.fase === 'swiss' && k.runde === 3, '14:00');
+    test('Tjek: doublen tæller ikke med — double kl. 9 og singler kl. 12–14:30 er 150 min singler', () => {
+        const p = swiss(laeg(u9(), (k) => k.kategori === 'U09 D HD', '09:00'), ['12:00', '13:00', '14:00']);
+        assert.deepEqual(tjekPlan(p).problemer.filter((x) => x.type === 'max-haltid'), []);
+    });
+    test('Tjek: singler fra kl. 9 til 14:30 er 330 min — én samlet fejl for rækken, der peger på de kampe, der ligger for sent', () => {
+        const p = swiss(u9(), ['09:00', '11:00', '14:00']);
         const fund = tjekPlan(p).problemer.filter((x) => x.type === 'max-haltid');
         assert.equal(fund.length, 1);
-        assert.match(fund[0].tekst, /Swiss Ladder-runderne/);
+        assert.equal(fund[0].alvor, 'fejl');
+        assert.match(fund[0].tekst, /U09 D: singlekampene strækker sig over 330 min/);
+        const runde3 = p.kampe.filter((k) => k.fase === 'swiss' && k.runde === 3).map((k) => k.id).sort();
+        assert.deepEqual([...fund[0].kampe].sort(), runde3);
     });
-    test('planlæggeren holder grænsen, når Swiss-runderne tælles med', () => {
-        const p = u9();
+    test('planlæggeren lægger rækkens singler samlet og holder grænsen', () => {
+        const p = u9(120);
         const f = lavForslag(p);
         assert.equal(f.brud.length, 0);
         assert.deepEqual(tjekPlan(anvendForslag(p, f)).problemer.filter((x) => x.alvor === 'fejl'), []);
+        const tider = p.kampe.filter((k) => k.kategori === 'U09 D HS').map((k) => f.plan[k.id].slot).sort();
+        const min = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
+        assert.ok(min(tider.at(-1)) - min(tider[0]) + 30 <= 120, `singlerne varer ${min(tider.at(-1)) - min(tider[0]) + 30} min`);
     });
-    test('løserens problem: spillerens haltid-gruppe rummer double, runde 1 og Swiss-runde 2+', () => {
+    test('løserens problem: én gruppe for rækkens singlekampe — doublen er ikke med', () => {
         const p = u9();
         const pr = bygProblem(p);
-        const kampFor = (i) => p.kampe.find((k) => k.id === pr.kampe[i].id);
-        const egne = pr.haltid.filter((h) => h.kampe.some((i) => kampFor(i).kategori === 'U09 D HD'));
-        assert.equal(egne.length, 4, 'én gruppe pr. spiller');
-        for (const h of egne) {
-            const kampe = h.kampe.map(kampFor);
-            assert.equal(kampe.filter((k) => k.kategori === 'U09 D HD').length, 1);
-            assert.equal(kampe.filter((k) => k.fase === 'swiss' && k.spillere.length).length, 1, 'runde 1 (kendt)');
-            assert.equal(kampe.filter((k) => k.fase === 'swiss' && !k.spillere.length).length, 4, 'runde 2 og 3: to kampe i hver');
-            assert.equal(h.graense, 240);
-        }
+        assert.equal(pr.haltid.length, 1);
+        const kampe = pr.haltid[0].kampe.map((i) => p.kampe.find((k) => k.id === pr.kampe[i].id));
+        assert.ok(kampe.every((k) => k.kategori === 'U09 D HS'));
+        assert.equal(kampe.length, 6, '3 runder á 2 kampe');
+        assert.equal(pr.haltid[0].graense, 240);
     });
 });

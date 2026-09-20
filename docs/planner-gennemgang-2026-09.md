@@ -71,12 +71,20 @@ Appendiks 2 (sammenlægning) og "U9-U11 turneringer 2026-2027 Vejledning" — al
       (`regler.eTidligst`, ny fejl `e-tidligst`; planlægger og løser overholder den).
 - [x] Rettet: senior må højst spille 10 kampe pr. dag, også når turneringen er på én dag (ungdom: 12).
 - [x] Rettet: finaledags-reglen gælder også Senior+ E- og A-rækker, ikke kun Senior A og B.
-- [ ] **Afventer Jesper:** minimum antal kampe står i teksterne PR. KATEGORI (single for sig, double for sig) og for
-      alle ungdomsrækker — ikke samlet på tværs. `minKampeSamlet` er i dag slået til for alle rækker.
-- [ ] **Afventer Jesper:** "max 4 timer" (U9) og "max 6 timer" (U11) gælder ifølge vejledningen AFVIKLINGEN AF
-      SINGLEKAMPENE, ikke spillerens samlede tid i hallen inkl. double. U11 har i dag ingen grænse som standard.
-- [ ] **Afventer Jesper:** anbefalet rækkefølge er U9/U11: single → double (→ mix); U13 og op: mix → double → single.
-      Planneren bruger mix → single → double for alle.
+- [x] **Minimum antal kampe tælles pr. kategori** (Appendiks 1: "minimum 2 kampe i hver tilmeldt kategori", "minimum 3
+      kampe i single og minimum 2 kampe i double", U9/U11 "minimum 4 kampe i single"; vejledningen: "4–6 singlekampe og
+      2–5 doublekampe"). `minKampeSamlet` er nu FRA som standard i alle rækker og mærket "afviger fra reglementet";
+      gemte projekter sættes én gang tilbage (`minKampeSamletV3`). Jesper 2026-09-20: reglementet gælder.
+- [x] **"Max 4 timer" (U9) og "max 6 timer" (U11) gælder afviklingen af rækkens SINGLEKAMPE** (vejledningen), ikke
+      spillerens samlede tid i hallen. `raekker[].maxHaltidMin` måles nu pr. række og dag fra første til sidste
+      singlekamp (`regelmodel.singleVarighedGraense`); doublerne tæller ikke med. Standard U9 240, U11 360.
+      Planlæggeren giver rækker med en grænse en frist fra morgenstunden, så singlerne lægges samlet.
+      Lyngby U9/U11: U9's singler afvikles på 180 min, og forslaget har 0 fejl i alle tre opsætninger.
+      (Afløser punkt 13's spiller-baserede haltid; spillerens ventetid er fortsat et blødt kriterie.)
+- [x] **Rækkefølge efter vejledningen:** U9/U11 single → double → mix; U13 og op mix → double → single
+      (`standardRaekkefoelge`); gemte projekter får den én gang (`raekkefoelgeV2`).
+- [ ] Idé (Appendiks 2): vis en oplysning ved kategorier med under 4 tilmeldte om, hvilke rækker de må sammenlægges
+      med. Sammenlægningen sker fortsat i TP.
 
 ## Pakke 3 — én kapacitetsberegning, stabilt formvalg og stabile kamp-id'er
 

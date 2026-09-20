@@ -466,3 +466,16 @@ løserens planer har 0 fejl i Tjek. Kør den lokalt efter enhver ændring af reg
     node tests/kontrakt/kontrakt.mjs tjek tests/kontrakt/_ud
 
 Status og detaljer: `docs/planner-gennemgang-2026-09.md`.
+
+## Krydstjek mod reglementet (2026-09-20)
+
+Kilder (badminton.dk/individuelle-turneringer): Reglement for Individuelle Turneringer, Appendiks 1 (turneringsformer),
+Appendiks 2 (sammenlægning) og "U9-U11 turneringer – Vejledning". Reglementet går forud for tidligere antagelser:
+
+- Minimum antal kampe gælder PR. KATEGORI (ikke samlet for single + double). `minKampeSamlet` er et tilvalg, fra som standard.
+- `raekker[].maxHaltidMin` = max varighed for afviklingen af rækkens SINGLEKAMPE pr. dag (U9 240, U11 360); doubler tæller ikke med.
+- Rækkefølge: U9/U11 single → double → mix; U13+ mix → double → single.
+- E-rækker: ingen kampe før kl. 10 (`regler.eTidligst`), sidste dag kun semi og finale, finaler 10–13.
+- Senior E/M: max 3 kampe pr. kategori pr. dag; kvartfinaler ikke samme dag som semi- og finaler. Senior: max 10 kampe pr. dag.
+- Senior A/B og Senior+ E/A: kun kvart-, semi- og finaler på finaledagen.
+`tests/unit/reglement.test.js` låser standarderne til reglementets tal. Detaljer: `docs/planner-gennemgang-2026-09.md`.

@@ -336,10 +336,13 @@ export function effektivForm(kategori) {
 
 /**
  * Tælles rækkens minimumskrav samlet på tværs af spillerens kategorier (single, double og mix)?
- * Ja som standard for alle årgange (Jesper 2026-09-18) — kan slås fra pr. række.
+ * NEJ som standard: reglementet (Appendiks 1) stiller kravet pr. kategori — "minimum 2 kampe i hver tilmeldt
+ * kategori" (M/A), "minimum 3 kampe i single og minimum 2 kampe i double" (B/C/D), U9/U11 "minimum 4 kampe i
+ * single" — og U9/U11-vejledningen siger "4–6 singlekampe og 2–5 doublekampe". Turneringslederen kan slå
+ * samlet tælling til pr. række som et bevidst valg, men det afviger fra reglementet.
  */
 export function minKampeSamlet(raekke) {
-    return raekke ? (raekke.minKampeSamlet ?? true) : false;
+    return raekke ? raekke.minKampeSamlet === true : false;
 }
 
 /**

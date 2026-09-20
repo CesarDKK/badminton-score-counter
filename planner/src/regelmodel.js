@@ -111,6 +111,14 @@ export function lavRegelmodel(projekt) {
         return max || null;
     };
 
+    /**
+     * Max varighed for afviklingen af rækkens SINGLEKAMPE (raekker[].maxHaltidMin). U9/U11-vejledningen:
+     * "Max. 4 timers varighed for afvikling af singlekampene" (U9) og "Max. 6 timers varighed …" (U11).
+     * Varigheden måles pr. dag fra rækkens første singlekamp til den sidste er slut. Doublerne tæller ikke med.
+     * Returnerer grænsen i minutter for kampen — eller null, når kampen ikke er omfattet.
+     */
+    const singleVarighedGraense = (k) => { const r = raekke(k); return r?.maxHaltidMin && kat(k)?.type === 'single' ? r.maxHaltidMin : null; };
+
     // ── E-rækker og senior: regler om, HVILKEN dag og tid en kamp må ligge ──
     const sidsteDag = dage.map((d) => d.dato).sort().at(-1);
     const erFinalerunde = (k) => k.fase === 'cup' && FINALERUNDER.has(k.rundeNavn);
@@ -156,7 +164,7 @@ export function lavRegelmodel(projekt) {
     const maxPrDagForKampe = (kampe) => Math.min(...kampe.map((k) => maxPrDagFor(raekke(k))));
 
     return {
-        maxPrDagFor, maxPrDagForKampe,
+        maxPrDagFor, maxPrDagForKampe, singleVarighedGraense,
         sidsteDag, erFinalerunde, seniorEM, kunFinalerunderPaaFinaledagen, kanSpilleFlereDage, kampForbud,
         regler, slotMin, pauseMin, dage, dagMap, katMap, raekkeMap, kampMap, kat, raekke,
         enDag: dage.length === 1,

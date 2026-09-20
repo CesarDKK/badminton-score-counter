@@ -139,37 +139,22 @@ export function bygProblem(projekt, hintPlan = null) {
         }
     }
 
-    // Max haltid: grupper af kampe, hvis første-til-sidste samme dag højst må være graense minutter.
-    // Kendte spillere i rækker med grænse, og Swiss Ladder-lodtrækninger (alle er med i hver runde).
+    // Max varighed for afviklingen af rækkens singlekampe (U9 4 timer, U11 6 timer): én gruppe pr. række, hvis
+    // første-til-sidste kamp samme dag højst må være graense minutter. Doublerne er ikke med.
     const haltid = [];
     const prKendt = new Map();
-    for (const k of projekt.kampe) { if (!indeks.has(k.id)) continue; for (const s of k.spillere) { if (!prKendt.has(s)) prKendt.set(s, []); prKendt.get(s).push(k); } }
-    // Samme regel som Tjek: på en dag, hvor spilleren har en kamp i en række MED grænse, gælder
-    // grænsen for alle spillerens kampe den dag. Kampene i rækken "udløser" grænsen; spillerens
-    // kampe i andre rækker er kun bundet de dage, hvor en udløser også ligger. (Før blev den
-    // mindste grænse lagt på alle dage — U9 om lørdagen begrænsede også søndagen.)
-    // Med i spillerens haltid: de kendte kampe OG Swiss-runde 2+ i spillerens lodtrækninger
-    const prHaltid = new Map();
-    for (const [s, liste] of prKendt) prHaltid.set(s, [...liste]);
-    for (const k of projekt.kampe) {
-        if (k.fase !== 'swiss' || k.spillere.length || !indeks.has(k.id)) continue;
-        for (const s of k.muligeSpillere) { if (!prHaltid.has(s)) prHaltid.set(s, []); prHaltid.get(s).push(k); }
-    }
-    for (const liste of prHaltid.values()) {
-        if (liste.length < 2) continue;
-        if (liste.every((k) => k.fase === 'swiss' && k.tpRef.draw === liste[0].tpRef.draw)) continue; // kun ét Swiss-forløb: dækket af gruppen for lodtrækningen nedenfor
-        const prRaekke = new Map(); // rækker med grænse → spillerens kampe i rækken
-        for (const k of liste) { const r = raekke(k); if (r?.maxHaltidMin) { if (!prRaekke.has(r.id)) prRaekke.set(r.id, { r, kampe: [] }); prRaekke.get(r.id).kampe.push(k); } }
-        for (const { r, kampe: egne } of prRaekke.values()) {
-            // rækken følger med, så løserens diagnose kan sige, HVIS grænse der spærrer
-            const h = { kampe: liste.map((k) => indeks.get(k.id)), graense: r.maxHaltidMin, raekke: r.id };
-            if (egne.length < liste.length) h.udloesere = egne.map((k) => indeks.get(k.id));
-            haltid.push(h);
+    for (const k of projekt.kampe) { if (!indeks.has(k.id)) continue; for (const sp of k.spillere) { if (!prKendt.has(sp)) prKendt.set(sp, []); prKendt.get(sp).push(k); } }
+    {
+        const prRaekke = new Map();
+        for (const k of projekt.kampe) {
+            const graense = indeks.has(k.id) ? M.singleVarighedGraense(k) : null;
+            if (!graense) continue;
+            const rid = raekke(k).id;
+            if (!prRaekke.has(rid)) prRaekke.set(rid, { kampe: [], graense, raekke: rid });
+            prRaekke.get(rid).kampe.push(indeks.get(k.id));
         }
+        for (const h of prRaekke.values()) if (h.kampe.length > 1) haltid.push(h);
     }
-    const prSwiss = new Map();
-    for (const k of projekt.kampe) { if (k.fase !== 'swiss' || !indeks.has(k.id) || !raekke(k)?.maxHaltidMin) continue; if (!prSwiss.has(k.tpRef.draw)) prSwiss.set(k.tpRef.draw, []); prSwiss.get(k.tpRef.draw).push(k); }
-    for (const liste of prSwiss.values()) haltid.push({ kampe: liste.map((k) => indeks.get(k.id)), graense: raekke(liste[0]).maxHaltidMin, raekke: raekke(liste[0]).id });
 
     // Ventetid (blødt): kendte spilleres kampe som grupper; Swiss-lodtrækninger vægtes med antal spillere
     const spillerGrupper = [];

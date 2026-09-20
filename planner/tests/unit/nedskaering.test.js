@@ -96,7 +96,7 @@ describe('nedskæring: forslag der får kabalen til at gå op', () => {
         const hs = f.aendringer.find((x) => x.kategori === 'U11 D HS');
         if (hs && hs.til < hs.fra) assert.equal(hd.til, 1, 'singlen røres først, når doublen er i bund (6 par = lige antal → gulv 1)');
     });
-    test('"Skær kun i double og mix": singlerne røres ikke, doublen må gå ned til 1 runde, og kun rene doublespillere kommer under kravet', () => {
+    test('"Skær kun i double og mix": singlerne røres ikke, doublen må gå ned til 1 runde, og alle doublespillere kommer under double-kravet', () => {
         // 8 i single (16 kampe) + 4 doublepar (4 runder er ikke muligt med 4 par → 3 runder = 6 kampe). 4 af de 8 doublespillere spiller også single.
         let p = nytProjekt(model([{ id: 'U13 D', aargang: 'U13', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', antal: 8 }, { kat: 'HD', type: 'double', antal: 4 }] }], ['2026-11-21']));
         const single = p.tilmeldinger['U13 D HS'].map((t) => t.spillere[0]);
@@ -109,7 +109,7 @@ describe('nedskæring: forslag der får kabalen til at gå op', () => {
         assert.deepEqual(Object.keys(f.runder), ['U13 D HD']);
         const hd = f.aendringer.find((a) => a.kategori === 'U13 D HD');
         assert.ok(hd.til < hd.fra && hd.til >= 1);
-        if (hd.til < 2) assert.equal(hd.underKravEfter, 4, 'de 4 rene doublespillere er under kravet på 2 — de 4, der også spiller single, er ikke');
+        if (hd.til < 2) assert.equal(hd.underKravEfter, 8, 'kravet gælder pr. kategori: alle 8 doublespillere er under 2 doublekampe — også dem, der spiller single');
         assert.equal(alleNedskaeringer(p).some((x) => x.strategi === 'kunDouble'), true);
     });
     test('"To dage": rækken får dispensation i stedet for færre kampe, når det er nok', () => {
@@ -194,11 +194,12 @@ describe('nedskæring: gulv for double og berørte kategorier', () => {
         const hd = f.aendringer.find((a) => a.kategori === 'U13 D HD');
         assert.ok(hd.til >= 2, `5 par: gulv 2, fik ${hd.til}`);
     });
-    test('en single-kategori kommer med i tabellen, når spillerne kommer under minimum, fordi deres doubler er skåret', () => {
+    test('samlet tælling tilvalgt: en single-kategori kommer med i tabellen, når spillerne kommer under minimum, fordi deres doubler er skåret', () => {
         // U11: single-kravet er 4. 5 i single (ulige → 3 runder sikrer kun 2); fire af dem spiller også double og når kun 4 via doublens 3 runder.
         let p = nytProjekt(model([{ id: 'U11 D', aargang: 'U11', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', antal: 5 }, { kat: 'HD', type: 'double', antal: 4 }] }], ['2026-11-21']));
         const s = p.tilmeldinger['U11 D HS'].map((t) => t.spillere[0]);
         p = { ...p, tilmeldinger: { ...p.tilmeldinger, 'U11 D HD': p.tilmeldinger['U11 D HD'].map((t, i) => (i < 2 ? { ...t, spillere: [s[i * 2], s[i * 2 + 1]] } : t)) } };
+        p = opdaterRaekke(p, 'U11 D', { minKampeSamlet: true });
         p = opdaterDag(p, '2026-11-21', { baner: 1, start: '09:00', slut: '13:00' }); // 8 bane-slots til 6 + 6 kampe → doublen må ned på 1 runde
         p = saetForm(saetForm(p, 'U11 D HS', { formValg: 'swiss', swissRunder: 3 }), 'U11 D HD', { formValg: 'swiss', swissRunder: 3 });
         assert.ok(lavForslag(p).brud.length > 0, 'udgangspunktet har regelbrud');

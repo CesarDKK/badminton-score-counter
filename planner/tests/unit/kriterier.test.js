@@ -108,14 +108,15 @@ describe('hårde rækkeregler som data: max haltid og max dage', () => {
         const p = projekt();
         assert.deepEqual(p.raekker.map((r) => [r.id, r.maxHaltidMin, r.maxDage]), [['U09 D', 240, 1], ['U13 M', null, null]]);
     });
-    test('Tjek: spiller over rækkens max haltid er en fejl', () => {
+    test('Tjek: afviklingen af rækkens singlekampe over grænsen er en fejl', () => {
         let p = projekt();
         p = flytKamp(p, '1:1', '2026-11-21', '09:00');
-        p = flytKamp(p, '1:2', '2026-11-21', '13:00'); // a: 09:00–13:30 = 270 min > 240
+        p = flytKamp(p, '1:2', '2026-11-21', '13:00'); // U09 D's singler: 09:00–13:30 = 270 min > 240
         const f = tjekPlan(p).problemer.filter((x) => x.type === 'max-haltid');
         assert.equal(f.length, 1);
         assert.equal(f[0].alvor, 'fejl');
-        assert.match(f[0].tekst, /a X er i hallen 270 min .* højst 240 min/);
+        assert.match(f[0].tekst, /U09 D: singlekampene strækker sig over 270 min .* højst vare 240 min/);
+        assert.deepEqual(f[0].kampe, ['1:2'], 'kampen, der ligger for sent, er den, der peges på');
         assert.equal(tjekPlan(flytKamp(p, '1:2', '2026-11-21', '12:30')).problemer.filter((x) => x.type === 'max-haltid').length, 0, '240 min er ok');
         assert.equal(tjekPlan(opdaterRaekke(p, 'U09 D', { maxHaltidMin: null })).problemer.filter((x) => x.type === 'max-haltid').length, 0, 'ingen grænse');
     });

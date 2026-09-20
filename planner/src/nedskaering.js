@@ -23,7 +23,7 @@ export const MIN_RUNDER = 2;
 export const MIN_RUNDER_DOUBLE = 1;
 
 export const STRATEGIER = [
-    { id: 'kunDouble', navn: 'Skær kun i double og mix', beskrivelse: 'Singlerne røres ikke. Double og mix mister runder (ned til 1), til alle kampe har lovlig plads. Minimum tælles samlet, så de spillere, der også stiller op i single, når stadig kravet — det er kun dem, der alene spiller double eller mix, som kan komme under.' },
+    { id: 'kunDouble', navn: 'Skær kun i double og mix', beskrivelse: 'Singlerne røres ikke. Double og mix mister runder (ned til 1), til alle kampe har lovlig plads. Reglementets minimum gælder pr. kategori, så spillerne kommer under kravet i double/mix — men alle beholder deres singlekampe.' },
     { id: 'jaevnt', navn: 'Jævnt fordelt', beskrivelse: 'De kategorier, der har flest runder, mister én runde ad gangen, til alle kampe har lovlig plads. Bagefter gives runder tilbage, hvor der alligevel er plads.' },
     { id: 'skaanSingle', navn: 'Skån singlerne', beskrivelse: 'Double og mix skæres først (ned til 1 runde), og singlerne røres kun, hvis det ikke er nok.' },
     { id: 'toDage', navn: 'To dage i stedet for færre kampe', beskrivelse: 'De rækker, der ikke kan være på én dag, får lov at spille over to dage. Det kræver dispensation efter reglementet, og spillerne skal møde begge dage. Der skæres kun i runderne, hvis det stadig ikke er nok.' },

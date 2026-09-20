@@ -9,6 +9,7 @@
 import { minutter } from './tp-reader.js';
 import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt, baneSlots } from './kapacitet.js';
 import { lavRegelmodel, banerBrugt, pauseForRaekke } from './regelmodel.js';
+import { standardRaekkefoelge } from './store.js';
 import { scorePlan } from './kriterier.js';
 
 const AARGANG_ORDEN = ['U09', 'U11', 'U13', 'U15', 'U17', 'U19', 'SEN'];
@@ -72,7 +73,7 @@ function lavForslagEnGang(projekt, valg = {}) {
     for (const k of projekt.kategorier) {
         const r = raekkeMap.get(k.raekke);
         const ri = raekkeOrden.findIndex((x) => x.id === k.raekke);
-        const orden = r?.raekkefoelge || ['MD', 'HS', 'DS', 'HD', 'DD'];
+        const orden = r?.raekkefoelge || standardRaekkefoelge(r?.aargang);
         let ki = orden.indexOf(k.kat);
         if (ki < 0) ki = orden.length;
         rang.set(k.id, (ri < 0 ? 99 : ri) * 10 + ki);
@@ -86,7 +87,7 @@ function lavForslagEnGang(projekt, valg = {}) {
     const katKampePrDag = new Map();    // `${spiller}|${kategori}|${dag}` → antal (senior E/M: max pr. kategori pr. dag)
     const finalerunderPrDag = new Map(); // `${kategori}|${dag}` → Set(rundeNavn) for cup-finalerunder
     const slotBrug = new Map();      // `${dag}|${slot}|${pulje}` → { hele, halve, kampe: [] }
-    const swissSpaend = new Map();   // `${draw}|${dag}` → { foerste, sidste } — Swiss-rundernes spænd til max haltid
+    const singleSpaend = new Map();  // `${raekke}|${dag}` → { foerste, sidste } — rækkens singlekampe, til max varighed
     const raekkeDage = new Map();    // raekkeId → Set(dage rækken allerede spiller på) — til maxDage
     const slotKampe = new Map();     // `${dag}|${slot}` → [kampe] på tværs af puljer (til anti-samtidighed)
     const antiSamtidighed = M.antiSamtidighed;
@@ -127,11 +128,11 @@ function lavForslagEnGang(projekt, valg = {}) {
         const sn = `${dag}|${slot}`;
         if (!slotKampe.has(sn)) slotKampe.set(sn, []);
         slotKampe.get(sn).push(k);
-        if (k.fase === 'swiss') {
-            const n = `${k.tpRef.draw}|${dag}`;
-            const x = swissSpaend.get(n) || { foerste: min, sidste: min };
+        if (M.singleVarighedGraense(k)) {
+            const n = `${kat(k).raekke}|${dag}`;
+            const x = singleSpaend.get(n) || { foerste: min, sidste: min };
             x.foerste = Math.min(x.foerste, min); x.sidste = Math.max(x.sidste, min);
-            swissSpaend.set(n, x);
+            singleSpaend.set(n, x);
         }
         if (M.erFinalerunde(k)) { const fn = `${k.kategori}|${dag}`; if (!finalerunderPrDag.has(fn)) finalerunderPrDag.set(fn, new Set()); finalerunderPrDag.get(fn).add(k.rundeNavn); }
         const rid = kat(k)?.raekke;
@@ -245,10 +246,10 @@ function lavForslagEnGang(projekt, valg = {}) {
                 if (kvartHer) return 'kvartfinale samme dag som semifinale eller finale';
             }
         }
-        // Max haltid for Swiss Ladder: alle er med i hver runde, så rundernes samlede spænd tæller
-        if (!lemp.maxHaltid && k.fase === 'swiss' && r.maxHaltidMin) {
-            const x = swissSpaend.get(`${k.tpRef.draw}|${dag.dato}`);
-            if (x && Math.max(x.sidste, slotStart) - Math.min(x.foerste, slotStart) + slotMin > r.maxHaltidMin) return 'spiller over max haltid';
+        // Max varighed for afviklingen af rækkens singlekampe (U9 4 timer, U11 6 timer): første til sidste singlekamp samme dag
+        if (!lemp.maxHaltid && M.singleVarighedGraense(k)) {
+            const x = singleSpaend.get(`${r.id}|${dag.dato}`);
+            if (x && Math.max(x.sidste, slotStart) - Math.min(x.foerste, slotStart) + slotMin > M.singleVarighedGraense(k)) return 'spiller over max haltid';
         }
         // Anti-samtidighed: HS/HD, DS/DD og MD i samme række ikke i samme slot
         if (antiSamtidighed && !lemp.antiSamtidighed) {
@@ -284,19 +285,6 @@ function lavForslagEnGang(projekt, valg = {}) {
         const kendte = new Set(k.spillere);
         let mindsteGab = null;
         for (const s of k.muligeSpillere) {
-            if (!lemp.maxHaltid && (kendte.has(s) || k.fase === 'swiss')) {
-                // Max haltid (hård regel som data, fx U9 240 min): første til sidste kamp samme dag —
-                // de kendte kampe og Swiss-runderne i spillerens lodtrækninger (alle er med i hver runde)
-                let graense = r.maxHaltidMin || null, foerste = slotStart, sidste = slotStart;
-                for (const x of historik.get(s) || []) {
-                    if (x.dag !== dag.dato || !(x.kendt || x.kamp.fase === 'swiss')) continue;
-                    const g = raekke(x.kamp)?.maxHaltidMin;
-                    if (g && (!graense || g < graense)) graense = g;
-                    if (x.min < foerste) foerste = x.min;
-                    if (x.min > sidste) sidste = x.min;
-                }
-                if (graense && sidste - foerste + slotMin > graense) return 'spiller over max haltid';
-            }
             if (!lemp.maxKampe && kendte.has(s) && (kendteKampePrDag.get(`${s}|${dag.dato}`) || 0) >= Math.min(M.maxPrDagFor(r), maxPrDag)) return 'spiller har max kampe den dag';
             if (!lemp.maxKampe && kendte.has(s) && M.seniorEM(r) && (katKampePrDag.get(`${s}|${k.kategori}|${dag.dato}`) || 0) >= M.regler.seniorMaxPrKategori) return 'spiller har max kampe i kategorien den dag';
             const h = historik.get(s);
@@ -360,7 +348,17 @@ function lavForslagEnGang(projekt, valg = {}) {
     const fristFor = (k, dagObj) => {
         const r = raekke(k);
         if (!r) return 9999;
-        return r.senest ? minutter(r.senest) : M.aargangsVindue(r, dagObj).til;
+        let frist = r.senest ? minutter(r.senest) : M.aargangsVindue(r, dagObj).til;
+        // Singlekampe i en række med max varighed (U9 4 timer, U11 6 timer) skal være færdige inden for grænsen,
+        // regnet fra rækkens første singlekamp — eller, før den er sat, fra det tidligste rækken kan begynde. Så får
+        // alle rækker med en grænse samme forrang fra morgenstunden og lægges side om side (vejledningen: single først).
+        const graense = M.singleVarighedGraense(k);
+        if (graense) {
+            const x = singleSpaend.get(`${r.id}|${dagObj.dato}`);
+            const start = x ? x.foerste : M.raekkeVindue(r, dagObj).fra;
+            frist = Math.min(frist, start + graense);
+        }
+        return frist;
     };
     // Fast "tilfældig" nøgle pr. kamp ud fra valg.seed — giver alternative, men
     // reproducerbare forslag (samme seed → samme plan).
@@ -664,7 +662,7 @@ function forslagFraBrud(projekt, liste) {
             const nu = pauseMin.faelles != null && klasse !== 'E' ? pauseMin.faelles : pauseMin[klasse];
             ud.push({ tekst: `${hvem} har kortere pause end de ${nu} min (ned til ${Math.max(0, gab)} min). Sæt pausen for ${klasse === 'ABCD' ? 'A–D' : klasse} til ${Math.max(0, gab)} min, forlæng dagen, eller lad rækken spille over flere dage.` });
         } else if (brud === 'max-haltid') {
-            ud.push({ tekst: `${hvem} giver spillere længere haltid end rækkens ${r?.maxHaltidMin || '?'} min. Giv rækken flere (reserverede) baner, saml dens kampe i et kortere tidsrum, skær i antal kampe/runder, eller hæv grænsen i fane 1.` });
+            ud.push({ tekst: `${hvem}: afviklingen af rækkens singlekampe varer længere end ${r?.maxHaltidMin || '?'} min. Giv rækken flere (reserverede) baner, skær i antal kampe/runder, eller hæv grænsen i fane 1.` });
         } else if (brud === 'tidsvindue') {
             const s = senesteSlot(xs);
             ud.push({ tekst: `${hvem} ligger uden for ${r?.aargang || 'årgangens'} tidsvindue${s ? ` (senest kl. ${s})` : ''}. Kræver dispensation: ret tidsvinduet under "Reglementets grænser", eller flyt kampe til en anden dag.` });

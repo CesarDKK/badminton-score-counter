@@ -67,8 +67,16 @@ export function nulstilRegler(projekt) {
     return { ...projekt, opsaetning: { ...projekt.opsaetning, regler: klon(STANDARD_REGLER), pauseMin: { ...STANDARD_PAUSE, faelles: harM && harABCD ? STANDARD_PAUSE.faelles : null } } };
 }
 
-/** Standardrækkefølge inden for en række: mix, single, double (Jespers ønske). */
-export const STANDARD_RAEKKEFOELGE = ['MD', 'HS', 'DS', 'HD', 'DD'];
+/**
+ * Standardrækkefølge inden for en række efter U9/U11-vejledningen ("Det lægger op til denne kamprækkefølge"):
+ * U9 og U11: single først, dernæst double og evt. mix. U13 og op: evt. mix først, dernæst double og til sidst single.
+ * ('D' er U9's kønsblandede double.)
+ */
+export const STANDARD_RAEKKEFOELGE = ['MD', 'HD', 'DD', 'D', 'HS', 'DS'];
+export const RAEKKEFOELGE_U9_U11 = ['HS', 'DS', 'HD', 'DD', 'D', 'MD'];
+export function standardRaekkefoelge(aargang) {
+    return [...(aargang === 'U09' || aargang === 'U11' ? RAEKKEFOELGE_U9_U11 : STANDARD_RAEKKEFOELGE)];
+}
 
 function senesteSlut(aargange) {
     let slut = '19:00';
@@ -124,15 +132,16 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
             pauseKlasse: r.pauseKlasse,
             dage: rDage,
             dispensationFlereDage: false,
-            raekkefoelge: [...STANDARD_RAEKKEFOELGE],
+            raekkefoelge: standardRaekkefoelge(r.aargang),
             tidligst: ekstra ? ekstra.fra : null,
             senest: ekstra ? ekstra.til : null,
             // TP's ekstra baner i vinduet er de baner, der deles i halve (Lyngby 2025:
             // 5 af 10 baner kl. 12–16:30); uden vindue gættes ud fra antal halve baner.
             reserveredeBaner: ekstra ? ekstra.baner : (harHalvBane && halve ? Math.ceil(halve / 2) : 0),
             // Hårde regler pr. række som data (rettes i fane 1; null = ingen grænse):
-            minKampeSamlet: true, // minimumskravet tælles samlet for single, double og mix (alle årgange)
-            maxHaltidMin: r.aargang === 'U09' ? 240 : null, // U9: højst 4 timer i hallen pr. spiller pr. dag
+            minKampeSamlet: false, // reglementet stiller minimumskravet pr. kategori (single for sig, double for sig)
+            // U9/U11-vejledningen: max 4 (U9) og 6 (U11) timers varighed for afviklingen af singlekampene
+            maxHaltidMin: r.aargang === 'U09' ? 240 : r.aargang === 'U11' ? 360 : null,
             maxDage: ['B', 'C', 'D'].includes(r.raekke) || (r.aargang === 'U11' && r.raekke === 'A') ? 1 : null, // reglementet: én dag uden dispensation
         };
     });
@@ -162,7 +171,9 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
             formKriterie: 'faerrest', // 'faerrest' bane-slots eller 'flest' kampe pr. spiller (form.js)
             vaegte: { ...VAEGT_SKABELONER.standard.vaegte }, // bløde kriterier (kriterier.js) — tunes i fane 1
             vaegtSkabelon: 'standard',
-            minKampeSamletV2: true,
+            minKampeSamletV3: true,
+            raekkefoelgeV2: true,
+            singleVarighedV1: true,
             regler: klon(STANDARD_REGLER),
             pauseMin: { ...STANDARD_PAUSE, faelles: harM && harABCD ? STANDARD_PAUSE.faelles : null },
             dage,
@@ -252,10 +263,19 @@ export function opdaterKategori(projekt, kategoriId, aendringer) {
 
 /** Sikrer at kun U9-kategorier har halv bane — bruges ved indlæsning af ældre projekter. */
 export function normaliserHalvBane(projekt) {
-    // Ældre projekter: "min. kampe tælles samlet" var kun slået til for U9. Det gælder alle årgange,
-    // så rækkerne opgraderes én gang (derefter er det brugerens eget valg pr. række).
-    if (projekt?.opsaetning && projekt.raekker && !projekt.opsaetning.minKampeSamletV2) {
-        projekt = { ...projekt, opsaetning: { ...projekt.opsaetning, minKampeSamletV2: true }, raekker: projekt.raekker.map((r) => ({ ...r, minKampeSamlet: true })) };
+    // Ældre projekter havde "min. kampe tælles samlet" slået til (først for U9, siden for alle rækker). Reglementet
+    // stiller kravet pr. kategori, så rækkerne sættes én gang tilbage til det (derefter er det brugerens eget valg).
+    if (projekt?.opsaetning && projekt.raekker && !projekt.opsaetning.minKampeSamletV3) {
+        projekt = { ...projekt, opsaetning: { ...projekt.opsaetning, minKampeSamletV3: true }, raekker: projekt.raekker.map((r) => ({ ...r, minKampeSamlet: false })) };
+    }
+    // U11 havde tidligere ingen grænse for singlernes varighed; vejledningen siger 6 timer. Sættes én gang, hvor feltet er tomt.
+    if (projekt?.opsaetning && projekt.raekker && !projekt.opsaetning.singleVarighedV1) {
+        projekt = { ...projekt, opsaetning: { ...projekt.opsaetning, singleVarighedV1: true }, raekker: projekt.raekker.map((r) => (r.aargang === 'U11' && r.maxHaltidMin == null ? { ...r, maxHaltidMin: 360 } : r)) };
+    }
+    // Rækkefølgen kan ikke rettes i brugerfladen, så en gemt værdi er altid den gamle standard (mix, single, double):
+    // den erstattes én gang af vejledningens rækkefølge for årgangen.
+    if (projekt?.opsaetning && projekt.raekker && !projekt.opsaetning.raekkefoelgeV2) {
+        projekt = { ...projekt, opsaetning: { ...projekt.opsaetning, raekkefoelgeV2: true }, raekker: projekt.raekker.map((r) => ({ ...r, raekkefoelge: standardRaekkefoelge(r.aargang) })) };
     }
     if (!projekt?.kategorier?.some((k) => k.halvBane && k.aargang !== 'U09')) return projekt;
     return { ...projekt, kategorier: projekt.kategorier.map((k) => (k.aargang !== 'U09' && k.halvBane ? { ...k, halvBane: false } : k)) };
