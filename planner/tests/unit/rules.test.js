@@ -356,7 +356,7 @@ describe('rules: raekkens eget tidsrum (valgfrit)', () => {
 });
 
 describe('rules: kapacitet pr. pulje med reserverede baner', () => {
-    test('raekken bruger kun sine reserverede baner, de andre deler resten', () => {
+    test('raekken bruger sine reserverede baner foerst, de andre deler resten — og overloeb er kun en fejl, naar de faelles ogsaa er fulde', () => {
         // 2 baner; U09 D reserverer 1 bane kl. 13–15
         let p = opdaterRaekke(projekt(), 'U09 D', { tidligst: '13:00', senest: '15:00', reserveredeBaner: 1 });
         p = flytKamp(p, 's1', '2026-11-21', '13:00');
@@ -366,12 +366,16 @@ describe('rules: kapacitet pr. pulje med reserverede baner', () => {
         const p2 = flytKamp(p, 'q1', '2026-11-21', '13:00'); // 2 kampe paa 1 faelles bane
         const f = tjekPlan(p2).problemer.filter((x) => x.type === 'kapacitet');
         assert.equal(f.length, 1);
-        assert.match(f[0].tekst, /paa de faelles baner|på de fælles baner/);
+        assert.match(f[0].tekst, /de fælles baner er fulde/);
         assert.deepEqual(f[0].kampe.sort(), ['p1', 'q1']);
-        const p3 = flytKamp(p, 's3', '2026-11-21', '13:00'); // 3 halve = 2 baner > 1 reserveret
+        const p3 = flytKamp(p, 's3', '2026-11-21', '13:00'); // 3 halve = 2 baner > 1 reserveret, og den faelles bane er optaget af p1
         const f3 = tjekPlan(p3).problemer.filter((x) => x.type === 'kapacitet');
         assert.equal(f3.length, 1);
-        assert.match(f3[0].tekst, /reserverede baner/);
+        assert.ok(f3[0].tekst.includes("1 af 1 reserverede baner + 1 fælles"), f3[0].tekst);
+        // Staar den faelles bane fri, maa U9 bruge den: 3 halve = 1 reserveret + 1 faelles → ingen fejl
+        let p4 = opdaterRaekke(projekt(), 'U09 D', { tidligst: '13:00', senest: '15:00', reserveredeBaner: 1 });
+        for (const id of ['s1', 's2', 's3']) p4 = flytKamp(p4, id, '2026-11-21', '13:00');
+        assert.equal(tjekPlan(p4).problemer.filter((x) => x.type === 'kapacitet').length, 0);
     });
     test('uden for tidsrummet deler alle banerne', () => {
         let p = opdaterRaekke(projekt(), 'U09 D', { tidligst: '13:00', senest: '15:00', reserveredeBaner: 1 });

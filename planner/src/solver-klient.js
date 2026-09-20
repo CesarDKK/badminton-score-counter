@@ -6,7 +6,7 @@
 // løseren har ikke brug for dem. Al regelkendskab (tidsvinduer, pauser, hvem der
 // kan dele spillere) ligger her i JS, så løseren kun kender tal og par.
 import { minutter, klokkeFraMinutter } from './tp-reader.js';
-import { slotsForDag, puljeKapacitet, katKonflikt } from './kapacitet.js';
+import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt } from './kapacitet.js';
 import { lavRegelmodel } from './regelmodel.js';
 import { vaegteFor } from './kriterier.js';
 
@@ -64,9 +64,12 @@ export function bygProblem(projekt, hintPlan = null) {
                 }
             }
         }
+        // En låst kamp uden for rækkens tidsrum ligger på de fælles baner (rækkens egne findes kun i tidsrummet)
+        let pulje = puljeForRaekke(r);
+        if (pulje !== 'faelles' && laast.has(k.id) && p && dagIndex.has(p.dag)) pulje = puljeFor(r.id, puljeKapacitet(dage[dagIndex.get(p.dag)], p.slot, projekt.raekker).reserveret);
         indeks.set(k.id, kampe.length);
         kampe.push({
-            id: k.id, raekke: r.id, pulje: puljeForRaekke(r), halv: !!kat(k)?.halvBane, tilladte,
+            id: k.id, raekke: r.id, pulje, halv: !!kat(k)?.halvBane, tilladte,
             spillere: k.spillere.map(nr), erFinale: k.rundeNavn === 'Finale',
             hint: hintPlan?.[k.id] && dagIndex.has(hintPlan[k.id].dag) ? dagIndex.get(hintPlan[k.id].dag) * DAG_MIN + minutter(hintPlan[k.id].slot) : null,
         });

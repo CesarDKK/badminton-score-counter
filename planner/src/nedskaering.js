@@ -43,7 +43,7 @@ function medRunder(projekt, runder) {
 }
 
 function afproev(projekt) {
-    const f = lavForslag(projekt);
+    const f = lavForslag(projekt); // inkl. forsøg med rækkernes andre dage — så der ikke skæres, hvor en anden dag løser det
     return { f, brud: f.brud.length + f.ikkePlaceret.length };
 }
 

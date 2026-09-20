@@ -179,7 +179,9 @@ for (const [navn, moenster] of [['U13/U15 CD 2026', /U13/i], ['U9/U11 BCD 2025',
                 const katMap = new Map(jesper.kampe.map((k) => [k.id, k.kategori]));
                 assert.equal(f.ikkePlaceret.length, 0, 'alle kampe placeres');
                 assert.ok(f.brud.every((x) => katMap.get(x.id).startsWith('U09')), 'kun U9-kampe med regelbrud');
-                assert.ok(f.brud.length > 0 && f.brud.every((x) => x.brud === 'tidsrum' || x.brud === 'max-haltid'), 'bruddet er rækkens tidsrum eller max haltid (240 min)');
+                // Der brydes ÉN regel ad gangen: rækkens tidsrum, max haltid (240 min) — eller at U9 spiller begge dage,
+                // som Tjek kun regner for en advarsel (kræver dispensation), hvor max haltid er en fejl.
+                assert.ok(f.brud.length > 0 && f.brud.every((x) => ['tidsrum', 'max-haltid', 'dag'].includes(x.brud)), JSON.stringify([...new Set(f.brud.map((x) => x.brud))]));
                 // 6 Swiss-runder plus doubler kan ikke nås på 4 timer pr. spiller; med 6 timer og vindue til 18:00 går det op
                 const laengere = lavForslag(opdaterRaekke(jesper, 'U09 D', { senest: '18:00', maxHaltidMin: 360 }));
                 assert.equal(laengere.ikkePlaceret.length + laengere.brud.length, 0, 'med vindue til 18:00 placeres alt uden brud');

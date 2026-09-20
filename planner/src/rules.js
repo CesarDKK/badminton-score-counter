@@ -5,7 +5,7 @@
 //               dag?, slot?, noegle? }
 // `noegle` sættes på advarsler, brugeren kan kvittere (projekt.kvitteret).
 import { minutter } from './tp-reader.js';
-import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt } from './kapacitet.js';
+import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt, banebrugISlot, banerISlot } from './kapacitet.js';
 import { lavRegelmodel, minKampMin, pauseForRaekke, foerSkoledag, tidsvindue, banerBrugt } from './regelmodel.js';
 import { effektivForm, minKampeSamlet, sikreKampe, minKampeKrav } from './form.js';
 
@@ -61,24 +61,18 @@ export function tjekPlan(projekt) {
         if (!gyldige.has(slot)) {
             tilfoej({ type: 'uden-for-dagen', alvor: 'fejl', tekst: `${kampe.length} ${kampe.length === 1 ? 'kamp' : 'kampe'} kl. ${slot} ligger uden for dagens slots (${dag.start}–${dag.slut}).`, kampe: kampe.map((k) => k.id), dag: dato, slot });
         }
-        // Kapacitet pr. pulje: rækker med reserverede baner i tidsrummet har egen
-        // pulje; alle andre deler de fælles baner.
-        const { faelles, reserveret } = puljeKapacitet(dag, slot, projekt.raekker);
-        const prPulje = new Map();
-        for (const k of kampe) {
-            const pulje = puljeFor(kat(k)?.raekke, reserveret);
-            if (!prPulje.has(pulje)) prPulje.set(pulje, []);
-            prPulje.get(pulje).push(k);
-        }
-        for (const [pulje, liste] of prPulje) {
-            const halve = liste.filter((k) => kat(k)?.halvBane).length;
-            const hele = liste.length - halve;
-            const brugt = banerBrugt(hele, halve);
-            const baner = pulje === 'faelles' ? faelles : reserveret.get(pulje);
-            if (brugt > baner) {
-                const hvor = pulje === 'faelles' ? (reserveret.size ? ' på de fælles baner' : '') : ` på ${pulje}'s reserverede baner`;
-                tilfoej({ type: 'kapacitet', alvor: 'fejl', tekst: `Kl. ${slot}: ${liste.length} kampe${halve ? ` (${halve} på halv bane)` : ''} kræver ${brugt} baner, men der er ${baner}${hvor}.`, kampe: liste.map((k) => k.id), dag: dato, slot });
-            }
+        // Rækker med reserverede baner bruger deres egne først og løber over på de fælles, hvis de ikke
+        // rækker. Først når de fælles baner også er fulde, er der for mange kampe (banebrugISlot).
+        const kapacitet = puljeKapacitet(dag, slot, projekt.raekker);
+        const brug = banebrugISlot(kampe.map((k) => ({ raekkeId: kat(k)?.raekke, halv: !!kat(k)?.halvBane })), kapacitet);
+        if (brug.forMange) {
+            const halve = kampe.filter((k) => kat(k)?.halvBane).length;
+            const iAlt = banerISlot(dag, slot);
+            const brugtIAlt = [...brug.prPulje].reduce((sum, [pulje, p]) => sum + (pulje === 'faelles' ? p.brugt : Math.min(p.brugt, p.baner)), 0) + [...brug.overloeb.values()].reduce((x, y) => x + y, 0);
+            const reserveret = [...brug.prPulje].filter(([pulje]) => pulje !== 'faelles').map(([pulje, p]) => `${pulje}: ${Math.min(p.brugt, p.baner)} af ${p.baner} reserverede baner${brug.overloeb.has(pulje) ? ` + ${brug.overloeb.get(pulje)} fælles` : ''}`);
+            // Kampene på de fælles baner (og dem, der løber over) er dem, der kan flyttes
+            const beroerte = kampe.filter((k) => { const pulje = puljeFor(kat(k)?.raekke, kapacitet.reserveret); return pulje === 'faelles' || brug.overloeb.has(pulje); });
+            tilfoej({ type: 'kapacitet', alvor: 'fejl', tekst: `Kl. ${slot}: ${kampe.length} kampe${halve ? ` (${halve} på halv bane)` : ''} kræver ${brugtIAlt} baner, men der er ${iAlt}${reserveret.length ? ` — de fælles baner er fulde (${reserveret.join('; ')})` : ''}.`, kampe: beroerte.map((k) => k.id), dag: dato, slot });
         }
     }
 
