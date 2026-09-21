@@ -331,7 +331,21 @@ export function seedTilmeldinger(tilmeldinger, spillere, kat) {
 /** Formen der faktisk gælder: plannerens egen (formForslag), når kategorien ikke følger TP. */
 export function effektivForm(kategori) {
     const f = (kategori.formValg || 'tp') !== 'tp' ? kategori.formForslag : null;
-    return f ? { form: f.form, runder: f.runder || 0, sikreSwiss: f.minKampe } : { form: kategori.form, runder: kategori.runder || 0, sikreSwiss: kategori.runder || 0 };
+    if (f) return { form: f.form, runder: f.runder || 0, sikreSwiss: f.minKampe, deltagere: f.deltagere || 0 };
+    // TP's egen Swiss Ladder: også her sidder én over pr. runde ved ulige antal, så der er kun sikret én kamp færre
+    const runder = kategori.runder || 0, deltagere = kategori.tilmelde || 0;
+    return { form: kategori.form, runder, sikreSwiss: deltagere % 2 ? Math.max(0, runder - 1) : runder, deltagere };
+}
+
+/**
+ * Ulige Swiss-felter: én deltager sidder over i hver runde, og ingen sidder over to gange. Alle er derfor kun
+ * SIKRET runder − 1 kampe, men det er højst `runder` af deltagerne, der ender dér — resten får alle runder.
+ * Mangler spillerne netop den ene kamp i at nå kravet, er det altså ikke hele feltet, der kommer under minimum.
+ * Returnerer antal deltagere (spillere eller par), der højst rammes — eller 0, når det ikke er et ulige Swiss-felt.
+ */
+export function swissOversiddere(kategori) {
+    const e = effektivForm(kategori);
+    return e.form === 'swiss' && e.deltagere % 2 === 1 ? Math.min(e.runder, e.deltagere) : 0;
 }
 
 /**
