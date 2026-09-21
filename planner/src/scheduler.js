@@ -7,7 +7,7 @@
 // max kampe pr. dag og rækkens dage. Låste kampe (projekt.laast) beholder
 // deres tid; alt andet placeres forfra.
 import { minutter } from './tp-reader.js';
-import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt, baneSlots } from './kapacitet.js';
+import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt, baneSlots, pladsPaaDag, FYLDNINGSGRAD } from './kapacitet.js';
 import { lavRegelmodel, banerBrugt, pauseForRaekke } from './regelmodel.js';
 import { standardRaekkefoelge } from './store.js';
 import { scorePlan } from './kriterier.js';
@@ -169,17 +169,11 @@ function lavForslagEnGang(projekt, valg = {}) {
     const raekkeDagValg = new Map(); // raekkeId → Set(dato)
     {
         const muligeDage = (r) => dage.filter((d) => r.dage.includes(d.dato) && (!kunDage || kunDage.has(d.dato)));
-        const FYLD = 0.85; // samme pakkefaktor som kapacitetTilKategori i store.js
-        // Plads til rækken på en dag: fælles bane-slots inden for årgangens tidsvindue og rækkens eget tidsrum
-        const pladsFor = (r, d) => {
-            const v = M.raekkeVindue(r, d);
-            return FYLD * slotsForDag(d, slotMin).reduce((sum, slot) => (M.iVindue(v, minutter(slot)) ? sum + kapFor(d.dato, slot).faelles : sum), 0);
-        };
+        // Plads til rækken på en dag: bane-slots inden for årgangens tidsvindue og rækkens eget tidsrum (kapacitet.js)
+        const plads = (r, d) => pladsPaaDag(M, r, d, projekt.raekker, { kapFor });
+        const pladsFor = (r, d) => FYLDNINGSGRAD * plads(r, d).faelles;
+        const egenPladsFor = (r, d) => FYLDNINGSGRAD * plads(r, d).egne;
         const brugt = new Map(dage.map((d) => [d.dato, 0]));
-        const egenPladsFor = (r, d) => {
-            const v = M.raekkeVindue(r, d);
-            return FYLD * slotsForDag(d, slotMin).reduce((sum, slot) => (M.iVindue(v, minutter(slot)) ? sum + (kapFor(d.dato, slot).reserveret.get(r.id) || 0) : sum), 0);
-        };
         const harEgne = (r) => r.reserveredeBaner > 0;
         const rest = { get: (dato, r) => (harEgne(r) ? egenPladsFor(r, dagMap.get(dato)) : pladsFor(r, dagMap.get(dato)) - brugt.get(dato)) };
         const last = new Map(); // raekkeId → bane-slots (på de fælles baner, eller på rækkens egne)

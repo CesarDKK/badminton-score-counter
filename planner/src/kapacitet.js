@@ -79,6 +79,31 @@ export function banebrugISlot(kampe, kapacitet) {
 }
 
 /**
+ * Hvor meget af banerne planlæggeren i praksis kan fylde: pauser, rækkefølge og Swiss-runder giver huller.
+ * DET ene sted tallet står — bruges af formvalget (store.js), dagfordelingen (scheduler.js) og fane 1.
+ */
+export const FYLDNINGSGRAD = 0.85;
+
+/**
+ * Bane-slots til rådighed for en række på én dag — DEN ene kapacitetsberegning (formvalg, dagfordeling
+ * og kapacitetsregnskab bygger alle på den). Kun slots, hvor rækken må spille: årgangens tidsvindue og
+ * rækkens eget tidsrum (M = regelmodellen). `vindue` kan snævre yderligere ind (fx en anden rækkes vindue).
+ * Returnerer { faelles, egne }: de fælles baner og rækkens egne reserverede baner. Uden fyldningsgrad.
+ */
+export function pladsPaaDag(M, raekke, dag, raekker, { vindue = null, kapFor = null } = {}) {
+    const v = M.raekkeVindue(raekke, dag);
+    let faelles = 0, egne = 0;
+    for (const slot of slotsForDag(dag, M.slotMin)) {
+        const m = minutter(slot);
+        if (!M.iVindue(v, m) || (vindue && !M.iVindue(vindue, m))) continue;
+        const kap = kapFor ? kapFor(dag.dato, slot) : puljeKapacitet(dag, slot, raekker);
+        faelles += kap.faelles;
+        egne += kap.reserveret.get(raekke.id) || 0;
+    }
+    return { faelles, egne };
+}
+
+/**
  * Anti-samtidighed (fra Jespers gamle prompt, regel A3): i samme række må
  * HS og HD ikke ligge samtidig, DS og DD ikke, og MD ikke sammen med nogen af
  * dem. U9's kønsblandede double ("D") regnes som både HD og DD.

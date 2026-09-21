@@ -6,7 +6,7 @@
 // Før stod de ting tre steder og var gledet fra hinanden (gennemgang 2026-09-20, pakke 2).
 // Alt her er rene funktioner uden DOM.
 import { minutter } from './tp-reader.js';
-import { reglerFor, STANDARD_REGLER } from './store.js';
+import { reglerFor, STANDARD_REGLER } from './regler.js';
 
 /** Min. tid pr. kamp (§ 4 stk. 5): standard ungdom ABCD 20, EM 25; senior ABCD 25, EM 30. */
 export function minKampMin(aargang, raekke, regler = STANDARD_REGLER) {
