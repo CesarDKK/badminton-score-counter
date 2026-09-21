@@ -74,7 +74,8 @@ describe('store: nyt projekt', () => {
     });
     test('validerProjekt afviser fremmede filer', () => {
         assert.match(validerProjekt(null), /ikke et planner-projekt/);
-        assert.match(validerProjekt({ version: 2 }), /version 2/);
+        assert.match(validerProjekt({ version: 99 }), /nyere udgave af planneren \(version 99/);
+        assert.match(validerProjekt({ version: 'x' }), /ikke et planner-projekt/);
         assert.match(validerProjekt({ version: 1, turnering: {} }), /mangler "opsaetning"/);
     });
 });

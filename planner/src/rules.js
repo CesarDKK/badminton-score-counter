@@ -369,7 +369,7 @@ export function tjekPlan(projekt) {
         if (!kampe.length) continue;
         const ef = effektivForm(k);
         if (ef.form === 'swiss' && ef.runder < regler.minKampe.swissRunder) tilfoej({ type: 'form', alvor: 'advarsel', noegle: `${k.id}:swiss-runder`, tekst: `${k.id}: Swiss Ladder med ${ef.runder} ${ef.runder === 1 ? 'runde' : 'runder'} — reglementet kræver mindst ${regler.minKampe.swissRunder}.`, kampe: [] });
-        // Tælles kravet samlet for rækken (U9), regnes spillerens sikre kampe i andre kategorier med
+        // Tælles kravet samlet for rækken (rækkens eget tilvalg), regnes spillerens sikre kampe i andre kategorier med
         const samlet = minKampeSamlet(r);
         const prSpillerAntal = new Map(sikrePrKat.get(k.id));
         if (samlet) for (const [id, andre] of sikrePrKat) if (id !== k.id) for (const s of prSpillerAntal.keys()) if (andre.has(s)) prSpillerAntal.set(s, prSpillerAntal.get(s) + andre.get(s));

@@ -110,14 +110,19 @@ Målt på begge Lyngby-filer i 10 opsætninger: samme antal kampe og regelbrud s
 med Jespers dage" nu skærer to små doubler fra 4 til 3 runder (stadig over kravet), fordi lørdagen er knap. Søndagens
 rækker (U11 B + C) markeres nu korrekt med "der er ikke plads" — før blev begge dages plads lagt sammen.
 
-## Pakke 4 — drift
+## Pakke 4 — drift (lavet 2026-09-21)
 
-- [ ] 19. Rate limit i nginx nøgler på Cloudflares IP (ingen `real_ip_header CF-Connecting-IP`);
-      grænsen giver 503 med uklar besked, og statuskald opgiver efter 5 i træk.
-- [ ] 20. Én løser-plads uden adgangskontrol; en klient kan holde den i 6 min ad gangen.
-- [ ] 22. Ingen CSP-header (valideringen i punkt 5 lukker de kendte huller).
-- [ ] 25. Opgradering af gemte projekter sker med løse flag; versionsforskel → tom start uden besked.
-- [ ] 26. Død kode (`antalKampe`, `cupRunder`, `ledigeBaneSlots`, `dagOrden`), forældede kommentarer
-      ("kun U9"), README er blevet en ændringslog.
+- [x] 19. Rate-grænserne nøgler på `CF-Connecting-IP` (`map $http_cf_connecting_ip $planner_klient`) med et højt loft
+      pr. forbindelses-adresse; grænsen svarer 429 med JSON og `Retry-After`. Klienten sætter tempoet ned ved 429 på
+      statuskald og tåler forbigående fejl i 25 s i stedet for "5 i træk".
+- [x] 20. Løser-pladsen: Origin-tjek i nginx, kvote på regnetid pr. klient (40 min/time), og løseren fortæller, hvornår
+      den er ledig. Klienten venter selv i kø og starter af sig selv; "Stop" opgiver ventetiden.
+      (Bevidst IKKE lavet: login. Planneren er åben for alle klubber; kvoten og den lave CPU-prioritet er værnet.)
+- [x] 22. CSP-header for planneren (`nginx-planner-csp.conf`), afprøvet i browseren uden overtrædelser.
+- [x] 25. Gemte projekter opgraderes i nummererede trin (`store.OPGRADERINGER`, `PROJEKT_VERSION` 2); de løse flag er
+      væk. Et projekt fra en NYERE udgave afvises med en klar besked og bliver liggende (beskeden ved start kom i pakke 1).
+- [x] 26. Død kode fjernet (`antalKampe`, `cupRunder`, formens `ledigeBaneSlots`-felt; `dagOrden` var allerede væk),
+      "kun U9"-kommentarer rettet, README skåret til en vejledning — historikken ligger i `docs/planner-aendringslog.md`.
+- [x] `nginx -t` i CI (upstream-navnene peges på localhost under testen).
 
 Ikke et problem: JS-filerne sendes med `no-store` (målt i prod), så forældede moduler efter deploy kan ikke ske.

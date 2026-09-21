@@ -10,7 +10,7 @@ import { STANDARD_PAUSE, TIDSVINDUE, STANDARD_REGLER, reglerFor } from './regler
 
 export { STANDARD_PAUSE, TIDSVINDUE, STANDARD_REGLER, reglerFor };
 
-export const PROJEKT_VERSION = 1;
+export const PROJEKT_VERSION = 2; // hæves, når et gemt projekt skal opgraderes — se OPGRADERINGER
 export const GEM_NOEGLE = 'planner.projekt.v1';
 
 const klon = (x) => JSON.parse(JSON.stringify(x));
@@ -112,7 +112,7 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
     });
     const kategorier = model.kategorier.map((k) => ({
         id: k.id, raekke: k.raekke, aargang: k.aargang, kat: k.kat, type: k.type, mix: k.mix,
-        form: k.form, halvBane: k.halvBane, tilmelde: k.tilmeldte, antalKampe: k.kampe, runder: k.runder,
+        form: k.form, halvBane: k.halvBane, tilmelde: k.tilmeldte, runder: k.runder,
         prioritet: 0, // forrang i forslaget: 1 = høj, 0 = normal, -1 = lav
         swissUdenPause: false, // Swiss Ladder: runder lige efter hinanden uden pause imellem
         formValg: 'tp',        // 'tp' = TP's lodtrækning; ellers bygger planneren selv kampene (form.js)
@@ -136,9 +136,6 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
             formKriterie: 'faerrest', // 'faerrest' bane-slots eller 'flest' kampe pr. spiller (form.js)
             vaegte: { ...VAEGT_SKABELONER.standard.vaegte }, // bløde kriterier (kriterier.js) — tunes i fane 1
             vaegtSkabelon: 'standard',
-            minKampeSamletV3: true,
-            raekkefoelgeV2: true,
-            singleVarighedV1: true,
             regler: klon(STANDARD_REGLER),
             pauseMin: { ...STANDARD_PAUSE, faelles: harM && harABCD ? STANDARD_PAUSE.faelles : null },
             dage,
@@ -253,22 +250,38 @@ export function opdaterKategori(projekt, kategoriId, aendringer) {
     return { ...projekt, kategorier };
 }
 
-/** Sikrer at kun U9-kategorier har halv bane — bruges ved indlæsning af ældre projekter. */
+/**
+ * Opgradering af gemte projekter, ét nummereret trin ad gangen: trin N bringer et projekt fra version N til N + 1.
+ * Et nyt trin = et nyt element her + PROJEKT_VERSION hævet med én. Trinene må aldrig ændres, når de først er ude:
+ * brugernes gemte projekter er på den version, trinnet efterlod dem i.
+ */
+const OPGRADERINGER = {
+    // Version 1 → 2: tre rettelser, der i version 1 blev styret af løse flag i opsætningen (et projekt kan have fået
+    // nogle af dem allerede). Flagene fjernes — fra version 2 er det versionsnummeret, der fortæller, hvad der er gjort.
+    1: (p) => {
+        const o = p.opsaetning;
+        let raekker = p.raekker;
+        // Reglementet stiller minimumskravet pr. kategori; "tælles samlet" var slået til i ældre projekter
+        if (!o.minKampeSamletV3) raekker = raekker.map((r) => ({ ...r, minKampeSamlet: false }));
+        // U9/U11-vejledningen: max 6 timer for U11's singler — sættes, hvor feltet er tomt
+        if (!o.singleVarighedV1) raekker = raekker.map((r) => (r.aargang === 'U11' && r.maxHaltidMin == null ? { ...r, maxHaltidMin: 360 } : r));
+        // Rækkefølgen kunne ikke rettes i brugerfladen, så en gemt værdi er den gamle standard: erstattes af vejledningens
+        if (!o.raekkefoelgeV2) raekker = raekker.map((r) => ({ ...r, raekkefoelge: standardRaekkefoelge(r.aargang) }));
+        const { minKampeSamletV2, minKampeSamletV3, singleVarighedV1, raekkefoelgeV2, ...opsaetning } = o;
+        return { ...p, opsaetning, raekker };
+    },
+};
+
+/** Bringer et gemt projekt (allerede godkendt af validerProjekt) op på den aktuelle version. */
+export function opgraderProjekt(projekt) {
+    let p = projekt;
+    while (p?.opsaetning && p.raekker && p.version < PROJEKT_VERSION && OPGRADERINGER[p.version]) p = { ...OPGRADERINGER[p.version](p), version: p.version + 1 };
+    return p;
+}
+
+/** Bruges, hver gang et gemt projekt åbnes: opgraderer det og sikrer, at kun U9-kategorier har halv bane. */
 export function normaliserHalvBane(projekt) {
-    // Ældre projekter havde "min. kampe tælles samlet" slået til (først for U9, siden for alle rækker). Reglementet
-    // stiller kravet pr. kategori, så rækkerne sættes én gang tilbage til det (derefter er det brugerens eget valg).
-    if (projekt?.opsaetning && projekt.raekker && !projekt.opsaetning.minKampeSamletV3) {
-        projekt = { ...projekt, opsaetning: { ...projekt.opsaetning, minKampeSamletV3: true }, raekker: projekt.raekker.map((r) => ({ ...r, minKampeSamlet: false })) };
-    }
-    // U11 havde tidligere ingen grænse for singlernes varighed; vejledningen siger 6 timer. Sættes én gang, hvor feltet er tomt.
-    if (projekt?.opsaetning && projekt.raekker && !projekt.opsaetning.singleVarighedV1) {
-        projekt = { ...projekt, opsaetning: { ...projekt.opsaetning, singleVarighedV1: true }, raekker: projekt.raekker.map((r) => (r.aargang === 'U11' && r.maxHaltidMin == null ? { ...r, maxHaltidMin: 360 } : r)) };
-    }
-    // Rækkefølgen kan ikke rettes i brugerfladen, så en gemt værdi er altid den gamle standard (mix, single, double):
-    // den erstattes én gang af vejledningens rækkefølge for årgangen.
-    if (projekt?.opsaetning && projekt.raekker && !projekt.opsaetning.raekkefoelgeV2) {
-        projekt = { ...projekt, opsaetning: { ...projekt.opsaetning, raekkefoelgeV2: true }, raekker: projekt.raekker.map((r) => ({ ...r, raekkefoelge: standardRaekkefoelge(r.aargang) })) };
-    }
+    projekt = opgraderProjekt(projekt);
     if (!projekt?.kategorier?.some((k) => k.halvBane && k.aargang !== 'U09')) return projekt;
     return { ...projekt, kategorier: projekt.kategorier.map((k) => (k.aargang !== 'U09' && k.halvBane ? { ...k, halvBane: false } : k)) };
 }
@@ -286,7 +299,8 @@ export function opdaterPause(projekt, klasse, min) {
 /** Kontrollerer at et JSON-objekt ligner en projektfil. Returnerer fejlbesked eller null. */
 export function validerProjekt(obj) {
     if (!obj || typeof obj !== 'object') return 'Filen er ikke et planner-projekt.';
-    if (obj.version !== PROJEKT_VERSION) return `Projektfilen har version ${obj.version}; denne udgave forstår version ${PROJEKT_VERSION}.`;
+    if (!Number.isInteger(obj.version) || obj.version < 1) return 'Filen er ikke et planner-projekt.';
+    if (obj.version > PROJEKT_VERSION) return `Projektet er lavet med en nyere udgave af planneren (version ${obj.version}; denne side forstår til og med ${PROJEKT_VERSION}). Genindlæs siden (Ctrl+F5), og prøv igen.`;
     for (const felt of ['turnering', 'opsaetning', 'raekker', 'kategorier', 'spillere', 'kampe', 'plan']) {
         if (!(felt in obj)) return `Projektfilen mangler "${felt}".`;
     }

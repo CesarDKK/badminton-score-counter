@@ -57,10 +57,10 @@ describe('min. kampe samlet: hjælpere', () => {
     test('ældre gemte projekter (samlet tælling slået til af tidligere udgaver) sættes én gang tilbage til reglementet', async () => {
         const { normaliserHalvBane } = await import('../../src/store.js');
         const p = nytProjekt(model());
-        const gammelt = { ...p, opsaetning: { ...p.opsaetning, minKampeSamletV3: undefined, minKampeSamletV2: true }, raekker: [{ ...p.raekker[0], minKampeSamlet: true }] };
+        const gammelt = { ...p, version: 1, opsaetning: { ...p.opsaetning, minKampeSamletV2: true, raekkefoelgeV2: true, singleVarighedV1: true }, raekker: [{ ...p.raekker[0], minKampeSamlet: true }] };
         const ny = normaliserHalvBane(gammelt);
         assert.equal(ny.raekker[0].minKampeSamlet, false);
-        assert.equal(ny.opsaetning.minKampeSamletV3, true);
+        assert.equal(ny.version, 2);
         const tilvalgt = { ...ny, raekker: [{ ...ny.raekker[0], minKampeSamlet: true }] };
         assert.equal(normaliserHalvBane(tilvalgt).raekker[0].minKampeSamlet, true, 'brugerens senere tilvalg bevares');
     });
