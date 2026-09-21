@@ -157,7 +157,48 @@ describe('solver-klient: asynkront job (start → status → svar)', () => {
         const { optimer } = await import('../../src/solver-klient.js');
         await assert.rejects(medFetch([{ kode: 202, data: { status: 'REGNER', job: 'jobjobjob123' } }, { kode: 404, data: { fejl: 'ukendt job' } }], () => optimer(projekt(), { pollMs: 1 })), /kender ikke længere jobbet/);
         await assert.rejects(medFetch([{ kode: 202, data: { status: 'REGNER', job: 'jobjobjob123' } }, { kode: 400, data: { fejl: 'ugyldigt problem: KeyError' } }], () => optimer(projekt(), { pollMs: 1 })), /ugyldigt problem/);
-        await assert.rejects(medFetch([{ kode: 429, data: {} }], () => optimer(projekt(), { pollMs: 1 })), /optaget/);
+        await assert.rejects(medFetch([{ kode: 429, data: {} }], () => optimer(projekt(), { pollMs: 1, ventMaxSekunder: -1 })), /optaget/);
+    });
+    test('pakke 4: er løseren optaget, venter klienten i kø og starter af sig selv', async () => {
+        const { optimer } = await import('../../src/solver-klient.js');
+        const set = [];
+        const { resultat, kald } = await medFetch([
+            { kode: 429, data: { fejl: 'løseren er optaget', optaget: true, ledigOmSekunder: 120 } },
+            { kode: 429, data: { fejl: 'løseren er optaget', optaget: true, ledigOmSekunder: 110 } },
+            { kode: 202, data: { status: 'REGNER', job: 'jobjobjob123' } },
+            { kode: 200, data: { status: 'OPTIMAL', sekunder: 2, tider: {} } },
+        ], () => optimer(projekt(), { job: 'jobjobjob123', pollMs: 1, ventMs: 1, vedStatus: (x) => set.push(x) }));
+        assert.equal(resultat.status, 'OPTIMAL');
+        assert.deepEqual(kald.map((k) => k.url), ['/api/solve', '/api/solve', '/api/solve', '/api/solve/status?job=jobjobjob123']);
+        assert.deepEqual(set.map((x) => [x.status, x.ledigOmSekunder]), [['VENTER', 120], ['VENTER', 110]]);
+    });
+    test('pakke 4: ventetiden i køen kan afbrydes ("Stop")', async () => {
+        const { optimer } = await import('../../src/solver-klient.js');
+        const afbryd = new AbortController();
+        const koer = medFetch([{ kode: 429, data: { optaget: true, ledigOmSekunder: 300 } }], () => optimer(projekt(), { pollMs: 1, ventMs: 60000, signal: afbryd.signal, vedStatus: () => afbryd.abort() }));
+        await assert.rejects(koer, /Afbrudt/);
+    });
+    test('pakke 4: brugt kvote og rate-grænse giver hver sin klare besked', async () => {
+        const { optimer } = await import('../../src/solver-klient.js');
+        await assert.rejects(medFetch([{ kode: 429, data: { kvote: true, ledigOmSekunder: 1500 } }], () => optimer(projekt(), { pollMs: 1 })), /regnetid for denne time — der er plads igen om ca. 25 min/);
+        await assert.rejects(medFetch([{ kode: 429, data: { graense: true } }], () => optimer(projekt(), { pollMs: 1, ventMaxSekunder: -1 })), /For mange kald/);
+        await assert.rejects(medFetch([{ kode: 403, data: {} }], () => optimer(projekt(), { pollMs: 1 })), /afviste kaldet/);
+    });
+    test('pakke 4: rammer statuskaldene rate-grænsen, sættes tempoet ned — jobbet opgives ikke', async () => {
+        const { optimer } = await import('../../src/solver-klient.js');
+        const graense = { kode: 429, data: { graense: true } };
+        const { resultat, kald } = await medFetch([
+            { kode: 202, data: { status: 'REGNER', job: 'jobjobjob123' } },
+            graense, graense, graense, graense, graense, graense, graense, // flere end de 5 fejl i træk, der før fik klienten til at give op
+            { kode: 200, data: { status: 'FEASIBLE', sekunder: 9, tider: {} } },
+        ], () => optimer(projekt(), { job: 'jobjobjob123', pollMs: 0 }));
+        assert.equal(resultat.status, 'FEASIBLE');
+        assert.equal(kald.length, 9);
+    });
+    test('pakke 4: forbigående fejl tåles en tid (ikke et antal), derefter opgives der med fejlen', async () => {
+        const { optimer } = await import('../../src/solver-klient.js');
+        const nede = { kode: 502, data: {} };
+        await assert.rejects(medFetch([{ kode: 202, data: { status: 'REGNER', job: 'jobjobjob123' } }, nede, nede, nede], () => optimer(projekt(), { job: 'jobjobjob123', pollMs: 5, taalFejlSekunder: 0 })), /svarede 502/);
     });
     test('en ældre løser, der svarer med det samme, virker stadig', async () => {
         const { optimer } = await import('../../src/solver-klient.js');

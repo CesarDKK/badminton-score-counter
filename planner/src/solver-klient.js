@@ -301,35 +301,69 @@ export async function stopLoeser(job, url = '/api/solve/stop') {
     return svar.ok;
 }
 
+const tidTekst = (sek) => (sek >= 90 ? `${Math.round(sek / 60)} min` : `${Math.max(1, Math.round(sek))} s`);
+const pause = (ms, signal) => new Promise((ok, fejl) => {
+    if (signal?.aborted) { fejl(new Error('Afbrudt.')); return; }
+    const t = setTimeout(ok, ms);
+    signal?.addEventListener('abort', () => { clearTimeout(t); fejl(new Error('Afbrudt.')); }, { once: true });
+});
+const laesJson = async (svar) => { try { return await svar.json(); } catch { return {}; } };
+
+/**
+ * Starter et job. Løseren har én plads: er den optaget, venter klienten i kø og prøver igen (vedStatus får
+ * { status: 'VENTER', ledigOmSekunder }), i stedet for at brugeren selv skal trykke igen og igen.
+ * 429 kan betyde tre ting — svaret fortæller hvilken: løseren er optaget (optaget), klientens regnetid for
+ * timen er brugt (kvote), eller der er kaldt for ofte (graense, fra nginx).
+ */
+async function startJob(url, krop, { signal, vedStatus, ventMaxSekunder, ventMs }) {
+    const frist = Date.now() + ventMaxSekunder * 1000;
+    for (;;) {
+        const svar = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: krop, signal });
+        if (svar.ok) return svar.json();
+        const data = await laesJson(svar);
+        if (svar.status === 429 && data.kvote) throw new Error(`Du har brugt løserens regnetid for denne time — der er plads igen om ca. ${tidTekst(data.ledigOmSekunder || 60)}`);
+        if (svar.status === 429) {
+            // Optaget, eller kaldt for ofte (også ældre svar uden markering): vent og prøv igen
+            if (Date.now() > frist) throw new Error(data.graense ? 'For mange kald til løseren — vent et øjeblik, og prøv igen' : 'Løseren er stadig optaget af en anden kørsel — prøv igen om lidt');
+            if (vedStatus) vedStatus({ status: 'VENTER', ledigOmSekunder: data.ledigOmSekunder ?? null, graense: !!data.graense });
+            await pause(data.graense ? Math.max(ventMs, (Number(svar.headers?.get?.('Retry-After')) || 10) * 1000) : ventMs, signal);
+            continue;
+        }
+        if (svar.status === 403) throw new Error('Løseren afviste kaldet (403)');
+        throw new Error(data.fejl ? `Løseren svarede ${svar.status}: ${data.fejl}` : `Løseren svarede ${svar.status}`);
+    }
+}
+
 /**
  * Kalder løseren. Returnerer { status, plan, sekunder, maal, graense } eller kaster ved netværksfejl.
  * status: 'OPTIMAL' | 'FEASIBLE' | 'INFEASIBLE' | 'UNKNOWN'
+ * signal afbryder også ventetiden i køen. Statuskald, der fejler forbigående (netværk, 5xx), tåles i
+ * taalFejlSekunder; rammer de rate-grænsen (429), sættes tempoet ned i stedet for at give op.
  */
-export async function optimer(projekt, { sekunder = 30, hintPlan = null, url = '/api/solve', signal, job = null, pollMs = 3000, vedStatus = null } = {}) {
+export async function optimer(projekt, { sekunder = 30, hintPlan = null, url = '/api/solve', signal, job = null, pollMs = 3000, vedStatus = null, ventMaxSekunder = 600, ventMs = 10000, taalFejlSekunder = 25 } = {}) {
     const problem = bygProblem(projekt, hintPlan);
     // Jobbet startes og hentes med korte kald (start → status hvert par sekunder), så ingen
     // forbindelse står åben i flere minutter — proxyer som Cloudflare afbryder dem efter ca. 100 s.
-    const svar = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ problem, sekunder, asynkron: true, ...(job ? { job } : {}) }), signal });
-    if (!svar.ok) throw new Error(svar.status === 429 ? 'Løseren er optaget — prøv igen om lidt.' : `Løseren svarede ${svar.status}`);
-    let data = await svar.json();
+    let data = await startJob(url, JSON.stringify({ problem, sekunder, asynkron: true, ...(job ? { job } : {}) }), { signal, vedStatus, ventMaxSekunder, ventMs });
     const jobId = data.job || job;
-    let fejlIRap = 0;
+    let sidstOk = Date.now(), ventMellem = pollMs;
     const frist = Date.now() + (sekunder + 90) * 1000;
     while (data.status === 'REGNER') {
         if (Date.now() > frist) throw new Error('Løseren svarede ikke inden for tiden.');
-        await new Promise((r) => setTimeout(r, pollMs));
-        if (signal?.aborted) throw new Error('Afbrudt.');
+        await pause(ventMellem, signal);
         try {
             const s = await fetch(`${url}/status?job=${encodeURIComponent(jobId)}`, { signal });
             if (s.status === 404) throw Object.assign(new Error('Løseren kender ikke længere jobbet (den er måske blevet genstartet).'), { endelig: true });
-            if (s.status >= 500 || s.status === 429) throw new Error(`Løseren svarede ${s.status}`); // forbigående: prøv igen
+            if (s.status === 429) { ventMellem = Math.min(Math.max(ventMellem, 1) * 2, Math.max(pollMs * 4, 1000)); data = { status: 'REGNER' }; continue; } // for mange kald: sæt tempoet ned
+            if (s.status >= 500) throw new Error(`Løseren svarede ${s.status}`); // forbigående: prøv igen
             data = await s.json();
             if (s.ok && data.status === 'REGNER' && vedStatus) vedStatus(data);
             if (!s.ok) throw Object.assign(new Error(data.fejl || `Løseren svarede ${s.status}`), { endelig: true });
-            fejlIRap = 0;
+            sidstOk = Date.now();
+            ventMellem = pollMs;
         } catch (err) {
-            fejlIRap += 1;
-            if (err.endelig || fejlIRap >= 5) throw err;
+            // Løseren stopper selv et job, den ikke har hørt fra i 30 s — længere end det giver det ingen mening at vente
+            if (err.endelig || signal?.aborted || Date.now() - sidstOk > taalFejlSekunder * 1000) throw err;
             data = { status: 'REGNER' };
         }
     }

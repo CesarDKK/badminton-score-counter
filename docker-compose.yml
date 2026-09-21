@@ -225,6 +225,7 @@ services:
       SOLVER_MAX_SEKUNDER: 360
       SOLVER_SAMTIDIGE: ${PLANNER_SOLVER_SAMTIDIGE:-1}
       SOLVER_ARBEJDERE: ${PLANNER_SOLVER_ARBEJDERE:-2}
+      SOLVER_KVOTE_SEKUNDER: ${PLANNER_SOLVER_KVOTE_SEKUNDER:-2400}   # regnetid pr. klient pr. time (0 = ingen kvote)
     # Løseren bruger al den CPU, den får, mens den regner. Den må ikke sulte tælleren:
     # loftet skal være under værtens antal kerner (Docker afviser et højere tal), og
     # cpu_shares gør, at de andre containere vinder, når der er kamp om kernerne.
