@@ -10,9 +10,9 @@
 import { genberegnKampe, opdaterKategori, opdaterRaekke, reglerFor, delerKapacitet, anvendForslag } from './store.js';
 import { lavForslag } from './scheduler.js';
 import { effektivForm, minKampeSamlet, sikreKampe, minKampeKrav } from './form.js';
-import { tidsvindue } from './rules.js';
+import { lavRegelmodel } from './regelmodel.js';
 import { minutter } from './tp-reader.js';
-import { slotsForDag, puljeKapacitet } from './kapacitet.js';
+import { slotsForDag, puljeKapacitet, pladsPaaDag, FYLDNINGSGRAD } from './kapacitet.js';
 
 /**
  * Swiss Ladder skæres aldrig under 2 runder — bortset fra double/mix, der må gå ned til 1, når
@@ -204,13 +204,13 @@ export function anvendNedskaering(projekt, forslag) {
 /**
  * Kapacitetsregnskab i bane-slots (en kamp på hel bane = 1, på halv bane = ½): hvad kampene
  * kræver, og hvad der er af lovlig plads — på de fælles baner og på rækkernes reserverede baner.
- * Pladsen er et loft: i praksis kan planlæggeren bruge ca. 85 %, fordi pauser, rækkefølge og
- * Swiss-runder giver huller.
+ * Pladsen er et loft: i praksis kan planlæggeren bruge ca. 85 % (FYLDNINGSGRAD), fordi pauser, rækkefølge og
+ * Swiss-runder giver huller. Samme byggesten som formvalget og dagfordelingen: regelmodellens vinduer og pladsPaaDag.
  * Returnerer { faelles: { behov, plads }, reserveret: [{ raekke, behov, plads, ubrugt }] }.
  */
 export function kapacitetsRegnskab(projekt) {
     const { slotMin, dage } = projekt.opsaetning;
-    const regler = reglerFor(projekt);
+    const M = lavRegelmodel(projekt);
     const katMap = new Map(projekt.kategorier.map((k) => [k.id, k]));
     const raekkeMap = new Map(projekt.raekker.map((r) => [r.id, r]));
     const egen = (r) => r && r.reserveredeBaner > 0;
@@ -225,18 +225,14 @@ export function kapacitetsRegnskab(projekt) {
     const faelles = projekt.raekker.filter((r) => !egen(r));
     for (const dag of dage) {
         // Fælles baner tæller i de slots, hvor mindst én række uden egne baner må spille
-        const vinduer = faelles.filter((r) => r.dage.includes(dag.dato)).map((r) => {
-            const v = tidsvindue(r.aargang, dag, regler);
-            return { fra: Math.max(v.fra, r.tidligst ? minutter(r.tidligst) : 0), til: Math.min(v.til, r.senest ? minutter(r.senest) : 9999) };
-        });
+        const vinduer = faelles.filter((r) => r.dage.includes(dag.dato)).map((r) => M.raekkeVindue(r, dag));
         for (const slot of slotsForDag(dag, slotMin)) {
-            const m = minutter(slot);
-            const kap = puljeKapacitet(dag, slot, projekt.raekker);
-            if (vinduer.some((v) => m >= v.fra && m + slotMin <= v.til)) plads.set('faelles', plads.get('faelles') + kap.faelles);
-            for (const [rid, baner] of kap.reserveret) plads.set(rid, (plads.get(rid) || 0) + baner);
+            if (vinduer.some((v) => M.iVindue(v, minutter(slot)))) plads.set('faelles', plads.get('faelles') + puljeKapacitet(dag, slot, projekt.raekker).faelles);
         }
+        for (const r of projekt.raekker.filter((x) => egen(x) && x.dage.includes(dag.dato))) plads.set(r.id, (plads.get(r.id) || 0) + pladsPaaDag(M, r, dag, projekt.raekker).egne);
     }
     return {
+        fyldningsgrad: FYLDNINGSGRAD,
         faelles: { behov: behov.get('faelles'), plads: plads.get('faelles') },
         reserveret: projekt.raekker.filter(egen).map((r) => ({ raekke: r.id, behov: behov.get(r.id) || 0, plads: plads.get(r.id) || 0, ubrugt: Math.max(0, (plads.get(r.id) || 0) - (behov.get(r.id) || 0)) })),
     };

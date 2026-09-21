@@ -3,7 +3,8 @@
 // kan bruges fra app.js; alt andet er testbart i Node.
 import { planFraTP, minutter } from './tp-reader.js';
 import { foreslaaForm, byggKampe, seedTilmeldinger, minKampeSamlet, sikreKampe } from './form.js';
-import { slotsForDag, puljeKapacitet } from './kapacitet.js';
+import { pladsPaaDag, fordelRaekkerPaaDage, FYLDNINGSGRAD } from './kapacitet.js';
+import { lavRegelmodel } from './regelmodel.js';
 import { VAEGT_SKABELONER } from './kriterier.js';
 import { STANDARD_PAUSE, TIDSVINDUE, STANDARD_REGLER, reglerFor } from './regler.js';
 
@@ -405,29 +406,57 @@ export function genberegnKampe(projekt) {
     };
     // Første pas: alle kategorier uden hensyn til kapacitet
     const foerste = new Map(projekt.kategorier.map((k) => [k.id, byg(k)]));
-    // Andet pas: automatiske Swiss-kandidater (formValg auto/swiss uden valgt antal runder)
-    // får kapaciteten, der er tilbage, når alle andre kategorier har fyldt, samt
-    // spillernes kampe i andre kategorier (double, mix), så runder kan skæres ned
-    // uden at spillerne kommer under kravet.
+    // Andet pas: automatiske Swiss-kandidater (formValg auto/swiss uden valgt antal runder) får den
+    // kapacitet, der er tilbage, når de øvrige kategorier har fyldt. I rækker, hvor minimumskravet tælles
+    // samlet (brugerens valg), får singlerne også spillernes sikre kampe i double/mix med.
     //
-    // Rækker hvor kravet tælles samlet (U9): singlerne får også spillernes sikre kampe i
-    // double/mix med, så formen kan vælges mindre. Double/mix afgøres først og for sig,
-    // og singlerne bagefter ud fra de endelige doubler — så de to ikke skærer ned på hinanden.
+    // Resultatet må ikke afhænge af, hvilken rækkefølge kategorierne står i: double/mix afgøres først
+    // (singlerne bygger på de endelige doubler), og inden for hver gruppe får kandidaterne FØRST hver sin
+    // forholdsmæssige andel af pladsen (alle regnet fra samme udgangspunkt), og DEREFTER — i fast orden,
+    // størst først — det, de andre ikke brugte.
     const aktuel = new Map(foerste);
     const autoSwiss = (k) => ['auto', 'swiss'].includes(k.formValg || 'tp') && !(k.swissRunder > 0);
     const samletSingle = (k) => (k.formValg || 'tp') !== 'tp' && k.type === 'single' && minKampeSamlet(raekkeMap.get(k.raekke));
-    const andetPas = projekt.kategorier.filter((k) => autoSwiss(k) || samletSingle(k)).sort((a, b) => (a.type === 'single') - (b.type === 'single'));
-    for (const k of andetPas) {
-        const andreKampe = new Map();
-        let andresBaneSlots = 0;
-        for (const [id, r2] of aktuel) {
-            if (id === k.id) continue;
-            const k2 = projekt.kategorier.find((x) => x.id === id);
-            for (const [s, n] of sikreKampe({ ...k2, formForslag: r2.form }, r2.kampe)) andreKampe.set(s, (andreKampe.get(s) || 0) + n);
-            if (delerKapacitet(projekt, k, k2)) andresBaneSlots += r2.kampe.reduce((sum) => sum + (k2.halvBane ? 0.5 : 1), 0);
+    const kandidater = projekt.kategorier.filter((k) => autoSwiss(k) || samletSingle(k));
+    if (kandidater.length) {
+        const vaegt = (k) => (k.halvBane ? 0.5 : 1);
+        const lastI = (tilstand, k) => tilstand.get(k.id).kampe.length * vaegt(k);
+        const raekkeLast = new Map();
+        for (const k of projekt.kategorier) raekkeLast.set(k.raekke, (raekkeLast.get(k.raekke) || 0) + lastI(foerste, k));
+        const kap = lavKapacitetsmodel(projekt, { raekkeLast });
+        const lastUden = (udeladt) => new Map(projekt.kategorier.filter((k) => !udeladt.has(k.id)).map((k) => [k.id, lastI(aktuel, k)]));
+        const andreKampeFor = (k) => {
+            const ud = new Map();
+            for (const k2 of projekt.kategorier) {
+                if (k2.id === k.id) continue;
+                const r2 = aktuel.get(k2.id);
+                for (const [sp, n] of sikreKampe({ ...k2, formForslag: r2.form }, r2.kampe)) ud.set(sp, (ud.get(sp) || 0) + n);
+            }
+            return ud;
+        };
+        const bygMed = (k, ledig) => byg(k, { ...(autoSwiss(k) ? { ledigeBaneSlots: ledig } : {}), andreKampe: andreKampeFor(k), samlet: minKampeSamlet(raekkeMap.get(k.raekke)) });
+        const fastOrden = (a, b) => lastI(foerste, b) - lastI(foerste, a) || a.id.localeCompare(b.id);
+        const resten = (k) => aktuel.set(k.id, bygMed(k, kap.ledig(k, lastUden(new Set([k.id])))));
+        const grupper = [kandidater.filter((k) => k.type !== 'single').sort(fastOrden), kandidater.filter((k) => k.type === 'single').sort(fastOrden)];
+        for (const gruppe of grupper) {
+            // 1) Forholdsmæssig andel: pladsen efter alle ikke-kandidater deles efter behov
+            const auto = gruppe.filter(autoSwiss);
+            const autoIds = new Set(auto.map((k) => k.id));
+            const andel = new Map();
+            for (const k of auto) {
+                const ialt = kap.ledig(k, lastUden(autoIds));
+                const delere = auto.filter((j) => j.id === k.id || delerKapacitet(projekt, k, j));
+                const behov = delere.reduce((sum, j) => sum + lastI(foerste, j), 0);
+                andel.set(k.id, behov ? (ialt * lastI(foerste, k)) / behov : ialt);
+            }
+            const delt = new Map(auto.map((k) => [k.id, bygMed(k, andel.get(k.id))]));
+            for (const [id, res] of delt) aktuel.set(id, res);
+            // 2) Det, de andre ikke brugte — i fast orden
+            gruppe.forEach(resten);
         }
-        const ledig = Math.max(0, kapacitetTilKategori(projekt, k) - andresBaneSlots);
-        aktuel.set(k.id, byg(k, { ...(autoSwiss(k) ? { ledigeBaneSlots: ledig } : {}), andreKampe, samlet: minKampeSamlet(raekkeMap.get(k.raekke)) }));
+        // 3) Til sidst én gang til for alle: double/mix blev vurderet, før singlerne var skåret til, så deres
+        //    "der er ikke plads" kan være forældet — og der kan være plads til overs.
+        grupper.flat().forEach(resten);
     }
     const kampe = [];
     const kategorier = projekt.kategorier.map((k) => {
@@ -460,31 +489,61 @@ export function opdaterFormKriterie(projekt, kriterie) {
 
 // ── Kapacitet til automatisk turneringsform ───────────────────
 
-const FYLDNINGSGRAD = 0.85; // pauser og rækkefølge gør, at banerne sjældent kan fyldes helt
-
 /**
- * Bane-slots, der er til rådighed for en kategori: rækkens reserverede baner i
- * dens tidsrum på dens dage — eller, uden reservation, de fælles baner på rækkens
- * dage. Ganget med en realistisk fyldningsgrad.
+ * Kapacitet til det automatiske formvalg — bygget på den fælles pladsberegning (kapacitet.js: pladsPaaDag),
+ * så formvalget ser samme hal som planlæggeren: kun de slots, hvor rækken må spille (årgangens tidsvindue
+ * og rækkens eget tidsrum), rækkens egne baner, hvis den har reserverede, og kun de DAGE, rækken ender på:
+ * rækker med max dage fordeles med planlæggerens egen dagfordeling (fordelRaekkerPaaDage), så en række med
+ * max 1 dag og to mulige dage får én dags plads — ikke begge lagt sammen.
+ *
+ * raekkeLast: Map(raekkeId → bane-slots) til dagfordelingen (standard: projektets nuværende kampe).
+ * ledig(kategori, andreLast): bane-slots til kategorien, når de andre kategoriers last (Map katId → bane-slots)
+ * er trukket fra DAG FOR DAG: en anden række belaster kun de dage, den selv spiller (ligeligt fordelt), og kun
+ * med den del af sin plads, der overlapper denne rækkes vindue.
  */
-export function kapacitetTilKategori(projekt, kategori) {
-    const r = projekt.raekker.find((x) => x.id === kategori.raekke);
-    if (!r) return 0;
-    const { slotMin } = projekt.opsaetning;
-    let sum = 0;
-    for (const dato of r.dage || []) {
-        const dag = projekt.opsaetning.dage.find((d) => d.dato === dato);
-        if (!dag) continue;
-        const fra = minutter(r.tidligst || dag.start), til = minutter(r.senest || dag.slut);
-        for (const slot of slotsForDag(dag, slotMin)) {
-            const m = minutter(slot);
-            if (m < fra || m >= til) continue; // uden for rækkens eget tidsrum
-            const kap = puljeKapacitet(dag, slot, projekt.raekker);
-            if (r.reserveredeBaner > 0) sum += kap.reserveret.get(r.id) || 0;
-            else sum += kap.faelles;
-        }
+export function lavKapacitetsmodel(projekt, { raekkeLast = null, M = lavRegelmodel(projekt) } = {}) {
+    const katMap = new Map(projekt.kategorier.map((k) => [k.id, k]));
+    const raekkeMap = new Map(projekt.raekker.map((r) => [r.id, r]));
+    let last = raekkeLast;
+    if (!last) {
+        last = new Map();
+        for (const k of projekt.kampe) { const kt = katMap.get(k.kategori); if (kt) last.set(kt.raekke, (last.get(kt.raekke) || 0) + (kt.halvBane ? 0.5 : 1)); }
     }
-    return sum * FYLDNINGSGRAD;
+    const dagValg = fordelRaekkerPaaDage(M, projekt, { last });
+    const dageFor = (r) => (r.dage || []).filter((d) => !dagValg.has(r.id) || dagValg.get(r.id).has(d)).map((d) => M.dagMap.get(d)).filter(Boolean);
+    const husk = new Map();
+    const plads = (r, dag, vindueRaekke = null) => {
+        const n = `${r.id}|${dag.dato}|${vindueRaekke?.id || ''}`;
+        if (!husk.has(n)) husk.set(n, pladsPaaDag(M, r, dag, projekt.raekker, vindueRaekke ? { vindue: M.raekkeVindue(vindueRaekke, dag) } : {}));
+        return husk.get(n);
+    };
+    const ledig = (kategori, andreLast = new Map()) => {
+        const r = raekkeMap.get(kategori.raekke);
+        if (!r) return 0;
+        const rDage = dageFor(r);
+        const egne = r.reserveredeBaner > 0;
+        const prDag = rDage.map((dag) => {
+            let andre = 0;
+            for (const [id, l2] of andreLast) {
+                const k2 = katMap.get(id);
+                if (!l2 || !k2 || id === kategori.id || !delerKapacitet(projekt, kategori, k2)) continue;
+                if (k2.raekke === r.id) { andre += l2 / rDage.length; continue; }
+                const r2 = raekkeMap.get(k2.raekke), d2 = dageFor(r2);
+                if (!d2.includes(dag)) continue;
+                const hele = plads(r2, dag).faelles;
+                if (hele) andre += (l2 / d2.length) * (plads(r2, dag, r).faelles / hele);
+            }
+            const p = plads(r, dag);
+            return Math.max(0, FYLDNINGSGRAD * (egne ? p.egne : p.faelles) - andre);
+        });
+        return prDag.reduce((sum, x) => sum + x, 0);
+    };
+    return { ledig };
+}
+
+/** Bane-slots til rådighed for en kategori, før andre kategorier er trukket fra (se lavKapacitetsmodel). */
+export function kapacitetTilKategori(projekt, kategori) {
+    return lavKapacitetsmodel(projekt).ledig(kategori);
 }
 
 /** Deler to kategorier baner? Samme række: ja. Ellers kun hvis ingen af rækkerne har reservation, og de har fælles dage. */

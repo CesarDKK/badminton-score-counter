@@ -1,7 +1,7 @@
 // Fane 1: Fil og opsætning (design § 8). Tegner hele fanen som HTML ud fra
 // projektet og sender ændringer tilbage gennem "handlers". Ingen tilstand her.
 import { esc, datoTekst, procent, tal } from './dom.js';
-import { kapacitetPrDag, kampePrKategori, slotsForDag, baneSlots } from '../kapacitet.js';
+import { kapacitetPrDag, kampePrKategori, slotsForDag, baneSlots, FYLDNINGSGRAD } from '../kapacitet.js';
 import { foerSkoledag } from '../rules.js';
 import { reglerFor, STANDARD_REGLER } from '../store.js';
 import { FORM_VALG, FORM_VALG_TEKST, formTekst, effektivForm, minKampeSamlet } from '../form.js';
@@ -358,8 +358,8 @@ function kapacitetPanel(p) {
     const k = kapacitetPrDag(p);
     const rows = k.dage.map((d) => {
         const u = d.udnyttelse;
-        const klasse = u > 1 ? 'er-over' : u > 0.85 ? '' : 'er-ok';
-        const maerke = u > 1 ? '<span class="maerke maerke--fejl">for mange kampe</span>' : u > 0.85 ? '<span class="maerke maerke--advarsel">tæt på</span>' : '<span class="maerke maerke--ok">plads</span>';
+        const klasse = u > 1 ? 'er-over' : u > FYLDNINGSGRAD ? '' : 'er-ok';
+        const maerke = u > 1 ? '<span class="maerke maerke--fejl">for mange kampe</span>' : u > FYLDNINGSGRAD ? '<span class="maerke maerke--advarsel">tæt på</span>' : '<span class="maerke maerke--ok">plads</span>';
         return `
         <tr>
             <td><strong>${datoTekst(d.dato)}</strong></td>
