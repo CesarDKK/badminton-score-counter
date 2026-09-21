@@ -86,16 +86,29 @@ Appendiks 2 (sammenlægning) og "U9-U11 turneringer 2026-2027 Vejledning" — al
 - [ ] Idé (Appendiks 2): vis en oplysning ved kategorier med under 4 tilmeldte om, hvilke rækker de må sammenlægges
       med. Sammenlægningen sker fortsat i TP.
 
-## Pakke 3 — én kapacitetsberegning, stabilt formvalg og stabile kamp-id'er
+## Pakke 3 — én kapacitetsberegning, stabilt formvalg og stabile kamp-id'er (lavet 2026-09-21)
 
-- [ ] 6. Kamp-id'er følger positionen: efter ny puljeinddeling eller ændret `cupTop` kan en gammel tid
-      eller lås lande på en anden kamp (genindlæsning er dækket af punkt 3; `genberegnKampe` er ikke).
-- [ ] 7. Ændringer af dage, tidsrum, regler, slotlængde og halv bane genberegner ikke kampene.
-- [ ] 15. `kapacitetTilKategori` tæller alle rækkens dage (også ved max 1 dag), ignorerer årgangens
-      tidsvindue og trækker andre rækker fuldt fra; tre forskellige kapacitetsberegninger.
-- [ ] 16. Andet pas i `genberegnKampe` afhænger af kategoriernes rækkefølge.
-- [ ] 17. Nedskæringsforslag afprøves med alle runder fastlåst, men "Brug dette" låser kun de ændrede.
-- [ ] 18. Ulige Swiss-felter: alle tælles som r−1 (overdriver "under minimum"); TP's Swiss tæller r for alle.
+- [x] 6. Tider og låse følger KAMPEN, ikke id'et (`store.overfoerPlan`, `kampSignatur`): samme kamp under nyt id
+      beholder tiden; et gammelt id, der nu dækker en anden kamp (ændret `cupTop`, afbud, ny puljeinddeling),
+      mister den. Genindlæsning og `genberegnKampe` bruger samme funktion.
+- [x] 7. Ændringer af dage, baner, tidsrum, rækkens dage, regler, slotlængde og halv bane genberegner kampene
+      (`genberegnEfterOpsaetning`), og fane 1 fortæller, hvis en automatisk form skiftede (og hvor mange tider der faldt bort).
+- [x] 15. Én kapacitetsberegning: `kapacitet.pladsPaaDag` (årgangens tidsvindue, rækkens tidsrum, egne/fælles baner),
+      `kapacitet.fordelRaekkerPaaDage` (planlæggerens dagfordeling, nu delt) og `FYLDNINGSGRAD` ét sted.
+      Formvalget (`store.lavKapacitetsmodel`) regner dag for dag: en række med max 1 dag får én dags plads, og andre
+      rækker belaster kun de dage og det tidsrum, de deler. Kapacitetsregnskabet bruger samme byggesten.
+      Dagene fordeles efter det, rækkerne MINDST skal have, så "flest kampe" ikke lader en stor række klemme en lille ud.
+      `regler.js` er skilt ud af store.js, så store kan bruge regelmodellen uden cirkulær import.
+- [x] 16. Andet pas afhænger ikke af kategoriernes rækkefølge: forholdsmæssig andel → resten i lige store bidder →
+      resten i fast orden → én afsluttende vurdering af alle (fjerner forældet "der er ikke plads" på doublerne).
+- [x] 17. "Brug dette" fastholder ALLE Swiss-kategoriers rundetal (`forslag.alleRunder`) — præcis som afprøvet.
+- [x] 18. Ulige Swiss-felter: højst én deltager pr. runde får en kamp færre (`form.swissOversiddere`). Mangler kun den
+      ene kamp, melder Tjek og nedskæringsforslagene "op til N spillere" i stedet for hele feltet. TP's egen Swiss
+      Ladder tælles nu på samme måde (ulige antal = én sikker kamp færre).
+
+Målt på begge Lyngby-filer i 10 opsætninger: samme antal kampe og regelbrud som før, bortset fra at "alt som Swiss
+med Jespers dage" nu skærer to små doubler fra 4 til 3 runder (stadig over kravet), fordi lørdagen er knap. Søndagens
+rækker (U11 B + C) markeres nu korrekt med "der er ikke plads" — før blev begge dages plads lagt sammen.
 
 ## Pakke 4 — drift
 

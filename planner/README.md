@@ -479,3 +479,20 @@ Appendiks 2 (sammenlægning) og "U9-U11 turneringer – Vejledning". Reglementet
 - Senior E/M: max 3 kampe pr. kategori pr. dag; kvartfinaler ikke samme dag som semi- og finaler. Senior: max 10 kampe pr. dag.
 - Senior A/B og Senior+ E/A: kun kvart-, semi- og finaler på finaledagen.
 `tests/unit/reglement.test.js` låser standarderne til reglementets tal. Detaljer: `docs/planner-gennemgang-2026-09.md`.
+
+## Pakke 3: én kapacitetsberegning, stabilt formvalg og tider, der følger kampen (2026-09-21)
+
+- **Én kapacitetsberegning** (`src/kapacitet.js`): `pladsPaaDag` tæller de bane-slots, en række må bruge en dag
+  (årgangens tidsvindue, rækkens tidsrum, egne eller fælles baner), `fordelRaekkerPaaDage` er planlæggerens
+  dagfordeling, og `FYLDNINGSGRAD` (85 %) står ét sted. Det automatiske formvalg (`store.lavKapacitetsmodel`),
+  planlæggeren og kapacitetsregnskabet bygger alle på dem — før havde de hver sin beregning.
+- **Formvalget afhænger ikke af kategoriernes rækkefølge**: kandidaterne får først en forholdsmæssig andel af
+  pladsen, derefter deles det, der er til overs, i lige store bidder. Dagene fordeles efter det, rækkerne mindst
+  skal have, så kriteriet "flest kampe" ikke lader en stor række klemme en lille ud.
+- **Tider og låse følger kampen** (`store.overfoerPlan`): kamp-id'erne følger positionen i lodtrækningen, så når
+  kampene bygges om, føres tiden over efter kampens signatur (kategori, fase, runde, gruppe, spillere).
+- **Ændret opsætning bygger kampene på ny**: dage, baner, tidsrum, regler, slotlængde og halv bane. Fane 1 fortæller,
+  hvis en automatisk form skiftede.
+- **Nedskæring**: "Brug dette" fastholder alle rundetal, som da forslaget blev afprøvet. Ulige Swiss-felter melder
+  "op til N spillere" (oversidderne), når kun den ene kamp mangler.
+- `src/regler.js`: reglementets tal (pauser, tidsvinduer, grænser) — skilt ud af store.js.

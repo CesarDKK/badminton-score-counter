@@ -107,3 +107,32 @@ describe('formvalget afhænger ikke af kategoriernes rækkefølge', () => {
         assert.equal(f['U13 C HD'], f['U13 C DD']);
     });
 });
+
+describe('kriteriet "flest kampe": en stor række kan ikke klemme en lille ud', () => {
+    const byg = (kriterie) => {
+        let p = nytProjekt(model([
+            { id: 'U11 B', aargang: 'U11', raekke: 'B', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('b', 16) }] },
+            { id: 'U11 C', aargang: 'U11', raekke: 'C', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('c', 8) }] },
+            { id: 'U11 D', aargang: 'U11', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('d', 24) }] },
+        ], [LOER, SOEN]));
+        p = opdaterDag(p, LOER, { baner: 1, start: '09:00', slut: '13:00', foerSkoledag: false }); // lørdag: næsten ingen plads
+        p = opdaterDag(p, SOEN, { baner: 8, start: '09:00', slut: '17:00', foerSkoledag: false }); // søndag: 128 bane-slots
+        p = { ...p, opsaetning: { ...p.opsaetning, formKriterie: kriterie }, kategorier: p.kategorier.map((k) => ({ ...k, formValg: 'auto' })) };
+        return genberegnKampe(p);
+    };
+    test('dagene fordeles efter det, rækkerne MINDST skal have — alle tre får plads søndag', () => {
+        for (const kriterie of ['faerrest', 'flest']) {
+            const p = byg(kriterie);
+            assert.deepEqual(p.kategorier.filter((k) => k.formForslag.passerIkke).map((k) => k.id), [], kriterie);
+            assert.ok(p.kampe.length <= FYLDNINGSGRAD * 136, `${kriterie}: ${p.kampe.length} kampe`);
+            const f = lavForslag(p);
+            assert.equal(f.brud.length + f.ikkePlaceret.length, 0, `${kriterie}: planlæggeren kan lægge det hele`);
+        }
+    });
+    test('"flest kampe" giver flere kampe end "færrest", og det, der er til overs, deles — den største tager ikke det hele', () => {
+        const faerrest = byg('faerrest'), flest = byg('flest');
+        assert.ok(flest.kampe.length > faerrest.kampe.length);
+        const runder = Object.fromEntries(flest.kategorier.map((k) => [k.id, k.formForslag.minKampe]));
+        assert.ok(Math.max(...Object.values(runder)) - Math.min(...Object.values(runder)) <= 2, JSON.stringify(runder));
+    });
+});

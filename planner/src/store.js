@@ -443,16 +443,24 @@ export function genberegnKampe(projekt, valg = {}) {
     // (singlerne bygger på de endelige doubler), og inden for hver gruppe får kandidaterne FØRST hver sin
     // forholdsmæssige andel af pladsen (alle regnet fra samme udgangspunkt), og DEREFTER — i fast orden,
     // størst først — det, de andre ikke brugte.
+    //
+    // Pladsen afhænger af, hvilke DAGE rækkerne ender på. Dagene fordeles efter det, rækkerne MINDST skal have
+    // (den mindste form, der opfylder kravet): det er den del, der skal være plads til. Kriteriet "flest kampe"
+    // lader derefter kategorierne vokse inden for deres dag — uden at en stor række kan klemme en lille ud.
     const aktuel = new Map(foerste);
     const autoSwiss = (k) => ['auto', 'swiss'].includes(k.formValg || 'tp') && !(k.swissRunder > 0);
     const samletSingle = (k) => (k.formValg || 'tp') !== 'tp' && k.type === 'single' && minKampeSamlet(raekkeMap.get(k.raekke));
     const kandidater = projekt.kategorier.filter((k) => autoSwiss(k) || samletSingle(k));
+    const vaegt = (k) => (k.halvBane ? 0.5 : 1);
+    const lastI = (tilstand, k) => tilstand.get(k.id).kampe.length * vaegt(k);
+    const raekkeLastI = (tilstand) => {
+        const ud = new Map();
+        for (const k of projekt.kategorier) ud.set(k.raekke, (ud.get(k.raekke) || 0) + lastI(tilstand, k));
+        return ud;
+    };
     if (kandidater.length) {
-        const vaegt = (k) => (k.halvBane ? 0.5 : 1);
-        const lastI = (tilstand, k) => tilstand.get(k.id).kampe.length * vaegt(k);
-        const raekkeLast = new Map();
-        for (const k of projekt.kategorier) raekkeLast.set(k.raekke, (raekkeLast.get(k.raekke) || 0) + lastI(foerste, k));
-        const kap = lavKapacitetsmodel(projekt, { raekkeLast });
+        const mindst = kriterie === 'faerrest' ? foerste : new Map(projekt.kategorier.map((k) => [k.id, byg(k, { kriterie: 'faerrest' })]));
+        const kap = lavKapacitetsmodel(projekt, { raekkeLast: raekkeLastI(mindst) });
         const lastUden = (udeladt) => new Map(projekt.kategorier.filter((k) => !udeladt.has(k.id)).map((k) => [k.id, lastI(aktuel, k)]));
         const andreKampeFor = (k) => {
             const ud = new Map();
@@ -474,13 +482,26 @@ export function genberegnKampe(projekt, valg = {}) {
             const andel = new Map();
             for (const k of auto) {
                 const ialt = kap.ledig(k, lastUden(autoIds));
-                const delere = auto.filter((j) => j.id === k.id || delerKapacitet(projekt, k, j));
+                const delere = auto.filter((j) => j.id === k.id || (delerKapacitet(projekt, k, j) && kap.sammeDage(k, j)));
                 const behov = delere.reduce((sum, j) => sum + lastI(foerste, j), 0);
                 andel.set(k.id, behov ? (ialt * lastI(foerste, k)) / behov : ialt);
             }
             const delt = new Map(auto.map((k) => [k.id, bygMed(k, andel.get(k.id))]));
             for (const [id, res] of delt) aktuel.set(id, res);
-            // 2) Det, de andre ikke brugte — i fast orden
+            // 2) Det, de andre ikke brugte: først i lige store bidder (så den største ikke tager det hele),
+            //    til sidst resten — i fast orden
+            for (let omgang = 0; omgang < 4; omgang += 1) {
+                let aendret = false;
+                for (const k of auto) {
+                    const nu = lastI(aktuel, k);
+                    const tilOvers = kap.ledig(k, lastUden(new Set([k.id]))) - nu;
+                    if (tilOvers <= 0) continue;
+                    const delere = auto.filter((j) => j.id === k.id || (delerKapacitet(projekt, k, j) && kap.sammeDage(k, j))).length;
+                    const ny = bygMed(k, nu + tilOvers / delere);
+                    if (ny.kampe.length * vaegt(k) > nu) { aktuel.set(k.id, ny); aendret = true; }
+                }
+                if (!aendret) break;
+            }
             gruppe.forEach(resten);
         }
         // 3) Til sidst én gang til for alle: double/mix blev vurderet, før singlerne var skåret til, så deres
@@ -583,7 +604,9 @@ export function lavKapacitetsmodel(projekt, { raekkeLast = null, M = lavRegelmod
         });
         return prDag.reduce((sum, x) => sum + x, 0);
     };
-    return { ledig };
+    /** Ender de to kategoriers rækker på mindst én fælles dag? */
+    const sammeDage = (a, b) => { const ra = raekkeMap.get(a.raekke), rb = raekkeMap.get(b.raekke); return !!ra && !!rb && dageFor(ra).some((d) => dageFor(rb).includes(d)); };
+    return { ledig, sammeDage, dagValg };
 }
 
 /** Bane-slots til rådighed for en kategori, før andre kategorier er trukket fra (se lavKapacitetsmodel). */
