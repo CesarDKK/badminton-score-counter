@@ -79,6 +79,75 @@ export function banebrugISlot(kampe, kapacitet) {
 }
 
 /**
+ * Hvor meget af banerne planlæggeren i praksis kan fylde: pauser, rækkefølge og Swiss-runder giver huller.
+ * DET ene sted tallet står — bruges af formvalget (store.js), dagfordelingen (scheduler.js) og fane 1.
+ */
+export const FYLDNINGSGRAD = 0.85;
+
+/**
+ * Bane-slots til rådighed for en række på én dag — DEN ene kapacitetsberegning (formvalg, dagfordeling
+ * og kapacitetsregnskab bygger alle på den). Kun slots, hvor rækken må spille: årgangens tidsvindue og
+ * rækkens eget tidsrum (M = regelmodellen). `vindue` kan snævre yderligere ind (fx en anden rækkes vindue).
+ * Returnerer { faelles, egne }: de fælles baner og rækkens egne reserverede baner. Uden fyldningsgrad.
+ */
+export function pladsPaaDag(M, raekke, dag, raekker, { vindue = null, kapFor = null } = {}) {
+    const v = M.raekkeVindue(raekke, dag);
+    let faelles = 0, egne = 0;
+    for (const slot of slotsForDag(dag, M.slotMin)) {
+        const m = minutter(slot);
+        if (!M.iVindue(v, m) || (vindue && !M.iVindue(vindue, m))) continue;
+        const kap = kapFor ? kapFor(dag.dato, slot) : puljeKapacitet(dag, slot, raekker);
+        faelles += kap.faelles;
+        egne += kap.reserveret.get(raekke.id) || 0;
+    }
+    return { faelles, egne };
+}
+
+/**
+ * Dagfordeling: rækker, der må spille færre dage, end de har at vælge imellem, fordeles på dagene.
+ * DEN ene fordeling — planlæggeren lægger kampene efter den, og formvalget regner sin kapacitet ud fra den.
+ * Rækkerne fordeles efter belastning, størst først: til den første dag, hvor rækken kan være, uden at dagen
+ * fyldes over fyldningsgraden, ellers til den dag, der har mest plads tilbage. Rækker uden grænse breder sig
+ * over deres dage. Rækker med reserverede baner vurderes mod deres EGNE baner og belaster ikke de fælles.
+ *   last: Map(raekkeId → bane-slots) · fasteDage: Map(raekkeId → Set(dato)) med dage, rækken allerede har
+ *   låste kampe på · dagTvang: { raekkeId: [dato] } fastlægger dagene · muligeDage(r): rækkens dage (objekter).
+ * Returnerer Map(raekkeId → Set(dato)) for de rækker, der er bundet.
+ */
+export function fordelRaekkerPaaDage(M, projekt, { last, muligeDage = null, fasteDage = new Map(), dagTvang = null, kapFor = null } = {}) {
+    const dage = projekt.opsaetning.dage;
+    const mulige = muligeDage || ((r) => dage.filter((d) => (r.dage || []).includes(d.dato)));
+    const dagMap = new Map(dage.map((d) => [d.dato, d]));
+    const plads = (r, d) => pladsPaaDag(M, r, d, projekt.raekker, { kapFor });
+    const harEgne = (r) => r.reserveredeBaner > 0;
+    const brugt = new Map(dage.map((d) => [d.dato, 0]));
+    const rest = (dato, r) => (harEgne(r) ? FYLDNINGSGRAD * plads(r, dagMap.get(dato)).egne : FYLDNINGSGRAD * plads(r, dagMap.get(dato)).faelles - brugt.get(dato));
+    const valg = new Map();
+    const bundne = projekt.raekker.filter((r) => M.maxDageFor(r) && mulige(r).length > M.maxDageFor(r));
+    for (const r of projekt.raekker) {
+        if (bundne.includes(r) || !last.has(r.id) || harEgne(r)) continue;
+        const md = mulige(r);
+        for (const d of md) brugt.set(d.dato, brugt.get(d.dato) + last.get(r.id) / md.length);
+    }
+    const foretruk = (a, b) => a.dato.localeCompare(b.dato);
+    for (const r of [...bundne].sort((a, b) => (last.get(b.id) || 0) - (last.get(a.id) || 0) || a.id.localeCompare(b.id))) {
+        const maxDage = M.maxDageFor(r);
+        const tvang = (dagTvang?.[r.id] || []).filter((d) => mulige(r).some((x) => x.dato === d));
+        const valgte = new Set([...(fasteDage.get(r.id) || []), ...tvang].slice(0, maxDage));
+        const behov = (last.get(r.id) || 0) / maxDage;
+        const kandidater = mulige(r).filter((d) => !valgte.has(d.dato)).sort(foretruk);
+        while (valgte.size < maxDage && kandidater.length) {
+            const passer = kandidater.find((d) => rest(d.dato, r) >= behov);
+            const dag = passer || [...kandidater].sort((a, b) => rest(b.dato, r) - rest(a.dato, r) || foretruk(a, b))[0];
+            kandidater.splice(kandidater.indexOf(dag), 1);
+            valgte.add(dag.dato);
+        }
+        if (!harEgne(r)) for (const d of valgte) brugt.set(d, brugt.get(d) + (last.get(r.id) || 0) / valgte.size);
+        valg.set(r.id, valgte);
+    }
+    return valg;
+}
+
+/**
  * Anti-samtidighed (fra Jespers gamle prompt, regel A3): i samme række må
  * HS og HD ikke ligge samtidig, DS og DD ikke, og MD ikke sammen med nogen af
  * dem. U9's kønsblandede double ("D") regnes som både HD og DD.

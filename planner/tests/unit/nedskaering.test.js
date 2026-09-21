@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { nytProjekt, saetForm, opdaterDag, opdaterRaekke } from '../../src/store.js';
 import { lavForslag } from '../../src/scheduler.js';
 import { tjekPlan } from '../../src/rules.js';
+import { effektivForm, swissOversiddere } from '../../src/form.js';
 import { nedskaeringsForslag, alleNedskaeringer, anvendNedskaering, kapacitetsRegnskab, underKrav, swissKandidater, MIN_RUNDER } from '../../src/nedskaering.js';
 
 /** raekker: [{ id, aargang, raekke, kategorier: [{ kat, type, antal }] }] */
@@ -134,7 +135,7 @@ describe('nedskæring: forslag der får kabalen til at gå op', () => {
     });
     test('underKrav tæller som Tjek', () => {
         const u = underKrav(lille());
-        assert.deepEqual(u.get('U11 D HS'), { krav: 4, faerrest: 4, spillere: [] });
+        assert.deepEqual(u.get('U11 D HS'), { krav: 4, faerrest: 4, spillere: [], antal: 0, opTil: false });
     });
 });
 
@@ -212,5 +213,58 @@ describe('nedskæring: gulv for double og berørte kategorier', () => {
             assert.ok(hs.underKravEfter > hs.underKravFoer);
             assert.equal(f.runder['U11 D HS'], undefined, 'og der sættes ikke noget rundetal på den');
         }
+    });
+});
+
+describe('pakke 3: "Brug dette" giver præcis den plan, der blev afprøvet', () => {
+    test('alle Swiss-kategoriers rundetal fastholdes — også dem, der ikke blev skåret', () => {
+        const p = projekt([{ id: 'U11 D', aargang: 'U11', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', antal: 8 }, { kat: 'DS', type: 'single', antal: 8 }, { kat: 'HD', type: 'double', antal: 6 }] }], { dage: ['2026-11-21'], slut: '16:00' });
+        assert.ok(lavForslag(p).brud.length > 0);
+        for (const strategi of ['jaevnt', 'skaanSingle', 'kunDouble']) {
+            const f = nedskaeringsForslag(p, { strategi });
+            if (!f || f.ingenKandidater) continue;
+            assert.deepEqual(Object.keys(f.alleRunder).sort(), swissKandidater(p).map((k) => k.id).sort());
+            const { projekt: efter, forslag } = anvendNedskaering(p, f);
+            assert.equal(efter.kampe.length, f.kampeEfter, `${strategi}: samme antal kampe som afprøvet`);
+            assert.equal(forslag.brud.length + forslag.ikkePlaceret.length, f.brudEfter, `${strategi}: samme resultat som afprøvet`);
+            for (const k of swissKandidater(efter)) assert.equal(k.swissRunder, f.alleRunder[k.id]);
+        }
+    });
+});
+
+describe('pakke 3: ulige Swiss-felter — kun oversidderne mangler en kamp', () => {
+    // 9 spillere, 4 runder: én sidder over pr. runde, så højst 4 af de 9 får 3 kampe; de øvrige 5 får 4 (kravet)
+    const ulige = (runder) => {
+        let p = projekt([{ id: 'U11 D', aargang: 'U11', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', antal: 9 }] }], { dage: ['2026-11-21'], slut: '18:00' });
+        return saetForm(p, 'U11 D HS', { formValg: 'swiss', swissRunder: runder });
+    };
+    test('mangler kun oversidderens ene kamp, rammes højst én spiller pr. runde — ikke hele feltet', () => {
+        const u = underKrav(ulige(4)).get('U11 D HS');
+        assert.deepEqual(u, { krav: 4, faerrest: 3, spillere: [], antal: 4, opTil: true });
+        const adv = tjekPlan(ulige(4)).problemer.find((x) => (x.noegle || '').endsWith(':min-kampe'));
+        assert.ok(adv.tekst.includes('ulige antal deltagere (9)'), adv.tekst);
+        assert.ok(adv.tekst.includes('op til 4 spillere får 3 kampe (krav 4)'), adv.tekst);
+    });
+    test('er der skåret længere ned, kommer hele feltet under — som før', () => {
+        const u = underKrav(ulige(3)).get('U11 D HS');
+        assert.equal(u.opTil, false);
+        assert.equal(u.antal, 9);
+        const adv = tjekPlan(ulige(3)).problemer.find((x) => (x.noegle || '').endsWith(':min-kampe'));
+        assert.match(adv.tekst, /9 spillere er kun sikret 2 kampe/);
+    });
+    test('med 5 runder når alle kravet, også oversidderne', () => {
+        assert.equal(underKrav(ulige(5)).get('U11 D HS').antal, 0);
+    });
+    test('double: et par, der sidder over, er to spillere', () => {
+        let p = projekt([{ id: 'U11 D', aargang: 'U11', raekke: 'D', kategorier: [{ kat: 'HD', type: 'double', antal: 5 }] }], { dage: ['2026-11-21'], slut: '18:00' });
+        p = saetForm(p, 'U11 D HD', { formValg: 'swiss', swissRunder: 2 });
+        assert.deepEqual(underKrav(p).get('U11 D HD'), { krav: 2, faerrest: 1, spillere: [], antal: 4, opTil: true });
+    });
+    test('TPs egen Swiss Ladder tælles på samme måde: ulige antal giver én sikker kamp færre', () => {
+        const kat = (tilmelde) => ({ formValg: 'tp', form: 'swiss', runder: 4, tilmelde, type: 'single' });
+        assert.equal(effektivForm(kat(8)).sikreSwiss, 4);
+        assert.equal(effektivForm(kat(9)).sikreSwiss, 3);
+        assert.equal(swissOversiddere(kat(9)), 4);
+        assert.equal(swissOversiddere(kat(8)), 0);
     });
 });

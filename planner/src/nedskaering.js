@@ -9,10 +9,10 @@
 // planlæggeren kan placere alle kampe uden et eneste regelbrud.
 import { genberegnKampe, opdaterKategori, opdaterRaekke, reglerFor, delerKapacitet, anvendForslag } from './store.js';
 import { lavForslag } from './scheduler.js';
-import { effektivForm, minKampeSamlet, sikreKampe, minKampeKrav } from './form.js';
-import { tidsvindue } from './rules.js';
+import { effektivForm, minKampeSamlet, sikreKampe, minKampeKrav, swissOversiddere } from './form.js';
+import { lavRegelmodel } from './regelmodel.js';
 import { minutter } from './tp-reader.js';
-import { slotsForDag, puljeKapacitet } from './kapacitet.js';
+import { slotsForDag, puljeKapacitet, pladsPaaDag, FYLDNINGSGRAD } from './kapacitet.js';
 
 /**
  * Swiss Ladder skæres aldrig under 2 runder — bortset fra double/mix, der må gå ned til 1, når
@@ -50,7 +50,9 @@ function afproev(projekt) {
 /**
  * Spillere under minimumskravet pr. kategori (samme tælling som Tjek: sikre kampe,
  * og samlet på tværs af kategorier i rækker, hvor kravet tælles samlet).
- * Returnerer Map katId → { krav, faerrest, spillere: [id] }.
+ * Returnerer Map katId → { krav, faerrest, spillere: [id], antal, opTil }.
+ * Ulige Swiss-felter, hvor kun oversidderens ene kamp mangler: det rammer højst én deltager pr. runde, så
+ * antal = "op til så mange" (opTil = true), og spillere er tom, fordi ingen ved, HVEM der kommer til at sidde over.
  */
 export function underKrav(projekt) {
     const regler = reglerFor(projekt);
@@ -64,7 +66,11 @@ export function underKrav(projekt) {
         const krav = minKampeKrav(k, r, regler);
         const antal = new Map(egne);
         if (minKampeSamlet(r)) for (const [id, andre] of sikre) if (id !== k.id) for (const s of antal.keys()) if (andre.has(s)) antal.set(s, antal.get(s) + andre.get(s));
-        ud.set(k.id, { krav, faerrest: Math.min(...antal.values()), spillere: [...antal].filter(([, n]) => n < krav).map(([s]) => s) });
+        const under = [...antal].filter(([, n]) => n < krav).map(([s]) => s);
+        const over = swissOversiddere(k);
+        const kunOversiddere = under.length > 0 && over > 0 && [...antal.values()].every((n) => n + 1 >= krav);
+        if (kunOversiddere) ud.set(k.id, { krav, faerrest: Math.min(...antal.values()), spillere: [], antal: Math.min(under.length, over * (k.type === 'single' ? 1 : 2)), opTil: true });
+        else ud.set(k.id, { krav, faerrest: Math.min(...antal.values()), spillere: under, antal: under.length, opTil: false });
     }
     return ud;
 }
@@ -162,18 +168,21 @@ export function nedskaeringsForslag(projekt, { strategi = 'jaevnt', maxAfproevni
     const uFoer = underKrav(oprindeligt), uEfter = underKrav(p);
     // Med i tabellen: kategorier der har mistet runder — og kategorier, hvor flere spillere kommer under
     // minimum, fordi deres kampe i ANDRE kategorier er skåret (minimum tælles samlet).
-    const beroert = (id) => (uEfter.get(id)?.spillere.length ?? 0) !== (uFoer.get(id)?.spillere.length ?? 0);
+    const beroert = (id) => (uEfter.get(id)?.antal ?? 0) !== (uFoer.get(id)?.antal ?? 0);
     const aendringer = [...runder].filter(([id, r]) => r !== start.get(id) || beroert(id)).map(([id, r]) => ({
         kategori: id, fra: start.get(id), til: r,
         kampeFoer: projekt.kampe.filter((k) => k.kategori === id).length, kampeEfter: p.kampe.filter((k) => k.kategori === id).length,
         krav: uEfter.get(id)?.krav ?? 0, faerrestFoer: uFoer.get(id)?.faerrest ?? 0, faerrestEfter: uEfter.get(id)?.faerrest ?? 0,
-        underKravFoer: uFoer.get(id)?.spillere.length ?? 0, underKravEfter: uEfter.get(id)?.spillere.length ?? 0,
+        underKravFoer: uFoer.get(id)?.antal ?? 0, underKravEfter: uEfter.get(id)?.antal ?? 0, opTilEfter: !!uEfter.get(id)?.opTil,
     }));
-    const alleUnder = (u) => new Set([...u.values()].flatMap((x) => x.spillere)).size;
+    // Spillere, der med sikkerhed kommer under (talt én gang hver) + dem, der højst rammes som oversiddere
+    const alleUnder = (u) => new Set([...u.values()].flatMap((x) => x.spillere)).size + [...u.values()].reduce((sum, x) => sum + (x.opTil ? x.antal : 0), 0);
     return {
         ...basis, loest: nu.brud === 0, brudEfter: nu.brud, kampeEfter: p.kampe.length, aendringer,
         spillereUnderKravFoer: alleUnder(uFoer), spillereUnderKravEfter: alleUnder(uEfter),
-        runder: Object.fromEntries(aendringer.filter((a) => a.fra !== a.til).map((a) => [a.kategori, a.til])), afproevninger,
+        runder: Object.fromEntries(aendringer.filter((a) => a.fra !== a.til).map((a) => [a.kategori, a.til])),
+        // Forslaget er afprøvet med ALLE Swiss-kategoriers rundetal fastholdt — også dem, der ikke blev skåret.
+        alleRunder: Object.fromEntries(runder), afproevninger,
     };
 }
 
@@ -192,11 +201,16 @@ export function alleNedskaeringer(projekt) {
     return ud.sort((a, b) => (b.loest - a.loest) || a.brudEfter - b.brudEfter || a.spillereUnderKravEfter - b.spillereUnderKravEfter || b.kampeEfter - a.kampeEfter);
 }
 
-/** Tager forslaget i brug: rundetallene bliver kategoriernes eget valg (kan ses og rettes i fane 1), og planen lægges på ny. */
+/**
+ * Tager forslaget i brug: rundetallene bliver kategoriernes eget valg (kan ses og rettes i fane 1), og planen lægges
+ * på ny. ALLE Swiss-kategoriers rundetal fastholdes, præcis som da forslaget blev afprøvet: blev kun de ændrede
+ * fastholdt, kunne det automatiske formvalg give de øvrige flere runder på den plads, der blev fri — og så var det
+ * en anden plan end den, brugeren sagde ja til.
+ */
 export function anvendNedskaering(projekt, forslag) {
     let basis = projekt;
     for (const id of forslag.raekkerToDage || []) basis = opdaterRaekke(basis, id, { dispensationFlereDage: true });
-    const p = medRunder(basis, new Map(Object.entries(forslag.runder)));
+    const p = medRunder(basis, new Map(Object.entries(forslag.alleRunder || forslag.runder)));
     const f = lavForslag(p);
     return { projekt: anvendForslag(p, f), forslag: f };
 }
@@ -204,13 +218,13 @@ export function anvendNedskaering(projekt, forslag) {
 /**
  * Kapacitetsregnskab i bane-slots (en kamp på hel bane = 1, på halv bane = ½): hvad kampene
  * kræver, og hvad der er af lovlig plads — på de fælles baner og på rækkernes reserverede baner.
- * Pladsen er et loft: i praksis kan planlæggeren bruge ca. 85 %, fordi pauser, rækkefølge og
- * Swiss-runder giver huller.
+ * Pladsen er et loft: i praksis kan planlæggeren bruge ca. 85 % (FYLDNINGSGRAD), fordi pauser, rækkefølge og
+ * Swiss-runder giver huller. Samme byggesten som formvalget og dagfordelingen: regelmodellens vinduer og pladsPaaDag.
  * Returnerer { faelles: { behov, plads }, reserveret: [{ raekke, behov, plads, ubrugt }] }.
  */
 export function kapacitetsRegnskab(projekt) {
     const { slotMin, dage } = projekt.opsaetning;
-    const regler = reglerFor(projekt);
+    const M = lavRegelmodel(projekt);
     const katMap = new Map(projekt.kategorier.map((k) => [k.id, k]));
     const raekkeMap = new Map(projekt.raekker.map((r) => [r.id, r]));
     const egen = (r) => r && r.reserveredeBaner > 0;
@@ -225,18 +239,14 @@ export function kapacitetsRegnskab(projekt) {
     const faelles = projekt.raekker.filter((r) => !egen(r));
     for (const dag of dage) {
         // Fælles baner tæller i de slots, hvor mindst én række uden egne baner må spille
-        const vinduer = faelles.filter((r) => r.dage.includes(dag.dato)).map((r) => {
-            const v = tidsvindue(r.aargang, dag, regler);
-            return { fra: Math.max(v.fra, r.tidligst ? minutter(r.tidligst) : 0), til: Math.min(v.til, r.senest ? minutter(r.senest) : 9999) };
-        });
+        const vinduer = faelles.filter((r) => r.dage.includes(dag.dato)).map((r) => M.raekkeVindue(r, dag));
         for (const slot of slotsForDag(dag, slotMin)) {
-            const m = minutter(slot);
-            const kap = puljeKapacitet(dag, slot, projekt.raekker);
-            if (vinduer.some((v) => m >= v.fra && m + slotMin <= v.til)) plads.set('faelles', plads.get('faelles') + kap.faelles);
-            for (const [rid, baner] of kap.reserveret) plads.set(rid, (plads.get(rid) || 0) + baner);
+            if (vinduer.some((v) => M.iVindue(v, minutter(slot)))) plads.set('faelles', plads.get('faelles') + puljeKapacitet(dag, slot, projekt.raekker).faelles);
         }
+        for (const r of projekt.raekker.filter((x) => egen(x) && x.dage.includes(dag.dato))) plads.set(r.id, (plads.get(r.id) || 0) + pladsPaaDag(M, r, dag, projekt.raekker).egne);
     }
     return {
+        fyldningsgrad: FYLDNINGSGRAD,
         faelles: { behov: behov.get('faelles'), plads: plads.get('faelles') },
         reserveret: projekt.raekker.filter(egen).map((r) => ({ raekke: r.id, behov: behov.get(r.id) || 0, plads: plads.get(r.id) || 0, ubrugt: Math.max(0, (plads.get(r.id) || 0) - (behov.get(r.id) || 0)) })),
     };

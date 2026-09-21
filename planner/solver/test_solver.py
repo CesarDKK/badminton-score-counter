@@ -263,7 +263,10 @@ class AsynkronTest(unittest.TestCase):
         self.assertEqual(kode, 202)
         time.sleep(2)
         self.assertEqual(self.kald("/status?job=asynk-job-0003")[1]["status"], "REGNER")
-        self.assertEqual(self.kald("/solve", {"problem": problem([kamp(0)]), "sekunder": 5, "asynkron": True})[0], 429, "én ad gangen")
+        kode, optaget = self.kald("/solve", {"problem": problem([kamp(0)]), "sekunder": 5, "asynkron": True})
+        self.assertEqual(kode, 429, "én ad gangen")
+        self.assertTrue(optaget["optaget"])
+        self.assertTrue(50 <= optaget["ledigOmSekunder"] <= 61, "fortæller, hvor længe det igangværende job højst regner endnu")
         t0 = time.time()
         self.assertEqual(self.kald("/stop", {"job": "asynk-job-0003"})[0], 200)
         kode, svar = self.vent("asynk-job-0003")
@@ -272,6 +275,30 @@ class AsynkronTest(unittest.TestCase):
         self.assertTrue(svar["stoppet"])
         self.assertEqual(len(svar["tider"]), 120)
         self.assertEqual(self.kald("/stop", {"job": "asynk-job-0003"})[0], 404, "et færdigt job kan ikke stoppes")
+
+    def test_kvote_pr_klient(self):
+        """Regnetiden føres pr. klient (X-Real-IP): er kvoten brugt, afvises klienten — andre klienter mærker intet."""
+        gammel = self.solver.KVOTE_SEKUNDER
+        self.solver.KVOTE_SEKUNDER = 100
+        try:
+            self.solver.noter_forbrug("10.0.0.1", 60)
+            self.assertEqual(self.solver.kvote_venter("10.0.0.1"), 0, "60 af 100 s brugt")
+            self.solver.noter_forbrug("10.0.0.1", 60)
+            venter = self.solver.kvote_venter("10.0.0.1")
+            self.assertTrue(3500 < venter <= 3600, "der er plads igen, når det ældste forbrug er en time gammelt")
+            self.assertEqual(self.solver.kvote_venter("10.0.0.2"), 0)
+            self.solver.KVOTE_SEKUNDER = 0
+            self.assertEqual(self.solver.kvote_venter("10.0.0.1"), 0, "0 = ingen kvote")
+            # Over HTTP: klienten fra testen (127.0.0.1) har brugt sin kvote
+            self.solver.KVOTE_SEKUNDER = 100
+            self.solver.noter_forbrug("127.0.0.1", 500)
+            kode, svar = self.kald("/solve", {"problem": problem([kamp(0)]), "sekunder": 5, "asynkron": True})
+            self.assertEqual(kode, 429)
+            self.assertTrue(svar["kvote"])
+            self.assertGreater(svar["ledigOmSekunder"], 0)
+        finally:
+            self.solver.KVOTE_SEKUNDER = gammel
+            self.solver.FORBRUG.clear()
 
     def test_forladt_job_stopper_selv(self):
         self.solver.FORLADT_SEKUNDER = 2

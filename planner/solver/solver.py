@@ -392,9 +392,50 @@ FORLADT_SEKUNDER = float(os.environ.get("SOLVER_FORLADT_SEKUNDER", "30"))
 GEM_SEKUNDER = float(os.environ.get("SOLVER_GEM_SEKUNDER", "600"))
 JOB_ID = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 
+# Der er kun én løser-plads, og tjenesten har ingen login. For at én klient ikke kan lægge beslag på den hele
+# tiden, føres der regnskab med FORBRUGT regnetid pr. klient (X-Real-IP fra nginx) den seneste time. Er kvoten
+# brugt, afvises nye job, til det ældste forbrug er en time gammelt. 0 = ingen kvote.
+KVOTE_SEKUNDER = float(os.environ.get("SOLVER_KVOTE_SEKUNDER", "2400"))
+KVOTE_VINDUE = 3600.0
+FORBRUG: dict[str, list[tuple[float, float]]] = {}  # klient → [(sluttid, sekunder)]
+
+
+def noter_forbrug(klient: str, sekunder: float):
+    with JOBS_LAAS:
+        FORBRUG.setdefault(klient, []).append((time.time(), sekunder))
+
+
+def kvote_venter(klient: str) -> float:
+    """0 når klienten må starte et job — ellers sekunder, til der igen er plads i kvoten."""
+    nu = time.time()
+    with JOBS_LAAS:
+        for k in [k for k, poster in FORBRUG.items() if all(nu - t > KVOTE_VINDUE for t, _ in poster)]:
+            del FORBRUG[k]
+        poster = [(t, s) for t, s in FORBRUG.get(klient, []) if nu - t <= KVOTE_VINDUE]
+        if klient in FORBRUG:
+            FORBRUG[klient] = poster
+    if KVOTE_SEKUNDER <= 0 or sum(s for _, s in poster) < KVOTE_SEKUNDER:
+        return 0.0
+    over = sum(s for _, s in poster) - KVOTE_SEKUNDER
+    for t, sek in sorted(poster):  # så mange af de ældste poster skal falde ud, at forbruget kommer under kvoten
+        over -= sek
+        if over < 0:
+            return max(1.0, t + KVOTE_VINDUE - nu)
+    return KVOTE_VINDUE
+
+
+def ledig_om() -> int:
+    """Hvor længe det igangværende job højst regner endnu (til beskeden "løseren er optaget")."""
+    nu = time.time()
+    with JOBS_LAAS:
+        rest = [max(0.0, x.sekunder - (nu - x.start)) for x in JOBS.values() if x.slut is None]
+    return int(max(rest, default=0)) + 1
+
 
 class Job:
-    def __init__(self):
+    def __init__(self, sekunder=0.0, klient="ukendt"):
+        self.sekunder = sekunder  # den ønskede regnetid
+        self.klient = klient
         self.stop = threading.Event()
         self.start = time.time()
         self.sidst_set = time.time()
@@ -503,9 +544,13 @@ class Handler(BaseHTTPRequestHandler):
         if not JOB_ID.match(jid):
             jid = os.urandom(12).hex()
         ryd_gamle_jobs()
+        klient = (self.headers.get("X-Real-IP") or self.client_address[0] or "ukendt")[:64]
+        venter = kvote_venter(klient)
+        if venter:
+            return self._svar(429, {"fejl": "regnetiden for denne time er brugt", "kvote": True, "ledigOmSekunder": int(venter)})
         if not SAMTIDIGE.acquire(blocking=False):
-            return self._svar(429, {"fejl": "løseren er optaget"})
-        job = Job()
+            return self._svar(429, {"fejl": "løseren er optaget", "optaget": True, "ledigOmSekunder": ledig_om()})
+        job = Job(min(max(sekunder, 1.0), MAX_SEKUNDER), klient)
         with JOBS_LAAS:
             JOBS[jid] = job
 
@@ -515,6 +560,7 @@ class Handler(BaseHTTPRequestHandler):
                     job.kode, job.svar = koer(problem, sekunder, job)
                 finally:
                     job.slut = time.time()
+                    noter_forbrug(klient, job.slut - job.start)
                     SAMTIDIGE.release()
 
             def forladt():  # ingen statuskald i et stykke tid = fanen er lukket
@@ -544,6 +590,7 @@ class Handler(BaseHTTPRequestHandler):
             pass  # klienten er væk
         finally:
             job.slut = job.slut or time.time()
+            noter_forbrug(klient, job.slut - job.start)
             with JOBS_LAAS:
                 JOBS.pop(jid, None)
             SAMTIDIGE.release()

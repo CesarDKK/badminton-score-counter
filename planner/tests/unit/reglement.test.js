@@ -76,7 +76,7 @@ describe('U9/U11-vejledningen: rækkefølge og max varighed for singlerne', () =
     });
     test('ældre gemte projekter: U11 uden grænse får én gang vejledningens 360 min — et senere fravalg bevares', () => {
         const p = nytProjekt(model([{ id: 'U11 D', aargang: 'U11', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('a', 4) }] }, { id: 'U13 D', aargang: 'U13', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('b', 4) }] }]));
-        const gammelt = { ...p, opsaetning: { ...p.opsaetning, singleVarighedV1: undefined }, raekker: p.raekker.map((r) => ({ ...r, maxHaltidMin: null })) };
+        const gammelt = { ...p, version: 1, opsaetning: { ...p.opsaetning, minKampeSamletV3: true, raekkefoelgeV2: true }, raekker: p.raekker.map((r) => ({ ...r, maxHaltidMin: null })) };
         const ny = normaliserHalvBane(gammelt);
         assert.deepEqual(ny.raekker.map((r) => r.maxHaltidMin), [360, null]);
         const fravalgt = { ...ny, raekker: ny.raekker.map((r) => ({ ...r, maxHaltidMin: null })) };
@@ -84,9 +84,10 @@ describe('U9/U11-vejledningen: rækkefølge og max varighed for singlerne', () =
     });
     test('ældre gemte projekter får én gang vejledningens rækkefølge (den kunne ikke rettes i brugerfladen)', () => {
         const p = nytProjekt(model([{ id: 'U13 D', aargang: 'U13', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('b', 4) }] }]));
-        const gammelt = { ...p, opsaetning: { ...p.opsaetning, raekkefoelgeV2: undefined }, raekker: [{ ...p.raekker[0], raekkefoelge: ['MD', 'HS', 'DS', 'HD', 'DD'] }] };
+        const gammelt = { ...p, version: 1, opsaetning: { ...p.opsaetning, minKampeSamletV3: true, singleVarighedV1: true }, raekker: [{ ...p.raekker[0], raekkefoelge: ['MD', 'HS', 'DS', 'HD', 'DD'] }] };
         const ny = normaliserHalvBane(gammelt);
         assert.deepEqual(ny.raekker[0].raekkefoelge, standardRaekkefoelge('U13'));
-        assert.equal(ny.opsaetning.raekkefoelgeV2, true);
+        assert.equal(ny.version, 2);
+        assert.equal('raekkefoelgeV2' in ny.opsaetning, false, 'de løse flag er væk — versionsnummeret fortæller, hvad der er gjort');
     });
 });

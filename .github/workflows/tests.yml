@@ -71,3 +71,14 @@ jobs:
       - name: Planner — kontrakt (tjek svarene i JS)
         working-directory: planner
         run: node tests/kontrakt/kontrakt.mjs tjek tests/kontrakt/_ud
+
+      # nginx-konfigurationen afprøves, før den når serveren: en slåfejl her tager ALLE sites ned ved deploy.
+      # Upstream-navnene findes kun i docker-netværket, så de peges på localhost under testen.
+      - name: nginx — konfigurationen er gyldig (nginx -t)
+        run: |
+          docker run --rm \
+            --add-host backend:127.0.0.1 --add-host football-frontend:127.0.0.1 --add-host stats-backend:127.0.0.1 \
+            -v "$PWD/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
+            -v "$PWD/nginx-security-headers.conf:/etc/nginx/snippets/security-headers.conf:ro" \
+            -v "$PWD/nginx-planner-csp.conf:/etc/nginx/snippets/planner-csp.conf:ro" \
+            nginx:alpine nginx -t

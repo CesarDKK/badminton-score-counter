@@ -66,6 +66,15 @@ function saet(nyt) {
     visStatus();
 }
 
+/** Ændringer af opsætningen bygger kampene på ny (formvalget afhænger af plads og regler) — og fortæller, hvis en form skiftede. */
+function saetOpsaetning(nyt) {
+    const r = store.genberegnEfterOpsaetning(projekt, nyt);
+    saet(r.projekt);
+    if (!r.aendringer.length) return;
+    const tider = r.mistedeTider ? ` ${r.mistedeTider} ${r.mistedeTider === 1 ? 'kamp' : 'kampe'} mistede deres tid, fordi de ikke længere findes.` : '';
+    visBesked(`Ændringen gav en ny automatisk form for ${r.aendringer.map((a) => a.kategori).join(', ')}.${tider} Se "Turneringsform" nedenfor.`);
+}
+
 function visBesked(tekst, fejl = false) {
     besked = { tekst, fejl };
     const el = document.getElementById('filBesked');
@@ -196,15 +205,15 @@ const handlers = {
     },
 
     besked: visBesked,
-    slotMin: (v) => saet(store.saetSlotMin(projekt, v)),
+    slotMin: (v) => saetOpsaetning(store.saetSlotMin(projekt, v)),
     opsaetning: (aendringer) => saet(store.opdaterOpsaetning(projekt, aendringer)),
-    dag: (dato, aendringer) => saet(store.opdaterDag(projekt, dato, aendringer)),
-    raekke: (id, aendringer) => saet(store.opdaterRaekke(projekt, id, aendringer)),
-    minKampeSamlet: (id, vaerdi) => saet(store.genberegnKampe(store.opdaterRaekke(projekt, id, { minKampeSamlet: vaerdi }))),
-    kategori: (id, aendringer) => saet(store.opdaterKategori(projekt, id, aendringer)),
+    dag: (dato, aendringer) => saetOpsaetning(store.opdaterDag(projekt, dato, aendringer)),
+    raekke: (id, aendringer) => saetOpsaetning(store.opdaterRaekke(projekt, id, aendringer)),
+    minKampeSamlet: (id, vaerdi) => saetOpsaetning(store.opdaterRaekke(projekt, id, { minKampeSamlet: vaerdi })),
+    kategori: (id, aendringer) => saetOpsaetning(store.opdaterKategori(projekt, id, aendringer)),
     pause: (klasse, v) => saet(store.opdaterPause(projekt, klasse, v)),
-    regler: (sti, v) => saet(store.opdaterRegler(projekt, sti, v)),
-    nulstilRegler: () => saet(store.nulstilRegler(projekt)),
+    regler: (sti, v) => saetOpsaetning(store.opdaterRegler(projekt, sti, v)),
+    nulstilRegler: () => saetOpsaetning(store.nulstilRegler(projekt)),
     form: (id, aendringer) => saet(store.saetForm(projekt, id, aendringer)),
     vaegt: (id, v) => saet(store.opdaterVaegt(projekt, id, v)),
     vaegtSkabelon: (navn) => saet(store.saetVaegtSkabelon(projekt, navn)),
@@ -291,10 +300,26 @@ const planHandlers = {
         const start = Date.now();
         const visUr = () => { const el = document.querySelector('[data-optimer-ur]'); if (el) el.textContent = `${Math.round((Date.now() - start) / 1000)} s`; };
         const ur = setInterval(visUr, 1000);
-        const faerdig = () => { clearInterval(ur); tilstand.optimerer = false; tilstand.optimerJob = null; tilstand.optimerStopper = false; tilstand.optimerDiagnose = false; };
+        let afbryd = null;
+        const faerdig = () => { clearInterval(ur); tilstand.optimerer = false; tilstand.optimerJob = null; tilstand.optimerStopper = false; tilstand.optimerDiagnose = false; tilstand.optimerAfbryd = null; };
         try {
-            const vedStatus = (s) => { if (s.fase === 'diagnose' && !tilstand.optimerDiagnose) { tilstand.optimerDiagnose = true; render(); visUr(); } };
-            const svar = await optimer(udgangspunkt, { sekunder, hintPlan: graadig.brud.length ? null : graadig.plan, job, vedStatus });
+            let ventede = false;
+            const vedStatus = (s) => {
+                if (s.status === 'VENTER') {
+                    // Løseren har én plads: vi står i kø og prøver selv igen. "Stop" afbryder ventetiden.
+                    const om = s.ledigOmSekunder ? ` Den er ledig om højst ${s.ledigOmSekunder >= 90 ? `${Math.round(s.ledigOmSekunder / 60)} min` : `${s.ledigOmSekunder} s`}.` : '';
+                    tilstand.forslag = { tekst: s.graense ? 'Der er kaldt for ofte til løseren — prøver igen om lidt.' : `Løseren er optaget af en anden kørsel.${om} Du står i kø, og kørslen starter af sig selv — eller tryk "Stop" for at opgive.`, ikkePlaceret: [] };
+                    ventede = true;
+                    render(); visUr();
+                } else if (ventede) {
+                    ventede = false;
+                    tilstand.forslag = { tekst: 'Løseren er blevet fri og regner nu på din plan. Du kan stoppe undervejs og bruge den bedste plan, den har fundet.', ikkePlaceret: [] };
+                    render(); visUr();
+                } else if (s.fase === 'diagnose' && !tilstand.optimerDiagnose) { tilstand.optimerDiagnose = true; render(); visUr(); }
+            };
+            afbryd = new AbortController();
+            tilstand.optimerAfbryd = afbryd;
+            const svar = await optimer(udgangspunkt, { sekunder, hintPlan: graadig.brud.length ? null : graadig.plan, job, vedStatus, signal: afbryd.signal });
             faerdig();
             const lovlig = svar.status === 'OPTIMAL' || svar.status === 'FEASIBLE';
             const aendring = aendretUnderOptimering(udgangspunkt, projekt);
@@ -342,7 +367,9 @@ const planHandlers = {
             }
         } catch (err) {
             faerdig();
-            tilstand.forslag = { tekst: `Løseren kunne ikke nås (${err.message || err}). "Lav forslag" og "Alternativer" virker uden den.`, ikkePlaceret: [] };
+            tilstand.forslag = afbryd?.signal.aborted
+                ? { tekst: 'Du opgav at vente på løseren. Din plan er ikke rørt.', ikkePlaceret: [] }
+                : { tekst: `Løseren gav ingen plan: ${err.message || err}. "Lav forslag" og "Alternativer" virker uden den.`, ikkePlaceret: [] };
             render();
         }
     },
@@ -385,9 +412,8 @@ const planHandlers = {
             if (vis) vis(); else render();
             return;
         }
-        projekt = store.opdaterRaekke(projekt, h.raekke, h.aendring);
         tilstand.forslag = null;
-        saet(projekt);
+        saetOpsaetning(store.opdaterRaekke(projekt, h.raekke, h.aendring));
         planHandlers.optimer({ udenSpoergsmaal: true });
     },
 
@@ -395,7 +421,8 @@ const planHandlers = {
         if (!tilstand.optimerer || !tilstand.optimerJob || tilstand.optimerStopper) return;
         tilstand.optimerStopper = true;
         render();
-        try { await stopLoeser(tilstand.optimerJob); } catch { /* svaret på optimer() afgør resten */ }
+        // Står vi stadig i kø, findes jobbet ikke hos løseren endnu: så er "Stop" at opgive ventetiden
+        try { if (!(await stopLoeser(tilstand.optimerJob))) tilstand.optimerAfbryd?.abort(); } catch { /* svaret på optimer() afgør resten */ }
     },
 
     // Alternative forslag: bladr mellem dem (planen skiftes med det samme, så

@@ -65,7 +65,7 @@ export function formMuligheder(n, { halvBane = false, cupTop = 1, minSwissRunder
             const videre = Math.min(puljer.length * cupTop, n);
             const ck = cupKampe(videre);
             const runder = Math.ceil(Math.log2(videre));
-            ud.push({ form: 'pulje-cup', stoerrelse: s, puljer, cupTop, cupDeltagere: videre, cupRunder: runder, kampe: pk + ck, baneSlots: slots(pk + ck), minKampe: min, maxKampe: Math.max(...puljer) - 1 + runder,
+            ud.push({ form: 'pulje-cup', stoerrelse: s, puljer, cupTop, cupDeltagere: videre, kampe: pk + ck, baneSlots: slots(pk + ck), minKampe: min, maxKampe: Math.max(...puljer) - 1 + runder,
                 tekst: `${puljer.length} puljer (${puljer.join(', ')}) + cup for ${cupTop === 1 ? 'vinderne' : 'de to bedste'} (${videre} deltagere, ${runder} ${runder === 1 ? 'runde' : 'runder'})` });
         }
     }
@@ -109,7 +109,7 @@ export function foreslaaForm(n, kategori, raekke, regler, valg = {}) {
     const andre = valg.andreKampe || new Map(); // spillerId → sikre kampe i andre kategorier
     const deltagere = valg.deltagere || [];       // [{ spillere }]
     const faerrestAndre = deltagere.length ? Math.min(...deltagere.map((t) => Math.min(...t.spillere.map((s) => andre.get(s) || 0)))) : 0;
-    // Tælles kravet samlet (U9), opfylder en form kravet, når egne + andre sikre kampe når op på det
+    // Tælles kravet samlet (rækkens eget tilvalg), opfylder en form kravet, når egne + andre sikre kampe når op på det
     // — i singlerne; double/mix afgøres for sig, så de to ikke skærer ned på hinanden.
     const medregnet = valg.samlet && kategori.type === 'single' ? faerrestAndre : 0;
     const medVedNedskaering = valg.samlet ? faerrestAndre : 0;
@@ -155,7 +155,7 @@ export function foreslaaForm(n, kategori, raekke, regler, valg = {}) {
             if (!passer(valgt)) valgt = { ...valgt, passerIkke: true };
         }
     }
-    return { ...valgt, krav, opfylderKrav: valgt.minKampe >= krav || (valgt.kravInklAndre === true), deltagere: n, ledigeBaneSlots: ledig ?? null };
+    return { ...valgt, krav, opfylderKrav: valgt.minKampe >= krav || (valgt.kravInklAndre === true), deltagere: n };
 }
 
 // ── Bygning af kampe ──────────────────────────────────────────
@@ -331,7 +331,21 @@ export function seedTilmeldinger(tilmeldinger, spillere, kat) {
 /** Formen der faktisk gælder: plannerens egen (formForslag), når kategorien ikke følger TP. */
 export function effektivForm(kategori) {
     const f = (kategori.formValg || 'tp') !== 'tp' ? kategori.formForslag : null;
-    return f ? { form: f.form, runder: f.runder || 0, sikreSwiss: f.minKampe } : { form: kategori.form, runder: kategori.runder || 0, sikreSwiss: kategori.runder || 0 };
+    if (f) return { form: f.form, runder: f.runder || 0, sikreSwiss: f.minKampe, deltagere: f.deltagere || 0 };
+    // TP's egen Swiss Ladder: også her sidder én over pr. runde ved ulige antal, så der er kun sikret én kamp færre
+    const runder = kategori.runder || 0, deltagere = kategori.tilmelde || 0;
+    return { form: kategori.form, runder, sikreSwiss: deltagere % 2 ? Math.max(0, runder - 1) : runder, deltagere };
+}
+
+/**
+ * Ulige Swiss-felter: én deltager sidder over i hver runde, og ingen sidder over to gange. Alle er derfor kun
+ * SIKRET runder − 1 kampe, men det er højst `runder` af deltagerne, der ender dér — resten får alle runder.
+ * Mangler spillerne netop den ene kamp i at nå kravet, er det altså ikke hele feltet, der kommer under minimum.
+ * Returnerer antal deltagere (spillere eller par), der højst rammes — eller 0, når det ikke er et ulige Swiss-felt.
+ */
+export function swissOversiddere(kategori) {
+    const e = effektivForm(kategori);
+    return e.form === 'swiss' && e.deltagere % 2 === 1 ? Math.min(e.runder, e.deltagere) : 0;
 }
 
 /**

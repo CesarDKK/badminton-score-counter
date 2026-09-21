@@ -2,53 +2,18 @@
 // Persistens (localStorage, JSON-fil) ligger i gem/hent-hjælperne nederst og
 // kan bruges fra app.js; alt andet er testbart i Node.
 import { planFraTP, minutter } from './tp-reader.js';
-import { foreslaaForm, byggKampe, seedTilmeldinger, minKampeSamlet, sikreKampe } from './form.js';
-import { slotsForDag, puljeKapacitet } from './kapacitet.js';
+import { foreslaaForm, byggKampe, seedTilmeldinger, minKampeSamlet, sikreKampe, formTekst } from './form.js';
+import { pladsPaaDag, fordelRaekkerPaaDage, FYLDNINGSGRAD } from './kapacitet.js';
+import { lavRegelmodel } from './regelmodel.js';
 import { VAEGT_SKABELONER } from './kriterier.js';
+import { STANDARD_PAUSE, TIDSVINDUE, STANDARD_REGLER, reglerFor } from './regler.js';
 
-export const PROJEKT_VERSION = 1;
+export { STANDARD_PAUSE, TIDSVINDUE, STANDARD_REGLER, reglerFor };
+
+export const PROJEKT_VERSION = 2; // hæves, når et gemt projekt skal opgraderes — se OPGRADERINGER
 export const GEM_NOEGLE = 'planner.projekt.v1';
 
-/** Reglementets standardpauser (§ 4 stk. 5). "faelles" bruges når M og ABCD spiller i samme turnering. */
-export const STANDARD_PAUSE = { ABCD: 10, M: 15, E: 20, faelles: 12 };
-
-/** Tidsvinduer i programmet pr. årgang (§ 4 stk. 5.1): start–slut. */
-export const TIDSVINDUE = {
-    U09: ['09:00', '19:00'], U11: ['09:00', '19:00'],
-    U13: ['09:00', '20:00'], U15: ['09:00', '20:00'],
-    U17: ['09:00', '21:00'], U19: ['09:00', '21:00'], SEN: ['09:00', '21:00'],
-};
-
-/**
- * Reglementets grænser som parametre (design § 5: "alle grænser er parametre med
- * reglementets værdi som standard"). Ligger i projekt.opsaetning.regler og kan
- * ændres i fane 1; manglende felter i ældre projekter falder tilbage på disse.
- */
-export const STANDARD_REGLER = {
-    tidsvindue: TIDSVINDUE,          // pr. årgang: [start, slut]
-    foerSkoledagTimer: 2,            // så mange timer tidligere slutter vinduet dagen før en skoledag
-    maxKampePrDag: 10,               // ved flere dage
-    maxKampePrDagEnDag: 12,          // ungdom, når hele turneringen afvikles på én dag (§ 4 stk. 5.1); senior: 10 (stk. 5.2)
-    minKampMin: { ungdomABCD: 20, ungdomEM: 25, seniorABCD: 25, seniorEM: 30 },
-    eTidligst: '10:00',              // E-rækker: ingen kampe (indledende, kvart-, semifinaler, finaler) før dette tidspunkt (§ 4 stk. 5.1)
-    eFinale: ['10:00', '13:00'],       // E-finaler skal ligge i dette vindue
-    seniorMaxPrKategori: 3,          // senior E/M: max kampe pr. kategori pr. dag
-    minKampe: { MA: 2, BCDSingle: 3, BCDDouble: 2, U9U11Single: 4, swissRunder: 4 },
-};
-
 const klon = (x) => JSON.parse(JSON.stringify(x));
-
-/** Reglerne for et projekt: standard med projektets ændringer lagt ovenpå. */
-export function reglerFor(projekt) {
-    const egne = projekt?.opsaetning?.regler || {};
-    return {
-        ...STANDARD_REGLER,
-        ...egne,
-        tidsvindue: { ...STANDARD_REGLER.tidsvindue, ...(egne.tidsvindue || {}) },
-        minKampMin: { ...STANDARD_REGLER.minKampMin, ...(egne.minKampMin || {}) },
-        minKampe: { ...STANDARD_REGLER.minKampe, ...(egne.minKampe || {}) },
-    };
-}
 
 /** Ændrer én grænse: sti som "maxKampePrDag", "minKampMin.ungdomABCD" eller "tidsvindue.U11.1". */
 export function opdaterRegler(projekt, sti, vaerdi) {
@@ -147,7 +112,7 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
     });
     const kategorier = model.kategorier.map((k) => ({
         id: k.id, raekke: k.raekke, aargang: k.aargang, kat: k.kat, type: k.type, mix: k.mix,
-        form: k.form, halvBane: k.halvBane, tilmelde: k.tilmeldte, antalKampe: k.kampe, runder: k.runder,
+        form: k.form, halvBane: k.halvBane, tilmelde: k.tilmeldte, runder: k.runder,
         prioritet: 0, // forrang i forslaget: 1 = høj, 0 = normal, -1 = lav
         swissUdenPause: false, // Swiss Ladder: runder lige efter hinanden uden pause imellem
         formValg: 'tp',        // 'tp' = TP's lodtrækning; ellers bygger planneren selv kampene (form.js)
@@ -171,9 +136,6 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
             formKriterie: 'faerrest', // 'faerrest' bane-slots eller 'flest' kampe pr. spiller (form.js)
             vaegte: { ...VAEGT_SKABELONER.standard.vaegte }, // bløde kriterier (kriterier.js) — tunes i fane 1
             vaegtSkabelon: 'standard',
-            minKampeSamletV3: true,
-            raekkefoelgeV2: true,
-            singleVarighedV1: true,
             regler: klon(STANDARD_REGLER),
             pauseMin: { ...STANDARD_PAUSE, faelles: harM && harABCD ? STANDARD_PAUSE.faelles : null },
             dage,
@@ -197,17 +159,48 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
  * Genindlæser en (nyere) TP-fil i et eksisterende projekt: opsætning og
  * rækker bevares, kampe udskiftes, og planen beholdes for de kampe der stadig
  * findes — eller ryddes, hvis valg.behold er false. Det gælder både TP's kampe og dem,
- * planneren selv har bygget. En tid eller lås følger kun med, når kampen stadig er DEN SAMME
- * (samme kategori, fase, runde og spillere): id'erne følger positionen i lodtrækningen, så efter
- * en ny lodtrækning kan samme id dække en helt anden kamp.
+ * planneren selv har bygget. En tid eller lås følger kun med, når kampen stadig er DEN SAMME (overfoerPlan).
  */
-const kampSignatur = (k) => [k.kategori, k.fase, k.runde, k.gruppe || '', [...k.spillere].sort().join(',')].join('|');
+
+/**
+ * Hvad der gør en kamp til "den samme": kategori, fase, runde, gruppe og spillere. Kampe uden kendte spillere
+ * (Swiss runde 2+, cupkampe) kendes på deres plads i forløbet: plannerens egne på navnet ("Semifinale: Pulje 1 #1 –
+ * Pulje 2 #1", "runde 2, kamp 3"), TP's på id'et.
+ */
+export const kampSignatur = (k) => [k.kategori, k.fase, k.runde, k.gruppe || '', [...k.spillere].sort().join(','), k.spillere.length ? '' : (k.genereret ? k.navn : k.id)].join('|');
+
+/**
+ * Fører tider og låse over fra et sæt kampe til et nyt. Kamp-id'erne følger positionen i lodtrækningen, så efter
+ * en ny puljeinddeling, et ændret cupTop eller en ny lodtrækning kan samme id dække en helt anden kamp. Derfor
+ * følger tiden KAMPEN (signaturen), ikke id'et: samme kamp under nyt id beholder sin tid, og et gammelt id, der
+ * nu dækker en anden kamp, mister den.
+ * Returnerer { plan, laast, mistet } — mistet = antal tider, der ikke kunne føres over.
+ */
+export function overfoerPlan(gamleKampe, nyeKampe, plan = {}, laast = []) {
+    const gamle = new Map(); // signatur → gamle id'er med tid (flere, hvis to kampe ikke kan skelnes)
+    for (const k of gamleKampe) {
+        if (!plan[k.id]) continue;
+        const sig = kampSignatur(k);
+        if (!gamle.has(sig)) gamle.set(sig, []);
+        gamle.get(sig).push(k.id);
+    }
+    const laastSet = new Set(laast);
+    const nyPlan = {}, nyLaast = [];
+    // Først kampe, der har beholdt deres id, så resten — så to ens kampe ikke bytter tid uden grund
+    for (const k of [...nyeKampe.filter((x) => plan[x.id]), ...nyeKampe.filter((x) => !plan[x.id])]) {
+        const ids = gamle.get(kampSignatur(k));
+        if (!ids?.length) continue;
+        const fra = ids.includes(k.id) ? k.id : ids[0];
+        ids.splice(ids.indexOf(fra), 1);
+        nyPlan[k.id] = plan[fra];
+        if (laastSet.has(fra)) nyLaast.push(k.id);
+    }
+    return { plan: nyPlan, laast: nyLaast, mistet: Object.keys(plan).length - Object.keys(nyPlan).length };
+}
 
 export function genindlaes(projekt, model, valg = { behold: true }) {
     const nyt = nytProjekt(model, { tagTiderMed: false });
-    const gamleIds = new Set(projekt.kampe.map((k) => k.id));
-    const plan = {};
-    if (valg.behold) for (const [id, p] of Object.entries(projekt.plan || {})) if (gamleIds.has(id)) plan[id] = { ...p };
+    const plan = valg.behold ? { ...(projekt.plan || {}) } : {};
     const raekker = nyt.raekker.map((r) => projekt.raekker.find((x) => x.id === r.id) || r);
     const kategorier = nyt.kategorier.map((k) => {
         const gammel = projekt.kategorier.find((x) => x.id === k.id);
@@ -217,7 +210,8 @@ export function genindlaes(projekt, model, valg = { behold: true }) {
         return { ...k, halvBane: gammel.halvBane, prioritet: gammel.prioritet || 0, swissUdenPause: !!gammel.swissUdenPause, formValg: harTpKampe ? 'tp' : (gammel.formValg || 'tp'), cupTop: gammel.cupTop || 1, swissRunder: gammel.swissRunder || 0 };
     });
     const dage = nyt.opsaetning.dage.map((d) => projekt.opsaetning.dage.find((x) => x.dato === d.dato) || d);
-    const resultat = genberegnKampe({
+    // Kun kampe, der stadig er de samme, beholder tid og lås (genberegnKampe fører dem over fra de gamle kampe)
+    return genberegnKampe({
         ...nyt,
         opsaetning: { ...projekt.opsaetning, dage },
         raekker,
@@ -225,13 +219,8 @@ export function genindlaes(projekt, model, valg = { behold: true }) {
         plan,
         vinduer: projekt.vinduer || [],
         kvitteret: projekt.kvitteret || [],
-        laast: (projekt.laast || []).filter((id) => plan[id]),
-    });
-    // Kun kampe, der stadig er de samme, beholder tid og lås
-    const foer = new Map(projekt.kampe.map((k) => [k.id, kampSignatur(k)]));
-    const beholdt = {};
-    for (const k of resultat.kampe) if (resultat.plan[k.id] && foer.get(k.id) === kampSignatur(k)) beholdt[k.id] = resultat.plan[k.id];
-    return { ...resultat, plan: beholdt, laast: (resultat.laast || []).filter((id) => beholdt[id]) };
+        laast: projekt.laast || [],
+    }, { gamleKampe: projekt.kampe });
 }
 
 /** Sætter slotlængden (5-min trin, mindst 5). */
@@ -261,22 +250,38 @@ export function opdaterKategori(projekt, kategoriId, aendringer) {
     return { ...projekt, kategorier };
 }
 
-/** Sikrer at kun U9-kategorier har halv bane — bruges ved indlæsning af ældre projekter. */
+/**
+ * Opgradering af gemte projekter, ét nummereret trin ad gangen: trin N bringer et projekt fra version N til N + 1.
+ * Et nyt trin = et nyt element her + PROJEKT_VERSION hævet med én. Trinene må aldrig ændres, når de først er ude:
+ * brugernes gemte projekter er på den version, trinnet efterlod dem i.
+ */
+const OPGRADERINGER = {
+    // Version 1 → 2: tre rettelser, der i version 1 blev styret af løse flag i opsætningen (et projekt kan have fået
+    // nogle af dem allerede). Flagene fjernes — fra version 2 er det versionsnummeret, der fortæller, hvad der er gjort.
+    1: (p) => {
+        const o = p.opsaetning;
+        let raekker = p.raekker;
+        // Reglementet stiller minimumskravet pr. kategori; "tælles samlet" var slået til i ældre projekter
+        if (!o.minKampeSamletV3) raekker = raekker.map((r) => ({ ...r, minKampeSamlet: false }));
+        // U9/U11-vejledningen: max 6 timer for U11's singler — sættes, hvor feltet er tomt
+        if (!o.singleVarighedV1) raekker = raekker.map((r) => (r.aargang === 'U11' && r.maxHaltidMin == null ? { ...r, maxHaltidMin: 360 } : r));
+        // Rækkefølgen kunne ikke rettes i brugerfladen, så en gemt værdi er den gamle standard: erstattes af vejledningens
+        if (!o.raekkefoelgeV2) raekker = raekker.map((r) => ({ ...r, raekkefoelge: standardRaekkefoelge(r.aargang) }));
+        const { minKampeSamletV2, minKampeSamletV3, singleVarighedV1, raekkefoelgeV2, ...opsaetning } = o;
+        return { ...p, opsaetning, raekker };
+    },
+};
+
+/** Bringer et gemt projekt (allerede godkendt af validerProjekt) op på den aktuelle version. */
+export function opgraderProjekt(projekt) {
+    let p = projekt;
+    while (p?.opsaetning && p.raekker && p.version < PROJEKT_VERSION && OPGRADERINGER[p.version]) p = { ...OPGRADERINGER[p.version](p), version: p.version + 1 };
+    return p;
+}
+
+/** Bruges, hver gang et gemt projekt åbnes: opgraderer det og sikrer, at kun U9-kategorier har halv bane. */
 export function normaliserHalvBane(projekt) {
-    // Ældre projekter havde "min. kampe tælles samlet" slået til (først for U9, siden for alle rækker). Reglementet
-    // stiller kravet pr. kategori, så rækkerne sættes én gang tilbage til det (derefter er det brugerens eget valg).
-    if (projekt?.opsaetning && projekt.raekker && !projekt.opsaetning.minKampeSamletV3) {
-        projekt = { ...projekt, opsaetning: { ...projekt.opsaetning, minKampeSamletV3: true }, raekker: projekt.raekker.map((r) => ({ ...r, minKampeSamlet: false })) };
-    }
-    // U11 havde tidligere ingen grænse for singlernes varighed; vejledningen siger 6 timer. Sættes én gang, hvor feltet er tomt.
-    if (projekt?.opsaetning && projekt.raekker && !projekt.opsaetning.singleVarighedV1) {
-        projekt = { ...projekt, opsaetning: { ...projekt.opsaetning, singleVarighedV1: true }, raekker: projekt.raekker.map((r) => (r.aargang === 'U11' && r.maxHaltidMin == null ? { ...r, maxHaltidMin: 360 } : r)) };
-    }
-    // Rækkefølgen kan ikke rettes i brugerfladen, så en gemt værdi er altid den gamle standard (mix, single, double):
-    // den erstattes én gang af vejledningens rækkefølge for årgangen.
-    if (projekt?.opsaetning && projekt.raekker && !projekt.opsaetning.raekkefoelgeV2) {
-        projekt = { ...projekt, opsaetning: { ...projekt.opsaetning, raekkefoelgeV2: true }, raekker: projekt.raekker.map((r) => ({ ...r, raekkefoelge: standardRaekkefoelge(r.aargang) })) };
-    }
+    projekt = opgraderProjekt(projekt);
     if (!projekt?.kategorier?.some((k) => k.halvBane && k.aargang !== 'U09')) return projekt;
     return { ...projekt, kategorier: projekt.kategorier.map((k) => (k.aargang !== 'U09' && k.halvBane ? { ...k, halvBane: false } : k)) };
 }
@@ -294,7 +299,8 @@ export function opdaterPause(projekt, klasse, min) {
 /** Kontrollerer at et JSON-objekt ligner en projektfil. Returnerer fejlbesked eller null. */
 export function validerProjekt(obj) {
     if (!obj || typeof obj !== 'object') return 'Filen er ikke et planner-projekt.';
-    if (obj.version !== PROJEKT_VERSION) return `Projektfilen har version ${obj.version}; denne udgave forstår version ${PROJEKT_VERSION}.`;
+    if (!Number.isInteger(obj.version) || obj.version < 1) return 'Filen er ikke et planner-projekt.';
+    if (obj.version > PROJEKT_VERSION) return `Projektet er lavet med en nyere udgave af planneren (version ${obj.version}; denne side forstår til og med ${PROJEKT_VERSION}). Genindlæs siden (Ctrl+F5), og prøv igen.`;
     for (const felt of ['turnering', 'opsaetning', 'raekker', 'kategorier', 'spillere', 'kampe', 'plan']) {
         if (!(felt in obj)) return `Projektfilen mangler "${felt}".`;
     }
@@ -424,9 +430,11 @@ export function anvendForslag(projekt, forslag) {
 /**
  * Genberegner projektets kampe: kategorier med formValg 'tp' bruger TP's
  * kampe (tpKampe); de øvrige får kampe bygget af form.js ud fra
- * tilmeldingerne. Plan, lås og sidste forslag renses for kampe, der forsvinder.
+ * tilmeldingerne. Tider og låse følger KAMPEN, ikke id'et (overfoerPlan): bygges kampene om — ny
+ * puljeinddeling, ændret cupTop, færre runder — beholder de kampe, der stadig er de samme, deres tid, og
+ * resten mister den. valg.gamleKampe: de kampe, planen hører til (standard: projektets nuværende).
  */
-export function genberegnKampe(projekt) {
+export function genberegnKampe(projekt, valg = {}) {
     const tp = projekt.tpKampe || projekt.kampe;
     const regler = reglerFor(projekt);
     const raekkeMap = new Map(projekt.raekker.map((r) => [r.id, r]));
@@ -441,29 +449,78 @@ export function genberegnKampe(projekt) {
     };
     // Første pas: alle kategorier uden hensyn til kapacitet
     const foerste = new Map(projekt.kategorier.map((k) => [k.id, byg(k)]));
-    // Andet pas: automatiske Swiss-kandidater (formValg auto/swiss uden valgt antal runder)
-    // får kapaciteten, der er tilbage, når alle andre kategorier har fyldt, samt
-    // spillernes kampe i andre kategorier (double, mix), så runder kan skæres ned
-    // uden at spillerne kommer under kravet.
+    // Andet pas: automatiske Swiss-kandidater (formValg auto/swiss uden valgt antal runder) får den
+    // kapacitet, der er tilbage, når de øvrige kategorier har fyldt. I rækker, hvor minimumskravet tælles
+    // samlet (brugerens valg), får singlerne også spillernes sikre kampe i double/mix med.
     //
-    // Rækker hvor kravet tælles samlet (U9): singlerne får også spillernes sikre kampe i
-    // double/mix med, så formen kan vælges mindre. Double/mix afgøres først og for sig,
-    // og singlerne bagefter ud fra de endelige doubler — så de to ikke skærer ned på hinanden.
+    // Resultatet må ikke afhænge af, hvilken rækkefølge kategorierne står i: double/mix afgøres først
+    // (singlerne bygger på de endelige doubler), og inden for hver gruppe får kandidaterne FØRST hver sin
+    // forholdsmæssige andel af pladsen (alle regnet fra samme udgangspunkt), og DEREFTER — i fast orden,
+    // størst først — det, de andre ikke brugte.
+    //
+    // Pladsen afhænger af, hvilke DAGE rækkerne ender på. Dagene fordeles efter det, rækkerne MINDST skal have
+    // (den mindste form, der opfylder kravet): det er den del, der skal være plads til. Kriteriet "flest kampe"
+    // lader derefter kategorierne vokse inden for deres dag — uden at en stor række kan klemme en lille ud.
     const aktuel = new Map(foerste);
     const autoSwiss = (k) => ['auto', 'swiss'].includes(k.formValg || 'tp') && !(k.swissRunder > 0);
     const samletSingle = (k) => (k.formValg || 'tp') !== 'tp' && k.type === 'single' && minKampeSamlet(raekkeMap.get(k.raekke));
-    const andetPas = projekt.kategorier.filter((k) => autoSwiss(k) || samletSingle(k)).sort((a, b) => (a.type === 'single') - (b.type === 'single'));
-    for (const k of andetPas) {
-        const andreKampe = new Map();
-        let andresBaneSlots = 0;
-        for (const [id, r2] of aktuel) {
-            if (id === k.id) continue;
-            const k2 = projekt.kategorier.find((x) => x.id === id);
-            for (const [s, n] of sikreKampe({ ...k2, formForslag: r2.form }, r2.kampe)) andreKampe.set(s, (andreKampe.get(s) || 0) + n);
-            if (delerKapacitet(projekt, k, k2)) andresBaneSlots += r2.kampe.reduce((sum) => sum + (k2.halvBane ? 0.5 : 1), 0);
+    const kandidater = projekt.kategorier.filter((k) => autoSwiss(k) || samletSingle(k));
+    const vaegt = (k) => (k.halvBane ? 0.5 : 1);
+    const lastI = (tilstand, k) => tilstand.get(k.id).kampe.length * vaegt(k);
+    const raekkeLastI = (tilstand) => {
+        const ud = new Map();
+        for (const k of projekt.kategorier) ud.set(k.raekke, (ud.get(k.raekke) || 0) + lastI(tilstand, k));
+        return ud;
+    };
+    if (kandidater.length) {
+        const mindst = kriterie === 'faerrest' ? foerste : new Map(projekt.kategorier.map((k) => [k.id, byg(k, { kriterie: 'faerrest' })]));
+        const kap = lavKapacitetsmodel(projekt, { raekkeLast: raekkeLastI(mindst) });
+        const lastUden = (udeladt) => new Map(projekt.kategorier.filter((k) => !udeladt.has(k.id)).map((k) => [k.id, lastI(aktuel, k)]));
+        const andreKampeFor = (k) => {
+            const ud = new Map();
+            for (const k2 of projekt.kategorier) {
+                if (k2.id === k.id) continue;
+                const r2 = aktuel.get(k2.id);
+                for (const [sp, n] of sikreKampe({ ...k2, formForslag: r2.form }, r2.kampe)) ud.set(sp, (ud.get(sp) || 0) + n);
+            }
+            return ud;
+        };
+        const bygMed = (k, ledig) => byg(k, { ...(autoSwiss(k) ? { ledigeBaneSlots: ledig } : {}), andreKampe: andreKampeFor(k), samlet: minKampeSamlet(raekkeMap.get(k.raekke)) });
+        const fastOrden = (a, b) => lastI(foerste, b) - lastI(foerste, a) || a.id.localeCompare(b.id);
+        const resten = (k) => aktuel.set(k.id, bygMed(k, kap.ledig(k, lastUden(new Set([k.id])))));
+        const grupper = [kandidater.filter((k) => k.type !== 'single').sort(fastOrden), kandidater.filter((k) => k.type === 'single').sort(fastOrden)];
+        for (const gruppe of grupper) {
+            // 1) Forholdsmæssig andel: pladsen efter alle ikke-kandidater deles efter behov
+            const auto = gruppe.filter(autoSwiss);
+            const autoIds = new Set(auto.map((k) => k.id));
+            const andel = new Map();
+            for (const k of auto) {
+                const ialt = kap.ledig(k, lastUden(autoIds));
+                const delere = auto.filter((j) => j.id === k.id || (delerKapacitet(projekt, k, j) && kap.sammeDage(k, j)));
+                const behov = delere.reduce((sum, j) => sum + lastI(foerste, j), 0);
+                andel.set(k.id, behov ? (ialt * lastI(foerste, k)) / behov : ialt);
+            }
+            const delt = new Map(auto.map((k) => [k.id, bygMed(k, andel.get(k.id))]));
+            for (const [id, res] of delt) aktuel.set(id, res);
+            // 2) Det, de andre ikke brugte: først i lige store bidder (så den største ikke tager det hele),
+            //    til sidst resten — i fast orden
+            for (let omgang = 0; omgang < 4; omgang += 1) {
+                let aendret = false;
+                for (const k of auto) {
+                    const nu = lastI(aktuel, k);
+                    const tilOvers = kap.ledig(k, lastUden(new Set([k.id]))) - nu;
+                    if (tilOvers <= 0) continue;
+                    const delere = auto.filter((j) => j.id === k.id || (delerKapacitet(projekt, k, j) && kap.sammeDage(k, j))).length;
+                    const ny = bygMed(k, nu + tilOvers / delere);
+                    if (ny.kampe.length * vaegt(k) > nu) { aktuel.set(k.id, ny); aendret = true; }
+                }
+                if (!aendret) break;
+            }
+            gruppe.forEach(resten);
         }
-        const ledig = Math.max(0, kapacitetTilKategori(projekt, k) - andresBaneSlots);
-        aktuel.set(k.id, byg(k, { ...(autoSwiss(k) ? { ledigeBaneSlots: ledig } : {}), andreKampe, samlet: minKampeSamlet(raekkeMap.get(k.raekke)) }));
+        // 3) Til sidst én gang til for alle: double/mix blev vurderet, før singlerne var skåret til, så deres
+        //    "der er ikke plads" kan være forældet — og der kan være plads til overs.
+        grupper.flat().forEach(resten);
     }
     const kampe = [];
     const kategorier = projekt.kategorier.map((k) => {
@@ -472,16 +529,32 @@ export function genberegnKampe(projekt) {
         return { ...k, formForslag: res.form };
     });
     const ids = new Set(kampe.map((k) => k.id));
-    const plan = {};
-    for (const [id, p] of Object.entries(projekt.plan || {})) if (ids.has(id)) plan[id] = p;
+    const { plan, laast } = overfoerPlan(valg.gamleKampe || projekt.kampe, kampe, projekt.plan || {}, projekt.laast || []);
     return {
         ...projekt,
         kategorier,
         kampe,
         plan,
-        laast: (projekt.laast || []).filter((id) => ids.has(id)),
+        laast,
         sidsteForslag: projekt.sidsteForslag ? { ikkePlaceret: (projekt.sidsteForslag.ikkePlaceret || []).filter((x) => ids.has(x.id)) } : projekt.sidsteForslag,
     };
+}
+
+/**
+ * Efter en ændring af opsætningen (dage, baner, tidsrum, rækkens dage, regler, slotlængde, halv bane): det
+ * automatiske formvalg afhænger af pladsen og af reglerne, så kampene bygges på ny — ellers viser fane 1 en
+ * form, der er valgt til en hal, der ikke længere findes. Tiderne følger kampene (overfoerPlan).
+ * Returnerer { projekt, aendringer: [{ kategori, fra, til }], mistedeTider } så brugeren kan få at vide, hvad der skete.
+ */
+export function genberegnEfterOpsaetning(foer, nyt) {
+    const projekt = genberegnKampe(nyt);
+    const gammel = new Map((foer?.kategorier || []).map((k) => [k.id, k.formForslag]));
+    const noegle = (f) => (f ? [f.form, f.runder || 0, (f.puljer || []).join(','), f.kampe].join('|') : '');
+    const aendringer = projekt.kategorier
+        .filter((k) => (k.formValg || 'tp') !== 'tp' && gammel.has(k.id) && noegle(gammel.get(k.id)) !== noegle(k.formForslag))
+        .map((k) => ({ kategori: k.id, fra: formTekst(gammel.get(k.id)), til: formTekst(k.formForslag) }));
+    const medTid = (p) => Object.keys(p?.plan || {}).length;
+    return { projekt, aendringer, mistedeTider: Math.max(0, medTid(nyt) - medTid(projekt)) };
 }
 
 /** Sætter turneringsform (og evt. cupTop) for en kategori og genberegner kampene. */
@@ -496,31 +569,63 @@ export function opdaterFormKriterie(projekt, kriterie) {
 
 // ── Kapacitet til automatisk turneringsform ───────────────────
 
-const FYLDNINGSGRAD = 0.85; // pauser og rækkefølge gør, at banerne sjældent kan fyldes helt
-
 /**
- * Bane-slots, der er til rådighed for en kategori: rækkens reserverede baner i
- * dens tidsrum på dens dage — eller, uden reservation, de fælles baner på rækkens
- * dage. Ganget med en realistisk fyldningsgrad.
+ * Kapacitet til det automatiske formvalg — bygget på den fælles pladsberegning (kapacitet.js: pladsPaaDag),
+ * så formvalget ser samme hal som planlæggeren: kun de slots, hvor rækken må spille (årgangens tidsvindue
+ * og rækkens eget tidsrum), rækkens egne baner, hvis den har reserverede, og kun de DAGE, rækken ender på:
+ * rækker med max dage fordeles med planlæggerens egen dagfordeling (fordelRaekkerPaaDage), så en række med
+ * max 1 dag og to mulige dage får én dags plads — ikke begge lagt sammen.
+ *
+ * raekkeLast: Map(raekkeId → bane-slots) til dagfordelingen (standard: projektets nuværende kampe).
+ * ledig(kategori, andreLast): bane-slots til kategorien, når de andre kategoriers last (Map katId → bane-slots)
+ * er trukket fra DAG FOR DAG: en anden række belaster kun de dage, den selv spiller (ligeligt fordelt), og kun
+ * med den del af sin plads, der overlapper denne rækkes vindue.
  */
-export function kapacitetTilKategori(projekt, kategori) {
-    const r = projekt.raekker.find((x) => x.id === kategori.raekke);
-    if (!r) return 0;
-    const { slotMin } = projekt.opsaetning;
-    let sum = 0;
-    for (const dato of r.dage || []) {
-        const dag = projekt.opsaetning.dage.find((d) => d.dato === dato);
-        if (!dag) continue;
-        const fra = minutter(r.tidligst || dag.start), til = minutter(r.senest || dag.slut);
-        for (const slot of slotsForDag(dag, slotMin)) {
-            const m = minutter(slot);
-            if (m < fra || m >= til) continue; // uden for rækkens eget tidsrum
-            const kap = puljeKapacitet(dag, slot, projekt.raekker);
-            if (r.reserveredeBaner > 0) sum += kap.reserveret.get(r.id) || 0;
-            else sum += kap.faelles;
-        }
+export function lavKapacitetsmodel(projekt, { raekkeLast = null, M = lavRegelmodel(projekt) } = {}) {
+    const katMap = new Map(projekt.kategorier.map((k) => [k.id, k]));
+    const raekkeMap = new Map(projekt.raekker.map((r) => [r.id, r]));
+    let last = raekkeLast;
+    if (!last) {
+        last = new Map();
+        for (const k of projekt.kampe) { const kt = katMap.get(k.kategori); if (kt) last.set(kt.raekke, (last.get(kt.raekke) || 0) + (kt.halvBane ? 0.5 : 1)); }
     }
-    return sum * FYLDNINGSGRAD;
+    const dagValg = fordelRaekkerPaaDage(M, projekt, { last });
+    const dageFor = (r) => (r.dage || []).filter((d) => !dagValg.has(r.id) || dagValg.get(r.id).has(d)).map((d) => M.dagMap.get(d)).filter(Boolean);
+    const husk = new Map();
+    const plads = (r, dag, vindueRaekke = null) => {
+        const n = `${r.id}|${dag.dato}|${vindueRaekke?.id || ''}`;
+        if (!husk.has(n)) husk.set(n, pladsPaaDag(M, r, dag, projekt.raekker, vindueRaekke ? { vindue: M.raekkeVindue(vindueRaekke, dag) } : {}));
+        return husk.get(n);
+    };
+    const ledig = (kategori, andreLast = new Map()) => {
+        const r = raekkeMap.get(kategori.raekke);
+        if (!r) return 0;
+        const rDage = dageFor(r);
+        const egne = r.reserveredeBaner > 0;
+        const prDag = rDage.map((dag) => {
+            let andre = 0;
+            for (const [id, l2] of andreLast) {
+                const k2 = katMap.get(id);
+                if (!l2 || !k2 || id === kategori.id || !delerKapacitet(projekt, kategori, k2)) continue;
+                if (k2.raekke === r.id) { andre += l2 / rDage.length; continue; }
+                const r2 = raekkeMap.get(k2.raekke), d2 = dageFor(r2);
+                if (!d2.includes(dag)) continue;
+                const hele = plads(r2, dag).faelles;
+                if (hele) andre += (l2 / d2.length) * (plads(r2, dag, r).faelles / hele);
+            }
+            const p = plads(r, dag);
+            return Math.max(0, FYLDNINGSGRAD * (egne ? p.egne : p.faelles) - andre);
+        });
+        return prDag.reduce((sum, x) => sum + x, 0);
+    };
+    /** Ender de to kategoriers rækker på mindst én fælles dag? */
+    const sammeDage = (a, b) => { const ra = raekkeMap.get(a.raekke), rb = raekkeMap.get(b.raekke); return !!ra && !!rb && dageFor(ra).some((d) => dageFor(rb).includes(d)); };
+    return { ledig, sammeDage, dagValg };
+}
+
+/** Bane-slots til rådighed for en kategori, før andre kategorier er trukket fra (se lavKapacitetsmodel). */
+export function kapacitetTilKategori(projekt, kategori) {
+    return lavKapacitetsmodel(projekt).ledig(kategori);
 }
 
 /** Deler to kategorier baner? Samme række: ja. Ellers kun hvis ingen af rækkerne har reservation, og de har fælles dage. */

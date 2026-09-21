@@ -7,7 +7,7 @@
 // max kampe pr. dag og rækkens dage. Låste kampe (projekt.laast) beholder
 // deres tid; alt andet placeres forfra.
 import { minutter } from './tp-reader.js';
-import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt, baneSlots } from './kapacitet.js';
+import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt, baneSlots, fordelRaekkerPaaDage } from './kapacitet.js';
 import { lavRegelmodel, banerBrugt, pauseForRaekke } from './regelmodel.js';
 import { standardRaekkefoelge } from './store.js';
 import { scorePlan } from './kriterier.js';
@@ -166,52 +166,15 @@ function lavForslagEnGang(projekt, valg = {}) {
     // først: til den første dag, hvor rækken kan være uden at dagen fyldes over 85 %, ellers til
     // den dag, der har mest plads tilbage. Dage, rækken allerede har faste kampe på, tæller med.
     // Rækker med reserverede baner vurderes mod deres EGNE baner. valg.dagTvang fastlægger dagene.
-    const raekkeDagValg = new Map(); // raekkeId → Set(dato)
-    {
-        const muligeDage = (r) => dage.filter((d) => r.dage.includes(d.dato) && (!kunDage || kunDage.has(d.dato)));
-        const FYLD = 0.85; // samme pakkefaktor som kapacitetTilKategori i store.js
-        // Plads til rækken på en dag: fælles bane-slots inden for årgangens tidsvindue og rækkens eget tidsrum
-        const pladsFor = (r, d) => {
-            const v = M.raekkeVindue(r, d);
-            return FYLD * slotsForDag(d, slotMin).reduce((sum, slot) => (M.iVindue(v, minutter(slot)) ? sum + kapFor(d.dato, slot).faelles : sum), 0);
-        };
-        const brugt = new Map(dage.map((d) => [d.dato, 0]));
-        const egenPladsFor = (r, d) => {
-            const v = M.raekkeVindue(r, d);
-            return FYLD * slotsForDag(d, slotMin).reduce((sum, slot) => (M.iVindue(v, minutter(slot)) ? sum + (kapFor(d.dato, slot).reserveret.get(r.id) || 0) : sum), 0);
-        };
-        const harEgne = (r) => r.reserveredeBaner > 0;
-        const rest = { get: (dato, r) => (harEgne(r) ? egenPladsFor(r, dagMap.get(dato)) : pladsFor(r, dagMap.get(dato)) - brugt.get(dato)) };
-        const last = new Map(); // raekkeId → bane-slots (på de fælles baner, eller på rækkens egne)
-        for (const k of projekt.kampe) {
-            const r = raekke(k);
-            if (!r) continue;
-            last.set(r.id, (last.get(r.id) || 0) + (kat(k)?.halvBane ? 0.5 : 1));
-        }
-        const bundne = projekt.raekker.filter((r) => M.maxDageFor(r) && muligeDage(r).length > M.maxDageFor(r));
-        // Rækker uden grænse breder sig over deres dage
-        for (const r of projekt.raekker) {
-            if (bundne.includes(r) || !last.has(r.id) || harEgne(r)) continue; // rækker med egne baner belaster ikke de fælles
-            const md = muligeDage(r);
-            for (const d of md) brugt.set(d.dato, brugt.get(d.dato) + last.get(r.id) / md.length);
-        }
-        const foretruk = (a, b) => a.dato.localeCompare(b.dato);
-        for (const r of [...bundne].sort((a, b) => (last.get(b.id) || 0) - (last.get(a.id) || 0) || a.id.localeCompare(b.id))) {
-            const maxDage = M.maxDageFor(r);
-            const tvang = (valg.dagTvang?.[r.id] || []).filter((d) => muligeDage(r).some((x) => x.dato === d));
-            const valgte = new Set([...(raekkeDage.get(r.id) || []), ...tvang].slice(0, maxDage));
-            const behov = (last.get(r.id) || 0) / maxDage;
-            const kandidater = muligeDage(r).filter((d) => !valgte.has(d.dato)).sort(foretruk);
-            while (valgte.size < maxDage && kandidater.length) {
-                const passer = kandidater.find((d) => rest.get(d.dato, r) >= behov);
-                const dag = passer || [...kandidater].sort((a, b) => rest.get(b.dato, r) - rest.get(a.dato, r) || foretruk(a, b))[0];
-                kandidater.splice(kandidater.indexOf(dag), 1);
-                valgte.add(dag.dato);
-            }
-            if (!harEgne(r)) for (const d of valgte) brugt.set(d, brugt.get(d) + (last.get(r.id) || 0) / valgte.size);
-            raekkeDagValg.set(r.id, valgte);
-        }
+    const last = new Map(); // raekkeId → bane-slots
+    for (const k of projekt.kampe) {
+        const r = raekke(k);
+        if (r) last.set(r.id, (last.get(r.id) || 0) + (kat(k)?.halvBane ? 0.5 : 1));
     }
+    const raekkeDagValg = fordelRaekkerPaaDage(M, projekt, {
+        last, kapFor, fasteDage: raekkeDage, dagTvang: valg.dagTvang,
+        muligeDage: (r) => dage.filter((d) => r.dage.includes(d.dato) && (!kunDage || kunDage.has(d.dato))),
+    }); // raekkeId → Set(dato)
 
     // ── Kan kampen ligge i dette slot? Returnerer null eller årsag ──
     // lemp = lempelser i fase 2 (se nedenfor): hvilke regler der må brydes for

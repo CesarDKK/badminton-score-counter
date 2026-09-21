@@ -7,7 +7,7 @@
 import { minutter } from './tp-reader.js';
 import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt, banebrugISlot, banerISlot } from './kapacitet.js';
 import { lavRegelmodel, minKampMin, pauseForRaekke, foerSkoledag, tidsvindue, banerBrugt } from './regelmodel.js';
-import { effektivForm, minKampeSamlet, sikreKampe, minKampeKrav } from './form.js';
+import { effektivForm, minKampeSamlet, sikreKampe, minKampeKrav, swissOversiddere } from './form.js';
 
 // Byggestenene (kampvarighed, pause, tidsvindue, hvem der kan dele spillere …) ligger i regelmodel.js,
 // så Tjek, planlæggeren og løseren bruger de samme. De eksporteres videre herfra af hensyn til eksisterende import.
@@ -369,7 +369,7 @@ export function tjekPlan(projekt) {
         if (!kampe.length) continue;
         const ef = effektivForm(k);
         if (ef.form === 'swiss' && ef.runder < regler.minKampe.swissRunder) tilfoej({ type: 'form', alvor: 'advarsel', noegle: `${k.id}:swiss-runder`, tekst: `${k.id}: Swiss Ladder med ${ef.runder} ${ef.runder === 1 ? 'runde' : 'runder'} — reglementet kræver mindst ${regler.minKampe.swissRunder}.`, kampe: [] });
-        // Tælles kravet samlet for rækken (U9), regnes spillerens sikre kampe i andre kategorier med
+        // Tælles kravet samlet for rækken (rækkens eget tilvalg), regnes spillerens sikre kampe i andre kategorier med
         const samlet = minKampeSamlet(r);
         const prSpillerAntal = new Map(sikrePrKat.get(k.id));
         if (samlet) for (const [id, andre] of sikrePrKat) if (id !== k.id) for (const s of prSpillerAntal.keys()) if (andre.has(s)) prSpillerAntal.set(s, prSpillerAntal.get(s) + andre.get(s));
@@ -378,6 +378,13 @@ export function tjekPlan(projekt) {
         const krav = minKampeKrav(k, r, regler);
         if (krav && faerrest < krav) {
             const ramte = [...prSpillerAntal].filter(([, n]) => n < krav).map(([s]) => spillerNavn(s));
+            // Ulige Swiss-felt, hvor kun oversidderens ene kamp mangler: det rammer højst én deltager pr. runde, ikke hele feltet
+            const over = swissOversiddere(k);
+            if (over && [...prSpillerAntal.values()].every((n) => n + 1 >= krav)) {
+                const antal = Math.min(ramte.length, over * (k.type === 'single' ? 1 : 2));
+                tilfoej({ type: 'form', alvor: 'advarsel', noegle: `${k.id}:min-kampe`, tekst: `${k.id}: ulige antal deltagere (${ef.deltagere}) — én sidder over i hver runde, så op til ${antal} spillere får ${krav - 1} ${krav - 1 === 1 ? 'kamp' : 'kampe'}${samlet ? ' i alt (single + double/mix)' : ''} (krav ${krav}); de øvrige når kravet. ${(k.formValg || 'tp') === 'tp' ? 'Rettes i TP.' : 'En ekstra runde eller en anden form i fane 1 løser det.'}`, kampe: [] });
+                continue;
+            }
             tilfoej({ type: 'form', alvor: 'advarsel', noegle: `${k.id}:min-kampe`, tekst: `${k.id}: ${ramte.length} spillere er kun sikret ${faerrest} ${faerrest === 1 ? 'kamp' : 'kampe'}${samlet ? ' i alt (single + double/mix)' : ''} (krav ${krav}): ${ramte.slice(0, 4).join(', ')}${ramte.length > 4 ? ' …' : ''}. ${(k.formValg || 'tp') === 'tp' ? 'Rettes i TP.' : 'Vælg en anden form i fane 1.'}`, kampe: [] });
         }
     }
