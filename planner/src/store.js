@@ -2,7 +2,7 @@
 // Persistens (localStorage, JSON-fil) ligger i gem/hent-hjælperne nederst og
 // kan bruges fra app.js; alt andet er testbart i Node.
 import { planFraTP, minutter } from './tp-reader.js';
-import { foreslaaForm, byggKampe, seedTilmeldinger, minKampeSamlet, sikreKampe } from './form.js';
+import { foreslaaForm, byggKampe, seedTilmeldinger, minKampeSamlet, sikreKampe, formTekst } from './form.js';
 import { pladsPaaDag, fordelRaekkerPaaDage, FYLDNINGSGRAD } from './kapacitet.js';
 import { lavRegelmodel } from './regelmodel.js';
 import { VAEGT_SKABELONER } from './kriterier.js';
@@ -162,17 +162,48 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
  * Genindlæser en (nyere) TP-fil i et eksisterende projekt: opsætning og
  * rækker bevares, kampe udskiftes, og planen beholdes for de kampe der stadig
  * findes — eller ryddes, hvis valg.behold er false. Det gælder både TP's kampe og dem,
- * planneren selv har bygget. En tid eller lås følger kun med, når kampen stadig er DEN SAMME
- * (samme kategori, fase, runde og spillere): id'erne følger positionen i lodtrækningen, så efter
- * en ny lodtrækning kan samme id dække en helt anden kamp.
+ * planneren selv har bygget. En tid eller lås følger kun med, når kampen stadig er DEN SAMME (overfoerPlan).
  */
-const kampSignatur = (k) => [k.kategori, k.fase, k.runde, k.gruppe || '', [...k.spillere].sort().join(',')].join('|');
+
+/**
+ * Hvad der gør en kamp til "den samme": kategori, fase, runde, gruppe og spillere. Kampe uden kendte spillere
+ * (Swiss runde 2+, cupkampe) kendes på deres plads i forløbet: plannerens egne på navnet ("Semifinale: Pulje 1 #1 –
+ * Pulje 2 #1", "runde 2, kamp 3"), TP's på id'et.
+ */
+export const kampSignatur = (k) => [k.kategori, k.fase, k.runde, k.gruppe || '', [...k.spillere].sort().join(','), k.spillere.length ? '' : (k.genereret ? k.navn : k.id)].join('|');
+
+/**
+ * Fører tider og låse over fra et sæt kampe til et nyt. Kamp-id'erne følger positionen i lodtrækningen, så efter
+ * en ny puljeinddeling, et ændret cupTop eller en ny lodtrækning kan samme id dække en helt anden kamp. Derfor
+ * følger tiden KAMPEN (signaturen), ikke id'et: samme kamp under nyt id beholder sin tid, og et gammelt id, der
+ * nu dækker en anden kamp, mister den.
+ * Returnerer { plan, laast, mistet } — mistet = antal tider, der ikke kunne føres over.
+ */
+export function overfoerPlan(gamleKampe, nyeKampe, plan = {}, laast = []) {
+    const gamle = new Map(); // signatur → gamle id'er med tid (flere, hvis to kampe ikke kan skelnes)
+    for (const k of gamleKampe) {
+        if (!plan[k.id]) continue;
+        const sig = kampSignatur(k);
+        if (!gamle.has(sig)) gamle.set(sig, []);
+        gamle.get(sig).push(k.id);
+    }
+    const laastSet = new Set(laast);
+    const nyPlan = {}, nyLaast = [];
+    // Først kampe, der har beholdt deres id, så resten — så to ens kampe ikke bytter tid uden grund
+    for (const k of [...nyeKampe.filter((x) => plan[x.id]), ...nyeKampe.filter((x) => !plan[x.id])]) {
+        const ids = gamle.get(kampSignatur(k));
+        if (!ids?.length) continue;
+        const fra = ids.includes(k.id) ? k.id : ids[0];
+        ids.splice(ids.indexOf(fra), 1);
+        nyPlan[k.id] = plan[fra];
+        if (laastSet.has(fra)) nyLaast.push(k.id);
+    }
+    return { plan: nyPlan, laast: nyLaast, mistet: Object.keys(plan).length - Object.keys(nyPlan).length };
+}
 
 export function genindlaes(projekt, model, valg = { behold: true }) {
     const nyt = nytProjekt(model, { tagTiderMed: false });
-    const gamleIds = new Set(projekt.kampe.map((k) => k.id));
-    const plan = {};
-    if (valg.behold) for (const [id, p] of Object.entries(projekt.plan || {})) if (gamleIds.has(id)) plan[id] = { ...p };
+    const plan = valg.behold ? { ...(projekt.plan || {}) } : {};
     const raekker = nyt.raekker.map((r) => projekt.raekker.find((x) => x.id === r.id) || r);
     const kategorier = nyt.kategorier.map((k) => {
         const gammel = projekt.kategorier.find((x) => x.id === k.id);
@@ -182,7 +213,8 @@ export function genindlaes(projekt, model, valg = { behold: true }) {
         return { ...k, halvBane: gammel.halvBane, prioritet: gammel.prioritet || 0, swissUdenPause: !!gammel.swissUdenPause, formValg: harTpKampe ? 'tp' : (gammel.formValg || 'tp'), cupTop: gammel.cupTop || 1, swissRunder: gammel.swissRunder || 0 };
     });
     const dage = nyt.opsaetning.dage.map((d) => projekt.opsaetning.dage.find((x) => x.dato === d.dato) || d);
-    const resultat = genberegnKampe({
+    // Kun kampe, der stadig er de samme, beholder tid og lås (genberegnKampe fører dem over fra de gamle kampe)
+    return genberegnKampe({
         ...nyt,
         opsaetning: { ...projekt.opsaetning, dage },
         raekker,
@@ -190,13 +222,8 @@ export function genindlaes(projekt, model, valg = { behold: true }) {
         plan,
         vinduer: projekt.vinduer || [],
         kvitteret: projekt.kvitteret || [],
-        laast: (projekt.laast || []).filter((id) => plan[id]),
-    });
-    // Kun kampe, der stadig er de samme, beholder tid og lås
-    const foer = new Map(projekt.kampe.map((k) => [k.id, kampSignatur(k)]));
-    const beholdt = {};
-    for (const k of resultat.kampe) if (resultat.plan[k.id] && foer.get(k.id) === kampSignatur(k)) beholdt[k.id] = resultat.plan[k.id];
-    return { ...resultat, plan: beholdt, laast: (resultat.laast || []).filter((id) => beholdt[id]) };
+        laast: projekt.laast || [],
+    }, { gamleKampe: projekt.kampe });
 }
 
 /** Sætter slotlængden (5-min trin, mindst 5). */
@@ -389,9 +416,11 @@ export function anvendForslag(projekt, forslag) {
 /**
  * Genberegner projektets kampe: kategorier med formValg 'tp' bruger TP's
  * kampe (tpKampe); de øvrige får kampe bygget af form.js ud fra
- * tilmeldingerne. Plan, lås og sidste forslag renses for kampe, der forsvinder.
+ * tilmeldingerne. Tider og låse følger KAMPEN, ikke id'et (overfoerPlan): bygges kampene om — ny
+ * puljeinddeling, ændret cupTop, færre runder — beholder de kampe, der stadig er de samme, deres tid, og
+ * resten mister den. valg.gamleKampe: de kampe, planen hører til (standard: projektets nuværende).
  */
-export function genberegnKampe(projekt) {
+export function genberegnKampe(projekt, valg = {}) {
     const tp = projekt.tpKampe || projekt.kampe;
     const regler = reglerFor(projekt);
     const raekkeMap = new Map(projekt.raekker.map((r) => [r.id, r]));
@@ -465,16 +494,32 @@ export function genberegnKampe(projekt) {
         return { ...k, formForslag: res.form };
     });
     const ids = new Set(kampe.map((k) => k.id));
-    const plan = {};
-    for (const [id, p] of Object.entries(projekt.plan || {})) if (ids.has(id)) plan[id] = p;
+    const { plan, laast } = overfoerPlan(valg.gamleKampe || projekt.kampe, kampe, projekt.plan || {}, projekt.laast || []);
     return {
         ...projekt,
         kategorier,
         kampe,
         plan,
-        laast: (projekt.laast || []).filter((id) => ids.has(id)),
+        laast,
         sidsteForslag: projekt.sidsteForslag ? { ikkePlaceret: (projekt.sidsteForslag.ikkePlaceret || []).filter((x) => ids.has(x.id)) } : projekt.sidsteForslag,
     };
+}
+
+/**
+ * Efter en ændring af opsætningen (dage, baner, tidsrum, rækkens dage, regler, slotlængde, halv bane): det
+ * automatiske formvalg afhænger af pladsen og af reglerne, så kampene bygges på ny — ellers viser fane 1 en
+ * form, der er valgt til en hal, der ikke længere findes. Tiderne følger kampene (overfoerPlan).
+ * Returnerer { projekt, aendringer: [{ kategori, fra, til }], mistedeTider } så brugeren kan få at vide, hvad der skete.
+ */
+export function genberegnEfterOpsaetning(foer, nyt) {
+    const projekt = genberegnKampe(nyt);
+    const gammel = new Map((foer?.kategorier || []).map((k) => [k.id, k.formForslag]));
+    const noegle = (f) => (f ? [f.form, f.runder || 0, (f.puljer || []).join(','), f.kampe].join('|') : '');
+    const aendringer = projekt.kategorier
+        .filter((k) => (k.formValg || 'tp') !== 'tp' && gammel.has(k.id) && noegle(gammel.get(k.id)) !== noegle(k.formForslag))
+        .map((k) => ({ kategori: k.id, fra: formTekst(gammel.get(k.id)), til: formTekst(k.formForslag) }));
+    const medTid = (p) => Object.keys(p?.plan || {}).length;
+    return { projekt, aendringer, mistedeTider: Math.max(0, medTid(nyt) - medTid(projekt)) };
 }
 
 /** Sætter turneringsform (og evt. cupTop) for en kategori og genberegner kampene. */

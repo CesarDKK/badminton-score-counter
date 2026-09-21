@@ -66,6 +66,15 @@ function saet(nyt) {
     visStatus();
 }
 
+/** Ændringer af opsætningen bygger kampene på ny (formvalget afhænger af plads og regler) — og fortæller, hvis en form skiftede. */
+function saetOpsaetning(nyt) {
+    const r = store.genberegnEfterOpsaetning(projekt, nyt);
+    saet(r.projekt);
+    if (!r.aendringer.length) return;
+    const tider = r.mistedeTider ? ` ${r.mistedeTider} ${r.mistedeTider === 1 ? 'kamp' : 'kampe'} mistede deres tid, fordi de ikke længere findes.` : '';
+    visBesked(`Ændringen gav en ny automatisk form for ${r.aendringer.map((a) => a.kategori).join(', ')}.${tider} Se "Turneringsform" nedenfor.`);
+}
+
 function visBesked(tekst, fejl = false) {
     besked = { tekst, fejl };
     const el = document.getElementById('filBesked');
@@ -196,15 +205,15 @@ const handlers = {
     },
 
     besked: visBesked,
-    slotMin: (v) => saet(store.saetSlotMin(projekt, v)),
+    slotMin: (v) => saetOpsaetning(store.saetSlotMin(projekt, v)),
     opsaetning: (aendringer) => saet(store.opdaterOpsaetning(projekt, aendringer)),
-    dag: (dato, aendringer) => saet(store.opdaterDag(projekt, dato, aendringer)),
-    raekke: (id, aendringer) => saet(store.opdaterRaekke(projekt, id, aendringer)),
-    minKampeSamlet: (id, vaerdi) => saet(store.genberegnKampe(store.opdaterRaekke(projekt, id, { minKampeSamlet: vaerdi }))),
-    kategori: (id, aendringer) => saet(store.opdaterKategori(projekt, id, aendringer)),
+    dag: (dato, aendringer) => saetOpsaetning(store.opdaterDag(projekt, dato, aendringer)),
+    raekke: (id, aendringer) => saetOpsaetning(store.opdaterRaekke(projekt, id, aendringer)),
+    minKampeSamlet: (id, vaerdi) => saetOpsaetning(store.opdaterRaekke(projekt, id, { minKampeSamlet: vaerdi })),
+    kategori: (id, aendringer) => saetOpsaetning(store.opdaterKategori(projekt, id, aendringer)),
     pause: (klasse, v) => saet(store.opdaterPause(projekt, klasse, v)),
-    regler: (sti, v) => saet(store.opdaterRegler(projekt, sti, v)),
-    nulstilRegler: () => saet(store.nulstilRegler(projekt)),
+    regler: (sti, v) => saetOpsaetning(store.opdaterRegler(projekt, sti, v)),
+    nulstilRegler: () => saetOpsaetning(store.nulstilRegler(projekt)),
     form: (id, aendringer) => saet(store.saetForm(projekt, id, aendringer)),
     vaegt: (id, v) => saet(store.opdaterVaegt(projekt, id, v)),
     vaegtSkabelon: (navn) => saet(store.saetVaegtSkabelon(projekt, navn)),
@@ -385,9 +394,8 @@ const planHandlers = {
             if (vis) vis(); else render();
             return;
         }
-        projekt = store.opdaterRaekke(projekt, h.raekke, h.aendring);
         tilstand.forslag = null;
-        saet(projekt);
+        saetOpsaetning(store.opdaterRaekke(projekt, h.raekke, h.aendring));
         planHandlers.optimer({ udenSpoergsmaal: true });
     },
 
