@@ -18,11 +18,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 18   # samme major som containerne (node:18-alpine)
+          node-version: 22   # samme major som containerne (node:22-alpine)
 
       - name: Backend — installer afhængigheder
         working-directory: backend
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Backend — unit-tests
         working-directory: backend
@@ -30,7 +30,7 @@ jobs:
 
       - name: Statistik — installer afhængigheder
         working-directory: stats/backend
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Statistik — unit-tests
         working-directory: stats/backend
@@ -38,7 +38,7 @@ jobs:
 
       - name: Planner — installer afhængigheder
         working-directory: planner
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       # TP-testfilerne ligger ikke i repoet (persondata) — de tests springes over.
       - name: Planner — unit-tests

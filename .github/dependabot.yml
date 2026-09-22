@@ -1,0 +1,35 @@
+# Dependabot holder øje med base-images, npm-pakker, Python-pakker og GitHub Actions og åbner en PR,
+# når der er en ny udgave — sikkerhedsrettelser med det samme, alt andet samlet én gang om ugen.
+# PR'erne kører CI (unit-tests, løserens tests, kontrakt-testen og nginx -t), så man kan se, om de er ufarlige.
+version: 2
+updates:
+  - package-ecosystem: docker
+    directories: ["/", "/football-app"]
+    schedule: { interval: weekly, day: monday }
+    ignore:
+      # Kun LTS-linjer for Node: lige major-numre (22, 24 …)
+      - dependency-name: node
+        versions: [">=23.0.0 <24.0.0", ">=25.0.0 <26.0.0"]
+  - package-ecosystem: docker-compose
+    directory: "/"
+    schedule: { interval: weekly, day: monday }
+    ignore:
+      # MySQL opgraderes med vilje (backup af volumes først) — ikke ved en automatisk PR
+      - dependency-name: mysql
+  - package-ecosystem: npm
+    directories: ["/backend", "/stats/backend", "/football-app/backend", "/planner"]
+    schedule: { interval: weekly, day: monday }
+    groups:
+      npm-mindre: { update-types: [minor, patch] }
+    ignore:
+      # Express 5 og multer 2 er større skift, der tages med vilje — se docs
+      - dependency-name: express
+        update-types: [version-update:semver-major]
+      - dependency-name: multer
+        update-types: [version-update:semver-major]
+  - package-ecosystem: pip
+    directory: "/planner/solver"
+    schedule: { interval: weekly, day: monday }
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule: { interval: weekly, day: monday }

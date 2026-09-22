@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM node:22-alpine
 
 ENV TZ=Europe/Copenhagen
 RUN apk add --no-cache tzdata
@@ -6,7 +6,7 @@ RUN apk add --no-cache tzdata
 WORKDIR /app
 
 COPY stats/backend/package*.json ./
-RUN npm install --omit=dev
+RUN npm ci --omit=dev --no-audit --no-fund
 
 COPY stats/backend/ ./
 
