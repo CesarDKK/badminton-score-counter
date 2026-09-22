@@ -661,7 +661,7 @@ The backend runs scheduled tasks using `node-cron`:
                    │
                    ▼
 ┌─────────────────────────────────────────┐
-│         Database (MySQL 8.0)            │
+│         Database (MySQL 8.4)            │
 │  - Courts configuration                 │
 │  - Game states                          │
 │  - Match history                        │

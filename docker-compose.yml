@@ -9,7 +9,7 @@ x-logging: &default-logging
 services:
   # MySQL Database
   mysql:
-    image: mysql:8.0
+    image: mysql:8.4
     container_name: badminton-mysql
     restart: unless-stopped
     logging: *default-logging
@@ -102,7 +102,7 @@ services:
   # Creates database, tables, and football_user (idempotent — safe to re-run).
   # Exits when done; football-backend depends on its successful completion.
   football-db-init:
-    image: mysql:8.0
+    image: mysql:8.4
     container_name: football-db-init
     restart: "no"
     logging: *default-logging
@@ -246,7 +246,7 @@ services:
   # ${BACKUP_RETENTION_DAYS} dage. Backup'erne ligger i det navngivne volume
   # "backups" (host-sti fås med: docker volume inspect badminton-app_backups).
   backup:
-    image: mysql:8.0
+    image: mysql:8.4
     container_name: badminton-backup
     restart: unless-stopped
     logging: *default-logging
