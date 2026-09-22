@@ -1,0 +1,7 @@
+# Byggekonteksten skal ikke rumme lokale node_modules (npm ci henter dem selv) eller ting, der ikke hører til i et image
+**/node_modules
+**/.git
+**/testdata
+**/*.TP
+**/*.tp
+.env
