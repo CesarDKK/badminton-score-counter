@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
+const { kunEgenBane } = require('../middleware/qrSession');
 const { publishGameStateChange } = require('../events/gameStateEvents');
 
 // GET /api/courts - Get all courts (public)
@@ -51,7 +52,7 @@ router.get('/:id', async (req, res, next) => {
 
 // PUT /api/courts/:id - Update court settings
 // Kræver et gyldigt adgangslink i club-mode; åben i direct-mode (se middleware)
-router.put('/:id', requireWriteAuthInClubMode, async (req, res, next) => {
+router.put('/:id', requireWriteAuthInClubMode, kunEgenBane('id'), async (req, res, next) => {
     try {
         const { id } = req.params;
         const { isActive, isDoubles, gameMode } = req.body;

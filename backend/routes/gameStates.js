@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
+const { kunEgenBane } = require('../middleware/qrSession');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
 const { publishGameStateChange, subscribeGameStateChanges } = require('../events/gameStateEvents');
 // badmintonplanner.dk: rundenavn/næste runde/udskiftere/note pr. bane (fase 2-visning)
@@ -325,7 +326,7 @@ router.get('/:courtId', async (req, res, next) => {
 // Ved mismatch svares 409 + serverens aktuelle tilstand, saa klienten kan merge og
 // proeve igen i stedet for stiltiende at overskrive en anden enheds aendring.
 // Klienter uden expectedVersion (aeldre court/tv-sider) beholder last-write-wins.
-router.put('/:courtId', requireWriteAuthInClubMode, async (req, res, next) => {
+router.put('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), async (req, res, next) => {
     try {
         const { courtId } = req.params;
         const body = req.body || {};
@@ -596,7 +597,7 @@ router.put('/:courtId', requireWriteAuthInClubMode, async (req, res, next) => {
 });
 
 // DELETE /api/game-states/:courtId - Reset court (public - used during gameplay)
-router.delete('/:courtId', requireWriteAuthInClubMode, async (req, res, next) => {
+router.delete('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), async (req, res, next) => {
     try {
         const { courtId } = req.params;
 

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
+const { ikkeQrSession } = require('../middleware/qrSession');
 const { publishGameStateChange } = require('../events/gameStateEvents');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
 const { fetchAndParseTournamentMatches, resolveClubNames, buildPlayerClubRows } = require('./importTournament');
@@ -582,7 +583,7 @@ router.put('/:id/auto-sync', authMiddleware, async (req, res, next) => {
 
 // PUT /api/tournaments/:id/matches/:matchId - Opdater kamp (bruges fra court-siden;
 // i club-mode kræves device/club_admin-token ligesom game-states)
-router.put('/:id/matches/:matchId', requireWriteAuthInClubMode, async (req, res, next) => {
+router.put('/:id/matches/:matchId', requireWriteAuthInClubMode, ikkeQrSession, async (req, res, next) => {
     try {
         const { id, matchId } = req.params;
         const {
