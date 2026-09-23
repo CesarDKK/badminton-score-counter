@@ -9,6 +9,7 @@ const tournamentRoutes = require('./routes/tournaments');
 const matchRoutes = require('./routes/matches');
 const teamRoutes = require('./routes/teams');
 const logoRoutes = require('./routes/logos');
+const { kunBilleder, sikreUploadHeadere } = require('./utils/billedUpload');
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -34,9 +35,12 @@ app.use('/api', matchRoutes);
 app.use('/api/teams', teamRoutes);
 app.use('/api/logos', logoRoutes);
 
-app.use('/api/uploads', express.static(UPLOAD_DIR, {
+// Uploads serveres på alle klubbers subdomæner: kun billeder, og med en
+// sandbox-CSP, så en fil aldrig kan køre scripts (se utils/billedUpload.js)
+app.use('/api/uploads', kunBilleder, express.static(UPLOAD_DIR, {
   maxAge: '1d',
   immutable: false,
+  setHeaders: sikreUploadHeadere,
 }));
 
 app.use((err, req, res, next) => {

@@ -5,6 +5,7 @@ const multer = require('multer');
 const { pool } = require('../db');
 const { requireAdmin } = require('../middleware/auth');
 const { requireClub } = require('../middleware/tenant');
+const { billedFilter, tjekUploadetBillede, endelseFraType, erGyldigtBillede } = require('../utils/billedUpload');
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || '/app/uploads';
 
@@ -40,8 +41,9 @@ const storage = multer.diskStorage({
     if (!req.clubId) return cb(new Error('Klub-kontekst mangler'));
     cb(null, clubLogosLibDir(req.clubId));
   },
+  // Endelsen udledes af typen, ikke af klientens filnavn (utils/billedUpload.js)
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase().replace(/[^a-z0-9.]/g, '') || '.png';
+    const ext = endelseFraType(file.mimetype);
     const slug = (req.body.name || 'logo')
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
@@ -54,12 +56,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: { fileSize: 2 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (!/^image\/(png|jpe?g|webp|svg\+xml|gif)$/.test(file.mimetype)) {
-      return cb(new Error('Kun billedfiler er tilladt'));
-    }
-    cb(null, true);
-  },
+  fileFilter: billedFilter,
 });
 
 const router = express.Router();
@@ -151,6 +148,9 @@ router.post('/import-external', requireClub, requireAdmin, async (req, res) => {
     if (buf.length === 0 || buf.length > 3 * 1024 * 1024) {
       return res.status(400).json({ error: 'Badge er for stor eller tom' });
     }
+    if (!erGyldigtBillede(buf, contentType)) {
+      return res.status(400).json({ error: 'Badge er ikke et gyldigt billede' });
+    }
     const filename = `${slugify(name)}_${Date.now()}${ext}`;
     const dir = clubLogosLibDir(req.clubId);
     await fs.promises.writeFile(path.join(dir, filename), buf);
@@ -172,7 +172,7 @@ router.post('/import-external', requireClub, requireAdmin, async (req, res) => {
 
 // POST /api/logos — upload nyt klub-logo til biblioteket
 // Form: { name } + fil i 'logo'-felt. Kind defaultes til 'club'.
-router.post('/', requireClub, requireAdmin, upload.single('logo'), async (req, res) => {
+router.post('/', requireClub, requireAdmin, upload.single('logo'), tjekUploadetBillede, async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Ingen fil uploadet' });
   const name = (req.body.name || '').trim();
   const kind = req.body.kind || 'club';

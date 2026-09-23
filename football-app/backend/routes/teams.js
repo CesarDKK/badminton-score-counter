@@ -5,6 +5,7 @@ const multer = require('multer');
 const { pool } = require('../db');
 const { requireAdmin } = require('../middleware/auth');
 const { requireClub } = require('../middleware/tenant');
+const { billedFilter, tjekUploadetBillede, endelseFraType, erGyldigtBillede } = require('../utils/billedUpload');
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || '/app/uploads';
 
@@ -19,22 +20,16 @@ const storage = multer.diskStorage({
     if (!req.clubId) return cb(new Error('Klub-kontekst mangler'));
     cb(null, clubLogoDir(req.clubId));
   },
+  // Endelsen udledes af typen, ikke af klientens filnavn (utils/billedUpload.js)
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase().replace(/[^a-z0-9.]/g, '') || '.png';
-    const teamId = req.params.id;
-    cb(null, `team_${teamId}_${Date.now()}${ext}`);
+    cb(null, `team_${req.params.id}_${Date.now()}${endelseFraType(file.mimetype)}`);
   },
 });
 
 const upload = multer({
   storage,
   limits: { fileSize: 2 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (!/^image\/(png|jpe?g|webp|svg\+xml|gif)$/.test(file.mimetype)) {
-      return cb(new Error('Only image files are allowed'));
-    }
-    cb(null, true);
-  },
+  fileFilter: billedFilter,
 });
 
 const router = express.Router();
@@ -64,7 +59,7 @@ function isTeamOwnUpload(logoPath, clubId) {
   return typeof logoPath === 'string' && logoPath.startsWith(`clubs/${clubId}/logos/`);
 }
 
-router.post('/:id/logo', requireClub, requireAdmin, upload.single('logo'), async (req, res) => {
+router.post('/:id/logo', requireClub, requireAdmin, upload.single('logo'), tjekUploadetBillede, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {
