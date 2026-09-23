@@ -11,7 +11,7 @@ on:
 
 jobs:
   unit:
-    name: Unit-tests (backend + statistik + planner)
+    name: Unit-tests (backend + statistik + football + planner)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,6 +34,14 @@ jobs:
 
       - name: Statistik — unit-tests
         working-directory: stats/backend
+        run: npm run test:unit
+
+      - name: Football — installer afhængigheder
+        working-directory: football-app/backend
+        run: npm ci --no-audit --no-fund
+
+      - name: Football — unit-tests
+        working-directory: football-app/backend
         run: npm run test:unit
 
       - name: Planner — installer afhængigheder
