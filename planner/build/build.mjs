@@ -1,6 +1,6 @@
 // Bygger planner/tp-bundle.js (mdb-reader + Buffer-polyfill til browseren).
 // Køres via Docker som de øvrige node-opgaver, fra mappen planner/:
-//   MSYS_NO_PATHCONV=1 docker run --rm -v "$PWD:/app" -w /app node:20-alpine \
+//   MSYS_NO_PATHCONV=1 docker run --rm -v "$PWD:/app" -w /app node:22-alpine \
 //     sh -c "npm install --no-audit --no-fund && npm run build"
 // Det færdige bundle committes, så nginx-imaget ikke behøver node.
 import * as esbuild from 'esbuild';

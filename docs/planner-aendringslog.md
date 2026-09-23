@@ -441,3 +441,16 @@ Appendiks 2 (sammenlægning) og "U9-U11 turneringer – Vejledning". Reglementet
   Et projekt fra en nyere udgave afvises med en klar besked og bliver liggende.
 - **CI** kører `nginx -t`. Død kode fjernet (`antalKampe`, `cupRunder`, formens `ledigeBaneSlots`-felt), forældede
   "kun U9"-kommentarer rettet, og README er igen en vejledning — historikken ligger i denne fil.
+
+## OR-Tools 9.11 → 9.15 og esbuild 0.28 (2026-09-23)
+
+Målt på Lyngby-filerne med samme problem og tidsgrænse mod begge løsere (1,5 CPU, 2 tråde; lavere score er bedre):
+
+| Fil | 60 s, 1. kørsel | 60 s, 2. kørsel | 120 s |
+|---|---|---|---|
+| U13/U15 (TP's lodtrækning) | 102,8 → 98,1 | 102,8 → 77,1 | 96,3 → 81,2 |
+| U9/U11 (Jespers dage) | 93,1 → 98,8 | 93,1 → 78,7 | 76,8 → 74,4 |
+
+9.15 vinder i 5 af 6 kørsler, og beviser "ingen lovlig plan" hurtigere (18 s mod 42 s). 9.11 gav samme svar i alle
+kørsler; 9.15 varierer fra kørsel til kørsel, så to kørsler kan give forskellige planer. Kontrakt-testen og de 29
+Python-tests består. esbuild 0.24 → 0.28 lukker det sidste audit-fund; `tp-bundle.js` er bygget igen og afprøvet i browseren.
