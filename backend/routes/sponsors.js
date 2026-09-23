@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
+const { requirePage } = require('../middleware/pagePermission');
 const { uploadLimiter } = require('../middleware/rateLimiter');
 const upload = require('../config/multer');
 const { validateImageMagic } = require('../config/imageUpload');
@@ -148,7 +149,7 @@ router.get('/settings', async (req, res, next) => {
 // PUT /api/sponsors/settings - Update sponsor settings (requires auth)
 // Begge varigheder kan sættes hver for sig — bane-bannerne kører typisk
 // langsommere end fuldskærms-slideshowet.
-router.put('/settings', authMiddleware, async (req, res, next) => {
+router.put('/settings', authMiddleware, requirePage('sponsors'), async (req, res, next) => {
     try {
         const { slideDuration, bannerDuration } = req.body;
         const gyldig = (v) => Number.isFinite(Number(v)) && Number(v) >= 3 && Number(v) <= 120;
@@ -177,7 +178,7 @@ router.put('/settings', authMiddleware, async (req, res, next) => {
 });
 
 // POST /api/sponsors/upload - Upload sponsor images (requires auth)
-router.post('/upload', uploadLimiter, authMiddleware, upload.array('images', 10), validateImageMagic, async (req, res, next) => {
+router.post('/upload', uploadLimiter, authMiddleware, requirePage('sponsors'), upload.array('images', 10), validateImageMagic, async (req, res, next) => {
     try {
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ error: 'Ingen filer uploadet' });
@@ -335,7 +336,7 @@ router.post('/upload', uploadLimiter, authMiddleware, upload.array('images', 10)
 });
 
 // DELETE /api/sponsors/:id - Delete sponsor image (requires auth)
-router.delete('/:id', authMiddleware, async (req, res, next) => {
+router.delete('/:id', authMiddleware, requirePage('sponsors'), async (req, res, next) => {
     try {
         const { id } = req.params;
 
@@ -369,7 +370,7 @@ router.delete('/:id', authMiddleware, async (req, res, next) => {
 });
 
 // DELETE /api/sponsors/all - Delete all sponsor images (requires auth)
-router.delete('/all', authMiddleware, async (req, res, next) => {
+router.delete('/all', authMiddleware, requirePage('sponsors'), async (req, res, next) => {
     try {
         // Get all images
         const images = await query('SELECT filename FROM sponsor_images');
@@ -398,7 +399,7 @@ router.delete('/all', authMiddleware, async (req, res, next) => {
 });
 
 // PUT /api/sponsors/:id/active - Toggle active status for sponsor image (requires auth)
-router.put('/:id/active', authMiddleware, async (req, res, next) => {
+router.put('/:id/active', authMiddleware, requirePage('sponsors'), async (req, res, next) => {
     try {
         const { id } = req.params;
         const { isActive } = req.body;
@@ -431,7 +432,7 @@ router.put('/:id/active', authMiddleware, async (req, res, next) => {
 });
 
 // PUT /api/sponsors/:id/expiration - Set expiration date for sponsor image (requires auth)
-router.put('/:id/expiration', authMiddleware, async (req, res, next) => {
+router.put('/:id/expiration', authMiddleware, requirePage('sponsors'), async (req, res, next) => {
     try {
         const { id } = req.params;
         const { expirationDate } = req.body;
@@ -496,7 +497,7 @@ router.put('/:id/expiration', authMiddleware, async (req, res, next) => {
  * Tidligere blev en bane revet væk fra andre bannere her, fordi databasen kun
  * tillod ét banner pr. bane — det er væk nu.
  */
-router.put('/:id/courts', authMiddleware, async (req, res, next) => {
+router.put('/:id/courts', authMiddleware, requirePage('sponsors'), async (req, res, next) => {
     try {
         const { id } = req.params;
         const { courts, scope } = req.body; // courts: array of court numbers

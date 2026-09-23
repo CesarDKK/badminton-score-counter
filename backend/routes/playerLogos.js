@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
+const { requirePage } = require('../middleware/pagePermission');
 const { publishConfigChange } = require('../events/gameStateEvents');
 
 // Efter en vellykket ændring af et spiller-logo pushes et 'logos'-config-event,
@@ -26,7 +27,7 @@ router.get('/', async (req, res, next) => {
 });
 
 // PUT /api/player-logos — upsert override for et spillernavn (auth)
-router.put('/', authMiddleware, async (req, res, next) => {
+router.put('/', authMiddleware, requirePage('tournament'), async (req, res, next) => {
     try {
         const playerName = (req.body.playerName || '').trim();
         // logo_id: >0 = bestemt logo, 0 = intet logo (vis ikke). Fravaer af raekke = auto.
@@ -46,7 +47,7 @@ router.put('/', authMiddleware, async (req, res, next) => {
 });
 
 // DELETE /api/player-logos?name=<navn> — fjern override (auth)
-router.delete('/', authMiddleware, async (req, res, next) => {
+router.delete('/', authMiddleware, requirePage('tournament'), async (req, res, next) => {
     try {
         const playerName = (req.query.name || '').trim();
         if (!playerName) return res.status(400).json({ error: 'Spillernavn er påkrævet' });

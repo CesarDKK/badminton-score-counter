@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
+const { requirePage } = require('../middleware/pagePermission');
 const { kunEgenBane } = require('../middleware/qrSession');
 const { varighedTekst } = require('../config/matchTiming');
 
@@ -260,7 +261,7 @@ router.post('/', requireWriteAuthInClubMode, kunEgenBane((req) => req.body && re
 });
 
 // DELETE /api/match-history/all - Delete all match history (protected - requires authentication)
-router.delete('/all', authMiddleware, async (req, res, next) => {
+router.delete('/all', authMiddleware, requirePage('history'), async (req, res, next) => {
     try {
         await query('DELETE FROM match_history');
 

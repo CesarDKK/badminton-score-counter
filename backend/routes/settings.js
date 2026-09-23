@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
+const { requirePage } = require('../middleware/pagePermission');
 const { publishConfigChange } = require('../events/gameStateEvents');
 
 // Efter enhver vellykket settings-mutation pushes et config-event, så TV/
@@ -55,7 +56,7 @@ router.get('/', async (req, res, next) => {
 });
 
 // PUT /api/settings/password - Change admin password (requires auth)
-router.put('/password', authMiddleware, async (req, res, next) => {
+router.put('/password', authMiddleware, requirePage('settings'), async (req, res, next) => {
     try {
         const { newPassword } = req.body;
 
@@ -79,7 +80,7 @@ router.put('/password', authMiddleware, async (req, res, next) => {
 });
 
 // PUT /api/settings/court-count - Update court count (requires auth)
-router.put('/court-count', authMiddleware, async (req, res, next) => {
+router.put('/court-count', authMiddleware, requirePage('settings'), async (req, res, next) => {
     try {
         const { courtCount } = req.body;
 
@@ -116,7 +117,7 @@ router.put('/court-count', authMiddleware, async (req, res, next) => {
 });
 
 // PUT /api/settings/reset-button - Toggle reset button visibility (requires auth)
-router.put('/reset-button', authMiddleware, async (req, res, next) => {
+router.put('/reset-button', authMiddleware, requirePage('settings'), async (req, res, next) => {
     try {
         const { showResetButton } = req.body;
 
@@ -137,7 +138,7 @@ router.put('/reset-button', authMiddleware, async (req, res, next) => {
 });
 
 // PUT /api/settings/tv-qr - Skjul/vis QR-kode på TV-siden (requires auth)
-router.put('/tv-qr', authMiddleware, async (req, res, next) => {
+router.put('/tv-qr', authMiddleware, requirePage('settings'), async (req, res, next) => {
     try {
         const { hideTvQr } = req.body;
         if (typeof hideTvQr !== 'boolean') {
@@ -154,7 +155,7 @@ router.put('/tv-qr', authMiddleware, async (req, res, next) => {
 });
 
 // PUT /api/settings/game-mode - Update default game mode (requires auth)
-router.put('/game-mode', authMiddleware, async (req, res, next) => {
+router.put('/game-mode', authMiddleware, requirePage('settings'), async (req, res, next) => {
     try {
         const { gameMode } = req.body;
         if (gameMode !== '21' && gameMode !== '15') {
@@ -189,7 +190,7 @@ router.get('/theme', async (req, res, next) => {
 });
 
 // PUT /api/settings/theme - Update theme colors (requires auth)
-router.put('/theme', authMiddleware, async (req, res, next) => {
+router.put('/theme', authMiddleware, requirePage('settings'), async (req, res, next) => {
     try {
         const {
             themeName,

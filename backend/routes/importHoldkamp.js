@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const { authMiddleware } = require('../middleware/auth');
+const { requirePage } = require('../middleware/pagePermission');
 const { query, queryOne } = require('../config/database');
 
 const SERVICE_URL  = 'https://www.badmintonplayer.dk/SportsResults/Components/WebService1.asmx/GetLeagueStanding';
@@ -305,7 +306,7 @@ async function hentKamp(url) {
  * faar sit preview. Er den ikke, sætter vi kampen under overvaagning i stedet
  * for at afvise linket — holdsedlen frigives typisk foerst en time foer start.
  */
-router.post('/holdkamp-url', authMiddleware, async (req, res, next) => {
+router.post('/holdkamp-url', authMiddleware, requirePage('holdkamp'), async (req, res, next) => {
     try {
         const { url } = req.body;
 
@@ -370,7 +371,7 @@ router.post('/holdkamp-url', authMiddleware, async (req, res, next) => {
 });
 
 // GET /api/import/holdkamp-watchers — kampe der venter på holdsammensætningen
-router.get('/holdkamp-watchers', authMiddleware, async (req, res, next) => {
+router.get('/holdkamp-watchers', authMiddleware, requirePage('holdkamp'), async (req, res, next) => {
     try {
         // start_time gemmes i UTC; vi sender det med et eksplicit 'Z', så
         // browseren selv omregner til dansk tid ved visning.
@@ -386,7 +387,7 @@ router.get('/holdkamp-watchers', authMiddleware, async (req, res, next) => {
 });
 
 // DELETE /api/import/holdkamp-watchers/:id — stop overvågningen af én kamp
-router.delete('/holdkamp-watchers/:id', authMiddleware, async (req, res, next) => {
+router.delete('/holdkamp-watchers/:id', authMiddleware, requirePage('holdkamp'), async (req, res, next) => {
     try {
         const r = await query('DELETE FROM holdkamp_watchers WHERE id = ?', [req.params.id]);
         if (r.affectedRows === 0) return res.status(404).json({ error: 'Overvågningen findes ikke' });

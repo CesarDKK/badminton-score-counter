@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
+const { requirePage } = require('../middleware/pagePermission');
 
 // GET /api/player-info/search?q=searchTerm - Search players by name (public)
 router.get('/search', async (req, res, next) => {
@@ -65,7 +66,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // POST /api/player-info - Create new player (requires auth)
-router.post('/', authMiddleware, async (req, res, next) => {
+router.post('/', authMiddleware, requirePage('playerinfo'), async (req, res, next) => {
     try {
         const { name, club, gender, ageGroup } = req.body;
 
@@ -104,7 +105,7 @@ router.post('/', authMiddleware, async (req, res, next) => {
 });
 
 // PUT /api/player-info/:id - Update player (requires auth)
-router.put('/:id', authMiddleware, async (req, res, next) => {
+router.put('/:id', authMiddleware, requirePage('playerinfo'), async (req, res, next) => {
     try {
         const { id } = req.params;
         const { name, club, gender, ageGroup } = req.body;
@@ -150,7 +151,7 @@ router.put('/:id', authMiddleware, async (req, res, next) => {
 });
 
 // DELETE /api/player-info/:id - Delete player (requires auth)
-router.delete('/:id', authMiddleware, async (req, res, next) => {
+router.delete('/:id', authMiddleware, requirePage('playerinfo'), async (req, res, next) => {
     try {
         const { id } = req.params;
 
@@ -173,7 +174,7 @@ router.delete('/:id', authMiddleware, async (req, res, next) => {
 });
 
 // DELETE /api/player-info/age-group/:ageGroup - Delete all players in age group (requires auth)
-router.delete('/age-group/:ageGroup', authMiddleware, async (req, res, next) => {
+router.delete('/age-group/:ageGroup', authMiddleware, requirePage('playerinfo'), async (req, res, next) => {
     try {
         const { ageGroup } = req.params;
 
@@ -207,7 +208,7 @@ router.delete('/age-group/:ageGroup', authMiddleware, async (req, res, next) => 
 });
 
 // POST /api/player-info/import - Import multiple players (requires auth)
-router.post('/import', authMiddleware, async (req, res, next) => {
+router.post('/import', authMiddleware, requirePage('playerinfo'), async (req, res, next) => {
     try {
         const { players } = req.body;
 

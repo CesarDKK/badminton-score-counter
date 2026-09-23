@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
+const { requirePage } = require('../middleware/pagePermission');
 const { ikkeQrSession } = require('../middleware/qrSession');
 const { currentTenant } = require('../config/tenantPools');
 const { banensStartTid } = require('../config/matchTiming');
@@ -171,7 +172,7 @@ router.get('/by-court/:courtId', async (req, res, next) => {
 });
 
 // POST /api/team-matches - Create new team match (requires auth)
-router.post('/', authMiddleware, async (req, res, next) => {
+router.post('/', authMiddleware, requirePage('holdkamp'), async (req, res, next) => {
     try {
         const { format, team1Name, team2Name, games, team1LogoId, team2LogoId } = req.body;
 
@@ -189,7 +190,7 @@ router.post('/', authMiddleware, async (req, res, next) => {
 
 // PUT /api/team-matches/:id/logos - opdater hold-logoer (requires auth)
 // Tilstande pr. hold: null = auto-match paa holdnavn, 0 = intet logo, >0 = bestemt logo
-router.put('/:id/logos', authMiddleware, async (req, res, next) => {
+router.put('/:id/logos', authMiddleware, requirePage('holdkamp'), async (req, res, next) => {
     try {
         const norm = v => (v === null || v === undefined || v === '') ? null : Number(v);
         const result = await query(
@@ -204,7 +205,7 @@ router.put('/:id/logos', authMiddleware, async (req, res, next) => {
 // PUT /api/team-matches/:id/games/:gameId - Update a game (bruges fra court-siden;
 // i club-mode kræves device/club_admin-token ligesom game-states — åben var den
 // et hul hvor enhver kunne omskrive spillere og vindere i en igangværende holdkamp)
-router.put('/:id/games/:gameId', requireWriteAuthInClubMode, ikkeQrSession, async (req, res, next) => {
+router.put('/:id/games/:gameId', requireWriteAuthInClubMode, requirePage('holdkamp'), ikkeQrSession, async (req, res, next) => {
     try {
         const { id, gameId } = req.params;
         const { courtNumber, status, winnerTeam, setScores, team1Player1, team1Player2, team2Player1, team2Player2 } = req.body;
@@ -317,7 +318,7 @@ router.put('/:id/games/:gameId', requireWriteAuthInClubMode, ikkeQrSession, asyn
 });
 
 // PUT /api/team-matches/:id/finish - Mark team match as finished (requires auth)
-router.put('/:id/finish', authMiddleware, async (req, res, next) => {
+router.put('/:id/finish', authMiddleware, requirePage('holdkamp'), async (req, res, next) => {
     try {
         await afslutHoldkamp(req.params.id, req);
         res.json({ success: true });
@@ -379,7 +380,7 @@ async function autoAfslutHoldkampe() {
 }
 
 // DELETE /api/team-matches - Delete ALL team matches (requires auth)
-router.delete('/', authMiddleware, async (req, res, next) => {
+router.delete('/', authMiddleware, requirePage('history'), async (req, res, next) => {
     try {
         await query(`DELETE FROM team_matches`);
         res.json({ success: true });
@@ -389,7 +390,7 @@ router.delete('/', authMiddleware, async (req, res, next) => {
 });
 
 // DELETE /api/team-matches/:id - Delete team match (requires auth)
-router.delete('/:id', authMiddleware, async (req, res, next) => {
+router.delete('/:id', authMiddleware, requirePage('holdkamp'), async (req, res, next) => {
     try {
         const { id } = req.params;
         await query(`DELETE FROM team_matches WHERE id = ?`, [id]);
