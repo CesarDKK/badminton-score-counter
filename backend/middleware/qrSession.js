@@ -31,12 +31,12 @@ async function standardErAktiv(tokenId) {
 
 // Efter requireWriteAuthInClubMode på bane-ruter: en QR-session må kun skrive
 // til sin egen bane, og kun så længe sessionen ikke er afsluttet.
-// param = navnet på route-parameteren med banenummeret.
+// param = navnet på route-parameteren med banenummeret, eller en funktion (req) → banenummer.
 function kunEgenBane(param, { erAktiv = standardErAktiv } = {}) {
     return async function (req, res, next) {
         if (!erQrSession(req.user)) return next();
 
-        const bane = parseInt(req.params[param], 10);
+        const bane = parseInt(typeof param === 'function' ? param(req) : req.params[param], 10);
         if (baneFraDestination(req.user.destination) !== bane) {
             return res.status(403).json({ error: 'QR-koden gælder en anden bane' });
         }
