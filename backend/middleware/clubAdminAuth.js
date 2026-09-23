@@ -1,5 +1,10 @@
 const jwt = require('jsonwebtoken');
 
+// Klub-admin-endpoints (adgangslinks, eget kodeord). Tokenet skal være et
+// club_admin-token udstedt til DENNE klub: klubben afgøres af subdomænet, og et
+// token fra klub A må ikke give adgang til klub B's adgangslinks. Uden for
+// club-mode (lokal installation, app., admin.) findes der ingen klub at være
+// admin for, så her afvises club_admin-tokens også.
 function clubAdminAuth(req, res, next) {
     try {
         const authHeader = req.headers.authorization;
@@ -14,7 +19,12 @@ function clubAdminAuth(req, res, next) {
             return res.status(403).json({ error: 'Kun klub admins har adgang' });
         }
 
+        if (req.accessMode !== 'club' || decoded.clubSubdomain !== req.clubSubdomain) {
+            return res.status(403).json({ error: 'Token giver ikke adgang til denne klub' });
+        }
+
         req.clubAdmin = decoded;
+        req.user = decoded; // så requirePage (side-rettigheder) kan bruges bagefter
         next();
     } catch (error) {
         if (error.name === 'TokenExpiredError') {
