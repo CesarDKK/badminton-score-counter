@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
+const { requirePage } = require('../middleware/pagePermission');
 const { ikkeQrSession } = require('../middleware/qrSession');
 const { publishGameStateChange } = require('../events/gameStateEvents');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
@@ -219,7 +220,7 @@ router.get('/history', async (req, res, next) => {
 });
 
 // POST /api/tournaments - Opret turnering (kræver auth)
-router.post('/', authMiddleware, async (req, res, next) => {
+router.post('/', authMiddleware, requirePage('tournament'), async (req, res, next) => {
     try {
         const { name, sourceTournamentId } = req.body;
         if (!name || !name.trim()) {
@@ -248,7 +249,7 @@ router.post('/', authMiddleware, async (req, res, next) => {
 });
 
 // POST /api/tournaments/:id/matches - Tilføj kamp (kræver auth)
-router.post('/:id/matches', authMiddleware, async (req, res, next) => {
+router.post('/:id/matches', authMiddleware, requirePage('tournament'), async (req, res, next) => {
     try {
         const { id } = req.params;
         const {
@@ -288,7 +289,7 @@ router.post('/:id/matches', authMiddleware, async (req, res, next) => {
 
 // POST /api/tournaments/:id/matches/bulk - Tilføj mange kampe på én gang (kræver auth)
 // Bruges af import-flowet så vi ikke laver hundredvis af enkelt-kald.
-router.post('/:id/matches/bulk', authMiddleware, async (req, res, next) => {
+router.post('/:id/matches/bulk', authMiddleware, requirePage('tournament'), async (req, res, next) => {
     try {
         const { id } = req.params;
         const { matches } = req.body;
@@ -347,7 +348,7 @@ router.post('/:id/matches/bulk', authMiddleware, async (req, res, next) => {
 // GET /api/tournaments/:id/import-progress - Status for baggrunds-klub-opsamling.
 // Bruges af frontend til at vise en progressbar under import. Ukendt/ryddet id
 // (fx job færdigt og udløbet) svarer { phase: 'done' } så polling altid kan stoppe.
-router.get('/:id/import-progress', authMiddleware, (req, res) => {
+router.get('/:id/import-progress', authMiddleware, requirePage('tournament'), (req, res) => {
     const p = importProgress.get(progressKey(req.params.id));
     if (!p) return res.json({ phase: 'done' });
     res.json(p);
@@ -508,7 +509,7 @@ async function runTournamentAutoSync(dbLabel) {
     }
 }
 
-router.post('/:id/sync-import', authMiddleware, async (req, res, next) => {
+router.post('/:id/sync-import', authMiddleware, requirePage('tournament'), async (req, res, next) => {
     const { id } = req.params;
     const key = tenantSyncKey(req.clubDbName, id);
     if (_syncingTournaments.has(key)) {
@@ -545,7 +546,7 @@ router.post('/:id/sync-import', authMiddleware, async (req, res, next) => {
 // PUT /api/tournaments/:id/auto-sync - Slå serverbaseret auto-opdatering til/fra (kræver auth)
 // Flaget gemmes i databasen, så schedulerens 4-minutters job kører uafhængigt
 // af om admin-siden (eller browseren) er åben.
-router.put('/:id/auto-sync', authMiddleware, async (req, res, next) => {
+router.put('/:id/auto-sync', authMiddleware, requirePage('tournament'), async (req, res, next) => {
     try {
         const { id } = req.params;
         const enabled = !!(req.body && req.body.enabled === true);
@@ -583,7 +584,7 @@ router.put('/:id/auto-sync', authMiddleware, async (req, res, next) => {
 
 // PUT /api/tournaments/:id/matches/:matchId - Opdater kamp (bruges fra court-siden;
 // i club-mode kræves device/club_admin-token ligesom game-states)
-router.put('/:id/matches/:matchId', requireWriteAuthInClubMode, ikkeQrSession, async (req, res, next) => {
+router.put('/:id/matches/:matchId', requireWriteAuthInClubMode, requirePage('tournament'), ikkeQrSession, async (req, res, next) => {
     try {
         const { id, matchId } = req.params;
         const {
@@ -670,7 +671,7 @@ router.put('/:id/matches/:matchId', requireWriteAuthInClubMode, ikkeQrSession, a
 });
 
 // PUT /api/tournaments/:id/finish - Marker turnering som afsluttet (kræver auth)
-router.put('/:id/finish', authMiddleware, async (req, res, next) => {
+router.put('/:id/finish', authMiddleware, requirePage('tournament'), async (req, res, next) => {
     try {
         const { id } = req.params;
 
@@ -695,7 +696,7 @@ router.put('/:id/finish', authMiddleware, async (req, res, next) => {
 // Bevarer aktive turneringer — det er en "ryd historik"-handling, ikke en nuke.
 // CASCADE på tournament_matches.tournament_id fjerner deres kampe automatisk.
 // NB: skal stå FØR /:id-routen ellers fanger den ikke den tomme path.
-router.delete('/', authMiddleware, async (req, res, next) => {
+router.delete('/', authMiddleware, requirePage('history'), async (req, res, next) => {
     try {
         const result = await query(`DELETE FROM tournaments WHERE status = 'finished'`);
         res.json({ success: true, deleted: result.affectedRows || 0 });
@@ -705,7 +706,7 @@ router.delete('/', authMiddleware, async (req, res, next) => {
 });
 
 // DELETE /api/tournaments/:id/matches/:matchId - Slet enkelt kamp (kræver auth)
-router.delete('/:id/matches/:matchId', authMiddleware, async (req, res, next) => {
+router.delete('/:id/matches/:matchId', authMiddleware, requirePage('tournament'), async (req, res, next) => {
     try {
         const { id, matchId } = req.params;
         await query(
@@ -719,7 +720,7 @@ router.delete('/:id/matches/:matchId', authMiddleware, async (req, res, next) =>
 });
 
 // DELETE /api/tournaments/:id - Slet turnering (kræver auth, cascade fjerner matches)
-router.delete('/:id', authMiddleware, async (req, res, next) => {
+router.delete('/:id', authMiddleware, requirePage('tournament'), async (req, res, next) => {
     try {
         const { id } = req.params;
         await query('DELETE FROM tournaments WHERE id = ?', [id]);

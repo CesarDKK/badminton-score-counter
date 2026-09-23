@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const { authMiddleware } = require('../middleware/auth');
+const { requirePage } = require('../middleware/pagePermission');
 
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const TS_BASE = 'https://badmintondenmark.tournamentsoftware.com';
@@ -331,7 +332,7 @@ async function fetchAndParseTournamentMatches(tournamentId) {
 // POST /api/import/tournament/preview
 // Body: { url } — URL fra tournamentsoftware.com (eller bare UUID)
 // Returnerer: { tournamentName, matchCount, matches: [...], days: [{date, value, label}] }
-router.post('/preview', authMiddleware, async (req, res, next) => {
+router.post('/preview', authMiddleware, requirePage('tournament'), async (req, res, next) => {
     try {
         const { url } = req.body;
         if (!url || typeof url !== 'string') {

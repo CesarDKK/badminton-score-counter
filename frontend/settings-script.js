@@ -226,7 +226,10 @@ async function downloadBackup() {
         const res = await fetch('/api/backup', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) {
+            const fejl = await res.json().catch(() => ({}));
+            throw new Error(fejl.error || res.statusText);
+        }
 
         const blob = await res.blob();
         const cd = res.headers.get('Content-Disposition') || '';

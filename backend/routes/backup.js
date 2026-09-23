@@ -4,6 +4,7 @@ const multer = require('multer');
 const db = require('../config/database');
 const { query, queryOne } = db;
 const { authMiddleware } = require('../middleware/auth');
+const { requireFuldAdgang } = require('../middleware/pagePermission');
 const { klubMappe, backupFilnavn, tilpasSponsorRaekker, hentSponsorFiler, skrivSponsorFiler } = require('../config/sponsorFiler');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
@@ -44,7 +45,7 @@ const BACKUP_TABLES = [
 ];
 
 // GET /api/backup — create and download a JSON backup of this club's data
-router.get('/', authMiddleware, async (req, res, next) => {
+router.get('/', authMiddleware, requireFuldAdgang, async (req, res, next) => {
     try {
         const tables = {};
         for (const table of BACKUP_TABLES) {
@@ -75,7 +76,7 @@ router.get('/', authMiddleware, async (req, res, next) => {
 });
 
 // POST /api/backup/restore — restore from a JSON backup
-router.post('/restore', authMiddleware, upload.single('backup'), async (req, res, next) => {
+router.post('/restore', authMiddleware, requireFuldAdgang, upload.single('backup'), async (req, res, next) => {
     let backup;
     try {
         backup = JSON.parse(req.file.buffer.toString('utf8'));
