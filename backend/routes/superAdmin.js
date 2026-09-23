@@ -377,17 +377,10 @@ const BACKUP_TABLES = [
     'device_tokens', 'player_info',
 ];
 
-// Se backup.js: filnavne og kolonnenavne i en uploadet backup er
-// angriberkontrollerede og valideres mod en whitelist før noget skrives.
-const SA_SIKKERT_FILNAVN = /^[A-Za-z0-9_.-]+$/;
-const SA_TILLADTE_ENDELSER = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
+// Se backup.js: filnavne, filstier og kolonnenavne i en uploadet backup er
+// angriberkontrollerede og valideres før noget skrives (config/sponsorFiler.js).
 const SA_SIKKERT_KOLONNENAVN = /^[A-Za-z0-9_]+$/;
-function saUgyldigtFilnavn(filename) {
-    return filename !== backupPath.basename(filename)
-        || !SA_SIKKERT_FILNAVN.test(filename)
-        || filename.includes('..')
-        || !SA_TILLADTE_ENDELSER.has(backupPath.extname(filename).toLowerCase());
-}
+const { backupFilnavn, tilpasSponsorRaekker, hentSponsorFiler, skrivSponsorFiler } = require('../config/sponsorFiler');
 
 // GET /api/super-admin/clubs/:id/backup — download backup for one club
 router.get('/clubs/:id/backup', superAdminAuth, async (req, res, next) => {
@@ -409,17 +402,7 @@ router.get('/clubs/:id/backup', superAdminAuth, async (req, res, next) => {
             await conn.end();
         }
 
-        const files = {};
-        const uploadDir = process.env.UPLOAD_DIR || backupPath.join(__dirname, '..', 'uploads');
-        const clubDir = backupPath.join(uploadDir, club.db_name);
-        if (tables.sponsor_images?.length) {
-            for (const img of tables.sponsor_images) {
-                const fp = backupPath.join(clubDir, img.filename);
-                if (backupFs.existsSync(fp)) {
-                    files[img.filename] = backupFs.readFileSync(fp).toString('base64');
-                }
-            }
-        }
+        const files = hentSponsorFiler(tables.sponsor_images, club.db_name);
 
         const backup = {
             version: '1.0',
@@ -463,7 +446,7 @@ router.post('/clubs/:id/restore', superAdminAuth, backupMulter.single('backup'),
     }
     if (backup.files && typeof backup.files === 'object') {
         for (const filename of Object.keys(backup.files)) {
-            if (saUgyldigtFilnavn(filename)) {
+            if (!backupFilnavn(filename)) {
                 return res.status(400).json({ error: `Ugyldigt filnavn i backup: ${filename}` });
             }
         }
@@ -475,6 +458,9 @@ router.post('/clubs/:id/restore', superAdminAuth, backupMulter.single('backup'),
             [req.params.id]
         );
         if (!club) return res.status(404).json({ error: 'Klub ikke fundet' });
+
+        const filFejl = tilpasSponsorRaekker(backup.tables.sponsor_images, club.db_name);
+        if (filFejl) return res.status(400).json({ error: filFejl });
 
         const conn = await clubConn(club.db_name);
         try {
@@ -498,14 +484,7 @@ router.post('/clubs/:id/restore', superAdminAuth, backupMulter.single('backup'),
             await conn.end();
         }
 
-        if (backup.files && Object.keys(backup.files).length > 0) {
-            const uploadDir = process.env.UPLOAD_DIR || backupPath.join(__dirname, '..', 'uploads');
-            const clubDir = backupPath.join(uploadDir, club.db_name);
-            if (!backupFs.existsSync(clubDir)) backupFs.mkdirSync(clubDir, { recursive: true });
-            for (const [filename, b64] of Object.entries(backup.files)) {
-                backupFs.writeFileSync(backupPath.join(clubDir, filename), Buffer.from(b64, 'base64'));
-            }
-        }
+        skrivSponsorFiler(backup.files, club.db_name);
 
         res.json({
             success: true,
