@@ -66,12 +66,16 @@ router.get('/validate/:token', async (req, res, next) => {
 
 // --- Klub admin endpoints (kræver club admin JWT) ---
 
-// GET /api/device-tokens — list alle tokens for denne klub
+// GET /api/device-tokens — list klubbens adgangslinks. QR-sessionerne (token_type
+// 'match_session') vises ikke: de oprettes automatisk af TV'et, skifter efter hver
+// kamp og er ikke noget, admin skal kopiere eller tilbagekalde.
 router.get('/', adgangslinkAdmin, async (req, res, next) => {
     try {
         const tokens = await query(
             `SELECT id, token, name, destination, locked, show_qr_on_tv, is_active, created_at, last_used_at
-             FROM device_tokens ORDER BY created_at DESC`
+             FROM device_tokens
+             WHERE COALESCE(token_type, 'permanent') <> 'match_session'
+             ORDER BY created_at DESC`
         );
         res.json(tokens);
     } catch (error) {
