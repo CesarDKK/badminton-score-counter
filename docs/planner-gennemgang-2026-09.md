@@ -83,8 +83,8 @@ Appendiks 2 (sammenlægning) og "U9-U11 turneringer 2026-2027 Vejledning" — al
       (Afløser punkt 13's spiller-baserede haltid; spillerens ventetid er fortsat et blødt kriterie.)
 - [x] **Rækkefølge efter vejledningen:** U9/U11 single → double → mix; U13 og op mix → double → single
       (`standardRaekkefoelge`); gemte projekter får den én gang (`raekkefoelgeV2`).
-- [ ] Idé (Appendiks 2): vis en oplysning ved kategorier med under 4 tilmeldte om, hvilke rækker de må sammenlægges
-      med. Sammenlægningen sker fortsat i TP.
+- [x] ~~Idé (Appendiks 2): vis en oplysning ved kategorier med under 4 tilmeldte om, hvilke rækker de må sammenlægges
+      med. Sammenlægningen sker fortsat i TP.~~ Fravalgt af Jesper 2026-09-23: sammenlægning afgøres i TP, og reglerne i Appendiks 2 kræver skøn (nybegyndere, pointniveau, accept), som planneren ikke kan træffe.
 
 ## Pakke 3 — én kapacitetsberegning, stabilt formvalg og stabile kamp-id'er (lavet 2026-09-21)
 
