@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const { req } = require('./helpers');
 const http = require('node:http');
 
-// Hjælpefunktion der sætter X-Forwarded-Host (Express læser den med trust proxy)
+// Sender en forfalsket X-Forwarded-Host. Serveren stoler ikke på X-Forwarded-*
+// (trust proxy er slået fra), så klubben skal afgøres af Host alene.
 function reqWithForwardedHost(path, host) {
     return new Promise((resolve, reject) => {
         const headers = {
@@ -37,9 +38,16 @@ test('Mode: localhost/IP returnerer direct', async () => {
 
 test('Mode: admin subdomain returnerer admin', async () => {
     const appDomain = process.env.APP_DOMAIN || 'badmintonapp.dk';
-    const { status, body } = await reqWithForwardedHost('/api/mode', `admin.${appDomain}`);
+    const { status, body } = await req('/api/mode', {}, { host: `admin.${appDomain}` });
     assert.equal(status, 200);
     assert.equal(body.mode, 'admin');
+});
+
+test('Mode: X-Forwarded-Host fra klienten skifter ikke klub/tilstand', async () => {
+    const appDomain = process.env.APP_DOMAIN || 'badmintonapp.dk';
+    const { status, body } = await reqWithForwardedHost('/api/mode', `admin.${appDomain}`);
+    assert.equal(status, 200);
+    assert.equal(body.mode, 'direct');
 });
 
 test('Mode: mode feltet er altid til stede', async () => {

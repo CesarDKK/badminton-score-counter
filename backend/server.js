@@ -11,7 +11,11 @@ const { startMidnightReset, startExpirationCheck, startInactivityCheck, startTou
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.set('trust proxy', true);
+// Stol IKKE på X-Forwarded-*-headere: dem kan klienten selv sende med gennem
+// Cloudflare og nginx. Med 'trust proxy' slået til afgjorde X-Forwarded-Host
+// klubben (req.hostname) og X-Forwarded-For IP'en. Klubben tages nu fra Host,
+// som nginx sætter, og IP'en fra CF-Connecting-IP/X-Real-IP (middleware/rateLimiter.js).
+app.set('trust proxy', false);
 
 app.use(helmet());
 app.use(cors());
@@ -51,8 +55,9 @@ app.get('/health', async (req, res) => {
 });
 
 // Routes
-const { loginLimiter } = require('./middleware/rateLimiter');
+const { loginLimiter, superAdminLoginLimiter } = require('./middleware/rateLimiter');
 
+app.use('/api/super-admin/login', superAdminLoginLimiter);
 app.use('/api/super-admin', require('./routes/superAdmin'));
 app.use('/api/auth', loginLimiter, require('./routes/auth'));
 app.use('/api/club-admin/login', loginLimiter);

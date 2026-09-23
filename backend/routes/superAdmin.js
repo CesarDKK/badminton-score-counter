@@ -4,6 +4,7 @@ const bcrypt = require('bcrypt');
 const mysql = require('mysql2/promise');
 const masterDb = require('../config/masterDatabase');
 const { superAdminAuth, generateSuperAdminToken } = require('../middleware/superAdminAuth');
+const { forkertLogin } = require('../middleware/rateLimiter');
 const fs = require('fs');
 const sharp = require('sharp');
 const AdmZip = require('adm-zip');
@@ -40,12 +41,12 @@ router.post('/login', async (req, res, next) => {
         );
 
         if (!admin) {
-            return res.status(401).json({ error: 'Forkert brugernavn eller adgangskode' });
+            return res.status(401).json({ error: forkertLogin(req, 'Forkert brugernavn eller adgangskode') });
         }
 
         const isValid = await bcrypt.compare(password, admin.password_hash);
         if (!isValid) {
-            return res.status(401).json({ error: 'Forkert brugernavn eller adgangskode' });
+            return res.status(401).json({ error: forkertLogin(req, 'Forkert brugernavn eller adgangskode') });
         }
 
         const mustChange = !!admin.must_change_password;

@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const { query, queryOne } = require('../config/database');
 const { generateToken } = require('../middleware/auth');
+const { forkertLogin } = require('../middleware/rateLimiter');
 
 // POST /api/auth/login - Verify password and return JWT token
 router.post('/login', async (req, res, next) => {
@@ -36,7 +37,7 @@ router.post('/login', async (req, res, next) => {
         const isValid = await bcrypt.compare(password, setting.setting_value);
 
         if (!isValid) {
-            return res.status(401).json({ error: 'Forkert adgangskode' });
+            return res.status(401).json({ error: forkertLogin(req, 'Forkert adgangskode') });
         }
 
         // Generate JWT token

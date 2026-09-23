@@ -14,7 +14,9 @@ const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const UPLOAD_DIR = process.env.UPLOAD_DIR || '/app/uploads';
 
-app.set('trust proxy', true);
+// Stol ikke på X-Forwarded-*: klienten kan selv sende dem med, og med 'trust proxy'
+// afgjorde X-Forwarded-Host klubben (req.hostname). Klubben tages nu fra Host, som nginx sætter.
+app.set('trust proxy', false);
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 
