@@ -52,11 +52,16 @@ document.addEventListener('DOMContentLoaded', function () {
     // afsløre server-interne detaljer, og netværksfejl skal kunne skelnes.
     function friendlyLoginError(err) {
         const status = err && err.status;
-        if (status === 401 || status === 403) {
+        // 401/429: serverens egen besked siger også, hvor mange forsøg der er
+        // tilbage, og hvornår man kan prøve igen
+        if (status === 401) {
+            return (err.message && !/^HTTP /.test(err.message)) ? err.message : 'Forkert brugernavn eller adgangskode';
+        }
+        if (status === 403) {
             return 'Forkert brugernavn eller adgangskode';
         }
         if (status === 429) {
-            return 'For mange forsøg. Vent et øjeblik, og prøv igen.';
+            return (err.message && !/^HTTP /.test(err.message)) ? err.message : 'For mange forsøg. Vent et øjeblik, og prøv igen.';
         }
         if (status >= 500) {
             return 'Serverfejl. Prøv igen om lidt.';

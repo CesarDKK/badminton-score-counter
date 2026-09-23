@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const { query, queryOne } = require('../config/database');
 const { clubAdminAuth, generateClubAdminToken } = require('../middleware/clubAdminAuth');
+const { forkertLogin } = require('../middleware/rateLimiter');
 
 // POST /api/club-admin/login
 router.post('/login', async (req, res, next) => {
@@ -20,12 +21,12 @@ router.post('/login', async (req, res, next) => {
         );
 
         if (!admin) {
-            return res.status(401).json({ error: 'Forkert brugernavn eller adgangskode' });
+            return res.status(401).json({ error: forkertLogin(req, 'Forkert brugernavn eller adgangskode') });
         }
 
         const isValid = await bcrypt.compare(password, admin.password_hash);
         if (!isValid) {
-            return res.status(401).json({ error: 'Forkert brugernavn eller adgangskode' });
+            return res.status(401).json({ error: forkertLogin(req, 'Forkert brugernavn eller adgangskode') });
         }
 
         // page_permissions: NULL = fuld adgang. Ellers JSON-array af side-noegler.

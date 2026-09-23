@@ -33,13 +33,39 @@ function erLokaltNet(req) {
 // Vi tæller selv på klientIp; express-rate-limit skal ikke advare om trust proxy / X-Forwarded-For
 const FAELLES = { standardHeaders: true, legacyHeaders: false, validate: false };
 
+// Hele minutter til grænsen nulstilles (tælleren starter ved første forsøg, så det
+// er sjældent hele vinduet). null hvis kaldet ikke er talt (fx lokalt net).
+function minutterTilNulstilling(req) {
+    const reset = req.rateLimit && req.rateLimit.resetTime;
+    if (!reset) return null;
+    return Math.max(1, Math.ceil((reset.getTime() - Date.now()) / 60000));
+}
+const minutter = (n) => (n === 1 ? '1 minut' : `${n} minutter`);
+
+// Svaret, når grænsen er nået: hvor mange forsøg, og hvornår man kan prøve igen
+function spaerret(req) {
+    const m = minutterTilNulstilling(req);
+    return { error: `Du har brugt alle ${req.rateLimit.limit} login-forsøg. Prøv igen om ${minutter(m || 1)}.` };
+}
+
+// Beskeden ved forkert brugernavn/adgangskode: advar, når der er få forsøg tilbage
+function forkertLogin(req, tekst) {
+    const rl = req.rateLimit;
+    if (!rl) return tekst;
+    if (rl.remaining <= 0) {
+        return `${tekst}. Du har brugt alle ${rl.limit} forsøg — prøv igen om ${minutter(minutterTilNulstilling(req) || 1)}.`;
+    }
+    if (rl.remaining <= 3) return `${tekst}. ${rl.remaining} forsøg tilbage.`;
+    return tekst;
+}
+
 // Login (klub-admin og det simple admin-login): 10 forsøg pr. 5 min pr. IP
 const loginLimiter = rateLimit({
     ...FAELLES,
     windowMs: 5 * 60 * 1000,
     max: 10,
     keyGenerator: (req) => 'login:' + klientIp(req),
-    message: { error: 'For mange login forsøg. Prøv igen om 5 minutter.' },
+    message: spaerret,
     skip: erLokaltNet,
 });
 
@@ -49,7 +75,7 @@ const superAdminLoginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 5,
     keyGenerator: (req) => 'super-admin-login:' + klientIp(req),
-    message: { error: 'For mange login forsøg. Prøv igen om 15 minutter.' },
+    message: spaerret,
 });
 
 // Upload: 20 pr. 5 min pr. IP
@@ -91,5 +117,6 @@ module.exports = {
     plannerTokenLimiter,
     plannerIpLimiter,
     klientIp,
+    forkertLogin,
     erLokaltNet
 };

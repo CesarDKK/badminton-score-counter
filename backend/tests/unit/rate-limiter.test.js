@@ -81,3 +81,36 @@ test('super-admin-login: ingen fritagelse for lokalt net', async () => {
     const koder = await forsoeg('/super-admin/login', 6, { 'x-real-ip': '192.168.1.99' });
     assert.equal(koder[5], 429);
 });
+
+// ── Beskederne: forsøg tilbage og hvornår man kan prøve igen ─────────────
+
+const { forkertLogin } = require('../../middleware/rateLimiter');
+const om = (ms) => new Date(Date.now() + ms);
+
+test('forkert login: ingen advarsel, så længe der er mange forsøg tilbage', () => {
+    assert.equal(forkertLogin({ rateLimit: { limit: 10, remaining: 7, resetTime: om(240000) } }, 'Forkert adgangskode'), 'Forkert adgangskode');
+});
+
+test('forkert login: advarsel ved 3 forsøg tilbage eller færre', () => {
+    assert.equal(forkertLogin({ rateLimit: { limit: 5, remaining: 3, resetTime: om(600000) } }, 'Forkert brugernavn eller adgangskode'),
+        'Forkert brugernavn eller adgangskode. 3 forsøg tilbage.');
+    assert.equal(forkertLogin({ rateLimit: { limit: 5, remaining: 1, resetTime: om(600000) } }, 'X'), 'X. 1 forsøg tilbage.');
+});
+
+test('forkert login: sidste forsøg brugt — siger hvornår man kan prøve igen', () => {
+    assert.equal(forkertLogin({ rateLimit: { limit: 5, remaining: 0, resetTime: om(11.5 * 60000) } }, 'X'),
+        'X. Du har brugt alle 5 forsøg — prøv igen om 12 minutter.');
+    assert.equal(forkertLogin({ rateLimit: { limit: 5, remaining: 0, resetTime: om(20000) } }, 'X'),
+        'X. Du har brugt alle 5 forsøg — prøv igen om 1 minut.');
+});
+
+test('forkert login: ikke talt (lokalt net) — kun selve beskeden', () => {
+    assert.equal(forkertLogin({}, 'Forkert adgangskode'), 'Forkert adgangskode');
+});
+
+test('spærret: svaret siger antal forsøg og minutter til nulstilling', async () => {
+    const r = await fetch(url('/super-admin/login'), { method: 'POST', headers: { 'cf-connecting-ip': '203.0.113.60' } });
+    assert.equal(r.status, 429);
+    assert.match((await r.json()).error, /^Du har brugt alle 5 login-forsøg\. Prøv igen om (1[0-5]|[1-9]) minut(ter)?\.$/);
+    assert.ok(Number(r.headers.get('retry-after')) > 0, 'Retry-After-header');
+});
