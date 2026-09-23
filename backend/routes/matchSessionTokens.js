@@ -3,6 +3,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const QRCode = require('qrcode');
 const { query, queryOne } = require('../config/database');
+const { afvisQrKode } = require('../middleware/qrSession');
 
 // Henter den aktive match-session token for en bane, eller null hvis ingen findes.
 // Bruges i "resume"-mode hvor vi KUN vil vise QR hvis banen allerede kører i
@@ -60,6 +61,11 @@ router.get('/:courtId', async (req, res) => {
     if (!Number.isInteger(courtNumber) || courtNumber < 1 || courtNumber > 20) {
         return res.status(400).end();
     }
+
+    // QR-koden udsteder skriveadgang til banen, så den vises kun på banens TV
+    // (eller for en admin) — ikke for enhver, der kender adressen.
+    const afvist = afvisQrKode(req, courtNumber);
+    if (afvist) return res.status(afvist).end();
 
     try {
         // resume=1: vis kun QR hvis banen allerede har en aktiv guest-session

@@ -48,6 +48,7 @@ let cachedSetScores = {
 };
 // QR counter — kun aktiv i klub-mode; vises når banen er ledig, gemmes når kampen starter
 let qrCounterEnabled = false;
+let qrCounterObjectUrl = null; // blob-URL til den senest hentede QR-kode
 let qrCounterVisible = false;
 let qrCounterMode = null; // 'idle' | 'resume' | null
 
@@ -1633,22 +1634,25 @@ function showQrCounter(mode = 'idle') {
     container.classList.toggle('qr-counter--compact', cfg.compact);
     if (label) label.textContent = cfg.label;
 
-    // Cache-busting via timestamp så en ny token hentes efter invalidering.
-    const q = cfg.peek ? 'resume=1&' : '';
-    if (cfg.peek) {
-        // Vent med at vise boksen til billedet faktisk loader — så en bane uden
-        // guest-session (fx holdkamp) ikke blinker en tom QR-ramme før 404'en.
-        container.style.display = 'none';
-        qrCounterVisible = false;
-        img.onload = () => { if (qrCounterMode === mode) { container.style.display = 'flex'; qrCounterVisible = true; } };
-        img.onerror = () => { if (qrCounterMode === mode) hideQrCounter(); };
-    } else {
-        img.onload = null;
-        img.onerror = null;
-        container.style.display = 'flex';
-        qrCounterVisible = true;
-    }
-    img.src = `/api/qr-code/${courtId}?${q}t=${Date.now()}`;
+    // QR-koden udsteder skriveadgang til banen, så backend udleverer den kun til
+    // banens TV: den hentes med TV'ets adgangslink og vises som blob. Boksen vises
+    // først, når billedet er hentet — så en bane uden guest-session (fx holdkamp,
+    // 404 i peek-tilstand) ikke blinker en tom QR-ramme.
+    container.style.display = 'none';
+    qrCounterVisible = false;
+    const q = cfg.peek ? 'resume=1' : '';
+    const headers = api.token ? { Authorization: `Bearer ${api.token}` } : {};
+    fetch(`/api/qr-code/${courtId}?${q}`, { headers, cache: 'no-store' })
+        .then((res) => (res.ok ? res.blob() : Promise.reject(res.status)))
+        .then((blob) => {
+            if (qrCounterMode !== mode) return;
+            if (qrCounterObjectUrl) URL.revokeObjectURL(qrCounterObjectUrl);
+            qrCounterObjectUrl = URL.createObjectURL(blob);
+            img.src = qrCounterObjectUrl;
+            container.style.display = 'flex';
+            qrCounterVisible = true;
+        })
+        .catch(() => { if (qrCounterMode === mode) hideQrCounter(); });
 }
 
 function hideQrCounter() {
