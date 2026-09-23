@@ -5,6 +5,7 @@ const { authMiddleware } = require('../middleware/auth');
 const { uploadLimiter } = require('../middleware/rateLimiter');
 const upload = require('../config/multer');
 const { validateImageMagic } = require('../config/imageUpload');
+const { klubMappe, sponsorFilSti } = require('../config/sponsorFiler');
 const { publishConfigChange } = require('../events/gameStateEvents');
 const sharp = require('sharp');
 const fs = require('fs').promises;
@@ -340,7 +341,7 @@ router.delete('/:id', authMiddleware, async (req, res, next) => {
 
         // Get image info
         const image = await queryOne(
-            'SELECT filename, file_path FROM sponsor_images WHERE id = ?',
+            'SELECT filename FROM sponsor_images WHERE id = ?',
             [id]
         );
 
@@ -351,9 +352,11 @@ router.delete('/:id', authMiddleware, async (req, res, next) => {
         // Delete from database
         await query('DELETE FROM sponsor_images WHERE id = ?', [id]);
 
-        // Delete file from filesystem
+        // Slet filen — stien bygges af filnavnet i klubbens egen mappe, aldrig af
+        // file_path (som kan stamme fra en uploadet backup, se config/sponsorFiler.js)
         try {
-            await fs.unlink(image.file_path);
+            const sti = sponsorFilSti(klubMappe(req), image.filename);
+            if (sti) await fs.unlink(sti);
         } catch (fileError) {
             console.error('Error deleting file:', fileError);
             // Continue even if file deletion fails
@@ -369,7 +372,7 @@ router.delete('/:id', authMiddleware, async (req, res, next) => {
 router.delete('/all', authMiddleware, async (req, res, next) => {
     try {
         // Get all images
-        const images = await query('SELECT filename, file_path FROM sponsor_images');
+        const images = await query('SELECT filename FROM sponsor_images');
 
         // Delete all from database
         await query('DELETE FROM sponsor_images');
@@ -377,7 +380,8 @@ router.delete('/all', authMiddleware, async (req, res, next) => {
         // Delete all files from filesystem
         for (const image of images) {
             try {
-                await fs.unlink(image.file_path);
+                const sti = sponsorFilSti(klubMappe(req), image.filename);
+                if (sti) await fs.unlink(sti);
             } catch (fileError) {
                 console.error(`Error deleting file ${image.filename}:`, fileError);
                 // Continue with other files

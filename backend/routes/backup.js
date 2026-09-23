@@ -1,27 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const fs = require('fs');
-const path = require('path');
 const multer = require('multer');
 const db = require('../config/database');
 const { query, queryOne } = db;
 const { authMiddleware } = require('../middleware/auth');
+const { klubMappe, backupFilnavn, tilpasSponsorRaekker, hentSponsorFiler, skrivSponsorFiler } = require('../config/sponsorFiler');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
-// Filnavne og kolonnenavne i en backup-fil er angriberkontrollerede: filnavnet
-// ender i fs.writeFileSync (path traversal → vilkårlig filskrivning) og
-// kolonnenavnet i backticks i SQL (identifier injection). Begge valideres mod
-// en stram whitelist FØR noget skrives. Multer-genererede filnavne (basename_
-// timestamp_hex.ext) passerer altid.
-const SIKKERT_FILNAVN = /^[A-Za-z0-9_.-]+$/;
-const TILLADTE_ENDELSER = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
-function ugyldigtBackupFilnavn(filename) {
-    return filename !== path.basename(filename)
-        || !SIKKERT_FILNAVN.test(filename)
-        || filename.includes('..')
-        || !TILLADTE_ENDELSER.has(path.extname(filename).toLowerCase());
-}
+// Filnavne, filstier og kolonnenavne i en backup-fil er angriberkontrollerede:
+// filnavnet ender i fs.writeFileSync (path traversal), file_path blev før brugt,
+// når et billede blev slettet (vilkårlig filsletning), og kolonnenavnet står i
+// backticks i SQL (identifier injection). Alt valideres FØR noget skrives, og
+// sponsorbillederne peges ind i klubbens egen mappe (config/sponsorFiler.js).
 const SIKKERT_KOLONNENAVN = /^[A-Za-z0-9_]+$/;
 
 const BACKUP_VERSION = '1.0';
@@ -60,22 +51,9 @@ router.get('/', authMiddleware, async (req, res, next) => {
             tables[table] = await query(`SELECT * FROM \`${table}\``);
         }
 
-        // Embed sponsor image files as base64
-        const files = {};
-        const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
-        const clubDir = req.clubSubdomain
-            ? path.join(uploadDir, `badminton_counter_${req.clubSubdomain}`)
-            : uploadDir;
-
-        if (tables.sponsor_images && tables.sponsor_images.length > 0) {
-            for (const img of tables.sponsor_images) {
-                const filePath = path.join(clubDir, img.filename);
-                if (fs.existsSync(filePath)) {
-                    const data = fs.readFileSync(filePath);
-                    files[img.filename] = data.toString('base64');
-                }
-            }
-        }
+        // Sponsorbillederne som base64 — fra klubbens egen mappe. (Før blev de ledt
+        // efter i en mappe, der ikke findes, så de kom aldrig med.)
+        const files = hentSponsorFiler(tables.sponsor_images, klubMappe(req));
 
         const backup = {
             version: BACKUP_VERSION,
@@ -124,11 +102,14 @@ router.post('/restore', authMiddleware, upload.single('backup'), async (req, res
     }
     if (backup.files && typeof backup.files === 'object') {
         for (const filename of Object.keys(backup.files)) {
-            if (ugyldigtBackupFilnavn(filename)) {
+            if (!backupFilnavn(filename)) {
                 return res.status(400).json({ error: `Ugyldigt filnavn i backup: ${filename}` });
             }
         }
     }
+
+    const filFejl = tilpasSponsorRaekker(backup.tables.sponsor_images, klubMappe(req));
+    if (filFejl) return res.status(400).json({ error: filFejl });
 
     // Gendannelse i én transaktion: fejler et INSERT, rulles alt tilbage, så
     // klubbens data ikke efterlades halvt slettet. Filerne skrives først bagefter.
@@ -165,20 +146,8 @@ router.post('/restore', authMiddleware, upload.single('backup'), async (req, res
     conn.release();
 
     try {
-        // Restore image files (efter commit — kun validerede filnavne)
-        if (backup.files && Object.keys(backup.files).length > 0) {
-            const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
-            const clubDir = req.clubSubdomain
-                ? path.join(uploadDir, `badminton_counter_${req.clubSubdomain}`)
-                : uploadDir;
-
-            if (!fs.existsSync(clubDir)) fs.mkdirSync(clubDir, { recursive: true });
-
-            for (const [filename, b64] of Object.entries(backup.files)) {
-                const filePath = path.join(clubDir, filename);
-                fs.writeFileSync(filePath, Buffer.from(b64, 'base64'));
-            }
-        }
+        // Billedfilerne (efter commit — kun validerede filnavne, i klubbens egen mappe)
+        skrivSponsorFiler(backup.files, klubMappe(req));
 
         res.json({
             success: true,
