@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { adgangslinkAfvist } = require('./auth');
 
 // QR-tælleren: enhver telefon må scanne QR-koden på banens TV og tælle kampen
 // uden login. Det skal blive ved med at være sådan — men adgangen skal følge
@@ -10,7 +11,8 @@ const jwt = require('jsonwebtoken');
 //      kun almindelig tælling — ikke holdkamp- og turneringsresultater.
 //   3. Den ophører, når banen ryddes, tildeles en holdkamp/turneringskamp eller
 //      frigives efter inaktivitet (rækken i device_tokens slettes). JWT'en
-//      gælder 12 timer, så rækken tjekkes ved hver skrivning.
+//      gælder 12 timer, så rækken tjekkes ved hver skrivning — det gør
+//      requireWriteAuthInClubMode for alle adgangslinks (middleware/auth.js).
 
 // Bane-nummeret en device-session hører til ('court/3' / 'tv/3' → 3), ellers null
 function baneFraDestination(destination) {
@@ -20,36 +22,16 @@ function baneFraDestination(destination) {
 
 const erQrSession = (user) => !!user && user.role === 'device' && user.tokenType === 'match_session';
 
-async function standardErAktiv(tokenId) {
-    const { queryOne } = require('../config/database');
-    const row = await queryOne(
-        "SELECT id FROM device_tokens WHERE id = ? AND token_type = 'match_session' AND is_active = 1",
-        [tokenId]
-    );
-    return !!row;
-}
-
 // Efter requireWriteAuthInClubMode på bane-ruter: en QR-session må kun skrive
-// til sin egen bane, og kun så længe sessionen ikke er afsluttet.
+// til sin egen bane. (At sessionen stadig er aktiv, har requireWriteAuthInClubMode tjekket.)
 // param = navnet på route-parameteren med banenummeret, eller en funktion (req) → banenummer.
-function kunEgenBane(param, { erAktiv = standardErAktiv } = {}) {
-    return async function (req, res, next) {
+function kunEgenBane(param) {
+    return function (req, res, next) {
         if (!erQrSession(req.user)) return next();
 
         const bane = parseInt(typeof param === 'function' ? param(req) : req.params[param], 10);
         if (baneFraDestination(req.user.destination) !== bane) {
             return res.status(403).json({ error: 'QR-koden gælder en anden bane' });
-        }
-        try {
-            if (!(await erAktiv(req.user.tokenId))) {
-                return res.status(401).json({
-                    error: 'Kampen er afsluttet — scan QR-koden igen',
-                    authRequired: true,
-                    qrSessionEnded: true
-                });
-            }
-        } catch (err) {
-            return next(err);
         }
         next();
     };
@@ -64,10 +46,10 @@ function ikkeQrSession(req, res, next) {
     next();
 }
 
-// Må den, der kalder, få QR-koden til banen vist? Kun banens TV (et fast
-// adgangslink til tv/<bane>, eller et gammelt TV-link uden bane), klubbens
-// admin eller super-admin. Returnerer en HTTP-status ved afvisning, ellers null.
-function afvisQrKode(req, courtNumber) {
+// Må den, der kalder, få QR-koden til banen vist? Kun banens TV (et fast og
+// stadig aktivt adgangslink til tv/<bane>, eller et gammelt TV-link uden bane),
+// klubbens admin eller super-admin. Returnerer en HTTP-status ved afvisning, ellers null.
+async function afvisQrKode(req, courtNumber) {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) return 401;
 
@@ -84,8 +66,10 @@ function afvisQrKode(req, courtNumber) {
 
     if (decoded.role === 'device' && decoded.tokenType !== 'match_session') {
         const dest = decoded.destination || '';
-        if (dest === 'tv' || dest === 'tv-v3') return null;           // gamle TV-links uden bane
-        if (dest.startsWith('tv/') && baneFraDestination(dest) === courtNumber) return null;
+        const tv = dest === 'tv' || dest === 'tv-v3'                  // gamle TV-links uden bane
+            || (dest.startsWith('tv/') && baneFraDestination(dest) === courtNumber);
+        if (!tv) return 403;
+        return (await adgangslinkAfvist(decoded)) ? 401 : null;       // tilbagekaldt TV-link
     }
     return 403;
 }
