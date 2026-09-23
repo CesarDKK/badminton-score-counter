@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { klubAdminAfvist } = require('./klubAdminSession');
 
 // Admin-auth til beskyttede endpoints (backup, indstillinger, sponsorer, sletning m.m.).
 //
@@ -8,13 +9,14 @@ const jwt = require('jsonwebtoken');
 //
 // Accepteres:
 //   - super_admin: altid (styrer alle klubber)
-//   - club_admin:  kun på den klub tokenet er udstedt til
+//   - club_admin:  kun på den klub tokenet er udstedt til, og kun så længe
+//                  admin'en findes og adgangskoden er den samme (klubAdminSession.js)
 //   - { admin: true } (simpelt admin-login): kun uden for club-mode — i club-mode
 //     udstedes den slags tokens slet ikke (se routes/auth.js), og et gammelt/
 //     fremmed et af slagsen må ikke give adgang på tværs af klubber
 // Afvises altid:
 //   - device-tokens: de er visnings-/tælleradgang, ikke administration
-function authMiddleware(req, res, next) {
+async function authMiddleware(req, res, next) {
     try {
         // Get token from Authorization header
         const authHeader = req.headers.authorization;
@@ -38,10 +40,16 @@ function authMiddleware(req, res, next) {
             if (!erKlubbensAdmin && decoded.role !== 'super_admin') {
                 return res.status(403).json({ error: 'Token giver ikke adgang til denne klub' });
             }
-        } else if (decoded.admin !== true
-            && decoded.role !== 'club_admin'
-            && decoded.role !== 'super_admin') {
+        } else if (decoded.admin !== true && decoded.role !== 'super_admin') {
+            // Uden for club-mode (lokal installation, app., admin.) er der ingen klub
+            // at være klub-admin for — et klub-admin-token giver ikke adgang her
             return res.status(403).json({ error: 'Token giver ikke admin-adgang' });
+        }
+
+        // Slettet admin eller skiftet adgangskode: sessionen gælder ikke længere
+        if (decoded.role === 'club_admin') {
+            const afvist = await klubAdminAfvist(decoded);
+            if (afvist) return res.status(401).json({ error: afvist, sessionEnded: true });
         }
 
         // Attach decoded payload to request
@@ -132,10 +140,15 @@ async function requireWriteAuthInClubMode(req, res, next) {
         return res.status(403).json({ error: 'Adgangslink hører til en anden klub', authRequired: true });
     }
 
-    // Tilbagekaldt, slettet eller (QR) afsluttet adgangslink
+    // Tilbagekaldt, slettet eller (QR) afsluttet adgangslink — og for klub-admins:
+    // slettet bruger eller skiftet adgangskode
     try {
         const afvist = await adgangslinkAfvist(decoded);
         if (afvist) return res.status(401).json(afvist);
+        if (decoded.role === 'club_admin') {
+            const fejl = await klubAdminAfvist(decoded);
+            if (fejl) return res.status(401).json({ error: fejl, authRequired: true, sessionEnded: true });
+        }
     } catch (err) {
         return next(err);
     }

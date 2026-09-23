@@ -16,6 +16,11 @@ const { authMiddleware, requireWriteAuthInClubMode, _saetAdgangslinkOpslag } = r
 // Adgangslink-opslaget i databasen: id 1–99 er aktive, alt andet tilbagekaldt/slettet
 _saetAdgangslinkOpslag(async (id) => id >= 1 && id < 100);
 
+// Klub-admins i databasen: admin 1 findes med hash 'hash-1'; alle andre er slettet
+const { _saetKlubAdminOpslag, kodeAftryk } = require('../../middleware/klubAdminSession');
+_saetKlubAdminOpslag(async (id) => (id === 1 ? { password_hash: 'hash-1', page_permissions: null } : null));
+const ADMIN = { role: 'club_admin', id: 1, pv: kodeAftryk('hash-1') };
+
 const sign = (payload) => jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
 
 function req({ token, accessMode, clubSubdomain }) {
@@ -57,7 +62,7 @@ test('authMiddleware: club_admin fra en ANDEN klub afvises', async () => {
 });
 
 test('authMiddleware: club_admin for EGEN klub tillades', async () => {
-    const r = await run(authMiddleware, req({ token: sign({ role: 'club_admin', clubSubdomain: 'lyngby' }), accessMode: 'club', clubSubdomain: 'lyngby' }));
+    const r = await run(authMiddleware, req({ token: sign({ ...ADMIN, clubSubdomain: 'lyngby' }), accessMode: 'club', clubSubdomain: 'lyngby' }));
     assert.equal(r.nexted, true);
 });
 
@@ -119,7 +124,7 @@ test('write: device-token for ANDEN klub afvises', async () => {
 });
 
 test('write: club_admin for egen klub tillades', async () => {
-    const r = await run(requireWriteAuthInClubMode, req({ token: sign({ role: 'club_admin', clubSubdomain: 'lyngby' }), accessMode: 'club', clubSubdomain: 'lyngby' }));
+    const r = await run(requireWriteAuthInClubMode, req({ token: sign({ ...ADMIN, clubSubdomain: 'lyngby' }), accessMode: 'club', clubSubdomain: 'lyngby' }));
     assert.equal(r.nexted, true);
 });
 
@@ -159,7 +164,7 @@ test('write: device-token uden tokenId afvises', async () => {
 test('write: admins slås ikke op i device_tokens', async () => {
     _saetAdgangslinkOpslag(async () => { throw new Error('må ikke slå op'); });
     try {
-        assert.equal((await run(requireWriteAuthInClubMode, club({ role: 'club_admin' }))).nexted, true);
+        assert.equal((await run(requireWriteAuthInClubMode, club(ADMIN))).nexted, true);
         assert.equal((await run(requireWriteAuthInClubMode, club({ role: 'super_admin' }))).nexted, true);
     } finally {
         _saetAdgangslinkOpslag(async (id) => id >= 1 && id < 100);
@@ -175,5 +180,46 @@ test('write: databasefejl ved opslaget går til fejlhåndteringen', async () => 
         assert.equal(fejl && fejl.message, 'db nede');
     } finally {
         _saetAdgangslinkOpslag(async (id) => id >= 1 && id < 100);
+    }
+});
+
+// ── Klub-admin-sessioner følger brugeren (A8) ────────────────────────────
+
+test('admin: slettet klub-admin afvises med 401 og sessionEnded', async () => {
+    for (const mw of [authMiddleware, requireWriteAuthInClubMode]) {
+        const r = await run(mw, club({ role: 'club_admin', id: 2, pv: kodeAftryk('hash-2') }));
+        assert.equal(r.status, 401);
+        assert.equal(r.body.sessionEnded, true);
+        assert.match(r.body.error, /findes ikke/);
+    }
+});
+
+test('admin: skiftet adgangskode gør gamle sessioner ugyldige', async () => {
+    for (const mw of [authMiddleware, requireWriteAuthInClubMode]) {
+        const r = await run(mw, club({ role: 'club_admin', id: 1, pv: kodeAftryk('gammel-hash') }));
+        assert.equal(r.status, 401);
+        assert.match(r.body.error, /Adgangskoden er ændret/);
+    }
+});
+
+test('admin: tokens fra før rettelsen (uden fingeraftryk) skal logge ind igen', async () => {
+    const r = await run(authMiddleware, club({ role: 'club_admin', id: 1 }));
+    assert.equal(r.status, 401);
+});
+
+test('admin: klub-admin-token uden for club-mode (app., admin., IP) afvises', async () => {
+    const r = await run(authMiddleware, req({ token: sign({ ...ADMIN, clubSubdomain: 'lyngby' }), accessMode: 'direct' }));
+    assert.equal(r.status, 403);
+});
+
+test('admin: side-rettighederne tages fra databasen, ikke fra tokenet', async () => {
+    _saetKlubAdminOpslag(async () => ({ password_hash: 'hash-1', page_permissions: '["holdkamp"]' }));
+    try {
+        const request = club({ ...ADMIN, permissions: null });
+        let user = null;
+        await authMiddleware(request, { status() { return this; }, json() { return this; } }, () => { user = request.user; });
+        assert.deepEqual(user.permissions, ['holdkamp']);
+    } finally {
+        _saetKlubAdminOpslag(async (id) => (id === 1 ? { password_hash: 'hash-1', page_permissions: null } : null));
     }
 });

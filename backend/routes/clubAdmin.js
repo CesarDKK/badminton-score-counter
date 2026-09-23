@@ -35,7 +35,7 @@ router.post('/login', async (req, res, next) => {
             try { permissions = JSON.parse(admin.page_permissions); } catch { permissions = null; }
         }
 
-        const token = generateClubAdminToken(admin.id, admin.username, req.clubSubdomain, permissions);
+        const token = generateClubAdminToken(admin.id, admin.username, req.clubSubdomain, permissions, admin.password_hash);
         res.json({ success: true, token });
     } catch (error) {
         next(error);
@@ -68,7 +68,10 @@ router.put('/password', clubAdminAuth, async (req, res, next) => {
         const newHash = await bcrypt.hash(newPassword, 10);
         await query('UPDATE club_admins SET password_hash = ? WHERE id = ?', [newHash, admin.id]);
 
-        res.json({ success: true });
+        // Den nye adgangskode gør alle admin'ens gamle sessioner ugyldige (også
+        // denne) — send et nyt token med, så man ikke bliver logget ud selv
+        const token = generateClubAdminToken(admin.id, req.clubAdmin.username, req.clubSubdomain, req.clubAdmin.permissions, newHash);
+        res.json({ success: true, token });
     } catch (error) {
         next(error);
     }
