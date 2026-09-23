@@ -399,10 +399,11 @@ class BadmintonAPI {
      * @returns {Promise<object>} - { success, id }
      */
     async saveMatchResult(matchData) {
+        // Adgangslinket sendes med: i klub-mode kræver serveren det (før kunne alle
+        // skrive falske resultater ind i kamphistorikken)
         return this.request('/match-history', {
             method: 'POST',
-            body: JSON.stringify(matchData),
-            requiresAuth: false // Allow public saves after match completion
+            body: JSON.stringify(matchData)
         });
     }
 

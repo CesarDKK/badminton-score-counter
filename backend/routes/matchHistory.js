@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
+const { kunEgenBane } = require('../middleware/qrSession');
 const { varighedTekst } = require('../config/matchTiming');
 
 // GET /api/match-history/all - Get all match history (public)
@@ -222,8 +223,11 @@ router.get('/:courtId', async (req, res, next) => {
     }
 });
 
-// POST /api/match-history - Save match result (public - used after match completion)
-router.post('/', async (req, res, next) => {
+// POST /api/match-history - gem et kampresultat (tælleren, når en kamp er afgjort).
+// Kræver et adgangslink i club-mode som de øvrige skrivninger: før kunne alle på
+// internettet skrive falske resultater ind i en klubs kamphistorik. En QR-tæller
+// må kun gemme resultater for sin egen bane.
+router.post('/', requireWriteAuthInClubMode, kunEgenBane((req) => req.body && req.body.courtId), async (req, res, next) => {
     try {
         const { courtId, winnerName, loserName, gamesWon, duration, setScores } = req.body;
 

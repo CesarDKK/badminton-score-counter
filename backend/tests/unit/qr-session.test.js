@@ -134,3 +134,11 @@ test('baneFraDestination', () => {
     assert.equal(baneFraDestination('court/3x'), null);
     assert.equal(baneFraDestination(undefined), null);
 });
+
+test('egen bane: banenummeret kan også komme fra body (kamphistorik)', async () => {
+    const mw = kunEgenBane((req) => req.body && req.body.courtId, aktiv);
+    assert.equal((await run(mw, { user: qrSession(3), params: {}, body: { courtId: 3 } })).nexted, true);
+    const r = await run(mw, { user: qrSession(3), params: {}, body: { courtId: 4 } });
+    assert.equal(r.status, 403);
+    assert.equal((await run(mw, { user: qrSession(3), params: {}, body: {} })).status, 403);
+});

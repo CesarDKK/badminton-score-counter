@@ -2239,8 +2239,15 @@ async function saveMatchResult(winner, loser, winnerGames, loserGames) {
 
         // Turneringskampe gemmes IKKE i enkelt-kamp-historikken — de findes kun
         // under Turnering-fanen så historikken ikke duplikeres.
+        // Fejler gemningen i historikken, skal holdkampens resultat alligevel
+        // indrapporteres nedenfor — før sprang en fejl her den over.
         if (!capturedTournamentMatchId) {
-            await api.saveMatchResult(matchData);
+            try {
+                await api.saveMatchResult(matchData);
+            } catch (historikFejl) {
+                console.error('Kampen kunne ikke gemmes i kamphistorikken:', historikFejl);
+                showMessage('Advarsel', 'Kampresultatet kunne ikke gemmes i kamphistorikken.');
+            }
         }
 
         // Report holdkamp result using captured values (assignedHoldkampGameId may already be null).
