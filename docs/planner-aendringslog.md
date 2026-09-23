@@ -448,7 +448,7 @@ Målt på Lyngby-filerne med samme problem og tidsgrænse mod begge løsere (1,5
 
 | Fil | 60 s, 1. kørsel | 60 s, 2. kørsel | 120 s |
 |---|---|---|---|
-| U13/U15 (TP's lodtrækning) | 102,8 → 98,1 | 102,8 → 77,1 | 96,8 → 89,5 |
+| U13/U15 (TP's lodtrækning) | 102,8 → 98,1 | 102,8 → 77,1 | 96,3 → 81,2 |
 | U9/U11 (Jespers dage) | 93,1 → 98,8 | 93,1 → 78,7 | 76,8 → 74,4 |
 
 9.15 vinder i 5 af 6 kørsler, og beviser "ingen lovlig plan" hurtigere (18 s mod 42 s). 9.11 gav samme svar i alle
