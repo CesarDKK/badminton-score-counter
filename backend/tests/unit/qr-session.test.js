@@ -14,6 +14,9 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const jwt = require('jsonwebtoken');
 const { kunEgenBane, ikkeQrSession, afvisQrKode, baneFraDestination } = require('../../middleware/qrSession');
+const { _saetAdgangslinkOpslag } = require('../../middleware/auth');
+// Adgangslink-opslaget i databasen: id 3 er et aktivt TV-link, 4 er tilbagekaldt
+_saetAdgangslinkOpslag(async (id) => id === 3);
 
 const sign = (payload) => jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
 const qrSession = (bane, klub = 'lyngby') => ({ role: 'device', tokenType: 'match_session', tokenId: 7, destination: `court/${bane}`, clubSubdomain: klub });
@@ -36,81 +39,69 @@ const qrReq = (payload, { klub = 'lyngby' } = {}) => ({
 
 // ── Hvem får QR-koden udleveret ──────────────────────────────────────────
 
-test('QR-kode: uden token afvises (det var hullet: alle kunne hente /api/qr-code/1)', () => {
-    assert.equal(afvisQrKode(qrReq(null), 1), 401);
+test('QR-kode: uden token afvises (det var hullet: alle kunne hente /api/qr-code/1)', async () => {
+    assert.equal(await afvisQrKode(qrReq(null), 1), 401);
 });
 
-test('QR-kode: ugyldigt token afvises', () => {
-    assert.equal(afvisQrKode({ headers: { authorization: 'Bearer noget-vroevl' }, clubSubdomain: 'lyngby' }, 1), 401);
+test('QR-kode: ugyldigt token afvises', async () => {
+    assert.equal(await afvisQrKode({ headers: { authorization: 'Bearer noget-vroevl' }, clubSubdomain: 'lyngby' }, 1), 401);
 });
 
-test('QR-kode: banens eget TV får den', () => {
-    assert.equal(afvisQrKode(qrReq(tvLink('tv/3')), 3), null);
+test('QR-kode: et tilbagekaldt TV-link får den ikke', async () => {
+    assert.equal(await afvisQrKode(qrReq({ ...tvLink('tv/3'), tokenId: 4 }), 3), 401);
 });
 
-test('QR-kode: et TV til en anden bane får den ikke', () => {
-    assert.equal(afvisQrKode(qrReq(tvLink('tv/4')), 3), 403);
+test('QR-kode: banens eget TV får den', async () => {
+    assert.equal(await afvisQrKode(qrReq(tvLink('tv/3')), 3), null);
 });
 
-test('QR-kode: gamle TV-links uden bane (tv, tv-v3) får den', () => {
-    assert.equal(afvisQrKode(qrReq(tvLink('tv')), 3), null);
-    assert.equal(afvisQrKode(qrReq(tvLink('tv-v3')), 3), null);
+test('QR-kode: et TV til en anden bane får den ikke', async () => {
+    assert.equal(await afvisQrKode(qrReq(tvLink('tv/4')), 3), 403);
 });
 
-test('QR-kode: en bane-tablet eller oversigten får den ikke', () => {
-    assert.equal(afvisQrKode(qrReq(tvLink('court/3')), 3), 403);
-    assert.equal(afvisQrKode(qrReq(tvLink('oversigt')), 3), 403);
+test('QR-kode: gamle TV-links uden bane (tv, tv-v3) får den', async () => {
+    assert.equal(await afvisQrKode(qrReq(tvLink('tv')), 3), null);
+    assert.equal(await afvisQrKode(qrReq(tvLink('tv-v3')), 3), null);
 });
 
-test('QR-kode: en QR-session kan ikke selv hente nye QR-koder', () => {
-    assert.equal(afvisQrKode(qrReq({ ...qrSession(3), destination: 'tv/3' }), 3), 403);
+test('QR-kode: en bane-tablet eller oversigten får den ikke', async () => {
+    assert.equal(await afvisQrKode(qrReq(tvLink('court/3')), 3), 403);
+    assert.equal(await afvisQrKode(qrReq(tvLink('oversigt')), 3), 403);
 });
 
-test('QR-kode: klubbens admin og super-admin får den', () => {
-    assert.equal(afvisQrKode(qrReq({ role: 'club_admin', clubSubdomain: 'lyngby' }), 3), null);
-    assert.equal(afvisQrKode(qrReq({ role: 'super_admin' }), 3), null);
+test('QR-kode: en QR-session kan ikke selv hente nye QR-koder', async () => {
+    assert.equal(await afvisQrKode(qrReq({ ...qrSession(3), destination: 'tv/3' }), 3), 403);
 });
 
-test('QR-kode: TV eller admin fra en anden klub afvises', () => {
-    assert.equal(afvisQrKode(qrReq(tvLink('tv/3', 'gentofte')), 3), 403);
-    assert.equal(afvisQrKode(qrReq({ role: 'club_admin', clubSubdomain: 'gentofte' }), 3), 403);
+test('QR-kode: klubbens admin og super-admin får den', async () => {
+    assert.equal(await afvisQrKode(qrReq({ role: 'club_admin', clubSubdomain: 'lyngby' }), 3), null);
+    assert.equal(await afvisQrKode(qrReq({ role: 'super_admin' }), 3), null);
+});
+
+test('QR-kode: TV eller admin fra en anden klub afvises', async () => {
+    assert.equal(await afvisQrKode(qrReq(tvLink('tv/3', 'gentofte')), 3), 403);
+    assert.equal(await afvisQrKode(qrReq({ role: 'club_admin', clubSubdomain: 'gentofte' }), 3), 403);
 });
 
 // ── En QR-session skriver kun til sin egen bane ──────────────────────────
 
-const aktiv = { erAktiv: async () => true };
-const afsluttet = { erAktiv: async () => false };
 
 test('egen bane: QR-session til bane 3 må skrive til bane 3', async () => {
-    const r = await run(kunEgenBane('courtId', aktiv), { user: qrSession(3), params: { courtId: '3' } });
+    const r = await run(kunEgenBane('courtId'), { user: qrSession(3), params: { courtId: '3' } });
     assert.equal(r.nexted, true);
 });
 
 test('egen bane: QR-session til bane 3 må IKKE skrive til bane 4', async () => {
-    const r = await run(kunEgenBane('courtId', aktiv), { user: qrSession(3), params: { courtId: '4' } });
+    const r = await run(kunEgenBane('courtId'), { user: qrSession(3), params: { courtId: '4' } });
     assert.equal(r.status, 403);
     assert.equal(r.nexted, false);
 });
 
-test('egen bane: afsluttet QR-session (banen ryddet/overtaget) afvises med 401 og qrSessionEnded', async () => {
-    const r = await run(kunEgenBane('courtId', afsluttet), { user: qrSession(3), params: { courtId: '3' } });
-    assert.equal(r.status, 401);
-    assert.equal(r.body.qrSessionEnded, true);
-    assert.equal(r.nexted, false);
-});
-
 test('egen bane: faste adgangslinks, admins og direct-mode (ingen bruger) berøres ikke', async () => {
-    const aldrig = { erAktiv: async () => { throw new Error('må ikke slå op'); } };
     for (const user of [tvLink('court/3'), tvLink('court/5'), { role: 'club_admin', clubSubdomain: 'lyngby' }, undefined]) {
-        const r = await run(kunEgenBane('courtId', aldrig), { user, params: { courtId: '3' } });
+        const r = await run(kunEgenBane('courtId'), { user, params: { courtId: '3' } });
         assert.equal(r.nexted, true, JSON.stringify(user));
     }
-});
-
-test('egen bane: databasefejl sendes videre til fejlhåndteringen', async () => {
-    const r = await run(kunEgenBane('id', { erAktiv: async () => { throw new Error('db nede'); } }), { user: qrSession(3), params: { id: '3' } });
-    assert.equal(r.nexted, false);
-    assert.equal(r.fejl.message, 'db nede');
 });
 
 // ── Holdkamp- og turneringsresultater ────────────────────────────────────
@@ -136,7 +127,7 @@ test('baneFraDestination', () => {
 });
 
 test('egen bane: banenummeret kan også komme fra body (kamphistorik)', async () => {
-    const mw = kunEgenBane((req) => req.body && req.body.courtId, aktiv);
+    const mw = kunEgenBane((req) => req.body && req.body.courtId);
     assert.equal((await run(mw, { user: qrSession(3), params: {}, body: { courtId: 3 } })).nexted, true);
     const r = await run(mw, { user: qrSession(3), params: {}, body: { courtId: 4 } });
     assert.equal(r.status, 403);

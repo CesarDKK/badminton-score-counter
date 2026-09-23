@@ -68,6 +68,30 @@ function generateToken(payload) {
     );
 }
 
+// Er adgangslinket (device_tokens-rækken) stadig aktivt? JWT'en fra /t/:token
+// gælder 12 timer (QR) eller 14 dage (faste links), så uden dette opslag virkede
+// et tilbagekaldt eller slettet link, til JWT'en udløb. Kan udskiftes i tests.
+let erAdgangslinkAktiv = async (tokenId) => {
+    const { queryOne } = require('../config/database');
+    const row = await queryOne('SELECT id FROM device_tokens WHERE id = ? AND is_active = 1', [tokenId]);
+    return !!row;
+};
+function _saetAdgangslinkOpslag(fn) { erAdgangslinkAktiv = fn; }
+
+// Svaret, når et adgangslink ikke længere gælder. QR-tællere (match_session)
+// får "kampen er afsluttet" — deres session slutter, når banen ryddes.
+async function adgangslinkAfvist(decoded) {
+    if (decoded.role !== 'device') return null;
+    if (decoded.tokenId && await erAdgangslinkAktiv(decoded.tokenId)) return null;
+    const qr = decoded.tokenType === 'match_session';
+    return {
+        error: qr ? 'Kampen er afsluttet — scan QR-koden igen' : 'Adgangslinket er tilbagekaldt',
+        authRequired: true,
+        tokenRevoked: true,
+        qrSessionEnded: qr
+    };
+}
+
 // Håndhæv gyldigt token på skrive-operationer — men KUN i club-mode.
 //
 // I club-mode er API'et offentligt på internettet (klub.badmintonapp.dk), så en
@@ -79,7 +103,7 @@ function generateToken(payload) {
 // LAN'et/firewallen er grænsen — dér bevares den nuværende åbne adfærd uændret.
 //
 // Cross-club-guard: et token udstedt til én klub må ikke skrive til en anden.
-function requireWriteAuthInClubMode(req, res, next) {
+async function requireWriteAuthInClubMode(req, res, next) {
     if (req.accessMode !== 'club') return next();
 
     const authHeader = req.headers.authorization;
@@ -108,6 +132,14 @@ function requireWriteAuthInClubMode(req, res, next) {
         return res.status(403).json({ error: 'Adgangslink hører til en anden klub', authRequired: true });
     }
 
+    // Tilbagekaldt, slettet eller (QR) afsluttet adgangslink
+    try {
+        const afvist = await adgangslinkAfvist(decoded);
+        if (afvist) return res.status(401).json(afvist);
+    } catch (err) {
+        return next(err);
+    }
+
     req.user = decoded;
     next();
 }
@@ -115,5 +147,7 @@ function requireWriteAuthInClubMode(req, res, next) {
 module.exports = {
     authMiddleware,
     generateToken,
-    requireWriteAuthInClubMode
+    requireWriteAuthInClubMode,
+    adgangslinkAfvist,
+    _saetAdgangslinkOpslag
 };

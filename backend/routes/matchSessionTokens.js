@@ -64,10 +64,10 @@ router.get('/:courtId', async (req, res) => {
 
     // QR-koden udsteder skriveadgang til banen, så den vises kun på banens TV
     // (eller for en admin) — ikke for enhver, der kender adressen.
-    const afvist = afvisQrKode(req, courtNumber);
-    if (afvist) return res.status(afvist).end();
-
     try {
+        const afvist = await afvisQrKode(req, courtNumber);
+        if (afvist) return res.status(afvist).end();
+
         // resume=1: vis kun QR hvis banen allerede har en aktiv guest-session
         // (kampen blev startet via QR). Opret aldrig en ny token her — så en
         // holdkamp/turneringskamp uden guest-session ikke får en overtag-QR.
