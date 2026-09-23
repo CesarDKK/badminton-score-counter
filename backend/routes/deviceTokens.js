@@ -4,6 +4,10 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { query, queryOne } = require('../config/database');
 const { clubAdminAuth } = require('../middleware/clubAdminAuth');
+const { requirePage } = require('../middleware/pagePermission');
+
+// Klub-admin med adgang til siden "Adgangslinks" (side-rettigheden devicetokens)
+const adgangslinkAdmin = [clubAdminAuth, requirePage('devicetokens')];
 
 // Gyldige destinations — frontend sider en device token kan pege på.
 // 'tv' og 'tv-v3' er legacy uden bane-nummer; 'tv/N' og 'court/N' bruges af
@@ -63,7 +67,7 @@ router.get('/validate/:token', async (req, res, next) => {
 // --- Klub admin endpoints (kræver club admin JWT) ---
 
 // GET /api/device-tokens — list alle tokens for denne klub
-router.get('/', clubAdminAuth, async (req, res, next) => {
+router.get('/', adgangslinkAdmin, async (req, res, next) => {
     try {
         const tokens = await query(
             `SELECT id, token, name, destination, locked, show_qr_on_tv, is_active, created_at, last_used_at
@@ -76,7 +80,7 @@ router.get('/', clubAdminAuth, async (req, res, next) => {
 });
 
 // POST /api/device-tokens — opret nyt device token
-router.post('/', clubAdminAuth, async (req, res, next) => {
+router.post('/', adgangslinkAdmin, async (req, res, next) => {
     try {
         const { name, destination, locked, showQrOnTv } = req.body;
 
@@ -112,7 +116,7 @@ router.post('/', clubAdminAuth, async (req, res, next) => {
 });
 
 // PUT /api/device-tokens/:id — opdater navn, destination, locked eller show_qr_on_tv
-router.put('/:id', clubAdminAuth, async (req, res, next) => {
+router.put('/:id', adgangslinkAdmin, async (req, res, next) => {
     try {
         const { name, destination, locked, showQrOnTv } = req.body;
 
@@ -153,7 +157,7 @@ router.put('/:id', clubAdminAuth, async (req, res, next) => {
 });
 
 // DELETE /api/device-tokens/:id — deaktiver token (soft delete)
-router.delete('/:id', clubAdminAuth, async (req, res, next) => {
+router.delete('/:id', adgangslinkAdmin, async (req, res, next) => {
     try {
         const existing = await queryOne('SELECT id FROM device_tokens WHERE id = ?', [req.params.id]);
         if (!existing) {
@@ -168,7 +172,7 @@ router.delete('/:id', clubAdminAuth, async (req, res, next) => {
 });
 
 // DELETE /api/device-tokens/:id/permanent — slet token permanent (kun tilbagekaldte)
-router.delete('/:id/permanent', clubAdminAuth, async (req, res, next) => {
+router.delete('/:id/permanent', adgangslinkAdmin, async (req, res, next) => {
     try {
         const existing = await queryOne(
             'SELECT id, is_active FROM device_tokens WHERE id = ?',
