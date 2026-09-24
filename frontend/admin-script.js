@@ -75,6 +75,11 @@ function setupEventListeners() {
     document.getElementById('addPlannerSlotBtn').addEventListener('click', addPlannerSlot);
     document.getElementById('togglePlannerTestBtn').addEventListener('click', togglePlannerTest);
     document.getElementById('ptStatusBtn').addEventListener('click', () => ptKald('status', null));
+    // Dagens resultater (dansk dato) — samme kald som badmintonplanner.dk bruger
+    document.getElementById('ptResultsBtn').addEventListener('click', () => {
+        const idag = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Copenhagen' }).format(new Date());
+        ptKald(`results?date=${idag}`, null);
+    });
     document.getElementById('ptSendBtn').addEventListener('click', () => ptKald('planned-round', ptByg(false)));
     document.getElementById('ptClearBtn').addEventListener('click', () => ptKald('planned-round', ptByg(true)));
 
@@ -4617,10 +4622,51 @@ async function ptKald(sti, body) {
     }
 }
 
+// Svar fra GET /api/integrations/results: en tabel + det rå JSON, som badmintonplanner.dk får
+const PT_RESULTAT_STATUS = {
+    completed: 'Færdigspillet',
+    ended_early: 'Afsluttet før tid',
+    walkover: 'Walkover',
+    unfinished: 'Afbrudt (talt, ikke afgjort)'
+};
+
+function ptResultaterHtml(data) {
+    const side = s => (s || []).filter(Boolean).map(escapeHtml).join(' / ');
+    if (!data.results.length) {
+        return '<div style="margin-top:8px;color:rgba(255,255,255,0.5);">Ingen resultater i dag for denne nøgle endnu.</div>';
+    }
+    const raekker = data.results.map(r => {
+        const saet = r.sets.length ? r.sets.map(x => `${x.side1}-${x.side2}`).join(', ') : '—';
+        const vinder = r.winner === 1 ? side(r.side1) : r.winner === 2 ? side(r.side2) : '—';
+        const rettet = r.updatedAt !== r.recordedAt ? ' <span style="color:rgba(255,255,255,0.45);">(rettet)</span>' : '';
+        return `<tr>
+            <td>${r.courtNumber}</td>
+            <td>${escapeHtml(r.label || r.roundId || '')}</td>
+            <td>${side(r.side1)}</td>
+            <td>${side(r.side2)}</td>
+            <td style="white-space:nowrap;">${escapeHtml(saet)}</td>
+            <td>${escapeHtml(PT_RESULTAT_STATUS[r.status] || r.status)}</td>
+            <td>${vinder}</td>
+            <td>${r.source === 'entered' ? 'Tastet' : 'Talt'}</td>
+            <td style="white-space:nowrap;">${new Date(r.updatedAt).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' })}${rettet}</td>
+        </tr>`;
+    }).join('');
+    return `<div style="overflow-x:auto;margin-top:8px;">
+            <table class="pl-week">
+                <thead><tr><th>Bane</th><th>Runde</th><th>Side 1</th><th>Side 2</th><th>Sæt</th><th>Status</th><th>Vinder</th><th>Kilde</th><th>Kl.</th></tr></thead>
+                <tbody>${raekker}</tbody>
+            </table>
+        </div>
+        <details style="margin-top:8px;"><summary style="cursor:pointer;color:rgba(255,255,255,0.6);">Vis JSON (som badmintonplanner.dk får det)</summary>
+            <pre style="white-space:pre-wrap;word-break:break-word;font-size:0.85em;margin:8px 0 0;">${escapeHtml(JSON.stringify(data, null, 2))}</pre>
+        </details>`;
+}
+
 function ptSvarHtml(status, ms, data) {
     const ok = status >= 200 && status < 300;
     let html = `<div><span class="${ok ? 'pl-status-ok' : 'pl-status-err'}">HTTP ${status}</span> <span style="color:rgba(255,255,255,0.4);">· ${ms} ms</span></div>`;
     if (!data) return html;
+    if (ok && Array.isArray(data.results) && 'hasMore' in data) return html + ptResultaterHtml(data);
     if (data.error) html += `<div style="margin-top:6px;">${escapeHtml(data.error)}${data.code ? ` <span style="color:rgba(255,255,255,0.4);">(${escapeHtml(data.code)})</span>` : ''}</div>`;
     if (Array.isArray(data.details)) html += `<div style="color:rgba(255,255,255,0.6);">${data.details.map(escapeHtml).join('<br>')}</div>`;
     if (Array.isArray(data.results)) {
