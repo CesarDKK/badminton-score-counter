@@ -10,4 +10,59 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- Vises over WebView'et, når selve siden ikke kan hentes (fx mens wifi
+         kommer på igen efter slukket skærm). Prøver selv igen; knappen gør det nu. -->
+    <LinearLayout
+        android:id="@+id/offlineOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/colorBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="32dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/offline_title"
+            android:textColor="#FFFFFF"
+            android:textSize="26sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/offlineMessage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:text="@string/offline_message"
+            android:textColor="#B0B0C0"
+            android:textSize="16sp" />
+
+        <Button
+            android:id="@+id/offlineReload"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            android:backgroundTint="@color/colorAccent"
+            android:minWidth="220dp"
+            android:paddingVertical="14dp"
+            android:text="@string/action_reload"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp" />
+
+        <TextView
+            android:id="@+id/offlineSettings"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:padding="8dp"
+            android:text="@string/offline_settings"
+            android:textColor="#8080A0"
+            android:textSize="13sp" />
+    </LinearLayout>
+
 </RelativeLayout>
