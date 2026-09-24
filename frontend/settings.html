@@ -120,6 +120,25 @@
                         <a href="theme.html" class="btn-primary" style="text-decoration:none;display:inline-block;">Åbn Tema Indstillinger</a>
                     </div>
 
+                    <!-- Tablet-app (Android APK) — hentes direkte på tabletten -->
+                    <div class="setting-card" id="tablet-app">
+                        <h3>Tablet-app (Android)</h3>
+                        <p style="color:#aaa;font-size:0.9em;line-height:1.5;margin-bottom:12px;">
+                            Appen til bane-tablets. Åbn denne side på tabletten og tryk på knappen, så hentes den direkte.
+                        </p>
+                        <div id="tabletAppInfo" style="font-size:0.85em;color:rgba(255,255,255,0.6);margin-bottom:12px;">Henter version…</div>
+                        <a id="tabletAppDownload" href="/downloads/BadmintonApp.apk" class="btn-primary" style="text-decoration:none;display:inline-block;">Hent tablet-appen (APK)</a>
+                        <details style="margin-top:14px;font-size:0.85em;color:#aaa;line-height:1.55;">
+                            <summary style="cursor:pointer;color:rgba(255,255,255,0.75);">Sådan installerer du på tabletten</summary>
+                            <ol style="margin:10px 0 0 18px;padding:0;">
+                                <li>Tryk på knappen ovenfor. Chrome henter filen og viser en advarsel om, at filen kan være skadelig. Vælg <b>Download alligevel</b>.</li>
+                                <li>Åbn filen fra download-linjen (eller fra Filer/Downloads). Første gang spørger Android, om Chrome må installere ukendte apps. Tryk <b>Indstillinger</b> og slå <b>Tillad fra denne kilde</b> til, gå tilbage og tryk <b>Installer</b>.</li>
+                                <li>Siger Play Protect "Ukendt udvikler", vælg <b>Flere oplysninger</b> og <b>Installer alligevel</b>. Appen er klubbens egen og er ikke i Play Butik.</li>
+                                <li>Har tabletten appen i forvejen, opdateres den bare. Indstillingerne (link og bane) bevares.</li>
+                            </ol>
+                        </details>
+                    </div>
+
                     <!-- Security -->
                     <div class="setting-card">
                         <h3>Sikkerhed</h3>
@@ -150,6 +169,6 @@
 
     <script src="js/api.js?v=22"></script>
     <script src="js/auth-guard.js?v=3"></script>
-    <script src="settings-script.js?v=16"></script>
+    <script src="settings-script.js?v=17"></script>
 </body>
 </html>

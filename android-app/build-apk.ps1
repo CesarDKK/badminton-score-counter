@@ -107,6 +107,38 @@ if ($buildSuccess) {
         Write-Host "  adb install `"$($apk.FullName)`"" -ForegroundColor Cyan
         Write-Host ""
 
+        # Release: laeg APK'en + et manifest (version, dato, sha256) i frontend/downloads,
+        # saa den kan hentes fra Indstillinger -> Tablet-app paa en tablet efter deploy.
+        # Commit begge filer sammen med resten (git add frontend/downloads).
+        if ($Release) {
+            $downloads = Join-Path $PSScriptRoot "..\frontend\downloads"
+            New-Item -ItemType Directory -Force $downloads | Out-Null
+            Copy-Item $apk.FullName (Join-Path $downloads "BadmintonApp.apk") -Force
+
+            $gradle = Get-Content (Join-Path $PSScriptRoot "app\build.gradle") -Raw
+            $versionName = [regex]::Match($gradle, 'versionName\s+"([^"]+)"').Groups[1].Value
+            $versionCode = [int][regex]::Match($gradle, 'versionCode\s+(\d+)').Groups[1].Value
+            $minSdk      = [int][regex]::Match($gradle, 'minSdk\s+(\d+)').Groups[1].Value
+            $minAndroid  = @{ 24 = "7.0"; 26 = "8.0"; 28 = "9"; 29 = "10"; 30 = "11"; 31 = "12"; 33 = "13"; 34 = "14"; 35 = "15" }[$minSdk]
+            if (-not $minAndroid) { $minAndroid = "API $minSdk" }
+            $sha = (Get-FileHash $apk.FullName -Algorithm SHA256).Hash.ToLower()
+
+            $manifest = [ordered]@{
+                file        = "BadmintonApp.apk"
+                version     = $versionName
+                versionCode = $versionCode
+                builtAt     = $apk.LastWriteTimeUtc.ToString("yyyy-MM-ddTHH:mm:ssZ")
+                sizeBytes   = $apk.Length
+                sha256      = $sha
+                minAndroid  = $minAndroid
+            }
+            $json = ($manifest | ConvertTo-Json) + "`n"
+            [System.IO.File]::WriteAllText((Join-Path $downloads "badminton-app.json"), $json, (New-Object System.Text.UTF8Encoding($false)))
+
+            Write-Host "Lagt i frontend/downloads (version $versionName) - husk: git add frontend/downloads" -ForegroundColor Green
+            Write-Host ""
+        }
+
         # Open folder
         Start-Process explorer.exe -ArgumentList "/select,`"$($apk.FullName)`""
     }
