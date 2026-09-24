@@ -87,7 +87,9 @@ async function handleLogin() {
     }
 }
 
-function handleLogout() {
+async function handleLogout() {
+    // Klub-subdomæne: til klub-login (brugernavn + kode) i stedet for sidens eget kodeord-login
+    if (await api.logoutTilLogin()) return;
     api.logout();
     document.getElementById('settingsDashboard').style.display = 'none';
     document.getElementById('loginScreen').style.display = 'block';

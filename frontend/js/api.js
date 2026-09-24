@@ -200,6 +200,26 @@ class BadmintonAPI {
     }
 
     /**
+     * "Log ud"-knappen på admin-siderne. På et klub-subdomæne logger man ind med
+     * brugernavn og adgangskode på klub-login — siden sender derhen, med vej
+     * tilbage til den side, man loggede ud fra. Returnerer true, når den sender
+     * videre; ellers (lokal installation med ét fælles kodeord) viser siden selv
+     * sit adgangskode-login.
+     */
+    async logoutTilLogin() {
+        this.logout();
+        try {
+            const mode = await this.getMode();
+            if (mode && mode.mode === 'club') {
+                const tilbage = encodeURIComponent(window.location.pathname);
+                window.location.href = '/club-login.html?redirect=' + tilbage;
+                return true;
+            }
+        } catch { /* kan ikke nå serveren — vis sidens eget login */ }
+        return false;
+    }
+
+    /**
      * Check if user is authenticated
      * @returns {boolean}
      */
