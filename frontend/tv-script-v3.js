@@ -399,7 +399,8 @@ async function loadCourtData() {
                                gameState.player1.name === originalPlayer2Name;
 
         // Check if match is finished
-        const matchFinished = gameState.player1.games >= 2 || gameState.player2.games >= 2;
+        // Også en kamp, hvis resultat er tastet ind (afsluttet før tid / walkover)
+        const matchFinished = gameState.matchCompleted || gameState.player1.games >= 2 || gameState.player2.games >= 2;
 
         if (matchFinished) {
             showMatchFinished(gameState, playersSwapped);
@@ -910,6 +911,14 @@ function updateTeamSetBoxes(teamId, playerData, setHistory, currentSetIndex, gam
 // Orientér et sæts score til [team1Score, team2Score] — team1 er altid den
 // oprindelige player1-side, uanset om siderne var byttet da sættet blev gemt.
 // Delt af extractTeamScore og markSetResult (var før tredobbelt-dupleret).
+// Er sættet spillet færdigt? (15/21 eller 21/30: vind med 2, dog højst loftet)
+function saetAfgjort(a, b, gameMode) {
+    if (gameMode !== '15' && gameMode !== '21') return true; // ukendt format (fx snapshot) — antag afgjort
+    const vind = gameMode === '21' ? 21 : 15, maks = gameMode === '21' ? 30 : 21;
+    const hoj = Math.max(a, b), lav = Math.min(a, b);
+    return (hoj >= vind && hoj - lav >= 2) || hoj === maks;
+}
+
 function orientSetScore(setData) {
     let scoreText;
     if (typeof setData === 'string') {
@@ -1489,6 +1498,8 @@ function showMatchFinished(gameState, playersSwapped) {
             const scores = scoreText.split('-').map(s => parseInt(s.trim()));
             const player1Won = scores[0] > scores[1];
             const winnerName = player1Won ? player1Name : player2Name;
+            // Et sæt, der ikke blev spillet færdigt (kamp afsluttet før tid), har ingen vinder
+            const afgjort = saetAfgjort(scores[0], scores[1], gameState.gameMode);
             const winnerColor = '#4CAF50';
             const loserColor = 'var(--color-accent)';
 
@@ -1508,9 +1519,9 @@ function showMatchFinished(gameState, playersSwapped) {
                             ${escapeHtml(player2Name)}
                         </span>
                     </div>
-                    <div style="color: ${winnerColor}; font-size: 0.9em; margin-top: 5px; font-weight: bold;">
+                    ${afgjort ? `<div style="color: ${winnerColor}; font-size: 0.9em; margin-top: 5px; font-weight: bold;">
                         ✓ ${escapeHtml(winnerName)}
-                    </div>
+                    </div>` : `<div style="color: #aaa; font-size: 0.9em; margin-top: 5px;">Ikke spillet færdigt</div>`}
                 </div>
             `;
         }).join('');
@@ -1532,6 +1543,14 @@ function showMatchFinished(gameState, playersSwapped) {
         const winnerColor = '#4CAF50';
         const loserColor = 'var(--color-accent)';
 
+        if (gameState.resultOutcome === 'walkover') {
+            setScoresContainer.innerHTML = `
+                <div style="margin: 30px 0; font-size: 1.3em; color: #aaa;">
+                    ${escapeHtml(player1DisplayName)} mod ${escapeHtml(player2DisplayName)}<br>
+                    <span style="color: #fff; font-size: 1.4em; font-weight: bold;">Walkover</span>
+                </div>
+            `;
+        } else
         setScoresContainer.innerHTML = `
             <div style="margin: 30px 0; font-size: 1.3em;">
                 <div style="margin-bottom: 15px; color: #aaa; font-size: 0.9em;">Resultat</div>
@@ -1561,7 +1580,18 @@ function showMatchFinished(gameState, playersSwapped) {
             ? formatPlayerNames(displayPlayer1Name, displayPlayer1Name2, gameState.isDoubles)
             : formatPlayerNames(displayPlayer2Name, displayPlayer2Name2, gameState.isDoubles);
     }
+    // Indtastet resultat: vinderen er valgt (kan være den, der var bagud)
+    if (gameState.resultWinner) {
+        const w = gameState.resultWinner === 1 ? gameState.player1 : gameState.player2;
+        winner = formatPlayerNames(w.name, w.name2, gameState.isDoubles);
+    }
     document.getElementById('tvFinishedWinner').textContent = winner;
+    const titel = document.getElementById('tvFinishedTitle');
+    if (titel) {
+        titel.textContent = gameState.resultOutcome === 'walkover' ? 'WALKOVER'
+            : gameState.resultOutcome === 'ended_early' ? 'KAMP AFSLUTTET'
+            : 'KAMP AFGJORT';
+    }
 
     overlay.style.display = 'flex';
 }

@@ -383,6 +383,20 @@ class BadmintonAPI {
     }
 
     /**
+     * Indtast resultatet for banens kamp i stedet for at tælle den (kun kampe
+     * fra badmintonplanner.dk). Kan kaldes igen for at rette resultatet.
+     * @param {number} courtId - Court ID
+     * @param {object} result - { sets: [[p1, p2], ...], winner: 1|2, walkover, expectedVersion }
+     * @returns {Promise<object>} - { success, outcome, version, state }
+     */
+    async saveEnteredResult(courtId, result) {
+        return this.request(`/game-states/${courtId}/result`, {
+            method: 'POST',
+            body: JSON.stringify(result)
+        });
+    }
+
+    /**
      * Get all game states in a single batch request (for overview page)
      * @returns {Promise<Array>} - Array of game state objects with courtId
      */

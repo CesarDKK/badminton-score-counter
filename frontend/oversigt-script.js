@@ -649,6 +649,11 @@ function displayCurrentPage() {
 function updateCourtCardData(court) {
     if (court._isFinished) {
         const card = document.querySelector(`.court-card[data-court-id="${court.courtId}"][data-finished="1"]`);
+        // Et indtastet resultat kan rettes, mens kortet står — tegn det så forfra
+        if (card && card.dataset.resultat !== resultatSignatur(court)) {
+            card.outerHTML = renderFinishedCard(court);
+            return;
+        }
         if (card) {
             const timeEl = card.querySelector('.finished-time');
             if (timeEl) {
@@ -826,11 +831,21 @@ function renderCourtCard(court) {
     `;
 }
 
+// Resultatet på et afsluttet kort — ændres det (rettet resultat), tegnes kortet igen
+function resultatSignatur(court) {
+    return [court.resultOutcome || '', court.resultWinner || '', (court.setScoresHistory || []).length,
+        court.player1?.games ?? 0, court.player2?.games ?? 0].join('|');
+}
+
 function renderFinishedCard(court) {
     const isDoubles = court.isDoubles || false;
     const p1games = court.player1?.games ?? 0;
     const p2games = court.player2?.games ?? 0;
-    const p1won = p1games > p2games;
+    // Indtastet resultat: vinderen er valgt (afsluttet før tid / walkover)
+    const p1won = court.resultWinner ? court.resultWinner === 1 : p1games > p2games;
+    const badge = court.resultOutcome === 'walkover' ? 'WALKOVER'
+        : court.resultOutcome === 'ended_early' ? 'AFSLUTTET FØR TID'
+        : 'AFSLUTTET';
 
     const minutesAgo = Math.floor((Date.now() - court._finishedAt) / 60000);
     const timeText = minutesAgo < 1 ? 'Lige afsluttet' : `${minutesAgo} min siden`;
@@ -859,10 +874,10 @@ function renderFinishedCard(court) {
     });
 
     return `
-        <div class="court-card court-card--finished" data-court-id="${court.courtId}" data-finished="1">
+        <div class="court-card court-card--finished" data-court-id="${court.courtId}" data-finished="1" data-resultat="${escapeHtml(resultatSignatur(court))}">
             <div class="court-card-header">
                 <div class="court-number">BANE ${court.courtId}</div>
-                <span class="finished-badge">AFSLUTTET</span>
+                <span class="finished-badge">${badge}</span>
                 <div class="finished-time">${timeText}</div>
             </div>
             <div class="court-players">

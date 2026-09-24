@@ -78,8 +78,14 @@ html, body {
     white-space: nowrap;
 }
 
-#startMatchBtn:disabled ~ .start-hint {
-    display: block;
+/* Synligheden styres af court-script (updateResultButtons): kun før kampen,
+   mens "Start kamp" er deaktiveret */
+
+/* "Start kamp" og (på planner-baner) "Indtast resultat" side om side */
+.start-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
 }
 
 .court-name-display {
@@ -1504,4 +1510,262 @@ html, body {
 }
 @media (prefers-reduced-motion: reduce) {
     #syncStatusBadge .sync-dot { animation: none; }
+}
+
+
+/* ══════════════════════════════════════════
+   Indtast resultat — kampe fra badmintonplanner.dk
+   Rækker = banens sider, kolonner = sæt, ✓ = vinder. Eget taltastatur
+   til højre (tablettens tastatur ville dække halvdelen af skærmen).
+   Egne breakpoints nederst i blokken (tablet ≤600 høj, telefon ≤500 høj).
+   ══════════════════════════════════════════ */
+.btn-enter-result {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
+    font-size: 1.05em;
+    padding: 10px 26px;
+    border-radius: var(--radius-pill);
+    background: rgba(13, 13, 26, 0.55);
+    color: #ffffff;
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(4px);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.btn-enter-result:hover {
+    background: rgba(13, 13, 26, 0.75);
+}
+
+
+.court-overlay--result {
+    z-index: 9998; /* under beskeder (10000), så kvitteringen kan vises ovenpå */
+    background: rgba(8, 8, 18, 0.97);
+}
+
+.result-dialog {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 32px;
+    width: 100%;
+    max-width: 1100px;
+    height: 100%;
+    padding: 20px 28px;
+    box-sizing: border-box;
+    color: #ffffff;
+    overflow-y: auto;
+}
+
+.result-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.result-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.4em;
+    letter-spacing: 0.05em;
+    margin: 0;
+    line-height: 1;
+}
+
+.result-table {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) repeat(3, 76px) 60px;
+    gap: 8px 10px;
+    align-items: center;
+}
+
+.result-set-head {
+    text-align: center;
+    font-size: 0.78em;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.result-name {
+    font-weight: 600;
+    font-size: 1.1em;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+
+.result-cell {
+    height: 62px;
+    border-radius: 12px;
+    background: var(--glass-bg);
+    border: 2px solid var(--glass-border);
+    color: #ffffff;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.2em;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+}
+
+.result-cell.is-active {
+    border-color: var(--color-accent);
+    background: rgba(var(--color-accent-rgb), 0.14);
+    box-shadow: 0 0 0 3px rgba(var(--color-accent-rgb), 0.28);
+}
+
+.result-winner-btn {
+    height: 52px;
+    border-radius: var(--radius-pill);
+    border: 2px solid var(--glass-border);
+    background: transparent;
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 1.4em;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0;
+}
+
+.result-winner-btn.is-winner {
+    background: var(--color-win);
+    border-color: var(--color-win);
+    color: #0d0d1a;
+}
+
+.result-table.is-walkover .result-cell {
+    opacity: 0.2;
+    pointer-events: none;
+}
+
+.result-walkover {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: transparent;
+    border: none;
+    padding: 4px 0;
+    color: rgba(255, 255, 255, 0.85);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1em;
+    cursor: pointer;
+}
+
+.result-walkover-box {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    border: 2px solid var(--glass-border);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.result-walkover[aria-pressed="true"] .result-walkover-box {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+}
+
+.result-walkover[aria-pressed="true"] .result-walkover-box::after {
+    content: '✓';
+    color: var(--color-on-accent, #ffffff);
+    font-size: 0.85em;
+    font-weight: 700;
+}
+
+.result-status {
+    min-height: 1.4em;
+    font-size: 1em;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.result-status.is-error { color: var(--color-warning); }
+.result-status.is-ok    { color: var(--color-win); }
+
+.result-buttons {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.result-buttons button {
+    font-size: 1.2em;
+    padding: 12px 34px;
+    border-radius: var(--radius-pill);
+}
+
+.result-buttons button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+    filter: none;
+}
+
+.result-numpad {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: repeat(3, 76px);
+    gap: 10px;
+}
+
+.result-numpad button {
+    height: 66px;
+    border-radius: 14px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: #ffffff;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2em;
+    cursor: pointer;
+    padding: 0;
+    touch-action: manipulation;
+}
+
+.result-numpad button:active {
+    background: var(--glass-bg-hover);
+}
+
+.result-numpad button[data-key="next"] {
+    background: rgba(var(--color-accent-rgb), 0.2);
+    border-color: rgba(var(--color-accent-rgb), 0.55);
+}
+
+.result-numpad.is-disabled {
+    opacity: 0.2;
+    pointer-events: none;
+}
+
+/* Tablet, lav skærm */
+@media (max-height: 600px) {
+    .result-dialog { gap: 22px; padding: 14px 20px; }
+    .result-main { gap: 10px; }
+    .result-title { font-size: 2em; }
+    .result-table { grid-template-columns: minmax(0, 1fr) repeat(3, 66px) 54px; gap: 6px 8px; }
+    .result-cell { height: 52px; font-size: 1.9em; }
+    .result-winner-btn { height: 44px; }
+    .result-numpad { grid-template-columns: repeat(3, 66px); gap: 8px; }
+    .result-numpad button { height: 54px; font-size: 1.8em; }
+    .result-buttons button { font-size: 1.05em; padding: 10px 28px; }
+}
+
+/* Telefon i landskab */
+@media (orientation: landscape) and (max-height: 500px) {
+    .result-dialog { gap: 14px; padding: 8px 12px; }
+    .result-main { gap: 6px; }
+    .result-title { font-size: 1.5em; }
+    .result-table { grid-template-columns: minmax(0, 1fr) repeat(3, 50px) 42px; gap: 4px 6px; }
+    .result-set-head { font-size: 0.65em; }
+    .result-name { font-size: 0.85em; }
+    .result-cell { height: 38px; font-size: 1.5em; border-radius: 9px; }
+    .result-winner-btn { height: 34px; font-size: 1.1em; }
+    .result-walkover { font-size: 0.85em; padding: 0; }
+    .result-walkover-box { width: 20px; height: 20px; }
+    .result-status { font-size: 0.82em; min-height: 1.2em; }
+    .result-numpad { grid-template-columns: repeat(3, 52px); gap: 6px; }
+    .result-numpad button { height: 42px; font-size: 1.5em; border-radius: 10px; }
+    .result-buttons { gap: 8px; }
+    .result-buttons button { font-size: 0.9em; padding: 8px 20px; }
+    .btn-enter-result { font-size: 0.85em; padding: 7px 18px; }
 }
