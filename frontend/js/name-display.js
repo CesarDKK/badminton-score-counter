@@ -41,8 +41,13 @@
      * (tomme strenge for pladser der ikke er i brug, fx makker i single) og
      * returnerer én visningsstreng pr. plads. Sammenfald afgøres på tværs af
      * ALLE pladser — også modstandere.
+     *
+     * uforkortet: navnene vises, som de er. Bruges når banen viser en runde fra
+     * badmintonplanner.dk — de navne er allerede forkortet dér ("Jesper H."), og
+     * en forkortelse mere gør dem dobbelt korte ("Jesper").
      */
-    function visningsnavne(fuldeNavne) {
+    function visningsnavne(fuldeNavne, { uforkortet = false } = {}) {
+        if (uforkortet) return (fuldeNavne || []).map((n) => String(n || '').trim());
         const navne = (fuldeNavne || []).map((n) => String(n || ''));
         const forn = navne.map(fornavn);
 

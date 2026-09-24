@@ -61,3 +61,20 @@ test('visningsnavne: tre ens fornavne håndteres', () => {
         ['Anna J.', 'Anna K.', 'Anna B.', 'Bo']
     );
 });
+
+test('visningsnavne uforkortet: navne fra badmintonplanner.dk vises, som de er', () => {
+    // badmintonplanner forkorter selv — en forkortelse mere gjorde "Jesper H." til "Jesper"
+    assert.deepEqual(
+        visningsnavne(['Jesper H.', 'Anna K.', 'Bo', ''], { uforkortet: true }),
+        ['Jesper H.', 'Anna K.', 'Bo', '']
+    );
+    // ...også ved sammenfald, og uden at røre udskiftere
+    assert.deepEqual(
+        visningsnavne(['  Anna J. ', 'Anna K.', 'Mads P.'], { uforkortet: true }),
+        ['Anna J.', 'Anna K.', 'Mads P.']
+    );
+});
+
+test('visningsnavne uden option: uændret forkortelse (almindelige kampe)', () => {
+    assert.deepEqual(visningsnavne(['Jesper Hansen', 'Anna Jensen']), ['Jesper', 'Anna']);
+});
