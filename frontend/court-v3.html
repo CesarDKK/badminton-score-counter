@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.json">
     <link rel="stylesheet" href="fonts.css?v=2">
     <link rel="stylesheet" href="styles.css?v=5">
-    <link rel="stylesheet" href="court-v3-styles.css?v=5">
+    <link rel="stylesheet" href="court-v3-styles.css?v=8">
     <script src="js/theme-loader.js?v=8"></script>
 </head>
 <body>
@@ -114,7 +114,11 @@
 
                     <!-- Timer and Start Button overlay on court center -->
                     <div class="court-center-overlay">
-                        <button id="startMatchBtn" class="btn-start-match-center">Start Kamp</button>
+                        <div class="start-row">
+                            <button id="startMatchBtn" class="btn-start-match-center">Start Kamp</button>
+                            <!-- Kun kampe fra badmintonplanner.dk: taste resultatet i stedet for at tælle -->
+                            <button id="enterResultBtn" class="btn-enter-result" style="display: none;">Indtast resultat</button>
+                        </div>
                         <div class="start-hint">Vælg først hvem der server — tryk på "Start serv"</div>
                         <div id="timerDisplay" class="timer-display-center" style="display: none;">00:00</div>
                     </div>
@@ -160,6 +164,7 @@
                 <button id="doublesToggle" class="menu-item">Skift til Double</button>
                 <button id="gameModeToggle" class="menu-item">Format: 21/30</button>
                 <button id="showHoldkampPanelBtn" class="menu-item" style="display:none;">Holdkamp</button>
+                <button id="enterResultMenuBtn" class="menu-item" style="display:none;">Indtast resultat</button>
                 <button id="clearCourtBtn" class="menu-item menu-danger">Ryd Banen</button>
 
                 <button id="installAppBtn" class="menu-item" style="display: none;">Installer som App</button>
@@ -177,6 +182,57 @@
         </div>
     </div>
 
+    <!-- Indtast resultat (kampe fra badmintonplanner.dk). Eget taltastatur i
+         stedet for telefonens/tablettens tastatur, som ellers dækker halvdelen
+         af skærmen i landskab. Rækker = banens sider, kolonner = sæt. -->
+    <div id="resultOverlay" class="court-overlay court-overlay--result" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
+        <div class="result-dialog">
+            <div class="result-main">
+                <h1 id="resultTitle" class="result-title">Indtast resultat</h1>
+                <div class="result-table" id="resultTable">
+                    <div class="result-corner"></div>
+                    <div class="result-set-head">Sæt 1</div>
+                    <div class="result-set-head">Sæt 2</div>
+                    <div class="result-set-head">Sæt 3</div>
+                    <div class="result-set-head result-set-head--winner">Vinder</div>
+
+                    <div class="result-name" id="resultName1"></div>
+                    <button type="button" class="result-cell" data-cell="0"></button>
+                    <button type="button" class="result-cell" data-cell="2"></button>
+                    <button type="button" class="result-cell" data-cell="4"></button>
+                    <button type="button" class="result-winner-btn" data-winner="1" aria-label="Vinder">✓</button>
+
+                    <div class="result-name" id="resultName2"></div>
+                    <button type="button" class="result-cell" data-cell="1"></button>
+                    <button type="button" class="result-cell" data-cell="3"></button>
+                    <button type="button" class="result-cell" data-cell="5"></button>
+                    <button type="button" class="result-winner-btn" data-winner="2" aria-label="Vinder">✓</button>
+                </div>
+                <button type="button" id="resultWalkoverBtn" class="result-walkover" aria-pressed="false">
+                    <span class="result-walkover-box"></span>Walkover — kampen blev ikke spillet
+                </button>
+                <div id="resultStatus" class="result-status" aria-live="polite"></div>
+                <div class="result-buttons">
+                    <button type="button" id="resultSaveBtn" class="btn-primary">Gem resultat</button>
+                    <button type="button" id="resultCancelBtn" class="btn-secondary">Annuller</button>
+                </div>
+            </div>
+            <div class="result-numpad" id="resultNumpad">
+                <button type="button" data-key="1">1</button>
+                <button type="button" data-key="2">2</button>
+                <button type="button" data-key="3">3</button>
+                <button type="button" data-key="4">4</button>
+                <button type="button" data-key="5">5</button>
+                <button type="button" data-key="6">6</button>
+                <button type="button" data-key="7">7</button>
+                <button type="button" data-key="8">8</button>
+                <button type="button" data-key="9">9</button>
+                <button type="button" data-key="del" aria-label="Slet">⌫</button>
+                <button type="button" data-key="0">0</button>
+                <button type="button" data-key="next" aria-label="Næste felt">→</button>
+            </div>
+        </div>
+    </div>
     <!-- Message Overlay -->
     <div id="messageOverlay" class="court-overlay court-overlay--message">
         <div class="court-overlay-content">
@@ -196,9 +252,10 @@
         </div>
     </div>
 
-    <script src="js/api.js?v=21"></script>
+    <script src="js/api.js?v=22"></script>
     <script src="js/auth-guard.js?v=3"></script>
     <script src="js/live-updates.js?v=2"></script>
-    <script src="court-script-v3.js?v=36"></script>
+    <script src="js/kamp-resultat.js?v=1"></script>
+    <script src="court-script-v3.js?v=39"></script>
 </body>
 </html>

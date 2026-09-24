@@ -117,6 +117,13 @@ let gameState = {
     restBreakStartedAt: null,
     restBreakDuration: 60,
     matchCompleted: false,
+    // Indtastet resultat (badmintonplanner-kampe): 'completed' | 'ended_early' |
+    // 'walkover' og vinderen (1 = player1, 2 = player2). null ved talte kampe.
+    resultOutcome: null,
+    resultWinner: null,
+    // Serverens planner-blok: banens kamp kommer fra badmintonplanner.dk, så
+    // resultatet kan tastes i stedet for at tælles
+    planner: null,
     servingPlayer: null,  // 1 or 2, null if not yet selected (used for singles)
     initialServer: null,  // Track who served first for set resets
     servingTeam: null,  // 1 or 2, which team is serving (for doubles)
@@ -251,6 +258,14 @@ function setupEventListeners() {
         await refreshHoldkampPanel();
     });
     document.getElementById('holdkampMatchSelect').addEventListener('change', onHoldkampMatchChange);
+
+    // Indtast resultat (kampe fra badmintonplanner.dk)
+    document.getElementById('enterResultBtn').addEventListener('click', () => openResultForm());
+    document.getElementById('enterResultMenuBtn').addEventListener('click', () => {
+        closeSettingsMenu();
+        openResultForm();
+    });
+    setupResultForm();
 
     // Editable player names
     // Top fields edit main player names, bottom fields can edit partner names in doubles
@@ -634,7 +649,7 @@ async function handleSetWin(winnerKey, loserKey, p1Score, p2Score) {
         // Save match result to database
         saveMatchResult(winnerNames, loserNames, winner.games, loser.games);
 
-        showMatchWonMessage(winnerNames, winner.games, loser.games, isReportedMatch);
+        showMatchWonMessage(isReportedMatch);
         return;
     }
 
@@ -841,6 +856,8 @@ async function performClearCourtNow() {
     gameState.isActive = false;  // Set court as inactive
     gameState.decidingGameSwitched = false;
     gameState.matchCompleted = false;
+    gameState.resultOutcome = null;
+    gameState.resultWinner = null;
     gameState.restBreakTaken = false;
     gameState.servingPlayer = null;  // Reset serving player
     gameState.initialServer = null;
@@ -939,53 +956,60 @@ async function initializeApp() {
 // Load game state from API
 async function loadGameState() {
     try {
-        const loaded = await api.getGameState(courtId);
-
-        gameState.player1 = loaded.player1;
-        gameState.player2 = loaded.player2;
-        gameState.timerSeconds = loaded.timerSeconds;
-        gameState.currentCourt = courtId;
-        gameState.isActive = loaded.isActive;
-        gameState.isDoubles = loaded.isDoubles || false;
-        gameState.gameMode = loaded.gameMode || gameState._defaultGameMode || '15';
-        gameState.decidingGameSwitched = loaded.decidingGameSwitched || false;
-
-        // Convert timestamps from string/ISO format to numbers
-        gameState.matchStartTime = loaded.matchStartTime ? (typeof loaded.matchStartTime === 'number' ? loaded.matchStartTime : new Date(loaded.matchStartTime).getTime()) : null;
-        syncTimerAnchor(loaded);
-        gameState.matchEndTime = loaded.matchEndTime ? (typeof loaded.matchEndTime === 'number' ? loaded.matchEndTime : new Date(loaded.matchEndTime).getTime()) : null;
-
-        gameState.setScoresHistory = loaded.setScoresHistory || [];
-        gameState.matchCompleted = loaded.matchCompleted || false;
-        gameState.restBreakActive = loaded.restBreakActive || false;
-        gameState.restBreakSecondsLeft = loaded.restBreakSecondsLeft || 0;
-        gameState.restBreakTitle = loaded.restBreakTitle || '';
-        gameState.restBreakTaken = loaded.restBreakTaken || false;
-        gameState.restBreakStartedAt = loaded.restBreakStartedAt || null;
-        gameState.restBreakDuration = loaded.restBreakDuration || 60;
-
-        // Load serving state
-        gameState.servingPlayer = loaded.servingPlayer || null;
-        gameState.initialServer = loaded.initialServer || null;
-        gameState.servingTeam = loaded.servingTeam || null;
-        gameState.servingPlayerOnTeam = loaded.servingPlayerOnTeam || null;
-        gameState.team1RightCourt = loaded.team1RightCourt || 1;
-        gameState.team2RightCourt = loaded.team2RightCourt || 1;
-        gameState.betweenSets = loaded.betweenSets || false;
-
-        // Ensure name2 exists for backwards compatibility
-        if (!gameState.player1.name2) gameState.player1.name2 = 'Makker 1';
-        if (!gameState.player2.name2) gameState.player2.name2 = 'Makker 2';
-
-        // Version til optimistic concurrency — medsendes ved næste save
-        gameState.version = loaded.version || 0;
-
-        // Clear history when loading from database (can't undo server-side state)
-        gameState.history = [];
+        applyLoadedState(await api.getGameState(courtId));
     } catch (error) {
         console.error('Failed to load game state:', error);
         // Continue with default state
     }
+}
+
+// Overtag banens tilstand fra serveren (GET, eller svaret på et indtastet resultat)
+function applyLoadedState(loaded) {
+    gameState.player1 = loaded.player1;
+    gameState.player2 = loaded.player2;
+    gameState.timerSeconds = loaded.timerSeconds;
+    gameState.currentCourt = courtId;
+    gameState.isActive = loaded.isActive;
+    gameState.isDoubles = loaded.isDoubles || false;
+    gameState.gameMode = loaded.gameMode || gameState._defaultGameMode || '15';
+    gameState.decidingGameSwitched = loaded.decidingGameSwitched || false;
+
+    // Convert timestamps from string/ISO format to numbers
+    gameState.matchStartTime = loaded.matchStartTime ? (typeof loaded.matchStartTime === 'number' ? loaded.matchStartTime : new Date(loaded.matchStartTime).getTime()) : null;
+    syncTimerAnchor(loaded);
+    gameState.matchEndTime = loaded.matchEndTime ? (typeof loaded.matchEndTime === 'number' ? loaded.matchEndTime : new Date(loaded.matchEndTime).getTime()) : null;
+
+    gameState.setScoresHistory = loaded.setScoresHistory || [];
+    gameState.matchCompleted = loaded.matchCompleted || false;
+    gameState.resultOutcome = loaded.resultOutcome || null;
+    gameState.resultWinner = loaded.resultWinner || null;
+    // Svaret på et indtastet resultat har ingen planner-blok — behold den vi har
+    if ('planner' in loaded) gameState.planner = loaded.planner || null;
+    gameState.restBreakActive = loaded.restBreakActive || false;
+    gameState.restBreakSecondsLeft = loaded.restBreakSecondsLeft || 0;
+    gameState.restBreakTitle = loaded.restBreakTitle || '';
+    gameState.restBreakTaken = loaded.restBreakTaken || false;
+    gameState.restBreakStartedAt = loaded.restBreakStartedAt || null;
+    gameState.restBreakDuration = loaded.restBreakDuration || 60;
+
+    // Load serving state
+    gameState.servingPlayer = loaded.servingPlayer || null;
+    gameState.initialServer = loaded.initialServer || null;
+    gameState.servingTeam = loaded.servingTeam || null;
+    gameState.servingPlayerOnTeam = loaded.servingPlayerOnTeam || null;
+    gameState.team1RightCourt = loaded.team1RightCourt || 1;
+    gameState.team2RightCourt = loaded.team2RightCourt || 1;
+    gameState.betweenSets = loaded.betweenSets || false;
+
+    // Ensure name2 exists for backwards compatibility
+    if (!gameState.player1.name2) gameState.player1.name2 = 'Makker 1';
+    if (!gameState.player2.name2) gameState.player2.name2 = 'Makker 2';
+
+    // Version til optimistic concurrency — medsendes ved næste save
+    gameState.version = loaded.version || 0;
+
+    // Clear history when loading from database (can't undo server-side state)
+    gameState.history = [];
 }
 
 // Returns true if any player name differs from the default placeholder names
@@ -1096,6 +1120,8 @@ function updateDisplay() {
         timerDisplay.style.display = 'block';
         if (courtNameEl) courtNameEl.style.display = 'none';
     }
+
+    updateResultButtons();
 }
 
 // Select which team serves first
@@ -1718,6 +1744,12 @@ async function adoptServerReset(loaded) {
     // Version sættes FØR endRestBreak — dens save skal bruge den friske version
     gameState.version = (loaded && loaded.version) || 0;
 
+    // Resultatet fra forrige kamp hører ikke til den nye
+    closeResultForm();
+    if (_kampSlutVist) hideMessage();
+    gameState.resultOutcome = null;
+    gameState.resultWinner = null;
+
     // Match-session tokens (QR-kode tæller) låses når banen nulstilles
     // — brugeren skal scanne QR-koden igen for at tælle næste kamp.
     if (isMatchSessionToken()) {
@@ -1752,6 +1784,7 @@ async function adoptServerReset(loaded) {
     gameState.sidesManuallySwitched = false;
     gameState.matchCompleted = false;
     gameState.restBreakTaken = false;
+    gameState.planner = loaded.planner || null;
 
     // Ensure name2 exists
     if (!gameState.player1.name2) gameState.player1.name2 = 'Makker 1';
@@ -1765,6 +1798,11 @@ async function adoptServerReset(loaded) {
 // holdkamp/turnering og direkte tilstand håndteres af admin/tablet som hidtil.
 function promptStartFreshIfCompleted() {
     if (!gameState.matchCompleted) return;
+    // Planner-bane: resultatet står til næste runde — vis det, så det kan rettes
+    if (gameState.planner) {
+        showMatchWonMessage();
+        return;
+    }
     if (!isMatchSessionToken()) return;
 
     const p1Won = (gameState.player1.games || 0) > (gameState.player2.games || 0);
@@ -1807,6 +1845,8 @@ async function startFreshMatchInSession() {
     gameState.isActive = false;
     gameState.decidingGameSwitched = false;
     gameState.matchCompleted = false;
+    gameState.resultOutcome = null;
+    gameState.resultWinner = null;
     gameState.restBreakTaken = false;
     gameState.servingPlayer = null;
     gameState.initialServer = null;
@@ -2062,6 +2102,7 @@ function showMessage(title, text, buttons = [{ text: 'OK', callback: null, style
 function hideMessage() {
     const overlay = document.getElementById('messageOverlay');
     overlay.style.display = 'none';
+    _kampSlutVist = false;
 }
 
 // Lille html-escape saa spillernavne (brugerinput) ikke kan injicere markup.
@@ -2078,10 +2119,16 @@ function escapeMessageHtml(s) {
 // Vis "kamp vundet" besked med en struktureret saet-tabel saa det er klart
 // hvilken spiller der fik hvilke point i hvert saet. Holdkamp/turneringskamp-
 // kampe faar derudover en 3-sek hold-knap og en dommerbesked-paamindelse.
-function showMatchWonMessage(winnerNames, winnerGames, loserGames, isReportedMatch) {
+// Resultatet efter kampen — talt færdig eller indtastet (også afsluttet før
+// tid og walkover). Læser alt fra gameState, så den også kan vises igen, når
+// en afsluttet kamp indlæses eller et resultat er tastet på en anden enhed.
+let _kampSlutVist = false;
+function showMatchWonMessage(isReportedMatch = false) {
     releaseWakeLock(); // kampen er afgjort — skærmen må gerne gå i dvale igen
     const history = gameState.setScoresHistory || [];
     const isDoubles = !!gameState.isDoubles;
+    const outcome = gameState.resultOutcome; // null = talt færdig
+    const mode = gameState.gameMode || '15';
 
     // Find kanonisk side A / side B fra det foerste saet — efterfoelgende saet
     // kan have positionerne ombyttet (decider-skift). Det boejer vi op igen
@@ -2111,35 +2158,45 @@ function showMatchWonMessage(winnerNames, winnerGames, loserGames, isReportedMat
             scoreA = parts[1];
             scoreB = parts[0];
         }
-        const aWonSet = scoreA > scoreB;
-        if (aWonSet) sideAGames++; else sideBGames++;
-        return { scoreA, scoreB, aWonSet };
+        // 0 = sættet blev ikke spillet færdigt (kamp afsluttet før tid)
+        const saetVinder = window.KampResultat
+            ? window.KampResultat.saetVinder(scoreA, scoreB, mode)
+            : (scoreA > scoreB ? 1 : 2);
+        if (saetVinder === 1) sideAGames++;
+        if (saetVinder === 2) sideBGames++;
+        return { scoreA, scoreB, saetVinder };
     });
 
     const labelA = isDoubles && sideAPartner ? `${sideAName} / ${sideAPartner}` : sideAName;
     const labelB = isDoubles && sideBPartner ? `${sideBName} / ${sideBPartner}` : sideBName;
-    const sideAWinsMatch = sideAGames > sideBGames;
+    // Vinderen er valgt ved indtastning; ved en talt kamp er det den med flest sæt
+    let sideAWinsMatch = sideAGames > sideBGames;
+    if (gameState.resultWinner) {
+        const vinder = gameState.resultWinner === 1 ? gameState.player1.name : gameState.player2.name;
+        sideAWinsMatch = vinder === sideAName;
+    }
 
     const WIN_GREEN = 'var(--color-win, #4CAF50)';
     const MUTED = '#9aa0a8';
     const NAME_COL = 'text-align:left;padding:10px 14px;';
-    const SCORE_COL = 'text-align:center;padding:10px 14px;min-width:54px;';
+    const SCORE_COL = 'text-align:center;padding:10px 14px;min-width:54px;white-space:nowrap;';
     const SETS_COL = 'text-align:center;padding:10px 14px;font-weight:bold;border-left:1px solid rgba(255,255,255,0.15);';
 
     const headerCells = setCells.length
         ? setCells.map((_, i) => `<th style="${SCORE_COL}font-weight:normal;color:${MUTED};">Sæt ${i + 1}</th>`).join('')
         : '';
+    const celle = (score, vandt) => `<td style="${SCORE_COL}color:${vandt ? WIN_GREEN : MUTED};font-weight:${vandt ? 'bold' : 'normal'};">${score}</td>`;
 
     const rowA = `
         <tr style="background:${sideAWinsMatch ? 'rgba(76,175,80,0.10)' : 'transparent'};color:${sideAWinsMatch ? '#fff' : MUTED};">
             <td style="${NAME_COL}font-weight:${sideAWinsMatch ? 'bold' : 'normal'};">${escapeMessageHtml(labelA)}</td>
-            ${setCells.map(c => `<td style="${SCORE_COL}color:${c.aWonSet ? WIN_GREEN : MUTED};font-weight:${c.aWonSet ? 'bold' : 'normal'};">${c.scoreA}</td>`).join('')}
+            ${setCells.map(c => celle(c.scoreA, c.saetVinder === 1)).join('')}
             <td style="${SETS_COL}color:${sideAWinsMatch ? WIN_GREEN : MUTED};">${sideAGames}</td>
         </tr>`;
     const rowB = `
         <tr style="background:${!sideAWinsMatch ? 'rgba(76,175,80,0.10)' : 'transparent'};color:${!sideAWinsMatch ? '#fff' : MUTED};">
             <td style="${NAME_COL}font-weight:${!sideAWinsMatch ? 'bold' : 'normal'};">${escapeMessageHtml(labelB)}</td>
-            ${setCells.map(c => `<td style="${SCORE_COL}color:${!c.aWonSet ? WIN_GREEN : MUTED};font-weight:${!c.aWonSet ? 'bold' : 'normal'};">${c.scoreB}</td>`).join('')}
+            ${setCells.map(c => celle(c.scoreB, c.saetVinder === 2)).join('')}
             <td style="${SETS_COL}color:${!sideAWinsMatch ? WIN_GREEN : MUTED};">${sideBGames}</td>
         </tr>`;
 
@@ -2156,9 +2213,16 @@ function showMatchWonMessage(winnerNames, winnerGames, loserGames, isReportedMat
            </table>`
         : '';
 
+    const vinderNavne = formatPlayerNames(
+        sideAWinsMatch ? sideAName : sideBName,
+        sideAWinsMatch ? sideAPartner : sideBPartner
+    );
+    const vinderTekst = outcome === 'walkover' ? `${escapeMessageHtml(vinderNavne)} vinder på walkover`
+        : outcome === 'ended_early' ? `${escapeMessageHtml(vinderNavne)} vinder — afsluttet før tid`
+        : `${escapeMessageHtml(vinderNavne)} vinder ${Math.max(sideAGames, sideBGames)}-${Math.min(sideAGames, sideBGames)}`;
     const winnerLine = `
         <div style="text-align:center;margin-bottom:18px;font-size:1.25em;color:${WIN_GREEN};font-weight:bold;">
-            ${escapeMessageHtml(winnerNames)} vinder ${winnerGames}-${loserGames}
+            ${vinderTekst}
         </div>`;
 
     const noticeHtml = isReportedMatch
@@ -2166,15 +2230,295 @@ function showMatchWonMessage(winnerNames, winnerGames, loserGames, isReportedMat
                 Husk at give dommerbesked om resultatet.<br>
                 Hold knappen inde i 3 sekunder for at rydde banen.
            </div>`
+        : gameState.planner
+        ? `<div style="margin-top:22px;color:${MUTED};text-align:center;font-size:0.95em;">
+                Resultatet er gemt til badmintonplanner.dk.
+           </div>`
         : '';
 
     const bodyHtml = `<div style="display:flex;flex-direction:column;align-items:center;">${winnerLine}${tableHtml}${noticeHtml}</div>`;
 
+    // Planner-bane: resultatet bliver stående til næste runde (TV viser det), og
+    // kan rettes — "Ny kamp" ville slette rundens navne fra banen
     const buttons = isReportedMatch
         ? [{ text: 'Ryd Banen (hold 3 sek.)', callback: () => performClearCourtNow(), style: 'danger', holdDurationMs: 3000 }]
+        : gameState.planner
+        ? [{ text: 'Ret resultat', callback: () => openResultForm(), style: 'secondary' },
+           { text: 'Luk', callback: null, style: 'primary' }]
         : [{ text: 'Ny Kamp', callback: () => clearCourt(), style: 'primary' }];
 
-    showMessage('Kamp Vundet!', '', buttons, { bodyHtml });
+    const titel = outcome === 'walkover' ? 'Walkover'
+        : outcome === 'ended_early' ? 'Kamp Afsluttet'
+        : 'Kamp Vundet!';
+    showMessage(titel, '', buttons, { bodyHtml });
+    _kampSlutVist = true;
+}
+
+// ===== Indtast resultat (kampe fra badmintonplanner.dk) =====
+// Til baner uden tæller: spillerne taster sættene bagefter — også en kamp, der
+// blev stoppet før tid (fx 15-7 13-4), hvor vinderen vælges — eller registrerer
+// walkover. Serveren validerer og gemmer (POST /game-states/:id/result);
+// reglerne deles med serveren via js/kamp-resultat.js. Tallene tastes på et
+// indbygget taltastatur: tablettens eget dækker halvdelen af skærmen i landskab.
+
+const resultForm = {
+    open: false,
+    values: ['', '', '', '', '', ''], // felt 0..5: sæt 1 player1, sæt 1 player2, sæt 2 player1, ...
+    active: 0,
+    fresh: true,          // næste ciffer erstatter feltets værdi
+    winner: null,         // 1 = player1, 2 = player2
+    winnerChosen: false,  // brugeren har selv valgt → foreslå ikke længere
+    walkover: false,
+    touched: false,       // der er tastet noget — først da vises fejl
+    saving: false
+};
+
+function updateResultButtons() {
+    const planner = !!gameState.planner;
+    const btn = document.getElementById('enterResultBtn');
+    const menuBtn = document.getElementById('enterResultMenuBtn');
+    // Før kampen: knap under "Start kamp". I menuen: altid på en planner-bane —
+    // også midt i en talt kamp, der skal stoppes, og for at rette resultatet
+    if (btn) btn.style.display = planner && !gameState.matchStartTime ? 'block' : 'none';
+    if (menuBtn) {
+        menuBtn.style.display = planner ? 'block' : 'none';
+        menuBtn.textContent = gameState.matchCompleted ? 'Ret resultat' : 'Indtast resultat';
+    }
+
+    // Serv-hintet hører kun til før kampen, mens "Start kamp" er deaktiveret
+    // (knappen er stadig deaktiveret, når et resultat er tastet uden serv), og
+    // et indtastet resultat har ingen spilletid at vise
+    const hint = document.querySelector('.start-hint');
+    const startBtn = document.getElementById('startMatchBtn');
+    if (hint) hint.style.display = !gameState.matchStartTime && startBtn && startBtn.disabled ? 'block' : 'none';
+    const timer = document.getElementById('timerDisplay');
+    if (timer && gameState.resultOutcome) timer.style.display = 'none';
+}
+
+function setupResultForm() {
+    document.querySelectorAll('#resultTable .result-cell').forEach(cell => {
+        cell.addEventListener('click', () => {
+            if (resultForm.walkover) return;
+            resultForm.active = Number(cell.dataset.cell);
+            resultForm.fresh = true;
+            renderResultForm();
+        });
+    });
+    document.querySelectorAll('#resultTable .result-winner-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            resultForm.winner = Number(btn.dataset.winner);
+            resultForm.winnerChosen = true;
+            resultForm.touched = true;
+            renderResultForm();
+        });
+    });
+    document.querySelectorAll('#resultNumpad button').forEach(btn => {
+        btn.addEventListener('click', () => resultNumpadKey(btn.dataset.key));
+    });
+    document.getElementById('resultWalkoverBtn').addEventListener('click', () => {
+        resultForm.walkover = !resultForm.walkover;
+        resultForm.touched = true;
+        renderResultForm();
+    });
+    document.getElementById('resultSaveBtn').addEventListener('click', saveResultForm);
+    document.getElementById('resultCancelBtn').addEventListener('click', closeResultForm);
+}
+
+function openResultForm() {
+    // Forudfyld med det, der er talt eller tastet: sættene vendes til banens
+    // nuværende sider (player1 til venstre), og et igangværende sæt tages med
+    const saet = [];
+    for (const set of (gameState.setScoresHistory || [])) {
+        const raw = typeof set === 'string' ? set : set.score;
+        const [a, b] = String(raw || '').split('-').map(x => parseInt(x, 10));
+        if (!Number.isInteger(a) || !Number.isInteger(b)) continue;
+        const vendt = typeof set === 'object' && set.player1Name && set.player1Name !== gameState.player1.name;
+        saet.push(vendt ? [b, a] : [a, b]);
+    }
+    if (!gameState.matchCompleted && (gameState.player1.score > 0 || gameState.player2.score > 0)) {
+        saet.push([gameState.player1.score, gameState.player2.score]);
+    }
+    const values = ['', '', '', '', '', ''];
+    saet.slice(0, 3).forEach(([a, b], i) => { values[i * 2] = String(a); values[i * 2 + 1] = String(b); });
+
+    resultForm.values = values;
+    resultForm.walkover = gameState.resultOutcome === 'walkover';
+    resultForm.winner = gameState.resultWinner || null;
+    resultForm.winnerChosen = !!gameState.resultWinner;
+    resultForm.touched = saet.length > 0;
+    const forsteTomme = values.indexOf('');
+    resultForm.active = forsteTomme === -1 ? 0 : forsteTomme;
+    resultForm.fresh = true;
+    resultForm.saving = false;
+    resultForm.open = true;
+
+    document.getElementById('resultTitle').textContent = gameState.matchCompleted ? 'Ret resultat' : 'Indtast resultat';
+    document.getElementById('resultName1').textContent = formatPlayerNames(gameState.player1.name, gameState.player1.name2);
+    document.getElementById('resultName2').textContent = formatPlayerNames(gameState.player2.name, gameState.player2.name2);
+    setResultStatus('', '');
+    renderResultForm();
+    document.getElementById('resultOverlay').style.display = 'flex';
+}
+
+function closeResultForm() {
+    resultForm.open = false;
+    const overlay = document.getElementById('resultOverlay');
+    if (overlay) overlay.style.display = 'none';
+}
+
+// Sættene som tal, til og med det sidste udfyldte (tomme felte før det = 0)
+function resultSaet() {
+    const v = resultForm.values;
+    let sidste = -1;
+    for (let i = 0; i < 3; i++) if (v[i * 2] !== '' || v[i * 2 + 1] !== '') sidste = i;
+    const saet = [];
+    for (let i = 0; i <= sidste; i++) saet.push([Number(v[i * 2] || 0), Number(v[i * 2 + 1] || 0)]);
+    return saet;
+}
+
+function resultNumpadKey(key) {
+    if (resultForm.walkover || resultForm.saving) return;
+    const i = resultForm.active;
+    const naeste = () => { resultForm.active = (resultForm.active + 1) % 6; resultForm.fresh = true; };
+    if (key === 'next') {
+        naeste();
+    } else if (key === 'del') {
+        resultForm.values[i] = resultForm.fresh ? '' : resultForm.values[i].slice(0, -1);
+        resultForm.fresh = false;
+    } else {
+        const maks = gameState.gameMode === '21' ? 30 : 21;
+        let tal = resultForm.fresh ? key : resultForm.values[i] + key;
+        if (Number(tal) > maks || tal.length > 2) tal = key; // kan ikke være et point-tal → start forfra
+        tal = String(Number(tal));
+        resultForm.values[i] = tal;
+        resultForm.fresh = false;
+        resultForm.touched = true;
+        // Videre til næste felt, når et ciffer mere ikke kan give et gyldigt tal
+        if (tal === '0' || tal.length === 2 || Number(tal) * 10 > maks) naeste();
+    }
+    renderResultForm();
+}
+
+function setResultStatus(tekst, type) {
+    const el = document.getElementById('resultStatus');
+    if (!el) return;
+    el.textContent = tekst;
+    el.className = 'result-status' + (type ? ' is-' + type : '');
+}
+
+function renderResultForm() {
+    const K = window.KampResultat;
+    const mode = gameState.gameMode || '15';
+    const saet = resultSaet();
+
+    // Vinderen foreslås (flest sæt, ellers den førende), til brugeren selv vælger.
+    // En færdigspillet kamp har kun én mulig vinder.
+    if (!resultForm.walkover && saet.length) {
+        if (K.afslutning(saet, mode) === 'completed') {
+            const [v1, v2] = K.vundneSaet(saet, mode);
+            resultForm.winner = v1 > v2 ? 1 : 2;
+        } else if (!resultForm.winnerChosen) {
+            resultForm.winner = K.foreslaaVinder(saet, mode);
+        }
+    }
+
+    document.querySelectorAll('#resultTable .result-cell').forEach(cell => {
+        const i = Number(cell.dataset.cell);
+        cell.textContent = resultForm.values[i];
+        cell.classList.toggle('is-active', !resultForm.walkover && i === resultForm.active);
+    });
+    document.querySelectorAll('#resultTable .result-winner-btn').forEach(btn => {
+        btn.classList.toggle('is-winner', Number(btn.dataset.winner) === resultForm.winner);
+    });
+    document.getElementById('resultTable').classList.toggle('is-walkover', resultForm.walkover);
+    document.getElementById('resultNumpad').classList.toggle('is-disabled', resultForm.walkover);
+    document.getElementById('resultWalkoverBtn').setAttribute('aria-pressed', resultForm.walkover ? 'true' : 'false');
+
+    const v = K.validerIndtastning({ sets: saet, winner: resultForm.winner, walkover: resultForm.walkover }, mode);
+    const saveBtn = document.getElementById('resultSaveBtn');
+    saveBtn.disabled = !!v.error || resultForm.saving;
+    saveBtn.textContent = resultForm.saving ? 'Gemmer…' : 'Gem resultat';
+
+    if (resultForm.saving) return;
+    if (v.error) {
+        if (resultForm.touched) setResultStatus(v.error, 'error');
+        else setResultStatus('Tryk på et felt og tast point — eller vælg walkover', '');
+        return;
+    }
+    const r = v.resultat;
+    const navn = r.winner === 1
+        ? formatPlayerNames(gameState.player1.name, gameState.player1.name2)
+        : formatPlayerNames(gameState.player2.name, gameState.player2.name2);
+    if (r.outcome === 'walkover') {
+        setResultStatus(`Walkover — ${navn} vinder`, 'ok');
+    } else if (r.outcome === 'completed') {
+        const [v1, v2] = K.vundneSaet(r.sets, mode);
+        setResultStatus(`Færdigspillet — ${navn} vinder ${Math.max(v1, v2)}-${Math.min(v1, v2)}`, 'ok');
+    } else {
+        setResultStatus(`Afsluttet før tid — ${navn} vinder (tryk ✓ for at vælge den anden side)`, 'ok');
+    }
+}
+
+async function saveResultForm() {
+    if (resultForm.saving) return;
+    const body = {
+        sets: resultSaet(),
+        winner: resultForm.winner,
+        walkover: resultForm.walkover,
+        expectedVersion: gameState.version
+    };
+    // En pause, der kører, og ventende gemninger må ikke skrive oven i resultatet
+    if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
+    pendingSave = false;
+
+    resultForm.saving = true;
+    renderResultForm();
+    try {
+        const svar = await api.saveEnteredResult(courtId, body);
+        await adoptEnteredResult(svar.state);
+    } catch (error) {
+        resultForm.saving = false;
+        if (error.status === 401) {
+            closeResultForm();
+            handleAuthExpired(error.body);
+            return;
+        }
+        if (error.status === 409 && error.body && error.body.state) {
+            // En anden enhed har skrevet imens — tag den friske tilstand og bed om at gemme igen
+            applyLoadedState(error.body.state);
+            updateDisplay();
+            renderResultForm();
+            setResultStatus('Banen er ændret på en anden enhed — tjek resultatet og gem igen', 'error');
+            return;
+        }
+        renderResultForm();
+        setResultStatus(error.message || 'Resultatet kunne ikke gemmes — prøv igen', 'error');
+    }
+}
+
+// Et indtastet resultat (her eller på en anden enhed) overtages og vises
+async function adoptEnteredResult(loaded) {
+    if (gameState.timerInterval) {
+        clearInterval(gameState.timerInterval);
+        gameState.timerInterval = null;
+    }
+    if (gameState.restBreakActive) {
+        // Pausen stoppes kun lokalt — serveren har allerede afsluttet den, og en
+        // gemning herfra ville gøre kampen uafsluttet igen
+        gameState.restBreakCallback = null;
+        if (gameState.restBreakInterval) {
+            clearInterval(gameState.restBreakInterval);
+            gameState.restBreakInterval = null;
+        }
+        gameState.restBreakActive = false;
+        const pause = document.getElementById('restBreakOverlay');
+        if (pause) pause.style.display = 'none';
+    }
+    applyLoadedState(loaded);
+    resultForm.saving = false;
+    closeResultForm();
+    updateDisplay();
+    showMatchWonMessage();
 }
 
 // Save match result to database
@@ -2385,6 +2729,19 @@ async function serverSyncTick(reason) {
         const checkAssignments = reason !== 'update' && reason !== 'reset' && reason !== 'config';
         try {
             const loaded = await api.getGameState(courtId);
+
+            // Planner-blokken følger banen (ny runde, runden slut) — styrer "Indtast resultat"
+            const hadPlanner = !!gameState.planner;
+            gameState.planner = loaded.planner || null;
+            if (hadPlanner !== !!gameState.planner) updateResultButtons();
+
+            // Resultatet er tastet (eller rettet) på en anden enhed, fx en spillers
+            // telefon via QR — overtag det og vis det her også
+            if (loaded.matchCompleted && loaded.resultOutcome && !resultForm.open &&
+                (loaded.version || 0) !== gameState.version) {
+                await adoptEnteredResult(loaded);
+                return;
+            }
 
             // Check if court was reset from admin (matchStartTime is null and scores are 0)
             const wasReset = !loaded.matchStartTime &&

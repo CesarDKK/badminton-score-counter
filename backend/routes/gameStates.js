@@ -6,7 +6,9 @@ const { kunEgenBane } = require('../middleware/qrSession');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
 const { publishGameStateChange, subscribeGameStateChanges } = require('../events/gameStateEvents');
 // badmintonplanner.dk: rundenavn/næste runde/udskiftere/note pr. bane (fase 2-visning)
-const { hentPlannerVisning, plannerForBane } = require('./plannerIntegration');
+const { hentPlannerVisning, plannerForBane, gemPlannerResultat, kampIGang } = require('./plannerIntegration');
+const { validerIndtastning, vundneSaet } = require('../config/kampResultat');
+const { varighedTekst } = require('../config/matchTiming');
 
 // Hvor længe (i minutter) et "last finished match" snapshot vises på TV efter Ryd bane
 const FINISHED_SNAPSHOT_TTL_MINUTES = 5;
@@ -47,6 +49,10 @@ function formatStateRow(row, court) {
         // så klienter slipper for at sammenligne serverens og eget ur
         elapsedSeconds: typeof row.elapsed_seconds === 'number' ? row.elapsed_seconds : null,
         matchCompleted: !!row.match_completed,
+        // Sat når resultatet er indtastet i stedet for talt færdigt:
+        // 'completed' | 'ended_early' | 'walkover', og vinderen (1 = player1, 2 = player2)
+        resultOutcome: row.result_outcome || null,
+        resultWinner: row.result_winner || null,
         isActive: !!court.is_active,
         isDoubles: !!court.is_doubles,
         gameMode: court.game_mode,
@@ -111,6 +117,7 @@ router.get('/batch/all', async (req, res, next) => {
                 gs.timer_seconds, gs.deciding_game_switched,
                 gs.rest_break_active, gs.rest_break_seconds_left, gs.rest_break_title,
                 gs.set_scores_history, gs.match_start_time, gs.match_end_time, gs.match_completed,
+                gs.result_outcome, gs.result_winner,
                 gs.version,
                 TIMESTAMPDIFF(SECOND, gs.match_start_time, COALESCE(gs.match_end_time, NOW())) AS elapsed_seconds
             FROM courts c
@@ -176,6 +183,8 @@ router.get('/batch/all', async (req, res, next) => {
                 matchEndTime: row.match_end_time,
                 elapsedSeconds: typeof row.elapsed_seconds === 'number' ? row.elapsed_seconds : null,
                 matchCompleted: !!row.match_completed,
+                resultOutcome: row.result_outcome || null,
+                resultWinner: row.result_winner || null,
                 isActive: !!row.isActive,
                 isDoubles: !!row.isDoubles,
                 gameMode: row.gameMode,
@@ -560,6 +569,25 @@ router.put('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), asyn
             }
         }
 
+        // Et indtastet resultat hører kun til en afsluttet kamp — fortrydes den,
+        // eller starter en ny, glemmes det
+        if (!matchCompleted && existing && (existing.result_outcome || existing.result_winner || existing.result_history_id)) {
+            await query(
+                'UPDATE game_states SET result_outcome = NULL, result_winner = NULL, result_history_id = NULL WHERE court_id = ?',
+                [court.id]
+            );
+        }
+
+        // badmintonplanner: resultatet gemmes, når en talt kamp bliver afgjort, og
+        // rettes til 'unfinished', hvis afslutningen fortrydes
+        const varAfsluttet = !!(existing && existing.match_completed);
+        if (matchCompleted !== varAfsluttet) {
+            try {
+                const frisk = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
+                await gemPlannerResultat(parseInt(courtId, 10), frisk, { kunHvisFindes: !matchCompleted });
+            } catch (e) { console.error('Planner-resultat fejlede:', e.message); }
+        }
+
         // Auto-update court active status based on activity (unless skipped by admin)
         // Only set to active if there IS activity, never set to inactive
         // This allows admin to manually mark courts as active without gameplay interference
@@ -596,6 +624,121 @@ router.put('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), asyn
     }
 });
 
+// POST /api/game-states/:courtId/result - Indtast resultatet i stedet for at tælle
+//
+// Til baner med en kamp fra badmintonplanner.dk, hvor der typisk ikke er en
+// tæller: spillerne taster sættene bagefter (også en kamp, der blev stoppet
+// før tid, fx 15-7 13-4) og vælger vinderen, eller registrerer walkover.
+// Body: { sets: [[p1, p2], ...], winner: 1|2, walkover: bool, expectedVersion? }
+// — set fra banens player1/player2, som tællersiden viser dem. Kan kaldes igen
+// for at rette resultatet.
+router.post('/:courtId/result', requireWriteAuthInClubMode, kunEgenBane('courtId'), async (req, res, next) => {
+    try {
+        const courtNumber = parseInt(req.params.courtId, 10);
+        const court = await queryOne(
+            'SELECT id, is_active, is_doubles, game_mode FROM courts WHERE court_number = ?',
+            [courtNumber]
+        );
+        if (!court) return res.status(404).json({ error: 'Bane ikke fundet' });
+
+        let plannerKamp = null;
+        try {
+            plannerKamp = await queryOne('SELECT court_number FROM planner_court_assignments WHERE court_number = ?', [courtNumber]);
+        } catch (e) { /* tabellen findes først efter migration 027 */ }
+        if (!plannerKamp) {
+            return res.status(409).json({ error: 'Resultat kan kun indtastes for kampe fra badmintonplanner.dk', code: 'not_planner_court' });
+        }
+
+        const gs = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
+        if (!gs) return res.status(409).json({ error: 'Der er ingen kamp på banen', code: 'no_match' });
+
+        const body = req.body || {};
+        if (body.expectedVersion !== undefined && body.expectedVersion !== null &&
+            Number(body.expectedVersion) !== (gs.version || 0)) {
+            return res.status(409).json({
+                error: 'Banens tilstand er ændret af en anden enhed',
+                conflict: true,
+                version: gs.version || 0,
+                state: formatStateRow(gs, court)
+            });
+        }
+
+        const v = validerIndtastning(body, court.game_mode);
+        if (v.error) return res.status(422).json({ error: v.error, code: 'invalid_result' });
+        const { sets, winner, walkover, outcome } = v.resultat;
+
+        const navne = {
+            player1Name: gs.player1_name, player1Name2: gs.player1_name2 || null,
+            player2Name: gs.player2_name, player2Name2: gs.player2_name2 || null
+        };
+        const historik = sets.map(([a, b]) => ({ ...navne, score: `${a}-${b}` }));
+        const [g1, g2] = vundneSaet(sets, court.game_mode);
+
+        await query(
+            `UPDATE game_states SET
+                player1_score = 0, player2_score = 0, player1_games = ?, player2_games = ?,
+                set_scores_history = ?, match_completed = TRUE,
+                result_outcome = ?, result_winner = ?,
+                rest_break_active = FALSE, rest_break_seconds_left = 0, between_sets = FALSE,
+                match_start_time = COALESCE(match_start_time, NOW()),
+                match_end_time = NOW(),
+                version = version + 1
+             WHERE court_id = ?`,
+            [g1, g2, JSON.stringify(historik), outcome, winner, court.id]
+        );
+        await query('UPDATE courts SET is_active = TRUE WHERE id = ?', [court.id]);
+        await query('DELETE FROM last_finished_matches WHERE court_id = ?', [court.id]);
+
+        // Kamphistorik — en rettelse opdaterer samme række i stedet for at lave en dublet
+        const frisk = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
+        const erDouble = !!court.is_doubles;
+        const sideNavn = (n1, n2) => (erDouble && n2 && !/^Makker [12]$/.test(n2) ? `${n1} & ${n2}` : n1).slice(0, 100);
+        const s1 = sideNavn(gs.player1_name, gs.player1_name2);
+        const s2 = sideNavn(gs.player2_name, gs.player2_name2);
+        const vinderSaet = winner === 1 ? g1 : g2, taberSaet = winner === 1 ? g2 : g1;
+        const historikTekst = walkover ? 'Walkover'
+            : historik.map(h => `${s1} ${h.score} ${s2}`).join(', ') + (outcome === 'ended_early' ? ' (afsluttet før tid)' : '');
+        const felter = [
+            winner === 1 ? s1 : s2,
+            winner === 1 ? s2 : s1,
+            walkover ? 'W.O.' : `${vinderSaet}-${taberSaet}`,
+            varighedTekst(frisk.match_start_time, frisk.match_end_time) || '00:00',
+            historikTekst
+        ];
+        let historyId = gs.result_history_id || null;
+        if (historyId) {
+            const r = await query(
+                'UPDATE match_history SET winner_name = ?, loser_name = ?, games_won = ?, duration = ?, set_scores = ? WHERE id = ?',
+                [...felter, historyId]
+            );
+            if (!r.affectedRows) historyId = null; // rækken er slettet i mellemtiden
+        }
+        if (!historyId) {
+            const r = await query(
+                `INSERT INTO match_history (court_id, winner_name, loser_name, games_won, duration, set_scores)
+                 VALUES (?, ?, ?, ?, ?, ?)`,
+                [court.id, ...felter]
+            );
+            historyId = r.insertId;
+        }
+        await query('UPDATE game_states SET result_history_id = ? WHERE court_id = ?', [historyId, court.id]);
+
+        try { await gemPlannerResultat(courtNumber, frisk); }
+        catch (e) { console.error('Planner-resultat fejlede:', e.message); }
+
+        publishGameStateChange(req, courtNumber, 'update');
+
+        res.json({
+            success: true,
+            outcome,
+            version: frisk.version,
+            state: formatStateRow(frisk, { ...court, is_active: true })
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
 // DELETE /api/game-states/:courtId - Reset court (public - used during gameplay)
 router.delete('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), async (req, res, next) => {
     try {
@@ -610,13 +753,14 @@ router.delete('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), a
 
         // Hvis en kamp er afsluttet (mindst én side vandt 2 sæt eller match_completed=true),
         // gem et snapshot så TV kan vise resultatet i et par minutter efter Ryd bane.
-        const existing = await queryOne(
-            `SELECT player1_name, player1_name2, player1_games,
-                    player2_name, player2_name2, player2_games,
-                    set_scores_history, match_end_time, match_completed
-             FROM game_states WHERE court_id = ?`,
-            [court.id]
-        );
+        const existing = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
+
+        // badmintonplanner: en talt kamp, der ryddes før den er afgjort, afleveres
+        // som 'unfinished' (afsluttede kampe har allerede deres resultat)
+        if (kampIGang(existing)) {
+            try { await gemPlannerResultat(parseInt(courtId, 10), existing); }
+            catch (e) { console.error('Planner-resultat fejlede:', e.message); }
+        }
 
         if (existing) {
             const finished = !!existing.match_completed ||

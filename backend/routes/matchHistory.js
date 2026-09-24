@@ -251,6 +251,15 @@ router.post('/', requireWriteAuthInClubMode, kunEgenBane((req) => req.body && re
             [court.id, winnerName, loserName, gamesWon, duration, setScores || null]
         );
 
+        // Husk rækken på banens afsluttede kamp, så "Ret resultat" opdaterer den
+        // i stedet for at lave en dublet (se POST /api/game-states/:courtId/result)
+        try {
+            await query(
+                'UPDATE game_states SET result_history_id = ? WHERE court_id = ? AND match_completed = TRUE',
+                [result.insertId, court.id]
+            );
+        } catch (e) { /* kolonnen findes først efter migration 029 */ }
+
         res.json({
             success: true,
             id: result.insertId

@@ -20,13 +20,18 @@ hos badmintonplanner.dk.
   bane. Baner, der er åbnet i ugeplanen, men ikke er med i kaldet, ryddes.
 - Uden for tidsrummet svares **403** uanset indhold. Når tidsrummet slutter,
   rydder badmintonapp.dk selv banerne, så klubben er tilbage i normal drift.
-- Tæller klubben selv på en bane (tablet/QR), kører tælleren som i dag.
+- Spillerne kan tælle kampen på banens tablet eller via QR-koden på TV'et,
+  eller taste resultatet ind bagefter: sættene (også en kamp, der blev
+  stoppet før tid, fx 15-7 13-4, hvor de selv vælger vinderen) eller
+  walkover. Resultaterne henter I med `GET /api/integrations/results`,
+  løbende eller samlet for en aften.
 
 ## Adresse og nøgle
 
 ```
 POST https://<klub>.badmintonapp.dk/api/integrations/planned-round
 GET  https://<klub>.badmintonapp.dk/api/integrations/status
+GET  https://<klub>.badmintonapp.dk/api/integrations/results
 Authorization: Bearer <API-nøgle>
 Content-Type: application/json
 ```
@@ -48,7 +53,7 @@ planen lige nu.
   "note": "Fælles udstrækning efter sidste runde",
   "forceNewMatch": true,
   "matches": [
-    { "courtNumber": 1,
+    { "courtNumber": 1, "matchId": "k-101",
       "side1Player1": "Anders Jensen", "side1Player2": "Bo Nielsen",
       "side2Player1": "Carsten Hansen", "side2Player2": "Dan Petersen",
       "substitutes": ["Erik Larsen"] },
@@ -72,6 +77,7 @@ planen lige nu.
 | `forceNewMatch` | valgfri, standard `true` | `true`: banen skifter til de nye navne, også hvis der tælles på den. `false`: en bane, hvor der tælles (point er scoret og kampen ikke afsluttet), afvises med `match_in_progress`; prøv igen senere. Navne alene spærrer aldrig. |
 | `matches` | påkrævet, ≤ 20 poster | Én post pr. bane i brug. Åbnede baner, som ikke er med, ryddes. |
 | `courtNumber` | 1–20, unik i listen | Hallens banenummer, samme som klubbens TV-links. |
+| `matchId` | valgfri, ≤ 100 tegn | Jeres id for kampen. Sendes med tilbage i resultaterne, så I kan koble dem til jeres kampe. |
 | `side1Player1`, `side2Player1` | påkrævet, ≤ 100 tegn | Første spiller på hver side af nettet. |
 | `side1Player2`, `side2Player2` | valgfri | Makkere. Er de udfyldt, vises banen som double. |
 | `substitutes` | valgfri, ≤ 8 navne | Udskiftere på banen. Vises under navnene på banens TV (fornavne, som spillerne) og på banekortet i oversigten. |
@@ -123,6 +129,72 @@ Grænser: højst 30 kald pr. minut pr. nøgle og 120 kald pr. 5 minutter pr.
 IP-adresse. Body højst 100 KB. Ved 5xx eller netværksfejl: prøv igen med
 stigende ventetid (fx 5, 15, 45 sekunder) og samme `roundId`.
 
+## GET /api/integrations/results
+
+Resultaterne af rundernes kampe, både talte og indtastede. Kaldet virker
+også uden for tidsrummet, så en hel aften kan hentes bagefter. I ser kun
+resultater fra runder sendt med jeres egen nøgle.
+
+```
+GET /api/integrations/results?roundId=2026-09-07-r2
+GET /api/integrations/results?date=2026-09-07
+GET /api/integrations/results?since=2026-09-07T17:05:00.000Z
+```
+
+| Parameter | Betydning |
+|---|---|
+| `roundId` | Kun resultater fra denne runde. |
+| `date` | Kun resultater fra denne dag (dansk dato, `åååå-mm-dd`). Til at hente en hel aften samlet. |
+| `since` | Kun resultater oprettet eller rettet fra og med dette tidspunkt (ISO 8601). Til løbende hentning: brug `serverTime` fra forrige svar. |
+| `limit` | Højst så mange resultater (1–1000, standard 500). `hasMore: true` betyder, at der er flere; hent igen med `since` = sidste resultats `updatedAt`. |
+
+Filtrene kan kombineres. Uden filtre får I alle jeres resultater. De gemmes
+i 90 dage.
+
+### Svar (200)
+
+```json
+{
+  "results": [
+    { "resultId": 17, "roundId": "2026-09-07-r2", "sequence": 2, "label": "Runde 2",
+      "matchId": "k-101", "courtNumber": 1,
+      "side1": ["Anders Jensen", "Bo Nielsen"], "side2": ["Carsten Hansen", "Dan Petersen"],
+      "status": "ended_early", "winner": 1,
+      "sets": [{ "side1": 15, "side2": 7 }, { "side1": 13, "side2": 4 }],
+      "source": "entered",
+      "recordedAt": "2026-09-07T17:21:40.120Z", "updatedAt": "2026-09-07T17:21:40.120Z" }
+  ],
+  "hasMore": false,
+  "serverTime": "2026-09-07T17:30:00.004Z"
+}
+```
+
+| Felt | Betydning |
+|---|---|
+| `resultId` | Vores id for resultatet. Der er ét resultat pr. bane pr. runde. |
+| `side1`, `side2` | Navnene, som I sendte dem i runden. Sider og sæt er altid set fra jeres `side1`/`side2`, også når spillerne har byttet side på banen undervejs. |
+| `status` | `completed`: spillet færdigt (en side vandt 2 sæt). `ended_early`: stoppet før tid; sidste sæt er ikke spillet færdigt, og vinderen er valgt af spillerne. `walkover`: ikke spillet; `sets` er tom. `unfinished`: der blev talt, men kampen blev afbrudt af næste runde eller ryddet, før den var afgjort; ingen vinder. |
+| `winner` | `1` (side1), `2` (side2) eller `null` ved `unfinished`. |
+| `sets` | Sættene i rækkefølge. Ved `unfinished` er det igangværende sæt med sidst. |
+| `source` | `counted` (talt point for point) eller `entered` (tastet ind bagefter). |
+| `updatedAt` | Ændres, når resultatet rettes. Et rettet resultat beholder sit `resultId`, så I kan overskrive jeres kopi. |
+
+Løbende hentning: kald fx hvert 30. sekund under aftenen med `since` =
+`serverTime` fra forrige svar. Et resultat, der skrives, mens I henter,
+kommer med i næste kald; brug `resultId` til at undgå dubletter. Kaldet
+tæller med i grænsen på 30 kald pr. minut pr. nøgle.
+
+Spillerne kan taste og rette resultatet, indtil næste runde sendes. Derefter
+viser banen de nye navne.
+
+### Fejlsvar
+
+| HTTP | `code` | Hvornår |
+|---|---|---|
+| 401 | `invalid_token` | Nøglen mangler, er ukendt eller tilbagekaldt. |
+| 422 | `invalid_query` | Ugyldig parameter. `details` er en liste af fejl. |
+| 429 | `rate_limited` | For mange kald. Vent det antal sekunder, der står i `Retry-After`. |
+
 ## GET /api/integrations/status
 
 Til at tjekke nøglen, når klubben sætter den ind, og til at vise
@@ -153,3 +225,6 @@ Til at tjekke nøglen, når klubben sætter den ind, og til at vise
 4. Ved sidste runde: send den med tom `nextRoundStartsAt`. Send gerne et
    ekstra kald med tom `matches`-liste, når aftenen er slut, så banerne
    ryddes med det samme; ellers ryddes de, når tidsrummet slutter.
+5. Resultater: hent `results` med `since` løbende (fx hvert 30. sekund)
+   og/eller med `date` samlet efter aftenen. Send `matchId` med i runderne,
+   så I kan koble resultaterne til jeres kampe.

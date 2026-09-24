@@ -208,7 +208,7 @@ function rensTekst(v, maks) {
  * Returnerer { runde } eller { error, details }.
  *
  * runde = { roundId, sequence, label, note, nextRoundStartsAt, forceNewMatch,
- *           matches: [{ courtNumber, side1: [n1, n2|null], side2: [...],
+ *           matches: [{ courtNumber, matchId|null, side1: [n1, n2|null], side2: [...],
  *                       substitutes: [], note }] }
  */
 function validerRunde(body) {
@@ -257,8 +257,11 @@ function validerRunde(body) {
                     if (substitutes.length > MAKS_UDSKIFTERE) fejl.push(`${hvor}: højst ${MAKS_UDSKIFTERE} udskiftere`);
                 }
             }
+            // Afsenderens id for kampen — sendes med tilbage i resultaterne
+            const matchId = m.matchId === undefined || m.matchId === null ? null : (rensTekst(m.matchId, MAKS_ROUND_ID) || null);
             matches.push({
                 courtNumber,
+                matchId,
                 side1: [s1p1, s1p2 || null],
                 side2: [s2p1, s2p2 || null],
                 substitutes,
