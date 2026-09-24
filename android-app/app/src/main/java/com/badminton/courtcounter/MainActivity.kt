@@ -2,10 +2,13 @@ package com.badminton.courtcounter
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.text.InputType
+import android.view.View
 import android.view.WindowManager
 import android.webkit.*
 import android.widget.*
@@ -20,6 +23,14 @@ class MainActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var screenTimeoutRunnable: Runnable? = null
 
+    private lateinit var offlineOverlay: View
+    private lateinit var offlineMessage: TextView
+    private var pageFailed = false
+    private var failedUrl: String? = null
+    private var isActive = false
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private val retryRunnable = Runnable { retryNow() }
+
     companion object {
         private const val PREF_NAME = "BadmintonCourtCounter"
         private const val PREF_SERVER_URL = "server_url"
@@ -28,6 +39,7 @@ class MainActivity : AppCompatActivity() {
         private const val DEFAULT_SERVER_URL = "http://badmintonapp.local"
         private const val DEFAULT_COURT_ID = "1"
         private const val SCREEN_TIMEOUT_MS = 10 * 60 * 1000L
+        private const val RETRY_MS = 5_000L
 
         // Et adgangslink indeholder /t/ i URL'en
         fun isTokenUrl(url: String) = url.contains("/t/")
@@ -43,6 +55,7 @@ class MainActivity : AppCompatActivity() {
 
         prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         webView = findViewById(R.id.webView)
+        setupOfflineOverlay()
         setupWebView()
         setupBackButtonHandler()
 
@@ -106,9 +119,32 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
+            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+                pageFailed = false
+            }
+
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                if (!pageFailed) hideOffline()
+            }
+
+            // Kun selve siden tæller. Fejler et API-kald eller et billede (fx de
+            // første sekunder efter skærmen tændes, mens wifi kommer på igen),
+            // klarer siden det selv med sit offline-mærke — før gav hvert fejlet
+            // kald en fejlboks, der ikke kunne lukkes.
             override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
                 super.onReceivedError(view, request, error)
-                showErrorDialog("Kunne ikke indlæse siden. Tjek forbindelsen og linket i indstillingerne.")
+                if (request?.isForMainFrame != true) return
+                showOffline(request.url.toString(), R.string.offline_message)
+            }
+
+            override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?) {
+                super.onReceivedHttpError(view, request, errorResponse)
+                if (request?.isForMainFrame != true) return
+                if ((errorResponse?.statusCode ?: 0) >= 500) {
+                    showOffline(request.url.toString(), R.string.offline_message_server)
+                }
             }
         }
 
@@ -232,13 +268,18 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        isActive = true
         webView.onResume()
         webView.resumeTimers()
         resetScreenTimeout()
+        // Skærmen tændt igen efter en fejl: prøv straks (og derefter hvert RETRY_MS)
+        if (pageFailed) retryNow()
     }
 
     override fun onPause() {
         super.onPause()
+        isActive = false
+        handler.removeCallbacks(retryRunnable)
         webView.onPause()
         webView.pauseTimers()
     }
@@ -246,15 +287,61 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         screenTimeoutRunnable?.let { handler.removeCallbacks(it) }
+        handler.removeCallbacks(retryRunnable)
+        networkCallback?.let {
+            try {
+                (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager).unregisterNetworkCallback(it)
+            } catch (e: Exception) {}
+        }
     }
 
-    private fun showErrorDialog(message: String) {
-        AlertDialog.Builder(this)
-            .setTitle("Fejl")
-            .setMessage("$message\n\nSlet app data i Android-indstillinger for at ændre link/URL.")
-            .setPositiveButton("Prøv igen") { _, _ -> loadPage() }
-            .setNegativeButton("Luk app") { _, _ -> finish() }
-            .setCancelable(false)
-            .show()
+    // ── Ingen forbindelse ──
+    // Kan siden ikke hentes, dækker en skærm WebView'ets egen fejlside. Den
+    // prøver igen hvert RETRY_MS og straks når Android melder netværk tilbage;
+    // "Genindlæs" prøver med det samme. Ingen dialog og ingen genstart af appen.
+
+    private fun setupOfflineOverlay() {
+        offlineOverlay = findViewById(R.id.offlineOverlay)
+        offlineMessage = findViewById(R.id.offlineMessage)
+        findViewById<Button>(R.id.offlineReload).setOnClickListener { retryNow() }
+
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                // Giv wifi et øjeblik til at få adresse og DNS, før vi prøver
+                handler.postDelayed({ if (pageFailed && isActive) retryNow() }, 1500)
+            }
+        }
+        try {
+            cm.registerDefaultNetworkCallback(callback)
+            networkCallback = callback
+        } catch (e: Exception) {
+            // Uden callback prøver timeren stadig igen hvert RETRY_MS
+        }
+    }
+
+    private fun showOffline(url: String, messageRes: Int) {
+        pageFailed = true
+        failedUrl = url
+        offlineMessage.setText(messageRes)
+        offlineOverlay.visibility = View.VISIBLE
+        scheduleRetry()
+    }
+
+    private fun hideOffline() {
+        handler.removeCallbacks(retryRunnable)
+        offlineOverlay.visibility = View.GONE
+    }
+
+    private fun scheduleRetry() {
+        handler.removeCallbacks(retryRunnable)
+        if (isActive) handler.postDelayed(retryRunnable, RETRY_MS)
+    }
+
+    private fun retryNow() {
+        handler.removeCallbacks(retryRunnable)
+        val url = failedUrl
+        if (url != null) webView.loadUrl(url) else loadPage()
+        resetScreenTimeout()
     }
 }

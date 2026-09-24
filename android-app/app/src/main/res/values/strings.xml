@@ -5,4 +5,8 @@
     <string name="action_settings">Indstillinger</string>
     <string name="action_reload">Genindlæs</string>
     <string name="action_show_menu">Vis Menu</string>
+    <string name="offline_title">Ingen forbindelse</string>
+    <string name="offline_message">Siden kunne ikke hentes. Appen prøver selv igen, så snart netværket er tilbage.</string>
+    <string name="offline_message_server">Serveren svarer ikke lige nu. Appen prøver selv igen om lidt.</string>
+    <string name="offline_settings">Forkert link? Slet app-data i Android-indstillinger for at indtaste et nyt.</string>
 </resources>
