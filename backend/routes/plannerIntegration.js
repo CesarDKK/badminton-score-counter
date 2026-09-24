@@ -452,7 +452,8 @@ async function hentPlannerVisning() {
         if (a.substitutes) { try { subs = JSON.parse(a.substitutes) || []; } catch { /* tomt */ } }
         courts[a.court_number] = {
             substitutes: subs, note: a.note || '',
-            label: r.label || '', roundNote: r.note || '', nextRoundAt: iso(r.next_round_at)
+            label: r.label || '', roundNote: r.note || '', nextRoundAt: iso(r.next_round_at),
+            round: r.id
         };
     }
     const r = runder[0];
@@ -475,7 +476,10 @@ function plannerForBane(visning, courtNumber) {
         note: c.roundNote,
         nextRoundAt: c.nextRoundAt,
         substitutes: c.substitutes,
-        courtNote: c.note
+        courtNote: c.note,
+        // Vores id for runden — nyt ved hver runde (TV'et henter så en ny QR-kode,
+        // fordi runden lukker banens QR-session)
+        round: c.round
     };
 }
 
