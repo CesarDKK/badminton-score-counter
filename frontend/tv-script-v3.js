@@ -50,7 +50,7 @@ let cachedSetScores = {
 let qrCounterEnabled = false;
 let qrCounterObjectUrl = null; // blob-URL til den senest hentede QR-kode
 let qrCounterVisible = false;
-let qrCounterMode = null; // 'idle' | 'resume' | null
+let qrCounterMode = null; // 'idle' | 'resume' | 'finished' | 'planner' (+ '|nøgle') | null
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async function() {
@@ -407,7 +407,8 @@ async function loadCourtData() {
             // Kampen er afgjort men banen ikke ryddet: vis "SCAN FOR NY KAMP"-QR
             // med det samme (kun hvis banen kører i QR-selvbetjening) — så et nyt
             // par kan gå i gang uden at nogen først skal trykke "Ryd bane".
-            showQrCounter('finished');
+            // Planner-bane: fuld QR, så resultatet kan rettes fra en telefon
+            showQrCounter(gameState.planner ? 'planner' : 'finished', plannerQrNoegle(gameState));
             return;
         } else {
             hideMatchFinished();
@@ -419,8 +420,11 @@ async function loadCourtData() {
             showRestBreak(gameState.restBreakSecondsLeft, gameState.restBreakTitle, gameState, playersSwapped);
         } else {
             hideRestBreak();
-            // Aktivt spil: vis kompakt "genoptag"-QR hvis banen kører i QR-selvbetjening
-            showQrCounter('resume');
+            // Aktivt spil: vis kompakt "genoptag"-QR hvis banen kører i QR-selvbetjening.
+            // En planner-runde sætter navne på banen, før nogen tæller — der er
+            // der ingen QR-session endnu, så vis den fulde QR (tæl eller tast resultat)
+            showQrCounter(gameState.planner && !gameState.matchStartTime ? 'planner' : 'resume',
+                plannerQrNoegle(gameState));
         }
 
         // Detect when rest break ends (timer disappears)
@@ -1649,18 +1653,28 @@ function hideMatchFinished() {
 const QR_MODES = {
     idle:     { peek: false, compact: false, label: 'TÆL MED DIN TELEFON' },
     resume:   { peek: true,  compact: true,  label: 'STYR KAMPEN'         },
-    finished: { peek: true,  compact: false, label: 'SCAN FOR NY KAMP'    }
+    finished: { peek: true,  compact: false, label: 'SCAN FOR NY KAMP'    },
+    // Kamp fra badmintonplanner.dk: spillerne tæller eller taster resultatet selv
+    planner:  { peek: false, compact: false, label: 'TÆL ELLER TAST RESULTAT' }
 };
 
-function showQrCounter(mode = 'idle') {
+// En ny runde lukker banens QR-session (serveren sletter tokenet), så QR'en skal
+// hentes igen, når runden skifter — nøglen gør tilstanden ny for showQrCounter
+function plannerQrNoegle(gs) {
+    if (!gs.planner) return '';
+    return [gs.planner.round, gs.player1.name, gs.player2.name].join('|');
+}
+
+function showQrCounter(mode = 'idle', noegle = '') {
     if (!qrCounterEnabled) return;
     const cfg = QR_MODES[mode] || QR_MODES.idle;
     const container = document.getElementById('qrCounter');
     const img = document.getElementById('qrCounterImage');
     if (!container || !img) return;
 
-    if (qrCounterMode === mode) return; // allerede vist i denne tilstand
-    qrCounterMode = mode;
+    const tilstand = noegle ? `${mode}|${noegle}` : mode;
+    if (qrCounterMode === tilstand) return; // allerede vist i denne tilstand
+    qrCounterMode = tilstand;
 
     const label = container.querySelector('.qr-counter__label');
     container.classList.toggle('qr-counter--compact', cfg.compact);
@@ -1677,14 +1691,14 @@ function showQrCounter(mode = 'idle') {
     fetch(`/api/qr-code/${courtId}?${q}`, { headers, cache: 'no-store' })
         .then((res) => (res.ok ? res.blob() : Promise.reject(res.status)))
         .then((blob) => {
-            if (qrCounterMode !== mode) return;
+            if (qrCounterMode !== tilstand) return;
             if (qrCounterObjectUrl) URL.revokeObjectURL(qrCounterObjectUrl);
             qrCounterObjectUrl = URL.createObjectURL(blob);
             img.src = qrCounterObjectUrl;
             container.style.display = 'flex';
             qrCounterVisible = true;
         })
-        .catch(() => { if (qrCounterMode === mode) hideQrCounter(); });
+        .catch(() => { if (qrCounterMode === tilstand) hideQrCounter(); });
 }
 
 function hideQrCounter() {

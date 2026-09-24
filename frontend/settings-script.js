@@ -12,6 +12,24 @@ function initializeSettings() {
         showSettingsDashboard();
     }
     showDeviceTokensNavIfClubAdmin();
+    loadTabletAppInfo();
+}
+
+// Tablet-appen: version, størrelse og byggedato fra /downloads/badminton-app.json
+// (skrives af android-app/build-apk.ps1 -Release sammen med selve APK'en).
+async function loadTabletAppInfo() {
+    const el = document.getElementById('tabletAppInfo');
+    if (!el) return;
+    try {
+        const r = await fetch('/downloads/badminton-app.json', { cache: 'no-cache' });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const m = await r.json();
+        const mb = m.sizeBytes ? (m.sizeBytes / 1048576).toFixed(1).replace('.', ',') + ' MB' : '';
+        const dato = m.builtAt ? new Date(m.builtAt).toLocaleDateString('da-DK') : '';
+        el.textContent = `Version ${m.version || '?'}${dato ? ` · bygget ${dato}` : ''}${mb ? ` · ${mb}` : ''}${m.minAndroid ? ` · kræver Android ${m.minAndroid} eller nyere` : ''}`;
+    } catch {
+        el.textContent = 'Versionsoplysninger kunne ikke hentes — knappen virker stadig.';
+    }
 }
 
 async function showDeviceTokensNavIfClubAdmin() {

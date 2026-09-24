@@ -221,6 +221,14 @@ cd android-app
 
 APK location: `android-app/app/build/outputs/apk/release/BadmintonApp.apk`
 
+**Distributing to tablets:** `android-app\build-apk.ps1 -Release` also copies the
+signed APK to `frontend/downloads/BadmintonApp.apk` and writes
+`frontend/downloads/badminton-app.json` (version, build date, size, sha256).
+Commit both files and deploy; the app can then be downloaded directly on a
+tablet from **Admin → Indstillinger → Tablet-app** (served by nginx under
+`/downloads/`). Updates install over the existing app because every release is
+signed with the same keystore — never distribute a debug build this way.
+
 **Requirements:**
 - Java 17 (configured in gradle.properties)
 - Android SDK with build tools 33.0.1+
