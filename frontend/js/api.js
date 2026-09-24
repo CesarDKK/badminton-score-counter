@@ -121,6 +121,16 @@ class BadmintonAPI {
                     // serverens aktuelle tilstand som kalderen skal bruge
                     err.body = error;
 
+                    // Klub-admin-sessionen er slut (brugeren slettet eller adgangskoden
+                    // skiftet): glem den og send til klub-login, med vej tilbage hertil
+                    if (response.status === 401 && error.sessionEnded) {
+                        sessionStorage.removeItem('authToken');
+                        this.token = sessionStorage.getItem('deviceToken');
+                        const tilbage = encodeURIComponent(window.location.pathname + window.location.search);
+                        window.location.href = '/club-login.html?redirect=' + tilbage;
+                        throw err;
+                    }
+
                     // Don't retry on 4xx client errors (except 429 Too Many Requests)
                     if (response.status >= 400 && response.status < 500 && response.status !== 429) {
                         throw err;
@@ -903,10 +913,16 @@ class BadmintonAPI {
     }
 
     async changeClubAdminPassword(currentPassword, newPassword) {
-        return this.request('/club-admin/password', {
+        const result = await this.request('/club-admin/password', {
             method: 'PUT',
             body: JSON.stringify({ currentPassword, newPassword })
         });
+        // Ny adgangskode gør de gamle sessioner ugyldige — serveren sender et nyt token
+        if (result && result.token) {
+            this.token = result.token;
+            sessionStorage.setItem('authToken', result.token);
+        }
+        return result;
     }
 
     // ==================== Device Tokens ====================

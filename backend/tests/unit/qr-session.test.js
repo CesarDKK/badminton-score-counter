@@ -17,6 +17,8 @@ const { kunEgenBane, ikkeQrSession, afvisQrKode, baneFraDestination } = require(
 const { _saetAdgangslinkOpslag } = require('../../middleware/auth');
 // Adgangslink-opslaget i databasen: id 3 er et aktivt TV-link, 4 er tilbagekaldt
 _saetAdgangslinkOpslag(async (id) => id === 3);
+const { _saetKlubAdminOpslag, kodeAftryk } = require('../../middleware/klubAdminSession');
+_saetKlubAdminOpslag(async (id) => (id === 1 ? { password_hash: 'h', page_permissions: null } : null));
 
 const sign = (payload) => jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
 const qrSession = (bane, klub = 'lyngby') => ({ role: 'device', tokenType: 'match_session', tokenId: 7, destination: `court/${bane}`, clubSubdomain: klub });
@@ -74,7 +76,8 @@ test('QR-kode: en QR-session kan ikke selv hente nye QR-koder', async () => {
 });
 
 test('QR-kode: klubbens admin og super-admin får den', async () => {
-    assert.equal(await afvisQrKode(qrReq({ role: 'club_admin', clubSubdomain: 'lyngby' }), 3), null);
+    assert.equal(await afvisQrKode(qrReq({ role: 'club_admin', id: 1, pv: kodeAftryk('h'), clubSubdomain: 'lyngby' }), 3), null);
+    assert.equal(await afvisQrKode(qrReq({ role: 'club_admin', id: 9, pv: kodeAftryk('h'), clubSubdomain: 'lyngby' }), 3), 401, 'slettet admin');
     assert.equal(await afvisQrKode(qrReq({ role: 'super_admin' }), 3), null);
 });
 

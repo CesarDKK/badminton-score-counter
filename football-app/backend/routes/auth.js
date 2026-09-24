@@ -34,6 +34,7 @@ router.post('/login', requireClub, async (req, res) => {
       adminId: admin.id,
       clubId: req.clubId,
       clubSubdomain: req.clubSubdomain,
+      passwordHash: admin.password_hash,
     });
     res.json({ token, club: { name: req.clubName, subdomain: req.clubSubdomain } });
   } catch (err) {
