@@ -21,12 +21,20 @@ async function loadTabletAppInfo() {
     const el = document.getElementById('tabletAppInfo');
     if (!el) return;
     try {
-        const r = await fetch('/downloads/badminton-app.json', { cache: 'no-cache' });
+        // Cloudflare cacher /downloads/ i 4 timer uanset vores no-cache. Manifestet
+        // hentes derfor med et tidsstempel (altid frisk), og hent-linket bærer
+        // versionsnummeret, så en ny version er en ny adresse — tablets får aldrig
+        // en gammel APK fra cachen.
+        const r = await fetch(`/downloads/badminton-app.json?t=${Date.now()}`, { cache: 'no-store' });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const m = await r.json();
         const mb = m.sizeBytes ? (m.sizeBytes / 1048576).toFixed(1).replace('.', ',') + ' MB' : '';
         const dato = m.builtAt ? new Date(m.builtAt).toLocaleDateString('da-DK') : '';
         el.textContent = `Version ${m.version || '?'}${dato ? ` · bygget ${dato}` : ''}${mb ? ` · ${mb}` : ''}${m.minAndroid ? ` · kræver Android ${m.minAndroid} eller nyere` : ''}`;
+        const link = document.getElementById('tabletAppDownload');
+        if (link && (m.versionCode || m.version)) {
+            link.href = `/downloads/${m.file || 'BadmintonApp.apk'}?v=${encodeURIComponent(m.versionCode || m.version)}`;
+        }
     } catch {
         el.textContent = 'Versionsoplysninger kunne ikke hentes — knappen virker stadig.';
     }
