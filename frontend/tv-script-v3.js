@@ -659,11 +659,12 @@ function updatePlayerNames(gameState, playersSwapped) {
     // sammenfald mellem en udskifter og en spiller ogsaa faar forbogstav.
     const subs = (gameState.planner && Array.isArray(gameState.planner.substitutes))
         ? gameState.planner.substitutes : [];
+    // Navne fra badmintonplanner.dk er allerede forkortet dér — vis dem, som de er
     const visning = NameDisplay.visningsnavne([
         displayPlayer1.name, d1 ? displayPlayer1.name2 : '',
         displayPlayer2.name, d2 ? displayPlayer2.name2 : '',
         ...subs
-    ]);
+    ], { uforkortet: !!gameState.planner });
     const [v1, v1m, v2, v2m] = visning;
     _plannerSubsDisplay = visning.slice(4);
 
@@ -1388,10 +1389,11 @@ function showRestBreak(secondsLeft, title, gameState, playersSwapped) {
         const isDoubles = gameState.isDoubles && displayPlayer1.name2 && displayPlayer2.name2;
 
         // Samme navneregel som scoreboardet: kun fornavn, forbogstav ved sammenfald
+        // — undtagen navne fra badmintonplanner.dk, der allerede er forkortet dér
         const [v1, v1m, v2, v2m] = NameDisplay.visningsnavne([
             displayPlayer1.name, isDoubles ? displayPlayer1.name2 : '',
             displayPlayer2.name, isDoubles ? displayPlayer2.name2 : ''
-        ]);
+        ], { uforkortet: !!gameState.planner });
         document.getElementById('tvRestBreakPlayer1').textContent = v1;
         document.getElementById('tvRestBreakPlayer2').textContent = v2;
 
