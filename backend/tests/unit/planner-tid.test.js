@@ -166,7 +166,7 @@ test('validerRunde: eksemplet fra badmintonplanner accepteres og normaliseres', 
     assert.equal(r.matches.length, 3);
     assert.deepEqual(r.matches[0].side1, ['Anders Jensen', 'Bo Nielsen']);
     assert.deepEqual(r.matches[0].substitutes, ['Erik Larsen']);
-    assert.deepEqual(r.matches[2], { courtNumber: 3, side1: ['Jens Holm', null], side2: ['Kim Lund', null], substitutes: [], note: '' });
+    assert.deepEqual(r.matches[2], { courtNumber: 3, matchId: null, side1: ['Jens Holm', null], side2: ['Kim Lund', null], substitutes: [], note: '' });
 });
 
 test('validerRunde: forceNewMatch er true som standard, tom nextRoundStartsAt = sidste runde', () => {
@@ -194,4 +194,13 @@ test('validerRunde: navne renses for styretegn og klippes til 100 tegn', () => {
     const v = tid.validerRunde({ matches: [{ courtNumber: 1, side1Player1: 'A B\tC', side2Player1: 'x'.repeat(150) }] });
     assert.equal(v.runde.matches[0].side1[0], 'A B C');
     assert.equal(v.runde.matches[0].side2[0].length, 100);
+});
+
+test('validerRunde: matchId er valgfri og sendes med videre (til resultaterne)', () => {
+    const v = tid.validerRunde({ matches: [
+        { courtNumber: 1, matchId: ' k-17 ', side1Player1: 'A', side2Player1: 'B' },
+        { courtNumber: 2, side1Player1: 'C', side2Player1: 'D' }
+    ] });
+    assert.equal(v.runde.matches[0].matchId, 'k-17');
+    assert.equal(v.runde.matches[1].matchId, null);
 });

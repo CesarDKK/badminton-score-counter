@@ -17,6 +17,7 @@
  * Routes:
  *   POST /api/integrations/planned-round
  *   GET  /api/integrations/status
+ *   GET  /api/integrations/results   (talte og indtastede resultater)
  */
 const express = require('express');
 const router = express.Router();
@@ -27,6 +28,7 @@ const { publishGameStateChange } = require('../events/gameStateEvents');
 const { plannerTokenLimiter, plannerIpLimiter, klientIp } = require('../middleware/rateLimiter');
 const { varighedTekst } = require('../config/matchTiming');
 const tid = require('../config/plannerTid');
+const { danskVaeggurTilUtc } = require('./importHoldkamp');
 
 const ENDPOINT_STI = '/api/integrations/planned-round';
 const LOG_MAKS = 200;
@@ -150,6 +152,124 @@ async function gemAfbrudtIKamphistorik(courtPk, gs, court) {
     return true;
 }
 
+// ---------- Resultater til badmintonplanner ----------
+
+/**
+ * Gemmer (eller retter) resultatet for banens planner-kamp ud fra banens
+ * game_state-række. Alt udledes af rækken, så talte og indtastede kampe går
+ * samme vej:
+ *   - match_completed + result_outcome  → indtastet (ended_early/walkover/completed)
+ *   - match_completed uden              → talt færdig ('completed', vinder efter sæt)
+ *   - ellers                            → 'unfinished' (talt, men afbrudt)
+ * Sættene vendes, så side1/side2 er badmintonplanners sider — på banen bytter
+ * spillerne plads mellem sættene. Returnerer false hvis banen ikke har en
+ * planner-kamp. kunHvisFindes: ret kun et eksisterende resultat (bruges når en
+ * afsluttet kamp fortrydes — så opretter hvert point ikke et resultat).
+ */
+async function gemPlannerResultat(courtNumber, gs, { kunHvisFindes = false } = {}) {
+    if (!gs) return false;
+    const a = await queryOne(
+        `SELECT a.*, r.id AS round_pk, r.round_id AS round_ref, r.sequence, r.label, r.token_id
+           FROM planner_court_assignments a JOIN planner_rounds r ON r.id = a.round_id
+          WHERE a.court_number = ?`,
+        [courtNumber]
+    );
+    if (!a) return false;
+    if (kunHvisFindes) {
+        const fandtes = await queryOne('SELECT id FROM planner_results WHERE round_pk = ? AND court_number = ?', [a.round_pk, courtNumber]);
+        if (!fandtes) return false;
+    }
+
+    // Hvilken planner-side står et navn på? 1, 2 eller null (navnet er rettet på banen)
+    const side1 = [a.side1_player1, a.side1_player2].filter(Boolean);
+    const side2 = [a.side2_player1, a.side2_player2].filter(Boolean);
+    const sideFor = (navn) => side1.includes(navn) ? 1 : side2.includes(navn) ? 2 : null;
+    // Står banens "player1" på planner-side 1? Kan navnet ikke genkendes, antages det
+    const slot1ErSide1 = sideFor(gs.player1_name) !== 2 && sideFor(gs.player2_name) !== 1;
+
+    const saet = [];
+    for (const s of parseSetScores(gs.set_scores_history)) {
+        const raw = typeof s === 'string' ? s : s.score;
+        const [x, y] = String(raw || '').split('-').map(n => parseInt(n, 10));
+        if (!Number.isInteger(x) || !Number.isInteger(y)) continue;
+        let ret = slot1ErSide1;
+        if (typeof s === 'object' && s.player1Name) {
+            const side = sideFor(s.player1Name);
+            if (side) ret = side === 1;
+        }
+        saet.push(ret ? { side1: x, side2: y } : { side1: y, side2: x });
+    }
+
+    let outcome, winnerSlot = null;
+    if (gs.match_completed) {
+        outcome = gs.result_outcome || 'completed';
+        winnerSlot = gs.result_winner ||
+            (gs.player1_games === gs.player2_games ? null : (gs.player1_games > gs.player2_games ? 1 : 2));
+    } else {
+        outcome = 'unfinished';
+        // Det igangværende sæt tages med, så badmintonplanner kan se stillingen
+        if (gs.player1_score > 0 || gs.player2_score > 0) {
+            saet.push(slot1ErSide1
+                ? { side1: gs.player1_score, side2: gs.player2_score }
+                : { side1: gs.player2_score, side2: gs.player1_score });
+        }
+    }
+    const winner = winnerSlot ? (slot1ErSide1 ? winnerSlot : 3 - winnerSlot) : null;
+    const source = gs.result_outcome ? 'entered' : 'counted';
+
+    await query(
+        `INSERT INTO planner_results
+            (round_pk, token_id, round_ref, round_sequence, round_label, match_ref, court_number,
+             side1_player1, side1_player2, side2_player1, side2_player2,
+             outcome, winner, sets_json, source)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE outcome = VALUES(outcome), winner = VALUES(winner),
+             sets_json = VALUES(sets_json), source = VALUES(source)`,
+        [a.round_pk, a.token_id, a.round_ref, a.sequence, a.label, a.match_ref || null, courtNumber,
+         a.side1_player1, a.side1_player2, a.side2_player1, a.side2_player2,
+         outcome, winner, JSON.stringify(saet), source]
+    );
+    return true;
+}
+
+/** Et resultat som badmintonplanner.dk får det. */
+function resultatTilApi(r) {
+    let sets = [];
+    try { sets = JSON.parse(r.sets_json) || []; } catch { /* tomt */ }
+    const iso = d => (d ? new Date(d).toISOString() : null);
+    return {
+        resultId: r.id,
+        roundId: r.round_ref,
+        sequence: r.round_sequence,
+        label: r.round_label,
+        matchId: r.match_ref,
+        courtNumber: r.court_number,
+        side1: [r.side1_player1, r.side1_player2 || null],
+        side2: [r.side2_player1, r.side2_player2 || null],
+        status: r.outcome,
+        winner: r.winner || null,
+        sets,
+        source: r.source,
+        recordedAt: iso(r.created_at),
+        updatedAt: iso(r.updated_at)
+    };
+}
+
+/** "2026-09-24" → [start, slut) i UTC for den danske kalenderdag. */
+function danskDagTilUtc(dato) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dato || ''));
+    if (!m) return null;
+    const aar = Number(m[1]), maaned = Number(m[2]) - 1, dag = Number(m[3]);
+    const start = danskVaeggurTilUtc(aar, maaned, dag, 0, 0);
+    const naeste = new Date(Date.UTC(aar, maaned, dag + 1));
+    const slut = danskVaeggurTilUtc(naeste.getUTCFullYear(), naeste.getUTCMonth(), naeste.getUTCDate(), 0, 0);
+    if (isNaN(start.getTime()) || isNaN(slut.getTime())) return null;
+    return [start, slut];
+}
+
+const RESULTAT_GRAENSE = 500;
+const RESULTAT_MAKS = 1000;
+
 // Frigiv holdkamp-/turneringstildelinger på banen (som "Ryd bane" gør) —
 // ellers re-binder bane-siden dem og navnene kommer tilbage.
 // Hver frigivelse for sig, som i "Ryd bane": et manglende skema-element på én
@@ -222,6 +342,11 @@ async function anvendRunde(runde, tilladteBaner) {
             continue;
         }
         if (gs) await gemAfbrudtIKamphistorik(court.id, gs, court);
+        // En talt, ikke afsluttet kamp fra forrige runde afleveres som 'unfinished'
+        // (afsluttede kampe har allerede deres resultat)
+        if (kampIGang(gs)) {
+            try { await gemPlannerResultat(courtNumber, gs); } catch (e) { console.error('Planner-resultat fejlede:', e.message); }
+        }
 
         if (m) {
             await visNavne(court, m);
@@ -252,10 +377,10 @@ async function gemRunde(runde, tokenId, results) {
         if (!vist.has(m.courtNumber)) continue;
         await query(
             `INSERT INTO planner_court_assignments
-                (court_number, round_id, side1_player1, side1_player2, side2_player1, side2_player2, substitutes, note)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                (court_number, round_id, side1_player1, side1_player2, side2_player1, side2_player2, substitutes, note, match_ref)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [m.courtNumber, r.insertId, m.side1[0], m.side1[1], m.side2[0], m.side2[1],
-             m.substitutes.length ? JSON.stringify(m.substitutes) : null, m.note || null]
+             m.substitutes.length ? JSON.stringify(m.substitutes) : null, m.note || null, m.matchId || null]
         );
     }
     return r.insertId;
@@ -462,6 +587,59 @@ router.post('/planned-round', plannerIpLimiter, plannerAuth, plannerTokenLimiter
     }
 });
 
+// GET /api/integrations/results — resultater for nøglens egne runder.
+// Filtre (kan kombineres): roundId, date (dansk dato, åååå-mm-dd) og since
+// (ISO-tid; resultater oprettet eller rettet fra og med). Virker også uden for
+// tidsrummet, så en hel aften kan hentes samlet bagefter.
+router.get('/results', plannerIpLimiter, plannerAuth, plannerTokenLimiter, async (req, res, next) => {
+    try {
+        const fejl = [];
+        const hvor = ['token_id = ?'];
+        const params = [req.plannerToken.id];
+
+        if (req.query.roundId !== undefined) {
+            const roundId = tid.rensTekst(req.query.roundId, 100);
+            if (!roundId) fejl.push('roundId må ikke være tom');
+            hvor.push('round_ref = ?'); params.push(roundId);
+        }
+        if (req.query.date !== undefined) {
+            const dag = danskDagTilUtc(req.query.date);
+            if (!dag) fejl.push('date skal være åååå-mm-dd');
+            else { hvor.push('created_at >= ? AND created_at < ?'); params.push(dag[0], dag[1]); }
+        }
+        if (req.query.since !== undefined) {
+            const since = new Date(String(req.query.since));
+            if (isNaN(since.getTime())) fejl.push('since skal være en ISO-tid, fx 2026-09-24T17:00:00Z');
+            else { hvor.push('updated_at >= ?'); params.push(since); }
+        }
+        let limit = RESULTAT_GRAENSE;
+        if (req.query.limit !== undefined) {
+            limit = Number(req.query.limit);
+            if (!Number.isInteger(limit) || limit < 1 || limit > RESULTAT_MAKS) fejl.push(`limit skal være 1–${RESULTAT_MAKS}`);
+        }
+        if (fejl.length) {
+            return res.status(422).json({ error: 'Ugyldige parametre', code: 'invalid_query', details: fejl });
+        }
+
+        // serverTime tages FØR opslaget: bruges den som næste "since", kommer et
+        // resultat, der skrives imens, med i næste kald (dubletter kendes på resultId)
+        const serverTime = new Date().toISOString();
+        const rows = await query(
+            `SELECT * FROM planner_results WHERE ${hvor.join(' AND ')}
+              ORDER BY updated_at, id LIMIT ${limit + 1}`,
+            params
+        );
+        const flere = rows.length > limit;
+        res.json({
+            results: rows.slice(0, limit).map(resultatTilApi),
+            hasMore: flere,
+            serverTime
+        });
+    } catch (e) {
+        next(e);
+    }
+});
+
 // GET /api/integrations/current-round — offentlig (som game-states): oversigten
 // viser rundenavn, næste runde og note som banner. null når ingen runde vises.
 router.get('/current-round', async (req, res, next) => {
@@ -475,6 +653,9 @@ router.get('/current-round', async (req, res, next) => {
 module.exports = router;
 module.exports.hentPlannerVisning = hentPlannerVisning;
 module.exports.plannerForBane = plannerForBane;
+module.exports.gemPlannerResultat = gemPlannerResultat;
+module.exports.danskDagTilUtc = danskDagTilUtc;
+module.exports.resultatTilApi = resultatTilApi;
 module.exports.hentConfig = hentConfig;
 module.exports.gemConfig = gemConfig;
 module.exports.statusFor = statusFor;

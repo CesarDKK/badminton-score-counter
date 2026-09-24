@@ -313,6 +313,28 @@ function startPlannerVindueLuk() {
     });
 
     console.log('⏰ Scheduled oprydning af badmintonplanner-baner ved vindue-luk (hvert minut)');
+
+    // Resultater til badmintonplanner.dk (spillernavne) gemmes ikke længere end
+    // nødvendigt: de hentes løbende eller samme aften, så 90 dage er rigeligt.
+    const rydResultater = () => query(
+        `DELETE FROM planner_results WHERE created_at < NOW() - INTERVAL ${PLANNER_RESULTAT_DAGE} DAY`
+    );
+    cron.schedule('15 3 * * *', async () => {
+        try { await rydResultater(); } catch (err) { /* tabellen findes først efter migration 029 */ }
+        try {
+            const masterDb = require('./config/masterDatabase');
+            const clubs = await masterDb.query('SELECT db_name FROM clubs WHERE is_active = 1');
+            for (const club of clubs) {
+                try { await runWithTenant(club.db_name, rydResultater); }
+                catch (err) { console.error(`❌ Oprydning af planner-resultater fejlede for ${club.db_name}:`, err.message); }
+            }
+        } catch (err) { /* master DB ikke tilgængelig i direkte mode */ }
+    }, {
+        scheduled: true,
+        timezone: 'Europe/Copenhagen'
+    });
 }
+
+const PLANNER_RESULTAT_DAGE = 90;
 
 module.exports = { startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk };
