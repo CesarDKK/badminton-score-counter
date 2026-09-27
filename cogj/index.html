@@ -3,85 +3,487 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="cogj.dk — siden er under opbygning.">
+<meta name="description" content="cogj.dk — siden er under opbygning. Der tegnes stadig.">
 <meta name="robots" content="noindex">
+<meta name="theme-color" content="#0b3565">
 <title>cogj.dk — Under opbygning</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d1117'/%3E%3Cpath d='M20.5 11.5a6 6 0 1 0 0 9' fill='none' stroke='%23e8b64c' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d3a6b'/%3E%3Cpath d='M8 16h16M16 8v16' stroke='%23a8d2ff' stroke-opacity='.45' stroke-width='1'/%3E%3Cpath d='M20.9 11.2a7 7 0 1 0 0 9.6' fill='none' stroke='%23e6f2ff' stroke-width='3.4' stroke-linecap='round'/%3E%3C/svg%3E">
+
 <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+/* Skrifterne er provebillede.dk's lokale filer (kopieres ind af Dockerfile.frontend),
+   så siden ikke sender besøgendes IP-adresse til Google Fonts. Dansk (æøå) ligger
+   i latin-undersættet, så det er det eneste der hentes. */
+@font-face {
+  font-family: 'Barlow Condensed'; font-style: normal; font-weight: 600; font-display: swap;
+  src: url(fonts/HTxwL3I-JCGChYJ8VI-L6OO_au7B4873z3bWuQ.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'Barlow Condensed'; font-style: normal; font-weight: 700; font-display: swap;
+  src: url(fonts/HTxwL3I-JCGChYJ8VI-L6OO_au7B46r2z3bWuQ.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url(fonts/-F63fjptAgt5VM-kVkqdyU8n1i8q1w.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 500; font-display: swap;
+  src: url(fonts/-F6qfjptAgt5VM-kVkqdyU8n3twJwlBFgg.woff2) format('woff2');
+}
 
-    html, body { height: 100%; }
+/* ══════════════════════════════════════════════════════════════════════
+   cogj.dk — "under opbygning" taget bogstaveligt: siden er en arbejdstegning.
+   Et blåtryk hvor ordmærket konstrueres med passer og lineal, og hvor et
+   gummistempel med dagens dato slås ned på arket til sidst.
+   ══════════════════════════════════════════════════════════════════════ */
+:root {
+  --paper:       #0d3a6b;
+  --paper-deep:  #072447;
+  --ink:         #e6f2ff;
+  --ink-soft:    rgba(214, 234, 255, .74);
+  --guide:       rgba(168, 210, 255, .42);
+  --guide-faint: rgba(168, 210, 255, .2);
+  --guide-text:  rgba(190, 222, 255, .78);
+  --construct:   rgba(150, 200, 255, .55);
+  --stamp:       #ff6a3d;
 
-    body {
-        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-        background: #0d1117;
-        color: #e6e8eb;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
-        overflow: hidden;
-    }
+  --label: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --mono:  'IBM Plex Mono', ui-monospace, 'Courier New', monospace;
 
-    /* Diskret baggrundsglød */
-    body::before {
-        content: '';
-        position: fixed;
-        inset: 0;
-        background: radial-gradient(ellipse 70% 55% at 50% 38%, rgba(232,182,76,0.07) 0%, transparent 70%);
-        pointer-events: none;
-    }
+  --inset-out: 12px;   /* ydre rammelinje */
+  --inset-in:  30px;   /* indre rammelinje — zonefeltet ligger imellem */
+}
 
-    main { position: relative; padding: 24px; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { min-height: 100%; }
 
-    .wordmark {
-        font-size: clamp(2.6em, 9vw, 4.5em);
-        font-weight: 700;
-        letter-spacing: 0.04em;
-        line-height: 1.1;
-        color: #fff;
-    }
+body {
+  min-height: 100vh; min-height: 100dvh;
+  color: var(--ink);
+  font-family: var(--mono);
+  background-color: var(--paper);
+  background-image:
+    /* vignet — arket er lysest i midten, som et fotokopieret blåtryk */
+    radial-gradient(ellipse 85% 75% at 50% 45%, transparent 40%, rgba(4, 22, 46, .55) 100%),
+    /* millimeterpapir: fine linjer hver 20. px, kraftige hver 100. px */
+    linear-gradient(rgba(150,196,255,.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(150,196,255,.15) 1px, transparent 1px),
+    linear-gradient(rgba(150,196,255,.065) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(150,196,255,.065) 1px, transparent 1px);
+  background-size: 100% 100%, 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+  background-position: center, center, center, center, center;
+  overflow-x: hidden;
+}
 
-    .wordmark span { color: #e8b64c; }
+/* Papirets struktur */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: 50; pointer-events: none;
+  opacity: .28; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='.6'/%3E%3C/svg%3E");
+}
+/* Foldelinjer — arket har ligget sammenfoldet i en tegnemappe */
+body::after {
+  content: ""; position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent calc(50% - 1px), rgba(3,18,38,.22) calc(50% - 1px), rgba(3,18,38,.22) 50%, rgba(255,255,255,.05) 50%, rgba(255,255,255,.05) calc(50% + 1px), transparent calc(50% + 1px)),
+    linear-gradient(transparent calc(50% - 1px), rgba(3,18,38,.2) calc(50% - 1px), rgba(3,18,38,.2) 50%, rgba(255,255,255,.045) 50%, rgba(255,255,255,.045) calc(50% + 1px), transparent calc(50% + 1px));
+}
 
-    .divider {
-        width: 64px;
-        height: 3px;
-        border-radius: 2px;
-        background: #e8b64c;
-        margin: 26px auto;
-    }
+/* ══ TEGNINGSRAMME med zonefelt ═════════════════════════════════════════ */
+.frame { position: fixed; pointer-events: none; z-index: 2; }
+.frame-out { inset: var(--inset-out); border: 1px solid var(--guide); }
+.frame-in  { inset: var(--inset-in);  border: 1.5px solid var(--ink-soft); }
 
-    .status {
-        font-size: clamp(1em, 3vw, 1.25em);
-        color: #9aa4b2;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-    }
+.zones {
+  position: fixed; z-index: 2; pointer-events: none;
+  display: flex;
+  font-family: var(--mono); font-size: 10px; color: var(--guide-text);
+}
+.zones span { flex: 1 1 0; display: flex; align-items: center; justify-content: center; }
+.zones-h { left: var(--inset-in); right: var(--inset-in); height: calc(var(--inset-in) - var(--inset-out)); }
+.zones-h span + span { border-left: 1px solid var(--guide); }
+.zones-top { top: var(--inset-out); }
+.zones-bot { bottom: var(--inset-out); }
+.zones-v { top: var(--inset-in); bottom: var(--inset-in); width: calc(var(--inset-in) - var(--inset-out)); flex-direction: column; }
+.zones-v span + span { border-top: 1px solid var(--guide); }
+.zones-l { left: var(--inset-out); }
+.zones-r { right: var(--inset-out); }
 
-    .status .dots::after {
-        content: '';
-        animation: dots 2.4s steps(4, end) infinite;
-    }
+/* ══ MARKØR-AFLÆSNING + TRÅDKORS (kun med mus) ═════════════════════════ */
+.coords {
+  position: fixed; z-index: 3; top: calc(var(--inset-in) + 14px); left: calc(var(--inset-in) + 16px);
+  display: none;
+  font-size: 11px; letter-spacing: .06em; color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.coords .lbl {
+  font-family: var(--label); font-weight: 600; letter-spacing: .28em; text-transform: uppercase;
+  color: var(--guide-text); margin-right: .9em;
+}
+.coords b { font-weight: 500; color: var(--ink); }
 
-    @keyframes dots {
-        0%   { content: ''; }
-        25%  { content: '.'; }
-        50%  { content: '..'; }
-        75%  { content: '...'; }
-        100% { content: ''; }
-    }
+.xhair { position: fixed; z-index: 4; pointer-events: none; opacity: 0; transition: opacity .25s; }
+.xhair.on { opacity: 1; }
+.xhair-x { left: 0; right: 0; top: 0; height: 1px;
+  background: repeating-linear-gradient(90deg, var(--guide) 0 8px, transparent 8px 13px); }
+.xhair-y { top: 0; bottom: 0; left: 0; width: 1px;
+  background: repeating-linear-gradient(180deg, var(--guide) 0 8px, transparent 8px 13px); }
 
-    @media (prefers-reduced-motion: reduce) {
-        .status .dots::after { animation: none; content: '...'; }
-    }
+@media (hover: hover) and (pointer: fine) {
+  body { cursor: crosshair; }
+  .coords { display: block; }
+}
+
+/* ══ TEGNINGEN ══════════════════════════════════════════════════════════ */
+main {
+  position: relative; z-index: 3;
+  min-height: 100vh; min-height: 100dvh;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 72px 56px 150px;
+}
+
+.drawing {
+  position: relative;
+  container-type: inline-size;
+  /* Så bred som muligt, men lav nok til at tegningshovedet kan være under */
+  width: min(1040px, 100%, calc((100vh - 330px) * 1120 / 540));
+  width: min(1040px, 100%, calc((100dvh - 330px) * 1120 / 540));
+  min-width: min(100%, 300px);
+}
+.drawing svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+/* Hjælpelinjer, konstruktion og mål */
+.guide       { stroke: var(--guide); stroke-width: 1.2; }
+.guide.faint { stroke: var(--guide-faint); }
+.glabel {
+  fill: var(--guide-text);
+  font-family: var(--label); font-weight: 600; font-size: 12.5px; letter-spacing: 2.6px;
+}
+.construct { opacity: .75; transition: opacity .45s; }
+.drawing:hover .construct { opacity: 1; }
+.cons      { fill: none; stroke: var(--construct); stroke-width: 1.2; stroke-dasharray: 7 5; }
+.cons-line { fill: none; stroke: var(--construct); stroke-width: 1.2; }
+.ctext     { fill: var(--guide-text); font-family: var(--mono); font-size: 12.5px; }
+
+.dim    { fill: none; stroke: var(--ink-soft); stroke-width: 1.2; }
+.dimtxt { fill: var(--ink-soft); font-family: var(--mono); font-weight: 500; font-size: 13px; }
+
+/* Blækket — ordmærket selv, konstrueret i én stregtykkelse */
+.ink { fill: none; stroke: var(--ink); stroke-width: 44; stroke-linecap: round; stroke-linejoin: round; }
+.dot { fill: var(--ink); }
+.dk  { fill: var(--stamp); font-family: var(--label); font-weight: 700; font-size: 120px; letter-spacing: 1px; }
+.snap { fill: none; stroke: var(--stamp); stroke-width: 1.8; }
+
+/* ══ STEMPLET ═══════════════════════════════════════════════════════════ */
+.stamp {
+  /* Under "co": der er intet under grundlinjen før g'ets underlængde, og
+     stemplet må gerne gå hen over underlængdelinjen — det gør stempler */
+  position: absolute; top: 72%; left: 17%;
+  transform: rotate(-6deg);
+  display: flex; flex-direction: column; align-items: center; gap: .35cqi;
+  padding: 1cqi 2.2cqi 1.1cqi;
+  color: var(--stamp);
+  border: .42cqi solid currentColor;
+  outline: .2cqi solid currentColor;
+  outline-offset: .55cqi;
+  border-radius: .6cqi;
+  font-family: var(--label); text-transform: uppercase; text-align: center;
+  line-height: 1;
+  /* Blæk der ikke har taget helt: pletter af papiret skinner igennem */
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 -2.6 2.35'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+          mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 -2.6 2.35'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+.stamp-top  { font-weight: 600; font-size: 1.35cqi; letter-spacing: .5em; padding-left: .5em; }
+.stamp-main { font-weight: 700; font-size: 3.6cqi; letter-spacing: .06em; }
+.stamp-date { font-family: var(--mono); font-weight: 500; font-size: 1.45cqi; letter-spacing: .22em; padding-left: .22em; }
+
+/* ══ TEKST UNDER TEGNINGEN ══════════════════════════════════════════════ */
+.tagline {
+  margin-top: clamp(1.4rem, 3.4vh, 2.6rem);
+  font-family: var(--label); font-weight: 600;
+  font-size: clamp(1.05rem, 2.2vw, 1.45rem);
+  letter-spacing: .42em; padding-left: .42em;
+  text-transform: uppercase; text-align: center;
+  color: var(--ink);
+}
+.sub {
+  margin-top: .7rem;
+  font-size: .8rem; letter-spacing: .12em; text-align: center;
+  color: var(--ink-soft);
+}
+
+/* ══ TEGNINGSHOVED ══════════════════════════════════════════════════════ */
+.titleblock {
+  position: fixed; z-index: 3;
+  right: calc(var(--inset-in) + 14px); bottom: calc(var(--inset-in) + 14px);
+  width: 330px;
+  border: 1.5px solid var(--ink-soft);
+  background: rgba(8, 38, 76, .55);
+  backdrop-filter: blur(1.5px);
+  font-size: 12px;
+}
+.tb-row { display: grid; grid-template-columns: 1fr; border-top: 1px solid var(--guide); }
+.tb-row:first-child { border-top: none; }
+.tb-row.two { grid-template-columns: 1fr 1fr; }
+.tb-row.two > div + div { border-left: 1px solid var(--guide); }
+.tb-cell { display: flex; flex-direction: column; gap: 3px; padding: 6px 10px 7px; }
+.k {
+  font-family: var(--label); font-weight: 600; font-size: 10.5px;
+  letter-spacing: .24em; text-transform: uppercase; color: var(--guide-text);
+}
+.v { color: var(--ink); font-weight: 500; letter-spacing: .04em; }
+.v.big {
+  font-family: var(--label); font-weight: 700; font-size: 26px; letter-spacing: .06em; line-height: 1;
+}
+.v.accent { color: var(--stamp); }
+
+/* ══ SMALLE OG LAVE SKÆRME ══════════════════════════════════════════════ */
+@media (max-width: 760px), (max-height: 620px) {
+  :root { --inset-out: 8px; --inset-in: 22px; }
+  main { padding: 56px 34px 28px; min-height: auto; }
+  /* Tegning + tagline skal kunne ses uden at scrolle; tegningshovedet må gerne ligge under */
+  .drawing {
+    width: min(100%, 1040px, calc((100vh - 170px) * 1120 / 540));
+    width: min(100%, 1040px, calc((100dvh - 170px) * 1120 / 540));
+  }
+  .titleblock {
+    position: relative; right: auto; bottom: auto;
+    width: min(330px, calc(100% - 68px));
+    margin: 2rem auto 56px;
+  }
+  .zones span:nth-child(n+5) { display: none; }
+}
+@media (max-width: 760px) {
+  .zones-v { display: none; }
+  .frame-out { display: none; }
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+/* ══ OPTEGNING — én orkestreret sekvens ved indlæsning ══════════════════
+   Hvile-tilstanden er det FÆRDIGE ark; animationerne kører kun "baglæns"
+   ind (fill-mode backwards). Uden bevægelse står tegningen bare færdig.
+   ═══════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: no-preference) {
+  /* pathLength="1" + dasharray "1 2": startforskydningen 1,02 lægger både
+     begyndelse og slutning i et hul, så runde endestykker ikke kan
+     efterlade prikker, før stregen er tegnet. */
+  .draw {
+    stroke-dasharray: 1 2;
+    animation: draw var(--dur, .8s) cubic-bezier(.65, 0, .35, 1) var(--d, 0s) backwards;
+  }
+  @keyframes draw { from { stroke-dashoffset: 1.02; } to { stroke-dashoffset: 0; } }
+
+  .pop {
+    transform-box: fill-box; transform-origin: center;
+    animation: pop .6s cubic-bezier(.2, .8, .3, 1) var(--d, 0s) backwards;
+  }
+  @keyframes pop { from { opacity: 0; transform: scale(.8); } }
+
+  .fade { animation: fade .7s ease-out var(--d, 0s) backwards; }
+  @keyframes fade { from { opacity: 0; } }
+
+  .rise { animation: rise .8s cubic-bezier(.2, .8, .3, 1) var(--d, 0s) backwards; }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+
+  .frame, .zones, .titleblock, .coords { animation: fade .8s ease-out backwards; }
+
+  /* Stemplet slås ned — og arket giver sig et øjeblik */
+  .stamp { animation: slam .42s cubic-bezier(.3, 0, .35, 1) 4.1s backwards; }
+  @keyframes slam {
+    0%   { opacity: 0; transform: rotate(-17deg) scale(2.3); }
+    72%  { opacity: 1; transform: rotate(-5deg) scale(.95); }
+    100% { opacity: 1; transform: rotate(-6deg) scale(1); }
+  }
+  .drawing svg { animation: thud .26s ease-out 4.38s; }
+  @keyframes thud {
+    0%, 100% { transform: none; }
+    35%      { transform: translateY(2px) scale(.998); }
+  }
+}
 </style>
 </head>
 <body>
+
+<!-- Tegningsramme med zonefelt (1–8 / A–D) -->
+<div class="frame frame-out" aria-hidden="true"></div>
+<div class="frame frame-in" aria-hidden="true"></div>
+<div class="zones zones-h zones-top" aria-hidden="true"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span></div>
+<div class="zones zones-h zones-bot" aria-hidden="true"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span></div>
+<div class="zones zones-v zones-l" aria-hidden="true"><span>A</span><span>B</span><span>C</span><span>D</span></div>
+<div class="zones zones-v zones-r" aria-hidden="true"><span>A</span><span>B</span><span>C</span><span>D</span></div>
+
+<div class="coords" aria-hidden="true"><span class="lbl">Markør</span>X <b id="cx">000,0</b>&nbsp;&nbsp;Y <b id="cy">000,0</b>&nbsp;mm</div>
+<div class="xhair xhair-x" aria-hidden="true"></div>
+<div class="xhair xhair-y" aria-hidden="true"></div>
+
 <main>
-    <h1 class="wordmark">cogj<span>.dk</span></h1>
-    <div class="divider"></div>
-    <p class="status">Under opbygning<span class="dots"></span></p>
+  <h1 class="sr-only">cogj.dk er under opbygning</h1>
+
+  <div class="drawing">
+    <!-- Ordmærket konstrueret i én stregtykkelse (44) på en x-højde af 200:
+         grundlinje y=400, x-højde y=200, underlængde y=530. Rundingerne har
+         centerlinjeradius 78, så de ydre kanter rammer netop hjælpelinjerne. -->
+    <svg viewBox="0 40 1120 540" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+
+      <!-- Hjælpelinjer -->
+      <g>
+        <line class="guide faint draw" x1="40" y1="126" x2="1100" y2="126" pathLength="1" style="--d:.2s;--dur:.9s"/>
+        <line class="guide draw" x1="40" y1="200" x2="1100" y2="200" pathLength="1" style="--d:.3s;--dur:.9s"/>
+        <line class="guide draw" x1="40" y1="400" x2="1100" y2="400" pathLength="1" style="--d:.45s;--dur:.9s"/>
+        <line class="guide draw" x1="40" y1="530" x2="1100" y2="530" pathLength="1" style="--d:.6s;--dur:.9s"/>
+        <g class="fade" style="--d:.9s">
+          <text class="glabel" x="78" y="193">X-HØJDE</text>
+          <!-- Under linjen: over den ville c'ets bue dække etikettens sidste bogstav -->
+          <text class="glabel" x="78" y="417">GRUNDLINJE</text>
+          <text class="glabel" x="78" y="523">UNDERLÆNGDE</text>
+        </g>
+      </g>
+
+      <!-- Konstruktion: passer, akser, vinkel og radius -->
+      <g class="construct">
+        <circle class="cons pop" cx="200" cy="300" r="100" style="--d:.95s"/>
+        <circle class="cons pop" cx="450" cy="300" r="100" style="--d:1.1s"/>
+        <circle class="cons pop" cx="700" cy="300" r="100" style="--d:1.25s"/>
+        <g class="fade" style="--d:1.05s">
+          <path class="cons-line" d="M188 300h24M200 288v24 M438 300h24M450 288v24 M688 300h24M700 288v24 M873 150h24M885 138v24 M692 430h16M700 422v16 M825 430h16M833 422v16"/>
+        </g>
+        <g class="fade" style="--d:1.35s">
+          <line class="cons" x1="778" y1="160" x2="778" y2="560"/>
+          <line class="cons" x1="885" y1="100" x2="885" y2="560"/>
+          <!-- Åbningen i c: ±50° = 100° -->
+          <path class="cons" d="M200 300L283.56 200.41M200 300L283.56 399.59"/>
+          <path class="cons-line" d="M283.56 200.41A130 130 0 0 1 283.56 399.59"/>
+          <text class="ctext" x="299" y="305" text-anchor="middle">100°</text>
+          <!-- Radius på o -->
+          <path class="cons-line" d="M450 300L531.92 242.64"/>
+          <text class="ctext" x="538" y="236">R100</text>
+        </g>
+      </g>
+
+      <!-- Mål -->
+      <g class="fade" style="--d:3.3s">
+        <path class="dim" d="M100 284V82 M907 118V82 M100 92H907 M94 98L106 86 M901 98L913 86"/>
+        <text class="dimtxt" x="503.5" y="84" text-anchor="middle">807</text>
+        <path class="dim" d="M60 200V400 M54 206L66 194 M54 406L66 394"/>
+        <text class="dimtxt" text-anchor="middle" transform="translate(49 300) rotate(-90)">200</text>
+      </g>
+      <g class="fade" style="--d:3.45s">
+        <path class="dim" d="M1086 400V530 M1080 406L1092 394 M1080 536L1092 524"/>
+        <text class="dimtxt" text-anchor="middle" transform="translate(1103 465) rotate(-90)">130</text>
+      </g>
+
+      <!-- Blækket: c · o · g · j -->
+      <path class="ink draw" pathLength="1" style="--d:1.5s;--dur:.7s"
+            d="M250.14 240.25A78 78 0 1 0 250.14 359.75"/>
+      <path class="ink draw" pathLength="1" style="--d:1.9s;--dur:.8s"
+            d="M450 222A78 78 0 1 0 450 378A78 78 0 1 0 450 222"/>
+      <path class="ink draw" pathLength="1" style="--d:2.35s;--dur:.7s"
+            d="M700 222A78 78 0 1 0 700 378A78 78 0 1 0 700 222"/>
+      <path class="ink draw" pathLength="1" style="--d:2.8s;--dur:.6s"
+            d="M778 222V430A78 78 0 0 1 626.7 456.68"/>
+      <path class="ink draw" pathLength="1" style="--d:3.15s;--dur:.5s"
+            d="M885 222V430A52 52 0 0 1 823.97 481.21"/>
+      <circle class="dot pop" cx="885" cy="150" r="24" style="--d:3.55s"/>
+
+      <text class="dk rise" x="935" y="400" style="--d:3.65s">.dk</text>
+
+      <!-- Snappunkter — endepunkterne konstruktionen hægter sig på -->
+      <g>
+        <rect class="snap pop" x="244.14" y="234.25" width="12" height="12" style="--d:3.75s"/>
+        <rect class="snap pop" x="244.14" y="353.75" width="12" height="12" style="--d:3.8s"/>
+        <rect class="snap pop" x="620.7"  y="450.68" width="12" height="12" style="--d:3.85s"/>
+        <rect class="snap pop" x="817.97" y="475.21" width="12" height="12" style="--d:3.9s"/>
+      </g>
+    </svg>
+
+    <div class="stamp" aria-hidden="true">
+      <span class="stamp-top">Status</span>
+      <span class="stamp-main">Under opbygning</span>
+      <span class="stamp-date" id="stampDate"></span>
+    </div>
+  </div>
+
+  <p class="tagline rise" style="--d:4.4s">Der tegnes stadig</p>
+  <p class="sub rise" style="--d:4.55s">Kom snart igen</p>
 </main>
+
+<!-- Tegningshoved -->
+<aside class="titleblock" aria-label="Tegningshoved">
+  <div class="tb-row"><div class="tb-cell"><span class="k">Projekt</span><span class="v big">cogj.dk</span></div></div>
+  <div class="tb-row two">
+    <div class="tb-cell"><span class="k">Tegning</span><span class="v">Forside</span></div>
+    <div class="tb-cell"><span class="k">Rev.</span><span class="v">0</span></div>
+  </div>
+  <div class="tb-row two">
+    <div class="tb-cell"><span class="k">Målestok</span><span class="v">1:1</span></div>
+    <div class="tb-cell"><span class="k">Ark</span><span class="v">1 / 1</span></div>
+  </div>
+  <div class="tb-row two">
+    <div class="tb-cell"><span class="k">Dato</span><span class="v" id="tbDate">—</span></div>
+    <div class="tb-cell"><span class="k">Godkendt</span><span class="v">—</span></div>
+  </div>
+  <div class="tb-row"><div class="tb-cell"><span class="k">Status</span><span class="v accent">Under opbygning</span></div></div>
+</aside>
+
+<script>
+(function () {
+  'use strict';
+
+  /* Dagens dato — stemplet slås altid med i dag: siden er stadig under opbygning */
+  var dato = '';
+  try {
+    dato = new Intl.DateTimeFormat('da-DK', {
+      timeZone: 'Europe/Copenhagen', day: '2-digit', month: '2-digit', year: 'numeric'
+    }).format(new Date()).replace(/\//g, '.');
+  } catch (e) {
+    var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
+    dato = p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + d.getFullYear();
+  }
+  document.getElementById('tbDate').textContent = dato;
+  document.getElementById('stampDate').textContent = dato;
+
+  /* CAD-trådkors og aflæsning i millimeter (96 px pr. tomme), målt fra den
+     indre rammes øverste venstre hjørne. Kun med en rigtig mus. */
+  if (!window.matchMedia || !matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+
+  var hx = document.querySelector('.xhair-x');
+  var hy = document.querySelector('.xhair-y');
+  var cx = document.getElementById('cx');
+  var cy = document.getElementById('cy');
+  var mx = 0, my = 0, queued = false;
+  // Rammens afstand følger CSS'en (den er mindre på små skærme)
+  var inset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--inset-in')) || 30;
+  addEventListener('resize', function () {
+    inset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--inset-in')) || 30;
+  });
+
+  function mm(px) {
+    var v = Math.max(0, px - inset) * 25.4 / 96;
+    var s = v.toFixed(1);
+    while (s.length < 5) s = '0' + s;
+    return s.replace('.', ',');
+  }
+  function paint() {
+    queued = false;
+    hx.style.transform = 'translateY(' + my + 'px)';
+    hy.style.transform = 'translateX(' + mx + 'px)';
+    cx.textContent = mm(mx);
+    cy.textContent = mm(my);
+  }
+  document.addEventListener('mousemove', function (e) {
+    mx = e.clientX; my = e.clientY;
+    hx.classList.add('on'); hy.classList.add('on');
+    if (!queued) { queued = true; requestAnimationFrame(paint); }
+  }, { passive: true });
+  document.documentElement.addEventListener('mouseleave', function () {
+    hx.classList.remove('on'); hy.classList.remove('on');
+  });
+})();
+</script>
+
 </body>
 </html>
