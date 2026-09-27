@@ -14,12 +14,13 @@
 <meta property="og:title" content="Prøvebillede — PM5544, DR's gamle testbillede">
 <meta property="og:description" content="Prøvebilledet som ren vektorgrafik med levende ur, 1000 Hz-tone og testmønstre til skærmkalibrering. Hent det i 4K.">
 <meta property="og:url" content="https://provebillede.dk/">
-<meta property="og:image" content="https://provebillede.dk/og.png">
+<!-- ?v= fordi billeder caches "immutable" i et år: et nyt delebillede skal have ny URL -->
+<meta property="og:image" content="https://provebillede.dk/og.png?v=1">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Det danske prøvebillede — PM5544-testmønster med teksten DANMARK og et ur.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="https://provebillede.dk/og.png">
+<meta name="twitter:image" content="https://provebillede.dk/og.png?v=1">
 
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%237a7a7a'/%3E%3Ccircle cx='16' cy='16' r='13' fill='%23fff'/%3E%3Ccircle cx='16' cy='16' r='11' fill='%237a7a7a'/%3E%3Crect x='5' y='10' width='3.7' height='6' fill='%23bfbf00'/%3E%3Crect x='8.7' y='10' width='3.7' height='6' fill='%2300bfbf'/%3E%3Crect x='12.4' y='10' width='3.7' height='6' fill='%2300bf00'/%3E%3Crect x='16.1' y='10' width='3.7' height='6' fill='%23bf00bf'/%3E%3Crect x='19.8' y='10' width='3.7' height='6' fill='%23bf0000'/%3E%3Crect x='23.5' y='10' width='3.7' height='6' fill='%230000bf'/%3E%3Crect x='9' y='18' width='14' height='4' fill='%23000'/%3E%3C/svg%3E">
 
@@ -39,6 +40,7 @@
   "about": [
     { "@type": "Thing", "name": "Prøvebillede" },
     { "@type": "Thing", "name": "Philips PM5544" },
+    { "@type": "Person", "name": "Finn Hendil" },
     { "@type": "Organization", "name": "DR (Danmarks Radio)" }
   ]
 }
@@ -61,9 +63,10 @@
   --edge:       #443f37;
   --groove:     #0d0c0a;
 
-  /* Graverede etiketter */
-  --engrave:    #9c9488;
-  --engrave-dim:#6a635a;
+  /* Graverede etiketter. -dim holder ≥ 4,5:1 mod den lyseste panelflade
+     (#2f2b25) — den bærer rigtig tekst: datablad, noter og footer. */
+  --engrave:    #b3ab9e;
+  --engrave-dim:#9a9285;
 
   /* Kontrollamper */
   --amber:      #ffb020;
@@ -185,7 +188,13 @@ body::before {
 
 .screen {
   position: relative;
-  width: min(100%, calc((100dvh - 25rem) * 4 / 3));
+  /* Over rummets korn (z-index 100) — et testbillede med støj henover er værdiløst */
+  z-index: 101;
+  /* Helst skal hele panelet kunne ses på én gang (25rem til mærkeplade og konsol),
+     men billedet er sidens pointe: på lave skærme må det aldrig blive mindre end
+     60 % af skærmhøjden (80vh bredt). Hellere at konsollen ryger under folden. */
+  width: min(100%, max(calc((100vh - 25rem) * 4 / 3), 80vh));
+  width: min(100%, max(calc((100dvh - 25rem) * 4 / 3), 80dvh));
   min-width: 0;
   margin: 0 auto;
   aspect-ratio: 4 / 3;
@@ -388,9 +397,32 @@ body::before {
 .btn-go { color: #0d0c0a; background: linear-gradient(180deg, var(--amber), #d68f10); border-color: #000; }
 .btn-go:hover { color: #0d0c0a; background: linear-gradient(180deg, #ffc44d, var(--amber)); }
 
-/* Pixel-vækker: fylder skærmen mens den kører */
-.fixer { display: none; position: absolute; inset: 0; z-index: 6; cursor: pointer; }
+/* Pixel-vækker: en LILLE firkant man trækker hen over den fastlåste pixel.
+   Fast størrelse i CSS-pixels (ikke procent), så den også er lille i fuldskærm
+   på et stort TV — blinkende lys på en lille flade ligger langt under
+   grænsen for anfaldsrisiko, en blinkende helskærm gør ikke. */
+.fixer {
+  display: none; position: absolute; z-index: 6;
+  left: 50%; top: 50%;
+  width: 88px; height: 88px;
+  transform: translate(-50%, -50%);
+  touch-action: none;
+}
 .fixer.on { display: block; }
+.fixer-flash {
+  width: 100%; height: 100%;
+  cursor: grab;
+  outline: 1px solid rgba(255,255,255,.6);
+  outline-offset: 3px;
+}
+.fixer.dragging .fixer-flash { cursor: grabbing; }
+.fixer-stop {
+  position: absolute; top: calc(100% + 10px); left: 50%;
+  transform: translateX(-50%);
+  min-height: 32px; padding: .3rem .7rem; font-size: .82rem;
+  white-space: nowrap;
+}
+.fixer.flip .fixer-stop { top: auto; bottom: calc(100% + 10px); }
 
 /* Landeforvalg — små trykknapper under stationsfeltet */
 .presets { gap: .28rem; }
@@ -497,11 +529,13 @@ body::before {
    Skinnen klæber — ikke pladerne hver for sig, ellers ville de overlappe. */
 .rail { position: sticky; top: 1.4rem; display: flex; flex-direction: column; gap: 1rem; }
 @media (max-width: 940px) { .rail { position: static; } }
-.plate-note {
+/* .article-præfiks: pladen ligger inde i artiklen, og ".article p" ville
+   ellers vinde og give noten brødtekstens størrelse og farve */
+.article .plate-note {
   font-family: var(--serif);
   font-size: .82rem; line-height: 1.5;
   color: var(--engrave-dim);
-  margin-top: .9rem; padding-top: .8rem;
+  margin: .9rem 0 0; padding-top: .8rem;
   border-top: 1px solid var(--groove);
 }
 .plate--live dd { color: var(--phosphor); }
@@ -523,7 +557,7 @@ body::before {
 }
 .plate dl { display: grid; grid-template-columns: auto 1fr; gap: .5rem .9rem; }
 .plate dt {
-  font-family: var(--panelfont); font-weight: 500;
+  font-family: var(--panelfont); font-weight: 600;
   font-size: .82rem; letter-spacing: .12em; text-transform: uppercase;
   color: var(--engrave-dim); white-space: nowrap;
 }
@@ -561,7 +595,22 @@ body::before {
   .grp:last-child { border-bottom: none; }
   .display { min-width: 0; flex: 1; }
 }
+
+/* Telefon på langs: der er kun plads til billedet. Mærkepladen gøres smal og
+   skærmen fylder resten af højden — konsollen ligger under, når man scroller. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .rack { margin: 0 auto; padding: .4rem; border-radius: 0; }
+  .screw { display: none; } /* ingen luft til dem — de ville dække overskriften */
+  .brand { padding: 0 .4rem .35rem; margin-bottom: .4rem; }
+  .brand h1 { font-size: 1.1rem; }
+  .monitor { padding: .3rem; }
+  .screen {
+    width: min(100%, calc((100vh - 3.6rem) * 4 / 3));
+    width: min(100%, calc((100dvh - 3.6rem) * 4 / 3));
+  }
+}
 </style>
+</head>
 
 <body>
 
@@ -708,10 +757,12 @@ body::before {
       <div class="warn" id="fixWarn" role="dialog" aria-modal="true" aria-labelledby="fixWarnTitle">
         <div class="warn-box">
           <h3 id="fixWarnTitle">Blinkende lys</h3>
-          <p>Pixel-vækkeren skifter farve mange gange i sekundet for at vække en
-             fastlåst pixel. Start den ikke, hvis du er lysfølsom eller har epilepsi.</p>
-          <p class="warn-sub">Kør den 10–30 minutter på det område hvor pixelen sidder.
-             Tryk et vilkårligt sted eller på Esc for at stoppe.</p>
+          <p>Pixel-vækkeren er en lille firkant, der skifter farve mange gange i
+             sekundet for at vække en fastlåst pixel. Start den ikke, hvis du er
+             lysfølsom eller har epilepsi.</p>
+          <p class="warn-sub">Træk firkanten hen over pixelen — eller tryk der, hvor den
+             sidder — og lad den køre 10–30 minutter. Stop med knappen under firkanten
+             eller på Esc.</p>
           <div class="warn-btns">
             <button class="btn" id="fixCancel">Annullér</button>
             <button class="btn btn-go" id="fixStart">Start</button>
@@ -794,7 +845,7 @@ body::before {
   </div>
 
   <p class="hint">
-    <kbd>←</kbd> <kbd>→</kbd> skifter mønster · <kbd>T</kbd> tone · <kbd>F</kbd> fuldskærm ·
+    <kbd>←</kbd> <kbd>→</kbd> skifter mønster · <kbd>T</kbd> tone · <kbd>F</kbd> fuldskærm · <kbd>W</kbd> vågen ·
     del med <span class="lit">?tekst=DIT&nbsp;NAVN</span>
   </p>
 </div><!-- /rack -->
@@ -822,6 +873,23 @@ body::before {
         Fordi så mange lande brugte den samme generator, ligner de europæiske prøvebilleder
         hinanden til forveksling — det er typisk kun teksten i den sorte boks, der afslører,
         hvilket land man sad i.
+      </p>
+
+      <h3>Tegnet på Amager</h3>
+
+      <p>
+        Det er de færreste, der ved det, men et af verdens mest udbredte prøvebilleder er
+        dansk. Mønsteret blev tegnet af ingeniøren <strong>Finn Hendil</strong> (1939–2011)
+        i Philips' laboratorium for tv- og måleudstyr på Amager i 1966–67, under ledelse af
+        overingeniør Erik Helmer Nielsen. I 1968–69 byggede Hendil og hans gruppe den første
+        generator, PM5544, som kunne frembringe billedet elektronisk.
+      </p>
+
+      <p>
+        Derfra bredte det sig til tv-stationer i store dele af verden. Så når en seer i
+        Norge, Holland eller Finland sad og ventede på, at udsendelserne skulle begynde, så
+        de på det samme stykke danske ingeniørarbejde som seerne herhjemme — bare med et
+        andet navn i den sorte boks.
       </p>
 
       <h3>Hvorfor så det sådan ud?</h3>
@@ -941,6 +1009,8 @@ body::before {
       <h4>Datablad</h4>
       <dl>
         <dt>Mønster</dt><dd>PM5544</dd>
+        <dt>Designer</dt><dd>Finn Hendil</dd>
+        <dt>Tegnet</dt><dd>1966–67</dd>
         <dt>Format</dt><dd>4:3</dd>
         <dt>Opløsning</dt><dd>768 × 576</dd>
         <dt>Linjer</dt><dd>625 / PAL</dd>
@@ -1057,6 +1127,7 @@ body::before {
   var urlTimer = null;
   input.addEventListener('input', function () {
     var v = setStation(input.value);
+    markChips(v);
     clearTimeout(urlTimer);
     urlTimer = setTimeout(function () {
       var u = new URL(location.href);
@@ -1084,7 +1155,6 @@ body::before {
     });
   });
   markChips(initial);
-  input.addEventListener('input', function () { markChips(setStation(input.value)); });
 
   /* ══════════════════════════════════════════════════════════════
      3) TESTMØNSTRE — piletaster skifter.
@@ -1093,6 +1163,8 @@ body::before {
      ══════════════════════════════════════════════════════════════ */
   var alt = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   alt.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  alt.setAttribute('viewBox', '0 0 768 576');
+  alt.setAttribute('role', 'img');
   alt.style.display = 'none';
   screenEl.appendChild(alt);
 
@@ -1197,11 +1269,14 @@ body::before {
     if (p.card) {
       card.style.display = '';
       alt.style.display = 'none';
+      // Teksten kan være skrevet mens kortet var skjult — dér måler
+      // getComputedTextLength 0, så den er aldrig blevet skrumpet til boksen
+      setStation(input.value);
     } else {
-      // Fuldflade-mønstre tegnes i skærmens eget forhold, ikke 4:3
-      var vb = p.bleed ? '0 0 768 576' : '0 0 768 576';
-      alt.setAttribute('viewBox', vb);
+      // Alle mønstre tegnes i 768×576. Fuldflade-mønstre strækkes til skærmens
+      // eget forhold (preserveAspectRatio=none); resten beholder 4:3.
       alt.setAttribute('preserveAspectRatio', p.bleed ? 'none' : 'xMidYMid meet');
+      alt.setAttribute('aria-label', 'Testmønster: ' + p.name + ' — ' + p.desc);
       alt.innerHTML = p.build();
       alt.style.display = '';
       card.style.display = 'none';
@@ -1235,6 +1310,7 @@ body::before {
   var tx = 0;
   screenEl.addEventListener('touchstart', function (e) { tx = e.changedTouches[0].clientX; }, { passive: true });
   screenEl.addEventListener('touchend', function (e) {
+    if (fixerRunning()) return; // mens vækkeren kører, flytter et træk firkanten
     var dx = e.changedTouches[0].clientX - tx;
     if (Math.abs(dx) > 55) show(cur + (dx < 0 ? 1 : -1));
   }, { passive: true });
@@ -1280,9 +1356,14 @@ body::before {
      ══════════════════════════════════════════════════════════════ */
   var btnFull = document.getElementById('btnFull');
   var btnWake = document.getElementById('btnWake');
-  var lock = null, wantLock = false;
+  // To uafhængige grunde til at holde skærmen vågen: brugeren har selv slået
+  // "Vågen" til, eller vi er i fuldskærm. Holdes adskilt, så låsen fra
+  // fuldskærm slippes igen bagefter — ellers blev skærmen holdt vågen, til
+  // fanen blev lukket.
+  var lock = null, pending = false, wakeManual = false;
 
   function isFull() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+  function wantLock() { return wakeManual || isFull(); }
 
   function toggleFull() {
     if (isFull()) {
@@ -1294,34 +1375,40 @@ body::before {
   }
   btnFull.addEventListener('click', toggleFull);
 
-  document.addEventListener('fullscreenchange', function () {
-    var f = isFull();
-    btnFull.setAttribute('aria-pressed', f ? 'true' : 'false');
-    if (f) { wantLock = true; acquire(); }
-    else if (!btnWake.getAttribute('aria-pressed') || btnWake.getAttribute('aria-pressed') === 'false') {
-      wantLock = false; release();
-    }
-  });
+  function onFullChange() {
+    btnFull.setAttribute('aria-pressed', isFull() ? 'true' : 'false');
+    syncLock();
+  }
+  document.addEventListener('fullscreenchange', onFullChange);
+  document.addEventListener('webkitfullscreenchange', onFullChange);
+
+  function syncLock() {
+    btnWake.setAttribute('aria-pressed', wantLock() ? 'true' : 'false');
+    if (wantLock()) acquire(); else release();
+  }
 
   async function acquire() {
-    if (!('wakeLock' in navigator) || lock) return;
+    if (!('wakeLock' in navigator) || lock || pending) return;
+    pending = true;
     try {
-      lock = await navigator.wakeLock.request('screen');
-      lock.addEventListener('release', function () { lock = null; });
-      btnWake.setAttribute('aria-pressed', 'true');
+      var l = await navigator.wakeLock.request('screen');
+      // Behovet kan være forsvundet, mens vi ventede på låsen
+      if (!wantLock()) { l.release(); return; }
+      lock = l;
+      lock.addEventListener('release', function () { if (lock === l) lock = null; });
     } catch (e) { /* nægtet eller ikke understøttet — ikke kritisk */ }
+    finally { pending = false; }
   }
   function release() {
-    if (lock) { try { lock.release(); } catch (e) {} lock = null; }
-    if (!wantLock) btnWake.setAttribute('aria-pressed', 'false');
+    if (lock) { var l = lock; lock = null; try { l.release(); } catch (e) {} }
   }
   btnWake.addEventListener('click', function () {
-    wantLock = !wantLock;
-    if (wantLock) acquire(); else release();
-    btnWake.setAttribute('aria-pressed', wantLock ? 'true' : 'false');
+    wakeManual = !wakeManual;
+    syncLock();
   });
+  // Systemet slipper låsen, når fanen skjules — tag den igen ved genkomst
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible' && wantLock && !lock) acquire();
+    if (document.visibilityState === 'visible' && wantLock() && !lock) acquire();
   });
   if (!('wakeLock' in navigator)) { btnWake.disabled = true; btnWake.style.opacity = '.45'; }
 
@@ -1474,7 +1561,15 @@ body::before {
   var fixWarn = document.getElementById('fixWarn');
   var fixer = document.createElement('div');
   fixer.className = 'fixer';
-  fixer.setAttribute('aria-hidden', 'true');
+  var fixFlash = document.createElement('div');
+  fixFlash.className = 'fixer-flash';
+  fixFlash.setAttribute('aria-hidden', 'true');
+  var fixStop = document.createElement('button');
+  fixStop.className = 'btn fixer-stop';
+  fixStop.type = 'button';
+  fixStop.textContent = 'Stop';
+  fixer.appendChild(fixFlash);
+  fixer.appendChild(fixStop);
   screenEl.appendChild(fixer);
 
   var fixTimer = null;
@@ -1485,19 +1580,63 @@ body::before {
   function fixerRunning() { return fixTimer !== null; }
   function warnOpen() { return fixWarn.classList.contains('on'); }
 
+  // Firkantens midtpunkt som brøkdel af skærmen, så den bliver det samme sted,
+  // når skærmen skifter størrelse (fx ind og ud af fuldskærm)
+  var fixPos = { x: 0.5, y: 0.5 };
+  function placeFixer() {
+    var r = screenEl.getBoundingClientRect();
+    var half = fixer.offsetWidth / 2;
+    // Hold hele firkanten inde på skærmen
+    var minX = r.width ? half / r.width : 0.5, minY = r.height ? half / r.height : 0.5;
+    fixPos.x = Math.min(1 - minX, Math.max(minX, fixPos.x));
+    fixPos.y = Math.min(1 - minY, Math.max(minY, fixPos.y));
+    fixer.style.left = (fixPos.x * 100) + '%';
+    fixer.style.top = (fixPos.y * 100) + '%';
+    // Stop-knappen vipper op over firkanten i skærmens nederste del, ellers ville
+    // den blive klippet af skærmkanten, når pixelen sidder langt nede
+    fixer.classList.toggle('flip', fixPos.y > 0.62);
+  }
+  function moveFixerTo(clientX, clientY) {
+    var r = screenEl.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    fixPos.x = (clientX - r.left) / r.width;
+    fixPos.y = (clientY - r.top) / r.height;
+    placeFixer();
+  }
+
+  // Træk firkanten — eller tryk et sted på skærmen for at flytte den dertil
+  var dragging = false;
+  screenEl.addEventListener('pointerdown', function (e) {
+    if (!fixerRunning() || e.target === fixStop) return;
+    dragging = true;
+    fixer.classList.add('dragging');
+    try { screenEl.setPointerCapture(e.pointerId); } catch (err) {}
+    moveFixerTo(e.clientX, e.clientY);
+    e.preventDefault();
+  });
+  screenEl.addEventListener('pointermove', function (e) {
+    if (dragging) moveFixerTo(e.clientX, e.clientY);
+  });
+  function endDrag() { dragging = false; fixer.classList.remove('dragging'); }
+  screenEl.addEventListener('pointerup', endDrag);
+  screenEl.addEventListener('pointercancel', endDrag);
+  addEventListener('resize', function () { if (fixerRunning()) placeFixer(); });
+
   function startFixer() {
     fixWarn.classList.remove('on');
     fixer.classList.add('on');
+    placeFixer();
     btnFix.setAttribute('aria-pressed', 'true');
     var i = 0;
     fixTimer = setInterval(function () {
-      fixer.style.background = FIX_COLORS[i++ % FIX_COLORS.length];
+      fixFlash.style.background = FIX_COLORS[i++ % FIX_COLORS.length];
     }, 100);
   }
   function stopFixer() {
     if (fixTimer) { clearInterval(fixTimer); fixTimer = null; }
+    endDrag();
     fixer.classList.remove('on');
-    fixer.style.background = '';
+    fixFlash.style.background = '';
     btnFix.setAttribute('aria-pressed', 'false');
   }
   function closeWarn() {
@@ -1517,7 +1656,7 @@ body::before {
 
   document.getElementById('fixCancel').addEventListener('click', closeWarn);
   document.getElementById('fixStart').addEventListener('click', startFixer);
-  fixer.addEventListener('click', stopFixer);
+  fixStop.addEventListener('click', stopFixer);
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') { stopFixer(); closeWarn(); }
   });
