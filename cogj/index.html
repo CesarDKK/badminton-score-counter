@@ -71,6 +71,10 @@
         75%  { content: '...'; }
         100% { content: ''; }
     }
+
+    @media (prefers-reduced-motion: reduce) {
+        .status .dots::after { animation: none; content: '...'; }
+    }
 </style>
 </head>
 <body>
