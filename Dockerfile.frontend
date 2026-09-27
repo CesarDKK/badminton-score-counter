@@ -17,6 +17,9 @@ COPY football-app/marketing/ /usr/share/nginx/football-marketing/
 # Copy provebillede.dk (statisk SVG-prøvebillede)
 COPY provebillede/ /usr/share/nginx/provebillede/
 
+# Copy cogj.dk (under opbygning-pladsholder)
+COPY cogj/ /usr/share/nginx/cogj/
+
 # Copy statistik.badmintonapp.dk (klubstatistik — backend er stats-backend)
 COPY stats/frontend/ /usr/share/nginx/statistik/
 
