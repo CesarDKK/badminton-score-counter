@@ -17,7 +17,7 @@ COPY football-app/marketing/ /usr/share/nginx/football-marketing/
 # Copy provebillede.dk (statisk SVG-prøvebillede)
 COPY provebillede/ /usr/share/nginx/provebillede/
 
-# Copy cogj.dk (under opbygning-pladsholder)
+# Copy cogj.dk (kampagneside for Simon Pihl Sørensen)
 COPY cogj/ /usr/share/nginx/cogj/
 
 # Copy statistik.badmintonapp.dk (klubstatistik — backend er stats-backend)
@@ -35,8 +35,8 @@ RUN cp -r /usr/share/nginx/html/fonts /usr/share/nginx/marketing/fonts \
     && cp /usr/share/nginx/marketing/fonts.css /usr/share/nginx/statistik/fonts.css \
     && cp -r /usr/share/nginx/html/fonts /usr/share/nginx/planner/fonts \
     && cp /usr/share/nginx/marketing/fonts.css /usr/share/nginx/planner/fonts.css \
-    && cp -r /usr/share/nginx/provebillede/fonts /usr/share/nginx/cogj/fonts
-# (cogj.dk's @font-face peger på provebillede.dk's filnavne — skiftes de ud, skal cogj/index.html med)
+    && cp -r /usr/share/nginx/provebillede/fonts /usr/share/nginx/cogj/fonts \
+    && cp /usr/share/nginx/provebillede/fonts.css /usr/share/nginx/cogj/fonts.css
 
 # Expose port 80
 EXPOSE 80
