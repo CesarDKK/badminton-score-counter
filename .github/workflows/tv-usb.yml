@@ -11,6 +11,10 @@ name: TV-USB
 
 on:
   push:
+    # branches skal stå her: med kun et tags-filter kører GitHub workflowet
+    # udelukkende ved tags og aldrig ved almindelige push.
+    branches:
+      - '**'
     paths:
       - 'kiosk/**'
       - '.github/workflows/tv-usb.yml'
