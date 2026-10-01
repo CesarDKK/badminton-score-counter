@@ -93,6 +93,7 @@ Systemet prøver automatisk og bruger CEC, hvis Linux finder det. Ellers:
 
 | Symptom | Løsning |
 |---|---|
+| "WiFi-kortet svarer ikke" — selvom WiFi virkede under Windows | Sluk PC'en, **træk strømstikket ud i 1 minut**, og tænd igen. Windows kan efterlade kortet i en strømsparetilstand, og M.2-kortet har strøm, selv når PC'en er slukket — derfor hjælper en genstart ikke. Set på M920x med Intel AC 8265 |
 | PC'en vil ikke starte fra nøglen | Slå *Secure Boot* fra i BIOS (F1 ved opstart på Lenovo) |
 | "PC'en har flere diske" | Skriv den rigtige i `kiosk.conf`, fx `DISK=/dev/nvme0n1` |
 | Venter på forbindelse i lang tid | Skærmen viser årsagen (forkert kode, netværket kan ikke ses, intet WiFi-kort …). Kun WPA2/WPA3 med adgangskode — ikke netværk med login-side eller brugernavn. Kør *Test uden at installere* i 6 minutter og se `diagnose.txt` på nøglen |

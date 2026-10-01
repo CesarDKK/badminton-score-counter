@@ -87,6 +87,14 @@ scenarie "Intet WiFi-kort" fejl "intet WiFi-kort"
 FAKE_TYPE_STATE='ethernet:connected' FAKE_DEVICE_TYPE='enp0s31f6:ethernet'
 scenarie "Intet WiFi-kort, men kabel" advarsel "Bruger netværkskablet"
 
+# Kortet findes, men driveren kunne ikke starte det (M920x efter Windows)
+SONDE='iwlwifi 0000:02:00.0: probe with driver iwlwifi failed with error -110'
+FAKE_TYPE_STATE='ethernet:unavailable' FAKE_DEVICE_TYPE='eno1:ethernet' FAKE_JOURNAL="$SONDE"
+scenarie "WiFi-kort svarer ikke" fejl "træk strømstikket ud"
+
+FAKE_TYPE_STATE='ethernet:connected' FAKE_DEVICE_TYPE='eno1:ethernet' FAKE_JOURNAL="$SONDE"
+scenarie "WiFi-kort svarer ikke, men kabel" advarsel "træk strømstikket ud"
+
 # Kort findes
 KORT='enp0s31f6:ethernet
 wlp0s20f3:wifi'
