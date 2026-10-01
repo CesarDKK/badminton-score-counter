@@ -63,6 +63,9 @@ PC'er — ret bare `kiosk.conf` imellem. Efter hver installation ligger der en
 fra nøglen uden at røre disken. Den viser først en oversigt med netværk,
 skærmopløsning og om HDMI-CEC virker på netop den PC og det kabel.
 Prøvetilstanden slukker ikke automatisk — det gør kun den installerede PC.
+Efter 1, 3 og 6 minutter skriver den `diagnose.txt` på nøglen: netværkskort,
+driver, synlige WiFi-netværk med sikkerhedstype og NetworkManagers log.
+WiFi-koden kommer ikke med — kun dens længde og om den har mellemrum.
 
 ### Daglig brug
 
@@ -92,7 +95,7 @@ Systemet prøver automatisk og bruger CEC, hvis Linux finder det. Ellers:
 |---|---|
 | PC'en vil ikke starte fra nøglen | Slå *Secure Boot* fra i BIOS (F1 ved opstart på Lenovo) |
 | "PC'en har flere diske" | Skriv den rigtige i `kiosk.conf`, fx `DISK=/dev/nvme0n1` |
-| Venter på forbindelse i lang tid | Tjek `WIFI_NAVN`/`WIFI_KODE`. Kun WPA2/WPA3 med adgangskode — ikke netværk med login-side eller brugernavn |
+| Venter på forbindelse i lang tid | Skærmen viser årsagen (forkert kode, netværket kan ikke ses, intet WiFi-kort …). Kun WPA2/WPA3 med adgangskode — ikke netværk med login-side eller brugernavn. Kør *Test uden at installere* i 6 minutter og se `diagnose.txt` på nøglen |
 | Teksten er for lille/stor | `SKALERING=1.5` (eller et andet tal) i `kiosk.conf`, og installér igen |
 | Uret er forkert første gang | Retter sig, når PC'en har været på nettet. Indtil da springes den automatiske slukning over |
 
@@ -131,6 +134,8 @@ Debian-installer, ingen netværksinstallation og intet preseed.
 | Værtsnavn + WiFi ved opstart | `usr/lib/badminton-tv/setup` |
 | Chromium i fuldskærm under `cage` | `usr/lib/badminton-tv/browser` |
 | Venter på netværk, viser fejl/diagnose | `usr/share/badminton-tv/start.html` |
+| Netværksstatus til skærmen (`status.js`) | `usr/lib/badminton-tv/netstatus` |
+| `diagnose.txt` på nøglen i prøvetilstand | `usr/lib/badminton-tv/diagnose` |
 | HDMI-CEC (`cec-ctl`) | `usr/lib/badminton-tv/cec` |
 | Automatisk slukning + opdateringer | `usr/lib/badminton-tv/sluk` + generator |
 | Installation på disk | `usr/lib/badminton-tv/installer` |

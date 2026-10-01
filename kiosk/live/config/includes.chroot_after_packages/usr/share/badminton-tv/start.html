@@ -85,6 +85,7 @@
     <dt>Navn</dt><dd id="d-navn"></dd>
     <dt>Viser</dt><dd id="d-url"></dd>
     <dt>WiFi</dt><dd id="d-wifi"></dd>
+    <dt>Netværk</dt><dd id="d-net">Undersøger…</dd>
     <dt>Skærm</dt><dd id="d-skaerm"></dd>
     <dt>HDMI-CEC</dt><dd id="d-cec"></dd>
     <dt>Slukker kl.</dt><dd id="d-sluk"></dd>
@@ -132,6 +133,29 @@
     liste.hidden = false;
     return;
   }
+
+  // Netværksstatus fra badminton-tv-netstatus. En file://-side må ikke fetche
+  // andre filer, men gerne indlæse et <script> — så status.js sætter bare
+  // window.BT_STATUS, og vi henter den igen hvert 3. sekund.
+  let netStatus = null;
+  const NET_KLASSE = { ok: 'ok', advarsel: 'advarsel', fejl: 'fejltekst' };
+  function hentStatus() {
+    const s = document.createElement('script');
+    s.src = 'file:///run/badminton-tv/status.js?' + Date.now();
+    s.onload = () => {
+      s.remove();
+      const st = window.BT_STATUS;
+      // Ignorér en gammel fil, hvis tjenesten er gået i stå.
+      if (st && Math.abs(Date.now() / 1000 - st.t) < 30) {
+        netStatus = st;
+        saet('d-net', st.tekst, NET_KLASSE[st.niveau] || '');
+      }
+    };
+    s.onerror = () => s.remove();
+    document.head.appendChild(s);
+  }
+  hentStatus();
+  setInterval(hentStatus, 3000);
 
   let maal;
   try {
@@ -194,11 +218,18 @@
     const prik = document.createElement('span');
     prik.className = 'prik';
     status.append(prik, document.createTextNode('Venter på forbindelse til ' + maal.host + ' … (' + sek + ' s)'));
-    if (sek >= 45) {
-      const hint = $('hint');
-      hint.textContent = p.get('wifi')
+    const hint = $('hint');
+    if (netStatus && netStatus.niveau === 'fejl') {
+      // Vi ved hvad der er galt — sig det med det samme.
+      hint.textContent = netStatus.tekst;
+      hint.hidden = false;
+    } else if (netStatus && netStatus.niveau === 'ok' && sek >= 30) {
+      hint.textContent = 'Netværket virker, men ' + maal.host + ' svarer ikke. Tjek adressen i TV_URL.';
+      hint.hidden = false;
+    } else if (sek >= 45) {
+      hint.textContent = netStatus ? netStatus.tekst : (p.get('wifi')
         ? 'Tjek at WIFI_NAVN og WIFI_KODE i kiosk.conf er stavet rigtigt, og at netværket er i nærheden.'
-        : 'Ingen WiFi er sat op — tjek at netværkskablet sidder i, eller udfyld WIFI_NAVN og WIFI_KODE i kiosk.conf.';
+        : 'Ingen WiFi er sat op — tjek at netværkskablet sidder i, eller udfyld WIFI_NAVN og WIFI_KODE i kiosk.conf.');
       hint.hidden = false;
     }
     setTimeout(loekke, 3000);

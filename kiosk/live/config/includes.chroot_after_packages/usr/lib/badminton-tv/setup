@@ -39,8 +39,15 @@ else
 fi
 
 # ── WiFi ───────────────────────────────────────────────────
-# Keyfile-formatet bruger backslash som escape-tegn; andre tegn er bogstavelige.
-nm_escape() { local s=${1//\\/\\\\}; printf '%s' "$s"; }
+# Keyfile-formatet (GLib) bruger backslash som escape-tegn og fjerner
+# mellemrum forrest i en værdi — et indledende mellemrum skal derfor skrives \s.
+nm_escape() {
+    local s=${1//\\/\\\\}
+    if [ "${s:0:1}" = " " ]; then
+        s="\\s${s:1}"
+    fi
+    printf '%s' "$s"
+}
 
 if [ -n "$BT_WIFI_NAVN" ]; then
     umask 077

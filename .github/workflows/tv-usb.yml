@@ -28,16 +28,19 @@ jobs:
       - name: Læsning af kiosk.conf
         run: bash kiosk/test/test-conf.sh
 
+      - name: Netværksstatus (forkert kode, netværk ikke synligt …)
+        run: bash kiosk/test/test-netstatus.sh
+
       - name: ShellCheck
         env:
           LANG: C.UTF-8   # filerne indeholder æøå
         run: |
           cd kiosk
           shellcheck -S warning -x \
-            build.sh test/vm.sh test/test-conf.sh \
+            build.sh test/vm.sh test/test-conf.sh test/test-netstatus.sh \
             live/auto/config \
             live/config/hooks/normal/*.hook.chroot \
-            live/config/includes.chroot_after_packages/usr/lib/badminton-tv/{conf.sh,setup,browser,cec,sluk,installer} \
+            live/config/includes.chroot_after_packages/usr/lib/badminton-tv/{conf.sh,setup,browser,cec,sluk,installer,netstatus,diagnose} \
             live/config/includes.chroot_after_packages/usr/lib/systemd/system-generators/badminton-tv-sluk-generator
 
   byg:

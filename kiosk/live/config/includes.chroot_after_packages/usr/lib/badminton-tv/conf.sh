@@ -9,8 +9,8 @@
 # fejl der forhindrer visning (én pr. linje), og BT_ADVARSLER indeholder ting der
 # er værd at nævne, men som ikke stopper noget.
 
-BT_CONF_INSTALLERET=/etc/badminton-tv/kiosk.conf
-BT_CONF_USB=/run/live/medium/kiosk.conf
+BT_CONF_INSTALLERET=${BT_CONF_INSTALLERET:-/etc/badminton-tv/kiosk.conf}
+BT_CONF_USB=${BT_CONF_USB:-/run/live/medium/kiosk.conf}
 
 # Udskriver stien til den kiosk.conf der gælder. På den installerede PC ligger
 # den i /etc; i prøvetilstand læses den direkte fra USB-nøglen.

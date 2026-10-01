@@ -37,6 +37,11 @@ USB-nøglen. PC'ens disk bliver ikke rørt. Skærmen viser først en oversigt me
 netværk, skærmopløsning og om HDMI-CEC virker. Prøvetilstanden slukker ikke
 automatisk — det gør kun den installerede PC.
 
+Efter 1, 3 og 6 minutter i prøvetilstand skriver PC'en en diagnose.txt på
+USB-nøglen med detaljer om netværkskort og WiFi. Driller WiFi'en, så lad
+testen køre i 6 minutter, sluk PC'en, og send diagnose.txt til den, der
+hjælper dig. WiFi-koden står ikke i filen.
+
 
 I DAGLIG BRUG
 -------------
@@ -54,6 +59,8 @@ HVIS NOGET GÅR GALT
 -------------------
 
   - Fejl i kiosk.conf vises på skærmen, før noget slettes.
+  - Kommer PC'en ikke på nettet, står årsagen på skærmen, fx "Forkert
+    WiFi-kode" eller "Kan ikke se WiFi ... Synlige netværk: ...".
   - Efter hver installation ligger der en installation-log.txt på USB-nøglen.
   - "PC'en starter ikke fra USB-nøglen": Slå "Secure Boot" fra i BIOS
     (F1 ved opstart på Lenovo) og prøv igen.

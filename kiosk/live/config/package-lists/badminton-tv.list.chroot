@@ -18,6 +18,9 @@ jq
 network-manager
 wpasupplicant
 iw
+pciutils
+usbutils
+rfkill
 firmware-iwlwifi
 firmware-realtek
 firmware-atheros
