@@ -52,6 +52,19 @@ vurder() {
     fi
 
     if [ -z "$wifi_dev" ]; then
+        # Kortet findes, men driveren kunne ikke starte det. Set på en M920x
+        # efter Windows (Intel AC 8265, error -110): kortet hænger i en
+        # strømsparetilstand, som kun forsvinder, når strømmen fjernes helt —
+        # M.2-kortet får standby-strøm, også når PC'en er slukket.
+        if journalctl -k -b -o cat --no-pager 2>/dev/null \
+            | grep -qE "probe with driver (iwlwifi|rtw88_[a-z0-9]+|rtw89_[a-z0-9]+|ath9k|ath1[0-2]k_pci|mt7[0-9a-z_]+|brcmfmac) failed with error"; then
+            if [ "$kabel" -gt 0 ]; then
+                NIVEAU=advarsel TEKST='Bruger netværkskablet — WiFi-kortet svarer ikke. Sluk PC'"'"'en, træk strømstikket ud i 1 minut, og tænd igen'
+            else
+                TEKST='WiFi-kortet svarer ikke. Sluk PC'"'"'en, træk strømstikket ud i 1 minut, og tænd igen'
+            fi
+            return
+        fi
         if [ "$kabel" -gt 0 ]; then
             NIVEAU=advarsel TEKST='Bruger netværkskablet — PC'"'"'en har intet WiFi-kort, som Linux kan bruge'
         else

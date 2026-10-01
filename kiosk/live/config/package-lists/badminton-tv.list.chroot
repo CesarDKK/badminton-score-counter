@@ -21,6 +21,7 @@ iw
 pciutils
 usbutils
 rfkill
+wireless-regdb
 firmware-iwlwifi
 firmware-realtek
 firmware-atheros

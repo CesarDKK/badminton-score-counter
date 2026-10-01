@@ -93,6 +93,15 @@ overskrift
 log "Badminton TV installation, version $(cat /usr/share/badminton-tv/version 2>/dev/null || echo ukendt)"
 log "PC: $(cat /sys/class/dmi/id/sys_vendor 2>/dev/null) $(cat /sys/class/dmi/id/product_version 2>/dev/null) ($(cat /sys/class/dmi/id/product_name 2>/dev/null))"
 
+# Netværkskortene, og om driverne kunne starte dem — så installationsloggen
+# alene kan forklare et WiFi-problem bagefter.
+log "Netværkskort:
+$(lspci -nnk 2>/dev/null | grep -A3 -iE 'network|ethernet|wireless' || echo '(ingen fundet med lspci)')"
+WIFI_IF=$(for d in /sys/class/net/*/wireless; do [ -e "$d" ] && basename "$(dirname "$d")"; done || true)
+WIFI_SONDE_FEJL=$(dmesg 2>/dev/null | grep -E 'probe with driver .* failed with error' \
+    | grep -iE 'iwlwifi|rtw|ath|mt7|brcm' | tail -1 || true)
+log "WiFi-interface: ${WIFI_IF:-ingen}${WIFI_SONDE_FEJL:+ — driverfejl: $WIFI_SONDE_FEJL}"
+
 # ── 1. USB-nøglen ──────────────────────────────────────────
 trin "Finder USB-nøglen…"
 USB_PART=''
@@ -341,6 +350,19 @@ printf '\n  %s══════════════════════
 printf '  %s  FÆRDIG!%s\n\n' "$G" "$N"
 printf '  %sFjern USB-nøglen nu.%s PC\x27en genstarter af sig selv,\n' "$F" "$N"
 printf '  når nøglen er taget ud, og viser derefter TV-siden.\n'
+# WiFi er sat op, men live-systemet kunne ikke bruge kortet — det installerede
+# system kan heller ikke, så sig det nu, mens nogen kigger på skærmen.
+if [ -n "$BT_WIFI_NAVN" ] && [ -z "$WIFI_IF" ]; then
+    printf '\n'
+    if [ -n "$WIFI_SONDE_FEJL" ]; then
+        printf '  %sBemærk: WiFi-kortet svarer ikke lige nu.%s Kommer TV-siden\n' "$Y" "$N"
+        printf '  ikke frem, så sluk PC\x27en, træk strømstikket ud i 1 minut,\n'
+        printf '  og tænd igen.\n'
+    else
+        printf '  %sBemærk: PC\x27en har intet WiFi-kort, som Linux kan bruge.%s\n' "$Y" "$N"
+        printf '  Brug et netværkskabel.\n'
+    fi
+fi
 printf '  %s══════════════════════════════════════════════════════%s\n' "$G" "$N"
 
 # Vi genstarter først, når nøglen er væk — ellers kunne PC'en starte

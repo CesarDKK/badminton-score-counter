@@ -61,6 +61,8 @@ HVIS NOGET GÅR GALT
   - Fejl i kiosk.conf vises på skærmen, før noget slettes.
   - Kommer PC'en ikke på nettet, står årsagen på skærmen, fx "Forkert
     WiFi-kode" eller "Kan ikke se WiFi ... Synlige netværk: ...".
+  - "WiFi-kortet svarer ikke" (typisk lige efter Windows): Sluk PC'en, TRÆK
+    STRØMSTIKKET UD i 1 minut, og tænd igen. En genstart er ikke nok.
   - Efter hver installation ligger der en installation-log.txt på USB-nøglen.
   - "PC'en starter ikke fra USB-nøglen": Slå "Secure Boot" fra i BIOS
     (F1 ved opstart på Lenovo) og prøv igen.
