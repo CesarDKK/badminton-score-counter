@@ -1,0 +1,84 @@
+#!/bin/bash
+# Anvender kiosk.conf ved hver opstart: værtsnavn, WiFi og det miljø browseren
+# starter med. Kører før NetworkManager, så WiFi-forbindelsen findes, når
+# NetworkManager starter.
+#
+# Skriver /run/badminton-tv/kiosk.env (shell-quotet med %q, så browser-scriptet
+# kan source den sikkert), selv når konfigurationen er fejlbehæftet — så kan
+# startsiden vise fejlen på skærmen i stedet for at TV'et bare er sort.
+
+set -u
+. /usr/lib/badminton-tv/conf.sh
+
+RUN=/run/badminton-tv
+WIFI_FIL=/etc/NetworkManager/system-connections/badminton-tv-wifi.nmconnection
+mkdir -p "$RUN"
+
+tilstand=normal
+grep -qw 'badminton.tilstand=proeve' /proc/cmdline && tilstand=proeve
+
+if conf=$(bt_find_conf); then
+    bt_read_conf "$conf"
+else
+    bt_read_conf /dev/null
+    BT_FEJL="Filen kiosk.conf blev ikke fundet."
+fi
+
+[ -n "$BT_FEJL" ] && printf 'Fejl i kiosk.conf:\n%s\n' "$BT_FEJL"
+[ -n "$BT_ADVARSLER" ] && printf 'Advarsler i kiosk.conf:\n%s\n' "$BT_ADVARSLER"
+
+# ── Værtsnavn ──────────────────────────────────────────────
+if [ "$(cat /etc/hostname 2>/dev/null)" != "$BT_NAVN" ]; then
+    printf '%s\n' "$BT_NAVN" > /etc/hostname
+fi
+hostname "$BT_NAVN"
+if grep -q '^127\.0\.1\.1' /etc/hosts; then
+    sed -i "s/^127\.0\.1\.1.*/127.0.1.1\t$BT_NAVN/" /etc/hosts
+else
+    printf '127.0.1.1\t%s\n' "$BT_NAVN" >> /etc/hosts
+fi
+
+# ── WiFi ───────────────────────────────────────────────────
+# Keyfile-formatet (GLib) bruger backslash som escape-tegn og fjerner
+# mellemrum forrest i en værdi — et indledende mellemrum skal derfor skrives \s.
+nm_escape() {
+    local s=${1//\\/\\\\}
+    if [ "${s:0:1}" = " " ]; then
+        s="\\s${s:1}"
+    fi
+    printf '%s' "$s"
+}
+
+if [ -n "$BT_WIFI_NAVN" ]; then
+    umask 077
+    {
+        printf '[connection]\nid=badminton-tv-wifi\ntype=wifi\nautoconnect=true\n'
+        printf 'autoconnect-retries=0\n\n'
+        printf '[wifi]\nmode=infrastructure\nssid=%s\n\n' "$(nm_escape "$BT_WIFI_NAVN")"
+        if [ -n "$BT_WIFI_KODE" ]; then
+            printf '[wifi-security]\nkey-mgmt=wpa-psk\npsk=%s\n\n' "$(nm_escape "$BT_WIFI_KODE")"
+        fi
+        printf '[ipv4]\nmethod=auto\n\n[ipv6]\nmethod=auto\naddr-gen-mode=default\n'
+    } > "$WIFI_FIL.ny"
+    if cmp -s "$WIFI_FIL.ny" "$WIFI_FIL"; then
+        rm -f "$WIFI_FIL.ny"
+    else
+        mv "$WIFI_FIL.ny" "$WIFI_FIL"
+    fi
+    umask 022
+else
+    rm -f "$WIFI_FIL"
+fi
+
+# ── Miljø til browseren ────────────────────────────────────
+{
+    printf 'BT_TV_URL=%q\n' "$BT_TV_URL"
+    printf 'BT_NAVN=%q\n' "$BT_NAVN"
+    printf 'BT_WIFI_NAVN=%q\n' "$BT_WIFI_NAVN"
+    printf 'BT_SKALERING=%q\n' "$BT_SKALERING"
+    printf 'BT_SLUK_KL=%q\n' "$BT_SLUK_KL"
+    printf 'BT_FEJL=%q\n' "$BT_FEJL"
+    printf 'BT_TILSTAND=%q\n' "$tilstand"
+} > "$RUN/kiosk.env"
+
+exit 0

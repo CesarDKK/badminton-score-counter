@@ -1,0 +1,143 @@
+#!/bin/bash
+# Vurderer netværket og forklarer på dansk, hvorfor PC'en ikke er på nettet:
+# intet WiFi-kort, forkert kode, netværket kan ikke ses osv.
+#
+#   netstatus          skriver /run/badminton-tv/status.js hvert 3. sekund
+#                      (startsiden indlæser den og viser teksten på skærmen)
+#   netstatus tekst    udskriver vurderingen én gang (bruges af diagnose)
+#
+# Kører som root: journalen og rfkill kræver det.
+
+set -u
+# BT_LIB og BT_RUN kan overstyres af kiosk/test/test-netstatus.sh.
+. "${BT_LIB:-/usr/lib/badminton-tv}/conf.sh"
+
+RUN=${BT_RUN:-/run/badminton-tv}
+mkdir -p "$RUN"
+
+if conf=$(bt_find_conf); then
+    bt_read_conf "$conf"
+else
+    BT_WIFI_NAVN=''
+fi
+
+# Udfylder NIVEAU (ok|advarsel|fejl), TEKST og SYNLIGE (synlige netværk).
+vurder() {
+    NIVEAU=fejl TEKST='' SYNLIGE=''
+
+    local kabel wifi_dev tilstand
+    kabel=$(nmcli -t -f TYPE,STATE device 2>/dev/null | grep -c '^ethernet:connected$')
+    wifi_dev=$(nmcli -t -f DEVICE,TYPE device 2>/dev/null | awk -F: '$2 == "wifi" { print $1; exit }')
+
+    # Synlige netværk, stærkeste først. -e no + multiline: ingen escaping, én
+    # værdi pr. linje, så kolon i et netværksnavn ikke forvirrer.
+    local scan=''
+    if [ -n "$wifi_dev" ]; then
+        scan=$(nmcli -t -e no -m multiline -f SSID,SECURITY,SIGNAL device wifi list --rescan no 2>/dev/null \
+            | awk -F: '
+                /^SSID:/     { ssid = substr($0, 6) }
+                /^SECURITY:/ { sik = substr($0, 10) }
+                /^SIGNAL:/   { if (ssid != "") printf "%s\t%s\t%s\n", substr($0, 8), ssid, sik }' \
+            | sort -t$'\t' -k1,1nr | awk -F'\t' '!set[$2]++')
+        SYNLIGE=$(printf '%s\n' "$scan" | awk -F'\t' 'NF >= 2 { printf "%s%s (%s, %s %%)", (n++ ? ", " : ""), $2, ($3 == "" ? "åben" : $3), $1 } END { print "" }')
+    fi
+
+    if [ -z "$BT_WIFI_NAVN" ]; then
+        if [ "$kabel" -gt 0 ]; then
+            NIVEAU=ok TEKST='Forbundet med netværkskabel'
+        else
+            TEKST='Netværkskablet er ikke forbundet, og WiFi er ikke sat op i kiosk.conf'
+        fi
+        return
+    fi
+
+    if [ -z "$wifi_dev" ]; then
+        if [ "$kabel" -gt 0 ]; then
+            NIVEAU=advarsel TEKST='Bruger netværkskablet — PC'"'"'en har intet WiFi-kort, som Linux kan bruge'
+        else
+            TEKST='PC'"'"'en har intet WiFi-kort, som Linux kan bruge. Brug et netværkskabel'
+        fi
+        return
+    fi
+
+    if rfkill list wifi 2>/dev/null | grep -q 'blocked: yes'; then
+        TEKST='WiFi er slået fra på PC'"'"'en (kontakt, tastaturgenvej eller BIOS)'
+        return
+    fi
+
+    tilstand=$(nmcli -t -f GENERAL.STATE device show "$wifi_dev" 2>/dev/null | cut -d: -f2 | awk '{ print $1 }')
+    if [ "${tilstand:-0}" -ge 100 ]; then
+        local signal
+        signal=$(nmcli -t -f IN-USE,SIGNAL device wifi list --rescan no 2>/dev/null | awk -F: '$1 == "*" { print $2; exit }')
+        NIVEAU=ok TEKST="Forbundet til WiFi \"$BT_WIFI_NAVN\"${signal:+ (signal $signal %)}"
+        return
+    fi
+
+    # Forkert kode: wpa_supplicant melder WRONG_KEY, NetworkManager "no-secrets".
+    if journalctl -b --since '-3min' -u wpa_supplicant -u NetworkManager -o cat --no-pager 2>/dev/null \
+        | grep -qE "WRONG_KEY|reason 'no-secrets'"; then
+        TEKST="Forkert WiFi-kode — netværket \"$BT_WIFI_NAVN\" afviser koden i kiosk.conf"
+        return
+    fi
+
+    local fundet sik
+    fundet=$(printf '%s\n' "$scan" | awk -F'\t' -v s="$BT_WIFI_NAVN" '$2 == s { print; exit }')
+    if [ -z "$fundet" ]; then
+        local oppe
+        oppe=$(cut -d. -f1 /proc/uptime)
+        if [ "$oppe" -lt 30 ]; then
+            NIVEAU=advarsel TEKST="Leder efter WiFi \"$BT_WIFI_NAVN\" …"
+        else
+            # Samme navn med andre store/små bogstaver er en klassisk fejl.
+            local naesten
+            naesten=$(printf '%s\n' "$scan" | awk -F'\t' -v s="$BT_WIFI_NAVN" 'tolower($2) == tolower(s) { print $2; exit }')
+            if [ -n "$naesten" ]; then
+                TEKST="Kan ikke se \"$BT_WIFI_NAVN\" — men \"$naesten\" findes. Store og små bogstaver skal passe"
+            else
+                TEKST="Kan ikke se WiFi \"$BT_WIFI_NAVN\". Synlige netværk: ${SYNLIGE:-ingen}"
+            fi
+        fi
+        return
+    fi
+
+    sik=$(printf '%s\n' "$fundet" | cut -f3)
+    case "$sik" in
+        *802.1X*)
+            TEKST="\"$BT_WIFI_NAVN\" kræver brugernavn og adgangskode (WPA-Enterprise) — det understøttes ikke"
+            return ;;
+    esac
+    if [ -n "$sik" ] && [ -z "$BT_WIFI_KODE" ]; then
+        TEKST="\"$BT_WIFI_NAVN\" kræver en kode ($sik), men WIFI_KODE er tom i kiosk.conf"
+        return
+    fi
+
+    if [ "${tilstand:-0}" -ge 40 ]; then
+        NIVEAU=advarsel TEKST="Forbinder til WiFi \"$BT_WIFI_NAVN\" …"
+        return
+    fi
+
+    local aarsag
+    aarsag=$(journalctl -b --since '-3min' -u NetworkManager -o cat --no-pager 2>/dev/null \
+        | grep "device ($wifi_dev)" | grep -o "reason '[^']*'" | tail -1)
+    NIVEAU=advarsel TEKST="Ikke forbundet til WiFi \"$BT_WIFI_NAVN\" ($sik)${aarsag:+ — $aarsag}"
+}
+
+skriv_js() {
+    jq -n --arg niveau "$NIVEAU" --arg tekst "$TEKST" --arg synlige "$SYNLIGE" \
+        --argjson t "$(date +%s)" \
+        '{t: $t, niveau: $niveau, tekst: $tekst, synlige: $synlige}' \
+        | { printf 'window.BT_STATUS = '; cat; printf ';\n'; } > "$RUN/status.js.ny"
+    mv "$RUN/status.js.ny" "$RUN/status.js"
+}
+
+if [ "${1:-}" = tekst ]; then
+    vurder
+    printf 'Vurdering: %s (%s)\nSynlige netværk: %s\n' "$TEKST" "$NIVEAU" "${SYNLIGE:-ingen}"
+    exit 0
+fi
+
+while true; do
+    vurder
+    skriv_js
+    sleep 3
+done

@@ -1,0 +1,357 @@
+#!/bin/bash
+# Installerer Badminton TV på PC'ens interne disk.
+#
+# Kører på skærmen (tty1), når PC'en er bootet fra USB-nøglen med "Installer".
+# Live-systemet er kopieret ind i RAM (boot-parameteren toram), så nøglen kan
+# fjernes til sidst, uden at systemet mister sine egne filer.
+#
+# Rækkefølge:
+#   1. Find USB-nøglen og læs kiosk.conf — stop før noget slettes, hvis den er forkert
+#   2. Vælg den interne disk — stop hvis der er flere end én (og DISK ikke er sat)
+#   3. Vis hvad der slettes, og tæl 15 sekunder ned (en tast afbryder)
+#   4. Partitionér, kopiér systemet, installér bootloader
+#   5. Skriv en log til USB-nøglen, vent til nøglen er fjernet, genstart
+
+set -Eeuo pipefail
+. /usr/lib/badminton-tv/conf.sh
+
+LOG=/run/badminton-tv/installation.log
+MAAL=/mnt/badminton-tv
+USB_MNT=/run/badminton-usb
+NEDTAELLING=15
+MIN_DISK_GB=8
+
+mkdir -p /run/badminton-tv "$MAAL" "$USB_MNT"
+: > "$LOG"
+
+# ── Skærm ──────────────────────────────────────────────────
+R=$'\033[1;31m' G=$'\033[1;32m' Y=$'\033[1;33m' B=$'\033[1;36m' F=$'\033[1m' N=$'\033[0m'
+
+# Stor skrift, så teksten kan læses på et TV på afstand.
+for font in /usr/share/consolefonts/Uni3-TerminusBold32x16.psf.gz \
+            /usr/share/consolefonts/Uni2-TerminusBold32x16.psf.gz; do
+    [ -f "$font" ] && { setfont "$font" 2>/dev/null || true; break; }
+done
+setterm --blank 0 --powerdown 0 --cursor off 2>/dev/null || true
+
+log() { printf '%s %s\n' "$(date '+%H:%M:%S')" "$*" >> "$LOG"; }
+koer() { log "\$ $*"; "$@" >> "$LOG" 2>&1; }
+
+overskrift() {
+    printf '\033[2J\033[H'
+    printf '\n  %s══════════════════════════════════════════════════════%s\n' "$B" "$N"
+    printf '  %s  BADMINTON TV — INSTALLATION%s\n' "$F" "$N"
+    printf '  %s══════════════════════════════════════════════════════%s\n\n' "$B" "$N"
+}
+
+trin() { printf '  %s»%s %s' "$B" "$N" "$1"; log "TRIN: $1"; }
+okay() { printf ' %sOK%s\n' "$G" "$N"; }
+
+vent_for_evigt() {
+    while true; do sleep 3600; done
+}
+
+# Skriver loggen til USB-nøglen, så den kan læses på en Windows-PC bagefter.
+gem_log_paa_usb() {
+    [ -n "${USB_PART:-}" ] || return 0
+    [ -b "$USB_PART" ] || return 0
+    umount "$USB_MNT" 2>/dev/null || true
+    if mount -o rw "$USB_PART" "$USB_MNT" 2>/dev/null; then
+        {
+            printf '\r\n===== %s =====\r\n' "$(date '+%Y-%m-%d %H:%M:%S')"
+            sed 's/$/\r/' "$LOG"
+        } >> "$USB_MNT/installation-log.txt" 2>/dev/null || true
+        sync
+        umount "$USB_MNT" 2>/dev/null || true
+    fi
+}
+
+stop_med_fejl() {
+    printf '\n  %sINSTALLATIONEN BLEV STOPPET%s\n\n' "$R" "$N"
+    printf '%s\n' "$1" | sed 's/^/  /'
+    printf '\n'
+    log "STOPPET: $1"
+    gem_log_paa_usb
+    printf '  Detaljer er gemt i installation-log.txt på USB-nøglen.\n'
+    printf '  Du kan slukke PC\x27en på tænd/sluk-knappen.\n'
+    vent_for_evigt
+}
+
+ved_fejl() {
+    local linje=$1 kode=$2
+    trap - ERR
+    printf '\n'
+    log "FEJL: linje $linje, kode $kode"
+    # Afmontér hvad vi kan, så disken ikke efterlades halvt monteret.
+    umount -R "$MAAL" 2>/dev/null || true
+    stop_med_fejl "Der opstod en uventet fejl (linje $linje, kode $kode).
+PC'ens disk kan være delvist slettet. Start installationen forfra."
+}
+trap 'ved_fejl $LINENO $?' ERR
+
+overskrift
+log "Badminton TV installation, version $(cat /usr/share/badminton-tv/version 2>/dev/null || echo ukendt)"
+log "PC: $(cat /sys/class/dmi/id/sys_vendor 2>/dev/null) $(cat /sys/class/dmi/id/product_version 2>/dev/null) ($(cat /sys/class/dmi/id/product_name 2>/dev/null))"
+
+# ── 1. USB-nøglen ──────────────────────────────────────────
+trin "Finder USB-nøglen…"
+USB_PART=''
+# toram har kopieret systemet til RAM og afmonteret nøglen, så vi leder efter
+# den FAT-partition der indeholder både live-systemet og kiosk.conf.
+for _ in 1 2 3 4 5; do
+    while read -r navn fstype; do
+        case "$fstype" in vfat|exfat) ;; *) continue ;; esac
+        if mount -o ro "$navn" "$USB_MNT" 2>/dev/null; then
+            if [ -f "$USB_MNT/live/filesystem.squashfs" ] && [ -f "$USB_MNT/kiosk.conf" ]; then
+                USB_PART=$navn
+                break 2
+            fi
+            umount "$USB_MNT"
+        fi
+    done < <(lsblk -lnpo NAME,FSTYPE)
+    sleep 1
+done
+[ -n "$USB_PART" ] || stop_med_fejl "USB-nøglen med kiosk.conf blev ikke fundet."
+
+USB_DISK=/dev/$(lsblk -no PKNAME "$USB_PART" | head -1)
+[ "$USB_DISK" != /dev/ ] || USB_DISK=$USB_PART   # nøgle uden partitionstabel
+log "USB: $USB_PART på $USB_DISK"
+
+cp "$USB_MNT/kiosk.conf" /run/badminton-tv/kiosk.conf.usb
+umount "$USB_MNT"
+okay
+
+trin "Læser kiosk.conf…"
+bt_read_conf /run/badminton-tv/kiosk.conf.usb
+log "TV_URL=$BT_TV_URL NAVN=$BT_NAVN WIFI_NAVN=$BT_WIFI_NAVN SLUK_KL=$BT_SLUK_KL CEC=$BT_CEC DISK=$BT_DISK"
+[ -n "$BT_ADVARSLER" ] && log "Advarsler: $BT_ADVARSLER"
+if [ -n "$BT_FEJL" ]; then
+    printf '\n'
+    stop_med_fejl "Der er fejl i kiosk.conf — intet er slettet:
+
+$BT_FEJL
+
+Ret filen på USB-nøglen (fx i Notesblok) og prøv igen."
+fi
+okay
+
+# ── 2. Den interne disk ────────────────────────────────────
+trin "Finder PC'ens disk…"
+mapfile -t KANDIDATER < <(
+    lsblk -dpJ -o NAME,TYPE,TRAN,SIZE,RO | jq -r --arg usb "$USB_DISK" '
+        .blockdevices[]
+        | select(.type == "disk" and (.ro == false or .ro == "0") and .name != $usb and (.tran // "") != "usb")
+        | select(.name | test("^/dev/(loop|zram|ram|sr)") | not)
+        | .name')
+log "Kandidater: ${KANDIDATER[*]:-ingen}"
+
+if [ -n "$BT_DISK" ]; then
+    if [ "$BT_DISK" = "$USB_DISK" ]; then
+        stop_med_fejl "DISK i kiosk.conf peger på selve USB-nøglen ($BT_DISK)."
+    fi
+    [ -b "$BT_DISK" ] || stop_med_fejl "Disken $BT_DISK fra kiosk.conf findes ikke."
+    if [ "$(lsblk -dno TYPE "$BT_DISK")" != disk ]; then
+        stop_med_fejl "DISK=$BT_DISK er en partition, ikke en hel disk.
+Skriv diskens navn uden partitionsnummer, fx /dev/nvme0n1 eller /dev/sda."
+    fi
+    MAAL_DISK=$BT_DISK
+elif [ "${#KANDIDATER[@]}" -eq 0 ]; then
+    stop_med_fejl "PC'en har ingen intern disk, der kan installeres på."
+elif [ "${#KANDIDATER[@]}" -gt 1 ]; then
+    liste=$(for d in "${KANDIDATER[@]}"; do
+        printf '  %-16s %8s  %s\n' "$d" "$(lsblk -dno SIZE "$d" | tr -d ' ')" "$(lsblk -dno MODEL "$d")"
+    done)
+    stop_med_fejl "PC'en har flere diske — intet er slettet:
+
+$liste
+
+Skriv den rigtige i kiosk.conf, fx:  DISK=${KANDIDATER[0]}"
+else
+    MAAL_DISK=${KANDIDATER[0]}
+fi
+
+STR_BYTES=$(lsblk -dbno SIZE "$MAAL_DISK" | tr -d ' ')
+if [ "$STR_BYTES" -lt $((MIN_DISK_GB * 1000 * 1000 * 1000)) ]; then
+    stop_med_fejl "Disken $MAAL_DISK er for lille ($((STR_BYTES / 1000000000)) GB, mindst $MIN_DISK_GB GB)."
+fi
+MODEL=$(lsblk -dno MODEL "$MAAL_DISK" | sed 's/[[:space:]]*$//')
+STR=$(lsblk -dno SIZE "$MAAL_DISK" | tr -d ' ')
+log "Mål: $MAAL_DISK ($MODEL, $STR)"
+okay
+
+# ── 3. Bekræftelse ─────────────────────────────────────────
+overskrift
+printf '  %sALT PÅ DENNE DISK BLIVER SLETTET:%s\n\n' "$R" "$N"
+printf '     %s%s%s   %s   %s\n\n' "$F" "$MAAL_DISK" "$N" "$STR" "${MODEL:-ukendt model}"
+indhold=$(lsblk -lno NAME,FSTYPE,LABEL,SIZE "$MAAL_DISK" | tail -n +2 | awk '$2 != "" || $3 != ""')
+if [ -n "$indhold" ]; then
+    printf '  Disken indeholder nu:\n'
+    printf '%s\n' "$indhold" | sed 's/^/     /'
+    printf '\n'
+fi
+printf '  Den bliver til en Badminton TV-skærm, der viser:\n'
+printf '     %s%s%s\n\n' "$F" "$BT_TV_URL" "$N"
+[ -n "$BT_WIFI_NAVN" ] && printf '  WiFi: %s\n' "$BT_WIFI_NAVN"
+printf '  Navn: %s\n\n' "$BT_NAVN"
+if [ -n "$BT_ADVARSLER" ]; then
+    printf '  %sBemærk:%s\n' "$Y" "$N"
+    printf '%s\n' "$BT_ADVARSLER" | sed 's/^/     /'
+    printf '\n'
+fi
+
+# Tøm tastaturbufferen, så et tastetryk fra boot-menuen ikke afbryder.
+while read -rsn1 -t 0.1 _; do :; done 2>/dev/null || true
+for ((i = NEDTAELLING; i > 0; i--)); do
+    printf '\r  %sInstallationen starter om %2d sekunder.%s Tryk på en tast for at afbryde. ' "$Y" "$i" "$N"
+    if read -rsn1 -t 1 _ 2>/dev/null; then
+        printf '\n\n  %sAfbrudt — intet er ændret.%s\n\n' "$G" "$N"
+        printf '  Fjern USB-nøglen og sluk PC\x27en på tænd/sluk-knappen.\n'
+        log "Afbrudt af bruger"
+        vent_for_evigt
+    fi
+done
+log "Bekræftet (nedtælling udløb)"
+
+# ── 4. Installation ────────────────────────────────────────
+overskrift
+printf '  Installerer på %s (%s). Sluk ikke PC\x27en.\n\n' "$MAAL_DISK" "$STR"
+
+trin "Sletter disken…"
+# Alt der måtte være monteret fra disken (fx swap fundet af live-systemet).
+for p in $(lsblk -lnpo NAME "$MAAL_DISK"); do
+    swapoff "$p" 2>/dev/null || true
+    umount "$p" 2>/dev/null || true
+done
+for p in $(lsblk -lnpo NAME,TYPE "$MAAL_DISK" | awk '$2 == "part" { print $1 }'); do
+    koer wipefs -af "$p"
+done
+koer wipefs -af "$MAAL_DISK"
+okay
+
+trin "Opretter partitioner…"
+koer sfdisk --wipe always --wipe-partitions always "$MAAL_DISK" <<'EOF'
+label: gpt
+size=512MiB, type=uefi, name="EFI"
+type=linux, name="badminton-tv"
+EOF
+# sfdisk beder selv kernen genlæse tabellen; vi venter bare på at udev har
+# oprettet de nye enheder.
+for _ in $(seq 1 20); do
+    koer udevadm settle
+    mapfile -t PARTS < <(lsblk -lnpo NAME,TYPE "$MAAL_DISK" | awk '$2 == "part" { print $1 }')
+    [ "${#PARTS[@]}" -eq 2 ] && [ -b "${PARTS[1]}" ] && break
+    sleep 0.5
+done
+[ "${#PARTS[@]}" -eq 2 ] || stop_med_fejl "Partitionerne blev ikke oprettet korrekt (${PARTS[*]:-ingen})."
+ESP=${PARTS[0]} ROD=${PARTS[1]}
+log "ESP=$ESP ROD=$ROD"
+koer mkfs.vfat -F 32 -n EFI "$ESP"
+koer mkfs.ext4 -F -q -L badminton-tv "$ROD"
+okay
+
+trin "Kopierer systemet…"
+KILDE=$(findmnt -rno TARGET -t squashfs | head -1)
+[ -n "$KILDE" ] || stop_med_fejl "Live-systemets filer blev ikke fundet."
+log "Kilde: $KILDE"
+koer mount "$ROD" "$MAAL"
+# progress2 skriver én linje, der opdateres med \r. Procenten skrives efter
+# trinnets tekst og erstattes af OK, når kopieringen er færdig.
+rsync -aHAXx --numeric-ids --info=progress2 --no-inc-recursive "$KILDE/" "$MAAL/" 2>>"$LOG" \
+    | stdbuf -oL tr '\r' '\n' \
+    | awk '/%/ { printf " %4s\b\b\b\b\b", $2; fflush() }'
+printf '     \b\b\b\b\b'
+# ESP'en monteres først nu: FAT kan ikke have ejer og rettigheder, så rsync
+# ville fejle på /boot/efi, hvis den allerede var monteret.
+mkdir -p "$MAAL/boot/efi"
+koer mount "$ESP" "$MAAL/boot/efi"
+okay
+
+trin "Indstiller systemet…"
+ROD_UUID=$(blkid -s UUID -o value "$ROD")
+ESP_UUID=$(blkid -s UUID -o value "$ESP")
+cat > "$MAAL/etc/fstab" <<EOF
+# Oprettet af Badminton TV-installationen
+UUID=$ROD_UUID  /          ext4  defaults,noatime,errors=remount-ro  0  1
+UUID=$ESP_UUID  /boot/efi  vfat  umask=0077                          0  1
+tmpfs           /tmp       tmpfs defaults,nosuid,nodev               0  0
+EOF
+
+mkdir -p "$MAAL/etc/badminton-tv"
+bt_normaliser_conf /run/badminton-tv/kiosk.conf.usb > "$MAAL/etc/badminton-tv/kiosk.conf"
+chmod 600 "$MAAL/etc/badminton-tv/kiosk.conf"   # indeholder WiFi-koden
+printf '%s\n' "$BT_NAVN" > "$MAAL/etc/hostname"
+{
+    echo "installeret=$(date --iso-8601=seconds)"
+    echo "version=$(cat /usr/share/badminton-tv/version 2>/dev/null || echo ukendt)"
+    echo "disk=$MAAL_DISK"
+} > "$MAAL/etc/badminton-tv/installeret"
+
+# Hver PC skal have sit eget maskine-id (bruges bl.a. af DHCP).
+rm -f "$MAAL/etc/machine-id" "$MAAL/var/lib/dbus/machine-id"
+koer systemd-machine-id-setup --root="$MAAL"
+okay
+
+trin "Installerer bootloader…"
+# rslave: ellers forplanter umount -R sig tilbage og afmonterer live-systemets
+# egne /sys- og /dev-undermonteringer. (/sys/firmware/efi/efivars, som
+# grub-install skal bruge, kommer med i rbind af /sys.) /run får sin egen
+# tomme tmpfs — live-systemets /run har USB-nøglen monteret og skal ikke med.
+for d in dev proc sys; do
+    koer mount --rbind "/$d" "$MAAL/$d"
+    koer mount --make-rslave "$MAAL/$d"
+done
+koer mount -t tmpfs tmpfs "$MAAL/run"
+
+i_maal() { koer chroot "$MAAL" env LC_ALL=C.UTF-8 DEBIAN_FRONTEND=noninteractive "$@"; }
+
+# Live-pakkerne hører kun til USB-nøglen. Når de fjernes, bygger dpkg selv en
+# almindelig initramfs uden live-boot.
+LIVE_PAKKER=$(chroot "$MAAL" dpkg-query -W -f='${Package} ${Status}\n' 'live-*' 2>/dev/null \
+    | awk '$NF == "installed" { print $1 }' | tr '\n' ' ')
+if [ -n "$LIVE_PAKKER" ]; then
+    # shellcheck disable=SC2086
+    i_maal dpkg --purge $LIVE_PAKKER
+fi
+
+# --force-extra-removable lægger også en kopi i \EFI\BOOT\BOOTX64.EFI, så PC'en
+# kan starte, selv hvis BIOS'en glemmer sin boot-post.
+i_maal grub-install --target=x86_64-efi --efi-directory=/boot/efi \
+    --bootloader-id=debian --force-extra-removable --recheck
+i_maal update-grub
+
+# Windows' gamle boot-post peger nu på ingenting — fjern den.
+if command -v efibootmgr >/dev/null && [ -d /sys/firmware/efi ]; then
+    for nr in $(efibootmgr 2>/dev/null | awk '/Windows Boot Manager/ { print substr($1, 5, 4) }'); do
+        koer efibootmgr -q -b "$nr" -B || true
+    done
+    log "$(efibootmgr 2>&1)"
+fi
+okay
+
+trin "Afslutter…"
+cp "$LOG" "$MAAL/var/log/badminton-tv-installation.log"
+sync
+koer umount -R "$MAAL" || koer umount -Rl "$MAAL"
+okay
+log "Installation færdig"
+gem_log_paa_usb
+
+# ── 5. Fjern nøglen ────────────────────────────────────────
+printf '\n  %s══════════════════════════════════════════════════════%s\n' "$G" "$N"
+printf '  %s  FÆRDIG!%s\n\n' "$G" "$N"
+printf '  %sFjern USB-nøglen nu.%s PC\x27en genstarter af sig selv,\n' "$F" "$N"
+printf '  når nøglen er taget ud, og viser derefter TV-siden.\n'
+printf '  %s══════════════════════════════════════════════════════%s\n' "$G" "$N"
+
+# Vi genstarter først, når nøglen er væk — ellers kunne PC'en starte
+# installationen forfra. (Live-systemet ligger i RAM, så det tåler at nøglen fjernes.)
+while [ -b "$USB_DISK" ]; do
+    sleep 1
+done
+log "USB-nøglen er fjernet — genstarter"
+# Tvungen genstart: disken er allerede synkroniseret og afmonteret, og
+# live-systemet ligger kun i RAM, så der er intet at gemme. En almindelig
+# nedlukning kan hænge i minutter på at afmontere den fjernede nøgle.
+sync
+systemctl reboot --force --force
+vent_for_evigt

@@ -1,0 +1,12 @@
+# Kun i "Test uden at installere": skriver diagnose.txt på USB-nøglen.
+[Unit]
+Description=Badminton TV: diagnose.txt på USB-nøglen
+After=NetworkManager.service badminton-tv-setup.service
+ConditionKernelCommandLine=badminton.tilstand=proeve
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/badminton-tv/diagnose
+
+[Install]
+WantedBy=multi-user.target

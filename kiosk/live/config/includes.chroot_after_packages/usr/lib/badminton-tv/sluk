@@ -1,0 +1,45 @@
+#!/bin/bash
+# Automatisk slukning (SLUK_KL, standard 23:59), hvis ingen har slukket PC'en
+# manuelt. Installerer sikkerhedsopdateringer lige inden — det er det eneste
+# tidspunkt, hvor vi ved at ingen kigger på skærmen.
+#
+# Startes af badminton-tv-sluk.timer, som genereres ud fra kiosk.conf.
+
+set -u
+TTY=/dev/tty1
+
+besked() { printf '\033[2J\033[H\n\n   %s\n' "$1" > "$TTY" 2>/dev/null; echo "$1"; }
+
+# Samme store skrift som installationen — standardskriften mangler bl.a. tankestreg.
+skrift() {
+    local f
+    for f in /usr/share/consolefonts/Uni3-TerminusBold32x16.psf.gz \
+             /usr/share/consolefonts/Uni2-TerminusBold32x16.psf.gz; do
+        [ -f "$f" ] && { setfont -C "$TTY" "$f" 2>/dev/null || true; return; }
+    done
+}
+
+# Uret skal være sat fra internettet. Første gang efter Windows står BIOS-uret
+# på dansk tid, som Linux læser som UTC — så ville PC'en tro, at klokken var
+# 23:59 to timer for tidligt. Hellere lade den køre natten over end slukke midt
+# i en kamp.
+if [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" != yes ]; then
+    echo "Uret er ikke synkroniseret med internettet — springer automatisk slukning over."
+    exit 0
+fi
+
+# Stop browseren først: Chromium må ikke opdateres, mens den kører.
+systemctl stop badminton-tv.service
+setterm --term linux --blank 0 --cursor off > "$TTY" 2>/dev/null
+skrift
+besked "Badminton TV slukker - installerer opdateringer først (det kan tage et par minutter) ..."
+
+if timeout 10m apt-get update -q >/dev/null 2>&1; then
+    timeout 20m unattended-upgrade -v || echo "Opdateringen blev ikke færdig — prøver igen næste gang."
+else
+    echo "Ingen forbindelse til opdateringsserveren — springer opdatering over."
+fi
+apt-get clean
+
+besked "Badminton TV slukker ..."
+systemctl poweroff

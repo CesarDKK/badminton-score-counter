@@ -1,0 +1,9 @@
+# Startes af badminton-tv-sluk.timer (genereret ud fra SLUK_KL i kiosk.conf).
+[Unit]
+Description=Badminton TV: automatisk slukning
+ConditionKernelCommandLine=!badminton.tilstand=installer
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/badminton-tv/sluk
+TimeoutStartSec=45min

@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="da" translate="no">
+<head>
+<meta charset="utf-8">
+<meta name="google" content="notranslate">
+<title>Badminton TV</title>
+<!--
+  Lokal startside. Chromium åbner den først; den venter til serveren bag TV_URL
+  svarer og skifter så over. Viser fejl fra kiosk.conf på skærmen, så man kan se
+  hvad der er galt uden tastatur. I prøvetilstand (fra USB-nøglen) vises en
+  diagnose i 20 sekunder, før TV-siden åbnes.
+-->
+<style>
+  :root {
+    --bg: #0b1220;
+    --panel: #121b2e;
+    --tekst: #e8edf6;
+    --daempet: #8a97ad;
+    --accent: #3fb6ff;
+    --ok: #4ade80;
+    --advarsel: #fbbf24;
+    --fejl: #f87171;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--tekst);
+    font-family: "DejaVu Sans", "Liberation Sans", sans-serif;
+    font-size: clamp(16px, 1.6vw, 40px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    cursor: none;
+  }
+  main { width: min(90vw, 64em); }
+  h1 {
+    font-size: 2.6em;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    margin: 0 0 0.2em;
+  }
+  h1 span { color: var(--accent); }
+  #status { font-size: 1.4em; margin: 0 0 1.2em; min-height: 1.4em; }
+  #status.fejl { color: var(--fejl); }
+  .prik {
+    display: inline-block; width: 0.6em; height: 0.6em; border-radius: 50%;
+    background: var(--accent); margin-right: 0.5em; vertical-align: 0.1em;
+    animation: puls 1.4s ease-in-out infinite;
+  }
+  @keyframes puls { 50% { opacity: 0.25; } }
+  #fejlliste {
+    background: rgba(248, 113, 113, 0.1);
+    border-left: 0.25em solid var(--fejl);
+    padding: 0.8em 1.2em;
+    margin: 0 0 1.2em;
+    white-space: pre-line;
+  }
+  #hint { color: var(--advarsel); margin: 0 0 1.2em; }
+  dl {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.4em 1.5em;
+    background: var(--panel);
+    padding: 1em 1.4em;
+    border-radius: 0.5em;
+    margin: 0;
+  }
+  dt { color: var(--daempet); }
+  dd { margin: 0; overflow-wrap: anywhere; }
+  .ok { color: var(--ok); }
+  .advarsel { color: var(--advarsel); }
+  .fejltekst { color: var(--fejl); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Badminton <span>TV</span></h1>
+  <p id="status"><span class="prik"></span>Starter…</p>
+  <div id="fejlliste" hidden></div>
+  <p id="hint" hidden></p>
+  <dl id="diagnose">
+    <dt>Navn</dt><dd id="d-navn"></dd>
+    <dt>Viser</dt><dd id="d-url"></dd>
+    <dt>WiFi</dt><dd id="d-wifi"></dd>
+    <dt>Netværk</dt><dd id="d-net">Undersøger…</dd>
+    <dt>Skærm</dt><dd id="d-skaerm"></dd>
+    <dt>HDMI-CEC</dt><dd id="d-cec"></dd>
+    <dt>Slukker kl.</dt><dd id="d-sluk"></dd>
+    <dt>Version</dt><dd id="d-version"></dd>
+  </dl>
+</main>
+<script>
+(function () {
+  const p = new URLSearchParams(location.search);
+  const url = p.get('url') || '';
+  const fejl = p.get('fejl') || '';
+  const proeve = p.get('tilstand') === 'proeve';
+  const $ = (id) => document.getElementById(id);
+  const status = $('status');
+
+  const CEC_TEKST = {
+    ok: ['Fundet — TV\'et svarer og tænder/slukker med PC\'en', 'ok'],
+    'ingen-svar': ['Fundet, men TV\'et svarer ikke (er CEC slået til i TV\'ets menu?)', 'advarsel'],
+    'ikke-fundet': ['Ikke understøttet af PC\'en eller kablet — TV\'et skal tændes med fjernbetjeningen', 'advarsel'],
+    fra: ['Slået fra i kiosk.conf', ''],
+  };
+
+  function saet(id, tekst, klasse) {
+    const el = $(id);
+    el.textContent = tekst;
+    if (klasse) el.className = klasse;
+  }
+
+  saet('d-navn', p.get('navn') || '—');
+  saet('d-url', url || '—', url ? '' : 'fejltekst');
+  saet('d-wifi', p.get('wifi') || 'Ikke sat op — bruger netværkskabel');
+  saet('d-skaerm', p.get('skaerm') || '—');
+  const cec = CEC_TEKST[p.get('cec')] || ['Ukendt', ''];
+  saet('d-cec', cec[0], cec[1]);
+  const sluk = p.get('sluk');
+  saet('d-sluk', (sluk === 'aldrig' ? 'Slukker ikke automatisk' : (sluk || '—'))
+    + (proeve && sluk !== 'aldrig' ? ' (efter installation — ikke i prøvetilstand)' : ''));
+  saet('d-version', p.get('version') || '—');
+
+  if (fejl) {
+    status.textContent = 'Der er en fejl i kiosk.conf';
+    status.className = 'fejl';
+    const liste = $('fejlliste');
+    liste.textContent = fejl + '\n\nRet filen på USB-nøglen og installér igen.';
+    liste.hidden = false;
+    return;
+  }
+
+  // Netværksstatus fra badminton-tv-netstatus. En file://-side må ikke fetche
+  // andre filer, men gerne indlæse et <script> — så status.js sætter bare
+  // window.BT_STATUS, og vi henter den igen hvert 3. sekund.
+  let netStatus = null;
+  const NET_KLASSE = { ok: 'ok', advarsel: 'advarsel', fejl: 'fejltekst' };
+  function hentStatus() {
+    const s = document.createElement('script');
+    s.src = 'file:///run/badminton-tv/status.js?' + Date.now();
+    s.onload = () => {
+      s.remove();
+      const st = window.BT_STATUS;
+      // Ignorér en gammel fil, hvis tjenesten er gået i stå.
+      if (st && Math.abs(Date.now() / 1000 - st.t) < 30) {
+        netStatus = st;
+        saet('d-net', st.tekst, NET_KLASSE[st.niveau] || '');
+      }
+    };
+    s.onerror = () => s.remove();
+    document.head.appendChild(s);
+  }
+  hentStatus();
+  setInterval(hentStatus, 3000);
+
+  let maal;
+  try {
+    maal = new URL(url);
+  } catch (e) {
+    status.textContent = 'TV_URL kan ikke læses';
+    status.className = 'fejl';
+    return;
+  }
+
+  // Vi prøver serverens rod og ikke selve TV_URL: et /t/<token>-link tæller
+  // som en brug af adgangslinket, og det skal kun ske én gang.
+  const proeveUrl = maal.origin + '/';
+  const startet = Date.now();
+  let gaaet = false;
+
+  function gaa() {
+    if (gaaet) return;
+    gaaet = true;
+    status.innerHTML = '<span class="prik"></span>Åbner TV-siden…';
+    location.replace(url);
+  }
+
+  async function svarer() {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 6000);
+    try {
+      // no-cors: svaret er uigennemsigtigt, men at der overhovedet kommer et
+      // svar (også 404) betyder at serveren kan nås.
+      await fetch(proeveUrl, { mode: 'no-cors', cache: 'no-store', signal: ctrl.signal });
+      return true;
+    } catch (e) {
+      return false;
+    } finally {
+      clearTimeout(t);
+    }
+  }
+
+  function nedtaelling(sek) {
+    status.innerHTML = '';
+    const prik = document.createElement('span');
+    prik.className = 'prik';
+    status.append(prik, document.createTextNode(''));
+    const tekst = status.lastChild;
+    const tik = () => {
+      tekst.textContent = 'Prøvetilstand — TV-siden åbner om ' + sek + ' s (tryk en tast for at åbne nu)';
+      if (sek-- <= 0) gaa(); else setTimeout(tik, 1000);
+    };
+    tik();
+    window.addEventListener('keydown', gaa, { once: true });
+  }
+
+  async function loekke() {
+    if (await svarer()) {
+      if (proeve) nedtaelling(20); else gaa();
+      return;
+    }
+    const sek = Math.round((Date.now() - startet) / 1000);
+    status.innerHTML = '';
+    const prik = document.createElement('span');
+    prik.className = 'prik';
+    status.append(prik, document.createTextNode('Venter på forbindelse til ' + maal.host + ' … (' + sek + ' s)'));
+    const hint = $('hint');
+    if (netStatus && netStatus.niveau === 'fejl') {
+      // Vi ved hvad der er galt — sig det med det samme.
+      hint.textContent = netStatus.tekst;
+      hint.hidden = false;
+    } else if (netStatus && netStatus.niveau === 'ok' && sek >= 30) {
+      hint.textContent = 'Netværket virker, men ' + maal.host + ' svarer ikke. Tjek adressen i TV_URL.';
+      hint.hidden = false;
+    } else if (sek >= 45) {
+      hint.textContent = netStatus ? netStatus.tekst : (p.get('wifi')
+        ? 'Tjek at WIFI_NAVN og WIFI_KODE i kiosk.conf er stavet rigtigt, og at netværket er i nærheden.'
+        : 'Ingen WiFi er sat op — tjek at netværkskablet sidder i, eller udfyld WIFI_NAVN og WIFI_KODE i kiosk.conf.');
+      hint.hidden = false;
+    }
+    setTimeout(loekke, 3000);
+  }
+
+  // Normal drift: diagnosen vises kun mens vi venter, ikke ved hver opstart.
+  if (!proeve) $('diagnose').hidden = true;
+  setTimeout(() => { if (!gaaet) $('diagnose').hidden = false; }, proeve ? 0 : 15000);
+
+  loekke();
+})();
+</script>
+</body>
+</html>

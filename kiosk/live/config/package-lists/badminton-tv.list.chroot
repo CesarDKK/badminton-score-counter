@@ -1,0 +1,57 @@
+# Badminton TV — pakker i live-systemet, som også er det system der installeres.
+# Bygges med --apt-recommends false, så alt der skal bruges står her.
+
+# Grundsystem
+systemd-sysv
+systemd-timesyncd
+libpam-systemd
+dbus
+udev
+locales
+tzdata
+ca-certificates
+kbd
+console-setup-linux
+jq
+
+# Netværk (kabel og WiFi)
+network-manager
+wpasupplicant
+iw
+pciutils
+usbutils
+rfkill
+firmware-iwlwifi
+firmware-realtek
+firmware-atheros
+firmware-misc-nonfree
+firmware-intel-graphics
+firmware-amd-graphics
+
+# Skærm og browser
+cage
+chromium
+wlr-randr
+wlrctl
+libgl1-mesa-dri
+libegl-mesa0
+fonts-dejavu-core
+fonts-liberation2
+fonts-noto-color-emoji
+
+# HDMI-CEC (cec-ctl)
+v4l-utils
+
+# Installation på disk
+grub-efi-amd64
+grub-efi-amd64-signed
+shim-signed
+efibootmgr
+dosfstools
+e2fsprogs
+fdisk
+rsync
+zstd
+
+# Sikkerhedsopdateringer ved automatisk slukning
+unattended-upgrades

@@ -1,0 +1,30 @@
+#!/bin/bash
+# systemd-generator: laver badminton-tv-sluk.timer ud fra SLUK_KL i kiosk.conf.
+# Generatorer kører tidligt i opstarten (og ved daemon-reload), før enhederne
+# indlæses — så tidspunktet kan ligge i kiosk.conf i stedet for i en unit-fil.
+
+set -u
+UD=${1:-/run/systemd/generator}
+
+# Kun på den installerede PC. Under installation og i prøvetilstand fra
+# USB-nøglen skal PC'en ikke slukke af sig selv midt i en test.
+grep -qE '(^| )badminton\.tilstand=' /proc/cmdline && exit 0
+
+. /usr/lib/badminton-tv/conf.sh
+conf=$(bt_find_conf) || exit 0
+bt_read_conf "$conf" 2>/dev/null
+
+[ "$BT_SLUK_KL" = aldrig ] && exit 0
+
+mkdir -p "$UD/timers.target.wants"
+cat > "$UD/badminton-tv-sluk.timer" <<EOF
+[Unit]
+Description=Sluk Badminton TV kl. $BT_SLUK_KL, hvis den ikke er slukket i forvejen
+
+[Timer]
+OnCalendar=*-*-* $BT_SLUK_KL:00
+AccuracySec=1s
+Unit=badminton-tv-sluk.service
+EOF
+ln -sf ../badminton-tv-sluk.timer "$UD/timers.target.wants/badminton-tv-sluk.timer"
+exit 0

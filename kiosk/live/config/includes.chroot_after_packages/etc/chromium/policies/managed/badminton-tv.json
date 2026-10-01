@@ -1,0 +1,19 @@
+{
+  "TranslateEnabled": false,
+  "SpellcheckEnabled": false,
+  "PasswordManagerEnabled": false,
+  "AutofillAddressEnabled": false,
+  "AutofillCreditCardEnabled": false,
+  "BrowserSignin": 0,
+  "SyncDisabled": true,
+  "MetricsReportingEnabled": false,
+  "PromotionalTabsEnabled": false,
+  "BackgroundModeEnabled": false,
+  "IncognitoModeAvailability": 1,
+  "PrintingEnabled": false,
+  "DefaultNotificationsSetting": 2,
+  "DefaultGeolocationSetting": 2,
+  "AudioCaptureAllowed": false,
+  "VideoCaptureAllowed": false,
+  "ScreenCaptureAllowed": false
+}

@@ -1,0 +1,15 @@
+[Unit]
+Description=Badminton TV: anvend kiosk.conf (værtsnavn, WiFi)
+DefaultDependencies=no
+After=local-fs.target
+Before=network-pre.target NetworkManager.service badminton-tv.service badminton-tv-cec.service sysinit.target
+Wants=network-pre.target
+ConditionKernelCommandLine=!badminton.tilstand=installer
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/badminton-tv/setup
+
+[Install]
+WantedBy=sysinit.target

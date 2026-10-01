@@ -1,0 +1,40 @@
+#!/bin/sh
+# Indstiller live-systemet — som også er det system der ender på PC'en.
+set -e
+
+# Bruger der kører browseren. Ingen adgangskode: kontoen kan ikke logges ind på.
+if ! id tv >/dev/null 2>&1; then
+    useradd --create-home --shell /bin/bash --comment "Badminton TV" tv
+fi
+passwd -l tv
+for g in video render input audio; do
+    getent group "$g" >/dev/null && usermod -aG "$g" tv
+done
+
+# Dansk tid og sprog. Tidszonen er vigtig: SLUK_KL er dansk tid.
+ln -sf /usr/share/zoneinfo/Europe/Copenhagen /etc/localtime
+echo Europe/Copenhagen > /etc/timezone
+sed -i 's/^# *da_DK.UTF-8/da_DK.UTF-8/' /etc/locale.gen
+locale-gen
+printf 'LANG=da_DK.UTF-8\n' > /etc/default/locale
+
+# Rettigheder på vores scripts (Git på Windows bevarer ikke altid +x).
+chmod 755 /usr/lib/badminton-tv/setup /usr/lib/badminton-tv/browser \
+          /usr/lib/badminton-tv/cec /usr/lib/badminton-tv/sluk \
+          /usr/lib/badminton-tv/installer /usr/lib/badminton-tv/netstatus \
+          /usr/lib/badminton-tv/diagnose \
+          /usr/lib/systemd/system-generators/badminton-tv-sluk-generator
+chmod 644 /usr/lib/badminton-tv/conf.sh
+
+systemctl enable badminton-tv-setup.service badminton-tv-cec.service \
+                 badminton-tv.service badminton-tv-installer.service \
+                 badminton-tv-netstatus.service badminton-tv-diagnose.service
+systemctl enable NetworkManager.service systemd-timesyncd.service
+systemctl set-default multi-user.target
+
+# Aldrig dvale.
+systemctl mask sleep.target suspend.target hibernate.target \
+               hybrid-sleep.target suspend-then-hibernate.target
+
+# Opdateringer kun ved automatisk slukning, ikke på tilfældige tidspunkter.
+systemctl mask apt-daily.timer apt-daily-upgrade.timer
