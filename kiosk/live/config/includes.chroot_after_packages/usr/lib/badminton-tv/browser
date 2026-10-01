@@ -1,0 +1,68 @@
+#!/bin/bash
+# Starter Chromium i fuldskærm. Kører inde i cage (WAYLAND_DISPLAY er sat) som
+# brugeren tv. Chromium åbner først den lokale startside, som venter på netværk
+# og derefter skifter til TV_URL — så TV'et aldrig viser Chromiums fejlside,
+# fordi WiFi'en var et par sekunder om at komme op.
+
+set -u
+. /run/badminton-tv/kiosk.env
+
+# Frisk profil ved hver start, i RAM. Så findes der ingen "Gendan sider?"-boble
+# efter et strømsvigt, og disken bliver ikke slidt af Chromiums cache.
+PROFIL=${XDG_RUNTIME_DIR:-/tmp}/chromium-profil
+rm -rf "$PROFIL"
+mkdir -p "$PROFIL"
+
+# Skalering: TV-siden er layoutet til 1920 px bredde. På et 4K-TV ville teksten
+# blive halvt så stor, så vi skalerer op i forhold til skærmens bredde.
+skala=1
+bredde=$(wlr-randr 2>/dev/null | awk '/current/ { split($1, m, "x"); print m[1]; exit }')
+if [ "$BT_SKALERING" = auto ]; then
+    if [ -n "$bredde" ] && [ "$bredde" -gt 2560 ]; then
+        skala=$(awk -v b="$bredde" 'BEGIN { printf "%.2f", b / 1920 }')
+    fi
+else
+    skala=$BT_SKALERING
+fi
+
+# Er der en mus tilsluttet, viser cage markøren midt på skærmen — midt i
+# TV-billedet. Skub den ud i nederste højre hjørne, hvor den er usynlig.
+wlrctl pointer move 20000 20000 >/dev/null 2>&1 || true
+
+cec=$(cat /run/badminton-tv/cec-status 2>/dev/null || echo ukendt)
+version=$(cat /usr/share/badminton-tv/version 2>/dev/null || echo ukendt)
+
+enc() { jq -rn --arg v "$1" '$v | @uri'; }
+
+START="file:///usr/share/badminton-tv/start.html"
+START+="?url=$(enc "$BT_TV_URL")"
+START+="&navn=$(enc "$BT_NAVN")"
+START+="&wifi=$(enc "$BT_WIFI_NAVN")"
+START+="&tilstand=$(enc "$BT_TILSTAND")"
+START+="&cec=$(enc "$cec")"
+START+="&skaerm=$(enc "${bredde:-?} px, skalering $skala")"
+START+="&sluk=$(enc "$BT_SLUK_KL")"
+START+="&version=$(enc "$version")"
+START+="&fejl=$(enc "$BT_FEJL")"
+
+exec /usr/bin/chromium \
+    --kiosk \
+    --ozone-platform=wayland \
+    --user-data-dir="$PROFIL" \
+    --disk-cache-dir="$PROFIL/cache" \
+    --force-device-scale-factor="$skala" \
+    --lang=da \
+    --accept-lang=da-DK,da \
+    --no-first-run \
+    --no-default-browser-check \
+    --noerrdialogs \
+    --disable-session-crashed-bubble \
+    --disable-features=Translate,TranslateUI,MediaRouter \
+    --disable-component-update \
+    --check-for-update-interval=31536000 \
+    --password-store=basic \
+    --hide-scrollbars \
+    --disable-pinch \
+    --overscroll-history-navigation=0 \
+    --autoplay-policy=no-user-gesture-required \
+    "$START"

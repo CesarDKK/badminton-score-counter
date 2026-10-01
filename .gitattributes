@@ -12,3 +12,7 @@ avahi-daemon.conf text eol=lf
 
 # Auto-detect the rest
 * text=auto
+
+# Badminton TV USB-nøglen: alt under kiosk/live ender i et Linux-system, også
+# scripts uden .sh-endelse. Tekstfilerne til USB-nøglen får CRLF i buildet.
+kiosk/** text eol=lf

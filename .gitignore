@@ -32,3 +32,6 @@ planner/solver/_bench/
 __pycache__/
 
 planner/tests/kontrakt/_ud/
+
+# Badminton TV USB-build
+kiosk/ud/

@@ -1,0 +1,106 @@
+# Bygger Badminton TV USB-nøglen (kiosk/).
+#
+# - Push der rører kiosk/: test konfigurationslæseren og scriptene, og byg
+#   billedet. Resultatet ligger som artefakt i 7 dage, så en branch kan prøves
+#   på en rigtig PC uden at lave en release.
+# - Tag tv-usb-v<version> (fx tv-usb-v2026.10.1): byg og læg zip + img ud som
+#   GitHub-release, som klubberne kan hente.
+#
+# Stifiltre gælder ikke for tags, så et tag bygger altid.
+name: TV-USB
+
+on:
+  push:
+    paths:
+      - 'kiosk/**'
+      - '.github/workflows/tv-usb.yml'
+    tags:
+      - 'tv-usb-v*'
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test af scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Læsning af kiosk.conf
+        run: bash kiosk/test/test-conf.sh
+
+      - name: ShellCheck
+        env:
+          LANG: C.UTF-8   # filerne indeholder æøå
+        run: |
+          cd kiosk
+          shellcheck -S warning -x \
+            build.sh test/vm.sh test/test-conf.sh \
+            live/auto/config \
+            live/config/hooks/normal/*.hook.chroot \
+            live/config/includes.chroot_after_packages/usr/lib/badminton-tv/{conf.sh,setup,browser,cec,sluk,installer} \
+            live/config/includes.chroot_after_packages/usr/lib/systemd/system-generators/badminton-tv-sluk-generator
+
+  byg:
+    name: Byg USB-billede
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # live-build fylder 8-10 GB undervejs. Runnerens forudinstallerede SDK'er
+      # fylder det dobbelte og skal ikke bruges her.
+      - name: Frigør diskplads
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/tv-usb-v* ]]; then
+            echo "VERSION=${GITHUB_REF_NAME#tv-usb-v}" >> "$GITHUB_ENV"
+          else
+            echo "VERSION=$(date -u +%Y.%m.%d)-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Byg
+        run: |
+          mkdir -p ud
+          docker run --rm --privileged -e VERSION \
+            -v "$PWD/kiosk:/src" -v "$PWD/ud:/ud" \
+            debian:trixie bash /src/build.sh
+
+      - name: Gem som artefakt
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: badminton-tv-usb-${{ env.VERSION }}
+          path: |
+            ud/*.zip
+            ud/*.img
+            ud/SHA256SUMS
+          retention-days: 7
+          compression-level: 0
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/tv-usb-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > noter.md <<EOF
+          USB-nøgle der laver en PC om til en TV-skærm i hallen.
+
+          **Hent én af filerne:**
+          - \`badminton-tv-usb-$VERSION.zip\` — pak den ud på en FAT32-formateret USB-nøgle (8-32 GB).
+          - \`badminton-tv-usb-$VERSION.img\` — skriv den med [balenaEtcher](https://etcher.balena.io/) eller Rufus. Virker med alle størrelser.
+
+          Ret derefter \`kiosk.conf\` på nøglen og følg \`VEJLEDNING.txt\`.
+
+          ⚠️ Installationen sletter alt på PC'ens disk.
+          EOF
+          gh release create "$GITHUB_REF_NAME" \
+            ud/*.zip ud/*.img ud/SHA256SUMS \
+            --title "Badminton TV USB $VERSION" \
+            --notes-file noter.md

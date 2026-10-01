@@ -1,0 +1,19 @@
+[Unit]
+Description=Badminton TV: installation fra USB-nøglen
+After=systemd-user-sessions.service getty@tty1.service systemd-udev-settle.service
+Wants=systemd-udev-settle.service
+Conflicts=getty@tty1.service
+ConditionKernelCommandLine=badminton.tilstand=installer
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/badminton-tv/installer
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+
+[Install]
+WantedBy=multi-user.target

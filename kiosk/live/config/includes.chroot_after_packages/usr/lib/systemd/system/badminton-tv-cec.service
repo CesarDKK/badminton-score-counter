@@ -1,0 +1,18 @@
+# Tænder TV'et ved opstart og sætter det i standby ved nedlukning — hvis PC'en
+# kan HDMI-CEC. ExecStop kører, når PC'en lukker ned (også via tænd/sluk-knappen).
+[Unit]
+Description=Badminton TV: tænd/sluk TV'et via HDMI-CEC
+After=badminton-tv-setup.service systemd-udev-settle.service
+Before=badminton-tv.service
+ConditionKernelCommandLine=!badminton.tilstand=installer
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/badminton-tv/cec taend
+ExecStop=/usr/lib/badminton-tv/cec sluk
+TimeoutStartSec=20
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

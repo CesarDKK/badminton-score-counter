@@ -1,0 +1,26 @@
+#!/bin/sh
+# live-build-konfiguration for Badminton TV. Køres af "lb config".
+set -e
+
+lb config noauto \
+    --distribution trixie \
+    --architecture amd64 \
+    --archive-areas "main contrib non-free non-free-firmware" \
+    --mirror-bootstrap http://deb.debian.org/debian \
+    --mirror-binary http://deb.debian.org/debian \
+    --security true \
+    --updates true \
+    --binary-images iso-hybrid \
+    --bootloaders grub-efi \
+    --uefi-secure-boot enable \
+    --debian-installer none \
+    --apt-recommends false \
+    --apt-indices false \
+    --memtest none \
+    --firmware-binary false \
+    --firmware-chroot false \
+    --linux-flavours amd64 \
+    --iso-application "Badminton TV" \
+    --iso-volume "BADMINTON-TV" \
+    --bootappend-live "boot=live quiet" \
+    "${@}"

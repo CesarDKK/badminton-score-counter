@@ -1,0 +1,62 @@
+BADMINTON TV — USB-NØGLE TIL TV-SKÆRME I HALLEN
+================================================
+
+Denne USB-nøgle laver en PC om til en TV-skærm, der starter direkte op i
+fuld skærm og viser én side fra Badminton-appen.
+
+ADVARSEL: Installationen SLETTER ALT på PC'ens disk.
+
+
+SÅDAN GØR DU
+------------
+
+1. Åbn kiosk.conf på denne USB-nøgle (dobbeltklik åbner den i Notesblok).
+
+2. Skriv adressen efter TV_URL= og, hvis hallen bruger WiFi, netværkets navn
+   og kode efter WIFI_NAVN= og WIFI_KODE=. Gem filen.
+
+3. Sæt USB-nøglen i PC'en og tænd den. Tryk gentagne gange på F12, mens den
+   starter (Lenovo — på andre PC'er ofte F11, F8 eller Esc), og vælg
+   USB-nøglen i menuen.
+
+4. Vælg "Installer Badminton TV" (eller vent 10 sekunder).
+   Skærmen viser, hvilken disk der slettes, og tæller 15 sekunder ned.
+   Tryk på en tast, hvis du fortryder.
+
+5. Efter 3-5 minutter står der "FÆRDIG! Fjern USB-nøglen nu".
+   Tag nøglen ud — PC'en genstarter og viser TV-siden.
+
+Samme USB-nøgle kan bruges til flere PC'er. Ret bare kiosk.conf imellem.
+
+
+TEST FØRST
+----------
+
+Vælg "Test uden at installere" i startmenuen for at se TV-siden direkte fra
+USB-nøglen. PC'ens disk bliver ikke rørt. Skærmen viser først en oversigt med
+netværk, skærmopløsning og om HDMI-CEC virker. Prøvetilstanden slukker ikke
+automatisk — det gør kun den installerede PC.
+
+
+I DAGLIG BRUG
+-------------
+
+  - Tænd PC'en på knappen. TV-siden vises efter ca. 20 sekunder.
+  - Sluk PC'en med et kort tryk på knappen. Den lukker pænt ned.
+  - Er den ikke slukket kl. 23:59, slukker den selv (se SLUK_KL i kiosk.conf).
+  - Den går aldrig i dvale.
+
+Ændre siden TV'et viser: Brug et adgangslink fra admin-siden som TV_URL, så
+skifter du bane derfra. Ellers: ret kiosk.conf og installér igen.
+
+
+HVIS NOGET GÅR GALT
+-------------------
+
+  - Fejl i kiosk.conf vises på skærmen, før noget slettes.
+  - Efter hver installation ligger der en installation-log.txt på USB-nøglen.
+  - "PC'en starter ikke fra USB-nøglen": Slå "Secure Boot" fra i BIOS
+    (F1 ved opstart på Lenovo) og prøv igen.
+  - TV'et tænder ikke af sig selv: De fleste PC'er kan ikke styre TV'et (HDMI-
+    CEC). Tænd TV'et med fjernbetjeningen. Mange TV'er kan selv slukke, når
+    signalet forsvinder — se "Sluk ved intet signal" i TV'ets menu.
