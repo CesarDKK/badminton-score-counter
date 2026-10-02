@@ -150,7 +150,11 @@ CMDLINE=$ROD/boot/firmware/cmdline.txt
 # låses til 1080p på begge HDMI-porte: TV-siden er lavet til 1920 px, og en
 # Pi 3/4 har ikke kræfter til 4K. (Uden 'D' — porten tvinges ikke tændt, så
 # den ubrugte port ikke bliver en usynlig skærm.)
-for param in cfg80211.ieee80211_regdom=DK consoleblank=0 loglevel=3 quiet \
+# systemd.restore_state=0: systemd gemmer ellers WiFi-kortets "slået fra" ved
+# nedlukning og genskaber det ved næste opstart — så en enkelt blokeret
+# opstart ville hænge ved for altid.
+for param in cfg80211.ieee80211_regdom=DK systemd.restore_state=0 \
+             consoleblank=0 loglevel=3 quiet \
              vt.global_cursor_default=0 \
              video=HDMI-A-1:1920x1080@60 video=HDMI-A-2:1920x1080@60; do
     grep -qw -- "$param" "$CMDLINE" || sed -i "1s|\$| $param|" "$CMDLINE"

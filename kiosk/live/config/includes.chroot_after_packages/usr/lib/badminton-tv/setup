@@ -50,9 +50,14 @@ nm_escape() {
 }
 
 if [ -n "$BT_WIFI_NAVN" ]; then
-    # Raspberry Pi OS starter med WiFi blokeret, indtil der er valgt et land
-    # (landet sættes til DK på kernens kommandolinje). Blokeringen gemmes
-    # mellem opstarter, så den skal ophæves eksplicit.
+    # Raspberry Pi OS leveres med WiFi slået fra i NetworkManagers tilstandsfil,
+    # indtil man vælger et land i Imager eller raspi-config — og så slår
+    # NetworkManager selv WiFi-kortet fra. Vi kører før NetworkManager, så
+    # rettelsen her gælder fra start. (Landet sættes til DK på kommandolinjen.)
+    NM_STATE=/var/lib/NetworkManager/NetworkManager.state
+    if grep -q '^WirelessEnabled=false' "$NM_STATE" 2>/dev/null; then
+        sed -i 's/^WirelessEnabled=false/WirelessEnabled=true/' "$NM_STATE"
+    fi
     rfkill unblock wifi 2>/dev/null || true
     umask 077
     {

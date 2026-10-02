@@ -23,8 +23,10 @@ rapport() {
         printf 'Model: %s\n' "$(tr -d '\0' < /proc/device-tree/model)"
         printf 'RAM: %s MB\n' "$(awk '/MemTotal/ { print int($2 / 1024) }' /proc/meminfo)"
     fi
-    printf 'PC: %s %s (%s)\n' "$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)" \
-        "$(cat /sys/class/dmi/id/product_version 2>/dev/null)" "$(cat /sys/class/dmi/id/product_name 2>/dev/null)"
+    if [ -r /sys/class/dmi/id/sys_vendor ]; then
+        printf 'PC: %s %s (%s)\n' "$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)" \
+            "$(cat /sys/class/dmi/id/product_version 2>/dev/null)" "$(cat /sys/class/dmi/id/product_name 2>/dev/null)"
+    fi
     printf 'Kerne: %s, oppe i %s s\n' "$(uname -r)" "$(cut -d. -f1 /proc/uptime)"
 
     afsnit 'Vurdering'

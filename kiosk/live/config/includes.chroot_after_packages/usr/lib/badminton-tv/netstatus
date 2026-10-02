@@ -73,8 +73,16 @@ vurder() {
         return
     fi
 
-    if rfkill list wifi 2>/dev/null | grep -q 'blocked: yes'; then
-        TEKST='WiFi er slået fra på PC'"'"'en (kontakt, tastaturgenvej eller BIOS)'
+    local blok
+    blok=$(rfkill list wifi 2>/dev/null)
+    if grep -q 'Hard blocked: yes' <<<"$blok"; then
+        TEKST='WiFi er slået fra med en kontakt eller i BIOS'
+        return
+    fi
+    if grep -q 'Soft blocked: yes' <<<"$blok"; then
+        # setup ophæver normalt blokeringen ved opstart — sidder den der
+        # stadig, har noget andet slået WiFi fra efter opstarten.
+        TEKST='WiFi er slået fra i systemet. Genstart — hjælper det ikke, så send diagnose.txt'
         return
     fi
 

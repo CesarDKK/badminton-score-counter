@@ -102,7 +102,12 @@ wlp0s20f3:wifi'
 FAKE_DEVICE_TYPE="$KORT" FAKE_RFKILL='0: phy0: Wireless LAN
 	Soft blocked: yes
 	Hard blocked: no'
-scenarie "WiFi slået fra (rfkill)" fejl "slået fra"
+scenarie "WiFi slået fra i softwaren (Raspberry Pi OS)" fejl "slået fra i systemet"
+
+FAKE_DEVICE_TYPE="$KORT" FAKE_RFKILL='0: phy0: Wireless LAN
+	Soft blocked: no
+	Hard blocked: yes'
+scenarie "WiFi slået fra med kontakt" fejl "kontakt eller i BIOS"
 
 FAKE_DEVICE_TYPE="$KORT" FAKE_STATE='100 (connected)' FAKE_SCAN="$(scan 'Hallen|WPA2|72')"
 scenarie "Forbundet" ok "Forbundet til WiFi \"Hallen\" (signal 72 %)"

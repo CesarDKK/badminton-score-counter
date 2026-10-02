@@ -95,7 +95,8 @@ tjek "tidszone København" symlink_til "$R/etc/localtime" /usr/share/zoneinfo/Eu
 # Opstart
 CMD=$R/boot/firmware/cmdline.txt
 tjek "cmdline.txt er én linje" test "$(wc -l < "$CMD")" -le 1
-for p in 'cfg80211.ieee80211_regdom=DK' 'video=HDMI-A-1:1920x1080@60' 'video=HDMI-A-2:1920x1080@60' \
+for p in 'cfg80211.ieee80211_regdom=DK' 'systemd.restore_state=0' \
+         'video=HDMI-A-1:1920x1080@60' 'video=HDMI-A-2:1920x1080@60' \
          'consoleblank=0' 'resize' 'root=PARTUUID='; do
     tjek "cmdline: $p" grep -q -- "$p" "$CMD"
 done
@@ -117,6 +118,8 @@ chroot "$R" /usr/lib/badminton-tv/setup >/dev/null 2>&1
 NM=$R/etc/NetworkManager/system-connections/badminton-tv-wifi.nmconnection
 tjek "setup: WiFi-fil skrevet" grep -q '^ssid=Hal æ$' "$NM"
 tjek "setup: WiFi-kode med mellemrum" grep -q '^psk=min kode 1$' "$NM"
+# Raspberry Pi OS leveres med WirelessEnabled=false — setup skal slå det til.
+tjek "setup: WiFi slået til i NetworkManager" grep -qx 'WirelessEnabled=true' "$R/var/lib/NetworkManager/NetworkManager.state"
 tjek "setup: værtsnavn" grep -qx 'tv-bane-oe' "$R/etc/hostname"
 tjek "setup: URL med & til browseren" grep -q "abc\\\\&qr=0" "$R/run/badminton-tv/kiosk.env"
 mkdir -p "$R/tmp/gen"
