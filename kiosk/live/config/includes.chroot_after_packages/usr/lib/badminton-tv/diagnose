@@ -32,6 +32,19 @@ rapport() {
     afsnit 'Vurdering'
     /usr/lib/badminton-tv/netstatus tekst
 
+    # En Pi har intet batteri-ur: indtil uret er synkroniseret, står det på
+    # sidst kendte tidspunkt (på et nyt SD-kort: da billedet blev bygget).
+    # Den automatiske slukning venter også på synkroniseringen.
+    afsnit 'Ur'
+    if [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" = yes ]; then
+        printf 'Synkroniseret med internettet: ja\n'
+    else
+        printf 'Synkroniseret med internettet: NEJ — tiden øverst er ikke den rigtige,\n'
+        printf 'og automatisk slukning springes over, indtil der er forbindelse.\n'
+    fi
+    timedatectl 2>&1
+    timedatectl timesync-status 2>&1 | grep -E 'Server|Poll|Packet count|Offset'
+
     afsnit 'kiosk.conf (WiFi-koden er skjult)'
     if conf=$(bt_find_conf); then
         bt_read_conf "$conf"

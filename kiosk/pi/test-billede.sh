@@ -81,6 +81,8 @@ tjek "diagnose kører på Pi (drop-in)" test -f "$R/etc/systemd/system/badminton
 
 # Services
 tjek "aktiv: badminton-tv-setup" aktiveret sysinit.target badminton-tv-setup.service
+# En Pi har intet batteri-ur — uden timesyncd stilles uret aldrig.
+tjek "aktiv: systemd-timesyncd" aktiveret sysinit.target systemd-timesyncd.service
 for s in badminton-tv badminton-tv-cec badminton-tv-netstatus badminton-tv-diagnose NetworkManager; do
     tjek "aktiv: $s" aktiveret multi-user.target "$s.service"
 done
