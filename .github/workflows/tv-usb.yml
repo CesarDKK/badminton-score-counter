@@ -1,10 +1,11 @@
-# Bygger Badminton TV USB-nøglen (kiosk/).
+# Bygger Badminton TV (kiosk/): USB-nøglen til PC'er og SD-kort-billedet til
+# Raspberry Pi 3/4/5.
 #
 # - Push der rører kiosk/: test konfigurationslæseren og scriptene, og byg
-#   billedet. Resultatet ligger som artefakt i 7 dage, så en branch kan prøves
-#   på en rigtig PC uden at lave en release.
-# - Tag tv-usb-v<version> (fx tv-usb-v2026.10.1): byg og læg zip + img ud som
-#   GitHub-release, som klubberne kan hente.
+#   begge billeder. Resultatet ligger som artefakter i 7 dage, så en branch kan
+#   prøves på rigtig hardware uden at lave en release.
+# - Tag tv-usb-v<version> (fx tv-usb-v2026.10.1): byg begge og læg dem ud som
+#   én GitHub-release, som klubberne kan hente.
 #
 # Stifiltre gælder ikke for tags, så et tag bygger altid.
 name: TV-USB
@@ -42,18 +43,17 @@ jobs:
           cd kiosk
           shellcheck -S warning -x \
             build.sh test/vm.sh test/test-conf.sh test/test-netstatus.sh \
+            pi/build-pi.sh pi/tilpas.sh pi/test-billede.sh \
             live/auto/config \
             live/config/hooks/normal/*.hook.chroot \
             live/config/includes.chroot_after_packages/usr/lib/badminton-tv/{conf.sh,setup,browser,cec,sluk,installer,netstatus,diagnose} \
             live/config/includes.chroot_after_packages/usr/lib/systemd/system-generators/badminton-tv-sluk-generator
 
   byg:
-    name: Byg USB-billede
+    name: Byg USB-billede (PC)
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -79,11 +79,11 @@ jobs:
             -v "$PWD/kiosk:/src" -v "$PWD/ud:/ud" \
             debian:trixie bash /src/build.sh
 
+      # Også ved tags: release-jobbet henter filerne herfra.
       - name: Gem som artefakt
-        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v4
         with:
-          name: badminton-tv-usb-${{ env.VERSION }}
+          name: tv-pc
           path: |
             ud/*.zip
             ud/*.img
@@ -91,23 +91,82 @@ jobs:
           retention-days: 7
           compression-level: 0
 
+  byg-pi:
+    name: Byg SD-kort-billede (Raspberry Pi)
+    needs: test
+    # ARM-runner: Raspberry Pi OS' programmer kører uden emulering i chroot.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/tv-usb-v* ]]; then
+            echo "VERSION=${GITHUB_REF_NAME#tv-usb-v}" >> "$GITHUB_ENV"
+          else
+            echo "VERSION=$(date -u +%Y.%m.%d)-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Byg
+        run: |
+          mkdir -p ud
+          docker run --rm --privileged -e VERSION \
+            -v "$PWD/kiosk:/src" -v "$PWD/ud:/ud" \
+            debian:trixie bash /src/pi/build-pi.sh
+
+      # En Pi kan ikke emuleres — så tjek billedets indhold, og kør setup og
+      # slukke-generatoren inde i det.
+      - name: Tjek billedet
+        run: |
+          docker run --rm --privileged \
+            -v "$PWD/kiosk:/src" -v "$PWD/ud:/ud" \
+            debian:trixie bash /src/pi/test-billede.sh "/ud/badminton-tv-pi-$VERSION.img.xz"
+
+      - name: Gem som artefakt
+        uses: actions/upload-artifact@v4
+        with:
+          name: tv-pi
+          path: |
+            ud/*.img.xz
+            ud/SHA256SUMS-pi
+          retention-days: 7
+          compression-level: 0
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/tv-usb-v')
+    needs: [byg, byg-pi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: ud
+          merge-multiple: true
+
       - name: Release
-        if: startsWith(github.ref, 'refs/tags/tv-usb-v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cat > noter.md <<EOF
-          USB-nøgle der laver en PC om til en TV-skærm i hallen.
+          VERSION=${GITHUB_REF_NAME#tv-usb-v}
+          cd ud
+          cat SHA256SUMS-pi >> SHA256SUMS
+          rm SHA256SUMS-pi
+          cat > ../noter.md <<EOF
+          Laver en PC eller en Raspberry Pi om til en TV-skærm i hallen. Ret \`kiosk.conf\` og følg \`VEJLEDNING.txt\`.
 
-          **Hent én af filerne:**
+          **PC (USB-nøgle)** — hent én af filerne:
           - \`badminton-tv-usb-$VERSION.zip\` — pak den ud på en FAT32-formateret USB-nøgle (8-32 GB).
           - \`badminton-tv-usb-$VERSION.img\` — skriv den med [balenaEtcher](https://etcher.balena.io/) eller Rufus. Virker med alle størrelser.
 
-          Ret derefter \`kiosk.conf\` på nøglen og følg \`VEJLEDNING.txt\`.
-
           ⚠️ Installationen sletter alt på PC'ens disk.
+
+          **Raspberry Pi 3, 4 og 5 (SD-kort):**
+          - \`badminton-tv-pi-$VERSION.img.xz\` — skriv den til et SD-kort (mindst 8 GB) med [Raspberry Pi Imager](https://www.raspberrypi.com/software/) ("Use custom", uden OS-tilpasning) eller balenaEtcher. \`kiosk.conf\` ligger på kortet bagefter.
           EOF
-          gh release create "$GITHUB_REF_NAME" \
-            ud/*.zip ud/*.img ud/SHA256SUMS \
-            --title "Badminton TV USB $VERSION" \
-            --notes-file noter.md
+          gh release create "$GITHUB_REF_NAME" * \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Badminton TV $VERSION" \
+            --notes-file ../noter.md

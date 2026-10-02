@@ -38,7 +38,7 @@ EOF
 chmod +x "$TMP/bin/"*
 
 export PATH="$TMP/bin:$PATH" BT_LIB="$LIB" BT_RUN="$TMP/run"
-export BT_CONF_INSTALLERET="$TMP/kiosk.conf" BT_CONF_USB="$TMP/ingen.conf"
+export BT_CONF_INSTALLERET="$TMP/kiosk.conf" BT_CONF_USB="$TMP/ingen.conf" BT_CONF_PI="$TMP/ingen-pi.conf"
 
 # Tomme værdier betyder "brug standardsvaret" i de falske kommandoer.
 export FAKE_TYPE_STATE="" FAKE_DEVICE_TYPE="" FAKE_SCAN="" FAKE_STATE="" FAKE_JOURNAL="" FAKE_RFKILL=""

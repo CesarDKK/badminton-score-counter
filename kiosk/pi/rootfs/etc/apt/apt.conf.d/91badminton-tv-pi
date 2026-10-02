@@ -1,0 +1,6 @@
+// Chromium, kerne og firmware til Raspberry Pi kommer fra Raspberry Pi's eget
+// arkiv — det skal med, når sikkerhedsopdateringerne installeres ved
+// automatisk slukning.
+Unattended-Upgrade::Origins-Pattern {
+    "origin=Raspberry Pi Foundation,codename=${distro_codename}";
+};

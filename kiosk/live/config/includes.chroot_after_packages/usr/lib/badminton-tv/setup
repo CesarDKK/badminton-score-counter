@@ -50,6 +50,10 @@ nm_escape() {
 }
 
 if [ -n "$BT_WIFI_NAVN" ]; then
+    # Raspberry Pi OS starter med WiFi blokeret, indtil der er valgt et land
+    # (landet sættes til DK på kernens kommandolinje). Blokeringen gemmes
+    # mellem opstarter, så den skal ophæves eksplicit.
+    rfkill unblock wifi 2>/dev/null || true
     umask 077
     {
         printf '[connection]\nid=badminton-tv-wifi\ntype=wifi\nautoconnect=true\n'

@@ -43,6 +43,9 @@ START+="&cec=$(enc "$cec")"
 START+="&skaerm=$(enc "${bredde:-?} px, skalering $skala")"
 START+="&sluk=$(enc "$BT_SLUK_KL")"
 START+="&version=$(enc "$version")"
+if tr -d '\0' < /proc/device-tree/model 2>/dev/null | grep -q 'Raspberry Pi'; then
+    START+="&platform=pi"
+fi
 START+="&fejl=$(enc "$BT_FEJL")"
 
 exec /usr/bin/chromium \

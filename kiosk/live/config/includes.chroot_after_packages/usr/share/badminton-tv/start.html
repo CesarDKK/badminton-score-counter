@@ -129,7 +129,9 @@
     status.textContent = 'Der er en fejl i kiosk.conf';
     status.className = 'fejl';
     const liste = $('fejlliste');
-    liste.textContent = fejl + '\n\nRet filen på USB-nøglen og installér igen.';
+    liste.textContent = fejl + (p.get('platform') === 'pi'
+      ? '\n\nSluk Pi\'en, tag SD-kortet ud, ret kiosk.conf på en PC, og sæt kortet i igen.'
+      : '\n\nRet filen på USB-nøglen og installér igen.');
     liste.hidden = false;
     return;
   }
