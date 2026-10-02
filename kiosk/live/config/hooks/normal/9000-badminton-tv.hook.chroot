@@ -36,5 +36,11 @@ systemctl set-default multi-user.target
 systemctl mask sleep.target suspend.target hibernate.target \
                hybrid-sleep.target suspend-then-hibernate.target
 
+# live-config (Debian live's opsætning ved hver opstart fra USB-nøglen) skal
+# ikke køre: den sætter tidszonen til UTC og opretter en "user"-konto med
+# automatisk login på de andre konsoller. Vi har vores egen opsætning.
+# live-boot, der starter systemet fra nøglen, bliver.
+apt-get purge -y live-config live-config-systemd || true
+
 # Opdateringer kun ved automatisk slukning, ikke på tilfældige tidspunkter.
 systemctl mask apt-daily.timer apt-daily-upgrade.timer

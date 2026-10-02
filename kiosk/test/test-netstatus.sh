@@ -38,7 +38,7 @@ EOF
 chmod +x "$TMP/bin/"*
 
 export PATH="$TMP/bin:$PATH" BT_LIB="$LIB" BT_RUN="$TMP/run"
-export BT_CONF_INSTALLERET="$TMP/kiosk.conf" BT_CONF_USB="$TMP/ingen.conf"
+export BT_CONF_INSTALLERET="$TMP/kiosk.conf" BT_CONF_USB="$TMP/ingen.conf" BT_CONF_PI="$TMP/ingen-pi.conf"
 
 # Tomme værdier betyder "brug standardsvaret" i de falske kommandoer.
 export FAKE_TYPE_STATE="" FAKE_DEVICE_TYPE="" FAKE_SCAN="" FAKE_STATE="" FAKE_JOURNAL="" FAKE_RFKILL=""
@@ -102,7 +102,12 @@ wlp0s20f3:wifi'
 FAKE_DEVICE_TYPE="$KORT" FAKE_RFKILL='0: phy0: Wireless LAN
 	Soft blocked: yes
 	Hard blocked: no'
-scenarie "WiFi slået fra (rfkill)" fejl "slået fra"
+scenarie "WiFi slået fra i softwaren (Raspberry Pi OS)" fejl "slået fra i systemet"
+
+FAKE_DEVICE_TYPE="$KORT" FAKE_RFKILL='0: phy0: Wireless LAN
+	Soft blocked: no
+	Hard blocked: yes'
+scenarie "WiFi slået fra med kontakt" fejl "kontakt eller i BIOS"
 
 FAKE_DEVICE_TYPE="$KORT" FAKE_STATE='100 (connected)' FAKE_SCAN="$(scan 'Hallen|WPA2|72')"
 scenarie "Forbundet" ok "Forbundet til WiFi \"Hallen\" (signal 72 %)"

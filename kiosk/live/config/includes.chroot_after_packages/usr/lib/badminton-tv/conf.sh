@@ -9,14 +9,16 @@
 # fejl der forhindrer visning (én pr. linje), og BT_ADVARSLER indeholder ting der
 # er værd at nævne, men som ikke stopper noget.
 
+BT_CONF_PI=${BT_CONF_PI:-/boot/firmware/kiosk.conf}
 BT_CONF_INSTALLERET=${BT_CONF_INSTALLERET:-/etc/badminton-tv/kiosk.conf}
 BT_CONF_USB=${BT_CONF_USB:-/run/live/medium/kiosk.conf}
 
-# Udskriver stien til den kiosk.conf der gælder. På den installerede PC ligger
-# den i /etc; i prøvetilstand læses den direkte fra USB-nøglen.
+# Udskriver stien til den kiosk.conf der gælder. På en Raspberry Pi ligger den
+# på SD-kortets FAT-partition, så den kan rettes på en Windows-PC. På den
+# installerede PC ligger den i /etc; i prøvetilstand læses den fra USB-nøglen.
 bt_find_conf() {
     local f
-    for f in "$BT_CONF_INSTALLERET" "$BT_CONF_USB"; do
+    for f in "$BT_CONF_PI" "$BT_CONF_INSTALLERET" "$BT_CONF_USB"; do
         if [ -f "$f" ]; then
             printf '%s\n' "$f"
             return 0

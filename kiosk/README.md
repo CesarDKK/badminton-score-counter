@@ -8,6 +8,9 @@ selv kl. 23:59, hvis ingen har slukket den. Det eneste, man skal rette, er
 Bygget og testet til **Lenovo ThinkCentre M920x**, men virker på de fleste
 UEFI-PC'er fra de sidste ti år.
 
+Der findes også et **SD-kort-billede til Raspberry Pi 3, 4 og 5** med samme
+skærm og samme `kiosk.conf` — se [Raspberry Pi](#raspberry-pi) nedenfor.
+
 ---
 
 ## Til dem der sætter skærmene op
@@ -100,6 +103,30 @@ Systemet prøver automatisk og bruger CEC, hvis Linux finder det. Ellers:
 | Teksten er for lille/stor | `SKALERING=1.5` (eller et andet tal) i `kiosk.conf`, og installér igen |
 | Uret er forkert første gang | Retter sig, når PC'en har været på nettet. Indtil da springes den automatiske slukning over |
 
+### Raspberry Pi
+
+Hent `badminton-tv-pi-<version>.img.xz` fra samme release, og skriv den til
+et SD-kort på mindst 8 GB med [Raspberry Pi Imager](https://www.raspberrypi.com/software/)
+(*Use custom*, og sig nej til OS-tilpasning) eller balenaEtcher. Kortet dukker
+op som drevet `bootfs` i Windows — ret `kiosk.conf` dér, sæt kortet i Pi'en og
+tilslut strøm. Der er ingen installation: SD-kortet *er* Pi'ens disk.
+
+Forskelle fra PC'en:
+
+- **Pi 4 eller 5 anbefales.** Pi 3 virker, men er langsom — kun som reserve.
+  Samme billede passer til alle tre.
+- **`kiosk.conf` kan rettes bagefter**: sluk, tag kortet ud, ret filen på en
+  PC, sæt kortet i igen.
+- **HDMI-CEC virker** på Pi'en, når det er slået til i TV'et. Pi 4: brug
+  HDMI-porten nærmest strømstikket.
+- **Slukning kl. 23:59**: en Pi 5 tændes igen med knappen; Pi 3 og 4 har ingen
+  knap og skal have strømmen fjernet og sat i igen.
+- **`diagnose.txt`** skrives på SD-kortet ved hver opstart (efter 1, 3 og 6
+  minutter).
+- **Skærmen låses til 1080p**, også på et 4K-TV — en Pi 3/4 har ikke kræfter
+  til mere.
+- Loggen ligger kun i RAM, så SD-kortet ikke slides.
+
 ---
 
 ## Til udviklere
@@ -119,10 +146,23 @@ kiosk/
 │       ├── package-lists/   pakkerne
 │       ├── hooks/normal/    bruger, tidszone, aktivering af services
 │       └── includes.chroot_after_packages/   vores filer i systemet
+├── pi/                      Raspberry Pi-udgaven
+│   ├── build-pi.sh          tilpasser Raspberry Pi OS Lite → img.xz
+│   ├── tilpas.sh            kører inde i Pi-billedet (pakker, bruger, services)
+│   ├── rootfs/              Pi-specifikke filer (diagnose, journal, opdateringer)
+│   └── VEJLEDNING.txt       lægges på SD-kortet
 └── test/
     ├── test-conf.sh         tests af kiosk.conf-læsningen
+    ├── test-netstatus.sh    tests af netværksvurderingen
     └── vm.sh                kør hele forløbet i en virtuel UEFI-PC
 ```
+
+**Raspberry Pi:** `build-pi.sh` tager det officielle Raspberry Pi OS Lite
+(64-bit, trixie — URL og tjeksum er låst i scriptet), gør plads,
+kopierer de fælles filer fra `live/config/includes.chroot_after_packages/`
+ind (minus installeren og GRUB), lægger `pi/rootfs/` ovenpå og kører
+`tilpas.sh` i chroot. Raspberry Pi OS' førstegangsopsætning (`userconfig`,
+`systemd-firstboot`, `cloud-init`) slås fra, så intet venter på et tastatur.
 
 **Idé:** USB-nøglen er et Debian 13 live-system, og **det samme system** er
 det, der ender på disken. Installationen kopierer live-systemets filer over
@@ -154,6 +194,19 @@ Første build tager 15–30 minutter. Med `-e GENBRUG_ISO=1` genbruges
 live-systemet, hvis du kun har ændret filerne i `usb/`. Det kræver, at
 containeren ikke blev fjernet, så brug en navngivet container i stedet for
 `--rm`.
+
+Raspberry Pi-billedet bygges i en almindelig container. Kun programmerne inde
+i Pi-billedet skal køre som ARM64, og det emulerer Docker Desktop selv —
+langsomt, men kun for installationen af pakkerne. GitHub Actions bygger det på
+en ARM-runner uden emulering. Brug ikke `--platform linux/arm64`: så emuleres
+også udpakning og komprimering, og det tager timer.
+
+```bash
+docker run --rm --privileged -v "$PWD/kiosk:/src" -v "$PWD/kiosk/ud:/ud" debian:trixie bash /src/pi/build-pi.sh
+```
+
+En Raspberry Pi kan ikke emuleres brugbart, så Pi-billedet skal testes på en
+rigtig Pi. Scripts og indhold kan kontrolleres i chroot.
 
 ### Test i en virtuel PC
 

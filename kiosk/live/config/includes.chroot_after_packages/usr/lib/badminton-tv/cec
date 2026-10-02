@@ -33,27 +33,41 @@ fi
 
 # DisplayPort-CEC registreres først når grafikdriveren har læst skærmens EDID.
 # Ved opstart giver vi den et par sekunder; ved nedlukning findes den allerede.
-enhed=''
+enheder=()
 forsoeg=1
 [ "${1:-}" = taend ] && forsoeg=6
 for ((i = 0; i < forsoeg; i++)); do
     for d in /dev/cec*; do
-        [ -c "$d" ] && { enhed=$d; break 2; }
+        [ -c "$d" ] && enheder+=("$d")
     done
+    [ "${#enheder[@]}" -gt 0 ] && break
     sleep 0.5
 done
 
-if [ -z "$enhed" ]; then
+if [ "${#enheder[@]}" -eq 0 ]; then
     status ikke-fundet
     exit 0
 fi
 
-# Meld PC'en på CEC-bussen som afspiller. Uden en logisk adresse må vi ikke
-# sende kommandoer.
-cec-ctl -d "$enhed" --playback >/dev/null 2>&1
+# Meld enheden på CEC-bussen som afspiller (uden en logisk adresse må vi ikke
+# sende kommandoer) og udskriv dens fysiske adresse.
+fysisk_adresse() {
+    cec-ctl -d "$1" --playback >/dev/null 2>&1
+    cec-ctl -d "$1" 2>/dev/null \
+        | awk -F: '/Physical Address/ { gsub(/[[:space:]]/, "", $2); print $2; exit }'
+}
 
-fysisk=$(cec-ctl -d "$enhed" 2>/dev/null \
-    | awk -F: '/Physical Address/ { gsub(/[[:space:]]/, "", $2); print $2; exit }')
+# En Raspberry Pi 4/5 har to HDMI-porte og dermed to CEC-enheder. Brug den,
+# hvor der sidder et TV — kun den har en rigtig fysisk adresse.
+enhed=${enheder[0]}
+fysisk=$(fysisk_adresse "$enhed")
+for d in "${enheder[@]}"; do
+    f=$(fysisk_adresse "$d")
+    if [ -n "$f" ] && [ "$f" != "f.f.f.f" ]; then
+        enhed=$d fysisk=$f
+        break
+    fi
+done
 
 case "${1:-}" in
     taend)

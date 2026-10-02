@@ -1,0 +1,57 @@
+BADMINTON TV — SD-KORT TIL RASPBERRY PI
+=======================================
+
+Dette SD-kort laver en Raspberry Pi 3, 4 eller 5 om til en TV-skærm, der
+starter direkte op i fuld skærm og viser én side fra Badminton-appen.
+
+Pi 4 eller Pi 5 anbefales. En Pi 3 virker, men er langsom — brug den kun som
+reserve.
+
+
+SÅDAN GØR DU
+------------
+
+1. Åbn kiosk.conf på dette SD-kort (dobbeltklik åbner den i Notesblok).
+
+2. Skriv adressen efter TV_URL= og, hvis hallen bruger WiFi, netværkets navn
+   og kode efter WIFI_NAVN= og WIFI_KODE=. Gem filen.
+
+3. Sæt SD-kortet i Pi'en, sæt HDMI-kablet i TV'et, og tilslut strømmen.
+   Pi 4: brug HDMI-porten nærmest strømstikket.
+
+4. Første opstart tager et par minutter ekstra (Pi'en gør plads på hele
+   SD-kortet). Derefter vises TV-siden af sig selv.
+
+
+ÆNDRE SIDEN TV'ET VISER
+-----------------------
+
+Sluk Pi'en, tag SD-kortet ud, ret kiosk.conf på en PC, og sæt kortet i igen.
+Brug helst et adgangslink fra admin-siden som TV_URL — så skifter du bane fra
+admin-siden og behøver aldrig røre Pi'en.
+
+
+I DAGLIG BRUG
+-------------
+
+  - TV'et tænder og slukker med Pi'en via HDMI-CEC, hvis TV'et understøtter
+    det (slå CEC til i TV'ets menu — hedder fx Anynet+, SimpLink, Bravia
+    Sync eller EasyLink).
+  - Er Pi'en ikke slukket kl. 23:59, slukker den selv (se SLUK_KL).
+      Pi 5: tænd igen med knappen på Pi'en.
+      Pi 3 og 4: har ingen knap — tag strømmen fra og sæt den i igen
+      (en stikdåse med afbryder gør det nemt).
+  - Den går aldrig i dvale.
+
+
+HVIS NOGET GÅR GALT
+-------------------
+
+  - Fejl i kiosk.conf og årsagen til netværksproblemer vises på skærmen.
+  - Hver gang Pi'en starter, skriver den diagnose.txt på SD-kortet (efter 1,
+    3 og 6 minutter). Send den til den, der hjælper dig. WiFi-koden står ikke
+    i filen.
+  - Sort skærm: tjek at HDMI-kablet sidder i den rigtige port, og at
+    strømforsyningen er kraftig nok (brug Raspberry Pi's egen).
+  - Brug ikke Raspberry Pi Imagers "OS-tilpasning" (WiFi, brugernavn osv.) —
+    den bliver ignoreret. Det er kiosk.conf, der bestemmer.
