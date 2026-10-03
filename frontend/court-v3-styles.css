@@ -1864,7 +1864,8 @@ html, body {
     padding: 8px 12px;
 }
 
-.cv-standing .btn-swap-players svg,
+/* Byt makker-knappens pile drejes IKKE — de peger mellem de to felter, og
+   det er rigtigt i begge visninger */
 .cv-standing .serve-indicator::after {
     transform: rotate(-90deg);
 }
