@@ -324,7 +324,7 @@ html, body {
 
 /* Kompakte skærme (tablet i lavt landskab + telefon-landskab): skrump boldpoint-labelen
    så den ikke gør scorebjælken højere */
-@media (max-height: 700px) {
+@media (max-height: 700px), (orientation: portrait) and (max-width: 700px) {
     .boldpoint-label {
         height: 15px;
         line-height: 15px;
@@ -337,7 +337,7 @@ html, body {
 }
 
 /* Ultrasmå skærme — labelen fylder reelt ingenting ekstra */
-@media (max-height: 550px) {
+@media (max-height: 550px), (orientation: portrait) and (max-width: 550px) {
     .boldpoint-label {
         height: 13px;
         line-height: 13px;
@@ -689,7 +689,7 @@ html, body {
         width: min(100%, calc((100vh - 220px) * (13.4 / 6.1)));
         /* dvh = den faktiske (dynamiske) viewport — undgår overflow når
            browser-UI gør 100vh større end det synlige område */
-        width: min(100%, calc((100dvh - 220px) * (13.4 / 6.1)));
+        width: min(100%, calc((var(--app-h, 100dvh) - 220px) * (13.4 / 6.1)));
         aspect-ratio: 13.4 / 6.1;
         padding-bottom: 0;
         height: auto;
@@ -889,52 +889,37 @@ html, body {
 }
 
 /* ══════════════════════════════════════════
-   Portrait overlay
+   Altid landskab
+   Tælleren er bygget til landskab. Android-appen er låst dér, men i en
+   browser kan skærmen stå på højkant — så drejes hele siden 90° med uret,
+   og --app-h/--app-w peger på de byttede viewport-mål. Media queries kan
+   ikke byttes om, så hvert størrelsestrin har en tilsvarende
+   "(orientation: portrait) and (max-width: …)"-variant.
    ══════════════════════════════════════════ */
-#portraitOverlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: #0d0d1a;
-    z-index: 10000;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-}
-
-.portrait-overlay-inner {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 24px;
-    padding: 40px;
-    text-align: center;
-}
-
-.portrait-rotate-icon {
-    font-size: 5em;
-    color: rgba(255,255,255,0.6);
-    animation: rotateHint 2.5s ease-in-out infinite;
-    display: block;
-    transform-origin: center;
-}
-
-@keyframes rotateHint {
-    0%, 35%  { transform: rotate(0deg); }
-    65%, 100% { transform: rotate(90deg); }
-}
-
-.portrait-overlay-inner p {
-    font-family: 'DM Sans', sans-serif;
-    font-size: 1.15em;
-    color: rgba(255,255,255,0.65);
-    max-width: 280px;
-    line-height: 1.6;
-}
-
-/* Show overlay in portrait on phone */
-@media (orientation: portrait) and (max-width: 767px) {
-    #portraitOverlay { display: flex; }
+@media (orientation: portrait) {
+    :root {
+        --app-h: 100vw;
+        --app-w: 100vh;
+    }
+    @supports (height: 100dvh) {
+        :root {
+            --app-h: 100dvw;
+            --app-w: 100dvh;
+        }
+    }
+    html, body {
+        overflow: hidden;
+    }
+    body {
+        position: fixed;
+        top: 0;
+        left: var(--app-h);
+        width: var(--app-w);
+        height: var(--app-h);
+        min-height: 0; /* styles.css: min-height: 100vh = den lange led */
+        transform-origin: 0 0;
+        transform: rotate(90deg);
+    }
 }
 
 /* (Telefon-landskab-queryen ligger nederst i filen, efter tablet-trinnene,
@@ -1120,7 +1105,8 @@ html, body {
 }
 
 /* Tablet-trin 1 (fx 1024x600 i landskab) */
-@media (max-height: 700px) and (min-width: 800px) {
+@media (max-height: 700px) and (min-width: 800px),
+       (orientation: portrait) and (max-width: 700px) and (min-height: 800px) {
     :root {
         --cv-score-mb: 3px;
         --cv-scores-pad: 0 8px;
@@ -1175,7 +1161,8 @@ html, body {
 }
 
 /* Tablet-trin 2 (600px eller lavere) */
-@media (max-height: 600px) and (min-width: 800px) {
+@media (max-height: 600px) and (min-width: 800px),
+       (orientation: portrait) and (max-width: 600px) and (min-height: 800px) {
     :root {
         --cv-score-mb: 2px;
         --cv-scores-pad: 0 5px;
@@ -1228,7 +1215,8 @@ html, body {
 }
 
 /* Tablet-trin 3 (550px eller lavere — Android med synlig navigationsbar) */
-@media (max-height: 550px) and (min-width: 800px) {
+@media (max-height: 550px) and (min-width: 800px),
+       (orientation: portrait) and (max-width: 550px) and (min-height: 800px) {
     :root {
         --cv-score-mb: 1px;
         --cv-scores-pad: 0 3px;
@@ -1286,7 +1274,8 @@ html, body {
    Telefon-landskab — sidste trin, vinder hele zonen ≤500px høj
    (uanset bredde, så brede telefoner får ét sammenhængende udtryk)
    ══════════════════════════════════════════ */
-@media (orientation: landscape) and (max-height: 500px) {
+@media (orientation: landscape) and (max-height: 500px),
+       (orientation: portrait) and (max-width: 500px) {
     :root {
         --cv-score-mb: 0;
         --cv-scores-pad: 3px 10px;
@@ -1333,14 +1322,14 @@ html, body {
     }
 
     body {
-        height: 100dvh;
+        height: var(--app-h, 100dvh);
         overflow: hidden;
     }
 
     .bg-glow { position: fixed; }
 
     .container {
-        height: 100dvh;
+        height: var(--app-h, 100dvh);
         display: flex;
         flex-direction: column;
         padding: 0 !important;
@@ -1409,7 +1398,7 @@ html, body {
     #startServPlayer2 { justify-self: end; }
 
     /* Settings menu full-width */
-    .settings-menu-content { width: 92vw; }
+    .settings-menu-content { width: calc(var(--app-w, 100vw) * 0.92); }
 
     .start-hint {
         font-size: 0.72em;
@@ -1783,7 +1772,7 @@ html, body {
 }
 
 /* Tablet, lav skærm */
-@media (max-height: 600px) {
+@media (max-height: 600px), (orientation: portrait) and (max-width: 600px) {
     .result-dialog { gap: 22px; padding: 14px 20px; }
     .result-main { gap: 10px; }
     .result-title { font-size: 2em; }
@@ -1796,7 +1785,8 @@ html, body {
 }
 
 /* Telefon i landskab */
-@media (orientation: landscape) and (max-height: 500px) {
+@media (orientation: landscape) and (max-height: 500px),
+       (orientation: portrait) and (max-width: 500px) {
     .result-dialog { gap: 14px; padding: 8px 12px; }
     .result-main { gap: 6px; }
     .result-title { font-size: 1.5em; }
