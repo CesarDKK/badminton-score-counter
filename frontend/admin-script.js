@@ -1199,11 +1199,24 @@ async function showHoldkamp() {
     }
 }
 
-function stopHoldkampRefresh() {
+// Kun score-pollingen (hvert 3. sek.). Bruges når der ikke er nogen aktiv
+// holdkamp at vise — køen med ventende kampe kører videre for sig.
+function stopHoldkampPoll() {
     if (holdkampRefreshTimer) {
         clearInterval(holdkampRefreshTimer);
         holdkampRefreshTimer = null;
     }
+}
+
+function startHoldkampPoll() {
+    if (!holdkampRefreshTimer) {
+        holdkampRefreshTimer = setInterval(loadActiveHoldkamp, 3000);
+    }
+}
+
+// Forlader holdkamp-fanen: stop både score-polling og køens opdatering.
+function stopHoldkampRefresh() {
+    stopHoldkampPoll();
     bpStopWatcherRefresh();
 }
 
@@ -1221,7 +1234,7 @@ async function loadActiveHoldkamp() {
 
         if (activeTournaments && activeTournaments.length > 0) {
             // Aktiv turnering blokerer holdkampe
-            stopHoldkampRefresh();
+            stopHoldkampPoll(); // kun score-pollingen — køen med ventende kampe skal blive ved med at tælle ned
             container.style.display = 'none';
             createForm.style.display = 'none';
             renderHoldkampBlocker(activeTournaments[0]);
@@ -1234,7 +1247,7 @@ async function loadActiveHoldkamp() {
         if (!teamMatches || teamMatches.length === 0) {
             container.style.display = 'none';
             container.innerHTML = '';
-            stopHoldkampRefresh();
+            stopHoldkampPoll(); // kun score-pollingen — køen med ventende kampe skal blive ved med at tælle ned
             return;
         }
 
@@ -2941,6 +2954,14 @@ async function bpImport() {
 // ── Kampe der venter på holdsammensætningen ─────────────────────────────────
 
 let bpWatcherTimer = null;
+let bpWatcherTick = null;
+// id -> tidspunkt (browserens ur) for næste automatiske tjek. Serveren sender
+// "sekunder til næste tjek", så nedtællingen ikke afhænger af at browserens og
+// serverens ure går ens.
+let bpNaesteTjek = {};
+let bpGenindlaesPlanlagt = false;
+let bpTjekBesked = {}; // id -> kort besked efter "Tjek nu"
+let bpSidsteStatus = {}; // id -> status ved forrige indlæsning (opdager venter → oprettet)
 
 function bpFormatStart(iso) {
     if (!iso) return 'på et ukendt tidspunkt';
@@ -2949,6 +2970,47 @@ function bpFormatStart(iso) {
     const dag = d.toLocaleDateString('da-DK', { weekday: 'long', day: 'numeric', month: 'long' });
     const kl = d.toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
     return `${dag} kl. ${kl}`;
+}
+
+function bpKlokken(d, medSekunder) {
+    return d.toLocaleTimeString('da-DK', medSekunder
+        ? { hour: '2-digit', minute: '2-digit', second: '2-digit' }
+        : { hour: '2-digit', minute: '2-digit' });
+}
+
+/** Teksten i nedtællingen for én kamp ud fra tidspunktet for næste tjek. */
+function bpNedtaellingTekst(naeste) {
+    const sek = Math.ceil((naeste - Date.now()) / 1000);
+    if (sek <= 0) return 'Tjekker nu…';
+    if (sek > 3600) {
+        const d = new Date(naeste);
+        const iDag = d.toDateString() === new Date().toDateString();
+        const dag = iDag ? '' : d.toLocaleDateString('da-DK', { weekday: 'long' }) + ' ';
+        return `Næste tjek ${dag}kl. ${bpKlokken(d, true)}`;
+    }
+    const m = Math.floor(sek / 60), s = sek % 60;
+    return `Næste tjek om ${m}:${String(s).padStart(2, '0')}`;
+}
+
+/** Kører hvert sekund: opdaterer nedtællingerne og genindlæser lige efter et tjek. */
+function bpTikNedtaelling() {
+    let forfalden = false;
+    document.querySelectorAll('#bpWatchers [data-bp-naeste]').forEach(el => {
+        const naeste = bpNaesteTjek[el.dataset.bpNaeste];
+        if (!naeste) return;
+        const tekst = bpNedtaellingTekst(naeste);
+        if (el.textContent !== tekst) el.textContent = tekst;
+        if (naeste <= Date.now()) forfalden = true;
+    });
+    // Vagten tjekker i samme sekund som nedtællingen rammer 0 — hent resultatet
+    // et par sekunder efter (badmintonplayer skal også nå at svare).
+    if (forfalden && !bpGenindlaesPlanlagt) {
+        bpGenindlaesPlanlagt = true;
+        setTimeout(async () => {
+            await bpLoadWatchers();
+            bpGenindlaesPlanlagt = false;
+        }, 4000);
+    }
 }
 
 async function bpLoadWatchers() {
@@ -2966,16 +3028,36 @@ async function bpLoadWatchers() {
     if (!liste || liste.length === 0) {
         box.style.display = 'none';
         box.innerHTML = '';
+        bpNaesteTjek = {};
         return;
     }
+
+    // Er en ventende kamp netop blevet til en holdkamp, vises den med det samme
+    // (score-pollingen står stille, når der ikke var nogen aktiv holdkamp).
+    const nyOprettet = liste.some(w => w.status === 'oprettet' && bpSidsteStatus[w.id] === 'venter');
+    bpSidsteStatus = {};
+    liste.forEach(w => { bpSidsteStatus[w.id] = w.status; });
+    if (nyOprettet) {
+        loadActiveHoldkamp();
+        startHoldkampPoll();
+    }
+
+    const modtaget = Date.now();
+    bpNaesteTjek = {};
+    liste.forEach(w => {
+        if (w.status === 'venter' && typeof w.seconds_to_next === 'number') {
+            bpNaesteTjek[w.id] = modtaget + w.seconds_to_next * 1000;
+        }
+    });
 
     const badge = (tekst, farve) =>
         `<span style="background:rgba(${farve},0.15);color:rgb(${farve});border:1px solid rgba(${farve},0.35);`
         + `border-radius:100px;padding:2px 10px;font-size:0.82em;white-space:nowrap;">${tekst}</span>`;
 
     const raekker = liste.map(w => {
+        const venter = w.status === 'venter';
         const status =
-            w.status === 'venter'   ? badge('Venter på holdsammensætning', '170,170,170') :
+            venter                  ? badge('Venter på holdsammensætning', '170,170,170') :
             w.status === 'oprettet' ? badge('Holdkamp oprettet', '69,209,126') :
             w.status === 'opgivet'  ? badge('Kom aldrig', '170,170,170') :
                                       badge('Kunne ikke oprettes', '217,44,63');
@@ -2984,8 +3066,20 @@ async function bpLoadWatchers() {
             ? `<div style="color:var(--color-danger,#d92c3f);font-size:0.82em;margin-top:4px;">${escapeHtml(w.last_error)}</div>`
             : '';
 
-        const slet = w.status === 'venter'
-            ? `<button onclick="bpStopWatcher(${w.id})" class="btn-secondary"
+        // Sidst tjekket + nedtælling til næste automatiske tjek
+        const sidst = w.last_checked_iso ? `Sidst tjekket kl. ${bpKlokken(new Date(w.last_checked_iso), true)}` : 'Ikke tjekket endnu';
+        const tjekLinje = venter
+            ? `<div style="color:#aaa;font-size:0.82em;margin-top:4px;">
+                   <span data-bp-naeste="${w.id}" style="color:var(--color-accent);font-variant-numeric:tabular-nums;">${bpNaesteTjek[w.id] ? bpNedtaellingTekst(bpNaesteTjek[w.id]) : ''}</span>
+                   <span style="opacity:0.7;"> · ${sidst}</span>
+                   ${bpTjekBesked[w.id] ? `<span style="opacity:0.9;"> · ${escapeHtml(bpTjekBesked[w.id])}</span>` : ''}
+               </div>`
+            : '';
+
+        const knapper = venter
+            ? `<button onclick="bpTjekNu(${w.id}, this)" class="btn-primary"
+                       style="padding:4px 12px;font-size:0.82em;white-space:nowrap;">Tjek nu</button>
+               <button onclick="bpStopWatcher(${w.id})" class="btn-secondary"
                        style="padding:4px 12px;font-size:0.82em;white-space:nowrap;">Stop</button>`
             : '';
 
@@ -2994,24 +3088,47 @@ async function bpLoadWatchers() {
                     <div style="min-width:0;">
                         <div style="color:#eaeaea;">${escapeHtml(w.team1_name || '?')} – ${escapeHtml(w.team2_name || '?')}</div>
                         <div style="color:#aaa;font-size:0.84em;">${bpFormatStart(w.start_time_iso)}</div>
+                        ${tjekLinje}
                         ${fejl}
                     </div>
-                    <div style="display:flex;align-items:center;gap:10px;">${status}${slet}</div>
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">${status}${knapper}</div>
                 </div>`;
     }).join('');
 
     box.innerHTML = `
         <h4 style="color:var(--color-accent);margin-bottom:6px;font-size:0.95em;">Venter på holdsammensætning</h4>
         <p style="color:#aaa;font-size:0.84em;margin-bottom:8px;">
-            Systemet tjekker badmintonplayer.dk fra ca. en time før kampstart og opretter holdkampen, så snart holdsedlen er frigivet.
+            Holdsedlen frigives en time før kampstart. Systemet tjekker første gang 59 min og 50 sek før start og derefter
+            hvert 30. sekund, og opretter holdkampen, så snart holdsedlen er der. Indtil da genlæses kamptidspunktet jævnligt.
         </p>
         <div style="background:rgba(0,0,0,0.2);border-radius:8px;">${raekker}</div>`;
     box.style.display = 'block';
 }
 
+/** "Tjek nu": samme tjek som det automatiske, bare med det samme. */
+async function bpTjekNu(id, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = 'Tjekker…'; }
+    try {
+        const r = await api.checkHoldkampWatcher(id);
+        const kl = bpKlokken(new Date(), true);
+        bpTjekBesked[id] =
+            r.udfald === 'oprettet'      ? '' :
+            r.udfald === 'ikke_frigivet' ? `Ikke frigivet endnu (tjekket manuelt kl. ${kl})` :
+            r.udfald === 'optaget'       ? 'Et tjek er allerede i gang' :
+            r.udfald === 'fejl'          ? '' : '';
+        await bpLoadWatchers();
+        // Holdkampen er oprettet → vis den med det samme
+        if (r.udfald === 'oprettet') { loadActiveHoldkamp(); startHoldkampPoll(); }
+    } catch (err) {
+        showMessage('Fejl', 'Kunne ikke tjekke: ' + err.message);
+        if (btn) { btn.disabled = false; btn.textContent = 'Tjek nu'; }
+    }
+}
+
 async function bpStopWatcher(id) {
     try {
         await api.deleteHoldkampWatcher(id);
+        delete bpTjekBesked[id];
         await bpLoadWatchers();
     } catch (err) {
         showMessage('Fejl', 'Kunne ikke stoppe overvågningen: ' + err.message);
@@ -3023,10 +3140,12 @@ function bpStartWatcherRefresh() {
     bpStopWatcherRefresh();
     bpLoadWatchers();
     bpWatcherTimer = setInterval(bpLoadWatchers, 60000);
+    bpWatcherTick = setInterval(bpTikNedtaelling, 1000);
 }
 
 function bpStopWatcherRefresh() {
     if (bpWatcherTimer) { clearInterval(bpWatcherTimer); bpWatcherTimer = null; }
+    if (bpWatcherTick) { clearInterval(bpWatcherTick); bpWatcherTick = null; }
 }
 
 function bpStatus(msg, type) {

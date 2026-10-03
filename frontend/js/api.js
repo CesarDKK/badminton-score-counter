@@ -680,6 +680,11 @@ class BadmintonAPI {
         return this.request(`/import/holdkamp-watchers/${id}`, { method: 'DELETE' });
     }
 
+    /** Tjek én ventende kamp hos badmintonplayer nu (samme tjek som det automatiske). */
+    async checkHoldkampWatcher(id) {
+        return this.request(`/import/holdkamp-watchers/${id}/check`, { method: 'POST', timeout: 40000 });
+    }
+
     // ==================== Player Info ====================
 
     /**

@@ -205,11 +205,26 @@ function startHoldkampWatch() {
     // klubber kan tage over et minut. Uden dette ville næste minuts kørsel starte
     // oven i den forrige, vælge de samme 'venter'-watchers og oprette holdkampen
     // to gange. Springer vi bare over, til den igangværende er færdig.
-    let koererNu = false;
+    //
+    // Nødbremse: værnet må aldrig kunne stoppe vagten for altid. Hænger et
+    // gennemløb (alle kald har timeouts, så det burde ikke ske), slipper vi
+    // det efter 3 minutter og starter et nyt. Det er sikkert, fordi hvert tjek
+    // "tager" kampen atomart i databasen (se tjekWatcher) — to gennemløb kan
+    // ikke oprette samme holdkamp.
+    const MAKS_GENNEMLOEB_MS = 3 * 60 * 1000;
+    let aktiv = null; // { id, siden }
+    let loebenr = 0;
 
-    cron.schedule('* * * * *', async () => {
-        if (koererNu) return;
-        koererNu = true;
+    // Hvert 10. sekund: tidsplanen har første tjek 59 min 50 sek før kampstart
+    // og derefter hvert 30. sekund, så minut-opløsning er for grov. Uden
+    // forfaldne kampe er et gennemløb én lille databaseforespørgsel pr. klub.
+    cron.schedule('*/10 * * * * *', async () => {
+        if (aktiv) {
+            if (Date.now() - aktiv.siden < MAKS_GENNEMLOEB_MS) return;
+            console.error(`❌ Holdkamp-overvågning: gennemløb ${aktiv.id} har hængt i over 3 minutter — starter et nyt`);
+        }
+        const mit = { id: ++loebenr, siden: Date.now() };
+        aktiv = mit;
         try {
             // 1. Standard/direkte database
             try {
@@ -231,14 +246,14 @@ function startHoldkampWatch() {
                 }
             } catch (err) { /* master DB ikke tilgængelig i direkte mode */ }
         } finally {
-            koererNu = false;
+            if (aktiv === mit) aktiv = null;
         }
     }, {
         scheduled: true,
         timezone: 'Europe/Copenhagen'
     });
 
-    console.log('⏰ Scheduled holdkamp-overvågning hvert minut (henter holdsedlen når den frigives)');
+    console.log('⏰ Scheduled holdkamp-overvågning hvert 10. sekund (første tjek 59:50 før kampstart, derefter hvert 30. sekund)');
 }
 
 /**
