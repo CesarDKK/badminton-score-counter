@@ -1825,10 +1825,16 @@ html, body {
 
 /* Scorerækken: hver blok drejes om sin egen midte. Boksene bliver
    visuelt høje, så de må ikke fange tryk ment for banen nedenunder. */
-.cv-standing .player-score-section,
-.cv-standing .set-score-section {
+.cv-standing .player-score-section {
     transform: rotate(-90deg);
     pointer-events: none;
+}
+
+/* Sæt-stillingen bliver liggende (hver sides sæt står på sin side) — kun
+   tallene drejes, stregen bliver vandret */
+.cv-standing .set-score > span:not(.set-separator) {
+    display: inline-block;
+    transform: rotate(-90deg);
 }
 
 .cv-standing .score-logos {
