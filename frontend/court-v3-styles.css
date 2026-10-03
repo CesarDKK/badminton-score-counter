@@ -1911,6 +1911,12 @@ html, body {
     transform: translate(-50%, -50%) rotate(-90deg) scale(0.95);
 }
 
+/* Siderne ligger over/under hinanden set fra enden — pilene skal pege
+   op/ned, ikke følge knappens drejning */
+.cv-standing .btn-switch-sides-icon svg {
+    transform: rotate(90deg);
+}
+
 /* Menu, pause og beskeder: hele boksen drejes, og bredde/højde byttes */
 .cv-standing .settings-menu-content {
     transform: rotate(-90deg);
