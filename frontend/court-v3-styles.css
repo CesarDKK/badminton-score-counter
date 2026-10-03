@@ -689,7 +689,7 @@ html, body {
         width: min(100%, calc((100vh - 220px) * (13.4 / 6.1)));
         /* dvh = den faktiske (dynamiske) viewport — undgår overflow når
            browser-UI gør 100vh større end det synlige område */
-        width: min(100%, calc((var(--app-h, 100dvh) - 220px) * (13.4 / 6.1)));
+        width: min(100%, calc((var(--app-h, 100dvh) - var(--cv-chrome-h, 220px)) * (13.4 / 6.1)));
         aspect-ratio: 13.4 / 6.1;
         padding-bottom: 0;
         height: auto;
@@ -1324,6 +1324,10 @@ html, body {
     body {
         height: var(--app-h, 100dvh);
         overflow: hidden;
+        /* styles.css giver body 10–30px polstring på brede telefoner (>576px),
+           som skubbede knaprækken ud under kanten — .container fylder selv
+           hele højden og har sin egen luft */
+        padding: 0;
     }
 
     .bg-glow { position: fixed; }
@@ -1803,4 +1807,113 @@ html, body {
     .result-buttons { gap: 8px; }
     .result-buttons button { font-size: 0.9em; padding: 8px 20px; }
     .btn-enter-result { font-size: 0.85em; padding: 7px 18px; }
+}
+
+/* ══════════════════════════════════════════
+   Stående visning (.cv-standing på <html>, slås til i Indstillinger)
+   Tabletten holdes på højkant — drejet med uret — fra enden af banen.
+   Layout og knapper bliver hvor de er; kun indholdet drejes 90° mod uret,
+   så det læses lige. Navne og knaptekster bruger writing-mode, så de
+   brydes efter den plads der er på langs; resten drejes med transform.
+   Gælder ikke "Indtast resultat" — den dialog fylder hele skærmen og er
+   bygget til landskab.
+   ══════════════════════════════════════════ */
+.cv-standing {
+    /* Knapperne bliver lidt højere med lodret tekst — giv banen plads til det */
+    --cv-chrome-h: 250px;
+}
+
+/* Scorerækken: hver blok drejes om sin egen midte. Boksene bliver
+   visuelt høje, så de må ikke fange tryk ment for banen nedenunder. */
+.cv-standing .player-score-section,
+.cv-standing .set-score-section {
+    transform: rotate(-90deg);
+    pointer-events: none;
+}
+
+.cv-standing .score-logos {
+    transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+/* Lodret tekst der læses nedefra og op */
+.cv-standing .player-name,
+.cv-standing .cv-label {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+}
+
+.cv-standing .cv-label {
+    display: inline-block;
+    /* "Start serv" på to linjer i stedet for én lang */
+    inline-size: min-content;
+    line-height: 1.1;
+}
+
+.cv-standing .btn-start-serv,
+.cv-standing .btn-undo {
+    height: auto;
+    min-height: var(--cv-ctrl-h, 45px);
+    min-width: var(--cv-ctrl-h, 45px);
+    padding: 8px 12px;
+}
+
+.cv-standing .btn-swap-players svg,
+.cv-standing .serve-indicator::after {
+    transform: rotate(-90deg);
+}
+
+/* "Sæt vundet" er for lang til scorerækkens højde, når den står på langs —
+   stillingen mellem pointtallene taler for sig selv */
+.cv-standing .set-label {
+    display: none;
+}
+
+/* Midten af banen, set fra enden: banenavn øverst (= venstre for nettet),
+   Start kamp/timer på nettet, Skift side nederst (= højre for nettet) */
+.cv-standing .court-name-display {
+    left: 40%;
+    top: 50%;
+    transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+.cv-standing .court-center-overlay {
+    transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+.cv-standing .start-row {
+    flex-direction: column;
+}
+
+.cv-standing .start-hint {
+    /* Ingen plads på langs ad nettet ved siden af Skift side — Start kamp er
+       stadig grå indtil serven er valgt, og Start serv-knapperne er lige der */
+    display: none !important;
+}
+
+.cv-standing .btn-switch-sides {
+    left: 60%;
+    top: 50%;
+    transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+.cv-standing .btn-switch-sides:hover {
+    transform: translate(-50%, -50%) rotate(-90deg) scale(1.1);
+}
+
+.cv-standing .btn-switch-sides:active {
+    transform: translate(-50%, -50%) rotate(-90deg) scale(0.95);
+}
+
+/* Menu, pause og beskeder: hele boksen drejes, og bredde/højde byttes */
+.cv-standing .settings-menu-content {
+    transform: rotate(-90deg);
+    width: auto;
+    min-width: min(var(--cv-menu-minw, 400px), calc(var(--app-h, 100dvh) * 0.9));
+    max-width: calc(var(--app-h, 100dvh) * 0.9);
+}
+
+.cv-standing .court-overlay-content {
+    transform: rotate(-90deg);
+    max-width: calc(var(--app-h, 100dvh) * 0.92);
+    max-height: calc(var(--app-w, 100vw) * 0.92);
 }

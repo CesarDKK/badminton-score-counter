@@ -244,6 +244,11 @@ function setupEventListeners() {
         closeSettingsMenu();
     });
 
+    document.getElementById('standingToggle').addEventListener('click', () => {
+        setStanding(!document.documentElement.classList.contains('cv-standing'));
+        closeSettingsMenu();
+    });
+
     // Close settings menu when clicking outside
     document.getElementById('settingsMenu').addEventListener('click', (e) => {
         if (e.target.id === 'settingsMenu') {
@@ -333,6 +338,17 @@ function toggleGameMode() {
 function updateGameModeButton() {
     const btn = document.getElementById('gameModeToggle');
     if (btn) btn.textContent = gameState.gameMode === '21' ? 'Skift til 15/21' : 'Skift til 21/30';
+}
+
+// Stående visning: tabletten holdes på højkant (drejet med uret) fra enden af
+// banen. Layoutet og knapperne bliver hvor de er — kun teksten drejes 90° mod
+// uret (.cv-standing i CSS). Huskes bevidst ikke: hver kamp starter liggende,
+// og setStanding(false) kaldes når banen ryddes/nulstilles.
+function setStanding(on) {
+    document.documentElement.classList.toggle('cv-standing', on);
+    const btn = document.getElementById('standingToggle');
+    if (btn) btn.textContent = on ? 'Liggende visning' : 'Stående visning';
+    positionScoreLogos();
 }
 
 function openSettingsMenu() {
@@ -827,6 +843,9 @@ async function performClearCourtNow() {
         assignedTournamentMatchId = null;
     }
 
+    // Ny kamp starter altid liggende
+    setStanding(false);
+
     // Nulstil swap-flag når banen ryddes
     gameState.sidesManuallySwitched = false;
 
@@ -1192,26 +1211,45 @@ function updateScoreLogos() {
 }
 
 // Logoets midte en tredjedel af vejen fra sæt-tekstens kant mod point-tallets
-// midte. offset* er layout-mål (upåvirket af transform) i forhold til
-// .scores-container (position: relative), så det virker også
+// midte. offset* er layout-mål (upåvirket af transform), så det virker også
 // når teksten er drejet i stående visning.
 function positionScoreLogos() {
+    const container = document.querySelector('.scores-container');
     const setSection = document.querySelector('.set-score-section');
-    if (!setSection) return;
-    const parts = setSection.querySelectorAll('.set-label, .set-score');
-    let setLeft = Infinity, setRight = -Infinity;
-    parts.forEach(p => {
-        setLeft = Math.min(setLeft, p.offsetLeft);
-        setRight = Math.max(setRight, p.offsetLeft + p.offsetWidth);
-    });
-    if (!isFinite(setLeft)) return;
+    if (!container || !setSection) return;
+    // Afstand fra .scores-container — summeret op gennem offsetParent, fordi en
+    // drejet blok (stående visning) selv bliver offsetParent for sit indhold
+    const within = (el, prop) => {
+        let v = 0;
+        for (let e = el; e && e !== container; e = e.offsetParent) v += e[prop];
+        return v;
+    };
+    let setLeft, setRight;
+    if (document.documentElement.classList.contains('cv-standing')) {
+        // Sæt-blokken er drejet om sin midte: dens højde ligger nu vandret
+        const mid = within(setSection, 'offsetLeft') + setSection.offsetWidth / 2;
+        setLeft = mid - setSection.offsetHeight / 2;
+        setRight = mid + setSection.offsetHeight / 2;
+    } else {
+        setLeft = Infinity;
+        setRight = -Infinity;
+        setSection.querySelectorAll('.set-label, .set-score').forEach(p => {
+            const left = within(p, 'offsetLeft');
+            setLeft = Math.min(setLeft, left);
+            setRight = Math.max(setRight, left + p.offsetWidth);
+        });
+        if (!isFinite(setLeft)) return;
+    }
     [1, 2].forEach(n => {
         const el = document.getElementById('player' + n + 'Logos');
         const point = document.getElementById('player' + n + 'PointScore');
         if (!el || !point) return;
         const section = point.parentElement;
-        const pointCenter = section.offsetLeft + section.offsetWidth / 2;
-        const pointMiddleY = point.offsetTop + point.offsetHeight / 2;
+        const pointCenter = within(section, 'offsetLeft') + section.offsetWidth / 2;
+        // Stående: den drejede blok står om sin egen midte
+        const pointMiddleY = document.documentElement.classList.contains('cv-standing')
+            ? within(section, 'offsetTop') + section.offsetHeight / 2
+            : within(point, 'offsetTop') + point.offsetHeight / 2;
         const setEdge = n === 1 ? setLeft : setRight;
         el.style.left = (setEdge + (pointCenter - setEdge) / 3) + 'px';
         el.style.top = pointMiddleY + 'px';
@@ -1838,6 +1876,8 @@ async function handleSaveConflict(conflict) {
 // Banen er nulstillet på serveren (admin: Ryd bane / Nulstil) — adopter den
 // tomme servertilstand lokalt. Bruges af både periodic sync og 409-håndtering.
 async function adoptServerReset(loaded) {
+    // Ny kamp starter altid liggende
+    setStanding(false);
     // Version sættes FØR endRestBreak — dens save skal bruge den friske version
     gameState.version = (loaded && loaded.version) || 0;
 
@@ -1919,6 +1959,7 @@ function promptStartFreshIfCompleted() {
 // en DELETE nemlig udløbe adgangen ("scan igen"). I stedet nulstiller vi til
 // defaults og gemmer (PUT), så den samme session fortsætter på et rent scoreboard.
 async function startFreshMatchInSession() {
+    setStanding(false); // ny kamp starter altid liggende
     if (gameState.restBreakActive) {
         gameState.restBreakCallback = null;
         await endRestBreak();

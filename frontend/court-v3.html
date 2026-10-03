@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.json">
     <link rel="stylesheet" href="fonts.css?v=2">
     <link rel="stylesheet" href="styles.css?v=5">
-    <link rel="stylesheet" href="court-v3-styles.css?v=11">
+    <link rel="stylesheet" href="court-v3-styles.css?v=15">
     <script src="js/theme-loader.js?v=8"></script>
 </head>
 <body>
@@ -59,7 +59,7 @@
 
         <!-- Court + side +1 buttons -->
         <div class="court-middle-row">
-        <button id="addPointPlayer1" class="btn-add-point btn-add-left" disabled>+1</button>
+        <button id="addPointPlayer1" class="btn-add-point btn-add-left" disabled><span class="cv-label">+1</span></button>
         <div class="court-view-container">
             <div class="badminton-court">
                 <!-- Court surface (green) -->
@@ -130,19 +130,19 @@
                 </div>
             </div>
         </div>
-        <button id="addPointPlayer2" class="btn-add-point btn-add-right" disabled>+1</button>
+        <button id="addPointPlayer2" class="btn-add-point btn-add-right" disabled><span class="cv-label">+1</span></button>
         </div><!-- end court-middle-row -->
 
         <!-- Control Buttons Below Court -->
         <div class="control-buttons-bottom">
-            <button id="startServPlayer1" class="btn-start-serv">Start serv</button>
+            <button id="startServPlayer1" class="btn-start-serv"><span class="cv-label">Start serv</span></button>
             <div class="center-buttons">
-                <button id="undoBtn" class="btn-undo">Fortryd</button>
+                <button id="undoBtn" class="btn-undo"><span class="cv-label">Fortryd</span></button>
                 <button id="settingsBtn" class="btn-settings" aria-label="Indstillinger">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                 </button>
             </div>
-            <button id="startServPlayer2" class="btn-start-serv">Start serv</button>
+            <button id="startServPlayer2" class="btn-start-serv"><span class="cv-label">Start serv</span></button>
         </div>
 
 
@@ -170,6 +170,7 @@
                 <button id="gameModeToggle" class="menu-item">Format: 21/30</button>
                 <button id="showHoldkampPanelBtn" class="menu-item" style="display:none;">Holdkamp</button>
                 <button id="enterResultMenuBtn" class="menu-item" style="display:none;">Indtast resultat</button>
+                <button id="standingToggle" class="menu-item">Stående visning</button>
                 <button id="clearCourtBtn" class="menu-item menu-danger">Ryd Banen</button>
 
                 <button id="installAppBtn" class="menu-item" style="display: none;">Installer som App</button>
@@ -254,6 +255,6 @@
     <script src="js/live-updates.js?v=2"></script>
     <script src="js/kamp-resultat.js?v=1"></script>
     <script src="js/logo-match.js?v=1"></script>
-    <script src="court-script-v3.js?v=40"></script>
+    <script src="court-script-v3.js?v=42"></script>
 </body>
 </html>
