@@ -1240,22 +1240,15 @@ function positionScoreLogos() {
         for (let e = el; e && e !== container; e = e.offsetParent) v += e[prop];
         return v;
     };
-    let setLeft, setRight;
-    if (document.documentElement.classList.contains('cv-standing')) {
-        // Sæt-blokken er drejet om sin midte: dens højde ligger nu vandret
-        const mid = within(setSection, 'offsetLeft') + setSection.offsetWidth / 2;
-        setLeft = mid - setSection.offsetHeight / 2;
-        setRight = mid + setSection.offsetHeight / 2;
-    } else {
-        setLeft = Infinity;
-        setRight = -Infinity;
-        setSection.querySelectorAll('.set-label, .set-score').forEach(p => {
-            const left = within(p, 'offsetLeft');
-            setLeft = Math.min(setLeft, left);
-            setRight = Math.max(setRight, left + p.offsetWidth);
-        });
-        if (!isFinite(setLeft)) return;
-    }
+    // Sæt-teksternes ydre kanter ("Sæt vundet" er skjult i stående visning)
+    let setLeft = Infinity, setRight = -Infinity;
+    setSection.querySelectorAll('.set-label, .set-score').forEach(p => {
+        if (!p.offsetWidth) return;
+        const left = within(p, 'offsetLeft');
+        setLeft = Math.min(setLeft, left);
+        setRight = Math.max(setRight, left + p.offsetWidth);
+    });
+    if (!isFinite(setLeft)) return;
     [1, 2].forEach(n => {
         const el = document.getElementById('player' + n + 'Logos');
         const point = document.getElementById('player' + n + 'PointScore');
