@@ -348,6 +348,7 @@ function setStanding(on) {
     document.documentElement.classList.toggle('cv-standing', on);
     const btn = document.getElementById('standingToggle');
     if (btn) btn.textContent = on ? 'Liggende visning' : 'Stående visning';
+    fitPlayerNames();
     positionScoreLogos();
 }
 
@@ -1097,6 +1098,7 @@ function updateDisplay() {
 
     // Update player name positions based on serve
     updatePlayerNamePositions();
+    fitPlayerNames();
 
     // Show/hide swap players buttons (in doubles: before match starts OR between sets)
     const swapBtn1 = document.getElementById('swapPlayer1Btn');
@@ -1256,8 +1258,8 @@ function positionScoreLogos() {
     });
 }
 
-window.addEventListener('resize', positionScoreLogos);
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(positionScoreLogos);
+window.addEventListener('resize', () => { fitPlayerNames(); positionScoreLogos(); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { fitPlayerNames(); positionScoreLogos(); });
 
 // Select which team serves first
 async function selectServer(team) {
@@ -1421,6 +1423,7 @@ function updatePlayerNamePositions() {
     // Helper function to safely update text content (don't update if being edited)
     function safeSetText(element, text) {
         if (element.contentEditable !== 'true') {
+            element.dataset.fullName = text;
             element.textContent = text;
         }
     }
@@ -1495,6 +1498,34 @@ function updatePlayerNamePositions() {
             }
         }
     }
+}
+
+// Stående visning: navne der ikke kan være i deres felt vises kun med fornavn.
+// Det fulde navn ligger i data-full-name (sat af updatePlayerNamePositions), så
+// gameState og redigering altid bruger hele navnet.
+function fitPlayerNames() {
+    const standing = document.documentElement.classList.contains('cv-standing');
+    ['player1Name1Display', 'player1Name2Display', 'player2Name1Display', 'player2Name2Display'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el || el.contentEditable === 'true') return;
+        const full = el.dataset.fullName;
+        if (full === undefined) return;
+        el.textContent = full;
+        if (!standing || !full) return;
+        const box = el.parentElement;
+        const tooBig = Math.max(el.offsetWidth, el.scrollWidth) > box.clientWidth + 1 ||
+                       Math.max(el.offsetHeight, el.scrollHeight) > box.clientHeight + 1;
+        // Lodret tekst: offsetWidth er linjerne stablet. Mål én linje for at
+        // tælle dem — mere end to linjer er for trangt til at læse ved banen.
+        const fullWidth = el.offsetWidth;
+        el.textContent = 'X';
+        const oneLine = el.offsetWidth;
+        el.textContent = full;
+        const cs = getComputedStyle(el);
+        const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+        const lines = Math.round((fullWidth - pad) / Math.max(1, oneLine - pad));
+        if (tooBig || lines > 2) el.textContent = full.split(/\s+/)[0];
+    });
 }
 
 // Undo last action
@@ -3065,6 +3096,9 @@ function setupEditablePlayerName(elementId, player, primaryField, fallbackField 
         if (!element.textContent.trim()) {
             return;
         }
+
+        // Stående visning kan vise et forkortet navn — redigér altid hele navnet
+        if (element.dataset.fullName) element.textContent = element.dataset.fullName;
 
         // Determine which field to edit based on current displayed text
         let fieldToEdit = primaryField;
