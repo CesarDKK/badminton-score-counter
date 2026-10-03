@@ -1,6 +1,8 @@
 /**
  * Unit-tests af tidsplanen for den automatiske hentning af holdsedler.
- * Første tjek 59 min 50 sek før kampstart, derefter hvert 30. sekund.
+ * Første tjek 59 min 50 sek før kampstart, hvert 30. sekund de første 10
+ * minutter og derefter hvert 2. minut. Plus den fælles fartgrænse mod
+ * badmintonplayer.dk.
  */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -24,15 +26,13 @@ test('lige før første tjek er kampen ikke forfalden, i samme sekund er den', (
     assert.equal(vagt.erForfalden(w(sidst), t('12:00:10')), true);
 });
 
-test('i vinduet tjekkes hvert 30. sekund på et fast gitter (:10 og :40)', () => {
+test('de første 10 minutter tjekkes hvert 30. sekund på et fast gitter (:10 og :40)', () => {
     // Tjekket 12:00:10 → næste 12:00:40
     assert.equal(vagt.naesteTjek(w(t('12:00:10')), t('12:00:11')).toISOString(), '2026-10-03T12:00:40.000Z');
     assert.equal(vagt.erForfalden(w(t('12:00:10')), t('12:00:39')), false);
     assert.equal(vagt.erForfalden(w(t('12:00:10')), t('12:00:40')), true);
     // Et tjek der blev et par sekunder forsinket flytter ikke gitteret
     assert.equal(vagt.naesteTjek(w(t('12:00:43')), t('12:00:44')).toISOString(), '2026-10-03T12:01:10.000Z');
-    // Stadig hvert 30. sekund efter kampstart (indtil der opgives 30 min efter)
-    assert.equal(vagt.naesteTjek(w(t('13:10:10')), t('13:10:11')).toISOString(), '2026-10-03T13:10:40.000Z');
 });
 
 test('et manuelt tjek uden for gitteret flytter ikke næste automatiske tjek', () => {
@@ -81,4 +81,42 @@ test('uden kendt tidspunkt tjekkes hvert 5. minut', () => {
 test('tidspunkter som strenge (fra databasen) accepteres også', () => {
     const s = { start_time: '2026-10-03T13:00:00Z', last_checked_at: '2026-10-03T12:00:10Z' };
     assert.equal(vagt.naesteTjek(s, t('12:00:11')).toISOString(), '2026-10-03T12:00:40.000Z');
+});
+
+test('efter 10 minutter trappes der ned til hvert 2. minut', () => {
+    // Sidste hurtige tjek 12:09:40 → første langsomme 12:10:10
+    assert.equal(vagt.naesteTjek(w(t('12:09:40')), t('12:09:41')).toISOString(), '2026-10-03T12:10:10.000Z');
+    // Derefter 12:12:10, 12:14:10, ...
+    assert.equal(vagt.naesteTjek(w(t('12:10:10')), t('12:10:11')).toISOString(), '2026-10-03T12:12:10.000Z');
+    assert.equal(vagt.erForfalden(w(t('12:10:10')), t('12:12:09')), false);
+    assert.equal(vagt.erForfalden(w(t('12:10:10')), t('12:12:10')), true);
+    // Også efter kampstart, indtil der opgives 30 min efter
+    assert.equal(vagt.naesteTjek(w(t('13:10:10')), t('13:10:11')).toISOString(), '2026-10-03T13:12:10.000Z');
+    // Et manuelt tjek flytter heller ikke det langsomme gitter
+    assert.equal(vagt.naesteTjek(w(t('12:11:00')), t('12:11:01')).toISOString(), '2026-10-03T12:12:10.000Z');
+});
+
+test('en kamp hvor holdsedlen aldrig kommer koster ca. 60 kald, ikke 180', () => {
+    // Simulér hele vinduet: første tjek 12:00:10 til der opgives 13:30:00
+    let sidst = t('11:45:00');
+    let antal = 0;
+    for (;;) {
+        const naeste = vagt.naesteTjek(w(sidst), sidst);
+        if (naeste > t('13:30:00')) break;
+        sidst = naeste;
+        antal++;
+    }
+    assert.equal(antal, 20 + 40); // 20 hurtige (10 min) + 40 langsomme (80 min)
+});
+
+test('fartgrænsen: samtidige kald til badmintonplayer spredes med mindst 500 ms', async () => {
+    const { bpTur, BP_MIN_AFSTAND_MS } = require('../../routes/importHoldkamp');
+    assert.equal(BP_MIN_AFSTAND_MS, 500);
+    const t0 = Date.now();
+    const tider = [];
+    await Promise.all([1, 2, 3].map(() => bpTur().then(() => tider.push(Date.now() - t0))));
+    tider.sort((a, b) => a - b);
+    assert.ok(tider[0] < 200, `første kald skal gå igennem med det samme (${tider[0]} ms)`);
+    assert.ok(tider[1] >= 450, `andet kald skal vente (${tider[1]} ms)`);
+    assert.ok(tider[2] >= 950, `tredje kald skal vente to gange (${tider[2]} ms)`);
 });

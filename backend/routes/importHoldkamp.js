@@ -9,12 +9,28 @@ const SERVICE_URL  = 'https://www.badmintonplayer.dk/SportsResults/Components/We
 const CONTEXT_PAGE = 'https://www.badmintonplayer.dk/DBF/HoldTurnering/Stilling/';
 const BROWSER_UA   = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
+// Fælles fartgrænse mod badmintonplayer.dk: højst 2 kald i sekundet fra hele
+// serveren, uanset hvor mange klubber og holdkampe der venter på samme tid.
+// Alle kald herfra (vagten, "Tjek nu" og manuel import) går gennem bpTur(),
+// som reserverer næste ledige tidspunkt — så en travl lørdag giver en jævn
+// række kald og aldrig en byge, der kunne få hele serverens IP blokeret.
+const BP_MIN_AFSTAND_MS = 500;
+let _bpNaesteLedig = 0;
+
+async function bpTur() {
+    const nu = Date.now();
+    const start = Math.max(nu, _bpNaesteLedig);
+    _bpNaesteLedig = start + BP_MIN_AFSTAND_MS; // reserveres synkront → sikkert ved samtidige kald
+    if (start > nu) await new Promise(r => setTimeout(r, start - nu));
+}
+
 // Cache context key for 10 minutes — avoids hammering the site
 let _contextKey = null;
 let _contextKeyExpires = 0;
 
 async function getContextKey(force = false) {
     if (!force && _contextKey && Date.now() < _contextKeyExpires) return _contextKey;
+    await bpTur();
     const resp = await fetch(CONTEXT_PAGE, {
         headers: { 'User-Agent': BROWSER_UA, 'Accept': 'text/html,application/xhtml+xml' },
         signal: AbortSignal.timeout(12000),
@@ -46,6 +62,7 @@ function parseHashParams(url) {
 }
 
 async function fetchMatchHtml(contextKey, params) {
+    await bpTur();
     const resp = await fetch(SERVICE_URL, {
         method: 'POST',
         headers: {
@@ -417,7 +434,7 @@ router.delete('/holdkamp-watchers/:id', authMiddleware, requirePage('holdkamp'),
 
 // ── Automatisk hentning ──────────────────────────────────────────────────────
 
-// Tidsplanen (første tjek 59 min 50 sek før start, derefter hvert 30. sekund)
+// Tidsplanen (første tjek 59 min 50 sek før start, hvert 30. sekund i 10 minutter, derefter hvert 2. minut)
 // ligger i config/holdkampVagt.js, så den kan unit-testes uden database.
 const vagt = require('../config/holdkampVagt');
 
@@ -532,7 +549,7 @@ async function runHoldkampWatchers() {
         // frigivet endnu"-tjek tavse (180 linjer pr. kamp ville drukne resten).
         const foerste = vagt.foersteTjek(w.start_time);
         if (foerste && nu >= foerste && (!w.last_checked_at || new Date(w.last_checked_at) < foerste)) {
-            console.log(`[holdkamp-watch] kamp ${w.league_match_id} (${w.team1_name} – ${w.team2_name}): vinduet er åbnet, tjekker hvert 30. sekund`);
+            console.log(`[holdkamp-watch] kamp ${w.league_match_id} (${w.team1_name} – ${w.team2_name}): vinduet er åbnet, tjekker hvert 30. sekund i 10 minutter og derefter hvert 2. minut`);
         }
         await tjekWatcher(w);
     }
@@ -542,6 +559,8 @@ async function runHoldkampWatchers() {
 
 module.exports = router;
 module.exports.runHoldkampWatchers = runHoldkampWatchers;
+module.exports.bpTur = bpTur;
+module.exports.BP_MIN_AFSTAND_MS = BP_MIN_AFSTAND_MS;
 // Rene hjælpefunktioner eksporteres til unit-tests (tests/unit/holdkamp-tid.test.js)
 module.exports.parseDanskTid = parseDanskTid;
 module.exports.tilMysqlDato = tilMysqlDato;

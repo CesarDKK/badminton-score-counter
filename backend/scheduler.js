@@ -216,7 +216,7 @@ function startHoldkampWatch() {
     let loebenr = 0;
 
     // Hvert 10. sekund: tidsplanen har første tjek 59 min 50 sek før kampstart
-    // og derefter hvert 30. sekund, så minut-opløsning er for grov. Uden
+    // og derefter hvert 30. sekund (senere hvert 2. minut), så minut-opløsning er for grov. Uden
     // forfaldne kampe er et gennemløb én lille databaseforespørgsel pr. klub.
     cron.schedule('*/10 * * * * *', async () => {
         if (aktiv) {
@@ -253,7 +253,7 @@ function startHoldkampWatch() {
         timezone: 'Europe/Copenhagen'
     });
 
-    console.log('⏰ Scheduled holdkamp-overvågning hvert 10. sekund (første tjek 59:50 før kampstart, derefter hvert 30. sekund)');
+    console.log('⏰ Scheduled holdkamp-overvågning hvert 10. sekund (første tjek 59:50 før kampstart, hvert 30. sekund i 10 min, derefter hvert 2. minut)');
 }
 
 /**
