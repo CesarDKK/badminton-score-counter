@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.json">
     <link rel="stylesheet" href="fonts.css?v=2">
     <link rel="stylesheet" href="styles.css?v=5">
-    <link rel="stylesheet" href="court-v3-styles.css?v=8">
+    <link rel="stylesheet" href="court-v3-styles.css?v=9">
     <script src="js/theme-loader.js?v=8"></script>
 </head>
 <body>
@@ -49,6 +49,11 @@
                     <div class="point-score" id="player2PointScore">0</div>
                     <div class="boldpoint-label" id="player2Boldpoint"></div>
                 </div>
+
+                <!-- Klublogoer: placeres af positionScoreLogos() en tredjedel
+                     af vejen fra sæt-visningen mod point-visningen -->
+                <div class="score-logos" id="player1Logos" aria-hidden="true"></div>
+                <div class="score-logos" id="player2Logos" aria-hidden="true"></div>
             </div>
         </div>
 
@@ -256,6 +261,7 @@
     <script src="js/auth-guard.js?v=3"></script>
     <script src="js/live-updates.js?v=2"></script>
     <script src="js/kamp-resultat.js?v=1"></script>
-    <script src="court-script-v3.js?v=39"></script>
+    <script src="js/logo-match.js?v=1"></script>
+    <script src="court-script-v3.js?v=40"></script>
 </body>
 </html>

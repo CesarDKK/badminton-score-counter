@@ -181,6 +181,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Load holdkamp panel
     await initHoldkampPanel();
 
+    // Klublogoer ved scoren (navnene kendes nu)
+    refreshCourtLogos();
+
     // Tournament-tildelinger sker udelukkende fra admin baneoversigt —
     // sync-loopet detekterer når en kamp er sat på denne bane.
 
@@ -1122,7 +1125,101 @@ function updateDisplay() {
     }
 
     updateResultButtons();
+    updateScoreLogos();
 }
+
+// ── Klublogoer ved scoren ──
+// Samme opslag som oversigten: spiller-override (player_logos) vinder, ellers
+// spillerens klub (player-clubs) -> centralt logo. Hentes ved start og igen
+// ved et 'logos'-config-event.
+let _courtLogos = [];
+let _courtPlayerLogos = [];
+let _courtClubByName = {};
+const _renderedLogoKeys = { 1: null, 2: null };
+
+async function refreshCourtLogos() {
+    if (!window.LogoMatch) return;
+    try { _courtLogos = await api.getPublicLogos() || []; } catch (e) { _courtLogos = []; }
+    try {
+        _courtPlayerLogos = await api.getPlayerLogos() || [];
+        const clubs = await api.getPlayerClubs() || [];
+        _courtClubByName = {};
+        clubs.forEach(c => { if (c && c.name) _courtClubByName[LogoMatch.normalizeName(c.name)] = c.club; });
+    } catch (e) {
+        _courtPlayerLogos = [];
+        _courtClubByName = {};
+    }
+    updateScoreLogos();
+}
+
+// Logoer for én side: single = spilleren, double = begge — kun ét hvis samme klub
+function sideLogos(player) {
+    if (!window.LogoMatch) return [];
+    const names = gameState.isDoubles ? [player.name, player.name2] : [player.name];
+    const placeholders = ['Spiller 1', 'Spiller 2', 'Makker 1', 'Makker 2'];
+    const logos = [];
+    names.forEach(name => {
+        if (!name || placeholders.includes(name)) return;
+        const logo = LogoMatch.resolvePlayerLogo(name, {
+            playerLogos: _courtPlayerLogos, clubByName: _courtClubByName, logos: _courtLogos
+        });
+        if (logo && !logos.some(l => l.id === logo.id)) logos.push(logo);
+    });
+    return logos;
+}
+
+function updateScoreLogos() {
+    let changed = false;
+    [1, 2].forEach(n => {
+        const logos = sideLogos(gameState['player' + n]);
+        const key = logos.map(l => l.id).join(',');
+        if (key === _renderedLogoKeys[n]) return;
+        _renderedLogoKeys[n] = key;
+        changed = true;
+        const el = document.getElementById('player' + n + 'Logos');
+        if (!el) return;
+        el.innerHTML = '';
+        logos.forEach(logo => {
+            const img = document.createElement('img');
+            img.className = 'score-logo';
+            img.alt = '';
+            img.src = logo.url;
+            img.onerror = () => img.remove();
+            el.appendChild(img);
+        });
+    });
+    if (changed) positionScoreLogos();
+}
+
+// Logoets midte en tredjedel af vejen fra sæt-tekstens kant mod point-tallets
+// midte. offset* er layout-mål (upåvirket af transform) i forhold til
+// .scores-container (position: relative), så det virker også
+// når teksten er drejet i stående visning.
+function positionScoreLogos() {
+    const setSection = document.querySelector('.set-score-section');
+    if (!setSection) return;
+    const parts = setSection.querySelectorAll('.set-label, .set-score');
+    let setLeft = Infinity, setRight = -Infinity;
+    parts.forEach(p => {
+        setLeft = Math.min(setLeft, p.offsetLeft);
+        setRight = Math.max(setRight, p.offsetLeft + p.offsetWidth);
+    });
+    if (!isFinite(setLeft)) return;
+    [1, 2].forEach(n => {
+        const el = document.getElementById('player' + n + 'Logos');
+        const point = document.getElementById('player' + n + 'PointScore');
+        if (!el || !point) return;
+        const section = point.parentElement;
+        const pointCenter = section.offsetLeft + section.offsetWidth / 2;
+        const pointMiddleY = point.offsetTop + point.offsetHeight / 2;
+        const setEdge = n === 1 ? setLeft : setRight;
+        el.style.left = (setEdge + (pointCenter - setEdge) / 3) + 'px';
+        el.style.top = pointMiddleY + 'px';
+    });
+}
+
+window.addEventListener('resize', positionScoreLogos);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(positionScoreLogos);
 
 // Select which team serves first
 async function selectServer(team) {
@@ -2695,6 +2792,7 @@ function startSyncPolling(ms) {
 // (de kan ikke stamme fra vores egen point-gemning og er vigtige at reagere på).
 function handleCourtEvent(event) {
     const type = event && event.type;
+    if (type === 'config' && event.scope === 'logos') refreshCourtLogos();
     if (type !== 'reset' && type !== 'assignment' && Date.now() - lastOwnSaveAt < 1200) return;
     runServerSync(type);
 }

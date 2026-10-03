@@ -198,6 +198,45 @@ html, body {
     color: rgba(255,255,255,0.3);
 }
 
+/* ── Klublogoer ved scoren ──
+   Én pr. side (double: to, eller ét hvis makkerne er fra samme klub).
+   Vandret placering sættes af positionScoreLogos() ud fra den målte
+   sæt-tekst og point-tallet — derfor er sæt-teksterne kun så brede som
+   indholdet (fit-content), så offsetLeft/offsetWidth giver tekstens kant. */
+.scores-container {
+    position: relative;
+}
+
+.set-label,
+.set-score {
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.score-logos {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    gap: var(--cv-logo-gap, 8px);
+    pointer-events: none;
+}
+
+.score-logos:empty {
+    display: none;
+}
+
+.score-logo {
+    height: var(--cv-logo-h, 52px);
+    width: auto;
+    max-width: calc(var(--cv-logo-h, 52px) * 1.6);
+    object-fit: contain;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
+}
+
 /* ── Point-feedback (punkt 2): puls på score + glimt på banehalvdel ── */
 .point-score.score-pulse {
     animation: scorePulse 450ms ease-out;
@@ -1090,6 +1129,7 @@ html, body {
         --cv-setlabel-mb: 2px;
         --cv-setscore-fs: 1.6em;
         --cv-setscore-gap: 6px;
+        --cv-logo-h: 38px;
         --cv-controls-mt: 3px;
         --cv-controls-pad: 3px 10px;
         --cv-add-pad: 12px 30px;
@@ -1144,6 +1184,7 @@ html, body {
         --cv-setlabel-mb: 1px;
         --cv-setscore-fs: 1.2em;
         --cv-setscore-gap: 4px;
+        --cv-logo-h: 30px;
         --cv-controls-mt: 2px;
         --cv-controls-pad: 2px 8px;
         --cv-add-pad: 10px 25px;
@@ -1196,6 +1237,8 @@ html, body {
         --cv-setlabel-mb: 1px;
         --cv-setscore-fs: 1em;
         --cv-setscore-gap: 3px;
+        --cv-logo-h: 26px;
+        --cv-logo-gap: 5px;
         --cv-controls-mt: 1px;
         --cv-controls-pad: 1px 5px;
         --cv-controls-gap: 3px;
@@ -1252,6 +1295,8 @@ html, body {
         --cv-setlabel-mb: 1px;
         --cv-setscore-fs: 1.3em;
         --cv-setscore-gap: 4px;
+        --cv-logo-h: 28px;
+        --cv-logo-gap: 5px;
         --cv-controls-mt: 0;
         --cv-controls-pad: 5px 10px 6px;
         --cv-controls-gap: 0;
