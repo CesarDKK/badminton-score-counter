@@ -1183,10 +1183,24 @@ function sideLogos(player) {
         if (!name || placeholders.includes(name)) return;
         const logo = LogoMatch.resolvePlayerLogo(name, {
             playerLogos: _courtPlayerLogos, clubByName: _courtClubByName, logos: _courtLogos
-        });
+        }) || holdkampTeamLogo(name);
         if (logo && !logos.some(l => l.id === logo.id)) logos.push(logo);
     });
     return logos;
+}
+
+// Reserve i holdkampe: spillere uden kendt klub får deres holds logo. Holdet
+// findes via spillerens navn i delkampene, så det også passer efter "Skift side".
+function holdkampTeamLogo(name) {
+    const teamMatches = [activeTeamMatch, ...holdkampMatches].filter(Boolean);
+    for (const tm of teamMatches) {
+        const games = tm.games || (tm.game ? [tm.game] : []);
+        for (const g of games) {
+            if (g.team1_player1 === name || g.team1_player2 === name) return LogoMatch.resolveTeamLogo(tm, 1, _courtLogos);
+            if (g.team2_player1 === name || g.team2_player2 === name) return LogoMatch.resolveTeamLogo(tm, 2, _courtLogos);
+        }
+    }
+    return null;
 }
 
 function updateScoreLogos() {
