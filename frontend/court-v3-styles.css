@@ -1842,6 +1842,13 @@ html, body {
     transform: rotate(180deg);
 }
 
+/* styles.css giver .player-name width: 100% — med lodret tekst er bredden
+   linjestablingen, så navnet lagde sig i feltets ene side (= toppen, når
+   tabletten er drejet). Kun så bred som teksten, så feltet centrerer den. */
+.cv-standing .player-name {
+    width: auto;
+}
+
 .cv-standing .cv-label {
     display: inline-block;
     /* "Start serv" på to linjer i stedet for én lang */
