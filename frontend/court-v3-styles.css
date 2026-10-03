@@ -198,6 +198,45 @@ html, body {
     color: rgba(255,255,255,0.3);
 }
 
+/* ── Klublogoer ved scoren ──
+   Én pr. side (double: to, eller ét hvis makkerne er fra samme klub).
+   Vandret placering sættes af positionScoreLogos() ud fra den målte
+   sæt-tekst og point-tallet — derfor er sæt-teksterne kun så brede som
+   indholdet (fit-content), så offsetLeft/offsetWidth giver tekstens kant. */
+.scores-container {
+    position: relative;
+}
+
+.set-label,
+.set-score {
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.score-logos {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    gap: var(--cv-logo-gap, 8px);
+    pointer-events: none;
+}
+
+.score-logos:empty {
+    display: none;
+}
+
+.score-logo {
+    height: var(--cv-logo-h, 52px);
+    width: auto;
+    max-width: calc(var(--cv-logo-h, 52px) * 1.6);
+    object-fit: contain;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
+}
+
 /* ── Point-feedback (punkt 2): puls på score + glimt på banehalvdel ── */
 .point-score.score-pulse {
     animation: scorePulse 450ms ease-out;
@@ -285,7 +324,7 @@ html, body {
 
 /* Kompakte skærme (tablet i lavt landskab + telefon-landskab): skrump boldpoint-labelen
    så den ikke gør scorebjælken højere */
-@media (max-height: 700px) {
+@media (max-height: 700px), (orientation: portrait) and (max-width: 700px) {
     .boldpoint-label {
         height: 15px;
         line-height: 15px;
@@ -298,7 +337,7 @@ html, body {
 }
 
 /* Ultrasmå skærme — labelen fylder reelt ingenting ekstra */
-@media (max-height: 550px) {
+@media (max-height: 550px), (orientation: portrait) and (max-width: 550px) {
     .boldpoint-label {
         height: 13px;
         line-height: 13px;
@@ -650,7 +689,7 @@ html, body {
         width: min(100%, calc((100vh - 220px) * (13.4 / 6.1)));
         /* dvh = den faktiske (dynamiske) viewport — undgår overflow når
            browser-UI gør 100vh større end det synlige område */
-        width: min(100%, calc((100dvh - 220px) * (13.4 / 6.1)));
+        width: min(100%, calc((var(--app-h, 100dvh) - var(--cv-chrome-h, 220px)) * (13.4 / 6.1)));
         aspect-ratio: 13.4 / 6.1;
         padding-bottom: 0;
         height: auto;
@@ -850,52 +889,37 @@ html, body {
 }
 
 /* ══════════════════════════════════════════
-   Portrait overlay
+   Altid landskab
+   Tælleren er bygget til landskab. Android-appen er låst dér, men i en
+   browser kan skærmen stå på højkant — så drejes hele siden 90° med uret,
+   og --app-h/--app-w peger på de byttede viewport-mål. Media queries kan
+   ikke byttes om, så hvert størrelsestrin har en tilsvarende
+   "(orientation: portrait) and (max-width: …)"-variant.
    ══════════════════════════════════════════ */
-#portraitOverlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: #0d0d1a;
-    z-index: 10000;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-}
-
-.portrait-overlay-inner {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 24px;
-    padding: 40px;
-    text-align: center;
-}
-
-.portrait-rotate-icon {
-    font-size: 5em;
-    color: rgba(255,255,255,0.6);
-    animation: rotateHint 2.5s ease-in-out infinite;
-    display: block;
-    transform-origin: center;
-}
-
-@keyframes rotateHint {
-    0%, 35%  { transform: rotate(0deg); }
-    65%, 100% { transform: rotate(90deg); }
-}
-
-.portrait-overlay-inner p {
-    font-family: 'DM Sans', sans-serif;
-    font-size: 1.15em;
-    color: rgba(255,255,255,0.65);
-    max-width: 280px;
-    line-height: 1.6;
-}
-
-/* Show overlay in portrait on phone */
-@media (orientation: portrait) and (max-width: 767px) {
-    #portraitOverlay { display: flex; }
+@media (orientation: portrait) {
+    :root {
+        --app-h: 100vw;
+        --app-w: 100vh;
+    }
+    @supports (height: 100dvh) {
+        :root {
+            --app-h: 100dvw;
+            --app-w: 100dvh;
+        }
+    }
+    html, body {
+        overflow: hidden;
+    }
+    body {
+        position: fixed;
+        top: 0;
+        left: var(--app-h);
+        width: var(--app-w);
+        height: var(--app-h);
+        min-height: 0; /* styles.css: min-height: 100vh = den lange led */
+        transform-origin: 0 0;
+        transform: rotate(90deg);
+    }
 }
 
 /* (Telefon-landskab-queryen ligger nederst i filen, efter tablet-trinnene,
@@ -1081,7 +1105,8 @@ html, body {
 }
 
 /* Tablet-trin 1 (fx 1024x600 i landskab) */
-@media (max-height: 700px) and (min-width: 800px) {
+@media (max-height: 700px) and (min-width: 800px),
+       (orientation: portrait) and (max-width: 700px) and (min-height: 800px) {
     :root {
         --cv-score-mb: 3px;
         --cv-scores-pad: 0 8px;
@@ -1090,6 +1115,7 @@ html, body {
         --cv-setlabel-mb: 2px;
         --cv-setscore-fs: 1.6em;
         --cv-setscore-gap: 6px;
+        --cv-logo-h: 38px;
         --cv-controls-mt: 3px;
         --cv-controls-pad: 3px 10px;
         --cv-add-pad: 12px 30px;
@@ -1135,7 +1161,8 @@ html, body {
 }
 
 /* Tablet-trin 2 (600px eller lavere) */
-@media (max-height: 600px) and (min-width: 800px) {
+@media (max-height: 600px) and (min-width: 800px),
+       (orientation: portrait) and (max-width: 600px) and (min-height: 800px) {
     :root {
         --cv-score-mb: 2px;
         --cv-scores-pad: 0 5px;
@@ -1144,6 +1171,7 @@ html, body {
         --cv-setlabel-mb: 1px;
         --cv-setscore-fs: 1.2em;
         --cv-setscore-gap: 4px;
+        --cv-logo-h: 30px;
         --cv-controls-mt: 2px;
         --cv-controls-pad: 2px 8px;
         --cv-add-pad: 10px 25px;
@@ -1187,7 +1215,8 @@ html, body {
 }
 
 /* Tablet-trin 3 (550px eller lavere — Android med synlig navigationsbar) */
-@media (max-height: 550px) and (min-width: 800px) {
+@media (max-height: 550px) and (min-width: 800px),
+       (orientation: portrait) and (max-width: 550px) and (min-height: 800px) {
     :root {
         --cv-score-mb: 1px;
         --cv-scores-pad: 0 3px;
@@ -1196,6 +1225,8 @@ html, body {
         --cv-setlabel-mb: 1px;
         --cv-setscore-fs: 1em;
         --cv-setscore-gap: 3px;
+        --cv-logo-h: 26px;
+        --cv-logo-gap: 5px;
         --cv-controls-mt: 1px;
         --cv-controls-pad: 1px 5px;
         --cv-controls-gap: 3px;
@@ -1243,7 +1274,8 @@ html, body {
    Telefon-landskab — sidste trin, vinder hele zonen ≤500px høj
    (uanset bredde, så brede telefoner får ét sammenhængende udtryk)
    ══════════════════════════════════════════ */
-@media (orientation: landscape) and (max-height: 500px) {
+@media (orientation: landscape) and (max-height: 500px),
+       (orientation: portrait) and (max-width: 500px) {
     :root {
         --cv-score-mb: 0;
         --cv-scores-pad: 3px 10px;
@@ -1252,6 +1284,8 @@ html, body {
         --cv-setlabel-mb: 1px;
         --cv-setscore-fs: 1.3em;
         --cv-setscore-gap: 4px;
+        --cv-logo-h: 28px;
+        --cv-logo-gap: 5px;
         --cv-controls-mt: 0;
         --cv-controls-pad: 5px 10px 6px;
         --cv-controls-gap: 0;
@@ -1288,14 +1322,18 @@ html, body {
     }
 
     body {
-        height: 100dvh;
+        height: var(--app-h, 100dvh);
         overflow: hidden;
+        /* styles.css giver body 10–30px polstring på brede telefoner (>576px),
+           som skubbede knaprækken ud under kanten — .container fylder selv
+           hele højden og har sin egen luft */
+        padding: 0;
     }
 
     .bg-glow { position: fixed; }
 
     .container {
-        height: 100dvh;
+        height: var(--app-h, 100dvh);
         display: flex;
         flex-direction: column;
         padding: 0 !important;
@@ -1364,7 +1402,7 @@ html, body {
     #startServPlayer2 { justify-self: end; }
 
     /* Settings menu full-width */
-    .settings-menu-content { width: 92vw; }
+    .settings-menu-content { width: calc(var(--app-w, 100vw) * 0.92); }
 
     .start-hint {
         font-size: 0.72em;
@@ -1738,7 +1776,7 @@ html, body {
 }
 
 /* Tablet, lav skærm */
-@media (max-height: 600px) {
+@media (max-height: 600px), (orientation: portrait) and (max-width: 600px) {
     .result-dialog { gap: 22px; padding: 14px 20px; }
     .result-main { gap: 10px; }
     .result-title { font-size: 2em; }
@@ -1751,7 +1789,8 @@ html, body {
 }
 
 /* Telefon i landskab */
-@media (orientation: landscape) and (max-height: 500px) {
+@media (orientation: landscape) and (max-height: 500px),
+       (orientation: portrait) and (max-width: 500px) {
     .result-dialog { gap: 14px; padding: 8px 12px; }
     .result-main { gap: 6px; }
     .result-title { font-size: 1.5em; }
@@ -1768,4 +1807,127 @@ html, body {
     .result-buttons { gap: 8px; }
     .result-buttons button { font-size: 0.9em; padding: 8px 20px; }
     .btn-enter-result { font-size: 0.85em; padding: 7px 18px; }
+}
+
+/* ══════════════════════════════════════════
+   Stående visning (.cv-standing på <html>, slås til i Indstillinger)
+   Tabletten holdes på højkant — drejet med uret — fra enden af banen.
+   Layout og knapper bliver hvor de er; kun indholdet drejes 90° mod uret,
+   så det læses lige. Navne og knaptekster bruger writing-mode, så de
+   brydes efter den plads der er på langs; resten drejes med transform.
+   Gælder ikke "Indtast resultat" — den dialog fylder hele skærmen og er
+   bygget til landskab.
+   ══════════════════════════════════════════ */
+.cv-standing {
+    /* Knapperne bliver lidt højere med lodret tekst — giv banen plads til det */
+    --cv-chrome-h: 250px;
+}
+
+/* Scorerækken: hver blok drejes om sin egen midte. Boksene bliver
+   visuelt høje, så de må ikke fange tryk ment for banen nedenunder. */
+.cv-standing .player-score-section,
+.cv-standing .set-score-section {
+    transform: rotate(-90deg);
+    pointer-events: none;
+}
+
+.cv-standing .score-logos {
+    transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+/* Lodret tekst der læses nedefra og op */
+.cv-standing .player-name,
+.cv-standing .cv-label {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+}
+
+/* styles.css giver .player-name width: 100% — med lodret tekst er bredden
+   linjestablingen, så navnet lagde sig i feltets ene side (= toppen, når
+   tabletten er drejet). Kun så bred som teksten, så feltet centrerer den. */
+.cv-standing .player-name {
+    width: auto;
+}
+
+.cv-standing .cv-label {
+    display: inline-block;
+    /* "Start serv" på to linjer i stedet for én lang */
+    inline-size: min-content;
+    line-height: 1.1;
+}
+
+.cv-standing .btn-start-serv,
+.cv-standing .btn-undo {
+    height: auto;
+    min-height: var(--cv-ctrl-h, 45px);
+    min-width: var(--cv-ctrl-h, 45px);
+    padding: 8px 12px;
+}
+
+/* Byt makker-knappens pile drejes IKKE — de peger mellem de to felter, og
+   det er rigtigt i begge visninger */
+.cv-standing .serve-indicator::after {
+    transform: rotate(-90deg);
+}
+
+/* "Sæt vundet" er for lang til scorerækkens højde, når den står på langs —
+   stillingen mellem pointtallene taler for sig selv */
+.cv-standing .set-label {
+    display: none;
+}
+
+/* Midten af banen, set fra enden: banenavn øverst (= venstre for nettet),
+   Start kamp/timer på nettet, Skift side nederst (= højre for nettet) */
+.cv-standing .court-name-display {
+    left: 40%;
+    top: 50%;
+    transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+.cv-standing .court-center-overlay {
+    transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+.cv-standing .start-row {
+    flex-direction: column;
+}
+
+.cv-standing .start-hint {
+    /* Ingen plads på langs ad nettet ved siden af Skift side — Start kamp er
+       stadig grå indtil serven er valgt, og Start serv-knapperne er lige der */
+    display: none !important;
+}
+
+.cv-standing .btn-switch-sides {
+    left: 60%;
+    top: 50%;
+    transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+.cv-standing .btn-switch-sides:hover {
+    transform: translate(-50%, -50%) rotate(-90deg) scale(1.1);
+}
+
+.cv-standing .btn-switch-sides:active {
+    transform: translate(-50%, -50%) rotate(-90deg) scale(0.95);
+}
+
+/* Siderne ligger over/under hinanden set fra enden — pilene skal pege
+   op/ned, ikke følge knappens drejning */
+.cv-standing .btn-switch-sides-icon svg {
+    transform: rotate(90deg);
+}
+
+/* Menu, pause og beskeder: hele boksen drejes, og bredde/højde byttes */
+.cv-standing .settings-menu-content {
+    transform: rotate(-90deg);
+    width: auto;
+    min-width: min(var(--cv-menu-minw, 400px), calc(var(--app-h, 100dvh) * 0.9));
+    max-width: calc(var(--app-h, 100dvh) * 0.9);
+}
+
+.cv-standing .court-overlay-content {
+    transform: rotate(-90deg);
+    max-width: calc(var(--app-h, 100dvh) * 0.92);
+    max-height: calc(var(--app-w, 100vw) * 0.92);
 }

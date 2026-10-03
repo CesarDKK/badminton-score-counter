@@ -181,6 +181,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Load holdkamp panel
     await initHoldkampPanel();
 
+    // Klublogoer ved scoren (navnene kendes nu)
+    refreshCourtLogos();
+
     // Tournament-tildelinger sker udelukkende fra admin baneoversigt —
     // sync-loopet detekterer når en kamp er sat på denne bane.
 
@@ -238,6 +241,11 @@ function setupEventListeners() {
 
     document.getElementById('gameModeToggle').addEventListener('click', () => {
         toggleGameMode();
+        closeSettingsMenu();
+    });
+
+    document.getElementById('standingToggle').addEventListener('click', () => {
+        setStanding(!document.documentElement.classList.contains('cv-standing'));
         closeSettingsMenu();
     });
 
@@ -330,6 +338,18 @@ function toggleGameMode() {
 function updateGameModeButton() {
     const btn = document.getElementById('gameModeToggle');
     if (btn) btn.textContent = gameState.gameMode === '21' ? 'Skift til 15/21' : 'Skift til 21/30';
+}
+
+// Stående visning: tabletten holdes på højkant (drejet med uret) fra enden af
+// banen. Layoutet og knapperne bliver hvor de er — kun teksten drejes 90° mod
+// uret (.cv-standing i CSS). Huskes bevidst ikke: hver kamp starter liggende,
+// og setStanding(false) kaldes når banen ryddes/nulstilles.
+function setStanding(on) {
+    document.documentElement.classList.toggle('cv-standing', on);
+    const btn = document.getElementById('standingToggle');
+    if (btn) btn.textContent = on ? 'Liggende visning' : 'Stående visning';
+    fitPlayerNames();
+    positionScoreLogos();
 }
 
 function openSettingsMenu() {
@@ -824,6 +844,9 @@ async function performClearCourtNow() {
         assignedTournamentMatchId = null;
     }
 
+    // Ny kamp starter altid liggende
+    setStanding(false);
+
     // Nulstil swap-flag når banen ryddes
     gameState.sidesManuallySwitched = false;
 
@@ -1075,6 +1098,7 @@ function updateDisplay() {
 
     // Update player name positions based on serve
     updatePlayerNamePositions();
+    fitPlayerNames();
 
     // Show/hide swap players buttons (in doubles: before match starts OR between sets)
     const swapBtn1 = document.getElementById('swapPlayer1Btn');
@@ -1122,7 +1146,134 @@ function updateDisplay() {
     }
 
     updateResultButtons();
+    updateScoreLogos();
 }
+
+// ── Klublogoer ved scoren ──
+// Samme opslag som oversigten: spiller-override (player_logos) vinder, ellers
+// spillerens klub (player-clubs) -> centralt logo. Hentes ved start og igen
+// ved et 'logos'-config-event.
+let _courtLogos = [];
+let _courtPlayerLogos = [];
+let _courtClubByName = {};
+const _renderedLogoKeys = { 1: null, 2: null };
+
+async function refreshCourtLogos() {
+    if (!window.LogoMatch) return;
+    try { _courtLogos = await api.getPublicLogos() || []; } catch (e) { _courtLogos = []; }
+    try {
+        _courtPlayerLogos = await api.getPlayerLogos() || [];
+        const clubs = await api.getPlayerClubs() || [];
+        _courtClubByName = {};
+        clubs.forEach(c => { if (c && c.name) _courtClubByName[LogoMatch.normalizeName(c.name)] = c.club; });
+    } catch (e) {
+        _courtPlayerLogos = [];
+        _courtClubByName = {};
+    }
+    updateScoreLogos();
+}
+
+// Logoer for én side: single = spilleren, double = begge — kun ét hvis samme klub
+function sideLogos(player) {
+    if (!window.LogoMatch) return [];
+    const names = gameState.isDoubles ? [player.name, player.name2] : [player.name];
+    const placeholders = ['Spiller 1', 'Spiller 2', 'Makker 1', 'Makker 2'];
+    const logos = [];
+    names.forEach(name => {
+        if (!name || placeholders.includes(name)) return;
+        const logo = LogoMatch.resolvePlayerLogo(name, {
+            playerLogos: _courtPlayerLogos, clubByName: _courtClubByName, logos: _courtLogos
+        }) || holdkampTeamLogo(name);
+        if (logo && !logos.some(l => l.id === logo.id)) logos.push(logo);
+    });
+    return logos;
+}
+
+// Reserve i holdkampe: spillere uden kendt klub får deres holds logo. Holdet
+// findes via spillerens navn i delkampene, så det også passer efter "Skift side".
+function holdkampTeamLogo(name) {
+    const teamMatches = [activeTeamMatch, ...holdkampMatches].filter(Boolean);
+    for (const tm of teamMatches) {
+        const games = tm.games || (tm.game ? [tm.game] : []);
+        for (const g of games) {
+            if (g.team1_player1 === name || g.team1_player2 === name) return LogoMatch.resolveTeamLogo(tm, 1, _courtLogos);
+            if (g.team2_player1 === name || g.team2_player2 === name) return LogoMatch.resolveTeamLogo(tm, 2, _courtLogos);
+        }
+    }
+    return null;
+}
+
+function updateScoreLogos() {
+    let changed = false;
+    [1, 2].forEach(n => {
+        const logos = sideLogos(gameState['player' + n]);
+        const key = logos.map(l => l.id).join(',');
+        if (key === _renderedLogoKeys[n]) return;
+        _renderedLogoKeys[n] = key;
+        changed = true;
+        const el = document.getElementById('player' + n + 'Logos');
+        if (!el) return;
+        el.innerHTML = '';
+        logos.forEach(logo => {
+            const img = document.createElement('img');
+            img.className = 'score-logo';
+            img.alt = '';
+            img.src = logo.url;
+            img.onerror = () => img.remove();
+            el.appendChild(img);
+        });
+    });
+    if (changed) positionScoreLogos();
+}
+
+// Logoets midte en tredjedel af vejen fra sæt-tekstens kant mod point-tallets
+// midte. offset* er layout-mål (upåvirket af transform), så det virker også
+// når teksten er drejet i stående visning.
+function positionScoreLogos() {
+    const container = document.querySelector('.scores-container');
+    const setSection = document.querySelector('.set-score-section');
+    if (!container || !setSection) return;
+    // Afstand fra .scores-container — summeret op gennem offsetParent, fordi en
+    // drejet blok (stående visning) selv bliver offsetParent for sit indhold
+    const within = (el, prop) => {
+        let v = 0;
+        for (let e = el; e && e !== container; e = e.offsetParent) v += e[prop];
+        return v;
+    };
+    let setLeft, setRight;
+    if (document.documentElement.classList.contains('cv-standing')) {
+        // Sæt-blokken er drejet om sin midte: dens højde ligger nu vandret
+        const mid = within(setSection, 'offsetLeft') + setSection.offsetWidth / 2;
+        setLeft = mid - setSection.offsetHeight / 2;
+        setRight = mid + setSection.offsetHeight / 2;
+    } else {
+        setLeft = Infinity;
+        setRight = -Infinity;
+        setSection.querySelectorAll('.set-label, .set-score').forEach(p => {
+            const left = within(p, 'offsetLeft');
+            setLeft = Math.min(setLeft, left);
+            setRight = Math.max(setRight, left + p.offsetWidth);
+        });
+        if (!isFinite(setLeft)) return;
+    }
+    [1, 2].forEach(n => {
+        const el = document.getElementById('player' + n + 'Logos');
+        const point = document.getElementById('player' + n + 'PointScore');
+        if (!el || !point) return;
+        const section = point.parentElement;
+        const pointCenter = within(section, 'offsetLeft') + section.offsetWidth / 2;
+        // Stående: den drejede blok står om sin egen midte
+        const pointMiddleY = document.documentElement.classList.contains('cv-standing')
+            ? within(section, 'offsetTop') + section.offsetHeight / 2
+            : within(point, 'offsetTop') + point.offsetHeight / 2;
+        const setEdge = n === 1 ? setLeft : setRight;
+        el.style.left = (setEdge + (pointCenter - setEdge) / 3) + 'px';
+        el.style.top = pointMiddleY + 'px';
+    });
+}
+
+window.addEventListener('resize', () => { fitPlayerNames(); positionScoreLogos(); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { fitPlayerNames(); positionScoreLogos(); });
 
 // Select which team serves first
 async function selectServer(team) {
@@ -1286,6 +1437,7 @@ function updatePlayerNamePositions() {
     // Helper function to safely update text content (don't update if being edited)
     function safeSetText(element, text) {
         if (element.contentEditable !== 'true') {
+            element.dataset.fullName = text;
             element.textContent = text;
         }
     }
@@ -1360,6 +1512,34 @@ function updatePlayerNamePositions() {
             }
         }
     }
+}
+
+// Stående visning: navne der ikke kan være i deres felt vises kun med fornavn.
+// Det fulde navn ligger i data-full-name (sat af updatePlayerNamePositions), så
+// gameState og redigering altid bruger hele navnet.
+function fitPlayerNames() {
+    const standing = document.documentElement.classList.contains('cv-standing');
+    ['player1Name1Display', 'player1Name2Display', 'player2Name1Display', 'player2Name2Display'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el || el.contentEditable === 'true') return;
+        const full = el.dataset.fullName;
+        if (full === undefined) return;
+        el.textContent = full;
+        if (!standing || !full) return;
+        const box = el.parentElement;
+        const tooBig = Math.max(el.offsetWidth, el.scrollWidth) > box.clientWidth + 1 ||
+                       Math.max(el.offsetHeight, el.scrollHeight) > box.clientHeight + 1;
+        // Lodret tekst: offsetWidth er linjerne stablet. Mål én linje for at
+        // tælle dem — mere end to linjer er for trangt til at læse ved banen.
+        const fullWidth = el.offsetWidth;
+        el.textContent = 'X';
+        const oneLine = el.offsetWidth;
+        el.textContent = full;
+        const cs = getComputedStyle(el);
+        const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+        const lines = Math.round((fullWidth - pad) / Math.max(1, oneLine - pad));
+        if (tooBig || lines > 2) el.textContent = full.split(/\s+/)[0];
+    });
 }
 
 // Undo last action
@@ -1741,6 +1921,8 @@ async function handleSaveConflict(conflict) {
 // Banen er nulstillet på serveren (admin: Ryd bane / Nulstil) — adopter den
 // tomme servertilstand lokalt. Bruges af både periodic sync og 409-håndtering.
 async function adoptServerReset(loaded) {
+    // Ny kamp starter altid liggende
+    setStanding(false);
     // Version sættes FØR endRestBreak — dens save skal bruge den friske version
     gameState.version = (loaded && loaded.version) || 0;
 
@@ -1822,6 +2004,7 @@ function promptStartFreshIfCompleted() {
 // en DELETE nemlig udløbe adgangen ("scan igen"). I stedet nulstiller vi til
 // defaults og gemmer (PUT), så den samme session fortsætter på et rent scoreboard.
 async function startFreshMatchInSession() {
+    setStanding(false); // ny kamp starter altid liggende
     if (gameState.restBreakActive) {
         gameState.restBreakCallback = null;
         await endRestBreak();
@@ -2695,6 +2878,7 @@ function startSyncPolling(ms) {
 // (de kan ikke stamme fra vores egen point-gemning og er vigtige at reagere på).
 function handleCourtEvent(event) {
     const type = event && event.type;
+    if (type === 'config' && event.scope === 'logos') refreshCourtLogos();
     if (type !== 'reset' && type !== 'assignment' && Date.now() - lastOwnSaveAt < 1200) return;
     runServerSync(type);
 }
@@ -2926,6 +3110,9 @@ function setupEditablePlayerName(elementId, player, primaryField, fallbackField 
         if (!element.textContent.trim()) {
             return;
         }
+
+        // Stående visning kan vise et forkortet navn — redigér altid hele navnet
+        if (element.dataset.fullName) element.textContent = element.dataset.fullName;
 
         // Determine which field to edit based on current displayed text
         let fieldToEdit = primaryField;
