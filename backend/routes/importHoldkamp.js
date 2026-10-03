@@ -382,7 +382,27 @@ router.get('/holdkamp-watchers', authMiddleware, requirePage('holdkamp'), async 
                  OR updated_at > DATE_SUB(NOW(), INTERVAL 12 HOUR)
               ORDER BY start_time IS NULL, start_time ASC`
         );
-        res.json(raekker);
+        const nu = new Date();
+        res.json(raekker.map(w => medTidsplan(w, nu)));
+    } catch (error) { next(error); }
+});
+
+// POST /api/import/holdkamp-watchers/:id/check — "Tjek nu": samme tjek som
+// vagten laver, bare med det samme. Flytter ikke vagtens 30-sekunders gitter.
+router.post('/holdkamp-watchers/:id/check', authMiddleware, requirePage('holdkamp'), async (req, res, next) => {
+    try {
+        const hent = () => queryOne(
+            `SELECT *, DATE_FORMAT(start_time, '%Y-%m-%dT%H:%i:00Z') AS start_time_iso
+               FROM holdkamp_watchers WHERE id = ?`,
+            [req.params.id]
+        );
+        const w = await hent();
+        if (!w) return res.status(404).json({ error: 'Overvågningen findes ikke' });
+        if (w.status !== 'venter') {
+            return res.json({ udfald: w.status === 'oprettet' ? 'oprettet' : 'lukket', watcher: medTidsplan(w) });
+        }
+        const r = await tjekWatcher(w, { kilde: 'manuel' });
+        res.json({ ...r, watcher: medTidsplan(await hent()) });
     } catch (error) { next(error); }
 });
 
@@ -397,85 +417,124 @@ router.delete('/holdkamp-watchers/:id', authMiddleware, requirePage('holdkamp'),
 
 // ── Automatisk hentning ──────────────────────────────────────────────────────
 
-// Vi begynder at kigge 70 minutter før start (holdsedlen frigives ca. 60 min
-// før) og giver op 30 minutter efter starttidspunktet.
-const START_FOER_MIN = 70;
-const OPGIV_EFTER_MIN = 30;
-const INTERVAL_MIN = 5;
+// Tidsplanen (første tjek 59 min 50 sek før start, derefter hvert 30. sekund)
+// ligger i config/holdkampVagt.js, så den kan unit-testes uden database.
+const vagt = require('../config/holdkampVagt');
 
-// Kender vi ikke tidspunktet, kigger vi hvert 5. minut i seks timer og stopper.
-const UDEN_TID_TIMER = 6;
+/** Tilføjer tjek-tidspunkter og nedtælling til en watcher-række (til admin). */
+function medTidsplan(w, nu = new Date()) {
+    const iso = (d) => (d ? new Date(d).toISOString() : null);
+    const venter = w.status === 'venter';
+    return {
+        ...w,
+        last_checked_iso: iso(w.last_checked_at),
+        next_check_iso: venter ? vagt.naesteTjek(w, nu).toISOString() : null,
+        seconds_to_next: venter ? vagt.sekunderTilNaeste(w, nu) : null,
+        first_check_iso: iso(vagt.foersteTjek(w.start_time))
+    };
+}
 
 /**
- * Kaldes fra scheduleren hvert minut. Den henter kun fra badmintonplayer for de
- * kampe der faktisk er i vinduet og ikke er tjekket inden for de sidste 5
- * minutter — resten er en ren databaseforespørgsel.
+ * Tjekker én kamp hos badmintonplayer og opretter holdkampen, hvis holdsedlen
+ * er frigivet. Bruges både af den automatiske vagt og af "Tjek nu"-knappen.
+ *
+ * Kampen "tages" først med en atomar opdatering af last_checked_at, så to
+ * samtidige tjek (vagten og knappen, eller to gennemløb) aldrig opretter
+ * holdkampen to gange.
+ *
+ * Returnerer { udfald: 'oprettet' | 'ikke_frigivet' | 'fejl' | 'optaget', ... }.
+ */
+async function tjekWatcher(w, { kilde = 'auto' } = {}) {
+    const taget = await query(
+        `UPDATE holdkamp_watchers SET last_checked_at = NOW()
+          WHERE id = ? AND status = 'venter' AND last_checked_at <=> ?`,
+        [w.id, w.last_checked_at || null]
+    );
+    if (taget.affectedRows === 0) return { udfald: 'optaget' };
+
+    try {
+        const { info, seddel } = await hentKamp(w.url);
+
+        if (!seddel.team1Name || !seddel.team2Name || seddel.games.length === 0) {
+            // Ikke frigivet endnu. Kamptidspunktet genlæses hver gang, så en
+            // flyttet kamp får sit vindue på det rigtige tidspunkt.
+            await query(
+                `UPDATE holdkamp_watchers SET last_error = NULL, start_time = COALESCE(?, start_time) WHERE id = ?`,
+                [tilMysqlDato(info.tid), w.id]
+            );
+            if (info.tid && w.start_time && new Date(w.start_time).getTime() !== info.tid.getTime()) {
+                console.log(`[holdkamp-watch] kamp ${w.league_match_id}: kamptidspunktet er ændret til ${info.tid.toISOString()}`);
+            }
+            return { udfald: 'ikke_frigivet' };
+        }
+
+        const { opretHoldkamp } = require('./teamMatches');
+        const teamMatchId = await opretHoldkamp({
+            format: seddel.format,
+            team1Name: seddel.team1Name,
+            team2Name: seddel.team2Name,
+            games: seddel.games
+        });
+
+        await query(
+            `UPDATE holdkamp_watchers SET status = 'oprettet', team_match_id = ?, last_error = NULL WHERE id = ?`,
+            [teamMatchId, w.id]
+        );
+        console.log(`✓ Holdkamp hentet ${kilde === 'manuel' ? 'manuelt' : 'automatisk'}: ${seddel.team1Name} – ${seddel.team2Name} (kamp ${w.league_match_id})`);
+        return { udfald: 'oprettet', teamMatchId };
+    } catch (err) {
+        // En turnering kan blokere oprettelsen. Holdsedlen er der, men vi kan
+        // ikke oprette — markér som fejl så admin kan gøre det manuelt. Alle
+        // andre fejl (netværk, timeout) prøves igen ved næste tjek.
+        const blokeret = err.status === 409;
+        const besked = String(err.message || err).slice(0, 400);
+        await query(
+            `UPDATE holdkamp_watchers SET last_error = ?, status = ? WHERE id = ?`,
+            [besked, blokeret ? 'fejl' : 'venter', w.id]
+        );
+        console.error(`[holdkamp-watch] kamp ${w.league_match_id}: ${err.message}`);
+        return { udfald: 'fejl', fejl: besked, blokeret };
+    }
+}
+
+/**
+ * Kaldes fra scheduleren hvert 10. sekund. Selve gennemløbet er en ren
+ * databaseforespørgsel; badmintonplayer rammes kun for de kampe, tidsplanen
+ * siger er forfaldne (se config/holdkampVagt.js).
  */
 async function runHoldkampWatchers() {
     // 1. Giv op på kampe hvor starttidspunktet for længst er passeret
-    await query(
+    const opgivet = await query(
         `UPDATE holdkamp_watchers
             SET status = 'opgivet',
                 last_error = 'Holdsammensætningen blev aldrig frigivet'
           WHERE status = 'venter'
             AND ((start_time IS NOT NULL AND NOW() > DATE_ADD(start_time, INTERVAL ? MINUTE))
               OR (start_time IS NULL AND created_at < DATE_SUB(NOW(), INTERVAL ? HOUR)))`,
-        [OPGIV_EFTER_MIN, UDEN_TID_TIMER]
+        [vagt.OPGIV_EFTER_MIN, vagt.UDEN_TID_TIMER]
     );
+    if (opgivet.affectedRows > 0) {
+        console.log(`[holdkamp-watch] ${opgivet.affectedRows} kamp(e) opgivet — holdsedlen kom aldrig`);
+    }
 
-    // 2. Find dem der skal tjekkes nu
-    const forfaldne = await query(
+    // 2. Find dem tidsplanen siger skal tjekkes nu
+    const venter = await query(
         `SELECT * FROM holdkamp_watchers
           WHERE status = 'venter'
-            AND (last_checked_at IS NULL OR last_checked_at <= DATE_SUB(NOW(), INTERVAL ? MINUTE))
-            AND (start_time IS NULL OR NOW() >= DATE_SUB(start_time, INTERVAL ? MINUTE))
-          ORDER BY start_time ASC
-          LIMIT 10`,
-        [INTERVAL_MIN, START_FOER_MIN]
+          ORDER BY start_time IS NULL, start_time ASC
+          LIMIT 50`
     );
+    const nu = new Date();
+    const forfaldne = venter.filter(w => vagt.erForfalden(w, nu));
 
     for (const w of forfaldne) {
-        try {
-            const { info, seddel } = await hentKamp(w.url);
-
-            if (!seddel.team1Name || !seddel.team2Name || seddel.games.length === 0) {
-                // Stadig ikke frigivet — notér forsøget og prøv igen om 5 minutter
-                await query(
-                    `UPDATE holdkamp_watchers SET last_checked_at = NOW(), last_error = NULL,
-                            start_time = COALESCE(?, start_time)
-                      WHERE id = ?`,
-                    [tilMysqlDato(info.tid), w.id]
-                );
-                continue;
-            }
-
-            const { opretHoldkamp } = require('./teamMatches');
-            const teamMatchId = await opretHoldkamp({
-                format: seddel.format,
-                team1Name: seddel.team1Name,
-                team2Name: seddel.team2Name,
-                games: seddel.games
-            });
-
-            await query(
-                `UPDATE holdkamp_watchers
-                    SET status = 'oprettet', team_match_id = ?, last_checked_at = NOW(), last_error = NULL
-                  WHERE id = ?`,
-                [teamMatchId, w.id]
-            );
-            console.log(`✓ Holdkamp hentet automatisk: ${seddel.team1Name} – ${seddel.team2Name} (kamp ${w.league_match_id})`);
-        } catch (err) {
-            // En turnering kan blokere oprettelsen. Holdsedlen er der, men vi kan
-            // ikke oprette — markér som fejl så admin kan gøre det manuelt.
-            const blokeret = err.status === 409;
-            await query(
-                `UPDATE holdkamp_watchers
-                    SET last_checked_at = NOW(), last_error = ?, status = ?
-                  WHERE id = ?`,
-                [String(err.message || err).slice(0, 400), blokeret ? 'fejl' : 'venter', w.id]
-            );
-            console.error(`[holdkamp-watch] kamp ${w.league_match_id}: ${err.message}`);
+        // Ét spor i loggen når vinduet åbner — ellers er de enkelte "ikke
+        // frigivet endnu"-tjek tavse (180 linjer pr. kamp ville drukne resten).
+        const foerste = vagt.foersteTjek(w.start_time);
+        if (foerste && nu >= foerste && (!w.last_checked_at || new Date(w.last_checked_at) < foerste)) {
+            console.log(`[holdkamp-watch] kamp ${w.league_match_id} (${w.team1_name} – ${w.team2_name}): vinduet er åbnet, tjekker hvert 30. sekund`);
         }
+        await tjekWatcher(w);
     }
 
     return forfaldne.length;
