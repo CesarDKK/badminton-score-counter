@@ -139,6 +139,32 @@
                         </details>
                     </div>
 
+                    <!-- TV-skærme (PC og Raspberry Pi) — billederne ligger som GitHub-udgivelse
+                         (for store til vores egen server/Cloudflare); se loadTvBilleder() -->
+                    <div class="setting-card" id="tv-skaerme">
+                        <h3>TV-skærme (PC og Raspberry Pi)</h3>
+                        <p style="color:#aaa;font-size:0.9em;line-height:1.5;margin-bottom:12px;">
+                            Gør en PC eller en Raspberry Pi til en TV-skærm, der starter direkte i TV-visningen og passer på sig selv
+                            (genstarter selv, hvis den fryser). Filerne er ca. 700 MB — hent dem på en computer.
+                        </p>
+                        <div id="tvBillederInfo" style="font-size:0.85em;color:rgba(255,255,255,0.6);margin-bottom:12px;">Henter version…</div>
+                        <div id="tvBillederKnapper" style="display:flex;gap:10px;flex-wrap:wrap;">
+                            <a id="tvPcZip" class="btn-primary" style="text-decoration:none;display:inline-block;" href="https://github.com/CesarDKK/badminton-score-counter/releases" target="_blank" rel="noopener">PC: USB-nøgle (zip)</a>
+                            <a id="tvPiImg" class="btn-secondary" style="text-decoration:none;display:inline-block;" href="https://github.com/CesarDKK/badminton-score-counter/releases" target="_blank" rel="noopener">Raspberry Pi: SD-kort</a>
+                        </div>
+                        <div id="tvBillederEkstra" style="font-size:0.8em;color:rgba(255,255,255,0.5);margin-top:10px;"></div>
+                        <details style="margin-top:14px;font-size:0.85em;color:#aaa;line-height:1.55;">
+                            <summary style="cursor:pointer;color:rgba(255,255,255,0.75);">Sådan sætter du en TV-skærm op</summary>
+                            <ol style="margin:10px 0 0 18px;padding:0;">
+                                <li>Opret et adgangslink til TV'et under <a href="admin.html#device-tokens" style="color:var(--color-accent);">Admin → Adgangslinks</a>, og tryk <b>Hent kiosk.conf</b> ved linket. Skriv PC'ens navn (fx tv-bane-1) og evt. hallens WiFi.</li>
+                                <li><b>PC:</b> Pak zip-filen ud på en FAT32-formateret USB-nøgle, og erstat <b>kiosk.conf</b> på nøglen med den, du hentede. Start PC'en fra nøglen (F12 på Lenovo) og vælg <b>Installer</b>. Installationen sletter PC'ens disk.</li>
+                                <li><b>Raspberry Pi:</b> Skriv filen til et SD-kort med Raspberry Pi Imager ("Use custom") eller balenaEtcher, og erstat <b>kiosk.conf</b> på kortet med den, du hentede.</li>
+                                <li>Én kiosk.conf pr. skærm — så kan hver skærm kendes på sit navn under Adgangslinks og i fejlloggen.</li>
+                                <li>Fryser en PC, kan nøglen hente dens fejllog: vælg <b>Hent fejllog fra PC'en</b> i nøglens startmenu. Se VEJLEDNING.txt på nøglen.</li>
+                            </ol>
+                        </details>
+                    </div>
+
                     <!-- Security -->
                     <div class="setting-card">
                         <h3>Sikkerhed</h3>
@@ -169,6 +195,6 @@
 
     <script src="js/api.js?v=25"></script>
     <script src="js/auth-guard.js?v=3"></script>
-    <script src="settings-script.js?v=18"></script>
+    <script src="settings-script.js?v=19"></script>
 </body>
 </html>

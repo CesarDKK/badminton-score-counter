@@ -13,6 +13,54 @@ function initializeSettings() {
     }
     showDeviceTokensNavIfClubAdmin();
     loadTabletAppInfo();
+    loadTvBilleder();
+}
+
+// TV-skærmenes billeder (PC-USB og Raspberry Pi) ligger som GitHub-udgivelse
+// (tag tv-usb-v…, lavet af .github/workflows/tv-usb.yml). De er ~700 MB — for
+// store til /downloads/ bag Cloudflare. Udgivelsens filer udløber ikke; den
+// nyeste tv-usb-udgivelse slås op her, så knapperne altid peger på den.
+const TV_REPO = 'CesarDKK/badminton-score-counter';
+
+async function loadTvBilleder() {
+    const info = document.getElementById('tvBillederInfo');
+    if (!info) return;
+    try {
+        const r = await fetch(`https://api.github.com/repos/${TV_REPO}/releases?per_page=20`, {
+            headers: { Accept: 'application/vnd.github+json' }
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const udgivelse = (await r.json()).find(u => !u.draft && !u.prerelease && /^tv-usb-v/.test(u.tag_name));
+        if (!udgivelse) throw new Error('ingen udgivelse');
+        const fil = (re) => (udgivelse.assets || []).find(a => re.test(a.name));
+        const mb = (a) => a ? ` (${Math.round(a.size / 1048576)} MB)` : '';
+        const saet = (id, a, tekst) => {
+            const el = document.getElementById(id);
+            if (!el || !a) return;
+            el.href = a.browser_download_url;
+            el.removeAttribute('target');
+            el.textContent = tekst + mb(a);
+        };
+        const zip = fil(/^badminton-tv-usb-.*\.zip$/), img = fil(/^badminton-tv-usb-.*\.img$/);
+        saet('tvPcZip', zip, 'PC: USB-nøgle (zip)');
+        saet('tvPiImg', fil(/^badminton-tv-pi-.*\.img\.xz$/), 'Raspberry Pi: SD-kort');
+        const version = udgivelse.tag_name.replace(/^tv-usb-v/, '');
+        const dato = udgivelse.published_at ? new Date(udgivelse.published_at).toLocaleDateString('da-DK') : '';
+        info.textContent = `Version ${version}${dato ? ` · udgivet ${dato}` : ''}`;
+        const ekstra = document.getElementById('tvBillederEkstra');
+        if (ekstra) {
+            const dele = [];
+            if (img) dele.push(`<a href="${img.browser_download_url}" style="color:var(--color-accent);">PC som .img</a> (til balenaEtcher/Rufus)`);
+            const sum = fil(/^SHA256SUMS/);
+            if (sum) dele.push(`<a href="${sum.browser_download_url}" style="color:var(--color-accent);">kontrolsummer</a>`);
+            dele.push(`<a href="${udgivelse.html_url}" target="_blank" rel="noopener" style="color:var(--color-accent);">alle filer og ændringer</a>`);
+            ekstra.innerHTML = 'Også: ' + dele.join(' · ');
+        }
+    } catch {
+        // GitHub tillader 60 opslag i timen pr. IP uden login — knapperne peger
+        // så bare på udgivelsessiden, hvor filerne ligger
+        info.textContent = 'Versionsoplysninger kunne ikke hentes — knapperne åbner udgivelsessiden på GitHub.';
+    }
 }
 
 // Tablet-appen: version, størrelse og byggedato fra /downloads/badminton-app.json
