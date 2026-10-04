@@ -143,6 +143,23 @@
                         <button id="startHoldkampBtn" class="btn-primary" style="margin-top: 20px; width: 100%; padding: 15px; font-size: 1.1em;">Start Holdkamp</button>
                     </div>
                 </div>
+
+                <!-- Log for den automatiske hentning (holdkamp-køen) — til fejlsøgning
+                     uden adgang til serverens log. Udfyldes af bpLoadVagtLog(). -->
+                <details id="bpVagtLogBoks" ontoggle="if (this.open) bpLoadVagtLog()" style="margin-top:28px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 18px;">
+                    <summary style="cursor:pointer;color:rgba(255,255,255,0.8);font-weight:600;">Log for automatisk hentning fra badmintonplayer.dk</summary>
+                    <div style="margin-top:12px;">
+                        <div id="bpVagtDiagnose" style="font-size:0.85em;color:#aaa;line-height:1.6;margin-bottom:10px;"></div>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+                            <select id="bpVagtLogFilter" onchange="bpLoadVagtLog()" style="background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:6px 10px;color:#eaeaea;font-size:0.85em;">
+                                <option value="">Alle kampe</option>
+                            </select>
+                            <button onclick="bpLoadVagtLog()" class="btn-secondary" style="padding:6px 12px;font-size:0.82em;">Opdatér</button>
+                            <button onclick="bpKopierVagtLog(this)" class="btn-secondary" style="padding:6px 12px;font-size:0.82em;">Kopiér log</button>
+                        </div>
+                        <div id="bpVagtLog" style="max-height:420px;overflow-y:auto;font-size:0.82em;"></div>
+                    </div>
+                </details>
             </div>
 
             <!-- Tournament Section -->
@@ -547,11 +564,11 @@
         </div>
     </div>
 
-    <script src="js/api.js?v=25"></script>
+    <script src="js/api.js?v=26"></script>
     <script src="js/auth-guard.js?v=3"></script>
     <script src="js/logo-match.js?v=1"></script>
     <script src="js/live-updates.js?v=2"></script>
     <script src="js/holdkamp-formater.js?v=1"></script>
-    <script src="admin-script.js?v=62"></script>
+    <script src="admin-script.js?v=63"></script>
 </body>
 </html>

@@ -2,8 +2,9 @@ const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
 require('dotenv').config();
 
-// Pool til normale forespørgsler mod master databasen (badminton_user)
-const pool = mysql.createPool({
+// Pool til normale forespørgsler mod master databasen (badminton_user).
+// Forbindelserne kører i UTC som klub-databasernes (se utcSession i tenantPools).
+const pool = require('./tenantPools').utcSession(mysql.createPool({
     host: process.env.DB_HOST || 'localhost',
     port: process.env.DB_PORT || 3306,
     user: process.env.DB_USER || 'badminton_user',
@@ -15,7 +16,7 @@ const pool = mysql.createPool({
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
     timezone: '+00:00'
-});
+}));
 
 // Root-forbindelse til DDL operationer (CREATE DATABASE, GRANT)
 async function createAdminConnection() {
