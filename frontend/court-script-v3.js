@@ -451,10 +451,11 @@ function addPoint(player) {
         return;
     }
 
-    // Sættet er afgjort, men endnu ikke nulstillet (sætpausen kører, eller
-    // gemningen ved sætbold er undervejs): ét tryk mere gav før 22-15, et nyt
-    // "vundet" sæt og en kamp afsluttet 2-0 på et falsk sæt
-    if (erSaetAfgjort()) {
+    // Sættet er vundet, men endnu ikke nulstillet (sætpausen kører — den starter
+    // straks ved sætbolden, før gemningen): ét tryk mere gav før 22-15, et nyt
+    // "vundet" sæt og en kamp afsluttet 2-0 på et falsk sæt. Kun under pausen —
+    // ændrer admin spilletypen midt i et sæt (17-12 i 21 → 15), må banen ikke låses.
+    if (gameState.restBreakActive && erSaetAfgjort()) {
         return;
     }
 
@@ -723,11 +724,39 @@ function mellemSaet() {
 }
 
 // Står scoren til et vundet sæt (jf. checkGameWin)?
-function erSaetAfgjort() {
-    const vind = gameState.gameMode === '21' ? 21 : 15;
-    const maks = gameState.gameMode === '21' ? 30 : 21;
-    const a = gameState.player1.score, b = gameState.player2.score;
+function erSaetAfgjort(st = gameState) {
+    const mode = st.gameMode || gameState.gameMode;
+    const vind = mode === '21' ? 21 : 15;
+    const maks = mode === '21' ? 30 : 21;
+    const a = st.player1?.score || 0, b = st.player2?.score || 0;
     return (a >= vind && a - b >= 2) || a === maks || (b >= vind && b - a >= 2) || b === maks;
+}
+
+// To enheder på samme bane: den anden har afsluttet pausen (sprunget den over)
+// og spiller videre, mens vi stadig står i pausen. Så skal vi følge med — ellers
+// overskrev vores pause (eller dens afslutning) de point, den anden har talt.
+// Kun når serveren tydeligt er kommet videre: samme antal vundne sæt, ingen
+// pause, og enten et nyt sæt (vi står på et vundet sæt) eller flere point end vi.
+function serverErVidereEfterPause(s) {
+    if (!gameState.restBreakActive || !s || s.restBreakActive || !s.matchStartTime) return false;
+    const saet = x => (x.player1?.games || 0) + (x.player2?.games || 0);
+    const point = x => (x.player1?.score || 0) + (x.player2?.score || 0);
+    if (saet(s) !== saet(gameState) || erSaetAfgjort(s)) return false;
+    return erSaetAfgjort() || point(s) > point(gameState);
+}
+
+function foelgServerEfterPause(s) {
+    console.warn('Pausen er afsluttet på en anden enhed — følger med');
+    if (gameState.restBreakInterval) {
+        clearInterval(gameState.restBreakInterval);
+        gameState.restBreakInterval = null;
+    }
+    gameState.restBreakCallback = null;
+    const overlay = document.getElementById('restBreakOverlay');
+    if (overlay) overlay.style.display = 'none';
+    if (document.getElementById('messageTitle')?.textContent === 'Sæt Vundet!') hideMessage();
+    applyLoadedState(s);
+    updateDisplay();
 }
 
 // Siden blev genindlæst midt i en pause (fx træk-ned-for-at-opdatere). Serveren
@@ -1934,6 +1963,11 @@ function handleAuthExpired(body) {
 // Ellers adopteres serverens version + navne og gemningen prøves igen:
 // tælleren er autoritativ for point/serve under spil, admin for navne.
 async function handleSaveConflict(conflict) {
+    if (conflict && conflict.state && serverErVidereEfterPause(conflict.state)) {
+        // Ikke gem igen — vores gemning ville overskrive den andens point
+        foelgServerEfterPause(conflict.state);
+        return;
+    }
     if (!conflict || conflict.state === null || conflict.state === undefined) {
         console.warn('Save-konflikt: banen er nulstillet af en anden enhed');
         try {
@@ -3050,6 +3084,9 @@ async function serverSyncTick(reason) {
                 console.log('Court was reset from admin, resetting local state');
                 await adoptServerReset(loaded);
                 if (isMatchSessionToken()) return;
+            } else if (!ownSaveRacing() && (loaded.version || 0) !== gameState.version &&
+                       serverErVidereEfterPause(loaded)) {
+                foelgServerEfterPause(loaded);
             } else if (!assignedHoldkampGameId && !assignedTournamentMatchId && !ownSaveRacing()) {
                 // Just sync player names (in case they were changed from another device).
                 // Springes over når banen er bundet til en holdkamp/turnering — der er
@@ -3495,7 +3532,10 @@ function holdkampHoldNavne(game, tm) {
 // stavefejl i et af de andre ikke vender det.
 function sideOrientering(hold1, hold2, spillere = gameState) {
     const p1 = spillere.player1, p2 = spillere.player2;
-    const har = (p, navne) => navne.some(n => n && (p.name === n || p.name2 === n));
+    // Standardnavnene står på alle baner (name2 er 'Makker 1' i single) og
+    // siger intet om, hvem der står hvor
+    const standard = new Set(['Spiller 1', 'Spiller 2', 'Makker 1', 'Makker 2']);
+    const har = (p, navne) => navne.some(n => n && !standard.has(n) && (p.name === n || p.name2 === n));
     if (har(p1, hold1) || har(p2, hold2)) return 'lige';
     if (har(p1, hold2) || har(p2, hold1)) return 'byttet';
     return null;

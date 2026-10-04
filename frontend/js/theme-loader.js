@@ -85,7 +85,10 @@
         try {
             // Timeout: en hængende forbindelse (halvåben TCP efter et netudfald)
             // må aldrig holde den kaldende side fast — TV'et ventede her for evigt
-            const response = await fetch('/api/settings/theme', { signal: AbortSignal.timeout(10000) });
+            const ctrl = new AbortController(); // ikke AbortSignal.timeout — kræver nyere browser
+            const t = setTimeout(() => ctrl.abort(), 10000);
+            const response = await fetch('/api/settings/theme', { signal: ctrl.signal })
+                .finally(() => clearTimeout(t));
             // Tjek response.ok — en 500 med fejl-body ville ellers blive parset
             // som JSON, anvendt (→ default-farver) og skrevet i cachen, så en
             // forbigående backend-fejl overskrev et gyldigt cachet tema.
