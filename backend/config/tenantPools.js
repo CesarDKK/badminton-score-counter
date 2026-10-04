@@ -7,8 +7,19 @@ const tenantStorage = new AsyncLocalStorage();
 // Cache af connection pools — én per klub-database
 const pools = new Map();
 
+// Hver forbindelse kører i UTC — også databasens egne NOW(), CURRENT_TIMESTAMP og
+// TIMESTAMP-kolonner. `timezone: '+00:00'` herunder styrer kun, hvordan driveren
+// fortolker datoer; uden SET time_zone fulgte NOW() databasens tidszone, og en
+// server på CET sammenlignede dansk tid med appens UTC-tider (holdkamp-køen
+// opgav fx kampe to timer for tidligt). Nu er det ligegyldigt, hvad serveren,
+// containeren eller MySQL står på.
+function utcSession(pool) {
+    pool.on('connection', (conn) => conn.query("SET time_zone = '+00:00'"));
+    return pool;
+}
+
 function createPool(dbName) {
-    return mysql.createPool({
+    return utcSession(mysql.createPool({
         host: process.env.DB_HOST || 'localhost',
         port: process.env.DB_PORT || 3306,
         user: process.env.DB_USER || 'badminton_user',
@@ -29,7 +40,7 @@ function createPool(dbName) {
         enableKeepAlive: true,
         keepAliveInitialDelay: 0,
         timezone: '+00:00'   // Fortolk TIMESTAMP/DATETIME som UTC — undgår +2t fejl i sommertid
-    });
+    }));
 }
 
 // Returnerer pool for den aktuelle tenant (eller default hvis ingen tenant)
@@ -60,4 +71,4 @@ function currentTenant() {
     return tenantStorage.getStore() || 'direct';
 }
 
-module.exports = { getPool, runWithTenant, closeAll, currentTenant };
+module.exports = { getPool, runWithTenant, closeAll, currentTenant, utcSession };
