@@ -809,6 +809,14 @@ class BadmintonAPI {
         });
     }
 
+    /** Opret golden set (4 spillere / 4 piger, 6 kampe, ved 3–3) */
+    async createGoldenSet(teamMatchId, data) {
+        return this.request(`/team-matches/${teamMatchId}/golden-set`, {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+    }
+
     /** Mark team match as finished */
     async finishTeamMatch(teamMatchId) {
         return this.request(`/team-matches/${teamMatchId}/finish`, {

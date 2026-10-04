@@ -456,7 +456,8 @@ router.put('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), asyn
         // Check if this is a reset (no activity at all)
         const isReset = !hasActivity;
 
-        // Check if match is ending (someone won 2 games)
+        // Kampen er slut: en side har vundet 2 sæt. En kamp der meldes afsluttet
+        // på anden vis (golden set = ét sæt, slutter 1–0) får sluttid længere nede.
         const matchEnding = (player1.games >= 2 || player2.games >= 2);
 
         // Hvis match_start_time ændres fra null til værdi, invalidér QR-tokens for banen
@@ -509,6 +510,9 @@ router.put('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), asyn
                 endExpr = 'NULL';
             } else if (matchEnding) {
                 endExpr = 'NOW()';
+            } else if (matchCompleted && (player1.games >= 1 || player2.games >= 1)) {
+                // Golden set (ét sæt) meldt afsluttet ved 1–0 — sæt sluttid én gang
+                endExpr = 'COALESCE(match_end_time, NOW())';
             } else {
                 endExpr = 'match_end_time';
             }

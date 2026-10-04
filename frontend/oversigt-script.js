@@ -64,7 +64,7 @@ async function refreshOverviewLogos() {
 }
 
 let _hkRenderedKey = ''; // signatur af struktur (side + match-ids + game-ids + status)
-const HK_DOUBLES = ['MD', 'DD', 'HD', 'Double'];
+const HK_DOUBLES = HoldkampFormater.DOUBLE_KATEGORIER; // inkl. GS = golden set
 const HK_PAGE_SIZE = 1;       // én holdkamp pr. side (fylder hele skærmen)
 const HK_ROTATE_MS = 15000;   // hver holdkamp vises 15 sek, så roteres der
 
@@ -79,6 +79,8 @@ const HK_FINISHED_DISPLAY_MS = 10 * 60 * 1000;
 // hvis den ikke er færdigspillet (ingen delkampe, en delkamp der ikke er
 // 'finished', eller en uden finished_at). null = skal vises som hidtil.
 function hkFaerdigSiden(tm, nu = Date.now()) {
+    // 3–3 i 4 spillere / 4 piger: golden set mangler — holdkampen er ikke færdig
+    if (HoldkampFormater.goldenSetStatus(tm).kraeves) return null;
     const games = tm.games || [];
     if (!games.length) return null;
     let sidst = 0;
@@ -226,7 +228,7 @@ function hkGameCellHtml(g, num) {
         : (nm(g.team2_player1) || '?');
     const topRow = `
         <div class="hk-game-top">
-            <span class="hk-badge">${g.category} ${num}</span>
+            <span class="hk-badge">${escapeHtml(HoldkampFormater.kategoriNavn(g.category, num))}</span>
             <span class="hk-game-status"></span>
         </div>`;
 
@@ -300,13 +302,20 @@ function renderHoldkampCards(matches) {
         const t1w = tm.games.filter(g => g.winner_team === 1).length;
         const t2w = tm.games.filter(g => g.winner_team === 2).length;
         const counts = {};
+        // 3–3 og golden set endnu ikke sat op: vis en plads til det, så tilskuerne
+        // kan se, at holdkampen ikke er slut (§ 7 stk. 1 e)
+        const ventGS = HoldkampFormater.goldenSetStatus(tm).kraeves;
         const cells = tm.games.map(g => {
             counts[g.category] = (counts[g.category] || 0) + 1;
             return hkGameCellHtml(g, counts[g.category]);
-        }).join('');
+        }).join('') + (ventGS ? `
+            <div class="hk-game">
+                <div class="hk-game-top"><span class="hk-badge">Golden set</span><span class="hk-game-status"></span></div>
+                <div style="opacity:0.8;">3–3 — golden set afgør holdkampen</div>
+            </div>` : '');
         // Vælg kolonner ud fra antal delkampe. Max 3 kolonner — bredere kasser så
         // (især doubles-)navne kan stå på én linje uden at ombryde og overflyde.
-        const n = tm.games.length;
+        const n = tm.games.length + (ventGS ? 1 : 0);
         const cols = n <= 6 ? 2 : 3;
         const rows = Math.ceil(n / cols);
         const logo1 = window.LogoMatch && LogoMatch.resolveTeamLogo(tm, 1, _overviewLogos);
