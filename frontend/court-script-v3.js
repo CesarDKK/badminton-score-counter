@@ -166,6 +166,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     await loadGameState();
     updateDisplay();
     setupEventListeners();
+    genoptagPause();
 
     // QR-gæst der scanner ind i en allerede afsluttet kamp (banen er endnu ikke
     // ryddet): tilbyd at starte en frisk kamp i samme session — så man ikke skal
@@ -268,6 +269,10 @@ function setupEventListeners() {
     document.getElementById('assignHoldkampBtn').addEventListener('click', assignHoldkampGame);
     document.getElementById('showHoldkampPanelBtn').addEventListener('click', async () => {
         document.getElementById('settingsMenu').style.display = 'none';
+        if (holdkampIGang()) {
+            showMessage('Holdkamp i gang', 'Delkampen på banen er i gang. Ryd banen, før du vælger en anden delkamp.');
+            return;
+        }
         await refreshHoldkampPanel();
     });
     document.getElementById('holdkampMatchSelect').addEventListener('change', onHoldkampMatchChange);
@@ -443,6 +448,13 @@ function addPoint(player) {
     // videre til et 4. sæt hvis man annullerer "Ryd bane"-prompten. Brug "Fortryd"
     // hvis point-vindet var en fejl, eller "Ryd bane" for at afslutte.
     if (gameState.matchCompleted) {
+        return;
+    }
+
+    // Sættet er afgjort, men endnu ikke nulstillet (sætpausen kører, eller
+    // gemningen ved sætbold er undervejs): ét tryk mere gav før 22-15, et nyt
+    // "vundet" sæt og en kamp afsluttet 2-0 på et falsk sæt
+    if (erSaetAfgjort()) {
         return;
     }
 
@@ -674,7 +686,7 @@ async function handleSetWin(winnerKey, loserKey, p1Score, p2Score) {
         performSave();
 
         // Save match result to database
-        saveMatchResult(winnerNames, loserNames, winner.games, loser.games);
+        saveMatchResult(winnerNames, loserNames, winner.games, loser.games, winnerKey);
 
         showMatchWonMessage(isReportedMatch);
         return;
@@ -683,13 +695,8 @@ async function handleSetWin(winnerKey, loserKey, p1Score, p2Score) {
     // Set won but not match - start 2-minute rest break in background, show on Fortsæt
     const winnerNames = formatPlayerNames(winner.name, winner.name2);
 
-    await startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', () => {
-        resetScores();
-        gameState.decidingGameSwitched = false;
-        switchSides();
-        fixDoublesStartPosition();
-        showDoublesPositionMessage();
-    }, false); // showOverlay = false, timer runs in background
+    // Beskeden vises straks — før ventede den på gemningen (op til ~40 s uden net)
+    const pauseStartet = startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', mellemSaet, false); // timer kører i baggrunden
 
     showMessage(
         'Sæt Vundet!',
@@ -697,11 +704,49 @@ async function handleSetWin(winnerKey, loserKey, p1Score, p2Score) {
         [
             {
                 text: 'Fortsæt',
-                callback: () => showRestBreakOverlay(),
+                // Er pausen udløbet imens, er sættet allerede nulstillet
+                callback: () => { if (gameState.restBreakActive) showRestBreakOverlay(); },
                 style: 'primary'
             }
         ]
     );
+    await pauseStartet;
+}
+
+// Efter sætpausen: nyt sæt, siderne byttes
+function mellemSaet() {
+    resetScores();
+    gameState.decidingGameSwitched = false;
+    switchSides();
+    fixDoublesStartPosition();
+    showDoublesPositionMessage();
+}
+
+// Står scoren til et vundet sæt (jf. checkGameWin)?
+function erSaetAfgjort() {
+    const vind = gameState.gameMode === '21' ? 21 : 15;
+    const maks = gameState.gameMode === '21' ? 30 : 21;
+    const a = gameState.player1.score, b = gameState.player2.score;
+    return (a >= vind && a - b >= 2) || a === maks || (b >= vind && b - a >= 2) || b === maks;
+}
+
+// Siden blev genindlæst midt i en pause (fx træk-ned-for-at-opdatere). Serveren
+// husker ikke pausens timer eller hvad der skal ske bagefter, så sætpausen
+// nulstillede aldrig sættet: 21-15 stod, og næste point afsluttede kampen.
+function genoptagPause() {
+    if (!gameState.restBreakActive || gameState.restBreakInterval) return;
+    const setVundet = erSaetAfgjort();
+    const tilbage = Math.max(0, Math.min(gameState.restBreakSecondsLeft || 0, 120));
+    const titel = gameState.restBreakTitle || (setVundet ? 'Pause mellem Sæt - 2 Minutter' : 'Pause 1 minut');
+    const taget = gameState.restBreakTaken;
+    gameState.restBreakActive = false;
+    if (tilbage > 0) {
+        startRestBreak(tilbage, titel, setVundet ? mellemSaet : null, true);
+        gameState.restBreakTaken = taget || !setVundet;
+    } else {
+        if (setVundet) mellemSaet();
+        performSave();
+    }
 }
 
 function fixDoublesServePosition() {
@@ -1020,7 +1065,11 @@ function applyLoadedState(loaded) {
     gameState.restBreakActive = loaded.restBreakActive || false;
     gameState.restBreakSecondsLeft = loaded.restBreakSecondsLeft || 0;
     gameState.restBreakTitle = loaded.restBreakTitle || '';
-    gameState.restBreakTaken = loaded.restBreakTaken || false;
+    // Serveren gemmer ikke restBreakTaken — er en af siderne nået pausepunktet,
+    // er pausen taget (ellers startede en ny 60 s-pause efter genindlæsning)
+    const pausePunkt = (loaded.gameMode || gameState.gameMode) === '21' ? 11 : 8;
+    gameState.restBreakTaken = loaded.restBreakTaken ||
+        Math.max(loaded.player1?.score || 0, loaded.player2?.score || 0) >= pausePunkt;
     gameState.restBreakStartedAt = loaded.restBreakStartedAt || null;
     gameState.restBreakDuration = loaded.restBreakDuration || 60;
 
@@ -1837,8 +1886,8 @@ async function performSave() {
         }
         console.error('Failed to save game state:', error);
         setSyncStatus(false); // forbindelses-/serverfejl — vis offline-badge
-        // Retry after 5 seconds on error
-        pendingSave = true;
+        // Prøv igen om 5 sek. (ikke også pendingSave — så kørte finally et
+        // genforsøg mere efter 100 ms, og løkken gik uden pause)
         setTimeout(performSave, 5000);
     } finally {
         isSaving = false;
@@ -1970,6 +2019,27 @@ async function adoptServerReset(loaded) {
     gameState.setsToWin = 2; // en bundet golden set-delkamp sætter det igen via holdkamp-synken
     gameState.restBreakTaken = false;
     gameState.planner = loaded.planner || null;
+    gameState.isDoubles = loaded.isDoubles || false;
+    // Som performClearCourtNow: server, sæt og fortryd hører til forrige kamp.
+    // Før blev de stående — TV'et viste forrige kamps sæt, og Fortryd hentede
+    // forrige kamp frem.
+    gameState.servingPlayer = null;
+    gameState.initialServer = null;
+    gameState.servingTeam = null;
+    gameState.servingPlayerOnTeam = null;
+    gameState.team1RightCourt = 1;
+    gameState.team2RightCourt = 1;
+    gameState.betweenSets = false;
+    gameState.setScoresHistory = [];
+    gameState.history = [];
+    // Serveren har frigivet holdkamp-/turneringskampen — glem koblingen, ellers
+    // blev banens næste resultat meldt ind på den gamle delkamp
+    assignedHoldkampGameId = null;
+    activeTeamMatch = null;
+    assignedTournamentMatchId = null;
+    activeTournament = null;
+    const tilknyttet = document.getElementById('holdkampAssigned');
+    if (tilknyttet) tilknyttet.style.display = 'none';
 
     // Ensure name2 exists
     if (!gameState.player1.name2) gameState.player1.name2 = 'Makker 1';
@@ -2709,7 +2779,21 @@ async function adoptEnteredResult(loaded) {
 }
 
 // Save match result to database
-async function saveMatchResult(winner, loser, winnerGames, loserGames) {
+async function saveMatchResult(winner, loser, winnerGames, loserGames, winnerKey) {
+    // Navnene som de står nu — banen kan være ryddet, før opslagene herunder svarer
+    const spillere = {
+        player1: { ...gameState.player1 },
+        player2: { ...gameState.player2 }
+    };
+    // Vandt hold/side 1? Ud fra vinderens plads og hvor hold 1 står (efter
+    // sideskift), ikke ud fra navne-tekst: "Mads Nielsen".includes("Mads") gav
+    // før den forkerte vinder, og manglende navne gav altid hold 2
+    const vinderErSide1 = (side1, side2, gammelGaet) => {
+        const o = sideOrientering(side1, side2, spillere);
+        if (!winnerKey || o === null) return gammelGaet();
+        return (winnerKey === 'player1') === (o === 'lige');
+    };
+
     // Fang state-oplysninger med det samme og nulstil assigned-IDs straks.
     // saveMatchResult køres IKKE-afventet fra checkGameWin, så clearCourt() kan
     // køre parallelt og overskrive de globale assigned-vars inden vi når at rapportere.
@@ -2784,7 +2868,8 @@ async function saveMatchResult(winner, loser, winnerGames, loserGames) {
                 await api.saveMatchResult(matchData);
             } catch (historikFejl) {
                 console.error('Kampen kunne ikke gemmes i kamphistorikken:', historikFejl);
-                showMessage('Advarsel', 'Kampresultatet kunne ikke gemmes i kamphistorikken.');
+                visAdvarselOgKampSlut('Kampresultatet kunne ikke gemmes i kamphistorikken.',
+                    !!(capturedGameId || capturedTournamentMatchId));
             }
         }
 
@@ -2797,7 +2882,8 @@ async function saveMatchResult(winner, loser, winnerGames, loserGames) {
             let winnerTeam = 2;
             if (game) {
                 const team1Names = [game.team1_player1, game.team1_player2].filter(Boolean);
-                winnerTeam = team1Names.some(name => winner.includes(name)) ? 1 : 2;
+                const [h1, h2] = holdkampHoldNavne(game, capturedTeamMatch);
+                winnerTeam = vinderErSide1(h1, h2, () => team1Names.some(name => winner.includes(name))) ? 1 : 2;
             }
             await reportHoldkampResult(winnerTeam, setScoresText, capturedTeamMatch.id, capturedGameId);
         }
@@ -2808,7 +2894,8 @@ async function saveMatchResult(winner, loser, winnerGames, loserGames) {
             let winnerTeam = 2;
             if (match) {
                 const side1Names = [match.side1_player1, match.side1_player2].filter(Boolean);
-                winnerTeam = side1Names.some(name => winner.includes(name)) ? 1 : 2;
+                const [s1, s2] = turneringSideNavne(match);
+                winnerTeam = vinderErSide1(s1, s2, () => side1Names.some(name => winner.includes(name))) ? 1 : 2;
             }
             await reportTournamentResult(winnerTeam, setScoresText, capturedTournament.id, capturedTournamentMatchId);
         }
@@ -2819,8 +2906,19 @@ async function saveMatchResult(winner, loser, winnerGames, loserGames) {
         console.log('Match result saved:', matchData);
     } catch (error) {
         console.error('Failed to save match result:', error);
-        showMessage('Advarsel', 'Kampresultatet kunne ikke gemmes i databasen.');
+        visAdvarselOgKampSlut('Kampresultatet kunne ikke gemmes i databasen.',
+            !!(capturedGameId || capturedTournamentMatchId));
     }
+}
+
+// Advarslen erstatter "Kamp Vundet!"-beskeden — og dermed knappen til at rydde
+// banen (i turneringstilstand den eneste vej). Vis kampslut igen bagefter.
+function visAdvarselOgKampSlut(tekst, rapporteret) {
+    showMessage('Advarsel', tekst, [{
+        text: 'OK',
+        callback: () => { if (gameState.matchCompleted) showMatchWonMessage(rapporteret); },
+        style: 'primary'
+    }]);
 }
 
 function formatDuration(seconds) {
@@ -2945,7 +3043,9 @@ async function serverSyncTick(reason) {
                            loaded.player1.games === 0 &&
                            loaded.player2.games === 0;
 
-            if (wasReset && gameState.matchStartTime) {
+            // !ownSaveRacing(): en GET besvaret før vores første point blev gemt,
+            // ligner ellers en nulstilling, og pointet faldt tilbage til 0-0
+            if (wasReset && gameState.matchStartTime && !ownSaveRacing()) {
                 // Court was reset from admin while we had an active match
                 console.log('Court was reset from admin, resetting local state');
                 await adoptServerReset(loaded);
@@ -3190,6 +3290,24 @@ function finishEditingName(element, player, nameField) {
         }
     }
 
+    // Ret også navnet i de spillede sæt. TV og oversigt vender et sæts score
+    // efter navnene i historikken — en rettet stavefejl midt i kampen vendte
+    // ellers 1. sæt, så vinderen stod som taber.
+    const gammeltNavn = gameState[player][nameField];
+    if (gammeltNavn && gammeltNavn !== newName) {
+        const felt = nameField === 'name2' ? 'Name2' : 'Name';
+        (gameState.setScoresHistory || []).forEach(saet => {
+            if (!saet || typeof saet !== 'object') return;
+            if (saet['player1' + felt] === gammeltNavn) saet['player1' + felt] = newName;
+            else if (saet['player2' + felt] === gammeltNavn) saet['player2' + felt] = newName;
+        });
+    }
+
+    // Står hold 1 i player2 efter et sideskift? Afgøres FØR navnet ændres
+    const holdGame = aktuelHoldkampGame();
+    const holdByttet = !!holdGame &&
+        sideOrientering(...holdkampHoldNavne(holdGame, activeTeamMatch)) === 'byttet';
+
     // Update game state
     gameState[player][nameField] = newName;
 
@@ -3200,13 +3318,28 @@ function finishEditingName(element, player, nameField) {
     saveGameState();
 
     // Sync name change back to holdkamp game if one is assigned
+    // — efter et sideskift står hold 1 i player2; før blev holdene byttet om i
+    // holdkampen, og den forkerte vinder kunne blive meldt ind
     if (assignedHoldkampGameId && activeTeamMatch) {
-        api.updateTeamMatchGame(activeTeamMatch.id, assignedHoldkampGameId, {
-            team1Player1: gameState.player1.name,
-            team1Player2: gameState.player1.name2 || null,
-            team2Player1: gameState.player2.name,
-            team2Player2: gameState.player2.name2 || null,
-        }).catch(e => console.error('Failed to sync name to holdkamp:', e));
+        const hold1 = holdByttet ? gameState.player2 : gameState.player1;
+        const hold2 = holdByttet ? gameState.player1 : gameState.player2;
+        const navne = {
+            team1Player1: hold1.name,
+            team1Player2: hold1.name2 || null,
+            team2Player1: hold2.name,
+            team2Player2: hold2.name2 || null,
+        };
+        if (holdGame) {
+            // Lokal kopi ajour, så vinderen findes rigtigt ved kampens slutning
+            holdGame.team1_player1 = navne.team1Player1;
+            holdGame.team2_player1 = navne.team2Player1;
+            if (gameState.isDoubles) {
+                holdGame.team1_player2 = navne.team1Player2;
+                holdGame.team2_player2 = navne.team2Player2;
+            }
+        }
+        api.updateTeamMatchGame(activeTeamMatch.id, assignedHoldkampGameId, navne)
+            .catch(e => console.error('Failed to sync name to holdkamp:', e));
     }
 
     console.log(`Updated ${player}.${nameField} to: ${newName}`);
@@ -3315,14 +3448,19 @@ function holdkampCategoryNumbers(games) {
 
 function applyHoldkampGameToState(game) {
     const isDoubles = HoldkampFormater.erDouble(game.category);
-    const team1 = activeTeamMatch?.team1_name || 'Hold 1';
-    const team2 = activeTeamMatch?.team2_name || 'Hold 2';
+    const [hold1, hold2] = holdkampHoldNavne(game, activeTeamMatch);
 
-    gameState.player1.name = game.team1_player1 || `${team1} spiller`;
-    gameState.player2.name = game.team2_player1 || `${team2} spiller`;
-    if (isDoubles) {
-        gameState.player1.name2 = game.team1_player2 || `${team1} makker`;
-        gameState.player2.name2 = game.team2_player2 || `${team2} makker`;
+    // Genindlæst/genbundet midt i kampen: navnene står allerede (evt. efter
+    // sideskift) — at skrive dem i oprindelig orientering satte navne og
+    // point på hver sin side
+    const fortsaetter = kampIGang() && sideOrientering(hold1, hold2) !== null;
+    if (!fortsaetter) {
+        gameState.player1.name = hold1[0];
+        gameState.player2.name = hold2[0];
+        if (isDoubles) {
+            gameState.player1.name2 = hold1[1];
+            gameState.player2.name2 = hold2[1];
+        }
     }
     gameState.isDoubles = isDoubles;
     gameState.setsToWin = HoldkampFormater.saetForSejr(game.category); // golden set = 1 sæt
@@ -3331,9 +3469,43 @@ function applyHoldkampGameToState(game) {
     // admin baneoversigt straks tabte navnene.
     gameState.isActive = true;
     // Frisk tildeling — eventuelt tidligere swap-flag nulstilles
-    gameState.sidesManuallySwitched = false;
+    if (!fortsaetter) gameState.sidesManuallySwitched = false;
     updateDisplay();
     saveGameState();
+}
+
+// En kamp er i gang (startet og ikke afsluttet)
+function kampIGang() {
+    return !!gameState.matchStartTime && !gameState.matchCompleted;
+}
+
+// Holdenes navne for en delkamp, med de pladsholdere applyHoldkampGameToState
+// bruger, når et navn mangler: [[hold1 spiller, makker], [hold2 spiller, makker]]
+function holdkampHoldNavne(game, tm) {
+    const team1 = tm?.team1_name || 'Hold 1';
+    const team2 = tm?.team2_name || 'Hold 2';
+    return [
+        [game.team1_player1 || `${team1} spiller`, game.team1_player2 || `${team1} makker`],
+        [game.team2_player1 || `${team2} spiller`, game.team2_player2 || `${team2} makker`]
+    ];
+}
+
+// Står hold 1 i player1 ('lige') eller i player2 ('byttet', efter sideskift)?
+// null hvis ingen af navnene genkendes. Ét genkendt navn er nok, så en rettet
+// stavefejl i et af de andre ikke vender det.
+function sideOrientering(hold1, hold2, spillere = gameState) {
+    const p1 = spillere.player1, p2 = spillere.player2;
+    const har = (p, navne) => navne.some(n => n && (p.name === n || p.name2 === n));
+    if (har(p1, hold1) || har(p2, hold2)) return 'lige';
+    if (har(p1, hold2) || har(p2, hold1)) return 'byttet';
+    return null;
+}
+
+// Delkampen banen er bundet til (by-court-svar har .game, fuld holdkamp .games)
+function aktuelHoldkampGame() {
+    if (!assignedHoldkampGameId || !activeTeamMatch) return null;
+    if (activeTeamMatch.game && activeTeamMatch.game.id === assignedHoldkampGameId) return activeTeamMatch.game;
+    return (activeTeamMatch.games || []).find(g => g.id === assignedHoldkampGameId) || null;
 }
 
 async function assignHoldkampGame() {
@@ -3381,7 +3553,15 @@ function showHoldkampAssigned(game) {
     panel.style.display = 'none';
 }
 
+// Er banen bundet til en delkamp, der er i gang?
+function holdkampIGang() {
+    return !!assignedHoldkampGameId && kampIGang();
+}
+
 async function refreshHoldkampPanel() {
+    // Panelet afbinder delkampen (og sætter golden set tilbage til 2 sæt) —
+    // aldrig midt i en kamp
+    if (holdkampIGang()) return;
     try {
         const matches = await api.getActiveTeamMatches();
         const hasPending = (matches || []).some(tm => (tm.games || []).some(g => g.status === 'pending'));
@@ -3470,13 +3650,25 @@ async function reportHoldkampResult(winnerTeam, setScores, teamMatchId, gameId) 
 // detekterer at en planlagt kamp er aktiv på denne bane, og rapporterer resultatet
 // tilbage når kampen afsluttes.
 
+function turneringSideNavne(match) {
+    return [
+        [match.side1_player1 || 'Spiller 1', match.side1_player2 || 'Makker 1'],
+        [match.side2_player1 || 'Spiller 2', match.side2_player2 || 'Makker 2']
+    ];
+}
+
 function applyTournamentMatchToCourt(match) {
     const isDoubles = !!match.doubles;
-    gameState.player1.name = match.side1_player1 || 'Spiller 1';
-    gameState.player2.name = match.side2_player1 || 'Spiller 2';
-    if (isDoubles) {
-        gameState.player1.name2 = match.side1_player2 || 'Makker 1';
-        gameState.player2.name2 = match.side2_player2 || 'Makker 2';
+    const [side1, side2] = turneringSideNavne(match);
+    // Genindlæst midt i kampen: behold navnene, hvor de står (se applyHoldkampGameToState)
+    const fortsaetter = kampIGang() && sideOrientering(side1, side2) !== null;
+    if (!fortsaetter) {
+        gameState.player1.name = side1[0];
+        gameState.player2.name = side2[0];
+        if (isDoubles) {
+            gameState.player1.name2 = side1[1];
+            gameState.player2.name2 = side2[1];
+        }
     }
     gameState.isDoubles = isDoubles;
     gameState.setsToWin = 2; // turneringskampe er altid bedst af 3
@@ -3484,7 +3676,7 @@ function applyTournamentMatchToCourt(match) {
     // courts.is_active til false naar admin lige har aktiveret banen.
     gameState.isActive = true;
     // Frisk tildeling — eventuelt tidligere swap-flag nulstilles
-    gameState.sidesManuallySwitched = false;
+    if (!fortsaetter) gameState.sidesManuallySwitched = false;
     updateDisplay();
     saveGameState();
 }
