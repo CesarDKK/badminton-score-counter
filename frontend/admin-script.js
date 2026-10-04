@@ -3273,7 +3273,12 @@ async function bpLoadWatchers() {
                        style="padding:4px 12px;font-size:0.82em;white-space:nowrap;">Tjek nu</button>
                <button onclick="bpStopWatcher(${w.id})" class="btn-secondary"
                        style="padding:4px 12px;font-size:0.82em;white-space:nowrap;">Stop</button>`
-            : '';
+            // Afsluttede rækker ("Kom aldrig", "Kunne ikke oprettes", "Holdkamp
+            // oprettet") stod ellers i 12 timer uden mulighed for at fjerne dem.
+            // Fjerner kun linjen her — en oprettet holdkamp ligger i sin egen tabel.
+            : `<button onclick="bpStopWatcher(${w.id})" class="btn-secondary"
+                       title="Fjern linjen fra listen${w.status === 'oprettet' ? ' (selve holdkampen bevares)' : ''}"
+                       style="padding:4px 12px;font-size:0.82em;white-space:nowrap;">Fjern</button>`;
 
         return `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;
                             padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.06);">
@@ -3324,7 +3329,7 @@ async function bpStopWatcher(id) {
         delete bpTjekBesked[id];
         await bpLoadWatchers();
     } catch (err) {
-        showMessage('Fejl', 'Kunne ikke stoppe overvågningen: ' + err.message);
+        showMessage('Fejl', 'Kunne ikke fjerne overvågningen: ' + err.message);
     }
 }
 
