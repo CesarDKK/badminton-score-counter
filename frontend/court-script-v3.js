@@ -43,6 +43,226 @@ function setSyncStatus(ok) {
     }
 }
 
+// ── Kun én tæller ad gangen pr. bane ──
+// Tælleren gemmer hele banens tilstand, så to enheder der tællede samme kamp,
+// overskrev hinandens point. Nu tæller kun én enhed: den melder sig hvert 10.
+// sekund, og andre enheder SER MED (stillingen følger serveren, og alt andet er
+// spærret) med knappen "Overtag tællingen". Den der blev overtaget fra, får
+// besked og kan tage tællingen tilbage — fx tablet løbet tør, telefonen tæller
+// imens, tabletten er ladet op igen. Se backend/taeller/ejerskab.js.
+const TAELLER_PING_MS = 10000;
+const TAELLER_ID = (() => {
+    const nyt = () => 't' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+    // Gemmes på enheden (ikke kun fanen), så en tablet der genstartes efter at
+    // være løbet tør, genkendes og får tilbudt at tage tællingen tilbage
+    try {
+        let id = localStorage.getItem('btTaellerId');
+        if (!id || !/^[A-Za-z0-9_-]{8,64}$/.test(id)) {
+            id = nyt();
+            localStorage.setItem('btTaellerId', id);
+        }
+        return id;
+    } catch {
+        return nyt();
+    }
+})();
+// Hvad de andre enheder ser: "Tablet tæller denne kamp"
+const TAELLER_NAVN = (() => {
+    const app = /; wv\)/.test(navigator.userAgent) ? ' i appen' : '';
+    if (!(navigator.maxTouchPoints > 0)) return 'Computer' + app;
+    return (Math.min(screen.width, screen.height) >= 600 ? 'Tablet' : 'Telefon') + app;
+})();
+let serMed = false;          // en anden enhed tæller — her vises kun stillingen
+let _taellerPingTimer = null;
+
+function minTaeller(t) {
+    return !!t && t.kort === TAELLER_ID.slice(0, 8);
+}
+
+async function taellerPing(handling = 'ping') {
+    try {
+        const svar = await api.taeller(courtId, TAELLER_ID, TAELLER_NAVN, handling);
+        taellerStatus(svar);
+        return svar;
+    } catch (e) {
+        // Offline eller udløbet QR-session — det håndteres andre steder
+        return null;
+    }
+}
+
+function startTaellerPing() {
+    if (_taellerPingTimer) return;
+    _taellerPingTimer = setInterval(() => {
+        if (document.visibilityState === 'visible') taellerPing();
+    }, TAELLER_PING_MS);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') taellerPing();
+    });
+}
+
+// Svar fra serveren (livstegn eller en spærret gemning)
+function taellerStatus(s) {
+    if (!s) return;
+    if (s.ejer) {
+        if (serMed) forladSerMed();
+        return;
+    }
+    if (s.ledig) {
+        // Ingen tæller: ser vi med på en tom bane (kampen er ryddet), tæller
+        // vi bare herfra. Står der en kamp, tilbydes "Overtag" stadig.
+        if (serMed && !kampIGang()) forladSerMed();
+        else if (serMed) opdaterSerMedBanner(s);
+        return;
+    }
+    if (!serMed) gaaTilSerMed(s);
+    else opdaterSerMedBanner(s);
+}
+
+function gaaTilSerMed(s) {
+    serMed = true;
+    // Vores pause, ventende gemninger og kobling til holdkamp/turnering hører
+    // nu til den anden enhed
+    if (gameState.restBreakInterval) {
+        clearInterval(gameState.restBreakInterval);
+        gameState.restBreakInterval = null;
+    }
+    gameState.restBreakCallback = null;
+    if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
+    pendingSave = false;
+    assignedHoldkampGameId = null;
+    activeTeamMatch = null;
+    assignedTournamentMatchId = null;
+    activeTournament = null;
+    const pause = document.getElementById('restBreakOverlay');
+    if (pause) pause.style.display = 'none';
+    const panel = document.getElementById('holdkampPanel');
+    if (panel) panel.style.display = 'none';
+    closeSettingsMenu();
+    if (resultForm.open) closeResultForm();
+    hideMessage();
+    releaseWakeLock();
+
+    document.documentElement.classList.add('cv-ser-med');
+    opdaterSerMedBanner(s);
+
+    if (s.overtagetFraDig) {
+        const navn = (s.taeller && s.taeller.navn) || 'En anden enhed';
+        showMessage(
+            'Tællingen er overtaget',
+            `${navn} tæller nu kampen. Her vises stillingen, indtil du tager tællingen tilbage.`,
+            [
+                { text: 'Tag tællingen tilbage', callback: () => overtagTaelling(true), style: 'primary' },
+                { text: 'Se med', callback: null, style: 'secondary' }
+            ]
+        );
+    }
+    runServerSync('update');
+}
+
+function forladSerMed() {
+    serMed = false;
+    document.documentElement.classList.remove('cv-ser-med');
+}
+
+function opdaterSerMedBanner(s) {
+    const tekst = document.getElementById('serMedTekst');
+    if (!tekst) return;
+    const t = s && s.taeller;
+    if (t && t.aktiv) {
+        tekst.textContent = `${t.navn} tæller denne kamp`;
+    } else if (t) {
+        tekst.textContent = `${t.navn} har ikke givet lyd i et stykke tid`;
+    } else {
+        tekst.textContent = 'Ingen enhed tæller kampen lige nu';
+    }
+}
+
+// Stillingen fra serveren, som den anden enhed har talt den
+function visSomSerMed(loaded) {
+    const foer = [gameState.player1.name, gameState.player1.name2, gameState.player2.name, gameState.player2.name2].join('|');
+    applyLoadedState(loaded);
+    if (gameState.matchStartTime && !gameState.matchEndTime) {
+        if (!gameState.timerInterval) startTimer();
+    } else if (gameState.timerInterval) {
+        clearInterval(gameState.timerInterval);
+        gameState.timerInterval = null;
+    }
+    updateTimer();
+    updateDisplay();
+    const pauseTekst = document.getElementById('serMedPause');
+    if (pauseTekst) pauseTekst.textContent = loaded.restBreakActive ? 'Pause' : '';
+    const efter = [gameState.player1.name, gameState.player1.name2, gameState.player2.name, gameState.player2.name2].join('|');
+    if (foer !== efter) refreshCourtLogos();
+    // Ingen tæller mere (ryddet/frigivet) eller os selv: spørg hvor vi står
+    if (!loaded.taeller || !loaded.taeller.aktiv || minTaeller(loaded.taeller)) taellerPing();
+}
+
+// "Overtag tællingen" (bekræft = spørg først, hvis en anden tæller aktivt)
+async function overtagTaelling(bekraeftet = false) {
+    if (!bekraeftet) {
+        const s = await taellerPing();
+        if (s && !s.ejer && !s.ledig && s.taeller && s.taeller.aktiv) {
+            showMessage(
+                'Overtag tællingen?',
+                `${s.taeller.navn} tæller kampen lige nu. Overtager du, kan den ikke tælle mere og får besked om det.`,
+                [
+                    { text: 'Overtag', callback: () => overtagTaelling(true), style: 'primary' },
+                    { text: 'Annuller', callback: null, style: 'secondary' }
+                ]
+            );
+            return;
+        }
+    }
+    try {
+        await api.taeller(courtId, TAELLER_ID, TAELLER_NAVN, 'overtag');
+        // Fortsæt fra stillingen, som den anden enhed har talt den
+        const frisk = await api.getGameState(courtId);
+        forladSerMed();
+        hideMessage();
+        applyLoadedState(frisk);
+        updateDisplay();
+        updateTimer();
+        if (gameState.matchStartTime && !gameState.matchEndTime) {
+            startTimer();
+            acquireWakeLock();
+        }
+        genoptagPause();
+        refreshCourtLogos();
+        // Bind holdkamp/turneringskamp igen (navnene beholdes, hvor de står)
+        runServerSync('poll');
+    } catch (e) {
+        console.error('Kunne ikke overtage tællingen:', e);
+        showMessage('Kunne ikke overtage', 'Tællingen kunne ikke overtages. Tjek forbindelsen og prøv igen.');
+    }
+}
+
+// Banneret og et gennemsigtigt lag over tælleren, mens vi ser med
+function byggSerMedVisning() {
+    if (document.getElementById('serMedBanner')) return;
+    const laag = document.createElement('div');
+    laag.id = 'serMedLaag';
+    laag.className = 'ser-med-laag';
+    const banner = document.createElement('div');
+    banner.id = 'serMedBanner';
+    banner.className = 'ser-med-banner';
+    banner.innerHTML = `
+        <div class="ser-med-info">
+            <span class="ser-med-maerke">Ser med</span>
+            <span id="serMedTekst" class="ser-med-tekst"></span>
+            <span id="serMedPause" class="ser-med-pause"></span>
+        </div>
+        <button type="button" id="serMedOvertag" class="btn-primary ser-med-knap">Overtag tællingen</button>`;
+    // Et tryk på tælleren mens vi ser med: gør opmærksom på banneret
+    laag.addEventListener('click', () => {
+        banner.classList.remove('ser-med-blink');
+        void banner.offsetWidth;
+        banner.classList.add('ser-med-blink');
+    });
+    document.body.appendChild(laag);
+    document.body.appendChild(banner);
+    document.getElementById('serMedOvertag').addEventListener('click', () => overtagTaelling(false));
+}
+
 // PWA Install
 let _pwaPrompt = null;
 
@@ -166,6 +386,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     await loadGameState();
     updateDisplay();
     setupEventListeners();
+    byggSerMedVisning();
+    await taellerPing();
+    startTaellerPing();
     genoptagPause();
 
     // QR-gæst der scanner ind i en allerede afsluttet kamp (banen er endnu ikke
@@ -763,7 +986,7 @@ function foelgServerEfterPause(s) {
 // husker ikke pausens timer eller hvad der skal ske bagefter, så sætpausen
 // nulstillede aldrig sættet: 21-15 stod, og næste point afsluttede kampen.
 function genoptagPause() {
-    if (!gameState.restBreakActive || gameState.restBreakInterval) return;
+    if (serMed || !gameState.restBreakActive || gameState.restBreakInterval) return;
     const setVundet = erSaetAfgjort();
     const tilbage = Math.max(0, Math.min(gameState.restBreakSecondsLeft || 0, 120));
     const titel = gameState.restBreakTitle || (setVundet ? 'Pause mellem Sæt - 2 Minutter' : 'Pause 1 minut');
@@ -1816,6 +2039,7 @@ const SAVE_THROTTLE_MS = 150;
 let lastSaveStartedAt = 0;
 
 function saveGameState() {
+    if (serMed) return; // en anden enhed tæller
     // Mark that we have a pending save
     pendingSave = true;
 
@@ -1842,6 +2066,9 @@ function saveGameState() {
 // fx forkert servende makker/side for den gemte score).
 function buildSavePayload() {
     return {
+        // Kun én tæller ad gangen — serveren svarer 423, hvis en anden tæller
+        taellerId: TAELLER_ID,
+        taellerNavn: TAELLER_NAVN,
         player1: gameState.player1,
         player2: gameState.player2,
         timerSeconds: gameState.timerSeconds,
@@ -1878,6 +2105,7 @@ function buildSavePayload() {
 }
 
 async function performSave() {
+    if (serMed) { pendingSave = false; return; }
     if (isSaving) {
         // Already saving, will retry
         pendingSave = true;
@@ -1905,6 +2133,16 @@ async function performSave() {
             // En 409 er et svar fra serveren, ikke et forbindelsestab.
             setSyncStatus(true);
             await handleSaveConflict(error.body);
+            return;
+        }
+        if (error && error.status === 423 && error.body) {
+            // En anden enhed tæller kampen (overtog den, mens vi stod med en
+            // gemning) — vores ændring droppes, og vi viser dens stilling
+            setSyncStatus(true);
+            pendingSave = false;
+            if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
+            if (!serMed) gaaTilSerMed(error.body);
+            if (error.body.state) visSomSerMed(error.body.state);
             return;
         }
         if (error && error.status === 401) {
@@ -2086,7 +2324,7 @@ async function adoptServerReset(loaded) {
 // så tilbyd den scannende gæst at starte en frisk kamp. Kun for QR-sessioner —
 // holdkamp/turnering og direkte tilstand håndteres af admin/tablet som hidtil.
 function promptStartFreshIfCompleted() {
-    if (!gameState.matchCompleted) return;
+    if (serMed || !gameState.matchCompleted) return;
     // Planner-bane: resultatet står til næste runde — vis det, så det kan rettes
     if (gameState.planner) {
         showMatchWonMessage();
@@ -3057,6 +3295,16 @@ async function serverSyncTick(reason) {
             // format overtages først ved næste sync, når tælleren er i ro.
             const ownSaveRacing = () => isSaving || pendingSave || !!saveTimeout || lastOwnSaveAt >= syncStartedAt;
 
+            if (serMed) {
+                visSomSerMed(loaded);
+                return;
+            }
+            // En anden enhed tæller nu (overtog tællingen) — livstegnet afgør det
+            if (loaded.taeller && loaded.taeller.aktiv && !minTaeller(loaded.taeller)) {
+                await taellerPing();
+                if (serMed) return;
+            }
+
             // Planner-blokken følger banen (ny runde, runden slut) — styrer "Indtast resultat"
             const hadPlanner = !!gameState.planner;
             gameState.planner = loaded.planner || null;
@@ -3385,6 +3633,7 @@ function finishEditingName(element, player, nameField) {
 // ==================== HOLDKAMP ====================
 
 async function initHoldkampPanel() {
+    if (serMed) return; // den anden enhed har koblingen til delkampen
     try {
         // Er denne bane allerede bundet til en aktiv delkamp?
         const byCourt = await api.getTeamMatchByCourt(courtId);

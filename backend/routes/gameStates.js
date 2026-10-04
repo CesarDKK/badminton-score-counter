@@ -9,6 +9,8 @@ const { publishGameStateChange, subscribeGameStateChanges } = require('../events
 const { hentPlannerVisning, plannerForBane, gemPlannerResultat, kampIGang } = require('./plannerIntegration');
 const { validerIndtastning, vundneSaet } = require('../config/kampResultat');
 const { varighedTekst } = require('../config/matchTiming');
+// Kun én tæller ad gangen pr. bane (se taeller/ejerskab.js og migration 031)
+const ejerskab = require('../taeller/ejerskab');
 
 // Hvor længe (i minutter) et "last finished match" snapshot vises på TV efter Ryd bane
 const FINISHED_SNAPSHOT_TTL_MINUTES = 5;
@@ -63,8 +65,47 @@ function formatStateRow(row, court) {
         team1RightCourt: row.team1_right_court || 1,
         team2RightCourt: row.team2_right_court || 1,
         betweenSets: !!row.between_sets,
+        // Hvem der tæller kampen — kort id, så en enhed kan se om det er den selv
+        taeller: row.taeller_id ? {
+            navn: row.taeller_navn || 'En anden enhed',
+            kort: ejerskab.kortId(row.taeller_id),
+            aktiv: ejerskab.erAktiv(row, Date.now())
+        } : null,
         version: row.version || 0
     };
+}
+
+// Navnet de andre enheder ser ("Tablet tæller denne kamp"): enhedens eget bud
+// (Tablet/Telefon/App), suppleret med adgangslinkets navn; QR-telefoner hedder
+// altid "Telefon (QR-kode)"
+async function taellerNavn(req, hint) {
+    const u = req.user;
+    if (u && u.tokenType === 'match_session') return 'Telefon (QR-kode)';
+    let navn = ejerskab.rensNavn(hint) || 'En enhed';
+    if (u && u.role === 'device' && u.tokenId) {
+        try {
+            const t = await queryOne('SELECT name FROM device_tokens WHERE id = ?', [u.tokenId]);
+            if (t && t.name) navn = `${navn} (${t.name})`;
+        } catch { /* navnet er kun pynt */ }
+    }
+    return ejerskab.rensNavn(navn);
+}
+
+// Skriv at enheden tæller banen (efter en gemning, eller når den overtager)
+async function saetTaeller(req, courtPk, row, id, hint) {
+    if (row && row.taeller_id === id) {
+        await query('UPDATE game_states SET taeller_set_at = UTC_TIMESTAMP(3) WHERE court_id = ?', [courtPk]);
+        return false;
+    }
+    const f = ejerskab.kraev(row, id, await taellerNavn(req, hint));
+    await query(
+        `UPDATE game_states SET taeller_id = ?, taeller_navn = ?, taeller_set_at = UTC_TIMESTAMP(3),
+            forrige_taeller_id = ?, forrige_taeller_navn = ?,
+            overtaget_at = ${f.overtaget ? 'UTC_TIMESTAMP(3)' : 'overtaget_at'}
+         WHERE court_id = ?`,
+        [f.taeller_id, f.taeller_navn, f.forrige_taeller_id, f.forrige_taeller_navn, courtPk]
+    );
+    return f.overtaget;
 }
 
 // Henter og auto-udløber snapshot for en bane. Returnerer null hvis intet/udløbet.
@@ -361,6 +402,19 @@ router.put('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), asyn
             state: row ? formatStateRow(row, court) : null
         });
 
+        // Kun én tæller ad gangen: tæller en anden enhed kampen, svares 423 med
+        // banens tilstand, så enheden kan vise stillingen og tilbyde "Overtag"
+        const taellerId = ejerskab.rensId(body.taellerId);
+        if (taellerId && !ejerskab.maaGemme(existing, taellerId, Date.now())) {
+            return res.status(423).json({
+                error: 'En anden enhed tæller denne kamp',
+                taellerSpaerret: true,
+                ...ejerskab.status(existing, taellerId, Date.now()),
+                version: existing.version || 0,
+                state: formatStateRow(existing, court)
+            });
+        }
+
         const expectedVersion = has('expectedVersion') ? Number(body.expectedVersion) : null;
         if (expectedVersion !== null) {
             if (!existing && expectedVersion > 0) {
@@ -624,11 +678,53 @@ router.put('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), asyn
         // senere skal reagere på kampstart.
         void matchIsStarting;
 
+        // Enheden der gemte, tæller nu banen (og giver lyd)
+        if (taellerId) {
+            try { await saetTaeller(req, court.id, existing, taellerId, body.taellerNavn); }
+            catch (e) { console.error('Kunne ikke registrere tælleren:', e.message); }
+        }
+
         const updatedRow = await queryOne('SELECT version FROM game_states WHERE court_id = ?', [court.id]);
 
         publishGameStateChange(req, courtId, 'update');
 
         res.json({ success: true, version: updatedRow ? updatedRow.version : 1 });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /api/game-states/:courtId/taeller - livstegn fra tælleren, eller "Overtag"
+// Body: { taellerId, taellerNavn, handling: 'ping' | 'overtag' }
+// Svar: { ejer, ledig, taeller: {navn, sekSidenLyd, aktiv} | null, overtagetFraDig }
+router.post('/:courtId/taeller', requireWriteAuthInClubMode, kunEgenBane('courtId'), async (req, res, next) => {
+    try {
+        const body = req.body || {};
+        const id = ejerskab.rensId(body.taellerId);
+        if (!id) return res.status(400).json({ error: 'Ugyldigt tæller-id' });
+
+        const court = await queryOne('SELECT id FROM courts WHERE court_number = ?', [req.params.courtId]);
+        if (!court) return res.status(404).json({ error: 'Bane ikke fundet' });
+
+        const hent = () => queryOne(
+            `SELECT taeller_id, taeller_navn, taeller_set_at, forrige_taeller_id, forrige_taeller_navn
+             FROM game_states WHERE court_id = ?`, [court.id]);
+        let row = await hent();
+
+        if (body.handling === 'overtag') {
+            // Uden række er der intet at overtage — den første gemning gør enheden til tæller
+            if (row) {
+                await saetTaeller(req, court.id, row, id, body.taellerNavn);
+                row = await hent();
+                // Den der tællede, får besked med det samme (via sin sync)
+                publishGameStateChange(req, req.params.courtId, 'taeller');
+            }
+        } else if (row && row.taeller_id === id) {
+            await query('UPDATE game_states SET taeller_set_at = UTC_TIMESTAMP(3) WHERE court_id = ?', [court.id]);
+            row = await hent();
+        }
+
+        res.json(ejerskab.status(row, id, Date.now()));
     } catch (error) {
         next(error);
     }

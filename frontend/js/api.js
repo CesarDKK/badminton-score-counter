@@ -346,6 +346,18 @@ class BadmintonAPI {
      * @param {number} courtId - Court ID
      * @returns {Promise<object>} - Game state object
      */
+    /**
+     * Kun én tæller ad gangen pr. bane: livstegn ('ping') eller "Overtag tællingen"
+     * ('overtag'). Svar: { ejer, ledig, taeller: {navn, sekSidenLyd, aktiv} | null, overtagetFraDig }
+     */
+    async taeller(courtId, taellerId, taellerNavn, handling = 'ping') {
+        return this.request(`/game-states/${courtId}/taeller`, {
+            method: 'POST',
+            body: JSON.stringify({ taellerId, taellerNavn, handling }),
+            timeout: 8000
+        }, 1);
+    }
+
     async getGameState(courtId) {
         // Live-poll: kort timeout og INGEN retry — næste poll er selv gentagelsen.
         // Retries her ville lægge ekstra last oveni netop når serveren er presset
