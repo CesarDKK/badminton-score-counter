@@ -63,6 +63,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     loadCourtData();
     startAutoRefresh();
     startLocalTimer();
+    startSkaermStatus();
     // Sponsorer/logoer/settings/tema opdateres nu via SSE-config-events (push).
     // Et langsomt sikkerhedsnet (5 min) selvheler ved missede events (SSE-
     // reconnect-huller) og fanger super-admins centrale logo-ændringer, som
@@ -232,6 +233,67 @@ function startLocalTimer() {
     }, 500);
 }
 
+/* ── Skærm-status (admin → Adgangslinks) ──
+   Livstegn hvert 20. sekund med skærmens navn (kiosk-PC'en sætter ?skaerm= fra
+   sin config-fil) og hændelser siden sidst:
+   - 'frys': browseren stod stille (et 1-sekunds-tik kom over 5 sek. for sent)
+   - 'net':  livstegnene kunne ikke nå serveren (fra første fejl til næste succes)
+   Så kan en skærm, der "går i stå", undersøges uden at køre ud til den. */
+const SKAERM_NAVN = (urlParams.get('skaerm') || '').slice(0, 60);
+const SKAERM_ID = 'tv-' + Math.random().toString(36).slice(2, 10);
+const SKAERM_INTERVAL_MS = 20000;
+let _sidsteDataOk = null;
+let _skaermHaendelser = [];
+let _netFejlFra = null;
+
+function startSkaermStatus() {
+    // Frys-vagt: tikker hvert sekund og måler med det monotone ur. En skjult
+    // fane bremses bevidst af browseren — det er ikke en frysning.
+    let sidsteTik = performance.now();
+    let sidsteTikKl = Date.now();
+    let varSkjult = document.hidden;
+    setInterval(() => {
+        const nu = performance.now();
+        const hul = nu - sidsteTik;
+        if (hul > 5000 && !document.hidden && !varSkjult) {
+            _skaermHaendelser.push({ type: 'frys', fra: sidsteTikKl, sek: Math.round(hul / 1000) });
+        }
+        sidsteTik = nu;
+        sidsteTikKl = Date.now();
+        varSkjult = document.hidden;
+    }, 1000);
+
+    sendLivstegn();
+    setInterval(sendLivstegn, SKAERM_INTERVAL_MS);
+}
+
+async function sendLivstegn() {
+    const haendelser = _skaermHaendelser.slice(0, 10);
+    try {
+        await api.sendScreenHeartbeat({
+            klientId: SKAERM_ID,
+            navn: SKAERM_NAVN,
+            bane: courtId,
+            version: (document.querySelector('script[src*="tv-script-v3.js"]')?.src.split('v=')[1] || ''),
+            dataAlderSek: _sidsteDataOk ? Math.round((Date.now() - _sidsteDataOk) / 1000) : null,
+            haendelser
+        });
+        _skaermHaendelser = _skaermHaendelser.slice(haendelser.length);
+        if (_netFejlFra) {
+            // Forbindelsen er tilbage — meld hullet med det samme
+            _skaermHaendelser.push({ type: 'net', fra: _netFejlFra, til: Date.now() });
+            _netFejlFra = null;
+            sendLivstegn();
+        }
+    } catch (e) {
+        // Et 4xx-svar (fx 401) betyder, at serveren kunne nås — timeout,
+        // netværksfejl og 5xx (server/Cloudflare nede) er et hul i forbindelsen
+        if ((!e.status || e.status >= 500) && !_netFejlFra) _netFejlFra = Date.now();
+        // Hold køen kort, hvis serveren er væk længe
+        if (_skaermHaendelser.length > 30) _skaermHaendelser = _skaermHaendelser.slice(-30);
+    }
+}
+
 /* ── Kamp-timer: server-forankret og monotonisk ──
    TV'ets eget ur kan være skævt ift. serverens (og tælleren, der startede
    kampen) — så i stedet for at regne "lokal tid minus starttid" ankres
@@ -299,6 +361,7 @@ async function loadCourtData() {
     try {
         const gameState = await api.getGameState(courtId);
 
+        _sidsteDataOk = Date.now(); // til skærm-status (dataAlderSek)
         // Succesfuldt hentet — nulstil fejltæller og skjul evt. forbindelsesbadge
         _loadFailCount = 0;
         setTvConnectionLost(false);

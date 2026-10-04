@@ -63,6 +63,7 @@ app.use('/api/auth', loginLimiter, require('./routes/auth'));
 app.use('/api/club-admin/login', loginLimiter);
 app.use('/api/club-admin', require('./routes/clubAdmin'));
 app.use('/api/device-tokens', require('./routes/deviceTokens'));
+app.use('/api/screens', require('./routes/screens'));
 
 // Device token entry point — tablet/TV åbner dette bogmærke-link
 app.get('/t/:token', async (req, res, next) => {
@@ -119,6 +120,11 @@ app.get('/t/:token', async (req, res, next) => {
             const legacyMap = { tv: '/tv-v3.html', 'tv-v3': '/tv-v3.html', oversigt: '/oversigt.html' };
             targetUrl = `${legacyMap[deviceToken.destination] || '/' + deviceToken.destination}?dt=${sessionToken}`;
         }
+
+        // Skærmens navn (kiosk-PC'en sætter ?skaerm=<navn fra config-filen>) går
+        // videre til siden, så den kan melde sig med navn i admins skærm-status
+        const skaerm = String(req.query.skaerm || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 60);
+        if (skaerm) targetUrl += `&skaerm=${encodeURIComponent(skaerm)}`;
 
         res.redirect(targetUrl);
     } catch (error) {

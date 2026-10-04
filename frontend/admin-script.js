@@ -2740,9 +2740,81 @@ async function loadDeviceTokens() {
     try {
         const tokens = await api.getDeviceTokens();
         renderDeviceTokens(tokens);
+        await refreshSkaermStatus();
+        startSkaermStatusRefresh();
     } catch (err) {
         listEl.innerHTML = `<p style="color:var(--color-accent);text-align:center;padding:20px;">Fejl: ${err.message}</p>`;
     }
+}
+
+// ── Skærm-status: TV'er der bruger hvert adgangslink (livstegn hvert 20. sek.) ──
+let skaermStatusInterval = null;
+
+function startSkaermStatusRefresh() {
+    if (skaermStatusInterval) clearInterval(skaermStatusInterval);
+    skaermStatusInterval = setInterval(() => {
+        // Stop af sig selv, når siden er skiftet væk fra Adgangslinks
+        if (document.getElementById('deviceTokensSection').style.display === 'none') {
+            clearInterval(skaermStatusInterval);
+            skaermStatusInterval = null;
+            return;
+        }
+        refreshSkaermStatus();
+    }, 15000);
+}
+
+async function refreshSkaermStatus() {
+    let skaerme;
+    try { skaerme = await api.getScreens(); } catch { return; } // status er en bonus — lad listen stå
+    document.querySelectorAll('.dt-skaerme').forEach(el => {
+        const id = Number(el.dataset.tokenId);
+        el.innerHTML = renderSkaerme(skaerme.filter(s => s.tokenId === id));
+    });
+}
+
+function skaermVarighed(sek) {
+    if (sek < 90) return `${sek} s`;
+    if (sek < 5400) return `${Math.round(sek / 60)} min`;
+    return `${Math.round(sek / 3600)} t`;
+}
+
+function renderSkaerme(skaerme) {
+    if (!skaerme.length) return '';
+    const kl = (ms) => new Date(ms).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
+    const linjer = skaerme.map(s => {
+        const farve = s.sekunderSiden < 60 ? 'var(--color-win)'
+            : s.sekunderSiden < 300 ? 'var(--color-warning, #f0a020)' : 'var(--color-danger)';
+        const status = s.sekunderSiden < 60 ? 'Kører'
+            : `Ingen livstegn i ${skaermVarighed(s.sekunderSiden)}`;
+        const navn = s.navn
+            ? escapeHtml(s.navn)
+            : `Skærm uden navn <span style="opacity:0.6;">(${escapeHtml(s.klientId)} — opdatér kiosk-PC'en for at få navnet med)</span>`;
+        const data = s.dataAlderSek != null && s.dataAlderSek > 30
+            ? ` &nbsp;•&nbsp; <span style="color:var(--color-warning, #f0a020);">data ${skaermVarighed(s.dataAlderSek)} gamle</span>` : '';
+        const haendelser = (s.haendelser || []).slice(0, 3).map(h =>
+            h.type === 'frys'
+                ? `Stod stille ${skaermVarighed(h.sek)} kl. ${kl(h.fra)}`
+                : `Uden forbindelse ${skaermVarighed(h.sek)} kl. ${kl(h.fra)}`
+        ).join(' &nbsp;•&nbsp; ');
+        return `
+            <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid rgba(255,255,255,0.06);">
+                <span style="width:9px;height:9px;border-radius:50%;background:${farve};margin-top:6px;flex-shrink:0;"></span>
+                <div style="flex:1;min-width:0;font-size:0.85em;">
+                    <div><strong>${navn}</strong> &nbsp;<span style="color:${farve};">${status}</span></div>
+                    <div style="color:rgba(255,255,255,0.45);font-size:0.9em;margin-top:2px;">
+                        Bane ${s.bane || '?'} &nbsp;•&nbsp; sidst set ${skaermVarighed(s.sekunderSiden)} siden &nbsp;•&nbsp; IP ${escapeHtml(s.ip || '?')}${data}
+                    </div>
+                    ${haendelser ? `<div style="color:var(--color-warning, #f0a020);font-size:0.9em;margin-top:2px;">⚠ ${haendelser}</div>` : ''}
+                </div>
+            </div>`;
+    }).join('');
+    return `
+        <div style="margin-top:12px;">
+            <div style="font-size:0.72em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.45);margin-bottom:4px;">
+                Skærme på dette link (${skaerme.length})
+            </div>
+            ${linjer}
+        </div>`;
 }
 
 function renderDeviceTokens(tokens) {
@@ -2787,6 +2859,7 @@ function renderDeviceTokens(tokens) {
                             Kopiér
                         </button>
                     </div>
+                    <div class="dt-skaerme" data-token-id="${t.id}"></div>
                 </div>
                 <div style="display:flex;gap:8px;flex-shrink:0;">
                     ${t.is_active

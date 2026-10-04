@@ -178,7 +178,11 @@
     if (gaaet) return;
     gaaet = true;
     status.innerHTML = '<span class="prik"></span>Åbner TV-siden…';
-    location.replace(url);
+    // PC'ens navn fra config-filen følger med, så skærmen kan kendes i
+    // admin → Adgangslinks (skærm-status), også når flere deler samme link
+    const navn = p.get('navn') || '';
+    if (navn && !maal.searchParams.has('skaerm')) maal.searchParams.set('skaerm', navn);
+    location.replace(maal.href);
   }
 
   async function svarer() {
