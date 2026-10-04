@@ -403,6 +403,10 @@ async function loadCourtData() {
         const matchFinished = gameState.matchCompleted || gameState.player1.games >= 2 || gameState.player2.games >= 2;
 
         if (matchFinished) {
+            // Tavlen bag resultatboksen skal vise slutstillingen — ellers står
+            // sidste sæt fast på den stilling, TV'et nåede at se før matchbolden
+            updatePlayerNames(gameState, playersSwapped);
+            updateSetScores(gameState, playersSwapped);
             showMatchFinished(gameState, playersSwapped);
             // Kampen er afgjort men banen ikke ryddet: vis "SCAN FOR NY KAMP"-QR
             // med det samme (kun hvis banen kører i QR-selvbetjening) — så et nyt
@@ -859,7 +863,10 @@ async function setupPlayerNameMarquee() {
 // Update set score boxes
 function updateSetScores(gameState, playersSwapped) {
     const setHistory = gameState.setScoresHistory || [];
-    const currentSetIndex = gameState.player1.games + gameState.player2.games;
+    // Afgjort kamp har intet igangværende sæt — ellers viste en 2-0-kamp
+    // slutscoren igen i 3. sæts boks
+    const matchFinished = gameState.matchCompleted || gameState.player1.games >= 2 || gameState.player2.games >= 2;
+    const currentSetIndex = matchFinished ? -1 : gameState.player1.games + gameState.player2.games;
 
     // Determine display players
     let displayPlayer1, displayPlayer2;
