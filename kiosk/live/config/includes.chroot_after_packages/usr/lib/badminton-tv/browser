@@ -7,6 +7,9 @@
 set -u
 . /run/badminton-tv/kiosk.env
 
+# Fejlsøgningsporten (kun 127.0.0.1) bruges af browser-vagten, som genstarter
+# browseren, hvis TV-siden fryser (/usr/lib/badminton-tv/browservagt).
+#
 # Frisk profil ved hver start, i RAM. Så findes der ingen "Gendan sider?"-boble
 # efter et strømsvigt, og disken bliver ikke slidt af Chromiums cache.
 PROFIL=${XDG_RUNTIME_DIR:-/tmp}/chromium-profil
@@ -68,4 +71,6 @@ exec /usr/bin/chromium \
     --disable-pinch \
     --overscroll-history-navigation=0 \
     --autoplay-policy=no-user-gesture-required \
+    --remote-debugging-port=9222 \
+    --remote-debugging-address=127.0.0.1 \
     "$START"

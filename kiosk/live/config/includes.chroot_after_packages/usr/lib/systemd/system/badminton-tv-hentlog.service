@@ -1,0 +1,21 @@
+# "Hent fejllog fra PC'en" i USB-nøglens startmenu: kopierer den installerede
+# PC's log ned på nøglen. Ændrer intet på PC'en.
+[Unit]
+Description=Badminton TV: hent fejllog fra PC'en til USB-nøglen
+After=systemd-user-sessions.service getty@tty1.service systemd-udev-settle.service
+Wants=systemd-udev-settle.service
+Conflicts=getty@tty1.service
+ConditionKernelCommandLine=badminton.tilstand=hentlog
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/badminton-tv/hentlog
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+
+[Install]
+WantedBy=multi-user.target

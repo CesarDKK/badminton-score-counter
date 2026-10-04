@@ -44,12 +44,13 @@ printf 'LANG=da_DK.UTF-8\n' > /etc/default/locale
 chmod 755 /usr/lib/badminton-tv/setup /usr/lib/badminton-tv/browser \
           /usr/lib/badminton-tv/cec /usr/lib/badminton-tv/sluk \
           /usr/lib/badminton-tv/netstatus /usr/lib/badminton-tv/diagnose \
+          /usr/lib/badminton-tv/browservagt \
           /usr/lib/systemd/system-generators/badminton-tv-sluk-generator
 chmod 644 /usr/lib/badminton-tv/conf.sh
 
 systemctl enable badminton-tv-setup.service badminton-tv-cec.service \
                  badminton-tv.service badminton-tv-netstatus.service \
-                 badminton-tv-diagnose.service
+                 badminton-tv-diagnose.service badminton-tv-browservagt.service
 systemctl enable NetworkManager.service systemd-timesyncd.service
 systemctl set-default multi-user.target
 

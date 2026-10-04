@@ -348,6 +348,9 @@ function startSkaermStatus() {
     let sidsteTikKl = Date.now();
     let varSkjult = document.hidden;
     setInterval(() => {
+        // Hjerteslag til kiosk-PC'ens browser-vagt (læses via Chromiums lokale
+        // fejlsøgningsport): står det stille, genstartes browseren
+        window.__btTik = Date.now();
         const nu = performance.now();
         const hul = nu - sidsteTik;
         if (hul > 5000 && !document.hidden && !varSkjult) {

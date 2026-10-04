@@ -2,6 +2,7 @@
 [Unit]
 Description=Badminton TV: automatisk slukning
 ConditionKernelCommandLine=!badminton.tilstand=installer
+ConditionKernelCommandLine=!badminton.tilstand=hentlog
 
 [Service]
 Type=oneshot
