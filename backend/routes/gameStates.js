@@ -92,7 +92,7 @@ async function taellerNavn(req, hint) {
 }
 
 // Skriv at enheden tæller banen (efter en gemning, eller når den overtager)
-async function saetTaeller(req, courtPk, row, id, hint) {
+async function saetTaeller(req, courtPk, row, id, hint, { bumpVersion = false } = {}) {
     if (row && row.taeller_id === id) {
         await query('UPDATE game_states SET taeller_set_at = UTC_TIMESTAMP(3) WHERE court_id = ?', [courtPk]);
         return false;
@@ -102,6 +102,7 @@ async function saetTaeller(req, courtPk, row, id, hint) {
         `UPDATE game_states SET taeller_id = ?, taeller_navn = ?, taeller_set_at = UTC_TIMESTAMP(3),
             forrige_taeller_id = ?, forrige_taeller_navn = ?,
             overtaget_at = ${f.overtaget ? 'UTC_TIMESTAMP(3)' : 'overtaget_at'}
+            ${bumpVersion ? ', version = version + 1' : ''}
          WHERE court_id = ?`,
         [f.taeller_id, f.taeller_navn, f.forrige_taeller_id, f.forrige_taeller_navn, courtPk]
     );
@@ -678,11 +679,20 @@ router.put('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), asyn
         // senere skal reagere på kampstart.
         void matchIsStarting;
 
-        // Enheden der gemte, tæller nu banen (og giver lyd)
-        if (taellerId) {
-            try { await saetTaeller(req, court.id, existing, taellerId, body.taellerNavn); }
-            catch (e) { console.error('Kunne ikke registrere tælleren:', e.message); }
-        }
+        // Enheden der gemte, tæller nu banen (og giver lyd) — men kun når der
+        // tælles en kamp. Navne, double/single eller valg af server gør ikke en
+        // tablet til tæller (ellers spærrede den for QR-telefonen, der skal tælle).
+        // En nulstilling glemmer tællerne, så ingen får "overtaget" om en gammel kamp.
+        try {
+            if (isReset) {
+                await query(
+                    `UPDATE game_states SET taeller_id = NULL, taeller_navn = NULL, taeller_set_at = NULL,
+                        forrige_taeller_id = NULL, forrige_taeller_navn = NULL, overtaget_at = NULL
+                     WHERE court_id = ?`, [court.id]);
+            } else if (taellerId && (hasActivity || (existing && existing.taeller_id === taellerId))) {
+                await saetTaeller(req, court.id, existing, taellerId, body.taellerNavn);
+            }
+        } catch (e) { console.error('Kunne ikke registrere tælleren:', e.message); }
 
         const updatedRow = await queryOne('SELECT version FROM game_states WHERE court_id = ?', [court.id]);
 
@@ -707,14 +717,17 @@ router.post('/:courtId/taeller', requireWriteAuthInClubMode, kunEgenBane('courtI
         if (!court) return res.status(404).json({ error: 'Bane ikke fundet' });
 
         const hent = () => queryOne(
-            `SELECT taeller_id, taeller_navn, taeller_set_at, forrige_taeller_id, forrige_taeller_navn
+            `SELECT taeller_id, taeller_navn, taeller_set_at, forrige_taeller_id, forrige_taeller_navn, match_completed
              FROM game_states WHERE court_id = ?`, [court.id]);
         let row = await hent();
 
         if (body.handling === 'overtag') {
             // Uden række er der intet at overtage — den første gemning gør enheden til tæller
             if (row) {
-                await saetTaeller(req, court.id, row, id, body.taellerNavn);
+                // version + 1: en gemning fra den gamle tæller, der allerede er
+                // undervejs, får 409 → prøver igen → 423, i stedet for at lande
+                // efter at den nye har hentet stillingen (så tabtes et point)
+                await saetTaeller(req, court.id, row, id, body.taellerNavn, { bumpVersion: true });
                 row = await hent();
                 // Den der tællede, får besked med det samme (via sin sync)
                 publishGameStateChange(req, req.params.courtId, 'taeller');

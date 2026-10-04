@@ -84,6 +84,13 @@ test('tælleren der fortsætter, bevarer forrige (ingen ny overtagelse)', () => 
     assert.equal(f.forrige_taeller_id, TELEFON);
 });
 
+test('en afsluttet kamp har ingen aktiv tæller — næste kamp kan startes fra en anden enhed', () => {
+    const r = raekke({ match_completed: 1 });
+    assert.equal(maaGemme(r, TELEFON, NU), true);
+    assert.equal(status(r, TELEFON, NU).ledig, true);
+    assert.equal(status(r, TABLET, NU).ejer, true);
+});
+
 test('id og navn renses; kortId afslører kun starten', () => {
     assert.equal(rensId('abc'), null);
     assert.equal(rensId('ok-id_12345'), 'ok-id_12345');

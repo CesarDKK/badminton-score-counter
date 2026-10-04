@@ -85,8 +85,10 @@ async function taellerPing(handling = 'ping') {
         taellerStatus(svar);
         return svar;
     } catch (e) {
-        // Offline eller udløbet QR-session — det håndteres andre steder
-        return null;
+        // Udløbet adgang (fx QR-sessionen efter Ryd bane): vis det — ellers
+        // hang en telefon, der så med, over en tom bane
+        if (e && e.status === 401) handleAuthExpired(e.body);
+        return null; // offline: næste livstegn prøver igen
     }
 }
 
@@ -104,7 +106,10 @@ function startTaellerPing() {
 function taellerStatus(s) {
     if (!s) return;
     if (s.ejer) {
-        if (serMed) forladSerMed();
+        if (serMed) {
+            forladSerMed();
+            genoptagEfterSerMed();
+        }
         return;
     }
     if (s.ledig) {
@@ -220,20 +225,25 @@ async function overtagTaelling(bekraeftet = false) {
         forladSerMed();
         hideMessage();
         applyLoadedState(frisk);
-        updateDisplay();
-        updateTimer();
-        if (gameState.matchStartTime && !gameState.matchEndTime) {
-            startTimer();
-            acquireWakeLock();
-        }
-        genoptagPause();
-        refreshCourtLogos();
-        // Bind holdkamp/turneringskamp igen (navnene beholdes, hvor de står)
-        runServerSync('poll');
+        genoptagEfterSerMed();
     } catch (e) {
         console.error('Kunne ikke overtage tællingen:', e);
         showMessage('Kunne ikke overtage', 'Tællingen kunne ikke overtages. Tjek forbindelsen og prøv igen.');
     }
+}
+
+// Tæl videre fra den stilling, vi har vist (timer, skærm, pause, holdkamp)
+function genoptagEfterSerMed() {
+    updateDisplay();
+    updateTimer();
+    if (gameState.matchStartTime && !gameState.matchEndTime) {
+        startTimer();
+        acquireWakeLock();
+    }
+    genoptagPause();
+    refreshCourtLogos();
+    // Bind holdkamp/turneringskamp igen (navnene beholdes, hvor de står)
+    runServerSync('poll');
 }
 
 // Banneret og et gennemsigtigt lag over tælleren, mens vi ser med
@@ -907,10 +917,11 @@ async function handleSetWin(winnerKey, loserKey, p1Score, p2Score) {
         // Gem øjeblikkeligt (afbryd debounced timer) så oversigt ser matchCompleted=true
         // inden brugeren evt. klikker "Ny Kamp" og nulstiller tilstanden.
         if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
-        performSave();
+        const kampGemt = performSave();
 
-        // Save match result to database
-        saveMatchResult(winnerNames, loserNames, winner.games, loser.games, winnerKey);
+        // Save match result to database — først når kampslut er gemt (er
+        // tællingen overtaget, må denne enhed ikke melde resultatet ind)
+        saveMatchResult(winnerNames, loserNames, winner.games, loser.games, winnerKey, kampGemt);
 
         showMatchWonMessage(isReportedMatch);
         return;
@@ -3051,7 +3062,7 @@ async function adoptEnteredResult(loaded) {
 }
 
 // Save match result to database
-async function saveMatchResult(winner, loser, winnerGames, loserGames, winnerKey) {
+async function saveMatchResult(winner, loser, winnerGames, loserGames, winnerKey, kampGemt) {
     // Navnene som de står nu — banen kan være ryddet, før opslagene herunder svarer
     const spillere = {
         player1: { ...gameState.player1 },
@@ -3076,6 +3087,16 @@ async function saveMatchResult(winner, loser, winnerGames, loserGames, winnerKey
     let capturedTournamentMatchId = assignedTournamentMatchId;
     let capturedTournament = activeTournament;
     assignedTournamentMatchId = null;
+
+    // Kun én tæller ad gangen: blev tællingen overtaget, mens dette point blev
+    // talt, er det den anden enheds kamp — så meldes intet ind herfra (før
+    // kunne en spærret tablet melde et forkert holdkamp-resultat ind)
+    try { await kampGemt; } catch { /* performSave håndterer selv sine fejl */ }
+    const ejerskabNu = await taellerPing();
+    if (serMed || (ejerskabNu && !ejerskabNu.ejer && !ejerskabNu.ledig)) {
+        console.warn('Tællingen er overtaget — kampresultatet meldes ikke ind herfra');
+        return;
+    }
 
     try {
         // Fallback-binding: de globale assigned-vars sættes KUN af den periodiske

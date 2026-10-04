@@ -44,6 +44,9 @@ function sekSidenLyd(row, nuMs) {
 }
 
 function erAktiv(row, nuMs) {
+    // En afsluttet kamp tælles ikke mere — tabletten, der stadig viser "Kamp
+    // Vundet", må ikke spærre for næste kamp (fx en QR-gæst)
+    if (row && row.match_completed) return false;
     const s = sekSidenLyd(row, nuMs);
     return s !== null && s <= AKTIV_SEK;
 }
