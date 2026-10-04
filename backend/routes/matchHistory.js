@@ -251,11 +251,15 @@ router.post('/', requireWriteAuthInClubMode, kunEgenBane((req) => req.body && re
             [court.id, winnerName, loserName, gamesWon, duration, setScores || null]
         );
 
-        // Husk rækken på banens afsluttede kamp, så "Ret resultat" opdaterer den
-        // i stedet for at lave en dublet (se POST /api/game-states/:courtId/result)
+        // Husk rækken på banens kamp, så "Ret resultat" opdaterer den i stedet for
+        // at lave en dublet (se POST /api/game-states/:courtId/result), og så en
+        // fortrudt matchbold kan slette den igen (PUT /api/game-states/:courtId).
+        // Kræver ikke match_completed: tælleren sender resultatet samtidig med
+        // gemningen af "kamp afgjort", og nåede resultatet frem først, blev
+        // koblingen aldrig sat.
         try {
             await query(
-                'UPDATE game_states SET result_history_id = ? WHERE court_id = ? AND match_completed = TRUE',
+                'UPDATE game_states SET result_history_id = ? WHERE court_id = ? AND match_start_time IS NOT NULL',
                 [result.insertId, court.id]
             );
         } catch (e) { /* kolonnen findes først efter migration 029 */ }

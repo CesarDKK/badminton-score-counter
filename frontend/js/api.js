@@ -978,6 +978,19 @@ class BadmintonAPI {
         return this.request('/device-tokens');
     }
 
+    // Skærm-status: TV'ets livstegn og admins liste (Adgangslinks)
+    async sendScreenHeartbeat(data) {
+        return this.request('/screens/heartbeat', {
+            method: 'POST',
+            body: JSON.stringify(data),
+            timeout: 8000
+        });
+    }
+
+    async getScreens() {
+        return this.request('/screens');
+    }
+
     async createDeviceToken(name, destination, locked, showQrOnTv) {
         const body = { name, destination, locked };
         if (showQrOnTv !== undefined) body.showQrOnTv = showQrOnTv;

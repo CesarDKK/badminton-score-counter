@@ -63,6 +63,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     loadCourtData();
     startAutoRefresh();
     startLocalTimer();
+    startSkaermStatus();
     // Sponsorer/logoer/settings/tema opdateres nu via SSE-config-events (push).
     // Et langsomt sikkerhedsnet (5 min) selvheler ved missede events (SSE-
     // reconnect-huller) og fanger super-admins centrale logo-ændringer, som
@@ -221,6 +222,48 @@ async function scheduleCourtDataLoad() {
     }
 }
 
+// TV'ets rækkefølge (originalPlayer1 øverst, originalPlayer2 nederst) holdes
+// ajour ved HVER opdatering. Før blev den husket én gang, da TV'et opdagede
+// kampen — men banen er "aktiv", før navnene er skrevet ind, så TV'et huskede
+// fx "Spiller 1"/"Spiller 2", og sæt-historikken (gemt med de rigtige navne)
+// blev vendt om: vinderen af 1. sæt stod som taber.
+//
+// Reglerne:
+// - Samme to spillere (også efter "Skift side", før eller under kampen):
+//   rækkefølgen står fast — navnene må ikke hoppe op og ned på TV'et.
+// - Ét navn rettet: den uændrede spiller beholder sin række.
+// - Nye spillere (ny kamp / navnene skrevet ind / TV'et genstartet): sæt 1's
+//   sider, hvis et sæt er spillet, ellers de nuværende.
+// Sæt-scorerne vendes efter navn (orientSetScore), så de passer uanset rækkefølge.
+function laesOprindeligeSider(gameState) {
+    const p1 = gameState.player1, p2 = gameState.player2;
+    const saet = (a, b) => {
+        originalPlayer1Name = a.name;
+        originalPlayer1Name2 = a.name2 || null;
+        originalPlayer2Name = b.name;
+        originalPlayer2Name2 = b.name2 || null;
+    };
+    const o1 = originalPlayer1Name, o2 = originalPlayer2Name;
+
+    if (o1 !== null && o2 !== null) {
+        if (p1.name === o1 && p2.name === o2) return saet(p1, p2);
+        if (p1.name === o2 && p2.name === o1) return saet(p2, p1);
+        if (p1.name === o1 || p2.name === o2) return saet(p1, p2);
+        if (p1.name === o2 || p2.name === o1) return saet(p2, p1);
+    }
+
+    const h = gameState.setScoresHistory;
+    const foerste = Array.isArray(h) && h[0] && typeof h[0] === 'object' && h[0].player1Name ? h[0] : null;
+    const sammePar = foerste &&
+        ((foerste.player1Name === p1.name && foerste.player2Name === p2.name) ||
+         (foerste.player1Name === p2.name && foerste.player2Name === p1.name));
+    if (sammePar) {
+        return saet({ name: foerste.player1Name, name2: foerste.player1Name2 },
+                    { name: foerste.player2Name, name2: foerste.player2Name2 });
+    }
+    saet(p1, p2);
+}
+
 function startLocalTimer() {
     // 500 ms-tick så et sekundskifte aldrig springes over ved interval-jitter;
     // DOM'en opdateres kun når det viste tal faktisk ændrer sig
@@ -230,6 +273,67 @@ function startLocalTimer() {
         }
         updatePlannerCountdown(); // no-op uden planner-runde; skriver kun ved ændring
     }, 500);
+}
+
+/* ── Skærm-status (admin → Adgangslinks) ──
+   Livstegn hvert 20. sekund med skærmens navn (kiosk-PC'en sætter ?skaerm= fra
+   sin config-fil) og hændelser siden sidst:
+   - 'frys': browseren stod stille (et 1-sekunds-tik kom over 5 sek. for sent)
+   - 'net':  livstegnene kunne ikke nå serveren (fra første fejl til næste succes)
+   Så kan en skærm, der "går i stå", undersøges uden at køre ud til den. */
+const SKAERM_NAVN = (urlParams.get('skaerm') || '').slice(0, 60);
+const SKAERM_ID = 'tv-' + Math.random().toString(36).slice(2, 10);
+const SKAERM_INTERVAL_MS = 20000;
+let _sidsteDataOk = null;
+let _skaermHaendelser = [];
+let _netFejlFra = null;
+
+function startSkaermStatus() {
+    // Frys-vagt: tikker hvert sekund og måler med det monotone ur. En skjult
+    // fane bremses bevidst af browseren — det er ikke en frysning.
+    let sidsteTik = performance.now();
+    let sidsteTikKl = Date.now();
+    let varSkjult = document.hidden;
+    setInterval(() => {
+        const nu = performance.now();
+        const hul = nu - sidsteTik;
+        if (hul > 5000 && !document.hidden && !varSkjult) {
+            _skaermHaendelser.push({ type: 'frys', fra: sidsteTikKl, sek: Math.round(hul / 1000) });
+        }
+        sidsteTik = nu;
+        sidsteTikKl = Date.now();
+        varSkjult = document.hidden;
+    }, 1000);
+
+    sendLivstegn();
+    setInterval(sendLivstegn, SKAERM_INTERVAL_MS);
+}
+
+async function sendLivstegn() {
+    const haendelser = _skaermHaendelser.slice(0, 10);
+    try {
+        await api.sendScreenHeartbeat({
+            klientId: SKAERM_ID,
+            navn: SKAERM_NAVN,
+            bane: courtId,
+            version: (document.querySelector('script[src*="tv-script-v3.js"]')?.src.split('v=')[1] || ''),
+            dataAlderSek: _sidsteDataOk ? Math.round((Date.now() - _sidsteDataOk) / 1000) : null,
+            haendelser
+        });
+        _skaermHaendelser = _skaermHaendelser.slice(haendelser.length);
+        if (_netFejlFra) {
+            // Forbindelsen er tilbage — meld hullet med det samme
+            _skaermHaendelser.push({ type: 'net', fra: _netFejlFra, til: Date.now() });
+            _netFejlFra = null;
+            sendLivstegn();
+        }
+    } catch (e) {
+        // Et 4xx-svar (fx 401) betyder, at serveren kunne nås — timeout,
+        // netværksfejl og 5xx (server/Cloudflare nede) er et hul i forbindelsen
+        if ((!e.status || e.status >= 500) && !_netFejlFra) _netFejlFra = Date.now();
+        // Hold køen kort, hvis serveren er væk længe
+        if (_skaermHaendelser.length > 30) _skaermHaendelser = _skaermHaendelser.slice(-30);
+    }
 }
 
 /* ── Kamp-timer: server-forankret og monotonisk ──
@@ -299,6 +403,7 @@ async function loadCourtData() {
     try {
         const gameState = await api.getGameState(courtId);
 
+        _sidsteDataOk = Date.now(); // til skærm-status (dataAlderSek)
         // Succesfuldt hentet — nulstil fejltæller og skjul evt. forbindelsesbadge
         _loadFailCount = 0;
         setTvConnectionLost(false);
@@ -358,24 +463,8 @@ async function loadCourtData() {
 
         // Detect new match starting
         if (isMatchActive && !wasMatchPreviouslyActive) {
-            console.log('[TV V3] New match detected - storing original player positions');
+            console.log('[TV V3] New match detected');
             _tvByCourtDirty = true; // ny kamp — genhent holdkamp-bindingen én gang
-
-            // If set history exists, use it to determine the true original positions.
-            // This handles the case where the TV page loads mid-match after sides have switched.
-            const history = gameState.setScoresHistory;
-            if (history && history.length > 0 && typeof history[0] === 'object' && history[0].player1Name) {
-                originalPlayer1Name = history[0].player1Name;
-                originalPlayer1Name2 = history[0].player1Name2 || null;
-                originalPlayer2Name = history[0].player2Name;
-                originalPlayer2Name2 = history[0].player2Name2 || null;
-                console.log('[TV V3] Using set history for original positions:', originalPlayer1Name, 'vs', originalPlayer2Name);
-            } else {
-                originalPlayer1Name = gameState.player1.name;
-                originalPlayer1Name2 = gameState.player1.name2 || null;
-                originalPlayer2Name = gameState.player2.name;
-                originalPlayer2Name2 = gameState.player2.name2 || null;
-            }
 
             // Reset cached scores for new match
             cachedSetScores = {
@@ -394,6 +483,8 @@ async function loadCourtData() {
 
         hideSponsorSlideshow();
 
+        laesOprindeligeSider(gameState);
+
         // Check if players have been swapped
         const playersSwapped = originalPlayer1Name &&
                                gameState.player1.name === originalPlayer2Name;
@@ -403,6 +494,10 @@ async function loadCourtData() {
         const matchFinished = gameState.matchCompleted || gameState.player1.games >= 2 || gameState.player2.games >= 2;
 
         if (matchFinished) {
+            // Tavlen bag resultatboksen skal vise slutstillingen — ellers står
+            // sidste sæt fast på den stilling, TV'et nåede at se før matchbolden
+            updatePlayerNames(gameState, playersSwapped);
+            updateSetScores(gameState, playersSwapped);
             showMatchFinished(gameState, playersSwapped);
             // Kampen er afgjort men banen ikke ryddet: vis "SCAN FOR NY KAMP"-QR
             // med det samme (kun hvis banen kører i QR-selvbetjening) — så et nyt
@@ -859,7 +954,10 @@ async function setupPlayerNameMarquee() {
 // Update set score boxes
 function updateSetScores(gameState, playersSwapped) {
     const setHistory = gameState.setScoresHistory || [];
-    const currentSetIndex = gameState.player1.games + gameState.player2.games;
+    // Afgjort kamp har intet igangværende sæt — ellers viste en 2-0-kamp
+    // slutscoren igen i 3. sæts boks
+    const matchFinished = gameState.matchCompleted || gameState.player1.games >= 2 || gameState.player2.games >= 2;
+    const currentSetIndex = matchFinished ? -1 : gameState.player1.games + gameState.player2.games;
 
     // Determine display players
     let displayPlayer1, displayPlayer2;
@@ -891,6 +989,13 @@ function updateTeamSetBoxes(teamId, playerData, setHistory, currentSetIndex, gam
             box.textContent = extractTeamScore(setHistory[idx], isTeam1);
             box.className = 'set-box';
             markSetResult(teamId, setNum, setHistory[idx], isTeam1);
+        } else if (currentSetIndex === idx && (gameState.gameMode === '15' || gameState.gameMode === '21') &&
+                   gameState.player1.score + gameState.player2.score > 0 &&
+                   saetAfgjort(gameState.player1.score, gameState.player2.score, gameState.gameMode)) {
+            // Pausen mellem sæt: tælleren nulstiller først pointene, når pausen
+            // slutter, så stillingen er det netop afsluttede sæts — ikke dette sæts
+            box.textContent = '-';
+            box.className = 'set-box';
         } else if (currentSetIndex === idx) {
             // Igangværende sæt — vis og cache aktuel score (max, som fallback)
             const currentScore = playerData.score;
