@@ -576,6 +576,14 @@ router.put('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), asyn
         // Et indtastet resultat hører kun til en afsluttet kamp — fortrydes den,
         // eller starter en ny, glemmes det
         if (!matchCompleted && existing && (existing.result_outcome || existing.result_winner || existing.result_history_id)) {
+            // Fortrudt matchbold (samme kamp spiller videre): kampen er ikke afgjort
+            // alligevel, så dens række i kamphistorikken slettes. Vindes den igen,
+            // gemmes en ny — før gav det to rækker for samme kamp. En ny kamp
+            // (isReset) beholder selvfølgelig den forriges række.
+            if (existing.match_completed && !isReset && existing.result_history_id) {
+                await query('DELETE FROM match_history WHERE id = ? AND court_id = ?',
+                    [existing.result_history_id, court.id]);
+            }
             await query(
                 'UPDATE game_states SET result_outcome = NULL, result_winner = NULL, result_history_id = NULL WHERE court_id = ?',
                 [court.id]

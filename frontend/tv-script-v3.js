@@ -898,6 +898,13 @@ function updateTeamSetBoxes(teamId, playerData, setHistory, currentSetIndex, gam
             box.textContent = extractTeamScore(setHistory[idx], isTeam1);
             box.className = 'set-box';
             markSetResult(teamId, setNum, setHistory[idx], isTeam1);
+        } else if (currentSetIndex === idx && (gameState.gameMode === '15' || gameState.gameMode === '21') &&
+                   gameState.player1.score + gameState.player2.score > 0 &&
+                   saetAfgjort(gameState.player1.score, gameState.player2.score, gameState.gameMode)) {
+            // Pausen mellem sæt: tælleren nulstiller først pointene, når pausen
+            // slutter, så stillingen er det netop afsluttede sæts — ikke dette sæts
+            box.textContent = '-';
+            box.className = 'set-box';
         } else if (currentSetIndex === idx) {
             // Igangværende sæt — vis og cache aktuel score (max, som fallback)
             const currentScore = playerData.score;
