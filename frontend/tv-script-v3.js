@@ -64,6 +64,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     startAutoRefresh();
     startLocalTimer();
     startSkaermStatus();
+    startAutoOpdatering();
     // Sponsorer/logoer/settings/tema opdateres nu via SSE-config-events (push).
     // Et langsomt sikkerhedsnet (5 min) selvheler ved missede events (SSE-
     // reconnect-huller) og fanger super-admins centrale logo-ændringer, som
@@ -288,6 +289,58 @@ let _sidsteDataOk = null;
 let _skaermHaendelser = [];
 let _netFejlFra = null;
 
+/* ── Automatisk opdatering ──
+   Et TV kører hele dagen og indlæser ellers først en ny version, når PC'en
+   genstarter. Hvert 5. minut (med tilfældigt forskud, så hallens skærme ikke
+   spørger samtidig) hentes tv-v3.html, og dens ?v=-numre sammenlignes med dem,
+   siden kører med — er et bumpet, er der deployet en ny version. Siden
+   genindlæses kun, når banen er ledig (ingen kamp, heller ikke en afsluttet,
+   der ikke er ryddet, og ingen pause), så en kamp aldrig afbrydes. */
+const OPDATERING_INTERVAL_MS = 5 * 60 * 1000;
+
+function versionsSignatur(urls) {
+    return urls.filter(u => /[?&]v=/.test(u)).map(u => u.replace(/^\.?\//, '')).sort().join(' ');
+}
+
+function egenSignatur() {
+    const urls = [...document.querySelectorAll('script[src], link[href]')]
+        .map(el => el.getAttribute('src') || el.getAttribute('href'));
+    return versionsSignatur(urls);
+}
+
+let _ventendeVersion = null;
+
+async function tjekNyVersion() {
+    try {
+        const res = await fetch('/tv-v3.html', { cache: 'no-store' });
+        if (!res.ok) return;
+        const html = await res.text();
+        const urls = [...html.matchAll(/(?:src|href)="([^"]+)"/g)].map(m => m[1]);
+        const ny = versionsSignatur(urls);
+        _ventendeVersion = ny && ny !== egenSignatur() ? ny : null;
+        genindlaesHvisLedig();
+    } catch (e) { /* intet net — prøv igen næste gang */ }
+}
+
+function genindlaesHvisLedig() {
+    if (!_ventendeVersion || isMatchCurrentlyActive || isRestBreakActive) return;
+    // Kun ét forsøg pr. ny version: serverer en cache stadig den gamle side
+    // efter genindlæsningen, må TV'et ikke genindlæse i ring
+    try {
+        if (sessionStorage.getItem('tvGenindlaestFor') === _ventendeVersion) return;
+        sessionStorage.setItem('tvGenindlaestFor', _ventendeVersion);
+    } catch (e) { return; }
+    console.log('[TV V3] Ny version deployet — genindlæser, mens banen er ledig');
+    location.reload();
+}
+
+function startAutoOpdatering() {
+    setTimeout(() => {
+        tjekNyVersion();
+        setInterval(tjekNyVersion, OPDATERING_INTERVAL_MS);
+    }, Math.floor(Math.random() * OPDATERING_INTERVAL_MS));
+}
+
 function startSkaermStatus() {
     // Frys-vagt: tikker hvert sekund og måler med det monotone ur. En skjult
     // fane bremses bevidst af browseren — det er ikke en frysning.
@@ -427,6 +480,7 @@ async function loadCourtData() {
             gameState.servingTeam != null;      // Serving team selected (doubles)
 
         isMatchCurrentlyActive = isMatchActive && hasGameActivity;
+        if (!isMatchCurrentlyActive) genindlaesHvisLedig(); // ventende ny version → nu, banen er ledig
 
         // Hold-logoer (kun holdkamp-delkampe) — fire-and-forget, fejl skjuler logoer
         updateTvTeamLogos(gameState, isMatchActive);
