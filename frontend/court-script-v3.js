@@ -2916,7 +2916,14 @@ async function serverSyncTick(reason) {
         // assignment-events og ukendt grund — ikke ved almindelige point-events.
         const checkAssignments = reason !== 'update' && reason !== 'reset' && reason !== 'config';
         try {
+            const syncStartedAt = Date.now();
             const loaded = await api.getGameState(courtId);
+            // En egen gemning er undervejs, eller blev færdig mens vi hentede: så
+            // kan svaret være fra FØR den. Fx sender serveren sit event for pointet
+            // til 11 i 3. sæt, før tælleren har gemt sideskiftet — overtog vi
+            // navnene derfra, flyttede pointene men navnene blev stående. Navne/
+            // format overtages først ved næste sync, når tælleren er i ro.
+            const ownSaveRacing = () => isSaving || pendingSave || !!saveTimeout || lastOwnSaveAt >= syncStartedAt;
 
             // Planner-blokken følger banen (ny runde, runden slut) — styrer "Indtast resultat"
             const hadPlanner = !!gameState.planner;
@@ -2943,7 +2950,7 @@ async function serverSyncTick(reason) {
                 console.log('Court was reset from admin, resetting local state');
                 await adoptServerReset(loaded);
                 if (isMatchSessionToken()) return;
-            } else if (!assignedHoldkampGameId && !assignedTournamentMatchId) {
+            } else if (!assignedHoldkampGameId && !assignedTournamentMatchId && !ownSaveRacing()) {
                 // Just sync player names (in case they were changed from another device).
                 // Springes over når banen er bundet til en holdkamp/turnering — der er
                 // delkampen/kampen autoritativ (håndteres i holdkamp/turnerings-synken),
