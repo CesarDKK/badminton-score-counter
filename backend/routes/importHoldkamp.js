@@ -171,8 +171,11 @@ function holdNavnAf(cellHtml) {
 }
 
 // Badmintonplayer angiver tider som dansk vægur (Europe/Copenhagen). Vi gemmer
-// dem i UTC, så de kan sammenlignes med MySQL NOW() (UTC i containeren) og med
-// de øvrige tidsstempler i appen, uafhængigt af serverens egen tidszone.
+// dem i UTC (DATETIME: start_time, last_checked_at) og sammenligner i SQL med
+// UTC_TIMESTAMP() — ikke NOW(), som følger databasens tidszone: står den ikke
+// på UTC, blev kampe før opgivet to timer for tidligt ("Kom aldrig").
+// TIMESTAMP-kolonner (created_at, updated_at) følger selv databasens tidszone
+// og sammenlignes fortsat med NOW(). Uafhængigt af serverens egen tidszone.
 
 /** Tidszone-offset (ms, positiv = foran UTC) for en zone på et givet tidspunkt. */
 function tzOffsetMs(tz, dato) {
@@ -208,7 +211,7 @@ function parseDanskTid(s) {
     return isNaN(d.getTime()) ? null : d;
 }
 
-/** MySQL DATETIME i UTC — samme zone som NOW() i containeren. */
+/** MySQL DATETIME i UTC — sammenlignes med UTC_TIMESTAMP() (se ovenfor). */
 function tilMysqlDato(d) {
     if (!d) return null;
     const p = n => String(n).padStart(2, '0');
@@ -305,7 +308,74 @@ async function hentKamp(url) {
     return { params, info, seddel };
 }
 
+// ── Log for holdkamp-køen ────────────────────────────────────────────────────
+// Hvert tjek og hver hændelse skrives i holdkamp_vagt_log (migration 030), så
+// admin kan se i bunden af Holdkamp-siden, hvad der skete med en kamp — uden
+// adgang til serverens log. Loggen må aldrig vælte vagten: fejl ignoreres.
+
+const { currentTenant } = require('../config/tenantPools');
+const _sidsteGennemloeb = new Map();   // tenant → ms for vagtens seneste gennemløb
+const _sidsteOprydning = new Map();    // tenant → ms for seneste sletning af gamle rækker
+
+const danskTid = (d) => d ? new Date(d).toLocaleString('da-DK', {
+    timeZone: 'Europe/Copenhagen', day: 'numeric', month: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+}) : 'ukendt';
+
+async function vagtLog(w, niveau, besked) {
+    try {
+        await query(
+            'INSERT INTO holdkamp_vagt_log (watcher_id, league_match_id, niveau, besked) VALUES (?, ?, ?, ?)',
+            [w ? w.id || null : null, w ? w.league_match_id || null : null, niveau, String(besked).slice(0, 600)]
+        );
+    } catch (e) { /* fx før migration 030 er kørt */ }
+}
+
+/** Hvad badmintonplayer svarede — kort, til loggen. */
+function svarBeskrivelse(info, seddel) {
+    const dele = [];
+    dele.push(info.kampnr ? `kampinfo fundet (kampnr ${info.kampnr})` : 'INGEN kampinfo i svaret');
+    dele.push(`kamptid ${info.tid ? danskTid(info.tid) : 'ukendt'}`);
+    dele.push(`hold: ${seddel.team1Name || '–'} / ${seddel.team2Name || '–'}`);
+    dele.push(`${seddel.games.length} delkampe`);
+    return dele.join(', ');
+}
+
 // ── Ruter ────────────────────────────────────────────────────────────────────
+
+// GET /api/import/holdkamp-vagt-log — loggen + en lille diagnose af vagten
+// (kører den, og går databasens ur rigtigt? En database der ikke kører UTC får
+// kampe til at blive opgivet to timer for tidligt).
+router.get('/holdkamp-vagt-log', authMiddleware, requirePage('holdkamp'), async (req, res, next) => {
+    try {
+        const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 300, 1), 1000);
+        const watcherId = parseInt(req.query.watcher, 10) || null;
+        const ur = await queryOne('SELECT NOW() AS nu, UTC_TIMESTAMP() AS utc, @@session.time_zone AS tz');
+        const afvigelseMin = ur ? Math.round((new Date(ur.nu) - new Date(ur.utc)) / 60000) : null;
+        const sidst = _sidsteGennemloeb.get(currentTenant());
+        let log = [];
+        try {
+            log = await query(
+                `SELECT l.id, UNIX_TIMESTAMP(l.tid) AS tid_unix, l.watcher_id, l.league_match_id,
+                        l.niveau, l.besked, w.team1_name, w.team2_name
+                   FROM holdkamp_vagt_log l
+                   LEFT JOIN holdkamp_watchers w ON w.id = l.watcher_id
+                  ${watcherId ? 'WHERE l.watcher_id = ?' : ''}
+                  ORDER BY l.id DESC LIMIT ${limit}`,
+                watcherId ? [watcherId] : []
+            );
+        } catch (e) { /* tabellen findes ikke endnu */ }
+        res.json({
+            diagnose: {
+                serverTid: new Date().toISOString(),
+                databaseNu: ur && ur.nu, databaseUtc: ur && ur.utc, databaseTidszone: ur && ur.tz,
+                databaseAfvigelseMin: afvigelseMin,
+                vagtSidstKoertSekSiden: sidst ? Math.round((Date.now() - sidst) / 1000) : null
+            },
+            log
+        });
+    } catch (error) { next(error); }
+});
 
 /**
  * POST /api/import/holdkamp-url
@@ -345,11 +415,11 @@ router.post('/holdkamp-url', authMiddleware, requirePage('holdkamp'), async (req
         await query(
             `INSERT INTO holdkamp_watchers
                (league_match_id, url, team1_name, team2_name, venue, start_time, status, last_checked_at, last_error, team_match_id)
-             VALUES (?, ?, ?, ?, ?, ?, 'venter', NOW(), NULL, NULL)
+             VALUES (?, ?, ?, ?, ?, ?, 'venter', UTC_TIMESTAMP(), NULL, NULL)
              ON DUPLICATE KEY UPDATE
                url = VALUES(url), team1_name = VALUES(team1_name), team2_name = VALUES(team2_name),
                venue = VALUES(venue), start_time = VALUES(start_time),
-               status = 'venter', last_checked_at = NOW(), last_error = NULL, team_match_id = NULL`,
+               status = 'venter', last_checked_at = UTC_TIMESTAMP(), last_error = NULL, team_match_id = NULL`,
             [params.leagueMatchID, url, team1, team2, info.spillested || null, tilMysqlDato(info.tid)]
         );
 
@@ -358,6 +428,9 @@ router.post('/holdkamp-url', authMiddleware, requirePage('holdkamp'), async (req
                FROM holdkamp_watchers WHERE league_match_id = ?`,
             [params.leagueMatchID]
         );
+        await vagtLog(watcher, 'info',
+            `Sat i kø: ${team1} – ${team2}, kampstart ${danskTid(info.tid)}. `
+            + `Første tjek ${danskTid(vagt.foersteTjek(info.tid))}. (${svarBeskrivelse(info, seddel)})`);
 
         res.json({
             success: true,
@@ -417,8 +490,10 @@ router.post('/holdkamp-watchers/:id/check', authMiddleware, requirePage('holdkam
 // DELETE /api/import/holdkamp-watchers/:id — stop overvågningen af én kamp
 router.delete('/holdkamp-watchers/:id', authMiddleware, requirePage('holdkamp'), async (req, res, next) => {
     try {
+        const w = await queryOne('SELECT id, league_match_id, team1_name, team2_name, status FROM holdkamp_watchers WHERE id = ?', [req.params.id]);
         const r = await query('DELETE FROM holdkamp_watchers WHERE id = ?', [req.params.id]);
         if (r.affectedRows === 0) return res.status(404).json({ error: 'Overvågningen findes ikke' });
+        await vagtLog(w, 'info', `${w.status === 'venter' ? 'Stoppet' : 'Fjernet fra listen'} af admin: ${w.team1_name} – ${w.team2_name}`);
         res.json({ success: true });
     } catch (error) { next(error); }
 });
@@ -454,11 +529,12 @@ function medTidsplan(w, nu = new Date()) {
  */
 async function tjekWatcher(w, { kilde = 'auto' } = {}) {
     const taget = await query(
-        `UPDATE holdkamp_watchers SET last_checked_at = NOW()
+        `UPDATE holdkamp_watchers SET last_checked_at = UTC_TIMESTAMP()
           WHERE id = ? AND status = 'venter' AND last_checked_at <=> ?`,
         [w.id, w.last_checked_at || null]
     );
     if (taget.affectedRows === 0) return { udfald: 'optaget' };
+    const hvem = kilde === 'manuel' ? 'Tjek nu' : 'Tjek';
 
     try {
         const { info, seddel } = await hentKamp(w.url);
@@ -470,9 +546,15 @@ async function tjekWatcher(w, { kilde = 'auto' } = {}) {
                 `UPDATE holdkamp_watchers SET last_error = NULL, start_time = COALESCE(?, start_time) WHERE id = ?`,
                 [tilMysqlDato(info.tid), w.id]
             );
-            if (info.tid && w.start_time && new Date(w.start_time).getTime() !== info.tid.getTime()) {
+            const flyttet = info.tid && w.start_time && new Date(w.start_time).getTime() !== info.tid.getTime();
+            if (flyttet) {
                 console.log(`[holdkamp-watch] kamp ${w.league_match_id}: kamptidspunktet er ændret til ${info.tid.toISOString()}`);
             }
+            const naeste = vagt.naesteTjek({ ...w, start_time: info.tid || w.start_time, last_checked_at: new Date() });
+            await vagtLog(w, 'info',
+                `${hvem}: holdsedlen er ikke frigivet endnu (${svarBeskrivelse(info, seddel)}).`
+                + (flyttet ? ` Kamptidspunktet er ændret fra ${danskTid(w.start_time)} til ${danskTid(info.tid)}.` : '')
+                + ` Næste tjek ${danskTid(naeste)}.`);
             return { udfald: 'ikke_frigivet' };
         }
 
@@ -489,6 +571,9 @@ async function tjekWatcher(w, { kilde = 'auto' } = {}) {
             [teamMatchId, w.id]
         );
         console.log(`✓ Holdkamp hentet ${kilde === 'manuel' ? 'manuelt' : 'automatisk'}: ${seddel.team1Name} – ${seddel.team2Name} (kamp ${w.league_match_id})`);
+        await vagtLog(w, 'info',
+            `${hvem}: holdsedlen er frigivet — holdkampen er oprettet (${seddel.team1Name} – ${seddel.team2Name}, `
+            + `format ${seddel.format}, ${seddel.games.length} delkampe).`);
         return { udfald: 'oprettet', teamMatchId };
     } catch (err) {
         // En turnering kan blokere oprettelsen. Holdsedlen er der, men vi kan
@@ -501,6 +586,11 @@ async function tjekWatcher(w, { kilde = 'auto' } = {}) {
             [besked, blokeret ? 'fejl' : 'venter', w.id]
         );
         console.error(`[holdkamp-watch] kamp ${w.league_match_id}: ${err.message}`);
+        const aarsag = err.name === 'TimeoutError' ? ' (badmintonplayer.dk svarede ikke inden for tidsgrænsen)'
+            : (err.cause && err.cause.code) ? ` (${err.cause.code})` : '';
+        await vagtLog(w, 'fejl',
+            `${hvem} fejlede: ${besked}${aarsag}. `
+            + (blokeret ? 'Holdkampen kan ikke oprettes automatisk — opret den manuelt.' : 'Prøves igen ved næste tjek.'));
         return { udfald: 'fejl', fejl: besked, blokeret };
     }
 }
@@ -511,18 +601,37 @@ async function tjekWatcher(w, { kilde = 'auto' } = {}) {
  * siger er forfaldne (se config/holdkampVagt.js).
  */
 async function runHoldkampWatchers() {
-    // 1. Giv op på kampe hvor starttidspunktet for længst er passeret
-    const opgivet = await query(
-        `UPDATE holdkamp_watchers
-            SET status = 'opgivet',
-                last_error = 'Holdsammensætningen blev aldrig frigivet'
+    // Til diagnosen i admin: kører vagten overhovedet for denne klub?
+    const tenant = currentTenant();
+    _sidsteGennemloeb.set(tenant, Date.now());
+    if (Date.now() - (_sidsteOprydning.get(tenant) || 0) > 10 * 60 * 1000) {
+        _sidsteOprydning.set(tenant, Date.now());
+        try { await query('DELETE FROM holdkamp_vagt_log WHERE tid < NOW() - INTERVAL 14 DAY'); } catch (e) { /* før migration 030 */ }
+    }
+
+    // 1. Giv op på kampe hvor starttidspunktet for længst er passeret. Var der
+    // en fejl undervejs (fx badmintonplayer svarede ikke), bevares den — før
+    // stod der altid "aldrig frigivet", også når den rigtige årsag var en fejl.
+    const opgives = await query(
+        `SELECT id, league_match_id, team1_name, team2_name, start_time, last_error FROM holdkamp_watchers
           WHERE status = 'venter'
-            AND ((start_time IS NOT NULL AND NOW() > DATE_ADD(start_time, INTERVAL ? MINUTE))
+            AND ((start_time IS NOT NULL AND UTC_TIMESTAMP() > DATE_ADD(start_time, INTERVAL ? MINUTE))
               OR (start_time IS NULL AND created_at < DATE_SUB(NOW(), INTERVAL ? HOUR)))`,
         [vagt.OPGIV_EFTER_MIN, vagt.UDEN_TID_TIMER]
     );
-    if (opgivet.affectedRows > 0) {
-        console.log(`[holdkamp-watch] ${opgivet.affectedRows} kamp(e) opgivet — holdsedlen kom aldrig`);
+    for (const w of opgives) {
+        const besked = w.last_error
+            ? `Opgivet. Sidste fejl: ${w.last_error}`.slice(0, 400)
+            : 'Holdsammensætningen blev aldrig frigivet';
+        const r = await query(
+            `UPDATE holdkamp_watchers SET status = 'opgivet', last_error = ? WHERE id = ? AND status = 'venter'`,
+            [besked, w.id]
+        );
+        if (r.affectedRows > 0) {
+            console.log(`[holdkamp-watch] kamp ${w.league_match_id} opgivet: ${besked}`);
+            await vagtLog(w, w.last_error ? 'fejl' : 'advarsel',
+                `Opgivet ${vagt.OPGIV_EFTER_MIN} min efter kampstart (${danskTid(w.start_time)}): ${besked}`);
+        }
     }
 
     // 2. Find dem tidsplanen siger skal tjekkes nu
@@ -541,6 +650,8 @@ async function runHoldkampWatchers() {
         const foerste = vagt.foersteTjek(w.start_time);
         if (foerste && nu >= foerste && (!w.last_checked_at || new Date(w.last_checked_at) < foerste)) {
             console.log(`[holdkamp-watch] kamp ${w.league_match_id} (${w.team1_name} – ${w.team2_name}): vinduet er åbnet, tjekker hvert 30. sekund i 10 minutter og derefter hvert 2. minut`);
+            await vagtLog(w, 'info',
+                `Vinduet er åbnet (kampstart ${danskTid(w.start_time)}): tjekker hvert 30. sekund i 10 minutter, derefter hvert 2. minut`);
         }
         await tjekWatcher(w);
     }

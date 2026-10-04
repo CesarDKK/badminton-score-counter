@@ -675,6 +675,10 @@ class BadmintonAPI {
         return this.request('/import/holdkamp-watchers');
     }
 
+    async getHoldkampVagtLog(watcherId) {
+        return this.request('/import/holdkamp-vagt-log' + (watcherId ? `?watcher=${encodeURIComponent(watcherId)}` : ''));
+    }
+
     /** Stop overvågningen af en kamp. */
     async deleteHoldkampWatcher(id) {
         return this.request(`/import/holdkamp-watchers/${id}`, { method: 'DELETE' });

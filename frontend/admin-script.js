@@ -3254,7 +3254,7 @@ async function bpLoadWatchers() {
             w.status === 'opgivet'  ? badge('Kom aldrig', '170,170,170') :
                                       badge('Kunne ikke oprettes', '217,44,63');
 
-        const fejl = w.last_error && w.status !== 'opgivet'
+        const fejl = w.last_error && (w.status !== 'opgivet' || w.last_error.startsWith('Opgivet.'))
             ? `<div style="color:var(--color-danger,#d92c3f);font-size:0.82em;margin-top:4px;">${escapeHtml(w.last_error)}</div>`
             : '';
 
@@ -3323,6 +3323,79 @@ async function bpTjekNu(id, btn) {
     }
 }
 
+// ── Log for holdkamp-køen (i bunden af Holdkamp-siden) ──
+let bpVagtLogTekst = '';
+
+async function bpLoadVagtLog() {
+    const boks = document.getElementById('bpVagtLog');
+    if (!boks) return;
+    const filter = document.getElementById('bpVagtLogFilter');
+    let data;
+    try {
+        data = await api.getHoldkampVagtLog(filter && filter.value);
+    } catch (err) {
+        boks.innerHTML = `<p style="color:var(--color-danger,#d92c3f);">Loggen kunne ikke hentes: ${escapeHtml(err.message)}</p>`;
+        return;
+    }
+    const d = data.diagnose || {};
+    const kl = (ms) => new Date(ms).toLocaleString('da-DK', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    // Diagnose: kører vagten, og går databasens ur rigtigt?
+    const ok = (t) => `<span style="color:var(--color-win,#45d17e);">${t}</span>`;
+    const galt = (t) => `<span style="color:var(--color-danger,#d92c3f);font-weight:600;">${t}</span>`;
+    const vagtTekst = d.vagtSidstKoertSekSiden == null
+        ? galt('har ikke kørt siden serveren startede')
+        : d.vagtSidstKoertSekSiden <= 60 ? ok(`kørte for ${d.vagtSidstKoertSekSiden} sek. siden`)
+        : galt(`kørte sidst for ${Math.round(d.vagtSidstKoertSekSiden / 60)} min. siden — den skal køre hvert 10. sekund`);
+    const urTekst = d.databaseAfvigelseMin === 0 ? ok('går rigtigt (UTC)')
+        : galt(`afviger ${d.databaseAfvigelseMin} min. fra UTC (tidszone ${escapeHtml(String(d.databaseTidszone))}) — kampe opgives for tidligt`);
+    document.getElementById('bpVagtDiagnose').innerHTML =
+        `Vagten ${vagtTekst} · Databasens ur ${urTekst} · Serverens tid ${kl(d.serverTid)}`;
+
+    // Kampfilteret udfyldes ud fra de kampe, der står i loggen
+    const log = data.log || [];
+    if (filter && !filter.value) {
+        const kampe = new Map();
+        log.forEach(l => { if (l.watcher_id && !kampe.has(l.watcher_id)) kampe.set(l.watcher_id, l); });
+        filter.innerHTML = '<option value="">Alle kampe</option>' + [...kampe.values()].map(l =>
+            `<option value="${l.watcher_id}">${escapeHtml(l.team1_name ? `${l.team1_name} – ${l.team2_name}` : `kamp ${l.league_match_id}`)}</option>`
+        ).join('');
+    }
+
+    const farve = { info: 'rgba(255,255,255,0.75)', advarsel: 'var(--color-warning,#f0a020)', fejl: 'var(--color-danger,#d92c3f)' };
+    const navn = (l) => l.team1_name ? `${l.team1_name} – ${l.team2_name}` : (l.league_match_id ? `kamp ${l.league_match_id}` : '');
+    boks.innerHTML = log.length
+        ? log.map(l => `
+            <div style="display:grid;grid-template-columns:120px 1fr;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+                <span style="color:#888;font-variant-numeric:tabular-nums;">${kl(l.tid_unix * 1000)}</span>
+                <span style="color:${farve[l.niveau] || farve.info};">
+                    ${navn(l) ? `<b style="color:#ccc;font-weight:600;">${escapeHtml(navn(l))}:</b> ` : ''}${escapeHtml(l.besked)}
+                </span>
+            </div>`).join('')
+        : '<p style="color:#888;">Ingen hændelser endnu. Loggen fyldes, når en kamp sættes i kø fra badmintonplayer.dk.</p>';
+
+    // Tekstudgave til "Kopiér log" — med diagnosen øverst, så den kan sendes videre
+    bpVagtLogTekst = [
+        `Holdkamp-kø — log hentet ${kl(Date.now())}`,
+        `Vagt sidst kørt: ${d.vagtSidstKoertSekSiden == null ? 'aldrig' : d.vagtSidstKoertSekSiden + ' sek. siden'}`,
+        `Database: NOW ${d.databaseNu} / UTC ${d.databaseUtc} (afvigelse ${d.databaseAfvigelseMin} min, tidszone ${d.databaseTidszone})`,
+        `Server: ${d.serverTid}`,
+        '',
+        ...log.map(l => `${kl(l.tid_unix * 1000)}  [${l.niveau}]  ${navn(l) ? navn(l) + ': ' : ''}${l.besked}`)
+    ].join('\n');
+}
+
+async function bpKopierVagtLog(knap) {
+    try {
+        await navigator.clipboard.writeText(bpVagtLogTekst);
+        const tekst = knap.textContent;
+        knap.textContent = 'Kopieret ✓';
+        setTimeout(() => { knap.textContent = tekst; }, 2000);
+    } catch {
+        showMessage('Kopiér log', 'Kopiering blev afvist af browseren. Markér teksten i loggen og kopiér manuelt.');
+    }
+}
+
 async function bpStopWatcher(id) {
     try {
         await api.deleteHoldkampWatcher(id);
@@ -3337,7 +3410,11 @@ async function bpStopWatcher(id) {
 function bpStartWatcherRefresh() {
     bpStopWatcherRefresh();
     bpLoadWatchers();
-    bpWatcherTimer = setInterval(bpLoadWatchers, 60000);
+    bpWatcherTimer = setInterval(() => {
+        bpLoadWatchers();
+        const logBoks = document.getElementById('bpVagtLogBoks');
+        if (logBoks && logBoks.open) bpLoadVagtLog();
+    }, 60000);
     bpWatcherTick = setInterval(bpTikNedtaelling, 1000);
 }
 
