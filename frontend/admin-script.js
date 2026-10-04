@@ -2772,6 +2772,110 @@ async function refreshSkaermStatus() {
     });
 }
 
+// ── kiosk.conf til TV-PC'er / Raspberry Pi (kiosk-USB'en, se Indstillinger → TV-skærme) ──
+// Filen bygges i browseren: WiFi-koden sendes aldrig til serveren.
+
+// Samme regler som kiosk-PC'ens conf.sh (_bt_valider): æøå skrives om, kun a-z,
+// 0-9 og bindestreg — så viser formularen det navn, skærmen faktisk får.
+function kioskNavn(tekst) {
+    const n = String(tekst || '').toLowerCase()
+        .replace(/æ/g, 'ae').replace(/ø/g, 'oe').replace(/å/g, 'aa')
+        .replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+        .slice(0, 63).replace(/-$/, '');
+    return n || 'badminton-tv';
+}
+
+function visKioskConfForm(tokenId) {
+    const boks = document.getElementById(`kioskConf-${tokenId}`);
+    if (!boks) return;
+    if (boks.style.display !== 'none') { boks.style.display = 'none'; return; }
+    const felt = 'width:100%;background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 10px;color:#eaeaea;font-family:\'DM Sans\',sans-serif;font-size:0.9em;box-sizing:border-box;';
+    const etiket = 'display:block;font-size:0.72em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:4px;';
+    boks.innerHTML = `
+        <div style="margin-top:10px;padding:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;">
+                <div><label style="${etiket}">Skærmens navn</label>
+                    <input id="kc-navn-${tokenId}" style="${felt}" value="${escapeHtml(kioskNavn(boks.dataset.navn))}" placeholder="fx tv-bane-1a"
+                        oninput="document.getElementById('kc-navnvis-${tokenId}').textContent = kioskNavn(this.value)">
+                    <div style="font-size:0.75em;color:rgba(255,255,255,0.4);margin-top:3px;">Bliver til: <span id="kc-navnvis-${tokenId}">${escapeHtml(kioskNavn(boks.dataset.navn))}</span></div></div>
+                <div><label style="${etiket}">WiFi-navn (tom = kabel)</label>
+                    <input id="kc-wifi-${tokenId}" style="${felt}" autocomplete="off"></div>
+                <div><label style="${etiket}">WiFi-kode</label>
+                    <input id="kc-kode-${tokenId}" type="password" style="${felt}" autocomplete="new-password"></div>
+                <div><label style="${etiket}">Sluk selv kl.</label>
+                    <input id="kc-sluk-${tokenId}" style="${felt}" value="23:59" placeholder="TT:MM eller aldrig"></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap;">
+                <button onclick="hentKioskConf(${tokenId})" class="btn-primary" style="padding:8px 16px;font-size:0.85em;">Download kiosk.conf</button>
+                <span style="font-size:0.78em;color:rgba(255,255,255,0.45);">Filen laves her i browseren — WiFi-koden sendes ikke til serveren.
+                    Læg den på USB-nøglen / SD-kortet i stedet for den, der ligger der. Én fil pr. skærm.</span>
+            </div>
+        </div>`;
+    boks.style.display = 'block';
+}
+
+function hentKioskConf(tokenId) {
+    const boks = document.getElementById(`kioskConf-${tokenId}`);
+    const v = (id) => document.getElementById(`kc-${id}-${tokenId}`).value;
+    const navn = kioskNavn(v('navn'));
+    const wifi = v('wifi').trim();
+    const kode = v('kode');
+    const sluk = v('sluk').trim() || '23:59';
+    // Altid i anførselstegn: conf.sh fjerner ét ydre par, så mellemrum i
+    // starten/slutningen og anførselstegn inde i koden overlever
+    const citer = (s) => s ? `"${s}"` : '';
+
+    // Samme opbygning som kiosk/usb/kiosk.conf — ret begge steder
+    const linjer = [
+        '# ============================================================',
+        '#  BADMINTON TV — INDSTILLINGER',
+        `#  Lavet på admin-siden ${new Date().toLocaleString('da-DK')} til skærmen "${navn}"`,
+        '# ============================================================',
+        '#',
+        '#  Læg filen på USB-nøglen (PC) eller SD-kortet (Raspberry Pi) i',
+        '#  stedet for den kiosk.conf, der ligger der. Én fil pr. skærm.',
+        '#  Linjer der starter med # er kommentarer og bliver ignoreret.',
+        '#',
+        '# ------------------------------------------------------------',
+        '',
+        '# Siden TV\'et skal vise (adgangslink fra admin-siden).',
+        `TV_URL=${boks.dataset.link}`,
+        '',
+        '# WiFi. Begge tomme, hvis PC\'en bruger netværkskabel.',
+        `WIFI_NAVN=${citer(wifi)}`,
+        `WIFI_KODE=${citer(kode)}`,
+        '',
+        '# Skærmens navn — vises under Adgangslinks og i fejlloggen.',
+        `NAVN=${navn}`,
+        '',
+        '# Klokkeslæt hvor PC\'en slukker af sig selv. "aldrig" slår det fra.',
+        `SLUK_KL=${sluk}`,
+        '',
+        '# ------------------------------------------------------------',
+        '#  Avanceret — behøver normalt ikke at blive ændret',
+        '# ------------------------------------------------------------',
+        '',
+        '# Tænd/sluk TV\'et via HDMI-CEC: auto eller fra.',
+        'CEC=auto',
+        '',
+        '# Størrelse på skærmen: auto eller et tal, fx 1.5',
+        'SKALERING=auto',
+        '',
+        '# Kun PC: Har PC\'en mere end én disk, så skriv hvilken, fx DISK=/dev/nvme0n1',
+        'DISK=',
+        ''
+    ];
+    // CRLF, så filen ser rigtig ud i Windows' Notesblok (conf.sh tåler begge)
+    const blob = new Blob([linjer.join('\r\n')], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'kiosk.conf';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
 function skaermVarighed(sek) {
     if (sek < 90) return `${sek} s`;
     if (sek < 5400) return `${Math.round(sek / 60)} min`;
@@ -2859,6 +2963,12 @@ function renderDeviceTokens(tokens) {
                             Kopiér
                         </button>
                     </div>
+                    ${t.is_active && (dest.startsWith('tv/') || dest === 'oversigt') ? `
+                    <button onclick="visKioskConfForm(${t.id})"
+                        style="margin-top:10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:6px 12px;color:#eaeaea;font-size:0.8em;cursor:pointer;">
+                        Hent kiosk.conf til en TV-PC / Raspberry Pi
+                    </button>
+                    <div class="dt-kioskconf" id="kioskConf-${t.id}" data-link="${escapeHtml(link)}" data-navn="${escapeHtml(t.name)}" style="display:none;"></div>` : ''}
                     <div class="dt-skaerme" data-token-id="${t.id}"></div>
                 </div>
                 <div style="display:flex;gap:8px;flex-shrink:0;">
