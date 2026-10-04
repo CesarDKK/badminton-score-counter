@@ -206,15 +206,25 @@ function startPolling(ms) {
 // events mens en fetch koerer, hentes der praecis een gang til bagefter
 let _loadRunning = false;
 let _loadPending = false;
+let _loadStartedAt = 0;
+let _loadGeneration = 0;
+// Ingen hentning tager så lang tid (alle kald har timeout) — hænger en alligevel,
+// opgives den, så én fastlåst hentning ikke fryser stillingen resten af dagen
+const LOAD_STUCK_MS = 45000;
 async function scheduleCourtDataLoad() {
-    if (_loadRunning) {
+    if (_loadRunning && Date.now() - _loadStartedAt < LOAD_STUCK_MS) {
         _loadPending = true;
         return;
     }
+    if (_loadRunning) console.warn('Hentning hang i over 45 s — starter forfra');
+    const generation = ++_loadGeneration;
     _loadRunning = true;
+    _loadStartedAt = Date.now();
     try {
         await loadCourtData();
     } finally {
+        // En opgivet hentning der alligevel bliver færdig, må ikke røre flagene
+        if (generation !== _loadGeneration) return;
         _loadRunning = false;
         if (_loadPending) {
             _loadPending = false;
@@ -453,7 +463,11 @@ function updateTimerDisplay() {
 // kendte skærmbillede og viser en diskret "forbindelse mistet"-badge, indtil
 // flere forsøg i træk fejler.
 let _loadFailCount = 0;
-const LOAD_FAILS_BEFORE_SLIDESHOW = 4; // ved ~2s poll ≈ 8s tolerance
+const LOAD_FAILS_BEFORE_SLIDESHOW = 4;
+// ...og først når der ikke er kommet data i 30 s. Før var det 4 fejl i træk
+// (~8 s), så alle TV'er skiftede til sponsorer midt i kampene ved hver deploy,
+// mens backenden genstartede.
+const OFFLINE_MS_BEFORE_SLIDESHOW = 30000;
 
 async function loadCourtData() {
     try {
@@ -532,8 +546,11 @@ async function loadCourtData() {
             // Reset rest break tracker
             wasRestBreakActive = false;
 
+            // Ikke await: loadCourtData er serialiseret (scheduleCourtDataLoad),
+            // så et hængende tema-kald her frøs al opdatering af stillingen,
+            // mens uret og livstegnet kørte videre
             if (window.loadTheme) {
-                await window.loadTheme();
+                window.loadTheme();
             }
             wasMatchPreviouslyActive = true;
         }
@@ -621,12 +638,16 @@ async function loadCourtData() {
         updateCourtBanner();
     } catch (error) {
         console.error('Failed to load court data:', error);
+        // Data blev hentet lige nu — fejlen er i visningen, ikke forbindelsen.
+        // Den må ikke vise "Forbindelse mistet" eller skifte til sponsorer.
+        if (_sidsteDataOk && Date.now() - _sidsteDataOk < 2000) return;
         _loadFailCount++;
         // Behold sidste kendte skærmbillede og vis en diskret badge. Først når
         // flere forsøg i træk fejler antager vi et reelt udfald og falder tilbage
         // til slideshow (så en tom/frossen skærm ikke bare står med gammel score).
         setTvConnectionLost(true);
-        if (_loadFailCount >= LOAD_FAILS_BEFORE_SLIDESHOW) {
+        if (_loadFailCount >= LOAD_FAILS_BEFORE_SLIDESHOW &&
+            Date.now() - (_sidsteDataOk || 0) >= OFFLINE_MS_BEFORE_SLIDESHOW) {
             showSponsorSlideshow();
         }
     }
@@ -1089,8 +1110,11 @@ function orientSetScore(setData) {
     let scoreText;
     if (typeof setData === 'string') {
         scoreText = setData; // gammelt format: "21-15"
-    } else if (setData.player1Name === originalPlayer1Name) {
-        scoreText = setData.score; // navne i original rækkefølge
+    } else if (setData.player1Name === originalPlayer1Name ||
+               setData.player2Name === originalPlayer2Name) {
+        // Navne i original rækkefølge — også når kun det ene navn genkendes
+        // (det andet er rettet undervejs)
+        scoreText = setData.score;
     } else {
         // Navnene var byttet da sættet blev gemt — vend scoren tilbage
         const s = setData.score.split('-').map(x => x.trim());
@@ -1275,11 +1299,19 @@ function forudindlaesBannere() {
     }
 }
 
+// Fjern ALLE slideshow-containere. Bliver en gammel liggende, dækker den
+// (fuldskærm, opak) den næste kamp, fordi oprydningen kun fandt den første.
+function fjernSlideshowContainere() {
+    document.querySelectorAll('.sponsor-slideshow').forEach(el => el.remove());
+}
+
 function restartSlideshow() {
     if (slideshowInterval) {
         clearInterval(slideshowInterval);
         slideshowInterval = null;
     }
+    stopScreensaver();
+    fjernSlideshowContainere();
     isShowingSlideshow = false;
     currentSlideIndex = 0;
     showSponsorSlideshow();
@@ -1336,11 +1368,7 @@ function hideSponsorSlideshow() {
         }
 
         stopScreensaver();
-
-        const slideshowContainer = document.querySelector('.sponsor-slideshow');
-        if (slideshowContainer) {
-            slideshowContainer.remove();
-        }
+        fjernSlideshowContainere();
 
         showScoreboard();
         isShowingSlideshow = false;
@@ -1369,8 +1397,7 @@ function showScoreboard() {
 }
 
 function createSlideshowContainer() {
-    const existing = document.querySelector('.sponsor-slideshow');
-    if (existing) existing.remove();
+    fjernSlideshowContainere();
 
     const container = document.createElement('div');
     container.id = 'sponsorSlideshowContainer';
@@ -1392,6 +1419,7 @@ function displayCurrentSlide(images) {
 }
 
 function showDefaultMessage() {
+    fjernSlideshowContainere();
     const container = document.createElement('div');
     container.id = 'sponsorSlideshowContainer';
     container.className = 'sponsor-slideshow active';
@@ -1860,7 +1888,17 @@ function showQrCounter(mode = 'idle', noegle = '') {
             container.style.display = 'flex';
             qrCounterVisible = true;
         })
-        .catch(() => { if (qrCounterMode === tilstand) hideQrCounter(); });
+        .catch((status) => {
+            if (qrCounterMode !== tilstand) return;
+            if (status === 404) {
+                // Ingen QR i denne tilstand (fx holdkamp/turnering) — husk
+                // tilstanden, så den ikke hentes igen ved hver eneste poll
+                container.style.display = 'none';
+                qrCounterVisible = false;
+                return;
+            }
+            hideQrCounter(); // andre fejl: prøv igen ved næste poll
+        });
 }
 
 function hideQrCounter() {

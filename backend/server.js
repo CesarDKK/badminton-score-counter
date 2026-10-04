@@ -90,7 +90,11 @@ app.get('/t/:token', async (req, res, next) => {
         // Faste enheder (TV/bane-tablet) får en lang session så de ikke skal
         // åbne adgangslinket igen midt i en turnering. Match-session (QR-tæller)
         // er kortlivet pr. kamp og bevarer 12t.
-        const sessionTtl = deviceToken.token_type === 'match_session' ? '12h' : '14d';
+        // TV og oversigt kører i kiosk uden at nogen rører dem — står PC'en tændt
+        // i over 14 dage, endte TV'et på login-siden ved næste auto-opdatering.
+        // Et spærret eller slettet link afvises stadig ved hver request.
+        const erSkaerm = /^(tv|oversigt)/.test(deviceToken.destination || '');
+        const sessionTtl = deviceToken.token_type === 'match_session' ? '12h' : (erSkaerm ? '180d' : '14d');
         const sessionToken = jwt.sign(
             {
                 role: 'device',

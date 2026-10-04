@@ -83,7 +83,9 @@
     //    den igen for at annullere en forhåndsvisning.
     window.loadTheme = async function () {
         try {
-            const response = await fetch('/api/settings/theme');
+            // Timeout: en hængende forbindelse (halvåben TCP efter et netudfald)
+            // må aldrig holde den kaldende side fast — TV'et ventede her for evigt
+            const response = await fetch('/api/settings/theme', { signal: AbortSignal.timeout(10000) });
             // Tjek response.ok — en 500 med fejl-body ville ellers blive parset
             // som JSON, anvendt (→ default-farver) og skrevet i cachen, så en
             // forbigående backend-fejl overskrev et gyldigt cachet tema.
