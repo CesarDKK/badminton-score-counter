@@ -122,18 +122,9 @@ function mapCategory(raw) {
     return c; // MD, DS, HS, DD, HD
 }
 
-function detectFormat(games) {
-    const cats = games.map(g => g.category);
-    if (cats.some(c => c === 'Single' || c === 'Double')) return '4spillere';
-    const n = games.length;
-    const cnt = c => cats.filter(x => x === c).length;
-    if (n === 11) return 'liga11';
-    if (n === 13) return '13kamps';
-    if (n === 9)  return '4plus3';
-    if (n === 8 && cnt('MD') >= 2 && cnt('DS') >= 2) return '2plus2';
-    if (n === 8 && cnt('MD') === 1 && cnt('DS') === 1) return '4plus2';
-    return 'imported';
-}
+// Formatgenkendelse (også 4 piger, U9 3 spillere og 8-kamps-varianten) ligger
+// i config/holdkampFormater.js sammen med reglerne for formaterne.
+const { detectFormat } = require('../config/holdkampFormater');
 
 /**
  * Kampinfo-tabellen. Den findes ogsaa foer holdsedlen er frigivet, og det er

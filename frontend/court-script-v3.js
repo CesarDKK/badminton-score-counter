@@ -72,6 +72,11 @@ let isTournamentMode = false;
 // Holdkamp state
 let activeTeamMatch = null;
 let assignedHoldkampGameId = null;
+
+// Sæt der skal vindes: 2 — men 1 i golden set (holdkamp, § 7 stk. 1 e), som er
+// ét sæt spillet som et 3. sæt. Sættes ud fra den bundne delkamps kategori
+// (applyHoldkampGameToState og holdkamp-synken) og nulstilles ved afbinding.
+function saetForSejr() { return (typeof gameState !== "undefined" && gameState.setsToWin) || 2; }
 let holdkampSelectFocused = false; // true mens delkamp-dropdownen er i fokus/aaben
 let holdkampMatches = []; // alle aktive holdkampe (cache til de to dropdowns)
 
@@ -503,9 +508,11 @@ function addPoint(player) {
     // Check for rest break at 11 points
     checkRestBreak();
 
-    // Check for side switch at mid-point in deciding game (when games are 1-1)
+    // Check for side switch at mid-point in deciding game (1-1 — eller golden
+    // set, som er ét sæt spillet som et 3. sæt: afgørende fra første bold)
     // 21/30 format: 11 points · 15/21 format: 8 points
-    const isDecidingGame = gameState.player1.games === 1 && gameState.player2.games === 1;
+    const afgoerende = saetForSejr() - 1;
+    const isDecidingGame = gameState.player1.games === afgoerende && gameState.player2.games === afgoerende;
     const decidingMidPoint = gameState.gameMode === '21' ? 11 : 8;
     const scoredToMid = gameState.player1.score === decidingMidPoint || gameState.player2.score === decidingMidPoint;
 
@@ -573,7 +580,7 @@ function getBoldpointState() {
         const next = p.score + 1;
         const wins = (next >= winScore && next - o.score >= 2) || next === maxScore;
         if (!wins) return null;
-        return p.games === 1 ? 'match' : 'set';
+        return p.games === saetForSejr() - 1 ? 'match' : 'set';
     };
 
     return {
@@ -645,8 +652,8 @@ async function handleSetWin(winnerKey, loserKey, p1Score, p2Score) {
 
     winner.games++;
 
-    // Kampen vundet (2 sæt)?
-    if (winner.games === 2) {
+    // Kampen vundet (2 sæt — eller 1 i golden set)?
+    if (winner.games >= saetForSejr()) {
         gameState.matchEndTime = Date.now();
         gameState.matchCompleted = true;
         // Frys den forløbne tid og stop interval'et — tiden ændrer sig ikke mere,
@@ -829,6 +836,7 @@ async function performClearCourtNow() {
             console.error('Failed to release holdkamp game:', e);
         }
         assignedHoldkampGameId = null;
+        gameState.setsToWin = 2;
     }
 
     // Release tournament match back to pending if assigned
@@ -879,6 +887,7 @@ async function performClearCourtNow() {
     gameState.isActive = false;  // Set court as inactive
     gameState.decidingGameSwitched = false;
     gameState.matchCompleted = false;
+    gameState.setsToWin = 2; // en bundet golden set-delkamp sætter det igen via holdkamp-synken
     gameState.resultOutcome = null;
     gameState.resultWinner = null;
     gameState.restBreakTaken = false;
@@ -1958,6 +1967,7 @@ async function adoptServerReset(loaded) {
     gameState.decidingGameSwitched = false;
     gameState.sidesManuallySwitched = false;
     gameState.matchCompleted = false;
+    gameState.setsToWin = 2; // en bundet golden set-delkamp sætter det igen via holdkamp-synken
     gameState.restBreakTaken = false;
     gameState.planner = loaded.planner || null;
 
@@ -2021,6 +2031,7 @@ async function startFreshMatchInSession() {
     gameState.isActive = false;
     gameState.decidingGameSwitched = false;
     gameState.matchCompleted = false;
+    gameState.setsToWin = 2; // en bundet golden set-delkamp sætter det igen via holdkamp-synken
     gameState.resultOutcome = null;
     gameState.resultWinner = null;
     gameState.restBreakTaken = false;
@@ -2977,7 +2988,9 @@ async function serverSyncTick(reason) {
                     // Håndhæv at banen står i samme single/double-tilstand som delkampen.
                     // Game-state-synken kan ellers kortvarigt læse en stale server-tilstand
                     // (lige efter tildeling) og sætte banen tilbage til single.
-                    const shouldBeDoubles = ['MD', 'DD', 'HD', 'Double'].includes(myGame.category);
+                    const shouldBeDoubles = HoldkampFormater.erDouble(myGame.category);
+                    // Golden set (ét sæt) — også efter genindlæsning midt i kampen
+                    gameState.setsToWin = HoldkampFormater.saetForSejr(myGame.category);
                     if (!gameState.matchStartTime && gameState.isDoubles !== shouldBeDoubles) {
                         gameState.isDoubles = shouldBeDoubles;
                         if (shouldBeDoubles) {
@@ -3266,7 +3279,7 @@ function onHoldkampMatchChange() {
     if (!tm) return;
     const catNums = holdkampCategoryNumbers(tm.games);
     (tm.games || []).filter(g => g.status === 'pending').forEach(g => {
-        const isDoubles = ['MD', 'DD', 'HD', 'Double'].includes(g.category);
+        const isDoubles = HoldkampFormater.erDouble(g.category);
         const t1 = isDoubles
             ? `${g.team1_player1 || '?'}${g.team1_player2 ? ' & ' + g.team1_player2 : ''}`
             : (g.team1_player1 || '?');
@@ -3275,7 +3288,7 @@ function onHoldkampMatchChange() {
             : (g.team2_player1 || '?');
         const opt = document.createElement('option');
         opt.value = g.id;
-        opt.textContent = `${g.category} ${catNums[g.id]}: ${t1} vs ${t2}`;
+        opt.textContent = `${HoldkampFormater.kategoriNavn(g.category, catNums[g.id])}: ${t1} vs ${t2}`;
         select.appendChild(opt);
     });
 }
@@ -3294,7 +3307,7 @@ function holdkampCategoryNumbers(games) {
 }
 
 function applyHoldkampGameToState(game) {
-    const isDoubles = ['MD', 'DD', 'HD', 'Double'].includes(game.category);
+    const isDoubles = HoldkampFormater.erDouble(game.category);
     const team1 = activeTeamMatch?.team1_name || 'Hold 1';
     const team2 = activeTeamMatch?.team2_name || 'Hold 2';
 
@@ -3305,6 +3318,7 @@ function applyHoldkampGameToState(game) {
         gameState.player2.name2 = game.team2_player2 || `${team2} makker`;
     }
     gameState.isDoubles = isDoubles;
+    gameState.setsToWin = HoldkampFormater.saetForSejr(game.category); // golden set = 1 sæt
     // Tildeling betragtes som aktiv — uden dette ville saveGameState saa langt
     // herefter sende isActive=false og overskrive courts.is_active i DB, saa
     // admin baneoversigt straks tabte navnene.
@@ -3347,7 +3361,7 @@ function showHoldkampAssigned(game) {
     select.style.display = 'none';
     assignBtn.style.display = 'none';
 
-    const isDoubles = ['MD', 'DD', 'HD', 'Double'].includes(game.category);
+    const isDoubles = HoldkampFormater.erDouble(game.category);
     const t1 = isDoubles
         ? `${game.team1_player1 || '?'}${game.team1_player2 ? ' & ' + game.team1_player2 : ''}`
         : (game.team1_player1 || '?');
@@ -3356,7 +3370,7 @@ function showHoldkampAssigned(game) {
         : (game.team2_player1 || '?');
 
     assignedDiv.style.display = 'block';
-    assignedDiv.textContent = `✓ Tilknyttet: ${game.category} – ${t1} vs ${t2} (${activeTeamMatch.team1_name} vs ${activeTeamMatch.team2_name})`;
+    assignedDiv.textContent = `✓ Tilknyttet: ${HoldkampFormater.kategoriNavn(game.category)} – ${t1} vs ${t2} (${activeTeamMatch.team1_name} vs ${activeTeamMatch.team2_name})`;
     panel.style.display = 'none';
 }
 
@@ -3367,6 +3381,7 @@ async function refreshHoldkampPanel() {
         if (!hasPending) return;
 
         assignedHoldkampGameId = null;
+        gameState.setsToWin = 2;
         const panel = document.getElementById('holdkampPanel');
         const select = document.getElementById('holdkampGameSelect');
         const assignBtn = document.getElementById('assignHoldkampBtn');
@@ -3457,6 +3472,7 @@ function applyTournamentMatchToCourt(match) {
         gameState.player2.name2 = match.side2_player2 || 'Makker 2';
     }
     gameState.isDoubles = isDoubles;
+    gameState.setsToWin = 2; // turneringskampe er altid bedst af 3
     // Tildeling betragtes som aktiv — saa saveGameState ikke nedgraderer
     // courts.is_active til false naar admin lige har aktiveret banen.
     gameState.isActive = true;

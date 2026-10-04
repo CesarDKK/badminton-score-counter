@@ -13,6 +13,11 @@ RUN npm ci --omit=dev --no-audit --no-fund
 # Copy application files
 COPY backend/ ./
 
+# Holdkamp-formater og -regler deles med frontenden (én kilde): admin, tæller
+# og oversigt loader frontend/js/holdkamp-formater.js, backend læser den samme
+# fil herfra (se config/holdkampFormater.js).
+COPY frontend/js/holdkamp-formater.js ./shared/holdkamp-formater.js
+
 # Create uploads directory
 RUN mkdir -p uploads && chmod 755 uploads
 

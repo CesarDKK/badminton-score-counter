@@ -11,16 +11,12 @@ let allMatchesData = []; // Store all matches for filtering/sorting
 let currentSearchTerm = '';
 let currentCourtFilter = 'all';
 
-// Holdkamp format definitions
-const HOLDKAMP_FORMATS = {
-    liga11:    { name: 'Liga (11 kampe)',         games: ['MD','MD','DS','DS','HS','HS','HS','DD','DD','HD','HD'] },
-    '13kamps': { name: '13-kamps format',          games: ['HS','HS','HS','HS','DS','DS','HD','HD','HD','DD','DD','MD','MD'] },
-    '2plus2':  { name: '2+2-format (8 kampe)',     games: ['MD','MD','DS','DS','HS','HS','DD','HD'] },
-    '4plus2':  { name: '4+2-format (8 kampe)',     games: ['MD','DS','HS','HS','HS','DD','HD','HD'] },
-    '4plus3':  { name: '4+3-format (9 kampe)',     games: ['MD','MD','DS','DS','HS','HS','DD','HD','HD'] },
-    '4spillere':{ name: '4-spillere (6 kampe)',    games: ['Single','Single','Single','Single','Double','Double'] }
-};
-const DOUBLES_CATEGORIES = ['MD', 'DD', 'HD', 'Double'];
+// Holdkamp-formater og -regler kommer fra js/holdkamp-formater.js (deles med
+// backend, tæller og oversigt). Her blot i den form resten af admin bruger.
+const HOLDKAMP_FORMATS = Object.fromEntries(
+    Object.entries(HoldkampFormater.FORMATER).map(([id, f]) => [id, { name: f.navn, games: f.kampe, note: f.note || '' }])
+);
+const DOUBLES_CATEGORIES = HoldkampFormater.DOUBLE_KATEGORIER;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
@@ -1016,15 +1012,8 @@ async function loadTeamMatchHistory() {
             return;
         }
 
-        const formatNames = {
-            liga11:      'Liga (11 kampe)',
-            '13kamps':   '13-kamps format',
-            '2plus2':    '2+2-format (8 kampe)',
-            '4plus2':    '4+2-format (8 kampe)',
-            '4plus3':    '4+3-format (9 kampe)',
-            '4spillere': '4-spillere (6 kampe)'
-        };
-        const DOUBLES = ['MD', 'DD', 'HD', 'Double'];
+        const formatNames = Object.fromEntries(Object.entries(HOLDKAMP_FORMATS).map(([id, f]) => [id, f.name]));
+        const DOUBLES = DOUBLES_CATEGORIES;
 
         const cards = matches.map((tm, i) => {
             const team1Wins = tm.games.filter(g => g.winner_team === 1).length;
@@ -1063,7 +1052,7 @@ async function loadTeamMatchHistory() {
                 const varighedHtml = varighed ? `<span style="color:#aaa; font-size:0.8em; white-space:nowrap;">⏱️ ${varighed}</span>` : '';
 
                 return `<div style="display:flex; align-items:center; gap:10px; padding:7px 10px; border-left:3px solid ${rowBorder}; background:rgba(255,255,255,0.03); border-radius:4px; margin-bottom:4px; flex-wrap:wrap;">
-                    <span style="background:var(--color-accent); color:#fff; padding:2px 7px; border-radius:4px; font-size:0.78em; font-weight:bold; white-space:nowrap;">${escapeHtml(g.category)} ${num}</span>
+                    <span style="background:var(--color-accent); color:#fff; padding:2px 7px; border-radius:4px; font-size:0.78em; font-weight:bold; white-space:nowrap;">${escapeHtml(HoldkampFormater.kategoriNavn(g.category, num))}</span>
                     <span style="color:#eaeaea; font-size:0.85em; flex:1; min-width:120px;">${escapeHtml(t1)} <span style="color:#aaa;">vs</span> ${escapeHtml(t2)}</span>
                     ${resultHtml}
                     ${varighedHtml}
@@ -1264,9 +1253,10 @@ async function loadActiveHoldkamp() {
             // Bevar brugerens valgte baner i dropdowns, saa 3-sek refreshen ikke
             // nulstiller dem til Bane 1 mens man er ved at tildele en bane.
             const selectedCourts = {};
-            container.querySelectorAll('select[id^="courtSelect_"]').forEach(sel => {
+            container.querySelectorAll('select[id^="courtSelect_"], select[id^="gs_"]').forEach(sel => {
                 selectedCourts[sel.id] = sel.value;
             });
+            sidsteHoldkampe = teamMatches;
             // Optaget-baner beregnes på tværs af ALLE aktive holdkampe.
             const allActiveGames = teamMatches.flatMap(tm => tm.games || []);
             container.innerHTML = teamMatches.map(tm =>
@@ -1410,12 +1400,15 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
         const rawScores = (g.set_scores && g.set_scores !== 'W.O.') ? g.set_scores.split(' ') : [];
         const getScore = (si, ti) => rawScores[si] ? (rawScores[si].split('-')[ti] || '') : '';
         const initWO = g.set_scores === 'W.O.';
+        // Golden set spilles som ét sæt (et 3. sæt) — kun ét sæt-felt og vinder efter 1 sæt
+        const erGS = HoldkampFormater.erGoldenSet(g.category);
+        const saetFelter = erGS ? [1] : [1, 2, 3];
         const isFinished = g.status === 'finished';
         const formTitle = isFinished ? 'Rediger resultat' : 'Manuel resultat';
         const saveLabel = isFinished ? 'Gem ændringer' : 'Gem resultat';
 
         const manualForm = `
-        <div id="manualResult_${g.id}" style="display:none; padding:12px; background:rgba(240,165,0,0.07); border:1px solid rgba(240,165,0,0.3); border-radius:6px; margin-top:8px;" data-wo="${initWO}">
+        <div id="manualResult_${g.id}" style="display:none; padding:12px; background:rgba(240,165,0,0.07); border:1px solid rgba(240,165,0,0.3); border-radius:6px; margin-top:8px;" data-wo="${initWO}" data-saet="${erGS ? 1 : 3}">
             <div style="color:#f0a500;font-size:0.82em;font-weight:bold;margin-bottom:10px;">${formTitle}</div>
             <div style="margin-bottom:10px;">
                 <div style="color:#aaa;font-size:0.8em;margin-bottom:6px;">Vinder</div>
@@ -1431,21 +1424,21 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
             <div style="margin-bottom:12px;">
                 <div style="color:#aaa;font-size:0.8em;margin-bottom:10px;">Sætscore</div>
                 <div style="display:flex;gap:32px;flex-wrap:wrap;">
-                    ${[1,2,3].map(s => `
+                    ${saetFelter.map(s => `
                     <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
-                        <span style="color:#666;font-size:0.8em;">Sæt ${s}${s===3?' *':''}</span>
+                        <span style="color:#666;font-size:0.8em;">${erGS ? 'Golden set' : `Sæt ${s}${s===3?' *':''}`}</span>
                         <div style="display:flex;align-items:center;gap:6px;">
                             <input id="manualS${s}t1_${g.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="–" value="${getScore(s-1, 0)}"
-                                   oninput="this.value=this.value.replace(/[^0-9]/g,''); determineHoldkampWinner(${g.id}, '${gameMode}')"
+                                   oninput="this.value=this.value.replace(/[^0-9]/g,''); determineHoldkampWinner(${g.id}, '${gameMode}', ${erGS ? 1 : 2})"
                                    style="width:64px;padding:12px 8px;background:var(--color-bg-dark);color:var(--color-win, #45d17e);border:1px solid #555;border-radius:4px;text-align:center;font-size:1.6em;">
                             <span style="color:#555;font-size:1.2em;">–</span>
                             <input id="manualS${s}t2_${g.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="–" value="${getScore(s-1, 1)}"
-                                   oninput="this.value=this.value.replace(/[^0-9]/g,''); determineHoldkampWinner(${g.id}, '${gameMode}')"
+                                   oninput="this.value=this.value.replace(/[^0-9]/g,''); determineHoldkampWinner(${g.id}, '${gameMode}', ${erGS ? 1 : 2})"
                                    style="width:64px;padding:12px 8px;background:var(--color-bg-dark);color:var(--color-accent);border:1px solid #555;border-radius:4px;text-align:center;font-size:1.6em;">
                         </div>
                     </div>`).join('')}
                 </div>
-                <div style="color:#666;font-size:0.75em;margin-top:6px;">* Sæt 3 kun hvis nødvendigt</div>
+                <div style="color:#666;font-size:0.75em;margin-top:6px;">${erGS ? 'Golden set er ét sæt, spillet som et 3. sæt' : '* Sæt 3 kun hvis nødvendigt'}</div>
             </div>
             <div style="margin-bottom:8px;">
                 <button id="woToggle_${g.id}" onclick="toggleWO(${g.id})" style="padding:6px 14px;background:${initWO ? '#aaa' : 'transparent'};color:${initWO ? '#000' : '#aaa'};border:1px solid ${initWO ? '#aaa' : '#777'};border-radius:4px;cursor:pointer;font-size:0.85em;">W.O.</button>
@@ -1459,7 +1452,7 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
         return `
         <div style="padding:10px 15px;background:rgba(var(--color-primary-rgb),0.2);border-radius:8px;margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                <span style="background:var(--color-accent);color:#fff;padding:3px 8px;border-radius:4px;font-size:0.85em;font-weight:bold;white-space:nowrap;">${escapeHtml(g.category)} ${num}</span>
+                <span style="background:var(--color-accent);color:#fff;padding:3px 8px;border-radius:4px;font-size:0.85em;font-weight:bold;white-space:nowrap;${erGS ? 'background:#c9a227;color:#000;' : ''}">${escapeHtml(HoldkampFormater.kategoriNavn(g.category, num))}</span>
                 <span style="color:#eaeaea;font-size:0.95em;flex:1;min-width:120px;">${escapeHtml(t1)} <span style="color:#aaa;">vs</span> ${escapeHtml(t2)}</span>
                 ${statusBadge}
                 ${winnerBadge}
@@ -1488,6 +1481,7 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
                     <button onclick="deleteHoldkamp(${teamMatch.id})" class="btn-danger">Slet</button>
                 </div>
             </div>
+            ${renderHoldkampRegelBlok(teamMatch)}
             <div>${gamesHtml}</div>
         </div>
     `;
@@ -1550,6 +1544,15 @@ function onHoldkampFormatChange() {
         }
     }).join('');
 
+    // Formatets regler som note + løbende regeltjek mens navnene tastes ind
+    const noteEl = document.getElementById('holdkampFormatNote');
+    if (noteEl) {
+        noteEl.textContent = HOLDKAMP_FORMATS[format].note || '';
+        noteEl.style.display = HOLDKAMP_FORMATS[format].note ? 'block' : 'none';
+    }
+    container.querySelectorAll('input').forEach(inp => inp.addEventListener('input', opdaterHoldkampFormRegler));
+    opdaterHoldkampFormRegler();
+
     playerInputs.style.display = 'block';
 }
 
@@ -1583,25 +1586,18 @@ async function startHoldkamp() {
         return;
     }
 
-    const formatDef = HOLDKAMP_FORMATS[format];
-    const inputs = document.getElementById('holdkampGamesInputContainer').querySelectorAll('input');
+    const games = holdkampFormGames(format);
 
-    // Build games array from inputs
-    const gameData = {};
-    inputs.forEach(input => {
-        const gameIdx = input.dataset.game;
-        const field = input.dataset.field;
-        if (!gameData[gameIdx]) gameData[gameIdx] = {};
-        gameData[gameIdx][field] = input.value.trim();
-    });
-
-    const games = formatDef.games.map((cat, i) => ({
-        category: cat,
-        team1Player1: gameData[i]?.t1p1 || '',
-        team1Player2: gameData[i]?.t1p2 || '',
-        team2Player1: gameData[i]?.t2p1 || '',
-        team2Player2: gameData[i]?.t2p2 || ''
-    }));
+    // Opstillingen tjekkes mod reglementet — advarsel, ikke blokering (navne
+    // tastes frit, og en reserve kan gøre en opstilling lovlig).
+    const fund = HoldkampFormater.tjekOpstilling(format, games, { 1: team1Name, 2: team2Name });
+    if (fund.length) {
+        const ok = await BadmintonUtils.confirmDialog(
+            'Opstillingen bryder reglerne',
+            fund.map(f => '• ' + f.tekst).join('\n') + '\n\nOpret holdkampen alligevel?'
+        );
+        if (!ok) return;
+    }
 
     try {
         const t1LogoSel = document.getElementById('holdkampTeam1Logo');
@@ -1724,7 +1720,7 @@ function toggleManualResult(teamMatchId, gameId) {
     holdkampEditOpen = opening;
 }
 
-function determineHoldkampWinner(gameId, gameMode) {
+function determineHoldkampWinner(gameId, gameMode, saetForSejr = 2) {
     const winTarget = gameMode === '15' ? 15 : 21;
     const cap = gameMode === '15' ? 21 : 30;
 
@@ -1745,7 +1741,7 @@ function determineHoldkampWinner(gameId, gameMode) {
         else if (w === 2) t2Sets++;
     }
 
-    const winner = t1Sets >= 2 ? 1 : t2Sets >= 2 ? 2 : null;
+    const winner = t1Sets >= saetForSejr ? 1 : t2Sets >= saetForSejr ? 2 : null;
     if (winner !== null) {
         const radio = document.querySelector(`input[name="manualWinner_${gameId}"][value="${winner}"]`);
         if (radio) radio.checked = true;
@@ -1777,6 +1773,15 @@ async function saveManualResult(teamMatchId, gameId, gameMode = '21') {
 
     if (isWO) {
         setScores = 'W.O.';
+    } else if (form?.dataset.saet === '1') {
+        // Golden set: ét sæt
+        const t1 = document.getElementById(`manualS1t1_${gameId}`)?.value.trim();
+        const t2 = document.getElementById(`manualS1t2_${gameId}`)?.value.trim();
+        if (!t1 || !t2) {
+            showMessage('Mangler score', 'Udfyld scoren i golden set.');
+            return;
+        }
+        setScores = `${t1}-${t2}`;
     } else {
         const sets = [1, 2, 3].map(s => {
             const t1 = document.getElementById(`manualS${s}t1_${gameId}`)?.value.trim();
@@ -1951,9 +1956,13 @@ async function setTournamentPlayerLogo(playerName) {
 }
 
 function finishHoldkamp(id) {
+    const tm = sidsteHoldkampe.find(t => t.id === id);
+    const manglerGoldenSet = tm && HoldkampFormater.goldenSetStatus(tm).kraeves;
     showMessage(
         'Afslut Holdkamp',
-        'Holdkampen afsluttes og kan ikke genoptages.',
+        manglerGoldenSet
+            ? 'Holdkampen står 3–3, og golden set er ikke spillet. Afsluttes den uden golden set, får hvert hold 2 stillingspoint (§ 18 stk. 3). Holdkampen kan ikke genoptages.'
+            : 'Holdkampen afsluttes og kan ikke genoptages.',
         [
             {
                 text: 'Afslut',
@@ -3174,8 +3183,8 @@ function bpRenderPreview(data) {
     const counts = {};
     const gameRows = games.map((g, i) => {
         counts[g.category] = (counts[g.category] || 0) + 1;
-        const label = `${g.category} ${counts[g.category]}`;
-        const isDoubles = ['MD', 'DD', 'HD', 'Double'].includes(g.category);
+        const label = escapeHtml(HoldkampFormater.kategoriNavn(g.category, counts[g.category]));
+        const isDoubles = DOUBLES_CATEGORIES.includes(g.category);
         const inp = (id, val, ph) =>
             `<input type="text" id="bp_${id}_${i}" value="${escapeHtml(val || '')}" placeholder="${ph}" style="${inpStyle}">`;
 
@@ -3198,7 +3207,8 @@ function bpRenderPreview(data) {
 
     preview.innerHTML = `
         <div style="background:rgba(255,255,255,0.03);border:1px solid var(--color-primary);border-radius:10px;padding:20px;">
-            <h4 style="color:#eaeaea;margin-bottom:15px;">Gennemse og ret inden oprettelse</h4>
+            <h4 style="color:#eaeaea;margin-bottom:6px;">Gennemse og ret inden oprettelse</h4>
+            <div style="color:#aaa;font-size:0.88em;margin-bottom:15px;">Format: ${escapeHtml(HOLDKAMP_FORMATS[data.format]?.name || 'ukendt — oprettes med kampene som de står på holdsedlen')}</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;">
                 <div>
                     <label style="color:#aaa;font-size:0.85em;">Hold 1</label>
@@ -3240,7 +3250,7 @@ async function bpCreate() {
     }
 
     const gamesData = games.map((g, i) => {
-        const isDoubles = ['MD', 'DD', 'HD', 'Double'].includes(g.category);
+        const isDoubles = DOUBLES_CATEGORIES.includes(g.category);
         return {
             category:     g.category,
             team1Player1: document.getElementById(`bp_t1p1_${i}`)?.value.trim() || '',
@@ -4804,4 +4814,164 @@ function ptSvarHtml(status, ms, data) {
         else html += '<div style="color:rgba(255,255,255,0.5);">Ingen runde vises lige nu.</div>';
     }
     return html;
+}
+
+// ==================== HOLDKAMP: REGLER, U9-BYT OG GOLDEN SET ====================
+//
+// Reglerne (Fælles reglement for ungdomsholdturneringen, § 7, § 15 og § 22)
+// ligger i js/holdkamp-formater.js. Her vises de på det aktive holdkamp-kort:
+// bemærkninger til opstillingen, U9-bytteforslaget og golden set ved 3–3.
+
+let sidsteHoldkampe = []; // seneste aktive holdkampe (til afslut-advarslen)
+
+const regelBoks = (farve, indhold) =>
+    `<div style="margin-bottom:12px;padding:10px 14px;border-radius:8px;font-size:0.88em;line-height:1.5;
+                 background:rgba(${farve},0.10);border:1px solid rgba(${farve},0.35);color:#eaeaea;">${indhold}</div>`;
+
+function renderHoldkampRegelBlok(tm) {
+    let html = '';
+    const navne = { 1: tm.team1_name, 2: tm.team2_name };
+
+    const fund = HoldkampFormater.tjekOpstilling(tm.format, tm.games || [], navne);
+    if (fund.length) {
+        html += regelBoks('240,165,0',
+            `<div style="color:#f0a500;font-weight:bold;margin-bottom:4px;">Bemærkninger til opstillingen</div>` +
+            fund.map(f => `<div>• ${escapeHtml(f.tekst)}</div>`).join(''));
+    }
+
+    // U9: de samme to spillere mødes to gange i single (§ 7 stk. 6 c)
+    if (tm.format === 'u9_3spillere') {
+        const moeder = HoldkampFormater.dobbeltMoeder(tm.games || []);
+        if (moeder.length) {
+            const m = moeder[0];
+            const f = HoldkampFormater.byttForslag(tm.games || []);
+            const gA = f && tm.games[f.idxA], gB = f && tm.games[f.idxB];
+            const kanByttes = f && gA.status === 'pending' && gB.status === 'pending';
+            const knap = kanByttes
+                ? `<button onclick="byttU9Singler(${tm.id}, ${gA.id}, ${gB.id}, ${f.hold}, ${f.a}, ${f.b})" class="btn-primary"
+                           style="margin-top:8px;padding:6px 14px;font-size:0.9em;">Byt ${escapeHtml(navne[f.hold])}s spillere i ${f.a}. og ${f.b}. single</button>`
+                : '';
+            html += regelBoks('217,44,63',
+                `<div style="font-weight:bold;margin-bottom:4px;">${escapeHtml(m.spiller1)} og ${escapeHtml(m.spiller2)} mødes i både ${m.a}. og ${m.b}. single</div>
+                 <div style="color:#ccc;">Hvis begge klubber er enige, kan der byttes rundt på to singler fra toppen af holdskemaet (§ 7 stk. 6 c).</div>
+                 ${f ? '' : '<div style="color:#ccc;margin-top:4px;">Der er ikke fundet et byt, der løser det — ret spillerne under Rediger.</div>'}
+                 ${f && !kanByttes ? '<div style="color:#ccc;margin-top:4px;">En af kampene er allerede i gang, så der kan ikke byttes.</div>' : ''}
+                 ${knap}`);
+        }
+    }
+
+    // Golden set ved 3–3 (§ 7 stk. 1 e)
+    const gs = HoldkampFormater.goldenSetStatus(tm);
+    if (gs.kraeves) {
+        const vaelger = (hold, n) => {
+            const id = `gs_${tm.id}_${hold}_${n}`;
+            const opts = gs.deltagere[hold].map(navn => `<option value="${escapeHtml(navn)}">${escapeHtml(navn)}</option>`).join('');
+            return `<select id="${id}" onfocus="holdkampCourtSelectOpen=true" onblur="holdkampCourtSelectOpen=false"
+                            style="width:100%;padding:8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;margin-bottom:6px;">
+                        <option value="">— Vælg spiller —</option>${opts}</select>`;
+        };
+        html += regelBoks('201,162,39',
+            `<div style="color:#e8c547;font-weight:bold;font-size:1.05em;margin-bottom:4px;">3–3: Der skal spilles golden set</div>
+             <div style="color:#ccc;margin-bottom:10px;">Ét sæt, spillet som et 3. sæt, med en double i en ny konstellation af spillere, der har deltaget i holdkampen.
+                 Vinderen vinder holdkampen 4–3 (§ 7 stk. 1 e).</div>
+             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                 <div><div style="color:var(--color-win, #45d17e);font-size:0.85em;margin-bottom:5px;">${escapeHtml(tm.team1_name)}</div>${vaelger(1, 1)}${vaelger(1, 2)}</div>
+                 <div><div style="color:var(--color-accent);font-size:0.85em;margin-bottom:5px;">${escapeHtml(tm.team2_name)}</div>${vaelger(2, 1)}${vaelger(2, 2)}</div>
+             </div>
+             <button onclick="opretGoldenSet(${tm.id})" style="margin-top:6px;padding:8px 18px;background:#c9a227;color:#000;font-weight:bold;border:none;border-radius:4px;cursor:pointer;">Opret golden set</button>
+             <div style="color:#999;font-size:0.82em;margin-top:8px;">Kan et hold ikke stille et nyt par (fx ved afbud fra 2 spillere), tabes golden set uden kamp (§ 22 stk. 1 c).
+                 Opret det så med de spillere, der er, og registrér W.O. under Manuel.</div>`);
+    }
+    return html;
+}
+
+async function opretGoldenSet(tmId) {
+    const tm = sidsteHoldkampe.find(t => t.id === tmId);
+    if (!tm) return;
+    const v = (hold, n) => document.getElementById(`gs_${tmId}_${hold}_${n}`)?.value || '';
+    const status = HoldkampFormater.goldenSetStatus(tm);
+    for (const hold of [1, 2]) {
+        const fejl = HoldkampFormater.tjekGoldenSetPar(status, hold, v(hold, 1), v(hold, 2));
+        if (fejl) {
+            showMessage('Golden set', `${hold === 1 ? tm.team1_name : tm.team2_name}: ${fejl}`);
+            return;
+        }
+    }
+    try {
+        await api.createGoldenSet(tmId, {
+            team1Player1: v(1, 1), team1Player2: v(1, 2),
+            team2Player1: v(2, 1), team2Player2: v(2, 2)
+        });
+        holdkampCourtSelectOpen = false;
+        await loadActiveHoldkamp();
+    } catch (error) {
+        showMessage('Kunne ikke oprette golden set', error.message || 'Ukendt fejl');
+    }
+}
+
+async function byttU9Singler(tmId, gameIdA, gameIdB, hold, a, b) {
+    const tm = sidsteHoldkampe.find(t => t.id === tmId);
+    const gA = tm && tm.games.find(g => g.id === gameIdA);
+    const gB = tm && tm.games.find(g => g.id === gameIdB);
+    if (!gA || !gB) return;
+    const holdnavn = hold === 1 ? tm.team1_name : tm.team2_name;
+    const felt = `team${hold}_player1`;
+    const ok = await BadmintonUtils.confirmDialog(
+        'Byt singler',
+        `${holdnavn}: ${gA[felt] || '?'} flyttes til ${b}. single og ${gB[felt] || '?'} til ${a}. single.\n\n` +
+        'Det må kun gøres, hvis begge klubber er enige (§ 7 stk. 6 c).'
+    );
+    if (!ok) return;
+    const key = `team${hold}Player1`;
+    try {
+        await api.updateTeamMatchGame(tmId, gameIdA, { [key]: gB[felt] || '' });
+        await api.updateTeamMatchGame(tmId, gameIdB, { [key]: gA[felt] || '' });
+        await loadActiveHoldkamp();
+    } catch (error) {
+        showMessage('Fejl', 'Kunne ikke bytte singlerne: ' + (error.message || 'Ukendt fejl'));
+    }
+}
+
+// Regeltjek i "Opret ny holdkamp"-formularen (opdateres mens der tastes)
+function holdkampFormGames(format) {
+    const formatDef = HOLDKAMP_FORMATS[format];
+    if (!formatDef) return [];
+    const data = {};
+    document.getElementById('holdkampGamesInputContainer').querySelectorAll('input').forEach(input => {
+        (data[input.dataset.game] = data[input.dataset.game] || {})[input.dataset.field] = input.value.trim();
+    });
+    return formatDef.games.map((cat, i) => ({
+        category: cat,
+        team1Player1: data[i]?.t1p1 || '',
+        team1Player2: data[i]?.t1p2 || '',
+        team2Player1: data[i]?.t2p1 || '',
+        team2Player2: data[i]?.t2p2 || ''
+    }));
+}
+
+function opdaterHoldkampFormRegler() {
+    const el = document.getElementById('holdkampRegler');
+    if (!el) return;
+    const format = document.getElementById('holdkampFormat').value;
+    const navne = {
+        1: document.getElementById('holdkampTeam1Name').value.trim() || 'Hold 1',
+        2: document.getElementById('holdkampTeam2Name').value.trim() || 'Hold 2'
+    };
+    const games = holdkampFormGames(format);
+    const fund = HoldkampFormater.tjekOpstilling(format, games, navne);
+    let html = '';
+    if (fund.length) {
+        html += regelBoks('240,165,0',
+            `<div style="color:#f0a500;font-weight:bold;margin-bottom:4px;">Bemærkninger til opstillingen</div>` +
+            fund.map(f => `<div>• ${escapeHtml(f.tekst)}</div>`).join(''));
+    }
+    if (format === 'u9_3spillere') {
+        const m = HoldkampFormater.dobbeltMoeder(games)[0];
+        if (m) {
+            html += regelBoks('217,44,63',
+                `${escapeHtml(m.spiller1)} og ${escapeHtml(m.spiller2)} mødes i både ${m.a}. og ${m.b}. single. ` +
+                'Hvis begge klubber er enige, kan der byttes rundt på to singler fra toppen af holdskemaet (§ 7 stk. 6 c).');
+        }
+    }
+    el.innerHTML = html;
 }

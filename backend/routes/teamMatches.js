@@ -8,6 +8,7 @@ const { currentTenant } = require('../config/tenantPools');
 const { banensStartTid } = require('../config/matchTiming');
 const { publishGameStateChange } = require('../events/gameStateEvents');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
+const holdkampFormater = require('../config/holdkampFormater');
 
 /**
  * Opretter en holdkamp med dens delkampe.
@@ -186,6 +187,48 @@ router.post('/', authMiddleware, requirePage('holdkamp'), async (req, res, next)
         if (error.status === 409) return res.status(409).json({ error: error.message });
         next(error);
     }
+});
+
+// POST /api/team-matches/:id/golden-set — opret golden set (4 spillere / 4 piger, 6 kampe).
+//
+// § 7 stk. 1 e: ender holdkampen 3–3, spilles et golden set "med en ikke
+// tidligere anvendt doublekonstellation af de spillere, som har deltaget i
+// ungdomsholdkampen". Golden set spilles som et 3. sæt (ét sæt) og vinderen
+// vinder holdkampen 4–3. Body: { team1Player1, team1Player2, team2Player1, team2Player2 }.
+router.post('/:id/golden-set', authMiddleware, requirePage('holdkamp'), async (req, res, next) => {
+    try {
+        const tm = await queryOne('SELECT id, format, status FROM team_matches WHERE id = ?', [req.params.id]);
+        if (!tm) return res.status(404).json({ error: 'Holdkamp ikke fundet' });
+        if (tm.status !== 'active') return res.status(409).json({ error: 'Holdkampen er afsluttet' });
+        tm.games = await query(
+            `SELECT id, game_number, category, team1_player1, team1_player2, team2_player1, team2_player2,
+                    status, winner_team
+               FROM team_match_games WHERE team_match_id = ? ORDER BY game_number`,
+            [tm.id]
+        );
+
+        const status = holdkampFormater.goldenSetStatus(tm);
+        if (!status.muligt) return res.status(400).json({ error: 'Golden set findes kun i 4 spillere / 4 piger med 6 kampe' });
+        if (status.findes) return res.status(409).json({ error: 'Der er allerede oprettet et golden set' });
+        if (!status.kraeves) return res.status(409).json({ error: 'Golden set spilles først, når alle 6 kampe er færdige og stillingen er 3–3' });
+
+        const b = req.body || {};
+        const t = (v) => String(v || '').trim();
+        const valg = { 1: [t(b.team1Player1), t(b.team1Player2)], 2: [t(b.team2Player1), t(b.team2Player2)] };
+        for (const hold of [1, 2]) {
+            const fejl = holdkampFormater.tjekGoldenSetPar(status, hold, ...valg[hold]);
+            if (fejl) return res.status(400).json({ error: `Hold ${hold}: ${fejl}`, hold });
+        }
+
+        const nr = Math.max(0, ...tm.games.map(g => g.game_number || 0)) + 1;
+        const r = await query(
+            `INSERT INTO team_match_games
+               (team_match_id, game_number, category, team1_player1, team1_player2, team2_player1, team2_player2)
+             VALUES (?, ?, 'GS', ?, ?, ?, ?)`,
+            [tm.id, nr, ...valg[1], ...valg[2]]
+        );
+        res.json({ success: true, gameId: r.insertId });
+    } catch (error) { next(error); }
 });
 
 // PUT /api/team-matches/:id/logos - opdater hold-logoer (requires auth)
@@ -372,11 +415,21 @@ async function autoAfslutHoldkampe() {
 
     // Samme tenant-nøgle som et rigtigt request ville give (se gameStateEvents.tenantKey)
     const req = { clubDbName: currentTenant() };
+    let lukket = 0;
     for (const tm of klar) {
+        // 4 spillere / 4 piger på 3–3: der mangler et golden set (§ 7 stk. 1 e).
+        // Lukkes ikke automatisk — admin opretter golden set eller afslutter selv.
+        const fuld = await queryOne('SELECT format FROM team_matches WHERE id = ?', [tm.id]);
+        fuld.games = await query(
+            'SELECT category, status, winner_team FROM team_match_games WHERE team_match_id = ?',
+            [tm.id]
+        );
+        if (holdkampFormater.goldenSetStatus(fuld).kraeves) continue;
+        lukket++;
         await afslutHoldkamp(tm.id, req);
         console.log(`✓ Holdkamp afsluttet automatisk (${AUTO_AFSLUT_EFTER_MIN} min efter sidste delkamp): ${tm.team1_name} – ${tm.team2_name} (#${tm.id})`);
     }
-    return klar.length;
+    return lukket;
 }
 
 // DELETE /api/team-matches - Delete ALL team matches (requires auth)
