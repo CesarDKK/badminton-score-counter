@@ -200,14 +200,19 @@ router.put('/clubs/:id/toggle', superAdminAuth, async (req, res, next) => {
 });
 
 // Hjælper: opret direkte forbindelse til en klubs database
+// I UTC som puljerne (se utcSession i config/tenantPools) — ellers flytter
+// backup/gendannelse alle tidsstempler 1–2 timer på en server der kører CET.
 async function clubConn(dbName) {
-    return mysql.createConnection({
+    const conn = await mysql.createConnection({
         host: process.env.DB_HOST || 'localhost',
         port: process.env.DB_PORT || 3306,
         user: process.env.DB_USER || 'badminton_user',
         password: process.env.DB_PASSWORD || '',
-        database: dbName
+        database: dbName,
+        timezone: '+00:00'
     });
+    await conn.query("SET time_zone = '+00:00'");
+    return conn;
 }
 
 // GET /api/super-admin/clubs/:id/admins — hent klub admins

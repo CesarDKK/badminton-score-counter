@@ -13,14 +13,19 @@ const ALREADY_EXISTS_ERRORS = new Set([
     1091, // Can't DROP; doesn't exist — at droppe noget der allerede er væk er ikke en fejl
 ]);
 
+// I UTC som resten af appen (se utcSession i tenantPools), så en migration der
+// bruger NOW() eller datoer skriver samme tider som appen
 async function getConnection(dbName) {
-    return mysql.createConnection({
+    const conn = await mysql.createConnection({
         host: process.env.DB_HOST || 'localhost',
         port: process.env.DB_PORT || 3306,
         user: process.env.DB_USER || 'badminton_user',
         password: process.env.DB_PASSWORD || '',
         database: dbName,
+        timezone: '+00:00',
     });
+    await conn.query("SET time_zone = '+00:00'");
+    return conn;
 }
 
 async function ensureMigrationsTable(conn) {

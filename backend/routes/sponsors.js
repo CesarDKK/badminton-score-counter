@@ -336,7 +336,8 @@ router.post('/upload', uploadLimiter, authMiddleware, requirePage('sponsors'), u
 });
 
 // DELETE /api/sponsors/:id - Delete sponsor image (requires auth)
-router.delete('/:id', authMiddleware, requirePage('sponsors'), async (req, res, next) => {
+// Kun tal-id'er — ellers fanger den /all, der står længere nede
+router.delete('/:id(\\d+)', authMiddleware, requirePage('sponsors'), async (req, res, next) => {
     try {
         const { id } = req.params;
 
