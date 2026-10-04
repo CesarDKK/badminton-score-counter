@@ -222,27 +222,46 @@ async function scheduleCourtDataLoad() {
     }
 }
 
-// Kampens oprindelige sider (TV'ets øverste/nederste række) udregnes fra dataene
-// ved HVER opdatering. Før blev de husket én gang, da TV'et opdagede kampen —
-// men banen er "aktiv", før navnene er skrevet ind, så TV'et huskede fx
-// "Spiller 1"/"Spiller 2", og sæt-historikken (gemt med de rigtige navne) blev
-// så vendt om: vinderen af 1. sæt stod som taber. Med et afsluttet sæt er sæt
-// 1's navne de oprindelige sider; ellers er det de nuværende, for siderne
-// byttes først, når et sæt er slut.
+// TV'ets rækkefølge (originalPlayer1 øverst, originalPlayer2 nederst) holdes
+// ajour ved HVER opdatering. Før blev den husket én gang, da TV'et opdagede
+// kampen — men banen er "aktiv", før navnene er skrevet ind, så TV'et huskede
+// fx "Spiller 1"/"Spiller 2", og sæt-historikken (gemt med de rigtige navne)
+// blev vendt om: vinderen af 1. sæt stod som taber.
+//
+// Reglerne:
+// - Samme to spillere (også efter "Skift side", før eller under kampen):
+//   rækkefølgen står fast — navnene må ikke hoppe op og ned på TV'et.
+// - Ét navn rettet: den uændrede spiller beholder sin række.
+// - Nye spillere (ny kamp / navnene skrevet ind / TV'et genstartet): sæt 1's
+//   sider, hvis et sæt er spillet, ellers de nuværende.
+// Sæt-scorerne vendes efter navn (orientSetScore), så de passer uanset rækkefølge.
 function laesOprindeligeSider(gameState) {
+    const p1 = gameState.player1, p2 = gameState.player2;
+    const saet = (a, b) => {
+        originalPlayer1Name = a.name;
+        originalPlayer1Name2 = a.name2 || null;
+        originalPlayer2Name = b.name;
+        originalPlayer2Name2 = b.name2 || null;
+    };
+    const o1 = originalPlayer1Name, o2 = originalPlayer2Name;
+
+    if (o1 !== null && o2 !== null) {
+        if (p1.name === o1 && p2.name === o2) return saet(p1, p2);
+        if (p1.name === o2 && p2.name === o1) return saet(p2, p1);
+        if (p1.name === o1 || p2.name === o2) return saet(p1, p2);
+        if (p1.name === o2 || p2.name === o1) return saet(p2, p1);
+    }
+
     const h = gameState.setScoresHistory;
     const foerste = Array.isArray(h) && h[0] && typeof h[0] === 'object' && h[0].player1Name ? h[0] : null;
-    if (foerste) {
-        originalPlayer1Name = foerste.player1Name;
-        originalPlayer1Name2 = foerste.player1Name2 || null;
-        originalPlayer2Name = foerste.player2Name;
-        originalPlayer2Name2 = foerste.player2Name2 || null;
-    } else {
-        originalPlayer1Name = gameState.player1.name;
-        originalPlayer1Name2 = gameState.player1.name2 || null;
-        originalPlayer2Name = gameState.player2.name;
-        originalPlayer2Name2 = gameState.player2.name2 || null;
+    const sammePar = foerste &&
+        ((foerste.player1Name === p1.name && foerste.player2Name === p2.name) ||
+         (foerste.player1Name === p2.name && foerste.player2Name === p1.name));
+    if (sammePar) {
+        return saet({ name: foerste.player1Name, name2: foerste.player1Name2 },
+                    { name: foerste.player2Name, name2: foerste.player2Name2 });
     }
+    saet(p1, p2);
 }
 
 function startLocalTimer() {
