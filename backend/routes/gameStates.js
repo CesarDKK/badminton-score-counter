@@ -130,11 +130,9 @@ router.get('/batch/all', async (req, res, next) => {
 
         // Format results
         const courtStates = results.map(row => {
-            const setScoresHistory = row.set_scores_history
-                ? (typeof row.set_scores_history === 'string'
-                    ? JSON.parse(row.set_scores_history)
-                    : row.set_scores_history)
-                : [];
+            // parseSetScores tåler ugyldig JSON — én ødelagt række må ikke give
+            // 500 for alle baner på oversigt og TV
+            const setScoresHistory = parseSetScores(row.set_scores_history);
 
             // If no game state exists, return default values
             if (!row.player1_name) {
@@ -509,7 +507,7 @@ router.put('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), asyn
             if (isReset || shouldClearMatchEndTime) {
                 endExpr = 'NULL';
             } else if (matchEnding) {
-                endExpr = 'NOW()';
+                endExpr = 'COALESCE(match_end_time, NOW())'; // ellers flytter en navnerettelse efter kampen sluttiden
             } else if (matchCompleted && (player1.games >= 1 || player2.games >= 1)) {
                 // Golden set (ét sæt) meldt afsluttet ved 1–0 — sæt sluttid én gang
                 endExpr = 'COALESCE(match_end_time, NOW())';
@@ -686,7 +684,7 @@ router.post('/:courtId/result', requireWriteAuthInClubMode, kunEgenBane('courtId
         const historik = sets.map(([a, b]) => ({ ...navne, score: `${a}-${b}` }));
         const [g1, g2] = vundneSaet(sets, court.game_mode);
 
-        await query(
+        const opdateret = await query(
             `UPDATE game_states SET
                 player1_score = 0, player2_score = 0, player1_games = ?, player2_games = ?,
                 set_scores_history = ?, match_completed = TRUE,
@@ -695,9 +693,21 @@ router.post('/:courtId/result', requireWriteAuthInClubMode, kunEgenBane('courtId
                 match_start_time = COALESCE(match_start_time, NOW()),
                 match_end_time = NOW(),
                 version = version + 1
-             WHERE court_id = ?`,
-            [g1, g2, JSON.stringify(historik), outcome, winner, court.id]
+             WHERE court_id = ? AND version = ?`,
+            [g1, g2, JSON.stringify(historik), outcome, winner, court.id, gs.version || 0]
         );
+        // Compare-and-swap mod den version vi læste: to enheder der indtaster
+        // samtidigt ville ellers begge se result_history_id = NULL og hver lave
+        // sin række i kamphistorikken. Den sidste får 409 og læser forfra.
+        if (!opdateret.affectedRows) {
+            const nyeste = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
+            return res.status(409).json({
+                error: 'Banens tilstand er ændret af en anden enhed',
+                conflict: true,
+                version: (nyeste && nyeste.version) || 0,
+                state: nyeste ? formatStateRow(nyeste, court) : null
+            });
+        }
         await query('UPDATE courts SET is_active = TRUE WHERE id = ?', [court.id]);
         await query('DELETE FROM last_finished_matches WHERE court_id = ?', [court.id]);
 

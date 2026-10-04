@@ -26,7 +26,7 @@ const VALID_DESTINATIONS = (() => {
 router.get('/validate/:token', async (req, res, next) => {
     try {
         const deviceToken = await queryOne(
-            'SELECT id, name, destination, locked FROM device_tokens WHERE token = ? AND is_active = 1',
+            'SELECT id, name, destination, locked, token_type FROM device_tokens WHERE token = ? AND is_active = 1',
             [req.params.token]
         );
 
@@ -40,13 +40,17 @@ router.get('/validate/:token', async (req, res, next) => {
             [deviceToken.id]
         );
 
-        // Udsted et kortlivet JWT til denne session
+        // Udsted et kortlivet JWT til denne session. tokenType SKAL med — uden den
+        // er en QR-session (match_session) ikke bundet til sin egen bane og
+        // almindelig tælling (middleware/qrSession.js), og QR-koden på TV'et
+        // ville give fuld tælleradgang til hele klubben.
         const sessionToken = jwt.sign(
             {
                 role: 'device',
                 tokenId: deviceToken.id,
                 destination: deviceToken.destination,
                 locked: deviceToken.locked,
+                tokenType: deviceToken.token_type || 'permanent',
                 clubSubdomain: req.clubSubdomain
             },
             process.env.JWT_SECRET,

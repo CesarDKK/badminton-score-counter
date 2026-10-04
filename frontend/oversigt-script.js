@@ -625,6 +625,9 @@ function displayCurrentPage() {
 
     // Calculate total pages
     const totalPages = Math.ceil(activeCourts.length / COURTS_PER_PAGE);
+    // Færre baner end før (fx fra 8 til 6, mens vi stod på side 2): uden dette
+    // pegede currentPage ud over sidste side, og skærmen blev helt tom
+    if (currentPage >= totalPages) currentPage = 0;
 
     // Update page indicator
     if (totalPages > 1) {
@@ -770,7 +773,7 @@ function renderCourtCard(court) {
         let sB = parseInt(parts[1]) || 0; // score of history-player2
 
         // Determine if history player1 maps to current player1 or player2
-        const swapped = set.player1Name && set.player1Name !== p1Name;
+        const swapped = erSaetVendt(set, p1Name, court.player2 && court.player2.name);
         const row1Score = swapped ? sB : sA;
         const row2Score = swapped ? sA : sB;
         const row1Won = row1Score > row2Score;
@@ -874,7 +877,7 @@ function renderFinishedCard(court) {
         const parts = (set.score || '0-0').split('-');
         let sA = parseInt(parts[0]) || 0;
         let sB = parseInt(parts[1]) || 0;
-        const swapped = set.player1Name && set.player1Name !== p1Name;
+        const swapped = erSaetVendt(set, p1Name, court.player2 && court.player2.name);
         const r1 = swapped ? sB : sA;
         const r2 = swapped ? sA : sB;
         const r1won = r1 > r2;
@@ -936,6 +939,15 @@ function calculateElapsedTime(courtId) {
     const elapsedSeconds = Math.floor(elapsedMs / 1000);
 
     return Math.max(0, elapsedSeconds);
+}
+
+// Er sættet gemt med siderne byttet i forhold til nu? Genkendes blot ét af
+// navnene på sin plads, er det ikke byttet (en rettet stavefejl i det andet navn
+// vendte før sættet, så vinderen stod som taber).
+function erSaetVendt(set, p1Name, p2Name) {
+    if (!set || typeof set !== 'object' || !set.player1Name) return false;
+    if (set.player1Name === p1Name || (p2Name && set.player2Name === p2Name)) return false;
+    return true;
 }
 
 function formatTimer(seconds) {
