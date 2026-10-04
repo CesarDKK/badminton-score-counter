@@ -222,6 +222,29 @@ async function scheduleCourtDataLoad() {
     }
 }
 
+// Kampens oprindelige sider (TV'ets øverste/nederste række) udregnes fra dataene
+// ved HVER opdatering. Før blev de husket én gang, da TV'et opdagede kampen —
+// men banen er "aktiv", før navnene er skrevet ind, så TV'et huskede fx
+// "Spiller 1"/"Spiller 2", og sæt-historikken (gemt med de rigtige navne) blev
+// så vendt om: vinderen af 1. sæt stod som taber. Med et afsluttet sæt er sæt
+// 1's navne de oprindelige sider; ellers er det de nuværende, for siderne
+// byttes først, når et sæt er slut.
+function laesOprindeligeSider(gameState) {
+    const h = gameState.setScoresHistory;
+    const foerste = Array.isArray(h) && h[0] && typeof h[0] === 'object' && h[0].player1Name ? h[0] : null;
+    if (foerste) {
+        originalPlayer1Name = foerste.player1Name;
+        originalPlayer1Name2 = foerste.player1Name2 || null;
+        originalPlayer2Name = foerste.player2Name;
+        originalPlayer2Name2 = foerste.player2Name2 || null;
+    } else {
+        originalPlayer1Name = gameState.player1.name;
+        originalPlayer1Name2 = gameState.player1.name2 || null;
+        originalPlayer2Name = gameState.player2.name;
+        originalPlayer2Name2 = gameState.player2.name2 || null;
+    }
+}
+
 function startLocalTimer() {
     // 500 ms-tick så et sekundskifte aldrig springes over ved interval-jitter;
     // DOM'en opdateres kun når det viste tal faktisk ændrer sig
@@ -421,24 +444,8 @@ async function loadCourtData() {
 
         // Detect new match starting
         if (isMatchActive && !wasMatchPreviouslyActive) {
-            console.log('[TV V3] New match detected - storing original player positions');
+            console.log('[TV V3] New match detected');
             _tvByCourtDirty = true; // ny kamp — genhent holdkamp-bindingen én gang
-
-            // If set history exists, use it to determine the true original positions.
-            // This handles the case where the TV page loads mid-match after sides have switched.
-            const history = gameState.setScoresHistory;
-            if (history && history.length > 0 && typeof history[0] === 'object' && history[0].player1Name) {
-                originalPlayer1Name = history[0].player1Name;
-                originalPlayer1Name2 = history[0].player1Name2 || null;
-                originalPlayer2Name = history[0].player2Name;
-                originalPlayer2Name2 = history[0].player2Name2 || null;
-                console.log('[TV V3] Using set history for original positions:', originalPlayer1Name, 'vs', originalPlayer2Name);
-            } else {
-                originalPlayer1Name = gameState.player1.name;
-                originalPlayer1Name2 = gameState.player1.name2 || null;
-                originalPlayer2Name = gameState.player2.name;
-                originalPlayer2Name2 = gameState.player2.name2 || null;
-            }
 
             // Reset cached scores for new match
             cachedSetScores = {
@@ -456,6 +463,8 @@ async function loadCourtData() {
         }
 
         hideSponsorSlideshow();
+
+        laesOprindeligeSider(gameState);
 
         // Check if players have been swapped
         const playersSwapped = originalPlayer1Name &&
