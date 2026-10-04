@@ -73,6 +73,7 @@ koer_qemu() { # med_usb(0/1)
     rm -f "$MON"
     qemu-system-x86_64 \
         -machine "$maskine" -cpu max -smp 4 -m 4096 \
+        -global ICH9-LPC.noreboot=off \
         "${ekstra[@]}" \
         -drive "if=pflash,format=raw,unit=0,readonly=on,file=$code" \
         -drive "if=pflash,format=raw,unit=1,file=$VM/vars.fd" \
@@ -119,6 +120,16 @@ case "${1:-}" in
         monitor quit >/dev/null 2>&1 || true
         sleep 1
         koer_qemu 0
+        ;;
+    hentlog)
+        # Den installerede disk beholdes; nøglen sættes i igen med "Hent
+        # fejllog" som standardvalg. Resultatet læses bagefter med
+        # mdir/mtype -i vm/usb.img@@1M ::/fejllog
+        behoev
+        monitor quit >/dev/null 2>&1 || true
+        sleep 1
+        ret_grub 's/^set default=.*/set default=hentlog/'
+        koer_qemu 1
         ;;
     skaerm)
         fil=${2:?Angiv filnavn}

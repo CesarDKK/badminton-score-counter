@@ -5,6 +5,7 @@ Description=Badminton TV: tænd/sluk TV'et via HDMI-CEC
 After=badminton-tv-setup.service systemd-udev-settle.service
 Before=badminton-tv.service
 ConditionKernelCommandLine=!badminton.tilstand=installer
+ConditionKernelCommandLine=!badminton.tilstand=hentlog
 
 [Service]
 Type=oneshot

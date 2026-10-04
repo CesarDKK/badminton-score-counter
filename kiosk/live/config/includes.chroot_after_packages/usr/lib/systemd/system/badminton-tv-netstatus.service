@@ -4,6 +4,7 @@
 Description=Badminton TV: netværksstatus til skærmen
 After=NetworkManager.service badminton-tv-setup.service
 ConditionKernelCommandLine=!badminton.tilstand=installer
+ConditionKernelCommandLine=!badminton.tilstand=hentlog
 
 [Service]
 Type=simple

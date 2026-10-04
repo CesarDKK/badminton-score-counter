@@ -8,6 +8,7 @@ After=systemd-user-sessions.service getty@tty1.service badminton-tv-setup.servic
 Wants=badminton-tv-setup.service
 Conflicts=getty@tty1.service
 ConditionKernelCommandLine=!badminton.tilstand=installer
+ConditionKernelCommandLine=!badminton.tilstand=hentlog
 
 [Service]
 Type=simple

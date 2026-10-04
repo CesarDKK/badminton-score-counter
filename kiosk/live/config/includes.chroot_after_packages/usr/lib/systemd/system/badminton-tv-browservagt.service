@@ -1,0 +1,17 @@
+# Genstarter browseren, hvis TV-siden fryser, mens PC'en ellers kører (se
+# /usr/lib/badminton-tv/browservagt). Hardware-vagthunden dækker, når hele
+# PC'en hænger.
+[Unit]
+Description=Badminton TV: browser-vagt (genstarter en frossen TV-side)
+After=badminton-tv.service
+ConditionKernelCommandLine=!badminton.tilstand=installer
+ConditionKernelCommandLine=!badminton.tilstand=hentlog
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/badminton-tv/browservagt
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

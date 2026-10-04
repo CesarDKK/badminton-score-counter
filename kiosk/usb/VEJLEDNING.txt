@@ -69,3 +69,29 @@ HVIS NOGET GÅR GALT
   - TV'et tænder ikke af sig selv: De fleste PC'er kan ikke styre TV'et (HDMI-
     CEC). Tænd TV'et med fjernbetjeningen. Mange TV'er kan selv slukke, når
     signalet forsvinder — se "Sluk ved intet signal" i TV'ets menu.
+
+
+HVIS EN PC FRYSER
+-----------------
+
+PC'en passer selv på sig selv:
+  - Fryser hele PC'en, genstarter den af sig selv efter ca. 15 sekunder.
+  - Fryser kun TV-siden, genstartes browseren efter ca. 1 minut.
+
+Vil du finde ud af HVORFOR en PC frøs, så hent dens fejllog ned på nøglen.
+Intet på PC'en bliver slettet eller ændret:
+
+1. Sæt USB-nøglen i PC'en, tænd den, og vælg USB-nøglen (F12 på Lenovo).
+
+2. Vælg "Hent fejllog fra PC'en til USB-noeglen" i startmenuen med
+   piletasterne og Enter. VIGTIGT: Gør det inden for 10 sekunder — ellers
+   starter installationen (som så viser, hvad der slettes, og tæller ned,
+   så du kan nå at trykke på en tast).
+
+3. Efter ca. 1 minut står der "Færdig". Tag nøglen ud og sluk PC'en.
+   Starter den igen uden nøglen, kører den som TV som før.
+
+4. På en Windows-PC ligger loggen i mappen fejllog\<PC-navn>-<dato>-<tid> på
+   nøglen. Start med OVERSIGT.txt: opstarter, der er markeret "IKKE LUKKET
+   NED", er dem, hvor PC'en frøs eller mistede strømmen. Send hele mappen til
+   den, der hjælper dig. WiFi-koden er ikke med.

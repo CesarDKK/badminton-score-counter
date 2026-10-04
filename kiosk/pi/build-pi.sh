@@ -115,9 +115,12 @@ trin "Kopierer Badminton TV-filerne ind"
 FAELLES=$SRC/live/config/includes.chroot_after_packages
 cp -a "$FAELLES/." "$ROD/"
 cp -a "$SRC/pi/rootfs/." "$ROD/"
-# Kun til PC'en: installationen fra USB-nøglen og GRUB.
+# Kun til PC'en: installationen og "Hent fejllog" fra USB-nøglen, og GRUB.
 rm -f "$ROD/usr/lib/badminton-tv/installer" \
-      "$ROD/usr/lib/systemd/system/badminton-tv-installer.service"
+      "$ROD/usr/lib/systemd/system/badminton-tv-installer.service" \
+      "$ROD/usr/lib/badminton-tv/hentlog" \
+      "$ROD/usr/lib/systemd/system/badminton-tv-hentlog.service" \
+      "$ROD/etc/modules-load.d/badminton-tv-pstore.conf"
 rm -rf "$ROD/etc/default/grub.d"
 mkdir -p "$ROD/usr/share/badminton-tv"
 printf '%s\n' "$VERSION" > "$ROD/usr/share/badminton-tv/version"

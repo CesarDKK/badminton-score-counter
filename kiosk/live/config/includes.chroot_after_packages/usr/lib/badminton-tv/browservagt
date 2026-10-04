@@ -1,0 +1,167 @@
+#!/usr/bin/python3
+"""Browser-vagt: genstarter browseren, hvis TV-siden fryser.
+
+Hardware-vagthunden genstarter PC'en, når HELE PC'en hænger. Men browseren
+kan også fryse alene (en hængende side, en GPU-fejl), mens PC'en kører videre
+— så står skærmen stille, og ingen opdager det. Denne vagt spørger hvert
+20. sekund TV-siden gennem Chromiums lokale fejlsøgningsport (kun 127.0.0.1):
+
+  - svarer siden slet ikke inden for 10 sekunder, eller
+  - står sidens hjerteslag (window.__btTik, sættes hvert sekund af
+    tv-script-v3.js) mere end 30 sekunder stille,
+
+tæller det som en fejl. Efter 3 fejl i træk (ca. et minut) genstartes
+browseren (badminton-tv.service). PC'en selv kører videre.
+
+Kioskens egen startside (file://, venter på netværk) og Chromiums fejlsider
+rører vagten ikke — dem tager startsiden sig af. Kun sider på http(s).
+
+Kun Pythons standardbibliotek: en minimal websocket-klient til Chromium
+DevTools-protokollen (én forespørgsel pr. forbindelse).
+"""
+
+import base64
+import json
+import os
+import socket
+import struct
+import subprocess
+import sys
+import time
+import urllib.request
+
+PORT = int(os.environ.get('BT_DEVTOOLS_PORT', '9222'))
+INTERVAL = int(os.environ.get('BT_VAGT_INTERVAL', '20'))
+OPSTART_PAUSE = int(os.environ.get('BT_VAGT_OPSTART', '120'))
+SVAR_TIMEOUT = 10
+TIK_MAX_ALDER_MS = 30000
+FEJL_FOER_GENSTART = 3
+GENSTART = os.environ.get('BT_GENSTART', 'systemctl restart badminton-tv.service')
+
+
+def log(tekst):
+    print(f'[browservagt] {tekst}', flush=True)
+
+
+def sider():
+    with urllib.request.urlopen(f'http://127.0.0.1:{PORT}/json/list', timeout=SVAR_TIMEOUT) as r:
+        return json.load(r)
+
+
+def evaluer(ws_url, udtryk):
+    """Afvikler udtryk i siden og returnerer værdien (eller rejser en fejl)."""
+    # ws://127.0.0.1:9222/devtools/page/<id>
+    rest = ws_url.split('://', 1)[1]
+    vaert, sti = rest.split('/', 1)
+    host, port = vaert.split(':')
+    s = socket.create_connection((host, int(port)), timeout=SVAR_TIMEOUT)
+    try:
+        noegle = base64.b64encode(os.urandom(16)).decode()
+        s.sendall((f'GET /{sti} HTTP/1.1\r\nHost: {vaert}\r\nUpgrade: websocket\r\n'
+                   f'Connection: Upgrade\r\nSec-WebSocket-Key: {noegle}\r\n'
+                   'Sec-WebSocket-Version: 13\r\n\r\n').encode())
+        svar = b''
+        while b'\r\n\r\n' not in svar:
+            del_ = s.recv(4096)
+            if not del_:
+                raise ConnectionError('forbindelsen lukket under håndtrykket')
+            svar += del_
+        if b' 101 ' not in svar.split(b'\r\n', 1)[0]:
+            raise ConnectionError('websocket afvist: ' + svar.split(b'\r\n', 1)[0].decode(errors='replace'))
+        rest_data = svar.split(b'\r\n\r\n', 1)[1]
+
+        besked = json.dumps({'id': 1, 'method': 'Runtime.evaluate',
+                             'params': {'expression': udtryk, 'returnByValue': True}}).encode()
+        maske = os.urandom(4)
+        hoved = bytes([0x81])
+        n = len(besked)
+        if n < 126:
+            hoved += bytes([0x80 | n])
+        elif n < 65536:
+            hoved += bytes([0x80 | 126]) + struct.pack('>H', n)
+        else:
+            hoved += bytes([0x80 | 127]) + struct.pack('>Q', n)
+        s.sendall(hoved + maske + bytes(b ^ maske[i % 4] for i, b in enumerate(besked)))
+
+        buf = rest_data
+        frist = time.monotonic() + SVAR_TIMEOUT
+
+        def laes(antal):
+            nonlocal buf
+            while len(buf) < antal:
+                if time.monotonic() > frist:
+                    raise TimeoutError('siden svarede ikke')
+                del_ = s.recv(65536)
+                if not del_:
+                    raise ConnectionError('forbindelsen lukket')
+                buf += del_
+            ud, buf = buf[:antal], buf[antal:]
+            return ud
+
+        while True:
+            b1, b2 = laes(2)
+            laengde = b2 & 0x7f
+            if laengde == 126:
+                laengde = struct.unpack('>H', laes(2))[0]
+            elif laengde == 127:
+                laengde = struct.unpack('>Q', laes(8))[0]
+            data = laes(laengde)
+            if b1 & 0x0f != 1:      # kun tekst-rammer er svar
+                continue
+            msg = json.loads(data)
+            if msg.get('id') == 1:
+                if 'error' in msg:
+                    raise RuntimeError(msg['error'].get('message', 'fejl'))
+                return msg.get('result', {}).get('result', {}).get('value')
+    finally:
+        s.close()
+
+
+def tjek():
+    """None = alt i orden (eller intet at tjekke), ellers en fejlbeskrivelse."""
+    try:
+        alle = sider()
+    except Exception as e:
+        return f'browseren svarer ikke ({e})'
+    side = next((p for p in alle if p.get('type') == 'page'
+                 and str(p.get('url', '')).startswith(('http://', 'https://'))), None)
+    if not side:
+        return None                     # startsiden/fejlside — startsiden tager sig af det
+    try:
+        vaerdi = evaluer(side['webSocketDebuggerUrl'],
+                         '[Date.now(), window.__btTik || 0, document.visibilityState]')
+    except Exception as e:
+        return f'TV-siden svarer ikke ({e}) — {side.get("url", "")[:80]}'
+    if isinstance(vaerdi, list) and len(vaerdi) >= 2 and vaerdi[1]:
+        alder = vaerdi[0] - vaerdi[1]
+        if alder > TIK_MAX_ALDER_MS:
+            return f'TV-sidens hjerteslag har stået stille i {round(alder / 1000)} s'
+    return None
+
+
+def main():
+    log(f'startet — første tjek om {OPSTART_PAUSE} s, derefter hvert {INTERVAL}. sekund')
+    time.sleep(OPSTART_PAUSE)
+    fejl = 0
+    while True:
+        problem = tjek()
+        if problem:
+            fejl += 1
+            log(f'fejl {fejl}/{FEJL_FOER_GENSTART}: {problem}')
+            if fejl >= FEJL_FOER_GENSTART:
+                log('genstarter browseren')
+                subprocess.run(GENSTART, shell=True, check=False)
+                fejl = 0
+                time.sleep(OPSTART_PAUSE)
+                continue
+        elif fejl:
+            log('TV-siden svarer igen')
+            fejl = 0
+        time.sleep(INTERVAL)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.exit(0)

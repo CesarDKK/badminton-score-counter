@@ -13,6 +13,8 @@ ca-certificates
 kbd
 console-setup-linux
 jq
+# Browser-vagten (usr/lib/badminton-tv/browservagt) er et Python-script
+python3
 
 # Netværk (kabel og WiFi)
 network-manager

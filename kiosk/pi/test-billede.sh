@@ -70,7 +70,7 @@ for g in video render input; do
 done
 
 # Vores filer
-for s in setup browser cec sluk netstatus diagnose; do
+for s in setup browser cec sluk netstatus diagnose browservagt; do
     tjek "kørbar: $s" test -x "$R/usr/lib/badminton-tv/$s"
 done
 tjek "generator kørbar" test -x "$R/usr/lib/systemd/system-generators/badminton-tv-sluk-generator"
@@ -83,7 +83,7 @@ tjek "diagnose kører på Pi (drop-in)" test -f "$R/etc/systemd/system/badminton
 tjek "aktiv: badminton-tv-setup" aktiveret sysinit.target badminton-tv-setup.service
 # En Pi har intet batteri-ur — uden timesyncd stilles uret aldrig.
 tjek "aktiv: systemd-timesyncd" aktiveret sysinit.target systemd-timesyncd.service
-for s in badminton-tv badminton-tv-cec badminton-tv-netstatus badminton-tv-diagnose NetworkManager; do
+for s in badminton-tv badminton-tv-cec badminton-tv-netstatus badminton-tv-diagnose badminton-tv-browservagt NetworkManager; do
     tjek "aktiv: $s" aktiveret multi-user.target "$s.service"
 done
 for u in userconfig.service systemd-firstboot.service sleep.target suspend.target \
