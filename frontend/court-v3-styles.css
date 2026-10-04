@@ -1937,3 +1937,87 @@ html, body {
     max-width: calc(var(--app-h, 100dvh) * 0.92);
     max-height: calc(var(--app-w, 100vw) * 0.92);
 }
+
+/* ══════════════════════════════════════════
+   Ser med — en anden enhed tæller kampen
+   Laget dækker tælleren (intet kan trykkes), banneret ligger øverst med
+   "Overtag tællingen". Under beskeder (10000), så de kan vises ovenpå.
+   ══════════════════════════════════════════ */
+.ser-med-laag,
+.ser-med-banner {
+    display: none;
+}
+.cv-ser-med .ser-med-laag {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 9500;
+    background: rgba(0, 0, 0, 0.18);
+}
+.cv-ser-med .ser-med-banner {
+    display: flex;
+    position: fixed;
+    left: 50%;
+    bottom: 14px;
+    transform: translateX(-50%);
+    z-index: 9600;
+    align-items: center;
+    gap: 16px;
+    max-width: calc(100% - 24px);
+    padding: 10px 12px 10px 18px;
+    border-radius: var(--radius-pill);
+    background: rgba(13, 13, 26, 0.94);
+    border: 1px solid rgba(var(--color-accent-rgb), 0.55);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(6px);
+    box-sizing: border-box;
+}
+.ser-med-info {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    color: #ffffff;
+    font-family: 'DM Sans', sans-serif;
+}
+.ser-med-maerke {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-accent);
+}
+.ser-med-tekst {
+    font-size: 1rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ser-med-pause:empty {
+    display: none;
+}
+.ser-med-pause {
+    font-size: 0.85rem;
+    opacity: 0.75;
+}
+.cv-ser-med .ser-med-banner .ser-med-knap {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 0;
+    flex-shrink: 0;
+    padding: 10px 20px;
+    font-size: 1rem;
+    white-space: nowrap;
+}
+.ser-med-blink {
+    animation: serMedBlink 0.6s ease-in-out 2;
+}
+@keyframes serMedBlink {
+    50% { box-shadow: 0 0 0 4px rgba(var(--color-accent-rgb), 0.6), 0 8px 30px rgba(0, 0, 0, 0.45); }
+}
+@media (max-width: 520px), (max-height: 420px) {
+    .cv-ser-med .ser-med-banner { gap: 10px; padding: 8px 8px 8px 14px; }
+    .ser-med-tekst { font-size: 0.85rem; }
+    .cv-ser-med .ser-med-banner .ser-med-knap { padding: 8px 14px; font-size: 0.85rem; }
+}
