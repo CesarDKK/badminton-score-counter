@@ -45,12 +45,12 @@ test('hændelser gemmes nyeste først og returneres i tidsorden til logning', ()
     const r = registrer('lyngby', {
         klientId: 'abc123',
         haendelser: [
-            { type: 'frys', fra: NU - 60000, sek: 45 },
-            { type: 'net', fra: NU - 30000, til: NU - 10000 }
+            { type: 'frys', fra: NU - 200000, sek: 45 },
+            { type: 'net', fra: NU - 90000, til: NU - 10000 }
         ]
     }, meta, NU);
     assert.deepEqual(r.nye.map(h => h.type), ['frys', 'net']);
-    assert.equal(r.nye[1].sek, 20);
+    assert.equal(r.nye[1].sek, 80);
     assert.deepEqual(liste('lyngby', NU)[0].haendelser.map(h => h.type), ['net', 'frys']);
 });
 
@@ -108,10 +108,20 @@ test('skærme uden navn erstattes ikke af hinanden', () => {
 test('advarsler vises kun den første time efter de sluttede', () => {
     registrer('lyngby', { klientId: 'abc123', haendelser: [
         { type: 'frys', fra: NU - 10000, sek: 8 },
-        { type: 'net', fra: NU - 5000, til: NU - 2000 }
+        { type: 'net', fra: NU - 95000, til: NU - 2000 }
     ] }, meta, NU);
     assert.equal(liste('lyngby', NU + 30 * 60000)[0].haendelser.length, 2);
     assert.equal(liste('lyngby', NU + 61 * 60000)[0].haendelser.length, 0);
+});
+
+test('korte huller i forbindelsen (under et minut) vises ikke som advarsel', () => {
+    registrer('lyngby', { klientId: 'abc123', haendelser: [
+        { type: 'net', fra: NU - 40000, til: NU - 20000 },
+        { type: 'net', fra: NU - 200000, til: NU - 110000 }
+    ] }, meta, NU);
+    const h = liste('lyngby', NU)[0].haendelser;
+    assert.equal(h.length, 1);
+    assert.equal(h[0].sek, 90);
 });
 
 test('admin kan fjerne en skærm', () => {
