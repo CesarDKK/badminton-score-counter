@@ -293,7 +293,17 @@ function startLocalTimer() {
    - 'net':  livstegnene kunne ikke nå serveren (fra første fejl til næste succes)
    Så kan en skærm, der "går i stå", undersøges uden at køre ud til den. */
 const SKAERM_NAVN = (urlParams.get('skaerm') || '').slice(0, 60);
-const SKAERM_ID = 'tv-' + Math.random().toString(36).slice(2, 10);
+// Samme id efter genindlæsning (ny version, frys-vagt): ellers dukkede skærmen
+// op som en ny skærm hver gang, og den gamle stod tilbage med rød lampe
+const SKAERM_ID = (() => {
+    const nyt = 'tv-' + Math.random().toString(36).slice(2, 10);
+    try {
+        const gemt = localStorage.getItem('btSkaermId');
+        if (gemt && /^tv-[a-z0-9]{6,12}$/.test(gemt)) return gemt;
+        localStorage.setItem('btSkaermId', nyt);
+    } catch { /* privat vindue — så et nyt id pr. indlæsning */ }
+    return nyt;
+})();
 const SKAERM_INTERVAL_MS = 20000;
 let _sidsteDataOk = null;
 let _skaermHaendelser = [];

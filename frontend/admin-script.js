@@ -2763,6 +2763,15 @@ function startSkaermStatusRefresh() {
     }, 15000);
 }
 
+async function fjernSkaerm(klientId) {
+    try {
+        await api.deleteScreen(klientId);
+    } catch (e) {
+        if (e.status !== 404) { alert('Skærmen kunne ikke fjernes: ' + e.message); return; }
+    }
+    refreshSkaermStatus();
+}
+
 async function refreshSkaermStatus() {
     let skaerme;
     try { skaerme = await api.getScreens(); } catch { return; } // status er en bonus — lad listen stå
@@ -2910,6 +2919,9 @@ function renderSkaerme(skaerme) {
                     </div>
                     ${haendelser ? `<div style="color:var(--color-warning, #f0a020);font-size:0.9em;margin-top:2px;">⚠ ${haendelser}</div>` : ''}
                 </div>
+                ${s.sekunderSiden >= 60 ? `<button type="button" class="btn-secondary" onclick="fjernSkaerm('${escapeHtml(s.klientId)}')"
+                    title="Fjern skærmen fra listen. Tænder den igen, kommer den tilbage af sig selv."
+                    style="padding:4px 12px;font-size:0.78em;flex-shrink:0;">Fjern</button>` : ''}
             </div>`;
     }).join('');
     return `

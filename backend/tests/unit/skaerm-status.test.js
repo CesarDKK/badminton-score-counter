@@ -5,7 +5,7 @@
  */
 const { test, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
-const { registrer, liste, rensHaendelse, _nulstil, MAX_SKAERME } = require('../../screens/skaermStatus');
+const { registrer, liste, fjern, rensHaendelse, _nulstil, MAX_SKAERME } = require('../../screens/skaermStatus');
 
 const NU = 1_800_000_000_000;
 const meta = { tokenId: 7, ip: '203.0.113.5' };
@@ -80,6 +80,46 @@ test('en skærm der har været tavs i over 2 minutter meldes tilbage', () => {
 test('skærme der ikke er set i et døgn glemmes', () => {
     registrer('lyngby', { klientId: 'abc123' }, meta, NU);
     assert.equal(liste('lyngby', NU + 25 * 3600 * 1000).length, 0);
+});
+
+test('samme navn på samme link erstatter den gamle række (skærmen er startet forfra)', () => {
+    registrer('lyngby', { klientId: 'gammel-id1', navn: 'tv-bane-1a', bane: 1 }, meta, NU);
+    registrer('lyngby', { klientId: 'andet-link', navn: 'tv-bane-1a', bane: 1 }, { tokenId: 8, ip: '' }, NU);
+    registrer('lyngby', { klientId: 'ny-id2', navn: 'tv-bane-1a', bane: 1 }, meta, NU + 60000);
+    const l = liste('lyngby', NU + 61000);
+    assert.deepEqual(l.map(s => s.klientId).sort(), ['andet-link', 'ny-id2']);
+});
+
+test('advarsler fra før en genstart følger med til den nye række', () => {
+    registrer('lyngby', { klientId: 'gammel-id1', navn: 'tv-bane-2a', haendelser: [{ type: 'frys', fra: NU - 5000, sek: 30 }] }, meta, NU);
+    registrer('lyngby', { klientId: 'ny-id2', navn: 'tv-bane-2a' }, meta, NU + 120000);
+    const [s] = liste('lyngby', NU + 121000);
+    assert.equal(s.klientId, 'ny-id2');
+    assert.equal(s.haendelser.length, 1);
+    assert.equal(s.haendelser[0].sek, 30);
+});
+
+test('skærme uden navn erstattes ikke af hinanden', () => {
+    registrer('lyngby', { klientId: 'uden-navn1' }, meta, NU);
+    registrer('lyngby', { klientId: 'uden-navn2' }, meta, NU);
+    assert.equal(liste('lyngby', NU).length, 2);
+});
+
+test('advarsler vises kun den første time efter de sluttede', () => {
+    registrer('lyngby', { klientId: 'abc123', haendelser: [
+        { type: 'frys', fra: NU - 10000, sek: 8 },
+        { type: 'net', fra: NU - 5000, til: NU - 2000 }
+    ] }, meta, NU);
+    assert.equal(liste('lyngby', NU + 30 * 60000)[0].haendelser.length, 2);
+    assert.equal(liste('lyngby', NU + 61 * 60000)[0].haendelser.length, 0);
+});
+
+test('admin kan fjerne en skærm', () => {
+    registrer('lyngby', { klientId: 'abc123' }, meta, NU);
+    assert.equal(fjern('lyngby', 'abc123'), true);
+    assert.equal(fjern('lyngby', 'abc123'), false);
+    assert.equal(fjern('anden-klub', 'abc123'), false);
+    assert.equal(liste('lyngby', NU).length, 0);
 });
 
 test('loft over antal skærme pr. klub', () => {

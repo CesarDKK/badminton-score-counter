@@ -9,6 +9,9 @@
 const MAX_SKAERME = 200;          // pr. klub — et loft mod oversvømmelse
 const MAX_HAENDELSER = 20;        // pr. skærm, nyeste først
 const GLEM_EFTER_MS = 24 * 3600 * 1000;
+// Advarsler (stod stille / uden forbindelse) vises kun den første time — ellers
+// stod en enkelt gammel hændelse som en advarsel resten af dagen
+const VIS_HAENDELSE_MS = 3600 * 1000;
 
 const register = new Map();       // tenant -> Map(klientId -> skærm)
 
@@ -56,6 +59,20 @@ function registrer(tenant, data, meta, nu = Date.now()) {
     const tilbageEfterSek = !ny && nu - s.sidstSet > 120000 ? Math.round((nu - s.sidstSet) / 1000) : null;
 
     s.navn = tekst(data.navn, 60);
+    // Samme navn på samme link er samme fysiske skærm, der er startet forfra
+    // (genstart, ny version, ny browserprofil) — den gamle række erstattes, så
+    // den ikke står tilbage med rød lampe
+    if (s.navn) {
+        for (const [id, anden] of skaerme) {
+            if (id !== klientId && anden.navn === s.navn && anden.tokenId === (meta.tokenId || null)) {
+                // Hændelserne følger med — "stod stille" fra før en genstart er
+                // netop det, man vil kunne se bagefter
+                s.haendelser = [...s.haendelser, ...anden.haendelser]
+                    .sort((a, b) => b.fra - a.fra).slice(0, MAX_HAENDELSER);
+                skaerme.delete(id);
+            }
+        }
+    }
     s.bane = heltal(data.bane, 1, 99);
     s.version = tekst(data.version, 20);
     s.dataAlderSek = heltal(data.dataAlderSek, 0, 7 * 24 * 3600);
@@ -79,16 +96,31 @@ function ryd(skaerme, nu) {
     }
 }
 
+// Hvornår en hændelse sluttede (frys: start + varighed, net: til)
+const slut = (h) => h.type === 'net' ? h.til : h.fra + h.sek * 1000;
+
 // Klubbens skærme, senest sete først, med sekunder siden sidste livstegn.
+// Kun hændelser fra den seneste time kommer med.
 function liste(tenant, nu = Date.now()) {
     const skaerme = register.get(tenant);
     if (!skaerme) return [];
     ryd(skaerme, nu);
     return [...skaerme.values()]
-        .map(s => ({ ...s, haendelser: [...s.haendelser], sekunderSiden: Math.max(0, Math.round((nu - s.sidstSet) / 1000)) }))
+        .map(s => ({
+            ...s,
+            haendelser: s.haendelser.filter(h => nu - slut(h) <= VIS_HAENDELSE_MS),
+            sekunderSiden: Math.max(0, Math.round((nu - s.sidstSet) / 1000))
+        }))
         .sort((a, b) => a.sekunderSiden - b.sekunderSiden);
+}
+
+// Admin fjerner en skærm fra listen (fx en PC der er taget ned). Sender den
+// livstegn igen, kommer den bare tilbage.
+function fjern(tenant, klientId) {
+    const skaerme = register.get(tenant);
+    return !!skaerme && skaerme.delete(String(klientId || ''));
 }
 
 function _nulstil() { register.clear(); }
 
-module.exports = { registrer, liste, rensHaendelse, _nulstil, MAX_SKAERME };
+module.exports = { registrer, liste, fjern, rensHaendelse, _nulstil, MAX_SKAERME };
