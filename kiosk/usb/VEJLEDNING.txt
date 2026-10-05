@@ -21,7 +21,8 @@ SÅDAN GØR DU
 
 4. Vælg "Installer Badminton TV" (eller vent 10 sekunder).
    Skærmen viser, hvilken disk der slettes, og tæller 15 sekunder ned.
-   Tryk på en tast, hvis du fortryder.
+   Det sker også uden tastatur. Fortryder du, så tryk på en tast, tag
+   USB-nøglen ud, eller sluk PC'en, inden nedtællingen er slut.
 
 5. Efter 3-5 minutter står der "FÆRDIG! Fjern USB-nøglen nu".
    Tag nøglen ud — PC'en genstarter og viser TV-siden.

@@ -53,8 +53,13 @@ Filen tåler det, Notesblok laver: Windows-linjeskift, ANSI eller UTF-8, æøå,
 1. Sæt nøglen i PC'en, tænd den, og tryk gentagne gange på **F12** (Lenovo).
    Vælg USB-nøglen.
 2. Vælg **Installer Badminton TV**, eller vent 10 sekunder.
-3. Skærmen viser, hvilken disk der slettes, og tæller **15 sekunder** ned.
-   Et tastetryk afbryder.
+3. Skærmen viser, hvilken disk der slettes, og tæller **15 sekunder** ned —
+   også uden tastatur. Et tastetryk, at tage nøglen ud eller at slukke PC'en
+   afbryder.
+
+Er PC'ens UEFI-lager (NVRAM) fuldt, kan boot-posten ikke gemmes. Så
+installeres der uden den, og PC'en starter fra disken via standardstien
+`\EFI\BOOT\BOOTX64.EFI`. Skærmen og `installation-log.txt` siger det.
 4. Efter 3–5 minutter: **"Fjern USB-nøglen nu"**. PC'en genstarter, når
    nøglen er taget ud, og viser TV-siden.
 
@@ -220,7 +225,9 @@ docker exec bt-vm bash /src/test/vm.sh genstart-fra-disk
 
 `--secure-boot` efter billedet tester med Microsofts nøgler, som på en rigtig
 PC. `--proeve` gør *Test uden at installere* til menuens standardvalg — et
-tastetryk sendt gennem QEMU når ikke altid frem i tide. Uden KVM (Docker
+tastetryk sendt gennem QEMU når ikke altid frem i tide. `--uden-tastatur`
+fjerner både USB- og PS/2-tastaturet. `--nvram-fuld[=N]` fylder UEFI-lageret,
+så kun ca. N KB er fri (standard 4), og boot-posten ikke kan gemmes. Uden KVM (Docker
 Desktop på Windows) emuleres CPU'en. Det tager et par minutter pr. opstart,
 men hele forløbet kan testes undtagen WiFi og CEC.
 

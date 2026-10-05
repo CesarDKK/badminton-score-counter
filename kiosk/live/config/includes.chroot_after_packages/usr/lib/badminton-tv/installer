@@ -208,14 +208,27 @@ if [ -n "$BT_ADVARSLER" ]; then
     printf '\n'
 fi
 
+# Uden tastatur skal man også kunne fortryde: systemet ligger i RAM (toram),
+# så installationen ville ellers fortsætte, selvom nøglen blev taget ud.
+printf '  Fortryder du: Tryk på en tast, tag USB-nøglen ud, eller sluk PC\x27en.\n\n'
 # Tøm tastaturbufferen, så et tastetryk fra boot-menuen ikke afbryder.
 while read -rsn1 -t 0.1 _; do :; done 2>/dev/null || true
 for ((i = NEDTAELLING; i > 0; i--)); do
-    printf '\r  %sInstallationen starter om %2d sekunder.%s Tryk på en tast for at afbryde. ' "$Y" "$i" "$N"
+    printf '\r  %sInstallationen starter om %2d sekunder.%s ' "$Y" "$i" "$N"
+    afbrudt=''
     if read -rsn1 -t 1 _ 2>/dev/null; then
+        afbrudt='tastetryk'
+    elif [ ! -b "$USB_PART" ]; then
+        afbrudt='USB-nøglen blev taget ud'
+    fi
+    if [ -n "$afbrudt" ]; then
         printf '\n\n  %sAfbrudt — intet er ændret.%s\n\n' "$G" "$N"
-        printf '  Fjern USB-nøglen og sluk PC\x27en på tænd/sluk-knappen.\n'
-        log "Afbrudt af bruger"
+        if [ -b "$USB_PART" ]; then
+            printf '  Fjern USB-nøglen og sluk PC\x27en på tænd/sluk-knappen.\n'
+        else
+            printf '  Sluk PC\x27en på tænd/sluk-knappen.\n'
+        fi
+        log "Afbrudt af bruger ($afbrudt)"
         vent_for_evigt
     fi
 done
@@ -322,17 +335,39 @@ if [ -n "$LIVE_PAKKER" ]; then
     i_maal dpkg --purge $LIVE_PAKKER
 fi
 
+# Boot-posten skal ligge i UEFI's lager (NVRAM), som er lille og kan være fuldt
+# (set på en M70q Gen 4: "No space left on device"). Ryd først op i det, vi selv
+# må fjerne: Windows' gamle boot-post, der nu peger på ingenting, og gamle
+# kernedumps fra efi_pstore.
+if [ -d /sys/firmware/efi ]; then
+    if command -v efibootmgr >/dev/null; then
+        for nr in $(efibootmgr 2>/dev/null | awk '/Windows Boot Manager/ { print substr($1, 5, 4) }'); do
+            koer efibootmgr -q -b "$nr" -B || true
+        done
+    fi
+    for f in /sys/fs/pstore/*efi*; do
+        [ -e "$f" ] && { koer rm -f "$f" || true; }
+    done
+    log "UEFI-variabler: $(find /sys/firmware/efi/efivars -mindepth 1 2>/dev/null | wc -l)"
+fi
+
 # --force-extra-removable lægger også en kopi i \EFI\BOOT\BOOTX64.EFI, så PC'en
 # kan starte, selv hvis BIOS'en glemmer sin boot-post.
-i_maal grub-install --target=x86_64-efi --efi-directory=/boot/efi \
-    --bootloader-id=debian --force-extra-removable --recheck
+GRUB_ARG=(--target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=debian
+          --force-extra-removable --recheck)
+UDEN_BOOTPOST=''
+if ! i_maal grub-install "${GRUB_ARG[@]}"; then
+    # Uden boot-post starter PC'en fra \EFI\BOOT\BOOTX64.EFI — den sti, alle
+    # UEFI-PC'er prøver på en disk uden boot-post. shim ville ellers starte
+    # fbx64.efi, som forsøger at oprette boot-posten ved hver opstart; uden den
+    # går shim direkte videre til GRUB.
+    log "ADVARSEL: Boot-posten kunne ikke gemmes i UEFI — installerer uden"
+    i_maal grub-install "${GRUB_ARG[@]}" --no-nvram
+    koer rm -f "$MAAL/boot/efi/EFI/BOOT/fbx64.efi"
+    UDEN_BOOTPOST=1
+fi
 i_maal update-grub
-
-# Windows' gamle boot-post peger nu på ingenting — fjern den.
 if command -v efibootmgr >/dev/null && [ -d /sys/firmware/efi ]; then
-    for nr in $(efibootmgr 2>/dev/null | awk '/Windows Boot Manager/ { print substr($1, 5, 4) }'); do
-        koer efibootmgr -q -b "$nr" -B || true
-    done
     log "$(efibootmgr 2>&1)"
 fi
 okay
@@ -362,6 +397,10 @@ if [ -n "$BT_WIFI_NAVN" ] && [ -z "$WIFI_IF" ]; then
         printf '  %sBemærk: PC\x27en har intet WiFi-kort, som Linux kan bruge.%s\n' "$Y" "$N"
         printf '  Brug et netværkskabel.\n'
     fi
+fi
+if [ -n "$UDEN_BOOTPOST" ]; then
+    printf '\n  %sBemærk: PC\x27ens UEFI-lager er fuldt.%s Starter den ikke af sig\n' "$Y" "$N"
+    printf '  selv fra disken, så tryk F12 ved opstart og vælg disken.\n'
 fi
 printf '  %s══════════════════════════════════════════════════════%s\n' "$G" "$N"
 
