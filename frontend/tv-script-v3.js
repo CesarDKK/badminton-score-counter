@@ -398,10 +398,15 @@ async function sendLivstegn() {
         });
         _skaermHaendelser = _skaermHaendelser.slice(haendelser.length);
         if (_netFejlFra) {
-            // Forbindelsen er tilbage — meld hullet med det samme
-            _skaermHaendelser.push({ type: 'net', fra: _netFejlFra, til: Date.now() });
+            // Forbindelsen er tilbage — meld hullet med det samme, men kun hvis
+            // det varede mindst et minut (ét tabt livstegn er et wifi-hik eller
+            // en server-genstart, ikke noget admin skal advares om)
+            const hul = Date.now() - _netFejlFra;
             _netFejlFra = null;
-            sendLivstegn();
+            if (hul >= 60000) {
+                _skaermHaendelser.push({ type: 'net', fra: Date.now() - hul, til: Date.now() });
+                sendLivstegn();
+            }
         }
     } catch (e) {
         // Et 4xx-svar (fx 401) betyder, at serveren kunne nås — timeout,

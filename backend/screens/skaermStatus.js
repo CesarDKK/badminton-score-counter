@@ -12,6 +12,10 @@ const GLEM_EFTER_MS = 24 * 3600 * 1000;
 // Advarsler (stod stille / uden forbindelse) vises kun den første time — ellers
 // stod en enkelt gammel hændelse som en advarsel resten af dagen
 const VIS_HAENDELSE_MS = 3600 * 1000;
+// Et kort hul i forbindelsen (ét tabt livstegn: wifi-hik, Cloudflare, serveren
+// genstartet ved deploy) er ikke en advarsel værd — først fra 1 minut, dvs.
+// mindst 3 livstegn i træk der ikke kom igennem
+const MIN_NET_SEK = 60;
 
 const register = new Map();       // tenant -> Map(klientId -> skærm)
 
@@ -108,7 +112,8 @@ function liste(tenant, nu = Date.now()) {
     return [...skaerme.values()]
         .map(s => ({
             ...s,
-            haendelser: s.haendelser.filter(h => nu - slut(h) <= VIS_HAENDELSE_MS),
+            haendelser: s.haendelser.filter(h =>
+                nu - slut(h) <= VIS_HAENDELSE_MS && !(h.type === 'net' && h.sek < MIN_NET_SEK)),
             sekunderSiden: Math.max(0, Math.round((nu - s.sidstSet) / 1000))
         }))
         .sort((a, b) => a.sekunderSiden - b.sekunderSiden);
@@ -123,4 +128,4 @@ function fjern(tenant, klientId) {
 
 function _nulstil() { register.clear(); }
 
-module.exports = { registrer, liste, fjern, rensHaendelse, _nulstil, MAX_SKAERME };
+module.exports = { registrer, liste, fjern, rensHaendelse, _nulstil, MAX_SKAERME, MIN_NET_SEK };
