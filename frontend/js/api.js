@@ -1007,6 +1007,10 @@ class BadmintonAPI {
         return this.request('/screens');
     }
 
+    async deleteScreen(klientId) {
+        return this.request(`/screens/${encodeURIComponent(klientId)}`, { method: 'DELETE' });
+    }
+
     async createDeviceToken(name, destination, locked, showQrOnTv) {
         const body = { name, destination, locked };
         if (showQrOnTv !== undefined) body.showQrOnTv = showQrOnTv;

@@ -4,7 +4,7 @@ const { requireWriteAuthInClubMode, authMiddleware } = require('../middleware/au
 const { clubAdminAuth } = require('../middleware/clubAdminAuth');
 const { requirePage } = require('../middleware/pagePermission');
 const { klientIp } = require('../middleware/rateLimiter');
-const { registrer, liste } = require('../screens/skaermStatus');
+const { registrer, liste, fjern } = require('../screens/skaermStatus');
 
 const tenantKey = (req) => req.clubDbName || 'direct';
 const kl = (ms) => new Date(ms).toLocaleTimeString('da-DK', { timeZone: 'Europe/Copenhagen' });
@@ -41,6 +41,14 @@ const skaermAdmin = (req, res, next) => {
 
 router.get('/', skaermAdmin, (req, res) => {
     res.json(liste(tenantKey(req)));
+});
+
+// DELETE /api/screens/:klientId — fjern en skærm, der ikke er i brug mere
+router.delete('/:klientId', skaermAdmin, (req, res) => {
+    if (!fjern(tenantKey(req), req.params.klientId)) {
+        return res.status(404).json({ error: 'Skærmen findes ikke (længere)' });
+    }
+    res.json({ success: true });
 });
 
 module.exports = router;
