@@ -132,6 +132,11 @@ afslutning() {
     df -h "$PC" 2>/dev/null
     printf '\n== Kernenedbrud (pstore) ==\n'
     ls -la "$PC/var/lib/systemd/pstore" 2>/dev/null || printf 'ingen\n'
+    # Årsagen står inde i dumpet: panik-linjen og browser-vagtens egne linjer
+    # (diskfejlene, den gentog lige før panikken). Hele dumpet ligger i kernenedbrud\.
+    # Dumpet ligger i flere dele, så sortér på kernens tidsstempel "[  287.37]".
+    grep -rhsE 'Kernel panic - not syncing|browservagt:' "$PC/var/lib/systemd/pstore" 2>/dev/null \
+        | sort -t '[' -k2,2n | awk '!set[$0]++' | head -60 | sed 's/^/  /'
     printf '\n== Hardware ==\n'
     lspci -nn 2>/dev/null | grep -iE 'vga|display|network|ethernet|wireless'
 } > "$UD/OVERSIGT.txt"

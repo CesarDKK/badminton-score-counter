@@ -78,6 +78,7 @@ HVIS EN PC FRYSER
 PC'en passer selv på sig selv:
   - Fryser hele PC'en, genstarter den af sig selv efter ca. 15 sekunder.
   - Fryser kun TV-siden, genstartes browseren efter ca. 1 minut.
+  - Dør disken, genstarter PC'en af sig selv inden for et par minutter.
 
 Vil du finde ud af HVORFOR en PC frøs, så hent dens fejllog ned på nøglen.
 Intet på PC'en bliver slettet eller ændret:

@@ -22,6 +22,8 @@
 #   skaerm <fil.png>      skærmbillede
 #   tast <tast>…          send taster (QEMU-navne: ret, down, esc, spc …)
 #   fjern-usb             træk USB-nøglen ud
+#   fjern-disk            lad PC'ens disk dø (PCIe hot-unplug) → kernepanik → genstart
+#   saet-disk             sæt disken i igen, så genstarten kan boote fra den
 #   stop
 #
 # Flagene ændrer kun VM'ens kopi af billedet, aldrig selve byggeresultatet.
@@ -34,6 +36,9 @@
 set -euo pipefail
 VM=${VM_DIR:-/ud/vm}
 MON=$VM/monitor.sock
+# Disken sidder bag en PCIe-port, så den kan trækkes ud og sættes i igen
+# (fjern-disk/saet-disk) — en NVMe direkte på rodbussen kan ikke hot-plugges.
+NVME_DEV='nvme,drive=nvm,serial=BTDISK01,bootindex=2,id=nvme0,bus=rp1'
 mkdir -p "$VM"
 
 behoev() {
@@ -100,8 +105,9 @@ koer_qemu() { # med_usb(0/1)
         -device qemu-xhci,id=xhci \
         "${kbd[@]}" \
         "${usb[@]}" \
+        -device pcie-root-port,id=rp1,slot=1 \
         -drive "if=none,id=nvm,format=qcow2,file=$VM/disk.qcow2" \
-        -device nvme,drive=nvm,serial=BTDISK01,bootindex=2 \
+        -device "$NVME_DEV" \
         -device virtio-vga,xres=1920,yres=1080 \
         -nic user,model=e1000e \
         -display none \
@@ -182,6 +188,15 @@ case "${1:-}" in
         ;;
     fjern-usb)
         monitor "device_del usbdev"
+        ;;
+    fjern-disk)
+        # Som en NVMe-disk, der dør: al I/O fejler. Med errors=panic i fstab
+        # panikker kernen, gemmer dumpet i pstore og genstarter efter 10 s.
+        monitor "device_del nvme0"
+        ;;
+    saet-disk)
+        # Sæt disken i igen (inden de 10 sekunder), så PC'en kan boote fra den.
+        monitor "device_add $NVME_DEV"
         ;;
     stop)
         monitor quit >/dev/null 2>&1 || true

@@ -3,6 +3,9 @@
 #   1. sund side          → ingen genstart
 #   2. frossen JavaScript → genstart
 #   3. stoppet hjerteslag → genstart
+#   4. disken svarer      → ingen kernepanik
+#   5. disken er væk      → kernepanik (sysrq 'c' — skrives til en testfil her)
+#   6. kernelog-filteret  → kun advarsler om disken gentages før panikken
 #
 # Køres i en debian:trixie-container (henter chromium + python3):
 #   docker run --rm -v "$PWD/kiosk:/src" debian:trixie bash /src/test/test-browservagt.sh
@@ -55,13 +58,18 @@ s.sendall(hd + m + bytes(c ^ m[i % 4] for i, c in enumerate(b)))
 EOF
 }
 
-# Kører vagten et stykke tid; returnerer om den genstartede browseren
-koer_vagt() { # sekunder
-    rm -f "$ARB/genstartet"
+# Kører vagten et stykke tid; returnerer om den genstartede browseren.
+# BT_DISK tomt = ingen disk-vagt (som på live-USB'en); sysrq går til en testfil.
+koer_vagt() { # sekunder [disk]
+    rm -f "$ARB/genstartet" "$ARB/sysrq"
     BT_VAGT_OPSTART=1 BT_VAGT_INTERVAL=2 BT_GENSTART="touch $ARB/genstartet" \
+        BT_DISK="${2:-}" BT_SYSRQ="$ARB/sysrq" \
         timeout "$1" python3 "$VAGT" > "$ARB/vagt.log" 2>&1
     [ -f "$ARB/genstartet" ]
 }
+
+# Returnerer om disk-vagten udløste en kernepanik (sysrq 'c')
+panik_udloest() { [ -f "$ARB/sysrq" ] && grep -q c "$ARB/sysrq"; }
 
 tjek() { # navn forventet(ja/nej) faktisk(0=genstart)
     local faktisk=nej
@@ -91,6 +99,35 @@ send_js 'while (true) {}'
 sleep 1
 koer_vagt 60; tjek "frossen JavaScript" ja $?
 kill -9 "$CHROME" 2>/dev/null
+
+# Disk-vagten: en læsbar "disk" (en fil på 1 MB) og en, der er væk.
+start_chromium
+sleep 3
+head -c 1048576 /dev/zero > "$ARB/disk.img"
+koer_vagt 12 "$ARB/disk.img"; panik_udloest; tjek "disken svarer" nej $?
+koer_vagt 12 "$ARB/findes-ikke"; panik_udloest; tjek "disken er væk → kernepanik" ja $?
+grep -q "disk-vagt på $ARB/findes-ikke" "$ARB/vagt.log" || { echo "  FEJL  disk-vagten blev ikke slået til"; FEJL=$((FEJL + 1)); }
+kill -9 "$CHROME" 2>/dev/null
+
+# Kernelog-filteret: hvilke /dev/kmsg-poster gentages før panikken
+python3 - "$VAGT" <<'EOF'
+import importlib.machinery, importlib.util, sys
+sp = importlib.util.spec_from_loader('bv', importlib.machinery.SourceFileLoader('bv', sys.argv[1]))
+bv = importlib.util.module_from_spec(sp); sp.loader.exec_module(bv)
+med = [b'3,1,1,-;nvme nvme0: I/O 5 QID 1 timeout, aborting\n',
+       b'4,2,2,-;nvme nvme0: controller is down; will reset: CSTS=0xffffffff\n',
+       b'3,3,3,-;Aborting journal on device nvme0n1p2-8.\n',
+       b'4,4,4,-;EXT4-fs (nvme0n1p2): shut down requested (2)\n',
+       b'3,5,5,-;blk_update_request: I/O error, dev mmcblk0, sector 2048\n']
+uden = [b'6,6,6,-;nvme nvme0: pci function 0000:01:00.0\n',            # info
+        b'4,7,7,-;EXT4-fs warning (device nvme0n1p2): dx_probe:823\n',  # det døde fs' støj
+        b'3,8,8,-;usb 1-1: device descriptor read/64, error -71\n',    # ikke disken
+        b'hvad er det her\n']                                            # ugyldig post
+fejl = [p for p in med if not bv.disklinje(p)] + [p for p in uden if bv.disklinje(p)]
+for p in fejl: print('   forkert:', p)
+sys.exit(1 if fejl else 0)
+EOF
+tjek "kernelog-filteret" ja $?
 
 kill "$WEB" 2>/dev/null
 rm -rf "$ARB"
