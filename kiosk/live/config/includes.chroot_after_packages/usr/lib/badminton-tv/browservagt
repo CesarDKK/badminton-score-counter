@@ -16,13 +16,27 @@ browseren (badminton-tv.service). PC'en selv kører videre.
 Kioskens egen startside (file://, venter på netværk) og Chromiums fejlsider
 rører vagten ikke — dem tager startsiden sig af. Kun sider på http(s).
 
+Disk-vagt: vagten læser samtidig en lille fil på rod-filsystemet direkte fra
+disken (O_DIRECT, uden om cachen) hvert 20. sekund — gennem filsystemet, så
+et dødt filsystem også opdages, selv hvis disken dukker op igen under et nyt
+navn. Dør disken (set 2026-10-06 på en M70q: NVMe'en holdt op med
+at svare), kører kernen videre, og hardware-vagthunden hjælper ikke — men
+intet kan læses eller skrives, nedlukningen kl. SLUK_KL kan ikke køre, og
+skærmen står frosset. Kernen lukker filsystemet pænt ned ved en forsvundet
+disk, så errors=panic i fstab udløses heller ikke. Efter 3 fejl i træk udløser
+vagten derfor selv en kernepanik (sysrq 'c'): kernebeskederne, inklusive
+diskfejlene, gemmes i pstore, og PC'en genstarter efter 10 s (kernel.panic).
+Det virker, fordi vagten allerede ligger i hukommelsen og kun rører /proc.
+
 Kun Pythons standardbibliotek: en minimal websocket-klient til Chromium
 DevTools-protokollen (én forespørgsel pr. forbindelse).
 """
 
 import base64
 import json
+import mmap
 import os
+import re
 import socket
 import struct
 import subprocess
@@ -37,10 +51,123 @@ SVAR_TIMEOUT = 10
 TIK_MAX_ALDER_MS = 30000
 FEJL_FOER_GENSTART = 3
 GENSTART = os.environ.get('BT_GENSTART', 'systemctl restart badminton-tv.service')
+SYSRQ = os.environ.get('BT_SYSRQ', '/proc/sysrq-trigger')
+# Filen, der læses fra disken. BT_DISK (tests): en anden fil, tom = ingen disk-vagt.
+DISK_FIL = '/usr/share/badminton-tv/version'
 
 
 def log(tekst):
     print(f'[browservagt] {tekst}', flush=True)
+
+
+def rod_disk():
+    """Blokenheden bag / (fx /dev/nvme0n1p2), eller None (live-USB: overlay)."""
+    try:
+        with open('/proc/self/mountinfo') as f:
+            for linje in f:
+                felter = linje.split()
+                if len(felter) > 4 and felter[4] == '/' and ' - ' in linje:
+                    kilde = linje.split(' - ', 1)[1].split()[1]
+                    return kilde if kilde.startswith('/dev/') else None
+    except OSError:
+        pass
+    return None
+
+
+def tjek_disk(fil):
+    """None = disken svarer, ellers en fejlbeskrivelse. Læser uden om cachen."""
+    buf = mmap.mmap(-1, 4096)       # sidejusteret, som O_DIRECT kræver
+    try:
+        try:
+            fd = os.open(fil, os.O_RDONLY | os.O_DIRECT)
+        except OSError as e:
+            if e.errno != 22:       # EINVAL: filsystemet kan ikke O_DIRECT (test på tmpfs)
+                return f'kan ikke åbne {fil}: {e.strerror}'
+            fd = os.open(fil, os.O_RDONLY)
+            os.posix_fadvise(fd, 0, 4096, os.POSIX_FADV_DONTNEED)
+        try:
+            n = os.preadv(fd, [buf], 0)
+        finally:
+            os.close(fd)
+        if n < 1:
+            return f'{fil} er tom'
+    except OSError as e:
+        return f'kan ikke læse {fil}: {e.strerror}'
+    finally:
+        buf.close()
+    return None
+
+
+# Kernens egne beskeder om disken — dem vil vi have med i dumpet.
+DISK_MOENSTER = re.compile(r'nvme|\bata[0-9]|mmc[0-9]|mmcblk|pciehp|pcieport|blk_update_request'
+                           r'|I/O error|EXT4-fs error|JBD2|Buffer I/O|Remounting', re.I)
+
+
+def disklinje(post):
+    """Beskeden i én /dev/kmsg-post ("<prio>,<nr>,<µs>,-;<besked>"), hvis den er
+    en advarsel eller værre (prio <= 4) om disken — opstartens almindelige
+    disk-linjer (info) og det døde filsystems gentagne EXT4-advarsler er ikke med."""
+    hoved, _, tekst = post.decode(errors='replace').partition(';')
+    try:
+        prio = int(hoved.split(',', 1)[0]) & 7
+    except ValueError:
+        return None
+    tekst = tekst.strip()
+    if prio <= 4 and DISK_MOENSTER.search(tekst) and 'EXT4-fs warning' not in tekst:
+        return tekst
+    return None
+
+
+def diskfejl_fra_kernen(maks=40):
+    """De seneste kernebeskeder om disken, læst fra /dev/kmsg (ligger i RAM)."""
+    linjer = []
+    try:
+        fd = os.open('/dev/kmsg', os.O_RDONLY | os.O_NONBLOCK)
+    except OSError:
+        return linjer
+    try:
+        while True:
+            try:
+                post = os.read(fd, 8192)
+            except BlockingIOError:
+                break
+            except OSError:         # EPIPE: bufferen løb over — læs videre
+                continue
+            if not post:
+                break
+            linje = disklinje(post)
+            if linje:
+                linjer.append(linje)
+    finally:
+        os.close(fd)
+    return linjer[-maks:]
+
+
+def genstart_pc_med_dump(aarsag):
+    log(f'disken er død ({aarsag}) — udløser kernepanik, PC\'en genstarter')
+    # Dumpet i pstore er kun de sidste par KB af kerneloggen, og et dødt
+    # filsystem fylder den med gentagne EXT4-advarsler. Så gentag diskfejlene
+    # lige før panikken — så står årsagen altid i "Hent fejllog".
+    # Én write() pr. linje: kernen tager hver skrivning til /dev/kmsg som én
+    # besked på højst 1 KB og afviser større (så ingen bufret fil her).
+    try:
+        linjer = diskfejl_fra_kernen()
+        fd = os.open('/dev/kmsg', os.O_WRONLY)
+        try:
+            os.write(fd, f'browservagt: disken er død ({aarsag}) — udløser kernepanik\n'.encode()[:1000])
+            for linje in linjer:
+                os.write(fd, f'browservagt: tidligere: {linje}\n'.encode()[:1000])
+        finally:
+            os.close(fd)
+    except Exception as e:          # noqa: BLE001 — må aldrig forhindre genstarten
+        log(f'kunne ikke gentage kernens diskfejl: {e}')
+    for tast in 'cb':               # c: panik med dump i pstore; b: nødgenstart, hvis c ikke virker
+        try:
+            with open(SYSRQ, 'w') as f:
+                f.write(tast)
+            time.sleep(30)          # panikken genstarter os inden da
+        except OSError as e:
+            log(f'sysrq {tast} fejlede: {e}')
 
 
 def sider():
@@ -140,10 +267,27 @@ def tjek():
 
 
 def main():
-    log(f'startet — første tjek om {OPSTART_PAUSE} s, derefter hvert {INTERVAL}. sekund')
+    if 'BT_DISK' in os.environ:
+        disk = os.environ['BT_DISK'] or None
+    else:
+        disk = DISK_FIL if rod_disk() else None
+    log(f'startet — første tjek om {OPSTART_PAUSE} s, derefter hvert {INTERVAL}. sekund'
+        + (f'; disk-vagt på {disk} ({rod_disk() or "?"})' if disk else '; ingen disk-vagt'))
     time.sleep(OPSTART_PAUSE)
     fejl = 0
+    diskfejl = 0
     while True:
+        if disk:
+            problem = tjek_disk(disk)
+            if problem:
+                diskfejl += 1
+                log(f'diskfejl {diskfejl}/{FEJL_FOER_GENSTART}: {problem}')
+                if diskfejl >= FEJL_FOER_GENSTART:
+                    genstart_pc_med_dump(problem)
+                    diskfejl = 0
+            elif diskfejl:
+                log('disken svarer igen')
+                diskfejl = 0
         problem = tjek()
         if problem:
             fejl += 1

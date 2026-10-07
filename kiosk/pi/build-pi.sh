@@ -167,6 +167,11 @@ rm -f "$ROD/boot/firmware/user-data" "$ROD/boot/firmware/meta-data" "$ROD/boot/f
 
 # FAT-partitionen kan kun læses af root — kiosk.conf indeholder WiFi-koden.
 sed -i 's|^\(\S*\s\+/boot/firmware\s\+vfat\s\+\)defaults|\1defaults,fmask=0077,dmask=0077|' "$ROD/etc/fstab"
+# Dør SD-kortet, skal Pi'en genstarte frem for at stå frosset med et
+# skrivebeskyttet system — samme regel som PC'ens installer giver NVMe-disken.
+sed -i 's|^\(\S*\s\+/\s\+ext4\s\+defaults,noatime\)|\1,errors=panic|' "$ROD/etc/fstab"
+grep -qE '\s/\s+ext4\s+\S*errors=panic' "$ROD/etc/fstab" \
+    || { echo "FEJL: roden i /etc/fstab ser ikke ud som ventet" >&2; exit 1; }
 
 til_windows() { printf '\xEF\xBB\xBF'; sed 's/$/\r/' "$1"; }
 til_windows "$SRC/usb/kiosk.conf" > "$ROD/boot/firmware/kiosk.conf"

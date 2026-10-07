@@ -106,6 +106,8 @@ tjek "kerne til Pi 3/4 (kernel8.img)" test -f "$R/boot/firmware/kernel8.img"
 tjek "kerne til Pi 5 (kernel_2712.img)" test -f "$R/boot/firmware/kernel_2712.img"
 tjek "cloud-init-filer fjernet" test ! -e "$R/boot/firmware/network-config"
 tjek "FAT-partition kun for root" grep -qE '/boot/firmware\s+vfat\s+\S*fmask=0077' "$R/etc/fstab"
+tjek "roden genstarter ved diskfejl (errors=panic)" grep -qE '\s/\s+ext4\s+\S*errors=panic' "$R/etc/fstab"
+tjek "hængende disk → panik (sysctl)" grep -q '^kernel.hung_task_panic = 1' "$R/etc/sysctl.d/90-badminton-tv-vagthund.conf"
 
 # kiosk.conf på SD-kortet: UTF-8 med BOM og CRLF, så den kan rettes i Notesblok
 KC=$R/boot/firmware/kiosk.conf

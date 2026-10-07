@@ -291,9 +291,12 @@ okay
 trin "Indstiller systemet…"
 ROD_UUID=$(blkid -s UUID -o value "$ROD")
 ESP_UUID=$(blkid -s UUID -o value "$ESP")
+# errors=panic: dør disken (set 2026-10-06: NVMe holdt op med at svare), skal
+# PC'en genstarte med det samme i stedet for at stå frosset med et skrivebeskyttet
+# system. Panikken gemmes i pstore, så "Hent fejllog" viser diskfejlene.
 cat > "$MAAL/etc/fstab" <<EOF
 # Oprettet af Badminton TV-installationen
-UUID=$ROD_UUID  /          ext4  defaults,noatime,errors=remount-ro  0  1
+UUID=$ROD_UUID  /          ext4  defaults,noatime,errors=panic       0  1
 UUID=$ESP_UUID  /boot/efi  vfat  umask=0077                          0  1
 tmpfs           /tmp       tmpfs defaults,nosuid,nodev               0  0
 EOF
