@@ -143,7 +143,12 @@ scenarie "Kode mangler" fejl "WIFI_KODE er tom"
 # status.js er gyldig JavaScript med en JSON-værdi
 printf '%s\n' "$WIFI_CONF" > "$TMP/kiosk.conf"
 FAKE_DEVICE_TYPE="$KORT" FAKE_SCAN="$(scan 'Ha"llen|WPA2|80')"
-timeout 2 bash "$LIB/netstatus" >/dev/null 2>&1
+# netstatus kører i en løkke; vent på den første statusfil (op til 15 s — en
+# travl CI-runner nåede det ikke på 2 s) og stop den så.
+bash "$LIB/netstatus" >/dev/null 2>&1 &
+NS=$!
+for _ in $(seq 150); do [ -s "$TMP/run/status.js" ] && break; sleep 0.1; done
+kill "$NS" 2>/dev/null; wait "$NS" 2>/dev/null
 if sed 's/^window.BT_STATUS = //; s/;$//' "$TMP/run/status.js" | jq -e '.niveau and .tekst and (.t | type == "number")' >/dev/null; then
     ok=$((ok + 1))
 else

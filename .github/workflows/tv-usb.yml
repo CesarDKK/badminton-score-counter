@@ -28,7 +28,7 @@ jobs:
     name: Test af scripts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Læsning af kiosk.conf
         run: bash kiosk/test/test-conf.sh
@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # live-build fylder 8-10 GB undervejs. Runnerens forudinstallerede SDK'er
       # fylder det dobbelte og skal ikke bruges her.
@@ -84,7 +84,7 @@ jobs:
 
       # Også ved tags: release-jobbet henter filerne herfra.
       - name: Gem som artefakt
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: tv-pc
           path: |
@@ -101,7 +101,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Version
         run: |
@@ -127,7 +127,7 @@ jobs:
             debian:trixie bash /src/pi/test-billede.sh "/ud/badminton-tv-pi-$VERSION.img.xz"
 
       - name: Gem som artefakt
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: tv-pi
           path: |
@@ -144,7 +144,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           path: ud
           merge-multiple: true
