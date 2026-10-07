@@ -1,0 +1,12 @@
+# Hver time: hardware-uret får dansk tid (se badminton-tv-ur.service).
+# 10 minutter efter opstart har PC'en normalt fået tiden fra nettet.
+[Unit]
+Description=Badminton TV: hold hardware-uret i dansk tid
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

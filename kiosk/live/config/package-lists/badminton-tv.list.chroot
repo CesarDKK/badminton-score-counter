@@ -9,6 +9,8 @@ dbus
 udev
 locales
 tzdata
+# hwclock: hardware-uret i dansk tid (badminton-tv-ur.service)
+util-linux-extra
 ca-certificates
 kbd
 console-setup-linux

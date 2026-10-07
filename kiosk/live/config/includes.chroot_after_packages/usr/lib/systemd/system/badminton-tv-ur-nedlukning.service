@@ -1,0 +1,17 @@
+# Ved nedlukning (også på tænd/sluk-knappen og kl. SLUK_KL): skriv dansk tid i
+# hardware-uret, så BIOS' opstartstid næste morgen regnes rigtigt. ExecStop
+# kører, når PC'en lukker ned. Se badminton-tv-ur.service.
+[Unit]
+Description=Badminton TV: dansk tid i hardware-uret ved nedlukning
+ConditionKernelCommandLine=!badminton.tilstand=installer
+ConditionKernelCommandLine=!badminton.tilstand=hentlog
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+ExecStop=-/usr/sbin/hwclock --systohc
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

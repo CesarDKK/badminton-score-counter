@@ -81,6 +81,10 @@ WiFi-koden kommer ikke med — kun dens længde og om den har mellemrum.
 - **Sluk** med et kort tryk på knappen. PC'en lukker pænt ned.
 - Er den ikke slukket kl. `SLUK_KL`, slukker den selv. Lige før installeres
   sikkerhedsopdateringer — så sker det aldrig midt i en kamp.
+- **Tænd automatisk:** sæt en opstartstid i BIOS (*Wake on alarm* el.lign.).
+  PC'ens BIOS-ur kører dansk tid (fra 2026.10.8), så kl. 8 i BIOS er kl. 8.
+  Natten efter et skift til/fra sommertid kan den ene opstart ligge en time
+  forkert; uret rettes, så snart PC'en har været på nettet.
 - Mister den netværket ved opstart, viser den "Venter på forbindelse…" og
   prøver igen, i stedet for en fejlside.
 
