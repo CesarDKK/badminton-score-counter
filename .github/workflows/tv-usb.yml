@@ -26,7 +26,7 @@ on:
 jobs:
   test:
     name: Test af scripts
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
 
@@ -55,7 +55,7 @@ jobs:
   byg:
     name: Byg USB-billede (PC)
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
@@ -140,7 +140,7 @@ jobs:
     name: Release
     if: startsWith(github.ref, 'refs/tags/tv-usb-v')
     needs: [byg, byg-pi]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
