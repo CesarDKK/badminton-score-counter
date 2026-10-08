@@ -38,6 +38,12 @@ EOF
 chmod +x "$TMP/bin/"*
 
 export PATH="$TMP/bin:$PATH" BT_LIB="$LIB" BT_RUN="$TMP/run"
+# De første 30 s efter opstart siger netstatus "Leder efter WiFi …" i stedet
+# for "kan ikke ses". En GitHub-runner er tit nystartet, så testen bestemmer
+# selv oppetiden (sekunder, samme format som /proc/uptime).
+oppetid() { printf '%s.00 0.00\n' "$1" > "$TMP/uptime"; }
+export BT_UPTIME="$TMP/uptime"
+oppetid 600
 export BT_CONF_INSTALLERET="$TMP/kiosk.conf" BT_CONF_USB="$TMP/ingen.conf" BT_CONF_PI="$TMP/ingen-pi.conf"
 
 # Tomme værdier betyder "brug standardsvaret" i de falske kommandoer.
@@ -125,6 +131,11 @@ scenarie "Netværket kan ikke ses" fejl "Synlige netværk: Naboen (WPA2, 80 %), 
 
 FAKE_DEVICE_TYPE="$KORT" FAKE_SCAN="$(scan 'HALLEN|WPA2|80')"
 scenarie "Forkerte store/små bogstaver" fejl "\"HALLEN\" findes"
+
+oppetid 10
+FAKE_DEVICE_TYPE="$KORT" FAKE_SCAN="$(scan 'Naboen|WPA2|80')"
+scenarie "Lige efter opstart: leder stadig" advarsel "Leder efter WiFi \"Hallen\""
+oppetid 600
 
 FAKE_DEVICE_TYPE="$KORT" FAKE_SCAN="$(scan 'Hallen|WPA2 802.1X|80')"
 scenarie "WPA-Enterprise" fejl "WPA-Enterprise"

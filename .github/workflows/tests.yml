@@ -12,7 +12,7 @@ on:
 jobs:
   unit:
     name: Unit-tests (backend + statistik + football + planner)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
 
