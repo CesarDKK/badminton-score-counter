@@ -111,6 +111,7 @@ Systemet prøver automatisk og bruger CEC, hvis Linux finder det. Ellers:
 | Venter på forbindelse i lang tid | Skærmen viser årsagen (forkert kode, netværket kan ikke ses, intet WiFi-kort …). Kun WPA2/WPA3 med adgangskode — ikke netværk med login-side eller brugernavn. Kør *Test uden at installere* i 6 minutter og se `diagnose.txt` på nøglen |
 | Teksten er for lille/stor | `SKALERING=1.5` (eller et andet tal) i `kiosk.conf`, og installér igen |
 | Uret er forkert første gang | Retter sig, når PC'en har været på nettet. Indtil da springes den automatiske slukning over |
+| PC'en er tændt, men skærmen står som "uden forbindelse" i admin, indtil TV'et tændes | Uden TV er der intet display, og Chromium regner siden for skjult og bremser dens timere — livstegnene kom kun én gang i minuttet. Fra 2026.10.9 er bremsningen slået fra, og browser-vagten genstarter ikke en skjult side |
 | PC'en stod frosset hele natten med en ensfarvet skærm uden logo | Disken holdt op med at svare (set på M70q med Micron-NVMe, 2026-10-06). Kernen kører videre, så hardware-vagthunden hjælper ikke, men intet kan skrives, og slukningen kl. `SLUK_KL` sker aldrig. Fra 2026.10.7 genstarter PC'en selv: straks når disken melder fejl, og efter 2–4 minutter hvis den bare hænger. *Hent fejllog* viser diskfejlene under *Kernenedbrud*. NVMe-diskens dybe strømsparetilstande er samtidig slået fra |
 
 ### Raspberry Pi

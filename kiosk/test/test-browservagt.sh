@@ -6,6 +6,7 @@
 #   4. disken svarer      → ingen kernepanik
 #   5. disken er væk      → kernepanik (sysrq 'c' — skrives til en testfil her)
 #   6. kernelog-filteret  → kun advarsler om disken gentages før panikken
+#   7. skjult side (TV'et slukket) med stoppet hjerteslag → ingen genstart
 #
 # Køres i en debian:trixie-container (henter chromium + python3):
 #   docker run --rm -v "$PWD/kiosk:/src" debian:trixie bash /src/test/test-browservagt.sh
@@ -99,6 +100,14 @@ send_js 'while (true) {}'
 sleep 1
 koer_vagt 60; tjek "frossen JavaScript" ja $?
 kill -9 "$CHROME" 2>/dev/null
+
+# Skjult side (som når TV'et er slukket): hjerteslaget må gerne stå stille
+start_chromium
+sleep 3
+send_js 'Object.defineProperty(document, "visibilityState", {get: () => "hidden"}); clearInterval(window.__btTimer)'
+sleep 32
+koer_vagt 15; tjek "skjult side med stoppet hjerteslag" nej $?
+kill "$CHROME" 2>/dev/null; wait "$CHROME" 2>/dev/null
 
 # Disk-vagten: en læsbar "disk" (en fil på 1 MB) og en, der er væk.
 start_chromium

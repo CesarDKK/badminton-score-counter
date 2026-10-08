@@ -51,6 +51,11 @@ if tr -d '\0' < /proc/device-tree/model 2>/dev/null | grep -q 'Raspberry Pi'; th
 fi
 START+="&fejl=$(enc "$BT_FEJL")"
 
+# Er TV'et slukket, har PC'en intet display, og Chromium regner siden for
+# skjult: normalt bremses skjulte siders timere til én gang i minuttet efter
+# 5 minutter. Så kom TV-sidens livstegn (hvert 20. s) ikke frem til admin-siden,
+# før TV'et blev tændt (set i Lyngby, 2026-10-08). De tre --disable-* og
+# IntensiveWakeUpThrottling slår bremsningen fra.
 exec /usr/bin/chromium \
     --kiosk \
     --ozone-platform=wayland \
@@ -63,7 +68,10 @@ exec /usr/bin/chromium \
     --no-default-browser-check \
     --noerrdialogs \
     --disable-session-crashed-bubble \
-    --disable-features=Translate,TranslateUI,MediaRouter \
+    --disable-features=Translate,TranslateUI,MediaRouter,IntensiveWakeUpThrottling \
+    --disable-background-timer-throttling \
+    --disable-renderer-backgrounding \
+    --disable-backgrounding-occluded-windows \
     --disable-component-update \
     --check-for-update-interval=31536000 \
     --password-store=basic \

@@ -261,7 +261,10 @@ def tjek():
         return f'TV-siden svarer ikke ({e}) — {side.get("url", "")[:80]}'
     if isinstance(vaerdi, list) and len(vaerdi) >= 2 and vaerdi[1]:
         alder = vaerdi[0] - vaerdi[1]
-        if alder > TIK_MAX_ALDER_MS:
+        # Er TV'et slukket (intet display), regner Chromium siden for skjult og
+        # kan bremse dens timere — det er ikke en frysning, og ingen ser
+        # skærmen. Genstart ville bare starte forfra hvert minut.
+        if alder > TIK_MAX_ALDER_MS and (len(vaerdi) < 3 or vaerdi[2] != 'hidden'):
             return f'TV-sidens hjerteslag har stået stille i {round(alder / 1000)} s'
     return None
 
