@@ -14,7 +14,7 @@ PAKKER=(
     cage chromium wlr-randr wlrctl
     libgl1-mesa-dri libegl-mesa0
     fonts-dejavu-core fonts-liberation2 fonts-noto-color-emoji
-    jq kbd console-setup-linux
+    jq kbd console-setup-linux util-linux-extra
     v4l-utils iw rfkill wireless-regdb pciutils usbutils
     unattended-upgrades
 )
@@ -40,6 +40,9 @@ echo Europe/Copenhagen > /etc/timezone
 sed -i 's/^# *da_DK.UTF-8/da_DK.UTF-8/' /etc/locale.gen
 locale-gen
 printf 'LANG=da_DK.UTF-8\n' > /etc/default/locale
+# Hardware-uret i dansk tid (Pi 5 har et ur, og det bruges til opstartstider),
+# som på PC'en — se 9000-badminton-tv.hook.chroot.
+printf '0.0 0 0.0\n0\nLOCAL\n' > /etc/adjtime
 
 chmod 755 /usr/lib/badminton-tv/setup /usr/lib/badminton-tv/browser \
           /usr/lib/badminton-tv/cec /usr/lib/badminton-tv/sluk \
@@ -52,6 +55,7 @@ systemctl enable badminton-tv-setup.service badminton-tv-cec.service \
                  badminton-tv.service badminton-tv-netstatus.service \
                  badminton-tv-diagnose.service badminton-tv-browservagt.service
 systemctl enable NetworkManager.service systemd-timesyncd.service
+systemctl enable badminton-tv-ur.timer badminton-tv-ur-nedlukning.service   # hardware-uret i dansk tid
 systemctl set-default multi-user.target
 
 # Aldrig dvale.

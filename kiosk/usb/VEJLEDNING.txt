@@ -50,6 +50,8 @@ I DAGLIG BRUG
   - Tænd PC'en på knappen. TV-siden vises efter ca. 20 sekunder.
   - Sluk PC'en med et kort tryk på knappen. Den lukker pænt ned.
   - Er den ikke slukket kl. 23:59, slukker den selv (se SLUK_KL i kiosk.conf).
+  - Skal PC'en tænde selv, så sæt en opstartstid i BIOS (Wake on alarm).
+    BIOS-uret kører dansk tid, så kl. 8 i BIOS er kl. 8.
   - Den går aldrig i dvale.
 
 Ændre siden TV'et viser: Brug et adgangslink fra admin-siden som TV_URL, så

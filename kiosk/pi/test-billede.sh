@@ -93,6 +93,10 @@ done
 tjek "cloud-init slået fra" test -e "$R/etc/cloud/cloud-init.disabled"
 tjek "standardmål multi-user" symlink_til "$R/etc/systemd/system/default.target" /usr/lib/systemd/system/multi-user.target
 tjek "tidszone København" symlink_til "$R/etc/localtime" /usr/share/zoneinfo/Europe/Copenhagen
+tjek "hardware-uret i dansk tid (adjtime LOCAL)" grep -qx LOCAL "$R/etc/adjtime"
+tjek "aktiv: badminton-tv-ur.timer" aktiveret timers.target badminton-tv-ur.timer
+tjek "aktiv: badminton-tv-ur-nedlukning" aktiveret multi-user.target badminton-tv-ur-nedlukning.service
+tjek "hwclock findes (util-linux-extra)" test -x "$R/usr/sbin/hwclock"
 
 # Opstart
 CMD=$R/boot/firmware/cmdline.txt

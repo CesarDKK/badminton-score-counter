@@ -1,0 +1,15 @@
+# Skriver dansk tid i hardware-uret (BIOS-uret). Hallerne tænder PC'erne på en
+# opstartstid sat i BIOS, og den regnes i hardware-urets tid — derfor kører
+# uret dansk tid (/etc/adjtime: LOCAL). Men i den tilstand opdaterer
+# systemd-timesyncd ALDRIG uret ("cannot be fully supported"), så det gør vi
+# selv: hver time (badminton-tv-ur.timer) og ved nedlukning
+# (badminton-tv-ur-nedlukning.service). Så passer uret også efter skift
+# til/fra sommertid. "-": en Raspberry Pi 3/4 har intet ur, og det er i orden.
+[Unit]
+Description=Badminton TV: skriv dansk tid i hardware-uret
+ConditionKernelCommandLine=!badminton.tilstand=installer
+ConditionKernelCommandLine=!badminton.tilstand=hentlog
+
+[Service]
+Type=oneshot
+ExecStart=-/usr/sbin/hwclock --systohc
