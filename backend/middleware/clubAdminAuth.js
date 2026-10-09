@@ -33,7 +33,7 @@ async function clubAdminAuth(req, res, next) {
         next();
     } catch (error) {
         if (error.name === 'TokenExpiredError') {
-            return res.status(401).json({ error: 'Token udløbet' });
+            return res.status(401).json({ error: 'Token udløbet', sessionExpired: true });
         }
         return res.status(401).json({ error: 'Ugyldig token' });
     }
