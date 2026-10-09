@@ -28,6 +28,58 @@ function nedskaeringPanel(ned) {
         <button class="knap knap--sekundaer" data-handling="ned-luk">Luk uden at ændre</button></div>`;
 }
 
+const udenPauseI = (p) => !p?.ABCD && !p?.M && !p?.E && !p?.faelles;
+const kamplaengdeTekst = (min, udenPause) => `${min} min, ${udenPause ? 'pausen gives på dagen (0 min i planen)' : 'reglementets pause i planen'}`;
+
+/**
+ * Resultatet af "Lav kampprogram": går det op, hvad blev valgt for brugeren, og — hvis ikke — ét beslutningskort
+ * pr. problem med løsninger, der allerede er afprøvet (kampprogram.js). Det anbefalede valg står først.
+ */
+function kampprogramPanel(kp, aabneKort) {
+    const v = kp.valg;
+    const gaarOp = kp.beslutninger.brud === 0;
+    const beholdt = kp.beslutninger.kort.length - aabneKort.length;
+    let valgTekst;
+    if (v.grund === 'laast') valgTekst = `Kamplængden er ikke ændret (${kamplaengdeTekst(v.minutter, v.udenPause)}), fordi der er låste kampe.`;
+    else if (v.grund === 'fast' || v.grund === 'tidligere') valgTekst = `Kamplængde: ${kamplaengdeTekst(v.minutter, v.udenPause)}.`;
+    else if (v.aendret) valgTekst = `Valgt for dig ud fra sammenligningen af kamplængder: <b>${esc(kamplaengdeTekst(v.minutter, v.udenPause))}</b>. Husk at sætte den samme kamplængde i TP.`;
+    else valgTekst = `Kamplængden passer allerede bedst: ${kamplaengdeTekst(v.minutter, v.udenPause)}.`;
+    const tilbage = v.aendret && v.grund !== 'tidligere'
+        ? ` <button class="knap knap--sekundaer knap--lille" data-handling="kp-tidligere">Brug ${esc(kamplaengdeTekst(v.foer.slotMin, udenPauseI(v.foer.pauseMin)))} som før</button>` : '';
+    const kort = aabneKort.map((k) => {
+        const i = kp.beslutninger.kort.indexOf(k);
+        const valg = k.valg.map((x, j) => {
+            const effekt = x.gaarOp ? '<span class="er-groen">går op</span>' : x.loest ? `løser dette — ${x.brudEfter} regelbrud andre steder` : `${x.brudEfter} regelbrud tilbage`;
+            return `<label class="beslutning-valg"><input type="radio" name="kort-${i}" value="${j}" ${j === 0 ? 'checked' : ''}>
+                <span><b>${esc(x.tekst)}</b>${j === 0 ? ' <span class="maerke maerke--ok">anbefalet</span>' : ''}${x.pris === 'dispensation' ? ' <span class="maerke maerke--advarsel">kræver dispensation</span>' : ''}
+                <span class="daempet">— ${effekt}${x.konsekvens.length ? ` · ${esc(x.konsekvens.join(' · '))}` : ''}</span></span></label>`;
+        }).join('');
+        return `<div class="beslutning" data-kort="${i}">
+            <h4>${esc(k.titel)}</h4>
+            ${k.valg.length ? '<p class="daempet">Hver løsning er afprøvet med planlæggeren.</p>' : '<p class="daempet">Planneren fandt ingen ændring af opsætningen, der hjælper her. Kampene ligger med regelbrud — se dem i Tjek.</p>'}
+            <div class="beslutning-liste">${valg}
+                <label class="beslutning-valg"><input type="radio" name="kort-${i}" value="behold" ${k.valg.length ? '' : 'checked'}>
+                    <span><b>Behold</b> <span class="daempet">— ${k.antal} ${k.antal === 1 ? 'kamp' : 'kampe'} bryder reglen og vises som fejl/advarsel i Tjek</span></span></label>
+            </div>
+            <button class="knap ${k === aabneKort[0] ? '' : 'knap--sekundaer'}" data-handling="beslutning">${k.valg.length ? 'Brug valget og lav programmet igen' : 'OK'}</button>
+        </div>`;
+    }).join('');
+    const titel = gaarOp ? 'Kampprogrammet går op' : aabneKort.length
+        ? `Kampprogrammet går ikke helt op — ${aabneKort.length} ting at tage stilling til`
+        : `Kampprogrammet er lavet med ${kp.beslutninger.brud} regelbrud, som du har valgt at beholde`;
+    return `
+    <section class="kampprogram ${gaarOp ? 'er-ok' : aabneKort.length ? 'er-valg' : ''}">
+        <div class="kampprogram-hoved">
+            <h3>${gaarOp ? '<span class="er-groen">✓</span> ' : ''}${esc(titel)}</h3>
+            <button class="knap knap--sekundaer knap--lille" data-handling="kp-fortryd" title="Går tilbage til planen og opsætningen fra før 'Lav kampprogram'">Fortryd</button>
+        </div>
+        <p class="kampprogram-valg">${valgTekst}${tilbage}</p>
+        ${kp.udfoert.length ? `<p class="daempet">Gjort undervejs: ${esc(kp.udfoert.join(' · '))}.</p>` : ''}
+        ${beholdt && aabneKort.length ? `<p class="daempet">${beholdt} beholdt som det er.</p>` : ''}
+        ${kort}
+    </section>`;
+}
+
 const OPTIMER_TIDER = [10, 30, 60, 120, 240, 360];
 const FASE_KORT = { pulje: 'P', cup: '', swiss: 'R' };
 const RUNDE_KORT = { 'Finale': 'Finale', 'Semifinale': 'Semi', 'Kvartfinale': 'Kvart', '1/8-finale': '1/8' };
@@ -206,7 +258,11 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
     // Én primær (rød) handling ad gangen: uden plan er det "Lav forslag"; med en plan er det løseren, som er
     // anbefalet — den kører kun, når man trykker (Jesper 2026-10-09)
     const harPlan = placeret.size > 0;
-    const anbefalLoeser = harPlan && !tilstand.optimerer && !tilstand.alternativer && tilstand.forslag?.kilde !== 'loeser';
+    // Panelet fra 'Lav kampprogram' vises for det projekt, det blev lavet til
+    const kp = tilstand.kampprogram?.projekt === projekt ? tilstand.kampprogram : null;
+    const aabneKort = kp ? kp.beslutninger.kort.filter((k) => !kp.beholdt.includes(k.noegle)) : [];
+    const travl = !!tilstand.arbejder || !!tilstand.optimerer;
+    const anbefalLoeser = harPlan && !travl && !tilstand.alternativer && !aabneKort.length && tilstand.forslag?.kilde !== 'loeser';
     const sek = tilstand.optimerSek || 60;
     const slut = Object.entries(statistik.slutPrDag);
     const statusTal = (vaerdi, etiket, klasse = '') => `<div class="status-tal ${klasse}"><b>${esc(String(vaerdi))}</b><span>${esc(etiket)}</span></div>`;
@@ -221,7 +277,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
                 ${projekt.kategorier.map((k) => `<option value="${esc(k.id)}" ${tilstand.filter === k.id ? 'selected' : ''}>${esc(k.id)}</option>`).join('')}
             </select>
             <input type="search" data-felt="soeg" placeholder="Søg spiller, klub eller kamp" value="${esc(tilstand.soeg || '')}" aria-label="Søg">
-            <button class="knap ${harPlan ? 'knap--sekundaer' : ''}" data-handling="forslag" title="Planlægger alle kampe forfra på et øjeblik; låste kampe beholder deres tid">${harPlan ? 'Lav forslag igen' : 'Lav forslag'}</button>
+            <button class="knap ${harPlan ? 'knap--sekundaer' : ''}" data-handling="kampprogram" ${travl ? 'disabled' : ''} title="Planneren vælger kamplængde og pause, bygger kampene, laver flere forslag og tager det bedste. Låste kampe beholder deres tid. Går programmet ikke op, får du valgmuligheder, der allerede er afprøvet.">${harPlan ? 'Lav kampprogram igen' : 'Lav kampprogram'}</button>
             <span class="optimer">
                 <button class="knap ${harPlan ? '' : 'knap--sekundaer'}" data-handling="optimer" ${tilstand.optimerer ? 'disabled' : ''} title="Sender et anonymiseret planlægningsproblem (kun kamp-id'er og spillernumre) til løseren, som leder efter en bedre plan under alle hårde regler. Låste kampe beholder deres tid.">${tilstand.optimerer ? `${tilstand.optimerDiagnose ? 'Ingen lovlig plan — undersøger hvorfor …' : 'Løseren regner …'} <span data-optimer-ur></span>` : 'Forbedr med løseren'}</button>
                 <select data-felt="optimerSek" aria-label="Tid til løseren" title="Hvor længe løseren må regne. Længere tid giver som regel en bedre plan.">
@@ -232,6 +288,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
             <details class="menu">
                 <summary class="knap knap--sekundaer">Mere</summary>
                 <div class="menu-liste">
+                    <button class="knap knap--sekundaer" data-handling="forslag" title="Planlægger alle kampe forfra på et øjeblik med den kamplængde og pause, der er sat — uden at prøve andre">Lav forslag med nuværende kamplængde</button>
                     <button class="knap knap--sekundaer" data-handling="forslag-dag" title="Planlægger kun denne dag om; andre dage og låste kampe røres ikke">Lav forslag kun for ${esc(datoTekst(dag.dato, { kort: true }))}</button>
                     <button class="knap knap--sekundaer" data-handling="alternativer" title="Laver op til 8 forskellige forslag med forskellige prioriteringer, som du kan bladre imellem">Andre forslag at vælge imellem</button>
                     ${tilstand.filter ? `<button class="knap knap--sekundaer" data-handling="laas-kategori" title="Lås alle placerede kampe i ${esc(tilstand.filter)}, så forslaget ikke flytter dem">Lås ${esc(tilstand.filter)}</button>
@@ -242,6 +299,8 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
         </div>
     </div>
     ${tilstand.alternativer ? alternativBjaelke(tilstand.alternativer) : ''}
+    ${tilstand.arbejder ? `<p class="arbejder" role="status"><span class="spinner" aria-hidden="true"></span>${esc(tilstand.arbejder)}</p>` : ''}
+    ${kp ? kampprogramPanel(kp, aabneKort) : ''}
     <div class="status-linje">
         ${statusTal(`${placeret.size}/${projekt.kampe.length}`, 'kampe har tid', ikkePlacerede.length ? 'er-roed' : '')}
         ${statusTal(antalFejl, 'fejl', antalFejl ? 'er-roed' : 'er-ok')}
@@ -253,7 +312,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
     </div>
     ${anbefalLoeser ? `<p class="anbefaling"><b>Anbefalet:</b> tryk "Forbedr med løseren". Den regner i op til ${sek < 120 ? `${sek} sekunder` : `${sek / 60} minutter`} og finder som regel en plan med kortere ventetid og tid i hallen. Du vælger selv, om du vil bruge den.</p>` : ''}
     <p class="plan-hjaelp daempet">Træk et kort til et slot, eller til listen til højre for at fjerne tiden. Klik viser spillerens andre kampe; dobbeltklik låser. <span title="${esc('Vægtet sum af de bløde kriterier — lavere er bedre. Vægtene står under Avanceret i opsætningen.\n' + scoreTitel)}">Score ${score.total}.</span></p>
-    ${tilstand.forslag ? `<p class="plan-status forslag-info">${esc(tilstand.forslag.tekst)}${tilstand.forslag.ikkePlaceret.length ? ` Berørte kampe: ${tilstand.forslag.ikkePlaceret.slice(0, 6).map((x) => `${esc(x.kategori)} ${esc(x.navn)} (${esc(x.brud || x.aarsag)})`).join('; ')}${tilstand.forslag.ikkePlaceret.length > 6 ? ' …' : ''}` : ''}</p>
+    ${tilstand.forslag && !kp ? `<p class="plan-status forslag-info">${esc(tilstand.forslag.tekst)}${tilstand.forslag.ikkePlaceret.length ? ` Berørte kampe: ${tilstand.forslag.ikkePlaceret.slice(0, 6).map((x) => `${esc(x.kategori)} ${esc(x.navn)} (${esc(x.brud || x.aarsag)})`).join('; ')}${tilstand.forslag.ikkePlaceret.length > 6 ? ' …' : ''}` : ''}</p>
     ${tilstand.forslag.handlinger?.length ? `<p class="diagnose-knapper">${tilstand.forslag.handlinger.map((x, i) => `<button class="knap knap--sekundaer" data-handling="diagnose" data-index="${i}">${esc(x.tekst)}</button>`).join(' ')}</p>` : ''}
     ${tilstand.forslag.ikkePlaceret.length ? `<ul class="loesninger">${loesningsforslag(projekt, tilstand.forslag.ikkePlaceret).map((f, i) => `<li><span>${esc(f.tekst)}</span>${f.handling ? ` <button class="knap knap--sekundaer knap--lille" data-handling="loesning" data-index="${i}">${esc(f.handling.tekst)} og lav forslag igen</button>` : ''}</li>`).join('')}</ul>
     ${tilstand.nedskaering ? '' : `<p><button class="knap knap--sekundaer" data-handling="ned-find" title="Afprøver færre Swiss Ladder-runder og spil over to dage med planlæggeren, og viser hvad hvert forslag koster i kampe pr. spiller. Intet ændres, før du vælger.">Prøv færre runder eller to dage</button></p>`}` : ''}` : ''}
@@ -320,6 +379,15 @@ function bind(container, h) {
         if (knap) {
             const hd = knap.dataset.handling;
             if (hd === 'ryd-dag') h.rydDag();
+            else if (hd === 'kampprogram') h.lavKampprogram();
+            else if (hd === 'beslutning') {
+                const kortEl = knap.closest('[data-kort]');
+                const valgt = kortEl?.querySelector('input[type=radio]:checked')?.value;
+                if (valgt === 'behold') h.beholdBeslutning(Number(kortEl.dataset.kort));
+                else if (valgt != null) h.brugBeslutning(Number(kortEl.dataset.kort), Number(valgt));
+            }
+            else if (hd === 'kp-tidligere') h.brugTidligereKamplaengde();
+            else if (hd === 'kp-fortryd') h.fortrydKampprogram();
             else if (hd === 'forslag') h.lavForslag(false);
             else if (hd === 'forslag-dag') h.lavForslag(true);
             else if (hd === 'laas-kategori') h.laasKategori(true);
