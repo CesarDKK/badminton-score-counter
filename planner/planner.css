@@ -435,3 +435,72 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 .kamplaengde-detaljer summary { cursor: pointer; color: var(--muted); font-size: 0.9em; }
 .kamplaengde .er-roed { color: var(--red-soft); }
 .kamplaengde .er-gul { color: var(--amber); }
+
+/* ── Fil og opsætning: afsnit, hop-links og rækkeblokke ── */
+.afsnit-nav {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    padding: 8px 0;
+    margin: -10px 0 14px;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--border-soft);
+}
+.afsnit-nav a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.86em;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 100px;
+}
+.afsnit-nav a:hover { color: #fff; background: rgba(83,52,131,0.3); }
+#fane-opsaetning > .panel { scroll-margin-top: 64px; }
+[data-filzone].er-over { border-color: var(--red); background: rgba(233,69,96,0.08); }
+
+.felter { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: flex-end; margin-top: 14px; }
+
+.raekke-blok { border: 1px solid var(--border); border-radius: 12px; margin-top: 18px; overflow: hidden; }
+.raekke-blok-hoved { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; background: rgba(83,52,131,0.22); }
+.raekke-blok-hoved h3 { font-size: 1.05em; color: #fff; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.raekke-blok-hoved .daempet { font-size: 0.88em; }
+.raekke-indstillinger { display: flex; flex-wrap: wrap; gap: 14px 26px; padding: 14px 16px 4px; }
+.raekke-indstillinger input[type="time"] { width: 6.8em; }
+.valg-gruppe { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 38px; }
+.valg-gruppe--lodret { flex-direction: column; align-items: flex-start; gap: 4px; min-height: 0; }
+.raekke-blok .tabel-hylster { margin-top: 6px; }
+
+.tabel--kategorier { table-layout: fixed; }
+.tabel--kategorier col.k-navn { width: 13%; }
+.tabel--kategorier col.k-form { width: 31%; }
+.tabel--kategorier col.k-tal { width: 8%; }
+.tabel--kategorier col.k-fordeling { width: 14%; }
+.tabel--kategorier col.k-valg { width: 18%; }
+.tabel--kategorier th:first-child, .tabel--kategorier td:first-child { padding-left: 16px; }
+.tabel--kategorier select { padding: 5px 8px; font-size: 0.92em; margin: 2px 6px 2px 0; }
+.tabel--kategorier td .valg { margin: 4px 0 0; display: flex; }
+.tabel td.kan-bryde, .tabel th.kan-bryde { white-space: normal; }
+
+.fold { border-top: 1px solid var(--border-soft); padding: 4px 0; }
+.panel details.fold { margin-top: 10px; }
+.fold > summary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fold > summary .daempet { font-weight: 400; font-size: 0.88em; }
+.fold-titel { min-width: 200px; }
+.fold[open] > summary { margin-bottom: 4px; }
+
+.videre { display: flex; justify-content: flex-end; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 18px; }
+
+@media (max-width: 1100px) {
+    .tabel--kategorier { table-layout: auto; min-width: 760px; }
+}
+.fold > summary { list-style: none; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary::before { content: ""; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); margin-right: 2px; transition: transform 0.15s; }
+.fold[open] > summary::before { transform: rotate(45deg); }
+/* Afkrydsningsfelter i et felt arver ikke etikettens store bogstaver */
+.felt label.valg { display: inline-flex; font-size: 0.92em; letter-spacing: normal; text-transform: none; color: var(--text); margin: 0 10px 0 0; }
+.felter label.valg { white-space: normal; }
