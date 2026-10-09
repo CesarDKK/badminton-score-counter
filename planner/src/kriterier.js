@@ -39,6 +39,17 @@ export const KRITERIER = [
         },
     },
     {
+        // Flowet i hallen (Jesper 2026-10-10): en spiller, der spiller i slottet lige efter sin forrige kamp, får
+        // kun reglementets minimumspause og ingen luft. Jespers egne planer giver som regel ét slot fri.
+        id: 'kampeITraek', navn: 'Kampe i træk', enhed: 'gange',
+        beskrivelse: 'Antal gange en spiller har sin næste kamp i slottet lige efter den forrige (kun minimumspausen imellem).',
+        beregn: (p, c) => {
+            let n = 0;
+            for (const t of c.prSpillerDag.values()) for (let i = 1; i < t.length; i += 1) if (t[i] - t[i - 1] === c.slotMin) n += 1;
+            return n;
+        },
+    },
+    {
         id: 'langeHuller', navn: 'Lange huller', enhed: 'spillerdage',
         beskrivelse: 'Spillerdage med et hul over ventetidsgrænsen mellem to egne kampe.',
         beregn: (p, c) => {
@@ -122,9 +133,9 @@ export const KRITERIER = [
 
 /** Navngivne skabeloner med vægte. "standard" bruges i nye projekter. */
 export const VAEGT_SKABELONER = {
-    standard: { navn: 'Kortest ventetid (standard)', vaegte: { ventetid: 1, langeHuller: 2, sluttid: 2, tommeBaner: 0.1, puljerunderSpredt: 0.2, finalerSpredt: 0.2 } },
-    tidligSlut: { navn: 'Tidlig slut', vaegte: { ventetid: 0.5, langeHuller: 1, sluttid: 8, tommeBaner: 0.3, puljerunderSpredt: 0.1, finalerSpredt: 0.1 } },
-    roligt: { navn: 'Roligt, overskueligt program', vaegte: { ventetid: 0.5, langeHuller: 2, sluttid: 1, tommeBaner: 0.05, puljerunderSpredt: 2, finalerSpredt: 1 } },
+    standard: { navn: 'Standard: kort ventetid og luft mellem kampene', vaegte: { ventetid: 1, kampeITraek: 2, langeHuller: 2, sluttid: 2, tommeBaner: 0.1, puljerunderSpredt: 0.2, finalerSpredt: 0.2 } },
+    tidligSlut: { navn: 'Tidlig slut', vaegte: { ventetid: 0.5, kampeITraek: 0.5, langeHuller: 1, sluttid: 8, tommeBaner: 0.3, puljerunderSpredt: 0.1, finalerSpredt: 0.1 } },
+    roligt: { navn: 'Roligt, overskueligt program', vaegte: { ventetid: 0.5, kampeITraek: 3, langeHuller: 2, sluttid: 1, tommeBaner: 0.05, puljerunderSpredt: 2, finalerSpredt: 1 } },
 };
 
 /** Projektets vægte: standard med projektets ændringer ovenpå (ukendte kriterier får vægt 0). */

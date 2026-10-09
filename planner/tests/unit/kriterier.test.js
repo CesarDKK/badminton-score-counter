@@ -148,3 +148,20 @@ describe('hårde rækkeregler som data: max haltid og max dage', () => {
         assert.equal(tjekPlan(opdaterRaekke(p, 'U13 M', { maxDage: 2 })).problemer.filter((x) => x.type === 'flere-dage').length, 0);
     });
 });
+
+describe('kriterier: kampe i træk (Jesper 2026-10-10: flowet i hallen)', async () => {
+    const { scorePlan: score } = await import('../../src/kriterier.js');
+    test('tæller, når en spillers næste kamp ligger i slottet lige efter', () => {
+        const kamp = (id, spillere) => ({ id, kategori: 'K', spillere, muligeSpillere: spillere, afhaengerAf: [], fase: 'pulje', runde: 1 });
+        const p = {
+            opsaetning: { slotMin: 30, dage: [{ dato: '2026-11-21', start: '09:00', slut: '12:00', baner: 4 }], maxVentetidMin: 90 },
+            kategorier: [{ id: 'K', raekke: 'R' }], raekker: [{ id: 'R' }],
+            kampe: [kamp('1', ['a', 'b']), kamp('2', ['a', 'c']), kamp('3', ['a', 'd']), kamp('4', ['b', 'c'])],
+            plan: { 1: { dag: '2026-11-21', slot: '09:00' }, 2: { dag: '2026-11-21', slot: '09:30' }, 3: { dag: '2026-11-21', slot: '10:30' }, 4: { dag: '2026-11-21', slot: '10:00' } },
+        };
+        const d = score(p).dele.find((x) => x.id === 'kampeITraek');
+        // a: 09:00 → 09:30 (i træk), 09:30 → 10:30 (et slot fri); c: 09:30 → 10:00 (i træk); b: 09:00 → 10:00 (fri)
+        assert.equal(d.vaerdi, 2);
+        assert.ok(d.vaegt > 0, 'standardvægten straffer kampe i træk');
+    });
+});
