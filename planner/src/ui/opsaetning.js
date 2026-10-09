@@ -8,6 +8,7 @@ import { reglerFor, STANDARD_REGLER } from '../store.js';
 import { FORM_VALG, FORM_VALG_TEKST, formTekst, effektivForm, minKampeSamlet } from '../form.js';
 import { KRITERIER, VAEGT_SKABELONER, vaegteFor } from '../kriterier.js';
 import { anbefaletKamplaengde, bedsteKamplaengde, SAESONDATA, SKIFTE_MIN, MARGEN, FORSINKELSE_GRAENSE } from '../kamplaengde.js';
+import { PRIS, STANDARD_PRIS_ORDEN, prisOrden } from '../kampprogram.js';
 
 const FORM_TEKST = {
     'pulje': 'Pulje', 'pulje-cup': 'Pulje + cup', 'cup': 'Cup', 'dobbelt-pulje': 'Dobbelt pulje',
@@ -232,6 +233,7 @@ function avanceretPanel(p) {
         <p class="panel-sub">Behøver normalt ikke ændres. Ændrede værdier markeres med gult.</p>
         ${forslagBoks(p)}
         ${reglerBoks(p)}
+        ${prisBoks(p)}
         ${vaegtBoks(p)}
     </section>`;
 }
@@ -311,6 +313,26 @@ function reglerBoks(p) {
         <details class="fold" data-id="avanceret-regler" ${antalAendret ? 'open' : ''}>
             <summary><span class="fold-titel">Reglementets grænser</span> ${antalAendret ? `<span class="maerke maerke--advarsel">${antalAendret} ændret</span>` : '<span class="daempet">som reglementet</span>'}</summary>
             ${indhold}
+        </details>`;
+}
+
+/** Rækkefølgen af det, der må give sig, når kampprogrammet ikke går op — bestemmer, hvilken løsning der anbefales. */
+function prisBoks(p) {
+    const orden = prisOrden(p);
+    const egen = orden.join() !== STANDARD_PRIS_ORDEN.join();
+    const navn = Object.fromEntries(PRIS.map((x) => [x.id, x.navn]));
+    return `
+        <details class="fold" data-id="avanceret-pris">
+            <summary><span class="fold-titel">Når programmet ikke går op</span> ${egen ? '<span class="maerke maerke--advarsel">egen rækkefølge</span>' : '<span class="daempet">standardrækkefølge</span>'}</summary>
+            <p class="panel-sub">"Lav kampprogram" afprøver løsninger og anbefaler den, der står højest her blandt dem, der virker. Du vælger stadig selv på kortet.</p>
+            <ol class="pris-liste">${orden.map((id, i) => `
+                <li><span>${esc(navn[id])}</span>
+                    <span class="pris-knapper">
+                        <button type="button" class="knap knap--sekundaer knap--lille" data-handling="pris-op" data-id="${id}" ${i === 0 ? 'disabled' : ''} aria-label="Flyt op">↑</button>
+                        <button type="button" class="knap knap--sekundaer knap--lille" data-handling="pris-ned" data-id="${id}" ${i === orden.length - 1 ? 'disabled' : ''} aria-label="Flyt ned">↓</button>
+                    </span></li>`).join('')}
+            </ol>
+            ${egen ? '<button type="button" class="knap knap--sekundaer knap--lille" data-handling="pris-nulstil">Brug standardrækkefølgen</button>' : ''}
         </details>`;
 }
 
@@ -501,8 +523,9 @@ function kapacitetPanel(p) {
         </div>
         ${k.udenDag ? `<p class="besked fejl">${k.udenDag} kampe hører til rækker uden valgt dag.</p>` : ''}
         <div class="videre">
-            <span class="daempet">Er opsætningen på plads, laves tidsplanen under Plan.</span>
-            <button type="button" class="knap" data-handling="vis-plan">Videre til Plan →</button>
+            <span class="daempet">Planneren vælger selv kamplængde og pause og laver det bedste program. Går det ikke op, får du valgmuligheder.</span>
+            <button type="button" class="knap knap--sekundaer" data-handling="vis-plan">Gå til Plan</button>
+            <button type="button" class="knap" data-handling="lav-kampprogram">Lav kampprogram →</button>
         </div>
     </section>`;
 }
@@ -538,6 +561,14 @@ function bind(container, projekt, h) {
         if (handling === 'gem-projekt') h.gemProjekt();
         else if (handling === 'start-forfra') h.startForfra();
         else if (handling === 'vis-plan') h.visPlan();
+        else if (handling === 'lav-kampprogram') h.lavKampprogram();
+        else if (handling === 'pris-op' || handling === 'pris-ned') {
+            const orden = prisOrden(projekt());
+            const i = orden.indexOf(knap.dataset.id), j = i + (handling === 'pris-op' ? -1 : 1);
+            if (i < 0 || j < 0 || j >= orden.length) return;
+            [orden[i], orden[j]] = [orden[j], orden[i]];
+            h.prisOrden(orden);
+        } else if (handling === 'pris-nulstil') h.prisOrden([]);
         else if (handling === 'nulstil-regler') h.nulstilRegler();
         else if (handling === 'brug-kamplaengde') {
             // Fra sammenligningen: kamplængde og pause; fra anbefalingen: kun kamplængden

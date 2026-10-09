@@ -8,6 +8,7 @@ import { optimer, stopLoeser, stopVedLukning, nytJobId, diagnoseTekst, aendretUn
 import { scorePlan } from './kriterier.js';
 import { alleNedskaeringer, anvendNedskaering, kapacitetsRegnskab, swissKandidater } from './nedskaering.js';
 import { sammenlignKamplaengder } from './kamplaengde.js';
+import { lavKampprogram as byggKampprogram, lavBeslutninger, anvendAendring } from './kampprogram.js';
 import { reglementetsPause, INGEN_PAUSE } from './regler.js';
 import { renderOpsaetning } from './ui/opsaetning.js';
 import { renderPlan } from './ui/plan.js';
@@ -22,7 +23,9 @@ let tjek = null;
 let besked = { tekst: '', fejl: false };
 // UI-tilstand der ikke gemmes: aktiv fane, valgt dag, filter, søgning, valgt kamp, fremhævede kampe
 // kamplaengde: { projekt, resultat } fra "Sammenlign kamplængder" — vises kun for det projekt, den er regnet på
-const tilstand = { fane: 'opsaetning', dag: null, filter: '', soeg: '', valgtKamp: null, fremhaev: [], kamplaengde: null };
+// kampprogram: { projekt, foer, valg, beslutninger, udfoert, beholdt } fra "Lav kampprogram" — vises for det projekt,
+// det blev lavet til (ændrer brugeren noget bagefter, forsvinder panelet); arbejder: tekst, mens der regnes
+const tilstand = { fane: 'opsaetning', dag: null, filter: '', soeg: '', valgtKamp: null, fremhaev: [], kamplaengde: null, kampprogram: null, arbejder: null };
 
 const faneKnapper = document.querySelectorAll('.fane');
 const sektioner = {
@@ -216,6 +219,12 @@ const handlers = {
         vaelgFane('plan');
         window.scrollTo(0, 0);
     },
+    lavKampprogram() {
+        vaelgFane('plan');
+        window.scrollTo(0, 0);
+        planHandlers.lavKampprogram();
+    },
+    prisOrden: (orden) => saet(store.opdaterOpsaetning(projekt, { prisOrden: orden })),
     slotMin(v) {
         // Sammenligningen afhænger ikke af den valgte kamplængde — den bliver stående, når man vælger én
         const sammenligning = tilstand.kamplaengde?.projekt === projekt ? tilstand.kamplaengde.resultat : null;
@@ -249,7 +258,85 @@ const handlers = {
 
 // ── Handlinger: fane 2 og 3 ───────────────────────────────────
 
+/**
+ * Kører et regnestykke, der tager et par sekunder (autopilot, beslutninger): først vises "arbejder"-teksten,
+ * så regnes der. Fejl vises som besked i stedet for at efterlade siden halvt opdateret.
+ */
+function arbejd(tekst, fn) {
+    if (tilstand.arbejder) return;
+    tilstand.arbejder = tekst;
+    render();
+    setTimeout(() => {
+        try { fn(); } catch (err) {
+            console.error(err);
+            tilstand.forslag = { tekst: `Kampprogrammet kunne ikke laves: ${err.message || err}`, ikkePlaceret: [] };
+        } finally {
+            tilstand.arbejder = null;
+            render();
+        }
+    }, 40);
+}
+
+const katFelter = (p, brud) => {
+    const katMap = new Map(p.kampe.map((k) => [k.id, k]));
+    return brud.map((x) => ({ ...x, kategori: katMap.get(x.id)?.kategori || '', navn: katMap.get(x.id)?.navn || x.id }));
+};
+
+/** Lægger et resultat fra lavKampprogram ind og regner beslutningskortene ud. */
+function visKampprogram(r, { foer, valg, udfoert = [] }) {
+    const beslutninger = lavBeslutninger(r.projekt, r.forslag);
+    const brud = [...r.forslag.brud, ...r.forslag.ikkePlaceret];
+    tilstand.alternativer = null;
+    tilstand.nedskaering = null;
+    tilstand.forslag = { tekst: '', ikkePlaceret: katFelter(r.projekt, brud), kilde: 'graadig' };
+    saet({ ...r.projekt, sidsteForslag: { ikkePlaceret: brud } });
+    tilstand.kampprogram = { projekt, foer, valg, beslutninger, udfoert, beholdt: [] };
+}
+
 const planHandlers = {
+    // "Lav kampprogram": hele kæden på én gang (kampprogram.js). Det gamle program kan fås tilbage med "Fortryd".
+    lavKampprogram({ fastKamplaengde = false } = {}) {
+        const foer = projekt;
+        arbejd('Laver kampprogrammet … planneren prøver kamplængder og flere forslag og vælger det bedste.', () => {
+            const r = byggKampprogram(foer, { fastKamplaengde });
+            visKampprogram(r, { foer, valg: r.valg });
+        });
+    },
+    // Et valg på et beslutningskort: ændringen udføres, og programmet laves igen med samme kamplængde
+    brugBeslutning(kortIndex, valgIndex) {
+        const kp = tilstand.kampprogram;
+        const v = kp?.beslutninger.kort[kortIndex]?.valg[valgIndex];
+        if (!v) return;
+        arbejd(`${v.tekst} … og laver programmet igen.`, () => {
+            const r = byggKampprogram(anvendAendring(projekt, v), { fastKamplaengde: true });
+            visKampprogram(r, { foer: kp.foer, valg: kp.valg, udfoert: [...kp.udfoert, v.tekst] });
+        });
+    },
+    beholdBeslutning(kortIndex) {
+        const kp = tilstand.kampprogram;
+        const k = kp?.beslutninger.kort[kortIndex];
+        if (!k) return;
+        kp.beholdt = [...kp.beholdt, k.noegle];
+        render();
+    },
+    // Kamplængden og pausen fra før "Lav kampprogram" — programmet laves igen med dem
+    brugTidligereKamplaengde() {
+        const kp = tilstand.kampprogram;
+        if (!kp) return;
+        const { slotMin, pauseMin } = kp.valg.foer;
+        arbejd(`Laver programmet igen med ${slotMin} min …`, () => {
+            const p = store.genberegnKampe(store.opdaterOpsaetning(store.saetSlotMin(projekt, slotMin), { pauseMin }));
+            const r = byggKampprogram(p, { fastKamplaengde: true });
+            visKampprogram(r, { foer: kp.foer, valg: { ...r.valg, aendret: false, grund: 'tidligere' }, udfoert: kp.udfoert });
+        });
+    },
+    fortrydKampprogram() {
+        const kp = tilstand.kampprogram;
+        if (!kp) return;
+        tilstand.kampprogram = null;
+        tilstand.forslag = null;
+        saet(kp.foer);
+    },
     vaelgDag(dag) { tilstand.dag = dag; render(); },
     filter(kat) { tilstand.filter = kat; render(); },
     soeg(tekst) {

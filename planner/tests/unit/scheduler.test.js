@@ -379,3 +379,60 @@ describe('scheduler: lange huller i statistikken og standarder', () => {
         assert.equal(f.statistik.langeHuller, 0, 'ingen lange huller i den lille turnering');
     });
 });
+
+describe('kampprogram: "Lav kampprogram" og beslutningskort (fase B)', async () => {
+    const { lavKampprogram, lavBeslutninger, anvendAendring, prisOrden, STANDARD_PRIS_ORDEN } = await import('../../src/kampprogram.js');
+    test('autopiloten lægger alle kampe og fortæller, hvilken kamplængde den valgte', () => {
+        const p = projekt();
+        const r = lavKampprogram(p);
+        assert.equal(Object.keys(r.projekt.plan).length, r.projekt.kampe.length, 'alle kampe har tid');
+        assert.equal(r.valg.minutter, r.projekt.opsaetning.slotMin);
+        assert.equal(r.valg.foer.slotMin, p.opsaetning.slotMin);
+        assert.equal(typeof r.valg.udenPause, 'boolean');
+        assert.equal(r.valg.grund, null);
+    });
+    test('med låste kampe røres kamplængden ikke', () => {
+        let p = flytKamp(projekt(), '4:1', '2026-11-21', '12:00');
+        p = laasKamp(p, '4:1');
+        const r = lavKampprogram(p);
+        assert.equal(r.valg.grund, 'laast');
+        assert.equal(r.projekt.opsaetning.slotMin, p.opsaetning.slotMin);
+        assert.deepEqual(r.projekt.plan['4:1'], { dag: '2026-11-21', slot: '12:00' });
+    });
+    test('går programmet op, er der ingen kort', () => {
+        const r = lavKampprogram(projekt(), { fastKamplaengde: true });
+        const b = lavBeslutninger(r.projekt, r.forslag);
+        if (!r.forslag.brud.length && !r.forslag.ikkePlaceret.length) assert.deepEqual(b, { brud: 0, kort: [] });
+    });
+    test('rækkens tidsrum for kort: ét kort med en afprøvet løsning, der virker', () => {
+        const p = opdaterRaekke(projekt(), 'U09 D', { dage: ['2026-11-21'], tidligst: '12:00', senest: '13:00' });
+        const r = lavKampprogram(p, { fastKamplaengde: true });
+        assert.ok(r.forslag.brud.some((x) => x.brud === 'tidsrum'), 'udgangspunktet har tidsrum-brud');
+        const b = lavBeslutninger(r.projekt, r.forslag);
+        const k = b.kort.find((x) => x.familie === 'tidsrum' && x.raekke === 'U09 D');
+        assert.ok(k, b.kort.map((x) => x.titel).join(' | '));
+        assert.ok(k.valg.length >= 1);
+        const v = k.valg[0];
+        assert.equal(v.loest, true, 'det anbefalede valg løser kortet');
+        assert.ok(v.brudEfter < b.brud);
+        // Valget er ren data og giver samme resultat, når det udføres
+        const efter = lavForslag(anvendAendring(r.projekt, v));
+        assert.equal(efter.brud.filter((x) => x.brud === 'tidsrum').length, 0);
+    });
+    test('der foreslås aldrig flere baner end dagens', () => {
+        let p = opdaterRaekke(projekt(), 'U09 D', { dage: ['2026-11-21'], tidligst: '12:00', senest: '13:00', reserveredeBaner: 2 });
+        p = opdaterDag(p, '2026-11-21', { slut: '14:00' });
+        const r = lavKampprogram(p, { fastKamplaengde: true });
+        const b = lavBeslutninger(r.projekt, r.forslag);
+        for (const k of b.kort) for (const v of k.valg) {
+            assert.ok(!('baner' in (v.aendring || {})), `ændrer ikke dagens baner: ${v.tekst}`);
+            if (v.aendring?.reserveredeBaner != null) assert.ok(v.aendring.reserveredeBaner <= 3, v.tekst);
+        }
+    });
+    test('prisrækkefølgen: brugerens egen først, resten i standardrækkefølge, ukendte ignoreres', () => {
+        const o = prisOrden({ opsaetning: { prisOrden: ['runder', 'findes-ikke', 'dag'] } });
+        assert.deepEqual(o.slice(0, 2), ['runder', 'dag']);
+        assert.deepEqual([...o].sort(), [...STANDARD_PRIS_ORDEN].sort());
+        assert.deepEqual(prisOrden({ opsaetning: {} }), STANDARD_PRIS_ORDEN);
+    });
+});
