@@ -6,7 +6,7 @@ import { foreslaaForm, byggKampe, seedTilmeldinger, minKampeSamlet, sikreKampe, 
 import { pladsPaaDag, fordelRaekkerPaaDage, FYLDNINGSGRAD } from './kapacitet.js';
 import { lavRegelmodel } from './regelmodel.js';
 import { VAEGT_SKABELONER } from './kriterier.js';
-import { STANDARD_PAUSE, TIDSVINDUE, STANDARD_REGLER, reglerFor } from './regler.js';
+import { STANDARD_PAUSE, TIDSVINDUE, STANDARD_REGLER, reglerFor, reglementetsPause } from './regler.js';
 
 export { STANDARD_PAUSE, TIDSVINDUE, STANDARD_REGLER, reglerFor };
 
@@ -27,9 +27,7 @@ export function opdaterRegler(projekt, sti, vaerdi) {
 
 /** Sætter alle grænser og pauser tilbage til reglementet. */
 export function nulstilRegler(projekt) {
-    const harM = projekt.raekker.some((r) => r.raekke === 'M');
-    const harABCD = projekt.raekker.some((r) => r.pauseKlasse === 'ABCD');
-    return { ...projekt, opsaetning: { ...projekt.opsaetning, regler: klon(STANDARD_REGLER), pauseMin: { ...STANDARD_PAUSE, faelles: harM && harABCD ? STANDARD_PAUSE.faelles : null } } };
+    return { ...projekt, opsaetning: { ...projekt.opsaetning, regler: klon(STANDARD_REGLER), pauseMin: reglementetsPause(projekt.raekker) } };
 }
 
 /**
@@ -120,9 +118,6 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
         swissRunder: 0,        // Swiss Ladder: valgt antal runder (0 = automatisk, skæres ned efter kapacitet)
     }));
 
-    const harM = model.raekker.some((r) => r.raekke === 'M');
-    const harABCD = model.raekker.some((r) => r.pauseKlasse === 'ABCD');
-
     return {
         version: PROJEKT_VERSION,
         kilde: { ...model.kilde, tagTiderMed: !!valg.tagTiderMed },
@@ -137,7 +132,7 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
             vaegte: { ...VAEGT_SKABELONER.standard.vaegte }, // bløde kriterier (kriterier.js) — tunes i fane 1
             vaegtSkabelon: 'standard',
             regler: klon(STANDARD_REGLER),
-            pauseMin: { ...STANDARD_PAUSE, faelles: harM && harABCD ? STANDARD_PAUSE.faelles : null },
+            pauseMin: reglementetsPause(model.raekker),
             dage,
         },
         raekker,

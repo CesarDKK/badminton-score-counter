@@ -8,6 +8,7 @@ import { optimer, stopLoeser, stopVedLukning, nytJobId, diagnoseTekst, aendretUn
 import { scorePlan } from './kriterier.js';
 import { alleNedskaeringer, anvendNedskaering, kapacitetsRegnskab, swissKandidater } from './nedskaering.js';
 import { sammenlignKamplaengder } from './kamplaengde.js';
+import { reglementetsPause, INGEN_PAUSE } from './regler.js';
 import { renderOpsaetning } from './ui/opsaetning.js';
 import { renderPlan } from './ui/plan.js';
 import { renderTjek } from './ui/tjek.js';
@@ -212,6 +213,12 @@ const handlers = {
         // Sammenligningen afhænger ikke af den valgte kamplængde — den bliver stående, når man vælger én
         const sammenligning = tilstand.kamplaengde?.projekt === projekt ? tilstand.kamplaengde.resultat : null;
         saetOpsaetning(store.saetSlotMin(projekt, v));
+        if (sammenligning) { tilstand.kamplaengde = { projekt, resultat: sammenligning }; render(); }
+    },
+    brugKamplaengde(min, udenPause) {
+        const sammenligning = tilstand.kamplaengde?.projekt === projekt ? tilstand.kamplaengde.resultat : null;
+        const pauseMin = udenPause ? { ...INGEN_PAUSE } : reglementetsPause(projekt.raekker);
+        saetOpsaetning(store.opdaterOpsaetning(store.saetSlotMin(projekt, min), { pauseMin }));
         if (sammenligning) { tilstand.kamplaengde = { projekt, resultat: sammenligning }; render(); }
     },
     sammenlignKamplaengder() {

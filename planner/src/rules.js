@@ -7,6 +7,7 @@
 import { minutter } from './tp-reader.js';
 import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt, banebrugISlot, banerISlot } from './kapacitet.js';
 import { lavRegelmodel, minKampMin, pauseForRaekke, foerSkoledag, tidsvindue, banerBrugt } from './regelmodel.js';
+import { reglementetsPause } from './regler.js';
 import { effektivForm, minKampeSamlet, sikreKampe, minKampeKrav, swissOversiddere } from './form.js';
 
 // Byggestenene (kampvarighed, pause, tidsvindue, hvem der kan dele spillere …) ligger i regelmodel.js,
@@ -358,6 +359,19 @@ export function tjekPlan(projekt) {
     }
 
     // ── Kampe uden tid ──
+    // Pausen i planen under reglementet: lovligt valg (flowet i hallen giver pausen), men spillerne har krav
+    // på den (§ 3 stk. 8) — så den skal gives på dagen ved at vente med kampen (Jesper 2026-10-09)
+    {
+        const regl = reglementetsPause(projekt.raekker);
+        const klasser = [...new Set(projekt.raekker.map((r) => r.pauseKlasse || 'ABCD'))];
+        const lavere = klasser
+            .map((kl) => ({ kl, plan: pauseForRaekke(projekt.opsaetning.pauseMin, kl), regl: pauseForRaekke(regl, kl) }))
+            .filter((x) => x.plan < x.regl);
+        if (lavere.length) {
+            const navn = { ABCD: 'A–D', M: 'M', E: 'E' };
+            tilfoej({ type: 'pause-under-reglementet', alvor: 'info', tekst: `Pausen i planen er sat lavere end reglementet (${lavere.map((x) => `${navn[x.kl] || x.kl}: ${x.plan} min, reglementet ${x.regl} min`).join('; ')}). Spillerne har krav på pausen — giv den på dagen ved at vente med kampen.`, kampe: [] });
+        }
+    }
     const udenTid = projekt.kampe.filter((k) => !projekt.plan[k.id]);
     if (udenTid.length) tilfoej({ type: 'uden-tid', alvor: 'info', tekst: `${udenTid.length} kampe har ingen tid endnu.`, kampe: udenTid.map((k) => k.id) });
 

@@ -2,7 +2,9 @@
 // (TP har kun én), reglementets minimum (§ 4 stk. 5), simulering af dagen og sammenligning.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { nytProjekt, genberegnKampe, saetSlotMin, opdaterDag } from '../../src/store.js';
+import { nytProjekt, genberegnKampe, saetSlotMin, opdaterDag, opdaterOpsaetning } from '../../src/store.js';
+import { tjekPlan } from '../../src/rules.js';
+import { reglementetsPause, INGEN_PAUSE } from '../../src/regler.js';
 import {
     forventetVarighed, varighedsAargang, niveauTillaeg, kampType, programVarighed, reglementMinimum,
     anbefaletKamplaengde, kandidatLaengder, simulerDag, sammenlignKamplaengder, bedsteKamplaengde, VARIGHED, SKIFTE_MIN, MARGEN,
@@ -107,7 +109,13 @@ describe('kamplaengde: simulering og sammenligning', () => {
             { id: 'U15 B', aargang: 'U15', raekke: 'B', kategorier: [{ kat: 'HD', type: 'double', spillere: par('b', 4) }] },
         ]);
         const r = sammenlignKamplaengder(p, [20, 25, 30]);
-        assert.deepEqual(r.map((x) => x.minutter), [20, 25, 30]);
+        // Hver længde med reglementets pause i planen og uden pause i planen
+        // (en "uden pause"-række, der giver præcis samme resultat, slås sammen med "med pause")
+        for (const min of [20, 25, 30]) {
+            const med = r.find((x) => x.minutter === min && !x.udenPause), uden = r.find((x) => x.minutter === min && x.udenPause);
+            assert.ok(med, `${min} med pause`);
+            assert.ok(uden || med.ogsaaUdenPause, `${min} uden pause, eller samme som med`);
+        }
         for (const x of r) {
             assert.equal(x.udenTid, 0);
             assert.ok(Number.isInteger(x.fejl) && Number.isInteger(x.muligeBrud));
@@ -120,11 +128,42 @@ describe('kamplaengde: bedst samlet i sammenligningen', () => {
     const r = (minutter, udenTid, fejl, forsinkelseMax, muligeBrud, haltidGnsMin) => ({ minutter, udenTid, fejl, forsinkelseMax, muligeBrud, haltidGnsMin });
     test('rækkefølge: uden tid, regelbrud (fejl), forsinkelse over grænsen, mulige brud, tid i hal', () => {
         // Lyngby U13/U15 (prod-test 2026-10-09): 25 min har ét muligt pausebrud før en finale, men kun 3 min forsinkelse
-        assert.equal(bedsteKamplaengde([r(20, 0, 0, 46, 0, 178), r(25, 0, 0, 3, 3, 203), r(30, 0, 0, 27, 0, 153)]), 25);
-        assert.equal(bedsteKamplaengde([r(20, 2, 0, 0, 0, 100), r(25, 0, 5, 0, 0, 300)]), 25);
-        assert.equal(bedsteKamplaengde([r(20, 0, 1, 0, 0, 100), r(25, 0, 0, 40, 0, 300)]), 25);
-        assert.equal(bedsteKamplaengde([r(20, 0, 0, 5, 2, 150), r(25, 0, 0, 5, 0, 200)]), 25);
-        assert.equal(bedsteKamplaengde([r(20, 0, 0, 5, 0, 150), r(25, 0, 0, 5, 0, 200)]), 20);
+        assert.equal(bedsteKamplaengde([r(20, 0, 0, 46, 0, 178), r(25, 0, 0, 3, 3, 203), r(30, 0, 0, 27, 0, 153)]).minutter, 25);
+        assert.equal(bedsteKamplaengde([r(20, 2, 0, 0, 0, 100), r(25, 0, 5, 0, 0, 300)]).minutter, 25);
+        assert.equal(bedsteKamplaengde([r(20, 0, 1, 0, 0, 100), r(25, 0, 0, 40, 0, 300)]).minutter, 25);
+        assert.equal(bedsteKamplaengde([r(20, 0, 0, 5, 2, 150), r(25, 0, 0, 5, 0, 200)]).minutter, 25);
+        assert.equal(bedsteKamplaengde([r(20, 0, 0, 5, 0, 150), r(25, 0, 0, 5, 0, 200)]).minutter, 20);
         assert.equal(bedsteKamplaengde([]), null);
+        // Over grænsen tæller størrelsen: 104 min forsinkelse er værre end 23 (Lyngby U9/U11 uden pause)
+        assert.equal(bedsteKamplaengde([r(20, 0, 0, 104, 0, 153), r(25, 0, 0, 23, 0, 197)]).minutter, 25);
+        // Ved lige foretrækkes reglementets pause i planen
+        const medPause = { ...r(25, 0, 0, 5, 0, 200), udenPause: false }, udenPause = { ...r(25, 0, 0, 5, 0, 200), udenPause: true };
+        assert.equal(bedsteKamplaengde([udenPause, medPause]), medPause);
+    });
+});
+
+describe('pause på dagen (Jesper 2026-10-09: pausen fjernes ofte i planen — flowet i hallen giver den)', () => {
+    function toKampe(pauseMin) {
+        let p = projekt([{ id: 'U13 B', aargang: 'U13', raekke: 'B', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('b', 3) }] }], { baner: 2 });
+        p = opdaterOpsaetning(saetSlotMin(p, 20), { pauseMin });
+        const dato = p.opsaetning.dage[0].dato;
+        // To kampe med en fælles spiller i naboslots: 09:00 og 09:20
+        const [a, b] = p.kampe.filter((k, i, alle) => i === 0 || k.spillere.some((x) => alle[0].spillere.includes(x))).slice(0, 2);
+        return { p: { ...p, plan: { [a.id]: { dag: dato, slot: '09:00' }, [b.id]: { dag: dato, slot: '09:20' } } }, dato };
+    }
+    test('simuleringen giver altid reglementets pause, også når planen er lagt uden', () => {
+        const { p, dato } = toKampe({ ...INGEN_PAUSE });
+        const v = forventetVarighed('U13', 'B', 'single');
+        // Anden kamp venter: første slutter efter v min (+ skifte på banen), og spilleren skal have 10 min pause
+        assert.equal(simulerDag(p, dato).forsinkelseMax, Math.round(v + 10 - 20));
+    });
+    test('Tjek: info, når planens pause er under reglementet — ingen, når den følger reglementet', () => {
+        const { p } = toKampe({ ...INGEN_PAUSE });
+        const info = tjekPlan(p).problemer.filter((x) => x.type === 'pause-under-reglementet');
+        assert.equal(info.length, 1);
+        assert.equal(info[0].alvor, 'info');
+        assert.match(info[0].tekst, /A–D: 0 min, reglementet 10 min/);
+        const { p: medPause } = toKampe(reglementetsPause(p.raekker));
+        assert.equal(tjekPlan(medPause).problemer.filter((x) => x.type === 'pause-under-reglementet').length, 0);
     });
 });
