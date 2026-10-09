@@ -176,7 +176,8 @@ function sammenligningTabel(rk, anbefalet, nu) {
         return `<tr>
             <td><strong>${r.minutter} min</strong>${mark ? `<br><span class="daempet">${mark}</span>` : ''}</td>
             <td class="tal">${r.udenTid ? `<span class="er-roed">${r.udenTid}</span>` : '0'}</td>
-            <td class="tal">${r.brud ? `<span class="er-roed">${r.brud}</span>` : '0'}</td>
+            <td class="tal">${r.fejl ? `<span class="er-roed">${r.fejl}</span>` : '0'}</td>
+            <td class="tal">${r.muligeBrud ? `<span class="er-gul">${r.muligeBrud}</span>` : '0'}</td>
             <td class="tal">${r.haltidGnsMin} min</td>
             <td>${slut}</td>
             <td class="tal">${r.forsinkelseMax > FORSINKELSE_GRAENSE ? `<span class="er-roed">${r.forsinkelseMax} min</span>` : `${r.forsinkelseMax} min`}</td>
@@ -185,9 +186,9 @@ function sammenligningTabel(rk, anbefalet, nu) {
     }).join('');
     return `
             <div class="tabel-hylster" style="margin-top:12px"><table class="tabel">
-                <thead><tr><th>Kamplængde</th><th class="tal">Kampe uden tid</th><th class="tal">Regelbrud</th><th class="tal">Tid i hal (gns.)</th><th>Slut pr. dag (plan → forventet)</th><th class="tal">Største forsinkelse</th><th></th></tr></thead>
+                <thead><tr><th>Kamplængde</th><th class="tal">Kampe uden tid</th><th class="tal" title="Tjeks fejl: reglen brydes med sikkerhed">Regelbrud</th><th class="tal" title="Tjeks pause-advarsler: reglen brydes, hvis bestemte spillere går videre (fx kort pause før en finale)">Mulige brud</th><th class="tal">Tid i hal (gns.)</th><th>Slut pr. dag (plan → forventet)</th><th class="tal">Største forsinkelse</th><th></th></tr></thead>
                 <tbody>${raekker}</tbody></table></div>
-            <p class="panel-sub">Hver kamplængde er afprøvet med et nyt forslag fra planlæggeren og en simulering af dagen med de forventede kamptider: kampen tager den bane, der bliver ledig først, og spillerne får deres pause. Forsinkelsen viser risikoen, ikke en garanti. "Bedst samlet" er længden med færrest kampe uden tid, færrest regelbrud, ingen forsinkelse over ${FORSINKELSE_GRAENSE} min og kortest tid i hallen. Den kan afvige fra anbefalingen, fordi pausen spiller ind: 20 min kamp + 10 min pause = 30 min, så med 25-min slots skal en spiller vente to slots mellem sine kampe.</p>`;
+            <p class="panel-sub">Hver kamplængde er afprøvet med et nyt forslag fra planlæggeren og en simulering af dagen med de forventede kamptider: kampen tager den bane, der bliver ledig først, og spillerne får deres pause. Forsinkelsen viser risikoen, ikke en garanti. "Bedst samlet" er længden med færrest kampe uden tid, færrest regelbrud, ingen forsinkelse over ${FORSINKELSE_GRAENSE} min, færrest mulige brud og kortest tid i hallen — i den rækkefølge. Den kan afvige fra anbefalingen, fordi pausen spiller ind: 20 min kamp + 10 min pause = 30 min, så med 25-min slots skal en spiller vente to slots mellem sine kampe.</p>`;
 }
 
 function reglerPanel(p) {

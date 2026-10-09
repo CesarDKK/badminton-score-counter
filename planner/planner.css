@@ -434,3 +434,4 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 .kamplaengde-detaljer { margin-top: 10px; }
 .kamplaengde-detaljer summary { cursor: pointer; color: var(--muted); font-size: 0.9em; }
 .kamplaengde .er-roed { color: var(--red-soft); }
+.kamplaengde .er-gul { color: var(--amber); }

@@ -15,6 +15,7 @@ import { minKampMin, erSenior, pauseForRaekke } from './regelmodel.js';
 import { banerISlot } from './kapacitet.js';
 import { saetSlotMin, genberegnKampe } from './store.js';
 import { lavForslag } from './scheduler.js';
+import { tjekPlan } from './rules.js';
 
 export const SAESONDATA = {
     tekst: 'sæsondata aug.–okt. 2026 (78 turneringer, 15 point pr. sæt)',
@@ -181,14 +182,19 @@ export function simulerDag(projekt, dato, varighed = varighedForProjekt(projekt)
 /** Forsinkelse (min), der regnes som "af betydning" i sammenligningen. */
 export const FORSINKELSE_GRAENSE = 15;
 
+/** Tjek-advarsler, der er mulige regelbrud: reglen brydes, hvis bestemte spillere går videre (fx cup-finalister). */
+export const MULIGE_BRUD = new Set(['pause']);
+
 /**
- * Den kamplængde i en sammenligning, der giver den bedste plan: færrest kampe uden tid, færrest
- * regelbrud, ingen forsinkelse over FORSINKELSE_GRAENSE, kortest tid i hallen. Kan afvige fra
- * anbefalingen, fordi pausereglerne spiller ind (fx 20 min kamp + 10 min pause = 30: med 25-min
- * slots skal en spiller vente to slots mellem sine kampe).
+ * Den kamplængde i en sammenligning, der giver den bedste plan (aftalt med Jesper 2026-10-09):
+ * 1) færrest kampe uden tid, 2) færrest regelbrud (Tjeks fejl), 3) ingen forsinkelse over
+ * FORSINKELSE_GRAENSE, 4) færrest mulige brud (Tjeks pause-advarsler — fx 5 min for lidt pause før
+ * en finale, hvis bestemte spillere vinder), 5) kortest tid i hallen. Kan afvige fra anbefalingen,
+ * fordi pausereglerne spiller ind (20 min kamp + 10 min pause = 30: med 25-min slots skal en spiller
+ * vente to slots mellem sine kampe).
  */
 export function bedsteKamplaengde(resultater) {
-    const noegle = (r) => [r.udenTid, r.brud, r.forsinkelseMax > FORSINKELSE_GRAENSE ? 1 : 0, r.haltidGnsMin, r.minutter];
+    const noegle = (r) => [r.udenTid, r.fejl, r.forsinkelseMax > FORSINKELSE_GRAENSE ? 1 : 0, r.muligeBrud, r.haltidGnsMin, r.minutter];
     return [...resultater].sort((a, b) => {
         const x = noegle(a), y = noegle(b);
         for (let i = 0; i < x.length; i += 1) if (x[i] !== y[i]) return x[i] - y[i];
@@ -206,6 +212,8 @@ export function sammenlignKamplaengder(projekt, laengder = kandidatLaengder(proj
         const f = lavForslag(p);
         const planlagt = { ...p, plan: f.plan };
         const varighed = varighedForProjekt(planlagt);
+        // Regelbrud tælles som Tjek viser dem: fejl er sikre brud, pause-advarsler er mulige brud
+        const problemer = tjekPlan(planlagt).problemer;
         const dage = p.opsaetning.dage
             .map((d) => ({ dato: d.dato, ...(simulerDag(planlagt, d.dato, varighed) || {}) }))
             .filter((d) => d.planSlut);
@@ -213,7 +221,8 @@ export function sammenlignKamplaengder(projekt, laengder = kandidatLaengder(proj
             minutter: min,
             kampe: p.kampe.length,
             udenTid: f.ikkePlaceret.length,
-            brud: f.brud.length,
+            fejl: problemer.filter((x) => x.alvor === 'fejl').length,
+            muligeBrud: problemer.filter((x) => x.alvor === 'advarsel' && MULIGE_BRUD.has(x.type)).length,
             haltidGnsMin: f.statistik.haltidGnsMin,
             dage,
             forsinkelseMax: dage.reduce((m, d) => Math.max(m, d.forsinkelseMax), 0),
