@@ -2,6 +2,7 @@
 // at taste ind i Tournament Planner. byggListe er en ren funktion (testes i
 // Node); renderListe tegner den med udskrift og kopiering.
 import { esc, datoTekst } from './dom.js';
+import { opskriftPanel } from './opsaetning.js';
 
 const RUNDE_ORDEN = { '1/8-finale': 1, 'Kvartfinale': 2, 'Semifinale': 3, 'Finale': 4 };
 
@@ -89,13 +90,14 @@ export function listeSomTekst(projekt) {
 
 export function renderListe(container, projekt, handlers) {
     if (!projekt) {
-        container.innerHTML = '<div class="panel"><h2>Liste</h2><p class="panel-sub">Åbn en .TP-fil under "Fil og opsætning" først.</p></div>';
+        container.innerHTML = '<div class="panel"><h2>Til TP</h2><p class="panel-sub">Åbn en .TP-fil under trin 1 (Fil) først.</p></div>';
         return;
     }
     const liste = byggListe(projekt);
     const udenTid = projekt.kampe.filter((k) => !projekt.plan[k.id]).length;
+    // Trin 4: opskriften til lodtrækningen (når planneren har bygget kampe) og listen til indtastning i TP
     container.innerHTML = `
-    <div class="panel liste-hoved udskriv-skjul">
+    ${opskriftPanel(projekt)}    <div class="panel liste-hoved udskriv-skjul">
         <div class="panel-hoved">
             <div>
                 <h2>Liste til indtastning i TP</h2>

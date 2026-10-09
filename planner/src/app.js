@@ -10,11 +10,10 @@ import { alleNedskaeringer, anvendNedskaering, kapacitetsRegnskab, swissKandidat
 import { sammenlignKamplaengder } from './kamplaengde.js';
 import { lavKampprogram as byggKampprogram, lavBeslutninger, anvendAendring } from './kampprogram.js';
 import { reglementetsPause, INGEN_PAUSE } from './regler.js';
-import { renderOpsaetning } from './ui/opsaetning.js';
+import { renderOpsaetning, renderFil } from './ui/opsaetning.js';
 import { renderPlan } from './ui/plan.js';
-import { renderTjek } from './ui/tjek.js';
 import { renderListe } from './ui/liste.js';
-import { esc } from './ui/dom.js';
+import { esc, datoTekst } from './ui/dom.js';
 
 const gemtVedStart = store.hentLokaltMedStatus();
 let projekt = gemtVedStart.projekt;
@@ -25,13 +24,15 @@ let besked = { tekst: '', fejl: false };
 // kamplaengde: { projekt, resultat } fra "Sammenlign kamplængder" — vises kun for det projekt, den er regnet på
 // kampprogram: { projekt, foer, valg, beslutninger, udfoert, beholdt } fra "Lav kampprogram" — vises for det projekt,
 // det blev lavet til (ændrer brugeren noget bagefter, forsvinder panelet); arbejder: tekst, mens der regnes
-const tilstand = { fane: 'opsaetning', dag: null, filter: '', soeg: '', valgtKamp: null, fremhaev: [], kamplaengde: null, kampprogram: null, arbejder: null };
+// visning: 'gitter' eller 'problemer' i trin 3 (Program); fortryd: { projekt, efter, tekst } — den sidste ændring, der kan fortrydes
+const tilstand = { fane: 'fil', dag: null, filter: '', soeg: '', valgtKamp: null, valgtIds: null, fremhaev: [], kamplaengde: null, kampprogram: null, arbejder: null, visning: 'gitter', fortryd: null };
 
 const faneKnapper = document.querySelectorAll('.fane');
+// Trinene: 1 Fil · 2 Turneringen (opsaetning) · 3 Program (plan + Tjek) · 4 Til TP (liste)
 const sektioner = {
+    fil: document.getElementById('fane-fil'),
     opsaetning: document.getElementById('fane-opsaetning'),
     plan: document.getElementById('fane-plan'),
-    tjek: document.getElementById('fane-tjek'),
     liste: document.getElementById('fane-liste'),
 };
 const navStatus = document.getElementById('navStatus');
@@ -78,13 +79,13 @@ function saetOpsaetning(nyt) {
     saet(r.projekt);
     if (!r.aendringer.length) return;
     const tider = r.mistedeTider ? ` ${r.mistedeTider} ${r.mistedeTider === 1 ? 'kamp' : 'kampe'} mistede deres tid, fordi de ikke længere findes.` : '';
-    visBesked(`Ændringen gav en ny automatisk form for ${r.aendringer.map((a) => a.kategori).join(', ')}.${tider} Se "Turneringsform" nedenfor.`);
+    visBesked(`Ændringen gav en ny automatisk form for ${r.aendringer.map((a) => a.kategori).join(', ')}.${tider} Opskriften til lodtrækningen i TP står under trin 4 (Til TP).`);
 }
 
 function visBesked(tekst, fejl = false) {
     besked = { tekst, fejl };
-    const el = document.getElementById('filBesked');
-    if (el) { el.textContent = tekst; el.classList.toggle('fejl', fejl); }
+    // Beskedfeltet findes i trin 1 og trin 2 — det synlige trin viser beskeden
+    for (const el of document.querySelectorAll('[data-besked]')) { el.textContent = tekst; el.classList.toggle('fejl', fejl); }
 }
 
 function render() {
@@ -92,21 +93,23 @@ function render() {
     if (projekt && !projekt.opsaetning.dage.some((d) => d.dato === tilstand.dag)) tilstand.dag = projekt.opsaetning.dage[0]?.dato || null;
     if (tilstand.fane === 'opsaetning') {
         const sammenligning = tilstand.kamplaengde?.projekt === projekt ? tilstand.kamplaengde.resultat : null;
-        renderOpsaetning(sektioner.opsaetning, projekt, handlers, { sammenligning });
+        renderOpsaetning(sektioner.opsaetning, projekt, handlers, { sammenligning, tjek });
         visBesked(besked.tekst, besked.fejl);
     } else if (tilstand.fane === 'plan') {
         renderPlan(sektioner.plan, projekt, tjek, tilstand, planHandlers);
         tilstand.fremhaev = [];
-    } else if (tilstand.fane === 'tjek') {
-        renderTjek(sektioner.tjek, projekt, tjek, tjekHandlers);
+    } else if (tilstand.fane === 'fil') {
+        renderFil(sektioner.fil, projekt, handlers);
+        visBesked(besked.tekst, besked.fejl);
     } else if (tilstand.fane === 'liste') {
         renderListe(sektioner.liste, projekt, { gemProjekt: () => handlers.gemProjekt(), visKampe: (ids) => tjekHandlers.visKampe(ids, null) });
     }
-    for (const knap of faneKnapper) {
-        if (knap.dataset.fane === 'tjek') {
-            const dele = tjek ? [tjek.antal.fejl ? `${tjek.antal.fejl} fejl` : '', tjek.antal.advarsel ? `${tjek.antal.advarsel} ${tjek.antal.advarsel === 1 ? 'advarsel' : 'advarsler'}` : ''].filter(Boolean) : [];
-            knap.textContent = dele.length ? `Tjek (${dele.join(', ')})` : 'Tjek';
-        }
+    // Mærket på "Program": fejl i planen (rødt), ellers kampe uden tid
+    const maerke = document.querySelector('[data-program-maerke]');
+    if (maerke) {
+        const udenTid = projekt ? projekt.kampe.length - Object.keys(projekt.plan).length : 0;
+        maerke.textContent = !projekt ? '' : tjek.antal.fejl ? `${tjek.antal.fejl} fejl` : udenTid && udenTid < projekt.kampe.length ? `${udenTid} uden tid` : '';
+        maerke.classList.toggle('er-fejl', !!projekt && tjek.antal.fejl > 0);
     }
     visStatus();
 }
@@ -176,7 +179,10 @@ const handlers = {
                 ? store.genindlaes(projekt, model, { behold: valg.behold })
                 : store.nytProjekt(model, { tagTiderMed: valg.tagTiderMed });
             besked = { tekst: `${fil.name} læst på ${ms} ms: ${model.kampe.length} kampe i ${model.kategorier.length} kategorier.`, fejl: false };
+            tilstand.kampprogram = null;
+            tilstand.fortryd = null;
             saet(nyt);
+            vaelgFane('opsaetning');
         } catch (err) {
             console.error(err);
             visBesked(`Kunne ikke læse ${fil.name}: ${err.message || err}. Er det en .TP-fil fra Tournament Planner?`, true);
@@ -190,7 +196,10 @@ const handlers = {
             if (fejl) { visBesked(fejl, true); return; }
             if (projekt && !window.confirm(`Erstat det åbne projekt "${projekt.turnering.navn}" med ${fil.name}?`)) return;
             besked = { tekst: `${fil.name} åbnet.`, fejl: false };
+            tilstand.kampprogram = null;
+            tilstand.fortryd = null;
             saet(store.normaliserHalvBane(obj));
+            vaelgFane(Object.keys(projekt.plan).length ? 'plan' : 'opsaetning');
         } catch (err) {
             visBesked(`Kunne ikke åbne ${fil.name}: ${err.message || err}`, true);
         }
@@ -211,10 +220,15 @@ const handlers = {
     startForfra() {
         if (!window.confirm('Ryd projektet fra browseren? Gem det først som fil, hvis du vil kunne åbne det igen.')) return;
         besked = { tekst: 'Projektet er ryddet.', fejl: false };
+        tilstand.kampprogram = null;
+        tilstand.fortryd = null;
         saet(null);
+        vaelgFane('fil');
     },
 
     besked: visBesked,
+    gaaTil(fane) { vaelgFane(fane); window.scrollTo(0, 0); },
+    kvitter: (noegle) => saet(store.kvitter(projekt, noegle, true)),
     visPlan() {
         vaelgFane('plan');
         window.scrollTo(0, 0);
@@ -351,7 +365,31 @@ const planHandlers = {
             if (nyt) { nyt.focus(); if (pos != null) nyt.setSelectionRange(pos, pos); }
         }, 150);
     },
-    vaelgKamp(id) { tilstand.valgtKamp = tilstand.valgtKamp === id ? null : id; render(); },
+    // Et klik på et kort vælger kampen (blokken); et klik på et slot flytter den valgte dertil — alternativ til træk-og-slip
+    vaelgKamp(ids) {
+        const id = ids.split(',')[0];
+        const fravaelg = tilstand.valgtKamp === id;
+        tilstand.valgtKamp = fravaelg ? null : id;
+        tilstand.valgtIds = fravaelg ? null : ids;
+        render();
+    },
+    flytValgte(dag, slot) {
+        if (!tilstand.valgtIds) return;
+        const ids = tilstand.valgtIds;
+        tilstand.valgtKamp = null;
+        tilstand.valgtIds = null;
+        planHandlers.flyt(ids, dag, slot);
+    },
+    valgteIds: () => tilstand.valgtIds,
+    visning(v) { tilstand.visning = v; render(); },
+    fortryd() {
+        const f = tilstand.fortryd;
+        if (!f || f.efter !== projekt) return;
+        tilstand.fortryd = null;
+        tilstand.forslag = null;
+        tilstand.alternativer = null;
+        saet(f.projekt);
+    },
     visKamp(id) {
         const p = projekt.plan[id];
         if (p) tilstand.dag = p.dag;
@@ -363,14 +401,16 @@ const planHandlers = {
     flyt(id, dag, slot) { let p = projekt; for (const x of id.split(',')) p = store.flytKamp(p, x, dag, slot); saet(p); },
     fjern(id) { let p = projekt; for (const x of id.split(',')) p = store.fjernFraPlan(p, x); saet(p); },
     rydDag() {
-        if (!window.confirm(`Fjern tiden på alle kampe ${tilstand.dag}?`)) return;
+        const foer = projekt;
         tilstand.forslag = null;
         saet(store.rydDag(projekt, tilstand.dag));
+        tilstand.fortryd = { projekt: foer, efter: projekt, tekst: `Tiderne ${datoTekst(tilstand.dag, { kort: true })} er fjernet.` };
+        render();
     },
     lavForslag(kunDenneDag, { udenSpoergsmaal = false } = {}) {
         const antalLaast = (projekt.laast || []).length;
-        const hvad = kunDenneDag ? `alle kampe ${tilstand.dag}` : 'alle kampe';
-        if (!udenSpoergsmaal && Object.keys(projekt.plan).length > antalLaast && !window.confirm(`Planlæg ${hvad} forfra? Kun låste kampe (${antalLaast}) beholder deres tid.`)) return;
+        const hvad = kunDenneDag ? `alle kampe ${datoTekst(tilstand.dag, { kort: true })}` : 'alle kampe';
+        const foer = !udenSpoergsmaal && Object.keys(projekt.plan).length > antalLaast ? projekt : null;
         const t0 = performance.now();
         const f = lavForslag(projekt, kunDenneDag ? { kunDage: [tilstand.dag] } : {});
         const ms = Math.round(performance.now() - t0);
@@ -382,6 +422,7 @@ const planHandlers = {
             kilde: 'graadig', // Plan-fanen anbefaler løseren, indtil dens plan er taget i brug
         };
         saet({ ...store.anvendForslag(projekt, f), sidsteForslag: { ikkePlaceret: brud } });
+        if (foer) { tilstand.fortryd = { projekt: foer, efter: projekt, tekst: `Der er lavet nyt forslag for ${hvad} (låste kampe beholdt tiden).` }; render(); }
     },
     // "Ret og lav forslag igen" ved et løsningsforslag: ændringen udføres, og planen lægges forfra (låste beholder tiden)
     brugLoesning(index) {
@@ -413,7 +454,6 @@ const planHandlers = {
     async optimer({ udenSpoergsmaal = false } = {}) {
         if (tilstand.optimerer) return;
         const antalLaast = (projekt.laast || []).length;
-        if (!udenSpoergsmaal && Object.keys(projekt.plan).length > antalLaast && !window.confirm(`Optimér alle kampe? Kun låste kampe (${antalLaast}) beholder deres tid. Du kan fortryde bagefter.`)) return;
         const sekunder = tilstand.optimerSek || 60;
         // Løseren regner på projektet, som det er NU. Ændrer brugeren noget imens (op til 6 min), må
         // resultatet ikke bare lægges ind oven i det — se aendretUnderOptimering nedenfor.
@@ -528,7 +568,7 @@ const planHandlers = {
         tilstand.nedskaering = null;
         tilstand.alternativer = null;
         tilstand.forslag = {
-            tekst: `"${f.navn}" er taget i brug: ${f.kampeFoer} → ${r.projekt.kampe.length} kampe, og alle har tid${brud.length ? `, men ${brud.length} med regelbrud.` : ' uden regelbrud.'} ${f.spillereUnderKravEfter} spillere får færre kampe end reglementets minimum — se advarslerne i Tjek. Rundetallene står nu på kategorierne i fane 1.`,
+            tekst: `"${f.navn}" er taget i brug: ${f.kampeFoer} → ${r.projekt.kampe.length} kampe, og alle har tid${brud.length ? `, men ${brud.length} med regelbrud.` : ' uden regelbrud.'} ${f.spillereUnderKravEfter} spillere får færre kampe end reglementets minimum — se advarslerne i Tjek. Rundetallene står nu på kategorierne under Turneringen.`,
             ikkePlaceret: brud.map((x) => ({ ...x, kategori: katMap.get(x.id)?.kategori || '', navn: katMap.get(x.id)?.navn || x.id })),
         };
         saet({ ...r.projekt, sidsteForslag: { ikkePlaceret: brud } });
@@ -563,7 +603,6 @@ const planHandlers = {
     // gitteret viser forslaget), "Brug dette" beholder det, "Fortryd" går tilbage.
     lavAlternativer() {
         const antalLaast = (projekt.laast || []).length;
-        if (Object.keys(projekt.plan).length > antalLaast && !window.confirm(`Lav alternative forslag for alle kampe? Kun låste kampe (${antalLaast}) beholder deres tid. Du kan fortryde bagefter.`)) return;
         const t0 = performance.now();
         const liste = lavAlternativer(projekt);
         const ms = Math.round(performance.now() - t0);
@@ -616,15 +655,25 @@ const tjekHandlers = {
         tilstand.dag = dag || (foerste ? projekt.plan[foerste].dag : tilstand.dag);
         tilstand.fremhaev = ids;
         tilstand.valgtKamp = null;
+        tilstand.valgtIds = null;
         tilstand.filter = '';
         tilstand.soeg = '';
+        tilstand.visning = 'gitter';
         vaelgFane('plan');
     },
     kvitter(noegle, vaerdi) { saet(store.kvitter(projekt, noegle, vaerdi)); },
+    kvitterAlle(noegler) { saet(noegler.reduce((p, n) => store.kvitter(p, n, true), projekt)); },
 };
+
+// Problemerne (Tjek) vises inde i trin 3
+planHandlers.tjek = tjekHandlers;
 
 // Lukkes siden, mens løseren regner, får den besked med det samme (ellers opdager den det selv efter ca. 30 s)
 window.addEventListener('pagehide', () => { if (tilstand.optimerer && tilstand.optimerJob) stopVedLukning(tilstand.optimerJob); });
+
+tilstand.fane = !projekt ? 'fil' : Object.keys(projekt.plan).length ? 'plan' : 'opsaetning';
+for (const knap of faneKnapper) { const aktiv = knap.dataset.fane === tilstand.fane; knap.classList.toggle('er-aktiv', aktiv); knap.setAttribute('aria-selected', String(aktiv)); }
+for (const [n, sektion] of Object.entries(sektioner)) sektion.hidden = n !== tilstand.fane;
 
 if (gemtVedStart.fejl) besked = { tekst: `Det projekt, der lå gemt i browseren, kunne ikke åbnes: ${gemtVedStart.fejl} Det bliver liggende, til du åbner en ny fil.`, fejl: true };
 try { render(); } catch (err) {

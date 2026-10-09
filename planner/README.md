@@ -8,7 +8,7 @@ løsningen i [docs/planner-gennemgang-2026-09.md](../docs/planner-gennemgang-202
 
 `.TP`-filen (Tournament Planner, en Access-database) læses i browseren med `mdb-reader`, og projektet
 gemmes i `localStorage` og som JSON-fil. Persondata forlader aldrig brugerens maskine. Den eneste
-server er løseren bag "Optimér" (`solver/`, CP-SAT): den får et anonymiseret regnestykke — kamp-id'er,
+server er løseren bag "Forbedr med løseren" (`solver/`, CP-SAT): den får et anonymiseret regnestykke — kamp-id'er,
 løbenumre for spillere og tider — og intet andet.
 
 ## Mapper
@@ -80,7 +80,7 @@ docker cp planner/src/. badminton-frontend:/usr/share/nginx/planner/src/
 docker cp planner/index.html badminton-frontend:/usr/share/nginx/planner/index.html
 ```
 
-Åbn derefter <http://planner.localhost/>. Skal "Optimér" med, startes løseren på samme netværk med aliaset
+Åbn derefter <http://planner.localhost/>. Skal "Forbedr med løseren" med, startes løseren på samme netværk med aliaset
 `planner-solver`, og `nginx.conf` samt `nginx-planner-csp.conf` (→ `/etc/nginx/snippets/planner-csp.conf`)
 kopieres ind, efterfulgt af `nginx -s reload`. Permanent deploy: `docker compose build frontend planner-solver`.
 

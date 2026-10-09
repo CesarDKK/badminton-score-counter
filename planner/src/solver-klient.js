@@ -246,7 +246,7 @@ export function diagnoseTekst(diagnose, alleDage = []) {
             linjer.push(`${d.raekke}: kampene kan ikke være på de dage, rækken er sat til — må rækken bruge alle turneringens dage, findes der en lovlig plan.`);
             if (alleDage.length) handlinger.push({ tekst: `Lad ${d.raekke} spille alle turneringens dage, og optimér igen`, raekke: d.raekke, aendring: { dage: [...alleDage] } });
         } else if (d.regel === 'maxKampePrDag') {
-            linjer.push('Grænsen for antal kampe pr. spiller pr. dag kan ikke overholdes — hæv den under "Reglementets grænser" i fane 1, eller fordel kategorierne på flere dage.');
+            linjer.push('Grænsen for antal kampe pr. spiller pr. dag kan ikke overholdes — hæv den under "Reglementets grænser" under Turneringen, eller fordel kategorierne på flere dage.');
         } else if (d.regel === 'flere') {
             linjer.push('Ingen enkelt regel er årsagen: først når max haltid, max dage og max kampe pr. dag lempes samtidig, findes der en plan. Brug "Find forslag, der får kabalen til at gå op".');
         } else if (d.regel === 'plads') {

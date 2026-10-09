@@ -384,6 +384,6 @@ export function formTekst(form) {
     else if (form.nedskaaret && !form.valgtRunder && form.form === 'swiss' && form.runder >= form.deltagere - 1) bem = form.opfylderKrav ? ` (kun ${form.deltagere} deltagere — alle møder alle)` : ` (kun ${form.deltagere} deltagere — under kravet på ${form.krav})`;
     else if (form.nedskaaret && !form.valgtRunder) bem = ` (skåret ned pga. kapacitet — under kravet på ${form.krav})`;
     else if (!form.opfylderKrav) bem = ` (under kravet på ${form.krav})`;
-    if (form.passerIkke) bem += ' — der er ikke plads nok; se forslagene i Plan-fanen';
+    if (form.passerIkke) bem += ' — der er ikke plads nok; se forslagene under Program';
     return `${form.tekst} · ${form.kampe} kampe · ${form.minKampe}–${form.maxKampe} kampe pr. spiller${bem}`;
 }
