@@ -83,15 +83,34 @@ describe('planlæggeren: rækkens anden dag prøves, og der brydes én regel ad 
         const med = lavForslag(p);
         assert.ok(med.brud.length + med.ikkePlaceret.length <= uden.brud.length + uden.ikkePlaceret.length);
     });
-    test('en kamp, der ikke kan være på rækkens dag, flyttes til den anden dag INDEN FOR tidsvinduet — den bryder kun én regel', () => {
-        // Én række med max 1 dag og for mange kampe til én dag: resten skal over på dag 2, ikke uden for tidsvinduet på dag 1
+    // Jesper 2026-10-09: en række med max 1 dag (U11 B/C/D) må ikke flyttes til en anden dag — dispensation
+    // gives kun yderst sjældent og må ikke forudsættes. Dagen er sidste udvej og en rød fejl i Tjek.
+    function enDagsRaekke() {
         let p = nytProjekt(model([{ id: 'U11 D', aargang: 'U11', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('d', 14) }] }], ['2026-11-21', '2026-11-22']));
         for (const d of p.opsaetning.dage) p = opdaterDag(p, d.dato, { baner: 1, start: '09:00', slut: '21:00' });
         p = opdaterOpsaetning(p, { pauseMin: { ...p.opsaetning.pauseMin, faelles: null } });
-        p = saetForm(p, 'U11 D HS', { formValg: 'pulje' });
+        return saetForm(p, 'U11 D HS', { formValg: 'pulje' });
+    }
+    test('en række, der kun må spille én dag: dagen fyldes først (pause/tidsvindue brydes), og kun det, der fysisk ikke kan være der, kommer på dag 2 som rød fejl', () => {
+        const p = enDagsRaekke();
         const f = lavForslag(p);
         assert.equal(f.ikkePlaceret.length, 0);
         assert.ok(f.brud.length > 0, 'kan ikke være på én dag');
+        const prDag = {};
+        for (const x of Object.values(f.plan)) prDag[x.dag] = (prDag[x.dag] || 0) + 1;
+        const dage = Object.keys(prDag).sort();
+        const problemer = tjekPlan(anvendForslag(p, f)).problemer;
+        const typer = new Set(problemer.filter((x) => x.alvor === 'fejl').map((x) => x.type));
+        assert.equal(typer.has('kapacitet'), false, 'aldrig to kampe på én bane');
+        if (dage.length > 1) {
+            assert.ok(prDag[dage[0]] > prDag[dage[1]], `første dag fyldes først (${JSON.stringify(prDag)})`);
+            assert.ok(problemer.some((x) => x.type === 'flere-dage' && x.alvor === 'fejl'), 'dag 2 er en rød fejl');
+        }
+    });
+    test('med dispensation til flere dage flyttes resten til dag 2 INDEN FOR tidsvinduet', () => {
+        const p = opdaterRaekke(enDagsRaekke(), 'U11 D', { dispensationFlereDage: true });
+        const f = lavForslag(p);
+        assert.equal(f.ikkePlaceret.length, 0);
         const typer = new Set(tjekPlan(anvendForslag(p, f)).problemer.filter((x) => x.alvor === 'fejl').map((x) => x.type));
         assert.equal(typer.has('tidsvindue'), false, `ingen kampe uden for tidsvinduet, fik: ${[...typer].join(', ')}`);
     });

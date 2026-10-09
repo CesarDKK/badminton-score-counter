@@ -199,14 +199,16 @@ describe('rules: regelbrud', () => {
         assert.equal(f.length, 1);
         assert.match(f[0].tekst, /11 kampe .* \(max 10\)/);
     });
-    test('flere dage i en D-række er en advarsel, der kan kvitteres eller dispenseres', () => {
+    test('flere dage i en D-række er en rød fejl, der kun forsvinder med dispensation (Jesper 2026-10-09)', () => {
         const p = flytKamp(grund(), 'f1', '2026-11-22', '12:00');
         const f = fejl(p, 'flere-dage');
         assert.equal(f.length, 1);
-        assert.equal(f[0].noegle, 'U11 D:flere-dage');
-        assert.equal(fejl(kvitter(p, 'U11 D:flere-dage'), 'flere-dage').length, 0);
+        assert.equal(f[0].alvor, 'fejl');
+        assert.equal(f[0].noegle, undefined, 'kan ikke kvitteres væk');
         assert.equal(fejl(opdaterRaekke(p, 'U11 D', { dispensationFlereDage: true }), 'flere-dage').length, 0);
-        assert.equal(fejl(opdaterRaekke(p, 'U11 D', { dage: ['2026-11-21'] }), 'uden-for-raekkens-dage').length, 1);
+        const uden = fejl(opdaterRaekke(p, 'U11 D', { dage: ['2026-11-21'] }), 'uden-for-raekkens-dage');
+        assert.equal(uden.length, 1);
+        assert.equal(uden[0].alvor, 'fejl');
     });
     test('Swiss: runde 2 for tidligt efter runde 1', () => {
         let p = grund();
