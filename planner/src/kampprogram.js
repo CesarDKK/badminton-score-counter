@@ -54,14 +54,15 @@ export function lavKampprogram(projekt, { fastKamplaengde = false } = {}) {
  * Hvad der må give sig, når programmet ikke går op — i den rækkefølge, løsningerne anbefales. Brugeren kan
  * ændre rækkefølgen under Avanceret (opsaetning.prisOrden). Der foreslås aldrig flere baner end dagens.
  */
+// Standardrækkefølgen er Jespers (2026-10-10): pausen på dagen og færre runder før længere dag og tidsrum
 export const PRIS = [
+    { id: 'pause', navn: 'Pausen gives på dagen i stedet for i planen' },
+    { id: 'runder', navn: 'Færre kampe (runder)' },
     { id: 'dag', navn: 'Længere spilledag' },
     { id: 'tidsrum', navn: 'Længere tidsrum for rækken' },
     { id: 'baner', navn: 'Flere af dagens baner reserveret til rækken' },
-    { id: 'flyt', navn: 'Rækken flyttes til en anden dag' },
-    { id: 'pause', navn: 'Pausen gives på dagen i stedet for i planen' },
     { id: 'samtidighed', navn: 'Single og double må ligge samtidig' },
-    { id: 'runder', navn: 'Færre kampe (runder)' },
+    { id: 'flyt', navn: 'Rækken flyttes til en anden dag' },
     { id: 'dispensation', navn: 'Noget, der kræver dispensation' },
 ];
 export const STANDARD_PRIS_ORDEN = PRIS.map((x) => x.id);
@@ -244,7 +245,9 @@ export function lavBeslutninger(projekt, forslag, { medNedskaering = true } = {}
             if (bedst) valg.push(bedst);
         }
         // Færre runder er dyrt at regne ud — prøves kun, når intet billigere løser kortet
-        if (medNedskaering && g.familie === 'plads' && !valg.some((v) => v.loest)) {
+        // — dvs. kun når ingen løsning, der står FØR "færre runder" i prisrækkefølgen, løser kortet
+        const runderRang = orden.indexOf('runder');
+        if (medNedskaering && g.familie === 'plads' && !valg.some((v) => v.loest && orden.indexOf(v.pris) < runderRang)) {
             nedskaeringer ??= alleNedskaeringer(projekt).filter((f) => f.loest || f.brudEfter < f.brudFoer);
             for (const f of nedskaeringer) {
                 const toDage = f.raekkerToDage?.length ? f.raekkerToDage : null;

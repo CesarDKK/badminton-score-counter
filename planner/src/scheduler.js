@@ -349,9 +349,12 @@ function lavForslagEnGang(projekt, valg = {}) {
         id: (k) => k.id,
     };
     const synkront = projekt.opsaetning.puljerunderSynkront === true;
+    // Brugerens "puljerunder synkront" gælder også de alternative forslag (og dermed "Lav kampprogram"): før
+    // overskrev varianternes prioritet valget, så det bedste alternativ altid spillede puljerne ude af takt
+    const synkNoegle = synkront ? ['rundeIEvent'] : [];
     const prioritet = valg.prioritet
-        ? ['frist', 'prioritet', ...valg.prioritet.filter((n) => n !== 'frist' && n !== 'prioritet')]
-        : ['frist', 'prioritet', ...(synkront ? ['rundeIEvent'] : []), 'spillet', 'dybde', 'rang', 'runde', 'gruppe', 'id'];
+        ? ['frist', 'prioritet', ...synkNoegle, ...valg.prioritet.filter((n) => n !== 'frist' && n !== 'prioritet' && !(synkront && n === 'rundeIEvent'))]
+        : ['frist', 'prioritet', ...synkNoegle, 'spillet', 'dybde', 'rang', 'runde', 'gruppe', 'id'];
 
     for (const dag of dage) {
         if (kunDage && !kunDage.has(dag.dato)) continue;

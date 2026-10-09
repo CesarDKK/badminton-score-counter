@@ -436,3 +436,14 @@ describe('kampprogram: "Lav kampprogram" og beslutningskort (fase B)', async () 
         assert.deepEqual(prisOrden({ opsaetning: {} }), STANDARD_PRIS_ORDEN);
     });
 });
+
+describe('scheduler: "puljerunder synkront" gælder også de alternative forslag (fejl fundet 2026-10-10)', () => {
+    test('alle alternativer spiller puljernes runde 1 før runde 2', () => {
+        const p = opdaterOpsaetning(projekt(), { puljerunderSynkront: true });
+        const tid = (plan, id) => `${plan[id].dag}T${plan[id].slot}`;
+        for (const a of lavAlternativer(p)) {
+            // To puljer á 3 i U11 D HS (draw 1 og 2): begge puljers runde 1 før nogen runde 2
+            assert.ok(tid(a.plan, '1:1') <= tid(a.plan, '2:2') && tid(a.plan, '2:1') <= tid(a.plan, '1:2'), a.navn);
+        }
+    });
+});

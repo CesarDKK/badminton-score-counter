@@ -166,6 +166,9 @@ export function bygProblem(projekt, hintPlan = null) {
         if (liste.length > 1) spillerGrupper.push({ kampe: liste.map((k) => indeks.get(k.id)), vaegt: antalSpillere });
     }
 
+    // Kampe i træk (blødt, kriteriet "kampeITraek"): hver kendt spillers kampe — løseren straffer par i nabo-slots
+    const traek = [...prKendt.values()].filter((l) => l.length > 1).map((l) => l.map((k) => indeks.get(k.id)));
+
     // Max dage pr. række
     const maxDage = projekt.raekker.filter((r) => M.maxDageFor(r) && (r.dage || []).length > M.maxDageFor(r))
         .map((r) => ({ raekke: r.id, max: M.maxDageFor(r), kampe: kampe.map((k, i) => (k.raekke === r.id ? i : -1)).filter((i) => i >= 0) }));
@@ -203,7 +206,7 @@ export function bygProblem(projekt, hintPlan = null) {
         version: 1,
         slotMin,
         dage: dage.map((d, i) => ({ index: i, start: minutter(d.start), slut: minutter(d.slut), baner: d.baner })),
-        kapacitet, kampe, foer, konflikter, ikkeSamtidig, haltid, spillerGrupper, maxDage,
+        kapacitet, kampe, foer, konflikter, ikkeSamtidig, haltid, spillerGrupper, traek, maxDage,
         maxKampePrDag: maxPrDag, mangeKampe, maxPrGruppe, ikkeSammeDag, alternativer,
         vaegte: vaegteFor(projekt),
     };
