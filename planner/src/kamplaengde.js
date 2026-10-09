@@ -10,10 +10,10 @@
 // 15 point pr. sæt (formatet fra august 2026). Ældre kampe er spillet til 21 og er markant længere — de
 // må ikke bruges her. Varighederne på Tournament Software er de samme som i TP-filens PlayerMatch.duration.
 import { minutter, klokkeFraMinutter } from './tp-reader.js';
-import { reglerFor } from './regler.js';
+import { reglerFor, reglementetsPause, INGEN_PAUSE } from './regler.js';
 import { minKampMin, erSenior, pauseForRaekke } from './regelmodel.js';
 import { banerISlot } from './kapacitet.js';
-import { saetSlotMin, genberegnKampe } from './store.js';
+import { saetSlotMin, genberegnKampe, opdaterOpsaetning } from './store.js';
 import { lavForslag } from './scheduler.js';
 import { tjekPlan } from './rules.js';
 
@@ -134,7 +134,10 @@ export function kandidatLaengder(projekt) {
 
 /**
  * Simulerer en dag med de forventede kamptider: kampene tages i planens rækkefølge og starter på
- * deres planlagte tid, eller når en bane er ledig og spillerne har haft deres pause. Kampen tager
+ * deres planlagte tid, eller når en bane er ledig og spillerne har haft deres pause — og den kamp, der kan
+ * starte tidligst, får den ledige bane (kampene sættes løbende i gang). Pausen er ALTID
+ * reglementets (§ 3 stk. 8: spillerne har krav på den), også når planen er lagt med kortere eller ingen
+ * pause — på dagen venter kampen så, til spilleren har haft den (Jesper 2026-10-09). Kampen tager
  * den bane, der bliver ledig først (som i hallen). Halve baner (U9-single) deler en hel bane.
  * Returnerer { planSlut, forventetSlut, forsinkelseMax } (klokkeslæt / minutter) eller null.
  */
@@ -149,32 +152,54 @@ export function simulerDag(projekt, dato, varighed = varighedForProjekt(projekt)
         .sort((a, b) => a.t - b.t || String(a.k.id).localeCompare(String(b.k.id)));
     if (!kampe.length) return null;
     const slotMin = projekt.opsaetning.slotMin;
+    const pauseMin = reglementetsPause(projekt.raekker);
     // Hver hel bane har to halvdele; en hel kamp kræver begge
     const baner = Array.from({ length: Math.max(1, dag.baner) }, () => [0, 0]);
     const spillerFri = new Map();
-    let slut = 0, forsinkelseMax = 0, planSlut = 0;
-    for (const { k, t, slot } of kampe) {
-        const kat = katMap.get(k.kategori);
-        const pause = pauseForRaekke(projekt.opsaetning.pauseMin, raekkeMap.get(kat?.raekke)?.pauseKlasse);
-        let tidligst = t;
-        for (const s of k.spillere) if (spillerFri.has(s)) tidligst = Math.max(tidligst, spillerFri.get(s) + pause);
-        const ledige = Math.max(1, Math.min(baner.length, banerISlot(dag, slot)));
-        let valgt = null, valgtHalv = 0, valgtFri = Infinity;
-        for (let i = 0; i < ledige; i += 1) {
-            if (kat?.halvBane) {
-                for (const h of [0, 1]) if (baner[i][h] < valgtFri) { valgt = i; valgtHalv = h; valgtFri = baner[i][h]; }
+    const slutPaa = new Map(); // kamp-id → sluttid (til kampe, der bygger på den, fx en finale)
+    const ventende = kampe.map((x) => {
+        const kat = katMap.get(x.k.kategori);
+        return { ...x, kat, pause: pauseForRaekke(pauseMin, raekkeMap.get(kat?.raekke)?.pauseKlasse), ledige: Math.max(1, Math.min(baner.length, banerISlot(dag, x.slot))) };
+    });
+    // Som i hallen: kampene sættes løbende i gang. Hver gang vælges den kamp, der kan starte tidligst —
+    // tidligst på sin planlagte tid, når spillerne har haft deres pause, kampe den bygger på er slut, og en
+    // bane (eller halv bane) er ledig. Venter en kamp på en spiller, kan en anden kamp tage banen imens.
+    const baneTil = (x) => {
+        let valgt = null, halv = 0, fri = Infinity;
+        for (let i = 0; i < x.ledige; i += 1) {
+            if (x.kat?.halvBane) {
+                for (const h of [0, 1]) if (baner[i][h] < fri) { valgt = i; halv = h; fri = baner[i][h]; }
             } else {
-                const fri = Math.max(baner[i][0], baner[i][1]);
-                if (fri < valgtFri) { valgt = i; valgtFri = fri; }
+                const b = Math.max(baner[i][0], baner[i][1]);
+                if (b < fri) { valgt = i; fri = b; }
             }
         }
-        const start = Math.max(tidligst, valgtFri);
-        const ende = start + varighed(k) + SKIFTE_MIN;
-        if (kat?.halvBane) baner[valgt][valgtHalv] = ende; else baner[valgt] = [ende, ende];
-        for (const s of k.spillere) spillerFri.set(s, ende - SKIFTE_MIN);
+        return { valgt, halv, fri };
+    };
+    const klar = (x) => {
+        let t = x.t;
+        for (const sp of x.k.spillere) if (spillerFri.has(sp)) t = Math.max(t, spillerFri.get(sp) + x.pause);
+        for (const id of x.k.afhaengerAf || []) if (slutPaa.has(id)) t = Math.max(t, slutPaa.get(id) + x.pause);
+        return t;
+    };
+    let slut = 0, forsinkelseMax = 0, planSlut = 0;
+    while (ventende.length) {
+        let bedst = -1, bedstStart = Infinity, bedstBane = null;
+        for (let i = 0; i < ventende.length; i += 1) {
+            const x = ventende[i];
+            if (x.t > bedstStart) break; // listen er sorteret efter planlagt tid — senere kampe kan ikke starte før
+            const bane = baneTil(x);
+            const start = Math.max(klar(x), bane.fri);
+            if (start < bedstStart) { bedst = i; bedstStart = start; bedstBane = bane; }
+        }
+        const [x] = ventende.splice(bedst, 1);
+        const ende = bedstStart + varighed(x.k) + SKIFTE_MIN;
+        if (x.kat?.halvBane) baner[bedstBane.valgt][bedstBane.halv] = ende; else baner[bedstBane.valgt] = [ende, ende];
+        for (const sp of x.k.spillere) spillerFri.set(sp, ende - SKIFTE_MIN);
+        slutPaa.set(x.k.id, ende - SKIFTE_MIN);
         slut = Math.max(slut, ende - SKIFTE_MIN);
-        forsinkelseMax = Math.max(forsinkelseMax, start - t);
-        planSlut = Math.max(planSlut, t + slotMin);
+        forsinkelseMax = Math.max(forsinkelseMax, bedstStart - x.t);
+        planSlut = Math.max(planSlut, x.t + slotMin);
     }
     return { planSlut: klokkeFraMinutter(planSlut), forventetSlut: klokkeFraMinutter(Math.round(slut)), forsinkelseMax: Math.round(forsinkelseMax) };
 }
@@ -187,28 +212,41 @@ export const MULIGE_BRUD = new Set(['pause']);
 
 /**
  * Den kamplængde i en sammenligning, der giver den bedste plan (aftalt med Jesper 2026-10-09):
- * 1) færrest kampe uden tid, 2) færrest regelbrud (Tjeks fejl), 3) ingen forsinkelse over
+ * 1) færrest kampe uden tid, 2) færrest regelbrud (Tjeks fejl), 3) mindst forsinkelse ud over
  * FORSINKELSE_GRAENSE, 4) færrest mulige brud (Tjeks pause-advarsler — fx 5 min for lidt pause før
  * en finale, hvis bestemte spillere vinder), 5) kortest tid i hallen. Kan afvige fra anbefalingen,
  * fordi pausereglerne spiller ind (20 min kamp + 10 min pause = 30: med 25-min slots skal en spiller
  * vente to slots mellem sine kampe).
  */
 export function bedsteKamplaengde(resultater) {
-    const noegle = (r) => [r.udenTid, r.fejl, r.forsinkelseMax > FORSINKELSE_GRAENSE ? 1 : 0, r.muligeBrud, r.haltidGnsMin, r.minutter];
+    // Ved lige: med reglementets pause i planen før uden (den er pænest), så den korteste kamplængde
+    // Forsinkelse op til grænsen er ligegyldig; over den tæller hvert minut (104 min er værre end 23)
+    const noegle = (r) => [r.udenTid, r.fejl, Math.max(0, r.forsinkelseMax - FORSINKELSE_GRAENSE), r.muligeBrud, r.haltidGnsMin, r.udenPause ? 1 : 0, r.minutter];
     return [...resultater].sort((a, b) => {
         const x = noegle(a), y = noegle(b);
         for (let i = 0; i < x.length; i += 1) if (x[i] !== y[i]) return x[i] - y[i];
         return 0;
-    })[0]?.minutter ?? null;
+    })[0] ?? null;
+}
+
+/** Er planens pause sat til 0 for alle klasser? */
+export function erUdenPause(pauseMin) {
+    return !pauseMin.ABCD && !pauseMin.M && !pauseMin.E && !pauseMin.faelles;
 }
 
 /**
  * Sammenligner kamplængder: for hver længde bygges kampene på ny (formvalget afhænger af pladsen),
- * planlæggeren laver et forslag, og hver dag simuleres med de forventede kamptider.
+ * planlæggeren laver et forslag, og hver dag simuleres med de forventede kamptider. Hver længde
+ * afprøves både med reglementets pause i planen og uden pause (mange klubber fjerner pausen i TP, fordi
+ * flowet i hallen giver den) — simuleringen giver altid spillerne reglementets pause, så forsinkelsen
+ * viser, hvad det koster på dagen.
  */
 export function sammenlignKamplaengder(projekt, laengder = kandidatLaengder(projekt)) {
-    return laengder.map((min) => {
-        const p = genberegnKampe(saetSlotMin(projekt, min));
+    const varianter = [];
+    for (const min of laengder) for (const udenPause of [false, true]) varianter.push({ min, udenPause });
+    const resultater = varianter.map(({ min, udenPause }) => {
+        const pauseMin = udenPause ? { ...INGEN_PAUSE } : reglementetsPause(projekt.raekker);
+        const p = genberegnKampe(opdaterOpsaetning(saetSlotMin(projekt, min), { pauseMin }));
         const f = lavForslag(p);
         const planlagt = { ...p, plan: f.plan };
         const varighed = varighedForProjekt(planlagt);
@@ -219,6 +257,8 @@ export function sammenlignKamplaengder(projekt, laengder = kandidatLaengder(proj
             .filter((d) => d.planSlut);
         return {
             minutter: min,
+            udenPause,
+            pauseMin,
             kampe: p.kampe.length,
             udenTid: f.ikkePlaceret.length,
             fejl: problemer.filter((x) => x.alvor === 'fejl').length,
@@ -227,5 +267,14 @@ export function sammenlignKamplaengder(projekt, laengder = kandidatLaengder(proj
             dage,
             forsinkelseMax: dage.reduce((m, d) => Math.max(m, d.forsinkelseMax), 0),
         };
+    });
+    // Giver "uden pause" præcis samme resultat som "med pause" (fx 30 min: 20 + 10 = 30, pausen er allerede
+    // i slottet), vises kun én række — markeret som gældende for begge
+    const noegle = (r) => JSON.stringify([r.kampe, r.udenTid, r.fejl, r.muligeBrud, r.haltidGnsMin, r.forsinkelseMax, r.dage]);
+    return resultater.filter((r) => {
+        if (!r.udenPause) return true;
+        const med = resultater.find((x) => x.minutter === r.minutter && !x.udenPause);
+        if (med && noegle(med) === noegle(r)) { med.ogsaaUdenPause = true; return false; }
+        return true;
     });
 }

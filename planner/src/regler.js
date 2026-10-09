@@ -5,6 +5,16 @@
 /** Reglementets standardpauser (§ 4 stk. 5). "faelles" bruges når M og ABCD spiller i samme turnering. */
 export const STANDARD_PAUSE = { ABCD: 10, M: 15, E: 20, faelles: 12 };
 
+/** Reglementets pauser for turneringens rækker: fælles pause (12 min), når M og A–D spiller i samme turnering. */
+export function reglementetsPause(raekker = []) {
+    const harM = raekker.some((r) => r.raekke === 'M');
+    const harABCD = raekker.some((r) => r.pauseKlasse === 'ABCD');
+    return { ...STANDARD_PAUSE, faelles: harM && harABCD ? STANDARD_PAUSE.faelles : null };
+}
+
+/** Ingen pause i planen (som mange klubber gør i TP — flowet i hallen giver pauserne). */
+export const INGEN_PAUSE = { ABCD: 0, M: 0, E: 0, faelles: null };
+
 /** Tidsvinduer i programmet pr. årgang (§ 4 stk. 5.1): start–slut. */
 export const TIDSVINDUE = {
     U09: ['09:00', '19:00'], U11: ['09:00', '19:00'],

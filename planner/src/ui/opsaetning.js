@@ -162,33 +162,36 @@ function kamplaengdeBoks(p, sammenligning) {
                 <p class="panel-sub">Hver kamp får en forventet varighed efter årgang, single/double/mix og niveau fra ${esc(SAESONDATA.tekst)}. TP har kun én kamplængde, så anbefalingen er gennemsnittet vægtet efter antal kampe.</p>
                 <div class="tabel-hylster"><table class="tabel"><thead><tr><th>Kategori</th><th class="tal">Kampe</th><th class="tal">Forventet</th></tr></thead><tbody>${fordeling}</tbody></table></div>
             </details>
-            ${sammenligning ? sammenligningTabel(sammenligning, a.minutter, nu) : ''}
+            ${sammenligning ? sammenligningTabel(sammenligning, a.minutter, p.opsaetning) : ''}
         </div>`;
 }
 
-function sammenligningTabel(rk, anbefalet, nu) {
+// Hver række er en kamplængde med reglementets pause i planen eller uden pause i planen
+function sammenligningTabel(rk, anbefalet, opsaetning) {
     const bedst = bedsteKamplaengde(rk);
+    const samme = (a, b) => ['ABCD', 'M', 'E', 'faelles'].every((x) => (a?.[x] ?? null) === (b?.[x] ?? null));
+    const bruges = (r) => r.minutter === opsaetning.slotMin && (samme(r.pauseMin, opsaetning.pauseMin) || (r.ogsaaUdenPause && ['ABCD', 'M', 'E', 'faelles'].every((x) => !opsaetning.pauseMin?.[x])));
     const raekker = rk.map((r) => {
-        const mark = [r.minutter === bedst ? '<span class="kamplaengde-ok">bedst samlet</span>' : '', r.minutter === anbefalet ? 'anbefalet' : '', r.minutter === nu ? 'bruges nu' : ''].filter(Boolean).join(', ');
+        const mark = [r === bedst ? '<span class="kamplaengde-ok">bedst samlet</span>' : '', r.minutter === anbefalet && !r.udenPause ? 'anbefalet' : '', bruges(r) ? 'bruges nu' : ''].filter(Boolean).join(', ');
         // Den forventede sluttid vises kun, når den ligger mindst 5 min efter planen (ellers er det støj)
         const senere = (d) => minutter(d.forventetSlut) - minutter(d.planSlut) >= 5;
         const slut = r.dage.map((d) => `${datoTekst(d.dato, { kort: true })}: ${d.planSlut}${senere(d) ? ` <span class="er-roed">→ ca. ${d.forventetSlut}</span>` : ''}`).join('<br>');
         return `<tr>
-            <td><strong>${r.minutter} min</strong>${mark ? `<br><span class="daempet">${mark}</span>` : ''}</td>
+            <td><strong>${r.minutter} min</strong><br><span class="daempet">${r.udenPause ? 'uden pause' : r.ogsaaUdenPause ? 'med/uden pause' : 'med pause'}</span>${mark ? `<br><span class="daempet">${mark}</span>` : ''}</td>
             <td class="tal">${r.udenTid ? `<span class="er-roed">${r.udenTid}</span>` : '0'}</td>
             <td class="tal">${r.fejl ? `<span class="er-roed">${r.fejl}</span>` : '0'}</td>
             <td class="tal">${r.muligeBrud ? `<span class="er-gul">${r.muligeBrud}</span>` : '0'}</td>
             <td class="tal">${r.haltidGnsMin} min</td>
             <td>${slut}</td>
             <td class="tal">${r.forsinkelseMax > FORSINKELSE_GRAENSE ? `<span class="er-roed">${r.forsinkelseMax} min</span>` : `${r.forsinkelseMax} min`}</td>
-            <td>${r.minutter === nu ? '' : `<button type="button" class="knap knap--sekundaer knap--lille" data-handling="brug-kamplaengde" data-min="${r.minutter}">Brug</button>`}</td>
+            <td>${bruges(r) ? '' : `<button type="button" class="knap knap--sekundaer knap--lille" data-handling="brug-kamplaengde" data-min="${r.minutter}" data-uden-pause="${r.udenPause ? '1' : '0'}">Brug</button>`}</td>
         </tr>`;
     }).join('');
     return `
             <div class="tabel-hylster" style="margin-top:12px"><table class="tabel">
-                <thead><tr><th>Kamplængde</th><th class="tal">Kampe uden tid</th><th class="tal" title="Tjeks fejl: reglen brydes med sikkerhed">Regelbrud</th><th class="tal" title="Tjeks pause-advarsler: reglen brydes, hvis bestemte spillere går videre (fx kort pause før en finale)">Mulige brud</th><th class="tal">Tid i hal (gns.)</th><th>Slut pr. dag (plan → forventet)</th><th class="tal">Største forsinkelse</th><th></th></tr></thead>
+                <thead><tr><th title="Kamplængde og pause i planen">Kamplængde</th><th class="tal">Uden tid</th><th class="tal" title="Tjeks fejl: reglen brydes med sikkerhed">Regelbrud</th><th class="tal" title="Tjeks pause-advarsler: reglen brydes, hvis bestemte spillere går videre (fx kort pause før en finale)">Mulige brud</th><th class="tal">Tid i hal</th><th>Slut (plan → forventet)</th><th class="tal">Forsinkelse</th><th></th></tr></thead>
                 <tbody>${raekker}</tbody></table></div>
-            <p class="panel-sub">Hver kamplængde er afprøvet med et nyt forslag fra planlæggeren og en simulering af dagen med de forventede kamptider: kampen tager den bane, der bliver ledig først, og spillerne får deres pause. Forsinkelsen viser risikoen, ikke en garanti. "Bedst samlet" er længden med færrest kampe uden tid, færrest regelbrud, ingen forsinkelse over ${FORSINKELSE_GRAENSE} min, færrest mulige brud og kortest tid i hallen — i den rækkefølge. Den kan afvige fra anbefalingen, fordi pausen spiller ind: 20 min kamp + 10 min pause = 30 min, så med 25-min slots skal en spiller vente to slots mellem sine kampe.</p>`;
+            <p class="panel-sub">Hver kamplængde er afprøvet med reglementets pause i planen og uden pause i planen, hver med et nyt forslag fra planlæggeren og en simulering af dagen med de forventede kamptider: kampen tager den bane, der bliver ledig først, og spillerne får altid reglementets pause — er den ikke i planen, venter kampen på dagen. Forsinkelsen viser altså, hvad en plan uden pause koster i hallen. Den viser risikoen, ikke en garanti. "Bedst samlet" er længden med færrest kampe uden tid, færrest regelbrud, mindst forsinkelse ud over ${FORSINKELSE_GRAENSE} min, færrest mulige brud og kortest tid i hallen — i den rækkefølge. Den kan afvige fra anbefalingen, fordi pausen spiller ind: 20 min kamp + 10 min pause = 30 min, så med 25-min slots skal en spiller vente to slots mellem sine kampe.</p>`;
 }
 
 function reglerPanel(p) {
@@ -468,7 +471,11 @@ function bind(container, projekt, h) {
         if (handling === 'gem-projekt') h.gemProjekt();
         else if (handling === 'start-forfra') h.startForfra();
         else if (handling === 'nulstil-regler') h.nulstilRegler();
-        else if (handling === 'brug-kamplaengde') h.slotMin(Number(knap.dataset.min));
+        else if (handling === 'brug-kamplaengde') {
+            // Fra sammenligningen: kamplængde og pause; fra anbefalingen: kun kamplængden
+            if (knap.dataset.udenPause !== undefined) h.brugKamplaengde(Number(knap.dataset.min), knap.dataset.udenPause === '1');
+            else h.slotMin(Number(knap.dataset.min));
+        }
         else if (handling === 'sammenlign-kamplaengder') h.sammenlignKamplaengder();
         else if (handling === 'fjern-spaerring') {
             const dag = projekt().opsaetning.dage.find((d) => d.dato === dato);
