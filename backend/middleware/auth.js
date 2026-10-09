@@ -61,7 +61,7 @@ async function authMiddleware(req, res, next) {
             return res.status(401).json({ error: 'Ugyldig token' });
         }
         if (error.name === 'TokenExpiredError') {
-            return res.status(401).json({ error: 'Token udløbet' });
+            return res.status(401).json({ error: 'Token udløbet', sessionExpired: true });
         }
         return res.status(500).json({ error: 'Autentificeringsfejl' });
     }
@@ -126,9 +126,11 @@ async function requireWriteAuthInClubMode(req, res, next) {
     try {
         decoded = jwt.verify(authHeader.substring(7), process.env.JWT_SECRET);
     } catch (error) {
+        const udloebet = error.name === 'TokenExpiredError';
         return res.status(401).json({
-            error: error.name === 'TokenExpiredError' ? 'Adgangslink udløbet' : 'Ugyldigt adgangslink',
-            authRequired: true
+            error: udloebet ? 'Adgangslink udløbet' : 'Ugyldigt adgangslink',
+            authRequired: true,
+            sessionExpired: udloebet || undefined
         });
     }
 

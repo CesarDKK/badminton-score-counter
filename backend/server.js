@@ -60,6 +60,7 @@ const { loginLimiter, superAdminLoginLimiter } = require('./middleware/rateLimit
 app.use('/api/super-admin/login', superAdminLoginLimiter);
 app.use('/api/super-admin', require('./routes/superAdmin'));
 app.use('/api/auth', loginLimiter, require('./routes/auth'));
+app.use('/api/session', require('./routes/session'));
 app.use('/api/club-admin/login', loginLimiter);
 app.use('/api/club-admin', require('./routes/clubAdmin'));
 app.use('/api/device-tokens', require('./routes/deviceTokens'));

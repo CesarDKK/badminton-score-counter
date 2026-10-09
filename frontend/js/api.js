@@ -14,10 +14,28 @@ window.decodeJwtPayload = function (token) {
     return JSON.parse(atob(b64));
 };
 
+// Vises på login-siden, når man er blevet logget ud, fordi tokenet udløb
+const SESSION_UDLOEBET = 'Du er blevet logget ud, fordi din session udløb. Log ind igen.';
+
 class BadmintonAPI {
     constructor() {
         this.token = sessionStorage.getItem('authToken');
+        // Et udløbet admin-token (fanen stod åben natten over) er ubrugeligt: glem
+        // det, så siden viser login i stedet for et dashboard, der ikke kan noget
+        if (this.token && this._erUdloebet(this.token)) {
+            sessionStorage.removeItem('authToken');
+            sessionStorage.removeItem('superAdminToken');
+            sessionStorage.setItem('loginBesked', SESSION_UDLOEBET);
+            this.token = null;
+        }
         this._initDeviceToken();
+    }
+
+    _erUdloebet(token) {
+        try {
+            const exp = window.decodeJwtPayload(token).exp;
+            return !!exp && Date.now() / 1000 > exp;
+        } catch { return true; }
     }
 
     // Læser ?dt=<jwt> fra URL, gemmer i sessionStorage og renser URL
@@ -85,6 +103,9 @@ class BadmintonAPI {
         if (this.token && options.requiresAuth !== false) {
             headers['Authorization'] = `Bearer ${this.token}`;
         }
+        // Bar kaldet et admin-login (ikke et adgangslink)? Så betyder et 401 for
+        // udløbet/afsluttet session, at man skal logge ind igen
+        const medAdminLogin = !!headers['Authorization'] && this.token === sessionStorage.getItem('authToken');
 
         // 12s standard. Var 30s, men et kald der hænger i en halv minut hjælper
         // ingen: brugeren ser bare "timeout" længe efter at det reelt var gået galt,
@@ -121,13 +142,11 @@ class BadmintonAPI {
                     // serverens aktuelle tilstand som kalderen skal bruge
                     err.body = error;
 
-                    // Klub-admin-sessionen er slut (brugeren slettet eller adgangskoden
-                    // skiftet): glem den og send til klub-login, med vej tilbage hertil
-                    if (response.status === 401 && error.sessionEnded) {
-                        sessionStorage.removeItem('authToken');
-                        this.token = sessionStorage.getItem('deviceToken');
-                        const tilbage = encodeURIComponent(window.location.pathname + window.location.search);
-                        window.location.href = '/club-login.html?redirect=' + tilbage;
+                    // Sessionen er slut (tokenet udløbet, brugeren slettet eller
+                    // adgangskoden skiftet): send til login, med vej tilbage hertil
+                    if (response.status === 401 && medAdminLogin && (error.sessionEnded || error.sessionExpired)) {
+                        if (error.sessionExpired) this.sessionUdloebet();
+                        else this.afslutSession(error.error);
                         throw err;
                     }
 
@@ -211,12 +230,48 @@ class BadmintonAPI {
         try {
             const mode = await this.getMode();
             if (mode && mode.mode === 'club') {
-                const tilbage = encodeURIComponent(window.location.pathname);
+                const tilbage = encodeURIComponent(window.location.pathname + window.location.search);
                 window.location.href = '/club-login.html?redirect=' + tilbage;
                 return true;
             }
         } catch { /* kan ikke nå serveren — vis sidens eget login */ }
         return false;
+    }
+
+    /**
+     * "Jeg er her stadig": bytter admin-tokenet til et nyt med fuld levetid,
+     * før det gamle udløber (js/session-vagt.js).
+     */
+    async fornySession() {
+        const result = await this.request('/session/forny', { method: 'POST' });
+        if (result.token) {
+            this.token = result.token;
+            sessionStorage.setItem('authToken', result.token);
+            if (sessionStorage.getItem('superAdminToken')) {
+                sessionStorage.setItem('superAdminToken', result.token);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Sessionen er slut: glem tokenet og vis login, med en besked om hvorfor.
+     * Klub-subdomæner → klub-login (med vej tilbage hertil); super-admin og
+     * lokale installationer → siden selv, som viser sit eget login uden token.
+     */
+    async afslutSession(besked) {
+        if (this._afslutter) return;
+        this._afslutter = true;
+        const varSuperAdmin = !!sessionStorage.getItem('superAdminToken');
+        sessionStorage.removeItem('superAdminToken');
+        if (besked) sessionStorage.setItem('loginBesked', besked);
+        if (!varSuperAdmin && await this.logoutTilLogin()) return;
+        this.logout();
+        window.location.reload();
+    }
+
+    sessionUdloebet() {
+        return this.afslutSession(SESSION_UDLOEBET);
     }
 
     /**
