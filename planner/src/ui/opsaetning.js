@@ -3,17 +3,20 @@
 import { esc, datoTekst, procent, tal } from './dom.js';
 import { kapacitetPrDag, kampePrKategori, slotsForDag, baneSlots, FYLDNINGSGRAD } from '../kapacitet.js';
 import { foerSkoledag } from '../rules.js';
+import { minutter } from '../tp-reader.js';
 import { reglerFor, STANDARD_REGLER } from '../store.js';
 import { FORM_VALG, FORM_VALG_TEKST, formTekst, effektivForm, minKampeSamlet } from '../form.js';
 import { KRITERIER, VAEGT_SKABELONER, vaegteFor } from '../kriterier.js';
+import { anbefaletKamplaengde, bedsteKamplaengde, SAESONDATA, SKIFTE_MIN, MARGEN, FORSINKELSE_GRAENSE } from '../kamplaengde.js';
 
 const FORM_TEKST = {
     'pulje': 'Pulje', 'pulje-cup': 'Pulje + cup', 'cup': 'Cup', 'dobbelt-pulje': 'Dobbelt pulje',
     'dobbelt-pulje-cup': 'Dobbelt pulje + cup', 'swiss': 'Swiss Ladder', 'ingen lodtrækning': 'Ingen lodtrækning',
 };
 
-export function renderOpsaetning(container, projekt, handlers) {
-    container.innerHTML = [filPanel(projekt), ...(projekt ? [turneringPanel(projekt), dagePanel(projekt), reglerPanel(projekt), vaegtPanel(projekt), raekkePanel(projekt), opskriftPanel(projekt), kapacitetPanel(projekt)] : [])].join('');
+// ui.sammenligning: resultatet af "Sammenlign kamplængder" for det viste projekt (eller null)
+export function renderOpsaetning(container, projekt, handlers, ui = {}) {
+    container.innerHTML = [filPanel(projekt), ...(projekt ? [turneringPanel(projekt), dagePanel(projekt, ui), reglerPanel(projekt), vaegtPanel(projekt), raekkePanel(projekt), opskriftPanel(projekt), kapacitetPanel(projekt)] : [])].join('');
     // Lytterne sættes på beholderen én gang og læser det aktuelle projekt herfra,
     // så de ikke hober sig op ved hver gentegning.
     container._projekt = projekt;
@@ -72,7 +75,7 @@ function turneringPanel(p) {
     </section>`;
 }
 
-function dagePanel(p) {
+function dagePanel(p, ui = {}) {
     const { slotMin, pauseMin, dage } = p.opsaetning;
     const raekker = dage.map((d) => {
         const slots = slotsForDag(d, slotMin).length;
@@ -112,7 +115,7 @@ function dagePanel(p) {
             </table>
         </div>
         <div class="raekke-knapper" style="margin-top:18px; gap:22px">
-            <label class="felt"><span class="etiket">Slotlængde</span>
+            <label class="felt" title="Turneringens ene kamplængde, som også sættes i TP. Den bestemmer slot-gitteret."><span class="etiket">Kamplængde (slot)</span>
                 <input type="number" min="5" max="90" step="5" value="${slotMin}" data-felt="slotMin"> min</label>
             ${pause('ABCD', 'Pause A/B/C/D')}
             ${pause('M', 'Pause M')}
@@ -124,6 +127,7 @@ function dagePanel(p) {
                     <option value="slot" ${p.opsaetning.kampVarighed === 'slot' ? 'selected' : ''}>et helt slot (streng)</option>
                 </select></label>
         </div>
+        ${kamplaengdeBoks(p, ui.sammenligning)}
         <div class="raekke-knapper" style="margin-top:14px; gap:22px">
             <label class="valg" title="Fra din gamle prompt (regel A3): i samme række må HS og HD ikke ligge samtidig, DS og DD ikke, og MD ikke sammen med nogen af dem. Tjek advarer, og forslaget undgår det."><input type="checkbox" data-opsaetning="antiSamtidighed" ${p.opsaetning.antiSamtidighed !== false ? 'checked' : ''}> undgå single og double samtidig i samme række</label>
             <label class="valg" title="Blødt mål i forslaget: alle puljers runde 1 spilles før runde 2 osv. inden for hvert event. Giver et mere overskueligt program, men ofte lidt længere haltid."><input type="checkbox" data-opsaetning="puljerunderSynkront" ${p.opsaetning.puljerunderSynkront ? 'checked' : ''}> puljerunder synkront på tværs af puljer</label>
@@ -132,6 +136,58 @@ function dagePanel(p) {
         </div>
         <p class="panel-sub">Reglementet: mindst 10 min pause i A–D-rækker, 15 i M, 20 i E, og 12 når M og A–D spilles i samme turnering. Med "minimumstid" må to 20-min-kampe for samme spiller ligge i naboslots ved 30-min slots (20 + 10 = 30); med "et helt slot" skal der være slot + pause mellem starttiderne.</p>
     </section>`;
+}
+
+// Anbefalet kamplængde ud fra programmets kampe (sæsondata) — TP har kun én kamplængde for hele
+// turneringen — og evt. sammenligningen af kamplængder.
+function kamplaengdeBoks(p, sammenligning) {
+    const a = anbefaletKamplaengde(p);
+    if (!a.antal) return '';
+    const nu = p.opsaetning.slotMin;
+    const komma = (x) => String(x).replace('.', ',');
+    const grund = a.minutter > a.fraData ? ` Reglementets minimum for programmets rækker er ${a.reglement} min (§ 4 stk. 5).` : '';
+    const knap = nu === a.minutter
+        ? '<span class="kamplaengde-ok">✓ Bruges nu</span>'
+        : `<button type="button" class="knap knap--sekundaer knap--lille" data-handling="brug-kamplaengde" data-min="${a.minutter}">Brug ${a.minutter} min</button>`;
+    const fordeling = a.kategorier.map((k) => `<tr><td>${esc(k.id)}</td><td class="tal">${k.antal}</td><td class="tal">${komma(k.minutter)} min</td></tr>`).join('');
+    return `
+        <div class="kamplaengde">
+            <div class="kamplaengde-top">
+                <div><strong>Anbefalet kamplængde: ${a.minutter} min</strong>
+                    <span class="daempet">Programmets ${a.antal} kampe varer forventet ${komma(a.gennemsnit)} min i gennemsnit + ${SKIFTE_MIN} min skifte + ${Math.round((MARGEN - 1) * 100)} % margen, rundet op til hele 5 min.${grund}</span></div>
+                <div class="raekke-knapper">${knap}
+                    <button type="button" class="knap knap--sekundaer knap--lille" data-handling="sammenlign-kamplaengder">Sammenlign kamplængder</button></div>
+            </div>
+            <details class="kamplaengde-detaljer"><summary>Sådan er gennemsnittet regnet ud</summary>
+                <p class="panel-sub">Hver kamp får en forventet varighed efter årgang, single/double/mix og niveau fra ${esc(SAESONDATA.tekst)}. TP har kun én kamplængde, så anbefalingen er gennemsnittet vægtet efter antal kampe.</p>
+                <div class="tabel-hylster"><table class="tabel"><thead><tr><th>Kategori</th><th class="tal">Kampe</th><th class="tal">Forventet</th></tr></thead><tbody>${fordeling}</tbody></table></div>
+            </details>
+            ${sammenligning ? sammenligningTabel(sammenligning, a.minutter, nu) : ''}
+        </div>`;
+}
+
+function sammenligningTabel(rk, anbefalet, nu) {
+    const bedst = bedsteKamplaengde(rk);
+    const raekker = rk.map((r) => {
+        const mark = [r.minutter === bedst ? '<span class="kamplaengde-ok">bedst samlet</span>' : '', r.minutter === anbefalet ? 'anbefalet' : '', r.minutter === nu ? 'bruges nu' : ''].filter(Boolean).join(', ');
+        // Den forventede sluttid vises kun, når den ligger mindst 5 min efter planen (ellers er det støj)
+        const senere = (d) => minutter(d.forventetSlut) - minutter(d.planSlut) >= 5;
+        const slut = r.dage.map((d) => `${datoTekst(d.dato, { kort: true })}: ${d.planSlut}${senere(d) ? ` <span class="er-roed">→ ca. ${d.forventetSlut}</span>` : ''}`).join('<br>');
+        return `<tr>
+            <td><strong>${r.minutter} min</strong>${mark ? `<br><span class="daempet">${mark}</span>` : ''}</td>
+            <td class="tal">${r.udenTid ? `<span class="er-roed">${r.udenTid}</span>` : '0'}</td>
+            <td class="tal">${r.brud ? `<span class="er-roed">${r.brud}</span>` : '0'}</td>
+            <td class="tal">${r.haltidGnsMin} min</td>
+            <td>${slut}</td>
+            <td class="tal">${r.forsinkelseMax > FORSINKELSE_GRAENSE ? `<span class="er-roed">${r.forsinkelseMax} min</span>` : `${r.forsinkelseMax} min`}</td>
+            <td>${r.minutter === nu ? '' : `<button type="button" class="knap knap--sekundaer knap--lille" data-handling="brug-kamplaengde" data-min="${r.minutter}">Brug</button>`}</td>
+        </tr>`;
+    }).join('');
+    return `
+            <div class="tabel-hylster" style="margin-top:12px"><table class="tabel">
+                <thead><tr><th>Kamplængde</th><th class="tal">Kampe uden tid</th><th class="tal">Regelbrud</th><th class="tal">Tid i hal (gns.)</th><th>Slut pr. dag (plan → forventet)</th><th class="tal">Største forsinkelse</th><th></th></tr></thead>
+                <tbody>${raekker}</tbody></table></div>
+            <p class="panel-sub">Hver kamplængde er afprøvet med et nyt forslag fra planlæggeren og en simulering af dagen med de forventede kamptider: kampen tager den bane, der bliver ledig først, og spillerne får deres pause. Forsinkelsen viser risikoen, ikke en garanti. "Bedst samlet" er længden med færrest kampe uden tid, færrest regelbrud, ingen forsinkelse over ${FORSINKELSE_GRAENSE} min og kortest tid i hallen. Den kan afvige fra anbefalingen, fordi pausen spiller ind: 20 min kamp + 10 min pause = 30 min, så med 25-min slots skal en spiller vente to slots mellem sine kampe.</p>`;
 }
 
 function reglerPanel(p) {
@@ -411,6 +467,8 @@ function bind(container, projekt, h) {
         if (handling === 'gem-projekt') h.gemProjekt();
         else if (handling === 'start-forfra') h.startForfra();
         else if (handling === 'nulstil-regler') h.nulstilRegler();
+        else if (handling === 'brug-kamplaengde') h.slotMin(Number(knap.dataset.min));
+        else if (handling === 'sammenlign-kamplaengder') h.sammenlignKamplaengder();
         else if (handling === 'fjern-spaerring') {
             const dag = projekt().opsaetning.dage.find((d) => d.dato === dato);
             h.dag(dato, { spaerret: dag.spaerret.filter((_, i) => i !== Number(index)) });

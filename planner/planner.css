@@ -425,3 +425,12 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 .ned-tabel th { font-weight: 600; opacity: 0.75; }
 .diagnose-knapper { margin: 0 0 10px; display: flex; gap: 8px; flex-wrap: wrap; }
 .nav-status.er-ikke-gemt { color: var(--amber); font-weight: 600; }
+
+/* Kamplængde: anbefaling ud fra programmets kampe og sammenligning af kamplængder (fane 1) */
+.kamplaengde { margin-top: 18px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.kamplaengde-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.kamplaengde-top .daempet { display: block; margin-top: 4px; font-size: 0.9em; line-height: 1.5; }
+.kamplaengde-ok { color: var(--green); font-weight: 600; font-size: 0.9em; }
+.kamplaengde-detaljer { margin-top: 10px; }
+.kamplaengde-detaljer summary { cursor: pointer; color: var(--muted); font-size: 0.9em; }
+.kamplaengde .er-roed { color: var(--red-soft); }
