@@ -154,7 +154,7 @@ Fanerne bliver til trin: **1 Fil · 2 Turneringen · 3 Program · 4 Til TP**.
 
 - **Fase A — rettelser (lille, bygget 2026-10-09):** fanelinjens rullebjælke, knapkontrast, én rød knap på Plan, statuskort i stedet for statussætning og score, nedskæring uden tomme forslag, en "Ret og lav igen"-knap ved de løsningsforslag, der i dag kun er tekst.
 - **Fase B — automatik (bygget 2026-10-09; motorens regler er uændret):** beslutningsgenerator + "Lav kampprogram" + resultatkort og beslutningskort. De nuværende faner bevares imens.
-- **Fase C — nyt flow:** trin i stedet for faner, opsætningen skåret ned til trin 2 + avanceret, Tjek ind i Program.
+- **Fase C — nyt flow (bygget 2026-10-09):** trin i stedet for faner, opsætningen skåret ned til trin 2 + avanceret, Tjek ind i Program.
 
 ## Spørgsmål til Jesper
 

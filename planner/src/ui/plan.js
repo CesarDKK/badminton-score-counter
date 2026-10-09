@@ -7,12 +7,13 @@ import { slotsForDag, banerISlot, puljeKapacitet } from '../kapacitet.js';
 import { alvorForKamp } from '../rules.js';
 import { bedoemPlan, loesningsforslag } from '../scheduler.js';
 import { scorePlan } from '../kriterier.js';
+import { renderTjek } from './tjek.js';
 
 /** Panelet med forslag, der får kabalen til at gå op (nedskaering.js) — valget træffes på oplyst grundlag. */
 function nedskaeringPanel(ned) {
     const tal = (n) => String(Math.round(n * 10) / 10).replace('.', ',');
     const r = ned.regnskab;
-    const regnskab = r ? `<p class="ned-regnskab">På de fælles baner kræver kampene <b>${tal(r.faelles.behov)} bane-slots</b>, og der er højst <b>${tal(r.faelles.plads)}</b> lovlige — i praksis kan ca. ${Math.round(r.fyldningsgrad * 100)} % (${tal(r.faelles.plads * r.fyldningsgrad)}) bruges, fordi pauser og runder giver huller.${r.reserveret.filter((x) => x.ubrugt >= 1).map((x) => ` <b>${esc(x.raekke)}</b> har reserveret ${tal(x.plads)} bane-slots, men bruger ${tal(x.behov)} — ${tal(x.ubrugt)} står ubrugt. Færre reserverede baner, et kortere tidsrum eller kun den dag, rækken spiller (fane 1), giver plads til de andre uden at skære i kampene.`).join('')}</p>` : '';
+    const regnskab = r ? `<p class="ned-regnskab">På de fælles baner kræver kampene <b>${tal(r.faelles.behov)} bane-slots</b>, og der er højst <b>${tal(r.faelles.plads)}</b> lovlige — i praksis kan ca. ${Math.round(r.fyldningsgrad * 100)} % (${tal(r.faelles.plads * r.fyldningsgrad)}) bruges, fordi pauser og runder giver huller.${r.reserveret.filter((x) => x.ubrugt >= 1).map((x) => ` <b>${esc(x.raekke)}</b> har reserveret ${tal(x.plads)} bane-slots, men bruger ${tal(x.behov)} — ${tal(x.ubrugt)} står ubrugt. Færre reserverede baner, et kortere tidsrum eller kun den dag, rækken spiller (under Turneringen), giver plads til de andre uden at skære i kampene.`).join('')}</p>` : '';
     if (!ned.liste.length) return `<div class="panel nedskaering"><h3>Forslag, der får kabalen til at gå op</h3>${regnskab}<p class="panel-sub">${esc(ned.besked || 'Planneren kan ikke selv skære ned her.')}</p><button class="knap knap--sekundaer" data-handling="ned-luk">Luk</button></div>`;
     const kort = ned.liste.map((f, i) => `
         <div class="ned-kort">
@@ -23,7 +24,7 @@ function nedskaeringPanel(ned) {
             <button class="knap" data-handling="ned-brug" data-index="${i}">Brug dette</button>
         </div>`).join('');
     return `<div class="panel nedskaering"><h3>Forslag, der får kabalen til at gå op</h3>
-        <p class="panel-sub">Hvert forslag er afprøvet med planlæggeren. "Brug dette" sætter rundetallene på kategorierne (de kan ses og rettes i fane 1), bygger kampene igen og lægger planen. Spillere under minimum vises bagefter som advarsler i Tjek, som du kan kvittere.</p>
+        <p class="panel-sub">Hvert forslag er afprøvet med planlæggeren. "Brug dette" sætter rundetallene på kategorierne (de kan ses og rettes under Turneringen), bygger kampene igen og lægger planen. Spillere under minimum vises bagefter som advarsler i Tjek, som du kan kvittere.</p>
         ${regnskab}${kort}
         <button class="knap knap--sekundaer" data-handling="ned-luk">Luk uden at ændre</button></div>`;
 }
@@ -55,7 +56,7 @@ function kampprogramPanel(kp, aabneKort) {
                 <span class="daempet">— ${effekt}${x.konsekvens.length ? ` · ${esc(x.konsekvens.join(' · '))}` : ''}</span></span></label>`;
         }).join('');
         return `<div class="beslutning" data-kort="${i}">
-            <h4>${esc(k.titel)}</h4>
+            <h4>${esc(k.titel)}</h4>${k.flere?.length ? `<ul class="beslutning-flere">${k.flere.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
             ${k.valg.length ? '<p class="daempet">Hver løsning er afprøvet med planlæggeren.</p>' : '<p class="daempet">Planneren fandt ingen ændring af opsætningen, der hjælper her. Kampene ligger med regelbrud — se dem i Tjek.</p>'}
             <div class="beslutning-liste">${valg}
                 <label class="beslutning-valg"><input type="radio" name="kort-${i}" value="behold" ${k.valg.length ? '' : 'checked'}>
@@ -117,7 +118,7 @@ function tooltip(projekt, tjek, kamp) {
 
 export function renderPlan(container, projekt, tjek, tilstand, handlers) {
     if (!projekt) {
-        container.innerHTML = '<div class="panel"><h2>Plan</h2><p class="panel-sub">Åbn en .TP-fil under "Fil og opsætning" først.</p></div>';
+        container.innerHTML = '<div class="panel"><h2>Program</h2><p class="panel-sub">Åbn en .TP-fil under trin 1 (Fil) først.</p></div>';
         return;
     }
     const dage = projekt.opsaetning.dage;
@@ -187,7 +188,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
             titel = tooltip(projekt, tjek, k);
             tekst = kortNavn(k);
         }
-        return `<div class="${klasser.join(' ')}" draggable="true" data-kamp="${esc(ids.join(','))}" style="--hue:${hueFor(projekt, k.kategori)}" title="${esc(titel)}${laast ? '\n🔒 Låst — dobbeltklik for at låse op' : ''}"><b>${esc(k.kategori)}${laast ? ' 🔒' : ''}</b><span>${esc(tekst)}</span></div>`;
+        return `<div class="${klasser.join(' ')}" draggable="true" tabindex="0" role="button" data-kamp="${esc(ids.join(','))}" style="--hue:${hueFor(projekt, k.kategori)}" title="${esc(titel)}${laast ? '\n🔒 Låst — dobbeltklik for at låse op' : ''}"><b>${esc(k.kategori)}${laast ? ' 🔒' : ''}</b><span>${esc(tekst)}</span></div>`;
     };
 
     // Kampe pr. slot på den valgte dag
@@ -258,6 +259,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
     // Én primær (rød) handling ad gangen: uden plan er det "Lav forslag"; med en plan er det løseren, som er
     // anbefalet — den kører kun, når man trykker (Jesper 2026-10-09)
     const harPlan = placeret.size > 0;
+    const problemer = tilstand.visning === 'problemer';
     // Panelet fra 'Lav kampprogram' vises for det projekt, det blev lavet til
     const kp = tilstand.kampprogram?.projekt === projekt ? tilstand.kampprogram : null;
     const aabneKort = kp ? kp.beslutninger.kort.filter((k) => !kp.beholdt.includes(k.noegle)) : [];
@@ -310,16 +312,21 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
         ${harPlan ? statusTal(statistik.langeHuller, `venter over ${statistik.maxVentetidMin} min`, statistik.langeHuller ? 'er-gul' : '') : ''}
         ${laaste.size ? statusTal(laaste.size, laaste.size === 1 ? 'låst kamp' : 'låste kampe') : ''}
     </div>
+    ${tilstand.fortryd?.efter === projekt ? `<p class="fortryd-bjaelke">${esc(tilstand.fortryd.tekst)} <button class="knap knap--sekundaer knap--lille" data-handling="fortryd">Fortryd</button></p>` : ''}
     ${anbefalLoeser ? `<p class="anbefaling"><b>Anbefalet:</b> tryk "Forbedr med løseren". Den regner i op til ${sek < 120 ? `${sek} sekunder` : `${sek / 60} minutter`} og finder som regel en plan med kortere ventetid og tid i hallen. Du vælger selv, om du vil bruge den.</p>` : ''}
-    <p class="plan-hjaelp daempet">Træk et kort til et slot, eller til listen til højre for at fjerne tiden. Klik viser spillerens andre kampe; dobbeltklik låser. <span title="${esc('Vægtet sum af de bløde kriterier — lavere er bedre. Vægtene står under Avanceret i opsætningen.\n' + scoreTitel)}">Score ${score.total}.</span></p>
+    <div class="visning-skift" role="tablist" aria-label="Visning">
+        <button role="tab" class="visning ${problemer ? '' : 'er-aktiv'}" data-visning="gitter" aria-selected="${!problemer}">Plan</button>
+        <button role="tab" class="visning ${problemer ? 'er-aktiv' : ''}" data-visning="problemer" aria-selected="${problemer}">Problemer${antalFejl ? ` <span class="maerke maerke--fejl">${antalFejl} fejl</span>` : ''}${antalAdv ? ` <span class="maerke maerke--advarsel">${antalAdv}</span>` : ''}</button>
+    </div>
+    ${problemer ? '' : `<p class="plan-hjaelp daempet">Træk et kort til et slot — eller klik på kortet og derefter på et slot. Træk det til listen til højre for at fjerne tiden. Dobbeltklik låser. <span title="${esc('Vægtet sum af de bløde kriterier — lavere er bedre. Vægtene står under Avanceret i opsætningen.\n' + scoreTitel)}">Score ${score.total}.</span></p>`}
     ${tilstand.forslag && !kp ? `<p class="plan-status forslag-info">${esc(tilstand.forslag.tekst)}${tilstand.forslag.ikkePlaceret.length ? ` Berørte kampe: ${tilstand.forslag.ikkePlaceret.slice(0, 6).map((x) => `${esc(x.kategori)} ${esc(x.navn)} (${esc(x.brud || x.aarsag)})`).join('; ')}${tilstand.forslag.ikkePlaceret.length > 6 ? ' …' : ''}` : ''}</p>
     ${tilstand.forslag.handlinger?.length ? `<p class="diagnose-knapper">${tilstand.forslag.handlinger.map((x, i) => `<button class="knap knap--sekundaer" data-handling="diagnose" data-index="${i}">${esc(x.tekst)}</button>`).join(' ')}</p>` : ''}
     ${tilstand.forslag.ikkePlaceret.length ? `<ul class="loesninger">${loesningsforslag(projekt, tilstand.forslag.ikkePlaceret).map((f, i) => `<li><span>${esc(f.tekst)}</span>${f.handling ? ` <button class="knap knap--sekundaer knap--lille" data-handling="loesning" data-index="${i}">${esc(f.handling.tekst)} og lav forslag igen</button>` : ''}</li>`).join('')}</ul>
     ${tilstand.nedskaering ? '' : `<p><button class="knap knap--sekundaer" data-handling="ned-find" title="Afprøver færre Swiss Ladder-runder og spil over to dage med planlæggeren, og viser hvad hvert forslag koster i kampe pr. spiller. Intet ændres, før du vælger.">Prøv færre runder eller to dage</button></p>`}` : ''}` : ''}
     ${tilstand.nedskaering ? nedskaeringPanel(tilstand.nedskaering) : ''}
-    <div class="plan-layout">
+    ${problemer ? '<div class="tjek-indhold"></div>' : `<div class="plan-layout">
         <div class="gitter-hylster">
-            <table class="gitter">
+            <table class="gitter ${tilstand.valgtIds ? 'kan-flyttes' : ''}">
                 <tbody>${raekker}</tbody>
             </table>
         </div>
@@ -328,9 +335,13 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
                 <h3>Ikke placeret <span class="daempet">${ikkePlacerede.length}</span></h3>
                 ${sidepanel || '<p class="daempet">Alle kampe har en tid.</p>'}
             </section>
-            ${spillerPanel ? `<section class="spillerpanel"><h3>Spillere i den valgte kamp</h3>${spillerPanel}</section>` : ''}
+            ${valgt ? `<section class="spillerpanel"><h3>Den valgte kamp</h3>
+                <p class="daempet">Klik på et slot i gitteret for at flytte kampen dertil.</p>
+                <p class="raekke-knapper" style="margin:6px 0 4px"><button class="knap knap--sekundaer knap--lille" data-handling="fjern-valgte">Fjern tiden</button><button class="knap knap--sekundaer knap--lille" data-handling="fravaelg">Fravælg</button></p>
+                ${spillerPanel}</section>` : ''}
         </aside>
-    </div>`;
+    </div>`}`;
+    if (problemer) renderTjek(container.querySelector('.tjek-indhold'), projekt, tjek, handlers.tjek);
 
     // Lytterne sættes én gang på beholderen (delegering), ikke ved hver gentegning.
     if (!container.dataset.bundet) {
@@ -404,12 +415,25 @@ function bind(container, h) {
             else if (hd === 'ned-find') h.findNedskaering();
             else if (hd === 'ned-brug') h.brugNedskaering(Number(knap.dataset.index));
             else if (hd === 'ned-luk') h.lukNedskaering();
+            else if (hd === 'fortryd') h.fortryd();
+            else if (hd === 'fjern-valgte') { const ids = h.valgteIds(); if (ids) { h.vaelgKamp(ids); h.fjern(ids); } }
+            else if (hd === 'fravaelg') { const ids = h.valgteIds(); if (ids) h.vaelgKamp(ids); }
             return;
         }
+        const vis = e.target.closest('[data-visning]');
+        if (vis) { h.visning(vis.dataset.visning); return; }
         const li = e.target.closest('li[data-kamp]');
         if (li) { h.visKamp(li.dataset.kamp); return; }
         const kort = e.target.closest('.kort[data-kamp]');
-        if (kort) h.vaelgKamp(kort.dataset.kamp.split(',')[0]);
+        if (kort) { h.vaelgKamp(kort.dataset.kamp); return; }
+        const celle = e.target.closest('.celle[data-slot]');
+        if (celle && h.valgteIds()) h.flytValgte(celle.dataset.dag, celle.dataset.slot);
+    });
+    // Tastatur: Enter/mellemrum på et kort vælger det
+    container.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const kort = e.target.closest?.('.kort[data-kamp]');
+        if (kort) { e.preventDefault(); h.vaelgKamp(kort.dataset.kamp); }
     });
     container.addEventListener('dblclick', (e) => {
         const kort = e.target.closest('.kort[data-kamp]');

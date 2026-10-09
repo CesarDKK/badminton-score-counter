@@ -264,6 +264,14 @@ export function lavBeslutninger(projekt, forslag, { medNedskaering = true } = {}
         valg.sort((a, b) => { const x = rang(a), y = rang(b); for (let i = 0; i < x.length; i += 1) if (x[i] !== y[i]) return x[i] - y[i]; return 0; });
         kort.push({ noegle: g.noegle, titel: titelFor(projekt, g), familie: g.familie, raekke: g.raekke, antal: g.kampe.length, valg: valg.slice(0, 4).map((v) => ({ ...v, prisNavn: prisNavn[v.pris] })) });
     }
+    // Kort, hvis anbefalede løsning er den samme (fx "lad tre rækker spille over to dage"), bliver til ét kort
+    const samlet = [];
+    for (const k of kort) {
+        const n = k.valg[0] ? k.valg[0].tekst : null;
+        const ens = n && samlet.find((x) => x.valg[0]?.tekst === n);
+        if (ens) { ens.flere = [...(ens.flere || []), k.titel]; ens.antal += k.antal; ens.noegler.push(k.noegle); } else samlet.push({ ...k, noegler: [k.noegle] });
+    }
+    kort.splice(0, kort.length, ...samlet);
     // Kort med en løsning, der får hele programmet til at gå op, først — det er dem, der flytter mest
     kort.sort((a, b) => (b.valg.some((v) => v.gaarOp) - a.valg.some((v) => v.gaarOp)));
     return { brud: foer.brud, kort };

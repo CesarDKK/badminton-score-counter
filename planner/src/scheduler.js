@@ -652,7 +652,7 @@ function forslagFraBrud(projekt, liste) {
         } else if (brud === 'max-kampe') {
             ud.push({ tekst: `${hvem} giver spillere flere kampe pr. dag end tilladt. Lad rækken spille over flere dage, eller ret grænsen under "Reglementets grænser" (kræver dispensation).` });
         } else if (brud === 'dag') {
-            ud.push({ tekst: `${hvem} er lagt på en dag, rækken ikke har valgt. Vælg dagen for rækken i fane 1, eller forlæng rækkens egne dage.` });
+            ud.push({ tekst: `${hvem} er lagt på en dag, rækken ikke har valgt. Vælg dagen for rækken under Turneringen, eller forlæng rækkens egne dage.` });
         } else if (brud === 'kapacitet') {
             const prDag = new Map();
             for (const x of xs) { const d = x.detalje?.dag; if (d) prDag.set(d, (prDag.get(d) || 0) + 1); }

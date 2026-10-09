@@ -112,7 +112,7 @@ describe('min. kampe samlet: i projektet og i Tjek', () => {
         const a = minAdvarsler(p).find((x) => x.noegle.startsWith('U09 D DS'));
         assert.ok(a, 'advarsel om for få kampe');
         assert.doesNotMatch(a.tekst, /i alt/);
-        assert.match(a.tekst, /Vælg en anden form i fane 1/);
+        assert.match(a.tekst, /Vælg en anden form under Turneringen/);
     });
     test('uden doubler: advarslen nævner, at der er talt samlet', () => {
         const p = projekt({ pigerIDouble: false });

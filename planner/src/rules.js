@@ -399,10 +399,10 @@ export function tjekPlan(projekt) {
             const over = swissOversiddere(k);
             if (over && [...prSpillerAntal.values()].every((n) => n + 1 >= krav)) {
                 const antal = Math.min(ramte.length, over * (k.type === 'single' ? 1 : 2));
-                tilfoej({ type: 'form', alvor: 'advarsel', noegle: `${k.id}:min-kampe`, tekst: `${k.id}: ulige antal deltagere (${ef.deltagere}) — én sidder over i hver runde, så op til ${antal} spillere får ${krav - 1} ${krav - 1 === 1 ? 'kamp' : 'kampe'}${samlet ? ' i alt (single + double/mix)' : ''} (krav ${krav}); de øvrige når kravet. ${(k.formValg || 'tp') === 'tp' ? 'Rettes i TP.' : 'En ekstra runde eller en anden form i fane 1 løser det.'}`, kampe: [] });
+                tilfoej({ type: 'form', alvor: 'advarsel', noegle: `${k.id}:min-kampe`, tekst: `${k.id}: ulige antal deltagere (${ef.deltagere}) — én sidder over i hver runde, så op til ${antal} spillere får ${krav - 1} ${krav - 1 === 1 ? 'kamp' : 'kampe'}${samlet ? ' i alt (single + double/mix)' : ''} (krav ${krav}); de øvrige når kravet. ${(k.formValg || 'tp') === 'tp' ? 'Rettes i TP.' : 'En ekstra runde eller en anden form under Turneringen løser det.'}`, kampe: [] });
                 continue;
             }
-            tilfoej({ type: 'form', alvor: 'advarsel', noegle: `${k.id}:min-kampe`, tekst: `${k.id}: ${ramte.length} spillere er kun sikret ${faerrest} ${faerrest === 1 ? 'kamp' : 'kampe'}${samlet ? ' i alt (single + double/mix)' : ''} (krav ${krav}): ${ramte.slice(0, 4).join(', ')}${ramte.length > 4 ? ' …' : ''}. ${(k.formValg || 'tp') === 'tp' ? 'Rettes i TP.' : 'Vælg en anden form i fane 1.'}`, kampe: [] });
+            tilfoej({ type: 'form', alvor: 'advarsel', noegle: `${k.id}:min-kampe`, tekst: `${k.id}: ${ramte.length} spillere er kun sikret ${faerrest} ${faerrest === 1 ? 'kamp' : 'kampe'}${samlet ? ' i alt (single + double/mix)' : ''} (krav ${krav}): ${ramte.slice(0, 4).join(', ')}${ramte.length > 4 ? ' …' : ''}. ${(k.formValg || 'tp') === 'tp' ? 'Rettes i TP.' : 'Vælg en anden form under Turneringen.'}`, kampe: [] });
         }
     }
 

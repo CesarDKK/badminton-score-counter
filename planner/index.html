@@ -8,7 +8,7 @@
     <title>Planner — BadmintonApp.dk</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23e94560' transform='translate(0 1.2)'%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-33 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(33 12 14.5)'/%3E%3Crect x='9.4' y='14.3' width='5.2' height='1.7' rx='0.85'/%3E%3Cpath d='M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z'/%3E%3C/g%3E%3C/svg%3E">
     <link rel="stylesheet" href="fonts.css">
-    <link rel="stylesheet" href="planner.css?v=36">
+    <link rel="stylesheet" href="planner.css?v=38">
 </head>
 <body>
 
@@ -33,16 +33,17 @@
 </nav>
 
 <main class="wrap">
-    <div class="faner" role="tablist" aria-label="Sider">
-        <button class="fane er-aktiv" role="tab" data-fane="opsaetning" aria-selected="true">Fil og opsætning</button>
-        <button class="fane" role="tab" data-fane="plan" aria-selected="false">Plan</button>
-        <button class="fane" role="tab" data-fane="tjek" aria-selected="false">Tjek</button>
-        <button class="fane" role="tab" data-fane="liste" aria-selected="false">Liste</button>
+    <!-- Trinene i arbejdsgangen (designkritikken 2026-10-09, fase C): fil → turneringen → program → til TP -->
+    <div class="faner" role="tablist" aria-label="Trin">
+        <button class="fane er-aktiv" role="tab" data-fane="fil" aria-selected="true"><span class="trin-nr">1</span>Fil</button>
+        <button class="fane" role="tab" data-fane="opsaetning" aria-selected="false"><span class="trin-nr">2</span>Turneringen</button>
+        <button class="fane" role="tab" data-fane="plan" aria-selected="false"><span class="trin-nr">3</span>Program<span class="fane-maerke" data-program-maerke></span></button>
+        <button class="fane" role="tab" data-fane="liste" aria-selected="false"><span class="trin-nr">4</span>Til TP</button>
     </div>
 
-    <section id="fane-opsaetning" class="fane-indhold" role="tabpanel"></section>
+    <section id="fane-fil" class="fane-indhold" role="tabpanel"></section>
+    <section id="fane-opsaetning" class="fane-indhold" role="tabpanel" hidden></section>
     <section id="fane-plan" class="fane-indhold fane-indhold--bred" role="tabpanel" hidden></section>
-    <section id="fane-tjek" class="fane-indhold" role="tabpanel" hidden></section>
     <section id="fane-liste" class="fane-indhold" role="tabpanel" hidden></section>
 </main>
 
@@ -56,10 +57,10 @@
 </dialog>
 
 <footer class="wrap sidefod">
-    <p>Filen læses i din browser og sendes ikke til nogen server. Kun "Optimér" bruger en server — den får et anonymiseret regnestykke (kamp-numre og tider, ingen navne). Projektet gemmes i browseren og kan hentes som fil.</p>
+    <p>Filen læses i din browser og sendes ikke til nogen server. Kun "Forbedr med løseren" bruger en server — den får et anonymiseret regnestykke (kamp-numre og tider, ingen navne). Projektet gemmes i browseren og kan hentes som fil.</p>
 </footer>
 
 <script src="tp-bundle.js"></script>
-<script type="module" src="src/app.js?v=36"></script>
+<script type="module" src="src/app.js?v=38"></script>
 </body>
 </html>
