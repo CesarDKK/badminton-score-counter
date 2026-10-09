@@ -110,17 +110,21 @@ describe('kamplaengde: simulering og sammenligning', () => {
         assert.deepEqual(r.map((x) => x.minutter), [20, 25, 30]);
         for (const x of r) {
             assert.equal(x.udenTid, 0);
+            assert.ok(Number.isInteger(x.fejl) && Number.isInteger(x.muligeBrud));
             assert.ok(x.dage.length >= 1 && x.dage[0].planSlut && x.dage[0].forventetSlut);
         }
     });
 });
 
 describe('kamplaengde: bedst samlet i sammenligningen', () => {
-    const r = (minutter, udenTid, brud, forsinkelseMax, haltidGnsMin) => ({ minutter, udenTid, brud, forsinkelseMax, haltidGnsMin });
-    test('færrest uden tid, så færrest brud, så ingen forsinkelse af betydning, så kortest tid i hal', () => {
-        assert.equal(bedsteKamplaengde([r(20, 0, 9, 5, 210), r(25, 0, 28, 6, 257), r(30, 0, 16, 3, 221)]), 20);
-        assert.equal(bedsteKamplaengde([r(20, 2, 0, 0, 100), r(25, 0, 5, 0, 300)]), 25);
-        assert.equal(bedsteKamplaengde([r(20, 0, 0, 40, 150), r(25, 0, 0, 5, 200)]), 25);
+    const r = (minutter, udenTid, fejl, forsinkelseMax, muligeBrud, haltidGnsMin) => ({ minutter, udenTid, fejl, forsinkelseMax, muligeBrud, haltidGnsMin });
+    test('rækkefølge: uden tid, regelbrud (fejl), forsinkelse over grænsen, mulige brud, tid i hal', () => {
+        // Lyngby U13/U15 (prod-test 2026-10-09): 25 min har ét muligt pausebrud før en finale, men kun 3 min forsinkelse
+        assert.equal(bedsteKamplaengde([r(20, 0, 0, 46, 0, 178), r(25, 0, 0, 3, 3, 203), r(30, 0, 0, 27, 0, 153)]), 25);
+        assert.equal(bedsteKamplaengde([r(20, 2, 0, 0, 0, 100), r(25, 0, 5, 0, 0, 300)]), 25);
+        assert.equal(bedsteKamplaengde([r(20, 0, 1, 0, 0, 100), r(25, 0, 0, 40, 0, 300)]), 25);
+        assert.equal(bedsteKamplaengde([r(20, 0, 0, 5, 2, 150), r(25, 0, 0, 5, 0, 200)]), 25);
+        assert.equal(bedsteKamplaengde([r(20, 0, 0, 5, 0, 150), r(25, 0, 0, 5, 0, 200)]), 20);
         assert.equal(bedsteKamplaengde([]), null);
     });
 });
