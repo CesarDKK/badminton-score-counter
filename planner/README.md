@@ -26,6 +26,7 @@ løbenumre for spillere og tider — og intet andet.
 | `src/rules.js` | `tjekPlan(projekt)` → fejl og advarsler pr. kamp og slot |
 | `src/scheduler.js` | Den grådige planlægger: `lavForslag`, alternativer, `bedoemPlan` |
 | `src/kriterier.js` | De bløde kriterier med vægte og `scorePlan` |
+| `src/kamplaengde.js` | Anbefalet kamplængde for hele programmet (TP har kun én): forventet varighed pr. kamp fra sæsondata aug.–okt. 2026 (15 point), skifte + margen, reglementets minimum; `simulerDag` og `sammenlignKamplaengder` |
 | `src/nedskaering.js` | Forslag, der får kabalen til at gå op (færre runder, to dage), og kapacitetsregnskabet |
 | `src/solver-klient.js` | `bygProblem` (projekt → anonymiseret regnestykke), `optimer` (start, kø, status, stop), `diagnoseTekst` |
 | `src/ui/` | De fire faner: `opsaetning.js`, `plan.js`, `tjek.js`, `liste.js` — rene tegnefunktioner, ingen tilstand |

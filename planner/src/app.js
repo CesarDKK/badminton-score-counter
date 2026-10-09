@@ -7,6 +7,7 @@ import { lavForslag, lavAlternativer, bedoemPlan } from './scheduler.js';
 import { optimer, stopLoeser, stopVedLukning, nytJobId, diagnoseTekst, aendretUnderOptimering, flettetPlan } from './solver-klient.js';
 import { scorePlan } from './kriterier.js';
 import { alleNedskaeringer, anvendNedskaering, kapacitetsRegnskab, swissKandidater } from './nedskaering.js';
+import { sammenlignKamplaengder } from './kamplaengde.js';
 import { renderOpsaetning } from './ui/opsaetning.js';
 import { renderPlan } from './ui/plan.js';
 import { renderTjek } from './ui/tjek.js';
@@ -19,7 +20,8 @@ let gemt = true; // blev seneste ændring gemt i browseren?
 let tjek = null;
 let besked = { tekst: '', fejl: false };
 // UI-tilstand der ikke gemmes: aktiv fane, valgt dag, filter, søgning, valgt kamp, fremhævede kampe
-const tilstand = { fane: 'opsaetning', dag: null, filter: '', soeg: '', valgtKamp: null, fremhaev: [] };
+// kamplaengde: { projekt, resultat } fra "Sammenlign kamplængder" — vises kun for det projekt, den er regnet på
+const tilstand = { fane: 'opsaetning', dag: null, filter: '', soeg: '', valgtKamp: null, fremhaev: [], kamplaengde: null };
 
 const faneKnapper = document.querySelectorAll('.fane');
 const sektioner = {
@@ -85,7 +87,8 @@ function render() {
     tjek = projekt ? tjekPlan(projekt) : null;
     if (projekt && !projekt.opsaetning.dage.some((d) => d.dato === tilstand.dag)) tilstand.dag = projekt.opsaetning.dage[0]?.dato || null;
     if (tilstand.fane === 'opsaetning') {
-        renderOpsaetning(sektioner.opsaetning, projekt, handlers);
+        const sammenligning = tilstand.kamplaengde?.projekt === projekt ? tilstand.kamplaengde.resultat : null;
+        renderOpsaetning(sektioner.opsaetning, projekt, handlers, { sammenligning });
         visBesked(besked.tekst, besked.fejl);
     } else if (tilstand.fane === 'plan') {
         renderPlan(sektioner.plan, projekt, tjek, tilstand, planHandlers);
@@ -205,7 +208,17 @@ const handlers = {
     },
 
     besked: visBesked,
-    slotMin: (v) => saetOpsaetning(store.saetSlotMin(projekt, v)),
+    slotMin(v) {
+        // Sammenligningen afhænger ikke af den valgte kamplængde — den bliver stående, når man vælger én
+        const sammenligning = tilstand.kamplaengde?.projekt === projekt ? tilstand.kamplaengde.resultat : null;
+        saetOpsaetning(store.saetSlotMin(projekt, v));
+        if (sammenligning) { tilstand.kamplaengde = { projekt, resultat: sammenligning }; render(); }
+    },
+    sammenlignKamplaengder() {
+        // Hver kamplængde får et nyt forslag og en simulering; vises, til projektet ændres
+        tilstand.kamplaengde = { projekt, resultat: sammenlignKamplaengder(projekt) };
+        render();
+    },
     opsaetning: (aendringer) => saet(store.opdaterOpsaetning(projekt, aendringer)),
     dag: (dato, aendringer) => saetOpsaetning(store.opdaterDag(projekt, dato, aendringer)),
     raekke: (id, aendringer) => saetOpsaetning(store.opdaterRaekke(projekt, id, aendringer)),
