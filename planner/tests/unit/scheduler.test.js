@@ -311,12 +311,21 @@ describe('scheduler: anti-samtidighed, prioritet, synkrone puljerunder, loesning
         assert.ok(l.every((x) => x.tekst.length > 10));
         assert.ok(l.some((x) => /forlæng|tidsrum|bane/i.test(x.tekst)), l.map((x) => x.tekst).join(' | '));
         assert.deepEqual(loesningsforslag(p, []), []);
+        // Banerne er dem, TP-filen har: der foreslås aldrig flere baner (Jesper 2026-10-09)
+        assert.ok(l.every((x) => !/tilføj .*bane/i.test(x.tekst)), l.map((x) => x.tekst).join(' | '));
         const p2 = opdaterRaekke(projekt(), 'U09 D', { dage: ['2026-11-21'], tidligst: '12:00', senest: '13:00' });
         const f2 = lavForslag(p2);
         assert.equal(f2.ikkePlaceret.length, 0);
         assert.ok(f2.brud.some((x) => x.brud === 'tidsrum'));
         const l2 = loesningsforslag(p2, f2.brud);
         assert.ok(l2.some((x) => /Udvid tidsrummet til \d\d:\d\d/.test(x.tekst)), l2.map((x) => x.tekst).join(' | '));
+        // Knappen "Ret og lav forslag igen": en konkret ændring af rækkens tidsrum, der fjerner bruddene
+        const h2 = l2.find((x) => x.handling)?.handling;
+        assert.equal(h2?.raekke, 'U09 D');
+        assert.match(h2.aendring.senest, /^\d\d:\d\d$/);
+        assert.ok(h2.aendring.senest > '13:00');
+        const efter = lavForslag(opdaterRaekke(p2, 'U09 D', h2.aendring));
+        assert.ok(efter.brud.filter((x) => x.brud === 'tidsrum').length < f2.brud.filter((x) => x.brud === 'tidsrum').length, 'ændringen giver færre tidsrum-brud');
         // pause-brud: én bane, kort dag, streng pausefortolkning → nogle kampe faar for kort pause
         let p3 = opdaterOpsaetning(projekt(), { kampVarighed: 'slot' });
         p3 = opdaterDag(p3, '2026-11-21', { baner: 2, slut: '11:30' });
