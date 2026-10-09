@@ -203,6 +203,13 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
     }
 
     const antalFejl = tjek.antal.fejl, antalAdv = tjek.antal.advarsel;
+    // Én primær (rød) handling ad gangen: uden plan er det "Lav forslag"; med en plan er det løseren, som er
+    // anbefalet — den kører kun, når man trykker (Jesper 2026-10-09)
+    const harPlan = placeret.size > 0;
+    const anbefalLoeser = harPlan && !tilstand.optimerer && !tilstand.alternativer && tilstand.forslag?.kilde !== 'loeser';
+    const sek = tilstand.optimerSek || 60;
+    const slut = Object.entries(statistik.slutPrDag);
+    const statusTal = (vaerdi, etiket, klasse = '') => `<div class="status-tal ${klasse}"><b>${esc(String(vaerdi))}</b><span>${esc(etiket)}</span></div>`;
     container.innerHTML = `
     <div class="plan-hoved">
         <div class="dagfaner" role="tablist">
@@ -214,33 +221,42 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
                 ${projekt.kategorier.map((k) => `<option value="${esc(k.id)}" ${tilstand.filter === k.id ? 'selected' : ''}>${esc(k.id)}</option>`).join('')}
             </select>
             <input type="search" data-felt="soeg" placeholder="Søg spiller, klub eller kamp" value="${esc(tilstand.soeg || '')}" aria-label="Søg">
-            ${tilstand.filter ? `<button class="knap knap--sekundaer" data-handling="laas-kategori" title="Lås alle placerede kampe i ${esc(tilstand.filter)}, så forslaget ikke flytter dem">Lås ${esc(tilstand.filter)}</button>
-            <button class="knap knap--sekundaer" data-handling="laas-op-kategori">Lås op</button>` : ''}
-            <button class="knap knap--sekundaer" data-handling="ryd-dag">Ryd dag</button>
-            <button class="knap knap--sekundaer" data-handling="forslag-dag" title="Planlægger kun denne dag om; andre dage og låste kampe røres ikke">Forslag for dagen</button>
-            <button class="knap" data-handling="forslag" title="Planlægger alle kampe forfra; låste kampe beholder deres tid">Lav forslag</button>
+            <button class="knap ${harPlan ? 'knap--sekundaer' : ''}" data-handling="forslag" title="Planlægger alle kampe forfra på et øjeblik; låste kampe beholder deres tid">${harPlan ? 'Lav forslag igen' : 'Lav forslag'}</button>
             <span class="optimer">
+                <button class="knap ${harPlan ? '' : 'knap--sekundaer'}" data-handling="optimer" ${tilstand.optimerer ? 'disabled' : ''} title="Sender et anonymiseret planlægningsproblem (kun kamp-id'er og spillernumre) til løseren, som leder efter en bedre plan under alle hårde regler. Låste kampe beholder deres tid.">${tilstand.optimerer ? `${tilstand.optimerDiagnose ? 'Ingen lovlig plan — undersøger hvorfor …' : 'Løseren regner …'} <span data-optimer-ur></span>` : 'Forbedr med løseren'}</button>
                 <select data-felt="optimerSek" aria-label="Tid til løseren" title="Hvor længe løseren må regne. Længere tid giver som regel en bedre plan.">
-                    ${OPTIMER_TIDER.map((n) => `<option value="${n}" ${(tilstand.optimerSek || 60) === n ? 'selected' : ''}>${n < 120 ? `${n} sek` : `${n / 60} min`}</option>`).join('')}
+                    ${OPTIMER_TIDER.map((n) => `<option value="${n}" ${sek === n ? 'selected' : ''}>${n < 120 ? `${n} sek` : `${n / 60} min`}</option>`).join('')}
                 </select>
-                <button class="knap" data-handling="optimer" ${tilstand.optimerer ? 'disabled' : ''} title="Sender et anonymiseret planlægningsproblem (kun kamp-id'er og spillernumre) til CP-SAT-løseren, som minimerer scoren under alle hårde regler. Låste kampe beholder deres tid.">${tilstand.optimerer ? `${tilstand.optimerDiagnose ? 'Ingen lovlig plan — undersøger hvorfor …' : 'Løseren regner …'} <span data-optimer-ur></span>` : 'Optimér'}</button>
                 ${tilstand.optimerer ? `<button class="knap knap--sekundaer" data-handling="stopOptimer" ${tilstand.optimerStopper ? 'disabled' : ''} title="Løseren stopper nu og afleverer den bedste plan, den har fundet indtil nu.">${tilstand.optimerStopper ? 'Stopper …' : 'Stop og brug det bedste'}</button>` : ''}
             </span>
-            <button class="knap knap--sekundaer" data-handling="alternativer" title="Laver op til 8 forskellige forslag med forskellige prioriteringer, som du kan bladre imellem">Alternativer</button>
+            <details class="menu">
+                <summary class="knap knap--sekundaer">Mere</summary>
+                <div class="menu-liste">
+                    <button class="knap knap--sekundaer" data-handling="forslag-dag" title="Planlægger kun denne dag om; andre dage og låste kampe røres ikke">Lav forslag kun for ${esc(datoTekst(dag.dato, { kort: true }))}</button>
+                    <button class="knap knap--sekundaer" data-handling="alternativer" title="Laver op til 8 forskellige forslag med forskellige prioriteringer, som du kan bladre imellem">Andre forslag at vælge imellem</button>
+                    ${tilstand.filter ? `<button class="knap knap--sekundaer" data-handling="laas-kategori" title="Lås alle placerede kampe i ${esc(tilstand.filter)}, så forslaget ikke flytter dem">Lås ${esc(tilstand.filter)}</button>
+                    <button class="knap knap--sekundaer" data-handling="laas-op-kategori">Lås ${esc(tilstand.filter)} op</button>` : ''}
+                    <button class="knap knap--sekundaer" data-handling="ryd-dag">Ryd ${esc(datoTekst(dag.dato, { kort: true }))}</button>
+                </div>
+            </details>
         </div>
     </div>
     ${tilstand.alternativer ? alternativBjaelke(tilstand.alternativer) : ''}
-    <p class="plan-status">
-        <span class="maerke ${antalFejl ? 'maerke--fejl' : 'maerke--ok'}">${antalFejl} fejl</span>
-        <span class="maerke ${antalAdv ? 'maerke--advarsel' : ''}">${antalAdv} advarsler</span>
-        ${laaste.size ? `<span class="maerke">🔒 ${laaste.size} låst</span>` : ''}
-        <span class="maerke" title="${esc('Vægtet sum af de bløde kriterier — lavere er bedre. Vægtene rettes i fane 1.\n' + scoreTitel)}">score ${score.total}</span>
-        <span class="daempet">${placeret.size} af ${projekt.kampe.length} kampe har tid · ${ikkePlacerede.length} mangler · haltid gns. ${statistik.haltidGnsMin} min pr. spiller pr. dag · <span class="${statistik.langeHuller ? 'er-roed' : ''}">${statistik.langeHuller} spillere med hul over ${statistik.maxVentetidMin} min</span>${Object.keys(statistik.slutPrDag).length ? ` · slut ${Object.entries(statistik.slutPrDag).map(([d, t]) => `${datoTekst(d, { kort: true })} ${t}`).join(', ')}` : ''}. Træk et kort til et slot, eller til listen til højre for at fjerne tiden. Klik viser spillerens andre kampe; dobbeltklik låser.</span>
-    </p>
+    <div class="status-linje">
+        ${statusTal(`${placeret.size}/${projekt.kampe.length}`, 'kampe har tid', ikkePlacerede.length ? 'er-roed' : '')}
+        ${statusTal(antalFejl, 'fejl', antalFejl ? 'er-roed' : 'er-ok')}
+        ${statusTal(antalAdv, antalAdv === 1 ? 'advarsel' : 'advarsler', antalAdv ? 'er-gul' : '')}
+        ${slut.length ? statusTal(slut.map(([, t]) => t).join(' · '), `slut ${slut.map(([d]) => datoTekst(d, { kort: true })).join(' · ')}`) : ''}
+        ${harPlan ? statusTal(`${statistik.haltidGnsMin} min`, 'tid i hallen, gns.') : ''}
+        ${harPlan ? statusTal(statistik.langeHuller, `venter over ${statistik.maxVentetidMin} min`, statistik.langeHuller ? 'er-gul' : '') : ''}
+        ${laaste.size ? statusTal(laaste.size, laaste.size === 1 ? 'låst kamp' : 'låste kampe') : ''}
+    </div>
+    ${anbefalLoeser ? `<p class="anbefaling"><b>Anbefalet:</b> tryk "Forbedr med løseren". Den regner i op til ${sek < 120 ? `${sek} sekunder` : `${sek / 60} minutter`} og finder som regel en plan med kortere ventetid og tid i hallen. Du vælger selv, om du vil bruge den.</p>` : ''}
+    <p class="plan-hjaelp daempet">Træk et kort til et slot, eller til listen til højre for at fjerne tiden. Klik viser spillerens andre kampe; dobbeltklik låser. <span title="${esc('Vægtet sum af de bløde kriterier — lavere er bedre. Vægtene står under Avanceret i opsætningen.\n' + scoreTitel)}">Score ${score.total}.</span></p>
     ${tilstand.forslag ? `<p class="plan-status forslag-info">${esc(tilstand.forslag.tekst)}${tilstand.forslag.ikkePlaceret.length ? ` Berørte kampe: ${tilstand.forslag.ikkePlaceret.slice(0, 6).map((x) => `${esc(x.kategori)} ${esc(x.navn)} (${esc(x.brud || x.aarsag)})`).join('; ')}${tilstand.forslag.ikkePlaceret.length > 6 ? ' …' : ''}` : ''}</p>
-    ${tilstand.forslag.handlinger?.length ? `<p class="diagnose-knapper">${tilstand.forslag.handlinger.map((x, i) => `<button class="knap" data-handling="diagnose" data-index="${i}">${esc(x.tekst)}</button>`).join(' ')}</p>` : ''}
-    ${tilstand.forslag.ikkePlaceret.length ? `<ul class="loesninger">${loesningsforslag(projekt, tilstand.forslag.ikkePlaceret).map((f) => `<li>${esc(f.tekst)}</li>`).join('')}</ul>
-    ${tilstand.nedskaering ? '' : `<p><button class="knap" data-handling="ned-find" title="Afprøver færre Swiss Ladder-runder og spil over to dage med planlæggeren, og viser hvad hvert forslag koster i kampe pr. spiller. Intet ændres, før du vælger.">Find forslag, der får kabalen til at gå op</button></p>`}` : ''}` : ''}
+    ${tilstand.forslag.handlinger?.length ? `<p class="diagnose-knapper">${tilstand.forslag.handlinger.map((x, i) => `<button class="knap knap--sekundaer" data-handling="diagnose" data-index="${i}">${esc(x.tekst)}</button>`).join(' ')}</p>` : ''}
+    ${tilstand.forslag.ikkePlaceret.length ? `<ul class="loesninger">${loesningsforslag(projekt, tilstand.forslag.ikkePlaceret).map((f, i) => `<li><span>${esc(f.tekst)}</span>${f.handling ? ` <button class="knap knap--sekundaer knap--lille" data-handling="loesning" data-index="${i}">${esc(f.handling.tekst)} og lav forslag igen</button>` : ''}</li>`).join('')}</ul>
+    ${tilstand.nedskaering ? '' : `<p><button class="knap knap--sekundaer" data-handling="ned-find" title="Afprøver færre Swiss Ladder-runder og spil over to dage med planlæggeren, og viser hvad hvert forslag koster i kampe pr. spiller. Intet ændres, før du vælger.">Prøv færre runder eller to dage</button></p>`}` : ''}` : ''}
     ${tilstand.nedskaering ? nedskaeringPanel(tilstand.nedskaering) : ''}
     <div class="plan-layout">
         <div class="gitter-hylster">
@@ -316,6 +332,7 @@ function bind(container, h) {
             else if (hd === 'alt-brug') h.brugAlternativ();
             else if (hd === 'alt-fortryd') h.fortrydAlternativ();
             else if (hd === 'diagnose') h.diagnoseHandling(Number(knap.dataset.index));
+            else if (hd === 'loesning') h.brugLoesning(Number(knap.dataset.index));
             else if (hd === 'ned-find') h.findNedskaering();
             else if (hd === 'ned-brug') h.brugNedskaering(Number(knap.dataset.index));
             else if (hd === 'ned-luk') h.lukNedskaering();

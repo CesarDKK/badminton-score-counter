@@ -7,7 +7,7 @@
 // max kampe pr. dag og rækkens dage. Låste kampe (projekt.laast) beholder
 // deres tid; alt andet placeres forfra.
 import { minutter } from './tp-reader.js';
-import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt, baneSlots, fordelRaekkerPaaDage } from './kapacitet.js';
+import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt, fordelRaekkerPaaDage } from './kapacitet.js';
 import { lavRegelmodel, banerBrugt, pauseForRaekke } from './regelmodel.js';
 import { standardRaekkefoelge } from './store.js';
 import { scorePlan } from './kriterier.js';
@@ -541,6 +541,12 @@ export function lavAlternativer(projekt, valg = {}) {
  * regnes ud, hvor meget der mangler — flere slots, flere baner, længere
  * tidsrum for rækken eller færre kampe. Returnerer [{ tekst }].
  */
+/**
+ * Løsningsforslag til kampe, der kun kunne placeres med regelbrud (eller slet ikke). Hvert forslag er
+ * { tekst, handling? }. handling er en konkret ændring, som "Ret og lav forslag igen" udfører:
+ *   { tekst, raekke, aendring } · { tekst, dag, aendring } · { tekst, pause, minutter } · { tekst, opsaetning }
+ * Banerne er dem, TP-filen har — der foreslås aldrig flere baner (Jesper 2026-10-09).
+ */
 export function loesningsforslag(projekt, ikkePlaceret) {
     if (!ikkePlaceret?.length) return [];
     if (ikkePlaceret.some((x) => x.brud)) return forslagFraBrud(projekt, ikkePlaceret);
@@ -569,19 +575,25 @@ export function loesningsforslag(projekt, ikkePlaceret) {
         const slots = Math.ceil(baneSlotsNoedvendige / baner);
         const hvem = `${kampe.length} ${kampe.length === 1 ? 'kamp' : 'kampe'} i ${raekkeId}`;
         if (aarsag === 'efter rækkens seneste slut' || aarsag === 'før rækkens tidligste start') {
-            if (r?.senest) ud.push({ tekst: `${hvem}: udvid rækkens tidsrum til ${plusMin(r.senest, slots * slotMin)} (nu ${r.tidligst || '–'}–${r.senest}), eller giv rækken flere reserverede baner.` });
+            if (r?.senest) {
+                const til = plusMin(r.senest, slots * slotMin);
+                ud.push({ tekst: `${hvem}: udvid rækkens tidsrum til ${til} (nu ${r.tidligst || '–'}–${r.senest}), eller giv rækken flere af dagens baner som reserverede.`, handling: { tekst: `Udvid ${raekkeId} til ${til}`, raekke: raekkeId, aendring: { senest: til } } });
+            }
             else ud.push({ tekst: `${hvem}: rækkens tidsrum er for kort — udvid det med ca. ${slots} slots.` });
         } else if (aarsag === 'ingen ledig reserveret bane') {
-            ud.push({ tekst: `${hvem}: giv rækken ${Math.ceil(baneSlotsNoedvendige / Math.max(1, rDage.length * 4))} reserverede baner mere, eller udvid dens tidsrum.` });
+            ud.push({ tekst: `${hvem}: giv rækken ${Math.ceil(baneSlotsNoedvendige / Math.max(1, rDage.length * 4))} af dagens baner mere som reserverede, eller udvid dens tidsrum.` });
         } else if (aarsag === 'ingen ledig bane' || aarsag === 'ingen ledig plads' || aarsag === 'uden for tidsvinduet') {
-            if (sidsteDag) ud.push({ tekst: `${hvem}: forlæng ${sidsteDag.dato} til ${plusMin(sidsteDag.slut, slots * slotMin)}, tilføj ${Math.ceil(baneSlotsNoedvendige / Math.max(1, baneSlots(sidsteDag, slotMin) / sidsteDag.baner))} bane${baneSlotsNoedvendige > 1 ? 'r' : ''} den dag, eller flyt rækken til en anden dag.` });
+            if (sidsteDag) {
+                const til = plusMin(sidsteDag.slut, slots * slotMin);
+                ud.push({ tekst: `${hvem}: forlæng ${sidsteDag.dato} til ${til}, eller flyt rækken til en anden dag.`, handling: { tekst: `Forlæng ${sidsteDag.dato} til ${til}`, dag: sidsteDag.dato, aendring: { slut: til } } });
+            }
             else ud.push({ tekst: `${hvem}: der mangler ${baneSlotsNoedvendige} bane-slots.` });
         } else if (aarsag === 'rækken spiller ikke den dag' || aarsag === 'rækken har ingen dage') {
             ud.push({ tekst: `${hvem}: rækken har ingen dag valgt under "Rækker og kategorier".` });
         } else if (aarsag === 'spiller mangler pause' || aarsag === 'spiller er i en anden kamp i slottet' || aarsag === 'spiller har max kampe den dag') {
             ud.push({ tekst: `${hvem}: spillernes pauser og kampe pr. dag fylder dagen — forlæng dagen, sænk pausen, eller lad rækken spille over flere dage.` });
         } else if (aarsag === 'single og double samtidig i rækken') {
-            ud.push({ tekst: `${hvem}: single og double i rækken må ikke ligge samtidig — forlæng dagen, eller slå "undgå single og double samtidig" fra.` });
+            ud.push({ tekst: `${hvem}: single og double i rækken må ikke ligge samtidig — forlæng dagen, eller slå "undgå single og double samtidig" fra.`, handling: { tekst: 'Tillad single og double samtidig', opsaetning: { antiSamtidighed: false } } });
         } else {
             ud.push({ tekst: `${hvem}: ${aarsag}.` });
         }
@@ -618,19 +630,22 @@ function forslagFraBrud(projekt, liste) {
         const antal = xs.length;
         const hvem = `${antal} ${antal === 1 ? 'kamp' : 'kampe'} i ${raekkeId}`;
         if (brud === 'anti-samtidighed') {
-            ud.push({ tekst: `${hvem} ligger samtidig med en anden kategori i rækken (single/double). Slå "undgå single og double samtidig" fra i fane 1, eller forlæng dagen.` });
+            ud.push({ tekst: `${hvem} ligger samtidig med en anden kategori i rækken (single/double). Slå "undgå single og double samtidig" fra, eller forlæng dagen.`, handling: { tekst: 'Tillad single og double samtidig', opsaetning: { antiSamtidighed: false } } });
         } else if (brud === 'tidsrum') {
             const s = senesteSlot(xs);
-            ud.push({ tekst: `${hvem} ligger uden for rækkens eget tidsrum (${r?.tidligst || '–'}–${r?.senest || '–'}). Udvid tidsrummet${s ? ` til ${klokkeFraMin(minutter(s) + slotMin)}` : ''}, eller giv rækken flere reserverede baner.` });
+            const til = s ? klokkeFraMin(minutter(s) + slotMin) : null;
+            // Kun når kampene ligger EFTER tidsrummet, kan det udvides ved at flytte "senest"
+            const efter = til && r?.senest && minutter(s) >= minutter(r.senest);
+            ud.push({ tekst: `${hvem} ligger uden for rækkens eget tidsrum (${r?.tidligst || '–'}–${r?.senest || '–'}). Udvid tidsrummet${til ? ` til ${til}` : ''}, eller giv rækken flere af dagens baner som reserverede.`, ...(efter ? { handling: { tekst: `Udvid ${raekkeId} til ${til}`, raekke: raekkeId, aendring: { senest: til } } } : {}) });
         } else if (brud === 'reserveret') {
-            ud.push({ tekst: `${hvem} bruger andre baner end rækkens ${r?.reserveredeBaner || 0} reserverede. Giv rækken flere reserverede baner, eller udvid dens tidsrum.` });
+            ud.push({ tekst: `${hvem} bruger andre baner end rækkens ${r?.reserveredeBaner || 0} reserverede. Giv rækken flere af dagens baner som reserverede, eller udvid dens tidsrum.` });
         } else if (brud === 'pause') {
             const gab = Math.min(...xs.map((x) => (x.detalje?.gab ?? 0)));
             const klasse = r?.pauseKlasse || 'ABCD';
             const nu = pauseMin.faelles != null && klasse !== 'E' ? pauseMin.faelles : pauseMin[klasse];
-            ud.push({ tekst: `${hvem} har kortere pause end de ${nu} min (ned til ${Math.max(0, gab)} min). Sæt pausen for ${klasse === 'ABCD' ? 'A–D' : klasse} til ${Math.max(0, gab)} min, forlæng dagen, eller lad rækken spille over flere dage.` });
+            ud.push({ tekst: `${hvem} har kortere pause end de ${nu} min (ned til ${Math.max(0, gab)} min). Sæt pausen for ${klasse === 'ABCD' ? 'A–D' : klasse} til ${Math.max(0, gab)} min i planen og giv resten på dagen, forlæng dagen, eller lad rækken spille over flere dage.`, handling: { tekst: `Sæt pausen for ${klasse === 'ABCD' ? 'A–D' : klasse} til ${Math.max(0, gab)} min`, pause: klasse, minutter: Math.max(0, gab) } });
         } else if (brud === 'max-haltid') {
-            ud.push({ tekst: `${hvem}: afviklingen af rækkens singlekampe varer længere end ${r?.maxHaltidMin || '?'} min. Giv rækken flere (reserverede) baner, skær i antal kampe/runder, eller hæv grænsen i fane 1.` });
+            ud.push({ tekst: `${hvem}: afviklingen af rækkens singlekampe varer længere end ${r?.maxHaltidMin || '?'} min. Giv rækken flere af dagens baner som reserverede, skær i antal kampe/runder, eller hæv grænsen under rækken.` });
         } else if (brud === 'tidsvindue') {
             const s = senesteSlot(xs);
             ud.push({ tekst: `${hvem} ligger uden for ${r?.aargang || 'årgangens'} tidsvindue${s ? ` (senest kl. ${s})` : ''}. Kræver dispensation: ret tidsvinduet under "Reglementets grænser", eller flyt kampe til en anden dag.` });
@@ -644,12 +659,13 @@ function forslagFraBrud(projekt, liste) {
             for (const [d, antalDag] of prDag) {
                 const dag = dage.find((x) => x.dato === d);
                 const slots = dag ? Math.ceil(antalDag / Math.max(1, dag.baner)) : 1;
-                ud.push({ tekst: `${antalDag} ${antalDag === 1 ? 'kamp' : 'kampe'} i ${raekkeId} har ingen ledig bane ${d}. Forlæng dagen${dag ? ` til ${klokkeFraMin(minutter(dag.slut) + slots * slotMin)}` : ''}, tilføj ${Math.ceil(antalDag / Math.max(1, dag ? baneSlots(dag, slotMin) / dag.baner : 1)) || 1} bane, eller flyt rækken til en anden dag.` });
+                const til = dag ? klokkeFraMin(minutter(dag.slut) + slots * slotMin) : null;
+                ud.push({ tekst: `${antalDag} ${antalDag === 1 ? 'kamp' : 'kampe'} i ${raekkeId} har ingen ledig bane ${d}. Forlæng dagen${til ? ` til ${til}` : ''}, eller flyt rækken til en anden dag.`, ...(til ? { handling: { tekst: `Forlæng ${d} til ${til}`, dag: d, aendring: { slut: til } } } : {}) });
             }
         } else if (brud === 'dobbeltbooket') {
             ud.push({ tekst: `${hvem} sætter en spiller i to kampe samtidig — dagene rækker slet ikke. Tilføj en dag, forlæng dagene markant, eller skær i turneringsformen i TP.` });
         } else if (brud === 'raekkefoelge') {
-            ud.push({ tekst: `${hvem} ligger før de kampe, de bygger på (der var ingen senere slots). Forlæng sidste dag, eller tilføj baner.` });
+            ud.push({ tekst: `${hvem} ligger før de kampe, de bygger på (der var ingen senere slots). Forlæng sidste dag.` });
         } else {
             ud.push({ tekst: `${hvem}: ${brud}.` });
         }

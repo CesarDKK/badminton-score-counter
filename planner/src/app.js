@@ -3,7 +3,7 @@
 import { laesTP, tabellerFraMDB } from './tp-reader.js';
 import * as store from './store.js';
 import { tjekPlan } from './rules.js';
-import { lavForslag, lavAlternativer, bedoemPlan } from './scheduler.js';
+import { lavForslag, lavAlternativer, bedoemPlan, loesningsforslag } from './scheduler.js';
 import { optimer, stopLoeser, stopVedLukning, nytJobId, diagnoseTekst, aendretUnderOptimering, flettetPlan } from './solver-klient.js';
 import { scorePlan } from './kriterier.js';
 import { alleNedskaeringer, anvendNedskaering, kapacitetsRegnskab, swissKandidater } from './nedskaering.js';
@@ -100,7 +100,10 @@ function render() {
         renderListe(sektioner.liste, projekt, { gemProjekt: () => handlers.gemProjekt(), visKampe: (ids) => tjekHandlers.visKampe(ids, null) });
     }
     for (const knap of faneKnapper) {
-        if (knap.dataset.fane === 'tjek') knap.textContent = tjek && (tjek.antal.fejl || tjek.antal.advarsel) ? `Tjek (${tjek.antal.fejl}/${tjek.antal.advarsel})` : 'Tjek';
+        if (knap.dataset.fane === 'tjek') {
+            const dele = tjek ? [tjek.antal.fejl ? `${tjek.antal.fejl} fejl` : '', tjek.antal.advarsel ? `${tjek.antal.advarsel} ${tjek.antal.advarsel === 1 ? 'advarsel' : 'advarsler'}` : ''].filter(Boolean) : [];
+            knap.textContent = dele.length ? `Tjek (${dele.join(', ')})` : 'Tjek';
+        }
     }
     visStatus();
 }
@@ -277,10 +280,10 @@ const planHandlers = {
         tilstand.forslag = null;
         saet(store.rydDag(projekt, tilstand.dag));
     },
-    lavForslag(kunDenneDag) {
+    lavForslag(kunDenneDag, { udenSpoergsmaal = false } = {}) {
         const antalLaast = (projekt.laast || []).length;
         const hvad = kunDenneDag ? `alle kampe ${tilstand.dag}` : 'alle kampe';
-        if (Object.keys(projekt.plan).length > antalLaast && !window.confirm(`Planlæg ${hvad} forfra? Kun låste kampe (${antalLaast}) beholder deres tid.`)) return;
+        if (!udenSpoergsmaal && Object.keys(projekt.plan).length > antalLaast && !window.confirm(`Planlæg ${hvad} forfra? Kun låste kampe (${antalLaast}) beholder deres tid.`)) return;
         const t0 = performance.now();
         const f = lavForslag(projekt, kunDenneDag ? { kunDage: [tilstand.dag] } : {});
         const ms = Math.round(performance.now() - t0);
@@ -289,8 +292,24 @@ const planHandlers = {
         tilstand.forslag = {
             tekst: `Forslag lavet på ${ms} ms: alle ${Object.keys(f.plan).length} kampe har tid${brud.length ? `, men ${brud.length} kunne kun placeres ved at bryde en regel — se forslagene nedenfor og fejlene i Tjek.` : ' uden regelbrud.'}`,
             ikkePlaceret: brud.map((x) => ({ ...x, kategori: katMap.get(x.id)?.kategori || '', navn: katMap.get(x.id)?.navn || x.id })),
+            kilde: 'graadig', // Plan-fanen anbefaler løseren, indtil dens plan er taget i brug
         };
         saet({ ...store.anvendForslag(projekt, f), sidsteForslag: { ikkePlaceret: brud } });
+    },
+    // "Ret og lav forslag igen" ved et løsningsforslag: ændringen udføres, og planen lægges forfra (låste beholder tiden)
+    brugLoesning(index) {
+        const h = loesningsforslag(projekt, tilstand.forslag?.ikkePlaceret || [])[index]?.handling;
+        if (!h) return;
+        let nyt = projekt;
+        if (h.raekke) nyt = store.opdaterRaekke(nyt, h.raekke, h.aendring);
+        else if (h.dag) nyt = store.opdaterDag(nyt, h.dag, h.aendring);
+        else if (h.pause) nyt = store.opdaterPause(nyt, h.pause, h.minutter);
+        else if (h.opsaetning) nyt = store.opdaterOpsaetning(nyt, h.opsaetning);
+        tilstand.nedskaering = null;
+        saetOpsaetning(nyt);
+        planHandlers.lavForslag(false, { udenSpoergsmaal: true });
+        tilstand.forslag.tekst = `"${h.tekst}" er gjort, og planen er lagt igen. ${tilstand.forslag.tekst}`;
+        render();
     },
     laasKamp(id) {
         const ids = id.split(',');
@@ -401,11 +420,15 @@ const planHandlers = {
     // Forslag, der får kabalen til at gå op: færre Swiss-runder eller to dage — afprøvet med planlæggeren
     findNedskaering() {
         const regnskab = kapacitetsRegnskab(projekt);
-        const liste = alleNedskaeringer(projekt);
+        const alle = alleNedskaeringer(projekt);
+        // Kun forslag, der faktisk giver færre regelbrud — et forslag, der intet ændrer, er støj
+        const liste = alle.filter((f) => f.loest || f.brudEfter < f.brudFoer);
         let besked = '';
-        if (!liste.length) besked = swissKandidater(projekt).length
-            ? 'Planlæggeren kan lægge alle kampe uden regelbrud, som opsætningen er nu — tryk "Lav forslag".'
-            : 'Kampene kommer fra TP\'s lodtrækning, så planneren kan ikke selv ændre antallet. Sæt kategorierne til "Swiss Ladder" eller "automatisk" i fane 1 — eller ret lodtrækningen i TP.';
+        if (!liste.length) besked = alle.length
+            ? 'Færre runder eller spil over to dage giver ikke færre regelbrud her. Brug løsningsforslagene ovenfor i stedet.'
+            : swissKandidater(projekt).length
+                ? 'Planlæggeren kan lægge alle kampe uden regelbrud, som opsætningen er nu — tryk "Lav forslag".'
+                : 'Kampene kommer fra TP\'s lodtrækning, så planneren kan ikke selv ændre antallet. Sæt kategorierne til "Swiss Ladder" eller "automatisk" under Rækker og kategorier — eller ret lodtrækningen i TP.';
         tilstand.nedskaering = { liste, regnskab, besked };
         render();
     },
@@ -484,6 +507,7 @@ const planHandlers = {
         const katMap = new Map(projekt.kampe.map((k) => [k.id, k]));
         const brud = [...(a.brud || []), ...a.ikkePlaceret];
         tilstand.forslag = {
+            kilde: a.navn.startsWith('Optimeret') ? 'loeser' : 'graadig',
             tekst: `Forslaget "${a.navn}" er valgt: alle ${Object.keys(a.plan).length} kampe har tid${brud.length ? `, ${brud.length} med regelbrud — se forslagene nedenfor og Tjek.` : ' uden regelbrud.'}`,
             ikkePlaceret: brud.map((x) => ({ ...x, kategori: katMap.get(x.id)?.kategori || '', navn: katMap.get(x.id)?.navn || x.id })),
         };
