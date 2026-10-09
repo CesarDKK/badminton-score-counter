@@ -52,6 +52,25 @@ class SolverTest(unittest.TestCase):
         self.assertEqual(t["k0"], t["k1"], "to halve deler den ene reserverede bane")
         self.assertEqual(sorted([t["k2"], t["k3"]]), [540, 570], "én fælles bane")
 
+    def test_kampe_i_traek_straffes(self):
+        # Samme spiller i k0 og k1 (minimumsafstand = ét slot). Uden vægt pakkes de lige efter hinanden;
+        # med vægten "kampeITraek" får spilleren ét slot fri imellem (Jesper 2026-10-10: flowet i hallen).
+        kampe = [kamp(0), kamp(1), kamp(2)]
+        konf = [[0, 1, 30, 0]]
+        uden = loes(problem(kampe, konflikter=konf, traek=[[0, 1]]), 5)
+        self.assertEqual(abs(uden["tider"]["k0"] - uden["tider"]["k1"]), 30, "uden vægt: i træk")
+        vaegte = {"ventetid": 1, "sluttid": 2, "tommeBaner": 0.1, "finalerSpredt": 0.2, "kampeITraek": 2}
+        med = loes(problem(kampe, konflikter=konf, traek=[[0, 1]], vaegte=vaegte), 5)
+        self.assertEqual(med["status"], "OPTIMAL")
+        self.assertGreaterEqual(abs(med["tider"]["k0"] - med["tider"]["k1"]), 60, "med vægt: ét slot fri")
+        # Forskellige dage tæller aldrig som i træk
+        to_dage = [kamp(0, tilladte=[540]), kamp(1, tilladte=[DAG + 540])]
+        dage = [{"index": 0, "start": 540, "slut": 720, "baner": 2}, {"index": 1, "start": 540, "slut": 720, "baner": 2}]
+        kap = {"faelles": [{"t": d * DAG + t, "baner": 2} for d in (0, 1) for t in range(540, 720, 30)]}
+        r = loes(problem(to_dage, traek=[[0, 1]], vaegte=vaegte, dage=dage, kapacitet=kap), 5)
+        self.assertEqual(r["status"], "OPTIMAL")
+        self.assertEqual(r["tider"], {"k0": 540, "k1": DAG + 540})
+
     def test_max_haltid_er_haard(self):
         kampe = [kamp(0), kamp(1), kamp(2)]
         konf = [[0, 1, 60, 0], [1, 2, 60, 0], [0, 2, 60, 0]]

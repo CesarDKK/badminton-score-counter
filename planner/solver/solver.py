@@ -278,6 +278,31 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, st
             if len(ids) > 1 and all(enkeltDag[i] for i in ids) and len({dagFor[i] for i in ids}) == 1:
                 for s in spaend(ids):
                     led.append(s * max(1, int(round(w_fin * SKALA / slot))))
+    # Kampe i træk (planner/src/kriterier.js "kampeITraek", Jesper 2026-10-10): en spiller, hvis næste kamp ligger i
+    # slottet lige efter den forrige, koster vægten pr. gang — som i planneren, hvor vægt 1 svarer til 1 times ventetid.
+    # Starttiderne ligger i slot-gitteret, og to kampe for samme spiller kan aldrig dele slot, så "i træk" er netop
+    # en afstand under to slots. Et par, der deles af to spillere (en double), tæller to gange som i planneren.
+    w_traek = float(v.get("kampeITraek", 0))
+    if w_traek > 0:
+        koef = max(1, int(round(w_traek * SKALA)))
+        par = {}
+        for ids in problem.get("traek", []):
+            for x in range(len(ids)):
+                for y in range(x + 1, len(ids)):
+                    a, b = sorted((ids[x], ids[y]))
+                    par[(a, b)] = par.get((a, b), 0) + 1
+        stor = DAG * max(1, len(problem["dage"]))
+        for (a, b), antal in par.items():
+            ta, tb = kampe[a]["tilladte"], kampe[b]["tilladte"]
+            if min(tb) - max(ta) >= 2 * slot or min(ta) - max(tb) >= 2 * slot:
+                continue  # kan aldrig komme i træk
+            naer = m.NewBoolVar(f"traek{a}_{b}")
+            forskel = m.NewIntVar(-stor, stor, "")
+            m.Add(forskel == T[a] - T[b])
+            afstand = m.NewIntVar(0, stor, "")
+            m.AddAbsEquality(afstand, forskel)
+            m.Add(afstand >= 2 * slot).OnlyEnforceIf(naer.Not())
+            led.append(naer * (koef * antal))
     # Lille træk mod tidlig start, så planen pakkes fra morgenen og ligestillede løsninger bliver entydige
     led.append(sum(T))
     m.Minimize(sum(led))
