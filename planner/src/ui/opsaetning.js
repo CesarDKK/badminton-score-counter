@@ -14,9 +14,28 @@ const FORM_TEKST = {
     'dobbelt-pulje-cup': 'Dobbelt pulje + cup', 'swiss': 'Swiss Ladder', 'ingen lodtrækning': 'Ingen lodtrækning',
 };
 
+// Fanen følger arbejdsgangen: turnering og fil → dage og baner → kamplængde og pauser → rækker og
+// kategorier → (opskrift til TP) → kapacitet → videre til Plan. Indstillinger, der sjældent ændres,
+// ligger samlet under "Avanceret" nederst.
+const AFSNIT = [
+    ['afsnit-turnering', 'Turnering'],
+    ['afsnit-dage', 'Dage og baner'],
+    ['afsnit-kamplaengde', 'Kamplængde og pauser'],
+    ['afsnit-raekker', 'Rækker og kategorier'],
+    ['afsnit-form', 'Turneringsform'],
+    ['afsnit-kapacitet', 'Kapacitet'],
+    ['afsnit-avanceret', 'Avanceret'],
+];
+
 // ui.sammenligning: resultatet af "Sammenlign kamplængder" for det viste projekt (eller null)
 export function renderOpsaetning(container, projekt, handlers, ui = {}) {
-    container.innerHTML = [filPanel(projekt), ...(projekt ? [turneringPanel(projekt), dagePanel(projekt, ui), reglerPanel(projekt), vaegtPanel(projekt), raekkePanel(projekt), opskriftPanel(projekt), kapacitetPanel(projekt)] : [])].join('');
+    // Hele fanen tegnes forfra ved hver ændring — de fold-ud-bokse, brugeren selv har åbnet eller lukket, bevares
+    const aabne = new Map([...container.querySelectorAll('details[data-id]')].map((d) => [d.dataset.id, d.open]));
+    const paneler = projekt
+        ? [turneringPanel(projekt), dagePanel(projekt), kamplaengdePanel(projekt, ui), raekkePanel(projekt), opskriftPanel(projekt), kapacitetPanel(projekt), avanceretPanel(projekt)].filter(Boolean)
+        : [filPanel()];
+    container.innerHTML = (projekt ? afsnitNav(paneler.join('')) : '') + paneler.join('');
+    for (const d of container.querySelectorAll('details[data-id]')) if (aabne.has(d.dataset.id)) d.open = aabne.get(d.dataset.id);
     // Lytterne sættes på beholderen én gang og læser det aktuelle projekt herfra,
     // så de ikke hober sig op ved hver gentegning.
     container._projekt = projekt;
@@ -28,23 +47,18 @@ export function renderOpsaetning(container, projekt, handlers, ui = {}) {
 
 // ── Paneler ───────────────────────────────────────────────────
 
-function filPanel(projekt) {
+// Fil-knapperne (åbn .TP-fil / projektfil) — både i den store filzone og i turneringens hoved
+const filKnapper = (sekundaer) => `
+                <label class="knap${sekundaer ? ' knap--sekundaer' : ''}">${sekundaer ? 'Åbn anden .TP-fil' : 'Åbn .TP-fil'}<input type="file" id="tpFil" accept=".tp,.TP,application/octet-stream" hidden></label>
+                <label class="knap knap--sekundaer">Åbn projektfil<input type="file" id="projektFil" accept=".json,application/json" hidden></label>`;
+
+function filPanel() {
     return `
     <section class="panel" id="filPanel">
-        <div class="panel-hoved">
-            <div>
-                <h2>Fil</h2>
-                <p class="panel-sub">Åbn en .TP-fil fra Tournament Planner, hvor tilmeldinger, par og lodtrækning er på plads. Du kan også åbne et gemt planner-projekt.</p>
-            </div>
-            ${projekt ? `<div class="raekke-knapper">
-                <button class="knap knap--sekundaer" data-handling="gem-projekt">Gem projektfil</button>
-                <button class="knap knap--sekundaer" data-handling="start-forfra">Start forfra</button>
-            </div>` : ''}
-        </div>
+        <h2>Fil</h2>
+        <p class="panel-sub">Åbn en .TP-fil fra Tournament Planner, hvor tilmeldinger, par og lodtrækning er på plads. Du kan også åbne et gemt planner-projekt.</p>
         <div class="filzone" id="filzone">
-            <div class="knapper">
-                <label class="knap">Åbn .TP-fil<input type="file" id="tpFil" accept=".tp,.TP,application/octet-stream" hidden></label>
-                <label class="knap knap--sekundaer">Åbn projektfil<input type="file" id="projektFil" accept=".json,application/json" hidden></label>
+            <div class="knapper">${filKnapper(false)}
             </div>
             <p>… eller træk filen herind. Filen læses i din browser og forlader ikke din computer.</p>
         </div>
@@ -52,18 +66,31 @@ function filPanel(projekt) {
     </section>`;
 }
 
+/** Hop-links til fanens afsnit — kun dem, der er tegnet. */
+function afsnitNav(html) {
+    const links = AFSNIT.filter(([id]) => html.includes(`id="${id}"`))
+        .map(([id, navn]) => `<a href="#${id}" data-afsnit="${id}">${navn}</a>`).join('');
+    return `<div class="afsnit-nav" role="navigation" aria-label="Afsnit på siden">${links}</div>`;
+}
+
+// Turneringen og filen i ét panel; hele panelet tager imod en fil, der trækkes ind
 function turneringPanel(p) {
     const antalSpillere = Object.keys(p.spillere).length;
     const medTid = Object.keys(p.plan).length;
     const bem = p.bemaerkninger || [];
     return `
-    <section class="panel">
+    <section class="panel filzone--panel" id="afsnit-turnering" data-filzone>
         <div class="panel-hoved">
             <div>
                 <h2>${esc(p.turnering.navn || 'Turnering')}${p.turnering.hal ? ` <span class="daempet">· ${esc(p.turnering.hal)}</span>` : ''}</h2>
                 <p class="panel-sub">${p.turnering.dage.map((d) => datoTekst(d)).join(' og ')} · fra <code>${esc(p.kilde.filnavn || 'ukendt fil')}</code>${p.kilde.tagTiderMed ? ' · TP’s tidsplan er taget med' : ' · startet med tomt gitter'}</p>
             </div>
+            <div class="raekke-knapper">${filKnapper(true)}
+                <button class="knap knap--sekundaer" data-handling="gem-projekt">Gem projektfil</button>
+                <button class="knap knap--sekundaer" data-handling="start-forfra">Start forfra</button>
+            </div>
         </div>
+        <p class="besked" id="filBesked"></p>
         <div class="noegletal">
             <div class="tal-kort"><div class="vaerdi">${p.kampe.length}</div><span class="etiket">Kampe</span></div>
             <div class="tal-kort"><div class="vaerdi">${p.kategorier.length}</div><span class="etiket">Kategorier</span></div>
@@ -75,8 +102,8 @@ function turneringPanel(p) {
     </section>`;
 }
 
-function dagePanel(p, ui = {}) {
-    const { slotMin, pauseMin, dage } = p.opsaetning;
+function dagePanel(p) {
+    const { slotMin, dage } = p.opsaetning;
     const raekker = dage.map((d) => {
         const slots = slotsForDag(d, slotMin).length;
         const spaerringer = (d.spaerret || []).map((s, i) => `
@@ -88,10 +115,10 @@ function dagePanel(p, ui = {}) {
             <td><input type="time" step="300" value="${esc(d.start)}" data-felt="start" data-dato="${d.dato}" aria-label="Start"></td>
             <td><input type="time" step="300" value="${esc(d.slut)}" data-felt="slut" data-dato="${d.dato}" aria-label="Slut"></td>
             <td><input type="number" min="1" max="60" value="${d.baner}" data-felt="baner" data-dato="${d.dato}" aria-label="Baner"></td>
-            <td><label class="valg" title="Dagen før en skoledag slutter tidsvinduet 2 timer tidligere (§ 4 stk. 5.1)"><input type="checkbox" data-skoledag="${d.dato}" ${foerSkoledag(d) ? 'checked' : ''}> før skoledag</label></td>
+            <td><label class="valg" title="Dagen før en skoledag slutter tidsvinduet 2 timer tidligere (§ 4 stk. 5.1)"><input type="checkbox" data-skoledag="${d.dato}" ${foerSkoledag(d) ? 'checked' : ''}> ja</label></td>
             <td class="tal">${slots}</td>
             <td class="tal">${baneSlots(d, slotMin)}</td>
-            <td>${spaerringer}
+            <td class="kan-bryde">${spaerringer}
                 <span class="spaerring-ny">
                     <input type="time" step="300" data-ny="fra" data-dato="${d.dato}" aria-label="Spærret fra" placeholder="fra">
                     <input type="time" step="300" data-ny="til" data-dato="${d.dato}" aria-label="Spærret til">
@@ -101,40 +128,42 @@ function dagePanel(p, ui = {}) {
             </td>
         </tr>`;
     }).join('');
+    return `
+    <section class="panel" id="afsnit-dage">
+        <h2>Dage og baner</h2>
+        <p class="panel-sub">Tiderne fra TP-filens gitter er foreslået. Kapaciteten er antal hele baner pr. slot; spær baner i et tidsrum, hvis de ikke kan bruges.</p>
+        <div class="tabel-hylster">
+            <table class="tabel">
+                <thead><tr><th>Dag</th><th>Start</th><th>Slut</th><th>Baner</th><th title="Dagen før en skoledag slutter tidsvinduet 2 timer tidligere (§ 4 stk. 5.1)">Før skoledag</th><th class="tal">Slots</th><th class="tal">Bane-slots</th><th>Spærrede baner</th></tr></thead>
+                <tbody>${raekker}</tbody>
+            </table>
+        </div>
+    </section>`;
+}
+
+function kamplaengdePanel(p, ui = {}) {
+    const { slotMin, pauseMin } = p.opsaetning;
     const pause = (klasse, tekst) => `
         <label class="felt"><span class="etiket">${tekst}</span>
             <input type="number" min="0" max="60" step="1" value="${pauseMin[klasse] ?? ''}" data-pause="${klasse}"> min</label>`;
     return `
-    <section class="panel">
-        <h2>Dage, tider og baner</h2>
-        <p class="panel-sub">Tiderne fra TP-filens gitter er foreslået. Kapaciteten er antal hele baner pr. slot; spær baner i et tidsrum, hvis de ikke kan bruges.</p>
-        <div class="tabel-hylster">
-            <table class="tabel">
-                <thead><tr><th>Dag</th><th>Start</th><th>Slut</th><th>Baner</th><th></th><th class="tal">Slots</th><th class="tal">Bane-slots</th><th>Spærrede baner</th></tr></thead>
-                <tbody>${raekker}</tbody>
-            </table>
-        </div>
-        <div class="raekke-knapper" style="margin-top:18px; gap:22px">
+    <section class="panel" id="afsnit-kamplaengde">
+        <h2>Kamplængde og pauser</h2>
+        <p class="panel-sub">Turneringen har én kamplængde, som også sættes i TP, og den bestemmer slot-gitteret. Reglementet: mindst 10 min pause i A–D-rækker, 15 i M, 20 i E, og 12 når M og A–D spilles i samme turnering.</p>
+        <div class="felter">
             <label class="felt" title="Turneringens ene kamplængde, som også sættes i TP. Den bestemmer slot-gitteret."><span class="etiket">Kamplængde (slot)</span>
                 <input type="number" min="5" max="90" step="5" value="${slotMin}" data-felt="slotMin"> min</label>
             ${pause('ABCD', 'Pause A/B/C/D')}
             ${pause('M', 'Pause M')}
             ${pause('E', 'Pause E')}
             ${pause('faelles', 'Fælles pause (M + ABCD)')}
-            <label class="felt"><span class="etiket">En kamp regnes til</span>
+            <label class="felt" title='Med "minimumstid" må to 20-min-kampe for samme spiller ligge i naboslots ved 30-min slots (20 + 10 = 30); med "et helt slot" skal der være slot + pause mellem starttiderne.'><span class="etiket">En kamp regnes til</span>
                 <select data-felt="kampVarighed">
                     <option value="minimum" ${(p.opsaetning.kampVarighed || 'minimum') === 'minimum' ? 'selected' : ''}>reglementets minimumstid (som TP)</option>
                     <option value="slot" ${p.opsaetning.kampVarighed === 'slot' ? 'selected' : ''}>et helt slot (streng)</option>
                 </select></label>
         </div>
         ${kamplaengdeBoks(p, ui.sammenligning)}
-        <div class="raekke-knapper" style="margin-top:14px; gap:22px">
-            <label class="valg" title="Fra din gamle prompt (regel A3): i samme række må HS og HD ikke ligge samtidig, DS og DD ikke, og MD ikke sammen med nogen af dem. Tjek advarer, og forslaget undgår det."><input type="checkbox" data-opsaetning="antiSamtidighed" ${p.opsaetning.antiSamtidighed !== false ? 'checked' : ''}> undgå single og double samtidig i samme række</label>
-            <label class="valg" title="Blødt mål i forslaget: alle puljers runde 1 spilles før runde 2 osv. inden for hvert event. Giver et mere overskueligt program, men ofte lidt længere haltid."><input type="checkbox" data-opsaetning="puljerunderSynkront" ${p.opsaetning.puljerunderSynkront ? 'checked' : ''}> puljerunder synkront på tværs af puljer</label>
-            <label class="felt" title="Tjek advarer, når en spiller venter længere end dette mellem to af sine egne kampe samme dag. Tallet vises også i statuslinjen og under Alternativer."><span class="etiket">Advar ved ventetid over</span>
-                <input type="number" min="0" max="600" step="5" value="${p.opsaetning.maxVentetidMin ?? 90}" data-opsaetning-tal="maxVentetidMin"> min</label>
-        </div>
-        <p class="panel-sub">Reglementet: mindst 10 min pause i A–D-rækker, 15 i M, 20 i E, og 12 når M og A–D spilles i samme turnering. Med "minimumstid" må to 20-min-kampe for samme spiller ligge i naboslots ved 30-min slots (20 + 10 = 30); med "et helt slot" skal der være slot + pause mellem starttiderne.</p>
     </section>`;
 }
 
@@ -158,7 +187,7 @@ function kamplaengdeBoks(p, sammenligning) {
                 <div class="raekke-knapper">${knap}
                     <button type="button" class="knap knap--sekundaer knap--lille" data-handling="sammenlign-kamplaengder">Sammenlign kamplængder</button></div>
             </div>
-            <details class="kamplaengde-detaljer"><summary>Sådan er gennemsnittet regnet ud</summary>
+            <details class="kamplaengde-detaljer" data-id="kamplaengde-udregning"><summary>Sådan er gennemsnittet regnet ud</summary>
                 <p class="panel-sub">Hver kamp får en forventet varighed efter årgang, single/double/mix og niveau fra ${esc(SAESONDATA.tekst)}. TP har kun én kamplængde, så anbefalingen er gennemsnittet vægtet efter antal kampe.</p>
                 <div class="tabel-hylster"><table class="tabel"><thead><tr><th>Kategori</th><th class="tal">Kampe</th><th class="tal">Forventet</th></tr></thead><tbody>${fordeling}</tbody></table></div>
             </details>
@@ -194,14 +223,45 @@ function sammenligningTabel(rk, anbefalet, opsaetning) {
             <p class="panel-sub">Hver kamplængde er afprøvet med reglementets pause i planen og uden pause i planen, hver med et nyt forslag fra planlæggeren og en simulering af dagen med de forventede kamptider: kampen tager den bane, der bliver ledig først, og spillerne får altid reglementets pause — er den ikke i planen, venter kampen på dagen. Forsinkelsen viser altså, hvad en plan uden pause koster i hallen. Den viser risikoen, ikke en garanti. "Bedst samlet" er længden med færrest kampe uden tid, færrest regelbrud, mindst forsinkelse ud over ${FORSINKELSE_GRAENSE} min, færrest mulige brud og kortest tid i hallen — i den rækkefølge. Den kan afvige fra anbefalingen, fordi pausen spiller ind: 20 min kamp + 10 min pause = 30 min, så med 25-min slots skal en spiller vente to slots mellem sine kampe.</p>`;
 }
 
-function reglerPanel(p) {
+// Indstillinger, der sjældent ændres: forslagets valg, reglementets grænser og de bløde vægte.
+// Hver boks viser i overskriften, om noget er ændret, så man ikke skal folde dem ud for at se det.
+function avanceretPanel(p) {
+    return `
+    <section class="panel" id="afsnit-avanceret">
+        <h2>Avanceret</h2>
+        <p class="panel-sub">Behøver normalt ikke ændres. Ændrede værdier markeres med gult.</p>
+        ${forslagBoks(p)}
+        ${reglerBoks(p)}
+        ${vaegtBoks(p)}
+    </section>`;
+}
+
+function forslagBoks(p) {
+    const o = p.opsaetning;
+    const valg = [o.antiSamtidighed !== false ? 'single og double ikke samtidig' : 'single og double må ligge samtidig', o.puljerunderSynkront ? 'puljerunder synkront' : '', `advar ved ventetid over ${o.maxVentetidMin ?? 90} min`].filter(Boolean).join(' · ');
+    return `
+        <details class="fold" data-id="avanceret-forslag">
+            <summary><span class="fold-titel">Forslag og tjek</span> <span class="daempet">${esc(valg)}</span></summary>
+            <div class="felter">
+                <label class="valg" title="Fra din gamle prompt (regel A3): i samme række må HS og HD ikke ligge samtidig, DS og DD ikke, og MD ikke sammen med nogen af dem. Tjek advarer, og forslaget undgår det."><input type="checkbox" data-opsaetning="antiSamtidighed" ${o.antiSamtidighed !== false ? 'checked' : ''}> undgå single og double samtidig i samme række</label>
+                <label class="valg" title="Blødt mål i forslaget: alle puljers runde 1 spilles før runde 2 osv. inden for hvert event. Giver et mere overskueligt program, men ofte lidt længere haltid."><input type="checkbox" data-opsaetning="puljerunderSynkront" ${o.puljerunderSynkront ? 'checked' : ''}> puljerunder synkront på tværs af puljer</label>
+                <label class="felt" title="Tjek advarer, når en spiller venter længere end dette mellem to af sine egne kampe samme dag. Tallet vises også i statuslinjen og under Alternativer."><span class="etiket">Advar ved ventetid over</span>
+                    <input type="number" min="0" max="600" step="5" value="${o.maxVentetidMin ?? 90}" data-opsaetning-tal="maxVentetidMin"> min</label>
+            </div>
+        </details>`;
+}
+
+function reglerBoks(p) {
     const r = reglerFor(p);
     const std = STANDARD_REGLER;
     const aargange = [...new Set(p.raekker.map((x) => x.aargang))].sort();
     const alleAargange = [...new Set([...aargange, ...Object.keys(std.tidsvindue)])];
+    let antalAendret = 0;
     const aendret = (sti, v) => {
         const s = sti.split('.').reduce((o, k) => o?.[k], std);
-        return JSON.stringify(s) !== JSON.stringify(v) ? ' er-aendret' : '';
+        if (JSON.stringify(s) === JSON.stringify(v)) return '';
+        antalAendret += 1;
+        return ' er-aendret';
     };
     const tal = (sti, v, tekst, enhed = '') => `
         <label class="felt regel${aendret(sti, v)}"><span class="etiket">${tekst}</span>
@@ -215,30 +275,21 @@ function reglerPanel(p) {
             <td>${tid(`tidsvindue.${a}.0`, r.tidsvindue[a][0], '')}</td>
             <td>${tid(`tidsvindue.${a}.1`, r.tidsvindue[a][1], '')}</td>
         </tr>`).join('');
-    return `
-    <section class="panel">
-        <div class="panel-hoved">
-            <div>
-                <h2>Reglementets grænser</h2>
-                <p class="panel-sub">Standardværdierne er reglementets. Ret dem, hvis du har dispensation eller vil planlægge strammere/løsere; ændrede felter markeres. Pauserne står under dage og tider.</p>
-            </div>
-            <button class="knap knap--sekundaer" data-handling="nulstil-regler">Nulstil til reglementet</button>
-        </div>
-        <details ${Object.keys(p.opsaetning.regler || {}).length && JSON.stringify(r) !== JSON.stringify(std) ? 'open' : ''}>
-            <summary>Vis grænserne</summary>
-            <div class="raekke-knapper" style="margin-top:14px; gap:22px">
+    const indhold = `
+            <p class="panel-sub">Standardværdierne er reglementets. Ret dem, hvis du har dispensation eller vil planlægge strammere/løsere. Pauserne står under kamplængde og pauser.</p>
+            <div class="felter">
                 ${tal('maxKampePrDag', r.maxKampePrDag, 'Max kampe pr. dag')}
                 ${tal('maxKampePrDagEnDag', r.maxKampePrDagEnDag, 'Max kampe, éndagsturnering')}
                 ${tal('foerSkoledagTimer', r.foerSkoledagTimer, 'Tidligere før skoledag', 'timer')}
                 ${tal('seniorMaxPrKategori', r.seniorMaxPrKategori, 'Senior E/M pr. kategori pr. dag')}
             </div>
-            <div class="raekke-knapper" style="margin-top:14px; gap:22px">
+            <div class="felter">
                 ${tal('minKampMin.ungdomABCD', r.minKampMin.ungdomABCD, 'Min. kamptid ungdom A–D', 'min')}
                 ${tal('minKampMin.ungdomEM', r.minKampMin.ungdomEM, 'Ungdom E/M', 'min')}
                 ${tal('minKampMin.seniorABCD', r.minKampMin.seniorABCD, 'Senior A–D', 'min')}
                 ${tal('minKampMin.seniorEM', r.minKampMin.seniorEM, 'Senior E/M', 'min')}
             </div>
-            <div class="raekke-knapper" style="margin-top:14px; gap:22px">
+            <div class="felter">
                 ${tal('minKampe.MA', r.minKampe.MA, 'Min. kampe M/A')}
                 ${tal('minKampe.BCDSingle', r.minKampe.BCDSingle, 'B–D single')}
                 ${tal('minKampe.BCDDouble', r.minKampe.BCDDouble, 'B–D double')}
@@ -254,145 +305,150 @@ function reglerPanel(p) {
                     <tbody>${vinduer}</tbody>
                 </table>
             </div>
-        </details>
-    </section>`;
+            <div class="raekke-knapper" style="margin-top:14px"><button class="knap knap--sekundaer knap--lille" data-handling="nulstil-regler">Nulstil til reglementet</button></div>`;
+    // Overskriften tælles efter indholdet er bygget (aendret() tæller undervejs)
+    return `
+        <details class="fold" data-id="avanceret-regler" ${antalAendret ? 'open' : ''}>
+            <summary><span class="fold-titel">Reglementets grænser</span> ${antalAendret ? `<span class="maerke maerke--advarsel">${antalAendret} ændret</span>` : '<span class="daempet">som reglementet</span>'}</summary>
+            ${indhold}
+        </details>`;
 }
 
 /** Bløde kriterier med vægte (kriterier.js): skabelon + enkeltvægte. */
-function vaegtPanel(p) {
+function vaegtBoks(p) {
     const v = vaegteFor(p);
     const skabelon = p.opsaetning.vaegtSkabelon || 'standard';
+    const navn = skabelon === 'egen' ? 'egne vægte' : VAEGT_SKABELONER[skabelon]?.navn || skabelon;
     return `
-    <section class="panel">
-        <div class="panel-hoved">
-            <div>
-                <h2>Bløde ønsker og vægte</h2>
-                <p class="panel-sub">Planens score er den vægtede sum af disse kriterier — lavere er bedre. Scoren vises i Plan-fanen, rangerer alternativerne og er målet for "Optimér". Hårde regler (pauser, max haltid, tidsvinduer) er ikke vægte; de må aldrig brydes.</p>
+        <details class="fold" data-id="avanceret-vaegte" ${skabelon === 'egen' ? 'open' : ''}>
+            <summary><span class="fold-titel">Bløde ønsker og vægte</span> ${skabelon === 'egen' ? `<span class="maerke maerke--advarsel">${esc(navn)}</span>` : `<span class="daempet">${esc(navn)}</span>`}</summary>
+            <p class="panel-sub">Planens score er den vægtede sum af disse kriterier — lavere er bedre. Scoren vises i Plan-fanen, rangerer alternativerne og er målet for "Optimér". Hårde regler (pauser, max haltid, tidsvinduer) er ikke vægte; de må aldrig brydes.</p>
+            <div class="felter">
+                <label class="felt"><span class="etiket">Skabelon</span>
+                    <select data-felt="vaegtSkabelon">
+                        ${Object.entries(VAEGT_SKABELONER).map(([id, s]) => `<option value="${id}" ${skabelon === id ? 'selected' : ''}>${esc(s.navn)}</option>`).join('')}
+                        ${skabelon === 'egen' ? '<option value="egen" selected>egne vægte</option>' : ''}
+                    </select></label>
             </div>
-            <label class="felt"><span class="etiket">Skabelon</span>
-                <select data-felt="vaegtSkabelon">
-                    ${Object.entries(VAEGT_SKABELONER).map(([id, s]) => `<option value="${id}" ${skabelon === id ? 'selected' : ''}>${esc(s.navn)}</option>`).join('')}
-                    ${skabelon === 'egen' ? '<option value="egen" selected>egne vægte</option>' : ''}
-                </select></label>
-        </div>
-        <details ${skabelon === 'egen' ? 'open' : ''}>
-            <summary>Vis vægtene</summary>
-            <div class="raekke-knapper" style="margin-top:14px; gap:22px">
+            <div class="felter">
                 ${KRITERIER.map((k) => `<label class="felt" title="${esc(k.beskrivelse)}"><span class="etiket">${esc(k.navn)} (${esc(k.enhed)})</span>
                     <input type="number" min="0" max="100" step="0.1" value="${v[k.id] ?? 0}" data-vaegt="${k.id}"></label>`).join('')}
             </div>
-        </details>
-    </section>`;
+        </details>`;
 }
 
 function raekkePanel(p) {
     const prKat = kampePrKategori(p);
     const dage = p.turnering.dage;
-    const rows = [];
-    for (const r of p.raekker) {
-        const dagValg = dage.map((d) => `
-            <label class="valg"><input type="checkbox" data-raekke-dag="${d}" data-raekke="${esc(r.id)}" ${r.dage.includes(d) ? 'checked' : ''}> ${datoTekst(d, { kort: true })}</label>`).join('');
+    const kriterie = p.opsaetning.formKriterie || 'faerrest';
+    const blokke = p.raekker.map((r) => {
+        const kategorier = p.kategorier.filter((k) => k.raekke === r.id);
+        const kampe = kategorier.reduce((sum, k) => sum + (prKat.get(k.id)?.ialt || 0), 0);
         const flereDage = r.dage.length > 1;
         const kraeverDisp = flereDage && (['B', 'C', 'D'].includes(r.raekke) || (r.aargang === 'U11' && r.raekke === 'A'));
-        rows.push(`
-        <tr class="raekke-hoved">
-            <td colspan="2">${esc(r.id)} <span class="maerke">pause ${r.pauseKlasse}</span></td>
-            <td colspan="5">${dagValg}
-                <span class="raekke-tid" title="Valgfrit: rækkens eget tidsrum på dagen (fx U9 kun 12:00–17:00). Forslaget holder sig inden for det; Tjek advarer, hvis kampe ligger udenfor.">
-                    <input type="time" step="300" value="${esc(r.tidligst || '')}" data-raekke-tid="tidligst" data-raekke="${esc(r.id)}" aria-label="Tidligst">–<input type="time" step="300" value="${esc(r.senest || '')}" data-raekke-tid="senest" data-raekke="${esc(r.id)}" aria-label="Senest">
-                </span>
-                <span class="raekke-tid" title="Valgfrit: baner der er reserveret til rækken i dens tidsrum (hele dagen, hvis intet tidsrum). Rækken bruger kun dem, og de øvrige rækker deler resten — fx 5 baner til U9, der deles i 10 halve.">
-                    <input type="number" min="0" max="60" value="${r.reserveredeBaner || 0}" data-raekke-baner="${esc(r.id)}" aria-label="Reserverede baner"> reserverede baner
-                </span>
-                <span class="raekke-tid" title="Hårde regler for rækken: højst så mange minutter til afviklingen af rækkens SINGLEKAMPE — fra dagens første til dagens sidste singlekamp (U9/U11-vejledningen: U9 240, U11 360; doublerne tæller ikke med), og højst så mange spilledage (tomt = ingen grænse). Forslaget og løseren overholder dem; Tjek melder brud som fejl.">
-                    max varighed, singler <input type="number" min="0" max="900" step="30" value="${r.maxHaltidMin ?? ''}" data-raekke-tal="maxHaltidMin" data-raekke="${esc(r.id)}" aria-label="Max haltid i minutter"> min ·
-                    max dage <input type="number" min="0" max="9" step="1" value="${r.maxDage ?? ''}" data-raekke-tal="maxDage" data-raekke="${esc(r.id)}" aria-label="Max dage">
-                </span>
-                <label class="valg" title="AFVIGER FRA REGLEMENTET, som stiller minimumskravet pr. kategori (fx 3 kampe i single OG 2 i double). Sættes flueben, tælles spillerens single, double og mix i stedet sammen — i Tjek, i nedskæringsforslagene, og når planneren selv vælger turneringsform."><input type="checkbox" data-min-samlet="${esc(r.id)}" ${minKampeSamlet(r) ? 'checked' : ''}> min. kampe tælles samlet</label>
-                ${r.reserveredeBaner > 0 ? `<span class="maerke">${r.reserveredeBaner} ${r.reserveredeBaner === 1 ? 'bane' : 'baner'} reserveret${p.kategorier.some((k) => k.raekke === r.id && k.halvBane) ? ` = ${r.reserveredeBaner * 2} halve` : ''}</span>` : ''}
-                ${kraeverDisp ? `<label class="valg"><input type="checkbox" data-disp="${esc(r.id)}" ${r.dispensationFlereDage ? 'checked' : ''}> dispensation til flere dage</label>
-                ${r.dispensationFlereDage ? '<span class="maerke maerke--ok">dispensation givet</span>' : '<span class="maerke maerke--advarsel">kræver dispensation</span>'}` : ''}
-                ${!r.dage.length ? '<span class="maerke maerke--fejl">ingen dag valgt</span>' : ''}
-            </td>
-        </tr>`);
-        for (const katId of p.kategorier.filter((k) => k.raekke === r.id).map((k) => k.id)) {
-            const k = p.kategorier.find((x) => x.id === katId);
-            const t = prKat.get(k.id) || { pulje: 0, cup: 0, swiss: 0, ialt: 0, medTid: 0 };
-            const fordeling = [t.pulje ? `${t.pulje} pulje` : '', t.cup ? `${t.cup} cup` : '', t.swiss ? `${t.swiss} Swiss` : ''].filter(Boolean).join(' + ');
-            rows.push(`
-            <tr>
-                <td class="indrykket">${esc(k.id)}</td>
-                <td>
-                    <select data-form="${esc(k.id)}" title="Turneringsform: 'fra TP' bruger filens lodtrækning. Ellers bygger planneren selv kampene ud fra tilmeldingerne — 'automatisk' vælger den form, der opfylder reglementets minimum med færrest bane-slots.">
-                        ${FORM_VALG.map((v) => `<option value="${v}" ${(k.formValg || 'tp') === v ? 'selected' : ''}>${esc(FORM_VALG_TEKST[v])}</option>`).join('')}
-                    </select>
-                    ${(k.formValg || 'tp') === 'tp'
-                        ? `<span class="daempet">${esc(FORM_TEKST[k.form] || k.form)}${k.runder ? ` · ${k.runder} runder` : ''}</span>`
-                        : `${k.formForslag?.form === 'pulje-cup' || (k.formValg === 'auto' && k.formForslag?.form === 'pulje-cup') ? `<select data-cuptop="${esc(k.id)}" title="Hvem går videre fra puljerne til cuppen"><option value="1" ${(k.cupTop || 1) === 1 ? 'selected' : ''}>cup for vinderne</option><option value="2" ${k.cupTop === 2 ? 'selected' : ''}>cup for de to bedste</option></select>` : ''}
-                           ${k.formValg === 'swiss' || k.formForslag?.form === 'swiss' ? `<select data-swissrunder="${esc(k.id)}" title="Antal runder i Swiss Ladder. 'automatisk' vælger 4–6 efter reglementet og skærer ned, hvis kapaciteten ikke rækker — men holder øje med, at spillerne når minimum, når deres double- og mixkampe tælles med.">
-                               <option value="0" ${!(k.swissRunder > 0) ? 'selected' : ''}>runder: automatisk</option>
-                               ${[1, 2, 3, 4, 5, 6, 7, 8].map((n) => `<option value="${n}" ${k.swissRunder === n ? 'selected' : ''}>${n} ${n === 1 ? 'runde' : 'runder'}</option>`).join('')}
-                           </select>` : ''}
-                           <span class="${k.formForslag?.opfylderKrav === false ? 'maerke maerke--advarsel' : 'daempet'}">${esc(formTekst(k.formForslag))}</span>`}
-                </td>
-                <td class="tal">${k.tilmelde}</td>
-                <td class="tal">${t.ialt}</td>
-                <td class="daempet">${fordeling}</td>
-                <td class="tal">${t.medTid}</td>
-                <td>${k.aargang === 'U09' ? `<label class="valg" title="Kun U9 spiller på halv bane (single som standard). En hel bane deles i to halve."><input type="checkbox" data-halv="${esc(k.id)}" ${k.halvBane ? 'checked' : ''}> halv bane</label>` : ''}
-                    ${effektivForm(k).form === 'swiss' ? `<label class="valg" title="Swiss Ladder: næste runde må begynde i slottet lige efter forrige rundes sidste kamp, uden pause imellem. Pausen mod kampe i andre kategorier gælder stadig."><input type="checkbox" data-swiss-uden-pause="${esc(k.id)}" ${k.swissUdenPause ? 'checked' : ''}> runder lige efter hinanden</label>` : ''}
-                    <select data-prioritet="${esc(k.id)}" title="Forrang i forslaget: kategorier med høj prioritet får plads først, lav prioritet fylder op til sidst">
-                        <option value="1" ${k.prioritet === 1 ? 'selected' : ''}>høj prioritet</option>
-                        <option value="0" ${!k.prioritet ? 'selected' : ''}>normal</option>
-                        <option value="-1" ${k.prioritet === -1 ? 'selected' : ''}>lav prioritet</option>
-                    </select></td>
-            </tr>`);
-        }
-    }
+        const dagValg = dage.map((d) => `
+                    <label class="valg"><input type="checkbox" data-raekke-dag="${d}" data-raekke="${esc(r.id)}" ${r.dage.includes(d) ? 'checked' : ''}> ${datoTekst(d, { kort: true })}</label>`).join('');
+        const maerker = [
+            !r.dage.length ? '<span class="maerke maerke--fejl">ingen dag valgt</span>' : '',
+            kraeverDisp ? (r.dispensationFlereDage ? '<span class="maerke maerke--ok">dispensation givet</span>' : '<span class="maerke maerke--advarsel">kræver dispensation</span>') : '',
+            r.reserveredeBaner > 0 ? `<span class="maerke">${r.reserveredeBaner} ${r.reserveredeBaner === 1 ? 'bane' : 'baner'} reserveret${kategorier.some((k) => k.halvBane) ? ` = ${r.reserveredeBaner * 2} halve` : ''}</span>` : '',
+        ].filter(Boolean).join(' ');
+        return `
+        <div class="raekke-blok">
+            <div class="raekke-blok-hoved">
+                <h3>${esc(r.id)} <span class="maerke">pause ${r.pauseKlasse}</span> ${maerker}</h3>
+                <span class="daempet">${kategorier.length} ${kategorier.length === 1 ? 'kategori' : 'kategorier'} · ${kampe} kampe</span>
+            </div>
+            <div class="raekke-indstillinger">
+                <div class="felt"><span class="etiket">Spilledage</span>
+                    <div class="valg-gruppe">${dagValg}</div></div>
+                <div class="felt" title="Valgfrit: rækkens eget tidsrum på dagen (fx U9 kun 12:00–17:00). Forslaget holder sig inden for det; Tjek advarer, hvis kampe ligger udenfor."><span class="etiket">Tidsrum (valgfrit)</span>
+                    <div class="valg-gruppe"><input type="time" step="300" value="${esc(r.tidligst || '')}" data-raekke-tid="tidligst" data-raekke="${esc(r.id)}" aria-label="Tidligst">–<input type="time" step="300" value="${esc(r.senest || '')}" data-raekke-tid="senest" data-raekke="${esc(r.id)}" aria-label="Senest"></div></div>
+                <label class="felt" title="Valgfrit: baner der er reserveret til rækken i dens tidsrum (hele dagen, hvis intet tidsrum). Rækken bruger kun dem, og de øvrige rækker deler resten — fx 5 baner til U9, der deles i 10 halve."><span class="etiket">Reserverede baner</span>
+                    <input type="number" min="0" max="60" value="${r.reserveredeBaner || 0}" data-raekke-baner="${esc(r.id)}"></label>
+                <label class="felt" title="Hård regel: højst så mange minutter til afviklingen af rækkens SINGLEKAMPE — fra dagens første til dagens sidste singlekamp (U9/U11-vejledningen: U9 240, U11 360; doublerne tæller ikke med). Forslaget og løseren overholder den; Tjek melder brud som fejl."><span class="etiket">Max varighed, singler</span>
+                    <input type="number" min="0" max="900" step="30" value="${r.maxHaltidMin ?? ''}" data-raekke-tal="maxHaltidMin" data-raekke="${esc(r.id)}"> min</label>
+                <label class="felt" title="Hård regel: højst så mange spilledage (tomt = ingen grænse)."><span class="etiket">Max dage</span>
+                    <input type="number" min="0" max="9" step="1" value="${r.maxDage ?? ''}" data-raekke-tal="maxDage" data-raekke="${esc(r.id)}"></label>
+                <div class="felt"><span class="etiket">Valg</span>
+                    <div class="valg-gruppe valg-gruppe--lodret">
+                        <label class="valg" title="AFVIGER FRA REGLEMENTET, som stiller minimumskravet pr. kategori (fx 3 kampe i single OG 2 i double). Sættes flueben, tælles spillerens single, double og mix i stedet sammen — i Tjek, i nedskæringsforslagene, og når planneren selv vælger turneringsform."><input type="checkbox" data-min-samlet="${esc(r.id)}" ${minKampeSamlet(r) ? 'checked' : ''}> min. kampe tælles samlet</label>
+                        ${kraeverDisp ? `<label class="valg"><input type="checkbox" data-disp="${esc(r.id)}" ${r.dispensationFlereDage ? 'checked' : ''}> dispensation til flere dage</label>` : ''}
+                    </div></div>
+            </div>
+            <div class="tabel-hylster">
+                <table class="tabel tabel--kategorier">
+                    <colgroup><col class="k-navn"><col class="k-form"><col class="k-tal"><col class="k-tal"><col class="k-fordeling"><col class="k-tal"><col class="k-valg"></colgroup>
+                    <thead><tr><th>Kategori</th><th>Form</th><th class="tal">Tilmeldte</th><th class="tal">Kampe</th><th>Fordeling</th><th class="tal">Med tid</th><th>Valg</th></tr></thead>
+                    <tbody>${kategorier.map((k) => kategoriRaekke(k, prKat)).join('')}</tbody>
+                </table>
+            </div>
+        </div>`;
+    }).join('');
     return `
-    <section class="panel">
-        <h2>Rækker og kategorier</h2>
-        <p class="panel-sub">Vælg hvilke dage hver række spiller. Turneringsformen kommer fra TP og ændres der. U9-single spilles på halv bane; en hel bane deles i to og kan så ikke bruges til andre kampe i det slot.</p>
-        <div class="tabel-hylster">
-            <table class="tabel">
-                <thead><tr><th>Kategori</th><th>Form</th><th class="tal">Tilmeldte</th><th class="tal">Kampe</th><th>Fordeling</th><th class="tal">Med tid</th><th></th></tr></thead>
-                <tbody>${rows.join('')}</tbody>
-            </table>
+    <section class="panel" id="afsnit-raekker">
+        <div class="panel-hoved">
+            <div>
+                <h2>Rækker og kategorier</h2>
+                <p class="panel-sub">Vælg hvilke dage hver række spiller. Turneringsformen kommer fra TP; vælg en anden form ud for en kategori, så bygger planneren selv kampene. U9-single spilles på halv bane; en hel bane deles i to og kan så ikke bruges til andre kampe i det slot.</p>
+            </div>
+            <label class="felt" title="Gælder kategorier, hvor formen er sat til 'automatisk'"><span class="etiket">Automatisk form vælger</span>
+                <select data-felt="formKriterie">
+                    <option value="faerrest" ${kriterie === 'faerrest' ? 'selected' : ''}>færrest bane-slots, der opfylder minimum</option>
+                    <option value="flest" ${kriterie === 'flest' ? 'selected' : ''}>flest kampe pr. spiller (op til 6)</option>
+                </select></label>
         </div>
+        ${blokke}
     </section>`;
+}
+
+function kategoriRaekke(k, prKat) {
+    const t = prKat.get(k.id) || { pulje: 0, cup: 0, swiss: 0, ialt: 0, medTid: 0 };
+    const fordeling = [t.pulje ? `${t.pulje} pulje` : '', t.cup ? `${t.cup} cup` : '', t.swiss ? `${t.swiss} Swiss` : ''].filter(Boolean).join(' + ');
+    const formValg = k.formValg || 'tp';
+    const pc = k.formForslag?.form === 'pulje-cup';
+    const swiss = k.formValg === 'swiss' || k.formForslag?.form === 'swiss';
+    return `
+                <tr>
+                    <td><strong>${esc(k.id)}</strong></td>
+                    <td class="kan-bryde">
+                        <select data-form="${esc(k.id)}" title="Turneringsform: 'fra TP' bruger filens lodtrækning. Ellers bygger planneren selv kampene ud fra tilmeldingerne — 'automatisk' vælger den form, der opfylder reglementets minimum med færrest bane-slots.">
+                            ${FORM_VALG.map((v) => `<option value="${v}" ${formValg === v ? 'selected' : ''}>${esc(FORM_VALG_TEKST[v])}</option>`).join('')}
+                        </select>
+                        ${formValg === 'tp'
+                            ? `<span class="daempet">${esc(FORM_TEKST[k.form] || k.form)}${k.runder ? ` · ${k.runder} runder` : ''}</span>`
+                            : `${pc ? `<select data-cuptop="${esc(k.id)}" title="Hvem går videre fra puljerne til cuppen"><option value="1" ${(k.cupTop || 1) === 1 ? 'selected' : ''}>cup for vinderne</option><option value="2" ${k.cupTop === 2 ? 'selected' : ''}>cup for de to bedste</option></select>` : ''}
+                               ${swiss ? `<select data-swissrunder="${esc(k.id)}" title="Antal runder i Swiss Ladder. 'automatisk' vælger 4–6 efter reglementet og skærer ned, hvis kapaciteten ikke rækker — men holder øje med, at spillerne når minimum, når deres double- og mixkampe tælles med.">
+                                   <option value="0" ${!(k.swissRunder > 0) ? 'selected' : ''}>runder: automatisk</option>
+                                   ${[1, 2, 3, 4, 5, 6, 7, 8].map((n) => `<option value="${n}" ${k.swissRunder === n ? 'selected' : ''}>${n} ${n === 1 ? 'runde' : 'runder'}</option>`).join('')}
+                               </select>` : ''}
+                               <span class="${k.formForslag?.opfylderKrav === false ? 'maerke maerke--advarsel' : 'daempet'}">${esc(formTekst(k.formForslag))}</span>`}
+                    </td>
+                    <td class="tal">${k.tilmelde}</td>
+                    <td class="tal">${t.ialt}</td>
+                    <td class="daempet kan-bryde">${fordeling}</td>
+                    <td class="tal">${t.medTid}</td>
+                    <td class="kan-bryde">
+                        <select data-prioritet="${esc(k.id)}" title="Forrang i forslaget: kategorier med høj prioritet får plads først, lav prioritet fylder op til sidst">
+                            <option value="1" ${k.prioritet === 1 ? 'selected' : ''}>høj prioritet</option>
+                            <option value="0" ${!k.prioritet ? 'selected' : ''}>normal prioritet</option>
+                            <option value="-1" ${k.prioritet === -1 ? 'selected' : ''}>lav prioritet</option>
+                        </select>
+                        ${k.aargang === 'U09' ? `<label class="valg" title="Kun U9 spiller på halv bane (single som standard). En hel bane deles i to halve."><input type="checkbox" data-halv="${esc(k.id)}" ${k.halvBane ? 'checked' : ''}> halv bane</label>` : ''}
+                        ${effektivForm(k).form === 'swiss' ? `<label class="valg" title="Swiss Ladder: næste runde må begynde i slottet lige efter forrige rundes sidste kamp, uden pause imellem. Pausen mod kampe i andre kategorier gælder stadig."><input type="checkbox" data-swiss-uden-pause="${esc(k.id)}" ${k.swissUdenPause ? 'checked' : ''}> runder lige efter hinanden</label>` : ''}
+                    </td>
+                </tr>`;
 }
 
 /** Opskrift til lodtrækningen i TP for kategorier, hvor planneren selv har bygget kampene. */
 function opskriftPanel(p) {
+    // Vises kun, når mindst én kategori har en anden form end TP's (valget af form står ud for kategorien)
     const egne = p.kategorier.filter((k) => (k.formValg || 'tp') !== 'tp');
-    const kriterie = p.opsaetning.formKriterie || 'faerrest';
-    const valg = `
-        <label class="felt"><span class="etiket">Automatisk form vælger</span>
-            <select data-felt="formKriterie">
-                <option value="faerrest" ${kriterie === 'faerrest' ? 'selected' : ''}>færrest bane-slots, der opfylder minimum</option>
-                <option value="flest" ${kriterie === 'flest' ? 'selected' : ''}>flest kampe pr. spiller (op til 6)</option>
-            </select></label>`;
-    if (!egne.length) {
-        return `
-    <section class="panel">
-        <div class="panel-hoved">
-            <div>
-                <h2>Turneringsform</h2>
-                <p class="panel-sub">Alle kategorier bruger TP's lodtrækning. Vælg "automatisk", Swiss Ladder, pulje + cup eller pulje ud for en kategori ovenfor, så bygger planneren selv kampene ud fra tilmeldingerne (puljer á 3–5 seedet efter ranglistepoint, Swiss Ladder 4–6 runder) og viser her, hvordan lodtrækningen skal laves i TP.</p>
-            </div>
-            ${valg}
-        </div>
-    </section>`;
-    }
+    if (!egne.length) return '';
     return `
-    <section class="panel">
-        <div class="panel-hoved">
-            <div>
-                <h2>Opskrift til lodtrækningen i TP <span class="maerke">${egne.length}</span></h2>
-                <p class="panel-sub">Disse kategorier bruger planneren-byggede kampe. Lav lodtrækningen sådan i TP, gem filen og åbn den igen — så bruges TP's kampe, og "Lav forslag" laver planen forfra for dem.</p>
-            </div>
-            ${valg}
-        </div>
+    <section class="panel" id="afsnit-form">
+        <h2>Turneringsform: opskrift til lodtrækningen i TP <span class="maerke">${egne.length}</span></h2>
+        <p class="panel-sub">Disse kategorier bruger planneren-byggede kampe (puljer á 3–5 seedet efter ranglistepoint, Swiss Ladder 4–6 runder). Lav lodtrækningen sådan i TP, gem filen og åbn den igen — så bruges TP's kampe, og "Lav forslag" laver planen forfra for dem.</p>
         <div class="tabel-hylster">
             <table class="tabel">
                 <thead><tr><th>Kategori</th><th>Valg</th><th class="tal">Tilmeldte</th><th>Sådan i TP</th><th class="tal">Kampe</th><th class="tal">Bane-slots</th><th>Kampe pr. spiller</th></tr></thead>
@@ -403,7 +459,7 @@ function opskriftPanel(p) {
                         <td>${esc(k.id)}</td>
                         <td>${esc(FORM_VALG_TEKST[k.formValg])}</td>
                         <td class="tal">${n}</td>
-                        <td>${f ? esc(f.tekst) : '<span class="daempet">ingen kampe (under 2 tilmeldte)</span>'}</td>
+                        <td class="kan-bryde">${f ? esc(f.tekst) : '<span class="daempet">ingen kampe (under 2 tilmeldte)</span>'}</td>
                         <td class="tal">${f ? f.kampe : 0}</td>
                         <td class="tal">${f ? tal(f.baneSlots, f.baneSlots % 1 ? 1 : 0) : 0}</td>
                         <td>${f ? `${f.minKampe}–${f.maxKampe}${f.opfylderKrav ? ` <span class="maerke maerke--ok">≥ ${f.krav}</span>` : ` <span class="maerke maerke--advarsel">under kravet på ${f.krav}</span>`}` : ''}</td>
@@ -434,7 +490,7 @@ function kapacitetPanel(p) {
         </tr>`;
     }).join('');
     return `
-    <section class="panel">
+    <section class="panel" id="afsnit-kapacitet">
         <h2>Kapacitet</h2>
         <p class="panel-sub">Bane-slots til rådighed mod de kampe, rækkernes dage lægger på dagen. "Faste" er kampe i rækker, der kun spiller den dag; "fleksible" spiller over flere dage og er delt ligeligt i "fordelt". U9-singler på halv bane tæller ½. Udnyttelse over ca. 85 % bliver svær at få til at gå op med pauser og rækkefølge.</p>
         <div class="tabel-hylster">
@@ -444,6 +500,10 @@ function kapacitetPanel(p) {
             </table>
         </div>
         ${k.udenDag ? `<p class="besked fejl">${k.udenDag} kampe hører til rækker uden valgt dag.</p>` : ''}
+        <div class="videre">
+            <span class="daempet">Er opsætningen på plads, laves tidsplanen under Plan.</span>
+            <button type="button" class="knap" data-handling="vis-plan">Videre til Plan →</button>
+        </div>
     </section>`;
 }
 
@@ -451,7 +511,7 @@ function kapacitetPanel(p) {
 
 function bind(container, projekt, h) {
     // Filzonen og filfelterne gentegnes, så alt går via delegering på beholderen.
-    const zone = (e) => e.target.closest?.('#filzone');
+    const zone = (e) => e.target.closest?.('#filzone, [data-filzone]');
     container.addEventListener('dragover', (e) => { const z = zone(e); if (z) { e.preventDefault(); z.classList.add('er-over'); } });
     container.addEventListener('dragleave', (e) => { const z = zone(e); if (z && !z.contains(e.relatedTarget)) z.classList.remove('er-over'); });
     container.addEventListener('drop', (e) => {
@@ -465,11 +525,19 @@ function bind(container, projekt, h) {
     });
 
     container.addEventListener('click', (e) => {
+        // Hop-links: rul til afsnittet uden at ændre adressen
+        const link = e.target.closest('[data-afsnit]');
+        if (link) {
+            e.preventDefault();
+            document.getElementById(link.dataset.afsnit)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+        }
         const knap = e.target.closest('[data-handling]');
         if (!knap) return;
         const { handling, dato, index } = knap.dataset;
         if (handling === 'gem-projekt') h.gemProjekt();
         else if (handling === 'start-forfra') h.startForfra();
+        else if (handling === 'vis-plan') h.visPlan();
         else if (handling === 'nulstil-regler') h.nulstilRegler();
         else if (handling === 'brug-kamplaengde') {
             // Fra sammenligningen: kamplængde og pause; fra anbefalingen: kun kamplængden

@@ -209,6 +209,10 @@ const handlers = {
     },
 
     besked: visBesked,
+    visPlan() {
+        vaelgFane('plan');
+        window.scrollTo(0, 0);
+    },
     slotMin(v) {
         // Sammenligningen afhænger ikke af den valgte kamplængde — den bliver stående, når man vælger én
         const sammenligning = tilstand.kamplaengde?.projekt === projekt ? tilstand.kamplaengde.resultat : null;
