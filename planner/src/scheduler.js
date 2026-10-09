@@ -393,17 +393,22 @@ function lavForslagEnGang(projekt, valg = {}) {
     const LEMPELSE_ORDEN = [
         // 'reserveret' står først: at låne en FRI fælles bane er lovligt (Tjek melder det ikke), så det prøves,
         // før nogen regel brydes, og registreres ikke som regelbrud.
-        // Derefter det, Tjek kun regner for ADVARSLER (anti-samtidighed, rækkens tidsrum, rækkens dage/max dage),
-        // og først til sidst det, Tjek regner for FEJL.
-        ['reserveret', 'reserveret'], ['anti-samtidighed', 'antiSamtidighed'], ['tidsrum', 'tidsrum'], ['dag', 'dag'],
-        ['pause', 'pause'], ['max-haltid', 'maxHaltid'], ['tidsvindue', 'tidsvindue'], ['max-kampe', 'maxKampe'], ['kapacitet', 'kapacitet'],
+        // Derefter det, Tjek kun regner for ADVARSLER (anti-samtidighed, rækkens tidsrum), og først til sidst
+        // det, Tjek regner for FEJL. Rækkens dage/max dage er fejl og brydes sent (Jesper 2026-10-09: U11 må
+        // kun spille de valgte dage; dispensation til flere dage må ikke forudsættes) — først efter pause,
+        // max haltid, tidsvindue og max kampe, men før banekapaciteten, som er fysisk umulig.
+        ['reserveret', 'reserveret'], ['anti-samtidighed', 'antiSamtidighed'], ['tidsrum', 'tidsrum'],
+        ['pause', 'pause'], ['max-haltid', 'maxHaltid'], ['tidsvindue', 'tidsvindue'], ['max-kampe', 'maxKampe'], ['dag', 'dag'], ['kapacitet', 'kapacitet'],
         ['raekkefoelge', 'afhaengighed'],  // sidste udvej: fx en finale, hvis semifinalen ligger i dagens sidste slot
         ['dobbeltbooket', 'samtidig'],     // allersidste udvej: kun når dagene slet ikke rækker
     ];
     // Først brydes ÉN regel ad gangen (plus lovligt lån af en fri fælles bane), i rækkefølge efter hvor lidt
     // det koster. Først når ingen enkelt lempelse giver plads, lempes reglerne samlet (kumulativt). Ellers
     // kunne en kamp, der blot skulle over på rækkens anden dag, ende uden for tidsvinduet på den første.
-    const enkeltvis = LEMPELSE_ORDEN.map(([brudNavn, n]) => ({ brud: brudNavn, lemp: { reserveret: true, [n]: true } }));
+    // Rækkens dage prøves IKKE alene: en kamp (typisk U9-Swiss), der kræver flere små lempelser på samme
+    // dag, ville ellers hellere flytte til en dag, rækken ikke må spille. Dagen brydes kun samlet, efter
+    // pause, max haltid, tidsvindue og max kampe (Jesper 2026-10-09).
+    const enkeltvis = LEMPELSE_ORDEN.filter(([brudNavn]) => brudNavn !== 'dag').map(([brudNavn, n]) => ({ brud: brudNavn, lemp: { reserveret: true, [n]: true } }));
     const samlet = LEMPELSE_ORDEN.map(([brudNavn], i) => ({ brud: brudNavn, lemp: Object.fromEntries(LEMPELSE_ORDEN.slice(0, i + 1).map(([, n]) => [n, true])) }));
     const LEMPELSER = [...enkeltvis, ...samlet.slice(1)];
     const brud = [];

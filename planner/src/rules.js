@@ -270,7 +270,9 @@ export function tjekPlan(projekt) {
         // Max dage pr. række som data (r.maxDage); dispensation og ældre projekter håndteres i regelmodellen
         const maxDage = M.maxDageFor(r);
         if (maxDage && m.size > maxDage) {
-            tilfoej({ type: 'flere-dage', alvor: 'advarsel', noegle: `${r.id}:flere-dage`, tekst: `${r.id} spiller over ${m.size} dage (${[...m.keys()].sort().map(datoKort).join(', ')}). B-, C- og D-rækker og U11 A skal afvikles på én dag, medmindre der er givet dispensation.`, kampe: [...m.values()].flat().map((k) => k.id) });
+            // Fejl, ikke advarsel (Jesper 2026-10-09): dispensation til flere dage gives kun yderst sjældent og
+            // må ikke forudsættes. Kan ikke kvitteres væk — er der givet dispensation, sættes den på rækken.
+            tilfoej({ type: 'flere-dage', alvor: 'fejl', tekst: `${r.id} spiller over ${m.size} dage (${[...m.keys()].sort().map(datoKort).join(', ')}). B-, C- og D-rækker og U11 A skal afvikles på én dag. Er der givet dispensation, så sæt flueben ved den på rækken.`, kampe: [...m.values()].flat().map((k) => k.id) });
         }
         for (const [dag, kampe] of m) {
             // Rækkens eget tidsrum (valgfrit) — brugerens ønske, ikke reglementet: advarsel
@@ -282,7 +284,8 @@ export function tjekPlan(projekt) {
                 if (udenfor.length) tilfoej({ type: 'raekke-tidsrum', alvor: 'advarsel', noegle: `${r.id}:${dag}:tidsrum`, tekst: `${udenfor.length} kampe i ${r.id} ligger ${datoKort(dag)} uden for rækkens eget tidsrum ${r.tidligst || dagMap.get(dag).start}–${r.senest || dagMap.get(dag).slut}.`, kampe: udenfor.map((k) => k.id), dag });
             }
             const uPlaceret = kampe.filter((k) => !r.dage.includes(dag));
-            if (uPlaceret.length) tilfoej({ type: 'uden-for-raekkens-dage', alvor: 'advarsel', noegle: `${r.id}:${dag}:uden-for-dage`, tekst: `${uPlaceret.length} kampe i ${r.id} ligger ${datoKort(dag)}, som ikke er valgt som rækkens dag.`, kampe: uPlaceret.map((k) => k.id), dag });
+            // Fejl: rækkens dage er valgt med vilje (fx U11 kun lørdag) — løseren behandler dem også som hårde
+            if (uPlaceret.length) tilfoej({ type: 'uden-for-raekkens-dage', alvor: 'fejl', tekst: `${uPlaceret.length} ${uPlaceret.length === 1 ? 'kamp' : 'kampe'} i ${r.id} ligger ${datoKort(dag)}, som ikke er valgt som rækkens dag.`, kampe: uPlaceret.map((k) => k.id), dag });
         }
         const senior = r.aargang === 'SEN' || /^\+/.test(r.aargang);
         if (r.raekke === 'E') {
