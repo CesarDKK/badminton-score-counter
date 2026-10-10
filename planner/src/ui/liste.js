@@ -88,13 +88,15 @@ export function listeSomTekst(projekt) {
     return ud.join('\n');
 }
 
-export function renderListe(container, projekt, handlers) {
+export function renderListe(container, projekt, handlers, fejl = 0) {
     if (!projekt) {
         container.innerHTML = '<div class="panel"><h2>Til TP</h2><p class="panel-sub">Åbn en .TP-fil under trin 1 (Fil) først.</p></div>';
         return;
     }
     const liste = byggListe(projekt);
     const udenTid = projekt.kampe.filter((k) => !projekt.plan[k.id]).length;
+    // Fejl i Tjek følger med til TP og på udskriften, så de ikke tastes ind uden at nogen har set dem (Fable V6)
+    const fejlTekst = fejl ? `Programmet har ${fejl} fejl i Tjek — fx en spiller i to kampe på én gang eller for kort pause.` : '';
     // Trin 4: opskriften til lodtrækningen (når planneren har bygget kampe) og listen til indtastning i TP
     container.innerHTML = `
     ${opskriftPanel(projekt)}    <div class="panel liste-hoved udskriv-skjul">
@@ -109,11 +111,13 @@ export function renderListe(container, projekt, handlers) {
                 <button class="knap" data-handling="udskriv">Udskriv</button>
             </div>
         </div>
+        ${fejl ? `<p class="liste-fejl" role="alert"><b>${esc(fejlTekst)}</b> Ret dem under Program › Problemer, før programmet tastes ind i TP.</p>` : ''}
         <p class="besked" id="listeBesked"></p>
     </div>
     <div class="udskrift-hoved">
         <h1>${esc(projekt.turnering.navn)} — spilleprogram</h1>
         <p>${projekt.turnering.dage.map((d) => datoTekst(d)).join(' og ')}${projekt.turnering.hal ? ` · ${esc(projekt.turnering.hal)}` : ''}</p>
+        ${fejl ? `<p class="liste-fejl">${esc(fejlTekst)}</p>` : ''}
     </div>
     ${liste.map((kat) => `
     <section class="panel liste-kategori">

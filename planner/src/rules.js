@@ -64,7 +64,7 @@ export function tjekPlan(projekt) {
         }
         // Rækker med reserverede baner bruger deres egne først og løber over på de fælles, hvis de ikke
         // rækker. Først når de fælles baner også er fulde, er der for mange kampe (banebrugISlot).
-        const kapacitet = puljeKapacitet(dag, slot, projekt.raekker);
+        const kapacitet = puljeKapacitet(dag, slot, projekt.raekker, slotMin);
         const brug = banebrugISlot(kampe.map((k) => ({ raekkeId: kat(k)?.raekke, halv: !!kat(k)?.halvBane })), kapacitet);
         if (brug.forMange) {
             const halve = kampe.filter((k) => kat(k)?.halvBane).length;

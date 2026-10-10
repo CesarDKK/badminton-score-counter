@@ -101,6 +101,7 @@ function turneringPanel(p) {
             </div>
         </div>
         <p class="besked" id="filBesked" data-besked></p>
+        <p class="daempet">Projektet — med spillernes navne og klubber — gemmes kun i denne browser. På en fælles PC: tryk "Start forfra", når du er færdig, så det slettes.</p>
         <div class="noegletal">
             <div class="tal-kort"><div class="vaerdi">${p.kampe.length}</div><span class="etiket">Kampe</span></div>
             <div class="tal-kort"><div class="vaerdi">${p.kategorier.length}</div><span class="etiket">Kategorier</span></div>
@@ -151,8 +152,10 @@ function lodtraekningPanel(p, tjek) {
     </section>`;
 }
 
-function dagePanel(p) {
+export function dagePanel(p) {
     const { slotMin, dage } = p.opsaetning;
+    // Aldrig flere baner end i TP-filen (Jesper): skriver man selv flere, siges det tydeligt (Fable-gennemgangen, idé 4)
+    const tpBaner = p.tpGitter?.baner?.hele || 0;
     const raekker = dage.map((d) => {
         const slots = slotsForDag(d, slotMin).length;
         const spaerringer = (d.spaerret || []).map((s, i) => `
@@ -163,7 +166,7 @@ function dagePanel(p) {
             <td><strong>${datoTekst(d.dato)}</strong></td>
             <td><input type="time" step="300" value="${esc(d.start)}" data-felt="start" data-dato="${d.dato}" aria-label="Start"></td>
             <td><input type="time" step="300" value="${esc(d.slut)}" data-felt="slut" data-dato="${d.dato}" aria-label="Slut"></td>
-            <td><input type="number" min="1" max="60" value="${d.baner}" data-felt="baner" data-dato="${d.dato}" aria-label="Baner"></td>
+            <td><input type="number" min="1" max="60" value="${d.baner}" data-felt="baner" data-dato="${d.dato}" aria-label="Baner">${tpBaner && d.baner > tpBaner ? ` <span class="maerke maerke--advarsel" title="TP-filen har ${tpBaner} baner. Planen kan ikke spilles på flere baner, end hallen har i TP.">flere end TP's ${tpBaner}</span>` : ''}</td>
             <td><label class="valg" title="Dagen før en skoledag slutter tidsvinduet 2 timer tidligere (§ 4 stk. 5.1)"><input type="checkbox" data-skoledag="${d.dato}" ${foerSkoledag(d) ? 'checked' : ''}> ja</label></td>
             <td class="tal">${slots}</td>
             <td class="tal">${baneSlots(d, slotMin)}</td>

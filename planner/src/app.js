@@ -102,7 +102,7 @@ function render() {
         renderFil(sektioner.fil, projekt, handlers);
         visBesked(besked.tekst, besked.fejl);
     } else if (tilstand.fane === 'liste') {
-        renderListe(sektioner.liste, projekt, { gemProjekt: () => handlers.gemProjekt(), visKampe: (ids) => tjekHandlers.visKampe(ids, null) });
+        renderListe(sektioner.liste, projekt, { gemProjekt: () => handlers.gemProjekt(), visKampe: (ids) => tjekHandlers.visKampe(ids, null) }, tjek?.antal.fejl || 0);
     }
     // Mærket på "Program": fejl i planen (rødt), ellers kampe uden tid
     const maerke = document.querySelector('[data-program-maerke]');
@@ -116,7 +116,7 @@ function render() {
 
 function visStatus() {
     navStatus.textContent = projekt
-        ? `${projekt.turnering.navn || 'Turnering'} · ${projekt.kampe.length} kampe · ${tjek.antal.fejl} fejl, ${tjek.antal.advarsel} advarsler · ${gemt ? 'gemt i browseren' : 'IKKE gemt i browseren — hent projektfilen under "Fil og opsætning"'}`
+        ? `${projekt.turnering.navn || 'Turnering'} · ${projekt.kampe.length} kampe · ${tjek.antal.fejl} fejl, ${tjek.antal.advarsel} advarsler · ${gemt ? 'gemt i browseren' : 'IKKE gemt i browseren — hent projektfilen under trin 1 (Fil)'}`
         : 'Intet projekt åbnet';
     navStatus.classList.toggle('er-ikke-gemt', !!projekt && !gemt);
 }
@@ -273,22 +273,61 @@ const handlers = {
 // ── Handlinger: fane 2 og 3 ───────────────────────────────────
 
 /**
- * Kører et regnestykke, der tager et par sekunder (autopilot, beslutninger): først vises "arbejder"-teksten,
- * så regnes der. Fejl vises som besked i stedet for at efterlade siden halvt opdateret.
+ * "Lav kampprogram" + beslutningskortene i en baggrundstråd (kampprogram-worker.js), så siden ikke fryser på en stor
+ * turnering (Fable-gennemgangen 2026-10-10, M9). Kan tråden ikke startes (ældre browser), regnes der her som før.
+ * Returnerer { r, beslutninger }.
  */
-function arbejd(tekst, fn) {
+let kpTraad = null, kpTraadVirker = true, kpNr = 0;
+const kpVenter = new Map();
+function beregnKampprogram(p, valg) {
+    const direkte = () => { const r = byggKampprogram(p, valg); return { r, beslutninger: lavBeslutninger(r.projekt, r.forslag) }; };
+    if (!kpTraadVirker || typeof Worker === 'undefined') return Promise.resolve().then(direkte);
+    try {
+        if (!kpTraad) {
+            kpTraad = new Worker(new URL('./kampprogram-worker.js', import.meta.url), { type: 'module' });
+            kpTraad.onmessage = (e) => { const v = kpVenter.get(e.data.id); kpVenter.delete(e.data.id); v?.(e.data); };
+            kpTraad.onerror = () => {
+                // Modul-workers understøttes ikke (eller tråden døde): resten regnes i hovedtråden
+                kpTraadVirker = false;
+                kpTraad = null;
+                for (const v of kpVenter.values()) v({ igen: true });
+                kpVenter.clear();
+            };
+        }
+    } catch { kpTraadVirker = false; return Promise.resolve().then(direkte); }
+    return new Promise((ok, fejl) => {
+        const id = ++kpNr;
+        kpVenter.set(id, (svar) => {
+            if (svar.igen) ok(direkte());
+            else if (svar.fejl) fejl(new Error(svar.fejl));
+            else ok({ r: svar.r, beslutninger: svar.beslutninger });
+        });
+        kpTraad.postMessage({ id, projekt: p, valg });
+    });
+}
+
+/**
+ * Kører et regnestykke, der tager et par sekunder (autopilot, beslutninger), i baggrundstråden: først vises
+ * "arbejder"-teksten, og siden kan tegnes imens. Fejl vises som besked i stedet for at efterlade siden halvt
+ * opdateret; er projektet skiftet ud imens, kasseres resultatet.
+ */
+function arbejd(tekst, regn, brug) {
     if (tilstand.arbejder) return;
+    const start = projekt;
     tilstand.arbejder = tekst;
     render();
-    setTimeout(() => {
-        try { fn(); } catch (err) {
-            console.error(err);
-            tilstand.forslag = { tekst: `Kampprogrammet kunne ikke laves: ${err.message || err}`, ikkePlaceret: [] };
-        } finally {
-            tilstand.arbejder = null;
-            render();
-        }
-    }, 40);
+    regn().then((resultat) => {
+        tilstand.arbejder = null;
+        const a = aendretUnderOptimering(start, projekt);
+        if (a === 'lukket' || a === 'andet-projekt') { render(); return; }
+        brug(resultat);
+        render();
+    }).catch((err) => {
+        console.error(err);
+        tilstand.arbejder = null;
+        tilstand.forslag = { tekst: `Kampprogrammet kunne ikke laves: ${err.message || err}`, ikkePlaceret: [] };
+        render();
+    });
 }
 
 const katFelter = (p, brud) => {
@@ -297,8 +336,7 @@ const katFelter = (p, brud) => {
 };
 
 /** Lægger et resultat fra lavKampprogram ind og regner beslutningskortene ud. */
-function visKampprogram(r, { foer, valg, udfoert = [], note = null }) {
-    const beslutninger = lavBeslutninger(r.projekt, r.forslag);
+function visKampprogram(r, { foer, valg, udfoert = [], note = null, beslutninger = lavBeslutninger(r.projekt, r.forslag) }) {
     const brud = [...r.forslag.brud, ...r.forslag.ikkePlaceret];
     tilstand.alternativer = null;
     tilstand.nedskaering = null;
@@ -322,9 +360,8 @@ const planHandlers = {
     // "Lav kampprogram": hele kæden på én gang (kampprogram.js). Det gamle program kan fås tilbage med "Fortryd".
     lavKampprogram({ fastKamplaengde = false } = {}) {
         const foer = projekt;
-        arbejd('Laver kampprogrammet … planneren prøver kamplængder og flere forslag og vælger det bedste.', () => {
-            const r = byggKampprogram(foer, { fastKamplaengde });
-            visKampprogram(r, { foer, valg: r.valg });
+        arbejd('Laver kampprogrammet … planneren prøver kamplængder og flere forslag og vælger det bedste.', () => beregnKampprogram(foer, { fastKamplaengde }), ({ r, beslutninger }) => {
+            visKampprogram(r, { foer, valg: r.valg, beslutninger });
             startAutoLoeser();
         });
     },
@@ -333,9 +370,8 @@ const planHandlers = {
         const kp = tilstand.kampprogram;
         const v = kp?.beslutninger.kort[kortIndex]?.valg[valgIndex];
         if (!v) return;
-        arbejd(`${v.tekst} … og laver programmet igen.`, () => {
-            const r = byggKampprogram(anvendAendring(projekt, v), { fastKamplaengde: true });
-            visKampprogram(r, { foer: kp.foer, valg: kp.valg, udfoert: [...kp.udfoert, v.tekst] });
+        arbejd(`${v.tekst} … og laver programmet igen.`, () => beregnKampprogram(anvendAendring(projekt, v), { fastKamplaengde: true }), ({ r, beslutninger }) => {
+            visKampprogram(r, { foer: kp.foer, valg: kp.valg, udfoert: [...kp.udfoert, v.tekst], beslutninger });
             startAutoLoeser();
         });
     },
@@ -351,10 +387,9 @@ const planHandlers = {
         const kp = tilstand.kampprogram;
         if (!kp) return;
         const { slotMin, pauseMin } = kp.valg.foer;
-        arbejd(`Laver programmet igen med ${slotMin} min …`, () => {
-            const p = store.genberegnKampe(store.opdaterOpsaetning(store.saetSlotMin(projekt, slotMin), { pauseMin }));
-            const r = byggKampprogram(p, { fastKamplaengde: true });
-            visKampprogram(r, { foer: kp.foer, valg: { ...r.valg, aendret: false, grund: 'tidligere' }, udfoert: kp.udfoert });
+        const p = store.genberegnKampe(store.opdaterOpsaetning(store.saetSlotMin(projekt, slotMin), { pauseMin }));
+        arbejd(`Laver programmet igen med ${slotMin} min …`, () => beregnKampprogram(p, { fastKamplaengde: true }), ({ r, beslutninger }) => {
+            visKampprogram(r, { foer: kp.foer, valg: { ...r.valg, aendret: false, grund: 'tidligere' }, udfoert: kp.udfoert, beslutninger });
             startAutoLoeser();
         });
     },
@@ -569,7 +604,7 @@ const planHandlers = {
                 tilstand.ventendeOptimering = lovlig ? visLoeserensPlan : null;
                 tilstand.forslag = {
                     tekst: lovlig
-                        ? `Løseren er færdig (${svar.sekunder} s), men du har ændret projektet, mens den regnede. Dens plan er derfor IKKE lagt ind. Den bygger på projektet, som det var, da du trykkede "Optimér" — viser du den alligevel, beholder låste kampe deres tid, og "Fortryd" bringer dig tilbage til din nuværende plan.`
+                        ? `Løseren er færdig (${svar.sekunder} s), men du har ændret projektet, mens den regnede. Dens plan er derfor IKKE lagt ind. Den bygger på projektet, som det var, da løseren gik i gang — viser du den alligevel, beholder låste kampe deres tid, og "Fortryd" bringer dig tilbage til din nuværende plan.`
                         : 'Løseren blev færdig uden en plan, og du har ændret projektet imens. Din plan er ikke rørt — tryk "Optimér" igen for at regne på det, du har nu.',
                     handlinger: lovlig ? [{ tekst: 'Vis løserens plan alligevel', type: 'vis-ventende' }, { tekst: 'Kassér løserens plan', type: 'kasser-ventende' }] : [],
                     ikkePlaceret: [],

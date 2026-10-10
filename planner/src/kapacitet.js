@@ -27,20 +27,21 @@ export function banerISlot(dag, slot) {
  * (fx U9 på 5 delte baner kl. 12–16), og de øvrige rækker deler resten.
  * Returnerer Map(raekkeId → baner).
  */
-export function reservationerISlot(raekker, dag, slot) {
+export function reservationerISlot(raekker, dag, slot, slotMin = 0) {
     const m = minutter(slot);
     const ud = new Map();
     for (const r of raekker) {
         if (!(r.reserveredeBaner > 0) || !r.dage?.includes(dag.dato)) continue;
         const fra = minutter(r.tidligst || dag.start), til = minutter(r.senest || dag.slut);
-        if (m >= fra && m < til) ud.set(r.id, r.reserveredeBaner);
+        // Kun slots, rækken selv kan bruge: hele kampen inden for tidsrummet (som regelmodel.iVindue) — Fable M4
+        if (m >= fra && m < til && m + slotMin <= til) ud.set(r.id, r.reserveredeBaner);
     }
     return ud;
 }
 
 /** Kapacitet pr. pulje i et slot: { faelles, reserveret: Map(raekkeId → baner) }. */
-export function puljeKapacitet(dag, slot, raekker) {
-    const reserveret = reservationerISlot(raekker, dag, slot);
+export function puljeKapacitet(dag, slot, raekker, slotMin = 0) {
+    const reserveret = reservationerISlot(raekker, dag, slot, slotMin);
     let sum = 0;
     for (const b of reserveret.values()) sum += b;
     return { faelles: Math.max(0, banerISlot(dag, slot) - sum), reserveret };
@@ -100,7 +101,7 @@ export function pladsPaaDag(M, raekke, dag, raekker, { vindue = null, kapFor = n
     for (const slot of slotsForDag(dag, M.slotMin)) {
         const m = minutter(slot);
         if (!M.iVindue(v, m) || (vindue && !M.iVindue(vindue, m))) continue;
-        const kap = kapFor ? kapFor(dag.dato, slot) : puljeKapacitet(dag, slot, raekker);
+        const kap = kapFor ? kapFor(dag.dato, slot) : puljeKapacitet(dag, slot, raekker, M.slotMin);
         faelles += kap.faelles;
         egne += kap.reserveret.get(raekke.id) || 0;
     }

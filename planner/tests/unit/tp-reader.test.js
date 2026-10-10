@@ -133,13 +133,12 @@ describe('tp-reader: syntetisk turnering', () => {
         assert.deepEqual(model.bemaerkninger, []);
     });
 
-    test('spillere med klub, køn, fødselsdato og niveau', () => {
+    test('spillere med klub, køn og niveau — ikke fødselsdato og medlemsnummer (dataminimering)', () => {
         assert.equal(Object.keys(model.spillere).length, 6);
         assert.deepEqual(model.spillere.p1, {
-            id: 'p1', fornavn: 'Anna', efternavn: 'A', koen: 'D', foedt: '2015-02-01', klub: 'Lyngby', memberid: '150201-01',
+            id: 'p1', fornavn: 'Anna', efternavn: 'A', koen: 'D', klub: 'Lyngby',
             niveau: { single: 6, double: 5, mix: 6 },
         });
-        assert.equal(model.spillere.p3.foedt, null, 'tom Jet-dato bliver null');
         assert.deepEqual(model.spillere.p3.niveau, { single: null, double: null, mix: null });
     });
 

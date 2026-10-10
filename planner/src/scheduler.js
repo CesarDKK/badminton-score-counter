@@ -18,7 +18,7 @@ const AARGANG_ORDEN = ['U09', 'U11', 'U13', 'U15', 'U17', 'U19', 'SEN'];
 const AARSAG_RANG = {
     'ingen ledig bane': 6, 'ingen ledig reserveret bane': 6,
     'spiller mangler pause': 5, 'spiller over max haltid': 5, 'rækken må ikke spille flere dage': 3, 'spiller er i en anden kamp i slottet': 5, 'spiller har max kampe den dag': 5,
-    'uden for tidsvinduet': 4, 'E-række: tidligst kl. 10:00': 4, 'E-række: kun semifinaler og finaler på sidste dag': 4, 'E-finale uden for finalevinduet': 4, 'senior A/B: kun kvart-, semi- og finaler på finaledagen': 4,
+    'uden for tidsvinduet': 4, 'E-række: kun semifinaler og finaler på sidste dag': 4, 'E-finale uden for finalevinduet': 4, 'senior A/B: kun kvart-, semi- og finaler på finaledagen': 4,
     'kvartfinale samme dag som semifinale eller finale': 4, 'spiller har max kampe i kategorien den dag': 5, 'rækken er lagt på en anden dag': 3,
     'før rækkens tidligste start': 4, 'efter rækkens seneste slut': 4,
     'rækken spiller ikke den dag': 3, 'single og double samtidig i rækken': 3,
@@ -62,6 +62,18 @@ function lavForslagEnGang(projekt, valg = {}) {
     const { slotMin, dage, raekkeMap, kat, raekke, varighedFor, kanDeleSpillere, maxPrDag } = M;
     const laast = new Set(projekt.laast || []);
     const kunDage = valg.kunDage ? new Set(valg.kunDage) : null;
+    // Max kampe pr. spiller pr. dag er den strengeste grænse blandt spillerens kampe den dag (Tjek: maxPrDagForKampe).
+    // Planlæggeren ved ikke på forhånd, hvilke kampe der ender på dagen, så alle spillerens kampe i rækker, der kan
+    // spille dagen, tæller med — fx en seniorkamp (10) sammen med ungdom på én dag (12) (Fable-gennemgangen, M1).
+    const graenseCache = new Map();
+    const spillerGraense = (s, dato) => {
+        const n = `${s}|${dato}`;
+        if (!graenseCache.has(n)) {
+            const kampe = projekt.kampe.filter((x) => x.spillere.includes(s) && (raekke(x)?.dage || []).includes(dato));
+            graenseCache.set(n, kampe.length ? M.maxPrDagForKampe(kampe) : Infinity);
+        }
+        return graenseCache.get(n);
+    };
 
 
     // ── Prioritet pr. kategori: række (årgang, bogstav) og rækkens rækkefølge (mix → single → double) ──
@@ -95,7 +107,7 @@ function lavForslagEnGang(projekt, valg = {}) {
     const kapCache = new Map();      // `${dag}|${slot}` → { faelles, reserveret }
     const kapFor = (dagDato, slot) => {
         const n = `${dagDato}|${slot}`;
-        if (!kapCache.has(n)) kapCache.set(n, puljeKapacitet(dagMap.get(dagDato), slot, projekt.raekker));
+        if (!kapCache.has(n)) kapCache.set(n, puljeKapacitet(dagMap.get(dagDato), slot, projekt.raekker, slotMin));
         return kapCache.get(n);
     };
     // Pulje for en kamp i et slot: rækkens egne reserverede baner eller de fælles
@@ -248,7 +260,7 @@ function lavForslagEnGang(projekt, valg = {}) {
         const kendte = new Set(k.spillere);
         let mindsteGab = null;
         for (const s of k.muligeSpillere) {
-            if (!lemp.maxKampe && kendte.has(s) && (kendteKampePrDag.get(`${s}|${dag.dato}`) || 0) >= Math.min(M.maxPrDagFor(r), maxPrDag)) return 'spiller har max kampe den dag';
+            if (!lemp.maxKampe && kendte.has(s) && (kendteKampePrDag.get(`${s}|${dag.dato}`) || 0) >= Math.min(spillerGraense(s, dag.dato), maxPrDag)) return 'spiller har max kampe den dag';
             if (!lemp.maxKampe && kendte.has(s) && M.seniorEM(r) && (katKampePrDag.get(`${s}|${k.kategori}|${dag.dato}`) || 0) >= M.regler.seniorMaxPrKategori) return 'spiller har max kampe i kategorien den dag';
             const h = historik.get(s);
             if (!h) continue;
@@ -379,7 +391,7 @@ function lavForslagEnGang(projekt, valg = {}) {
                 const aarsag = aarsagFor(k, dag, slot, slotStart, baner);
                 if (aarsag) {
                     // Gem den mest sigende årsag (kapacitet og pause frem for "bygger på …")
-                    if ((AARSAG_RANG[aarsag] || 0) >= (AARSAG_RANG[aarsager.get(k.id)] || 0)) aarsager.set(k.id, aarsag);
+                    if (aarsagRang(aarsag) >= aarsagRang(aarsager.get(k.id))) aarsager.set(k.id, aarsag);
                     continue;
                 }
                 registrer(k, dag.dato, slot);
@@ -604,7 +616,11 @@ export function loesningsforslag(projekt, ikkePlaceret) {
     return ud;
 }
 
+// "E-række: tidligst kl. <regler.eTidligst>" har klokkeslættet med i teksten, så den rangeres på begyndelsen
+const aarsagRang = (a) => AARSAG_RANG[a] ?? (a?.startsWith('E-række: tidligst') ? 4 : 0);
+
 function klokkeFraMin(min) {
+    min = Math.min(min, 24 * 60 - 1); // aldrig over midnat ("00:30" ville betyde næste dag)
     return `${String(Math.floor(min / 60) % 24).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 }
 

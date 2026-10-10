@@ -388,6 +388,7 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 .tabel--liste tr { cursor: pointer; }
 .tabel--liste tr.er-uden-tid td { color: var(--red-soft); }
 .udskrift-hoved { display: none; }
+.liste-fejl { margin: 10px 0 0; padding: 8px 12px; border-left: 3px solid var(--red-soft); background: rgba(233,69,96,0.10); border-radius: 8px; }
 
 @media print {
     body { background: #fff; color: #000; font-size: 11px; }
@@ -399,6 +400,7 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
     .panel h2, .liste-kategori h3, .daempet, .tabel--liste td { color: #000; }
     .tabel--liste td { border-bottom: 1px solid #ccc; padding: 3px 8px; }
     .tabel--liste tr.er-uden-tid td { color: #b00; }
+    .liste-fejl { background: none; border-left-color: #b00; color: #b00; }
 }
 .gitter th .fyld--pulje { color: var(--purple-soft); }
 

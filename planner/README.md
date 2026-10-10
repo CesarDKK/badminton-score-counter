@@ -38,11 +38,11 @@ løbenumre for spillere og tider — og intet andet.
 
 ## Kommandoer
 
-Node findes ikke på udviklings-pc'en; alt kører via Docker fra mappen `planner/`. **CI kører Node 18**, så
-test på den (og gerne også Node 20):
+Node findes ikke på udviklings-pc'en; alt kører via Docker fra mappen `planner/`. **CI kører Node 22**, så
+test på den:
 
 ```bash
-MSYS_NO_PATHCONV=1 docker run --rm -v "$PWD:/app" -w /app node:18-alpine sh -c "npm install --no-audit --no-fund && npm run test:unit"
+MSYS_NO_PATHCONV=1 docker run --rm -v "$PWD:/app" -w /app node:22-alpine sh -c "npm install --no-audit --no-fund && npm run test:unit"
 ```
 
 Løserens tests (kræver et image med OR-Tools: `docker build -f ../Dockerfile.solver -t planner-solver-test ..`):

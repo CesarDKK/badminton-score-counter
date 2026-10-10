@@ -31,7 +31,7 @@ export function bygProblem(projekt, hintPlan = null) {
     dage.forEach((dag, di) => {
         for (const slot of slotsForDag(dag, slotMin)) {
             const t = di * DAG_MIN + minutter(slot);
-            const kap = puljeKapacitet(dag, slot, projekt.raekker);
+            const kap = puljeKapacitet(dag, slot, projekt.raekker, slotMin);
             (kapacitet.faelles = kapacitet.faelles || []).push({ t, baner: kap.faelles });
             for (const r of projekt.raekker) {
                 if (!(r.reserveredeBaner > 0)) continue;
@@ -66,7 +66,7 @@ export function bygProblem(projekt, hintPlan = null) {
         }
         // En låst kamp uden for rækkens tidsrum ligger på de fælles baner (rækkens egne findes kun i tidsrummet)
         let pulje = puljeForRaekke(r);
-        if (pulje !== 'faelles' && laast.has(k.id) && p && dagIndex.has(p.dag)) pulje = puljeFor(r.id, puljeKapacitet(dage[dagIndex.get(p.dag)], p.slot, projekt.raekker).reserveret);
+        if (pulje !== 'faelles' && laast.has(k.id) && p && dagIndex.has(p.dag)) pulje = puljeFor(r.id, puljeKapacitet(dage[dagIndex.get(p.dag)], p.slot, projekt.raekker, slotMin).reserveret);
         indeks.set(k.id, kampe.length);
         kampe.push({
             id: k.id, raekke: r.id, pulje, halv: !!kat(k)?.halvBane, tilladte,
@@ -78,6 +78,21 @@ export function bygProblem(projekt, hintPlan = null) {
     // Til diagnosen ("hvorfor findes der ingen plan?"): hvad rækken måtte, hvis dens eget tidsrum eller dens
     // dage ikke gjaldt. Løseren holder begge dele hårdt, mens Tjek kun advarer — så de skal kunne udpeges.
     // Rækker med reserverede baner er ikke med: deres egne baner findes kun i tidsrummet på rækkens dage.
+    // E- og senior-rækker: nogle kampe må ikke ligge på alle rækkens tider (kampForbud — fx kun semifinaler og finaler
+    // på sidste dag). De bredere tider nedenfor gælder pr. række, så undtagelserne følger med pr. kamp:
+    // [[kampindeks, [tider]]] (Fable-gennemgangen 2026-10-10, M2)
+    const forbudt = (r, tider) => {
+        if (r.raekke !== 'E' && !M.kunFinalerunderPaaFinaledagen(r)) return [];
+        const ud = [];
+        kampe.forEach((x, i) => {
+            if (x.raekke !== r.id || x.tilladte.length === 1) return;
+            const k = M.kampMap.get(x.id);
+            const nej = tider.filter((t) => M.kampForbud(k, dage[Math.floor(t / DAG_MIN)].dato, t % DAG_MIN));
+            if (nej.length) ud.push([i, nej]);
+        });
+        return ud;
+    };
+    const medForbudt = (r, alt) => { const f = forbudt(r, alt.tilladte); return f.length ? { ...alt, forbudt: f } : alt; };
     const alternativer = [];
     for (const r of projekt.raekker) {
         if (r.reserveredeBaner > 0) continue;
@@ -92,8 +107,8 @@ export function bygProblem(projekt, hintPlan = null) {
             }
             return ud;
         };
-        if (r.tidligst || r.senest) alternativer.push({ regel: 'tidsrum', raekke: r.id, kampe: egne, tilladte: tider(r.dage || [], false) });
-        if ((r.dage || []).length < dage.length) alternativer.push({ regel: 'dage', raekke: r.id, kampe: egne, tilladte: tider(dage.map((d) => d.dato), true) });
+        if (r.tidligst || r.senest) alternativer.push(medForbudt(r, { regel: 'tidsrum', raekke: r.id, kampe: egne, tilladte: tider(r.dage || [], false) }));
+        if ((r.dage || []).length < dage.length) alternativer.push(medForbudt(r, { regel: 'dage', raekke: r.id, kampe: egne, tilladte: tider(dage.map((d) => d.dato), true) }));
     }
 
     // Til planen med færrest regelbrud (når der ingen lovlig plan er): de tider, hver række kunne bruge, hvis den
@@ -110,7 +125,9 @@ export function bygProblem(projekt, hintPlan = null) {
                 else if (M.iVindue(av, m)) ud.dage.push(t);
             }
         }
-        if (ud.tidsrum.length || ud.tidsvindue.length || ud.dage.length) elastisk.push(ud);
+        if (!ud.tidsrum.length && !ud.tidsvindue.length && !ud.dage.length) continue;
+        const f = forbudt(r, [...ud.tidsrum, ...ud.tidsvindue, ...ud.dage]);
+        elastisk.push(f.length ? { ...ud, forbudt: f } : ud);
     }
 
     // Afhængigheder: efterfølger skal starte mindst ét slot senere
@@ -323,6 +340,8 @@ export function diagnoseTekst(diagnose, alleDage = []) {
             linjer.push('Ingen enkelt regel er årsagen: først når max haltid, max dage og max kampe pr. dag lempes samtidig, findes der en plan. Se valgmulighederne nedenfor.');
         } else if (d.regel === 'plads') {
             linjer.push('Der er ikke plads: hverken max haltid, max dage, max kampe pr. dag eller en enkelt rækkes tidsrum eller dage er årsagen — kampene kan ikke være på banerne inden for tidsvinduerne (eller låste kampe står i vejen). Se valgmulighederne nedenfor — fx længere dage, færre runder eller flere spilledage.');
+        } else if (d.regel === 'ikkeUndersoegt') {
+            linjer.push('Løseren nåede ikke at undersøge alle reglerne inden for tiden, så der kan være flere årsager.');
         }
     }
     if (!linjer.length) linjer.push('Løseren kunne ikke pege på én bestemt regel inden for tiden.');

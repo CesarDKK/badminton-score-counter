@@ -229,7 +229,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
         const halve = kampe.filter((k) => katMap.get(k.kategori)?.halvBane).length;
         const brugt = (kampe.length - halve) + Math.ceil(halve / 2);
         const baner = slots.includes(slot) ? banerISlot(dag, slot) : 0;
-        const { reserveret } = slots.includes(slot) ? puljeKapacitet(dag, slot, projekt.raekker) : { reserveret: new Map() };
+        const { reserveret } = slots.includes(slot) ? puljeKapacitet(dag, slot, projekt.raekker, slotMin) : { reserveret: new Map() };
         // Reserverede puljer vises for sig: "U09 D 4/5"
         const puljeTekst = [...reserveret.entries()].map(([rid, b]) => {
             const egne = kampe.filter((k) => katMap.get(k.kategori)?.raekke === rid);

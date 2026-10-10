@@ -241,7 +241,7 @@ export function kapacitetsRegnskab(projekt) {
         // Fælles baner tæller i de slots, hvor mindst én række uden egne baner må spille
         const vinduer = faelles.filter((r) => r.dage.includes(dag.dato)).map((r) => M.raekkeVindue(r, dag));
         for (const slot of slotsForDag(dag, slotMin)) {
-            if (vinduer.some((v) => M.iVindue(v, minutter(slot)))) plads.set('faelles', plads.get('faelles') + puljeKapacitet(dag, slot, projekt.raekker).faelles);
+            if (vinduer.some((v) => M.iVindue(v, minutter(slot)))) plads.set('faelles', plads.get('faelles') + puljeKapacitet(dag, slot, projekt.raekker, slotMin).faelles);
         }
         for (const r of projekt.raekker.filter((x) => egen(x) && x.dage.includes(dag.dato))) plads.set(r.id, (plads.get(r.id) || 0) + pladsPaaDag(M, r, dag, projekt.raekker).egne);
     }

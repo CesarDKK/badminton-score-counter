@@ -20,6 +20,8 @@ const TYPE_TEKST = {
     'max-haltid': 'Spiller over rækkens max haltid',
     'anti-samtidighed': 'Single og double samtidig i samme række',
     'e-sidste-dag': 'E-række: sidste dag',
+    'e-tidligst': 'E-række: for tidligt på dagen',
+    'pause-under-reglementet': 'Pausen er lavere end reglementet',
     'e-finale-tid': 'E-finale uden for 10–13',
     'senior-max-3': 'Senior E/M: over 3 kampe',
     'senior-finalerunder': 'Senior E/M: finalerunder samme dag',
