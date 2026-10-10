@@ -521,6 +521,27 @@ class ValideringTest(unittest.TestCase):
         self.assertEqual((r["status"], r["stoppet"]), ("UNKNOWN", True))
 
 
+class ForbudtPrKampTest(unittest.TestCase):
+    """Fable M2: E- og senior-reglerne pr. kamp gælder også i de bredere tider (elastisk plan og diagnose).
+    Én bane og ét brugbart slot pr. dag (kl. 10 har ingen baner); to tider pr. kamp, så de ikke regnes som låste."""
+    dage = [{"index": 0, "start": 540, "slut": 570, "baner": 1}, {"index": 1, "start": 540, "slut": 570, "baner": 1}]
+    kap = {"faelles": [{"t": 540, "baner": 1}, {"t": DAG + 540, "baner": 1}]}
+
+    def test_elastisk_flytter_ikke_en_kamp_til_en_forbudt_tid(self):
+        p = problem([kamp(0, tilladte=[540, 600]), kamp(1, tilladte=[540, 600])], dage=self.dage, kapacitet=self.kap,
+                    elastisk=[{"raekke": "U11 D", "dage": [DAG + 540], "forbudt": [[0, [DAG + 540]]]}])
+        r = loes(p, 5, elastisk=True)
+        self.assertEqual(r["tider"], {"k0": 540, "k1": DAG + 540}, "kun k1 må flyttes til dag 2")
+
+    def test_diagnosen_lemper_ikke_forbudte_tider(self):
+        from solver import diagnose
+        alt = {"regel": "dage", "raekke": "U11 D", "kampe": [0, 1], "tilladte": [540, DAG + 540]}
+        p = problem([kamp(0, tilladte=[540, 600]), kamp(1, tilladte=[540, 600])], dage=self.dage, kapacitet=self.kap, alternativer=[alt])
+        self.assertEqual(diagnose(p), [{"regel": "dage", "raekke": "U11 D"}])
+        p["alternativer"] = [{**alt, "forbudt": [[0, [DAG + 540]], [1, [DAG + 540]]]}]
+        self.assertEqual(diagnose(p), [{"regel": "plads"}])
+
+
 class DageOgMaxDageTest(unittest.TestCase):
     def test_laaste_kampe_paa_to_dage_deles_ikke_op(self):
         # Fable V3: rækken må højst spille 1 dag, men låste kampe ligger på begge — hver dag for sig ville godkende det

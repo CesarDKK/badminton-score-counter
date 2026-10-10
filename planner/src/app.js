@@ -102,7 +102,7 @@ function render() {
         renderFil(sektioner.fil, projekt, handlers);
         visBesked(besked.tekst, besked.fejl);
     } else if (tilstand.fane === 'liste') {
-        renderListe(sektioner.liste, projekt, { gemProjekt: () => handlers.gemProjekt(), visKampe: (ids) => tjekHandlers.visKampe(ids, null) });
+        renderListe(sektioner.liste, projekt, { gemProjekt: () => handlers.gemProjekt(), visKampe: (ids) => tjekHandlers.visKampe(ids, null) }, tjek?.antal.fejl || 0);
     }
     // Mærket på "Program": fejl i planen (rødt), ellers kampe uden tid
     const maerke = document.querySelector('[data-program-maerke]');
@@ -116,7 +116,7 @@ function render() {
 
 function visStatus() {
     navStatus.textContent = projekt
-        ? `${projekt.turnering.navn || 'Turnering'} · ${projekt.kampe.length} kampe · ${tjek.antal.fejl} fejl, ${tjek.antal.advarsel} advarsler · ${gemt ? 'gemt i browseren' : 'IKKE gemt i browseren — hent projektfilen under "Fil og opsætning"'}`
+        ? `${projekt.turnering.navn || 'Turnering'} · ${projekt.kampe.length} kampe · ${tjek.antal.fejl} fejl, ${tjek.antal.advarsel} advarsler · ${gemt ? 'gemt i browseren' : 'IKKE gemt i browseren — hent projektfilen under trin 1 (Fil)'}`
         : 'Intet projekt åbnet';
     navStatus.classList.toggle('er-ikke-gemt', !!projekt && !gemt);
 }
@@ -569,7 +569,7 @@ const planHandlers = {
                 tilstand.ventendeOptimering = lovlig ? visLoeserensPlan : null;
                 tilstand.forslag = {
                     tekst: lovlig
-                        ? `Løseren er færdig (${svar.sekunder} s), men du har ændret projektet, mens den regnede. Dens plan er derfor IKKE lagt ind. Den bygger på projektet, som det var, da du trykkede "Optimér" — viser du den alligevel, beholder låste kampe deres tid, og "Fortryd" bringer dig tilbage til din nuværende plan.`
+                        ? `Løseren er færdig (${svar.sekunder} s), men du har ændret projektet, mens den regnede. Dens plan er derfor IKKE lagt ind. Den bygger på projektet, som det var, da løseren gik i gang — viser du den alligevel, beholder låste kampe deres tid, og "Fortryd" bringer dig tilbage til din nuværende plan.`
                         : 'Løseren blev færdig uden en plan, og du har ændret projektet imens. Din plan er ikke rørt — tryk "Optimér" igen for at regne på det, du har nu.',
                     handlinger: lovlig ? [{ tekst: 'Vis løserens plan alligevel', type: 'vis-ventende' }, { tekst: 'Kassér løserens plan', type: 'kasser-ventende' }] : [],
                     ikkePlaceret: [],

@@ -105,6 +105,10 @@ def _valider(problem) -> str | None:
         for g in problem.get(navn, []):
             if not isinstance(g, dict) or not all(inde(i) for i in g.get("kampe", []) + (g.get("udloesere") or [])):
                 return f"ugyldigt {navn}"
+    for navn in ("alternativer", "elastisk"):
+        for g in problem.get(navn, []):
+            if not all(isinstance(x, list) and len(x) == 2 and inde(x[0]) and isinstance(x[1], list) for x in g.get("forbudt", [])):
+                return f"ugyldigt {navn}"
     return None
 
 
@@ -141,13 +145,15 @@ def _loes(problem: dict, sekunder: float, arbejdere: int | None, stop: threading
     ekstra = [dict() for _ in kampe]  # kamp → {tid: regel}
     if elastisk:
         pr_raekke = {e["raekke"]: e for e in problem.get("elastisk", [])}
+        # Tider, en kamp aldrig må have, selv om rækken bryder sit tidsrum/sine dage (E- og senior-reglerne pr. kamp)
+        forbudt = {i: set(tider) for e in problem.get("elastisk", []) for i, tider in e.get("forbudt", [])}
         for i, k in enumerate(kampe):
             e = pr_raekke.get(k["raekke"])
             if not e or len(base[i]) == 1:
                 continue
             for regel in ("tidsrum", "tidsvindue", "dage"):
                 for t in e.get(regel, []):
-                    if t not in base[i] and t not in ekstra[i]:
+                    if t not in base[i] and t not in ekstra[i] and t not in forbudt.get(i, ()):
                         ekstra[i][t] = regel
         kampe = [({**k, "tilladte": sorted(base[i] | set(ekstra[i]))} if ekstra[i] else k) for i, k in enumerate(kampe)]
     for k in kampe:
@@ -652,7 +658,9 @@ def delproblem(problem: dict, ids: list[int], dag: int) -> dict:
     p["maxDage"] = [{**r, "kampe": inde(r["kampe"])} for r in problem.get("maxDage", []) if inde(r["kampe"])]
     p["mangeKampe"] = [x for x in (inde(l) for l in problem.get("mangeKampe", [])) if x]
     p["maxPrGruppe"] = [{**g, "kampe": inde(g["kampe"])} for g in problem.get("maxPrGruppe", []) if inde(g["kampe"])]
-    p["alternativer"] = [{**a, "kampe": inde(a["kampe"])} for a in problem.get("alternativer", []) if inde(a["kampe"])]
+    nyt_forbudt = lambda e: {"forbudt": [[ny[i], t] for i, t in e["forbudt"] if i in ny]} if e.get("forbudt") else {}
+    p["alternativer"] = [{**a, "kampe": inde(a["kampe"]), **nyt_forbudt(a)} for a in problem.get("alternativer", []) if inde(a["kampe"])]
+    p["elastisk"] = [{**e, **nyt_forbudt(e)} for e in problem.get("elastisk", [])]
     p["kapacitet"] = {pulje: [s for s in slots if s["t"] // DAG == dag] for pulje, slots in problem["kapacitet"].items()}
     return p
 
@@ -728,7 +736,8 @@ def diagnose(problem: dict, stop: threading.Event | None = None) -> list[dict]:
     # Rækkens tidsrum og rækkens dage: klienten sender de bredere tilladte tider med (problem["alternativer"])
     for alt in problem.get("alternativer", []):
         bredere = set(alt["kampe"])
-        kampe2 = [({**k, "tilladte": alt["tilladte"]} if i in bredere and len(k["tilladte"]) != 1 else k) for i, k in enumerate(problem["kampe"])]
+        forbudt = {i: set(tider) for i, tider in alt.get("forbudt", [])}  # E- og senior-reglerne pr. kamp
+        kampe2 = [({**k, "tilladte": [t for t in alt["tilladte"] if t not in forbudt.get(i, ())]} if i in bredere and len(k["tilladte"]) != 1 else k) for i, k in enumerate(problem["kampe"])]
         if loesbar({**problem, "kampe": kampe2}):
             fund.append({"regel": alt["regel"], "raekke": alt.get("raekke", "")})
     if problem.get("mangeKampe") and loesbar({**problem, "mangeKampe": []}):

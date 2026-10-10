@@ -125,9 +125,9 @@ export function laesTP(tabeller, valg = {}) {
             fornavn,
             efternavn,
             koen: p.gender === 2 ? 'D' : 'H',
-            foedt: erGyldigDato(p.dob) ? datoStr(p.dob) : null,
+            // Fødselsdato og medlemsnummer læses ikke med: planneren bruger dem ikke, og projektet ligger i browseren,
+            // ofte på hallens fælles PC (dataminimering, Fable-gennemgangen 2026-10-10)
             klub: klubber.get(p.club) || '',
-            memberid: p.memberid || null,
             niveau: niveauer.get(p.id) || { single: null, double: null, mix: null },
         };
         spillerNavn.set(id, `${fornavn} ${efternavn}`.trim());

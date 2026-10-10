@@ -274,9 +274,19 @@ export function opgraderProjekt(projekt) {
     return p;
 }
 
-/** Bruges, hver gang et gemt projekt åbnes: opgraderer det og sikrer, at kun U9-kategorier har halv bane. */
+/** Fjerner spillernes fødselsdato og medlemsnummer fra projekter, der er gemt, før planneren holdt op med at læse dem. */
+export function udenUnoedigePersondata(projekt) {
+    if (!projekt?.spillere || !Object.values(projekt.spillere).some((s) => s && ('foedt' in s || 'memberid' in s))) return projekt;
+    const spillere = Object.fromEntries(Object.entries(projekt.spillere).map(([id, s]) => {
+        const { foedt, memberid, ...rest } = s || {};
+        return [id, rest];
+    }));
+    return { ...projekt, spillere };
+}
+
+/** Bruges, hver gang et gemt projekt åbnes: opgraderer det, fjerner unødige persondata og sikrer, at kun U9-kategorier har halv bane. */
 export function normaliserHalvBane(projekt) {
-    projekt = opgraderProjekt(projekt);
+    projekt = udenUnoedigePersondata(opgraderProjekt(projekt));
     if (!projekt?.kategorier?.some((k) => k.halvBane && k.aargang !== 'U09')) return projekt;
     return { ...projekt, kategorier: projekt.kategorier.map((k) => (k.aargang !== 'U09' && k.halvBane ? { ...k, halvBane: false } : k)) };
 }

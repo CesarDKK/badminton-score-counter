@@ -91,7 +91,7 @@ export function projekter() {
 
 /** Antal slots, hvor en række med egne baner låner fælles baner (banebrugISlot). */
 function antalOverloeb(p) {
-    const { dagMap, kat } = lavRegelmodel(p);
+    const { dagMap, kat, slotMin } = lavRegelmodel(p);
     const prSlot = new Map();
     for (const k of p.kampe) {
         const t = p.plan[k.id];
@@ -103,7 +103,7 @@ function antalOverloeb(p) {
     let antal = 0;
     for (const [n, kampe] of prSlot) {
         const [dato, slot] = n.split('|');
-        if (banebrugISlot(kampe, puljeKapacitet(dagMap.get(dato), slot, p.raekker)).overloeb.size) antal += 1;
+        if (banebrugISlot(kampe, puljeKapacitet(dagMap.get(dato), slot, p.raekker, slotMin)).overloeb.size) antal += 1;
     }
     return antal;
 }

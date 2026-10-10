@@ -101,6 +101,7 @@ function turneringPanel(p) {
             </div>
         </div>
         <p class="besked" id="filBesked" data-besked></p>
+        <p class="daempet">Projektet — med spillernes navne og klubber — gemmes kun i denne browser. På en fælles PC: tryk "Start forfra", når du er færdig, så det slettes.</p>
         <div class="noegletal">
             <div class="tal-kort"><div class="vaerdi">${p.kampe.length}</div><span class="etiket">Kampe</span></div>
             <div class="tal-kort"><div class="vaerdi">${p.kategorier.length}</div><span class="etiket">Kategorier</span></div>
