@@ -133,9 +133,9 @@ export const KRITERIER = [
 
 /** Navngivne skabeloner med vægte. "standard" bruges i nye projekter. */
 export const VAEGT_SKABELONER = {
-    standard: { navn: 'Standard: kort ventetid og luft mellem kampene', vaegte: { ventetid: 1, kampeITraek: 2, langeHuller: 2, sluttid: 2, tommeBaner: 0.1, puljerunderSpredt: 0.2, finalerSpredt: 0.2 } },
-    tidligSlut: { navn: 'Tidlig slut', vaegte: { ventetid: 0.5, kampeITraek: 0.5, langeHuller: 1, sluttid: 8, tommeBaner: 0.3, puljerunderSpredt: 0.1, finalerSpredt: 0.1 } },
-    roligt: { navn: 'Roligt, overskueligt program', vaegte: { ventetid: 0.5, kampeITraek: 3, langeHuller: 2, sluttid: 1, tommeBaner: 0.05, puljerunderSpredt: 2, finalerSpredt: 1 } },
+    standard: { navn: 'Standard: kort ventetid og luft mellem kampene', vaegte: { ventetid: 1, kampeITraek: 2, langeHuller: 2, sluttid: 2, tommeBaner: 0.1, puljerunderSpredt: 2, finalerSpredt: 0.2 } },
+    tidligSlut: { navn: 'Tidlig slut', vaegte: { ventetid: 0.5, kampeITraek: 0.5, langeHuller: 1, sluttid: 8, tommeBaner: 0.3, puljerunderSpredt: 0.5, finalerSpredt: 0.1 } },
+    roligt: { navn: 'Roligt, overskueligt program', vaegte: { ventetid: 0.5, kampeITraek: 3, langeHuller: 2, sluttid: 1, tommeBaner: 0.05, puljerunderSpredt: 3, finalerSpredt: 1 } },
 };
 
 /** Projektets vægte: standard med projektets ændringer ovenpå (ukendte kriterier får vægt 0). */

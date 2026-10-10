@@ -65,15 +65,20 @@ function kampprogramPanel(kp, aabneKort) {
             <button class="knap ${k === aabneKort[0] ? '' : 'knap--sekundaer'}" data-handling="beslutning">${k.valg.length ? 'Brug valget og lav programmet igen' : 'OK'}</button>
         </div>`;
     }).join('');
-    const titel = gaarOp ? 'Kampprogrammet går op' : aabneKort.length
-        ? `Kampprogrammet går ikke helt op — ${aabneKort.length} ting at tage stilling til`
-        : `Kampprogrammet er lavet med ${kp.beslutninger.brud} regelbrud, som du har valgt at beholde`;
+    // Løseren har bevist, at der ingen lovlig plan er (kp.note), selv om planlæggeren ikke fandt noget at rette
+    const loeserNej = !!kp.note && gaarOp;
+    const titel = loeserNej ? 'Løseren fandt ingen plan, der overholder alle de hårde regler'
+        : gaarOp ? 'Kampprogrammet går op' : aabneKort.length
+            ? `Kampprogrammet går ikke helt op — ${aabneKort.length} ting at tage stilling til`
+            : `Kampprogrammet er lavet med ${kp.beslutninger.brud} regelbrud, som du har valgt at beholde`;
     return `
-    <section class="kampprogram ${gaarOp ? 'er-ok' : aabneKort.length ? 'er-valg' : ''}">
+    <section class="kampprogram ${loeserNej || aabneKort.length ? 'er-valg' : gaarOp ? 'er-ok' : ''}">
         <div class="kampprogram-hoved">
-            <h3>${gaarOp ? '<span class="er-groen">✓</span> ' : ''}${esc(titel)}</h3>
-            <button class="knap knap--sekundaer knap--lille" data-handling="kp-fortryd" title="Går tilbage til planen og opsætningen fra før 'Lav kampprogram'">Fortryd</button>
+            <h3>${gaarOp && !loeserNej ? '<span class="er-groen">✓</span> ' : ''}${esc(titel)}</h3>
+            <button class="knap knap--sekundaer knap--lille" data-handling="kp-fortryd" title="Går tilbage til planen og opsætningen fra før">Fortryd</button>
         </div>
+        ${kp.note ? `<p class="kampprogram-valg">${esc(kp.note)}</p>` : ''}
+        ${kp.handlinger?.length ? `<p class="diagnose-knapper">${kp.handlinger.map((x, i) => `<button class="knap knap--sekundaer knap--lille" data-handling="diagnose" data-index="${i}">${esc(x.tekst)}</button>`).join(' ')}</p>` : ''}
         <p class="kampprogram-valg">${valgTekst}${tilbage}</p>
         ${kp.udfoert.length ? `<p class="daempet">Gjort undervejs: ${esc(kp.udfoert.join(' · '))}.</p>` : ''}
         ${beholdt && aabneKort.length ? `<p class="daempet">${beholdt} beholdt som det er.</p>` : ''}
