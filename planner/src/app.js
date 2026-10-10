@@ -587,7 +587,15 @@ const planHandlers = {
                 tilstand.forslag.handlinger = diag.handlinger;
                 tilstand.kampprogram.handlinger = diag.handlinger;
                 if (svar.elastisk?.tider) {
-                    tilstand.kampprogram.elastisk = { plan: planFraSvar(udgangspunkt, svar.elastisk), tekster: brudTekster(svar.elastisk.brud, udgangspunkt) };
+                    // Sikkerhedsnet: løserens bud vises kun, hvis det ikke har flere fejl eller brud end programmet, brugeren
+                    // allerede har (en kort regnetid kan give et dårligere bud end det hurtige program)
+                    const plan = planFraSvar(udgangspunkt, svar.elastisk);
+                    const fejlEl = tjekPlan({ ...projekt, plan: flettetPlan(projekt, plan) }).antal.fejl;
+                    const fejlNu = tjekPlan(projekt).antal.fejl;
+                    const brudEl = (svar.elastisk.brud || []).length, brudNu = tilstand.kampprogram.beslutninger.brud;
+                    if (fejlEl < fejlNu || (fejlEl === fejlNu && brudEl <= brudNu)) {
+                        tilstand.kampprogram.elastisk = { plan, tekster: brudTekster(svar.elastisk.brud, udgangspunkt) };
+                    }
                 }
                 render();
             } else {
