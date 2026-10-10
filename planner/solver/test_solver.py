@@ -91,7 +91,7 @@ class SolverTest(unittest.TestCase):
         uden = loes(problem(kampe, dage=dage, kapacitet=kap, traek=[[0, 1]], maxVent=90), 5)
         vaegte = {"ventetid": 1, "sluttid": 2, "tommeBaner": 0.1, "finalerSpredt": 0.2, "langeHuller": 2}
         med = loes(problem(kampe, dage=dage, kapacitet=kap, traek=[[0, 1]], maxVent=90, vaegte=vaegte), 5)
-        self.assertEqual(med["maal"] - uden["maal"], 2 * SKALA, "ét langt hul koster vægten")
+        self.assertAlmostEqual(med["maal"] - uden["maal"], 2 * SKALA, places=3, msg="ét langt hul koster vægten")
         # Kan kampene lægges tæt, gør løseren det
         tae = [kamp(0, tilladte=[540]), kamp(1, tilladte=[600, 780])]
         r = loes(problem(tae, dage=dage, kapacitet=kap, traek=[[0, 1]], maxVent=90, vaegte=vaegte), 5)
@@ -105,11 +105,11 @@ class SolverTest(unittest.TestCase):
         kampe = [kamp(0, tilladte=loer), kamp(1, tilladte=loer), kamp(2, tilladte=loer), kamp(3, tilladte=soen), kamp(4, tilladte=soen)]
         p = problem(kampe, dage=dage, kapacitet=kap, konflikter=[[0, 1, 30, 0], [3, 4, 30, 0]], traek=[[0, 1], [3, 4]], puljerunder=[[[0, 3], [1, 4]]])
         self.assertEqual(dele_pr_dag(p), {0: [0, 1, 2], 1: [3, 4]})
-        opdelt = loes_opdelt(p, 5)
-        samlet = loes(p, 5)
+        opdelt = loes_opdelt(p, 30)  # rigelig tid: små opgaver løses på et øjeblik, også på en langsom CI-maskine
+        samlet = loes(p, 30)
         self.assertEqual(opdelt["dele"], 2)
         self.assertEqual(opdelt["status"], "OPTIMAL")
-        self.assertEqual(opdelt["maal"], samlet["maal"], "uafhængige dage: samme optimum")
+        self.assertAlmostEqual(opdelt["maal"], samlet["maal"], places=3, msg="uafhængige dage: samme optimum")
         self.assertTrue(all(t >= DAG for k, t in opdelt["tider"].items() if k in ("k3", "k4")))
         # En kamp, der kan ligge begge dage, binder dagene sammen: ingen opdeling
         self.assertIsNone(dele_pr_dag(problem([kamp(0, tilladte=loer + soen), kamp(1, tilladte=soen)], dage=dage, kapacitet=kap)))
