@@ -114,6 +114,39 @@ class SolverTest(unittest.TestCase):
         # En kamp, der kan ligge begge dage, binder dagene sammen: ingen opdeling
         self.assertIsNone(dele_pr_dag(problem([kamp(0, tilladte=loer + soen), kamp(1, tilladte=soen)], dage=dage, kapacitet=kap)))
 
+    def test_elastisk_faerrest_brud(self):
+        # Tre kampe for samme række, kun to slots i rækkens tidsrum (9:00 og 9:30) og én bane:
+        # ingen lovlig plan. Elastisk må den tredje kamp ligge efter tidsrummet — det koster ét brud.
+        kampe = [kamp(i, tilladte=[540, 570]) for i in range(3)]
+        kap = {"faelles": [{"t": t, "baner": 1} for t in range(540, 720, 30)]}
+        p = problem(kampe, kapacitet=kap, elastisk=[{"raekke": "U11 D", "tidsrum": list(range(600, 720, 30))}])
+        self.assertEqual(loes(p, 5)["status"], "INFEASIBLE")
+        r = loes(p, 5, elastisk=True)
+        self.assertEqual(r["status"], "OPTIMAL")
+        self.assertEqual(len(r["brud"]), 1)
+        self.assertEqual(r["brud"][0]["regel"], "tidsrum")
+        self.assertEqual(sorted(r["tider"].values()), [540, 570, 600], "den tredje kamp lige efter tidsrummet")
+
+    def test_elastisk_max_haltid_og_pause(self):
+        # Max haltid 60 min for tre kampe med 60 min mellem hver: umuligt. Elastisk: overskridelse i minutter.
+        kampe = [kamp(0), kamp(1), kamp(2)]
+        konf = [[0, 1, 60, 0], [1, 2, 60, 0], [0, 2, 60, 0]]
+        p = problem(kampe, konflikter=konf, haltid=[{"kampe": [0, 1, 2], "graense": 60, "raekke": "U11 D"}])
+        self.assertEqual(loes(p, 5)["status"], "INFEASIBLE")
+        r = loes(p, 5, elastisk=True)
+        self.assertEqual(r["status"], "OPTIMAL")
+        # Billigst: hold pausen og overskrid max varighed med 90 min (0,1 pr. min = 9) — at korte to pauser med
+        # 30 min hver (0,2 pr. min = 12) og overskride med 60 min (6) ville koste mere
+        self.assertEqual([(b["regel"], b["maengde"]) for b in r["brud"]], [("haltid", 90)])
+        tider = sorted(r["tider"].values())
+        self.assertEqual([tider[1] - tider[0], tider[2] - tider[1]], [60, 60])
+
+    def test_elastisk_bryder_aldrig_banerne(self):
+        # Fire kampe, én bane, to slots — og ingen elastiske tider: heller ikke elastisk findes der en plan
+        kampe = [kamp(i, tilladte=[540, 570]) for i in range(4)]
+        kap = {"faelles": [{"t": t, "baner": 1} for t in range(540, 720, 30)]}
+        self.assertEqual(loes(problem(kampe, kapacitet=kap), 5, elastisk=True)["status"], "INFEASIBLE")
+
     def test_max_haltid_er_haard(self):
         kampe = [kamp(0), kamp(1), kamp(2)]
         konf = [[0, 1, 60, 0], [1, 2, 60, 0], [0, 2, 60, 0]]

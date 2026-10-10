@@ -80,7 +80,15 @@ function kampprogramPanel(kp, aabneKort) {
         ${kp.note ? `<p class="kampprogram-valg">${esc(kp.note)}</p>` : ''}
         ${kp.handlinger?.length ? `<p class="diagnose-knapper">${kp.handlinger.map((x, i) => `<button class="knap knap--sekundaer knap--lille" data-handling="diagnose" data-index="${i}">${esc(x.tekst)}</button>`).join(' ')}</p>` : ''}
         <p class="kampprogram-valg">${valgTekst}${tilbage}</p>
+        ${kp.forbedret ? `<p class="kampprogram-valg"><span class="er-groen">✓</span> ${esc(kp.forbedret)}</p>` : ''}
         ${kp.udfoert.length ? `<p class="daempet">Gjort undervejs: ${esc(kp.udfoert.join(' · '))}.</p>` : ''}
+        ${kp.elastisk ? `<div class="beslutning elastisk">
+            <h4>Planen med færrest regelbrud</h4>
+            <p class="daempet">Løseren har lavet den plan, der bryder reglerne mindst. Den bryder:</p>
+            <ul class="beslutning-flere">${kp.elastisk.tekster.map((t) => `<li>${esc(t)}</li>`).join('') || '<li>ingen regler</li>'}</ul>
+            <p class="daempet">Vil du hellere have en lovlig plan, så brug en af ændringerne herunder.</p>
+            <button class="knap knap--sekundaer" data-handling="kp-elastisk">Brug planen med disse regelbrud</button>
+        </div>` : ''}
         ${beholdt && aabneKort.length ? `<p class="daempet">${beholdt} beholdt som det er.</p>` : ''}
         ${kort}
     </section>`;
@@ -269,8 +277,18 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
     const kp = tilstand.kampprogram?.projekt === projekt ? tilstand.kampprogram : null;
     const aabneKort = kp ? kp.beslutninger.kort.filter((k) => !kp.beholdt.includes(k.noegle)) : [];
     const travl = !!tilstand.arbejder || !!tilstand.optimerer;
-    const anbefalLoeser = harPlan && !travl && !tilstand.alternativer && !aabneKort.length && tilstand.forslag?.kilde !== 'loeser';
+    const anbefalLoeser = projekt.opsaetning.autoLoeser === false && harPlan && !travl && !tilstand.alternativer && !aabneKort.length && tilstand.forslag?.kilde !== 'loeser';
     const sek = tilstand.optimerSek || 60;
+    // Løseren kører af sig selv efter "Lav kampprogram" (opsaetning.autoLoeser); så ligger knappen under "Mere"
+    const autoLoeser = projekt.opsaetning.autoLoeser !== false;
+    const loeserKnap = `<span class="optimer">
+                <button class="knap ${harPlan && !autoLoeser ? '' : 'knap--sekundaer'}" data-handling="optimer" ${tilstand.optimerer ? 'disabled' : ''} title="Sender et anonymiseret planlægningsproblem (kun kamp-id'er og spillernumre) til løseren, som leder efter en bedre plan under alle hårde regler. Låste kampe beholder deres tid.">${tilstand.optimerer ? 'Løseren regner …' : autoLoeser ? 'Forbedr med løseren igen' : 'Forbedr med løseren'}</button>
+                <select data-felt="optimerSek" aria-label="Tid til løseren" title="Hvor længe løseren må regne. Den stopper selv, når den ikke finder bedre planer.">
+                    ${OPTIMER_TIDER.map((n) => `<option value="${n}" ${sek === n ? 'selected' : ''}>${n < 120 ? `${n} sek` : `${n / 60} min`}</option>`).join('')}
+                </select></span>`;
+    const loeserStatus = tilstand.optimerElastisk ? 'Ingen lovlig plan — løseren finder planen med færrest regelbrud …'
+        : tilstand.optimerDiagnose ? 'Ingen lovlig plan — løseren undersøger, hvilke ændringer der hjælper …'
+            : tilstand.optimerAuto ? 'Løseren forbedrer programmet …' : 'Løseren regner …';
     const slut = Object.entries(statistik.slutPrDag);
     const statusTal = (vaerdi, etiket, klasse = '') => `<div class="status-tal ${klasse}"><b>${esc(String(vaerdi))}</b><span>${esc(etiket)}</span></div>`;
     container.innerHTML = `
@@ -285,16 +303,11 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
             </select>
             <input type="search" data-felt="soeg" placeholder="Søg spiller, klub eller kamp" value="${esc(tilstand.soeg || '')}" aria-label="Søg">
             <button class="knap ${harPlan ? 'knap--sekundaer' : ''}" data-handling="kampprogram" ${travl ? 'disabled' : ''} title="Planneren vælger kamplængde og pause, bygger kampene, laver flere forslag og tager det bedste. Låste kampe beholder deres tid. Går programmet ikke op, får du valgmuligheder, der allerede er afprøvet.">${harPlan ? 'Lav kampprogram igen' : 'Lav kampprogram'}</button>
-            <span class="optimer">
-                <button class="knap ${harPlan ? '' : 'knap--sekundaer'}" data-handling="optimer" ${tilstand.optimerer ? 'disabled' : ''} title="Sender et anonymiseret planlægningsproblem (kun kamp-id'er og spillernumre) til løseren, som leder efter en bedre plan under alle hårde regler. Låste kampe beholder deres tid.">${tilstand.optimerer ? `${tilstand.optimerDiagnose ? 'Ingen lovlig plan — undersøger hvorfor …' : 'Løseren regner …'} <span data-optimer-ur></span>` : 'Forbedr med løseren'}</button>
-                <select data-felt="optimerSek" aria-label="Tid til løseren" title="Hvor længe løseren må regne. Længere tid giver som regel en bedre plan.">
-                    ${OPTIMER_TIDER.map((n) => `<option value="${n}" ${sek === n ? 'selected' : ''}>${n < 120 ? `${n} sek` : `${n / 60} min`}</option>`).join('')}
-                </select>
-                ${tilstand.optimerer ? `<button class="knap knap--sekundaer" data-handling="stopOptimer" ${tilstand.optimerStopper ? 'disabled' : ''} title="Løseren stopper nu og afleverer den bedste plan, den har fundet indtil nu.">${tilstand.optimerStopper ? 'Stopper …' : 'Stop og brug det bedste'}</button>` : ''}
-            </span>
+            ${autoLoeser ? '' : loeserKnap}
             <details class="menu">
                 <summary class="knap knap--sekundaer">Mere</summary>
                 <div class="menu-liste">
+                    ${autoLoeser ? loeserKnap : ''}
                     <button class="knap knap--sekundaer" data-handling="forslag" title="Planlægger alle kampe forfra på et øjeblik med den kamplængde og pause, der er sat — uden at prøve andre">Lav forslag med nuværende kamplængde</button>
                     <button class="knap knap--sekundaer" data-handling="forslag-dag" title="Planlægger kun denne dag om; andre dage og låste kampe røres ikke">Lav forslag kun for ${esc(datoTekst(dag.dato, { kort: true }))}</button>
                     <button class="knap knap--sekundaer" data-handling="alternativer" title="Laver op til 8 forskellige forslag med forskellige prioriteringer, som du kan bladre imellem">Andre forslag at vælge imellem</button>
@@ -307,6 +320,8 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
     </div>
     ${tilstand.alternativer ? alternativBjaelke(tilstand.alternativer) : ''}
     ${tilstand.arbejder ? `<p class="arbejder" role="status"><span class="spinner" aria-hidden="true"></span>${esc(tilstand.arbejder)}</p>` : ''}
+    ${tilstand.optimerer ? `<p class="arbejder" role="status"><span class="spinner" aria-hidden="true"></span><span>${esc(loeserStatus)} <span data-optimer-ur></span></span>
+        <button class="knap knap--sekundaer knap--lille" data-handling="stopOptimer" ${tilstand.optimerStopper ? 'disabled' : ''} title="Løseren stopper nu og afleverer den bedste plan, den har fundet indtil nu.">${tilstand.optimerStopper ? 'Stopper …' : 'Stop og brug det bedste'}</button></p>` : ''}
     ${kp ? kampprogramPanel(kp, aabneKort) : ''}
     <div class="status-linje">
         ${statusTal(`${placeret.size}/${projekt.kampe.length}`, 'kampe har tid', ikkePlacerede.length ? 'er-roed' : '')}
@@ -404,6 +419,7 @@ function bind(container, h) {
             }
             else if (hd === 'kp-tidligere') h.brugTidligereKamplaengde();
             else if (hd === 'kp-fortryd') h.fortrydKampprogram();
+            else if (hd === 'kp-elastisk') h.brugElastisk();
             else if (hd === 'forslag') h.lavForslag(false);
             else if (hd === 'forslag-dag') h.lavForslag(true);
             else if (hd === 'laas-kategori') h.laasKategori(true);

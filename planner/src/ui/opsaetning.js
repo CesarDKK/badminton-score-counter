@@ -289,7 +289,7 @@ function avanceretPanel(p) {
 
 function forslagBoks(p) {
     const o = p.opsaetning;
-    const valg = [o.kampVarighed === 'slot' ? 'en kamp = et helt slot' : '', o.antiSamtidighed !== false ? 'single og double ikke samtidig' : 'single og double må ligge samtidig', o.puljerunderSynkront ? 'puljerunder synkront' : '', `advar ved ventetid over ${o.maxVentetidMin ?? 90} min`].filter(Boolean).join(' · ');
+    const valg = [o.autoLoeser === false ? 'løseren kun på knap' : '', o.kampVarighed === 'slot' ? 'en kamp = et helt slot' : '', o.antiSamtidighed !== false ? 'single og double ikke samtidig' : 'single og double må ligge samtidig', o.puljerunderSynkront ? 'puljerunder synkront' : '', `advar ved ventetid over ${o.maxVentetidMin ?? 90} min`].filter(Boolean).join(' · ');
     return `
         <details class="fold" data-id="avanceret-forslag">
             <summary><span class="fold-titel">Forslag og tjek</span> <span class="daempet">${esc(valg)}</span></summary>
@@ -306,6 +306,7 @@ function forslagBoks(p) {
                     </select></label>
             </div>
             <div class="felter">
+                <label class="valg" title="Når 'Lav kampprogram' har lavet et program, der går op, sender planneren det anonymiserede regnestykke til løseren, som forbedrer det i op til den valgte tid. Du kan stoppe undervejs og fortryde bagefter."><input type="checkbox" data-opsaetning="autoLoeser" ${o.autoLoeser !== false ? 'checked' : ''}> forbedr automatisk med løseren efter "Lav kampprogram"</label>
                 <label class="valg" title="Fra din gamle prompt (regel A3): i samme række må HS og HD ikke ligge samtidig, DS og DD ikke, og MD ikke sammen med nogen af dem. Tjek advarer, og forslaget undgår det."><input type="checkbox" data-opsaetning="antiSamtidighed" ${o.antiSamtidighed !== false ? 'checked' : ''}> undgå single og double samtidig i samme række</label>
                 <label class="valg" title="Blødt mål i forslaget: alle puljers runde 1 spilles før runde 2 osv. inden for hvert event. Giver et mere overskueligt program, men ofte lidt længere haltid."><input type="checkbox" data-opsaetning="puljerunderSynkront" ${o.puljerunderSynkront ? 'checked' : ''}> puljerunder synkront på tværs af puljer</label>
                 <label class="felt" title="Tjek advarer, når en spiller venter længere end dette mellem to af sine egne kampe samme dag. Tallet vises også i statuslinjen og under Alternativer."><span class="etiket">Advar ved ventetid over</span>
