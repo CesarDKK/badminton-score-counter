@@ -303,6 +303,26 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, st
             m.AddAbsEquality(afstand, forskel)
             m.Add(afstand >= 2 * slot).OnlyEnforceIf(naer.Not())
             led.append(naer * (koef * antal))
+    # Puljerunder i takt (planner/src/kriterier.js "puljerunderSpredt", Jesper 2026-10-10): en puljekamp i runde r+1,
+    # der starter før kategoriens sidste kamp i runde r, koster vægten pr. kamp — så alle puljers runde 1 spilles
+    # før runde 2 osv., som i en plan lagt i TP. Runderne kommer pr. kategori med runde 1 først.
+    w_takt = float(v.get("puljerunderSpredt", 0))
+    if w_takt > 0:
+        koef = max(1, int(round(w_takt * SKALA)))
+        stor = DAG * max(1, len(problem["dage"]))
+        for runder in problem.get("puljerunder", []):
+            for forrige, denne in zip(runder, runder[1:]):
+                if not forrige or not denne:
+                    continue
+                sidste = m.NewIntVar(0, stor, "")
+                m.AddMaxEquality(sidste, [T[i] for i in forrige])
+                seneste_forrige = max(t for i in forrige for t in kampe[i]["tilladte"])
+                for b in denne:
+                    if min(kampe[b]["tilladte"]) >= seneste_forrige:
+                        continue  # kan aldrig komme før forrige runde er slut
+                    ude = m.NewBoolVar("")
+                    m.Add(T[b] >= sidste).OnlyEnforceIf(ude.Not())
+                    led.append(ude * koef)
     # Lille træk mod tidlig start, så planen pakkes fra morgenen og ligestillede løsninger bliver entydige
     led.append(sum(T))
     m.Minimize(sum(led))

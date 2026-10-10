@@ -71,6 +71,18 @@ class SolverTest(unittest.TestCase):
         self.assertEqual(r["status"], "OPTIMAL")
         self.assertEqual(r["tider"], {"k0": 540, "k1": DAG + 540})
 
+    def test_puljerunder_i_takt(self):
+        # To puljer: k0/k1 er runde 1, k2/k3 runde 2. k1 kan først spilles kl. 10 (fx en spiller, der kommer sent).
+        # Uden vægt spilles pulje A's runde 2 (k2) med det samme; med vægten venter den, til runde 1 er færdig.
+        kampe = [kamp(0), kamp(1, tilladte=[600, 630, 660, 690]), kamp(2), kamp(3, tilladte=[630, 660, 690])]
+        foer = [[0, 2, 30], [1, 3, 30]]
+        uden = loes(problem(kampe, foer=foer, puljerunder=[[[0, 1], [2, 3]]]), 5)
+        self.assertLess(uden["tider"]["k2"], uden["tider"]["k1"], "uden vægt: runde 2 før runde 1 er færdig")
+        vaegte = {"ventetid": 1, "sluttid": 2, "tommeBaner": 0.1, "finalerSpredt": 0.2, "puljerunderSpredt": 1}
+        med = loes(problem(kampe, foer=foer, puljerunder=[[[0, 1], [2, 3]]], vaegte=vaegte), 5)
+        self.assertEqual(med["status"], "OPTIMAL")
+        self.assertGreaterEqual(med["tider"]["k2"], med["tider"]["k1"], "med vægt: runde 2 efter hele runde 1")
+
     def test_max_haltid_er_haard(self):
         kampe = [kamp(0), kamp(1), kamp(2)]
         konf = [[0, 1, 60, 0], [1, 2, 60, 0], [0, 2, 60, 0]]

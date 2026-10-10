@@ -169,6 +169,23 @@ export function bygProblem(projekt, hintPlan = null) {
     // Kampe i træk (blødt, kriteriet "kampeITraek"): hver kendt spillers kampe — løseren straffer par i nabo-slots
     const traek = [...prKendt.values()].filter((l) => l.length > 1).map((l) => l.map((k) => indeks.get(k.id)));
 
+    // Puljerunder i takt (blødt, kriteriet "puljerunderSpredt"): pr. kategori puljekampene pr. runde, runde 1 først
+    const puljerunder = [];
+    {
+        const prKat = new Map();
+        for (const k of projekt.kampe) {
+            if (k.fase !== 'pulje' || !indeks.has(k.id) || !k.runde) continue;
+            if (!prKat.has(k.kategori)) prKat.set(k.kategori, new Map());
+            const r = prKat.get(k.kategori);
+            if (!r.has(k.runde)) r.set(k.runde, []);
+            r.get(k.runde).push(indeks.get(k.id));
+        }
+        for (const runder of prKat.values()) {
+            const liste = [...runder.entries()].sort(([a], [b]) => a - b).map(([, ids]) => ids);
+            if (liste.length > 1) puljerunder.push(liste);
+        }
+    }
+
     // Max dage pr. række
     const maxDage = projekt.raekker.filter((r) => M.maxDageFor(r) && (r.dage || []).length > M.maxDageFor(r))
         .map((r) => ({ raekke: r.id, max: M.maxDageFor(r), kampe: kampe.map((k, i) => (k.raekke === r.id ? i : -1)).filter((i) => i >= 0) }));
@@ -206,7 +223,7 @@ export function bygProblem(projekt, hintPlan = null) {
         version: 1,
         slotMin,
         dage: dage.map((d, i) => ({ index: i, start: minutter(d.start), slut: minutter(d.slut), baner: d.baner })),
-        kapacitet, kampe, foer, konflikter, ikkeSamtidig, haltid, spillerGrupper, traek, maxDage,
+        kapacitet, kampe, foer, konflikter, ikkeSamtidig, haltid, spillerGrupper, traek, puljerunder, maxDage,
         maxKampePrDag: maxPrDag, mangeKampe, maxPrGruppe, ikkeSammeDag, alternativer,
         vaegte: vaegteFor(projekt),
     };
