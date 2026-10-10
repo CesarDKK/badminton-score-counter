@@ -559,11 +559,11 @@ def delproblem(problem: dict, ids: list[int], dag: int) -> dict:
     return p
 
 
-def loes_opdelt(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, stop: threading.Event | None = None) -> dict:
+def loes_opdelt(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, stop: threading.Event | None = None, elastisk: bool = False) -> dict:
     """Som loes(), men løser hver dag for sig, når dagene er uafhængige (dele_pr_dag). Tiden fordeles efter antal kampe."""
     dele = dele_pr_dag(problem)
     if not dele:
-        return loes(problem, sekunder, arbejdere, stop)
+        return loes(problem, sekunder, arbejdere, stop, elastisk=elastisk)
     t0 = time.time()
     n = len(problem["kampe"])
     svar = {"status": "OPTIMAL", "tider": {}, "maal": 0.0, "graense": 0.0, "stoppet": False, "rolig": False, "dele": len(dele)}
@@ -577,16 +577,18 @@ def loes_opdelt(problem: dict, sekunder: float = 30.0, arbejdere: int | None = N
                 svar["status"] = "FEASIBLE"
                 svar["stoppet"] = True
                 continue
-            return {**loes(problem, 1, arbejdere, stop), "stoppet": True}
-        del_svar = loes(delproblem(problem, ids, dag), min(andel, tilbage), arbejdere, stop)
+            return {**loes(problem, 1, arbejdere, stop, elastisk=elastisk), "stoppet": True}
+        del_svar = loes(delproblem(problem, ids, dag), min(andel, tilbage), arbejdere, stop, elastisk=elastisk)
         if del_svar["status"] not in ("OPTIMAL", "FEASIBLE"):
             # En dag uden lovlig plan: hele problemet løses samlet, så svaret (og diagnosen) bliver som før
-            return loes(problem, max(1.0, float(sekunder) - (time.time() - t0)), arbejdere, stop)
+            return loes(problem, max(1.0, float(sekunder) - (time.time() - t0)), arbejdere, stop, elastisk=elastisk)
         svar["tider"].update(del_svar["tider"])
         svar["maal"] += del_svar.get("maal", 0.0)
         svar["graense"] += del_svar.get("graense", 0.0)
         svar["stoppet"] = svar["stoppet"] or del_svar["stoppet"]
         svar["rolig"] = svar["rolig"] or del_svar.get("rolig", False)
+        if "brud" in del_svar:
+            svar.setdefault("brud", []).extend(del_svar["brud"])
         if del_svar["status"] == "FEASIBLE":
             svar["status"] = "FEASIBLE"
     svar["sekunder"] = round(time.time() - t0, 2)
@@ -731,7 +733,14 @@ def koer(problem: dict, sekunder: float, job: Job):
         if svar["status"] == "INFEASIBLE" and not job.stop.is_set() and problem.get("elastiskPlan"):
             # Ingen lovlig plan: planen med færrest regelbrud — og hvilke regler den bryder (Jesper 2026-10-10)
             job.fase = "elastisk"
-            el = loes(problem, max(10.0, min(float(sekunder), ELASTISK_SEKUNDER)), stop=job.stop, elastisk=True)
+            # Først uden at flytte kampe til andre dage: så falder problemet i uafhængige dage, der løses hver for sig
+            # (målt på prod 2026-10-10: ellers nåede løseren ikke ned på de færreste brud på 30 s). Kun hvis det er
+            # umuligt, må kampe flyttes til dage, rækken ikke spiller.
+            tid = max(10.0, min(float(sekunder), ELASTISK_SEKUNDER))
+            uden_dage = {**problem, "elastisk": [{**e, "dage": []} for e in problem.get("elastisk", [])]}
+            el = loes_opdelt(uden_dage, tid, stop=job.stop, elastisk=True)
+            if el["status"] not in ("OPTIMAL", "FEASIBLE") and not job.stop.is_set():
+                el = loes(problem, tid, stop=job.stop, elastisk=True)
             if el["status"] in ("OPTIMAL", "FEASIBLE"):
                 svar["elastisk"] = {"tider": el["tider"], "brud": el.get("brud", []), "status": el["status"], "sekunder": el["sekunder"]}
         if svar["status"] == "INFEASIBLE" and not job.stop.is_set() and problem.get("diagnose", True):
