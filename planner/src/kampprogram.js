@@ -179,7 +179,7 @@ function afproev(projekt, foer, g, aendring) {
 }
 
 /** Kandidat-ændringer for et kort. Hver: { tekst, pris, type, ... }. Flere trin prøves, til kortet er løst. */
-function kandidater(projekt, g) {
+export function kandidater(projekt, g) {
     const o = projekt.opsaetning;
     const r = projekt.raekker.find((x) => x.id === g.raekke);
     const ud = [];
@@ -189,6 +189,15 @@ function kandidater(projekt, g) {
     const kortDato = (d) => `${d.slice(8, 10)}/${Number(d.slice(5, 7))}`;
     const forlaengDag = () => {
         for (const d of dage) ud.push({ gruppe: `dag-${d.dato}`, trin: trin.filter((m) => minutter(d.slut) + m < 24 * 60).map((m) => ({ tekst: `Forlæng ${kortDato(d.dato)} til ${klokke(minutter(d.slut) + m)}`, pris: 'dag', type: 'dag', dato: d.dato, aendring: { slut: klokke(minutter(d.slut) + m) } })) });
+    };
+    // Pause på dagen: 0 min i planen; den fælles pause (M + A–D) gælder for alle andre end E, så den nulstilles med.
+    // Prøves også, når der mangler plads: pauser giver huller i programmet (pris nr. 1 i Jespers rækkefølge — Fable idé 3)
+    const pausePaaDagen = () => {
+        const klasse = r?.pauseKlasse || 'ABCD';
+        const faelles = o.pauseMin?.faelles != null && klasse !== 'E';
+        if (o.pauseMin?.[klasse] || (faelles && o.pauseMin.faelles)) {
+            ud.push({ gruppe: 'pause', trin: [{ tekst: `Pausen for ${klasse === 'ABCD' ? 'A–D' : klasse}${faelles ? ' (og den fælles pause)' : ''} gives på dagen, 0 min i planen`, pris: 'pause', type: 'opsaetning', aendring: { pauseMin: { ...o.pauseMin, [klasse]: 0, ...(faelles ? { faelles: 0 } : {}) } } }] });
+        }
     };
     const flereReserverede = () => {
         const maks = Math.min(...dage.map((d) => d.baner));
@@ -201,12 +210,7 @@ function kandidater(projekt, g) {
         if (r?.tidligst && g.aarsager.has('før rækkens tidligste start')) ud.push({ gruppe: 'tidligst', trin: trin.map((m) => ({ tekst: `Lad ${g.raekke} starte ${klokke(Math.max(0, minutter(r.tidligst) - m))}`, pris: 'tidsrum', type: 'raekke', raekke: g.raekke, aendring: { tidligst: klokke(Math.max(0, minutter(r.tidligst) - m)) } })) });
         flereReserverede();
     } else if (g.familie === 'pause') {
-        // Pause på dagen: 0 min i planen; den fælles pause (M + A–D) gælder for alle andre end E, så den nulstilles med
-        const klasse = r?.pauseKlasse || 'ABCD';
-        const faelles = o.pauseMin?.faelles != null && klasse !== 'E';
-        if (o.pauseMin?.[klasse] || (faelles && o.pauseMin.faelles)) {
-            ud.push({ gruppe: 'pause', trin: [{ tekst: `Pausen for ${klasse === 'ABCD' ? 'A–D' : klasse}${faelles ? ' (og den fælles pause)' : ''} gives på dagen, 0 min i planen`, pris: 'pause', type: 'opsaetning', aendring: { pauseMin: { ...o.pauseMin, [klasse]: 0, ...(faelles ? { faelles: 0 } : {}) } } }] });
-        }
+        pausePaaDagen();
         forlaengDag();
     } else if (g.familie === 'samtidighed') {
         ud.push({ gruppe: 'samtidighed', trin: [{ tekst: 'Tillad single og double samtidig', pris: 'samtidighed', type: 'opsaetning', aendring: { antiSamtidighed: false } }] });
@@ -215,6 +219,7 @@ function kandidater(projekt, g) {
         flereReserverede();
         if (r?.maxHaltidMin) ud.push({ gruppe: 'haltid', trin: [30, 60, 90].map((m) => ({ tekst: `Hæv max varighed for ${g.raekke}s singler til ${r.maxHaltidMin + m} min`, pris: 'dispensation', type: 'raekke', raekke: g.raekke, aendring: { maxHaltidMin: r.maxHaltidMin + m } })) });
     } else if (g.familie === 'plads') {
+        pausePaaDagen();
         forlaengDag();
         if (r && r.dage.length === 1) for (const d of andreDage) ud.push({ gruppe: `flyt-${d.dato}`, trin: [{ tekst: `Flyt ${g.raekke} til ${kortDato(d.dato)}`, pris: 'flyt', type: 'raekke', raekke: g.raekke, aendring: { dage: [d.dato] } }] });
         if (r && andreDage.length && r.maxDage && r.dage.length >= r.maxDage && !r.dispensationFlereDage) {

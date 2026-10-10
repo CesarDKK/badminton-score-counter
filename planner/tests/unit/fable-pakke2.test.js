@@ -9,6 +9,8 @@ import { tjekPlan } from '../../src/rules.js';
 import { bygProblem } from '../../src/solver-klient.js';
 import { reservationerISlot } from '../../src/kapacitet.js';
 import { renderListe } from '../../src/ui/liste.js';
+import { dagePanel } from '../../src/ui/opsaetning.js';
+import { kandidater } from '../../src/kampprogram.js';
 import { model } from '../hjaelp/model.js';
 
 const LOER = '2026-11-21', SOEN = '2026-11-22';
@@ -75,6 +77,26 @@ describe('V6: fejl i Tjek følger med til TP og på udskriften', () => {
         const c = {};
         renderListe(c, projekt(), {}, 3);
         assert.equal((c.innerHTML.match(/3 fejl i Tjek/g) || []).length, 2);
+    });
+});
+
+describe('Idé 4: flere baner end i TP-filen siges tydeligt', () => {
+    test('mærket vises kun, når dagen har flere baner end TP', () => {
+        let p = nytProjekt(model([{ id: 'U11 D', aargang: 'U11', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', spillere: [['a'], ['b']] }] }], [LOER]));
+        p = { ...p, tpGitter: { ...p.tpGitter, baner: { ...p.tpGitter.baner, hele: 4 } } };
+        assert.doesNotMatch(dagePanel(opdaterDag(p, LOER, { baner: 4 })), /flere end TP/);
+        assert.match(dagePanel(opdaterDag(p, LOER, { baner: 6 })), /flere end TP's 4/);
+    });
+});
+
+describe('Idé 3: pause på dagen prøves også, når der mangler plads', () => {
+    test('et pladskort får "pausen gives på dagen" som kandidat (prøves og vises kun, hvis det hjælper)', () => {
+        let p = nytProjekt(model([{ id: 'U11 D', aargang: 'U11', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('s', 6) }] }], [LOER]));
+        p = opdaterRaekke(p, 'U11 D', { dage: [LOER] });
+        const plads = { noegle: 'plads|U11 D', familie: 'plads', raekke: 'U11 D', kampe: [], aarsager: new Set() };
+        const priser = (q) => kandidater(q, plads).flatMap((x) => x.trin.map((t) => t.pris));
+        assert.ok(priser(opdaterOpsaetning(p, { pauseMin: { ...p.opsaetning.pauseMin, ABCD: 10 } })).includes('pause'));
+        assert.ok(!priser(opdaterOpsaetning(p, { pauseMin: { ABCD: 0, M: 0, E: 0, faelles: null } })).includes('pause'), 'ingen pause at give på dagen');
     });
 });
 
