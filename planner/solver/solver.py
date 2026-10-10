@@ -30,6 +30,7 @@ MAX_BYTES = int(os.environ.get("SOLVER_MAX_BYTES", str(5 * 1024 * 1024)))
 MAX_KAMPE = int(os.environ.get("SOLVER_MAX_KAMPE", "2000"))
 ARBEJDERE = int(os.environ.get("SOLVER_ARBEJDERE", "2"))
 SAMTIDIGE = threading.Semaphore(int(os.environ.get("SOLVER_SAMTIDIGE", "1")))
+RO_SEKUNDER = float(os.environ.get("SOLVER_RO_SEKUNDER", "15"))  # stop efter så længe uden en bedre plan (0 = aldrig)
 SKALA = 6000  # vægte ganges op til heltal pr. minut (vægt 1 pr. time = 100 pr. minut); tidlig-start-trækket er 1 pr. minut
 
 
@@ -303,6 +304,31 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, st
             m.AddAbsEquality(afstand, forskel)
             m.Add(afstand >= 2 * slot).OnlyEnforceIf(naer.Not())
             led.append(naer * (koef * antal))
+    # Lange huller (planner/src/kriterier.js "langeHuller"): en spillerdag med et hul over ventetidsgrænsen mellem to
+    # egne kampe koster vægten. Med k kampe og intet hul over grænsen kan dagens spænd højst være (k-1)·(grænse+slot);
+    # er spændet længere, er der mindst ét langt hul. For to kampe er det præcis plannerens regel, for flere en
+    # nedre grænse (et enkelt langt hul i en ellers tæt dag fanges ikke).
+    w_hul = float(v.get("langeHuller", 0))
+    max_vent = int(problem.get("maxVent") or 0)
+    if w_hul > 0 and max_vent > 0:
+        koef = max(1, int(round(w_hul * SKALA)))
+        for ids in problem.get("traek", []):
+            if not all(enkeltDag[i] for i in ids):
+                continue
+            pr_dag = {}
+            for i in ids:
+                pr_dag.setdefault(dagFor[i], []).append(i)
+            for dids in pr_dag.values():
+                if len(dids) < 2:
+                    continue
+                graense = (len(dids) - 1) * (max_vent + slot)
+                alle = [t for i in dids for t in kampe[i]["tilladte"]]
+                if max(alle) - min(alle) <= graense:
+                    continue  # kan aldrig få et langt hul
+                for s in spaend(dids):
+                    hul = m.NewBoolVar("")
+                    m.Add(s <= graense).OnlyEnforceIf(hul.Not())
+                    led.append(hul * koef)
     # Puljerunder i takt (planner/src/kriterier.js "puljerunderSpredt", Jesper 2026-10-10): en puljekamp i runde r+1,
     # der starter før kategoriens sidste kamp i runde r, koster vægten pr. kamp — så alle puljers runde 1 spilles
     # før runde 2 osv., som i en plan lagt i TP. Runderne kommer pr. kategori med runde 1 først.
@@ -350,15 +376,42 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, st
                         solver.stop_search()
                     return
         threading.Thread(target=vagt, daemon=True).start()
+    # Stop, når løseren ikke længere bliver bedre: er der ikke fundet en bedre plan i `ro` sekunder, afleveres den
+    # bedste (målt 2026-10-10: 240 s gav ikke bedre planer end 60 s — resten af tiden er ventetid for brugeren)
+    rolig = threading.Event()
+    sidst_bedre = [time.time()]
+    ro = 0.0 if foerste or RO_SEKUNDER <= 0 else max(RO_SEKUNDER, float(sekunder) * 0.25)
+
+    class Fremskridt(cp_model.CpSolverSolutionCallback):
+        def __init__(self):
+            super().__init__()
+            self.bedste = None
+
+        def on_solution_callback(self):
+            v_ = self.ObjectiveValue()
+            if self.bedste is None or v_ < self.bedste:
+                self.bedste = v_
+                sidst_bedre[0] = time.time()
+
+    fremskridt = Fremskridt()
+    if ro > 0:
+        def ro_vagt():
+            while not faerdig.wait(0.5):
+                if fremskridt.bedste is not None and time.time() - sidst_bedre[0] > ro:
+                    rolig.set()
+                    while not faerdig.wait(0.1):
+                        solver.stop_search()
+                    return
+        threading.Thread(target=ro_vagt, daemon=True).start()
     try:
         if stop is not None and stop.is_set():
             status = cp_model.UNKNOWN  # stoppet, før søgningen overhovedet gik i gang
         else:
-            status = solver.Solve(m)
+            status = solver.Solve(m, fremskridt)
     finally:
         faerdig.set()
     navn = {cp_model.OPTIMAL: "OPTIMAL", cp_model.FEASIBLE: "FEASIBLE", cp_model.INFEASIBLE: "INFEASIBLE"}.get(status, "UNKNOWN")
-    svar = {"status": navn, "sekunder": round(time.time() - t0, 2), "tider": {}, "stoppet": bool(stop is not None and stop.is_set())}
+    svar = {"status": navn, "sekunder": round(time.time() - t0, 2), "tider": {}, "stoppet": bool(stop is not None and stop.is_set()), "rolig": rolig.is_set()}
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         svar["tider"] = {k["id"]: int(solver.Value(T[i])) for i, k in enumerate(kampe)}
         svar["maal"] = solver.ObjectiveValue()
@@ -367,6 +420,87 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, st
         svar["besked"] = "Der findes ingen plan, der overholder alle de hårde regler med de nuværende dage, baner og tidsrum."
     else:
         svar["besked"] = "Løseren nåede ikke at finde en plan, før den blev stoppet." if svar["stoppet"] else "Løseren fandt ingen plan inden for tidsgrænsen."
+    return svar
+
+
+def dele_pr_dag(problem: dict) -> dict | None:
+    """Kampene pr. dag, når problemet falder i uafhængige dage — ellers None.
+
+    Det gør det, når hver kamp kun kan ligge på én dag (rækkerne spiller hver én dag): så binder ingen regel to
+    dage sammen — pause, kampe i træk og haltid gælder inden for dagen — og hver dag kan løses for sig.
+    Målt 2026-10-10 (Lyngby U9/U11): to mindre opgaver giver en bedre plan end én stor med samme samlede tid.
+    """
+    kampe = problem["kampe"]
+    dag_for = []
+    for k in kampe:
+        dage = {t // DAG for t in k["tilladte"]}
+        if len(dage) != 1:
+            return None
+        dag_for.append(next(iter(dage)))
+    if len(set(dag_for)) < 2:
+        return None
+    # En rækkefølge, der peger bagud over dage, kan ikke opfyldes — den skal løseren se samlet (og afvise)
+    if any(dag_for[a] > dag_for[b] for a, b, _ in problem.get("foer", [])):
+        return None
+    ud = {}
+    for i, d in enumerate(dag_for):
+        ud.setdefault(d, []).append(i)
+    return ud
+
+
+def delproblem(problem: dict, ids: list[int], dag: int) -> dict:
+    """Problemet med kun kampene `ids` (alle på `dag`), med indeksene nummereret om."""
+    ny = {gammel: i for i, gammel in enumerate(ids)}
+    inde = lambda xs: [ny[x] for x in xs if x in ny]
+    par = lambda liste: [[ny[a], ny[b], *rest] for a, b, *rest in liste if a in ny and b in ny]
+    p = dict(problem)
+    p["kampe"] = [problem["kampe"][i] for i in ids]
+    p["foer"], p["konflikter"] = par(problem.get("foer", [])), par(problem.get("konflikter", []))
+    p["ikkeSamtidig"], p["ikkeSammeDag"] = par(problem.get("ikkeSamtidig", [])), par(problem.get("ikkeSammeDag", []))
+    p["haltid"] = [{**h, "kampe": inde(h["kampe"]), **({"udloesere": inde(h["udloesere"])} if h.get("udloesere") else {})} for h in problem.get("haltid", [])]
+    p["haltid"] = [h for h in p["haltid"] if len(h["kampe"]) > 1 and (h.get("udloesere") is None or h["udloesere"])]
+    p["spillerGrupper"] = [g for g in ({**g, "kampe": inde(g["kampe"])} for g in problem.get("spillerGrupper", [])) if len(g["kampe"]) > 1]
+    p["traek"] = [x for x in (inde(l) for l in problem.get("traek", [])) if len(x) > 1]
+    p["puljerunder"] = [r for r in ([inde(x) for x in runder] for runder in problem.get("puljerunder", [])) if sum(1 for x in r if x) > 1]
+    p["maxDage"] = [{**r, "kampe": inde(r["kampe"])} for r in problem.get("maxDage", []) if inde(r["kampe"])]
+    p["mangeKampe"] = [x for x in (inde(l) for l in problem.get("mangeKampe", [])) if x]
+    p["maxPrGruppe"] = [{**g, "kampe": inde(g["kampe"])} for g in problem.get("maxPrGruppe", []) if inde(g["kampe"])]
+    p["alternativer"] = [{**a, "kampe": inde(a["kampe"])} for a in problem.get("alternativer", []) if inde(a["kampe"])]
+    p["kapacitet"] = {pulje: [s for s in slots if s["t"] // DAG == dag] for pulje, slots in problem["kapacitet"].items()}
+    return p
+
+
+def loes_opdelt(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, stop: threading.Event | None = None) -> dict:
+    """Som loes(), men løser hver dag for sig, når dagene er uafhængige (dele_pr_dag). Tiden fordeles efter antal kampe."""
+    dele = dele_pr_dag(problem)
+    if not dele:
+        return loes(problem, sekunder, arbejdere, stop)
+    t0 = time.time()
+    n = len(problem["kampe"])
+    svar = {"status": "OPTIMAL", "tider": {}, "maal": 0.0, "graense": 0.0, "stoppet": False, "rolig": False, "dele": len(dele)}
+    for dag, ids in sorted(dele.items()):
+        tilbage = max(1.0, float(sekunder) - (time.time() - t0))
+        andel = max(5.0, float(sekunder) * len(ids) / n) if dag != max(dele) else tilbage
+        if stop is not None and stop.is_set():
+            # Stoppet, før dagen kom til: dens kampe beholder startplanens tider, hvis den har dem alle
+            if all(problem["kampe"][i].get("hint") in problem["kampe"][i]["tilladte"] for i in ids):
+                svar["tider"].update({problem["kampe"][i]["id"]: int(problem["kampe"][i]["hint"]) for i in ids})
+                svar["status"] = "FEASIBLE"
+                svar["stoppet"] = True
+                continue
+            return {**loes(problem, 1, arbejdere, stop), "stoppet": True}
+        del_svar = loes(delproblem(problem, ids, dag), min(andel, tilbage), arbejdere, stop)
+        if del_svar["status"] not in ("OPTIMAL", "FEASIBLE"):
+            # En dag uden lovlig plan: hele problemet løses samlet, så svaret (og diagnosen) bliver som før
+            return loes(problem, max(1.0, float(sekunder) - (time.time() - t0)), arbejdere, stop)
+        svar["tider"].update(del_svar["tider"])
+        svar["maal"] += del_svar.get("maal", 0.0)
+        svar["graense"] += del_svar.get("graense", 0.0)
+        svar["stoppet"] = svar["stoppet"] or del_svar["stoppet"]
+        svar["rolig"] = svar["rolig"] or del_svar.get("rolig", False)
+        if del_svar["status"] == "FEASIBLE":
+            svar["status"] = "FEASIBLE"
+    svar["sekunder"] = round(time.time() - t0, 2)
     return svar
 
 
@@ -504,7 +638,7 @@ def ryd_gamle_jobs():
 def koer(problem: dict, sekunder: float, job: Job):
     """Løser problemet og returnerer (HTTP-kode, svar). Fejl i modellen må ikke vælte tjenesten."""
     try:
-        svar = loes(problem, sekunder, stop=job.stop)
+        svar = loes_opdelt(problem, sekunder, stop=job.stop)
         if svar["status"] == "INFEASIBLE" and not job.stop.is_set() and problem.get("diagnose", True):
             job.fase = "diagnose"
             svar["diagnose"] = diagnose(problem, job.stop)

@@ -225,6 +225,7 @@ export function bygProblem(projekt, hintPlan = null) {
         dage: dage.map((d, i) => ({ index: i, start: minutter(d.start), slut: minutter(d.slut), baner: d.baner })),
         kapacitet, kampe, foer, konflikter, ikkeSamtidig, haltid, spillerGrupper, traek, puljerunder, maxDage,
         maxKampePrDag: maxPrDag, mangeKampe, maxPrGruppe, ikkeSammeDag, alternativer,
+        maxVent: projekt.opsaetning.maxVentetidMin ?? 90, // til "lange huller" (kriteriet langeHuller)
         vaegte: vaegteFor(projekt),
     };
 }
@@ -257,7 +258,7 @@ export function diagnoseTekst(diagnose, alleDage = []) {
                 handlinger.push({ tekst: `Fjern grænsen for haltid i ${d.raekke}, og optimér igen`, raekke: d.raekke, aendring: { maxHaltidMin: null } });
             }
         } else if (d.regel === 'maxDage') {
-            linjer.push(`${d.raekke}: kampene kan ikke være på én dag inden for rækkens tidsrum og baner. Over flere dage findes der en lovlig plan (kræver dispensation) — eller giv rækken et længere tidsrum, flere baner eller færre kampe.`);
+            linjer.push(`${d.raekke}: kampene kan ikke være på én dag inden for rækkens tidsrum og baner. Over flere dage findes der en lovlig plan (kræver dispensation) — eller giv rækken et længere tidsrum, flere af dagens baner eller færre kampe.`);
             handlinger.push({ tekst: `Giv ${d.raekke} dispensation til flere dage, og optimér igen`, raekke: d.raekke, aendring: { dispensationFlereDage: true } });
         } else if (d.regel === 'tidsrum') {
             linjer.push(`${d.raekke}: rækkens eget tidsrum er for snævert til kampene — uden det (kun årgangens tidsvindue) findes der en lovlig plan.`);
@@ -268,9 +269,9 @@ export function diagnoseTekst(diagnose, alleDage = []) {
         } else if (d.regel === 'maxKampePrDag') {
             linjer.push('Grænsen for antal kampe pr. spiller pr. dag kan ikke overholdes — hæv den under "Reglementets grænser" under Turneringen, eller fordel kategorierne på flere dage.');
         } else if (d.regel === 'flere') {
-            linjer.push('Ingen enkelt regel er årsagen: først når max haltid, max dage og max kampe pr. dag lempes samtidig, findes der en plan. Brug "Find forslag, der får kabalen til at gå op".');
+            linjer.push('Ingen enkelt regel er årsagen: først når max haltid, max dage og max kampe pr. dag lempes samtidig, findes der en plan. Se valgmulighederne nedenfor.');
         } else if (d.regel === 'plads') {
-            linjer.push('Der er ikke plads: hverken max haltid, max dage, max kampe pr. dag eller en enkelt rækkes tidsrum eller dage er årsagen — kampene kan ikke være på banerne inden for tidsvinduerne (eller låste kampe står i vejen). Brug "Find forslag, der får kabalen til at gå op", eller giv flere baner, længere dage eller flere spilledage.');
+            linjer.push('Der er ikke plads: hverken max haltid, max dage, max kampe pr. dag eller en enkelt rækkes tidsrum eller dage er årsagen — kampene kan ikke være på banerne inden for tidsvinduerne (eller låste kampe står i vejen). Se valgmulighederne nedenfor — fx længere dage, færre runder eller flere spilledage.');
         }
     }
     if (!linjer.length) linjer.push('Løseren kunne ikke pege på én bestemt regel inden for tiden.');

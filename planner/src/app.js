@@ -297,14 +297,14 @@ const katFelter = (p, brud) => {
 };
 
 /** Lægger et resultat fra lavKampprogram ind og regner beslutningskortene ud. */
-function visKampprogram(r, { foer, valg, udfoert = [] }) {
+function visKampprogram(r, { foer, valg, udfoert = [], note = null }) {
     const beslutninger = lavBeslutninger(r.projekt, r.forslag);
     const brud = [...r.forslag.brud, ...r.forslag.ikkePlaceret];
     tilstand.alternativer = null;
     tilstand.nedskaering = null;
     tilstand.forslag = { tekst: '', ikkePlaceret: katFelter(r.projekt, brud), kilde: 'graadig' };
     saet({ ...r.projekt, sidsteForslag: { ikkePlaceret: brud } });
-    tilstand.kampprogram = { projekt, foer, valg, beslutninger, udfoert, beholdt: [] };
+    tilstand.kampprogram = { projekt, foer, valg, beslutninger, udfoert, beholdt: [], note, handlinger: [] };
 }
 
 const planHandlers = {
@@ -459,6 +459,10 @@ const planHandlers = {
         // resultatet ikke bare lægges ind oven i det — se aendretUnderOptimering nedenfor.
         const udgangspunkt = projekt;
         const graadig = lavForslag(udgangspunkt);
+        // Startplanen: det program, brugeren har (fx fra "Lav kampprogram"), når alle kampe har tid — ellers det
+        // hurtige forslag. Målt 2026-10-10: at starte fra det bedste program gav en klart bedre plan på samme tid.
+        const harProgram = udgangspunkt.kampe.every((k) => udgangspunkt.plan[k.id]);
+        const hintPlan = harProgram ? udgangspunkt.plan : graadig.brud.length ? null : graadig.plan;
         tilstand.ventendeOptimering = null;
         const job = nytJobId();
         tilstand.optimerer = true;
@@ -489,7 +493,7 @@ const planHandlers = {
             };
             afbryd = new AbortController();
             tilstand.optimerAfbryd = afbryd;
-            const svar = await optimer(udgangspunkt, { sekunder, hintPlan: graadig.brud.length ? null : graadig.plan, job, vedStatus, signal: afbryd.signal });
+            const svar = await optimer(udgangspunkt, { sekunder, hintPlan, job, vedStatus, signal: afbryd.signal });
             faerdig();
             const lovlig = svar.status === 'OPTIMAL' || svar.status === 'FEASIBLE';
             const aendring = aendretUnderOptimering(udgangspunkt, projekt);
@@ -504,11 +508,16 @@ const planHandlers = {
             const visLoeserensPlan = () => {
                 const foer = { ...projekt.plan };
                 const plan = flettetPlan(projekt, svar.plan);
-                const graadigAlt = { navn: 'Grådig planlægger', beskrivelse: 'Det hurtige forslag fra "Lav forslag" — til sammenligning.', plan: flettetPlan(projekt, graadig.plan), ikkePlaceret: graadig.ikkePlaceret, brud: graadig.brud, statistik: graadig.statistik, score: scorePlan({ ...projekt, plan: flettetPlan(projekt, graadig.plan) }).total };
+                // Løserens plan sammenlignes med det program, brugeren havde — eller det hurtige forslag, hvis der ikke var et
+                const nuPlan = flettetPlan(projekt, udgangspunkt.plan);
+                const sammenlign = harProgram
+                    ? { navn: 'Dit program fra før', beskrivelse: 'Planen, som den var, før du trykkede "Forbedr med løseren".', plan: nuPlan, ikkePlaceret: [], brud: [], statistik: bedoemPlan({ ...projekt, plan: nuPlan }), score: scorePlan({ ...projekt, plan: nuPlan }).total }
+                    : { navn: 'Hurtigt forslag', beskrivelse: 'Det hurtige forslag fra "Lav forslag" — til sammenligning.', plan: flettetPlan(projekt, graadig.plan), ikkePlaceret: graadig.ikkePlaceret, brud: graadig.brud, statistik: graadig.statistik, score: scorePlan({ ...projekt, plan: flettetPlan(projekt, graadig.plan) }).total };
                 const p2 = { ...projekt, plan };
-                const opt = { navn: svar.status === 'OPTIMAL' ? 'Optimeret (bevist bedst mulig)' : 'Optimeret (CP-SAT)', beskrivelse: svar.stoppet ? `Stoppet efter ${svar.sekunder} s — den bedste plan, løseren havde fundet. Se Tjek for regler, løseren ikke kender (fx senior-reglerne).` : `Løseren minimerede scoren under de hårde regler på ${svar.sekunder} s.`, plan, ikkePlaceret: [], brud: [], statistik: bedoemPlan(p2), score: scorePlan(p2).total };
-                const liste = [opt, graadigAlt].sort((x, y) => (x.brud.length - y.brud.length) || (x.score - y.score));
-                tilstand.forslag = { tekst: `Løseren fandt en plan med score ${opt.score} på ${svar.sekunder} s (grådig: ${graadigAlt.score}). Bladr med ◀ ▶ og vælg "Brug dette".`, ikkePlaceret: [] };
+                const opt = { navn: svar.status === 'OPTIMAL' ? 'Optimeret (bevist bedst mulig)' : 'Optimeret (CP-SAT)', beskrivelse: svar.stoppet ? `Stoppet efter ${svar.sekunder} s — den bedste plan, løseren havde fundet.` : svar.rolig ? `Løseren stoppede selv efter ${svar.sekunder} s, fordi den ikke fandt bedre planer.` : `Løseren minimerede scoren under de hårde regler på ${svar.sekunder} s.`, plan, ikkePlaceret: [], brud: [], statistik: bedoemPlan(p2), score: scorePlan(p2).total };
+                const liste = [opt, sammenlign].sort((x, y) => (x.brud.length - y.brud.length) || (x.score - y.score));
+                const bedre = opt.score < sammenlign.score;
+                tilstand.forslag = { tekst: `Løseren fandt en plan med score ${opt.score} på ${svar.sekunder} s (${harProgram ? 'dit program' : 'hurtigt forslag'}: ${sammenlign.score}; lavere er bedre).${bedre ? '' : ' Den er ikke bedre end din — dit program står først.'} Bladr med ◀ ▶ og vælg "Brug dette".`, ikkePlaceret: [] };
                 tilstand.alternativer = { liste, index: 0, foer };
                 planHandlers.visAlternativ();
             };
@@ -527,10 +536,14 @@ const planHandlers = {
             }
             if (lovlig) visLoeserensPlan();
             else if (svar.status === 'INFEASIBLE') {
+                // Ingen lovlig plan: samme beslutningskort som efter "Lav kampprogram" (afprøvede løsninger), med
+                // løserens diagnose som forklaring og dens knapper under kortene
                 const diag = diagnoseTekst(svar.diagnose, projekt.opsaetning.dage.map((d) => d.dato));
-                const brud = [...graadig.brud, ...graadig.ikkePlaceret];
-                tilstand.forslag = { tekst: `Løseren regnede kun ${svar.sekunder} s, fordi den hurtigt kunne bevise, at der IKKE findes en plan, der overholder alle hårde regler. Årsag: ${diag.tekst} Herunder er den hurtige plan med de nødvendige regelbrud:`, handlinger: diag.handlinger, ikkePlaceret: brud.map((x) => ({ ...x, kategori: projekt.kampe.find((k) => k.id === x.id)?.kategori || '', navn: projekt.kampe.find((k) => k.id === x.id)?.navn || x.id })) };
-                saet({ ...store.anvendForslag(projekt, graadig), sidsteForslag: { ikkePlaceret: brud } });
+                const r = byggKampprogram(udgangspunkt, { fastKamplaengde: true });
+                visKampprogram(r, { foer: udgangspunkt, valg: r.valg, note: `Løseren kunne bevise, at der ikke findes en plan, der overholder alle de hårde regler. Årsag: ${diag.tekst}` });
+                tilstand.forslag.handlinger = diag.handlinger;
+                tilstand.kampprogram.handlinger = diag.handlinger;
+                render();
             } else {
                 tilstand.forslag = { tekst: `${svar.besked || 'Løseren fandt ingen plan inden for tiden.'} Prøv med længere tid, eller brug "Lav forslag".`, ikkePlaceret: [] };
                 render();
