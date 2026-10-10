@@ -421,19 +421,24 @@ function vaegtBoks(p) {
         </details>`;
 }
 
-function raekkePanel(p) {
+export function raekkePanel(p) {
     const prKat = kampePrKategori(p);
     const dage = p.turnering.dage;
     const blokke = p.raekker.map((r) => {
         const kategorier = p.kategorier.filter((k) => k.raekke === r.id);
         const kampe = kategorier.reduce((sum, k) => sum + (prKat.get(k.id)?.ialt || 0), 0);
         const flereDage = r.dage.length > 1;
-        const kraeverDisp = flereDage && (['B', 'C', 'D'].includes(r.raekke) || (r.aargang === 'U11' && r.raekke === 'A'));
+        // Reglementet: B/C/D (og U11 A) spiller én dag. Har rækken flere dage at vælge imellem, lægger planlæggeren den
+        // på én af dem — dispensation kræves først, når programmet faktisk bruger flere dage (Fable-gennemgangen, V7)
+        const kanKraeveDisp = flereDage && (['B', 'C', 'D'].includes(r.raekke) || (r.aargang === 'U11' && r.raekke === 'A'));
+        const katIds = new Set(kategorier.map((k) => k.id));
+        const spilleDage = new Set(p.kampe.filter((k) => katIds.has(k.kategori) && p.plan[k.id]).map((k) => p.plan[k.id].dag));
+        const kraeverDisp = kanKraeveDisp && spilleDage.size > 1;
         const dagValg = dage.map((d) => `
                     <label class="valg"><input type="checkbox" data-raekke-dag="${d}" data-raekke="${esc(r.id)}" ${r.dage.includes(d) ? 'checked' : ''}> ${datoTekst(d, { kort: true })}</label>`).join('');
         const maerker = [
             !r.dage.length ? '<span class="maerke maerke--fejl">ingen dag valgt</span>' : '',
-            kraeverDisp ? (r.dispensationFlereDage ? '<span class="maerke maerke--ok">dispensation givet</span>' : '<span class="maerke maerke--advarsel">kræver dispensation</span>') : '',
+            kanKraeveDisp && r.dispensationFlereDage ? '<span class="maerke maerke--ok">dispensation givet</span>' : kraeverDisp ? '<span class="maerke maerke--advarsel">kræver dispensation</span>' : '',
         ].filter(Boolean).join(' ');
         // Det, der er sat i den foldede del, vises i overskriften, så man ikke skal folde ud for at se det
         const sat = [
@@ -474,7 +479,7 @@ function raekkePanel(p) {
                     <div class="felt"><span class="etiket">Valg</span>
                         <div class="valg-gruppe valg-gruppe--lodret">
                             <label class="valg" title="AFVIGER FRA REGLEMENTET, som stiller minimumskravet pr. kategori (fx 3 kampe i single OG 2 i double). Sættes flueben, tælles spillerens single, double og mix i stedet sammen — i Tjek, i nedskæringsforslagene, og når planneren selv vælger turneringsform."><input type="checkbox" data-min-samlet="${esc(r.id)}" ${minKampeSamlet(r) ? 'checked' : ''}> min. kampe tælles samlet</label>
-                            ${kraeverDisp ? `<label class="valg"><input type="checkbox" data-disp="${esc(r.id)}" ${r.dispensationFlereDage ? 'checked' : ''}> dispensation til flere dage</label>` : ''}
+                            ${kanKraeveDisp ? `<label class="valg" title="Uden dispensation spiller rækken på én af de valgte dage — planlæggeren vælger hvilken"><input type="checkbox" data-disp="${esc(r.id)}" ${r.dispensationFlereDage ? 'checked' : ''}> dispensation til flere dage</label>` : ''}
                         </div></div>
                 </div>
                 <div class="tabel-hylster">

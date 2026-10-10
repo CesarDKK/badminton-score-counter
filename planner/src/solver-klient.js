@@ -419,7 +419,9 @@ export async function optimer(projekt, { sekunder = 30, hintPlan = null, url = '
     let data = await startJob(url, JSON.stringify({ problem, sekunder, asynkron: true, ...(job ? { job } : {}) }), { signal, vedStatus, ventMaxSekunder, ventMs });
     const jobId = data.job || job;
     let sidstOk = Date.now(), ventMellem = pollMs;
-    const frist = Date.now() + (sekunder + 90) * 1000;
+    // Fristen er et sikkerhedsnet mod en løser, der er gået i stå. Efter selve søgningen kan løseren lave planen med
+    // færrest brud og en diagnose; status fortæller, hvor længe den højst regner endnu (restSekunder), og så venter vi.
+    let frist = Date.now() + (sekunder + 90) * 1000;
     while (data.status === 'REGNER') {
         if (Date.now() > frist) throw new Error('Løseren svarede ikke inden for tiden.');
         await pause(ventMellem, signal);
@@ -429,6 +431,7 @@ export async function optimer(projekt, { sekunder = 30, hintPlan = null, url = '
             if (s.status === 429) { ventMellem = Math.min(Math.max(ventMellem, 1) * 2, Math.max(pollMs * 4, 1000)); data = { status: 'REGNER' }; continue; } // for mange kald: sæt tempoet ned
             if (s.status >= 500) throw new Error(`Løseren svarede ${s.status}`); // forbigående: prøv igen
             data = await s.json();
+            if (s.ok && data.status === 'REGNER' && Number.isFinite(data.restSekunder)) frist = Math.max(frist, Date.now() + (data.restSekunder + 60) * 1000);
             if (s.ok && data.status === 'REGNER' && vedStatus) vedStatus(data);
             if (!s.ok) throw Object.assign(new Error(data.fejl || `Løseren svarede ${s.status}`), { endelig: true });
             sidstOk = Date.now();

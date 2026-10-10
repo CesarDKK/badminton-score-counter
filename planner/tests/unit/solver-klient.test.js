@@ -153,6 +153,15 @@ describe('solver-klient: asynkront job (start → status → svar)', () => {
         assert.equal(resultat.status, 'FEASIBLE');
         assert.deepEqual(resultat.plan['1:1'], { dag: '2026-11-21', slot: '09:00' });
     });
+    test('Fable V2: klienten venter, så længe løseren melder tid tilbage (planen med færrest brud, diagnose)', async () => {
+        const { optimer } = await import('../../src/solver-klient.js');
+        const regner = (ekstra) => ({ kode: 200, data: { status: 'REGNER', fase: 'diagnose', ...ekstra } });
+        const forloeb = (ekstra) => [{ kode: 202, data: { status: 'REGNER', job: 'jobjobjob123' } }, regner(ekstra), regner(ekstra), regner(ekstra), { kode: 200, data: { status: 'INFEASIBLE', sekunder: 9, tider: {} } }];
+        // Fristen er her 150 ms (sekunder + 90 s), og fire statuskald med 80 ms imellem varer længere
+        const { resultat } = await medFetch(forloeb({ restSekunder: 30 }), () => optimer(projekt(), { sekunder: -89.85, job: 'jobjobjob123', pollMs: 80 }));
+        assert.equal(resultat.status, 'INFEASIBLE');
+        await assert.rejects(medFetch(forloeb({}), () => optimer(projekt(), { sekunder: -89.85, job: 'jobjobjob123', pollMs: 80 })), /inden for tiden/);
+    });
     test('ukendt job (løseren genstartet) og ugyldigt problem giver en klar fejl', async () => {
         const { optimer } = await import('../../src/solver-klient.js');
         await assert.rejects(medFetch([{ kode: 202, data: { status: 'REGNER', job: 'jobjobjob123' } }, { kode: 404, data: { fejl: 'ukendt job' } }], () => optimer(projekt(), { pollMs: 1 })), /kender ikke længere jobbet/);

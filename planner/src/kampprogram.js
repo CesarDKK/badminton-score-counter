@@ -23,6 +23,17 @@ const pauseNoegle = (p) => ['ABCD', 'M', 'E', 'faelles'].map((x) => p?.[x] ?? nu
  * deres tid — og så røres kamplængden ikke, for låste kampe ligger i det nuværende slot-gitter.
  * Returnerer { projekt, forslag, valg } — valg: { minutter, udenPause, aendret, foer: { slotMin, pauseMin }, grund }.
  */
+/**
+ * Hører panelet fra "Lav kampprogram" (kp) stadig til projektet? Ja, så længe kampene og opsætningen er de samme:
+ * at flytte, låse eller kvittere fjerner ikke beslutningskortene (Fable-gennemgangen 2026-10-10, V5).
+ * Store-funktionerne laver nye objekter for det, de ændrer, så samme objekt = uændret.
+ */
+export function panelGaelder(kp, projekt) {
+    if (!kp || !projekt) return false;
+    const a = kp.projekt;
+    return a === projekt || (a.kampe === projekt.kampe && a.opsaetning === projekt.opsaetning && a.raekker === projekt.raekker && a.kategorier === projekt.kategorier);
+}
+
 export function lavKampprogram(projekt, { fastKamplaengde = false } = {}) {
     const foer = { slotMin: projekt.opsaetning.slotMin, pauseMin: projekt.opsaetning.pauseMin };
     let p = projekt;
