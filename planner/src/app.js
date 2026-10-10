@@ -4,7 +4,7 @@ import { laesTP, tabellerFraMDB } from './tp-reader.js';
 import * as store from './store.js';
 import { tjekPlan } from './rules.js';
 import { lavForslag, lavAlternativer, bedoemPlan, loesningsforslag } from './scheduler.js';
-import { optimer, stopLoeser, stopVedLukning, nytJobId, diagnoseTekst, aendretUnderOptimering, flettetPlan } from './solver-klient.js';
+import { optimer, stopLoeser, stopVedLukning, nytJobId, diagnoseTekst, aendretUnderOptimering, flettetPlan, planFraSvar, brudTekster } from './solver-klient.js';
 import { scorePlan } from './kriterier.js';
 import { alleNedskaeringer, anvendNedskaering, kapacitetsRegnskab, swissKandidater } from './nedskaering.js';
 import { sammenlignKamplaengder } from './kamplaengde.js';
@@ -307,6 +307,17 @@ function visKampprogram(r, { foer, valg, udfoert = [], note = null }) {
     tilstand.kampprogram = { projekt, foer, valg, beslutninger, udfoert, beholdt: [], note, handlinger: [] };
 }
 
+/**
+ * Løseren starter af sig selv, når "Lav kampprogram" har lavet et program, der går op (Jesper 2026-10-10): det hurtige
+ * program vises med det samme, og løseren forbedrer det bagefter. Går programmet ikke op, venter den, til kortene er
+ * taget stilling til. Kan slås fra under Avanceret (opsaetning.autoLoeser).
+ */
+function startAutoLoeser() {
+    const kp = tilstand.kampprogram;
+    if (!kp || kp.projekt !== projekt || kp.beslutninger.brud || projekt.opsaetning.autoLoeser === false) return;
+    setTimeout(() => planHandlers.optimer({ udenSpoergsmaal: true, auto: true }), 0);
+}
+
 const planHandlers = {
     // "Lav kampprogram": hele kæden på én gang (kampprogram.js). Det gamle program kan fås tilbage med "Fortryd".
     lavKampprogram({ fastKamplaengde = false } = {}) {
@@ -314,6 +325,7 @@ const planHandlers = {
         arbejd('Laver kampprogrammet … planneren prøver kamplængder og flere forslag og vælger det bedste.', () => {
             const r = byggKampprogram(foer, { fastKamplaengde });
             visKampprogram(r, { foer, valg: r.valg });
+            startAutoLoeser();
         });
     },
     // Et valg på et beslutningskort: ændringen udføres, og programmet laves igen med samme kamplængde
@@ -324,6 +336,7 @@ const planHandlers = {
         arbejd(`${v.tekst} … og laver programmet igen.`, () => {
             const r = byggKampprogram(anvendAendring(projekt, v), { fastKamplaengde: true });
             visKampprogram(r, { foer: kp.foer, valg: kp.valg, udfoert: [...kp.udfoert, v.tekst] });
+            startAutoLoeser();
         });
     },
     beholdBeslutning(kortIndex) {
@@ -342,7 +355,18 @@ const planHandlers = {
             const p = store.genberegnKampe(store.opdaterOpsaetning(store.saetSlotMin(projekt, slotMin), { pauseMin }));
             const r = byggKampprogram(p, { fastKamplaengde: true });
             visKampprogram(r, { foer: kp.foer, valg: { ...r.valg, aendret: false, grund: 'tidligere' }, udfoert: kp.udfoert });
+            startAutoLoeser();
         });
+    },
+    brugElastisk() {
+        const kp = tilstand.kampprogram;
+        if (!kp?.elastisk) return;
+        const foer = projekt;
+        tilstand.kampprogram = null;
+        tilstand.forslag = null;
+        saet({ ...projekt, plan: flettetPlan(projekt, kp.elastisk.plan) });
+        tilstand.fortryd = { projekt: foer, efter: projekt, tekst: `Planen med færrest regelbrud er lagt ind: ${kp.elastisk.tekster.join('; ')}.` };
+        render();
     },
     fortrydKampprogram() {
         const kp = tilstand.kampprogram;
@@ -451,7 +475,7 @@ const planHandlers = {
     // Optimér: CP-SAT-løseren (planner-solver) minimerer scoren under alle hårde regler.
     // Den grådige plan bruges som startløsning og vises ved siden af til sammenligning.
     optimerSek(n) { tilstand.optimerSek = n; },
-    async optimer({ udenSpoergsmaal = false } = {}) {
+    async optimer({ udenSpoergsmaal = false, auto = false } = {}) {
         if (tilstand.optimerer) return;
         const antalLaast = (projekt.laast || []).length;
         const sekunder = tilstand.optimerSek || 60;
@@ -468,6 +492,7 @@ const planHandlers = {
         tilstand.optimerer = true;
         tilstand.optimerJob = job;
         tilstand.optimerStopper = false;
+        tilstand.optimerAuto = auto;
         tilstand.forslag = { tekst: `Løseren regner i op til ${sekunder >= 120 ? `${sekunder / 60} minutter` : `${sekunder} sekunder`}. Du kan stoppe undervejs og bruge den bedste plan, den har fundet.`, ikkePlaceret: [] };
         render();
         // Uret opdateres direkte i knappen, så gitteret ikke tegnes om hvert sekund
@@ -475,7 +500,7 @@ const planHandlers = {
         const visUr = () => { const el = document.querySelector('[data-optimer-ur]'); if (el) el.textContent = `${Math.round((Date.now() - start) / 1000)} s`; };
         const ur = setInterval(visUr, 1000);
         let afbryd = null;
-        const faerdig = () => { clearInterval(ur); tilstand.optimerer = false; tilstand.optimerJob = null; tilstand.optimerStopper = false; tilstand.optimerDiagnose = false; tilstand.optimerAfbryd = null; };
+        const faerdig = () => { clearInterval(ur); tilstand.optimerer = false; tilstand.optimerJob = null; tilstand.optimerStopper = false; tilstand.optimerDiagnose = false; tilstand.optimerElastisk = false; tilstand.optimerAfbryd = null; tilstand.optimerAuto = false; };
         try {
             let ventede = false;
             const vedStatus = (s) => {
@@ -489,7 +514,8 @@ const planHandlers = {
                     ventede = false;
                     tilstand.forslag = { tekst: 'Løseren er blevet fri og regner nu på din plan. Du kan stoppe undervejs og bruge den bedste plan, den har fundet.', ikkePlaceret: [] };
                     render(); visUr();
-                } else if (s.fase === 'diagnose' && !tilstand.optimerDiagnose) { tilstand.optimerDiagnose = true; render(); visUr(); }
+                } else if (s.fase === 'elastisk' && !tilstand.optimerElastisk) { tilstand.optimerElastisk = true; render(); visUr(); }
+                else if (s.fase === 'diagnose' && !tilstand.optimerDiagnose) { tilstand.optimerDiagnose = true; render(); visUr(); }
             };
             afbryd = new AbortController();
             tilstand.optimerAfbryd = afbryd;
@@ -517,6 +543,23 @@ const planHandlers = {
                 const opt = { navn: svar.status === 'OPTIMAL' ? 'Optimeret (bevist bedst mulig)' : 'Optimeret (CP-SAT)', beskrivelse: svar.stoppet ? `Stoppet efter ${svar.sekunder} s — den bedste plan, løseren havde fundet.` : svar.rolig ? `Løseren stoppede selv efter ${svar.sekunder} s, fordi den ikke fandt bedre planer.` : `Løseren minimerede scoren under de hårde regler på ${svar.sekunder} s.`, plan, ikkePlaceret: [], brud: [], statistik: bedoemPlan(p2), score: scorePlan(p2).total };
                 const liste = [opt, sammenlign].sort((x, y) => (x.brud.length - y.brud.length) || (x.score - y.score));
                 const bedre = opt.score < sammenlign.score;
+                if (auto && harProgram) {
+                    const kp = tilstand.kampprogram?.projekt === projekt ? tilstand.kampprogram : null;
+                    if (bedre) {
+                        const foerP = projekt;
+                        saet({ ...projekt, plan });
+                        const tekst = `Løseren har forbedret programmet på ${svar.sekunder} s (score ${sammenlign.score} → ${opt.score}; lavere er bedre).`;
+                        tilstand.fortryd = { projekt: foerP, efter: projekt, tekst };
+                        tilstand.forslag = { tekst, ikkePlaceret: [], kilde: 'loeser' };
+                        if (kp) { kp.projekt = projekt; kp.forbedret = tekst; }
+                    } else {
+                        const tekst = `Løseren fandt ikke en bedre plan end programmet på ${svar.sekunder} s — det er beholdt.`;
+                        tilstand.forslag = { tekst, ikkePlaceret: [], kilde: 'loeser' };
+                        if (kp) kp.forbedret = tekst;
+                    }
+                    render();
+                    return;
+                }
                 tilstand.forslag = { tekst: `Løseren fandt en plan med score ${opt.score} på ${svar.sekunder} s (${harProgram ? 'dit program' : 'hurtigt forslag'}: ${sammenlign.score}; lavere er bedre).${bedre ? '' : ' Den er ikke bedre end din — dit program står først.'} Bladr med ◀ ▶ og vælg "Brug dette".`, ikkePlaceret: [] };
                 tilstand.alternativer = { liste, index: 0, foer };
                 planHandlers.visAlternativ();
@@ -543,6 +586,9 @@ const planHandlers = {
                 visKampprogram(r, { foer: udgangspunkt, valg: r.valg, note: `Løseren kunne bevise, at der ikke findes en plan, der overholder alle de hårde regler. Årsag: ${diag.tekst}` });
                 tilstand.forslag.handlinger = diag.handlinger;
                 tilstand.kampprogram.handlinger = diag.handlinger;
+                if (svar.elastisk?.tider) {
+                    tilstand.kampprogram.elastisk = { plan: planFraSvar(udgangspunkt, svar.elastisk), tekster: brudTekster(svar.elastisk.brud, udgangspunkt) };
+                }
                 render();
             } else {
                 tilstand.forslag = { tekst: `${svar.besked || 'Løseren fandt ingen plan inden for tiden.'} Prøv med længere tid, eller brug "Lav forslag".`, ikkePlaceret: [] };

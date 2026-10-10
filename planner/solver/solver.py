@@ -30,11 +30,19 @@ MAX_BYTES = int(os.environ.get("SOLVER_MAX_BYTES", str(5 * 1024 * 1024)))
 MAX_KAMPE = int(os.environ.get("SOLVER_MAX_KAMPE", "2000"))
 ARBEJDERE = int(os.environ.get("SOLVER_ARBEJDERE", "2"))
 SAMTIDIGE = threading.Semaphore(int(os.environ.get("SOLVER_SAMTIDIGE", "1")))
+# Elastisk løsning (ingen lovlig plan): pris pr. brud — pr. kamp, pr. minut eller pr. ekstra kamp/dag. Billigst først:
+# pause (pr. minut), max varighed (pr. minut), tidsrum, single/double samtidig, tidsvindue, max kampe, senior, dage, max dage.
+ELASTISK_PRIS = {"pause": 0.2, "haltid": 0.1, "tidsrum": 1, "antiSamtidighed": 1, "tidsvindue": 3, "maxKampe": 5, "senior": 5, "dage": 10, "maxDage": 20}
+ELASTISK_SKALA = 10 ** 7  # et brud til pris 1 vejer mere end alle bløde ønsker tilsammen
+ELASTISK_SEKUNDER = float(os.environ.get("SOLVER_ELASTISK_SEKUNDER", "30"))  # tid til planen med færrest brud
 RO_SEKUNDER = float(os.environ.get("SOLVER_RO_SEKUNDER", "15"))  # stop efter så længe uden en bedre plan (0 = aldrig)
 SKALA = 6000  # vægte ganges op til heltal pr. minut (vægt 1 pr. time = 100 pr. minut); tidlig-start-trækket er 1 pr. minut
 
 
-def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, stop: threading.Event | None = None, foerste: bool = False) -> dict:
+def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, stop: threading.Event | None = None, foerste: bool = False, elastisk: bool = False) -> dict:
+    """elastisk=True: planen med færrest mulige regelbrud (når der ingen lovlig plan er). De hårde regler må brydes,
+    men hvert brud koster (ELASTISK_PRIS) langt mere end alle bløde ønsker tilsammen. Banerne og rækkefølgen (en
+    kamp efter dem, den bygger på) brydes aldrig. Svaret har "brud": hvilke regler planen bryder, og hvor meget."""
     t0 = time.time()
     slot = int(problem["slotMin"])
     kampe = problem["kampe"]
@@ -43,12 +51,50 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, st
         return {"status": "OPTIMAL", "tider": {}, "sekunder": 0.0, "maal": 0, "graense": 0}
     if n > MAX_KAMPE:
         return {"status": "FOR_STORT", "besked": f"Højst {MAX_KAMPE} kampe"}
+
+    # Elastisk: kampene må også ligge uden for rækkens tidsrum, årgangens tidsvindue eller rækkens dage (klientens
+    # "elastisk": tiderne pr. række pr. slags brud). Låste kampe (én tilladt tid) flyttes aldrig.
+    base = [set(k["tilladte"]) for k in kampe]
+    ekstra = [dict() for _ in kampe]  # kamp → {tid: regel}
+    if elastisk:
+        pr_raekke = {e["raekke"]: e for e in problem.get("elastisk", [])}
+        for i, k in enumerate(kampe):
+            e = pr_raekke.get(k["raekke"])
+            if not e or len(base[i]) == 1:
+                continue
+            for regel in ("tidsrum", "tidsvindue", "dage"):
+                for t in e.get(regel, []):
+                    if t not in base[i] and t not in ekstra[i]:
+                        ekstra[i][t] = regel
+        kampe = [({**k, "tilladte": sorted(base[i] | set(ekstra[i]))} if ekstra[i] else k) for i, k in enumerate(kampe)]
     for k in kampe:
         if not k["tilladte"]:
             return {"status": "INFEASIBLE", "besked": f"Kampen {k['id']} har ingen tilladte tider (tjek rækkens dage, tidsrum og tidsvindue).", "tider": {}, "sekunder": 0.0}
 
     m = cp_model.CpModel()
     T = [m.NewIntVarFromDomain(cp_model.Domain.FromValues(sorted(set(k["tilladte"]))), f"T{i}") for i, k in enumerate(kampe)]
+    # Regelbrud (kun elastisk): (pris, variabel, beskrivelse) — beskrivelsen bliver til "brud" i svaret
+    brud = []
+    def bryd(pris, var, **info):
+        brud.append((pris, var, info))
+    ude_for = {}  # kamp → bool: ligger uden for sine normale tider (rækker med egne baner spiller så på de fælles)
+    for i, ek in enumerate(ekstra):
+        if not ek:
+            continue
+        ude = []
+        for regel in ("tidsrum", "tidsvindue", "dage"):
+            tider = sorted(t for t, r in ek.items() if r == regel)
+            if not tider:
+                continue
+            b = m.NewBoolVar(f"ude_{regel}_{i}")
+            resten = sorted(set(kampe[i]["tilladte"]) - set(tider))
+            m.AddLinearExpressionInDomain(T[i], cp_model.Domain.FromValues(tider)).OnlyEnforceIf(b)
+            m.AddLinearExpressionInDomain(T[i], cp_model.Domain.FromValues(resten)).OnlyEnforceIf(b.Not())
+            bryd(ELASTISK_PRIS[regel], b, regel=regel, kamp=kampe[i]["id"], raekke=kampe[i]["raekke"])
+            ude.append(b)
+        u = m.NewBoolVar(f"ude_{i}")
+        m.AddMaxEquality(u, ude)
+        ude_for[i] = u
     enkeltDag = [len({t // DAG for t in k["tilladte"]}) == 1 for k in kampe]
     dagFor = [k["tilladte"][0] // DAG for k in kampe]
 
@@ -65,17 +111,25 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, st
 
     # ── Kapacitet pr. pulje: cumulative med faste "blokke" der fylder det, banerne ikke rækker til ──
     # Hel bane = 2, halv bane = 1, kapacitet = 2 x baner. Ækvivalent med hele + ceil(halve/2) <= baner.
+    # En kamp fra en række med egne baner, der (elastisk) ligger uden for rækkens tider, spiller på de fælles baner
+    pr_pulje = {}  # pulje → [(interval, krav, mulige tider)]
+    for i, k in enumerate(kampe):
+        krav_i = 1 if k["halv"] else 2
+        if i in ude_for and k["pulje"] != "faelles":
+            u = ude_for[i]
+            pr_pulje.setdefault(k["pulje"], []).append((m.NewOptionalFixedSizeIntervalVar(T[i], slot, u.Not(), f"I{k['pulje']}_{i}"), krav_i, base[i]))
+            pr_pulje.setdefault("faelles", []).append((m.NewOptionalFixedSizeIntervalVar(T[i], slot, u, f"Ifaelles_{i}"), krav_i, set(ekstra[i])))
+        else:
+            pr_pulje.setdefault(k["pulje"], []).append((m.NewFixedSizeIntervalVar(T[i], slot, f"I{k['pulje']}_{i}"), krav_i, set(k["tilladte"])))
     for pulje, slots in problem["kapacitet"].items():
-        idx = [i for i, k in enumerate(kampe) if k["pulje"] == pulje]
-        if not idx:
+        led_p = pr_pulje.get(pulje)
+        if not led_p:
             continue
         maxkap = max((s["baner"] for s in slots), default=0)
         tider_i_pulje = {s["t"]: s["baner"] for s in slots}
-        intervaller, krav = [], []
-        for i in idx:
-            intervaller.append(m.NewFixedSizeIntervalVar(T[i], slot, f"I{pulje}_{i}"))
-            krav.append(1 if kampe[i]["halv"] else 2)
-        brugte = {t for i in idx for t in kampe[i]["tilladte"]}
+        intervaller = [iv for iv, _, _ in led_p]
+        krav = [kr for _, kr, _ in led_p]
+        brugte = {t for _, _, tider in led_p for t in tider}
         for t in sorted(brugte):
             baner = tider_i_pulje.get(t, 0)
             if baner < maxkap:
@@ -92,16 +146,27 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, st
         ta, tb = kampe[a]["tilladte"], kampe[b]["tilladte"]
         if min(tb) - max(ta) >= gab or min(ta) - max(tb) >= gab:
             continue  # kan aldrig komme for tæt på hinanden
+        # Elastisk: pausen må blive kortere (pris pr. minut), men aldrig så kort, at spilleren står i to kampe på én gang
+        afstand = gab
+        if elastisk and gab > slot:
+            mangler = m.NewIntVar(0, gab - slot, f"pause{a}_{b}")
+            afstand = gab - mangler
+            bryd(ELASTISK_PRIS["pause"], mangler, regel="pause", kampe=[kampe[a]["id"], kampe[b]["id"]], raekke=kampe[a]["raekke"])
         if ordnet:
-            m.Add(T[b] >= T[a] + gab)
+            m.Add(T[b] >= T[a] + afstand)
         else:
             foerst = m.NewBoolVar(f"o{a}_{b}")
-            m.Add(T[b] >= T[a] + gab).OnlyEnforceIf(foerst)
-            m.Add(T[a] >= T[b] + gab).OnlyEnforceIf(foerst.Not())
+            m.Add(T[b] >= T[a] + afstand).OnlyEnforceIf(foerst)
+            m.Add(T[a] >= T[b] + afstand).OnlyEnforceIf(foerst.Not())
 
     for a, b in problem.get("ikkeSamtidig", []):
         if set(kampe[a]["tilladte"]) & set(kampe[b]["tilladte"]):
-            m.Add(T[a] != T[b])
+            if elastisk:
+                samtidig = m.NewBoolVar("")
+                m.Add(T[a] != T[b]).OnlyEnforceIf(samtidig.Not())
+                bryd(ELASTISK_PRIS["antiSamtidighed"], samtidig, regel="antiSamtidighed", kampe=[kampe[a]["id"], kampe[b]["id"]], raekke=kampe[a]["raekke"])
+            else:
+                m.Add(T[a] != T[b])
 
     # ── Spænd pr. gruppe af kampe pr. dag (haltid): bruges både til max haltid (hårdt) og ventetid (blødt) ──
     spaend_cache = {}
@@ -159,12 +224,23 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, st
             paa_cache[(i, d)] = b
         return paa_cache[(i, d)]
 
+    def begraens(udtryk, maks, regel, maksOver=DAG, betingelse=None, **info):
+        """udtryk <= maks — hårdt, eller (elastisk) med en overskridelse, der koster ELASTISK_PRIS[regel] pr. enhed."""
+        if elastisk:
+            over = m.NewIntVar(0, maksOver, "")
+            c = m.Add(udtryk <= maks + over)
+            bryd(ELASTISK_PRIS[regel], over, regel=regel, **info)
+        else:
+            c = m.Add(udtryk <= maks)
+        if betingelse is not None:
+            c.OnlyEnforceIf(betingelse)
+
     for h in problem.get("haltid", []):
         gruppe = h["kampe"]
         udloesere = set(h.get("udloesere") or gruppe)
         if udloesere >= set(gruppe):
-            for s in spaend(gruppe):
-                m.Add(s + slot <= int(h["graense"]))
+            for s_ in spaend(gruppe):
+                begraens(s_ + slot, int(h["graense"]), "haltid", raekke=h.get("raekke", ""), graense=int(h["graense"]))
             continue
         # Grænsen gælder kun de dage, hvor mindst én udløser (kamp i rækken med grænsen) ligger
         for d in sorted({t // DAG for i in gruppe for t in kampe[i]["tilladte"]}):
@@ -182,11 +258,11 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, st
                     m.Add(senest >= T[i]).OnlyEnforceIf(paa_dag(i, d))
                     m.Add(tidligst <= T[i]).OnlyEnforceIf(paa_dag(i, d))
             if any(enkeltDag[i] for i in udl):
-                m.Add(senest - tidligst + slot <= int(h["graense"]))
+                begraens(senest - tidligst + slot, int(h["graense"]), "haltid", raekke=h.get("raekke", ""), graense=int(h["graense"]))
             else:
                 udloest = m.NewBoolVar("")
                 m.AddMaxEquality(udloest, [paa_dag(i, d) for i in udl])
-                m.Add(senest - tidligst + slot <= int(h["graense"])).OnlyEnforceIf(udloest)
+                begraens(senest - tidligst + slot, int(h["graense"]), "haltid", betingelse=udloest, raekke=h.get("raekke", ""), graense=int(h["graense"]))
 
     # ── Max dage pr. række ──
     for r in problem.get("maxDage", []):
@@ -204,7 +280,7 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, st
                     m.Add(dag_var(i) == d).OnlyEnforceIf(paa)
                     m.Add(dag_var(i) != d).OnlyEnforceIf(paa.Not())
                     m.AddImplication(paa, b)
-        m.Add(sum(brugt) <= int(r["max"]))
+        begraens(sum(brugt), int(r["max"]), "maxDage", maksOver=len(dage), raekke=r.get("raekke", ""), graense=int(r["max"]))
 
     # ── Max kampe pr. spiller pr. dag (kun spillere med flere kampe end grænsen) ──
     for ids in problem.get("mangeKampe", []):
@@ -220,18 +296,26 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, st
                     m.Add(dag_var(i) == d).OnlyEnforceIf(paa)
                     m.Add(dag_var(i) != d).OnlyEnforceIf(paa.Not())
                     led.append(paa)
-            m.Add(sum(led) <= int(problem["maxKampePrDag"]))
+            begraens(sum(led), int(problem["maxKampePrDag"]), "maxKampe", maksOver=len(ids), kampe=[kampe[i]["id"] for i in ids], graense=int(problem["maxKampePrDag"]))
 
     # ── Grupper med egen grænse pr. dag (senior E/M: max kampe pr. kategori pr. spiller pr. dag) ──
     for g in problem.get("maxPrGruppe", []):
         ids = g["kampe"]
         for d in sorted({t // DAG for i in ids for t in kampe[i]["tilladte"]}):
             led = [1 if dagFor[i] == d else 0 for i in ids if enkeltDag[i]] + [paa_dag(i, d) for i in ids if not enkeltDag[i]]
-            m.Add(sum(led) <= int(g["max"]))
+            begraens(sum(led), int(g["max"]), "senior", maksOver=len(ids), kampe=[kampe[i]["id"] for i in ids], graense=int(g["max"]))
 
     # ── Par, der ikke må ligge samme dag (senior E/M: finalen ikke samme dag som en kvartfinale) ──
     for a, b in problem.get("ikkeSammeDag", []):
-        if enkeltDag[a] and enkeltDag[b]:
+        if elastisk:
+            samme = m.NewBoolVar("")
+            if enkeltDag[a] and enkeltDag[b]:
+                if dagFor[a] == dagFor[b]:
+                    m.Add(samme == 1)
+            else:
+                m.Add(dag_var(a) != dag_var(b)).OnlyEnforceIf(samme.Not())
+            bryd(ELASTISK_PRIS["senior"], samme, regel="senior", kampe=[kampe[a]["id"], kampe[b]["id"]])
+        elif enkeltDag[a] and enkeltDag[b]:
             if dagFor[a] == dagFor[b]:
                 umulig = m.NewBoolVar("")  # begge kampe kan kun ligge på samme dag → ingen løsning
                 m.Add(umulig == 1)
@@ -351,6 +435,8 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, st
                     led.append(ude * koef)
     # Lille træk mod tidlig start, så planen pakkes fra morgenen og ligestillede løsninger bliver entydige
     led.append(sum(T))
+    for pris, var, _ in brud:
+        led.append(var * max(1, int(round(pris * ELASTISK_SKALA))))
     m.Minimize(sum(led))
 
     for i, k in enumerate(kampe):
@@ -416,6 +502,9 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, st
         svar["tider"] = {k["id"]: int(solver.Value(T[i])) for i, k in enumerate(kampe)}
         svar["maal"] = solver.ObjectiveValue()
         svar["graense"] = solver.BestObjectiveBound()
+        if elastisk:
+            # Kun de brud, planen faktisk har: { regel, mængde (kampe/minutter/dage), raekke?, kamp?, kampe?, graense? }
+            svar["brud"] = [{**info, "maengde": int(solver.Value(var))} for _, var, info in brud if solver.Value(var) > 0]
     elif status == cp_model.INFEASIBLE:
         svar["besked"] = "Der findes ingen plan, der overholder alle de hårde regler med de nuværende dage, baner og tidsrum."
     else:
@@ -639,6 +728,12 @@ def koer(problem: dict, sekunder: float, job: Job):
     """Løser problemet og returnerer (HTTP-kode, svar). Fejl i modellen må ikke vælte tjenesten."""
     try:
         svar = loes_opdelt(problem, sekunder, stop=job.stop)
+        if svar["status"] == "INFEASIBLE" and not job.stop.is_set() and problem.get("elastiskPlan"):
+            # Ingen lovlig plan: planen med færrest regelbrud — og hvilke regler den bryder (Jesper 2026-10-10)
+            job.fase = "elastisk"
+            el = loes(problem, max(10.0, min(float(sekunder), ELASTISK_SEKUNDER)), stop=job.stop, elastisk=True)
+            if el["status"] in ("OPTIMAL", "FEASIBLE"):
+                svar["elastisk"] = {"tider": el["tider"], "brud": el.get("brud", []), "status": el["status"], "sekunder": el["sekunder"]}
         if svar["status"] == "INFEASIBLE" and not job.stop.is_set() and problem.get("diagnose", True):
             job.fase = "diagnose"
             svar["diagnose"] = diagnose(problem, job.stop)

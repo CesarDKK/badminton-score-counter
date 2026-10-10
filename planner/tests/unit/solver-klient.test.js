@@ -228,3 +228,31 @@ describe('solver-klient: diagnose når der ingen lovlig plan findes', () => {
         assert.match(diagnoseTekst(undefined).tekst, /kunne ikke pege/);
     });
 });
+
+describe('solver-klient: planen med færrest regelbrud (ingen lovlig plan)', async () => {
+    const { brudTekster } = await import('../../src/solver-klient.js');
+    test('bygProblem sender rækkernes tider uden for tidsrum, tidsvindue og dage, og grænsen for lange huller', () => {
+        const p = opdaterRaekke(projekt(), projekt().raekker[0].id, { tidligst: '10:00', senest: '12:00' });
+        const prob = bygProblem(p);
+        assert.equal(prob.elastiskPlan, true);
+        assert.equal(prob.maxVent, p.opsaetning.maxVentetidMin ?? 90);
+        const e = prob.elastisk.find((x) => x.raekke === p.raekker[0].id);
+        assert.ok(e && e.tidsrum.length > 0, 'tider uden for rækkens tidsrum');
+        // Ingen elastisk tid ligger inden for rækkens normale tider
+        const normale = new Set(prob.kampe.filter((k) => k.raekke === e.raekke).flatMap((k) => k.tilladte));
+        assert.ok([...e.tidsrum, ...e.tidsvindue].every((t) => !normale.has(t)));
+    });
+    test('bruddene som læsbare linjer, samlet pr. regel og række', () => {
+        const p = { raekker: [{ id: 'U09 D', tidligst: '12:00', senest: '17:00' }, { id: 'U11 D' }] };
+        const t = brudTekster([
+            { regel: 'tidsrum', raekke: 'U09 D', kamp: 'a', maengde: 1 }, { regel: 'tidsrum', raekke: 'U09 D', kamp: 'b', maengde: 1 },
+            { regel: 'pause', raekke: 'U11 D', kampe: ['c', 'd'], maengde: 5 },
+            { regel: 'haltid', raekke: 'U11 D', graense: 360, maengde: 30 },
+        ], p);
+        assert.deepEqual(t, [
+            '2 kampe i U09 D ligger uden for rækkens tidsrum (12:00–17:00)',
+            '1 gang for kort pause i U11 D — i alt 5 min for lidt',
+            'U11 D: singlerne varer 30 min længere end grænsen på 360 min',
+        ]);
+    });
+});

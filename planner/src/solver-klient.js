@@ -96,6 +96,23 @@ export function bygProblem(projekt, hintPlan = null) {
         if ((r.dage || []).length < dage.length) alternativer.push({ regel: 'dage', raekke: r.id, kampe: egne, tilladte: tider(dage.map((d) => d.dato), true) });
     }
 
+    // Til planen med færrest regelbrud (når der ingen lovlig plan er): de tider, hver række kunne bruge, hvis den
+    // brød sit eget tidsrum, årgangens tidsvindue eller sine dage. Løseren prissætter hvert brud (solver.py).
+    const elastisk = [];
+    for (const r of projekt.raekker) {
+        const ud = { raekke: r.id, tidsrum: [], tidsvindue: [], dage: [] };
+        for (const dag of dage) {
+            const egen = (r.dage || []).includes(dag.dato);
+            const av = M.aargangsVindue(r, dag), rv = M.raekkeVindue(r, dag);
+            for (const slot of slotsForDag(dag, slotMin)) {
+                const m = minutter(slot), t = dagIndex.get(dag.dato) * DAG_MIN + m;
+                if (egen) { if (!M.iVindue(rv, m)) (M.iVindue(av, m) ? ud.tidsrum : ud.tidsvindue).push(t); }
+                else if (M.iVindue(av, m)) ud.dage.push(t);
+            }
+        }
+        if (ud.tidsrum.length || ud.tidsvindue.length || ud.dage.length) elastisk.push(ud);
+    }
+
     // Afhængigheder: efterfølger skal starte mindst ét slot senere
     const foer = [];
     for (const k of projekt.kampe) for (const dep of k.afhaengerAf) if (indeks.has(k.id) && indeks.has(dep)) foer.push([indeks.get(dep), indeks.get(k.id), slotMin]);
@@ -226,6 +243,7 @@ export function bygProblem(projekt, hintPlan = null) {
         kapacitet, kampe, foer, konflikter, ikkeSamtidig, haltid, spillerGrupper, traek, puljerunder, maxDage,
         maxKampePrDag: maxPrDag, mangeKampe, maxPrGruppe, ikkeSammeDag, alternativer,
         maxVent: projekt.opsaetning.maxVentetidMin ?? 90, // til "lange huller" (kriteriet langeHuller)
+        elastisk, elastiskPlan: true, // ingen lovlig plan → løseren laver planen med færrest regelbrud
         vaegte: vaegteFor(projekt),
     };
 }
@@ -246,6 +264,39 @@ export function planFraSvar(projekt, svar) {
  * handlinger, brugeren kan vælge: { tekst, handlinger: [{ tekst, raekke, aendring }] }.
  * aendring er felter til opdaterRaekke (fx { maxHaltidMin: 300 }).
  */
+/**
+ * Løserens brud i planen med færrest regelbrud (solver.py, elastisk) som læsbare linjer, samlet pr. regel og række.
+ * brud: [{ regel, maengde, raekke?, kamp?, kampe?, graense? }] — mængde er kampe, minutter, dage eller ekstra kampe.
+ */
+export function brudTekster(brud, projekt) {
+    const r = (id) => projekt.raekker.find((x) => x.id === id);
+    const prRegel = new Map();
+    for (const b of brud || []) {
+        const n = `${b.regel}|${b.raekke || ''}`;
+        if (!prRegel.has(n)) prRegel.set(n, []);
+        prRegel.get(n).push(b);
+    }
+    const ud = [];
+    const kampe = (n) => `${n} ${n === 1 ? 'kamp' : 'kampe'}`;
+    for (const [n, liste] of prRegel) {
+        const [regel, raekke] = n.split('|');
+        const antal = liste.length;
+        const sum = liste.reduce((s, b) => s + (b.maengde || 0), 0);
+        const rk = r(raekke);
+        if (regel === 'tidsrum') ud.push(`${kampe(antal)} i ${raekke} ligger uden for rækkens tidsrum (${rk?.tidligst || '–'}–${rk?.senest || '–'})`);
+        else if (regel === 'tidsvindue') ud.push(`${kampe(antal)} i ${raekke} ligger uden for årgangens tidsvindue (kræver dispensation)`);
+        else if (regel === 'dage') ud.push(`${kampe(antal)} i ${raekke} ligger på en dag, rækken ikke spiller (kræver dispensation)`);
+        else if (regel === 'pause') ud.push(`${antal} ${antal === 1 ? 'gang' : 'gange'} for kort pause i ${raekke} — i alt ${sum} min for lidt`);
+        else if (regel === 'haltid') ud.push(`${raekke}: singlerne varer ${Math.max(...liste.map((b) => b.maengde))} min længere end grænsen på ${liste[0].graense} min`);
+        else if (regel === 'maxDage') ud.push(`${raekke} spiller ${sum} ${sum === 1 ? 'dag' : 'dage'} mere end tilladt (kræver dispensation)`);
+        else if (regel === 'maxKampe') ud.push(`${antal} ${antal === 1 ? 'spiller får' : 'spillere får'} flere kampe på en dag end de ${liste[0].graense} tilladte (kræver dispensation)`);
+        else if (regel === 'antiSamtidighed') ud.push(`${antal} ${antal === 1 ? 'gang' : 'gange'} single og double samtidig i ${raekke}`);
+        else if (regel === 'senior') ud.push(`${antal} ${antal === 1 ? 'brud' : 'brud'} på seniorreglerne (kampe pr. kategori pr. dag eller finalerunder samme dag)`);
+        else ud.push(`${regel}: ${antal}`);
+    }
+    return ud;
+}
+
 export function diagnoseTekst(diagnose, alleDage = []) {
     const linjer = [], handlinger = [];
     for (const d of diagnose || []) {
