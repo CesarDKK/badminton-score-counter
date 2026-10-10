@@ -4,6 +4,10 @@
 //   python solver/kontrakt.py <mappe>               → løser hvert problem, skriver svar-*.json
 //   node tests/kontrakt/kontrakt.mjs tjek <mappe>   → lægger svaret ind og kører tjekPlan: 0 fejl kræves
 //
+// Og omvendt (Fable-gennemgangen 2026-10-10, K1): et program, Tjek godkender, skal løseren også godkende. Planlæggerens
+// program låses helt (problem-omvendt-*.json), og løseren skal svare, at det er lovligt. Mindst ét af dem bruger
+// "overløb" (en række med egne baner låner en fri fælles bane), som løseren tidligere afviste.
+//
 // Projekterne er syntetiske (ingen persondata) og dækker det, de to sider skal være enige om:
 // Swiss Ladder, pulje + cup, doubler med spillere fra singlerne, halve baner med reserverede baner og
 // tidsrum, max haltid, én-dags-rækker over to dage, låste kampe, "før skoledag" og streng kampvarighed.
@@ -13,6 +17,8 @@ import { nytProjekt, saetForm, opdaterDag, opdaterRaekke, opdaterOpsaetning, fly
 import { lavForslag } from '../../src/scheduler.js';
 import { bygProblem, planFraSvar } from '../../src/solver-klient.js';
 import { tjekPlan } from '../../src/rules.js';
+import { lavRegelmodel } from '../../src/regelmodel.js';
+import { puljeKapacitet, banebrugISlot } from '../../src/kapacitet.js';
 
 function model(raekker, dage) {
     const spillere = {}, kategorier = [], tilmeldinger = {};
@@ -83,14 +89,53 @@ export function projekter() {
     };
 }
 
+/** Antal slots, hvor en række med egne baner låner fælles baner (banebrugISlot). */
+function antalOverloeb(p) {
+    const { dagMap, kat } = lavRegelmodel(p);
+    const prSlot = new Map();
+    for (const k of p.kampe) {
+        const t = p.plan[k.id];
+        if (!t) continue;
+        const n = `${t.dag}|${t.slot}`;
+        if (!prSlot.has(n)) prSlot.set(n, []);
+        prSlot.get(n).push({ raekkeId: kat(k)?.raekke, halv: !!kat(k)?.halvBane });
+    }
+    let antal = 0;
+    for (const [n, kampe] of prSlot) {
+        const [dato, slot] = n.split('|');
+        if (banebrugISlot(kampe, puljeKapacitet(dagMap.get(dato), slot, p.raekker)).overloeb.size) antal += 1;
+    }
+    return antal;
+}
+
 const [, , kommando, mappe = 'tests/kontrakt/_ud'] = process.argv;
 if (kommando === 'byg') {
     fs.mkdirSync(mappe, { recursive: true });
+    const omvendte = [];
     for (const [navn, p] of Object.entries(projekter())) {
         const g = lavForslag(p);
         fs.writeFileSync(path.join(mappe, `problem-${navn}.json`), JSON.stringify({ problem: bygProblem(p, g.brud.length ? null : g.plan), sekunder: 8 }));
-        console.log(`${navn}: ${p.kampe.length} kampe · grådig ${g.brud.length} regelbrud`);
+        // Omvendt: planlæggerens program, låst helt, når Tjek godkender det
+        const lp = { ...p, plan: { ...p.plan, ...g.plan }, laast: p.kampe.map((k) => k.id) };
+        const lovligt = !g.brud.length && p.kampe.every((k) => lp.plan[k.id]) && tjekPlan(lp).antal.fejl === 0;
+        const overloeb = lovligt ? antalOverloeb(lp) : 0;
+        if (lovligt) {
+            fs.writeFileSync(path.join(mappe, `problem-omvendt-${navn}.json`), JSON.stringify({ problem: bygProblem(lp), sekunder: 8 }));
+            omvendte.push({ navn, overloeb });
+        }
+        console.log(`${navn}: ${p.kampe.length} kampe · grådig ${g.brud.length} regelbrud${lovligt ? ` · omvendt (${overloeb} slots med overløb)` : ''}`);
     }
+    // Overløb: grundprojektets program, men U9 har nu kun 1 reserveret bane — det, der lå på den anden, låner en fri
+    // fælles bane. Tjek godkender det; det skal løseren også (den afviste det før, K1).
+    const grund = projekter().grund;
+    const op = opdaterRaekke({ ...grund, plan: { ...grund.plan, ...lavForslag(grund).plan }, laast: grund.kampe.map((k) => k.id) }, 'U09 D', { reserveredeBaner: 1 });
+    const overloeb = antalOverloeb(op);
+    if (tjekPlan(op).antal.fejl === 0) {
+        fs.writeFileSync(path.join(mappe, 'problem-omvendt-overloeb.json'), JSON.stringify({ problem: bygProblem(op), sekunder: 8 }));
+        omvendte.push({ navn: 'overloeb', overloeb });
+    }
+    console.log(`overloeb: Tjek ${tjekPlan(op).antal.fejl} fejl · ${overloeb} slots med overløb`);
+    fs.writeFileSync(path.join(mappe, 'omvendt.json'), JSON.stringify(omvendte));
 } else if (kommando === 'tjek') {
     let fejl = 0;
     for (const [navn, p] of Object.entries(projekter())) {
@@ -104,8 +149,16 @@ if (kommando === 'byg') {
         console.log(`${ok ? 'OK  ' : 'FEJL'} ${navn}: ${svar.status} · ${p.kampe.length - mangler}/${p.kampe.length} kampe · Tjek ${t ? t.antal.fejl : '-'} fejl${laastFlyttet ? ` · ${laastFlyttet} låste kampe flyttet` : ''}`);
         if (!ok) { fejl += 1; for (const x of (t?.problemer || []).filter((y) => y.alvor === 'fejl').slice(0, 5)) console.log(`      ${x.type}: ${x.tekst}`); if (svar.diagnose) console.log('      diagnose:', JSON.stringify(svar.diagnose)); }
     }
-    if (fejl) { console.error(`${fejl} kontraktbrud: løserens plan og Tjek er uenige`); process.exit(1); }
-    console.log('Kontrakten holder: løserens planer har 0 fejl i Tjek.');
+    const omvendte = JSON.parse(fs.readFileSync(path.join(mappe, 'omvendt.json'), 'utf8'));
+    for (const { navn, overloeb } of omvendte) {
+        const svar = JSON.parse(fs.readFileSync(path.join(mappe, `svar-omvendt-${navn}.json`), 'utf8'));
+        const ok = svar.status === 'OPTIMAL' || svar.status === 'FEASIBLE';
+        console.log(`${ok ? 'OK  ' : 'FEJL'} omvendt ${navn}: Tjek godkender programmet${overloeb ? ` (${overloeb} slots med overløb)` : ''} · løseren ${svar.status}`);
+        if (!ok) { fejl += 1; if (svar.diagnose) console.log('      diagnose:', JSON.stringify(svar.diagnose)); }
+    }
+    if (!omvendte.some((x) => x.overloeb)) { fejl += 1; console.log('FEJL omvendt: intet program bruger overløb — testen dækker ikke længere K1'); }
+    if (fejl) { console.error(`${fejl} kontraktbrud: løseren og Tjek er uenige`); process.exit(1); }
+    console.log('Kontrakten holder begge veje: løserens planer har 0 fejl i Tjek, og løseren godkender de programmer, Tjek godkender.');
 } else if (kommando) {
     console.error('Brug: kontrakt.mjs byg|tjek <mappe>'); process.exit(2);
 }

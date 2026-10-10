@@ -8,6 +8,7 @@ import { alvorForKamp } from '../rules.js';
 import { bedoemPlan, loesningsforslag } from '../scheduler.js';
 import { scorePlan } from '../kriterier.js';
 import { renderTjek } from './tjek.js';
+import { panelGaelder } from '../kampprogram.js';
 
 /** Panelet med forslag, der får kabalen til at gå op (nedskaering.js) — valget træffes på oplyst grundlag. */
 function nedskaeringPanel(ned) {
@@ -36,16 +37,18 @@ const kamplaengdeTekst = (min, udenPause) => `${min} min, ${udenPause ? 'pausen 
  * Resultatet af "Lav kampprogram": går det op, hvad blev valgt for brugeren, og — hvis ikke — ét beslutningskort
  * pr. problem med løsninger, der allerede er afprøvet (kampprogram.js). Det anbefalede valg står først.
  */
-function kampprogramPanel(kp, aabneKort) {
+export function kampprogramPanel(kp, aabneKort, projekt) {
     const v = kp.valg;
     const gaarOp = kp.beslutninger.brud === 0;
+    const rettet = kp.projekt !== projekt; // flyttet eller låst siden (panelGaelder)
     const beholdt = kp.beslutninger.kort.length - aabneKort.length;
-    let valgTekst;
-    if (v.grund === 'laast') valgTekst = `Kamplængden er ikke ændret (${kamplaengdeTekst(v.minutter, v.udenPause)}), fordi der er låste kampe.`;
+    let valgTekst = '';
+    if (!v) valgTekst = ''; // brugerens eget program: intet er valgt for dem
+    else if (v.grund === 'laast') valgTekst = `Kamplængden er ikke ændret (${kamplaengdeTekst(v.minutter, v.udenPause)}), fordi der er låste kampe.`;
     else if (v.grund === 'fast' || v.grund === 'tidligere') valgTekst = `Kamplængde: ${kamplaengdeTekst(v.minutter, v.udenPause)}.`;
     else if (v.aendret) valgTekst = `Valgt for dig ud fra sammenligningen af kamplængder: <b>${esc(kamplaengdeTekst(v.minutter, v.udenPause))}</b>. Husk at sætte den samme kamplængde i TP.`;
     else valgTekst = `Kamplængden passer allerede bedst: ${kamplaengdeTekst(v.minutter, v.udenPause)}.`;
-    const tilbage = v.aendret && v.grund !== 'tidligere'
+    const tilbage = v?.aendret && v.grund !== 'tidligere'
         ? ` <button class="knap knap--sekundaer knap--lille" data-handling="kp-tidligere">Brug ${esc(kamplaengdeTekst(v.foer.slotMin, udenPauseI(v.foer.pauseMin)))} som før</button>` : '';
     const kort = aabneKort.map((k) => {
         const i = kp.beslutninger.kort.indexOf(k);
@@ -67,19 +70,21 @@ function kampprogramPanel(kp, aabneKort) {
     }).join('');
     // Løseren har bevist, at der ingen lovlig plan er (kp.note), selv om planlæggeren ikke fandt noget at rette
     const loeserNej = !!kp.note && gaarOp;
-    const titel = loeserNej ? 'Løseren fandt ingen plan, der overholder alle de hårde regler'
+    const titel = kp.egetProgram ? 'Løseren fandt ingen plan, der overholder alle de hårde regler — dit program er ikke ændret'
+        : loeserNej ? 'Løseren fandt ingen plan, der overholder alle de hårde regler'
         : gaarOp ? 'Kampprogrammet går op' : aabneKort.length
             ? `Kampprogrammet går ikke helt op — ${aabneKort.length} ting at tage stilling til`
             : `Kampprogrammet er lavet med ${kp.beslutninger.brud} regelbrud, som du har valgt at beholde`;
     return `
-    <section class="kampprogram ${loeserNej || aabneKort.length ? 'er-valg' : gaarOp ? 'er-ok' : ''}">
+    <section class="kampprogram ${kp.egetProgram || loeserNej || aabneKort.length ? 'er-valg' : gaarOp ? 'er-ok' : ''}">
         <div class="kampprogram-hoved">
-            <h3>${gaarOp && !loeserNej ? '<span class="er-groen">✓</span> ' : ''}${esc(titel)}</h3>
-            <button class="knap knap--sekundaer knap--lille" data-handling="kp-fortryd" title="Går tilbage til planen og opsætningen fra før">Fortryd</button>
+            <h3>${gaarOp && !loeserNej && !kp.egetProgram ? '<span class="er-groen">✓</span> ' : ''}${esc(titel)}</h3>
+            ${kp.egetProgram ? '' : '<button class="knap knap--sekundaer knap--lille" data-handling="kp-fortryd" title="Går tilbage til planen og opsætningen fra før">Fortryd</button>'}
         </div>
         ${kp.note ? `<p class="kampprogram-valg">${esc(kp.note)}</p>` : ''}
         ${kp.handlinger?.length ? `<p class="diagnose-knapper">${kp.handlinger.map((x, i) => `<button class="knap knap--sekundaer knap--lille" data-handling="diagnose" data-index="${i}">${esc(x.tekst)}</button>`).join(' ')}</p>` : ''}
-        <p class="kampprogram-valg">${valgTekst}${tilbage}</p>
+        ${valgTekst ? `<p class="kampprogram-valg">${valgTekst}${tilbage}</p>` : ''}
+        ${rettet ? '<p class="daempet">Du har flyttet eller låst kampe, siden programmet blev lavet — Tjek viser, hvordan det står nu.</p>' : ''}
         ${kp.forbedret ? `<p class="kampprogram-valg"><span class="er-groen">✓</span> ${esc(kp.forbedret)}</p>` : ''}
         ${kp.udfoert.length ? `<p class="daempet">Gjort undervejs: ${esc(kp.udfoert.join(' · '))}.</p>` : ''}
         ${kp.elastisk ? `<div class="beslutning elastisk">
@@ -274,7 +279,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
     const harPlan = placeret.size > 0;
     const problemer = tilstand.visning === 'problemer';
     // Panelet fra 'Lav kampprogram' vises for det projekt, det blev lavet til
-    const kp = tilstand.kampprogram?.projekt === projekt ? tilstand.kampprogram : null;
+    const kp = panelGaelder(tilstand.kampprogram, projekt) ? tilstand.kampprogram : null;
     const aabneKort = kp ? kp.beslutninger.kort.filter((k) => !kp.beholdt.includes(k.noegle)) : [];
     const travl = !!tilstand.arbejder || !!tilstand.optimerer;
     const anbefalLoeser = projekt.opsaetning.autoLoeser === false && harPlan && !travl && !tilstand.alternativer && !aabneKort.length && tilstand.forslag?.kilde !== 'loeser';
@@ -322,7 +327,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
     ${tilstand.arbejder ? `<p class="arbejder" role="status"><span class="spinner" aria-hidden="true"></span>${esc(tilstand.arbejder)}</p>` : ''}
     ${tilstand.optimerer ? `<p class="arbejder" role="status"><span class="spinner" aria-hidden="true"></span><span>${esc(loeserStatus)} <span data-optimer-ur></span></span>
         <button class="knap knap--sekundaer knap--lille" data-handling="stopOptimer" ${tilstand.optimerStopper ? 'disabled' : ''} title="Løseren stopper nu og afleverer den bedste plan, den har fundet indtil nu.">${tilstand.optimerStopper ? 'Stopper …' : 'Stop og brug det bedste'}</button></p>` : ''}
-    ${kp ? kampprogramPanel(kp, aabneKort) : ''}
+    ${kp ? kampprogramPanel(kp, aabneKort, projekt) : ''}
     <div class="status-linje">
         ${statusTal(`${placeret.size}/${projekt.kampe.length}`, 'kampe har tid', ikkePlacerede.length ? 'er-roed' : '')}
         ${statusTal(antalFejl, 'fejl', antalFejl ? 'er-roed' : 'er-ok')}

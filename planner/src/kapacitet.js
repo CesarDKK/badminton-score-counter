@@ -67,14 +67,18 @@ export function banebrugISlot(kampe, kapacitet) {
         const p = prPulje.get(pulje);
         if (k.halv) p.halve += 1; else p.hele += 1;
     }
+    // Tælles i halve baner (hel kamp = 2, halv = 1): to halve kampe kan dele en fælles bane, også når den ene er
+    // løbet over fra en række med egne baner. Samme regel som løseren (solver.py: cumulative med kapacitet 2 x baner).
     const overloeb = new Map();
-    let faellesBrugt = 0;
+    let faellesEnheder = 0;
     for (const [pulje, p] of prPulje) {
         p.brugt = p.hele + Math.ceil(p.halve / 2);
         p.baner = pulje === 'faelles' ? kapacitet.faelles : kapacitet.reserveret.get(pulje);
-        if (pulje === 'faelles') faellesBrugt += p.brugt;
-        else if (p.brugt > p.baner) { overloeb.set(pulje, p.brugt - p.baner); faellesBrugt += p.brugt - p.baner; }
+        const enheder = 2 * p.hele + p.halve;
+        if (pulje === 'faelles') faellesEnheder += enheder;
+        else if (enheder > 2 * p.baner) { overloeb.set(pulje, Math.ceil((enheder - 2 * p.baner) / 2)); faellesEnheder += enheder - 2 * p.baner; }
     }
+    const faellesBrugt = Math.ceil(faellesEnheder / 2);
     return { faellesBrugt, faellesBaner: kapacitet.faelles, overloeb, prPulje, forMange: faellesBrugt > kapacitet.faelles };
 }
 

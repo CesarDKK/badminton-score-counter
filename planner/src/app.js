@@ -8,7 +8,7 @@ import { optimer, stopLoeser, stopVedLukning, nytJobId, diagnoseTekst, aendretUn
 import { scorePlan } from './kriterier.js';
 import { alleNedskaeringer, anvendNedskaering, kapacitetsRegnskab, swissKandidater } from './nedskaering.js';
 import { sammenlignKamplaengder } from './kamplaengde.js';
-import { lavKampprogram as byggKampprogram, lavBeslutninger, anvendAendring } from './kampprogram.js';
+import { lavKampprogram as byggKampprogram, lavBeslutninger, anvendAendring, panelGaelder } from './kampprogram.js';
 import { reglementetsPause, INGEN_PAUSE } from './regler.js';
 import { renderOpsaetning, renderFil } from './ui/opsaetning.js';
 import { renderPlan } from './ui/plan.js';
@@ -544,7 +544,7 @@ const planHandlers = {
                 const liste = [opt, sammenlign].sort((x, y) => (x.brud.length - y.brud.length) || (x.score - y.score));
                 const bedre = opt.score < sammenlign.score;
                 if (auto && harProgram) {
-                    const kp = tilstand.kampprogram?.projekt === projekt ? tilstand.kampprogram : null;
+                    const kp = panelGaelder(tilstand.kampprogram, projekt) ? tilstand.kampprogram : null;
                     if (bedre) {
                         const foerP = projekt;
                         saet({ ...projekt, plan });
@@ -579,13 +579,29 @@ const planHandlers = {
             }
             if (lovlig) visLoeserensPlan();
             else if (svar.status === 'INFEASIBLE') {
-                // Ingen lovlig plan: samme beslutningskort som efter "Lav kampprogram" (afprøvede løsninger), med
-                // løserens diagnose som forklaring og dens knapper under kortene
+                // Ingen lovlig plan. Programmet, brugeren har, røres ikke (Fable-gennemgangen 2026-10-10, V1): diagnosen,
+                // planen med færrest brud og beslutningskortene vises i panelet. Er programmet lavet med "Lav kampprogram",
+                // står kortene der allerede; er det brugerens eget (TP's tider, rettet i hånden), er de et tilbud.
                 const diag = diagnoseTekst(svar.diagnose, projekt.opsaetning.dage.map((d) => d.dato));
-                const r = byggKampprogram(udgangspunkt, { fastKamplaengde: true });
-                visKampprogram(r, { foer: udgangspunkt, valg: r.valg, note: `Løseren kunne bevise, at der ikke findes en plan, der overholder alle de hårde regler. Årsag: ${diag.tekst}` });
-                tilstand.forslag.handlinger = diag.handlinger;
-                tilstand.kampprogram.handlinger = diag.handlinger;
+                const fejlNu = tjekPlan(projekt).antal.fejl;
+                let kp = panelGaelder(tilstand.kampprogram, projekt) ? tilstand.kampprogram : null;
+                if (!fejlNu && harProgram) {
+                    // Tjek godkender programmet: så er løseren og Tjek uenige om en regel — programmet beholdes
+                    const tekst = 'Løseren fandt ingen anden plan, der overholder alle de hårde regler. Dit program har 0 fejl i Tjek og er beholdt.';
+                    tilstand.forslag = { tekst, ikkePlaceret: [], kilde: 'loeser' };
+                    if (kp) kp.forbedret = tekst;
+                    render();
+                    return;
+                }
+                const handlinger = [...diag.handlinger];
+                if (!kp) {
+                    handlinger.push({ tekst: 'Lav kampprogram med forslag til ændringer', type: 'lav-kampprogram' });
+                    kp = tilstand.kampprogram = { projekt, foer: projekt, valg: null, beslutninger: { kort: [], brud: fejlNu }, udfoert: [], beholdt: [], egetProgram: true };
+                }
+                kp.note = `Løseren kunne bevise, at der ikke findes en plan, der overholder alle de hårde regler. Årsag: ${diag.tekst}`;
+                kp.handlinger = handlinger;
+                kp.elastisk = null;
+                tilstand.forslag = { tekst: '', ikkePlaceret: kp.egetProgram ? [] : katFelter(projekt, projekt.sidsteForslag?.ikkePlaceret || []), kilde: 'graadig', handlinger };
                 if (svar.elastisk?.tider) {
                     // Sikkerhedsnet: løserens bud vises kun, hvis det ikke har flere fejl eller brud end programmet, brugeren
                     // allerede har (en kort regnetid kan give et dårligere bud end det hurtige program)
@@ -646,6 +662,12 @@ const planHandlers = {
     diagnoseHandling(index) {
         const h = tilstand.forslag?.handlinger?.[index];
         if (!h) return;
+        if (h.type === 'lav-kampprogram') {
+            // Brugerens eget program skiftes først ud nu, hvor der er valgt — "Fortryd" i panelet bringer det tilbage
+            tilstand.forslag = null;
+            planHandlers.lavKampprogram({ fastKamplaengde: true });
+            return;
+        }
         if (h.type === 'vis-ventende' || h.type === 'kasser-ventende') {
             const vis = h.type === 'vis-ventende' ? tilstand.ventendeOptimering : null;
             tilstand.ventendeOptimering = null;

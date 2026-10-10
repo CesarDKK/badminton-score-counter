@@ -44,13 +44,33 @@ class SolverTest(unittest.TestCase):
 
     def test_reserveret_pulje_og_spaerret_kapacitet(self):
         kap = {"faelles": [{"t": t, "baner": 1} for t in range(540, 720, 30)], "U09 D": [{"t": t, "baner": 1 if t >= 600 else 0} for t in range(540, 720, 30)]}
-        kampe = [kamp(0, pulje="U09 D", halv=True, raekke="U09 D"), kamp(1, pulje="U09 D", halv=True, raekke="U09 D"), kamp(2), kamp(3)]
+        u9 = list(range(600, 720, 30))  # rækkens tidsrum (fra kl. 10:00), som klienten sender det
+        kampe = [kamp(0, u9, pulje="U09 D", halv=True, raekke="U09 D"), kamp(1, u9, pulje="U09 D", halv=True, raekke="U09 D"), kamp(2), kamp(3)]
         r = loes(problem(kampe, kapacitet=kap), 5)
         t = r["tider"]
         self.assertEqual(r["status"], "OPTIMAL")
         self.assertGreaterEqual(min(t["k0"], t["k1"]), 600, "U9-puljen har først baner fra kl. 10:00")
         self.assertEqual(t["k0"], t["k1"], "to halve deler den ene reserverede bane")
         self.assertEqual(sorted([t["k2"], t["k3"]]), [540, 570], "én fælles bane")
+
+    def test_overloeb_paa_fri_faelles_bane(self):
+        # Fable-gennemgangen 2026-10-10 (K1): U11 D har 1 reserveret bane og 3 kampe, U13 M 1 kamp, 2 baner i 2 slots.
+        # Tjek og planlæggeren lader den tredje U11 D-kamp bruge den frie fælles bane — det skal løseren også.
+        tider = [540, 570]
+        kap = {"faelles": [{"t": t, "baner": 1} for t in tider], "U11 D": [{"t": t, "baner": 1} for t in tider]}
+        kampe = [kamp(i, tider, pulje="U11 D") for i in range(3)] + [kamp(3, tider, raekke="U13 M")]
+        r = loes(problem(kampe, kapacitet=kap, dage=[{"index": 0, "start": 540, "slut": 600, "baner": 2}]), 5)
+        self.assertEqual(r["status"], "OPTIMAL")
+        self.assertEqual(sorted(r["tider"].values()), [540, 540, 570, 570])
+        # Er den fælles bane optaget, er der stadig for lidt plads
+        kampe.append(kamp(4, tider, raekke="U13 M"))
+        self.assertEqual(loes(problem(kampe, kapacitet=kap, dage=[{"index": 0, "start": 540, "slut": 600, "baner": 2}]), 5)["status"], "INFEASIBLE")
+
+    def test_overloeb_halve_deler_faelles_bane(self):
+        # 3 halve U9-kampe på 1 reserveret bane: den tredje løber over og deler en fælles bane med en anden halv kamp
+        kap = {"faelles": [{"t": 540, "baner": 1}], "U09 D": [{"t": 540, "baner": 1}]}
+        kampe = [kamp(i, [540], pulje="U09 D", halv=True, raekke="U09 D") for i in range(3)] + [kamp(3, [540], halv=True, raekke="U09 C")]
+        self.assertEqual(loes(problem(kampe, kapacitet=kap), 5)["status"], "OPTIMAL")
 
     def test_kampe_i_traek_straffes(self):
         # Samme spiller i k0 og k1 (minimumsafstand = ét slot). Uden vægt pakkes de lige efter hinanden;
@@ -288,10 +308,6 @@ class StopTest(unittest.TestCase):
             server.server_close()
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class AsynkronTest(unittest.TestCase):
     """Start job → spørg til status → hent svaret. Ingen forbindelse holdes åben imens."""
 
@@ -357,7 +373,9 @@ class AsynkronTest(unittest.TestCase):
         kode, _ = self.kald("/solve", {"problem": stort_problem(), "sekunder": 60, "asynkron": True, "job": "asynk-job-0003"})
         self.assertEqual(kode, 202)
         time.sleep(2)
-        self.assertEqual(self.kald("/status?job=asynk-job-0003")[1]["status"], "REGNER")
+        status = self.kald("/status?job=asynk-job-0003")[1]
+        self.assertEqual(status["status"], "REGNER")
+        self.assertGreater(status["restSekunder"], 50, "60 s søgning (+ evt. diagnose) — godt 2 s er gået")
         kode, optaget = self.kald("/solve", {"problem": problem([kamp(0)]), "sekunder": 5, "asynkron": True})
         self.assertEqual(kode, 429, "én ad gangen")
         self.assertTrue(optaget["optaget"])
@@ -454,6 +472,8 @@ class DiagnoseTest(unittest.TestCase):
         self.assertEqual((kode, svar["status"]), (200, "INFEASIBLE"))
         self.assertEqual(svar["diagnose"], [{"regel": "plads"}])
         self.assertEqual(job.fase, "diagnose")
+        # Status viser, hvor længe løseren højst regner endnu — klienten venter så længe (Fable V2)
+        self.assertGreaterEqual(job.senest, job.start)
         kode, svar = solver.koer({**p, "diagnose": False}, 5, solver.Job())
         self.assertNotIn("diagnose", svar)
 
@@ -512,3 +532,7 @@ class HaltidUdloesereTest(unittest.TestCase):
         r = loes(self.opsaet(begge, [DAG + 540], udloesere=[0]), 5)
         self.assertIn(r["status"], ("OPTIMAL", "FEASIBLE"))
         self.assertEqual(r["tider"]["k1"], DAG + 720, "kl. 12 dag 1 ville bryde grænsen, så den må ligge dag 2")
+
+
+if __name__ == "__main__":
+    unittest.main()

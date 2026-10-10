@@ -111,14 +111,17 @@ def loes(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, st
 
     # ── Kapacitet pr. pulje: cumulative med faste "blokke" der fylder det, banerne ikke rækker til ──
     # Hel bane = 2, halv bane = 1, kapacitet = 2 x baner. Ækvivalent med hele + ceil(halve/2) <= baner.
-    # En kamp fra en række med egne baner, der (elastisk) ligger uden for rækkens tider, spiller på de fælles baner
+    # En kamp fra en række med egne baner spiller på dem eller "løber over" på en fri fælles bane — samme regel som
+    # Tjek (kapacitet.js banebrugISlot). Ligger den (elastisk) uden for rækkens tider, spiller den på de fælles baner.
     pr_pulje = {}  # pulje → [(interval, krav, mulige tider)]
     for i, k in enumerate(kampe):
         krav_i = 1 if k["halv"] else 2
-        if i in ude_for and k["pulje"] != "faelles":
-            u = ude_for[i]
-            pr_pulje.setdefault(k["pulje"], []).append((m.NewOptionalFixedSizeIntervalVar(T[i], slot, u.Not(), f"I{k['pulje']}_{i}"), krav_i, base[i]))
-            pr_pulje.setdefault("faelles", []).append((m.NewOptionalFixedSizeIntervalVar(T[i], slot, u, f"Ifaelles_{i}"), krav_i, set(ekstra[i])))
+        if k["pulje"] != "faelles" and "faelles" in problem["kapacitet"]:
+            egen = m.NewBoolVar(f"egen_{i}")
+            if i in ude_for:
+                m.AddImplication(ude_for[i], egen.Not())
+            pr_pulje.setdefault(k["pulje"], []).append((m.NewOptionalFixedSizeIntervalVar(T[i], slot, egen, f"I{k['pulje']}_{i}"), krav_i, base[i]))
+            pr_pulje.setdefault("faelles", []).append((m.NewOptionalFixedSizeIntervalVar(T[i], slot, egen.Not(), f"Ifaelles_{i}"), krav_i, set(k["tilladte"])))
         else:
             pr_pulje.setdefault(k["pulje"], []).append((m.NewFixedSizeIntervalVar(T[i], slot, f"I{k['pulje']}_{i}"), krav_i, set(k["tilladte"])))
     for pulje, slots in problem["kapacitet"].items():
@@ -710,7 +713,8 @@ class Job:
         self.start = time.time()
         self.sidst_set = time.time()
         self.slut = None
-        self.fase = "loeser"  # "loeser" | "diagnose" — vises i status
+        self.fase = "loeser"  # "loeser" | "elastisk" | "diagnose" — vises i status
+        self.senest = None    # hvornår jobbet senest er færdigt (alle faser, der kan komme) — status viser resten
         self.kode = None      # HTTP-kode for det færdige svar
         self.svar = None      # det færdige svar
 
@@ -728,7 +732,12 @@ def ryd_gamle_jobs():
 
 def koer(problem: dict, sekunder: float, job: Job):
     """Løser problemet og returnerer (HTTP-kode, svar). Fejl i modellen må ikke vælte tjenesten."""
+    # Klienten venter, så længe status siger, der er tid tilbage (restSekunder) — ellers giver den op midt i
+    # planen med færrest brud eller diagnosen (Fable-gennemgangen 2026-10-10, V2)
+    elastisk_tid = max(10.0, min(float(sekunder), ELASTISK_SEKUNDER)) if problem.get("elastiskPlan") else 0.0
+    diagnose_tid = DIAGNOSE_SEKUNDER + DIAGNOSE_PR_FORSOEG if problem.get("diagnose", True) else 0.0
     try:
+        job.senest = time.time() + float(sekunder) + 2 * elastisk_tid + diagnose_tid
         svar = loes_opdelt(problem, sekunder, stop=job.stop)
         if svar["status"] == "INFEASIBLE" and not job.stop.is_set() and problem.get("elastiskPlan"):
             # Ingen lovlig plan: planen med færrest regelbrud — og hvilke regler den bryder (Jesper 2026-10-10)
@@ -736,7 +745,8 @@ def koer(problem: dict, sekunder: float, job: Job):
             # Først uden at flytte kampe til andre dage: så falder problemet i uafhængige dage, der løses hver for sig
             # (målt på prod 2026-10-10: ellers nåede løseren ikke ned på de færreste brud på 30 s). Kun hvis det er
             # umuligt, må kampe flyttes til dage, rækken ikke spiller.
-            tid = max(10.0, min(float(sekunder), ELASTISK_SEKUNDER))
+            tid = elastisk_tid
+            job.senest = time.time() + 2 * tid + diagnose_tid
             uden_dage = {**problem, "elastisk": [{**e, "dage": []} for e in problem.get("elastisk", [])]}
             el = loes_opdelt(uden_dage, tid, stop=job.stop, elastisk=True)
             if el["status"] not in ("OPTIMAL", "FEASIBLE") and not job.stop.is_set():
@@ -745,6 +755,7 @@ def koer(problem: dict, sekunder: float, job: Job):
                 svar["elastisk"] = {"tider": el["tider"], "brud": el.get("brud", []), "status": el["status"], "sekunder": el["sekunder"]}
         if svar["status"] == "INFEASIBLE" and not job.stop.is_set() and problem.get("diagnose", True):
             job.fase = "diagnose"
+            job.senest = time.time() + diagnose_tid
             svar["diagnose"] = diagnose(problem, job.stop)
             svar["sekunder"] = round(time.time() - job.start, 2)
         return 200, svar
@@ -792,7 +803,8 @@ class Handler(BaseHTTPRequestHandler):
         if job is None:
             return self._svar(404, {"fejl": "ukendt job"})
         if job.slut is None:
-            return self._svar(200, {"status": "REGNER", "fase": job.fase, "sekunder": round(time.time() - job.start, 1), "stopper": job.stop.is_set()})
+            rest = {"restSekunder": round(max(0.0, job.senest - time.time()), 1)} if job.senest else {}
+            return self._svar(200, {"status": "REGNER", "fase": job.fase, "sekunder": round(time.time() - job.start, 1), "stopper": job.stop.is_set(), **rest})
         self._svar(job.kode, job.svar)
 
     def _stop(self):
