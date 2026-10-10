@@ -362,12 +362,14 @@ class AsynkronTest(unittest.TestCase):
         self.assertRegex(svar["job"], r"^[0-9a-f]{24}$")
         self.assertEqual(self.vent(svar["job"])[1]["status"], "OPTIMAL")
 
-    def test_ugyldigt_problem_giver_400_i_status(self):
+    def test_ugyldigt_problem_afvises_med_det_samme(self):
+        # Før løserens plads gives væk (Fable V4): intet job, ingen kø
         kode, svar = self.kald("/solve", {"problem": {"slotMin": 30}, "sekunder": 5, "asynkron": True, "job": "asynk-job-0002"})
-        self.assertEqual(kode, 202)
-        kode, svar = self.vent("asynk-job-0002")
         self.assertEqual(kode, 400)
         self.assertIn("kampe", svar["fejl"])
+        self.assertEqual(self.kald("/status?job=asynk-job-0002")[0], 404)
+        kode, svar = self.kald("/solve", {"problem": problem([kamp(0)]), "sekunder": float("nan"), "asynkron": True})
+        self.assertEqual(kode, 400)
 
     def test_stop_og_optaget(self):
         kode, _ = self.kald("/solve", {"problem": stort_problem(), "sekunder": 60, "asynkron": True, "job": "asynk-job-0003"})
@@ -464,6 +466,17 @@ class DiagnoseTest(unittest.TestCase):
         p = problem([kamp(i, tilladte=[540]) for i in range(3)])  # tre kampe, to baner, ét slot
         self.assertEqual(diagnose(p), [{"regel": "plads"}])
 
+    def test_diagnosen_skelner_ikke_undersoegt_fra_ikke_aarsagen(self):
+        # Fable M7: løber diagnosens tid ud, er "plads" ikke bevist
+        import solver
+        gammel = solver.DIAGNOSE_SEKUNDER
+        solver.DIAGNOSE_SEKUNDER = 0
+        try:
+            p = problem([kamp(i, tilladte=[540]) for i in range(3)], mangeKampe=[[0, 1, 2]])
+            self.assertEqual(solver.diagnose(p), [{"regel": "ikkeUndersoegt"}])
+        finally:
+            solver.DIAGNOSE_SEKUNDER = gammel
+
     def test_diagnosen_foelger_med_i_svaret_og_status_viser_fasen(self):
         import solver
         job = solver.Job()
@@ -476,6 +489,47 @@ class DiagnoseTest(unittest.TestCase):
         self.assertGreaterEqual(job.senest, job.start)
         kode, svar = solver.koer({**p, "diagnose": False}, 5, solver.Job())
         self.assertNotIn("diagnose", svar)
+
+
+class ValideringTest(unittest.TestCase):
+    """Fable-gennemgangen 2026-10-10, V4: problemer, planneren ikke kan lave, afvises før modellen bygges."""
+
+    def test_gyldige_problemer_godkendes(self):
+        from solver import valider
+        self.assertIsNone(valider(problem([kamp(i) for i in range(3)], konflikter=[[0, 1, 60, 0]], foer=[[1, 2, 30]], traek=[[0, 1]])))
+
+    def test_ugyldige_problemer_afvises(self):
+        from solver import valider
+        self.assertIsNotNone(valider([]))
+        self.assertIsNotNone(valider(problem([kamp(0)], slotMin=1)))
+        self.assertIsNotNone(valider(problem([kamp(0)], konflikter=[[0, 5, 60, 0]])), "indeks uden for kampene")
+        self.assertIsNotNone(valider(problem([kamp(0, tilladte=[-30])])), "negativ tid")
+        self.assertIsNotNone(valider(problem([kamp(0, tilladte=list(range(0, 30 * 1000, 30)))])), "flere tider end dagene har")
+        self.assertIsNotNone(valider(problem([kamp(0)], vaegte={"ventetid": float("inf")})))
+        self.assertIsNotNone(valider(problem([kamp(0)], konflikter=5)), "forkert form")
+
+    def test_for_stort_problem_afvises(self):
+        from solver import valider, ELEMENTER_PR_KAMP
+        kampe = [kamp(i) for i in range(10)]
+        self.assertIsNotNone(valider(problem(kampe, traek=[[0, 1]] * (ELEMENTER_PR_KAMP * 10 + 10000))))
+
+    def test_stop_under_opbygningen(self):
+        import solver
+        stop = threading.Event()
+        stop.set()
+        r = solver.loes(problem([kamp(i) for i in range(5)]), 30, stop=stop)
+        self.assertEqual((r["status"], r["stoppet"]), ("UNKNOWN", True))
+
+
+class DageOgMaxDageTest(unittest.TestCase):
+    def test_laaste_kampe_paa_to_dage_deles_ikke_op(self):
+        # Fable V3: rækken må højst spille 1 dag, men låste kampe ligger på begge — hver dag for sig ville godkende det
+        dage = [{"index": 0, "start": 540, "slut": 720, "baner": 2}, {"index": 1, "start": 540, "slut": 720, "baner": 2}]
+        kap = {"faelles": [{"t": d * DAG + t, "baner": 2} for d in (0, 1) for t in range(540, 720, 30)]}
+        p = problem([kamp(0, tilladte=[540]), kamp(1, tilladte=[DAG + 540])], dage=dage, kapacitet=kap,
+                    maxDage=[{"raekke": "U11 D", "kampe": [0, 1], "max": 1}])
+        self.assertIsNone(dele_pr_dag(p))
+        self.assertEqual(loes_opdelt(p, 5)["status"], "INFEASIBLE")
 
 
 class SeniorReglerTest(unittest.TestCase):

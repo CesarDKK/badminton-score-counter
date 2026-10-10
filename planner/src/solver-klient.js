@@ -323,6 +323,8 @@ export function diagnoseTekst(diagnose, alleDage = []) {
             linjer.push('Ingen enkelt regel er årsagen: først når max haltid, max dage og max kampe pr. dag lempes samtidig, findes der en plan. Se valgmulighederne nedenfor.');
         } else if (d.regel === 'plads') {
             linjer.push('Der er ikke plads: hverken max haltid, max dage, max kampe pr. dag eller en enkelt rækkes tidsrum eller dage er årsagen — kampene kan ikke være på banerne inden for tidsvinduerne (eller låste kampe står i vejen). Se valgmulighederne nedenfor — fx længere dage, færre runder eller flere spilledage.');
+        } else if (d.regel === 'ikkeUndersoegt') {
+            linjer.push('Løseren nåede ikke at undersøge alle reglerne inden for tiden, så der kan være flere årsager.');
         }
     }
     if (!linjer.length) linjer.push('Løseren kunne ikke pege på én bestemt regel inden for tiden.');
