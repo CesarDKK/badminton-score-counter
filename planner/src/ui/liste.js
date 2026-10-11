@@ -21,6 +21,12 @@ export function byggListe(projekt) {
     for (const kat of projekt.kategorier) {
         const kampe = projekt.kampe.filter((k) => k.kategori === kat.id);
         if (!kampe.length) continue;
+        // Har planneren selv bygget kampene, findes de ikke i TP endnu: TP's lodtrækning giver andre par og
+        // kampnumre, så tiderne kan ikke tastes ind (gennemgangen 2026-10-11, U2/A2)
+        if ((kat.formValg || 'tp') !== 'tp') {
+            liste.push({ kategori: kat.id, form: kat.form, grupper: [], antal: kampe.length, medTid: kampe.filter((k) => projekt.plan[k.id]).length, afventer: true });
+            continue;
+        }
         const grupper = [];
         const prGruppe = new Map();
         const nøgleFor = (k) => (k.fase === 'cup' ? `cup|${k.runde}` : k.fase === 'swiss' ? `swiss|${k.runde}` : `pulje|${k.gruppe}`);
@@ -74,10 +80,26 @@ export function byggListe(projekt) {
     return liste;
 }
 
+export const AFVENTER_TEKST = 'Afventer lodtrækning i TP: lav den efter opskriften øverst, gem TP-filen, åbn den her igen og lav programmet igen — først da kan tiderne tastes ind.';
+
+/**
+ * Tidsgitteret i TP skal passe til planens kamplængde, ellers findes tiderne (fx 09:25) ikke i TP
+ * (gennemgangen 2026-10-11, A1). Returnerer en besked eller ''.
+ */
+export function tidsgitterBesked(projekt) {
+    const plan = projekt.opsaetning.slotMin, tp = projekt.tpGitter?.slotMin;
+    if (!plan) return '';
+    if (tp && tp !== plan) return `Sæt tidsintervallet i TP til ${plan} min (filen står til ${tp} min), før du taster tiderne ind — ellers findes tiderne ikke i TP.`;
+    return '';
+}
+
 /** Listen som ren tekst (til kopiering). */
 export function listeSomTekst(projekt) {
     const ud = [];
+    const gitter = tidsgitterBesked(projekt);
+    if (gitter) ud.push(`OBS: ${gitter}`, '');
     for (const kat of byggListe(projekt)) {
+        if (kat.afventer) { ud.push(kat.kategori, `  ${AFVENTER_TEKST}`, ''); continue; }
         ud.push(`${kat.kategori} (${kat.medTid}/${kat.antal} kampe med tid)`);
         for (const g of kat.grupper) {
             ud.push(`  ${g.navn}`);
@@ -88,13 +110,15 @@ export function listeSomTekst(projekt) {
     return ud.join('\n');
 }
 
-export function renderListe(container, projekt, handlers, fejl = 0) {
+export function renderListe(container, projekt, handlers, fejl = 0, { loeserRegner = false } = {}) {
     if (!projekt) {
         container.innerHTML = '<div class="panel"><h2>Til TP</h2><p class="panel-sub">Åbn en .TP-fil under trin 1 (Fil) først.</p></div>';
         return;
     }
     const liste = byggListe(projekt);
-    const udenTid = projekt.kampe.filter((k) => !projekt.plan[k.id]).length;
+    const afventer = new Set(liste.filter((k) => k.afventer).map((k) => k.kategori));
+    const udenTid = projekt.kampe.filter((k) => !projekt.plan[k.id] && !afventer.has(k.kategori)).length;
+    const gitter = tidsgitterBesked(projekt);
     // Fejl i Tjek følger med til TP og på udskriften, så de ikke tastes ind uden at nogen har set dem (Fable V6)
     const fejlTekst = fejl ? `Programmet har ${fejl} fejl i Tjek — fx en spiller i to kampe på én gang eller for kort pause.` : '';
     // Trin 4: opskriften til lodtrækningen (når planneren har bygget kampe) og listen til indtastning i TP
@@ -111,6 +135,8 @@ export function renderListe(container, projekt, handlers, fejl = 0) {
                 <button class="knap" data-handling="udskriv">Udskriv</button>
             </div>
         </div>
+        ${loeserRegner ? '<p class="liste-fejl" role="status"><b>Løseren forbedrer stadig programmet.</b> Vent med at taste tiderne ind, til den er færdig — eller stop den under Program. Er du gået i gang her, bliver dens forbedring et tilbud i stedet for at skifte tiderne ud.</p>' : ''}
+        ${gitter ? `<p class="liste-fejl" role="alert"><b>${esc(gitter)}</b></p>` : ''}
         ${fejl ? `<p class="liste-fejl" role="alert"><b>${esc(fejlTekst)}</b> Ret dem under Program › Problemer, før programmet tastes ind i TP.</p>` : ''}
         <p class="besked" id="listeBesked"></p>
     </div>
@@ -119,7 +145,11 @@ export function renderListe(container, projekt, handlers, fejl = 0) {
         <p>${projekt.turnering.dage.map((d) => datoTekst(d)).join(' og ')}${projekt.turnering.hal ? ` · ${esc(projekt.turnering.hal)}` : ''}</p>
         ${fejl ? `<p class="liste-fejl">${esc(fejlTekst)}</p>` : ''}
     </div>
-    ${liste.map((kat) => `
+    ${liste.map((kat) => kat.afventer ? `
+    <section class="panel liste-kategori">
+        <h2>${esc(kat.kategori)} <span class="maerke maerke--advarsel">afventer lodtrækning i TP</span></h2>
+        <p>${esc(AFVENTER_TEKST)}</p>
+    </section>` : `
     <section class="panel liste-kategori">
         <h2>${esc(kat.kategori)} <span class="daempet">${kat.medTid}/${kat.antal} kampe</span></h2>
         ${kat.grupper.map((g) => `

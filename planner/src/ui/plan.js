@@ -86,7 +86,10 @@ export function kampprogramPanel(kp, aabneKort, projekt) {
         ${kp.handlinger?.length ? `<p class="diagnose-knapper">${kp.handlinger.map((x, i) => `<button class="knap knap--sekundaer knap--lille" data-handling="diagnose" data-index="${i}">${esc(x.tekst)}</button>`).join(' ')}</p>` : ''}
         ${valgTekst ? `<p class="kampprogram-valg">${valgTekst}${tilbage}</p>` : ''}
         ${rettet ? '<p class="daempet">Du har flyttet eller låst kampe, siden programmet blev lavet — Tjek viser, hvordan det står nu.</p>' : ''}
+        ${(projekt.laast || []).length ? `<p class="daempet">🔒 ${projekt.laast.length} ${projekt.laast.length === 1 ? 'kamp er låst' : 'kampe er låst'} og beholder ${projekt.laast.length === 1 ? 'sin' : 'deres'} tid, når programmet laves igen. Dobbeltklik på en kamp for at låse den op.</p>` : ''}
         ${kp.forbedret ? `<p class="kampprogram-valg"><span class="er-groen">✓</span> ${esc(kp.forbedret)}</p>` : ''}
+        ${kp.tilbud ? `<p class="kampprogram-valg">${esc(kp.tilbud.tekst)} <button class="knap knap--lille" data-handling="kp-tilbud">Brug løserens program</button></p>` : ''}
+        ${gaarOp && !loeserNej && !kp.egetProgram && !aabneKort.length ? '<p class="raekke-knapper"><button class="knap knap--sekundaer knap--lille" data-handling="til-tp">Videre til Til TP →</button></p>' : ''}
         ${kp.udfoert.length ? `<p class="daempet">Gjort undervejs: ${esc(kp.udfoert.join(' · '))}.</p>` : ''}
         ${kp.elastisk ? `<div class="beslutning elastisk">
             <h4>Planen med færrest regelbrud</h4>
@@ -281,6 +284,9 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
     const problemer = tilstand.visning === 'problemer';
     // Panelet fra 'Lav kampprogram' vises for det projekt, det blev lavet til
     const kp = panelGaelder(tilstand.kampprogram, projekt) ? tilstand.kampprogram : null;
+    const gitterHistorik = tilstand.gitterHistorik || [];
+    const gitterTop = gitterHistorik[gitterHistorik.length - 1];
+    const gitterAntal = gitterHistorik.length;
     const aabneKort = kp ? kp.beslutninger.kort.filter((k) => !kp.beholdt.includes(k.noegle)) : [];
     const travl = !!tilstand.arbejder || !!tilstand.optimerer;
     const anbefalLoeser = projekt.opsaetning.autoLoeser === false && harPlan && !travl && !tilstand.alternativer && !aabneKort.length && tilstand.forslag?.kilde !== 'loeser';
@@ -338,13 +344,14 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
         ${harPlan ? statusTal(statistik.langeHuller, `venter over ${statistik.maxVentetidMin} min`, statistik.langeHuller ? 'er-gul' : '') : ''}
         ${laaste.size ? statusTal(laaste.size, laaste.size === 1 ? 'låst kamp' : 'låste kampe') : ''}
     </div>
-    ${tilstand.fortryd?.efter === projekt ? `<p class="fortryd-bjaelke">${esc(tilstand.fortryd.tekst)} <button class="knap knap--sekundaer knap--lille" data-handling="fortryd">Fortryd</button></p>` : ''}
+    ${tilstand.fortryd?.efter === projekt ? `<p class="fortryd-bjaelke">${esc(tilstand.fortryd.tekst)} <button class="knap knap--sekundaer knap--lille" data-handling="fortryd">Fortryd</button></p>`
+        : gitterTop?.efter === projekt ? `<p class="fortryd-bjaelke">${esc(gitterTop.tekst)} <button class="knap knap--sekundaer knap--lille" data-handling="fortryd-gitter" title="Ctrl+Z">Fortryd${gitterAntal > 1 ? ` (${gitterAntal})` : ''}</button></p>` : ''}
     ${anbefalLoeser ? `<p class="anbefaling"><b>Anbefalet:</b> tryk "Forbedr med løseren". Den regner i op til ${sek < 120 ? `${sek} sekunder` : `${sek / 60} minutter`} og finder som regel en plan med kortere ventetid og tid i hallen. Du vælger selv, om du vil bruge den.</p>` : ''}
     <div class="visning-skift" role="tablist" aria-label="Visning">
         <button role="tab" class="visning ${problemer ? '' : 'er-aktiv'}" data-visning="gitter" aria-selected="${!problemer}">Plan</button>
         <button role="tab" class="visning ${problemer ? 'er-aktiv' : ''}" data-visning="problemer" aria-selected="${problemer}">Problemer${antalFejl ? ` <span class="maerke maerke--fejl">${antalFejl} fejl</span>` : ''}${antalAdv ? ` <span class="maerke maerke--advarsel">${antalAdv}</span>` : ''}</button>
     </div>
-    ${problemer ? '' : `<p class="plan-hjaelp daempet">Træk et kort til et slot — eller klik på kortet og derefter på et slot. Træk det til listen til højre for at fjerne tiden. Dobbeltklik låser. <span title="${esc('Vægtet sum af de bløde kriterier — lavere er bedre. Vægtene står under Avanceret i opsætningen.\n' + scoreTitel)}">Score ${score.total}.</span></p>`}
+    ${problemer ? '' : `<p class="plan-hjaelp daempet">Træk et kort til et slot — eller klik på kortet og derefter på et slot. Træk det til listen til højre for at fjerne tiden. Dobbeltklik låser. <span title="${esc('Vægtet sum af de bløde kriterier — lavere er bedre. Vægtene står under Avanceret i opsætningen.\n' + scoreTitel)}">Programmets score: ${score.total} (lavere er bedre).</span></p>`}
     ${tilstand.forslag && !kp ? `<p class="plan-status forslag-info">${esc(tilstand.forslag.tekst)}${tilstand.forslag.ikkePlaceret.length ? ` Berørte kampe: ${tilstand.forslag.ikkePlaceret.slice(0, 6).map((x) => `${esc(x.kategori)} ${esc(x.navn)} (${esc(x.brud || x.aarsag)})`).join('; ')}${tilstand.forslag.ikkePlaceret.length > 6 ? ' …' : ''}` : ''}</p>
     ${tilstand.forslag.handlinger?.length ? `<p class="diagnose-knapper">${tilstand.forslag.handlinger.map((x, i) => `<button class="knap knap--sekundaer" data-handling="diagnose" data-index="${i}">${esc(x.tekst)}</button>`).join(' ')}</p>` : ''}
     ${tilstand.forslag.ikkePlaceret.length ? `<ul class="loesninger">${loesningsforslag(projekt, tilstand.forslag.ikkePlaceret).map((f, i) => `<li><span>${esc(f.tekst)}</span>${f.handling ? ` <button class="knap knap--sekundaer knap--lille" data-handling="loesning" data-index="${i}">${esc(f.handling.tekst)} og lav forslag igen</button>` : ''}</li>`).join('')}</ul>
@@ -426,6 +433,8 @@ function bind(container, h) {
             else if (hd === 'kp-tidligere') h.brugTidligereKamplaengde();
             else if (hd === 'kp-fortryd') h.fortrydKampprogram();
             else if (hd === 'kp-elastisk') h.brugElastisk();
+            else if (hd === 'kp-tilbud') h.brugTilbud();
+            else if (hd === 'til-tp') h.tilTP();
             else if (hd === 'forslag') h.lavForslag(false);
             else if (hd === 'forslag-dag') h.lavForslag(true);
             else if (hd === 'laas-kategori') h.laasKategori(true);
@@ -443,6 +452,7 @@ function bind(container, h) {
             else if (hd === 'ned-brug') h.brugNedskaering(Number(knap.dataset.index));
             else if (hd === 'ned-luk') h.lukNedskaering();
             else if (hd === 'fortryd') h.fortryd();
+            else if (hd === 'fortryd-gitter') h.fortrydGitter();
             else if (hd === 'fjern-valgte') { const ids = h.valgteIds(); if (ids) { h.vaelgKamp(ids); h.fjern(ids); } }
             else if (hd === 'fravaelg') { const ids = h.valgteIds(); if (ids) h.vaelgKamp(ids); }
             return;

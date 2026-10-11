@@ -140,8 +140,8 @@ function lodtraekningPanel(p, tjek) {
         const egen = k && (k.formValg || 'tp') !== 'tp';
         const knapper = !k ? '' : egen
             ? `<button type="button" class="knap knap--sekundaer knap--lille" data-handling="form-valg" data-kat="${esc(k.id)}" data-form-valg="tp">Brug TP's lodtrækning</button>`
-            : `<button type="button" class="knap knap--sekundaer knap--lille" data-handling="form-valg" data-kat="${esc(k.id)}" data-form-valg="swiss" title="Planneren bygger selv kampene som Swiss Ladder (4–6 runder). Opskriften til lodtrækningen i TP står under trin 4.">Lad planneren lave Swiss Ladder</button>
-               <button type="button" class="knap knap--sekundaer knap--lille" data-handling="form-valg" data-kat="${esc(k.id)}" data-form-valg="auto" title="Planneren vælger den form, der opfylder minimum med færrest bane-slots">Lad planneren vælge form</button>`;
+            : `<button type="button" class="knap knap--sekundaer knap--lille" data-handling="form-valg" data-kat="${esc(k.id)}" data-form-valg="swiss" title="Planneren planlægger kategorien som Swiss Ladder (4–6 runder). Lodtrækningen skal stadig laves i TP efter opskriften under trin 4 — gem filen og åbn den her igen, så kan tiderne tastes ind.">Planlæg som Swiss Ladder (lodtrækning i TP bagefter)</button>
+               <button type="button" class="knap knap--sekundaer knap--lille" data-handling="form-valg" data-kat="${esc(k.id)}" data-form-valg="auto" title="Planneren vælger den form, der opfylder minimum med færrest bane-slots. Lodtrækningen laves stadig i TP efter opskriften under trin 4.">Lad planneren vælge form (lodtrækning i TP bagefter)</button>`;
         return `<li><span>${esc(x.tekst.replace(/ Rettes i TP\.$| Vælg en anden form under Turneringen\.$| En ekstra runde eller en anden form under Turneringen løser det\.$/, ''))}</span>
             <span class="problem-knapper">${knapper}
                 ${x.noegle ? `<button type="button" class="knap knap--sekundaer knap--lille" data-handling="kvitter-form" data-noegle="${esc(x.noegle)}">Behold</button>` : ''}</span></li>`;
@@ -169,7 +169,7 @@ export function dagePanel(p) {
             <td><input type="time" step="300" value="${esc(d.start)}" data-felt="start" data-dato="${d.dato}" aria-label="Start"></td>
             <td><input type="time" step="300" value="${esc(d.slut)}" data-felt="slut" data-dato="${d.dato}" aria-label="Slut"></td>
             <td><input type="number" min="1" max="60" value="${d.baner}" data-felt="baner" data-dato="${d.dato}" aria-label="Baner">${tpBaner && d.baner > tpBaner ? ` <span class="maerke maerke--advarsel" title="TP-filen har ${tpBaner} baner. Planen kan ikke spilles på flere baner, end hallen har i TP.">flere end TP's ${tpBaner}</span>` : ''}</td>
-            <td><label class="valg" title="Dagen før en skoledag slutter tidsvinduet 2 timer tidligere (§ 4 stk. 5.1)"><input type="checkbox" data-skoledag="${d.dato}" ${foerSkoledag(d) ? 'checked' : ''}> ja</label></td>
+            <td><label class="valg" title="Dagen før en skoledag eller hverdag — også i ferier — slutter tidsvinduet 2 timer tidligere (§ 4 stk. 5.1)"><input type="checkbox" data-skoledag="${d.dato}" ${foerSkoledag(d) ? 'checked' : ''}> ja</label></td>
             <td class="tal">${slots}</td>
             <td class="tal">${baneSlots(d, slotMin)}</td>
             <td class="kan-bryde">${spaerringer}
@@ -189,7 +189,7 @@ export function dagePanel(p) {
         <p class="panel-sub">Tiderne fra TP-filens gitter er foreslået. Kapaciteten er antal hele baner pr. slot; spær baner i et tidsrum, hvis de ikke kan bruges.</p>
         <div class="tabel-hylster">
             <table class="tabel">
-                <thead><tr><th>Dag</th><th>Start</th><th>Slut</th><th>Baner</th><th title="Dagen før en skoledag slutter tidsvinduet 2 timer tidligere (§ 4 stk. 5.1)">Før skoledag</th><th class="tal">Slots</th><th class="tal">Bane-slots</th><th>Spærrede baner</th></tr></thead>
+                <thead><tr><th>Dag</th><th>Start</th><th>Slut</th><th>Baner</th><th title="Dagen før en skoledag eller hverdag — også i ferier — slutter tidsvinduet 2 timer tidligere (§ 4 stk. 5.1)">Før skoledag/hverdag</th><th class="tal">Slots</th><th class="tal">Bane-slots</th><th>Spærrede baner</th></tr></thead>
                 <tbody>${raekker}</tbody>
             </table>
         </div>
@@ -449,6 +449,13 @@ export function raekkePanel(p) {
         const katIds = new Set(kategorier.map((k) => k.id));
         const spilleDage = new Set(p.kampe.filter((k) => katIds.has(k.kategori) && p.plan[k.id]).map((k) => p.plan[k.id].dag));
         const kraeverDisp = kanKraeveDisp && spilleDage.size > 1;
+        // Hvad afkrydsningen betyder for netop denne række — og hvilken dag programmet har lagt den på
+        // (gennemgangen 2026-10-11, A3: "Spilledage" betød to forskellige ting, og planlæggerens dagvalg sås aldrig)
+        const maxDage = r.dispensationFlereDage ? null : (r.maxDage !== undefined ? r.maxDage : standardMaxDage(r));
+        const lagtPaa = spilleDage.size ? [...spilleDage].sort().map((d) => datoTekst(d, { kort: true })).join(' og ') : '';
+        const dageHjaelp = r.dage.length < 2 ? ''
+            : maxDage && maxDage < r.dage.length ? `Spiller ${maxDage === 1 ? 'én' : maxDage} af dagene — planneren vælger${lagtPaa ? `: lagt på ${lagtPaa}` : ''}.`
+                : `Fordeles på de valgte dage${lagtPaa ? ` (nu ${lagtPaa})` : ''}.`;
         const dagValg = dage.map((d) => `
                     <label class="valg"><input type="checkbox" data-raekke-dag="${d}" data-raekke="${esc(r.id)}" ${r.dage.includes(d) ? 'checked' : ''}> ${datoTekst(d, { kort: true })}</label>`).join('');
         const maerker = [
@@ -473,8 +480,9 @@ export function raekkePanel(p) {
                 <span class="daempet">${kategorier.length} ${kategorier.length === 1 ? 'kategori' : 'kategorier'} · ${kampe} kampe</span>
             </div>
             <div class="raekke-indstillinger">
-                <div class="felt"><span class="etiket">Spilledage</span>
-                    <div class="valg-gruppe">${dagValg}</div></div>
+                <div class="felt"><span class="etiket">Må spille</span>
+                    <div class="valg-gruppe">${dagValg}</div>
+                    ${dageHjaelp ? `<span class="daempet">${esc(dageHjaelp)}</span>` : ''}</div>
             </div>
             <div class="tabel-hylster">
                 <table class="tabel tabel--kategorier tabel--kategorier-kort">
