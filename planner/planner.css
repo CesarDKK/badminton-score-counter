@@ -388,6 +388,9 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 .tabel--liste tr { cursor: pointer; }
 .tabel--liste tr.er-uden-tid td { color: var(--red-soft); }
 .udskrift-hoved { display: none; }
+.regelsaet { margin: 0 0 14px; padding: 10px 14px; border-left: 3px solid var(--purple-soft); border-radius: 8px; }
+.regelsaet p, .regelsaet ul { margin: 4px 0; }
+.regelsaet ul { padding-left: 18px; }
 .liste-fejl { margin: 10px 0 0; padding: 8px 12px; border-left: 3px solid var(--red-soft); background: rgba(233,69,96,0.10); border-radius: 8px; }
 
 @media print {
