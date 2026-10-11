@@ -8,7 +8,7 @@
 import { minutter, klokkeFraMinutter } from './tp-reader.js';
 import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt } from './kapacitet.js';
 import { lavRegelmodel } from './regelmodel.js';
-import { vaegteFor } from './kriterier.js';
+import { vaegteFor, SAENKET_NET } from './kriterier.js';
 
 const DAG_MIN = 1440;
 
@@ -203,6 +203,31 @@ export function bygProblem(projekt, hintPlan = null) {
     // Kampe i træk (blødt, kriteriet "kampeITraek"): hver kendt spillers kampe — løseren straffer par i nabo-slots
     const traek = [...prKendt.values()].filter((l) => l.length > 1).map((l) => l.map((k) => indeks.get(k.id)));
 
+    // Ventetid før cupkampe (blødt, kriteriet "cupVent"): [cupkamp, [kampe den bygger på]] — kun når de altid ligger
+    // samme dag: rækken spiller én dag (max dage 1), eller alle kan kun ligge på én og samme dag. En cup dagen efter
+    // puljerne tæller ikke (som i kriterier.js). Løseren regner i minutter på dagen.
+    const cupVent = [];
+    {
+        const dagene = (i) => new Set(kampe[i].tilladte.map((t) => Math.floor(t / DAG_MIN)));
+        for (const k of projekt.kampe) {
+            if (k.fase !== 'cup' || !indeks.has(k.id) || !k.afhaengerAf.length || !k.afhaengerAf.every((d) => indeks.has(d))) continue;
+            const b = indeks.get(k.id), deps = k.afhaengerAf.map((d) => indeks.get(d));
+            const r = raekke(k);
+            const enDag = r && M.maxDageFor(r) === 1 && k.afhaengerAf.every((d) => raekke(kampMap.get(d))?.id === r.id);
+            const db = dagene(b);
+            const sammeDag = db.size === 1 && deps.every((d) => { const dd = dagene(d); return dd.size === 1 && [...dd][0] === [...db][0]; });
+            if (enDag || sammeDag) cupVent.push([b, deps]);
+        }
+    }
+
+    // Sænket net (blødt, kriteriet "saenketNet"): U9/U11's kampe og de øvrige — løseren straffer overlappet pr. dag
+    const nethoejde = { saenket: [], normal: [] };
+    for (const k of projekt.kampe) {
+        if (!indeks.has(k.id)) continue;
+        const aargang = raekke(k)?.aargang;
+        if (aargang) (SAENKET_NET.has(aargang) ? nethoejde.saenket : nethoejde.normal).push(indeks.get(k.id));
+    }
+
     // Puljerunder i takt (blødt, kriteriet "puljerunderSpredt"): pr. kategori puljekampene pr. runde, runde 1 først
     const puljerunder = [];
     {
@@ -271,7 +296,7 @@ export function bygProblem(projekt, hintPlan = null) {
         slotMin,
         dage: dage.map((d, i) => ({ index: i, start: minutter(d.start), slut: minutter(d.slut), baner: d.baner })),
         kapacitet, kampe, foer, konflikter, ikkeSamtidig, haltid, spillerGrupper, traek, puljerunder, maxDage,
-        maxKampePrDag: maxPrDag, mangeKampe, maxPrGruppe, ikkeSammeDag, alternativer,
+        cupVent, nethoejde, maxKampePrDag: maxPrDag, mangeKampe, maxPrGruppe, ikkeSammeDag, alternativer,
         maxVent: projekt.opsaetning.maxVentetidMin ?? 90, // til "lange huller" (kriteriet langeHuller)
         elastisk, elastiskPlan: true, // ingen lovlig plan → løseren laver planen med færrest regelbrud
         vaegte: vaegteFor(projekt),

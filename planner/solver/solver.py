@@ -94,6 +94,12 @@ def _valider(problem) -> str | None:
         for par in problem.get(navn, []):
             if not isinstance(par, list) or len(par) < 2 or not (inde(par[0]) and inde(par[1])):
                 return f"ugyldigt {navn}"
+    net = problem.get("nethoejde", {})
+    if not isinstance(net, dict) or not all(isinstance(net.get(n, []), list) and all(inde(i) for i in net.get(n, [])) for n in ("saenket", "normal")):
+        return "ugyldig nethoejde"
+    for par in problem.get("cupVent", []):
+        if not isinstance(par, list) or len(par) != 2 or not inde(par[0]) or not isinstance(par[1], list) or not par[1] or not all(inde(i) for i in par[1]):
+            return "ugyldigt cupVent"
     for navn in ("traek", "mangeKampe"):
         for liste in problem.get(navn, []):
             if not isinstance(liste, list) or not all(inde(i) for i in liste):
@@ -466,6 +472,35 @@ def _loes(problem: dict, sekunder: float, arbejdere: int | None, stop: threading
     # slottet lige efter den forrige, koster vægten pr. gang — som i planneren, hvor vægt 1 svarer til 1 times ventetid.
     # Starttiderne ligger i slot-gitteret, og to kampe for samme spiller kan aldrig dele slot, så "i træk" er netop
     # en afstand under to slots. Et par, der deles af to spillere (en double), tæller to gange som i planneren.
+    # Ventetid før cupkampe (kriteriet "cupVent"): cupkampens start minus slut på den seneste kamp, den bygger på
+    # (klienten sender kun par, der ligger samme dag). Vægt pr. time som ventetiden.
+    w_cup = float(v.get("cupVent", 0))
+    if w_cup > 0:
+        koef = max(1, int(round(w_cup * SKALA / 60)))
+        paa_dagen = lambda i: T[i] - DAG * dag_var(i)  # minutter på dagen (kampen og dem, den bygger på, er samme dag)
+        for b, deps in problem.get("cupVent", []):
+            vent = m.NewIntVar(0, DAG, "")
+            for d in deps:
+                m.Add(vent >= paa_dagen(b) - paa_dagen(d) - slot)
+            led.append(vent * koef)
+
+    # Sænket net (kriteriet "saenketNet"): pr. dag tiden fra de ældres første start til U9/U11's sidste slut — kun kampe,
+    # der kun kan ligge på den dag (så den del er konstant og lineær)
+    w_net = float(v.get("saenketNet", 0))
+    net = problem.get("nethoejde", {})
+    if w_net > 0 and net.get("saenket") and net.get("normal"):
+        koef = max(1, int(round(w_net * SKALA / 60)))
+        for d in sorted({dagFor[i] for i in net["saenket"] if enkeltDag[i]} & {dagFor[i] for i in net["normal"] if enkeltDag[i]}):
+            s_ids = [i for i in net["saenket"] if enkeltDag[i] and dagFor[i] == d]
+            n_ids = [i for i in net["normal"] if enkeltDag[i] and dagFor[i] == d]
+            net_sidste = m.NewIntVar(d * DAG, (d + 1) * DAG, "")
+            m.AddMaxEquality(net_sidste, [T[i] for i in s_ids])
+            net_foerste = m.NewIntVar(d * DAG, (d + 1) * DAG, "")
+            m.AddMinEquality(net_foerste, [T[i] for i in n_ids])
+            overlap = m.NewIntVar(0, DAG, "")
+            m.Add(overlap >= net_sidste + slot - net_foerste)
+            led.append(overlap * koef)
+
     w_traek = float(v.get("kampeITraek", 0))
     if w_traek > 0:
         koef = max(1, int(round(w_traek * SKALA)))
@@ -654,6 +689,9 @@ def delproblem(problem: dict, ids: list[int], dag: int) -> dict:
     p["haltid"] = [h for h in p["haltid"] if len(h["kampe"]) > 1 and (h.get("udloesere") is None or h["udloesere"])]
     p["spillerGrupper"] = [g for g in ({**g, "kampe": inde(g["kampe"])} for g in problem.get("spillerGrupper", [])) if len(g["kampe"]) > 1]
     p["traek"] = [x for x in (inde(l) for l in problem.get("traek", [])) if len(x) > 1]
+    p["cupVent"] = [[ny[b], inde(deps)] for b, deps in problem.get("cupVent", []) if b in ny and len(inde(deps)) == len(deps)]
+    net = problem.get("nethoejde", {})
+    p["nethoejde"] = {n: inde(net.get(n, [])) for n in ("saenket", "normal")}
     p["puljerunder"] = [r for r in ([inde(x) for x in runder] for runder in problem.get("puljerunder", [])) if sum(1 for x in r if x) > 1]
     p["maxDage"] = [{**r, "kampe": inde(r["kampe"])} for r in problem.get("maxDage", []) if inde(r["kampe"])]
     p["mangeKampe"] = [x for x in (inde(l) for l in problem.get("mangeKampe", [])) if x]

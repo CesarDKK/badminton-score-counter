@@ -614,7 +614,7 @@ function kapacitetPanel(p) {
         <tr>
             <td><strong>${datoTekst(d.dato)}</strong></td>
             <td class="tal">${d.slots}</td>
-            <td class="tal">${d.baneSlots}</td>
+            <td class="tal">${d.baneSlots}${d.baneSlotsHeleDagen !== d.baneSlots ? ` <span class="daempet">af ${d.baneSlotsHeleDagen}</span>` : ''}</td>
             <td class="tal">${tal(d.faste, d.faste % 1 ? 1 : 0)}</td>
             <td class="tal">${tal(d.fleksible, d.fleksible % 1 ? 1 : 0)}</td>
             <td class="tal">${tal(d.fordelt, 1)}</td>
@@ -629,7 +629,7 @@ function kapacitetPanel(p) {
         <p class="panel-sub">Bane-slots til rådighed mod de kampe, rækkernes dage lægger på dagen. "Faste" er kampe i rækker, der kun spiller den dag; "fleksible" spiller over flere dage og er delt ligeligt i "fordelt". U9-singler på halv bane tæller ½. Udnyttelse over ca. 85 % bliver svær at få til at gå op med pauser og rækkefølge.</p>
         <div class="tabel-hylster">
             <table class="tabel">
-                <thead><tr><th>Dag</th><th class="tal">Slots</th><th class="tal">Bane-slots</th><th class="tal">Faste</th><th class="tal">Fleksible</th><th class="tal">Fordelt</th><th>Udnyttelse</th><th class="tal"></th><th class="tal">Planlagte</th></tr></thead>
+                <thead><tr><th>Dag</th><th class="tal">Slots</th><th class="tal" title="Bane-slots inden for dagens rækkers tidsvinduer og tidsrum — 'af' er hele dagen">Lovlige bane-slots</th><th class="tal">Faste</th><th class="tal">Fleksible</th><th class="tal">Fordelt</th><th>Udnyttelse</th><th class="tal"></th><th class="tal">Planlagte</th></tr></thead>
                 <tbody>${rows}</tbody>
             </table>
         </div>

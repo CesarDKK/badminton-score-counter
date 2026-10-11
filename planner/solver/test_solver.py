@@ -72,6 +72,22 @@ class SolverTest(unittest.TestCase):
         kampe = [kamp(i, [540], pulje="U09 D", halv=True, raekke="U09 D") for i in range(3)] + [kamp(3, [540], halv=True, raekke="U09 C")]
         self.assertEqual(loes(problem(kampe, kapacitet=kap), 5)["status"], "OPTIMAL")
 
+    def test_cupkamp_lige_efter_puljen(self):
+        # Gennemgangen 2026-10-11 (B3): med vægten "cupVent" lægges cupkampen lige efter de kampe, den bygger på
+        vaegte = {"ventetid": 0, "sluttid": 0, "tommeBaner": 0, "finalerSpredt": 0, "cupVent": 1}
+        kampe = [kamp(0, tilladte=[540]), kamp(1, tilladte=[570, 600, 630, 660, 690])]
+        r = loes(problem(kampe, foer=[[0, 1, 30]], cupVent=[[1, [0]]], vaegte=vaegte), 5)
+        self.assertEqual(r["tider"]["k1"], 570)
+        from solver import valider
+        self.assertIsNotNone(valider(problem(kampe, cupVent=[[1, [7]]])))
+
+    def test_saenket_net_foer_normalt(self):
+        # U9/U11 (sænket net) før U13+ samme dag, så nettet kun hæves én gang (Jesper 2026-10-11)
+        vaegte = {"ventetid": 0, "sluttid": 0, "tommeBaner": 0, "finalerSpredt": 0, "saenketNet": 1}
+        kampe = [kamp(0, tilladte=[540, 600]), kamp(1, tilladte=[540, 600], raekke="U13 D")]
+        r = loes(problem(kampe, nethoejde={"saenket": [0], "normal": [1]}, vaegte=vaegte), 5)
+        self.assertLess(r["tider"]["k0"], r["tider"]["k1"])
+
     def test_kampe_i_traek_straffes(self):
         # Samme spiller i k0 og k1 (minimumsafstand = ét slot). Uden vægt pakkes de lige efter hinanden;
         # med vægten "kampeITraek" får spilleren ét slot fri imellem (Jesper 2026-10-10: flowet i hallen).

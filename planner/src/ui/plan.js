@@ -9,6 +9,8 @@ import { bedoemPlan, loesningsforslag } from '../scheduler.js';
 import { scorePlan } from '../kriterier.js';
 import { renderTjek } from './tjek.js';
 import { panelGaelder } from '../kampprogram.js';
+import { lavRegelmodel } from '../regelmodel.js';
+import { vurderSlots } from '../slotvurdering.js';
 
 /** Panelet med forslag, der får kabalen til at gå op (nedskaering.js) — valget træffes på oplyst grundlag. */
 function nedskaeringPanel(ned) {
@@ -157,6 +159,8 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
     const valgt = projekt.kampe.find((k) => k.id === tilstand.valgtKamp);
     const valgtSpillere = new Set(valgt ? valgt.spillere : []);
     const fremhaev = new Set(tilstand.fremhaev || []);
+    // Valgt kamp (klik-flyt): hvert slot på dagen farves efter, om kampen kan ligge der (slotvurdering.js)
+    const vurdering = tilstand.valgtIds ? vurderSlots(projekt, lavRegelmodel(projekt), tilstand.valgtIds.split(','), dag) : null;
 
     const passer = (k) => {
         if (tilstand.filter && k.kategori !== tilstand.filter) return false;
@@ -246,7 +250,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
         return `
         <tr class="slot ${klasse}" data-slot="${slot}">
             <th scope="row"><span class="tid">${slot}</span><span class="fyld">${brugt}/${baner}</span>${puljeTekst ? `<span class="fyld fyld--pulje">${puljeTekst}</span>` : ''}</th>
-            <td class="celle" data-slot="${slot}" data-dag="${dag.dato}">${grupper(kampe).map(({ k, ids }) => kort(k, ids)).join('')}</td>
+            <td class="celle${vurdering?.has(slot) ? ` slot-${vurdering.get(slot).niveau}` : ''}" data-slot="${slot}" data-dag="${dag.dato}"${vurdering?.has(slot) ? ` title="${esc(vurdering.get(slot).grunde.length ? vurdering.get(slot).grunde.join('; ') : 'Kampen kan ligge her uden nye problemer')}"` : ''}>${grupper(kampe).map(({ k, ids }) => kort(k, ids)).join('')}</td>
         </tr>`;
     }).join('');
 

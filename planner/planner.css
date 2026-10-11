@@ -388,6 +388,10 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 .tabel--liste tr { cursor: pointer; }
 .tabel--liste tr.er-uden-tid td { color: var(--red-soft); }
 .udskrift-hoved { display: none; }
+/* Klik-flyt: hvor må den valgte kamp ligge (slotvurdering.js) */
+.celle.slot-ok { box-shadow: inset 3px 0 0 var(--green); }
+.celle.slot-advarsel { box-shadow: inset 3px 0 0 var(--amber); }
+.celle.slot-fejl { box-shadow: inset 3px 0 0 var(--red-soft); opacity: 0.85; }
 .regelsaet { margin: 0 0 14px; padding: 10px 14px; border-left: 3px solid var(--purple-soft); border-radius: 8px; }
 .regelsaet p, .regelsaet ul { margin: 4px 0; }
 .regelsaet ul { padding-left: 18px; }

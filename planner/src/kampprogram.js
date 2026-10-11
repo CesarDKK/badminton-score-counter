@@ -11,6 +11,7 @@ import { sammenlignKamplaengder, bedsteKamplaengde, erUdenPause } from './kampla
 import { alleNedskaeringer, anvendNedskaering } from './nedskaering.js';
 import { minutter } from './tp-reader.js';
 import { standardMaxDage } from './regelmodel.js';
+import { reglerFor } from './regler.js';
 
 const opremsning = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} og ${xs[xs.length - 1]}`);
 const klokke = (min) => `${String(Math.floor(min / 60) % 24).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
@@ -151,6 +152,10 @@ export function anvendAendring(projekt, a) {
     if (a.type === 'pause') return genberegnKampe(opdaterPause(projekt, a.klasse, a.minutter));
     if (a.type === 'opsaetning') return genberegnKampe(opdaterOpsaetning(projekt, a.aendring));
     if (a.type === 'nedskaering') return anvendNedskaering(projekt, a.forslag).projekt;
+    if (a.type === 'tidsvindue') {
+        const regler = projekt.opsaetning.regler || {};
+        return genberegnKampe(opdaterOpsaetning(projekt, { regler: { ...regler, tidsvindue: { ...(regler.tidsvindue || {}), [a.aargang]: a.vindue } } }));
+    }
     return projekt;
 }
 
@@ -185,7 +190,9 @@ function afproev(projekt, foer, g, aendring) {
     }
     const rs = raekkeSlut(p, f.plan, g.raekke);
     if (rs && (aendring.pris === 'tidsrum' || aendring.pris === 'baner')) konsekvens.unshift(`${g.raekke} slutter ${rs}`);
-    return { brudEfter: brud, loest: !tilbage, gaarOp: brud === 0, bedre: brud < foer.brud, konsekvens };
+    // "Bedre" måles mod det samme søgeniveau: én planlægger-kørsel på udgangspunktet (foer.basis), ikke det bedste af
+    // alternativerne — ellers kunne en ændring, der reelt hjælper, se ud som ingen forbedring (gennemgangen, B2)
+    return { brudEfter: brud, loest: !tilbage, gaarOp: brud === 0, bedre: brud < Math.max(foer.brud, foer.basis ?? 0), konsekvens };
 }
 
 /** Kandidat-ændringer for et kort. Hver: { tekst, pris, type, ... }. Flere trin prøves, til kortet er løst. */
@@ -231,6 +238,14 @@ export function kandidater(projekt, g) {
     } else if (g.familie === 'plads') {
         pausePaaDagen();
         forlaengDag();
+        // Kampe uden for årgangens tidsvindue: et længere vindue kræver dispensation (gennemgangen 2026-10-11, A6) —
+        // at forlænge dagen hjælper ikke, når det er vinduet, der er grænsen
+        const aargang = r?.aargang;
+        const vindue = aargang ? reglerFor(projekt).tidsvindue[aargang] : null;
+        if (vindue && [...g.aarsager].some((a) => a === 'tidsvindue' || a === 'uden for tidsvinduet')) {
+            const til = minutter(vindue[1]);
+            ud.push({ gruppe: 'tidsvindue', trin: trin.filter((m) => til + m < 24 * 60).map((m) => ({ tekst: `Udvid ${aargang}'s tidsvindue til ${klokke(til + m)}`, pris: 'dispensation', type: 'tidsvindue', aargang, vindue: [vindue[0], klokke(til + m)] })) });
+        }
         if (r && r.dage.length === 1) for (const d of andreDage) ud.push({ gruppe: `flyt-${d.dato}`, trin: [{ tekst: `Flyt ${g.raekke} til ${kortDato(d.dato)}`, pris: 'flyt', type: 'raekke', raekke: g.raekke, aendring: { dage: [d.dato] } }] });
         if (r && andreDage.length && r.maxDage && r.dage.length >= r.maxDage && !r.dispensationFlereDage) {
             ud.push({ gruppe: 'flere-dage', trin: [{ tekst: `Lad ${g.raekke} spille over flere dage`, pris: 'dispensation', type: 'raekke', raekke: g.raekke, aendring: { dage: [...new Set([...r.dage, ...andreDage.map((d) => d.dato)])].sort(), dispensationFlereDage: true } }] });
@@ -264,6 +279,7 @@ export function kandidater(projekt, g) {
 export function lavBeslutninger(projekt, forslag, { medNedskaering = true } = {}) {
     const foer = { f: forslag, brud: brudI(forslag) };
     if (!foer.brud) return { brud: 0, kort: [] };
+    foer.basis = brudI(lavForslag(projekt));
     const orden = prisOrden(projekt);
     const prisNavn = Object.fromEntries(PRIS.map((x) => [x.id, x.navn]));
     const kort = [];
