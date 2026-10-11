@@ -88,6 +88,24 @@ class SolverTest(unittest.TestCase):
         r = loes(problem(kampe, nethoejde={"saenket": [0], "normal": [1]}, vaegte=vaegte), 5)
         self.assertLess(r["tider"]["k0"], r["tider"]["k1"])
 
+    def test_stabil_omplanlaegning(self):
+        # Gennemgangen 2026-10-11 (U6/I2): en kamp, der havde tid (hint), flyttes helst ikke — selv om en tidligere tid ellers
+        # ville være bedre
+        kampe = [kamp(0, tilladte=[540, 600], hint=600)]
+        self.assertEqual(loes(problem(kampe), 5)["tider"]["k0"], 540)
+        self.assertEqual(loes(problem(kampe, stabil={"vaegt": 3, "kampe": [0]}), 5)["tider"]["k0"], 600)
+
+    def test_forbedring_i_bidder(self):
+        # D4: løsning i bidder må aldrig gøre planen værre og afleverer altid en plan med alle kampe
+        import solver
+        kampe = [kamp(i) for i in range(5)]
+        p = problem(kampe, konflikter=[[0, 1, 60, 0]])
+        start = {"status": "FEASIBLE", "tider": {"k0": 690, "k1": 630, "k2": 660, "k3": 660, "k4": 690}, "maal": 10 ** 9}
+        r = solver.forbedr_i_bidder(p, start, time.time() + 10)
+        self.assertEqual(set(r["tider"]), {f"k{i}" for i in range(5)})
+        self.assertGreaterEqual(abs(r["tider"]["k0"] - r["tider"]["k1"]), 60)
+        self.assertGreater(r["bidder"], 0)
+
     def test_kampe_i_traek_straffes(self):
         # Samme spiller i k0 og k1 (minimumsafstand = ét slot). Uden vægt pakkes de lige efter hinanden;
         # med vægten "kampeITraek" får spilleren ét slot fri imellem (Jesper 2026-10-10: flowet i hallen).
@@ -476,6 +494,20 @@ class DiagnoseTest(unittest.TestCase):
         laast = problem([kamp(0, tilladte=[540]), kamp(1, tilladte=[540])], kapacitet=kap,
                         alternativer=[{"regel": "dage", "raekke": "U11 D", "kampe": [0, 1], "tilladte": [540, 570]}])
         self.assertEqual(diagnose(laast), [{"regel": "plads"}])
+
+    def test_ingen_lempelse_hjaelper_svares_med_et_forsoeg(self):
+        # Gennemgangen 2026-10-11 (D3): hjælper selv alle lempelser på én gang ikke, er svaret "plads" efter ét forsøg
+        import solver
+        kald = []
+        gammel = solver.loes
+        solver.loes = lambda *a, **k: (kald.append(1), gammel(*a, **k))[1]
+        try:
+            haltid = [{"raekke": f"R{i}", "kampe": [0, 1], "graense": 30} for i in range(4)]
+            p = problem([kamp(i, tilladte=[540]) for i in range(3)], haltid=haltid, maxDage=[{"raekke": "R0", "kampe": [0, 1], "max": 1}])
+            self.assertEqual(solver.diagnose(p), [{"regel": "plads"}])
+            self.assertEqual(len(kald), 1)
+        finally:
+            solver.loes = gammel
 
     def test_for_lidt_plads(self):
         from solver import diagnose

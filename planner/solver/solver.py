@@ -94,6 +94,9 @@ def _valider(problem) -> str | None:
         for par in problem.get(navn, []):
             if not isinstance(par, list) or len(par) < 2 or not (inde(par[0]) and inde(par[1])):
                 return f"ugyldigt {navn}"
+    stabil = problem.get("stabil") or {}
+    if not isinstance(stabil, dict) or not all(inde(i) for i in stabil.get("kampe", [])):
+        return "ugyldig stabil"
     net = problem.get("nethoejde", {})
     if not isinstance(net, dict) or not all(isinstance(net.get(n, []), list) and all(inde(i) for i in net.get(n, [])) for n in ("saenket", "normal")):
         return "ugyldig nethoejde"
@@ -501,6 +504,18 @@ def _loes(problem: dict, sekunder: float, arbejdere: int | None, stop: threading
             m.Add(overlap >= net_sidste + slot - net_foerste)
             led.append(overlap * koef)
 
+    # Stabil omplanlægning: en kamp, der flyttes fra sin tidligere tid (hint), koster vaegt x SKALA
+    stabil = problem.get("stabil") or {}
+    if stabil.get("kampe"):
+        koef = max(1, int(round(float(stabil.get("vaegt", 3)) * SKALA)))
+        for i in stabil["kampe"]:
+            h = kampe[i].get("hint")
+            if h is None or h not in kampe[i]["tilladte"]:
+                continue
+            flyttet = m.NewBoolVar("")
+            m.Add(T[i] == h).OnlyEnforceIf(flyttet.Not())
+            led.append(flyttet * koef)
+
     w_traek = float(v.get("kampeITraek", 0))
     if w_traek > 0:
         koef = max(1, int(round(w_traek * SKALA)))
@@ -690,6 +705,8 @@ def delproblem(problem: dict, ids: list[int], dag: int) -> dict:
     p["spillerGrupper"] = [g for g in ({**g, "kampe": inde(g["kampe"])} for g in problem.get("spillerGrupper", [])) if len(g["kampe"]) > 1]
     p["traek"] = [x for x in (inde(l) for l in problem.get("traek", [])) if len(x) > 1]
     p["cupVent"] = [[ny[b], inde(deps)] for b, deps in problem.get("cupVent", []) if b in ny and len(inde(deps)) == len(deps)]
+    if problem.get("stabil"):
+        p["stabil"] = {**problem["stabil"], "kampe": inde(problem["stabil"].get("kampe", []))}
     net = problem.get("nethoejde", {})
     p["nethoejde"] = {n: inde(net.get(n, [])) for n in ("saenket", "normal")}
     p["puljerunder"] = [r for r in ([inde(x) for x in runder] for runder in problem.get("puljerunder", [])) if sum(1 for x in r if x) > 1]
@@ -743,6 +760,55 @@ DIAGNOSE_SEKUNDER = float(os.environ.get("SOLVER_DIAGNOSE_SEKUNDER", "45"))
 DIAGNOSE_PR_FORSOEG = float(os.environ.get("SOLVER_DIAGNOSE_PR_FORSOEG", "8"))
 
 
+# Løsning i bidder (fix-and-optimize, Fonseca & Toffolo 2022; gennemgangen 2026-10-11, D4): stopper hovedsøgningen,
+# fordi den ikke finder bedre planer, bruges resten af tiden på at løse et vindue på LNS_VINDUE minutter ad gangen
+# med resten af programmet holdt fast. Kan slås fra med SOLVER_LNS=0.
+LNS = os.environ.get("SOLVER_LNS", "1") == "1"
+LNS_VINDUE = int(os.environ.get("SOLVER_LNS_VINDUE", "120"))
+LNS_FORSOEG_SEKUNDER = float(os.environ.get("SOLVER_LNS_SEKUNDER", "4"))
+
+
+def forbedr_i_bidder(problem: dict, svar: dict, slut: float, stop: threading.Event | None = None) -> dict:
+    """Forbedrer en lovlig plan vindue for vindue, til tiden (slut, time.time()) er brugt eller et helt gennemløb af
+    vinduerne ikke gav noget. Returnerer svaret med de bedste tider (og "bidder": antal forbedringer)."""
+    bedst = dict(svar)
+    if not bedst.get("tider") or "maal" not in bedst:
+        return bedst
+    # Målet regnes i den samlede model (opdelingen pr. dag summerer delene), så forbedringer kan sammenlignes
+    fast = loes({**problem, "kampe": [{**k, "tilladte": [bedst["tider"][k["id"]]]} for k in problem["kampe"]]}, 5, stop=stop)
+    if fast["status"] not in ("OPTIMAL", "FEASIBLE"):
+        return bedst
+    bedst["maal"] = fast["maal"]
+    slot = int(problem["slotMin"])
+    dage = sorted({t // DAG for t in bedst["tider"].values()})
+    vinduer = []
+    for d in dage:
+        tider = [t - d * DAG for t in bedst["tider"].values() if t // DAG == d]
+        for a in range(min(tider), max(tider) + slot, max(slot, LNS_VINDUE // 2)):
+            vinduer.append((d * DAG + a, d * DAG + a + LNS_VINDUE))
+    forbedringer = 0
+    while time.time() < slut - 1 and not (stop is not None and stop.is_set()):
+        bedre_i_runden = False
+        for lo, hi in vinduer:
+            rest = slut - time.time()
+            if rest < 1 or (stop is not None and stop.is_set()):
+                break
+            kampe2 = []
+            for k in problem["kampe"]:
+                t = bedst["tider"][k["id"]]
+                inde = [x for x in k["tilladte"] if lo <= x < hi] if lo <= t < hi and len(k["tilladte"]) > 1 else []
+                kampe2.append({**k, "tilladte": inde or [t], "hint": t})
+            r = loes({**problem, "kampe": kampe2}, min(LNS_FORSOEG_SEKUNDER, rest), stop=stop)
+            if r["status"] in ("OPTIMAL", "FEASIBLE") and r.get("maal") is not None and r["maal"] < bedst["maal"] - 0.5:
+                bedst = {**bedst, "tider": r["tider"], "maal": r["maal"]}
+                forbedringer += 1
+                bedre_i_runden = True
+        if not bedre_i_runden:
+            break
+    bedst["bidder"] = forbedringer
+    return bedst
+
+
 def diagnose(problem: dict, stop: threading.Event | None = None) -> list[dict]:
     """Hvorfor findes der ingen lovlig plan? Prøver at lempe én hård regel ad gangen.
 
@@ -768,6 +834,18 @@ def diagnose(problem: dict, stop: threading.Event | None = None) -> list[dict]:
         if svar is None:
             uafklaret.append(1)
         return svar
+
+    # Først ét forsøg med ALLE lempelser på én gang (gennemgangen 2026-10-11, D3): hjælper selv det ikke, kan ingen enkelt
+    # lempelse hjælpe — så er svaret "plads" med det samme i stedet for efter op til 45 s med én regel ad gangen
+    kampe_alle = list(problem["kampe"])
+    for alt in problem.get("alternativer", []):
+        forbudt_alt = {i: set(tider) for i, tider in alt.get("forbudt", [])}
+        for i in alt["kampe"]:
+            if len(kampe_alle[i]["tilladte"]) != 1:
+                bredere = {t for t in alt["tilladte"] if t not in forbudt_alt.get(i, ())}
+                kampe_alle[i] = {**kampe_alle[i], "tilladte": sorted(set(kampe_alle[i]["tilladte"]) | bredere)}
+    if loesbar({**problem, "kampe": kampe_alle, "haltid": [], "maxDage": [], "mangeKampe": []}) is False:
+        return [{"regel": "plads"}]
 
     # De hyppigste årsager for en ny bruger først (Fable-gennemgangen, M7): rækkens tidsrum og dage, så max kampe pr.
     # dag og max dage, og til sidst max haltid, der kan koste op til fire forsøg pr. række
@@ -893,6 +971,12 @@ def koer(problem: dict, sekunder: float, job: Job):
     try:
         job.senest = time.time() + float(sekunder) + 2 * elastisk_tid + diagnose_tid
         svar = loes_opdelt(problem, sekunder, stop=job.stop)
+        rest = float(sekunder) - (time.time() - job.start)
+        if LNS and svar["status"] == "FEASIBLE" and not job.stop.is_set() and rest > 5:
+            svar = forbedr_i_bidder(problem, svar, time.time() + rest, job.stop)
+            svar["sekunder"] = round(time.time() - job.start, 2)
+            if svar.get("bidder"):
+                svar["rolig"] = False  # tiden er brugt på forbedringer i bidder, ikke stoppet af sig selv
         if svar["status"] == "INFEASIBLE" and not job.stop.is_set() and problem.get("elastiskPlan"):
             # Ingen lovlig plan: planen med færrest regelbrud — og hvilke regler den bryder (Jesper 2026-10-10)
             job.fase = "elastisk"

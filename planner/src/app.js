@@ -394,9 +394,9 @@ function startAutoLoeser() {
 
 const planHandlers = {
     // "Lav kampprogram": hele kæden på én gang (kampprogram.js). Det gamle program kan fås tilbage med "Fortryd".
-    lavKampprogram({ fastKamplaengde = false } = {}) {
+    lavKampprogram({ fastKamplaengde = false, behold = false } = {}) {
         const foer = projekt;
-        arbejd('Laver kampprogrammet … planneren prøver kamplængder og flere forslag og vælger det bedste.', () => beregnKampprogram(foer, { fastKamplaengde }), ({ r, beslutninger }) => {
+        arbejd('Laver kampprogrammet … planneren prøver kamplængder og flere forslag og vælger det bedste.', () => beregnKampprogram(foer, { fastKamplaengde, behold }), ({ r, beslutninger }) => {
             visKampprogram(r, { foer, valg: r.valg, beslutninger });
             startAutoLoeser();
         });
@@ -617,7 +617,9 @@ const planHandlers = {
             };
             afbryd = new AbortController();
             tilstand.optimerAfbryd = afbryd;
-            const svar = await optimer(udgangspunkt, { sekunder, hintPlan, job, vedStatus, signal: afbryd.signal });
+            // Efter "Planlæg kun kampe uden tid" flytter løseren helst ikke de kampe, der havde tid (stabil omplanlægning)
+            const stabil = auto && panelGaelder(tilstand.kampprogram, udgangspunkt) && tilstand.kampprogram.valg?.grund === 'behold' ? Object.keys(tilstand.kampprogram.foer.plan || {}) : null;
+            const svar = await optimer(udgangspunkt, { sekunder, hintPlan, job, vedStatus, signal: afbryd.signal, stabil });
             faerdig();
             const lovlig = svar.status === 'OPTIMAL' || svar.status === 'FEASIBLE';
             const aendring = aendretUnderOptimering(udgangspunkt, projekt);

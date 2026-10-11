@@ -36,12 +36,21 @@ export function panelGaelder(kp, projekt) {
     return a === projekt || (a.kampe === projekt.kampe && a.opsaetning === projekt.opsaetning && a.raekker === projekt.raekker && a.kategorier === projekt.kategorier);
 }
 
-export function lavKampprogram(projekt, { fastKamplaengde = false } = {}) {
+export function lavKampprogram(projekt, { fastKamplaengde = false, behold = false } = {}) {
+    // "Planlæg kun kampe uden tid" (gennemgangen 2026-10-11, U6/I2): efter et afbud eller en ny lodtrækning i TP skal
+    // programmet, spillerne har set, blive stående — alle kampe med tid låses midlertidigt, og kun resten planlægges
+    const oprLaast = projekt.laast || [];
+    if (behold) {
+        const medTid = projekt.kampe.filter((k) => projekt.plan[k.id]).map((k) => k.id);
+        projekt = { ...projekt, laast: [...new Set([...oprLaast, ...medTid])] };
+        fastKamplaengde = true;
+    }
     const foer = { slotMin: projekt.opsaetning.slotMin, pauseMin: projekt.opsaetning.pauseMin };
     let p = projekt;
     let grund = null;
     let bedst = null;
-    if (fastKamplaengde) grund = 'fast';
+    if (behold) grund = 'behold';
+    else if (fastKamplaengde) grund = 'fast';
     else if ((projekt.laast || []).length) grund = 'laast';
     else {
         bedst = bedsteKamplaengde(sammenlignKamplaengder(projekt));
@@ -58,7 +67,7 @@ export function lavKampprogram(projekt, { fastKamplaengde = false } = {}) {
         foer,
         grund,
     };
-    return { projekt: anvendForslag(p, forslag), forslag, valg };
+    return { projekt: { ...anvendForslag(p, forslag), laast: oprLaast }, forslag, valg };
 }
 
 // ── Beslutninger ──────────────────────────────────────────────

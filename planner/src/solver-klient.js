@@ -18,7 +18,7 @@ const DAG_MIN = 1440;
  * @param {object} projekt
  * @param {object} [hintPlan]  en lovlig plan (fra lavForslag) som startløsning
  */
-export function bygProblem(projekt, hintPlan = null) {
+export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
     // Reglernes byggesten kommer fra regelmodellen — de samme, som Tjek og planlæggeren bruger
     const M = lavRegelmodel(projekt);
     const { slotMin, dage, kampMap, kat, raekke, kanDeleSpillere, alleForfaedre, maxPrDag } = M;
@@ -296,7 +296,9 @@ export function bygProblem(projekt, hintPlan = null) {
         slotMin,
         dage: dage.map((d, i) => ({ index: i, start: minutter(d.start), slut: minutter(d.slut), baner: d.baner })),
         kapacitet, kampe, foer, konflikter, ikkeSamtidig, haltid, spillerGrupper, traek, puljerunder, maxDage,
-        cupVent, nethoejde, maxKampePrDag: maxPrDag, mangeKampe, maxPrGruppe, ikkeSammeDag, alternativer,
+        cupVent, nethoejde, maxKampePrDag: maxPrDag, mangeKampe,
+        // Stabil omplanlægning: kampe, der havde tid, flyttes helst ikke (pr. flyttet kamp koster det som 3 timers ventetid)
+        ...(stabil?.length ? { stabil: { vaegt: 3, kampe: kampe.map((k, i) => (stabil.includes(k.id) && k.hint != null && k.tilladte.length > 1 ? i : -1)).filter((i) => i >= 0) } } : {}), maxPrGruppe, ikkeSammeDag, alternativer,
         maxVent: projekt.opsaetning.maxVentetidMin ?? 90, // til "lange huller" (kriteriet langeHuller)
         elastisk, elastiskPlan: true, // ingen lovlig plan → løseren laver planen med færrest regelbrud
         vaegte: vaegteFor(projekt),
@@ -469,8 +471,8 @@ async function startJob(url, krop, { signal, vedStatus, ventMaxSekunder, ventMs 
  * signal afbryder også ventetiden i køen. Statuskald, der fejler forbigående (netværk, 5xx), tåles i
  * taalFejlSekunder; rammer de rate-grænsen (429), sættes tempoet ned i stedet for at give op.
  */
-export async function optimer(projekt, { sekunder = 30, hintPlan = null, url = '/api/solve', signal, job = null, pollMs = 3000, vedStatus = null, ventMaxSekunder = 600, ventMs = 10000, taalFejlSekunder = 25 } = {}) {
-    const problem = bygProblem(projekt, hintPlan);
+export async function optimer(projekt, { sekunder = 30, hintPlan = null, url = '/api/solve', signal, job = null, pollMs = 3000, vedStatus = null, ventMaxSekunder = 600, ventMs = 10000, taalFejlSekunder = 25, stabil = null } = {}) {
+    const problem = bygProblem(projekt, hintPlan, { stabil });
     // Jobbet startes og hentes med korte kald (start → status hvert par sekunder), så ingen
     // forbindelse står åben i flere minutter — proxyer som Cloudflare afbryder dem efter ca. 100 s.
     let data = await startJob(url, JSON.stringify({ problem, sekunder, asynkron: true, ...(job ? { job } : {}) }), { signal, vedStatus, ventMaxSekunder, ventMs });

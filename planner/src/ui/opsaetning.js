@@ -257,9 +257,11 @@ function sammenligningTabel(rk, anbefalet, opsaetning) {
     const bruges = (r) => r.minutter === opsaetning.slotMin && (samme(r.pauseMin, opsaetning.pauseMin) || (r.ogsaaUdenPause && ['ABCD', 'M', 'E', 'faelles'].every((x) => !opsaetning.pauseMin?.[x])));
     const raekker = rk.map((r) => {
         const mark = [r === bedst ? '<span class="kamplaengde-ok">bedst samlet</span>' : '', r.minutter === anbefalet && !r.udenPause ? 'anbefalet' : '', bruges(r) ? 'bruges nu' : ''].filter(Boolean).join(', ');
-        // Den forventede sluttid vises kun, når den ligger mindst 5 min efter planen (ellers er det støj)
-        const senere = (d) => minutter(d.forventetSlut) - minutter(d.planSlut) >= 5;
-        const slut = r.dage.map((d) => `${datoTekst(d.dato, { kort: true })}: ${d.planSlut}${senere(d) ? ` <span class="er-roed">→ ca. ${d.forventetSlut}</span>` : ''}`).join('<br>');
+        // Den forventede sluttid (prognosens 80 %-fraktil) vises kun, når den ligger mindst 5 min efter planen (ellers støj)
+        const forventet = (d) => d.prognose?.slut80 ?? d.forventetSlut;
+        const senere = (d) => minutter(forventet(d)) - minutter(d.planSlut) >= 5;
+        const slut = r.dage.map((d) => `${datoTekst(d.dato, { kort: true })}: ${d.planSlut}${senere(d) ? ` <span class="er-roed">→ ca. ${forventet(d)}</span>` : ''}`).join('<br>');
+        const forsinkelse = r.forsinkelse80 ?? r.forsinkelseMax;
         return `<tr>
             <td><strong>${r.minutter} min</strong><br><span class="daempet">${r.udenPause ? 'uden pause' : r.ogsaaUdenPause ? 'med/uden pause' : 'med pause'}</span>${mark ? `<br><span class="daempet">${mark}</span>` : ''}</td>
             <td class="tal">${r.udenTid ? `<span class="er-roed">${r.udenTid}</span>` : '0'}</td>
@@ -267,13 +269,13 @@ function sammenligningTabel(rk, anbefalet, opsaetning) {
             <td class="tal">${r.muligeBrud ? `<span class="er-gul">${r.muligeBrud}</span>` : '0'}</td>
             <td class="tal">${r.haltidGnsMin} min</td>
             <td>${slut}</td>
-            <td class="tal">${r.forsinkelseMax > FORSINKELSE_GRAENSE ? `<span class="er-roed">${r.forsinkelseMax} min</span>` : `${r.forsinkelseMax} min`}</td>
+            <td class="tal">${forsinkelse > FORSINKELSE_GRAENSE ? `<span class="er-roed">${forsinkelse} min</span>` : `${forsinkelse} min`}${(r.igangsaetRisiko ?? 0) > 0.2 ? '<br><span class="er-roed" title="Risiko for at kampe sættes i gang efter reglementets grænse (kl. 20/21/22, 2 timer tidligere før skoledag/hverdag)">sene kampe</span>' : ''}</td>
             <td>${bruges(r) ? '' : `<button type="button" class="knap knap--sekundaer knap--lille" data-handling="brug-kamplaengde" data-min="${r.minutter}" data-uden-pause="${r.udenPause ? '1' : '0'}">Brug</button>`}</td>
         </tr>`;
     }).join('');
     return `
             <div class="tabel-hylster" style="margin-top:12px"><table class="tabel">
-                <thead><tr><th title="Kamplængde og pause i planen">Kamplængde</th><th class="tal">Uden tid</th><th class="tal" title="Tjeks fejl: reglen brydes med sikkerhed">Regelbrud</th><th class="tal" title="Tjeks pause-advarsler: reglen brydes, hvis bestemte spillere går videre (fx kort pause før en finale)">Mulige brud</th><th class="tal">Tid i hal</th><th>Slut (plan → forventet)</th><th class="tal">Forsinkelse</th><th></th></tr></thead>
+                <thead><tr><th title="Kamplængde og pause i planen">Kamplængde</th><th class="tal">Uden tid</th><th class="tal" title="Tjeks fejl: reglen brydes med sikkerhed">Regelbrud</th><th class="tal" title="Tjeks pause-advarsler: reglen brydes, hvis bestemte spillere går videre (fx kort pause før en finale)">Mulige brud</th><th class="tal">Tid i hal</th><th title="Prognose: dagen simuleret 40 gange med tilfældige kamplængder; kampe kan sættes i gang op til 30 min før tid. 80 % af dagene slutter før den viste tid.">Slut (plan → forventet)</th><th class="tal" title="Største forsinkelse, som 80 % af de simulerede dage holder sig under">Forsinkelse</th><th></th></tr></thead>
                 <tbody>${raekker}</tbody></table></div>
             <p class="panel-sub">Hver kamplængde er afprøvet med reglementets pause i planen og uden pause i planen, hver med et nyt forslag fra planlæggeren og en simulering af dagen med de forventede kamptider: kampen tager den bane, der bliver ledig først, og spillerne får altid reglementets pause — er den ikke i planen, venter kampen på dagen. Forsinkelsen viser altså, hvad en plan uden pause koster i hallen. Den viser risikoen, ikke en garanti. "Bedst samlet" er længden med færrest kampe uden tid, færrest regelbrud, mindst forsinkelse ud over ${FORSINKELSE_GRAENSE} min, færrest mulige brud og kortest tid i hallen — i den rækkefølge. Den kan afvige fra anbefalingen, fordi pausen spiller ind: 20 min kamp + 10 min pause = 30 min, så med 25-min slots skal en spiller vente to slots mellem sine kampe.</p>`;
 }

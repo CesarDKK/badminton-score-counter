@@ -11,6 +11,7 @@ import { renderTjek } from './tjek.js';
 import { panelGaelder } from '../kampprogram.js';
 import { lavRegelmodel } from '../regelmodel.js';
 import { vurderSlots } from '../slotvurdering.js';
+import { prognoseDag, TIDLIG_START_MIN } from '../kamplaengde.js';
 
 /** Panelet med forslag, der får kabalen til at gå op (nedskaering.js) — valget træffes på oplyst grundlag. */
 function nedskaeringPanel(ned) {
@@ -47,6 +48,7 @@ export function kampprogramPanel(kp, aabneKort, projekt) {
     let valgTekst = '';
     if (!v) valgTekst = ''; // brugerens eget program: intet er valgt for dem
     else if (v.grund === 'laast') valgTekst = `Kamplængden er ikke ændret (${kamplaengdeTekst(v.minutter, v.udenPause)}), fordi der er låste kampe.`;
+    else if (v.grund === 'behold') valgTekst = `Kun kampe uden tid er planlagt — alle andre har beholdt deres tid. Kamplængde: ${kamplaengdeTekst(v.minutter, v.udenPause)}.`;
     else if (v.grund === 'fast' || v.grund === 'tidligere') valgTekst = `Kamplængde: ${kamplaengdeTekst(v.minutter, v.udenPause)}.`;
     else if (v.aendret) valgTekst = `Valgt for dig ud fra sammenligningen af kamplængder: <b>${esc(kamplaengdeTekst(v.minutter, v.udenPause))}</b>. Husk at sætte den samme kamplængde i TP.`;
     else valgTekst = `Kamplængden passer allerede bedst: ${kamplaengdeTekst(v.minutter, v.udenPause)}.`;
@@ -90,6 +92,8 @@ export function kampprogramPanel(kp, aabneKort, projekt) {
         ${rettet ? '<p class="daempet">Du har flyttet eller låst kampe, siden programmet blev lavet — Tjek viser, hvordan det står nu.</p>' : ''}
         ${(projekt.laast || []).length ? `<p class="daempet">🔒 ${projekt.laast.length} ${projekt.laast.length === 1 ? 'kamp er låst' : 'kampe er låst'} og beholder ${projekt.laast.length === 1 ? 'sin' : 'deres'} tid, når programmet laves igen. Dobbeltklik på en kamp for at låse den op.</p>` : ''}
         ${kp.forbedret ? `<p class="kampprogram-valg"><span class="er-groen">✓</span> ${esc(kp.forbedret)}</p>` : ''}
+        ${kp.prognose?.length ? `<p class="daempet" title="Dagen simuleret 100 gange med tilfældige kamplængder omkring sæsondataenes gennemsnit; kampe kan sættes i gang op til ${TIDLIG_START_MIN} min før tid (spillerne skal være klar), dog ikke før dagens start.">Prognose: ${kp.prognose.map((d) => `${esc(datoTekst(d.dato, { kort: true }))} plan slut ${d.planSlut}, forventet ca. ${d.slutMedian} (80 %: ${d.slut80})`).join(' · ')}.</p>` : ''}
+        ${kp.prognose?.some((d) => d.igangsaetRisiko > 0.2) ? `<p class="liste-fejl"><b>Risiko for sene kampe:</b> ${kp.prognose.filter((d) => d.igangsaetRisiko > 0.2).map((d) => `${esc(datoTekst(d.dato, { kort: true }))} (${Math.round(d.igangsaetRisiko * 100)} % af de simulerede dage)`).join(', ')} — kampe kan blive sat i gang efter reglementets grænse (kl. 20/21/22 for U9–U11/U13–U15/U17+, 2 timer tidligere før skoledag/hverdag).</p>` : ''}
         ${kp.tilbud ? `<p class="kampprogram-valg">${esc(kp.tilbud.tekst)} <button class="knap knap--lille" data-handling="kp-tilbud">Brug løserens program</button></p>` : ''}
         ${gaarOp && !loeserNej && !kp.egetProgram && !aabneKort.length ? '<p class="raekke-knapper"><button class="knap knap--sekundaer knap--lille" data-handling="til-tp">Videre til Til TP →</button></p>' : ''}
         ${kp.udfoert.length ? `<p class="daempet">Gjort undervejs: ${esc(kp.udfoert.join(' · '))}.</p>` : ''}
@@ -288,6 +292,11 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
     const problemer = tilstand.visning === 'problemer';
     // Panelet fra 'Lav kampprogram' vises for det projekt, det blev lavet til
     const kp = panelGaelder(tilstand.kampprogram, projekt) ? tilstand.kampprogram : null;
+    // Prognosen for programmet (kamplaengde.js: prognoseDag) — regnes igen, når programmet ændres
+    if (kp && kp.prognoseFor !== projekt) {
+        kp.prognose = projekt.opsaetning.dage.map((d) => ({ dato: d.dato, ...(prognoseDag(projekt, d.dato) || {}) })).filter((d) => d.planSlut);
+        kp.prognoseFor = projekt;
+    }
     const gitterHistorik = tilstand.gitterHistorik || [];
     const gitterTop = gitterHistorik[gitterHistorik.length - 1];
     const gitterAntal = gitterHistorik.length;
@@ -324,6 +333,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
                 <summary class="knap knap--sekundaer">Mere</summary>
                 <div class="menu-liste">
                     ${autoLoeser ? loeserKnap : ''}
+                    <button class="knap knap--sekundaer" data-handling="kun-uden-tid" title="Efter et afbud eller en ny lodtrækning i TP: alle kampe, der har tid, beholder den — kun kampe uden tid planlægges, og løseren flytter helst ikke de andre">Planlæg kun kampe uden tid</button>
                     <button class="knap knap--sekundaer" data-handling="forslag" title="Planlægger alle kampe forfra på et øjeblik med den kamplængde og pause, der er sat — uden at prøve andre">Lav forslag med nuværende kamplængde</button>
                     <button class="knap knap--sekundaer" data-handling="forslag-dag" title="Planlægger kun denne dag om; andre dage og låste kampe røres ikke">Lav forslag kun for ${esc(datoTekst(dag.dato, { kort: true }))}</button>
                     <button class="knap knap--sekundaer" data-handling="alternativer" title="Laver op til 8 forskellige forslag med forskellige prioriteringer, som du kan bladre imellem">Andre forslag at vælge imellem</button>
@@ -439,6 +449,7 @@ function bind(container, h) {
             else if (hd === 'kp-elastisk') h.brugElastisk();
             else if (hd === 'kp-tilbud') h.brugTilbud();
             else if (hd === 'til-tp') h.tilTP();
+            else if (hd === 'kun-uden-tid') h.lavKampprogram({ behold: true });
             else if (hd === 'forslag') h.lavForslag(false);
             else if (hd === 'forslag-dag') h.lavForslag(true);
             else if (hd === 'laas-kategori') h.laasKategori(true);
