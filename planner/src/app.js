@@ -9,7 +9,7 @@ import { scorePlan } from './kriterier.js';
 import { alleNedskaeringer, anvendNedskaering, kapacitetsRegnskab, swissKandidater } from './nedskaering.js';
 import { sammenlignKamplaengder } from './kamplaengde.js';
 import { lavKampprogram as byggKampprogram, lavBeslutninger, anvendAendring, panelGaelder } from './kampprogram.js';
-import { reglementetsPause, INGEN_PAUSE } from './regler.js';
+import { reglementetsPause, INGEN_PAUSE, regelsaetTekst } from './regler.js';
 import { renderOpsaetning, renderFil } from './ui/opsaetning.js';
 import { renderPlan } from './ui/plan.js';
 import { renderListe } from './ui/liste.js';
@@ -37,6 +37,9 @@ const sektioner = {
 };
 const navStatus = document.getElementById('navStatus');
 const dialog = document.getElementById('importValg');
+// Hvilket regelsæt planneren følger (regler.js: REGELSAET) — detaljerne står under "Reglementets grænser"
+const regelsaetLinje = document.getElementById('regelsaet');
+if (regelsaetLinje) regelsaetLinje.textContent = `Reglerne følger ${regelsaetTekst()}. Udgaverne står under Turneringen › Avanceret › Reglementets grænser.`;
 
 // ── Faner ─────────────────────────────────────────────────────
 

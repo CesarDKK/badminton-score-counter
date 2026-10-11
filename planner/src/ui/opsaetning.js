@@ -5,6 +5,7 @@ import { kapacitetPrDag, kampePrKategori, slotsForDag, baneSlots, FYLDNINGSGRAD 
 import { foerSkoledag } from '../rules.js';
 import { minutter } from '../tp-reader.js';
 import { reglerFor, STANDARD_REGLER } from '../store.js';
+import { REGELSAET, regelsaetTekst } from '../regler.js';
 import { FORM_VALG, FORM_VALG_TEKST, formTekst, effektivForm, minKampeSamlet } from '../form.js';
 import { KRITERIER, VAEGT_SKABELONER, vaegteFor } from '../kriterier.js';
 import { anbefaletKamplaengde, bedsteKamplaengde, SAESONDATA, SKIFTE_MIN, MARGEN, FORSINKELSE_GRAENSE } from '../kamplaengde.js';
@@ -344,6 +345,7 @@ function reglerBoks(p) {
         </tr>`).join('');
     const indhold = `
             <p class="panel-sub">Standardværdierne er reglementets. Ret dem, hvis du har dispensation eller vil planlægge strammere/løsere. Pauserne står under kamplængde og pauser.</p>
+            ${regelsaetBoks()}
             <div class="felter">
                 ${tal('maxKampePrDag', r.maxKampePrDag, 'Max kampe pr. dag')}
                 ${tal('maxKampePrDagEnDag', r.maxKampePrDagEnDag, 'Max kampe, éndagsturnering')}
@@ -379,6 +381,15 @@ function reglerBoks(p) {
             <summary><span class="fold-titel">Reglementets grænser</span> ${antalAendret ? `<span class="maerke maerke--advarsel">${antalAendret} ændret</span>` : '<span class="daempet">som reglementet</span>'}</summary>
             ${indhold}
         </details>`;
+}
+
+/** Hvilke udgaver af reglementet planneren følger — så man ved, om de passer til sæsonen. */
+export function regelsaetBoks() {
+    return `<div class="regelsaet">
+                <p><b>${esc(regelsaetTekst())}</b></p>
+                <ul>${REGELSAET.kilder.map((k) => `<li><a href="${esc(k.url)}" target="_blank" rel="noopener noreferrer">${esc(k.navn)}</a> <span class="daempet">(${esc(k.udgave)})</span></li>`).join('')}</ul>
+                <p class="daempet">Er der kommet en nyere udgave på badminton.dk, gælder den — og planneren skal opdateres.</p>
+            </div>`;
 }
 
 /** Rækkefølgen af det, der må give sig, når kampprogrammet ikke går op — bestemmer, hvilken løsning der anbefales. */
