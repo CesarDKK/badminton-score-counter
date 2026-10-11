@@ -60,7 +60,8 @@ export function kampprogramPanel(kp, aabneKort, projekt) {
         }).join('');
         return `<div class="beslutning" data-kort="${i}">
             <h4>${esc(k.titel)}</h4>${k.flere?.length ? `<ul class="beslutning-flere">${k.flere.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
-            ${k.valg.length ? '<p class="daempet">Hver løsning er afprøvet med planlæggeren.</p>' : '<p class="daempet">Planneren fandt ingen ændring af opsætningen, der hjælper her. Kampene ligger med regelbrud — se dem i Tjek.</p>'}
+            ${k.forklaring ? `<p>${esc(k.forklaring)}</p>` : ''}
+            ${k.valg.length ? '<p class="daempet">Hver løsning er afprøvet med planlæggeren.</p>' : k.forklaring ? '' : '<p class="daempet">Planneren fandt ingen ændring af opsætningen, der hjælper her. Kampene ligger med regelbrud — se dem i Tjek.</p>'}
             <div class="beslutning-liste">${valg}
                 <label class="beslutning-valg"><input type="radio" name="kort-${i}" value="behold" ${k.valg.length ? '' : 'checked'}>
                     <span><b>Behold</b> <span class="daempet">— ${k.antal} ${k.antal === 1 ? 'kamp' : 'kampe'} bryder reglen og vises som fejl/advarsel i Tjek</span></span></label>
@@ -228,7 +229,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
         const kampe = sortKampe(prSlot.get(slot) || []);
         const halve = kampe.filter((k) => katMap.get(k.kategori)?.halvBane).length;
         const brugt = (kampe.length - halve) + Math.ceil(halve / 2);
-        const baner = slots.includes(slot) ? banerISlot(dag, slot) : 0;
+        const baner = slots.includes(slot) ? banerISlot(dag, slot, slotMin) : 0;
         const { reserveret } = slots.includes(slot) ? puljeKapacitet(dag, slot, projekt.raekker, slotMin) : { reserveret: new Map() };
         // Reserverede puljer vises for sig: "U09 D 4/5"
         const puljeTekst = [...reserveret.entries()].map(([rid, b]) => {

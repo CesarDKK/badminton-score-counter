@@ -159,7 +159,7 @@ export function simulerDag(projekt, dato, varighed = varighedForProjekt(projekt)
     const slutPaa = new Map(); // kamp-id → sluttid (til kampe, der bygger på den, fx en finale)
     const ventende = kampe.map((x) => {
         const kat = katMap.get(x.k.kategori);
-        return { ...x, kat, pause: pauseForRaekke(pauseMin, raekkeMap.get(kat?.raekke)?.pauseKlasse), ledige: Math.max(1, Math.min(baner.length, banerISlot(dag, x.slot))) };
+        return { ...x, kat, pause: pauseForRaekke(pauseMin, raekkeMap.get(kat?.raekke)?.pauseKlasse), ledige: Math.max(1, Math.min(baner.length, banerISlot(dag, x.slot, slotMin))) };
     });
     // Som i hallen: kampene sættes løbende i gang. Hver gang vælges den kamp, der kan starte tidligst —
     // tidligst på sin planlagte tid, når spillerne har haft deres pause, kampe den bygger på er slut, og en

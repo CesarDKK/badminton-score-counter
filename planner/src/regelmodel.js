@@ -91,6 +91,9 @@ export function lavRegelmodel(projekt) {
     };
     const kanDeleSpillere = (a, b) => {
         if (a.tpRef.draw !== b.tpRef.draw) return true;
+        // Kendte spillere på begge kampe (puljer): afgøres af spillerne selv — ikke af rundenumre, som en TP-fil kan
+        // mangle (så var to puljekampe med samme spiller ikke blevet set som konflikt; gennemgangen 2026-10-11, K4)
+        if (a.spillere.length && b.spillere.length && a.fase !== 'swiss' && b.fase !== 'swiss') return a.spillere.some((s) => b.spillere.includes(s));
         if (a.fase === 'swiss' && b.fase === 'swiss') return a.runde !== b.runde;
         return alleForfaedre(a.id).has(b.id) || alleForfaedre(b.id).has(a.id);
     };

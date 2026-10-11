@@ -97,6 +97,10 @@ function lavForslagEnGang(projekt, valg = {}) {
     const historik = new Map();      // spillerId → [{ kamp, dag, min, kendt }]
     const kendteKampePrDag = new Map(); // `${spiller}|${dag}` → antal
     const katKampePrDag = new Map();    // `${spiller}|${kategori}|${dag}` → antal (senior E/M: max pr. kategori pr. dag)
+    // Swiss-runde 2+ har ingen kendte spillere, men alle i lodtrækningen spiller hver runde: én kamp pr. runde pr. deltager
+    // tæller med i max kampe pr. dag (Tjek gør det samme). Nøgle: spiller|draw|runde|dag
+    const swissTalt = new Set();
+    const erSwissRunde = (k) => k.fase === 'swiss' && !k.spillere.length;
     const finalerunderPrDag = new Map(); // `${kategori}|${dag}` → Set(rundeNavn) for cup-finalerunder
     const slotBrug = new Map();      // `${dag}|${slot}|${pulje}` → { hele, halve, kampe: [] }
     const singleSpaend = new Map();  // `${raekke}|${dag}` → { foerste, sidste } — rækkens singlekampe, til max varighed
@@ -153,6 +157,12 @@ function lavForslagEnGang(projekt, valg = {}) {
         for (const s of k.muligeSpillere) {
             if (!historik.has(s)) historik.set(s, []);
             historik.get(s).push({ kamp: k, dag, min, kendt: kendte.has(s) });
+            const swissNoegle = erSwissRunde(k) ? `${s}|${k.tpRef.draw}|${k.runde}|${dag}` : null;
+            if (swissNoegle && !swissTalt.has(swissNoegle)) {
+                swissTalt.add(swissNoegle);
+                const n = `${s}|${dag}`;
+                kendteKampePrDag.set(n, (kendteKampePrDag.get(n) || 0) + 1);
+            }
             if (kendte.has(s)) {
                 const n = `${s}|${dag}`;
                 kendteKampePrDag.set(n, (kendteKampePrDag.get(n) || 0) + 1);
@@ -260,7 +270,9 @@ function lavForslagEnGang(projekt, valg = {}) {
         const kendte = new Set(k.spillere);
         let mindsteGab = null;
         for (const s of k.muligeSpillere) {
-            if (!lemp.maxKampe && kendte.has(s) && (kendteKampePrDag.get(`${s}|${dag.dato}`) || 0) >= Math.min(spillerGraense(s, dag.dato), maxPrDag)) return 'spiller har max kampe den dag';
+            // En Swiss-runde tæller én kamp for hver deltager (kun første gang rundens kampe lægges på dagen)
+            const nyKamp = kendte.has(s) || (erSwissRunde(k) && !swissTalt.has(`${s}|${k.tpRef.draw}|${k.runde}|${dag.dato}`));
+            if (!lemp.maxKampe && nyKamp && (kendteKampePrDag.get(`${s}|${dag.dato}`) || 0) >= Math.min(spillerGraense(s, dag.dato), maxPrDag)) return 'spiller har max kampe den dag';
             if (!lemp.maxKampe && kendte.has(s) && M.seniorEM(r) && (katKampePrDag.get(`${s}|${k.kategori}|${dag.dato}`) || 0) >= M.regler.seniorMaxPrKategori) return 'spiller har max kampe i kategorien den dag';
             const h = historik.get(s);
             if (!h) continue;
@@ -423,7 +435,12 @@ function lavForslagEnGang(projekt, valg = {}) {
     // Rækkens dage prøves IKKE alene: en kamp (typisk U9-Swiss), der kræver flere små lempelser på samme
     // dag, ville ellers hellere flytte til en dag, rækken ikke må spille. Dagen brydes kun samlet, efter
     // pause, max haltid, tidsvindue og max kampe (Jesper 2026-10-09).
-    const enkeltvis = LEMPELSE_ORDEN.filter(([brudNavn]) => brudNavn !== 'dag').map(([brudNavn, n]) => ({ brud: brudNavn, lemp: { reserveret: true, [n]: true } }));
+    // Enkeltvis kun de regler, der kan brydes "lidt" (til og med max kampe). Det fysisk umulige — for mange kampe på
+    // banerne, forkert rækkefølge, en spiller i to kampe på én gang — kommer først efter alle kombinationer af de små
+    // brud (samlet nedenfor). Ellers vandt "dobbeltbooket" over "10 min for lidt pause + uden for tidsrummet"
+    // (gennemgangen 2026-10-11, K2).
+    const FYSISK_UMULIGT = new Set(['kapacitet', 'raekkefoelge', 'dobbeltbooket']);
+    const enkeltvis = LEMPELSE_ORDEN.filter(([brudNavn]) => brudNavn !== 'dag' && !FYSISK_UMULIGT.has(brudNavn)).map(([brudNavn, n]) => ({ brud: brudNavn, lemp: { reserveret: true, [n]: true } }));
     const samlet = LEMPELSE_ORDEN.map(([brudNavn], i) => ({ brud: brudNavn, lemp: Object.fromEntries(LEMPELSE_ORDEN.slice(0, i + 1).map(([, n]) => [n, true])) }));
     const LEMPELSER = [...enkeltvis, ...samlet.slice(1)];
     const brud = [];
@@ -596,7 +613,10 @@ export function loesningsforslag(projekt, ikkePlaceret) {
             }
             else ud.push({ tekst: `${hvem}: rækkens tidsrum er for kort — udvid det med ca. ${slots} slots.` });
         } else if (aarsag === 'ingen ledig reserveret bane') {
-            ud.push({ tekst: `${hvem}: giv rækken ${Math.ceil(baneSlotsNoedvendige / Math.max(1, rDage.length * 4))} af dagens baner mere som reserverede, eller udvid dens tidsrum.` });
+            // Aldrig flere reserverede baner end dagen har (gennemgangen 2026-10-11, B8)
+            const ledige = Math.max(0, Math.min(...rDage.map((d) => d.baner), Infinity) - (r?.reserveredeBaner || 0));
+            const flere = Math.min(Math.ceil(baneSlotsNoedvendige / Math.max(1, rDage.length * 4)), ledige);
+            ud.push({ tekst: flere > 0 ? `${hvem}: giv rækken ${flere} af dagens baner mere som reserverede, eller udvid dens tidsrum.` : `${hvem}: alle dagens baner er allerede reserveret til rækken — udvid dens tidsrum.` });
         } else if (aarsag === 'ingen ledig bane' || aarsag === 'ingen ledig plads' || aarsag === 'uden for tidsvinduet') {
             if (sidsteDag) {
                 const til = plusMin(sidsteDag.slut, slots * slotMin);

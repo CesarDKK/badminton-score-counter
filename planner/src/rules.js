@@ -68,7 +68,7 @@ export function tjekPlan(projekt) {
         const brug = banebrugISlot(kampe.map((k) => ({ raekkeId: kat(k)?.raekke, halv: !!kat(k)?.halvBane })), kapacitet);
         if (brug.forMange) {
             const halve = kampe.filter((k) => kat(k)?.halvBane).length;
-            const iAlt = banerISlot(dag, slot);
+            const iAlt = banerISlot(dag, slot, slotMin);
             const brugtIAlt = [...brug.prPulje].reduce((sum, [pulje, p]) => sum + (pulje === 'faelles' ? p.brugt : Math.min(p.brugt, p.baner)), 0) + [...brug.overloeb.values()].reduce((x, y) => x + y, 0);
             const reserveret = [...brug.prPulje].filter(([pulje]) => pulje !== 'faelles').map(([pulje, p]) => `${pulje}: ${Math.min(p.brugt, p.baner)} af ${p.baner} reserverede baner${brug.overloeb.has(pulje) ? ` + ${brug.overloeb.get(pulje)} fælles` : ''}`);
             // Kampene på de fælles baner (og dem, der løber over) er dem, der kan flyttes
@@ -130,12 +130,44 @@ export function tjekPlan(projekt) {
                 }
             }
         }
-        // Max kampe pr. dag (kun kendte)
-        const prDag = new Map();
-        for (const x of liste) if (x.kendt) prDag.set(x.p.dag, (prDag.get(x.p.dag) || 0) + 1);
-        for (const [dag, n] of prDag) {
-            const graense = M.maxPrDagForKampe(liste.filter((x) => x.kendt && x.p.dag === dag).map((x) => x.k)); // senior: 10 også på én dag
-            if (n > graense) tilfoej({ type: 'max-kampe', alvor: 'fejl', tekst: `${spillerNavn(s)} har ${n} kampe ${datoKort(dag)} (max ${graense}).`, kampe: liste.filter((x) => x.kendt && x.p.dag === dag).map((x) => x.k.id), dag });
+    }
+
+    // ── Max kampe pr. spiller pr. dag (§ 4 stk. 5.1–5.2) ──
+    // Sikre kampe: de kendte og hver Swiss-runde, spilleren er med i (alle spiller i hver runde) → fejl.
+    // Mulige cupkampe (højst én pr. cuprunde) tæller med, hvis spilleren går videre → kun advarsel (Jesper 2026-10-11);
+    // reglementet siger, at deltagerne så skal kunne trække sig inden turneringen. Grænsen er spillerens strengeste.
+    const dagstal = new Map(); // spiller|dag → { s, dag, sikre: [kamp], swiss: Map(draw|runde → kamp), cup: Map(draw|runde → kamp) }
+    const dagFor = (s, dag) => {
+        const n = `${s}|${dag}`;
+        if (!dagstal.has(n)) dagstal.set(n, { s, dag, sikre: [], swiss: new Map(), cup: new Map() });
+        return dagstal.get(n);
+    };
+    for (const { k, p } of placerede) {
+        const runde = `${k.tpRef.draw}|${k.runde}`;
+        if (k.fase === 'swiss' && !k.spillere.length) {
+            for (const s of k.muligeSpillere) { const t = dagFor(s, p.dag); if (!t.swiss.has(runde)) t.swiss.set(runde, k); }
+            continue;
+        }
+        const kendte = new Set(k.spillere);
+        for (const s of k.muligeSpillere) {
+            const t = dagFor(s, p.dag);
+            if (kendte.has(s)) t.sikre.push(k);
+            else if (k.fase === 'cup' && !t.cup.has(runde)) t.cup.set(runde, k);
+        }
+    }
+    for (const t of dagstal.values()) {
+        const sikre = [...t.sikre, ...t.swiss.values()];
+        if (!sikre.length) continue;
+        const graense = M.maxPrDagForKampe(sikre); // senior: 10 også på én dag
+        const swissTekst = t.swiss.size ? ` (heraf ${t.swiss.size} Swiss-${t.swiss.size === 1 ? 'runde' : 'runder'})` : '';
+        if (sikre.length > graense) {
+            tilfoej({ type: 'max-kampe', alvor: 'fejl', tekst: `${spillerNavn(t.s)} har ${sikre.length} kampe ${datoKort(t.dag)}${swissTekst} (max ${graense}).`, kampe: sikre.map((k) => k.id), dag: t.dag });
+            continue;
+        }
+        const mulige = [...sikre, ...t.cup.values()];
+        const graenseMulige = M.maxPrDagForKampe(mulige);
+        if (t.cup.size && mulige.length > graenseMulige) {
+            tilfoej({ type: 'max-kampe-mulige', alvor: 'advarsel', tekst: `${spillerNavn(t.s)} kan få ${mulige.length} kampe ${datoKort(t.dag)} (max ${graenseMulige}), hvis spilleren går videre i cuppen: ${sikre.length} sikre${swissTekst} og op til ${t.cup.size} i cuppen. Deltagerne skal have mulighed for at trække sig inden turneringen.`, kampe: mulige.map((k) => k.id), dag: t.dag });
         }
     }
 
@@ -385,6 +417,24 @@ export function tjekPlan(projekt) {
         const kampe = projekt.kampe.filter((x) => x.kategori === k.id);
         if (!kampe.length) continue;
         const ef = effektivForm(k);
+        // U9/U11: højst 6 singlekampe og 5 doublekampe pr. spiller (vejledningen) — Swiss tæller alle runder, cup alle
+        // runder, spilleren kan nå
+        if (['U09', 'U11'].includes(r.aargang)) {
+            const loft = k.type === 'single' ? regler.maxKampeU9U11.single : regler.maxKampeU9U11.double;
+            const flest = new Map();
+            const cupRunder = new Map(); // spiller → Set(draw|runde)
+            for (const x of kampe) {
+                if (x.fase === 'cup' && !x.spillere.length) { for (const s of x.muligeSpillere) { if (!cupRunder.has(s)) cupRunder.set(s, new Set()); cupRunder.get(s).add(`${x.tpRef.draw}|${x.runde}`); } continue; }
+                if (x.fase === 'swiss') { for (const s of [...x.spillere, ...x.muligeSpillere]) flest.set(s, ef.runder || flest.get(s) || 0); continue; }
+                for (const s of x.spillere) flest.set(s, (flest.get(s) || 0) + 1);
+            }
+            for (const [s, rr] of cupRunder) flest.set(s, (flest.get(s) || 0) + rr.size);
+            const max = Math.max(0, ...flest.values());
+            if (max > loft) {
+                const antal = [...flest.values()].filter((n) => n > loft).length;
+                tilfoej({ type: 'form', alvor: 'advarsel', noegle: `${k.id}:max-kampe-kategori`, tekst: `${k.id}: ${antal} ${antal === 1 ? 'spiller' : 'spillere'} kan få op til ${max} ${k.type === 'single' ? 'singlekampe' : 'doublekampe'} — U9-U11-vejledningen siger ${k.type === 'single' ? `4–${loft} singlekampe` : `2–${loft} doublekampe`}. ${(k.formValg || 'tp') === 'tp' ? 'Rettes i TP (færre runder eller mindre puljer).' : 'Vælg færre runder eller en anden form under Turneringen.'}`, kampe: [] });
+            }
+        }
         if (ef.form === 'swiss' && ef.runder < regler.minKampe.swissRunder) tilfoej({ type: 'form', alvor: 'advarsel', noegle: `${k.id}:swiss-runder`, tekst: `${k.id}: Swiss Ladder med ${ef.runder} ${ef.runder === 1 ? 'runde' : 'runder'} — reglementet kræver mindst ${regler.minKampe.swissRunder}.`, kampe: [] });
         // Tælles kravet samlet for rækken (rækkens eget tilvalg), regnes spillerens sikre kampe i andre kategorier med
         const samlet = minKampeSamlet(r);

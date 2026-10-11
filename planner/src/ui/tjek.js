@@ -13,6 +13,7 @@ const TYPE_TEKST = {
     'uden-for-dagen': 'Uden for dagens slots',
     'ukendt-dag': 'Ukendt dag',
     'max-kampe': 'For mange kampe pr. dag',
+    'max-kampe-mulige': 'Kan få for mange kampe pr. dag (cup)',
     'flere-dage': 'Række over flere dage',
     'uden-for-raekkens-dage': 'Uden for rækkens dage',
     'raekke-tidsrum': 'Uden for rækkens eget tidsrum',
