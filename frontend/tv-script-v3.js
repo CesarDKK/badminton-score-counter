@@ -512,6 +512,9 @@ async function loadCourtData() {
             gameState.servingTeam != null;      // Serving team selected (doubles)
 
         isMatchCurrentlyActive = isMatchActive && hasGameActivity;
+
+        // Planner-runde, hvor ingen tæller: kun navnene, i fuld bredde
+        setPlannerNavneVisning(isMatchActive && !!gameState.planner && !hasGameActivity);
         if (!isMatchCurrentlyActive) genindlaesHvisLedig(); // ventende ny version → nu, banen er ledig
 
         // Hold-logoer (kun holdkamp-delkampe) — fire-and-forget, fejl skjuler logoer
@@ -1963,6 +1966,21 @@ function setPlannerLayout(on) {
     const c = document.querySelector('.tv-container');
     if (c) c.classList.toggle('has-planner', on);
     if (typeof fitAllPlayerNames === 'function') requestAnimationFrame(fitAllPlayerNames);
+}
+
+// Kampe fra badmintonplanner.dk tælles sjældent, så før første point (eller
+// valgt server) viser TV'et kun navnene — store, i fuld bredde, uden de tomme
+// pointbokse. Tælles der (tablet eller QR), skiftes til den normale tavle.
+let _plannerNavneOn = false;
+function setPlannerNavneVisning(on) {
+    if (on === _plannerNavneOn) return;
+    _plannerNavneOn = on;
+    const c = document.querySelector('.tv-container');
+    if (c) c.classList.toggle('planner-navne', on);
+    // Mål med det samme: navnenes bredde skifter markant. (requestAnimationFrame
+    // alene venter, til siden er synlig — er TV'et slukket, kom målingen først,
+    // når det blev tændt, og indtil da stod navnene i den gamle størrelse.)
+    if (typeof fitAllPlayerNames === 'function') fitAllPlayerNames();
 }
 
 function updatePlannerDisplay(planner, hasGameActivity) {
