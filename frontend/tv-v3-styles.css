@@ -943,6 +943,62 @@ body::before {
     font-size: calc(clamp(2.2em, 11vh, 16em) * var(--fit-scale, 1));
 }
 
+/* Runde fra badmintonplanner.dk, hvor ingen tæller endnu: stillingen siger
+   intet (0 og streger), så navnene får hele bredden, centreret med "MOD"
+   imellem holdene. Så snart der tælles (server valgt eller første point),
+   fjerner tv-script-v3.js klassen, og tavlen er som ellers. */
+.tv-planner-mod {
+    display: none;
+}
+
+.tv-container.planner-navne .set-boxes {
+    display: none;
+}
+
+.tv-container.planner-navne .team-row {
+    justify-content: center;
+}
+
+.tv-container.planner-navne .team-row + .team-row {
+    border-top: 0;
+}
+
+.tv-container.planner-navne .tv-player-row {
+    justify-content: center;
+}
+
+.tv-container.planner-navne .player-name,
+.tv-container.planner-navne .partner-name {
+    font-size: calc(clamp(2.4em, 14.5vh, 18em) * var(--fit-scale, 1));
+    text-align: center;
+}
+
+/* Med udskiftere/banenote i strippen er der lidt mindre højde */
+.tv-container.planner-navne.has-planner .player-name,
+.tv-container.planner-navne.has-planner .partner-name {
+    font-size: calc(clamp(2.2em, 13vh, 18em) * var(--fit-scale, 1));
+}
+
+.tv-container.planner-navne .tv-planner-mod {
+    display: flex;
+    align-items: center;
+    gap: 2vw;
+    padding: 0 6vw;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(1.4em, 4.5vh, 4em);
+    letter-spacing: 6px;
+    line-height: 1;
+    color: var(--color-accent);
+}
+
+.tv-container.planner-navne .tv-planner-mod::before,
+.tv-container.planner-navne .tv-planner-mod::after {
+    content: '';
+    flex: 1;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.12);
+}
+
 .tv-planner-strip {
     flex-shrink: 0;
     display: flex;
