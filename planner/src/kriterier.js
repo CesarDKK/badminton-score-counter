@@ -85,7 +85,7 @@ export const KRITERIER = [
                     if (m > sidste) break;
                     const her = paaDagen.filter((x) => x.min === m);
                     const halve = her.filter((x) => c.katMap.get(x.k.kategori)?.halvBane).length;
-                    tomme += Math.max(0, banerISlot(d, slot) - ((her.length - halve) + Math.ceil(halve / 2)));
+                    tomme += Math.max(0, banerISlot(d, slot, c.slotMin) - ((her.length - halve) + Math.ceil(halve / 2)));
                 }
             }
             return tomme;

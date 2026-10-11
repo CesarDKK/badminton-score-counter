@@ -58,6 +58,9 @@ export const STANDARD_REGLER = {
     eFinale: ['10:00', '13:00'],       // E-finaler skal ligge i dette vindue
     seniorMaxPrKategori: 3,          // senior E/M: max kampe pr. kategori pr. dag
     minKampe: { MA: 2, BCDSingle: 3, BCDDouble: 2, U9U11Single: 4, swissRunder: 4 },
+    // U9-U11-vejledningen 2026/27: "Alle spillere får 4 – 6 singlekampe og 2 – 5 doublekampe" — Jesper 2026-10-11:
+    // anbefalingen følges (advarsel), og reglementets max kampe pr. dag gælder stadig (fejl)
+    maxKampeU9U11: { single: 6, double: 5 },
 };
 
 /** Reglerne for et projekt: standard med projektets ændringer lagt ovenpå. */
@@ -69,5 +72,6 @@ export function reglerFor(projekt) {
         tidsvindue: { ...STANDARD_REGLER.tidsvindue, ...(egne.tidsvindue || {}) },
         minKampMin: { ...STANDARD_REGLER.minKampMin, ...(egne.minKampMin || {}) },
         minKampe: { ...STANDARD_REGLER.minKampe, ...(egne.minKampe || {}) },
+        maxKampeU9U11: { ...STANDARD_REGLER.maxKampeU9U11, ...(egne.maxKampeU9U11 || {}) },
     };
 }

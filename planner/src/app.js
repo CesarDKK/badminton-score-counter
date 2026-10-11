@@ -583,7 +583,9 @@ const planHandlers = {
                 const bedre = opt.score < sammenlign.score;
                 if (auto && harProgram) {
                     const kp = panelGaelder(tilstand.kampprogram, projekt) ? tilstand.kampprogram : null;
-                    if (bedre) {
+                    // Sikkerhedsnet: automatisk kun, når løserens plan ikke har flere fejl i Tjek end programmet — så en
+                    // uenighed mellem løseren og Tjek aldrig skifter et lovligt program ud (gennemgangen 2026-10-11, K8)
+                    if (bedre && tjekPlan(p2).antal.fejl <= tjekPlan(projekt).antal.fejl) {
                         const foerP = projekt;
                         saet({ ...projekt, plan });
                         const tekst = `Løseren har forbedret programmet på ${svar.sekunder} s (score ${sammenlign.score} → ${opt.score}; lavere er bedre).`;
@@ -591,7 +593,9 @@ const planHandlers = {
                         tilstand.forslag = { tekst, ikkePlaceret: [], kilde: 'loeser' };
                         if (kp) { kp.projekt = projekt; kp.forbedret = tekst; }
                     } else {
-                        const tekst = `Løseren fandt ikke en bedre plan end programmet på ${svar.sekunder} s — det er beholdt.`;
+                        const tekst = bedre
+                            ? `Løseren fandt en plan med bedre score, men flere fejl i Tjek end programmet — programmet er beholdt.`
+                            : `Løseren fandt ikke en bedre plan end programmet på ${svar.sekunder} s — det er beholdt.`;
                         tilstand.forslag = { tekst, ikkePlaceret: [], kilde: 'loeser' };
                         if (kp) kp.forbedret = tekst;
                     }

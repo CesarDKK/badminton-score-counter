@@ -6,6 +6,7 @@ import { foerSkoledag } from '../rules.js';
 import { minutter } from '../tp-reader.js';
 import { reglerFor, STANDARD_REGLER } from '../store.js';
 import { REGELSAET, regelsaetTekst } from '../regler.js';
+import { standardMaxDage } from '../regelmodel.js';
 import { FORM_VALG, FORM_VALG_TEKST, formTekst, effektivForm, minKampeSamlet } from '../form.js';
 import { KRITERIER, VAEGT_SKABELONER, vaegteFor } from '../kriterier.js';
 import { anbefaletKamplaengde, bedsteKamplaengde, SAESONDATA, SKIFTE_MIN, MARGEN, FORSINKELSE_GRAENSE } from '../kamplaengde.js';
@@ -453,13 +454,15 @@ export function raekkePanel(p) {
         const maerker = [
             !r.dage.length ? '<span class="maerke maerke--fejl">ingen dag valgt</span>' : '',
             kanKraeveDisp && r.dispensationFlereDage ? '<span class="maerke maerke--ok">dispensation givet</span>' : kraeverDisp ? '<span class="maerke maerke--advarsel">kræver dispensation</span>' : '',
+            // Én-dags-reglen (B/C/D, U11 A) slået fra under "Flere indstillinger" uden dispensation (gennemgangen, A4)
+            standardMaxDage(r) && !r.dispensationFlereDage && (r.maxDage === null || r.maxDage > standardMaxDage(r)) ? `<span class="maerke maerke--advarsel" title="Reglementet: rækken spiller ${standardMaxDage(r)} dag uden dispensation. Tøm feltet Max dage under Flere indstillinger for at følge reglementet.">én-dags-reglen slået fra</span>` : '',
         ].filter(Boolean).join(' ');
         // Det, der er sat i den foldede del, vises i overskriften, så man ikke skal folde ud for at se det
         const sat = [
             r.tidligst || r.senest ? `${r.tidligst || '–'}–${r.senest || '–'}` : '',
             r.reserveredeBaner ? `${r.reserveredeBaner} reserverede baner${kategorier.some((k) => k.halvBane) ? ` (${r.reserveredeBaner * 2} halve)` : ''}` : '',
             r.maxHaltidMin ? `singler max ${r.maxHaltidMin} min` : '',
-            r.maxDage ? `max ${r.maxDage} ${r.maxDage === 1 ? 'dag' : 'dage'}` : '',
+            r.maxDage ? `max ${r.maxDage} ${r.maxDage === 1 ? 'dag' : 'dage'}` : r.maxDage === null && standardMaxDage(r) ? 'ingen grænse for dage' : '',
             minKampeSamlet(r) ? 'min. kampe samlet' : '',
             kategorier.some((k) => (k.formValg || 'tp') !== 'tp') ? 'planneren bygger kampe' : '',
         ].filter(Boolean).join(' · ');
@@ -488,8 +491,8 @@ export function raekkePanel(p) {
                         <input type="number" min="0" max="60" value="${r.reserveredeBaner || 0}" data-raekke-baner="${esc(r.id)}"></label>
                     <label class="felt" title="Hård regel: højst så mange minutter til afviklingen af rækkens SINGLEKAMPE — fra dagens første til dagens sidste singlekamp (U9/U11-vejledningen: U9 240, U11 360; doublerne tæller ikke med). Forslaget og løseren overholder den; Tjek melder brud som fejl."><span class="etiket">Max varighed, singler</span>
                         <input type="number" min="0" max="900" step="30" value="${r.maxHaltidMin ?? ''}" data-raekke-tal="maxHaltidMin" data-raekke="${esc(r.id)}"> min</label>
-                    <label class="felt" title="Hård regel: højst så mange spilledage (tomt = ingen grænse)."><span class="etiket">Max dage</span>
-                        <input type="number" min="0" max="9" step="1" value="${r.maxDage ?? ''}" data-raekke-tal="maxDage" data-raekke="${esc(r.id)}"></label>
+                    <label class="felt" title="Hård regel: højst så mange spilledage. Tomt = reglementet (B, C, D og U11 A: 1 dag; ellers ingen grænse). 0 = ingen grænse."><span class="etiket">Max dage</span>
+                        <input type="number" min="0" max="9" step="1" value="${r.maxDage === null && standardMaxDage(r) ? 0 : r.maxDage ?? ''}" placeholder="${standardMaxDage(r) ?? ''}" data-standard="${standardMaxDage(r) ?? ''}" data-raekke-tal="maxDage" data-raekke="${esc(r.id)}"></label>
                     <div class="felt"><span class="etiket">Valg</span>
                         <div class="valg-gruppe valg-gruppe--lodret">
                             <label class="valg" title="AFVIGER FRA REGLEMENTET, som stiller minimumskravet pr. kategori (fx 3 kampe i single OG 2 i double). Sættes flueben, tælles spillerens single, double og mix i stedet sammen — i Tjek, i nedskæringsforslagene, og når planneren selv vælger turneringsform."><input type="checkbox" data-min-samlet="${esc(r.id)}" ${minKampeSamlet(r) ? 'checked' : ''}> min. kampe tælles samlet</label>
@@ -721,6 +724,9 @@ function bind(container, projekt, h) {
             return;
         }
         if (d.vaegt) { h.vaegt(d.vaegt, el.value); return; }
+        // Max dage: tomt = reglementets standard (data-standard), 0 = ingen grænse — før betød tomt "ingen grænse",
+        // så én-dags-reglen kunne slås fra i stilhed (gennemgangen 2026-10-11, A4)
+        if (d.raekkeTal === 'maxDage') { h.raekke(d.raekke, { maxDage: el.value === '' ? (d.standard ? Number(d.standard) : null) : Number(el.value) <= 0 ? null : Number(el.value) }); return; }
         if (d.raekkeTal) { h.raekke(d.raekke, { [d.raekkeTal]: el.value === '' || Number(el.value) <= 0 ? null : Number(el.value) }); return; }
         if (d.raekkeTid) { h.raekke(d.raekke, { [d.raekkeTid]: el.value || null }); return; }
         if (d.raekkeBaner) { h.raekke(d.raekkeBaner, { reserveredeBaner: Math.max(0, Number(el.value) || 0) }); return; }

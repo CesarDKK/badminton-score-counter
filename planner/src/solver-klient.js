@@ -226,8 +226,21 @@ export function bygProblem(projekt, hintPlan = null) {
 
     // Max kampe pr. spiller pr. dag
     // Spillere med en strengere grænse end turneringens (senior på én dag: 10 i stedet for 12) får deres egen gruppe
+    // Swiss-runde 2+ tæller én kamp for hver deltager (alle spiller hver runde) — én repræsentant pr. runde, da rundens
+    // kampe ligger samlet (som Tjek og planlæggeren tæller)
+    const prSikker = new Map([...prKendt].map(([sp, l]) => [sp, [...l]]));
+    {
+        const runder = new Map(); // draw|runde → første kamp
+        for (const k of projekt.kampe) {
+            if (k.fase !== 'swiss' || k.spillere.length || !indeks.has(k.id)) continue;
+            const n = `${k.tpRef.draw}|${k.runde}`;
+            if (runder.has(n)) continue;
+            runder.set(n, k);
+            for (const sp of k.muligeSpillere) { if (!prSikker.has(sp)) prSikker.set(sp, []); prSikker.get(sp).push(k); }
+        }
+    }
     const mangeKampe = [], egenGraense = [];
-    for (const l of prKendt.values()) {
+    for (const l of prSikker.values()) {
         const graense = M.maxPrDagForKampe(l);
         if (l.length <= graense) continue;
         if (graense === maxPrDag) mangeKampe.push(l.map((k) => indeks.get(k.id)));

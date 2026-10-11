@@ -11,11 +11,14 @@ export function slotsForDag(dag, slotMin) {
 }
 
 /** Antal hele baner der er ledige i et givet slot (baner minus spærringer). */
-export function banerISlot(dag, slot) {
+export function banerISlot(dag, slot, slotMin = 0) {
     const m = minutter(slot);
     let baner = dag.baner;
     for (const s of dag.spaerret || []) {
-        if (m >= minutter(s.fra) && m < minutter(s.til)) baner -= s.baner;
+        // Spærringen tæller i alle slots, den overlapper — også når den ikke følger slot-gitteret (fx fra 09:45
+        // med 30-min-slots: slottet 09:30 rammes). Uden slotlængde: kun slottets start (som før). Gennemgangen 2026-10-11, K7.
+        const fra = minutter(s.fra), til = minutter(s.til);
+        if (slotMin ? m < til && m + slotMin > fra : m >= fra && m < til) baner -= s.baner;
     }
     return Math.max(0, baner);
 }
@@ -44,7 +47,7 @@ export function puljeKapacitet(dag, slot, raekker, slotMin = 0) {
     const reserveret = reservationerISlot(raekker, dag, slot, slotMin);
     let sum = 0;
     for (const b of reserveret.values()) sum += b;
-    return { faelles: Math.max(0, banerISlot(dag, slot) - sum), reserveret };
+    return { faelles: Math.max(0, banerISlot(dag, slot, slotMin) - sum), reserveret };
 }
 
 /** Hvilken pulje en kamp hører til i et slot: rækkens id (reserveret) eller 'faelles'. */
@@ -168,7 +171,7 @@ export function katKonflikt(katA, katB) {
 
 /** Bane-slots i alt på en dag. */
 export function baneSlots(dag, slotMin) {
-    return slotsForDag(dag, slotMin).reduce((sum, slot) => sum + banerISlot(dag, slot), 0);
+    return slotsForDag(dag, slotMin).reduce((sum, slot) => sum + banerISlot(dag, slot, slotMin), 0);
 }
 
 /**

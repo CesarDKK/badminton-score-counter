@@ -92,6 +92,8 @@ const FAMILIE = {
     'anti-samtidighed': 'samtidighed', 'single og double samtidig i rækken': 'samtidighed',
     'max-haltid': 'haltid',
     'dag': 'dage', 'rækken spiller ikke den dag': 'dage', 'rækken har ingen dage': 'dage',
+    // For mange kampe pr. spiller pr. dag kommer af lodtrækningen (runder/kampe pr. spiller), ikke af tiderne
+    'max-kampe': 'kampe', 'spiller har max kampe den dag': 'kampe',
 };
 const familieFor = (x) => FAMILIE[x.brud || x.aarsag] || 'plads';
 const PLADS_TEKST = {
@@ -130,8 +132,16 @@ function titelFor(projekt, g) {
     if (g.familie === 'samtidighed') return `${hvem}: single og double ligger samtidig`;
     if (g.familie === 'haltid') return `${g.raekke}: singlerne kan ikke afvikles inden for ${r?.maxHaltidMin || '?'} min`;
     if (g.familie === 'dage') return `${hvem} ligger på en dag, rækken ikke spiller`;
+    if (g.familie === 'kampe') return `${g.raekke}: spillerne får flere kampe på én dag, end reglementet tillader`;
     const grunde = [...new Set([...g.aarsager].map((a) => PLADS_TEKST[a] || a))];
     return `${hvem} har ikke lovlig plads (${grunde.join(', ')})`;
+}
+
+/** Hvorfor et kort ikke kan løses med tiderne alene — vises på kortet (gennemgangen 2026-10-11). */
+function forklaringFor(projekt, g) {
+    if (g.familie !== 'kampe') return null;
+    const egneKategorier = projekt.kategorier.filter((k) => k.raekke === g.raekke && (k.formValg || 'tp') !== 'tp');
+    return `Det kommer af lodtrækningen — antallet af runder og kampe pr. spiller — ikke af tiderne. ${egneKategorier.length ? 'Vælg færre runder under Turneringen' : 'Ret det i TP, fx med færre Swiss-runder'}, eller behold det og giv deltagerne mulighed for at trække sig fra en kategori inden turneringen (reglementet § 4 stk. 5.1).`;
 }
 
 /** Udfører en ændring på projektet. Ændringen er ren data, så den kan gemmes i UI-tilstanden. */
@@ -226,6 +236,9 @@ export function kandidater(projekt, g) {
             ud.push({ gruppe: 'flere-dage', trin: [{ tekst: `Lad ${g.raekke} spille over flere dage`, pris: 'dispensation', type: 'raekke', raekke: g.raekke, aendring: { dage: [...new Set([...r.dage, ...andreDage.map((d) => d.dato)])].sort(), dispensationFlereDage: true } }] });
         }
     }
+    if (g.familie === 'kampe' && r && andreDage.length && !r.dispensationFlereDage) {
+        ud.push({ gruppe: 'flere-dage', trin: [{ tekst: `Lad ${g.raekke} spille over flere dage`, pris: 'dispensation', type: 'raekke', raekke: g.raekke, aendring: { dage: [...new Set([...r.dage, ...andreDage.map((d) => d.dato)])].sort(), dispensationFlereDage: true } }] });
+    }
     if (g.familie === 'dage' && r) {
         const mangler = [...new Set(g.kampe.map((x) => x.dag).filter((d) => d && !r.dage.includes(d)))];
         if (mangler.length) {
@@ -289,7 +302,7 @@ export function lavBeslutninger(projekt, forslag, { medNedskaering = true } = {}
         }
         const rang = (v) => [v.loest ? 0 : 1, orden.indexOf(v.pris), v.brudEfter];
         valg.sort((a, b) => { const x = rang(a), y = rang(b); for (let i = 0; i < x.length; i += 1) if (x[i] !== y[i]) return x[i] - y[i]; return 0; });
-        kort.push({ noegle: g.noegle, titel: titelFor(projekt, g), familie: g.familie, raekke: g.raekke, antal: g.kampe.length, valg: valg.slice(0, 4).map((v) => ({ ...v, prisNavn: prisNavn[v.pris] })) });
+        kort.push({ noegle: g.noegle, titel: titelFor(projekt, g), forklaring: forklaringFor(projekt, g), familie: g.familie, raekke: g.raekke, antal: g.kampe.length, valg: valg.slice(0, 4).map((v) => ({ ...v, prisNavn: prisNavn[v.pris] })) });
     }
     // Kort, hvis anbefalede løsning er den samme (fx "lad tre rækker spille over to dage"), bliver til ét kort
     const samlet = [];
