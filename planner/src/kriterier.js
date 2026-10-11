@@ -27,6 +27,9 @@ function kontekst(projekt) {
     return { slotMin, dage, katMap, placeret, prSpillerDag, maxVent: projekt.opsaetning.maxVentetidMin ?? 90 };
 }
 
+/** Årgange, der spiller med sænket net (U9-U11-vejledningen 2026/27: 145 cm). */
+export const SAENKET_NET = new Set(['U09', 'U11']);
+
 /** Kriterierne: { id, navn, beskrivelse, enhed, beregn(projekt, ctx) → tal (≥ 0) }. */
 export const KRITERIER = [
     {
@@ -114,6 +117,44 @@ export const KRITERIER = [
         },
     },
     {
+        // Gennemgangen 2026-10-11 (B3): de, der går videre fra puljen, tælles ikke af ventetiden (de er kun "mulige"
+        // spillere i cuppen), så cuppen kunne starte timer efter puljerne. Målt i U13/U15: gns. 45 min, op til 3 timer.
+        id: 'cupVent', navn: 'Ventetid før cupkampe', enhed: 'timer',
+        beskrivelse: 'Tid fra de kampe, en cupkamp bygger på, er slut, til cupkampen starter — samme dag (en cup dagen efter puljerne tæller ikke).',
+        beregn: (p, c) => {
+            const tid = new Map(c.placeret.map((x) => [x.k.id, x]));
+            let min = 0;
+            for (const x of c.placeret) {
+                if (x.k.fase !== 'cup' || !x.k.afhaengerAf.length) continue;
+                const deps = x.k.afhaengerAf.map((id) => tid.get(id));
+                if (deps.some((d) => !d || d.dag !== x.dag)) continue;
+                min += Math.max(0, x.min - (Math.max(...deps.map((d) => d.min)) + c.slotMin));
+            }
+            return min / 60;
+        },
+    },
+    {
+        // U9-U11-vejledningen 2026/27: U9 og U11 spiller med sænket net (145 cm) — "flest baner først på dagen og færrest
+        // sidst på dagen og U13 omvendt", så nettet kun hæves én gang. Jesper 2026-10-11: ja. Måles pr. dag som den tid,
+        // U9/U11 og de øvrige årgange overlapper (fra de ældres første start til U9/U11's sidste slut).
+        id: 'saenketNet', navn: 'Sænket net blandet med normalt', enhed: 'timer',
+        beskrivelse: 'Pr. dag: tid fra den første kamp med normalt net (U13 og op) til den sidste med sænket net (U9/U11) slutter.',
+        beregn: (p, c) => {
+            const prDag = new Map();
+            for (const x of c.placeret) {
+                const aargang = p.raekker.find((r) => r.id === c.katMap.get(x.k.kategori)?.raekke)?.aargang;
+                if (!aargang) continue;
+                if (!prDag.has(x.dag)) prDag.set(x.dag, { saenket: -Infinity, normal: Infinity });
+                const d = prDag.get(x.dag);
+                if (SAENKET_NET.has(aargang)) d.saenket = Math.max(d.saenket, x.min + c.slotMin);
+                else d.normal = Math.min(d.normal, x.min);
+            }
+            let min = 0;
+            for (const d of prDag.values()) if (Number.isFinite(d.saenket) && Number.isFinite(d.normal)) min += Math.max(0, d.saenket - d.normal);
+            return min / 60;
+        },
+    },
+    {
         id: 'finalerSpredt', navn: 'Finaler spredt', enhed: 'slots',
         beskrivelse: 'Afstand i slots mellem rækkens første og sidste finale samme dag (finaler gerne samlet).',
         beregn: (p, c) => {
@@ -133,9 +174,9 @@ export const KRITERIER = [
 
 /** Navngivne skabeloner med vægte. "standard" bruges i nye projekter. */
 export const VAEGT_SKABELONER = {
-    standard: { navn: 'Standard: kort ventetid og luft mellem kampene', vaegte: { ventetid: 1, kampeITraek: 2, langeHuller: 2, sluttid: 2, tommeBaner: 0.1, puljerunderSpredt: 2, finalerSpredt: 0.2 } },
-    tidligSlut: { navn: 'Tidlig slut', vaegte: { ventetid: 0.5, kampeITraek: 0.5, langeHuller: 1, sluttid: 8, tommeBaner: 0.3, puljerunderSpredt: 0.5, finalerSpredt: 0.1 } },
-    roligt: { navn: 'Roligt, overskueligt program', vaegte: { ventetid: 0.5, kampeITraek: 3, langeHuller: 2, sluttid: 1, tommeBaner: 0.05, puljerunderSpredt: 3, finalerSpredt: 1 } },
+    standard: { navn: 'Standard: kort ventetid og luft mellem kampene', vaegte: { ventetid: 1, kampeITraek: 2, langeHuller: 2, sluttid: 2, tommeBaner: 0.1, puljerunderSpredt: 2, cupVent: 1, saenketNet: 0.5, finalerSpredt: 0.2 } },
+    tidligSlut: { navn: 'Tidlig slut', vaegte: { ventetid: 0.5, kampeITraek: 0.5, langeHuller: 1, sluttid: 8, tommeBaner: 0.3, puljerunderSpredt: 0.5, cupVent: 0.5, saenketNet: 0.2, finalerSpredt: 0.1 } },
+    roligt: { navn: 'Roligt, overskueligt program', vaegte: { ventetid: 0.5, kampeITraek: 3, langeHuller: 2, sluttid: 1, tommeBaner: 0.05, puljerunderSpredt: 3, cupVent: 1, saenketNet: 0.5, finalerSpredt: 1 } },
 };
 
 /** Projektets vægte: standard med projektets ændringer ovenpå (ukendte kriterier får vægt 0). */

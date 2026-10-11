@@ -105,7 +105,10 @@ function render() {
         renderFil(sektioner.fil, projekt, handlers);
         visBesked(besked.tekst, besked.fejl);
     } else if (tilstand.fane === 'liste') {
-        renderListe(sektioner.liste, projekt, { gemProjekt: () => handlers.gemProjekt(), visKampe: (ids) => tjekHandlers.visKampe(ids, null) }, tjek?.antal.fejl || 0);
+        // Ser brugeren listen, mens løseren regner, må dens forbedring ikke skifte tiderne ud under indtastningen
+        // (gennemgangen 2026-10-11, U1) — den bliver et tilbud i stedet
+        if (tilstand.optimerer) tilstand.listeSetUnderLoeser = true;
+        renderListe(sektioner.liste, projekt, { gemProjekt: () => handlers.gemProjekt(), visKampe: (ids) => tjekHandlers.visKampe(ids, null) }, tjek?.antal.fejl || 0, { loeserRegner: !!tilstand.optimerer });
     }
     // Mærket på "Program": fejl i planen (rødt), ellers kampe uden tid
     const maerke = document.querySelector('[data-program-maerke]');
@@ -322,7 +325,17 @@ function arbejd(tekst, regn, brug) {
     regn().then((resultat) => {
         tilstand.arbejder = null;
         const a = aendretUnderOptimering(start, projekt);
-        if (a === 'lukket' || a === 'andet-projekt') { render(); return; }
+        // En anden fil (eller lukket projekt): resultatet hører ikke til her. Samme fil med nybyggede kampe (fx en rækkes
+        // dage rettet) er en ændring som alle andre
+        const sammeFil = !!projekt && (projekt.kilde?.filnavn || '') === (start.kilde?.filnavn || '');
+        if (a === 'lukket' || (a === 'andet-projekt' && !sammeFil)) { render(); return; }
+        if (a !== 'uaendret') {
+            // Brugeren har rettet noget, mens programmet blev regnet: resultatet bygger på det gamle og ville overskrive
+            // rettelsen (gennemgangen 2026-10-11, U8) — kasseres, og der siges til
+            tilstand.forslag = { tekst: 'Du ændrede noget, mens programmet blev regnet, så resultatet er ikke lagt ind (det byggede på det gamle). Tryk "Lav kampprogram" igen.', ikkePlaceret: [] };
+            render();
+            return;
+        }
         brug(resultat);
         render();
     }).catch((err) => {
@@ -332,6 +345,26 @@ function arbejd(tekst, regn, brug) {
         render();
     });
 }
+
+/** Ret i gitteret (flyt, fjern, lås) med en fortryd-stak på højst 20 trin; den gælder, så længe intet andet er ændret. */
+function redigerGitter(nyt, tekst) {
+    // Stakken gælder kun, så længe intet andet har ændret projektet siden sidste trin
+    let h = tilstand.gitterHistorik || [];
+    if (h.length && h[h.length - 1].efter !== projekt) h = [];
+    h.push({ foer: projekt, efter: nyt, tekst });
+    tilstand.gitterHistorik = h.slice(-20);
+    saet(nyt);
+}
+
+// Ctrl+Z (Cmd+Z): fortryd det seneste i gitteret — ikke mens man skriver i et felt
+document.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z' || e.shiftKey) return;
+    if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+    const h = tilstand.gitterHistorik || [];
+    if (!h.length || h[h.length - 1].efter !== projekt) return;
+    e.preventDefault();
+    planHandlers.fortrydGitter();
+});
 
 const katFelter = (p, brud) => {
     const katMap = new Map(p.kampe.map((k) => [k.id, k]));
@@ -361,9 +394,9 @@ function startAutoLoeser() {
 
 const planHandlers = {
     // "Lav kampprogram": hele kæden på én gang (kampprogram.js). Det gamle program kan fås tilbage med "Fortryd".
-    lavKampprogram({ fastKamplaengde = false } = {}) {
+    lavKampprogram({ fastKamplaengde = false, behold = false } = {}) {
         const foer = projekt;
-        arbejd('Laver kampprogrammet … planneren prøver kamplængder og flere forslag og vælger det bedste.', () => beregnKampprogram(foer, { fastKamplaengde }), ({ r, beslutninger }) => {
+        arbejd('Laver kampprogrammet … planneren prøver kamplængder og flere forslag og vælger det bedste.', () => beregnKampprogram(foer, { fastKamplaengde, behold }), ({ r, beslutninger }) => {
             visKampprogram(r, { foer, valg: r.valg, beslutninger });
             startAutoLoeser();
         });
@@ -396,6 +429,19 @@ const planHandlers = {
             startAutoLoeser();
         });
     },
+    // Løserens forbedring, der blev et tilbud, fordi brugeren var i "Til TP" imens
+    brugTilbud() {
+        const kp = tilstand.kampprogram;
+        if (!kp?.tilbud) return;
+        const foer = projekt;
+        saet({ ...projekt, plan: flettetPlan(projekt, kp.tilbud.plan) });
+        kp.tilbud = null;
+        kp.projekt = projekt;
+        kp.forbedret = 'Løserens program er lagt ind — tjek listen til TP igen.';
+        tilstand.fortryd = { projekt: foer, efter: projekt, tekst: 'Løserens program er lagt ind.' };
+        render();
+    },
+    tilTP() { vaelgFane('liste'); },
     brugElastisk() {
         const kp = tilstand.kampprogram;
         if (!kp?.elastisk) return;
@@ -460,8 +506,21 @@ const planHandlers = {
         render();
     },
     // id kan være flere kampe adskilt af komma (Swiss Ladder-runder flyttes samlet)
-    flyt(id, dag, slot) { let p = projekt; for (const x of id.split(',')) p = store.flytKamp(p, x, dag, slot); saet(p); },
-    fjern(id) { let p = projekt; for (const x of id.split(',')) p = store.fjernFraPlan(p, x); saet(p); },
+    // Flyt i hånden: kampen låses, så den beholder tiden ved "Lav kampprogram igen" og i løseren — og hvert flyt kan
+    // fortrydes trin for trin (Ctrl+Z). Gennemgangen 2026-10-11, U3: håndarbejde forsvandt ved næste beregning.
+    flyt(id, dag, slot) {
+        let p = projekt;
+        for (const x of id.split(',')) p = store.laasKamp(store.flytKamp(p, x, dag, slot), x, true);
+        redigerGitter(p, `Kampen er flyttet til ${datoTekst(dag, { kort: true })} ${slot} og låst (dobbeltklik for at låse den op).`);
+    },
+    fjern(id) { let p = projekt; for (const x of id.split(',')) p = store.fjernFraPlan(p, x); redigerGitter(p, 'Kampens tid er fjernet.'); },
+    fortrydGitter() {
+        const h = tilstand.gitterHistorik || [];
+        const top = h[h.length - 1];
+        if (!top || top.efter !== projekt) { tilstand.gitterHistorik = []; render(); return; }
+        h.pop();
+        saet(top.foer);
+    },
     rydDag() {
         const foer = projekt;
         tilstand.forslag = null;
@@ -506,7 +565,7 @@ const planHandlers = {
         const vaerdi = !(projekt.laast || []).includes(ids[0]);
         let p = projekt;
         for (const x of ids) p = store.laasKamp(p, x, vaerdi);
-        saet(p);
+        redigerGitter(p, vaerdi ? 'Kampen er låst.' : 'Kampen er låst op.');
     },
     laasKategori(vaerdi) { if (tilstand.filter) saet(store.laasKategori(projekt, tilstand.filter, vaerdi)); },
 
@@ -531,6 +590,7 @@ const planHandlers = {
         tilstand.optimerJob = job;
         tilstand.optimerStopper = false;
         tilstand.optimerAuto = auto;
+        tilstand.listeSetUnderLoeser = tilstand.fane === 'liste';
         tilstand.forslag = { tekst: `Løseren regner i op til ${sekunder >= 120 ? `${sekunder / 60} minutter` : `${sekunder} sekunder`}. Du kan stoppe undervejs og bruge den bedste plan, den har fundet.`, ikkePlaceret: [] };
         render();
         // Uret opdateres direkte i knappen, så gitteret ikke tegnes om hvert sekund
@@ -557,13 +617,16 @@ const planHandlers = {
             };
             afbryd = new AbortController();
             tilstand.optimerAfbryd = afbryd;
-            const svar = await optimer(udgangspunkt, { sekunder, hintPlan, job, vedStatus, signal: afbryd.signal });
+            // Efter "Planlæg kun kampe uden tid" flytter løseren helst ikke de kampe, der havde tid (stabil omplanlægning)
+            const stabil = auto && panelGaelder(tilstand.kampprogram, udgangspunkt) && tilstand.kampprogram.valg?.grund === 'behold' ? Object.keys(tilstand.kampprogram.foer.plan || {}) : null;
+            const svar = await optimer(udgangspunkt, { sekunder, hintPlan, job, vedStatus, signal: afbryd.signal, stabil });
             faerdig();
             const lovlig = svar.status === 'OPTIMAL' || svar.status === 'FEASIBLE';
             const aendring = aendretUnderOptimering(udgangspunkt, projekt);
             if (aendring === 'lukket' || aendring === 'andet-projekt') {
                 // Projektet er lukket eller skiftet ud imens: resultatet hører til en anden turnering
-                tilstand.forslag = projekt ? { tekst: 'Løseren blev færdig, men du har åbnet et andet projekt imens, så dens plan er kasseret.', ikkePlaceret: [] } : null;
+                const sammeFil = !!projekt && (projekt.kilde?.filnavn || '') === (udgangspunkt.kilde?.filnavn || '');
+                tilstand.forslag = projekt ? { tekst: sammeFil ? 'Løseren blev færdig, men du har ændret opsætningen imens, så kampene er bygget om — dens plan er kasseret. Lav programmet igen.' : 'Løseren blev færdig, men du har åbnet et andet projekt imens, så dens plan er kasseret.', ikkePlaceret: [] } : null;
                 render();
                 return;
             }
@@ -585,7 +648,13 @@ const planHandlers = {
                     const kp = panelGaelder(tilstand.kampprogram, projekt) ? tilstand.kampprogram : null;
                     // Sikkerhedsnet: automatisk kun, når løserens plan ikke har flere fejl i Tjek end programmet — så en
                     // uenighed mellem løseren og Tjek aldrig skifter et lovligt program ud (gennemgangen 2026-10-11, K8)
-                    if (bedre && tjekPlan(p2).antal.fejl <= tjekPlan(projekt).antal.fejl) {
+                    const sikker = bedre && tjekPlan(p2).antal.fejl <= tjekPlan(projekt).antal.fejl;
+                    if (sikker && tilstand.listeSetUnderLoeser) {
+                        // Brugeren har set listen til TP imens: tilbud, ikke automatisk
+                        const tekst = `Løseren fandt et bedre program (score ${sammenlign.score} → ${opt.score}), mens du var i "Til TP". Tiderne er ikke ændret.`;
+                        tilstand.forslag = { tekst, ikkePlaceret: [], kilde: 'loeser' };
+                        if (kp) { kp.forbedret = null; kp.tilbud = { plan, tekst }; }
+                    } else if (sikker) {
                         const foerP = projekt;
                         saet({ ...projekt, plan });
                         const tekst = `Løseren har forbedret programmet på ${svar.sekunder} s (score ${sammenlign.score} → ${opt.score}; lavere er bedre).`;

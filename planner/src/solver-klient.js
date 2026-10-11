@@ -8,7 +8,7 @@
 import { minutter, klokkeFraMinutter } from './tp-reader.js';
 import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt } from './kapacitet.js';
 import { lavRegelmodel } from './regelmodel.js';
-import { vaegteFor } from './kriterier.js';
+import { vaegteFor, SAENKET_NET } from './kriterier.js';
 
 const DAG_MIN = 1440;
 
@@ -18,7 +18,7 @@ const DAG_MIN = 1440;
  * @param {object} projekt
  * @param {object} [hintPlan]  en lovlig plan (fra lavForslag) som startløsning
  */
-export function bygProblem(projekt, hintPlan = null) {
+export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
     // Reglernes byggesten kommer fra regelmodellen — de samme, som Tjek og planlæggeren bruger
     const M = lavRegelmodel(projekt);
     const { slotMin, dage, kampMap, kat, raekke, kanDeleSpillere, alleForfaedre, maxPrDag } = M;
@@ -203,6 +203,31 @@ export function bygProblem(projekt, hintPlan = null) {
     // Kampe i træk (blødt, kriteriet "kampeITraek"): hver kendt spillers kampe — løseren straffer par i nabo-slots
     const traek = [...prKendt.values()].filter((l) => l.length > 1).map((l) => l.map((k) => indeks.get(k.id)));
 
+    // Ventetid før cupkampe (blødt, kriteriet "cupVent"): [cupkamp, [kampe den bygger på]] — kun når de altid ligger
+    // samme dag: rækken spiller én dag (max dage 1), eller alle kan kun ligge på én og samme dag. En cup dagen efter
+    // puljerne tæller ikke (som i kriterier.js). Løseren regner i minutter på dagen.
+    const cupVent = [];
+    {
+        const dagene = (i) => new Set(kampe[i].tilladte.map((t) => Math.floor(t / DAG_MIN)));
+        for (const k of projekt.kampe) {
+            if (k.fase !== 'cup' || !indeks.has(k.id) || !k.afhaengerAf.length || !k.afhaengerAf.every((d) => indeks.has(d))) continue;
+            const b = indeks.get(k.id), deps = k.afhaengerAf.map((d) => indeks.get(d));
+            const r = raekke(k);
+            const enDag = r && M.maxDageFor(r) === 1 && k.afhaengerAf.every((d) => raekke(kampMap.get(d))?.id === r.id);
+            const db = dagene(b);
+            const sammeDag = db.size === 1 && deps.every((d) => { const dd = dagene(d); return dd.size === 1 && [...dd][0] === [...db][0]; });
+            if (enDag || sammeDag) cupVent.push([b, deps]);
+        }
+    }
+
+    // Sænket net (blødt, kriteriet "saenketNet"): U9/U11's kampe og de øvrige — løseren straffer overlappet pr. dag
+    const nethoejde = { saenket: [], normal: [] };
+    for (const k of projekt.kampe) {
+        if (!indeks.has(k.id)) continue;
+        const aargang = raekke(k)?.aargang;
+        if (aargang) (SAENKET_NET.has(aargang) ? nethoejde.saenket : nethoejde.normal).push(indeks.get(k.id));
+    }
+
     // Puljerunder i takt (blødt, kriteriet "puljerunderSpredt"): pr. kategori puljekampene pr. runde, runde 1 først
     const puljerunder = [];
     {
@@ -271,7 +296,9 @@ export function bygProblem(projekt, hintPlan = null) {
         slotMin,
         dage: dage.map((d, i) => ({ index: i, start: minutter(d.start), slut: minutter(d.slut), baner: d.baner })),
         kapacitet, kampe, foer, konflikter, ikkeSamtidig, haltid, spillerGrupper, traek, puljerunder, maxDage,
-        maxKampePrDag: maxPrDag, mangeKampe, maxPrGruppe, ikkeSammeDag, alternativer,
+        cupVent, nethoejde, maxKampePrDag: maxPrDag, mangeKampe,
+        // Stabil omplanlægning: kampe, der havde tid, flyttes helst ikke (pr. flyttet kamp koster det som 3 timers ventetid)
+        ...(stabil?.length ? { stabil: { vaegt: 3, kampe: kampe.map((k, i) => (stabil.includes(k.id) && k.hint != null && k.tilladte.length > 1 ? i : -1)).filter((i) => i >= 0) } } : {}), maxPrGruppe, ikkeSammeDag, alternativer,
         maxVent: projekt.opsaetning.maxVentetidMin ?? 90, // til "lange huller" (kriteriet langeHuller)
         elastisk, elastiskPlan: true, // ingen lovlig plan → løseren laver planen med færrest regelbrud
         vaegte: vaegteFor(projekt),
@@ -444,8 +471,8 @@ async function startJob(url, krop, { signal, vedStatus, ventMaxSekunder, ventMs 
  * signal afbryder også ventetiden i køen. Statuskald, der fejler forbigående (netværk, 5xx), tåles i
  * taalFejlSekunder; rammer de rate-grænsen (429), sættes tempoet ned i stedet for at give op.
  */
-export async function optimer(projekt, { sekunder = 30, hintPlan = null, url = '/api/solve', signal, job = null, pollMs = 3000, vedStatus = null, ventMaxSekunder = 600, ventMs = 10000, taalFejlSekunder = 25 } = {}) {
-    const problem = bygProblem(projekt, hintPlan);
+export async function optimer(projekt, { sekunder = 30, hintPlan = null, url = '/api/solve', signal, job = null, pollMs = 3000, vedStatus = null, ventMaxSekunder = 600, ventMs = 10000, taalFejlSekunder = 25, stabil = null } = {}) {
+    const problem = bygProblem(projekt, hintPlan, { stabil });
     // Jobbet startes og hentes med korte kald (start → status hvert par sekunder), så ingen
     // forbindelse står åben i flere minutter — proxyer som Cloudflare afbryder dem efter ca. 100 s.
     let data = await startJob(url, JSON.stringify({ problem, sekunder, asynkron: true, ...(job ? { job } : {}) }), { signal, vedStatus, ventMaxSekunder, ventMs });

@@ -140,8 +140,8 @@ function lodtraekningPanel(p, tjek) {
         const egen = k && (k.formValg || 'tp') !== 'tp';
         const knapper = !k ? '' : egen
             ? `<button type="button" class="knap knap--sekundaer knap--lille" data-handling="form-valg" data-kat="${esc(k.id)}" data-form-valg="tp">Brug TP's lodtrækning</button>`
-            : `<button type="button" class="knap knap--sekundaer knap--lille" data-handling="form-valg" data-kat="${esc(k.id)}" data-form-valg="swiss" title="Planneren bygger selv kampene som Swiss Ladder (4–6 runder). Opskriften til lodtrækningen i TP står under trin 4.">Lad planneren lave Swiss Ladder</button>
-               <button type="button" class="knap knap--sekundaer knap--lille" data-handling="form-valg" data-kat="${esc(k.id)}" data-form-valg="auto" title="Planneren vælger den form, der opfylder minimum med færrest bane-slots">Lad planneren vælge form</button>`;
+            : `<button type="button" class="knap knap--sekundaer knap--lille" data-handling="form-valg" data-kat="${esc(k.id)}" data-form-valg="swiss" title="Planneren planlægger kategorien som Swiss Ladder (4–6 runder). Lodtrækningen skal stadig laves i TP efter opskriften under trin 4 — gem filen og åbn den her igen, så kan tiderne tastes ind.">Planlæg som Swiss Ladder (lodtrækning i TP bagefter)</button>
+               <button type="button" class="knap knap--sekundaer knap--lille" data-handling="form-valg" data-kat="${esc(k.id)}" data-form-valg="auto" title="Planneren vælger den form, der opfylder minimum med færrest bane-slots. Lodtrækningen laves stadig i TP efter opskriften under trin 4.">Lad planneren vælge form (lodtrækning i TP bagefter)</button>`;
         return `<li><span>${esc(x.tekst.replace(/ Rettes i TP\.$| Vælg en anden form under Turneringen\.$| En ekstra runde eller en anden form under Turneringen løser det\.$/, ''))}</span>
             <span class="problem-knapper">${knapper}
                 ${x.noegle ? `<button type="button" class="knap knap--sekundaer knap--lille" data-handling="kvitter-form" data-noegle="${esc(x.noegle)}">Behold</button>` : ''}</span></li>`;
@@ -169,7 +169,7 @@ export function dagePanel(p) {
             <td><input type="time" step="300" value="${esc(d.start)}" data-felt="start" data-dato="${d.dato}" aria-label="Start"></td>
             <td><input type="time" step="300" value="${esc(d.slut)}" data-felt="slut" data-dato="${d.dato}" aria-label="Slut"></td>
             <td><input type="number" min="1" max="60" value="${d.baner}" data-felt="baner" data-dato="${d.dato}" aria-label="Baner">${tpBaner && d.baner > tpBaner ? ` <span class="maerke maerke--advarsel" title="TP-filen har ${tpBaner} baner. Planen kan ikke spilles på flere baner, end hallen har i TP.">flere end TP's ${tpBaner}</span>` : ''}</td>
-            <td><label class="valg" title="Dagen før en skoledag slutter tidsvinduet 2 timer tidligere (§ 4 stk. 5.1)"><input type="checkbox" data-skoledag="${d.dato}" ${foerSkoledag(d) ? 'checked' : ''}> ja</label></td>
+            <td><label class="valg" title="Dagen før en skoledag eller hverdag — også i ferier — slutter tidsvinduet 2 timer tidligere (§ 4 stk. 5.1)"><input type="checkbox" data-skoledag="${d.dato}" ${foerSkoledag(d) ? 'checked' : ''}> ja</label></td>
             <td class="tal">${slots}</td>
             <td class="tal">${baneSlots(d, slotMin)}</td>
             <td class="kan-bryde">${spaerringer}
@@ -189,7 +189,7 @@ export function dagePanel(p) {
         <p class="panel-sub">Tiderne fra TP-filens gitter er foreslået. Kapaciteten er antal hele baner pr. slot; spær baner i et tidsrum, hvis de ikke kan bruges.</p>
         <div class="tabel-hylster">
             <table class="tabel">
-                <thead><tr><th>Dag</th><th>Start</th><th>Slut</th><th>Baner</th><th title="Dagen før en skoledag slutter tidsvinduet 2 timer tidligere (§ 4 stk. 5.1)">Før skoledag</th><th class="tal">Slots</th><th class="tal">Bane-slots</th><th>Spærrede baner</th></tr></thead>
+                <thead><tr><th>Dag</th><th>Start</th><th>Slut</th><th>Baner</th><th title="Dagen før en skoledag eller hverdag — også i ferier — slutter tidsvinduet 2 timer tidligere (§ 4 stk. 5.1)">Før skoledag/hverdag</th><th class="tal">Slots</th><th class="tal">Bane-slots</th><th>Spærrede baner</th></tr></thead>
                 <tbody>${raekker}</tbody>
             </table>
         </div>
@@ -257,9 +257,11 @@ function sammenligningTabel(rk, anbefalet, opsaetning) {
     const bruges = (r) => r.minutter === opsaetning.slotMin && (samme(r.pauseMin, opsaetning.pauseMin) || (r.ogsaaUdenPause && ['ABCD', 'M', 'E', 'faelles'].every((x) => !opsaetning.pauseMin?.[x])));
     const raekker = rk.map((r) => {
         const mark = [r === bedst ? '<span class="kamplaengde-ok">bedst samlet</span>' : '', r.minutter === anbefalet && !r.udenPause ? 'anbefalet' : '', bruges(r) ? 'bruges nu' : ''].filter(Boolean).join(', ');
-        // Den forventede sluttid vises kun, når den ligger mindst 5 min efter planen (ellers er det støj)
-        const senere = (d) => minutter(d.forventetSlut) - minutter(d.planSlut) >= 5;
-        const slut = r.dage.map((d) => `${datoTekst(d.dato, { kort: true })}: ${d.planSlut}${senere(d) ? ` <span class="er-roed">→ ca. ${d.forventetSlut}</span>` : ''}`).join('<br>');
+        // Den forventede sluttid (prognosens 80 %-fraktil) vises kun, når den ligger mindst 5 min efter planen (ellers støj)
+        const forventet = (d) => d.prognose?.slut80 ?? d.forventetSlut;
+        const senere = (d) => minutter(forventet(d)) - minutter(d.planSlut) >= 5;
+        const slut = r.dage.map((d) => `${datoTekst(d.dato, { kort: true })}: ${d.planSlut}${senere(d) ? ` <span class="er-roed">→ ca. ${forventet(d)}</span>` : ''}`).join('<br>');
+        const forsinkelse = r.forsinkelse80 ?? r.forsinkelseMax;
         return `<tr>
             <td><strong>${r.minutter} min</strong><br><span class="daempet">${r.udenPause ? 'uden pause' : r.ogsaaUdenPause ? 'med/uden pause' : 'med pause'}</span>${mark ? `<br><span class="daempet">${mark}</span>` : ''}</td>
             <td class="tal">${r.udenTid ? `<span class="er-roed">${r.udenTid}</span>` : '0'}</td>
@@ -267,13 +269,13 @@ function sammenligningTabel(rk, anbefalet, opsaetning) {
             <td class="tal">${r.muligeBrud ? `<span class="er-gul">${r.muligeBrud}</span>` : '0'}</td>
             <td class="tal">${r.haltidGnsMin} min</td>
             <td>${slut}</td>
-            <td class="tal">${r.forsinkelseMax > FORSINKELSE_GRAENSE ? `<span class="er-roed">${r.forsinkelseMax} min</span>` : `${r.forsinkelseMax} min`}</td>
+            <td class="tal">${forsinkelse > FORSINKELSE_GRAENSE ? `<span class="er-roed">${forsinkelse} min</span>` : `${forsinkelse} min`}${(r.igangsaetRisiko ?? 0) > 0.2 ? '<br><span class="er-roed" title="Risiko for at kampe sættes i gang efter reglementets grænse (kl. 20/21/22, 2 timer tidligere før skoledag/hverdag)">sene kampe</span>' : ''}</td>
             <td>${bruges(r) ? '' : `<button type="button" class="knap knap--sekundaer knap--lille" data-handling="brug-kamplaengde" data-min="${r.minutter}" data-uden-pause="${r.udenPause ? '1' : '0'}">Brug</button>`}</td>
         </tr>`;
     }).join('');
     return `
             <div class="tabel-hylster" style="margin-top:12px"><table class="tabel">
-                <thead><tr><th title="Kamplængde og pause i planen">Kamplængde</th><th class="tal">Uden tid</th><th class="tal" title="Tjeks fejl: reglen brydes med sikkerhed">Regelbrud</th><th class="tal" title="Tjeks pause-advarsler: reglen brydes, hvis bestemte spillere går videre (fx kort pause før en finale)">Mulige brud</th><th class="tal">Tid i hal</th><th>Slut (plan → forventet)</th><th class="tal">Forsinkelse</th><th></th></tr></thead>
+                <thead><tr><th title="Kamplængde og pause i planen">Kamplængde</th><th class="tal">Uden tid</th><th class="tal" title="Tjeks fejl: reglen brydes med sikkerhed">Regelbrud</th><th class="tal" title="Tjeks pause-advarsler: reglen brydes, hvis bestemte spillere går videre (fx kort pause før en finale)">Mulige brud</th><th class="tal">Tid i hal</th><th title="Prognose: dagen simuleret 40 gange med tilfældige kamplængder; kampe kan sættes i gang op til 30 min før tid. 80 % af dagene slutter før den viste tid.">Slut (plan → forventet)</th><th class="tal" title="Største forsinkelse, som 80 % af de simulerede dage holder sig under">Forsinkelse</th><th></th></tr></thead>
                 <tbody>${raekker}</tbody></table></div>
             <p class="panel-sub">Hver kamplængde er afprøvet med reglementets pause i planen og uden pause i planen, hver med et nyt forslag fra planlæggeren og en simulering af dagen med de forventede kamptider: kampen tager den bane, der bliver ledig først, og spillerne får altid reglementets pause — er den ikke i planen, venter kampen på dagen. Forsinkelsen viser altså, hvad en plan uden pause koster i hallen. Den viser risikoen, ikke en garanti. "Bedst samlet" er længden med færrest kampe uden tid, færrest regelbrud, mindst forsinkelse ud over ${FORSINKELSE_GRAENSE} min, færrest mulige brud og kortest tid i hallen — i den rækkefølge. Den kan afvige fra anbefalingen, fordi pausen spiller ind: 20 min kamp + 10 min pause = 30 min, så med 25-min slots skal en spiller vente to slots mellem sine kampe.</p>`;
 }
@@ -449,6 +451,13 @@ export function raekkePanel(p) {
         const katIds = new Set(kategorier.map((k) => k.id));
         const spilleDage = new Set(p.kampe.filter((k) => katIds.has(k.kategori) && p.plan[k.id]).map((k) => p.plan[k.id].dag));
         const kraeverDisp = kanKraeveDisp && spilleDage.size > 1;
+        // Hvad afkrydsningen betyder for netop denne række — og hvilken dag programmet har lagt den på
+        // (gennemgangen 2026-10-11, A3: "Spilledage" betød to forskellige ting, og planlæggerens dagvalg sås aldrig)
+        const maxDage = r.dispensationFlereDage ? null : (r.maxDage !== undefined ? r.maxDage : standardMaxDage(r));
+        const lagtPaa = spilleDage.size ? [...spilleDage].sort().map((d) => datoTekst(d, { kort: true })).join(' og ') : '';
+        const dageHjaelp = r.dage.length < 2 ? ''
+            : maxDage && maxDage < r.dage.length ? `Spiller ${maxDage === 1 ? 'én' : maxDage} af dagene — planneren vælger${lagtPaa ? `: lagt på ${lagtPaa}` : ''}.`
+                : `Fordeles på de valgte dage${lagtPaa ? ` (nu ${lagtPaa})` : ''}.`;
         const dagValg = dage.map((d) => `
                     <label class="valg"><input type="checkbox" data-raekke-dag="${d}" data-raekke="${esc(r.id)}" ${r.dage.includes(d) ? 'checked' : ''}> ${datoTekst(d, { kort: true })}</label>`).join('');
         const maerker = [
@@ -473,8 +482,9 @@ export function raekkePanel(p) {
                 <span class="daempet">${kategorier.length} ${kategorier.length === 1 ? 'kategori' : 'kategorier'} · ${kampe} kampe</span>
             </div>
             <div class="raekke-indstillinger">
-                <div class="felt"><span class="etiket">Spilledage</span>
-                    <div class="valg-gruppe">${dagValg}</div></div>
+                <div class="felt"><span class="etiket">Må spille</span>
+                    <div class="valg-gruppe">${dagValg}</div>
+                    ${dageHjaelp ? `<span class="daempet">${esc(dageHjaelp)}</span>` : ''}</div>
             </div>
             <div class="tabel-hylster">
                 <table class="tabel tabel--kategorier tabel--kategorier-kort">
@@ -606,7 +616,7 @@ function kapacitetPanel(p) {
         <tr>
             <td><strong>${datoTekst(d.dato)}</strong></td>
             <td class="tal">${d.slots}</td>
-            <td class="tal">${d.baneSlots}</td>
+            <td class="tal">${d.baneSlots}${d.baneSlotsHeleDagen !== d.baneSlots ? ` <span class="daempet">af ${d.baneSlotsHeleDagen}</span>` : ''}</td>
             <td class="tal">${tal(d.faste, d.faste % 1 ? 1 : 0)}</td>
             <td class="tal">${tal(d.fleksible, d.fleksible % 1 ? 1 : 0)}</td>
             <td class="tal">${tal(d.fordelt, 1)}</td>
@@ -621,7 +631,7 @@ function kapacitetPanel(p) {
         <p class="panel-sub">Bane-slots til rådighed mod de kampe, rækkernes dage lægger på dagen. "Faste" er kampe i rækker, der kun spiller den dag; "fleksible" spiller over flere dage og er delt ligeligt i "fordelt". U9-singler på halv bane tæller ½. Udnyttelse over ca. 85 % bliver svær at få til at gå op med pauser og rækkefølge.</p>
         <div class="tabel-hylster">
             <table class="tabel">
-                <thead><tr><th>Dag</th><th class="tal">Slots</th><th class="tal">Bane-slots</th><th class="tal">Faste</th><th class="tal">Fleksible</th><th class="tal">Fordelt</th><th>Udnyttelse</th><th class="tal"></th><th class="tal">Planlagte</th></tr></thead>
+                <thead><tr><th>Dag</th><th class="tal">Slots</th><th class="tal" title="Bane-slots inden for dagens rækkers tidsvinduer og tidsrum — 'af' er hele dagen">Lovlige bane-slots</th><th class="tal">Faste</th><th class="tal">Fleksible</th><th class="tal">Fordelt</th><th>Udnyttelse</th><th class="tal"></th><th class="tal">Planlagte</th></tr></thead>
                 <tbody>${rows}</tbody>
             </table>
         </div>

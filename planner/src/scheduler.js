@@ -409,6 +409,15 @@ function lavForslagEnGang(projekt, valg = {}) {
                 registrer(k, dag.dato, slot);
                 for (const s of k.spillere) dagSet.add(s);
             }
+            // Andet gennemløb: rækker med egne baner må låne en fælles bane, der stadig står fri, når alle kandidater har
+            // haft deres chance i slottet — det er lovligt (Tjek: banebrugISlot) og var før først muligt i fase 2, så fx
+            // U9 ventede, mens fælles baner stod tomme (gennemgangen 2026-10-11, B7)
+            for (const { k } of kandidater) {
+                if (plan[k.id] || puljeForKamp(k, dag.dato, slot) === 'faelles') continue;
+                if (aarsagFor(k, dag, slot, slotStart, baner, { reserveret: true })) continue;
+                registrer(k, dag.dato, slot);
+                for (const s of k.spillere) dagSet.add(s);
+            }
         }
     }
 
@@ -448,9 +457,43 @@ function lavForslagEnGang(projekt, valg = {}) {
     // Afhængigheder først (færrest forfædre først), så kæderne kan placeres i rækkefølge
     rest.sort((a, b) => M.alleForfaedre(a.id).size - M.alleForfaedre(b.id).size || a.id.localeCompare(b.id));
     const dageTilFase2 = dage.filter((d) => !kunDage || kunDage.has(d.dato));
+    // Hvor stort bruddet er i et slot (minutter uden for rækkens tidsrum/årgangens vindue, og hvor lidt pause der er):
+    // brydes tidsrum, vindue eller pause, vælges slottet med det mindste brud — ikke det første ledige, som kunne lægge
+    // en overskydende U9-double kl. 9 i stedet for lige efter tidsrummet (gennemgangen 2026-10-11, K3)
+    const brudMaal = (k, dag, slotStart, lemp, gab) => {
+        const r = raekke(k);
+        let m = 0;
+        if (lemp.tidsrum && r) {
+            if (r.tidligst) m += Math.max(0, minutter(r.tidligst) - slotStart);
+            if (r.senest) m += Math.max(0, slotStart + slotMin - minutter(r.senest));
+        }
+        if (lemp.tidsvindue && r) { const v = M.aargangsVindue(r, dag); m += Math.max(0, v.fra - slotStart) + Math.max(0, slotStart + slotMin - v.til); }
+        if (lemp.pause && gab !== null) m += Math.max(0, 120 - gab);
+        return m;
+    };
     for (const k of rest) {
         let placeret = false;
         for (const trin of [{ brud: null, lemp: {} }, ...LEMPELSER]) {
+            if (trin.lemp.tidsrum || trin.lemp.tidsvindue || trin.lemp.pause) {
+                let bedst = null;
+                for (const dag of dageTilFase2) {
+                    for (const slot of slotsForDag(dag, slotMin)) {
+                        const slotStart = minutter(slot);
+                        if (aarsagFor(k, dag, slot, slotStart, 0, trin.lemp)) continue;
+                        const maal = brudMaal(k, dag, slotStart, trin.lemp, sidsteGab);
+                        if (!bedst || maal < bedst.maal) bedst = { maal, dag, slot, gab: sidsteGab };
+                        if (maal === 0) break;
+                    }
+                    if (bedst?.maal === 0) break;
+                }
+                if (bedst) {
+                    registrer(k, bedst.dag.dato, bedst.slot);
+                    if (trin.brud && trin.brud !== 'reserveret') brud.push({ id: k.id, brud: trin.brud, aarsag: aarsager.get(k.id) || trin.brud, detalje: trin.brud === 'pause' ? { gab: bedst.gab } : { dag: bedst.dag.dato, slot: bedst.slot } });
+                    placeret = true;
+                    break;
+                }
+                continue;
+            }
             for (const dag of dageTilFase2) {
                 for (const slot of slotsForDag(dag, slotMin)) {
                     const slotStart = minutter(slot);

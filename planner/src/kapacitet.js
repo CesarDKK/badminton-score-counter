@@ -1,6 +1,7 @@
 // Kapacitet (design § 7.1 og § 8 fane 1): bane-slots til rådighed pr. dag mod
 // de kampe, rækkernes dage lægger på dagen. Rene funktioner uden DOM.
 import { minutter, klokkeFraMinutter } from './tp-reader.js';
+import { lavRegelmodel } from './regelmodel.js';
 
 /** Slot-starttider for en dag: ["09:00", "09:30", …]. */
 export function slotsForDag(dag, slotMin) {
@@ -187,7 +188,14 @@ export function kapacitetPrDag(projekt) {
     const raekkeMap = new Map(projekt.raekker.map((r) => [r.id, r]));
     const vaegt = (kamp) => (katMap.get(kamp.kategori)?.halvBane ? 0.5 : 1);
 
-    const pr = new Map(dage.map((d) => [d.dato, { dato: d.dato, slots: slotsForDag(d, slotMin).length, baneSlots: baneSlots(d, slotMin), faste: 0, fleksible: 0, fordelt: 0, halveKampe: 0, planlagte: 0, kampe: 0 }]));
+    // Lovlige bane-slots: kun slots, hvor mindst én af dagens rækker må spille (årgangens tidsvindue, "før skoledag" og
+    // rækkens tidsrum) — før talte panelet hele dagen og kunne sige "plads", hvor programmet ikke gik op (gennemgangen, U5/A7)
+    const M = lavRegelmodel(projekt);
+    const lovligeBaneSlots = (d) => {
+        const rr = projekt.raekker.filter((r) => (r.dage || []).includes(d.dato));
+        return slotsForDag(d, slotMin).reduce((sum, slot) => (rr.some((r) => M.iVindue(M.raekkeVindue(r, d), minutter(slot))) ? sum + banerISlot(d, slot, slotMin) : sum), 0);
+    };
+    const pr = new Map(dage.map((d) => [d.dato, { dato: d.dato, slots: slotsForDag(d, slotMin).length, baneSlots: lovligeBaneSlots(d), baneSlotsHeleDagen: baneSlots(d, slotMin), faste: 0, fleksible: 0, fordelt: 0, halveKampe: 0, planlagte: 0, kampe: 0 }]));
     let udenDag = 0;
     for (const kamp of projekt.kampe) {
         const kat = katMap.get(kamp.kategori);
@@ -210,7 +218,7 @@ export function kapacitetPrDag(projekt) {
     const liste = [...pr.values()].map((r) => ({
         ...r,
         kampe: Math.round(r.kampe * 100) / 100,
-        udnyttelse: r.baneSlots ? r.fordelt / r.baneSlots : Infinity,
+        udnyttelse: r.baneSlots ? r.fordelt / r.baneSlots : r.fordelt ? Infinity : 0,
     }));
     return { dage: liste, udenDag, kampeIAlt: projekt.kampe.length };
 }

@@ -11,7 +11,7 @@
 // må ikke bruges her. Varighederne på Tournament Software er de samme som i TP-filens PlayerMatch.duration.
 import { minutter, klokkeFraMinutter } from './tp-reader.js';
 import { reglerFor, reglementetsPause, INGEN_PAUSE } from './regler.js';
-import { minKampMin, erSenior, pauseForRaekke } from './regelmodel.js';
+import { minKampMin, erSenior, pauseForRaekke, lavRegelmodel } from './regelmodel.js';
 import { banerISlot } from './kapacitet.js';
 import { saetSlotMin, genberegnKampe, opdaterOpsaetning } from './store.js';
 import { lavForslag } from './scheduler.js';
@@ -141,7 +141,7 @@ export function kandidatLaengder(projekt) {
  * den bane, der bliver ledig først (som i hallen). Halve baner (U9-single) deler en hel bane.
  * Returnerer { planSlut, forventetSlut, forsinkelseMax } (klokkeslæt / minutter) eller null.
  */
-export function simulerDag(projekt, dato, varighed = varighedForProjekt(projekt)) {
+export function simulerDag(projekt, dato, varighed = varighedForProjekt(projekt), { faktor = null, tidligStart = 0, M = null } = {}) {
     const dag = projekt.opsaetning.dage.find((d) => d.dato === dato);
     if (!dag) return null;
     const katMap = new Map(projekt.kategorier.map((k) => [k.id, k]));
@@ -176,13 +176,18 @@ export function simulerDag(projekt, dato, varighed = varighedForProjekt(projekt)
         }
         return { valgt, halv, fri };
     };
+    // Spillerne skal være klar 30 min før (reglementet § 3), så en kamp kan sættes i gang før tid — dog ikke før dagens start
+    const dagStart = minutter(dag.start);
     const klar = (x) => {
-        let t = x.t;
+        let t = tidligStart ? Math.max(dagStart, x.t - tidligStart) : x.t;
         for (const sp of x.k.spillere) if (spillerFri.has(sp)) t = Math.max(t, spillerFri.get(sp) + x.pause);
         for (const id of x.k.afhaengerAf || []) if (slutPaa.has(id)) t = Math.max(t, slutPaa.get(id) + x.pause);
         return t;
     };
-    let slut = 0, forsinkelseMax = 0, planSlut = 0;
+    // Igangsættelsesgrænsen (§ 4 stk. 5.1): ingen kampe sættes normalt i gang efter kl. 20/21/22 for U9–U11/U13–U15/U17+
+    // — årgangens tidsvindue + 1 time, og 2 timer tidligere dagen før en skoledag/hverdag (det er tidsvinduet allerede)
+    const graense = (x) => { const r = raekkeMap.get(x.kat?.raekke); return r && M ? M.aargangsVindue(r, dag).til + 60 : Infinity; };
+    let slut = 0, forsinkelseMax = 0, planSlut = 0, overGraense = 0;
     while (ventende.length) {
         let bedst = -1, bedstStart = Infinity, bedstBane = null;
         for (let i = 0; i < ventende.length; i += 1) {
@@ -193,7 +198,8 @@ export function simulerDag(projekt, dato, varighed = varighedForProjekt(projekt)
             if (start < bedstStart) { bedst = i; bedstStart = start; bedstBane = bane; }
         }
         const [x] = ventende.splice(bedst, 1);
-        const ende = bedstStart + varighed(x.k) + SKIFTE_MIN;
+        const ende = bedstStart + varighed(x.k) * (faktor ? faktor(x.k) : 1) + SKIFTE_MIN;
+        if (bedstStart > graense(x)) overGraense += 1;
         if (x.kat?.halvBane) baner[bedstBane.valgt][bedstBane.halv] = ende; else baner[bedstBane.valgt] = [ende, ende];
         for (const sp of x.k.spillere) spillerFri.set(sp, ende - SKIFTE_MIN);
         slutPaa.set(x.k.id, ende - SKIFTE_MIN);
@@ -201,7 +207,58 @@ export function simulerDag(projekt, dato, varighed = varighedForProjekt(projekt)
         forsinkelseMax = Math.max(forsinkelseMax, bedstStart - x.t);
         planSlut = Math.max(planSlut, x.t + slotMin);
     }
-    return { planSlut: klokkeFraMinutter(planSlut), forventetSlut: klokkeFraMinutter(Math.round(slut)), forsinkelseMax: Math.round(forsinkelseMax) };
+    return { planSlut: klokkeFraMinutter(planSlut), forventetSlut: klokkeFraMinutter(Math.round(slut)), forsinkelseMax: Math.round(forsinkelseMax), overGraense, slutMin: slut };
+}
+
+/** Pseudo-tilfældige tal med frø (mulberry32), så prognosen er den samme hver gang for samme program. */
+function tilfaeldig(froe) {
+    let a = froe >>> 0;
+    return () => {
+        a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+/** Lognormal faktor med middel 1 og variationskoefficient cv (kamplængder er højreskæve: nogle kampe trækker ud). */
+function lognormal(r, cv) {
+    const s2 = Math.log(1 + cv * cv);
+    const z = Math.sqrt(-2 * Math.log(r() || 1e-12)) * Math.cos(2 * Math.PI * r());
+    return Math.exp(-s2 / 2 + Math.sqrt(s2) * z);
+}
+
+/** Spredning på kampenes varighed (variationskoefficient). Antagelse: ca. 25 % — kampe til 15 point varierer meget. */
+export const VARIGHED_SPREDNING = 0.25;
+/** Spillerne skal være klar så mange minutter før deres kamp (reglementet) — kampen kan sættes i gang før tid. */
+export const TIDLIG_START_MIN = 30;
+
+const fraktil = (xs, q) => { const s = [...xs].sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.floor(q * s.length))]; };
+
+/**
+ * Prognose for en dag (gennemgangen 2026-10-11, K5/K6/B4): dagen simuleres mange gange med tilfældige kamplængder
+ * omkring sæsondataenes gennemsnit, og kampe må sættes i gang op til 30 min før tid. Returnerer forsinkelse og slut
+ * som median og 80 %-fraktil, og risikoen for, at en kamp sættes i gang efter igangsættelsesgrænsen
+ * ({ planSlut, slutMedian, slut80, forsinkelseMedian, forsinkelse80, igangsaetRisiko }) eller null.
+ */
+export function prognoseDag(projekt, dato, { koersler = 100, cv = VARIGHED_SPREDNING, tidligStart = TIDLIG_START_MIN, froe = 1, varighed = varighedForProjekt(projekt), M = lavRegelmodel(projekt) } = {}) {
+    const r = tilfaeldig(froe);
+    const ud = [];
+    for (let i = 0; i < koersler; i += 1) {
+        const faktorer = new Map();
+        const faktor = (k) => { if (!faktorer.has(k.id)) faktorer.set(k.id, lognormal(r, cv)); return faktorer.get(k.id); };
+        const sim = simulerDag(projekt, dato, varighed, { faktor, tidligStart, M });
+        if (!sim) return null;
+        ud.push(sim);
+    }
+    return {
+        planSlut: ud[0].planSlut,
+        slutMedian: klokkeFraMinutter(Math.round(fraktil(ud.map((x) => x.slutMin), 0.5))),
+        slut80: klokkeFraMinutter(Math.round(fraktil(ud.map((x) => x.slutMin), 0.8))),
+        forsinkelseMedian: fraktil(ud.map((x) => x.forsinkelseMax), 0.5),
+        forsinkelse80: fraktil(ud.map((x) => x.forsinkelseMax), 0.8),
+        igangsaetRisiko: ud.filter((x) => x.overGraense > 0).length / ud.length,
+    };
 }
 
 /** Forsinkelse (min), der regnes som "af betydning" i sammenligningen. */
@@ -221,7 +278,11 @@ export const MULIGE_BRUD = new Set(['pause']);
 export function bedsteKamplaengde(resultater) {
     // Ved lige: med reglementets pause i planen før uden (den er pænest), så den korteste kamplængde
     // Forsinkelse op til grænsen er ligegyldig; over den tæller hvert minut (104 min er værre end 23)
-    const noegle = (r) => [r.udenTid, r.fejl, Math.max(0, r.forsinkelseMax - FORSINKELSE_GRAENSE), r.muligeBrud, r.haltidGnsMin, r.udenPause ? 1 : 0, r.minutter];
+    // Med prognosen (gennemgangen 2026-10-11): først risikoen for at sætte kampe i gang efter grænsen (kun en advarsel i
+    // Tjek-forstand, men den bedste kamplængde undgår den), og forsinkelsen, som 80 % af dagene holder sig under
+    const forsinkelse = (r) => r.forsinkelse80 ?? r.forsinkelseMax;
+    const risiko = (r) => ((r.igangsaetRisiko ?? 0) > 0.2 ? 1 : 0);
+    const noegle = (r) => [r.udenTid, r.fejl, risiko(r), Math.max(0, forsinkelse(r) - FORSINKELSE_GRAENSE), r.muligeBrud, r.haltidGnsMin, r.udenPause ? 1 : 0, r.minutter];
     return [...resultater].sort((a, b) => {
         const x = noegle(a), y = noegle(b);
         for (let i = 0; i < x.length; i += 1) if (x[i] !== y[i]) return x[i] - y[i];
@@ -252,8 +313,9 @@ export function sammenlignKamplaengder(projekt, laengder = kandidatLaengder(proj
         const varighed = varighedForProjekt(planlagt);
         // Regelbrud tælles som Tjek viser dem: fejl er sikre brud, pause-advarsler er mulige brud
         const problemer = tjekPlan(planlagt).problemer;
+        const M = lavRegelmodel(planlagt);
         const dage = p.opsaetning.dage
-            .map((d) => ({ dato: d.dato, ...(simulerDag(planlagt, d.dato, varighed) || {}) }))
+            .map((d) => ({ dato: d.dato, ...(simulerDag(planlagt, d.dato, varighed) || {}), prognose: prognoseDag(planlagt, d.dato, { koersler: 40, varighed, M }) }))
             .filter((d) => d.planSlut);
         return {
             minutter: min,
@@ -266,6 +328,9 @@ export function sammenlignKamplaengder(projekt, laengder = kandidatLaengder(proj
             haltidGnsMin: f.statistik.haltidGnsMin,
             dage,
             forsinkelseMax: dage.reduce((m, d) => Math.max(m, d.forsinkelseMax), 0),
+            // Realistisk: 80 % af dagene holder sig under denne forsinkelse (tilfældige kamplængder, start op til 30 min før)
+            forsinkelse80: dage.reduce((m, d) => Math.max(m, d.prognose?.forsinkelse80 ?? 0), 0),
+            igangsaetRisiko: dage.reduce((m, d) => Math.max(m, d.prognose?.igangsaetRisiko ?? 0), 0),
         };
     });
     // Giver "uden pause" præcis samme resultat som "med pause" (fx 30 min: 20 + 10 = 30, pausen er allerede
