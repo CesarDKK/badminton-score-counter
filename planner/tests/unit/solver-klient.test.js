@@ -222,12 +222,13 @@ describe('solver-klient: diagnose når der ingen lovlig plan findes', () => {
         const { opdaterRaekke } = await import('../../src/store.js');
         const pr = bygProblem(opdaterRaekke(projekt(), 'U09 D', { maxHaltidMin: 240 }));
         assert.ok(pr.haltid.length > 0);
-        assert.ok(pr.haltid.every((h) => h.raekke === 'U09 D' && h.graense === 240));
+        assert.ok(pr.haltid.every((h) => h.raekke === 'U09 D'));
+        assert.equal(pr.haltid.find((h) => h.art === 'single').graense, 240);
     });
     test('diagnoseTekst: tekst og handlinger pr. regel', async () => {
         const { diagnoseTekst } = await import('../../src/solver-klient.js');
         const d = diagnoseTekst([{ regel: 'haltid', raekke: 'U09 D', graense: 240, forslag: 300 }, { regel: 'maxDage', raekke: 'U11 D' }]);
-        assert.match(d.tekst, /U09 D: max haltid på 240 min kan ikke overholdes — med 300 min/);
+        assert.match(d.tekst, /U09 D: max 240 min for singlekampene kan ikke overholdes — med 300 min/);
         assert.match(d.tekst, /U11 D: kampene kan ikke være på én dag/);
         assert.deepEqual(d.handlinger.map((h) => [h.raekke, h.aendring]), [['U09 D', { maxHaltidMin: 300 }], ['U11 D', { dispensationFlereDage: true }]]);
         assert.deepEqual(diagnoseTekst([{ regel: 'haltid', raekke: 'U09 D', graense: 240, forslag: null }]).handlinger[0].aendring, { maxHaltidMin: null });
@@ -261,7 +262,7 @@ describe('solver-klient: planen med færrest regelbrud (ingen lovlig plan)', asy
         assert.deepEqual(t, [
             '2 kampe i U09 D ligger uden for rækkens tidsrum (12:00–17:00)',
             '1 gang for kort pause i U11 D — i alt 5 min for lidt',
-            'U11 D: singlerne varer 30 min længere end grænsen på 360 min',
+            'U11 D: singlekampene varer 30 min længere end grænsen på 360 min',
         ]);
     });
 });

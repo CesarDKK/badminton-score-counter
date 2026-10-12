@@ -2,7 +2,7 @@
 // standarderne i et nyt projekt skal være reglementets — og ældre gemte projekter bringes på linje.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { nytProjekt, normaliserHalvBane, standardRaekkefoelge, STANDARD_REGLER, STANDARD_PAUSE, TIDSVINDUE } from '../../src/store.js';
+import { nytProjekt, normaliserHalvBane, standardRaekkefoelge, STANDARD_REGLER, STANDARD_PAUSE, TIDSVINDUE, PROJEKT_VERSION } from '../../src/store.js';
 import { minKampeKrav } from '../../src/form.js';
 import { lavForslag } from '../../src/scheduler.js';
 import { saetForm, opdaterDag, opdaterOpsaetning } from '../../src/store.js';
@@ -87,7 +87,7 @@ describe('U9/U11-vejledningen: rækkefølge og max varighed for singlerne', () =
         const gammelt = { ...p, version: 1, opsaetning: { ...p.opsaetning, minKampeSamletV3: true, singleVarighedV1: true }, raekker: [{ ...p.raekker[0], raekkefoelge: ['MD', 'HS', 'DS', 'HD', 'DD'] }] };
         const ny = normaliserHalvBane(gammelt);
         assert.deepEqual(ny.raekker[0].raekkefoelge, standardRaekkefoelge('U13'));
-        assert.equal(ny.version, 2);
+        assert.equal(ny.version, PROJEKT_VERSION);
         assert.equal('raekkefoelgeV2' in ny.opsaetning, false, 'de løse flag er væk — versionsnummeret fortæller, hvad der er gjort');
     });
 });

@@ -77,7 +77,7 @@ export function projekter() {
     const laast = (() => { let p = grund; const k = p.kampe.find((x) => x.kategori === 'U13 M HS' && x.fase === 'pulje'); p = flytKamp(p, k.id, '2026-11-22', '11:00'); return laasKamp(p, k.id, true); })();
     // Med to slots mellem en spillers kampe (streng varighed eller fælles pause) skal U9 have længere tid
     // i hallen, og U11 D må spille begge dage — ellers er opgaven reelt umulig, og så tester den ikke kontrakten.
-    const rummelig = (p) => opdaterRaekke(opdaterRaekke(p, 'U09 D', { senest: '18:30', maxHaltidMin: 480 }), 'U11 D', { dispensationFlereDage: true });
+    const rummelig = (p) => opdaterRaekke(opdaterRaekke(p, 'U09 D', { senest: '18:30', maxHaltidMin: 480, maxRaekkeMin: 480 }), 'U11 D', { dispensationFlereDage: true });
     return {
         grund,
         streng: rummelig(opdaterOpsaetning(grund, { kampVarighed: 'slot' })),

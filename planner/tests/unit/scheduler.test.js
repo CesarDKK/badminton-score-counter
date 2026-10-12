@@ -169,8 +169,11 @@ for (const [navn, moenster] of [['U13/U15 CD 2026', /U13/i], ['U9/U11 BCD 2025',
             // Swiss-runderne tæller med i max kampe pr. dag (gennemgangen 2026-10-11): i U9/U11-filen har U9 D-drengene
             // 6 runder + 6 doubler = 12 kampe lørdag, og ved flere dage giver reglementet 10 (Jesper: reglementet gælder).
             // Det er filens lodtrækning, ikke tiderne — så det er den eneste fejl, forslaget må have.
+            // Af samme grund kan U9 D's 12 kampe heller ikke være inden for rækkens 5 timer (Jesper 2026-10-12: hele U9-rækken
+            // højst 300 min) — 12 kampe á 20 min + 10 min pause er 6 timer.
+            const fraLodtraekningen = (x) => x.type === 'max-kampe' || (x.type === 'max-haltid' && x.art === 'raekke' && /^U09 D:/.test(x.tekst));
             const maxKampe = fejlMit.filter((x) => x.type === 'max-kampe');
-            assert.deepEqual(fejlMit.filter((x) => x.type !== 'max-kampe').map((x) => `${x.type}: ${x.tekst}`), [], 'forslaget har ingen andre fejl i Tjek');
+            assert.deepEqual(fejlMit.filter((x) => !fraLodtraekningen(x)).map((x) => `${x.type}: ${x.tekst}`), [], 'forslaget har ingen andre fejl i Tjek');
             for (const x of maxKampe) assert.match(x.tekst, /12 kampe .*heraf 5 Swiss-runder.*max 10/);
             assert.ok(ms < 3000, `forslag på ${ms} ms`);
             const u9 = jesper.raekker.find((r) => r.id === 'U09 D');
@@ -190,7 +193,7 @@ for (const [navn, moenster] of [['U13/U15 CD 2026', /U13/i], ['U9/U11 BCD 2025',
                 // U9's singler (6 Swiss-runder) holder sig inden for vejledningens 4 timer; med vindue til 18:00 er der også plads til doublerne
                 const laengere = lavForslag(opdaterRaekke(jesper, 'U09 D', { senest: '18:00' }));
                 assert.equal(laengere.ikkePlaceret.length + laengere.brud.filter((x) => x.brud !== 'max-kampe').length, 0, 'med vindue til 18:00 placeres alt uden andre brud end max kampe');
-                assert.deepEqual(fejl(anvendForslag(opdaterRaekke(jesper, 'U09 D', { senest: '18:00' }), laengere)).filter((x) => x.type !== 'max-kampe'), []);
+                assert.deepEqual(fejl(anvendForslag(opdaterRaekke(jesper, 'U09 D', { senest: '18:00' }), laengere)).filter((x) => !fraLodtraekningen(x)), []);
                 // U9-runderne ligger lige efter hinanden: runde r+1 senest 60 min efter runde r
                 const swiss = jesper.kampe.filter((k) => k.kategori === 'U09 D HS');
                 const rundeTid = (r) => Math.min(...swiss.filter((k) => k.runde === r).map((k) => Number(laengere.plan[k.id].slot.replace(':', ''))));

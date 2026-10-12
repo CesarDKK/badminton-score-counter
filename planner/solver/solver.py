@@ -110,7 +110,7 @@ def _valider(problem) -> str | None:
     for runder in problem.get("puljerunder", []):
         if not isinstance(runder, list) or not all(isinstance(r, list) and all(inde(i) for i in r) for r in runder):
             return "ugyldige puljerunder"
-    for navn in ("haltid", "spillerGrupper", "maxDage", "maxPrGruppe", "alternativer"):
+    for navn in ("haltid", "spillerGrupper", "halTid", "maxDage", "maxPrGruppe", "alternativer"):
         for g in problem.get(navn, []):
             if not isinstance(g, dict) or not all(inde(i) for i in g.get("kampe", []) + (g.get("udloesere") or [])):
                 return f"ugyldigt {navn}"
@@ -347,7 +347,7 @@ def _loes(problem: dict, sekunder: float, arbejdere: int | None, stop: threading
         udloesere = set(h.get("udloesere") or gruppe)
         if udloesere >= set(gruppe):
             for s_ in spaend(gruppe):
-                begraens(s_ + slot, int(h["graense"]), "haltid", raekke=h.get("raekke", ""), graense=int(h["graense"]))
+                begraens(s_ + slot, int(h["graense"]), "haltid", raekke=h.get("raekke", ""), art=h.get("art", "single"), graense=int(h["graense"]))
             continue
         # Grænsen gælder kun de dage, hvor mindst én udløser (kamp i rækken med grænsen) ligger
         for d in sorted({t // DAG for i in gruppe for t in kampe[i]["tilladte"]}):
@@ -365,11 +365,11 @@ def _loes(problem: dict, sekunder: float, arbejdere: int | None, stop: threading
                     m.Add(senest >= T[i]).OnlyEnforceIf(paa_dag(i, d))
                     m.Add(tidligst <= T[i]).OnlyEnforceIf(paa_dag(i, d))
             if any(enkeltDag[i] for i in udl):
-                begraens(senest - tidligst + slot, int(h["graense"]), "haltid", raekke=h.get("raekke", ""), graense=int(h["graense"]))
+                begraens(senest - tidligst + slot, int(h["graense"]), "haltid", raekke=h.get("raekke", ""), art=h.get("art", "single"), graense=int(h["graense"]))
             else:
                 udloest = m.NewBoolVar("")
                 m.AddMaxEquality(udloest, [paa_dag(i, d) for i in udl])
-                begraens(senest - tidligst + slot, int(h["graense"]), "haltid", betingelse=udloest, raekke=h.get("raekke", ""), graense=int(h["graense"]))
+                begraens(senest - tidligst + slot, int(h["graense"]), "haltid", betingelse=udloest, raekke=h.get("raekke", ""), art=h.get("art", "single"), graense=int(h["graense"]))
 
     # ── Max dage pr. række ──
     for r in problem.get("maxDage", []):
@@ -486,6 +486,14 @@ def _loes(problem: dict, sekunder: float, arbejdere: int | None, stop: threading
             for d in deps:
                 m.Add(vent >= paa_dagen(b) - paa_dagen(d) - slot)
             led.append(vent * koef)
+
+    # Tid i hallen for U9/U11 (kriteriet "halTid"): pr. spiller spændet over de kampe, spilleren er i hallen til — i Swiss
+    # alle runder i lodtrækningen. Ens grupper kommer samlet med en vægt (antal spillere). Vægt pr. spillertime.
+    w_hal = float(v.get("halTid", 0))
+    if w_hal > 0:
+        for g in problem.get("halTid", []):
+            for s in spaend(g["kampe"]):
+                led.append(s * max(1, int(round(w_hal * g.get("vaegt", 1) * SKALA / 60))))
 
     # Sænket net (kriteriet "saenketNet"): pr. dag tiden fra de ældres første start til U9/U11's sidste slut — kun kampe,
     # der kun kan ligge på den dag (så den del er konstant og lineær)
@@ -703,6 +711,7 @@ def delproblem(problem: dict, ids: list[int], dag: int) -> dict:
     p["haltid"] = [{**h, "kampe": inde(h["kampe"]), **({"udloesere": inde(h["udloesere"])} if h.get("udloesere") else {})} for h in problem.get("haltid", [])]
     p["haltid"] = [h for h in p["haltid"] if len(h["kampe"]) > 1 and (h.get("udloesere") is None or h["udloesere"])]
     p["spillerGrupper"] = [g for g in ({**g, "kampe": inde(g["kampe"])} for g in problem.get("spillerGrupper", [])) if len(g["kampe"]) > 1]
+    p["halTid"] = [g for g in ({**g, "kampe": inde(g["kampe"])} for g in problem.get("halTid", [])) if len(g["kampe"]) > 1]
     p["traek"] = [x for x in (inde(l) for l in problem.get("traek", [])) if len(x) > 1]
     p["cupVent"] = [[ny[b], inde(deps)] for b, deps in problem.get("cupVent", []) if b in ny and len(inde(deps)) == len(deps)]
     if problem.get("stabil"):
@@ -813,7 +822,7 @@ def diagnose(problem: dict, stop: threading.Event | None = None) -> list[dict]:
     """Hvorfor findes der ingen lovlig plan? Prøver at lempe én hård regel ad gangen.
 
     Returnerer de lempelser, der hver for sig gør problemet løsbart:
-      {"regel": "haltid", "raekke": "U09 D", "graense": 240, "forslag": 360}   (forslag None = kun uden grænse)
+      {"regel": "haltid", "raekke": "U09 D", "art": "single", "graense": 240, "forslag": 360}   (forslag None = kun uden grænse)
       {"regel": "maxDage", "raekke": "U11 D"}
       {"regel": "tidsrum", "raekke": "U09 D"}   — rækkens eget tidsrum er for snævert (løseren holder det hårdt; Tjek advarer kun)
       {"regel": "dage", "raekke": "U11 D"}      — rækken kan ikke være på de dage, den er sat til
@@ -861,10 +870,12 @@ def diagnose(problem: dict, stop: threading.Event | None = None) -> list[dict]:
     for r in problem.get("maxDage", []):
         if loesbar({**problem, "maxDage": [x for x in problem["maxDage"] if x is not r]}):
             fund.append({"regel": "maxDage", "raekke": r.get("raekke", "")})
+    # Pr. række og art (singlerne, doublerne, hele rækken — klientens VARIGHEDER)
     haltid = problem.get("haltid", [])
-    for raekke in sorted({h.get("raekke") or "" for h in haltid}):
-        egne = [h for h in haltid if (h.get("raekke") or "") == raekke]
-        andre = [h for h in haltid if (h.get("raekke") or "") != raekke]
+    noegle = lambda h: (h.get("raekke") or "", h.get("art") or "single")
+    for raekke, art in sorted({noegle(h) for h in haltid}):
+        egne = [h for h in haltid if noegle(h) == (raekke, art)]
+        andre = [h for h in haltid if noegle(h) != (raekke, art)]
         if not loesbar({**problem, "haltid": andre}):
             continue
         graense = min(int(h["graense"]) for h in egne)
@@ -873,7 +884,7 @@ def diagnose(problem: dict, stop: threading.Event | None = None) -> list[dict]:
             if loesbar({**problem, "haltid": andre + [{**h, "graense": int(h["graense"]) + ekstra} for h in egne]}):
                 forslag = graense + ekstra
                 break
-        fund.append({"regel": "haltid", "raekke": raekke, "graense": graense, "forslag": forslag})
+        fund.append({"regel": "haltid", "raekke": raekke, "art": art, "graense": graense, "forslag": forslag})
     if not fund:
         uden = loesbar({**problem, "haltid": [], "maxDage": [], "mangeKampe": []})
         if uden is True:

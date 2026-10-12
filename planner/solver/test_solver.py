@@ -472,7 +472,21 @@ class DiagnoseTest(unittest.TestCase):
             k["tilladte"] = list(range(540, 900, 30))
         self.assertEqual(loes(p, 5)["status"], "INFEASIBLE")
         fund = diagnose(p)
-        self.assertEqual(fund, [{"regel": "haltid", "raekke": "U09 D", "graense": 120, "forslag": 240}])
+        self.assertEqual(fund, [{"regel": "haltid", "raekke": "U09 D", "art": "single", "graense": 120, "forslag": 240}])
+
+    def test_varighed_pr_art_peger_paa_den_grænse_der_spaerrer(self):
+        # Jesper 2026-10-12: singlerne, doublerne og hele rækken har hver deres grænse — diagnosen skal sige hvilken
+        from solver import diagnose
+        kampe = [kamp(i, raekke="U09 D", tilladte=list(range(540, 900, 30))) for i in range(3)]
+        konf = [[0, 1, 90, 0], [1, 2, 90, 0], [0, 2, 90, 0]]
+        haltid = [{"kampe": [0, 1], "graense": 240, "raekke": "U09 D", "art": "single"},
+                  {"kampe": [0, 1, 2], "graense": 120, "raekke": "U09 D", "art": "raekke"}]
+        p = problem(kampe, konflikter=konf, haltid=haltid,
+                    kapacitet={"faelles": [{"t": t, "baner": 2} for t in range(540, 900, 30)]}, dage=[{"index": 0, "start": 540, "slut": 900, "baner": 2}])
+        self.assertEqual(loes(p, 5)["status"], "INFEASIBLE")
+        self.assertEqual(diagnose(p), [{"regel": "haltid", "raekke": "U09 D", "art": "raekke", "graense": 120, "forslag": 240}])
+        r = loes(p, 5, elastisk=True)
+        self.assertEqual({(b["regel"], b["art"]) for b in r["brud"]}, {("haltid", "raekke")})
 
     def test_max_dage_er_aarsagen(self):
         from solver import diagnose
@@ -537,6 +551,20 @@ class DiagnoseTest(unittest.TestCase):
         self.assertGreaterEqual(job.senest, job.start)
         kode, svar = solver.koer({**p, "diagnose": False}, 5, solver.Job())
         self.assertNotIn("diagnose", svar)
+
+
+class HalTidTest(unittest.TestCase):
+    """Tid i hallen for U9/U11 (kriteriet halTid): løseren trækker en spillers kampe sammen."""
+
+    def test_kampene_trækkes_sammen(self):
+        kampe = [kamp(0, tilladte=[540]), kamp(1, tilladte=[600, 690])]
+        vaegte = {"ventetid": 0, "sluttid": 0, "tommeBaner": 0, "halTid": 1}
+        r = loes(problem(kampe, vaegte=vaegte, halTid=[{"kampe": [0, 1], "vaegt": 3}]), 5)
+        self.assertEqual(r["tider"]["k1"], 600, "alle andre vægte er 0 — det er halTid, der trækker kamp 1 frem")
+
+    def test_ugyldig_gruppe_afvises(self):
+        from solver import valider
+        self.assertEqual(valider(problem([kamp(0)], halTid=[{"kampe": [0, 7], "vaegt": 1}])), "ugyldigt halTid")
 
 
 class ValideringTest(unittest.TestCase):

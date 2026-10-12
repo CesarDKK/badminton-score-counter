@@ -30,6 +30,9 @@ function kontekst(projekt) {
 /** Årgange, der spiller med sænket net (U9-U11-vejledningen 2026/27: 145 cm). */
 export const SAENKET_NET = new Set(['U09', 'U11']);
 
+/** Spillerne, der er i hallen til en kamp: de kendte — og i Swiss alle i lodtrækningen (alle spiller hver runde). */
+export const halTidSpillere = (k) => (k.fase === 'swiss' ? new Set([...k.spillere, ...(k.muligeSpillere || [])]) : k.spillere);
+
 /** Kriterierne: { id, navn, beskrivelse, enhed, beregn(projekt, ctx) → tal (≥ 0) }. */
 export const KRITERIER = [
     {
@@ -155,6 +158,30 @@ export const KRITERIER = [
         },
     },
     {
+        // Jesper 2026-10-12: U9-spillere i hallen fra kl. 9 til efter 15. Ventetiden kender kun spillerne i de kampe, de
+        // er trukket til, og i Swiss kendes de først efter lodtrækningen til runden — så en U9-række med Swiss i alle
+        // kategorier var næsten usynlig, og doublerne kunne spredes over eftermiddagen. Her tæller alle i en
+        // Swiss-lodtrækning med i hver runde (de spiller alle hver runde). U9-U11-vejledningen: "U9 single først og dernæst
+        // double", "kampene [skal] være så komprimeret med en hurtig afvikling uden for lange pauser".
+        id: 'halTid', navn: 'Tid i hallen, U9/U11', enhed: 'spillertimer',
+        beskrivelse: 'U9- og U11-spillernes tid i hallen pr. dag, fra deres første til deres sidste kamp er slut — Swiss-runder tæller for alle i lodtrækningen.',
+        beregn: (p, c) => {
+            const prSpillerDag = new Map();
+            for (const x of c.placeret) {
+                const aargang = p.raekker.find((r) => r.id === c.katMap.get(x.k.kategori)?.raekke)?.aargang;
+                if (!SAENKET_NET.has(aargang)) continue;
+                for (const s of halTidSpillere(x.k)) {
+                    const n = `${s}|${x.dag}`;
+                    const t = prSpillerDag.get(n) || [x.min, x.min];
+                    prSpillerDag.set(n, [Math.min(t[0], x.min), Math.max(t[1], x.min)]);
+                }
+            }
+            let min = 0;
+            for (const [a, b] of prSpillerDag.values()) min += b - a + c.slotMin;
+            return min / 60;
+        },
+    },
+    {
         id: 'finalerSpredt', navn: 'Finaler spredt', enhed: 'slots',
         beskrivelse: 'Afstand i slots mellem rækkens første og sidste finale samme dag (finaler gerne samlet).',
         beregn: (p, c) => {
@@ -174,9 +201,9 @@ export const KRITERIER = [
 
 /** Navngivne skabeloner med vægte. "standard" bruges i nye projekter. */
 export const VAEGT_SKABELONER = {
-    standard: { navn: 'Standard: kort ventetid og luft mellem kampene', vaegte: { ventetid: 1, kampeITraek: 2, langeHuller: 2, sluttid: 2, tommeBaner: 0.1, puljerunderSpredt: 2, cupVent: 1, saenketNet: 0.5, finalerSpredt: 0.2 } },
-    tidligSlut: { navn: 'Tidlig slut', vaegte: { ventetid: 0.5, kampeITraek: 0.5, langeHuller: 1, sluttid: 8, tommeBaner: 0.3, puljerunderSpredt: 0.5, cupVent: 0.5, saenketNet: 0.2, finalerSpredt: 0.1 } },
-    roligt: { navn: 'Roligt, overskueligt program', vaegte: { ventetid: 0.5, kampeITraek: 3, langeHuller: 2, sluttid: 1, tommeBaner: 0.05, puljerunderSpredt: 3, cupVent: 1, saenketNet: 0.5, finalerSpredt: 1 } },
+    standard: { navn: 'Standard: kort ventetid og luft mellem kampene', vaegte: { ventetid: 1, kampeITraek: 2, langeHuller: 2, sluttid: 2, tommeBaner: 0.1, puljerunderSpredt: 2, cupVent: 1, saenketNet: 0.5, halTid: 0.5, finalerSpredt: 0.2 } },
+    tidligSlut: { navn: 'Tidlig slut', vaegte: { ventetid: 0.5, kampeITraek: 0.5, langeHuller: 1, sluttid: 8, tommeBaner: 0.3, puljerunderSpredt: 0.5, cupVent: 0.5, saenketNet: 0.2, halTid: 0.3, finalerSpredt: 0.1 } },
+    roligt: { navn: 'Roligt, overskueligt program', vaegte: { ventetid: 0.5, kampeITraek: 3, langeHuller: 2, sluttid: 1, tommeBaner: 0.05, puljerunderSpredt: 3, cupVent: 1, saenketNet: 0.5, halTid: 0.5, finalerSpredt: 1 } },
 };
 
 /** Projektets vægte: standard med projektets ændringer ovenpå (ukendte kriterier får vægt 0). */
