@@ -352,6 +352,7 @@ function reglerBoks(p) {
             <div class="felter">
                 ${tal('maxKampePrDag', r.maxKampePrDag, 'Max kampe pr. dag')}
                 ${tal('maxKampePrDagEnDag', r.maxKampePrDagEnDag, 'Max kampe, éndagsturnering')}
+                ${tal('maxKampePrDagU11', r.maxKampePrDagU11, 'Max kampe pr. dag, U11')}
                 ${tal('foerSkoledagTimer', r.foerSkoledagTimer, 'Tidligere før skoledag', 'timer')}
                 ${tal('seniorMaxPrKategori', r.seniorMaxPrKategori, 'Senior E/M pr. kategori pr. dag')}
             </div>
@@ -367,6 +368,8 @@ function reglerBoks(p) {
                 ${tal('minKampe.BCDDouble', r.minKampe.BCDDouble, 'B–D double')}
                 ${tal('minKampe.U9U11Single', r.minKampe.U9U11Single, 'U9/U11 single')}
                 ${tal('minKampe.swissRunder', r.minKampe.swissRunder, 'Swiss Ladder-runder')}
+                ${tal('maalKampeU9U11.single', r.maalKampeU9U11.single, 'U9/U11 mål, single')}
+                ${tal('maalKampeU9U11.double', r.maalKampeU9U11.double, 'U9/U11 mål, double')}
                 ${tid('eTidligst', r.eTidligst, 'E-rækker tidligst')}
                 ${tid('eFinale.0', r.eFinale[0], 'E-finaler fra')}
                 ${tid('eFinale.1', r.eFinale[1], 'E-finaler til')}

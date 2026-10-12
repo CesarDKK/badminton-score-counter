@@ -526,3 +526,22 @@ Målt på Lyngby U9/U11 med alle kategorier som Swiss, U9 D og U11 D lørdag og 
 | Dagene slutter | 18:35 og 19:00 | 15:40 og 15:20 (løseren 16:00) |
 | U11 D: længst i hallen | 9,2 / 7,5 t | 6,7 / 6,3 t |
 | U11 B: over 5 t i hallen | 18 / 35 spillere | 4 / 0 spillere |
+
+## U11: max 12 kampe på en dag og en middelvej i det anbefalede antal (2026-10-12)
+
+U9-U11-vejledningen siger: "Max. antal kampe på en dag for U11 er 12 kampe". Jesper besluttede, at det gælder, også når
+turneringen har flere dage (`maxKampePrDagU11`). Reglementets 10 gælder stadig for de andre. Grænsen virker i Tjek, i
+planlæggeren (også for spillere, der kun spiller Swiss) og i løseren. Løseren får spillere med en anden grænse end
+dagens fælles som en gruppe med `regel: "maxKampe"`, og diagnosen lemper dem sammen med max kampe pr. dag.
+
+Jesper: målet er ikke 12. Når planneren selv vælger form for U9/U11, sigter den efter midten af anbefalingen "4 – 6
+singlekampe og 2 – 5 doublekampe" (`maalKampeU9U11`: 5 single, 3 double).
+
+- Den vælger den form, der kommer tættest på målet uden at give over 6 singler eller 5 doubler. Ved lige afstand vælges
+  den billigste.
+- Er der ikke plads, gælder minimum som før.
+- Begge tal kan rettes under "Reglementets grænser".
+- Ældre årgange er uændrede: de får færrest bane-slots, der når minimum.
+
+Målt på Lyngby med alt som Swiss steg antallet af kampe fra 377 til 393, fordi U9 D HS og U11 D DS fik 5 runder i stedet
+for 4. Lørdagen blev strammere: 35 i stedet for 27 brud, før kortene er brugt. Kortene foreslår grupper, der løser det.

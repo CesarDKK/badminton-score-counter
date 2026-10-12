@@ -405,12 +405,13 @@ def _loes(problem: dict, sekunder: float, arbejdere: int | None, stop: threading
                     led.append(paa)
             begraens(sum(led), int(problem["maxKampePrDag"]), "maxKampe", maksOver=len(ids), kampe=[kampe[i]["id"] for i in ids], graense=int(problem["maxKampePrDag"]))
 
-    # ── Grupper med egen grænse pr. dag (senior E/M: max kampe pr. kategori pr. spiller pr. dag) ──
+    # ── Grupper med egen grænse pr. dag (senior E/M: max kampe pr. kategori pr. spiller pr. dag; spillere, hvis grænse
+    # pr. dag afviger fra problemets — fx U11's 12 ved flere dage, regel "maxKampe") ──
     for g in problem.get("maxPrGruppe", []):
         ids = g["kampe"]
         for d in sorted({t // DAG for i in ids for t in kampe[i]["tilladte"]}):
             led = [1 if dagFor[i] == d else 0 for i in ids if enkeltDag[i]] + [paa_dag(i, d) for i in ids if not enkeltDag[i]]
-            begraens(sum(led), int(g["max"]), "senior", maksOver=len(ids), kampe=[kampe[i]["id"] for i in ids], graense=int(g["max"]))
+            begraens(sum(led), int(g["max"]), g.get("regel", "senior"), maksOver=len(ids), kampe=[kampe[i]["id"] for i in ids], graense=int(g["max"]))
 
     # ── Par, der ikke må ligge samme dag (senior E/M: finalen ikke samme dag som en kvartfinale) ──
     for a, b in problem.get("ikkeSammeDag", []):
@@ -822,6 +823,11 @@ def forbedr_i_bidder(problem: dict, svar: dict, slut: float, stop: threading.Eve
     return bedst
 
 
+def uden_max_kampe(problem: dict) -> dict:
+    """Problemet uden max kampe pr. spiller pr. dag — både den fælles grænse og spillere med egen grænse (fx U11)."""
+    return {**problem, "mangeKampe": [], "maxPrGruppe": [g for g in problem.get("maxPrGruppe", []) if g.get("regel", "senior") != "maxKampe"]}
+
+
 def diagnose(problem: dict, stop: threading.Event | None = None) -> list[dict]:
     """Hvorfor findes der ingen lovlig plan? Prøver at lempe én hård regel ad gangen.
 
@@ -857,7 +863,7 @@ def diagnose(problem: dict, stop: threading.Event | None = None) -> list[dict]:
             if len(kampe_alle[i]["tilladte"]) != 1:
                 bredere = {t for t in alt["tilladte"] if t not in forbudt_alt.get(i, ())}
                 kampe_alle[i] = {**kampe_alle[i], "tilladte": sorted(set(kampe_alle[i]["tilladte"]) | bredere)}
-    if loesbar({**problem, "kampe": kampe_alle, "haltid": [], "maxDage": [], "mangeKampe": []}) is False:
+    if loesbar({**uden_max_kampe(problem), "kampe": kampe_alle, "haltid": [], "maxDage": []}) is False:
         return [{"regel": "plads"}]
 
     # De hyppigste årsager for en ny bruger først (Fable-gennemgangen, M7): rækkens tidsrum og dage, så max kampe pr.
@@ -869,7 +875,7 @@ def diagnose(problem: dict, stop: threading.Event | None = None) -> list[dict]:
         kampe2 = [({**k, "tilladte": [t for t in alt["tilladte"] if t not in forbudt.get(i, ())]} if i in bredere and len(k["tilladte"]) != 1 else k) for i, k in enumerate(problem["kampe"])]
         if loesbar({**problem, "kampe": kampe2}):
             fund.append({"regel": alt["regel"], "raekke": alt.get("raekke", "")})
-    if problem.get("mangeKampe") and loesbar({**problem, "mangeKampe": []}):
+    if (problem.get("mangeKampe") or len(uden_max_kampe(problem)["maxPrGruppe"]) < len(problem.get("maxPrGruppe", []))) and loesbar(uden_max_kampe(problem)):
         fund.append({"regel": "maxKampePrDag"})
     for r in problem.get("maxDage", []):
         if loesbar({**problem, "maxDage": [x for x in problem["maxDage"] if x is not r]}):
@@ -890,7 +896,7 @@ def diagnose(problem: dict, stop: threading.Event | None = None) -> list[dict]:
                 break
         fund.append({"regel": "haltid", "raekke": raekke, "art": art, "graense": graense, "forslag": forslag})
     if not fund:
-        uden = loesbar({**problem, "haltid": [], "maxDage": [], "mangeKampe": []})
+        uden = loesbar({**uden_max_kampe(problem), "haltid": [], "maxDage": []})
         if uden is True:
             fund.append({"regel": "flere"})
         elif uden is False and not uafklaret:

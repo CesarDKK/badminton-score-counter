@@ -206,7 +206,10 @@ export function lavRegelmodel(projekt) {
      * Senior: altid 10 — "Dog må en spiller ikke spille mere end 10 kampe på én dag" (stk. 5.2).
      * For en spiller gælder den strengeste grænse blandt rækkerne for dagens kampe.
      */
-    const maxPrDagFor = (r) => (dage.length === 1 && !(r && erSenior(r.aargang)) ? regler.maxKampePrDagEnDag : regler.maxKampePrDag);
+    const maxPrDagFor = (r) => {
+        if (r?.aargang === 'U11') return regler.maxKampePrDagU11;
+        return dage.length === 1 && !(r && erSenior(r.aargang)) ? regler.maxKampePrDagEnDag : regler.maxKampePrDag;
+    };
     const maxPrDagForKampe = (kampe) => Math.min(...kampe.map((k) => maxPrDagFor(raekke(k))));
 
     return {

@@ -69,7 +69,9 @@ function lavForslagEnGang(projekt, valg = {}) {
     const spillerGraense = (s, dato) => {
         const n = `${s}|${dato}`;
         if (!graenseCache.has(n)) {
-            const kampe = projekt.kampe.filter((x) => x.spillere.includes(s) && (raekke(x)?.dage || []).includes(dato));
+            // Også kampe, spilleren kan være i (Swiss-runder): ellers fik en U11-spiller, der kun spiller Swiss, dagens
+            // generelle grænse (10) i stedet for U11's 12
+            const kampe = projekt.kampe.filter((x) => (x.spillere.includes(s) || x.muligeSpillere.includes(s)) && (raekke(x)?.dage || []).includes(dato));
             graenseCache.set(n, kampe.length ? M.maxPrDagForKampe(kampe) : Infinity);
         }
         return graenseCache.get(n);
@@ -274,7 +276,7 @@ function lavForslagEnGang(projekt, valg = {}) {
         for (const s of k.muligeSpillere) {
             // En Swiss-runde tæller én kamp for hver deltager (kun første gang rundens kampe lægges på dagen)
             const nyKamp = kendte.has(s) || (erSwissRunde(k) && !swissTalt.has(`${s}|${k.tpRef.draw}|${k.runde}|${dag.dato}`));
-            if (!lemp.maxKampe && nyKamp && (kendteKampePrDag.get(`${s}|${dag.dato}`) || 0) >= Math.min(spillerGraense(s, dag.dato), maxPrDag)) return 'spiller har max kampe den dag';
+            if (!lemp.maxKampe && nyKamp && (kendteKampePrDag.get(`${s}|${dag.dato}`) || 0) >= (Number.isFinite(spillerGraense(s, dag.dato)) ? spillerGraense(s, dag.dato) : maxPrDag)) return 'spiller har max kampe den dag';
             if (!lemp.maxKampe && kendte.has(s) && M.seniorEM(r) && (katKampePrDag.get(`${s}|${k.kategori}|${dag.dato}`) || 0) >= M.regler.seniorMaxPrKategori) return 'spiller har max kampe i kategorien den dag';
             const h = historik.get(s);
             if (!h) continue;

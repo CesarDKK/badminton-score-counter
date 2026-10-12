@@ -189,15 +189,15 @@ describe('rules: regelbrud', () => {
     });
     test('max kampe pr. dag', () => {
         let p = projekt();
-        // Anton får 11 kampe: brug kunstige kampe
-        for (let i = 0; i < 11; i += 1) {
+        // Anton får 13 kampe: brug kunstige kampe. U11 må få 12 på en dag (U9-U11-vejledningen; Jesper 2026-10-12)
+        for (let i = 0; i < 13; i += 1) {
             p.kampe.push({ id: `x${i}`, kategori: 'U11 D HS', fase: 'pulje', runde: 1, navn: `x${i}`, spillere: ['a', `z${i}`], muligeSpillere: ['a', `z${i}`], afhaengerAf: [], tpRef: { draw: 10 + i }, tpTid: null, varighed: 0 });
             p = flytKamp(p, `x${i}`, '2026-11-21', `${String(9 + Math.floor(i / 1)).padStart(2, '0')}:00`);
         }
-        p = opdaterDag(p, '2026-11-21', { slut: '21:00' });
+        p = opdaterDag(p, '2026-11-21', { slut: '23:00' });
         const f = fejl(p, 'max-kampe');
         assert.equal(f.length, 1);
-        assert.match(f[0].tekst, /11 kampe .* \(max 10\)/);
+        assert.match(f[0].tekst, /13 kampe .* \(max 12\)/);
     });
     test('flere dage i en D-række er en rød fejl, der kun forsvinder med dispensation (Jesper 2026-10-09)', () => {
         const p = flytKamp(grund(), 'f1', '2026-11-22', '12:00');
@@ -321,8 +321,8 @@ describe('rules: grænser kan ændres og nulstilles', () => {
         assert.equal(fejl(p, 'pause').length, 0, '20 + 10 = 30');
         p = opdaterRegler(p, 'minKampMin.ungdomABCD', 25);
         assert.equal(fejl(p, 'pause').length, 1, '25 + 10 = 35 > 30');
-        p = opdaterRegler(p, 'maxKampePrDag', 1);
-        assert.equal(fejl(p, 'max-kampe').length, 1, 'Anton har 2 kampe');
+        p = opdaterRegler(p, 'maxKampePrDagU11', 1);
+        assert.equal(fejl(p, 'max-kampe').length, 1, 'Anton (U11) har 2 kampe');
     });
     test('min. antal kampe og Swiss-runder kan ændres', () => {
         let p = projekt();
