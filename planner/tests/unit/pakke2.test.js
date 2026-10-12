@@ -66,11 +66,11 @@ describe('max varighed gælder afviklingen af rækkens SINGLEKAMPE (U9 4 timer, 
     });
     test('Tjek: doublen tæller ikke med — double kl. 9 og singler kl. 12–14:30 er 150 min singler', () => {
         const p = swiss(laeg(u9(), (k) => k.kategori === 'U09 D HD', '09:00'), ['12:00', '13:00', '14:00']);
-        assert.deepEqual(tjekPlan(p).problemer.filter((x) => x.type === 'max-haltid'), []);
+        assert.deepEqual(tjekPlan(p).problemer.filter((x) => x.type === 'max-haltid' && x.art === 'single'), []);
     });
     test('Tjek: singler fra kl. 9 til 14:30 er 330 min — én samlet fejl for rækken, der peger på de kampe, der ligger for sent', () => {
         const p = swiss(u9(), ['09:00', '11:00', '14:00']);
-        const fund = tjekPlan(p).problemer.filter((x) => x.type === 'max-haltid');
+        const fund = tjekPlan(p).problemer.filter((x) => x.type === 'max-haltid' && x.art === 'single');
         assert.equal(fund.length, 1);
         assert.equal(fund[0].alvor, 'fejl');
         assert.match(fund[0].tekst, /U09 D: singlekampene strækker sig over 330 min/);
@@ -89,8 +89,9 @@ describe('max varighed gælder afviklingen af rækkens SINGLEKAMPE (U9 4 timer, 
     test('løserens problem: én gruppe for rækkens singlekampe — doublen er ikke med', () => {
         const p = u9();
         const pr = bygProblem(p);
-        assert.equal(pr.haltid.length, 1);
-        const kampe = pr.haltid[0].kampe.map((i) => p.kampe.find((k) => k.id === pr.kampe[i].id));
+        const singler = pr.haltid.filter((h) => h.art === 'single');
+        assert.equal(singler.length, 1);
+        const kampe = singler[0].kampe.map((i) => p.kampe.find((k) => k.id === pr.kampe[i].id));
         assert.ok(kampe.every((k) => k.kategori === 'U09 D HS'));
         assert.equal(kampe.length, 6, '3 runder á 2 kampe');
         assert.equal(pr.haltid[0].graense, 240);

@@ -68,7 +68,8 @@ describe('kriterier: score og vægte', () => {
         assert.equal(del.langeHuller.vaerdi, 1);
         assert.equal(del.sluttid.vaerdi, 3.5, '09:00 → 12:30');
         assert.equal(del.tommeBaner.vaerdi, 12, '7 slots x 2 baner = 14, minus 2 kampe');
-        assert.equal(s.total, Math.round((2.5 * 1 + 1 * 2 + 3.5 * 2 + 12 * 0.1) * 10) / 10);
+        assert.equal(del.halTid.vaerdi, 4.5, 'U9: a 09:00–12:30, b 09:00–09:30, c 12:00–12:30');
+        assert.equal(s.total, Math.round((2.5 * 1 + 1 * 2 + 3.5 * 2 + 12 * 0.1 + 4.5 * 0.5) * 10) / 10);
     });
     test('puljerunder ude af takt og finaler spredt', () => {
         let p = projekt();

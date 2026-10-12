@@ -6,7 +6,7 @@
 // `noegle` sættes på advarsler, brugeren kan kvittere (projekt.kvitteret).
 import { minutter } from './tp-reader.js';
 import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt, banebrugISlot, banerISlot } from './kapacitet.js';
-import { lavRegelmodel, minKampMin, pauseForRaekke, foerSkoledag, tidsvindue, banerBrugt } from './regelmodel.js';
+import { lavRegelmodel, minKampMin, pauseForRaekke, foerSkoledag, tidsvindue, banerBrugt, varighedsSpaend } from './regelmodel.js';
 import { reglementetsPause } from './regler.js';
 import { effektivForm, minKampeSamlet, sikreKampe, minKampeKrav, swissOversiddere } from './form.js';
 
@@ -234,27 +234,14 @@ export function tjekPlan(projekt) {
         }
     }
 
-    // ── Max varighed for afviklingen af rækkens singlekampe (U9: 4 timer, U11: 6 timer) ──
-    // Pr. række og dag: fra første singlekamp starter, til den sidste er slut. Doublerne tæller ikke med.
-    {
-        const prRaekkeDag = new Map();
-        for (const { k, p, min } of placerede) {
-            const graense = M.singleVarighedGraense(k);
-            if (!graense) continue;
-            const n = `${raekke(k).id}|${p.dag}`;
-            if (!prRaekkeDag.has(n)) prRaekkeDag.set(n, { raekkeId: raekke(k).id, dag: p.dag, graense, foerste: min, sidste: min, kampe: [] });
-            const d = prRaekkeDag.get(n);
-            d.foerste = Math.min(d.foerste, min);
-            d.sidste = Math.max(d.sidste, min);
-            d.kampe.push({ id: k.id, min });
-        }
-        for (const d of prRaekkeDag.values()) {
-            const varighed = d.sidste - d.foerste + slotMin;
-            if (varighed <= d.graense) continue;
-            // De kampe, der ligger uden for grænsen regnet fra dagens første singlekamp, er dem, der skal flyttes
-            const forSent = d.kampe.filter((x) => x.min + slotMin > d.foerste + d.graense).map((x) => x.id);
-            tilfoej({ type: 'max-haltid', alvor: 'fejl', tekst: `${d.raekkeId}: singlekampene strækker sig over ${varighed} min ${datoKort(d.dag)} (kl. ${klokke(d.foerste)}–${klokke(d.sidste + slotMin)}); afviklingen af singlekampene må højst vare ${d.graense} min.`, kampe: forSent, dag: d.dag });
-        }
+    // ── Max varighed pr. række og dag: singlerne (U9 4 t, U11 6 t), doublerne (U9 4 t, U11 3 t) og hele rækken (U9 5 t) ──
+    // Fra den første kamp starter, til den sidste er slut (regelmodellens VARIGHEDER).
+    for (const d of varighedsSpaend(M, placerede.map((x) => x.k), projekt.plan).values()) {
+        const varighed = d.sidste - d.foerste + slotMin;
+        if (varighed <= d.graense) continue;
+        // De kampe, der ligger uden for grænsen regnet fra dagens første kamp, er dem, der skal flyttes
+        const forSent = d.kampe.filter((x) => x.min + slotMin > d.foerste + d.graense).map((x) => x.id);
+        tilfoej({ type: 'max-haltid', alvor: 'fejl', art: d.art, tekst: `${d.raekkeId}: ${d.navn} strækker sig over ${varighed} min ${datoKort(d.dag)} (kl. ${klokke(d.foerste)}–${klokke(d.sidste + slotMin)}); afviklingen af ${d.navn} må højst vare ${d.graense} min.`, kampe: forSent, dag: d.dag });
     }
 
     // ── Lang ventetid: en spiller venter længere end grænsen mellem egne (kendte) kampe ──

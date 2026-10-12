@@ -454,3 +454,36 @@ Målt på Lyngby-filerne med samme problem og tidsgrænse mod begge løsere (1,5
 9.15 vinder i 5 af 6 kørsler, og beviser "ingen lovlig plan" hurtigere (18 s mod 42 s). 9.11 gav samme svar i alle
 kørsler; 9.15 varierer fra kørsel til kørsel, så to kørsler kan give forskellige planer. Kontrakt-testen og de 29
 Python-tests består. esbuild 0.24 → 0.28 lukker det sidste audit-fund; `tp-bundle.js` er bygget igen og afprøvet i browseren.
+
+## U9/U11: varighed for doublerne og hele rækken, og tid i hallen med Swiss (2026-10-12)
+
+Jesper testede et program, hvor U9-spillere mødte kl. 9 og gik hjem efter en double kl. 15. Årsagen: alle U9-kategorier
+spilles som Swiss, og fra runde 2 kendes spillerne først efter lodtrækningen. Ventetiden tæller kun kendte spillere, så
+U9-spillernes tid i hallen var næsten usynlig for planlægger og løser, og doublerne blev spredt over eftermiddagen.
+
+U9-U11-vejledningen (28-07-2026, gode råd): "max. 4 timer i single i U9 – og gerne lidt kortere tid i double … I U11
+max. 6 timer i single og det halve i double". Jesper besluttede:
+
+- **Doublerne**, hårdt: U9 240 min, U11 180 min (`maxDoubleMin`), målt som singlerne fra dagens første til sidste double.
+- **Hele rækken**, hårdt: U9 300 min (`maxRaekkeMin`), single og double samlet. Det er Jespers eget valg; vejledningen
+  har intet samlet tal.
+- **Blødt kriterie `halTid`** ("Tid i hallen, U9/U11", vægt 0,5): spillertimer fra første til sidste kamp. I Swiss
+  tæller alle i lodtrækningen med i hver runde, fordi de alle spiller hver runde.
+
+Grænserne står ét sted (`VARIGHEDER` i `regelmodel.js`) og gælder i Tjek, planlæggeren, løseren (`haltid`-grupper med
+`art`), diagnosen og beslutningskortene. Gemte projekter får standardværdierne i opgradering 2 → 3.
+
+Doublegrænsen giver ikke forrang i planlæggeren, kun et tjek. Med forrang røg U11 C's doubler ud over tidsvinduet.
+
+Målt på Lyngby U9/U11 med U9 uden TP's 12–17-vindue, Swiss med 4 runder i alle U9-kategorier og 20 min slots:
+
+| | Før: planlægger / løser | Efter: planlægger / løser |
+|---|---|---|
+| U9: længste tid i hallen | 4,7 / 4,3 t | 3,7 / 5,0 t (grænsen) |
+| U11 D: spillere over 5 t | 25 / 13 | 17 / 12 |
+
+Løseren minimerer summen af tid i hallen. Derfor kan nogle få (her pigerne i DS og double) ramme grænsen på 5 timer,
+mens drengene får kortere dage.
+
+I Lyngby-filens egen lodtrækning har U9 D 12 kampe på en dag (6 Swiss-runder og 6 doubler). Det kan heller ikke være
+inden for 5 timer, og benchmark-testen regner det som en fejl i lodtrækningen ligesom max kampe.

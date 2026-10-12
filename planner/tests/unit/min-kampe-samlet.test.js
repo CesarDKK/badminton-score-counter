@@ -4,7 +4,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { foreslaaForm, formTekst, minKampeSamlet, sikreKampe, effektivForm } from '../../src/form.js';
-import { STANDARD_REGLER, nytProjekt, saetForm, opdaterRaekke, genberegnKampe } from '../../src/store.js';
+import { STANDARD_REGLER, nytProjekt, saetForm, opdaterRaekke, genberegnKampe, PROJEKT_VERSION } from '../../src/store.js';
 import { tjekPlan } from '../../src/rules.js';
 
 const regler = STANDARD_REGLER;
@@ -60,7 +60,7 @@ describe('min. kampe samlet: hjælpere', () => {
         const gammelt = { ...p, version: 1, opsaetning: { ...p.opsaetning, minKampeSamletV2: true, raekkefoelgeV2: true, singleVarighedV1: true }, raekker: [{ ...p.raekker[0], minKampeSamlet: true }] };
         const ny = normaliserHalvBane(gammelt);
         assert.equal(ny.raekker[0].minKampeSamlet, false);
-        assert.equal(ny.version, 2);
+        assert.equal(ny.version, PROJEKT_VERSION);
         const tilvalgt = { ...ny, raekker: [{ ...ny.raekker[0], minKampeSamlet: true }] };
         assert.equal(normaliserHalvBane(tilvalgt).raekker[0].minKampeSamlet, true, 'brugerens senere tilvalg bevares');
     });

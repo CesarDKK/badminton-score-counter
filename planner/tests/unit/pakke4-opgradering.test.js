@@ -25,14 +25,14 @@ describe('opgradering af gemte projekter', () => {
     });
     test('det ældste version 1-projekt får alle tre rettelser', () => {
         const p = opgraderProjekt(v1({}));
-        assert.equal(p.version, 2);
+        assert.equal(p.version, PROJEKT_VERSION);
         assert.deepEqual(p.raekker.map((r) => r.minKampeSamlet), [false, false]);
         assert.deepEqual(p.raekker.map((r) => r.maxHaltidMin), [360, null]);
         assert.deepEqual(p.raekker.map((r) => r.raekkefoelge), [standardRaekkefoelge('U11'), standardRaekkefoelge('U13')]);
     });
     test('et version 1-projekt, der allerede havde fået rettelserne, får dem ikke igen — brugerens valg bevares', () => {
         const p = opgraderProjekt(v1({ minKampeSamletV3: true, singleVarighedV1: true, raekkefoelgeV2: true }));
-        assert.equal(p.version, 2);
+        assert.equal(p.version, PROJEKT_VERSION);
         assert.deepEqual(p.raekker.map((r) => r.minKampeSamlet), [true, true]);
         assert.deepEqual(p.raekker.map((r) => r.maxHaltidMin), [null, null]);
         assert.deepEqual(Object.keys(p.opsaetning).filter((k) => /V\d$/.test(k)), [], 'flagene er fjernet');
@@ -42,7 +42,7 @@ describe('opgradering af gemte projekter', () => {
         gemLokalt(v1({}), l);
         const r = hentLokaltMedStatus(l);
         assert.equal(r.fejl, null);
-        assert.equal(r.projekt.version, 2);
+        assert.equal(r.projekt.version, PROJEKT_VERSION);
         assert.equal(validerProjekt(r.projekt), null);
         l.setItem(GEM_NOEGLE, JSON.stringify({ ...nyt(), version: PROJEKT_VERSION + 1 }));
         const nyere = hentLokaltMedStatus(l);

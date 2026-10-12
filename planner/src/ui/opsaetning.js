@@ -471,6 +471,8 @@ export function raekkePanel(p) {
             r.tidligst || r.senest ? `${r.tidligst || '–'}–${r.senest || '–'}` : '',
             r.reserveredeBaner ? `${r.reserveredeBaner} reserverede baner${kategorier.some((k) => k.halvBane) ? ` (${r.reserveredeBaner * 2} halve)` : ''}` : '',
             r.maxHaltidMin ? `singler max ${r.maxHaltidMin} min` : '',
+            r.maxDoubleMin ? `doubler max ${r.maxDoubleMin} min` : '',
+            r.maxRaekkeMin ? `hele rækken max ${r.maxRaekkeMin} min` : '',
             r.maxDage ? `max ${r.maxDage} ${r.maxDage === 1 ? 'dag' : 'dage'}` : r.maxDage === null && standardMaxDage(r) ? 'ingen grænse for dage' : '',
             minKampeSamlet(r) ? 'min. kampe samlet' : '',
             kategorier.some((k) => (k.formValg || 'tp') !== 'tp') ? 'planneren bygger kampe' : '',
@@ -501,6 +503,10 @@ export function raekkePanel(p) {
                         <input type="number" min="0" max="60" value="${r.reserveredeBaner || 0}" data-raekke-baner="${esc(r.id)}"></label>
                     <label class="felt" title="Hård regel: højst så mange minutter til afviklingen af rækkens SINGLEKAMPE — fra dagens første til dagens sidste singlekamp (U9/U11-vejledningen: U9 240, U11 360; doublerne tæller ikke med). Forslaget og løseren overholder den; Tjek melder brud som fejl."><span class="etiket">Max varighed, singler</span>
                         <input type="number" min="0" max="900" step="30" value="${r.maxHaltidMin ?? ''}" data-raekke-tal="maxHaltidMin" data-raekke="${esc(r.id)}"> min</label>
+                    <label class="felt" title="Hård regel: højst så mange minutter til afviklingen af rækkens DOUBLEKAMPE — fra dagens første til dagens sidste doublekamp (U9/U11-vejledningen: U9 'gerne lidt kortere' end singlernes 4 timer = 240, U11 'det halve' = 180). Tomt = ingen grænse."><span class="etiket">Max varighed, doubler</span>
+                        <input type="number" min="0" max="900" step="30" value="${r.maxDoubleMin ?? ''}" data-raekke-tal="maxDoubleMin" data-raekke="${esc(r.id)}"> min</label>
+                    <label class="felt" title="Hård regel: højst så mange minutter fra rækkens første kamp til den sidste er slut, single og double samlet — så de yngste ikke er i hallen hele dagen. U9: 300 (turneringslederens valg; vejledningen har intet samlet tal). Tomt = ingen grænse."><span class="etiket">Max varighed, hele rækken</span>
+                        <input type="number" min="0" max="900" step="30" value="${r.maxRaekkeMin ?? ''}" data-raekke-tal="maxRaekkeMin" data-raekke="${esc(r.id)}"> min</label>
                     <label class="felt" title="Hård regel: højst så mange spilledage. Tomt = reglementet (B, C, D og U11 A: 1 dag; ellers ingen grænse). 0 = ingen grænse."><span class="etiket">Max dage</span>
                         <input type="number" min="0" max="9" step="1" value="${r.maxDage === null && standardMaxDage(r) ? 0 : r.maxDage ?? ''}" placeholder="${standardMaxDage(r) ?? ''}" data-standard="${standardMaxDage(r) ?? ''}" data-raekke-tal="maxDage" data-raekke="${esc(r.id)}"></label>
                     <div class="felt"><span class="etiket">Valg</span>

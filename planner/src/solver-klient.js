@@ -7,8 +7,8 @@
 // kan dele spillere) ligger her i JS, så løseren kun kender tal og par.
 import { minutter, klokkeFraMinutter } from './tp-reader.js';
 import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt } from './kapacitet.js';
-import { lavRegelmodel } from './regelmodel.js';
-import { vaegteFor, SAENKET_NET } from './kriterier.js';
+import { lavRegelmodel, VARIGHEDER } from './regelmodel.js';
+import { vaegteFor, SAENKET_NET, halTidSpillere } from './kriterier.js';
 
 const DAG_MIN = 1440;
 
@@ -173,19 +173,20 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
         }
     }
 
-    // Max varighed for afviklingen af rækkens singlekampe (U9 4 timer, U11 6 timer): én gruppe pr. række, hvis
-    // første-til-sidste kamp samme dag højst må være graense minutter. Doublerne er ikke med.
+    // Max varighed pr. række og dag (regelmodellens VARIGHEDER: singlerne U9 4 t/U11 6 t, doublerne U9 4 t/U11 3 t, hele
+    // U9-rækken 5 t): én gruppe pr. række og art, hvis første-til-sidste kamp samme dag højst må være graense minutter.
     const haltid = [];
     const prKendt = new Map();
     for (const k of projekt.kampe) { if (!indeks.has(k.id)) continue; for (const sp of k.spillere) { if (!prKendt.has(sp)) prKendt.set(sp, []); prKendt.get(sp).push(k); } }
     {
         const prRaekke = new Map();
         for (const k of projekt.kampe) {
-            const graense = indeks.has(k.id) ? M.singleVarighedGraense(k) : null;
-            if (!graense) continue;
-            const rid = raekke(k).id;
-            if (!prRaekke.has(rid)) prRaekke.set(rid, { kampe: [], graense, raekke: rid });
-            prRaekke.get(rid).kampe.push(indeks.get(k.id));
+            if (!indeks.has(k.id)) continue;
+            for (const g of M.varighedsGraenser(k)) {
+                const n = `${raekke(k).id}|${g.art}`;
+                if (!prRaekke.has(n)) prRaekke.set(n, { kampe: [], graense: g.graense, raekke: raekke(k).id, art: g.art });
+                prRaekke.get(n).kampe.push(indeks.get(k.id));
+            }
         }
         for (const h of prRaekke.values()) if (h.kampe.length > 1) haltid.push(h);
     }
@@ -199,6 +200,25 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
         const antalSpillere = Math.max(...liste.map((k) => k.muligeSpillere.length), 2);
         if (liste.length > 1) spillerGrupper.push({ kampe: liste.map((k) => indeks.get(k.id)), vaegt: antalSpillere });
     }
+
+    // Tid i hallen for U9/U11 (blødt, kriteriet "halTid"): pr. spiller de kampe, spilleren er i hallen til — i Swiss alle
+    // runder i lodtrækningen. Ens grupper (fx spillere, der kun spiller samme Swiss-lodtrækning) slås sammen med en vægt.
+    const halTidPr = new Map();
+    {
+        const prSpiller = new Map();
+        for (const k of projekt.kampe) {
+            if (!indeks.has(k.id) || !SAENKET_NET.has(raekke(k)?.aargang)) continue;
+            for (const s of halTidSpillere(k)) { if (!prSpiller.has(s)) prSpiller.set(s, []); prSpiller.get(s).push(indeks.get(k.id)); }
+        }
+        for (const liste of prSpiller.values()) {
+            if (liste.length < 2) continue;
+            const n = [...liste].sort((a, b) => a - b).join(',');
+            const g = halTidPr.get(n) || { kampe: liste, vaegt: 0 };
+            g.vaegt += 1;
+            halTidPr.set(n, g);
+        }
+    }
+    const halTid = [...halTidPr.values()];
 
     // Kampe i træk (blødt, kriteriet "kampeITraek"): hver kendt spillers kampe — løseren straffer par i nabo-slots
     const traek = [...prKendt.values()].filter((l) => l.length > 1).map((l) => l.map((k) => indeks.get(k.id)));
@@ -296,7 +316,7 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
         slotMin,
         dage: dage.map((d, i) => ({ index: i, start: minutter(d.start), slut: minutter(d.slut), baner: d.baner })),
         kapacitet, kampe, foer, konflikter, ikkeSamtidig, haltid, spillerGrupper, traek, puljerunder, maxDage,
-        cupVent, nethoejde, maxKampePrDag: maxPrDag, mangeKampe,
+        cupVent, nethoejde, halTid, maxKampePrDag: maxPrDag, mangeKampe,
         // Stabil omplanlægning: kampe, der havde tid, flyttes helst ikke (pr. flyttet kamp koster det som 3 timers ventetid)
         ...(stabil?.length ? { stabil: { vaegt: 3, kampe: kampe.map((k, i) => (stabil.includes(k.id) && k.hint != null && k.tilladte.length > 1 ? i : -1)).filter((i) => i >= 0) } } : {}), maxPrGruppe, ikkeSammeDag, alternativer,
         maxVent: projekt.opsaetning.maxVentetidMin ?? 90, // til "lange huller" (kriteriet langeHuller)
@@ -325,18 +345,21 @@ export function planFraSvar(projekt, svar) {
  * Løserens brud i planen med færrest regelbrud (solver.py, elastisk) som læsbare linjer, samlet pr. regel og række.
  * brud: [{ regel, maengde, raekke?, kamp?, kampe?, graense? }] — mængde er kampe, minutter, dage eller ekstra kampe.
  */
+// Varighedsgrænsens art fra løseren (singlerne, når den mangler — ældre svar)
+const artFor = (art) => VARIGHEDER.find((v) => v.art === art) || VARIGHEDER[0];
+
 export function brudTekster(brud, projekt) {
     const r = (id) => projekt.raekker.find((x) => x.id === id);
     const prRegel = new Map();
     for (const b of brud || []) {
-        const n = `${b.regel}|${b.raekke || ''}`;
+        const n = `${b.regel}|${b.raekke || ''}|${b.art || ''}`;
         if (!prRegel.has(n)) prRegel.set(n, []);
         prRegel.get(n).push(b);
     }
     const ud = [];
     const kampe = (n) => `${n} ${n === 1 ? 'kamp' : 'kampe'}`;
     for (const [n, liste] of prRegel) {
-        const [regel, raekke] = n.split('|');
+        const [regel, raekke, art] = n.split('|');
         const antal = liste.length;
         const sum = liste.reduce((s, b) => s + (b.maengde || 0), 0);
         const rk = r(raekke);
@@ -344,7 +367,7 @@ export function brudTekster(brud, projekt) {
         else if (regel === 'tidsvindue') ud.push(`${kampe(antal)} i ${raekke} ligger uden for årgangens tidsvindue (kræver dispensation)`);
         else if (regel === 'dage') ud.push(`${kampe(antal)} i ${raekke} ligger på en dag, rækken ikke spiller (kræver dispensation)`);
         else if (regel === 'pause') ud.push(`${antal} ${antal === 1 ? 'gang' : 'gange'} for kort pause i ${raekke} — i alt ${sum} min for lidt`);
-        else if (regel === 'haltid') ud.push(`${raekke}: singlerne varer ${Math.max(...liste.map((b) => b.maengde))} min længere end grænsen på ${liste[0].graense} min`);
+        else if (regel === 'haltid') ud.push(`${raekke}: ${artFor(art).navn} varer ${Math.max(...liste.map((b) => b.maengde))} min længere end grænsen på ${liste[0].graense} min`);
         else if (regel === 'maxDage') ud.push(`${raekke} spiller ${sum} ${sum === 1 ? 'dag' : 'dage'} mere end tilladt (kræver dispensation)`);
         else if (regel === 'maxKampe') ud.push(`${antal} ${antal === 1 ? 'spiller får' : 'spillere får'} flere kampe på en dag end de ${liste[0].graense} tilladte (kræver dispensation)`);
         else if (regel === 'antiSamtidighed') ud.push(`${antal} ${antal === 1 ? 'gang' : 'gange'} single og double samtidig i ${raekke}`);
@@ -358,12 +381,13 @@ export function diagnoseTekst(diagnose, alleDage = []) {
     const linjer = [], handlinger = [];
     for (const d of diagnose || []) {
         if (d.regel === 'haltid') {
+            const v = artFor(d.art);
             if (d.forslag) {
-                linjer.push(`${d.raekke}: max haltid på ${d.graense} min kan ikke overholdes — med ${d.forslag} min findes der en lovlig plan.`);
-                handlinger.push({ tekst: `Sæt ${d.raekke} til max ${d.forslag} min i hallen, og optimér igen`, raekke: d.raekke, aendring: { maxHaltidMin: d.forslag } });
+                linjer.push(`${d.raekke}: max ${d.graense} min for ${v.navn} kan ikke overholdes — med ${d.forslag} min findes der en lovlig plan.`);
+                handlinger.push({ tekst: `Sæt ${d.raekke}s ${v.kort} til max ${d.forslag} min, og optimér igen`, raekke: d.raekke, aendring: { [v.felt]: d.forslag } });
             } else {
-                linjer.push(`${d.raekke}: max haltid på ${d.graense} min kan ikke overholdes, heller ikke med 3 timer mere — kun helt uden grænsen findes der en plan.`);
-                handlinger.push({ tekst: `Fjern grænsen for haltid i ${d.raekke}, og optimér igen`, raekke: d.raekke, aendring: { maxHaltidMin: null } });
+                linjer.push(`${d.raekke}: max ${d.graense} min for ${v.navn} kan ikke overholdes, heller ikke med 3 timer mere — kun helt uden grænsen findes der en plan.`);
+                handlinger.push({ tekst: `Fjern grænsen for ${d.raekke}s ${v.kort}, og optimér igen`, raekke: d.raekke, aendring: { [v.felt]: null } });
             }
         } else if (d.regel === 'maxDage') {
             linjer.push(`${d.raekke}: kampene kan ikke være på én dag inden for rækkens tidsrum og baner. Over flere dage findes der en lovlig plan (kræver dispensation) — eller giv rækken et længere tidsrum, flere af dagens baner eller færre kampe.`);
@@ -377,9 +401,9 @@ export function diagnoseTekst(diagnose, alleDage = []) {
         } else if (d.regel === 'maxKampePrDag') {
             linjer.push('Grænsen for antal kampe pr. spiller pr. dag kan ikke overholdes — hæv den under "Reglementets grænser" under Turneringen, eller fordel kategorierne på flere dage.');
         } else if (d.regel === 'flere') {
-            linjer.push('Ingen enkelt regel er årsagen: først når max haltid, max dage og max kampe pr. dag lempes samtidig, findes der en plan. Se valgmulighederne nedenfor.');
+            linjer.push('Ingen enkelt regel er årsagen: først når max varighed, max dage og max kampe pr. dag lempes samtidig, findes der en plan. Se valgmulighederne nedenfor.');
         } else if (d.regel === 'plads') {
-            linjer.push('Der er ikke plads: hverken max haltid, max dage, max kampe pr. dag eller en enkelt rækkes tidsrum eller dage er årsagen — kampene kan ikke være på banerne inden for tidsvinduerne (eller låste kampe står i vejen). Se valgmulighederne nedenfor — fx længere dage, færre runder eller flere spilledage.');
+            linjer.push('Der er ikke plads: hverken max varighed, max dage, max kampe pr. dag eller en enkelt rækkes tidsrum eller dage er årsagen — kampene kan ikke være på banerne inden for tidsvinduerne (eller låste kampe står i vejen). Se valgmulighederne nedenfor — fx længere dage, færre runder eller flere spilledage.');
         } else if (d.regel === 'ikkeUndersoegt') {
             linjer.push('Løseren nåede ikke at undersøge alle reglerne inden for tiden, så der kan være flere årsager.');
         }

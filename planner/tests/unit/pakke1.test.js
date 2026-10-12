@@ -85,8 +85,10 @@ describe('løserens problem: max varighed gælder rækkens singlekampe', () => {
         p = opdaterRaekke(p, 'U09 D', { maxHaltidMin: 240 });
         p = opdaterRaekke(p, 'U11 D', { maxHaltidMin: null });
         const pr = bygProblem(p);
-        assert.equal(pr.haltid.length, 1);
-        const h = pr.haltid[0];
+        // U09 D har også grænser for doublerne og hele rækken (Jesper 2026-10-12); doublen er kun én kamp, så den får
+        // ingen gruppe. Her ses på singlerne.
+        assert.deepEqual(pr.haltid.map((h) => `${h.raekke}|${h.art}`).sort(), ['U09 D|raekke', 'U09 D|single']);
+        const h = pr.haltid.find((x) => x.art === 'single');
         assert.equal(h.raekke, 'U09 D');
         assert.equal(h.graense, 240);
         const kampe = h.kampe.map((i) => p.kampe.find((k) => k.id === pr.kampe[i].id));

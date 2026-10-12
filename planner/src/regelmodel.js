@@ -8,6 +8,39 @@
 import { minutter } from './tp-reader.js';
 import { reglerFor, STANDARD_REGLER } from './regler.js';
 
+/**
+ * Rækkens varighedsgrænser (se varighedsGraenser i lavRegelmodel): felterne er minutter på rækken (null = ingen
+ * grænse); type null = alle rækkens kampe. navn/kort bruges i tekster.
+ */
+export const VARIGHEDER = [
+    { art: 'single', felt: 'maxHaltidMin', type: 'single', navn: 'singlekampene', kort: 'singler' },
+    { art: 'double', felt: 'maxDoubleMin', type: 'double', navn: 'doublekampene', kort: 'doubler' },
+    { art: 'raekke', felt: 'maxRaekkeMin', type: null, navn: 'alle rækkens kampe', kort: 'hele rækken' },
+];
+
+/**
+ * Rækkernes spænd pr. varighedsgrænse og dag i en plan: Map(`${raekke}|${art}|${dag}`) →
+ * { raekkeId, art, felt, navn, kort, graense, dag, foerste, sidste, kampe: [{ id, min }] } (minutter fra midnat).
+ */
+export function varighedsSpaend(M, kampe, plan) {
+    const ud = new Map();
+    for (const k of kampe) {
+        const p = plan[k.id];
+        if (!p) continue;
+        const min = minutter(p.slot);
+        for (const g of M.varighedsGraenser(k)) {
+            const rid = M.raekke(k).id;
+            const n = `${rid}|${g.art}|${p.dag}`;
+            if (!ud.has(n)) ud.set(n, { ...g, raekkeId: rid, dag: p.dag, foerste: min, sidste: min, kampe: [] });
+            const d = ud.get(n);
+            d.foerste = Math.min(d.foerste, min);
+            d.sidste = Math.max(d.sidste, min);
+            d.kampe.push({ id: k.id, min });
+        }
+    }
+    return ud;
+}
+
 /** Min. tid pr. kamp (§ 4 stk. 5): standard ungdom ABCD 20, EM 25; senior ABCD 25, EM 30. */
 export function minKampMin(aargang, raekke, regler = STANDARD_REGLER) {
     const senior = erSenior(aargang);
@@ -115,12 +148,22 @@ export function lavRegelmodel(projekt) {
     };
 
     /**
-     * Max varighed for afviklingen af rækkens SINGLEKAMPE (raekker[].maxHaltidMin). U9/U11-vejledningen:
-     * "Max. 4 timers varighed for afvikling af singlekampene" (U9) og "Max. 6 timers varighed …" (U11).
-     * Varigheden måles pr. dag fra rækkens første singlekamp til den sidste er slut. Doublerne tæller ikke med.
-     * Returnerer grænsen i minutter for kampen — eller null, når kampen ikke er omfattet.
+     * Max varighed pr. række og dag, målt fra den første kamp starter til den sidste er slut (VARIGHEDER):
+     * - singlerne (raekker[].maxHaltidMin): "Max. 4 timers varighed for afvikling af singlekampene" (U9), 6 timer (U11);
+     * - doublerne (maxDoubleMin): "Turneringen må max. tager 4 timer i single i U9 – og gerne lidt kortere tid i double
+     *   … I U11 max. 6 timer i single og det halve i double" (U9-U11-vejledningen, gode råd). Jesper 2026-10-12: U9 4
+     *   timer, U11 3 timer, hårdt;
+     * - hele rækken (maxRaekkeMin), single og double samlet. Jesper 2026-10-12: U9 5 timer, hårdt (eget valg —
+     *   vejledningen har intet samlet tal). Swiss-rækker kender ikke spillerne efter runde 1, så ventetiden ser ikke,
+     *   hvor længe de er i hallen; rækkens spænd gør.
+     * Returnerer de grænser, kampen er omfattet af: [{ art, felt, navn, kort, graense }].
      */
-    const singleVarighedGraense = (k) => { const r = raekke(k); return r?.maxHaltidMin && kat(k)?.type === 'single' ? r.maxHaltidMin : null; };
+    const varighedsGraenser = (k) => {
+        const r = raekke(k);
+        if (!r) return [];
+        const type = kat(k)?.type;
+        return VARIGHEDER.filter((v) => r[v.felt] && (!v.type || v.type === type)).map((v) => ({ ...v, graense: r[v.felt] }));
+    };
 
     // ── E-rækker og senior: regler om, HVILKEN dag og tid en kamp må ligge ──
     const sidsteDag = dage.map((d) => d.dato).sort().at(-1);
@@ -167,7 +210,7 @@ export function lavRegelmodel(projekt) {
     const maxPrDagForKampe = (kampe) => Math.min(...kampe.map((k) => maxPrDagFor(raekke(k))));
 
     return {
-        maxPrDagFor, maxPrDagForKampe, singleVarighedGraense,
+        maxPrDagFor, maxPrDagForKampe, varighedsGraenser,
         sidsteDag, erFinalerunde, seniorEM, kunFinalerunderPaaFinaledagen, kanSpilleFlereDage, kampForbud,
         regler, slotMin, pauseMin, dage, dagMap, katMap, raekkeMap, kampMap, kat, raekke,
         enDag: dage.length === 1,

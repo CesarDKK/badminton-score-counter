@@ -10,7 +10,7 @@ import { STANDARD_PAUSE, TIDSVINDUE, STANDARD_REGLER, reglerFor, reglementetsPau
 
 export { STANDARD_PAUSE, TIDSVINDUE, STANDARD_REGLER, reglerFor };
 
-export const PROJEKT_VERSION = 2; // hæves, når et gemt projekt skal opgraderes — se OPGRADERINGER
+export const PROJEKT_VERSION = 3; // hæves, når et gemt projekt skal opgraderes — se OPGRADERINGER
 export const GEM_NOEGLE = 'planner.projekt.v1';
 
 const klon = (x) => JSON.parse(JSON.stringify(x));
@@ -105,6 +105,7 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
             minKampeSamlet: false, // reglementet stiller minimumskravet pr. kategori (single for sig, double for sig)
             // U9/U11-vejledningen: max 4 (U9) og 6 (U11) timers varighed for afviklingen af singlekampene
             maxHaltidMin: r.aargang === 'U09' ? 240 : r.aargang === 'U11' ? 360 : null,
+            ...standardVarighed(r.aargang),
             maxDage: ['B', 'C', 'D'].includes(r.raekke) || (r.aargang === 'U11' && r.raekke === 'A') ? 1 : null, // reglementet: én dag uden dispensation
         };
     });
@@ -265,7 +266,21 @@ const OPGRADERINGER = {
         const { minKampeSamletV2, minKampeSamletV3, singleVarighedV1, raekkefoelgeV2, ...opsaetning } = o;
         return { ...p, opsaetning, raekker };
     },
+    // Version 2 → 3: varighed for doublerne (U9 4 t, U11 3 t) og hele U9-rækken (5 t) — Jesper 2026-10-12
+    2: (p) => ({ ...p, raekker: p.raekker.map((r) => ({ ...standardVarighed(r.aargang), ...r })) }),
 };
+
+/**
+ * Varighedsgrænser ud over singlerne (regelmodellens VARIGHEDER). U9-U11-vejledningen: "max. 4 timer i single i U9 –
+ * og gerne lidt kortere tid i double … I U11 max. 6 timer i single og det halve i double". Jesper 2026-10-12: doublerne
+ * U9 240 og U11 180 min, hårdt; hele U9-rækken (single og double) højst 300 min — hans eget valg, ikke vejledningens.
+ */
+export function standardVarighed(aargang) {
+    return {
+        maxDoubleMin: aargang === 'U09' ? 240 : aargang === 'U11' ? 180 : null,
+        maxRaekkeMin: aargang === 'U09' ? 300 : null,
+    };
+}
 
 /** Bringer et gemt projekt (allerede godkendt af validerProjekt) op på den aktuelle version. */
 export function opgraderProjekt(projekt) {
@@ -329,7 +344,7 @@ export function validerProjekt(obj) {
         if (!erObjekt(r) || typeof r.id !== 'string' || !Array.isArray(r.dage) || !r.dage.every((d) => DATO.test(d))) return fejl('række');
         if ((r.tidligst && !erKlokke(r.tidligst)) || (r.senest && !erKlokke(r.senest))) return fejl(`tidsrum for ${r.id}`);
         if (r.pauseKlasse !== undefined && !['ABCD', 'M', 'E'].includes(r.pauseKlasse)) return fejl(`pauseklasse for ${r.id}`);
-        if (!erTalEllerTomt(r.reserveredeBaner) || !erTalEllerTomt(r.maxHaltidMin) || !erTalEllerTomt(r.maxDage)) return fejl(`tal for ${r.id}`);
+        if (!erTalEllerTomt(r.reserveredeBaner) || !erTalEllerTomt(r.maxHaltidMin) || !erTalEllerTomt(r.maxDoubleMin) || !erTalEllerTomt(r.maxRaekkeMin) || !erTalEllerTomt(r.maxDage)) return fejl(`tal for ${r.id}`);
     }
     for (const k of obj.kategorier) {
         if (!erObjekt(k) || typeof k.id !== 'string' || typeof k.raekke !== 'string') return fejl('kategori');

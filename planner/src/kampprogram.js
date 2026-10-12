@@ -10,7 +10,7 @@ import { genberegnKampe, saetSlotMin, opdaterOpsaetning, opdaterRaekke, opdaterD
 import { sammenlignKamplaengder, bedsteKamplaengde, erUdenPause } from './kamplaengde.js';
 import { alleNedskaeringer, anvendNedskaering } from './nedskaering.js';
 import { minutter } from './tp-reader.js';
-import { standardMaxDage } from './regelmodel.js';
+import { standardMaxDage, lavRegelmodel, varighedsSpaend, VARIGHEDER } from './regelmodel.js';
 import { reglerFor } from './regler.js';
 
 const opremsning = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} og ${xs[xs.length - 1]}`);
@@ -130,6 +130,15 @@ function grupper(projekt, forslag) {
         g.kampe.push({ ...x, k, dag: x.detalje?.dag || forslag.plan?.[x.id]?.dag || null });
         g.aarsager.add(x.brud || x.aarsag);
     }
+    // Max varighed: hvilke af rækkens grænser (singlerne, doublerne, hele rækken) planen går over
+    if ([...ud.values()].some((g) => g.familie === 'haltid')) {
+        const spaend = [...varighedsSpaend(lavRegelmodel(projekt), projekt.kampe, forslag.plan || {}).values()];
+        for (const g of ud.values()) {
+            if (g.familie !== 'haltid') continue;
+            const over = spaend.filter((d) => d.raekkeId === g.raekke && d.sidste - d.foerste + projekt.opsaetning.slotMin > d.graense);
+            g.arter = VARIGHEDER.filter((v) => over.some((d) => d.art === v.art)).map((v) => v.art);
+        }
+    }
     return [...ud.values()];
 }
 
@@ -140,7 +149,10 @@ function titelFor(projekt, g) {
     if (g.familie === 'tidsrum') return `${hvem} kan ikke ligge inden for rækkens tidsrum${r?.tidligst || r?.senest ? ` (${r?.tidligst || '–'}–${r?.senest || '–'})` : ''}${r?.reserveredeBaner ? ` på dens ${r.reserveredeBaner} reserverede baner` : ''}`;
     if (g.familie === 'pause') return `${hvem} får kortere pause end planens pause`;
     if (g.familie === 'samtidighed') return `${hvem}: single og double ligger samtidig`;
-    if (g.familie === 'haltid') return `${g.raekke}: singlerne kan ikke afvikles inden for ${r?.maxHaltidMin || '?'} min`;
+    if (g.familie === 'haltid') {
+        const arter = VARIGHEDER.filter((v) => (g.arter?.length ? g.arter : ['single']).includes(v.art) && r?.[v.felt]);
+        return `${g.raekke}: ${arter.map((v) => `${v.navn} kan ikke afvikles inden for ${r[v.felt]} min`).join(', og ') || 'kampene kan ikke afvikles inden for grænsen'}`;
+    }
     if (g.familie === 'dage') return `${hvem} ligger på en dag, rækken ikke spiller`;
     if (g.familie === 'kampe') return `${g.raekke}: spillerne får flere kampe på én dag, end reglementet tillader`;
     const grunde = [...new Set([...g.aarsager].map((a) => PLADS_TEKST[a] || a))];
@@ -243,7 +255,10 @@ export function kandidater(projekt, g) {
         forlaengDag();
     } else if (g.familie === 'haltid') {
         flereReserverede();
-        if (r?.maxHaltidMin) ud.push({ gruppe: 'haltid', trin: [30, 60, 90].map((m) => ({ tekst: `Hæv max varighed for ${g.raekke}s singler til ${r.maxHaltidMin + m} min`, pris: 'dispensation', type: 'raekke', raekke: g.raekke, aendring: { maxHaltidMin: r.maxHaltidMin + m } })) });
+        for (const v of VARIGHEDER) {
+            if (!r?.[v.felt] || !(g.arter?.length ? g.arter : ['single']).includes(v.art)) continue;
+            ud.push({ gruppe: `haltid-${v.art}`, trin: [30, 60, 90].map((m) => ({ tekst: `Hæv max varighed for ${g.raekke}s ${v.kort} til ${r[v.felt] + m} min`, pris: 'dispensation', type: 'raekke', raekke: g.raekke, aendring: { [v.felt]: r[v.felt] + m } })) });
+        }
     } else if (g.familie === 'plads') {
         pausePaaDagen();
         forlaengDag();
