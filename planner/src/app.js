@@ -689,7 +689,10 @@ const planHandlers = {
                 return;
             }
             if (lovlig) visLoeserensPlan();
-            else if (svar.status === 'INFEASIBLE') {
+            else if (svar.status === 'INFEASIBLE' || (svar.status === 'UNKNOWN' && svar.elastisk?.tider)) {
+                // UNKNOWN: løseren nåede hverken en lovlig plan eller et bevis, men har lavet planen med færrest brud
+                // (Jespers prod-test 2026-10-12: før fik brugeren intet ud af kørslen)
+                const uafgjort = svar.status === 'UNKNOWN';
                 // Ingen lovlig plan. Programmet, brugeren har, røres ikke (Fable-gennemgangen 2026-10-10, V1): diagnosen,
                 // planen med færrest brud og beslutningskortene vises i panelet. Er programmet lavet med "Lav kampprogram",
                 // står kortene der allerede; er det brugerens eget (TP's tider, rettet i hånden), er de et tilbud.
@@ -709,8 +712,10 @@ const planHandlers = {
                     handlinger.push({ tekst: 'Lav kampprogram med forslag til ændringer', type: 'lav-kampprogram' });
                     kp = tilstand.kampprogram = { projekt, foer: projekt, valg: null, beslutninger: { kort: [], brud: fejlNu }, udfoert: [], beholdt: [], egetProgram: true };
                 }
-                kp.note = `Løseren kunne bevise, at der ikke findes en plan, der overholder alle de hårde regler. Årsag: ${diag.tekst}`;
-                kp.handlinger = handlinger;
+                kp.note = uafgjort
+                    ? `Løseren fandt ingen plan, der overholder alle de hårde regler, på ${svar.sekunder} s — og nåede ikke at afgøre, om der findes en. Prøv med længere tid, eller brug ændringerne herunder.`
+                    : `Løseren kunne bevise, at der ikke findes en plan, der overholder alle de hårde regler. Årsag: ${diag.tekst}`;
+                kp.handlinger = uafgjort ? handlinger.filter((h) => h.type === 'lav-kampprogram') : handlinger;
                 kp.elastisk = null;
                 tilstand.forslag = { tekst: '', ikkePlaceret: kp.egetProgram ? [] : katFelter(projekt, projekt.sidsteForslag?.ikkePlaceret || []), kilde: 'graadig', handlinger };
                 if (svar.elastisk?.tider) {
@@ -726,7 +731,11 @@ const planHandlers = {
                 }
                 render();
             } else {
-                tilstand.forslag = { tekst: `${svar.besked || 'Løseren fandt ingen plan inden for tiden.'} Prøv med længere tid, eller brug "Lav forslag".`, ikkePlaceret: [] };
+                const tekst = `${svar.besked || 'Løseren fandt ingen plan inden for tiden.'} Prøv med længere tid, eller brug "Lav forslag".`;
+                tilstand.forslag = { tekst, ikkePlaceret: [] };
+                // Står kampprogrammets panel åbent, vises beskeden dér — ellers forsvandt den bag kortene (prod-test 2026-10-12)
+                const kp = panelGaelder(tilstand.kampprogram, projekt) ? tilstand.kampprogram : null;
+                if (kp) { kp.forbedret = null; kp.note = tekst; }
                 render();
             }
         } catch (err) {

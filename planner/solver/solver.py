@@ -749,6 +749,10 @@ def loes_opdelt(problem: dict, sekunder: float = 30.0, arbejdere: int | None = N
                 continue
             return {**loes(problem, 1, arbejdere, stop, elastisk=elastisk), "stoppet": True}
         del_svar = loes(delproblem(problem, ids, dag), min(andel, tilbage), arbejdere, stop, elastisk=elastisk)
+        if del_svar["status"] == "UNKNOWN" and not (stop is not None and stop.is_set()):
+            # Dagen er uafgjort (hverken plan eller bevis på tiden): det samlede problem er større og når det heller ikke
+            # på resten af tiden — den går hellere til planen med færrest brud (Jespers prod-test 2026-10-12)
+            return {**del_svar, "sekunder": round(time.time() - t0, 2)}
         if del_svar["status"] not in ("OPTIMAL", "FEASIBLE"):
             # En dag uden lovlig plan: hele problemet løses samlet, så svaret (og diagnosen) bliver som før
             return loes(problem, max(1.0, float(sekunder) - (time.time() - t0)), arbejdere, stop, elastisk=elastisk)
@@ -988,8 +992,9 @@ def koer(problem: dict, sekunder: float, job: Job):
             svar["sekunder"] = round(time.time() - job.start, 2)
             if svar.get("bidder"):
                 svar["rolig"] = False  # tiden er brugt på forbedringer i bidder, ikke stoppet af sig selv
-        if svar["status"] == "INFEASIBLE" and not job.stop.is_set() and problem.get("elastiskPlan"):
-            # Ingen lovlig plan: planen med færrest regelbrud — og hvilke regler den bryder (Jesper 2026-10-10)
+        if svar["status"] in ("INFEASIBLE", "UNKNOWN") and not job.stop.is_set() and problem.get("elastiskPlan"):
+            # Ingen lovlig plan: planen med færrest regelbrud — og hvilke regler den bryder (Jesper 2026-10-10). Også når
+            # løseren ikke nåede at afgøre det (UNKNOWN): ellers fik brugeren intet ud af kørslen (prod-test 2026-10-12)
             job.fase = "elastisk"
             # Først uden at flytte kampe til andre dage: så falder problemet i uafhængige dage, der løses hver for sig
             # (målt på prod 2026-10-10: ellers nåede løseren ikke ned på de færreste brud på 30 s). Kun hvis det er

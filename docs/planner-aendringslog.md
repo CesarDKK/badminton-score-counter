@@ -487,3 +487,14 @@ mens drengene får kortere dage.
 
 I Lyngby-filens egen lodtrækning har U9 D 12 kampe på en dag (6 Swiss-runder og 6 doubler). Det kan heller ikke være
 inden for 5 timer, og benchmark-testen regner det som en fejl i lodtrækningen ligesom max kampe.
+
+## Løseren: uafgjort giver planen med færrest brud (2026-10-12)
+
+I Jespers prod-test (Lyngby U9/U11, alle kategorier som Swiss, U9 D og U11 D lørdag) nåede løseren hverken en lovlig
+plan eller et bevis for, at der ingen findes, på 60 s (`UNKNOWN`). Den gav så intet: hverken plan eller planen med
+færrest brud. Beskeden forsvandt også bag kampprogrammets kort.
+
+Nu laver løseren planen med færrest regelbrud, også når svaret er uafgjort. Diagnosen springes over, fordi den kræver et
+bevis. En dag, der er uafgjort, løses ikke igen som ét samlet problem på resten af tiden (det nåede heller ikke noget);
+tiden går til planen med færrest brud. Panelet skriver, at løseren ikke nåede at afgøre det, og viser planen med færrest
+brud, hvis den ikke er dårligere end programmet. En uafgjort kørsel uden plan står nu i panelet.
