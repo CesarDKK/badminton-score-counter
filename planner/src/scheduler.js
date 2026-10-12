@@ -69,8 +69,8 @@ function lavForslagEnGang(projekt, valg = {}) {
     const spillerGraense = (s, dato) => {
         const n = `${s}|${dato}`;
         if (!graenseCache.has(n)) {
-            // Også kampe, spilleren kan være i (Swiss-runder): ellers fik en U11-spiller, der kun spiller Swiss, dagens
-            // generelle grænse (10) i stedet for U11's 12
+            // Også kampe, spilleren kan være i (Swiss-runder): ellers fik en spiller, der kun spiller Swiss, dagens generelle
+            // grænse i stedet for sin egen rækkes
             const kampe = projekt.kampe.filter((x) => (x.spillere.includes(s) || x.muligeSpillere.includes(s)) && (raekke(x)?.dage || []).includes(dato));
             graenseCache.set(n, kampe.length ? M.maxPrDagForKampe(kampe) : Infinity);
         }

@@ -352,7 +352,6 @@ function reglerBoks(p) {
             <div class="felter">
                 ${tal('maxKampePrDag', r.maxKampePrDag, 'Max kampe pr. dag')}
                 ${tal('maxKampePrDagEnDag', r.maxKampePrDagEnDag, 'Max kampe, éndagsturnering')}
-                ${tal('maxKampePrDagU11', r.maxKampePrDagU11, 'Max kampe pr. dag, U11')}
                 ${tal('foerSkoledagTimer', r.foerSkoledagTimer, 'Tidligere før skoledag', 'timer')}
                 ${tal('seniorMaxPrKategori', r.seniorMaxPrKategori, 'Senior E/M pr. kategori pr. dag')}
             </div>

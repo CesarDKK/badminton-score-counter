@@ -55,14 +55,16 @@ describe('form: valg af turneringsform', () => {
         assert.equal(sw4.kampe, 19 * 4);
         assert.equal(sw4.minKampe, 3, 'ulige felt: én oversidder pr. runde');
     });
-    test('automatisk: U11 D HS med 39 — vejledningens middelvej (5 singler, højst 6) med færrest bane-slots', () => {
-        // Jesper 2026-10-12: ikke flest mulige kampe, men midt i "4 – 6 singlekampe"
+    test('automatisk: U11 D HS med 39 kræver 4 kampe → færrest bane-slots der opfylder', () => {
         const f = foreslaaForm(39, u11dHS, u11d, regler, { form: 'auto', kriterie: 'faerrest' });
         assert.ok(f.opfylderKrav, f.tekst);
-        assert.equal(f.minKampe, 5);
-        assert.ok(f.maxKampe <= 6);
-        const alle = formMuligheder(39).filter((x) => x.minKampe === 5 && x.maxKampe <= 6 && x.form !== 'dobbelt-pulje'); // automatisk bruger kun dobbelt pulje til små felter
+        assert.ok(f.minKampe >= 4);
+        const alle = formMuligheder(39).filter((x) => x.minKampe >= 4 && x.form !== 'dobbelt-pulje'); // automatisk bruger kun dobbelt pulje til små felter
         assert.equal(f.baneSlots, Math.min(...alle.map((x) => x.baneSlots)));
+        // Med middelvejen (når der er god plads): midt i "4 – 6 singlekampe", højst 6 (Jesper 2026-10-12)
+        const m = foreslaaForm(39, u11dHS, u11d, regler, { form: 'auto', kriterie: 'faerrest', middelvej: true });
+        assert.equal(m.minKampe, 5);
+        assert.ok(m.maxKampe <= 6);
     });
     test('automatisk: U9-single med 19 → Swiss Ladder på halve baner, U11 D HD med 9 par → puljer', () => {
         const f9 = foreslaaForm(19, u9HS, u9d, regler, { form: 'auto' });
@@ -215,9 +217,9 @@ describe('form: Swiss Ladder-runder — valgt antal og nedskaering efter kapacit
         assert.equal(f7.runder, 7);
         assert.equal(byggKampe(u9HS, tilm(20), f7).length, 70);
     });
-    test('automatisk: rigeligt plads → 5 runder (middelvejen); for lidt plads → skaeres ned, hvis andre kampe daekker kravet', () => {
+    test('automatisk: rigeligt plads → 4 runder; for lidt plads → skaeres ned, hvis andre kampe daekker kravet', () => {
         const rigeligt = foreslaaForm(20, u9HS, u9d, regler, { form: 'swiss', ledigeBaneSlots: 100, deltagere: tilm(20), andreKampe: new Map() });
-        assert.equal(rigeligt.runder, 5);
+        assert.equal(rigeligt.runder, 4);
         assert.equal(rigeligt.nedskaaret, false);
         // plads til 25 bane-slots = 50 halve kampe = 5 runder á 10; men kun 12 bane-slots → 2 runder
         const andre = new Map(Array.from({ length: 20 }, (_, i) => [`s${i + 1}`, 2])); // alle har 2 doublekampe

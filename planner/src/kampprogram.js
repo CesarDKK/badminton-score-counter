@@ -54,12 +54,32 @@ export function lavKampprogram(projekt, { fastKamplaengde = false, behold = fals
     else if (fastKamplaengde) grund = 'fast';
     else if ((projekt.laast || []).length) grund = 'laast';
     else {
-        bedst = bedsteKamplaengde(sammenlignKamplaengder(projekt));
+        bedst = bedsteKamplaengde(sammenlignKamplaengder(medMiddelvej(projekt, () => false)));
         if (bedst) p = opdaterOpsaetning(saetSlotMin(p, bedst.minutter), { pauseMin: { ...bedst.pauseMin } });
     }
-    p = genberegnKampe(p);
+    // Først til minimum (ingen middelvej) — så vurderes pladsen på det, der SKAL være plads til. Ikke ved "kun kampe uden
+    // tid" eller låste kampe: der må ingen kampe med tid forsvinde, så kategoriernes valg bliver stående
+    const nulstil = !behold && !(projekt.laast || []).length;
+    p = genberegnKampe(nulstil ? medMiddelvej(p, () => false) : p);
     const alternativer = lavAlternativer(p);
-    const forslag = alternativer[0] || lavForslag(p);
+    let forslag = alternativer[0] || lavForslag(p);
+    // Middelvejen for U9/U11 (Jesper 2026-10-12): kun når der er god plads — dvs. når programmet går op, og det STADIG går op
+    // med de ekstra kampe. Først alle kategorier, ellers kun singlerne (hvor 4 → 5 kampe betyder mest).
+    const middelvej = [];
+    const kandidater = p.kategorier.filter((k) => erMiddelvejKandidat(p, k));
+    if (kandidater.length && nulstil && brudI(forslag) === 0) {
+        for (const med of [() => true, (k) => k.type === 'single']) {
+            const q = genberegnKampe(medMiddelvej(p, (k) => kandidater.includes(k) && med(k)));
+            const loeftet = q.kategorier.filter((k) => (q.kampe.filter((x) => x.kategori === k.id).length > p.kampe.filter((x) => x.kategori === k.id).length));
+            if (!loeftet.length) continue;
+            const fq = lavAlternativer(q)[0] || lavForslag(q);
+            if (brudI(fq) > 0) continue;
+            p = medMiddelvej(q, (k) => loeftet.some((x) => x.id === k.id));
+            forslag = fq;
+            middelvej.push(...loeftet.map((k) => `${k.id} (${k.formForslag?.minKampe}–${k.formForslag?.maxKampe} kampe)`));
+            break;
+        }
+    }
     const o = p.opsaetning;
     const valg = {
         minutter: o.slotMin,
@@ -67,6 +87,7 @@ export function lavKampprogram(projekt, { fastKamplaengde = false, behold = fals
         aendret: o.slotMin !== foer.slotMin || pauseNoegle(o.pauseMin) !== pauseNoegle(foer.pauseMin),
         foer,
         grund,
+        middelvej,
     };
     return { projekt: { ...anvendForslag(p, forslag), laast: oprLaast }, forslag, valg };
 }
@@ -189,6 +210,17 @@ export function anvendAendring(projekt, a) {
 const SWISS_STOR = 16;
 /** … og i kortets egen række allerede fra 10 (2 grupper á 5). */
 const SWISS_MELLEM = 10;
+
+/** U9/U11-kategorier, hvor planneren selv vælger antallet af kampe (automatisk form/runder) — kan få middelvejen. */
+function erMiddelvejKandidat(projekt, k) {
+    const r = projekt.raekker.find((x) => x.id === k.raekke);
+    return ['U09', 'U11'].includes(r?.aargang) && ['auto', 'swiss'].includes(k.formValg || 'tp') && !(k.swissRunder > 0);
+}
+
+/** Sætter kategori.middelvej efter `skal` (kun på kandidaterne; de andre får den fjernet). */
+function medMiddelvej(projekt, skal) {
+    return { ...projekt, kategorier: projekt.kategorier.map((k) => ({ ...k, middelvej: erMiddelvejKandidat(projekt, k) && !!skal(k) })) };
+}
 
 const brudI = (f) => (f.brud?.length || 0) + (f.ikkePlaceret?.length || 0);
 

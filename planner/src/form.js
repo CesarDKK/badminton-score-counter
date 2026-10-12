@@ -156,12 +156,11 @@ export function foreslaaForm(n, kategori, raekke, regler, valg = {}) {
     const sortFaerrest = (a, b) => a.baneSlots - b.baneSlots || formRang[a.form] - formRang[b.form] || b.minKampe - a.minKampe;
     const sortFlest = (a, b) => Math.min(b.minKampe, MAAL_KAMPE) - Math.min(a.minKampe, MAAL_KAMPE) || a.baneSlots - b.baneSlots || formRang[a.form] - formRang[b.form];
     // U9/U11 (Jesper 2026-10-12): ikke flest mulige kampe, men en middelvej i vejledningens anbefaling ("4 – 6 singlekampe
-    // og 2 – 5 doublekampe"): den billigste form, hvor alle får mindst målet (5 single, 3 double) og ingen over
-    // anbefalingen — dvs. den, der kommer tættest på målet (ved lige afstand den billigste). Er der ikke plads, gælder
-    // minimum som før.
+    // og 2 – 5 doublekampe"): den form, der kommer tættest på målet (5 single, 3 double; ved lige afstand den billigste)
+    // uden at give over anbefalingen. Kun når genberegnKampe har set, at der er god plads på dagen (valg.middelvej).
     const u9u11 = ['U09', 'U11'].includes(raekke?.aargang);
     const typ = kategori.type === 'double' ? 'double' : 'single';
-    const maal = u9u11 ? regler.maalKampeU9U11?.[typ] : null;
+    const maal = u9u11 && valg.middelvej ? regler.maalKampeU9U11?.[typ] : null;
     const loft = u9u11 ? regler.maxKampeU9U11?.[typ] : null;
     let valgt = null;
     if (opfylder.length) {

@@ -53,9 +53,6 @@ export const STANDARD_REGLER = {
     foerSkoledagTimer: 2,            // så mange timer tidligere slutter vinduet dagen før en skoledag
     maxKampePrDag: 10,               // ved flere dage
     maxKampePrDagEnDag: 12,          // ungdom, når hele turneringen afvikles på én dag (§ 4 stk. 5.1); senior: 10 (stk. 5.2)
-    // U9-U11-vejledningen 2026/27: "Max. antal kampe på en dag for U11 er 12 kampe" — også når turneringen har flere dage
-    // (Jesper 2026-10-12). Målet er ikke 12, men vejledningens anbefaling (maalKampeU9U11).
-    maxKampePrDagU11: 12,
     minKampMin: { ungdomABCD: 20, ungdomEM: 25, seniorABCD: 25, seniorEM: 30 },
     eTidligst: '10:00',              // E-rækker: ingen kampe (indledende, kvart-, semifinaler, finaler) før dette tidspunkt (§ 4 stk. 5.1)
     eFinale: ['10:00', '13:00'],       // E-finaler skal ligge i dette vindue
@@ -65,7 +62,9 @@ export const STANDARD_REGLER = {
     // anbefalingen følges (advarsel), og reglementets max kampe pr. dag gælder stadig (fejl)
     maxKampeU9U11: { single: 6, double: 5 },
     // Jesper 2026-10-12: målet er ikke flest mulige kampe, men en middelvej i anbefalingen — planneren sigter efter så
-    // mange sikre kampe pr. spiller, når den selv vælger form (midten af 4–6 og 2–5)
+    // mange sikre kampe pr. spiller, når den selv vælger form (midten af 4–6 og 2–5), men kun når der er god plads på
+    // dagen. Max kampe pr. dag følger reglementet (§ 4 stk. 5.1): 12 på én dag, 10 pr. dag over flere dage — også U11
+    // (vejledningens "max 12 for U11" er den samme regel for de én-dags-turneringer, U11 normalt spilles som)
     maalKampeU9U11: { single: 5, double: 3 },
 };
 
