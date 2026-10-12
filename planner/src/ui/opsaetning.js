@@ -7,7 +7,7 @@ import { minutter } from '../tp-reader.js';
 import { reglerFor, STANDARD_REGLER } from '../store.js';
 import { REGELSAET, regelsaetTekst } from '../regler.js';
 import { standardMaxDage } from '../regelmodel.js';
-import { FORM_VALG, FORM_VALG_TEKST, formTekst, effektivForm, minKampeSamlet } from '../form.js';
+import { FORM_VALG, FORM_VALG_TEKST, formTekst, effektivForm, minKampeSamlet, maxSwissGrupper } from '../form.js';
 import { KRITERIER, VAEGT_SKABELONER, vaegteFor } from '../kriterier.js';
 import { anbefaletKamplaengde, bedsteKamplaengde, SAESONDATA, SKIFTE_MIN, MARGEN, FORSINKELSE_GRAENSE } from '../kamplaengde.js';
 import { PRIS, STANDARD_PRIS_ORDEN, prisOrden } from '../kampprogram.js';
@@ -569,6 +569,9 @@ function kategoriIndstillinger(k) {
                             <option value="0" ${!(k.swissRunder > 0) ? 'selected' : ''}>runder: automatisk</option>
                             ${[1, 2, 3, 4, 5, 6, 7, 8].map((n) => `<option value="${n}" ${k.swissRunder === n ? 'selected' : ''}>${n} ${n === 1 ? 'runde' : 'runder'}</option>`).join('')}
                         </select>` : ''}
+                        ${swiss && formValg !== 'tp' && maxSwissGrupper(k.formForslag?.deltagere || 0) > 1 ? `<select data-swissgrupper="${esc(k.id)}" title="Swiss Ladder i grupper: deltagerne deles efter seedning (gruppe A = de bedste), og hver gruppe er sin egen Swiss Ladder i TP. Antallet af kampe pr. spiller er det samme (én pr. runde), men en runde kan lodtrækkes, så snart gruppens egne kampe er færdige — så kan grupperne spilles hver for sig, og den enkelte spiller er kortere tid i hallen.">
+                            ${Array.from({ length: Math.min(6, maxSwissGrupper(k.formForslag?.deltagere || 0)) }, (_, i) => i + 1).map((n) => `<option value="${n}" ${(k.swissGrupper || 1) === n ? 'selected' : ''}>${n === 1 ? 'én gruppe' : `${n} grupper`}</option>`).join('')}
+                        </select>` : ''}
                     </td>
                     <td class="kan-bryde">
                         <select data-prioritet="${esc(k.id)}" title="Forrang i forslaget: kategorier med høj prioritet får plads først, lav prioritet fylder op til sidst">
@@ -590,7 +593,7 @@ export function opskriftPanel(p) {
     return `
     <section class="panel">
         <h2>Turneringsform: opskrift til lodtrækningen i TP <span class="maerke">${egne.length}</span></h2>
-        <p class="panel-sub">Disse kategorier bruger planneren-byggede kampe (puljer á 3–5 seedet efter ranglistepoint, Swiss Ladder 4–6 runder). Lav lodtrækningen sådan i TP, gem filen og åbn den igen — så bruges TP's kampe, og "Lav kampprogram" laver planen forfra for dem.</p>
+        <p class="panel-sub">Disse kategorier bruger planneren-byggede kampe (puljer á 3–5 seedet efter ranglistepoint, Swiss Ladder 4–6 runder — i grupper: én Swiss Ladder pr. gruppe, gruppe A = de bedst seedede). Lav lodtrækningen sådan i TP, gem filen og åbn den igen — så bruges TP's kampe, og "Lav kampprogram" laver planen forfra for dem.</p>
         <div class="tabel-hylster">
             <table class="tabel">
                 <thead><tr><th>Kategori</th><th>Valg</th><th class="tal">Tilmeldte</th><th>Sådan i TP</th><th class="tal">Kampe</th><th class="tal">Bane-slots</th><th>Kampe pr. spiller</th></tr></thead>
@@ -722,6 +725,7 @@ function bind(container, projekt, h) {
             else if (el.dataset.form) h.form(el.dataset.form, { formValg: el.value });
             else if (el.dataset.cuptop) h.form(el.dataset.cuptop, { cupTop: Number(el.value) || 1 });
             else if (el.dataset.swissrunder) h.form(el.dataset.swissrunder, { swissRunder: Number(el.value) || 0 });
+            else if (el.dataset.swissgrupper) h.form(el.dataset.swissgrupper, { swissGrupper: Number(el.value) || 1 });
             return;
         }
         if (!(el instanceof HTMLInputElement)) return;

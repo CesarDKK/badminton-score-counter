@@ -6,8 +6,9 @@
 // stadig alle kampe og bryder reglerne i den aftalte rækkefølge. Kortene foreslår kun ændringer af
 // opsætningen, som brugeren selv kunne have lavet, og viser, hvad hver ændring giver.
 import { lavForslag, lavAlternativer } from './scheduler.js';
-import { genberegnKampe, saetSlotMin, opdaterOpsaetning, opdaterRaekke, opdaterDag, opdaterPause, anvendForslag } from './store.js';
-import { sammenlignKamplaengder, bedsteKamplaengde, erUdenPause } from './kamplaengde.js';
+import { genberegnKampe, saetSlotMin, opdaterOpsaetning, opdaterRaekke, opdaterDag, opdaterPause, anvendForslag, saetForm, opdaterKategori } from './store.js';
+import { effektivForm, maxSwissGrupper, swissGruppeFordeling } from './form.js';
+import { sammenlignKamplaengder, bedsteKamplaengde, erUdenPause, kandidatLaengder } from './kamplaengde.js';
 import { alleNedskaeringer, anvendNedskaering } from './nedskaering.js';
 import { minutter } from './tp-reader.js';
 import { standardMaxDage, lavRegelmodel, varighedsSpaend, VARIGHEDER } from './regelmodel.js';
@@ -79,6 +80,8 @@ export function lavKampprogram(projekt, { fastKamplaengde = false, behold = fals
 // Standardrækkefølgen er Jespers (2026-10-10): pausen på dagen og færre runder før længere dag og tidsrum
 export const PRIS = [
     { id: 'pause', navn: 'Pausen gives på dagen i stedet for i planen' },
+    // Jesper 2026-10-12: en stor Swiss Ladder fra TP deles i grupper — ingen mister kampe, men lodtrækningen laves om i TP
+    { id: 'grupper', navn: 'Swiss Ladder delt i grupper (ny lodtrækning i TP)' },
     { id: 'runder', navn: 'Færre kampe (runder)' },
     { id: 'dag', navn: 'Længere spilledag' },
     { id: 'tidsrum', navn: 'Længere tidsrum for rækken' },
@@ -170,6 +173,8 @@ function forklaringFor(projekt, g) {
 export function anvendAendring(projekt, a) {
     if (a.type === 'raekke') return genberegnKampe(opdaterRaekke(projekt, a.raekke, a.aendring));
     if (a.type === 'dag') return genberegnKampe(opdaterDag(projekt, a.dato, a.aendring));
+    if (a.type === 'kategori') return saetForm(projekt, a.kategori, a.aendring);
+    if (a.type === 'kategorier') return genberegnKampe(a.aendringer.reduce((p, x) => opdaterKategori(p, x.kategori, x.aendring), projekt));
     if (a.type === 'pause') return genberegnKampe(opdaterPause(projekt, a.klasse, a.minutter));
     if (a.type === 'opsaetning') return genberegnKampe(opdaterOpsaetning(projekt, a.aendring));
     if (a.type === 'nedskaering') return anvendNedskaering(projekt, a.forslag).projekt;
@@ -179,6 +184,11 @@ export function anvendAendring(projekt, a) {
     }
     return projekt;
 }
+
+/** Swiss Ladder med så mange deltagere foreslås delt i grupper (8 kampe pr. runde). */
+const SWISS_STOR = 16;
+/** … og i kortets egen række allerede fra 10 (2 grupper á 5). */
+const SWISS_MELLEM = 10;
 
 const brudI = (f) => (f.brud?.length || 0) + (f.ikkePlaceret?.length || 0);
 
@@ -199,11 +209,22 @@ function raekkeSlut(projekt, plan, raekkeId) {
  * udgangspunktet. loest: kortets egne problemer er væk; gaarOp: ingen regelbrud tilbage overhovedet.
  */
 function afproev(projekt, foer, g, aendring) {
-    const p = anvendAendring(projekt, aendring);
-    const f = lavForslag(p);
+    let p = anvendAendring(projekt, aendring);
+    let f = lavForslag(p);
+    // Swiss i grupper kan gøre en anden kamplængde mulig (målt 2026-10-12: med grupperne gik 20 min op, hvor 25 min
+    // var valgt uden dem) — så prøves de andre længder også; "Lav kampprogram" vælger kamplængden igen bagefter
+    let andenLaengde = null;
+    if (aendring.pris === 'grupper') {
+        for (const min of kandidatLaengder(p)) {
+            if (min === p.opsaetning.slotMin) continue;
+            const q = genberegnKampe(saetSlotMin(p, min));
+            const fq = lavForslag(q);
+            if (brudI(fq) < brudI(f)) { p = q; f = fq; andenLaengde = min; }
+        }
+    }
     const brud = brudI(f);
     const tilbage = grupper(p, f).find((x) => x.noegle === g.noegle);
-    const konsekvens = [];
+    const konsekvens = andenLaengde ? [`med ${andenLaengde} min kampe`] : [];
     const slutFoer = foer.f.statistik?.slutPrDag || {};
     for (const [d, t] of Object.entries(f.statistik?.slutPrDag || {})) {
         const f0 = slutFoer[d];
@@ -243,6 +264,40 @@ export function kandidater(projekt, g) {
         const muligt = [1, 2].map((n) => r.reserveredeBaner + n).filter((n) => n <= maks);
         if (muligt.length) ud.push({ gruppe: 'baner', trin: muligt.map((n) => ({ tekst: `Reservér ${n} af dagens baner til ${g.raekke} (nu ${r.reserveredeBaner})`, pris: 'baner', type: 'raekke', raekke: g.raekke, aendring: { reserveredeBaner: n } })) });
     };
+    // Swiss Ladder i grupper (Jesper 2026-10-12): en stor Swiss i rækken — fra TP's lodtrækning eller plannerens egen —
+    // deles i 2 eller 3 grupper efter seedning. Hver spiller får lige så mange kampe, men grupperne kan spilles hver for
+    // sig, så runderne ikke venter på hele feltet. Kræver en ny lodtrækning i TP, når kampene kommer derfra.
+    // Målt 2026-10-12 (Lyngby, alt Swiss, U9 D + U11 D lørdag): én kategori ad gangen hjalp kun lidt; rækkens Swiss fra
+    // 10 deltagere og dagens store (16+) i 2 grupper fik programmet til at gå op. Trinene prøves fra rækkens egne og ud.
+    const swissGrupper = () => {
+        const swiss = (kategorier, min) => kategorier.map((k) => ({ k, e: effektivForm(k) })).filter(({ k, e }) => {
+            const draws = new Set(projekt.kampe.filter((x) => x.kategori === k.id && x.fase === 'swiss').map((x) => x.tpRef.draw));
+            return e.form === 'swiss' && draws.size === 1 && (e.deltagere || 0) >= min;
+        });
+        const egne = swiss(projekt.kategorier.filter((x) => x.raekke === g.raekke), SWISS_MELLEM);
+        const sammeDag = (k) => k.raekke !== g.raekke && (projekt.raekker.find((x) => x.id === k.raekke)?.dage || []).some((d) => (r?.dage || []).includes(d));
+        const dagens = [...egne, ...swiss(projekt.kategorier.filter(sammeDag), SWISS_STOR)];
+        // Flest grupper ≤ ønsket, hvor hver gruppe stadig kan spille alle runderne mod nye modstandere
+        const antalFor = (e, oensket) => {
+            for (let x = Math.min(oensket, maxSwissGrupper(e.deltagere)); x >= 2; x -= 1) if (Math.min(...swissGruppeFordeling(e.deltagere, x)) - 1 >= (e.runder || 0)) return x;
+            return 1;
+        };
+        const trinFor = (liste, antal) => {
+            const dele = liste.map(({ k, e }) => ({ k, e, x: antalFor(e, antal(e.deltagere)) })).filter((d) => d.x >= 2);
+            if (!dele.length) return null;
+            const fraTP = dele.some(({ k }) => (k.formValg || 'tp') === 'tp');
+            return {
+                tekst: `Del Swiss Ladder i grupper: ${dele.map(({ k, e, x }) => `${k.id} (${swissGruppeFordeling(e.deltagere, x).join(' + ')})`).join(', ')}${fraTP ? ' — ny lodtrækning i TP' : ''}`,
+                pris: 'grupper', type: 'kategorier',
+                aendringer: dele.map(({ k, e, x }) => ({ kategori: k.id, aendring: { formValg: 'swiss', swissGrupper: x, ...(e.runder ? { swissRunder: e.runder } : {}) } })),
+            };
+        };
+        const noegle = (t) => t && t.aendringer.map((a) => `${a.kategori}=${a.aendring.swissGrupper}`).join();
+        const kandidat = [trinFor(egne, () => 2), trinFor(dagens, () => 2), trinFor(dagens, (n) => Math.max(2, Math.round(n / 10)))].filter(Boolean);
+        const trin = kandidat.filter((t, i) => kandidat.findIndex((x) => noegle(x) === noegle(t)) === i);
+        if (trin.length) ud.push({ gruppe: 'grupper', trin });
+    };
+    if (['tidsrum', 'pause', 'haltid', 'plads'].includes(g.familie)) swissGrupper();
     if (g.familie === 'tidsrum') {
         if (r?.senest) ud.push({ gruppe: 'senest', trin: trin.filter((m) => minutter(r.senest) + m < 24 * 60).map((m) => ({ tekst: `Udvid ${g.raekke} til ${klokke(minutter(r.senest) + m)}`, pris: 'tidsrum', type: 'raekke', raekke: g.raekke, aendring: { senest: klokke(minutter(r.senest) + m) } })) });
         if (r?.tidligst && g.aarsager.has('før rækkens tidligste start')) ud.push({ gruppe: 'tidligst', trin: trin.map((m) => ({ tekst: `Lad ${g.raekke} starte ${klokke(Math.max(0, minutter(r.tidligst) - m))}`, pris: 'tidsrum', type: 'raekke', raekke: g.raekke, aendring: { tidligst: klokke(Math.max(0, minutter(r.tidligst) - m)) } })) });

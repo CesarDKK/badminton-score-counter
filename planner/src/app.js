@@ -406,7 +406,8 @@ const planHandlers = {
         const kp = tilstand.kampprogram;
         const v = kp?.beslutninger.kort[kortIndex]?.valg[valgIndex];
         if (!v) return;
-        arbejd(`${v.tekst} … og laver programmet igen.`, () => beregnKampprogram(anvendAendring(projekt, v), { fastKamplaengde: true }), ({ r, beslutninger }) => {
+        // Swiss i grupper: kamplængden vælges igen — det er ofte den, grupperne gør mulig (forslaget er afprøvet sådan)
+        arbejd(`${v.tekst} … og laver programmet igen.`, () => beregnKampprogram(anvendAendring(projekt, v), { fastKamplaengde: v.pris !== 'grupper' }), ({ r, beslutninger }) => {
             visKampprogram(r, { foer: kp.foer, valg: kp.valg, udfoert: [...kp.udfoert, v.tekst], beslutninger });
             startAutoLoeser();
         });
