@@ -7,7 +7,7 @@ import { lavForslag, lavAlternativer, bedoemPlan, loesningsforslag } from './sch
 import { optimer, stopLoeser, stopVedLukning, nytJobId, diagnoseTekst, aendretUnderOptimering, flettetPlan, planFraSvar, brudTekster } from './solver-klient.js';
 import { scorePlan } from './kriterier.js';
 import { alleNedskaeringer, anvendNedskaering, kapacitetsRegnskab, swissKandidater } from './nedskaering.js';
-import { sammenlignKamplaengder } from './kamplaengde.js';
+import { sammenlignKamplaengder, erUdenPause } from './kamplaengde.js';
 import { lavKampprogram as byggKampprogram, lavBeslutninger, anvendAendring, panelGaelder } from './kampprogram.js';
 import { reglementetsPause, INGEN_PAUSE, regelsaetTekst } from './regler.js';
 import { renderOpsaetning, renderFil } from './ui/opsaetning.js';
@@ -372,6 +372,17 @@ const katFelter = (p, brud) => {
 };
 
 /** Lægger et resultat fra lavKampprogram ind og regner beslutningskortene ud. */
+/**
+ * Kamplængden efter et kortvalg, der valgte den igen (Swiss i grupper): den nye længde, men "før" er stadig længden fra
+ * før "Lav kampprogram" — så "Brug … som før" og "Husk at sætte den samme kamplængde i TP" passer (prod-test 2026-10-12).
+ */
+function nytValg(gammelt, nyt) {
+    if (!nyt) return gammelt;
+    const foer = gammelt?.foer || nyt.foer;
+    if (!foer) return nyt;
+    return { ...nyt, foer, aendret: nyt.minutter !== foer.slotMin || nyt.udenPause !== erUdenPause(foer.pauseMin) };
+}
+
 function visKampprogram(r, { foer, valg, udfoert = [], note = null, beslutninger = lavBeslutninger(r.projekt, r.forslag) }) {
     const brud = [...r.forslag.brud, ...r.forslag.ikkePlaceret];
     tilstand.alternativer = null;
@@ -408,7 +419,8 @@ const planHandlers = {
         if (!v) return;
         // Swiss i grupper: kamplængden vælges igen — det er ofte den, grupperne gør mulig (forslaget er afprøvet sådan)
         arbejd(`${v.tekst} … og laver programmet igen.`, () => beregnKampprogram(anvendAendring(projekt, v), { fastKamplaengde: v.pris !== 'grupper' }), ({ r, beslutninger }) => {
-            visKampprogram(r, { foer: kp.foer, valg: kp.valg, udfoert: [...kp.udfoert, v.tekst], beslutninger });
+            // Er kamplængden valgt igen (grupper), skal panelet vise den nye — den skal sættes i TP (prod-test 2026-10-12)
+            visKampprogram(r, { foer: kp.foer, valg: v.pris === 'grupper' ? nytValg(kp.valg, r.valg) : kp.valg, udfoert: [...kp.udfoert, v.tekst], beslutninger });
             startAutoLoeser();
         });
     },
