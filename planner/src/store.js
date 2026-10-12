@@ -117,6 +117,7 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
         formValg: 'tp',        // 'tp' = TP's lodtrækning; ellers bygger planneren selv kampene (form.js)
         cupTop: 1,             // pulje + cup: 1 = vinderne, 2 = de to bedste
         swissRunder: 0,        // Swiss Ladder: valgt antal runder (0 = automatisk, skæres ned efter kapacitet)
+        swissGrupper: 1,       // Swiss Ladder i grupper: antal grupper (1 = alle i én), hver sin lodtrækning (Jesper 2026-10-12)
     }));
 
     return {
@@ -203,7 +204,7 @@ export function genindlaes(projekt, model, valg = { behold: true }) {
         if (!gammel) return k;
         // Har den nye fil en lodtrækning for kategorien, er den lavet i TP → tilbage til "fra TP"
         const harTpKampe = model.kampe.some((x) => x.kategori === k.id);
-        return { ...k, halvBane: gammel.halvBane, prioritet: gammel.prioritet || 0, swissUdenPause: !!gammel.swissUdenPause, formValg: harTpKampe ? 'tp' : (gammel.formValg || 'tp'), cupTop: gammel.cupTop || 1, swissRunder: gammel.swissRunder || 0 };
+        return { ...k, halvBane: gammel.halvBane, prioritet: gammel.prioritet || 0, swissUdenPause: !!gammel.swissUdenPause, formValg: harTpKampe ? 'tp' : (gammel.formValg || 'tp'), cupTop: gammel.cupTop || 1, swissRunder: gammel.swissRunder || 0, swissGrupper: gammel.swissGrupper || 1 };
     });
     const dage = nyt.opsaetning.dage.map((d) => projekt.opsaetning.dage.find((x) => x.dato === d.dato) || d);
     // Kun kampe, der stadig er de samme, beholder tid og lås (genberegnKampe fører dem over fra de gamle kampe)
@@ -348,7 +349,7 @@ export function validerProjekt(obj) {
     }
     for (const k of obj.kategorier) {
         if (!erObjekt(k) || typeof k.id !== 'string' || typeof k.raekke !== 'string') return fejl('kategori');
-        if (!erTalEllerTomt(k.tilmeldte) || !erTalEllerTomt(k.kampe) || !erTalEllerTomt(k.runder) || !erTalEllerTomt(k.prioritet) || !erTalEllerTomt(k.swissRunder) || !erTalEllerTomt(k.cupTop)) return fejl(`tal for ${k.id}`);
+        if (!erTalEllerTomt(k.tilmeldte) || !erTalEllerTomt(k.kampe) || !erTalEllerTomt(k.runder) || !erTalEllerTomt(k.prioritet) || !erTalEllerTomt(k.swissRunder) || !erTalEllerTomt(k.swissGrupper) || !erTalEllerTomt(k.cupTop)) return fejl(`tal for ${k.id}`);
     }
     for (const k of obj.kampe) {
         if (!erObjekt(k) || typeof k.id !== 'string' || typeof k.kategori !== 'string' || !Array.isArray(k.spillere) || !Array.isArray(k.muligeSpillere) || !Array.isArray(k.afhaengerAf) || !erObjekt(k.tpRef)) return fejl('kamp');
@@ -464,7 +465,7 @@ export function genberegnKampe(projekt, valg = {}) {
         const valg = k.formValg || 'tp';
         if (valg === 'tp') return { kampe: tp.filter((x) => x.kategori === k.id), form: null };
         const seedet = seedetFor(k);
-        const form = foreslaaForm(seedet.length, k, raekkeMap.get(k.raekke), regler, { form: valg, cupTop: k.cupTop || 1, kriterie, swissRunder: k.swissRunder || 0, deltagere: seedet, ...ekstra });
+        const form = foreslaaForm(seedet.length, k, raekkeMap.get(k.raekke), regler, { form: valg, cupTop: k.cupTop || 1, kriterie, swissRunder: k.swissRunder || 0, swissGrupper: k.swissGrupper || 1, deltagere: seedet, ...ekstra });
         return { kampe: byggKampe(k, seedet, form), form };
     };
     // Første pas: alle kategorier uden hensyn til kapacitet

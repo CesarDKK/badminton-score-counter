@@ -498,3 +498,31 @@ Nu laver løseren planen med færrest regelbrud, også når svaret er uafgjort. 
 bevis. En dag, der er uafgjort, løses ikke igen som ét samlet problem på resten af tiden (det nåede heller ikke noget);
 tiden går til planen med færrest brud. Panelet skriver, at løseren ikke nåede at afgøre det, og viser planen med færrest
 brud, hvis den ikke er dårligere end programmet. En uafgjort kørsel uden plan står nu i panelet.
+
+## Swiss Ladder i grupper (2026-10-12)
+
+Jespers idé: en stor Swiss Ladder deles i grupper, der hver er sin egen lodtrækning. En spiller får stadig én kamp pr.
+runde, så antallet af kampe er det samme. Men en gruppes næste runde kan lodtrækkes, så snart gruppens egne kampe er
+færdige. Grupperne kan altså spilles hver for sig, og den enkelte spiller er kortere tid i hallen.
+
+- **Opsætning:** "Swiss Ladder i grupper" vælges pr. kategori ved siden af antallet af runder (`swissGrupper`). Grupperne
+  er blokke i seedningen, så gruppe A er de bedste. De er så lige store som muligt, og højst én gruppe har et ulige antal,
+  fordi hver ulige gruppe giver en oversidder pr. runde. Hver gruppe skal kunne spille alle runderne mod nye modstandere.
+- **TP:** Lodtrækningen laves som én Swiss Ladder pr. gruppe. Når filen kommer tilbage, læses hver lodtrækning som sin
+  egen Swiss (det gjorde TP-læseren i forvejen). "Til TP" viser gruppernes runder hver for sig.
+- **Kortene:** Når programmet ikke går op, foreslås en opdeling (prisen "grupper", før "færre runder"). Det gælder både
+  for en stor Swiss fra TP-filen (så skal lodtrækningen laves om i TP) og for plannerens egen. Trinene prøves i rækkefølge:
+  1. Rækkens egne Swiss med mindst 10 deltagere.
+  2. Dertil dagens store Swiss med mindst 16.
+  3. Samme kategorier med ca. 10 i hver gruppe.
+
+  Afprøvningen tager andre kamplængder med, og når forslaget vælges, vælges kamplængden igen.
+
+Målt på Lyngby U9/U11 med alle kategorier som Swiss, U9 D og U11 D lørdag og U11 B og C søndag (planlægger / løser 60 s):
+
+| | Én stor Swiss | U09 D HS, U11 B HS og U11 D HS i 2 grupper |
+|---|---|---|
+| Fejl i Tjek | 16 / 13 (løseren nåede ikke en lovlig plan) | 0 / 0 |
+| Dagene slutter | 18:35 og 19:00 | 15:40 og 15:20 (løseren 16:00) |
+| U11 D: længst i hallen | 9,2 / 7,5 t | 6,7 / 6,3 t |
+| U11 B: over 5 t i hallen | 18 / 35 spillere | 4 / 0 spillere |

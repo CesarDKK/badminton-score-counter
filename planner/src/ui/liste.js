@@ -29,7 +29,9 @@ export function byggListe(projekt) {
         }
         const grupper = [];
         const prGruppe = new Map();
-        const nøgleFor = (k) => (k.fase === 'cup' ? `cup|${k.runde}` : k.fase === 'swiss' ? `swiss|${k.runde}` : `pulje|${k.gruppe}`);
+        // Swiss i grupper (flere Swiss-lodtrækninger i kategorien): hver gruppes runder for sig
+        const swissDraws = new Set(kampe.filter((k) => k.fase === 'swiss').map((k) => k.tpRef.draw));
+        const nøgleFor = (k) => (k.fase === 'cup' ? `cup|${k.runde}` : k.fase === 'swiss' ? `swiss|${k.tpRef.draw}|${k.runde}` : `pulje|${k.gruppe}`);
         for (const k of kampe) {
             const n = nøgleFor(k);
             if (!prGruppe.has(n)) prGruppe.set(n, []);
@@ -40,6 +42,7 @@ export function byggListe(projekt) {
             const orden = { pulje: 0, swiss: 1, cup: 2 };
             if (orden[fa] !== orden[fb]) return orden[fa] - orden[fb];
             if (fa === 'pulje') return (ka[0].gruppe || '').localeCompare(kb[0].gruppe || '', 'da', { numeric: true });
+            if (fa === 'swiss' && ka[0].gruppe !== kb[0].gruppe) return (ka[0].gruppe || '').localeCompare(kb[0].gruppe || '', 'da', { numeric: true });
             return (ka[0].runde || 0) - (kb[0].runde || 0);
         });
         for (const [n, gk] of sorteret) {
@@ -49,10 +52,11 @@ export function byggListe(projekt) {
                 const foerste = tider[0] || null;
                 const sidste = tider[tider.length - 1] || null;
                 const flereSlots = foerste && sidste && (foerste.dag !== sidste.dag || foerste.slot !== sidste.slot);
+                const rundeNavn = swissDraws.size > 1 ? `${gk[0].gruppe} — runde ${gk[0].runde}` : `Runde ${gk[0].runde}`;
                 grupper.push({
-                    navn: `Runde ${gk[0].runde}`,
+                    navn: rundeNavn,
                     linjer: [{
-                        tekst: `Runde ${gk[0].runde} (${gk.length} kampe)`,
+                        tekst: `${rundeNavn} (${gk.length} kampe)`,
                         tid: foerste,
                         tidTekst: tidTekst(foerste) + (flereSlots ? ` – ${sidste.slot}` : ''),
                         bemaerkning: tider.length < gk.length ? `${gk.length - tider.length} kampe uden tid` : flereSlots ? `runden fylder flere slots (${foerste.slot}–${sidste.slot}); TP får starttiden` : '',

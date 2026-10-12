@@ -32,6 +32,26 @@ export function puljeFordeling(n, stoerrelse) {
     return Array.from({ length: q }, (_, i) => basis + (i < rest ? 1 : 0));
 }
 
+/**
+ * Swiss Ladder i grupper (Jesper 2026-10-12): n deltagere i g grupper, så lige store som muligt og med lige antal i
+ * alle grupper undtagen højst én — hver gruppe med ulige antal giver en oversidder pr. runde. 39 i 3 → [14, 12, 13].
+ */
+export function swissGruppeFordeling(n, g) {
+    const grupper = Math.max(1, Math.min(g, Math.floor(n / 2)));
+    const par = Math.floor(n / 2);
+    const sizes = Array.from({ length: grupper }, (_, i) => 2 * (Math.floor(par / grupper) + (i < par % grupper ? 1 : 0)));
+    if (n % 2) sizes[sizes.length - 1] += 1;
+    return sizes;
+}
+
+/** Største antal Swiss-grupper for n deltagere, så hver gruppe har mindst 4 (ellers er det ikke en Swiss Ladder). */
+export function maxSwissGrupper(n) {
+    return Math.max(1, Math.floor(n / 4));
+}
+
+/** Gruppens bogstav: A, B, C … (gruppe A = de bedst seedede). */
+export const gruppeBogstav = (i) => String.fromCharCode(65 + i);
+
 function cupKampe(deltagere) {
     return deltagere > 1 ? deltagere - 1 : 0;
 }
@@ -40,7 +60,7 @@ function cupKampe(deltagere) {
  * Alle mulige former for n deltagere med nøgletal:
  * { form, stoerrelse?, runder?, puljer: [..], kampe, baneSlots, minKampe, maxKampe, tekst }
  */
-export function formMuligheder(n, { halvBane = false, cupTop = 1, minSwissRunder = 4, swissRunder = 0 } = {}) {
+export function formMuligheder(n, { halvBane = false, cupTop = 1, minSwissRunder = 4, swissRunder = 0, swissGrupper = 1 } = {}) {
     const ud = [];
     if (n < 2) return ud;
     const slots = (kampe) => (halvBane ? kampe / 2 : kampe);
@@ -77,13 +97,22 @@ export function formMuligheder(n, { halvBane = false, cupTop = 1, minSwissRunder
         // Valgt antal runder (1–8) eller automatisk 4–6; færre end reglementets
         // minimum markeres som nedskåret (bruges kun når kapaciteten ikke rækker).
         const runder = swissRunder ? [swissRunder] : [2, 3, ...SWISS_RUNDER, 7, 8];
+        // I grupper: hver gruppe er sin egen Swiss Ladder med samme antal runder. En spiller får stadig én kamp pr.
+        // runde, men en runde kan lodtrækkes, så snart dens EGEN gruppe er færdig — så kan grupperne spilles hver for
+        // sig, og den enkelte spiller er kortere tid i hallen.
+        const g = Math.min(Math.max(1, swissGrupper || 1), maxSwissGrupper(n));
+        const sizes = g > 1 ? swissGruppeFordeling(n, g) : [n];
+        const ulige = sizes.filter((s) => s % 2).length;
         for (const r of runder) {
-            if (r > n - 1 || r < 1) continue;
-            const prRunde = Math.floor(n / 2);
+            if (r > Math.min(...sizes) - 1 || r < 1) continue;
+            const prRunde = sizes.reduce((sum, s) => sum + Math.floor(s / 2), 0);
             const kampe = prRunde * r;
-            ud.push({ form: 'swiss', runder: r, kampe, baneSlots: slots(kampe), minKampe: n % 2 ? r - 1 : r, maxKampe: r,
-                nedskaaret: r < minSwissRunder, valgtRunder: !!swissRunder,
-                tekst: `Swiss Ladder, ${r} ${r === 1 ? 'runde' : 'runder'} á ${prRunde} kampe${n % 2 ? ' (én oversidder pr. runde)' : ''}` });
+            const over = ulige ? ` (${ulige === 1 ? 'én oversidder' : `${ulige} oversiddere`} pr. runde)` : '';
+            ud.push({ form: 'swiss', runder: r, kampe, baneSlots: slots(kampe), minKampe: ulige ? r - 1 : r, maxKampe: r,
+                nedskaaret: r < minSwissRunder, valgtRunder: !!swissRunder, ...(g > 1 ? { grupper: sizes } : {}),
+                tekst: g > 1
+                    ? `Swiss Ladder i ${g} grupper (${sizes.map((s, i) => `${gruppeBogstav(i)}: ${s}`).join(', ')}), ${r} ${r === 1 ? 'runde' : 'runder'} á ${prRunde} kampe${over}`
+                    : `Swiss Ladder, ${r} ${r === 1 ? 'runde' : 'runder'} á ${prRunde} kampe${over}` });
         }
     }
     return ud;
@@ -98,7 +127,7 @@ export function foreslaaForm(n, kategori, raekke, regler, valg = {}) {
     const krav = minKampeKrav(kategori, raekke, regler);
     const minSwiss = regler.minKampe.swissRunder;
     const swissRunder = Number(valg.swissRunder) > 0 ? Number(valg.swissRunder) : 0;
-    const alle = formMuligheder(n, { halvBane: !!kategori.halvBane, cupTop: valg.cupTop || 1, minSwissRunder: minSwiss, swissRunder });
+    const alle = formMuligheder(n, { halvBane: !!kategori.halvBane, cupTop: valg.cupTop || 1, minSwissRunder: minSwiss, swissRunder, swissGrupper: Number(valg.swissGrupper) || 1 });
     if (!alle.length) return null;
     // Automatisk bruger kun dobbelt pulje til små felter (én pulje), hvor intet andet når minimum.
     // Valgt direkte gælder den for alle feltstørrelser.
@@ -206,28 +235,42 @@ export function byggKampe(kategori, tilmeldinger, form) {
     const navn = (t) => t.spillere.join('/');
     if (!form || tilmeldinger.length < 2) return kampe;
     if (form.form === 'swiss') {
-        const n = tilmeldinger.length;
-        const alle = tilmeldinger.flatMap((t) => t.spillere);
-        const halv = Math.ceil(n / 2);
-        const runde1 = [];
-        for (let i = 0; i < Math.floor(n / 2); i += 1) {
-            const a = tilmeldinger[i], b = tilmeldinger[i + halv];
-            if (!a || !b) continue;
-            runde1.push({ id: `${praefiks}r1:${i + 1}`, kategori: kategori.id, fase: 'swiss', gruppe: kategori.id, runde: 1,
-                navn: `${kategori.id} runde 1: #${i + 1} – #${i + halv + 1}`, spillere: [...a.spillere, ...b.spillere], muligeSpillere: [...a.spillere, ...b.spillere],
-                afhaengerAf: [], tpRef: { draw: praefiks + 'swiss', planning: null, van1: 0, van2: 0, matchnr: i + 1, swissRunde: 1, swissKamp: i + 1 }, tpTid: null, varighed: 0, genereret: true });
-        }
-        kampe.push(...runde1);
-        let forrige = runde1.map((k) => k.id);
-        for (let r = 2; r <= form.runder; r += 1) {
-            const nye = [];
-            for (let i = 1; i <= Math.floor(n / 2); i += 1) {
-                nye.push({ id: `${praefiks}r${r}:${i}`, kategori: kategori.id, fase: 'swiss', gruppe: kategori.id, runde: r, navn: `${kategori.id} runde ${r}, kamp ${i}`,
-                    spillere: [], muligeSpillere: alle, afhaengerAf: [...forrige], tpRef: { draw: praefiks + 'swiss', planning: null, van1: 0, van2: 0, matchnr: 0, swissRunde: r, swissKamp: i }, tpTid: null, varighed: 0, genereret: true });
+        // Én Swiss Ladder pr. gruppe — uden grupper én for hele kategorien (samme id'er som før). Grupperne er blokke i
+        // seedningen: gruppe A = de bedste, så kampene bliver jævnbyrdige. Hver gruppe er sin egen lodtrækning (draw).
+        const sizes = form.grupper?.length > 1 ? form.grupper : [tilmeldinger.length];
+        let start = 0;
+        sizes.forEach((stoerrelse, gi) => {
+            const del = tilmeldinger.slice(start, start + stoerrelse);
+            start += stoerrelse;
+            const n = del.length;
+            const medGrupper = sizes.length > 1;
+            const bogstav = gruppeBogstav(gi);
+            const p = medGrupper ? `${praefiks}${bogstav}:` : praefiks;
+            const draw = medGrupper ? `${praefiks}swiss-${bogstav}` : `${praefiks}swiss`;
+            const gruppe = medGrupper ? `${kategori.id} gruppe ${bogstav}` : kategori.id;
+            const titel = medGrupper ? `${kategori.id} gruppe ${bogstav}` : kategori.id;
+            const alle = del.flatMap((t) => t.spillere);
+            const halv = Math.ceil(n / 2);
+            const runde1 = [];
+            for (let i = 0; i < Math.floor(n / 2); i += 1) {
+                const a = del[i], b = del[i + halv];
+                if (!a || !b) continue;
+                runde1.push({ id: `${p}r1:${i + 1}`, kategori: kategori.id, fase: 'swiss', gruppe, runde: 1,
+                    navn: `${titel} runde 1: #${i + 1} – #${i + halv + 1}`, spillere: [...a.spillere, ...b.spillere], muligeSpillere: [...a.spillere, ...b.spillere],
+                    afhaengerAf: [], tpRef: { draw, planning: null, van1: 0, van2: 0, matchnr: i + 1, swissRunde: 1, swissKamp: i + 1 }, tpTid: null, varighed: 0, genereret: true });
             }
-            kampe.push(...nye);
-            forrige = nye.map((k) => k.id);
-        }
+            kampe.push(...runde1);
+            let forrige = runde1.map((k) => k.id);
+            for (let r = 2; r <= form.runder; r += 1) {
+                const nye = [];
+                for (let i = 1; i <= Math.floor(n / 2); i += 1) {
+                    nye.push({ id: `${p}r${r}:${i}`, kategori: kategori.id, fase: 'swiss', gruppe, runde: r, navn: `${titel} runde ${r}, kamp ${i}`,
+                        spillere: [], muligeSpillere: alle, afhaengerAf: [...forrige], tpRef: { draw, planning: null, van1: 0, van2: 0, matchnr: 0, swissRunde: r, swissKamp: i }, tpTid: null, varighed: 0, genereret: true });
+                }
+                kampe.push(...nye);
+                forrige = nye.map((k) => k.id);
+            }
+        });
         return kampe;
     }
     // Puljer
@@ -331,7 +374,7 @@ export function seedTilmeldinger(tilmeldinger, spillere, kat) {
 /** Formen der faktisk gælder: plannerens egen (formForslag), når kategorien ikke følger TP. */
 export function effektivForm(kategori) {
     const f = (kategori.formValg || 'tp') !== 'tp' ? kategori.formForslag : null;
-    if (f) return { form: f.form, runder: f.runder || 0, sikreSwiss: f.minKampe, deltagere: f.deltagere || 0 };
+    if (f) return { form: f.form, runder: f.runder || 0, sikreSwiss: f.minKampe, deltagere: f.deltagere || 0, grupper: f.grupper || null };
     // TP's egen Swiss Ladder: også her sidder én over pr. runde ved ulige antal, så der er kun sikret én kamp færre
     const runder = kategori.runder || 0, deltagere = kategori.tilmelde || 0;
     return { form: kategori.form, runder, sikreSwiss: deltagere % 2 ? Math.max(0, runder - 1) : runder, deltagere };
@@ -345,7 +388,9 @@ export function effektivForm(kategori) {
  */
 export function swissOversiddere(kategori) {
     const e = effektivForm(kategori);
-    return e.form === 'swiss' && e.deltagere % 2 === 1 ? Math.min(e.runder, e.deltagere) : 0;
+    if (e.form !== 'swiss') return 0;
+    // I grupper: hver gruppe med ulige antal har sin egen oversidder pr. runde
+    return (e.grupper || [e.deltagere]).filter((s) => s % 2 === 1).reduce((sum, s) => sum + Math.min(e.runder, s), 0);
 }
 
 /**
