@@ -552,6 +552,40 @@ class DiagnoseTest(unittest.TestCase):
         kode, svar = solver.koer({**p, "diagnose": False}, 5, solver.Job())
         self.assertNotIn("diagnose", svar)
 
+    def test_uafgjort_giver_planen_med_faerrest_brud_men_ingen_diagnose(self):
+        # Jespers prod-test 2026-10-12: hverken plan eller bevis på tiden (UNKNOWN) gav intet — nu planen med færrest brud
+        import solver
+        gammel = solver.loes_opdelt
+        solver.loes_opdelt = lambda p, s, stop=None, elastisk=False, **k: gammel(p, s, stop=stop, elastisk=True) if elastisk else {"status": "UNKNOWN", "tider": {}, "sekunder": 1.0}
+        try:
+            p = problem([kamp(0), kamp(1)], konflikter=[[0, 1, 60, 0]], elastiskPlan=True, elastisk=[])
+            kode, svar = solver.koer(p, 5, solver.Job())
+        finally:
+            solver.loes_opdelt = gammel
+        self.assertEqual((kode, svar["status"]), (200, "UNKNOWN"))
+        self.assertIn(svar["elastisk"]["status"], ("OPTIMAL", "FEASIBLE"))
+        self.assertEqual(len(svar["elastisk"]["tider"]), 2)
+        self.assertNotIn("diagnose", svar, "en diagnose kræver et bevis — den spares")
+
+    def test_en_uafgjort_dag_loeses_ikke_igen_samlet(self):
+        import solver
+        kald = []
+        gammel = solver.loes
+        def falsk(p, s, *a, **k):
+            kald.append(len(p["kampe"]))
+            return {"status": "UNKNOWN", "tider": {}, "stoppet": False, "sekunder": 0.1}
+        tider = [540, 570, DAG + 540, DAG + 570]
+        p = problem([kamp(0, tilladte=[540, 570]), kamp(1, tilladte=[540, 570]), kamp(2, tilladte=[DAG + 540, DAG + 570])],
+                    kapacitet={"faelles": [{"t": t, "baner": 2} for t in tider]},
+                    dage=[{"index": 0, "start": 540, "slut": 600, "baner": 2}, {"index": 1, "start": 540, "slut": 600, "baner": 2}])
+        solver.loes = falsk
+        try:
+            svar = solver.loes_opdelt(p, 5)
+        finally:
+            solver.loes = gammel
+        self.assertEqual(svar["status"], "UNKNOWN")
+        self.assertEqual(kald, [2], "kun første dag — ikke hele problemet bagefter")
+
 
 class HalTidTest(unittest.TestCase):
     """Tid i hallen for U9/U11 (kriteriet halTid): løseren trækker en spillers kampe sammen."""
