@@ -88,6 +88,31 @@ WiFi-koden kommer ikke med — kun dens længde og om den har mellemrum.
 - Mister den netværket ved opstart, viser den "Venter på forbindelse…" og
   prøver igen, i stedet for en fejlside.
 
+### Automatisk opdatering
+
+En installeret PC henter selv nye versioner af Badminton TV fra
+[Releases](https://github.com/CesarDKK/badminton-score-counter/releases) — der
+er ingen grund til at køre ud og installere forfra med USB-nøglen.
+
+- PC'en tjekker 10 minutter efter, den er tændt, og derefter hver anden time.
+  Et tjek er en lille fil; selve systemet (ca. 700 MB) hentes kun, når der er
+  en ny version. TV-siden kører videre imens.
+- Den nye version startes, **næste gang PC'en tændes**. Kommer TV-siden frem og
+  kører i 5 minutter, beholdes den. Ellers genstarter PC'en selv til den
+  forrige version efter højst 20 minutter. Det samme sker, hvis den nye
+  version fryser, eller nogen slukker PC'en på knappen inden da. En version,
+  der er prøvet 3 gange uden at virke, opgives, indtil der kommer en nyere.
+- **Én skærm går forrest:** sæt `OPDATERING=foerst` i `kiosk.conf` på fx
+  oversigtsskærmen. Den henter en ny version med det samme; de andre
+  (`OPDATERING=auto`) venter, til versionen har været ude i et døgn. Ser
+  oversigten forkert ud efter en opdatering, så **markér udgivelsen som
+  "pre-release"** på GitHub (rediger udgivelsen → *Set as a pre-release*). Så
+  henter de andre den ikke, og en rettet version kan udgives i stedet.
+- `OPDATERING=fra` slår det fra.
+- Kun PC'er, der er installeret med en version med automatisk opdatering,
+  opdaterer sig selv (de har to systemer på disken, se nedenfor). Ældre
+  installationer skal installeres forfra én gang.
+
 ### TV'et og HDMI-CEC
 
 De fleste PC'er kan **ikke** tænde og slukke TV'et. Grafikkortet har ikke
@@ -165,7 +190,9 @@ kiosk/
 └── test/
     ├── test-conf.sh         tests af kiosk.conf-læsningen
     ├── test-netstatus.sh    tests af netværksvurderingen
-    └── vm.sh                kør hele forløbet i en virtuel UEFI-PC
+    ├── test-opdatering.sh   tests af den automatiske opdaterings beslutninger
+    ├── vm.sh                kør hele forløbet i en virtuel UEFI-PC
+    └── opdatering-vm.sh     testdata til opdateringen i den virtuelle PC
 ```
 
 **Raspberry Pi:** `build-pi.sh` tager det officielle Raspberry Pi OS Lite
@@ -180,6 +207,30 @@ det, der ender på disken. Installationen kopierer live-systemets filer over
 med rsync, fjerner live-pakkerne og installerer GRUB. Der er ingen
 Debian-installer, ingen netværksinstallation og intet preseed.
 
+**To systemer (A/B):** Disken har en EFI-partition og to ens
+systempartitioner, `badminton-tv-a` og `badminton-tv-b` (højst 16 GB hver).
+Installationen lægger systemet på A. En opdatering er det samme som en
+installation: live-systemets `filesystem.squashfs` (som udgivelsen også har
+som `badminton-tv-rod-<version>.squashfs`) kopieres til det ledige system, og
+PC'ens `kiosk.conf`, navn og maskine-id følger med. Derfor kommer alle
+ændringer med — pakker, fstab, kerneparametre — uden opgraderingsscripts.
+
+GRUB på EFI-partitionen (`\EFI\debian\grub.cfg` = `grub-esp.cfg`) vælger
+systemet ud fra `badminton-tv.env` ved siden af: `aktiv=a|b` og `proev=a|b`.
+`proev` slettes af GRUB selv, før det nye system startes (med
+`badminton.forsoeg=1`), så næste opstart altid er det gamle, medmindre
+`badminton-tv-opdatering-bekraeft` har sat `aktiv` efter 5 minutter med
+TV-siden fremme. Kernen og dens parametre står i systemet selv
+(`grub-slot.cfg`), så de følger med opdateringerne. Vælgeren skrives kun af
+installeren. GRUB- og shim-pakkerne sættes i bero (`apt-mark hold`), når et
+system lægges på disken, fordi deres opgradering ville køre `grub-install` og
+overskrive vælgeren.
+
+Manifestet `opdatering.json` (version, udgivelsestid, `vent_timer`, filnavn,
+SHA256, størrelse) signeres med en ed25519-nøgle ved udgivelsen. PC'en
+tjekker signaturen med `opdatering.pub` fra sit eget system, før den bruger
+noget fra det.
+
 | Del | Fil |
 |---|---|
 | Læsning af `kiosk.conf` (fælles) | `usr/lib/badminton-tv/conf.sh` |
@@ -191,6 +242,9 @@ Debian-installer, ingen netværksinstallation og intet preseed.
 | HDMI-CEC (`cec-ctl`) | `usr/lib/badminton-tv/cec` |
 | Automatisk slukning + opdateringer | `usr/lib/badminton-tv/sluk` + generator |
 | Installation på disk | `usr/lib/badminton-tv/installer` |
+| Automatisk opdatering (hent, godkend, status) | `usr/lib/badminton-tv/opdatering` |
+| Fælles for installation og opdatering | `usr/lib/badminton-tv/rod.sh` |
+| GRUB: vælger A/B, og hvert systems opstartslinje | `usr/share/badminton-tv/grub-esp.cfg`, `grub-slot.cfg` |
 
 Tilstanden vælges med boot-parameteren `badminton.tilstand=installer|proeve`.
 Uden parameteren (den installerede PC) er det normal drift.
@@ -253,3 +307,30 @@ git tag tv-usb-v2026.10.1
 ```bash
 git push origin tv-usb-v2026.10.1
 ```
+
+Udgivelsen får også `opdatering.json` og `opdatering.json.sig`, som de
+installerede PC'er henter via `releases/latest/download/` — så **den seneste
+udgivelse, der ikke er pre-release, er den, PC'erne opdaterer til**. Andre
+slags udgivelser i dette repo ville forstyrre det.
+
+**Signeringsnøglen:** Release-jobbet signerer manifestet med secret
+`TV_OPDATERING_NOEGLE` (*Settings → Secrets and variables → Actions*): hele
+indholdet af en PEM-fil med en ed25519-nøgle. Mangler den, fejler jobbet, og
+der udgives intet. Den offentlige halvdel ligger i
+`usr/share/badminton-tv/opdatering.pub`. Mistes nøglen, kan der laves en ny,
+men så skal alle PC'er installeres forfra én gang, fordi de kun stoler på den
+gamle:
+
+```bash
+openssl genpkey -algorithm ed25519 -out opdateringsnoegle.pem
+```
+
+```bash
+openssl pkey -in opdateringsnoegle.pem -pubout -out kiosk/live/config/includes.chroot_after_packages/usr/share/badminton-tv/opdatering.pub
+```
+
+**Test af opdateringen** i den virtuelle PC: `test/opdatering-vm.sh` laver et
+USB-billede, der henter fra en lokal server med en testnøgle, plus en ny og en
+bevidst ødelagt version. Forløbet står øverst i scriptet. Selve
+beslutningerne (hvornår der hentes, signatur, antal forsøg) testes uden VM af
+`test/test-opdatering.sh`, som også kører i CI.

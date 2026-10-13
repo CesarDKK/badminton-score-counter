@@ -2915,7 +2915,7 @@ function renderSkaerme(skaerme) {
                 <div style="flex:1;min-width:0;font-size:0.85em;">
                     <div><strong>${navn}</strong> &nbsp;<span style="color:${farve};">${status}</span></div>
                     <div style="color:rgba(255,255,255,0.45);font-size:0.9em;margin-top:2px;">
-                        Bane ${s.bane || '?'} &nbsp;•&nbsp; sidst set ${skaermVarighed(s.sekunderSiden)} siden &nbsp;•&nbsp; IP ${escapeHtml(s.ip || '?')}${data}
+                        ${s.side === 'oversigt' ? 'Oversigt' : `Bane ${s.bane || '?'}`}${s.kioskVersion ? ` &nbsp;•&nbsp; Badminton TV ${escapeHtml(s.kioskVersion)}` : ''} &nbsp;•&nbsp; sidst set ${skaermVarighed(s.sekunderSiden)} siden &nbsp;•&nbsp; IP ${escapeHtml(s.ip || '?')}${data}
                     </div>
                     ${haendelser ? `<div style="color:var(--color-warning, #f0a020);font-size:0.9em;margin-top:2px;">⚠ ${haendelser}</div>` : ''}
                 </div>

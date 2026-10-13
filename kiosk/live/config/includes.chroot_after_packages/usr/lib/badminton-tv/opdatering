@@ -1,0 +1,322 @@
+#!/bin/bash
+# Automatisk opdatering af Badminton TV på PC'en.
+#
+# PC'ens disk har to systemer, A og B (se rod.sh). Det ene kører, det andet er
+# ledigt. En ny version skrives til det ledige, mens TV'et kører videre, og
+# PC'en prøver den ved næste opstart. Kommer TV-siden frem og kører i 5
+# minutter, bliver den nye version det aktive system; ellers starter PC'en det
+# gamle igen. Valget træffes af GRUB på EFI-partitionen (grub-esp.cfg).
+#
+#   opdatering tjek       hent og klargør en ny version, hvis der er en
+#                         (badminton-tv-opdatering.timer, hver anden time)
+#   opdatering bekraeft   i et nyt system på prøve: gør det til det aktive, når
+#                         TV-siden har kørt i 5 minutter — eller genstart til
+#                         det gamle, hvis den ikke er kommet efter 20 minutter
+#   opdatering status     vis tilstanden
+#
+# Versionerne hentes fra GitHub-udgivelserne (tags tv-usb-v*): manifestet
+# opdatering.json, signeret med Badminton TV's nøgle (opdatering.pub), og
+# rod-filsystemet, hvis SHA256 står i manifestet. Uden gyldig signatur sker der
+# intet. Der nedgraderes aldrig.
+#
+# OPDATERING i kiosk.conf:
+#   auto    hent, når udgivelsen er vent_timer gammel (står i manifestet,
+#           normalt 24 timer)
+#   foerst  hent med det samme. Én skærm (fx oversigten) går forrest, så en
+#           fejl kan opdages, før de andre følger efter — markér udgivelsen som
+#           "pre-release" på GitHub, så stopper udrulningen.
+#   fra     aldrig
+
+set -Eeuo pipefail
+BT_LIB=${BT_LIB:-/usr/lib/badminton-tv}
+. "$BT_LIB/conf.sh"
+. "$BT_LIB/rod.sh"
+
+KILDE=https://github.com/CesarDKK/badminton-score-counter/releases
+NOEGLE=${BT_NOEGLE:-/usr/share/badminton-tv/opdatering.pub}
+BTENV=/boot/efi/EFI/debian/badminton-tv.env
+ARB=/run/badminton-tv/opdatering
+SUND_SEK=300        # så længe skal TV-siden have kørt, før et nyt system godkendes
+FRIST_SEK=1200      # … og senest så længe efter opstarten
+MAKS_FORSOEG=3      # forsøg pr. version, før den opgives
+# Kun til test (kiosk/test/opdatering-vm.sh): anden KILDE og kortere tider.
+if [ -f /etc/badminton-tv/opdatering.env ]; then
+    . /etc/badminton-tv/opdatering.env
+fi
+
+cmdline() { tr ' ' '\n' < /proc/cmdline | sed -n "s/^$1=//p" | tail -1; }
+SLOT=$(cmdline badminton.slot)
+VERSION_NU=$(cat /usr/share/badminton-tv/version 2>/dev/null || echo ukendt)
+
+env_hent() { grub-editenv "$BTENV" list 2>/dev/null | sed -n "s/^$1=//p"; }
+env_saet() { grub-editenv "$BTENV" set "$@"; }
+env_slet() { grub-editenv "$BTENV" unset "$@"; }
+
+# er_nyere A B — er B en nyere version end A?
+er_nyere() {
+    [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" = "$2" ]
+}
+
+# beslut KØRENDE NY UDGIVET VENT_TIMER TILSTAND NU KLAR ANTAL
+#   KLAR:  versionen der allerede venter på næste opstart (tom: ingen)
+#   ANTAL: hvor mange gange NY er gjort klar før
+# Udskriver: fra | nyeste | venter <sekunder> | klar | opgivet | hent
+beslut() {
+    local koer=$1 ny=$2 udgivet=$3 vent=$4 tilstand=$5 nu=$6 klar=$7 antal=$8
+    if [ "$tilstand" = fra ]; then echo fra; return; fi
+    if ! er_nyere "$koer" "$ny"; then echo nyeste; return; fi
+    if [ "$tilstand" != foerst ]; then
+        local frem=$((udgivet + vent * 3600 - nu))
+        if [ "$frem" -gt 0 ]; then echo "venter $frem"; return; fi
+    fi
+    if [ "$klar" = "$ny" ]; then echo klar; return; fi
+    if [ "${antal:-0}" -ge "$MAKS_FORSOEG" ]; then echo opgivet; return; fi
+    echo hent
+}
+
+# laes_manifest FIL — sætter M_VERSION, M_UDGIVET, M_VENT, M_FIL, M_SHA256 og
+# M_BYTES. Fejler, hvis noget ser forkert ud (filnavnet bruges i en URL og en
+# sti, så det skal være helt almindeligt).
+laes_manifest() {
+    local felter
+    felter=$(jq -er '[.version, .udgivet, (.vent_timer // 24), .rod.fil, .rod.sha256, .rod.bytes]
+                     | map(tostring) | join("\t")' "$1" 2>/dev/null) || return 1
+    IFS=$'\t' read -r M_VERSION M_UDGIVET M_VENT M_FIL M_SHA256 M_BYTES <<<"$felter"
+    [[ "$M_VERSION" =~ ^[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,3}$ ]] &&
+    [[ "$M_UDGIVET" =~ ^[0-9]{9,11}$ ]] &&
+    [[ "$M_VENT" =~ ^[0-9]{1,3}$ ]] &&
+    [ "$M_FIL" = "badminton-tv-rod-$M_VERSION.squashfs" ] &&
+    [[ "$M_SHA256" =~ ^[0-9a-f]{64}$ ]] &&
+    [[ "$M_BYTES" =~ ^[0-9]{6,11}$ ]]
+}
+
+# signatur_ok FIL SIG — ed25519-signatur fra Badminton TV's nøgle?
+signatur_ok() {
+    openssl pkeyutl -verify -pubin -inkey "$NOEGLE" -rawin -in "$1" -sigfile "$2" >/dev/null 2>&1
+}
+
+hent() { # URL FIL [curl-flag…]
+    local url=$1 fil=$2; shift 2
+    curl -fsSL --proto '=https,http' --connect-timeout 30 -o "$fil" "$@" "$url"
+}
+
+# ── tjek ───────────────────────────────────────────────────
+tjek() {
+    if [ -z "$SLOT" ]; then
+        echo "PC'en har det gamle disklayout med ét system — installér den forfra fra USB-nøglen for at få automatisk opdatering."
+        return 0
+    fi
+    local aktiv
+    aktiv=$(env_hent aktiv)
+    if [ "${aktiv:-a}" != "$SLOT" ]; then
+        echo "System $SLOT kører på prøve og er ikke godkendt endnu — tjekker ikke for opdateringer."
+        return 0
+    fi
+
+    local conf
+    if conf=$(bt_find_conf); then
+        bt_read_conf "$conf"
+    else
+        BT_OPDATERING=auto
+    fi
+    if [ "$BT_OPDATERING" = fra ]; then
+        echo "Automatisk opdatering er slået fra (OPDATERING=fra i kiosk.conf)."
+        return 0
+    fi
+    # Uret skal passe: udgivelsestidspunktet sammenlignes med det, og HTTPS
+    # afviser certifikaterne med et forkert ur.
+    if [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" != yes ]; then
+        echo "Uret er ikke sat fra internettet endnu — prøver igen senere."
+        return 0
+    fi
+
+    mkdir -p "$ARB"
+    rm -f "$ARB/opdatering.json" "$ARB/opdatering.json.sig"
+    if ! hent "$KILDE/latest/download/opdatering.json" "$ARB/opdatering.json" --max-time 60 \
+       || ! hent "$KILDE/latest/download/opdatering.json.sig" "$ARB/opdatering.json.sig" --max-time 60; then
+        echo "Kunne ikke hente opdateringsmanifestet fra $KILDE — prøver igen senere."
+        return 0
+    fi
+    if ! signatur_ok "$ARB/opdatering.json" "$ARB/opdatering.json.sig"; then
+        echo "FEJL: Opdateringsmanifestets signatur passer ikke — det bliver ikke brugt."
+        return 1
+    fi
+    if ! laes_manifest "$ARB/opdatering.json"; then
+        echo "FEJL: Opdateringsmanifestet kan ikke læses: $(head -c 500 "$ARB/opdatering.json")"
+        return 1
+    fi
+
+    local proev pv antal=0 klar='' svar
+    proev=$(env_hent proev)
+    pv=$(env_hent proev_version)
+    if [ "$pv" = "$M_VERSION" ]; then
+        antal=$(env_hent proev_antal)
+        [ -n "$proev" ] && klar=$pv
+    fi
+    svar=$(beslut "$VERSION_NU" "$M_VERSION" "$M_UDGIVET" "$M_VENT" "$BT_OPDATERING" "$(date +%s)" "$klar" "${antal:-0}")
+    case "$svar" in
+        nyeste)  echo "Kører den nyeste version ($VERSION_NU)." ;;
+        venter*) echo "Version $M_VERSION er udgivet. Henter den om ca. $(( (${svar#venter } + 3599) / 3600 )) time(r) (OPDATERING=auto)." ;;
+        klar)    echo "Version $M_VERSION er klar og startes ved næste opstart." ;;
+        opgivet) echo "Version $M_VERSION er prøvet $antal gange uden at virke — venter på en nyere version." ;;
+        hent)    klargoer ;;
+    esac
+}
+
+# Skriver M_VERSION til det ledige system og beder GRUB om at prøve det.
+klargoer() {
+    local andet dev
+    if [ "$SLOT" = a ]; then andet=b; else andet=a; fi
+    if ! dev=$(blkid -L "badminton-tv-$andet"); then
+        echo "FEJL: System $andet (badminton-tv-$andet) findes ikke på disken."
+        return 1
+    fi
+    if findmnt -rno TARGET "$dev" >/dev/null; then
+        echo "FEJL: System $andet ($dev) er i brug."
+        return 1
+    fi
+    NY=$ARB/system-$andet
+    KILDE_MNT=$ARB/kilde
+    mkdir -p "$NY" "$KILDE_MNT"
+    trap 'oprydning' EXIT
+
+    # Står versionen allerede klar fra et tidligere forsøg (der ikke blev
+    # godkendt, fx fordi nettet var nede), skal den ikke hentes igen.
+    if mount -o ro "$dev" "$NY" 2>/dev/null; then
+        local fra_foer
+        fra_foer=$(cat "$NY/.badminton-tv-klar" 2>/dev/null || true)
+        umount "$NY"
+        if [ "$fra_foer" = "$M_VERSION" ]; then
+            echo "Version $M_VERSION ligger allerede på system $andet fra et tidligere forsøg."
+            saet_proev "$andet"
+            return 0
+        fi
+    fi
+
+    echo "Henter version $M_VERSION ($((M_BYTES / 1000000)) MB) til system $andet ($dev) …"
+    mkfs.ext4 -F -q -L "badminton-tv-$andet" "$dev"
+    mount "$dev" "$NY"
+    local sq=$NY/.badminton-tv-hentning.squashfs
+    # Giver op, hvis der ikke er kommet 10 KB/s i 2 minutter — prøver igen
+    # næste gang (hele forløbet starter forfra, med et tomt filsystem).
+    hent "$KILDE/download/tv-usb-v$M_VERSION/$M_FIL" "$sq" \
+        --retry 3 --retry-delay 30 --speed-limit 10000 --speed-time 120
+    if [ "$(stat -c %s "$sq")" != "$M_BYTES" ] \
+       || ! printf '%s  %s\n' "$M_SHA256" "$sq" | sha256sum -c --quiet; then
+        echo "FEJL: Den hentede fil passer ikke med manifestet (størrelse eller SHA256)."
+        return 1
+    fi
+
+    echo "Kopierer systemet …"
+    mount -o loop,ro "$sq" "$KILDE_MNT"
+    rsync -aHAXx --numeric-ids "$KILDE_MNT/" "$NY/"
+    umount "$KILDE_MNT"
+    rm -f "$sq"
+
+    echo "Overfører PC'ens indstillinger …"
+    # kiosk.conf (med WiFi-koden), installationsoplysninger og evt. testindstillinger
+    mkdir -p "$NY/etc/badminton-tv"
+    cp -a /etc/badminton-tv/. "$NY/etc/badminton-tv/"
+    printf 'opdateret=%s\nversion=%s\n' "$(date --iso-8601=seconds)" "$M_VERSION" >> "$NY/etc/badminton-tv/installeret"
+    cp /etc/hostname "$NY/etc/hostname"
+    # Samme maskine-id som før (bruges bl.a. af DHCP), så PC'en beholder sin IP
+    rm -f "$NY/var/lib/dbus/machine-id"
+    cp /etc/machine-id "$NY/etc/machine-id"
+    bt_rod_fstab "$NY" "$(blkid -s UUID -o value "$dev")" "$(findmnt -no UUID /boot/efi)"
+
+    echo "Gør systemet klar til at starte fra disken …"
+    bt_rod_monter "$NY"
+    bt_rod_fjern_live "$NY"
+    bt_rod_laas_grub "$NY"
+    bt_rod_afmonter "$NY"
+    bt_rod_kan_starte "$NY" "$M_VERSION"
+
+    printf '%s\n' "$M_VERSION" > "$NY/.badminton-tv-klar"
+    sync
+    umount "$NY"
+    saet_proev "$andet"
+}
+
+oprydning() {
+    if [ -n "${NY:-}" ] && mountpoint -q "$NY"; then
+        bt_rod_afmonter "$NY" 2>/dev/null || true
+        umount -R "$NY" 2>/dev/null || umount -Rl "$NY" 2>/dev/null || true
+    fi
+    if [ -n "${KILDE_MNT:-}" ] && mountpoint -q "$KILDE_MNT"; then
+        umount "$KILDE_MNT" 2>/dev/null || true
+    fi
+}
+
+saet_proev() { # slot
+    local antal=0
+    if [ "$(env_hent proev_version)" = "$M_VERSION" ]; then
+        antal=$(env_hent proev_antal)
+    fi
+    antal=$((${antal:-0} + 1))
+    env_saet proev="$1" proev_version="$M_VERSION" proev_antal="$antal"
+    echo "Version $M_VERSION er klar på system $1 og startes ved næste opstart (forsøg $antal af $MAKS_FORSOEG)."
+}
+
+# ── bekraeft ───────────────────────────────────────────────
+# Kører TV-siden? badminton-tv.service kører, og Chromium viser en side på
+# http(s) — dvs. startsiden har fundet netværket og skiftet til TV_URL.
+sund() {
+    systemctl -q is-active badminton-tv.service || return 1
+    curl -fs --max-time 5 "http://127.0.0.1:${BT_DEVTOOLS_PORT:-9222}/json/list" \
+        | jq -e 'any(.[]; .type == "page" and (.url | test("^https?://")))' >/dev/null
+}
+
+bekraeft() {
+    if [ "$(cmdline badminton.forsoeg)" != 1 ]; then
+        return 0
+    fi
+    echo "System $SLOT (version $VERSION_NU) er startet på prøve. Det bliver det aktive system, når TV-siden har kørt i $SUND_SEK sekunder."
+    # Oppetiden og ikke $SECONDS: den følger uret, som springer, når det
+    # sættes fra internettet (set i testen: 2 timer — fristen "udløb" med det samme)
+    oppe() { cut -d. -f1 /proc/uptime; }
+    local start ok_fra=''
+    start=$(oppe)
+    while [ $(($(oppe) - start)) -lt "$FRIST_SEK" ]; do
+        if sund; then
+            ok_fra=${ok_fra:-$(oppe)}
+            if [ $(($(oppe) - ok_fra)) -ge "$SUND_SEK" ]; then
+                env_saet aktiv="$SLOT"
+                env_slet proev proev_version proev_antal
+                echo "Opdateret til version $VERSION_NU — system $SLOT er nu det aktive."
+                return 0
+            fi
+        else
+            ok_fra=''
+        fi
+        sleep 10
+    done
+    echo "FEJL: TV-siden kom ikke frem inden for $((FRIST_SEK / 60)) minutter med version $VERSION_NU — genstarter til det tidligere system."
+    env_saet sidste_fejl="$VERSION_NU $(date '+%Y-%m-%d %H:%M')"
+    systemctl reboot
+}
+
+# ── status ─────────────────────────────────────────────────
+status() {
+    printf 'Kører: system %s, version %s%s\n' "${SLOT:-(gammelt layout)}" "$VERSION_NU" \
+        "$([ "$(cmdline badminton.forsoeg)" = 1 ] && echo ' — på prøve')"
+    [ -f "$BTENV" ] && grub-editenv "$BTENV" list
+    return 0
+}
+
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    trap 'echo "FEJL: linje $LINENO: $BASH_COMMAND (kode $?) — prøver igen næste gang."' ERR
+    case "${1:-}" in
+        tjek)
+            # Én hentning ad gangen (timeren og et manuelt kald)
+            mkdir -p "$ARB"
+            exec 9>"$ARB/laas"
+            if ! flock -n 9; then
+                echo "En anden opdatering kører allerede."
+                exit 0
+            fi
+            tjek ;;
+        bekraeft) bekraeft ;;
+        status)   status ;;
+        *) sed -n '2,30p' "$0"; exit 1 ;;
+    esac
+fi

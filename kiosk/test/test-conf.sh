@@ -85,5 +85,20 @@ printf 'NAVN=x\nTV_URL=https://a.dk/sidst' > "$TMP/eof.conf"
 bt_read_conf "$TMP/eof.conf"
 forvent "Sidste linje uden linjeskift" "$BT_TV_URL" "https://a.dk/sidst"
 
+# 11. OPDATERING: standard auto, først med og uden ø, ukendt værdi giver advarsel
+printf 'TV_URL=https://a.dk/\n' > "$TMP/opd.conf"
+bt_read_conf "$TMP/opd.conf"
+forvent "Standard: opdatering" "$BT_OPDATERING" "auto"
+for par in "foerst foerst" "Først foerst" "FØRST foerst" "fra fra" "Nej fra" "AUTO auto"; do
+    ind=${par% *}; ud=${par#* }
+    printf 'TV_URL=https://a.dk/\nOPDATERING=%s\n' "$ind" > "$TMP/opd.conf"
+    bt_read_conf "$TMP/opd.conf"
+    forvent "OPDATERING=$ind" "$BT_OPDATERING" "$ud"
+done
+printf 'TV_URL=https://a.dk/\nOPDATERING=hver uge\n' > "$TMP/opd.conf"
+bt_read_conf "$TMP/opd.conf"
+forvent "OPDATERING ukendt → auto" "$BT_OPDATERING" "auto"
+forvent "OPDATERING ukendt giver advarsel" "${BT_ADVARSLER:+ja}" "ja"
+
 echo "$ok bestået, $fejl fejlet"
 [ "$fejl" -eq 0 ]

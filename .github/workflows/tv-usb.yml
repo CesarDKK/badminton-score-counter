@@ -36,6 +36,9 @@ jobs:
       - name: Netværksstatus (forkert kode, netværk ikke synligt …)
         run: bash kiosk/test/test-netstatus.sh
 
+      - name: Automatisk opdatering (beslutning, manifest, signatur)
+        run: bash kiosk/test/test-opdatering.sh
+
       - name: Browser-vagt (mod headless Chromium)
         run: docker run --rm -v "$PWD/kiosk:/src" debian:trixie bash /src/test/test-browservagt.sh
 
@@ -46,10 +49,11 @@ jobs:
           cd kiosk
           shellcheck -S warning -x \
             build.sh test/vm.sh test/test-conf.sh test/test-netstatus.sh test/test-browservagt.sh \
+            test/test-opdatering.sh test/opdatering-vm.sh \
             pi/build-pi.sh pi/tilpas.sh pi/test-billede.sh \
             live/auto/config \
             live/config/hooks/normal/*.hook.chroot \
-            live/config/includes.chroot_after_packages/usr/lib/badminton-tv/{conf.sh,setup,browser,cec,sluk,installer,netstatus,diagnose,hentlog} \
+            live/config/includes.chroot_after_packages/usr/lib/badminton-tv/{conf.sh,rod.sh,setup,browser,cec,sluk,installer,netstatus,diagnose,hentlog,opdatering} \
             live/config/includes.chroot_after_packages/usr/lib/systemd/system-generators/badminton-tv-sluk-generator
 
   byg:
@@ -90,6 +94,7 @@ jobs:
           path: |
             ud/*.zip
             ud/*.img
+            ud/*.squashfs
             ud/SHA256SUMS
           retention-days: 7
           compression-level: 0
@@ -144,10 +149,48 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Kun den offentlige nøgle, så signaturen kan tjekkes, før den udgives
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: kiosk/live/config/includes.chroot_after_packages/usr/share/badminton-tv
+          path: kilde
+
       - uses: actions/download-artifact@v5
         with:
           path: ud
           merge-multiple: true
+
+      # PC'ernes automatiske opdatering henter releases/latest/download/opdatering.json
+      # og tjekker signaturen med opdatering.pub fra billedet. vent_timer: så
+      # længe venter PC'er med OPDATERING=auto efter udgivelsen — PC'er med
+      # OPDATERING=foerst henter med det samme. Den private nøgle ligger som
+      # secret TV_OPDATERING_NOEGLE (PEM, ed25519); uden den udgives intet.
+      - name: Opdateringsmanifest (signeret)
+        env:
+          NOEGLE: ${{ secrets.TV_OPDATERING_NOEGLE }}
+        run: |
+          if [ -z "$NOEGLE" ]; then
+            echo "::error::Secret TV_OPDATERING_NOEGLE mangler — se kiosk/README.md (Udgivelser)"
+            exit 1
+          fi
+          VERSION=${GITHUB_REF_NAME#tv-usb-v}
+          ROD=badminton-tv-rod-$VERSION.squashfs
+          cd ud
+          jq -n --arg version "$VERSION" --arg fil "$ROD" \
+                --arg sha256 "$(sha256sum "$ROD" | cut -d' ' -f1)" \
+                --argjson bytes "$(stat -c %s "$ROD")" \
+                --argjson udgivet "$(date +%s)" \
+                '{version: $version, udgivet: $udgivet, vent_timer: 24,
+                  rod: {fil: $fil, sha256: $sha256, bytes: $bytes}}' > opdatering.json
+          cat opdatering.json
+          umask 077
+          printf '%s\n' "$NOEGLE" > "$RUNNER_TEMP/noegle.pem"
+          openssl pkeyutl -sign -inkey "$RUNNER_TEMP/noegle.pem" -rawin \
+            -in opdatering.json -out opdatering.json.sig
+          rm -f "$RUNNER_TEMP/noegle.pem"
+          openssl pkeyutl -verify -rawin -pubin \
+            -inkey ../kilde/kiosk/live/config/includes.chroot_after_packages/usr/share/badminton-tv/opdatering.pub \
+            -in opdatering.json -sigfile opdatering.json.sig
 
       - name: Release
         env:
@@ -165,6 +208,8 @@ jobs:
           - \`badminton-tv-usb-$VERSION.img\` — skriv den med [balenaEtcher](https://etcher.balena.io/) eller Rufus. Virker med alle størrelser.
 
           ⚠️ Installationen sletter alt på PC'ens disk.
+
+          **Allerede installerede PC'er** opdaterer sig selv: \`opdatering.json\` (signeret) og \`badminton-tv-rod-$VERSION.squashfs\` hentes automatisk. PC'er med \`OPDATERING=foerst\` henter med det samme, de øvrige efter 24 timer. Stop udrulningen ved at markere udgivelsen som pre-release.
 
           **Raspberry Pi 3, 4 og 5 (SD-kort):**
           - \`badminton-tv-pi-$VERSION.img.xz\` — skriv den til et SD-kort (mindst 8 GB) med [Raspberry Pi Imager](https://www.raspberrypi.com/software/) ("Use custom", uden OS-tilpasning) eller balenaEtcher. \`kiosk.conf\` ligger på kortet bagefter.

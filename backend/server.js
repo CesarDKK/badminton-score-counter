@@ -130,6 +130,9 @@ app.get('/t/:token', async (req, res, next) => {
         // videre til siden, så den kan melde sig med navn i admins skærm-status
         const skaerm = String(req.query.skaerm || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 60);
         if (skaerm) targetUrl += `&skaerm=${encodeURIComponent(skaerm)}`;
+        // Badminton TV-PC'ens version følger med på samme måde (admin viser den)
+        const kioskversion = String(req.query.kioskversion || '').replace(/[^0-9A-Za-z.-]/g, '').slice(0, 30);
+        if (kioskversion) targetUrl += `&kioskversion=${encodeURIComponent(kioskversion)}`;
 
         res.redirect(targetUrl);
     } catch (error) {

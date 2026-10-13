@@ -14,6 +14,8 @@
 #   opstart-NN-<dato>.txt     kernebeskeder + advarsler + slutningen af hver opstart
 #   kernenedbrud\             pstore-dumps (kerne-panik), hvis der er nogen
 #   kiosk.conf.txt            uden WiFi-kode
+#   andet-system\             det samme fra PC'ens andet system (A/B), hvis det
+#                             har kørt — fx en opdatering, der ikke blev godkendt
 
 set -uo pipefail
 . /usr/lib/badminton-tv/conf.sh
@@ -66,30 +68,59 @@ done
 umount "$USB_MNT"
 okay
 
-# ── 2. PC'ens installerede system ──────────────────────────
+# ── 2. PC'ens installerede system(er) ──────────────────────
+# PC'en har to systemer, A og B (se rod.sh) — eller ét, hvis den er installeret
+# før den automatiske opdatering. Det aktive står i badminton-tv.env på
+# EFI-partitionen. Det andet system kommer også med: gik en opdatering galt,
+# ligger loggen fra forsøget dér.
 trin "Finder Badminton TV på PC'ens disk…"
-ROD=''
 for _ in 1 2 3 4 5; do
-    ROD=$(blkid -L badminton-tv 2>/dev/null || true)
-    [ -n "$ROD" ] && break
+    ROD_A=$(blkid -L badminton-tv-a 2>/dev/null || true)
+    ROD_B=$(blkid -L badminton-tv-b 2>/dev/null || true)
+    ROD_GL=$(blkid -L badminton-tv 2>/dev/null || true)
+    [ -n "$ROD_A$ROD_GL" ] && break
     sleep 1
 done
-[ -n "$ROD" ] || stop "PC'en har ikke Badminton TV installeret (ingen disk med navnet badminton-tv)."
+BTENV=''
+AKTIV=a
+if [ -n "$ROD_A" ]; then
+    DISK=/dev/$(lsblk -no PKNAME "$ROD_A" | head -1)
+    ESP_MNT=/run/badminton-esp
+    mkdir -p "$ESP_MNT"
+    for p in $(lsblk -lnpo NAME,FSTYPE "$DISK" | awk '$2 == "vfat" { print $1 }'); do
+        mount -o ro "$p" "$ESP_MNT" 2>/dev/null || continue
+        if [ -f "$ESP_MNT/EFI/debian/badminton-tv.env" ]; then
+            BTENV=$(grep -v '^#' "$ESP_MNT/EFI/debian/badminton-tv.env")
+            umount "$ESP_MNT"
+            break
+        fi
+        umount "$ESP_MNT"
+    done
+    [ "$(printf '%s\n' "$BTENV" | sed -n 's/^aktiv=//p')" = b ] && AKTIV=b
+fi
+if [ -n "$ROD_GL" ]; then
+    HOVED=$ROD_GL ANDET=''
+elif [ "$AKTIV" = b ]; then
+    HOVED=$ROD_B ANDET=$ROD_A
+else
+    HOVED=$ROD_A ANDET=$ROD_B
+fi
+[ -n "$HOVED" ] || stop "PC'en har ikke Badminton TV installeret (ingen disk med navnet badminton-tv)."
+
 # noload: et frosset system er slukket hårdt, og ext4's journal må IKKE
 # afspilles — det ville skrive på disken
-mount -o ro,noload "$ROD" "$PC" 2>/dev/null || mount -o ro "$ROD" "$PC" 2>/dev/null \
-    || stop "PC'ens disk ($ROD) kunne ikke åbnes."
+monter() {
+    mount -o ro,noload "$1" "$PC" 2>/dev/null || mount -o ro "$1" "$PC" 2>/dev/null
+}
+monter "$HOVED" || stop "PC'ens disk ($HOVED) kunne ikke åbnes."
+NAVN=$(tr -cd 'A-Za-z0-9._-' < "$PC/etc/hostname" 2>/dev/null)
+umount "$PC"
 okay
 
-JOURNAL=$PC/var/log/journal
-NAVN=$(tr -cd 'A-Za-z0-9._-' < "$PC/etc/hostname" 2>/dev/null)
 [ -n "$NAVN" ] || NAVN=ukendt-pc
 MAPPE="$NAVN-$(date '+%Y-%m-%d-%H%M')"
-UD=$TMP/$MAPPE
-mkdir -p "$UD"
+UD_ROD=$TMP/$MAPPE
 
-# ── 3. Oversigt ────────────────────────────────────────────
-trin "Læser PC'ens opstarter…"
 jc() { journalctl --directory="$JOURNAL" --no-pager "$@" 2>/dev/null; }
 
 # Endte en opstart med en ordentlig nedlukning? Ellers frøs PC'en, eller
@@ -104,89 +135,129 @@ afslutning() {
     fi
 }
 
-{
-    printf 'Badminton TV — fejllog hentet %s\n' "$(date '+%Y-%m-%d %H:%M:%S')"
-    printf 'PC-navn: %s\n' "$NAVN"
-    printf 'PC: %s %s (%s), BIOS %s %s\n' \
-        "$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)" "$(cat /sys/class/dmi/id/product_version 2>/dev/null)" \
-        "$(cat /sys/class/dmi/id/product_name 2>/dev/null)" "$(cat /sys/class/dmi/id/bios_version 2>/dev/null)" \
-        "$(cat /sys/class/dmi/id/bios_date 2>/dev/null)"
-    printf 'RAM: %s MB\n' "$(awk '/MemTotal/ { print int($2 / 1024) }' /proc/meminfo)"
-    printf 'Installeret version: %s\n' "$(cat "$PC/usr/share/badminton-tv/version" 2>/dev/null || echo ukendt)"
-    printf 'USB-nøglens version: %s\n' "$(cat /usr/share/badminton-tv/version 2>/dev/null || echo ukendt)"
-    [ -f "$PC/etc/badminton-tv/installeret" ] && { printf '\n-- Installation --\n'; cat "$PC/etc/badminton-tv/installeret"; }
-
-    printf '\n== Opstarter (nyeste nederst) ==\n'
-    printf 'Hver linje: nr., start og slut. En opstart der IKKE er lukket ned normalt,\n'
-    printf "er den interessante: PC'ens log stopper der, hvor den frøs.\n\n"
-    if [ -d "$JOURNAL" ]; then
-        jc --list-boots | tail -n "$ANTAL_OPSTARTER" | while read -r nr _id rest; do
-            [[ "$nr" =~ ^-?[0-9]+$ ]] || { printf '%s\n' "$nr $_id $rest"; continue; }
-            printf '%5s  %s  →  %s\n' "$nr" "$rest" "$(afslutning "$nr")"
-        done
-    else
-        printf "Ingen log fundet på PC'ens disk (/var/log/journal mangler).\n"
+# saml ENHED MAPPE BESKRIVELSE — ét systems oversigt, log og konfiguration.
+saml() {
+    local enhed=$1 beskrivelse=$3
+    UD=$2
+    JOURNAL=$PC/var/log/journal
+    mkdir -p "$UD"
+    if ! monter "$enhed"; then
+        printf 'Kunne ikke åbne %s\n' "$enhed" > "$UD/OVERSIGT.txt"
+        return
     fi
 
-    printf '\n== Disk ==\n'
-    df -h "$PC" 2>/dev/null
-    printf '\n== Kernenedbrud (pstore) ==\n'
-    ls -la "$PC/var/lib/systemd/pstore" 2>/dev/null || printf 'ingen\n'
-    # Årsagen står inde i dumpet: panik-linjen og browser-vagtens egne linjer
-    # (diskfejlene, den gentog lige før panikken). Hele dumpet ligger i kernenedbrud\.
-    # Dumpet ligger i flere dele, så sortér på kernens tidsstempel "[  287.37]".
-    grep -rhsE 'Kernel panic - not syncing|browservagt:' "$PC/var/lib/systemd/pstore" 2>/dev/null \
-        | sort -t '[' -k2,2n | awk '!set[$0]++' | head -60 | sed 's/^/  /'
-    printf '\n== Hardware ==\n'
-    lspci -nn 2>/dev/null | grep -iE 'vga|display|network|ethernet|wireless'
-} > "$UD/OVERSIGT.txt"
-okay
+    # ── Oversigt ──
+    {
+        printf 'Badminton TV — fejllog hentet %s\n' "$(date '+%Y-%m-%d %H:%M:%S')"
+        printf 'PC-navn: %s\n' "$NAVN"
+        printf 'System: %s (%s)\n' "$beskrivelse" "$enhed"
+        printf 'PC: %s %s (%s), BIOS %s %s\n' \
+            "$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null)" "$(cat /sys/class/dmi/id/product_version 2>/dev/null)" \
+            "$(cat /sys/class/dmi/id/product_name 2>/dev/null)" "$(cat /sys/class/dmi/id/bios_version 2>/dev/null)" \
+            "$(cat /sys/class/dmi/id/bios_date 2>/dev/null)"
+        printf 'RAM: %s MB\n' "$(awk '/MemTotal/ { print int($2 / 1024) }' /proc/meminfo)"
+        printf 'Installeret version: %s\n' "$(cat "$PC/usr/share/badminton-tv/version" 2>/dev/null || echo ukendt)"
+        printf 'USB-nøglens version: %s\n' "$(cat /usr/share/badminton-tv/version 2>/dev/null || echo ukendt)"
+        [ -f "$PC/etc/badminton-tv/installeret" ] && { printf '\n-- Installation og opdateringer --\n'; cat "$PC/etc/badminton-tv/installeret"; }
+        if [ -n "$BTENV" ]; then
+            printf '\n-- Automatisk opdatering (badminton-tv.env) --\n%s\n' "$BTENV"
+        fi
 
-# ── 4. Hver opstart ────────────────────────────────────────
+        printf '\n== Opstarter (nyeste nederst) ==\n'
+        printf 'Hver linje: nr., start og slut. En opstart der IKKE er lukket ned normalt,\n'
+        printf "er den interessante: PC'ens log stopper der, hvor den frøs.\n\n"
+        if [ -d "$JOURNAL" ]; then
+            jc --list-boots | tail -n "$ANTAL_OPSTARTER" | while read -r nr _id rest; do
+                [[ "$nr" =~ ^-?[0-9]+$ ]] || { printf '%s\n' "$nr $_id $rest"; continue; }
+                printf '%5s  %s  →  %s\n' "$nr" "$rest" "$(afslutning "$nr")"
+            done
+            printf '\n== Automatisk opdatering ==\n'
+            jc -u badminton-tv-opdatering.service -u badminton-tv-opdatering-bekraeft.service \
+                -o short-iso -n 60 | grep -v '^-- ' || printf 'ingen\n'
+        else
+            printf "Ingen log fundet på PC'ens disk (/var/log/journal mangler).\n"
+        fi
+
+        printf '\n== Disk ==\n'
+        df -h "$PC" 2>/dev/null
+        printf '\n== Kernenedbrud (pstore) ==\n'
+        ls -la "$PC/var/lib/systemd/pstore" 2>/dev/null || printf 'ingen\n'
+        # Årsagen står inde i dumpet: panik-linjen og browser-vagtens egne linjer
+        # (diskfejlene, den gentog lige før panikken). Hele dumpet ligger i kernenedbrud\.
+        # Dumpet ligger i flere dele, så sortér på kernens tidsstempel "[  287.37]".
+        grep -rhsE 'Kernel panic - not syncing|browservagt:' "$PC/var/lib/systemd/pstore" 2>/dev/null \
+            | sort -t '[' -k2,2n | awk '!set[$0]++' | head -60 | sed 's/^/  /'
+        printf '\n== Hardware ==\n'
+        lspci -nn 2>/dev/null | grep -iE 'vga|display|network|ethernet|wireless'
+    } > "$UD/OVERSIGT.txt"
+
+    # ── Hver opstart ──
+    if [ -d "$JOURNAL" ]; then
+        # --list-boots: "IDX BOOT-ID UGEDAG DATO TID ZONE …" (evt. med overskrift)
+        jc --list-boots | tail -n "$ANTAL_OPSTARTER" | awk '$1 ~ /^-?[0-9]+$/ { print $1, $4 }' | while read -r nr start; do
+            fil=$(printf '%s/opstart-%03d-%s.txt' "$UD" "$(( -nr ))" "${start:-ukendt}")
+            {
+                printf 'Opstart %s: %s\n\n' "$nr" "$(afslutning "$nr")"
+                printf '== Advarsler og fejl (alle) ==\n'
+                jc -b "$nr" -p warning -o short-iso
+                printf '\n== Kernen (alle beskeder) ==\n'
+                jc -b "$nr" -k -o short-iso
+                printf '\n== De sidste 600 linjer før opstarten sluttede ==\n'
+                printf "(frøs PC'en, er det her, sporet er)\n"
+                jc -b "$nr" -o short-iso -n 600
+            } > "$fil"
+        done
+    fi
+
+    # ── Kernenedbrud og konfiguration ──
+    if [ -d "$PC/var/lib/systemd/pstore" ] && [ -n "$(ls -A "$PC/var/lib/systemd/pstore" 2>/dev/null)" ]; then
+        cp -r "$PC/var/lib/systemd/pstore" "$UD/kernenedbrud" 2>/dev/null
+    fi
+    if [ -f "$PC/etc/badminton-tv/kiosk.conf" ]; then
+        grep -v '^[[:space:]]*WIFI_KODE' "$PC/etc/badminton-tv/kiosk.conf" > "$UD/kiosk.conf.txt"
+        printf '# WIFI_KODE er fjernet\n' >> "$UD/kiosk.conf.txt"
+    fi
+    umount "$PC" 2>/dev/null
+}
+
+# ── 3. Loggen ──────────────────────────────────────────────
 trin "Kopierer loggen fra de seneste $ANTAL_OPSTARTER opstarter…"
-if [ -d "$JOURNAL" ]; then
-    # --list-boots: "IDX BOOT-ID UGEDAG DATO TID ZONE …" (evt. med overskrift)
-    jc --list-boots | tail -n "$ANTAL_OPSTARTER" | awk '$1 ~ /^-?[0-9]+$/ { print $1, $4 }' | while read -r nr start; do
-        fil=$(printf '%s/opstart-%03d-%s.txt' "$UD" "$(( -nr ))" "${start:-ukendt}")
-        {
-            printf 'Opstart %s: %s\n\n' "$nr" "$(afslutning "$nr")"
-            printf '== Advarsler og fejl (alle) ==\n'
-            jc -b "$nr" -p warning -o short-iso
-            printf '\n== Kernen (alle beskeder) ==\n'
-            jc -b "$nr" -k -o short-iso
-            printf '\n== De sidste 600 linjer før opstarten sluttede ==\n'
-            printf "(frøs PC'en, er det her, sporet er)\n"
-            jc -b "$nr" -o short-iso -n 600
-        } > "$fil"
-    done
+if [ -n "$ROD_GL" ]; then
+    saml "$HOVED" "$UD_ROD" "det eneste system"
+else
+    saml "$HOVED" "$UD_ROD" "system ${AKTIV^^} — det aktive"
+    # Har det andet system kørt (versionen før den seneste opdatering, eller
+    # en opdatering der ikke blev godkendt), kommer dets log med i en undermappe.
+    if [ "$AKTIV" = a ]; then ANDET_NAVN=B; else ANDET_NAVN=A; fi
+    if [ -n "$ANDET" ] && monter "$ANDET"; then
+        HAR_LOG=''
+        [ -d "$PC/var/log/journal" ] && HAR_LOG=1
+        umount "$PC"
+        if [ -n "$HAR_LOG" ]; then
+            saml "$ANDET" "$UD_ROD/andet-system" \
+                "system $ANDET_NAVN — det inaktive (versionen før, eller en opdatering der ikke blev godkendt)"
+        fi
+    fi
 fi
 okay
 
-# ── 5. Kernenedbrud og konfiguration ───────────────────────
-if [ -d "$PC/var/lib/systemd/pstore" ] && [ -n "$(ls -A "$PC/var/lib/systemd/pstore" 2>/dev/null)" ]; then
-    cp -r "$PC/var/lib/systemd/pstore" "$UD/kernenedbrud" 2>/dev/null
-fi
-if [ -f "$PC/etc/badminton-tv/kiosk.conf" ]; then
-    grep -v '^[[:space:]]*WIFI_KODE' "$PC/etc/badminton-tv/kiosk.conf" > "$UD/kiosk.conf.txt"
-    printf '# WIFI_KODE er fjernet\n' >> "$UD/kiosk.conf.txt"
-fi
-umount "$PC" 2>/dev/null
-
-# ── 6. Ned på USB-nøglen ───────────────────────────────────
+# ── 4. Ned på USB-nøglen ───────────────────────────────────
 trin "Gemmer på USB-nøglen…"
 mount -o rw "$USB_PART" "$USB_MNT" 2>/dev/null || stop "USB-nøglen kunne ikke skrives på."
-mkdir -p "$USB_MNT/fejllog/$MAPPE"
 # CRLF, så filerne ser rigtige ud i Windows' Notesblok
-for f in "$UD"/*.txt; do
-    sed 's/$/\r/' "$f" > "$USB_MNT/fejllog/$MAPPE/$(basename "$f")"
+(cd "$UD_ROD" && find . -type f) | while read -r f; do
+    mkdir -p "$USB_MNT/fejllog/$MAPPE/$(dirname "$f")"
+    case "$f" in
+        *.txt) sed 's/$/\r/' "$UD_ROD/$f" > "$USB_MNT/fejllog/$MAPPE/$f" ;;
+        *)     cp "$UD_ROD/$f" "$USB_MNT/fejllog/$MAPPE/$f" ;;
+    esac
 done
-[ -d "$UD/kernenedbrud" ] && cp -r "$UD/kernenedbrud" "$USB_MNT/fejllog/$MAPPE/"
 sync
 umount "$USB_MNT"
 okay
 
 # ── Færdig ─────────────────────────────────────────────────
-uren=$(grep -c 'IKKE LUKKET NED' "$UD/OVERSIGT.txt" || true)
+uren=$(grep -c 'IKKE LUKKET NED' "$UD_ROD/OVERSIGT.txt" || true)
 printf '\n  %sFærdig.%s Fejlloggen ligger på USB-nøglen i mappen:\n\n' "$G" "$N"
 printf '    %sfejllog\\%s%s\n\n' "$F" "$MAPPE" "$N"
 if [ "${uren:-0}" -gt 0 ]; then

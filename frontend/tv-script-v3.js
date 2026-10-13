@@ -293,6 +293,9 @@ function startLocalTimer() {
    - 'net':  livstegnene kunne ikke nå serveren (fra første fejl til næste succes)
    Så kan en skærm, der "går i stå", undersøges uden at køre ud til den. */
 const SKAERM_NAVN = (urlParams.get('skaerm') || '').slice(0, 60);
+// Badminton TV-PC'ens version (kiosk-PC'en sætter ?kioskversion=), så admin kan
+// følge den automatiske opdatering
+const KIOSK_VERSION = (urlParams.get('kioskversion') || '').slice(0, 30);
 // Samme id efter genindlæsning (ny version, frys-vagt): ellers dukkede skærmen
 // op som en ny skærm hver gang, og den gamle stod tilbage med rød lampe
 const SKAERM_ID = (() => {
@@ -393,6 +396,7 @@ async function sendLivstegn() {
             navn: SKAERM_NAVN,
             bane: courtId,
             version: (document.querySelector('script[src*="tv-script-v3.js"]')?.src.split('v=')[1] || ''),
+            kioskVersion: KIOSK_VERSION,
             dataAlderSek: _sidsteDataOk ? Math.round((Date.now() - _sidsteDataOk) / 1000) : null,
             haendelser
         });

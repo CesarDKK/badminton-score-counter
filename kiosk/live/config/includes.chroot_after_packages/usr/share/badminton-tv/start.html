@@ -182,6 +182,12 @@
     // admin → Adgangslinks (skærm-status), også når flere deler samme link
     const navn = p.get('navn') || '';
     if (navn && !maal.searchParams.has('skaerm')) maal.searchParams.set('skaerm', navn);
+    // Badminton TV's version følger også med, så admin kan se, hvilken version
+    // hver skærm kører (den automatiske opdatering)
+    const version = p.get('version') || '';
+    if (version && version !== 'ukendt' && !maal.searchParams.has('kioskversion')) {
+      maal.searchParams.set('kioskversion', version);
+    }
     location.replace(maal.href);
   }
 

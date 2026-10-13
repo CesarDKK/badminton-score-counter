@@ -10,6 +10,8 @@
 # Resultat i /ud:
 #   badminton-tv-usb-<version>.zip   pakkes ud på en FAT32-formateret USB-nøgle
 #   badminton-tv-usb-<version>.img   skrives med balenaEtcher/Rufus (alle størrelser)
+#   badminton-tv-rod-<version>.squashfs   systemet alene — den automatiske
+#                                    opdatering henter det fra udgivelsen
 #   SHA256SUMS
 #
 # Miljøvariabler:
@@ -125,7 +127,8 @@ echo "filesystem.squashfs: $((SQ / 1024 / 1024)) MB"
 
 # ── 3. Zip og diskbillede ──────────────────────────────────
 NAVN=badminton-tv-usb-$VERSION
-rm -f "$UD/$NAVN.zip" "$UD/$NAVN.img"
+ROD_FIL=badminton-tv-rod-$VERSION.squashfs
+rm -f "$UD/$NAVN.zip" "$UD/$NAVN.img" "$UD/$ROD_FIL"
 
 trin "Pakker $NAVN.zip"
 (cd "$USB" && zip -q -r -X "$UD/$NAVN.zip" .)
@@ -142,7 +145,10 @@ SEKTORER=$(( STR_MB * 1024 * 1024 / 512 - 2048 ))
 mkfs.vfat -F 32 -n "$LABEL" --offset 2048 "$IMG" $((SEKTORER / 2)) >/dev/null
 MTOOLS_SKIP_CHECK=1 mcopy -s -i "$IMG@@1M" "$USB"/* "$USB"/.disk ::/
 
-(cd "$UD" && sha256sum "$NAVN.zip" "$NAVN.img" > SHA256SUMS)
+trin "Lægger $ROD_FIL ud til automatisk opdatering"
+cp "$USB/live/filesystem.squashfs" "$UD/$ROD_FIL"
+
+(cd "$UD" && sha256sum "$NAVN.zip" "$NAVN.img" "$ROD_FIL" > SHA256SUMS)
 
 trin "Færdig"
-ls -lh "$UD/$NAVN.zip" "$UD/$NAVN.img"
+ls -lh "$UD/$NAVN.zip" "$UD/$NAVN.img" "$UD/$ROD_FIL"

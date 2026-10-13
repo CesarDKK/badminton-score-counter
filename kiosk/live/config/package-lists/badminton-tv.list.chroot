@@ -60,3 +60,8 @@ zstd
 
 # Sikkerhedsopdateringer ved automatisk slukning
 unattended-upgrades
+
+# Automatisk opdatering: henter nye versioner fra GitHub, openssl tjekker
+# signaturen
+curl
+openssl

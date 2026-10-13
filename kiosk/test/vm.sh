@@ -24,7 +24,8 @@
 #   fjern-usb             træk USB-nøglen ud
 #   fjern-disk            lad PC'ens disk dø (PCIe hot-unplug) → kernepanik → genstart
 #   saet-disk             sæt disken i igen, så genstarten kan boote fra den
-#   stop
+#   sluk                  tryk på tænd/sluk-knappen og vent, til PC'en er lukket ned
+#   stop                  træk stikket
 #
 # Flagene ændrer kun VM'ens kopi af billedet, aldrig selve byggeresultatet.
 # Uden KVM (fx Docker Desktop på Windows) emuleres CPU'en — langsomt, men det virker.
@@ -197,6 +198,18 @@ case "${1:-}" in
     saet-disk)
         # Sæt disken i igen (inden de 10 sekunder), så PC'en kan boote fra den.
         monitor "device_add $NVME_DEV"
+        ;;
+    sluk)
+        # Som et kort tryk på tænd/sluk-knappen: PC'en lukker pænt ned.
+        monitor system_powerdown >/dev/null
+        for _ in $(seq 1 180); do
+            # QEMU er væk, når monitoren ikke svarer (pgrep ser også zombier:
+            # containerens init rydder ikke op efter -daemonize)
+            socat -u OPEN:/dev/null "UNIX-CONNECT:$MON" 2>/dev/null || { echo "Slukket."; exit 0; }
+            sleep 1
+        done
+        echo "Lukkede ikke ned inden for 3 minutter" >&2
+        exit 1
         ;;
     stop)
         monitor quit >/dev/null 2>&1 || true

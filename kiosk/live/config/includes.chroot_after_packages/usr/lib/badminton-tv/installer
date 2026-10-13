@@ -9,17 +9,20 @@
 #   1. Find USB-nøglen og læs kiosk.conf — stop før noget slettes, hvis den er forkert
 #   2. Vælg den interne disk — stop hvis der er flere end én (og DISK ikke er sat)
 #   3. Vis hvad der slettes, og tæl 15 sekunder ned (en tast afbryder)
-#   4. Partitionér, kopiér systemet, installér bootloader
+#   4. Partitionér (EFI + system A + system B), kopiér systemet til A,
+#      installér bootloaderen og vælgeren mellem A og B (se rod.sh, opdatering)
 #   5. Skriv en log til USB-nøglen, vent til nøglen er fjernet, genstart
 
 set -Eeuo pipefail
 . /usr/lib/badminton-tv/conf.sh
+. /usr/lib/badminton-tv/rod.sh
 
 LOG=/run/badminton-tv/installation.log
 MAAL=/mnt/badminton-tv
 USB_MNT=/run/badminton-usb
 NEDTAELLING=15
-MIN_DISK_GB=8
+MIN_DISK_GB=16   # to systemer (A/B) af mindst 7 GB
+MAX_SYSTEM_MIB=16384
 
 mkdir -p /run/badminton-tv "$MAAL" "$USB_MNT"
 : > "$LOG"
@@ -251,24 +254,32 @@ koer wipefs -af "$MAAL_DISK"
 okay
 
 trin "Opretter partitioner…"
-koer sfdisk --wipe always --wipe-partitions always "$MAAL_DISK" <<'EOF'
+# To ens systemer, A og B: PC'en kører fra det ene, og den automatiske
+# opdatering skriver næste version til det andet (se opdatering). Højst 16 GB
+# hver — resten af disken bruges ikke.
+SYSTEM_MIB=$(( (STR_BYTES / 1048576 - 512 - 4) / 2 ))
+[ "$SYSTEM_MIB" -le "$MAX_SYSTEM_MIB" ] || SYSTEM_MIB=$MAX_SYSTEM_MIB
+koer sfdisk --wipe always --wipe-partitions always "$MAAL_DISK" <<EOF
 label: gpt
 size=512MiB, type=uefi, name="EFI"
-type=linux, name="badminton-tv"
+size=${SYSTEM_MIB}MiB, type=linux, name="badminton-tv-a"
+size=${SYSTEM_MIB}MiB, type=linux, name="badminton-tv-b"
 EOF
 # sfdisk beder selv kernen genlæse tabellen; vi venter bare på at udev har
 # oprettet de nye enheder.
 for _ in $(seq 1 20); do
     koer udevadm settle
     mapfile -t PARTS < <(lsblk -lnpo NAME,TYPE "$MAAL_DISK" | awk '$2 == "part" { print $1 }')
-    [ "${#PARTS[@]}" -eq 2 ] && [ -b "${PARTS[1]}" ] && break
+    [ "${#PARTS[@]}" -eq 3 ] && [ -b "${PARTS[2]}" ] && break
     sleep 0.5
 done
-[ "${#PARTS[@]}" -eq 2 ] || stop_med_fejl "Partitionerne blev ikke oprettet korrekt (${PARTS[*]:-ingen})."
-ESP=${PARTS[0]} ROD=${PARTS[1]}
-log "ESP=$ESP ROD=$ROD"
+[ "${#PARTS[@]}" -eq 3 ] || stop_med_fejl "Partitionerne blev ikke oprettet korrekt (${PARTS[*]:-ingen})."
+ESP=${PARTS[0]} ROD=${PARTS[1]} ROD_B=${PARTS[2]}
+log "ESP=$ESP A=$ROD B=$ROD_B (${SYSTEM_MIB} MiB hver)"
 koer mkfs.vfat -F 32 -n EFI "$ESP"
-koer mkfs.ext4 -F -q -L badminton-tv "$ROD"
+koer mkfs.ext4 -F -q -L badminton-tv-a "$ROD"
+# B er tom, indtil den første opdatering skriver til den
+koer mkfs.ext4 -F -q -L badminton-tv-b "$ROD_B"
 okay
 
 trin "Kopierer systemet…"
@@ -289,17 +300,7 @@ koer mount "$ESP" "$MAAL/boot/efi"
 okay
 
 trin "Indstiller systemet…"
-ROD_UUID=$(blkid -s UUID -o value "$ROD")
-ESP_UUID=$(blkid -s UUID -o value "$ESP")
-# errors=panic: dør disken (set 2026-10-06: NVMe holdt op med at svare), skal
-# PC'en genstarte med det samme i stedet for at stå frosset med et skrivebeskyttet
-# system. Panikken gemmes i pstore, så "Hent fejllog" viser diskfejlene.
-cat > "$MAAL/etc/fstab" <<EOF
-# Oprettet af Badminton TV-installationen
-UUID=$ROD_UUID  /          ext4  defaults,noatime,errors=panic       0  1
-UUID=$ESP_UUID  /boot/efi  vfat  umask=0077                          0  1
-tmpfs           /tmp       tmpfs defaults,nosuid,nodev               0  0
-EOF
+bt_rod_fstab "$MAAL" "$(blkid -s UUID -o value "$ROD")" "$(blkid -s UUID -o value "$ESP")"
 
 mkdir -p "$MAAL/etc/badminton-tv"
 bt_normaliser_conf /run/badminton-tv/kiosk.conf.usb > "$MAAL/etc/badminton-tv/kiosk.conf"
@@ -317,26 +318,9 @@ koer systemd-machine-id-setup --root="$MAAL"
 okay
 
 trin "Installerer bootloader…"
-# rslave: ellers forplanter umount -R sig tilbage og afmonterer live-systemets
-# egne /sys- og /dev-undermonteringer. (/sys/firmware/efi/efivars, som
-# grub-install skal bruge, kommer med i rbind af /sys.) /run får sin egen
-# tomme tmpfs — live-systemets /run har USB-nøglen monteret og skal ikke med.
-for d in dev proc sys; do
-    koer mount --rbind "/$d" "$MAAL/$d"
-    koer mount --make-rslave "$MAAL/$d"
-done
-koer mount -t tmpfs tmpfs "$MAAL/run"
-
-i_maal() { koer chroot "$MAAL" env LC_ALL=C.UTF-8 DEBIAN_FRONTEND=noninteractive "$@"; }
-
-# Live-pakkerne hører kun til USB-nøglen. Når de fjernes, bygger dpkg selv en
-# almindelig initramfs uden live-boot.
-LIVE_PAKKER=$(chroot "$MAAL" dpkg-query -W -f='${Package} ${Status}\n' 'live-*' 2>/dev/null \
-    | awk '$NF == "installed" { print $1 }' | tr '\n' ' ')
-if [ -n "$LIVE_PAKKER" ]; then
-    # shellcheck disable=SC2086
-    i_maal dpkg --purge $LIVE_PAKKER
-fi
+koer bt_rod_monter "$MAAL"
+i_maal() { koer bt_rod_chroot "$MAAL" "$@"; }
+koer bt_rod_fjern_live "$MAAL"
 
 # Boot-posten skal ligge i UEFI's lager (NVRAM), som er lille og kan være fuldt
 # (set på en M70q Gen 4: "No space left on device"). Ryd først op i det, vi selv
@@ -369,7 +353,15 @@ if ! i_maal grub-install "${GRUB_ARG[@]}"; then
     koer rm -f "$MAAL/boot/efi/EFI/BOOT/fbx64.efi"
     UDEN_BOOTPOST=1
 fi
-i_maal update-grub
+# grub-install har lagt en grub.cfg, der kun kender system A. Erstat den med
+# vælgeren mellem A og B, og start med A.
+koer cp /usr/share/badminton-tv/grub-esp.cfg "$MAAL/boot/efi/EFI/debian/grub.cfg"
+i_maal grub-editenv /boot/efi/EFI/debian/badminton-tv.env create
+i_maal grub-editenv /boot/efi/EFI/debian/badminton-tv.env set aktiv=a
+koer bt_rod_laas_grub "$MAAL"
+if ! koer bt_rod_kan_starte "$MAAL" "$(cat /usr/share/badminton-tv/version)"; then
+    stop_med_fejl "Systemet på disken kan ikke starte — se installation-log.txt."
+fi
 if command -v efibootmgr >/dev/null && [ -d /sys/firmware/efi ]; then
     log "$(efibootmgr 2>&1)"
 fi
