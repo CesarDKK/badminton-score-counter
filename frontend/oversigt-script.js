@@ -36,7 +36,31 @@ document.addEventListener('DOMContentLoaded', async function() {
     startAutoRefresh();
     startAutoScroll();
     startLocalTimers();
+    startSkaermStatus();
 });
+
+// ==================== SKÆRM-STATUS ====================
+// Livstegn hvert 20. sekund til admin → Adgangslinks, som TV-siden sender, så
+// en kiosk-PC med oversigten kan ses dér med navn og Badminton TV-version.
+// Kun fra en kiosk-PC (startsiden sætter ?skaerm= og ?kioskversion=) — en
+// oversigt åbnet i en almindelig browser melder sig ikke.
+function startSkaermStatus() {
+    const p = new URLSearchParams(location.search);
+    const navn = (p.get('skaerm') || '').slice(0, 60);
+    const kioskVersion = (p.get('kioskversion') || '').slice(0, 30);
+    if (!navn && !kioskVersion) return;
+    let klientId = 'ov-' + Math.random().toString(36).slice(2, 10);
+    try {
+        const gemt = localStorage.getItem('btOversigtId');
+        if (gemt && /^ov-[a-z0-9]{6,12}$/.test(gemt)) klientId = gemt;
+        else localStorage.setItem('btOversigtId', klientId);
+    } catch { /* privat vindue — nyt id pr. indlæsning */ }
+    const version = document.querySelector('script[src*="oversigt-script.js"]')?.src.split('v=')[1] || '';
+    const send = () => api.sendScreenHeartbeat({ klientId, navn, side: 'oversigt', version, kioskVersion })
+        .catch(() => { /* intet net — næste livstegn prøver igen */ });
+    send();
+    setInterval(send, 20000);
+}
 
 // ==================== HOLDKAMP ====================
 

@@ -28,8 +28,10 @@ if [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" != yes ]; then
     exit 0
 fi
 
-# Stop browseren først: Chromium må ikke opdateres, mens den kører.
-systemctl stop badminton-tv.service
+# Stop browseren først: Chromium må ikke opdateres, mens den kører. En
+# hentning af en ny version, der ikke er nået at blive færdig, stoppes også —
+# den starter forfra næste gang.
+systemctl stop badminton-tv.service badminton-tv-opdatering.service
 setterm --term linux --blank 0 --cursor off > "$TTY" 2>/dev/null
 skrift
 besked "Badminton TV slukker - installerer opdateringer først (det kan tage et par minutter) ..."

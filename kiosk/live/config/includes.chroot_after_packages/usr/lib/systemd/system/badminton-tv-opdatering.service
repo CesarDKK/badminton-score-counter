@@ -1,0 +1,19 @@
+# Henter en ny version af Badminton TV til det ledige system (A/B), hvis der er
+# udgivet en. Startes af badminton-tv-opdatering.timer. Se
+# /usr/lib/badminton-tv/opdatering.
+[Unit]
+Description=Badminton TV: hent ny version
+Wants=network-online.target
+After=network-online.target time-sync.target
+# Kun på en PC installeret med to systemer (A/B) — ikke fra USB-nøglen og ikke
+# på det gamle disklayout.
+ConditionKernelCommandLine=badminton.slot
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/badminton-tv/opdatering tjek
+# TV'et må ikke mærke det: laveste prioritet til CPU og disk
+Nice=19
+CPUSchedulingPolicy=idle
+IOSchedulingClass=idle
+TimeoutStartSec=2h

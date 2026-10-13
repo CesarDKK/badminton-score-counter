@@ -51,7 +51,7 @@ bt_read_conf() {
     local fil=$1 linje noegle vaerdi
 
     BT_TV_URL='' BT_NAVN='' BT_WIFI_NAVN='' BT_WIFI_KODE='' BT_SLUK_KL=''
-    BT_CEC='' BT_SKALERING='' BT_DISK=''
+    BT_CEC='' BT_SKALERING='' BT_DISK='' BT_OPDATERING=''
     BT_FEJL='' BT_ADVARSLER=''
 
     while IFS= read -r linje || [ -n "$linje" ]; do
@@ -81,6 +81,7 @@ bt_read_conf() {
             CEC)        BT_CEC=$vaerdi ;;
             SKALERING)  BT_SKALERING=$vaerdi ;;
             DISK)       BT_DISK=$vaerdi ;;
+            OPDATERING) BT_OPDATERING=$vaerdi ;;
             *) BT_ADVARSLER+="Ukendt indstilling \"$noegle\" blev ignoreret (stavefejl?)."$'\n' ;;
         esac
     done < <(bt_normaliser_conf "$fil")
@@ -160,6 +161,18 @@ _bt_valider() {
         BT_ADVARSLER+="SKALERING \"$BT_SKALERING\" skal være auto eller et tal mellem 0.5 og 4 — bruger auto."$'\n'
         BT_SKALERING=auto
     fi
+
+    # OPDATERING — "først" skrives om som navnet (uden dansk locale).
+    local opd=$BT_OPDATERING
+    opd=${opd//ø/oe}; opd=${opd//Ø/oe}
+    opd=$(printf '%s' "$opd" | LC_ALL=C tr 'A-Z' 'a-z')
+    case "$opd" in
+        ''|auto|ja|til) BT_OPDATERING=auto ;;
+        foerst|forst|tidlig) BT_OPDATERING=foerst ;;
+        fra|nej|aldrig) BT_OPDATERING=fra ;;
+        *) BT_ADVARSLER+="OPDATERING \"$BT_OPDATERING\" skal være auto, foerst eller fra — bruger auto."$'\n'
+           BT_OPDATERING=auto ;;
+    esac
 
     # DISK
     if [ -n "$BT_DISK" ] && ! [[ "$BT_DISK" =~ ^/dev/[A-Za-z0-9/_-]+$ ]]; then

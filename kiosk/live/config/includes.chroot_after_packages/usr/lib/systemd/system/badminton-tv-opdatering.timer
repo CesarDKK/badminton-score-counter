@@ -1,0 +1,13 @@
+# Tjekker for en ny version 10 minutter efter opstart og derefter hver anden
+# time, så længe PC'en er tændt. Et tjek er et lille manifest; selve systemet
+# (ca. 700 MB) hentes kun, når der er en ny version.
+[Unit]
+Description=Badminton TV: tjek for ny version
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=2h
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

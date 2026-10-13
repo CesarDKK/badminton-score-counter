@@ -79,6 +79,11 @@ function registrer(tenant, data, meta, nu = Date.now()) {
     }
     s.bane = heltal(data.bane, 1, 99);
     s.version = tekst(data.version, 20);
+    // Badminton TV-PC'ens version (kiosk-PC'ens startside sætter ?kioskversion=),
+    // så admin kan følge den automatiske opdatering. Tom for andre skærme.
+    const kv = tekst(data.kioskVersion, 30);
+    s.kioskVersion = /^[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,3}([.-][0-9A-Za-z.-]+)?$/.test(kv) ? kv : '';
+    s.side = data.side === 'oversigt' ? 'oversigt' : 'tv';
     s.dataAlderSek = heltal(data.dataAlderSek, 0, 7 * 24 * 3600);
     s.tokenId = meta.tokenId || null;
     s.ip = tekst(meta.ip, 64);

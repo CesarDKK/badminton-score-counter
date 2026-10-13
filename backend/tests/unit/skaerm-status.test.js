@@ -23,6 +23,18 @@ test('første livstegn registrerer skærmen med navn, bane og link', () => {
     assert.equal(s.sekunderSiden, 5);
 });
 
+test('Badminton TV-PC\'ens version og sidetype gemmes; ugyldig version ignoreres', () => {
+    registrer('lyngby', { klientId: 'abc123', kioskVersion: '2026.10.21', side: 'oversigt' }, meta, NU);
+    registrer('lyngby', { klientId: 'def456', kioskVersion: '<b>2026</b>' }, meta, NU);
+    registrer('lyngby', { klientId: 'ghi789', kioskVersion: '2026.10.13-abc1234' }, meta, NU);
+    const pr = Object.fromEntries(liste('lyngby', NU).map(s => [s.klientId, s]));
+    assert.equal(pr.abc123.kioskVersion, '2026.10.21');
+    assert.equal(pr.abc123.side, 'oversigt');
+    assert.equal(pr.def456.kioskVersion, '');
+    assert.equal(pr.def456.side, 'tv');
+    assert.equal(pr.ghi789.kioskVersion, '2026.10.13-abc1234');
+});
+
 test('to skærme på samme link holdes adskilt på klient-id', () => {
     registrer('lyngby', { klientId: 'skaerm-a1', navn: 'tv-bane-1a', bane: 1 }, meta, NU);
     registrer('lyngby', { klientId: 'skaerm-b2', navn: 'tv-bane-1b', bane: 1 }, meta, NU + 1000);
