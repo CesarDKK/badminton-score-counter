@@ -109,13 +109,12 @@ env_slet() { # nøgle …
 }
 aktiv() { local a; a=$(env_hent aktiv); echo "${a:-a}"; }
 
-# Kører et nyt system på prøve, som ikke er godkendt endnu?
+# Kører et nyt system på prøve, som ikke er godkendt endnu? Det er det, når
+# det ikke er det aktive. (Ikke badminton.forsoeg fra GRUB: den står på
+# kernelinjen resten af opstarten, også efter godkendelsen — så tjekkede
+# PC'en ikke for nye versioner før næste opstart. Set i VM-testen.)
 paa_proeve() {
-    if [ "$PLATFORM" = pi ]; then
-        [ -n "$SLOT" ] && [ "$SLOT" != "$(aktiv)" ]
-    else
-        [ "$(cmdline badminton.forsoeg)" = 1 ]
-    fi
+    [ -n "$SLOT" ] && [ "$SLOT" != "$(aktiv)" ]
 }
 
 # er_nyere A B — er B en nyere version end A?
@@ -176,7 +175,7 @@ tjek() {
         fi
         return 0
     fi
-    if paa_proeve || [ "$(aktiv)" != "$SLOT" ]; then
+    if paa_proeve; then
         echo "System $SLOT kører på prøve og er ikke godkendt endnu — tjekker ikke for opdateringer."
         return 0
     fi

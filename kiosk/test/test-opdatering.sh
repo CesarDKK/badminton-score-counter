@@ -212,6 +212,11 @@ indeholder "Uret er ikke sat" "$(FAKE_NTP=no tjek)" "Uret er ikke sat"
 
 SLOT=b
 indeholder "Ny version på prøve: tjekker ikke" "$(tjek)" "kører på prøve"
+# Godkendt i samme opstart: GRUB's badminton.forsoeg=1 står stadig på
+# kernelinjen, men systemet er nu det aktive (set i VM-testen)
+env_saet aktiv=b
+indeholder "Godkendt: tjekker igen uden genstart" "$(tjek)" "KLARGØR 2026.10.12"
+env_saet aktiv=a
 SLOT=''
 indeholder "Gammelt disklayout" "$(tjek)" "det gamle disklayout"
 
