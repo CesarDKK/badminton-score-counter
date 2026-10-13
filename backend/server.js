@@ -70,7 +70,7 @@ app.use('/api/screens', require('./routes/screens'));
 app.get('/t/:token', async (req, res, next) => {
     try {
         const { query, queryOne } = require('./config/database');
-        const jwt = require('jsonwebtoken');
+        const { adgangslinkSession } = require('./middleware/adgangslinkSession');
 
         const deviceToken = await queryOne(
             'SELECT id, name, destination, locked, token_type, consumed_at, show_qr_on_tv FROM device_tokens WHERE token = ? AND is_active = 1',
@@ -88,43 +88,8 @@ app.get('/t/:token', async (req, res, next) => {
             await query('UPDATE device_tokens SET last_used_at = NOW() WHERE id = ?', [deviceToken.id]);
         }
 
-        // Faste enheder (TV/bane-tablet) får en lang session så de ikke skal
-        // åbne adgangslinket igen midt i en turnering. Match-session (QR-tæller)
-        // er kortlivet pr. kamp og bevarer 12t.
-        // TV og oversigt kører i kiosk uden at nogen rører dem — står PC'en tændt
-        // i over 14 dage, endte TV'et på login-siden ved næste auto-opdatering.
-        // Et spærret eller slettet link afvises stadig ved hver request.
-        const erSkaerm = /^(tv|oversigt)/.test(deviceToken.destination || '');
-        const sessionTtl = deviceToken.token_type === 'match_session' ? '12h' : (erSkaerm ? '180d' : '14d');
-        const sessionToken = jwt.sign(
-            {
-                role: 'device',
-                tokenId: deviceToken.id,
-                destination: deviceToken.destination,
-                locked: deviceToken.locked,
-                tokenType: deviceToken.token_type || 'permanent',
-                clubSubdomain: req.clubSubdomain
-            },
-            process.env.JWT_SECRET,
-            { expiresIn: sessionTtl }
-        );
-
-        // Byg destination URL — v2-siderne er udfaset, alt peger på v3
-        let targetUrl;
-
-        if (deviceToken.destination.startsWith('tv/')) {
-            const courtNum = deviceToken.destination.split('/')[1];
-            // QR-flag per-token: tilladelsen kombineres med klub-mode på TV-siden
-            const qrFlag = deviceToken.show_qr_on_tv ? '1' : '0';
-            targetUrl = `/tv-v3.html?court=${courtNum}&dt=${sessionToken}&qr=${qrFlag}`;
-        } else if (deviceToken.destination.startsWith('court/')) {
-            const courtNum = deviceToken.destination.split('/')[1];
-            targetUrl = `/court-v3.html?court=${courtNum}&dt=${sessionToken}`;
-        } else {
-            // Legacy destinations
-            const legacyMap = { tv: '/tv-v3.html', 'tv-v3': '/tv-v3.html', oversigt: '/oversigt.html' };
-            targetUrl = `${legacyMap[deviceToken.destination] || '/' + deviceToken.destination}?dt=${sessionToken}`;
-        }
+        // Session (JWT) og siden, linket åbner (middleware/adgangslinkSession.js)
+        let targetUrl = adgangslinkSession(deviceToken, req.clubSubdomain).url;
 
         // Skærmens navn (kiosk-PC'en sætter ?skaerm=<navn fra config-filen>) går
         // videre til siden, så den kan melde sig med navn i admins skærm-status

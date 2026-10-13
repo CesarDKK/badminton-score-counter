@@ -5,6 +5,8 @@ const jwt = require('jsonwebtoken');
 const { query, queryOne } = require('../config/database');
 const { clubAdminAuth } = require('../middleware/clubAdminAuth');
 const { requirePage } = require('../middleware/pagePermission');
+const { requireWriteAuthInClubMode } = require('../middleware/auth');
+const { adgangslinkSession } = require('../middleware/adgangslinkSession');
 
 // Klub-admin med adgang til siden "Adgangslinks" (side-rettigheden devicetokens)
 const adgangslinkAdmin = [clubAdminAuth, requirePage('devicetokens')];
@@ -63,6 +65,46 @@ router.get('/validate/:token', async (req, res, next) => {
             destination: deviceToken.destination,
             locked: deviceToken.locked
         });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// --- Enhedens eget adgangslink (TV, tablet, oversigt) ---
+//
+// Enheden har sin session i op til 180 dage, med bane og låsning bagt ind. Når
+// admin redigerer linket, spørger enheden her (js/adgangslink-vagt.js, hvert
+// minut), og er linket ændret, henter den en ny session og skifter side.
+// Tilbagekaldte links afvises allerede af requireWriteAuthInClubMode (401).
+
+// Det faste adgangslink bag enhedens session, eller null (admin-login, QR-tæller,
+// lokal installation uden adgangslinks)
+async function enhedensLink(req) {
+    const u = req.user;
+    if (!u || u.role !== 'device' || u.tokenType === 'match_session' || !u.tokenId) return null;
+    return queryOne(
+        'SELECT id, destination, locked, token_type, show_qr_on_tv FROM device_tokens WHERE id = ? AND is_active = 1',
+        [u.tokenId]
+    );
+}
+
+// GET /api/device-tokens/mit — hvad peger enhedens link på nu? ({} = intet link)
+router.get('/mit', requireWriteAuthInClubMode, async (req, res, next) => {
+    try {
+        const link = await enhedensLink(req);
+        if (!link) return res.json({});
+        res.json({ destination: link.destination, locked: !!link.locked, showQrOnTv: !!link.show_qr_on_tv });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /api/device-tokens/mit/skift — ny session og adresse efter en ændring
+router.post('/mit/skift', requireWriteAuthInClubMode, async (req, res, next) => {
+    try {
+        const link = await enhedensLink(req);
+        if (!link) return res.status(404).json({ error: 'Intet adgangslink' });
+        res.json({ url: adgangslinkSession(link, req.clubSubdomain).url });
     } catch (error) {
         next(error);
     }

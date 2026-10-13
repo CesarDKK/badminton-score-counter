@@ -2933,16 +2933,82 @@ function renderSkaerme(skaerme) {
         </div>`;
 }
 
+// Listen deles i to grupper, der kan foldes ud: tablets (bane-visning til
+// tælleren) og alle andre links (TV-skærme og oversigt). Om en gruppe er åben,
+// huskes i browseren; et nyoprettet link åbner sin gruppe.
+const DT_GRUPPER = [
+    { noegle: 'tablets', titel: 'Tablets', tom: 'Ingen tablets endnu',
+      erMed: dest => dest.startsWith('court/') },
+    { noegle: 'skaerme', titel: 'TV-skærme og oversigt', tom: 'Ingen TV-skærme endnu',
+      erMed: dest => !dest.startsWith('court/') }
+];
+
+function dtGruppeFor(destination) {
+    return DT_GRUPPER.find(g => g.erMed(destination)).noegle;
+}
+
+function dtGruppeAaben(noegle) {
+    try { return localStorage.getItem('adgangslinks-gruppe:' + noegle) === 'aaben'; } catch { return false; }
+}
+
+function saetDtGruppeAaben(noegle, aaben) {
+    try { localStorage.setItem('adgangslinks-gruppe:' + noegle, aaben ? 'aaben' : 'lukket'); } catch {}
+}
+
+// Aktive før tilbagekaldte, oversigten først, derefter efter banenummer og navn
+function dtSorteringsNoegle(t) {
+    const bane = Number(t.destination.split('/')[1]) || 0;
+    return [t.is_active ? 0 : 1, t.destination === 'oversigt' ? 0 : 1, bane, (t.name || '').toLowerCase()];
+}
+
+function sammenlignDt(a, b) {
+    const ka = dtSorteringsNoegle(a), kb = dtSorteringsNoegle(b);
+    for (let i = 0; i < ka.length; i++) {
+        if (ka[i] < kb[i]) return -1;
+        if (ka[i] > kb[i]) return 1;
+    }
+    return 0;
+}
+
+let _dtTokens = []; // seneste liste — redigér-formularen udfyldes herfra
+
 function renderDeviceTokens(tokens) {
     const listEl = document.getElementById('deviceTokensList');
-    const baseUrl = window.location.origin;
+    _dtTokens = tokens;
 
     if (tokens.length === 0) {
         listEl.innerHTML = '<p style="color:rgba(255,255,255,0.4);text-align:center;padding:20px;">Ingen adgangslinks endnu</p>';
         return;
     }
 
-    const rows = tokens.map(t => {
+    listEl.innerHTML = DT_GRUPPER.map(g => {
+        const medlemmer = tokens.filter(t => g.erMed(t.destination)).sort(sammenlignDt);
+        const tilbagekaldte = medlemmer.filter(t => !t.is_active).length;
+        const aktive = medlemmer.length - tilbagekaldte;
+        const antal = `${aktive} ${aktive === 1 ? 'link' : 'links'}`
+            + (tilbagekaldte ? ` · ${tilbagekaldte} tilbagekaldt` : '');
+        const indhold = medlemmer.length
+            ? deviceTokenKort(medlemmer)
+            : `<p class="dt-gruppe-tom">${g.tom}</p>`;
+        return `
+        <details class="dt-gruppe" data-gruppe="${g.noegle}"${dtGruppeAaben(g.noegle) ? ' open' : ''}>
+            <summary>
+                <span class="dt-gruppe-titel">${g.titel}</span>
+                <span class="dt-gruppe-antal">${antal}</span>
+            </summary>
+            <div class="dt-gruppe-indhold">${indhold}</div>
+        </details>`;
+    }).join('');
+
+    // toggle-hændelsen bobler ikke op — lyt på hver gruppe
+    listEl.querySelectorAll('.dt-gruppe').forEach(el => {
+        el.addEventListener('toggle', () => saetDtGruppeAaben(el.dataset.gruppe, el.open));
+    });
+}
+
+function deviceTokenKort(tokens) {
+    const baseUrl = window.location.origin;
+    return tokens.map(t => {
         const link = `${baseUrl}/t/${t.token}`;
         const lastUsed = t.last_used_at
             ? new Date(t.last_used_at).toLocaleString('da-DK')
@@ -2982,10 +3048,15 @@ function renderDeviceTokens(tokens) {
                     </button>
                     <div class="dt-kioskconf" id="kioskConf-${t.id}" data-link="${escapeHtml(link)}" data-navn="${escapeHtml(t.name)}" style="display:none;"></div>` : ''}
                     <div class="dt-skaerme" data-token-id="${t.id}"></div>
+                    <div class="dt-rediger" id="dtRediger-${t.id}" style="display:none;"></div>
                 </div>
                 <div style="display:flex;gap:8px;flex-shrink:0;">
                     ${t.is_active
-                        ? `<button onclick="handleDeleteDeviceToken(${t.id})"
+                        ? `<button onclick="visRedigerDt(${t.id})"
+                            style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:6px 14px;color:#eaeaea;font-size:0.85em;cursor:pointer;">
+                            Redigér
+                           </button>
+                           <button onclick="handleDeleteDeviceToken(${t.id})"
                             style="background:rgba(var(--color-accent-rgb),0.12);border:1px solid rgba(var(--color-accent-rgb),0.25);border-radius:6px;padding:6px 14px;color:var(--color-accent);font-size:0.85em;cursor:pointer;">
                             Tilbagekald
                            </button>`
@@ -2999,8 +3070,109 @@ function renderDeviceTokens(tokens) {
             </div>
         </div>`;
     }).join('');
+}
 
-    listEl.innerHTML = rows;
+// ── Redigér et adgangslink: navn, type, bane, navigation og QR ──
+// Enheder, der bruger linket, opdager ændringen selv inden for et minut og
+// skifter side (js/adgangslink-vagt.js) — linket skal ikke sættes ind igen.
+const DT_FELT = 'width:100%;background:var(--color-bg-container);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:9px 11px;color:#eaeaea;font-family:\'DM Sans\',sans-serif;font-size:0.9em;box-sizing:border-box;';
+const DT_ETIKET = 'display:block;font-size:0.72em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:5px;';
+
+function visRedigerDt(id) {
+    const boks = document.getElementById(`dtRediger-${id}`);
+    const t = _dtTokens.find(x => x.id === id);
+    if (!boks || !t) return;
+    if (boks.style.display !== 'none') { boks.style.display = 'none'; return; }
+
+    const [type, bane] = t.destination === 'oversigt' ? ['oversigt', '1']
+        : t.destination.startsWith('tv/') ? ['tv', t.destination.split('/')[1]]
+        : ['court', t.destination.split('/')[1]];
+    // Banerne som i "Opret nyt link" (antal fra indstillingerne)
+    const baner = document.getElementById('dtCourt').innerHTML;
+
+    boks.innerHTML = `
+        <div style="margin-top:14px;padding:16px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;background:rgba(255,255,255,0.03);">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:12px;">
+                <div><label style="${DT_ETIKET}">Navn</label>
+                    <input type="text" class="dtr-navn" maxlength="100" style="${DT_FELT}"></div>
+                <div><label style="${DT_ETIKET}">Type</label>
+                    <select class="dtr-type" style="${DT_FELT}">
+                        <option value="tv">TV visning</option>
+                        <option value="court">Bane visning</option>
+                        <option value="oversigt">Oversigt</option>
+                    </select></div>
+                <div class="dtr-bane-wrap"><label style="${DT_ETIKET}">Bane</label>
+                    <select class="dtr-bane" style="${DT_FELT}">${baner}</select></div>
+                <div><label style="${DT_ETIKET}">Navigation</label>
+                    <select class="dtr-laast" style="${DT_FELT}">
+                        <option value="1">Låst</option>
+                        <option value="0">Fri</option>
+                    </select></div>
+            </div>
+            <label class="dtr-qr-wrap" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:0.9em;color:rgba(255,255,255,0.75);cursor:pointer;">
+                <input type="checkbox" class="dtr-qr" style="width:18px;height:18px;accent-color:var(--color-accent);"> Vis QR-kode på TV
+            </label>
+            <p style="font-size:0.8em;color:rgba(255,255,255,0.45);margin:0 0 12px;">
+                Skærme og tablets, der bruger linket, skifter selv inden for et minut. Linket er det samme.
+            </p>
+            <div style="display:flex;gap:8px;">
+                <button class="btn-primary dtr-gem" style="padding:8px 18px;">Gem</button>
+                <button class="dtr-annuller" style="background:transparent;border:1px solid rgba(255,255,255,0.2);border-radius:8px;padding:8px 16px;color:rgba(255,255,255,0.75);cursor:pointer;">Annullér</button>
+            </div>
+            <div class="dtr-besked" style="display:none;margin-top:10px;padding:8px 12px;border-radius:8px;font-size:0.85em;"></div>
+        </div>`;
+
+    const $ = (k) => boks.querySelector(k);
+    $('.dtr-navn').value = t.name;
+    $('.dtr-type').value = type;
+    if (![...$('.dtr-bane').options].some(o => o.value === bane)) {
+        // Banen findes ikke længere i indstillingerne — vis den alligevel
+        $('.dtr-bane').insertAdjacentHTML('beforeend', `<option value="${escapeHtml(bane)}">Bane ${escapeHtml(bane)}</option>`);
+    }
+    $('.dtr-bane').value = bane;
+    $('.dtr-laast').value = t.locked ? '1' : '0';
+    $('.dtr-qr').checked = !!t.show_qr_on_tv;
+
+    const opdaterFelter = () => {
+        const ty = $('.dtr-type').value;
+        $('.dtr-bane-wrap').style.visibility = ty === 'oversigt' ? 'hidden' : 'visible';
+        $('.dtr-qr-wrap').style.display = ty === 'tv' ? 'flex' : 'none';
+    };
+    $('.dtr-type').addEventListener('change', opdaterFelter);
+    opdaterFelter();
+
+    $('.dtr-annuller').addEventListener('click', () => { boks.style.display = 'none'; });
+    $('.dtr-gem').addEventListener('click', () => gemRedigeretDt(id, boks));
+
+    boks.style.display = 'block';
+    $('.dtr-navn').focus();
+}
+
+async function gemRedigeretDt(id, boks) {
+    const $ = (k) => boks.querySelector(k);
+    const name = $('.dtr-navn').value.trim();
+    const type = $('.dtr-type').value;
+    const destination = type === 'oversigt' ? 'oversigt' : `${type}/${$('.dtr-bane').value}`;
+    const besked = $('.dtr-besked');
+    if (!name) { showDtMsg(besked, 'Linket skal have et navn', 'error'); return; }
+
+    const knap = $('.dtr-gem');
+    knap.disabled = true;
+    knap.textContent = 'Gemmer...';
+    try {
+        await api.updateDeviceToken(id, {
+            name,
+            destination,
+            locked: $('.dtr-laast').value === '1',
+            showQrOnTv: $('.dtr-qr').checked
+        });
+        saetDtGruppeAaben(dtGruppeFor(destination), true); // linket kan have skiftet gruppe
+        await loadDeviceTokens();
+    } catch (err) {
+        showDtMsg(besked, err.message || 'Kunne ikke gemme', 'error');
+        knap.disabled = false;
+        knap.textContent = 'Gem';
+    }
 }
 
 function toggleDtCourt() {
@@ -3031,6 +3203,7 @@ async function handleCreateDeviceToken() {
 
     try {
         await api.createDeviceToken(name, destination, locked, showQrOnTv);
+        saetDtGruppeAaben(dtGruppeFor(destination), true); // vis det nye link
         document.getElementById('dtName').value = '';
         document.getElementById('dtShowQr').checked = true;
         showDtMsg(msgEl, '✓ Link oprettet', 'success');

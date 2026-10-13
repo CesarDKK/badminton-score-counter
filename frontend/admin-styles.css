@@ -884,3 +884,62 @@ header > div {
     }
 }
 
+
+/* ---- Adgangslinks: grupper der kan foldes ud (tablets / TV-skærme og oversigt) ---- */
+.dt-gruppe {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    margin-bottom: 14px;
+}
+
+.dt-gruppe > summary {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    padding: 16px 20px;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+.dt-gruppe > summary::-webkit-details-marker {
+    display: none;
+}
+
+.dt-gruppe > summary::before {
+    content: '▸';
+    color: var(--color-accent);
+    transition: transform 0.15s ease;
+}
+
+.dt-gruppe[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+.dt-gruppe > summary:hover .dt-gruppe-titel {
+    color: var(--color-accent);
+}
+
+.dt-gruppe-titel {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.3em;
+    letter-spacing: 0.05em;
+    color: #ffffff;
+}
+
+.dt-gruppe-antal {
+    font-size: 0.85em;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.dt-gruppe-indhold {
+    padding: 0 16px 4px;
+}
+
+.dt-gruppe-tom {
+    color: rgba(255, 255, 255, 0.4);
+    text-align: center;
+    padding: 12px 0 20px;
+    margin: 0;
+}
