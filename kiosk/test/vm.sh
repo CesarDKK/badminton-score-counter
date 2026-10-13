@@ -203,7 +203,9 @@ case "${1:-}" in
         # Som et kort tryk på tænd/sluk-knappen: PC'en lukker pænt ned.
         monitor system_powerdown >/dev/null
         for _ in $(seq 1 180); do
-            pgrep -x qemu-system-x86_64 >/dev/null || { echo "Slukket."; exit 0; }
+            # QEMU er væk, når monitoren ikke svarer (pgrep ser også zombier:
+            # containerens init rydder ikke op efter -daemonize)
+            socat -u OPEN:/dev/null "UNIX-CONNECT:$MON" 2>/dev/null || { echo "Slukket."; exit 0; }
             sleep 1
         done
         echo "Lukkede ikke ned inden for 3 minutter" >&2

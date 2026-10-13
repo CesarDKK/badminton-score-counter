@@ -271,11 +271,15 @@ bekraeft() {
         return 0
     fi
     echo "System $SLOT (version $VERSION_NU) er startet på prøve. Det bliver det aktive system, når TV-siden har kørt i $SUND_SEK sekunder."
-    local start=$SECONDS ok_fra=''
-    while [ $((SECONDS - start)) -lt "$FRIST_SEK" ]; do
+    # Oppetiden og ikke $SECONDS: den følger uret, som springer, når det
+    # sættes fra internettet (set i testen: 2 timer — fristen "udløb" med det samme)
+    oppe() { cut -d. -f1 /proc/uptime; }
+    local start ok_fra=''
+    start=$(oppe)
+    while [ $(($(oppe) - start)) -lt "$FRIST_SEK" ]; do
         if sund; then
-            ok_fra=${ok_fra:-$SECONDS}
-            if [ $((SECONDS - ok_fra)) -ge "$SUND_SEK" ]; then
+            ok_fra=${ok_fra:-$(oppe)}
+            if [ $(($(oppe) - ok_fra)) -ge "$SUND_SEK" ]; then
                 env_saet aktiv="$SLOT"
                 env_slet proev proev_version proev_antal
                 echo "Opdateret til version $VERSION_NU — system $SLOT er nu det aktive."
@@ -300,15 +304,17 @@ status() {
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
-    mkdir -p "$ARB"
-    exec 9>"$ARB/laas"
-    if ! flock -n 9; then
-        echo "En anden opdatering kører allerede."
-        exit 0
-    fi
     trap 'echo "FEJL: linje $LINENO: $BASH_COMMAND (kode $?) — prøver igen næste gang."' ERR
     case "${1:-}" in
-        tjek)     tjek ;;
+        tjek)
+            # Én hentning ad gangen (timeren og et manuelt kald)
+            mkdir -p "$ARB"
+            exec 9>"$ARB/laas"
+            if ! flock -n 9; then
+                echo "En anden opdatering kører allerede."
+                exit 0
+            fi
+            tjek ;;
         bekraeft) bekraeft ;;
         status)   status ;;
         *) sed -n '2,30p' "$0"; exit 1 ;;

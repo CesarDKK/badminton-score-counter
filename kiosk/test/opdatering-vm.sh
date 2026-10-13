@@ -52,7 +52,8 @@ forbered() {
     # skelner mellem store og små bogstaver (firmwarefiler kolliderer).
     local arb=${ARB_DIR:-/var/tmp/opdatering-vm} rod comp
     rod=$arb/rod
-    rm -rf "$arb" "$SERVER"
+    # Kun indholdet: en kørende server holder fast i selve mappen
+    rm -rf "$arb" "$SERVER/releases"
     mkdir -p "$arb" "$SERVER/releases/latest/download"
     export MTOOLS_SKIP_CHECK=1
 
@@ -87,10 +88,10 @@ FRIST_SEK=480
 EOF
     mkdir -p "$rod/etc/systemd/system/badminton-tv-opdatering.timer.d"
     cat > "$rod/etc/systemd/system/badminton-tv-opdatering.timer.d/test.conf" <<'EOF'
+# En tom værdi nulstiller ALLE timerens tidspunkter — derfor kun én gang
 [Timer]
 OnBootSec=
 OnBootSec=2min
-OnUnitActiveSec=
 OnUnitActiveSec=4min
 RandomizedDelaySec=0
 EOF
