@@ -1,11 +1,11 @@
-# Kun når PC'en er startet på en ny version på prøve (badminton.forsoeg=1, sat
-# af GRUB-vælgeren): gør den til det aktive system, når TV-siden har kørt i 5
-# minutter — ellers genstart til den tidligere version. Se
-# /usr/lib/badminton-tv/opdatering.
+# Kun når en ny version kører på prøve (PC: badminton.forsoeg=1 fra
+# GRUB-vælgeren; Pi: systemet er ikke det aktive — scriptet afgør det): gør
+# den til det aktive system, når TV-siden har kørt i 5 minutter — ellers
+# genstart til den tidligere version. Se /usr/lib/badminton-tv/opdatering.
 [Unit]
 Description=Badminton TV: godkend ny version
 After=badminton-tv.service
-ConditionKernelCommandLine=badminton.forsoeg=1
+ConditionKernelCommandLine=badminton.slot
 
 [Service]
 Type=simple

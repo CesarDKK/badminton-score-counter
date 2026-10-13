@@ -19,8 +19,7 @@ SÅDAN GØR DU
 3. Sæt SD-kortet i Pi'en, sæt HDMI-kablet i TV'et, og tilslut strømmen.
    Pi 4: brug HDMI-porten nærmest strømstikket.
 
-4. Første opstart tager et par minutter ekstra (Pi'en gør plads på hele
-   SD-kortet). Derefter vises TV-siden af sig selv.
+4. TV-siden vises af sig selv efter et minuts tid.
 
 
 ÆNDRE SIDEN TV'ET VISER
@@ -42,6 +41,12 @@ I DAGLIG BRUG
       Pi 3 og 4: har ingen knap — tag strømmen fra og sæt den i igen
       (en stikdåse med afbryder gør det nemt).
   - Den går aldrig i dvale.
+  - Den opdaterer sig selv: en ny version hentes, mens TV'et kører. Næste
+    gang Pi'en tændes, genstarter den én gang ekstra (ca. 1 minut) og
+    prøver den nye version. Virker den ikke, går Pi'en selv tilbage til den
+    forrige inden for 20 minutter. Kræver et SD-kort på mindst 16 GB (se
+    OPDATERING i kiosk.conf).
+  - Mapperne a og b på SD-kortet er Pi'ens to systemer. Lad dem være.
 
 
 HVIS NOGET GÅR GALT

@@ -1,0 +1,18 @@
+# Kun Raspberry Pi: venter en ny version, så genstart med tryboot ind i den,
+# før TV-siden startes (ca. 1 minut ekstra). Firmwaren glemmer tryboot igen,
+# så næste opstart er det gamle system, medmindre det nye bliver godkendt.
+# Se /usr/lib/badminton-tv/opdatering.
+[Unit]
+Description=Badminton TV: prøv ny version (Raspberry Pi)
+After=local-fs.target
+Before=badminton-tv.service badminton-tv-cec.service
+RequiresMountsFor=/boot/kort
+ConditionKernelCommandLine=badminton.slot
+ConditionPathExists=/boot/kort/badminton-tv-opdatering.txt
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/badminton-tv/opdatering proev
+
+[Install]
+WantedBy=multi-user.target

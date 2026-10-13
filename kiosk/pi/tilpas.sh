@@ -17,6 +17,8 @@ PAKKER=(
     jq kbd console-setup-linux util-linux-extra
     v4l-utils iw rfkill wireless-regdb pciutils usbutils
     unattended-upgrades
+    # Automatisk opdatering: hent, tjek signaturen, kopiér systemet
+    curl openssl rsync fdisk
 )
 # Raspberry Pi's Chromium-tilpasninger (hardware-videoafkodning m.m.), hvis
 # arkivet har dem.
@@ -47,15 +49,18 @@ printf '0.0 0 0.0\n0\nLOCAL\n' > /etc/adjtime
 chmod 755 /usr/lib/badminton-tv/setup /usr/lib/badminton-tv/browser \
           /usr/lib/badminton-tv/cec /usr/lib/badminton-tv/sluk \
           /usr/lib/badminton-tv/netstatus /usr/lib/badminton-tv/diagnose \
-          /usr/lib/badminton-tv/browservagt \
+          /usr/lib/badminton-tv/browservagt /usr/lib/badminton-tv/opdatering \
           /usr/lib/systemd/system-generators/badminton-tv-sluk-generator
-chmod 644 /usr/lib/badminton-tv/conf.sh
+chmod 644 /usr/lib/badminton-tv/conf.sh /usr/lib/badminton-tv/rod.sh
 
 systemctl enable badminton-tv-setup.service badminton-tv-cec.service \
                  badminton-tv.service badminton-tv-netstatus.service \
                  badminton-tv-diagnose.service badminton-tv-browservagt.service
 systemctl enable NetworkManager.service systemd-timesyncd.service
 systemctl enable badminton-tv-ur.timer badminton-tv-ur-nedlukning.service   # hardware-uret i dansk tid
+# Automatisk opdatering med to systemer (A/B) — se usr/lib/badminton-tv/opdatering
+systemctl enable badminton-tv-opdatering.timer badminton-tv-opdatering-proev.service \
+                 badminton-tv-opdatering-bekraeft.service
 systemctl set-default multi-user.target
 
 # Aldrig dvale.

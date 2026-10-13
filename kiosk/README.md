@@ -90,7 +90,8 @@ WiFi-koden kommer ikke med — kun dens længde og om den har mellemrum.
 
 ### Automatisk opdatering
 
-En installeret PC henter selv nye versioner af Badminton TV fra
+En installeret PC (og en Raspberry Pi — se [Raspberry Pi](#raspberry-pi))
+henter selv nye versioner af Badminton TV fra
 [Releases](https://github.com/CesarDKK/badminton-score-counter/releases) — der
 er ingen grund til at køre ud og installere forfra med USB-nøglen.
 
@@ -112,6 +113,7 @@ er ingen grund til at køre ud og installere forfra med USB-nøglen.
 - Kun PC'er, der er installeret med en version med automatisk opdatering,
   opdaterer sig selv (de har to systemer på disken, se nedenfor). Ældre
   installationer skal installeres forfra én gang.
+  Det samme gælder Pi'er: skriv et nyt billede på SD-kortet én gang.
 
 ### TV'et og HDMI-CEC
 
@@ -162,6 +164,11 @@ Forskelle fra PC'en:
 - **Skærmen låses til 1080p**, også på et 4K-TV — en Pi 3/4 har ikke kræfter
   til mere.
 - Loggen ligger kun i RAM, så SD-kortet ikke slides.
+- **Automatisk opdatering** virker som på PC'en (se ovenfor), men kræver et
+  SD-kort på mindst 16 GB. Når en ny version er hentet, genstarter Pi'en én
+  gang ekstra lige efter, den er tændt, for at prøve den (tryboot). Mapperne
+  `a` og `b` på kortet er de to systemer. `diagnose.txt` viser opdateringens
+  tilstand.
 
 ---
 
@@ -225,6 +232,24 @@ TV-siden fremme. Kernen og dens parametre står i systemet selv
 installeren. GRUB- og shim-pakkerne sættes i bero (`apt-mark hold`), når et
 system lægges på disken, fordi deres opgradering ville køre `grub-install` og
 overskrive vælgeren.
+
+**Raspberry Pi** har ingen GRUB: firmwaren henter kernen fra SD-kortets
+FAT-partition. Kortet har derfor mapperne `a\` og `b\` med hvert systems
+kerne, initramfs, device trees, overlays og `cmdline.txt` (`root=` og
+`badminton.slot=`), og `config.txt` slutter med en blok, der vælger mappen med
+`os_prefix` — og den anden mappe under `[tryboot]`. FAT-partitionen er
+monteret på `/boot/kort`, og det kørende systems mappe er bundet til
+`/boot/firmware`, så Raspberry Pi OS' kerneopdateringer lander i den rigtige
+mappe. Roden (system A) er låst til 6 GB (ingen `resize`), og system B
+oprettes af den første opdatering bag den. Tilstanden ligger i
+`badminton-tv-opdatering.txt` på FAT-partitionen. Ved opstart genstarter
+`badminton-tv-opdatering-proev` med `reboot "0 tryboot"`, hvis en ny version
+venter (og sletter `proev` først); firmwaren glemmer tryboot igen, så en
+mislykket prøve, et strømsvigt eller `panic=10` ender i det gamle system.
+`bekraeft` skriver `config.txt` om, når TV-siden har kørt i 5 minutter.
+`dtparam=watchdog=on` genstarter en Pi, der fryser, før Linux kører.
+Udgivelsen har `opdatering-pi.json` og `badminton-tv-pi-rod-<version>.squashfs`
+(roden med mappens filer i `/boot/firmware`).
 
 Manifestet `opdatering.json` (version, udgivelsestid, `vent_timer`, filnavn,
 SHA256, størrelse) signeres med en ed25519-nøgle ved udgivelsen. PC'en
