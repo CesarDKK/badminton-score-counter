@@ -2933,16 +2933,79 @@ function renderSkaerme(skaerme) {
         </div>`;
 }
 
+// Listen deles i to grupper, der kan foldes ud: tablets (bane-visning til
+// tælleren) og alle andre links (TV-skærme og oversigt). Om en gruppe er åben,
+// huskes i browseren; et nyoprettet link åbner sin gruppe.
+const DT_GRUPPER = [
+    { noegle: 'tablets', titel: 'Tablets', tom: 'Ingen tablets endnu',
+      erMed: dest => dest.startsWith('court/') },
+    { noegle: 'skaerme', titel: 'TV-skærme og oversigt', tom: 'Ingen TV-skærme endnu',
+      erMed: dest => !dest.startsWith('court/') }
+];
+
+function dtGruppeFor(destination) {
+    return DT_GRUPPER.find(g => g.erMed(destination)).noegle;
+}
+
+function dtGruppeAaben(noegle) {
+    try { return localStorage.getItem('adgangslinks-gruppe:' + noegle) === 'aaben'; } catch { return false; }
+}
+
+function saetDtGruppeAaben(noegle, aaben) {
+    try { localStorage.setItem('adgangslinks-gruppe:' + noegle, aaben ? 'aaben' : 'lukket'); } catch {}
+}
+
+// Aktive før tilbagekaldte, oversigten først, derefter efter banenummer og navn
+function dtSorteringsNoegle(t) {
+    const bane = Number(t.destination.split('/')[1]) || 0;
+    return [t.is_active ? 0 : 1, t.destination === 'oversigt' ? 0 : 1, bane, (t.name || '').toLowerCase()];
+}
+
+function sammenlignDt(a, b) {
+    const ka = dtSorteringsNoegle(a), kb = dtSorteringsNoegle(b);
+    for (let i = 0; i < ka.length; i++) {
+        if (ka[i] < kb[i]) return -1;
+        if (ka[i] > kb[i]) return 1;
+    }
+    return 0;
+}
+
 function renderDeviceTokens(tokens) {
     const listEl = document.getElementById('deviceTokensList');
-    const baseUrl = window.location.origin;
 
     if (tokens.length === 0) {
         listEl.innerHTML = '<p style="color:rgba(255,255,255,0.4);text-align:center;padding:20px;">Ingen adgangslinks endnu</p>';
         return;
     }
 
-    const rows = tokens.map(t => {
+    listEl.innerHTML = DT_GRUPPER.map(g => {
+        const medlemmer = tokens.filter(t => g.erMed(t.destination)).sort(sammenlignDt);
+        const tilbagekaldte = medlemmer.filter(t => !t.is_active).length;
+        const aktive = medlemmer.length - tilbagekaldte;
+        const antal = `${aktive} ${aktive === 1 ? 'link' : 'links'}`
+            + (tilbagekaldte ? ` · ${tilbagekaldte} tilbagekaldt` : '');
+        const indhold = medlemmer.length
+            ? deviceTokenKort(medlemmer)
+            : `<p class="dt-gruppe-tom">${g.tom}</p>`;
+        return `
+        <details class="dt-gruppe" data-gruppe="${g.noegle}"${dtGruppeAaben(g.noegle) ? ' open' : ''}>
+            <summary>
+                <span class="dt-gruppe-titel">${g.titel}</span>
+                <span class="dt-gruppe-antal">${antal}</span>
+            </summary>
+            <div class="dt-gruppe-indhold">${indhold}</div>
+        </details>`;
+    }).join('');
+
+    // toggle-hændelsen bobler ikke op — lyt på hver gruppe
+    listEl.querySelectorAll('.dt-gruppe').forEach(el => {
+        el.addEventListener('toggle', () => saetDtGruppeAaben(el.dataset.gruppe, el.open));
+    });
+}
+
+function deviceTokenKort(tokens) {
+    const baseUrl = window.location.origin;
+    return tokens.map(t => {
         const link = `${baseUrl}/t/${t.token}`;
         const lastUsed = t.last_used_at
             ? new Date(t.last_used_at).toLocaleString('da-DK')
@@ -2999,8 +3062,6 @@ function renderDeviceTokens(tokens) {
             </div>
         </div>`;
     }).join('');
-
-    listEl.innerHTML = rows;
 }
 
 function toggleDtCourt() {
@@ -3031,6 +3092,7 @@ async function handleCreateDeviceToken() {
 
     try {
         await api.createDeviceToken(name, destination, locked, showQrOnTv);
+        saetDtGruppeAaben(dtGruppeFor(destination), true); // vis det nye link
         document.getElementById('dtName').value = '';
         document.getElementById('dtShowQr').checked = true;
         showDtMsg(msgEl, '✓ Link oprettet', 'success');
