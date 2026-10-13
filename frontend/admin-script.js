@@ -2970,8 +2970,11 @@ function sammenlignDt(a, b) {
     return 0;
 }
 
+let _dtTokens = []; // seneste liste — redigér-formularen udfyldes herfra
+
 function renderDeviceTokens(tokens) {
     const listEl = document.getElementById('deviceTokensList');
+    _dtTokens = tokens;
 
     if (tokens.length === 0) {
         listEl.innerHTML = '<p style="color:rgba(255,255,255,0.4);text-align:center;padding:20px;">Ingen adgangslinks endnu</p>';
@@ -3045,10 +3048,15 @@ function deviceTokenKort(tokens) {
                     </button>
                     <div class="dt-kioskconf" id="kioskConf-${t.id}" data-link="${escapeHtml(link)}" data-navn="${escapeHtml(t.name)}" style="display:none;"></div>` : ''}
                     <div class="dt-skaerme" data-token-id="${t.id}"></div>
+                    <div class="dt-rediger" id="dtRediger-${t.id}" style="display:none;"></div>
                 </div>
                 <div style="display:flex;gap:8px;flex-shrink:0;">
                     ${t.is_active
-                        ? `<button onclick="handleDeleteDeviceToken(${t.id})"
+                        ? `<button onclick="visRedigerDt(${t.id})"
+                            style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:6px 14px;color:#eaeaea;font-size:0.85em;cursor:pointer;">
+                            Redigér
+                           </button>
+                           <button onclick="handleDeleteDeviceToken(${t.id})"
                             style="background:rgba(var(--color-accent-rgb),0.12);border:1px solid rgba(var(--color-accent-rgb),0.25);border-radius:6px;padding:6px 14px;color:var(--color-accent);font-size:0.85em;cursor:pointer;">
                             Tilbagekald
                            </button>`
@@ -3062,6 +3070,109 @@ function deviceTokenKort(tokens) {
             </div>
         </div>`;
     }).join('');
+}
+
+// ── Redigér et adgangslink: navn, type, bane, navigation og QR ──
+// Enheder, der bruger linket, opdager ændringen selv inden for et minut og
+// skifter side (js/adgangslink-vagt.js) — linket skal ikke sættes ind igen.
+const DT_FELT = 'width:100%;background:var(--color-bg-container);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:9px 11px;color:#eaeaea;font-family:\'DM Sans\',sans-serif;font-size:0.9em;box-sizing:border-box;';
+const DT_ETIKET = 'display:block;font-size:0.72em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:5px;';
+
+function visRedigerDt(id) {
+    const boks = document.getElementById(`dtRediger-${id}`);
+    const t = _dtTokens.find(x => x.id === id);
+    if (!boks || !t) return;
+    if (boks.style.display !== 'none') { boks.style.display = 'none'; return; }
+
+    const [type, bane] = t.destination === 'oversigt' ? ['oversigt', '1']
+        : t.destination.startsWith('tv/') ? ['tv', t.destination.split('/')[1]]
+        : ['court', t.destination.split('/')[1]];
+    // Banerne som i "Opret nyt link" (antal fra indstillingerne)
+    const baner = document.getElementById('dtCourt').innerHTML;
+
+    boks.innerHTML = `
+        <div style="margin-top:14px;padding:16px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;background:rgba(255,255,255,0.03);">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:12px;">
+                <div><label style="${DT_ETIKET}">Navn</label>
+                    <input type="text" class="dtr-navn" maxlength="100" style="${DT_FELT}"></div>
+                <div><label style="${DT_ETIKET}">Type</label>
+                    <select class="dtr-type" style="${DT_FELT}">
+                        <option value="tv">TV visning</option>
+                        <option value="court">Bane visning</option>
+                        <option value="oversigt">Oversigt</option>
+                    </select></div>
+                <div class="dtr-bane-wrap"><label style="${DT_ETIKET}">Bane</label>
+                    <select class="dtr-bane" style="${DT_FELT}">${baner}</select></div>
+                <div><label style="${DT_ETIKET}">Navigation</label>
+                    <select class="dtr-laast" style="${DT_FELT}">
+                        <option value="1">Låst</option>
+                        <option value="0">Fri</option>
+                    </select></div>
+            </div>
+            <label class="dtr-qr-wrap" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:0.9em;color:rgba(255,255,255,0.75);cursor:pointer;">
+                <input type="checkbox" class="dtr-qr" style="width:18px;height:18px;accent-color:var(--color-accent);"> Vis QR-kode på TV
+            </label>
+            <p style="font-size:0.8em;color:rgba(255,255,255,0.45);margin:0 0 12px;">
+                Skærme og tablets, der bruger linket, skifter selv inden for et minut. Linket er det samme.
+            </p>
+            <div style="display:flex;gap:8px;">
+                <button class="btn-primary dtr-gem" style="padding:8px 18px;">Gem</button>
+                <button class="dtr-annuller" style="background:transparent;border:1px solid rgba(255,255,255,0.2);border-radius:8px;padding:8px 16px;color:rgba(255,255,255,0.75);cursor:pointer;">Annullér</button>
+            </div>
+            <div class="dtr-besked" style="display:none;margin-top:10px;padding:8px 12px;border-radius:8px;font-size:0.85em;"></div>
+        </div>`;
+
+    const $ = (k) => boks.querySelector(k);
+    $('.dtr-navn').value = t.name;
+    $('.dtr-type').value = type;
+    if (![...$('.dtr-bane').options].some(o => o.value === bane)) {
+        // Banen findes ikke længere i indstillingerne — vis den alligevel
+        $('.dtr-bane').insertAdjacentHTML('beforeend', `<option value="${escapeHtml(bane)}">Bane ${escapeHtml(bane)}</option>`);
+    }
+    $('.dtr-bane').value = bane;
+    $('.dtr-laast').value = t.locked ? '1' : '0';
+    $('.dtr-qr').checked = !!t.show_qr_on_tv;
+
+    const opdaterFelter = () => {
+        const ty = $('.dtr-type').value;
+        $('.dtr-bane-wrap').style.visibility = ty === 'oversigt' ? 'hidden' : 'visible';
+        $('.dtr-qr-wrap').style.display = ty === 'tv' ? 'flex' : 'none';
+    };
+    $('.dtr-type').addEventListener('change', opdaterFelter);
+    opdaterFelter();
+
+    $('.dtr-annuller').addEventListener('click', () => { boks.style.display = 'none'; });
+    $('.dtr-gem').addEventListener('click', () => gemRedigeretDt(id, boks));
+
+    boks.style.display = 'block';
+    $('.dtr-navn').focus();
+}
+
+async function gemRedigeretDt(id, boks) {
+    const $ = (k) => boks.querySelector(k);
+    const name = $('.dtr-navn').value.trim();
+    const type = $('.dtr-type').value;
+    const destination = type === 'oversigt' ? 'oversigt' : `${type}/${$('.dtr-bane').value}`;
+    const besked = $('.dtr-besked');
+    if (!name) { showDtMsg(besked, 'Linket skal have et navn', 'error'); return; }
+
+    const knap = $('.dtr-gem');
+    knap.disabled = true;
+    knap.textContent = 'Gemmer...';
+    try {
+        await api.updateDeviceToken(id, {
+            name,
+            destination,
+            locked: $('.dtr-laast').value === '1',
+            showQrOnTv: $('.dtr-qr').checked
+        });
+        saetDtGruppeAaben(dtGruppeFor(destination), true); // linket kan have skiftet gruppe
+        await loadDeviceTokens();
+    } catch (err) {
+        showDtMsg(besked, err.message || 'Kunne ikke gemme', 'error');
+        knap.disabled = false;
+        knap.textContent = 'Gem';
+    }
 }
 
 function toggleDtCourt() {
