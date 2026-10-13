@@ -19,8 +19,12 @@
 #   docker run --rm --privileged \
 #       -v "$PWD/kiosk:/src" -v "$PWD/kiosk/ud:/ud" debian:trixie bash /src/pi/build-pi.sh
 #
-# Resultat i /ud: badminton-tv-pi-<version>.img.xz (+ SHA256SUMS-pi), som
-# skrives til et SD-kort med Raspberry Pi Imager eller balenaEtcher.
+# Resultat i /ud:
+#   badminton-tv-pi-<version>.img.xz        skrives til et SD-kort med Raspberry
+#                                           Pi Imager eller balenaEtcher
+#   badminton-tv-pi-rod-<version>.squashfs  systemet alene — den automatiske
+#                                           opdatering henter det fra udgivelsen
+#   SHA256SUMS-pi
 
 set -euo pipefail
 
@@ -34,15 +38,17 @@ VERSION=${VERSION:-$(date -u +%Y.%m.%d)-dev}
 PI_OS_URL=https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2026-09-15/2026-09-15-raspios-trixie-arm64-lite.img.xz
 PI_OS_SHA256=cdf4f3bfac35ae947b46e4e767f935453810549779ac3290e05a6754aee627e5
 
-# Raspberry Pi OS' rodpartition er næsten fuld; Chromium m.m. skal have plads.
-# Ved første opstart udvides den alligevel til hele SD-kortet.
-EKSTRA_MB=2048
+# Rodpartitionen (system A) får en fast størrelse og udvides IKKE til hele
+# SD-kortet ved første opstart: resten af kortet bruges til system B, som den
+# automatiske opdatering opretter (se usr/lib/badminton-tv/rod.sh). 6 GB giver
+# plads til Chromium og til at hente en ny version (ca. 700 MB) ved siden af.
+SYSTEM_MIB=6144
 
 trin() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 
 trin "Værktøjer"
 mangler=''
-for p in curl ca-certificates xz-utils fdisk e2fsprogs dosfstools zerofree; do
+for p in curl ca-certificates xz-utils fdisk e2fsprogs dosfstools zerofree squashfs-tools; do
     dpkg -s "$p" >/dev/null 2>&1 || mangler+=" $p"
 done
 if [ -n "$mangler" ]; then
@@ -63,9 +69,10 @@ fi
 IMG=$ARB/badminton-tv-pi.img
 xz -T0 -dc "$KILDE" > "$IMG"
 
-trin "Gør plads til Chromium (+$EKSTRA_MB MB)"
-truncate -s "+${EKSTRA_MB}M" "$IMG"
-echo ', +' | sfdisk -q --no-reread -N 2 "$IMG"
+trin "Gør system A $SYSTEM_MIB MB stort"
+ROD_START_FOER=$(sfdisk -d "$IMG" | awk -v p="${IMG}2 " -F'[=,]' 'index($0, p) == 1 { gsub(/ /, "", $2); print $2 }')
+truncate -s $(( ROD_START_FOER * 512 + SYSTEM_MIB * 1024 * 1024 )) "$IMG"
+echo ", $((SYSTEM_MIB * 2048))" | sfdisk -q --no-reread -N 2 "$IMG"
 
 # Partitionernes placering (sektorer à 512 byte).
 part() { sfdisk -d "$IMG" | awk -v p="${IMG}$1" -F'[=,]' '$1 ~ p" " { gsub(/ /, "", $2); gsub(/ /, "", $4); print $2, $4 }'; }
@@ -77,6 +84,7 @@ ROD=$ARB/rod
 oprydning() {
     set +e
     umount -R "$ROD" 2>/dev/null
+    umount "$ARB/fat" 2>/dev/null
     for l in "${LOOPS[@]}"; do losetup -d "$l" 2>/dev/null; done
 }
 trap oprydning EXIT
@@ -115,20 +123,13 @@ trin "Kopierer Badminton TV-filerne ind"
 FAELLES=$SRC/live/config/includes.chroot_after_packages
 cp -a "$FAELLES/." "$ROD/"
 cp -a "$SRC/pi/rootfs/." "$ROD/"
-# Kun til PC'en: installationen og "Hent fejllog" fra USB-nøglen, og den
-# automatiske opdatering med to systemer (A/B) og GRUB.
+# Kun til PC'en: installationen og "Hent fejllog" fra USB-nøglen, og GRUB.
 rm -f "$ROD/usr/lib/badminton-tv/installer" \
       "$ROD/usr/lib/systemd/system/badminton-tv-installer.service" \
       "$ROD/usr/lib/badminton-tv/hentlog" \
       "$ROD/usr/lib/systemd/system/badminton-tv-hentlog.service" \
-      "$ROD/usr/lib/badminton-tv/opdatering" \
-      "$ROD/usr/lib/badminton-tv/rod.sh" \
-      "$ROD/usr/lib/systemd/system/badminton-tv-opdatering.service" \
-      "$ROD/usr/lib/systemd/system/badminton-tv-opdatering.timer" \
-      "$ROD/usr/lib/systemd/system/badminton-tv-opdatering-bekraeft.service" \
       "$ROD/usr/share/badminton-tv/grub-esp.cfg" \
       "$ROD/usr/share/badminton-tv/grub-slot.cfg" \
-      "$ROD/usr/share/badminton-tv/opdatering.pub" \
       "$ROD/etc/modules-load.d/badminton-tv-pstore.conf"
 mkdir -p "$ROD/usr/share/badminton-tv"
 printf '%s\n' "$VERSION" > "$ROD/usr/share/badminton-tv/version"
@@ -156,7 +157,8 @@ cp "$ARB/resolv.conf.orig" "$ROD/etc/resolv.conf"
 
 # ── 4. SD-kortets FAT-partition ────────────────────────────
 trin "Indstiller opstart og lægger kiosk.conf på SD-kortet"
-CMDLINE=$ROD/boot/firmware/cmdline.txt
+FAT=$ROD/boot/firmware
+CMDLINE=$FAT/cmdline.txt
 # Danske WiFi-regler, ingen skærmslukning, ingen tekst og markør. Opløsningen
 # låses til 1080p på begge HDMI-porte: TV-siden er lavet til 1920 px, og en
 # Pi 3/4 har ikke kræfter til 4K. (Uden 'D' — porten tvinges ikke tændt, så
@@ -164,31 +166,62 @@ CMDLINE=$ROD/boot/firmware/cmdline.txt
 # systemd.restore_state=0: systemd gemmer ellers WiFi-kortets "slået fra" ved
 # nedlukning og genskaber det ved næste opstart — så en enkelt blokeret
 # opstart ville hænge ved for altid.
+# panic=10: går en ny version i stå, før vagthunden kører, genstarter Pi'en —
+# og starter så den forrige version (se rod.sh).
 for param in cfg80211.ieee80211_regdom=DK systemd.restore_state=0 \
              consoleblank=0 loglevel=3 quiet \
              vt.global_cursor_default=0 \
-             video=HDMI-A-1:1920x1080@60 video=HDMI-A-2:1920x1080@60; do
+             video=HDMI-A-1:1920x1080@60 video=HDMI-A-2:1920x1080@60 \
+             panic=10 badminton.slot=a; do
     grep -qw -- "$param" "$CMDLINE" || sed -i "1s|\$| $param|" "$CMDLINE"
 done
+# Roden må ikke udvides til hele kortet (Raspberry Pi OS gør det ved første
+# opstart, når "resize" står på kernelinjen) — resten er til system B.
+sed -i -E '1s/(^| )resize( |$)/\1/' "$CMDLINE"
 # cloud-init er slået fra; dens filer på kortet ville bare forvirre.
-rm -f "$ROD/boot/firmware/user-data" "$ROD/boot/firmware/meta-data" "$ROD/boot/firmware/network-config"
+rm -f "$FAT/user-data" "$FAT/meta-data" "$FAT/network-config"
 
-# FAT-partitionen kan kun læses af root — kiosk.conf indeholder WiFi-koden.
-sed -i 's|^\(\S*\s\+/boot/firmware\s\+vfat\s\+\)defaults|\1defaults,fmask=0077,dmask=0077|' "$ROD/etc/fstab"
-# Dør SD-kortet, skal Pi'en genstarte frem for at stå frosset med et
-# skrivebeskyttet system — samme regel som PC'ens installer giver NVMe-disken.
-sed -i 's|^\(\S*\s\+/\s\+ext4\s\+defaults,noatime\)|\1,errors=panic|' "$ROD/etc/fstab"
-grep -qE '\s/\s+ext4\s+\S*errors=panic' "$ROD/etc/fstab" \
-    || { echo "FEJL: roden i /etc/fstab ser ikke ud som ventet" >&2; exit 1; }
+# To systemer, A og B (se usr/lib/badminton-tv/rod.sh): kernen, initramfs,
+# device trees, overlays og cmdline.txt flytter i mappen a\, og config.txt
+# vælger den med os_prefix. Firmwaren (bootcode.bin, start*.elf, fixup*.dat)
+# og config.txt bliver i roden.
+. "$FAELLES/usr/lib/badminton-tv/rod.sh"
+DISKID=$(sfdisk --disk-id "$IMG" | sed 's/^0x//')
+mkdir -p "$FAT/a"
+mv "$FAT"/kernel*.img "$FAT"/initramfs* "$FAT"/*.dtb "$FAT/overlays" "$CMDLINE" "$FAT/a/"
+# os_prefix bruges kun til overlays, hvis mappen har en README
+[ -s "$FAT/a/overlays/README" ] || { echo "FEJL: overlays/README mangler" >&2; exit 1; }
+bt_pi_config "$FAT/config.txt" a
+# FAT-partitionen (kun root kan læse den — kiosk.conf indeholder WiFi-koden)
+# på /boot/kort og system A's mappe på /boot/firmware. Dør SD-kortet, skal
+# Pi'en genstarte frem for at stå frosset (errors=panic, som på PC'en).
+bt_pi_fstab "$ROD" "$DISKID" a
 
 til_windows() { printf '\xEF\xBB\xBF'; sed 's/$/\r/' "$1"; }
-til_windows "$SRC/usb/kiosk.conf" > "$ROD/boot/firmware/kiosk.conf"
-til_windows "$SRC/pi/VEJLEDNING.txt" > "$ROD/boot/firmware/VEJLEDNING.txt"
-printf '%s\r\n' "$VERSION" > "$ROD/boot/firmware/badminton-tv-version.txt"
+til_windows "$SRC/usb/kiosk.conf" > "$FAT/kiosk.conf"
+til_windows "$SRC/pi/VEJLEDNING.txt" > "$FAT/VEJLEDNING.txt"
+printf '%s\r\n' "$VERSION" > "$FAT/badminton-tv-version.txt"
 
-df -h "$ROD" | tail -1
+bt_pi_kan_starte "$FAT" a "$DISKID" "$VERSION" "$ROD"
+df -h "$ROD" "$FAT" | tail -2
 
-# ── 5. Pak billedet ────────────────────────────────────────
+# ── 5. Systemet til automatisk opdatering ──────────────────
+# Samme system som på kortet, med system A's opstartsfiler i /boot/firmware.
+# Opdateringen kopierer det til system B og flytter opstartsfilerne over i b\.
+trin "Lægger systemet ud til automatisk opdatering"
+sync
+umount -R "$ROD"
+mount "$LOOP_ROD" "$ROD"
+mkdir -p "$ARB/fat"
+mount -o ro "$LOOP_BOOT" "$ARB/fat"
+cp -r "$ARB/fat/a/." "$ROD/boot/firmware/"
+ROD_FIL=badminton-tv-pi-rod-$VERSION.squashfs
+rm -f "$UD/$ROD_FIL"
+mksquashfs "$ROD" "$UD/$ROD_FIL" -comp xz -noappend -quiet -no-progress
+find "$ROD/boot/firmware" -mindepth 1 -delete
+umount "$ARB/fat"
+
+# ── 6. Pak billedet ────────────────────────────────────────
 trin "Pakker billedet"
 sync
 umount -R "$ROD"
@@ -201,7 +234,7 @@ NAVN=badminton-tv-pi-$VERSION.img.xz
 rm -f "$UD/$NAVN"
 xz -T0 -6 -c "$IMG" > "$UD/$NAVN"
 rm -f "$IMG"
-(cd "$UD" && sha256sum "$NAVN" > SHA256SUMS-pi)
+(cd "$UD" && sha256sum "$NAVN" "$ROD_FIL" > SHA256SUMS-pi)
 
 trin "Færdig"
-ls -lh "$UD/$NAVN"
+ls -lh "$UD/$NAVN" "$UD/$ROD_FIL"

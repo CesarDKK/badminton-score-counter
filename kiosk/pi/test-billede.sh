@@ -1,7 +1,8 @@
 #!/bin/bash
 # Tjekker et færdigt Raspberry Pi-billede uden en rigtig Pi: monterer det og
 # kontrollerer pakker, bruger, services, opstartsindstillinger og kiosk.conf,
-# og kører setup og slukke-generatoren inde i billedet (chroot).
+# og kører setup og slukke-generatoren inde i billedet (chroot). Tjekker også
+# opdateringens system (badminton-tv-pi-rod-<version>.squashfs ved siden af).
 #
 # Køres som root i en privilegeret container (som build-pi.sh):
 #
@@ -24,7 +25,7 @@ oprydning() {
 }
 trap oprydning EXIT
 
-command -v xz >/dev/null || { apt-get update -qq; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xz-utils fdisk >/dev/null; }
+command -v unsquashfs >/dev/null || { apt-get update -qq; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xz-utils fdisk squashfs-tools >/dev/null; }
 
 xz -T0 -dc "$FIL" > "$IMG"
 part() { sfdisk -d "$IMG" | awk -v p="${IMG}$1" -F'[=,]' '$1 ~ p" " { gsub(/ /, "", $2); gsub(/ /, "", $4); print $2, $4 }'; }
@@ -37,7 +38,10 @@ mkdir -p "$R"
 loop LOOP_ROD "$RS" "$RZ"
 loop LOOP_BOOT "$BS" "$BZ"
 mount "$LOOP_ROD" "$R"
-mount "$LOOP_BOOT" "$R/boot/firmware"
+# Som på Pi'en (fstab): FAT-partitionen på /boot/kort, system A's mappe på /boot/firmware
+mount "$LOOP_BOOT" "$R/boot/kort"
+mount --bind "$R/boot/kort/a" "$R/boot/firmware"
+K=$R/boot/kort
 for d in dev proc sys; do mount --bind "/$d" "$R/$d"; done
 mount -t tmpfs tmpfs "$R/run"
 
@@ -98,27 +102,62 @@ tjek "aktiv: badminton-tv-ur.timer" aktiveret timers.target badminton-tv-ur.time
 tjek "aktiv: badminton-tv-ur-nedlukning" aktiveret multi-user.target badminton-tv-ur-nedlukning.service
 tjek "hwclock findes (util-linux-extra)" test -x "$R/usr/sbin/hwclock"
 
-# Opstart
-CMD=$R/boot/firmware/cmdline.txt
-tjek "cmdline.txt er én linje" test "$(wc -l < "$CMD")" -le 1
+# Opstart: to systemer, A og B (usr/lib/badminton-tv/rod.sh)
+CMD=$K/a/cmdline.txt
+tjek "cmdline.txt i a\ er én linje" test "$(wc -l < "$CMD")" -le 1
 for p in 'cfg80211.ieee80211_regdom=DK' 'systemd.restore_state=0' \
          'video=HDMI-A-1:1920x1080@60' 'video=HDMI-A-2:1920x1080@60' \
-         'consoleblank=0' 'resize' 'root=PARTUUID='; do
+         'consoleblank=0' 'panic=10' 'badminton.slot=a' 'root=PARTUUID=[0-9a-f]*-02 '; do
     tjek "cmdline: $p" grep -q -- "$p" "$CMD"
 done
-tjek "kerne til Pi 3/4 (kernel8.img)" test -f "$R/boot/firmware/kernel8.img"
-tjek "kerne til Pi 5 (kernel_2712.img)" test -f "$R/boot/firmware/kernel_2712.img"
-tjek "cloud-init-filer fjernet" test ! -e "$R/boot/firmware/network-config"
-tjek "FAT-partition kun for root" grep -qE '/boot/firmware\s+vfat\s+\S*fmask=0077' "$R/etc/fstab"
-tjek "roden genstarter ved diskfejl (errors=panic)" grep -qE '\s/\s+ext4\s+\S*errors=panic' "$R/etc/fstab"
+tjek "cmdline: roden udvides ikke (resize)" bash -c "! grep -qw resize '$CMD'"
+for f in kernel8.img kernel_2712.img initramfs8 initramfs_2712 bcm2710-rpi-3-b-plus.dtb \
+         bcm2711-rpi-4-b.dtb bcm2712-rpi-5-b.dtb overlays/README; do
+    tjek "a\$f" test -s "$K/a/$f"
+done
+tjek "ingen kerne i FAT-roden" test ! -e "$K/kernel8.img"
+tjek "firmware i FAT-roden (start.elf, bootcode.bin)" test -s "$K/start.elf" -a -s "$K/bootcode.bin"
+tjek "config.txt: os_prefix=a/" grep -qx 'os_prefix=a/' "$K/config.txt"
+tjek "config.txt: tryboot → b/" bash -c "sed -n '/^\[tryboot\]/,/^\[all\]/p' '$K/config.txt' | grep -qx 'os_prefix=b/'"
+tjek "config.txt: vagthund fra start" grep -qx 'dtparam=watchdog=on' "$K/config.txt"
+tjek "config.txt: Badminton TV-blokken står sidst" bash -c "tail -1 '$K/config.txt' | grep -q '<<< Badminton TV'"
+tjek "cloud-init-filer fjernet" test ! -e "$K/network-config"
+tjek "fstab: FAT på /boot/kort, kun for root" grep -qE '^PARTUUID=[0-9a-f]+-01\s+/boot/kort\s+vfat\s+\S*fmask=0077' "$R/etc/fstab"
+tjek "fstab: system A er roden" grep -qE '^PARTUUID=[0-9a-f]+-02\s+/\s+ext4\s+\S*errors=panic' "$R/etc/fstab"
+tjek "fstab: a\ bundet til /boot/firmware" grep -qE '^/boot/kort/a\s+/boot/firmware\s+none\s+bind' "$R/etc/fstab"
+tjek "disk-id i fstab = cmdline" test "$(grep -o 'PARTUUID=[0-9a-f]*-02' "$R/etc/fstab")" = "$(grep -o 'PARTUUID=[0-9a-f]*-02' "$CMD")"
+tjek "system A er 6 GB" test "$RZ" -eq $((6144 * 2048))
+tjek "ingen system B i billedet (oprettes af opdateringen)" bash -c "! sfdisk -d '$IMG' | grep -q '${IMG}3 '"
 tjek "hængende disk → panik (sysctl)" grep -q '^kernel.hung_task_panic = 1' "$R/etc/sysctl.d/90-badminton-tv-vagthund.conf"
 
+# Automatisk opdatering
+tjek "kørbar: opdatering" test -x "$R/usr/lib/badminton-tv/opdatering"
+tjek "rod.sh findes" test -s "$R/usr/lib/badminton-tv/rod.sh"
+tjek "offentlig nøgle (opdatering.pub)" grep -q 'BEGIN PUBLIC KEY' "$R/usr/share/badminton-tv/opdatering.pub"
+for p in /usr/bin/curl /usr/bin/openssl /usr/bin/rsync /usr/sbin/sfdisk /usr/bin/partx; do
+    tjek "findes: $p" test -x "$R$p"
+done
+tjek "aktiv: badminton-tv-opdatering.timer" aktiveret timers.target badminton-tv-opdatering.timer
+tjek "aktiv: badminton-tv-opdatering-proev" aktiveret multi-user.target badminton-tv-opdatering-proev.service
+tjek "aktiv: badminton-tv-opdatering-bekraeft" aktiveret multi-user.target badminton-tv-opdatering-bekraeft.service
+tjek "opdatering status kører i billedet" chroot "$R" env BT_PLATFORM=pi /usr/lib/badminton-tv/opdatering status
+SQ=$(dirname "$FIL")/$(basename "$FIL" .img.xz | sed 's/^badminton-tv-pi-/badminton-tv-pi-rod-/').squashfs
+tjek "opdateringens system findes ($(basename "$SQ"))" test -s "$SQ"
+if [ -s "$SQ" ]; then
+    INDHOLD=$(unsquashfs -l "$SQ" 2>/dev/null)
+    for f in boot/firmware/kernel8.img boot/firmware/kernel_2712.img boot/firmware/cmdline.txt \
+             boot/firmware/overlays/README usr/lib/badminton-tv/opdatering usr/bin/chromium; do
+        tjek "squashfs: $f" grep -q "^squashfs-root/$f\$" <<<"$INDHOLD"
+    done
+    tjek "squashfs: samme version" test "$(unsquashfs -cat "$SQ" usr/share/badminton-tv/version 2>/dev/null)" = "$(cat "$R/usr/share/badminton-tv/version")"
+fi
+
 # kiosk.conf på SD-kortet: UTF-8 med BOM og CRLF, så den kan rettes i Notesblok
-KC=$R/boot/firmware/kiosk.conf
+KC=$K/kiosk.conf
 tjek "kiosk.conf på SD-kortet" test -f "$KC"
 tjek "kiosk.conf har BOM" test "$(head -c 3 "$KC" | od -An -tx1 | tr -d ' \n')" = efbbbf
 tjek "kiosk.conf har CRLF" grep -q $'\r$' "$KC"
-tjek "VEJLEDNING.txt på SD-kortet" test -f "$R/boot/firmware/VEJLEDNING.txt"
+tjek "VEJLEDNING.txt på SD-kortet" test -f "$K/VEJLEDNING.txt"
 
 # Funktion inde i billedet: setup og generator læser kiosk.conf fra SD-kortet
 printf '\xEF\xBB\xBFTV_URL=https://a.dk/t/abc&qr=0\r\nNAVN=TV Bane Ø\r\nWIFI_NAVN=Hal æ\r\nWIFI_KODE=min kode 1\r\nSLUK_KL=22.30\r\n' > "$KC"

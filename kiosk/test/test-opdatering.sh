@@ -28,10 +28,12 @@ ud='' url=''
 while [ \$# -gt 0 ]; do
     case "\$1" in
         -o) ud=\$2; shift ;;
-        https://*) url=\$1 ;;
+        http://*|https://*) url=\$1 ;;
     esac
     shift
 done
+# Chromiums fejlsøgningsport (bekraeft): siderne fra FAKE_SIDER
+case "\$url" in http://127.0.0.1:9222/*) printf '%s' "\${FAKE_SIDER:-[]}"; exit 0 ;; esac
 fil="$TMP/udgivelser/\${url#https://test/releases/}"
 [ -f "\$fil" ] || exit 22
 cp "\$fil" "\$ud"
@@ -52,6 +54,13 @@ case "$handling" in
 esac
 EOF
 printf '#!/bin/bash\necho "${FAKE_NTP:-yes}"\n' > "$TMP/bin/timedatectl"
+# systemctl: is-active svarer FAKE_AKTIV (0 = kører); resten skrives i en log
+cat > "$TMP/bin/systemctl" <<EOF
+#!/bin/bash
+[ "\$1" = -q ] && shift
+[ "\$1" = is-active ] && exit "\${FAKE_AKTIV:-0}"
+echo "\$*" >> "$TMP/systemctl.log"
+EOF
 chmod +x "$TMP/bin/"*
 
 # Testnøgle — i stedet for Badminton TV's rigtige nøgle
@@ -59,7 +68,7 @@ openssl genpkey -algorithm ed25519 -out "$TMP/noegle.pem" 2>/dev/null
 openssl pkey -in "$TMP/noegle.pem" -pubout -out "$TMP/noegle.pub"
 openssl genpkey -algorithm ed25519 -out "$TMP/fremmed.pem" 2>/dev/null
 
-export PATH="$TMP/bin:$PATH" BT_LIB="$LIB" BT_NOEGLE="$TMP/noegle.pub"
+export PATH="$TMP/bin:$PATH" BT_LIB="$LIB" BT_NOEGLE="$TMP/noegle.pub" BT_PLATFORM=pc
 export BT_CONF_INSTALLERET="$TMP/kiosk.conf" BT_CONF_USB="$TMP/ingen.conf" BT_CONF_PI="$TMP/ingen-pi.conf"
 
 # Opdateringsscriptet indlæses som bibliotek (main kører kun ved direkte kald)
@@ -118,7 +127,7 @@ forvent "3 mislykkede forsøg: opgiv" "$(beslut 2026.10.9 2026.10.10 $NU 0 auto 
 # ── 3. Manifestet ──────────────────────────────────────────
 SHA=$(printf 'a%.0s' {1..64})
 manifest() { # version [fil] [sha]
-    jq -n --arg v "$1" --arg fil "${2:-badminton-tv-rod-$1.squashfs}" --arg sha "${3:-$SHA}" \
+    jq -n --arg v "$1" --arg fil "${2:-$ROD_NAVN-$1.squashfs}" --arg sha "${3:-$SHA}" \
         --argjson udgivet "${UDGIVET:-1800000000}" --argjson vent "${VENT:-24}" \
         '{version: $v, udgivet: $udgivet, vent_timer: $vent, rod: {fil: $fil, sha256: $sha, bytes: 700000000}}'
 }
@@ -141,10 +150,10 @@ forvent "Ikke JSON afvises" "$(laes)" ugyldig
 
 # ── 4. tjek: hele forløbet med falske kommandoer ───────────
 udgiv() { # version [nøgle] — lægger et signeret manifest som "seneste udgivelse"
-    manifest "$1" > "$TMP/udgivelser/latest/download/opdatering.json"
+    manifest "$1" > "$TMP/udgivelser/latest/download/$MANIFEST"
     openssl pkeyutl -sign -inkey "${2:-$TMP/noegle.pem}" -rawin \
-        -in "$TMP/udgivelser/latest/download/opdatering.json" \
-        -out "$TMP/udgivelser/latest/download/opdatering.json.sig"
+        -in "$TMP/udgivelser/latest/download/$MANIFEST" \
+        -out "$TMP/udgivelser/latest/download/$MANIFEST.sig"
 }
 conf() { printf 'TV_URL=https://a.dk/\nOPDATERING=%s\n' "$1" > "$TMP/kiosk.conf"; }
 env_vaerdi() { sed -n "s/^$1=//p" "$BTENV"; }
@@ -189,10 +198,10 @@ forvent "Forkert nøgle: fejlkode" "$kode" 1
 forvent "Forkert nøgle: intet klargjort" "$(env_vaerdi proev)" ""
 
 udgiv 2026.10.12
-printf ' ' >> "$TMP/udgivelser/latest/download/opdatering.json"
+printf ' ' >> "$TMP/udgivelser/latest/download/$MANIFEST"
 indeholder "Ændret manifest afvises" "$(tjek)" "signatur passer ikke"
 
-rm -f "$TMP/udgivelser/latest/download/opdatering.json"*
+rm -f "$TMP/udgivelser/latest/download/$MANIFEST"*
 indeholder "Ingen forbindelse / ingen manifest" "$(tjek)" "Kunne ikke hente opdateringsmanifestet"
 
 udgiv 2026.10.12
@@ -205,6 +214,84 @@ SLOT=b
 indeholder "Ny version på prøve: tjekker ikke" "$(tjek)" "kører på prøve"
 SLOT=''
 indeholder "Gammelt disklayout" "$(tjek)" "det gamle disklayout"
+
+# ── 5. Raspberry Pi ────────────────────────────────────────
+PLATFORM=pi MANIFEST=opdatering-pi.json ROD_NAVN=badminton-tv-pi-rod
+KORT=$TMP/kort
+PI_ENV=$KORT/badminton-tv-opdatering.txt
+mkdir -p "$KORT/a" "$KORT/b"
+pi_env() { sed -n "s/^$1=//p" "$PI_ENV"; }
+
+# Tilstandsfilen på FAT-partitionen
+env_saet aktiv=a
+env_saet proev=b proev_version=2026.10.10 sidste_fejl="2026.10.9 2026-10-13 13:03"
+forvent "Pi: env_hent" "$(env_hent proev_version)" 2026.10.10
+forvent "Pi: værdi med mellemrum" "$(env_hent sidste_fejl)" "2026.10.9 2026-10-13 13:03"
+env_saet proev=a
+forvent "Pi: overskrevet, ikke dubleret" "$(grep -c '^proev=' "$PI_ENV")" 1
+env_slet proev sidste_fejl
+forvent "Pi: env_slet" "$(env_hent proev)$(env_hent sidste_fejl)" ""
+forvent "Pi: resten bevaret" "$(env_hent aktiv) $(env_hent proev_version)" "a 2026.10.10"
+indeholder "Pi: forklaring øverst i filen" "$(head -1 "$PI_ENV")" "Rør ikke filen"
+
+# config.txt: Badminton TV-blokken sidst, uden at røre resten
+printf 'dtparam=audio=on\n[pi5]\ndtoverlay=nospi10\n[all]\n' > "$KORT/config.txt"
+bt_pi_config "$KORT/config.txt" a
+forvent "Pi config: resten bevaret" "$(head -4 "$KORT/config.txt" | tr '\n' ' ')" "dtparam=audio=on [pi5] dtoverlay=nospi10 [all] "
+forvent "Pi config: aktiv a" "$(sed -n '/>>> Badminton/,/<<< Badminton/p' "$KORT/config.txt" | grep -v '^#' | tr '\n' ' ')" \
+    "[all] dtparam=watchdog=on os_prefix=a/ [tryboot] os_prefix=b/ [all] "
+bt_pi_config "$KORT/config.txt" b
+forvent "Pi config: skift til b, kun én blok" "$(grep -c 'os_prefix=' "$KORT/config.txt") $(sed -n '/>>> Badminton/,/<<< Badminton/p' "$KORT/config.txt" | grep os_prefix | tr '\n' ' ')" \
+    "2 os_prefix=b/ os_prefix=a/ "
+bt_pi_config "$KORT/config.txt" a
+
+# tjek med Pi-manifestet
+: > "$PI_ENV"; env_saet aktiv=a
+SLOT=a VERSION_NU=2026.10.9
+conf foerst
+manifest 2026.10.10 badminton-tv-rod-2026.10.10.squashfs > "$TMP/m.json"
+forvent "Pi: PC'ens system afvises" "$(laes)" ugyldig
+udgiv 2026.10.10
+indeholder "Pi: henter fra opdatering-pi.json" "$(tjek)" "KLARGØR 2026.10.10"
+forvent "Pi: proev sat" "$(pi_env proev) $(pi_env proev_antal)" "b 1"
+
+# proev: genstart med tryboot, og slet proev først (én gang)
+echo 'console=tty1 root=PARTUUID=abcd1234-03 badminton.slot=b' > "$KORT/b/cmdline.txt"
+: > "$TMP/systemctl.log"
+proev >/dev/null
+forvent "Pi proev: genstarter med tryboot" "$(cat "$TMP/systemctl.log")" "reboot 0 tryboot"
+forvent "Pi proev: proev slettet, prøven i gang" "$(pi_env proev)|$(pi_env proev_igang)" "|2026.10.10"
+# Næste opstart er igen system a: firmwaren startede det gamle system uden at
+# prøve det nye (tryboot virker ikke på denne Pi)
+: > "$TMP/systemctl.log"
+svar=$(proev)
+forvent "Pi proev: ikke igen uden ny proev" "$(cat "$TMP/systemctl.log")" ""
+indeholder "Pi proev: tryboot virkede ikke" "$svar" "understøtter måske ikke tryboot"
+indeholder "Pi proev: gemt som sidste fejl" "$(pi_env sidste_fejl)" "ikke startet med tryboot"
+forvent "Pi proev: meldes kun én gang" "$(pi_env proev_igang)" ""
+
+# bekraeft i det nye system (b), mens a stadig er det aktive
+env_saet proev_igang=2026.10.10
+SLOT=b VERSION_NU=2026.10.10 SUND_SEK=0 FRIST_SEK=30
+forvent "Pi: på prøve, når systemet ikke er det aktive" "$(paa_proeve && echo ja)" ja
+indeholder "Pi: tjekker ikke under prøven" "$(tjek)" "kører på prøve"
+FAKE_SIDER='[{"type": "page", "url": "https://lyngby.badmintonapp.dk/tv-v3.html"}]' bekraeft >/dev/null
+forvent "Pi bekraeft: aktiv=b" "$(pi_env aktiv)" b
+forvent "Pi bekraeft: config.txt starter b" "$(grep -m1 '^os_prefix=' "$KORT/config.txt")" "os_prefix=b/"
+forvent "Pi bekraeft: tilstanden ryddet" "$(grep -cE '^proev' "$PI_ENV")" 0
+forvent "Pi: ikke længere på prøve" "$(paa_proeve && echo ja)" ""
+
+# En prøve, hvor TV-siden aldrig kommer frem: genstart til det gamle
+env_saet aktiv=a proev_igang=2026.10.10
+bt_pi_config "$KORT/config.txt" a
+: > "$TMP/systemctl.log"
+FRIST_SEK=0 bekraeft >/dev/null
+forvent "Pi bekraeft fejlet: genstarter (uden tryboot)" "$(cat "$TMP/systemctl.log")" "reboot"
+forvent "Pi bekraeft fejlet: aktiv uændret" "$(pi_env aktiv) $(grep -m1 '^os_prefix=' "$KORT/config.txt")" "a os_prefix=a/"
+indeholder "Pi bekraeft fejlet: sidste fejl" "$(pi_env sidste_fejl)" "2026.10.10"
+# Tilbage i a: prøven blev startet, men ikke godkendt
+SLOT=a
+indeholder "Pi proev: prøvet, ikke godkendt" "$(proev)" "blev prøvet, men ikke godkendt"
 
 echo "$ok bestået, $fejl fejlet"
 [ "$fejl" -eq 0 ]

@@ -1,23 +1,29 @@
 #!/bin/bash
-# Automatisk opdatering af Badminton TV på PC'en.
+# Automatisk opdatering af Badminton TV — på PC'en og på Raspberry Pi'en.
 #
-# PC'ens disk har to systemer, A og B (se rod.sh). Det ene kører, det andet er
-# ledigt. En ny version skrives til det ledige, mens TV'et kører videre, og
-# PC'en prøver den ved næste opstart. Kommer TV-siden frem og kører i 5
-# minutter, bliver den nye version det aktive system; ellers starter PC'en det
-# gamle igen. Valget træffes af GRUB på EFI-partitionen (grub-esp.cfg).
+# Disken (SD-kortet) har to systemer, A og B (se rod.sh). Det ene kører, det
+# andet er ledigt. En ny version skrives til det ledige, mens TV'et kører
+# videre, og prøves ved næste opstart. Kommer TV-siden frem og kører i 5
+# minutter, bliver den nye version det aktive system; ellers starter det gamle
+# igen.
+#   PC:  GRUB på EFI-partitionen vælger system (grub-esp.cfg + badminton-tv.env).
+#   Pi:  config.txt vælger system med os_prefix. Pi'en prøver det nye med en
+#        tryboot-genstart lige efter opstarten — firmwaren glemmer tryboot igen,
+#        så næste opstart er altid det gamle, medmindre det nye er godkendt.
 #
 #   opdatering tjek       hent og klargør en ny version, hvis der er en
 #                         (badminton-tv-opdatering.timer, hver anden time)
+#   opdatering proev      Pi: genstart med tryboot, hvis en ny version venter
+#                         (badminton-tv-opdatering-proev.service, ved opstart)
 #   opdatering bekraeft   i et nyt system på prøve: gør det til det aktive, når
 #                         TV-siden har kørt i 5 minutter — eller genstart til
 #                         det gamle, hvis den ikke er kommet efter 20 minutter
 #   opdatering status     vis tilstanden
 #
 # Versionerne hentes fra GitHub-udgivelserne (tags tv-usb-v*): manifestet
-# opdatering.json, signeret med Badminton TV's nøgle (opdatering.pub), og
-# rod-filsystemet, hvis SHA256 står i manifestet. Uden gyldig signatur sker der
-# intet. Der nedgraderes aldrig.
+# (opdatering.json / opdatering-pi.json), signeret med Badminton TV's nøgle
+# (opdatering.pub), og rod-filsystemet, hvis SHA256 står i manifestet. Uden
+# gyldig signatur sker der intet. Der nedgraderes aldrig.
 #
 # OPDATERING i kiosk.conf:
 #   auto    hent, når udgivelsen er vent_timer gammel (står i manifestet,
@@ -35,6 +41,7 @@ BT_LIB=${BT_LIB:-/usr/lib/badminton-tv}
 KILDE=https://github.com/CesarDKK/badminton-score-counter/releases
 NOEGLE=${BT_NOEGLE:-/usr/share/badminton-tv/opdatering.pub}
 BTENV=/boot/efi/EFI/debian/badminton-tv.env
+KORT=${BT_KORT:-/boot/kort}
 ARB=/run/badminton-tv/opdatering
 SUND_SEK=300        # så længe skal TV-siden have kørt, før et nyt system godkendes
 FRIST_SEK=1200      # … og senest så længe efter opstarten
@@ -44,13 +51,72 @@ if [ -f /etc/badminton-tv/opdatering.env ]; then
     . /etc/badminton-tv/opdatering.env
 fi
 
+if [ -n "${BT_PLATFORM:-}" ]; then
+    PLATFORM=$BT_PLATFORM
+elif tr -d '\0' < /proc/device-tree/model 2>/dev/null | grep -q 'Raspberry Pi'; then
+    PLATFORM=pi
+else
+    PLATFORM=pc
+fi
+if [ "$PLATFORM" = pi ]; then
+    MANIFEST=opdatering-pi.json
+    ROD_NAVN=badminton-tv-pi-rod
+    PI_ENV=$KORT/badminton-tv-opdatering.txt
+else
+    MANIFEST=opdatering.json
+    ROD_NAVN=badminton-tv-rod
+fi
+
 cmdline() { tr ' ' '\n' < /proc/cmdline | sed -n "s/^$1=//p" | tail -1; }
 SLOT=$(cmdline badminton.slot)
 VERSION_NU=$(cat /usr/share/badminton-tv/version 2>/dev/null || echo ukendt)
 
-env_hent() { grub-editenv "$BTENV" list 2>/dev/null | sed -n "s/^$1=//p"; }
-env_saet() { grub-editenv "$BTENV" set "$@"; }
-env_slet() { grub-editenv "$BTENV" unset "$@"; }
+# Tilstanden (aktiv, proev, proev_version, proev_antal …): på PC'en i GRUB's
+# miljøfil, på Pi'en i en tekstfil på SD-kortets FAT-partition.
+env_hent() {
+    if [ "$PLATFORM" = pi ]; then
+        sed -n "s/^$1=//p" "$PI_ENV" 2>/dev/null | tail -1
+    else
+        grub-editenv "$BTENV" list 2>/dev/null | sed -n "s/^$1=//p"
+    fi
+}
+pi_env_skriv() { # awk-program, der får filen ind og skriver den nye
+    {
+        printf '# Badminton TV: automatisk opdatering. Rør ikke filen.\n'
+        grep -v '^#' "$PI_ENV" 2>/dev/null | awk "$1"
+    } > "$PI_ENV.ny"
+    sync
+    mv "$PI_ENV.ny" "$PI_ENV"
+    sync
+}
+env_saet() { # nøgle=værdi …
+    if [ "$PLATFORM" = pi ]; then
+        local kv prog='1'
+        for kv in "$@"; do prog="$prog && !/^${kv%%=*}=/"; done
+        pi_env_skriv "$prog { print } END { $(for kv in "$@"; do printf 'print "%s"; ' "$kv"; done) }"
+    else
+        grub-editenv "$BTENV" set "$@"
+    fi
+}
+env_slet() { # nøgle …
+    if [ "$PLATFORM" = pi ]; then
+        local k prog='1'
+        for k in "$@"; do prog="$prog && !/^$k=/"; done
+        pi_env_skriv "$prog { print }"
+    else
+        grub-editenv "$BTENV" unset "$@"
+    fi
+}
+aktiv() { local a; a=$(env_hent aktiv); echo "${a:-a}"; }
+
+# Kører et nyt system på prøve, som ikke er godkendt endnu?
+paa_proeve() {
+    if [ "$PLATFORM" = pi ]; then
+        [ -n "$SLOT" ] && [ "$SLOT" != "$(aktiv)" ]
+    else
+        [ "$(cmdline badminton.forsoeg)" = 1 ]
+    fi
+}
 
 # er_nyere A B — er B en nyere version end A?
 er_nyere() {
@@ -85,7 +151,7 @@ laes_manifest() {
     [[ "$M_VERSION" =~ ^[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,3}$ ]] &&
     [[ "$M_UDGIVET" =~ ^[0-9]{9,11}$ ]] &&
     [[ "$M_VENT" =~ ^[0-9]{1,3}$ ]] &&
-    [ "$M_FIL" = "badminton-tv-rod-$M_VERSION.squashfs" ] &&
+    [ "$M_FIL" = "$ROD_NAVN-$M_VERSION.squashfs" ] &&
     [[ "$M_SHA256" =~ ^[0-9a-f]{64}$ ]] &&
     [[ "$M_BYTES" =~ ^[0-9]{6,11}$ ]]
 }
@@ -103,12 +169,14 @@ hent() { # URL FIL [curl-flag…]
 # ── tjek ───────────────────────────────────────────────────
 tjek() {
     if [ -z "$SLOT" ]; then
-        echo "PC'en har det gamle disklayout med ét system — installér den forfra fra USB-nøglen for at få automatisk opdatering."
+        if [ "$PLATFORM" = pi ]; then
+            echo "SD-kortet har det gamle layout med ét system — skriv et nyt billede på kortet for at få automatisk opdatering."
+        else
+            echo "PC'en har det gamle disklayout med ét system — installér den forfra fra USB-nøglen for at få automatisk opdatering."
+        fi
         return 0
     fi
-    local aktiv
-    aktiv=$(env_hent aktiv)
-    if [ "${aktiv:-a}" != "$SLOT" ]; then
+    if paa_proeve || [ "$(aktiv)" != "$SLOT" ]; then
         echo "System $SLOT kører på prøve og er ikke godkendt endnu — tjekker ikke for opdateringer."
         return 0
     fi
@@ -131,18 +199,18 @@ tjek() {
     fi
 
     mkdir -p "$ARB"
-    rm -f "$ARB/opdatering.json" "$ARB/opdatering.json.sig"
-    if ! hent "$KILDE/latest/download/opdatering.json" "$ARB/opdatering.json" --max-time 60 \
-       || ! hent "$KILDE/latest/download/opdatering.json.sig" "$ARB/opdatering.json.sig" --max-time 60; then
-        echo "Kunne ikke hente opdateringsmanifestet fra $KILDE — prøver igen senere."
+    rm -f "$ARB/manifest.json" "$ARB/manifest.json.sig"
+    if ! hent "$KILDE/latest/download/$MANIFEST" "$ARB/manifest.json" --max-time 60 \
+       || ! hent "$KILDE/latest/download/$MANIFEST.sig" "$ARB/manifest.json.sig" --max-time 60; then
+        echo "Kunne ikke hente opdateringsmanifestet ($MANIFEST) fra $KILDE — prøver igen senere."
         return 0
     fi
-    if ! signatur_ok "$ARB/opdatering.json" "$ARB/opdatering.json.sig"; then
+    if ! signatur_ok "$ARB/manifest.json" "$ARB/manifest.json.sig"; then
         echo "FEJL: Opdateringsmanifestets signatur passer ikke — det bliver ikke brugt."
         return 1
     fi
-    if ! laes_manifest "$ARB/opdatering.json"; then
-        echo "FEJL: Opdateringsmanifestet kan ikke læses: $(head -c 500 "$ARB/opdatering.json")"
+    if ! laes_manifest "$ARB/manifest.json"; then
+        echo "FEJL: Opdateringsmanifestet kan ikke læses: $(head -c 500 "$ARB/manifest.json")"
         return 1
     fi
 
@@ -163,12 +231,56 @@ tjek() {
     esac
 }
 
-# Skriver M_VERSION til det ledige system og beder GRUB om at prøve det.
+# ── Det ledige system ──────────────────────────────────────
+# Udskriver enheden for system $1 — på Pi'en oprettes partitionen, første
+# gang der skal bruges et system B. Status 2: SD-kortet er for lille.
+ledigt_system() {
+    if [ "$PLATFORM" != pi ]; then
+        blkid -L "badminton-tv-$1"
+        return
+    fi
+    local dev
+    dev=/dev/disk/by-partuuid/$DISKID-$(bt_pi_nr "$1")
+    if [ -e "$dev" ]; then
+        readlink -f "$dev"
+        return
+    fi
+    # Partition 3 lægges efter roden (2) med samme størrelse.
+    local rod disk start str i
+    rod=$(readlink -f "/dev/disk/by-partuuid/$DISKID-02")
+    disk=/dev/$(lsblk -no PKNAME "$rod")
+    start=$(cat "/sys/class/block/$(basename "$rod")/start")
+    str=$(cat "/sys/class/block/$(basename "$rod")/size")
+    i=$(( (start + str + 8191) / 8192 * 8192 ))
+    if [ $((i + str)) -gt "$(cat "/sys/block/$(basename "$disk")/size")" ]; then
+        return 2
+    fi
+    echo "Opretter plads til system B på SD-kortet ($((str / 2048)) MB) …" >&2
+    printf 'start=%s, size=%s, type=83\n' "$i" "$str" | sfdisk -q --append --no-reread "$disk" >&2
+    partx -a -n 3 "$disk" >&2 2>/dev/null || true
+    udevadm settle
+    for _ in $(seq 1 20); do
+        [ -e "$dev" ] && break
+        sleep 0.5
+    done
+    readlink -f "$dev"
+}
+
+# Skriver M_VERSION til det ledige system og sætter det til at blive prøvet.
 klargoer() {
-    local andet dev
+    local andet dev status=0
     if [ "$SLOT" = a ]; then andet=b; else andet=a; fi
-    if ! dev=$(blkid -L "badminton-tv-$andet"); then
-        echo "FEJL: System $andet (badminton-tv-$andet) findes ikke på disken."
+    if [ "$PLATFORM" = pi ]; then
+        DISKID=$(cmdline root | sed -n 's/^PARTUUID=\(.*\)-0[0-9]$/\1/p')
+        [ -n "$DISKID" ] || { echo "FEJL: Kan ikke finde SD-kortets disk-id i kernelinjen."; return 1; }
+    fi
+    dev=$(ledigt_system "$andet") || status=$?
+    if [ "$status" = 2 ]; then
+        echo "SD-kortet er for lille til automatisk opdatering — brug et kort på mindst 16 GB."
+        return 0
+    fi
+    if [ "$status" != 0 ] || [ ! -b "$dev" ]; then
+        echo "FEJL: System $andet findes ikke på disken."
         return 1
     fi
     if findmnt -rno TARGET "$dev" >/dev/null; then
@@ -186,7 +298,8 @@ klargoer() {
         local fra_foer
         fra_foer=$(cat "$NY/.badminton-tv-klar" 2>/dev/null || true)
         umount "$NY"
-        if [ "$fra_foer" = "$M_VERSION" ]; then
+        if [ "$fra_foer" = "$M_VERSION" ] \
+           && { [ "$PLATFORM" != pi ] || [ -s "$KORT/$andet/cmdline.txt" ]; }; then
             echo "Version $M_VERSION ligger allerede på system $andet fra et tidligere forsøg."
             saet_proev "$andet"
             return 0
@@ -213,28 +326,54 @@ klargoer() {
     umount "$KILDE_MNT"
     rm -f "$sq"
 
-    echo "Overfører PC'ens indstillinger …"
-    # kiosk.conf (med WiFi-koden), installationsoplysninger og evt. testindstillinger
-    mkdir -p "$NY/etc/badminton-tv"
-    cp -a /etc/badminton-tv/. "$NY/etc/badminton-tv/"
-    printf 'opdateret=%s\nversion=%s\n' "$(date --iso-8601=seconds)" "$M_VERSION" >> "$NY/etc/badminton-tv/installeret"
+    echo "Overfører indstillingerne …"
+    # kiosk.conf (med WiFi-koden), installationsoplysninger og evt.
+    # testindstillinger. (På Pi'en ligger kiosk.conf på FAT-partitionen.)
+    if [ -d /etc/badminton-tv ]; then
+        mkdir -p "$NY/etc/badminton-tv"
+        cp -a /etc/badminton-tv/. "$NY/etc/badminton-tv/"
+        printf 'opdateret=%s\nversion=%s\n' "$(date --iso-8601=seconds)" "$M_VERSION" >> "$NY/etc/badminton-tv/installeret"
+    fi
     cp /etc/hostname "$NY/etc/hostname"
-    # Samme maskine-id som før (bruges bl.a. af DHCP), så PC'en beholder sin IP
+    # Samme maskine-id som før (bruges bl.a. af DHCP), så den beholder sin IP
     rm -f "$NY/var/lib/dbus/machine-id"
     cp /etc/machine-id "$NY/etc/machine-id"
-    bt_rod_fstab "$NY" "$(blkid -s UUID -o value "$dev")" "$(findmnt -no UUID /boot/efi)"
 
-    echo "Gør systemet klar til at starte fra disken …"
-    bt_rod_monter "$NY"
-    bt_rod_fjern_live "$NY"
-    bt_rod_laas_grub "$NY"
-    bt_rod_afmonter "$NY"
-    bt_rod_kan_starte "$NY" "$M_VERSION"
+    echo "Gør systemet klar til at starte …"
+    if [ "$PLATFORM" = pi ]; then
+        klargoer_pi_opstart "$andet"
+        bt_pi_fstab "$NY" "$DISKID" "$andet"
+        bt_pi_kan_starte "$KORT" "$andet" "$DISKID" "$M_VERSION" "$NY"
+    else
+        bt_rod_fstab "$NY" "$(blkid -s UUID -o value "$dev")" "$(findmnt -no UUID /boot/efi)"
+        bt_rod_monter "$NY"
+        bt_rod_fjern_live "$NY"
+        bt_rod_laas_grub "$NY"
+        bt_rod_afmonter "$NY"
+        bt_rod_kan_starte "$NY" "$M_VERSION"
+    fi
 
     printf '%s\n' "$M_VERSION" > "$NY/.badminton-tv-klar"
     sync
     umount "$NY"
     saet_proev "$andet"
+}
+
+# Pi: systemets kerne, initramfs, device trees og cmdline.txt ligger i
+# squashfs'ens /boot/firmware og skal over i sin mappe på FAT-partitionen.
+klargoer_pi_opstart() { # slot
+    local dir=$KORT/$1
+    rm -rf "$dir.ny"
+    mkdir -p "$dir.ny"
+    # FAT kan ikke have ejer og rettigheder
+    cp -r --no-preserve=all "$NY/boot/firmware/." "$dir.ny/"
+    find "$NY/boot/firmware" -mindepth 1 -delete
+    sed -i -e "s/root=PARTUUID=[^ ]*/root=PARTUUID=$DISKID-$(bt_pi_nr "$1")/" \
+           -e "s/badminton\.slot=[a-z]*/badminton.slot=$1/" "$dir.ny/cmdline.txt"
+    sync
+    rm -rf "$dir"
+    mv "$dir.ny" "$dir"
+    sync
 }
 
 oprydning() {
@@ -257,6 +396,40 @@ saet_proev() { # slot
     echo "Version $M_VERSION er klar på system $1 og startes ved næste opstart (forsøg $antal af $MAKS_FORSOEG)."
 }
 
+# ── proev (Pi) ─────────────────────────────────────────────
+# Ved opstart: venter en ny version, så genstart med tryboot ind i den. proev
+# slettes først (som GRUB gør på PC'en), så en mislykket prøve ikke prøves igen
+# i ring — tjek sætter den igen, hvis versionen skal prøves en gang til.
+proev() {
+    [ "$PLATFORM" = pi ] || return 0
+    local proev forrige
+    # Kom vi tilbage fra en prøve, der ikke blev godkendt?
+    forrige=$(env_hent proev_igang)
+    if [ -n "$forrige" ] && [ "$SLOT" = "$(aktiv)" ]; then
+        if [ "$(env_hent proev_startet)" = "$forrige" ]; then
+            echo "Version $forrige blev prøvet, men ikke godkendt — kører den tidligere version."
+        else
+            echo "FEJL: Version $forrige blev aldrig startet — Pi'en understøtter måske ikke tryboot. Kører den tidligere version."
+            env_saet sidste_fejl="$forrige blev ikke startet med tryboot $(date '+%Y-%m-%d %H:%M')"
+        fi
+        env_slet proev_igang proev_startet
+    fi
+    proev=$(env_hent proev)
+    if [ -z "$proev" ] || [ "$proev" = "$SLOT" ] || [ "$SLOT" != "$(aktiv)" ]; then
+        return 0
+    fi
+    if [ ! -s "$KORT/$proev/cmdline.txt" ]; then
+        env_slet proev
+        return 0
+    fi
+    local version
+    version=$(env_hent proev_version)
+    env_slet proev proev_startet
+    env_saet proev_igang="$version"
+    echo "Genstarter for at prøve version $version (system $proev) …"
+    systemctl reboot "0 tryboot"
+}
+
 # ── bekraeft ───────────────────────────────────────────────
 # Kører TV-siden? badminton-tv.service kører, og Chromium viser en side på
 # http(s) — dvs. startsiden har fundet netværket og skiftet til TV_URL.
@@ -267,9 +440,8 @@ sund() {
 }
 
 bekraeft() {
-    if [ "$(cmdline badminton.forsoeg)" != 1 ]; then
-        return 0
-    fi
+    paa_proeve || return 0
+    [ "$PLATFORM" = pi ] && env_saet proev_startet="$VERSION_NU"
     echo "System $SLOT (version $VERSION_NU) er startet på prøve. Det bliver det aktive system, når TV-siden har kørt i $SUND_SEK sekunder."
     # Oppetiden og ikke $SECONDS: den følger uret, som springer, når det
     # sættes fra internettet (set i testen: 2 timer — fristen "udløb" med det samme)
@@ -280,8 +452,15 @@ bekraeft() {
         if sund; then
             ok_fra=${ok_fra:-$(oppe)}
             if [ $(($(oppe) - ok_fra)) -ge "$SUND_SEK" ]; then
-                env_saet aktiv="$SLOT"
-                env_slet proev proev_version proev_antal
+                if [ "$PLATFORM" = pi ]; then
+                    # Først config.txt (hvad firmwaren starter), så tilstanden
+                    bt_pi_config "$KORT/config.txt" "$SLOT"
+                    env_saet aktiv="$SLOT"
+                    env_slet proev proev_version proev_antal proev_igang proev_startet
+                else
+                    env_saet aktiv="$SLOT"
+                    env_slet proev proev_version proev_antal
+                fi
                 echo "Opdateret til version $VERSION_NU — system $SLOT er nu det aktive."
                 return 0
             fi
@@ -298,8 +477,12 @@ bekraeft() {
 # ── status ─────────────────────────────────────────────────
 status() {
     printf 'Kører: system %s, version %s%s\n' "${SLOT:-(gammelt layout)}" "$VERSION_NU" \
-        "$([ "$(cmdline badminton.forsoeg)" = 1 ] && echo ' — på prøve')"
-    [ -f "$BTENV" ] && grub-editenv "$BTENV" list
+        "$(paa_proeve && echo ' — på prøve')"
+    if [ "$PLATFORM" = pi ]; then
+        [ -f "$PI_ENV" ] && grep -v '^#' "$PI_ENV"
+    else
+        [ -f "$BTENV" ] && grub-editenv "$BTENV" list
+    fi
     return 0
 }
 
@@ -315,8 +498,9 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
                 exit 0
             fi
             tjek ;;
+        proev)    proev ;;
         bekraeft) bekraeft ;;
         status)   status ;;
-        *) sed -n '2,30p' "$0"; exit 1 ;;
+        *) sed -n '2,35p' "$0"; exit 1 ;;
     esac
 fi

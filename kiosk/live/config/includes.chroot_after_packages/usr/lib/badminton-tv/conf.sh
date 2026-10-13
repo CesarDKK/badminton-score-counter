@@ -9,7 +9,7 @@
 # fejl der forhindrer visning (én pr. linje), og BT_ADVARSLER indeholder ting der
 # er værd at nævne, men som ikke stopper noget.
 
-BT_CONF_PI=${BT_CONF_PI:-/boot/firmware/kiosk.conf}
+BT_CONF_PI=${BT_CONF_PI:-/boot/kort/kiosk.conf}
 BT_CONF_INSTALLERET=${BT_CONF_INSTALLERET:-/etc/badminton-tv/kiosk.conf}
 BT_CONF_USB=${BT_CONF_USB:-/run/live/medium/kiosk.conf}
 

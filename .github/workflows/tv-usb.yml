@@ -137,6 +137,7 @@ jobs:
           name: tv-pi
           path: |
             ud/*.img.xz
+            ud/*.squashfs
             ud/SHA256SUMS-pi
           retention-days: 7
           compression-level: 0
@@ -165,7 +166,7 @@ jobs:
       # længe venter PC'er med OPDATERING=auto efter udgivelsen — PC'er med
       # OPDATERING=foerst henter med det samme. Den private nøgle ligger som
       # secret TV_OPDATERING_NOEGLE (PEM, ed25519); uden den udgives intet.
-      - name: Opdateringsmanifest (signeret)
+      - name: Opdateringsmanifester (signerede)
         env:
           NOEGLE: ${{ secrets.TV_OPDATERING_NOEGLE }}
         run: |
@@ -174,23 +175,25 @@ jobs:
             exit 1
           fi
           VERSION=${GITHUB_REF_NAME#tv-usb-v}
-          ROD=badminton-tv-rod-$VERSION.squashfs
-          cd ud
-          jq -n --arg version "$VERSION" --arg fil "$ROD" \
-                --arg sha256 "$(sha256sum "$ROD" | cut -d' ' -f1)" \
-                --argjson bytes "$(stat -c %s "$ROD")" \
-                --argjson udgivet "$(date +%s)" \
-                '{version: $version, udgivet: $udgivet, vent_timer: 24,
-                  rod: {fil: $fil, sha256: $sha256, bytes: $bytes}}' > opdatering.json
-          cat opdatering.json
+          PUB=../kilde/kiosk/live/config/includes.chroot_after_packages/usr/share/badminton-tv/opdatering.pub
           umask 077
           printf '%s\n' "$NOEGLE" > "$RUNNER_TEMP/noegle.pem"
-          openssl pkeyutl -sign -inkey "$RUNNER_TEMP/noegle.pem" -rawin \
-            -in opdatering.json -out opdatering.json.sig
+          cd ud
+          # PC: opdatering.json, Raspberry Pi: opdatering-pi.json
+          for par in opdatering:badminton-tv-rod opdatering-pi:badminton-tv-pi-rod; do
+            M=${par%%:*}.json
+            ROD=${par#*:}-$VERSION.squashfs
+            jq -n --arg version "$VERSION" --arg fil "$ROD" \
+                  --arg sha256 "$(sha256sum "$ROD" | cut -d' ' -f1)" \
+                  --argjson bytes "$(stat -c %s "$ROD")" \
+                  --argjson udgivet "$(date +%s)" \
+                  '{version: $version, udgivet: $udgivet, vent_timer: 24,
+                    rod: {fil: $fil, sha256: $sha256, bytes: $bytes}}' > "$M"
+            cat "$M"
+            openssl pkeyutl -sign -inkey "$RUNNER_TEMP/noegle.pem" -rawin -in "$M" -out "$M.sig"
+            openssl pkeyutl -verify -rawin -pubin -inkey "$PUB" -in "$M" -sigfile "$M.sig"
+          done
           rm -f "$RUNNER_TEMP/noegle.pem"
-          openssl pkeyutl -verify -rawin -pubin \
-            -inkey ../kilde/kiosk/live/config/includes.chroot_after_packages/usr/share/badminton-tv/opdatering.pub \
-            -in opdatering.json -sigfile opdatering.json.sig
 
       - name: Release
         env:
@@ -209,10 +212,10 @@ jobs:
 
           ⚠️ Installationen sletter alt på PC'ens disk.
 
-          **Allerede installerede PC'er** opdaterer sig selv: \`opdatering.json\` (signeret) og \`badminton-tv-rod-$VERSION.squashfs\` hentes automatisk. PC'er med \`OPDATERING=foerst\` henter med det samme, de øvrige efter 24 timer. Stop udrulningen ved at markere udgivelsen som pre-release.
+          **Allerede installerede PC'er og Pi'er** opdaterer sig selv: manifestet (\`opdatering.json\` / \`opdatering-pi.json\`, signeret) og systemet (\`badminton-tv-rod-$VERSION.squashfs\` / \`badminton-tv-pi-rod-$VERSION.squashfs\`) hentes automatisk. Skærme med \`OPDATERING=foerst\` henter med det samme, de øvrige efter 24 timer. Stop udrulningen ved at markere udgivelsen som pre-release.
 
           **Raspberry Pi 3, 4 og 5 (SD-kort):**
-          - \`badminton-tv-pi-$VERSION.img.xz\` — skriv den til et SD-kort (mindst 8 GB) med [Raspberry Pi Imager](https://www.raspberrypi.com/software/) ("Use custom", uden OS-tilpasning) eller balenaEtcher. \`kiosk.conf\` ligger på kortet bagefter.
+          - \`badminton-tv-pi-$VERSION.img.xz\` — skriv den til et SD-kort (mindst 8 GB — 16 GB for automatisk opdatering) med [Raspberry Pi Imager](https://www.raspberrypi.com/software/) ("Use custom", uden OS-tilpasning) eller balenaEtcher. \`kiosk.conf\` ligger på kortet bagefter.
           EOF
           gh release create "$GITHUB_REF_NAME" * \
             --repo "$GITHUB_REPOSITORY" \
