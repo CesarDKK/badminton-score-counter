@@ -24,7 +24,16 @@ StandardError=journal
 UtmpIdentifier=tty1
 UtmpMode=user
 Environment=XDG_SESSION_TYPE=wayland
-ExecStart=/usr/bin/cage -- /usr/lib/badminton-tv/browser
+# En usynlig skærm (HEADLESS-1) ved siden af den rigtige. På nogle PC'er (fx
+# DisplayPort med adapter) — og på en Pi — forsvinder skærmen helt for Linux,
+# når TV'et er slukket. Uden nogen skærm starter Chromium slet ikke, så TV-siden
+# og livstegnene til admin kom først, når TV'et blev tændt (set i Lyngby; i
+# VM'en med video=Virtual-1:d). Den virtuelle skærm oprettes først, og
+# -m last viser kun den sidst tilsluttede: TV'et, når det er der, ellers den
+# virtuelle — også når TV'et slukkes og tændes, mens PC'en kører.
+Environment=WLR_BACKENDS=headless,drm,libinput
+Environment=WLR_HEADLESS_OUTPUTS=1
+ExecStart=/usr/bin/cage -m last -- /usr/lib/badminton-tv/browser
 Restart=always
 RestartSec=3
 

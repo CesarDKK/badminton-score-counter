@@ -69,11 +69,11 @@ forbered() {
         local f=$KILDE_SRC/live/config/includes.chroot_after_packages
         echo "Lægger scripts fra $KILDE_SRC ind …"
         cp -r "$f/usr/lib/badminton-tv/." "$rod/usr/lib/badminton-tv/"
-        cp "$f"/usr/lib/systemd/system/badminton-tv-* "$rod/usr/lib/systemd/system/"
+        cp "$f"/usr/lib/systemd/system/badminton-tv* "$rod/usr/lib/systemd/system/"
         cp "$f"/usr/share/badminton-tv/{grub-esp.cfg,grub-slot.cfg,start.html} "$rod/usr/share/badminton-tv/"
         find "$rod/usr/lib/badminton-tv" -type f -exec chmod 755 {} +
         chmod 644 "$rod/usr/lib/badminton-tv/conf.sh" "$rod/usr/lib/badminton-tv/rod.sh" \
-                  "$rod"/usr/lib/systemd/system/badminton-tv-*
+                  "$rod"/usr/lib/systemd/system/badminton-tv*
         find "$rod/usr/share/badminton-tv" -type f -exec chmod 644 {} +
     fi
 
@@ -117,14 +117,17 @@ EOF
     printf 'TV_URL=%s/tv.html\r\nNAVN=vm-test\r\nOPDATERING=foerst\r\n' "$TEST_KILDE" > "$arb/kiosk.conf"
     mcopy -o -i "$OPD/usb-test.img@@1M" "$arb/kiosk.conf" ::/kiosk.conf
 
-    # Den nye version
-    printf '%s\n' "$ny" > "$rod/usr/share/badminton-tv/version"
-    lav "$SERVER/releases/download/tv-usb-v$ny/badminton-tv-rod-$ny.squashfs"
+    # KUN_USB=1: kun USB-billedet (fx til at prøve TV-siden uden skærm)
+    if [ -z "${KUN_USB:-}" ]; then
+        # Den nye version
+        printf '%s\n' "$ny" > "$rod/usr/share/badminton-tv/version"
+        lav "$SERVER/releases/download/tv-usb-v$ny/badminton-tv-rod-$ny.squashfs"
 
-    # Den ødelagte: browseren stopper med det samme, TV-siden kommer aldrig
-    printf '%s\n' "$oedelagt" > "$rod/usr/share/badminton-tv/version"
-    printf '#!/bin/sh\necho "Testversion: browseren starter ikke" >&2\nexit 1\n' > "$rod/usr/lib/badminton-tv/browser"
-    lav "$SERVER/releases/download/tv-usb-v$oedelagt/badminton-tv-rod-$oedelagt.squashfs"
+        # Den ødelagte: browseren stopper med det samme, TV-siden kommer aldrig
+        printf '%s\n' "$oedelagt" > "$rod/usr/share/badminton-tv/version"
+        printf '#!/bin/sh\necho "Testversion: browseren starter ikke" >&2\nexit 1\n' > "$rod/usr/lib/badminton-tv/browser"
+        lav "$SERVER/releases/download/tv-usb-v$oedelagt/badminton-tv-rod-$oedelagt.squashfs"
+    fi
     rm -rf "$rod"
 
     cat > "$SERVER/tv.html" <<'EOF'
@@ -134,6 +137,10 @@ EOF
 <script>
   const p = new URLSearchParams(location.search);
   document.getElementById('v').textContent = 'Badminton TV ' + (p.get('kioskversion') || '?');
+  // Vinduets størrelse og synlighed i serverloggen (GET /status?…): 1920x1080
+  // = på den rigtige skærm, 1280x720 = på den virtuelle (TV'et slukket)
+  const meld = () => fetch('/status?vis=' + document.visibilityState + '&w=' + innerWidth + '&h=' + innerHeight).catch(() => {});
+  meld(); setInterval(meld, 5000);
 </script>
 EOF
     echo "Klar: $OPD/usb-test.img og $SERVER"
