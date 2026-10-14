@@ -17,9 +17,11 @@ rm -rf "$PROFIL"
 mkdir -p "$PROFIL"
 
 # Skalering: TV-siden er layoutet til 1920 px bredde. På et 4K-TV ville teksten
-# blive halvt så stor, så vi skalerer op i forhold til skærmens bredde.
+# blive halvt så stor, så vi skalerer op i forhold til skærmens bredde. Den
+# virtuelle skærm (HEADLESS-1, se badminton-tv.service) tæller ikke: er TV'et
+# slukket ved opstart, er der ingen bredde, og skalaen bliver 1.
 skala=1
-bredde=$(wlr-randr 2>/dev/null | awk '/current/ { split($1, m, "x"); print m[1]; exit }')
+bredde=$(wlr-randr 2>/dev/null | awk '/^[^ ]/ { navn = $1 } /current/ && navn !~ /^HEADLESS/ { split($1, m, "x"); print m[1]; exit }')
 if [ "$BT_SKALERING" = auto ]; then
     if [ -n "$bredde" ] && [ "$bredde" -gt 2560 ]; then
         skala=$(awk -v b="$bredde" 'BEGIN { printf "%.2f", b / 1920 }')
@@ -46,7 +48,7 @@ START+="&cec=$(enc "$cec")"
 START+="&skaerm=$(enc "${bredde:-?} px, skalering $skala")"
 START+="&sluk=$(enc "$BT_SLUK_KL")"
 START+="&version=$(enc "$version")"
-if tr -d '\0' < /proc/device-tree/model 2>/dev/null | grep -q 'Raspberry Pi'; then
+if tr -d '\0' 2>/dev/null < /proc/device-tree/model | grep -q 'Raspberry Pi'; then
     START+="&platform=pi"
 fi
 START+="&fejl=$(enc "$BT_FEJL")"

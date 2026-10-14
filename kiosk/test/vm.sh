@@ -18,6 +18,8 @@
 #       --uden-tastatur   hverken USB- eller PS/2-tastatur (så virker tast ikke)
 #       --nvram-fuld[=N]  fyld UEFI-lageret, så kun ca. N KB er fri (standard 4),
 #                         og boot-posten ikke kan gemmes (som på M70q Gen 4)
+#       --kerne="…"       ekstra kerneparametre på USB-nøglens menupunkter, fx
+#                         --kerne=video=Virtual-1:d (ingen skærm, som et slukket TV)
 #   genstart-fra-disk     start igen uden USB-nøgle (efter installation)
 #   skaerm <fil.png>      skærmbillede
 #   tast <tast>…          send taster (QEMU-navne: ret, down, esc, spc …)
@@ -122,7 +124,7 @@ case "${1:-}" in
     start)
         behoev
         img=${2:?Angiv USB-billedet}
-        secure=0 proeve=0 fyld=0 tastatur=1
+        secure=0 proeve=0 fyld=0 tastatur=1 kerne=''
         for flag in "${@:3}"; do
             case "$flag" in
                 --secure-boot) secure=1 ;;
@@ -130,6 +132,7 @@ case "${1:-}" in
                 --uden-tastatur) tastatur=0 ;;
                 --nvram-fuld) fyld=4 ;;
                 --nvram-fuld=*) fyld=${flag#*=} ;;
+                --kerne=*) kerne=${flag#*=} ;;
                 *) echo "Ukendt flag: $flag" >&2; exit 1 ;;
             esac
         done
@@ -143,6 +146,9 @@ case "${1:-}" in
         cp "$img" "$VM/usb.img"
         if [ "$proeve" = 1 ]; then
             ret_grub 's/^set default=installer/set default=proeve/'
+        fi
+        if [ -n "$kerne" ]; then
+            ret_grub "s|badminton.tilstand=|$kerne badminton.tilstand=|"
         fi
         if [ "$fyld" != 0 ]; then
             command -v virt-fw-vars >/dev/null || DEBIAN_FRONTEND=noninteractive \
