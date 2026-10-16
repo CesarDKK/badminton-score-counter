@@ -113,9 +113,6 @@ function setupEventListeners() {
     document.getElementById('courtFilterSelect').addEventListener('change', handleCourtFilter);
     document.getElementById('deleteAllMatchHistoryBtn').addEventListener('click', deleteAllMatchHistory);
 
-    // Clear All Court Data
-    document.getElementById('clearAllDataBtn').addEventListener('click', clearAllData);
-
     // Edit Court Modal
     const modal = document.getElementById('editCourtModal');
     const closeBtn = document.querySelector('.close-modal');
@@ -201,6 +198,11 @@ function applyPagePermissions() {
     const allowed = new Set(permissions);
     document.querySelectorAll('#adminNavRow [data-page]').forEach(el => {
         if (!allowed.has(el.dataset.page)) el.style.display = 'none';
+    });
+    // En gruppe ("Kampe"/"Klub") uden tilladte punkter skjules helt — ellers står mærket alene
+    document.querySelectorAll('#adminNavRow .admin-nav-group').forEach(group => {
+        const anyAllowed = [...group.querySelectorAll('[data-page]')].some(el => allowed.has(el.dataset.page));
+        if (!anyAllowed) group.style.display = 'none';
     });
     return allowed;
 }
@@ -366,7 +368,7 @@ function createCourtCard(courtNumber, state) {
                     Ingen aktiv kamp
                 </div>
                 <div class="court-actions">
-                    <button class="btn-edit" onclick="openEditModal(${courtNumber})">Redigér Bane</button>
+                    <button class="btn-edit" onclick="openEditModal(${courtNumber})">Redigér bane</button>
                     <button class="btn-latest-match" onclick="showLatestMatch(${courtNumber})">Seneste kamp</button>
                 </div>
             `;
@@ -420,7 +422,7 @@ function createCourtCard(courtNumber, state) {
                 </div>
             </div>
             <div class="court-actions">
-                <button class="btn-edit" onclick="openEditModal(${courtNumber})">Redigér Bane</button>
+                <button class="btn-edit" onclick="openEditModal(${courtNumber})">Redigér bane</button>
                 <button class="btn-latest-match" onclick="showLatestMatch(${courtNumber})">Seneste kamp</button>
             </div>
         `;
@@ -438,7 +440,7 @@ function createCourtCard(courtNumber, state) {
                 Kunne ikke indlæse data
             </div>
             <div class="court-actions">
-                <button class="btn-edit" onclick="openEditModal(${courtNumber})">Redigér Bane</button>
+                <button class="btn-edit" onclick="openEditModal(${courtNumber})">Redigér bane</button>
                 <button class="btn-latest-match" onclick="showLatestMatch(${courtNumber})">Seneste kamp</button>
             </div>
         `;
@@ -515,7 +517,7 @@ async function deleteAllMatchHistory() {
         config.msg1,
         [
             {
-                text: 'Ja, Fortsæt',
+                text: 'Ja, fortsæt',
                 callback: () => {
                     showMessage(
                         'SIDSTE ADVARSEL',
@@ -531,52 +533,6 @@ async function deleteAllMatchHistory() {
                                     } catch (error) {
                                         console.error('Failed to delete match history:', error);
                                         showMessage('Fejl', 'Kunne ikke slette historik. Tjek din forbindelse.');
-                                    }
-                                },
-                                style: 'danger'
-                            },
-                            { text: 'Annuller', callback: null, style: 'secondary' }
-                        ]
-                    );
-                },
-                style: 'danger'
-            },
-            { text: 'Annuller', callback: null, style: 'secondary' }
-        ]
-    );
-}
-
-async function clearAllData() {
-    showMessage(
-        'ADVARSEL',
-        'Er du sikker på at du vil nulstille ALLE baner? Dette vil slette alle point og spiltilstande!',
-        [
-            {
-                text: 'Ja, Fortsæt',
-                callback: () => {
-                    showMessage(
-                        'SIDSTE ADVARSEL',
-                        'Dette vil nulstille alle baner. Er du helt sikker?',
-                        [
-                            {
-                                text: 'Ja, Nulstil Alt',
-                                callback: async () => {
-                                    try {
-                                        const settings = await api.getSettings();
-                                        const courtCount = settings.courtCount || 4;
-
-                                        // Reset all courts and set them to single mode
-                                        for (let i = 1; i <= courtCount; i++) {
-                                            await api.resetGameState(i);
-                                            // Set court to single mode (isDoubles = false)
-                                            await api.updateCourt(i, { isDoubles: false });
-                                        }
-
-                                        showMessage('Succes', 'Alle baner er blevet nulstillet og sat til single!');
-                                        await loadCourtOverview();
-                                    } catch (error) {
-                                        console.error('Failed to clear all data:', error);
-                                        showMessage('Fejl', 'Kunne ikke nulstille baner. Tjek din forbindelse.');
                                     }
                                 },
                                 style: 'danger'
@@ -899,7 +855,7 @@ function switchHistoryTab(tab) {
     if (btn) {
         if (tab === 'team') btn.textContent = 'Slet Alt Holdkamphistorik';
         else if (tab === 'tournament') btn.textContent = 'Slet Al Turneringshistorik';
-        else btn.textContent = 'Slet Alt Kamphistorik';
+        else btn.textContent = 'Slet al kamphistorik';
     }
 
     loadActiveHistoryTab();
@@ -1120,14 +1076,8 @@ function setNavActive(section) {
     document.querySelectorAll('#adminNavRow .btn-primary').forEach(btn => {
         btn.classList.remove('admin-nav-active');
     });
-    const overviewBtn = document.getElementById('backToOverviewNavBtn');
-    if (section === 'overview' || !section) {
-        if (overviewBtn) overviewBtn.style.display = 'none';
-    } else {
-        if (overviewBtn) overviewBtn.style.display = '';
-        const btn = document.querySelector(`#adminNavRow [data-section="${section}"]`);
-        if (btn) btn.classList.add('admin-nav-active');
-    }
+    const btn = document.querySelector(`#adminNavRow [data-section="${section || 'overview'}"]`);
+    if (btn) btn.classList.add('admin-nav-active');
 }
 
 // ==================== HOLDKAMP ====================
@@ -3212,7 +3162,7 @@ async function handleCreateDeviceToken() {
         showDtMsg(msgEl, err.message || 'Oprettelse mislykkedes', 'error');
     } finally {
         btn.disabled = false;
-        btn.textContent = '+ Opret Link';
+        btn.textContent = '+ Opret link';
     }
 }
 

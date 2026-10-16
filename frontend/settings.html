@@ -8,8 +8,8 @@
     <link rel="icon" type="image/png" href="/favicon.png?v=5">
     <link rel="stylesheet" href="fonts.css?v=2">
     <link rel="stylesheet" href="styles.css?v=5">
-    <link rel="stylesheet" href="admin-styles.css?v=7">
-    <link rel="stylesheet" href="settings-styles.css?v=2">
+    <link rel="stylesheet" href="admin-styles.css?v=10">
+    <link rel="stylesheet" href="settings-styles.css?v=3">
     <script src="js/theme-loader.js?v=10"></script>
 </head>
 <body>
@@ -24,7 +24,7 @@
                 <div class="login-box">
                     <h2>Login Påkrævet</h2>
                     <input type="password" id="adminPassword" placeholder="Indtast admin adgangskode">
-                    <button id="loginBtn" class="btn-primary">Log Ind</button>
+                    <button id="loginBtn" class="btn-primary">Log ind</button>
                     <div class="back-link">
                         <a href="admin.html">← Tilbage til Oversigt</a>
                     </div>
@@ -37,38 +37,47 @@
             <header>
                 <h1>Indstillinger</h1>
                 <div class="header-controls">
-                    <a href="landing.html" class="btn-secondary" style="text-decoration: none; display: inline-block;">Tilbage til Baner</a>
-                    <button id="logoutBtn" class="btn-secondary">Log Ud</button>
+                    <a href="landing.html" class="btn-secondary" style="text-decoration: none; display: inline-block;">Tilbage til baner</a>
+                    <button id="logoutBtn" class="btn-secondary">Log ud</button>
                 </div>
             </header>
 
-            <div class="admin-nav">
+            <!-- Samme menu på admin.html, player-info.html, settings.html og sponsor.html -->
+            <nav class="admin-nav" aria-label="Admin">
                 <div class="admin-nav-row">
-                    <a href="admin.html" class="btn-primary" style="text-decoration: none; display: inline-block;">← Oversigt</a>
-                    <a href="admin.html#holdkamp" class="btn-primary" style="text-decoration: none; display: inline-block;">Holdkamp</a>
-                    <a href="admin.html#history" class="btn-primary" style="text-decoration: none; display: inline-block;">Kamphistorik</a>
-                    <a href="player-info.html" class="btn-primary" style="text-decoration: none; display: inline-block;">Spiller Info</a>
-                    <a href="settings.html" class="btn-primary admin-nav-active" style="text-decoration: none; display: inline-block;">Indstillinger</a>
-                    <a href="sponsor.html" class="btn-primary" style="text-decoration: none; display: inline-block;">Sponsorer</a>
-                    <a id="deviceTokensNavBtn" href="admin.html#device-tokens" class="btn-primary" style="text-decoration: none; display: none;">Adgangslinks</a>
+                    <a href="admin.html" class="btn-primary">Oversigt</a>
+                    <div class="admin-nav-group">
+                        <span class="admin-nav-label">Kampe</span>
+                        <a href="admin.html#holdkamp" class="btn-primary">Holdkamp</a>
+                        <a href="admin.html#tournament" class="btn-primary">Turnering</a>
+                        <a href="admin.html#history" class="btn-primary">Kamphistorik</a>
+                    </div>
+                    <div class="admin-nav-group">
+                        <span class="admin-nav-label">Klub</span>
+                        <a href="player-info.html" class="btn-primary">Spillere</a>
+                        <a href="sponsor.html" class="btn-primary">Sponsorer</a>
+                        <a id="deviceTokensNavBtn" href="admin.html#device-tokens" class="btn-primary" style="display: none;">Adgangslinks</a>
+                        <a href="admin.html#planner" class="btn-primary">Badmintonplanner</a>
+                        <a href="settings.html" class="btn-primary admin-nav-active" aria-current="page">Indstillinger</a>
+                    </div>
                 </div>
-            </div>
+            </nav>
 
             <div class="settings-grid">
                 <!-- Court Management -->
                 <div class="setting-card">
                     <h3>Banestyring</h3>
-                    <label>Antal Baner:</label>
+                    <label>Antal baner:</label>
                     <input type="number" id="courtCount" min="1" max="20" value="4">
-                    <button id="saveCourtBtn" class="btn-primary">Gem Ændringer</button>
+                    <button id="saveCourtBtn" class="btn-primary">Gem ændringer</button>
 
                     <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid rgba(255,255,255,0.1);">
                         <label class="toggle-label" style="display: flex; align-items: center; cursor: pointer;">
                             <input type="checkbox" id="showResetButton" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
-                            <span>Turnerings tilstand</span>
+                            <span>Turneringstilstand</span>
                         </label>
                         <p style="color: #aaa; font-size: 0.9em; margin-top: 10px; line-height: 1.5;">
-                            Når aktiveret, skjules "Ryd Banen", "Skift til Double", "Tilbage" og "Admin" knapperne på banesiden for at forhindre utilsigtede ændringer under turneringer.
+                            Når aktiveret, skjules "Ryd banen", "Skift til double", "Tilbage" og "Admin" knapperne på banesiden for at forhindre utilsigtede ændringer under turneringer.
                         </p>
                     </div>
 
@@ -84,12 +93,12 @@
 
                     <!-- Default Game Mode -->
                     <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid rgba(255,255,255,0.1);">
-                        <label>Standard Kamptilstand:</label>
+                        <label>Kamptilstand som standard:</label>
                         <select id="defaultGameMode" style="width: 100%; padding: 10px; font-size: 1em; margin-top: 10px; background: var(--color-bg-card); color: white; border: 2px solid var(--color-primary); border-radius: 8px; cursor: pointer;">
                             <option value="15">15/21 point (standard)</option>
                             <option value="21">21/30 point</option>
                         </select>
-                        <button id="saveGameModeBtn" class="btn-primary" style="margin-top: 15px;">Gem Kamptilstand</button>
+                        <button id="saveGameModeBtn" class="btn-primary" style="margin-top: 15px;">Gem kamptilstand</button>
                         <p style="color: #aaa; font-size: 0.9em; margin-top: 10px; line-height: 1.5;">
                             Vælg hvilken kamptilstand der bruges som standard på nye baner.
                         </p>
@@ -103,12 +112,12 @@
                     <div class="setting-card">
                         <h3>Backup &amp; Gendannelse</h3>
                         <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;">
-                            <button id="downloadBackupBtn" class="btn-primary" style="flex:1;">Download Backup</button>
+                            <button id="downloadBackupBtn" class="btn-primary" style="flex:1;">Download backup</button>
                             <button id="chooseRestoreFileBtn" class="btn-secondary" style="flex:1;">Gendan fra fil...</button>
                             <input type="file" id="restoreFileInput" accept=".json" style="display:none;">
                         </div>
                         <div id="restoreFileInfo" style="display:none;padding:8px 10px;background:rgba(255,255,255,0.05);border-radius:8px;font-size:0.85em;margin-bottom:10px;color:#aaa;"></div>
-                        <button id="restoreBtn" class="btn-primary" style="width:100%;display:none;background:var(--color-accent);">Gendan Nu</button>
+                        <button id="restoreBtn" class="btn-primary" style="width:100%;display:none;background:var(--color-accent);">Gendan nu</button>
                         <p style="color:rgba(255,255,255,0.25);font-size:0.78em;margin-top:10px;">
                             Gendannelse overskriver alle nuværende data og kan ikke fortrydes.
                         </p>
@@ -117,7 +126,7 @@
                     <!-- Theme Link -->
                     <div class="setting-card">
                         <h3>Tema</h3>
-                        <a href="theme.html" class="btn-primary" style="text-decoration:none;display:inline-block;">Åbn Tema Indstillinger</a>
+                        <a href="theme.html" class="btn-primary" style="text-decoration:none;display:inline-block;">Åbn temaindstillinger</a>
                     </div>
 
                     <!-- Tablet-app (Android APK) — hentes direkte på tabletten -->
@@ -169,14 +178,21 @@
                     <div class="setting-card">
                         <h3>Sikkerhed</h3>
                         <div id="currentPasswordWrap" style="display:none;margin-bottom:12px;">
-                            <label>Nuværende Adgangskode:</label>
+                            <label>Nuværende adgangskode:</label>
                             <input type="password" id="currentPassword" placeholder="Nuværende adgangskode">
                         </div>
-                        <label>Ny Adgangskode:</label>
+                        <label>Ny adgangskode:</label>
                         <input type="password" id="newPassword" placeholder="Ny adgangskode (min. 8 tegn)" autocomplete="new-password">
-                        <label>Gentag Ny Adgangskode:</label>
+                        <label>Gentag ny adgangskode:</label>
                         <input type="password" id="newPasswordConfirm" placeholder="Gentag ny adgangskode" autocomplete="new-password">
-                        <button id="changePasswordBtn" class="btn-primary">Skift Adgangskode</button>
+                        <button id="changePasswordBtn" class="btn-primary">Skift adgangskode</button>
+                    </div>
+
+                    <!-- Farezone: flyttet hertil fra Baneoversigten, så knappen ikke står på den mest brugte side -->
+                    <div class="setting-card setting-card-danger">
+                        <h3>Ryd banedata</h3>
+                        <p class="warning-text" style="margin-top:0;">Nulstiller point og spiltilstand på alle baner og sætter dem til single. Kan ikke fortrydes.</p>
+                        <button id="clearAllDataBtn" class="btn-danger">Ryd alle banedata</button>
                     </div>
                 </div>
             </div>
@@ -189,13 +205,16 @@
         <div style="text-align: center; color: white; max-width: 600px; padding: 40px;">
             <h1 id="messageTitle" style="font-size: 2.5em; margin-bottom: 30px; color: var(--color-accent);"></h1>
             <p id="messageText" style="font-size: 1.5em; margin-bottom: 40px; line-height: 1.5;"></p>
-            <button id="messageOkBtn" class="btn-primary" style="font-size: 1.5em; padding: 20px 60px;">OK</button>
+            <div style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;">
+                <button id="messageCancelBtn" class="btn-secondary" style="display: none; font-size: 1.5em; padding: 20px 60px;">Annuller</button>
+                <button id="messageOkBtn" class="btn-primary" style="font-size: 1.5em; padding: 20px 60px;">OK</button>
+            </div>
         </div>
     </div>
 
     <script src="js/api.js?v=29"></script>
     <script src="js/session-vagt.js?v=1"></script>
     <script src="js/auth-guard.js?v=3"></script>
-    <script src="settings-script.js?v=19"></script>
+    <script src="settings-script.js?v=20"></script>
 </body>
 </html>

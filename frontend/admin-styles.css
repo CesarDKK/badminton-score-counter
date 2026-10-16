@@ -168,13 +168,56 @@ header > div {
 .admin-nav-row {
     display: flex;
     flex-wrap: wrap;
+    gap: 10px 16px;
+    align-items: center;
+}
+
+/* Grupper: "Kampe" og "Klub" — et lille mærke foran, og gruppen brydes som én blok */
+.admin-nav-group {
+    display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     align-items: center;
+    padding-left: 16px;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.admin-nav-label {
+    font-size: 0.72em;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.6);
+    margin-right: 2px;
+}
+
+@media (max-width: 768px) {
+    /* Telefon: hver gruppe som to kolonner under sit mærke */
+    .admin-nav-group {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        padding-left: 0;
+        border-left: none;
+        width: 100%;
+    }
+    .admin-nav-label {
+        grid-column: 1 / -1;
+    }
+    .admin-nav-row > .btn-primary {
+        width: 100%;
+    }
+    .admin-nav-group .btn-primary {
+        width: 100%;
+        margin: 0;
+    }
 }
 
 .admin-nav-row .btn-primary,
 .admin-nav-row a.btn-primary {
-    padding: 9px 20px;
+    display: inline-block;
+    text-decoration: none;
+    text-align: center;
+    padding: 9px 16px;
     background: rgba(var(--color-primary-rgb), 0.18);
     color: rgba(255, 255, 255, 0.72);
     border: 1px solid rgba(var(--color-primary-rgb), 0.28);
@@ -198,7 +241,7 @@ header > div {
 .admin-nav-row .admin-nav-active,
 .admin-nav-row a.admin-nav-active {
     background: var(--color-primary);
-    color: white;
+    color: var(--color-on-primary, #fff);
     border-color: var(--color-primary);
 }
 

@@ -139,6 +139,9 @@ function setupEventListeners() {
     document.getElementById('restoreFileInput').addEventListener('change', onRestoreFileChosen);
     document.getElementById('restoreBtn').addEventListener('click', doRestore);
 
+    // Ryd alle banedata (flyttet hertil fra Baneoversigten i admin.html)
+    document.getElementById('clearAllDataBtn').addEventListener('click', clearAllData);
+
     // Message overlay
     document.getElementById('messageOkBtn').addEventListener('click', hideMessage);
 }
@@ -256,8 +259,8 @@ async function toggleResetButton() {
     try {
         await api.updateResetButtonVisibility(showResetButton);
         showMessage('Succes', tournamentModeChecked ?
-            'Turnerings tilstand aktiveret - kontrol knapper er nu skjult på banesiden' :
-            'Turnerings tilstand deaktiveret - alle knapper er nu synlige');
+            'Turneringstilstand aktiveret - kontrolknapperne er nu skjult på banesiden' :
+            'Turneringstilstand deaktiveret - alle knapper er nu synlige');
     } catch (error) {
         console.error('Failed to toggle reset button:', error);
         showMessage('Fejl', error.message);
@@ -320,7 +323,7 @@ async function downloadBackup() {
         showMessage('Fejl', 'Backup fejlede: ' + err.message);
     } finally {
         btn.disabled = false;
-        btn.textContent = 'Download Backup';
+        btn.textContent = 'Download backup';
     }
 }
 
@@ -369,7 +372,62 @@ async function doRestore() {
         showMessage('Fejl', 'Gendannelse fejlede: ' + err.message);
     } finally {
         btn.disabled = false;
-        btn.textContent = 'Gendan Nu';
+        btn.textContent = 'Gendan nu';
+    }
+}
+
+// Nulstiller knapperne efter en bekræftelse (showConfirm låner samme overlay)
+function resetMessageButtons() {
+    const okBtn = document.getElementById('messageOkBtn');
+    okBtn.textContent = 'OK';
+    okBtn.className = 'btn-primary';
+    const cancelBtn = document.getElementById('messageCancelBtn');
+    cancelBtn.style.display = 'none';
+    cancelBtn.onclick = null;
+}
+
+// Bekræftelse med Annuller + en farlig knap. Giver true, hvis brugeren bekræfter.
+function showConfirm(title, text, confirmLabel) {
+    return new Promise(resolve => {
+        document.getElementById('messageTitle').textContent = title;
+        document.getElementById('messageText').textContent = text;
+        const okBtn = document.getElementById('messageOkBtn');
+        const cancelBtn = document.getElementById('messageCancelBtn');
+        okBtn.textContent = confirmLabel;
+        okBtn.className = 'btn-danger';
+        cancelBtn.style.display = '';
+        const done = answer => {
+            hideMessage();
+            resetMessageButtons();
+            resolve(answer);
+        };
+        okBtn.onclick = () => done(true);
+        cancelBtn.onclick = () => done(false);
+        document.getElementById('messageOverlay').style.display = 'flex';
+    });
+}
+
+async function clearAllData() {
+    if (!await showConfirm('Ryd alle banedata?',
+        'Point og spiltilstand nulstilles på alle baner, og banerne sættes til single.', 'Ja, fortsæt')) return;
+    if (!await showConfirm('Er du helt sikker?',
+        'Igangværende kampe på alle baner bliver nulstillet. Det kan ikke fortrydes.', 'Ja, ryd alle baner')) return;
+
+    const btn = document.getElementById('clearAllDataBtn');
+    btn.disabled = true;
+    try {
+        const settings = await api.getSettings();
+        const courtCount = settings.courtCount || 4;
+        for (let i = 1; i <= courtCount; i++) {
+            await api.resetGameState(i);
+            await api.updateCourt(i, { isDoubles: false });
+        }
+        showMessage('Færdig', 'Alle baner er nulstillet og sat til single.');
+    } catch (error) {
+        console.error('Failed to clear all data:', error);
+        showMessage('Fejl', 'Kunne ikke nulstille banerne. Tjek din forbindelse.');
+    } finally {
+        btn.disabled = false;
     }
 }
 
@@ -377,6 +435,7 @@ function showMessage(title, text, requireReload = false) {
     const overlay = document.getElementById('messageOverlay');
     document.getElementById('messageTitle').textContent = title;
     document.getElementById('messageText').textContent = text;
+    resetMessageButtons();
 
     const okBtn = document.getElementById('messageOkBtn');
     okBtn.onclick = () => {

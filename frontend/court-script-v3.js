@@ -1237,11 +1237,11 @@ async function performClearCourtNow() {
 function clearCourt() {
     closeSettingsMenu();
     showMessage(
-        'Ryd Banen',
+        'Ryd banen',
         'Er du sikker på at du vil rydde banen? Alle data vil blive slettet.',
         [
             {
-                text: 'Ja, Ryd Banen',
+                text: 'Ja, ryd banen',
                 callback: () => performClearCourtNow(),
                 style: 'danger'
             },
@@ -1387,7 +1387,7 @@ function updateDisplay() {
     // Update doubles toggle button text
     const doublesBtn = document.getElementById('doublesToggle');
     if (doublesBtn) {
-        doublesBtn.textContent = gameState.isDoubles ? 'Skift til Single' : 'Skift til Double';
+        doublesBtn.textContent = gameState.isDoubles ? 'Skift til single' : 'Skift til double';
     }
 
     // Show/hide serve selection buttons
@@ -2781,11 +2781,11 @@ function showMatchWonMessage(isReportedMatch = false) {
     // Planner-bane: resultatet bliver stående til næste runde (TV viser det), og
     // kan rettes — "Ny kamp" ville slette rundens navne fra banen
     const buttons = isReportedMatch
-        ? [{ text: 'Ryd Banen (hold 3 sek.)', callback: () => performClearCourtNow(), style: 'danger', holdDurationMs: 3000 }]
+        ? [{ text: 'Ryd banen (hold 3 sek.)', callback: () => performClearCourtNow(), style: 'danger', holdDurationMs: 3000 }]
         : gameState.planner
         ? [{ text: 'Ret resultat', callback: () => openResultForm(), style: 'secondary' },
            { text: 'Luk', callback: null, style: 'primary' }]
-        : [{ text: 'Ny Kamp', callback: () => clearCourt(), style: 'primary' }];
+        : [{ text: 'Ny kamp', callback: () => clearCourt(), style: 'primary' }];
 
     const titel = outcome === 'walkover' ? 'Walkover'
         : outcome === 'ended_early' ? 'Kamp Afsluttet'

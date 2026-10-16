@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" href="/favicon.png?v=5">
     <link rel="stylesheet" href="fonts.css?v=2">
     <link rel="stylesheet" href="styles.css?v=5">
-    <link rel="stylesheet" href="admin-styles.css?v=7">
+    <link rel="stylesheet" href="admin-styles.css?v=10">
     <script src="js/theme-loader.js?v=10"></script>
 </head>
 <body>
@@ -23,9 +23,9 @@
                 <div class="login-box">
                     <h2>Login Påkrævet</h2>
                     <input type="password" id="adminPassword" placeholder="Indtast admin adgangskode" autofocus>
-                    <button id="loginBtn" class="btn-primary">Log Ind</button>
+                    <button id="loginBtn" class="btn-primary">Log ind</button>
                     <div class="back-link">
-                        <a href="landing.html">← Tilbage til Banevalg</a>
+                        <a href="landing.html">← Tilbage til banevalg</a>
                     </div>
                 </div>
             </div>
@@ -36,37 +36,38 @@
             <header>
                 <h1>Admin Oversigt</h1>
                 <div style="display: flex; gap: 10px; align-items: center;">
-                    <a href="landing.html" class="btn-secondary" style="text-decoration: none; display: inline-block;">Tilbage til Baner</a>
-                    <button id="logoutBtn" class="btn-secondary">Log Ud</button>
+                    <a href="landing.html" class="btn-secondary" style="text-decoration: none; display: inline-block;">Tilbage til baner</a>
+                    <button id="logoutBtn" class="btn-secondary">Log ud</button>
                 </div>
             </header>
 
             <!-- Navigation Buttons -->
-            <div class="admin-nav">
+            <!-- Samme menu på admin.html, player-info.html, settings.html og sponsor.html -->
+            <nav class="admin-nav" aria-label="Admin">
                 <div class="admin-nav-row" id="adminNavRow">
-                    <button id="backToOverviewNavBtn" class="btn-primary" data-section="overview" style="display:none;">← Oversigt</button>
-                    <button id="holdkampBtn" class="btn-primary" data-section="holdkamp" data-page="holdkamp">Holdkamp</button>
-                    <button id="tournamentBtn" class="btn-primary" data-section="tournament" data-page="tournament">Turnering</button>
-                    <button id="matchHistoryBtn" class="btn-primary" data-section="history" data-page="history">Kamphistorik</button>
-                    <a href="player-info.html" class="btn-primary" data-page="playerinfo" style="text-decoration: none; display: inline-block;">Spiller Info</a>
-                    <a href="settings.html" class="btn-primary" data-page="settings" style="text-decoration: none; display: inline-block;">Indstillinger</a>
-                    <a href="sponsor.html" class="btn-primary" data-page="sponsors" style="text-decoration: none; display: inline-block;">Sponsorer</a>
-                    <button id="deviceTokensBtn" class="btn-primary" data-section="deviceTokens" data-page="devicetokens" style="display:none;">Adgangslinks</button>
-                    <button id="plannerBtn" class="btn-primary" data-section="planner" data-page="planner">Badmintonplanner</button>
+                    <button id="backToOverviewNavBtn" class="btn-primary admin-nav-active" data-section="overview">Oversigt</button>
+                    <div class="admin-nav-group">
+                        <span class="admin-nav-label">Kampe</span>
+                        <button id="holdkampBtn" class="btn-primary" data-section="holdkamp" data-page="holdkamp">Holdkamp</button>
+                        <button id="tournamentBtn" class="btn-primary" data-section="tournament" data-page="tournament">Turnering</button>
+                        <button id="matchHistoryBtn" class="btn-primary" data-section="history" data-page="history">Kamphistorik</button>
+                    </div>
+                    <div class="admin-nav-group">
+                        <span class="admin-nav-label">Klub</span>
+                        <a href="player-info.html" class="btn-primary" data-page="playerinfo">Spillere</a>
+                        <a href="sponsor.html" class="btn-primary" data-page="sponsors">Sponsorer</a>
+                        <button id="deviceTokensBtn" class="btn-primary" data-section="deviceTokens" data-page="devicetokens" style="display:none;">Adgangslinks</button>
+                        <button id="plannerBtn" class="btn-primary" data-section="planner" data-page="planner">Badmintonplanner</button>
+                        <a href="settings.html" class="btn-primary" data-page="settings">Indstillinger</a>
+                    </div>
                 </div>
-            </div>
+            </nav>
 
             <!-- Court Overview Section -->
             <div id="courtOverviewSection" class="overview-section">
                 <h2>Baneoversigt</h2>
                 <div id="courtOverview" class="court-grid"></div>
-
-                <!-- Clear All Court Data Section -->
-                <div style="margin-top: 40px; padding: 20px; background: rgba(231, 76, 60, 0.1); border: 2px solid #e74c3c; border-radius: 10px;">
-                    <h3 style="color: var(--color-accent); margin-bottom: 15px;">Ryd Banedata</h3>
-                    <button id="clearAllDataBtn" class="btn-danger">Ryd Alle Banedata</button>
-                    <p class="warning-text">Advarsel: Dette vil nulstille alle point og spiltilstande for alle baner!</p>
-                </div>
+                <!-- "Ryd alle banedata" er flyttet til Indstillinger (settings.html) -->
             </div>
 
             <!-- Holdkamp Section -->
@@ -104,14 +105,14 @@
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
                         <div>
-                            <label>Hold 1 Navn:</label>
+                            <label>Hold 1:</label>
                             <input type="text" id="holdkampTeam1Name" placeholder="Hold 1" style="width: 100%; padding: 10px; background: var(--color-bg-dark); color: #eaeaea; border: 1px solid var(--color-primary); border-radius: 5px; margin-top: 5px;">
                             <select id="holdkampTeam1Logo" style="width: 100%; padding: 10px; margin-top: 8px; background: var(--color-bg-dark); color: #eaeaea; border: 1px solid var(--color-primary); border-radius: 5px;">
                                 <option value="">Logo: automatisk</option>
                             </select>
                         </div>
                         <div>
-                            <label>Hold 2 Navn:</label>
+                            <label>Hold 2:</label>
                             <input type="text" id="holdkampTeam2Name" placeholder="Hold 2" style="width: 100%; padding: 10px; background: var(--color-bg-dark); color: #eaeaea; border: 1px solid var(--color-primary); border-radius: 5px; margin-top: 5px;">
                             <select id="holdkampTeam2Logo" style="width: 100%; padding: 10px; margin-top: 8px; background: var(--color-bg-dark); color: #eaeaea; border: 1px solid var(--color-primary); border-radius: 5px;">
                                 <option value="">Logo: automatisk</option>
@@ -140,7 +141,7 @@
                         <div id="holdkampFormatNote" style="display:none;color:#aaa;font-size:0.88em;line-height:1.5;margin-bottom:12px;"></div>
                         <div id="holdkampGamesInputContainer"></div>
                         <div id="holdkampRegler"></div>
-                        <button id="startHoldkampBtn" class="btn-primary" style="margin-top: 20px; width: 100%; padding: 15px; font-size: 1.1em;">Start Holdkamp</button>
+                        <button id="startHoldkampBtn" class="btn-primary" style="margin-top: 20px; width: 100%; padding: 15px; font-size: 1.1em;">Start holdkamp</button>
                     </div>
                 </div>
 
@@ -175,7 +176,7 @@
                     <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                         <input type="text" id="tournamentNameInput" placeholder="Turneringens navn (fx U13 stævne 28. maj)"
                                style="flex:1; min-width:240px; padding:10px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid var(--color-primary); border-radius:5px;">
-                        <button id="createTournamentBtn" class="btn-primary" style="white-space:nowrap;">Opret Turnering</button>
+                        <button id="createTournamentBtn" class="btn-primary" style="white-space:nowrap;">Opret turnering</button>
                     </div>
                 </div>
 
@@ -243,7 +244,7 @@
                 <!-- Delete Match History Section -->
                 <div style="margin-top: 40px; padding: 20px; background: rgba(231, 76, 60, 0.1); border: 2px solid #e74c3c; border-radius: 10px;">
                     <h3 style="color: var(--color-accent); margin-bottom: 15px;">Slet Kamphistorik</h3>
-                    <button id="deleteAllMatchHistoryBtn" class="btn-danger">Slet Alt Kamphistorik</button>
+                    <button id="deleteAllMatchHistoryBtn" class="btn-danger">Slet al kamphistorik</button>
                     <p class="warning-text">Advarsel: Dette vil permanent slette hele kamphistorikken!</p>
                 </div>
             </div>
@@ -273,13 +274,13 @@
                         </div>
 
                         <!-- 3. Spillernavne -->
-                        <label>Spiller 1 Navn:</label>
+                        <label>Spiller 1:</label>
                         <input type="text" id="editPlayer1Name" placeholder="Spiller 1">
 
                         <label id="editPlayer1Name2Label" style="display: none;">Spiller 1 Makker:</label>
                         <input type="text" id="editPlayer1Name2" placeholder="Makker 1" style="display: none;">
 
-                        <label>Spiller 2 Navn:</label>
+                        <label>Spiller 2:</label>
                         <input type="text" id="editPlayer2Name" placeholder="Spiller 2">
 
                         <label id="editPlayer2Name2Label" style="display: none;">Spiller 2 Makker:</label>
@@ -302,8 +303,8 @@
                         </div>
 
                         <div class="modal-actions">
-                            <button id="saveCourtChanges" class="btn-primary">Gem Ændringer</button>
-                            <button id="resetCourt" class="btn-danger">Nulstil Bane</button>
+                            <button id="saveCourtChanges" class="btn-primary">Gem ændringer</button>
+                            <button id="resetCourt" class="btn-danger">Nulstil bane</button>
                         </div>
                     </div>
                 </div>
@@ -356,7 +357,7 @@
                             <input type="checkbox" id="dtShowQr" checked style="width:18px;height:18px;cursor:pointer;accent-color:var(--color-accent,var(--color-accent));">
                             <label for="dtShowQr" style="font-size:0.9em;color:rgba(255,255,255,0.75);cursor:pointer;user-select:none;">Vis QR-kode på TV</label>
                         </div>
-                        <button id="createDtBtn" class="btn-primary" style="height:42px;white-space:nowrap;">+ Opret Link</button>
+                        <button id="createDtBtn" class="btn-primary" style="height:42px;white-space:nowrap;">+ Opret link</button>
                     </div>
                     <div id="dtCreateMsg" style="display:none;margin-top:12px;padding:10px 14px;border-radius:8px;font-size:0.88em;"></div>
                 </div>
@@ -570,6 +571,6 @@
     <script src="js/logo-match.js?v=1"></script>
     <script src="js/live-updates.js?v=2"></script>
     <script src="js/holdkamp-formater.js?v=1"></script>
-    <script src="admin-script.js?v=66"></script>
+    <script src="admin-script.js?v=67"></script>
 </body>
 </html>

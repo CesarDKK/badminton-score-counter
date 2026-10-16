@@ -457,6 +457,23 @@ html, body {
     display: none;
 }
 
+/* Før kampen er "Start serv" det eneste, man kan trykke på (+1 er grå) —
+   fremhæv knapperne med accentfarven og en rolig puls, så første skridt er tydeligt */
+.btn-start-serv:not(.hidden) {
+    background: rgba(var(--color-accent-rgb), 0.16);
+    border-color: rgba(var(--color-accent-rgb), 0.7);
+    animation: servPulse 2.2s ease-in-out infinite;
+}
+
+@keyframes servPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(var(--color-accent-rgb), 0.45); }
+    50%      { box-shadow: 0 0 0 10px rgba(var(--color-accent-rgb), 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .btn-start-serv:not(.hidden) { animation: none; }
+}
+
 .serve-buttons-group {
     display: flex;
     flex-direction: column;
@@ -584,6 +601,10 @@ html, body {
     padding: var(--cv-menu-pad, 40px);
     min-width: var(--cv-menu-minw, 400px);
     box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+    /* Med alle punkter synlige er menuen højere end en telefon på langs — rul i stedet for at klippe */
+    max-height: calc(var(--app-h, 100vh) - 16px);
+    overflow-y: auto;
+    box-sizing: border-box;
 }
 
 .settings-menu-content h3 {
@@ -634,15 +655,18 @@ html, body {
     color: white;
 }
 
+/* Står nederst i menuen (før Luk) med ekstra luft over, så den ikke rammes ved et uheld */
 .menu-danger {
-    background: rgba(231,76,60,0.12);
-    border-color: rgba(231,76,60,0.3);
-    color: #e74c3c;
+    margin-top: calc(var(--cv-item-mb, 10px) * 2.4);
+    background: rgba(var(--color-danger-rgb, 217, 44, 63), 0.12);
+    border-color: rgba(var(--color-danger-rgb, 217, 44, 63), 0.35);
+    color: #ff6b7a; /* fallback for ældre webviews uden color-mix */
+    color: color-mix(in srgb, var(--color-danger) 65%, white);
 }
 
 .menu-danger:hover {
-    background: rgba(231,76,60,0.28);
-    border-color: rgba(231,76,60,0.6);
+    background: rgba(var(--color-danger-rgb, 217, 44, 63), 0.28);
+    border-color: rgba(var(--color-danger-rgb, 217, 44, 63), 0.6);
     color: white;
 }
 

@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" href="/favicon.png?v=5">
     <link rel="stylesheet" href="fonts.css?v=2">
     <link rel="stylesheet" href="styles.css?v=5">
-    <link rel="stylesheet" href="admin-styles.css?v=7">
+    <link rel="stylesheet" href="admin-styles.css?v=10">
     <link rel="stylesheet" href="sponsor-styles.css?v=6">
     <script src="js/theme-loader.js?v=10"></script>
 </head>
@@ -24,7 +24,7 @@
                 <div class="login-box">
                     <h2>Login Påkrævet</h2>
                     <input type="password" id="adminPassword" placeholder="Indtast admin adgangskode">
-                    <button id="loginBtn" class="btn-primary">Log Ind</button>
+                    <button id="loginBtn" class="btn-primary">Log ind</button>
                     <div class="back-link">
                         <a href="admin.html">← Tilbage til Oversigt</a>
                     </div>
@@ -37,22 +37,31 @@
             <header>
                 <h1>Sponsor Administration</h1>
                 <div class="header-controls">
-                    <a href="landing.html" class="btn-secondary" style="text-decoration: none; display: inline-block;">Tilbage til Baner</a>
-                    <button id="logoutBtn" class="btn-secondary">Log Ud</button>
+                    <a href="landing.html" class="btn-secondary" style="text-decoration: none; display: inline-block;">Tilbage til baner</a>
+                    <button id="logoutBtn" class="btn-secondary">Log ud</button>
                 </div>
             </header>
 
-            <div class="admin-nav">
+            <!-- Samme menu på admin.html, player-info.html, settings.html og sponsor.html -->
+            <nav class="admin-nav" aria-label="Admin">
                 <div class="admin-nav-row">
-                    <a href="admin.html" class="btn-primary" style="text-decoration: none; display: inline-block;">← Oversigt</a>
-                    <a href="admin.html#holdkamp" class="btn-primary" style="text-decoration: none; display: inline-block;">Holdkamp</a>
-                    <a href="admin.html#history" class="btn-primary" style="text-decoration: none; display: inline-block;">Kamphistorik</a>
-                    <a href="player-info.html" class="btn-primary" style="text-decoration: none; display: inline-block;">Spiller Info</a>
-                    <a href="settings.html" class="btn-primary" style="text-decoration: none; display: inline-block;">Indstillinger</a>
-                    <a href="sponsor.html" class="btn-primary admin-nav-active" style="text-decoration: none; display: inline-block;">Sponsorer</a>
-                    <a id="deviceTokensNavBtn" href="admin.html#device-tokens" class="btn-primary" style="text-decoration: none; display: none;">Adgangslinks</a>
+                    <a href="admin.html" class="btn-primary">Oversigt</a>
+                    <div class="admin-nav-group">
+                        <span class="admin-nav-label">Kampe</span>
+                        <a href="admin.html#holdkamp" class="btn-primary">Holdkamp</a>
+                        <a href="admin.html#tournament" class="btn-primary">Turnering</a>
+                        <a href="admin.html#history" class="btn-primary">Kamphistorik</a>
+                    </div>
+                    <div class="admin-nav-group">
+                        <span class="admin-nav-label">Klub</span>
+                        <a href="player-info.html" class="btn-primary">Spillere</a>
+                        <a href="sponsor.html" class="btn-primary admin-nav-active" aria-current="page">Sponsorer</a>
+                        <a id="deviceTokensNavBtn" href="admin.html#device-tokens" class="btn-primary" style="display: none;">Adgangslinks</a>
+                        <a href="admin.html#planner" class="btn-primary">Badmintonplanner</a>
+                        <a href="settings.html" class="btn-primary">Indstillinger</a>
+                    </div>
                 </div>
-            </div>
+            </nav>
 
             <!-- Combined Upload Section -->
             <div class="upload-section">
@@ -64,7 +73,7 @@
                         <p class="section-description">Vises i fuldskærm på TV-skærmene</p>
                         <div class="upload-box">
                             <input type="file" id="slideshowImageUpload" accept="image/*" multiple style="display: none;">
-                            <button id="slideshowUploadBtn" class="btn-primary">Vælg Slideshow Billeder</button>
+                            <button id="slideshowUploadBtn" class="btn-primary">Vælg slideshow-billeder</button>
                             <p class="upload-hint">Opløsning: 1920x1080 (FullHD)</p>
                             <p class="upload-hint-secondary">Sideforhold bevares - ingen beskæring</p>
                             <div id="slideshowUploadPreview" class="upload-preview"></div>
@@ -77,7 +86,7 @@
                         <p class="section-description">Banner format til baneoversigtsskærme</p>
                         <div class="upload-box upload-box-banner">
                             <input type="file" id="courtImageUpload" accept="image/*" multiple style="display: none;">
-                            <button id="courtUploadBtn" class="btn-primary">Vælg Bane Banner Billeder</button>
+                            <button id="courtUploadBtn" class="btn-primary">Vælg banebannere</button>
                             <p class="upload-hint">Opløsning: 1920x216 (banner format)</p>
                             <p class="upload-hint-secondary">Beskæres automatisk fra bunden</p>
                             <div id="courtUploadPreview" class="upload-preview"></div>
@@ -90,7 +99,7 @@
             <div class="gallery-section">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <h2>Slideshow Sponsor Galleri</h2>
-                    <button id="clearAllSlideshowBtn" class="btn-danger">Slet Alle Slideshow Billeder</button>
+                    <button id="clearAllSlideshowBtn" class="btn-danger">Slet alle slideshow-billeder</button>
                 </div>
                 <div id="slideshowGalleryContainer" class="gallery-grid"></div>
                 <div id="emptySlideshowGallery" class="empty-gallery" style="display: none;">
@@ -102,7 +111,7 @@
             <div class="gallery-section">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <h2>Bane Sponsor Galleri</h2>
-                    <button id="clearAllCourtBtn" class="btn-danger">Slet Alle Bane Billeder</button>
+                    <button id="clearAllCourtBtn" class="btn-danger">Slet alle banebilleder</button>
                 </div>
                 <div id="courtGalleryContainer" class="gallery-grid"></div>
                 <div id="emptyCourtGallery" class="empty-gallery" style="display: none;">
