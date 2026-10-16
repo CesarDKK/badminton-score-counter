@@ -227,7 +227,7 @@ Kontrasttallene er skønnet ud fra farveværdierne i koden, ikke målt i en brow
 |---|---|---|---|---|
 | E8 | **Fem knapstilarter → tre** (primær, sekundær, fare). I dag: rød pille (tæller, markedsføring), lilla 8 px (admin), Bebas-gradient (login, super-admin), rød 12 px (statistik, planner), gennemsigtig rød (fare). | Middel | S–M | ☐ |
 | E9 | **Én login-skabelon** i stedet for tre forskellige (admin, klub-login, super-admin). | Middel | S | ☐ |
-| E10 | **Ikoner:** admin bruger emoji (⏱️ 📅 👤 🗑 ⚙️), tælleren og football stregikoner. Emoji ser forskellige ud på Windows, Android og TV-boksene og kan ikke farves med temaet. Designsystemet beskriver emoji som et bevidst valg, så det er en beslutning. Forslag: ét sæt stregikoner overalt. | Lav | M | ☐ Besluttet: brug jeres egne ikoner (afklar hvilke) |
+| E10 | **Ikoner:** admin bruger emoji (⏱️ 📅 👤 🗑 ⚙️), tælleren og football stregikoner. Emoji ser forskellige ud på Windows, Android og TV-boksene og kan ikke farves med temaet. Designsystemet beskriver emoji som et bevidst valg, så det er en beslutning. Forslag: ét sæt stregikoner overalt. | Lav | M | ☑ Stregikoner i tællerens stil (js/ikoner.js) erstatter alle emoji i admin, super-admin, sponsorer, spillere og banevalg. |
 | E11 | **Holdkamp-formularerne** er skrevet med indlejret CSS (5 px hjørner, anden feltbaggrund) og ligner ikke resten af admin. | Lav | S | ☑ |
 
 ### UX produkt for produkt

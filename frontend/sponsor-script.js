@@ -409,8 +409,8 @@ async function loadGallery(type) {
                     <div class="${containerClass}">
                         <img src="/uploads/${img.filename}" alt="${escapeHtml(img.original_name)}" class="gallery-image">
                         <div class="gallery-overlay">
-                            <button class="btn-view" onclick="viewImage(${img.id})">👁️ Vis</button>
-                            <button class="btn-delete" onclick="deleteImage(${img.id}, '${type}')">🗑️ Slet</button>
+                            <button class="btn-view" onclick="viewImage(${img.id})">${Ikon('oeje')} Vis</button>
+                            <button class="btn-delete" onclick="deleteImage(${img.id}, '${type}')">${Ikon('slet')} Slet</button>
                         </div>
                     </div>
                     <div class="gallery-info">

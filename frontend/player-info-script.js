@@ -455,7 +455,7 @@ async function deleteAgeGroup(ageGroup, playerCount) {
 
     // Double confirmation for safety
     const confirmed2 = await showConfirm(
-        '⚠️ ADVARSEL',
+        'ADVARSEL',
         `Dette vil permanent slette alle ${playerCount} spillere i ${ageGroup}.\n\nEr du helt sikker?`
     );
 

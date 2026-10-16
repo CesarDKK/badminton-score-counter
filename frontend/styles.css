@@ -1186,3 +1186,11 @@ header h1 {
         margin-bottom: 22px !important;
     }
 }
+
+/* Stregikoner fra js/ikoner.js (erstatter emoji) — følger tekstfarven og
+   sidder på tekstlinjen */
+.ikon {
+    display: inline-block;
+    vertical-align: -0.15em;
+    flex-shrink: 0;
+}
