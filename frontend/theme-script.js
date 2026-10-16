@@ -9,7 +9,7 @@ const THEME_PRESETS = {
         colorAccent: '#e94560',
         colorBgDark: '#1a1a2e',
         colorBgContainer: '#16213e',
-        colorBgCard: '#0f3460'
+        colorBgCard: '#252347'
     },
     ocean: {
         name: 'Ocean',

@@ -572,6 +572,116 @@ header > div {
     margin-top: 8px;
 }
 
+/* ---- Paneler og felter i Holdkamp/Turnering (samme sprog som kortene i Indstillinger) ---- */
+.admin-panel {
+    margin-bottom: 25px;
+    padding: 24px;
+    background: rgba(var(--color-primary-rgb), 0.08);
+    border: 1px solid rgba(var(--color-primary-rgb), 0.3);
+    border-radius: 16px;
+}
+
+.admin-panel h3,
+.admin-panel-head h3 {
+    margin: 0 0 8px;
+    color: var(--color-accent);
+}
+
+.admin-panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.admin-help {
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.9em;
+    line-height: 1.5;
+    margin: 0 0 14px;
+}
+
+.admin-help code {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 1px 5px;
+    border-radius: 4px;
+}
+
+.admin-inline {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.admin-inline > .admin-input { flex: 1; min-width: 220px; }
+.admin-inline > .btn-primary { white-space: nowrap; }
+
+.admin-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+@media (max-width: 600px) {
+    .admin-grid-2 { grid-template-columns: 1fr; }
+}
+
+.admin-field-label {
+    display: block;
+    margin: 0 0 6px;
+    font-size: 0.82em;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+
+.admin-input {
+    display: block;
+    width: 100%;
+    padding: 11px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    font-size: 1em;
+    font-family: 'DM Sans', sans-serif;
+    background: rgba(255, 255, 255, 0.05);
+    color: #eaeaea;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.admin-input + .admin-input { margin-top: 8px; }
+
+/* Kompakt variant til spillerfelterne pr. delkamp */
+.admin-input--sm { padding: 8px 10px; font-size: 0.92em; border-radius: 8px; }
+.admin-input--sm + .admin-input--sm { margin-top: 0; }
+
+.admin-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    background: rgba(var(--color-primary-rgb), 0.08);
+}
+
+/* Valgmuligheder i en <select> får ellers browserens hvide baggrund */
+.admin-input option { background: var(--color-bg-container); color: #eaeaea; }
+
+.btn-ghost-sm {
+    padding: 7px 14px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 100px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.85em;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.btn-ghost-sm:hover { color: #fff; border-color: rgba(255, 255, 255, 0.35); }
+
 /* ---- Warning / Danger zone ---- */
 .warning-text {
     color: rgba(var(--color-danger-rgb, 217, 44, 63), 0.75);

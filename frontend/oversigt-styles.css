@@ -520,18 +520,29 @@ body::before {
     text-transform: uppercase;
 }
 
-/* =================== INACTIVE COURT =================== */
-.court-card.inactive {
-    border-color: rgba(255, 255, 255, 0.04);
-    opacity: 0.4;
+/* =================== VENTER PÅ KAMP =================== */
+/* Aktiv bane uden startet kamp: stiplet kant, tydeligt mærke og ingen 0–0-stilling,
+   så man på afstand kan se forskel på "ledig" og "kamp i gang" */
+.court-card.court-card--waiting {
+    border-style: dashed;
+    border-color: rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.02);
 }
 
-.court-card.inactive .court-inactive-message {
-    text-align: center;
-    color: rgba(255, 255, 255, 0.3);
-    font-size: 0.95em;
-    padding: 30px 0;
-    letter-spacing: 1px;
+.court-card--waiting .player-stats {
+    visibility: hidden;
+}
+
+.court-waiting-badge {
+    font-size: 0.8em;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    padding: 3px 12px;
+    border-radius: 100px;
 }
 
 /* =================== REST BREAK =================== */

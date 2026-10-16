@@ -1897,7 +1897,7 @@ function showQrCounter(mode = 'idle', noegle = '') {
     // først, når billedet er hentet — så en bane uden guest-session (fx holdkamp,
     // 404 i peek-tilstand) ikke blinker en tom QR-ramme.
     container.style.display = 'none';
-    qrCounterVisible = false;
+    qrCounterVisible = false; markerQrPlads(false);
     const q = cfg.peek ? 'resume=1' : '';
     const headers = api.token ? { Authorization: `Bearer ${api.token}` } : {};
     fetch(`/api/qr-code/${courtId}?${q}`, { headers, cache: 'no-store' })
@@ -1908,7 +1908,7 @@ function showQrCounter(mode = 'idle', noegle = '') {
             qrCounterObjectUrl = URL.createObjectURL(blob);
             img.src = qrCounterObjectUrl;
             container.style.display = 'flex';
-            qrCounterVisible = true;
+            qrCounterVisible = true; markerQrPlads(true);
         })
         .catch((status) => {
             if (qrCounterMode !== tilstand) return;
@@ -1916,11 +1916,17 @@ function showQrCounter(mode = 'idle', noegle = '') {
                 // Ingen QR i denne tilstand (fx holdkamp/turnering) — husk
                 // tilstanden, så den ikke hentes igen ved hver eneste poll
                 container.style.display = 'none';
-                qrCounterVisible = false;
+                qrCounterVisible = false; markerQrPlads(false);
                 return;
             }
             hideQrCounter(); // andre fejl: prøv igen ved næste poll
         });
+}
+
+// Mens QR-boksen vises, reserverer CSS'en plads til højre i holdrækkerne
+// (body.tv-qr-synlig), så boksen aldrig dækker sidste sætboks ved 3 sæt
+function markerQrPlads(synlig) {
+    document.body.classList.toggle('tv-qr-synlig', synlig);
 }
 
 function hideQrCounter() {
@@ -1928,7 +1934,7 @@ function hideQrCounter() {
     if (!container) return;
     if (qrCounterVisible) {
         container.style.display = 'none';
-        qrCounterVisible = false;
+        qrCounterVisible = false; markerQrPlads(false);
     }
     qrCounterMode = null;
 }

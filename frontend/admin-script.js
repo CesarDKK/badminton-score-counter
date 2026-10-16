@@ -921,7 +921,7 @@ async function loadTournamentMatchHistory() {
                 const scores = scoreNums ? `<span style="color:#aaa; font-size:0.8em; margin-left:6px;">${scoreNums}</span>` : '';
                 const resultHtml = `<span style="color:${winnerColor}; font-size:0.85em; font-weight:bold;">✓ ${escapeHtml(winnerLabel)}</span>${scores}`;
                 const varighed = varighedFra(m.started_at, m.finished_at);
-                const varighedHtml = varighed ? `<span style="color:#aaa; font-size:0.8em; white-space:nowrap;">⏱️ ${varighed}</span>` : '';
+                const varighedHtml = varighed ? `<span style="color:#aaa; font-size:0.8em; white-space:nowrap;">${Ikon('ur')} ${varighed}</span>` : '';
 
                 const labelBadge = m.label
                     ? `<span style="background:var(--color-accent); color:#fff; padding:2px 7px; border-radius:4px; font-size:0.78em; font-weight:bold; white-space:nowrap;">${escapeHtml(m.label)}</span>`
@@ -951,7 +951,7 @@ async function loadTournamentMatchHistory() {
         }).join('');
 
         container.innerHTML = `
-            <h3 style="color:#eaeaea; margin-bottom:12px; font-size:1.1em; border-bottom:1px solid #333; padding-bottom:8px;">🏆 Turneringer (${tournaments.length})</h3>
+            <h3 style="color:#eaeaea; margin-bottom:12px; font-size:1.1em; border-bottom:1px solid #333; padding-bottom:8px;">${Ikon('pokal')} Turneringer (${tournaments.length})</h3>
             ${cards}`;
     } catch (error) {
         console.error('Failed to load tournament history:', error);
@@ -1005,7 +1005,7 @@ async function loadTeamMatchHistory() {
                     rowBorder = winnerColor;
                 }
                 const varighed = g.status === 'finished' ? varighedFra(g.started_at, g.finished_at) : '';
-                const varighedHtml = varighed ? `<span style="color:#aaa; font-size:0.8em; white-space:nowrap;">⏱️ ${varighed}</span>` : '';
+                const varighedHtml = varighed ? `<span style="color:#aaa; font-size:0.8em; white-space:nowrap;">${Ikon('ur')} ${varighed}</span>` : '';
 
                 return `<div style="display:flex; align-items:center; gap:10px; padding:7px 10px; border-left:3px solid ${rowBorder}; background:rgba(255,255,255,0.03); border-radius:4px; margin-bottom:4px; flex-wrap:wrap;">
                     <span style="background:var(--color-accent); color:#fff; padding:2px 7px; border-radius:4px; font-size:0.78em; font-weight:bold; white-space:nowrap;">${escapeHtml(HoldkampFormater.kategoriNavn(g.category, num))}</span>
@@ -1332,13 +1332,13 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;">
                 <div>
                     <div style="color:var(--color-win, #45d17e);font-size:0.82em;margin-bottom:6px;">${escapeHtml(teamMatch.team1_name)}</div>
-                    <input id="eg_${g.id}_t1p1" type="text" value="${escapeHtml(g.team1_player1 || '')}" placeholder="Spiller 1" style="width:100%;padding:7px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;box-sizing:border-box;margin-bottom:6px;">
-                    ${isDoubles ? `<input id="eg_${g.id}_t1p2" type="text" value="${escapeHtml(g.team1_player2 || '')}" placeholder="Makker" style="width:100%;padding:7px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;box-sizing:border-box;">` : ''}
+                    <input id="eg_${g.id}_t1p1" type="text" value="${escapeHtml(g.team1_player1 || '')}" placeholder="Spiller 1" class="admin-input admin-input--sm" style="margin-bottom:6px;">
+                    ${isDoubles ? `<input id="eg_${g.id}_t1p2" type="text" value="${escapeHtml(g.team1_player2 || '')}" placeholder="Makker" class="admin-input admin-input--sm">` : ''}
                 </div>
                 <div>
                     <div style="color:var(--color-accent);font-size:0.82em;margin-bottom:6px;">${escapeHtml(teamMatch.team2_name)}</div>
-                    <input id="eg_${g.id}_t2p1" type="text" value="${escapeHtml(g.team2_player1 || '')}" placeholder="Spiller 1" style="width:100%;padding:7px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;box-sizing:border-box;margin-bottom:6px;">
-                    ${isDoubles ? `<input id="eg_${g.id}_t2p2" type="text" value="${escapeHtml(g.team2_player2 || '')}" placeholder="Makker" style="width:100%;padding:7px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;box-sizing:border-box;">` : ''}
+                    <input id="eg_${g.id}_t2p1" type="text" value="${escapeHtml(g.team2_player1 || '')}" placeholder="Spiller 1" class="admin-input admin-input--sm" style="margin-bottom:6px;">
+                    ${isDoubles ? `<input id="eg_${g.id}_t2p2" type="text" value="${escapeHtml(g.team2_player2 || '')}" placeholder="Makker" class="admin-input admin-input--sm">` : ''}
                 </div>
             </div>
             <div style="display:flex;gap:8px;">
@@ -1466,13 +1466,13 @@ function onHoldkampFormatChange() {
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                     <div>
                         <div style="color:var(--color-win, #45d17e);font-size:0.85em;margin-bottom:5px;">${escapeHtml(team1Name)}</div>
-                        <input type="text" placeholder="Spiller 1" data-game="${i}" data-field="t1p1" style="width:100%;padding:8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;margin-bottom:6px;">
-                        <input type="text" placeholder="Makker" data-game="${i}" data-field="t1p2" style="width:100%;padding:8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;">
+                        <input type="text" placeholder="Spiller 1" data-game="${i}" data-field="t1p1" class="admin-input admin-input--sm" style="margin-bottom:6px;">
+                        <input type="text" placeholder="Makker" data-game="${i}" data-field="t1p2" class="admin-input admin-input--sm">
                     </div>
                     <div>
                         <div style="color:var(--color-accent);font-size:0.85em;margin-bottom:5px;">${escapeHtml(team2Name)}</div>
-                        <input type="text" placeholder="Spiller 1" data-game="${i}" data-field="t2p1" style="width:100%;padding:8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;margin-bottom:6px;">
-                        <input type="text" placeholder="Makker" data-game="${i}" data-field="t2p2" style="width:100%;padding:8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;">
+                        <input type="text" placeholder="Spiller 1" data-game="${i}" data-field="t2p1" class="admin-input admin-input--sm" style="margin-bottom:6px;">
+                        <input type="text" placeholder="Makker" data-game="${i}" data-field="t2p2" class="admin-input admin-input--sm">
                     </div>
                 </div>
             </div>`;
@@ -1483,11 +1483,11 @@ function onHoldkampFormatChange() {
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                     <div>
                         <div style="color:var(--color-win, #45d17e);font-size:0.85em;margin-bottom:5px;">${escapeHtml(team1Name)}</div>
-                        <input type="text" placeholder="Spillernavn" data-game="${i}" data-field="t1p1" style="width:100%;padding:8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;">
+                        <input type="text" placeholder="Spillernavn" data-game="${i}" data-field="t1p1" class="admin-input admin-input--sm">
                     </div>
                     <div>
                         <div style="color:var(--color-accent);font-size:0.85em;margin-bottom:5px;">${escapeHtml(team2Name)}</div>
-                        <input type="text" placeholder="Spillernavn" data-game="${i}" data-field="t2p1" style="width:100%;padding:8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;">
+                        <input type="text" placeholder="Spillernavn" data-game="${i}" data-field="t2p1" class="admin-input admin-input--sm">
                     </div>
                 </div>
             </div>`;
@@ -1865,7 +1865,7 @@ async function editHoldkampLogos(teamMatchId) {
     });
 }
 
-// 🏷-knap til en turneringsspiller (tom navn -> ingen knap)
+// Mærke-knap til en turneringsspiller (tom navn -> ingen knap)
 function tPlayerLogoBtn(name) {
     if (!name) return '';
     // Navnet lægges i en data-attribut (attribut-sikkert via escapeHtml) og læses
@@ -1883,7 +1883,7 @@ function tPlayerLogoBtn(name) {
         return `<img data-player="${safe}" onclick="setTournamentPlayerLogo(this.dataset.player)" src="${escapeHtml(logo.url)}" title="Skift klub-logo — ${safe}" onerror="this.style.display='none'" style="height:22px; width:auto; max-width:40px; object-fit:contain; margin-left:4px; vertical-align:middle; cursor:pointer;">`;
     }
     // Intet logo → tydelig stiplet "mangler"-markør (klik for at tilføje)
-    return `<button data-player="${safe}" onclick="setTournamentPlayerLogo(this.dataset.player)" title="Tilføj klub-logo — ${safe}" style="padding:1px 5px; margin-left:4px; background:transparent; color:#c9a23a; border:1px dashed #c9a23a; border-radius:3px; cursor:pointer; font-size:0.72em; vertical-align:middle;">🏷</button>`;
+    return `<button data-player="${safe}" onclick="setTournamentPlayerLogo(this.dataset.player)" title="Tilføj klub-logo — ${safe}" style="padding:1px 5px; margin-left:4px; background:transparent; color:#c9a23a; border:1px dashed #c9a23a; border-radius:3px; cursor:pointer; font-size:0.72em; vertical-align:middle;">${Ikon('maerke')}</button>`;
 }
 
 // Saet/ret en turneringsspillers klub-logo (gemmes pr. navn i player_logos -> slaar
@@ -2195,7 +2195,7 @@ function createMatchCard(match, index) {
     // Determine if doubles (check for "/" or " & " in names)
     const isDoubles = match.winner_name.includes('/') || match.loser_name.includes('/') ||
                       match.winner_name.includes(' & ') || match.loser_name.includes(' & ');
-    const gameTypeIcon = isDoubles ? '👥' : '👤';
+    const gameTypeIcon = Ikon(isDoubles ? 'personer' : 'person');
     const gameTypeText = isDoubles ? 'Double' : 'Single';
 
     // Create set overview badges
@@ -2230,9 +2230,9 @@ function createMatchCard(match, index) {
                 </div>
                 ${setOverviewBadges ? `<div style="margin: 10px 0;">${setOverviewBadges}</div>` : ''}
                 <div style="color: #aaa; font-size: 0.9em; margin-top: 8px;">
-                    <span style="margin-right: 15px;">⏱️ ${match.duration}</span>
+                    <span style="margin-right: 15px;">${Ikon('ur')} ${match.duration}</span>
                     <span style="margin-right: 15px;"><svg viewBox="0 0 24 24" fill="currentColor" style="width:1em;height:1em;vertical-align:-0.12em;" aria-hidden="true"><g transform="translate(0 1.2)"><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/><rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/><path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/></g></svg> Bane ${match.court_id}</span>
-                    <span>📅 ${new Date(match.match_date).toLocaleDateString('da-DK', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                    <span>${Ikon('kalender')} ${new Date(match.match_date).toLocaleDateString('da-DK', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                 </div>
             </div>
             ${hasSetDetails ? '<div class="expand-icon" style="color: var(--color-accent); font-size: 1.5em; padding: 10px;">▼</div>' : ''}
@@ -2277,7 +2277,7 @@ function createMatchCard(match, index) {
         // Statistics section
         const statsHtml = `
             <div style="margin-top: 15px; padding: 15px; background: rgba(var(--color-primary-rgb), 0.15); border-radius: 8px; border: 1px solid rgba(var(--color-primary-rgb), 0.3);">
-                <div style="font-weight: bold; margin-bottom: 12px; color: var(--color-accent); font-size: 1em;">📊 KAMPSTATISTIK</div>
+                <div style="font-weight: bold; margin-bottom: 12px; color: var(--color-accent); font-size: 1em;">${Ikon('statistik')} KAMPSTATISTIK</div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
                     <div style="background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 5px;">
                         <div style="color: #aaa; font-size: 0.85em; margin-bottom: 3px;">Gennemsnitlige Point pr. Sæt</div>
@@ -2297,7 +2297,7 @@ function createMatchCard(match, index) {
 
         details.innerHTML = `
             <div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid rgba(var(--color-accent-rgb), 0.3);">
-                <div style="font-weight: bold; margin-bottom: 15px; color: #eaeaea; font-size: 1.1em;">🏆 SÆT DETALJER</div>
+                <div style="font-weight: bold; margin-bottom: 15px; color: #eaeaea; font-size: 1.1em;">${Ikon('pokal')} SÆT DETALJER</div>
                 ${setsHtml}
                 ${statsHtml}
             </div>
@@ -2969,7 +2969,7 @@ function deviceTokenKort(tokens) {
             : dest.startsWith('court/') ? `Bane visning — Bane ${dest.split('/')[1]}`
             : dest;
         const qrBadge = dest.startsWith('tv/')
-            ? ` &nbsp;•&nbsp; 📱 ${t.show_qr_on_tv ? 'QR vises' : 'QR skjult'}`
+            ? ` &nbsp;•&nbsp; ${Ikon('telefon')} ${t.show_qr_on_tv ? 'QR vises' : 'QR skjult'}`
             : '';
 
         return `
@@ -2978,8 +2978,8 @@ function deviceTokenKort(tokens) {
                 <div style="flex:1;min-width:200px;">
                     <div style="font-weight:600;margin-bottom:4px;">${escapeHtml(t.name)}</div>
                     <div style="font-size:0.8em;color:rgba(255,255,255,0.45);">
-                        📍 ${destLabel} &nbsp;•&nbsp;
-                        🔒 ${t.locked ? 'Låst' : 'Fri navigation'}${qrBadge} &nbsp;•&nbsp;
+                        ${Ikon('sted')} ${destLabel} &nbsp;•&nbsp;
+                        ${Ikon('laas')} ${t.locked ? 'Låst' : 'Fri navigation'}${qrBadge} &nbsp;•&nbsp;
                         Sidst brugt: ${lastUsed}
                     </div>
                     <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
@@ -3013,7 +3013,7 @@ function deviceTokenKort(tokens) {
                         : `<span style="font-size:0.8em;color:rgba(255,255,255,0.3);padding:6px 10px;">Tilbagekaldt</span>
                            <button onclick="handlePermanentDeleteDeviceToken(${t.id})"
                             style="background:rgba(var(--color-accent-rgb),0.18);border:1px solid rgba(var(--color-accent-rgb),0.35);border-radius:6px;padding:6px 14px;color:var(--color-accent);font-size:0.85em;cursor:pointer;">
-                            🗑 Slet
+                            ${Ikon('slet')} Slet
                            </button>`
                     }
                 </div>
@@ -4126,7 +4126,7 @@ function renderTournamentMatchRow(tournamentId, m) {
         ? `${m.side2_player1 || '?'}${m.side2_player2 ? ' & ' + m.side2_player2 : ''}`
         : (m.side2_player1 || '?');
 
-    // Navne med 🏷-knap til at sætte spillerens klub-logo (gemmes pr. navn)
+    // Navne med mærke-knap til at sætte spillerens klub-logo (gemmes pr. navn)
     const side1Html = m.doubles
         ? `${escapeHtml(m.side1_player1 || '?')}${tPlayerLogoBtn(m.side1_player1)}${m.side1_player2 ? ' &amp; ' + escapeHtml(m.side1_player2) + tPlayerLogoBtn(m.side1_player2) : ''}`
         : `${escapeHtml(m.side1_player1 || '?')}${tPlayerLogoBtn(m.side1_player1)}`;
@@ -4932,7 +4932,7 @@ function renderPlannerTokens(tokens) {
                     ${t.is_active
                         ? `<button class="pl-btn-danger" onclick="handleRevokePlannerToken(${t.id})">Tilbagekald</button>`
                         : `<span style="font-size:0.8em;color:rgba(255,255,255,0.3);padding:6px 10px;">Tilbagekaldt</span>
-                           <button class="pl-btn-danger" onclick="handlePermanentDeletePlannerToken(${t.id})">🗑 Slet</button>`}
+                           <button class="pl-btn-danger" onclick="handlePermanentDeletePlannerToken(${t.id})">${Ikon('slet')} Slet</button>`}
                 </div>
             </div>
         </div>`;
@@ -5267,7 +5267,7 @@ function renderHoldkampRegelBlok(tm) {
             const id = `gs_${tm.id}_${hold}_${n}`;
             const opts = gs.deltagere[hold].map(navn => `<option value="${escapeHtml(navn)}">${escapeHtml(navn)}</option>`).join('');
             return `<select id="${id}" onfocus="holdkampCourtSelectOpen=true" onblur="holdkampCourtSelectOpen=false"
-                            style="width:100%;padding:8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;margin-bottom:6px;">
+                            class="admin-input admin-input--sm" style="margin-bottom:6px;">
                         <option value="">— Vælg spiller —</option>${opts}</select>`;
         };
         html += regelBoks('201,162,39',

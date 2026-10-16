@@ -343,7 +343,7 @@
 }
 
 .image-modal-info {
-    background: rgba(15, 52, 96, 0.9);
+    background: rgba(var(--color-bg-card-rgb, 37, 35, 71), 0.9);
     padding: 15px 30px;
     border-radius: 10px;
     margin-top: 20px;

@@ -57,7 +57,7 @@ function loadTVButtons(courtCount) {
         button.target = '_blank'; // Open in new window/tab
         button.rel = 'noopener'; // afskær window.opener-adgang fra ny fane
         button.innerHTML = `
-            <div class="tv-icon">📺</div>
+            <div class="tv-icon">${Ikon('tv')}</div>
             <div class="tv-label">Bane ${i} TV</div>
         `;
         tvButtons.appendChild(button);

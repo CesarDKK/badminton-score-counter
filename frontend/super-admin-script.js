@@ -300,12 +300,12 @@ function renderClubs() {
             <div class="club-info">
                 <div class="club-name">${escapeHtml(club.name)}</div>
                 <div class="club-meta">
-                    <span>🌐 ${escapeHtml(club.subdomain)}</span>
-                    <span>🗄️ ${escapeHtml(club.db_name)}</span>
-                    <span>📅 ${formatDate(club.created_at)}</span>
+                    <span>${Ikon('globus')} ${escapeHtml(club.subdomain)}</span>
+                    <span>${Ikon('database')} ${escapeHtml(club.db_name)}</span>
+                    <span>${Ikon('kalender')} ${formatDate(club.created_at)}</span>
                     <span class="club-sidst-login${sidstLoginGammel(club.last_login_at) ? ' club-sidst-login--gammel' : ''}"
                         title="Seneste login af en klub-admin">
-                        🔑 Sidst logget ind: ${sidstLoginTekst(club.last_login_at)}${club.last_login_user ? ` · ${escapeHtml(club.last_login_user)}` : ''}
+                        ${Ikon('noegle')} Sidst logget ind: ${sidstLoginTekst(club.last_login_at)}${club.last_login_user ? ` · ${escapeHtml(club.last_login_user)}` : ''}
                     </span>
                 </div>
             </div>
@@ -328,7 +328,7 @@ function renderClubs() {
                 ${!club.is_active ? `
                 <button class="btn-danger" style="background:rgba(var(--color-danger-rgb, 217, 44, 63),0.3);border-color:rgba(var(--color-danger-rgb, 217, 44, 63),0.5);"
                     onclick="handleDeleteClub(${club.id})">
-                    🗑 Slet
+                    ${Ikon('slet')} Slet
                 </button>` : ''}
             </div>
         </div>
@@ -773,9 +773,9 @@ function renderFootballClubs() {
             <div class="club-info">
                 <div class="club-name">${escapeHtml(club.name)}</div>
                 <div class="club-meta">
-                    <span>🌐 ${escapeHtml(club.subdomain)}.footballapp.dk</span>
-                    <span>👥 ${club.admin_count ?? 0} admin${(club.admin_count ?? 0) === 1 ? '' : 's'}</span>
-                    <span>📅 ${formatDate(club.created_at)}</span>
+                    <span>${Ikon('globus')} ${escapeHtml(club.subdomain)}.footballapp.dk</span>
+                    <span>${Ikon('personer')} ${club.admin_count ?? 0} admin${(club.admin_count ?? 0) === 1 ? '' : 's'}</span>
+                    <span>${Ikon('kalender')} ${formatDate(club.created_at)}</span>
                 </div>
             </div>
             <div class="club-actions">
@@ -791,7 +791,7 @@ function renderFootballClubs() {
                 ${!club.is_active ? `
                 <button class="btn-danger" style="background:rgba(var(--color-danger-rgb, 217, 44, 63),0.3);border-color:rgba(var(--color-danger-rgb, 217, 44, 63),0.5);"
                     onclick="handleDeleteFootballClub(${club.id})">
-                    🗑 Slet
+                    ${Ikon('slet')} Slet
                 </button>` : ''}
             </div>
         </div>
@@ -1142,7 +1142,7 @@ async function loadMissingLogos() {
 function renderMissingLogos(list) {
     const listEl = document.getElementById('missingLogoList');
     if (!list.length) {
-        listEl.innerHTML = '<div class="empty-state" style="padding:12px;">Alle kendte klubber har et logo 🎉</div>';
+        listEl.innerHTML = '<div class="empty-state" style="padding:12px;">Alle kendte klubber har et logo</div>';
         return;
     }
     const opts = logoCache.map(l => `<option value="${l.id}">${escapeHtml(l.club_name)}</option>`).join('');

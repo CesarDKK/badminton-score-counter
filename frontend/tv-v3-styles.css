@@ -37,6 +37,13 @@
 }
 
 
+/* Plads til QR-boksen: holdrækker og planner-linjen rykker ind fra højre,
+   så sætboksene aldrig ligger under boksen (bredde ≈ 110 px billede + polstring) */
+body.tv-qr-synlig .team-row,
+body.tv-qr-synlig .tv-planner-strip {
+    padding-right: calc(3vw + 160px);
+}
+
 /* Kompakt variant — vises under en aktiv kamp så en gæst der har lukket
    browseren kan scanne igen og genoptage. Basis-QR'en er nu selv lille
    (104 px-varianten var større end den), så her skal kun diskretionen
