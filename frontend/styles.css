@@ -12,7 +12,8 @@
        DEFAULTS og backend-defaulten, så FOUC-vinduet ikke blinker en anden farve. */
     --color-bg-dark: #1a1a2e;
     --color-bg-container: #16213e;
-    --color-bg-card: #0f3460;
+    --color-bg-card: #252347;
+    --color-bg-card-rgb: 37, 35, 71;
     /* Tekstfarve oven på accent/primary — theme-loader.js overskriver med
        mørk tekst hvis temaets farve er lys (fx lime) */
     --color-on-accent: #ffffff;

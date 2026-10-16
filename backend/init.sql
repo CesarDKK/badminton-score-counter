@@ -28,7 +28,7 @@ INSERT INTO settings (setting_key, setting_value) VALUES
   ('color_accent', '#e94560'),
   ('color_bg_dark', '#1a1a2e'),
   ('color_bg_container', '#16213e'),
-  ('color_bg_card', '#0f3460')
+  ('color_bg_card', '#252347')
 ON DUPLICATE KEY UPDATE setting_key=setting_key;
 
 -- Courts table (stores court-specific settings)

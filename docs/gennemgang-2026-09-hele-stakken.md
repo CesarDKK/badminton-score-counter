@@ -212,7 +212,7 @@ Kontrasttallene er skønnet ud fra farveværdierne i koden, ikke målt i en brow
 |---|---|---|---|---|
 | E1 | **Fælles designværdier med et tema pr. produkt.** Football og badminton deler allerede Bebas Neue, mørk baggrund, 56 px gitter, radial glød og pilleknapper. Afstande, hjørner, skrifttyper og komponenter kan ligge ét sted, så hvert produkt kun overskriver sine farver. | Høj | M | ☐ |
 | E2 | **Én farve pr. betydning.** Der er tre røde (`#e94560`, `#d92c3f`, `#e74c3c`), to grønne (`#45d17e`, `#4CAF50`) og tre gule (`#ffb02e`, `#f0a500`, `#f1c40f`). De hårdkodede følger ikke klubtemaet. Hænger sammen med de ca. 190 hårdkodede farver i `admin-script.js` (Mindre ting). | Høj | M | ☐ |
-| E3 | **Badminton har to paletter, der næsten er ens:** appen bruger navy `#1a1a2e` med blå `#0f3460` til felter, websiderne `#0d0d1a` med lilla kort. Den blå passer dårligt til den lilla. Saml til én. | Middel | S–M | ☐ |
+| E3 | **Badminton har to paletter, der næsten er ens:** appen bruger navy `#1a1a2e` med blå `#0f3460` til felter, websiderne `#0d0d1a` med lilla kort. Den blå passer dårligt til den lilla. Saml til én. | Middel | S–M | ☑ Ny standard-feltfarve #252347 (lilla-navy) i stedet for #0f3460; migration 032 flytter klubber, der stadig har den gamle standard. Websidernes baggrund er uændret. |
 | E4 | **Én brødtekst-skrift.** Football-appen bruger Outfit, football-siden og hele badminton bruger DM Sans. | Lav | S | ☑ |
 
 ### Læsbarhed og kontrast
