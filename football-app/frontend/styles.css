@@ -2,7 +2,7 @@
    FOOTBALL TOURNAMENT — Design System: "Stadium Noir"
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
 
 :root {
   /* Palette — deep night with electric pitch-green accent */
@@ -33,7 +33,7 @@
 
   /* Type */
   --font-display: 'Bebas Neue', 'Arial Narrow', sans-serif;
-  --font-body: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
 
   /* Spacing */
@@ -81,16 +81,19 @@ html, body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Atmospheric grain texture — subtle, sits on top of everything */
+/* Banegulv-gitter (56 px) bag indholdet — samme baggrund som badminton og
+   markedsføringssiden. Erstatter det tidligere kornfilter, der lå OVER hele
+   siden med mix-blend-mode og kostede ydelse på svage TV-maskiner. */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 100;
-  opacity: .35;
-  mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .08 0 0 0 0 .08 0 0 0 0 .08 0 0 0 .25 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+  background-size: 56px 56px;
 }
 
 /* Atmospheric gradient — pitch-green glow in top-right corner */

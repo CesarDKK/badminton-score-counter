@@ -114,7 +114,14 @@ body::before {
   .live i { animation: onair 2s ease-in-out infinite; }
   @keyframes onair { 50% { opacity: .35; } }
 }
-@media (max-width: 640px) { .top nav { display: none; } .live { margin-left: auto; } }
+/* Telefon: menuen flytter ned på sin egen linje i stedet for at forsvinde,
+   så Anatomi og Historien stadig kan nås */
+@media (max-width: 640px) {
+  .top { flex-wrap: wrap; row-gap: .2rem; }
+  .live { margin-left: auto; }
+  .top nav { order: 3; width: 100%; margin-left: 0; gap: 1.4rem; }
+  .top nav a { padding: .7rem 0; }
+}
 
 /* ══ HERO: tekst + værk ═════════════════════════════════════════════════ */
 .hero {

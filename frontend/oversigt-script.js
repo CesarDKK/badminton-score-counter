@@ -717,7 +717,8 @@ function updateCourtCardData(court) {
         wasPaused !== isPaused ||
         parseInt(card.dataset.sets || '0') !== history.length ||
         card.dataset.p1 !== court.player1.name ||
-        (card.dataset.planner || '') !== plannerSignatur(court)) {
+        (card.dataset.planner || '') !== plannerSignatur(court) ||
+        (card.dataset.waiting === '1') !== venterPaaKamp(court)) {
         card.outerHTML = renderCourtCard(court);
         return;
     }
@@ -824,9 +825,10 @@ function renderCourtCard(court) {
     }
 
     const pauseSeconds = isPaused ? getPauseSecondsLeft(court) : 0;
+    const waiting = venterPaaKamp(court);
 
     return `
-        <div class="court-card${isPaused ? ' court-card--paused' : ''}" data-court-id="${court.courtId}" data-sets="${history.length}" data-p1="${escapeHtml(court.player1.name)}" data-planner="${escapeHtml(plannerSignatur(court))}">
+        <div class="court-card${isPaused ? ' court-card--paused' : ''}${waiting ? ' court-card--waiting' : ''}" data-court-id="${court.courtId}" data-sets="${history.length}" data-p1="${escapeHtml(court.player1.name)}" data-planner="${escapeHtml(plannerSignatur(court))}" data-waiting="${waiting ? '1' : ''}">
 
             <!-- Pause overlay — dækker hele kortet når aktiv -->
             ${isPaused ? `
@@ -839,7 +841,9 @@ function renderCourtCard(court) {
             <div class="court-card-content${isPaused ? ' court-card-content--paused' : ''}">
                 <div class="court-card-header">
                     <div class="court-number">BANE ${court.courtId}</div>
-                    <div class="court-timer" id="timer-${court.courtId}">${timerDisplay}</div>
+                    ${waiting
+                        ? '<div class="court-waiting-badge">Venter på kamp</div>'
+                        : `<div class="court-timer" id="timer-${court.courtId}">${timerDisplay}</div>`}
                 </div>
 
                 <div class="court-players">
@@ -865,6 +869,13 @@ function renderCourtCard(court) {
             </div>
         </div>
     `;
+}
+
+// Banen er aktiv, men kampen er ikke gået i gang (ingen starttid og ingen point).
+// Kortet viser da "Venter på kamp" i stedet for et ur på 00:00 og en stilling på 0–0.
+function venterPaaKamp(court) {
+    if (court._isFinished || court.matchStartTime || court.restBreakActive) return false;
+    return !(court.player1.score || court.player2.score || court.player1.games || court.player2.games);
 }
 
 // Resultatet på et afsluttet kort — ændres det (rettet resultat), tegnes kortet igen

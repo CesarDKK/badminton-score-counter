@@ -1332,13 +1332,13 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;">
                 <div>
                     <div style="color:var(--color-win, #45d17e);font-size:0.82em;margin-bottom:6px;">${escapeHtml(teamMatch.team1_name)}</div>
-                    <input id="eg_${g.id}_t1p1" type="text" value="${escapeHtml(g.team1_player1 || '')}" placeholder="Spiller 1" style="width:100%;padding:7px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;box-sizing:border-box;margin-bottom:6px;">
-                    ${isDoubles ? `<input id="eg_${g.id}_t1p2" type="text" value="${escapeHtml(g.team1_player2 || '')}" placeholder="Makker" style="width:100%;padding:7px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;box-sizing:border-box;">` : ''}
+                    <input id="eg_${g.id}_t1p1" type="text" value="${escapeHtml(g.team1_player1 || '')}" placeholder="Spiller 1" class="admin-input admin-input--sm" style="margin-bottom:6px;">
+                    ${isDoubles ? `<input id="eg_${g.id}_t1p2" type="text" value="${escapeHtml(g.team1_player2 || '')}" placeholder="Makker" class="admin-input admin-input--sm">` : ''}
                 </div>
                 <div>
                     <div style="color:var(--color-accent);font-size:0.82em;margin-bottom:6px;">${escapeHtml(teamMatch.team2_name)}</div>
-                    <input id="eg_${g.id}_t2p1" type="text" value="${escapeHtml(g.team2_player1 || '')}" placeholder="Spiller 1" style="width:100%;padding:7px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;box-sizing:border-box;margin-bottom:6px;">
-                    ${isDoubles ? `<input id="eg_${g.id}_t2p2" type="text" value="${escapeHtml(g.team2_player2 || '')}" placeholder="Makker" style="width:100%;padding:7px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;box-sizing:border-box;">` : ''}
+                    <input id="eg_${g.id}_t2p1" type="text" value="${escapeHtml(g.team2_player1 || '')}" placeholder="Spiller 1" class="admin-input admin-input--sm" style="margin-bottom:6px;">
+                    ${isDoubles ? `<input id="eg_${g.id}_t2p2" type="text" value="${escapeHtml(g.team2_player2 || '')}" placeholder="Makker" class="admin-input admin-input--sm">` : ''}
                 </div>
             </div>
             <div style="display:flex;gap:8px;">
@@ -1466,13 +1466,13 @@ function onHoldkampFormatChange() {
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                     <div>
                         <div style="color:var(--color-win, #45d17e);font-size:0.85em;margin-bottom:5px;">${escapeHtml(team1Name)}</div>
-                        <input type="text" placeholder="Spiller 1" data-game="${i}" data-field="t1p1" style="width:100%;padding:8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;margin-bottom:6px;">
-                        <input type="text" placeholder="Makker" data-game="${i}" data-field="t1p2" style="width:100%;padding:8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;">
+                        <input type="text" placeholder="Spiller 1" data-game="${i}" data-field="t1p1" class="admin-input admin-input--sm" style="margin-bottom:6px;">
+                        <input type="text" placeholder="Makker" data-game="${i}" data-field="t1p2" class="admin-input admin-input--sm">
                     </div>
                     <div>
                         <div style="color:var(--color-accent);font-size:0.85em;margin-bottom:5px;">${escapeHtml(team2Name)}</div>
-                        <input type="text" placeholder="Spiller 1" data-game="${i}" data-field="t2p1" style="width:100%;padding:8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;margin-bottom:6px;">
-                        <input type="text" placeholder="Makker" data-game="${i}" data-field="t2p2" style="width:100%;padding:8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;">
+                        <input type="text" placeholder="Spiller 1" data-game="${i}" data-field="t2p1" class="admin-input admin-input--sm" style="margin-bottom:6px;">
+                        <input type="text" placeholder="Makker" data-game="${i}" data-field="t2p2" class="admin-input admin-input--sm">
                     </div>
                 </div>
             </div>`;
@@ -1483,11 +1483,11 @@ function onHoldkampFormatChange() {
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                     <div>
                         <div style="color:var(--color-win, #45d17e);font-size:0.85em;margin-bottom:5px;">${escapeHtml(team1Name)}</div>
-                        <input type="text" placeholder="Spillernavn" data-game="${i}" data-field="t1p1" style="width:100%;padding:8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;">
+                        <input type="text" placeholder="Spillernavn" data-game="${i}" data-field="t1p1" class="admin-input admin-input--sm">
                     </div>
                     <div>
                         <div style="color:var(--color-accent);font-size:0.85em;margin-bottom:5px;">${escapeHtml(team2Name)}</div>
-                        <input type="text" placeholder="Spillernavn" data-game="${i}" data-field="t2p1" style="width:100%;padding:8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;">
+                        <input type="text" placeholder="Spillernavn" data-game="${i}" data-field="t2p1" class="admin-input admin-input--sm">
                     </div>
                 </div>
             </div>`;
@@ -5267,7 +5267,7 @@ function renderHoldkampRegelBlok(tm) {
             const id = `gs_${tm.id}_${hold}_${n}`;
             const opts = gs.deltagere[hold].map(navn => `<option value="${escapeHtml(navn)}">${escapeHtml(navn)}</option>`).join('');
             return `<select id="${id}" onfocus="holdkampCourtSelectOpen=true" onblur="holdkampCourtSelectOpen=false"
-                            style="width:100%;padding:8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;margin-bottom:6px;">
+                            class="admin-input admin-input--sm" style="margin-bottom:6px;">
                         <option value="">— Vælg spiller —</option>${opts}</select>`;
         };
         html += regelBoks('201,162,39',

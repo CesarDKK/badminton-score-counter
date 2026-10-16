@@ -213,22 +213,22 @@ Kontrasttallene er skønnet ud fra farveværdierne i koden, ikke målt i en brow
 | E1 | **Fælles designværdier med et tema pr. produkt.** Football og badminton deler allerede Bebas Neue, mørk baggrund, 56 px gitter, radial glød og pilleknapper. Afstande, hjørner, skrifttyper og komponenter kan ligge ét sted, så hvert produkt kun overskriver sine farver. | Høj | M | ☐ |
 | E2 | **Én farve pr. betydning.** Der er tre røde (`#e94560`, `#d92c3f`, `#e74c3c`), to grønne (`#45d17e`, `#4CAF50`) og tre gule (`#ffb02e`, `#f0a500`, `#f1c40f`). De hårdkodede følger ikke klubtemaet. Hænger sammen med de ca. 190 hårdkodede farver i `admin-script.js` (Mindre ting). | Høj | M | ☐ |
 | E3 | **Badminton har to paletter, der næsten er ens:** appen bruger navy `#1a1a2e` med blå `#0f3460` til felter, websiderne `#0d0d1a` med lilla kort. Den blå passer dårligt til den lilla. Saml til én. | Middel | S–M | ☐ |
-| E4 | **Én brødtekst-skrift.** Football-appen bruger Outfit, football-siden og hele badminton bruger DM Sans. | Lav | S | ☐ |
+| E4 | **Én brødtekst-skrift.** Football-appen bruger Outfit, football-siden og hele badminton bruger DM Sans. | Lav | S | ☑ |
 
 ### Læsbarhed og kontrast
 | # | Forslag | Værdi | Indsats | Status |
 |---|---|---|---|---|
 | E5 | **For svag tekst.** Etiketter i hvid 30–45 % ("Bane" på banefliserne, "Store skærme til tilskuere", "LIVE" på TV, "Tilbage"-links) ligger omkring 2,5–3:1; kravet er 4,5:1. Admin-sidefoden (`#555` på navy) ca. 2,3:1. Football `--text-dim #5f6a7d` ca. 3,5:1. | Høj | S | ☐ |
 | E6 | **TV: rød betyder både "tabt sæt" og "serverer",** og vundet/tabt skelnes kun på grøn mod rød, som farveblinde har svært ved. Giv tabt sæt en neutral, mørk tone, og behold rød til serv og aktivitet. | Høj | S | ☐ |
-| E7 | **Oversigt:** inaktive baner står med 40 % gennemsigtighed og er næsten ulæselige på afstand. Brug en tydelig "Ledig"-markering i stedet. | Middel | S | ☐ |
+| E7 | **Oversigt:** inaktive baner står med 40 % gennemsigtighed og er næsten ulæselige på afstand. Brug en tydelig "Ledig"-markering i stedet. | Middel | S | ☑ Den nedtonede "inaktiv"-stil var død CSS (oversigten viser kun aktive baner). Lavet i stedet: aktive baner uden startet kamp viser "Venter på kamp" i stedet for 00:00 og 0–0. |
 
 ### Ensartede komponenter i badminton
 | # | Forslag | Værdi | Indsats | Status |
 |---|---|---|---|---|
 | E8 | **Fem knapstilarter → tre** (primær, sekundær, fare). I dag: rød pille (tæller, markedsføring), lilla 8 px (admin), Bebas-gradient (login, super-admin), rød 12 px (statistik, planner), gennemsigtig rød (fare). | Middel | S–M | ☐ |
 | E9 | **Én login-skabelon** i stedet for tre forskellige (admin, klub-login, super-admin). | Middel | S | ☐ |
-| E10 | **Ikoner:** admin bruger emoji (⏱️ 📅 👤 🗑 ⚙️), tælleren og football stregikoner. Emoji ser forskellige ud på Windows, Android og TV-boksene og kan ikke farves med temaet. Designsystemet beskriver emoji som et bevidst valg, så det er en beslutning. Forslag: ét sæt stregikoner overalt. | Lav | M | ☐ beslut |
-| E11 | **Holdkamp-formularerne** er skrevet med indlejret CSS (5 px hjørner, anden feltbaggrund) og ligner ikke resten af admin. | Lav | S | ☐ |
+| E10 | **Ikoner:** admin bruger emoji (⏱️ 📅 👤 🗑 ⚙️), tælleren og football stregikoner. Emoji ser forskellige ud på Windows, Android og TV-boksene og kan ikke farves med temaet. Designsystemet beskriver emoji som et bevidst valg, så det er en beslutning. Forslag: ét sæt stregikoner overalt. | Lav | M | ☐ Besluttet: brug jeres egne ikoner (afklar hvilke) |
+| E11 | **Holdkamp-formularerne** er skrevet med indlejret CSS (5 px hjørner, anden feltbaggrund) og ligner ikke resten af admin. | Lav | S | ☑ |
 
 ### UX produkt for produkt
 | # | Forslag | Værdi | Indsats | Status |
@@ -238,9 +238,9 @@ Kontrasttallene er skønnet ud fra farveværdierne i koden, ikke målt i en brow
 | E14 | **Dansk tekst:** stort begyndelsesbogstav i hvert ord ("Log Ind", "Gem Ændringer", "Ryd Alle Banedata", "Spiller 1 Navn:") føles oversat; brug almindelig dansk skrivemåde. "Turnerings tilstand" skrives i ét ord. | Lav | S | ☑ |
 | E15 | **Tælleren:** "Ryd Banen" står blandt de almindelige punkter i indstillingsmenuen. Flyt den nederst med luft over. | Middel | S | ☑ |
 | E16 | **Tælleren, første kamp:** før serv er valgt, er +1 grå og der står kun en lille hjælpetekst. Fremhæv "Start serv"-knapperne tydeligere. | Middel | S | ☑ |
-| E17 | **TV:** QR-boksen sidder fast nederst til højre og kan dække sidste sætboks ved 3 sæt og lange navne. Giv den fast plads i sidefoden. | Middel | S | ☐ |
-| E18 | **Football:** kornfilteret ligger over hele siden og koster ydelse på svage TV-maskiner og projektor-PC'er. Brug det kun på markedsføringssiden. Football har ellers den mest konsekvente komponentbase og er en god model for badminton. | Lav | S | ☐ |
-| E19 | **Provebillede:** Barlow Condensed indlæses, men bruges ikke. På mobil forsvinder menuen helt, så der ikke er vej til Anatomi og Historien. (Billedet på telefon på langs står allerede under Salgssider i Pakke D.) | Lav | S | ☐ |
+| E17 | **TV:** QR-boksen sidder fast nederst til højre og kan dække sidste sætboks ved 3 sæt og lange navne. Giv den fast plads i sidefoden. | Middel | S | ☑ |
+| E18 | **Football:** kornfilteret ligger over hele siden og koster ydelse på svage TV-maskiner og projektor-PC'er. Brug det kun på markedsføringssiden. Football har ellers den mest konsekvente komponentbase og er en god model for badminton. | Lav | S | ☑ |
+| E19 | **Provebillede:** Barlow Condensed indlæses, men bruges ikke. På mobil forsvinder menuen helt, så der ikke er vej til Anatomi og Historien. (Billedet på telefon på langs står allerede under Salgssider i Pakke D.) | Lav | S | ☑ Menuen står nu på egen linje på mobil. Barlow Condensed bliver: cogj bruger den via provebillede's fonts.css, og en ubrugt skrift hentes ikke af browseren. |
 
 ---
 
