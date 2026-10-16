@@ -459,6 +459,16 @@ function updateTimerDisplay() {
     const timerElement = document.getElementById('timerDisplay');
     if (!timerElement) return;
 
+    // Resultat-snapshot efter rydning har ingen kamptid — vis ingen tid
+    // (headeren siger bare "AFGJORT") i stedet for 00:00
+    if (!timerAnchor && document.querySelector('.tv-container.afgjort')) {
+        if (_lastTimerText !== '') {
+            _lastTimerText = '';
+            timerElement.textContent = '';
+        }
+        return;
+    }
+
     const elapsedSeconds = anchoredElapsedSeconds() ?? 0;
 
     const hours = Math.floor(elapsedSeconds / 3600);
@@ -595,6 +605,14 @@ async function loadCourtData() {
             updatePlayerNames(gameState, playersSwapped);
             updateSetScores(gameState, playersSwapped);
             showMatchFinished(gameState, playersSwapped);
+            // Runde, udskiftere og banner står også, mens resultatet vises, og
+            // headeren viser den samlede kamptid (frosset ved kampslut)
+            updatePlannerDisplay(gameState.planner, true);
+            matchStartTime = gameState.matchStartTime;
+            matchEndTime = gameState.matchEndTime;
+            syncTimerAnchor(gameState);
+            updateTimerDisplay();
+            updateCourtBanner();
             // Kampen er afgjort men banen ikke ryddet: vis "SCAN FOR NY KAMP"-QR
             // med det samme (kun hvis banen kører i QR-selvbetjening) — så et nyt
             // par kan gå i gang uden at nogen først skal trykke "Ryd bane".
@@ -852,6 +870,9 @@ function updatePlayerNames(gameState, playersSwapped) {
 
     const d1 = isDoubles && displayPlayer1.name2;
     const d2 = isDoubles && displayPlayer2.name2;
+    // Double: to navne pr. række — CSS bruger en lidt mindre navnestørrelse
+    const container = document.querySelector('.tv-container');
+    if (container) container.classList.toggle('is-double', !!(d1 || d2));
 
     // Kun fornavn paa TV-skaermen; forbogstav ved sammenfald paa tvaers af
     // alle fire pladser (ogsaa modstandere). Tom streng = pladsen er ikke i brug.
@@ -1072,8 +1093,24 @@ function updateSetScores(gameState, playersSwapped) {
     // Update set boxes for both teams
     updateTeamSetBoxes('team1', displayPlayer1, setHistory, currentSetIndex, gameState, playersSwapped);
     updateTeamSetBoxes('team2', displayPlayer2, setHistory, currentSetIndex, gameState, playersSwapped);
+
+    // "2. SÆT" i headeren foran kamptiden. En afgjort kamp sætter sin egen
+    // tekst i showMatchFinished.
+    if (!matchFinished) setTvSetLabel(`${Math.min(currentSetIndex + 1, 3)}. SÆT`);
 }
 
+// Teksten foran kamptiden i headeren ("2. SÆT", "AFGJORT" …). Tom = kun tiden.
+let _tvSetLabel = null;
+function setTvSetLabel(tekst) {
+    if (tekst === _tvSetLabel) return;
+    _tvSetLabel = tekst;
+    const el = document.getElementById('tvSetLabel');
+    if (el) el.textContent = tekst ? `${tekst} · ` : '';
+}
+
+// Layout A: de små bokse viser kun AFSLUTTEDE sæt; pointene i det sæt, der
+// spilles nu, står i det store felt (#team1Score/#team2Score). Ikke spillede
+// sæt skjules (.tom), så der ikke står tomme bokse og stjæler plads fra navnene.
 function updateTeamSetBoxes(teamId, playerData, setHistory, currentSetIndex, gameState, playersSwapped) {
     // Determine which team we're displaying (1 or 2)
     const isTeam1 = teamId === 'team1';
@@ -1089,31 +1126,36 @@ function updateTeamSetBoxes(teamId, playerData, setHistory, currentSetIndex, gam
             box.textContent = extractTeamScore(setHistory[idx], isTeam1);
             box.className = 'set-box';
             markSetResult(teamId, setNum, setHistory[idx], isTeam1);
-        } else if (currentSetIndex === idx && (gameState.gameMode === '15' || gameState.gameMode === '21') &&
-                   gameState.player1.score + gameState.player2.score > 0 &&
-                   saetAfgjort(gameState.player1.score, gameState.player2.score, gameState.gameMode)) {
-            // Pausen mellem sæt: tælleren nulstiller først pointene, når pausen
-            // slutter, så stillingen er det netop afsluttede sæts — ikke dette sæts
-            box.textContent = '-';
-            box.className = 'set-box';
         } else if (currentSetIndex === idx) {
-            // Igangværende sæt — vis og cache aktuel score (max, som fallback)
+            // Igangværende sæt — cache aktuel score (max) som fallback, til
+            // historikken er opdateret. Selve pointene står i det store felt.
             const currentScore = playerData.score;
             if (currentScore > (cachedSetScores[teamId][cacheKey] ?? -1)) {
                 cachedSetScores[teamId][cacheKey] = currentScore;
             }
-            box.textContent = currentScore;
-            box.className = 'set-box current';
-        } else if (currentSetIndex > idx) {
+            box.textContent = '';
+            box.className = 'set-box tom';
+        } else if (currentSetIndex > idx && cachedSetScores[teamId][cacheKey] != null) {
             // Sættet er slut men historikken ikke opdateret endnu — cachet fallback
-            const cached = cachedSetScores[teamId][cacheKey];
-            box.textContent = (cached == null) ? '-' : cached;
+            box.textContent = cachedSetScores[teamId][cacheKey];
             box.className = 'set-box';
         } else {
             // Ikke startet endnu
-            box.textContent = '-';
-            box.className = 'set-box';
+            box.textContent = '';
+            box.className = 'set-box tom';
         }
+    }
+
+    // Det store pointfelt. Pausen mellem sæt: tælleren nulstiller først
+    // pointene, når pausen slutter, så stillingen er det netop afsluttede sæts
+    // — vis 0 i stedet (pause-overlayet dækker alligevel).
+    const scoreEl = document.getElementById(`${teamId}Score`);
+    if (scoreEl) {
+        const iPause = currentSetIndex >= 0 && (gameState.gameMode === '15' || gameState.gameMode === '21') &&
+            gameState.player1.score + gameState.player2.score > 0 &&
+            saetAfgjort(gameState.player1.score, gameState.player2.score, gameState.gameMode);
+        const tekst = String(iPause ? 0 : (playerData.score ?? 0));
+        if (scoreEl.textContent !== tekst) scoreEl.textContent = tekst;
     }
 }
 
@@ -1260,25 +1302,28 @@ let _bannerSignatur = null;
 
 function updateCourtBanner() {
     const footer = document.querySelector('.tv-footer');
-    if (!footer) return;
+    const slot = document.getElementById('tvFooterBanner');
+    if (!footer || !slot) return;
 
     const isMatchActive = !isShowingSlideshow;
     const viserBanner = isMatchActive && cachedCourtBanners.length > 0;
     const signatur = viserBanner
         ? cachedCourtBanners.map(b => b.id).join(',') + '@' + cachedBannerDuration
-        : 'live';
+        : 'tom';
 
-    // Uændret indhold og footeren står som vi forlod den → lad den være
-    const forventetElement = viserBanner ? '#courtBannerImage' : '.live-indicator';
-    if (signatur === _bannerSignatur && footer.querySelector(forventetElement)) return;
+    // Uændret indhold og pladsen står som vi forlod den → lad den være
+    if (signatur === _bannerSignatur && (!viserBanner || slot.querySelector('#courtBannerImage'))) return;
 
     _bannerSignatur = signatur;
     stopBannerRotation();
 
+    // Banneret har sin egen plads i bundbjælken, så udskiftere/banenote
+    // (planner-strippen) og QR-koden står ved siden af det. Uden banner er
+    // pladsen tom — "LIVE"-teksten er fjernet (sagde ikke noget).
     if (viserBanner) {
         if (currentBannerIndex >= cachedCourtBanners.length) currentBannerIndex = 0;
         footer.classList.add('has-banner');
-        footer.innerHTML = `
+        slot.innerHTML = `
             <img id="courtBannerImage"
                  src="/uploads/${cachedCourtBanners[currentBannerIndex].filename}"
                  alt="Bane-sponsor"
@@ -1287,12 +1332,7 @@ function updateCourtBanner() {
         if (cachedCourtBanners.length > 1) startBannerRotation();
     } else {
         footer.classList.remove('has-banner');
-        footer.innerHTML = `
-            <div class="live-indicator">
-                <span class="live-dot"></span>
-                LIVE
-            </div>
-        `;
+        slot.innerHTML = '';
     }
 }
 
@@ -1673,183 +1713,85 @@ function formatPlayerNames(playerName, playerName2, isDoubles) {
     return playerName;
 }
 
+// Afgjort kamp (layout A): tavlen skifter selv til "alle sæt i stor størrelse".
+// Navne og sæt er allerede tegnet (updatePlayerNames/updateSetScores) — her
+// markeres vinderens række grøn og taberens tones ned, og headeren siger
+// AFGJORT / WALKOVER / AFSLUTTET foran kamptiden. Står, til banen ryddes, og
+// derefter i snapshot-perioden (backend: last_finished_matches, 5 min).
 function showMatchFinished(gameState, playersSwapped) {
-    const overlay = document.getElementById('tvMatchFinishedOverlay');
-    if (!overlay) return;
+    const container = document.querySelector('.tv-container');
+    if (!container) return;
 
-    let displayPlayer1Name, displayPlayer1Name2, displayPlayer2Name, displayPlayer2Name2;
-    if (playersSwapped) {
-        displayPlayer1Name = gameState.player2.name;
-        displayPlayer1Name2 = gameState.player2.name2;
-        displayPlayer2Name = gameState.player1.name;
-        displayPlayer2Name2 = gameState.player1.name2;
-    } else {
-        displayPlayer1Name = gameState.player1.name;
-        displayPlayer1Name2 = gameState.player1.name2;
-        displayPlayer2Name = gameState.player2.name;
-        displayPlayer2Name2 = gameState.player2.name2;
-    }
+    // Vinderen i data-orientering (player1/player2) — indtastet resultat kan
+    // have valgt en vinder, der var bagud
+    let vinder = gameState.resultWinner === 1 || gameState.resultWinner === 2
+        ? gameState.resultWinner
+        : (gameState.player1.games > gameState.player2.games ? 1
+            : gameState.player2.games > gameState.player1.games ? 2 : null);
+    // På tavlen står player2 øverst, hvis siderne er byttet
+    if (vinder && playersSwapped) vinder = vinder === 1 ? 2 : 1;
 
-    const setScoresContainer = document.getElementById('tvSetScoresContainer');
-    if (setScoresContainer && gameState.setScoresHistory && gameState.setScoresHistory.length > 0) {
-        const setScoresHtml = gameState.setScoresHistory.map((setData, index) => {
-            let player1Name, player2Name, scoreText;
+    const r1 = document.getElementById('team1Row');
+    const r2 = document.getElementById('team2Row');
+    [r1, r2].forEach((row, i) => {
+        if (!row) return;
+        row.classList.remove('serving');
+        row.classList.toggle('vinder', vinder === i + 1);
+        row.classList.toggle('taber', vinder !== null && vinder !== i + 1);
+    });
 
-            if (typeof setData === 'string') {
-                player1Name = formatPlayerNames(originalPlayer1Name || displayPlayer1Name,
-                                               originalPlayer1Name2 || displayPlayer1Name2,
-                                               gameState.isDoubles);
-                player2Name = formatPlayerNames(originalPlayer2Name || displayPlayer2Name,
-                                               originalPlayer2Name2 || displayPlayer2Name2,
-                                               gameState.isDoubles);
-                scoreText = setData;
-            } else {
-                // Navnene er altid original-siderne; kun scoren orienteres (delt helper)
-                player1Name = formatPlayerNames(originalPlayer1Name, originalPlayer1Name2, gameState.isDoubles);
-                player2Name = formatPlayerNames(originalPlayer2Name, originalPlayer2Name2, gameState.isDoubles);
-                const [t1, t2] = orientSetScore(setData);
-                scoreText = `${t1}-${t2}`;
-            }
-
-            const scores = scoreText.split('-').map(s => parseInt(s.trim()));
-            const player1Won = scores[0] > scores[1];
-            const winnerName = player1Won ? player1Name : player2Name;
-            // Et sæt, der ikke blev spillet færdigt (kamp afsluttet før tid), har ingen vinder
-            const afgjort = saetAfgjort(scores[0], scores[1], gameState.gameMode);
-            const winnerColor = '#4CAF50';
-            const loserColor = 'var(--color-accent)';
-
-            // Spillernavne kommer fra brugerinput (tæller/QR-gæster) — skal
-            // escapes før innerHTML, ellers kan et navn køre script på TV'et
-            return `
-                <div style="margin: 20px 0; font-size: 1.1em;">
-                    <div style="margin-bottom: 8px; color: #aaa;">Sæt ${index + 1}</div>
-                    <div style="font-size: 1.3em;">
-                        <span style="color: ${player1Won ? winnerColor : loserColor}; font-weight: ${player1Won ? 'bold' : 'normal'};">
-                            ${escapeHtml(player1Name)}
-                        </span>
-                        <span style="color: #fff; margin: 0 15px; font-weight: bold;">
-                            ${escapeHtml(scoreText)}
-                        </span>
-                        <span style="color: ${!player1Won ? winnerColor : loserColor}; font-weight: ${!player1Won ? 'bold' : 'normal'};">
-                            ${escapeHtml(player2Name)}
-                        </span>
-                    </div>
-                    ${afgjort ? `<div style="color: ${winnerColor}; font-size: 0.9em; margin-top: 5px; font-weight: bold;">
-                        ✓ ${escapeHtml(winnerName)}
-                    </div>` : `<div style="color: #aaa; font-size: 0.9em; margin-top: 5px;">Ikke spillet færdigt</div>`}
-                </div>
-            `;
-        }).join('');
-        setScoresContainer.innerHTML = setScoresHtml;
-    } else {
-        const player1DisplayName = formatPlayerNames(displayPlayer1Name, displayPlayer1Name2, gameState.isDoubles);
-        const player2DisplayName = formatPlayerNames(displayPlayer2Name, displayPlayer2Name2, gameState.isDoubles);
-
-        let displayPlayer1Games, displayPlayer2Games;
-        if (playersSwapped) {
-            displayPlayer1Games = gameState.player2.games;
-            displayPlayer2Games = gameState.player1.games;
-        } else {
-            displayPlayer1Games = gameState.player1.games;
-            displayPlayer2Games = gameState.player2.games;
-        }
-
-        const player1WonMatch = displayPlayer1Games > displayPlayer2Games;
-        const winnerColor = '#4CAF50';
-        const loserColor = 'var(--color-accent)';
-
-        if (gameState.resultOutcome === 'walkover') {
-            setScoresContainer.innerHTML = `
-                <div style="margin: 30px 0; font-size: 1.3em; color: #aaa;">
-                    ${escapeHtml(player1DisplayName)} mod ${escapeHtml(player2DisplayName)}<br>
-                    <span style="color: #fff; font-size: 1.4em; font-weight: bold;">Walkover</span>
-                </div>
-            `;
-        } else
-        setScoresContainer.innerHTML = `
-            <div style="margin: 30px 0; font-size: 1.3em;">
-                <div style="margin-bottom: 15px; color: #aaa; font-size: 0.9em;">Resultat</div>
-                <div style="font-size: 1.5em; display: flex; justify-content: center; align-items: center; gap: 30px;">
-                    <span style="color: ${player1WonMatch ? winnerColor : loserColor}; font-weight: ${player1WonMatch ? 'bold' : 'normal'};">
-                        ${escapeHtml(player1DisplayName)}
-                    </span>
-                    <span style="color: #fff; font-weight: bold; font-size: 1.2em;">
-                        ${displayPlayer1Games} - ${displayPlayer2Games}
-                    </span>
-                    <span style="color: ${!player1WonMatch ? winnerColor : loserColor}; font-weight: ${!player1WonMatch ? 'bold' : 'normal'};">
-                        ${escapeHtml(player2DisplayName)}
-                    </span>
-                </div>
-            </div>
-        `;
-    }
-
-    const player1WonMatch = gameState.player1.games > gameState.player2.games;
-    let winner;
-    if (playersSwapped) {
-        winner = player1WonMatch
-            ? formatPlayerNames(displayPlayer2Name, displayPlayer2Name2, gameState.isDoubles)
-            : formatPlayerNames(displayPlayer1Name, displayPlayer1Name2, gameState.isDoubles);
-    } else {
-        winner = player1WonMatch
-            ? formatPlayerNames(displayPlayer1Name, displayPlayer1Name2, gameState.isDoubles)
-            : formatPlayerNames(displayPlayer2Name, displayPlayer2Name2, gameState.isDoubles);
-    }
-    // Indtastet resultat: vinderen er valgt (kan være den, der var bagud)
-    if (gameState.resultWinner) {
-        const w = gameState.resultWinner === 1 ? gameState.player1 : gameState.player2;
-        winner = formatPlayerNames(w.name, w.name2, gameState.isDoubles);
-    }
-    document.getElementById('tvFinishedWinner').textContent = winner;
-    const titel = document.getElementById('tvFinishedTitle');
-    if (titel) {
-        titel.textContent = gameState.resultOutcome === 'walkover' ? 'WALKOVER'
-            : gameState.resultOutcome === 'ended_early' ? 'KAMP AFSLUTTET'
-            : 'KAMP AFGJORT';
-    }
-
-    overlay.style.display = 'flex';
+    container.classList.add('afgjort');
+    container.classList.toggle('walkover', gameState.resultOutcome === 'walkover');
+    setTvSetLabel(gameState.resultOutcome === 'walkover' ? 'WALKOVER'
+        : gameState.resultOutcome === 'ended_early' ? 'AFSLUTTET'
+        : 'AFGJORT');
+    requestAnimationFrame(fitAllPlayerNames);
 }
 
-// Vis resultatet fra et snapshot (gemt da banen blev ryddet).
-// Genbruger showMatchFinished ved at konstruere et minimalt gameState-objekt
-// og sætte original-positions så set-historikkens swap-logik virker korrekt.
+// Vis resultatet fra et snapshot (gemt da banen blev ryddet). Navne og sæt
+// tegnes på tavlen ud fra et minimalt gameState-objekt; snapshot-positionen
+// bruges også som "original", så sæt-historikken ikke fejlagtigt byttes om.
 function showFinishedSnapshot(snap) {
     hideSponsorSlideshow();
 
-    // Snapshot lagrer den endelige position; den bruges også som "original"
-    // så scores i setScoresHistory ikke fejlagtigt byttes om i visningen.
     originalPlayer1Name = snap.player1.name;
     originalPlayer1Name2 = snap.player1.name2 || null;
     originalPlayer2Name = snap.player2.name;
     originalPlayer2Name2 = snap.player2.name2 || null;
 
     const fakeGameState = {
-        player1: {
-            name: snap.player1.name,
-            name2: snap.player1.name2,
-            score: 0,
-            games: snap.player1.games || 0
-        },
-        player2: {
-            name: snap.player2.name,
-            name2: snap.player2.name2,
-            score: 0,
-            games: snap.player2.games || 0
-        },
+        player1: { name: snap.player1.name, name2: snap.player1.name2, score: 0, games: snap.player1.games || 0 },
+        player2: { name: snap.player2.name, name2: snap.player2.name2, score: 0, games: snap.player2.games || 0 },
         setScoresHistory: snap.setScoresHistory || [],
-        isDoubles: !!snap.isDoubles
+        isDoubles: !!snap.isDoubles,
+        matchCompleted: true
     };
 
+    updatePlannerDisplay(null, false);
+    updatePlayerNames(fakeGameState, false);
+    updateSetScores(fakeGameState, false);
     showMatchFinished(fakeGameState, false);
+    // Snapshottet har ingen kamptid — vis kun "AFGJORT"
+    timerAnchor = null;
+    _lastTimerText = '';
+    const t = document.getElementById('timerDisplay');
+    if (t) t.textContent = '';
+    if (_tvSetLabel) {
+        const el = document.getElementById('tvSetLabel');
+        if (el) el.textContent = _tvSetLabel;
+    }
 }
 
 function hideMatchFinished() {
-    const overlay = document.getElementById('tvMatchFinishedOverlay');
-    if (overlay) {
-        overlay.style.display = 'none';
-    }
+    const container = document.querySelector('.tv-container');
+    if (!container || !container.classList.contains('afgjort')) return;
+    container.classList.remove('afgjort', 'walkover');
+    ['team1Row', 'team2Row'].forEach(id => {
+        const row = document.getElementById(id);
+        if (row) row.classList.remove('vinder', 'taber');
+    });
+    _tvSetLabel = null; // tegnes igen af updateSetScores
+    requestAnimationFrame(fitAllPlayerNames);
 }
 
 // ========== QR COUNTER ==========
