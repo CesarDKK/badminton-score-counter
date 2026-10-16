@@ -233,11 +233,11 @@ Kontrasttallene er skønnet ud fra farveværdierne i koden, ikke målt i en brow
 ### UX produkt for produkt
 | # | Forslag | Værdi | Indsats | Status |
 |---|---|---|---|---|
-| E12 | **Admin-menuen:** 9 knapper på række, og Indstillinger/Sponsorer viser andre menupunkter end hovedsiden. Del i to grupper med samme menu på alle sider: *Kampe* (Holdkamp, Turnering, Kamphistorik) og *Klub* (Spillere, Sponsorer, Adgangslinks, Planner, Indstillinger). | Middel | S–M | ☐ |
-| E13 | **"Ryd Alle Banedata"** står som stor rød boks under baneoversigten, den mest brugte side. Flyt til Indstillinger. | Middel | S | ☐ |
-| E14 | **Dansk tekst:** stort begyndelsesbogstav i hvert ord ("Log Ind", "Gem Ændringer", "Ryd Alle Banedata", "Spiller 1 Navn:") føles oversat; brug almindelig dansk skrivemåde. "Turnerings tilstand" skrives i ét ord. | Lav | S | ☐ |
-| E15 | **Tælleren:** "Ryd Banen" står blandt de almindelige punkter i indstillingsmenuen. Flyt den nederst med luft over. | Middel | S | ☐ |
-| E16 | **Tælleren, første kamp:** før serv er valgt, er +1 grå og der står kun en lille hjælpetekst. Fremhæv "Start serv"-knapperne tydeligere. | Middel | S | ☐ |
+| E12 | **Admin-menuen:** 9 knapper på række, og Indstillinger/Sponsorer viser andre menupunkter end hovedsiden. Del i to grupper med samme menu på alle sider: *Kampe* (Holdkamp, Turnering, Kamphistorik) og *Klub* (Spillere, Sponsorer, Adgangslinks, Planner, Indstillinger). | Middel | S–M | ☑ |
+| E13 | **"Ryd Alle Banedata"** står som stor rød boks under baneoversigten, den mest brugte side. Flyt til Indstillinger. | Middel | S | ☑ |
+| E14 | **Dansk tekst:** stort begyndelsesbogstav i hvert ord ("Log Ind", "Gem Ændringer", "Ryd Alle Banedata", "Spiller 1 Navn:") føles oversat; brug almindelig dansk skrivemåde. "Turnerings tilstand" skrives i ét ord. | Lav | S | ☑ |
+| E15 | **Tælleren:** "Ryd Banen" står blandt de almindelige punkter i indstillingsmenuen. Flyt den nederst med luft over. | Middel | S | ☑ |
+| E16 | **Tælleren, første kamp:** før serv er valgt, er +1 grå og der står kun en lille hjælpetekst. Fremhæv "Start serv"-knapperne tydeligere. | Middel | S | ☑ |
 | E17 | **TV:** QR-boksen sidder fast nederst til højre og kan dække sidste sætboks ved 3 sæt og lange navne. Giv den fast plads i sidefoden. | Middel | S | ☐ |
 | E18 | **Football:** kornfilteret ligger over hele siden og koster ydelse på svage TV-maskiner og projektor-PC'er. Brug det kun på markedsføringssiden. Football har ellers den mest konsekvente komponentbase og er en god model for badminton. | Lav | S | ☐ |
 | E19 | **Provebillede:** Barlow Condensed indlæses, men bruges ikke. På mobil forsvinder menuen helt, så der ikke er vej til Anatomi og Historien. (Billedet på telefon på langs står allerede under Salgssider i Pakke D.) | Lav | S | ☐ |
