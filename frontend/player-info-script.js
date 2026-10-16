@@ -445,7 +445,7 @@ async function deletePlayer(playerId) {
 
 async function deleteAgeGroup(ageGroup, playerCount) {
     const confirmed1 = await showConfirm(
-        'Slet Alle Spillere',
+        'Slet alle spillere',
         `Er du sikker på, at du vil slette ALLE ${playerCount} spillere i ${ageGroup}?\n\nDette kan ikke fortrydes!`
     );
 

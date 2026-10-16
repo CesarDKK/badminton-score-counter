@@ -8,8 +8,8 @@
     <link rel="icon" type="image/png" href="/favicon.png?v=5">
     <link rel="stylesheet" href="fonts.css?v=2">
     <link rel="stylesheet" href="styles.css?v=5">
-    <link rel="stylesheet" href="admin-styles.css?v=7">
-    <link rel="stylesheet" href="settings-styles.css?v=2">
+    <link rel="stylesheet" href="admin-styles.css?v=10">
+    <link rel="stylesheet" href="settings-styles.css?v=3">
     <script src="js/theme-loader.js?v=10"></script>
 </head>
 <body>
@@ -24,7 +24,7 @@
                 <div class="login-box">
                     <h2>Login Påkrævet</h2>
                     <input type="password" id="adminPassword" placeholder="Indtast admin adgangskode">
-                    <button id="loginBtn" class="btn-primary">Log Ind</button>
+                    <button id="loginBtn" class="btn-primary">Log ind</button>
                     <div class="back-link">
                         <a href="admin.html">← Tilbage til Oversigt</a>
                     </div>
@@ -37,22 +37,31 @@
             <header>
                 <h1>Spiller Info</h1>
                 <div class="header-controls">
-                    <a href="landing.html" class="btn-secondary" style="text-decoration: none; display: inline-block;">Tilbage til Baner</a>
-                    <button id="logoutBtn" class="btn-secondary">Log Ud</button>
+                    <a href="landing.html" class="btn-secondary" style="text-decoration: none; display: inline-block;">Tilbage til baner</a>
+                    <button id="logoutBtn" class="btn-secondary">Log ud</button>
                 </div>
             </header>
 
-            <div class="admin-nav">
+            <!-- Samme menu på admin.html, player-info.html, settings.html og sponsor.html -->
+            <nav class="admin-nav" aria-label="Admin">
                 <div class="admin-nav-row">
-                    <a href="admin.html" class="btn-primary" style="text-decoration: none; display: inline-block;">← Oversigt</a>
-                    <a href="admin.html#holdkamp" class="btn-primary" style="text-decoration: none; display: inline-block;">Holdkamp</a>
-                    <a href="admin.html#history" class="btn-primary" style="text-decoration: none; display: inline-block;">Kamphistorik</a>
-                    <a href="player-info.html" class="btn-primary admin-nav-active" style="text-decoration: none; display: inline-block;">Spiller Info</a>
-                    <a href="settings.html" class="btn-primary" style="text-decoration: none; display: inline-block;">Indstillinger</a>
-                    <a href="sponsor.html" class="btn-primary" style="text-decoration: none; display: inline-block;">Sponsorer</a>
-                    <a id="deviceTokensNavBtn" href="admin.html#device-tokens" class="btn-primary" style="text-decoration: none; display: none;">Adgangslinks</a>
+                    <a href="admin.html" class="btn-primary">Oversigt</a>
+                    <div class="admin-nav-group">
+                        <span class="admin-nav-label">Kampe</span>
+                        <a href="admin.html#holdkamp" class="btn-primary">Holdkamp</a>
+                        <a href="admin.html#tournament" class="btn-primary">Turnering</a>
+                        <a href="admin.html#history" class="btn-primary">Kamphistorik</a>
+                    </div>
+                    <div class="admin-nav-group">
+                        <span class="admin-nav-label">Klub</span>
+                        <a href="player-info.html" class="btn-primary admin-nav-active" aria-current="page">Spillere</a>
+                        <a href="sponsor.html" class="btn-primary">Sponsorer</a>
+                        <a id="deviceTokensNavBtn" href="admin.html#device-tokens" class="btn-primary" style="display: none;">Adgangslinks</a>
+                        <a href="admin.html#planner" class="btn-primary">Badmintonplanner</a>
+                        <a href="settings.html" class="btn-primary">Indstillinger</a>
+                    </div>
                 </div>
-            </div>
+            </nav>
 
             <div class="settings-grid">
                 <!-- Add New Player -->
@@ -106,7 +115,7 @@
                             <span id="addPlayerLogoHint" style="font-size:0.85em; color:#aaa;"></span>
                         </div>
 
-                        <button type="submit" class="btn-primary">Tilføj Spiller</button>
+                        <button type="submit" class="btn-primary">Tilføj spiller</button>
                     </form>
                 </div>
 
@@ -201,7 +210,7 @@
                 </div>
 
                 <div class="modal-actions">
-                    <button type="submit" class="btn-primary">Gem Ændringer</button>
+                    <button type="submit" class="btn-primary">Gem ændringer</button>
                     <button type="button" id="cancelEditBtn" class="btn-secondary">Annuller</button>
                 </div>
             </form>
@@ -233,6 +242,6 @@
     <script src="js/session-vagt.js?v=1"></script>
     <script src="js/auth-guard.js?v=3"></script>
     <script src="js/logo-match.js?v=1"></script>
-    <script src="player-info-script.js?v=14"></script>
+    <script src="player-info-script.js?v=15"></script>
 </body>
 </html>
