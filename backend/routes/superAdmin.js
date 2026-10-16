@@ -95,7 +95,7 @@ router.put('/change-password', superAdminAuth, async (req, res, next) => {
 router.get('/clubs', superAdminAuth, async (req, res, next) => {
     try {
         const clubs = await masterDb.query(
-            'SELECT id, name, subdomain, db_name, is_active, created_at FROM clubs ORDER BY created_at DESC'
+            'SELECT id, name, subdomain, db_name, is_active, created_at, last_login_at, last_login_user FROM clubs ORDER BY created_at DESC'
         );
         res.json(clubs);
     } catch (error) {
@@ -224,7 +224,7 @@ router.get('/clubs/:id/admins', superAdminAuth, async (req, res, next) => {
         const conn = await clubConn(club.db_name);
         try {
             const [rows] = await conn.execute(
-                'SELECT id, username, email, page_permissions, created_at FROM club_admins ORDER BY created_at ASC'
+                'SELECT id, username, email, page_permissions, created_at, last_login_at FROM club_admins ORDER BY created_at ASC'
             );
             // Parse page_permissions til array (eller null = fuld adgang) til frontend
             const admins = rows.map(r => {

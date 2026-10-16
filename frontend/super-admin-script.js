@@ -303,6 +303,10 @@ function renderClubs() {
                     <span>🌐 ${escapeHtml(club.subdomain)}</span>
                     <span>🗄️ ${escapeHtml(club.db_name)}</span>
                     <span>📅 ${formatDate(club.created_at)}</span>
+                    <span class="club-sidst-login${sidstLoginGammel(club.last_login_at) ? ' club-sidst-login--gammel' : ''}"
+                        title="Seneste login af en klub-admin">
+                        🔑 Sidst logget ind: ${sidstLoginTekst(club.last_login_at)}${club.last_login_user ? ` · ${escapeHtml(club.last_login_user)}` : ''}
+                    </span>
                 </div>
             </div>
             <div class="club-actions">
@@ -455,6 +459,7 @@ function renderAdmins(admins) {
                 <div class="admin-name">${escapeHtml(a.username)}</div>
                 ${a.email ? `<div class="admin-email">${escapeHtml(a.email)}</div>` : ''}
                 <div class="admin-email" style="opacity:0.8;">Adgang: ${escapeHtml(permissionsSummary(a.page_permissions))}</div>
+                <div class="admin-email" style="opacity:0.8;">Sidst logget ind: ${sidstLoginTekst(a.last_login_at)}</div>
             </div>
             <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
                 <button class="btn-secondary" style="font-size:0.8em; padding:5px 10px;"
@@ -1058,6 +1063,23 @@ function escapeHtml(str) {
 function formatDate(dateStr) {
     const d = new Date(dateStr);
     return d.toLocaleDateString('da-DK', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+// "i dag kl. 14.32", "i går kl. 19.05", "12. okt. 2026 (for 4 dage siden)"
+function sidstLoginTekst(dateStr) {
+    if (!dateStr) return 'Aldrig';
+    const d = new Date(dateStr);
+    const kl = d.toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
+    const dagStart = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const dage = Math.round((dagStart(new Date()) - dagStart(d)) / 86400000);
+    if (dage <= 0) return `i dag kl. ${kl}`;
+    if (dage === 1) return `i går kl. ${kl}`;
+    return `${formatDate(dateStr)} (for ${dage} dage siden)`;
+}
+
+// Ingen login i en måned (eller aldrig): fremhæves, så inaktive klubber springer i øjnene
+function sidstLoginGammel(dateStr) {
+    return !dateStr || Date.now() - new Date(dateStr).getTime() > 30 * 86400000;
 }
 
 // ==================== KLUB-LOGOER ====================

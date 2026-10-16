@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS clubs (
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  last_login_at TIMESTAMP NULL DEFAULT NULL,
+  last_login_user VARCHAR(100) NULL DEFAULT NULL,
   INDEX idx_subdomain (subdomain),
   INDEX idx_is_active (is_active)
 ) ENGINE=InnoDB;

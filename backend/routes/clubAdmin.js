@@ -4,6 +4,25 @@ const bcrypt = require('bcrypt');
 const { query, queryOne } = require('../config/database');
 const { clubAdminAuth, generateClubAdminToken } = require('../middleware/clubAdminAuth');
 const { forkertLogin } = require('../middleware/rateLimiter');
+const masterDb = require('../config/masterDatabase');
+
+// Hvornår klubben og admin'en sidst loggede ind — vises på super-admin-siden.
+// Klubbens seneste login står i master-databasen, så klublisten ikke skal åbne
+// hver klubs database. updated_at = updated_at: et login er ikke en ændring af
+// klubben eller admin'en. Fejler det, logges der stadig ind.
+async function registrerLogin(admin, subdomain) {
+    try {
+        await query('UPDATE club_admins SET last_login_at = NOW(), updated_at = updated_at WHERE id = ?', [admin.id]);
+        if (subdomain) {
+            await masterDb.query(
+                'UPDATE clubs SET last_login_at = NOW(), last_login_user = ?, updated_at = updated_at WHERE subdomain = ?',
+                [admin.username, subdomain]
+            );
+        }
+    } catch (e) {
+        console.error('Sidste login kunne ikke gemmes:', e.message);
+    }
+}
 
 // POST /api/club-admin/login
 router.post('/login', async (req, res, next) => {
@@ -36,6 +55,7 @@ router.post('/login', async (req, res, next) => {
         }
 
         const token = generateClubAdminToken(admin.id, admin.username, req.clubSubdomain, permissions, admin.password_hash);
+        await registrerLogin(admin, req.clubSubdomain);
         res.json({ success: true, token });
     } catch (error) {
         next(error);
