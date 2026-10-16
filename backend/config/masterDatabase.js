@@ -122,6 +122,23 @@ async function initialize() {
             console.log('✓ club_logos.seed_key kolonne tilfoejet');
         }
 
+        // Klubbens seneste klub-admin-login (vises paa super-admin). Tilfoejes
+        // idempotent saa eksisterende master-DB ogsaa faar kolonnerne.
+        const loginCol = await query(
+            `SELECT COUNT(*) AS c FROM information_schema.columns
+             WHERE table_schema = 'badminton_master'
+               AND table_name = 'clubs'
+               AND column_name = 'last_login_at'`
+        );
+        if (loginCol[0].c === 0) {
+            await query(
+                `ALTER TABLE clubs
+                   ADD COLUMN last_login_at TIMESTAMP NULL DEFAULT NULL,
+                   ADD COLUMN last_login_user VARCHAR(100) NULL DEFAULT NULL`
+            );
+            console.log('✓ clubs.last_login_at/last_login_user kolonner tilfoejet');
+        }
+
         // Seed standard klub-logoer (idempotent). Lazy require for at undgaa
         // cirkulaer afhaengighed (seedLogos kraever dette modul ved load).
         try {

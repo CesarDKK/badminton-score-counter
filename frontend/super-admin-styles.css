@@ -171,6 +171,9 @@ header .subtitle {
     color: rgba(255,255,255,0.4);
 }
 .club-meta span { margin-right: 12px; }
+/* Seneste klub-admin-login; over en måned siden (eller aldrig) fremhæves */
+.club-meta .club-sidst-login { display: block; margin-top: 4px; color: rgba(255,255,255,0.7); }
+.club-meta .club-sidst-login--gammel { color: var(--color-accent); }
 .club-actions { display: flex; gap: 8px; align-items: center; }
 
 /* Status badge */
