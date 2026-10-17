@@ -5,31 +5,7 @@
     to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Login */
-.login-wrap {
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.login-card {
-    background: var(--color-bg-container);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 16px;
-    padding: 48px 40px;
-    width: 100%;
-    max-width: 400px;
-    animation: fadeUp 0.35s ease both;
-}
-.login-card .brand { text-align: center; margin-bottom: 32px; }
-.login-card .brand-icon { font-size: 2.8em; margin-bottom: 8px; }
-.login-card h1 {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 2em;
-    letter-spacing: 0.05em;
-    color: #fff;
-}
-.login-card .subtitle { color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.85em; margin-top: 4px; }
+/* Login: skabelonen ligger i styles.css (E9) */
 
 /* Forms */
 .form-group { margin-bottom: 16px; }

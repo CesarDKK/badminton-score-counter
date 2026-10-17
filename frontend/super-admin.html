@@ -7,8 +7,8 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=5">
     <link rel="icon" type="image/png" href="/favicon.png?v=5">
     <link rel="stylesheet" href="fonts.css?v=2">
-    <link rel="stylesheet" href="styles.css?v=8">
-    <link rel="stylesheet" href="super-admin-styles.css?v=9">
+    <link rel="stylesheet" href="styles.css?v=9">
+    <link rel="stylesheet" href="super-admin-styles.css?v=10">
     <script src="js/theme-loader.js?v=13"></script>
 </head>
 <body>
@@ -23,15 +23,15 @@
                     <h1>Super Admin</h1>
                     <p class="subtitle">Badminton App administration</p>
                 </div>
-                <div class="form-group">
-                    <label>Brugernavn</label>
+                <div class="login-felt">
+                    <label for="saUsername">Brugernavn</label>
                     <input type="text" id="saUsername" placeholder="Brugernavn" autocomplete="username" autofocus>
                 </div>
-                <div class="form-group">
-                    <label>Adgangskode</label>
+                <div class="login-felt">
+                    <label for="saPassword">Adgangskode</label>
                     <input type="password" id="saPassword" placeholder="Adgangskode" autocomplete="current-password">
                 </div>
-                <button id="saLoginBtn" class="btn-primary btn-block btn-lg">Log Ind</button>
+                <button id="saLoginBtn" class="btn-primary btn-block btn-lg">Log ind</button>
                 <div id="loginError" class="msg msg-error" style="display:none;"></div>
             </div>
         </div>
@@ -46,16 +46,16 @@
                     <h1>Skift adgangskode</h1>
                     <p class="subtitle">Standard-adgangskoden skal skiftes, før du kan fortsætte</p>
                 </div>
-                <div class="form-group">
-                    <label>Nuværende adgangskode</label>
+                <div class="login-felt">
+                    <label for="fpCurrent">Nuværende adgangskode</label>
                     <input type="password" id="fpCurrent" placeholder="Nuværende adgangskode" autocomplete="current-password">
                 </div>
-                <div class="form-group">
-                    <label>Ny adgangskode (min. 8 tegn)</label>
+                <div class="login-felt">
+                    <label for="fpNew">Ny adgangskode (min. 8 tegn)</label>
                     <input type="password" id="fpNew" placeholder="Ny adgangskode" autocomplete="new-password">
                 </div>
-                <div class="form-group">
-                    <label>Gentag ny adgangskode</label>
+                <div class="login-felt">
+                    <label for="fpConfirm">Gentag ny adgangskode</label>
                     <input type="password" id="fpConfirm" placeholder="Gentag ny adgangskode" autocomplete="new-password">
                 </div>
                 <button id="fpSubmitBtn" class="btn-primary btn-block btn-lg">Skift og fortsæt</button>
@@ -349,6 +349,6 @@
     <script src="js/session-vagt.js?v=2"></script>
     <script src="js/logo-match.js?v=1"></script>
     <script src="js/ikoner.js?v=2"></script>
-    <script src="super-admin-script.js?v=21"></script>
+    <script src="super-admin-script.js?v=22"></script>
 </body>
 </html>
