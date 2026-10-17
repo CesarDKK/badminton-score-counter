@@ -1,6 +1,9 @@
 FROM nginx:alpine
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY frontend/ /usr/share/nginx/html/
+# Byggekonteksten er repoets rod (docker-compose.yml), så de fælles
+# designværdier i design/fundament.css (E1) kan kopieres med
+COPY football-app/nginx.conf /etc/nginx/conf.d/default.conf
+COPY football-app/frontend/ /usr/share/nginx/html/
+COPY design/fundament.css /usr/share/nginx/html/fundament.css
 
 EXPOSE 80

@@ -61,30 +61,8 @@
         root.style.setProperty('--color-on-accent',  onColor(accent));
         root.style.setProperty('--color-on-primary', onColor(primary));
 
-        // Semantiske status-farver (offline-/forbindelsesbadges, info-toasts) —
-        // faste, uafhængige af klub-tema. Sættes her (ikke kun i styles.css) fordi
-        // det er det ENESTE stylesheet-uafhængige sted alle sider inkl. TV loader;
-        // tv-v3.html loader ikke styles.css, så et token dér ville være udefineret.
-        // Én farve pr. betydning (E2): vundet/ok = grøn, fare/fejl = rød,
-        // advarsel/afventer = gul, info = blå. --color-danger-text er en lysere
-        // rød til tekst, så den når 4,5:1 på mørk baggrund.
-        root.style.setProperty('--color-win', '#45d17e');
-        root.style.setProperty('--color-win-rgb', '69, 209, 126');
-        root.style.setProperty('--color-danger', '#d92c3f');
-        root.style.setProperty('--color-danger-rgb', '217, 44, 63');
-        root.style.setProperty('--color-danger-text', '#ff6b7a');
-        root.style.setProperty('--color-warning', '#ffb02e');
-        root.style.setProperty('--color-warning-rgb', '255, 176, 46');
-        root.style.setProperty('--color-info', '#3498db');
-        root.style.setProperty('--color-info-rgb', '52, 152, 219');
-        root.style.setProperty('--color-info-text', '#7fc7f0');
-
-        // Tekstniveauer (E5): alle mindst 4,5:1 mod temaernes baggrunde og kort.
-        // Svagere end --text-muted bruges kun til deaktiveret/pynt.
-        root.style.setProperty('--text-primary', '#eaeaea');
-        root.style.setProperty('--text-secondary', 'rgba(255, 255, 255, 0.78)');
-        root.style.setProperty('--text-muted', 'rgba(255, 255, 255, 0.62)');
-
+        // Faste betydningsfarver og tekstniveauer ligger i fundament.css (E1),
+        // som alle sider inkl. TV henter — her sættes kun klubbens tema.
         root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${primary} 0%, ${accent} 100%)`);
 
         // Grønt tema (fx Skov): den faste vinder-grøn drukner i temaets grønne,

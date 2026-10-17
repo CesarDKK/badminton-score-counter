@@ -28,42 +28,24 @@
 
   --live: #ff4d6d;
   --live-glow: rgba(255, 77, 109, 0.25);
-  --warn: #f5b94d;
-  --cool: #6ec5ff;
+  --warn: var(--color-warning);   /* fælles betydningsfarve (E2) */
+  --cool: var(--color-info-text);
 
-  /* Type */
-  --font-display: 'Bebas Neue', 'Arial Narrow', sans-serif;
-  --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  /* Skrift, afstande, hjørner, skygger og bevægelse kommer fra fundament.css (E1).
+     Her sættes kun footballs farver ind i fundamentets produktfarver. */
+  --color-accent: var(--pitch);
+  --color-accent-rgb: 20, 232, 163;
+  --color-on-accent: #07140d;
+  --color-knap-hover: var(--pitch-deep);
+  --color-primary: var(--pitch-deep);
+  --color-primary-rgb: 10, 168, 111;
+  --color-bg-dark: var(--bg);
+  --color-bg-container: var(--surface);
+  --color-bg-card: var(--surface-2);
+  --color-bg-card-rgb: 28, 35, 51;
+  --text-primary: var(--text);
 
-  /* Spacing */
-  --sp-1: 4px;
-  --sp-2: 8px;
-  --sp-3: 12px;
-  --sp-4: 16px;
-  --sp-5: 20px;
-  --sp-6: 24px;
-  --sp-7: 32px;
-  --sp-8: 40px;
-  --sp-9: 56px;
-  --sp-10: 80px;
-
-  /* Radii */
-  --r-sm: 6px;
-  --r-md: 10px;
-  --r-lg: 16px;
-  --r-xl: 22px;
-  --r-pill: 999px;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
-  --shadow-md: 0 4px 16px rgba(0,0,0,.35);
-  --shadow-lg: 0 12px 40px rgba(0,0,0,.5);
   --shadow-pitch: 0 0 0 1px var(--pitch-glow), 0 8px 24px rgba(20,232,163,.12);
-
-  /* Animation */
-  --ease: cubic-bezier(.4, 0, .2, 1);
-  --ease-out: cubic-bezier(.16, 1, .3, 1);
 }
 
 * { box-sizing: border-box; }
@@ -239,47 +221,14 @@ input, select, textarea {
 
 /* ============= BUTTONS ============= */
 
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sp-2);
+/* Stilen (primær/sekundær/ghost/fare) kommer fra fundament.css (E1/E8);
+   football har større knapper, så de er nemme at ramme på en mobil ved banen */
+.btn, .btn-secondary, .btn-ghost, .btn-danger {
   min-height: 48px;
   padding: var(--sp-3) var(--sp-5);
-  border-radius: var(--r-md);
-  background: var(--pitch);
-  color: #07140d;
-  font-family: var(--font-body);
-  font-weight: 700;
   font-size: 15px;
-  letter-spacing: 0.02em;
-  transition: transform .08s var(--ease), background .15s var(--ease), box-shadow .2s var(--ease);
-  white-space: nowrap;
+  font-weight: 700;
 }
-.btn:hover:not(:disabled) { background: var(--pitch-deep); box-shadow: var(--shadow-pitch); }
-.btn:active:not(:disabled) { transform: scale(0.97); }
-.btn:disabled { opacity: .4; cursor: not-allowed; }
-
-.btn-secondary {
-  background: var(--surface-2);
-  color: var(--text);
-  border: 1px solid var(--border);
-}
-.btn-secondary:hover:not(:disabled) { background: var(--surface-3); border-color: var(--border-bright); box-shadow: none; }
-
-.btn-ghost {
-  background: transparent;
-  color: var(--text-muted);
-  border: 1px solid transparent;
-}
-.btn-ghost:hover:not(:disabled) { color: var(--text); background: var(--surface-2); box-shadow: none; }
-
-.btn-danger {
-  background: var(--live);
-  color: #fff;
-}
-.btn-danger:hover:not(:disabled) { background: #e53e5b; box-shadow: 0 0 0 1px var(--live-glow), 0 8px 24px rgba(255,77,109,.2); }
-
 .btn-sm { min-height: 36px; padding: var(--sp-2) var(--sp-3); font-size: 13px; }
 .btn-icon {
   width: 44px;
@@ -289,7 +238,6 @@ input, select, textarea {
 }
 .btn-icon svg { width: 20px; height: 20px; }
 
-.btn-block { width: 100%; }
 
 /* ============= INPUTS ============= */
 

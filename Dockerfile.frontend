@@ -27,6 +27,11 @@ COPY stats/frontend/ /usr/share/nginx/statistik/
 COPY planner/index.html planner/planner.css planner/tp-bundle.js /usr/share/nginx/planner/
 COPY planner/src/ /usr/share/nginx/planner/src/
 
+# Fælles designværdier (E1) — kilden er design/fundament.css; kopieres ind i hvert site
+COPY design/fundament.css /usr/share/nginx/html/fundament.css
+COPY design/fundament.css /usr/share/nginx/statistik/fundament.css
+COPY design/fundament.css /usr/share/nginx/planner/fundament.css
+
 # Share fonts from app into marketing sites (fonts.css lives in marketing/ and is reused by football)
 RUN cp -r /usr/share/nginx/html/fonts /usr/share/nginx/marketing/fonts \
     && cp -r /usr/share/nginx/html/fonts /usr/share/nginx/football-marketing/fonts \

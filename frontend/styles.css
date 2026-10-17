@@ -4,39 +4,10 @@
     box-sizing: border-box;
 }
 
-/* Theme colors - dynamically loaded from database */
+/* Tokens (skrift, afstande, hjørner, betydningsfarver, tekstniveauer) og
+   standardtemaets farver ligger i fundament.css (E1). theme-loader.js
+   overskriver temafarverne fra databasen. */
 :root {
-    --color-primary: #533483;
-    --color-accent: #e94560;
-    /* Default-tema (Standard-preset + init.sql) — skal matche theme-loader.js
-       DEFAULTS og backend-defaulten, så FOUC-vinduet ikke blinker en anden farve. */
-    --color-bg-dark: #1a1a2e;
-    --color-bg-container: #16213e;
-    --color-bg-card: #252347;
-    --color-bg-card-rgb: 37, 35, 71;
-    /* Tekstfarve oven på accent/primary — theme-loader.js overskriver med
-       mørk tekst hvis temaets farve er lys (fx lime) */
-    --color-on-accent: #ffffff;
-    --color-on-primary: #ffffff;
-    /* RGB-varianter — theme-loader.js overskriver med de aktuelle temafarver */
-    --color-primary-rgb: 83, 52, 131;
-    --color-accent-rgb: 233, 69, 96;
-    /* Semantiske farver — faste på tværs af temaer.
-       win/success = grøn, danger = rød (sletning, fejl) */
-    --color-win: #45d17e;
-    --color-win-rgb: 69, 209, 126;
-    --color-danger: #d92c3f;
-    --color-danger-rgb: 217, 44, 63;
-    --color-danger-text: #ff6b7a;
-    --color-warning: #ffb02e;
-    --color-warning-rgb: 255, 176, 46;
-    --color-info: #3498db;
-    --color-info-rgb: 52, 152, 219;
-    --color-info-text: #7fc7f0;
-    /* Tekstniveauer — mindst 4,5:1 (E5); theme-loader.js sætter de samme */
-    --text-primary: #eaeaea;
-    --text-secondary: rgba(255, 255, 255, 0.78);
-    --text-muted: rgba(255, 255, 255, 0.62);
     --gradient-primary: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
 }
 
@@ -393,73 +364,7 @@ header h1 {
     margin: 24px 0;
 }
 
-/* ── Knapper (E8): tre stilarter på alle sider ──
-   primær = fyldt accent-pille, sekundær = gennemsigtig pille med kant,
-   fare = rødtonet pille. Sidernes egne stylesheets ændrer kun størrelsen.
-   Modifikatorer: .btn-sm (lille, fx i lister), .btn-lg, .btn-block (fuld bredde). */
-.btn-primary, .btn-secondary, .btn-danger {
-    padding: 10px 22px;
-    font-size: 0.9em;
-    font-family: 'DM Sans', sans-serif;
-    font-weight: 600;
-    line-height: 1.2;
-    border-radius: 100px;
-    cursor: pointer;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    white-space: nowrap;
-    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
-}
-
-.btn-primary {
-    background: var(--color-accent);
-    color: var(--color-on-accent, #ffffff);
-    border: 1px solid var(--color-accent);
-}
-
-.btn-primary:hover {
-    background: color-mix(in srgb, var(--color-accent) 85%, white 15%);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 14px rgba(var(--color-accent-rgb), 0.35);
-}
-
-.btn-secondary {
-    background: transparent;
-    color: var(--text-secondary, rgba(255, 255, 255, 0.78));
-    border: 1px solid rgba(255, 255, 255, 0.22);
-}
-
-.btn-secondary:hover {
-    color: #ffffff;
-    border-color: rgba(255, 255, 255, 0.4);
-    background: rgba(255, 255, 255, 0.06);
-}
-
-.btn-danger {
-    background: rgba(var(--color-danger-rgb, 217, 44, 63), 0.12);
-    color: var(--color-danger-text, #ff6b7a);
-    border: 1px solid rgba(var(--color-danger-rgb, 217, 44, 63), 0.45);
-}
-
-.btn-danger:hover {
-    background: rgba(var(--color-danger-rgb, 217, 44, 63), 0.24);
-    border-color: var(--color-danger, #d92c3f);
-    transform: translateY(-1px);
-}
-
-.btn-primary:disabled, .btn-secondary:disabled, .btn-danger:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
-}
-
-.btn-sm { padding: 5px 13px; font-size: 0.8em; }
-.btn-lg { padding: 13px 28px; font-size: 1.05em; }
-.btn-block { width: 100%; }
+/* Knapperne (primær/sekundær/fare) ligger i fundament.css (E1/E8) */
 
 /* ── Login (E9): én skabelon på alle login-sider ──
    admin, indstillinger, sponsorer, spillere, tema, klub-login og super-admin:

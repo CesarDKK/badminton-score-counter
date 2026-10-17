@@ -171,8 +171,9 @@ services:
   # Football Tournament — Frontend (internal nginx, not exposed)
   football-frontend:
     build:
-      context: ./football-app
-      dockerfile: Dockerfile.frontend
+      # Repoets rod, så design/fundament.css (fælles designværdier) kan kopieres med
+      context: .
+      dockerfile: football-app/Dockerfile.frontend
     container_name: football-frontend
     restart: unless-stopped
     logging: *default-logging
