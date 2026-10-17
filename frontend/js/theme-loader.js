@@ -71,6 +71,22 @@
         root.style.setProperty('--color-info-rgb', '52, 152, 219');
 
         root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${primary} 0%, ${accent} 100%)`);
+
+        // Grønt tema (fx Skov): den faste vinder-grøn drukner i temaets grønne,
+        // så TV og oversigt viser vundne sæt/vinderen lyst i stedet (data-groent-tema).
+        if (erGroen(primary) || erGroen(accent)) root.setAttribute('data-groent-tema', '');
+        else root.removeAttribute('data-groent-tema');
+    }
+
+    // Farvetone 75–165° med tydelig mætning = grøn (lime og mellemgrøn i Skov)
+    function erGroen(hex) {
+        const h = hex.replace('#', '');
+        const r = parseInt(h.slice(0,2),16) / 255, g = parseInt(h.slice(2,4),16) / 255, b = parseInt(h.slice(4,6),16) / 255;
+        const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+        if (max !== g || d === 0) return false;
+        const maet = d / (1 - Math.abs(max + min - 1));
+        const tone = 60 * ((b - r) / d + 2);
+        return maet >= 0.35 && tone >= 75 && tone <= 165;
     }
 
     // 1) Anvend cachet tema SYNKRONT (før første paint) — fjerner FOUC
