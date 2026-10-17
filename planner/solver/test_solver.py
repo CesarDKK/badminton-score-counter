@@ -584,7 +584,32 @@ class DiagnoseTest(unittest.TestCase):
         finally:
             solver.loes = gammel
         self.assertEqual(svar["status"], "UNKNOWN")
-        self.assertEqual(kald, [2], "kun første dag — ikke hele problemet bagefter")
+        # Første dag uafgjort → anden dag løses → første dag prøves igen med resten af tiden; aldrig hele problemet samlet
+        self.assertEqual(kald, [2, 1, 2], "dagene hver for sig — ikke hele problemet bagefter")
+
+    def test_en_uafgjort_dag_faar_resten_af_tiden(self):
+        # Jesper 2026-10-17: med 4 min gav løseren op efter 2, fordi den svære dag kun fik sin andel af tiden
+        import solver
+        kald = []
+        gammel = solver.loes
+        def falsk(p, s, *a, **k):
+            kald.append((len(p["kampe"]), round(s)))
+            if len(p["kampe"]) == 2 and len([x for x in kald if x[0] == 2]) == 1:
+                return {"status": "UNKNOWN", "tider": {}, "stoppet": False, "sekunder": s}
+            return {"status": "FEASIBLE", "tider": {k["id"]: k["tilladte"][0] for k in p["kampe"]}, "stoppet": False, "maal": 0.0, "graense": 0.0, "sekunder": 0.1}
+        tider = [540, 570, DAG + 540, DAG + 570]
+        p = problem([kamp(0, tilladte=[540, 570]), kamp(1, tilladte=[540, 570]), kamp(2, tilladte=[DAG + 540, DAG + 570])],
+                    kapacitet={"faelles": [{"t": t, "baner": 2} for t in tider]},
+                    dage=[{"index": 0, "start": 540, "slut": 600, "baner": 2}, {"index": 1, "start": 540, "slut": 600, "baner": 2}])
+        solver.loes = falsk
+        try:
+            svar = solver.loes_opdelt(p, 30)
+        finally:
+            solver.loes = gammel
+        self.assertEqual(svar["status"], "FEASIBLE")
+        self.assertEqual(len(svar["tider"]), 3)
+        self.assertEqual([k[0] for k in kald], [2, 1, 2])
+        self.assertGreater(kald[2][1], kald[0][1], "anden gang får den svære dag mere tid end sin andel")
 
 
 class EgenKampgraenseTest(unittest.TestCase):
