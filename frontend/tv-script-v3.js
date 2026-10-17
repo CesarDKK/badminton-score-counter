@@ -701,7 +701,7 @@ function setTvConnectionLost(lost) {
         if (!_tvConnBadge) {
             _tvConnBadge = document.createElement('div');
             _tvConnBadge.id = 'tvConnectionBadge';
-            _tvConnBadge.textContent = '⚠ Forbindelse mistet';
+            _tvConnBadge.innerHTML = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.125em" aria-hidden="true"><path d="M12 3 2 21h20zM12 10v5M12 18h.01"/></svg> Forbindelse mistet';
             // Farver fra --color-warning-tokenet (styles.css) i stedet for
             // hårdkodede literaler — holder tema-reglen for TV-fladen.
             _tvConnBadge.style.cssText =

@@ -79,6 +79,20 @@
     --color-bg-card-rgb: 37, 35, 71;
 }
 
+/* ═════════ Tastaturfokus (F4) ═════════
+   Alt, man kan tabbe til, får en tydelig ramme, når fokus kommer fra
+   tastaturet. :where() giver nul specificitet, så produkternes egne
+   fokusstile stadig vinder. Felter, der selv fjerner outline og skifter
+   kantfarve, får desuden en ring i accentfarven — kantfarven alene er for svag. */
+:where(a, button, summary, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: 2px solid #ffffff;
+    outline-offset: 2px;
+}
+
+:where(input, select, textarea):focus-visible {
+    box-shadow: 0 0 0 3px rgba(var(--color-accent-rgb), 0.45);
+}
+
 /* ═════════ Knapper (E8) ═════════
    Tre stilarter: primær (fyldt pille), sekundær (gennemsigtig pille med kant)
    og fare (rødtonet pille). Produkternes egne klassenavne er aliaser:
