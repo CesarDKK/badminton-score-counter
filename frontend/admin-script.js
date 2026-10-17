@@ -524,7 +524,7 @@ async function deleteAllMatchHistory() {
                         config.msg2,
                         [
                             {
-                                text: 'Ja, Slet Alt',
+                                text: 'Ja, slet alt',
                                 callback: async () => {
                                     try {
                                         await config.apiCall();
@@ -853,8 +853,8 @@ function switchHistoryTab(tab) {
 
     const btn = document.getElementById('deleteAllMatchHistoryBtn');
     if (btn) {
-        if (tab === 'team') btn.textContent = 'Slet Alt Holdkamphistorik';
-        else if (tab === 'tournament') btn.textContent = 'Slet Al Turneringshistorik';
+        if (tab === 'team') btn.textContent = 'Slet al holdkamphistorik';
+        else if (tab === 'tournament') btn.textContent = 'Slet al turneringshistorik';
         else btn.textContent = 'Slet al kamphistorik';
     }
 
@@ -1427,7 +1427,7 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
                 </div>
                 <div style="display:flex;gap:10px;">
                     <button onclick="editHoldkampLogos(${teamMatch.id})" class="btn-secondary">Logoer</button>
-                    <button onclick="finishHoldkamp(${teamMatch.id})" class="btn-secondary">Afslut Holdkamp</button>
+                    <button onclick="finishHoldkamp(${teamMatch.id})" class="btn-secondary">Afslut holdkamp</button>
                     <button onclick="deleteHoldkamp(${teamMatch.id})" class="btn-danger">Slet</button>
                 </div>
             </div>
@@ -1907,7 +1907,7 @@ function finishHoldkamp(id) {
     const tm = sidsteHoldkampe.find(t => t.id === id);
     const manglerGoldenSet = tm && HoldkampFormater.goldenSetStatus(tm).kraeves;
     showMessage(
-        'Afslut Holdkamp',
+        'Afslut holdkamp',
         manglerGoldenSet
             ? 'Holdkampen står 3–3, og golden set er ikke spillet. Afsluttes den uden golden set, får hvert hold 2 stillingspoint (§ 18 stk. 3). Holdkampen kan ikke genoptages.'
             : 'Holdkampen afsluttes og kan ikke genoptages.',
