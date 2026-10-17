@@ -606,3 +606,11 @@ et flueben":
 Jesper spurgte: "Hvorfor er der kun mulighed for 20 og 30 minutter, hvorfor ikke 25?". Kamplængden kunne kun gå helt
 tilbage til længden fra før. Nu er linjen et valg: "Kampe på [25 min / 30 min (som før)] igen (nu 20 min)". Valget har
 alle trin på 5 min fra den nuværende længde hen mod den fra før, og standard er længden fra før.
+
+## Løseren: en uafgjort dag får resten af tiden (2026-10-17)
+
+Jesper satte løseren til 4 minutter for at se, om 25 min kunne gå op. Den gav op efter 126 s. Dagene løses hver for sig,
+og tiden fordeles efter antal kampe. En dag, der ikke blev afgjort på sin andel, stoppede hele søgningen (rettelsen fra
+2026-10-12). Nu gemmes en uafgjort dag til sidst og får al den tid, der er tilbage, når de andre dage er løst. Først hvis
+den heller ikke bliver afgjort da, er svaret uafgjort, og tiden går til planen med færrest brud. Det samlede problem
+løses stadig ikke samlet bagefter.

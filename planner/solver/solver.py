@@ -734,32 +734,22 @@ def delproblem(problem: dict, ids: list[int], dag: int) -> dict:
 
 
 def loes_opdelt(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, stop: threading.Event | None = None, elastisk: bool = False) -> dict:
-    """Som loes(), men løser hver dag for sig, når dagene er uafhængige (dele_pr_dag). Tiden fordeles efter antal kampe."""
+    """Som loes(), men løser hver dag for sig, når dagene er uafhængige (dele_pr_dag). Tiden fordeles efter antal kampe.
+
+    En dag, der ikke bliver afgjort på sin andel (hverken plan eller bevis), gemmes til sidst og får al den tid, der er
+    tilbage, når de andre dage er løst (Jesper 2026-10-17: med 4 min til løseren gav den op efter 2, fordi den svære dag
+    kun fik sin andel). Bliver den heller ikke afgjort da, er svaret uafgjort.
+    """
     dele = dele_pr_dag(problem)
     if not dele:
         return loes(problem, sekunder, arbejdere, stop, elastisk=elastisk)
     t0 = time.time()
     n = len(problem["kampe"])
     svar = {"status": "OPTIMAL", "tider": {}, "maal": 0.0, "graense": 0.0, "stoppet": False, "rolig": False, "dele": len(dele)}
-    for dag, ids in sorted(dele.items()):
-        tilbage = max(1.0, float(sekunder) - (time.time() - t0))
-        andel = max(5.0, float(sekunder) * len(ids) / n) if dag != max(dele) else tilbage
-        if stop is not None and stop.is_set():
-            # Stoppet, før dagen kom til: dens kampe beholder startplanens tider, hvis den har dem alle
-            if all(problem["kampe"][i].get("hint") in problem["kampe"][i]["tilladte"] for i in ids):
-                svar["tider"].update({problem["kampe"][i]["id"]: int(problem["kampe"][i]["hint"]) for i in ids})
-                svar["status"] = "FEASIBLE"
-                svar["stoppet"] = True
-                continue
-            return {**loes(problem, 1, arbejdere, stop, elastisk=elastisk), "stoppet": True}
-        del_svar = loes(delproblem(problem, ids, dag), min(andel, tilbage), arbejdere, stop, elastisk=elastisk)
-        if del_svar["status"] == "UNKNOWN" and not (stop is not None and stop.is_set()):
-            # Dagen er uafgjort (hverken plan eller bevis på tiden): det samlede problem er større og når det heller ikke
-            # på resten af tiden — den går hellere til planen med færrest brud (Jespers prod-test 2026-10-12)
-            return {**del_svar, "sekunder": round(time.time() - t0, 2)}
-        if del_svar["status"] not in ("OPTIMAL", "FEASIBLE"):
-            # En dag uden lovlig plan: hele problemet løses samlet, så svaret (og diagnosen) bliver som før
-            return loes(problem, max(1.0, float(sekunder) - (time.time() - t0)), arbejdere, stop, elastisk=elastisk)
+    stoppet = lambda: stop is not None and stop.is_set()
+    tilbage = lambda: max(1.0, float(sekunder) - (time.time() - t0))
+
+    def med(del_svar):
         svar["tider"].update(del_svar["tider"])
         svar["maal"] += del_svar.get("maal", 0.0)
         svar["graense"] += del_svar.get("graense", 0.0)
@@ -769,6 +759,38 @@ def loes_opdelt(problem: dict, sekunder: float = 30.0, arbejdere: int | None = N
             svar.setdefault("brud", []).extend(del_svar["brud"])
         if del_svar["status"] == "FEASIBLE":
             svar["status"] = "FEASIBLE"
+
+    uafgjort = []  # [(dag, ids, seneste svar)]
+    for dag, ids in sorted(dele.items()):
+        # Den sidste dag får resten — men ikke, hvis en uafgjort dag venter på den
+        andel = tilbage() if dag == max(dele) and not uafgjort else max(5.0, float(sekunder) * len(ids) / n)
+        if stoppet():
+            # Stoppet, før dagen kom til: dens kampe beholder startplanens tider, hvis den har dem alle
+            if all(problem["kampe"][i].get("hint") in problem["kampe"][i]["tilladte"] for i in ids):
+                svar["tider"].update({problem["kampe"][i]["id"]: int(problem["kampe"][i]["hint"]) for i in ids})
+                svar["status"] = "FEASIBLE"
+                svar["stoppet"] = True
+                continue
+            return {**loes(problem, 1, arbejdere, stop, elastisk=elastisk), "stoppet": True}
+        del_svar = loes(delproblem(problem, ids, dag), min(andel, tilbage()), arbejdere, stop, elastisk=elastisk)
+        if del_svar["status"] == "UNKNOWN" and not stoppet():
+            uafgjort.append((dag, ids, del_svar))
+            continue
+        if del_svar["status"] not in ("OPTIMAL", "FEASIBLE"):
+            # En dag uden lovlig plan: hele problemet løses samlet, så svaret (og diagnosen) bliver som før
+            return loes(problem, tilbage(), arbejdere, stop, elastisk=elastisk)
+        med(del_svar)
+    # De uafgjorte dage deler resten af tiden — det samlede problem er større og når det ikke bedre
+    for i, (dag, ids, foer) in enumerate(uafgjort):
+        rest = float(sekunder) - (time.time() - t0)
+        if rest < 1.0 or stoppet():
+            return {**foer, "sekunder": round(time.time() - t0, 2)}
+        del_svar = loes(delproblem(problem, ids, dag), rest / (len(uafgjort) - i), arbejdere, stop, elastisk=elastisk)
+        if del_svar["status"] == "UNKNOWN":
+            return {**del_svar, "sekunder": round(time.time() - t0, 2)}
+        if del_svar["status"] not in ("OPTIMAL", "FEASIBLE"):
+            return loes(problem, tilbage(), arbejdere, stop, elastisk=elastisk)
+        med(del_svar)
     svar["sekunder"] = round(time.time() - t0, 2)
     return svar
 
