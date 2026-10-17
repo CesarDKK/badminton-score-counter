@@ -566,3 +566,7 @@ doublen, og meldte en ventetid, spilleren ikke havde.
   ventetid- og halTid-grupperne, der tæller runderne med. Ældre klienter sender kun `traek`, som stadig virker.
 - **Målt på Lyngby med alt som Swiss:** 73 advarsler om lang ventetid blev til 16, og scoren faldt fra 794,2 til 680,2,
   fordi falske huller ikke længere straffes.
+
+Prod-testen samme dag viste, at Program-fanens statusfelter ("venter over 90 min", "tid i hallen, gns.") og planens
+ventetid stadig talte uden Swiss-runderne. De kommer fra planlæggerens `bedoemPlan`, som nu bruger `spillerOphold`.
+I Lyngby-scenariet faldt "venter over 90 min" fra 73 til 16, og "tid i hallen, gns." steg fra 146 til 291 min.

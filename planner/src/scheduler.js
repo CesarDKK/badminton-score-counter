@@ -8,7 +8,7 @@
 // deres tid; alt andet placeres forfra.
 import { minutter } from './tp-reader.js';
 import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt, fordelRaekkerPaaDage } from './kapacitet.js';
-import { lavRegelmodel, banerBrugt, pauseForRaekke, VARIGHEDER } from './regelmodel.js';
+import { lavRegelmodel, banerBrugt, pauseForRaekke, VARIGHEDER, spillerOphold } from './regelmodel.js';
 import { standardRaekkefoelge } from './store.js';
 import { scorePlan } from './kriterier.js';
 
@@ -536,7 +536,6 @@ function sammenlign(a, b) {
  */
 export function bedoemPlan(projekt) {
     const slotMin = projekt.opsaetning.slotMin;
-    const prSpillerDag = new Map();
     const slutPrDag = new Map();
     let udenTid = 0;
     for (const k of projekt.kampe) {
@@ -544,24 +543,18 @@ export function bedoemPlan(projekt) {
         if (!p) { udenTid += 1; continue; }
         const min = minutter(p.slot);
         slutPrDag.set(p.dag, Math.max(slutPrDag.get(p.dag) || 0, min + slotMin));
-        for (const s of k.spillere) {
-            const n = `${s}|${p.dag}`;
-            const x = prSpillerDag.get(n) || { foerste: min, sidste: min, kampe: 0, tider: [] };
-            x.foerste = Math.min(x.foerste, min);
-            x.sidste = Math.max(x.sidste, min);
-            x.kampe += 1;
-            x.tider.push(min);
-            prSpillerDag.set(n, x);
-        }
     }
+    // Spillernes ophold pr. dag — med Swiss-runderne for alle i lodtrækningen (som Tjek), ellers så en Swiss-spiller ud
+    // til at vente fra runde 1 til sin double, og "tid i hallen" var for lav (prod-test 2026-10-17). Ventetid mellem to
+    // ophold i det mest gunstige tilfælde; tid i hallen fra første ophold til det sidste er slut.
     const maxVent = projekt.opsaetning.maxVentetidMin ?? 90;
     let haltidMin = 0, spillerDage = 0, ventetid = 0, langeHuller = 0;
-    for (const x of prSpillerDag.values()) {
-        haltidMin += x.sidste - x.foerste + slotMin;
-        ventetid += x.sidste - x.foerste + slotMin - x.kampe * slotMin;
+    for (const o of spillerOphold(projekt.kampe, projekt.plan).values()) {
+        const span = o.at(-1).til - o[0].fra + slotMin;
+        haltidMin += span;
+        ventetid += Math.max(0, span - o.length * slotMin);
         spillerDage += 1;
-        x.tider.sort((a, b) => a - b);
-        if (maxVent > 0) for (let i = 1; i < x.tider.length; i += 1) if (x.tider[i] - x.tider[i - 1] - slotMin > maxVent) { langeHuller += 1; break; }
+        if (maxVent > 0) for (let i = 1; i < o.length; i += 1) if (o[i].fra - o[i - 1].til - slotMin > maxVent) { langeHuller += 1; break; }
     }
     return {
         haltidMin,
