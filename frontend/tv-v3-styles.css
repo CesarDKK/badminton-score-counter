@@ -1,53 +1,52 @@
 ﻿/* TV View V3 — Arena Design */
 
 /* =================== QR COUNTER (kun klub-mode, ledig bane) =================== */
+/* Layout A: QR-boksen sidder i højre side af bundbjælken (11vh høj) med
+   teksten ved siden af koden. Den er position: fixed, så den også står oven
+   på sponsorslideshowet, når banen er ledig. */
 .qr-counter {
     position: fixed;
-    bottom: 3vh;
-    right: 3vw;
-    /* Over .tv-overlay (9999) så QR'en er synlig oven på resultat-snapshottet —
-       en ledig bane med et vist resultat skal stadig kunne scannes til ny kamp.
-       QR skjules under pause-overlay og live "kamp afgjort", så ingen konflikt. */
+    bottom: 0.5vh;
+    right: clamp(20px, 2.5vw, 50px);
+    /* Over .tv-overlay (9999), så QR'en er synlig oven på overlays.
+       QR skjules under pause-overlayet, så ingen konflikt. */
     z-index: 10000;
     background: rgba(var(--color-bg-card-rgb), 0.92);
-    border: 2px solid var(--color-accent, var(--color-accent));
-    border-radius: 8px;
-    padding: 10px 12px;
+    border: 2px solid var(--color-accent);
+    border-radius: 10px;
+    padding: 0.5vh 0.6vh 0.5vh 1.2vh;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    gap: 5px;
+    gap: 1.2vh;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
 }
 
-/* Alle mål herunder er halveret i forhold til den oprindelige QR-boks —
-   den fyldte for meget af skærmen, især oven på et sponsorbillede. */
 .qr-counter__label {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 0.8em;
-    letter-spacing: 0.08em;
-    color: var(--color-accent, var(--color-accent));
+    font-size: clamp(14px, 3.1vh, 70px);
+    line-height: 1;
+    letter-spacing: 0.06em;
+    text-align: right;
+    max-width: 6.5em;
+    color: var(--color-accent);
 }
 
 .qr-counter__image {
-    width: 110px;
-    height: 110px;
+    width: clamp(60px, 9vh, 200px);
+    height: clamp(60px, 9vh, 200px);
     display: block;
     background: transparent;
 }
 
-
-/* Plads til QR-boksen: holdrækker og planner-linjen rykker ind fra højre,
-   så sætboksene aldrig ligger under boksen (bredde ≈ 110 px billede + polstring) */
-body.tv-qr-synlig .team-row,
-body.tv-qr-synlig .tv-planner-strip {
-    padding-right: calc(3vw + 160px);
+/* Bundbjælken holder plads til QR-boksen i højre side, mens den vises, så
+   sponsorbanner og udskiftere aldrig ligger under den */
+body.tv-qr-synlig .tv-footer {
+    padding-right: calc(clamp(20px, 2.5vw, 50px) + 36vh);
 }
 
-/* Kompakt variant — vises under en aktiv kamp så en gæst der har lukket
-   browseren kan scanne igen og genoptage. Basis-QR'en er nu selv lille
-   (104 px-varianten var større end den), så her skal kun diskretionen
-   tilbage: lidt lavere opacitet. */
+/* Kompakt variant — vises under en aktiv kamp, så en gæst, der har lukket
+   browseren, kan scanne igen og genoptage: lidt lavere opacitet. */
 .qr-counter--compact {
     opacity: 0.9;
 }
@@ -170,7 +169,7 @@ body::before {
 /* =================== HEADER =================== */
 /* Slankere chrome så scoreboardet får maksimalt plads — pointene er hovedsagen. */
 .tv-header {
-    padding: clamp(10px, 2vh, 26px) clamp(20px, 3vw, 60px);
+    padding: clamp(6px, 0.8vh, 14px) clamp(20px, 2.5vw, 50px);
     background: rgba(0, 0, 0, 0.2);
     backdrop-filter: blur(8px);
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -180,9 +179,13 @@ body::before {
     flex-shrink: 0;
 }
 
+/* Layout A: banenummer og "2. SÆT · 14:32" i 84 px på Full HD (7,8vh) —
+   læsbart fra den anden ende af hallen */
 .tv-header h1 {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(1.8em, 5vh, 4.5em);
+    font-size: clamp(1.8em, 7.8vh, 7em);
+    line-height: 1;
+    white-space: nowrap;
     font-weight: 400;
     letter-spacing: 5px;
     color: #ffffff;
@@ -194,11 +197,13 @@ body::before {
 
 .timer-display {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(1.8em, 5vh, 4.5em);
+    font-size: clamp(1.8em, 7.8vh, 7em);
     font-weight: 400;
     letter-spacing: 4px;
-    color: rgba(255, 255, 255, 0.7);
+    line-height: 1;
+    color: rgba(255, 255, 255, 0.75);
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
 
 /* =================== SCOREBOARD =================== */
@@ -212,13 +217,17 @@ body::before {
 }
 
 /* =================== TEAM ROW =================== */
+/* Layout A: to lige høje rækker, der deler hele højden mellem header og
+   bundbjælke. Kanten til venstre markerer serv (accent) eller vinder (grøn). */
 .team-row {
+    flex: 1 1 0;
+    min-height: 0;
     display: flex;
     align-items: center;
-    padding: clamp(10px, 1.8vh, 28px) clamp(20px, 2.5vw, 50px);
-    gap: clamp(16px, 2vw, 40px);
+    padding: 0 clamp(20px, 2.5vw, 50px) 0 clamp(14px, 1.8vw, 36px);
+    gap: clamp(16px, 1.9vw, 40px);
     transition: background 0.3s ease, border-left-color 0.3s ease;
-    border-left: 10px solid transparent;
+    border-left: clamp(8px, 2vh, 28px) solid transparent;
     position: relative;
 }
 
@@ -251,19 +260,8 @@ body::before {
 
 /* Serving highlight */
 .team-row.serving {
-    background: rgba(var(--color-primary-rgb), 0.1);
+    background: rgba(var(--color-primary-rgb), 0.22);
     border-left-color: var(--color-accent);
-}
-
-.team-row.serving::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 8px;
-    background: var(--color-accent);
-    box-shadow: 0 0 20px rgba(var(--color-accent-rgb), 0.5);
 }
 
 /* =================== PLAYER NAMES =================== */
@@ -280,9 +278,10 @@ body::before {
    per element hvis et navn alligevel er for langt. En periodisk marquee
    (.is-marquee + .marquee-text) viser det fulde navn med efternavn engang
    imellem. */
+/* Layout A: 175 px på Full HD i single (16vh), 145 px i double (13,4vh) */
 .player-name {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: calc(clamp(2.4em, 13vh, 16em) * var(--fit-scale, 1));
+    font-size: calc(clamp(2.4em, 16vh, 18em) * var(--fit-scale, 1));
     font-weight: 400;
     color: #ffffff;
     letter-spacing: 3px;
@@ -297,11 +296,11 @@ body::before {
    (fitTeamNames i JS), saa begge navne faar samme --fit-scale. */
 .partner-name {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: calc(clamp(2.4em, 13vh, 16em) * var(--fit-scale, 1));
+    font-size: calc(clamp(2.4em, 16vh, 18em) * var(--fit-scale, 1));
     font-weight: 400;
     color: #ffffff;
     letter-spacing: 3px;
-    margin-top: 0.5vh;
+    margin-top: 0;
     line-height: 1.05;
     white-space: nowrap;
     overflow: hidden;
@@ -333,143 +332,141 @@ body::before {
     100% { transform: translateX(var(--marquee-dx, 0)); }
 }
 
-/* =================== SET BOXES =================== */
-/* Pointene er hovedsagen — fylder ~35vh på typiske skærme, dobbelt op
-   ift. den oprindelige layout. Bredde-caps på 22vw sikrer at 3 bokse +
-   navne-kolonne stadig kan være på rækken. */
+/* =================== SÆT OG POINT (layout A) ===================
+   Pointene i det sæt, der spilles nu, står i det store felt (.team-score,
+   420 px på Full HD). De små bokse viser kun AFSLUTTEDE sæt (grøn = vundet,
+   grå = tabt) — ikke spillede sæt skjules (.tom), så navnene får pladsen.
+   Når kampen er afgjort (.tv-container.afgjort), forsvinder pointfeltet og
+   alle sæt vises i stor størrelse. */
 .set-boxes {
     display: flex;
-    gap: clamp(10px, 1.5vw, 30px);
+    gap: clamp(8px, 1.3vh, 24px);
     flex: 0 0 auto;
     justify-content: flex-end;
     align-items: center;
 }
 
 .set-box {
-    width: clamp(170px, min(36vh, 22vw), 480px);
-    height: clamp(170px, min(36vh, 22vw), 480px);
+    width: clamp(60px, 13.9vh, 300px);
+    height: clamp(72px, 16.7vh, 360px);
     display: flex;
     align-items: center;
     justify-content: center;
     font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(4em, min(22vh, 14vw), 14em);
+    font-size: clamp(2.4em, 13.9vh, 13em);
     font-weight: 400;
-    letter-spacing: 2px;
-    border: 2px solid rgba(255, 255, 255, 0.1);
-    border-radius: clamp(14px, 2vh, 28px);
-    background: rgba(255, 255, 255, 0.03);
-    color: rgba(255, 255, 255, 0.5);
-    transition: all 0.3s ease;
-    position: relative;
-    overflow: hidden;
+    line-height: 1;
+    letter-spacing: 0;
+    font-variant-numeric: tabular-nums;
+    border-radius: clamp(10px, 1.7vh, 30px);
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.8);
+    transition: background 0.3s ease, color 0.3s ease;
     flex-shrink: 0;
 }
 
-/* Accent bottom line on set-box */
-.set-box::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 15%;
-    right: 15%;
-    height: 3px;
-    background: var(--color-accent);
-    border-radius: 3px 3px 0 0;
-    opacity: 0;
-    transition: opacity 0.3s ease;
+.set-box.tom {
+    display: none;
 }
 
-/* Serving row set boxes */
-.team-row.serving .set-box {
-    background: rgba(var(--color-primary-rgb), 0.15);
-    border-color: rgba(var(--color-primary-rgb), 0.4);
-    color: #ffffff;
-}
-
-/* Current set */
-.set-box.current {
-    border-color: rgba(var(--color-primary-rgb), 0.6);
-    color: #ffffff;
-    background: rgba(var(--color-primary-rgb), 0.12);
-}
-
-.set-box.current::after {
-    opacity: 1;
-}
-
-/* Won set */
 .set-box.won {
-    background: rgba(76, 175, 80, 0.15);
-    border-color: rgba(76, 175, 80, 0.5);
-    color: rgba(76, 175, 80, 0.95);
+    background: rgba(var(--color-win-rgb, 69, 209, 126), 0.18);
+    color: rgb(var(--color-win-rgb, 69, 209, 126));
 }
 
-/* Lost set */
 .set-box.lost {
-    background: rgba(var(--color-accent-rgb), 0.1);
-    border-color: rgba(var(--color-accent-rgb), 0.3);
-    color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.8);
 }
 
-.team-row.serving .set-box.won {
-    background: rgba(76, 175, 80, 0.15);
-    border-color: rgba(76, 175, 80, 0.5);
-    color: rgba(76, 175, 80, 0.95);
+.team-score {
+    flex: 0 0 auto;
+    width: clamp(160px, 37vh, 800px);
+    text-align: right;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(6em, 39vh, 40em);
+    font-weight: 400;
+    line-height: 0.8;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    color: #ffffff;
 }
 
-.team-row.serving .set-box.lost {
-    background: rgba(var(--color-accent-rgb), 0.1);
-    border-color: rgba(var(--color-accent-rgb), 0.3);
-    color: rgba(255, 255, 255, 0.4);
+/* =================== AFGJORT KAMP =================== */
+.tv-container.afgjort .team-score {
+    display: none;
 }
 
-/* =================== FOOTER =================== */
+.tv-container.afgjort .set-boxes {
+    gap: clamp(10px, 1.9vh, 36px);
+}
+
+.tv-container.afgjort .set-box {
+    width: clamp(110px, 25vh, 540px);
+    height: clamp(130px, 30.5vh, 660px);
+    font-size: clamp(4em, 27.8vh, 28em);
+    border-radius: clamp(14px, 2vh, 40px);
+    letter-spacing: -0.01em;
+}
+
+.tv-container.afgjort .player-name,
+.tv-container.afgjort .partner-name {
+    font-size: calc(clamp(2.2em, 13vh, 15em) * var(--fit-scale, 1));
+}
+
+.tv-container.afgjort.is-double .player-name,
+.tv-container.afgjort.is-double .partner-name {
+    font-size: calc(clamp(2em, 11vh, 13em) * var(--fit-scale, 1));
+}
+
+.team-row.vinder {
+    background: rgba(var(--color-win-rgb, 69, 209, 126), 0.12);
+    border-left-color: rgb(var(--color-win-rgb, 69, 209, 126));
+}
+
+.team-row.taber .player-name,
+.team-row.taber .partner-name {
+    color: rgba(255, 255, 255, 0.55);
+}
+
+/* Double: to navne pr. række — lidt mindre, så begge står helt */
+.tv-container.is-double .player-name,
+.tv-container.is-double .partner-name {
+    font-size: calc(clamp(2.2em, 13.4vh, 15em) * var(--fit-scale, 1));
+}
+
+/* =================== BUNDBJÆLKE =================== */
+/* Udskiftere/banenote til venstre, sponsorbanner i midten, QR-koden fast i
+   højre side (#qrCounter er position: fixed; bjælken holder plads til den,
+   mens den vises — se body.tv-qr-synlig). */
 .tv-footer {
-    padding: clamp(8px, 1.5vh, 22px) clamp(20px, 3vw, 60px);
-    background: rgba(0, 0, 0, 0.2);
+    padding: 0 clamp(20px, 2.5vw, 50px);
+    background: rgba(0, 0, 0, 0.28);
     border-top: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: clamp(16px, 2vw, 48px);
+    min-height: clamp(60px, 11vh, 240px);
+    flex-shrink: 0;
+}
+
+/* Banneret tager pladsen, der er tilbage — udskiftere/banenote går forud */
+.tv-footer-banner {
+    flex: 1 1 0;
+    min-width: 0;
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: clamp(46px, 7vh, 90px);
-    flex-shrink: 0;
-}
-
-.tv-footer.has-banner {
-    padding: 0;
 }
 
 .court-banner-image {
-    width: 100%;
-    height: auto;
     display: block;
-    max-height: 140px;
+    max-width: 100%;
+    max-height: clamp(50px, 9vh, 200px);
+    width: auto;
+    height: auto;
     object-fit: contain;
-}
-
-.live-indicator {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 2em;
-    font-weight: 400;
-    letter-spacing: 5px;
-    color: rgba(255, 255, 255, 0.4);
-}
-
-.live-dot {
-    width: 14px;
-    height: 14px;
-    background: var(--color-accent);
-    border-radius: 50%;
-    box-shadow: 0 0 10px rgba(var(--color-accent-rgb), 0.6);
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50%       { opacity: 0.4; transform: scale(1.15); }
 }
 
 /* =================== SPONSOR SLIDESHOW =================== */
@@ -811,10 +808,11 @@ body::before {
         flex: none;
     }
 
-    /* Stack player name above set boxes */
+    /* Navne øverst, afsluttede sæt og point på linjen under */
     .team-row {
-        flex-direction: column;
-        align-items: flex-start;
+        flex: none;
+        flex-wrap: wrap;
+        align-items: center;
         padding: 18px 16px;
         gap: 12px;
         border-left-width: 5px;
@@ -823,43 +821,43 @@ body::before {
     .team-names {
         min-width: 0;
         width: 100%;
+        flex: 1 1 100%;
     }
 
-    .player-name {
+    .tv-container .player-name,
+    .tv-container .partner-name {
         font-size: 2.2em;
         letter-spacing: 2px;
     }
 
-    .partner-name {
-        font-size: 2em;
-        letter-spacing: 2px;
-        margin-top: 4px;
-    }
-
     .set-boxes {
         gap: 10px;
-        flex-wrap: wrap;
     }
 
-    .set-box {
-        width: 72px;
+    .set-box,
+    .tv-container.afgjort .set-box {
+        width: 64px;
         height: 72px;
         font-size: 2.8em;
         border-radius: 10px;
+    }
+
+    .team-score {
+        width: auto;
+        margin-left: auto;
+        font-size: 5em;
     }
 
     /* Footer */
     .tv-footer {
         padding: 14px 16px;
         min-height: 50px;
+        flex-wrap: wrap;
     }
 
-    .live-indicator {
-        font-size: 1.1em;
-        letter-spacing: 3px;
+    body.tv-qr-synlig .tv-footer {
+        padding-right: 16px;
     }
-
-    .live-dot { width: 10px; height: 10px; }
 
     /* Overlays */
     .overlay-content { gap: 18px; width: 96%; }
@@ -884,11 +882,14 @@ body::before {
    Når badmintonplanner.dk har sendt en runde, viser headeren rundenavn og
    "Næste runde", og en strip over footeren viser udskiftere og noter. Alt
    skjules igen uden runde, så det almindelige scoreboard er uændret. */
+/* Layout A: "RUNDE 4" og nedtællingen på én linje i headerens midte;
+   nedtællingen står som en pille, der bliver helt rød, når runden er nu */
 .tv-planner-head {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
     justify-content: center;
+    gap: clamp(10px, 1.5vw, 32px);
     flex: 1 1 auto;
     min-width: 0;
     padding: 0 clamp(12px, 2vw, 40px);
@@ -898,7 +899,7 @@ body::before {
 
 .tv-planner-label {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(1.6em, 4.5vh, 4em);
+    font-size: clamp(1.6em, 4.8vh, 4.4em);
     letter-spacing: 4px;
     color: #ffffff;
     white-space: nowrap;
@@ -909,14 +910,20 @@ body::before {
 
 .tv-planner-next {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(1.1em, 3vh, 2.6em);
+    font-size: clamp(1.1em, 4vh, 3.6em);
     letter-spacing: 3px;
+    line-height: 1;
     color: var(--color-accent);
+    background: rgba(var(--color-accent-rgb), 0.12);
+    padding: 0.5vh 1.6vh;
+    border-radius: 100px;
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
 }
 
 .tv-planner-next.is-due {
+    background: var(--color-accent);
+    color: var(--color-on-accent, #fff);
     animation: plannerPulse 1.6s ease-in-out infinite;
 }
 
@@ -936,20 +943,6 @@ body::before {
     min-height: 0;
 }
 
-/* Med strip i bunden er der ~7vh mindre til scoreboardet: saet-bokse og navne
-   skaleres lidt ned, saa header + 2 raekker + strip + footer altid passer i
-   100vh (ogsaa med bane-sponsorbanner i footeren). Uden strip er alt som foer. */
-.tv-container.has-planner .set-box {
-    width: clamp(150px, min(30vh, 22vw), 480px);
-    height: clamp(150px, min(30vh, 22vw), 480px);
-    font-size: clamp(3.4em, min(18vh, 14vw), 14em);
-}
-
-.tv-container.has-planner .player-name,
-.tv-container.has-planner .partner-name {
-    font-size: calc(clamp(2.2em, 11vh, 16em) * var(--fit-scale, 1));
-}
-
 /* Runde fra badmintonplanner.dk, hvor ingen tæller endnu: stillingen siger
    intet (0 og streger), så navnene får hele bredden, centreret med "MOD"
    imellem holdene. Så snart der tælles (server valgt eller første point),
@@ -958,7 +951,8 @@ body::before {
     display: none;
 }
 
-.tv-container.planner-navne .set-boxes {
+.tv-container.planner-navne .set-boxes,
+.tv-container.planner-navne .team-score {
     display: none;
 }
 
@@ -978,12 +972,6 @@ body::before {
 .tv-container.planner-navne .partner-name {
     font-size: calc(clamp(2.4em, 14.5vh, 18em) * var(--fit-scale, 1));
     text-align: center;
-}
-
-/* Med udskiftere/banenote i strippen er der lidt mindre højde */
-.tv-container.planner-navne.has-planner .player-name,
-.tv-container.planner-navne.has-planner .partner-name {
-    font-size: calc(clamp(2.2em, 13vh, 18em) * var(--fit-scale, 1));
 }
 
 .tv-container.planner-navne .tv-planner-mod {
@@ -1006,16 +994,15 @@ body::before {
     background: rgba(255, 255, 255, 0.12);
 }
 
+/* Udskiftere og banenote står i venstre side af bundbjælken (layout A) */
 .tv-planner-strip {
-    flex-shrink: 0;
+    flex: 0 1 auto;
+    max-width: 62%;
     display: flex;
     flex-direction: row;
     align-items: baseline;
     gap: clamp(12px, 2vw, 48px);
     min-width: 0;
-    padding: clamp(6px, 1.2vh, 16px) clamp(20px, 3vw, 60px);
-    background: rgba(var(--color-primary-rgb), 0.10);
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .tv-planner-subs {
@@ -1027,17 +1014,17 @@ body::before {
 
 .tv-planner-strip-label {
     font-family: 'DM Sans', sans-serif;
-    font-size: clamp(0.8em, 2vh, 1.6em);
+    font-size: clamp(0.8em, 2.6vh, 2em);
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.7);
     flex-shrink: 0;
 }
 
 .tv-planner-subs-names {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(1.4em, 4.2vh, 3.6em);
+    font-size: clamp(1.4em, 4.8vh, 4.4em);
     letter-spacing: 3px;
     color: #ffffff;
     white-space: nowrap;
