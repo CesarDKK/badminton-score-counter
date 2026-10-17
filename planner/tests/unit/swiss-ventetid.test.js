@@ -9,6 +9,7 @@ import { tjekPlan } from '../../src/rules.js';
 import { scorePlan } from '../../src/kriterier.js';
 import { bygProblem } from '../../src/solver-klient.js';
 import { spillerOphold } from '../../src/regelmodel.js';
+import { bedoemPlan } from '../../src/scheduler.js';
 import { model } from '../hjaelp/model.js';
 
 const LOER = '2026-11-21';
@@ -56,6 +57,13 @@ describe('lang ventetid tæller Swiss-runderne med', () => {
         const o = spillerOphold(p.kampe, p.plan).get(`s5|${LOER}`);
         assert.equal(o.length, 4, 'én kendt kamp (runde 1) + runde 2, 3 og 4');
         assert.deepEqual([o.at(-1).fra, o.at(-1).til], [10 * 60 + 30, 12 * 60]);
+    });
+    test('planens statistik ("venter over 90 min", tid i hallen) tæller også Swiss-runderne (prod-test 2026-10-17)', () => {
+        const tæt = bedoemPlan(laeg(['09:00', '10:00', '11:00', '12:00'], '13:00'));
+        assert.equal(tæt.langeHuller, 0);
+        // s5/s6: 09:00–12:30 (Swiss), s1–s4: 09:00–13:30 (Swiss + double)
+        assert.equal(tæt.haltidMin, 2 * 210 + 4 * 270);
+        assert.equal(bedoemPlan(laeg(['09:00', '09:30', '10:00', '10:30'], '14:00')).langeHuller, 4);
     });
     test('løseren straffer ikke lange huller for spillere, der også spiller Swiss-runder', () => {
         const pr = bygProblem(laeg(['09:00', '10:00', '11:00', '12:00'], '13:00'));
