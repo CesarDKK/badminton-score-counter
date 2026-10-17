@@ -54,7 +54,15 @@ export function kompromiser(foer, nu) {
     const ud = [];
     const tilfoej = (id, tekst, sti, a, b) => ud.push({ id, tekst, sti, foer: a, nu: b });
     const o0 = foer.opsaetning, o1 = nu.opsaetning;
-    if (o0.slotMin !== o1.slotMin) tilfoej('slotMin', `Tilbage til ${o0.slotMin} min kampe (nu ${o1.slotMin} min)`, { type: 'opsaetning', felt: 'slotMin' }, o0.slotMin, o1.slotMin);
+    if (o0.slotMin !== o1.slotMin) {
+        // Kamplængden kan også gå et mellemtrin tilbage (Jesper 2026-10-17: "hvorfor ikke 25?"): alle trin på 5 min fra den
+        // nuværende hen mod den fra før — standard er den fra før
+        const retning = o0.slotMin > o1.slotMin ? 5 : -5;
+        const valg = [];
+        for (let m = o1.slotMin + retning; retning > 0 ? m <= o0.slotMin : m >= o0.slotMin; m += retning) valg.push(m);
+        tilfoej('slotMin', `Tilbage til ${o0.slotMin} min kampe (nu ${o1.slotMin} min)`, { type: 'opsaetning', felt: 'slotMin' }, o0.slotMin, o1.slotMin);
+        ud.at(-1).valg = valg;
+    }
     if (!ens(o0.pauseMin, o1.pauseMin)) {
         const tekst = erUdenPause(o1.pauseMin) && !erUdenPause(o0.pauseMin) ? 'Pausen tilbage i planen (nu gives den på dagen)' : 'Pausen i planen som før';
         tilfoej('pauseMin', tekst, { type: 'opsaetning', felt: 'pauseMin' }, o0.pauseMin, o1.pauseMin);

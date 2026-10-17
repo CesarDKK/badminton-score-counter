@@ -124,7 +124,9 @@ function kompromisBoks(kp, projekt) {
             <h4>Kan løseren klare sig uden kompromiserne?</h4>
             <p class="daempet">For at få programmet til at gå op er der givet efter på det herunder. Sæt flueben ved det, du vil have tilbage, og lad løseren prøve — den er stærkere end planlæggeren. Løseren regner på en kopi: dit program ændres ikke, før du selv vælger det, løseren finder.</p>
             ${kp.proeveSvar ? `<p>${esc(kp.proeveSvar)}</p>` : ''}
-            <div class="beslutning-liste">${liste.map((k) => `<label class="beslutning-valg"><input type="checkbox" data-kompromis="${esc(k.id)}"> <span>${esc(k.tekst)}</span></label>`).join('')}</div>
+            <div class="beslutning-liste">${liste.map((k) => `<label class="beslutning-valg"><input type="checkbox" data-kompromis="${esc(k.id)}"> <span>${k.valg?.length > 1
+                ? `Kampe på <select data-kompromis-vaerdi="${esc(k.id)}" aria-label="Kamplængde">${k.valg.map((m) => `<option value="${m}" ${m === k.foer ? 'selected' : ''}>${m} min${m === k.foer ? ' (som før)' : ''}</option>`).join('')}</select> igen (nu ${k.nu} min)`
+                : esc(k.tekst)}</span></label>`).join('')}</div>
             <button class="knap knap--sekundaer" data-handling="kp-uden-kompromis" title="Løseren regner så længe, som er valgt ved 'Forbedr med løseren'">Lad løseren prøve med de valgte ændringer</button>
         </div>`;
 }
@@ -468,7 +470,11 @@ function bind(container, h) {
             else if (hd === 'kp-fortryd') h.fortrydKampprogram();
             else if (hd === 'kp-elastisk') h.brugElastisk();
             else if (hd === 'kp-tilbud') h.brugTilbud();
-            else if (hd === 'kp-uden-kompromis') h.udenKompromis([...(knap.closest('.kompromiser')?.querySelectorAll('[data-kompromis]:checked') || [])].map((x) => x.dataset.kompromis));
+            else if (hd === 'kp-uden-kompromis') {
+                const boks = knap.closest('.kompromiser');
+                const vaerdier = Object.fromEntries([...(boks?.querySelectorAll('[data-kompromis-vaerdi]') || [])].map((x) => [x.dataset.kompromisVaerdi, Number(x.value)]));
+                h.udenKompromis([...(boks?.querySelectorAll('[data-kompromis]:checked') || [])].map((x) => x.dataset.kompromis), vaerdier);
+            }
             else if (hd === 'til-tp') h.tilTP();
             else if (hd === 'kun-uden-tid') h.lavKampprogram({ behold: true });
             else if (hd === 'forslag') h.lavForslag(false);

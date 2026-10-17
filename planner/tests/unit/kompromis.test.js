@@ -67,3 +67,14 @@ describe('de valgte trækkes tilbage — resten bliver stående', () => {
         assert.deepEqual(kompromiser(a, c), []);
     });
 });
+
+describe('kamplængden kan gå et mellemtrin tilbage (Jesper 2026-10-17: "hvorfor ikke 25?")', () => {
+    test('20 min nu, 30 før: valget er 25 og 30 — og 25 sættes, når det vælges', () => {
+        const a = foer();
+        const b = genberegnKampe(saetSlotMin(a, 20));
+        const k = kompromiser(a, b).find((x) => x.id === 'slotMin');
+        assert.deepEqual(k.valg, [25, 30]);
+        assert.equal(udenKompromiser(b, [{ ...k, foer: 25 }]).opsaetning.slotMin, 25);
+        assert.equal(udenKompromiser(b, [k]).opsaetning.slotMin, 30, 'standard: som før');
+    });
+});

@@ -602,3 +602,7 @@ et flueben":
 - Overskriften er "Kan løseren klare sig uden kompromiserne?", og knappen hedder "Lad løseren prøve med de valgte
   ændringer".
 - Svaret gentager, hvad der blev prøvet: "Løseren prøvede: Pausen tilbage i planen. Det gik ikke — …".
+
+Jesper spurgte: "Hvorfor er der kun mulighed for 20 og 30 minutter, hvorfor ikke 25?". Kamplængden kunne kun gå helt
+tilbage til længden fra før. Nu er linjen et valg: "Kampe på [25 min / 30 min (som før)] igen (nu 20 min)". Valget har
+alle trin på 5 min fra den nuværende længde hen mod den fra før, og standard er længden fra før.

@@ -496,10 +496,12 @@ const planHandlers = {
         render();
     },
     // Kompromiser undervejs (Jesper 2026-10-17): de valgte trækkes tilbage på en kopi, og løseren prøver igen
-    udenKompromis(ids) {
+    udenKompromis(ids, vaerdier = {}) {
         const kp = tilstand.kampprogram;
         if (!kp || tilstand.optimerer) return;
-        const valgte = kompromiser(kp.foer, projekt).filter((k) => ids.includes(k.id));
+        // Et kompromis med et valgt mellemtrin (kamplængden: fx 25 min i stedet for helt tilbage til 30) går dertil
+        const valgte = kompromiser(kp.foer, projekt).filter((k) => ids.includes(k.id)).map((k) => (k.valg?.includes(vaerdier[k.id]) && vaerdier[k.id] !== k.foer
+            ? { ...k, foer: vaerdier[k.id], tekst: `Kampe på ${vaerdier[k.id]} min (nu ${k.nu} min)` } : k));
         if (!valgte.length) return;
         kp.tilbud = null;
         kp.proeveSvar = null;
