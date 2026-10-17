@@ -5,6 +5,7 @@ import * as store from './store.js';
 import { tjekPlan } from './rules.js';
 import { lavForslag, lavAlternativer, bedoemPlan, loesningsforslag } from './scheduler.js';
 import { optimer, stopLoeser, stopVedLukning, nytJobId, diagnoseTekst, aendretUnderOptimering, flettetPlan, planFraSvar, brudTekster } from './solver-klient.js';
+import { vurderLoeserPlan, visPlanMedFaerrestBrud, vurderProeve } from './loeser-svar.js';
 import { scorePlan } from './kriterier.js';
 import { alleNedskaeringer, anvendNedskaering, kapacitetsRegnskab, swissKandidater } from './nedskaering.js';
 import { sammenlignKamplaengder, erUdenPause } from './kamplaengde.js';
@@ -318,6 +319,9 @@ function beregnKampprogram(p, valg) {
  * "arbejder"-teksten, og siden kan tegnes imens. Fejl vises som besked i stedet for at efterlade siden halvt
  * opdateret; er projektet skiftet ud imens, kasseres resultatet.
  */
+/** Er nu samme TP-fil som før (eller er projektet lukket)? Kampene kan være bygget om, men filen er den samme. */
+const sammeFil = (nu, foer) => !!nu && (nu.kilde?.filnavn || '') === (foer.kilde?.filnavn || '');
+
 function arbejd(tekst, regn, brug) {
     if (tilstand.arbejder) return;
     // Løseren regner på programmet, som det er: et nyt program imens ville den overskrive bagefter (gennemgangen 2026-10-17)
@@ -330,8 +334,7 @@ function arbejd(tekst, regn, brug) {
         const a = aendretUnderOptimering(start, projekt);
         // En anden fil (eller lukket projekt): resultatet hører ikke til her. Samme fil med nybyggede kampe (fx en rækkes
         // dage rettet) er en ændring som alle andre
-        const sammeFil = !!projekt && (projekt.kilde?.filnavn || '') === (start.kilde?.filnavn || '');
-        if (a === 'lukket' || (a === 'andet-projekt' && !sammeFil)) { render(); return; }
+        if (a === 'lukket' || (a === 'andet-projekt' && !sammeFil(projekt, start))) { render(); return; }
         if (a !== 'uaendret') {
             // Brugeren har rettet noget, mens programmet blev regnet: resultatet bygger på det gamle og ville overskrive
             // rettelsen (gennemgangen 2026-10-11, U8) — kasseres, og der siges til
@@ -385,7 +388,6 @@ const katFelter = (p, brud) => {
     return brud.map((x) => ({ ...x, kategori: katMap.get(x.id)?.kategori || '', navn: katMap.get(x.id)?.navn || x.id }));
 };
 
-/** Lægger et resultat fra lavKampprogram ind og regner beslutningskortene ud. */
 /**
  * Løserens svar på en prøve uden udvalgte kompromiser: et tilbud i panelet (det nuværende program røres ikke), eller en
  * besked om, at løseren heller ikke kunne uden dem.
@@ -406,12 +408,12 @@ function visProeve(proeve, startProjekt, svar, lovlig) {
     if (kandidat) {
         const p3 = { ...proeve.projekt, plan: flettetPlan(proeve.projekt, kandidat) };
         const fejl3 = tjekPlan(p3).antal.fejl, score3 = scorePlan(p3).total;
-        const bedre = fejl3 < fejlNu || (fejl3 === fejlNu && score3 < scoreNu);
+        const { tilbud, bedre } = vurderProeve({ lovlig, fejlProeve: fejl3, fejlNu, scoreProeve: score3, scoreNu });
         tekst = lovlig
             ? `Løseren prøvede: ${proeve.tekst}. Det gik — Tjek finder ${fejl3} fejl, score ${score3} (dit nuværende: ${fejlNu} fejl, score ${scoreNu}; lavere er bedre).`
             : `Løseren prøvede: ${proeve.tekst}. Den fandt ingen lovlig plan (${bevist ? 'den kunne bevise, at der ingen findes' : `ikke inden for ${Math.round(svar.sekunder)} s`}); planen med færrest brud har ${fejl3} fejl i Tjek (dit nuværende: ${fejlNu}).${laaste}`;
         // Kun et tilbud, når programmet ikke får flere fejl i Tjek end det nuværende (sikkerhedsnet som ved løserens forbedring)
-        if (kp && fejl3 <= fejlNu && (lovlig || fejl3 < fejlNu)) kp.tilbud = { projekt: p3, start: startProjekt, uden: proeve.tekst, tekst: tekst + (bedre ? '' : ' Det er ikke bedre end det nuværende.') };
+        if (kp && tilbud) kp.tilbud = { projekt: p3, start: startProjekt, uden: proeve.tekst, tekst: tekst + (bedre ? '' : ' Det er ikke bedre end det nuværende.') };
         else tekst += ' Dit program er ikke ændret.';
     } else {
         tekst = `Løseren prøvede: ${proeve.tekst}. Det gik ikke — ${bevist ? 'den kunne bevise, at der ingen lovlig plan findes' : `den fandt ingen lovlig plan på ${Math.round(svar.sekunder)} s`}.${laaste} Dit program er ikke ændret.`;
@@ -432,6 +434,7 @@ function nytValg(gammelt, nyt) {
     return { ...nyt, foer, aendret: nyt.minutter !== foer.slotMin || nyt.udenPause !== erUdenPause(foer.pauseMin) };
 }
 
+/** Lægger et resultat fra lavKampprogram ind og regner beslutningskortene ud. */
 function visKampprogram(r, { foer, valg, udfoert = [], note = null, beslutninger = lavBeslutninger(r.projekt, r.forslag) }) {
     const brud = [...r.forslag.brud, ...r.forslag.ikkePlaceret];
     tilstand.alternativer = null;
@@ -449,7 +452,7 @@ function visKampprogram(r, { foer, valg, udfoert = [], note = null, beslutninger
 function startAutoLoeser() {
     const kp = tilstand.kampprogram;
     if (!kp || kp.projekt !== projekt || kp.beslutninger.brud || projekt.opsaetning.autoLoeser === false) return;
-    setTimeout(() => planHandlers.optimer({ udenSpoergsmaal: true, auto: true }), 0);
+    setTimeout(() => planHandlers.optimer({ auto: true }), 0);
 }
 
 const planHandlers = {
@@ -545,7 +548,7 @@ const planHandlers = {
         if (!valgte.length) return;
         kp.tilbud = null;
         kp.proeveSvar = null;
-        planHandlers.optimer({ udenSpoergsmaal: true, proeve: { projekt: udenKompromiser(projekt, valgte), tekst: valgte.map((k) => k.tekst.split(' (nu ')[0]).join('; ') } });
+        planHandlers.optimer({ proeve: { projekt: udenKompromiser(projekt, valgte), tekst: valgte.map((k) => k.tekst.split(' (nu ')[0]).join('; ') } });
     },
     tilTP() { vaelgFane('liste'); },
     brugElastisk() {
@@ -645,7 +648,7 @@ const planHandlers = {
         const brud = [...f.brud, ...f.ikkePlaceret];
         tilstand.forslag = {
             tekst: `Forslag lavet på ${ms} ms: alle ${Object.keys(f.plan).length} kampe har tid${brud.length ? `, men ${brud.length} kunne kun placeres ved at bryde en regel — se forslagene nedenfor og fejlene i Tjek.` : ' uden regelbrud.'}`,
-            ikkePlaceret: brud.map((x) => ({ ...x, kategori: katMap.get(x.id)?.kategori || '', navn: katMap.get(x.id)?.navn || x.id })),
+            ikkePlaceret: katFelter(r.projekt, brud),
             kilde: 'graadig', // Plan-fanen anbefaler løseren, indtil dens plan er taget i brug
         };
         saet({ ...store.anvendForslag(projekt, f), sidsteForslag: { ikkePlaceret: brud } });
@@ -678,9 +681,8 @@ const planHandlers = {
     // Optimér: CP-SAT-løseren (planner-solver) minimerer scoren under alle hårde regler.
     // Den grådige plan bruges som startløsning og vises ved siden af til sammenligning.
     optimerSek(n) { tilstand.optimerSek = n; },
-    async optimer({ udenSpoergsmaal = false, auto = false, proeve = null } = {}) {
+    async optimer({ auto = false, proeve = null } = {}) {
         if (tilstand.optimerer) return;
-        const antalLaast = (projekt.laast || []).length;
         const sekunder = tilstand.optimerSek || 60;
         // Løseren regner på projektet, som det er NU. Ændrer brugeren noget imens (op til 6 min), må
         // resultatet ikke bare lægges ind oven i det — se aendretUnderOptimering nedenfor.
@@ -745,8 +747,7 @@ const planHandlers = {
             const aendring = aendretUnderOptimering(udgangspunkt, projekt);
             if (aendring === 'lukket' || aendring === 'andet-projekt') {
                 // Projektet er lukket eller skiftet ud imens: resultatet hører til en anden turnering
-                const sammeFil = !!projekt && (projekt.kilde?.filnavn || '') === (udgangspunkt.kilde?.filnavn || '');
-                tilstand.forslag = projekt ? { tekst: sammeFil ? 'Løseren blev færdig, men du har ændret opsætningen imens, så kampene er bygget om — dens plan er kasseret. Lav programmet igen.' : 'Løseren blev færdig, men du har åbnet et andet projekt imens, så dens plan er kasseret.', ikkePlaceret: [] } : null;
+                tilstand.forslag = projekt ? { tekst: sammeFil(projekt, udgangspunkt) ? 'Løseren blev færdig, men du har ændret opsætningen imens, så kampene er bygget om — dens plan er kasseret. Lav programmet igen.' : 'Løseren blev færdig, men du har åbnet et andet projekt imens, så dens plan er kasseret.', ikkePlaceret: [] } : null;
                 render();
                 return;
             }
@@ -764,17 +765,18 @@ const planHandlers = {
                 const opt = { navn: svar.status === 'OPTIMAL' ? 'Optimeret (bevist bedst mulig)' : 'Optimeret (CP-SAT)', beskrivelse: svar.stoppet ? `Stoppet efter ${svar.sekunder} s — den bedste plan, løseren havde fundet.` : svar.rolig ? `Løseren stoppede selv efter ${svar.sekunder} s, fordi den ikke fandt bedre planer.` : `Løseren minimerede scoren under de hårde regler på ${svar.sekunder} s.`, plan, ikkePlaceret: [], brud: [], statistik: bedoemPlan(p2), score: scorePlan(p2).total };
                 const liste = [opt, sammenlign].sort((x, y) => (x.brud.length - y.brud.length) || (x.score - y.score));
                 const bedre = opt.score < sammenlign.score;
-                if (auto && harProgram) {
+                // Sikkerhedsnet: automatisk kun, når løserens plan ikke har flere fejl i Tjek end programmet — så en
+                // uenighed mellem løseren og Tjek aldrig skifter et lovligt program ud (loeser-svar.js)
+                const valg = vurderLoeserPlan({ auto, harProgram, scoreLoeser: opt.score, scoreFoer: sammenlign.score,
+                    fejlLoeser: bedre ? tjekPlan(p2).antal.fejl : 0, fejlFoer: bedre ? tjekPlan(projekt).antal.fejl : 0, listeSet: tilstand.listeSetUnderLoeser });
+                if (valg !== 'vaelg') {
                     const kp = panelGaelder(tilstand.kampprogram, projekt) ? tilstand.kampprogram : null;
-                    // Sikkerhedsnet: automatisk kun, når løserens plan ikke har flere fejl i Tjek end programmet — så en
-                    // uenighed mellem løseren og Tjek aldrig skifter et lovligt program ud (gennemgangen 2026-10-11, K8)
-                    const sikker = bedre && tjekPlan(p2).antal.fejl <= tjekPlan(projekt).antal.fejl;
-                    if (sikker && tilstand.listeSetUnderLoeser) {
+                    if (valg === 'tilbud') {
                         // Brugeren har set listen til TP imens: tilbud, ikke automatisk
                         const tekst = `Løseren fandt et bedre program (score ${sammenlign.score} → ${opt.score}), mens du var i "Til TP". Tiderne er ikke ændret.`;
                         tilstand.forslag = { tekst, ikkePlaceret: [], kilde: 'loeser' };
                         if (kp) { kp.forbedret = null; kp.tilbud = { plan, tekst, start: projekt }; }
-                    } else if (sikker) {
+                    } else if (valg === 'indlaeg') {
                         const foerP = projekt;
                         saet({ ...projekt, plan });
                         const tekst = `Løseren har forbedret programmet på ${svar.sekunder} s (score ${sammenlign.score} → ${opt.score}; lavere er bedre).`;
@@ -782,7 +784,7 @@ const planHandlers = {
                         tilstand.forslag = { tekst, ikkePlaceret: [], kilde: 'loeser' };
                         if (kp) { kp.projekt = projekt; kp.forbedret = tekst; }
                     } else {
-                        const tekst = bedre
+                        const tekst = valg === 'beholdt-fejl'
                             ? `Løseren fandt en plan med bedre score, men flere fejl i Tjek end programmet — programmet er beholdt.`
                             : `Løseren fandt ikke en bedre plan end programmet på ${svar.sekunder} s — det er beholdt.`;
                         tilstand.forslag = { tekst, ikkePlaceret: [], kilde: 'loeser' };
@@ -836,13 +838,11 @@ const planHandlers = {
                 kp.elastisk = null;
                 tilstand.forslag = { tekst: '', ikkePlaceret: kp.egetProgram ? [] : katFelter(projekt, projekt.sidsteForslag?.ikkePlaceret || []), kilde: 'graadig', handlinger };
                 if (svar.elastisk?.tider) {
-                    // Sikkerhedsnet: løserens bud vises kun, hvis det ikke har flere fejl eller brud end programmet, brugeren
-                    // allerede har (en kort regnetid kan give et dårligere bud end det hurtige program)
+                    // Sikkerhedsnet: løserens bud vises kun, hvis det ikke har flere fejl i Tjek end programmet, brugeren
+                    // allerede har (en kort regnetid kan give et dårligere bud end det hurtige program). Før blev antal
+                    // brudte regler sammenlignet med antal fejl — to forskellige ting (gennemgangen 2026-10-17)
                     const plan = planFraSvar(udgangspunkt, svar.elastisk);
-                    const fejlEl = tjekPlan({ ...projekt, plan: flettetPlan(projekt, plan) }).antal.fejl;
-                    const fejlNu = tjekPlan(projekt).antal.fejl;
-                    const brudEl = (svar.elastisk.brud || []).length, brudNu = tilstand.kampprogram.beslutninger.brud;
-                    if (fejlEl < fejlNu || (fejlEl === fejlNu && brudEl <= brudNu)) {
+                    if (visPlanMedFaerrestBrud(tjekPlan({ ...projekt, plan: flettetPlan(projekt, plan) }).antal.fejl, fejlNu)) {
                         tilstand.kampprogram.elastisk = { plan, tekster: brudTekster(svar.elastisk.brud, udgangspunkt) };
                     }
                 }
@@ -881,7 +881,6 @@ const planHandlers = {
         if (!f) return;
         const r = anvendNedskaering(projekt, f);
         const brud = [...r.forslag.brud, ...r.forslag.ikkePlaceret];
-        const katMap = new Map(r.projekt.kampe.map((k) => [k.id, k]));
         tilstand.nedskaering = null;
         tilstand.alternativer = null;
         tilstand.forslag = {
@@ -916,7 +915,7 @@ const planHandlers = {
         }
         tilstand.forslag = null;
         saetOpsaetning(h.opsaetning ? store.opdaterOpsaetning(projekt, h.opsaetning) : store.opdaterRaekke(projekt, h.raekke, h.aendring));
-        planHandlers.optimer({ udenSpoergsmaal: true });
+        planHandlers.optimer();
     },
 
     async stopOptimer() {
@@ -930,7 +929,6 @@ const planHandlers = {
     // Alternative forslag: bladr mellem dem (planen skiftes med det samme, så
     // gitteret viser forslaget), "Brug dette" beholder det, "Fortryd" går tilbage.
     lavAlternativer() {
-        const antalLaast = (projekt.laast || []).length;
         const t0 = performance.now();
         const liste = lavAlternativer(projekt);
         const ms = Math.round(performance.now() - t0);

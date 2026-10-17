@@ -116,10 +116,8 @@ describe('blød målsætning: tid i hallen for U9/U11 — også Swiss-runder', (
     test('løseren får en gruppe pr. spiller med Swiss-runderne — ens grupper samlet med vægt', () => {
         const p = raekke();
         const pr = bygProblem(p);
-        // Sidste runde (ingen kendte spillere) skal være med i hver singlespillers gruppe; den midterste ændrer ikke opholdet
-        const senere = p.kampe.filter((k) => k.kategori === 'U09 D HS' && k.runde === 3).map((k) => pr.kampe.findIndex((x) => x.id === k.id));
-        const midt = p.kampe.filter((k) => k.kategori === 'U09 D HS' && k.runde === 2).map((k) => pr.kampe.findIndex((x) => x.id === k.id));
-        assert.ok(pr.halTid.every((g) => midt.every((i) => !g.kampe.includes(i))), 'runde 2 er ikke med');
+        // Runde 2 og 3 (ingen kendte spillere) skal være med i hver singlespillers gruppe — første og sidste ukendte runde
+        const senere = p.kampe.filter((k) => k.kategori === 'U09 D HS' && k.runde > 1).map((k) => pr.kampe.findIndex((x) => x.id === k.id));
         assert.equal(pr.halTid.reduce((s, g) => s + g.vaegt, 0), 8, 'a–h');
         assert.equal(pr.halTid.length, 6, 'a, b, c og d har hver deres runde 1-kamp; e+f og g+h spiller ens (kun HD-puljen) og er slået sammen');
         assert.equal(pr.halTid.filter((g) => senere.every((i) => g.kampe.includes(i))).length, 4, 'singlespillernes grupper har Swiss-runderne');

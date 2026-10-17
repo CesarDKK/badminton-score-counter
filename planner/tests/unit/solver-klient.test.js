@@ -68,10 +68,10 @@ describe('solver-klient: bygProblem', () => {
         const m = pr.kampe.find((k) => k.id === '3:1');
         assert.ok(m.tilladte.some((t) => t >= 1440), 'U13 M kan også spille søndag (global tid = dag * 1440 + minut)');
     });
-    test('spillere er løbenumre, og kampe med fælles spiller er konfliktpar med varighed + pause som gab', () => {
+    test('ingen spillere sendes, og kampe med fælles spiller er konfliktpar med varighed + pause som gab', () => {
         const pr = bygProblem(projekt());
         const i = (id) => pr.kampe.findIndex((k) => k.id === id);
-        for (const k of pr.kampe) assert.ok(k.spillere.every((s) => Number.isInteger(s)));
+        for (const k of pr.kampe) assert.equal(k.spillere, undefined, 'løseren bruger ikke spillerne — de sendes ikke');
         const parret = pr.konflikter.find(([a, b]) => (a === i('1:1') && b === i('1:2')) || (a === i('1:2') && b === i('1:1')));
         assert.ok(parret, '1:1 og 1:2 deler spiller a');
         assert.ok(parret[2] >= 30, 'gab mindst kampens varighed');

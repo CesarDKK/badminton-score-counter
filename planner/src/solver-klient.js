@@ -41,10 +41,6 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
         }
     });
 
-    // Spillere som løbenumre (ingen persondata forlader browseren)
-    const spillerNr = new Map();
-    const nr = (id) => { if (!spillerNr.has(id)) spillerNr.set(id, spillerNr.size); return spillerNr.get(id); };
-
     const kampe = [];
     const indeks = new Map();
     for (const k of projekt.kampe) {
@@ -71,7 +67,7 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
         indeks.set(k.id, kampe.length);
         kampe.push({
             id: k.id, raekke: r.id, pulje, halv: !!kat(k)?.halvBane, tilladte,
-            spillere: k.spillere.map(nr), erFinale: k.rundeNavn === 'Finale',
+            erFinale: k.rundeNavn === 'Finale',
             hint: hintPlan?.[k.id] && dagIndex.has(hintPlan[k.id].dag) ? dagIndex.get(hintPlan[k.id].dag) * DAG_MIN + minutter(hintPlan[k.id].slot) : null,
         });
     }
@@ -131,6 +127,32 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
         elastisk.push(f.length ? { ...ud, forbudt: f } : ud);
     }
 
+    // Swiss-runder uden kendte spillere: runde r+1 afhænger af hele runde r (afhaengerAf), så runderne ligger i rækkefølge.
+    // Er runderne sammenhængende, følger en pause mellem runde r og r+2 af pauserne til runden imellem — og ligger alle
+    // de ukendte runder på én dag, ændrer de midterste hverken, hvornår spillerne kommer, eller hvornår de går. De sendes
+    // derfor ikke med i konflikterne og spænd-grupperne (varighed, ventetid, tid i hallen): det gør modellen meget mindre
+    // (gennemgangen 2026-10-17). Første ukendte runde er med, for en oversidder i runde 1 kommer først til der.
+    const swissDraw = new Map(); // draw → { runder, foerste, sidste (ukendte), dage }
+    for (const k of projekt.kampe) {
+        if (k.fase !== 'swiss' || !indeks.has(k.id)) continue;
+        const d = swissDraw.get(k.tpRef.draw) || { runder: new Set(), foerste: Infinity, sidste: -Infinity, dage: new Set() };
+        d.runder.add(k.runde);
+        if (!k.spillere.length) {
+            d.foerste = Math.min(d.foerste, k.runde);
+            d.sidste = Math.max(d.sidste, k.runde);
+            for (const t of kampe[indeks.get(k.id)].tilladte) d.dage.add(Math.floor(t / DAG_MIN));
+        }
+        swissDraw.set(k.tpRef.draw, d);
+    }
+    const sammenhaengende = (d) => d.runder.size === Math.max(...d.runder) - Math.min(...d.runder) + 1;
+    const swissMidt = (k) => {
+        if (k.fase !== 'swiss' || k.spillere.length) return false;
+        const d = swissDraw.get(k.tpRef.draw);
+        return d.dage.size === 1 && sammenhaengende(d) && k.runde !== d.foerste && k.runde !== d.sidste;
+    };
+    const runderImellem = (a, b) => a.fase === 'swiss' && b.fase === 'swiss' && a.tpRef.draw === b.tpRef.draw
+        && Math.abs(a.runde - b.runde) >= 2 && sammenhaengende(swissDraw.get(a.tpRef.draw));
+
     // Afhængigheder: efterfølger skal starte mindst ét slot senere
     const foer = [];
     for (const k of projekt.kampe) for (const dep of k.afhaengerAf) if (indeks.has(k.id) && indeks.has(dep)) foer.push([indeks.get(dep), indeks.get(k.id), slotMin]);
@@ -145,7 +167,7 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
     for (const liste of prSpiller.values()) {
         for (let i = 0; i < liste.length; i += 1) for (let j = i + 1; j < liste.length; j += 1) {
             const a = liste[i], b = liste[j];
-            if (!kanDeleSpillere(a, b)) continue;
+            if (!kanDeleSpillere(a, b) || runderImellem(a, b)) continue;
             const udenPause = a.fase === 'swiss' && b.fase === 'swiss' && a.tpRef.draw === b.tpRef.draw && kat(a)?.swissUdenPause;
             const mr = M.mellemrum(a, b);
             const gab = udenPause ? slotMin : Math.max(slotMin, mr.varighed + mr.pause);
@@ -182,7 +204,7 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
     {
         const prRaekke = new Map();
         for (const k of projekt.kampe) {
-            if (!indeks.has(k.id)) continue;
+            if (!indeks.has(k.id) || swissMidt(k)) continue;
             for (const g of M.varighedsGraenser(k)) {
                 const n = `${raekke(k).id}|${g.art}`;
                 if (!prRaekke.has(n)) prRaekke.set(n, { kampe: [], graense: g.graense, raekke: raekke(k).id, art: g.art });
@@ -193,25 +215,13 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
     }
 
     // Spillernes ophold (som regelmodel.spillerOphold, Tjek og kriterierne): pr. spiller de kampe, spilleren er i hallen
-    // til — kendte kampe og Swiss-runder for alle i lodtrækningen. Af en Swiss-lodtrækning tages kun første og sidste
-    // runde med: runde r+1 ligger efter hele runde r (afhaengerAf), så de midterste ændrer hverken første eller sidste
-    // tid — og modellen bliver meget mindre (gennemgangen 2026-10-17). Ens grupper slås sammen med en vægt (antal spillere).
-    const runderPrDraw = new Map();
-    for (const k of projekt.kampe) {
-        if (k.fase !== 'swiss' || !indeks.has(k.id)) continue;
-        const r = runderPrDraw.get(k.tpRef.draw) || [Infinity, -Infinity];
-        runderPrDraw.set(k.tpRef.draw, [Math.min(r[0], k.runde), Math.max(r[1], k.runde)]);
-    }
+    // til — kendte kampe og Swiss-runder for alle i lodtrækningen (de midterste runder springes over, se swissMidt).
+    // Ens grupper slås sammen med en vægt (antal spillere).
     const opholdsGrupper = (medKamp) => {
         const prSpiller = new Map();
         for (const k of projekt.kampe) {
-            if (!indeks.has(k.id) || !medKamp(k)) continue;
-            let hvem = k.spillere;
-            if (k.fase === 'swiss' && !k.spillere.length) {
-                const [foerste, sidste] = runderPrDraw.get(k.tpRef.draw);
-                if (k.runde !== foerste && k.runde !== sidste) continue;
-                hvem = k.muligeSpillere;
-            }
+            if (!indeks.has(k.id) || !medKamp(k) || swissMidt(k)) continue;
+            const hvem = k.fase === 'swiss' && !k.spillere.length ? k.muligeSpillere : k.spillere;
             for (const s of hvem) { if (!prSpiller.has(s)) prSpiller.set(s, []); prSpiller.get(s).push(indeks.get(k.id)); }
         }
         const ud = new Map();
@@ -329,7 +339,7 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
     return {
         version: 1,
         slotMin,
-        dage: dage.map((d, i) => ({ index: i, start: minutter(d.start), slut: minutter(d.slut), baner: d.baner })),
+        dage: dage.map((d, i) => ({ index: i, baner: d.baner })),
         kapacitet, kampe, foer, konflikter, ikkeSamtidig, haltid, spillerGrupper, traek, huller, puljerunder, maxDage,
         cupVent, nethoejde, halTid, maxKampePrDag: maxPrDag, mangeKampe,
         // Stabil omplanlægning: kampe, der havde tid, flyttes helst ikke (pr. flyttet kamp koster det som 3 timers ventetid)
@@ -465,18 +475,18 @@ export function flettetPlan(nu, loeserPlan) {
 /** Tilfældigt job-id, så en igangværende løsning kan stoppes med stopLoeser(). */
 export function nytJobId() {
     const b = new Uint8Array(12);
-    // Ældre Node (CI kører 18) har ikke crypto som global; id'et er kun et håndtag til "Stop", ikke en hemmelighed
+    // Reserve, hvis crypto ikke findes (fx en meget gammel browser); id'et er kun et håndtag til "Stop", ikke en hemmelighed
     if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(b);
     else for (let i = 0; i < b.length; i += 1) b[i] = Math.floor(Math.random() * 256);
     return [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
 
-/** Beder løseren stoppe nu og aflevere den bedste plan hidtil (svaret kommer i det oprindelige optimer()-kald). */
 /** Som stopLoeser, men til når siden lukkes: sendBeacon overlever, at fanen forsvinder. */
 export function stopVedLukning(job, url = '/api/solve/stop') {
     try { return !!globalThis.navigator?.sendBeacon?.(url, new Blob([JSON.stringify({ job })], { type: 'application/json' })); } catch { return false; }
 }
 
+/** Beder løseren stoppe nu og aflevere den bedste plan hidtil (svaret kommer i det oprindelige optimer()-kald). */
 export async function stopLoeser(job, url = '/api/solve/stop') {
     const svar = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ job }) });
     return svar.ok;

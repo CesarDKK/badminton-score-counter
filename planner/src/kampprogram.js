@@ -21,12 +21,6 @@ const pauseNoegle = (p) => ['ABCD', 'M', 'E', 'faelles'].map((x) => p?.[x] ?? nu
 // ── Autopilot ─────────────────────────────────────────────────
 
 /**
- * Laver kampprogrammet: vælger kamplængde og pause ud fra sammenligningen (Jesper: autopiloten må selv vælge
- * og skal vise valget), bygger kampene og tager det bedste af de alternative forslag. Låste kampe beholder
- * deres tid — og så røres kamplængden ikke, for låste kampe ligger i det nuværende slot-gitter.
- * Returnerer { projekt, forslag, valg } — valg: { minutter, udenPause, aendret, foer: { slotMin, pauseMin }, grund }.
- */
-/**
  * Hører panelet fra "Lav kampprogram" (kp) stadig til projektet? Ja, så længe kampene og opsætningen er de samme:
  * at flytte, låse eller kvittere fjerner ikke beslutningskortene (Fable-gennemgangen 2026-10-10, V5).
  * Store-funktionerne laver nye objekter for det, de ændrer, så samme objekt = uændret.
@@ -37,6 +31,12 @@ export function panelGaelder(kp, projekt) {
     return a === projekt || (a.kampe === projekt.kampe && a.opsaetning === projekt.opsaetning && a.raekker === projekt.raekker && a.kategorier === projekt.kategorier);
 }
 
+/**
+ * Laver kampprogrammet: vælger kamplængde og pause ud fra sammenligningen (Jesper: autopiloten må selv vælge
+ * og skal vise valget), bygger kampene og tager det bedste af de alternative forslag. Låste kampe beholder
+ * deres tid — og så røres kamplængden ikke, for låste kampe ligger i det nuværende slot-gitter.
+ * Returnerer { projekt, forslag, valg } — valg: { minutter, udenPause, aendret, foer: { slotMin, pauseMin }, grund }.
+ */
 export function lavKampprogram(projekt, { fastKamplaengde = false, behold = false } = {}) {
     // "Planlæg kun kampe uden tid" (gennemgangen 2026-10-11, U6/I2): efter et afbud eller en ny lodtrækning i TP skal
     // programmet, spillerne har set, blive stående — alle kampe med tid låses midlertidigt, og kun resten planlægges

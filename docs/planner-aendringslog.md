@@ -646,3 +646,25 @@ punkter, delt i tre pakker.
   "Lav kampprogram" imens siger til i stedet for at blive overskrevet bagefter.
 - "Lad løseren prøve med de valgte ændringer" har sin egen tidsvælger. Det er den samme tid som ved "Forbedr med
   løseren".
+
+**Pakke 3 — en mindre model, oprydning og tests:**
+
+- Swiss-runder uden kendte spillere ligger i rækkefølge, fordi hver runde afhænger af hele runden før. Derfor sendes
+  konflikter mellem runde r og r+2 ikke med, for de følger af runden imellem. Ligger runderne på én dag, sendes de
+  midterste heller ikke med i varigheden, ventetiden og tiden i hallen. Første ukendte runde er med, for en
+  oversidder i runde 1 kommer først der. På Lyngby U9/U11 med alt som Swiss faldt konfliktparrene fra 11.174 til
+  7.155, og tid i hallen fra 6.671 til 3.978 kampe i grupperne.
+- I løseren regnes hver kamps dage én gang. "Kampen ligger på dag d" er én variabel, som alle reglerne deler. Før
+  lavede spændet, max dage, max kampe og sluttiden hver deres.
+- Spillernes løbenumre sendes ikke længere til løseren, for den brugte dem ikke. Det samme gælder dagenes start og
+  slut. Den døde "udløsere" i varigheden er fjernet.
+- Valideringen tjekker også kapaciteten og tiderne til planen med færrest brud og diagnosen. Den køres én gang.
+- Beslutningen om løserens svar ligger nu i `loeser-svar.js` med egne tests: læg ind, tilbud eller behold, planen
+  med færrest brud og prøven. Planen med færrest brud sammenlignes nu på fejl i Tjek. Før blev antal brudte regler
+  sammenlignet med antal fejl.
+- Nye løsertests:
+  - delt pr. dag og samlet giver samme mål med alle bløde mål;
+  - en uafgjort dag, der bevises umulig i anden runde;
+  - stop i anden runde giver startplanen;
+  - tiden klemmes til max;
+  - løsningen i bidder regner flytningen fra den tidligere tid.

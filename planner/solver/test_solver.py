@@ -794,6 +794,107 @@ class GennemgangPakke2Test(unittest.TestCase):
         self.assertLessEqual(len(kald), 2, "alle lempelser + helt uden varighed — ikke fire forsøg pr. række og art")
 
 
+class GennemgangPakke3Test(unittest.TestCase):
+    """Gennemgangen af løseren 2026-10-17, pakke 3: opdelingen pr. dag, tiden og løsningen i bidder."""
+
+    def _to_dage(self, **ekstra):
+        tider = [d * DAG + t for d in range(2) for t in range(540, 720, 30)]
+        kampe = [kamp(i, tilladte=[d * DAG + t for t in range(540, 720, 30)], raekke="U09 D" if i % 3 == 0 else "U13 D")
+                 for i, d in enumerate((0, 0, 0, 1, 1, 1))]
+        p = problem(kampe, kapacitet={"faelles": [{"t": t, "baner": 1} for t in tider]},
+                    dage=[{"index": d, "start": 540, "slut": 720, "baner": 1} for d in range(2)],
+                    spillerGrupper=[{"kampe": [0, 2], "vaegt": 2}, {"kampe": [3, 5], "vaegt": 1}],
+                    halTid=[{"kampe": [0, 1], "vaegt": 1}], traek=[[0, 1], [3, 4]], huller=[[1, 2]], cupVent=[[5, [4]]],
+                    nethoejde={"saenket": [0, 3], "normal": [1, 4]}, puljerunder=[[[0], [2]]],
+                    vaegte={"ventetid": 1, "sluttid": 2, "tommeBaner": 0.1, "finalerSpredt": 0.2, "kampeITraek": 1,
+                            "langeHuller": 1, "cupVent": 1, "halTid": 0.5, "saenketNet": 1, "puljerunderSpredt": 1}, maxVent=30)
+        p.update(ekstra)
+        return p
+
+    def test_opdelt_og_samlet_giver_samme_maal(self):
+        # Målet pr. dag summeres; med alle bløde mål skal summen være det samlede problems mål (ellers sammenligner
+        # løsningen i bidder æbler og pærer)
+        import solver
+        p = self._to_dage(stabil={"vaegt": 3, "kampe": [1, 4]})
+        for k, h in ((1, 600), (4, DAG + 600)):
+            p["kampe"][k]["hint"] = h
+        self.assertIsNotNone(solver.dele_pr_dag(p))
+        samlet, opdelt = loes(p, 20), solver.loes_opdelt(p, 20)
+        self.assertEqual((samlet["status"], opdelt["status"]), ("OPTIMAL", "OPTIMAL"))
+        self.assertAlmostEqual(samlet["maal"], opdelt["maal"], delta=1)
+
+    def test_uafgjort_dag_der_bevises_umulig_i_anden_runde(self):
+        import solver
+        kald = {}
+        gammel = solver.loes
+        def falsk(q, sek, *a, **k):
+            dag = q["kampe"][0]["tilladte"][0] // DAG
+            kald[dag] = kald.get(dag, 0) + 1
+            if dag == 0:
+                return {"status": "UNKNOWN" if kald[dag] == 1 else "INFEASIBLE", "tider": {}, "stoppet": False, "sekunder": 0.1}
+            return {"status": "OPTIMAL", "tider": {x["id"]: x["tilladte"][0] for x in q["kampe"]}, "stoppet": False, "maal": 0.0, "graense": 0.0, "sekunder": 0.1, "rolig": True}
+        solver.loes = falsk
+        try:
+            svar = solver.loes_opdelt(self._to_dage(), 30)
+        finally:
+            solver.loes = gammel
+        self.assertEqual(svar["status"], "INFEASIBLE", "beviset i anden runde gælder hele problemet")
+        self.assertEqual(kald, {0: 2, 1: 1})
+
+    def test_stop_i_anden_runde_giver_startplanen_for_dagen(self):
+        import solver
+        stop = threading.Event()
+        gammel = solver.loes
+        def falsk(q, sek, *a, **k):
+            if q["kampe"][0]["tilladte"][0] // DAG == 0:
+                return {"status": "UNKNOWN", "tider": {}, "stoppet": False, "sekunder": 0.1}
+            stop.set()  # brugeren trykker "Stop" mens dag 2 løses
+            return {"status": "FEASIBLE", "tider": {x["id"]: x["tilladte"][0] for x in q["kampe"]}, "stoppet": True, "maal": 0.0, "graense": 0.0, "sekunder": 0.1}
+        p = self._to_dage()
+        for i in (0, 1, 2):
+            p["kampe"][i]["hint"] = 540 + 30 * i
+        solver.loes = falsk
+        try:
+            svar = solver.loes_opdelt(p, 30, stop=stop)
+        finally:
+            solver.loes = gammel
+        self.assertEqual(svar["status"], "FEASIBLE")
+        self.assertTrue(svar["stoppet"])
+        self.assertEqual([svar["tider"][f"k{i}"] for i in (0, 1, 2)], [540, 570, 600], "dag 1 beholder startplanens tider")
+
+    def test_tiden_klemmes_til_max(self):
+        import solver
+        fanget = []
+        Gammel = solver.cp_model.CpSolver
+        class Fanger(Gammel):
+            def Solve(self, model, *a, **k):
+                fanget.append(self.parameters.max_time_in_seconds)
+                return super().Solve(model, *a, **k)
+        solver.cp_model.CpSolver = Fanger
+        try:
+            loes(problem([kamp(0)]), 10 ** 6)
+        finally:
+            solver.cp_model.CpSolver = Gammel
+        self.assertTrue(fanget and max(fanget) <= solver.MAX_SEKUNDER)
+
+    def test_bidderne_regner_flytningen_fra_den_tidligere_tid(self):
+        # Kampen lå kl. 9:30 (startplanen); hovedsøgningen har flyttet den til 9:00. At flytte koster 3 timer, at slutte en
+        # halv time senere 1 time — så bidderne skal flytte den tilbage. Før regnede de fra den nuværende tid (9:00)
+        import solver
+        p = problem([kamp(0, tilladte=[540, 570], hint=570)], vaegte={"ventetid": 0, "sluttid": 2, "tommeBaner": 0},
+                    stabil={"vaegt": 3, "kampe": [0]})
+        r = solver.forbedr_i_bidder(p, {"status": "FEASIBLE", "tider": {"k0": 540}, "maal": 0.0}, time.time() + 8)
+        self.assertEqual(r["tider"]["k0"], 570)
+
+    def test_valideringen_tjekker_kapacitet_og_tiderne_til_diagnosen(self):
+        from solver import valider
+        self.assertIsNone(valider(problem([kamp(0)])))
+        self.assertEqual(valider(problem([kamp(0)], kapacitet={"faelles": [{"t": 540, "baner": "to"}]})), "ugyldig kapacitet")
+        self.assertEqual(valider(problem([kamp(0)], kapacitet=[])), "ugyldig kapacitet")
+        self.assertEqual(valider(problem([kamp(0)], elastisk=[{"raekke": "U11 D", "tidsrum": [-30]}])), "ugyldigt elastisk")
+        self.assertEqual(valider(problem([kamp(0)], alternativer=[{"regel": "dage", "kampe": [0], "tilladte": [1.5]}])), "ugyldigt alternativer")
+
+
 class ValideringTest(unittest.TestCase):
     """Fable-gennemgangen 2026-10-10, V4: problemer, planneren ikke kan lave, afvises før modellen bygges."""
 
@@ -884,8 +985,8 @@ class SeniorReglerTest(unittest.TestCase):
         self.assertEqual(loes(problem([kamp(0), kamp(1)], ikkeSammeDag=[[0, 1]]), 5)["status"], "INFEASIBLE", "begge kan kun ligge på samme dag")
 
 
-class HaltidUdloesereTest(unittest.TestCase):
-    """Max haltid gælder kun de dage, hvor spilleren har en kamp i rækken med grænsen (samme regel som Tjek)."""
+class HaltidHverDagTest(unittest.TestCase):
+    """Max haltid gælder hver dag for sig. Klienten sender én gruppe pr. række og art ("udloesere" er fjernet 2026-10-17)."""
 
     def opsaet(self, k1_tider, k2_tider, **haltid):
         tider = list(range(540, 900, 30)) + [DAG + t for t in range(540, 900, 30)]
@@ -894,22 +995,18 @@ class HaltidUdloesereTest(unittest.TestCase):
         kampe = [kamp(0, tilladte=[540], raekke="U09 D"), kamp(1, tilladte=k1_tider, raekke="U11 D"), kamp(2, tilladte=k2_tider, raekke="U11 D")]
         return problem(kampe, kapacitet=kap, dage=dage, konflikter=[[1, 2, 150, 0]], haltid=[{"kampe": [0, 1, 2], "graense": 120, "raekke": "U09 D", **haltid}])
 
-    def test_anden_dag_uden_udloeser_er_ikke_bundet(self):
+    def test_graensen_gaelder_hver_dag(self):
         dag2 = [DAG + t for t in range(540, 900, 30)]
-        self.assertEqual(loes(self.opsaet(dag2, dag2), 5)["status"], "INFEASIBLE", "uden udløsere gælder grænsen alle dage (gammel adfærd)")
-        r = loes(self.opsaet(dag2, dag2, udloesere=[0]), 5)
-        self.assertIn(r["status"], ("OPTIMAL", "FEASIBLE"), "U09-kampen ligger dag 1 — dag 2 er fri af grænsen")
+        self.assertEqual(loes(self.opsaet(dag2, dag2), 5)["status"], "INFEASIBLE", "dag 2: 150 min mellem starterne giver 180 min > 120")
+        self.assertIn(loes(self.opsaet([600], dag2), 5)["status"], ("OPTIMAL", "FEASIBLE"), "dag 1: 09:00 → 10:30 er 90 min; dag 2 har én kamp")
+        self.assertEqual(loes(self.opsaet([720], dag2), 5)["status"], "INFEASIBLE", "09:00 → 12:30 er 210 min > 120")
 
-    def test_samme_dag_som_udloeseren_er_bundet(self):
-        dag2 = [DAG + t for t in range(540, 900, 30)]
-        self.assertEqual(loes(self.opsaet([720], dag2, udloesere=[0]), 5)["status"], "INFEASIBLE", "09:00 → 12:30 er 210 min > 120")
-        self.assertIn(loes(self.opsaet([600], dag2, udloesere=[0]), 5)["status"], ("OPTIMAL", "FEASIBLE"), "09:00 → 10:30 er 90 min")
-
-    def test_kamp_der_kan_ligge_begge_dage_vaelger_den_frie_dag(self):
-        begge = [720] + [DAG + 720]
-        r = loes(self.opsaet(begge, [DAG + 540], udloesere=[0]), 5)
+    def test_kamp_der_kan_ligge_begge_dage_vaelger_dagen_der_holder(self):
+        # k1 kan ligge kl. 12 dag 1 (210 min fra k0 — over grænsen) eller kl. 9:30 dag 2 (60 min til k2). Konflikten
+        # (150 min mellem k1 og k2) slås fra, så kun grænsen bestemmer dagen
+        r = loes({**self.opsaet([720, DAG + 570], [DAG + 600]), "konflikter": []}, 5)
         self.assertIn(r["status"], ("OPTIMAL", "FEASIBLE"))
-        self.assertEqual(r["tider"]["k1"], DAG + 720, "kl. 12 dag 1 ville bryde grænsen, så den må ligge dag 2")
+        self.assertEqual(r["tider"]["k1"], DAG + 570, "kl. 12 dag 1 ville bryde grænsen (210 min)")
 
 
 if __name__ == "__main__":
