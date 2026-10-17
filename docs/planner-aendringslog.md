@@ -592,3 +592,17 @@ prøve igen. Det gælder fx kortere kampe og pausen givet på dagen.
 Afprøvet lokalt på Lyngby med alt som Swiss og kortenes gruppeforslag, så programmet går op med 20 min og pausen på
 dagen. Hverken pausen eller grupperne kunne undværes på 60 s, og programmet blev stående. Tilbudsvejen blev afprøvet med
 et kunstigt løsersvar.
+
+Formuleringen blev rettet samme dag. Jesper fandt det "svært at gennemskue, hvad det betyder, når jeg sætter eller fjerner
+et flueben":
+
+- Hver linje siger nu, hvad der sker, hvis man sætter flueben, fx "Tilbage til 30 min kampe (nu 20 min)" og "Pausen
+  tilbage i planen (nu gives den på dagen)".
+- Ingen flueben er sat fra start.
+- Overskriften er "Kan løseren klare sig uden kompromiserne?", og knappen hedder "Lad løseren prøve med de valgte
+  ændringer".
+- Svaret gentager, hvad der blev prøvet: "Løseren prøvede: Pausen tilbage i planen. Det gik ikke — …".
+
+Jesper spurgte: "Hvorfor er der kun mulighed for 20 og 30 minutter, hvorfor ikke 25?". Kamplængden kunne kun gå helt
+tilbage til længden fra før. Nu er linjen et valg: "Kampe på [25 min / 30 min (som før)] igen (nu 20 min)". Valget har
+alle trin på 5 min fra den nuværende længde hen mod den fra før, og standard er længden fra før.
