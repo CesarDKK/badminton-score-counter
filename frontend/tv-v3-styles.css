@@ -374,6 +374,13 @@ body::before {
     color: rgb(var(--color-win-rgb, 69, 209, 126));
 }
 
+/* Grønt tema (data-groent-tema sættes af theme-loader): vinder-grøn drukner i
+   temaets grønne baggrund — vundne sæt vises som lyst felt med mørke tal */
+:root[data-groent-tema] .set-box.won {
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--color-bg-dark);
+}
+
 .set-box.lost {
     background: rgba(255, 255, 255, 0.08);
     color: rgba(255, 255, 255, 0.8);
@@ -422,6 +429,11 @@ body::before {
 .team-row.vinder {
     background: rgba(var(--color-win-rgb, 69, 209, 126), 0.12);
     border-left-color: rgb(var(--color-win-rgb, 69, 209, 126));
+}
+
+:root[data-groent-tema] .team-row.vinder {
+    background: rgba(255, 255, 255, 0.1);
+    border-left-color: #ffffff;
 }
 
 .team-row.taber .player-name,

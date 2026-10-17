@@ -600,6 +600,22 @@ body::before {
     color: var(--color-win);
 }
 
+/* Grønt tema (data-groent-tema fra theme-loader): vinderen lyst i stedet for grøn */
+:root[data-groent-tema] .player-row--winner {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
+:root[data-groent-tema] .player-score--winner,
+:root[data-groent-tema] .finished-badge {
+    color: #ffffff;
+}
+
+:root[data-groent-tema] .finished-badge {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
 .finished-set-scores {
     display: flex;
     justify-content: center;
