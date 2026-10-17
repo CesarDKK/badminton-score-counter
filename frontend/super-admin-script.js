@@ -368,7 +368,7 @@ async function handleCreateClub() {
         showMsg(msgEl, err.message || 'Oprettelse mislykkedes', 'error');
     } finally {
         btn.disabled = false;
-        btn.textContent = 'Opret Klub';
+        btn.textContent = 'Opret klub';
     }
 }
 
@@ -637,7 +637,7 @@ async function handleCreateAdmin() {
         showMsg(msgEl, err.message || 'Oprettelse mislykkedes', 'error');
     } finally {
         btn.disabled = false;
-        btn.textContent = 'Opret Admin';
+        btn.textContent = 'Opret admin';
     }
 }
 
@@ -677,7 +677,7 @@ async function handleChangeSuperAdminPassword() {
         showMsg(msgEl, err.message || 'Skift af adgangskode mislykkedes', 'error');
     } finally {
         btn.disabled = false;
-        btn.textContent = 'Skift Adgangskode';
+        btn.textContent = 'Skift adgangskode';
     }
 }
 
@@ -824,7 +824,7 @@ async function handleCreateFootballClub() {
         showMsg(msgEl, err.message || 'Oprettelse mislykkedes', 'error');
     } finally {
         btn.disabled = false;
-        btn.textContent = 'Opret Klub';
+        btn.textContent = 'Opret klub';
     }
 }
 
@@ -996,7 +996,7 @@ async function handleCreateFootballAdmin() {
         showMsg(msgEl, err.message || 'Oprettelse mislykkedes', 'error');
     } finally {
         btn.disabled = false;
-        btn.textContent = 'Opret Admin';
+        btn.textContent = 'Opret admin';
     }
 }
 
