@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded', function () {
         } catch (err) {
             showError(friendlyLoginError(err));
             loginBtn.disabled = false;
-            loginBtn.textContent = 'Log Ind';
+            loginBtn.textContent = 'Log ind';
             passwordInput.value = '';
             passwordInput.focus();
         }

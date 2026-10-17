@@ -461,6 +461,125 @@ header h1 {
 .btn-lg { padding: 13px 28px; font-size: 1.05em; }
 .btn-block { width: 100%; }
 
+/* ── Login (E9): én skabelon på alle login-sider ──
+   admin, indstillinger, sponsorer, spillere, tema, klub-login og super-admin:
+   .login-wrap > .login-card > .brand (ikon, titel, undertitel), .login-felt
+   (label + input), .btn-primary .btn-block .btn-lg, .login-fejl, .login-tilbage */
+@keyframes loginInd {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.login-wrap {
+    min-height: calc(100vh - 60px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-card {
+    background: var(--color-bg-container);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 48px 40px;
+    width: 100%;
+    max-width: 400px;
+    animation: loginInd 0.35s ease both;
+}
+
+.login-card .brand {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.login-card .brand-icon {
+    font-size: 2.8em;
+    line-height: 1;
+    margin-bottom: 10px;
+    color: var(--color-accent);
+}
+
+.login-card h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2em;
+    font-weight: 400;
+    letter-spacing: 0.05em;
+    color: #ffffff;
+    margin: 0 0 4px;
+}
+
+.login-card .subtitle {
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
+    font-size: 0.85em;
+}
+
+.login-felt {
+    margin-bottom: 16px;
+}
+
+.login-felt label {
+    display: block;
+    font-size: 0.78em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
+    margin-bottom: 6px;
+}
+
+.login-felt input {
+    width: 100%;
+    background: var(--color-bg-card);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: var(--text-primary, #eaeaea);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1em;
+    transition: border-color 0.2s;
+}
+
+.login-felt input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+}
+
+.login-card .btn-primary {
+    margin-top: 8px;
+}
+
+.login-fejl {
+    background: rgba(var(--color-danger-rgb, 217, 44, 63), 0.12);
+    border: 1px solid rgba(var(--color-danger-rgb, 217, 44, 63), 0.3);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--color-danger-text, #ff6b7a);
+    font-size: 0.88em;
+    margin-top: 14px;
+    display: none;
+}
+
+.login-tilbage {
+    margin-top: 24px;
+    text-align: center;
+}
+
+.login-tilbage a {
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
+    text-decoration: none;
+    font-size: 0.88em;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+.login-tilbage a:hover {
+    color: var(--color-accent);
+}
+
+@media (max-width: 480px) {
+    .login-card { padding: 36px 24px; }
+}
+
 /* ── History Section ── */
 .history-section {
     margin-top: 40px;

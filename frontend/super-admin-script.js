@@ -202,7 +202,7 @@ async function handleLogin() {
     } catch (err) {
         showMsg(errEl, err.message || 'Login mislykkedes', 'error');
         btn.disabled = false;
-        btn.textContent = 'Log Ind';
+        btn.textContent = 'Log ind';
         document.getElementById('saPassword').value = '';
     }
 }

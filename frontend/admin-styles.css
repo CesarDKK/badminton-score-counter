@@ -177,75 +177,9 @@ header > div {
 }
 
 /* ---- Login ---- */
-.login-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 60vh;
-}
-
-.login-box {
-    background: rgba(255, 255, 255, 0.03);
-    padding: 48px 44px;
-    border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    max-width: 420px;
-    width: 100%;
-    text-align: center;
-    animation: fadeUp 0.5s ease both;
-}
-
-.login-box h2 {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 2em;
-    letter-spacing: 3px;
-    color: #ffffff;
-    margin-bottom: 32px;
-    font-weight: 400;
-}
-
-.login-box input {
-    width: 100%;
-    padding: 14px 18px;
-    margin: 0 0 14px 0;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    font-size: 1em;
-    font-family: 'DM Sans', sans-serif;
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--text-primary, #eaeaea);
-    transition: border-color 0.2s ease, background 0.2s ease;
-}
-
-.login-box input:focus {
-    outline: none;
-    border-color: var(--color-primary);
-    background: rgba(var(--color-primary-rgb), 0.08);
-}
-
-.login-box button {
-    width: 100%;
-    margin-top: 4px;
-    padding: 13px;
-    border-radius: 10px;
-    font-size: 1em;
-}
-
-.back-link {
-    margin-top: 24px;
-}
-
-.back-link a {
-    color: var(--text-muted, rgba(255, 255, 255, 0.62));
-    text-decoration: none;
-    font-size: 0.88em;
-    font-weight: 500;
-    transition: color 0.2s ease;
-}
-
-.back-link a:hover {
-    color: var(--color-accent);
-}
+/* Login-skabelonen ligger i styles.css (E9) */
+/* Inde i .container (48px + 80px lodret padding) — ellers bliver siden højere end skærmen */
+.container .login-wrap { min-height: calc(100vh - 128px); }
 
 /* ---- Overview Section ---- */
 .overview-section {
