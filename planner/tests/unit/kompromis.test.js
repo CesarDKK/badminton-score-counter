@@ -32,12 +32,15 @@ describe('kompromiserne findes ved at sammenligne med opsætningen fra før "Lav
         const k = kompromiser(a, b);
         assert.deepEqual(ider(k), ['dag|2026-11-21|slut', 'kategori|U11 D HS|swissGrupper', 'kategori|U11 D HS|swissRunder', 'pauseMin', 'raekke|U11 D|maxHaltidMin', 'raekke|U11 D|senest', 'slotMin', 'tidsvindue|U11'].sort());
         const tekst = Object.fromEntries(k.map((x) => [x.id, x.tekst]));
-        assert.equal(tekst.slotMin, 'Kamplængde 20 min (før 30 min)');
-        assert.equal(tekst.pauseMin, 'Pausen gives på dagen (0 min i planen)');
-        assert.equal(tekst['dag|2026-11-21|slut'], '21/11: dagen slutter 18:00 (før 17:00)');
-        assert.equal(tekst['raekke|U11 D|maxHaltidMin'], 'U11 D: max 420 min for singler (før 360)');
-        assert.equal(tekst['kategori|U11 D HS|swissGrupper'], 'U11 D HS i 2 Swiss-grupper');
-        assert.equal(tekst['tidsvindue|U11'], "U11's tidsvindue 09:00–19:25 (før 09:00–19:00; kræver dispensation)");
+        // Teksten står ud for et flueben og siger, hvad der sker, hvis man sætter det (Jesper 2026-10-17)
+        assert.equal(tekst.slotMin, 'Tilbage til 30 min kampe (nu 20 min)');
+        assert.equal(tekst.pauseMin, 'Pausen tilbage i planen (nu gives den på dagen)');
+        assert.equal(tekst['dag|2026-11-21|slut'], '21/11: dagen slutter igen 17:00 (nu 18:00)');
+        assert.equal(tekst['raekke|U11 D|maxHaltidMin'], 'U11 D: max 360 min for singler igen (nu 420 min)');
+        assert.equal(tekst['raekke|U11 D|senest'], 'U11 D spiller igen senest til dagens slut (nu 16:30)');
+        assert.equal(tekst['kategori|U11 D HS|swissGrupper'], 'U11 D HS som én Swiss Ladder igen (nu 2 grupper)');
+        assert.equal(tekst['kategori|U11 D HS|swissRunder'], 'U11 D HS: automatisk antal runder igen (nu 3)');
+        assert.equal(tekst['tidsvindue|U11'], "U11's tidsvindue tilbage til 09:00–19:00 (nu 09:00–19:25, kræver dispensation)");
     });
 });
 

@@ -96,7 +96,7 @@ export function kampprogramPanel(kp, aabneKort, projekt) {
         ${kp.forbedret ? `<p class="kampprogram-valg"><span class="er-groen">✓</span> ${esc(kp.forbedret)}</p>` : ''}
         ${kp.prognose?.length ? `<p class="daempet" title="Dagen simuleret 100 gange med tilfældige kamplængder omkring sæsondataenes gennemsnit; kampe kan sættes i gang op til ${TIDLIG_START_MIN} min før tid (spillerne skal være klar), dog ikke før dagens start.">Prognose: ${kp.prognose.map((d) => `${esc(datoTekst(d.dato, { kort: true }))} plan slut ${d.planSlut}, forventet ca. ${d.slutMedian} (80 %: ${d.slut80})`).join(' · ')}.</p>` : ''}
         ${kp.prognose?.some((d) => d.igangsaetRisiko > 0.2) ? `<p class="liste-fejl"><b>Risiko for sene kampe:</b> ${kp.prognose.filter((d) => d.igangsaetRisiko > 0.2).map((d) => `${esc(datoTekst(d.dato, { kort: true }))} (${Math.round(d.igangsaetRisiko * 100)} % af de simulerede dage)`).join(', ')} — kampe kan blive sat i gang efter reglementets grænse (kl. 20/21/22 for U9–U11/U13–U15/U17+, 2 timer tidligere før skoledag/hverdag).</p>` : ''}
-        ${kp.tilbud ? `<p class="kampprogram-valg">${esc(kp.tilbud.tekst)} <button class="knap knap--lille" data-handling="kp-tilbud">${kp.tilbud.projekt ? 'Brug programmet uden kompromiset' : 'Brug løserens program'}</button></p>` : ''}
+        ${kp.tilbud ? `<p class="kampprogram-valg">${esc(kp.tilbud.tekst)} <button class="knap knap--lille" data-handling="kp-tilbud">${kp.tilbud.projekt ? 'Brug løserens program med ændringerne' : 'Brug løserens program'}</button></p>` : ''}
         ${gaarOp && !loeserNej && !kp.egetProgram && !aabneKort.length ? '<p class="raekke-knapper"><button class="knap knap--sekundaer knap--lille" data-handling="til-tp">Videre til Til TP →</button></p>' : ''}
         ${kp.udfoert.length ? `<p class="daempet">Gjort undervejs: ${esc(kp.udfoert.join(' · '))}.</p>` : ''}
         ${kompromisBoks(kp, projekt)}
@@ -121,11 +121,11 @@ function kompromisBoks(kp, projekt) {
     const liste = kompromiser(kp.foer, projekt);
     if (!liste.length) return '';
     return `<div class="beslutning kompromiser">
-            <h4>Kompromiser undervejs</h4>
-            <p class="daempet">Det, der er givet efter for at få programmet til at gå op. Løseren er stærkere end planlæggeren — vælg dem, du vil prøve uden, så regner løseren på en kopi. Dit program røres ikke, før du selv vælger løserens.</p>
+            <h4>Kan løseren klare sig uden kompromiserne?</h4>
+            <p class="daempet">For at få programmet til at gå op er der givet efter på det herunder. Sæt flueben ved det, du vil have tilbage, og lad løseren prøve — den er stærkere end planlæggeren. Løseren regner på en kopi: dit program ændres ikke, før du selv vælger det, løseren finder.</p>
             ${kp.proeveSvar ? `<p>${esc(kp.proeveSvar)}</p>` : ''}
-            <div class="beslutning-liste">${liste.map((k) => `<label class="beslutning-valg"><input type="checkbox" data-kompromis="${esc(k.id)}" checked> <span>${esc(k.tekst)}</span></label>`).join('')}</div>
-            <button class="knap knap--sekundaer" data-handling="kp-uden-kompromis" title="Løseren regner så længe, som er valgt ved 'Forbedr med løseren'">Prøv uden de valgte — løseren regner</button>
+            <div class="beslutning-liste">${liste.map((k) => `<label class="beslutning-valg"><input type="checkbox" data-kompromis="${esc(k.id)}"> <span>${esc(k.tekst)}</span></label>`).join('')}</div>
+            <button class="knap knap--sekundaer" data-handling="kp-uden-kompromis" title="Løseren regner så længe, som er valgt ved 'Forbedr med løseren'">Lad løseren prøve med de valgte ændringer</button>
         </div>`;
 }
 

@@ -392,13 +392,13 @@ function visProeve(proeve, startProjekt, svar, lovlig) {
         const fejl3 = tjekPlan(p3).antal.fejl, score3 = scorePlan(p3).total;
         const bedre = fejl3 < fejlNu || (fejl3 === fejlNu && score3 < scoreNu);
         tekst = lovlig
-            ? `Uden ${proeve.tekst}: løseren fandt et program, der overholder de hårde regler — ${fejl3} fejl i Tjek, score ${score3} (nu ${fejlNu} fejl, score ${scoreNu}; lavere er bedre).`
-            : `Uden ${proeve.tekst}: løseren fandt ingen lovlig plan på ${Math.round(svar.sekunder)} s; planen med færrest brud har ${fejl3} fejl i Tjek (nu ${fejlNu}).`;
+            ? `Løseren prøvede: ${proeve.tekst}. Det gik — den fandt et program, der overholder de hårde regler: ${fejl3} fejl i Tjek, score ${score3} (dit nuværende: ${fejlNu} fejl, score ${scoreNu}; lavere er bedre).`
+            : `Løseren prøvede: ${proeve.tekst}. Den fandt ingen lovlig plan på ${Math.round(svar.sekunder)} s; planen med færrest brud har ${fejl3} fejl i Tjek (dit nuværende: ${fejlNu}).`;
         // Kun et tilbud, når programmet ikke får flere fejl i Tjek end det nuværende (sikkerhedsnet som ved løserens forbedring)
-        if (kp && fejl3 <= fejlNu && (lovlig || fejl3 < fejlNu)) kp.tilbud = { projekt: p3, uden: `uden ${proeve.tekst}`, tekst: tekst + (bedre ? '' : ' Det er ikke bedre end det nuværende.') };
+        if (kp && fejl3 <= fejlNu && (lovlig || fejl3 < fejlNu)) kp.tilbud = { projekt: p3, uden: proeve.tekst, tekst: tekst + (bedre ? '' : ' Det er ikke bedre end det nuværende.') };
         else tekst += ' Programmet er ikke ændret.';
     } else {
-        tekst = `Løseren fandt ingen plan uden ${proeve.tekst} (${svar.status === 'INFEASIBLE' ? 'den kunne bevise, at der ingen lovlig plan findes' : `ikke inden for ${Math.round(svar.sekunder)} s`}). Programmet er ikke ændret.`;
+        tekst = `Løseren prøvede: ${proeve.tekst}. Det gik ikke — ${svar.status === 'INFEASIBLE' ? 'den kunne bevise, at der ingen lovlig plan findes' : `den fandt ingen lovlig plan på ${Math.round(svar.sekunder)} s`}. Dit program er ikke ændret.`;
     }
     if (kp && !kp.tilbud) kp.proeveSvar = tekst;
     tilstand.forslag = { tekst, ikkePlaceret: [], kilde: 'loeser' };
@@ -491,8 +491,8 @@ const planHandlers = {
         }
         kp.tilbud = null;
         kp.projekt = projekt;
-        kp.forbedret = uden ? 'Programmet uden kompromiset er lagt ind — tjek listen til TP igen.' : 'Løserens program er lagt ind — tjek listen til TP igen.';
-        tilstand.fortryd = { projekt: foer, efter: projekt, tekst: uden ? 'Programmet uden kompromiset er lagt ind.' : 'Løserens program er lagt ind.' };
+        kp.forbedret = uden ? 'Løserens program er lagt ind med ændringerne — tjek listen til TP igen.' : 'Løserens program er lagt ind — tjek listen til TP igen.';
+        tilstand.fortryd = { projekt: foer, efter: projekt, tekst: 'Løserens program er lagt ind.' };
         render();
     },
     // Kompromiser undervejs (Jesper 2026-10-17): de valgte trækkes tilbage på en kopi, og løseren prøver igen
@@ -503,7 +503,7 @@ const planHandlers = {
         if (!valgte.length) return;
         kp.tilbud = null;
         kp.proeveSvar = null;
-        planHandlers.optimer({ udenSpoergsmaal: true, proeve: { projekt: udenKompromiser(projekt, valgte), tekst: valgte.length === 1 ? `kompromiset "${valgte[0].tekst}"` : `kompromiserne ${valgte.map((k) => `"${k.tekst}"`).join(', ')}` } });
+        planHandlers.optimer({ udenSpoergsmaal: true, proeve: { projekt: udenKompromiser(projekt, valgte), tekst: valgte.map((k) => k.tekst.split(' (nu ')[0]).join('; ') } });
     },
     tilTP() { vaelgFane('liste'); },
     brugElastisk() {
