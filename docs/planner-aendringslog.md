@@ -570,3 +570,25 @@ doublen, og meldte en ventetid, spilleren ikke havde.
 Prod-testen samme dag viste, at Program-fanens statusfelter ("venter over 90 min", "tid i hallen, gns.") og planens
 ventetid stadig talte uden Swiss-runderne. De kommer fra planlæggerens `bedoemPlan`, som nu bruger `spillerOphold`.
 I Lyngby-scenariet faldt "venter over 90 min" fra 73 til 16, og "tid i hallen, gns." steg fra 146 til 291 min.
+
+## Kompromiser undervejs kan trækkes tilbage (2026-10-17)
+
+Jesper: det, der gives efter undervejs for at få programmet til at gå op, skal kunne trækkes tilbage, så løseren kan
+prøve igen. Det gælder fx kortere kampe og pausen givet på dagen.
+
+- **Hvordan kompromiserne findes:** `kompromis.js` sammenligner opsætningen fra før "Lav kampprogram" (`kp.foer`) med
+  den nuværende. Dermed er kamplængden, pausen og alle valg på kortene med, uden at hvert valg skal huske sig selv:
+  dagens tider og baner, rækkens tidsrum, reserverede baner, dage, dispensation, varighedsgrænser, tidsvindue, Swiss i
+  grupper, færre runder og form.
+- **Ikke med:** beregnede felter (formForslag, middelvejen) og et fastlåst antal runder, der er det samme, som planneren
+  valgte automatisk.
+- **I panelet:** "Kompromiser undervejs" viser dem med afkrydsning og knappen "Prøv uden de valgte — løseren regner".
+- **Prøven:** De valgte sættes tilbage på en kopi (`udenKompromiser`), kampene bygges igen, og løseren regner på kopien.
+  Programmet røres ikke.
+- **Resultatet:** Finder løseren et program, der ikke har flere fejl i Tjek end det nuværende, bliver det et tilbud
+  ("Brug programmet uden kompromiset", med Fortryd). Ellers står det i panelet, at løseren ikke kunne, og at programmet
+  ikke er ændret.
+
+Afprøvet lokalt på Lyngby med alt som Swiss og kortenes gruppeforslag, så programmet går op med 20 min og pausen på
+dagen. Hverken pausen eller grupperne kunne undværes på 60 s, og programmet blev stående. Tilbudsvejen blev afprøvet med
+et kunstigt løsersvar.
