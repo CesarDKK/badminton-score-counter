@@ -36,7 +36,7 @@
     margin: 14px 0 8px;
     font-size: 0.82em;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     text-transform: uppercase;
     letter-spacing: 0.8px;
 }
@@ -52,7 +52,7 @@
     font-size: 1em;
     font-family: 'DM Sans', sans-serif;
     background: rgba(255, 255, 255, 0.05);
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     margin-bottom: 14px;
     transition: border-color 0.2s ease, background 0.2s ease;
 }
@@ -75,7 +75,7 @@
 
 .setting-card select option {
     background: var(--color-bg-container);
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
 }
 
 .setting-card button {
@@ -84,7 +84,7 @@
 }
 
 .theme-description {
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     font-size: 0.9em;
     margin-bottom: 20px;
     line-height: 1.5;
@@ -181,7 +181,7 @@
     font-size: 0.95em;
     font-family: 'Courier New', monospace;
     background: rgba(255, 255, 255, 0.05);
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     transition: border-color 0.2s ease;
     margin-bottom: 0;
 }
@@ -194,7 +194,7 @@
 .theme-hint {
     margin-top: 14px;
     font-size: 0.82em;
-    color: rgba(255, 255, 255, 0.3);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     line-height: 1.5;
 }
 
@@ -240,7 +240,7 @@
 }
 
 .theme-color-label {
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     font-size: 0.82em;
 }
 
@@ -265,7 +265,7 @@
     margin: 14px 0 8px;
     font-size: 0.82em;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     text-transform: uppercase;
     letter-spacing: 0.8px;
 }
@@ -279,7 +279,7 @@
     font-size: 1em;
     font-family: 'DM Sans', sans-serif;
     background: rgba(255, 255, 255, 0.05);
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     margin-bottom: 14px;
     transition: border-color 0.2s ease;
 }
@@ -302,7 +302,7 @@
 
 .modal form select option {
     background: var(--color-bg-container);
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
 }
 
 /* ---- Responsive ---- */

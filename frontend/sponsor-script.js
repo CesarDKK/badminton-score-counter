@@ -157,7 +157,7 @@ async function handleImageUpload(event, type) {
     }
 
     if (validFiles.length === 0) {
-        preview.innerHTML = `<p style="color: var(--color-danger, #d92c3f);">Ingen gyldige billeder at uploade</p>`;
+        preview.innerHTML = `<p style="color: var(--color-danger-text, #ff6b7a);">Ingen gyldige billeder at uploade</p>`;
         setTimeout(() => {
             preview.innerHTML = '';
         }, 3000);
@@ -202,7 +202,7 @@ async function handleImageUpload(event, type) {
         if (successCount > 0) {
             preview.innerHTML = `<p style="color: var(--color-win, #45d17e);">✓ ${successCount} ${typeName} billede(r) uploadet!</p>`;
         } else {
-            preview.innerHTML = `<p style="color: var(--color-danger, #d92c3f);">Ingen billeder blev uploadet</p>`;
+            preview.innerHTML = `<p style="color: var(--color-danger-text, #ff6b7a);">Ingen billeder blev uploadet</p>`;
         }
 
         setTimeout(() => {
@@ -213,7 +213,7 @@ async function handleImageUpload(event, type) {
         await loadGallery(type);
     } catch (error) {
         console.error('Failed to upload images:', error);
-        preview.innerHTML = `<p style="color: var(--color-danger, #d92c3f);">Upload fejlede: ${error.message}</p>`;
+        preview.innerHTML = `<p style="color: var(--color-danger-text, #ff6b7a);">Upload fejlede: ${error.message}</p>`;
         setTimeout(() => {
             preview.innerHTML = '';
         }, 5000);
@@ -409,8 +409,8 @@ async function loadGallery(type) {
                     <div class="${containerClass}">
                         <img src="/uploads/${img.filename}" alt="${escapeHtml(img.original_name)}" class="gallery-image">
                         <div class="gallery-overlay">
-                            <button class="btn-view" onclick="viewImage(${img.id})">${Ikon('oeje')} Vis</button>
-                            <button class="btn-delete" onclick="deleteImage(${img.id}, '${type}')">${Ikon('slet')} Slet</button>
+                            <button class="btn-primary btn-sm" onclick="viewImage(${img.id})">${Ikon('oeje')} Vis</button>
+                            <button class="btn-danger btn-sm" onclick="deleteImage(${img.id}, '${type}')">${Ikon('slet')} Slet</button>
                         </div>
                     </div>
                     <div class="gallery-info">
@@ -424,7 +424,7 @@ async function loadGallery(type) {
         }).join('');
     } catch (error) {
         console.error(`Failed to load ${type} gallery:`, error);
-        galleryContainer.innerHTML = '<p style="color: var(--color-danger, #d92c3f); text-align: center; padding: 40px;">Kunne ikke indlæse galleri. Tjek din forbindelse.</p>';
+        galleryContainer.innerHTML = '<p style="color: var(--color-danger-text, #ff6b7a); text-align: center; padding: 40px;">Kunne ikke indlæse galleri. Tjek din forbindelse.</p>';
     }
 }
 

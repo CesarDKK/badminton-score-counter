@@ -22,12 +22,12 @@ function permissionCheckboxesHtml(idPrefix, permissions) {
     const all = permissions === null || permissions === undefined;
     const allowed = new Set(all ? PAGE_OPTIONS.map(p => p.key) : permissions);
     const rows = PAGE_OPTIONS.map(p => `
-        <label style="display:flex;align-items:center;gap:8px;font-size:0.9em;color:#eaeaea;cursor:pointer;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:0.9em;color:var(--text-primary, #eaeaea);cursor:pointer;">
             <input type="checkbox" class="${idPrefix}-page" value="${p.key}" ${allowed.has(p.key) ? 'checked' : ''} onchange="syncPermAll('${idPrefix}')">
             ${p.label}
         </label>`).join('');
     return `
-        <label style="display:flex;align-items:center;gap:8px;font-size:0.9em;color:#eaeaea;cursor:pointer;margin-bottom:8px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:8px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:0.9em;color:var(--text-primary, #eaeaea);cursor:pointer;margin-bottom:8px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:8px;">
             <input type="checkbox" id="${idPrefix}-all" ${all ? 'checked' : ''} onchange="togglePermAll('${idPrefix}')">
             Alle sider
         </label>
@@ -326,7 +326,7 @@ function renderClubs() {
                     ${club.is_active ? 'Deaktiver' : 'Aktiver'}
                 </button>
                 ${!club.is_active ? `
-                <button class="btn-danger" style="background:rgba(var(--color-danger-rgb, 217, 44, 63),0.3);border-color:rgba(var(--color-danger-rgb, 217, 44, 63),0.5);"
+                <button class="btn-danger"
                     onclick="handleDeleteClub(${club.id})">
                     ${Ikon('slet')} Slet
                 </button>` : ''}
@@ -462,15 +462,15 @@ function renderAdmins(admins) {
                 <div class="admin-email" style="opacity:0.8;">Sidst logget ind: ${sidstLoginTekst(a.last_login_at)}</div>
             </div>
             <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-                <button class="btn-secondary" style="font-size:0.8em; padding:5px 10px;"
+                <button class="btn-secondary btn-sm"
                     onclick="showEditPermissions(${a.id})">
                     Adgang
                 </button>
-                <button class="btn-secondary" style="font-size:0.8em; padding:5px 10px;"
+                <button class="btn-secondary btn-sm"
                     onclick="showChangePassword(${a.id})">
                     Skift kode
                 </button>
-                <button class="btn-danger" style="font-size:0.8em; padding:5px 10px;"
+                <button class="btn-danger btn-sm"
                     onclick="handleDeleteAdmin(${a.id})">
                     Slet
                 </button>
@@ -492,14 +492,14 @@ function showEditPermissions(adminId) {
     form.id = 'edit-perm-form';
     form.style.cssText = 'background:rgba(255,255,255,0.04);border-radius:8px;padding:12px 14px;margin-top:4px;';
     form.innerHTML = `
-        <div style="font-size:0.82em;color:rgba(255,255,255,0.5);margin-bottom:8px;">
+        <div style="font-size:0.82em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin-bottom:8px;">
             Sideadgang for <strong>${escapeHtml(admin.username)}</strong>
         </div>
         ${permissionCheckboxesHtml('editPerm', admin.page_permissions)}
         <div style="display:flex;gap:8px;align-items:center;margin-top:12px;">
-            <button class="btn-primary" style="padding:8px 14px;font-size:0.85em;"
+            <button class="btn-primary btn-sm"
                 onclick="handleSavePermissions(${adminId})">Gem adgang</button>
-            <button class="btn-secondary" style="padding:8px 12px;font-size:0.85em;"
+            <button class="btn-secondary btn-sm"
                 onclick="document.getElementById('edit-perm-form').remove()">Annuller</button>
         </div>
         <div id="editPermMsg" class="msg" style="display:none;margin-top:8px;"></div>
@@ -531,16 +531,16 @@ function showChangePassword(adminId) {
     form.id = 'change-pw-form';
     form.style.cssText = 'background:rgba(255,255,255,0.04);border-radius:8px;padding:12px 14px;margin-top:4px;';
     form.innerHTML = `
-        <div style="font-size:0.82em;color:rgba(255,255,255,0.5);margin-bottom:8px;">
+        <div style="font-size:0.82em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin-bottom:8px;">
             Ny adgangskode til <strong>${escapeHtml(username)}</strong>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
             <input type="password" id="changePwInput" placeholder="Min. 8 tegn"
                 style="flex:1;background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);
-                border-radius:6px;padding:8px 10px;color:#eaeaea;font-family:'DM Sans',sans-serif;font-size:0.9em;">
-            <button class="btn-primary" style="padding:8px 14px;font-size:0.85em;"
+                border-radius:6px;padding:8px 10px;color:var(--text-primary, #eaeaea);font-family:'DM Sans',sans-serif;font-size:0.9em;">
+            <button class="btn-primary btn-sm"
                 onclick="handleChangePassword(${adminId})">Gem</button>
-            <button class="btn-secondary" style="padding:8px 12px;font-size:0.85em;"
+            <button class="btn-secondary btn-sm"
                 onclick="document.getElementById('change-pw-form').remove()">Annuller</button>
         </div>
         <div id="changePwMsg" class="msg" style="display:none;margin-top:8px;"></div>
@@ -789,7 +789,7 @@ function renderFootballClubs() {
                     ${club.is_active ? 'Deaktiver' : 'Aktiver'}
                 </button>
                 ${!club.is_active ? `
-                <button class="btn-danger" style="background:rgba(var(--color-danger-rgb, 217, 44, 63),0.3);border-color:rgba(var(--color-danger-rgb, 217, 44, 63),0.5);"
+                <button class="btn-danger"
                     onclick="handleDeleteFootballClub(${club.id})">
                     ${Ikon('slet')} Slet
                 </button>` : ''}
@@ -893,11 +893,11 @@ function renderFootballAdmins(admins) {
                 ${a.email ? `<div class="admin-email">${escapeHtml(a.email)}</div>` : ''}
             </div>
             <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-                <button class="btn-secondary" style="font-size:0.8em; padding:5px 10px;"
+                <button class="btn-secondary btn-sm"
                     onclick="showChangeFootballPassword(${a.id})">
                     Skift kode
                 </button>
-                <button class="btn-danger" style="font-size:0.8em; padding:5px 10px;"
+                <button class="btn-danger btn-sm"
                     onclick="handleDeleteFootballAdmin(${a.id})">
                     Slet
                 </button>
@@ -917,16 +917,16 @@ function showChangeFootballPassword(adminId) {
     form.id = 'football-change-pw-form';
     form.style.cssText = 'background:rgba(255,255,255,0.04);border-radius:8px;padding:12px 14px;margin-top:4px;';
     form.innerHTML = `
-        <div style="font-size:0.82em;color:rgba(255,255,255,0.5);margin-bottom:8px;">
+        <div style="font-size:0.82em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin-bottom:8px;">
             Ny adgangskode til <strong>${escapeHtml(username)}</strong>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
             <input type="password" id="footballChangePwInput" placeholder="Min. 8 tegn"
                 style="flex:1;background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);
-                border-radius:6px;padding:8px 10px;color:#eaeaea;font-family:'DM Sans',sans-serif;font-size:0.9em;">
-            <button class="btn-primary" style="padding:8px 14px;font-size:0.85em;"
+                border-radius:6px;padding:8px 10px;color:var(--text-primary, #eaeaea);font-family:'DM Sans',sans-serif;font-size:0.9em;">
+            <button class="btn-primary btn-sm"
                 onclick="handleChangeFootballPassword(${adminId})">Gem</button>
-            <button class="btn-secondary" style="padding:8px 12px;font-size:0.85em;"
+            <button class="btn-secondary btn-sm"
                 onclick="document.getElementById('football-change-pw-form').remove()">Annuller</button>
         </div>
         <div id="footballChangePwMsg" class="msg" style="display:none;margin-top:8px;"></div>
@@ -1114,9 +1114,9 @@ function renderLogos(logos) {
                 ${l.aliases ? `<div class="admin-email">${escapeHtml(l.aliases)}</div>` : ''}
             </div>
             <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-                <button class="btn-secondary" style="font-size:0.8em; padding:5px 10px;"
+                <button class="btn-secondary btn-sm"
                     onclick="showEditLogo(${l.id})">Rediger</button>
-                <button class="btn-danger" style="font-size:0.8em; padding:5px 10px;"
+                <button class="btn-danger btn-sm"
                     onclick="handleDeleteLogo(${l.id})">Slet</button>
             </div>
         </div>
@@ -1158,11 +1158,11 @@ function renderMissingLogos(list) {
                 <div class="admin-email">${c.sources.join(', ')} · ${c.count}×</div>
             </div>
             <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-                <button class="btn-primary" style="font-size:0.8em; padding:5px 10px;" onclick="prefillUploadLogo(${i})">Upload logo</button>
+                <button class="btn-primary btn-sm" onclick="prefillUploadLogo(${i})">Upload logo</button>
                 <select class="link-existing-sel" style="font-size:0.8em; padding:5px;">
                     <option value="">Knyt til…</option>${opts}
                 </select>
-                <button class="btn-secondary" style="font-size:0.8em; padding:5px 10px;" onclick="linkClubToLogo(${i}, this.previousElementSibling)">Knyt</button>
+                <button class="btn-secondary btn-sm" onclick="linkClubToLogo(${i}, this.previousElementSibling)">Knyt</button>
             </div>
         </div>`;
     }).join('');
@@ -1300,8 +1300,8 @@ function showEditLogo(id) {
             <input type="text" id="editLogoAliases" value="${escapeHtml(logo.aliases || '')}">
         </div>
         <div style="display:flex; gap:8px;">
-            <button class="btn-primary" style="padding:8px 14px;font-size:0.85em;" onclick="handleSaveLogo(${id})">Gem</button>
-            <button class="btn-secondary" style="padding:8px 12px;font-size:0.85em;" onclick="document.getElementById('edit-logo-form').remove()">Annuller</button>
+            <button class="btn-primary btn-sm" onclick="handleSaveLogo(${id})">Gem</button>
+            <button class="btn-secondary btn-sm" onclick="document.getElementById('edit-logo-form').remove()">Annuller</button>
         </div>
         <div id="editLogoMsg" class="msg" style="display:none;margin-top:8px;"></div>
     `;

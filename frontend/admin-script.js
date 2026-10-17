@@ -368,8 +368,8 @@ function createCourtCard(courtNumber, state) {
                     Ingen aktiv kamp
                 </div>
                 <div class="court-actions">
-                    <button class="btn-edit" onclick="openEditModal(${courtNumber})">Redigér bane</button>
-                    <button class="btn-latest-match" onclick="showLatestMatch(${courtNumber})">Seneste kamp</button>
+                    <button class="btn-secondary" onclick="openEditModal(${courtNumber})">Redigér bane</button>
+                    <button class="btn-secondary btn-sm btn-latest-match" onclick="showLatestMatch(${courtNumber})">Seneste kamp</button>
                 </div>
             `;
             return card;
@@ -422,8 +422,8 @@ function createCourtCard(courtNumber, state) {
                 </div>
             </div>
             <div class="court-actions">
-                <button class="btn-edit" onclick="openEditModal(${courtNumber})">Redigér bane</button>
-                <button class="btn-latest-match" onclick="showLatestMatch(${courtNumber})">Seneste kamp</button>
+                <button class="btn-secondary" onclick="openEditModal(${courtNumber})">Redigér bane</button>
+                <button class="btn-secondary btn-sm btn-latest-match" onclick="showLatestMatch(${courtNumber})">Seneste kamp</button>
             </div>
         `;
 
@@ -440,8 +440,8 @@ function createCourtCard(courtNumber, state) {
                 Kunne ikke indlæse data
             </div>
             <div class="court-actions">
-                <button class="btn-edit" onclick="openEditModal(${courtNumber})">Redigér bane</button>
-                <button class="btn-latest-match" onclick="showLatestMatch(${courtNumber})">Seneste kamp</button>
+                <button class="btn-secondary" onclick="openEditModal(${courtNumber})">Redigér bane</button>
+                <button class="btn-secondary btn-sm btn-latest-match" onclick="showLatestMatch(${courtNumber})">Seneste kamp</button>
             </div>
         `;
         return card;
@@ -887,7 +887,7 @@ async function loadTournamentMatchHistory() {
         const tournaments = combined.filter(t => (t.matches || []).some(m => m.status === 'finished'));
 
         if (tournaments.length === 0) {
-            container.innerHTML = '<p style="color:#aaa; font-style:italic;">Ingen afsluttede turneringskampe endnu.</p>';
+            container.innerHTML = '<p style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-style:italic;">Ingen afsluttede turneringskampe endnu.</p>';
             return;
         }
 
@@ -918,10 +918,10 @@ async function loadTournamentMatchHistory() {
                     ? `${m.side1_player1 || ''} / ${m.side1_player2}`
                     : (m.side1_player1 || '');
                 const scoreNums = orientHistorySetScoreNumbers(m.set_scores, side1Key).join(' · ');
-                const scores = scoreNums ? `<span style="color:#aaa; font-size:0.8em; margin-left:6px;">${scoreNums}</span>` : '';
+                const scores = scoreNums ? `<span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.8em; margin-left:6px;">${scoreNums}</span>` : '';
                 const resultHtml = `<span style="color:${winnerColor}; font-size:0.85em; font-weight:bold;">✓ ${escapeHtml(winnerLabel)}</span>${scores}`;
                 const varighed = varighedFra(m.started_at, m.finished_at);
-                const varighedHtml = varighed ? `<span style="color:#aaa; font-size:0.8em; white-space:nowrap;">${Ikon('ur')} ${varighed}</span>` : '';
+                const varighedHtml = varighed ? `<span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.8em; white-space:nowrap;">${Ikon('ur')} ${varighed}</span>` : '';
 
                 const labelBadge = m.label
                     ? `<span style="background:var(--color-accent); color:#fff; padding:2px 7px; border-radius:4px; font-size:0.78em; font-weight:bold; white-space:nowrap;">${escapeHtml(m.label)}</span>`
@@ -929,7 +929,7 @@ async function loadTournamentMatchHistory() {
 
                 return `<div style="display:flex; align-items:center; gap:10px; padding:7px 10px; border-left:3px solid ${winnerColor}; background:rgba(255,255,255,0.03); border-radius:4px; margin-bottom:4px; flex-wrap:wrap;">
                     ${labelBadge}
-                    <span style="color:#eaeaea; font-size:0.85em; flex:1; min-width:120px;">${escapeHtml(side1)} <span style="color:#aaa;">vs</span> ${escapeHtml(side2)}</span>
+                    <span style="color:var(--text-primary, #eaeaea); font-size:0.85em; flex:1; min-width:120px;">${escapeHtml(side1)} <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">vs</span> ${escapeHtml(side2)}</span>
                     ${resultHtml}
                     ${varighedHtml}
                 </div>`;
@@ -938,11 +938,11 @@ async function loadTournamentMatchHistory() {
             return `<div style="background:rgba(var(--color-primary-rgb),0.15); border:1px solid var(--color-primary); border-radius:8px; margin-bottom:12px; overflow:hidden;">
                 <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; cursor:pointer; flex-wrap:wrap; gap:8px;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
                     <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-                        <span style="font-size:1.1em; font-weight:bold; color:#eaeaea;">${escapeHtml(t.name)}${statusBadge}</span>
-                        <span style="color:#aaa; font-size:0.85em;">${playedCount}/${totalCount} kampe spillet</span>
-                        <span style="color:#666; font-size:0.8em;">${date}</span>
+                        <span style="font-size:1.1em; font-weight:bold; color:var(--text-primary, #eaeaea);">${escapeHtml(t.name)}${statusBadge}</span>
+                        <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.85em;">${playedCount}/${totalCount} kampe spillet</span>
+                        <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.8em;">${date}</span>
                     </div>
-                    <span style="color:#aaa; font-size:0.85em;">▼ Se kampe</span>
+                    <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.85em;">▼ Se kampe</span>
                 </div>
                 <div style="display:none; padding:0 16px 12px;">
                     ${matchRows}
@@ -951,11 +951,11 @@ async function loadTournamentMatchHistory() {
         }).join('');
 
         container.innerHTML = `
-            <h3 style="color:#eaeaea; margin-bottom:12px; font-size:1.1em; border-bottom:1px solid #333; padding-bottom:8px;">${Ikon('pokal')} Turneringer (${tournaments.length})</h3>
+            <h3 style="color:var(--text-primary, #eaeaea); margin-bottom:12px; font-size:1.1em; border-bottom:1px solid #333; padding-bottom:8px;">${Ikon('pokal')} Turneringer (${tournaments.length})</h3>
             ${cards}`;
     } catch (error) {
         console.error('Failed to load tournament history:', error);
-        container.innerHTML = '<p style="color:var(--color-danger, #d92c3f);">Kunne ikke indlæse turneringshistorik.</p>';
+        container.innerHTML = '<p style="color:var(--color-danger-text, #ff6b7a);">Kunne ikke indlæse turneringshistorik.</p>';
     }
 }
 
@@ -989,7 +989,7 @@ async function loadTeamMatchHistory() {
                     ? `${g.team2_player1 || '?'}${g.team2_player2 ? ' & ' + g.team2_player2 : ''}`
                     : (g.team2_player1 || '?');
 
-                let resultHtml = '<span style="color:#aaa; font-size:0.8em;">Ikke spillet</span>';
+                let resultHtml = '<span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.8em;">Ikke spillet</span>';
                 let rowBorder = '#444';
                 if (g.status === 'finished' && g.winner_team) {
                     const winnerName = g.winner_team === 1 ? tm.team1_name : tm.team2_name;
@@ -1000,16 +1000,16 @@ async function loadTeamMatchHistory() {
                         ? `${g.team1_player1 || ''} / ${g.team1_player2}`
                         : (g.team1_player1 || '');
                     const scoreNums = orientHistorySetScoreNumbers(g.set_scores, side1Key).join(' · ');
-                    const scores = scoreNums ? `<span style="color:#aaa; font-size:0.8em; margin-left:6px;">${scoreNums}</span>` : '';
+                    const scores = scoreNums ? `<span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.8em; margin-left:6px;">${scoreNums}</span>` : '';
                     resultHtml = `<span style="color:${winnerColor}; font-size:0.85em; font-weight:bold;">✓ ${escapeHtml(winnerName)}</span>${scores}`;
                     rowBorder = winnerColor;
                 }
                 const varighed = g.status === 'finished' ? varighedFra(g.started_at, g.finished_at) : '';
-                const varighedHtml = varighed ? `<span style="color:#aaa; font-size:0.8em; white-space:nowrap;">${Ikon('ur')} ${varighed}</span>` : '';
+                const varighedHtml = varighed ? `<span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.8em; white-space:nowrap;">${Ikon('ur')} ${varighed}</span>` : '';
 
                 return `<div style="display:flex; align-items:center; gap:10px; padding:7px 10px; border-left:3px solid ${rowBorder}; background:rgba(255,255,255,0.03); border-radius:4px; margin-bottom:4px; flex-wrap:wrap;">
                     <span style="background:var(--color-accent); color:#fff; padding:2px 7px; border-radius:4px; font-size:0.78em; font-weight:bold; white-space:nowrap;">${escapeHtml(HoldkampFormater.kategoriNavn(g.category, num))}</span>
-                    <span style="color:#eaeaea; font-size:0.85em; flex:1; min-width:120px;">${escapeHtml(t1)} <span style="color:#aaa;">vs</span> ${escapeHtml(t2)}</span>
+                    <span style="color:var(--text-primary, #eaeaea); font-size:0.85em; flex:1; min-width:120px;">${escapeHtml(t1)} <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">vs</span> ${escapeHtml(t2)}</span>
                     ${resultHtml}
                     ${varighedHtml}
                 </div>`;
@@ -1018,11 +1018,11 @@ async function loadTeamMatchHistory() {
             return `<div style="background:rgba(var(--color-primary-rgb),0.15); border:1px solid var(--color-primary); border-radius:8px; margin-bottom:12px; overflow:hidden;">
                 <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; cursor:pointer; flex-wrap:wrap; gap:8px;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
                     <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-                        <span style="font-size:1.1em; font-weight:bold; color:#eaeaea;">${escapeHtml(tm.team1_name)} <span style="color:var(--color-win, #45d17e);">${team1Wins}</span> – <span style="color:var(--color-accent);">${team2Wins}</span> ${escapeHtml(tm.team2_name)}</span>
-                        <span style="color:#aaa; font-size:0.82em;">${formatLabel}</span>
-                        <span style="color:#666; font-size:0.8em;">${date}</span>
+                        <span style="font-size:1.1em; font-weight:bold; color:var(--text-primary, #eaeaea);">${escapeHtml(tm.team1_name)} <span style="color:var(--color-win, #45d17e);">${team1Wins}</span> – <span style="color:var(--color-accent);">${team2Wins}</span> ${escapeHtml(tm.team2_name)}</span>
+                        <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em;">${formatLabel}</span>
+                        <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.8em;">${date}</span>
                     </div>
-                    <span style="color:#aaa; font-size:0.85em;">▼ Se delkampe</span>
+                    <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.85em;">▼ Se delkampe</span>
                 </div>
                 <div style="display:none; padding:0 16px 12px;">
                     ${gameRows}
@@ -1031,7 +1031,7 @@ async function loadTeamMatchHistory() {
         }).join('');
 
         container.innerHTML = `
-            <h3 style="color:#eaeaea; margin-bottom:12px; font-size:1.1em; border-bottom:1px solid #333; padding-bottom:8px;"><svg viewBox="0 0 24 24" fill="currentColor" style="width:1em;height:1em;vertical-align:-0.12em;" aria-hidden="true"><g transform="translate(0 1.2)"><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/><rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/><path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/></g></svg> Holdkampe (${matches.length})</h3>
+            <h3 style="color:var(--text-primary, #eaeaea); margin-bottom:12px; font-size:1.1em; border-bottom:1px solid #333; padding-bottom:8px;"><svg viewBox="0 0 24 24" fill="currentColor" style="width:1em;height:1em;vertical-align:-0.12em;" aria-hidden="true"><g transform="translate(0 1.2)"><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/><rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/><path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/></g></svg> Holdkampe (${matches.length})</h3>
             ${cards}`;
     } catch (error) {
         console.error('Failed to load team match history:', error);
@@ -1233,15 +1233,15 @@ function renderHoldkampBlocker(activeTournament) {
     if (!blocker) {
         blocker = document.createElement('div');
         blocker.id = 'holdkampBlocker';
-        blocker.style.cssText = 'margin-bottom:25px; padding:20px; background:rgba(241,196,15,0.1); border:2px solid #f1c40f; border-radius:10px;';
+        blocker.style.cssText = 'margin-bottom:25px; padding:20px; background:rgba(var(--color-warning-rgb, 255, 176, 46),0.1); border:2px solid var(--color-warning, #ffb02e); border-radius:10px;';
         const section = document.getElementById('holdkampSection');
         // Indsæt øverst efter h2-headeren
         const h2Wrap = section.querySelector('div');
         h2Wrap.insertAdjacentElement('afterend', blocker);
     }
     blocker.innerHTML = `
-        <h3 style="color:#f1c40f; margin:0 0 10px 0;">⚠ Aktiv turnering findes</h3>
-        <p style="color:#ccc; margin:0 0 12px 0; line-height:1.5;">
+        <h3 style="color:var(--color-warning, #ffb02e); margin:0 0 10px 0;">⚠ Aktiv turnering findes</h3>
+        <p style="color:var(--text-secondary, rgba(255, 255, 255, 0.78)); margin:0 0 12px 0; line-height:1.5;">
             Du har en aktiv turnering: <strong>${escapeHtml(activeTournament.name)}</strong>.<br>
             Du kan kun have én aktiv holdkamp ELLER turnering ad gangen. Afslut eller slet turneringen først.
         </p>
@@ -1275,8 +1275,8 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
 
         if (g.status === 'pending') {
             statusBadge = '<span style="background:#555;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8em;">Afventer</span>';
-            editBtn = `<button onclick="toggleEditGame(${teamMatch.id}, ${g.id})" style="padding:3px 10px;background:transparent;color:#aaa;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:0.8em;">Rediger</button>
-                       <button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" style="padding:3px 10px;background:transparent;color:#f0a500;border:1px solid #f0a500;border-radius:4px;cursor:pointer;font-size:0.8em;">Manuel</button>`;
+            editBtn = `<button onclick="toggleEditGame(${teamMatch.id}, ${g.id})" class="btn-secondary btn-sm">Rediger</button>
+                       <button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" class="btn-secondary btn-sm">Manuel</button>`;
 
             // Courts occupied by other active holdkamp games or active game states.
             // Beregn på tværs af ALLE aktive holdkampe når listen er tilgængelig.
@@ -1299,10 +1299,10 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
 
             courtAssign = `
                 <div style="display:flex;align-items:center;gap:6px;margin-top:8px;">
-                    <select id="courtSelect_${g.id}" onfocus="holdkampCourtSelectOpen=true" onblur="holdkampCourtSelectOpen=false" style="padding:5px 8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;font-size:0.82em;">
+                    <select id="courtSelect_${g.id}" onfocus="holdkampCourtSelectOpen=true" onblur="holdkampCourtSelectOpen=false" style="padding:5px 8px;background:var(--color-bg-dark);color:var(--text-primary, #eaeaea);border:1px solid var(--color-primary);border-radius:4px;font-size:0.82em;">
                         ${courtOptions}
                     </select>
-                    <button onclick="assignCourtToGame(${teamMatch.id}, ${g.id})" style="padding:5px 12px;background:var(--color-primary);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.82em;">Tildel bane</button>
+                    <button onclick="assignCourtToGame(${teamMatch.id}, ${g.id})" class="btn-primary btn-sm">Tildel bane</button>
                 </div>`;
         } else if (g.status === 'active') {
             const courtData = allGameStates.find(c => c.courtId === g.court_number);
@@ -1311,8 +1311,8 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
                 scoreText = ` · ${courtData.player1.score}–${courtData.player2.score} (${courtData.player1.games}–${courtData.player2.games} sæt)`;
             }
             statusBadge = `<span style="background:var(--color-primary);color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8em;">Bane ${g.court_number || '?'} ▶${scoreText}</span>`;
-            editBtn = `<button onclick="toggleEditGame(${teamMatch.id}, ${g.id})" style="padding:3px 10px;background:transparent;color:#aaa;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:0.8em;">Rediger</button>
-                       <button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" style="padding:3px 10px;background:transparent;color:#f0a500;border:1px solid #f0a500;border-radius:4px;cursor:pointer;font-size:0.8em;">Manuel</button>`;
+            editBtn = `<button onclick="toggleEditGame(${teamMatch.id}, ${g.id})" class="btn-secondary btn-sm">Rediger</button>
+                       <button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" class="btn-secondary btn-sm">Manuel</button>`;
         } else if (g.status === 'finished') {
             const winner = g.winner_team === 1 ? teamMatch.team1_name : teamMatch.team2_name;
             const isWO = g.set_scores === 'W.O.';
@@ -1322,9 +1322,9 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
                 ? `${g.team1_player1 || ''} / ${g.team1_player2}`
                 : (g.team1_player1 || '');
             const scoreNums = (g.set_scores && !isWO) ? orientHistorySetScoreNumbers(g.set_scores, side1Key).join(' · ') : '';
-            const scoreText = scoreNums ? `<span style="color:#aaa;font-size:0.82em;margin-left:4px;">${scoreNums}</span>` : '';
+            const scoreText = scoreNums ? `<span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.82em;margin-left:4px;">${scoreNums}</span>` : '';
             winnerBadge = `<span style="background:var(--color-win, #45d17e);color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8em;">✓ ${escapeHtml(winner)}${isWO ? ' (W.O.)' : ''}</span>${scoreText}`;
-            editBtn = `<button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" style="padding:3px 10px;background:transparent;color:#aaa;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:0.8em;">Rediger</button>`;
+            editBtn = `<button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" class="btn-secondary btn-sm">Rediger</button>`;
         }
 
         const editForm = g.status !== 'finished' ? `
@@ -1342,8 +1342,8 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
                 </div>
             </div>
             <div style="display:flex;gap:8px;">
-                <button onclick="saveEditGame(${teamMatch.id}, ${g.id}, ${isDoubles})" style="padding:6px 16px;background:var(--color-primary);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.85em;">Gem</button>
-                <button onclick="toggleEditGame(${teamMatch.id}, ${g.id})" style="padding:6px 12px;background:transparent;color:#aaa;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:0.85em;">Annuller</button>
+                <button onclick="saveEditGame(${teamMatch.id}, ${g.id}, ${isDoubles})" class="btn-primary btn-sm">Gem</button>
+                <button onclick="toggleEditGame(${teamMatch.id}, ${g.id})" class="btn-secondary btn-sm">Annuller</button>
             </div>
         </div>` : '';
 
@@ -1358,10 +1358,10 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
         const saveLabel = isFinished ? 'Gem ændringer' : 'Gem resultat';
 
         const manualForm = `
-        <div id="manualResult_${g.id}" style="display:none; padding:12px; background:rgba(240,165,0,0.07); border:1px solid rgba(240,165,0,0.3); border-radius:6px; margin-top:8px;" data-wo="${initWO}" data-saet="${erGS ? 1 : 3}">
-            <div style="color:#f0a500;font-size:0.82em;font-weight:bold;margin-bottom:10px;">${formTitle}</div>
+        <div id="manualResult_${g.id}" style="display:none; padding:12px; background:rgba(var(--color-warning-rgb, 255, 176, 46),0.07); border:1px solid rgba(var(--color-warning-rgb, 255, 176, 46),0.3); border-radius:6px; margin-top:8px;" data-wo="${initWO}" data-saet="${erGS ? 1 : 3}">
+            <div style="color:var(--color-warning, #ffb02e);font-size:0.82em;font-weight:bold;margin-bottom:10px;">${formTitle}</div>
             <div style="margin-bottom:10px;">
-                <div style="color:#aaa;font-size:0.8em;margin-bottom:6px;">Vinder</div>
+                <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.8em;margin-bottom:6px;">Vinder</div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;">
                     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1px solid var(--color-win, #45d17e);border-radius:4px;color:var(--color-win, #45d17e);font-size:0.88em;">
                         <input type="radio" name="manualWinner_${g.id}" value="1" ${g.winner_team === 1 ? 'checked' : ''} style="accent-color:var(--color-win, #45d17e);"> ${escapeHtml(teamMatch.team1_name)}
@@ -1372,38 +1372,38 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
                 </div>
             </div>
             <div style="margin-bottom:12px;">
-                <div style="color:#aaa;font-size:0.8em;margin-bottom:10px;">Sætscore</div>
+                <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.8em;margin-bottom:10px;">Sætscore</div>
                 <div style="display:flex;gap:32px;flex-wrap:wrap;">
                     ${saetFelter.map(s => `
                     <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
-                        <span style="color:#666;font-size:0.8em;">${erGS ? 'Golden set' : `Sæt ${s}${s===3?' *':''}`}</span>
+                        <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.8em;">${erGS ? 'Golden set' : `Sæt ${s}${s===3?' *':''}`}</span>
                         <div style="display:flex;align-items:center;gap:6px;">
                             <input id="manualS${s}t1_${g.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="–" value="${getScore(s-1, 0)}"
                                    oninput="this.value=this.value.replace(/[^0-9]/g,''); determineHoldkampWinner(${g.id}, '${gameMode}', ${erGS ? 1 : 2})"
                                    style="width:64px;padding:12px 8px;background:var(--color-bg-dark);color:var(--color-win, #45d17e);border:1px solid #555;border-radius:4px;text-align:center;font-size:1.6em;">
-                            <span style="color:#555;font-size:1.2em;">–</span>
+                            <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:1.2em;">–</span>
                             <input id="manualS${s}t2_${g.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="–" value="${getScore(s-1, 1)}"
                                    oninput="this.value=this.value.replace(/[^0-9]/g,''); determineHoldkampWinner(${g.id}, '${gameMode}', ${erGS ? 1 : 2})"
                                    style="width:64px;padding:12px 8px;background:var(--color-bg-dark);color:var(--color-accent);border:1px solid #555;border-radius:4px;text-align:center;font-size:1.6em;">
                         </div>
                     </div>`).join('')}
                 </div>
-                <div style="color:#666;font-size:0.75em;margin-top:6px;">${erGS ? 'Golden set er ét sæt, spillet som et 3. sæt' : '* Sæt 3 kun hvis nødvendigt'}</div>
+                <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.75em;margin-top:6px;">${erGS ? 'Golden set er ét sæt, spillet som et 3. sæt' : '* Sæt 3 kun hvis nødvendigt'}</div>
             </div>
             <div style="margin-bottom:8px;">
-                <button id="woToggle_${g.id}" onclick="toggleWO(${g.id})" style="padding:6px 14px;background:${initWO ? '#aaa' : 'transparent'};color:${initWO ? '#000' : '#aaa'};border:1px solid ${initWO ? '#aaa' : '#777'};border-radius:4px;cursor:pointer;font-size:0.85em;">W.O.</button>
+                <button id="woToggle_${g.id}" onclick="toggleWO(${g.id})" class="btn-secondary btn-sm${initWO ? ' er-valgt' : ''}">W.O.</button>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <button onclick="saveManualResult(${teamMatch.id}, ${g.id}, '${gameMode}')" style="padding:6px 16px;background:#f0a500;color:#000;font-weight:bold;border:none;border-radius:4px;cursor:pointer;font-size:0.85em;">${saveLabel}</button>
-                <button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" style="padding:6px 12px;background:transparent;color:#aaa;border:1px solid #555;border-radius:4px;cursor:pointer;font-size:0.85em;">Annuller</button>
+                <button onclick="saveManualResult(${teamMatch.id}, ${g.id}, '${gameMode}')" class="btn-primary btn-sm">${saveLabel}</button>
+                <button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" class="btn-secondary btn-sm">Annuller</button>
             </div>
         </div>`;
 
         return `
         <div style="padding:10px 15px;background:rgba(var(--color-primary-rgb),0.2);border-radius:8px;margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                <span style="background:var(--color-accent);color:#fff;padding:3px 8px;border-radius:4px;font-size:0.85em;font-weight:bold;white-space:nowrap;${erGS ? 'background:#c9a227;color:#000;' : ''}">${escapeHtml(HoldkampFormater.kategoriNavn(g.category, num))}</span>
-                <span style="color:#eaeaea;font-size:0.95em;flex:1;min-width:120px;">${escapeHtml(t1)} <span style="color:#aaa;">vs</span> ${escapeHtml(t2)}</span>
+                <span style="background:var(--color-accent);color:#fff;padding:3px 8px;border-radius:4px;font-size:0.85em;font-weight:bold;white-space:nowrap;${erGS ? 'background:var(--color-warning, #ffb02e);color:#000;' : ''}">${escapeHtml(HoldkampFormater.kategoriNavn(g.category, num))}</span>
+                <span style="color:var(--text-primary, #eaeaea);font-size:0.95em;flex:1;min-width:120px;">${escapeHtml(t1)} <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">vs</span> ${escapeHtml(t2)}</span>
                 ${statusBadge}
                 ${winnerBadge}
                 ${editBtn}
@@ -1418,7 +1418,7 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
         <div style="background:rgba(var(--color-primary-rgb),0.15);border:1px solid var(--color-primary);border-radius:10px;padding:20px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
                 <div>
-                    <div style="color:#aaa;font-size:0.85em;margin-bottom:4px;">${escapeHtml(formatName)}</div>
+                    <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.85em;margin-bottom:4px;">${escapeHtml(formatName)}</div>
                     <div style="font-size:1.8em;font-weight:bold;">
                         <span style="color:var(--color-win, #45d17e);">${escapeHtml(teamMatch.team1_name)}</span>
                         <span style="color:#fff;margin:0 15px;">${team1Wins} – ${team2Wins}</span>
@@ -1703,9 +1703,7 @@ function toggleWO(gameId) {
     const btn = document.getElementById(`woToggle_${gameId}`);
     const isWO = form.dataset.wo === 'true';
     form.dataset.wo = isWO ? 'false' : 'true';
-    btn.style.background = isWO ? 'transparent' : '#aaa';
-    btn.style.color = isWO ? '#aaa' : '#000';
-    btn.style.borderColor = isWO ? '#777' : '#aaa';
+    btn.classList.toggle('er-valgt', !isWO);
 }
 
 async function saveManualResult(teamMatchId, gameId, gameMode = '21') {
@@ -1795,9 +1793,9 @@ function openLogoModal(title, targets, onSave) {
         <div class="logo-target" data-key="${escapeHtml(String(t.key))}" data-auto="${escapeHtml(t.autoName || '')}" data-club="${escapeHtml(t.club || '')}" style="display:flex; align-items:center; gap:14px; padding:12px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
             <img class="logo-target-img" alt="" style="width:54px; height:54px; object-fit:contain; background:rgba(255,255,255,0.06); border-radius:8px; flex-shrink:0; display:none;">
             <div style="flex:1; min-width:0;">
-                <div style="color:#eaeaea; font-weight:bold; margin-bottom:6px;">${escapeHtml(t.label)}${t.club ? `<span style="font-weight:normal; color:#9ab; font-size:0.85em;"> — ${escapeHtml(t.club)}</span>` : ''}</div>
-                <select class="logo-target-sel" style="width:100%; padding:9px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid var(--color-primary); border-radius:5px;">${optionsHtml}</select>
-                <div class="logo-target-hint" style="font-size:0.8em; color:#aaa; margin-top:4px;"></div>
+                <div style="color:var(--text-primary, #eaeaea); font-weight:bold; margin-bottom:6px;">${escapeHtml(t.label)}${t.club ? `<span style="font-weight:normal; color:#9ab; font-size:0.85em;"> — ${escapeHtml(t.club)}</span>` : ''}</div>
+                <select class="logo-target-sel" style="width:100%; padding:9px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid var(--color-primary); border-radius:5px;">${optionsHtml}</select>
+                <div class="logo-target-hint" style="font-size:0.8em; color:var(--text-muted, rgba(255, 255, 255, 0.62)); margin-top:4px;"></div>
             </div>
         </div>`).join('');
 
@@ -1883,7 +1881,7 @@ function tPlayerLogoBtn(name) {
         return `<img data-player="${safe}" onclick="setTournamentPlayerLogo(this.dataset.player)" src="${escapeHtml(logo.url)}" title="Skift klub-logo — ${safe}" onerror="this.style.display='none'" style="height:22px; width:auto; max-width:40px; object-fit:contain; margin-left:4px; vertical-align:middle; cursor:pointer;">`;
     }
     // Intet logo → tydelig stiplet "mangler"-markør (klik for at tilføje)
-    return `<button data-player="${safe}" onclick="setTournamentPlayerLogo(this.dataset.player)" title="Tilføj klub-logo — ${safe}" style="padding:1px 5px; margin-left:4px; background:transparent; color:#c9a23a; border:1px dashed #c9a23a; border-radius:3px; cursor:pointer; font-size:0.72em; vertical-align:middle;">${Ikon('maerke')}</button>`;
+    return `<button data-player="${safe}" onclick="setTournamentPlayerLogo(this.dataset.player)" title="Tilføj klub-logo — ${safe}" style="padding:1px 5px; margin-left:4px; background:transparent; color:var(--color-warning, #ffb02e); border:1px dashed var(--color-warning, #ffb02e); border-radius:3px; cursor:pointer; font-size:0.72em; vertical-align:middle;">${Ikon('maerke')}</button>`;
 }
 
 // Saet/ret en turneringsspillers klub-logo (gemmes pr. navn i player_logos -> slaar
@@ -2005,7 +2003,7 @@ function displayFilteredMatches() {
     const container = document.getElementById('allMatchesContainer');
 
     if (allMatchesData.length === 0) {
-        container.innerHTML = '<div style="color: #999; text-align: center; padding: 40px; font-size: 1.2em;">Ingen kamphistorik tilgængelig</div>';
+        container.innerHTML = '<div style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); text-align: center; padding: 40px; font-size: 1.2em;">Ingen kamphistorik tilgængelig</div>';
         return;
     }
 
@@ -2035,7 +2033,7 @@ function displayFilteredMatches() {
     container.innerHTML = '';
 
     if (filteredMatches.length === 0) {
-        container.innerHTML = '<div style="color: #999; text-align: center; padding: 40px; font-size: 1.2em;">Ingen kampe fundet</div>';
+        container.innerHTML = '<div style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); text-align: center; padding: 40px; font-size: 1.2em;">Ingen kampe fundet</div>';
         return;
     }
 
@@ -2225,11 +2223,11 @@ function createMatchCard(match, index) {
                 </div>
                 <div style="font-weight: bold; font-size: 1.2em; margin-bottom: 8px;">
                     <span style="color: var(--color-win, #45d17e);">${escapeHtml(match.winner_name)}</span>
-                    <span style="color: #aaa; margin: 0 8px;">besejrede</span>
+                    <span style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); margin: 0 8px;">besejrede</span>
                     <span style="color: var(--color-accent);">${escapeHtml(match.loser_name)}</span>
                 </div>
                 ${setOverviewBadges ? `<div style="margin: 10px 0;">${setOverviewBadges}</div>` : ''}
-                <div style="color: #aaa; font-size: 0.9em; margin-top: 8px;">
+                <div style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.9em; margin-top: 8px;">
                     <span style="margin-right: 15px;">${Ikon('ur')} ${match.duration}</span>
                     <span style="margin-right: 15px;"><svg viewBox="0 0 24 24" fill="currentColor" style="width:1em;height:1em;vertical-align:-0.12em;" aria-hidden="true"><g transform="translate(0 1.2)"><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/><rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/><path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/></g></svg> Bane ${match.court_id}</span>
                     <span>${Ikon('kalender')} ${new Date(match.match_date).toLocaleDateString('da-DK', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
@@ -2260,7 +2258,7 @@ function createMatchCard(match, index) {
             setsHtml += `
                 <div style="padding: 12px 15px; background: rgba(var(--color-primary-rgb), 0.2); border-radius: 8px; margin-bottom: 10px; border-left: 4px solid ${player1Won ? player1Color : player2Color};">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                        <span style="font-weight: bold; color: #eaeaea; font-size: 0.9em;">SÆT ${i + 1}</span>
+                        <span style="font-weight: bold; color: var(--text-primary, #eaeaea); font-size: 0.9em;">SÆT ${i + 1}</span>
                         <span style="background: ${player1Won ? player1Color : player2Color}; color: white; padding: 3px 10px; border-radius: 5px; font-size: 0.85em; font-weight: bold;">
                             ${player1Won ? '✓ ' + player1Name : '✓ ' + player2Name}
                         </span>
@@ -2280,16 +2278,16 @@ function createMatchCard(match, index) {
                 <div style="font-weight: bold; margin-bottom: 12px; color: var(--color-accent); font-size: 1em;">${Ikon('statistik')} KAMPSTATISTIK</div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
                     <div style="background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 5px;">
-                        <div style="color: #aaa; font-size: 0.85em; margin-bottom: 3px;">Gennemsnitlige Point pr. Sæt</div>
-                        <div style="color: #eaeaea; font-weight: bold; font-size: 1.1em;">${stats.avgPointsPerSet} point</div>
+                        <div style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.85em; margin-bottom: 3px;">Gennemsnitlige Point pr. Sæt</div>
+                        <div style="color: var(--text-primary, #eaeaea); font-weight: bold; font-size: 1.1em;">${stats.avgPointsPerSet} point</div>
                     </div>
                     <div style="background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 5px;">
-                        <div style="color: #aaa; font-size: 0.85em; margin-bottom: 3px;">Tættest Sæt</div>
-                        <div style="color: #eaeaea; font-weight: bold; font-size: 1.1em;">Sæt ${stats.closestSet.index} (${stats.closestSet.diff} points forskel)</div>
+                        <div style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.85em; margin-bottom: 3px;">Tættest Sæt</div>
+                        <div style="color: var(--text-primary, #eaeaea); font-weight: bold; font-size: 1.1em;">Sæt ${stats.closestSet.index} (${stats.closestSet.diff} points forskel)</div>
                     </div>
                     <div style="background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 5px;">
-                        <div style="color: #aaa; font-size: 0.85em; margin-bottom: 3px;">Højeste Score i et Sæt</div>
-                        <div style="color: #eaeaea; font-weight: bold; font-size: 1.1em;">${stats.longestSetPoints} point</div>
+                        <div style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.85em; margin-bottom: 3px;">Højeste Score i et Sæt</div>
+                        <div style="color: var(--text-primary, #eaeaea); font-weight: bold; font-size: 1.1em;">${stats.longestSetPoints} point</div>
                     </div>
                 </div>
             </div>
@@ -2297,7 +2295,7 @@ function createMatchCard(match, index) {
 
         details.innerHTML = `
             <div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid rgba(var(--color-accent-rgb), 0.3);">
-                <div style="font-weight: bold; margin-bottom: 15px; color: #eaeaea; font-size: 1.1em;">${Ikon('pokal')} SÆT DETALJER</div>
+                <div style="font-weight: bold; margin-bottom: 15px; color: var(--text-primary, #eaeaea); font-size: 1.1em;">${Ikon('pokal')} SÆT DETALJER</div>
                 ${setsHtml}
                 ${statsHtml}
             </div>
@@ -2685,7 +2683,7 @@ async function showDeviceTokens() {
 
 async function loadDeviceTokens() {
     const listEl = document.getElementById('deviceTokensList');
-    listEl.innerHTML = '<p style="color:rgba(255,255,255,0.4);text-align:center;padding:20px;">Indlæser...</p>';
+    listEl.innerHTML = '<p style="color:var(--text-muted, rgba(255, 255, 255, 0.62));text-align:center;padding:20px;">Indlæser...</p>';
 
     try {
         const tokens = await api.getDeviceTokens();
@@ -2748,15 +2746,15 @@ function visKioskConfForm(tokenId) {
     const boks = document.getElementById(`kioskConf-${tokenId}`);
     if (!boks) return;
     if (boks.style.display !== 'none') { boks.style.display = 'none'; return; }
-    const felt = 'width:100%;background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 10px;color:#eaeaea;font-family:\'DM Sans\',sans-serif;font-size:0.9em;box-sizing:border-box;';
-    const etiket = 'display:block;font-size:0.72em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:4px;';
+    const felt = 'width:100%;background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 10px;color:var(--text-primary, #eaeaea);font-family:\'DM Sans\',sans-serif;font-size:0.9em;box-sizing:border-box;';
+    const etiket = 'display:block;font-size:0.72em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin-bottom:4px;';
     boks.innerHTML = `
         <div style="margin-top:10px;padding:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;">
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;">
                 <div><label style="${etiket}">Skærmens navn</label>
                     <input id="kc-navn-${tokenId}" style="${felt}" value="${escapeHtml(kioskNavn(boks.dataset.navn))}" placeholder="fx tv-bane-1a"
                         oninput="document.getElementById('kc-navnvis-${tokenId}').textContent = kioskNavn(this.value)">
-                    <div style="font-size:0.75em;color:rgba(255,255,255,0.4);margin-top:3px;">Bliver til: <span id="kc-navnvis-${tokenId}">${escapeHtml(kioskNavn(boks.dataset.navn))}</span></div></div>
+                    <div style="font-size:0.75em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin-top:3px;">Bliver til: <span id="kc-navnvis-${tokenId}">${escapeHtml(kioskNavn(boks.dataset.navn))}</span></div></div>
                 <div><label style="${etiket}">WiFi-navn (tom = kabel)</label>
                     <input id="kc-wifi-${tokenId}" style="${felt}" autocomplete="off"></div>
                 <div><label style="${etiket}">WiFi-kode</label>
@@ -2765,8 +2763,8 @@ function visKioskConfForm(tokenId) {
                     <input id="kc-sluk-${tokenId}" style="${felt}" value="23:59" placeholder="TT:MM eller aldrig"></div>
             </div>
             <div style="display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap;">
-                <button onclick="hentKioskConf(${tokenId})" class="btn-primary" style="padding:8px 16px;font-size:0.85em;">Download kiosk.conf</button>
-                <span style="font-size:0.78em;color:rgba(255,255,255,0.45);">Filen laves her i browseren — WiFi-koden sendes ikke til serveren.
+                <button onclick="hentKioskConf(${tokenId})" class="btn-primary btn-sm">Download kiosk.conf</button>
+                <span style="font-size:0.78em;color:var(--text-muted, rgba(255, 255, 255, 0.62));">Filen laves her i browseren — WiFi-koden sendes ikke til serveren.
                     Læg den på USB-nøglen / SD-kortet i stedet for den, der ligger der. Én fil pr. skærm.</span>
             </div>
         </div>`;
@@ -2846,14 +2844,14 @@ function renderSkaerme(skaerme) {
     const kl = (ms) => new Date(ms).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
     const linjer = skaerme.map(s => {
         const farve = s.sekunderSiden < 60 ? 'var(--color-win)'
-            : s.sekunderSiden < 300 ? 'var(--color-warning, #f0a020)' : 'var(--color-danger)';
+            : s.sekunderSiden < 300 ? 'var(--color-warning, #ffb02e)' : 'var(--color-danger)';
         const status = s.sekunderSiden < 60 ? 'Kører'
             : `Ingen livstegn i ${skaermVarighed(s.sekunderSiden)}`;
         const navn = s.navn
             ? escapeHtml(s.navn)
             : `Skærm uden navn <span style="opacity:0.6;">(${escapeHtml(s.klientId)} — opdatér kiosk-PC'en for at få navnet med)</span>`;
         const data = s.dataAlderSek != null && s.dataAlderSek > 30
-            ? ` &nbsp;•&nbsp; <span style="color:var(--color-warning, #f0a020);">data ${skaermVarighed(s.dataAlderSek)} gamle</span>` : '';
+            ? ` &nbsp;•&nbsp; <span style="color:var(--color-warning, #ffb02e);">data ${skaermVarighed(s.dataAlderSek)} gamle</span>` : '';
         const haendelser = (s.haendelser || []).slice(0, 3).map(h =>
             h.type === 'frys'
                 ? `Stod stille ${skaermVarighed(h.sek)} kl. ${kl(h.fra)}`
@@ -2864,10 +2862,10 @@ function renderSkaerme(skaerme) {
                 <span style="width:9px;height:9px;border-radius:50%;background:${farve};margin-top:6px;flex-shrink:0;"></span>
                 <div style="flex:1;min-width:0;font-size:0.85em;">
                     <div><strong>${navn}</strong> &nbsp;<span style="color:${farve};">${status}</span></div>
-                    <div style="color:rgba(255,255,255,0.45);font-size:0.9em;margin-top:2px;">
+                    <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.9em;margin-top:2px;">
                         ${s.side === 'oversigt' ? 'Oversigt' : `Bane ${s.bane || '?'}`}${s.kioskVersion ? ` &nbsp;•&nbsp; Badminton TV ${escapeHtml(s.kioskVersion)}` : ''} &nbsp;•&nbsp; sidst set ${skaermVarighed(s.sekunderSiden)} siden &nbsp;•&nbsp; IP ${escapeHtml(s.ip || '?')}${data}
                     </div>
-                    ${haendelser ? `<div style="color:var(--color-warning, #f0a020);font-size:0.9em;margin-top:2px;">⚠ ${haendelser}</div>` : ''}
+                    ${haendelser ? `<div style="color:var(--color-warning, #ffb02e);font-size:0.9em;margin-top:2px;">⚠ ${haendelser}</div>` : ''}
                 </div>
                 ${s.sekunderSiden >= 60 ? `<button type="button" class="btn-secondary" onclick="fjernSkaerm('${escapeHtml(s.klientId)}')"
                     title="Fjern skærmen fra listen. Tænder den igen, kommer den tilbage af sig selv."
@@ -2876,7 +2874,7 @@ function renderSkaerme(skaerme) {
     }).join('');
     return `
         <div style="margin-top:12px;">
-            <div style="font-size:0.72em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.45);margin-bottom:4px;">
+            <div style="font-size:0.72em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin-bottom:4px;">
                 Skærme på dette link (${skaerme.length})
             </div>
             ${linjer}
@@ -2927,7 +2925,7 @@ function renderDeviceTokens(tokens) {
     _dtTokens = tokens;
 
     if (tokens.length === 0) {
-        listEl.innerHTML = '<p style="color:rgba(255,255,255,0.4);text-align:center;padding:20px;">Ingen adgangslinks endnu</p>';
+        listEl.innerHTML = '<p style="color:var(--text-muted, rgba(255, 255, 255, 0.62));text-align:center;padding:20px;">Ingen adgangslinks endnu</p>';
         return;
     }
 
@@ -2977,23 +2975,23 @@ function deviceTokenKort(tokens) {
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
                 <div style="flex:1;min-width:200px;">
                     <div style="font-weight:600;margin-bottom:4px;">${escapeHtml(t.name)}</div>
-                    <div style="font-size:0.8em;color:rgba(255,255,255,0.45);">
+                    <div style="font-size:0.8em;color:var(--text-muted, rgba(255, 255, 255, 0.62));">
                         ${Ikon('sted')} ${destLabel} &nbsp;•&nbsp;
                         ${Ikon('laas')} ${t.locked ? 'Låst' : 'Fri navigation'}${qrBadge} &nbsp;•&nbsp;
                         Sidst brugt: ${lastUsed}
                     </div>
                     <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
                         <input readonly value="${link}"
-                            style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:6px 10px;color:rgba(255,255,255,0.6);font-size:0.78em;font-family:monospace;"
+                            style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:6px 10px;color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.78em;font-family:monospace;"
                             onclick="this.select()">
                         <button onclick="copyLink(this.parentElement.querySelector('input').value, this)"
-                            style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:6px 12px;color:#eaeaea;font-size:0.8em;cursor:pointer;white-space:nowrap;">
+                            style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:6px 12px;color:var(--text-primary, #eaeaea);font-size:0.8em;cursor:pointer;white-space:nowrap;">
                             Kopiér
                         </button>
                     </div>
                     ${t.is_active && (dest.startsWith('tv/') || dest === 'oversigt') ? `
                     <button onclick="visKioskConfForm(${t.id})"
-                        style="margin-top:10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:6px 12px;color:#eaeaea;font-size:0.8em;cursor:pointer;">
+                        style="margin-top:10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:6px 12px;color:var(--text-primary, #eaeaea);font-size:0.8em;cursor:pointer;">
                         Hent kiosk.conf til en TV-PC / Raspberry Pi
                     </button>
                     <div class="dt-kioskconf" id="kioskConf-${t.id}" data-link="${escapeHtml(link)}" data-navn="${escapeHtml(t.name)}" style="display:none;"></div>` : ''}
@@ -3003,14 +3001,14 @@ function deviceTokenKort(tokens) {
                 <div style="display:flex;gap:8px;flex-shrink:0;">
                     ${t.is_active
                         ? `<button onclick="visRedigerDt(${t.id})"
-                            style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:6px 14px;color:#eaeaea;font-size:0.85em;cursor:pointer;">
+                            style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:6px 14px;color:var(--text-primary, #eaeaea);font-size:0.85em;cursor:pointer;">
                             Redigér
                            </button>
                            <button onclick="handleDeleteDeviceToken(${t.id})"
                             style="background:rgba(var(--color-accent-rgb),0.12);border:1px solid rgba(var(--color-accent-rgb),0.25);border-radius:6px;padding:6px 14px;color:var(--color-accent);font-size:0.85em;cursor:pointer;">
                             Tilbagekald
                            </button>`
-                        : `<span style="font-size:0.8em;color:rgba(255,255,255,0.3);padding:6px 10px;">Tilbagekaldt</span>
+                        : `<span style="font-size:0.8em;color:var(--text-muted, rgba(255, 255, 255, 0.62));padding:6px 10px;">Tilbagekaldt</span>
                            <button onclick="handlePermanentDeleteDeviceToken(${t.id})"
                             style="background:rgba(var(--color-accent-rgb),0.18);border:1px solid rgba(var(--color-accent-rgb),0.35);border-radius:6px;padding:6px 14px;color:var(--color-accent);font-size:0.85em;cursor:pointer;">
                             ${Ikon('slet')} Slet
@@ -3025,8 +3023,8 @@ function deviceTokenKort(tokens) {
 // ── Redigér et adgangslink: navn, type, bane, navigation og QR ──
 // Enheder, der bruger linket, opdager ændringen selv inden for et minut og
 // skifter side (js/adgangslink-vagt.js) — linket skal ikke sættes ind igen.
-const DT_FELT = 'width:100%;background:var(--color-bg-container);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:9px 11px;color:#eaeaea;font-family:\'DM Sans\',sans-serif;font-size:0.9em;box-sizing:border-box;';
-const DT_ETIKET = 'display:block;font-size:0.72em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:5px;';
+const DT_FELT = 'width:100%;background:var(--color-bg-container);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:9px 11px;color:var(--text-primary, #eaeaea);font-family:\'DM Sans\',sans-serif;font-size:0.9em;box-sizing:border-box;';
+const DT_ETIKET = 'display:block;font-size:0.72em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin-bottom:5px;';
 
 function visRedigerDt(id) {
     const boks = document.getElementById(`dtRediger-${id}`);
@@ -3062,12 +3060,12 @@ function visRedigerDt(id) {
             <label class="dtr-qr-wrap" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:0.9em;color:rgba(255,255,255,0.75);cursor:pointer;">
                 <input type="checkbox" class="dtr-qr" style="width:18px;height:18px;accent-color:var(--color-accent);"> Vis QR-kode på TV
             </label>
-            <p style="font-size:0.8em;color:rgba(255,255,255,0.45);margin:0 0 12px;">
+            <p style="font-size:0.8em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin:0 0 12px;">
                 Skærme og tablets, der bruger linket, skifter selv inden for et minut. Linket er det samme.
             </p>
             <div style="display:flex;gap:8px;">
-                <button class="btn-primary dtr-gem" style="padding:8px 18px;">Gem</button>
-                <button class="dtr-annuller" style="background:transparent;border:1px solid rgba(255,255,255,0.2);border-radius:8px;padding:8px 16px;color:rgba(255,255,255,0.75);cursor:pointer;">Annullér</button>
+                <button class="btn-primary dtr-gem">Gem</button>
+                <button class="btn-secondary dtr-annuller">Annullér</button>
             </div>
             <div class="dtr-besked" style="display:none;margin-top:10px;padding:8px 12px;border-radius:8px;font-size:0.85em;"></div>
         </div>`;
@@ -3390,13 +3388,13 @@ async function bpLoadWatchers() {
                                       badge('Kunne ikke oprettes', '217,44,63');
 
         const fejl = w.last_error && (w.status !== 'opgivet' || w.last_error.startsWith('Opgivet.'))
-            ? `<div style="color:var(--color-danger,#d92c3f);font-size:0.82em;margin-top:4px;">${escapeHtml(w.last_error)}</div>`
+            ? `<div style="color:var(--color-danger-text, #ff6b7a);font-size:0.82em;margin-top:4px;">${escapeHtml(w.last_error)}</div>`
             : '';
 
         // Sidst tjekket + nedtælling til næste automatiske tjek
         const sidst = w.last_checked_iso ? `Sidst tjekket kl. ${bpKlokken(new Date(w.last_checked_iso), true)}` : 'Ikke tjekket endnu';
         const tjekLinje = venter
-            ? `<div style="color:#aaa;font-size:0.82em;margin-top:4px;">
+            ? `<div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.82em;margin-top:4px;">
                    <span data-bp-naeste="${w.id}" style="color:var(--color-accent);font-variant-numeric:tabular-nums;">${bpNaesteTjek[w.id] ? bpNedtaellingTekst(bpNaesteTjek[w.id]) : ''}</span>
                    <span style="opacity:0.7;"> · ${sidst}</span>
                    ${bpTjekBesked[w.id] ? `<span style="opacity:0.9;"> · ${escapeHtml(bpTjekBesked[w.id])}</span>` : ''}
@@ -3418,8 +3416,8 @@ async function bpLoadWatchers() {
         return `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;
                             padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.06);">
                     <div style="min-width:0;">
-                        <div style="color:#eaeaea;">${escapeHtml(w.team1_name || '?')} – ${escapeHtml(w.team2_name || '?')}</div>
-                        <div style="color:#aaa;font-size:0.84em;">${bpFormatStart(w.start_time_iso)}</div>
+                        <div style="color:var(--text-primary, #eaeaea);">${escapeHtml(w.team1_name || '?')} – ${escapeHtml(w.team2_name || '?')}</div>
+                        <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.84em;">${bpFormatStart(w.start_time_iso)}</div>
                         ${tjekLinje}
                         ${fejl}
                     </div>
@@ -3429,7 +3427,7 @@ async function bpLoadWatchers() {
 
     box.innerHTML = `
         <h4 style="color:var(--color-accent);margin-bottom:6px;font-size:0.95em;">Venter på holdsammensætning</h4>
-        <p style="color:#aaa;font-size:0.84em;margin-bottom:8px;">
+        <p style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.84em;margin-bottom:8px;">
             Holdsedlen frigives en time før kampstart. Systemet tjekker første gang 59 min og 50 sek før start og derefter
             hvert 30. sekund de første 10 minutter og så hvert 2. minut, og opretter holdkampen, så snart holdsedlen er der.
             Indtil da genlæses kamptidspunktet jævnligt. "Tjek nu" tjekker med det samme.
@@ -3469,7 +3467,7 @@ async function bpLoadVagtLog() {
     try {
         data = await api.getHoldkampVagtLog(filter && filter.value);
     } catch (err) {
-        boks.innerHTML = `<p style="color:var(--color-danger,#d92c3f);">Loggen kunne ikke hentes: ${escapeHtml(err.message)}</p>`;
+        boks.innerHTML = `<p style="color:var(--color-danger-text, #ff6b7a);">Loggen kunne ikke hentes: ${escapeHtml(err.message)}</p>`;
         return;
     }
     const d = data.diagnose || {};
@@ -3477,7 +3475,7 @@ async function bpLoadVagtLog() {
 
     // Diagnose: kører vagten, og går databasens ur rigtigt?
     const ok = (t) => `<span style="color:var(--color-win,#45d17e);">${t}</span>`;
-    const galt = (t) => `<span style="color:var(--color-danger,#d92c3f);font-weight:600;">${t}</span>`;
+    const galt = (t) => `<span style="color:var(--color-danger-text, #ff6b7a);font-weight:600;">${t}</span>`;
     const vagtTekst = d.vagtSidstKoertSekSiden == null
         ? galt('har ikke kørt siden serveren startede')
         : d.vagtSidstKoertSekSiden <= 60 ? ok(`kørte for ${d.vagtSidstKoertSekSiden} sek. siden`)
@@ -3497,17 +3495,17 @@ async function bpLoadVagtLog() {
         ).join('');
     }
 
-    const farve = { info: 'rgba(255,255,255,0.75)', advarsel: 'var(--color-warning,#f0a020)', fejl: 'var(--color-danger,#d92c3f)' };
+    const farve = { info: 'rgba(255,255,255,0.75)', advarsel: 'var(--color-warning, #ffb02e)', fejl: 'var(--color-danger,#d92c3f)' };
     const navn = (l) => l.team1_name ? `${l.team1_name} – ${l.team2_name}` : (l.league_match_id ? `kamp ${l.league_match_id}` : '');
     boks.innerHTML = log.length
         ? log.map(l => `
             <div style="display:grid;grid-template-columns:120px 1fr;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
-                <span style="color:#888;font-variant-numeric:tabular-nums;">${kl(l.tid_unix * 1000)}</span>
+                <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-variant-numeric:tabular-nums;">${kl(l.tid_unix * 1000)}</span>
                 <span style="color:${farve[l.niveau] || farve.info};">
-                    ${navn(l) ? `<b style="color:#ccc;font-weight:600;">${escapeHtml(navn(l))}:</b> ` : ''}${escapeHtml(l.besked)}
+                    ${navn(l) ? `<b style="color:var(--text-secondary, rgba(255, 255, 255, 0.78));font-weight:600;">${escapeHtml(navn(l))}:</b> ` : ''}${escapeHtml(l.besked)}
                 </span>
             </div>`).join('')
-        : '<p style="color:#888;">Ingen hændelser endnu. Loggen fyldes, når en kamp sættes i kø fra badmintonplayer.dk.</p>';
+        : '<p style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">Ingen hændelser endnu. Loggen fyldes, når en kamp sættes i kø fra badmintonplayer.dk.</p>';
 
     // Tekstudgave til "Kopiér log" — med diagnosen øverst, så den kan sendes videre
     bpVagtLogTekst = [
@@ -3578,7 +3576,7 @@ function bpRenderPreview(data) {
     const { team1Name, team2Name, games } = data;
     const preview = document.getElementById('bpImportPreview');
 
-    const inpStyle = 'width:100%;padding:8px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-primary);border-radius:4px;margin-bottom:4px;box-sizing:border-box;';
+    const inpStyle = 'width:100%;padding:8px;background:var(--color-bg-dark);color:var(--text-primary, #eaeaea);border:1px solid var(--color-primary);border-radius:4px;margin-bottom:4px;box-sizing:border-box;';
 
     const counts = {};
     const gameRows = games.map((g, i) => {
@@ -3607,18 +3605,18 @@ function bpRenderPreview(data) {
 
     preview.innerHTML = `
         <div style="background:rgba(255,255,255,0.03);border:1px solid var(--color-primary);border-radius:10px;padding:20px;">
-            <h4 style="color:#eaeaea;margin-bottom:6px;">Gennemse og ret inden oprettelse</h4>
-            <div style="color:#aaa;font-size:0.88em;margin-bottom:15px;">Format: ${escapeHtml(HOLDKAMP_FORMATS[data.format]?.name || 'ukendt — oprettes med kampene som de står på holdsedlen')}</div>
+            <h4 style="color:var(--text-primary, #eaeaea);margin-bottom:6px;">Gennemse og ret inden oprettelse</h4>
+            <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.88em;margin-bottom:15px;">Format: ${escapeHtml(HOLDKAMP_FORMATS[data.format]?.name || 'ukendt — oprettes med kampene som de står på holdsedlen')}</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;">
                 <div>
-                    <label style="color:#aaa;font-size:0.85em;">Hold 1</label>
+                    <label style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.85em;">Hold 1</label>
                     <input id="bp_team1" value="${escapeHtml(team1Name)}"
-                           style="width:100%;padding:10px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-win, #45d17e);border-radius:5px;margin-top:4px;box-sizing:border-box;">
+                           style="width:100%;padding:10px;background:var(--color-bg-dark);color:var(--text-primary, #eaeaea);border:1px solid var(--color-win, #45d17e);border-radius:5px;margin-top:4px;box-sizing:border-box;">
                 </div>
                 <div>
-                    <label style="color:#aaa;font-size:0.85em;">Hold 2</label>
+                    <label style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.85em;">Hold 2</label>
                     <input id="bp_team2" value="${escapeHtml(team2Name)}"
-                           style="width:100%;padding:10px;background:var(--color-bg-dark);color:#eaeaea;border:1px solid var(--color-accent);border-radius:5px;margin-top:4px;box-sizing:border-box;">
+                           style="width:100%;padding:10px;background:var(--color-bg-dark);color:var(--text-primary, #eaeaea);border:1px solid var(--color-accent);border-radius:5px;margin-top:4px;box-sizing:border-box;">
                 </div>
             </div>
             ${gameRows}
@@ -3757,14 +3755,14 @@ function renderTournamentBlocker(activeTeamMatch) {
     if (!blocker) {
         blocker = document.createElement('div');
         blocker.id = 'tournamentBlocker';
-        blocker.style.cssText = 'margin-bottom:25px; padding:20px; background:rgba(241,196,15,0.1); border:2px solid #f1c40f; border-radius:10px;';
+        blocker.style.cssText = 'margin-bottom:25px; padding:20px; background:rgba(var(--color-warning-rgb, 255, 176, 46),0.1); border:2px solid var(--color-warning, #ffb02e); border-radius:10px;';
         const section = document.getElementById('tournamentSection');
         const headerWrap = section.querySelector('div');
         headerWrap.insertAdjacentElement('afterend', blocker);
     }
     blocker.innerHTML = `
-        <h3 style="color:#f1c40f; margin:0 0 10px 0;">⚠ Aktiv holdkamp findes</h3>
-        <p style="color:#ccc; margin:0 0 12px 0; line-height:1.5;">
+        <h3 style="color:var(--color-warning, #ffb02e); margin:0 0 10px 0;">⚠ Aktiv holdkamp findes</h3>
+        <p style="color:var(--text-secondary, rgba(255, 255, 255, 0.78)); margin:0 0 12px 0; line-height:1.5;">
             Du har en aktiv holdkamp: <strong>${escapeHtml(activeTeamMatch.team1_name)} vs ${escapeHtml(activeTeamMatch.team2_name)}</strong>.<br>
             Du kan kun have én aktiv holdkamp ELLER turnering ad gangen. Afslut eller slet holdkampen først.
         </p>
@@ -3865,16 +3863,16 @@ async function toggleTournamentAutoSync(tournamentId, checkbox) {
 function autoSyncStatusHtml(t) {
     if (!t.auto_sync) return '';
     const s = t.autoSyncStatus;
-    if (!s) return `<div style="color:#777; font-size:0.78em; width:100%;">Auto-opdatering aktiv — venter på første kørsel…</div>`;
+    if (!s) return `<div style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.78em; width:100%;">Auto-opdatering aktiv — venter på første kørsel…</div>`;
     const time = new Date(s.at).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
     if (s.error) {
-        return `<div style="color:var(--color-danger, #d92c3f); font-size:0.78em; width:100%;">Auto-opdatering fejlede kl. ${time} — prøver igen om lidt</div>`;
+        return `<div style="color:var(--color-danger-text, #ff6b7a); font-size:0.78em; width:100%;">Auto-opdatering fejlede kl. ${time} — prøver igen om lidt</div>`;
     }
     const added = s.added > 0 ? ` · ${s.added} nye kampe tilføjet` : '';
     const candidates = s.newCandidates > 0
-        ? ` · <span style="color:#f0a500; font-weight:bold;">${s.newCandidates} kampe i ny kategori — tryk Opdater for at tilføje</span>`
+        ? ` · <span style="color:var(--color-warning, #ffb02e); font-weight:bold;">${s.newCandidates} kampe i ny kategori — tryk Opdater for at tilføje</span>`
         : '';
-    return `<div style="color:#777; font-size:0.78em; width:100%;">Auto-opdateret kl. ${time}${added}${candidates}</div>`;
+    return `<div style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.78em; width:100%;">Auto-opdateret kl. ${time}${added}${candidates}</div>`;
 }
 
 // Holder kandidaterne for det åbne bekræftelses-modal så "Tilføj valgte" kan finde dem.
@@ -3895,14 +3893,14 @@ function showNewMatchCandidates(tournamentId, candidates, summaryHtml) {
         return `<label style="display:flex; align-items:center; gap:8px; padding:6px 10px; background:rgba(0,0,0,0.2); border-radius:4px; margin-bottom:4px; cursor:pointer; flex-wrap:wrap;">
             <input type="checkbox" class="sync-cand-check" data-idx="${idx}" checked style="width:16px; height:16px; cursor:pointer; flex-shrink:0;">
             ${dayBadge}${catBadge}
-            <span style="color:#eaeaea; font-size:0.85em; flex:1; min-width:160px;">${escapeHtml(side1)} <span style="color:#777;">vs</span> ${escapeHtml(side2)}</span>
+            <span style="color:var(--text-primary, #eaeaea); font-size:0.85em; flex:1; min-width:160px;">${escapeHtml(side1)} <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">vs</span> ${escapeHtml(side2)}</span>
         </label>`;
     }).join('');
 
     const bodyHtml = `
         <div style="text-align:left;">
-            <div style="color:#ccc; font-size:0.9em; margin-bottom:12px; line-height:1.5;">${summaryHtml}</div>
-            <div style="color:#eaeaea; font-size:0.9em; margin-bottom:8px; font-weight:600;">Nye kampe på Tournament Software — vælg hvilke der skal tilføjes:</div>
+            <div style="color:var(--text-secondary, rgba(255, 255, 255, 0.78)); font-size:0.9em; margin-bottom:12px; line-height:1.5;">${summaryHtml}</div>
+            <div style="color:var(--text-primary, #eaeaea); font-size:0.9em; margin-bottom:8px; font-weight:600;">Nye kampe på Tournament Software — vælg hvilke der skal tilføjes:</div>
             <div style="max-height:340px; overflow-y:auto; padding-right:6px;">${rows}</div>
         </div>`;
 
@@ -3960,7 +3958,7 @@ function renderTournaments(tournaments) {
     if (!container) return;
 
     if (!tournaments || tournaments.length === 0) {
-        container.innerHTML = '<p style="color:#aaa; font-style:italic;">Ingen aktive turneringer. Opret en ovenfor for at komme i gang.</p>';
+        container.innerHTML = '<p style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-style:italic;">Ingen aktive turneringer. Opret en ovenfor for at komme i gang.</p>';
         return;
     }
 
@@ -4049,7 +4047,7 @@ function renderTournaments(tournaments) {
 function renderTournamentBlock(t) {
     const matches = t.matches || [];
     const matchesHtml = matches.length === 0
-        ? '<p style="color:#888; font-style:italic; padding: 8px 0;">Ingen kampe endnu — tilføj nedenfor.</p>'
+        ? '<p style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-style:italic; padding: 8px 0;">Ingen kampe endnu — tilføj nedenfor.</p>'
         : matches.map(m => renderTournamentMatchRow(t.id, m)).join('');
 
     return `
@@ -4057,13 +4055,13 @@ function renderTournamentBlock(t) {
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
                 <h3 style="color: var(--color-accent); margin:0;">${escapeHtml(t.name)}</h3>
                 <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                    ${t.source_tournament_id ? `<label style="display:flex; align-items:center; gap:6px; color:#ccc; font-size:0.85em; white-space:nowrap; cursor:pointer;">
+                    ${t.source_tournament_id ? `<label style="display:flex; align-items:center; gap:6px; color:var(--text-secondary, rgba(255, 255, 255, 0.78)); font-size:0.85em; white-space:nowrap; cursor:pointer;">
                         <input type="checkbox" id="t${t.id}_autoSync" ${t.auto_sync ? 'checked' : ''} style="width:16px; height:16px; cursor:pointer;">
                         Auto-opdater hvert 4. minut
                     </label>
-                    <button id="t${t.id}_syncBtn" class="btn-primary" style="padding:6px 14px; font-size:0.88em;">↻ Opdater fra Tournament Software</button>` : ''}
-                    <button id="t${t.id}_finishBtn" class="btn-secondary" style="padding:6px 14px; font-size:0.88em;">Afslut turnering</button>
-                    <button id="t${t.id}_deleteBtn" class="btn-danger" style="padding:6px 14px; font-size:0.88em;">Slet</button>
+                    <button id="t${t.id}_syncBtn" class="btn-primary btn-sm">↻ Opdater fra Tournament Software</button>` : ''}
+                    <button id="t${t.id}_finishBtn" class="btn-secondary btn-sm">Afslut turnering</button>
+                    <button id="t${t.id}_deleteBtn" class="btn-danger btn-sm">Slet</button>
                     ${autoSyncStatusHtml(t)}
                 </div>
             </div>
@@ -4073,12 +4071,12 @@ function renderTournamentBlock(t) {
             </div>
 
             <div data-tournament-add-form="${t.id}" style="padding: 14px; background: rgba(0,0,0,0.25); border-radius: 8px;">
-                <h4 style="margin: 0 0 12px 0; color: #ccc; font-size: 0.95em;">Tilføj kamp</h4>
+                <h4 style="margin: 0 0 12px 0; color: var(--text-secondary, rgba(255, 255, 255, 0.78)); font-size: 0.95em;">Tilføj kamp</h4>
 
                 <div style="display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-bottom: 10px; align-items: center;">
                     <input type="text" id="t${t.id}_label" placeholder="Label (valgfri) – fx 'U13 HS pulje A'"
-                           style="padding:8px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid #444; border-radius:4px;">
-                    <label style="display:flex; align-items:center; gap:6px; color:#ccc; font-size:0.9em; white-space:nowrap;">
+                           style="padding:8px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px;">
+                    <label style="display:flex; align-items:center; gap:6px; color:var(--text-secondary, rgba(255, 255, 255, 0.78)); font-size:0.9em; white-space:nowrap;">
                         <input type="checkbox" id="t${t.id}_doubles" style="width:16px; height:16px; cursor:pointer;">
                         Double
                     </label>
@@ -4086,28 +4084,28 @@ function renderTournamentBlock(t) {
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
                     <div>
-                        <label style="display:block; color:#aaa; font-size:0.82em; margin-bottom:4px;">Side 1 – spiller 1</label>
+                        <label style="display:block; color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-bottom:4px;">Side 1 – spiller 1</label>
                         <input type="text" id="t${t.id}_side1p1" placeholder="Spillernavn"
-                               style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid #444; border-radius:4px;">
+                               style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px;">
                     </div>
                     <div>
-                        <label style="display:block; color:#aaa; font-size:0.82em; margin-bottom:4px;">Side 2 – spiller 1</label>
+                        <label style="display:block; color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-bottom:4px;">Side 2 – spiller 1</label>
                         <input type="text" id="t${t.id}_side2p1" placeholder="Spillernavn"
-                               style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid #444; border-radius:4px;">
+                               style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px;">
                     </div>
                     <div id="t${t.id}_side1p2_wrap" style="display:none;">
-                        <label style="display:block; color:#aaa; font-size:0.82em; margin-bottom:4px;">Side 1 – makker</label>
+                        <label style="display:block; color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-bottom:4px;">Side 1 – makker</label>
                         <input type="text" id="t${t.id}_side1p2" placeholder="Makker"
-                               style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid #444; border-radius:4px;">
+                               style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px;">
                     </div>
                     <div id="t${t.id}_side2p2_wrap" style="display:none;">
-                        <label style="display:block; color:#aaa; font-size:0.82em; margin-bottom:4px;">Side 2 – makker</label>
+                        <label style="display:block; color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-bottom:4px;">Side 2 – makker</label>
                         <input type="text" id="t${t.id}_side2p2" placeholder="Makker"
-                               style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid #444; border-radius:4px;">
+                               style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px;">
                     </div>
                 </div>
 
-                <button id="t${t.id}_addBtn" class="btn-primary" style="width:100%; padding:10px;">+ Tilføj Kamp</button>
+                <button id="t${t.id}_addBtn" class="btn-primary btn-block">+ Tilføj Kamp</button>
             </div>
         </div>
     `;
@@ -4152,12 +4150,12 @@ function renderTournamentMatchRow(tournamentId, m) {
                 : (m.side1_player1 || '');
             const nums = m.set_scores === 'W.O.' ? [] : orientHistorySetScoreNumbers(m.set_scores, side1Key);
             const scoreText = nums.length ? nums.join(' · ') : m.set_scores;
-            courtInfo = `<div style="color:#999; font-size:0.82em; margin-top:3px;">${escapeHtml(scoreText)}</div>`;
+            courtInfo = `<div style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-top:3px;">${escapeHtml(scoreText)}</div>`;
         }
     }
 
     const labelHtml = m.label
-        ? `<span style="color:#aaa; font-size:0.85em; margin-right:8px;">${escapeHtml(m.label)}</span>`
+        ? `<span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.85em; margin-right:8px;">${escapeHtml(m.label)}</span>`
         : '';
 
     // Rediger tillades for pending + active (sync-loop pusher navne videre til banen),
@@ -4165,17 +4163,17 @@ function renderTournamentMatchRow(tournamentId, m) {
     const canEdit = m.status !== 'finished';
     const canDelete = m.status !== 'active';
     const editBtn = canEdit
-        ? `<button onclick="startEditTournamentMatch(${tournamentId}, ${m.id})" style="padding:4px 10px; background:transparent; color:#aaa; border:1px solid #555; border-radius:4px; cursor:pointer; font-size:0.8em;">Rediger</button>`
+        ? `<button onclick="startEditTournamentMatch(${tournamentId}, ${m.id})" class="btn-secondary btn-sm">Rediger</button>`
         : '';
     const deleteBtn = canDelete
-        ? `<button onclick="confirmDeleteTournamentMatch(${tournamentId}, ${m.id})" style="padding:4px 10px; background:transparent; color:var(--color-danger, #d92c3f); border:1px solid var(--color-danger, #d92c3f); border-radius:4px; cursor:pointer; font-size:0.8em;">Slet</button>`
+        ? `<button onclick="confirmDeleteTournamentMatch(${tournamentId}, ${m.id})" class="btn-danger btn-sm">Slet</button>`
         : '';
 
     return `
         <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:rgba(0,0,0,0.2); border-radius:6px; margin-bottom:6px; gap:10px; flex-wrap:wrap;">
             <div style="flex:1; min-width:200px;">
-                <div style="color:#eaeaea;">
-                    ${labelHtml}<strong>${side1Html}</strong> <span style="color:#777;">vs</span> <strong>${side2Html}</strong>
+                <div style="color:var(--text-primary, #eaeaea);">
+                    ${labelHtml}<strong>${side1Html}</strong> <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">vs</span> <strong>${side2Html}</strong>
                 </div>
                 ${courtInfo}
             </div>
@@ -4191,44 +4189,44 @@ function renderTournamentMatchRow(tournamentId, m) {
 function renderTournamentMatchEditForm(tournamentId, m) {
     const isActive = m.status === 'active';
     const warningHtml = isActive
-        ? `<div style="margin-bottom:10px; padding:8px 10px; background:rgba(241,196,15,0.12); border:1px solid #f1c40f; border-radius:4px; color:#f1c40f; font-size:0.82em;">⚠ Kampen er i gang på Bane ${m.court_number}. Navneændringer pusher til banen indenfor 5 sekunder.</div>`
+        ? `<div style="margin-bottom:10px; padding:8px 10px; background:rgba(var(--color-warning-rgb, 255, 176, 46),0.12); border:1px solid var(--color-warning, #ffb02e); border-radius:4px; color:var(--color-warning, #ffb02e); font-size:0.82em;">⚠ Kampen er i gang på Bane ${m.court_number}. Navneændringer pusher til banen indenfor 5 sekunder.</div>`
         : '';
     return `
         <div data-tournament-edit="${m.id}" style="padding:14px; background:rgba(0,0,0,0.3); border:1px solid var(--color-primary); border-radius:6px; margin-bottom:6px;">
             ${warningHtml}
             <div style="display:grid; grid-template-columns: 1fr auto; gap:10px; margin-bottom:10px; align-items:center;">
                 <input type="text" id="te_${m.id}_label" value="${escapeHtml(m.label || '')}" placeholder="Label (valgfri)"
-                       style="padding:8px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid #444; border-radius:4px;">
-                <label style="display:flex; align-items:center; gap:6px; color:#ccc; font-size:0.9em; white-space:nowrap;">
+                       style="padding:8px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px;">
+                <label style="display:flex; align-items:center; gap:6px; color:var(--text-secondary, rgba(255, 255, 255, 0.78)); font-size:0.9em; white-space:nowrap;">
                     <input type="checkbox" id="te_${m.id}_doubles" ${m.doubles ? 'checked' : ''} style="width:16px; height:16px; cursor:pointer;">
                     Double
                 </label>
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
                 <div>
-                    <label style="display:block; color:#aaa; font-size:0.82em; margin-bottom:4px;">Side 1 – spiller 1</label>
+                    <label style="display:block; color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-bottom:4px;">Side 1 – spiller 1</label>
                     <input type="text" id="te_${m.id}_s1p1" value="${escapeHtml(m.side1_player1 || '')}" placeholder="Spillernavn"
-                           style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid #444; border-radius:4px;">
+                           style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px;">
                 </div>
                 <div>
-                    <label style="display:block; color:#aaa; font-size:0.82em; margin-bottom:4px;">Side 2 – spiller 1</label>
+                    <label style="display:block; color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-bottom:4px;">Side 2 – spiller 1</label>
                     <input type="text" id="te_${m.id}_s2p1" value="${escapeHtml(m.side2_player1 || '')}" placeholder="Spillernavn"
-                           style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid #444; border-radius:4px;">
+                           style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px;">
                 </div>
                 <div id="te_${m.id}_s1p2_wrap" style="display:${m.doubles ? 'block' : 'none'};">
-                    <label style="display:block; color:#aaa; font-size:0.82em; margin-bottom:4px;">Side 1 – makker</label>
+                    <label style="display:block; color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-bottom:4px;">Side 1 – makker</label>
                     <input type="text" id="te_${m.id}_s1p2" value="${escapeHtml(m.side1_player2 || '')}" placeholder="Makker"
-                           style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid #444; border-radius:4px;">
+                           style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px;">
                 </div>
                 <div id="te_${m.id}_s2p2_wrap" style="display:${m.doubles ? 'block' : 'none'};">
-                    <label style="display:block; color:#aaa; font-size:0.82em; margin-bottom:4px;">Side 2 – makker</label>
+                    <label style="display:block; color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-bottom:4px;">Side 2 – makker</label>
                     <input type="text" id="te_${m.id}_s2p2" value="${escapeHtml(m.side2_player2 || '')}" placeholder="Makker"
-                           style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid #444; border-radius:4px;">
+                           style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px;">
                 </div>
             </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button onclick="saveEditTournamentMatch(${tournamentId}, ${m.id})" class="btn-primary" style="padding:8px 18px;">Gem</button>
-                <button onclick="cancelEditTournamentMatch(${m.id})" class="btn-secondary" style="padding:8px 18px;">Annuller</button>
+                <button onclick="saveEditTournamentMatch(${tournamentId}, ${m.id})" class="btn-primary">Gem</button>
+                <button onclick="cancelEditTournamentMatch(${m.id})" class="btn-secondary">Annuller</button>
             </div>
         </div>
     `;
@@ -4355,7 +4353,7 @@ function tsImportStatus(text, type) {
         return;
     }
     const colors = {
-        info: { bg: 'rgba(var(--color-info-rgb, 52, 152, 219),0.15)', border: 'var(--color-info, #3498db)', text: '#7fc7f0' },
+        info: { bg: 'rgba(var(--color-info-rgb, 52, 152, 219),0.15)', border: 'var(--color-info, #3498db)', text: 'var(--color-info-text, #7fc7f0)' },
         success: { bg: 'rgba(var(--color-win-rgb, 69, 209, 126),0.15)', border: 'var(--color-win, #45d17e)', text: '#90df93' },
         error: { bg: 'rgba(var(--color-danger-rgb, 217, 44, 63),0.15)', border: 'var(--color-danger, #d92c3f)', text: '#f0867a' }
     };
@@ -4375,7 +4373,7 @@ function tsImportProgress(label, current, total) {
     el.style.display = 'block';
     el.style.background = 'rgba(var(--color-info-rgb, 52, 152, 219),0.12)';
     el.style.border = '1px solid var(--color-info, #3498db)';
-    el.style.color = '#7fc7f0';
+    el.style.color = 'var(--color-info-text, #7fc7f0)';
     if (total > 0) {
         const pct = Math.min(100, Math.round((current / total) * 100));
         el.innerHTML = `
@@ -4450,7 +4448,7 @@ function renderTournamentImportPreview(data) {
         const side2 = m.doubles
             ? `${m.side2Player1 || '?'}${m.side2Player2 ? ' & ' + m.side2Player2 : ''}`
             : (m.side2Player1 || '?');
-        const numBadge = `<span style="background:#333; color:#aaa; padding:2px 7px; border-radius:4px; font-size:0.74em; font-family:monospace; min-width:32px; text-align:center;">#${idx + 1}</span>`;
+        const numBadge = `<span style="background:#333; color:var(--text-muted, rgba(255, 255, 255, 0.62)); padding:2px 7px; border-radius:4px; font-size:0.74em; font-family:monospace; min-width:32px; text-align:center;">#${idx + 1}</span>`;
         const dayBadge = m.dayLabel
             ? `<span style="background:#3a3a4a; color:#bfa; padding:2px 7px; border-radius:4px; font-size:0.74em; white-space:nowrap;">${escapeHtml(m.dayLabel)}</span>`
             : '';
@@ -4458,7 +4456,7 @@ function renderTournamentImportPreview(data) {
             ? `<span style="background:var(--color-accent); color:#fff; padding:2px 7px; border-radius:4px; font-size:0.74em; white-space:nowrap;">${escapeHtml(m.category)}</span>`
             : '';
         const roundBadge = m.round
-            ? `<span style="color:#888; font-size:0.78em; white-space:nowrap;">${escapeHtml(m.round)}</span>`
+            ? `<span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.78em; white-space:nowrap;">${escapeHtml(m.round)}</span>`
             : '';
         return `<label data-category="${escapeHtml(m.category || '')}" data-day="${escapeHtml(m.day || '')}" class="ts-import-row" style="display:flex; align-items:center; gap:8px; padding:6px 10px; background:rgba(0,0,0,0.2); border-radius:4px; margin-bottom:4px; cursor:pointer; flex-wrap:wrap;">
             <input type="checkbox" class="ts-import-check" data-idx="${idx}" checked style="width:16px; height:16px; cursor:pointer; flex-shrink:0;">
@@ -4466,20 +4464,20 @@ function renderTournamentImportPreview(data) {
             ${dayBadge}
             ${catBadge}
             ${roundBadge}
-            <span style="color:#eaeaea; font-size:0.85em; flex:1; min-width:160px;">${escapeHtml(side1)} <span style="color:#777;">vs</span> ${escapeHtml(side2)}</span>
+            <span style="color:var(--text-primary, #eaeaea); font-size:0.85em; flex:1; min-width:160px;">${escapeHtml(side1)} <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">vs</span> ${escapeHtml(side2)}</span>
         </label>`;
     }).join('');
 
     // Dag-filter UI — vises kun hvis turneringen har 2+ dage
     const dayFilterHtml = (data.days && data.days.length > 1)
         ? `<div style="margin-bottom: 12px; padding:12px; background:rgba(0,0,0,0.25); border-radius:6px;">
-            <div style="color:#ccc; font-size:0.85em; margin-bottom:8px; font-weight:600;">Vælg dage at importere:</div>
+            <div style="color:var(--text-secondary, rgba(255, 255, 255, 0.78)); font-size:0.85em; margin-bottom:8px; font-weight:600;">Vælg dage at importere:</div>
             <div style="display:flex; gap:14px; flex-wrap:wrap;">
                 ${data.days.map(d => {
                     const count = data.matches.filter(m => m.day === d.date).length;
                     return `<label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
                         <input type="checkbox" class="ts-day-check" data-day="${escapeHtml(d.date)}" checked style="width:16px; height:16px; cursor:pointer;">
-                        <span style="color:#eaeaea; font-size:0.9em;">${escapeHtml(d.label)} <span style="color:#888;">(${count})</span></span>
+                        <span style="color:var(--text-primary, #eaeaea); font-size:0.9em;">${escapeHtml(d.label)} <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">(${count})</span></span>
                     </label>`;
                 }).join('')}
             </div>
@@ -4495,32 +4493,32 @@ function renderTournamentImportPreview(data) {
 
     preview.innerHTML = `
         <div style="margin-bottom: 16px;">
-            <label style="display:block; color:#aaa; font-size:0.85em; margin-bottom:6px;">Turneringens navn (kan redigeres):</label>
+            <label style="display:block; color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.85em; margin-bottom:6px;">Turneringens navn (kan redigeres):</label>
             <input type="text" id="tsImportTournamentName" value="${escapeHtml(data.tournamentName || '')}"
-                   style="width:100%; box-sizing:border-box; padding:10px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid var(--color-primary); border-radius:5px;">
+                   style="width:100%; box-sizing:border-box; padding:10px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid var(--color-primary); border-radius:5px;">
         </div>
 
-        <p style="color:#888; font-size:0.82em; margin: 0 0 12px 0;">
+        <p style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin: 0 0 12px 0;">
             Kampene importeres i denne rækkefølge — den næste til afvikling ligger øverst.
         </p>
 
         ${dayFilterHtml}
 
         <div style="margin-bottom: 12px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-            <button type="button" id="tsCheckAllBtn" class="btn-secondary" style="padding:6px 14px; font-size:0.85em;">Vælg alle</button>
-            <button type="button" id="tsUncheckAllBtn" class="btn-secondary" style="padding:6px 14px; font-size:0.85em;">Fravælg alle</button>
-            <select id="tsCategoryFilter" style="padding:6px 10px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid #444; border-radius:4px; font-size:0.85em;">
+            <button type="button" id="tsCheckAllBtn" class="btn-secondary btn-sm">Vælg alle</button>
+            <button type="button" id="tsUncheckAllBtn" class="btn-secondary btn-sm">Fravælg alle</button>
+            <select id="tsCategoryFilter" style="padding:6px 10px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px; font-size:0.85em;">
                 ${categoryOptions}
             </select>
-            <button type="button" id="tsToggleCategoryBtn" class="btn-secondary" style="padding:6px 14px; font-size:0.85em;">Toggle valgte kategori</button>
-            <span id="tsSelectedCount" style="color:#aaa; font-size:0.88em; margin-left:auto;"></span>
+            <button type="button" id="tsToggleCategoryBtn" class="btn-secondary btn-sm">Toggle valgte kategori</button>
+            <span id="tsSelectedCount" style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.88em; margin-left:auto;"></span>
         </div>
 
         <div style="max-height: 500px; overflow-y: auto; padding-right: 6px; margin-bottom: 16px;">
             ${rows}
         </div>
 
-        <button type="button" id="tsConfirmImportBtn" class="btn-primary" style="width:100%; padding:12px; font-size:1.05em;">
+        <button type="button" id="tsConfirmImportBtn" class="btn-primary btn-block btn-lg">
             Opret turnering med valgte kampe
         </button>
     `;
@@ -4908,15 +4906,15 @@ function renderPlannerTokens(tokens) {
     const listEl = document.getElementById('plannerTokensList');
     const url = `${window.location.origin}/api/integrations/planned-round`;
     if (!tokens.length) {
-        listEl.innerHTML = '<p style="color:rgba(255,255,255,0.4);padding:12px 0;">Ingen nøgle oprettet endnu. Opret én og sæt den ind i badmintonplanner.dk.</p>';
+        listEl.innerHTML = '<p style="color:var(--text-muted, rgba(255, 255, 255, 0.62));padding:12px 0;">Ingen nøgle oprettet endnu. Opret én og sæt den ind i badmintonplanner.dk.</p>';
         ptFillTokens(tokens);
         return;
     }
     const copyRow = (label, value) => `
         <div class="pl-copy">
-            <span style="font-size:0.72em;text-transform:uppercase;letter-spacing:0.06em;color:rgba(255,255,255,0.45);width:70px;flex-shrink:0;">${label}</span>
+            <span style="font-size:0.72em;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted, rgba(255, 255, 255, 0.62));width:70px;flex-shrink:0;">${label}</span>
             <input readonly value="${escapeHtml(value)}" onclick="this.select()">
-            <button class="pl-btn-sm" onclick="copyLink(this.parentElement.querySelector('input').value, this)">Kopiér</button>
+            <button class="btn-secondary btn-sm" onclick="copyLink(this.parentElement.querySelector('input').value, this)">Kopiér</button>
         </div>`;
     listEl.innerHTML = tokens.map(t => {
         const lastUsed = t.last_used_at ? new Date(t.last_used_at).toLocaleString('da-DK') : 'Aldrig';
@@ -4925,14 +4923,14 @@ function renderPlannerTokens(tokens) {
             <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">
                 <div style="flex:1;min-width:240px;">
                     <div style="font-weight:600;margin-bottom:2px;">${escapeHtml(t.name)}</div>
-                    <div style="font-size:0.8em;color:rgba(255,255,255,0.45);">Oprettet ${new Date(t.created_at).toLocaleDateString('da-DK')} &nbsp;•&nbsp; Sidst brugt: ${lastUsed}</div>
+                    <div style="font-size:0.8em;color:var(--text-muted, rgba(255, 255, 255, 0.62));">Oprettet ${new Date(t.created_at).toLocaleDateString('da-DK')} &nbsp;•&nbsp; Sidst brugt: ${lastUsed}</div>
                     ${t.is_active ? copyRow('Adresse', url) + copyRow('Nøgle', t.token) : ''}
                 </div>
                 <div style="display:flex;gap:8px;flex-shrink:0;">
                     ${t.is_active
-                        ? `<button class="pl-btn-danger" onclick="handleRevokePlannerToken(${t.id})">Tilbagekald</button>`
-                        : `<span style="font-size:0.8em;color:rgba(255,255,255,0.3);padding:6px 10px;">Tilbagekaldt</span>
-                           <button class="pl-btn-danger" onclick="handlePermanentDeletePlannerToken(${t.id})">${Ikon('slet')} Slet</button>`}
+                        ? `<button class="btn-danger btn-sm" onclick="handleRevokePlannerToken(${t.id})">Tilbagekald</button>`
+                        : `<span style="font-size:0.8em;color:var(--text-muted, rgba(255, 255, 255, 0.62));padding:6px 10px;">Tilbagekaldt</span>
+                           <button class="btn-danger btn-sm" onclick="handlePermanentDeletePlannerToken(${t.id})">${Ikon('slet')} Slet</button>`}
                 </div>
             </div>
         </div>`;
@@ -4997,7 +4995,7 @@ function togglePlannerLog() {
 
 async function loadPlannerLog() {
     const panel = document.getElementById('plannerLogPanel');
-    panel.innerHTML = '<p style="color:rgba(255,255,255,0.4);">Indlæser…</p>';
+    panel.innerHTML = '<p style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">Indlæser…</p>';
     try {
         const rows = await api.getPlannerLog(100);
         renderPlannerLog(rows);
@@ -5015,7 +5013,7 @@ const PL_AARSAG = {
 function renderPlannerLog(rows) {
     const panel = document.getElementById('plannerLogPanel');
     if (!rows.length) {
-        panel.innerHTML = '<p style="color:rgba(255,255,255,0.4);">Ingen kald endnu.</p>';
+        panel.innerHTML = '<p style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">Ingen kald endnu.</p>';
         return;
     }
     const linjer = rows.map(r => {
@@ -5027,12 +5025,12 @@ function renderPlannerLog(rows) {
             const detaljer = r.result.map(x =>
                 `Bane ${x.courtNumber}: ${x.status === 'shown' ? 'vist' : x.status === 'cleared' ? 'ryddet' : 'afvist'}${x.reason ? ` (${PL_AARSAG[x.reason] || x.reason})` : ''}`
             ).join('<br>');
-            resultat = `<details><summary>${t.shown} vist · ${t.cleared} ryddet · ${t.rejected} afvist</summary><div style="padding:6px 0 0 12px;color:rgba(255,255,255,0.6);">${detaljer}</div></details>`;
+            resultat = `<details><summary>${t.shown} vist · ${t.cleared} ryddet · ${t.rejected} afvist</summary><div style="padding:6px 0 0 12px;color:var(--text-muted, rgba(255, 255, 255, 0.62));">${detaljer}</div></details>`;
         } else if (r.result && Array.isArray(r.result.cleared)) {
             resultat = r.result.cleared.length ? `Ryddet bane ${r.result.cleared.join(', ')}` : 'Ingen baner at rydde';
         }
         const antal = (r.endpoint === 'planned-round' && r.match_count !== null && r.match_count !== undefined)
-            ? ` <span style="color:rgba(255,255,255,0.4);">(${r.match_count} baner)</span>` : '';
+            ? ` <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">(${r.match_count} baner)</span>` : '';
         return `
         <tr>
             <td style="white-space:nowrap;">${new Date(r.received_at).toLocaleString('da-DK')}</td>
@@ -5163,12 +5161,12 @@ const PT_RESULTAT_STATUS = {
 function ptResultaterHtml(data) {
     const side = s => (s || []).filter(Boolean).map(escapeHtml).join(' / ');
     if (!data.results.length) {
-        return '<div style="margin-top:8px;color:rgba(255,255,255,0.5);">Ingen resultater i dag for denne nøgle endnu.</div>';
+        return '<div style="margin-top:8px;color:var(--text-muted, rgba(255, 255, 255, 0.62));">Ingen resultater i dag for denne nøgle endnu.</div>';
     }
     const raekker = data.results.map(r => {
         const saet = r.sets.length ? r.sets.map(x => `${x.side1}-${x.side2}`).join(', ') : '—';
         const vinder = r.winner === 1 ? side(r.side1) : r.winner === 2 ? side(r.side2) : '—';
-        const rettet = r.updatedAt !== r.recordedAt ? ' <span style="color:rgba(255,255,255,0.45);">(rettet)</span>' : '';
+        const rettet = r.updatedAt !== r.recordedAt ? ' <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">(rettet)</span>' : '';
         return `<tr>
             <td>${r.courtNumber}</td>
             <td>${escapeHtml(r.label || r.roundId || '')}</td>
@@ -5187,31 +5185,31 @@ function ptResultaterHtml(data) {
                 <tbody>${raekker}</tbody>
             </table>
         </div>
-        <details style="margin-top:8px;"><summary style="cursor:pointer;color:rgba(255,255,255,0.6);">Vis JSON (som badmintonplanner.dk får det)</summary>
+        <details style="margin-top:8px;"><summary style="cursor:pointer;color:var(--text-muted, rgba(255, 255, 255, 0.62));">Vis JSON (som badmintonplanner.dk får det)</summary>
             <pre style="white-space:pre-wrap;word-break:break-word;font-size:0.85em;margin:8px 0 0;">${escapeHtml(JSON.stringify(data, null, 2))}</pre>
         </details>`;
 }
 
 function ptSvarHtml(status, ms, data) {
     const ok = status >= 200 && status < 300;
-    let html = `<div><span class="${ok ? 'pl-status-ok' : 'pl-status-err'}">HTTP ${status}</span> <span style="color:rgba(255,255,255,0.4);">· ${ms} ms</span></div>`;
+    let html = `<div><span class="${ok ? 'pl-status-ok' : 'pl-status-err'}">HTTP ${status}</span> <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">· ${ms} ms</span></div>`;
     if (!data) return html;
     if (ok && Array.isArray(data.results) && 'hasMore' in data) return html + ptResultaterHtml(data);
-    if (data.error) html += `<div style="margin-top:6px;">${escapeHtml(data.error)}${data.code ? ` <span style="color:rgba(255,255,255,0.4);">(${escapeHtml(data.code)})</span>` : ''}</div>`;
-    if (Array.isArray(data.details)) html += `<div style="color:rgba(255,255,255,0.6);">${data.details.map(escapeHtml).join('<br>')}</div>`;
+    if (data.error) html += `<div style="margin-top:6px;">${escapeHtml(data.error)}${data.code ? ` <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">(${escapeHtml(data.code)})</span>` : ''}</div>`;
+    if (Array.isArray(data.details)) html += `<div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">${data.details.map(escapeHtml).join('<br>')}</div>`;
     if (Array.isArray(data.results)) {
         html += '<div style="margin-top:8px;">' + data.results.map(r => {
             const s = r.status === 'shown' ? '✓ vist' : r.status === 'cleared' ? '– ryddet' : `✗ afvist (${PL_AARSAG[r.reason] || r.reason})`;
-            const prev = r.previous ? ` <span style="color:rgba(255,255,255,0.45);">før: ${escapeHtml(r.previous.side1)} vs ${escapeHtml(r.previous.side2)}${r.previous.counted ? `, ${escapeHtml(r.previous.sets)} sæt` : ''}</span>` : '';
+            const prev = r.previous ? ` <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">før: ${escapeHtml(r.previous.side1)} vs ${escapeHtml(r.previous.side2)}${r.previous.counted ? `, ${escapeHtml(r.previous.sets)} sæt` : ''}</span>` : '';
             return `<div>Bane ${r.courtNumber}: ${s}${prev}</div>`;
         }).join('') + '</div>';
-        if (data.replayed) html += '<div style="color:rgba(255,255,255,0.5);">Gentaget kald — samme roundId som sidst, banerne blev ikke rørt.</div>';
+        if (data.replayed) html += '<div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">Gentaget kald — samme roundId som sidst, banerne blev ikke rørt.</div>';
     }
     if (data.integrationEnabled !== undefined && !Array.isArray(data.results)) {
         const v = w => w ? `${plDagNavn(w.ugedag).toLowerCase()} ${w.from.replace(':', '.')}–${w.to.replace(':', '.')}` : '';
         html += `<div style="margin-top:8px;">Integration: ${data.integrationEnabled ? 'aktiv' : 'slået fra'} · ${data.openNow ? `<span class="pl-status-ok">åbent nu</span> (${v(data.window)}), bane ${data.courtsNow.join(', ')}` : `lukket${data.nextWindow ? `, næste: ${v(data.nextWindow)}` : ''}`}</div>`;
         if (data.currentRound) html += `<div>Vist runde: ${escapeHtml(data.currentRound.label || data.currentRound.roundId || '')} (modtaget ${new Date(data.currentRound.receivedAt).toLocaleTimeString('da-DK')})</div>`;
-        else html += '<div style="color:rgba(255,255,255,0.5);">Ingen runde vises lige nu.</div>';
+        else html += '<div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">Ingen runde vises lige nu.</div>';
     }
     return html;
 }
@@ -5226,7 +5224,7 @@ let sidsteHoldkampe = []; // seneste aktive holdkampe (til afslut-advarslen)
 
 const regelBoks = (farve, indhold) =>
     `<div style="margin-bottom:12px;padding:10px 14px;border-radius:8px;font-size:0.88em;line-height:1.5;
-                 background:rgba(${farve},0.10);border:1px solid rgba(${farve},0.35);color:#eaeaea;">${indhold}</div>`;
+                 background:rgba(${farve},0.10);border:1px solid rgba(${farve},0.35);color:var(--text-primary, #eaeaea);">${indhold}</div>`;
 
 function renderHoldkampRegelBlok(tm) {
     let html = '';
@@ -5235,7 +5233,7 @@ function renderHoldkampRegelBlok(tm) {
     const fund = HoldkampFormater.tjekOpstilling(tm.format, tm.games || [], navne);
     if (fund.length) {
         html += regelBoks('240,165,0',
-            `<div style="color:#f0a500;font-weight:bold;margin-bottom:4px;">Bemærkninger til opstillingen</div>` +
+            `<div style="color:var(--color-warning, #ffb02e);font-weight:bold;margin-bottom:4px;">Bemærkninger til opstillingen</div>` +
             fund.map(f => `<div>• ${escapeHtml(f.tekst)}</div>`).join(''));
     }
 
@@ -5253,9 +5251,9 @@ function renderHoldkampRegelBlok(tm) {
                 : '';
             html += regelBoks('217,44,63',
                 `<div style="font-weight:bold;margin-bottom:4px;">${escapeHtml(m.spiller1)} og ${escapeHtml(m.spiller2)} mødes i både ${m.a}. og ${m.b}. single</div>
-                 <div style="color:#ccc;">Hvis begge klubber er enige, kan der byttes rundt på to singler fra toppen af holdskemaet (§ 7 stk. 6 c).</div>
-                 ${f ? '' : '<div style="color:#ccc;margin-top:4px;">Der er ikke fundet et byt, der løser det — ret spillerne under Rediger.</div>'}
-                 ${f && !kanByttes ? '<div style="color:#ccc;margin-top:4px;">En af kampene er allerede i gang, så der kan ikke byttes.</div>' : ''}
+                 <div style="color:var(--text-secondary, rgba(255, 255, 255, 0.78));">Hvis begge klubber er enige, kan der byttes rundt på to singler fra toppen af holdskemaet (§ 7 stk. 6 c).</div>
+                 ${f ? '' : '<div style="color:var(--text-secondary, rgba(255, 255, 255, 0.78));margin-top:4px;">Der er ikke fundet et byt, der løser det — ret spillerne under Rediger.</div>'}
+                 ${f && !kanByttes ? '<div style="color:var(--text-secondary, rgba(255, 255, 255, 0.78));margin-top:4px;">En af kampene er allerede i gang, så der kan ikke byttes.</div>' : ''}
                  ${knap}`);
         }
     }
@@ -5271,15 +5269,15 @@ function renderHoldkampRegelBlok(tm) {
                         <option value="">— Vælg spiller —</option>${opts}</select>`;
         };
         html += regelBoks('201,162,39',
-            `<div style="color:#e8c547;font-weight:bold;font-size:1.05em;margin-bottom:4px;">3–3: Der skal spilles golden set</div>
-             <div style="color:#ccc;margin-bottom:10px;">Ét sæt, spillet som et 3. sæt, med en double i en ny konstellation af spillere, der har deltaget i holdkampen.
+            `<div style="color:var(--color-warning, #ffb02e);font-weight:bold;font-size:1.05em;margin-bottom:4px;">3–3: Der skal spilles golden set</div>
+             <div style="color:var(--text-secondary, rgba(255, 255, 255, 0.78));margin-bottom:10px;">Ét sæt, spillet som et 3. sæt, med en double i en ny konstellation af spillere, der har deltaget i holdkampen.
                  Vinderen vinder holdkampen 4–3 (§ 7 stk. 1 e).</div>
              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
                  <div><div style="color:var(--color-win, #45d17e);font-size:0.85em;margin-bottom:5px;">${escapeHtml(tm.team1_name)}</div>${vaelger(1, 1)}${vaelger(1, 2)}</div>
                  <div><div style="color:var(--color-accent);font-size:0.85em;margin-bottom:5px;">${escapeHtml(tm.team2_name)}</div>${vaelger(2, 1)}${vaelger(2, 2)}</div>
              </div>
-             <button onclick="opretGoldenSet(${tm.id})" style="margin-top:6px;padding:8px 18px;background:#c9a227;color:#000;font-weight:bold;border:none;border-radius:4px;cursor:pointer;">Opret golden set</button>
-             <div style="color:#999;font-size:0.82em;margin-top:8px;">Kan et hold ikke stille et nyt par (fx ved afbud fra 2 spillere), tabes golden set uden kamp (§ 22 stk. 1 c).
+             <button onclick="opretGoldenSet(${tm.id})" class="btn-primary" style="margin-top:6px;">Opret golden set</button>
+             <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.82em;margin-top:8px;">Kan et hold ikke stille et nyt par (fx ved afbud fra 2 spillere), tabes golden set uden kamp (§ 22 stk. 1 c).
                  Opret det så med de spillere, der er, og registrér W.O. under Manuel.</div>`);
     }
     return html;
@@ -5362,7 +5360,7 @@ function opdaterHoldkampFormRegler() {
     let html = '';
     if (fund.length) {
         html += regelBoks('240,165,0',
-            `<div style="color:#f0a500;font-weight:bold;margin-bottom:4px;">Bemærkninger til opstillingen</div>` +
+            `<div style="color:var(--color-warning, #ffb02e);font-weight:bold;margin-bottom:4px;">Bemærkninger til opstillingen</div>` +
             fund.map(f => `<div>• ${escapeHtml(f.tekst)}</div>`).join(''));
     }
     if (format === 'u9_3spillere') {

@@ -125,7 +125,7 @@ html, body {
 .btn-start-match-center:disabled {
     background: rgba(13, 13, 26, 0.5);
     border: 1px solid var(--glass-border);
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     backdrop-filter: blur(4px);
     cursor: not-allowed;
     box-shadow: none;
@@ -180,7 +180,7 @@ html, body {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: rgba(255,255,255,0.45);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     margin-bottom: var(--cv-setlabel-mb, 4px);
 }
 
@@ -195,7 +195,7 @@ html, body {
 }
 
 .set-separator {
-    color: rgba(255,255,255,0.3);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
 }
 
 /* ── Klublogoer ved scoren ──
@@ -498,7 +498,7 @@ html, body {
     font-weight: 600;
     background: rgba(255,255,255,0.06);
     border: 1px solid rgba(255,255,255,0.14);
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     border-radius: var(--radius-pill);
     cursor: pointer;
     transition: all 0.2s;
@@ -513,44 +513,11 @@ html, body {
     transform: scale(1.04);
 }
 
-.btn-primary {
-    padding: 15px 30px;
-    font-size: 1.2em;
-    font-family: 'DM Sans', sans-serif;
-    background: var(--color-accent);
-    color: var(--color-on-accent, #ffffff);
-    border: none;
-    border-radius: var(--radius-pill);
-    cursor: pointer;
-    font-weight: 600;
-    transition: all 0.2s;
-    box-shadow: 0 8px 26px rgba(var(--color-accent-rgb), 0.3);
-}
-
-.btn-primary:hover {
-    filter: brightness(1.1);
-    transform: scale(1.04);
-}
-
-/* Destruktive bekræftelser (fx "Ja, Ryd Banen") — fast fare-rød,
-   uafhængig af tema, så "slet alle data" aldrig ligner en positiv handling */
+/* Tællerens dialogknapper: stilen kommer fra styles.css (E8), her kun størrelsen */
+.btn-primary,
 .btn-danger {
     padding: 15px 30px;
     font-size: 1.2em;
-    font-family: 'DM Sans', sans-serif;
-    background: #d92c3f;
-    color: #ffffff;
-    border: none;
-    border-radius: var(--radius-pill);
-    cursor: pointer;
-    font-weight: 600;
-    transition: all 0.2s;
-    box-shadow: 0 8px 26px rgba(217, 44, 63, 0.3);
-}
-
-.btn-danger:hover {
-    filter: brightness(1.1);
-    transform: scale(1.04);
 }
 
 .btn-settings {
@@ -646,7 +613,7 @@ html, body {
 .menu-close {
     background: transparent;
     border-color: rgba(255,255,255,0.15);
-    color: rgba(255,255,255,0.55);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     margin-top: 16px;
 }
 
@@ -1478,7 +1445,7 @@ html, body {
     min-width: 180px;
     padding: 8px 12px;
     background: #1a1a2e;
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     border: 1px solid var(--glass-border);
     border-radius: 10px;
     font-size: 0.9em;
@@ -1504,7 +1471,7 @@ html, body {
 .holdkamp-dismiss {
     padding: 8px 14px;
     background: transparent;
-    color: #aaa;
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     border: 1px solid rgba(255, 255, 255, 0.25);
     border-radius: var(--radius-pill);
     cursor: pointer;
@@ -1647,7 +1614,7 @@ html, body {
     font-size: 0.78em;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.55);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
 }
 
 .result-name {
@@ -1681,7 +1648,7 @@ html, body {
     border-radius: var(--radius-pill);
     border: 2px solid var(--glass-border);
     background: transparent;
-    color: rgba(255, 255, 255, 0.3);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     font-size: 1.4em;
     font-weight: 700;
     cursor: pointer;

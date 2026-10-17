@@ -27,6 +27,16 @@
     --color-win-rgb: 69, 209, 126;
     --color-danger: #d92c3f;
     --color-danger-rgb: 217, 44, 63;
+    --color-danger-text: #ff6b7a;
+    --color-warning: #ffb02e;
+    --color-warning-rgb: 255, 176, 46;
+    --color-info: #3498db;
+    --color-info-rgb: 52, 152, 219;
+    --color-info-text: #7fc7f0;
+    /* Tekstniveauer — mindst 4,5:1 (E5); theme-loader.js sætter de samme */
+    --text-primary: #eaeaea;
+    --text-secondary: rgba(255, 255, 255, 0.78);
+    --text-muted: rgba(255, 255, 255, 0.62);
     --gradient-primary: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
 }
 
@@ -35,7 +45,7 @@ body {
     background: var(--color-bg-dark);
     min-height: 100vh;
     padding: 30px 20px;
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
 }
 
 /* Arena background */
@@ -100,7 +110,7 @@ header h1 {
     padding: 10px 18px;
     background: rgba(255,255,255,0.06);
     border: 1px solid rgba(255,255,255,0.12);
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     text-decoration: none;
     border-radius: 8px;
     font-weight: 600;
@@ -126,7 +136,7 @@ header h1 {
     gap: 10px;
     align-items: center;
     font-weight: 600;
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
 }
 
 .court-selector select {
@@ -136,7 +146,7 @@ header h1 {
     border-radius: 8px;
     cursor: pointer;
     background: rgba(255,255,255,0.06);
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     backdrop-filter: blur(8px);
 }
 
@@ -179,7 +189,7 @@ header h1 {
     border: 1px solid rgba(255,255,255,0.15);
     border-radius: 10px;
     background: rgba(255,255,255,0.06);
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     outline: none;
     transition: border-color 0.2s, background 0.2s;
 }
@@ -233,9 +243,9 @@ header h1 {
 .btn-score-minus {
     padding: 16px 32px;
     font-size: 1.4em;
-    background: rgba(231,76,60,0.2);
-    color: #e74c3c;
-    border: 1px solid rgba(231,76,60,0.4);
+    background: rgba(var(--color-danger-rgb, 217, 44, 63),0.2);
+    color: var(--color-danger-text, #ff6b7a);
+    border: 1px solid rgba(var(--color-danger-rgb, 217, 44, 63),0.4);
     border-radius: 10px;
     cursor: pointer;
     transition: all 0.2s;
@@ -243,7 +253,7 @@ header h1 {
 }
 
 .btn-score-minus:hover {
-    background: rgba(231,76,60,0.35);
+    background: rgba(var(--color-danger-rgb, 217, 44, 63),0.35);
     transform: scale(1.04);
 }
 
@@ -343,7 +353,7 @@ header h1 {
     font-size: 0.8em;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: rgba(255,255,255,0.55);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
 }
 
 .game-score {
@@ -366,7 +376,7 @@ header h1 {
     cursor: pointer;
     transition: all 0.2s;
     background: rgba(255,255,255,0.06);
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     width: 100%;
 }
 
@@ -383,78 +393,73 @@ header h1 {
     margin: 24px 0;
 }
 
-.btn-primary, .btn-secondary {
-    padding: 14px 28px;
-    font-size: 1em;
+/* ── Knapper (E8): tre stilarter på alle sider ──
+   primær = fyldt accent-pille, sekundær = gennemsigtig pille med kant,
+   fare = rødtonet pille. Sidernes egne stylesheets ændrer kun størrelsen.
+   Modifikatorer: .btn-sm (lille, fx i lister), .btn-lg, .btn-block (fuld bredde). */
+.btn-primary, .btn-secondary, .btn-danger {
+    padding: 10px 22px;
+    font-size: 0.9em;
     font-family: 'DM Sans', sans-serif;
     font-weight: 600;
-    border: none;
-    border-radius: 10px;
+    line-height: 1.2;
+    border-radius: 100px;
     cursor: pointer;
-    transition: all 0.2s;
     text-decoration: none;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
 }
 
 .btn-primary {
-    background: var(--color-primary);
-    color: var(--color-on-primary, #ffffff);
+    background: var(--color-accent);
+    color: var(--color-on-accent, #ffffff);
+    border: 1px solid var(--color-accent);
 }
 
 .btn-primary:hover {
-    filter: brightness(1.2);
-    transform: scale(1.04);
+    background: color-mix(in srgb, var(--color-accent) 85%, white 15%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(var(--color-accent-rgb), 0.35);
 }
 
 .btn-secondary {
-    background: rgba(255,255,255,0.07);
-    border: 1px solid rgba(255,255,255,0.14);
-    color: white;
-    backdrop-filter: blur(8px);
+    background: transparent;
+    color: var(--text-secondary, rgba(255, 255, 255, 0.78));
+    border: 1px solid rgba(255, 255, 255, 0.22);
 }
 
 .btn-secondary:hover {
-    background: rgba(255,255,255,0.13);
-    transform: scale(1.04);
-}
-
-.btn-mode {
-    padding: 14px 28px;
-    font-size: 1em;
-    font-family: 'DM Sans', sans-serif;
-    font-weight: 600;
-    border: 1px solid var(--color-accent);
-    background: transparent;
-    color: var(--color-accent);
-    border-radius: 10px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-mode:hover {
-    background: var(--color-accent);
-    color: white;
-    transform: scale(1.04);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.06);
 }
 
 .btn-danger {
-    padding: 14px 28px;
-    font-size: 1em;
-    font-family: 'DM Sans', sans-serif;
-    font-weight: 600;
-    background: rgba(231,76,60,0.18);
-    color: #e74c3c;
-    border: 1px solid rgba(231,76,60,0.35);
-    border-radius: 10px;
-    cursor: pointer;
-    transition: all 0.2s;
+    background: rgba(var(--color-danger-rgb, 217, 44, 63), 0.12);
+    color: var(--color-danger-text, #ff6b7a);
+    border: 1px solid rgba(var(--color-danger-rgb, 217, 44, 63), 0.45);
 }
 
 .btn-danger:hover {
-    background: rgba(231,76,60,0.35);
-    transform: scale(1.04);
+    background: rgba(var(--color-danger-rgb, 217, 44, 63), 0.24);
+    border-color: var(--color-danger, #d92c3f);
+    transform: translateY(-1px);
 }
+
+.btn-primary:disabled, .btn-secondary:disabled, .btn-danger:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.btn-sm { padding: 5px 13px; font-size: 0.8em; }
+.btn-lg { padding: 13px 28px; font-size: 1.05em; }
+.btn-block { width: 100%; }
 
 /* ── History Section ── */
 .history-section {
@@ -489,11 +494,11 @@ header h1 {
     font-weight: 700;
     font-size: 1.05em;
     margin-bottom: 4px;
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
 }
 
 .history-item .match-details {
-    color: rgba(255,255,255,0.5);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     font-size: 0.88em;
 }
 
@@ -518,11 +523,11 @@ header h1 {
     width: 90%;
     max-width: 500px;
     box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
 }
 
 .close {
-    color: rgba(255,255,255,0.4);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     float: right;
     font-size: 28px;
     font-weight: bold;
@@ -546,7 +551,7 @@ header h1 {
     border-radius: 8px;
     font-size: 1em;
     background: rgba(255,255,255,0.06);
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
 }
 
 .modal-content button {

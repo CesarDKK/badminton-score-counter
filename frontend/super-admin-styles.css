@@ -29,7 +29,7 @@
     letter-spacing: 0.05em;
     color: #fff;
 }
-.login-card .subtitle { color: rgba(255,255,255,0.45); font-size: 0.85em; margin-top: 4px; }
+.login-card .subtitle { color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.85em; margin-top: 4px; }
 
 /* Forms */
 .form-group { margin-bottom: 16px; }
@@ -39,7 +39,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: rgba(255,255,255,0.5);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     margin-bottom: 6px;
 }
 .form-group input, .form-group select {
@@ -48,7 +48,7 @@
     border: 1px solid rgba(255,255,255,0.1);
     border-radius: 8px;
     padding: 12px 14px;
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     font-family: 'DM Sans', sans-serif;
     font-size: 1em;
     transition: border-color 0.2s;
@@ -59,48 +59,7 @@
 }
 .form-group select option { background: var(--color-bg-card); }
 
-/* Buttons */
-.btn-primary {
-    background: var(--gradient-primary);
-    border: none;
-    border-radius: 8px;
-    color: #fff;
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.05em;
-    letter-spacing: 0.06em;
-    padding: 10px 20px;
-    cursor: pointer;
-    transition: opacity 0.2s;
-}
-.btn-primary:hover { opacity: 0.88; }
-.btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn-primary.full { width: 100%; padding: 13px; font-size: 1.15em; margin-top: 8px; }
-
-.btn-secondary {
-    background: rgba(255,255,255,0.07);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 8px;
-    color: #eaeaea;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.9em;
-    padding: 8px 16px;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-.btn-secondary:hover { background: rgba(255,255,255,0.12); }
-
-.btn-danger {
-    background: rgba(var(--color-danger-rgb, 217, 44, 63), 0.15);
-    border: 1px solid rgba(var(--color-danger-rgb, 217, 44, 63), 0.3);
-    border-radius: 8px;
-    color: var(--color-danger, #d92c3f);
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.85em;
-    padding: 6px 14px;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-.btn-danger:hover { background: rgba(var(--color-danger-rgb, 217, 44, 63), 0.25); }
+/* Knapper: primær/sekundær/fare ligger i styles.css (E8) */
 
 /* Dashboard layout */
 .dashboard { animation: fadeUp 0.3s ease both; }
@@ -121,7 +80,7 @@ header h1 {
 }
 header .subtitle {
     font-size: 0.82em;
-    color: rgba(255,255,255,0.4);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     margin-top: 2px;
 }
 
@@ -163,12 +122,12 @@ header .subtitle {
 .club-name {
     font-weight: 600;
     font-size: 1em;
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     margin-bottom: 3px;
 }
 .club-meta {
     font-size: 0.8em;
-    color: rgba(255,255,255,0.4);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
 }
 .club-meta span { margin-right: 12px; }
 /* Seneste klub-admin-login; over en måned siden (eller aldrig) fremhæves */
@@ -244,7 +203,7 @@ header .subtitle {
     background: rgba(255,255,255,0.1);
     border: 1px solid rgba(255,255,255,0.15);
     border-radius: 6px;
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     font-size: 1.1em;
     cursor: pointer;
     padding: 4px 10px;
@@ -264,17 +223,17 @@ header .subtitle {
     font-size: 0.9em;
 }
 .admin-item .admin-name { font-weight: 600; }
-.admin-item .admin-email { color: rgba(255,255,255,0.4); font-size: 0.85em; }
+.admin-item .admin-email { color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.85em; }
 
 /* Messages */
 .msg { padding: 10px 14px; border-radius: 8px; font-size: 0.88em; margin-top: 12px; }
-.msg-error { background: rgba(var(--color-danger-rgb, 217, 44, 63), 0.12); border: 1px solid rgba(var(--color-danger-rgb, 217, 44, 63), 0.3); color: var(--color-danger, #d92c3f); }
+.msg-error { background: rgba(var(--color-danger-rgb, 217, 44, 63), 0.12); border: 1px solid rgba(var(--color-danger-rgb, 217, 44, 63), 0.3); color: var(--color-danger-text, #ff6b7a); }
 .msg-success { background: rgba(var(--color-win-rgb, 69, 209, 126), 0.1); border: 1px solid rgba(var(--color-win-rgb, 69, 209, 126), 0.25); color: var(--color-win, #45d17e); }
 
 .empty-state {
     text-align: center;
     padding: 32px;
-    color: rgba(255,255,255,0.3);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     font-size: 0.9em;
 }
 
@@ -293,7 +252,7 @@ header .subtitle {
 .app-tab {
     flex: 1;
     background: transparent;
-    color: rgba(255,255,255,0.5);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     border: none;
     padding: 16px 20px;
     font-family: inherit;

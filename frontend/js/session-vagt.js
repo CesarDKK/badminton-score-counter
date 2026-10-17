@@ -18,7 +18,7 @@
         .sv-baggrund { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center;
             justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); }
         .sv-boks { width: 100%; max-width: 420px; padding: 28px; border-radius: 18px; text-align: center;
-            background: var(--color-bg-container, #16213e); color: #eaeaea;
+            background: var(--color-bg-container, #16213e); color: var(--text-primary, #eaeaea);
             border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
             font-family: 'DM Sans', 'Segoe UI', sans-serif; }
         .sv-boks h2 { margin: 0 0 10px; font-family: 'Bebas Neue', sans-serif; font-weight: 400;
@@ -32,14 +32,14 @@
         .sv-bliv { background: var(--gradient-primary, #e94560); color: var(--color-on-accent, #fff); }
         .sv-bliv:disabled { opacity: 0.6; cursor: wait; }
         .sv-ud { background: transparent; color: rgba(255, 255, 255, 0.75); border-color: rgba(255, 255, 255, 0.2) !important; }
-        .sv-fejl { min-height: 1.5em; margin-top: 12px; color: var(--color-danger, #d92c3f); font-size: 14px; }
+        .sv-fejl { min-height: 1.5em; margin-top: 12px; color: var(--color-danger-text, #ff6b7a); font-size: 14px; }
         .sv-besked { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 10000;
             width: calc(100% - 32px); max-width: 520px; padding: 14px 44px 14px 18px; border-radius: 12px;
-            background: var(--color-bg-container, #16213e); color: #eaeaea;
+            background: var(--color-bg-container, #16213e); color: var(--text-primary, #eaeaea);
             border: 1px solid rgba(var(--color-accent-rgb, 233, 69, 96), 0.6);
             box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); font-family: 'DM Sans', 'Segoe UI', sans-serif; line-height: 1.4; }
         .sv-besked button { position: absolute; top: 8px; right: 10px; background: none; border: 0;
-            color: rgba(255, 255, 255, 0.6); font-size: 22px; line-height: 1; cursor: pointer; }
+            color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 22px; line-height: 1; cursor: pointer; }
     `;
 
     function tilfoejCss() {

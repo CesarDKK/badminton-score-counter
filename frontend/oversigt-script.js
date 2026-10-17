@@ -277,11 +277,11 @@ function hkGameCellHtml(g, num) {
     }
 
     // Afventer / færdig: navne + status (navne på én linje med ellipsis).
-    const nameStyle = 'color:#eaeaea; font-size:0.9em; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
+    const nameStyle = 'color:var(--text-primary, #eaeaea); font-size:0.9em; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
     return `<div class="hk-game" data-game-id="${g.id}">
         ${topRow}
         <div style="${nameStyle}">${escapeHtml(t1)}</div>
-        <div style="color:#aaa; font-size:0.7em; line-height:1; margin:0.05em 0;">vs</div>
+        <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.7em; line-height:1; margin:0.05em 0;">vs</div>
         <div style="${nameStyle}">${escapeHtml(t2)}</div>
     </div>`;
 }
@@ -297,7 +297,7 @@ function holdkampCourtSides(cd, g) {
 }
 
 function hkStatusFor(g, teamMatch) {
-    if (g.status === 'pending') return { html: '<span style="color:#aaa;">Afventer</span>', border: '#555' };
+    if (g.status === 'pending') return { html: '<span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">Afventer</span>', border: '#555' };
     if (g.status === 'active') {
         const cd = allCourtData.find(c => c.courtId === g.court_number);
         // Pause/sæthvil vises i rubrikken når banen er på pause
@@ -305,8 +305,8 @@ function hkStatusFor(g, teamMatch) {
             const label = (cd.restBreakTitle || '').toLowerCase().includes('sæt') ? 'Sæthvil' : 'Pause';
             const left = formatTimer(getPauseSecondsLeft(cd));
             return {
-                html: `<span style="color:#f1c40f;">⏸ ${label} ${left} · Bane ${g.court_number}</span>`,
-                border: '#f1c40f'
+                html: `<span style="color:var(--color-warning, #ffb02e);">⏸ ${label} ${left} · Bane ${g.court_number}</span>`,
+                border: 'var(--color-warning, #ffb02e)'
             };
         }
         return { html: `<span style="color:#fff;">▶ Bane ${g.court_number}</span>`, border: 'var(--color-primary, #533483)' };
@@ -316,7 +316,7 @@ function hkStatusFor(g, teamMatch) {
     const isDoubles = HK_DOUBLES.includes(g.category);
     const side1Key = isDoubles && g.team1_player2 ? `${g.team1_player1 || ''} / ${g.team1_player2}` : (g.team1_player1 || '');
     const nums = g.set_scores ? orientHistorySetScoreNumbers(g.set_scores, side1Key).join(' · ') : '';
-    const sc = nums ? ` <span style="color:rgba(255,255,255,0.45);">${nums}</span>` : '';
+    const sc = nums ? ` <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">${nums}</span>` : '';
     return { html: `<span style="color:var(--color-win, #45d17e);">✓ ${escapeHtml(winner)}${sc}</span>`, border: g.winner_team === 1 ? 'var(--color-win, #45d17e)' : '#e94560' };
 }
 
@@ -803,8 +803,8 @@ function renderCourtCard(court) {
         const row2Score = swapped ? sA : sB;
         const row1Won = row1Score > row2Score;
 
-        histP1 += `<div class="set-hist-score" style="color:${row1Won ? 'var(--color-win, #45d17e)' : '#e94560'}">${row1Score}</div>`;
-        histP2 += `<div class="set-hist-score" style="color:${row1Won ? '#e94560' : 'var(--color-win, #45d17e)'}">${row2Score}</div>`;
+        histP1 += `<div class="set-hist-score" style="color:${row1Won ? 'var(--set-vundet, var(--color-win, #45d17e))' : 'var(--text-muted, rgba(255,255,255,0.62))'}">${row1Score}</div>`;
+        histP2 += `<div class="set-hist-score" style="color:${row1Won ? 'var(--text-muted, rgba(255,255,255,0.62))' : 'var(--set-vundet, var(--color-win, #45d17e))'}">${row2Score}</div>`;
     });
 
     // Når et sæt netop er afsluttet er restBreakActive=true men resetScores() er
@@ -916,8 +916,8 @@ function renderFinishedCard(court) {
         const r1 = swapped ? sB : sA;
         const r2 = swapped ? sA : sB;
         const r1won = r1 > r2;
-        histP1 += `<div class="set-hist-score" style="color:${r1won ? 'var(--color-win, #45d17e)' : '#e94560'}">${r1}</div>`;
-        histP2 += `<div class="set-hist-score" style="color:${r1won ? '#e94560' : 'var(--color-win, #45d17e)'}">${r2}</div>`;
+        histP1 += `<div class="set-hist-score" style="color:${r1won ? 'var(--set-vundet, var(--color-win, #45d17e))' : 'var(--text-muted, rgba(255,255,255,0.62))'}">${r1}</div>`;
+        histP2 += `<div class="set-hist-score" style="color:${r1won ? 'var(--text-muted, rgba(255,255,255,0.62))' : 'var(--set-vundet, var(--color-win, #45d17e))'}">${r2}</div>`;
     });
 
     return `
