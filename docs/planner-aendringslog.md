@@ -526,3 +526,20 @@ Målt på Lyngby U9/U11 med alle kategorier som Swiss, U9 D og U11 D lørdag og 
 | Dagene slutter | 18:35 og 19:00 | 15:40 og 15:20 (løseren 16:00) |
 | U11 D: længst i hallen | 9,2 / 7,5 t | 6,7 / 6,3 t |
 | U11 B: over 5 t i hallen | 18 / 35 spillere | 4 / 0 spillere |
+
+## Lang ventetid tæller Swiss-runderne med (2026-10-17)
+
+Jesper fandt advarsler som "venter 260 min" for U11 D-spillere, der spillede Swiss-runde 1 kl. 9, runde 2–5 i løbet af
+formiddagen og en double kl. 13:40. Swiss-runder efter runde 1 har ingen kendte spillere. Tjek så derfor kun runde 1 og
+doublen, og meldte en ventetid, spilleren ikke havde.
+
+- **Fælles funktion:** `spillerOphold` (regelmodel.js) giver hver spillers ophold pr. dag. Det er de kendte kampe plus
+  hver Swiss-runde, spilleren er i lodtrækningen til, fra rundens første til dens sidste starttid.
+- **Mest gunstige tilfælde:** Man ved ikke, hvornår i runden spilleren spiller. Ventetiden regnes derfor som næste
+  opholds start minus forriges slut, så der kun advares om sikre ventetider.
+- **Tjek og "Lange huller":** Tjek's "lang ventetid" og kriteriet "Lange huller" bruger den. Teksten nævner runden,
+  fx "U11 D HS runde 4".
+- **Løseren:** Den får "lange huller" (`huller`) kun for spillere uden ukendte Swiss-runder. Deres tid i hallen dækkes af
+  ventetid- og halTid-grupperne, der tæller runderne med. Ældre klienter sender kun `traek`, som stadig virker.
+- **Målt på Lyngby med alt som Swiss:** 73 advarsler om lang ventetid blev til 16, og scoren faldt fra 794,2 til 680,2,
+  fordi falske huller ikke længere straffes.

@@ -7,6 +7,7 @@
 // Vægtene ligger i projekt.opsaetning.vaegte og kan tunes i fane 1 uden kode.
 import { minutter } from './tp-reader.js';
 import { slotsForDag, banerISlot } from './kapacitet.js';
+import { spillerOphold } from './regelmodel.js';
 
 /** Fælles forarbejde, så kriterierne ikke hver især skal løbe planen igennem. */
 function kontekst(projekt) {
@@ -57,11 +58,13 @@ export const KRITERIER = [
     },
     {
         id: 'langeHuller', navn: 'Lange huller', enhed: 'spillerdage',
-        beskrivelse: 'Spillerdage med et hul over ventetidsgrænsen mellem to egne kampe.',
+        beskrivelse: 'Spillerdage med et hul over ventetidsgrænsen mellem to egne kampe (Swiss-runder tæller for alle i lodtrækningen).',
+        // Som Tjek's "lang ventetid": Swiss-runder efter runde 1 tæller med (spillerOphold) — ellers så en Swiss-spiller ud
+        // til at have et hul fra runde 1 til sin double, selv om runde 2–5 lå imellem (Jesper 2026-10-17)
         beregn: (p, c) => {
             if (!(c.maxVent > 0)) return 0;
             let n = 0;
-            for (const t of c.prSpillerDag.values()) for (let i = 1; i < t.length; i += 1) if (t[i] - t[i - 1] - c.slotMin > c.maxVent) { n += 1; break; }
+            for (const t of spillerOphold(p.kampe, p.plan).values()) for (let i = 1; i < t.length; i += 1) if (t[i].fra - t[i - 1].til - c.slotMin > c.maxVent) { n += 1; break; }
             return n;
         },
     },

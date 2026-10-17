@@ -41,6 +41,36 @@ export function varighedsSpaend(M, kampe, plan) {
     return ud;
 }
 
+/**
+ * Hvornår hver spiller er på banen pr. dag (Jesper 2026-10-17): kendte kampe — og Swiss-runder efter runde 1, hvor
+ * spillerne ikke kendes før lodtrækningen, men ALLE i lodtrækningen spiller hver runde. En Swiss-runde er ét ophold
+ * fra rundens første til dens sidste starttid (spilleren spiller én af kampene, vi ved ikke hvilken).
+ * Returnerer Map(`${spiller}|${dag}`) → [{ fra, til, kampe: [kamp], swiss: { draw, runde } | null }] sorteret efter fra.
+ * Ventetid mellem to ophold regnes i det mest gunstige tilfælde: næste.fra − forrige.til − slot.
+ */
+export function spillerOphold(kampe, plan) {
+    const ud = new Map();
+    const tilfoej = (s, dag, o) => { const n = `${s}|${dag}`; if (!ud.has(n)) ud.set(n, []); ud.get(n).push(o); };
+    const runder = new Map(); // draw|runde|dag → { fra, til, kampe, spillere }
+    for (const k of kampe) {
+        const p = plan[k.id];
+        if (!p) continue;
+        const min = minutter(p.slot);
+        if (k.fase === 'swiss' && !k.spillere.length) {
+            const n = `${k.tpRef.draw}|${k.runde}|${p.dag}`;
+            if (!runder.has(n)) runder.set(n, { dag: p.dag, fra: min, til: min, kampe: [], spillere: new Set(), swiss: { draw: k.tpRef.draw, runde: k.runde } });
+            const r = runder.get(n);
+            r.fra = Math.min(r.fra, min); r.til = Math.max(r.til, min); r.kampe.push(k);
+            for (const s of k.muligeSpillere) r.spillere.add(s);
+            continue;
+        }
+        for (const s of k.spillere) tilfoej(s, p.dag, { fra: min, til: min, kampe: [k], swiss: null });
+    }
+    for (const r of runder.values()) for (const s of r.spillere) tilfoej(s, r.dag, { fra: r.fra, til: r.til, kampe: r.kampe, swiss: r.swiss });
+    for (const liste of ud.values()) liste.sort((a, b) => a.fra - b.fra || a.til - b.til);
+    return ud;
+}
+
 /** Min. tid pr. kamp (§ 4 stk. 5): standard ungdom ABCD 20, EM 25; senior ABCD 25, EM 30. */
 export function minKampMin(aargang, raekke, regler = STANDARD_REGLER) {
     const senior = erSenior(aargang);

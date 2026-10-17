@@ -103,7 +103,7 @@ def _valider(problem) -> str | None:
     for par in problem.get("cupVent", []):
         if not isinstance(par, list) or len(par) != 2 or not inde(par[0]) or not isinstance(par[1], list) or not par[1] or not all(inde(i) for i in par[1]):
             return "ugyldigt cupVent"
-    for navn in ("traek", "mangeKampe"):
+    for navn in ("traek", "huller", "mangeKampe"):
         for liste in problem.get(navn, []):
             if not isinstance(liste, list) or not all(inde(i) for i in liste):
                 return f"ugyldigt {navn}"
@@ -553,7 +553,8 @@ def _loes(problem: dict, sekunder: float, arbejdere: int | None, stop: threading
     max_vent = int(problem.get("maxVent") or 0)
     if w_hul > 0 and max_vent > 0:
         koef = max(1, int(round(w_hul * SKALA)))
-        for ids in problem.get("traek", []):
+        # "huller": spillere uden ukendte Swiss-runder (klienten, 2026-10-17); ældre klienter sender kun "traek"
+        for ids in problem.get("huller", problem.get("traek", [])):
             if not all(enkeltDag[i] for i in ids):
                 continue
             pr_dag = {}
@@ -713,6 +714,8 @@ def delproblem(problem: dict, ids: list[int], dag: int) -> dict:
     p["spillerGrupper"] = [g for g in ({**g, "kampe": inde(g["kampe"])} for g in problem.get("spillerGrupper", [])) if len(g["kampe"]) > 1]
     p["halTid"] = [g for g in ({**g, "kampe": inde(g["kampe"])} for g in problem.get("halTid", [])) if len(g["kampe"]) > 1]
     p["traek"] = [x for x in (inde(l) for l in problem.get("traek", [])) if len(x) > 1]
+    if "huller" in problem:
+        p["huller"] = [x for x in (inde(l) for l in problem["huller"]) if len(x) > 1]
     p["cupVent"] = [[ny[b], inde(deps)] for b, deps in problem.get("cupVent", []) if b in ny and len(inde(deps)) == len(deps)]
     if problem.get("stabil"):
         p["stabil"] = {**problem["stabil"], "kampe": inde(problem["stabil"].get("kampe", []))}
