@@ -10,8 +10,8 @@
     --purple-soft: #b89fe0;
     --red: #e94560;
     --red-soft: #f2879a;
-    --green: #4fc98a;
-    --amber: #f0b64a;
+    --green: var(--color-win);       /* fælles betydningsfarver (E2) */
+    --amber: var(--color-warning);
     --bg: #0d0d1a;
     --bg-raise: #14142a;
     --card: rgba(83, 52, 131, 0.12);
@@ -19,7 +19,6 @@
     --border-soft: rgba(255, 255, 255, 0.08);
     --text: #eaeaea;
     --muted: #9494a6;
-    --radius: 16px;
 }
 
 body {
@@ -116,7 +115,7 @@ nav {
 .panel {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--r-lg);
     padding: 24px;
     margin-bottom: 22px;
 }
@@ -125,31 +124,7 @@ nav {
 .panel-hoved { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
 .raekke-knapper { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
-.knap {
-    background: var(--red);
-    border: 1px solid var(--red);
-    color: #fff;
-    font: inherit;
-    font-weight: 600;
-    padding: 11px 22px;
-    border-radius: 12px;
-    cursor: pointer;
-    text-decoration: none;
-    display: inline-block;
-    transition: filter 0.2s, opacity 0.2s;
-}
-.knap:hover { filter: brightness(1.1); }
-.knap:disabled { opacity: 0.5; cursor: default; filter: none; }
-.knap--sekundaer {
-    background: rgba(255,255,255,0.05);
-    border-color: var(--border);
-    color: #fff;
-    font-weight: 500;
-    font-size: 0.88em;
-    padding: 9px 16px;
-}
-.knap--sekundaer:hover { background: rgba(83,52,131,0.3); filter: none; }
-.knap--lille { padding: 5px 10px; font-size: 0.8em; border-radius: 8px; }
+/* Knapstilen (.knap, .knap--sekundaer, .knap--lille) kommer fra fundament.css (E1/E8) */
 
 .felt label, .etiket {
     display: block;
@@ -178,7 +153,7 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 /* ── Filpanel ── */
 .filzone {
     border: 2px dashed var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--r-lg);
     padding: 34px 24px;
     text-align: center;
     transition: border-color 0.2s, background 0.2s;
@@ -234,8 +209,8 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
     background: rgba(83,52,131,0.35);
     color: var(--purple-soft);
 }
-.maerke--ok { background: rgba(79,201,138,0.15); color: var(--green); }
-.maerke--advarsel { background: rgba(240,182,74,0.15); color: var(--amber); }
+.maerke--ok { background: rgba(var(--color-win-rgb), 0.15); color: var(--green); }
+.maerke--advarsel { background: rgba(var(--color-warning-rgb), 0.15); color: var(--amber); }
 .maerke--fejl { background: rgba(233,69,96,0.15); color: var(--red-soft); }
 
 /* ── Kapacitet ── */
@@ -255,7 +230,7 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
     background: var(--bg-raise);
     color: var(--text);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--r-lg);
     padding: 28px;
     max-width: 560px;
     width: calc(100% - 40px);
@@ -263,7 +238,7 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 .dialog::backdrop { background: rgba(0,0,0,0.6); }
 .dialog h2 { color: #fff; font-size: 1.2em; }
 .dialog-valg { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
-.dialog-valg .knap { text-align: left; }
+.dialog-valg .knap { flex-direction: column; align-items: flex-start; text-align: left; }
 .dialog-valg .knap small { display: block; font-weight: 400; opacity: 0.8; margin-top: 3px; font-size: 0.85em; }
 
 .sidefod { padding: 20px 24px 40px; color: var(--muted); font-size: 0.85em; }
@@ -340,7 +315,7 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 @keyframes blink { 0%, 100% { box-shadow: 0 0 0 2px #fff; } 50% { box-shadow: 0 0 0 6px rgba(255,255,255,0.15); } }
 
 .sidepanel { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
-.sidepanel section { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.sidepanel section { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 16px; }
 .sidepanel h3 { font-size: 1em; color: #fff; margin-bottom: 10px; }
 .sidepanel h4 { font-size: 0.92em; color: #fff; margin-top: 10px; }
 .sidepanel details { margin-bottom: 8px; }
@@ -518,14 +493,7 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 /* Fanelinjen: kun vandret rulning (før gav margin-bottom: -1px en lodret rullebjælke) */
 .faner { overflow-y: hidden; }
 /* Hvid tekst på knappen skal have mindst 4,5:1 i kontrast (#e94560 gav 3,8:1) */
-:root { --red-knap: #d02c4a; --red-knap-hover: #b8243f; }
-.knap { background: var(--red-knap); border-color: var(--red-knap); }
-.knap:hover { filter: none; background: var(--red-knap-hover); border-color: var(--red-knap-hover); }
-.knap--sekundaer, .knap--sekundaer:hover { border-color: var(--border); }
-.knap--sekundaer { background: rgba(255,255,255,0.05); }
-.knap--sekundaer:hover { background: rgba(83,52,131,0.3); }
-.knap:disabled:hover { background: var(--red-knap); }
-.knap--sekundaer:disabled:hover { background: rgba(255,255,255,0.05); }
+:root { --red-knap: #d02c4a; --red-knap-hover: #b8243f; --color-knap: var(--red-knap); --color-knap-hover: var(--red-knap-hover); }
 .knap--lille { padding: 7px 12px; min-height: 32px; }
 .filzone .knapper { align-items: center; }
 
@@ -537,7 +505,7 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 .status-tal.er-roed b { color: var(--red-soft); }
 .status-tal.er-gul b { color: var(--amber); }
 .status-tal.er-ok b { color: var(--green); }
-.anbefaling { border: 1px solid rgba(79,201,138,0.45); background: rgba(79,201,138,0.08); border-radius: 10px; padding: 9px 14px; font-size: 0.9em; line-height: 1.5; margin-bottom: 10px; }
+.anbefaling { border: 1px solid rgba(var(--color-win-rgb), 0.45); background: rgba(var(--color-win-rgb), 0.08); border-radius: 10px; padding: 9px 14px; font-size: 0.9em; line-height: 1.5; margin-bottom: 10px; }
 .anbefaling b { color: var(--green); }
 .plan-hjaelp { font-size: 0.85em; margin-bottom: 12px; }
 .menu { position: relative; }
@@ -545,7 +513,7 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 .menu > summary::-webkit-details-marker { display: none; }
 .menu > summary::after { content: ''; display: inline-block; width: 6px; height: 6px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); margin-left: 9px; vertical-align: 3px; }
 .menu-liste { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; display: flex; flex-direction: column; gap: 6px; padding: 10px; min-width: 240px; background: var(--bg-raise); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.45); }
-.menu-liste .knap { text-align: left; }
+.menu-liste .knap { justify-content: flex-start; text-align: left; }
 .loesninger li { margin-bottom: 6px; }
 .loesninger li .knap { margin-left: 6px; vertical-align: middle; }
 
@@ -554,9 +522,9 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 .spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.15); border-top-color: var(--red); animation: drej 0.8s linear infinite; flex-shrink: 0; }
 @keyframes drej { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
-.kampprogram { border: 1px solid var(--border); background: var(--card); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 14px; }
-.kampprogram.er-ok { border-color: rgba(79,201,138,0.45); }
-.kampprogram.er-valg { border-color: rgba(240,182,74,0.55); }
+.kampprogram { border: 1px solid var(--border); background: var(--card); border-radius: var(--r-lg); padding: 16px 20px; margin-bottom: 14px; }
+.kampprogram.er-ok { border-color: rgba(var(--color-win-rgb), 0.45); }
+.kampprogram.er-valg { border-color: rgba(var(--color-warning-rgb), 0.55); }
 .kampprogram-hoved { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .kampprogram-hoved h3 { font-size: 1.1em; color: #fff; }
 .kampprogram-valg { margin-top: 6px; font-size: 0.92em; line-height: 1.6; }
@@ -582,11 +550,11 @@ input[type="radio"] { accent-color: var(--red); }
 .trin-nr { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; font-size: 0.78em; background: rgba(255,255,255,0.08); color: var(--muted); }
 .fane.er-aktiv .trin-nr { background: var(--red-knap); color: #fff; }
 .fane-maerke:empty { display: none; }
-.fane-maerke { font-size: 0.72em; padding: 2px 8px; border-radius: 100px; background: rgba(240,182,74,0.15); color: var(--amber); }
+.fane-maerke { font-size: 0.72em; padding: 2px 8px; border-radius: 100px; background: rgba(var(--color-warning-rgb), 0.15); color: var(--amber); }
 .fane-maerke.er-fejl { background: rgba(233,69,96,0.18); color: var(--red-soft); }
 
 .panel--kompakt { padding: 16px 24px; }
-.panel--advarsel { border-color: rgba(240,182,74,0.5); }
+.panel--advarsel { border-color: rgba(var(--color-warning-rgb), 0.5); }
 .spaer-fold summary { cursor: pointer; color: var(--muted); font-size: 0.86em; padding: 2px 0; }
 .spaer-fold[open] summary { margin-bottom: 6px; }
 .tabel--kategorier.tabel--kategorier-kort { table-layout: auto; }

@@ -18,7 +18,9 @@
     --border-soft: rgba(255, 255, 255, 0.08);
     --text: #eaeaea;
     --muted: #9494a6;
-    --radius: 16px;
+    /* Hvid tekst på knappen skal have mindst 4,5:1 (#e94560 gav 3,8:1) — som planneren */
+    --color-knap: #d02c4a;
+    --color-knap-hover: #b8243f;
 }
 
 html { scroll-behavior: smooth; }
@@ -176,37 +178,16 @@ nav {
 .felt input:focus, .felt select:focus { outline: none; border-color: var(--purple-light); }
 .felt input::placeholder { color: #5b5b70; }
 
-.knap {
-    background: var(--red);
-    border: 1px solid var(--red);
-    color: #fff;
-    font: inherit;
-    font-weight: 600;
-    padding: 13px 26px;
-    border-radius: 12px;
-    cursor: pointer;
-    text-decoration: none;
-    display: inline-block;
-    transition: filter 0.2s, opacity 0.2s;
-}
-.knap:hover { filter: brightness(1.1); }
-.knap:disabled { opacity: 0.5; cursor: default; }
-
-.knap--sekundaer {
-    background: rgba(255,255,255,0.05);
-    border-color: var(--border);
-    color: #fff;
-    font-weight: 500;
-    font-size: 0.88em;
-    padding: 10px 16px;
-}
-.knap--sekundaer:hover { background: rgba(83,52,131,0.3); filter: none; }
+/* Knapstilen (.knap, .knap--sekundaer, .knap--lille) kommer fra fundament.css (E1/E8) */
+/* Statistik: hovedknappen er lige så høj som felterne ved siden af */
+.knap { padding: 13px 26px; font-size: 1em; }
+.knap--sekundaer { padding: 10px 16px; font-size: 0.88em; }
 
 /* ── Paneler og kort ── */
 .panel, .kort {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--r-lg);
     padding: 24px;
     margin-bottom: 22px;
 }
@@ -283,7 +264,7 @@ nav {
 .noegletal .tal-kort {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--r-lg);
     padding: 20px;
 }
 .noegletal .vaerdi {
