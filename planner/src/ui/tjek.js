@@ -3,7 +3,7 @@
 import { esc, datoTekst } from './dom.js';
 import { loesningsforslag } from '../scheduler.js';
 
-const TYPE_TEKST = {
+export const TYPE_TEKST = {
     'kapacitet': 'For mange kampe i et slot',
     'dobbeltbooket': 'Spiller i to kampe samtidig',
     'pause': 'For kort pause',

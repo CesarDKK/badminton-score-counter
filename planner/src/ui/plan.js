@@ -7,12 +7,12 @@ import { slotsForDag, banerISlot, puljeKapacitet } from '../kapacitet.js';
 import { alvorForKamp } from '../rules.js';
 import { bedoemPlan, loesningsforslag } from '../scheduler.js';
 import { scorePlan } from '../kriterier.js';
-import { renderTjek } from './tjek.js';
+import { renderTjek, TYPE_TEKST } from './tjek.js';
 import { panelGaelder } from '../kampprogram.js';
 import { lavRegelmodel } from '../regelmodel.js';
 import { vurderSlots } from '../slotvurdering.js';
 import { prognoseDag, TIDLIG_START_MIN } from '../kamplaengde.js';
-import { kompromiser, laasteUdenForGitter } from '../kompromis.js';
+import { kompromiser, variantValg } from '../kompromis.js';
 
 /** Panelet med forslag, der får kabalen til at gå op (nedskaering.js) — valget træffes på oplyst grundlag. */
 function nedskaeringPanel(ned) {
@@ -34,20 +34,23 @@ function nedskaeringPanel(ned) {
         <button class="knap knap--sekundaer" data-handling="ned-luk">Luk uden at ændre</button></div>`;
 }
 
-const udenPauseI = (p) => !p?.ABCD && !p?.M && !p?.E && !p?.faelles;
 const kamplaengdeTekst = (min, udenPause) => `${min} min, ${udenPause ? 'pausen gives på dagen (0 min i planen)' : 'reglementets pause i planen'}`;
 
 /**
  * Resultatet af "Lav kampprogram": går det op, hvad blev valgt for brugeren, og — hvis ikke — ét beslutningskort
  * pr. problem med løsninger, der allerede er afprøvet (kampprogram.js). Det anbefalede valg står først.
+ *
+ * Opbygning (Jesper 2026-10-17: "UI-delen er blevet lidt rodet og svær at overskue"): først hvad der skal tages stilling
+ * til — løserens besked, det kort, der er nu (de næste står som en linje; programmet laves om efter hvert valg), og
+ * tilbuddet — så programmerne uden kompromiserne, og nederst detaljerne (prognose, gjort undervejs, låste kampe).
  */
 export function kampprogramPanel(kp, aabneKort, projekt, { travl = false, sek = 60 } = {}) {
     const v = kp.valg;
-    // Mens løseren eller planlæggeren regner, kan panelets valg ikke bruges — de ville bygge på det gamle (gennemgangen 2026-10-17)
-    const dis = travl ? ' disabled' : '';
     const gaarOp = kp.beslutninger.brud === 0;
     const rettet = kp.projekt !== projekt; // flyttet eller låst siden (panelGaelder)
     const beholdt = kp.beslutninger.kort.length - aabneKort.length;
+    // Mens løseren eller planlæggeren regner, kan panelets valg ikke bruges — de ville bygge på det gamle (gennemgangen 2026-10-17)
+    const dis = travl ? ' disabled' : '';
     let valgTekst = '';
     if (!v) valgTekst = ''; // brugerens eget program: intet er valgt for dem
     else if (v.grund === 'laast') valgTekst = `Kamplængden er ikke ændret (${kamplaengdeTekst(v.minutter, v.udenPause)}), fordi der er låste kampe.`;
@@ -57,88 +60,123 @@ export function kampprogramPanel(kp, aabneKort, projekt, { travl = false, sek = 
     else if (v.aendret) valgTekst = `Valgt for dig ud fra sammenligningen af kamplængder: <b>${esc(kamplaengdeTekst(v.minutter, v.udenPause))}</b>. Husk at sætte den samme kamplængde i TP.`;
     else valgTekst = `Kamplængden passer allerede bedst: ${kamplaengdeTekst(v.minutter, v.udenPause)}.`;
     if (v?.middelvej?.length) valgTekst += ` Der var god plads, så U9/U11 fik flere kampe — midt i Badminton Danmarks anbefaling (4–6 single, 2–5 double): ${esc(v.middelvej.join(', '))}.`;
-    // "som før" kun, når de låste kampe passer i den tidligere kamplængde — ellers ville de ligge uden for gitteret og gøre
-    // programmet umuligt (gennemgangen 2026-10-17)
-    const tilbage = v?.aendret && v.grund !== 'tidligere' && !laasteUdenForGitter(projekt, v.foer.slotMin)
-        ? ` <button class="knap knap--sekundaer knap--lille" data-handling="kp-tidligere"${dis}>Brug ${esc(kamplaengdeTekst(v.foer.slotMin, udenPauseI(v.foer.pauseMin)))} som før</button>` : '';
-    const kort = aabneKort.map((k) => {
+    // Kun det første åbne kort vises helt: efter et valg laves programmet om, og kortene regnes forfra
+    const forrest = aabneKort[0];
+    const kort = forrest ? (() => {
+        const k = forrest;
         const i = kp.beslutninger.kort.indexOf(k);
         const valg = k.valg.map((x, j) => {
-            const effekt = x.gaarOp ? '<span class="er-groen">går op</span>' : x.loest ? `løser dette — ${x.brudEfter} regelbrud andre steder` : `${x.brudEfter} regelbrud tilbage`;
+            const effekt = x.gaarOp ? '<span class="maerke maerke--ok">går op</span>'
+                : x.loest ? `<span class="maerke maerke--advarsel">løser dette · ${x.brudEfter} regelbrud andre steder</span>`
+                    : `<span class="maerke maerke--fejl">${x.brudEfter} regelbrud tilbage</span>`;
             return `<label class="beslutning-valg"><input type="radio" name="kort-${i}" value="${j}" ${j === 0 ? 'checked' : ''}>
-                <span><b>${esc(x.tekst)}</b>${j === 0 ? ' <span class="maerke maerke--ok">anbefalet</span>' : ''}${x.pris === 'dispensation' ? ' <span class="maerke maerke--advarsel">kræver dispensation</span>' : ''}
-                <span class="daempet">— ${effekt}${x.konsekvens.length ? ` · ${esc(x.konsekvens.join(' · '))}` : ''}</span></span></label>`;
+                <span class="valg-indhold"><span class="valg-linje"><b>${esc(x.tekst)}</b>${j === 0 ? ' <span class="maerke maerke--ok">anbefalet</span>' : ''}${x.pris === 'dispensation' ? ' <span class="maerke maerke--advarsel">kræver dispensation</span>' : ''} ${effekt}</span>
+                ${x.konsekvens.length ? `<span class="valg-detaljer">${esc(x.konsekvens.join(' · '))}</span>` : ''}</span></label>`;
         }).join('');
+        const resten = aabneKort.slice(1);
         return `<div class="beslutning" data-kort="${i}">
-            <h4>${esc(k.titel)}</h4>${k.flere?.length ? `<ul class="beslutning-flere">${k.flere.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
+            <h4>${aabneKort.length > 1 ? `<span class="daempet">1 af ${aabneKort.length}:</span> ` : ''}${esc(k.titel)}</h4>${k.flere?.length ? `<ul class="beslutning-flere">${k.flere.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
             ${k.forklaring ? `<p>${esc(k.forklaring)}</p>` : ''}
             ${k.valg.length ? '<p class="daempet">Hver løsning er afprøvet med planlæggeren.</p>' : k.forklaring ? '' : '<p class="daempet">Planneren fandt ingen ændring af opsætningen, der hjælper her. Kampene ligger med regelbrud — se dem i Tjek.</p>'}
             <div class="beslutning-liste">${valg}
                 <label class="beslutning-valg"><input type="radio" name="kort-${i}" value="behold" ${k.valg.length ? '' : 'checked'}>
-                    <span><b>Behold</b> <span class="daempet">— ${k.antal} ${k.antal === 1 ? 'kamp' : 'kampe'} bryder reglen og vises som fejl/advarsel i Tjek</span></span></label>
+                    <span class="valg-indhold"><span class="valg-linje"><b>Behold</b></span><span class="valg-detaljer">${k.antal} ${k.antal === 1 ? 'kamp' : 'kampe'} bryder reglen og vises som fejl/advarsel i Tjek</span></span></label>
             </div>
-            <button class="knap ${k === aabneKort[0] ? '' : 'knap--sekundaer'}" data-handling="beslutning"${dis}>${k.valg.length ? 'Brug valget og lav programmet igen' : 'OK'}</button>
+            <button class="knap" data-handling="beslutning"${dis}>${k.valg.length ? 'Brug valget og lav programmet igen' : 'OK'}</button>
+            ${resten.length ? `<p class="daempet beslutning-naeste">Bagefter: ${resten.map((x) => esc(x.titel)).join(' · ')}</p>` : ''}
         </div>`;
-    }).join('');
+    })() : '';
     // Løseren har bevist, at der ingen lovlig plan er (kp.note), selv om planlæggeren ikke fandt noget at rette
     const loeserNej = !!kp.note && gaarOp;
     const titel = kp.egetProgram ? 'Løseren fandt ingen plan, der overholder alle de hårde regler — dit program er ikke ændret'
         : loeserNej ? 'Løseren fandt ingen plan, der overholder alle de hårde regler'
         : gaarOp ? 'Kampprogrammet går op'
-        : kp.beslutninger.fraLoeser ? `Løserens program har ${kp.beslutninger.brud} ${kp.beslutninger.brud === 1 ? 'fejl' : 'fejl'} i Tjek`
+        : kp.beslutninger.fraLoeser ? `Løserens program har ${kp.beslutninger.brud} fejl i Tjek`
         : aabneKort.length
             ? `Kampprogrammet går ikke helt op — ${aabneKort.length} ting at tage stilling til`
-            : `Kampprogrammet er lavet med ${kp.beslutninger.brud} regelbrud, som du har valgt at beholde`;
+            : `Kampprogrammet er lavet med ${kp.beslutninger.brud} regelbrud, som du har valgt`;
+    const laaseIkon = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.125em" aria-hidden="true"><path d="M6 11h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2zM8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+    const detaljer = [
+        kp.prognose?.length ? `<span title="Dagen simuleret 100 gange med tilfældige kamplængder omkring sæsondataenes gennemsnit; kampe kan sættes i gang op til ${TIDLIG_START_MIN} min før tid (spillerne skal være klar), dog ikke før dagens start.">Prognose: ${kp.prognose.map((d) => `${esc(datoTekst(d.dato, { kort: true }))} plan slut ${d.planSlut}, forventet ca. ${d.slutMedian} (80 %: ${d.slut80})`).join(' · ')}.</span>` : '',
+        kp.udfoert.length ? `Gjort undervejs: ${esc(kp.udfoert.join(' · '))}.` : '',
+        (projekt.laast || []).length ? `${laaseIkon} ${projekt.laast.length} ${projekt.laast.length === 1 ? 'kamp er låst' : 'kampe er låst'} og beholder ${projekt.laast.length === 1 ? 'sin' : 'deres'} tid, når programmet laves igen. Dobbeltklik på en kamp for at låse den op.` : '',
+        rettet ? 'Du har flyttet eller låst kampe, siden programmet blev lavet — Tjek viser, hvordan det står nu.' : '',
+        beholdt && aabneKort.length ? `${beholdt} beholdt som det er.` : '',
+    ].filter(Boolean);
     return `
     <section class="kampprogram ${kp.egetProgram || loeserNej || aabneKort.length ? 'er-valg' : gaarOp ? 'er-ok' : ''}">
         <div class="kampprogram-hoved">
             <h3>${gaarOp && !loeserNej && !kp.egetProgram ? '<span class="er-groen">✓</span> ' : ''}${esc(titel)}</h3>
-            ${kp.egetProgram ? '' : '<button class="knap knap--sekundaer knap--lille" data-handling="kp-fortryd" title="Går tilbage til planen og opsætningen fra før">Fortryd</button>'}
+            <span class="kampprogram-hoved-knapper">
+                ${gaarOp && !loeserNej && !kp.egetProgram && !aabneKort.length ? '<button class="knap knap--lille" data-handling="til-tp">Videre til Til TP →</button>' : ''}
+                ${kp.egetProgram ? '' : '<button class="knap knap--sekundaer knap--lille" data-handling="kp-fortryd" title="Går tilbage til planen og opsætningen fra før">Fortryd</button>'}
+            </span>
         </div>
+        ${valgTekst ? `<p class="kampprogram-valg">${valgTekst}</p>` : ''}
+        ${kp.forbedret ? `<p class="kampprogram-valg"><span class="er-groen">✓</span> ${esc(kp.forbedret)}</p>` : ''}
         ${kp.melding ? `<p class="kampprogram-valg">${esc(kp.melding.tekst)}</p>${kp.melding.handlinger?.length ? `<p class="diagnose-knapper">${kp.melding.handlinger.map((x, i) => `<button class="knap knap--sekundaer knap--lille" data-handling="diagnose" data-kilde="melding" data-index="${i}"${dis}>${esc(x.tekst)}</button>`).join(' ')}</p>` : ''}` : ''}
         ${kp.note ? `<p class="kampprogram-valg">${esc(kp.note)}</p>` : ''}
         ${kp.handlinger?.length ? `<p class="diagnose-knapper">${kp.handlinger.map((x, i) => `<button class="knap knap--sekundaer knap--lille" data-handling="diagnose" data-kilde="kp" data-index="${i}"${dis}>${esc(x.tekst)}</button>`).join(' ')}</p>` : ''}
-        ${valgTekst ? `<p class="kampprogram-valg">${valgTekst}${tilbage}</p>` : ''}
-        ${rettet ? '<p class="daempet">Du har flyttet eller låst kampe, siden programmet blev lavet — Tjek viser, hvordan det står nu.</p>' : ''}
-        ${(projekt.laast || []).length ? `<p class="daempet"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.125em" aria-hidden="true"><path d="M6 11h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2zM8 11V7a4 4 0 0 1 8 0v4"/></svg> ${projekt.laast.length} ${projekt.laast.length === 1 ? 'kamp er låst' : 'kampe er låst'} og beholder ${projekt.laast.length === 1 ? 'sin' : 'deres'} tid, når programmet laves igen. Dobbeltklik på en kamp for at låse den op.</p>` : ''}
-        ${kp.forbedret ? `<p class="kampprogram-valg"><span class="er-groen">✓</span> ${esc(kp.forbedret)}</p>` : ''}
-        ${kp.prognose?.length ? `<p class="daempet" title="Dagen simuleret 100 gange med tilfældige kamplængder omkring sæsondataenes gennemsnit; kampe kan sættes i gang op til ${TIDLIG_START_MIN} min før tid (spillerne skal være klar), dog ikke før dagens start.">Prognose: ${kp.prognose.map((d) => `${esc(datoTekst(d.dato, { kort: true }))} plan slut ${d.planSlut}, forventet ca. ${d.slutMedian} (80 %: ${d.slut80})`).join(' · ')}.</p>` : ''}
         ${kp.prognose?.some((d) => d.igangsaetRisiko > 0.2) ? `<p class="liste-fejl"><b>Risiko for sene kampe:</b> ${kp.prognose.filter((d) => d.igangsaetRisiko > 0.2).map((d) => `${esc(datoTekst(d.dato, { kort: true }))} (${Math.round(d.igangsaetRisiko * 100)} % af de simulerede dage)`).join(', ')} — kampe kan blive sat i gang efter reglementets grænse (kl. 20/21/22 for U9–U11/U13–U15/U17+, 2 timer tidligere før skoledag/hverdag).</p>` : ''}
-        ${kp.tilbud ? `<p class="kampprogram-valg">${esc(kp.tilbud.tekst)} <button class="knap knap--lille" data-handling="kp-tilbud"${dis}>${kp.tilbud.projekt ? 'Brug løserens program med ændringerne' : 'Brug løserens program'}</button></p>` : ''}
-        ${gaarOp && !loeserNej && !kp.egetProgram && !aabneKort.length ? '<p class="raekke-knapper"><button class="knap knap--sekundaer knap--lille" data-handling="til-tp">Videre til Til TP →</button></p>' : ''}
-        ${kp.udfoert.length ? `<p class="daempet">Gjort undervejs: ${esc(kp.udfoert.join(' · '))}.</p>` : ''}
-        ${kompromisBoks(kp, projekt, { dis, sek })}
+        ${kp.tilbud ? `<p class="kampprogram-valg kampprogram-tilbud">${esc(kp.tilbud.tekst)} <button class="knap knap--lille" data-handling="kp-tilbud"${dis}>${kp.tilbud.projekt ? 'Brug løserens program med ændringerne' : 'Brug løserens program'}</button></p>` : ''}
+        ${kort}
+        ${aabneKort.length ? '' : kompromisBoks(kp, projekt, { dis, sek, travl })}
         ${kp.elastisk ? `<div class="beslutning elastisk">
             <h4>Planen med færrest regelbrud</h4>
             <p class="daempet">Løseren har lavet den plan, der bryder reglerne mindst. Den bryder:</p>
             <ul class="beslutning-flere">${kp.elastisk.tekster.map((t) => `<li>${esc(t)}</li>`).join('') || '<li>ingen regler</li>'}</ul>
-            <p class="daempet">Vil du hellere have en lovlig plan, så brug en af ændringerne herunder.</p>
+            <p class="daempet">Vil du hellere have en lovlig plan, så brug en af ændringerne ovenfor.</p>
             <button class="knap knap--sekundaer" data-handling="kp-elastisk"${dis}>Brug planen med disse regelbrud</button>
         </div>` : ''}
-        ${beholdt && aabneKort.length ? `<p class="daempet">${beholdt} beholdt som det er.</p>` : ''}
-        ${kort}
+        ${detaljer.length ? `<div class="kampprogram-fod">${detaljer.map((x) => `<p>${x}</p>`).join('')}</div>` : ''}
     </section>`;
 }
 
+const dagTekst = (s) => { const t = Object.entries(s.slut || s.slutPrDag || {}).sort(([a], [b]) => a.localeCompare(b)).map(([, x]) => x); return `slutter ${t.length > 1 ? `${t.slice(0, -1).join(', ')} og ${t.at(-1)}` : t[0] || '–'} · ${s.haltidGnsMin} min i hallen i gns.`; };
+const typerTekst = (typer) => typer.slice(0, 2).map(([t, n]) => `${n} × ${TYPE_TEKST[t] || t}`).join(' · ') + (typer.length > 2 ? ' …' : '');
+
 /**
- * Kompromiser undervejs (Jesper 2026-10-17): det, der er givet efter i forhold til opsætningen fra før "Lav kampprogram"
- * — kan trækkes tilbage, så løseren prøver igen på en kopi. Resultatet bliver et tilbud; programmet røres ikke.
+ * Programmer uden kompromiserne (Jesper 2026-10-17): for hvert kompromis — kortere kampe, pausen på dagen, Swiss i
+ * grupper … — har planlæggeren lavet et program uden det (kompromis.js lavVarianter, i baggrundstråden). Hver række
+ * siger, om det går op, eller hvor mange fejl og hvilke, og har "Brug dette program" og "Lad løseren prøve" (løseren
+ * regner på en kopi; resultatet bliver et tilbud). Før var det flueben og én knap — og man så ikke, hvad hvert kostede.
  */
-function kompromisBoks(kp, projekt, { dis = '', sek = 60 } = {}) {
+function kompromisBoks(kp, projekt, { dis = '', sek = 60, travl = false } = {}) {
     if (kp.egetProgram) return '';
     const liste = kompromiser(kp.foer, projekt);
     if (!liste.length) return '';
+    const v = kp.varianter;
+    const resultat = new Map((v?.liste || []).map((x) => [x.noegle, x]));
+    // Med resultaterne: færrest fejl først (og evt. en kombination af dem, der går op); ellers rækkerne i kompromisernes orden
+    const raekker = v?.liste?.length ? v.liste : variantValg(kp.foer, projekt);
+    const regner = v && !v.liste;
+    const blokerede = liste.filter((k) => k.blokeret);
+    const raekke = (x) => {
+        const r = resultat.get(x.noegle);
+        const ok = r && !r.fejl && !r.udenTid;
+        const effekt = !r ? (regner ? '<span class="daempet">planlæggeren regner …</span>' : '')
+            : ok ? '<span class="maerke maerke--ok">går op</span>'
+                : `<span class="maerke maerke--fejl">${r.fejl} fejl i Tjek</span>${r.udenTid ? ` <span class="maerke maerke--fejl">${r.udenTid} uden tid</span>` : ''} <span class="valg-detaljer">${esc(typerTekst(r.typer))}</span>`;
+        const proever = kp.proeveNoegle === x.noegle;
+        return `<div class="variant${ok ? ' er-gaar-op' : ''}">
+            <div class="variant-tekst"><span class="valg-linje"><b>${esc(x.tekst)}</b> ${effekt}</span>${r ? `<span class="valg-detaljer">${esc(dagTekst(r))}</span>` : ''}${proever && kp.proeveSvar ? `<span class="valg-detaljer">${esc(kp.proeveSvar)}</span>` : ''}</div>
+            <div class="variant-knapper">
+                ${r ? `<button class="knap knap--sekundaer knap--lille" data-handling="variant-brug" data-variant="${esc(x.noegle)}"${dis} title="${ok ? 'Lægger programmet ind' : 'Lægger programmet ind med regelbruddene — Tjek viser dem'}. Fortryd bringer det nuværende tilbage.">Brug dette program</button>` : ''}
+                ${ok ? '' : `<button class="knap knap--sekundaer knap--lille" data-handling="variant-proeve" data-variant="${esc(x.noegle)}"${dis} title="Løseren prøver at få programmet til at gå op — på en kopi; dit program ændres ikke, før du vælger.">${proever && travl ? 'Løseren prøver …' : 'Lad løseren prøve'}</button>`}
+            </div>
+        </div>`;
+    };
     return `<div class="beslutning kompromiser">
-            <h4>Kan løseren klare sig uden kompromiserne?</h4>
-            <p class="daempet">For at få programmet til at gå op er der givet efter på det herunder. Sæt flueben ved det, du vil have tilbage, og lad løseren prøve — den er stærkere end planlæggeren. Løseren regner på en kopi: dit program ændres ikke, før du selv vælger det, løseren finder.</p>
-            ${kp.proeveSvar ? `<p>${esc(kp.proeveSvar)}</p>` : ''}
-            <div class="beslutning-liste">${liste.map((k) => `<label class="beslutning-valg"><input type="checkbox" data-kompromis="${esc(k.id)}" ${k.blokeret ? 'disabled' : ''}> <span>${k.valg?.length > 1
-                ? `Kampe på <select data-kompromis-vaerdi="${esc(k.id)}" aria-label="Kamplængde">${k.valg.map((m) => `<option value="${m}" ${m === k.foer ? 'selected' : ''}>${m} min${m === k.som ? ' (som før)' : ''}</option>`).join('')}</select> igen (nu ${k.nu} min)`
-                : esc(k.tekst)}</span></label>`).join('')}</div>
-            <p class="optimer"><button class="knap knap--sekundaer" data-handling="kp-uden-kompromis"${dis}>Lad løseren prøve med de valgte ændringer</button>
-                <select data-felt="optimerSek" aria-label="Tid til løseren" title="Hvor længe løseren må prøve (samme tid som ved 'Forbedr med løseren')">
-                    ${tidValg(sek)}
-                </select></p>
+            <h4>Programmer uden kompromiserne</h4>
+            <p class="daempet">For at få programmet til at gå op er der givet efter på noget. Her er planlæggerens program uden hvert af dem — du kan bruge et (også med regelbrud: Tjek viser hvor) eller lade løseren prøve at få det til at gå op.</p>
+            ${v?.liste?.length ? `<p class="daempet">Dit program nu: ${esc(dagTekst(bedoemPlan(projekt)))}</p>` : ''}
+            ${kp.proeveSvar && !raekker.some((x) => x.noegle === kp.proeveNoegle) ? `<p>${esc(kp.proeveSvar)}</p>` : ''}
+            <div class="variant-liste">${raekker.map(raekke).join('')}</div>
+            ${blokerede.length ? `<p class="daempet">${blokerede.map((k) => esc(k.tekst)).join(' · ')}</p>` : ''}
+            ${v?.fejl ? `<p class="daempet">Planlæggeren kunne ikke lave programmerne: ${esc(v.fejl)}</p>` : ''}
+            <p class="optimer daempet">Løseren må prøve i <select data-felt="optimerSek" aria-label="Tid til løseren" title="Hvor længe løseren må prøve (samme tid som ved 'Forbedr med løseren')">
+                ${tidValg(sek)}
+            </select></p>
         </div>`;
 }
 
@@ -481,15 +519,11 @@ function bind(container, h) {
                 if (valgt === 'behold') h.beholdBeslutning(Number(kortEl.dataset.kort));
                 else if (valgt != null) h.brugBeslutning(Number(kortEl.dataset.kort), Number(valgt));
             }
-            else if (hd === 'kp-tidligere') h.brugTidligereKamplaengde();
             else if (hd === 'kp-fortryd') h.fortrydKampprogram();
             else if (hd === 'kp-elastisk') h.brugElastisk();
             else if (hd === 'kp-tilbud') h.brugTilbud();
-            else if (hd === 'kp-uden-kompromis') {
-                const boks = knap.closest('.kompromiser');
-                const vaerdier = Object.fromEntries([...(boks?.querySelectorAll('[data-kompromis-vaerdi]') || [])].map((x) => [x.dataset.kompromisVaerdi, Number(x.value)]));
-                h.udenKompromis([...(boks?.querySelectorAll('[data-kompromis]:checked') || [])].map((x) => x.dataset.kompromis), vaerdier);
-            }
+            else if (hd === 'variant-brug') h.brugVariant(knap.dataset.variant);
+            else if (hd === 'variant-proeve') h.proeveVariant(knap.dataset.variant);
             else if (hd === 'til-tp') h.tilTP();
             else if (hd === 'kun-uden-tid') h.lavKampprogram({ behold: true });
             else if (hd === 'forslag') h.lavForslag(false);

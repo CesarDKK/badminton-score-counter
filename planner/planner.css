@@ -539,6 +539,22 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 .beslutning-valg:has(input:checked) { border-color: var(--purple-light); background: rgba(83,52,131,0.2); }
 .beslutning-valg input { margin-top: 4px; flex-shrink: 0; }
 .beslutning-valg b { color: #fff; font-weight: 600; }
+/* Panelet efter "Lav kampprogram", ryddet op 2026-10-17: valgets virkning som mærke, detaljerne dæmpet under */
+.kampprogram-hoved-knapper { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.valg-indhold { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.valg-linje .maerke { margin-left: 4px; vertical-align: 1px; }
+.valg-detaljer { display: block; color: var(--muted); font-size: 0.9em; }
+.beslutning-naeste { margin-top: 8px; font-size: 0.85em; }
+.kampprogram-tilbud .knap { margin-left: 6px; }
+/* Programmerne uden kompromiserne: én række pr. program med resultat og knapper */
+.variant-liste { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 6px; }
+.variant { display: flex; justify-content: space-between; align-items: center; gap: 8px 12px; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--border-soft); border-radius: 10px; font-size: 0.92em; line-height: 1.5; }
+.variant.er-gaar-op { border-color: rgba(var(--color-win-rgb), 0.45); }
+.variant b { color: #fff; font-weight: 600; }
+.variant-tekst { flex: 1 1 320px; min-width: 0; }
+.variant-knapper { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.kompromiser .optimer { display: flex; font-size: 0.85em; }
+.kampprogram-fod { border-top: 1px solid var(--border-soft); margin-top: 14px; padding-top: 10px; color: var(--muted); font-size: 0.85em; line-height: 1.6; }
 .pris-liste { margin: 10px 0 10px 22px; display: flex; flex-direction: column; gap: 6px; }
 .pris-liste li { display: flex; justify-content: space-between; align-items: center; gap: 12px; max-width: 560px; font-size: 0.92em; }
 .pris-knapper { display: inline-flex; gap: 4px; }

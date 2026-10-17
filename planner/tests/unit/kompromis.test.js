@@ -117,3 +117,38 @@ describe('diagnosens "flere" nævner rækkernes tidsrum og dage', async () => {
         assert.match(diagnoseTekst([{ regel: 'flere' }]).tekst, /rækkernes tidsrum og dage/);
     });
 });
+
+describe('programmerne uden kompromiserne (Jesper 2026-10-17: planer, der er tæt på, og som kan vælges)', async () => {
+    const { variantValg, lavVarianter } = await import('../../src/kompromis.js');
+    const efter = () => genberegnKampe(opdaterOpsaetning(saetSlotMin(foer(), 20), { pauseMin: { ...INGEN_PAUSE } }));
+    test('én række pr. kompromis, hvert trin for kamplængden og "Alt som før"', () => {
+        const tekster = variantValg(foer(), efter()).map((x) => x.tekst);
+        assert.deepEqual(tekster, ['Kampe på 25 min (nu 20 min)', 'Kampe på 30 min som før (nu 20 min)', 'Pausen tilbage i planen (nu gives den på dagen)', 'Alt som før']);
+    });
+    test('planlæggeren laver hvert program: fejl, sluttid, tid i hallen — og projektet, der kan tages i brug', () => {
+        const liste = lavVarianter(foer(), efter());
+        assert.ok(liste.length >= 4);
+        for (const v of liste) {
+            assert.equal(typeof v.fejl, 'number');
+            assert.ok(v.slut['2026-11-21'], 'sluttid for dagen');
+            assert.ok(v.haltidGnsMin > 0);
+            assert.ok(Object.keys(v.projekt.plan).length > 0, 'programmet har tider');
+        }
+        // Rækkefølgen: færrest fejl først
+        assert.deepEqual(liste.map((v) => v.fejl), [...liste.map((v) => v.fejl)].sort((a, b) => a - b));
+        // "Kampe på 30 min som før" har 30 min og pausen på dagen; "Alt som før" også reglementets pause
+        const tredive = liste.find((v) => v.tekst.startsWith('Kampe på 30'));
+        assert.equal(tredive.projekt.opsaetning.slotMin, 30);
+        const alt = liste.find((v) => v.tekst === 'Alt som før');
+        assert.equal(alt.projekt.opsaetning.slotMin, 30);
+        assert.deepEqual(alt.projekt.opsaetning.pauseMin, foer().opsaetning.pauseMin);
+    });
+    test('går to kompromiser hver for sig op, prøves de sammen', () => {
+        // Dagen er så lang, at alt går op: begge kompromiser kan trækkes tilbage hver for sig — og sammen
+        const a = opdaterDag(foer(), LOER, { slut: '21:00' });
+        const b = genberegnKampe(opdaterOpsaetning(saetSlotMin(a, 25), { pauseMin: { ...INGEN_PAUSE } }));
+        const liste = lavVarianter(a, b);
+        const op = liste.filter((v) => !v.fejl && !v.udenTid).map((v) => v.tekst);
+        assert.ok(op.some((t) => t.includes(' + ')) || op.includes('Alt som før'), `kombinationen findes: ${op.join(' | ')}`);
+    });
+});
