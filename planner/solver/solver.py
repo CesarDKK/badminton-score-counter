@@ -609,7 +609,8 @@ def _loes(problem: dict, sekunder: float, arbejdere: int | None, stop: threading
             m.AddHint(T[i], k["hint"])
 
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = max(1.0, min(float(sekunder), MAX_SEKUNDER))
+    # Tiden til at bygge modellen er allerede brugt af den valgte tid (gennemgangen 2026-10-17)
+    solver.parameters.max_time_in_seconds = max(1.0, min(float(sekunder), MAX_SEKUNDER) - (time.time() - t0))
     solver.parameters.num_workers = arbejdere or ARBEJDERE
     if foerste:  # diagnosen skal kun vide, OM der findes en plan
         solver.parameters.stop_after_first_solution = True
@@ -739,65 +740,84 @@ def delproblem(problem: dict, ids: list[int], dag: int) -> dict:
 
 
 def loes_opdelt(problem: dict, sekunder: float = 30.0, arbejdere: int | None = None, stop: threading.Event | None = None, elastisk: bool = False) -> dict:
-    """Som loes(), men løser hver dag for sig, når dagene er uafhængige (dele_pr_dag). Tiden fordeles efter antal kampe.
+    """Som loes(), men løser hver dag for sig, når dagene er uafhængige (dele_pr_dag).
 
-    En dag, der ikke bliver afgjort på sin andel (hverken plan eller bevis), gemmes til sidst og får al den tid, der er
-    tilbage, når de andre dage er løst (Jesper 2026-10-17: med 4 min til løseren gav den op efter 2, fordi den svære dag
-    kun fik sin andel). Bliver den heller ikke afgjort da, er svaret uafgjort.
+    Tiden fordeles efter antal kampe blandt de dage, der mangler — så tid, en dag ikke brugte, går videre til ALLE de
+    næste dage, ikke kun den sidste (gennemgangen 2026-10-17). En dag, der ikke bliver afgjort på sin andel (hverken plan
+    eller bevis), gemmes til sidst og får resten af tiden (Jesper 2026-10-17: med 4 min gav løseren før op efter 2).
+    En dag, der er bevist umulig, er beviset for hele problemet. Stoppes løseren, beholder de dage, den ikke nåede (eller
+    ikke nåede at afgøre), startplanens tider, hvis de har dem alle.
     """
     dele = dele_pr_dag(problem)
     if not dele:
         return loes(problem, sekunder, arbejdere, stop, elastisk=elastisk)
     t0 = time.time()
-    n = len(problem["kampe"])
     svar = {"status": "OPTIMAL", "tider": {}, "maal": 0.0, "graense": 0.0, "stoppet": False, "rolig": False, "dele": len(dele)}
     stoppet = lambda: stop is not None and stop.is_set()
     tilbage = lambda: max(1.0, float(sekunder) - (time.time() - t0))
+    rolige = []  # pr. løst dag: stoppede den selv (eller bevist bedst)?
+    afsluttet = lambda d: {**d, "sekunder": round(time.time() - t0, 2)}
 
     def med(del_svar):
         svar["tider"].update(del_svar["tider"])
         svar["maal"] += del_svar.get("maal", 0.0)
         svar["graense"] += del_svar.get("graense", 0.0)
         svar["stoppet"] = svar["stoppet"] or del_svar["stoppet"]
-        svar["rolig"] = svar["rolig"] or del_svar.get("rolig", False)
+        rolige.append(del_svar["status"] == "OPTIMAL" or bool(del_svar.get("rolig")))
         if "brud" in del_svar:
             svar.setdefault("brud", []).extend(del_svar["brud"])
         if del_svar["status"] == "FEASIBLE":
             svar["status"] = "FEASIBLE"
 
+    def fra_hint(ids):
+        """Dagens kampe beholder startplanens tider (når løseren er stoppet) — kun hvis de har dem alle."""
+        if not all(problem["kampe"][i].get("hint") in problem["kampe"][i]["tilladte"] for i in ids):
+            return False
+        svar["tider"].update({problem["kampe"][i]["id"]: int(problem["kampe"][i]["hint"]) for i in ids})
+        svar["status"] = "FEASIBLE"
+        svar["stoppet"] = True
+        return True
+
+    dagliste = sorted(dele.items())
     uafgjort = []  # [(dag, ids, seneste svar)]
-    for dag, ids in sorted(dele.items()):
-        # Den sidste dag får resten — men ikke, hvis en uafgjort dag venter på den
-        andel = tilbage() if dag == max(dele) and not uafgjort else max(5.0, float(sekunder) * len(ids) / n)
+    for nr, (dag, ids) in enumerate(dagliste):
         if stoppet():
-            # Stoppet, før dagen kom til: dens kampe beholder startplanens tider, hvis den har dem alle
-            if all(problem["kampe"][i].get("hint") in problem["kampe"][i]["tilladte"] for i in ids):
-                svar["tider"].update({problem["kampe"][i]["id"]: int(problem["kampe"][i]["hint"]) for i in ids})
-                svar["status"] = "FEASIBLE"
-                svar["stoppet"] = True
+            if fra_hint(ids):
                 continue
-            return {**loes(problem, 1, arbejdere, stop, elastisk=elastisk), "stoppet": True}
+            return {"status": "UNKNOWN", "tider": {}, "stoppet": True, "rolig": False, "sekunder": round(time.time() - t0, 2), "besked": "Løseren blev stoppet, før alle dage var løst."}
+        resten = sum(len(x) for _, x in dagliste[nr:])
+        # Den sidste dag får resten — men ikke, hvis en uafgjort dag venter på den
+        andel = tilbage() if nr == len(dagliste) - 1 and not uafgjort else max(5.0, tilbage() * len(ids) / resten)
         del_svar = loes(delproblem(problem, ids, dag), min(andel, tilbage()), arbejdere, stop, elastisk=elastisk)
-        if del_svar["status"] == "UNKNOWN" and not stoppet():
-            uafgjort.append((dag, ids, del_svar))
-            continue
+        if del_svar["status"] == "UNKNOWN":
+            if not stoppet():
+                uafgjort.append((dag, ids, del_svar))
+                continue
+            if fra_hint(ids):
+                continue
+            return afsluttet({**del_svar, "stoppet": True})
         if del_svar["status"] not in ("OPTIMAL", "FEASIBLE"):
-            # En dag uden lovlig plan: hele problemet løses samlet, så svaret (og diagnosen) bliver som før
-            # En dag uden lovlig plan: dagene er uafhængige (dele_pr_dag), så dens bevis gælder hele problemet — at løse
-            # hele problemet samlet på resten af tiden gav ofte "uafgjort" i stedet (gennemgangen 2026-10-17)
-            return {**del_svar, "sekunder": round(time.time() - t0, 2)}
+            # Bevist umulig (eller for stor): dagene er uafhængige, så det gælder hele problemet — før blev hele problemet
+            # løst samlet på resten af tiden, og så blev svaret ofte "uafgjort" uden diagnose (gennemgangen 2026-10-17)
+            return afsluttet(del_svar)
         med(del_svar)
     # De uafgjorte dage deler resten af tiden — det samlede problem er større og når det ikke bedre
     for i, (dag, ids, foer) in enumerate(uafgjort):
         rest = float(sekunder) - (time.time() - t0)
-        if rest < 1.0 or stoppet():
-            return {**foer, "sekunder": round(time.time() - t0, 2)}
+        if stoppet() or rest < 1.0:
+            if stoppet() and fra_hint(ids):
+                continue
+            return afsluttet({**foer, "stoppet": stoppet()})
         del_svar = loes(delproblem(problem, ids, dag), rest / (len(uafgjort) - i), arbejdere, stop, elastisk=elastisk)
         if del_svar["status"] == "UNKNOWN":
-            return {**del_svar, "sekunder": round(time.time() - t0, 2)}
+            if stoppet() and fra_hint(ids):
+                continue
+            return afsluttet({**del_svar, "stoppet": stoppet()})
         if del_svar["status"] not in ("OPTIMAL", "FEASIBLE"):
-            return {**del_svar, "sekunder": round(time.time() - t0, 2)}
+            return afsluttet(del_svar)
         med(del_svar)
+    # "Stoppede selv" kun, når ALLE dage gjorde det — ellers sagde planneren det, selv om de andre brugte hele tiden
+    svar["rolig"] = bool(rolige) and all(rolige) and not svar["stoppet"]
     svar["sekunder"] = round(time.time() - t0, 2)
     return svar
 
@@ -862,7 +882,7 @@ def uden_max_kampe(problem: dict) -> dict:
     return {**problem, "mangeKampe": [], "maxPrGruppe": [g for g in problem.get("maxPrGruppe", []) if g.get("regel", "senior") != "maxKampe"]}
 
 
-def diagnose(problem: dict, stop: threading.Event | None = None) -> list[dict]:
+def diagnose(problem: dict, stop: threading.Event | None = None, brud: list | None = None) -> list[dict]:
     """Hvorfor findes der ingen lovlig plan? Prøver at lempe én hård regel ad gangen.
 
     Returnerer de lempelser, der hver for sig gør problemet løsbart:
@@ -871,6 +891,8 @@ def diagnose(problem: dict, stop: threading.Event | None = None) -> list[dict]:
       {"regel": "tidsrum", "raekke": "U09 D"}   — rækkens eget tidsrum er for snævert (løseren holder det hårdt; Tjek advarer kun)
       {"regel": "dage", "raekke": "U11 D"}      — rækken kan ikke være på de dage, den er sat til
       {"regel": "maxKampePrDag"}
+      {"regel": "pause"} / {"regel": "antiSamtidighed"} / {"regel": "senior"} / {"regel": "tidsvindue", "raekke": …}
+                — prøves, når planen med færrest brud (brud) bryder dem, eller (pause, single/double, senior) når de findes
       {"regel": "flere"}   — først løsbart, når alle tre slags lempes samtidig
       {"regel": "plads"}   — ikke løsbart selv uden dem: for mange kampe til baner og tidsrum (eller låste kampe i konflikt)
     """
@@ -897,7 +919,17 @@ def diagnose(problem: dict, stop: threading.Event | None = None) -> list[dict]:
             if len(kampe_alle[i]["tilladte"]) != 1:
                 bredere = {t for t in alt["tilladte"] if t not in forbudt_alt.get(i, ())}
                 kampe_alle[i] = {**kampe_alle[i], "tilladte": sorted(set(kampe_alle[i]["tilladte"]) | bredere)}
-    alle = loesbar({**uden_max_kampe(problem), "kampe": kampe_alle, "haltid": [], "maxDage": []})
+    # … og årgangens tidsvindue, pausen, single/double samtidig og seniorreglerne (de lempes også hver for sig nedenfor)
+    forbudt_el = {i: set(t) for e in problem.get("elastisk", []) for i, t in e.get("forbudt", [])}
+    vinduer = {e["raekke"]: set(e.get("tidsvindue", [])) for e in problem.get("elastisk", []) if e.get("tidsvindue")}
+    for i, k in enumerate(kampe_alle):
+        if k["raekke"] in vinduer and len(k["tilladte"]) != 1:
+            kampe_alle[i] = {**k, "tilladte": sorted(set(k["tilladte"]) | {t for t in vinduer[k["raekke"]] if t not in forbudt_el.get(i, ())})}
+    slot = int(problem["slotMin"])
+    alt_lempet = {**uden_max_kampe(problem), "kampe": kampe_alle, "haltid": [], "maxDage": [], "ikkeSamtidig": [], "ikkeSammeDag": [],
+                  "konflikter": [[a, b, min(g, slot), o] for a, b, g, o in problem.get("konflikter", [])]}
+    alt_lempet["maxPrGruppe"] = [g for g in alt_lempet["maxPrGruppe"] if g.get("regel", "senior") != "senior"]
+    alle = loesbar(alt_lempet)
     if alle is False:
         return [{"regel": "plads"}]
 
@@ -915,8 +947,35 @@ def diagnose(problem: dict, stop: threading.Event | None = None) -> list[dict]:
     for r in problem.get("maxDage", []):
         if loesbar({**problem, "maxDage": [x for x in problem["maxDage"] if x is not r]}):
             fund.append({"regel": "maxDage", "raekke": r.get("raekke", "")})
-    # Pr. række og art (singlerne, doublerne, hele rækken — klientens VARIGHEDER)
+    # Regler, diagnosen før aldrig lempede (gennemgangen 2026-10-17): så blev svaret "plads" og gav banerne skylden. Planen
+    # med færrest brud (brud) siger, hvilke den bryder; uden den prøves de, der findes i problemet.
+    i_brud = {(b.get("regel"), b.get("raekke") or "") for b in (brud or [])}
+    regler_i_brud = {r for r, _ in i_brud}
+    if ("pause" in regler_i_brud) if brud is not None else any(g > slot for _, _, g, _ in problem.get("konflikter", [])):
+        # Ingen pause: kun at en spiller ikke står i to kampe på én gang (som planen med færrest brud)
+        if loesbar({**problem, "konflikter": [[a, b, min(g, slot), o] for a, b, g, o in problem.get("konflikter", [])]}):
+            fund.append({"regel": "pause"})
+    if ("antiSamtidighed" in regler_i_brud) if brud is not None else bool(problem.get("ikkeSamtidig")):
+        if loesbar({**problem, "ikkeSamtidig": []}):
+            fund.append({"regel": "antiSamtidighed"})
+    senior = [g for g in problem.get("maxPrGruppe", []) if g.get("regel", "senior") == "senior"]
+    if ("senior" in regler_i_brud) if brud is not None else bool(senior or problem.get("ikkeSammeDag")):
+        if loesbar({**problem, "ikkeSammeDag": [], "maxPrGruppe": [g for g in problem.get("maxPrGruppe", []) if g.get("regel", "senior") != "senior"]}):
+            fund.append({"regel": "senior"})
+    # Årgangens tidsvindue (kræver dispensation): kun for rækker, planen med færrest brud lægger uden for vinduet
+    for e in problem.get("elastisk", []):
+        if ("tidsvindue", e.get("raekke") or "") not in i_brud or not e.get("tidsvindue"):
+            continue
+        bredere = set(e["tidsvindue"])
+        kampe3 = [({**k, "tilladte": sorted(set(k["tilladte"]) | {t for t in bredere if t not in forbudt_el.get(i, ())})} if k["raekke"] == e["raekke"] and len(k["tilladte"]) != 1 else k) for i, k in enumerate(problem["kampe"])]
+        if loesbar({**problem, "kampe": kampe3}):
+            fund.append({"regel": "tidsvindue", "raekke": e["raekke"]})
+    # Pr. række og art (singlerne, doublerne, hele rækken — klientens VARIGHEDER). Hjælper det ikke at fjerne ALLE grænser
+    # for varighed, kan ingen enkelt gøre det — så spares op til fire forsøg pr. række og art (mange U9/U11-rækker løb før
+    # tør for tid her og endte i "ikke undersøgt")
     haltid = problem.get("haltid", [])
+    if haltid and loesbar({**problem, "haltid": []}) is False:
+        haltid = []
     noegle = lambda h: (h.get("raekke") or "", h.get("art") or "single")
     for raekke, art in sorted({noegle(h) for h in haltid}):
         egne = [h for h in haltid if noegle(h) == (raekke, art)]
@@ -1045,7 +1104,8 @@ def koer(problem: dict, sekunder: float, job: Job):
             # Først uden at flytte kampe til andre dage: så falder problemet i uafhængige dage, der løses hver for sig
             # (målt på prod 2026-10-10: ellers nåede løseren ikke ned på de færreste brud på 30 s). Kun hvis det er
             # umuligt, må kampe flyttes til dage, rækken ikke spiller.
-            tid = elastisk_tid
+            # Mindst ELASTISK_SEKUNDER — og den tid, søgningen ikke brugte (fx når den beviste "umulig" efter 2 af 240 s)
+            tid = min(float(MAX_SEKUNDER), max(elastisk_tid, float(sekunder) - (time.time() - job.start)))
             job.senest = time.time() + 2 * tid + (diagnose_tid if svar["status"] == "INFEASIBLE" and problem.get("diagnose", True) else 0.0)
             uden_dage = {**problem, "elastisk": [{**e, "dage": []} for e in problem.get("elastisk", [])]}
             el = loes_opdelt(uden_dage, tid, stop=job.stop, elastisk=True)
@@ -1056,7 +1116,7 @@ def koer(problem: dict, sekunder: float, job: Job):
         if svar["status"] == "INFEASIBLE" and not job.stop.is_set() and problem.get("diagnose", True):
             job.fase = "diagnose"
             job.senest = time.time() + diagnose_tid
-            svar["diagnose"] = diagnose(problem, job.stop)
+            svar["diagnose"] = diagnose(problem, job.stop, brud=(svar.get("elastisk") or {}).get("brud"))
             svar["sekunder"] = round(time.time() - job.start, 2)
         return 200, svar
     except (KeyError, TypeError, ValueError) as e:  # problemet har ikke den form, bygProblem() laver

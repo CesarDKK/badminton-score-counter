@@ -471,7 +471,7 @@ class DiagnoseTest(unittest.TestCase):
         for k in p["kampe"]:
             k["tilladte"] = list(range(540, 900, 30))
         self.assertEqual(loes(p, 5)["status"], "INFEASIBLE")
-        fund = diagnose(p)
+        fund = diagnose(p, brud=[{"regel": "haltid", "raekke": "U09 D"}])
         self.assertEqual(fund, [{"regel": "haltid", "raekke": "U09 D", "art": "single", "graense": 120, "forslag": 240}])
 
     def test_varighed_pr_art_peger_paa_den_grænse_der_spaerrer(self):
@@ -484,7 +484,7 @@ class DiagnoseTest(unittest.TestCase):
         p = problem(kampe, konflikter=konf, haltid=haltid,
                     kapacitet={"faelles": [{"t": t, "baner": 2} for t in range(540, 900, 30)]}, dage=[{"index": 0, "start": 540, "slut": 900, "baner": 2}])
         self.assertEqual(loes(p, 5)["status"], "INFEASIBLE")
-        self.assertEqual(diagnose(p), [{"regel": "haltid", "raekke": "U09 D", "art": "raekke", "graense": 120, "forslag": 240}])
+        self.assertEqual(diagnose(p, brud=[{"regel": "haltid", "raekke": "U09 D"}]), [{"regel": "haltid", "raekke": "U09 D", "art": "raekke", "graense": 120, "forslag": 240}])
         r = loes(p, 5, elastisk=True)
         self.assertEqual({(b["regel"], b["art"]) for b in r["brud"]}, {("haltid", "raekke")})
 
@@ -677,6 +677,43 @@ class GennemgangPakke1Test(unittest.TestCase):
                 solver.JOBS.pop("test-ledig", None)
 
 
+    def _tre_dage(self):
+        tider = [d * DAG + t for d in range(3) for t in (540, 570)]
+        return problem([kamp(i, tilladte=[d * DAG + 540, d * DAG + 570]) for i, d in enumerate((0, 1, 2))],
+                       kapacitet={"faelles": [{"t": t, "baner": 2} for t in tider]},
+                       dage=[{"index": d, "start": 540, "slut": 600, "baner": 2} for d in range(3)])
+
+    def test_tid_en_dag_ikke_brugte_gaar_til_alle_de_naeste_dage(self):
+        import solver
+        kald = []
+        gammel = solver.loes
+        def falsk(p, s, *a, **k):
+            kald.append(round(s))
+            return {"status": "OPTIMAL", "tider": {x["id"]: x["tilladte"][0] for x in p["kampe"]}, "stoppet": False, "maal": 0.0, "graense": 0.0, "sekunder": 0.0, "rolig": True}
+        solver.loes = falsk
+        try:
+            svar = solver.loes_opdelt(self._tre_dage(), 30)
+        finally:
+            solver.loes = gammel
+        # Dag 1 brugte intet: dag 2 får halvdelen af de 30 s (før en tredjedel), dag 3 resten
+        self.assertEqual(kald[:2], [10, 15])
+        self.assertTrue(svar["rolig"], "alle dage stoppede selv")
+
+    def test_rolig_kun_naar_alle_dage_stoppede_selv(self):
+        import solver
+        gammel = solver.loes
+        n = []
+        def falsk(p, s, *a, **k):
+            n.append(1)
+            return {"status": "FEASIBLE", "tider": {x["id"]: x["tilladte"][0] for x in p["kampe"]}, "stoppet": False, "maal": 0.0, "graense": 0.0, "sekunder": s, "rolig": len(n) != 2}
+        solver.loes = falsk
+        try:
+            svar = solver.loes_opdelt(self._tre_dage(), 30)
+        finally:
+            solver.loes = gammel
+        self.assertFalse(svar["rolig"], "dag 2 brugte hele sin tid")
+
+
 class EgenKampgraenseTest(unittest.TestCase):
     """Spillere med egen grænse for kampe pr. dag (U11: 12, også ved flere dage — Jesper 2026-10-12)."""
 
@@ -703,6 +740,58 @@ class HalTidTest(unittest.TestCase):
     def test_ugyldig_gruppe_afvises(self):
         from solver import valider
         self.assertEqual(valider(problem([kamp(0)], halTid=[{"kampe": [0, 7], "vaegt": 1}])), "ugyldigt halTid")
+
+
+class GennemgangPakke2Test(unittest.TestCase):
+    """Gennemgangen af løseren 2026-10-17, pakke 2: diagnosen lemper også pause, single/double, senior og tidsvindue."""
+
+    def _diagnose(self, p, brud):
+        from solver import diagnose
+        return diagnose(p, brud=brud)
+
+    def test_pause_er_aarsagen(self):
+        # To kampe med samme spiller og 60 min mellem starterne, men dagen har kun to slots á 30 min
+        kampe = [kamp(0, tilladte=[540, 570]), kamp(1, tilladte=[540, 570])]
+        p = problem(kampe, konflikter=[[0, 1, 60, 0]], kapacitet={"faelles": [{"t": t, "baner": 2} for t in (540, 570)]})
+        self.assertEqual(loes(p, 5)["status"], "INFEASIBLE")
+        self.assertIn({"regel": "pause"}, self._diagnose(p, [{"regel": "pause", "raekke": "U11 D"}]))
+        self.assertNotIn({"regel": "pause"}, self._diagnose(p, []), "bryder planen med færrest brud ikke pausen, prøves den ikke")
+
+    def test_single_og_double_samtidig_er_aarsagen(self):
+        kampe = [kamp(0, tilladte=[540]), kamp(1, tilladte=[540, 570]), kamp(2, tilladte=[570])]
+        p = problem(kampe, ikkeSamtidig=[[0, 1], [1, 2]])
+        self.assertEqual(loes(p, 5)["status"], "INFEASIBLE")
+        self.assertIn({"regel": "antiSamtidighed"}, self._diagnose(p, None))
+
+    def test_senior_er_aarsagen(self):
+        kampe = [kamp(0, tilladte=[540]), kamp(1, tilladte=[570])]
+        p = problem(kampe, ikkeSammeDag=[[0, 1]])
+        self.assertEqual(loes(p, 5)["status"], "INFEASIBLE")
+        self.assertIn({"regel": "senior"}, self._diagnose(p, None))
+
+    def test_tidsvindue_for_raekken_planen_med_faerrest_brud_lægger_udenfor(self):
+        # To kampe, én bane: kl. 9 er der plads til én, kl. 10 til ingen — kl. 9:30 (uden for vinduet) til den anden
+        kampe = [kamp(0, tilladte=[540, 600]), kamp(1, tilladte=[540, 600])]
+        p = problem(kampe, kapacitet={"faelles": [{"t": 540, "baner": 1}, {"t": 570, "baner": 1}, {"t": 600, "baner": 0}]},
+                    elastisk=[{"raekke": "U11 D", "tidsvindue": [570], "tidsrum": [], "dage": []}])
+        fund = self._diagnose(p, [{"regel": "tidsvindue", "raekke": "U11 D"}])
+        self.assertIn({"regel": "tidsvindue", "raekke": "U11 D"}, fund)
+
+    def test_varigheden_proeves_ikke_pr_raekke_naar_det_heller_ikke_hjaelper_helt_uden(self):
+        import solver
+        kald = []
+        gammel = solver.loes
+        def falsk(p, s, *a, **k):
+            kald.append(len(p.get("haltid", [])))
+            return {"status": "INFEASIBLE", "tider": {}, "stoppet": False, "sekunder": 0.1}
+        p = problem([kamp(0)], haltid=[{"kampe": [0], "graense": 60, "raekke": "U09 D", "art": a} for a in ("single", "double", "raekke")])
+        solver.loes = falsk
+        try:
+            fund = solver.diagnose(p, brud=[])
+        finally:
+            solver.loes = gammel
+        self.assertEqual(fund, [{"regel": "plads"}])
+        self.assertLessEqual(len(kald), 2, "alle lempelser + helt uden varighed — ikke fire forsøg pr. række og art")
 
 
 class ValideringTest(unittest.TestCase):

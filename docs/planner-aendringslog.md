@@ -614,3 +614,35 @@ og tiden fordeles efter antal kampe. En dag, der ikke blev afgjort på sin andel
 2026-10-12). Nu gemmes en uafgjort dag til sidst og får al den tid, der er tilbage, når de andre dage er løst. Først hvis
 den heller ikke bliver afgjort da, er svaret uafgjort, og tiden går til planen med færrest brud. Det samlede problem
 løses stadig ikke samlet bagefter.
+
+## Gennemgang af hele løseren (2026-10-17)
+
+Der var lavet mange ændringer i løseren på kort tid, så Jesper bad om en gennemgang af hele løsningen. Den fandt 22
+punkter, delt i tre pakker.
+
+**Pakke 1 — fejl, der gav et forkert resultat eller skjulte svaret:**
+
+- Løserens beskeder (ændret imens, netværksfejl, kø) vises i kampprogrammets panel. Før forsvandt de bag panelet.
+- Diagnoseknapperne udfører den handling, de viser.
+- Kamplængden kan kun sættes tilbage til længder, hvor de låste kampe passer i gitteret.
+- Et tilbud fra løseren afvises, hvis programmet er ændret siden.
+- En bevist umulig dag er beviset for hele problemet.
+- Diagnosens "flere ting på én gang" bruger forsøget med alle lempelser.
+- Stabil omplanlægning regnes fra kampens tidligere tid.
+
+**Pakke 2 — løserens tid, diagnosen og ventetiden:**
+
+- Dagene får hver en andel af den tid, der er tilbage, ikke af den samlede. Tiden til at bygge modellen trækkes fra.
+  Planen med færrest brud får mindst resten af den valgte tid.
+- Diagnosen kan nu også pege på pausen, single og double samtidig, seniorreglerne og årgangens tidsvindue. Før blev de
+  alle til "ikke plads nok". Pausen og single/double har en knap, der retter opsætningen og optimerer igen. Diagnosen
+  prøver de regler, planen med færrest brud bryder. Varigheden prøves ikke række for række, når den heller ikke hjælper
+  helt uden.
+- Løserens mål for ventetid regner nu på samme måde som programmets score og Tjek: Swiss-runderne tæller for alle i
+  lodtrækningen. Før talte løseren hver Swiss-lodtrækning som én gruppe, mens scoren kun så kendte kampe. Derfor kunne
+  en "forbedret" plan få en dårligere score. Af en Swiss-lodtrækning tager løseren kun første og sidste runde med, for
+  de midterste ændrer ikke, hvornår spilleren kommer og går. Det gør modellen mindre.
+- Panelets knapper kan ikke bruges, mens løseren eller planlæggeren regner, fordi resultatet ville bygge på det gamle.
+  "Lav kampprogram" imens siger til i stedet for at blive overskrevet bagefter.
+- "Lad løseren prøve med de valgte ændringer" har sin egen tidsvælger. Det er den samme tid som ved "Forbedr med
+  løseren".

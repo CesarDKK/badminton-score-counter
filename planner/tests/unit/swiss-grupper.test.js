@@ -84,10 +84,14 @@ describe('planlægning', () => {
         assert.equal(f.ikkePlaceret.length, 0);
         assert.deepEqual(tjekPlan(anvendForslag(p, f)).problemer.filter((x) => x.alvor === 'fejl').map((x) => x.tekst), []);
     });
-    test('løseren får en Swiss-gruppe pr. lodtrækning — kun gruppens egne spillere', () => {
-        const pr = bygProblem(projekt(20, 2));
-        const swissVent = pr.spillerGrupper.filter((g) => g.vaegt === 10);
-        assert.equal(swissVent.length, 2, 'én ventetidsgruppe pr. Swiss-gruppe á 10 spillere');
+    test('løserens ventetid pr. spiller holder sig til spillerens egen Swiss-gruppe', () => {
+        const p = projekt(20, 2);
+        const pr = bygProblem(p);
+        const draw = (i) => p.kampe.find((k) => k.id === pr.kampe[i].id).tpRef.draw;
+        assert.equal(pr.spillerGrupper.reduce((s, g) => s + g.vaegt, 0), 20, 'alle 20 spillere');
+        assert.ok(pr.spillerGrupper.every((g) => new Set(g.kampe.map(draw)).size === 1), 'kun gruppens egne kampe');
+        // Runde 1-kampen (kendte spillere) og sidste runde (5 kampe) — runde 2 og 3 ændrer ikke opholdet
+        assert.ok(pr.spillerGrupper.every((g) => g.kampe.length === 6));
     });
     test('"Til TP" holder gruppernes runder adskilt, når TP-filen har en lodtrækning pr. gruppe', () => {
         // Som TP-filen ser ud, når lodtrækningen er lavet i TP: kampene er TP's (formValg "fra TP")

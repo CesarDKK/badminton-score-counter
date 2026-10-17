@@ -8,7 +8,8 @@
 import { minutter, klokkeFraMinutter } from './tp-reader.js';
 import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt } from './kapacitet.js';
 import { lavRegelmodel, VARIGHEDER } from './regelmodel.js';
-import { vaegteFor, SAENKET_NET, halTidSpillere } from './kriterier.js';
+import { vaegteFor, SAENKET_NET } from './kriterier.js';
+import { INGEN_PAUSE } from './regler.js';
 
 const DAG_MIN = 1440;
 
@@ -191,34 +192,43 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
         for (const h of prRaekke.values()) if (h.kampe.length > 1) haltid.push(h);
     }
 
-    // Ventetid (blødt): kendte spilleres kampe som grupper; Swiss-lodtrækninger vægtes med antal spillere
-    const spillerGrupper = [];
-    for (const liste of prKendt.values()) if (liste.length > 1) spillerGrupper.push({ kampe: liste.map((k) => indeks.get(k.id)), vaegt: 1 });
-    const swissAlle = new Map();
-    for (const k of projekt.kampe) { if (k.fase !== 'swiss' || !indeks.has(k.id)) continue; if (!swissAlle.has(k.tpRef.draw)) swissAlle.set(k.tpRef.draw, []); swissAlle.get(k.tpRef.draw).push(k); }
-    for (const liste of swissAlle.values()) {
-        const antalSpillere = Math.max(...liste.map((k) => k.muligeSpillere.length), 2);
-        if (liste.length > 1) spillerGrupper.push({ kampe: liste.map((k) => indeks.get(k.id)), vaegt: antalSpillere });
+    // Spillernes ophold (som regelmodel.spillerOphold, Tjek og kriterierne): pr. spiller de kampe, spilleren er i hallen
+    // til — kendte kampe og Swiss-runder for alle i lodtrækningen. Af en Swiss-lodtrækning tages kun første og sidste
+    // runde med: runde r+1 ligger efter hele runde r (afhaengerAf), så de midterste ændrer hverken første eller sidste
+    // tid — og modellen bliver meget mindre (gennemgangen 2026-10-17). Ens grupper slås sammen med en vægt (antal spillere).
+    const runderPrDraw = new Map();
+    for (const k of projekt.kampe) {
+        if (k.fase !== 'swiss' || !indeks.has(k.id)) continue;
+        const r = runderPrDraw.get(k.tpRef.draw) || [Infinity, -Infinity];
+        runderPrDraw.set(k.tpRef.draw, [Math.min(r[0], k.runde), Math.max(r[1], k.runde)]);
     }
-
-    // Tid i hallen for U9/U11 (blødt, kriteriet "halTid"): pr. spiller de kampe, spilleren er i hallen til — i Swiss alle
-    // runder i lodtrækningen. Ens grupper (fx spillere, der kun spiller samme Swiss-lodtrækning) slås sammen med en vægt.
-    const halTidPr = new Map();
-    {
+    const opholdsGrupper = (medKamp) => {
         const prSpiller = new Map();
         for (const k of projekt.kampe) {
-            if (!indeks.has(k.id) || !SAENKET_NET.has(raekke(k)?.aargang)) continue;
-            for (const s of halTidSpillere(k)) { if (!prSpiller.has(s)) prSpiller.set(s, []); prSpiller.get(s).push(indeks.get(k.id)); }
+            if (!indeks.has(k.id) || !medKamp(k)) continue;
+            let hvem = k.spillere;
+            if (k.fase === 'swiss' && !k.spillere.length) {
+                const [foerste, sidste] = runderPrDraw.get(k.tpRef.draw);
+                if (k.runde !== foerste && k.runde !== sidste) continue;
+                hvem = k.muligeSpillere;
+            }
+            for (const s of hvem) { if (!prSpiller.has(s)) prSpiller.set(s, []); prSpiller.get(s).push(indeks.get(k.id)); }
         }
+        const ud = new Map();
         for (const liste of prSpiller.values()) {
             if (liste.length < 2) continue;
             const n = [...liste].sort((a, b) => a - b).join(',');
-            const g = halTidPr.get(n) || { kampe: liste, vaegt: 0 };
+            const g = ud.get(n) || { kampe: liste, vaegt: 0 };
             g.vaegt += 1;
-            halTidPr.set(n, g);
+            ud.set(n, g);
         }
-    }
-    const halTid = [...halTidPr.values()];
+        return [...ud.values()];
+    };
+    // Ventetid (blødt): hver spillers ophold — før kendte kampe pr. spiller plus hver Swiss-lodtrækning for sig, vægtet med
+    // antal spillere; det stemte ikke med kriteriet, så en "optimeret" plan kunne få en dårligere score (gennemgangen)
+    const spillerGrupper = opholdsGrupper(() => true);
+    // Tid i hallen for U9/U11 (blødt, kriteriet "halTid"): de samme ophold, kun for U9/U11
+    const halTid = opholdsGrupper((k) => SAENKET_NET.has(raekke(k)?.aargang));
 
     // Kampe i træk (blødt, kriteriet "kampeITraek"): hver kendt spillers kampe — løseren straffer par i nabo-slots
     const traek = [...prKendt.values()].filter((l) => l.length > 1).map((l) => l.map((k) => indeks.get(k.id)));
@@ -405,6 +415,17 @@ export function diagnoseTekst(diagnose, alleDage = []) {
             if (alleDage.length) handlinger.push({ tekst: `Lad ${d.raekke} spille alle turneringens dage, og optimér igen`, raekke: d.raekke, aendring: { dage: [...alleDage] } });
         } else if (d.regel === 'maxKampePrDag') {
             linjer.push('Grænsen for antal kampe pr. spiller pr. dag kan ikke overholdes — hæv den under "Reglementets grænser" under Turneringen, eller fordel kategorierne på flere dage.');
+        // Årsager, diagnosen kan pege på fra 2026-10-17 (før blev de til "plads")
+        } else if (d.regel === 'pause') {
+            linjer.push('Pausen mellem en spillers kampe kan ikke holdes i planen — gives pausen på dagen (0 min i planen), findes der en plan.');
+            handlinger.push({ tekst: 'Giv pausen på dagen (0 min i planen), og optimér igen', opsaetning: { pauseMin: { ...INGEN_PAUSE } } });
+        } else if (d.regel === 'antiSamtidighed') {
+            linjer.push('Reglen om, at single og double ikke må ligge samtidig i en række, kan ikke overholdes — uden den findes der en plan.');
+            handlinger.push({ tekst: 'Tillad single og double samtidig, og optimér igen', opsaetning: { antiSamtidighed: false } });
+        } else if (d.regel === 'senior') {
+            linjer.push('Seniorreglerne (max kampe pr. kategori pr. dag, kvartfinaler ikke samme dag som semi og finale) kan ikke overholdes — uden dem findes der en plan. Giv rækkerne flere dage eller et længere tidsrum.');
+        } else if (d.regel === 'tidsvindue') {
+            linjer.push(`${d.raekke}: kampene kan ikke ligge inden for årgangens tidsvindue — med et længere vindue (kræver dispensation) findes der en plan.`);
         } else if (d.regel === 'flere') {
             linjer.push('Ingen enkelt regel er årsagen: først når flere lempes samtidig — rækkernes tidsrum og dage, max varighed, max dage og max kampe pr. dag — findes der en plan. Se valgmulighederne nedenfor.');
         } else if (d.regel === 'plads') {

@@ -104,7 +104,7 @@ describe('blød målsætning: tid i hallen for U9/U11 — også Swiss-runder', (
         const p = runder(raekke(), 'U09 D HS', ['09:00', '10:00', '11:00']);
         assert.ok(p.kampe.some((k) => k.kategori === 'U09 D HS' && k.runde === 3 && !k.spillere.length), 'runde 3 har ingen kendte spillere');
         assert.equal(halTid(p), 4 * 2.5, 'a–d: 09:00–11:30');
-        assert.equal(scorePlan(p).dele.find((d) => d.id === 'ventetid').vaerdi, 0, 'ventetiden ser kun runde 1');
+        assert.equal(scorePlan(p).dele.find((d) => d.id === 'ventetid').vaerdi, 4 * 1, 'a–d: 2½ time i hallen, 1½ time på banen — de senere runder tæller med (som Tjek og løseren)');
     });
     test('doublerne lige efter singlerne giver kortere tid i hallen end doublerne om eftermiddagen', () => {
         const singler = runder(raekke(), 'U09 D HS', ['09:00', '09:30', '10:00']);
@@ -116,8 +116,10 @@ describe('blød målsætning: tid i hallen for U9/U11 — også Swiss-runder', (
     test('løseren får en gruppe pr. spiller med Swiss-runderne — ens grupper samlet med vægt', () => {
         const p = raekke();
         const pr = bygProblem(p);
-        // Runde 2 og 3 (ingen kendte spillere) skal være med i hver singlespillers gruppe
-        const senere = p.kampe.filter((k) => k.kategori === 'U09 D HS' && k.runde > 1).map((k) => pr.kampe.findIndex((x) => x.id === k.id));
+        // Sidste runde (ingen kendte spillere) skal være med i hver singlespillers gruppe; den midterste ændrer ikke opholdet
+        const senere = p.kampe.filter((k) => k.kategori === 'U09 D HS' && k.runde === 3).map((k) => pr.kampe.findIndex((x) => x.id === k.id));
+        const midt = p.kampe.filter((k) => k.kategori === 'U09 D HS' && k.runde === 2).map((k) => pr.kampe.findIndex((x) => x.id === k.id));
+        assert.ok(pr.halTid.every((g) => midt.every((i) => !g.kampe.includes(i))), 'runde 2 er ikke med');
         assert.equal(pr.halTid.reduce((s, g) => s + g.vaegt, 0), 8, 'a–h');
         assert.equal(pr.halTid.length, 6, 'a, b, c og d har hver deres runde 1-kamp; e+f og g+h spiller ens (kun HD-puljen) og er slået sammen');
         assert.equal(pr.halTid.filter((g) => senere.every((i) => g.kampe.includes(i))).length, 4, 'singlespillernes grupper har Swiss-runderne');

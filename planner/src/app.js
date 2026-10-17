@@ -320,6 +320,8 @@ function beregnKampprogram(p, valg) {
  */
 function arbejd(tekst, regn, brug) {
     if (tilstand.arbejder) return;
+    // Løseren regner på programmet, som det er: et nyt program imens ville den overskrive bagefter (gennemgangen 2026-10-17)
+    if (tilstand.optimerer) { meld('Løseren regner stadig — stop den ("Stop og brug det bedste") eller vent, før programmet laves igen.'); render(); return; }
     const start = projekt;
     tilstand.arbejder = tekst;
     render();
@@ -496,7 +498,7 @@ const planHandlers = {
     // kompromiser (tilbud.projekt: opsætningen er så også sat tilbage)
     brugTilbud() {
         const kp = tilstand.kampprogram;
-        if (!kp?.tilbud) return;
+        if (!kp?.tilbud || tilstand.optimerer || tilstand.arbejder) return;
         const foer = projekt;
         const uden = !!kp.tilbud.projekt;
         // Tilbuddet bygger på programmet, som det var, da løseren gik i gang: er der flyttet, låst eller rettet siden, ville
@@ -548,7 +550,7 @@ const planHandlers = {
     tilTP() { vaelgFane('liste'); },
     brugElastisk() {
         const kp = tilstand.kampprogram;
-        if (!kp?.elastisk) return;
+        if (!kp?.elastisk || tilstand.optimerer || tilstand.arbejder) return;
         const foer = projekt;
         tilstand.kampprogram = null;
         tilstand.forslag = null;
@@ -897,7 +899,7 @@ const planHandlers = {
         const kp = tilstand.kampprogram;
         const liste = kilde === 'kp' ? kp?.handlinger : kilde === 'melding' ? kp?.melding?.handlinger : tilstand.forslag?.handlinger;
         const h = liste?.[index];
-        if (!h) return;
+        if (!h || tilstand.optimerer || tilstand.arbejder) return;
         if (kp) kp.melding = null;
         if (h.type === 'lav-kampprogram') {
             // Brugerens eget program skiftes først ud nu, hvor der er valgt — "Fortryd" i panelet bringer det tilbage
@@ -913,7 +915,7 @@ const planHandlers = {
             return;
         }
         tilstand.forslag = null;
-        saetOpsaetning(store.opdaterRaekke(projekt, h.raekke, h.aendring));
+        saetOpsaetning(h.opsaetning ? store.opdaterOpsaetning(projekt, h.opsaetning) : store.opdaterRaekke(projekt, h.raekke, h.aendring));
         planHandlers.optimer({ udenSpoergsmaal: true });
     },
 
