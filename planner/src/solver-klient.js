@@ -222,6 +222,11 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
 
     // Kampe i træk (blødt, kriteriet "kampeITraek"): hver kendt spillers kampe — løseren straffer par i nabo-slots
     const traek = [...prKendt.values()].filter((l) => l.length > 1).map((l) => l.map((k) => indeks.get(k.id)));
+    // Lange huller (blødt, kriteriet "langeHuller"): som kampe i træk — men ikke for spillere, der også spiller Swiss-runder,
+    // hvor de ikke kendes endnu. Deres kendte kampe alene ser ud til at have et hul, som runderne fylder (Jesper
+    // 2026-10-17); deres tid i hallen dækkes af ventetid- og halTid-grupperne, der tæller runderne med.
+    const iSwiss = new Set(projekt.kampe.filter((k) => k.fase === 'swiss' && !k.spillere.length && indeks.has(k.id)).flatMap((k) => k.muligeSpillere));
+    const huller = [...prKendt.entries()].filter(([s, l]) => l.length > 1 && !iSwiss.has(s)).map(([, l]) => l.map((k) => indeks.get(k.id)));
 
     // Ventetid før cupkampe (blødt, kriteriet "cupVent"): [cupkamp, [kampe den bygger på]] — kun når de altid ligger
     // samme dag: rækken spiller én dag (max dage 1), eller alle kan kun ligge på én og samme dag. En cup dagen efter
@@ -315,7 +320,7 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
         version: 1,
         slotMin,
         dage: dage.map((d, i) => ({ index: i, start: minutter(d.start), slut: minutter(d.slut), baner: d.baner })),
-        kapacitet, kampe, foer, konflikter, ikkeSamtidig, haltid, spillerGrupper, traek, puljerunder, maxDage,
+        kapacitet, kampe, foer, konflikter, ikkeSamtidig, haltid, spillerGrupper, traek, huller, puljerunder, maxDage,
         cupVent, nethoejde, halTid, maxKampePrDag: maxPrDag, mangeKampe,
         // Stabil omplanlægning: kampe, der havde tid, flyttes helst ikke (pr. flyttet kamp koster det som 3 timers ventetid)
         ...(stabil?.length ? { stabil: { vaegt: 3, kampe: kampe.map((k, i) => (stabil.includes(k.id) && k.hint != null && k.tilladte.length > 1 ? i : -1)).filter((i) => i >= 0) } } : {}), maxPrGruppe, ikkeSammeDag, alternativer,

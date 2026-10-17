@@ -6,7 +6,7 @@
 // `noegle` sættes på advarsler, brugeren kan kvittere (projekt.kvitteret).
 import { minutter } from './tp-reader.js';
 import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt, banebrugISlot, banerISlot } from './kapacitet.js';
-import { lavRegelmodel, minKampMin, pauseForRaekke, foerSkoledag, tidsvindue, banerBrugt, varighedsSpaend } from './regelmodel.js';
+import { lavRegelmodel, minKampMin, pauseForRaekke, foerSkoledag, tidsvindue, banerBrugt, varighedsSpaend, spillerOphold } from './regelmodel.js';
 import { reglementetsPause } from './regler.js';
 import { effektivForm, minKampeSamlet, sikreKampe, minKampeKrav, swissOversiddere } from './form.js';
 
@@ -244,16 +244,20 @@ export function tjekPlan(projekt) {
         tilfoej({ type: 'max-haltid', alvor: 'fejl', art: d.art, tekst: `${d.raekkeId}: ${d.navn} strækker sig over ${varighed} min ${datoKort(d.dag)} (kl. ${klokke(d.foerste)}–${klokke(d.sidste + slotMin)}); afviklingen af ${d.navn} må højst vare ${d.graense} min.`, kampe: forSent, dag: d.dag });
     }
 
-    // ── Lang ventetid: en spiller venter længere end grænsen mellem egne (kendte) kampe ──
+    // ── Lang ventetid: en spiller venter længere end grænsen mellem egne kampe ──
+    // Swiss-runder tæller med for alle i lodtrækningen (spillerOphold): før så Tjek kun runde 1 og fx en double fire timer
+    // senere og meldte en ventetid, spilleren ikke havde — de spillede runde 2–5 imellem (Jesper 2026-10-17). Da man ikke
+    // ved, hvornår i runden spilleren spiller, advares der kun, når ventetiden er sikker (det mest gunstige tilfælde).
     const maxVent = projekt.opsaetning.maxVentetidMin ?? 90;
     if (maxVent > 0) {
-        for (const [s, liste] of prSpiller) {
-            const kendte = liste.filter((x) => x.kendt).sort((a, b) => a.p.dag.localeCompare(b.p.dag) || a.min - b.min);
-            for (let i = 1; i < kendte.length; i += 1) {
-                const a = kendte[i - 1], b = kendte[i];
-                if (a.p.dag !== b.p.dag) continue;
-                const vent = b.min - a.min - slotMin;
-                if (vent > maxVent) tilfoej({ type: 'lang-ventetid', alvor: 'advarsel', noegle: `${s}:${b.p.dag}:${b.k.id}:ventetid`, tekst: `${spillerNavn(s)} venter ${vent} min mellem ${navn(a.k)} kl. ${a.p.slot} og ${navn(b.k)} kl. ${b.p.slot} (grænse ${maxVent} min).`, kampe: [a.k.id, b.k.id], dag: b.p.dag, slot: b.p.slot });
+        const kl = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+        const beskriv = (o) => (o.swiss ? `${o.kampe[0].kategori} runde ${o.swiss.runde}` : navn(o.kampe[0]));
+        for (const [n, liste] of spillerOphold(projekt.kampe, projekt.plan)) {
+            const [s, dag] = n.split('|');
+            for (let i = 1; i < liste.length; i += 1) {
+                const a = liste[i - 1], b = liste[i];
+                const vent = b.fra - a.til - slotMin;
+                if (vent > maxVent) tilfoej({ type: 'lang-ventetid', alvor: 'advarsel', noegle: `${s}:${dag}:${b.kampe[0].id}:ventetid`, tekst: `${spillerNavn(s)} venter ${vent} min mellem ${beskriv(a)} kl. ${kl(a.til)} og ${beskriv(b)} kl. ${kl(b.fra)} (grænse ${maxVent} min).`, kampe: [a.kampe[0].id, b.kampe[0].id], dag, slot: kl(b.fra) });
             }
         }
     }
