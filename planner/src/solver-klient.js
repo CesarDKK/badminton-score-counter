@@ -294,7 +294,7 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
         const graense = M.maxPrDagForKampe(l);
         if (l.length <= graense) continue;
         if (graense === maxPrDag) mangeKampe.push(l.map((k) => indeks.get(k.id)));
-        else egenGraense.push({ kampe: l.map((k) => indeks.get(k.id)), max: graense });
+        else egenGraense.push({ kampe: l.map((k) => indeks.get(k.id)), max: graense, regel: 'maxKampe' });
     }
 
     // Senior E/M: max kampe pr. kategori pr. spiller pr. dag, og kvartfinalen ikke samme dag som kategoriens

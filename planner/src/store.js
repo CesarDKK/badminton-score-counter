@@ -3,7 +3,7 @@
 // kan bruges fra app.js; alt andet er testbart i Node.
 import { planFraTP, minutter } from './tp-reader.js';
 import { foreslaaForm, byggKampe, seedTilmeldinger, minKampeSamlet, sikreKampe, formTekst } from './form.js';
-import { pladsPaaDag, fordelRaekkerPaaDage, FYLDNINGSGRAD } from './kapacitet.js';
+import { pladsPaaDag, fordelRaekkerPaaDage, FYLDNINGSGRAD, kapacitetPrDag } from './kapacitet.js';
 import { lavRegelmodel } from './regelmodel.js';
 import { VAEGT_SKABELONER } from './kriterier.js';
 import { STANDARD_PAUSE, TIDSVINDUE, STANDARD_REGLER, reglerFor, reglementetsPause } from './regler.js';
@@ -204,7 +204,7 @@ export function genindlaes(projekt, model, valg = { behold: true }) {
         if (!gammel) return k;
         // Har den nye fil en lodtrækning for kategorien, er den lavet i TP → tilbage til "fra TP"
         const harTpKampe = model.kampe.some((x) => x.kategori === k.id);
-        return { ...k, halvBane: gammel.halvBane, prioritet: gammel.prioritet || 0, swissUdenPause: !!gammel.swissUdenPause, formValg: harTpKampe ? 'tp' : (gammel.formValg || 'tp'), cupTop: gammel.cupTop || 1, swissRunder: gammel.swissRunder || 0, swissGrupper: gammel.swissGrupper || 1 };
+        return { ...k, halvBane: gammel.halvBane, prioritet: gammel.prioritet || 0, swissUdenPause: !!gammel.swissUdenPause, formValg: harTpKampe ? 'tp' : (gammel.formValg || 'tp'), cupTop: gammel.cupTop || 1, swissRunder: gammel.swissRunder || 0, swissGrupper: gammel.swissGrupper || 1, middelvej: !!gammel.middelvej };
     });
     const dage = nyt.opsaetning.dage.map((d) => projekt.opsaetning.dage.find((x) => x.dato === d.dato) || d);
     // Kun kampe, der stadig er de samme, beholder tid og lås (genberegnKampe fører dem over fra de gamle kampe)
@@ -543,6 +543,31 @@ export function genberegnKampe(projekt, valg = {}) {
         //    "der er ikke plads" kan være forældet — og der kan være plads til overs.
         grupper.flat().forEach(resten);
     }
+    // Middelvejen for U9/U11 (Jesper 2026-10-12): ikke flest mulige kampe, men midt i vejledningens "4 – 6 singlekampe og
+    // 2 – 5 doublekampe" — og KUN når der er god plads på dagen. Ovenfor er alle bygget til minimum; kategorier, hvor
+    // "Lav kampprogram" har set, at programmet stadig går op med middelvejen (kategori.middelvej), løftes her — én ad
+    // gangen, størst først — og løftet beholdes kun, hvis rækkens dage stadig højst er fyldt GOD_PLADS af de lovlige
+    // bane-slots (så en senere ændring af hallen falder tilbage til minimum).
+    const middel = projekt.kategorier.filter((k) => k.middelvej === true && ['auto', 'swiss'].includes(k.formValg || 'tp') && !(k.swissRunder > 0) && ['U09', 'U11'].includes(raekkeMap.get(k.raekke)?.aargang));
+    if (middel.length) {
+        const udnyttelse = (raekke) => {
+            const p = { ...projekt, kampe: projekt.kategorier.flatMap((k) => aktuel.get(k.id).kampe), plan: {} };
+            return Math.max(0, ...kapacitetPrDag(p).dage.filter((d) => (raekke.dage || []).includes(d.dato)).map((d) => d.udnyttelse));
+        };
+        const vaegt1 = (k) => (k.halvBane ? 0.5 : 1);
+        const orden = [...middel].sort((a, b) => aktuel.get(b.id).kampe.length * vaegt1(b) - aktuel.get(a.id).kampe.length * vaegt1(a) || a.id.localeCompare(b.id));
+        for (const k of orden) {
+            const nu = aktuel.get(k.id);
+            const r = raekkeMap.get(k.raekke);
+            const samlet = minKampeSamlet(r);
+            const andreKampe = new Map();
+            if (samlet) for (const k2 of projekt.kategorier) if (k2.id !== k.id) for (const [sp, n] of sikreKampe({ ...k2, formForslag: aktuel.get(k2.id).form }, aktuel.get(k2.id).kampe)) andreKampe.set(sp, (andreKampe.get(sp) || 0) + n);
+            const op = byg(k, { middelvej: true, ...(samlet ? { samlet, andreKampe } : {}) });
+            if (!op.form || op.kampe.length <= nu.kampe.length) continue;
+            aktuel.set(k.id, op);
+            if (udnyttelse(r) > GOD_PLADS) aktuel.set(k.id, nu);
+        }
+    }
     const kampe = [];
     const kategorier = projekt.kategorier.map((k) => {
         const res = aktuel.get(k.id);
@@ -560,6 +585,9 @@ export function genberegnKampe(projekt, valg = {}) {
         sidsteForslag: projekt.sidsteForslag ? { ikkePlaceret: (projekt.sidsteForslag.ikkePlaceret || []).filter((x) => ids.has(x.id)) } : projekt.sidsteForslag,
     };
 }
+
+/** Middelvejen for U9/U11 tages kun, når rækkens dage højst er så fyldt (andel af de lovlige bane-slots). */
+export const GOD_PLADS = 0.7;
 
 /**
  * Efter en ændring af opsætningen (dage, baner, tidsrum, rækkens dage, regler, slotlængde, halv bane): det

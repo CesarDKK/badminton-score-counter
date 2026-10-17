@@ -587,6 +587,20 @@ class DiagnoseTest(unittest.TestCase):
         self.assertEqual(kald, [2], "kun første dag — ikke hele problemet bagefter")
 
 
+class EgenKampgraenseTest(unittest.TestCase):
+    """Spillere med egen grænse for kampe pr. dag (U11: 12, også ved flere dage — Jesper 2026-10-12)."""
+
+    def test_brud_og_diagnose_hedder_max_kampe(self):
+        from solver import diagnose
+        # Tre kampe for samme spiller på én dag med en grænse på 2: umuligt
+        kampe = [kamp(i) for i in range(3)]
+        p = problem(kampe, maxPrGruppe=[{"kampe": [0, 1, 2], "max": 2, "regel": "maxKampe"}])
+        self.assertEqual(loes(p, 5)["status"], "INFEASIBLE")
+        r = loes(p, 5, elastisk=True)
+        self.assertEqual([b["regel"] for b in r["brud"]], ["maxKampe"])
+        self.assertIn({"regel": "maxKampePrDag"}, diagnose(p))
+
+
 class HalTidTest(unittest.TestCase):
     """Tid i hallen for U9/U11 (kriteriet halTid): løseren trækker en spillers kampe sammen."""
 

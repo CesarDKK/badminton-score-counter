@@ -61,6 +61,10 @@ describe('form: valg af turneringsform', () => {
         assert.ok(f.minKampe >= 4);
         const alle = formMuligheder(39).filter((x) => x.minKampe >= 4 && x.form !== 'dobbelt-pulje'); // automatisk bruger kun dobbelt pulje til små felter
         assert.equal(f.baneSlots, Math.min(...alle.map((x) => x.baneSlots)));
+        // Med middelvejen (når der er god plads): midt i "4 – 6 singlekampe", højst 6 (Jesper 2026-10-12)
+        const m = foreslaaForm(39, u11dHS, u11d, regler, { form: 'auto', kriterie: 'faerrest', middelvej: true });
+        assert.equal(m.minKampe, 5);
+        assert.ok(m.maxKampe <= 6);
     });
     test('automatisk: U9-single med 19 → Swiss Ladder på halve baner, U11 D HD med 9 par → puljer', () => {
         const f9 = foreslaaForm(19, u9HS, u9d, regler, { form: 'auto' });

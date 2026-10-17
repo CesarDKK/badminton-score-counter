@@ -367,6 +367,8 @@ function reglerBoks(p) {
                 ${tal('minKampe.BCDDouble', r.minKampe.BCDDouble, 'B–D double')}
                 ${tal('minKampe.U9U11Single', r.minKampe.U9U11Single, 'U9/U11 single')}
                 ${tal('minKampe.swissRunder', r.minKampe.swissRunder, 'Swiss Ladder-runder')}
+                ${tal('maalKampeU9U11.single', r.maalKampeU9U11.single, 'U9/U11 mål, single')}
+                ${tal('maalKampeU9U11.double', r.maalKampeU9U11.double, 'U9/U11 mål, double')}
                 ${tid('eTidligst', r.eTidligst, 'E-rækker tidligst')}
                 ${tid('eFinale.0', r.eFinale[0], 'E-finaler fra')}
                 ${tid('eFinale.1', r.eFinale[1], 'E-finaler til')}

@@ -155,12 +155,22 @@ export function foreslaaForm(n, kategori, raekke, regler, valg = {}) {
     const passer = (x) => ledig == null || x.baneSlots <= ledig;
     const sortFaerrest = (a, b) => a.baneSlots - b.baneSlots || formRang[a.form] - formRang[b.form] || b.minKampe - a.minKampe;
     const sortFlest = (a, b) => Math.min(b.minKampe, MAAL_KAMPE) - Math.min(a.minKampe, MAAL_KAMPE) || a.baneSlots - b.baneSlots || formRang[a.form] - formRang[b.form];
+    // U9/U11 (Jesper 2026-10-12): ikke flest mulige kampe, men en middelvej i vejledningens anbefaling ("4 – 6 singlekampe
+    // og 2 – 5 doublekampe"): den form, der kommer tættest på målet (5 single, 3 double; ved lige afstand den billigste)
+    // uden at give over anbefalingen. Kun når genberegnKampe har set, at der er god plads på dagen (valg.middelvej).
+    const u9u11 = ['U09', 'U11'].includes(raekke?.aargang);
+    const typ = kategori.type === 'double' ? 'double' : 'single';
+    const maal = u9u11 && valg.middelvej ? regler.maalKampeU9U11?.[typ] : null;
+    const loft = u9u11 ? regler.maxKampeU9U11?.[typ] : null;
     let valgt = null;
     if (opfylder.length) {
         const derPasser = opfylder.filter(passer);
+        const iMaal = maal && valg.kriterie !== 'flest' ? derPasser.filter((x) => !loft || x.maxKampe <= loft) : [];
+        const afstand = (x) => Math.abs(x.minKampe + medregnet - maal);
         if (derPasser.length) {
-            derPasser.sort(valg.kriterie === 'flest' ? sortFlest : sortFaerrest);
-            valgt = derPasser[0];
+            const liste = iMaal.length ? iMaal : derPasser;
+            liste.sort(iMaal.length ? (a, b) => afstand(a) - afstand(b) || sortFaerrest(a, b) : valg.kriterie === 'flest' ? sortFlest : sortFaerrest);
+            valgt = liste[0];
             if (valgt.minKampe < krav) valgt = { ...valgt, kravInklAndre: true, faerrestAndre };
         }
     }

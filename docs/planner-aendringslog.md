@@ -527,6 +527,29 @@ Målt på Lyngby U9/U11 med alle kategorier som Swiss, U9 D og U11 D lørdag og 
 | U11 D: længst i hallen | 9,2 / 7,5 t | 6,7 / 6,3 t |
 | U11 B: over 5 t i hallen | 18 / 35 spillere | 4 / 0 spillere |
 
+## U9/U11: en middelvej i det anbefalede antal kampe — kun ved god plads (2026-10-12)
+
+Jesper: målet er ikke flest mulige kampe, men en middelvej i U9-U11-vejledningens anbefaling "4 – 6 singlekampe og 2 – 5
+doublekampe", og kun når der er god plads på dagen. Reglementet gælder, også for U11 (§ 4 stk. 5.1): max 12 kampe, når
+hele turneringen afvikles på én dag, og 10 pr. dag over flere dage. Vejledningens "max 12 for U11" er den samme regel for
+én-dags-turneringer, som U11 normalt spilles som. En første udgave gav U11 12 kampe også over flere dage; den blev rettet
+før merge.
+
+- **Til minimum først:** Kampene bygges til minimum som før, og "Lav kampprogram" vælger kamplængde ud fra det.
+- **Derefter middelvejen:** Går programmet op med 0 brud, prøver planneren midten for de U9/U11-kategorier, hvor den selv
+  vælger antallet (`maalKampeU9U11`: 5 single, 3 double). Den tager formen tættest på målet og aldrig over anbefalingen.
+  Først prøves alle kategorier, derefter kun singlerne. Løftet beholdes kun, hvis programmet stadig går op med 0 brud.
+- **Valget huskes:** Det gemmes på kategorien (`middelvej`), så en senere genberegning beholder det, så længe rækkens dage
+  højst er fyldt 70 % (`GOD_PLADS`).
+- **Undtagelser:** "Planlæg kun kampe uden tid", låste kampe og et valgt antal runder røres ikke.
+- **Panelet** skriver, hvilke kategorier der fik flere kampe.
+- **Løseren:** Spillere med en anden grænse end dagens fælles hedder nu `regel: "maxKampe"` (før "senior"), og diagnosen
+  lemper dem sammen med max kampe pr. dag.
+- **Planlæggeren** giver nu spillere, der kun spiller Swiss, deres egen rækkes grænse.
+
+Målt på Lyngby med alt som Swiss: dagene er fyldte, så der kommer ingen middelvej (377 kampe, som før). Med store Swiss i
+2 grupper går programmet op, og der kommer 6 kampe ekstra (383).
+
 ## Lang ventetid tæller Swiss-runderne med (2026-10-17)
 
 Jesper fandt advarsler som "venter 260 min" for U11 D-spillere, der spillede Swiss-runde 1 kl. 9, runde 2–5 i løbet af

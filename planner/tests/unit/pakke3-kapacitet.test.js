@@ -111,9 +111,10 @@ describe('formvalget afhænger ikke af kategoriernes rækkefølge', () => {
 describe('kriteriet "flest kampe": en stor række kan ikke klemme en lille ud', () => {
     const byg = (kriterie) => {
         let p = nytProjekt(model([
-            { id: 'U11 B', aargang: 'U11', raekke: 'B', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('b', 16) }] },
-            { id: 'U11 C', aargang: 'U11', raekke: 'C', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('c', 8) }] },
-            { id: 'U11 D', aargang: 'U11', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('d', 24) }] },
+            // U13: U9/U11 sigter efter vejledningens middelvej i stedet for færrest/flest (Jesper 2026-10-12)
+            { id: 'U13 B', aargang: 'U13', raekke: 'B', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('b', 16) }] },
+            { id: 'U13 C', aargang: 'U13', raekke: 'C', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('c', 8) }] },
+            { id: 'U13 D', aargang: 'U13', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('d', 24) }] },
         ], [LOER, SOEN]));
         p = opdaterDag(p, LOER, { baner: 1, start: '09:00', slut: '13:00', foerSkoledag: false }); // lørdag: næsten ingen plads
         p = opdaterDag(p, SOEN, { baner: 8, start: '09:00', slut: '17:00', foerSkoledag: false }); // søndag: 128 bane-slots

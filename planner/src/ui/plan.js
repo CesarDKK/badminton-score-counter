@@ -52,6 +52,7 @@ export function kampprogramPanel(kp, aabneKort, projekt) {
     else if (v.grund === 'fast' || v.grund === 'tidligere') valgTekst = `Kamplængde: ${kamplaengdeTekst(v.minutter, v.udenPause)}.`;
     else if (v.aendret) valgTekst = `Valgt for dig ud fra sammenligningen af kamplængder: <b>${esc(kamplaengdeTekst(v.minutter, v.udenPause))}</b>. Husk at sætte den samme kamplængde i TP.`;
     else valgTekst = `Kamplængden passer allerede bedst: ${kamplaengdeTekst(v.minutter, v.udenPause)}.`;
+    if (v?.middelvej?.length) valgTekst += ` Der var god plads, så U9/U11 fik flere kampe — midt i Badminton Danmarks anbefaling (4–6 single, 2–5 double): ${esc(v.middelvej.join(', '))}.`;
     const tilbage = v?.aendret && v.grund !== 'tidligere'
         ? ` <button class="knap knap--sekundaer knap--lille" data-handling="kp-tidligere">Brug ${esc(kamplaengdeTekst(v.foer.slotMin, udenPauseI(v.foer.pauseMin)))} som før</button>` : '';
     const kort = aabneKort.map((k) => {
