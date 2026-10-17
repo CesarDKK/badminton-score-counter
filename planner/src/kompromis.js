@@ -14,6 +14,7 @@ import { VARIGHEDER } from './regelmodel.js';
 import { erUdenPause } from './kamplaengde.js';
 import { FORM_VALG_TEKST } from './form.js';
 import { reglerFor } from './regler.js';
+import { minutter } from './tp-reader.js';
 
 const ens = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 const kortDato = (d) => `${d.slice(8, 10)}/${Number(d.slice(5, 7))}`;
@@ -58,10 +59,21 @@ export function kompromiser(foer, nu) {
         // Kamplængden kan også gå et mellemtrin tilbage (Jesper 2026-10-17: "hvorfor ikke 25?"): alle trin på 5 min fra den
         // nuværende hen mod den fra før — standard er den fra før
         const retning = o0.slotMin > o1.slotMin ? 5 : -5;
-        const valg = [];
-        for (let m = o1.slotMin + retning; retning > 0 ? m <= o0.slotMin : m >= o0.slotMin; m += retning) valg.push(m);
-        tilfoej('slotMin', `Tilbage til ${o0.slotMin} min kampe (nu ${o1.slotMin} min)`, { type: 'opsaetning', felt: 'slotMin' }, o0.slotMin, o1.slotMin);
-        ud.at(-1).valg = valg;
+        const alle = [];
+        for (let m = o1.slotMin + retning; retning > 0 ? m <= o0.slotMin : m >= o0.slotMin; m += retning) alle.push(m);
+        // Låste kampe beholder deres tid: en kamplængde, hvor de ikke passer i gitteret, gør programmet umuligt og gav falsk
+        // "kunne bevise, at der ingen plan findes" (gennemgangen 2026-10-17) — de længder tilbydes ikke
+        const valg = alle.filter((m) => !laasteUdenForGitter(nu, m));
+        const maal = valg.includes(o0.slotMin) ? o0.slotMin : valg.at(-1);
+        if (valg.length) {
+            tilfoej('slotMin', maal === o0.slotMin ? `Tilbage til ${o0.slotMin} min kampe (nu ${o1.slotMin} min)` : `Kampe på ${maal} min igen (nu ${o1.slotMin} min)`, { type: 'opsaetning', felt: 'slotMin' }, maal, o1.slotMin);
+            ud.at(-1).valg = valg;
+            ud.at(-1).som = o0.slotMin;
+        } else {
+            const n = laasteUdenForGitter(nu, o0.slotMin);
+            tilfoej('slotMin', `Tilbage til ${o0.slotMin} min kampe (nu ${o1.slotMin} min) — kræver, at ${n} ${n === 1 ? 'låst kamp låses op: den ligger på en tid' : 'låste kampe låses op: de ligger på tider'}, der ikke findes med ${o0.slotMin} min`, { type: 'opsaetning', felt: 'slotMin' }, o0.slotMin, o1.slotMin);
+            ud.at(-1).blokeret = true;
+        }
     }
     if (!ens(o0.pauseMin, o1.pauseMin)) {
         const tekst = erUdenPause(o1.pauseMin) && !erUdenPause(o0.pauseMin) ? 'Pausen tilbage i planen (nu gives den på dagen)' : 'Pausen i planen som før';
@@ -104,9 +116,26 @@ export function kompromiser(foer, nu) {
     return ud;
 }
 
+/** Antal låste kampe, hvis tid ikke findes i gitteret med `slotMin` (fra dagens start i trin på slotMin). */
+export function laasteUdenForGitter(projekt, slotMin) {
+    const dage = new Map(projekt.opsaetning.dage.map((d) => [d.dato, d]));
+    let n = 0;
+    for (const id of projekt.laast || []) {
+        const p = projekt.plan[id];
+        const d = p && dage.get(p.dag);
+        if (d && (minutter(p.slot) - minutter(d.start)) % slotMin !== 0) n += 1;
+    }
+    return n;
+}
+
 /** Projektet med de valgte kompromiser trukket tilbage (opsætningen fra før) og kampene bygget igen. Tider følger kampene. */
 export function udenKompromiser(projekt, valgte) {
     let p = projekt;
+    // Ekstra kampe fra middelvejen (U9/U11) blev kun lagt ind, fordi der var plads med kamplængden og pausen, som de er
+    // nu — trækkes de tilbage, prøves programmet med minimum (gennemgangen 2026-10-17)
+    if (valgte.some((k) => k.sti.type === 'opsaetning' && ['slotMin', 'pauseMin'].includes(k.sti.felt))) {
+        p = { ...p, kategorier: p.kategorier.map((k) => (k.middelvej ? { ...k, middelvej: false } : k)) };
+    }
     for (const k of valgte) {
         const s = k.sti;
         if (s.type === 'opsaetning' && s.felt === 'slotMin') p = saetSlotMin(p, k.foer);

@@ -513,13 +513,18 @@ def _loes(problem: dict, sekunder: float, arbejdere: int | None, stop: threading
             m.Add(overlap >= net_sidste + slot - net_foerste)
             led.append(overlap * koef)
 
-    # Stabil omplanlægning: en kamp, der flyttes fra sin tidligere tid (hint), koster vaegt x SKALA
+    # Stabil omplanlægning: en kamp, der flyttes fra sin tidligere tid, koster vaegt x SKALA. Den tidligere tid er
+    # "tidligere" (sat af løsningen i bidder, hvor hint er den nuværende) eller hint. Kan kampen ikke ligge på den
+    # tidligere tid, er den flyttet med sikkerhed — det koster stadig, så målene kan sammenlignes (gennemgangen 2026-10-17)
     stabil = problem.get("stabil") or {}
     if stabil.get("kampe"):
         koef = max(1, int(round(float(stabil.get("vaegt", 3)) * SKALA)))
         for i in stabil["kampe"]:
-            h = kampe[i].get("hint")
-            if h is None or h not in kampe[i]["tilladte"]:
+            h = kampe[i].get("tidligere", kampe[i].get("hint"))
+            if h is None:
+                continue
+            if h not in kampe[i]["tilladte"]:
+                led.append(koef)
                 continue
             flyttet = m.NewBoolVar("")
             m.Add(T[i] == h).OnlyEnforceIf(flyttet.Not())
@@ -778,7 +783,9 @@ def loes_opdelt(problem: dict, sekunder: float = 30.0, arbejdere: int | None = N
             continue
         if del_svar["status"] not in ("OPTIMAL", "FEASIBLE"):
             # En dag uden lovlig plan: hele problemet løses samlet, så svaret (og diagnosen) bliver som før
-            return loes(problem, tilbage(), arbejdere, stop, elastisk=elastisk)
+            # En dag uden lovlig plan: dagene er uafhængige (dele_pr_dag), så dens bevis gælder hele problemet — at løse
+            # hele problemet samlet på resten af tiden gav ofte "uafgjort" i stedet (gennemgangen 2026-10-17)
+            return {**del_svar, "sekunder": round(time.time() - t0, 2)}
         med(del_svar)
     # De uafgjorte dage deler resten af tiden — det samlede problem er større og når det ikke bedre
     for i, (dag, ids, foer) in enumerate(uafgjort):
@@ -789,7 +796,7 @@ def loes_opdelt(problem: dict, sekunder: float = 30.0, arbejdere: int | None = N
         if del_svar["status"] == "UNKNOWN":
             return {**del_svar, "sekunder": round(time.time() - t0, 2)}
         if del_svar["status"] not in ("OPTIMAL", "FEASIBLE"):
-            return loes(problem, tilbage(), arbejdere, stop, elastisk=elastisk)
+            return {**del_svar, "sekunder": round(time.time() - t0, 2)}
         med(del_svar)
     svar["sekunder"] = round(time.time() - t0, 2)
     return svar
@@ -814,7 +821,9 @@ def forbedr_i_bidder(problem: dict, svar: dict, slut: float, stop: threading.Eve
     if not bedst.get("tider") or "maal" not in bedst:
         return bedst
     # Målet regnes i den samlede model (opdelingen pr. dag summerer delene), så forbedringer kan sammenlignes
-    fast = loes({**problem, "kampe": [{**k, "tilladte": [bedst["tider"][k["id"]]]} for k in problem["kampe"]]}, 5, stop=stop)
+    # Kampens tidligere tid følger med (stabil), når hint bliver den nuværende
+    tidl = lambda k: {"tidligere": k.get("tidligere", k.get("hint"))} if k.get("hint") is not None or "tidligere" in k else {}
+    fast = loes({**problem, "kampe": [{**k, **tidl(k), "tilladte": [bedst["tider"][k["id"]]]} for k in problem["kampe"]]}, 5, stop=stop)
     if fast["status"] not in ("OPTIMAL", "FEASIBLE"):
         return bedst
     bedst["maal"] = fast["maal"]
@@ -836,7 +845,7 @@ def forbedr_i_bidder(problem: dict, svar: dict, slut: float, stop: threading.Eve
             for k in problem["kampe"]:
                 t = bedst["tider"][k["id"]]
                 inde = [x for x in k["tilladte"] if lo <= x < hi] if lo <= t < hi and len(k["tilladte"]) > 1 else []
-                kampe2.append({**k, "tilladte": inde or [t], "hint": t})
+                kampe2.append({**k, **tidl(k), "tilladte": inde or [t], "hint": t})
             r = loes({**problem, "kampe": kampe2}, min(LNS_FORSOEG_SEKUNDER, rest), stop=stop)
             if r["status"] in ("OPTIMAL", "FEASIBLE") and r.get("maal") is not None and r["maal"] < bedst["maal"] - 0.5:
                 bedst = {**bedst, "tider": r["tider"], "maal": r["maal"]}
@@ -888,7 +897,8 @@ def diagnose(problem: dict, stop: threading.Event | None = None) -> list[dict]:
             if len(kampe_alle[i]["tilladte"]) != 1:
                 bredere = {t for t in alt["tilladte"] if t not in forbudt_alt.get(i, ())}
                 kampe_alle[i] = {**kampe_alle[i], "tilladte": sorted(set(kampe_alle[i]["tilladte"]) | bredere)}
-    if loesbar({**uden_max_kampe(problem), "kampe": kampe_alle, "haltid": [], "maxDage": []}) is False:
+    alle = loesbar({**uden_max_kampe(problem), "kampe": kampe_alle, "haltid": [], "maxDage": []})
+    if alle is False:
         return [{"regel": "plads"}]
 
     # De hyppigste årsager for en ny bruger først (Fable-gennemgangen, M7): rækkens tidsrum og dage, så max kampe pr.
@@ -921,7 +931,9 @@ def diagnose(problem: dict, stop: threading.Event | None = None) -> list[dict]:
                 break
         fund.append({"regel": "haltid", "raekke": raekke, "art": art, "graense": graense, "forslag": forslag})
     if not fund:
-        uden = loesbar({**uden_max_kampe(problem), "haltid": [], "maxDage": []})
+        # Samme forsøg som først (alle lempelser, også tidsrum og dage) — før blev det gentaget uden de bredere tider,
+        # og så kunne svaret blive "plads", hvor det skulle være "flere" (gennemgangen 2026-10-17)
+        uden = alle
         if uden is True:
             fund.append({"regel": "flere"})
         elif uden is False and not uafklaret:
@@ -976,7 +988,8 @@ def ledig_om() -> int:
     """Hvor længe det igangværende job højst regner endnu (til beskeden "løseren er optaget")."""
     nu = time.time()
     with JOBS_LAAS:
-        rest = [max(0.0, x.sekunder - (nu - x.start)) for x in JOBS.values() if x.slut is None]
+        # Jobbets frist (senest) dækker også planen med færrest brud og diagnosen; før den er sat, den ønskede regnetid
+        rest = [max(0.0, (getattr(x, "senest", None) or x.start + x.sekunder) - nu) for x in JOBS.values() if x.slut is None]
     return int(max(rest, default=0)) + 1
 
 
@@ -1015,7 +1028,9 @@ def koer(problem: dict, sekunder: float, job: Job):
     elastisk_tid = max(10.0, min(float(sekunder), ELASTISK_SEKUNDER)) if problem.get("elastiskPlan") else 0.0
     diagnose_tid = DIAGNOSE_SEKUNDER + DIAGNOSE_PR_FORSOEG if problem.get("diagnose", True) else 0.0
     try:
-        job.senest = time.time() + float(sekunder) + 2 * elastisk_tid + diagnose_tid
+        # Fristen følger fasen: først kun søgningen; planen med færrest brud og diagnosen lægges til, når de begynder —
+        # før viste nedtællingen ca. 110 s for meget, også når problemet kunne løses (gennemgangen 2026-10-17)
+        job.senest = time.time() + float(sekunder)
         svar = loes_opdelt(problem, sekunder, stop=job.stop)
         rest = float(sekunder) - (time.time() - job.start)
         if LNS and svar["status"] == "FEASIBLE" and not job.stop.is_set() and rest > 5:
@@ -1031,7 +1046,7 @@ def koer(problem: dict, sekunder: float, job: Job):
             # (målt på prod 2026-10-10: ellers nåede løseren ikke ned på de færreste brud på 30 s). Kun hvis det er
             # umuligt, må kampe flyttes til dage, rækken ikke spiller.
             tid = elastisk_tid
-            job.senest = time.time() + 2 * tid + diagnose_tid
+            job.senest = time.time() + 2 * tid + (diagnose_tid if svar["status"] == "INFEASIBLE" and problem.get("diagnose", True) else 0.0)
             uden_dage = {**problem, "elastisk": [{**e, "dage": []} for e in problem.get("elastisk", [])]}
             el = loes_opdelt(uden_dage, tid, stop=job.stop, elastisk=True)
             if el["status"] not in ("OPTIMAL", "FEASIBLE") and not job.stop.is_set():
@@ -1142,7 +1157,7 @@ class Handler(BaseHTTPRequestHandler):
         if asynkron:
             def arbejd():
                 try:
-                    job.kode, job.svar = koer(problem, sekunder, job)
+                    job.kode, job.svar = koer(problem, job.sekunder, job)
                 finally:
                     job.slut = time.time()
                     noter_forbrug(klient, job.slut - job.start)
@@ -1168,7 +1183,7 @@ class Handler(BaseHTTPRequestHandler):
                     return
         threading.Thread(target=hold_oeje, daemon=True).start()
         try:
-            kode, svar = koer(problem, sekunder, job)
+            kode, svar = koer(problem, job.sekunder, job)
             job.slut = time.time()
             self._svar(kode, svar)
         except (BrokenPipeError, ConnectionResetError):

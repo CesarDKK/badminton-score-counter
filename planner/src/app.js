@@ -333,7 +333,7 @@ function arbejd(tekst, regn, brug) {
         if (a !== 'uaendret') {
             // Brugeren har rettet noget, mens programmet blev regnet: resultatet bygger på det gamle og ville overskrive
             // rettelsen (gennemgangen 2026-10-11, U8) — kasseres, og der siges til
-            tilstand.forslag = { tekst: 'Du ændrede noget, mens programmet blev regnet, så resultatet er ikke lagt ind (det byggede på det gamle). Tryk "Lav kampprogram" igen.', ikkePlaceret: [] };
+            meld('Du ændrede noget, mens programmet blev regnet, så resultatet er ikke lagt ind (det byggede på det gamle). Tryk "Lav kampprogram" igen.');
             render();
             return;
         }
@@ -342,7 +342,7 @@ function arbejd(tekst, regn, brug) {
     }).catch((err) => {
         console.error(err);
         tilstand.arbejder = null;
-        tilstand.forslag = { tekst: `Kampprogrammet kunne ikke laves: ${err.message || err}`, ikkePlaceret: [] };
+        meld(`Kampprogrammet kunne ikke laves: ${err.message || err}`);
         render();
     });
 }
@@ -367,6 +367,17 @@ document.addEventListener('keydown', (e) => {
     planHandlers.fortrydGitter();
 });
 
+/**
+ * En besked om løseren eller arbejdet. Står kampprogrammets panel åbent, vises den i panelet (med evt. knapper) — ellers
+ * i linjen under gitteret. Før forsvandt beskeder som "du ændrede noget imens", netværksfejl og "løserens plan er
+ * kasseret" bag panelet (gennemgangen 2026-10-17).
+ */
+function meld(tekst, { handlinger = [], kilde = null } = {}) {
+    tilstand.forslag = { tekst, ikkePlaceret: [], handlinger, ...(kilde ? { kilde } : {}) };
+    const kp = panelGaelder(tilstand.kampprogram, projekt) ? tilstand.kampprogram : null;
+    if (kp) kp.melding = { tekst, handlinger };
+}
+
 const katFelter = (p, brud) => {
     const katMap = new Map(p.kampe.map((k) => [k.id, k]));
     return brud.map((x) => ({ ...x, kategori: katMap.get(x.id)?.kategori || '', navn: katMap.get(x.id)?.navn || x.id }));
@@ -380,25 +391,28 @@ const katFelter = (p, brud) => {
 function visProeve(proeve, startProjekt, svar, lovlig) {
     const kp = panelGaelder(tilstand.kampprogram, startProjekt) ? tilstand.kampprogram : null;
     if (aendretUnderOptimering(startProjekt, projekt) !== 'uaendret') {
-        tilstand.forslag = { tekst: 'Løseren blev færdig, men du har ændret projektet imens — prøv igen.', ikkePlaceret: [] };
+        meld('Løseren blev færdig, men du har ændret projektet imens — prøv igen.');
         render();
         return;
     }
     const fejlNu = tjekPlan(projekt).antal.fejl, scoreNu = scorePlan(projekt).total;
     const kandidat = lovlig ? svar.plan : svar.elastisk?.tider ? planFraSvar(proeve.projekt, svar.elastisk) : null;
+    const bevist = svar.status === 'INFEASIBLE';
+    // Låste kampe beholder deres tid i prøven — er de årsagen, skal brugeren vide det (gennemgangen 2026-10-17)
+    const laaste = (projekt.laast || []).length ? ` ${projekt.laast.length} låste kampe beholdt deres tid — lås dem op, hvis løseren skal kunne flytte dem.` : '';
     let tekst;
     if (kandidat) {
         const p3 = { ...proeve.projekt, plan: flettetPlan(proeve.projekt, kandidat) };
         const fejl3 = tjekPlan(p3).antal.fejl, score3 = scorePlan(p3).total;
         const bedre = fejl3 < fejlNu || (fejl3 === fejlNu && score3 < scoreNu);
         tekst = lovlig
-            ? `Løseren prøvede: ${proeve.tekst}. Det gik — den fandt et program, der overholder de hårde regler: ${fejl3} fejl i Tjek, score ${score3} (dit nuværende: ${fejlNu} fejl, score ${scoreNu}; lavere er bedre).`
-            : `Løseren prøvede: ${proeve.tekst}. Den fandt ingen lovlig plan på ${Math.round(svar.sekunder)} s; planen med færrest brud har ${fejl3} fejl i Tjek (dit nuværende: ${fejlNu}).`;
+            ? `Løseren prøvede: ${proeve.tekst}. Det gik — Tjek finder ${fejl3} fejl, score ${score3} (dit nuværende: ${fejlNu} fejl, score ${scoreNu}; lavere er bedre).`
+            : `Løseren prøvede: ${proeve.tekst}. Den fandt ingen lovlig plan (${bevist ? 'den kunne bevise, at der ingen findes' : `ikke inden for ${Math.round(svar.sekunder)} s`}); planen med færrest brud har ${fejl3} fejl i Tjek (dit nuværende: ${fejlNu}).${laaste}`;
         // Kun et tilbud, når programmet ikke får flere fejl i Tjek end det nuværende (sikkerhedsnet som ved løserens forbedring)
-        if (kp && fejl3 <= fejlNu && (lovlig || fejl3 < fejlNu)) kp.tilbud = { projekt: p3, uden: proeve.tekst, tekst: tekst + (bedre ? '' : ' Det er ikke bedre end det nuværende.') };
-        else tekst += ' Programmet er ikke ændret.';
+        if (kp && fejl3 <= fejlNu && (lovlig || fejl3 < fejlNu)) kp.tilbud = { projekt: p3, start: startProjekt, uden: proeve.tekst, tekst: tekst + (bedre ? '' : ' Det er ikke bedre end det nuværende.') };
+        else tekst += ' Dit program er ikke ændret.';
     } else {
-        tekst = `Løseren prøvede: ${proeve.tekst}. Det gik ikke — ${svar.status === 'INFEASIBLE' ? 'den kunne bevise, at der ingen lovlig plan findes' : `den fandt ingen lovlig plan på ${Math.round(svar.sekunder)} s`}. Dit program er ikke ændret.`;
+        tekst = `Løseren prøvede: ${proeve.tekst}. Det gik ikke — ${bevist ? 'den kunne bevise, at der ingen lovlig plan findes' : `den fandt ingen lovlig plan på ${Math.round(svar.sekunder)} s`}.${laaste} Dit program er ikke ændret.`;
     }
     if (kp && !kp.tilbud) kp.proeveSvar = tekst;
     tilstand.forslag = { tekst, ikkePlaceret: [], kilde: 'loeser' };
@@ -450,10 +464,13 @@ const planHandlers = {
         const kp = tilstand.kampprogram;
         const v = kp?.beslutninger.kort[kortIndex]?.valg[valgIndex];
         if (!v) return;
+        // Efter "Planlæg kun kampe uden tid" beholder kampe med tid den også ved et kortvalg — før blev alle planlagt om,
+        // mens panelet sagde, at tiderne var beholdt (gennemgangen 2026-10-17)
+        const behold = kp.valg?.grund === 'behold';
         // Swiss i grupper: kamplængden vælges igen — det er ofte den, grupperne gør mulig (forslaget er afprøvet sådan)
-        arbejd(`${v.tekst} … og laver programmet igen.`, () => beregnKampprogram(anvendAendring(projekt, v), { fastKamplaengde: v.pris !== 'grupper' }), ({ r, beslutninger }) => {
+        arbejd(`${v.tekst} … og laver programmet igen.`, () => beregnKampprogram(anvendAendring(projekt, v), { fastKamplaengde: behold || v.pris !== 'grupper', behold }), ({ r, beslutninger }) => {
             // Er kamplængden valgt igen (grupper), skal panelet vise den nye — den skal sættes i TP (prod-test 2026-10-12)
-            visKampprogram(r, { foer: kp.foer, valg: v.pris === 'grupper' ? nytValg(kp.valg, r.valg) : kp.valg, udfoert: [...kp.udfoert, v.tekst], beslutninger });
+            visKampprogram(r, { foer: kp.foer, valg: behold ? { ...r.valg, foer: kp.valg?.foer || r.valg.foer } : v.pris === 'grupper' ? nytValg(kp.valg, r.valg) : kp.valg, udfoert: [...kp.udfoert, v.tekst], beslutninger });
             startAutoLoeser();
         });
     },
@@ -482,13 +499,34 @@ const planHandlers = {
         if (!kp?.tilbud) return;
         const foer = projekt;
         const uden = !!kp.tilbud.projekt;
+        // Tilbuddet bygger på programmet, som det var, da løseren gik i gang: er der flyttet, låst eller rettet siden, ville
+        // det blive overskrevet — så tages det ikke i brug (gennemgangen 2026-10-17)
+        if (uden && kp.tilbud.start && aendretUnderOptimering(kp.tilbud.start, projekt) !== 'uaendret') {
+            kp.tilbud = null;
+            meld('Du har ændret programmet, siden løseren fandt sit forslag, så det er ikke lagt ind (det ville overskrive dine ændringer). Lad løseren prøve igen.');
+            render();
+            return;
+        }
+        if (uden && tjekPlan(kp.tilbud.projekt).antal.fejl > tjekPlan(projekt).antal.fejl) {
+            kp.tilbud = null;
+            meld('Løserens forslag har flere fejl i Tjek end dit program, så det er ikke lagt ind.');
+            render();
+            return;
+        }
         saet(uden ? kp.tilbud.projekt : { ...projekt, plan: flettetPlan(projekt, kp.tilbud.plan) });
         if (uden) {
             const o = projekt.opsaetning;
-            kp.valg = { ...(kp.valg || {}), minutter: o.slotMin, udenPause: erUdenPause(o.pauseMin), aendret: false, grund: 'fast' };
-            kp.beslutninger = { kort: [], brud: tjekPlan(projekt).antal.fejl };
+            // Kamplængden kan være en anden end den, TP har: så skal påmindelsen og "som før" blive stående
+            kp.valg = nytValg(kp.valg, { ...(kp.valg || {}), minutter: o.slotMin, udenPause: erUdenPause(o.pauseMin), grund: 'proeve' });
+            kp.beslutninger = { kort: [], brud: tjekPlan(projekt).antal.fejl, fraLoeser: true };
             kp.udfoert = [...(kp.udfoert || []), kp.tilbud.uden];
+            // Det gamle svar (planen med færrest brud, diagnosen) hører til opsætningen fra før
+            kp.note = null;
+            kp.handlinger = [];
+            kp.elastisk = null;
+            kp.proeveSvar = null;
         }
+        kp.melding = null;
         kp.tilbud = null;
         kp.projekt = projekt;
         kp.forbedret = uden ? 'Løserens program er lagt ind med ændringerne — tjek listen til TP igen.' : 'Løserens program er lagt ind — tjek listen til TP igen.';
@@ -655,6 +693,13 @@ const planHandlers = {
         const harProgram = !nytGitter && udgangspunkt.kampe.every((k) => udgangspunkt.plan[k.id]);
         const hintPlan = harProgram ? udgangspunkt.plan : graadig.brud.length ? null : graadig.plan;
         tilstand.ventendeOptimering = null;
+        // Et nyt svar erstatter det forrige: en gammel "fandt ingen plan" eller planen med færrest brud må ikke blive stående,
+        // når den nye kørsel finder en plan (gennemgangen 2026-10-17)
+        const kpNu = panelGaelder(tilstand.kampprogram, projekt) ? tilstand.kampprogram : null;
+        if (kpNu) {
+            kpNu.melding = null;
+            if (!proeve) { kpNu.note = null; kpNu.handlinger = []; kpNu.elastisk = null; kpNu.forbedret = null; }
+        }
         const job = nytJobId();
         tilstand.optimerer = true;
         tilstand.optimerJob = job;
@@ -668,19 +713,21 @@ const planHandlers = {
         const visUr = () => { const el = document.querySelector('[data-optimer-ur]'); if (el) el.textContent = `${Math.round((Date.now() - start) / 1000)} s`; };
         const ur = setInterval(visUr, 1000);
         let afbryd = null;
-        const faerdig = () => { clearInterval(ur); tilstand.optimerer = false; tilstand.optimerJob = null; tilstand.optimerStopper = false; tilstand.optimerDiagnose = false; tilstand.optimerElastisk = false; tilstand.optimerAfbryd = null; tilstand.optimerAuto = false; };
+        const faerdig = () => { clearInterval(ur); tilstand.optimerer = false; tilstand.optimerJob = null; tilstand.optimerStopper = false; tilstand.optimerDiagnose = false; tilstand.optimerElastisk = false; tilstand.optimerAfbryd = null; tilstand.optimerAuto = false; tilstand.loeserKoe = null; tilstand.optimerProeve = null; };
+        tilstand.optimerProeve = proeve ? proeve.tekst : null;
         try {
             let ventede = false;
             const vedStatus = (s) => {
                 if (s.status === 'VENTER') {
-                    // Løseren har én plads: vi står i kø og prøver selv igen. "Stop" afbryder ventetiden.
+                    // Løseren har én plads: vi står i kø og prøver selv igen. "Stop" afbryder ventetiden. Det står i
+                    // statuslinjen ved stop-knappen — så det kan ses, også når kampprogrammets panel står åbent
                     const om = s.ledigOmSekunder ? ` Den er ledig om højst ${s.ledigOmSekunder >= 90 ? `${Math.round(s.ledigOmSekunder / 60)} min` : `${s.ledigOmSekunder} s`}.` : '';
-                    tilstand.forslag = { tekst: s.graense ? 'Der er kaldt for ofte til løseren — prøver igen om lidt.' : `Løseren er optaget af en anden kørsel.${om} Du står i kø, og kørslen starter af sig selv — eller tryk "Stop" for at opgive.`, ikkePlaceret: [] };
+                    tilstand.loeserKoe = s.graense ? 'Der er kaldt for ofte til løseren — prøver igen om lidt …' : `Løseren er optaget af en anden kørsel.${om} Du står i kø, og kørslen starter af sig selv …`;
                     ventede = true;
                     render(); visUr();
                 } else if (ventede) {
                     ventede = false;
-                    tilstand.forslag = { tekst: 'Løseren er blevet fri og regner nu på din plan. Du kan stoppe undervejs og bruge den bedste plan, den har fundet.', ikkePlaceret: [] };
+                    tilstand.loeserKoe = null;
                     render(); visUr();
                 } else if (s.fase === 'elastisk' && !tilstand.optimerElastisk) { tilstand.optimerElastisk = true; render(); visUr(); }
                 else if (s.fase === 'diagnose' && !tilstand.optimerDiagnose) { tilstand.optimerDiagnose = true; render(); visUr(); }
@@ -724,7 +771,7 @@ const planHandlers = {
                         // Brugeren har set listen til TP imens: tilbud, ikke automatisk
                         const tekst = `Løseren fandt et bedre program (score ${sammenlign.score} → ${opt.score}), mens du var i "Til TP". Tiderne er ikke ændret.`;
                         tilstand.forslag = { tekst, ikkePlaceret: [], kilde: 'loeser' };
-                        if (kp) { kp.forbedret = null; kp.tilbud = { plan, tekst }; }
+                        if (kp) { kp.forbedret = null; kp.tilbud = { plan, tekst, start: projekt }; }
                     } else if (sikker) {
                         const foerP = projekt;
                         saet({ ...projekt, plan });
@@ -749,13 +796,10 @@ const planHandlers = {
             if (aendring === 'aendret') {
                 // Brugeren har flyttet, låst eller rettet opsætningen, mens løseren regnede: intet overskrives uden et valg
                 tilstand.ventendeOptimering = lovlig ? visLoeserensPlan : null;
-                tilstand.forslag = {
-                    tekst: lovlig
-                        ? `Løseren er færdig (${svar.sekunder} s), men du har ændret projektet, mens den regnede. Dens plan er derfor IKKE lagt ind. Den bygger på projektet, som det var, da løseren gik i gang — viser du den alligevel, beholder låste kampe deres tid, og "Fortryd" bringer dig tilbage til din nuværende plan.`
-                        : 'Løseren blev færdig uden en plan, og du har ændret projektet imens. Din plan er ikke rørt — tryk "Optimér" igen for at regne på det, du har nu.',
-                    handlinger: lovlig ? [{ tekst: 'Vis løserens plan alligevel', type: 'vis-ventende' }, { tekst: 'Kassér løserens plan', type: 'kasser-ventende' }] : [],
-                    ikkePlaceret: [],
-                };
+                meld(lovlig
+                    ? `Løseren er færdig (${Math.round(svar.sekunder)} s), men du har ændret projektet, mens den regnede. Dens plan er derfor IKKE lagt ind. Den bygger på projektet, som det var, da løseren gik i gang — viser du den alligevel, beholder låste kampe deres tid, og "Fortryd" bringer dig tilbage til din nuværende plan.`
+                    : 'Løseren blev færdig uden en plan, og du har ændret projektet imens. Din plan er ikke rørt — lad løseren regne igen på det, du har nu.',
+                { handlinger: lovlig ? [{ tekst: 'Vis løserens plan alligevel', type: 'vis-ventende' }, { tekst: 'Kassér løserens plan', type: 'kasser-ventende' }] : [] });
                 render();
                 return;
             }
@@ -802,18 +846,15 @@ const planHandlers = {
                 }
                 render();
             } else {
-                const tekst = `${svar.besked || 'Løseren fandt ingen plan inden for tiden.'} Prøv med længere tid, eller brug "Lav forslag".`;
-                tilstand.forslag = { tekst, ikkePlaceret: [] };
                 // Står kampprogrammets panel åbent, vises beskeden dér — ellers forsvandt den bag kortene (prod-test 2026-10-12)
-                const kp = panelGaelder(tilstand.kampprogram, projekt) ? tilstand.kampprogram : null;
-                if (kp) { kp.forbedret = null; kp.note = tekst; }
+                meld(`${svar.besked || 'Løseren fandt ingen plan inden for tiden.'} Prøv med længere tid, eller brug "Lav forslag".`);
                 render();
             }
         } catch (err) {
             faerdig();
-            tilstand.forslag = afbryd?.signal.aborted
-                ? { tekst: 'Du opgav at vente på løseren. Din plan er ikke rørt.', ikkePlaceret: [] }
-                : { tekst: `Løseren gav ingen plan: ${err.message || err}. "Lav forslag" og "Alternativer" virker uden den.`, ikkePlaceret: [] };
+            meld(afbryd?.signal.aborted
+                ? 'Du opgav at vente på løseren. Din plan er ikke rørt.'
+                : `Løseren gav ingen plan: ${err.message || err}. "Lav forslag" og "Alternativer" virker uden den.`);
             render();
         }
     },
@@ -850,9 +891,14 @@ const planHandlers = {
     lukNedskaering() { tilstand.nedskaering = null; render(); },
 
     // Knapperne under løserens diagnose: ret rækkens indstilling og optimér igen
-    diagnoseHandling(index) {
-        const h = tilstand.forslag?.handlinger?.[index];
+    // kilde: hvor knappen blev tegnet — panelets diagnose ('kp'), panelets besked ('melding') eller linjen under gitteret.
+    // Før slog alle op i tilstand.forslag, så en knap i panelet kunne udføre en anden handling (gennemgangen 2026-10-17)
+    diagnoseHandling(index, kilde = null) {
+        const kp = tilstand.kampprogram;
+        const liste = kilde === 'kp' ? kp?.handlinger : kilde === 'melding' ? kp?.melding?.handlinger : tilstand.forslag?.handlinger;
+        const h = liste?.[index];
         if (!h) return;
+        if (kp) kp.melding = null;
         if (h.type === 'lav-kampprogram') {
             // Brugerens eget program skiftes først ud nu, hvor der er valgt — "Fortryd" i panelet bringer det tilbage
             tilstand.forslag = null;

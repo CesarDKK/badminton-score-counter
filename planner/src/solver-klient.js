@@ -406,7 +406,7 @@ export function diagnoseTekst(diagnose, alleDage = []) {
         } else if (d.regel === 'maxKampePrDag') {
             linjer.push('Grænsen for antal kampe pr. spiller pr. dag kan ikke overholdes — hæv den under "Reglementets grænser" under Turneringen, eller fordel kategorierne på flere dage.');
         } else if (d.regel === 'flere') {
-            linjer.push('Ingen enkelt regel er årsagen: først når max varighed, max dage og max kampe pr. dag lempes samtidig, findes der en plan. Se valgmulighederne nedenfor.');
+            linjer.push('Ingen enkelt regel er årsagen: først når flere lempes samtidig — rækkernes tidsrum og dage, max varighed, max dage og max kampe pr. dag — findes der en plan. Se valgmulighederne nedenfor.');
         } else if (d.regel === 'plads') {
             linjer.push('Der er ikke plads: hverken max varighed, max dage, max kampe pr. dag eller en enkelt rækkes tidsrum eller dage er årsagen — kampene kan ikke være på banerne inden for tidsvinduerne (eller låste kampe står i vejen). Se valgmulighederne nedenfor — fx længere dage, færre runder eller flere spilledage.');
         } else if (d.regel === 'ikkeUndersoegt') {
