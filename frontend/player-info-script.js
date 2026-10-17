@@ -242,8 +242,8 @@ function renderPlayersList(players, searchTerm) {
 
     if (players.length === 0) {
         container.innerHTML = searchTerm
-            ? `<p style="color: #aaa;">Ingen spillere matcher "${escapeHtml(searchTerm)}".</p>`
-            : '<p style="color: #aaa;">Ingen spillere endnu. Tilføj en spiller for at komme i gang.</p>';
+            ? `<p style="color: var(--text-muted, rgba(255, 255, 255, 0.62));">Ingen spillere matcher "${escapeHtml(searchTerm)}".</p>`
+            : '<p style="color: var(--text-muted, rgba(255, 255, 255, 0.62));">Ingen spillere endnu. Tilføj en spiller for at komme i gang.</p>';
         return;
     }
 
@@ -265,7 +265,7 @@ function renderPlayersList(players, searchTerm) {
             if (groupedPlayers[ageGroup] && groupedPlayers[ageGroup].length > 0) {
                 html += `<div class="age-group-section">`;
                 html += `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">`;
-                html += `<h4 style="color: var(--color-accent); margin: 0; font-size: 1.4em; font-weight: bold;">${ageGroup} <span style="color: #aaa; font-weight: normal; font-size: 0.85em;">(${groupedPlayers[ageGroup].length} spillere)</span></h4>`;
+                html += `<h4 style="color: var(--color-accent); margin: 0; font-size: 1.4em; font-weight: bold;">${ageGroup} <span style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-weight: normal; font-size: 0.85em;">(${groupedPlayers[ageGroup].length} spillere)</span></h4>`;
                 html += `<button class="btn-danger" style="padding: 8px 20px; font-size: 0.9em;" onclick="deleteAgeGroup('${ageGroup}', ${groupedPlayers[ageGroup].length})">Slet alle ${ageGroup}</button>`;
                 html += `</div>`;
                 html += `<div class="players-table" style="overflow-x: auto;">`;

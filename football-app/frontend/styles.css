@@ -18,7 +18,7 @@
   --text: #f4f1ec;
   --text-strong: #ffffff;
   --text-muted: #95a0b3;
-  --text-dim: #5f6a7d;
+  --text-dim: #8a95a8; /* min. 4,5:1 også på --surface-3 (E5) */
 
   --pitch: #14e8a3;
   --pitch-deep: #0aa86f;

@@ -37,7 +37,7 @@
 body {
     font-family: 'DM Sans', 'Segoe UI', sans-serif;
     background: var(--color-bg-dark);
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     overflow: hidden;
     height: 100vh;
 }
@@ -118,7 +118,7 @@ body::before {
 
 .page-indicator span {
     font-size: 0.85em;
-    color: rgba(255, 255, 255, 0.55);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     font-weight: 500;
     letter-spacing: 0.5px;
 }
@@ -238,13 +238,13 @@ body::before {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     font-size: 0.95em;
 }
 #holdkampCardsGrid .hk-sb-sets {
     min-width: 1.1em;
     text-align: center;
-    color: #f0a500;
+    color: var(--color-warning, #ffb02e);
     font-weight: bold;
     font-size: 0.9em;
 }
@@ -516,7 +516,7 @@ body::before {
     font-size: 0.65em;
     font-weight: 600;
     letter-spacing: 4px;
-    color: rgba(255, 255, 255, 0.25);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     text-transform: uppercase;
 }
 
@@ -571,7 +571,7 @@ body::before {
 }
 
 .court-card--finished .court-number {
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
 }
 
 .finished-badge {
@@ -587,7 +587,7 @@ body::before {
 
 .finished-time {
     font-size: 0.82em;
-    color: rgba(255, 255, 255, 0.3);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     font-variant-numeric: tabular-nums;
 }
 
@@ -601,6 +601,10 @@ body::before {
 }
 
 /* Grønt tema (data-groent-tema fra theme-loader): vinderen lyst i stedet for grøn */
+:root[data-groent-tema] {
+    --set-vundet: #ffffff;
+}
+
 :root[data-groent-tema] .player-row--winner {
     background: rgba(255, 255, 255, 0.08);
     border-color: rgba(255, 255, 255, 0.35);
@@ -627,7 +631,7 @@ body::before {
 
 .finished-set-score {
     font-size: 0.88em;
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     font-variant-numeric: tabular-nums;
 }
 
@@ -644,7 +648,7 @@ body::before {
     transform: translate(-50%, -50%);
     text-align: center;
     font-size: 1.4em;
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     letter-spacing: 1px;
 }
 
@@ -667,7 +671,7 @@ body::before {
 
 .no-matches-message p {
     font-size: 1.1em;
-    color: rgba(255, 255, 255, 0.35);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     letter-spacing: 0.5px;
 }
 
@@ -818,7 +822,7 @@ body::before {
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     margin-right: 8px;
 }
 

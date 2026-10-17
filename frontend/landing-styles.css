@@ -9,7 +9,7 @@ body {
     background: var(--color-bg-dark);
     min-height: 100vh;
     overflow-x: hidden;
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
 }
 
 /* Atmospheric glow from top-center */
@@ -94,7 +94,7 @@ header {
 .admin-link {
     padding: 10px 22px;
     background: transparent;
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     text-decoration: none;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 100px;
@@ -140,7 +140,7 @@ header {
 }
 
 .section-desc {
-    color: rgba(255, 255, 255, 0.32);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     font-size: 0.83em;
     margin-bottom: 18px;
     margin-top: -12px;
@@ -253,7 +253,7 @@ header {
     font-weight: 600;
     letter-spacing: 3.5px;
     text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.3);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     margin-top: 6px;
 }
 
@@ -278,7 +278,7 @@ header {
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 100px;
     text-decoration: none;
-    color: rgba(255, 255, 255, 0.55);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     font-family: 'DM Sans', sans-serif;
     font-size: 0.86em;
     font-weight: 500;
@@ -348,7 +348,7 @@ header {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 2.5px;
-    color: rgba(255, 255, 255, 0.35);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
 }
 
 .overview-title {
@@ -469,7 +469,7 @@ header {
 .landing-status {
     grid-column: 1 / -1;
     text-align: center;
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     padding: 20px;
     line-height: 1.5;
 }

@@ -7,10 +7,10 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=5">
     <link rel="icon" type="image/png" href="/favicon.png?v=5">
     <link rel="stylesheet" href="fonts.css?v=2">
-    <link rel="stylesheet" href="styles.css?v=7">
-    <link rel="stylesheet" href="admin-styles.css?v=11">
-    <link rel="stylesheet" href="settings-styles.css?v=3">
-    <script src="js/theme-loader.js?v=12"></script>
+    <link rel="stylesheet" href="styles.css?v=8">
+    <link rel="stylesheet" href="admin-styles.css?v=12">
+    <link rel="stylesheet" href="settings-styles.css?v=4">
+    <script src="js/theme-loader.js?v=13"></script>
 </head>
 <body>
     <div class="bg-glow"></div>
@@ -76,7 +76,7 @@
                             <input type="checkbox" id="showResetButton" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
                             <span>Turneringstilstand</span>
                         </label>
-                        <p style="color: #aaa; font-size: 0.9em; margin-top: 10px; line-height: 1.5;">
+                        <p style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.9em; margin-top: 10px; line-height: 1.5;">
                             Når aktiveret, skjules "Ryd banen", "Skift til double", "Tilbage" og "Admin" knapperne på banesiden for at forhindre utilsigtede ændringer under turneringer.
                         </p>
                     </div>
@@ -86,7 +86,7 @@
                             <input type="checkbox" id="hideTvQr" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
                             <span>Skjul QR-kode på TV-siden</span>
                         </label>
-                        <p style="color: #aaa; font-size: 0.9em; margin-top: 10px; line-height: 1.5;">
+                        <p style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.9em; margin-top: 10px; line-height: 1.5;">
                             Når aktiveret, vises QR-koden ikke på TV-skærmen.
                         </p>
                     </div>
@@ -99,7 +99,7 @@
                             <option value="21">21/30 point</option>
                         </select>
                         <button id="saveGameModeBtn" class="btn-primary" style="margin-top: 15px;">Gem kamptilstand</button>
-                        <p style="color: #aaa; font-size: 0.9em; margin-top: 10px; line-height: 1.5;">
+                        <p style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.9em; margin-top: 10px; line-height: 1.5;">
                             Vælg hvilken kamptilstand der bruges som standard på nye baner.
                         </p>
                     </div>
@@ -116,8 +116,8 @@
                             <button id="chooseRestoreFileBtn" class="btn-secondary" style="flex:1;">Gendan fra fil...</button>
                             <input type="file" id="restoreFileInput" accept=".json" style="display:none;">
                         </div>
-                        <div id="restoreFileInfo" style="display:none;padding:8px 10px;background:rgba(255,255,255,0.05);border-radius:8px;font-size:0.85em;margin-bottom:10px;color:#aaa;"></div>
-                        <button id="restoreBtn" class="btn-primary" style="width:100%;display:none;background:var(--color-accent);">Gendan nu</button>
+                        <div id="restoreFileInfo" style="display:none;padding:8px 10px;background:rgba(255,255,255,0.05);border-radius:8px;font-size:0.85em;margin-bottom:10px;color:var(--text-muted, rgba(255, 255, 255, 0.62));"></div>
+                        <button id="restoreBtn" class="btn-primary" style="width:100%;display:none;">Gendan nu</button>
                         <p style="color:rgba(255,255,255,0.25);font-size:0.78em;margin-top:10px;">
                             Gendannelse overskriver alle nuværende data og kan ikke fortrydes.
                         </p>
@@ -132,12 +132,12 @@
                     <!-- Tablet-app (Android APK) — hentes direkte på tabletten -->
                     <div class="setting-card" id="tablet-app">
                         <h3>Tablet-app (Android)</h3>
-                        <p style="color:#aaa;font-size:0.9em;line-height:1.5;margin-bottom:12px;">
+                        <p style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.9em;line-height:1.5;margin-bottom:12px;">
                             Appen til bane-tablets. Åbn denne side på tabletten og tryk på knappen, så hentes den direkte.
                         </p>
-                        <div id="tabletAppInfo" style="font-size:0.85em;color:rgba(255,255,255,0.6);margin-bottom:12px;">Henter version…</div>
+                        <div id="tabletAppInfo" style="font-size:0.85em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin-bottom:12px;">Henter version…</div>
                         <a id="tabletAppDownload" href="/downloads/BadmintonApp.apk" class="btn-primary" style="text-decoration:none;display:inline-block;">Hent tablet-appen (APK)</a>
-                        <details style="margin-top:14px;font-size:0.85em;color:#aaa;line-height:1.55;">
+                        <details style="margin-top:14px;font-size:0.85em;color:var(--text-muted, rgba(255, 255, 255, 0.62));line-height:1.55;">
                             <summary style="cursor:pointer;color:rgba(255,255,255,0.75);">Sådan installerer du på tabletten</summary>
                             <ol style="margin:10px 0 0 18px;padding:0;">
                                 <li>Tryk på knappen ovenfor. Chrome henter filen og viser en advarsel om, at filen kan være skadelig. Vælg <b>Download alligevel</b>.</li>
@@ -152,17 +152,17 @@
                          (for store til vores egen server/Cloudflare); se loadTvBilleder() -->
                     <div class="setting-card" id="tv-skaerme">
                         <h3>TV-skærme (PC og Raspberry Pi)</h3>
-                        <p style="color:#aaa;font-size:0.9em;line-height:1.5;margin-bottom:12px;">
+                        <p style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.9em;line-height:1.5;margin-bottom:12px;">
                             Gør en PC eller en Raspberry Pi til en TV-skærm, der starter direkte i TV-visningen og passer på sig selv
                             (genstarter selv, hvis den fryser). Filerne er ca. 700 MB — hent dem på en computer.
                         </p>
-                        <div id="tvBillederInfo" style="font-size:0.85em;color:rgba(255,255,255,0.6);margin-bottom:12px;">Henter version…</div>
+                        <div id="tvBillederInfo" style="font-size:0.85em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin-bottom:12px;">Henter version…</div>
                         <div id="tvBillederKnapper" style="display:flex;gap:10px;flex-wrap:wrap;">
                             <a id="tvPcZip" class="btn-primary" style="text-decoration:none;display:inline-block;" href="https://github.com/CesarDKK/badminton-score-counter/releases" target="_blank" rel="noopener">PC: USB-nøgle (zip)</a>
                             <a id="tvPiImg" class="btn-secondary" style="text-decoration:none;display:inline-block;" href="https://github.com/CesarDKK/badminton-score-counter/releases" target="_blank" rel="noopener">Raspberry Pi: SD-kort</a>
                         </div>
-                        <div id="tvBillederEkstra" style="font-size:0.8em;color:rgba(255,255,255,0.5);margin-top:10px;"></div>
-                        <details style="margin-top:14px;font-size:0.85em;color:#aaa;line-height:1.55;">
+                        <div id="tvBillederEkstra" style="font-size:0.8em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin-top:10px;"></div>
+                        <details style="margin-top:14px;font-size:0.85em;color:var(--text-muted, rgba(255, 255, 255, 0.62));line-height:1.55;">
                             <summary style="cursor:pointer;color:rgba(255,255,255,0.75);">Sådan sætter du en TV-skærm op</summary>
                             <ol style="margin:10px 0 0 18px;padding:0;">
                                 <li>Opret et adgangslink til TV'et under <a href="admin.html#device-tokens" style="color:var(--color-accent);">Admin → Adgangslinks</a>, og tryk <b>Hent kiosk.conf</b> ved linket. Skriv PC'ens navn (fx tv-bane-1) og evt. hallens WiFi.</li>
@@ -213,7 +213,7 @@
     </div>
 
     <script src="js/api.js?v=29"></script>
-    <script src="js/session-vagt.js?v=1"></script>
+    <script src="js/session-vagt.js?v=2"></script>
     <script src="js/auth-guard.js?v=3"></script>
     <script src="settings-script.js?v=20"></script>
 </body>

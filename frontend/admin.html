@@ -7,9 +7,9 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=5">
     <link rel="icon" type="image/png" href="/favicon.png?v=5">
     <link rel="stylesheet" href="fonts.css?v=2">
-    <link rel="stylesheet" href="styles.css?v=7">
-    <link rel="stylesheet" href="admin-styles.css?v=11">
-    <script src="js/theme-loader.js?v=12"></script>
+    <link rel="stylesheet" href="styles.css?v=8">
+    <link rel="stylesheet" href="admin-styles.css?v=12">
+    <script src="js/theme-loader.js?v=13"></script>
 </head>
 <body>
     <div class="bg-glow"></div>
@@ -99,7 +99,7 @@
                 <div id="createHoldkampForm" class="admin-panel">
                     <div class="admin-panel-head">
                         <h3>Opret ny holdkamp</h3>
-                        <button id="resetHoldkampFormBtn" type="button" class="btn-ghost-sm">↺ Nulstil</button>
+                        <button id="resetHoldkampFormBtn" type="button" class="btn-secondary btn-sm">↺ Nulstil</button>
                     </div>
 
                     <div class="admin-grid-2">
@@ -149,13 +149,13 @@
                 <details id="bpVagtLogBoks" ontoggle="if (this.open) bpLoadVagtLog()" style="margin-top:28px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 18px;">
                     <summary style="cursor:pointer;color:rgba(255,255,255,0.8);font-weight:600;">Log for automatisk hentning fra badmintonplayer.dk</summary>
                     <div style="margin-top:12px;">
-                        <div id="bpVagtDiagnose" style="font-size:0.85em;color:#aaa;line-height:1.6;margin-bottom:10px;"></div>
+                        <div id="bpVagtDiagnose" style="font-size:0.85em;color:var(--text-muted, rgba(255, 255, 255, 0.62));line-height:1.6;margin-bottom:10px;"></div>
                         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
-                            <select id="bpVagtLogFilter" onchange="bpLoadVagtLog()" style="background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:6px 10px;color:#eaeaea;font-size:0.85em;">
+                            <select id="bpVagtLogFilter" onchange="bpLoadVagtLog()" style="background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:6px 10px;color:var(--text-primary, #eaeaea);font-size:0.85em;">
                                 <option value="">Alle kampe</option>
                             </select>
-                            <button onclick="bpLoadVagtLog()" class="btn-secondary" style="padding:6px 12px;font-size:0.82em;">Opdatér</button>
-                            <button onclick="bpKopierVagtLog(this)" class="btn-secondary" style="padding:6px 12px;font-size:0.82em;">Kopiér log</button>
+                            <button onclick="bpLoadVagtLog()" class="btn-secondary btn-sm">Opdatér</button>
+                            <button onclick="bpKopierVagtLog(this)" class="btn-secondary btn-sm">Kopiér log</button>
                         </div>
                         <div id="bpVagtLog" style="max-height:420px;overflow-y:auto;font-size:0.82em;"></div>
                     </div>
@@ -166,7 +166,7 @@
             <div id="tournamentSection" class="overview-section" style="display: none;">
                 <div style="margin-bottom: 20px;">
                     <h2>Turnering</h2>
-                    <p style="color: #aaa; font-size: 0.95em; margin-top: 6px;">Sæt planlagte kampe op på forhånd — spillernavne er klar når banen henter kampen.</p>
+                    <p style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.95em; margin-top: 6px;">Sæt planlagte kampe op på forhånd — spillernavne er klar når banen henter kampen.</p>
                 </div>
 
                 <!-- Create new tournament -->
@@ -208,8 +208,8 @@
                 <!-- Tabs -->
                 <div style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 0;">
                     <button id="tabSingleMatches" onclick="switchHistoryTab('single')" style="padding: 8px 18px; background: var(--color-primary); color: #fff; border: none; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 0.95em; margin-bottom: -2px; border-bottom: 2px solid var(--color-primary);">Enkelt kampe</button>
-                    <button id="tabTeamMatches" onclick="switchHistoryTab('team')" style="padding: 8px 18px; background: transparent; color: #aaa; border: none; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 0.95em; margin-bottom: -2px; border-bottom: 2px solid transparent;">Holdkampe</button>
-                    <button id="tabTournamentMatches" onclick="switchHistoryTab('tournament')" style="padding: 8px 18px; background: transparent; color: #aaa; border: none; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 0.95em; margin-bottom: -2px; border-bottom: 2px solid transparent;">Turnering</button>
+                    <button id="tabTeamMatches" onclick="switchHistoryTab('team')" style="padding: 8px 18px; background: transparent; color: var(--text-muted, rgba(255, 255, 255, 0.62)); border: none; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 0.95em; margin-bottom: -2px; border-bottom: 2px solid transparent;">Holdkampe</button>
+                    <button id="tabTournamentMatches" onclick="switchHistoryTab('tournament')" style="padding: 8px 18px; background: transparent; color: var(--text-muted, rgba(255, 255, 255, 0.62)); border: none; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 0.95em; margin-bottom: -2px; border-bottom: 2px solid transparent;">Turnering</button>
                 </div>
 
                 <!-- Single matches tab -->
@@ -240,7 +240,7 @@
                 </div>
 
                 <!-- Delete Match History Section -->
-                <div style="margin-top: 40px; padding: 20px; background: rgba(231, 76, 60, 0.1); border: 2px solid #e74c3c; border-radius: 10px;">
+                <div style="margin-top: 40px; padding: 20px; background: rgba(var(--color-danger-rgb, 217, 44, 63), 0.1); border: 2px solid var(--color-danger, #d92c3f); border-radius: 10px;">
                     <h3 style="color: var(--color-accent); margin-bottom: 15px;">Slet Kamphistorik</h3>
                     <button id="deleteAllMatchHistoryBtn" class="btn-danger">Slet al kamphistorik</button>
                     <p class="warning-text">Advarsel: Dette vil permanent slette hele kamphistorikken!</p>
@@ -265,10 +265,10 @@
                         <!-- 2. Planlagt kamp fra turnering -->
                         <div id="editTournamentMatchWrap" style="margin-bottom: 20px; display: none;">
                             <label>Planlagt kamp fra turnering:</label>
-                            <select id="editTournamentMatchSelect" style="width:100%; padding:10px; background:var(--color-bg-dark); color:#eaeaea; border:1px solid var(--color-primary); border-radius:5px; margin-top:5px;">
+                            <select id="editTournamentMatchSelect" style="width:100%; padding:10px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid var(--color-primary); border-radius:5px; margin-top:5px;">
                                 <option value="">-- Manuel (skriv navne nedenfor) --</option>
                             </select>
-                            <p style="color:#888; font-size:0.82em; margin-top:6px; margin-bottom:0;">Vælg en pending kamp fra en aktiv turnering for at fylde spillernavne ind og markere kampen som i gang på denne bane.</p>
+                            <p style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-top:6px; margin-bottom:0;">Vælg en pending kamp fra en aktiv turnering for at fylde spillernavne ind og markere kampen som i gang på denne bane.</p>
                         </div>
 
                         <!-- 3. Spillernavne -->
@@ -315,8 +315,8 @@
 
             <!-- Device Tokens Section -->
             <div id="deviceTokensSection" class="overview-section" style="display: none;">
-                <h2>Adgangslinks <span style="font-family:'DM Sans';font-size:0.5em;font-weight:400;color:rgba(255,255,255,0.4);">Tablets og TV-skærme</span></h2>
-                <p style="font-size:0.88em;color:rgba(255,255,255,0.55);margin:-8px 0 20px;">
+                <h2>Adgangslinks <span style="font-family:'DM Sans';font-size:0.5em;font-weight:400;color:var(--text-muted, rgba(255, 255, 255, 0.62));">Tablets og TV-skærme</span></h2>
+                <p style="font-size:0.88em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin:-8px 0 20px;">
                     Ny tablet? Hent tablet-appen under <a href="settings.html#tablet-app" style="color:var(--color-accent);">Indstillinger → Tablet-app</a>, og sæt derefter dens adgangslink ind i appen.
                 </p>
 
@@ -325,28 +325,28 @@
                     <h3 style="font-family:'Bebas Neue',sans-serif;letter-spacing:0.05em;margin-bottom:16px;font-size:1.2em;">Opret Nyt Link</h3>
                     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;">
                         <div>
-                            <label style="display:block;font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Navn</label>
-                            <input type="text" id="dtName" placeholder="fx Bane 1 TV" style="width:100%;background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:#eaeaea;font-family:'DM Sans',sans-serif;font-size:0.95em;box-sizing:border-box;">
+                            <label style="display:block;font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin-bottom:6px;">Navn</label>
+                            <input type="text" id="dtName" placeholder="fx Bane 1 TV" style="width:100%;background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:var(--text-primary, #eaeaea);font-family:'DM Sans',sans-serif;font-size:0.95em;box-sizing:border-box;">
                         </div>
                         <div>
-                            <label style="display:block;font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Type</label>
-                            <select id="dtType" onchange="toggleDtCourt()" style="width:100%;background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:#eaeaea;font-family:'DM Sans',sans-serif;font-size:0.95em;">
+                            <label style="display:block;font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin-bottom:6px;">Type</label>
+                            <select id="dtType" onchange="toggleDtCourt()" style="width:100%;background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:var(--text-primary, #eaeaea);font-family:'DM Sans',sans-serif;font-size:0.95em;">
                                 <option value="tv">TV visning</option>
                                 <option value="court">Bane visning</option>
                                 <option value="oversigt">Oversigt</option>
                             </select>
                         </div>
                         <div id="dtCourtWrap">
-                            <label style="display:block;font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Bane</label>
-                            <select id="dtCourt" style="width:100%;background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:#eaeaea;font-family:'DM Sans',sans-serif;font-size:0.95em;">
+                            <label style="display:block;font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin-bottom:6px;">Bane</label>
+                            <select id="dtCourt" style="width:100%;background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:var(--text-primary, #eaeaea);font-family:'DM Sans',sans-serif;font-size:0.95em;">
                                 <!-- udfyldes dynamisk -->
                             </select>
                         </div>
                     </div>
                     <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;">
                         <div>
-                            <label style="display:block;font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.5);margin-bottom:6px;">Navigation</label>
-                            <select id="dtLocked" style="background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:#eaeaea;font-family:'DM Sans',sans-serif;font-size:0.95em;">
+                            <label style="display:block;font-size:0.75em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin-bottom:6px;">Navigation</label>
+                            <select id="dtLocked" style="background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:var(--text-primary, #eaeaea);font-family:'DM Sans',sans-serif;font-size:0.95em;">
                                 <option value="0">Fri</option>
                                 <option value="1" selected>Låst</option>
                             </select>
@@ -368,14 +368,12 @@
             <style>
                 .pl-card { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:24px; margin-bottom:24px; }
                 .pl-card h3 { font-family:'Bebas Neue',sans-serif; letter-spacing:0.05em; margin:0 0 12px; font-size:1.2em; }
-                .pl-help { font-size:0.88em; color:rgba(255,255,255,0.55); margin:0 0 16px; line-height:1.5; }
-                .pl-label { display:block; font-size:0.75em; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; color:rgba(255,255,255,0.5); margin-bottom:6px; }
-                .pl-input, .pl-select { background:var(--color-bg-card); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px 12px; color:#eaeaea; font-family:'DM Sans',sans-serif; font-size:0.95em; box-sizing:border-box; }
+                .pl-help { font-size:0.88em; color:var(--text-muted, rgba(255, 255, 255, 0.62)); margin:0 0 16px; line-height:1.5; }
+                .pl-label { display:block; font-size:0.75em; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted, rgba(255, 255, 255, 0.62)); margin-bottom:6px; }
+                .pl-input, .pl-select { background:var(--color-bg-card); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px 12px; color:var(--text-primary, #eaeaea); font-family:'DM Sans',sans-serif; font-size:0.95em; box-sizing:border-box; }
                 .pl-select { padding:6px 8px; font-size:0.9em; }
-                .pl-btn-sm { background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12); border-radius:6px; padding:6px 12px; color:#eaeaea; font-size:0.8em; cursor:pointer; white-space:nowrap; }
-                .pl-btn-danger { background:rgba(var(--color-accent-rgb),0.12); border:1px solid rgba(var(--color-accent-rgb),0.25); border-radius:6px; padding:6px 14px; color:var(--color-accent); font-size:0.85em; cursor:pointer; }
                 .pl-week { width:100%; border-collapse:collapse; font-size:0.9em; }
-                .pl-week th { text-align:left; font-size:0.72em; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; color:rgba(255,255,255,0.5); padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.08); }
+                .pl-week th { text-align:left; font-size:0.72em; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted, rgba(255, 255, 255, 0.62)); padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.08); }
                 .pl-week td { padding:8px; border-bottom:1px solid rgba(255,255,255,0.05); vertical-align:middle; }
                 .pl-week tr.pl-off td:not(:first-child) { opacity:0.35; }
                 .pl-courts { display:flex; flex-wrap:wrap; gap:4px 10px; }
@@ -383,26 +381,26 @@
                 .pl-check { width:16px; height:16px; cursor:pointer; accent-color:var(--color-accent); }
                 .pl-badge { display:inline-block; padding:4px 10px; border-radius:999px; font-size:0.78em; font-weight:600; letter-spacing:0.04em; }
                 .pl-badge.open { background:rgba(var(--color-win-rgb,69,209,126),0.15); color:var(--color-win,#45d17e); }
-                .pl-badge.closed { background:rgba(255,255,255,0.08); color:rgba(255,255,255,0.6); }
-                .pl-badge.off { background:rgba(var(--color-danger-rgb,217,44,63),0.15); color:var(--color-danger,#d92c3f); }
+                .pl-badge.closed { background:rgba(255,255,255,0.08); color:var(--text-muted, rgba(255, 255, 255, 0.62)); }
+                .pl-badge.off { background:rgba(var(--color-danger-rgb,217,44,63),0.15); color:var(--color-danger-text, #ff6b7a); }
                 .pl-copy { display:flex; align-items:center; gap:8px; margin-top:6px; }
                 .pl-copy input { flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px 10px; color:rgba(255,255,255,0.75); font-size:0.8em; font-family:monospace; }
                 .pl-log { width:100%; border-collapse:collapse; font-size:0.82em; }
-                .pl-log th { text-align:left; font-size:0.72em; text-transform:uppercase; letter-spacing:0.06em; color:rgba(255,255,255,0.5); padding:6px; border-bottom:1px solid rgba(255,255,255,0.08); }
+                .pl-log th { text-align:left; font-size:0.72em; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted, rgba(255, 255, 255, 0.62)); padding:6px; border-bottom:1px solid rgba(255,255,255,0.08); }
                 .pl-log td { padding:6px; border-bottom:1px solid rgba(255,255,255,0.05); vertical-align:top; }
                 .pl-log details summary { cursor:pointer; color:rgba(255,255,255,0.7); }
                 .pl-status-ok { color:var(--color-win,#45d17e); font-weight:600; }
-                .pl-status-err { color:var(--color-danger,#d92c3f); font-weight:600; }
+                .pl-status-err { color:var(--color-danger-text, #ff6b7a); font-weight:600; }
                 .pl-days { display:flex; gap:3px; }
-                .pl-pill { display:inline-flex; align-items:center; justify-content:center; min-width:30px; padding:4px 6px; border-radius:6px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.45); font-size:0.78em; font-weight:600; cursor:pointer; user-select:none; }
+                .pl-pill { display:inline-flex; align-items:center; justify-content:center; min-width:30px; padding:4px 6px; border-radius:6px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.04); color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.78em; font-weight:600; cursor:pointer; user-select:none; }
                 .pl-pill input { display:none; }
                 .pl-pill.on { background:rgba(var(--color-accent-rgb),0.22); border-color:rgba(var(--color-accent-rgb),0.5); color:#fff; }
-                .pl-slot-del { background:none; border:none; color:rgba(255,255,255,0.4); font-size:1.1em; cursor:pointer; padding:4px 8px; }
-                .pl-slot-del:hover { color:var(--color-danger,#d92c3f); }
+                .pl-slot-del { background:none; border:none; color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:1.1em; cursor:pointer; padding:4px 8px; }
+                .pl-slot-del:hover { color:var(--color-danger-text, #ff6b7a); }
                 #savePlannerConfigBtn:disabled { opacity:0.35; cursor:not-allowed; }
                 .pl-overview { display:grid; grid-template-columns:32px repeat(7, 1fr); gap:4px; margin-top:18px; font-size:0.72em; }
-                .pl-overview .pl-ov-head { text-align:center; color:rgba(255,255,255,0.5); font-weight:600; text-transform:uppercase; letter-spacing:0.06em; padding-bottom:2px; }
-                .pl-overview .pl-ov-hours { position:relative; height:180px; color:rgba(255,255,255,0.35); }
+                .pl-overview .pl-ov-head { text-align:center; color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-weight:600; text-transform:uppercase; letter-spacing:0.06em; padding-bottom:2px; }
+                .pl-overview .pl-ov-hours { position:relative; height:180px; color:var(--text-muted, rgba(255, 255, 255, 0.62)); }
                 .pl-overview .pl-ov-hours span { position:absolute; right:4px; transform:translateY(-50%); }
                 .pl-overview .pl-ov-col { position:relative; height:180px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:6px; overflow:hidden; }
                 .pl-overview .pl-ov-block { position:absolute; left:2px; right:2px; border-radius:4px; padding:2px 4px; overflow:hidden; line-height:1.2; color:#fff; white-space:nowrap; text-overflow:ellipsis; }
@@ -410,7 +408,7 @@
                 @media (max-width: 720px) { .pl-week th:nth-child(4), .pl-week td:nth-child(4) { display:none; } }
             </style>
             <div id="plannerSection" class="overview-section" style="display: none;">
-                <h2>Badmintonplanner <span style="font-family:'DM Sans';font-size:0.5em;font-weight:400;color:rgba(255,255,255,0.4);">Integration med badmintonplanner.dk</span></h2>
+                <h2>Badmintonplanner <span style="font-family:'DM Sans';font-size:0.5em;font-weight:400;color:var(--text-muted, rgba(255, 255, 255, 0.62));">Integration med badmintonplanner.dk</span></h2>
 
                 <!-- Status -->
                 <div class="pl-card">
@@ -446,7 +444,7 @@
                 <div class="pl-card">
                     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
                         <h3 style="margin:0;">Tidsrum</h3>
-                        <button id="addPlannerSlotBtn" class="btn-primary" style="padding:8px 16px;font-size:0.9em;">+ Tilføj tidsrum</button>
+                        <button id="addPlannerSlotBtn" class="btn-primary btn-sm">+ Tilføj tidsrum</button>
                     </div>
                     <p class="pl-help" style="margin-top:8px;">
                         Én linje pr. tidsrum: dag, fra, til (tidligst 07:00, senest 23:00), nøgle og baner. Tilføj så mange linjer, du vil,
@@ -472,7 +470,7 @@
                 <div class="pl-card">
                     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
                         <h3 style="margin:0;">Testværktøj</h3>
-                        <button id="togglePlannerTestBtn" class="pl-btn-sm">Vis testværktøj</button>
+                        <button id="togglePlannerTestBtn" class="btn-secondary btn-sm">Vis testværktøj</button>
                     </div>
                     <p class="pl-help" style="margin:8px 0 0;">
                         Send en testrunde præcis som badmintonplanner.dk ville gøre det — med nøglen ovenfor, gennem det rigtige API
@@ -509,9 +507,9 @@
                                 <input type="checkbox" id="ptForce" class="pl-check" checked> Skift også baner hvor der tælles (forceNewMatch)
                             </label>
                             <span style="flex:1;"></span>
-                            <button id="ptStatusBtn" class="pl-btn-sm">Tjek status</button>
-                            <button id="ptResultsBtn" class="pl-btn-sm">Hent resultater</button>
-                            <button id="ptClearBtn" class="pl-btn-sm">Send tom runde (ryd)</button>
+                            <button id="ptStatusBtn" class="btn-secondary btn-sm">Tjek status</button>
+                            <button id="ptResultsBtn" class="btn-secondary btn-sm">Hent resultater</button>
+                            <button id="ptClearBtn" class="btn-secondary btn-sm">Send tom runde (ryd)</button>
                             <button id="ptSendBtn" class="btn-primary">Send runde</button>
                         </div>
                         <div id="ptResult" style="display:none;margin-top:14px;padding:12px 14px;border-radius:8px;font-size:0.88em;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);line-height:1.5;"></div>
@@ -523,8 +521,8 @@
                     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
                         <h3 style="margin:0;">Kald-log</h3>
                         <div style="display:flex;gap:8px;">
-                            <button id="refreshPlannerLogBtn" class="pl-btn-sm" style="display:none;">Opdatér</button>
-                            <button id="togglePlannerLogBtn" class="pl-btn-sm">Vis log</button>
+                            <button id="refreshPlannerLogBtn" class="btn-secondary btn-sm" style="display:none;">Opdatér</button>
+                            <button id="togglePlannerLogBtn" class="btn-secondary btn-sm">Vis log</button>
                         </div>
                     </div>
                     <p class="pl-help" style="margin:8px 0 0;">De seneste 200 kald fra badmintonplanner.dk med svar pr. bane, til fejlsøgning.</p>
@@ -534,7 +532,7 @@
 
             <!-- Footer -->
             <div class="version-footer">
-                <p style="font-size: 0.85em; color: #555;">© 2026 Jesper Brink Sørensen. Alle rettigheder forbeholdes.</p>
+                <p style="font-size: 0.85em; color: var(--text-muted, rgba(255, 255, 255, 0.62));">© 2026 Jesper Brink Sørensen. Alle rettigheder forbeholdes.</p>
             </div>
         </div>
     </div>
@@ -542,7 +540,7 @@
     <!-- Message Overlay (for alerts and confirmations) -->
     <div id="messageOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); z-index: 10000; justify-content: center; align-items: center;">
         <div style="text-align: center; color: white; max-width: 600px; padding: 40px;">
-            <h1 id="messageTitle" style="font-size: 2.5em; margin-bottom: 30px; color: #4CAF50;"></h1>
+            <h1 id="messageTitle" style="font-size: 2.5em; margin-bottom: 30px; color: var(--color-win, #45d17e);"></h1>
             <p id="messageText" style="font-size: 1.5em; margin-bottom: 40px; line-height: 1.5;"></p>
             <div id="messageButtons" style="display: flex; gap: 20px; justify-content: center;">
                 <!-- Buttons will be added dynamically -->
@@ -564,12 +562,12 @@
     </div>
 
     <script src="js/api.js?v=29"></script>
-    <script src="js/session-vagt.js?v=1"></script>
+    <script src="js/session-vagt.js?v=2"></script>
     <script src="js/auth-guard.js?v=3"></script>
     <script src="js/logo-match.js?v=1"></script>
     <script src="js/live-updates.js?v=2"></script>
     <script src="js/holdkamp-formater.js?v=1"></script>
     <script src="js/ikoner.js?v=2"></script>
-    <script src="admin-script.js?v=69"></script>
+    <script src="admin-script.js?v=70"></script>
 </body>
 </html>

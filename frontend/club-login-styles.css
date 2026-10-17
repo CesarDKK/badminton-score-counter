@@ -36,7 +36,7 @@
 }
 
 .login-card .subtitle {
-    color: rgba(255,255,255,0.45);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     font-size: 0.85em;
 }
 
@@ -50,7 +50,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: rgba(255,255,255,0.5);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     margin-bottom: 6px;
 }
 
@@ -60,7 +60,7 @@
     border: 1px solid rgba(255,255,255,0.1);
     border-radius: 8px;
     padding: 12px 14px;
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     font-family: 'DM Sans', sans-serif;
     font-size: 1em;
     transition: border-color 0.2s;
@@ -71,30 +71,15 @@
     border-color: var(--color-primary);
 }
 
-.btn-login {
-    width: 100%;
-    padding: 13px;
-    background: var(--gradient-primary);
-    border: none;
-    border-radius: 8px;
-    color: #fff;
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.15em;
-    letter-spacing: 0.08em;
-    cursor: pointer;
-    margin-top: 8px;
-    transition: opacity 0.2s;
-}
-
-.btn-login:hover { opacity: 0.88; }
-.btn-login:disabled { opacity: 0.45; cursor: not-allowed; }
+/* Log ind-knappen er .btn-primary .btn-block .btn-lg (styles.css) */
+.login-card .btn-primary { margin-top: 8px; }
 
 .error-msg {
     background: rgba(var(--color-danger-rgb, 217, 44, 63), 0.12);
     border: 1px solid rgba(var(--color-danger-rgb, 217, 44, 63), 0.3);
     border-radius: 8px;
     padding: 10px 14px;
-    color: var(--color-danger, #d92c3f);
+    color: var(--color-danger-text, #ff6b7a);
     font-size: 0.88em;
     margin-top: 14px;
     display: none;

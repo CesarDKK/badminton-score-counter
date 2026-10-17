@@ -2728,13 +2728,13 @@ function showMatchWonMessage(isReportedMatch = false) {
     const celle = (score, vandt) => `<td style="${SCORE_COL}color:${vandt ? WIN_GREEN : MUTED};font-weight:${vandt ? 'bold' : 'normal'};">${score}</td>`;
 
     const rowA = `
-        <tr style="background:${sideAWinsMatch ? 'rgba(76,175,80,0.10)' : 'transparent'};color:${sideAWinsMatch ? '#fff' : MUTED};">
+        <tr style="background:${sideAWinsMatch ? 'rgba(var(--color-win-rgb, 69, 209, 126),0.10)' : 'transparent'};color:${sideAWinsMatch ? '#fff' : MUTED};">
             <td style="${NAME_COL}font-weight:${sideAWinsMatch ? 'bold' : 'normal'};">${escapeMessageHtml(labelA)}</td>
             ${setCells.map(c => celle(c.scoreA, c.saetVinder === 1)).join('')}
             <td style="${SETS_COL}color:${sideAWinsMatch ? WIN_GREEN : MUTED};">${sideAGames}</td>
         </tr>`;
     const rowB = `
-        <tr style="background:${!sideAWinsMatch ? 'rgba(76,175,80,0.10)' : 'transparent'};color:${!sideAWinsMatch ? '#fff' : MUTED};">
+        <tr style="background:${!sideAWinsMatch ? 'rgba(var(--color-win-rgb, 69, 209, 126),0.10)' : 'transparent'};color:${!sideAWinsMatch ? '#fff' : MUTED};">
             <td style="${NAME_COL}font-weight:${!sideAWinsMatch ? 'bold' : 'normal'};">${escapeMessageHtml(labelB)}</td>
             ${setCells.map(c => celle(c.scoreB, c.saetVinder === 2)).join('')}
             <td style="${SETS_COL}color:${!sideAWinsMatch ? WIN_GREEN : MUTED};">${sideBGames}</td>
@@ -3928,7 +3928,7 @@ function showQrSessionExpired(titel = 'Kamp Afsluttet', tekst = 'Banen er ryddet
     overlay.innerHTML = `
         <svg viewBox="0 0 24 24" fill="rgba(255,255,255,0.85)" style="width: clamp(60px,14vw,110px); height: clamp(60px,14vw,110px); margin-bottom: 24px;"><g transform="translate(0 1.2)"><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/><rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/><path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/></g></svg>
         <h1 style="font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.05em; font-size: clamp(1.8em,6vw,3em); margin-bottom: 16px; color: #fff;">${titel}</h1>
-        <p style="font-size: clamp(1em,3vw,1.4em); color: rgba(255,255,255,0.65); max-width: 400px; line-height: 1.6;">
+        <p style="font-size: clamp(1em,3vw,1.4em); color: var(--text-muted, rgba(255, 255, 255, 0.62)); max-width: 400px; line-height: 1.6;">
             ${tekst}
         </p>
     `;

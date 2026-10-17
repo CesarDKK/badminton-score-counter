@@ -7,9 +7,9 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=5">
     <link rel="icon" type="image/png" href="/favicon.png?v=5">
     <link rel="stylesheet" href="fonts.css?v=2">
-    <link rel="stylesheet" href="styles.css?v=7">
-    <link rel="stylesheet" href="super-admin-styles.css?v=8">
-    <script src="js/theme-loader.js?v=12"></script>
+    <link rel="stylesheet" href="styles.css?v=8">
+    <link rel="stylesheet" href="super-admin-styles.css?v=9">
+    <script src="js/theme-loader.js?v=13"></script>
 </head>
 <body>
     <div class="bg-glow"></div>
@@ -31,7 +31,7 @@
                     <label>Adgangskode</label>
                     <input type="password" id="saPassword" placeholder="Adgangskode" autocomplete="current-password">
                 </div>
-                <button id="saLoginBtn" class="btn-primary full">Log Ind</button>
+                <button id="saLoginBtn" class="btn-primary btn-block btn-lg">Log Ind</button>
                 <div id="loginError" class="msg msg-error" style="display:none;"></div>
             </div>
         </div>
@@ -58,7 +58,7 @@
                     <label>Gentag ny adgangskode</label>
                     <input type="password" id="fpConfirm" placeholder="Gentag ny adgangskode" autocomplete="new-password">
                 </div>
-                <button id="fpSubmitBtn" class="btn-primary full">Skift og fortsæt</button>
+                <button id="fpSubmitBtn" class="btn-primary btn-block btn-lg">Skift og fortsæt</button>
                 <div id="fpError" class="msg msg-error" style="display:none;"></div>
             </div>
         </div>
@@ -126,7 +126,7 @@
                     <span class="card-title">Klubber uden logo</span>
                     <button id="refreshMissingLogosBtn" class="btn-secondary">↻ Opdater</button>
                 </div>
-                <p style="color:rgba(255,255,255,0.5); font-size:0.82em; margin-bottom:10px;">Kendte klubnavne (turnering, holdkamp, spillere) der ikke auto-matcher et logo. Upload eller knyt til et eksisterende logo.</p>
+                <p style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-bottom:10px;">Kendte klubnavne (turnering, holdkamp, spillere) der ikke auto-matcher et logo. Upload eller knyt til et eksisterende logo.</p>
                 <div id="missingLogoList"><div class="empty-state"><div class="spinner"></div></div></div>
             </div>
 
@@ -182,7 +182,7 @@
                     </div>
                     <button id="createFootballClubBtn" class="btn-primary" style="height:46px; margin-top:22px;">Opret Klub</button>
                 </div>
-                <p style="color:rgba(255,255,255,0.5); font-size:0.82em; margin-top:10px;">
+                <p style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-top:10px;">
                     Klubben vises på <code style="background:rgba(0,0,0,0.3); padding:1px 5px; border-radius:3px;">&lt;subdomain&gt;.footballapp.dk</code>
                 </p>
                 <div id="createFootballClubMsg" class="msg" style="display:none;"></div>
@@ -230,17 +230,17 @@
     <div id="deleteModal" class="modal-overlay" style="display:none;">
         <div class="modal-box" style="max-width:420px;">
             <div class="modal-header">
-                <span class="modal-title" style="color:var(--color-danger, #d92c3f);">⚠ Slet Klub</span>
+                <span class="modal-title" style="color:var(--color-danger-text, #ff6b7a);">⚠ Slet Klub</span>
             </div>
             <p id="deleteModalText" style="color:rgba(255,255,255,0.7); font-size:0.92em; line-height:1.6; margin-bottom:16px;"></p>
-            <div style="background:rgba(var(--color-danger-rgb, 217, 44, 63),0.08); border:1px solid rgba(var(--color-danger-rgb, 217, 44, 63),0.2); border-radius:8px; padding:12px 14px; margin-bottom:20px; font-size:0.85em; color:rgba(255,255,255,0.5); line-height:1.6;">
+            <div style="background:rgba(var(--color-danger-rgb, 217, 44, 63),0.08); border:1px solid rgba(var(--color-danger-rgb, 217, 44, 63),0.2); border-radius:8px; padding:12px 14px; margin-bottom:20px; font-size:0.85em; color:var(--text-muted, rgba(255, 255, 255, 0.62)); line-height:1.6;">
                 Dette sletter permanent:<br>
                 • Al klubdata (baner, bookinger, spillere)<br>
                 • Alle admin-brugere<br>
                 • Hele klubbens database
             </div>
             <div class="form-group">
-                <label>Skriv <strong style="color:var(--color-danger, #d92c3f);">SLET</strong> for at bekræfte</label>
+                <label>Skriv <strong style="color:var(--color-danger-text, #ff6b7a);">SLET</strong> for at bekræfte</label>
                 <input type="text" id="deleteConfirmInput" placeholder="SLET" autocomplete="off">
             </div>
             <div style="display:flex; gap:10px; margin-top:8px;">
@@ -255,7 +255,7 @@
     <div id="deleteAdminModal" class="modal-overlay" style="display:none; z-index:10001;">
         <div class="modal-box" style="max-width:380px;">
             <div class="modal-header">
-                <span class="modal-title" style="color:var(--color-danger, #d92c3f);">Slet Admin</span>
+                <span class="modal-title" style="color:var(--color-danger-text, #ff6b7a);">Slet Admin</span>
             </div>
             <p id="deleteAdminModalText" style="color:rgba(255,255,255,0.7); font-size:0.92em; line-height:1.6; margin-bottom:20px;"></p>
             <div style="display:flex; gap:10px;">
@@ -336,7 +336,7 @@
                 <!-- Bevidst IKKE .form-group: dens 'label'-regel ville gøre sidenavnene
                      til VERSALER. Holdes ude så checkbox-labels matcher redigér-visningen. -->
                 <div style="margin-bottom:16px;">
-                    <div style="font-size:0.82em;color:rgba(255,255,255,0.5);margin-bottom:8px;">Sideadgang</div>
+                    <div style="font-size:0.82em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin-bottom:8px;">Sideadgang</div>
                     <div id="newAdminPermissions" style="background:rgba(255,255,255,0.04);border-radius:8px;padding:12px 14px;"></div>
                 </div>
                 <button id="createAdminBtn" class="btn-primary">Opret Admin</button>
@@ -346,9 +346,9 @@
     </div>
 
     <script src="js/api.js?v=29"></script>
-    <script src="js/session-vagt.js?v=1"></script>
+    <script src="js/session-vagt.js?v=2"></script>
     <script src="js/logo-match.js?v=1"></script>
     <script src="js/ikoner.js?v=2"></script>
-    <script src="super-admin-script.js?v=20"></script>
+    <script src="super-admin-script.js?v=21"></script>
 </body>
 </html>

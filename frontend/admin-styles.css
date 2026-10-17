@@ -49,7 +49,7 @@ body::before {
     max-width: 1200px;
     margin: 0 auto;
     padding: 48px 36px 80px;
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
 }
 
 .admin-section {
@@ -85,76 +85,7 @@ header > div {
 }
 
 /* ---- Buttons ---- */
-.btn-primary {
-    padding: 10px 22px;
-    background: var(--color-primary);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.9em;
-    font-weight: 600;
-    cursor: pointer;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
-    white-space: nowrap;
-}
-
-.btn-primary:hover {
-    background: color-mix(in srgb, var(--color-primary) 80%, white 20%);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 14px rgba(var(--color-primary-rgb), 0.35);
-    filter: none;
-}
-
-.btn-secondary {
-    padding: 9px 20px;
-    background: transparent;
-    color: rgba(255, 255, 255, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 100px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.85em;
-    font-weight: 500;
-    cursor: pointer;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
-    white-space: nowrap;
-}
-
-.btn-secondary:hover {
-    color: white;
-    border-color: rgba(255, 255, 255, 0.35);
-    background: rgba(255, 255, 255, 0.05);
-    transform: none;
-    filter: none;
-    box-shadow: none;
-}
-
-.btn-danger {
-    padding: 10px 22px;
-    font-size: 0.9em;
-    font-family: 'DM Sans', sans-serif;
-    font-weight: 600;
-    background: rgba(var(--color-danger-rgb, 217, 44, 63), 0.1);
-    color: var(--color-danger, #d92c3f);
-    border: 1px solid rgba(var(--color-danger-rgb, 217, 44, 63), 0.3);
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.btn-danger:hover {
-    background: rgba(var(--color-danger-rgb, 217, 44, 63), 0.2);
-    border-color: var(--color-danger, #d92c3f);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(var(--color-danger-rgb, 217, 44, 63), 0.2);
-}
+/* Knapstilen (primær/sekundær/fare) ligger i styles.css (E8) */
 
 /* ---- Admin Nav ---- */
 .admin-nav {
@@ -187,7 +118,7 @@ header > div {
     font-weight: 600;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     margin-right: 2px;
 }
 
@@ -282,7 +213,7 @@ header > div {
     font-size: 1em;
     font-family: 'DM Sans', sans-serif;
     background: rgba(255, 255, 255, 0.05);
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     transition: border-color 0.2s ease, background 0.2s ease;
 }
 
@@ -305,7 +236,7 @@ header > div {
 }
 
 .back-link a {
-    color: rgba(255, 255, 255, 0.35);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     text-decoration: none;
     font-size: 0.88em;
     font-weight: 500;
@@ -391,7 +322,7 @@ header > div {
 .court-status.inactive {
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.35);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
 }
 
 .court-players {
@@ -464,51 +395,19 @@ header > div {
     text-align: center;
 }
 
-.btn-edit {
-    padding: 9px 22px;
-    background: rgba(var(--color-primary-rgb), 0.2);
-    color: rgba(255, 255, 255, 0.8);
-    border: 1px solid rgba(var(--color-primary-rgb), 0.35);
-    border-radius: 8px;
-    cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
-    font-weight: 600;
-    font-size: 0.88em;
-    transition: all 0.2s ease;
-}
-
-.btn-edit:hover {
-    background: rgba(var(--color-primary-rgb), 0.38);
-    border-color: var(--color-primary);
-    transform: translateY(-1px);
-}
-
-/* Lille "Seneste kamp"-knap ved siden af Redigér Bane — samme farveskema
-   som .btn-edit, bare halv stoerrelse, saa den falder ind i admin-UI'et i
-   stedet for at vises som browserens default-knap. */
+/* "Seneste kamp" ved Redigér bane: .btn-secondary .btn-sm, lidt mindre i overskriften */
 .btn-latest-match {
-    padding: 4px 11px;
-    background: rgba(var(--color-primary-rgb), 0.10);
-    color: rgba(255, 255, 255, 0.75);
-    border: 1px solid rgba(var(--color-primary-rgb), 0.25);
-    border-radius: 5px;
-    cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
-    font-weight: 600;
-    font-size: 0.62em;
-    line-height: 1.2;
-    letter-spacing: 0.02em;
-    transition: all 0.2s ease;
     margin-left: 8px;
-    white-space: nowrap;
+    font-size: 0.62em;
+    padding: 4px 11px;
     vertical-align: middle;
 }
 
-.btn-latest-match:hover {
-    background: rgba(var(--color-primary-rgb), 0.24);
-    color: #fff;
-    border-color: rgba(var(--color-primary-rgb), 0.45);
-    transform: translateY(-1px);
+/* Til/fra-knap (fx W.O.) i valgt tilstand */
+.btn-secondary.er-valgt {
+    background: rgba(255, 255, 255, 0.85);
+    color: var(--color-bg-dark);
+    border-color: transparent;
 }
 
 /* ---- Setting Cards ---- */
@@ -541,7 +440,7 @@ header > div {
     margin: 14px 0 8px;
     font-size: 0.82em;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     text-transform: uppercase;
     letter-spacing: 0.8px;
 }
@@ -555,7 +454,7 @@ header > div {
     font-size: 1em;
     font-family: 'DM Sans', sans-serif;
     background: rgba(255, 255, 255, 0.05);
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     margin-bottom: 14px;
     transition: border-color 0.2s ease, background 0.2s ease;
 }
@@ -596,7 +495,7 @@ header > div {
 }
 
 .admin-help {
-    color: rgba(255, 255, 255, 0.65);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     font-size: 0.9em;
     line-height: 1.5;
     margin: 0 0 14px;
@@ -634,7 +533,7 @@ header > div {
     margin: 0 0 6px;
     font-size: 0.82em;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     text-transform: uppercase;
     letter-spacing: 0.8px;
 }
@@ -648,7 +547,7 @@ header > div {
     font-size: 1em;
     font-family: 'DM Sans', sans-serif;
     background: rgba(255, 255, 255, 0.05);
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     transition: border-color 0.2s ease, background 0.2s ease;
 }
 
@@ -665,22 +564,8 @@ header > div {
 }
 
 /* Valgmuligheder i en <select> får ellers browserens hvide baggrund */
-.admin-input option { background: var(--color-bg-container); color: #eaeaea; }
+.admin-input option { background: var(--color-bg-container); color: var(--text-primary, #eaeaea); }
 
-.btn-ghost-sm {
-    padding: 7px 14px;
-    background: transparent;
-    color: rgba(255, 255, 255, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 100px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.85em;
-    white-space: nowrap;
-    cursor: pointer;
-    transition: color 0.2s ease, border-color 0.2s ease;
-}
-
-.btn-ghost-sm:hover { color: #fff; border-color: rgba(255, 255, 255, 0.35); }
 
 /* ---- Warning / Danger zone ---- */
 .warning-text {
@@ -705,7 +590,7 @@ header > div {
 
 .modal .modal-content {
     background: var(--color-bg-container);
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     margin: 8% auto;
     padding: 32px;
     border-radius: 18px;
@@ -718,7 +603,7 @@ header > div {
 }
 
 .modal .close-modal {
-    color: rgba(255, 255, 255, 0.35);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     float: right;
     font-size: 24px;
     cursor: pointer;
@@ -744,7 +629,7 @@ header > div {
     margin: 14px 0 8px;
     font-size: 0.82em;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     text-transform: uppercase;
     letter-spacing: 0.8px;
 }
@@ -757,7 +642,7 @@ header > div {
     font-size: 1em;
     font-family: 'DM Sans', sans-serif;
     background: rgba(255, 255, 255, 0.05);
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     margin-bottom: 14px;
     transition: border-color 0.2s ease;
 }
@@ -793,13 +678,13 @@ header > div {
 
 .toggle-text {
     font-weight: 600;
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
 }
 
 .toggle-hint {
     margin-top: 10px;
     font-size: 0.85em;
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     line-height: 1.5;
 }
 
@@ -819,7 +704,7 @@ header > div {
     padding: 24px 0 16px;
     margin-top: 60px;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
-    color: rgba(255, 255, 255, 0.18);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
 }
 
 .version-footer p {
@@ -850,7 +735,7 @@ header > div {
     font-size: 0.95em;
     font-family: 'DM Sans', sans-serif;
     background: rgba(255, 255, 255, 0.05);
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     transition: border-color 0.2s ease;
 }
 
@@ -867,7 +752,7 @@ header > div {
 
 .sort-box label {
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.55);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     font-size: 0.82em;
     text-transform: uppercase;
     letter-spacing: 0.8px;
@@ -881,7 +766,7 @@ header > div {
     font-size: 0.95em;
     font-family: 'DM Sans', sans-serif;
     background: rgba(255, 255, 255, 0.05);
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     cursor: pointer;
     transition: border-color 0.2s ease;
 }
@@ -893,7 +778,7 @@ header > div {
 
 .sort-box select option {
     background: var(--color-bg-container);
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
 }
 
 .match-card {
@@ -971,13 +856,13 @@ header > div {
 .autocomplete-name {
     font-weight: 600;
     font-size: 0.95em;
-    color: #eaeaea;
+    color: var(--text-primary, #eaeaea);
     margin-bottom: 3px;
 }
 
 .autocomplete-info {
     font-size: 0.82em;
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
 }
 
 .edit-form {
@@ -1083,7 +968,7 @@ header > div {
 
 .dt-gruppe-antal {
     font-size: 0.85em;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
 }
 
 .dt-gruppe-indhold {
@@ -1091,7 +976,7 @@ header > div {
 }
 
 .dt-gruppe-tom {
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
     text-align: center;
     padding: 12px 0 20px;
     margin: 0;
