@@ -855,7 +855,7 @@
       </button>
       <button class="logo-pick-card" data-special="__none__" type="button"
               style="background:#0f1117; border:1px dashed rgba(255,255,255,0.2); border-radius:8px; padding:10px; cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; min-height:104px;">
-        <div style="font-size:1.4em;">🚫</div>
+        <div style="font-size:1.4em; color:rgba(255,255,255,0.62); line-height:1;"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.125em" aria-hidden="true"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM5 5l14 14"/></svg></div>
         <div style="font-size:0.75em; color:#eaeaea; text-align:center; line-height:1.2;">${tr('logo.noLogo')}</div>
       </button>` : '';
 

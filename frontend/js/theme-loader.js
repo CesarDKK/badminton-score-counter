@@ -35,6 +35,22 @@
         return yiq >= 150 ? '#0d1117' : '#ffffff';
     };
 
+    // Knapflade (F2): hvid tekst skal have mindst 4,5:1. Er accenten for lys til
+    // det (standardrøden #e94560 giver 3,8:1), gøres fladen gradvist mørkere.
+    // Lyse accenter med mørk tekst (fx lime) bruges som de er.
+    const luminans = rgb => {
+        const [r, g, b] = rgb.map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const tilHex = rgb => '#' + rgb.map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+    const knapFlade = hex => {
+        const h = hex.replace('#', '');
+        let rgb = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16));
+        if (onColor(hex) !== '#ffffff') return { flade: hex, hover: tilHex(rgb.map(v => v * 0.9)) };
+        for (let i = 0; i < 20 && 1.05 / (luminans(rgb) + 0.05) < 4.5; i++) rgb = rgb.map(v => v * 0.95);
+        return { flade: tilHex(rgb), hover: tilHex(rgb.map(v => v * 0.88)) };
+    };
+
     // Anvend et tema-objekt på CSS-variablerne. Ugyldige/manglende værdier
     // falder tilbage til defaults, så en korrupt cache aldrig giver NaN-farver.
     function applyTheme(theme) {
@@ -60,6 +76,9 @@
 
         root.style.setProperty('--color-on-accent',  onColor(accent));
         root.style.setProperty('--color-on-primary', onColor(primary));
+        const knap = knapFlade(accent);
+        root.style.setProperty('--color-knap',       knap.flade);
+        root.style.setProperty('--color-knap-hover', knap.hover);
 
         // Faste betydningsfarver og tekstniveauer ligger i fundament.css (E1),
         // som alle sider inkl. TV henter — her sættes kun klubbens tema.

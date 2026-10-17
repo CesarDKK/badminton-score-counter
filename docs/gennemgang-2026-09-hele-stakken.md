@@ -244,6 +244,29 @@ Kontrasttallene er skønnet ud fra farveværdierne i koden, ikke målt i en brow
 
 ---
 
+## Pakke F — ekstra designgennemgang efter Pakke E (tilføjet 17. oktober 2026)
+
+Lavet efter at Pakke E var i prod. Fundet ved at måle på koden og kigge på app.badmintonapp.dk på mobil og desktop.
+
+### Fejl
+| # | Fund | Værdi | Indsats | Status |
+|---|---|---|---|---|
+| F1 | **Knapperne i admin er skæve på mobil.** `styles.css` havde stadig CSS fra den gamle tæller (`.btn-score`, `.btn-timer`, `.action-buttons`, `.history-*`, `.btn-mode` m.fl.). Dens media queries gjorde sekundærknapper fuld bredde og gav `.btn-sm` stor polstring — "Afslut turnering" fyldte hele rækken, "Slet" ved siden af var lille. | Høj | S | ☑ 72 døde regler fjernet (1225 → 778 linjer); knapregler i media queries fjernet. Tællerens overlays bruger stadig højdereglerne og er uændrede |
+| F2 | **Hvid tekst på badmintons røde knapper giver 3,8:1** (krav 4,5:1). Planner og statistik var løst med `#d02c4a`, men badmintons accent er klubbens tema. | Høj | S | ☑ theme-loader beregner `--color-knap`: mørkner accenten, til hvid tekst når 4,5:1 (Standard #d23e57 4,6:1, Ocean 4,7:1, Solnedgang 4,9:1, Kongeligt 4,6:1); lyse accenter med mørk tekst (Skov, Monokrom) bruges som de er |
+| F3 | **Rester efter E2/E10:** gammel grøn `#2e8b57` på "Pågår", "I gang" og "… vandt" i holdkamp/turnering; emoji ⚠ (admin, TV, super-admin), ⏸ (oversigt), 🔒 (planner), 🚫 (football-admin), ⬆ (super-admin). | Middel | S | ☑ mærkerne er tonet `--color-win`; emoji erstattet af stregikoner; "Slet Klub" → "Slet klub" |
+| F4 | **Tastaturfokus kan næsten ikke ses.** Kun fundamentets knapper havde en fokusramme; menupiller, banefliser og links ingen, og felternes lilla kant er svag på marineblå. | Middel | S | ☑ fundament.css: 2 px hvid ramme på alt klikbart ved tastaturfokus og en accentring på felter (`:where()`, så produkternes egne fokusstile vinder) |
+
+### Huller
+| # | Fund | Værdi | Indsats | Status |
+|---|---|---|---|---|
+| G1 | **TV-pausen og "ingen aktiv kamp"** har stadig det gamle udtryk og blev ikke tegnet om sammen med layout A. | Høj | M | ☐ |
+| G2 | **Kampstatus-oversigten på storskærm** har små navne og tal set fra hallen — samme problem som TV'et havde før layout A. | Høj | M | ☐ |
+| G3 | **Markedsføringssiderne** (badmintonapp.dk, footballapp.dk) bruger ikke fundament.css; knapper og farver ligger for sig selv og glider over tid. | Middel | S–M | ☐ |
+| G4 | **Holdkamp- og turneringsdelen af admin** er bygget med ca. 420 inline-stilarter i `admin-script.js` — derfor dukker rester som F3 op. Flyt dem til klasser. | Middel | M–L | ☐ |
+| G5 | Småting: banevalget siger "Admin Panel", resten af appen "Admin". Football-login følger ikke E9-skabelonens opbygning. | Lav | S | ☐ |
+
+---
+
 ## Mindre ting (samlet)
 
 - Admin: `admin-script.js` er vokset til 4.639 linjer med ca. 190 hårdkodede farver. Delingen fra juli er stadig åben.

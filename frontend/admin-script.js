@@ -898,7 +898,7 @@ async function loadTournamentMatchHistory() {
             const totalCount = (t.matches || []).length;
             const date = new Date(t.created_at).toLocaleDateString('da-DK', { day: '2-digit', month: 'short', year: 'numeric' });
             const statusBadge = t.status === 'active'
-                ? '<span style="background:#2e8b57; color:#fff; padding:2px 7px; border-radius:4px; font-size:0.75em; margin-left:6px;">PÅGÅR</span>'
+                ? '<span style="background:rgba(var(--color-win-rgb, 69, 209, 126),0.15); color:var(--color-win, #45d17e); border:1px solid rgba(var(--color-win-rgb, 69, 209, 126),0.35); padding:2px 7px; border-radius:4px; font-size:0.75em; margin-left:6px;">PÅGÅR</span>'
                 : '';
 
             const matchRows = finishedMatches.map(m => {
@@ -1240,7 +1240,7 @@ function renderHoldkampBlocker(activeTournament) {
         h2Wrap.insertAdjacentElement('afterend', blocker);
     }
     blocker.innerHTML = `
-        <h3 style="color:var(--color-warning, #ffb02e); margin:0 0 10px 0;">⚠ Aktiv turnering findes</h3>
+        <h3 style="color:var(--color-warning, #ffb02e); margin:0 0 10px 0;">${Ikon('advarsel')} Aktiv turnering findes</h3>
         <p style="color:var(--text-secondary, rgba(255, 255, 255, 0.78)); margin:0 0 12px 0; line-height:1.5;">
             Du har en aktiv turnering: <strong>${escapeHtml(activeTournament.name)}</strong>.<br>
             Du kan kun have én aktiv holdkamp ELLER turnering ad gangen. Afslut eller slet turneringen først.
@@ -2865,7 +2865,7 @@ function renderSkaerme(skaerme) {
                     <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.9em;margin-top:2px;">
                         ${s.side === 'oversigt' ? 'Oversigt' : `Bane ${s.bane || '?'}`}${s.kioskVersion ? ` &nbsp;•&nbsp; Badminton TV ${escapeHtml(s.kioskVersion)}` : ''} &nbsp;•&nbsp; sidst set ${skaermVarighed(s.sekunderSiden)} siden &nbsp;•&nbsp; IP ${escapeHtml(s.ip || '?')}${data}
                     </div>
-                    ${haendelser ? `<div style="color:var(--color-warning, #ffb02e);font-size:0.9em;margin-top:2px;">⚠ ${haendelser}</div>` : ''}
+                    ${haendelser ? `<div style="color:var(--color-warning, #ffb02e);font-size:0.9em;margin-top:2px;">${Ikon('advarsel')} ${haendelser}</div>` : ''}
                 </div>
                 ${s.sekunderSiden >= 60 ? `<button type="button" class="btn-secondary" onclick="fjernSkaerm('${escapeHtml(s.klientId)}')"
                     title="Fjern skærmen fra listen. Tænder den igen, kommer den tilbage af sig selv."
@@ -3761,7 +3761,7 @@ function renderTournamentBlocker(activeTeamMatch) {
         headerWrap.insertAdjacentElement('afterend', blocker);
     }
     blocker.innerHTML = `
-        <h3 style="color:var(--color-warning, #ffb02e); margin:0 0 10px 0;">⚠ Aktiv holdkamp findes</h3>
+        <h3 style="color:var(--color-warning, #ffb02e); margin:0 0 10px 0;">${Ikon('advarsel')} Aktiv holdkamp findes</h3>
         <p style="color:var(--text-secondary, rgba(255, 255, 255, 0.78)); margin:0 0 12px 0; line-height:1.5;">
             Du har en aktiv holdkamp: <strong>${escapeHtml(activeTeamMatch.team1_name)} vs ${escapeHtml(activeTeamMatch.team2_name)}</strong>.<br>
             Du kan kun have én aktiv holdkamp ELLER turnering ad gangen. Afslut eller slet holdkampen først.
@@ -4137,10 +4137,10 @@ function renderTournamentMatchRow(tournamentId, m) {
     if (m.status === 'pending') {
         statusBadge = '<span style="background:#555;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.78em;">Afventer</span>';
     } else if (m.status === 'active') {
-        statusBadge = `<span style="background:#2e8b57;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.78em;">I gang – Bane ${m.court_number ?? '?'}</span>`;
+        statusBadge = `<span style="background:rgba(var(--color-win-rgb, 69, 209, 126),0.15); color:var(--color-win, #45d17e); border:1px solid rgba(var(--color-win-rgb, 69, 209, 126),0.35);padding:3px 8px;border-radius:4px;font-size:0.78em;">I gang – Bane ${m.court_number ?? '?'}</span>`;
     } else if (m.status === 'finished') {
         const winnerLabel = m.winner_team === 1 ? side1 : (m.winner_team === 2 ? side2 : '?');
-        statusBadge = `<span style="background:#2e8b57;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.78em;">✓ ${escapeHtml(winnerLabel)} vandt</span>`;
+        statusBadge = `<span style="background:rgba(var(--color-win-rgb, 69, 209, 126),0.15); color:var(--color-win, #45d17e); border:1px solid rgba(var(--color-win-rgb, 69, 209, 126),0.35);padding:3px 8px;border-radius:4px;font-size:0.78em;">✓ ${escapeHtml(winnerLabel)} vandt</span>`;
         if (m.set_scores) {
             // Orienter sættene til side1 (venstre i "side1 vs side2"-rækken ovenfor).
             // Raw-strengen har navnene som de stod på banen pr sæt — efter sideskift
@@ -4189,7 +4189,7 @@ function renderTournamentMatchRow(tournamentId, m) {
 function renderTournamentMatchEditForm(tournamentId, m) {
     const isActive = m.status === 'active';
     const warningHtml = isActive
-        ? `<div style="margin-bottom:10px; padding:8px 10px; background:rgba(var(--color-warning-rgb, 255, 176, 46),0.12); border:1px solid var(--color-warning, #ffb02e); border-radius:4px; color:var(--color-warning, #ffb02e); font-size:0.82em;">⚠ Kampen er i gang på Bane ${m.court_number}. Navneændringer pusher til banen indenfor 5 sekunder.</div>`
+        ? `<div style="margin-bottom:10px; padding:8px 10px; background:rgba(var(--color-warning-rgb, 255, 176, 46),0.12); border:1px solid var(--color-warning, #ffb02e); border-radius:4px; color:var(--color-warning, #ffb02e); font-size:0.82em;">${Ikon('advarsel')} Kampen er i gang på Bane ${m.court_number}. Navneændringer pusher til banen indenfor 5 sekunder.</div>`
         : '';
     return `
         <div data-tournament-edit="${m.id}" style="padding:14px; background:rgba(0,0,0,0.3); border:1px solid var(--color-primary); border-radius:6px; margin-bottom:6px;">
