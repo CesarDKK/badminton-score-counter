@@ -18,8 +18,12 @@ const DAG_MIN = 1440;
  * så "afstand mellem to kampe" virker på tværs af dage uden særbehandling.
  * @param {object} projekt
  * @param {object} [hintPlan]  en lovlig plan (fra lavForslag) som startløsning
+ * @param {string} [kunDag]  løseren arbejder kun på denne dag (Jesper 2026-10-18: "fix kun søndag"): kampe på de andre
+ *                           dage holdes på deres tid som låste — løseren kender dem stadig, så spillere, der spiller begge
+ *                           dage, pausen og varighederne regnes rigtigt — og kampene uden tid lægges på dagen, hvis rækken
+ *                           spiller den
  */
-export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
+export function bygProblem(projekt, hintPlan = null, { stabil = null, kunDag = null } = {}) {
     // Reglernes byggesten kommer fra regelmodellen — de samme, som Tjek og planlæggeren bruger
     const M = lavRegelmodel(projekt);
     const { slotMin, dage, kampMap, kat, raekke, kanDeleSpillere, alleForfaedre, maxPrDag } = M;
@@ -48,10 +52,12 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
         if (!r) continue;
         let tilladte = [];
         const p = projekt.plan[k.id];
-        if (laast.has(k.id) && p && dagIndex.has(p.dag)) {
+        const fast = laast.has(k.id) || (kunDag && p && p.dag !== kunDag);
+        if (fast && p && dagIndex.has(p.dag)) {
             tilladte = [dagIndex.get(p.dag) * DAG_MIN + minutter(p.slot)];
         } else {
-            for (const dato of r.dage || []) {
+            const rDage = r.dage || [];
+            for (const dato of kunDag && rDage.includes(kunDag) ? [kunDag] : rDage) {
                 const dag = dage.find((d) => d.dato === dato);
                 if (!dag) continue;
                 const v = M.raekkeVindue(r, dag);
@@ -63,7 +69,7 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
         }
         // En låst kamp uden for rækkens tidsrum ligger på de fælles baner (rækkens egne findes kun i tidsrummet)
         let pulje = puljeForRaekke(r);
-        if (pulje !== 'faelles' && laast.has(k.id) && p && dagIndex.has(p.dag)) pulje = puljeFor(r.id, puljeKapacitet(dage[dagIndex.get(p.dag)], p.slot, projekt.raekker, slotMin).reserveret);
+        if (pulje !== 'faelles' && fast && p && dagIndex.has(p.dag)) pulje = puljeFor(r.id, puljeKapacitet(dage[dagIndex.get(p.dag)], p.slot, projekt.raekker, slotMin).reserveret);
         indeks.set(k.id, kampe.length);
         kampe.push({
             id: k.id, raekke: r.id, pulje, halv: !!kat(k)?.halvBane, tilladte,
@@ -531,8 +537,8 @@ async function startJob(url, krop, { signal, vedStatus, ventMaxSekunder, ventMs 
  * signal afbryder også ventetiden i køen. Statuskald, der fejler forbigående (netværk, 5xx), tåles i
  * taalFejlSekunder; rammer de rate-grænsen (429), sættes tempoet ned i stedet for at give op.
  */
-export async function optimer(projekt, { sekunder = 30, hintPlan = null, url = '/api/solve', signal, job = null, pollMs = 3000, vedStatus = null, ventMaxSekunder = 600, ventMs = 10000, taalFejlSekunder = 25, stabil = null } = {}) {
-    const problem = bygProblem(projekt, hintPlan, { stabil });
+export async function optimer(projekt, { sekunder = 30, hintPlan = null, url = '/api/solve', signal, job = null, pollMs = 3000, vedStatus = null, ventMaxSekunder = 600, ventMs = 10000, taalFejlSekunder = 25, stabil = null, kunDag = null } = {}) {
+    const problem = bygProblem(projekt, hintPlan, { stabil, kunDag });
     // Jobbet startes og hentes med korte kald (start → status hvert par sekunder), så ingen
     // forbindelse står åben i flere minutter — proxyer som Cloudflare afbryder dem efter ca. 100 s.
     let data = await startJob(url, JSON.stringify({ problem, sekunder, asynkron: true, ...(job ? { job } : {}) }), { signal, vedStatus, ventMaxSekunder, ventMs });

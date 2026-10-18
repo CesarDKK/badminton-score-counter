@@ -752,7 +752,9 @@ const planHandlers = {
     // Optimér: CP-SAT-løseren (planner-solver) minimerer scoren under alle hårde regler.
     // Den grådige plan bruges som startløsning og vises ved siden af til sammenligning.
     optimerSek(n) { tilstand.optimerSek = n; },
-    async optimer({ auto = false, proeve = null } = {}) {
+    optimerDag(dato) { planHandlers.optimer({ kunDag: dato }); },
+    // kunDag: løseren arbejder kun på den dag; de andre dage røres ikke (Jesper 2026-10-18)
+    async optimer({ auto = false, proeve = null, kunDag = null } = {}) {
         if (tilstand.optimerer) return;
         const sekunder = tilstand.optimerSek || 60;
         // Løseren regner på projektet, som det er NU. Ændrer brugeren noget imens (op til 6 min), må
@@ -781,7 +783,8 @@ const planHandlers = {
         tilstand.optimerStopper = false;
         tilstand.optimerAuto = auto;
         tilstand.listeSetUnderLoeser = tilstand.fane === 'liste';
-        tilstand.forslag = { tekst: `Løseren regner i op til ${sekunder >= 120 ? `${sekunder / 60} minutter` : `${sekunder} sekunder`}. Du kan stoppe undervejs og bruge den bedste plan, den har fundet.`, ikkePlaceret: [] };
+        tilstand.optimerDag = kunDag;
+        tilstand.forslag = { tekst: `Løseren regner${kunDag ? ` kun på ${datoTekst(kunDag)} (de andre dage røres ikke)` : ''} i op til ${sekunder >= 120 ? `${sekunder / 60} minutter` : `${sekunder} sekunder`}. Du kan stoppe undervejs og bruge den bedste plan, den har fundet.`, ikkePlaceret: [] };
         // Uret tæller ned til løserens frist (Jesper 2026-10-18: brugeren ved ikke nødvendigvis, hvor lang tid løseren har
         // fået): først den valgte tid, så den tid, løseren selv melder (restSekunder) — også når den går videre til planen
         // med færrest brud eller diagnosen. "Højst", fordi den ofte stopper før, når den ikke finder bedre planer. I kø
@@ -797,7 +800,7 @@ const planHandlers = {
         const visUr = () => { const el = document.querySelector('[data-optimer-ur]'); if (el) el.textContent = tilstand.optimerUr?.() || ''; };
         const ur = setInterval(visUr, 1000);
         let afbryd = null;
-        const faerdig = () => { clearInterval(ur); tilstand.optimerUr = null; tilstand.optimerer = false; tilstand.optimerJob = null; tilstand.optimerStopper = false; tilstand.optimerDiagnose = false; tilstand.optimerElastisk = false; tilstand.optimerAfbryd = null; tilstand.optimerAuto = false; tilstand.loeserKoe = null; tilstand.optimerProeve = null; };
+        const faerdig = () => { clearInterval(ur); tilstand.optimerUr = null; tilstand.optimerer = false; tilstand.optimerJob = null; tilstand.optimerStopper = false; tilstand.optimerDiagnose = false; tilstand.optimerElastisk = false; tilstand.optimerAfbryd = null; tilstand.optimerAuto = false; tilstand.loeserKoe = null; tilstand.optimerProeve = null; tilstand.optimerDag = null; };
         tilstand.optimerProeve = proeve ? proeve.tekst : null;
         try {
             let ventede = false;
@@ -824,7 +827,7 @@ const planHandlers = {
             tilstand.optimerAfbryd = afbryd;
             // Efter "Planlæg kun kampe uden tid" flytter løseren helst ikke de kampe, der havde tid (stabil omplanlægning)
             const stabil = auto && panelGaelder(tilstand.kampprogram, udgangspunkt) && tilstand.kampprogram.valg?.grund === 'behold' ? Object.keys(tilstand.kampprogram.foer.plan || {}) : null;
-            const svar = await optimer(udgangspunkt, { sekunder, hintPlan, job, vedStatus, signal: afbryd.signal, stabil });
+            const svar = await optimer(udgangspunkt, { sekunder, hintPlan, job, vedStatus, signal: afbryd.signal, stabil, kunDag });
             faerdig();
             const lovlig = svar.status === 'OPTIMAL' || svar.status === 'FEASIBLE';
             if (proeve) { visProeve(proeve, startProjekt, svar, lovlig); return; }
@@ -846,7 +849,8 @@ const planHandlers = {
                     ? { navn: 'Dit program fra før', beskrivelse: 'Planen, som den var, før du trykkede "Forbedr med løseren".', plan: nuPlan, ikkePlaceret: [], brud: [], statistik: bedoemPlan({ ...projekt, plan: nuPlan }), score: scorePlan({ ...projekt, plan: nuPlan }).total }
                     : { navn: 'Hurtigt forslag', beskrivelse: 'Det hurtige forslag fra "Lav forslag" — til sammenligning.', plan: flettetPlan(projekt, graadig.plan), ikkePlaceret: graadig.ikkePlaceret, brud: graadig.brud, statistik: graadig.statistik, score: scorePlan({ ...projekt, plan: flettetPlan(projekt, graadig.plan) }).total };
                 const p2 = { ...projekt, plan };
-                const opt = { navn: svar.status === 'OPTIMAL' ? 'Optimeret (bevist bedst mulig)' : 'Optimeret (CP-SAT)', beskrivelse: svar.stoppet ? `Stoppet efter ${svar.sekunder} s — den bedste plan, løseren havde fundet.` : svar.rolig ? `Løseren stoppede selv efter ${svar.sekunder} s, fordi den ikke fandt bedre planer.` : `Løseren minimerede scoren under de hårde regler på ${svar.sekunder} s.`, plan, ikkePlaceret: [], brud: [], statistik: bedoemPlan(p2), score: scorePlan(p2).total };
+                const dagNote = kunDag ? ` Kun ${datoTekst(kunDag, { kort: true })} — de andre dage er ikke rørt.` : '';
+                const opt = { navn: svar.status === 'OPTIMAL' ? 'Optimeret (bevist bedst mulig)' : 'Optimeret (CP-SAT)', beskrivelse: (svar.stoppet ? `Stoppet efter ${svar.sekunder} s — den bedste plan, løseren havde fundet.` : svar.rolig ? `Løseren stoppede selv efter ${svar.sekunder} s, fordi den ikke fandt bedre planer.` : `Løseren minimerede scoren under de hårde regler på ${svar.sekunder} s.`) + dagNote, plan, ikkePlaceret: [], brud: [], statistik: bedoemPlan(p2), score: scorePlan(p2).total };
                 const liste = [opt, sammenlign].sort((x, y) => (x.brud.length - y.brud.length) || (x.score - y.score));
                 const bedre = opt.score < sammenlign.score;
                 // Sikkerhedsnet: automatisk kun, når løserens plan ikke har flere fejl i Tjek end programmet — så en
