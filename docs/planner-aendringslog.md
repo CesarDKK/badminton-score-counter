@@ -702,3 +702,13 @@ tilbage i planen, men så sluttede dagene 17:40 og 16:40 i stedet for 16:20 og 1
 - Programmerne uden kompromiserne vises, når kortene er afgjort.
 - "Videre til Til TP" står i toppen.
 - Prognose, "gjort undervejs" og låste kampe står samlet nederst.
+
+## Løserens ur tæller ned (2026-10-18)
+
+Jesper: brugeren ved ikke nødvendigvis, hvor lang tid der er sat af til løseren. Før talte uret op. Nu tæller det ned
+til løserens frist, fx "højst 21 s tilbage".
+
+- Uret starter med den valgte tid. Derefter følger det den tid, løseren selv melder (`restSekunder`), også når den går
+  videre til planen med færrest brud eller diagnosen.
+- Der står "højst", fordi løseren ofte stopper før, når den ikke finder bedre planer.
+- Står løseren i kø, står uret stille.

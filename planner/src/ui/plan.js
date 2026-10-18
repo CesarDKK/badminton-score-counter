@@ -421,7 +421,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
     </div>
     ${tilstand.alternativer ? alternativBjaelke(tilstand.alternativer) : ''}
     ${tilstand.arbejder ? `<p class="arbejder" role="status"><span class="spinner" aria-hidden="true"></span>${esc(tilstand.arbejder)}</p>` : ''}
-    ${tilstand.optimerer ? `<p class="arbejder" role="status"><span class="spinner" aria-hidden="true"></span><span>${esc(loeserStatus)} <span data-optimer-ur></span></span>
+    ${tilstand.optimerer ? `<p class="arbejder" role="status"><span class="spinner" aria-hidden="true"></span><span>${esc(loeserStatus)} <span data-optimer-ur>${esc(tilstand.optimerUr?.() || '')}</span></span>
         <button class="knap knap--sekundaer knap--lille" data-handling="stopOptimer" ${tilstand.optimerStopper ? 'disabled' : ''} title="Løseren stopper nu og afleverer den bedste plan, den har fundet indtil nu.">${tilstand.optimerStopper ? 'Stopper …' : 'Stop og brug det bedste'}</button></p>` : ''}
     ${kp ? kampprogramPanel(kp, aabneKort, projekt, { travl, sek }) : ''}
     <div class="status-linje">
