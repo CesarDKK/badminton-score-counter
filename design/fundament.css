@@ -8,7 +8,8 @@
    og evt. knapstørrelser.
 
    Kilden er design/fundament.css. Dockerfile.frontend og
-   football-app/Dockerfile.frontend kopierer den ind i hvert site.
+   football-app/Dockerfile.frontend kopierer den ind i hvert site —
+   også salgssiderne badmintonapp.dk og footballapp.dk (G3).
    ═══════════════════════════════════════════════════════════════════ */
 
 :root {

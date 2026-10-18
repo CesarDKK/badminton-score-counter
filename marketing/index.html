@@ -8,6 +8,7 @@
     <link rel="canonical" href="https://badmintonapp.dk/">
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23e94560' transform='translate(0 1.2)'%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-33 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(33 12 14.5)'/%3E%3Crect x='9.4' y='14.3' width='5.2' height='1.7' rx='0.85'/%3E%3Cpath d='M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z'/%3E%3C/g%3E%3C/svg%3E">
     <link rel="stylesheet" href="fonts.css">
+    <link rel="stylesheet" href="fundament.css?v=2">
     <style>
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -24,6 +25,10 @@
             --text: #eaeaea;
             --muted: #9494a6;
             --radius: 16px;
+            /* Knapper fra fundament.css: fladen er accenten mørknet, til hvid
+            tekst når 4,5:1 (samme værdi som theme-loader giver Standard-temaet) */
+            --color-knap: #d23e57;
+            --color-knap-hover: #b9374d;
         }
 
         html { scroll-behavior: smooth; }
@@ -100,21 +105,6 @@
 
         .nav-brand .wordmark span { color: var(--red); }
 
-        .nav-cta {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid var(--border);
-            color: #fff;
-            text-decoration: none;
-            padding: 10px 22px;
-            border-radius: 100px;
-            font-size: 0.9em;
-            font-weight: 600;
-            transition: border-color 0.2s, background 0.2s;
-            white-space: nowrap;
-        }
-
-        .nav-cta:hover { border-color: var(--purple-light); background: rgba(83,52,131,0.25); }
-
         /* ── Hero ── */
         .hero {
             text-align: center;
@@ -189,34 +179,6 @@
             from { opacity: 0; transform: translateY(16px); }
             to { opacity: 1; transform: translateY(0); }
         }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--red), #c93350);
-            color: #fff;
-            text-decoration: none;
-            padding: 15px 34px;
-            border-radius: 100px;
-            font-size: 1em;
-            font-weight: 700;
-            transition: transform 0.15s, box-shadow 0.2s;
-            box-shadow: 0 8px 28px rgba(233,69,96,0.28);
-        }
-
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 34px rgba(233,69,96,0.4); }
-
-        .btn-secondary {
-            background: transparent;
-            color: var(--text);
-            text-decoration: none;
-            padding: 15px 34px;
-            border-radius: 100px;
-            font-size: 1em;
-            font-weight: 600;
-            border: 1px solid var(--border);
-            transition: border-color 0.2s, transform 0.15s;
-        }
-
-        .btn-secondary:hover { border-color: var(--purple-light); transform: translateY(-2px); }
 
         /* ── Browser-ramme ── */
         .browser-chrome {
@@ -591,7 +553,7 @@
         </svg>
         <span class="wordmark">Badminton<span>App</span></span>
     </a>
-    <a class="nav-cta" href="https://app.badmintonapp.dk">Åben demo →</a>
+    <a class="btn-secondary nav-cta" href="https://app.badmintonapp.dk">Åben demo →</a>
 </nav>
 
 <!-- Hero -->
@@ -601,8 +563,8 @@
         <h1>Pointtælling til<br><span class="accent">din badmintonklub</span></h1>
         <p>Tæl på tablet eller telefon, vis kampen <strong>live på TV</strong> og følg hele hallen på én skærm. Holdkamp, turnering og klubbens egne farver — alt samlet ét sted.</p>
         <div class="hero-actions">
-            <a class="btn-primary" href="https://app.badmintonapp.dk">Prøv demoen</a>
-            <a class="btn-secondary" href="#funktioner">Se funktioner</a>
+            <a class="btn-primary btn-lg" href="https://app.badmintonapp.dk">Prøv demoen</a>
+            <a class="btn-secondary btn-lg" href="#funktioner">Se funktioner</a>
         </div>
 
         <div class="hero-shot">
@@ -835,7 +797,7 @@
             <h2>Klar til at prøve det?</h2>
             <p class="cta-sub">Demoen kører i browseren — ingen oprettelse, ingen installation.</p>
             <div class="hero-actions">
-                <a class="btn-primary" href="https://app.badmintonapp.dk">Prøv demoen</a>
+                <a class="btn-primary btn-lg" href="https://app.badmintonapp.dk">Prøv demoen</a>
             </div>
             <p class="cta-mail">Spørgsmål? Skriv til os på <a href="mailto:info@badmintonapp.dk">info@badmintonapp.dk</a></p>
         </div>
