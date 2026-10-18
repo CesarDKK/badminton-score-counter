@@ -915,3 +915,246 @@ header > div {
     padding: 12px 0 20px;
     margin: 0;
 }
+
+
+/* ═════════ Holdkamp og turnering: komponenter (G4) ═════════
+   Før stod farver og afstande som inline-stil i admin-script.js. Nu ligger
+   de her, så de rettes ét sted:
+   .maerke          — mærker (kategori, status, vinder, dag, nummer)
+   .kamp-raekke     — én delkamp/kamp i en liste
+   .formular-boks   — formularen, der foldes ud under en kamp (rediger, manuelt resultat)
+   .advarsel-boks   — gul blok, der standser en handling (fx aktiv turnering findes)
+   .felt-etiket     — lille etiket over et felt; feltet selv er .admin-input--sm
+   .tekst-daempet   — sekundær tekst (+ .tekst-lille / .tekst-mindre) */
+
+.maerke {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-size: 0.78em;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+/* Kategori ("HS 1") — knapfladen, så hvid tekst har nok kontrast (F2) */
+.maerke--kategori {
+    background: var(--color-knap, var(--color-accent));
+    color: var(--color-on-accent, #ffffff);
+}
+
+/* Golden set */
+.maerke--golden {
+    background: var(--color-warning, #ffb02e);
+    color: #000000;
+}
+
+.maerke--afventer {
+    background: rgba(var(--color-warning-rgb, 255, 176, 46), 0.15);
+    color: var(--color-warning, #ffb02e);
+    border-color: rgba(var(--color-warning-rgb, 255, 176, 46), 0.35);
+}
+
+/* I gang og vundet: tonet grøn (samme som "Pågår", F3) */
+.maerke--igang,
+.maerke--vundet {
+    background: rgba(var(--color-win-rgb, 69, 209, 126), 0.15);
+    color: var(--color-win, #45d17e);
+    border-color: rgba(var(--color-win-rgb, 69, 209, 126), 0.35);
+}
+
+.maerke--fare {
+    background: rgba(var(--color-danger-rgb, 217, 44, 63), 0.12);
+    color: var(--color-danger-text, #ff6b7a);
+    border-color: rgba(var(--color-danger-rgb, 217, 44, 63), 0.45);
+}
+
+/* Dag, kampnummer og andet, der bare skal skilles ud */
+.maerke--neutral {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary, rgba(255, 255, 255, 0.78));
+    border-color: rgba(255, 255, 255, 0.16);
+}
+
+.maerke--nummer {
+    font-family: var(--font-mono, monospace);
+    min-width: 32px;
+    justify-content: center;
+}
+
+/* Grønt tema: grøn på grønt drukner — som de vundne sæt (E/skov) */
+:root[data-groent-tema] .maerke--igang,
+:root[data-groent-tema] .maerke--vundet {
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
+.kamp-raekke {
+    padding: 10px 15px;
+    background: rgba(var(--color-primary-rgb), 0.2);
+    border-radius: 8px;
+    margin-bottom: 6px;
+}
+
+.kamp-raekke__top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.kamp-raekke__navne {
+    flex: 1;
+    min-width: 120px;
+    color: var(--text-primary, #eaeaea);
+    font-size: 0.95em;
+}
+
+.kamp-raekke__bane {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.formular-boks {
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    margin-top: 8px;
+}
+
+.formular-boks--advarsel {
+    background: rgba(var(--color-warning-rgb, 255, 176, 46), 0.07);
+    border: 1px solid rgba(var(--color-warning-rgb, 255, 176, 46), 0.3);
+}
+
+.formular-boks__titel {
+    color: var(--color-warning, #ffb02e);
+    font-size: 0.82em;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+.formular-boks__afsnit { margin-bottom: 10px; }
+
+.formular-boks__etiket {
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
+    font-size: 0.8em;
+    margin-bottom: 6px;
+}
+
+.formular-boks__note {
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
+    font-size: 0.75em;
+    margin-top: 6px;
+}
+
+.formular-boks__gitter {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.formular-boks__knapper {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Holdets navn over dets felter: hjemmehold grøn, udehold accent (som i dag) */
+.hold-navn {
+    font-size: 0.82em;
+    margin-bottom: 6px;
+}
+
+.hold-navn--1, .vinder-valg--1, .saet-felt--1 { color: var(--color-win, #45d17e); }
+.hold-navn--2, .vinder-valg--2, .saet-felt--2 { color: var(--color-accent); }
+
+.vinder-valg {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 7px 14px;
+    border: 1px solid currentColor;
+    border-radius: 4px;
+    font-size: 0.88em;
+}
+
+.vinder-valg input { accent-color: currentColor; }
+
+.saet-felter {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+}
+
+.saet-kolonne {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.saet-par {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.saet-felt {
+    width: 64px;
+    padding: 12px 8px;
+    background: var(--color-bg-dark);
+    border: 1px solid #555555;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 1.6em;
+}
+
+.advarsel-boks {
+    margin-bottom: 25px;
+    padding: 20px;
+    background: rgba(var(--color-warning-rgb, 255, 176, 46), 0.1);
+    border: 2px solid var(--color-warning, #ffb02e);
+    border-radius: 10px;
+}
+
+.advarsel-boks h3 {
+    color: var(--color-warning, #ffb02e);
+    margin: 0 0 10px 0;
+}
+
+.advarsel-boks p {
+    color: var(--text-secondary, rgba(255, 255, 255, 0.78));
+    margin: 0 0 12px 0;
+    line-height: 1.5;
+}
+
+/* Lille version (en note over en liste) */
+.advarsel-boks--lille {
+    margin-bottom: 10px;
+    padding: 8px 10px;
+    border-width: 1px;
+    border-radius: 6px;
+}
+
+.felt-etiket {
+    display: block;
+    font-size: 0.72em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
+    margin-bottom: 4px;
+}
+
+.tekst-daempet { color: var(--text-muted, rgba(255, 255, 255, 0.62)); }
+.tekst-lille { font-size: 0.8em; }
+.tekst-mindre { font-size: 0.85em; }

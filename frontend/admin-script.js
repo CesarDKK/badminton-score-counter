@@ -898,7 +898,7 @@ async function loadTournamentMatchHistory() {
             const totalCount = (t.matches || []).length;
             const date = new Date(t.created_at).toLocaleDateString('da-DK', { day: '2-digit', month: 'short', year: 'numeric' });
             const statusBadge = t.status === 'active'
-                ? '<span style="background:rgba(var(--color-win-rgb, 69, 209, 126),0.15); color:var(--color-win, #45d17e); border:1px solid rgba(var(--color-win-rgb, 69, 209, 126),0.35); padding:2px 7px; border-radius:4px; font-size:0.75em; margin-left:6px;">PÅGÅR</span>'
+                ? '<span class="maerke maerke--igang">PÅGÅR</span>'
                 : '';
 
             const matchRows = finishedMatches.map(m => {
@@ -924,12 +924,12 @@ async function loadTournamentMatchHistory() {
                 const varighedHtml = varighed ? `<span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.8em; white-space:nowrap;">${Ikon('ur')} ${varighed}</span>` : '';
 
                 const labelBadge = m.label
-                    ? `<span style="background:var(--color-accent); color:#fff; padding:2px 7px; border-radius:4px; font-size:0.78em; font-weight:bold; white-space:nowrap;">${escapeHtml(m.label)}</span>`
-                    : `<span style="background:#444; color:#fff; padding:2px 7px; border-radius:4px; font-size:0.78em; white-space:nowrap;">#${m.match_order}</span>`;
+                    ? `<span class="maerke maerke--kategori">${escapeHtml(m.label)}</span>`
+                    : `<span class="maerke maerke--neutral">#${m.match_order}</span>`;
 
                 return `<div style="display:flex; align-items:center; gap:10px; padding:7px 10px; border-left:3px solid ${winnerColor}; background:rgba(255,255,255,0.03); border-radius:4px; margin-bottom:4px; flex-wrap:wrap;">
                     ${labelBadge}
-                    <span style="color:var(--text-primary, #eaeaea); font-size:0.85em; flex:1; min-width:120px;">${escapeHtml(side1)} <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">vs</span> ${escapeHtml(side2)}</span>
+                    <span style="color:var(--text-primary, #eaeaea); font-size:0.85em; flex:1; min-width:120px;">${escapeHtml(side1)} <span class="tekst-daempet">vs</span> ${escapeHtml(side2)}</span>
                     ${resultHtml}
                     ${varighedHtml}
                 </div>`;
@@ -939,10 +939,10 @@ async function loadTournamentMatchHistory() {
                 <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; cursor:pointer; flex-wrap:wrap; gap:8px;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
                     <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
                         <span style="font-size:1.1em; font-weight:bold; color:var(--text-primary, #eaeaea);">${escapeHtml(t.name)}${statusBadge}</span>
-                        <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.85em;">${playedCount}/${totalCount} kampe spillet</span>
-                        <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.8em;">${date}</span>
+                        <span class="tekst-daempet tekst-mindre">${playedCount}/${totalCount} kampe spillet</span>
+                        <span class="tekst-daempet tekst-lille">${date}</span>
                     </div>
-                    <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.85em;">▼ Se kampe</span>
+                    <span class="tekst-daempet tekst-mindre">▼ Se kampe</span>
                 </div>
                 <div style="display:none; padding:0 16px 12px;">
                     ${matchRows}
@@ -989,7 +989,7 @@ async function loadTeamMatchHistory() {
                     ? `${g.team2_player1 || '?'}${g.team2_player2 ? ' & ' + g.team2_player2 : ''}`
                     : (g.team2_player1 || '?');
 
-                let resultHtml = '<span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.8em;">Ikke spillet</span>';
+                let resultHtml = '<span class="tekst-daempet tekst-lille">Ikke spillet</span>';
                 let rowBorder = '#444';
                 if (g.status === 'finished' && g.winner_team) {
                     const winnerName = g.winner_team === 1 ? tm.team1_name : tm.team2_name;
@@ -1008,8 +1008,8 @@ async function loadTeamMatchHistory() {
                 const varighedHtml = varighed ? `<span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.8em; white-space:nowrap;">${Ikon('ur')} ${varighed}</span>` : '';
 
                 return `<div style="display:flex; align-items:center; gap:10px; padding:7px 10px; border-left:3px solid ${rowBorder}; background:rgba(255,255,255,0.03); border-radius:4px; margin-bottom:4px; flex-wrap:wrap;">
-                    <span style="background:var(--color-accent); color:#fff; padding:2px 7px; border-radius:4px; font-size:0.78em; font-weight:bold; white-space:nowrap;">${escapeHtml(HoldkampFormater.kategoriNavn(g.category, num))}</span>
-                    <span style="color:var(--text-primary, #eaeaea); font-size:0.85em; flex:1; min-width:120px;">${escapeHtml(t1)} <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">vs</span> ${escapeHtml(t2)}</span>
+                    <span class="maerke maerke--kategori">${escapeHtml(HoldkampFormater.kategoriNavn(g.category, num))}</span>
+                    <span style="color:var(--text-primary, #eaeaea); font-size:0.85em; flex:1; min-width:120px;">${escapeHtml(t1)} <span class="tekst-daempet">vs</span> ${escapeHtml(t2)}</span>
                     ${resultHtml}
                     ${varighedHtml}
                 </div>`;
@@ -1020,9 +1020,9 @@ async function loadTeamMatchHistory() {
                     <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
                         <span style="font-size:1.1em; font-weight:bold; color:var(--text-primary, #eaeaea);">${escapeHtml(tm.team1_name)} <span style="color:var(--color-win, #45d17e);">${team1Wins}</span> – <span style="color:var(--color-accent);">${team2Wins}</span> ${escapeHtml(tm.team2_name)}</span>
                         <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em;">${formatLabel}</span>
-                        <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.8em;">${date}</span>
+                        <span class="tekst-daempet tekst-lille">${date}</span>
                     </div>
-                    <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.85em;">▼ Se delkampe</span>
+                    <span class="tekst-daempet tekst-mindre">▼ Se delkampe</span>
                 </div>
                 <div style="display:none; padding:0 16px 12px;">
                     ${gameRows}
@@ -1233,19 +1233,19 @@ function renderHoldkampBlocker(activeTournament) {
     if (!blocker) {
         blocker = document.createElement('div');
         blocker.id = 'holdkampBlocker';
-        blocker.style.cssText = 'margin-bottom:25px; padding:20px; background:rgba(var(--color-warning-rgb, 255, 176, 46),0.1); border:2px solid var(--color-warning, #ffb02e); border-radius:10px;';
+        blocker.className = 'advarsel-boks';
         const section = document.getElementById('holdkampSection');
         // Indsæt øverst efter h2-headeren
         const h2Wrap = section.querySelector('div');
         h2Wrap.insertAdjacentElement('afterend', blocker);
     }
     blocker.innerHTML = `
-        <h3 style="color:var(--color-warning, #ffb02e); margin:0 0 10px 0;">${Ikon('advarsel')} Aktiv turnering findes</h3>
-        <p style="color:var(--text-secondary, rgba(255, 255, 255, 0.78)); margin:0 0 12px 0; line-height:1.5;">
+        <h3>${Ikon('advarsel')} Aktiv turnering findes</h3>
+        <p>
             Du har en aktiv turnering: <strong>${escapeHtml(activeTournament.name)}</strong>.<br>
             Du kan kun have én aktiv holdkamp ELLER turnering ad gangen. Afslut eller slet turneringen først.
         </p>
-        <a href="#tournament" onclick="event.preventDefault(); showTournament();" class="btn-primary" style="display:inline-block; text-decoration:none;">Gå til Turnering</a>
+        <a href="#tournament" onclick="event.preventDefault(); showTournament();" class="btn-primary">Gå til Turnering</a>
     `;
 }
 
@@ -1274,7 +1274,7 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
         let courtAssign = '';
 
         if (g.status === 'pending') {
-            statusBadge = '<span style="background:#555;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8em;">Afventer</span>';
+            statusBadge = '<span class="maerke maerke--afventer">Afventer</span>';
             editBtn = `<button onclick="toggleEditGame(${teamMatch.id}, ${g.id})" class="btn-secondary btn-sm">Rediger</button>
                        <button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" class="btn-secondary btn-sm">Manuel</button>`;
 
@@ -1298,8 +1298,8 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
             }).join('');
 
             courtAssign = `
-                <div style="display:flex;align-items:center;gap:6px;margin-top:8px;">
-                    <select id="courtSelect_${g.id}" onfocus="holdkampCourtSelectOpen=true" onblur="holdkampCourtSelectOpen=false" style="padding:5px 8px;background:var(--color-bg-dark);color:var(--text-primary, #eaeaea);border:1px solid var(--color-primary);border-radius:4px;font-size:0.82em;">
+                <div class="kamp-raekke__bane">
+                    <select id="courtSelect_${g.id}" onfocus="holdkampCourtSelectOpen=true" onblur="holdkampCourtSelectOpen=false" class="admin-input admin-input--sm" style="width:auto;">
                         ${courtOptions}
                     </select>
                     <button onclick="assignCourtToGame(${teamMatch.id}, ${g.id})" class="btn-primary btn-sm">Tildel bane</button>
@@ -1310,7 +1310,7 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
             if (courtData) {
                 scoreText = ` · ${courtData.player1.score}–${courtData.player2.score} (${courtData.player1.games}–${courtData.player2.games} sæt)`;
             }
-            statusBadge = `<span style="background:var(--color-primary);color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8em;">Bane ${g.court_number || '?'} ▶${scoreText}</span>`;
+            statusBadge = `<span class="maerke maerke--igang">Bane ${g.court_number || '?'} ▶${scoreText}</span>`;
             editBtn = `<button onclick="toggleEditGame(${teamMatch.id}, ${g.id})" class="btn-secondary btn-sm">Rediger</button>
                        <button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" class="btn-secondary btn-sm">Manuel</button>`;
         } else if (g.status === 'finished') {
@@ -1322,26 +1322,26 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
                 ? `${g.team1_player1 || ''} / ${g.team1_player2}`
                 : (g.team1_player1 || '');
             const scoreNums = (g.set_scores && !isWO) ? orientHistorySetScoreNumbers(g.set_scores, side1Key).join(' · ') : '';
-            const scoreText = scoreNums ? `<span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.82em;margin-left:4px;">${scoreNums}</span>` : '';
-            winnerBadge = `<span style="background:var(--color-win, #45d17e);color:#fff;padding:3px 8px;border-radius:4px;font-size:0.8em;">✓ ${escapeHtml(winner)}${isWO ? ' (W.O.)' : ''}</span>${scoreText}`;
+            const scoreText = scoreNums ? `<span class="tekst-daempet tekst-lille">${scoreNums}</span>` : '';
+            winnerBadge = `<span class="maerke ${isWO ? 'maerke--fare' : 'maerke--vundet'}">✓ ${escapeHtml(winner)}${isWO ? ' (W.O.)' : ''}</span>${scoreText}`;
             editBtn = `<button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" class="btn-secondary btn-sm">Rediger</button>`;
         }
 
         const editForm = g.status !== 'finished' ? `
-        <div id="editGame_${g.id}" style="display:none; padding:12px; background:rgba(0,0,0,0.3); border-radius:6px; margin-top:8px;">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;">
+        <div id="editGame_${g.id}" class="formular-boks" style="display:none;">
+            <div class="formular-boks__gitter">
                 <div>
-                    <div style="color:var(--color-win, #45d17e);font-size:0.82em;margin-bottom:6px;">${escapeHtml(teamMatch.team1_name)}</div>
+                    <div class="hold-navn hold-navn--1">${escapeHtml(teamMatch.team1_name)}</div>
                     <input id="eg_${g.id}_t1p1" type="text" value="${escapeHtml(g.team1_player1 || '')}" placeholder="Spiller 1" class="admin-input admin-input--sm" style="margin-bottom:6px;">
                     ${isDoubles ? `<input id="eg_${g.id}_t1p2" type="text" value="${escapeHtml(g.team1_player2 || '')}" placeholder="Makker" class="admin-input admin-input--sm">` : ''}
                 </div>
                 <div>
-                    <div style="color:var(--color-accent);font-size:0.82em;margin-bottom:6px;">${escapeHtml(teamMatch.team2_name)}</div>
+                    <div class="hold-navn hold-navn--2">${escapeHtml(teamMatch.team2_name)}</div>
                     <input id="eg_${g.id}_t2p1" type="text" value="${escapeHtml(g.team2_player1 || '')}" placeholder="Spiller 1" class="admin-input admin-input--sm" style="margin-bottom:6px;">
                     ${isDoubles ? `<input id="eg_${g.id}_t2p2" type="text" value="${escapeHtml(g.team2_player2 || '')}" placeholder="Makker" class="admin-input admin-input--sm">` : ''}
                 </div>
             </div>
-            <div style="display:flex;gap:8px;">
+            <div class="formular-boks__knapper">
                 <button onclick="saveEditGame(${teamMatch.id}, ${g.id}, ${isDoubles})" class="btn-primary btn-sm">Gem</button>
                 <button onclick="toggleEditGame(${teamMatch.id}, ${g.id})" class="btn-secondary btn-sm">Annuller</button>
             </div>
@@ -1358,52 +1358,52 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
         const saveLabel = isFinished ? 'Gem ændringer' : 'Gem resultat';
 
         const manualForm = `
-        <div id="manualResult_${g.id}" style="display:none; padding:12px; background:rgba(var(--color-warning-rgb, 255, 176, 46),0.07); border:1px solid rgba(var(--color-warning-rgb, 255, 176, 46),0.3); border-radius:6px; margin-top:8px;" data-wo="${initWO}" data-saet="${erGS ? 1 : 3}">
-            <div style="color:var(--color-warning, #ffb02e);font-size:0.82em;font-weight:bold;margin-bottom:10px;">${formTitle}</div>
-            <div style="margin-bottom:10px;">
-                <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.8em;margin-bottom:6px;">Vinder</div>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1px solid var(--color-win, #45d17e);border-radius:4px;color:var(--color-win, #45d17e);font-size:0.88em;">
-                        <input type="radio" name="manualWinner_${g.id}" value="1" ${g.winner_team === 1 ? 'checked' : ''} style="accent-color:var(--color-win, #45d17e);"> ${escapeHtml(teamMatch.team1_name)}
+        <div id="manualResult_${g.id}" class="formular-boks formular-boks--advarsel" style="display:none;" data-wo="${initWO}" data-saet="${erGS ? 1 : 3}">
+            <div class="formular-boks__titel">${formTitle}</div>
+            <div class="formular-boks__afsnit">
+                <div class="formular-boks__etiket">Vinder</div>
+                <div class="formular-boks__knapper">
+                    <label class="vinder-valg vinder-valg--1">
+                        <input type="radio" name="manualWinner_${g.id}" value="1" ${g.winner_team === 1 ? 'checked' : ''}> ${escapeHtml(teamMatch.team1_name)}
                     </label>
-                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 14px;border:1px solid var(--color-accent);border-radius:4px;color:var(--color-accent);font-size:0.88em;">
-                        <input type="radio" name="manualWinner_${g.id}" value="2" ${g.winner_team === 2 ? 'checked' : ''} style="accent-color:var(--color-accent);"> ${escapeHtml(teamMatch.team2_name)}
+                    <label class="vinder-valg vinder-valg--2">
+                        <input type="radio" name="manualWinner_${g.id}" value="2" ${g.winner_team === 2 ? 'checked' : ''}> ${escapeHtml(teamMatch.team2_name)}
                     </label>
                 </div>
             </div>
-            <div style="margin-bottom:12px;">
-                <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.8em;margin-bottom:10px;">Sætscore</div>
-                <div style="display:flex;gap:32px;flex-wrap:wrap;">
+            <div class="formular-boks__afsnit">
+                <div class="formular-boks__etiket">Sætscore</div>
+                <div class="saet-felter">
                     ${saetFelter.map(s => `
-                    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
-                        <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.8em;">${erGS ? 'Golden set' : `Sæt ${s}${s===3?' *':''}`}</span>
-                        <div style="display:flex;align-items:center;gap:6px;">
+                    <div class="saet-kolonne">
+                        <span class="tekst-daempet tekst-lille">${erGS ? 'Golden set' : `Sæt ${s}${s===3?' *':''}`}</span>
+                        <div class="saet-par">
                             <input id="manualS${s}t1_${g.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="–" value="${getScore(s-1, 0)}"
                                    oninput="this.value=this.value.replace(/[^0-9]/g,''); determineHoldkampWinner(${g.id}, '${gameMode}', ${erGS ? 1 : 2})"
-                                   style="width:64px;padding:12px 8px;background:var(--color-bg-dark);color:var(--color-win, #45d17e);border:1px solid #555;border-radius:4px;text-align:center;font-size:1.6em;">
-                            <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:1.2em;">–</span>
+                                   class="saet-felt saet-felt--1">
+                            <span class="tekst-daempet" style="font-size:1.2em;">–</span>
                             <input id="manualS${s}t2_${g.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="–" value="${getScore(s-1, 1)}"
                                    oninput="this.value=this.value.replace(/[^0-9]/g,''); determineHoldkampWinner(${g.id}, '${gameMode}', ${erGS ? 1 : 2})"
-                                   style="width:64px;padding:12px 8px;background:var(--color-bg-dark);color:var(--color-accent);border:1px solid #555;border-radius:4px;text-align:center;font-size:1.6em;">
+                                   class="saet-felt saet-felt--2">
                         </div>
                     </div>`).join('')}
                 </div>
-                <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.75em;margin-top:6px;">${erGS ? 'Golden set er ét sæt, spillet som et 3. sæt' : '* Sæt 3 kun hvis nødvendigt'}</div>
+                <div class="formular-boks__note">${erGS ? 'Golden set er ét sæt, spillet som et 3. sæt' : '* Sæt 3 kun hvis nødvendigt'}</div>
             </div>
-            <div style="margin-bottom:8px;">
+            <div class="formular-boks__afsnit">
                 <button id="woToggle_${g.id}" onclick="toggleWO(${g.id})" class="btn-secondary btn-sm${initWO ? ' er-valgt' : ''}">W.O.</button>
             </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <div class="formular-boks__knapper">
                 <button onclick="saveManualResult(${teamMatch.id}, ${g.id}, '${gameMode}')" class="btn-primary btn-sm">${saveLabel}</button>
                 <button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" class="btn-secondary btn-sm">Annuller</button>
             </div>
         </div>`;
 
         return `
-        <div style="padding:10px 15px;background:rgba(var(--color-primary-rgb),0.2);border-radius:8px;margin-bottom:6px;">
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                <span style="background:var(--color-accent);color:#fff;padding:3px 8px;border-radius:4px;font-size:0.85em;font-weight:bold;white-space:nowrap;${erGS ? 'background:var(--color-warning, #ffb02e);color:#000;' : ''}">${escapeHtml(HoldkampFormater.kategoriNavn(g.category, num))}</span>
-                <span style="color:var(--text-primary, #eaeaea);font-size:0.95em;flex:1;min-width:120px;">${escapeHtml(t1)} <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">vs</span> ${escapeHtml(t2)}</span>
+        <div class="kamp-raekke">
+            <div class="kamp-raekke__top">
+                <span class="maerke ${erGS ? 'maerke--golden' : 'maerke--kategori'}">${escapeHtml(HoldkampFormater.kategoriNavn(g.category, num))}</span>
+                <span class="kamp-raekke__navne">${escapeHtml(t1)} <span class="tekst-daempet">vs</span> ${escapeHtml(t2)}</span>
                 ${statusBadge}
                 ${winnerBadge}
                 ${editBtn}
@@ -1465,12 +1465,12 @@ function onHoldkampFormatChange() {
                 <div style="font-weight:bold;color:var(--color-accent);margin-bottom:10px;">${label}</div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                     <div>
-                        <div style="color:var(--color-win, #45d17e);font-size:0.85em;margin-bottom:5px;">${escapeHtml(team1Name)}</div>
+                        <div class="hold-navn hold-navn--1">${escapeHtml(team1Name)}</div>
                         <input type="text" placeholder="Spiller 1" data-game="${i}" data-field="t1p1" class="admin-input admin-input--sm" style="margin-bottom:6px;">
                         <input type="text" placeholder="Makker" data-game="${i}" data-field="t1p2" class="admin-input admin-input--sm">
                     </div>
                     <div>
-                        <div style="color:var(--color-accent);font-size:0.85em;margin-bottom:5px;">${escapeHtml(team2Name)}</div>
+                        <div class="hold-navn hold-navn--2">${escapeHtml(team2Name)}</div>
                         <input type="text" placeholder="Spiller 1" data-game="${i}" data-field="t2p1" class="admin-input admin-input--sm" style="margin-bottom:6px;">
                         <input type="text" placeholder="Makker" data-game="${i}" data-field="t2p2" class="admin-input admin-input--sm">
                     </div>
@@ -1482,11 +1482,11 @@ function onHoldkampFormatChange() {
                 <div style="font-weight:bold;color:var(--color-accent);margin-bottom:10px;">${label}</div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                     <div>
-                        <div style="color:var(--color-win, #45d17e);font-size:0.85em;margin-bottom:5px;">${escapeHtml(team1Name)}</div>
+                        <div class="hold-navn hold-navn--1">${escapeHtml(team1Name)}</div>
                         <input type="text" placeholder="Spillernavn" data-game="${i}" data-field="t1p1" class="admin-input admin-input--sm">
                     </div>
                     <div>
-                        <div style="color:var(--color-accent);font-size:0.85em;margin-bottom:5px;">${escapeHtml(team2Name)}</div>
+                        <div class="hold-navn hold-navn--2">${escapeHtml(team2Name)}</div>
                         <input type="text" placeholder="Spillernavn" data-game="${i}" data-field="t2p1" class="admin-input admin-input--sm">
                     </div>
                 </div>
@@ -2746,21 +2746,19 @@ function visKioskConfForm(tokenId) {
     const boks = document.getElementById(`kioskConf-${tokenId}`);
     if (!boks) return;
     if (boks.style.display !== 'none') { boks.style.display = 'none'; return; }
-    const felt = 'width:100%;background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 10px;color:var(--text-primary, #eaeaea);font-family:\'DM Sans\',sans-serif;font-size:0.9em;box-sizing:border-box;';
-    const etiket = 'display:block;font-size:0.72em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin-bottom:4px;';
     boks.innerHTML = `
         <div style="margin-top:10px;padding:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;">
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;">
-                <div><label style="${etiket}">Skærmens navn</label>
-                    <input id="kc-navn-${tokenId}" style="${felt}" value="${escapeHtml(kioskNavn(boks.dataset.navn))}" placeholder="fx tv-bane-1a"
+                <div><label class="felt-etiket">Skærmens navn</label>
+                    <input id="kc-navn-${tokenId}" class="admin-input admin-input--sm" value="${escapeHtml(kioskNavn(boks.dataset.navn))}" placeholder="fx tv-bane-1a"
                         oninput="document.getElementById('kc-navnvis-${tokenId}').textContent = kioskNavn(this.value)">
                     <div style="font-size:0.75em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin-top:3px;">Bliver til: <span id="kc-navnvis-${tokenId}">${escapeHtml(kioskNavn(boks.dataset.navn))}</span></div></div>
-                <div><label style="${etiket}">WiFi-navn (tom = kabel)</label>
-                    <input id="kc-wifi-${tokenId}" style="${felt}" autocomplete="off"></div>
-                <div><label style="${etiket}">WiFi-kode</label>
-                    <input id="kc-kode-${tokenId}" type="password" style="${felt}" autocomplete="new-password"></div>
-                <div><label style="${etiket}">Sluk selv kl.</label>
-                    <input id="kc-sluk-${tokenId}" style="${felt}" value="23:59" placeholder="TT:MM eller aldrig"></div>
+                <div><label class="felt-etiket">WiFi-navn (tom = kabel)</label>
+                    <input id="kc-wifi-${tokenId}" class="admin-input admin-input--sm" autocomplete="off"></div>
+                <div><label class="felt-etiket">WiFi-kode</label>
+                    <input id="kc-kode-${tokenId}" type="password" class="admin-input admin-input--sm" autocomplete="new-password"></div>
+                <div><label class="felt-etiket">Sluk selv kl.</label>
+                    <input id="kc-sluk-${tokenId}" class="admin-input admin-input--sm" value="23:59" placeholder="TT:MM eller aldrig"></div>
             </div>
             <div style="display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap;">
                 <button onclick="hentKioskConf(${tokenId})" class="btn-primary btn-sm">Download kiosk.conf</button>
@@ -2868,8 +2866,7 @@ function renderSkaerme(skaerme) {
                     ${haendelser ? `<div style="color:var(--color-warning, #ffb02e);font-size:0.9em;margin-top:2px;">${Ikon('advarsel')} ${haendelser}</div>` : ''}
                 </div>
                 ${s.sekunderSiden >= 60 ? `<button type="button" class="btn-secondary" onclick="fjernSkaerm('${escapeHtml(s.klientId)}')"
-                    title="Fjern skærmen fra listen. Tænder den igen, kommer den tilbage af sig selv."
-                    style="padding:4px 12px;font-size:0.78em;flex-shrink:0;">Fjern</button>` : ''}
+                    title="Fjern skærmen fra listen. Tænder den igen, kommer den tilbage af sig selv." style="padding:4px 12px;font-size:0.78em;flex-shrink:0;">Fjern</button>` : ''}
             </div>`;
     }).join('');
     return `
@@ -2975,23 +2972,20 @@ function deviceTokenKort(tokens) {
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
                 <div style="flex:1;min-width:200px;">
                     <div style="font-weight:600;margin-bottom:4px;">${escapeHtml(t.name)}</div>
-                    <div style="font-size:0.8em;color:var(--text-muted, rgba(255, 255, 255, 0.62));">
+                    <div class="tekst-daempet tekst-lille">
                         ${Ikon('sted')} ${destLabel} &nbsp;•&nbsp;
                         ${Ikon('laas')} ${t.locked ? 'Låst' : 'Fri navigation'}${qrBadge} &nbsp;•&nbsp;
                         Sidst brugt: ${lastUsed}
                     </div>
                     <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
-                        <input readonly value="${link}"
-                            style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:6px 10px;color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.78em;font-family:monospace;"
+                        <input readonly value="${link}" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:6px 10px;color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.78em;font-family:monospace;"
                             onclick="this.select()">
-                        <button onclick="copyLink(this.parentElement.querySelector('input').value, this)"
-                            style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:6px 12px;color:var(--text-primary, #eaeaea);font-size:0.8em;cursor:pointer;white-space:nowrap;">
+                        <button onclick="copyLink(this.parentElement.querySelector('input').value, this)" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:6px 12px;color:var(--text-primary, #eaeaea);font-size:0.8em;cursor:pointer;white-space:nowrap;">
                             Kopiér
                         </button>
                     </div>
                     ${t.is_active && (dest.startsWith('tv/') || dest === 'oversigt') ? `
-                    <button onclick="visKioskConfForm(${t.id})"
-                        style="margin-top:10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:6px 12px;color:var(--text-primary, #eaeaea);font-size:0.8em;cursor:pointer;">
+                    <button onclick="visKioskConfForm(${t.id})" style="margin-top:10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:6px 12px;color:var(--text-primary, #eaeaea);font-size:0.8em;cursor:pointer;">
                         Hent kiosk.conf til en TV-PC / Raspberry Pi
                     </button>
                     <div class="dt-kioskconf" id="kioskConf-${t.id}" data-link="${escapeHtml(link)}" data-navn="${escapeHtml(t.name)}" style="display:none;"></div>` : ''}
@@ -3000,17 +2994,14 @@ function deviceTokenKort(tokens) {
                 </div>
                 <div style="display:flex;gap:8px;flex-shrink:0;">
                     ${t.is_active
-                        ? `<button onclick="visRedigerDt(${t.id})"
-                            style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:6px 14px;color:var(--text-primary, #eaeaea);font-size:0.85em;cursor:pointer;">
+                        ? `<button onclick="visRedigerDt(${t.id})" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:6px 14px;color:var(--text-primary, #eaeaea);font-size:0.85em;cursor:pointer;">
                             Redigér
                            </button>
-                           <button onclick="handleDeleteDeviceToken(${t.id})"
-                            style="background:rgba(var(--color-accent-rgb),0.12);border:1px solid rgba(var(--color-accent-rgb),0.25);border-radius:6px;padding:6px 14px;color:var(--color-accent);font-size:0.85em;cursor:pointer;">
+                           <button onclick="handleDeleteDeviceToken(${t.id})" style="background:rgba(var(--color-accent-rgb),0.12);border:1px solid rgba(var(--color-accent-rgb),0.25);border-radius:6px;padding:6px 14px;color:var(--color-accent);font-size:0.85em;cursor:pointer;">
                             Tilbagekald
                            </button>`
                         : `<span style="font-size:0.8em;color:var(--text-muted, rgba(255, 255, 255, 0.62));padding:6px 10px;">Tilbagekaldt</span>
-                           <button onclick="handlePermanentDeleteDeviceToken(${t.id})"
-                            style="background:rgba(var(--color-accent-rgb),0.18);border:1px solid rgba(var(--color-accent-rgb),0.35);border-radius:6px;padding:6px 14px;color:var(--color-accent);font-size:0.85em;cursor:pointer;">
+                           <button onclick="handlePermanentDeleteDeviceToken(${t.id})" style="background:rgba(var(--color-accent-rgb),0.18);border:1px solid rgba(var(--color-accent-rgb),0.35);border-radius:6px;padding:6px 14px;color:var(--color-accent);font-size:0.85em;cursor:pointer;">
                             ${Ikon('slet')} Slet
                            </button>`
                     }
@@ -3023,8 +3014,6 @@ function deviceTokenKort(tokens) {
 // ── Redigér et adgangslink: navn, type, bane, navigation og QR ──
 // Enheder, der bruger linket, opdager ændringen selv inden for et minut og
 // skifter side (js/adgangslink-vagt.js) — linket skal ikke sættes ind igen.
-const DT_FELT = 'width:100%;background:var(--color-bg-container);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:9px 11px;color:var(--text-primary, #eaeaea);font-family:\'DM Sans\',sans-serif;font-size:0.9em;box-sizing:border-box;';
-const DT_ETIKET = 'display:block;font-size:0.72em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin-bottom:5px;';
 
 function visRedigerDt(id) {
     const boks = document.getElementById(`dtRediger-${id}`);
@@ -3041,18 +3030,18 @@ function visRedigerDt(id) {
     boks.innerHTML = `
         <div style="margin-top:14px;padding:16px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;background:rgba(255,255,255,0.03);">
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:12px;">
-                <div><label style="${DT_ETIKET}">Navn</label>
-                    <input type="text" class="dtr-navn" maxlength="100" style="${DT_FELT}"></div>
-                <div><label style="${DT_ETIKET}">Type</label>
-                    <select class="dtr-type" style="${DT_FELT}">
+                <div><label class="felt-etiket">Navn</label>
+                    <input type="text" class="dtr-navn admin-input admin-input--sm" maxlength="100"></div>
+                <div><label class="felt-etiket">Type</label>
+                    <select class="dtr-type admin-input admin-input--sm">
                         <option value="tv">TV visning</option>
                         <option value="court">Bane visning</option>
                         <option value="oversigt">Oversigt</option>
                     </select></div>
-                <div class="dtr-bane-wrap"><label style="${DT_ETIKET}">Bane</label>
-                    <select class="dtr-bane" style="${DT_FELT}">${baner}</select></div>
-                <div><label style="${DT_ETIKET}">Navigation</label>
-                    <select class="dtr-laast" style="${DT_FELT}">
+                <div class="dtr-bane-wrap"><label class="felt-etiket">Bane</label>
+                    <select class="dtr-bane admin-input admin-input--sm">${baner}</select></div>
+                <div><label class="felt-etiket">Navigation</label>
+                    <select class="dtr-laast admin-input admin-input--sm">
                         <option value="1">Låst</option>
                         <option value="0">Fri</option>
                     </select></div>
@@ -3402,16 +3391,13 @@ async function bpLoadWatchers() {
             : '';
 
         const knapper = venter
-            ? `<button onclick="bpTjekNu(${w.id}, this)" class="btn-primary"
-                       style="padding:4px 12px;font-size:0.82em;white-space:nowrap;">Tjek nu</button>
-               <button onclick="bpStopWatcher(${w.id})" class="btn-secondary"
-                       style="padding:4px 12px;font-size:0.82em;white-space:nowrap;">Stop</button>`
+            ? `<button onclick="bpTjekNu(${w.id}, this)" class="btn-primary" style="padding:4px 12px;font-size:0.82em;white-space:nowrap;">Tjek nu</button>
+               <button onclick="bpStopWatcher(${w.id})" class="btn-secondary" style="padding:4px 12px;font-size:0.82em;white-space:nowrap;">Stop</button>`
             // Afsluttede rækker ("Kom aldrig", "Kunne ikke oprettes", "Holdkamp
             // oprettet") stod ellers i 12 timer uden mulighed for at fjerne dem.
             // Fjerner kun linjen her — en oprettet holdkamp ligger i sin egen tabel.
             : `<button onclick="bpStopWatcher(${w.id})" class="btn-secondary"
-                       title="Fjern linjen fra listen${w.status === 'oprettet' ? ' (selve holdkampen bevares)' : ''}"
-                       style="padding:4px 12px;font-size:0.82em;white-space:nowrap;">Fjern</button>`;
+                       title="Fjern linjen fra listen${w.status === 'oprettet' ? ' (selve holdkampen bevares)' : ''}" style="padding:4px 12px;font-size:0.82em;white-space:nowrap;">Fjern</button>`;
 
         return `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;
                             padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.06);">
@@ -3505,7 +3491,7 @@ async function bpLoadVagtLog() {
                     ${navn(l) ? `<b style="color:var(--text-secondary, rgba(255, 255, 255, 0.78));font-weight:600;">${escapeHtml(navn(l))}:</b> ` : ''}${escapeHtml(l.besked)}
                 </span>
             </div>`).join('')
-        : '<p style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">Ingen hændelser endnu. Loggen fyldes, når en kamp sættes i kø fra badmintonplayer.dk.</p>';
+        : '<p class="tekst-daempet">Ingen hændelser endnu. Loggen fyldes, når en kamp sættes i kø fra badmintonplayer.dk.</p>';
 
     // Tekstudgave til "Kopiér log" — med diagnosen øverst, så den kan sendes videre
     bpVagtLogTekst = [
@@ -3590,12 +3576,12 @@ function bpRenderPreview(data) {
             <div style="font-weight:bold;color:var(--color-accent);margin-bottom:10px;">${label}</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
                 <div>
-                    <div style="color:var(--color-win, #45d17e);font-size:0.82em;margin-bottom:6px;">${escapeHtml(team1Name)}</div>
+                    <div class="hold-navn hold-navn--1">${escapeHtml(team1Name)}</div>
                     ${inp('t1p1', g.team1Player1, 'Spiller')}
                     ${isDoubles ? inp('t1p2', g.team1Player2, 'Makker') : ''}
                 </div>
                 <div>
-                    <div style="color:var(--color-accent);font-size:0.82em;margin-bottom:6px;">${escapeHtml(team2Name)}</div>
+                    <div class="hold-navn hold-navn--2">${escapeHtml(team2Name)}</div>
                     ${inp('t2p1', g.team2Player1, 'Spiller')}
                     ${isDoubles ? inp('t2p2', g.team2Player2, 'Makker') : ''}
                 </div>
@@ -3609,19 +3595,16 @@ function bpRenderPreview(data) {
             <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.88em;margin-bottom:15px;">Format: ${escapeHtml(HOLDKAMP_FORMATS[data.format]?.name || 'ukendt — oprettes med kampene som de står på holdsedlen')}</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;">
                 <div>
-                    <label style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.85em;">Hold 1</label>
-                    <input id="bp_team1" value="${escapeHtml(team1Name)}"
-                           style="width:100%;padding:10px;background:var(--color-bg-dark);color:var(--text-primary, #eaeaea);border:1px solid var(--color-win, #45d17e);border-radius:5px;margin-top:4px;box-sizing:border-box;">
+                    <label class="tekst-daempet tekst-mindre">Hold 1</label>
+                    <input id="bp_team1" value="${escapeHtml(team1Name)}" style="width:100%;padding:10px;background:var(--color-bg-dark);color:var(--text-primary, #eaeaea);border:1px solid var(--color-win, #45d17e);border-radius:5px;margin-top:4px;box-sizing:border-box;">
                 </div>
                 <div>
-                    <label style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.85em;">Hold 2</label>
-                    <input id="bp_team2" value="${escapeHtml(team2Name)}"
-                           style="width:100%;padding:10px;background:var(--color-bg-dark);color:var(--text-primary, #eaeaea);border:1px solid var(--color-accent);border-radius:5px;margin-top:4px;box-sizing:border-box;">
+                    <label class="tekst-daempet tekst-mindre">Hold 2</label>
+                    <input id="bp_team2" value="${escapeHtml(team2Name)}" style="width:100%;padding:10px;background:var(--color-bg-dark);color:var(--text-primary, #eaeaea);border:1px solid var(--color-accent);border-radius:5px;margin-top:4px;box-sizing:border-box;">
                 </div>
             </div>
             ${gameRows}
-            <button onclick="bpCreate()" class="btn-primary"
-                    style="width:100%;padding:14px;font-size:1.05em;margin-top:8px;">
+            <button onclick="bpCreate()" class="btn-primary" style="width:100%;padding:14px;font-size:1.05em;margin-top:8px;">
                 Opret Holdkamp
             </button>
         </div>`;
@@ -3755,18 +3738,18 @@ function renderTournamentBlocker(activeTeamMatch) {
     if (!blocker) {
         blocker = document.createElement('div');
         blocker.id = 'tournamentBlocker';
-        blocker.style.cssText = 'margin-bottom:25px; padding:20px; background:rgba(var(--color-warning-rgb, 255, 176, 46),0.1); border:2px solid var(--color-warning, #ffb02e); border-radius:10px;';
+        blocker.className = 'advarsel-boks';
         const section = document.getElementById('tournamentSection');
         const headerWrap = section.querySelector('div');
         headerWrap.insertAdjacentElement('afterend', blocker);
     }
     blocker.innerHTML = `
-        <h3 style="color:var(--color-warning, #ffb02e); margin:0 0 10px 0;">${Ikon('advarsel')} Aktiv holdkamp findes</h3>
-        <p style="color:var(--text-secondary, rgba(255, 255, 255, 0.78)); margin:0 0 12px 0; line-height:1.5;">
+        <h3>${Ikon('advarsel')} Aktiv holdkamp findes</h3>
+        <p>
             Du har en aktiv holdkamp: <strong>${escapeHtml(activeTeamMatch.team1_name)} vs ${escapeHtml(activeTeamMatch.team2_name)}</strong>.<br>
             Du kan kun have én aktiv holdkamp ELLER turnering ad gangen. Afslut eller slet holdkampen først.
         </p>
-        <a href="#holdkamp" onclick="event.preventDefault(); showHoldkamp();" class="btn-primary" style="display:inline-block; text-decoration:none;">Gå til Holdkamp</a>
+        <a href="#holdkamp" onclick="event.preventDefault(); showHoldkamp();" class="btn-primary">Gå til Holdkamp</a>
     `;
 }
 
@@ -3888,12 +3871,12 @@ function showNewMatchCandidates(tournamentId, candidates, summaryHtml) {
         const side2 = m.doubles
             ? `${m.side2Player1 || '?'}${m.side2Player2 ? ' & ' + m.side2Player2 : ''}`
             : (m.side2Player1 || '?');
-        const dayBadge = m.dayLabel ? `<span style="background:#3a3a4a; color:#bfa; padding:2px 7px; border-radius:4px; font-size:0.74em;">${escapeHtml(m.dayLabel)}</span>` : '';
-        const catBadge = m.label ? `<span style="background:var(--color-accent); color:#fff; padding:2px 7px; border-radius:4px; font-size:0.74em;">${escapeHtml(m.label)}</span>` : '';
+        const dayBadge = m.dayLabel ? `<span class="maerke maerke--neutral">${escapeHtml(m.dayLabel)}</span>` : '';
+        const catBadge = m.label ? `<span class="maerke maerke--kategori">${escapeHtml(m.label)}</span>` : '';
         return `<label style="display:flex; align-items:center; gap:8px; padding:6px 10px; background:rgba(0,0,0,0.2); border-radius:4px; margin-bottom:4px; cursor:pointer; flex-wrap:wrap;">
             <input type="checkbox" class="sync-cand-check" data-idx="${idx}" checked style="width:16px; height:16px; cursor:pointer; flex-shrink:0;">
             ${dayBadge}${catBadge}
-            <span style="color:var(--text-primary, #eaeaea); font-size:0.85em; flex:1; min-width:160px;">${escapeHtml(side1)} <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">vs</span> ${escapeHtml(side2)}</span>
+            <span style="color:var(--text-primary, #eaeaea); font-size:0.85em; flex:1; min-width:160px;">${escapeHtml(side1)} <span class="tekst-daempet">vs</span> ${escapeHtml(side2)}</span>
         </label>`;
     }).join('');
 
@@ -4074,8 +4057,7 @@ function renderTournamentBlock(t) {
                 <h4 style="margin: 0 0 12px 0; color: var(--text-secondary, rgba(255, 255, 255, 0.78)); font-size: 0.95em;">Tilføj kamp</h4>
 
                 <div style="display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-bottom: 10px; align-items: center;">
-                    <input type="text" id="t${t.id}_label" placeholder="Label (valgfri) – fx 'U13 HS pulje A'"
-                           style="padding:8px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px;">
+                    <input type="text" id="t${t.id}_label" placeholder="Label (valgfri) – fx 'U13 HS pulje A'" class="admin-input admin-input--sm">
                     <label style="display:flex; align-items:center; gap:6px; color:var(--text-secondary, rgba(255, 255, 255, 0.78)); font-size:0.9em; white-space:nowrap;">
                         <input type="checkbox" id="t${t.id}_doubles" style="width:16px; height:16px; cursor:pointer;">
                         Double
@@ -4084,24 +4066,20 @@ function renderTournamentBlock(t) {
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
                     <div>
-                        <label style="display:block; color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-bottom:4px;">Side 1 – spiller 1</label>
-                        <input type="text" id="t${t.id}_side1p1" placeholder="Spillernavn"
-                               style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px;">
+                        <label class="felt-etiket">Side 1 – spiller 1</label>
+                        <input type="text" id="t${t.id}_side1p1" placeholder="Spillernavn" class="admin-input admin-input--sm">
                     </div>
                     <div>
-                        <label style="display:block; color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-bottom:4px;">Side 2 – spiller 1</label>
-                        <input type="text" id="t${t.id}_side2p1" placeholder="Spillernavn"
-                               style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px;">
+                        <label class="felt-etiket">Side 2 – spiller 1</label>
+                        <input type="text" id="t${t.id}_side2p1" placeholder="Spillernavn" class="admin-input admin-input--sm">
                     </div>
                     <div id="t${t.id}_side1p2_wrap" style="display:none;">
-                        <label style="display:block; color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-bottom:4px;">Side 1 – makker</label>
-                        <input type="text" id="t${t.id}_side1p2" placeholder="Makker"
-                               style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px;">
+                        <label class="felt-etiket">Side 1 – makker</label>
+                        <input type="text" id="t${t.id}_side1p2" placeholder="Makker" class="admin-input admin-input--sm">
                     </div>
                     <div id="t${t.id}_side2p2_wrap" style="display:none;">
-                        <label style="display:block; color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-bottom:4px;">Side 2 – makker</label>
-                        <input type="text" id="t${t.id}_side2p2" placeholder="Makker"
-                               style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px;">
+                        <label class="felt-etiket">Side 2 – makker</label>
+                        <input type="text" id="t${t.id}_side2p2" placeholder="Makker" class="admin-input admin-input--sm">
                     </div>
                 </div>
 
@@ -4135,12 +4113,12 @@ function renderTournamentMatchRow(tournamentId, m) {
     let statusBadge = '';
     let courtInfo = '';
     if (m.status === 'pending') {
-        statusBadge = '<span style="background:#555;color:#fff;padding:3px 8px;border-radius:4px;font-size:0.78em;">Afventer</span>';
+        statusBadge = '<span class="maerke maerke--afventer">Afventer</span>';
     } else if (m.status === 'active') {
-        statusBadge = `<span style="background:rgba(var(--color-win-rgb, 69, 209, 126),0.15); color:var(--color-win, #45d17e); border:1px solid rgba(var(--color-win-rgb, 69, 209, 126),0.35);padding:3px 8px;border-radius:4px;font-size:0.78em;">I gang – Bane ${m.court_number ?? '?'}</span>`;
+        statusBadge = `<span class="maerke maerke--igang">I gang – Bane ${m.court_number ?? '?'}</span>`;
     } else if (m.status === 'finished') {
         const winnerLabel = m.winner_team === 1 ? side1 : (m.winner_team === 2 ? side2 : '?');
-        statusBadge = `<span style="background:rgba(var(--color-win-rgb, 69, 209, 126),0.15); color:var(--color-win, #45d17e); border:1px solid rgba(var(--color-win-rgb, 69, 209, 126),0.35);padding:3px 8px;border-radius:4px;font-size:0.78em;">✓ ${escapeHtml(winnerLabel)} vandt</span>`;
+        statusBadge = `<span class="maerke maerke--vundet">✓ ${escapeHtml(winnerLabel)} vandt</span>`;
         if (m.set_scores) {
             // Orienter sættene til side1 (venstre i "side1 vs side2"-rækken ovenfor).
             // Raw-strengen har navnene som de stod på banen pr sæt — efter sideskift
@@ -4173,7 +4151,7 @@ function renderTournamentMatchRow(tournamentId, m) {
         <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:rgba(0,0,0,0.2); border-radius:6px; margin-bottom:6px; gap:10px; flex-wrap:wrap;">
             <div style="flex:1; min-width:200px;">
                 <div style="color:var(--text-primary, #eaeaea);">
-                    ${labelHtml}<strong>${side1Html}</strong> <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">vs</span> <strong>${side2Html}</strong>
+                    ${labelHtml}<strong>${side1Html}</strong> <span class="tekst-daempet">vs</span> <strong>${side2Html}</strong>
                 </div>
                 ${courtInfo}
             </div>
@@ -4189,14 +4167,13 @@ function renderTournamentMatchRow(tournamentId, m) {
 function renderTournamentMatchEditForm(tournamentId, m) {
     const isActive = m.status === 'active';
     const warningHtml = isActive
-        ? `<div style="margin-bottom:10px; padding:8px 10px; background:rgba(var(--color-warning-rgb, 255, 176, 46),0.12); border:1px solid var(--color-warning, #ffb02e); border-radius:4px; color:var(--color-warning, #ffb02e); font-size:0.82em;">${Ikon('advarsel')} Kampen er i gang på Bane ${m.court_number}. Navneændringer pusher til banen indenfor 5 sekunder.</div>`
+        ? `<div class="advarsel-boks advarsel-boks--lille tekst-lille" style="color:var(--color-warning, #ffb02e);">${Ikon('advarsel')} Kampen er i gang på Bane ${m.court_number}. Navneændringer pusher til banen indenfor 5 sekunder.</div>`
         : '';
     return `
         <div data-tournament-edit="${m.id}" style="padding:14px; background:rgba(0,0,0,0.3); border:1px solid var(--color-primary); border-radius:6px; margin-bottom:6px;">
             ${warningHtml}
             <div style="display:grid; grid-template-columns: 1fr auto; gap:10px; margin-bottom:10px; align-items:center;">
-                <input type="text" id="te_${m.id}_label" value="${escapeHtml(m.label || '')}" placeholder="Label (valgfri)"
-                       style="padding:8px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px;">
+                <input type="text" id="te_${m.id}_label" value="${escapeHtml(m.label || '')}" placeholder="Label (valgfri)" class="admin-input admin-input--sm">
                 <label style="display:flex; align-items:center; gap:6px; color:var(--text-secondary, rgba(255, 255, 255, 0.78)); font-size:0.9em; white-space:nowrap;">
                     <input type="checkbox" id="te_${m.id}_doubles" ${m.doubles ? 'checked' : ''} style="width:16px; height:16px; cursor:pointer;">
                     Double
@@ -4204,24 +4181,20 @@ function renderTournamentMatchEditForm(tournamentId, m) {
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
                 <div>
-                    <label style="display:block; color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-bottom:4px;">Side 1 – spiller 1</label>
-                    <input type="text" id="te_${m.id}_s1p1" value="${escapeHtml(m.side1_player1 || '')}" placeholder="Spillernavn"
-                           style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px;">
+                    <label class="felt-etiket">Side 1 – spiller 1</label>
+                    <input type="text" id="te_${m.id}_s1p1" value="${escapeHtml(m.side1_player1 || '')}" placeholder="Spillernavn" class="admin-input admin-input--sm">
                 </div>
                 <div>
-                    <label style="display:block; color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-bottom:4px;">Side 2 – spiller 1</label>
-                    <input type="text" id="te_${m.id}_s2p1" value="${escapeHtml(m.side2_player1 || '')}" placeholder="Spillernavn"
-                           style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px;">
+                    <label class="felt-etiket">Side 2 – spiller 1</label>
+                    <input type="text" id="te_${m.id}_s2p1" value="${escapeHtml(m.side2_player1 || '')}" placeholder="Spillernavn" class="admin-input admin-input--sm">
                 </div>
                 <div id="te_${m.id}_s1p2_wrap" style="display:${m.doubles ? 'block' : 'none'};">
-                    <label style="display:block; color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-bottom:4px;">Side 1 – makker</label>
-                    <input type="text" id="te_${m.id}_s1p2" value="${escapeHtml(m.side1_player2 || '')}" placeholder="Makker"
-                           style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px;">
+                    <label class="felt-etiket">Side 1 – makker</label>
+                    <input type="text" id="te_${m.id}_s1p2" value="${escapeHtml(m.side1_player2 || '')}" placeholder="Makker" class="admin-input admin-input--sm">
                 </div>
                 <div id="te_${m.id}_s2p2_wrap" style="display:${m.doubles ? 'block' : 'none'};">
-                    <label style="display:block; color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-bottom:4px;">Side 2 – makker</label>
-                    <input type="text" id="te_${m.id}_s2p2" value="${escapeHtml(m.side2_player2 || '')}" placeholder="Makker"
-                           style="width:100%; box-sizing:border-box; padding:8px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px;">
+                    <label class="felt-etiket">Side 2 – makker</label>
+                    <input type="text" id="te_${m.id}_s2p2" value="${escapeHtml(m.side2_player2 || '')}" placeholder="Makker" class="admin-input admin-input--sm">
                 </div>
             </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -4448,12 +4421,12 @@ function renderTournamentImportPreview(data) {
         const side2 = m.doubles
             ? `${m.side2Player1 || '?'}${m.side2Player2 ? ' & ' + m.side2Player2 : ''}`
             : (m.side2Player1 || '?');
-        const numBadge = `<span style="background:#333; color:var(--text-muted, rgba(255, 255, 255, 0.62)); padding:2px 7px; border-radius:4px; font-size:0.74em; font-family:monospace; min-width:32px; text-align:center;">#${idx + 1}</span>`;
+        const numBadge = `<span class="maerke maerke--neutral maerke--nummer">#${idx + 1}</span>`;
         const dayBadge = m.dayLabel
-            ? `<span style="background:#3a3a4a; color:#bfa; padding:2px 7px; border-radius:4px; font-size:0.74em; white-space:nowrap;">${escapeHtml(m.dayLabel)}</span>`
+            ? `<span class="maerke maerke--neutral">${escapeHtml(m.dayLabel)}</span>`
             : '';
         const catBadge = m.category
-            ? `<span style="background:var(--color-accent); color:#fff; padding:2px 7px; border-radius:4px; font-size:0.74em; white-space:nowrap;">${escapeHtml(m.category)}</span>`
+            ? `<span class="maerke maerke--kategori">${escapeHtml(m.category)}</span>`
             : '';
         const roundBadge = m.round
             ? `<span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.78em; white-space:nowrap;">${escapeHtml(m.round)}</span>`
@@ -4464,7 +4437,7 @@ function renderTournamentImportPreview(data) {
             ${dayBadge}
             ${catBadge}
             ${roundBadge}
-            <span style="color:var(--text-primary, #eaeaea); font-size:0.85em; flex:1; min-width:160px;">${escapeHtml(side1)} <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">vs</span> ${escapeHtml(side2)}</span>
+            <span style="color:var(--text-primary, #eaeaea); font-size:0.85em; flex:1; min-width:160px;">${escapeHtml(side1)} <span class="tekst-daempet">vs</span> ${escapeHtml(side2)}</span>
         </label>`;
     }).join('');
 
@@ -4477,7 +4450,7 @@ function renderTournamentImportPreview(data) {
                     const count = data.matches.filter(m => m.day === d.date).length;
                     return `<label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
                         <input type="checkbox" class="ts-day-check" data-day="${escapeHtml(d.date)}" checked style="width:16px; height:16px; cursor:pointer;">
-                        <span style="color:var(--text-primary, #eaeaea); font-size:0.9em;">${escapeHtml(d.label)} <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">(${count})</span></span>
+                        <span style="color:var(--text-primary, #eaeaea); font-size:0.9em;">${escapeHtml(d.label)} <span class="tekst-daempet">(${count})</span></span>
                     </label>`;
                 }).join('')}
             </div>
@@ -4494,8 +4467,7 @@ function renderTournamentImportPreview(data) {
     preview.innerHTML = `
         <div style="margin-bottom: 16px;">
             <label style="display:block; color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.85em; margin-bottom:6px;">Turneringens navn (kan redigeres):</label>
-            <input type="text" id="tsImportTournamentName" value="${escapeHtml(data.tournamentName || '')}"
-                   style="width:100%; box-sizing:border-box; padding:10px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid var(--color-primary); border-radius:5px;">
+            <input type="text" id="tsImportTournamentName" value="${escapeHtml(data.tournamentName || '')}" style="width:100%; box-sizing:border-box; padding:10px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid var(--color-primary); border-radius:5px;">
         </div>
 
         <p style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin: 0 0 12px 0;">
@@ -4923,7 +4895,7 @@ function renderPlannerTokens(tokens) {
             <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">
                 <div style="flex:1;min-width:240px;">
                     <div style="font-weight:600;margin-bottom:2px;">${escapeHtml(t.name)}</div>
-                    <div style="font-size:0.8em;color:var(--text-muted, rgba(255, 255, 255, 0.62));">Oprettet ${new Date(t.created_at).toLocaleDateString('da-DK')} &nbsp;•&nbsp; Sidst brugt: ${lastUsed}</div>
+                    <div class="tekst-daempet tekst-lille">Oprettet ${new Date(t.created_at).toLocaleDateString('da-DK')} &nbsp;•&nbsp; Sidst brugt: ${lastUsed}</div>
                     ${t.is_active ? copyRow('Adresse', url) + copyRow('Nøgle', t.token) : ''}
                 </div>
                 <div style="display:flex;gap:8px;flex-shrink:0;">
@@ -4995,7 +4967,7 @@ function togglePlannerLog() {
 
 async function loadPlannerLog() {
     const panel = document.getElementById('plannerLogPanel');
-    panel.innerHTML = '<p style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">Indlæser…</p>';
+    panel.innerHTML = '<p class="tekst-daempet">Indlæser…</p>';
     try {
         const rows = await api.getPlannerLog(100);
         renderPlannerLog(rows);
@@ -5013,7 +4985,7 @@ const PL_AARSAG = {
 function renderPlannerLog(rows) {
     const panel = document.getElementById('plannerLogPanel');
     if (!rows.length) {
-        panel.innerHTML = '<p style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">Ingen kald endnu.</p>';
+        panel.innerHTML = '<p class="tekst-daempet">Ingen kald endnu.</p>';
         return;
     }
     const linjer = rows.map(r => {
@@ -5030,7 +5002,7 @@ function renderPlannerLog(rows) {
             resultat = r.result.cleared.length ? `Ryddet bane ${r.result.cleared.join(', ')}` : 'Ingen baner at rydde';
         }
         const antal = (r.endpoint === 'planned-round' && r.match_count !== null && r.match_count !== undefined)
-            ? ` <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">(${r.match_count} baner)</span>` : '';
+            ? ` <span class="tekst-daempet">(${r.match_count} baner)</span>` : '';
         return `
         <tr>
             <td style="white-space:nowrap;">${new Date(r.received_at).toLocaleString('da-DK')}</td>
@@ -5166,7 +5138,7 @@ function ptResultaterHtml(data) {
     const raekker = data.results.map(r => {
         const saet = r.sets.length ? r.sets.map(x => `${x.side1}-${x.side2}`).join(', ') : '—';
         const vinder = r.winner === 1 ? side(r.side1) : r.winner === 2 ? side(r.side2) : '—';
-        const rettet = r.updatedAt !== r.recordedAt ? ' <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">(rettet)</span>' : '';
+        const rettet = r.updatedAt !== r.recordedAt ? ' <span class="tekst-daempet">(rettet)</span>' : '';
         return `<tr>
             <td>${r.courtNumber}</td>
             <td>${escapeHtml(r.label || r.roundId || '')}</td>
@@ -5192,24 +5164,24 @@ function ptResultaterHtml(data) {
 
 function ptSvarHtml(status, ms, data) {
     const ok = status >= 200 && status < 300;
-    let html = `<div><span class="${ok ? 'pl-status-ok' : 'pl-status-err'}">HTTP ${status}</span> <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">· ${ms} ms</span></div>`;
+    let html = `<div><span class="${ok ? 'pl-status-ok' : 'pl-status-err'}">HTTP ${status}</span> <span class="tekst-daempet">· ${ms} ms</span></div>`;
     if (!data) return html;
     if (ok && Array.isArray(data.results) && 'hasMore' in data) return html + ptResultaterHtml(data);
-    if (data.error) html += `<div style="margin-top:6px;">${escapeHtml(data.error)}${data.code ? ` <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">(${escapeHtml(data.code)})</span>` : ''}</div>`;
-    if (Array.isArray(data.details)) html += `<div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">${data.details.map(escapeHtml).join('<br>')}</div>`;
+    if (data.error) html += `<div style="margin-top:6px;">${escapeHtml(data.error)}${data.code ? ` <span class="tekst-daempet">(${escapeHtml(data.code)})</span>` : ''}</div>`;
+    if (Array.isArray(data.details)) html += `<div class="tekst-daempet">${data.details.map(escapeHtml).join('<br>')}</div>`;
     if (Array.isArray(data.results)) {
         html += '<div style="margin-top:8px;">' + data.results.map(r => {
             const s = r.status === 'shown' ? '✓ vist' : r.status === 'cleared' ? '– ryddet' : `✗ afvist (${PL_AARSAG[r.reason] || r.reason})`;
-            const prev = r.previous ? ` <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">før: ${escapeHtml(r.previous.side1)} vs ${escapeHtml(r.previous.side2)}${r.previous.counted ? `, ${escapeHtml(r.previous.sets)} sæt` : ''}</span>` : '';
+            const prev = r.previous ? ` <span class="tekst-daempet">før: ${escapeHtml(r.previous.side1)} vs ${escapeHtml(r.previous.side2)}${r.previous.counted ? `, ${escapeHtml(r.previous.sets)} sæt` : ''}</span>` : '';
             return `<div>Bane ${r.courtNumber}: ${s}${prev}</div>`;
         }).join('') + '</div>';
-        if (data.replayed) html += '<div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">Gentaget kald — samme roundId som sidst, banerne blev ikke rørt.</div>';
+        if (data.replayed) html += '<div class="tekst-daempet">Gentaget kald — samme roundId som sidst, banerne blev ikke rørt.</div>';
     }
     if (data.integrationEnabled !== undefined && !Array.isArray(data.results)) {
         const v = w => w ? `${plDagNavn(w.ugedag).toLowerCase()} ${w.from.replace(':', '.')}–${w.to.replace(':', '.')}` : '';
         html += `<div style="margin-top:8px;">Integration: ${data.integrationEnabled ? 'aktiv' : 'slået fra'} · ${data.openNow ? `<span class="pl-status-ok">åbent nu</span> (${v(data.window)}), bane ${data.courtsNow.join(', ')}` : `lukket${data.nextWindow ? `, næste: ${v(data.nextWindow)}` : ''}`}</div>`;
         if (data.currentRound) html += `<div>Vist runde: ${escapeHtml(data.currentRound.label || data.currentRound.roundId || '')} (modtaget ${new Date(data.currentRound.receivedAt).toLocaleTimeString('da-DK')})</div>`;
-        else html += '<div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">Ingen runde vises lige nu.</div>';
+        else html += '<div class="tekst-daempet">Ingen runde vises lige nu.</div>';
     }
     return html;
 }
@@ -5246,8 +5218,7 @@ function renderHoldkampRegelBlok(tm) {
             const gA = f && tm.games[f.idxA], gB = f && tm.games[f.idxB];
             const kanByttes = f && gA.status === 'pending' && gB.status === 'pending';
             const knap = kanByttes
-                ? `<button onclick="byttU9Singler(${tm.id}, ${gA.id}, ${gB.id}, ${f.hold}, ${f.a}, ${f.b})" class="btn-primary"
-                           style="margin-top:8px;padding:6px 14px;font-size:0.9em;">Byt ${escapeHtml(navne[f.hold])}s spillere i ${f.a}. og ${f.b}. single</button>`
+                ? `<button onclick="byttU9Singler(${tm.id}, ${gA.id}, ${gB.id}, ${f.hold}, ${f.a}, ${f.b})" class="btn-primary" style="margin-top:8px;padding:6px 14px;font-size:0.9em;">Byt ${escapeHtml(navne[f.hold])}s spillere i ${f.a}. og ${f.b}. single</button>`
                 : '';
             html += regelBoks('217,44,63',
                 `<div style="font-weight:bold;margin-bottom:4px;">${escapeHtml(m.spiller1)} og ${escapeHtml(m.spiller2)} mødes i både ${m.a}. og ${m.b}. single</div>
@@ -5273,8 +5244,8 @@ function renderHoldkampRegelBlok(tm) {
              <div style="color:var(--text-secondary, rgba(255, 255, 255, 0.78));margin-bottom:10px;">Ét sæt, spillet som et 3. sæt, med en double i en ny konstellation af spillere, der har deltaget i holdkampen.
                  Vinderen vinder holdkampen 4–3 (§ 7 stk. 1 e).</div>
              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                 <div><div style="color:var(--color-win, #45d17e);font-size:0.85em;margin-bottom:5px;">${escapeHtml(tm.team1_name)}</div>${vaelger(1, 1)}${vaelger(1, 2)}</div>
-                 <div><div style="color:var(--color-accent);font-size:0.85em;margin-bottom:5px;">${escapeHtml(tm.team2_name)}</div>${vaelger(2, 1)}${vaelger(2, 2)}</div>
+                 <div><div class="hold-navn hold-navn--1">${escapeHtml(tm.team1_name)}</div>${vaelger(1, 1)}${vaelger(1, 2)}</div>
+                 <div><div class="hold-navn hold-navn--2">${escapeHtml(tm.team2_name)}</div>${vaelger(2, 1)}${vaelger(2, 2)}</div>
              </div>
              <button onclick="opretGoldenSet(${tm.id})" class="btn-primary" style="margin-top:6px;">Opret golden set</button>
              <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.82em;margin-top:8px;">Kan et hold ikke stille et nyt par (fx ved afbud fra 2 spillere), tabes golden set uden kamp (§ 22 stk. 1 c).
