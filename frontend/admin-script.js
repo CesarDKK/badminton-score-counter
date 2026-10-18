@@ -1031,7 +1031,7 @@ async function loadTeamMatchHistory() {
         }).join('');
 
         container.innerHTML = `
-            <h3 class="historik-overskrift"><svg viewBox="0 0 24 24" fill="currentColor" style="width:1em;height:1em;vertical-align:-0.12em;" aria-hidden="true"><g transform="translate(0 1.2)"><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/><rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/><path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/></g></svg> Holdkampe (${matches.length})</h3>
+            <h3 class="historik-overskrift"><svg viewBox="0 0 24 24" fill="currentColor" class="ikon-tekst" aria-hidden="true"><g transform="translate(0 1.2)"><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/><rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/><path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/></g></svg> Holdkampe (${matches.length})</h3>
             ${cards}`;
     } catch (error) {
         console.error('Failed to load team match history:', error);
@@ -1792,10 +1792,10 @@ function openLogoModal(title, targets, onSave) {
     body.innerHTML = targets.map(t => `
         <div class="logo-target" data-key="${escapeHtml(String(t.key))}" data-auto="${escapeHtml(t.autoName || '')}" data-club="${escapeHtml(t.club || '')}" style="display:flex; align-items:center; gap:14px; padding:12px 0; border-bottom:1px solid rgba(255,255,255,0.08);">
             <img class="logo-target-img" alt="" style="width:54px; height:54px; object-fit:contain; background:rgba(255,255,255,0.06); border-radius:8px; flex-shrink:0; display:none;">
-            <div style="flex:1; min-width:0;">
+            <div class="fyld">
                 <div style="color:var(--text-primary, #eaeaea); font-weight:bold; margin-bottom:6px;">${escapeHtml(t.label)}${t.club ? `<span style="font-weight:normal; color:#9ab; font-size:0.85em;"> — ${escapeHtml(t.club)}</span>` : ''}</div>
-                <select class="logo-target-sel" style="width:100%; padding:9px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid var(--color-primary); border-radius:5px;">${optionsHtml}</select>
-                <div class="logo-target-hint" style="font-size:0.8em; color:var(--text-muted, rgba(255, 255, 255, 0.62)); margin-top:4px;"></div>
+                <select class="logo-target-sel admin-input">${optionsHtml}</select>
+                <div class="logo-target-hint tekst-daempet tekst-lille luft-over-4"></div>
             </div>
         </div>`).join('');
 
@@ -1974,7 +1974,7 @@ async function loadAllMatches() {
     } catch (error) {
         console.error('Failed to load match history:', error);
         const container = document.getElementById('allMatchesContainer');
-        container.innerHTML = '<div style="color: var(--color-accent); text-align: center; padding: 40px; font-size: 1.2em;">Kunne ikke indlæse kamphistorik. Tjek din forbindelse.</div>';
+        container.innerHTML = '<div class="tom-besked tom-besked--fejl">Kunne ikke indlæse kamphistorik. Tjek din forbindelse.</div>';
     }
 }
 
@@ -2003,7 +2003,7 @@ function displayFilteredMatches() {
     const container = document.getElementById('allMatchesContainer');
 
     if (allMatchesData.length === 0) {
-        container.innerHTML = '<div style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); text-align: center; padding: 40px; font-size: 1.2em;">Ingen kamphistorik tilgængelig</div>';
+        container.innerHTML = '<div class="tom-besked">Ingen kamphistorik tilgængelig</div>';
         return;
     }
 
@@ -2033,7 +2033,7 @@ function displayFilteredMatches() {
     container.innerHTML = '';
 
     if (filteredMatches.length === 0) {
-        container.innerHTML = '<div style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); text-align: center; padding: 40px; font-size: 1.2em;">Ingen kampe fundet</div>';
+        container.innerHTML = '<div class="tom-besked">Ingen kampe fundet</div>';
         return;
     }
 
@@ -2205,9 +2205,10 @@ function createMatchCard(match, index) {
                           winnerName.startsWith(set.winner) ||
                           (set.winner === 'player1' && set.score1 > set.score2) ||
                           (set.winner === 'player2' && set.score2 > set.score1);
-            const badgeColor = wonSet ? 'var(--color-win, #45d17e)' : 'var(--color-accent)';
+            // Vundet sæt tonet grønt, tabt sæt tonet rødt (.maerke, som resten af admin)
+            const badgeKlasse = wonSet ? 'maerke--vundet' : 'maerke--fare';
             const badgeIcon = wonSet ? '✓' : '✗';
-            return `<span style="background: ${badgeColor}; color: white; padding: 4px 10px; border-radius: 5px; font-size: 0.85em; font-weight: bold; margin-right: 5px;">${badgeIcon} Sæt ${i + 1}</span>`;
+            return `<span class="maerke ${badgeKlasse}" style="margin-right: 5px;">${badgeIcon} Sæt ${i + 1}</span>`;
         }).join('');
     }
 
@@ -2216,8 +2217,8 @@ function createMatchCard(match, index) {
     mainInfo.className = 'match-main-info';
     mainInfo.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: flex-start; cursor: ${hasSetDetails ? 'pointer' : 'default'}; gap: 15px;">
-            <div style="flex: 1;">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <div class="fyld">
+                <div class="raekke luft-under-8">
                     <span style="font-size: 1.3em;">${gameTypeIcon}</span>
                     <span style="background: rgba(var(--color-primary-rgb), 0.3); color: var(--color-accent); padding: 3px 8px; border-radius: 5px; font-size: 0.8em; font-weight: bold;">${gameTypeText}</span>
                 </div>
@@ -2229,7 +2230,7 @@ function createMatchCard(match, index) {
                 ${setOverviewBadges ? `<div style="margin: 10px 0;">${setOverviewBadges}</div>` : ''}
                 <div style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.9em; margin-top: 8px;">
                     <span style="margin-right: 15px;">${Ikon('ur')} ${match.duration}</span>
-                    <span style="margin-right: 15px;"><svg viewBox="0 0 24 24" fill="currentColor" style="width:1em;height:1em;vertical-align:-0.12em;" aria-hidden="true"><g transform="translate(0 1.2)"><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/><rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/><path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/></g></svg> Bane ${match.court_id}</span>
+                    <span style="margin-right: 15px;"><svg viewBox="0 0 24 24" fill="currentColor" class="ikon-tekst" aria-hidden="true"><g transform="translate(0 1.2)"><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/><rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/><path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/></g></svg> Bane ${match.court_id}</span>
                     <span>${Ikon('kalender')} ${new Date(match.match_date).toLocaleDateString('da-DK', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                 </div>
             </div>
@@ -2277,17 +2278,17 @@ function createMatchCard(match, index) {
             <div style="margin-top: 15px; padding: 15px; background: rgba(var(--color-primary-rgb), 0.15); border-radius: 8px; border: 1px solid rgba(var(--color-primary-rgb), 0.3);">
                 <div style="font-weight: bold; margin-bottom: 12px; color: var(--color-accent); font-size: 1em;">${Ikon('statistik')} KAMPSTATISTIK</div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
-                    <div style="background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 5px;">
-                        <div style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.85em; margin-bottom: 3px;">Gennemsnitlige Point pr. Sæt</div>
-                        <div style="color: var(--text-primary, #eaeaea); font-weight: bold; font-size: 1.1em;">${stats.avgPointsPerSet} point</div>
+                    <div class="statistik-kort">
+                        <div class="statistik-kort__etiket">Gennemsnitlige Point pr. Sæt</div>
+                        <div class="statistik-kort__vaerdi">${stats.avgPointsPerSet} point</div>
                     </div>
-                    <div style="background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 5px;">
-                        <div style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.85em; margin-bottom: 3px;">Tættest Sæt</div>
-                        <div style="color: var(--text-primary, #eaeaea); font-weight: bold; font-size: 1.1em;">Sæt ${stats.closestSet.index} (${stats.closestSet.diff} points forskel)</div>
+                    <div class="statistik-kort">
+                        <div class="statistik-kort__etiket">Tættest Sæt</div>
+                        <div class="statistik-kort__vaerdi">Sæt ${stats.closestSet.index} (${stats.closestSet.diff} points forskel)</div>
                     </div>
-                    <div style="background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 5px;">
-                        <div style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.85em; margin-bottom: 3px;">Højeste Score i et Sæt</div>
-                        <div style="color: var(--text-primary, #eaeaea); font-weight: bold; font-size: 1.1em;">${stats.longestSetPoints} point</div>
+                    <div class="statistik-kort">
+                        <div class="statistik-kort__etiket">Højeste Score i et Sæt</div>
+                        <div class="statistik-kort__vaerdi">${stats.longestSetPoints} point</div>
                     </div>
                 </div>
             </div>
@@ -2683,7 +2684,7 @@ async function showDeviceTokens() {
 
 async function loadDeviceTokens() {
     const listEl = document.getElementById('deviceTokensList');
-    listEl.innerHTML = '<p style="color:var(--text-muted, rgba(255, 255, 255, 0.62));text-align:center;padding:20px;">Indlæser...</p>';
+    listEl.innerHTML = '<p class="tom-besked tom-besked--lille">Indlæser...</p>';
 
     try {
         const tokens = await api.getDeviceTokens();
@@ -2752,7 +2753,7 @@ function visKioskConfForm(tokenId) {
                 <div><label class="felt-etiket">Skærmens navn</label>
                     <input id="kc-navn-${tokenId}" class="admin-input admin-input--sm" value="${escapeHtml(kioskNavn(boks.dataset.navn))}" placeholder="fx tv-bane-1a"
                         oninput="document.getElementById('kc-navnvis-${tokenId}').textContent = kioskNavn(this.value)">
-                    <div style="font-size:0.75em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin-top:3px;">Bliver til: <span id="kc-navnvis-${tokenId}">${escapeHtml(kioskNavn(boks.dataset.navn))}</span></div></div>
+                    <div class="tekst-daempet tekst-lille luft-over-4">Bliver til: <span id="kc-navnvis-${tokenId}">${escapeHtml(kioskNavn(boks.dataset.navn))}</span></div></div>
                 <div><label class="felt-etiket">WiFi-navn (tom = kabel)</label>
                     <input id="kc-wifi-${tokenId}" class="admin-input admin-input--sm" autocomplete="off"></div>
                 <div><label class="felt-etiket">WiFi-kode</label>
@@ -2762,7 +2763,7 @@ function visKioskConfForm(tokenId) {
             </div>
             <div style="display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap;">
                 <button onclick="hentKioskConf(${tokenId})" class="btn-primary btn-sm">Download kiosk.conf</button>
-                <span style="font-size:0.78em;color:var(--text-muted, rgba(255, 255, 255, 0.62));">Filen laves her i browseren — WiFi-koden sendes ikke til serveren.
+                <span class="tekst-daempet tekst-lille">Filen laves her i browseren — WiFi-koden sendes ikke til serveren.
                     Læg den på USB-nøglen / SD-kortet i stedet for den, der ligger der. Én fil pr. skærm.</span>
             </div>
         </div>`;
@@ -2858,20 +2859,20 @@ function renderSkaerme(skaerme) {
         return `
             <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid rgba(255,255,255,0.06);">
                 <span style="width:9px;height:9px;border-radius:50%;background:${farve};margin-top:6px;flex-shrink:0;"></span>
-                <div style="flex:1;min-width:0;font-size:0.85em;">
+                <div class="fyld tekst-mindre">
                     <div><strong>${navn}</strong> &nbsp;<span style="color:${farve};">${status}</span></div>
                     <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.9em;margin-top:2px;">
                         ${s.side === 'oversigt' ? 'Oversigt' : `Bane ${s.bane || '?'}`}${s.kioskVersion ? ` &nbsp;•&nbsp; Badminton TV ${escapeHtml(s.kioskVersion)}` : ''} &nbsp;•&nbsp; sidst set ${skaermVarighed(s.sekunderSiden)} siden &nbsp;•&nbsp; IP ${escapeHtml(s.ip || '?')}${data}
                     </div>
                     ${haendelser ? `<div style="color:var(--color-warning, #ffb02e);font-size:0.9em;margin-top:2px;">${Ikon('advarsel')} ${haendelser}</div>` : ''}
                 </div>
-                ${s.sekunderSiden >= 60 ? `<button type="button" class="btn-secondary" onclick="fjernSkaerm('${escapeHtml(s.klientId)}')"
-                    title="Fjern skærmen fra listen. Tænder den igen, kommer den tilbage af sig selv." style="padding:4px 12px;font-size:0.78em;flex-shrink:0;">Fjern</button>` : ''}
+                ${s.sekunderSiden >= 60 ? `<button type="button" class="btn-secondary btn-sm ingen-krymp" onclick="fjernSkaerm('${escapeHtml(s.klientId)}')"
+                    title="Fjern skærmen fra listen. Tænder den igen, kommer den tilbage af sig selv.">Fjern</button>` : ''}
             </div>`;
     }).join('');
     return `
-        <div style="margin-top:12px;">
-            <div style="font-size:0.72em;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin-bottom:4px;">
+        <div class="luft-over-12">
+            <div class="felt-etiket">
                 Skærme på dette link (${skaerme.length})
             </div>
             ${linjer}
@@ -2922,7 +2923,7 @@ function renderDeviceTokens(tokens) {
     _dtTokens = tokens;
 
     if (tokens.length === 0) {
-        listEl.innerHTML = '<p style="color:var(--text-muted, rgba(255, 255, 255, 0.62));text-align:center;padding:20px;">Ingen adgangslinks endnu</p>';
+        listEl.innerHTML = '<p class="tom-besked tom-besked--lille">Ingen adgangslinks endnu</p>';
         return;
     }
 
@@ -2971,7 +2972,7 @@ function deviceTokenKort(tokens) {
         <div style="background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:16px 20px;margin-bottom:12px;${!t.is_active ? 'opacity:0.45;' : ''}">
             <div class="historik-gruppe__titel-linje">
                 <div class="kamp-linje__info">
-                    <div style="font-weight:600;margin-bottom:4px;">${escapeHtml(t.name)}</div>
+                    <div class="fed luft-under-4">${escapeHtml(t.name)}</div>
                     <div class="tekst-daempet tekst-lille">
                         ${Ikon('sted')} ${destLabel} &nbsp;•&nbsp;
                         ${Ikon('laas')} ${t.locked ? 'Låst' : 'Fri navigation'}${qrBadge} &nbsp;•&nbsp;
@@ -2992,7 +2993,7 @@ function deviceTokenKort(tokens) {
                     <div class="dt-skaerme" data-token-id="${t.id}"></div>
                     <div class="dt-rediger" id="dtRediger-${t.id}" style="display:none;"></div>
                 </div>
-                <div style="display:flex;gap:8px;flex-shrink:0;">
+                <div class="raekke ingen-krymp">
                     ${t.is_active
                         ? `<button onclick="visRedigerDt(${t.id})" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:6px 14px;color:var(--text-primary, #eaeaea);font-size:0.85em;cursor:pointer;">
                             Redigér
@@ -3000,7 +3001,7 @@ function deviceTokenKort(tokens) {
                            <button onclick="handleDeleteDeviceToken(${t.id})" style="background:rgba(var(--color-accent-rgb),0.12);border:1px solid rgba(var(--color-accent-rgb),0.25);border-radius:6px;padding:6px 14px;color:var(--color-accent);font-size:0.85em;cursor:pointer;">
                             Tilbagekald
                            </button>`
-                        : `<span style="font-size:0.8em;color:var(--text-muted, rgba(255, 255, 255, 0.62));padding:6px 10px;">Tilbagekaldt</span>
+                        : `<span class="tekst-daempet tekst-lille status-tekst">Tilbagekaldt</span>
                            <button onclick="handlePermanentDeleteDeviceToken(${t.id})" style="background:rgba(var(--color-accent-rgb),0.18);border:1px solid rgba(var(--color-accent-rgb),0.35);border-radius:6px;padding:6px 14px;color:var(--color-accent);font-size:0.85em;cursor:pointer;">
                             ${Ikon('slet')} Slet
                            </button>`
@@ -3049,10 +3050,10 @@ function visRedigerDt(id) {
             <label class="dtr-qr-wrap" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:0.9em;color:rgba(255,255,255,0.75);cursor:pointer;">
                 <input type="checkbox" class="dtr-qr" style="width:18px;height:18px;accent-color:var(--color-accent);"> Vis QR-kode på TV
             </label>
-            <p style="font-size:0.8em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin:0 0 12px;">
+            <p class="tekst-daempet tekst-lille luft-under-12">
                 Skærme og tablets, der bruger linket, skifter selv inden for et minut. Linket er det samme.
             </p>
-            <div style="display:flex;gap:8px;">
+            <div class="raekke">
                 <button class="btn-primary dtr-gem">Gem</button>
                 <button class="btn-secondary dtr-annuller">Annullér</button>
             </div>
@@ -3391,13 +3392,13 @@ async function bpLoadWatchers() {
             : '';
 
         const knapper = venter
-            ? `<button onclick="bpTjekNu(${w.id}, this)" class="btn-primary" style="padding:4px 12px;font-size:0.82em;white-space:nowrap;">Tjek nu</button>
-               <button onclick="bpStopWatcher(${w.id})" class="btn-secondary" style="padding:4px 12px;font-size:0.82em;white-space:nowrap;">Stop</button>`
+            ? `<button onclick="bpTjekNu(${w.id}, this)" class="btn-primary btn-sm">Tjek nu</button>
+               <button onclick="bpStopWatcher(${w.id})" class="btn-secondary btn-sm">Stop</button>`
             // Afsluttede rækker ("Kom aldrig", "Kunne ikke oprettes", "Holdkamp
             // oprettet") stod ellers i 12 timer uden mulighed for at fjerne dem.
             // Fjerner kun linjen her — en oprettet holdkamp ligger i sin egen tabel.
-            : `<button onclick="bpStopWatcher(${w.id})" class="btn-secondary"
-                       title="Fjern linjen fra listen${w.status === 'oprettet' ? ' (selve holdkampen bevares)' : ''}" style="padding:4px 12px;font-size:0.82em;white-space:nowrap;">Fjern</button>`;
+            : `<button onclick="bpStopWatcher(${w.id})" class="btn-secondary btn-sm"
+                       title="Fjern linjen fra listen${w.status === 'oprettet' ? ' (selve holdkampen bevares)' : ''}">Fjern</button>`;
 
         return `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;
                             padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.06);">
@@ -3574,7 +3575,7 @@ function bpRenderPreview(data) {
 
         return `<div style="background:rgba(var(--color-primary-rgb),0.1);border-radius:8px;padding:14px;margin-bottom:8px;">
             <div class="opsaetning-kort__titel">${label}</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="gitter-2">
                 <div>
                     <div class="hold-navn hold-navn--1">${escapeHtml(team1Name)}</div>
                     ${inp('t1p1', g.team1Player1, 'Spiller')}
@@ -3593,18 +3594,18 @@ function bpRenderPreview(data) {
         <div style="background:rgba(255,255,255,0.03);border:1px solid var(--color-primary);border-radius:10px;padding:20px;">
             <h4 style="color:var(--text-primary, #eaeaea);margin-bottom:6px;">Gennemse og ret inden oprettelse</h4>
             <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.88em;margin-bottom:15px;">Format: ${escapeHtml(HOLDKAMP_FORMATS[data.format]?.name || 'ukendt — oprettes med kampene som de står på holdsedlen')}</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;">
+            <div class="gitter-2 luft-under-18">
                 <div>
                     <label class="tekst-daempet tekst-mindre">Hold 1</label>
-                    <input id="bp_team1" value="${escapeHtml(team1Name)}" style="width:100%;padding:10px;background:var(--color-bg-dark);color:var(--text-primary, #eaeaea);border:1px solid var(--color-win, #45d17e);border-radius:5px;margin-top:4px;box-sizing:border-box;">
+                    <input id="bp_team1" value="${escapeHtml(team1Name)}" class="admin-input admin-input--hold1 luft-over-4">
                 </div>
                 <div>
                     <label class="tekst-daempet tekst-mindre">Hold 2</label>
-                    <input id="bp_team2" value="${escapeHtml(team2Name)}" style="width:100%;padding:10px;background:var(--color-bg-dark);color:var(--text-primary, #eaeaea);border:1px solid var(--color-accent);border-radius:5px;margin-top:4px;box-sizing:border-box;">
+                    <input id="bp_team2" value="${escapeHtml(team2Name)}" class="admin-input admin-input--hold2 luft-over-4">
                 </div>
             </div>
             ${gameRows}
-            <button onclick="bpCreate()" class="btn-primary" style="width:100%;padding:14px;font-size:1.05em;margin-top:8px;">
+            <button onclick="bpCreate()" class="btn-primary btn-lg btn-block luft-over-8">
                 Opret Holdkamp
             </button>
         </div>`;
@@ -3881,7 +3882,7 @@ function showNewMatchCandidates(tournamentId, candidates, summaryHtml) {
     }).join('');
 
     const bodyHtml = `
-        <div style="text-align:left;">
+        <div class="tekst-venstre">
             <div class="tekst-sekundaer luft-under-12">${summaryHtml}</div>
             <div class="felt-overskrift">Nye kampe på Tournament Software — vælg hvilke der skal tilføjes:</div>
             <div class="rulle-liste">${rows}</div>
@@ -4898,10 +4899,10 @@ function renderPlannerTokens(tokens) {
                     <div class="tekst-daempet tekst-lille">Oprettet ${new Date(t.created_at).toLocaleDateString('da-DK')} &nbsp;•&nbsp; Sidst brugt: ${lastUsed}</div>
                     ${t.is_active ? copyRow('Adresse', url) + copyRow('Nøgle', t.token) : ''}
                 </div>
-                <div style="display:flex;gap:8px;flex-shrink:0;">
+                <div class="raekke ingen-krymp">
                     ${t.is_active
                         ? `<button class="btn-danger btn-sm" onclick="handleRevokePlannerToken(${t.id})">Tilbagekald</button>`
-                        : `<span style="font-size:0.8em;color:var(--text-muted, rgba(255, 255, 255, 0.62));padding:6px 10px;">Tilbagekaldt</span>
+                        : `<span class="tekst-daempet tekst-lille status-tekst">Tilbagekaldt</span>
                            <button class="btn-danger btn-sm" onclick="handlePermanentDeletePlannerToken(${t.id})">${Ikon('slet')} Slet</button>`}
                 </div>
             </div>
@@ -5005,7 +5006,7 @@ function renderPlannerLog(rows) {
             ? ` <span class="tekst-daempet">(${r.match_count} baner)</span>` : '';
         return `
         <tr>
-            <td style="white-space:nowrap;">${new Date(r.received_at).toLocaleString('da-DK')}</td>
+            <td class="nowrap">${new Date(r.received_at).toLocaleString('da-DK')}</td>
             <td class="${ok ? 'pl-status-ok' : 'pl-status-err'}">${r.http_status}</td>
             <td>${escapeHtml(r.endpoint || '')}</td>
             <td>${escapeHtml(r.label || '')}${antal}</td>
@@ -5057,7 +5058,7 @@ function renderPlannerTestCourts() {
     body.innerHTML = Array.from({ length: plannerCourtCount }, (_, i) => {
         const n = i + 1;
         const d = PT_NAVNE[i % PT_NAVNE.length];
-        const inp = (cls, val, ph) => `<input type="text" class="pl-input ${cls}" value="${escapeHtml(val)}" placeholder="${ph}" style="width:100%;padding:6px 8px;font-size:0.88em;">`;
+        const inp = (cls, val, ph) => `<input type="text" class="pl-input ${cls} admin-input admin-input--sm" value="${escapeHtml(val)}" placeholder="${ph}">`;
         return `
         <tr data-court="${n}">
             <td><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;white-space:nowrap;">
@@ -5133,7 +5134,7 @@ const PT_RESULTAT_STATUS = {
 function ptResultaterHtml(data) {
     const side = s => (s || []).filter(Boolean).map(escapeHtml).join(' / ');
     if (!data.results.length) {
-        return '<div style="margin-top:8px;color:var(--text-muted, rgba(255, 255, 255, 0.62));">Ingen resultater i dag for denne nøgle endnu.</div>';
+        return '<div class="tekst-daempet luft-over-8">Ingen resultater i dag for denne nøgle endnu.</div>';
     }
     const raekker = data.results.map(r => {
         const saet = r.sets.length ? r.sets.map(x => `${x.side1}-${x.side2}`).join(', ') : '—';
@@ -5144,11 +5145,11 @@ function ptResultaterHtml(data) {
             <td>${escapeHtml(r.label || r.roundId || '')}</td>
             <td>${side(r.side1)}</td>
             <td>${side(r.side2)}</td>
-            <td style="white-space:nowrap;">${escapeHtml(saet)}</td>
+            <td class="nowrap">${escapeHtml(saet)}</td>
             <td>${escapeHtml(PT_RESULTAT_STATUS[r.status] || r.status)}</td>
             <td>${vinder}</td>
             <td>${r.source === 'entered' ? 'Tastet' : 'Talt'}</td>
-            <td style="white-space:nowrap;">${new Date(r.updatedAt).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' })}${rettet}</td>
+            <td class="nowrap">${new Date(r.updatedAt).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' })}${rettet}</td>
         </tr>`;
     }).join('');
     return `<div style="overflow-x:auto;margin-top:8px;">
@@ -5157,7 +5158,7 @@ function ptResultaterHtml(data) {
                 <tbody>${raekker}</tbody>
             </table>
         </div>
-        <details style="margin-top:8px;"><summary style="cursor:pointer;color:var(--text-muted, rgba(255, 255, 255, 0.62));">Vis JSON (som badmintonplanner.dk får det)</summary>
+        <details class="luft-over-8"><summary style="cursor:pointer;color:var(--text-muted, rgba(255, 255, 255, 0.62));">Vis JSON (som badmintonplanner.dk får det)</summary>
             <pre style="white-space:pre-wrap;word-break:break-word;font-size:0.85em;margin:8px 0 0;">${escapeHtml(JSON.stringify(data, null, 2))}</pre>
         </details>`;
 }
@@ -5167,10 +5168,10 @@ function ptSvarHtml(status, ms, data) {
     let html = `<div><span class="${ok ? 'pl-status-ok' : 'pl-status-err'}">HTTP ${status}</span> <span class="tekst-daempet">· ${ms} ms</span></div>`;
     if (!data) return html;
     if (ok && Array.isArray(data.results) && 'hasMore' in data) return html + ptResultaterHtml(data);
-    if (data.error) html += `<div style="margin-top:6px;">${escapeHtml(data.error)}${data.code ? ` <span class="tekst-daempet">(${escapeHtml(data.code)})</span>` : ''}</div>`;
+    if (data.error) html += `<div class="luft-over-6">${escapeHtml(data.error)}${data.code ? ` <span class="tekst-daempet">(${escapeHtml(data.code)})</span>` : ''}</div>`;
     if (Array.isArray(data.details)) html += `<div class="tekst-daempet">${data.details.map(escapeHtml).join('<br>')}</div>`;
     if (Array.isArray(data.results)) {
-        html += '<div style="margin-top:8px;">' + data.results.map(r => {
+        html += '<div class="luft-over-8">' + data.results.map(r => {
             const s = r.status === 'shown' ? '✓ vist' : r.status === 'cleared' ? '– ryddet' : `✗ afvist (${PL_AARSAG[r.reason] || r.reason})`;
             const prev = r.previous ? ` <span class="tekst-daempet">før: ${escapeHtml(r.previous.side1)} vs ${escapeHtml(r.previous.side2)}${r.previous.counted ? `, ${escapeHtml(r.previous.sets)} sæt` : ''}</span>` : '';
             return `<div>Bane ${r.courtNumber}: ${s}${prev}</div>`;
@@ -5179,7 +5180,7 @@ function ptSvarHtml(status, ms, data) {
     }
     if (data.integrationEnabled !== undefined && !Array.isArray(data.results)) {
         const v = w => w ? `${plDagNavn(w.ugedag).toLowerCase()} ${w.from.replace(':', '.')}–${w.to.replace(':', '.')}` : '';
-        html += `<div style="margin-top:8px;">Integration: ${data.integrationEnabled ? 'aktiv' : 'slået fra'} · ${data.openNow ? `<span class="pl-status-ok">åbent nu</span> (${v(data.window)}), bane ${data.courtsNow.join(', ')}` : `lukket${data.nextWindow ? `, næste: ${v(data.nextWindow)}` : ''}`}</div>`;
+        html += `<div class="luft-over-8">Integration: ${data.integrationEnabled ? 'aktiv' : 'slået fra'} · ${data.openNow ? `<span class="pl-status-ok">åbent nu</span> (${v(data.window)}), bane ${data.courtsNow.join(', ')}` : `lukket${data.nextWindow ? `, næste: ${v(data.nextWindow)}` : ''}`}</div>`;
         if (data.currentRound) html += `<div>Vist runde: ${escapeHtml(data.currentRound.label || data.currentRound.roundId || '')} (modtaget ${new Date(data.currentRound.receivedAt).toLocaleTimeString('da-DK')})</div>`;
         else html += '<div class="tekst-daempet">Ingen runde vises lige nu.</div>';
     }
@@ -5205,7 +5206,7 @@ function renderHoldkampRegelBlok(tm) {
     const fund = HoldkampFormater.tjekOpstilling(tm.format, tm.games || [], navne);
     if (fund.length) {
         html += regelBoks('240,165,0',
-            `<div style="color:var(--color-warning, #ffb02e);font-weight:bold;margin-bottom:4px;">Bemærkninger til opstillingen</div>` +
+            `<div class="tekst-advarsel fed luft-under-4">Bemærkninger til opstillingen</div>` +
             fund.map(f => `<div>• ${escapeHtml(f.tekst)}</div>`).join(''));
     }
 
@@ -5218,13 +5219,13 @@ function renderHoldkampRegelBlok(tm) {
             const gA = f && tm.games[f.idxA], gB = f && tm.games[f.idxB];
             const kanByttes = f && gA.status === 'pending' && gB.status === 'pending';
             const knap = kanByttes
-                ? `<button onclick="byttU9Singler(${tm.id}, ${gA.id}, ${gB.id}, ${f.hold}, ${f.a}, ${f.b})" class="btn-primary" style="margin-top:8px;padding:6px 14px;font-size:0.9em;">Byt ${escapeHtml(navne[f.hold])}s spillere i ${f.a}. og ${f.b}. single</button>`
+                ? `<button onclick="byttU9Singler(${tm.id}, ${gA.id}, ${gB.id}, ${f.hold}, ${f.a}, ${f.b})" class="btn-primary btn-sm luft-over-8">Byt ${escapeHtml(navne[f.hold])}s spillere i ${f.a}. og ${f.b}. single</button>`
                 : '';
             html += regelBoks('217,44,63',
-                `<div style="font-weight:bold;margin-bottom:4px;">${escapeHtml(m.spiller1)} og ${escapeHtml(m.spiller2)} mødes i både ${m.a}. og ${m.b}. single</div>
+                `<div class="fed luft-under-4">${escapeHtml(m.spiller1)} og ${escapeHtml(m.spiller2)} mødes i både ${m.a}. og ${m.b}. single</div>
                  <div style="color:var(--text-secondary, rgba(255, 255, 255, 0.78));">Hvis begge klubber er enige, kan der byttes rundt på to singler fra toppen af holdskemaet (§ 7 stk. 6 c).</div>
-                 ${f ? '' : '<div style="color:var(--text-secondary, rgba(255, 255, 255, 0.78));margin-top:4px;">Der er ikke fundet et byt, der løser det — ret spillerne under Rediger.</div>'}
-                 ${f && !kanByttes ? '<div style="color:var(--text-secondary, rgba(255, 255, 255, 0.78));margin-top:4px;">En af kampene er allerede i gang, så der kan ikke byttes.</div>' : ''}
+                 ${f ? '' : '<div class="tekst-sekundaer luft-over-4">Der er ikke fundet et byt, der løser det — ret spillerne under Rediger.</div>'}
+                 ${f && !kanByttes ? '<div class="tekst-sekundaer luft-over-4">En af kampene er allerede i gang, så der kan ikke byttes.</div>' : ''}
                  ${knap}`);
         }
     }
@@ -5243,11 +5244,11 @@ function renderHoldkampRegelBlok(tm) {
             `<div style="color:var(--color-warning, #ffb02e);font-weight:bold;font-size:1.05em;margin-bottom:4px;">3–3: Der skal spilles golden set</div>
              <div style="color:var(--text-secondary, rgba(255, 255, 255, 0.78));margin-bottom:10px;">Ét sæt, spillet som et 3. sæt, med en double i en ny konstellation af spillere, der har deltaget i holdkampen.
                  Vinderen vinder holdkampen 4–3 (§ 7 stk. 1 e).</div>
-             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+             <div class="gitter-2">
                  <div><div class="hold-navn hold-navn--1">${escapeHtml(tm.team1_name)}</div>${vaelger(1, 1)}${vaelger(1, 2)}</div>
                  <div><div class="hold-navn hold-navn--2">${escapeHtml(tm.team2_name)}</div>${vaelger(2, 1)}${vaelger(2, 2)}</div>
              </div>
-             <button onclick="opretGoldenSet(${tm.id})" class="btn-primary" style="margin-top:6px;">Opret golden set</button>
+             <button onclick="opretGoldenSet(${tm.id})" class="btn-primary luft-over-6">Opret golden set</button>
              <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.82em;margin-top:8px;">Kan et hold ikke stille et nyt par (fx ved afbud fra 2 spillere), tabes golden set uden kamp (§ 22 stk. 1 c).
                  Opret det så med de spillere, der er, og registrér W.O. under Manuel.</div>`);
     }
@@ -5331,7 +5332,7 @@ function opdaterHoldkampFormRegler() {
     let html = '';
     if (fund.length) {
         html += regelBoks('240,165,0',
-            `<div style="color:var(--color-warning, #ffb02e);font-weight:bold;margin-bottom:4px;">Bemærkninger til opstillingen</div>` +
+            `<div class="tekst-advarsel fed luft-under-4">Bemærkninger til opstillingen</div>` +
             fund.map(f => `<div>• ${escapeHtml(f.tekst)}</div>`).join(''));
     }
     if (format === 'u9_3spillere') {

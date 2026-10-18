@@ -1407,3 +1407,55 @@ header > div {
 
 /* Mærket står lige efter navnet ("Klubturnering PÅGÅR") */
 .historik-gruppe__titel .maerke { margin-left: 6px; }
+
+
+/* ═════════ G4, bid 3: kamphistorik, logo-vælger, kiosk, import og planner ═════════ */
+
+/* Kamphistorikkens nøgletal (gennemsnit, tætteste sæt …) */
+.statistik-kort {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 10px;
+    border-radius: 5px;
+}
+
+.statistik-kort__etiket {
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
+    font-size: 0.85em;
+    margin-bottom: 3px;
+}
+
+.statistik-kort__vaerdi {
+    color: var(--text-primary, #eaeaea);
+    font-weight: 700;
+    font-size: 1.1em;
+}
+
+/* Tom liste / fejl i stedet for en liste */
+.tom-besked {
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
+    text-align: center;
+    padding: 40px;
+    font-size: 1.2em;
+}
+
+.tom-besked--lille { padding: 20px; font-size: 1em; }
+.tom-besked--fejl { color: var(--color-accent); }
+
+/* Tekst på højde med knapperne ved siden af ("Tilbagekaldt") */
+.status-tekst { padding: 6px 10px; }
+
+/* Ikon inde i en tekstlinje */
+.ikon-tekst { width: 1em; height: 1em; vertical-align: -0.12em; }
+
+/* Felter, der hører til et hold (badmintonplayer-import) */
+.admin-input--hold1 { border-color: var(--color-win, #45d17e); }
+.admin-input--hold2 { border-color: var(--color-accent); }
+
+.luft-over-4 { margin-top: 4px; }
+.luft-over-6 { margin-top: 6px; }
+.luft-over-8 { margin-top: 8px; }
+.luft-over-12 { margin-top: 12px; }
+.luft-under-4 { margin-bottom: 4px; }
+.fyld { flex: 1; min-width: 0; }
+.ingen-krymp { flex-shrink: 0; }
+.tekst-venstre { text-align: left; }
