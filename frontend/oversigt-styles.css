@@ -14,20 +14,6 @@
     --color-danger-rgb: 217, 44, 63;
 }
 
-/* Spiller-logo (individuelle/turneringskampe) ud for hvert navn */
-.court-card .player-name-row {
-    display: flex;
-    align-items: center;
-    gap: 0.6vw;
-}
-.court-card .player-logo {
-    height: min(4.5vh, 3vw);
-    width: auto;
-    max-width: min(7vh, 4.5vw);
-    object-fit: contain;
-    flex-shrink: 0;
-}
-
 * {
     margin: 0;
     padding: 0;
@@ -103,7 +89,7 @@ body::before {
 
 .overview-header h1 {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 2em;
+    font-size: min(5.6vh, 3.1vw);
     color: #ffffff;
     font-weight: 400;
     letter-spacing: 4px;
@@ -117,145 +103,267 @@ body::before {
 }
 
 .page-indicator span {
-    font-size: 0.85em;
+    font-size: min(2.6vh, 1.5vw);
     color: var(--text-muted, rgba(255, 255, 255, 0.62));
     font-weight: 500;
     letter-spacing: 0.5px;
 }
 
-/* =================== HOLDKAMP-KORT (én holdkamp pr. side) ===================
-   Alle størrelser er i viewport-enheder (vh/vw) uden faste em/px-lofter, så
-   visningen skalerer proportionalt og ser ens ud på FullHD og 4K (bare skarpere
-   på 4K). min(Xvh, Yvw) holder det balanceret på 16:9 og forhindrer overflow. */
+/* =================== HOLDKAMP (G2: enkel holdkampvisning) ===================
+   Holdstillingen øverst (det største på skærmen), delkampene, der spilles nu,
+   som små TV-kort, og alle delkampe som en række nederst. Størrelserne regnes
+   i --u (1vh på 16:9, mindre på smallere skærme), og "spilles nu"-kortene
+   skaleres med --hk-s efter, hvor mange der er i gang (sat i oversigt-script.js). */
 #holdkampCardsGrid {
+    --u: min(1vh, 0.5625vw);
+    --hk-farve-1: var(--color-accent);
+    --hk-farve-2: var(--color-info, #3498db);
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 1.5vh;
-    padding: 1.5vh 1.5vw;
-    overflow: hidden; /* ingen manuel scroll — rotation viser én side ad gangen */
+    overflow: hidden; /* ingen manuel scroll — rotation viser én holdkamp ad gangen */
     min-height: 0;
 }
-/* Under holdkamp vises kortene (med live delkampe) i stedet for per-bane-grid */
+/* Under holdkamp vises holdkampvisningen i stedet for per-bane-grid */
 .has-holdkamp .courts-grid { display: none; }
 
 #holdkampCardsGrid .hk-card {
-    flex: 1 1 0;        /* fylder den tilgængelige højde */
+    flex: 1 1 0;
     min-height: 0;
-    overflow: hidden;   /* info-skærm uden mus — må ALDRIG kræve scroll */
+    overflow: hidden;
     display: flex;
     flex-direction: column;
-    background: rgba(20, 10, 40, 0.5);
-    border: 1px solid rgba(var(--color-primary-rgb), 0.3);
-    border-radius: 1vh;
-    padding: 1.6vh 1.4vw;
     animation: fadeUp 0.4s ease both;
 }
-#holdkampCardsGrid .hk-card-header {
-    display: flex;
+
+/* 1) Holdstillingen med klublogoer */
+#holdkampCardsGrid .hk-hoved {
+    flex-shrink: 0;
+    height: calc(var(--u) * 15.7);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
-    gap: 1.6vw;
-    margin-bottom: 1.4vh;
+    gap: calc(var(--u) * 3.7);
+    padding: 0 calc(var(--u) * 4.4);
+    background: rgba(0, 0, 0, 0.28);
     font-family: 'Bebas Neue', sans-serif;
     line-height: 1;
-    flex-shrink: 0;
 }
-#holdkampCardsGrid .hk-card-header .t1 { color: var(--color-win); font-size: min(7vh, 4vw); }
-#holdkampCardsGrid .hk-card-header .sc { color: #fff; font-size: min(7vh, 4vw); letter-spacing: 0.4vw; }
-#holdkampCardsGrid .hk-card-header .t2 { color: var(--color-accent); font-size: min(7vh, 4vw); }
-/* Klub-logoer flankerer holdnavnene — fremtrædende, bevarer aspekt. */
-#holdkampCardsGrid .hk-card-logo {
-    height: min(9vh, 6vw);
-    width: auto;
-    max-width: min(14vh, 9vw);
-    object-fit: contain;
-    flex-shrink: 0;
-}
-/* Delkampene fylder den ledige højde — alle rækker deler højden ligeligt
-   (minmax(0,1fr)) så de altid er på skærmen uden scroll, uanset antal. */
-#holdkampCardsGrid .hk-games {
-    flex: 1;
-    min-height: 0;
-    display: grid;
-    /* grid-template-columns sættes inline pr. holdkamp ud fra antal delkampe */
-    grid-template-columns: 1fr 1fr;
-    grid-auto-rows: minmax(0, 1fr);
-    gap: 1vh;
-}
-/* Skriften skaleres efter rækkeantal (--hk-rows) så indholdet passer i cellen,
-   begrænset af bredden (vw). overflow:hidden er sikkerhedsnet mod scroll. */
-#holdkampCardsGrid .hk-game {
-    font-size: min(1.7vw, calc(82vh / var(--hk-rows, 3) / 5.5));
-    overflow: hidden;
-    min-height: 0;
+#holdkampCardsGrid .hk-hold {
     display: flex;
-    flex-direction: column;
-    justify-content: center;
-    background: rgba(var(--color-primary-rgb), 0.15);
-    border-left: 0.2em solid #555;
-    border-radius: 0.4em;
-    padding: 0.4em 0.6em;
+    align-items: center;
+    gap: calc(var(--u) * 2);
+    min-width: 0;
+    font-size: calc(var(--u) * 8.5);
+    letter-spacing: 2px;
+    color: #ffffff;
 }
-#holdkampCardsGrid .hk-game-top {
+#holdkampCardsGrid .hk-hold--1 { justify-content: flex-end; }
+#holdkampCardsGrid .hk-holdnavn {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+#holdkampCardsGrid .hk-farve {
+    flex-shrink: 0;
+    width: calc(var(--u) * 1.7);
+    height: calc(var(--u) * 7.4);
+    border-radius: calc(var(--u) * 0.5);
+}
+#holdkampCardsGrid .hk-farve--1 { background: var(--hk-farve-1); }
+#holdkampCardsGrid .hk-farve--2 { background: var(--hk-farve-2); }
+#holdkampCardsGrid .hk-card-logo {
+    flex-shrink: 0;
+    height: calc(var(--u) * 9.6);
+    width: auto;
+    max-width: calc(var(--u) * 15);
+    object-fit: contain;
+}
+#holdkampCardsGrid .hk-stilling {
+    font-size: calc(var(--u) * 13.9);
+    letter-spacing: 6px;
+    color: #ffffff;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+/* "Spilles nu · 4 kampe" og "Holdkamp 1 af 2" (skiftet mellem holdkampe) */
+#holdkampCardsGrid .hk-undertitel {
+    flex-shrink: 0;
+    height: calc(var(--u) * 5.4);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.4em;
-    margin-bottom: 0.2em;
+    padding: 0 calc(var(--u) * 4.4);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: calc(var(--u) * 3.7);
+    letter-spacing: 3px;
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
 }
-#holdkampCardsGrid .hk-badge {
-    background: var(--color-accent);
-    color: #fff;
-    padding: 0.1em 0.45em;
-    border-radius: 0.3em;
-    font-size: 0.8em;
-    font-weight: bold;
-    white-space: nowrap;
-}
-#holdkampCardsGrid .hk-game-status {
-    font-size: 0.8em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    min-width: 0;
+#holdkampCardsGrid .hk-side { font-size: calc(var(--u) * 3); }
+
+/* 2) Delkampene, der spilles nu */
+#holdkampCardsGrid .hk-live {
+    --s: var(--hk-s, 1);
     flex: 1;
-    text-align: right;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(var(--hk-cols, 2), minmax(0, 1fr));
+    grid-template-rows: repeat(var(--hk-rows, 2), minmax(0, 1fr));
+    gap: calc(var(--u) * 1.3);
+    padding: 0 calc(var(--u) * 2.2) calc(var(--u) * 1.3);
 }
-/* Mini-scoreboard (aktiv delkamp) — store point-tal som på TV, men kompakt */
-#holdkampCardsGrid .hk-sb {
+#holdkampCardsGrid .hk-kamp {
+    min-height: 0;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
-    gap: 0.1em;
+    border-radius: calc(var(--u) * 1.7 * var(--s));
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
 }
-#holdkampCardsGrid .hk-sb-row {
+#holdkampCardsGrid .hk-kamp-hoved {
+    flex-shrink: 0;
+    height: calc(var(--u) * 4.8 * var(--s));
     display: flex;
     align-items: center;
-    gap: 0.4em;
+    justify-content: space-between;
+    gap: 1em;
+    padding: 0 calc(var(--u) * 2 * var(--s));
+    background: rgba(0, 0, 0, 0.22);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: calc(var(--u) * 3.7 * var(--s));
+    line-height: 1;
+    letter-spacing: 2px;
+    white-space: nowrap;
 }
-#holdkampCardsGrid .hk-sb-name {
+#holdkampCardsGrid .hk-kamp-kat small {
+    font-size: 0.75em;
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
+}
+#holdkampCardsGrid .hk-kamp-status {
+    font-size: 0.85em;
+    color: rgba(255, 255, 255, 0.75);
+    font-variant-numeric: tabular-nums;
+}
+#holdkampCardsGrid .hk-kamp--pause .hk-kamp-status { color: #ff8fa1; }
+#holdkampCardsGrid .hk-kamp-raekke {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    gap: calc(var(--u) * 1.5 * var(--s));
+    padding-right: calc(var(--u) * 2.2 * var(--s));
+}
+#holdkampCardsGrid .hk-kamp-raekke.hk-serv { background: rgba(var(--color-primary-rgb), 0.2); }
+#holdkampCardsGrid .hk-streg {
+    flex-shrink: 0;
+    align-self: stretch;
+    width: calc(var(--u) * 1.1 * var(--s));
+}
+#holdkampCardsGrid .hk-streg--1 { background: var(--hk-farve-1); }
+#holdkampCardsGrid .hk-streg--2 { background: var(--hk-farve-2); }
+#holdkampCardsGrid .hk-kamp-logo {
+    flex-shrink: 0;
+    height: calc(var(--u) * 5.6 * var(--s));
+    width: auto;
+    max-width: calc(var(--u) * 8 * var(--s));
+    object-fit: contain;
+}
+#holdkampCardsGrid .hk-kamp-navn {
     flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column; /* double: én spiller pr. linje */
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: calc(var(--u) * 5.2 * var(--s));
+    line-height: 1;
+    letter-spacing: 1px;
+}
+#holdkampCardsGrid .hk-kamp-navn span {
     min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: var(--text-primary, #eaeaea);
-    font-size: 0.95em;
 }
-#holdkampCardsGrid .hk-sb-sets {
-    min-width: 1.1em;
-    text-align: center;
-    color: var(--color-warning, #ffb02e);
-    font-weight: bold;
-    font-size: 0.9em;
+#holdkampCardsGrid .hk-kamp-saet {
+    display: flex;
+    gap: calc(var(--u) * 0.6 * var(--s));
+    flex-shrink: 0;
 }
-#holdkampCardsGrid .hk-sb-pts {
-    min-width: 1.6em;
+#holdkampCardsGrid .hk-saet-boks {
+    width: calc(var(--u) * 4.8 * var(--s));
+    height: calc(var(--u) * 5.7 * var(--s));
+    display: grid;
+    place-items: center;
+    border-radius: calc(var(--u) * 0.7 * var(--s));
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: calc(var(--u) * 4.6 * var(--s));
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+#holdkampCardsGrid .hk-kamp-pts {
+    flex-shrink: 0;
+    min-width: calc(var(--u) * 12 * var(--s));
     text-align: right;
     font-family: 'Bebas Neue', sans-serif;
-    font-weight: bold;
-    line-height: 0.9;
-    font-size: 2em;
-    color: #fff;
+    font-size: calc(var(--u) * 11 * var(--s));
+    line-height: 0.8;
+    font-variant-numeric: tabular-nums;
+    color: #ffffff;
+}
+
+/* 3) Alle delkampe: kategori, vinderens farve og hvert sæt set fra hjemmeholdet */
+#holdkampCardsGrid .hk-chips {
+    flex-shrink: 0;
+    height: calc(var(--u) * 18);
+    display: flex;
+    align-items: center;
+    gap: calc(var(--u) * 0.9);
+    padding: 0 calc(var(--u) * 2.2);
+}
+#holdkampCardsGrid .hk-chip {
+    flex: 1 1 0;
+    min-width: 0;
+    height: calc(var(--u) * 15.4);
+    padding: calc(var(--u) * 0.9) 0;
+    border-radius: calc(var(--u) * 1.1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(var(--u) * 0.55);
+    overflow: hidden;
+    font-family: 'Bebas Neue', sans-serif;
+    line-height: 1;
+    color: #ffffff;
+}
+#holdkampCardsGrid .hk-chip--1 { background: var(--color-knap, var(--color-accent)); }
+#holdkampCardsGrid .hk-chip--2 { background: #2b7bbd; } /* mørkere info-blå: hvid tekst ≥ 4,5:1 */
+#holdkampCardsGrid .hk-chip--igang {
+    background: rgba(255, 255, 255, 0.04);
+    border: 2px solid rgba(255, 255, 255, 0.4);
+}
+#holdkampCardsGrid .hk-chip--venter {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
+}
+#holdkampCardsGrid .hk-chip-kat {
+    font-size: calc(var(--u) * 3.5);
+    letter-spacing: 1px;
+    white-space: nowrap;
+}
+#holdkampCardsGrid .hk-chip-saet {
+    font-size: calc(var(--u) * 2.8);
+    letter-spacing: 1px;
+    font-variant-numeric: tabular-nums;
+}
+#holdkampCardsGrid .hk-chip-saet--tabt { opacity: 0.7; }
+#holdkampCardsGrid .hk-chip-note {
+    margin: auto 0;
+    font-size: calc(var(--u) * 2.4);
+    letter-spacing: 1px;
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
 }
 
 /* Nedtællings-løber i toppen — tømmes fra højre mod venstre over 15 sek.
@@ -300,54 +408,38 @@ body::before {
     backdrop-filter: blur(4px);
 }
 
-/* =================== COURTS GRID =================== */
+/* =================== BANEKORT (G2: hvert kort er et lille TV, layout A) ===================
+   Status i kortets top, navne i Bebas, pointtallet er det største på kortet,
+   og stregen i venstre kant viser serv (grøn: vinderen). 3 × 2 kort; ved højst
+   4 baner 2 × 2 og ca. 40 % større (.courts-grid--fire sætter --k).
+   Størrelserne regnes i --u (1vh på 16:9, mindre på smallere skærme). */
 .courts-grid {
+    --u: min(1vh, 0.5625vw);
+    --k: 1;
     flex: 1;
+    min-height: 0;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    grid-template-rows: repeat(2, 1fr);
-    gap: 10px;
-    padding: 10px 16px 16px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: calc(var(--u) * 1.3);
+    padding: calc(var(--u) * 1.3);
     overflow: hidden;
 }
 
-/* =================== COURT CARD =================== */
+.courts-grid.courts-grid--fire {
+    --k: 1.4;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .court-card {
     position: relative;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 18px;
-    padding: 12px 16px;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
     overflow: hidden;
-    transition: border-color 0.3s ease, background 0.3s ease;
-}
-
-/* Accent line at bottom */
-.court-card::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 15%;
-    right: 15%;
-    height: 2px;
-    background: var(--color-accent);
-    border-radius: 2px 2px 0 0;
-    opacity: 0;
-    transform: scaleX(0.4);
-    transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-.court-card:not(.inactive):hover::after {
-    opacity: 0.6;
-    transform: scaleX(1);
-}
-
-.court-card:not(.inactive) {
-    border-color: rgba(var(--color-primary-rgb), 0.2);
-    background: rgba(var(--color-primary-rgb), 0.05);
+    border-radius: calc(var(--u) * 1.7);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* Stagger animations — only on initial render (.court-card--animate added by JS) */
@@ -359,285 +451,223 @@ body::before {
 .court-card--animate:nth-child(5) { animation-delay: 0.24s; }
 .court-card--animate:nth-child(6) { animation-delay: 0.28s; }
 
-/* =================== COURT CARD HEADER =================== */
 .court-card-header {
+    flex-shrink: 0;
+    height: calc(var(--u) * 5.4 * var(--k));
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
-    padding-bottom: 7px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    gap: 1em;
+    padding: 0 calc(var(--u) * 2 * var(--k));
+    background: rgba(0, 0, 0, 0.22);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: calc(var(--u) * 3.9 * var(--k));
+    line-height: 1;
+    white-space: nowrap;
 }
 
 .court-number {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 2.4em;
-    font-weight: 400;
-    color: rgba(255, 255, 255, 0.7);
+    letter-spacing: 3px;
+    color: #ffffff;
+}
+
+.court-number span { color: var(--color-accent); }
+
+.oc-status {
     letter-spacing: 2px;
-}
-
-.court-timer {
-    font-size: 0.9em;
-    color: rgba(var(--color-win-rgb), 0.7);
-    font-weight: 600;
+    color: rgba(255, 255, 255, 0.75);
     font-variant-numeric: tabular-nums;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-/* =================== PLAYERS =================== */
-.court-players {
+.oc-status--pause { color: #ff8fa1; }
+.oc-status--afgjort { color: rgb(var(--color-win-rgb)); }
+
+/* To rækker, der deler kortets højde */
+.oc-raekke {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    gap: calc(var(--u) * 1.5 * var(--k));
+    padding-right: calc(var(--u) * 1.9 * var(--k));
+}
+
+.oc-streg {
+    flex-shrink: 0;
+    align-self: stretch;
+    width: calc(var(--u) * 1.1 * var(--k));
+}
+
+.oc-raekke.oc-serv { background: rgba(var(--color-primary-rgb), 0.18); }
+.oc-raekke.oc-serv .oc-streg { background: var(--color-accent); }
+
+.oc-navne {
     flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    gap: 5px;
 }
 
-.player-row {
+.court-card .player-name-row {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: 6px 10px;
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.player-info {
-    flex: 1;
+    gap: calc(var(--u) * 0.9 * var(--k));
     min-width: 0;
 }
 
-.player-name,
-.player-name-partner {
-    font-size: clamp(0.85em, 1.3vw, 1.1em);
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.85);
-    margin-bottom: 1px;
+/* Spillerens klublogo foran navnet (turnering/klubkamp) */
+.court-card .player-logo {
+    flex-shrink: 0;
+    height: calc(var(--u) * 4.3 * var(--k));
+    width: auto;
+    max-width: calc(var(--u) * 6.5 * var(--k));
+    object-fit: contain;
+}
+
+.court-card .player-name {
+    min-width: 0;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: calc(var(--u) * 5 * var(--k));
+    line-height: 0.95;
+    letter-spacing: 1px;
+    color: #ffffff;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.player-stats {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+.oc-saet {
     flex-shrink: 0;
-}
-
-.player-score {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(3em, min(9vh, 6vw), 6em);
-    font-weight: 400;
-    color: #ffffff;
-    width: 2.5ch;
-    text-align: center;
-    letter-spacing: 1px;
-    line-height: 1;
-    font-variant-numeric: tabular-nums;
-}
-
-.player-games {
     display: flex;
-    align-items: center;
+    gap: calc(var(--u) * 0.75 * var(--k));
 }
 
-.vs-divider {
-    text-align: center;
-    font-size: 0.62em;
-    font-weight: 600;
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.15);
-    margin: 0;
-}
-
-.games-label { display: none; }
-.games-value { display: none; }
-
-/* Afsluttede sæt — farvet tal lidt mindre end nuværende score */
-.set-hist-score {
+.oc-saet-boks {
+    width: calc(var(--u) * 5.4 * var(--k));
+    height: calc(var(--u) * 6.5 * var(--k));
+    display: grid;
+    place-items: center;
+    border-radius: calc(var(--u) * 0.9 * var(--k));
     font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(2.2em, min(7vh, 4.5vw), 4.5em);
-    font-weight: 400;
-    letter-spacing: 1px;
+    font-size: calc(var(--u) * 5.2 * var(--k));
     line-height: 1;
-    opacity: 0.9;
-    width: 2.5ch;
-    text-align: center;
     font-variant-numeric: tabular-nums;
 }
 
-/* =================== PAUSE OVERLAY =================== */
-.court-card-content {
-    display: contents; /* transparent wrapper */
+/* Sætbokse (banekort og holdkampkort): grøn = vundet, grå = tabt,
+   kant = pausen midt i sættet (stillingen nu) */
+.oc-saet-boks.won,
+.hk-saet-boks.won {
+    background: rgba(var(--color-win-rgb), 0.18);
+    color: rgb(var(--color-win-rgb));
 }
 
-.court-card-content--paused {
-    opacity: 0.3;
-    pointer-events: none;
+.oc-saet-boks.lost,
+.hk-saet-boks.lost {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.8);
 }
 
-.court-pause-overlay {
+.oc-saet-boks.igang {
+    background: rgba(255, 255, 255, 0.04);
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35);
+    color: #ffffff;
+}
+
+.oc-point {
+    flex-shrink: 0;
+    width: calc(var(--u) * 14.8 * var(--k));
+    text-align: right;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: calc(var(--u) * 14.8 * var(--k));
+    line-height: 0.8;
+    font-variant-numeric: tabular-nums;
+    color: #ffffff;
+}
+
+/* Pause: nedtællingen står i højre side og dækker begge rækker; rækkerne
+   holder plads til den, så den ikke dækker sættene */
+.court-card--paused .oc-point { display: none; }
+
+.court-card--paused .oc-raekke {
+    padding-right: calc(var(--u) * 21 * var(--k));
+}
+
+.oc-pause {
     position: absolute;
-    inset: 0;
-    z-index: 10;
+    right: 0;
+    top: calc(var(--u) * 5.4 * var(--k));
+    bottom: 0;
+    width: calc(var(--u) * 19 * var(--k));
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 4px;
-    border-radius: 18px;
-    background: rgba(10, 8, 20, 0.55);
-    backdrop-filter: blur(2px);
+    background: rgba(var(--color-accent-rgb), 0.12);
+    border-left: 2px solid rgba(var(--color-accent-rgb), 0.4);
 }
 
-.court-pause-overlay__label {
-    font-size: 0.7em;
+.oc-pause-titel {
+    font-size: calc(var(--u) * 1.7 * var(--k));
     font-weight: 700;
-    letter-spacing: 4px;
-    text-transform: uppercase;
-    color: rgba(var(--color-win-rgb), 0.8);
+    letter-spacing: 0.3em;
+    margin-left: 0.3em;
+    color: #ff8fa1;
 }
 
-.court-pause-overlay__timer {
+.oc-pause-tal {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(4em, min(18vh, 14vw), 12em);
-    font-weight: 400;
-    color: rgba(var(--color-win-rgb), 0.95);
-    letter-spacing: 4px;
-    line-height: 1;
+    font-size: calc(var(--u) * 11 * var(--k));
+    line-height: 0.9;
     font-variant-numeric: tabular-nums;
-    text-shadow: 0 0 40px rgba(var(--color-win-rgb), 0.4);
-}
-
-.court-pause-overlay__unit {
-    font-size: 0.65em;
-    font-weight: 600;
-    letter-spacing: 4px;
-    color: var(--text-muted, rgba(255, 255, 255, 0.62));
-    text-transform: uppercase;
-}
-
-/* =================== VENTER PÅ KAMP =================== */
-/* Aktiv bane uden startet kamp: stiplet kant, tydeligt mærke og ingen 0–0-stilling,
-   så man på afstand kan se forskel på "ledig" og "kamp i gang" */
-.court-card.court-card--waiting {
-    border-style: dashed;
-    border-color: rgba(255, 255, 255, 0.18);
-    background: rgba(255, 255, 255, 0.02);
-}
-
-.court-card--waiting .player-stats {
-    visibility: hidden;
-}
-
-.court-waiting-badge {
-    font-size: 0.8em;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.85);
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    padding: 3px 12px;
-    border-radius: 100px;
-}
-
-/* =================== REST BREAK =================== */
-.rest-break-badge {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    background: rgba(var(--color-win-rgb), 0.15);
-    color: rgba(var(--color-win-rgb), 0.9);
-    padding: 4px 12px;
-    border-radius: 100px;
-    font-size: 0.78em;
-    font-weight: 600;
-    border: 1px solid rgba(var(--color-win-rgb), 0.3);
-    letter-spacing: 0.5px;
-}
-
-/* Bane-sponsorbanneret er fjernet fra kortene — sponsorerne vises i stedet som
-   fuldskærms-slideshow når ingen kampe er i gang. */
-
-/* =================== FINISHED MATCH CARD =================== */
-.court-card--finished {
-    border-color: rgba(255, 255, 255, 0.06);
-    background: rgba(255, 255, 255, 0.015);
-    opacity: 0.8;
-}
-
-.court-card--finished .court-number {
-    color: var(--text-muted, rgba(255, 255, 255, 0.62));
-}
-
-.finished-badge {
-    font-size: 0.68em;
-    font-weight: 700;
-    letter-spacing: 1.5px;
-    color: var(--color-win);
-    background: rgba(var(--color-win-rgb), 0.12);
-    border: 1px solid rgba(var(--color-win-rgb), 0.3);
-    padding: 3px 10px;
-    border-radius: 100px;
-}
-
-.finished-time {
-    font-size: 0.82em;
-    color: var(--text-muted, rgba(255, 255, 255, 0.62));
-    font-variant-numeric: tabular-nums;
-}
-
-.player-row--winner {
-    background: rgba(var(--color-win-rgb), 0.07);
-    border-color: rgba(var(--color-win-rgb), 0.2);
-}
-
-.player-score--winner {
-    color: var(--color-win);
-}
-
-/* Grønt tema (data-groent-tema fra theme-loader): vinderen lyst i stedet for grøn */
-:root[data-groent-tema] {
-    --set-vundet: #ffffff;
-}
-
-:root[data-groent-tema] .player-row--winner {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.35);
-}
-
-:root[data-groent-tema] .player-score--winner,
-:root[data-groent-tema] .finished-badge {
     color: #ffffff;
 }
 
-:root[data-groent-tema] .finished-badge {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: rgba(255, 255, 255, 0.35);
+/* Afgjort: kortet tones grønt, vinderens streg er grøn, taberens navn dæmpes,
+   og der er intet pointfelt */
+.court-card--finished {
+    background: rgba(var(--color-win-rgb), 0.05);
+    border-color: rgba(var(--color-win-rgb), 0.25);
 }
 
-.finished-set-scores {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 4px;
-    padding: 8px 0 2px;
-    flex-wrap: wrap;
+.court-card--finished .oc-point { display: none; }
+.oc-raekke.oc-vinder .oc-streg { background: rgb(var(--color-win-rgb)); }
+.oc-raekke.oc-taber .player-name { color: var(--text-muted, rgba(255, 255, 255, 0.62)); }
+
+/* Venter på kamp: stiplet kant og ingen 0–0-stilling */
+.court-card.court-card--waiting {
+    background: rgba(255, 255, 255, 0.02);
+    border: 2px dashed rgba(255, 255, 255, 0.18);
 }
 
-.finished-set-score {
-    font-size: 0.88em;
+.court-card--waiting .oc-status { color: rgba(255, 255, 255, 0.85); }
+.court-card--waiting .oc-point,
+.court-card--waiting .oc-saet { visibility: hidden; }
+
+.oc-venter-tekst {
+    position: absolute;
+    left: calc(var(--u) * 3.1 * var(--k));
+    bottom: calc(var(--u) * 1.5 * var(--k));
+    font-size: calc(var(--u) * 1.7 * var(--k));
     color: var(--text-muted, rgba(255, 255, 255, 0.62));
-    font-variant-numeric: tabular-nums;
 }
 
-.finished-set-sep {
-    color: rgba(255, 255, 255, 0.2);
-    font-size: 0.8em;
+/* Grønt tema (data-groent-tema fra theme-loader): vinder-grøn drukner i
+   temaets grønne baggrund — vundne sæt som lyst felt, vinderen hvid */
+:root[data-groent-tema] .oc-saet-boks.won,
+:root[data-groent-tema] .hk-saet-boks.won {
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--color-bg-dark);
+}
+
+:root[data-groent-tema] .oc-status--afgjort { color: #ffffff; }
+:root[data-groent-tema] .oc-raekke.oc-vinder .oc-streg { background: #ffffff; }
+
+:root[data-groent-tema] .court-card--finished {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.3);
 }
 
 /* =================== LOADING / NO MATCHES =================== */
@@ -681,46 +711,7 @@ body::before {
     display: none;
 }
 
-.has-holdkamp .courts-grid {
-    gap: 6px;
-    padding-top: 6px;
-    padding-bottom: 10px;
-}
-
-.has-holdkamp .court-card {
-    padding: 7px 12px;
-}
-
-.has-holdkamp .court-card-header {
-    margin-bottom: 4px;
-    padding-bottom: 4px;
-}
-
-.has-holdkamp .court-players {
-    gap: 2px;
-}
-
-.has-holdkamp .player-row {
-    padding: 3px 8px;
-}
-
-.has-holdkamp .vs-divider {
-    font-size: 0.52em;
-    margin: -1px 0;
-}
-
 /* =================== RESPONSIVE =================== */
-@media (max-width: 1400px) {
-    .courts-grid {
-        gap: 8px;
-        padding: 8px 12px 12px;
-    }
-
-    .court-card {
-        padding: 10px 12px;
-    }
-}
-
 @media (max-width: 1024px) {
     .courts-grid {
         grid-template-columns: repeat(2, 1fr);

@@ -128,17 +128,12 @@ function hkPageCount() {
     return Math.max(1, Math.ceil(activeTeamMatches.length / HK_PAGE_SIZE));
 }
 
-// Viser "Side X/Y" øverst til højre når der er mere end én holdkamp.
+// "Holdkamp 1 af 2" står i holdkampvisningens undertitel (renderHoldkampCards) —
+// den gamle faste sideindikator øverst til højre holdes skjult.
 function updateHkPageIndicator() {
     const el = document.getElementById('hkPageIndicator');
     if (!el) return;
-    const pages = hkPageCount();
-    if (pages > 1) {
-        el.textContent = `Side ${hkPage + 1}/${pages}`;
-        el.style.display = 'block';
-    } else {
-        el.style.display = 'none';
-    }
+    el.style.display = 'none';
 }
 
 function visibleHkMatches() {
@@ -234,56 +229,20 @@ async function loadHoldkamp() {
     }
 }
 
+// ==================== HOLDKAMP (G2: enkel holdkampvisning) ====================
+// Tre ting, læst ovenfra og ned:
+//  1) Holdstillingen med klublogoer — det største på skærmen.
+//  2) Delkampene, der spilles nu — som små TV-kort med navne, sæt og point.
+//     Feltet deler sig efter antal: 1–2 side om side, 3–4 i 2 × 2, 5–6 i 3 × 2,
+//     flere i 5 kolonner (13 på én gang = 5 × 3).
+//  3) Alle delkampe som en række nederst: kategori, vinderens farve og hvert
+//     sæt set fra hjemmeholdet. Udelades, så længe alle delkampe er i gang.
+// Strukturen tegnes kun igen, når hkKey ændrer sig; point, sæt, status og
+// rækken nederst opdateres på stedet (patchHoldkampCards).
+
 // Fornavn = første ord i navnet (bruges når kampen er i gang for at spare plads).
 function firstName(full) {
     return (full || '').trim().split(/\s+/)[0] || '';
-}
-
-function hkGameCellHtml(g, num) {
-    const isDoubles = HK_DOUBLES.includes(g.category);
-    // Kamp i gang: vis kun fornavn(e) så der er plads til stillingen. Ellers fuldt navn.
-    const short = g.status === 'active';
-    const nm = v => short ? firstName(v) : (v || '');
-    const t1 = isDoubles
-        ? `${nm(g.team1_player1) || '?'}${g.team1_player2 ? ' & ' + nm(g.team1_player2) : ''}`
-        : (nm(g.team1_player1) || '?');
-    const t2 = isDoubles
-        ? `${nm(g.team2_player1) || '?'}${g.team2_player2 ? ' & ' + nm(g.team2_player2) : ''}`
-        : (nm(g.team2_player1) || '?');
-    const topRow = `
-        <div class="hk-game-top">
-            <span class="hk-badge">${escapeHtml(HoldkampFormater.kategoriNavn(g.category, num))}</span>
-            <span class="hk-game-status"></span>
-        </div>`;
-
-    if (g.status === 'active') {
-        // Mini-scoreboard à la TV: navn + sæt + stort point-tal pr. hold.
-        // Tallene fyldes/opdateres live i patchHoldkampCards().
-        return `<div class="hk-game hk-game--active" data-game-id="${g.id}">
-            ${topRow}
-            <div class="hk-sb">
-                <div class="hk-sb-row">
-                    <span class="hk-sb-name">${escapeHtml(t1)}</span>
-                    <span class="hk-sb-sets" data-side="1"></span>
-                    <span class="hk-sb-pts" data-side="1">0</span>
-                </div>
-                <div class="hk-sb-row">
-                    <span class="hk-sb-name">${escapeHtml(t2)}</span>
-                    <span class="hk-sb-sets" data-side="2"></span>
-                    <span class="hk-sb-pts" data-side="2">0</span>
-                </div>
-            </div>
-        </div>`;
-    }
-
-    // Afventer / færdig: navne + status (navne på én linje med ellipsis).
-    const nameStyle = 'color:var(--text-primary, #eaeaea); font-size:0.9em; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
-    return `<div class="hk-game" data-game-id="${g.id}">
-        ${topRow}
-        <div style="${nameStyle}">${escapeHtml(t1)}</div>
-        <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.7em; line-height:1; margin:0.05em 0;">vs</div>
-        <div style="${nameStyle}">${escapeHtml(t2)}</div>
-    </div>`;
 }
 
 // Hvilken bane-spiller hører til team1 hhv. team2 (sider kan være byttet under spil).
@@ -292,73 +251,88 @@ function holdkampCourtSides(cd, g) {
     const t1 = [g.team1_player1, g.team1_player2].filter(Boolean);
     const p1IsT1 = [cd.player1.name, cd.player1.name2].some(n => n && t1.includes(n));
     const p2IsT1 = [cd.player2.name, cd.player2.name2].some(n => n && t1.includes(n));
-    if (p2IsT1 && !p1IsT1) return { team1: cd.player2, team2: cd.player1 };
-    return { team1: cd.player1, team2: cd.player2 };
+    if (p2IsT1 && !p1IsT1) return { team1: cd.player2, team2: cd.player1, byttet: true };
+    return { team1: cd.player1, team2: cd.player2, byttet: false };
 }
 
-function hkStatusFor(g, teamMatch) {
-    if (g.status === 'pending') return { html: '<span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">Afventer</span>', border: '#555' };
-    if (g.status === 'active') {
-        const cd = allCourtData.find(c => c.courtId === g.court_number);
-        // Pause/sæthvil vises i rubrikken når banen er på pause
-        if (cd && cd.restBreakActive) {
-            const label = (cd.restBreakTitle || '').toLowerCase().includes('sæt') ? 'Sæthvil' : 'Pause';
-            const left = formatTimer(getPauseSecondsLeft(cd));
-            return {
-                html: `<span style="color:var(--color-warning, #ffb02e);"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.125em" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg> ${label} ${left} · Bane ${g.court_number}</span>`,
-                border: 'var(--color-warning, #ffb02e)'
-            };
-        }
-        return { html: `<span style="color:#fff;">▶ Bane ${g.court_number}</span>`, border: 'var(--color-primary, #533483)' };
-    }
-    // finished — orienter scoren til team1 så tallene matcher navnene
-    const winner = g.winner_team === 1 ? teamMatch.team1_name : teamMatch.team2_name;
-    const isDoubles = HK_DOUBLES.includes(g.category);
-    const side1Key = isDoubles && g.team1_player2 ? `${g.team1_player1 || ''} / ${g.team1_player2}` : (g.team1_player1 || '');
-    const nums = g.set_scores ? orientHistorySetScoreNumbers(g.set_scores, side1Key).join(' · ') : '';
-    const sc = nums ? ` <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62));">${nums}</span>` : '';
-    return { html: `<span style="color:var(--color-win, #45d17e);">✓ ${escapeHtml(winner)}${sc}</span>`, border: g.winner_team === 1 ? 'var(--color-win, #45d17e)' : '#e94560' };
+// Delkampene nummereret pr. kategori ("HS 1", "HS 2" …) i formatets rækkefølge
+function hkNummererede(tm) {
+    const counts = {};
+    return (tm.games || []).map(g => {
+        counts[g.category] = (counts[g.category] || 0) + 1;
+        return { g, navn: HoldkampFormater.kategoriNavn(g.category, counts[g.category]) };
+    });
+}
+
+// Kolonner × rækker og størrelse for "spilles nu"-feltet
+function hkLiveLayout(n) {
+    if (n <= 2) return { cols: Math.max(n, 1), rows: 1, s: 1.15 };
+    if (n <= 4) return { cols: 2, rows: 2, s: 1 };
+    if (n <= 6) return { cols: 3, rows: 2, s: 0.8 };
+    return { cols: 5, rows: Math.ceil(n / 5), s: 0.66 };
+}
+
+// Navne på et "spilles nu"-kort: fornavne, forbogstav ved sammenfald (som på TV'et) — HTML
+function hkHoldNavn(g, hold) {
+    const dbl = HK_DOUBLES.includes(g.category);
+    const fulde = [g.team1_player1, dbl ? g.team1_player2 : '', g.team2_player1, dbl ? g.team2_player2 : ''];
+    const vis = window.NameDisplay ? NameDisplay.visningsnavne(fulde) : fulde.map(firstName);
+    const [a, b] = hold === 1 ? [vis[0], vis[1]] : [vis[2], vis[3]];
+    // Double: én spiller pr. linje, så navnene står helt — også i 5 × 3
+    return (b ? [a || '?', b] : [a || '?']).map(n => `<span>${escapeHtml(n)}</span>`).join('');
 }
 
 function renderHoldkampCards(matches) {
     const grid = document.getElementById('holdkampCardsGrid');
     grid.innerHTML = matches.map(tm => {
-        const t1w = tm.games.filter(g => g.winner_team === 1).length;
-        const t2w = tm.games.filter(g => g.winner_team === 2).length;
-        const counts = {};
-        // 3–3 og golden set endnu ikke sat op: vis en plads til det, så tilskuerne
-        // kan se, at holdkampen ikke er slut (§ 7 stk. 1 e)
-        const ventGS = HoldkampFormater.goldenSetStatus(tm).kraeves;
-        const cells = tm.games.map(g => {
-            counts[g.category] = (counts[g.category] || 0) + 1;
-            return hkGameCellHtml(g, counts[g.category]);
-        }).join('') + (ventGS ? `
-            <div class="hk-game">
-                <div class="hk-game-top"><span class="hk-badge">Golden set</span><span class="hk-game-status"></span></div>
-                <div style="opacity:0.8;">3–3 — golden set afgør holdkampen</div>
-            </div>` : '');
-        // Vælg kolonner ud fra antal delkampe. Max 3 kolonner — bredere kasser så
-        // (især doubles-)navne kan stå på én linje uden at ombryde og overflyde.
-        const n = tm.games.length + (ventGS ? 1 : 0);
-        const cols = n <= 6 ? 2 : 3;
-        const rows = Math.ceil(n / cols);
         const logo1 = window.LogoMatch && LogoMatch.resolveTeamLogo(tm, 1, _overviewLogos);
         const logo2 = window.LogoMatch && LogoMatch.resolveTeamLogo(tm, 2, _overviewLogos);
-        const logoImg = (logo) => logo
-            ? `<img class="hk-card-logo" src="${escapeHtml(logo.url)}" alt="" onerror="this.style.display='none'">`
+        const logoImg = (logo, kls) => logo
+            ? `<img class="${kls}" src="${escapeHtml(logo.url)}" alt="" onerror="this.style.display='none'">`
             : '';
+        const live = hkNummererede(tm).filter(x => x.g.status === 'active');
+        const lay = hkLiveLayout(live.length);
+        const sider = hkPageCount();
+
+        const kort = live.map(({ g, navn }) => {
+            const raekke = (hold) => `
+                <div class="hk-kamp-raekke" data-side="${hold}">
+                    <span class="hk-streg hk-streg--${hold}"></span>
+                    ${logoImg(hold === 1 ? logo1 : logo2, 'hk-kamp-logo')}
+                    <span class="hk-kamp-navn">${hkHoldNavn(g, hold)}</span>
+                    <span class="hk-kamp-saet" data-f="saet${hold}"></span>
+                    <span class="hk-kamp-pts" data-f="pts${hold}">0</span>
+                </div>`;
+            return `<div class="hk-kamp" data-game-id="${g.id}">
+                <div class="hk-kamp-hoved">
+                    <span class="hk-kamp-kat">${escapeHtml(navn.toUpperCase())} <small>· BANE ${g.court_number}</small></span>
+                    <span class="hk-kamp-status" data-f="status"></span>
+                </div>
+                ${raekke(1)}
+                ${raekke(2)}
+            </div>`;
+        }).join('');
+
         return `<div class="hk-card" data-match-id="${tm.id}">
-            <div class="hk-card-header">
-                ${logoImg(logo1)}
-                <span class="t1">${escapeHtml(tm.team1_name)}</span>
-                <span class="sc">${t1w} – ${t2w}</span>
-                <span class="t2">${escapeHtml(tm.team2_name)}</span>
-                ${logoImg(logo2)}
+            <div class="hk-hoved">
+                <span class="hk-hold hk-hold--1"><span class="hk-farve hk-farve--1"></span>${logoImg(logo1, 'hk-card-logo')}<span class="hk-holdnavn">${escapeHtml(tm.team1_name)}</span></span>
+                <span class="hk-stilling" data-f="stilling"></span>
+                <span class="hk-hold hk-hold--2"><span class="hk-holdnavn">${escapeHtml(tm.team2_name)}</span>${logoImg(logo2, 'hk-card-logo')}<span class="hk-farve hk-farve--2"></span></span>
             </div>
-            <div class="hk-games" style="grid-template-columns: repeat(${cols}, 1fr); --hk-rows:${rows};">${cells}</div>
+            <div class="hk-undertitel">
+                <span>${live.length ? `SPILLES NU · ${live.length} ${live.length === 1 ? 'KAMP' : 'KAMPE'}` : 'INGEN DELKAMPE I GANG LIGE NU'}</span>
+                ${sider > 1 ? `<span class="hk-side">HOLDKAMP ${hkPage + 1} AF ${sider}</span>` : ''}
+            </div>
+            <div class="hk-live" style="--hk-cols:${lay.cols}; --hk-rows:${lay.rows}; --hk-s:${lay.s};">${kort}</div>
+            <div class="hk-chips" data-f="chips"></div>
         </div>`;
     }).join('');
-    patchHoldkampCards(matches); // sæt status/score + border på de friske celler
+    patchHoldkampCards(matches); // sæt stilling, point, sæt og status på de friske kort
+}
+
+// Sæt på banen orienteret til holdkampens hold: [[team1, team2], ...]
+function hkBaneSaet(cd, byttet) {
+    return kortSaet(cd).map(([a, b]) => byttet ? [b, a] : [a, b]);
 }
 
 function patchHoldkampCards(matches) {
@@ -367,30 +341,76 @@ function patchHoldkampCards(matches) {
         if (!card) return;
         const t1w = tm.games.filter(g => g.winner_team === 1).length;
         const t2w = tm.games.filter(g => g.winner_team === 2).length;
-        const scEl = card.querySelector('.hk-card-header .sc');
-        if (scEl) scEl.textContent = `${t1w} – ${t2w}`;
-        tm.games.forEach(g => {
-            const cell = card.querySelector(`.hk-game[data-game-id="${g.id}"]`);
-            if (!cell) return;
-            const st = hkStatusFor(g, tm);
-            const statusEl = cell.querySelector('.hk-game-status');
-            if (statusEl) statusEl.innerHTML = st.html;
-            cell.style.borderLeftColor = st.border;
+        const sc = card.querySelector('[data-f="stilling"]');
+        const scTekst = `${t1w} – ${t2w}`;
+        if (sc && sc.textContent !== scTekst) sc.textContent = scTekst;
 
-            // Live scoreboard-tal for aktive delkampe (mappet til rette hold)
-            if (g.status === 'active') {
-                const cd = allCourtData.find(c => c.courtId === g.court_number);
-                const sides = holdkampCourtSides(cd, g);
-                if (sides) {
-                    [[1, sides.team1], [2, sides.team2]].forEach(([side, p]) => {
-                        const ptsEl = cell.querySelector(`.hk-sb-pts[data-side="${side}"]`);
-                        const setsEl = cell.querySelector(`.hk-sb-sets[data-side="${side}"]`);
-                        if (ptsEl) ptsEl.textContent = p.score;
-                        if (setsEl) setsEl.textContent = p.games;
-                    });
-                }
+        // Delkampe i gang: point, sæt, serv og status fra banens tæller
+        tm.games.forEach(g => {
+            if (g.status !== 'active') return;
+            const cell = card.querySelector(`.hk-kamp[data-game-id="${g.id}"]`);
+            if (!cell) return;
+            const cd = allCourtData.find(c => c.courtId === g.court_number);
+            const sides = holdkampCourtSides(cd, g);
+            if (!sides) return;
+            const saet = hkBaneSaet(cd, sides.byttet);
+            const mellem = erMellemSaet(cd);
+            const pts = mellem ? [0, 0] : [sides.team1.score, sides.team2.score];
+            const nr = Math.min((cd.player1.games || 0) + (cd.player2.games || 0) + 1, 3);
+            const serv = servSide(cd);
+            const servHold = serv ? (sides.byttet ? 3 - serv : serv) : 0;
+
+            let status;
+            if (cd.restBreakActive) {
+                status = `${mellem ? `${nr}. SÆT NÆSTE` : 'PAUSE'} · ${formatPause(getPauseSecondsLeft(cd))}`;
+            } else {
+                status = `${nr}. SÆT`;
             }
+            const st = cell.querySelector('[data-f="status"]');
+            if (st && st.textContent !== status) st.textContent = status;
+            cell.classList.toggle('hk-kamp--pause', !!cd.restBreakActive);
+
+            [1, 2].forEach(hold => {
+                const i = hold - 1;
+                const p = cell.querySelector(`[data-f="pts${hold}"]`);
+                if (p && p.textContent !== String(pts[i])) p.textContent = pts[i];
+                const s = cell.querySelector(`[data-f="saet${hold}"]`);
+                const html = saet.map(x => `<span class="hk-saet-boks ${x[i] > x[1 - i] ? 'won' : 'lost'}">${x[i]}</span>`).join('');
+                if (s && s.innerHTML !== html) s.innerHTML = html;
+                const r = cell.querySelector(`.hk-kamp-raekke[data-side="${hold}"]`);
+                if (r) r.classList.toggle('hk-serv', servHold === hold);
+            });
         });
+
+        // Rækken nederst: alle delkampe — udeladt, så længe alle er i gang
+        const chips = card.querySelector('[data-f="chips"]');
+        if (!chips) return;
+        const ventGS = HoldkampFormater.goldenSetStatus(tm).kraeves;
+        const alleIGang = tm.games.length > 0 && tm.games.every(g => g.status === 'active') && !ventGS;
+        const html = alleIGang ? '' : hkNummererede(tm).map(({ g, navn }) => {
+            let kls = 'hk-chip', indhold = '';
+            if (g.status === 'finished') {
+                kls += g.winner_team === 1 ? ' hk-chip--1' : ' hk-chip--2';
+                // Hvert sæt set fra hjemmeholdet; sæt, vinderen tabte, står lidt svagere
+                const side1Key = HK_DOUBLES.includes(g.category) && g.team1_player2
+                    ? `${g.team1_player1 || ''} / ${g.team1_player2}` : (g.team1_player1 || '');
+                const saet = g.set_scores ? orientHistorySetScoreNumbers(g.set_scores, side1Key) : [];
+                indhold = saet.map(x => {
+                    const [h, u] = x.split('-').map(Number);
+                    const vundet = g.winner_team === 1 ? h > u : u > h;
+                    return `<span class="hk-chip-saet${vundet ? '' : ' hk-chip-saet--tabt'}">${h}–${u}</span>`;
+                }).join('');
+            } else if (g.status === 'active') {
+                kls += ' hk-chip--igang';
+                indhold = '<span class="hk-chip-note">I GANG</span>';
+            } else {
+                kls += ' hk-chip--venter';
+            }
+            const kort = g.category === 'GS' ? 'GS' : navn.toUpperCase();
+            return `<div class="${kls}"><span class="hk-chip-kat">${escapeHtml(kort)}</span>${indhold}</div>`;
+        }).join('') + (ventGS ? '<div class="hk-chip hk-chip--venter"><span class="hk-chip-kat">GS</span><span class="hk-chip-note">3–3</span></div>' : '');
+        if (chips.innerHTML !== html) chips.innerHTML = html;
+        chips.style.display = html ? '' : 'none';
     });
 }
 
@@ -666,6 +686,9 @@ function displayCurrentPage() {
     const endIndex = startIndex + COURTS_PER_PAGE;
     const courtsToShow = activeCourts.slice(startIndex, endIndex);
 
+    // Højst 4 baner: 2 × 2 med ca. 40 % større kort (ellers 3 × 2)
+    grid.classList.toggle('courts-grid--fire', courtsToShow.length <= 4);
+
     // Check if same courts are already rendered — if so, update in-place to avoid layout jump
     // Include _isFinished in the key so a transition active→finished triggers a full re-render
     const existingIds = Array.from(grid.querySelectorAll('.court-card')).map(el =>
@@ -682,191 +705,167 @@ function displayCurrentPage() {
     }
 }
 
+// ==================== BANEKORT (G2: hvert kort er et lille TV, layout A) ====================
+// Status (sæt og tid / pause / afgjort / venter) står i kortets top, navnene i
+// Bebas, og pointtallet er det største på kortet. Stregen i venstre kant viser,
+// hvem der server (grøn for vinderen, når kampen er afgjort). Ved pause holder
+// rækkerne plads til nedtællingen i højre side, så den ikke dækker sættene.
+// Strukturen tegnes kun igen, når kortSignatur ændrer sig — ellers opdateres
+// pointtallene, uret og nedtællingen på stedet.
+
 function updateCourtCardData(court) {
-    if (court._isFinished) {
-        const card = document.querySelector(`.court-card[data-court-id="${court.courtId}"][data-finished="1"]`);
-        // Et indtastet resultat kan rettes, mens kortet står — tegn det så forfra
-        if (card && card.dataset.resultat !== resultatSignatur(court)) {
-            card.outerHTML = renderFinishedCard(court);
-            return;
-        }
-        if (card) {
-            const timeEl = card.querySelector('.finished-time');
-            if (timeEl) {
-                const minutesAgo = Math.floor((Date.now() - court._finishedAt) / 60000);
-                timeEl.textContent = minutesAgo < 1 ? 'Lige afsluttet' : `${minutesAgo} min siden`;
-            }
-        }
-        return;
-    }
     const card = document.querySelector(`.court-card[data-court-id="${court.courtId}"]`);
     if (!card) return;
-
-    const isDoubles = court.isDoubles || false;
-    const isPaused = !!court.restBreakActive;
-
-    // Toggle paused class
-    card.classList.toggle('court-card--paused', isPaused);
-
-    // Re-render entire card if finished state, pause state, history or player name changed
-    const history = court.setScoresHistory || [];
-    const wasPaused = !!card.querySelector('.court-pause-overlay');
-    const wasFinished = !!card.dataset.finished;
-    const isFinishedNow = !!court._isFinished;
-    if (wasFinished !== isFinishedNow ||
-        wasPaused !== isPaused ||
-        parseInt(card.dataset.sets || '0') !== history.length ||
-        card.dataset.p1 !== court.player1.name ||
-        (card.dataset.planner || '') !== plannerSignatur(court) ||
-        (card.dataset.waiting === '1') !== venterPaaKamp(court)) {
+    if (card.dataset.sig !== kortSignatur(court)) {
         card.outerHTML = renderCourtCard(court);
         return;
     }
-
-    // Update pause overlay countdown
-    if (isPaused) {
-        const pauseTimerEl = document.getElementById(`pause-timer-${court.courtId}`);
-        if (pauseTimerEl) pauseTimerEl.textContent = getPauseSecondsLeft(court);
+    if (court._isFinished) {
+        const timeEl = card.querySelector('.finished-time');
+        if (timeEl) {
+            const t = afsluttetTekst(court);
+            if (timeEl.textContent !== t) timeEl.textContent = t;
+        }
+        return;
     }
+    const [pts1, pts2] = kortPoint(court);
+    card.querySelectorAll('.oc-point').forEach(el => {
+        const t = String(el.dataset.side === '1' ? pts1 : pts2);
+        if (el.textContent !== t) el.textContent = t;
+    });
+}
 
-    // Update current-set scores (always white — history badges handle colour)
-    const scoreEls = card.querySelectorAll('.player-score');
-    if (scoreEls[0]) scoreEls[0].textContent = court.player1.score;
-    if (scoreEls[1]) scoreEls[1].textContent = court.player2.score;
+// Alt, der ændrer kortets opbygning (point og tid opdateres på stedet)
+function kortSignatur(court) {
+    const pause = !court._isFinished && !!court.restBreakActive;
+    return [
+        court._isFinished ? 'f' : '', pause ? 'p' : '', venterPaaKamp(court) ? 'v' : '',
+        court.player1?.name, court.player1?.name2, court.player2?.name, court.player2?.name2,
+        (court.setScoresHistory || []).length, servSide(court) || 0,
+        pause ? `${court.player1?.score}-${court.player2?.score}` : '',
+        court._isFinished ? resultatSignatur(court) : '', plannerSignatur(court)
+    ].join('|');
+}
 
-    // Update player names
-    const rows = card.querySelectorAll('.player-row');
-    if (rows[0]) {
-        const info = rows[0].querySelector('.player-info');
-        if (info) info.innerHTML = isDoubles && court.player1.name2
-            ? `<div class="player-name">${escapeHtml(court.player1.name)}</div><div class="player-name-partner">${escapeHtml(court.player1.name2)}</div>`
-            : `<div class="player-name">${escapeHtml(court.player1.name)}</div>`;
-    }
-    if (rows[1]) {
-        const info = rows[1].querySelector('.player-info');
-        if (info) info.innerHTML = isDoubles && court.player2.name2
-            ? `<div class="player-name">${escapeHtml(court.player2.name)}</div><div class="player-name-partner">${escapeHtml(court.player2.name2)}</div>`
-            : `<div class="player-name">${escapeHtml(court.player2.name)}</div>`;
-    }
+// Hvem server: 1 = øverste række (player1), 2 = nederste
+function servSide(court) {
+    const s = court.isDoubles ? court.servingTeam : court.servingPlayer;
+    return s === 1 || s === 2 ? s : null;
+}
+
+// Afsluttede sæt orienteret til kortets rækker: [[række1, række2], ...]
+function kortSaet(court) {
+    return (court.setScoresHistory || []).map(set => {
+        const parts = String((set && set.score) || set || '0-0').split('-');
+        const a = parseInt(parts[0]) || 0, b = parseInt(parts[1]) || 0;
+        return erSaetVendt(set, court.player1?.name, court.player2?.name) ? [b, a] : [a, b];
+    });
+}
+
+// Pausen mellem sæt: tælleren nulstiller først pointene, når pausen slutter,
+// så stillingen er stadig det afsluttede sæts
+function erMellemSaet(court) {
+    const saet = kortSaet(court);
+    if (!court.restBreakActive || !saet.length) return false;
+    const [a, b] = saet[saet.length - 1];
+    const s1 = court.player1.score, s2 = court.player2.score;
+    return (s1 === a && s2 === b) || (s1 === b && s2 === a);
+}
+
+function kortPoint(court) {
+    if (erMellemSaet(court)) return [0, 0];
+    return [court.player1.score, court.player2.score];
+}
+
+function afsluttetTekst(court) {
+    const min = Math.floor((Date.now() - court._finishedAt) / 60000);
+    return min < 1 ? 'LIGE NU' : `${min} MIN SIDEN`;
+}
+
+function formatPause(sek) {
+    const s = Math.max(0, sek || 0);
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 function renderCourtCard(court) {
-    if (court._isFinished) return renderFinishedCard(court);
-    const isDoubles = court.isDoubles || false;
-    const isPaused = !!court.restBreakActive;
+    const afgjort = !!court._isFinished;
+    const pause = !afgjort && !!court.restBreakActive;
+    const venter = venterPaaKamp(court);
+    const saet = kortSaet(court);
+    const nr = Math.min((court.player1.games || 0) + (court.player2.games || 0) + 1, 3);
 
-    // Calculate elapsed time from matchStartTime (same as TV display)
-    const timerSeconds = calculateElapsedTime(court.courtId);
-    const timerDisplay = formatTimer(timerSeconds);
+    // Status i kortets top
+    let status, statusKlasse = '';
+    if (afgjort) {
+        const ord = court.resultOutcome === 'walkover' ? 'WALKOVER'
+            : court.resultOutcome === 'ended_early' ? 'AFSLUTTET FØR TID' : 'AFGJORT';
+        status = `${ord} · <span class="finished-time">${afsluttetTekst(court)}</span>`;
+        statusKlasse = ' oc-status--afgjort';
+    } else if (venter) {
+        status = 'VENTER PÅ KAMP';
+    } else if (pause) {
+        status = erMellemSaet(court) ? `${nr}. SÆT NÆSTE` : `${nr}. SÆT · PAUSE`;
+        statusKlasse = ' oc-status--pause';
+    } else {
+        status = `${nr}. SÆT · <span id="timer-${court.courtId}">${formatTimer(calculateElapsedTime(court.courtId))}</span>`;
+    }
 
-    // Pause label based on restBreakTitle
-    const pauseLabel = (court.restBreakTitle || '').toLowerCase().includes('sæt') ? 'SÆTHVIL' : 'PAUSE';
+    // Vinderen (afgjort): indtastet resultat kan have valgt en vinder, der var bagud
+    const g1 = court.player1?.games ?? 0, g2 = court.player2?.games ?? 0;
+    const vinder = !afgjort ? 0 : court.resultWinner ? court.resultWinner : (g1 > g2 ? 1 : g2 > g1 ? 2 : 0);
 
-    // Render player names (including doubles partner if applicable)
+    // Navne: fornavn, forbogstav ved sammenfald — som på TV'et
+    const dbl = !!court.isDoubles;
+    const fulde = [court.player1?.name, dbl ? court.player1?.name2 : '', court.player2?.name, dbl ? court.player2?.name2 : ''];
+    const vis = window.NameDisplay
+        ? NameDisplay.visningsnavne(fulde, { uforkortet: !!court.planner })
+        : fulde.map(n => n || '');
     const plogo = (name) => {
         const logo = window.LogoMatch && LogoMatch.resolvePlayerLogo(name, {
             playerLogos: _overviewPlayerLogos, clubByName: _overviewClubByName, logos: _overviewLogos
         });
         return logo ? `<img class="player-logo" src="${escapeHtml(logo.url)}" alt="" onerror="this.style.display='none'">` : '';
     };
-    const nameRow = (name) => `<div class="player-name-row">${plogo(name)}<div class="player-name">${escapeHtml(name)}</div></div>`;
-    const partnerRow = (name) => `<div class="player-name-row">${plogo(name)}<div class="player-name-partner">${escapeHtml(name)}</div></div>`;
+    const navn = (full, v) => full
+        ? `<div class="player-name-row">${plogo(full)}<div class="player-name">${escapeHtml(v)}</div></div>` : '';
 
-    const player1Names = isDoubles && court.player1.name2
-        ? `${nameRow(court.player1.name)}${partnerRow(court.player1.name2)}`
-        : nameRow(court.player1.name);
+    // Pausen midt i sættet: stillingen står i sættets egen boks (nedtællingen har pointfeltet)
+    const igang = pause && !erMellemSaet(court) ? [court.player1.score, court.player2.score] : null;
+    const [pts1, pts2] = kortPoint(court);
+    const serv = afgjort || venter ? null : servSide(court);
 
-    const player2Names = isDoubles && court.player2.name2
-        ? `${nameRow(court.player2.name)}${partnerRow(court.player2.name2)}`
-        : nameRow(court.player2.name);
+    const raekke = (side) => {
+        const i = side - 1;
+        const bokse = saet.map(s => `<span class="oc-saet-boks ${s[i] > s[1 - i] ? 'won' : 'lost'}">${s[i]}</span>`).join('')
+            + (igang ? `<span class="oc-saet-boks igang">${igang[i]}</span>` : '');
+        const kls = ['oc-raekke', serv === side ? 'oc-serv' : '',
+            vinder === side ? 'oc-vinder' : '', vinder && vinder !== side ? 'oc-taber' : ''].filter(Boolean).join(' ');
+        return `<div class="${kls}">
+                <span class="oc-streg"></span>
+                <div class="oc-navne">${navn(fulde[i * 2], vis[i * 2])}${navn(fulde[i * 2 + 1], vis[i * 2 + 1])}</div>
+                <div class="oc-saet">${bokse}</div>
+                <span class="oc-point" data-side="${side}">${side === 1 ? pts1 : pts2}</span>
+            </div>`;
+    };
 
-    // Rest break badge (only when restBreakActive, not betweenSets)
-    const restBreakBadge = court.restBreakActive
-        ? `<div class="rest-break-badge">PAUSE ${court.restBreakSecondsLeft}s</div>`
-        : '';
-
-    // Build set-history score badges.
-    // After switchSides() player1/player2 slots swap, but setScoresHistory stores the
-    // names at the time the set ended. Match history names against current names to ensure
-    // each score is shown in the correct player row regardless of side switches.
-    const history = court.setScoresHistory || [];
-    const p1Name = court.player1.name;
-    let histP1 = '', histP2 = '';
-    history.forEach(set => {
-        const parts = (set.score || '0-0').split('-');
-        let sA = parseInt(parts[0]) || 0; // score of history-player1
-        let sB = parseInt(parts[1]) || 0; // score of history-player2
-
-        // Determine if history player1 maps to current player1 or player2
-        const swapped = erSaetVendt(set, p1Name, court.player2 && court.player2.name);
-        const row1Score = swapped ? sB : sA;
-        const row2Score = swapped ? sA : sB;
-        const row1Won = row1Score > row2Score;
-
-        histP1 += `<div class="set-hist-score" style="color:${row1Won ? 'var(--set-vundet, var(--color-win, #45d17e))' : 'var(--text-muted, rgba(255,255,255,0.62))'}">${row1Score}</div>`;
-        histP2 += `<div class="set-hist-score" style="color:${row1Won ? 'var(--text-muted, rgba(255,255,255,0.62))' : 'var(--set-vundet, var(--color-win, #45d17e))'}">${row2Score}</div>`;
-    });
-
-    // Når et sæt netop er afsluttet er restBreakActive=true men resetScores() er
-    // endnu ikke kørt — scorerne viser stadig sæt-slutresultatet i stedet for 0-0.
-    // Detektér dette ved at sammenligne med det sidst gemte sæt-resultat.
-    let currentP1Score = court.player1.score;
-    let currentP2Score = court.player2.score;
-    if (isPaused && history.length > 0) {
-        const last = history[history.length - 1];
-        const parts = (last.score || '0-0').split('-');
-        const hs1 = parseInt(parts[0]) || 0;
-        const hs2 = parseInt(parts[1]) || 0;
-        if ((currentP1Score === hs1 && currentP2Score === hs2) ||
-            (currentP1Score === hs2 && currentP2Score === hs1)) {
-            currentP1Score = 0;
-            currentP2Score = 0;
-        }
-    }
-
-    const pauseSeconds = isPaused ? getPauseSecondsLeft(court) : 0;
-    const waiting = venterPaaKamp(court);
+    const kls = ['court-card', afgjort ? 'court-card--finished' : '', pause ? 'court-card--paused' : '',
+        venter ? 'court-card--waiting' : ''].filter(Boolean).join(' ');
 
     return `
-        <div class="court-card${isPaused ? ' court-card--paused' : ''}${waiting ? ' court-card--waiting' : ''}" data-court-id="${court.courtId}" data-sets="${history.length}" data-p1="${escapeHtml(court.player1.name)}" data-planner="${escapeHtml(plannerSignatur(court))}" data-waiting="${waiting ? '1' : ''}">
-
-            <!-- Pause overlay — dækker hele kortet når aktiv -->
-            ${isPaused ? `
-            <div class="court-pause-overlay">
-                <div class="court-pause-overlay__label">${pauseLabel}</div>
-                <div class="court-pause-overlay__timer" id="pause-timer-${court.courtId}">${pauseSeconds}</div>
-                <div class="court-pause-overlay__unit">SEK</div>
-            </div>` : ''}
-
-            <div class="court-card-content${isPaused ? ' court-card-content--paused' : ''}">
-                <div class="court-card-header">
-                    <div class="court-number">BANE ${court.courtId}</div>
-                    ${waiting
-                        ? '<div class="court-waiting-badge">Venter på kamp</div>'
-                        : `<div class="court-timer" id="timer-${court.courtId}">${timerDisplay}</div>`}
-                </div>
-
-                <div class="court-players">
-                    <div class="player-row">
-                        <div class="player-info">${player1Names}</div>
-                        <div class="player-stats">
-                            ${histP1}
-                            <div class="player-score">${currentP1Score}</div>
-                        </div>
-                    </div>
-
-                    <div class="vs-divider">VS</div>
-
-                    <div class="player-row">
-                        <div class="player-info">${player2Names}</div>
-                        <div class="player-stats">
-                            ${histP2}
-                            <div class="player-score">${currentP2Score}</div>
-                        </div>
-                    </div>
-                </div>
-                ${plannerInfoHtml(court)}
+        <div class="${kls}" data-court-id="${court.courtId}"${afgjort ? ' data-finished="1"' : ''} data-sig="${escapeHtml(kortSignatur(court))}">
+            <div class="court-card-header">
+                <div class="court-number">BANE <span>${court.courtId}</span></div>
+                <div class="oc-status${statusKlasse}">${status}</div>
             </div>
+            ${raekke(1)}
+            ${raekke(2)}
+            ${pause ? `
+            <div class="oc-pause">
+                <span class="oc-pause-titel">PAUSE</span>
+                <span class="oc-pause-tal" id="pause-timer-${court.courtId}">${formatPause(getPauseSecondsLeft(court))}</span>
+            </div>` : ''}
+            ${venter ? '<div class="oc-venter-tekst">Kampen starter, når der trykkes Start kamp</div>' : ''}
+            ${plannerInfoHtml(court)}
         </div>
     `;
 }
@@ -882,68 +881,6 @@ function venterPaaKamp(court) {
 function resultatSignatur(court) {
     return [court.resultOutcome || '', court.resultWinner || '', (court.setScoresHistory || []).length,
         court.player1?.games ?? 0, court.player2?.games ?? 0].join('|');
-}
-
-function renderFinishedCard(court) {
-    const isDoubles = court.isDoubles || false;
-    const p1games = court.player1?.games ?? 0;
-    const p2games = court.player2?.games ?? 0;
-    // Indtastet resultat: vinderen er valgt (afsluttet før tid / walkover)
-    const p1won = court.resultWinner ? court.resultWinner === 1 : p1games > p2games;
-    const badge = court.resultOutcome === 'walkover' ? 'WALKOVER'
-        : court.resultOutcome === 'ended_early' ? 'AFSLUTTET FØR TID'
-        : 'AFSLUTTET';
-
-    const minutesAgo = Math.floor((Date.now() - court._finishedAt) / 60000);
-    const timeText = minutesAgo < 1 ? 'Lige afsluttet' : `${minutesAgo} min siden`;
-
-    const p1Names = isDoubles && court.player1?.name2
-        ? `${escapeHtml(court.player1.name)} / ${escapeHtml(court.player1.name2)}`
-        : escapeHtml(court.player1?.name || '?');
-    const p2Names = isDoubles && court.player2?.name2
-        ? `${escapeHtml(court.player2.name)} / ${escapeHtml(court.player2.name2)}`
-        : escapeHtml(court.player2?.name || '?');
-
-    // Byg sæt-score badges med samme navn-matching som active-kortet
-    const history = court.setScoresHistory || [];
-    const p1Name = court.player1?.name || '';
-    let histP1 = '', histP2 = '';
-    history.forEach(set => {
-        const parts = (set.score || '0-0').split('-');
-        let sA = parseInt(parts[0]) || 0;
-        let sB = parseInt(parts[1]) || 0;
-        const swapped = erSaetVendt(set, p1Name, court.player2 && court.player2.name);
-        const r1 = swapped ? sB : sA;
-        const r2 = swapped ? sA : sB;
-        const r1won = r1 > r2;
-        histP1 += `<div class="set-hist-score" style="color:${r1won ? 'var(--set-vundet, var(--color-win, #45d17e))' : 'var(--text-muted, rgba(255,255,255,0.62))'}">${r1}</div>`;
-        histP2 += `<div class="set-hist-score" style="color:${r1won ? 'var(--text-muted, rgba(255,255,255,0.62))' : 'var(--set-vundet, var(--color-win, #45d17e))'}">${r2}</div>`;
-    });
-
-    return `
-        <div class="court-card court-card--finished" data-court-id="${court.courtId}" data-finished="1" data-resultat="${escapeHtml(resultatSignatur(court))}">
-            <div class="court-card-header">
-                <div class="court-number">BANE ${court.courtId}</div>
-                <span class="finished-badge">${badge}</span>
-                <div class="finished-time">${timeText}</div>
-            </div>
-            <div class="court-players">
-                <div class="player-row${p1won ? ' player-row--winner' : ''}">
-                    <div class="player-info">
-                        <div class="player-name">${p1Names}</div>
-                    </div>
-                    <div class="player-stats">${histP1}</div>
-                </div>
-                <div class="vs-divider">VS</div>
-                <div class="player-row${!p1won ? ' player-row--winner' : ''}">
-                    <div class="player-info">
-                        <div class="player-name">${p2Names}</div>
-                    </div>
-                    <div class="player-stats">${histP2}</div>
-                </div>
-            </div>
-        </div>
-    `;
 }
 
 function getPauseSecondsLeft(court) {
@@ -1306,7 +1243,7 @@ function updateTimerDisplays() {
         if (!court.restBreakActive) return;
         const pauseTimerEl = document.getElementById(`pause-timer-${court.courtId}`);
         if (pauseTimerEl) {
-            pauseTimerEl.textContent = getPauseSecondsLeft(court);
+            pauseTimerEl.textContent = formatPause(getPauseSecondsLeft(court));
         }
     });
 }
