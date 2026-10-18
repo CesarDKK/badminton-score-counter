@@ -352,4 +352,58 @@ function startPlannerVindueLuk() {
 
 const PLANNER_RESULTAT_DAGE = 90;
 
-module.exports = { startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk };
+/**
+ * Automatisk backup af hver aktiv klub — mandag kl. 02.00 dansk tid. De 4 nyeste
+ * gemmes (config/autoBackup.js). Klublisten læses ved hver kørsel, så nye klubber
+ * kommer med af sig selv; deaktiverede klubber springes over, og demoen (app.) er
+ * ingen klub. Resultatet (tidspunkt eller fejl) står på klubben i master-DB'en
+ * og vises på super-admin.
+ */
+async function ugentligBackup() {
+    const db = require('./config/database');
+    const masterDb = require('./config/masterDatabase');
+    const { tagBackup } = require('./config/autoBackup');
+
+    let clubs;
+    try {
+        clubs = await masterDb.query('SELECT id, name, subdomain, db_name FROM clubs WHERE is_active = 1');
+    } catch (err) {
+        console.error('❌ Automatisk backup: klublisten kunne ikke hentes:', err.message);
+        return;
+    }
+    console.log(`💾 Automatisk backup af ${clubs.length} klubber...`);
+    let ok = 0;
+    for (const club of clubs) {
+        try {
+            const fil = await runWithTenant(club.db_name, async () => {
+                const conn = await db.pool.getConnection();
+                try { return await tagBackup(conn, club, 'auto'); } finally { conn.release(); }
+            });
+            await masterDb.query(
+                'UPDATE clubs SET last_auto_backup_at = NOW(), last_auto_backup_error = NULL, updated_at = updated_at WHERE id = ?',
+                [club.id]
+            );
+            ok++;
+            console.log(`  ✅ ${club.db_name}: ${fil}`);
+        } catch (err) {
+            console.error(`  ❌ Backup af ${club.db_name} fejlede:`, err.message);
+            try {
+                await masterDb.query(
+                    'UPDATE clubs SET last_auto_backup_error = ?, updated_at = updated_at WHERE id = ?',
+                    [String(err.message || err).slice(0, 500), club.id]
+                );
+            } catch { /* master-DB'en kunne heller ikke nås */ }
+        }
+    }
+    console.log(`💾 Automatisk backup færdig: ${ok} af ${clubs.length} klubber`);
+}
+
+function startUgentligBackup() {
+    cron.schedule('0 2 * * 1', ugentligBackup, {
+        scheduled: true,
+        timezone: 'Europe/Copenhagen'
+    });
+    console.log('⏰ Automatisk backup af klubberne hver mandag kl. 02:00 (Europe/Copenhagen)');
+}
+
+module.exports = { startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk, startUgentligBackup, ugentligBackup };

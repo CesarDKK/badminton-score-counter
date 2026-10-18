@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="fundament.css?v=2">
     <link rel="stylesheet" href="styles.css?v=11">
     <link rel="stylesheet" href="admin-styles.css?v=14">
-    <link rel="stylesheet" href="settings-styles.css?v=4">
+    <link rel="stylesheet" href="settings-styles.css?v=5">
     <script src="js/theme-loader.js?v=15"></script>
 </head>
 <body>
@@ -114,6 +114,12 @@
                     <!-- Backup & Restore (kompakt) -->
                     <div class="setting-card">
                         <h3>Backup &amp; Gendannelse</h3>
+                        <!-- Automatiske ugentlige backups (kun klubber, ikke demoen) — udfyldes af settings-script.js -->
+                        <div id="autoBackupBox" style="display:none;margin-bottom:16px;">
+                            <p id="autoBackupInfo" class="auto-backup-info"></p>
+                            <div id="autoBackupList" class="auto-backup-list"></div>
+                        </div>
+                        <p id="autoBackupDemo" class="auto-backup-info" style="display:none;">Automatisk backup er ikke slået til her — kun på klubbernes egne adresser.</p>
                         <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;">
                             <button id="downloadBackupBtn" class="btn-primary" style="flex:1;">Download backup</button>
                             <button id="chooseRestoreFileBtn" class="btn-secondary" style="flex:1;">Gendan fra fil...</button>
@@ -121,7 +127,7 @@
                         </div>
                         <div id="restoreFileInfo" style="display:none;padding:8px 10px;background:rgba(255,255,255,0.05);border-radius:8px;font-size:0.85em;margin-bottom:10px;color:var(--text-muted, rgba(255, 255, 255, 0.62));"></div>
                         <button id="restoreBtn" class="btn-primary" style="width:100%;display:none;">Gendan nu</button>
-                        <p style="color:rgba(255,255,255,0.25);font-size:0.78em;margin-top:10px;">
+                        <p id="restoreAdvarsel" style="color:rgba(255,255,255,0.25);font-size:0.78em;margin-top:10px;">
                             Gendannelse overskriver alle nuværende data og kan ikke fortrydes.
                         </p>
                     </div>
@@ -218,6 +224,6 @@
     <script src="js/api.js?v=29"></script>
     <script src="js/session-vagt.js?v=2"></script>
     <script src="js/auth-guard.js?v=3"></script>
-    <script src="settings-script.js?v=20"></script>
+    <script src="settings-script.js?v=21"></script>
 </body>
 </html>

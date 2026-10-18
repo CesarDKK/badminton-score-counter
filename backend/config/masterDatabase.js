@@ -139,6 +139,23 @@ async function initialize() {
             console.log('✓ clubs.last_login_at/last_login_user kolonner tilfoejet');
         }
 
+        // Seneste automatiske ugentlige backup (config/autoBackup.js) og fejlen,
+        // hvis den fejlede — vises paa super-admin. Tilfoejes idempotent.
+        const backupCol = await query(
+            `SELECT COUNT(*) AS c FROM information_schema.columns
+             WHERE table_schema = 'badminton_master'
+               AND table_name = 'clubs'
+               AND column_name = 'last_auto_backup_at'`
+        );
+        if (backupCol[0].c === 0) {
+            await query(
+                `ALTER TABLE clubs
+                   ADD COLUMN last_auto_backup_at TIMESTAMP NULL DEFAULT NULL,
+                   ADD COLUMN last_auto_backup_error VARCHAR(500) NULL DEFAULT NULL`
+            );
+            console.log('✓ clubs.last_auto_backup_at/last_auto_backup_error kolonner tilfoejet');
+        }
+
         // Seed standard klub-logoer (idempotent). Lazy require for at undgaa
         // cirkulaer afhaengighed (seedLogos kraever dette modul ved load).
         try {

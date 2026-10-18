@@ -324,3 +324,61 @@
         width: 100%;
     }
 }
+
+/* ---- Backup & Gendannelse: automatiske ugentlige backups ---- */
+.auto-backup-info {
+    font-size: 0.85em;
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
+    margin: 0 0 10px;
+    line-height: 1.5;
+}
+
+.auto-backup-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.auto-backup-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    font-size: 0.88em;
+}
+
+.auto-backup-row .auto-backup-hvornaar {
+    flex: 1 1 100%;
+    min-width: 0;
+}
+
+.auto-backup-row .auto-backup-type {
+    display: block;
+    font-size: 0.85em;
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
+}
+
+.auto-backup-row button {
+    flex: 1;
+    padding: 6px 10px;
+    font-size: 0.85em;
+    white-space: nowrap;
+}
+
+/* Bekræftelses-feltet ("skriv GENDAN") i besked-overlayet */
+.bekraeft-tekst {
+    display: block;
+    margin: -20px auto 30px;
+    padding: 12px 16px;
+    width: min(320px, 100%);
+    font-size: 1.2em;
+    text-align: center;
+    letter-spacing: 0.1em;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    color: #fff;
+}

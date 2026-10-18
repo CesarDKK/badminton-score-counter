@@ -18,8 +18,8 @@ COPY backend/ ./
 # fil herfra (se config/holdkampFormater.js).
 COPY frontend/js/holdkamp-formater.js ./shared/holdkamp-formater.js
 
-# Create uploads directory
-RUN mkdir -p uploads && chmod 755 uploads
+# Uploads og klubbernes automatiske backups (begge er volumes i docker-compose)
+RUN mkdir -p uploads club-backups && chmod 755 uploads && chmod 700 club-backups
 
 # Expose port
 EXPOSE 3000

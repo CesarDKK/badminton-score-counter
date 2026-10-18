@@ -178,6 +178,7 @@ async function showSettingsDashboard() {
     document.getElementById('settingsDashboard').style.display = 'block';
 
     await loadSettings();
+    loadAutoBackups();
 }
 
 async function loadSettings() {
@@ -296,35 +297,133 @@ async function saveDefaultGameMode() {
 
 // ==================== BACKUP ====================
 
+// Hent en backup som fil i browseren (serveren navngiver filen)
+async function hentBackupFil(url) {
+    const token = api.token || sessionStorage.getItem('authToken');
+    const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) {
+        const fejl = await res.json().catch(() => ({}));
+        throw new Error(fejl.error || res.statusText);
+    }
+    const blob = await res.blob();
+    const match = (res.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = match ? match[1] : 'backup.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
 async function downloadBackup() {
     const btn = document.getElementById('downloadBackupBtn');
     btn.disabled = true;
     btn.textContent = 'Henter backup...';
     try {
-        const token = api.token || sessionStorage.getItem('authToken');
-        const res = await fetch('/api/backup', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!res.ok) {
-            const fejl = await res.json().catch(() => ({}));
-            throw new Error(fejl.error || res.statusText);
-        }
-
-        const blob = await res.blob();
-        const cd = res.headers.get('Content-Disposition') || '';
-        const match = cd.match(/filename="([^"]+)"/);
-        const filename = match ? match[1] : 'backup.json';
-
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = filename; a.click();
-        URL.revokeObjectURL(url);
+        await hentBackupFil('/api/backup');
     } catch (err) {
         showMessage('Fejl', 'Backup fejlede: ' + err.message);
     } finally {
         btn.disabled = false;
         btn.textContent = 'Download backup';
     }
+}
+
+// ── Automatiske ugentlige backups (mandag kl. 02.00, de 4 nyeste gemmes) ──
+// Lige før en gendannelse tager serveren en "før gendannelse"-backup af det
+// nuværende, så en gendannelse kan fortrydes — den står også på listen.
+
+const DK_DATO = { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' };
+const DK_KL = { hour: '2-digit', minute: '2-digit' };
+
+function backupTidspunkt(iso) {
+    const d = new Date(iso);
+    const dato = d.toLocaleDateString('da-DK', DK_DATO);
+    return `${dato.charAt(0).toUpperCase()}${dato.slice(1)} kl. ${d.toLocaleTimeString('da-DK', DK_KL)}`;
+}
+
+function backupStoerrelse(bytes) {
+    return bytes >= 1048576
+        ? `${(bytes / 1048576).toLocaleString('da-DK', { maximumFractionDigits: 1 })} MB`
+        : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+async function loadAutoBackups() {
+    const boks = document.getElementById('autoBackupBox');
+    if (!boks) return;
+    let data;
+    try {
+        data = await api.request('/backup/automatisk', {}, 1);
+    } catch (err) {
+        return; // fx ingen fuld adgang — knapperne giver selv besked
+    }
+    if (!data.aktiv) {
+        document.getElementById('autoBackupDemo').style.display = 'block';
+        return;
+    }
+
+    const naeste = data.naeste ? backupTidspunkt(data.naeste).toLowerCase() : null;
+    document.getElementById('autoBackupInfo').textContent =
+        `Der tages automatisk en backup hver mandag kl. 02.00, og de ${data.behold} nyeste gemmes.`
+        + (naeste ? ` Næste: ${naeste}.` : '');
+    document.getElementById('restoreAdvarsel').textContent =
+        'Gendannelse overskriver alle nuværende data. Lige før gemmes en backup af det nuværende ("Før gendannelse"), så det kan fortrydes.';
+
+    const liste = document.getElementById('autoBackupList');
+    liste.innerHTML = '';
+    if (!data.backups.length) {
+        liste.innerHTML = '<p class="auto-backup-info">Ingen backups endnu — den første tages på mandag.</p>';
+    }
+    for (const b of data.backups) {
+        const raekke = document.createElement('div');
+        raekke.className = 'auto-backup-row';
+        const type = b.type === 'auto' ? 'Ugentlig backup' : 'Før gendannelse';
+        raekke.innerHTML = `
+            <span class="auto-backup-hvornaar">${backupTidspunkt(b.tidspunkt)}
+                <span class="auto-backup-type">${type} · ${backupStoerrelse(b.stoerrelse)}</span></span>
+            <button class="btn-secondary" data-handling="hent">Download</button>
+            <button class="btn-danger" data-handling="gendan">Gendan</button>`;
+        raekke.querySelector('[data-handling="hent"]').addEventListener('click', async (e) => {
+            e.target.disabled = true;
+            try { await hentBackupFil(`/api/backup/automatisk/${encodeURIComponent(b.fil)}`); }
+            catch (err) { showMessage('Fejl', 'Backuppen kunne ikke hentes: ' + err.message); }
+            finally { e.target.disabled = false; }
+        });
+        raekke.querySelector('[data-handling="gendan"]').addEventListener('click', () => gendanAutoBackup(b));
+        liste.appendChild(raekke);
+    }
+    boks.style.display = 'block';
+}
+
+async function gendanAutoBackup(b) {
+    const ok = await showConfirmTekst(
+        'Gendan backup?',
+        `Alle klubbens nuværende data erstattes med backuppen fra ${backupTidspunkt(b.tidspunkt).toLowerCase()}. Skriv GENDAN for at fortsætte.`,
+        'GENDAN',
+        'Gendan'
+    );
+    if (!ok) return;
+    showMessage('Gendanner...', 'Et øjeblik — klubbens data gendannes.');
+    const okBtn = document.getElementById('messageOkBtn');
+    okBtn.style.display = 'none';
+    try {
+        const data = await api.request(`/backup/automatisk/${encodeURIComponent(b.fil)}/gendan`,
+            { method: 'POST', timeout: 120000 }, 1);
+        okBtn.style.display = '';
+        visGendannelsesResultat(data);
+    } catch (err) {
+        okBtn.style.display = '';
+        showMessage('Fejl', 'Gendannelse fejlede: ' + err.message);
+    }
+}
+
+function visGendannelsesResultat(data) {
+    const rows = Object.entries(data.restored)
+        .map(([t, n]) => `${t}: ${n} rækker`)
+        .join('\n');
+    const fortryd = data.foerGendannelse
+        ? '\n\nDet, der var før, er gemt som "Før gendannelse" under Backup & Gendannelse.'
+        : '';
+    showMessage('Gendannelse fuldført', `Data er gendannet.\n\n${rows}\nBilleder: ${data.files}${fortryd}`, true);
 }
 
 let restoreFile = null;
@@ -346,7 +445,9 @@ function onRestoreFileChosen(e) {
 
 async function doRestore() {
     if (!restoreFile) return;
-    if (!confirm('Er du sikker? Alle nuværende data vil blive overskrevet med data fra backup-filen. Denne handling kan ikke fortrydes.')) return;
+    if (!await showConfirmTekst('Gendan fra fil?',
+        `Alle klubbens nuværende data erstattes med indholdet af ${restoreFile.name}. Skriv GENDAN for at fortsætte.`,
+        'GENDAN', 'Gendan')) return;
 
     const btn = document.getElementById('restoreBtn');
     btn.disabled = true;
@@ -364,10 +465,7 @@ async function doRestore() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || res.statusText);
 
-        const rows = Object.entries(data.restored)
-            .map(([t, n]) => `${t}: ${n} rækker`)
-            .join('\n');
-        showMessage('Gendannelse fuldført', `Data er gendannet.\n\n${rows}\nBilleder: ${data.files}`, true);
+        visGendannelsesResultat(data);
     } catch (err) {
         showMessage('Fejl', 'Gendannelse fejlede: ' + err.message);
     } finally {
@@ -405,6 +503,28 @@ function showConfirm(title, text, confirmLabel) {
         cancelBtn.onclick = () => done(false);
         document.getElementById('messageOverlay').style.display = 'flex';
     });
+}
+
+// Bekræftelse, hvor brugeren skal skrive et ord (fx GENDAN), før den farlige
+// knap virker. Giver true, hvis brugeren bekræfter.
+async function showConfirmTekst(title, text, ord, confirmLabel) {
+    const felt = document.createElement('input');
+    felt.type = 'text';
+    felt.className = 'bekraeft-tekst';
+    felt.autocomplete = 'off';
+    felt.setAttribute('aria-label', `Skriv ${ord}`);
+    felt.placeholder = ord;
+    document.getElementById('messageText').after(felt);
+    const okBtn = document.getElementById('messageOkBtn');
+    const tjek = () => { okBtn.disabled = felt.value.trim().toUpperCase() !== ord; };
+    felt.addEventListener('input', tjek);
+    const svar = showConfirm(title, text, confirmLabel);
+    tjek();
+    felt.focus();
+    const ok = await svar;
+    felt.remove();
+    okBtn.disabled = false;
+    return ok;
 }
 
 async function clearAllData() {
