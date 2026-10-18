@@ -181,7 +181,10 @@ body.tv-qr-synlig .tv-footer {
     height: clamp(160px, 37vh, 800px);
     padding: 1.2vh;
     border-radius: 1.5vh;
-    background: #ffffff;
+    /* Serveren tegner QR-koden hvid på gennemsigtig baggrund (som i den
+       faste QR-boks) — derfor en mørk flade, ikke hvid */
+    background: #000000;
+    border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 body.tv-ledig-kort .qr-counter {
