@@ -1623,7 +1623,7 @@ function renderRestBreakCountdown() {
     const s = Math.max(0, localRestBreakSecondsLeft);
     const tekst = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
     if (tal.textContent !== tekst) tal.textContent = tekst;
-    tal.classList.toggle('is-final', s <= 10);
+    tal.classList.toggle('is-final', s <= 20); // de sidste 20 sekunder pulserer
 
     const af = document.getElementById('tvPauseAf');
     if (af) {
