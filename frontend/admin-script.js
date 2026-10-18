@@ -1,4 +1,4 @@
-﻿// Admin Panel JavaScript
+﻿// Admin JavaScript
 const api = window.BadmintonAPI;
 let refreshInterval = null;
 let liveUpdatesHandle = null; // SSE-forbindelse til live game-state opdateringer
