@@ -8,6 +8,7 @@
     <link rel="canonical" href="https://footballapp.dk/">
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='%2314e8a3' stroke-width='1.8'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath fill='%2314e8a3' stroke='none' d='M12 8.2l3.4 2.5-1.3 4h-4.2l-1.3-4z'/%3E%3Cpath d='M12 8.2V3.5M15.4 10.7l4.4-1.6M14.1 14.7l2.7 3.8M9.9 14.7l-2.7 3.8M8.6 10.7L4.2 9.1'/%3E%3C/g%3E%3C/svg%3E">
     <link rel="stylesheet" href="fonts.css">
+    <link rel="stylesheet" href="fundament.css?v=2">
     <style>
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -24,6 +25,12 @@
             --text: #f4f1ec;
             --muted: #95a0b3;
             --radius: 16px;
+            /* Knapper fra fundament.css: footballs grønne accent med mørk tekst
+            (samme værdier som football-appen) */
+            --color-accent: #14e8a3;
+            --color-accent-rgb: 20, 232, 163;
+            --color-on-accent: #07140d;
+            --color-knap-hover: #0aa86f;
         }
 
         html { scroll-behavior: smooth; }
@@ -100,21 +107,6 @@
 
         .nav-brand .wordmark span { color: var(--green); }
 
-        .nav-cta {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid var(--border);
-            color: #fff;
-            text-decoration: none;
-            padding: 10px 22px;
-            border-radius: 100px;
-            font-size: 0.9em;
-            font-weight: 600;
-            transition: border-color 0.2s, background 0.2s;
-            white-space: nowrap;
-        }
-
-        .nav-cta:hover { border-color: var(--green); background: rgba(20,232,163,0.12); }
-
         /* ── Hero ── */
         .hero {
             text-align: center;
@@ -189,34 +181,6 @@
             from { opacity: 0; transform: translateY(16px); }
             to { opacity: 1; transform: translateY(0); }
         }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--green), var(--green-deep));
-            color: #06231a;
-            text-decoration: none;
-            padding: 15px 34px;
-            border-radius: 100px;
-            font-size: 1em;
-            font-weight: 700;
-            transition: transform 0.15s, box-shadow 0.2s;
-            box-shadow: 0 8px 28px rgba(20,232,163,0.25);
-        }
-
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 34px rgba(20,232,163,0.38); }
-
-        .btn-secondary {
-            background: transparent;
-            color: var(--text);
-            text-decoration: none;
-            padding: 15px 34px;
-            border-radius: 100px;
-            font-size: 1em;
-            font-weight: 600;
-            border: 1px solid var(--border);
-            transition: border-color 0.2s, transform 0.15s;
-        }
-
-        .btn-secondary:hover { border-color: var(--green); transform: translateY(-2px); }
 
         /* ── Browser-ramme ── */
         .browser-chrome {
@@ -616,7 +580,7 @@
     </a>
     <div class="nav-right">
         <span class="lang-switch" id="langSwitch" aria-label="Sprog / Language"></span>
-        <a class="nav-cta" href="https://demo.footballapp.dk" data-i18n="nav.demo">Åben demo →</a>
+        <a class="btn-secondary nav-cta" href="https://demo.footballapp.dk" data-i18n="nav.demo">Åben demo →</a>
     </div>
 </nav>
 
@@ -627,8 +591,8 @@
         <h1 data-i18n-html="hero.h1">Turneringsstyring til<br><span class="accent">din fodboldklub</span></h1>
         <p data-i18n-html="hero.p">Opret puljer og cups på få minutter, tast resultater fra telefonen og lad spillere og tilskuere følge <strong>stillinger og brackets live</strong> — på klubbens eget scoreboard.</p>
         <div class="hero-actions">
-            <a class="btn-primary" href="https://demo.footballapp.dk" data-i18n="cta.tryDemo">Prøv demoen</a>
-            <a class="btn-secondary" href="#funktioner" data-i18n="cta.seeFeatures">Se funktioner</a>
+            <a class="btn-primary btn-lg" href="https://demo.footballapp.dk" data-i18n="cta.tryDemo">Prøv demoen</a>
+            <a class="btn-secondary btn-lg" href="#funktioner" data-i18n="cta.seeFeatures">Se funktioner</a>
         </div>
 
         <div class="hero-shot">
@@ -853,8 +817,8 @@
             <h2 data-i18n="cta.h2">Klar til næste turnering?</h2>
             <p class="cta-sub" data-i18n="cta.sub">Prøv demoen med det samme — eller skriv til os, så er klubben i gang på ingen tid.</p>
             <div class="hero-actions">
-                <a class="btn-primary" href="https://demo.footballapp.dk" data-i18n="cta.tryDemo">Prøv demoen</a>
-                <a class="btn-secondary" href="mailto:info@footballapp.dk" data-i18n="cta.writeUs">Skriv til os</a>
+                <a class="btn-primary btn-lg" href="https://demo.footballapp.dk" data-i18n="cta.tryDemo">Prøv demoen</a>
+                <a class="btn-secondary btn-lg" href="mailto:info@footballapp.dk" data-i18n="cta.writeUs">Skriv til os</a>
             </div>
             <p class="cta-mail" data-i18n-html="cta.mail">Spørgsmål? <a href="mailto:info@footballapp.dk">info@footballapp.dk</a></p>
         </div>

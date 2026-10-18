@@ -31,6 +31,8 @@ COPY planner/src/ /usr/share/nginx/planner/src/
 COPY design/fundament.css /usr/share/nginx/html/fundament.css
 COPY design/fundament.css /usr/share/nginx/statistik/fundament.css
 COPY design/fundament.css /usr/share/nginx/planner/fundament.css
+COPY design/fundament.css /usr/share/nginx/marketing/fundament.css
+COPY design/fundament.css /usr/share/nginx/football-marketing/fundament.css
 
 # Share fonts from app into marketing sites (fonts.css lives in marketing/ and is reused by football)
 RUN cp -r /usr/share/nginx/html/fonts /usr/share/nginx/marketing/fonts \
