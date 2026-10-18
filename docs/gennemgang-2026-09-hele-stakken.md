@@ -259,7 +259,7 @@ Lavet efter at Pakke E var i prod. Fundet ved at måle på koden og kigge på ap
 ### Huller
 | # | Fund | Værdi | Indsats | Status |
 |---|---|---|---|---|
-| G1 | **TV-pausen og "ingen aktiv kamp"** har stadig det gamle udtryk og blev ikke tegnet om sammen med layout A. | Høj | M | ☐ |
+| G1 | **TV-pausen og "ingen aktiv kamp"** har stadig det gamle udtryk og blev ikke tegnet om sammen med layout A. | Høj | M | ☑ Pausen står på tavlen (layout A): navne og sæt bliver, én stor nedtælling erstatter pointfeltet, headeren siger "PAUSE · 3. SÆT NÆSTE" med en fremdriftsstreg; i pausen ved 11 står stillingen i sættets boks. Ledig bane: ét kort med banenummer, LEDIG og QR glider rundt (ca. 15 px/s). Planner før der tælles: står stille, QR-koden større i bundbjælken |
 | G2 | **Kampstatus-oversigten på storskærm** har små navne og tal set fra hallen — samme problem som TV'et havde før layout A. | Høj | M | ☐ |
 | G3 | **Markedsføringssiderne** (badmintonapp.dk, footballapp.dk) bruger ikke fundament.css; knapper og farver ligger for sig selv og glider over tid. | Middel | S–M | ☐ |
 | G4 | **Holdkamp- og turneringsdelen af admin** er bygget med ca. 420 inline-stilarter i `admin-script.js` — derfor dukker rester som F3 op. Flyt dem til klasser. | Middel | M–L | ☐ |

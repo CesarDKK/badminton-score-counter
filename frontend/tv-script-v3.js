@@ -624,17 +624,17 @@ async function loadCourtData() {
         }
 
         // Check for rest break
+        // Pausen står på selve tavlen, så bundbjælken og QR'en bliver stående
         if (gameState.restBreakActive) {
-            hideQrCounter(); // pause-overlay dækker skærmen — skjul QR imens
             showRestBreak(gameState.restBreakSecondsLeft, gameState.restBreakTitle, gameState, playersSwapped);
         } else {
             hideRestBreak();
-            // Aktivt spil: vis kompakt "genoptag"-QR hvis banen kører i QR-selvbetjening.
-            // En planner-runde sætter navne på banen, før nogen tæller — der er
-            // der ingen QR-session endnu, så vis den fulde QR (tæl eller tast resultat)
-            showQrCounter(gameState.planner && !gameState.matchStartTime ? 'planner' : 'resume',
-                plannerQrNoegle(gameState));
         }
+        // Aktivt spil: vis kompakt "genoptag"-QR hvis banen kører i QR-selvbetjening.
+        // En planner-runde sætter navne på banen, før nogen tæller — der er
+        // der ingen QR-session endnu, så vis den fulde QR (tæl eller tast resultat)
+        showQrCounter(gameState.planner && !gameState.matchStartTime ? 'planner' : 'resume',
+            plannerQrNoegle(gameState));
 
         // Detect when rest break ends (timer disappears)
         // This is the perfect time to refresh data from database
@@ -1095,17 +1095,19 @@ function updateSetScores(gameState, playersSwapped) {
     updateTeamSetBoxes('team2', displayPlayer2, setHistory, currentSetIndex, gameState, playersSwapped);
 
     // "2. SÆT" i headeren foran kamptiden. En afgjort kamp sætter sin egen
-    // tekst i showMatchFinished.
-    if (!matchFinished) setTvSetLabel(`${Math.min(currentSetIndex + 1, 3)}. SÆT`);
+    // tekst i showMatchFinished, pausen i showRestBreak.
+    if (!matchFinished && !isRestBreakActive) setTvSetLabel(`${Math.min(currentSetIndex + 1, 3)}. SÆT`);
 }
 
 // Teksten foran kamptiden i headeren ("2. SÆT", "AFGJORT" …). Tom = kun tiden.
+// medTid=false: teksten står alene (pausen skjuler kamptiden).
 let _tvSetLabel = null;
-function setTvSetLabel(tekst) {
-    if (tekst === _tvSetLabel) return;
-    _tvSetLabel = tekst;
+function setTvSetLabel(tekst, medTid = true) {
+    const noegle = medTid ? tekst : `${tekst}|alene`;
+    if (noegle === _tvSetLabel) return;
+    _tvSetLabel = noegle;
     const el = document.getElementById('tvSetLabel');
-    if (el) el.textContent = tekst ? `${tekst} · ` : '';
+    if (el) el.textContent = tekst ? (medTid ? `${tekst} · ` : tekst) : '';
 }
 
 // Layout A: de små bokse viser kun AFSLUTTEDE sæt; pointene i det sæt, der
@@ -1128,13 +1130,20 @@ function updateTeamSetBoxes(teamId, playerData, setHistory, currentSetIndex, gam
             markSetResult(teamId, setNum, setHistory[idx], isTeam1);
         } else if (currentSetIndex === idx) {
             // Igangværende sæt — cache aktuel score (max) som fallback, til
-            // historikken er opdateret. Selve pointene står i det store felt.
+            // historikken er opdateret. Selve pointene står i det store felt —
+            // undtagen i pausen midt i sættet, hvor nedtællingen har feltet:
+            // så står stillingen i sættets egen boks.
             const currentScore = playerData.score;
             if (currentScore > (cachedSetScores[teamId][cacheKey] ?? -1)) {
                 cachedSetScores[teamId][cacheKey] = currentScore;
             }
-            box.textContent = '';
-            box.className = 'set-box tom';
+            if (isRestBreakActive && !saetAfgjort(gameState.player1.score, gameState.player2.score, gameState.gameMode)) {
+                box.textContent = currentScore ?? 0;
+                box.className = 'set-box igang';
+            } else {
+                box.textContent = '';
+                box.className = 'set-box tom';
+            }
         } else if (currentSetIndex > idx && cachedSetScores[teamId][cacheKey] != null) {
             // Sættet er slut men historikken ikke opdateret endnu — cachet fallback
             box.textContent = cachedSetScores[teamId][cacheKey];
@@ -1148,7 +1157,7 @@ function updateTeamSetBoxes(teamId, playerData, setHistory, currentSetIndex, gam
 
     // Det store pointfelt. Pausen mellem sæt: tælleren nulstiller først
     // pointene, når pausen slutter, så stillingen er det netop afsluttede sæts
-    // — vis 0 i stedet (pause-overlayet dækker alligevel).
+    // — vis 0 i stedet (feltet er skjult under pausen, men ikke et øjeblik efter).
     const scoreEl = document.getElementById(`${teamId}Score`);
     if (scoreEl) {
         const iPause = currentSetIndex >= 0 && (gameState.gameMode === '15' || gameState.gameMode === '21') &&
@@ -1365,6 +1374,7 @@ function forudindlaesBannere() {
 // (fuldskærm, opak) den næste kamp, fordi oprydningen kun fandt den første.
 function fjernSlideshowContainere() {
     document.querySelectorAll('.sponsor-slideshow').forEach(el => el.remove());
+    document.body.classList.remove('tv-ledig-kort');
 }
 
 function restartSlideshow() {
@@ -1480,20 +1490,42 @@ function displayCurrentSlide(images) {
     `;
 }
 
+// "Ingen aktiv kamp" (ingen sponsorbilleder): ét kort med banenummer, LEDIG og
+// — i klub-mode — QR-koden. Hele kortet glider langsomt rundt og preller af
+// kanterne (DVD-bounce), så intet står fast på skærmen og brænder fast.
+// Gløden er kortets egen skygge og følger med.
 function showDefaultMessage() {
     fjernSlideshowContainere();
     const container = document.createElement('div');
     container.id = 'sponsorSlideshowContainer';
-    container.className = 'sponsor-slideshow active';
+    container.className = 'sponsor-slideshow active ledig';
     container.innerHTML = `
-        <div class="screensaver-text">
-            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><g transform="translate(0 1.2)"><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/><rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/><path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/></g></svg>
-            <div class="screensaver-label">Ingen aktiv kamp</div>
-            <div class="screensaver-court">BANE ${courtId}</div>
+        <div class="screensaver-text ledig-kort">
+            <div class="ledig-tekst">
+                <div class="ledig-bane">BANE <span>${escapeHtml(courtId)}</span></div>
+                <div class="ledig-pille">LEDIG</div>
+                <div class="ledig-kald">TÆL KAMPEN MED<br>DIN TELEFON</div>
+                <div class="ledig-hjaelp">Scan koden og start kampen på telefonen.</div>
+            </div>
+            <img class="ledig-qr" alt="Scan med telefon for at tælle kampen">
         </div>
     `;
     document.querySelector('.tv-container').appendChild(container);
+    synkLedigQr();
     startScreensaver();
+}
+
+// Ledig-kortet viser selv QR-koden (den faste QR-boks skjules imens), så
+// koden glider med rundt i stedet for at stå stille i hjørnet
+function synkLedigQr() {
+    const kort = document.querySelector('#sponsorSlideshowContainer .ledig-kort');
+    const vis = !!(kort && qrCounterVisible && qrCounterObjectUrl &&
+        String(qrCounterMode || '').split('|')[0] === 'idle');
+    document.body.classList.toggle('tv-ledig-kort', vis);
+    if (!kort) return;
+    kort.classList.toggle('har-qr', vis);
+    const img = kort.querySelector('.ledig-qr');
+    if (vis && img && img.src !== qrCounterObjectUrl) img.src = qrCounterObjectUrl;
 }
 
 function startScreensaver() {
@@ -1516,12 +1548,14 @@ function startScreensaver() {
             const maxY = c.offsetHeight - t.offsetHeight;
             x = Math.max(0, maxX / 2);
             y = Math.max(0, maxY / 2);
-            const speed = 20; // px/s
+            // Langsomt: ca. 15 px/s på Full HD (skaleres med skærmhøjden),
+            // så kortet glider og ikke tiltrækker sig opmærksomhed
+            const speed = 15 * Math.max(1, c.offsetHeight / 1080);
             const angle = Math.random() * 2 * Math.PI;
             dx = Math.cos(angle) * speed;
             dy = Math.sin(angle) * speed;
-            if (Math.abs(dx) < 6) dx = dx < 0 ? -6 : 6;
-            if (Math.abs(dy) < 6) dy = dy < 0 ? -6 : 6;
+            if (Math.abs(dx) < 5) dx = dx < 0 ? -5 : 5;
+            if (Math.abs(dy) < 5) dy = dy < 0 ? -5 : 5;
         }
 
         if (!lastTime) lastTime = timestamp;
@@ -1578,31 +1612,36 @@ function guessRestBreakTotal(title, secondsLeft) {
     return Math.max(secondsLeft || 0, 60);
 }
 
+// Pausen tegnes på selve tavlen (layout A): navne og sæt bliver stående, og
+// nedtællingen (#tvPausePanel) erstatter pointfeltet i begge rækker. Headeren
+// siger "PAUSE · 3. SÆT NÆSTE" i stedet for kamptiden, og en streg i bunden af
+// headeren viser, hvor meget af pausen der er gået.
 function renderRestBreakCountdown() {
-    const timerDisplay = document.getElementById('tvRestBreakTimer');
-    const ring = document.getElementById('tvRestBreakRing');
-    if (!timerDisplay) return;
+    const tal = document.getElementById('tvPauseTal');
+    if (!tal) return;
 
     const s = Math.max(0, localRestBreakSecondsLeft);
-    timerDisplay.textContent = s >= 60
-        ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-        : String(s);
-    timerDisplay.classList.toggle('is-final', s <= 10);
+    const tekst = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    if (tal.textContent !== tekst) tal.textContent = tekst;
+    tal.classList.toggle('is-final', s <= 20); // de sidste 20 sekunder pulserer
 
-    if (ring) {
-        const CIRCUMFERENCE = 2 * Math.PI * 90; // matcher r=90 i SVG'en
-        const fraction = localRestBreakTotal > 0 ? Math.min(1, s / localRestBreakTotal) : 0;
-        ring.style.strokeDashoffset = String(CIRCUMFERENCE * (1 - fraction));
+    const af = document.getElementById('tvPauseAf');
+    if (af) {
+        const min = Math.round(localRestBreakTotal / 60);
+        const afTekst = min >= 1 ? `AF ${min} ${min === 1 ? 'MINUT' : 'MINUTTER'}` : '';
+        if (af.textContent !== afTekst) af.textContent = afTekst;
+    }
+
+    const streg = document.getElementById('tvPauseFremdrift');
+    if (streg) {
+        const gaaet = localRestBreakTotal > 0 ? 1 - Math.min(1, s / localRestBreakTotal) : 0;
+        streg.style.width = `${(gaaet * 100).toFixed(1)}%`;
     }
 }
 
 function showRestBreak(secondsLeft, title, gameState, playersSwapped) {
-    const overlay = document.getElementById('tvRestBreakOverlay');
-    const titleElement = document.getElementById('tvRestBreakTitle');
-
-    if (!overlay) return;
-
-    titleElement.textContent = title || 'Pause';
+    const container = document.querySelector('.tv-container');
+    if (!container) return;
 
     const isNewRestBreak = !isRestBreakActive;
 
@@ -1639,52 +1678,28 @@ function showRestBreak(secondsLeft, title, gameState, playersSwapped) {
 
     renderRestBreakCountdown();
 
+    // Pause mellem sæt: sættet er gemt i historikken, og pointene står stadig
+    // på det afsluttede sæts stilling, til pausen slutter. Ellers er det
+    // pausen midt i sættet (ved 11/8).
     if (gameState) {
-        let displayPlayer1, displayPlayer2;
-        if (playersSwapped) {
-            displayPlayer1 = gameState.player2;
-            displayPlayer2 = gameState.player1;
-        } else {
-            displayPlayer1 = gameState.player1;
-            displayPlayer2 = gameState.player2;
-        }
-
-        const partner1Element = document.getElementById('tvRestBreakPlayer1Partner');
-        const partner2Element = document.getElementById('tvRestBreakPlayer2Partner');
-        const isDoubles = gameState.isDoubles && displayPlayer1.name2 && displayPlayer2.name2;
-
-        // Samme navneregel som scoreboardet: kun fornavn, forbogstav ved sammenfald
-        // — undtagen navne fra badmintonplanner.dk, der allerede er forkortet dér
-        const [v1, v1m, v2, v2m] = NameDisplay.visningsnavne([
-            displayPlayer1.name, isDoubles ? displayPlayer1.name2 : '',
-            displayPlayer2.name, isDoubles ? displayPlayer2.name2 : ''
-        ], { uforkortet: !!gameState.planner });
-        document.getElementById('tvRestBreakPlayer1').textContent = v1;
-        document.getElementById('tvRestBreakPlayer2').textContent = v2;
-
-        if (isDoubles) {
-            partner1Element.textContent = v1m;
-            partner1Element.style.display = 'block';
-            partner2Element.textContent = v2m;
-            partner2Element.style.display = 'block';
-        } else {
-            partner1Element.style.display = 'none';
-            partner2Element.style.display = 'none';
-        }
-
-        document.getElementById('tvRestBreakScore1').textContent = displayPlayer1.score;
-        document.getElementById('tvRestBreakScore2').textContent = displayPlayer2.score;
-        document.getElementById('tvRestBreakGames1').textContent = displayPlayer1.games;
-        document.getElementById('tvRestBreakGames2').textContent = displayPlayer2.games;
+        const p1 = gameState.player1, p2 = gameState.player2;
+        const naeste = Math.min((p1.games || 0) + (p2.games || 0) + 1, 3);
+        const mellemSaet = p1.score + p2.score > 0 && saetAfgjort(p1.score, p2.score, gameState.gameMode);
+        setTvSetLabel(mellemSaet ? `PAUSE · ${naeste}. SÆT NÆSTE` : `PAUSE · ${naeste}. SÆT`, false);
     }
 
-    overlay.style.display = 'flex';
+    if (!container.classList.contains('i-pause')) {
+        container.classList.add('i-pause');
+        requestAnimationFrame(fitAllPlayerNames); // pointfeltet er væk — navnene får mere plads
+    }
 }
 
 function hideRestBreak() {
-    const overlay = document.getElementById('tvRestBreakOverlay');
-    if (overlay) {
-        overlay.style.display = 'none';
+    const container = document.querySelector('.tv-container');
+    if (container && container.classList.contains('i-pause')) {
+        container.classList.remove('i-pause');
+        _tvSetLabel = null; // tegnes igen af updateSetScores
+        requestAnimationFrame(fitAllPlayerNames);
     }
 
     if (restBreakInterval) {
@@ -1697,10 +1712,10 @@ function hideRestBreak() {
     localRestBreakTotal = 0;
     restBreakEndAt = 0;
 
-    const timerDisplay = document.getElementById('tvRestBreakTimer');
-    if (timerDisplay) {
-        timerDisplay.classList.remove('is-final');
-    }
+    const tal = document.getElementById('tvPauseTal');
+    if (tal) tal.classList.remove('is-final');
+    const streg = document.getElementById('tvPauseFremdrift');
+    if (streg) streg.style.width = '0';
 }
 
 // ========== MATCH FINISHED FUNCTIONS (UNCHANGED FROM V2) ==========
@@ -1869,6 +1884,7 @@ function showQrCounter(mode = 'idle', noegle = '') {
 // (body.tv-qr-synlig), så boksen aldrig dækker sidste sætboks ved 3 sæt
 function markerQrPlads(synlig) {
     document.body.classList.toggle('tv-qr-synlig', synlig);
+    synkLedigQr();
 }
 
 function hideQrCounter() {

@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" href="/favicon.png?v=5">
     <link rel="stylesheet" href="fonts.css?v=2">
     <link rel="stylesheet" href="fundament.css?v=2">
-    <link rel="stylesheet" href="tv-v3-styles.css?v=17">
+    <link rel="stylesheet" href="tv-v3-styles.css?v=18">
     <script src="js/theme-loader.js?v=15"></script>
 </head>
 <body>
@@ -22,8 +22,10 @@
                 <span class="tv-planner-label" id="tvPlannerLabel"></span>
                 <span class="tv-planner-next" id="tvPlannerNext"></span>
             </div>
-            <!-- "2. SÆT · 14:32" (afgjort: "AFGJORT · 52:40") -->
+            <!-- "2. SÆT · 14:32" (afgjort: "AFGJORT · 52:40", pause: "PAUSE · 3. SÆT NÆSTE") -->
             <div class="timer-display"><span class="tv-set-label" id="tvSetLabel"></span><span id="timerDisplay">00:00</span></div>
+            <!-- Pause: hvor meget af pausen der er gået -->
+            <span class="tv-pause-fremdrift" id="tvPauseFremdrift" aria-hidden="true"></span>
         </div>
 
         <!-- Main scoreboard -->
@@ -62,6 +64,13 @@
                 </div>
                 <div class="team-score" id="team2Score">0</div>
             </div>
+            <!-- Pause (layout A): rækkerne med navne og sæt bliver stående, og
+                 nedtællingen erstatter pointfeltet i begge rækker -->
+            <div class="tv-pause-panel" id="tvPausePanel" aria-live="off">
+                <span class="tv-pause-titel">PAUSE</span>
+                <span class="tv-pause-tal" id="tvPauseTal">0:00</span>
+                <span class="tv-pause-af" id="tvPauseAf"></span>
+            </div>
         </div>
 
         <!-- Bundbjælke: udskiftere/banenote (badmintonplanner.dk) til venstre,
@@ -79,44 +88,6 @@
         </div>
     </div>
 
-    <!-- Rest Break Overlay — broadcast-layout: spillerne fylder siderne, countdown-ring i midten -->
-    <div id="tvRestBreakOverlay" class="tv-overlay">
-        <div class="overlay-glow"></div>
-        <div class="pause-layout">
-            <div class="pause-player">
-                <div class="pause-player-name" id="tvRestBreakPlayer1">Spiller 1</div>
-                <div class="pause-player-partner" id="tvRestBreakPlayer1Partner"></div>
-                <div class="pause-score" id="tvRestBreakScore1">0</div>
-                <div class="pause-score-label">Point</div>
-            </div>
-            <div class="pause-center">
-                <h1 id="tvRestBreakTitle" class="pause-title">Pause 1 minut</h1>
-                <div class="pause-ring-wrap">
-                    <svg class="pause-ring" viewBox="0 0 200 200" aria-hidden="true">
-                        <circle class="pause-ring-track" cx="100" cy="100" r="90"/>
-                        <circle class="pause-ring-fill" id="tvRestBreakRing" cx="100" cy="100" r="90"/>
-                    </svg>
-                    <div class="pause-ring-inner">
-                        <div id="tvRestBreakTimer" class="pause-countdown">60</div>
-                        <div class="pause-countdown-label">Tilbage</div>
-                    </div>
-                </div>
-                <div class="pause-sets">
-                    <span class="pause-sets-label">Sæt</span>
-                    <span class="pause-set-badge" id="tvRestBreakGames1">0</span>
-                    <span class="pause-sets-dash">–</span>
-                    <span class="pause-set-badge" id="tvRestBreakGames2">0</span>
-                </div>
-            </div>
-            <div class="pause-player">
-                <div class="pause-player-name" id="tvRestBreakPlayer2">Spiller 2</div>
-                <div class="pause-player-partner" id="tvRestBreakPlayer2Partner"></div>
-                <div class="pause-score" id="tvRestBreakScore2">0</div>
-                <div class="pause-score-label">Point</div>
-            </div>
-        </div>
-    </div>
-
     <!-- QR Counter — kun synlig i klub-mode når banen er ledig. Vises ovenpå slideshow. -->
     <div id="qrCounter" class="qr-counter" style="display: none;">
         <div class="qr-counter__label">TÆL MED DIN TELEFON</div>
@@ -131,6 +102,6 @@
     <script src="js/logo-match.js?v=1"></script>
     <script src="js/live-updates.js?v=2"></script>
     <script src="js/name-display.js?v=2"></script>
-    <script src="tv-script-v3.js?v=57"></script>
+    <script src="tv-script-v3.js?v=59"></script>
 </body>
 </html>

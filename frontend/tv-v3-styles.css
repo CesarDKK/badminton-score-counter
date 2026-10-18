@@ -8,8 +8,7 @@
     position: fixed;
     bottom: 0.5vh;
     right: clamp(20px, 2.5vw, 50px);
-    /* Over .tv-overlay (9999), så QR'en er synlig oven på overlays.
-       QR skjules under pause-overlayet, så ingen konflikt. */
+    /* Over sponsorslideshowet og alt andet på skærmen */
     z-index: 10000;
     background: rgba(var(--color-bg-card-rgb), 0.92);
     border: 2px solid var(--color-accent);
@@ -81,38 +80,112 @@ body.tv-qr-synlig .tv-footer {
     animation: fadeIn 1s ease-in-out;
 }
 
-/* "Ingen aktiv kamp" screensaver — skalerer med viewporten (clamp) så
-   teksten aldrig er bredere end skærmen og kan bounce frit */
+/* "Ingen aktiv kamp" (ingen sponsorbilleder): ét kort, der glider langsomt
+   rundt (DVD-bounce i tv-script-v3.js). Indhold og glød følger kortet, så
+   intet står stille. QR-koden ligger i kortet, når banen kører i klub-mode
+   (.har-qr) — den faste QR-boks skjules imens (body.tv-ledig-kort). */
+.sponsor-slideshow.ledig {
+    background: var(--color-bg-dark, #0d0d1a);
+}
+
 .screensaver-text {
-    text-align: center;
-    white-space: nowrap;
     position: absolute;
 }
 
-.screensaver-text svg {
-    width: clamp(2.4em, 8vw, 7em);
-    height: clamp(2.4em, 8vw, 7em);
-    color: var(--color-accent, #e94560);
-    margin-bottom: 0.4em;
+.ledig-kort {
+    display: flex;
+    align-items: center;
+    gap: 4.4vh;
+    padding: 4vh 4.4vh;
+    border-radius: 2.6vh;
+    background: rgba(var(--color-bg-card-rgb, 26, 26, 46), 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 3vh 8vh rgba(0, 0, 0, 0.45),
+                0 0 30vh 6vh rgba(var(--color-primary-rgb, 83, 52, 131), 0.3);
+    white-space: nowrap;
 }
 
-.screensaver-label {
-    font-family: 'DM Sans', sans-serif;
-    font-size: clamp(1em, 3.2vw, 2.6em);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.3em;
-    color: var(--text-muted, rgba(255, 255, 255, 0.62));
-    margin-bottom: 0.35em;
+.ledig-tekst {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.3vh;
 }
 
-.screensaver-court {
+.ledig-bane {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(3.5em, 19vw, 15em);
-    letter-spacing: 0.04em;
-    line-height: 1;
+    font-size: clamp(3em, 15vh, 16em);
+    line-height: 0.9;
+    letter-spacing: 0.03em;
     color: #ffffff;
-    text-shadow: 0 0 60px rgba(var(--color-accent-rgb, 233, 69, 96), 0.35);
+}
+
+.ledig-bane span {
+    color: var(--color-accent);
+}
+
+.ledig-pille {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(1.4em, 5.2vh, 5em);
+    line-height: 1;
+    letter-spacing: 0.08em;
+    padding: 0.4vh 2vh;
+    border-radius: 999px;
+    background: rgba(var(--color-win-rgb, 69, 209, 126), 0.15);
+    color: rgb(var(--color-win-rgb, 69, 209, 126));
+}
+
+:root[data-groent-tema] .ledig-pille {
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--color-bg-dark);
+}
+
+.ledig-kald,
+.ledig-hjaelp,
+.ledig-qr {
+    display: none;
+}
+
+/* Uden QR er banenummeret det eneste — større og centreret */
+.ledig-kort:not(.har-qr) .ledig-tekst {
+    align-items: center;
+}
+
+.ledig-kort:not(.har-qr) .ledig-bane {
+    font-size: clamp(4em, 24vh, 26em);
+}
+
+.ledig-kort:not(.har-qr) .ledig-pille {
+    font-size: clamp(1.8em, 7vh, 7em);
+}
+
+.ledig-kort.har-qr .ledig-kald {
+    display: block;
+    margin-top: 1.1vh;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(1.6em, 6vh, 6em);
+    line-height: 1;
+    letter-spacing: 0.02em;
+    color: #ffffff;
+}
+
+.ledig-kort.har-qr .ledig-hjaelp {
+    display: block;
+    font-size: clamp(0.9em, 2.1vh, 2em);
+    color: var(--text-secondary, rgba(255, 255, 255, 0.78));
+}
+
+.ledig-kort.har-qr .ledig-qr {
+    display: block;
+    width: clamp(160px, 37vh, 800px);
+    height: clamp(160px, 37vh, 800px);
+    padding: 1.2vh;
+    border-radius: 1.5vh;
+    background: #ffffff;
+}
+
+body.tv-ledig-kort .qr-counter {
+    display: none !important;
 }
 
 /* =================== RESET =================== */
@@ -504,291 +577,8 @@ body::before {
     to   { opacity: 1; }
 }
 
-/* =================== OVERLAYS =================== */
-.tv-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(10, 8, 20, 0.97);
-    z-index: 9999;
-    justify-content: center;
-    align-items: center;
-}
-
-.tv-overlay.active {
-    display: flex;
-}
-
-.overlay-glow {
-    position: absolute;
-    top: -20%;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 100vw;
-    height: 80vh;
-    background: radial-gradient(ellipse, rgba(var(--color-primary-rgb), 0.25) 0%, transparent 65%);
-    pointer-events: none;
-}
-
-.overlay-content {
-    position: relative;
-    z-index: 1;
-    text-align: center;
-    width: 90%;
-    max-width: 1500px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 40px;
-}
-
-/* ── Pauseskærm — broadcast-layout ──
-   Læses på lang afstand: spillerne fylder hver sin halvdel med navne og
-   point i kæmpestørrelse; midten er en countdown-søjle med progress-ring
-   der drænes, så man kan SE hvor meget pause der er tilbage. */
-.pause-layout {
-    position: relative;
-    z-index: 1;
-    width: 100%;
-    height: 100%;
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    align-items: center;
-    gap: clamp(20px, 3vw, 60px);
-    padding: clamp(20px, 4vw, 80px);
-}
-
-.pause-player {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    gap: clamp(4px, 1vh, 12px);
-    min-width: 0;
-}
-
-.pause-player-name {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(2.5em, 6vw, 6.5em);
-    letter-spacing: 0.04em;
-    line-height: 1.05;
-    color: #ffffff;
-    overflow-wrap: anywhere;
-}
-
-/* Makkeren i pause-overlayet: samme stoerrelse og farve som hovedspilleren —
-   de er et hold. (Var foer 3.4em og nedtonet til 55 %.) */
-.pause-player-partner {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(2.5em, 6vw, 6.5em);
-    letter-spacing: 0.04em;
-    line-height: 1.05;
-    color: #ffffff;
-    overflow-wrap: anywhere;
-}
-
-.pause-player-partner:empty {
-    display: none;
-}
-
-.pause-score {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(6em, min(26vh, 15vw), 16em);
-    line-height: 0.9;
-    color: var(--color-accent);
-    font-variant-numeric: tabular-nums;
-    text-shadow: 0 0 90px rgba(var(--color-accent-rgb), 0.35);
-    margin-top: clamp(4px, 1.5vh, 16px);
-}
-
-.pause-score-label {
-    font-size: clamp(0.8em, 1.2vw, 1.2em);
-    font-weight: 600;
-    letter-spacing: 0.35em;
-    text-transform: uppercase;
-    color: var(--text-muted, rgba(255, 255, 255, 0.62));
-}
-
-.pause-center {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: clamp(16px, 3.5vh, 40px);
-}
-
-.pause-title {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(1.6em, 2vh + 1vw, 3em);
-    font-weight: 400;
-    letter-spacing: 0.14em;
-    color: rgba(255, 255, 255, 0.75);
-    text-transform: uppercase;
-    white-space: nowrap;
-}
-
-.pause-ring-wrap {
-    position: relative;
-    width: clamp(220px, 40vh, 440px);
-    height: clamp(220px, 40vh, 440px);
-}
-
-.pause-ring {
-    width: 100%;
-    height: 100%;
-    transform: rotate(-90deg); /* ringen drænes fra kl. 12 */
-}
-
-.pause-ring-track {
-    fill: none;
-    stroke: rgba(255, 255, 255, 0.08);
-    stroke-width: 8;
-}
-
-.pause-ring-fill {
-    fill: none;
-    stroke: var(--color-accent);
-    stroke-width: 8;
-    stroke-linecap: round;
-    stroke-dasharray: 565.49; /* 2π · r90 */
-    stroke-dashoffset: 0;
-    transition: stroke-dashoffset 1s linear;
-    filter: drop-shadow(0 0 12px rgba(var(--color-accent-rgb), 0.5));
-}
-
-.pause-ring-inner {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-}
-
-.pause-countdown {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(4em, 13vh, 7.5em);
-    line-height: 1;
-    color: #ffffff;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.02em;
-}
-
-.pause-countdown.is-final {
-    color: var(--color-accent);
-    animation: pauseFinalPulse 1s ease-in-out infinite;
-}
-
-@keyframes pauseFinalPulse {
-    0%, 100% { opacity: 1; }
-    50%      { opacity: 0.55; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .pause-countdown.is-final { animation: none; }
-    .pause-ring-fill { transition: none; }
-}
-
-.pause-countdown-label {
-    font-size: clamp(0.7em, 1vw, 1em);
-    font-weight: 600;
-    letter-spacing: 0.35em;
-    text-transform: uppercase;
-    color: var(--text-muted, rgba(255, 255, 255, 0.62));
-    margin-left: 0.35em; /* kompenser sidste bogstavs letterspacing */
-}
-
-.pause-sets {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: 100px;
-    padding: 10px 28px;
-}
-
-.pause-sets-label {
-    font-size: 0.95em;
-    font-weight: 600;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: var(--text-muted, rgba(255, 255, 255, 0.62));
-    margin-right: 6px;
-}
-
-.pause-set-badge {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 2.2em;
-    line-height: 1;
-    color: #ffffff;
-    background: rgba(var(--color-primary-rgb), 0.25);
-    border: 1px solid rgba(var(--color-primary-rgb), 0.5);
-    border-radius: 10px;
-    padding: 6px 18px;
-    min-width: 58px;
-    text-align: center;
-}
-
-.pause-sets-dash {
-    font-size: 1.4em;
-    color: rgba(255, 255, 255, 0.25);
-}
-
-/* Match Finished overlay */
-.overlay-content--finished {
-    gap: 30px;
-}
-
-.overlay-finished-title {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 5em;
-    font-weight: 400;
-    letter-spacing: 8px;
-    color: #ffffff;
-    text-transform: uppercase;
-}
-
-.overlay-winner-card {
-    background: rgba(var(--color-win-rgb, 69, 209, 126), 0.08);
-    border: 1px solid rgba(var(--color-win-rgb, 69, 209, 126), 0.35);
-    border-radius: 20px;
-    padding: 30px 60px;
-    width: 100%;
-    max-width: 900px;
-}
-
-.overlay-winner-label {
-    font-size: 0.9em;
-    font-weight: 600;
-    letter-spacing: 5px;
-    color: rgba(var(--color-win-rgb, 69, 209, 126), 0.7);
-    text-transform: uppercase;
-    margin-bottom: 14px;
-}
-
-.overlay-winner-name {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 4.5em;
-    font-weight: 400;
-    letter-spacing: 4px;
-    color: #ffffff;
-}
-
-.overlay-set-history {
-    font-size: 1.5em;
-    color: var(--text-muted, rgba(255, 255, 255, 0.62));
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 16px;
-    padding: 24px 40px;
-    width: 100%;
-    max-width: 900px;
-    letter-spacing: 1px;
-}
-
 /* =================== RESPONSIVE =================== */
-/* Scoreboard, navne, header, footer og pauseskærm skalerer via clamp/vh/vw. */
+/* Scoreboard, navne, header, footer og pausen skalerer via clamp/vh/vw. */
 
 /* ── Mobile (tablet + phone portrait) ── */
 @media (max-width: 767px) {
@@ -870,22 +660,6 @@ body::before {
     body.tv-qr-synlig .tv-footer {
         padding-right: 16px;
     }
-
-    /* Overlays */
-    .overlay-content { gap: 18px; width: 96%; }
-    .overlay-heading { font-size: 1.8em; letter-spacing: 3px; }
-    .overlay-countdown { font-size: 5em; }
-    .overlay-score-row { gap: 12px; flex-wrap: wrap; }
-    .overlay-player-card { padding: 18px 20px; min-width: 0; flex: 1; }
-    .overlay-player-name { font-size: 1.5em; }
-    .overlay-score { font-size: 7em; }
-    .overlay-vs { font-size: 1.8em; }
-    .overlay-set-badge { font-size: 1.8em; padding: 5px 16px; min-width: 0; }
-    .overlay-sets-row { padding: 12px 16px; }
-    .overlay-finished-title { font-size: 2.8em; letter-spacing: 4px; }
-    .overlay-winner-card { padding: 18px 24px; }
-    .overlay-winner-name { font-size: 2.4em; }
-    .overlay-set-history { font-size: 1.1em; padding: 16px 20px; }
 }
 
 
@@ -1055,4 +829,156 @@ body::before {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* =================== PAUSE (layout A) ===================
+   Pausen bruger samme tavle som kampen: navne og afsluttede sæt bliver
+   stående, og én stor nedtælling erstatter pointfeltet i begge rækker. I
+   pausen midt i sættet står stillingen i sættets egen boks (.igang). Headeren
+   siger "PAUSE · 3. SÆT NÆSTE" i stedet for kamptiden, og stregen i bunden af
+   headeren viser, hvor meget af pausen der er gået. */
+.tv-header {
+    position: relative;
+}
+
+.tv-pause-fremdrift {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: clamp(3px, 0.75vh, 14px);
+    width: 0;
+    background: var(--color-accent);
+    transition: width 1s linear;
+    display: none;
+}
+
+.tv-container.i-pause .tv-pause-fremdrift {
+    display: block;
+}
+
+.tv-container.i-pause #timerDisplay {
+    display: none;
+}
+
+.tv-container.i-pause .timer-display {
+    color: #ffffff;
+}
+
+.scoreboard {
+    position: relative;
+}
+
+.tv-pause-panel {
+    display: none;
+}
+
+.tv-container.i-pause .tv-pause-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 29vw;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6vh;
+    background: rgba(var(--color-accent-rgb, 233, 69, 96), 0.08);
+    border-left: 2px solid rgba(var(--color-accent-rgb, 233, 69, 96), 0.35);
+}
+
+.tv-container.i-pause .team-score {
+    display: none;
+}
+
+.tv-container.i-pause .team-row {
+    padding-right: calc(29vw + clamp(20px, 2.5vw, 50px));
+}
+
+.tv-pause-titel {
+    font-size: clamp(1em, 3.1vh, 3em);
+    font-weight: 700;
+    letter-spacing: 0.3em;
+    margin-left: 0.3em; /* kompenser sidste bogstavs letterspacing */
+    color: var(--color-accent);
+}
+
+.tv-pause-tal {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(5em, 33vh, 34em);
+    line-height: 0.85;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    color: #ffffff;
+}
+
+.tv-pause-tal.is-final {
+    color: var(--color-accent);
+    animation: pauseFinalPulse 1s ease-in-out infinite;
+}
+
+@keyframes pauseFinalPulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tv-pause-tal.is-final { animation: none; }
+    .tv-pause-fremdrift { transition: none; }
+}
+
+.tv-pause-af {
+    font-size: clamp(0.9em, 2.8vh, 2.6em);
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
+}
+
+.set-box.igang {
+    background: rgba(255, 255, 255, 0.04);
+    box-shadow: inset 0 0 0 clamp(2px, 0.3vh, 5px) rgba(255, 255, 255, 0.35);
+    color: #ffffff;
+}
+
+/* Telefon: panelet står under rækkerne i stedet for ved siden af */
+@media (max-width: 767px) {
+    .tv-container.i-pause .tv-pause-panel {
+        position: static;
+        width: auto;
+        flex-direction: row;
+        gap: 14px;
+        padding: 14px 16px;
+        border-left: 0;
+        border-top: 2px solid rgba(var(--color-accent-rgb, 233, 69, 96), 0.35);
+    }
+    .tv-container.i-pause .team-row {
+        padding-right: 16px;
+    }
+    .tv-pause-tal {
+        font-size: 4em;
+    }
+}
+
+/* =================== PLANNER: QR'EN ER HOVEDSAGEN, FØR DER TÆLLES ===================
+   Står kun navnene på tavlen (.planner-navne), er QR-koden det, spillerne
+   skal bruge — den bliver større, og bundbjælken giver plads til den. */
+.tv-container.planner-navne ~ .qr-counter .qr-counter__image {
+    width: clamp(90px, 20vh, 440px);
+    height: clamp(90px, 20vh, 440px);
+}
+
+.tv-container.planner-navne ~ .qr-counter .qr-counter__label {
+    font-size: clamp(16px, 4.4vh, 96px);
+}
+
+body.tv-qr-synlig .tv-container.planner-navne .tv-footer {
+    min-height: clamp(100px, 22vh, 480px);
+    padding-right: calc(clamp(20px, 2.5vw, 50px) + 54vh);
+}
+
+@media (max-width: 767px) {
+    body.tv-qr-synlig .tv-container.planner-navne .tv-footer {
+        min-height: 50px;
+        padding-right: 16px;
+    }
 }
