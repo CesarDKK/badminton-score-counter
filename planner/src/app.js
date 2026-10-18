@@ -10,7 +10,7 @@ import { scorePlan } from './kriterier.js';
 import { alleNedskaeringer, anvendNedskaering, kapacitetsRegnskab, swissKandidater } from './nedskaering.js';
 import { sammenlignKamplaengder, erUdenPause } from './kamplaengde.js';
 import { lavKampprogram as byggKampprogram, lavBeslutninger, anvendAendring, panelGaelder } from './kampprogram.js';
-import { kompromiser, udenKompromiser } from './kompromis.js';
+import { kompromiser, udenKompromiser, variantValg } from './kompromis.js';
 import { reglementetsPause, INGEN_PAUSE, regelsaetTekst } from './regler.js';
 import { renderOpsaetning, renderFil } from './ui/opsaetning.js';
 import { renderPlan } from './ui/plan.js';
@@ -455,13 +455,65 @@ function startAutoLoeser() {
     setTimeout(() => planHandlers.optimer({ auto: true }), 0);
 }
 
+/** Efter et nyt kampprogram: programmerne uden kompromiserne regnes i baggrunden, og løseren går i gang, hvis det går op. */
+function efterKampprogram() {
+    startVarianter();
+    startAutoLoeser();
+}
+
+// Samme opsætning og låste kampe (planen kan være forbedret af løseren imens): programmerne uden kompromiserne passer stadig
+const sammeOpsaetning = (a, b) => !!a && !!b && a.kampe === b.kampe && a.opsaetning === b.opsaetning && a.raekker === b.raekker
+    && a.kategorier === b.kategorier && (a.laast || []).join() === (b.laast || []).join();
+
+/**
+ * Programmerne uden kompromiserne (kompromis.js lavVarianter) i deres egen baggrundstråd, så "Lav kampprogram", kortene
+ * og løseren ikke venter på dem (ca. et sekund pr. række på en stor turnering). Et nyt panel lukker den gamle tråd.
+ * Uden tråde (ældre browser) regnes de ikke — rækkerne står så uden resultat, og løseren kan stadig prøve.
+ */
+let variantTraad = null, variantNr = 0;
+function beregnVarianter(foer, p) {
+    variantTraad?.terminate();
+    variantTraad = null;
+    if (!kpTraadVirker || typeof Worker === 'undefined') return Promise.resolve(null);
+    let traad;
+    try { traad = variantTraad = new Worker(new URL('./kampprogram-worker.js', import.meta.url), { type: 'module' }); } catch { return Promise.resolve(null); }
+    const id = ++variantNr;
+    return new Promise((ok, fejl) => {
+        const luk = () => { traad.terminate(); if (variantTraad === traad) variantTraad = null; };
+        traad.onmessage = (e) => { if (e.data.id !== id) return; luk(); if (e.data.fejl) fejl(new Error(e.data.fejl)); else ok(e.data.varianter); };
+        traad.onerror = () => { luk(); ok(null); };
+        traad.postMessage({ id, type: 'varianter', foer, projekt: p });
+    });
+}
+
+function startVarianter() {
+    const kp = tilstand.kampprogram;
+    if (!kp || kp.egetProgram || !panelGaelder(kp, projekt)) return;
+    if (kp.varianter && sammeOpsaetning(kp.varianter.for, projekt)) return;
+    // Først kortene: programmerne vises (og regnes), når der ikke er flere kort at tage stilling til
+    if (kp.beslutninger.kort.some((k) => !kp.beholdt.includes(k.noegle))) return;
+    if (!kompromiser(kp.foer, projekt).some((k) => !k.blokeret)) { kp.varianter = null; return; }
+    const v = kp.varianter = { for: projekt, liste: null };
+    beregnVarianter(kp.foer, projekt).then((liste) => {
+        if (tilstand.kampprogram !== kp || kp.varianter !== v) return;
+        v.liste = liste || [];
+        render();
+    }).catch((err) => {
+        console.error(err);
+        if (kp.varianter !== v) return;
+        v.liste = [];
+        v.fejl = String(err.message || err);
+        render();
+    });
+}
+
 const planHandlers = {
     // "Lav kampprogram": hele kæden på én gang (kampprogram.js). Det gamle program kan fås tilbage med "Fortryd".
     lavKampprogram({ fastKamplaengde = false, behold = false } = {}) {
         const foer = projekt;
         arbejd('Laver kampprogrammet … planneren prøver kamplængder og flere forslag og vælger det bedste.', () => beregnKampprogram(foer, { fastKamplaengde, behold }), ({ r, beslutninger }) => {
             visKampprogram(r, { foer, valg: r.valg, beslutninger });
-            startAutoLoeser();
+            efterKampprogram();
         });
     },
     // Et valg på et beslutningskort: ændringen udføres, og programmet laves igen med samme kamplængde
@@ -476,7 +528,7 @@ const planHandlers = {
         arbejd(`${v.tekst} … og laver programmet igen.`, () => beregnKampprogram(anvendAendring(projekt, v), { fastKamplaengde: behold || v.pris !== 'grupper', behold }), ({ r, beslutninger }) => {
             // Er kamplængden valgt igen (grupper), skal panelet vise den nye — den skal sættes i TP (prod-test 2026-10-12)
             visKampprogram(r, { foer: kp.foer, valg: behold ? { ...r.valg, foer: kp.valg?.foer || r.valg.foer } : v.pris === 'grupper' ? nytValg(kp.valg, r.valg) : kp.valg, udfoert: [...kp.udfoert, v.tekst], beslutninger });
-            startAutoLoeser();
+            efterKampprogram();
         });
     },
     beholdBeslutning(kortIndex) {
@@ -485,17 +537,7 @@ const planHandlers = {
         if (!k) return;
         kp.beholdt = [...kp.beholdt, k.noegle];
         render();
-    },
-    // Kamplængden og pausen fra før "Lav kampprogram" — programmet laves igen med dem
-    brugTidligereKamplaengde() {
-        const kp = tilstand.kampprogram;
-        if (!kp) return;
-        const { slotMin, pauseMin } = kp.valg.foer;
-        const p = store.genberegnKampe(store.opdaterOpsaetning(store.saetSlotMin(projekt, slotMin), { pauseMin }));
-        arbejd(`Laver programmet igen med ${slotMin} min …`, () => beregnKampprogram(p, { fastKamplaengde: true }), ({ r, beslutninger }) => {
-            visKampprogram(r, { foer: kp.foer, valg: { ...r.valg, aendret: false, grund: 'tidligere' }, udfoert: kp.udfoert, beslutninger });
-            startAutoLoeser();
-        });
+        startVarianter();
     },
     // Løserens forbedring, der blev et tilbud, fordi brugeren var i "Til TP" imens — eller et program uden udvalgte
     // kompromiser (tilbud.projekt: opsætningen er så også sat tilbage)
@@ -537,18 +579,47 @@ const planHandlers = {
         kp.forbedret = uden ? 'Løserens program er lagt ind med ændringerne — tjek listen til TP igen.' : 'Løserens program er lagt ind — tjek listen til TP igen.';
         tilstand.fortryd = { projekt: foer, efter: projekt, tekst: 'Løserens program er lagt ind.' };
         render();
+        if (uden) startVarianter();
     },
-    // Kompromiser undervejs (Jesper 2026-10-17): de valgte trækkes tilbage på en kopi, og løseren prøver igen
-    udenKompromis(ids, vaerdier = {}) {
+    // Programmerne uden kompromiserne (Jesper 2026-10-17): et program, planlæggeren har lavet uden et kompromis, tages i
+    // brug — også med regelbrud, som Tjek så viser. "Fortryd" bringer det nuværende tilbage.
+    brugVariant(noegle) {
         const kp = tilstand.kampprogram;
-        if (!kp || tilstand.optimerer) return;
-        // Et kompromis med et valgt mellemtrin (kamplængden: fx 25 min i stedet for helt tilbage til 30) går dertil
-        const valgte = kompromiser(kp.foer, projekt).filter((k) => ids.includes(k.id)).map((k) => (k.valg?.includes(vaerdier[k.id]) && vaerdier[k.id] !== k.foer
-            ? { ...k, foer: vaerdier[k.id], tekst: `Kampe på ${vaerdier[k.id]} min (nu ${k.nu} min)` } : k));
-        if (!valgte.length) return;
+        const v = kp?.varianter?.liste?.find((x) => x.noegle === noegle);
+        if (!v || tilstand.optimerer || tilstand.arbejder) return;
+        if (!sammeOpsaetning(kp.varianter.for, projekt)) {
+            kp.varianter = null;
+            meld('Du har ændret opsætningen eller låst kampe, siden programmerne blev lavet — de laves igen.');
+            render();
+            startVarianter();
+            return;
+        }
+        const foerP = projekt;
+        saet({ ...v.projekt, sidsteForslag: { ikkePlaceret: [] } });
+        const o = projekt.opsaetning;
+        // Kamplængden kan være en anden end den, TP har: så skal påmindelsen blive stående
+        kp.valg = nytValg(kp.valg, { ...(kp.valg || {}), minutter: o.slotMin, udenPause: erUdenPause(o.pauseMin), grund: 'proeve' });
+        kp.beslutninger = { kort: [], brud: v.fejl + v.udenTid };
+        kp.udfoert = [...(kp.udfoert || []), v.tekst.replace(/ \(nu [^)]*\)$/, '')];
+        kp.projekt = projekt;
+        kp.note = null; kp.handlinger = []; kp.elastisk = null; kp.proeveSvar = null; kp.proeveNoegle = null; kp.tilbud = null; kp.melding = null;
+        kp.forbedret = v.fejl || v.udenTid ? `Programmet "${v.tekst}" er lagt ind med ${v.fejl} fejl i Tjek — se dem under Problemer.` : `Programmet "${v.tekst}" er lagt ind.`;
+        tilstand.fortryd = { projekt: foerP, efter: projekt, tekst: `Programmet "${v.tekst}" er lagt ind.` };
+        render();
+        efterKampprogram();
+    },
+    // Løseren prøver et program uden et kompromis — på en kopi; resultatet bliver et tilbud (visProeve)
+    proeveVariant(noegle) {
+        const kp = tilstand.kampprogram;
+        if (!kp || tilstand.optimerer || tilstand.arbejder) return;
+        const alle = kompromiser(kp.foer, projekt);
+        const x = [...(kp.varianter?.liste || []), ...variantValg(kp.foer, projekt)].find((y) => y.noegle === noegle);
+        const valgte = (x?.valgte || []).map((y) => { const k = alle.find((z) => z.id === y.id); return k && { ...k, foer: y.foer }; });
+        if (!valgte.length || valgte.some((k) => !k)) return;
         kp.tilbud = null;
         kp.proeveSvar = null;
-        planHandlers.optimer({ proeve: { projekt: udenKompromiser(projekt, valgte), tekst: valgte.map((k) => k.tekst.split(' (nu ')[0]).join('; ') } });
+        kp.proeveNoegle = noegle;
+        planHandlers.optimer({ proeve: { projekt: udenKompromiser(projekt, valgte), tekst: x.tekst.replace(/ \(nu [^)]*\)$/, '') } });
     },
     tilTP() { vaelgFane('liste'); },
     brugElastisk() {

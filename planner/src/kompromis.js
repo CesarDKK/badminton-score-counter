@@ -9,7 +9,9 @@
 // Teksten beskriver det, der sker, hvis man trækker kompromiset tilbage ("Tilbage til 30 min kampe (nu 20 min)") — den
 // står ud for et flueben, og et flueben betyder "prøv det" (Jesper 2026-10-17: "svært at gennemskue, hvad det betyder,
 // når jeg sætter eller fjerner et flueben").
-import { genberegnKampe, saetSlotMin, opdaterOpsaetning, opdaterDag, opdaterRaekke, opdaterKategori } from './store.js';
+import { genberegnKampe, saetSlotMin, opdaterOpsaetning, opdaterDag, opdaterRaekke, opdaterKategori, anvendForslag } from './store.js';
+import { lavForslag, lavAlternativer, bedoemPlan } from './scheduler.js';
+import { tjekPlan } from './rules.js';
 import { VARIGHEDER } from './regelmodel.js';
 import { erUdenPause } from './kamplaengde.js';
 import { FORM_VALG_TEKST } from './form.js';
@@ -151,4 +153,58 @@ export function udenKompromiser(projekt, valgte) {
         }
     }
     return genberegnKampe(p);
+}
+
+const noegleFor = (valgte) => valgte.map((k) => `${k.id}=${JSON.stringify(k.foer)}`).join('&');
+const enkel = (valgte, tekst) => ({ noegle: noegleFor(valgte), valgte: valgte.map((k) => ({ id: k.id, foer: k.foer })), tekst, kompromiser: valgte });
+
+/**
+ * Programmerne uden kompromiserne, før de er lavet (rækkerne i panelet): ét pr. kompromis — hvert trin for kamplængden
+ * ("Kampe på 25 min", "Kampe på 30 min som før") — og "Alt som før", når der er flere. [{ noegle, valgte, tekst, kompromiser }]
+ */
+export function variantValg(foer, nu) {
+    const liste = kompromiser(foer, nu).filter((k) => !k.blokeret);
+    const ud = [];
+    for (const k of liste) {
+        if (k.valg?.length > 1) for (const m of k.valg) ud.push(enkel([{ ...k, foer: m }], `Kampe på ${m} min${m === k.som ? ' som før' : ''} (nu ${k.nu} min)`));
+        else ud.push(enkel([k], k.tekst));
+    }
+    if (liste.length > 1) ud.push(enkel(liste, 'Alt som før'));
+    return ud;
+}
+
+/**
+ * Programmer uden kompromiserne (Jesper 2026-10-17: "vise de planer, der ikke går op, men som er tæt på, og give mulighed
+ * for at vælge dem"). For hver række fra variantValg laver planlæggeren et program med kompromiset trukket tilbage, som
+ * "Lav kampprogram" gør (det bedste af de alternative forslag). Går flere hver for sig op, prøves de også sammen. Et
+ * program med regelbrud kan godt bruges — Tjek viser, hvor reglerne brydes, og løseren kan måske få det til at gå op.
+ * Tager ca. et sekund pr. række på en stor turnering, så det regnes i baggrundstråden (kampprogram-worker.js).
+ * Returnerer [{ noegle, valgte, tekst, fejl, udenTid, typer: [[type, antal]], slut: { dato: 'tt:mm' }, haltidGnsMin, projekt }],
+ * færrest fejl først. Sluttiden og tiden i hallen viser, hvad et program uden kompromiset koster på dagen.
+ */
+export function lavVarianter(foer, nu) {
+    const lav = ({ noegle, valgte, tekst, kompromiser: ks }) => {
+        const q = udenKompromiser(nu, ks);
+        let bedst = null;
+        for (const f of [lavAlternativer(q)[0], lavForslag(q)].filter(Boolean)) {
+            const p = anvendForslag(q, f);
+            const t = tjekPlan(p);
+            if (!bedst || t.antal.fejl < bedst.fejl) bedst = { p, t, fejl: t.antal.fejl, udenTid: f.ikkePlaceret.length };
+        }
+        const typer = new Map();
+        for (const x of bedst.t.problemer) if (x.alvor === 'fejl') typer.set(x.type, (typer.get(x.type) || 0) + 1);
+        const s = bedoemPlan(bedst.p);
+        return { noegle, valgte, tekst, fejl: bedst.fejl, udenTid: bedst.udenTid, typer: [...typer].sort((a, b) => b[1] - a[1]), slut: s.slutPrDag, haltidGnsMin: s.haltidGnsMin, projekt: bedst.p };
+    };
+    const valg = variantValg(foer, nu);
+    const ud = valg.map(lav);
+    // De kompromiser, der hver for sig går op (højst ét trin pr. kompromis), prøves sammen
+    const gaarOp = [];
+    for (const [i, v] of ud.entries()) if (valg[i].kompromiser.length === 1 && !v.fejl && !v.udenTid && !gaarOp.some((x) => x.kompromiser[0].id === valg[i].kompromiser[0].id)) gaarOp.push(valg[i]);
+    if (gaarOp.length > 1) {
+        const ks = gaarOp.map((x) => x.kompromiser[0]);
+        ud.push(lav(enkel(ks, gaarOp.map((x) => x.tekst.replace(/ \(nu [^)]*\)$/, '')).join(' + '))));
+    }
+    const set = new Set();
+    return ud.filter((v) => !set.has(v.noegle) && set.add(v.noegle)).sort((a, b) => a.fejl - b.fejl || a.udenTid - b.udenTid);
 }

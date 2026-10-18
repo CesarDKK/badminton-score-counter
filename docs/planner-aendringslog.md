@@ -668,3 +668,37 @@ punkter, delt i tre pakker.
   - stop i anden runde giver startplanen;
   - tiden klemmes til max;
   - løsningen i bidder regner flytningen fra den tidligere tid.
+
+## Programmer uden kompromiserne, og et mere overskueligt panel (2026-10-17)
+
+Jesper ville gerne kunne se de planer, der ikke går op, men som er tæt på, og kunne vælge dem. Han syntes også, at
+panelet efter "Lav kampprogram" var blevet rodet og svært at overskue.
+
+**Programmer uden kompromiserne.** Felterne med flueben er erstattet af én række pr. kompromis:
+
+- Hvert trin for kamplængden har sin egen række, fx "Kampe på 25 min" og "Kampe på 30 min som før".
+- Der er rækker for pausen i planen og for en Swiss Ladder som én igen.
+- "Alt som før" har sin egen række. Går flere kompromiser op hver for sig, prøves de også sammen.
+
+For hver række laver planlæggeren et rigtigt program i en baggrundstråd. Det tager ca. et sekund pr. række på Lyngby.
+Rækken viser:
+
+- om programmet går op, eller hvor mange fejl i Tjek det har, og hvilke;
+- sluttid pr. dag og tid i hallen i gennemsnit, sammenlignet med programmet nu.
+
+"Brug dette program" lægger programmet ind, også med regelbrud. "Fortryd" bringer det nuværende tilbage. "Lad løseren
+prøve" er den samme prøve som før, og svaret står i rækken.
+
+På Lyngby U9/U11 med alt som Swiss og gruppekortene taget viste rækkerne, at programmet også gik op med pausen
+tilbage i planen, men så sluttede dagene 17:40 og 16:40 i stedet for 16:20 og 15:40. Det gik også op med U11 C HS som
+én Swiss igen. 25 min gav 1 fejl. Knappen "Brug … som før" er erstattet af rækkerne.
+
+**Panelet:**
+
+- Kortene står først, og kun ét ad gangen ("1 af 2"). De næste står som en linje, fordi programmet laves om efter
+  hvert valg.
+- Hvert valg viser sin virkning som et mærke: "går op", "løser dette · 27 regelbrud andre steder" eller "3 regelbrud
+  tilbage". Detaljerne står dæmpet under.
+- Programmerne uden kompromiserne vises, når kortene er afgjort.
+- "Videre til Til TP" står i toppen.
+- Prognose, "gjort undervejs" og låste kampe står samlet nederst.
