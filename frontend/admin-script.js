@@ -2260,9 +2260,7 @@ function createMatchCard(match, index) {
                 <div style="padding: 12px 15px; background: rgba(var(--color-primary-rgb), 0.2); border-radius: 8px; margin-bottom: 10px; border-left: 4px solid ${player1Won ? player1Color : player2Color};">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
                         <span style="font-weight: bold; color: var(--text-primary, #eaeaea); font-size: 0.9em;">SÆT ${i + 1}</span>
-                        <span style="background: ${player1Won ? player1Color : player2Color}; color: white; padding: 3px 10px; border-radius: 5px; font-size: 0.85em; font-weight: bold;">
-                            ${player1Won ? '✓ ' + player1Name : '✓ ' + player2Name}
-                        </span>
+                        <span class="maerke maerke--vundet">✓ ${escapeHtml(player1Won ? player1Name : player2Name)}</span>
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center; font-size: 1.1em;">
                         <span style="color: ${player1Color}; font-weight: ${player1Weight};">${escapeHtml(player1Name)}</span>
