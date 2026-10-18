@@ -160,6 +160,7 @@ router.get('/batch/all', async (req, res, next) => {
                 gs.rest_break_active, gs.rest_break_seconds_left, gs.rest_break_title,
                 gs.set_scores_history, gs.match_start_time, gs.match_end_time, gs.match_completed,
                 gs.result_outcome, gs.result_winner,
+                gs.serving_player, gs.serving_team,
                 gs.version,
                 TIMESTAMPDIFF(SECOND, gs.match_start_time, COALESCE(gs.match_end_time, NOW())) AS elapsed_seconds
             FROM courts c
@@ -225,6 +226,8 @@ router.get('/batch/all', async (req, res, next) => {
                 matchCompleted: !!row.match_completed,
                 resultOutcome: row.result_outcome || null,
                 resultWinner: row.result_winner || null,
+                servingPlayer: row.serving_player || null,
+                servingTeam: row.serving_team || null,
                 isActive: !!row.isActive,
                 isDoubles: !!row.isDoubles,
                 gameMode: row.gameMode,
