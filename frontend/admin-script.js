@@ -887,7 +887,7 @@ async function loadTournamentMatchHistory() {
         const tournaments = combined.filter(t => (t.matches || []).some(m => m.status === 'finished'));
 
         if (tournaments.length === 0) {
-            container.innerHTML = '<p style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-style:italic;">Ingen afsluttede turneringskampe endnu.</p>';
+            container.innerHTML = '<p class="tom-tekst">Ingen afsluttede turneringskampe endnu.</p>';
             return;
         }
 
@@ -918,44 +918,44 @@ async function loadTournamentMatchHistory() {
                     ? `${m.side1_player1 || ''} / ${m.side1_player2}`
                     : (m.side1_player1 || '');
                 const scoreNums = orientHistorySetScoreNumbers(m.set_scores, side1Key).join(' · ');
-                const scores = scoreNums ? `<span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.8em; margin-left:6px;">${scoreNums}</span>` : '';
-                const resultHtml = `<span style="color:${winnerColor}; font-size:0.85em; font-weight:bold;">✓ ${escapeHtml(winnerLabel)}</span>${scores}`;
+                const scores = scoreNums ? `<span class="tekst-daempet tekst-lille luft-venstre">${scoreNums}</span>` : '';
+                const resultHtml = `<span class="resultat" style="color:${winnerColor};">✓ ${escapeHtml(winnerLabel)}</span>${scores}`;
                 const varighed = varighedFra(m.started_at, m.finished_at);
-                const varighedHtml = varighed ? `<span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.8em; white-space:nowrap;">${Ikon('ur')} ${varighed}</span>` : '';
+                const varighedHtml = varighed ? `<span class="tekst-daempet tekst-lille nowrap">${Ikon('ur')} ${varighed}</span>` : '';
 
                 const labelBadge = m.label
                     ? `<span class="maerke maerke--kategori">${escapeHtml(m.label)}</span>`
                     : `<span class="maerke maerke--neutral">#${m.match_order}</span>`;
 
-                return `<div style="display:flex; align-items:center; gap:10px; padding:7px 10px; border-left:3px solid ${winnerColor}; background:rgba(255,255,255,0.03); border-radius:4px; margin-bottom:4px; flex-wrap:wrap;">
+                return `<div class="historik-raekke" style="border-left-color:${winnerColor};">
                     ${labelBadge}
-                    <span style="color:var(--text-primary, #eaeaea); font-size:0.85em; flex:1; min-width:120px;">${escapeHtml(side1)} <span class="tekst-daempet">vs</span> ${escapeHtml(side2)}</span>
+                    <span class="kamp-raekke__navne tekst-mindre">${escapeHtml(side1)} <span class="tekst-daempet">vs</span> ${escapeHtml(side2)}</span>
                     ${resultHtml}
                     ${varighedHtml}
                 </div>`;
             }).join('');
 
-            return `<div style="background:rgba(var(--color-primary-rgb),0.15); border:1px solid var(--color-primary); border-radius:8px; margin-bottom:12px; overflow:hidden;">
-                <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; cursor:pointer; flex-wrap:wrap; gap:8px;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
-                    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-                        <span style="font-size:1.1em; font-weight:bold; color:var(--text-primary, #eaeaea);">${escapeHtml(t.name)}${statusBadge}</span>
+            return `<div class="historik-gruppe">
+                <div class="historik-gruppe__hoved" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                    <div class="historik-gruppe__titel-linje">
+                        <span class="historik-gruppe__titel">${escapeHtml(t.name)}${statusBadge}</span>
                         <span class="tekst-daempet tekst-mindre">${playedCount}/${totalCount} kampe spillet</span>
                         <span class="tekst-daempet tekst-lille">${date}</span>
                     </div>
                     <span class="tekst-daempet tekst-mindre">▼ Se kampe</span>
                 </div>
-                <div style="display:none; padding:0 16px 12px;">
+                <div class="historik-gruppe__indhold" style="display:none;">
                     ${matchRows}
                 </div>
             </div>`;
         }).join('');
 
         container.innerHTML = `
-            <h3 style="color:var(--text-primary, #eaeaea); margin-bottom:12px; font-size:1.1em; border-bottom:1px solid #333; padding-bottom:8px;">${Ikon('pokal')} Turneringer (${tournaments.length})</h3>
+            <h3 class="historik-overskrift">${Ikon('pokal')} Turneringer (${tournaments.length})</h3>
             ${cards}`;
     } catch (error) {
         console.error('Failed to load tournament history:', error);
-        container.innerHTML = '<p style="color:var(--color-danger-text, #ff6b7a);">Kunne ikke indlæse turneringshistorik.</p>';
+        container.innerHTML = '<p class="tekst-fare">Kunne ikke indlæse turneringshistorik.</p>';
     }
 }
 
@@ -1000,38 +1000,38 @@ async function loadTeamMatchHistory() {
                         ? `${g.team1_player1 || ''} / ${g.team1_player2}`
                         : (g.team1_player1 || '');
                     const scoreNums = orientHistorySetScoreNumbers(g.set_scores, side1Key).join(' · ');
-                    const scores = scoreNums ? `<span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.8em; margin-left:6px;">${scoreNums}</span>` : '';
-                    resultHtml = `<span style="color:${winnerColor}; font-size:0.85em; font-weight:bold;">✓ ${escapeHtml(winnerName)}</span>${scores}`;
+                    const scores = scoreNums ? `<span class="tekst-daempet tekst-lille luft-venstre">${scoreNums}</span>` : '';
+                    resultHtml = `<span class="resultat" style="color:${winnerColor};">✓ ${escapeHtml(winnerName)}</span>${scores}`;
                     rowBorder = winnerColor;
                 }
                 const varighed = g.status === 'finished' ? varighedFra(g.started_at, g.finished_at) : '';
-                const varighedHtml = varighed ? `<span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.8em; white-space:nowrap;">${Ikon('ur')} ${varighed}</span>` : '';
+                const varighedHtml = varighed ? `<span class="tekst-daempet tekst-lille nowrap">${Ikon('ur')} ${varighed}</span>` : '';
 
-                return `<div style="display:flex; align-items:center; gap:10px; padding:7px 10px; border-left:3px solid ${rowBorder}; background:rgba(255,255,255,0.03); border-radius:4px; margin-bottom:4px; flex-wrap:wrap;">
+                return `<div class="historik-raekke" style="border-left-color:${rowBorder};">
                     <span class="maerke maerke--kategori">${escapeHtml(HoldkampFormater.kategoriNavn(g.category, num))}</span>
-                    <span style="color:var(--text-primary, #eaeaea); font-size:0.85em; flex:1; min-width:120px;">${escapeHtml(t1)} <span class="tekst-daempet">vs</span> ${escapeHtml(t2)}</span>
+                    <span class="kamp-raekke__navne tekst-mindre">${escapeHtml(t1)} <span class="tekst-daempet">vs</span> ${escapeHtml(t2)}</span>
                     ${resultHtml}
                     ${varighedHtml}
                 </div>`;
             }).join('');
 
-            return `<div style="background:rgba(var(--color-primary-rgb),0.15); border:1px solid var(--color-primary); border-radius:8px; margin-bottom:12px; overflow:hidden;">
-                <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; cursor:pointer; flex-wrap:wrap; gap:8px;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
-                    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-                        <span style="font-size:1.1em; font-weight:bold; color:var(--text-primary, #eaeaea);">${escapeHtml(tm.team1_name)} <span style="color:var(--color-win, #45d17e);">${team1Wins}</span> – <span style="color:var(--color-accent);">${team2Wins}</span> ${escapeHtml(tm.team2_name)}</span>
-                        <span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em;">${formatLabel}</span>
+            return `<div class="historik-gruppe">
+                <div class="historik-gruppe__hoved" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                    <div class="historik-gruppe__titel-linje">
+                        <span class="historik-gruppe__titel">${escapeHtml(tm.team1_name)} <span class="hold-farve--1">${team1Wins}</span> – <span class="hold-farve--2">${team2Wins}</span> ${escapeHtml(tm.team2_name)}</span>
+                        <span class="tekst-daempet tekst-lille">${formatLabel}</span>
                         <span class="tekst-daempet tekst-lille">${date}</span>
                     </div>
                     <span class="tekst-daempet tekst-mindre">▼ Se delkampe</span>
                 </div>
-                <div style="display:none; padding:0 16px 12px;">
+                <div class="historik-gruppe__indhold" style="display:none;">
                     ${gameRows}
                 </div>
             </div>`;
         }).join('');
 
         container.innerHTML = `
-            <h3 style="color:var(--text-primary, #eaeaea); margin-bottom:12px; font-size:1.1em; border-bottom:1px solid #333; padding-bottom:8px;"><svg viewBox="0 0 24 24" fill="currentColor" style="width:1em;height:1em;vertical-align:-0.12em;" aria-hidden="true"><g transform="translate(0 1.2)"><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/><rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/><path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/></g></svg> Holdkampe (${matches.length})</h3>
+            <h3 class="historik-overskrift"><svg viewBox="0 0 24 24" fill="currentColor" style="width:1em;height:1em;vertical-align:-0.12em;" aria-hidden="true"><g transform="translate(0 1.2)"><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/><rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/><path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/></g></svg> Holdkampe (${matches.length})</h3>
             ${cards}`;
     } catch (error) {
         console.error('Failed to load team match history:', error);
@@ -1210,7 +1210,7 @@ async function loadActiveHoldkamp() {
             // Optaget-baner beregnes på tværs af ALLE aktive holdkampe.
             const allActiveGames = teamMatches.flatMap(tm => tm.games || []);
             container.innerHTML = teamMatches.map(tm =>
-                `<div class="holdkamp-block" style="margin-bottom:18px;">` +
+                `<div class="holdkamp-block luft-under-18">` +
                 renderActiveHoldkampBlock(tm, allGameStates, courtCount, settings.defaultGameMode || '15', allActiveGames) +
                 `</div>`
             ).join('');
@@ -1332,12 +1332,12 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
             <div class="formular-boks__gitter">
                 <div>
                     <div class="hold-navn hold-navn--1">${escapeHtml(teamMatch.team1_name)}</div>
-                    <input id="eg_${g.id}_t1p1" type="text" value="${escapeHtml(g.team1_player1 || '')}" placeholder="Spiller 1" class="admin-input admin-input--sm" style="margin-bottom:6px;">
+                    <input id="eg_${g.id}_t1p1" type="text" value="${escapeHtml(g.team1_player1 || '')}" placeholder="Spiller 1" class="admin-input admin-input--sm luft-under-6">
                     ${isDoubles ? `<input id="eg_${g.id}_t1p2" type="text" value="${escapeHtml(g.team1_player2 || '')}" placeholder="Makker" class="admin-input admin-input--sm">` : ''}
                 </div>
                 <div>
                     <div class="hold-navn hold-navn--2">${escapeHtml(teamMatch.team2_name)}</div>
-                    <input id="eg_${g.id}_t2p1" type="text" value="${escapeHtml(g.team2_player1 || '')}" placeholder="Spiller 1" class="admin-input admin-input--sm" style="margin-bottom:6px;">
+                    <input id="eg_${g.id}_t2p1" type="text" value="${escapeHtml(g.team2_player1 || '')}" placeholder="Spiller 1" class="admin-input admin-input--sm luft-under-6">
                     ${isDoubles ? `<input id="eg_${g.id}_t2p2" type="text" value="${escapeHtml(g.team2_player2 || '')}" placeholder="Makker" class="admin-input admin-input--sm">` : ''}
                 </div>
             </div>
@@ -1415,17 +1415,17 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
     }).join('');
 
     return `
-        <div style="background:rgba(var(--color-primary-rgb),0.15);border:1px solid var(--color-primary);border-radius:10px;padding:20px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div class="holdkamp-panel">
+            <div class="holdkamp-panel__hoved">
                 <div>
-                    <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.85em;margin-bottom:4px;">${escapeHtml(formatName)}</div>
-                    <div style="font-size:1.8em;font-weight:bold;">
-                        <span style="color:var(--color-win, #45d17e);">${escapeHtml(teamMatch.team1_name)}</span>
-                        <span style="color:#fff;margin:0 15px;">${team1Wins} – ${team2Wins}</span>
-                        <span style="color:var(--color-accent);">${escapeHtml(teamMatch.team2_name)}</span>
+                    <div class="holdkamp-panel__format">${escapeHtml(formatName)}</div>
+                    <div class="holdkamp-panel__stilling">
+                        <span class="hold-farve--1">${escapeHtml(teamMatch.team1_name)}</span>
+                        <span class="holdkamp-panel__score">${team1Wins} – ${team2Wins}</span>
+                        <span class="hold-farve--2">${escapeHtml(teamMatch.team2_name)}</span>
                     </div>
                 </div>
-                <div style="display:flex;gap:10px;">
+                <div class="raekke">
                     <button onclick="editHoldkampLogos(${teamMatch.id})" class="btn-secondary">Logoer</button>
                     <button onclick="finishHoldkamp(${teamMatch.id})" class="btn-secondary">Afslut holdkamp</button>
                     <button onclick="deleteHoldkamp(${teamMatch.id})" class="btn-danger">Slet</button>
@@ -1461,26 +1461,26 @@ function onHoldkampFormatChange() {
 
         if (isDoubles) {
             return `
-            <div style="background:rgba(var(--color-primary-rgb),0.1);border-radius:8px;padding:15px;margin-bottom:10px;">
-                <div style="font-weight:bold;color:var(--color-accent);margin-bottom:10px;">${label}</div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="opsaetning-kort">
+                <div class="opsaetning-kort__titel">${label}</div>
+                <div class="gitter-2">
                     <div>
                         <div class="hold-navn hold-navn--1">${escapeHtml(team1Name)}</div>
-                        <input type="text" placeholder="Spiller 1" data-game="${i}" data-field="t1p1" class="admin-input admin-input--sm" style="margin-bottom:6px;">
+                        <input type="text" placeholder="Spiller 1" data-game="${i}" data-field="t1p1" class="admin-input admin-input--sm luft-under-6">
                         <input type="text" placeholder="Makker" data-game="${i}" data-field="t1p2" class="admin-input admin-input--sm">
                     </div>
                     <div>
                         <div class="hold-navn hold-navn--2">${escapeHtml(team2Name)}</div>
-                        <input type="text" placeholder="Spiller 1" data-game="${i}" data-field="t2p1" class="admin-input admin-input--sm" style="margin-bottom:6px;">
+                        <input type="text" placeholder="Spiller 1" data-game="${i}" data-field="t2p1" class="admin-input admin-input--sm luft-under-6">
                         <input type="text" placeholder="Makker" data-game="${i}" data-field="t2p2" class="admin-input admin-input--sm">
                     </div>
                 </div>
             </div>`;
         } else {
             return `
-            <div style="background:rgba(var(--color-primary-rgb),0.1);border-radius:8px;padding:15px;margin-bottom:10px;">
-                <div style="font-weight:bold;color:var(--color-accent);margin-bottom:10px;">${label}</div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="opsaetning-kort">
+                <div class="opsaetning-kort__titel">${label}</div>
+                <div class="gitter-2">
                     <div>
                         <div class="hold-navn hold-navn--1">${escapeHtml(team1Name)}</div>
                         <input type="text" placeholder="Spillernavn" data-game="${i}" data-field="t1p1" class="admin-input admin-input--sm">
@@ -2222,9 +2222,9 @@ function createMatchCard(match, index) {
                     <span style="background: rgba(var(--color-primary-rgb), 0.3); color: var(--color-accent); padding: 3px 8px; border-radius: 5px; font-size: 0.8em; font-weight: bold;">${gameTypeText}</span>
                 </div>
                 <div style="font-weight: bold; font-size: 1.2em; margin-bottom: 8px;">
-                    <span style="color: var(--color-win, #45d17e);">${escapeHtml(match.winner_name)}</span>
+                    <span class="hold-farve--1">${escapeHtml(match.winner_name)}</span>
                     <span style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); margin: 0 8px;">besejrede</span>
-                    <span style="color: var(--color-accent);">${escapeHtml(match.loser_name)}</span>
+                    <span class="hold-farve--2">${escapeHtml(match.loser_name)}</span>
                 </div>
                 ${setOverviewBadges ? `<div style="margin: 10px 0;">${setOverviewBadges}</div>` : ''}
                 <div style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.9em; margin-top: 8px;">
@@ -2849,7 +2849,7 @@ function renderSkaerme(skaerme) {
             ? escapeHtml(s.navn)
             : `Skærm uden navn <span style="opacity:0.6;">(${escapeHtml(s.klientId)} — opdatér kiosk-PC'en for at få navnet med)</span>`;
         const data = s.dataAlderSek != null && s.dataAlderSek > 30
-            ? ` &nbsp;•&nbsp; <span style="color:var(--color-warning, #ffb02e);">data ${skaermVarighed(s.dataAlderSek)} gamle</span>` : '';
+            ? ` &nbsp;•&nbsp; <span class="tekst-advarsel">data ${skaermVarighed(s.dataAlderSek)} gamle</span>` : '';
         const haendelser = (s.haendelser || []).slice(0, 3).map(h =>
             h.type === 'frys'
                 ? `Stod stille ${skaermVarighed(h.sek)} kl. ${kl(h.fra)}`
@@ -2969,8 +2969,8 @@ function deviceTokenKort(tokens) {
 
         return `
         <div style="background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:16px 20px;margin-bottom:12px;${!t.is_active ? 'opacity:0.45;' : ''}">
-            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-                <div style="flex:1;min-width:200px;">
+            <div class="historik-gruppe__titel-linje">
+                <div class="kamp-linje__info">
                     <div style="font-weight:600;margin-bottom:4px;">${escapeHtml(t.name)}</div>
                     <div class="tekst-daempet tekst-lille">
                         ${Ikon('sted')} ${destLabel} &nbsp;•&nbsp;
@@ -3402,7 +3402,7 @@ async function bpLoadWatchers() {
         return `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;
                             padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.06);">
                     <div style="min-width:0;">
-                        <div style="color:var(--text-primary, #eaeaea);">${escapeHtml(w.team1_name || '?')} – ${escapeHtml(w.team2_name || '?')}</div>
+                        <div class="tekst-primaer">${escapeHtml(w.team1_name || '?')} – ${escapeHtml(w.team2_name || '?')}</div>
                         <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.84em;">${bpFormatStart(w.start_time_iso)}</div>
                         ${tjekLinje}
                         ${fejl}
@@ -3453,14 +3453,14 @@ async function bpLoadVagtLog() {
     try {
         data = await api.getHoldkampVagtLog(filter && filter.value);
     } catch (err) {
-        boks.innerHTML = `<p style="color:var(--color-danger-text, #ff6b7a);">Loggen kunne ikke hentes: ${escapeHtml(err.message)}</p>`;
+        boks.innerHTML = `<p class="tekst-fare">Loggen kunne ikke hentes: ${escapeHtml(err.message)}</p>`;
         return;
     }
     const d = data.diagnose || {};
     const kl = (ms) => new Date(ms).toLocaleString('da-DK', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
     // Diagnose: kører vagten, og går databasens ur rigtigt?
-    const ok = (t) => `<span style="color:var(--color-win,#45d17e);">${t}</span>`;
+    const ok = (t) => `<span class="hold-farve--1">${t}</span>`;
     const galt = (t) => `<span style="color:var(--color-danger-text, #ff6b7a);font-weight:600;">${t}</span>`;
     const vagtTekst = d.vagtSidstKoertSekSiden == null
         ? galt('har ikke kørt siden serveren startede')
@@ -3573,7 +3573,7 @@ function bpRenderPreview(data) {
             `<input type="text" id="bp_${id}_${i}" value="${escapeHtml(val || '')}" placeholder="${ph}" style="${inpStyle}">`;
 
         return `<div style="background:rgba(var(--color-primary-rgb),0.1);border-radius:8px;padding:14px;margin-bottom:8px;">
-            <div style="font-weight:bold;color:var(--color-accent);margin-bottom:10px;">${label}</div>
+            <div class="opsaetning-kort__titel">${label}</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
                 <div>
                     <div class="hold-navn hold-navn--1">${escapeHtml(team1Name)}</div>
@@ -3846,16 +3846,16 @@ async function toggleTournamentAutoSync(tournamentId, checkbox) {
 function autoSyncStatusHtml(t) {
     if (!t.auto_sync) return '';
     const s = t.autoSyncStatus;
-    if (!s) return `<div style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.78em; width:100%;">Auto-opdatering aktiv — venter på første kørsel…</div>`;
+    if (!s) return `<div class="status-linje">Auto-opdatering aktiv — venter på første kørsel…</div>`;
     const time = new Date(s.at).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
     if (s.error) {
-        return `<div style="color:var(--color-danger-text, #ff6b7a); font-size:0.78em; width:100%;">Auto-opdatering fejlede kl. ${time} — prøver igen om lidt</div>`;
+        return `<div class="status-linje status-linje--fejl">Auto-opdatering fejlede kl. ${time} — prøver igen om lidt</div>`;
     }
     const added = s.added > 0 ? ` · ${s.added} nye kampe tilføjet` : '';
     const candidates = s.newCandidates > 0
-        ? ` · <span style="color:var(--color-warning, #ffb02e); font-weight:bold;">${s.newCandidates} kampe i ny kategori — tryk Opdater for at tilføje</span>`
+        ? ` · <span class="tekst-advarsel fed">${s.newCandidates} kampe i ny kategori — tryk Opdater for at tilføje</span>`
         : '';
-    return `<div style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.78em; width:100%;">Auto-opdateret kl. ${time}${added}${candidates}</div>`;
+    return `<div class="status-linje">Auto-opdateret kl. ${time}${added}${candidates}</div>`;
 }
 
 // Holder kandidaterne for det åbne bekræftelses-modal så "Tilføj valgte" kan finde dem.
@@ -3873,18 +3873,18 @@ function showNewMatchCandidates(tournamentId, candidates, summaryHtml) {
             : (m.side2Player1 || '?');
         const dayBadge = m.dayLabel ? `<span class="maerke maerke--neutral">${escapeHtml(m.dayLabel)}</span>` : '';
         const catBadge = m.label ? `<span class="maerke maerke--kategori">${escapeHtml(m.label)}</span>` : '';
-        return `<label style="display:flex; align-items:center; gap:8px; padding:6px 10px; background:rgba(0,0,0,0.2); border-radius:4px; margin-bottom:4px; cursor:pointer; flex-wrap:wrap;">
-            <input type="checkbox" class="sync-cand-check" data-idx="${idx}" checked style="width:16px; height:16px; cursor:pointer; flex-shrink:0;">
+        return `<label class="vaelg-raekke">
+            <input type="checkbox" class="sync-cand-check afkrydsning-boks" data-idx="${idx}" checked>
             ${dayBadge}${catBadge}
-            <span style="color:var(--text-primary, #eaeaea); font-size:0.85em; flex:1; min-width:160px;">${escapeHtml(side1)} <span class="tekst-daempet">vs</span> ${escapeHtml(side2)}</span>
+            <span class="kamp-raekke__navne tekst-mindre">${escapeHtml(side1)} <span class="tekst-daempet">vs</span> ${escapeHtml(side2)}</span>
         </label>`;
     }).join('');
 
     const bodyHtml = `
         <div style="text-align:left;">
-            <div style="color:var(--text-secondary, rgba(255, 255, 255, 0.78)); font-size:0.9em; margin-bottom:12px; line-height:1.5;">${summaryHtml}</div>
-            <div style="color:var(--text-primary, #eaeaea); font-size:0.9em; margin-bottom:8px; font-weight:600;">Nye kampe på Tournament Software — vælg hvilke der skal tilføjes:</div>
-            <div style="max-height:340px; overflow-y:auto; padding-right:6px;">${rows}</div>
+            <div class="tekst-sekundaer luft-under-12">${summaryHtml}</div>
+            <div class="felt-overskrift">Nye kampe på Tournament Software — vælg hvilke der skal tilføjes:</div>
+            <div class="rulle-liste">${rows}</div>
         </div>`;
 
     showMessage('Opdatering færdig', '', [
@@ -3941,7 +3941,7 @@ function renderTournaments(tournaments) {
     if (!container) return;
 
     if (!tournaments || tournaments.length === 0) {
-        container.innerHTML = '<p style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-style:italic;">Ingen aktive turneringer. Opret en ovenfor for at komme i gang.</p>';
+        container.innerHTML = '<p class="tom-tekst">Ingen aktive turneringer. Opret en ovenfor for at komme i gang.</p>';
         return;
     }
 
@@ -4030,16 +4030,16 @@ function renderTournaments(tournaments) {
 function renderTournamentBlock(t) {
     const matches = t.matches || [];
     const matchesHtml = matches.length === 0
-        ? '<p style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-style:italic; padding: 8px 0;">Ingen kampe endnu — tilføj nedenfor.</p>'
+        ? '<p class="tom-tekst luft-under-8">Ingen kampe endnu — tilføj nedenfor.</p>'
         : matches.map(m => renderTournamentMatchRow(t.id, m)).join('');
 
     return `
-        <div style="margin-bottom: 25px; padding: 20px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;" data-tournament-id="${t.id}">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
-                <h3 style="color: var(--color-accent); margin:0;">${escapeHtml(t.name)}</h3>
-                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                    ${t.source_tournament_id ? `<label style="display:flex; align-items:center; gap:6px; color:var(--text-secondary, rgba(255, 255, 255, 0.78)); font-size:0.85em; white-space:nowrap; cursor:pointer;">
-                        <input type="checkbox" id="t${t.id}_autoSync" ${t.auto_sync ? 'checked' : ''} style="width:16px; height:16px; cursor:pointer;">
+        <div class="turnering-kort" data-tournament-id="${t.id}">
+            <div class="turnering-kort__hoved">
+                <h3 class="turnering-kort__navn">${escapeHtml(t.name)}</h3>
+                <div class="raekke">
+                    ${t.source_tournament_id ? `<label class="afkrydsning tekst-mindre">
+                        <input type="checkbox" id="t${t.id}_autoSync" ${t.auto_sync ? 'checked' : ''} class="afkrydsning-boks">
                         Auto-opdater hvert 4. minut
                     </label>
                     <button id="t${t.id}_syncBtn" class="btn-primary btn-sm">↻ Opdater fra Tournament Software</button>` : ''}
@@ -4049,22 +4049,22 @@ function renderTournamentBlock(t) {
                 </div>
             </div>
 
-            <div style="margin-bottom: 18px;">
+            <div class="luft-under-18">
                 ${matchesHtml}
             </div>
 
-            <div data-tournament-add-form="${t.id}" style="padding: 14px; background: rgba(0,0,0,0.25); border-radius: 8px;">
-                <h4 style="margin: 0 0 12px 0; color: var(--text-secondary, rgba(255, 255, 255, 0.78)); font-size: 0.95em;">Tilføj kamp</h4>
+            <div data-tournament-add-form="${t.id}" class="tilfoej-boks">
+                <h4 class="tilfoej-boks__titel">Tilføj kamp</h4>
 
-                <div style="display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-bottom: 10px; align-items: center;">
+                <div class="gitter-felt-tjek">
                     <input type="text" id="t${t.id}_label" placeholder="Label (valgfri) – fx 'U13 HS pulje A'" class="admin-input admin-input--sm">
-                    <label style="display:flex; align-items:center; gap:6px; color:var(--text-secondary, rgba(255, 255, 255, 0.78)); font-size:0.9em; white-space:nowrap;">
-                        <input type="checkbox" id="t${t.id}_doubles" style="width:16px; height:16px; cursor:pointer;">
+                    <label class="afkrydsning">
+                        <input type="checkbox" id="t${t.id}_doubles" class="afkrydsning-boks">
                         Double
                     </label>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                <div class="gitter-2 luft-under-10">
                     <div>
                         <label class="felt-etiket">Side 1 – spiller 1</label>
                         <input type="text" id="t${t.id}_side1p1" placeholder="Spillernavn" class="admin-input admin-input--sm">
@@ -4128,12 +4128,12 @@ function renderTournamentMatchRow(tournamentId, m) {
                 : (m.side1_player1 || '');
             const nums = m.set_scores === 'W.O.' ? [] : orientHistorySetScoreNumbers(m.set_scores, side1Key);
             const scoreText = nums.length ? nums.join(' · ') : m.set_scores;
-            courtInfo = `<div style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-top:3px;">${escapeHtml(scoreText)}</div>`;
+            courtInfo = `<div class="tekst-daempet tekst-lille">${escapeHtml(scoreText)}</div>`;
         }
     }
 
     const labelHtml = m.label
-        ? `<span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.85em; margin-right:8px;">${escapeHtml(m.label)}</span>`
+        ? `<span class="tekst-daempet tekst-mindre luft-hoejre">${escapeHtml(m.label)}</span>`
         : '';
 
     // Rediger tillades for pending + active (sync-loop pusher navne videre til banen),
@@ -4148,14 +4148,14 @@ function renderTournamentMatchRow(tournamentId, m) {
         : '';
 
     return `
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:rgba(0,0,0,0.2); border-radius:6px; margin-bottom:6px; gap:10px; flex-wrap:wrap;">
-            <div style="flex:1; min-width:200px;">
-                <div style="color:var(--text-primary, #eaeaea);">
+        <div class="kamp-linje">
+            <div class="kamp-linje__info">
+                <div class="tekst-primaer">
                     ${labelHtml}<strong>${side1Html}</strong> <span class="tekst-daempet">vs</span> <strong>${side2Html}</strong>
                 </div>
                 ${courtInfo}
             </div>
-            <div style="display:flex; align-items:center; gap:8px;">
+            <div class="raekke">
                 ${statusBadge}
                 ${editBtn}
                 ${deleteBtn}
@@ -4167,19 +4167,19 @@ function renderTournamentMatchRow(tournamentId, m) {
 function renderTournamentMatchEditForm(tournamentId, m) {
     const isActive = m.status === 'active';
     const warningHtml = isActive
-        ? `<div class="advarsel-boks advarsel-boks--lille tekst-lille" style="color:var(--color-warning, #ffb02e);">${Ikon('advarsel')} Kampen er i gang på Bane ${m.court_number}. Navneændringer pusher til banen indenfor 5 sekunder.</div>`
+        ? `<div class="advarsel-boks advarsel-boks--lille tekst-lille tekst-advarsel">${Ikon('advarsel')} Kampen er i gang på Bane ${m.court_number}. Navneændringer pusher til banen indenfor 5 sekunder.</div>`
         : '';
     return `
-        <div data-tournament-edit="${m.id}" style="padding:14px; background:rgba(0,0,0,0.3); border:1px solid var(--color-primary); border-radius:6px; margin-bottom:6px;">
+        <div data-tournament-edit="${m.id}" class="formular-boks formular-boks--kant">
             ${warningHtml}
-            <div style="display:grid; grid-template-columns: 1fr auto; gap:10px; margin-bottom:10px; align-items:center;">
+            <div class="gitter-felt-tjek">
                 <input type="text" id="te_${m.id}_label" value="${escapeHtml(m.label || '')}" placeholder="Label (valgfri)" class="admin-input admin-input--sm">
-                <label style="display:flex; align-items:center; gap:6px; color:var(--text-secondary, rgba(255, 255, 255, 0.78)); font-size:0.9em; white-space:nowrap;">
-                    <input type="checkbox" id="te_${m.id}_doubles" ${m.doubles ? 'checked' : ''} style="width:16px; height:16px; cursor:pointer;">
+                <label class="afkrydsning">
+                    <input type="checkbox" id="te_${m.id}_doubles" ${m.doubles ? 'checked' : ''} class="afkrydsning-boks">
                     Double
                 </label>
             </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
+            <div class="gitter-2 luft-under-12">
                 <div>
                     <label class="felt-etiket">Side 1 – spiller 1</label>
                     <input type="text" id="te_${m.id}_s1p1" value="${escapeHtml(m.side1_player1 || '')}" placeholder="Spillernavn" class="admin-input admin-input--sm">
@@ -4197,7 +4197,7 @@ function renderTournamentMatchEditForm(tournamentId, m) {
                     <input type="text" id="te_${m.id}_s2p2" value="${escapeHtml(m.side2_player2 || '')}" placeholder="Makker" class="admin-input admin-input--sm">
                 </div>
             </div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <div class="raekke">
                 <button onclick="saveEditTournamentMatch(${tournamentId}, ${m.id})" class="btn-primary">Gem</button>
                 <button onclick="cancelEditTournamentMatch(${m.id})" class="btn-secondary">Annuller</button>
             </div>
@@ -4350,9 +4350,9 @@ function tsImportProgress(label, current, total) {
     if (total > 0) {
         const pct = Math.min(100, Math.round((current / total) * 100));
         el.innerHTML = `
-            <div style="margin-bottom:8px;">${escapeHtml(label)} (${current}/${total}) — ${pct}%</div>
-            <div style="height:8px;background:rgba(255,255,255,0.12);border-radius:4px;overflow:hidden;">
-                <div style="height:100%;width:${pct}%;background:var(--color-info, #3498db);transition:width .3s ease;"></div>
+            <div class="luft-under-8">${escapeHtml(label)} (${current}/${total}) — ${pct}%</div>
+            <div class="fremdrift">
+                <div class="fremdrift__fyld" style="width:${pct}%;"></div>
             </div>`;
     } else {
         el.innerHTML = `<div>${escapeHtml(label)}</div>`;
@@ -4429,28 +4429,28 @@ function renderTournamentImportPreview(data) {
             ? `<span class="maerke maerke--kategori">${escapeHtml(m.category)}</span>`
             : '';
         const roundBadge = m.round
-            ? `<span style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.78em; white-space:nowrap;">${escapeHtml(m.round)}</span>`
+            ? `<span class="tekst-daempet tekst-lille nowrap">${escapeHtml(m.round)}</span>`
             : '';
-        return `<label data-category="${escapeHtml(m.category || '')}" data-day="${escapeHtml(m.day || '')}" class="ts-import-row" style="display:flex; align-items:center; gap:8px; padding:6px 10px; background:rgba(0,0,0,0.2); border-radius:4px; margin-bottom:4px; cursor:pointer; flex-wrap:wrap;">
-            <input type="checkbox" class="ts-import-check" data-idx="${idx}" checked style="width:16px; height:16px; cursor:pointer; flex-shrink:0;">
+        return `<label data-category="${escapeHtml(m.category || '')}" data-day="${escapeHtml(m.day || '')}" class="ts-import-row vaelg-raekke">
+            <input type="checkbox" class="ts-import-check afkrydsning-boks" data-idx="${idx}" checked>
             ${numBadge}
             ${dayBadge}
             ${catBadge}
             ${roundBadge}
-            <span style="color:var(--text-primary, #eaeaea); font-size:0.85em; flex:1; min-width:160px;">${escapeHtml(side1)} <span class="tekst-daempet">vs</span> ${escapeHtml(side2)}</span>
+            <span class="kamp-raekke__navne tekst-mindre">${escapeHtml(side1)} <span class="tekst-daempet">vs</span> ${escapeHtml(side2)}</span>
         </label>`;
     }).join('');
 
     // Dag-filter UI — vises kun hvis turneringen har 2+ dage
     const dayFilterHtml = (data.days && data.days.length > 1)
-        ? `<div style="margin-bottom: 12px; padding:12px; background:rgba(0,0,0,0.25); border-radius:6px;">
-            <div style="color:var(--text-secondary, rgba(255, 255, 255, 0.78)); font-size:0.85em; margin-bottom:8px; font-weight:600;">Vælg dage at importere:</div>
-            <div style="display:flex; gap:14px; flex-wrap:wrap;">
+        ? `<div class="tilfoej-boks luft-under-12">
+            <div class="felt-overskrift">Vælg dage at importere:</div>
+            <div class="raekke raekke--bred">
                 ${data.days.map(d => {
                     const count = data.matches.filter(m => m.day === d.date).length;
-                    return `<label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
-                        <input type="checkbox" class="ts-day-check" data-day="${escapeHtml(d.date)}" checked style="width:16px; height:16px; cursor:pointer;">
-                        <span style="color:var(--text-primary, #eaeaea); font-size:0.9em;">${escapeHtml(d.label)} <span class="tekst-daempet">(${count})</span></span>
+                    return `<label class="afkrydsning">
+                        <input type="checkbox" class="ts-day-check afkrydsning-boks" data-day="${escapeHtml(d.date)}" checked>
+                        <span class="tekst-primaer">${escapeHtml(d.label)} <span class="tekst-daempet">(${count})</span></span>
                     </label>`;
                 }).join('')}
             </div>
@@ -4465,28 +4465,28 @@ function renderTournamentImportPreview(data) {
         )).join('');
 
     preview.innerHTML = `
-        <div style="margin-bottom: 16px;">
-            <label style="display:block; color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.85em; margin-bottom:6px;">Turneringens navn (kan redigeres):</label>
-            <input type="text" id="tsImportTournamentName" value="${escapeHtml(data.tournamentName || '')}" style="width:100%; box-sizing:border-box; padding:10px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid var(--color-primary); border-radius:5px;">
+        <div class="luft-under-16">
+            <label class="felt-etiket">Turneringens navn (kan redigeres):</label>
+            <input type="text" id="tsImportTournamentName" value="${escapeHtml(data.tournamentName || '')}" class="admin-input">
         </div>
 
-        <p style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin: 0 0 12px 0;">
+        <p class="tekst-daempet tekst-lille luft-under-12">
             Kampene importeres i denne rækkefølge — den næste til afvikling ligger øverst.
         </p>
 
         ${dayFilterHtml}
 
-        <div style="margin-bottom: 12px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <div class="raekke luft-under-12">
             <button type="button" id="tsCheckAllBtn" class="btn-secondary btn-sm">Vælg alle</button>
             <button type="button" id="tsUncheckAllBtn" class="btn-secondary btn-sm">Fravælg alle</button>
-            <select id="tsCategoryFilter" style="padding:6px 10px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid #444; border-radius:4px; font-size:0.85em;">
+            <select id="tsCategoryFilter" class="admin-input admin-input--sm" style="width:auto;">
                 ${categoryOptions}
             </select>
             <button type="button" id="tsToggleCategoryBtn" class="btn-secondary btn-sm">Toggle valgte kategori</button>
-            <span id="tsSelectedCount" style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.88em; margin-left:auto;"></span>
+            <span id="tsSelectedCount" class="tekst-daempet tekst-mindre skub-hoejre"></span>
         </div>
 
-        <div style="max-height: 500px; overflow-y: auto; padding-right: 6px; margin-bottom: 16px;">
+        <div class="rulle-liste rulle-liste--hoej luft-under-16">
             ${rows}
         </div>
 
@@ -4972,7 +4972,7 @@ async function loadPlannerLog() {
         const rows = await api.getPlannerLog(100);
         renderPlannerLog(rows);
     } catch (err) {
-        panel.innerHTML = `<p style="color:var(--color-accent);">Fejl: ${escapeHtml(err.message)}</p>`;
+        panel.innerHTML = `<p class="hold-farve--2">Fejl: ${escapeHtml(err.message)}</p>`;
     }
 }
 
@@ -5236,7 +5236,7 @@ function renderHoldkampRegelBlok(tm) {
             const id = `gs_${tm.id}_${hold}_${n}`;
             const opts = gs.deltagere[hold].map(navn => `<option value="${escapeHtml(navn)}">${escapeHtml(navn)}</option>`).join('');
             return `<select id="${id}" onfocus="holdkampCourtSelectOpen=true" onblur="holdkampCourtSelectOpen=false"
-                            class="admin-input admin-input--sm" style="margin-bottom:6px;">
+                            class="admin-input admin-input--sm luft-under-6">
                         <option value="">— Vælg spiller —</option>${opts}</select>`;
         };
         html += regelBoks('201,162,39',
