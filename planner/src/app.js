@@ -782,18 +782,29 @@ const planHandlers = {
         tilstand.optimerAuto = auto;
         tilstand.listeSetUnderLoeser = tilstand.fane === 'liste';
         tilstand.forslag = { tekst: `Løseren regner i op til ${sekunder >= 120 ? `${sekunder / 60} minutter` : `${sekunder} sekunder`}. Du kan stoppe undervejs og bruge den bedste plan, den har fundet.`, ikkePlaceret: [] };
+        // Uret tæller ned til løserens frist (Jesper 2026-10-18: brugeren ved ikke nødvendigvis, hvor lang tid løseren har
+        // fået): først den valgte tid, så den tid, løseren selv melder (restSekunder) — også når den går videre til planen
+        // med færrest brud eller diagnosen. "Højst", fordi den ofte stopper før, når den ikke finder bedre planer. I kø
+        // står uret stille, og fristen starter forfra, når kørslen går i gang.
+        let frist = Date.now() + sekunder * 1000, iKoe = false;
+        tilstand.optimerUr = () => {
+            if (iKoe) return '';
+            const s = Math.max(0, Math.ceil((frist - Date.now()) / 1000));
+            return s ? `højst ${s >= 60 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} min` : `${s} s`} tilbage` : 'afslutter …';
+        };
         render();
-        // Uret opdateres direkte i knappen, så gitteret ikke tegnes om hvert sekund
-        const start = Date.now();
-        const visUr = () => { const el = document.querySelector('[data-optimer-ur]'); if (el) el.textContent = `${Math.round((Date.now() - start) / 1000)} s`; };
+        // Uret opdateres direkte i statuslinjen, så gitteret ikke tegnes om hvert sekund
+        const visUr = () => { const el = document.querySelector('[data-optimer-ur]'); if (el) el.textContent = tilstand.optimerUr?.() || ''; };
         const ur = setInterval(visUr, 1000);
         let afbryd = null;
-        const faerdig = () => { clearInterval(ur); tilstand.optimerer = false; tilstand.optimerJob = null; tilstand.optimerStopper = false; tilstand.optimerDiagnose = false; tilstand.optimerElastisk = false; tilstand.optimerAfbryd = null; tilstand.optimerAuto = false; tilstand.loeserKoe = null; tilstand.optimerProeve = null; };
+        const faerdig = () => { clearInterval(ur); tilstand.optimerUr = null; tilstand.optimerer = false; tilstand.optimerJob = null; tilstand.optimerStopper = false; tilstand.optimerDiagnose = false; tilstand.optimerElastisk = false; tilstand.optimerAfbryd = null; tilstand.optimerAuto = false; tilstand.loeserKoe = null; tilstand.optimerProeve = null; };
         tilstand.optimerProeve = proeve ? proeve.tekst : null;
         try {
             let ventede = false;
             const vedStatus = (s) => {
+                if (s.status === 'REGNER' && Number.isFinite(s.restSekunder)) frist = Date.now() + s.restSekunder * 1000;
                 if (s.status === 'VENTER') {
+                    iKoe = true;
                     // Løseren har én plads: vi står i kø og prøver selv igen. "Stop" afbryder ventetiden. Det står i
                     // statuslinjen ved stop-knappen — så det kan ses, også når kampprogrammets panel står åbent
                     const om = s.ledigOmSekunder ? ` Den er ledig om højst ${s.ledigOmSekunder >= 90 ? `${Math.round(s.ledigOmSekunder / 60)} min` : `${s.ledigOmSekunder} s`}.` : '';
@@ -802,6 +813,8 @@ const planHandlers = {
                     render(); visUr();
                 } else if (ventede) {
                     ventede = false;
+                    iKoe = false;
+                    if (!Number.isFinite(s.restSekunder)) frist = Date.now() + sekunder * 1000;
                     tilstand.loeserKoe = null;
                     render(); visUr();
                 } else if (s.fase === 'elastisk' && !tilstand.optimerElastisk) { tilstand.optimerElastisk = true; render(); visUr(); }
