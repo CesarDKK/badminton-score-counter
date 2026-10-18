@@ -712,3 +712,18 @@ til løserens frist, fx "højst 21 s tilbage".
   videre til planen med færrest brud eller diagnosen.
 - Der står "højst", fordi løseren ofte stopper før, når den ikke finder bedre planer.
 - Står løseren i kø, står uret stille.
+
+## Løseren på én dag (2026-10-18)
+
+Jesper: lørdagens program er blevet rigtig godt, og han har selv rykket lidt rundt. Søndagen kan han ikke selv få god,
+så han vil kunne sætte løseren i gang med kun søndag.
+
+Knappen "Forbedr kun søn. 23/11 med løseren" står ved "Forbedr med løseren" og følger den valgte dagfane. Den vises
+kun, når turneringen har flere dage.
+
+- Kampene på de andre dage holdes på deres tid, som var de låst.
+- Løseren kender dem stadig, så spillere, der spiller begge dage, pausen og varighederne regnes rigtigt.
+- Kampe uden tid lægges på dagen, hvis rækken spiller den.
+
+Afprøvet lokalt på Lyngby U9/U11 med alt som Swiss: lørdagens 197 kampe stod præcis, hvor de stod, og 134 af
+søndagens 180 kampe blev flyttet.

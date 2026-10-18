@@ -379,16 +379,18 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
     // Løseren kører af sig selv efter "Lav kampprogram" (opsaetning.autoLoeser); så ligger knappen under "Mere"
     const autoLoeser = projekt.opsaetning.autoLoeser !== false;
     const loeserKnap = `<span class="optimer">
-                <button class="knap ${harPlan && !autoLoeser ? '' : 'knap--sekundaer'}" data-handling="optimer" ${tilstand.optimerer ? 'disabled' : ''} title="Sender et anonymiseret planlægningsproblem (kun kamp-id'er og spillernumre) til løseren, som leder efter en bedre plan under alle hårde regler. Låste kampe beholder deres tid.">${tilstand.optimerer ? 'Løseren regner …' : autoLoeser ? 'Forbedr med løseren igen' : 'Forbedr med løseren'}</button>
+                <button class="knap ${harPlan && !autoLoeser ? '' : 'knap--sekundaer'}" data-handling="optimer" ${tilstand.optimerer ? 'disabled' : ''} title="Sender et anonymiseret planlægningsproblem (kun kamp-id'er og tider) til løseren, som leder efter en bedre plan under alle hårde regler. Låste kampe beholder deres tid.">${tilstand.optimerer ? 'Løseren regner …' : autoLoeser ? 'Forbedr med løseren igen' : 'Forbedr med løseren'}</button>
                 <select data-felt="optimerSek" aria-label="Tid til løseren" title="Hvor længe løseren må regne. Den stopper selv, når den ikke finder bedre planer.">
                     ${tidValg(sek)}
-                </select></span>`;
+                </select></span>${dage.length > 1 ? `
+                <button class="knap knap--sekundaer" data-handling="optimer-dag" data-dato="${dag.dato}" ${tilstand.optimerer ? 'disabled' : ''} title="Løseren arbejder kun på ${esc(datoTekst(dag.dato))} — kampene på de andre dage beholder deres tid (fx når du selv har rettet dem til). Låste kampe beholder også deres tid.">Forbedr kun ${esc(datoTekst(dag.dato, { kort: true }))} med løseren</button>` : ''}`;
     // Køen først (den kan ellers ikke ses, mens kampprogrammets panel står åbent), og en prøve siger, hvad der prøves
     const loeserStatus = tilstand.loeserKoe ? tilstand.loeserKoe
         : tilstand.optimerElastisk ? 'Ingen lovlig plan — løseren finder planen med færrest regelbrud …'
         : tilstand.optimerDiagnose ? 'Ingen lovlig plan — løseren undersøger, hvilke ændringer der hjælper …'
             : tilstand.optimerProeve ? `Løseren prøver: ${tilstand.optimerProeve} …`
-            : tilstand.optimerAuto ? 'Løseren forbedrer programmet …' : 'Løseren regner …';
+            : tilstand.optimerAuto ? 'Løseren forbedrer programmet …'
+            : tilstand.optimerDag ? `Løseren regner kun på ${datoTekst(tilstand.optimerDag, { kort: true })} …` : 'Løseren regner …';
     const slut = Object.entries(statistik.slutPrDag);
     const statusTal = (vaerdi, etiket, klasse = '') => `<div class="status-tal ${klasse}"><b>${esc(String(vaerdi))}</b><span>${esc(etiket)}</span></div>`;
     container.innerHTML = `
@@ -532,6 +534,7 @@ function bind(container, h) {
             else if (hd === 'laas-op-kategori') h.laasKategori(false);
             else if (hd === 'alternativer') h.lavAlternativer();
             else if (hd === 'optimer') h.optimer();
+            else if (hd === 'optimer-dag') h.optimerDag(knap.dataset.dato);
             else if (hd === 'stopOptimer') h.stopOptimer();
             else if (hd === 'alt-forrige') h.bladreAlternativ(-1);
             else if (hd === 'alt-naeste') h.bladreAlternativ(1);
