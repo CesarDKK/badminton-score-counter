@@ -84,10 +84,28 @@ describe('planlægning', () => {
         assert.equal(f.ikkePlaceret.length, 0);
         assert.deepEqual(tjekPlan(anvendForslag(p, f)).problemer.filter((x) => x.alvor === 'fejl').map((x) => x.tekst), []);
     });
-    test('løseren får en Swiss-gruppe pr. lodtrækning — kun gruppens egne spillere', () => {
-        const pr = bygProblem(projekt(20, 2));
-        const swissVent = pr.spillerGrupper.filter((g) => g.vaegt === 10);
-        assert.equal(swissVent.length, 2, 'én ventetidsgruppe pr. Swiss-gruppe á 10 spillere');
+    test('løserens ventetid pr. spiller holder sig til spillerens egen Swiss-gruppe', () => {
+        const p = projekt(20, 2);
+        const pr = bygProblem(p);
+        const draw = (i) => p.kampe.find((k) => k.id === pr.kampe[i].id).tpRef.draw;
+        assert.equal(pr.spillerGrupper.reduce((s, g) => s + g.vaegt, 0), 20, 'alle 20 spillere');
+        assert.ok(pr.spillerGrupper.every((g) => new Set(g.kampe.map(draw)).size === 1), 'kun gruppens egne kampe');
+        // Runde 1-kampen (kendte spillere), første ukendte runde (2) og sidste (4): 1 + 5 + 5 — runde 3 ændrer ikke opholdet
+        assert.ok(pr.spillerGrupper.every((g) => g.kampe.length === 11));
+    });
+    test('de midterste runder sendes ikke i spænd-grupperne og konflikterne — kun når runderne ligger på én dag', () => {
+        const p = projekt(20, 2);
+        const pr = bygProblem(p);
+        const runde = (i) => p.kampe.find((k) => k.id === pr.kampe[i].id).runde;
+        assert.ok(pr.spillerGrupper.every((g) => g.kampe.every((i) => runde(i) !== 3)), 'runde 3 er ikke med');
+        assert.ok(pr.konflikter.every(([a, b]) => Math.abs(runde(a) - runde(b)) < 2), 'runde r og r+2 følger af runden imellem');
+        assert.ok(pr.konflikter.some(([a, b]) => Math.abs(runde(a) - runde(b)) === 1), 'nabo-runderne er stadig konfliktpar');
+        // Over to dage kan runde 3 være dagens første eller sidste — så er den med
+        let to = nytProjekt(model([{ id: 'U11 D', aargang: 'U11', raekke: 'D', kategorier: [{ kat: 'HS', type: 'single', spillere: enkelt('s', 20) }] }], [LOER, '2026-11-22']));
+        to = saetForm(opdaterDag(opdaterDag(to, LOER, { baner: 6, start: '09:00', slut: '19:00' }), '2026-11-22', { baner: 6, start: '09:00', slut: '19:00' }), 'U11 D HS', { formValg: 'swiss', swissRunder: 4, swissGrupper: 2 });
+        const pr2 = bygProblem(to);
+        const runde2 = (i) => to.kampe.find((k) => k.id === pr2.kampe[i].id).runde;
+        assert.ok(pr2.spillerGrupper.some((g) => g.kampe.some((i) => runde2(i) === 3)), 'to dage: runde 3 er med');
     });
     test('"Til TP" holder gruppernes runder adskilt, når TP-filen har en lodtrækning pr. gruppe', () => {
         // Som TP-filen ser ud, når lodtrækningen er lavet i TP: kampene er TP's (formValg "fra TP")

@@ -78,3 +78,42 @@ describe('kamplængden kan gå et mellemtrin tilbage (Jesper 2026-10-17: "hvorfo
         assert.equal(udenKompromiser(b, [k]).opsaetning.slotMin, 30, 'standard: som før');
     });
 });
+
+describe('gennemgangen 2026-10-17, pakke 1: låste kampe og middelvejen i prøven', async () => {
+    const { laasteUdenForGitter } = await import('../../src/kompromis.js');
+    const { flytKamp, laasKamp } = await import('../../src/store.js');
+    test('en låst kamp kl. 9:20 passer ikke i 30-min-gitteret — 30 tilbydes ikke, 25 heller ikke, kun det, der passer', () => {
+        const a = foer();
+        let b = genberegnKampe(saetSlotMin(a, 20));
+        const id = b.kampe[0].id;
+        b = laasKamp(flytKamp(b, id, '2026-11-21', '09:20'), id, true);
+        assert.equal(laasteUdenForGitter(b, 30), 1);
+        assert.equal(laasteUdenForGitter(b, 20), 0);
+        const k = kompromiser(a, b).find((x) => x.id === 'slotMin');
+        assert.equal(k.blokeret, true, '25 og 30: kl. 9:20 findes ikke');
+        assert.match(k.tekst, /kræver, at 1 låst kamp låses op/);
+    });
+    test('en låst kamp kl. 10:00 passer i 30 men ikke 25: kun 30 tilbydes', () => {
+        const a = foer();
+        let b = genberegnKampe(saetSlotMin(a, 20));
+        const id = b.kampe[0].id;
+        b = laasKamp(flytKamp(b, id, '2026-11-21', '10:00'), id, true);
+        const k = kompromiser(a, b).find((x) => x.id === 'slotMin');
+        assert.deepEqual(k.valg, [30]);
+        assert.equal(k.foer, 30);
+    });
+    test('trækkes kamplængden eller pausen tilbage, prøves U9/U11 uden middelvejens ekstra kampe', () => {
+        const a = foer();
+        const b = { ...genberegnKampe(saetSlotMin(a, 20)), kategorier: a.kategorier.map((k) => ({ ...k, middelvej: true })) };
+        const k = kompromiser(a, b).find((x) => x.id === 'slotMin');
+        const c = udenKompromiser(b, [k]);
+        assert.ok(c.kategorier.every((x) => !x.middelvej));
+    });
+});
+
+describe('diagnosens "flere" nævner rækkernes tidsrum og dage', async () => {
+    const { diagnoseTekst } = await import('../../src/solver-klient.js');
+    test('teksten', () => {
+        assert.match(diagnoseTekst([{ regel: 'flere' }]).tekst, /rækkernes tidsrum og dage/);
+    });
+});

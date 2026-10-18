@@ -471,7 +471,7 @@ class DiagnoseTest(unittest.TestCase):
         for k in p["kampe"]:
             k["tilladte"] = list(range(540, 900, 30))
         self.assertEqual(loes(p, 5)["status"], "INFEASIBLE")
-        fund = diagnose(p)
+        fund = diagnose(p, brud=[{"regel": "haltid", "raekke": "U09 D"}])
         self.assertEqual(fund, [{"regel": "haltid", "raekke": "U09 D", "art": "single", "graense": 120, "forslag": 240}])
 
     def test_varighed_pr_art_peger_paa_den_grænse_der_spaerrer(self):
@@ -484,7 +484,7 @@ class DiagnoseTest(unittest.TestCase):
         p = problem(kampe, konflikter=konf, haltid=haltid,
                     kapacitet={"faelles": [{"t": t, "baner": 2} for t in range(540, 900, 30)]}, dage=[{"index": 0, "start": 540, "slut": 900, "baner": 2}])
         self.assertEqual(loes(p, 5)["status"], "INFEASIBLE")
-        self.assertEqual(diagnose(p), [{"regel": "haltid", "raekke": "U09 D", "art": "raekke", "graense": 120, "forslag": 240}])
+        self.assertEqual(diagnose(p, brud=[{"regel": "haltid", "raekke": "U09 D"}]), [{"regel": "haltid", "raekke": "U09 D", "art": "raekke", "graense": 120, "forslag": 240}])
         r = loes(p, 5, elastisk=True)
         self.assertEqual({(b["regel"], b["art"]) for b in r["brud"]}, {("haltid", "raekke")})
 
@@ -612,6 +612,108 @@ class DiagnoseTest(unittest.TestCase):
         self.assertGreater(kald[2][1], kald[0][1], "anden gang får den svære dag mere tid end sin andel")
 
 
+class GennemgangPakke1Test(unittest.TestCase):
+    """Gennemgangen af løseren 2026-10-17, pakke 1."""
+
+    def _to_dage(self):
+        tider = [540, 570, DAG + 540, DAG + 570]
+        return problem([kamp(0, tilladte=[540, 570]), kamp(1, tilladte=[540, 570]), kamp(2, tilladte=[DAG + 540, DAG + 570])],
+                       kapacitet={"faelles": [{"t": t, "baner": 2} for t in tider]},
+                       dage=[{"index": 0, "start": 540, "slut": 600, "baner": 2}, {"index": 1, "start": 540, "slut": 600, "baner": 2}])
+
+    def test_en_umulig_dag_er_beviset_for_hele_problemet(self):
+        # Før blev hele problemet løst samlet på resten af tiden — ofte uafgjort, så diagnosen udeblev
+        import solver
+        kald = []
+        gammel = solver.loes
+        def falsk(p, s, *a, **k):
+            kald.append(len(p["kampe"]))
+            return {"status": "INFEASIBLE" if len(p["kampe"]) == 2 else "OPTIMAL", "tider": {}, "stoppet": False, "sekunder": 0.1, "maal": 0.0, "graense": 0.0}
+        solver.loes = falsk
+        try:
+            svar = solver.loes_opdelt(self._to_dage(), 30)
+        finally:
+            solver.loes = gammel
+        self.assertEqual(svar["status"], "INFEASIBLE")
+        self.assertEqual(kald, [2], "kun dagen — ikke hele problemet bagefter")
+
+    def test_diagnosen_siger_flere_naar_tidsrum_og_max_kampe_tilsammen_hjaelper(self):
+        # Kun med BÅDE de bredere tider (rækkens tidsrum) og uden max kampe findes der en plan
+        import solver
+        gammel = solver.loes
+        def falsk(p, s, *a, **k):
+            ok = 570 in p["kampe"][0]["tilladte"] and not p.get("mangeKampe")
+            return {"status": "OPTIMAL" if ok else "INFEASIBLE", "tider": {}, "stoppet": False, "sekunder": 0.1}
+        p = problem([kamp(0, tilladte=[540, 600])], mangeKampe=[[0]],
+                    alternativer=[{"regel": "tidsrum", "raekke": "U11 D", "kampe": [0], "tilladte": [570]}])
+        solver.loes = falsk
+        try:
+            fund = solver.diagnose(p)
+        finally:
+            solver.loes = gammel
+        self.assertEqual(fund, [{"regel": "flere"}])
+
+    def test_stabil_regnes_fra_den_tidligere_tid_ikke_hint(self):
+        # Løsningen i bidder sætter hint til den nuværende tid; flytningen skal stadig regnes fra den tidligere
+        kampe = [kamp(0, tilladte=[540, 570], hint=570, tidligere=540)]
+        vaegte = {"ventetid": 0, "sluttid": 0, "tommeBaner": 0}
+        r = loes(problem(kampe, vaegte=vaegte, stabil={"vaegt": 3, "kampe": [0]}), 5)
+        self.assertEqual(r["tider"]["k0"], 540, "tilbage til den tidligere tid koster intet")
+        # Kan kampen ikke ligge på sin tidligere tid, koster flytningen stadig (sammenlignelige mål i bidderne)
+        fast = loes(problem([kamp(0, tilladte=[570], hint=570, tidligere=540)], vaegte=vaegte, stabil={"vaegt": 3, "kampe": [0]}), 5)
+        uden = loes(problem([kamp(0, tilladte=[570], hint=570)], vaegte=vaegte, stabil={"vaegt": 3, "kampe": [0]}), 5)
+        self.assertGreater(fast["maal"], uden["maal"])
+
+    def test_ledig_om_bruger_jobbets_frist(self):
+        import solver
+        job = solver.Job(10.0)
+        job.senest = time.time() + 120
+        with solver.JOBS_LAAS:
+            solver.JOBS["test-ledig"] = job
+        try:
+            self.assertGreaterEqual(solver.ledig_om(), 110, "også planen med færrest brud og diagnosen")
+        finally:
+            with solver.JOBS_LAAS:
+                solver.JOBS.pop("test-ledig", None)
+
+
+    def _tre_dage(self):
+        tider = [d * DAG + t for d in range(3) for t in (540, 570)]
+        return problem([kamp(i, tilladte=[d * DAG + 540, d * DAG + 570]) for i, d in enumerate((0, 1, 2))],
+                       kapacitet={"faelles": [{"t": t, "baner": 2} for t in tider]},
+                       dage=[{"index": d, "start": 540, "slut": 600, "baner": 2} for d in range(3)])
+
+    def test_tid_en_dag_ikke_brugte_gaar_til_alle_de_naeste_dage(self):
+        import solver
+        kald = []
+        gammel = solver.loes
+        def falsk(p, s, *a, **k):
+            kald.append(round(s))
+            return {"status": "OPTIMAL", "tider": {x["id"]: x["tilladte"][0] for x in p["kampe"]}, "stoppet": False, "maal": 0.0, "graense": 0.0, "sekunder": 0.0, "rolig": True}
+        solver.loes = falsk
+        try:
+            svar = solver.loes_opdelt(self._tre_dage(), 30)
+        finally:
+            solver.loes = gammel
+        # Dag 1 brugte intet: dag 2 får halvdelen af de 30 s (før en tredjedel), dag 3 resten
+        self.assertEqual(kald[:2], [10, 15])
+        self.assertTrue(svar["rolig"], "alle dage stoppede selv")
+
+    def test_rolig_kun_naar_alle_dage_stoppede_selv(self):
+        import solver
+        gammel = solver.loes
+        n = []
+        def falsk(p, s, *a, **k):
+            n.append(1)
+            return {"status": "FEASIBLE", "tider": {x["id"]: x["tilladte"][0] for x in p["kampe"]}, "stoppet": False, "maal": 0.0, "graense": 0.0, "sekunder": s, "rolig": len(n) != 2}
+        solver.loes = falsk
+        try:
+            svar = solver.loes_opdelt(self._tre_dage(), 30)
+        finally:
+            solver.loes = gammel
+        self.assertFalse(svar["rolig"], "dag 2 brugte hele sin tid")
+
+
 class EgenKampgraenseTest(unittest.TestCase):
     """Spillere med egen grænse for kampe pr. dag (U11: 12, også ved flere dage — Jesper 2026-10-12)."""
 
@@ -638,6 +740,159 @@ class HalTidTest(unittest.TestCase):
     def test_ugyldig_gruppe_afvises(self):
         from solver import valider
         self.assertEqual(valider(problem([kamp(0)], halTid=[{"kampe": [0, 7], "vaegt": 1}])), "ugyldigt halTid")
+
+
+class GennemgangPakke2Test(unittest.TestCase):
+    """Gennemgangen af løseren 2026-10-17, pakke 2: diagnosen lemper også pause, single/double, senior og tidsvindue."""
+
+    def _diagnose(self, p, brud):
+        from solver import diagnose
+        return diagnose(p, brud=brud)
+
+    def test_pause_er_aarsagen(self):
+        # To kampe med samme spiller og 60 min mellem starterne, men dagen har kun to slots á 30 min
+        kampe = [kamp(0, tilladte=[540, 570]), kamp(1, tilladte=[540, 570])]
+        p = problem(kampe, konflikter=[[0, 1, 60, 0]], kapacitet={"faelles": [{"t": t, "baner": 2} for t in (540, 570)]})
+        self.assertEqual(loes(p, 5)["status"], "INFEASIBLE")
+        self.assertIn({"regel": "pause"}, self._diagnose(p, [{"regel": "pause", "raekke": "U11 D"}]))
+        self.assertNotIn({"regel": "pause"}, self._diagnose(p, []), "bryder planen med færrest brud ikke pausen, prøves den ikke")
+
+    def test_single_og_double_samtidig_er_aarsagen(self):
+        kampe = [kamp(0, tilladte=[540]), kamp(1, tilladte=[540, 570]), kamp(2, tilladte=[570])]
+        p = problem(kampe, ikkeSamtidig=[[0, 1], [1, 2]])
+        self.assertEqual(loes(p, 5)["status"], "INFEASIBLE")
+        self.assertIn({"regel": "antiSamtidighed"}, self._diagnose(p, None))
+
+    def test_senior_er_aarsagen(self):
+        kampe = [kamp(0, tilladte=[540]), kamp(1, tilladte=[570])]
+        p = problem(kampe, ikkeSammeDag=[[0, 1]])
+        self.assertEqual(loes(p, 5)["status"], "INFEASIBLE")
+        self.assertIn({"regel": "senior"}, self._diagnose(p, None))
+
+    def test_tidsvindue_for_raekken_planen_med_faerrest_brud_lægger_udenfor(self):
+        # To kampe, én bane: kl. 9 er der plads til én, kl. 10 til ingen — kl. 9:30 (uden for vinduet) til den anden
+        kampe = [kamp(0, tilladte=[540, 600]), kamp(1, tilladte=[540, 600])]
+        p = problem(kampe, kapacitet={"faelles": [{"t": 540, "baner": 1}, {"t": 570, "baner": 1}, {"t": 600, "baner": 0}]},
+                    elastisk=[{"raekke": "U11 D", "tidsvindue": [570], "tidsrum": [], "dage": []}])
+        fund = self._diagnose(p, [{"regel": "tidsvindue", "raekke": "U11 D"}])
+        self.assertIn({"regel": "tidsvindue", "raekke": "U11 D"}, fund)
+
+    def test_varigheden_proeves_ikke_pr_raekke_naar_det_heller_ikke_hjaelper_helt_uden(self):
+        import solver
+        kald = []
+        gammel = solver.loes
+        def falsk(p, s, *a, **k):
+            kald.append(len(p.get("haltid", [])))
+            return {"status": "INFEASIBLE", "tider": {}, "stoppet": False, "sekunder": 0.1}
+        p = problem([kamp(0)], haltid=[{"kampe": [0], "graense": 60, "raekke": "U09 D", "art": a} for a in ("single", "double", "raekke")])
+        solver.loes = falsk
+        try:
+            fund = solver.diagnose(p, brud=[])
+        finally:
+            solver.loes = gammel
+        self.assertEqual(fund, [{"regel": "plads"}])
+        self.assertLessEqual(len(kald), 2, "alle lempelser + helt uden varighed — ikke fire forsøg pr. række og art")
+
+
+class GennemgangPakke3Test(unittest.TestCase):
+    """Gennemgangen af løseren 2026-10-17, pakke 3: opdelingen pr. dag, tiden og løsningen i bidder."""
+
+    def _to_dage(self, **ekstra):
+        tider = [d * DAG + t for d in range(2) for t in range(540, 720, 30)]
+        kampe = [kamp(i, tilladte=[d * DAG + t for t in range(540, 720, 30)], raekke="U09 D" if i % 3 == 0 else "U13 D")
+                 for i, d in enumerate((0, 0, 0, 1, 1, 1))]
+        p = problem(kampe, kapacitet={"faelles": [{"t": t, "baner": 1} for t in tider]},
+                    dage=[{"index": d, "start": 540, "slut": 720, "baner": 1} for d in range(2)],
+                    spillerGrupper=[{"kampe": [0, 2], "vaegt": 2}, {"kampe": [3, 5], "vaegt": 1}],
+                    halTid=[{"kampe": [0, 1], "vaegt": 1}], traek=[[0, 1], [3, 4]], huller=[[1, 2]], cupVent=[[5, [4]]],
+                    nethoejde={"saenket": [0, 3], "normal": [1, 4]}, puljerunder=[[[0], [2]]],
+                    vaegte={"ventetid": 1, "sluttid": 2, "tommeBaner": 0.1, "finalerSpredt": 0.2, "kampeITraek": 1,
+                            "langeHuller": 1, "cupVent": 1, "halTid": 0.5, "saenketNet": 1, "puljerunderSpredt": 1}, maxVent=30)
+        p.update(ekstra)
+        return p
+
+    def test_opdelt_og_samlet_giver_samme_maal(self):
+        # Målet pr. dag summeres; med alle bløde mål skal summen være det samlede problems mål (ellers sammenligner
+        # løsningen i bidder æbler og pærer)
+        import solver
+        p = self._to_dage(stabil={"vaegt": 3, "kampe": [1, 4]})
+        for k, h in ((1, 600), (4, DAG + 600)):
+            p["kampe"][k]["hint"] = h
+        self.assertIsNotNone(solver.dele_pr_dag(p))
+        samlet, opdelt = loes(p, 20), solver.loes_opdelt(p, 20)
+        self.assertEqual((samlet["status"], opdelt["status"]), ("OPTIMAL", "OPTIMAL"))
+        self.assertAlmostEqual(samlet["maal"], opdelt["maal"], delta=1)
+
+    def test_uafgjort_dag_der_bevises_umulig_i_anden_runde(self):
+        import solver
+        kald = {}
+        gammel = solver.loes
+        def falsk(q, sek, *a, **k):
+            dag = q["kampe"][0]["tilladte"][0] // DAG
+            kald[dag] = kald.get(dag, 0) + 1
+            if dag == 0:
+                return {"status": "UNKNOWN" if kald[dag] == 1 else "INFEASIBLE", "tider": {}, "stoppet": False, "sekunder": 0.1}
+            return {"status": "OPTIMAL", "tider": {x["id"]: x["tilladte"][0] for x in q["kampe"]}, "stoppet": False, "maal": 0.0, "graense": 0.0, "sekunder": 0.1, "rolig": True}
+        solver.loes = falsk
+        try:
+            svar = solver.loes_opdelt(self._to_dage(), 30)
+        finally:
+            solver.loes = gammel
+        self.assertEqual(svar["status"], "INFEASIBLE", "beviset i anden runde gælder hele problemet")
+        self.assertEqual(kald, {0: 2, 1: 1})
+
+    def test_stop_i_anden_runde_giver_startplanen_for_dagen(self):
+        import solver
+        stop = threading.Event()
+        gammel = solver.loes
+        def falsk(q, sek, *a, **k):
+            if q["kampe"][0]["tilladte"][0] // DAG == 0:
+                return {"status": "UNKNOWN", "tider": {}, "stoppet": False, "sekunder": 0.1}
+            stop.set()  # brugeren trykker "Stop" mens dag 2 løses
+            return {"status": "FEASIBLE", "tider": {x["id"]: x["tilladte"][0] for x in q["kampe"]}, "stoppet": True, "maal": 0.0, "graense": 0.0, "sekunder": 0.1}
+        p = self._to_dage()
+        for i in (0, 1, 2):
+            p["kampe"][i]["hint"] = 540 + 30 * i
+        solver.loes = falsk
+        try:
+            svar = solver.loes_opdelt(p, 30, stop=stop)
+        finally:
+            solver.loes = gammel
+        self.assertEqual(svar["status"], "FEASIBLE")
+        self.assertTrue(svar["stoppet"])
+        self.assertEqual([svar["tider"][f"k{i}"] for i in (0, 1, 2)], [540, 570, 600], "dag 1 beholder startplanens tider")
+
+    def test_tiden_klemmes_til_max(self):
+        import solver
+        fanget = []
+        Gammel = solver.cp_model.CpSolver
+        class Fanger(Gammel):
+            def Solve(self, model, *a, **k):
+                fanget.append(self.parameters.max_time_in_seconds)
+                return super().Solve(model, *a, **k)
+        solver.cp_model.CpSolver = Fanger
+        try:
+            loes(problem([kamp(0)]), 10 ** 6)
+        finally:
+            solver.cp_model.CpSolver = Gammel
+        self.assertTrue(fanget and max(fanget) <= solver.MAX_SEKUNDER)
+
+    def test_bidderne_regner_flytningen_fra_den_tidligere_tid(self):
+        # Kampen lå kl. 9:30 (startplanen); hovedsøgningen har flyttet den til 9:00. At flytte koster 3 timer, at slutte en
+        # halv time senere 1 time — så bidderne skal flytte den tilbage. Før regnede de fra den nuværende tid (9:00)
+        import solver
+        p = problem([kamp(0, tilladte=[540, 570], hint=570)], vaegte={"ventetid": 0, "sluttid": 2, "tommeBaner": 0},
+                    stabil={"vaegt": 3, "kampe": [0]})
+        r = solver.forbedr_i_bidder(p, {"status": "FEASIBLE", "tider": {"k0": 540}, "maal": 0.0}, time.time() + 8)
+        self.assertEqual(r["tider"]["k0"], 570)
+
+    def test_valideringen_tjekker_kapacitet_og_tiderne_til_diagnosen(self):
+        from solver import valider
+        self.assertIsNone(valider(problem([kamp(0)])))
+        self.assertEqual(valider(problem([kamp(0)], kapacitet={"faelles": [{"t": 540, "baner": "to"}]})), "ugyldig kapacitet")
+        self.assertEqual(valider(problem([kamp(0)], kapacitet=[])), "ugyldig kapacitet")
+        self.assertEqual(valider(problem([kamp(0)], elastisk=[{"raekke": "U11 D", "tidsrum": [-30]}])), "ugyldigt elastisk")
+        self.assertEqual(valider(problem([kamp(0)], alternativer=[{"regel": "dage", "kampe": [0], "tilladte": [1.5]}])), "ugyldigt alternativer")
 
 
 class ValideringTest(unittest.TestCase):
@@ -730,8 +985,8 @@ class SeniorReglerTest(unittest.TestCase):
         self.assertEqual(loes(problem([kamp(0), kamp(1)], ikkeSammeDag=[[0, 1]]), 5)["status"], "INFEASIBLE", "begge kan kun ligge på samme dag")
 
 
-class HaltidUdloesereTest(unittest.TestCase):
-    """Max haltid gælder kun de dage, hvor spilleren har en kamp i rækken med grænsen (samme regel som Tjek)."""
+class HaltidHverDagTest(unittest.TestCase):
+    """Max haltid gælder hver dag for sig. Klienten sender én gruppe pr. række og art ("udloesere" er fjernet 2026-10-17)."""
 
     def opsaet(self, k1_tider, k2_tider, **haltid):
         tider = list(range(540, 900, 30)) + [DAG + t for t in range(540, 900, 30)]
@@ -740,22 +995,18 @@ class HaltidUdloesereTest(unittest.TestCase):
         kampe = [kamp(0, tilladte=[540], raekke="U09 D"), kamp(1, tilladte=k1_tider, raekke="U11 D"), kamp(2, tilladte=k2_tider, raekke="U11 D")]
         return problem(kampe, kapacitet=kap, dage=dage, konflikter=[[1, 2, 150, 0]], haltid=[{"kampe": [0, 1, 2], "graense": 120, "raekke": "U09 D", **haltid}])
 
-    def test_anden_dag_uden_udloeser_er_ikke_bundet(self):
+    def test_graensen_gaelder_hver_dag(self):
         dag2 = [DAG + t for t in range(540, 900, 30)]
-        self.assertEqual(loes(self.opsaet(dag2, dag2), 5)["status"], "INFEASIBLE", "uden udløsere gælder grænsen alle dage (gammel adfærd)")
-        r = loes(self.opsaet(dag2, dag2, udloesere=[0]), 5)
-        self.assertIn(r["status"], ("OPTIMAL", "FEASIBLE"), "U09-kampen ligger dag 1 — dag 2 er fri af grænsen")
+        self.assertEqual(loes(self.opsaet(dag2, dag2), 5)["status"], "INFEASIBLE", "dag 2: 150 min mellem starterne giver 180 min > 120")
+        self.assertIn(loes(self.opsaet([600], dag2), 5)["status"], ("OPTIMAL", "FEASIBLE"), "dag 1: 09:00 → 10:30 er 90 min; dag 2 har én kamp")
+        self.assertEqual(loes(self.opsaet([720], dag2), 5)["status"], "INFEASIBLE", "09:00 → 12:30 er 210 min > 120")
 
-    def test_samme_dag_som_udloeseren_er_bundet(self):
-        dag2 = [DAG + t for t in range(540, 900, 30)]
-        self.assertEqual(loes(self.opsaet([720], dag2, udloesere=[0]), 5)["status"], "INFEASIBLE", "09:00 → 12:30 er 210 min > 120")
-        self.assertIn(loes(self.opsaet([600], dag2, udloesere=[0]), 5)["status"], ("OPTIMAL", "FEASIBLE"), "09:00 → 10:30 er 90 min")
-
-    def test_kamp_der_kan_ligge_begge_dage_vaelger_den_frie_dag(self):
-        begge = [720] + [DAG + 720]
-        r = loes(self.opsaet(begge, [DAG + 540], udloesere=[0]), 5)
+    def test_kamp_der_kan_ligge_begge_dage_vaelger_dagen_der_holder(self):
+        # k1 kan ligge kl. 12 dag 1 (210 min fra k0 — over grænsen) eller kl. 9:30 dag 2 (60 min til k2). Konflikten
+        # (150 min mellem k1 og k2) slås fra, så kun grænsen bestemmer dagen
+        r = loes({**self.opsaet([720, DAG + 570], [DAG + 600]), "konflikter": []}, 5)
         self.assertIn(r["status"], ("OPTIMAL", "FEASIBLE"))
-        self.assertEqual(r["tider"]["k1"], DAG + 720, "kl. 12 dag 1 ville bryde grænsen, så den må ligge dag 2")
+        self.assertEqual(r["tider"]["k1"], DAG + 570, "kl. 12 dag 1 ville bryde grænsen (210 min)")
 
 
 if __name__ == "__main__":

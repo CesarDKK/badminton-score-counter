@@ -38,10 +38,12 @@ export const halTidSpillere = (k) => (k.fase === 'swiss' ? new Set([...k.spiller
 export const KRITERIER = [
     {
         id: 'ventetid', navn: 'Ventetid', enhed: 'timer',
-        beskrivelse: 'Spillernes samlede ventetid mellem egne kampe (haltid minus egne kampe), i timer.',
+        beskrivelse: 'Spillernes samlede ventetid mellem egne kampe (tid i hallen minus egne kampe), i timer — Swiss-runder tæller for alle i lodtrækningen.',
+        // Som Tjek og løseren (spillerOphold): før talte kun kendte kampe, så Swiss-spillere så ud til at vente mindre, end
+        // de gjorde — og løserens mål stemte ikke med scoren (gennemgangen 2026-10-17). Et ophold er en kamp eller en runde.
         beregn: (p, c) => {
             let min = 0;
-            for (const t of c.prSpillerDag.values()) min += (t[t.length - 1] - t[0] + c.slotMin) - t.length * c.slotMin;
+            for (const o of spillerOphold(p.kampe, p.plan).values()) min += Math.max(0, (o.at(-1).til - o[0].fra + c.slotMin) - o.length * c.slotMin);
             return min / 60;
         },
     },

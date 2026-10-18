@@ -8,7 +8,8 @@
 import { minutter, klokkeFraMinutter } from './tp-reader.js';
 import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt } from './kapacitet.js';
 import { lavRegelmodel, VARIGHEDER } from './regelmodel.js';
-import { vaegteFor, SAENKET_NET, halTidSpillere } from './kriterier.js';
+import { vaegteFor, SAENKET_NET } from './kriterier.js';
+import { INGEN_PAUSE } from './regler.js';
 
 const DAG_MIN = 1440;
 
@@ -40,10 +41,6 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
         }
     });
 
-    // Spillere som løbenumre (ingen persondata forlader browseren)
-    const spillerNr = new Map();
-    const nr = (id) => { if (!spillerNr.has(id)) spillerNr.set(id, spillerNr.size); return spillerNr.get(id); };
-
     const kampe = [];
     const indeks = new Map();
     for (const k of projekt.kampe) {
@@ -70,7 +67,7 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
         indeks.set(k.id, kampe.length);
         kampe.push({
             id: k.id, raekke: r.id, pulje, halv: !!kat(k)?.halvBane, tilladte,
-            spillere: k.spillere.map(nr), erFinale: k.rundeNavn === 'Finale',
+            erFinale: k.rundeNavn === 'Finale',
             hint: hintPlan?.[k.id] && dagIndex.has(hintPlan[k.id].dag) ? dagIndex.get(hintPlan[k.id].dag) * DAG_MIN + minutter(hintPlan[k.id].slot) : null,
         });
     }
@@ -130,6 +127,32 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
         elastisk.push(f.length ? { ...ud, forbudt: f } : ud);
     }
 
+    // Swiss-runder uden kendte spillere: runde r+1 afhænger af hele runde r (afhaengerAf), så runderne ligger i rækkefølge.
+    // Er runderne sammenhængende, følger en pause mellem runde r og r+2 af pauserne til runden imellem — og ligger alle
+    // de ukendte runder på én dag, ændrer de midterste hverken, hvornår spillerne kommer, eller hvornår de går. De sendes
+    // derfor ikke med i konflikterne og spænd-grupperne (varighed, ventetid, tid i hallen): det gør modellen meget mindre
+    // (gennemgangen 2026-10-17). Første ukendte runde er med, for en oversidder i runde 1 kommer først til der.
+    const swissDraw = new Map(); // draw → { runder, foerste, sidste (ukendte), dage }
+    for (const k of projekt.kampe) {
+        if (k.fase !== 'swiss' || !indeks.has(k.id)) continue;
+        const d = swissDraw.get(k.tpRef.draw) || { runder: new Set(), foerste: Infinity, sidste: -Infinity, dage: new Set() };
+        d.runder.add(k.runde);
+        if (!k.spillere.length) {
+            d.foerste = Math.min(d.foerste, k.runde);
+            d.sidste = Math.max(d.sidste, k.runde);
+            for (const t of kampe[indeks.get(k.id)].tilladte) d.dage.add(Math.floor(t / DAG_MIN));
+        }
+        swissDraw.set(k.tpRef.draw, d);
+    }
+    const sammenhaengende = (d) => d.runder.size === Math.max(...d.runder) - Math.min(...d.runder) + 1;
+    const swissMidt = (k) => {
+        if (k.fase !== 'swiss' || k.spillere.length) return false;
+        const d = swissDraw.get(k.tpRef.draw);
+        return d.dage.size === 1 && sammenhaengende(d) && k.runde !== d.foerste && k.runde !== d.sidste;
+    };
+    const runderImellem = (a, b) => a.fase === 'swiss' && b.fase === 'swiss' && a.tpRef.draw === b.tpRef.draw
+        && Math.abs(a.runde - b.runde) >= 2 && sammenhaengende(swissDraw.get(a.tpRef.draw));
+
     // Afhængigheder: efterfølger skal starte mindst ét slot senere
     const foer = [];
     for (const k of projekt.kampe) for (const dep of k.afhaengerAf) if (indeks.has(k.id) && indeks.has(dep)) foer.push([indeks.get(dep), indeks.get(k.id), slotMin]);
@@ -144,7 +167,7 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
     for (const liste of prSpiller.values()) {
         for (let i = 0; i < liste.length; i += 1) for (let j = i + 1; j < liste.length; j += 1) {
             const a = liste[i], b = liste[j];
-            if (!kanDeleSpillere(a, b)) continue;
+            if (!kanDeleSpillere(a, b) || runderImellem(a, b)) continue;
             const udenPause = a.fase === 'swiss' && b.fase === 'swiss' && a.tpRef.draw === b.tpRef.draw && kat(a)?.swissUdenPause;
             const mr = M.mellemrum(a, b);
             const gab = udenPause ? slotMin : Math.max(slotMin, mr.varighed + mr.pause);
@@ -181,7 +204,7 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
     {
         const prRaekke = new Map();
         for (const k of projekt.kampe) {
-            if (!indeks.has(k.id)) continue;
+            if (!indeks.has(k.id) || swissMidt(k)) continue;
             for (const g of M.varighedsGraenser(k)) {
                 const n = `${raekke(k).id}|${g.art}`;
                 if (!prRaekke.has(n)) prRaekke.set(n, { kampe: [], graense: g.graense, raekke: raekke(k).id, art: g.art });
@@ -191,34 +214,31 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
         for (const h of prRaekke.values()) if (h.kampe.length > 1) haltid.push(h);
     }
 
-    // Ventetid (blødt): kendte spilleres kampe som grupper; Swiss-lodtrækninger vægtes med antal spillere
-    const spillerGrupper = [];
-    for (const liste of prKendt.values()) if (liste.length > 1) spillerGrupper.push({ kampe: liste.map((k) => indeks.get(k.id)), vaegt: 1 });
-    const swissAlle = new Map();
-    for (const k of projekt.kampe) { if (k.fase !== 'swiss' || !indeks.has(k.id)) continue; if (!swissAlle.has(k.tpRef.draw)) swissAlle.set(k.tpRef.draw, []); swissAlle.get(k.tpRef.draw).push(k); }
-    for (const liste of swissAlle.values()) {
-        const antalSpillere = Math.max(...liste.map((k) => k.muligeSpillere.length), 2);
-        if (liste.length > 1) spillerGrupper.push({ kampe: liste.map((k) => indeks.get(k.id)), vaegt: antalSpillere });
-    }
-
-    // Tid i hallen for U9/U11 (blødt, kriteriet "halTid"): pr. spiller de kampe, spilleren er i hallen til — i Swiss alle
-    // runder i lodtrækningen. Ens grupper (fx spillere, der kun spiller samme Swiss-lodtrækning) slås sammen med en vægt.
-    const halTidPr = new Map();
-    {
+    // Spillernes ophold (som regelmodel.spillerOphold, Tjek og kriterierne): pr. spiller de kampe, spilleren er i hallen
+    // til — kendte kampe og Swiss-runder for alle i lodtrækningen (de midterste runder springes over, se swissMidt).
+    // Ens grupper slås sammen med en vægt (antal spillere).
+    const opholdsGrupper = (medKamp) => {
         const prSpiller = new Map();
         for (const k of projekt.kampe) {
-            if (!indeks.has(k.id) || !SAENKET_NET.has(raekke(k)?.aargang)) continue;
-            for (const s of halTidSpillere(k)) { if (!prSpiller.has(s)) prSpiller.set(s, []); prSpiller.get(s).push(indeks.get(k.id)); }
+            if (!indeks.has(k.id) || !medKamp(k) || swissMidt(k)) continue;
+            const hvem = k.fase === 'swiss' && !k.spillere.length ? k.muligeSpillere : k.spillere;
+            for (const s of hvem) { if (!prSpiller.has(s)) prSpiller.set(s, []); prSpiller.get(s).push(indeks.get(k.id)); }
         }
+        const ud = new Map();
         for (const liste of prSpiller.values()) {
             if (liste.length < 2) continue;
             const n = [...liste].sort((a, b) => a - b).join(',');
-            const g = halTidPr.get(n) || { kampe: liste, vaegt: 0 };
+            const g = ud.get(n) || { kampe: liste, vaegt: 0 };
             g.vaegt += 1;
-            halTidPr.set(n, g);
+            ud.set(n, g);
         }
-    }
-    const halTid = [...halTidPr.values()];
+        return [...ud.values()];
+    };
+    // Ventetid (blødt): hver spillers ophold — før kendte kampe pr. spiller plus hver Swiss-lodtrækning for sig, vægtet med
+    // antal spillere; det stemte ikke med kriteriet, så en "optimeret" plan kunne få en dårligere score (gennemgangen)
+    const spillerGrupper = opholdsGrupper(() => true);
+    // Tid i hallen for U9/U11 (blødt, kriteriet "halTid"): de samme ophold, kun for U9/U11
+    const halTid = opholdsGrupper((k) => SAENKET_NET.has(raekke(k)?.aargang));
 
     // Kampe i træk (blødt, kriteriet "kampeITraek"): hver kendt spillers kampe — løseren straffer par i nabo-slots
     const traek = [...prKendt.values()].filter((l) => l.length > 1).map((l) => l.map((k) => indeks.get(k.id)));
@@ -319,7 +339,7 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null } = {}) {
     return {
         version: 1,
         slotMin,
-        dage: dage.map((d, i) => ({ index: i, start: minutter(d.start), slut: minutter(d.slut), baner: d.baner })),
+        dage: dage.map((d, i) => ({ index: i, baner: d.baner })),
         kapacitet, kampe, foer, konflikter, ikkeSamtidig, haltid, spillerGrupper, traek, huller, puljerunder, maxDage,
         cupVent, nethoejde, halTid, maxKampePrDag: maxPrDag, mangeKampe,
         // Stabil omplanlægning: kampe, der havde tid, flyttes helst ikke (pr. flyttet kamp koster det som 3 timers ventetid)
@@ -405,8 +425,19 @@ export function diagnoseTekst(diagnose, alleDage = []) {
             if (alleDage.length) handlinger.push({ tekst: `Lad ${d.raekke} spille alle turneringens dage, og optimér igen`, raekke: d.raekke, aendring: { dage: [...alleDage] } });
         } else if (d.regel === 'maxKampePrDag') {
             linjer.push('Grænsen for antal kampe pr. spiller pr. dag kan ikke overholdes — hæv den under "Reglementets grænser" under Turneringen, eller fordel kategorierne på flere dage.');
+        // Årsager, diagnosen kan pege på fra 2026-10-17 (før blev de til "plads")
+        } else if (d.regel === 'pause') {
+            linjer.push('Pausen mellem en spillers kampe kan ikke holdes i planen — gives pausen på dagen (0 min i planen), findes der en plan.');
+            handlinger.push({ tekst: 'Giv pausen på dagen (0 min i planen), og optimér igen', opsaetning: { pauseMin: { ...INGEN_PAUSE } } });
+        } else if (d.regel === 'antiSamtidighed') {
+            linjer.push('Reglen om, at single og double ikke må ligge samtidig i en række, kan ikke overholdes — uden den findes der en plan.');
+            handlinger.push({ tekst: 'Tillad single og double samtidig, og optimér igen', opsaetning: { antiSamtidighed: false } });
+        } else if (d.regel === 'senior') {
+            linjer.push('Seniorreglerne (max kampe pr. kategori pr. dag, kvartfinaler ikke samme dag som semi og finale) kan ikke overholdes — uden dem findes der en plan. Giv rækkerne flere dage eller et længere tidsrum.');
+        } else if (d.regel === 'tidsvindue') {
+            linjer.push(`${d.raekke}: kampene kan ikke ligge inden for årgangens tidsvindue — med et længere vindue (kræver dispensation) findes der en plan.`);
         } else if (d.regel === 'flere') {
-            linjer.push('Ingen enkelt regel er årsagen: først når max varighed, max dage og max kampe pr. dag lempes samtidig, findes der en plan. Se valgmulighederne nedenfor.');
+            linjer.push('Ingen enkelt regel er årsagen: først når flere lempes samtidig — rækkernes tidsrum og dage, max varighed, max dage og max kampe pr. dag — findes der en plan. Se valgmulighederne nedenfor.');
         } else if (d.regel === 'plads') {
             linjer.push('Der er ikke plads: hverken max varighed, max dage, max kampe pr. dag eller en enkelt rækkes tidsrum eller dage er årsagen — kampene kan ikke være på banerne inden for tidsvinduerne (eller låste kampe står i vejen). Se valgmulighederne nedenfor — fx længere dage, færre runder eller flere spilledage.');
         } else if (d.regel === 'ikkeUndersoegt') {
@@ -444,18 +475,18 @@ export function flettetPlan(nu, loeserPlan) {
 /** Tilfældigt job-id, så en igangværende løsning kan stoppes med stopLoeser(). */
 export function nytJobId() {
     const b = new Uint8Array(12);
-    // Ældre Node (CI kører 18) har ikke crypto som global; id'et er kun et håndtag til "Stop", ikke en hemmelighed
+    // Reserve, hvis crypto ikke findes (fx en meget gammel browser); id'et er kun et håndtag til "Stop", ikke en hemmelighed
     if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(b);
     else for (let i = 0; i < b.length; i += 1) b[i] = Math.floor(Math.random() * 256);
     return [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
 
-/** Beder løseren stoppe nu og aflevere den bedste plan hidtil (svaret kommer i det oprindelige optimer()-kald). */
 /** Som stopLoeser, men til når siden lukkes: sendBeacon overlever, at fanen forsvinder. */
 export function stopVedLukning(job, url = '/api/solve/stop') {
     try { return !!globalThis.navigator?.sendBeacon?.(url, new Blob([JSON.stringify({ job })], { type: 'application/json' })); } catch { return false; }
 }
 
+/** Beder løseren stoppe nu og aflevere den bedste plan hidtil (svaret kommer i det oprindelige optimer()-kald). */
 export async function stopLoeser(job, url = '/api/solve/stop') {
     const svar = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ job }) });
     return svar.ok;
