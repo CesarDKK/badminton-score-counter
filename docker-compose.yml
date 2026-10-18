@@ -57,6 +57,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?sæt MYSQL_ROOT_PASSWORD i .env}
       JWT_SECRET: ${JWT_SECRET:?sæt JWT_SECRET i .env (mindst 32 tegn)}
       UPLOAD_DIR: /app/uploads
+      CLUB_BACKUP_DIR: /app/club-backups
       MAX_FILE_SIZE: 10485760
       # Super-admin har brug for adgang til football_tournament-DB for at administrere
       # football-klubber + admins (Phase 2 feature)
@@ -68,6 +69,8 @@ services:
       - "127.0.0.1:3000:3000"
     volumes:
       - uploads_data:/app/uploads
+      # Klubbernes automatiske ugentlige backups (de 4 nyeste pr. klub)
+      - club_backups:/app/club-backups
     depends_on:
       mysql:
         condition: service_healthy
@@ -279,6 +282,8 @@ volumes:
   football_uploads:
     driver: local
   stats_cache:
+    driver: local
+  club_backups:
     driver: local
   backups:
     driver: local

@@ -95,8 +95,16 @@ router.put('/change-password', superAdminAuth, async (req, res, next) => {
 router.get('/clubs', superAdminAuth, async (req, res, next) => {
     try {
         const clubs = await masterDb.query(
-            'SELECT id, name, subdomain, db_name, is_active, created_at, last_login_at, last_login_user FROM clubs ORDER BY created_at DESC'
+            `SELECT id, name, subdomain, db_name, is_active, created_at, last_login_at, last_login_user,
+                    last_auto_backup_at, last_auto_backup_error
+             FROM clubs ORDER BY created_at DESC`
         );
+        // Antal gemte automatiske backups (fra serverens backup-mappe)
+        for (const c of clubs) {
+            try {
+                c.auto_backups = autoBackup.listBackups(c.db_name).filter(b => b.type === 'auto').length;
+            } catch { c.auto_backups = 0; }
+        }
         res.json(clubs);
     } catch (error) {
         next(error);
@@ -359,33 +367,15 @@ router.put('/clubs/:id/admins/:adminId/permissions', superAdminAuth, async (req,
 });
 
 // ==================== BACKUP / RESTORE (super admin — per klub) ====================
-
-function saNormalizeValue(v) {
-    if (v === null || v === undefined) return v;
-    if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(v)) {
-        return v.replace('T', ' ').replace(/\.\d{3}Z$/, '').replace('Z', '');
-    }
-    if (v instanceof Object && !Buffer.isBuffer(v)) return JSON.stringify(v);
-    return v;
-}
+// Formatet og gendannelsen ligger i config/klubBackup.js (fælles med
+// Indstillinger → Backup og den automatiske ugentlige backup).
 
 const backupFs = require('fs');
 const backupPath = require('path');
 const crypto = require('crypto');
 const backupMulter = require('multer')({ storage: require('multer').memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
-
-const BACKUP_TABLES = [
-    'settings', 'sponsor_settings', 'courts',
-    'sponsor_images', 'sponsor_image_courts',
-    'game_states', 'match_history',
-    'team_matches', 'team_match_games',
-    'device_tokens', 'player_info',
-];
-
-// Se backup.js: filnavne, filstier og kolonnenavne i en uploadet backup er
-// angriberkontrollerede og valideres før noget skrives (config/sponsorFiler.js).
-const SA_SIKKERT_KOLONNENAVN = /^[A-Za-z0-9_]+$/;
-const { backupFilnavn, tilpasSponsorRaekker, hentSponsorFiler, skrivSponsorFiler } = require('../config/sponsorFiler');
+const { lavBackup, validerBackup, gendanBackup, BackupFejl } = require('../config/klubBackup');
+const autoBackup = require('../config/autoBackup');
 
 // GET /api/super-admin/clubs/:id/backup — download backup for one club
 router.get('/clubs/:id/backup', superAdminAuth, async (req, res, next) => {
@@ -397,26 +387,12 @@ router.get('/clubs/:id/backup', superAdminAuth, async (req, res, next) => {
         if (!club) return res.status(404).json({ error: 'Klub ikke fundet' });
 
         const conn = await clubConn(club.db_name);
-        const tables = {};
+        let backup;
         try {
-            for (const table of BACKUP_TABLES) {
-                const [rows] = await conn.execute(`SELECT * FROM \`${table}\``);
-                tables[table] = rows;
-            }
+            backup = await lavBackup(conn, { mappe: club.db_name, clubSubdomain: club.subdomain, clubName: club.name });
         } finally {
             await conn.end();
         }
-
-        const files = hentSponsorFiler(tables.sponsor_images, club.db_name);
-
-        const backup = {
-            version: '1.0',
-            timestamp: new Date().toISOString(),
-            clubSubdomain: club.subdomain,
-            clubName: club.name,
-            tables,
-            files,
-        };
 
         const filename = `backup_${club.subdomain}_${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.json`;
         res.setHeader('Content-Type', 'application/json');
@@ -425,7 +401,9 @@ router.get('/clubs/:id/backup', superAdminAuth, async (req, res, next) => {
     } catch (error) { next(error); }
 });
 
-// POST /api/super-admin/clubs/:id/restore — restore backup for one club
+// POST /api/super-admin/clubs/:id/restore — restore backup for one club.
+// Først tages en "før gendannelse"-backup (som på klubbens egen side), så
+// gendannelsen kan fortrydes; fejler den, gendannes der ikke.
 router.post('/clubs/:id/restore', superAdminAuth, backupMulter.single('backup'), async (req, res, next) => {
     let backup;
     try {
@@ -433,70 +411,30 @@ router.post('/clubs/:id/restore', superAdminAuth, backupMulter.single('backup'),
     } catch {
         return res.status(400).json({ error: 'Ugyldig backup-fil — kunne ikke parse JSON' });
     }
-    if (!backup.version || !backup.tables) {
-        return res.status(400).json({ error: 'Ugyldig backup-fil — mangler version eller tabeller' });
-    }
-
-    // Validér alt før noget skrives (se backup.js for begrundelsen)
-    for (const table of BACKUP_TABLES) {
-        const rows = backup.tables[table];
-        if (!Array.isArray(rows)) continue;
-        for (const row of rows) {
-            for (const col of Object.keys(row)) {
-                if (!SA_SIKKERT_KOLONNENAVN.test(col)) {
-                    return res.status(400).json({ error: `Ugyldigt kolonnenavn i backup: ${col}` });
-                }
-            }
-        }
-    }
-    if (backup.files && typeof backup.files === 'object') {
-        for (const filename of Object.keys(backup.files)) {
-            if (!backupFilnavn(filename)) {
-                return res.status(400).json({ error: `Ugyldigt filnavn i backup: ${filename}` });
-            }
-        }
-    }
+    // Afvis en ugyldig fil, før "før gendannelse"-backuppen erstattes
+    const fejl = validerBackup(backup);
+    if (fejl) return res.status(400).json({ error: fejl });
 
     try {
         const club = await masterDb.queryOne(
-            'SELECT db_name, subdomain FROM clubs WHERE id = ?',
+            'SELECT id, name, db_name, subdomain FROM clubs WHERE id = ?',
             [req.params.id]
         );
         if (!club) return res.status(404).json({ error: 'Klub ikke fundet' });
 
-        const filFejl = tilpasSponsorRaekker(backup.tables.sponsor_images, club.db_name);
-        if (filFejl) return res.status(400).json({ error: filFejl });
-
         const conn = await clubConn(club.db_name);
+        let resultat;
         try {
-            await conn.beginTransaction();
-            for (const table of BACKUP_TABLES) {
-                const rows = backup.tables[table];
-                if (!rows || rows.length === 0) { await conn.execute(`DELETE FROM \`${table}\``); continue; }
-                await conn.execute(`DELETE FROM \`${table}\``);
-                for (const row of rows) {
-                    const cols = Object.keys(row).map(c => `\`${c}\``).join(', ');
-                    const ph = Object.keys(row).map(() => '?').join(', ');
-                    const vals = Object.values(row).map(saNormalizeValue);
-                    await conn.execute(`INSERT INTO \`${table}\` (${cols}) VALUES (${ph})`, vals);
-                }
-            }
-            await conn.commit();
-        } catch (dbErr) {
-            try { await conn.rollback(); } catch {}
-            throw dbErr;
+            const foer = await autoBackup.tagBackup(conn, club, 'foer-gendannelse');
+            resultat = { ...(await gendanBackup(conn, backup, club.db_name)), foerGendannelse: foer };
         } finally {
             await conn.end();
         }
-
-        skrivSponsorFiler(backup.files, club.db_name);
-
-        res.json({
-            success: true,
-            restored: Object.fromEntries(BACKUP_TABLES.map(t => [t, backup.tables[t]?.length ?? 0])),
-            files: Object.keys(backup.files || {}).length,
-        });
-    } catch (error) { next(error); }
+        res.json({ success: true, ...resultat });
+    } catch (error) {
+        if (error instanceof BackupFejl) return res.status(400).json({ error: error.message });
+        next(error);
+    }
 });
 
 // ─────────────────────────────────────────────────────────────────────────

@@ -19,6 +19,7 @@ npm-debug.log*
 
 # Uploads directory (user-generated content)
 backend/uploads/
+backend/club-backups/
 
 # Docker volumes
 mysql_data/

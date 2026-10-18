@@ -307,6 +307,7 @@ function renderClubs() {
                         title="Seneste login af en klub-admin">
                         ${Ikon('noegle')} Sidst logget ind: ${sidstLoginTekst(club.last_login_at)}${club.last_login_user ? ` · ${escapeHtml(club.last_login_user)}` : ''}
                     </span>
+                    ${autoBackupLinje(club)}
                 </div>
             </div>
             <div class="club-actions">
@@ -1075,6 +1076,24 @@ function sidstLoginTekst(dateStr) {
     if (dage <= 0) return `i dag kl. ${kl}`;
     if (dage === 1) return `i går kl. ${kl}`;
     return `${formatDate(dateStr)} (for ${dage} dage siden)`;
+}
+
+// Den automatiske ugentlige backup (mandag kl. 02.00): seneste, antal gemte og
+// en fejl fremhævet. Deaktiverede klubber tages der ikke backup af.
+function autoBackupLinje(club) {
+    let tekst, fejl = false;
+    if (club.last_auto_backup_error) {
+        fejl = true;
+        tekst = `Automatisk backup fejlede: ${escapeHtml(club.last_auto_backup_error)}`
+            + (club.last_auto_backup_at ? ` (seneste gode: ${sidstLoginTekst(club.last_auto_backup_at)})` : '');
+    } else if (club.last_auto_backup_at) {
+        tekst = `Seneste automatiske backup: ${sidstLoginTekst(club.last_auto_backup_at)} · ${club.auto_backups || 0} gemt`;
+    } else {
+        tekst = club.is_active ? 'Automatisk backup: første tages mandag kl. 02.00' : 'Automatisk backup: ikke for deaktiverede klubber';
+    }
+    return `<span class="club-sidst-login${fejl ? ' club-sidst-login--gammel' : ''}" title="Automatisk backup hver mandag kl. 02.00 — de 4 nyeste gemmes">
+                ${Ikon(fejl ? 'advarsel' : 'database')} ${tekst}
+            </span>`;
 }
 
 // Ingen login i en måned (eller aldrig): fremhæves, så inaktive klubber springer i øjnene
