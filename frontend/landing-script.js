@@ -92,6 +92,6 @@ function showEmptyState() {
     const tvButtons = document.getElementById('tvButtons');
     tvButtons.innerHTML = '';
     courtButtons.innerHTML = `
-        <p class="landing-status">Ingen baner konfigureret endnu. Opsæt antal baner i Admin Panel under Indstillinger.</p>
+        <p class="landing-status">Ingen baner konfigureret endnu. Opsæt antal baner i Admin under Indstillinger.</p>
     `;
 }

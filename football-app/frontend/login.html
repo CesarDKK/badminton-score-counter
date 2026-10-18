@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0a0e14" />
   <title>Admin — Football</title>
   <link rel="stylesheet" href="/fundament.css?v=2" />
-  <link rel="stylesheet" href="/styles.css?v=4" />
+  <link rel="stylesheet" href="/styles.css?v=5" />
 </head>
 <body>
   <div class="login-page">
@@ -14,16 +14,19 @@
     <form id="loginForm" class="login-card fade-in">
       <div class="login-brand">
         <div class="symbol">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M12 2 L14.5 9 L22 9 L16 13.5 L18.5 21 L12 16.5 L5.5 21 L8 13.5 L2 9 L9.5 9 Z"/>
+          <!-- footballapp-mærket: samme bold som salgssiden og faviconet -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"/>
+            <path fill="currentColor" stroke="none" d="M12 8.5L15.33 10.92L14.06 14.83L9.94 14.83L8.67 10.92zM15.07 3.54L15.23 4.05L12 6.4L8.77 4.05L8.93 3.54A9 9 0 0 1 15.07 3.54zM20.99 12.3L20.56 12.62L17.33 10.27L18.56 6.47L19.1 6.47A9 9 0 0 1 20.99 12.3zM14.49 20.65L14.06 20.33L15.29 16.53L19.29 16.53L19.45 17.04A9 9 0 0 1 14.49 20.65zM4.55 17.04L4.71 16.53L8.71 16.53L9.94 20.33L9.51 20.65A9 9 0 0 1 4.55 17.04zM4.9 6.47L5.44 6.47L6.67 10.27L3.44 12.62L3.01 12.3A9 9 0 0 1 4.9 6.47z"/>
+            <path stroke-width="1.2" stroke-linecap="round" d="M12 8.5L12 6.4M15.33 10.92L17.33 10.27M14.06 14.83L15.29 16.53M9.94 14.83L8.71 16.53M8.67 10.92L6.67 10.27M15.23 4.05L18.56 6.47M20.56 12.62L19.29 16.53M14.06 20.33L9.94 20.33M4.71 16.53L3.44 12.62M5.44 6.47L8.77 4.05"/>
           </svg>
         </div>
-        <h1>Admin</h1>
-        <div class="eyebrow" id="clubLabel" style="margin-top: 4px;">Turneringsstyring</div>
+        <!-- E9-skabelonen: titel = klubbens navn, undertitel = hvad man logger ind til -->
+        <h1 id="clubLabel">Admin</h1>
+        <div class="login-undertitel" id="loginUndertitel" data-i18n="login.subtitle">Log ind for at styre turneringer</div>
       </div>
 
-      <div id="apexNotice" class="alert hidden" data-i18n-html="login.apexNotice" style="background:rgba(241,196,15,0.1); border-color:#f1c40f; color:#f1c40f;">
+      <div id="apexNotice" class="alert alert--advarsel hidden" data-i18n-html="login.apexNotice">
         Login skal ske fra jeres klub-subdomæne — fx <code>jeresklub.footballapp.dk/login.html</code>
       </div>
 
@@ -39,14 +42,14 @@
         <input id="password" type="password" autocomplete="current-password" required />
       </div>
 
-      <button type="submit" id="loginBtn" class="btn btn-block" data-i18n="login.signIn">Log ind</button>
+      <button type="submit" id="loginBtn" class="btn btn-block btn-lg" data-i18n="login.signIn">Log ind</button>
 
-      <p class="center muted" style="margin-top: var(--sp-5); font-size: 13px;">
-        <a href="/" data-i18n="login.backToPublic" style="color: var(--text-muted);">← Tilbage til forsiden</a>
+      <p class="login-tilbage">
+        <a href="/" data-i18n="login.backToPublic">← Tilbage til forsiden</a>
       </p>
     </form>
   </div>
-  <script src="/i18n.js"></script>
+  <script src="/i18n.js?v=2"></script>
   <script>
     const form = document.getElementById('loginForm');
     const errorBox = document.getElementById('errorBox');
@@ -59,7 +62,8 @@
     let clubName = null;
     function applyLabels() {
       document.title = clubName ? `Admin — ${clubName}` : FI18N.t('login.title');
-      if (!clubName) clubLabel.textContent = FI18N.t(apexNotice.classList.contains('hidden') ? 'login.control' : 'login.noClub');
+      // Uden klub (eller før club-info er hentet) står der "Admin"; på apex "Ingen klub valgt"
+      if (!clubName) clubLabel.textContent = apexNotice.classList.contains('hidden') ? 'Admin' : FI18N.t('login.noClub');
     }
     FI18N.onChange(applyLabels);
     applyLabels();

@@ -1052,9 +1052,26 @@ input[type=number].score-input,
   margin: 0;
   color: var(--text-strong);
 }
-.login-brand .eyebrow {
+/* E9-skabelonen (som badmintons login): ikon, titel (klubbens navn),
+   undertitel, label over felterne, knap i fuld bredde og tilbage-link */
+.login-undertitel {
   margin-top: var(--sp-1);
+  font-size: 14px;
+  color: var(--text-muted);
 }
+.login-card .btn-block { margin-top: var(--sp-2); }
+.login-tilbage {
+  margin-top: var(--sp-6);
+  text-align: center;
+  font-size: 14px;
+}
+.login-tilbage a {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s var(--ease);
+}
+.login-tilbage a:hover { color: var(--pitch); }
 
 /* ============= ERROR / MESSAGES ============= */
 
@@ -1066,6 +1083,12 @@ input[type=number].score-input,
   padding: var(--sp-3);
   margin: var(--sp-3) 0;
   font-size: 14px;
+}
+/* Advarsel (fx login fra apex uden klub) — fælles betydningsfarve (E2) */
+.alert--advarsel {
+  background: rgba(var(--color-warning-rgb), 0.1);
+  border-color: rgba(var(--color-warning-rgb), 0.45);
+  color: var(--color-warning);
 }
 
 /* ============= WIZARD ============= */

@@ -53,7 +53,7 @@
 
     /* ── Login ── */
     'login.title': { da: 'Admin-login — Football', en: 'Admin Login — Football' },
-    'login.control': { da: 'Turneringsstyring', en: 'Tournament Control' },
+    'login.subtitle': { da: 'Log ind for at styre turneringer', en: 'Sign in to run tournaments' },
     'login.apexNotice': { da: 'Login skal ske fra jeres klub-subdomæne — fx <code>jeresklub.footballapp.dk/login.html</code>', en: 'Log in from your club subdomain — e.g. <code>yourclub.footballapp.dk/login.html</code>' },
     'login.username': { da: 'Brugernavn', en: 'Username' },
     'login.password': { da: 'Kodeord', en: 'Password' },
