@@ -92,8 +92,8 @@
               <!-- footballapp-mærket: samme bold som salgssiden og faviconet -->
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
                 <circle cx="12" cy="12" r="9"/>
-                <path fill="currentColor" stroke="none" d="M12 8.2l3.4 2.5-1.3 4h-4.2l-1.3-4z"/>
-                <path d="M12 8.2V3.5M15.4 10.7l4.4-1.6M14.1 14.7l2.7 3.8M9.9 14.7l-2.7 3.8M8.6 10.7L4.2 9.1"/>
+                <path fill="currentColor" stroke="none" d="M12 8.5L15.33 10.92L14.06 14.83L9.94 14.83L8.67 10.92zM15.07 3.54L15.23 4.05L12 6.4L8.77 4.05L8.93 3.54A9 9 0 0 1 15.07 3.54zM20.99 12.3L20.56 12.62L17.33 10.27L18.56 6.47L19.1 6.47A9 9 0 0 1 20.99 12.3zM14.49 20.65L14.06 20.33L15.29 16.53L19.29 16.53L19.45 17.04A9 9 0 0 1 14.49 20.65zM4.55 17.04L4.71 16.53L8.71 16.53L9.94 20.33L9.51 20.65A9 9 0 0 1 4.55 17.04zM4.9 6.47L5.44 6.47L6.67 10.27L3.44 12.62L3.01 12.3A9 9 0 0 1 4.9 6.47z"/>
+                <path stroke-width="1.2" stroke-linecap="round" d="M12 8.5L12 6.4M15.33 10.92L17.33 10.27M14.06 14.83L15.29 16.53M9.94 14.83L8.71 16.53M8.67 10.92L6.67 10.27M15.23 4.05L18.56 6.47M20.56 12.62L19.29 16.53M14.06 20.33L9.94 20.33M4.71 16.53L3.44 12.62M5.44 6.47L8.77 4.05"/>
               </svg>
             </div>
             <h3>${tr('public.noTournaments')}</h3>
