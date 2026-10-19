@@ -634,7 +634,7 @@ async function loadAllCourts() {
                     : c;
             }),
             ...fallbackCourts
-        ];
+        ].map(orienterBane);
 
         hideLoading();
         displayCurrentPage();
@@ -745,6 +745,52 @@ function kortSignatur(court) {
         pause ? `${court.player1?.score}-${court.player2?.score}` : '',
         court._isFinished ? resultatSignatur(court) : '', plannerSignatur(court)
     ].join('|');
+}
+
+// Kortets rækkefølge pr. bane: { courtId: [øverste navn, nederste navn] }.
+// Tælleren bytter player1/player2, når spillerne skifter side mellem sættene,
+// men tilskuerne skal se samme spiller øverst hele kampen — som på TV'et.
+// Samme regler som tv-script-v3.js' laesOprindeligeSider:
+// - Samme to spillere: rækkefølgen står fast.
+// - Ét navn rettet: den uændrede spiller beholder sin række.
+// - Nye spillere (ny kamp / skærmen genstartet): sæt 1's sider, hvis et sæt
+//   er spillet, ellers de nuværende.
+const baneRaekkefoelge = {};
+
+function orienterBane(court) {
+    const p1 = court.player1, p2 = court.player2;
+    if (!p1 || !p2) return court;
+    const husket = baneRaekkefoelge[court.courtId];
+    let byttet = false;
+    if (husket) {
+        const [o1, o2] = husket;
+        if (p1.name === o1 && p2.name === o2) byttet = false;
+        else if (p1.name === o2 && p2.name === o1) byttet = true;
+        else if (p1.name === o1 || p2.name === o2) byttet = false;
+        else if (p1.name === o2 || p2.name === o1) byttet = true;
+        else byttet = foersteSaetByttet(court);
+    } else {
+        byttet = foersteSaetByttet(court);
+    }
+    baneRaekkefoelge[court.courtId] = byttet ? [p2.name, p1.name] : [p1.name, p2.name];
+    if (!byttet) return court;
+
+    const vend = (s) => (s === 1 || s === 2 ? 3 - s : s);
+    return {
+        ...court,
+        player1: p2,
+        player2: p1,
+        servingPlayer: vend(court.servingPlayer),
+        servingTeam: vend(court.servingTeam),
+        resultWinner: vend(court.resultWinner)
+    };
+}
+
+// Stod spillerne omvendt i 1. sæt i forhold til nu?
+function foersteSaetByttet(court) {
+    const h = court.setScoresHistory;
+    const foerste = Array.isArray(h) && h[0] && typeof h[0] === 'object' && h[0].player1Name ? h[0] : null;
+    return !!foerste && foerste.player1Name === court.player2.name && foerste.player2Name === court.player1.name;
 }
 
 // Hvem server: 1 = øverste række (player1), 2 = nederste
