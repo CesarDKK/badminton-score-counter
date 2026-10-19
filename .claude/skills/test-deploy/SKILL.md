@@ -16,6 +16,5 @@ description: Start en testinstallation af hele BadmintonApp (docker compose) i c
 4. Stop og slet testdata med `bash scripts/cloud-test-deploy.sh down`.
 
 Bliver et image sprunget over, står grunden i loggen scriptet nævner. Typisk er det
-en adresse, miljøets netværksregler blokerer (fx `codeload.github.com` for
-football-backendens landeflag). Fortæl brugeren hvilken adresse, så de kan
+en adresse, miljøets netværksregler blokerer. Fortæl brugeren hvilken adresse, så de kan
 tilføje den under miljøets *Network access*.

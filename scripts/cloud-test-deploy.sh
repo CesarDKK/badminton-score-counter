@@ -13,8 +13,8 @@
 #      eget CA. Byggetrinnene (apk, npm, pip) får derfor proxyen som build-args
 #      og bygger på lokale kopier af base-images, der stoler på proxyens CA.
 #      Selve repoets Dockerfiler og docker-compose.yml røres ikke.
-#   3. Kan et image ikke bygges (fx football-backend, hvis codeload.github.com
-#      er blokeret), springes det over, og resten startes alligevel.
+#   3. Kan et image ikke bygges (fx fordi en adresse er blokeret), springes
+#      det over, og resten startes alligevel.
 #
 # Brug:  bash scripts/cloud-test-deploy.sh          # byg og start
 #        bash scripts/cloud-test-deploy.sh down     # stop og slet test-data
