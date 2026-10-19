@@ -39,7 +39,7 @@ if [ ! -f /etc/docker/daemon.json ]; then
 fi
 if ! docker info >/dev/null 2>&1; then
     echo "Starter Docker ..."
-    nohup dockerd > "$ARBEJD/dockerd.log" 2>&1 &
+    setsid nohup dockerd > "$ARBEJD/dockerd.log" 2>&1 < /dev/null &
     for _ in $(seq 1 30); do docker info >/dev/null 2>&1 && break; sleep 1; done
     docker info >/dev/null 2>&1 || { echo "Docker startede ikke — se $ARBEJD/dockerd.log"; exit 1; }
 fi
