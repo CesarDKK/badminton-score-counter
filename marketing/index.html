@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="BadmintonApp.dk — Gratis pointtælling til badmintonklubber. Tæl på tablet, vis kampen på TV og følg hele hallen på én skærm. Holdkamp, turnering og klubbens egne farver.">
+    <meta name="description" content="BadmintonApp.dk — Gratis pointtælling til badmintonklubber. Tæl på tablet eller telefon, vis kampen live på TV og følg hele hallen på én skærm. Holdkamp, turnering og klubbens egne farver.">
     <title>BadmintonApp.dk — Pointtælling til din klub</title>
     <link rel="canonical" href="https://badmintonapp.dk/">
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23e94560' transform='translate(0 1.2)'%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-33 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(33 12 14.5)'/%3E%3Crect x='9.4' y='14.3' width='5.2' height='1.7' rx='0.85'/%3E%3Cpath d='M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z'/%3E%3C/g%3E%3C/svg%3E">
@@ -19,14 +19,15 @@
             --red: #e94560;
             --bg: #0d0d1a;
             --bg-raise: #14142a;
-            --card: rgba(83, 52, 131, 0.12);
+            --card: rgba(255, 255, 255, 0.03);
             --border: rgba(83, 52, 131, 0.35);
             --border-soft: rgba(255, 255, 255, 0.08);
             --text: #eaeaea;
-            --muted: #9494a6;
+            /* Brødtekst: fundamentets sekundære tekst (lysere end før, ≥ 4,5:1) */
+            --muted: var(--text-secondary, rgba(255, 255, 255, 0.78));
             --radius: 16px;
             /* Knapper fra fundament.css: fladen er accenten mørknet, til hvid
-            tekst når 4,5:1 (samme værdi som theme-loader giver Standard-temaet) */
+               tekst når 4,5:1 (samme værdi som theme-loader giver Standard-temaet) */
             --color-knap: #d23e57;
             --color-knap-hover: #b9374d;
         }
@@ -67,7 +68,7 @@
         }
 
         .wrap {
-            max-width: 1060px;
+            max-width: 1120px;
             margin: 0 auto;
             padding: 0 24px;
             position: relative;
@@ -81,8 +82,8 @@
             padding: 22px 24px;
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            max-width: 1060px;
+            gap: 32px;
+            max-width: 1120px;
             margin: 0 auto;
         }
 
@@ -91,6 +92,7 @@
             align-items: center;
             gap: 10px;
             text-decoration: none;
+            margin-right: auto;
         }
 
         .nav-brand svg { width: 30px; height: 30px; }
@@ -105,10 +107,22 @@
 
         .nav-brand .wordmark span { color: var(--red); }
 
+        .nav-links { display: flex; gap: 26px; }
+
+        .nav-links a {
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 0.92em;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover { color: #fff; }
+
         /* ── Hero ── */
         .hero {
             text-align: center;
-            padding: 72px 0 90px;
+            padding: 64px 0 72px;
         }
 
         .hero-badge {
@@ -160,12 +174,12 @@
             font-size: clamp(1em, 2.5vw, 1.18em);
             color: var(--muted);
             max-width: 620px;
-            margin: 0 auto 38px;
+            margin: 0 auto 36px;
             line-height: 1.7;
             animation: rise 0.6s 0.16s ease-out both;
         }
 
-        .hero p strong { color: var(--text); font-weight: 600; }
+        .hero p strong { color: #fff; font-weight: 600; }
 
         .hero-actions {
             display: flex;
@@ -175,62 +189,103 @@
             animation: rise 0.6s 0.24s ease-out both;
         }
 
+        /* Tre korte fakta under knapperne */
+        .hero-fakta {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 10px 28px;
+            margin-top: 28px;
+            list-style: none;
+            color: var(--muted);
+            font-size: 0.9em;
+            animation: rise 0.6s 0.3s ease-out both;
+        }
+
+        .hero-fakta li { display: flex; align-items: center; gap: 8px; }
+        .hero-fakta svg { width: 16px; height: 16px; color: var(--color-win, #45d17e); flex-shrink: 0; }
+
         @keyframes rise {
             from { opacity: 0; transform: translateY(16px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
-        /* ── Browser-ramme ── */
-        .browser-chrome {
-            border-radius: var(--radius);
-            overflow: hidden;
-            box-shadow: 0 30px 90px rgba(0,0,0,0.65), 0 0 0 1px var(--border);
-            background: var(--bg-raise);
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation: none !important; transition: none !important; }
         }
 
-        .browser-bar {
-            background: #1a1a2e;
-            padding: 10px 14px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            border-bottom: 1px solid rgba(255,255,255,0.06);
+        /* ── Skærme: TV med fod og tablet ── */
+        .tv {
+            position: relative;
+            background: #07070d;
+            padding: 1.2%;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 34px 90px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,0,0,0.4);
+            margin-bottom: 18px;
         }
 
-        .browser-dots { display: flex; gap: 5px; }
-
-        .browser-dot { width: 10px; height: 10px; border-radius: 50%; }
-        .browser-dot:nth-child(1) { background: #ff5f56; }
-        .browser-dot:nth-child(2) { background: #ffbd2e; }
-        .browser-dot:nth-child(3) { background: #27c93f; }
-
-        .browser-url {
-            flex: 1;
-            max-width: 340px;
-            margin: 0 auto;
-            background: rgba(255,255,255,0.06);
-            border-radius: 6px;
-            padding: 4px 12px;
-            font-size: 0.72em;
-            text-align: center;
-            color: rgba(255,255,255,0.45);
-            letter-spacing: 0.03em;
+        .tv::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            bottom: -15px;
+            transform: translateX(-50%);
+            width: 18%;
+            height: 9px;
+            background: linear-gradient(#15151f, #0a0a12);
+            border-radius: 0 0 10px 10px;
         }
 
-        .browser-chrome img { display: block; width: 100%; height: auto; }
+        .tv img, .tablet img {
+            display: block;
+            width: 100%;
+            height: auto;
+            border-radius: 5px;
+        }
 
-        .hero-shot {
-            margin: 60px auto 0;
-            max-width: 780px;
-            animation: rise 0.7s 0.34s ease-out both;
+        .tablet {
+            background: #07070d;
+            padding: 2.4%;
+            border-radius: 26px;
+            border: 1px solid rgba(255,255,255,0.14);
+            box-shadow: 0 26px 70px rgba(0,0,0,0.65);
+        }
+
+        .tablet img { border-radius: 12px; }
+
+        /* Hero: TV'et bagerst, tabletten foran — "tæl på tabletten, se det på TV'et" */
+        .hero-scene {
+            position: relative;
+            max-width: 980px;
+            margin: 68px auto 0;
+            padding-bottom: 3%;
+            animation: rise 0.7s 0.36s ease-out both;
+        }
+
+        .hero-scene .tv { width: 84%; margin-left: auto; }
+
+        .hero-scene .tablet {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 42%;
+        }
+
+        .hero-scene figcaption {
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            font-size: 0.82em;
+            color: var(--muted);
         }
 
         /* ── Sektioner ── */
         section { position: relative; z-index: 1; }
 
-        .section-pad { padding: 90px 0; }
+        .section-pad { padding: 100px 0; }
 
-        .section-header { text-align: center; margin-bottom: 54px; }
+        .section-header { text-align: center; margin-bottom: 64px; }
 
         .section-tag {
             display: inline-block;
@@ -251,7 +306,7 @@
 
         .section-header .sub {
             color: var(--muted);
-            max-width: 560px;
+            max-width: 580px;
             margin: 14px auto 0;
             line-height: 1.7;
         }
@@ -267,18 +322,17 @@
         /* ── Showcase (I hallen) ── */
         .show-row {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 54px;
+            grid-template-columns: 5fr 7fr;
+            gap: 56px;
             align-items: center;
-            margin-bottom: 84px;
+            margin-bottom: 104px;
         }
 
-        .show-row:last-child { margin-bottom: 0; }
-
+        .show-row.flip { grid-template-columns: 7fr 5fr; }
         .show-row.flip .show-text { order: 2; }
         .show-row.flip .show-media { order: 1; }
 
-        .show-text .kicker {
+        .kicker {
             color: var(--purple-soft);
             font-size: 0.78em;
             font-weight: 700;
@@ -298,33 +352,17 @@
         .show-text p {
             color: var(--muted);
             line-height: 1.75;
-            font-size: 0.98em;
         }
 
         .show-text p + p { margin-top: 10px; }
 
-        .show-media img {
-            display: block;
-            width: 100%;
-            height: auto;
-            border-radius: var(--radius);
-            box-shadow: 0 24px 70px rgba(0,0,0,0.55), 0 0 0 1px var(--border-soft);
-        }
+        .show-wide { margin-bottom: 104px; }
+        .show-wide:last-child { margin-bottom: 0; }
 
-        .show-wide { margin-top: 84px; }
-
-        .show-wide .show-text { text-align: center; max-width: 620px; margin: 0 auto 34px; }
-
-        .show-wide img {
-            display: block;
-            width: 100%;
-            height: auto;
-            border-radius: var(--radius);
-            box-shadow: 0 24px 70px rgba(0,0,0,0.55), 0 0 0 1px var(--border-soft);
-        }
+        .show-wide .show-text { text-align: center; max-width: 640px; margin: 0 auto 40px; }
 
         /* ── Feature-grupper ── */
-        .feature-group { margin-bottom: 56px; }
+        .feature-group { margin-bottom: 64px; }
         .feature-group:last-child { margin-bottom: 0; }
 
         .feature-group-title {
@@ -351,27 +389,21 @@
 
         .feature-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 18px;
-        }
-
-        .feature-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
-
-        @media (max-width: 640px) {
-            .feature-grid.cols-2 { grid-template-columns: 1fr; }
         }
 
         .feature-card {
             background: var(--card);
-            border: 1px solid var(--border);
+            border: 1px solid var(--border-soft);
             border-radius: 14px;
             padding: 24px;
             transition: border-color 0.2s, transform 0.2s, background 0.2s;
         }
 
         .feature-card:hover {
-            border-color: var(--purple-light);
-            background: rgba(83, 52, 131, 0.18);
+            border-color: var(--border);
+            background: rgba(83, 52, 131, 0.12);
             transform: translateY(-3px);
         }
 
@@ -398,22 +430,25 @@
         }
 
         .feature-card p {
-            font-size: 0.89em;
+            font-size: 0.9em;
             color: var(--muted);
             line-height: 1.65;
         }
 
-        /* ── Kom igang ── */
+        .feature-card a { color: var(--purple-soft); text-decoration: none; }
+        .feature-card a:hover { color: #fff; }
+
+        /* ── Kom i gang ── */
         .steps {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 18px;
-            margin-bottom: 26px;
+            margin-bottom: 28px;
         }
 
         .step-card {
             background: var(--card);
-            border: 1px solid var(--border);
+            border: 1px solid var(--border-soft);
             border-radius: var(--radius);
             padding: 30px 26px;
             position: relative;
@@ -438,25 +473,22 @@
         }
 
         .step-card p {
-            font-size: 0.9em;
+            font-size: 0.92em;
             color: var(--muted);
             line-height: 1.65;
         }
 
-        .step-card a { color: var(--purple-soft); text-decoration: none; }
-        .step-card a:hover { color: #fff; }
+        .step-card a, .selfhost-note a, .cta-mail a, footer a { color: var(--purple-soft); text-decoration: none; }
+        .step-card a:hover, .selfhost-note a:hover, .cta-mail a:hover, footer a:hover { color: #fff; }
 
         .selfhost-note {
             text-align: center;
             color: var(--muted);
-            font-size: 0.9em;
+            font-size: 0.92em;
             line-height: 1.7;
-            max-width: 560px;
+            max-width: 600px;
             margin: 0 auto;
         }
-
-        .selfhost-note a { color: var(--purple-soft); text-decoration: none; }
-        .selfhost-note a:hover { color: #fff; }
 
         /* ── CTA ── */
         .cta-box {
@@ -500,9 +532,6 @@
             position: relative;
         }
 
-        .cta-mail a { color: var(--purple-soft); text-decoration: none; }
-        .cta-mail a:hover { color: #fff; }
-
         /* ── Footer ── */
         footer {
             position: relative;
@@ -511,24 +540,30 @@
             padding: 30px 0;
             text-align: center;
             color: var(--muted);
-            font-size: 0.82em;
+            font-size: 0.85em;
+            line-height: 1.8;
         }
 
-        footer a { color: var(--muted); text-decoration: none; }
-        footer a:hover { color: var(--text); }
-
         /* ── Responsivt ── */
+        @media (max-width: 900px) {
+            .feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
         @media (max-width: 760px) {
-            .hero { padding: 52px 0 64px; }
-            .section-pad { padding: 64px 0; }
-            .show-row {
+            .nav-links { display: none; }
+            .hero { padding: 44px 0 64px; }
+            .hero-scene { margin-top: 48px; }
+            .section-pad { padding: 68px 0; }
+            .section-header { margin-bottom: 44px; }
+            .show-row, .show-row.flip {
                 grid-template-columns: 1fr;
-                gap: 22px;
-                margin-bottom: 56px;
+                gap: 26px;
+                margin-bottom: 68px;
             }
             .show-row.flip .show-text { order: 1; }
             .show-row.flip .show-media { order: 2; }
-            .steps { grid-template-columns: 1fr; }
+            .show-wide { margin-bottom: 68px; }
+            .feature-grid, .steps { grid-template-columns: 1fr; }
             .cta-box { padding: 44px 24px; }
         }
     </style>
@@ -553,6 +588,11 @@
         </svg>
         <span class="wordmark">Badminton<span>App</span></span>
     </a>
+    <div class="nav-links">
+        <a href="#ihallen">I hallen</a>
+        <a href="#funktioner">Funktioner</a>
+        <a href="#igang">Kom i gang</a>
+    </div>
     <a class="btn-secondary nav-cta" href="https://app.badmintonapp.dk">Åben demo →</a>
 </nav>
 
@@ -564,22 +604,22 @@
         <p>Tæl på tablet eller telefon, vis kampen <strong>live på TV</strong> og følg hele hallen på én skærm. Holdkamp, turnering og klubbens egne farver — alt samlet ét sted.</p>
         <div class="hero-actions">
             <a class="btn-primary btn-lg" href="https://app.badmintonapp.dk">Prøv demoen</a>
-            <a class="btn-secondary btn-lg" href="#funktioner">Se funktioner</a>
+            <a class="btn-secondary btn-lg" href="#ihallen">Se hvordan det ser ud</a>
         </div>
+        <ul class="hero-fakta">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg>Kører i browseren — ingen app</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg>Live på TV, oversigt og telefon</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg>Gratis på jeres egen server</li>
+        </ul>
 
-        <div class="hero-shot">
-            <div class="browser-chrome">
-                <div class="browser-bar">
-                    <div class="browser-dots">
-                        <div class="browser-dot"></div>
-                        <div class="browser-dot"></div>
-                        <div class="browser-dot"></div>
-                    </div>
-                    <div class="browser-url">jeresklub.badmintonapp.dk</div>
-                </div>
-                <img src="hero-court.jpg" alt="Tælleren — banevisning med Mathilde mod Freja, 15-12" width="1280" height="700">
+        <figure class="hero-scene">
+            <div class="tv">
+                <img src="tv-kamp.jpg" alt="TV ved banen: Mathilde og Freja mod Line og Katrine, 2. sæt, 11–9" width="1600" height="900">
             </div>
-        </div>
+            <div class="tablet">
+                <img src="taeller.jpg" alt="Tælleren på tabletten: Mathilde mod Freja, 11–9 i 2. sæt" width="960" height="525">
+            </div>
+        </figure>
     </div>
 </section>
 
@@ -596,35 +636,56 @@
 
         <div class="show-row">
             <div class="show-text">
-                <div class="kicker">TV-visning</div>
-                <h3>Kampen på storskærm</h3>
-                <p>Tilslut et TV til banen og vis stillingen sæt for sæt med spillernavne, klublogoer og servemarkering — læseligt fra den anden ende af hallen.</p>
-                <p>Når banen er ledig, skifter skærmen automatisk til klubbens sponsor-slideshow.</p>
+                <div class="kicker">TV ved banen</div>
+                <h3>Kan læses fra den anden ende af hallen</h3>
+                <p>Navne og point fylder skærmen, de afsluttede sæt står ved siden af, og en farvet kant viser, hvem der server. Har spillerne en klub, kommer klubbens logo med.</p>
+                <p>Når kampen er afgjort, vises alle sæt i stor størrelse med vinderen markeret — indtil banen ryddes.</p>
             </div>
             <div class="show-media">
-                <img src="tv-scoreboard.jpg" alt="TV-visning — Mathilde mod Freja, sætstilling 21-18 og 15-12" width="1920" height="1080" loading="lazy">
+                <div class="tv"><img src="tv-afgjort.jpg" alt="Afgjort kamp: Mathilde og Freja vinder 15–12, 13–15, 15–11" width="1600" height="900" loading="lazy"></div>
             </div>
         </div>
 
         <div class="show-row flip">
             <div class="show-text">
-                <div class="kicker">Sætpause</div>
-                <h3>Pauserne styrer sig selv</h3>
-                <p>Efter hvert sæt viser TV'et automatisk en nedtælling med stillingen, så spillere og tilskuere altid ved, hvornår næste sæt går i gang.</p>
-                <p>Tælleren fortsætter selv kampen, når pausen er slut — eller når spillerne springer den over.</p>
+                <div class="kicker">Pauser</div>
+                <h3>Pausen står på selve tavlen</h3>
+                <p>Navne og sæt bliver stående, og en stor nedtælling tager pointfeltets plads — så alle kan se, hvornår næste sæt går i gang.</p>
+                <p>Tælleren fortsætter selv kampen, når pausen er slut.</p>
             </div>
             <div class="show-media">
-                <img src="tv-pause.jpg" alt="Pauseskærm — nedtællingsring med 1:18 tilbage, Line mod Katrine" width="1920" height="1080" loading="lazy">
+                <div class="tv"><img src="tv-pausen.jpg" alt="Pause mellem sæt: 1:22 tilbage af 2 minutter, sætstilling 1–1" width="1600" height="900" loading="lazy"></div>
+            </div>
+        </div>
+
+        <div class="show-row">
+            <div class="show-text">
+                <div class="kicker">Ledig bane</div>
+                <h3>Scan og tæl med telefonen</h3>
+                <p>Står banen ledig, viser TV'et en QR-kode. Spillerne scanner den og tæller kampen på deres egen telefon — ingen app og intet login.</p>
+                <p>Har klubben sponsorbilleder, kører de som diasshow imens, med QR-koden i hjørnet.</p>
+            </div>
+            <div class="show-media">
+                <div class="tv"><img src="tv-ledig.jpg" alt="Ledig bane: Bane 3 med QR-kode til at tælle kampen på telefonen" width="1600" height="900" loading="lazy"></div>
             </div>
         </div>
 
         <div class="show-wide">
             <div class="show-text">
-                <div class="kicker" style="text-align:center;">Oversigt</div>
-                <h3 style="text-align:center;">Hele hallen på én skærm</h3>
-                <p style="text-align:center;">Hæng en skærm op i foyeren og vis alle baners kampe live — med sætstillinger og kamptid. Under holdkampe ruller oversigten automatisk gennem delkampene.</p>
+                <div class="kicker">Oversigt</div>
+                <h3>Hele hallen på én skærm</h3>
+                <p>Hæng en skærm op i foyeren og følg alle baner live: stilling, sæt, kamptid, pauser og afgjorte kampe.</p>
             </div>
-            <img src="oversigt.jpg" alt="Kampstatus-oversigt — tre baner med live-stillinger" width="1920" height="560" loading="lazy">
+            <div class="tv"><img src="oversigt-baner.jpg" alt="Kampstatus-oversigt med seks baner: kampe i gang, en pause og en afgjort kamp" width="1600" height="900" loading="lazy"></div>
+        </div>
+
+        <div class="show-wide">
+            <div class="show-text">
+                <div class="kicker">Holdkamp</div>
+                <h3>Holdkampdag på storskærmen</h3>
+                <p>Holdstillingen øverst, delkampene der spilles nu som små tavler, og alle delkampe med hvert sæt nederst. Spilles der flere holdkampe på én gang, skifter skærmen selv mellem dem.</p>
+            </div>
+            <div class="tv"><img src="oversigt-holdkamp.jpg" alt="Holdkamp Lyngby BK mod Gentofte, 6–3, med fire delkampe i gang" width="1600" height="900" loading="lazy"></div>
         </div>
     </div>
 </section>
@@ -688,14 +749,14 @@
         </div>
 
         <div class="feature-group">
-            <div class="feature-group-title"><h3>Holdkamp og turnering</h3></div>
-            <div class="feature-grid cols-2">
+            <div class="feature-group-title"><h3>Holdkamp og stævner</h3></div>
+            <div class="feature-grid">
                 <div class="feature-card">
                     <div class="feature-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0z"/><path d="M7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3"/></svg>
                     </div>
                     <h4>Holdkamp</h4>
-                    <p>Opret holdkampe i alle gængse formater — eller hent dem direkte fra badmintonplayer.dk. Fordel delkampene på banerne og følg med i realtid.</p>
+                    <p>Alle gængse formater — også ungdomsformaterne med golden set. Hent holdkampen fra badmintonplayer.dk, fordel delkampene på banerne og følg med i realtid.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
@@ -706,10 +767,17 @@
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-.5.5"/><path d="M14 10a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l.5-.5"/></svg>
                     </div>
-                    <h4>Spillerdatabase</h4>
-                    <p>Opret spillere manuelt eller importer fra turneringsprogrammet. Klublogoer matches automatisk på navnet.</p>
+                    <h4>Badmintonplanner.dk</h4>
+                    <p>Runderne fra badmintonplanner.dk kommer selv ud på banerne og TV'erne — og resultaterne sendes tilbage, uanset om kampen er talt eller tastet ind.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M7 14h4M7 17h7"/></svg>
+                    </div>
+                    <h4>Tidsplanlægger</h4>
+                    <p>Lav spilleprogrammet til individuelle stævner ud fra jeres Tournament Planner-fil — og ret det med træk-og-slip på <a href="https://planner.badmintonapp.dk">planner.badmintonapp.dk</a>.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
@@ -718,18 +786,25 @@
                     <h4>Kamphistorik</h4>
                     <p>Alle kampe gemmes automatisk — enkeltkampe, holdkampe og stævner kan søges frem med resultater og kamptid.</p>
                 </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+                    </div>
+                    <h4>Klubstatistik</h4>
+                    <p>Se hvilke spillere der har spillet for hvilke hold, og hvordan sæsonen har fordelt sig, på <a href="https://statistik.badmintonapp.dk">statistik.badmintonapp.dk</a>.</p>
+                </div>
             </div>
         </div>
 
         <div class="feature-group">
             <div class="feature-group-title"><h3>Jeres klub på skærmene</h3></div>
-            <div class="feature-grid cols-2">
+            <div class="feature-grid">
                 <div class="feature-card">
                     <div class="feature-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a9 9 0 1 1 9-9c0 2-1.5 3-3 3h-2.5a2.5 2.5 0 0 0-2 4c.5.7 0 2-1.5 2z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16.5" cy="10.5" r="1"/></svg>
                     </div>
-                    <h4>Klubbens farver</h4>
-                    <p>Vælg mellem seks færdige temaer eller sammensæt jeres egne klubfarver — de slår igennem på tæller, TV og oversigt.</p>
+                    <h4>Klubbens farver og logoer</h4>
+                    <p>Vælg et af de færdige temaer eller sammensæt jeres egne klubfarver. Klublogoer matches automatisk på spillernes navne.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
@@ -737,6 +812,13 @@
                     </div>
                     <h4>Sponsorvisning</h4>
                     <p>Upload sponsorernes logoer og styr, hvornår de vises på TV-skærmene — med visningstid og udløbsdato pr. billede.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="9" rx="1"/><path d="M5 11h14v6a5 5 0 0 1-5 5h-4a5 5 0 0 1-5-5z"/><path d="M10 5h1M13 5h1"/></svg>
+                    </div>
+                    <h4>TV-nøglen</h4>
+                    <p>En USB-nøgle til en PC — eller et SD-kort til en Raspberry Pi — der starter skærmen direkte i TV-visningen og slukker den selv om aftenen.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
@@ -752,6 +834,13 @@
                     <h4>Flere administratorer</h4>
                     <p>Opret logins til trænere og frivillige, og bestem hvem der har adgang til hvad — fra sponsorer til indstillinger.</p>
                 </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3"/><path d="m15 19 2 2 4-4"/></svg>
+                    </div>
+                    <h4>Automatisk backup</h4>
+                    <p>Klubbens data sikkerhedskopieres hver uge, og en valgt backup kan lægges tilbage, hvis uheldet er ude.</p>
+                </div>
             </div>
         </div>
     </div>
@@ -759,11 +848,11 @@
 
 <hr class="section-divider">
 
-<!-- Sådan kommer I igang -->
+<!-- Sådan kommer I i gang -->
 <section class="section-pad" id="igang">
     <div class="wrap">
         <div class="section-header">
-            <div class="section-tag">Kom igang</div>
+            <div class="section-tag">Kom i gang</div>
             <h2>Jeres egen klub-side på få dage</h2>
             <p class="sub">Vi hoster løsningen for jer — klubben skal hverken have server eller IT-udvalg.</p>
         </div>
@@ -782,7 +871,7 @@
             <div class="step-card">
                 <div class="step-num">3</div>
                 <h4>Tænd skærmene</h4>
-                <p>Åbn tælleren på en tablet og TV-visningen på storskærmen — så er I klar til første kamp.</p>
+                <p>Åbn tælleren på en tablet og TV-visningen på skærmene — eller sæt TV-nøglen i, så starter skærmen selv.</p>
             </div>
         </div>
 
@@ -807,7 +896,8 @@
 <!-- Footer -->
 <footer>
     <div class="wrap">
-        <p>© 2026 Jesper Brink Sørensen &nbsp;·&nbsp; <a href="https://app.badmintonapp.dk">app.badmintonapp.dk</a> &nbsp;·&nbsp; <a href="mailto:info@badmintonapp.dk">info@badmintonapp.dk</a></p>
+        <p>© 2026 Jesper Brink Sørensen &nbsp;·&nbsp; <a href="mailto:info@badmintonapp.dk">info@badmintonapp.dk</a></p>
+        <p><a href="https://app.badmintonapp.dk">Demo</a> &nbsp;·&nbsp; <a href="https://statistik.badmintonapp.dk">Klubstatistik</a> &nbsp;·&nbsp; <a href="https://planner.badmintonapp.dk">Tidsplanlægger</a></p>
     </div>
 </footer>
 
