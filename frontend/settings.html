@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="fundament.css?v=2">
     <link rel="stylesheet" href="styles.css?v=11">
     <link rel="stylesheet" href="admin-styles.css?v=14">
-    <link rel="stylesheet" href="settings-styles.css?v=5">
+    <link rel="stylesheet" href="settings-styles.css?v=6">
     <script src="js/theme-loader.js?v=15"></script>
 </head>
 <body>
@@ -66,50 +66,81 @@
                 </div>
             </nav>
 
+            <!-- To kolonner af omtrent samme højde, når backup-listen er fyldt:
+                 venstre klubbens indstillinger, højre backup og downloads -->
             <div class="settings-grid">
-                <!-- Court Management -->
-                <div class="setting-card">
-                    <h3>Banestyring</h3>
-                    <label>Antal baner:</label>
-                    <input type="number" id="courtCount" min="1" max="20" value="4">
-                    <button id="saveCourtBtn" class="btn-primary">Gem ændringer</button>
+                <div class="settings-kolonne">
+                    <!-- Court Management -->
+                    <div class="setting-card">
+                        <h3>Banestyring</h3>
+                        <label>Antal baner:</label>
+                        <input type="number" id="courtCount" min="1" max="20" value="4">
+                        <button id="saveCourtBtn" class="btn-primary">Gem ændringer</button>
 
-                    <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid rgba(255,255,255,0.1);">
-                        <label class="toggle-label" style="display: flex; align-items: center; cursor: pointer;">
-                            <input type="checkbox" id="showResetButton" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
-                            <span>Turneringstilstand</span>
-                        </label>
-                        <p style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.9em; margin-top: 10px; line-height: 1.5;">
-                            Når aktiveret, skjules "Ryd banen", "Skift til double", "Tilbage" og "Admin" knapperne på banesiden for at forhindre utilsigtede ændringer under turneringer.
-                        </p>
+                        <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid rgba(255,255,255,0.1);">
+                            <label class="toggle-label" style="display: flex; align-items: center; cursor: pointer;">
+                                <input type="checkbox" id="showResetButton" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
+                                <span>Turneringstilstand</span>
+                            </label>
+                            <p style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.9em; margin-top: 10px; line-height: 1.5;">
+                                Når aktiveret, skjules "Ryd banen", "Skift til double", "Tilbage" og "Admin" knapperne på banesiden for at forhindre utilsigtede ændringer under turneringer.
+                            </p>
+                        </div>
+
+                        <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid rgba(255,255,255,0.1);">
+                            <label class="toggle-label" style="display: flex; align-items: center; cursor: pointer;">
+                                <input type="checkbox" id="hideTvQr" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
+                                <span>Skjul QR-kode på TV-siden</span>
+                            </label>
+                            <p style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.9em; margin-top: 10px; line-height: 1.5;">
+                                Når aktiveret, vises QR-koden ikke på TV-skærmen.
+                            </p>
+                        </div>
+
+                        <!-- Default Game Mode -->
+                        <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid rgba(255,255,255,0.1);">
+                            <label>Kamptilstand som standard:</label>
+                            <select id="defaultGameMode" style="width: 100%; padding: 10px; font-size: 1em; margin-top: 10px; background: var(--color-bg-card); color: white; border: 2px solid var(--color-primary); border-radius: 8px; cursor: pointer;">
+                                <option value="15">15/21 point (standard)</option>
+                                <option value="21">21/30 point</option>
+                            </select>
+                            <button id="saveGameModeBtn" class="btn-primary" style="margin-top: 15px;">Gem kamptilstand</button>
+                            <p style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.9em; margin-top: 10px; line-height: 1.5;">
+                                Vælg hvilken kamptilstand der bruges som standard på nye baner.
+                            </p>
+                        </div>
                     </div>
 
-                    <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid rgba(255,255,255,0.1);">
-                        <label class="toggle-label" style="display: flex; align-items: center; cursor: pointer;">
-                            <input type="checkbox" id="hideTvQr" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
-                            <span>Skjul QR-kode på TV-siden</span>
-                        </label>
-                        <p style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.9em; margin-top: 10px; line-height: 1.5;">
-                            Når aktiveret, vises QR-koden ikke på TV-skærmen.
-                        </p>
+                    <!-- Theme Link -->
+                    <div class="setting-card">
+                        <h3>Tema</h3>
+                        <a href="theme.html" class="btn-primary" style="text-decoration:none;display:inline-block;">Åbn temaindstillinger</a>
                     </div>
 
-                    <!-- Default Game Mode -->
-                    <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid rgba(255,255,255,0.1);">
-                        <label>Kamptilstand som standard:</label>
-                        <select id="defaultGameMode" style="width: 100%; padding: 10px; font-size: 1em; margin-top: 10px; background: var(--color-bg-card); color: white; border: 2px solid var(--color-primary); border-radius: 8px; cursor: pointer;">
-                            <option value="15">15/21 point (standard)</option>
-                            <option value="21">21/30 point</option>
-                        </select>
-                        <button id="saveGameModeBtn" class="btn-primary" style="margin-top: 15px;">Gem kamptilstand</button>
-                        <p style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.9em; margin-top: 10px; line-height: 1.5;">
-                            Vælg hvilken kamptilstand der bruges som standard på nye baner.
-                        </p>
+                    <!-- Security -->
+                    <div class="setting-card">
+                        <h3>Sikkerhed</h3>
+                        <div id="currentPasswordWrap" style="display:none;margin-bottom:12px;">
+                            <label>Nuværende adgangskode:</label>
+                            <input type="password" id="currentPassword" placeholder="Nuværende adgangskode">
+                        </div>
+                        <label>Ny adgangskode:</label>
+                        <input type="password" id="newPassword" placeholder="Ny adgangskode (min. 8 tegn)" autocomplete="new-password">
+                        <label>Gentag ny adgangskode:</label>
+                        <input type="password" id="newPasswordConfirm" placeholder="Gentag ny adgangskode" autocomplete="new-password">
+                        <button id="changePasswordBtn" class="btn-primary">Skift adgangskode</button>
+                    </div>
+
+                    <!-- Farezone: flyttet hertil fra Baneoversigten, så knappen ikke står på den mest brugte side -->
+                    <div class="setting-card setting-card-danger">
+                        <h3>Ryd banedata</h3>
+                        <p class="warning-text" style="margin-top:0;">Nulstiller point og spiltilstand på alle baner og sætter dem til single. Kan ikke fortrydes.</p>
+                        <button id="clearAllDataBtn" class="btn-danger">Ryd alle banedata</button>
                     </div>
                 </div>
 
-                <!-- Backup, Tema og Sikkerhed stacked -->
-                <div style="display:flex;flex-direction:column;gap:18px;">
+                <!-- Backup, tablet-app og TV-skærme stacked -->
+                <div class="settings-kolonne">
 
                     <!-- Backup & Restore (kompakt) -->
                     <div class="setting-card">
@@ -120,7 +151,7 @@
                             <div id="autoBackupList" class="auto-backup-list"></div>
                         </div>
                         <p id="autoBackupDemo" class="auto-backup-info" style="display:none;">Automatisk backup er ikke slået til her — kun på klubbernes egne adresser.</p>
-                        <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;">
+                        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px;">
                             <button id="downloadBackupBtn" class="btn-primary" style="flex:1;">Download backup</button>
                             <button id="chooseRestoreFileBtn" class="btn-secondary" style="flex:1;">Gendan fra fil...</button>
                             <input type="file" id="restoreFileInput" accept=".json" style="display:none;">
@@ -130,12 +161,6 @@
                         <p id="restoreAdvarsel" style="color:rgba(255,255,255,0.25);font-size:0.78em;margin-top:10px;">
                             Gendannelse overskriver alle nuværende data og kan ikke fortrydes.
                         </p>
-                    </div>
-
-                    <!-- Theme Link -->
-                    <div class="setting-card">
-                        <h3>Tema</h3>
-                        <a href="theme.html" class="btn-primary" style="text-decoration:none;display:inline-block;">Åbn temaindstillinger</a>
                     </div>
 
                     <!-- Tablet-app (Android APK) — hentes direkte på tabletten -->
@@ -181,27 +206,6 @@
                                 <li>Fryser en PC, kan nøglen hente dens fejllog: vælg <b>Hent fejllog fra PC'en</b> i nøglens startmenu. Se VEJLEDNING.txt på nøglen.</li>
                             </ol>
                         </details>
-                    </div>
-
-                    <!-- Security -->
-                    <div class="setting-card">
-                        <h3>Sikkerhed</h3>
-                        <div id="currentPasswordWrap" style="display:none;margin-bottom:12px;">
-                            <label>Nuværende adgangskode:</label>
-                            <input type="password" id="currentPassword" placeholder="Nuværende adgangskode">
-                        </div>
-                        <label>Ny adgangskode:</label>
-                        <input type="password" id="newPassword" placeholder="Ny adgangskode (min. 8 tegn)" autocomplete="new-password">
-                        <label>Gentag ny adgangskode:</label>
-                        <input type="password" id="newPasswordConfirm" placeholder="Gentag ny adgangskode" autocomplete="new-password">
-                        <button id="changePasswordBtn" class="btn-primary">Skift adgangskode</button>
-                    </div>
-
-                    <!-- Farezone: flyttet hertil fra Baneoversigten, så knappen ikke står på den mest brugte side -->
-                    <div class="setting-card setting-card-danger">
-                        <h3>Ryd banedata</h3>
-                        <p class="warning-text" style="margin-top:0;">Nulstiller point og spiltilstand på alle baner og sætter dem til single. Kan ikke fortrydes.</p>
-                        <button id="clearAllDataBtn" class="btn-danger">Ryd alle banedata</button>
                     </div>
                 </div>
             </div>

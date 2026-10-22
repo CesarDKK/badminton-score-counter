@@ -6,6 +6,15 @@
     gap: 18px;
     margin-top: 32px;
     animation: fadeUp 0.4s ease 0.08s both;
+    align-items: start;
+}
+
+/* Kortene i hver kolonne stables; kolonnerne fordeles i settings.html */
+.settings-kolonne {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-width: 0;
 }
 
 /* setting-card overrides admin-styles base */
