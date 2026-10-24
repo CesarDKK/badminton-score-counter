@@ -3415,9 +3415,10 @@ async function bpLoadWatchers() {
     box.innerHTML = `
         <h4 style="color:var(--color-accent);margin-bottom:6px;font-size:0.95em;">Venter på holdsammensætning</h4>
         <p style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.84em;margin-bottom:8px;">
-            Holdsedlen frigives en time før kampstart. Systemet tjekker første gang 59 min og 50 sek før start og derefter
-            hvert 30. sekund de første 10 minutter og så hvert 2. minut, og opretter holdkampen, så snart holdsedlen er der.
-            Indtil da genlæses kamptidspunktet jævnligt. "Tjek nu" tjekker med det samme.
+            Holdsedlen frigives en time før kampstart. Indtil da genlæses kamptidspunktet, så en flyttet kamp opdages:
+            hver 6. time, hver 2. time det sidste døgn og hvert 30. minut de sidste 4 timer.
+            Fra 59 min og 50 sek før start tjekkes der hvert 30. sekund i 10 minutter og derefter hvert 2. minut.
+            Holdkampen oprettes, så snart holdsedlen er der. "Tjek nu" tjekker med det samme.
         </p>
         <div style="background:rgba(0,0,0,0.2);border-radius:8px;">${raekker}</div>`;
     box.style.display = 'block';
