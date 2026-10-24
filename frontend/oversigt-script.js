@@ -121,6 +121,42 @@ function hkSkalVises(tm) {
     const siden = hkFaerdigSiden(tm);
     return siden === null || siden < HK_FINISHED_DISPLAY_MS;
 }
+
+// En delkamp, der lige er afgjort, bliver stående under "spilles nu" i 1 minut
+// med slutresultatet og en løber rundt om kortet, der tømmes (som nedtællingen
+// mellem holdkampe). Tiden går fra det øjeblik, oversigten så delkampen blive
+// afgjort, på skærmens eget ur; ved en frisk indlæsning regnes fra finished_at.
+// Varigheden skal matche hkLoeber i oversigt-styles.css.
+const HK_RESULTAT_MS = 60 * 1000;
+const hkSetIGang = new Set();       // delkampe set med status 'active'
+const hkResultatStart = new Map();  // game-id → starttidspunkt (0 = vises ikke)
+
+function hkNoterResultater(matches, nu = Date.now()) {
+    for (const tm of matches) {
+        for (const g of tm.games || []) {
+            if (g.status === 'active') { hkSetIGang.add(g.id); continue; }
+            if (g.status !== 'finished' || hkResultatStart.has(g.id)) continue;
+            if (hkSetIGang.has(g.id)) { hkResultatStart.set(g.id, nu); continue; }
+            const alder = nu - new Date(g.finished_at).getTime();
+            hkResultatStart.set(g.id, alder >= 0 && alder < HK_RESULTAT_MS ? nu - alder : 0);
+        }
+    }
+}
+
+// Millisekunder tilbage af resultatvisningen (0 = vises ikke)
+function hkResultatTilbage(g, nu = Date.now()) {
+    if (g.status !== 'finished') return 0;
+    const start = hkResultatStart.get(g.id);
+    return start ? Math.max(0, HK_RESULTAT_MS - (nu - start)) : 0;
+}
+
+// Delkampens sæt set fra hjemmeholdet: [[hold1, hold2], ...]
+function hkSaetFraHold1(g) {
+    const side1Key = HK_DOUBLES.includes(g.category) && g.team1_player2
+        ? `${g.team1_player1 || ''} / ${g.team1_player2}` : (g.team1_player1 || '');
+    const saet = g.set_scores ? orientHistorySetScoreNumbers(g.set_scores, side1Key) : [];
+    return saet.map(x => x.split('-').map(Number));
+}
 let hkPage = 0;
 let hkRotateTimer = null;
 
@@ -144,7 +180,7 @@ function visibleHkMatches() {
 
 function hkKey(matches) {
     return hkPage + '#' + matches.map(tm =>
-        `${tm.id}:${(tm.games || []).map(g => g.id + g.status).join(',')}`
+        `${tm.id}:${(tm.games || []).map(g => g.id + g.status + (hkResultatTilbage(g) ? 'r' : '')).join(',')}`
     ).join('|');
 }
 
@@ -189,6 +225,7 @@ function ensureHkRotation() {
 async function loadHoldkamp() {
     try {
         const matches = await api.getActiveTeamMatches();
+        hkNoterResultater(matches || []);
         // Skjul færdigspillede holdkampe efter HK_FINISHED_DISPLAY_MS
         activeTeamMatches = (matches || []).filter(hkSkalVises);
         const grid = document.getElementById('holdkampCardsGrid');
@@ -290,11 +327,15 @@ function renderHoldkampCards(matches) {
         const logoImg = (logo, kls) => logo
             ? `<img class="${kls}" src="${escapeHtml(logo.url)}" alt="" onerror="this.style.display='none'">`
             : '';
-        const live = hkNummererede(tm).filter(x => x.g.status === 'active');
+        // I gang + lige afgjort (står 1 min med resultatet) — i formatets rækkefølge
+        const live = hkNummererede(tm).filter(x => x.g.status === 'active' || hkResultatTilbage(x.g) > 0);
+        const iGang = live.filter(x => x.g.status === 'active').length;
         const lay = hkLiveLayout(live.length);
         const sider = hkPageCount();
 
         const kort = live.map(({ g, navn }) => {
+            const tilbage = hkResultatTilbage(g);
+            if (tilbage) return hkResultatKort(g, navn, tilbage, logo1, logo2, logoImg);
             const raekke = (hold) => `
                 <div class="hk-kamp-raekke" data-side="${hold}">
                     <span class="hk-streg hk-streg--${hold}"></span>
@@ -320,7 +361,8 @@ function renderHoldkampCards(matches) {
                 <span class="hk-hold hk-hold--2"><span class="hk-holdnavn">${escapeHtml(tm.team2_name)}</span>${logoImg(logo2, 'hk-card-logo')}<span class="hk-farve hk-farve--2"></span></span>
             </div>
             <div class="hk-undertitel">
-                <span>${live.length ? `SPILLES NU · ${live.length} ${live.length === 1 ? 'KAMP' : 'KAMPE'}` : 'INGEN DELKAMPE I GANG LIGE NU'}</span>
+                <span>${iGang ? `SPILLES NU · ${iGang} ${iGang === 1 ? 'KAMP' : 'KAMPE'}`
+                    : live.length ? 'LIGE AFGJORT' : 'INGEN DELKAMPE I GANG LIGE NU'}</span>
                 ${sider > 1 ? `<span class="hk-side">HOLDKAMP ${hkPage + 1} AF ${sider}</span>` : ''}
             </div>
             <div class="hk-live" style="--hk-cols:${lay.cols}; --hk-rows:${lay.rows}; --hk-s:${lay.s};">${kort}</div>
@@ -328,6 +370,38 @@ function renderHoldkampCards(matches) {
         </div>`;
     }).join('');
     patchHoldkampCards(matches); // sæt stilling, point, sæt og status på de friske kort
+}
+
+// Kort for en delkamp, der lige er afgjort: vinderen fremhævet, sættene og antal
+// vundne sæt i stedet for point. Løberen rundt om kortet tømmes over
+// HK_RESULTAT_MS; den negative forsinkelse lader den fortsætte, hvor den var,
+// når kortene tegnes igen (fx ved skift mellem holdkampe).
+function hkResultatKort(g, navn, tilbage, logo1, logo2, logoImg) {
+    const saet = hkSaetFraHold1(g);
+    const raekke = (hold) => {
+        const i = hold - 1;
+        const vundne = saet.filter(x => x[i] > x[1 - i]).length;
+        const kls = g.winner_team === hold ? 'hk-vinder' : 'hk-taber';
+        return `
+            <div class="hk-kamp-raekke ${kls}" data-side="${hold}">
+                <span class="hk-streg hk-streg--${hold}"></span>
+                ${logoImg(hold === 1 ? logo1 : logo2, 'hk-kamp-logo')}
+                <span class="hk-kamp-navn">${hkHoldNavn(g, hold)}</span>
+                <span class="hk-kamp-saet">${saet.map(x =>
+                    `<span class="hk-saet-boks ${x[i] > x[1 - i] ? 'won' : 'lost'}">${x[i]}</span>`).join('')}</span>
+                <span class="hk-kamp-pts">${saet.length ? vundne : ''}</span>
+            </div>`;
+    };
+    const brugt = HK_RESULTAT_MS - tilbage;
+    return `<div class="hk-kamp hk-kamp--afgjort" data-game-id="${g.id}">
+        <svg class="hk-loeber" aria-hidden="true"><rect pathLength="100" style="animation-delay:-${brugt}ms"></rect></svg>
+        <div class="hk-kamp-hoved">
+            <span class="hk-kamp-kat">${escapeHtml(navn.toUpperCase())} <small>· BANE ${g.court_number}</small></span>
+            <span class="hk-kamp-status">AFGJORT</span>
+        </div>
+        ${raekke(1)}
+        ${raekke(2)}
+    </div>`;
 }
 
 // Sæt på banen orienteret til holdkampens hold: [[team1, team2], ...]
@@ -392,11 +466,7 @@ function patchHoldkampCards(matches) {
             if (g.status === 'finished') {
                 kls += g.winner_team === 1 ? ' hk-chip--1' : ' hk-chip--2';
                 // Hvert sæt set fra hjemmeholdet; sæt, vinderen tabte, står lidt svagere
-                const side1Key = HK_DOUBLES.includes(g.category) && g.team1_player2
-                    ? `${g.team1_player1 || ''} / ${g.team1_player2}` : (g.team1_player1 || '');
-                const saet = g.set_scores ? orientHistorySetScoreNumbers(g.set_scores, side1Key) : [];
-                indhold = saet.map(x => {
-                    const [h, u] = x.split('-').map(Number);
+                indhold = hkSaetFraHold1(g).map(([h, u]) => {
                     const vundet = g.winner_team === 1 ? h > u : u > h;
                     return `<span class="hk-chip-saet${vundet ? '' : ' hk-chip-saet--tabt'}">${h}–${u}</span>`;
                 }).join('');

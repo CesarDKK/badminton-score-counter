@@ -222,6 +222,7 @@ body::before {
     border-radius: calc(var(--u) * 1.7 * var(--s));
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
+    position: relative;
 }
 #holdkampCardsGrid .hk-kamp-hoved {
     flex-shrink: 0;
@@ -312,6 +313,41 @@ body::before {
     line-height: 0.8;
     font-variant-numeric: tabular-nums;
     color: #ffffff;
+}
+
+/* Lige afgjort: står 1 min med resultatet — vinderen fremhævet, antal vundne
+   sæt i stedet for point, og en løber rundt om kortet, der tømmes over 60 sek.
+   (varigheden skal matche HK_RESULTAT_MS i oversigt-script.js) */
+#holdkampCardsGrid .hk-kamp--afgjort .hk-kamp-status { color: var(--color-accent); }
+#holdkampCardsGrid .hk-kamp--afgjort .hk-vinder { background: rgba(var(--color-win-rgb), 0.12); }
+#holdkampCardsGrid .hk-kamp--afgjort .hk-vinder .hk-kamp-pts { color: rgb(var(--color-win-rgb)); }
+#holdkampCardsGrid .hk-kamp--afgjort .hk-taber .hk-kamp-navn,
+#holdkampCardsGrid .hk-kamp--afgjort .hk-taber .hk-kamp-pts { opacity: 0.55; }
+#holdkampCardsGrid .hk-loeber {
+    --w: calc(var(--u) * 0.55 * var(--s));
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+#holdkampCardsGrid .hk-loeber rect {
+    x: calc(var(--w) / 2);
+    y: calc(var(--w) / 2);
+    width: calc(100% - var(--w));
+    height: calc(100% - var(--w));
+    rx: calc(var(--u) * 1.7 * var(--s) - var(--w) / 2);
+    fill: none;
+    stroke: var(--color-accent);
+    stroke-width: var(--w);
+    stroke-linecap: round;
+    stroke-dasharray: 100;
+    animation: hkLoeber 60s linear forwards;
+}
+@keyframes hkLoeber {
+    from { stroke-dashoffset: 0; }
+    to   { stroke-dashoffset: 100; }
 }
 
 /* 3) Alle delkampe: kategori, vinderens farve og hvert sæt set fra hjemmeholdet */
