@@ -1175,6 +1175,13 @@ class BadmintonAPI {
         });
     }
 
+    async setClubAdminEmail(clubId, adminId, email) {
+        return this.request(`/super-admin/clubs/${clubId}/admins/${adminId}/email`, {
+            method: 'PUT',
+            body: JSON.stringify({ email })
+        });
+    }
+
     async updateClubAdminPermissions(clubId, adminId, pagePermissions) {
         return this.request(`/super-admin/clubs/${clubId}/admins/${adminId}/permissions`, {
             method: 'PUT',

@@ -468,6 +468,10 @@ function renderAdmins(admins) {
                     Adgang
                 </button>
                 <button class="btn-secondary btn-sm"
+                    onclick="showEditEmail(${a.id})">
+                    Mail
+                </button>
+                <button class="btn-secondary btn-sm"
                     onclick="showChangePassword(${a.id})">
                     Skift kode
                 </button>
@@ -562,6 +566,51 @@ async function handleChangePassword(adminId) {
         document.getElementById('change-pw-form').remove();
     } catch (err) {
         showMsg(msgEl, err.message || 'Fejl', 'error');
+    }
+}
+
+// Inline-formular til at sætte/ændre/fjerne en admins mail — den kan bruges
+// i stedet for brugernavnet ved login.
+function showEditEmail(adminId) {
+    const existing = document.getElementById('edit-mail-form');
+    if (existing) existing.remove();
+
+    const admin = currentAdmins.find(a => a.id === adminId);
+    if (!admin) return;
+
+    const row = document.getElementById(`admin-row-${adminId}`);
+    const form = document.createElement('div');
+    form.id = 'edit-mail-form';
+    form.style.cssText = 'background:rgba(255,255,255,0.04);border-radius:8px;padding:12px 14px;margin-top:4px;';
+    form.innerHTML = `
+        <div style="font-size:0.82em;color:var(--text-muted, rgba(255, 255, 255, 0.62));margin-bottom:8px;">
+            Mail til <strong>${escapeHtml(admin.username)}</strong> — kan bruges i stedet for brugernavnet ved login. Tom = ingen mail.
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <input type="email" id="editMailInput" placeholder="email@klub.dk" value="${escapeHtml(admin.email || '')}"
+                style="flex:1;background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);
+                border-radius:6px;padding:8px 10px;color:var(--text-primary, #eaeaea);font-family:'DM Sans',sans-serif;font-size:0.9em;">
+            <button class="btn-primary btn-sm"
+                onclick="handleSaveEmail(${adminId})">Gem</button>
+            <button class="btn-secondary btn-sm"
+                onclick="document.getElementById('edit-mail-form').remove()">Annuller</button>
+        </div>
+        <div id="editMailMsg" class="msg" style="display:none;margin-top:8px;"></div>
+    `;
+    row.insertAdjacentElement('afterend', form);
+    bindEnterSubmit(['editMailInput'], () => handleSaveEmail(adminId));
+    document.getElementById('editMailInput').focus();
+}
+
+async function handleSaveEmail(adminId) {
+    const email = document.getElementById('editMailInput').value.trim();
+    const msgEl = document.getElementById('editMailMsg');
+    try {
+        await api.setClubAdminEmail(selectedClubId, adminId, email);
+        document.getElementById('edit-mail-form').remove();
+        loadAdmins();
+    } catch (err) {
+        showMsg(msgEl, err.message || 'Kunne ikke gemme mail', 'error');
     }
 }
 

@@ -5,6 +5,7 @@ const { query, queryOne } = require('../config/database');
 const { clubAdminAuth, generateClubAdminToken } = require('../middleware/clubAdminAuth');
 const { forkertLogin } = require('../middleware/rateLimiter');
 const masterDb = require('../config/masterDatabase');
+const { lignerMail } = require('../config/adminMail');
 
 // Hvornår klubben og admin'en sidst loggede ind — vises på super-admin-siden.
 // Klubbens seneste login står i master-databasen, så klublisten ikke skal åbne
@@ -27,24 +28,31 @@ async function registrerLogin(admin, subdomain) {
 // POST /api/club-admin/login
 router.post('/login', async (req, res, next) => {
     try {
-        const { username, password } = req.body;
+        const { password } = req.body;
+        const username = typeof req.body.username === 'string' ? req.body.username.trim() : '';
 
         if (!username || !password) {
             return res.status(400).json({ error: 'Brugernavn og adgangskode er påkrævet' });
         }
 
+        // Man kan logge ind med sit brugernavn ELLER sin mailadresse (hvis den er
+        // sat på brugeren). Brugernavnet prøves først. Super-admin sikrer, at en
+        // mail kun står på én bruger i klubben; skulle to alligevel dele den,
+        // afgør adgangskoden, hvem det er.
         // query() bruger automatisk den rigtige klub-database via tenant middleware
-        const admin = await queryOne(
-            'SELECT id, username, password_hash, page_permissions FROM club_admins WHERE username = ?',
-            [username]
+        const kandidater = await query(
+            `SELECT id, username, password_hash, page_permissions FROM club_admins
+             WHERE username = ? OR (? = 1 AND email = ?)
+             ORDER BY (username = ?) DESC, id ASC
+             LIMIT 5`,
+            [username, lignerMail(username) ? 1 : 0, username, username]
         );
 
-        if (!admin) {
-            return res.status(401).json({ error: forkertLogin(req, 'Forkert brugernavn eller adgangskode') });
+        let admin = null;
+        for (const k of kandidater) {
+            if (await bcrypt.compare(password, k.password_hash)) { admin = k; break; }
         }
-
-        const isValid = await bcrypt.compare(password, admin.password_hash);
-        if (!isValid) {
+        if (!admin) {
             return res.status(401).json({ error: forkertLogin(req, 'Forkert brugernavn eller adgangskode') });
         }
 

@@ -5,6 +5,7 @@ const mysql = require('mysql2/promise');
 const masterDb = require('../config/masterDatabase');
 const { superAdminAuth, generateSuperAdminToken } = require('../middleware/superAdminAuth');
 const { forkertLogin } = require('../middleware/rateLimiter');
+const { normaliserMail } = require('../config/adminMail');
 const fs = require('fs');
 const sharp = require('sharp');
 const AdmZip = require('adm-zip');
@@ -249,6 +250,18 @@ router.get('/clubs/:id/admins', superAdminAuth, async (req, res, next) => {
     } catch (error) { next(error); }
 });
 
+// En klub-admin kan logge ind med sin mail i stedet for brugernavnet, så en mail
+// må kun stå på én bruger i klubben — og ikke være en anden brugers brugernavn.
+const MAIL_OPTAGET = 'Mailadressen bruges allerede af en anden bruger i klubben';
+async function mailOptaget(conn, mail, undtagId) {
+    if (!mail) return false;
+    const [rows] = await conn.execute(
+        'SELECT id FROM club_admins WHERE (email = ? OR username = ?) AND id <> ? LIMIT 1',
+        [mail, mail, undtagId || 0]
+    );
+    return rows.length > 0;
+}
+
 // POST /api/super-admin/clubs/:id/admins — opret klub admin
 router.post('/clubs/:id/admins', superAdminAuth, async (req, res, next) => {
     try {
@@ -266,6 +279,9 @@ router.post('/clubs/:id/admins', superAdminAuth, async (req, res, next) => {
         const perms = normalizePagePermissions(pagePermissions);
         if (perms.error) return res.status(400).json({ error: perms.error });
 
+        const mail = normaliserMail(email);
+        if (mail.error) return res.status(400).json({ error: mail.error });
+
         const club = await masterDb.queryOne(
             'SELECT id, db_name FROM clubs WHERE id = ?',
             [id]
@@ -277,15 +293,23 @@ router.post('/clubs/:id/admins', superAdminAuth, async (req, res, next) => {
 
         const conn = await clubConn(club.db_name);
         try {
+            if (await mailOptaget(conn, mail.value, null)) {
+                return res.status(409).json({ error: MAIL_OPTAGET });
+            }
+            // ... og omvendt: brugernavnet må ikke være en anden brugers mail
+            const [mailSomNavn] = await conn.execute('SELECT id FROM club_admins WHERE email = ? LIMIT 1', [username]);
+            if (mailSomNavn.length) {
+                return res.status(409).json({ error: 'Brugernavnet er en anden brugers mailadresse i klubben' });
+            }
             const hash = await bcrypt.hash(password, 10);
             const [result] = await conn.execute(
                 'INSERT INTO club_admins (username, password_hash, email, page_permissions) VALUES (?, ?, ?, ?)',
-                [username, hash, email || null, perms.value]
+                [username, hash, mail.value, perms.value]
             );
             res.status(201).json({
                 id: result.insertId,
                 username,
-                email: email || null,
+                email: mail.value,
                 page_permissions: perms.value ? JSON.parse(perms.value) : null
             });
         } finally {
@@ -337,6 +361,32 @@ router.put('/clubs/:id/admins/:adminId/password', superAdminAuth, async (req, re
             );
             if (result.affectedRows === 0) return res.status(404).json({ error: 'Admin ikke fundet' });
             res.json({ success: true });
+        } finally {
+            await conn.end();
+        }
+    } catch (error) { next(error); }
+});
+
+// PUT /api/super-admin/clubs/:id/admins/:adminId/email — sæt eller fjern mail
+// (tom = ingen mail). Mailen kan bruges i stedet for brugernavnet ved login.
+router.put('/clubs/:id/admins/:adminId/email', superAdminAuth, async (req, res, next) => {
+    try {
+        const mail = normaliserMail(req.body.email);
+        if (mail.error) return res.status(400).json({ error: mail.error });
+
+        const club = await masterDb.queryOne('SELECT db_name FROM clubs WHERE id = ?', [req.params.id]);
+        if (!club) return res.status(404).json({ error: 'Klub ikke fundet' });
+
+        const conn = await clubConn(club.db_name);
+        try {
+            if (await mailOptaget(conn, mail.value, req.params.adminId)) {
+                return res.status(409).json({ error: MAIL_OPTAGET });
+            }
+            const [result] = await conn.execute(
+                'UPDATE club_admins SET email = ? WHERE id = ?', [mail.value, req.params.adminId]
+            );
+            if (result.affectedRows === 0) return res.status(404).json({ error: 'Admin ikke fundet' });
+            res.json({ success: true, email: mail.value });
         } finally {
             await conn.end();
         }
