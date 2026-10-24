@@ -1085,6 +1085,8 @@ function setNavActive(section) {
 let holdkampRefreshTimer = null;
 let holdkampEditOpen = false;
 let holdkampCourtSelectOpen = false; // true mens en bane-dropdown er i fokus/aaben
+let nyHoldkamp = null; // { id, til }: den netop oprettede holdkamp markeres et øjeblik
+let opretterHoldkamp = false; // spærrer "Start holdkamp" mens oprettelsen kører
 
 // --- Klub-logoer (delt med turnering) ---
 let _adminLogoCache = [];
@@ -1209,8 +1211,10 @@ async function loadActiveHoldkamp() {
             sidsteHoldkampe = teamMatches;
             // Optaget-baner beregnes på tværs af ALLE aktive holdkampe.
             const allActiveGames = teamMatches.flatMap(tm => tm.games || []);
+            const ny = nyHoldkamp && Date.now() < nyHoldkamp.til ? nyHoldkamp.id : null;
             container.innerHTML = teamMatches.map(tm =>
-                `<div class="holdkamp-block luft-under-18">` +
+                `<div class="holdkamp-block luft-under-18${tm.id === ny ? ' holdkamp-block--ny' : ''}" data-holdkamp-id="${tm.id}">` +
+                (tm.id === ny ? `<div class="holdkamp-oprettet" role="status">✓ Holdkampen er oprettet</div>` : '') +
                 renderActiveHoldkampBlock(tm, allGameStates, courtCount, settings.defaultGameMode || '15', allActiveGames) +
                 `</div>`
             ).join('');
@@ -1515,20 +1519,52 @@ async function resetHoldkampForm() {
     const team2 = document.getElementById('holdkampTeam2Name');
     const format = document.getElementById('holdkampFormat');
     const container = document.getElementById('holdkampGamesInputContainer');
-    const playerInputs = document.getElementById('holdkampPlayerInputs');
 
     const hasInput = team1.value.trim() || team2.value.trim() || format.value ||
         Array.from(container.querySelectorAll('input')).some(i => i.value.trim());
     if (hasInput && !await BadmintonUtils.confirmDialog('Nulstil formular', 'Nulstil formularen og start forfra? Indtastede navne ryddes.')) return;
 
-    team1.value = '';
-    team2.value = '';
-    format.value = '';
-    container.innerHTML = '';
-    playerInputs.style.display = 'none';
+    rydHoldkampForm();
+}
+
+// Tømmer formularen uden at spørge (efter "Nulstil" eller en oprettet holdkamp)
+function rydHoldkampForm() {
+    document.getElementById('holdkampTeam1Name').value = '';
+    document.getElementById('holdkampTeam2Name').value = '';
+    document.getElementById('holdkampFormat').value = '';
+    ['holdkampTeam1Logo', 'holdkampTeam2Logo'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (sel) sel.value = '';
+    });
+    document.getElementById('holdkampGamesInputContainer').innerHTML = '';
+    document.getElementById('holdkampPlayerInputs').style.display = 'none';
+}
+
+// Aktiv holdkamp med de samme to hold (i vilkårlig rækkefølge), ellers null
+function findAktivHoldkampMedSammeHold(teamMatches, team1Name, team2Name) {
+    const norm = s => String(s || '').trim().toLowerCase();
+    const ny = [norm(team1Name), norm(team2Name)].sort().join('|');
+    return (teamMatches || []).find(tm =>
+        [norm(tm.team1_name), norm(tm.team2_name)].sort().join('|') === ny) || null;
 }
 
 async function startHoldkamp() {
+    // Et ekstra klik (eller dobbeltklik), mens holdkampen oprettes, gør intet
+    if (opretterHoldkamp) return;
+    const btn = document.getElementById('startHoldkampBtn');
+    opretterHoldkamp = true;
+    btn.disabled = true;
+    btn.textContent = 'Opretter …';
+    try {
+        await opretHoldkampFraForm();
+    } finally {
+        opretterHoldkamp = false;
+        btn.disabled = false;
+        btn.textContent = 'Start holdkamp';
+    }
+}
+
+async function opretHoldkampFraForm() {
     const format = document.getElementById('holdkampFormat').value;
     const team1Name = document.getElementById('holdkampTeam1Name').value.trim();
     const team2Name = document.getElementById('holdkampTeam2Name').value.trim();
@@ -1552,18 +1588,52 @@ async function startHoldkamp() {
     }
 
     try {
+        // Samme to hold kører allerede: advarsel, ikke blokering (flere holdkampe
+        // kan køre samtidig), men fanger den holdkamp, der blev oprettet to gange
+        const aktive = await api.getActiveTeamMatches();
+        const dublet = findAktivHoldkampMedSammeHold(aktive, team1Name, team2Name);
+        if (dublet && !await BadmintonUtils.confirmDialog(
+            'Holdkampen findes allerede',
+            `Der findes allerede en aktiv holdkamp ${dublet.team1_name} – ${dublet.team2_name}.\n\nOpret alligevel?`
+        )) return;
+
         const t1LogoSel = document.getElementById('holdkampTeam1Logo');
         const t2LogoSel = document.getElementById('holdkampTeam2Logo');
         const team1LogoId = t1LogoSel && t1LogoSel.value ? parseInt(t1LogoSel.value, 10) : autoHoldkampLogoId(team1Name);
         const team2LogoId = t2LogoSel && t2LogoSel.value ? parseInt(t2LogoSel.value, 10) : autoHoldkampLogoId(team2Name);
-        await api.createTeamMatch({ format, team1Name, team2Name, games, team1LogoId, team2LogoId });
+        const res = await api.createTeamMatch({ format, team1Name, team2Name, games, team1LogoId, team2LogoId });
+
+        // Oprettet: formularen tømmes, og siden ruller op til den nye holdkamp,
+        // der markeres et øjeblik — ellers ligner det, at intet skete
+        rydHoldkampForm();
+        nyHoldkamp = res && res.id ? { id: res.id, til: Date.now() + 8000 } : null;
         await loadActiveHoldkamp();
+        visNyHoldkamp();
     } catch (error) {
         console.error('Failed to create holdkamp:', error);
         // 409: backend afviste fordi en turnering er aktiv — vis dens besked direkte
         const friendly = error.status === 409 ? error.message : 'Kunne ikke oprette holdkamp. Prøv igen.';
         showMessage(error.status === 409 ? 'Kan ikke oprette holdkamp' : 'Fejl', friendly);
     }
+}
+
+// Ruller til den netop oprettede holdkamp og fjerner markeringen igen bagefter
+function visNyHoldkamp() {
+    const container = document.getElementById('activeHoldkampContainer');
+    const blok = nyHoldkamp && container.querySelector(`[data-holdkamp-id="${nyHoldkamp.id}"]`);
+    const blid = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    (blok || container).scrollIntoView({ behavior: blid ? 'auto' : 'smooth', block: 'start' });
+    if (!nyHoldkamp) return;
+    const id = nyHoldkamp.id;
+    setTimeout(() => {
+        if (!nyHoldkamp || nyHoldkamp.id !== id) return;
+        nyHoldkamp = null;
+        const el = container.querySelector(`[data-holdkamp-id="${id}"]`);
+        if (el) {
+            el.classList.remove('holdkamp-block--ny');
+            el.querySelector('.holdkamp-oprettet')?.remove();
+        }
+    }, Math.max(0, nyHoldkamp.til - Date.now()));
 }
 
 async function assignCourtToGame(teamMatchId, gameId) {
