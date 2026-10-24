@@ -365,22 +365,21 @@ function renderHoldkampCards(matches) {
                     : live.length ? 'LIGE AFGJORT' : 'INGEN DELKAMPE I GANG LIGE NU'}</span>
                 ${sider > 1 ? `<span class="hk-side">HOLDKAMP ${hkPage + 1} AF ${sider}</span>` : ''}
             </div>
-            <div class="hk-live" style="--hk-cols:${lay.cols}; --hk-rows:${lay.rows}; --hk-s:${lay.s};">${kort}</div>
+            <div class="hk-live${lay.cols >= 5 ? ' hk-live--taet' : ''}" style="--hk-cols:${lay.cols}; --hk-rows:${lay.rows}; --hk-s:${lay.s};">${kort}</div>
             <div class="hk-chips" data-f="chips"></div>
         </div>`;
     }).join('');
     patchHoldkampCards(matches); // sæt stilling, point, sæt og status på de friske kort
 }
 
-// Kort for en delkamp, der lige er afgjort: vinderen fremhævet, sættene og antal
-// vundne sæt i stedet for point. Løberen rundt om kortet tømmes over
-// HK_RESULTAT_MS; den negative forsinkelse lader den fortsætte, hvor den var,
-// når kortene tegnes igen (fx ved skift mellem holdkampe).
+// Kort for en delkamp, der lige er afgjort: vinderen fremhævet og sættene store
+// i stedet for point (antal vundne sæt kan læses af sættene). Løberen rundt om
+// kortet tømmes over HK_RESULTAT_MS; den negative forsinkelse lader den
+// fortsætte, hvor den var, når kortene tegnes igen (fx ved skift mellem holdkampe).
 function hkResultatKort(g, navn, tilbage, logo1, logo2, logoImg) {
     const saet = hkSaetFraHold1(g);
     const raekke = (hold) => {
         const i = hold - 1;
-        const vundne = saet.filter(x => x[i] > x[1 - i]).length;
         const kls = g.winner_team === hold ? 'hk-vinder' : 'hk-taber';
         return `
             <div class="hk-kamp-raekke ${kls}" data-side="${hold}">
@@ -389,7 +388,6 @@ function hkResultatKort(g, navn, tilbage, logo1, logo2, logoImg) {
                 <span class="hk-kamp-navn">${hkHoldNavn(g, hold)}</span>
                 <span class="hk-kamp-saet">${saet.map(x =>
                     `<span class="hk-saet-boks ${x[i] > x[1 - i] ? 'won' : 'lost'}">${x[i]}</span>`).join('')}</span>
-                <span class="hk-kamp-pts">${saet.length ? vundne : ''}</span>
             </div>`;
     };
     const brugt = HK_RESULTAT_MS - tilbage;
