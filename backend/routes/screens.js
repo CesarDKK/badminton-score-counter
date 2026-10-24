@@ -5,6 +5,7 @@ const { clubAdminAuth } = require('../middleware/clubAdminAuth');
 const { requirePage } = require('../middleware/pagePermission');
 const { klientIp } = require('../middleware/rateLimiter');
 const { registrer, liste, fjern } = require('../screens/skaermStatus');
+const haendelseslog = require('../screens/haendelseslog');
 
 const tenantKey = (req) => req.clubDbName || 'direct';
 const kl = (ms) => new Date(ms).toLocaleTimeString('da-DK', { timeZone: 'Europe/Copenhagen' });
@@ -22,10 +23,16 @@ router.post('/heartbeat', requireWriteAuthInClubMode, (req, res) => {
     if (r.ny) console.log(`[skærm] ${hvem}: tændt / første livstegn`);
     if (r.tilbageEfterSek) console.log(`[skærm] ${hvem}: tilbage efter ${r.tilbageEfterSek} s uden livstegn`);
     for (const h of r.nye) {
-        console.log(h.type === 'frys'
-            ? `[skærm] ${hvem}: browseren stod stille i ${h.sek} s fra kl. ${kl(h.fra)}`
-            : `[skærm] ${hvem}: ingen forbindelse til serveren i ${h.sek} s fra kl. ${kl(h.fra)}`);
+        const hvad = {
+            frys: 'browseren stod stille',
+            net: 'ingen forbindelse til serveren',
+            genstart: 'startet forfra efter et hul uden livstegn',
+            vaek: 'ingen livstegn, kom tilbage af sig selv'
+        }[h.type];
+        console.log(`[skærm] ${hvem}: ${hvad} i ${h.sek} s fra kl. ${kl(h.fra)}`);
     }
+    // Gemmes i 30 dage til admin (venter ikke — livstegnet svares med det samme)
+    haendelseslog.gem(tenantKey(req), r.skaerm, r.nye);
     res.json({ ok: true });
 });
 
@@ -41,6 +48,15 @@ const skaermAdmin = (req, res, next) => {
 
 router.get('/', skaermAdmin, (req, res) => {
     res.json(liste(tenantKey(req)));
+});
+
+// GET /api/screens/haendelser?dage=30 — klubbens hændelseslog (højst 30 dage)
+router.get('/haendelser', skaermAdmin, async (req, res, next) => {
+    try {
+        res.json(await haendelseslog.forKlub(tenantKey(req), req.query.dage));
+    } catch (error) {
+        next(error);
+    }
 });
 
 // DELETE /api/screens/:klientId — fjern en skærm, der ikke er i brug mere

@@ -1062,6 +1062,14 @@ class BadmintonAPI {
         return this.request('/screens');
     }
 
+    async getScreenEvents(dage = 30) {
+        return this.request(`/screens/haendelser?dage=${encodeURIComponent(dage)}`);
+    }
+
+    async getAllScreenEvents(dage = 7) {
+        return this.request(`/super-admin/skaerm-haendelser?dage=${encodeURIComponent(dage)}`);
+    }
+
     async deleteScreen(klientId) {
         return this.request(`/screens/${encodeURIComponent(klientId)}`, { method: 'DELETE' });
     }

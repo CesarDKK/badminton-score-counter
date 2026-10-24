@@ -6,6 +6,7 @@ const masterDb = require('../config/masterDatabase');
 const { superAdminAuth, generateSuperAdminToken } = require('../middleware/superAdminAuth');
 const { forkertLogin } = require('../middleware/rateLimiter');
 const { normaliserMail } = require('../config/adminMail');
+const skaermHaendelser = require('../screens/haendelseslog');
 const fs = require('fs');
 const sharp = require('sharp');
 const AdmZip = require('adm-zip');
@@ -106,7 +107,20 @@ router.get('/clubs', superAdminAuth, async (req, res, next) => {
                 c.auto_backups = autoBackup.listBackups(c.db_name).filter(b => b.type === 'auto').length;
             } catch { c.auto_backups = 0; }
         }
+        // Skærm-hændelser det seneste døgn (stod stille, startet forfra …)
+        let haendelser = {};
+        try { haendelser = await skaermHaendelser.antalSenesteDoegn(); } catch { /* vises bare ikke */ }
+        for (const c of clubs) c.skaerm_haendelser_doegn = haendelser[c.db_name] || 0;
         res.json(clubs);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/super-admin/skaerm-haendelser?dage=7 — alle klubbers skærm-hændelser
+router.get('/skaerm-haendelser', superAdminAuth, async (req, res, next) => {
+    try {
+        res.json(await skaermHaendelser.alle(req.query.dage || 7));
     } catch (error) {
         next(error);
     }

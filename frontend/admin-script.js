@@ -2689,6 +2689,7 @@ async function loadDeviceTokens() {
     try {
         const tokens = await api.getDeviceTokens();
         renderDeviceTokens(tokens);
+        await loadSkaermLog();
         await refreshSkaermStatus();
         startSkaermStatusRefresh();
     } catch (err) {
@@ -2698,18 +2699,104 @@ async function loadDeviceTokens() {
 
 // ── Skærm-status: TV'er der bruger hvert adgangslink (livstegn hvert 20. sek.) ──
 let skaermStatusInterval = null;
+let skaermStatusTik = 0;
 
 function startSkaermStatusRefresh() {
     if (skaermStatusInterval) clearInterval(skaermStatusInterval);
-    skaermStatusInterval = setInterval(() => {
+    skaermStatusInterval = setInterval(async () => {
         // Stop af sig selv, når siden er skiftet væk fra Adgangslinks
         if (document.getElementById('deviceTokensSection').style.display === 'none') {
             clearInterval(skaermStatusInterval);
             skaermStatusInterval = null;
             return;
         }
+        // Hændelsesloggen hvert minut, statussen hvert 15. sekund
+        if (++skaermStatusTik % 4 === 0) await loadSkaermLog();
         refreshSkaermStatus();
     }, 15000);
+}
+
+// ── Skærmenes hændelseslog (30 dage, gemt på serveren) ──
+let _skaermLog = [];
+let _skaermLogFilter = '';
+
+const skaermNoegle = (h) => h.navn || h.klient_id || h.klientId;
+
+function skaermHaendelseTekst(h) {
+    const v = skaermVarighed(h.sek || 0);
+    switch (h.type) {
+        case 'frys': return `Browseren stod stille i ${v}`;
+        case 'net': return `Ingen forbindelse til serveren i ${v}`;
+        case 'genstart': return `Væk i ${v} og startet forfra — genstartet, eller den frøs`;
+        case 'vaek': return `Ingen livstegn i ${v} — kom tilbage af sig selv`;
+        default: return h.type;
+    }
+}
+
+async function loadSkaermLog() {
+    try { _skaermLog = await api.getScreenEvents(30); } catch { return; } // bonus — lad loggen stå
+    renderSkaermLog();
+}
+
+function visSkaermLog(noegle) {
+    _skaermLogFilter = noegle || '';
+    renderSkaermLog();
+    const boks = document.querySelector('#skaermLogBox details');
+    if (boks) { boks.open = true; boks.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+}
+
+function renderSkaermLog() {
+    const boks = document.getElementById('skaermLogBox');
+    if (!boks) return;
+    const doegn = Date.now() - 24 * 3600 * 1000;
+    const senesteDoegn = _skaermLog.filter(h => new Date(h.fra).getTime() >= doegn).length;
+    const skaerme = [...new Set(_skaermLog.map(skaermNoegle))].sort((a, b) => a.localeCompare(b, 'da'));
+    if (_skaermLogFilter && !skaerme.includes(_skaermLogFilter)) _skaermLogFilter = '';
+    const viste = _skaermLog.filter(h => !_skaermLogFilter || skaermNoegle(h) === _skaermLogFilter);
+
+    const dagNavn = (d) => {
+        const i = new Date(); i.setHours(0, 0, 0, 0);
+        const dag = new Date(d); dag.setHours(0, 0, 0, 0);
+        const forskel = Math.round((i - dag) / 86400000);
+        if (forskel === 0) return 'I dag';
+        if (forskel === 1) return 'I går';
+        return dag.toLocaleDateString('da-DK', { weekday: 'long', day: 'numeric', month: 'long' });
+    };
+    let sidsteDag = '';
+    const raekker = viste.map(h => {
+        const d = new Date(h.fra);
+        const dag = dagNavn(d);
+        const overskrift = dag !== sidsteDag ? `<div class="felt-etiket luft-over-12">${escapeHtml(dag)}</div>` : '';
+        sidsteDag = dag;
+        const hvor = h.side === 'oversigt' ? 'Oversigt' : `Bane ${h.bane || '?'}`;
+        return `${overskrift}
+            <div class="skaerm-log-raekke tekst-mindre">
+                <span class="tid">${d.toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' })}</span>
+                <span class="skaerm"><strong>${escapeHtml(skaermNoegle(h))}</strong> <small>${hvor}</small></span>
+                <span class="hvad">${escapeHtml(skaermHaendelseTekst(h))}</span>
+            </div>`;
+    }).join('');
+
+    const aaben = boks.querySelector('details')?.open ?? dtGruppeAaben('haendelser');
+    boks.innerHTML = `
+        <details class="dt-gruppe" data-gruppe="haendelser"${aaben ? ' open' : ''}>
+            <summary>
+                <span class="dt-gruppe-titel">Skærmenes hændelser</span>
+                <span class="dt-gruppe-antal">${senesteDoegn} seneste døgn · ${_skaermLog.length} på 30 dage</span>
+            </summary>
+            <div class="dt-gruppe-indhold">
+                <p class="tekst-mindre" style="color:var(--text-muted, rgba(255, 255, 255, 0.62));margin:0 0 10px;">
+                    Når en TV-skærm eller oversigt har stået stille, mistet forbindelsen eller er startet forfra — også når nogen i hallen har genstartet den. Gemmes i 30 dage.
+                </p>
+                ${skaerme.length > 1 ? `
+                <select onchange="visSkaermLog(this.value)" style="background:var(--color-bg-card);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 10px;color:var(--text-primary, #eaeaea);margin-bottom:6px;">
+                    <option value="">Alle skærme</option>
+                    ${skaerme.map(n => `<option value="${escapeHtml(n)}"${n === _skaermLogFilter ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('')}
+                </select>` : ''}
+                ${raekker || '<p class="dt-gruppe-tom">Ingen hændelser de seneste 30 dage</p>'}
+            </div>
+        </details>`;
+    boks.querySelector('details').addEventListener('toggle', (e) => saetDtGruppeAaben('haendelser', e.target.open));
 }
 
 async function fjernSkaerm(klientId) {
@@ -2851,18 +2938,24 @@ function renderSkaerme(skaerme) {
             : `Skærm uden navn <span style="opacity:0.6;">(${escapeHtml(s.klientId)} — opdatér kiosk-PC'en for at få navnet med)</span>`;
         const data = s.dataAlderSek != null && s.dataAlderSek > 30
             ? ` &nbsp;•&nbsp; <span class="tekst-advarsel">data ${skaermVarighed(s.dataAlderSek)} gamle</span>` : '';
-        const haendelser = (s.haendelser || []).slice(0, 3).map(h =>
-            h.type === 'frys'
-                ? `Stod stille ${skaermVarighed(h.sek)} kl. ${kl(h.fra)}`
-                : `Uden forbindelse ${skaermVarighed(h.sek)} kl. ${kl(h.fra)}`
-        ).join(' &nbsp;•&nbsp; ');
+        const haendelser = (s.haendelser || []).slice(0, 3).map(h => {
+            const hvad = { frys: 'Stod stille', net: 'Uden forbindelse', genstart: 'Startet forfra efter', vaek: 'Væk i' }[h.type] || h.type;
+            return `${hvad} ${skaermVarighed(h.sek)} kl. ${kl(h.fra)}`;
+        }).join(' &nbsp;•&nbsp; ');
+        // Antal i hændelsesloggen det seneste døgn — klik viser skærmens log
+        const doegn = Date.now() - 24 * 3600 * 1000;
+        const noegle = s.navn || s.klientId;
+        const iLog = _skaermLog.filter(h => skaermNoegle(h) === noegle && new Date(h.fra).getTime() >= doegn).length;
+        const logLink = iLog
+            ? ` &nbsp;•&nbsp; <a href="#" onclick="visSkaermLog(this.dataset.skaerm);return false;" data-skaerm="${escapeHtml(noegle)}"
+                style="color:var(--color-warning, #ffb02e);">${iLog} ${iLog === 1 ? 'hændelse' : 'hændelser'} seneste døgn</a>` : '';
         return `
             <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid rgba(255,255,255,0.06);">
                 <span style="width:9px;height:9px;border-radius:50%;background:${farve};margin-top:6px;flex-shrink:0;"></span>
                 <div class="fyld tekst-mindre">
                     <div><strong>${navn}</strong> &nbsp;<span style="color:${farve};">${status}</span></div>
                     <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.9em;margin-top:2px;">
-                        ${s.side === 'oversigt' ? 'Oversigt' : `Bane ${s.bane || '?'}`}${s.kioskVersion ? ` &nbsp;•&nbsp; Badminton TV ${escapeHtml(s.kioskVersion)}` : ''} &nbsp;•&nbsp; sidst set ${skaermVarighed(s.sekunderSiden)} siden &nbsp;•&nbsp; IP ${escapeHtml(s.ip || '?')}${data}
+                        ${s.side === 'oversigt' ? 'Oversigt' : `Bane ${s.bane || '?'}`}${s.kioskVersion ? ` &nbsp;•&nbsp; Badminton TV ${escapeHtml(s.kioskVersion)}` : ''} &nbsp;•&nbsp; sidst set ${skaermVarighed(s.sekunderSiden)} siden &nbsp;•&nbsp; IP ${escapeHtml(s.ip || '?')}${data}${logLink}
                     </div>
                     ${haendelser ? `<div style="color:var(--color-warning, #ffb02e);font-size:0.9em;margin-top:2px;">${Ikon('advarsel')} ${haendelser}</div>` : ''}
                 </div>

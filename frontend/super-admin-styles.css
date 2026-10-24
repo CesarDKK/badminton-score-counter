@@ -109,6 +109,44 @@ header .subtitle {
 /* Seneste klub-admin-login; over en måned siden (eller aldrig) fremhæves */
 .club-meta .club-sidst-login { display: block; margin-top: 4px; color: rgba(255,255,255,0.7); }
 .club-meta .club-sidst-login--gammel { color: var(--color-accent); }
+.club-meta .club-skaerm-link { color: var(--color-warning, #ffb02e); cursor: pointer; text-decoration: underline; }
+
+/* Skærm-hændelser (alle klubber) */
+.sa-select {
+    background: var(--color-bg-card);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: var(--text-primary, #eaeaea);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9em;
+}
+.sa-select option { background: var(--color-bg-card); }
+.skaerm-log-dag {
+    margin: 14px 0 4px;
+    font-size: 0.72em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
+}
+.skaerm-log-raekke {
+    display: grid;
+    grid-template-columns: 3.4em 9em 11em 1fr;
+    gap: 10px;
+    padding: 6px 0;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    font-size: 0.86em;
+}
+.skaerm-log-raekke .tid { color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-variant-numeric: tabular-nums; }
+.skaerm-log-raekke .klub,
+.skaerm-log-raekke .skaerm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skaerm-log-raekke .skaerm small { opacity: 0.6; }
+@media (max-width: 640px) {
+    .skaerm-log-raekke { grid-template-columns: 3.4em 1fr; row-gap: 2px; }
+    .skaerm-log-raekke .skaerm,
+    .skaerm-log-raekke .hvad { grid-column: 2; }
+}
 .club-actions { display: flex; gap: 8px; align-items: center; }
 
 /* Status badge */

@@ -3,8 +3,12 @@
 // nettet ('net') eller perioder hvor browseren stod stille ('frys'). Admin ser
 // listen under Adgangslinks, så en skærm kan undersøges uden at køre ud til den.
 //
-// Kun i hukommelsen (som SSE-hubben): statussen er "lige nu"-information, og
-// hændelserne skrives desuden i backend-loggen, så de overlever en genstart.
+// Serveren ser desuden selv, når en skærm har været væk og er startet forfra
+// ('genstart') eller er kommet tilbage af sig selv ('vaek').
+//
+// Statussen er kun i hukommelsen (som SSE-hubben) — den er "lige nu"-
+// information. Hændelserne gemmes desuden i 30 dage (screens/haendelseslog.js),
+// så admin kan se dem bagefter.
 
 const MAX_SKAERME = 200;          // pr. klub — et loft mod oversvømmelse
 const MAX_HAENDELSER = 20;        // pr. skærm, nyeste først
@@ -16,6 +20,11 @@ const VIS_HAENDELSE_MS = 3600 * 1000;
 // genstartet ved deploy) er ikke en advarsel værd — først fra 1 minut, dvs.
 // mindst 3 livstegn i træk der ikke kom igennem
 const MIN_NET_SEK = 60;
+// Siden startet forfra efter mindst så langt et hul = genstart (browser-vagten
+// er ~1 min om at genstarte en frossen browser; en genindlæsning tager sekunder)
+const GENSTART_MIN_MS = 45 * 1000;
+// Længere huller er en slukket skærm (natten, en hal der lukker), ikke et udfald
+const UDFALD_MAX_MS = 4 * 3600 * 1000;
 
 const register = new Map();       // tenant -> Map(klientId -> skærm)
 
@@ -60,7 +69,9 @@ function registrer(tenant, data, meta, nu = Date.now()) {
         s = { klientId, foersteGang: nu, haendelser: [] };
         skaerme.set(klientId, s);
     }
-    const tilbageEfterSek = !ny && nu - s.sidstSet > 120000 ? Math.round((nu - s.sidstSet) / 1000) : null;
+    // Forrige livstegn fra den samme fysiske skærm: samme række, eller den gamle
+    // række med samme navn på samme link, som erstattes nedenfor
+    let forrige = ny ? null : { sidstSet: s.sidstSet, sideStartet: s.sideStartet };
 
     s.navn = tekst(data.navn, 60);
     // Samme navn på samme link er samme fysiske skærm, der er startet forfra
@@ -73,6 +84,9 @@ function registrer(tenant, data, meta, nu = Date.now()) {
                 // netop det, man vil kunne se bagefter
                 s.haendelser = [...s.haendelser, ...anden.haendelser]
                     .sort((a, b) => b.fra - a.fra).slice(0, MAX_HAENDELSER);
+                if (!forrige || anden.sidstSet > forrige.sidstSet) {
+                    forrige = { sidstSet: anden.sidstSet, sideStartet: anden.sideStartet };
+                }
                 skaerme.delete(id);
             }
         }
@@ -87,12 +101,34 @@ function registrer(tenant, data, meta, nu = Date.now()) {
     s.dataAlderSek = heltal(data.dataAlderSek, 0, 7 * 24 * 3600);
     s.tokenId = meta.tokenId || null;
     s.ip = tekst(meta.ip, 64);
+    // Hvornår siden blev indlæst (performance.timeOrigin) — skifter den, er
+    // siden startet forfra
+    s.sideStartet = heltal(data.sideStartet, nu - GLEM_EFTER_MS, nu + 60000);
     s.sidstSet = nu;
 
     const nye = (Array.isArray(data.haendelser) ? data.haendelser : [])
         .slice(0, 10)
         .map(h => rensHaendelse(h, nu))
         .filter(Boolean);
+
+    // Det serveren selv kan se ud fra livstegnene. Et hul over UDFALD_MAX_MS er
+    // en slukket skærm (natten, efter 23:59-slukningen), ikke et udfald.
+    const hulMs = forrige ? nu - forrige.sidstSet : 0;
+    const tilbageEfterSek = hulMs > 120000 ? Math.round(hulMs / 1000) : null;
+    if (forrige && hulMs <= UDFALD_MAX_MS) {
+        const hul = { fra: forrige.sidstSet, til: nu, sek: Math.round(hulMs / 1000) };
+        const startetForfra = !!s.sideStartet && !!forrige.sideStartet && s.sideStartet !== forrige.sideStartet;
+        if (startetForfra && hulMs >= GENSTART_MIN_MS) {
+            // Siden er startet forfra efter et hul: PC'en eller browseren er
+            // genstartet (af nogen i hallen, browser-vagten eller hardware-
+            // vagthunden). En genindlæsning ved ny version tager få sekunder.
+            nye.push({ type: 'genstart', ...hul });
+        } else if (!startetForfra && hulMs > 120000 && !nye.some(h => h.type === 'net')) {
+            // Væk og tilbage af sig selv, uden at TV'et selv har meldt et
+            // net-hul (oversigten melder ikke huller)
+            nye.push({ type: 'vaek', ...hul });
+        }
+    }
     // TV'et sender dem i tidsorden; listen gemmes nyeste først
     s.haendelser = [...[...nye].reverse(), ...s.haendelser].slice(0, MAX_HAENDELSER);
 
