@@ -25,16 +25,23 @@ test('en gyldig rapport renses og får varigheden regnet ud', () => {
     }]);
 });
 
-test('ukendte typer, tidspunkter langt væk og forkert rækkefølge filtreres fra', () => {
+test('ukendte typer og tidspunkter langt væk filtreres fra', () => {
     const r = rensRapport(rapport([
         { type: 'hack', fra: NU },
         { type: 'pc-knap', fra: NU - 40 * 24 * 3600 * 1000 },
-        { type: 'pc-genstart', fra: NU, til: NU - 1000 },
         { type: 'browser-genstart', fra: NU - 1000, tekst: 'hjerteslaget stod stille' }
     ]), NU);
     assert.deepEqual(r.haendelser.map(h => h.type), ['browser-genstart']);
     assert.equal(r.haendelser[0].til, null);
     assert.equal(r.haendelser[0].sek, null);
+});
+
+test('slut før start (PC\'ens ur lidt bagud lige efter opstart): hændelsen beholdes uden slut', () => {
+    // Set i VM-testen: "startet igen" lå 7 s før "slukket"
+    const [h] = rensRapport(rapport([{ type: 'pc-knap', fra: NU, til: NU - 7000 }]), NU).haendelser;
+    assert.equal(h.type, 'pc-knap');
+    assert.equal(h.til, null);
+    assert.equal(h.sek, null);
 });
 
 test('rapporten afvises uden gyldige hændelser, med forkert navn eller for mange hændelser', () => {

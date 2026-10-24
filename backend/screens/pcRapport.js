@@ -39,8 +39,9 @@ function rensRapport(body, nu = Date.now()) {
         if (!h || typeof h !== 'object' || !TYPER.has(h.type)) continue;
         const fra = heltal(h.fra, nu - MAX_ALDER_MS, nu + 3600 * 1000);
         if (fra === null) continue;
+        // Lige efter opstart kan PC'ens ur gå lidt bagud (før nettet har sat
+        // det), så "startet igen" kan ligge før "stoppede" — så bare uden slut
         const til = h.til == null ? null : heltal(h.til, fra, nu + 3600 * 1000);
-        if (h.til != null && til === null) continue;
         const ud = { type: h.type, fra, til, sek: til === null ? null : Math.round((til - fra) / 1000),
                      tekst: tekst(h.tekst, MAX_TEKST) || null };
         if (typeof h.log === 'string' && h.log) {

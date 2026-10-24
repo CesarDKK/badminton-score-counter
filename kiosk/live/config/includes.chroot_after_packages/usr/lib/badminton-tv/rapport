@@ -154,9 +154,15 @@ def koe_tilfoej(haendelse):
 
 # ── Forrige kørsel ────────────────────────────────────────
 
+def journal_boot(boot):
+    """journalctl -b vil have boot-id'et uden bindestreger (kernen giver det med:
+    "Failed to add match … Invalid argument" — set i VM-testen)."""
+    return boot.replace('-', '')
+
+
 def journal_slut(boot):
     """Tidspunktet for forrige opstarts sidste logpost (ms), hvis journalen har den."""
-    ud = koer(JOURNALCTL, '-b', boot, '-n', '1', '-o', 'json', '--no-pager', '-q')
+    ud = koer(JOURNALCTL, '-b', journal_boot(boot), '-n', '1', '-o', 'json', '--no-pager', '-q')
     for linje in ud.splitlines():
         try:
             return int(json.loads(linje)['__REALTIME_TIMESTAMP']) // 1000
@@ -167,8 +173,8 @@ def journal_slut(boot):
 
 def journal_uddrag(boot):
     """Advarslerne og slutningen af forrige opstarts log — dér står sporet."""
-    advarsler = koer(JOURNALCTL, '-b', boot, '-p', 'warning', '-n', '60', '-o', 'short-iso', '--no-pager', '-q')
-    slut = koer(JOURNALCTL, '-b', boot, '-n', '120', '-o', 'short-iso', '--no-pager', '-q')
+    advarsler = koer(JOURNALCTL, '-b', journal_boot(boot), '-p', 'warning', '-n', '60', '-o', 'short-iso', '--no-pager', '-q')
+    slut = koer(JOURNALCTL, '-b', journal_boot(boot), '-n', '120', '-o', 'short-iso', '--no-pager', '-q')
     if not (advarsler.strip() or slut.strip()):
         return ''
     return ('== Advarsler og fejl (de seneste 60) ==\n' + advarsler.strip()
@@ -182,10 +188,15 @@ def nye_pstore(sete):
         navn = os.path.basename(sti)
         if navn in sete:
             continue
-        dele = []
-        for fil in sorted(glob.glob(os.path.join(sti, '*'))) if os.path.isdir(sti) else [sti]:
-            dele.append(laes_tekst(fil))
-        ud.append((navn, '\n'.join(dele)))
+        # systemd-pstore lægger dumpet i pstore/<tid>/001/… (set i VM-testen) —
+        # så hele mappen læses, som hentlog's grep -r
+        filer = []
+        if os.path.isdir(sti):
+            for rod, _, navne in os.walk(sti):
+                filer += [os.path.join(rod, n) for n in navne]
+        else:
+            filer = [sti]
+        ud.append((navn, '\n'.join(laes_tekst(f) for f in sorted(filer))))
     return ud
 
 
@@ -199,7 +210,17 @@ def pstore_aarsag(dump):
 
 
 def vurder_forrige(forrige, nu_boot, nu_start, tilstand):
-    """Hændelserne om forrige kørsel (liste) — tom, hvis den sluttede planlagt."""
+    """Hændelserne om forrige kørsel (liste) — tom, hvis den sluttede planlagt.
+
+    Lige efter opstart kan uret gå lidt bagud, før nettet har sat det (set i
+    VM-testen: "startet igen" 7 s før "slukket") — så slut er aldrig før start."""
+    hs = _vurder_forrige(forrige, nu_boot, nu_start, tilstand)
+    for h in hs:
+        h['til'] = max(h['til'], h['fra'])
+    return hs
+
+
+def _vurder_forrige(forrige, nu_boot, nu_start, tilstand):
     if not forrige or forrige.get('boot_id') == nu_boot:
         return []
     slut = forrige.get('slut')
@@ -212,7 +233,7 @@ def vurder_forrige(forrige, nu_boot, nu_start, tilstand):
                  'genstart': f'Genstartet kl. {kl(slut["tid"])}'}.get(
                      hvordan, f'Slukket kl. {kl(slut["tid"])}')
         return [{'type': type_, 'fra': slut['tid'], 'til': nu_start,
-                 'tekst': f'{tekst}, startet igen kl. {kl(nu_start)}'}]
+                 'tekst': f'{tekst}, startet igen kl. {kl(max(nu_start, slut["tid"]))}'}]
 
     # Ingen ordentlig nedlukning: frøs, strømsvigt, knappen holdt inde — eller
     # kernenedbrud, hvis der ligger et nyt dump i pstore
@@ -231,12 +252,12 @@ def vurder_forrige(forrige, nu_boot, nu_start, tilstand):
                  if disk else 'Kernenedbrud — PC\'en genstartede af sig selv')
         dumptekst = '\n\n'.join(d for _, d in dumps)
         return [{'type': 'pc-panik', 'fra': fra, 'til': nu_start,
-                 'tekst': f'{tekst} (startet igen kl. {kl(nu_start)})',
+                 'tekst': f'{tekst} (startet igen kl. {kl(max(nu_start, fra))})',
                  'log': afkort('== Årsag (fra kernens dump) ==\n' + '\n'.join(aarsag)
                                + ('\n\n' + uddrag if uddrag else '')
                                + '\n\n== Kernens dump (slutningen) ==\n' + dumptekst[-8000:])}]
     tekst = (f'Stoppede brat kl. {kl(fra)} uden at lukke ned — frøs, mistede strømmen, '
-             f'eller tænd/sluk-knappen blev holdt inde. Startet igen kl. {kl(nu_start)}')
+             f'eller tænd/sluk-knappen blev holdt inde. Startet igen kl. {kl(max(nu_start, fra))}')
     h = {'type': 'pc-brat', 'fra': fra, 'til': nu_start, 'tekst': tekst}
     if uddrag:
         h['log'] = afkort(uddrag)

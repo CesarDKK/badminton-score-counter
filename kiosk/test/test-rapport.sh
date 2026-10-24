@@ -35,6 +35,14 @@ cat > "$TMP/bin/journalctl" <<'EOF'
 #!/bin/bash
 # -g 'Power key': $FAKE_POWERKEY. -o json -n 1: forrige opstarts sidste post.
 # Ellers en linje, der viser hvad der blev spurgt om.
+# Som den rigtige: -b tager boot-id'et uden bindestreger (set i VM-testen)
+args=("$@")
+for i in "${!args[@]}"; do
+    if [ "${args[$i]}" = -b ] && [[ "${args[$((i + 1))]:-}" == *-* ]] && [[ "${args[$((i + 1))]}" != -* ]]; then
+        echo "Failed to add match '${args[$((i + 1))]}': Invalid argument" >&2
+        exit 1
+    fi
+done
 case " $* " in
     *" -g "*) printf '%s' "${FAKE_POWERKEY:-}" ;;
     *" -o json "*) [ -n "${FAKE_SLUT_US:-}" ] && printf '{"__REALTIME_TIMESTAMP":"%s"}\n' "$FAKE_SLUT_US" ;;
@@ -126,14 +134,14 @@ FAKE_JOURNAL='EXT4-fs warning: noget' FAKE_SLUT_US=$(( SLUT_MS * 1000 )) ny_opst
 forvent "brat stop: pc-brat" "$(koe_typer)" pc-brat
 H=$(cat "$TMP/var/rapporter/"*.json)
 indeholder "brat stop: journalens slutning med" "$H" 'EXT4-fs warning: noget'
-indeholder "brat stop: forrige opstart (boot-4) spurgt" "$H" '-b boot-4'
+indeholder "brat stop: forrige opstart spurgt (uden bindestreger)" "$H" '-b boot4'
 indeholder "brat stop: tidspunkt fra journalen" "$H" "\"fra\": $SLUT_MS"
 rm -rf "$TMP/var/rapporter"
 
 # 6. Kernenedbrud med et nyt dump i pstore → pc-panik (det gamle dump fra før tæller ikke)
-mkdir -p "$TMP/pstore/12345"
+mkdir -p "$TMP/pstore/12345/001"   # som systemd-pstore: <tid>/001/…
 printf '%s\n' '<0>[  287.3] browservagt: disken er død (kan ikke læse /usr/share/badminton-tv/version: Input/output error) — udløser kernepanik' \
-              '<0>[  287.4] Kernel panic - not syncing: sysrq triggered crash' > "$TMP/pstore/12345/dmesg-efi-1"
+              '<0>[  287.4] Kernel panic - not syncing: sysrq triggered crash' > "$TMP/pstore/12345/001/dmesg.txt"
 ny_opstart boot-6
 forvent "kernenedbrud: pc-panik" "$(koe_typer)" pc-panik
 H=$(cat "$TMP/var/rapporter/"*.json)
