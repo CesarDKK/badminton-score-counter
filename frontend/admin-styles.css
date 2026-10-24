@@ -1459,3 +1459,28 @@ header > div {
 .fyld { flex: 1; min-width: 0; }
 .ingen-krymp { flex-shrink: 0; }
 .tekst-venstre { text-align: left; }
+
+/* Netop oprettet holdkamp: grøn ramme og en kvittering et øjeblik, så man kan
+   se, at "Start holdkamp" virkede (formularen er tømt, og siden er rullet hertil) */
+.holdkamp-block { scroll-margin-top: 20px; }
+
+.holdkamp-block--ny .holdkamp-panel {
+    border-color: var(--color-win);
+    box-shadow: 0 0 0 2px rgba(var(--color-win-rgb), 0.35);
+    transition: border-color 0.6s ease, box-shadow 0.6s ease;
+}
+
+.holdkamp-oprettet {
+    margin-bottom: 10px;
+    padding: 10px 14px;
+    background: rgba(var(--color-win-rgb), 0.12);
+    border: 1px solid var(--color-win);
+    border-radius: 8px;
+    color: var(--color-win);
+    font-weight: 600;
+    animation: fadeUp 0.3s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .holdkamp-oprettet { animation: none; }
+}
