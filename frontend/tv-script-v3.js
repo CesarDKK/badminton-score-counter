@@ -397,6 +397,9 @@ async function sendLivstegn() {
             bane: courtId,
             version: (document.querySelector('script[src*="tv-script-v3.js"]')?.src.split('v=')[1] || ''),
             kioskVersion: KIOSK_VERSION,
+            // Hvornår siden blev indlæst — skifter den efter et hul, er TV'et
+            // startet forfra (genstart), og det ses i admins hændelseslog
+            sideStartet: Math.round(performance.timeOrigin),
             dataAlderSek: _sidsteDataOk ? Math.round((Date.now() - _sidsteDataOk) / 1000) : null,
             haendelser
         });

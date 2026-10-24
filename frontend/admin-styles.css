@@ -916,6 +916,25 @@ header > div {
     margin: 0;
 }
 
+/* Skærmenes hændelseslog: tid · skærm · hvad — på en telefon står hvad under skærmen */
+.skaerm-log-raekke {
+    display: grid;
+    grid-template-columns: 3.2em 11em 1fr;
+    gap: 12px;
+    padding: 6px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.skaerm-log-raekke .tid {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
+}
+.skaerm-log-raekke .skaerm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skaerm-log-raekke .skaerm small { opacity: 0.6; font-size: 1em; }
+@media (max-width: 640px) {
+    .skaerm-log-raekke { grid-template-columns: 3.2em 1fr; row-gap: 2px; }
+    .skaerm-log-raekke .hvad { grid-column: 2; }
+}
+
 
 /* ═════════ Holdkamp og turnering: komponenter (G4) ═════════
    Før stod farver og afstande som inline-stil i admin-script.js. Nu ligger

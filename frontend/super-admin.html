@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="fonts.css?v=2">
     <link rel="stylesheet" href="fundament.css?v=2">
     <link rel="stylesheet" href="styles.css?v=11">
-    <link rel="stylesheet" href="super-admin-styles.css?v=10">
+    <link rel="stylesheet" href="super-admin-styles.css?v=11">
     <script src="js/theme-loader.js?v=15"></script>
 </head>
 <body>
@@ -119,6 +119,24 @@
                 <div id="clubList">
                     <div class="empty-state"><div class="spinner"></div></div>
                 </div>
+            </div>
+
+            <!-- Skærm-hændelser på tværs af klubberne (gemmes i 30 dage) -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Skærm-hændelser</span>
+                    <div style="display:flex; gap:8px;">
+                        <select id="skaermLogKlub" class="sa-select"></select>
+                        <select id="skaermLogDage" class="sa-select">
+                            <option value="1">Seneste døgn</option>
+                            <option value="7" selected>7 dage</option>
+                            <option value="30">30 dage</option>
+                        </select>
+                        <button id="refreshSkaermLogBtn" class="btn-secondary">↻ Opdater</button>
+                    </div>
+                </div>
+                <p style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-bottom:10px;">TV-skærme og oversigter, der har stået stille, mistet forbindelsen eller er startet forfra (genstartet af nogen i hallen, eller frosset). Klubberne ser deres egne under Adgangslinks.</p>
+                <div id="skaermLogList"><div class="empty-state"><div class="spinner"></div></div></div>
             </div>
 
             <!-- Klubber uden logo -->
@@ -346,10 +364,10 @@
         </div>
     </div>
 
-    <script src="js/api.js?v=30"></script>
+    <script src="js/api.js?v=31"></script>
     <script src="js/session-vagt.js?v=2"></script>
     <script src="js/logo-match.js?v=1"></script>
     <script src="js/ikoner.js?v=2"></script>
-    <script src="super-admin-script.js?v=25"></script>
+    <script src="super-admin-script.js?v=26"></script>
 </body>
 </html>

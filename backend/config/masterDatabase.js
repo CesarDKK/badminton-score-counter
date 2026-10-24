@@ -156,6 +156,26 @@ async function initialize() {
             console.log('✓ clubs.last_auto_backup_at/last_auto_backup_error kolonner tilfoejet');
         }
 
+        // Skærmenes hændelser (screens/haendelseslog.js) — idempotent
+        await query(`
+            CREATE TABLE IF NOT EXISTS skaerm_haendelser (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                klub VARCHAR(100) NOT NULL,
+                klient_id VARCHAR(40) NOT NULL,
+                navn VARCHAR(60) NULL,
+                side VARCHAR(10) NOT NULL DEFAULT 'tv',
+                bane INT NULL,
+                token_id INT NULL,
+                type VARCHAR(20) NOT NULL,
+                fra TIMESTAMP(3) NOT NULL,
+                til TIMESTAMP(3) NULL,
+                sek INT NULL,
+                oprettet TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_klub_fra (klub, fra),
+                INDEX idx_fra (fra)
+            ) ENGINE=InnoDB
+        `);
+
         // Seed standard klub-logoer (idempotent). Lazy require for at undgaa
         // cirkulaer afhaengighed (seedLogos kraever dette modul ved load).
         try {

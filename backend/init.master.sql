@@ -39,6 +39,24 @@ CREATE TABLE IF NOT EXISTS clubs (
   INDEX idx_is_active (is_active)
 ) ENGINE=InnoDB;
 
+-- Skærmenes hændelser (stod stille, uden forbindelse, startet forfra, væk) i 30 dage
+CREATE TABLE IF NOT EXISTS skaerm_haendelser (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  klub VARCHAR(100) NOT NULL,
+  klient_id VARCHAR(40) NOT NULL,
+  navn VARCHAR(60) NULL,
+  side VARCHAR(10) NOT NULL DEFAULT 'tv',
+  bane INT NULL,
+  token_id INT NULL,
+  type VARCHAR(20) NOT NULL,
+  fra TIMESTAMP(3) NOT NULL,
+  til TIMESTAMP(3) NULL,
+  sek INT NULL,
+  oprettet TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_klub_fra (klub, fra),
+  INDEX idx_fra (fra)
+) ENGINE=InnoDB;
+
 -- Centralt klub-logo-bibliotek (delt paa tvaers af alle klubber, kun superadmin)
 CREATE TABLE IF NOT EXISTS club_logos (
   id INT PRIMARY KEY AUTO_INCREMENT,

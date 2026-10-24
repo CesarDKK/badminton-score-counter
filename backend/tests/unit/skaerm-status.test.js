@@ -149,3 +149,54 @@ test('loft over antal skærme pr. klub', () => {
     assert.equal(registrer('lyngby', { klientId: 'en-for-mange' }, meta, NU), null);
     assert.equal(liste('lyngby', NU).length, MAX_SKAERME);
 });
+
+// ── Hvad serveren selv ser: startet forfra / væk ──
+
+const lb = (klientId, sideStartet, ekstra = {}) => ({ klientId, navn: 'tv-bane-1a', bane: 1, sideStartet, ...ekstra });
+
+test('siden startet forfra efter et hul = genstart (PC/browser genstartet eller frosset)', () => {
+    registrer('lyngby', lb('abc123', NU - 3600000), meta, NU);
+    // 3 min uden livstegn, så en ny side (ny timeOrigin)
+    const r = registrer('lyngby', lb('abc123', NU + 170000), meta, NU + 180000);
+    assert.deepEqual(r.nye.map(h => h.type), ['genstart']);
+    assert.equal(r.nye[0].fra, NU);
+    assert.equal(r.nye[0].til, NU + 180000);
+    assert.equal(r.nye[0].sek, 180);
+    assert.equal(liste('lyngby', NU + 180000)[0].haendelser[0].type, 'genstart');
+});
+
+test('genstart med ny browserprofil (nyt klient-id, samme navn) ses også', () => {
+    registrer('lyngby', lb('gammel-id1', NU - 3600000), meta, NU);
+    const r = registrer('lyngby', lb('ny-id2', NU + 80000), meta, NU + 90000);
+    assert.deepEqual(r.nye.map(h => h.type), ['genstart']);
+    assert.equal(r.nye[0].sek, 90);
+});
+
+test('en genindlæsning (ny version) med få sekunders hul er ikke en genstart', () => {
+    registrer('lyngby', lb('abc123', NU - 3600000), meta, NU);
+    const r = registrer('lyngby', lb('abc123', NU + 15000), meta, NU + 20000);
+    assert.deepEqual(r.nye, []);
+});
+
+test('væk og tilbage af sig selv (samme side) — men ikke når TV\'et selv har meldt net-hullet', () => {
+    registrer('lyngby', lb('abc123', NU - 3600000), meta, NU);
+    const vaek = registrer('lyngby', lb('abc123', NU - 3600000), meta, NU + 300000);
+    assert.deepEqual(vaek.nye.map(h => h.type), ['vaek']);
+    assert.equal(vaek.nye[0].sek, 300);
+
+    const meldt = registrer('lyngby', lb('abc123', NU - 3600000, {
+        haendelser: [{ type: 'net', fra: NU + 300000, til: NU + 600000 }]
+    }), meta, NU + 600000);
+    assert.deepEqual(meldt.nye.map(h => h.type), ['net']);
+});
+
+test('et hul på over 4 timer er en slukket skærm (natten), ikke et udfald', () => {
+    registrer('lyngby', lb('abc123', NU - 3600000), meta, NU);
+    const r = registrer('lyngby', lb('abc123', NU + 8 * 3600000), meta, NU + 8 * 3600000 + 10000);
+    assert.deepEqual(r.nye, []);
+});
+
+test('første livstegn efter en server-genstart giver ingen hændelse', () => {
+    const r = registrer('lyngby', lb('abc123', NU - 60000), meta, NU);
+    assert.deepEqual(r.nye, []);
+});

@@ -109,6 +109,14 @@ document.addEventListener('DOMContentLoaded', function () {
     // Opdater klubber
     document.getElementById('refreshClubsBtn').addEventListener('click', loadClubs);
 
+    // Skærm-hændelser
+    document.getElementById('refreshSkaermLogBtn').addEventListener('click', loadSkaermLog);
+    document.getElementById('skaermLogDage').addEventListener('change', loadSkaermLog);
+    document.getElementById('skaermLogKlub').addEventListener('change', function () {
+        this.dataset.valgt = this.value;
+        renderSkaermLog();
+    });
+
     // Klub-logoer
     document.getElementById('uploadLogoBtn').addEventListener('click', handleUploadLogo);
     document.getElementById('refreshLogosBtn').addEventListener('click', loadLogos);
@@ -268,6 +276,7 @@ function switchApp(app) {
 
     if (isBadminton) {
         loadClubs();
+        loadSkaermLog();
         loadLogos();
         loadMissingLogos();
     } else {
@@ -308,6 +317,7 @@ function renderClubs() {
                         ${Ikon('noegle')} Sidst logget ind: ${sidstLoginTekst(club.last_login_at)}${club.last_login_user ? ` · ${escapeHtml(club.last_login_user)}` : ''}
                     </span>
                     ${autoBackupLinje(club)}
+                    ${skaermLinje(club)}
                 </div>
             </div>
             <div class="club-actions">
@@ -1143,6 +1153,90 @@ function autoBackupLinje(club) {
     return `<span class="club-sidst-login${fejl ? ' club-sidst-login--gammel' : ''}" title="Automatisk backup hver mandag kl. 02.00 — de 4 nyeste gemmes">
                 ${Ikon(fejl ? 'advarsel' : 'database')} ${tekst}
             </span>`;
+}
+
+// Skærm-hændelser det seneste døgn — klik viser klubbens hændelser i loggen nedenfor
+function skaermLinje(club) {
+    const n = club.skaerm_haendelser_doegn || 0;
+    if (!n) return '';
+    return `<span class="club-sidst-login" title="TV-skærme/oversigter der har stået stille, mistet forbindelsen eller er startet forfra">
+                ${Ikon('advarsel')} <a class="club-skaerm-link" onclick="visSkaermLogForKlub('${escapeHtml(club.db_name)}')">${n} skærm-${n === 1 ? 'hændelse' : 'hændelser'} seneste døgn</a>
+            </span>`;
+}
+
+// ==================== SKÆRM-HÆNDELSER (alle klubber) ====================
+
+let skaermLogCache = [];
+
+function skaermVarighed(sek) {
+    if (sek < 90) return `${sek} s`;
+    if (sek < 5400) return `${Math.round(sek / 60)} min`;
+    return `${Math.round(sek / 3600)} t`;
+}
+
+// Samme tekster som klubbens hændelseslog under Adgangslinks (admin-script.js)
+function skaermHaendelseTekst(h) {
+    const v = skaermVarighed(h.sek || 0);
+    switch (h.type) {
+        case 'frys': return `Browseren stod stille i ${v}`;
+        case 'net': return `Ingen forbindelse til serveren i ${v}`;
+        case 'genstart': return `Væk i ${v} og startet forfra — genstartet, eller den frøs`;
+        case 'vaek': return `Ingen livstegn i ${v} — kom tilbage af sig selv`;
+        default: return h.type;
+    }
+}
+
+async function loadSkaermLog() {
+    const listEl = document.getElementById('skaermLogList');
+    if (!listEl) return;
+    const dage = document.getElementById('skaermLogDage').value;
+    try {
+        skaermLogCache = await api.getAllScreenEvents(dage);
+        renderSkaermLog();
+    } catch (err) {
+        listEl.innerHTML = `<div class="empty-state">Fejl: ${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function visSkaermLogForKlub(dbName) {
+    const valg = document.getElementById('skaermLogKlub');
+    valg.dataset.valgt = dbName;
+    document.getElementById('skaermLogDage').value = '1';
+    loadSkaermLog().then(() => valg.closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }));
+}
+
+function renderSkaermLog() {
+    const listEl = document.getElementById('skaermLogList');
+    const valg = document.getElementById('skaermLogKlub');
+    const klubNavn = (h) => h.klub_navn || h.klub;
+
+    // Klubvalget: alle klubber med hændelser i perioden
+    const klubber = [...new Map(skaermLogCache.map(h => [h.klub, klubNavn(h)])).entries()]
+        .sort((a, b) => a[1].localeCompare(b[1], 'da'));
+    const valgt = klubber.some(([k]) => k === valg.dataset.valgt) ? valg.dataset.valgt : '';
+    valg.innerHTML = `<option value="">Alle klubber</option>`
+        + klubber.map(([k, n]) => `<option value="${escapeHtml(k)}"${k === valgt ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('');
+
+    const viste = skaermLogCache.filter(h => !valgt || h.klub === valgt);
+    if (!viste.length) {
+        listEl.innerHTML = '<div class="empty-state" style="padding:12px;">Ingen skærm-hændelser i perioden</div>';
+        return;
+    }
+    let sidsteDag = '';
+    listEl.innerHTML = viste.map(h => {
+        const d = new Date(h.fra);
+        const dag = d.toLocaleDateString('da-DK', { weekday: 'long', day: 'numeric', month: 'long' });
+        const overskrift = dag !== sidsteDag ? `<div class="skaerm-log-dag">${escapeHtml(dag)}</div>` : '';
+        sidsteDag = dag;
+        const hvor = h.side === 'oversigt' ? 'Oversigt' : `Bane ${h.bane || '?'}`;
+        return `${overskrift}
+            <div class="skaerm-log-raekke">
+                <span class="tid">${d.toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' })}</span>
+                <span class="klub">${escapeHtml(klubNavn(h))}</span>
+                <span class="skaerm"><strong>${escapeHtml(h.navn || h.klient_id)}</strong> <small>${hvor}</small></span>
+                <span class="hvad">${escapeHtml(skaermHaendelseTekst(h))}</span>
+            </div>`;
+    }).join('');
 }
 
 // Ingen login i en måned (eller aldrig): fremhæves, så inaktive klubber springer i øjnene

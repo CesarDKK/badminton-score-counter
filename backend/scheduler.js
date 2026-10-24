@@ -406,4 +406,23 @@ function startUgentligBackup() {
     console.log('⏰ Automatisk backup af klubberne hver mandag kl. 02:00 (Europe/Copenhagen)');
 }
 
-module.exports = { startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk, startUgentligBackup, ugentligBackup };
+/**
+ * Skærmenes hændelseslog (screens/haendelseslog.js) holdes på 30 dage —
+ * ryddes hver nat kl. 04:15.
+ */
+function startSkaermLogOprydning() {
+    const haendelseslog = require('./screens/haendelseslog');
+    cron.schedule('15 4 * * *', async () => {
+        try {
+            const n = await haendelseslog.ryd();
+            if (n) console.log(`🧹 Skærm-hændelser: ${n} ældre end ${haendelseslog.BEHOLD_DAGE} dage slettet`);
+        } catch (err) {
+            console.error('❌ Oprydning af skærm-hændelser fejlede:', err.message);
+        }
+    }, {
+        scheduled: true,
+        timezone: 'Europe/Copenhagen'
+    });
+}
+
+module.exports = { startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk, startUgentligBackup, ugentligBackup, startSkaermLogOprydning };

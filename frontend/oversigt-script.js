@@ -56,7 +56,8 @@ function startSkaermStatus() {
         else localStorage.setItem('btOversigtId', klientId);
     } catch { /* privat vindue — nyt id pr. indlæsning */ }
     const version = document.querySelector('script[src*="oversigt-script.js"]')?.src.split('v=')[1] || '';
-    const send = () => api.sendScreenHeartbeat({ klientId, navn, side: 'oversigt', version, kioskVersion })
+    const send = () => api.sendScreenHeartbeat({ klientId, navn, side: 'oversigt', version, kioskVersion,
+        sideStartet: Math.round(performance.timeOrigin) })
         .catch(() => { /* intet net — næste livstegn prøver igen */ });
     send();
     setInterval(send, 20000);
