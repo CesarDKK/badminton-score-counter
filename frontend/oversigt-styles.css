@@ -315,14 +315,27 @@ body::before {
     color: #ffffff;
 }
 
-/* Lige afgjort: står 1 min med resultatet — vinderen fremhævet, antal vundne
-   sæt i stedet for point, og en løber rundt om kortet, der tømmes over 60 sek.
-   (varigheden skal matche HK_RESULTAT_MS i oversigt-script.js) */
+/* Lige afgjort: står 1 min med resultatet — vinderen fremhævet, sættene store
+   i stedet for point, og en løber rundt om kortet, der tømmes over 60 sek.
+   (varigheden skal matche HK_RESULTAT_MS i oversigt-script.js).
+   Antal vundne sæt vises ikke — det kan læses af sættene, som får pladsen. */
 #holdkampCardsGrid .hk-kamp--afgjort .hk-kamp-status { color: var(--color-accent); }
 #holdkampCardsGrid .hk-kamp--afgjort .hk-vinder { background: rgba(var(--color-win-rgb), 0.12); }
-#holdkampCardsGrid .hk-kamp--afgjort .hk-vinder .hk-kamp-pts { color: rgb(var(--color-win-rgb)); }
-#holdkampCardsGrid .hk-kamp--afgjort .hk-taber .hk-kamp-navn,
-#holdkampCardsGrid .hk-kamp--afgjort .hk-taber .hk-kamp-pts { opacity: 0.55; }
+#holdkampCardsGrid .hk-kamp--afgjort .hk-taber .hk-kamp-navn { opacity: 0.55; }
+#holdkampCardsGrid .hk-kamp--afgjort .hk-kamp-saet { gap: calc(var(--u) * 1.1 * var(--s)); }
+#holdkampCardsGrid .hk-kamp--afgjort .hk-saet-boks {
+    width: calc(var(--u) * 10.4 * var(--s));
+    height: calc(var(--u) * 10.6 * var(--s));
+    border-radius: calc(var(--u) * 1.3 * var(--s));
+    font-size: calc(var(--u) * 9.2 * var(--s));
+}
+/* 5 kolonner (7+ kort): smallere bokse, så navnene ikke klippes ved tre sæt */
+#holdkampCardsGrid .hk-live--taet .hk-kamp--afgjort .hk-kamp-saet { gap: calc(var(--u) * 0.6 * var(--s)); }
+#holdkampCardsGrid .hk-live--taet .hk-kamp--afgjort .hk-saet-boks {
+    width: calc(var(--u) * 6.2 * var(--s));
+    height: calc(var(--u) * 7.6 * var(--s));
+    font-size: calc(var(--u) * 6.4 * var(--s));
+}
 #holdkampCardsGrid .hk-loeber {
     --w: calc(var(--u) * 0.55 * var(--s));
     position: absolute;
