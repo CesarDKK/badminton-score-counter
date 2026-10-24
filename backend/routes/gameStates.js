@@ -9,6 +9,7 @@ const { publishGameStateChange, subscribeGameStateChanges } = require('../events
 const { hentPlannerVisning, plannerForBane, gemPlannerResultat, kampIGang } = require('./plannerIntegration');
 const { validerIndtastning, vundneSaet } = require('../config/kampResultat');
 const { varighedTekst } = require('../config/matchTiming');
+const { gemSidsteAfsluttedeKamp } = require('../config/banerydning');
 // Kun én tæller ad gangen pr. bane (se taeller/ejerskab.js og migration 031)
 const ejerskab = require('../taeller/ejerskab');
 
@@ -901,47 +902,7 @@ router.delete('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), a
                              existing.player1_games >= 2 ||
                              existing.player2_games >= 2;
 
-            if (finished) {
-                const courtRow = await queryOne(
-                    'SELECT is_doubles FROM courts WHERE id = ?',
-                    [court.id]
-                );
-                const setScoresJson = existing.set_scores_history
-                    ? (typeof existing.set_scores_history === 'string'
-                        ? existing.set_scores_history
-                        : JSON.stringify(existing.set_scores_history))
-                    : '[]';
-                await query(
-                    `INSERT INTO last_finished_matches
-                        (court_id, player1_name, player1_name2, player2_name, player2_name2,
-                         player1_games, player2_games, set_scores_history,
-                         is_doubles, match_end_time, cleared_at)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-                     ON DUPLICATE KEY UPDATE
-                        player1_name = VALUES(player1_name),
-                        player1_name2 = VALUES(player1_name2),
-                        player2_name = VALUES(player2_name),
-                        player2_name2 = VALUES(player2_name2),
-                        player1_games = VALUES(player1_games),
-                        player2_games = VALUES(player2_games),
-                        set_scores_history = VALUES(set_scores_history),
-                        is_doubles = VALUES(is_doubles),
-                        match_end_time = VALUES(match_end_time),
-                        cleared_at = NOW()`,
-                    [
-                        court.id,
-                        existing.player1_name,
-                        existing.player1_name2,
-                        existing.player2_name,
-                        existing.player2_name2,
-                        existing.player1_games || 0,
-                        existing.player2_games || 0,
-                        setScoresJson,
-                        courtRow ? !!courtRow.is_doubles : false,
-                        existing.match_end_time
-                    ]
-                );
-            }
+            if (finished) await gemSidsteAfsluttedeKamp(court.id, existing);
         }
 
         // Delete game state

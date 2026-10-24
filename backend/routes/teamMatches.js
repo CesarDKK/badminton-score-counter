@@ -8,6 +8,7 @@ const { currentTenant } = require('../config/tenantPools');
 const { banensStartTid } = require('../config/matchTiming');
 const { publishGameStateChange } = require('../events/gameStateEvents');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
+const { rydAfsluttetBane } = require('../config/banerydning');
 const holdkampFormater = require('../config/holdkampFormater');
 
 /**
@@ -304,6 +305,12 @@ router.put('/:id/games/:gameId', requireWriteAuthInClubMode, requirePage('holdka
                          WHERE id = ?`,
                         [occupant.id]
                     );
+                } else if (Number(courtNumber) !== Number(game.court_number)) {
+                    // Står forrige kamps resultat stadig på banen (ingen trykkede
+                    // "Ryd banen" på tabletten), ryddes den, så den nye delkamp kan
+                    // starte. En afsluttet kamp, hvis delkamp stadig er 'active'
+                    // (resultatet er ikke meldt ind), rammer 409 ovenfor i stedet.
+                    await rydAfsluttetBane(courtNumber, req);
                 }
             }
             fields.push('court_number = ?');
@@ -379,13 +386,33 @@ router.put('/:id/finish', authMiddleware, requirePage('holdkamp'), async (req, r
  * minimalt objekt med clubDbName.
  */
 async function afslutHoldkamp(id, req) {
-    const courts = await query(
-        `SELECT DISTINCT court_number FROM team_match_games
+    const games = await query(
+        `SELECT court_number, team1_player1, team1_player2, team2_player1, team2_player2
+         FROM team_match_games
          WHERE team_match_id = ? AND court_number IS NOT NULL`,
         [id]
     );
+    const courts = [...new Set(games.map(g => g.court_number))];
     await query(`UPDATE team_matches SET status = 'finished' WHERE id = ?`, [id]);
-    for (const row of courts) publishGameStateChange(req, row.court_number, 'assignment');
+
+    // Baner, hvor en af holdkampens afsluttede kampe stadig står (ingen trykkede
+    // "Ryd banen"), ryddes. Kun når navnene på banen er holdkampens egne fra
+    // den bane — en anden kamp, der er spillet der siden, røres ikke.
+    for (const court of courts) {
+        const navne = new Set();
+        for (const g of games.filter(g => g.court_number === court)) {
+            for (const n of [g.team1_player1, g.team1_player2, g.team2_player1, g.team2_player2]) {
+                if (n) navne.add(n);
+            }
+        }
+        try {
+            await rydAfsluttetBane(court, req,
+                row => navne.has(row.player1_name) && navne.has(row.player2_name));
+        } catch (e) {
+            console.error(`Kunne ikke rydde bane ${court} efter holdkamp #${id}:`, e.message);
+        }
+    }
+    for (const court of courts) publishGameStateChange(req, court, 'assignment');
 }
 
 // Automatisk lukning: når ALLE delkampe i en holdkamp er færdige, lukkes den
