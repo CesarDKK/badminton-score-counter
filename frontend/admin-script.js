@@ -1312,13 +1312,21 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
                 </div>`;
         } else if (g.status === 'active') {
             const courtData = allGameStates.find(c => c.courtId === g.court_number);
-            let scoreText = '';
-            if (courtData) {
-                scoreText = ` · ${courtData.player1.score}–${courtData.player2.score} (${courtData.player1.games}–${courtData.player2.games} sæt)`;
+            if (resultatFraBane(g, courtData)) {
+                // Spillet færdigt på banen, men resultatet kom aldrig ind (fx mistede
+                // tabletten forbindelsen) — så lukker holdkampen aldrig af sig selv
+                statusBadge = `<span class="maerke maerke--fare">Bane ${g.court_number} · spillet færdig, resultat mangler</span>`;
+                editBtn = `<button onclick="meldResultatFraBane(${teamMatch.id}, ${g.id})" class="btn-primary btn-sm">Hent resultat fra banen</button>
+                           <button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" class="btn-secondary btn-sm">Manuel</button>`;
+            } else {
+                let scoreText = '';
+                if (courtData) {
+                    scoreText = ` · ${courtData.player1.score}–${courtData.player2.score} (${courtData.player1.games}–${courtData.player2.games} sæt)`;
+                }
+                statusBadge = `<span class="maerke maerke--igang">Bane ${g.court_number || '?'} ▶${scoreText}</span>`;
+                editBtn = `<button onclick="toggleEditGame(${teamMatch.id}, ${g.id})" class="btn-secondary btn-sm">Rediger</button>
+                           <button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" class="btn-secondary btn-sm">Manuel</button>`;
             }
-            statusBadge = `<span class="maerke maerke--igang">Bane ${g.court_number || '?'} ▶${scoreText}</span>`;
-            editBtn = `<button onclick="toggleEditGame(${teamMatch.id}, ${g.id})" class="btn-secondary btn-sm">Rediger</button>
-                       <button onclick="toggleManualResult(${teamMatch.id}, ${g.id})" class="btn-secondary btn-sm">Manuel</button>`;
         } else if (g.status === 'finished') {
             const winner = g.winner_team === 1 ? teamMatch.team1_name : teamMatch.team2_name;
             const isWO = g.set_scores === 'W.O.';
@@ -1438,6 +1446,7 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
                 </div>
             </div>
             ${renderHoldkampRegelBlok(teamMatch)}
+            ${renderHoldkampAabenStatus(teamMatch, allGameStates)}
             <div>${gamesHtml}</div>
         </div>
     `;
@@ -1846,6 +1855,105 @@ async function saveManualResult(teamMatchId, gameId, gameMode = '21') {
         console.error('Failed to save manual result:', error);
         showMessage('Fejl', 'Kunne ikke gemme resultatet. Prøv igen.');
     }
+}
+
+// Holdkampen lukker af sig selv, når alle delkampe har et resultat (se
+// AUTO_AFSLUT_EFTER_MIN i backend/routes/teamMatches.js)
+const HOLDKAMP_AUTO_AFSLUT_MIN = 10;
+
+// Resultatet af en delkamp, der er spillet færdig på banen, men aldrig meldt ind:
+// { winnerTeam, setScores, vinder, taber, saet } ud fra banens tilstand — eller
+// null, hvis kampen ikke er afgjort, eller en anden kamp står på banen.
+function resultatFraBane(g, courtData) {
+    if (!courtData || !courtData.matchCompleted) return null;
+    const hold1 = [g.team1_player1, g.team1_player2].filter(Boolean);
+    const hold2 = [g.team2_player1, g.team2_player2].filter(Boolean);
+    const hold = p => (hold1.includes(p.name) ? 1 : hold2.includes(p.name) ? 2 : 0);
+    const h1 = hold(courtData.player1), h2 = hold(courtData.player2);
+    if (!h1 || !h2 || h1 === h2) return null;
+
+    const s1 = courtData.player1.games || 0, s2 = courtData.player2.games || 0;
+    const vinderSide = courtData.resultWinner === 1 || courtData.resultWinner === 2
+        ? courtData.resultWinner : (s1 > s2 ? 1 : s2 > s1 ? 2 : 0);
+    if (!vinderSide) return null;
+
+    // Samme tekst som tælleren melder ind ("Anna 21-15 Bo, ..."), så Kamphistorik
+    // kan vende scoren efter navnene
+    const navne = (n, n2) => (courtData.isDoubles && n2 && n2 !== 'Makker 1' && n2 !== 'Makker 2') ? `${n} & ${n2}` : n;
+    const setScores = courtData.resultOutcome === 'walkover' ? 'W.O.'
+        : (courtData.setScoresHistory || []).map(set => typeof set === 'string' ? set
+            : `${navne(set.player1Name, set.player1Name2)} ${set.score} ${navne(set.player2Name, set.player2Name2)}`).join(', ');
+    const [v, t] = vinderSide === 1 ? [courtData.player1, courtData.player2] : [courtData.player2, courtData.player1];
+    return {
+        winnerTeam: vinderSide === 1 ? h1 : h2,
+        setScores,
+        vinder: navne(v.name, v.name2),
+        taber: navne(t.name, t.name2),
+        saet: `${Math.max(s1, s2)}–${Math.min(s1, s2)}`
+    };
+}
+
+async function meldResultatFraBane(teamMatchId, gameId) {
+    try {
+        const [teamMatches, allGameStates] = await Promise.all([api.getActiveTeamMatches(), api.getAllGameStates()]);
+        const g = (teamMatches || []).find(tm => tm.id === teamMatchId)?.games?.find(x => x.id === gameId);
+        const courtData = g && allGameStates.find(c => c.courtId === g.court_number);
+        const res = g && g.status === 'active' ? resultatFraBane(g, courtData) : null;
+        if (!res) {
+            showMessage('Intet resultat på banen', 'Kampen på banen er ikke afgjort længere. Brug "Manuel" til at taste resultatet.');
+            await loadActiveHoldkamp();
+            return;
+        }
+        const ok = await BadmintonUtils.confirmDialog('Hent resultat fra banen',
+            `Bane ${g.court_number}: ${res.vinder} vandt ${res.saet} over ${res.taber}.\n\nMeld resultatet ind?`,
+            { okText: 'Meld ind' });
+        if (!ok) return;
+        await api.updateTeamMatchGame(teamMatchId, gameId, {
+            status: 'finished',
+            winnerTeam: res.winnerTeam,
+            ...(res.setScores ? { setScores: res.setScores } : {})
+        });
+        await loadActiveHoldkamp();
+    } catch (error) {
+        console.error('Failed to report result from court:', error);
+        showMessage('Fejl', 'Kunne ikke melde resultatet ind. Prøv igen, eller brug "Manuel".');
+    }
+}
+
+// Hvad holder holdkampen åben? Vises, når ingen delkamp er i gang — ellers er
+// det åbenlyst. Holdkampen lukker først af sig selv, når alle delkampe har et
+// resultat; golden set har sin egen boks i renderHoldkampRegelBlok.
+function renderHoldkampAabenStatus(tm, allGameStates = []) {
+    const games = tm.games || [];
+    if (!games.length || HoldkampFormater.goldenSetStatus(tm).kraeves) return '';
+
+    const counts = {};
+    const mangler = [];
+    let iGang = false;
+    for (const g of games) {
+        counts[g.category] = (counts[g.category] || 0) + 1;
+        if (g.status === 'finished') continue;
+        const navn = `${g.category} ${counts[g.category]}`;
+        if (g.status === 'active' && resultatFraBane(g, allGameStates.find(c => c.courtId === g.court_number))) {
+            mangler.push(`${navn} (spillet færdig på bane ${g.court_number}, resultatet er ikke meldt ind)`);
+        } else if (g.status === 'active') {
+            iGang = true;
+        } else {
+            mangler.push(`${navn} (ikke spillet)`);
+        }
+    }
+    if (iGang) return '';
+
+    if (!mangler.length) {
+        const sidst = Math.max(...games.map(g => (g.finished_at ? new Date(g.finished_at).getTime() : 0)));
+        const kl = sidst ? new Date(sidst + HOLDKAMP_AUTO_AFSLUT_MIN * 60000)
+            .toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' }) : null;
+        return regelBoks('69,209,126',
+            `Alle delkampe har et resultat. Holdkampen afsluttes automatisk${kl ? ` kl. ${kl}` : ''}, og banerne ryddes. Du kan også trykke "Afslut holdkamp" nu.`);
+    }
+    return regelBoks('240,165,0',
+        `<div class="tekst-advarsel fed luft-under-4">Holdkampen afsluttes først, når alle delkampe har et resultat</div>` +
+        mangler.map(m => `<div>• ${escapeHtml(m)}</div>`).join(''));
 }
 
 // ===== Genbrugelig logo-vælger modal =====

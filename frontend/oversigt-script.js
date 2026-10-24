@@ -96,7 +96,7 @@ const HK_ROTATE_MS = 15000;   // hver holdkamp vises 15 sek, så roteres der
 // En færdigspillet holdkamp (alle delkampe afsluttet) vises i 10 min efter den
 // sidste delkamp og skjules så — ellers optager den en fuld side i rotationen,
 // indtil nogen husker at trykke "Afslut Holdkamp". Den forbliver "aktiv" i
-// admin; backend'en lukker den selv efter 30 min (se autoAfslutHoldkampe).
+// admin; backend'en lukker den selv efter 10 min (se autoAfslutHoldkampe).
 // Bevidst højere end de 5 min for en enkelt bane (FINISHED_DISPLAY_MS).
 const HK_FINISHED_DISPLAY_MS = 10 * 60 * 1000;
 

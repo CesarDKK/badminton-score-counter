@@ -76,4 +76,43 @@ async function rydAfsluttetBane(courtNumber, req, skalVaere = null) {
     return true;
 }
 
-module.exports = { gemSidsteAfsluttedeKamp, rydAfsluttetBane };
+// Automatisk "Ryd banen" efter holdkamp- og turneringskampe: resultatet er meldt
+// ind, så snart kampen er vundet, men banen (tablet og TV) står med "Kamp vundet",
+// til nogen trykker "Ryd banen" — og det glemmes tit efter de sidste kampe. Efter
+// AUTO_RYD_EFTER_MIN minutter ryddes banen derfor af sig selv; TV'et viser
+// resultatet et par minutter mere fra last_finished_matches.
+//
+// Kun baner, hvor kampen er afsluttet, og hvor navnene er en færdigmeldt
+// holdkamp-/turneringskamps fra den bane. En almindelig kamp eller en
+// badmintonplanner-runde (resultatet skal stå til næste runde) røres ikke.
+const AUTO_RYD_EFTER_MIN = 5;
+
+async function autoRydAfsluttedeBaner(req) {
+    const spillere = (a1, a2, b1, b2) => `(${a1}, ${a2}, ${b1}, ${b2})`;
+    const holdkamp = spillere('g.team1_player1', 'g.team1_player2', 'g.team2_player1', 'g.team2_player2');
+    const turnering = spillere('m.side1_player1', 'm.side1_player2', 'm.side2_player1', 'm.side2_player2');
+    const baner = await query(
+        `SELECT c.court_number
+           FROM game_states gs
+           JOIN courts c ON c.id = gs.court_id
+          WHERE gs.match_completed = TRUE
+            AND gs.match_end_time <= NOW() - INTERVAL ? MINUTE
+            AND (EXISTS (SELECT 1 FROM team_match_games g
+                          WHERE g.court_number = c.court_number AND g.status = 'finished'
+                            AND gs.player1_name IN ${holdkamp} AND gs.player2_name IN ${holdkamp})
+              OR EXISTS (SELECT 1 FROM tournament_matches m
+                          WHERE m.court_number = c.court_number AND m.status = 'finished'
+                            AND gs.player1_name IN ${turnering} AND gs.player2_name IN ${turnering}))`,
+        [AUTO_RYD_EFTER_MIN]
+    );
+    let ryddet = 0;
+    for (const { court_number } of baner) {
+        if (await rydAfsluttetBane(court_number, req)) {
+            ryddet++;
+            console.log(`✓ Bane ${court_number} ryddet automatisk (${AUTO_RYD_EFTER_MIN} min efter holdkamp-/turneringskamp)`);
+        }
+    }
+    return ryddet;
+}
+
+module.exports = { gemSidsteAfsluttedeKamp, rydAfsluttetBane, autoRydAfsluttedeBaner, AUTO_RYD_EFTER_MIN };
