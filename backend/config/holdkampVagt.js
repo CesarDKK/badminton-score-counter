@@ -4,8 +4,9 @@
  *
  * Badmintonplayer frigiver holdsedlen 60 minutter før kampstart. Vi tjekker:
  *
- *   Før vinduet   kamptidspunktet genlæses med mellemrum (hvert 30. minut det
- *                 sidste døgn, ellers hver 6. time), så en flyttet kamp ikke
+ *   Før vinduet   kamptidspunktet genlæses oftere, jo nærmere kampen er (se
+ *                 GENLAES_TRAPPE: hver 6. time, hver 2. time det sidste døgn,
+ *                 hvert 30. minut de sidste 4 timer), så en flyttet kamp ikke
  *                 åbner vinduet for sent. Er holdsedlen der allerede, oprettes
  *                 holdkampen med det samme.
  *   I vinduet     første tjek 59 min 50 sek før start (10 sek efter frigivelsen,
@@ -27,9 +28,17 @@ const LANGSOMT_INTERVAL_MS = 2 * 60 * 1000; // derefter hvert 2. minut
 const OPGIV_EFTER_MIN = 30;
 const UDEN_TID_TIMER = 6;
 const UDEN_TID_INTERVAL_MS = 5 * 60 * 1000;
-const NAER_MS = 24 * 60 * 60 * 1000;
-const FOER_VINDUE_NAER_MS = 30 * 60 * 1000;
-const FOER_VINDUE_FJERN_MS = 6 * 60 * 60 * 1000;
+const TIME_MS = 60 * 60 * 1000;
+
+// Før vinduet: [mere end så lang tid før kampstart, genlæs med dette interval].
+// En kamp flyttes sjældent med kort varsel, så det sidste døgn rækker hver 2.
+// time; først de sidste 4 timer (3 før vinduet) genlæses der hvert 30. minut.
+const GENLAES_TRAPPE = [
+    [24 * TIME_MS, 6 * TIME_MS],
+    [4 * TIME_MS, 2 * TIME_MS],
+    [0, 30 * 60 * 1000]
+];
+const NAESTEN_VINDUE_MS = 5 * 60 * 1000;
 
 const ms = (d) => {
     if (d === null || d === undefined) return null;
@@ -72,10 +81,16 @@ function naesteTjek(w, nu = new Date()) {
         return new Date(langsomFra + n * LANGSOMT_INTERVAL_MS);
     }
 
-    // Før vinduet: genlæs kamptidspunktet med mellemrum, men aldrig senere end
-    // vinduets første tjek.
-    const interval = (start - nuMs <= NAER_MS) ? FOER_VINDUE_NAER_MS : FOER_VINDUE_FJERN_MS;
-    const t = sidst === null ? nuMs : sidst + interval;
+    // Før vinduet: genlæs kamptidspunktet efter trappen, men aldrig senere end
+    // vinduets første tjek. Når kampen rykker ind på næste trin, tjekkes der
+    // dér — så nedtællingen i admin viser det rigtige tidspunkt.
+    if (sidst === null) return new Date(Math.min(nuMs, foerste));
+    const [graense, interval] = GENLAES_TRAPPE.find(([g]) => start - nuMs > g) || GENLAES_TRAPPE[GENLAES_TRAPPE.length - 1];
+    let t = sidst + interval;
+    if (graense > 0) t = Math.min(t, start - graense);
+    // Et genlæs få minutter før vinduet åbner, er spildt — vinduets første tjek
+    // læser alligevel tidspunktet igen
+    if (foerste - t < NAESTEN_VINDUE_MS) t = foerste;
     return new Date(Math.min(t, foerste));
 }
 

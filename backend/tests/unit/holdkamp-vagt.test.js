@@ -51,17 +51,47 @@ test('kom linket ind efter vinduet åbnede, tjekkes der straks', () => {
     assert.equal(vagt.sekunderTilNaeste(w(null), t('12:20:00')), 0);
 });
 
-test('før vinduet genlæses kamptidspunktet hvert 30. minut det sidste døgn', () => {
-    assert.equal(vagt.naesteTjek(w(t('09:00:00')), t('09:10:00')).toISOString(), '2026-10-03T09:30:00.000Z');
-    assert.equal(vagt.erForfalden(w(t('09:00:00')), t('09:29:59')), false);
-    assert.equal(vagt.erForfalden(w(t('09:00:00')), t('09:30:00')), true);
+test('de sidste 4 timer før start genlæses kamptidspunktet hvert 30. minut', () => {
+    assert.equal(vagt.naesteTjek(w(t('09:30:00')), t('09:40:00')).toISOString(), '2026-10-03T10:00:00.000Z');
+    assert.equal(vagt.erForfalden(w(t('09:30:00')), t('09:59:59')), false);
+    assert.equal(vagt.erForfalden(w(t('09:30:00')), t('10:00:00')), true);
     // ... men aldrig senere end vinduets første tjek
     assert.equal(vagt.naesteTjek(w(t('11:45:00')), t('11:50:00')).toISOString(), '2026-10-03T12:00:10.000Z');
+    // ... og ikke et ekstra tjek lige før det (11:30 + 30 min = 12:00 → 12:00:10)
+    assert.equal(vagt.naesteTjek(w(t('11:30:00')), t('11:35:00')).toISOString(), '2026-10-03T12:00:10.000Z');
+});
+
+test('det sidste døgn (til 4 timer før start) genlæses kun hver 2. time', () => {
+    // 10 timer før start: tjekket 03:00 → næste 05:00
+    assert.equal(vagt.naesteTjek(w(t('03:00:00')), t('03:10:00')).toISOString(), '2026-10-03T05:00:00.000Z');
+    assert.equal(vagt.erForfalden(w(t('03:00:00')), t('04:59:59')), false);
+    // Når kampen kommer under 4 timer væk før næste 2-timers-tjek, tjekkes der
+    // dér (09:00), og derefter hvert 30. minut
+    assert.equal(vagt.naesteTjek(w(t('08:00:00')), t('08:10:00')).toISOString(), '2026-10-03T09:00:00.000Z');
+    assert.equal(vagt.erForfalden(w(t('08:00:00')), t('09:00:00')), true);
+    assert.equal(vagt.naesteTjek(w(t('09:00:00')), t('09:00:01')).toISOString(), '2026-10-03T09:30:00.000Z');
 });
 
 test('mere end et døgn før start genlæses kun hver 6. time', () => {
     const omEnUge = new Date('2026-10-10T13:00:00Z');
     assert.equal(vagt.naesteTjek(w(t('09:00:00'), omEnUge), t('09:10:00')).toISOString(), '2026-10-03T15:00:00.000Z');
+    // ... indtil kampen er under et døgn væk: kamp i morgen 13:00Z → tjek i dag 13:00Z
+    const iMorgen = new Date('2026-10-04T13:00:00Z');
+    assert.equal(vagt.naesteTjek(w(t('09:00:00'), iMorgen), t('09:10:00')).toISOString(), '2026-10-03T13:00:00.000Z');
+});
+
+test('en kamp i morgen tidlig genlæses få gange natten over', () => {
+    // Lyngby 2 – Skovshoved 1: søndag 25. okt. kl. 09.00 (08:00Z, vintertid),
+    // lagt i kø lørdag kl. 22.39 (20:39Z, sommertid). Vinduet åbner 07:00:10Z.
+    const start = new Date('2026-10-25T08:00:00Z');
+    const tjek = [];
+    let sidst = new Date('2026-10-24T20:39:00Z');
+    for (;;) {
+        sidst = vagt.naesteTjek(w(sidst, start), sidst);
+        if (sidst >= vagt.foersteTjek(start)) break;
+        tjek.push(sidst.toISOString().slice(11, 16));
+    }
+    assert.deepEqual(tjek, ['22:39', '00:39', '02:39', '04:00', '04:30', '05:00', '05:30', '06:00', '06:30']);
 });
 
 test('en kamp der flyttes frem får sit vindue på det nye tidspunkt', () => {
