@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const password = passwordInput.value;
 
         if (!username || !password) {
-            showError('Udfyld venligst brugernavn og adgangskode');
+            showError('Udfyld venligst brugernavn eller mail og adgangskode');
             return;
         }
 
