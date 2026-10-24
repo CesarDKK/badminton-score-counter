@@ -126,6 +126,17 @@ router.get('/skaerm-haendelser', superAdminAuth, async (req, res, next) => {
     }
 });
 
+// GET /api/super-admin/skaerm-haendelser/:id/log — loguddraget fra en TV-PC's rapport
+router.get('/skaerm-haendelser/:id/log', superAdminAuth, async (req, res, next) => {
+    try {
+        const log = await skaermHaendelser.hentLog(Number(req.params.id) || 0, null);
+        if (log == null) return res.status(404).json({ error: 'Ingen log til denne hændelse' });
+        res.json({ log });
+    } catch (error) {
+        next(error);
+    }
+});
+
 // POST /api/super-admin/clubs — opret ny klub
 router.post('/clubs', superAdminAuth, async (req, res, next) => {
     try {

@@ -44,4 +44,6 @@ fi
 apt-get clean
 
 besked "Badminton TV slukker ..."
+# Planlagt — rapporten (/usr/lib/badminton-tv/rapport) skal ikke melde det
+mkdir -p /run/badminton-tv && echo sluk > /run/badminton-tv/nedlukning
 systemctl poweroff

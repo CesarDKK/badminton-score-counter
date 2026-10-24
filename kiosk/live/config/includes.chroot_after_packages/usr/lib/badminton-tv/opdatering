@@ -165,6 +165,13 @@ hent() { # URL FIL [curl-flag…]
     curl -fsSL --proto '=https,http' --connect-timeout 30 -o "$fil" "$@" "$url"
 }
 
+# Genstarten er planlagt — rapporten (/usr/lib/badminton-tv/rapport) skal ikke
+# melde den som en hændelse
+planlagt_genstart() {
+    local fil=${BT_NEDLUKNING:-/run/badminton-tv/nedlukning}
+    { mkdir -p "${fil%/*}" && echo opdatering > "$fil"; } 2>/dev/null || true
+}
+
 # ── tjek ───────────────────────────────────────────────────
 tjek() {
     if [ -z "$SLOT" ]; then
@@ -426,6 +433,7 @@ proev() {
     env_slet proev proev_startet
     env_saet proev_igang="$version"
     echo "Genstarter for at prøve version $version (system $proev) …"
+    planlagt_genstart
     systemctl reboot "0 tryboot"
 }
 
@@ -470,6 +478,7 @@ bekraeft() {
     done
     echo "FEJL: TV-siden kom ikke frem inden for $((FRIST_SEK / 60)) minutter med version $VERSION_NU — genstarter til det tidligere system."
     env_saet sidste_fejl="$VERSION_NU $(date '+%Y-%m-%d %H:%M')"
+    planlagt_genstart
     systemctl reboot
 }
 

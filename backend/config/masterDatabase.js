@@ -175,6 +175,22 @@ async function initialize() {
                 INDEX idx_fra (fra)
             ) ENGINE=InnoDB
         `);
+        // TV-PC'ens egen rapport (pc-brat, pc-panik …): en kort tekst og et
+        // uddrag af PC'ens log. Tilføjes idempotent til en eksisterende tabel.
+        const tekstCol = await query(
+            `SELECT COUNT(*) AS c FROM information_schema.columns
+             WHERE table_schema = 'badminton_master'
+               AND table_name = 'skaerm_haendelser'
+               AND column_name = 'tekst'`
+        );
+        if (tekstCol[0].c === 0) {
+            await query(
+                `ALTER TABLE skaerm_haendelser
+                   ADD COLUMN tekst VARCHAR(300) NULL DEFAULT NULL,
+                   ADD COLUMN log MEDIUMTEXT NULL DEFAULT NULL`
+            );
+            console.log('✓ skaerm_haendelser.tekst/log kolonner tilfoejet');
+        }
 
         // Seed standard klub-logoer (idempotent). Lazy require for at undgaa
         // cirkulaer afhaengighed (seedLogos kraever dette modul ved load).

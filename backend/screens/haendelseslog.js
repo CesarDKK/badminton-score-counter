@@ -1,7 +1,8 @@
-// Skærmenes hændelser (stod stille, uden forbindelse, startet forfra, væk) gemt
-// i 30 dage, så klubbens admin kan se dem under Adgangslinks, og super-admin på
-// tværs af klubberne. Ligger i master-databasen, så super-admin ikke skal åbne
-// hver klubs database. `klub` er klubbens db_name ('direct' uden klubber).
+// Skærmenes hændelser (stod stille, uden forbindelse, startet forfra, væk — og
+// TV-PC'ens egen rapport om, hvordan forrige kørsel sluttede) gemt i 30 dage,
+// så klubbens admin kan se dem under Adgangslinks, og super-admin på tværs af
+// klubberne. Ligger i master-databasen, så super-admin ikke skal åbne hver
+// klubs database. `klub` er klubbens db_name ('direct' uden klubber).
 //
 // En fejl her må aldrig koste et livstegn — derfor fanges den og logges bare.
 
@@ -15,14 +16,15 @@ const dato = (ms) => (ms == null ? null : new Date(ms));
 async function gem(klub, skaerm, haendelser) {
     if (!haendelser || !haendelser.length) return;
     try {
-        const pladser = haendelser.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+        const pladser = haendelser.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
         const vaerdier = haendelser.flatMap(h => [
             klub, skaerm.klientId, skaerm.navn || null, skaerm.side || 'tv', skaerm.bane || null,
-            skaerm.tokenId || null, h.type, dato(h.fra), dato(h.til), h.sek ?? null
+            skaerm.tokenId || null, h.type, dato(h.fra), dato(h.til), h.sek ?? null,
+            h.tekst || null, h.log || null
         ]);
         await masterDb.query(
             `INSERT INTO skaerm_haendelser
-                (klub, klient_id, navn, side, bane, token_id, type, fra, til, sek)
+                (klub, klient_id, navn, side, bane, token_id, type, fra, til, sek, tekst, log)
              VALUES ${pladser}`,
             vaerdier
         );
@@ -36,10 +38,12 @@ function fraDato(dage) {
     return new Date(Date.now() - d * 24 * 3600 * 1000);
 }
 
-// Klubbens hændelser, nyeste først
+// Klubbens hændelser, nyeste først. Loggen hentes for sig (hentLog) — den kan
+// fylde titusinder af tegn pr. hændelse.
 async function forKlub(klub, dage) {
     return masterDb.query(
-        `SELECT id, klient_id, navn, side, bane, token_id, type, fra, til, sek
+        `SELECT id, klient_id, navn, side, bane, token_id, type, fra, til, sek, tekst,
+                (log IS NOT NULL) AS har_log
            FROM skaerm_haendelser
           WHERE klub = ? AND fra >= ?
           ORDER BY fra DESC, id DESC
@@ -52,7 +56,7 @@ async function forKlub(klub, dage) {
 async function alle(dage) {
     return masterDb.query(
         `SELECT h.id, h.klub, c.name AS klub_navn, c.subdomain, h.klient_id, h.navn, h.side,
-                h.bane, h.type, h.fra, h.til, h.sek
+                h.bane, h.type, h.fra, h.til, h.sek, h.tekst, (h.log IS NOT NULL) AS har_log
            FROM skaerm_haendelser h
            LEFT JOIN clubs c ON c.db_name = h.klub
           WHERE h.fra >= ?
@@ -60,6 +64,15 @@ async function alle(dage) {
           LIMIT ${MAX_RAEKKER}`,
         [fraDato(dage)]
     );
+}
+
+// Loguddraget fra en TV-PC's rapport. klub = null: super-admin (alle klubber).
+async function hentLog(id, klub) {
+    const rows = await masterDb.query(
+        `SELECT log FROM skaerm_haendelser WHERE id = ?${klub == null ? '' : ' AND klub = ?'}`,
+        klub == null ? [id] : [id, klub]
+    );
+    return rows.length ? rows[0].log : null;
 }
 
 // Antal hændelser pr. klub det seneste døgn: { db_name: antal }
@@ -76,4 +89,4 @@ async function ryd() {
     return r.affectedRows || 0;
 }
 
-module.exports = { gem, forKlub, alle, antalSenesteDoegn, ryd, BEHOLD_DAGE };
+module.exports = { gem, forKlub, alle, hentLog, antalSenesteDoegn, ryd, BEHOLD_DAGE };

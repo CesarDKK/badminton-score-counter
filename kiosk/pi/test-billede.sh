@@ -74,7 +74,7 @@ for g in video render input; do
 done
 
 # Vores filer
-for s in setup browser cec sluk netstatus diagnose browservagt; do
+for s in setup browser cec sluk netstatus diagnose browservagt rapport; do
     tjek "kørbar: $s" test -x "$R/usr/lib/badminton-tv/$s"
 done
 tjek "generator kørbar" test -x "$R/usr/lib/systemd/system-generators/badminton-tv-sluk-generator"
@@ -100,6 +100,8 @@ tjek "tidszone København" symlink_til "$R/etc/localtime" /usr/share/zoneinfo/Eu
 tjek "hardware-uret i dansk tid (adjtime LOCAL)" grep -qx LOCAL "$R/etc/adjtime"
 tjek "aktiv: badminton-tv-ur.timer" aktiveret timers.target badminton-tv-ur.timer
 tjek "aktiv: badminton-tv-ur-nedlukning" aktiveret multi-user.target badminton-tv-ur-nedlukning.service
+tjek "aktiv: badminton-tv-rapport" aktiveret multi-user.target badminton-tv-rapport.service
+tjek "aktiv: badminton-tv-rapport-send.timer" aktiveret timers.target badminton-tv-rapport-send.timer
 tjek "hwclock findes (util-linux-extra)" test -x "$R/usr/sbin/hwclock"
 
 # Opstart: to systemer, A og B (usr/lib/badminton-tv/rod.sh)

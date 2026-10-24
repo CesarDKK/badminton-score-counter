@@ -50,6 +50,7 @@ chmod 755 /usr/lib/badminton-tv/setup /usr/lib/badminton-tv/browser \
           /usr/lib/badminton-tv/cec /usr/lib/badminton-tv/sluk \
           /usr/lib/badminton-tv/netstatus /usr/lib/badminton-tv/diagnose \
           /usr/lib/badminton-tv/browservagt /usr/lib/badminton-tv/opdatering \
+          /usr/lib/badminton-tv/rapport \
           /usr/lib/systemd/system-generators/badminton-tv-sluk-generator
 chmod 644 /usr/lib/badminton-tv/conf.sh /usr/lib/badminton-tv/rod.sh
 
@@ -58,6 +59,7 @@ systemctl enable badminton-tv-setup.service badminton-tv-cec.service \
                  badminton-tv-diagnose.service badminton-tv-browservagt.service
 systemctl enable NetworkManager.service systemd-timesyncd.service
 systemctl enable badminton-tv-ur.timer badminton-tv-ur-nedlukning.service   # hardware-uret i dansk tid
+systemctl enable badminton-tv-rapport.service badminton-tv-rapport-send.timer   # hændelser til serveren
 # Automatisk opdatering med to systemer (A/B) — se usr/lib/badminton-tv/opdatering
 systemctl enable badminton-tv-opdatering.timer badminton-tv-opdatering-proev.service \
                  badminton-tv-opdatering-bekraeft.service

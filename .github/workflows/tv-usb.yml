@@ -39,6 +39,9 @@ jobs:
       - name: Automatisk opdatering (beslutning, manifest, signatur)
         run: bash kiosk/test/test-opdatering.sh
 
+      - name: Rapport til serveren (forrige kørsel, kø, afsendelse)
+        run: bash kiosk/test/test-rapport.sh
+
       - name: Browser-vagt (mod headless Chromium)
         run: docker run --rm -v "$PWD/kiosk:/src" debian:trixie bash /src/test/test-browservagt.sh
 
@@ -48,7 +51,7 @@ jobs:
         run: |
           cd kiosk
           shellcheck -S warning -x \
-            build.sh test/vm.sh test/test-conf.sh test/test-netstatus.sh test/test-browservagt.sh \
+            build.sh test/vm.sh test/test-conf.sh test/test-netstatus.sh test/test-browservagt.sh test/test-rapport.sh \
             test/test-opdatering.sh test/opdatering-vm.sh \
             pi/build-pi.sh pi/tilpas.sh pi/test-billede.sh \
             live/auto/config \

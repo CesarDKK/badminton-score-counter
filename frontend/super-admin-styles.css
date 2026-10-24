@@ -142,6 +142,21 @@ header .subtitle {
 .skaerm-log-raekke .klub,
 .skaerm-log-raekke .skaerm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .skaerm-log-raekke .skaerm small { opacity: 0.6; }
+/* Loguddrag fra TV-PC'ens rapport (Vis log) */
+.haendelse-log-link { color: var(--color-accent); white-space: nowrap; margin-left: 4px; }
+.haendelse-log {
+    margin: 8px 0 4px;
+    padding: 10px 12px;
+    max-height: 320px;
+    overflow: auto;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    font: 0.82em/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: rgba(255, 255, 255, 0.85);
+}
 @media (max-width: 640px) {
     .skaerm-log-raekke { grid-template-columns: 3.4em 1fr; row-gap: 2px; }
     .skaerm-log-raekke .skaerm,

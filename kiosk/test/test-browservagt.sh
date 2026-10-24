@@ -63,7 +63,7 @@ EOF
 # BT_DISK tomt = ingen disk-vagt (som på live-USB'en); sysrq går til en testfil.
 koer_vagt() { # sekunder [disk]
     rm -f "$ARB/genstartet" "$ARB/sysrq"
-    BT_VAGT_OPSTART=1 BT_VAGT_INTERVAL=2 BT_GENSTART="touch $ARB/genstartet" \
+    BT_VAGT_OPSTART=1 BT_VAGT_INTERVAL=2 BT_GENSTART="touch $ARB/genstartet" BT_MELD='' \
         BT_DISK="${2:-}" BT_SYSRQ="$ARB/sysrq" \
         timeout "$1" python3 "$VAGT" > "$ARB/vagt.log" 2>&1
     [ -f "$ARB/genstartet" ]

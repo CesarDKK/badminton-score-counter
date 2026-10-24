@@ -1070,6 +1070,13 @@ class BadmintonAPI {
         return this.request(`/super-admin/skaerm-haendelser?dage=${encodeURIComponent(dage)}`);
     }
 
+    // Loguddraget fra en TV-PC's rapport — klubbens eget (alle = super-admin)
+    async getScreenEventLog(id, alle = false) {
+        const sti = alle ? `/super-admin/skaerm-haendelser/${encodeURIComponent(id)}/log`
+                         : `/screens/haendelser/${encodeURIComponent(id)}/log`;
+        return (await this.request(sti)).log;
+    }
+
     async deleteScreen(klientId) {
         return this.request(`/screens/${encodeURIComponent(klientId)}`, { method: 'DELETE' });
     }

@@ -1,0 +1,12 @@
+# Sender køen af hændelser til serveren (startes af badminton-tv-rapport-send.timer
+# og af browser-vagten, når den har genstartet browseren).
+[Unit]
+Description=Badminton TV: send hændelser til serveren
+After=badminton-tv-rapport.service network-online.target
+ConditionKernelCommandLine=!badminton.tilstand=installer
+ConditionKernelCommandLine=!badminton.tilstand=hentlog
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/badminton-tv/rapport send
+TimeoutStartSec=5min
