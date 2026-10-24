@@ -260,17 +260,29 @@ function startHoldkampWatch() {
  * Automatisk lukning af faerdigspillede holdkampe.
  *
  * Koerer hvert minut. En holdkamp hvor ALLE delkampe er faerdige, lukkes
- * 30 minutter efter den sidste delkamp (se AUTO_AFSLUT_EFTER_MIN i
+ * 10 minutter efter den sidste delkamp (se AUTO_AFSLUT_EFTER_MIN i
  * routes/teamMatches.js) — saa admin har tid til at rette et resultat, og
  * bagefter ligger den under Kamphistorik. Ren databaseforespoergsel; intet net.
  */
 function startHoldkampAutoAfslut() {
     const { autoAfslutHoldkampe, AUTO_AFSLUT_EFTER_MIN } = require('./routes/teamMatches');
+    const { autoRydAfsluttedeBaner, AUTO_RYD_EFTER_MIN } = require('./config/banerydning');
+    const { currentTenant } = require('./config/tenantPools');
+    // Hver bane med en afgjort holdkamp-/turneringskamp ryddes først, så
+    // holdkampens egen lukning bagefter kun har sine sidste baner tilbage
+    const koer = async () => {
+        try {
+            await autoRydAfsluttedeBaner({ clubDbName: currentTenant() });
+        } catch (err) {
+            console.error('❌ Automatisk rydning af baner fejlede:', err.message);
+        }
+        await autoAfslutHoldkampe();
+    };
 
     cron.schedule('* * * * *', async () => {
         // 1. Standard/direkte database
         try {
-            await autoAfslutHoldkampe();
+            await koer();
         } catch (err) {
             console.error('❌ Auto-afslutning af holdkampe fejlede (default):', err.message);
         }
@@ -281,7 +293,7 @@ function startHoldkampAutoAfslut() {
             const clubs = await masterDb.query('SELECT db_name FROM clubs WHERE is_active = 1');
             for (const club of clubs) {
                 try {
-                    await runWithTenant(club.db_name, () => autoAfslutHoldkampe());
+                    await runWithTenant(club.db_name, koer);
                 } catch (err) {
                     console.error(`❌ Auto-afslutning af holdkampe fejlede for ${club.db_name}:`, err.message);
                 }
@@ -292,7 +304,7 @@ function startHoldkampAutoAfslut() {
         timezone: 'Europe/Copenhagen'
     });
 
-    console.log(`⏰ Scheduled auto-afslutning af holdkampe hvert minut (${AUTO_AFSLUT_EFTER_MIN} min efter sidste delkamp)`);
+    console.log(`⏰ Scheduled auto-afslutning af holdkampe hvert minut (${AUTO_AFSLUT_EFTER_MIN} min efter sidste delkamp; baner ryddes ${AUTO_RYD_EFTER_MIN} min efter kampen)`);
 }
 
 /**

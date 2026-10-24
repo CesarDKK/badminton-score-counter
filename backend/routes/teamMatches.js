@@ -416,15 +416,15 @@ async function afslutHoldkamp(id, req) {
 }
 
 // Automatisk lukning: når ALLE delkampe i en holdkamp er færdige, lukkes den
-// af sig selv 30 minutter efter den sidste delkamp — tid nok til at rette et
-// resultat i admin, og bagefter ligger den under Kamphistorik. Oversigten
-// skjuler den allerede efter 10 min (frontend), det her er selve status-skiftet.
+// af sig selv 10 minutter efter den sidste delkamp — tid nok til at se, at alt
+// er kommet ind, og et resultat kan stadig rettes bagefter under Kamphistorik.
+// Oversigten skjuler den også efter 10 min (frontend); det her er status-skiftet.
 //
 // Konservativt: en holdkamp uden delkampe, med en delkamp der ikke er
 // 'finished', eller med en delkamp uden finished_at, røres ALDRIG — så en
 // walkover der aldrig blev tastet, eller gamle rækker uden tidsstempel, kræver
 // stadig et manuelt tryk på "Afslut Holdkamp".
-const AUTO_AFSLUT_EFTER_MIN = 30;
+const AUTO_AFSLUT_EFTER_MIN = 10;
 
 async function autoAfslutHoldkampe() {
     const klar = await query(
