@@ -1285,9 +1285,11 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
                     .filter(og => og.status === 'active' && og.court_number)
                     .map(og => og.court_number)
             );
+            // En afsluttet kamp, som ingen har ryddet på tabletten, optager ikke
+            // banen — serveren rydder den, når delkampen tildeles
             const occupiedByGameState = new Set(
                 allGameStates
-                    .filter(c => c.isActive && (c.player1.score > 0 || c.player2.score > 0 || c.player1.games > 0 || c.player2.games > 0 || c.timerSeconds > 0))
+                    .filter(c => c.isActive && !c.matchCompleted && (c.player1.score > 0 || c.player2.score > 0 || c.player1.games > 0 || c.player2.games > 0 || c.timerSeconds > 0))
                     .map(c => c.courtId)
             );
 
