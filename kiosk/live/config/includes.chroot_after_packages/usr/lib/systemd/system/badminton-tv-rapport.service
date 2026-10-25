@@ -1,0 +1,19 @@
+# Fortæller serveren, hvordan forrige kørsel sluttede — frøs PC'en, mistede den
+# strømmen, eller blev den slukket på knappen (se /usr/lib/badminton-tv/rapport).
+# ExecStart ved opstart, ExecStop ved nedlukning (hvordan PC'en lukkes ned).
+[Unit]
+Description=Badminton TV: rapport om forrige kørsel til serveren
+After=local-fs.target systemd-pstore.service systemd-journald.service badminton-tv-setup.service
+ConditionKernelCommandLine=!badminton.tilstand=installer
+ConditionKernelCommandLine=!badminton.tilstand=hentlog
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/badminton-tv/rapport opstart
+ExecStop=/usr/lib/badminton-tv/rapport stop
+TimeoutStartSec=60
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

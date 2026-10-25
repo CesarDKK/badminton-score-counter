@@ -1182,8 +1182,43 @@ function skaermHaendelseTekst(h) {
         case 'net': return `Ingen forbindelse til serveren i ${v}`;
         case 'genstart': return `Væk i ${v} og startet forfra — genstartet, eller den frøs`;
         case 'vaek': return `Ingen livstegn i ${v} — kom tilbage af sig selv`;
-        default: return h.type;
+        // TV-PC'ens egen rapport — teksten kommer fra PC'en (kiosk: rapport)
+        case 'pc-brat': return h.tekst || "PC'en stoppede brat — frøs, eller mistede strømmen";
+        case 'pc-panik': return h.tekst || "Kernenedbrud — PC'en genstartede af sig selv";
+        case 'pc-knap': return h.tekst || 'Slukket på tænd/sluk-knappen';
+        case 'pc-genstart': return h.tekst || "PC'en blev genstartet";
+        case 'net-wifi': return h.tekst || 'WiFi-forbindelsen var væk og kom igen';
+        case 'net-server': return h.tekst || 'Ingen forbindelse til serveren, men hallens netværk virkede';
+        case 'net-genstart': return h.tekst || "Ingen WiFi-forbindelse — PC'en blev genstartet";
+        case 'net-kort': return h.tekst || "WiFi-kortet svarer ikke — træk strømstikket ud i 1 minut";
+        case 'browser-genstart': return 'Browseren frøs og blev genstartet af browser-vagten'
+            + (h.tekst ? ` (${h.tekst})` : '');
+        default: return h.tekst || h.type;
     }
+}
+
+// Loguddrag fra TV-PC'ens rapporter (Vis log) — hentes, når der klikkes
+const haendelseLogs = new Map();
+const aabneLogs = new Set();
+
+async function visHaendelseLog(id) {
+    if (aabneLogs.has(id)) {
+        aabneLogs.delete(id);
+    } else {
+        if (!haendelseLogs.has(id)) {
+            try { haendelseLogs.set(id, await api.getScreenEventLog(id, true)); }
+            catch (e) { haendelseLogs.set(id, `Loggen kunne ikke hentes: ${e.message}`); }
+        }
+        aabneLogs.add(id);
+    }
+    renderSkaermLog();
+}
+
+function haendelseLogHtml(h) {
+    if (!h.har_log) return '';
+    const aaben = aabneLogs.has(h.id);
+    return ` <a href="#" onclick="visHaendelseLog(${Number(h.id)});return false;" class="haendelse-log-link">${aaben ? 'Skjul log' : 'Vis log'}</a>`
+        + (aaben ? `<pre class="haendelse-log">${escapeHtml(haendelseLogs.get(h.id) || '')}</pre>` : '');
 }
 
 async function loadSkaermLog() {
@@ -1234,7 +1269,7 @@ function renderSkaermLog() {
                 <span class="tid">${d.toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' })}</span>
                 <span class="klub">${escapeHtml(klubNavn(h))}</span>
                 <span class="skaerm"><strong>${escapeHtml(h.navn || h.klient_id)}</strong> <small>${hvor}</small></span>
-                <span class="hvad">${escapeHtml(skaermHaendelseTekst(h))}</span>
+                <span class="hvad">${escapeHtml(skaermHaendelseTekst(h))}${haendelseLogHtml(h)}</span>
             </div>`;
     }).join('');
 }

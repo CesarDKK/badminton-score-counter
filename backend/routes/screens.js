@@ -6,6 +6,7 @@ const { requirePage } = require('../middleware/pagePermission');
 const { klientIp } = require('../middleware/rateLimiter');
 const { registrer, liste, fjern } = require('../screens/skaermStatus');
 const haendelseslog = require('../screens/haendelseslog');
+const pcRapport = require('../screens/pcRapport');
 
 const tenantKey = (req) => req.clubDbName || 'direct';
 const kl = (ms) => new Date(ms).toLocaleTimeString('da-DK', { timeZone: 'Europe/Copenhagen' });
@@ -54,6 +55,50 @@ router.get('/', skaermAdmin, (req, res) => {
 router.get('/haendelser', skaermAdmin, async (req, res, next) => {
     try {
         res.json(await haendelseslog.forKlub(tenantKey(req), req.query.dage));
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/screens/haendelser/:id/log — loguddraget fra en TV-PC's rapport
+router.get('/haendelser/:id/log', skaermAdmin, async (req, res, next) => {
+    try {
+        const log = await haendelseslog.hentLog(Number(req.params.id) || 0, tenantKey(req));
+        if (log == null) return res.status(404).json({ error: 'Ingen log til denne hændelse' });
+        res.json({ log });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /api/screens/pc-rapport — TV-PC'ens egen rapport (kiosk: rapport): hvordan
+// forrige kørsel sluttede, og browser-vagtens genstarter. Ingen login: PC'en
+// sender sit adgangslinks token i X-Adgangslink (fra TV_URL i kiosk.conf), og
+// linket skal være aktivt i klubben.
+router.post('/pc-rapport', async (req, res, next) => {
+    try {
+        if (req.accessMode !== 'club' && req.accessMode !== 'direct') {
+            return res.status(404).json({ error: 'Endpoint ikke fundet' });
+        }
+        const token = req.get('X-Adgangslink');
+        if (!pcRapport.gyldigtToken(token)) return res.status(401).json({ error: 'Mangler adgangslink' });
+        const { queryOne } = require('../config/database');
+        const deviceToken = await queryOne(
+            'SELECT id, destination FROM device_tokens WHERE token = ? AND is_active = 1', [token]);
+        if (!deviceToken) return res.status(403).json({ error: 'Ugyldigt eller tilbagekaldt adgangslink' });
+
+        const rapport = pcRapport.rensRapport(req.body);
+        if (!rapport) return res.status(400).json({ error: 'Ugyldig rapport' });
+        if (!pcRapport.indenforLoft(`${tenantKey(req)}:${deviceToken.id}`, rapport.haendelser.length)) {
+            return res.status(429).json({ error: 'For mange hændelser — prøv igen senere' });
+        }
+
+        const skaerm = pcRapport.skaermFor(rapport.navn, deviceToken);
+        for (const h of rapport.haendelser) {
+            console.log(`[skærm] ${tenantKey(req)} "${skaerm.navn}" (${klientIp(req)}, Badminton TV ${rapport.kioskVersion || '?'}): ${h.type} — ${h.tekst || ''}`);
+        }
+        await haendelseslog.gem(tenantKey(req), skaerm, rapport.haendelser);
+        res.json({ ok: true, modtaget: rapport.haendelser.length });
     } catch (error) {
         next(error);
     }

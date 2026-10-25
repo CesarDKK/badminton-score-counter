@@ -1,0 +1,472 @@
+#!/usr/bin/python3
+"""Rapport: fortæller serveren, når noget er gået galt på TV-PC'en.
+
+Mens PC'en er frosset, kan den intet sende — men den kan fortælle det, næste
+gang den starter. Så ser klubbens admin (Adgangslinks → Skærmenes hændelser)
+og super-admin det uden at hente loggen på en USB-nøgle:
+
+  pc-brat           forrige kørsel sluttede uden nedlukning: PC'en frøs (også
+                    hvis hardware-vagthunden genstartede den), mistede strømmen,
+                    eller tænd/sluk-knappen blev holdt inde
+  pc-panik          kernenedbrud (dump i pstore — kun PC), fx når browser-vagten
+                    fandt en død disk
+  pc-knap           slukket på tænd/sluk-knappen
+  pc-genstart       genstartet eller slukket på anden vis (ikke kl. SLUK_KL og
+                    ikke af den automatiske opdatering — de to er planlagte)
+  browser-genstart  browser-vagten genstartede en frossen TV-side (meldes med
+                    det samme, se `meld`)
+
+Hvordan forrige kørsel sluttede, står i koersel.json: skrevet ved opstart,
+"sidst i live" opdateres hvert 5.-10. minut, og ved en ordentlig nedlukning
+skriver ExecStop hvordan. Mangler slutningen, stoppede PC'en brat. På PC'en
+kommer slutningen af dens log (journalen ligger på disken) med; på en
+Raspberry Pi ligger loggen kun i RAM, så dér er det tidspunktet.
+
+Kun fremtidige hændelser: findes koersel.json ikke (første opstart med denne
+version, eller første opstart af det andet system efter en opdatering), meldes
+intet om forrige kørsel.
+
+Hændelserne lægges i en kø (rapporter/) og sendes til serveren bag TV_URL med
+adgangslinkets token. Uden net bliver de liggende til næste forsøg (timeren
+hvert 5. minut). kiosk.conf sendes aldrig — den indeholder WiFi-koden.
+
+  rapport opstart       ved opstart (badminton-tv-rapport.service)
+  rapport stop          ved nedlukning (samme service, ExecStop)
+  rapport send          hvert 5. minut (badminton-tv-rapport-send.timer)
+  rapport meld TYPE TEKST   en hændelse lige nu (browser-vagten)
+  rapport koe TYPE TEKST FRA_MS [TIL_MS]
+                        kun i køen, med WiFi-loggen (net-vagten — nettet er
+                        væk, så den sendes, når det er tilbage):
+                        net-wifi, net-server, net-genstart, net-kort
+
+Kun Pythons standardbibliotek.
+"""
+
+import glob
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+MAPPE = os.environ.get('BT_RAPPORT_MAPPE', '/var/lib/badminton-tv')
+KOE = os.path.join(MAPPE, 'rapporter')
+KOERSEL = os.path.join(MAPPE, 'koersel.json')
+KIOSK_ENV = os.environ.get('BT_KIOSK_ENV', '/run/badminton-tv/kiosk.env')
+# Planlagt nedlukning: sluk (kl. SLUK_KL) og opdatering skriver årsagen her
+NEDLUKNING = os.environ.get('BT_NEDLUKNING', '/run/badminton-tv/nedlukning')
+PSTORE = os.environ.get('BT_PSTORE', '/var/lib/systemd/pstore')
+JOURNALCTL = os.environ.get('BT_JOURNALCTL', 'journalctl')
+SYSTEMCTL = os.environ.get('BT_SYSTEMCTL', 'systemctl')
+VERSION_FIL = os.environ.get('BT_VERSION_FIL', '/usr/share/badminton-tv/version')
+BOOT_ID_FIL = os.environ.get('BT_BOOT_ID', '/proc/sys/kernel/random/boot_id')
+UPTIME_FIL = os.environ.get('BT_UPTIME', '/proc/uptime')
+
+MAKS_KOE = 50                # ældste smides ud — en PC uden net i ugevis
+MAKS_PR_SEND = 10            # serverens loft pr. forespørgsel
+MAKS_BYTES = 80 * 1024       # pr. forespørgsel — serveren tager højst 100 KB
+MAKS_LOG = 24 * 1024         # tegn log pr. hændelse (serveren gemmer højst 32 KB)
+LIVE_INTERVAL_MS = 10 * 60 * 1000   # "sidst i live" skrives højst så ofte (SD-kort)
+TIMEOUT = 15
+
+# Nedlukninger, der ikke meldes ved næste opstart: de planlagte — og net-vagtens
+# genstart, som allerede er meldt (net-genstart)
+PLANLAGT = ('sluk', 'opdatering', 'netvagt')
+
+
+def log(tekst):
+    print(f'[rapport] {tekst}', flush=True)
+
+
+def nu_ms():
+    return int(time.time() * 1000)
+
+
+def laes_json(sti, standard=None):
+    try:
+        with open(sti, encoding='utf-8') as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return standard
+
+
+def skriv_json(sti, data):
+    os.makedirs(os.path.dirname(sti), exist_ok=True)
+    ny = sti + '.ny'
+    with open(ny, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(ny, sti)
+
+
+def laes_tekst(sti):
+    try:
+        with open(sti, encoding='utf-8', errors='replace') as f:
+            return f.read().strip()
+    except OSError:
+        return ''
+
+
+def boot_id():
+    return laes_tekst(BOOT_ID_FIL)
+
+
+def startet_ms():
+    """Hvornår denne opstart begyndte (nu minus oppetiden)."""
+    try:
+        oppe = float(laes_tekst(UPTIME_FIL).split()[0])
+    except (ValueError, IndexError):
+        oppe = 0
+    return nu_ms() - int(oppe * 1000)
+
+
+def kl(ms):
+    return time.strftime('%H.%M', time.localtime(ms / 1000))
+
+
+def koer(*args, timeout=30):
+    try:
+        r = subprocess.run(args, capture_output=True, text=True, timeout=timeout, errors='replace')
+        return r.stdout
+    except (OSError, subprocess.SubprocessError):
+        return ''
+
+
+def afkort(tekst, maks=MAKS_LOG):
+    """De SIDSTE maks tegn — er der for meget, er slutningen den interessante."""
+    if len(tekst) <= maks:
+        return tekst
+    return '… (afkortet)\n' + tekst[-maks:]
+
+
+# ── Køen ──────────────────────────────────────────────────
+
+def koe_tilfoej(haendelse):
+    os.makedirs(KOE, exist_ok=True)
+    navn = f'{nu_ms()}-{os.getpid()}-{haendelse["type"]}.json'
+    skriv_json(os.path.join(KOE, navn), haendelse)
+    filer = sorted(glob.glob(os.path.join(KOE, '*.json')))
+    for gammel in filer[:-MAKS_KOE]:
+        try:
+            os.remove(gammel)
+        except OSError:
+            pass
+
+
+# ── Forrige kørsel ────────────────────────────────────────
+
+def journal_boot(boot):
+    """journalctl -b vil have boot-id'et uden bindestreger (kernen giver det med:
+    "Failed to add match … Invalid argument" — set i VM-testen)."""
+    return boot.replace('-', '')
+
+
+def journal_slut(boot):
+    """Tidspunktet for forrige opstarts sidste logpost (ms), hvis journalen har den."""
+    ud = koer(JOURNALCTL, '-b', journal_boot(boot), '-n', '1', '-o', 'json', '--no-pager', '-q')
+    for linje in ud.splitlines():
+        try:
+            return int(json.loads(linje)['__REALTIME_TIMESTAMP']) // 1000
+        except (ValueError, KeyError, TypeError):
+            continue
+    return None
+
+
+def journal_uddrag(boot):
+    """Advarslerne og slutningen af forrige opstarts log — dér står sporet."""
+    advarsler = koer(JOURNALCTL, '-b', journal_boot(boot), '-p', 'warning', '-n', '60', '-o', 'short-iso', '--no-pager', '-q')
+    slut = koer(JOURNALCTL, '-b', journal_boot(boot), '-n', '120', '-o', 'short-iso', '--no-pager', '-q')
+    if not (advarsler.strip() or slut.strip()):
+        return ''
+    return ('== Advarsler og fejl (de seneste 60) ==\n' + advarsler.strip()
+            + '\n\n== De sidste 120 linjer før PC\'en stoppede ==\n' + slut.strip())
+
+
+def nye_pstore(sete):
+    """pstore-dumps (kernenedbrud), der ikke er meldt før: [(navn, tekst)]."""
+    ud = []
+    for sti in sorted(glob.glob(os.path.join(PSTORE, '*'))):
+        navn = os.path.basename(sti)
+        if navn in sete:
+            continue
+        # systemd-pstore lægger dumpet i pstore/<tid>/001/… (set i VM-testen) —
+        # så hele mappen læses, som hentlog's grep -r
+        filer = []
+        if os.path.isdir(sti):
+            for rod, _, navne in os.walk(sti):
+                filer += [os.path.join(rod, n) for n in navne]
+        else:
+            filer = [sti]
+        ud.append((navn, '\n'.join(laes_tekst(f) for f in sorted(filer))))
+    return ud
+
+
+def pstore_aarsag(dump):
+    """Panik-linjen og browser-vagtens egne linjer (diskfejlene), som hentlog."""
+    linjer = [l for l in dump.splitlines()
+              if 'Kernel panic - not syncing' in l or 'browservagt:' in l]
+    set_ = set()
+    unikke = [l for l in linjer if not (l in set_ or set_.add(l))]
+    return unikke[:60]
+
+
+def vurder_forrige(forrige, nu_boot, nu_start, tilstand):
+    """Hændelserne om forrige kørsel (liste) — tom, hvis den sluttede planlagt.
+
+    Lige efter opstart kan uret gå lidt bagud, før nettet har sat det (set i
+    VM-testen: "startet igen" 7 s før "slukket") — så slut er aldrig før start."""
+    hs = _vurder_forrige(forrige, nu_boot, nu_start, tilstand)
+    for h in hs:
+        h['til'] = max(h['til'], h['fra'])
+    return hs
+
+
+def _vurder_forrige(forrige, nu_boot, nu_start, tilstand):
+    if not forrige or forrige.get('boot_id') == nu_boot:
+        return []
+    slut = forrige.get('slut')
+    if slut:
+        hvordan = slut.get('hvordan')
+        if hvordan in PLANLAGT:
+            return []
+        type_ = 'pc-knap' if hvordan == 'knap' else 'pc-genstart'
+        tekst = {'knap': f'Slukket på tænd/sluk-knappen kl. {kl(slut["tid"])}',
+                 'genstart': f'Genstartet kl. {kl(slut["tid"])}'}.get(
+                     hvordan, f'Slukket kl. {kl(slut["tid"])}')
+        return [{'type': type_, 'fra': slut['tid'], 'til': nu_start,
+                 'tekst': f'{tekst}, startet igen kl. {kl(max(nu_start, slut["tid"]))}'}]
+
+    # Ingen ordentlig nedlukning: frøs, strømsvigt, knappen holdt inde — eller
+    # kernenedbrud, hvis der ligger et nyt dump i pstore
+    boot = forrige.get('boot_id', '')
+    fra = max(filter(None, [forrige.get('sidst_i_live'), journal_slut(boot) if boot else None,
+                            forrige.get('startet')]), default=nu_start)
+    uddrag = journal_uddrag(boot) if boot else ''
+    dumps = nye_pstore(set(tilstand.get('pstore', [])))
+    tilstand['pstore'] = sorted(set(tilstand.get('pstore', [])) | {n for n, _ in dumps})
+    if dumps:
+        aarsag = []
+        for _, dump in dumps:
+            aarsag += pstore_aarsag(dump)
+        disk = any('disken er død' in l for l in aarsag)
+        tekst = ('Kernenedbrud: disken holdt op med at svare — PC\'en genstartede af sig selv'
+                 if disk else 'Kernenedbrud — PC\'en genstartede af sig selv')
+        dumptekst = '\n\n'.join(d for _, d in dumps)
+        return [{'type': 'pc-panik', 'fra': fra, 'til': nu_start,
+                 'tekst': f'{tekst} (startet igen kl. {kl(max(nu_start, fra))})',
+                 'log': afkort('== Årsag (fra kernens dump) ==\n' + '\n'.join(aarsag)
+                               + ('\n\n' + uddrag if uddrag else '')
+                               + '\n\n== Kernens dump (slutningen) ==\n' + dumptekst[-8000:])}]
+    tekst = (f'Stoppede brat kl. {kl(fra)} uden at lukke ned — frøs, mistede strømmen, '
+             f'eller tænd/sluk-knappen blev holdt inde. Startet igen kl. {kl(max(nu_start, fra))}')
+    h = {'type': 'pc-brat', 'fra': fra, 'til': nu_start, 'tekst': tekst}
+    if uddrag:
+        h['log'] = afkort(uddrag)
+    return [h]
+
+
+# ── Kommandoer ────────────────────────────────────────────
+
+def opstart():
+    tilstand = laes_json(os.path.join(MAPPE, 'rapport-tilstand.json'), {}) or {}
+    forrige = laes_json(KOERSEL)
+    nu_boot, nu_start = boot_id(), startet_ms()
+
+    if forrige is None:
+        # Første gang: kun fremtidige hændelser. Gamle kernedumps er set.
+        tilstand['pstore'] = sorted(n for n, _ in nye_pstore(set()))
+        log('første opstart med rapportering — forrige kørsel meldes ikke')
+    else:
+        for h in vurder_forrige(forrige, nu_boot, nu_start, tilstand):
+            log(f'{h["type"]}: {h["tekst"]}')
+            koe_tilfoej(h)
+
+    if not forrige or forrige.get('boot_id') != nu_boot:
+        skriv_json(KOERSEL, {'boot_id': nu_boot, 'startet': nu_start, 'sidst_i_live': nu_ms(),
+                             'version': laes_tekst(VERSION_FIL), 'slut': None})
+    skriv_json(os.path.join(MAPPE, 'rapport-tilstand.json'), tilstand)
+    try:
+        os.remove(NEDLUKNING)       # en rest fra en nedlukning, der blev afbrudt
+    except OSError:
+        pass
+
+
+def nedlukningsmaade():
+    planlagt = laes_tekst(NEDLUKNING)
+    if planlagt in PLANLAGT:
+        return planlagt
+    if koer(JOURNALCTL, '-b', '-u', 'systemd-logind', '-g', 'Power key', '-n', '1', '-q', '-o', 'cat', '--no-pager').strip():
+        return 'knap'
+    jobs = koer(SYSTEMCTL, 'list-jobs', '--no-legend', '--no-pager')
+    if re.search(r'\b(reboot|kexec)\.target\b', jobs):
+        return 'genstart'
+    return 'slukket'
+
+
+def stop():
+    k = laes_json(KOERSEL)
+    if not k or k.get('boot_id') != boot_id():
+        return
+    k['slut'] = {'tid': nu_ms(), 'hvordan': nedlukningsmaade()}
+    k['sidst_i_live'] = k['slut']['tid']
+    skriv_json(KOERSEL, k)
+    log(f'nedlukning: {k["slut"]["hvordan"]}')
+
+
+def kiosk_env():
+    """(TV_URL, NAVN) fra setup's kiosk.env — den er %q-citeret til bash."""
+    ud = koer('bash', '-c', 'set -a; . "$1" 2>/dev/null; printf "%s\\0%s" "${BT_TV_URL:-}" "${BT_NAVN:-}"',
+              'bash', KIOSK_ENV, timeout=5)
+    url, _, navn = ud.partition('\0')
+    return url.strip(), navn.strip()
+
+
+def adgangslink(tv_url):
+    """(server, token) fra TV_URL = https://klub.badmintonapp.dk/t/<token>."""
+    try:
+        u = urllib.parse.urlsplit(tv_url)
+    except ValueError:
+        return None, None
+    m = re.match(r'^/t/([A-Za-z0-9_-]{8,128})/?$', u.path or '')
+    if u.scheme not in ('http', 'https') or not u.netloc or not m:
+        return None, None
+    return f'{u.scheme}://{u.netloc}', m.group(1)
+
+
+def send():
+    # "Sidst i live" — så et brat stop kan tidsfæstes, også på en Pi, hvis log
+    # kun ligger i RAM. Højst hvert 10. minut (SD-kortet).
+    k = laes_json(KOERSEL)
+    if k and k.get('boot_id') == boot_id() and nu_ms() - (k.get('sidst_i_live') or 0) >= LIVE_INTERVAL_MS:
+        k['sidst_i_live'] = nu_ms()
+        skriv_json(KOERSEL, k)
+
+    filer = sorted(glob.glob(os.path.join(KOE, '*.json')))
+    if not filer:
+        return 0
+    tv_url, navn = kiosk_env()
+    server, token = adgangslink(tv_url)
+    if not server:
+        log('TV_URL er ikke et adgangslink (…/t/<kode>) — hændelserne kan ikke sendes')
+        return 0
+    url = os.environ.get('BT_RAPPORT_URL') or f'{server}/api/screens/pc-rapport'
+    sendt = 0
+    while filer:
+        # Højst MAKS_PR_SEND hændelser og MAKS_BYTES pr. forespørgsel (serverens
+        # loft på 100 KB) — en ulæselig fil i køen smides ud
+        bunke, haendelser, stoerrelse = [], [], 0
+        while filer and len(bunke) < MAKS_PR_SEND:
+            h = laes_json(filer[0])
+            n = len(json.dumps(h)) if h else 0
+            if bunke and stoerrelse + n > MAKS_BYTES:
+                break
+            bunke.append(filer.pop(0))
+            if h:
+                haendelser.append(h)
+                stoerrelse += n
+        if not haendelser:
+            for f in bunke:
+                try:
+                    os.remove(f)
+                except OSError:
+                    pass
+            continue
+        data = json.dumps({'navn': navn, 'kioskVersion': laes_tekst(VERSION_FIL),
+                           'haendelser': haendelser}).encode()
+        req = urllib.request.Request(url, data=data, method='POST', headers={
+            'Content-Type': 'application/json', 'X-Adgangslink': token,
+            'User-Agent': 'badminton-tv-rapport'})
+        try:
+            with urllib.request.urlopen(req, timeout=TIMEOUT):
+                pass
+        except urllib.error.HTTPError as e:
+            if e.code == 429 or e.code >= 500:
+                log(f'serveren svarede {e.code} — prøver igen senere')
+                return sendt
+            # 4xx: serveren vil aldrig tage imod dem (fx tilbagekaldt link)
+            log(f'serveren afviste {len(bunke)} hændelse(r) ({e.code}) — smides ud')
+        except (urllib.error.URLError, OSError) as e:
+            log(f'intet net ({getattr(e, "reason", e)}) — prøver igen senere')
+            return sendt
+        else:
+            sendt += len(haendelser)
+        for f in bunke:
+            try:
+                os.remove(f)
+            except OSError:
+                pass
+    if sendt:
+        log(f'{sendt} hændelse(r) sendt')
+    return sendt
+
+
+def netlog(fra_ms):
+    """NetworkManagers og WiFi-driverens log fra lidt før forbindelsen forsvandt."""
+    siden = f'@{max(0, fra_ms // 1000 - 120)}'
+    nm = koer(JOURNALCTL, '-b', '--since', siden, '-u', 'NetworkManager.service', '-u', 'wpa_supplicant.service',
+              '-n', '80', '-o', 'short-iso', '--no-pager', '-q', timeout=10)
+    kerne = koer(JOURNALCTL, '-b', '-k', '--since', siden, '-g', 'iwlwifi|wlp|wlan|cfg80211|brcmf|rtw|ath[0-9]|mt7',
+                 '-n', '40', '-o', 'short-iso', '--no-pager', '-q', timeout=10)
+    dele = []
+    if nm.strip():
+        dele.append('== NetworkManager og WiFi (de sidste 80 linjer) ==\n' + nm.strip())
+    if kerne.strip():
+        dele.append('== WiFi-driveren (kernen) ==\n' + kerne.strip())
+    return '\n\n'.join(dele)
+
+
+def koe(type_, tekst, fra_ms, til_ms=None):
+    """En hændelse kun i køen — sendes, når nettet er tilbage (net-vagten)."""
+    h = {'type': type_, 'fra': int(fra_ms), 'tekst': tekst[:300]}
+    if til_ms:
+        h['til'] = max(int(til_ms), h['fra'])
+    if type_.startswith('net-'):
+        uddrag = netlog(h['fra'])
+        if uddrag:
+            h['log'] = afkort(uddrag)
+    koe_tilfoej(h)
+    log(f'{type_}: {tekst}')
+
+
+def meld(type_, tekst):
+    h = {'type': type_, 'fra': nu_ms(), 'tekst': tekst[:300]}
+    if type_ == 'browser-genstart':
+        uddrag = koer(JOURNALCTL, '-b', '-u', 'badminton-tv.service', '-u', 'badminton-tv-browservagt.service',
+                      '-n', '60', '-o', 'short-iso', '--no-pager', '-q', timeout=10)
+        if uddrag.strip():
+            h['log'] = afkort('== Browseren og browser-vagten (de sidste 60 linjer) ==\n' + uddrag.strip())
+    koe_tilfoej(h)
+    send()
+
+
+def main(argv):
+    kommando = argv[1] if len(argv) > 1 else ''
+    if kommando == 'opstart':
+        # Sender ikke selv: nettet er sjældent oppe så tidligt, og opstarten
+        # skal ikke vente på det — timeren sender halvandet minut efter
+        opstart()
+    elif kommando == 'stop':
+        stop()
+    elif kommando == 'send':
+        send()
+    elif kommando == 'meld' and len(argv) >= 4:
+        meld(argv[2], argv[3])
+    elif kommando == 'koe' and len(argv) >= 5:
+        koe(argv[2], argv[3], argv[4], argv[5] if len(argv) >= 6 else None)
+    else:
+        print(__doc__)
+        return 2
+    return 0
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main(sys.argv))
+    except Exception as e:          # noqa: BLE001 — en rapport må aldrig vælte opstarten
+        log(f'fejl: {e}')
+        sys.exit(0)

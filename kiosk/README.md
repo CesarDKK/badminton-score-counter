@@ -87,6 +87,25 @@ WiFi-koden kommer ikke med — kun dens længde og om den har mellemrum.
   forkert; uret rettes, så snart PC'en har været på nettet.
 - Mister den netværket ved opstart, viser den "Venter på forbindelse…" og
   prøver igen, i stedet for en fejlside.
+- **Går noget galt, kan det ses i admin** (fra 2026.10.25): under
+  *Adgangslinks → Skærmenes hændelser* (og i super-admin for alle klubber).
+  Når PC'en starter, fortæller den, hvordan den forrige kørsel sluttede —
+  *stoppede brat* (frøs eller mistede strømmen), *kernenedbrud*, slukket på
+  knappen eller genstartet — med slutningen af PC'ens log (*Vis log*). Den
+  planlagte slukning kl. `SLUK_KL` og genstarter fra den automatiske
+  opdatering meldes ikke. Genstarter browser-vagten en frossen TV-side,
+  meldes det med det samme. Uden net venter hændelserne på PC'en, til nettet
+  er tilbage. Det kræver, at `TV_URL` er et adgangslink (`…/t/<kode>`);
+  `kiosk.conf` sendes aldrig.
+- **Mister PC'en sit WiFi** (fra 2026.10.25), og kan den hverken nå serveren
+  eller sin egen router, slås WiFi fra og til efter 1 minut, og PC'en
+  genstarter efter 3 minutter. Hjælper det ikke, venter den længere før
+  næste genstart (10, så 30 minutter) og giver op efter 3 i træk, til nettet
+  har virket en halv time. Svarer routeren, men ikke serveren (internettet
+  eller serveren er nede), genstartes ikke — det ville ikke hjælpe og ville
+  genstarte alle hallens skærme. Svarer WiFi-kortet slet ikke (*error -110*),
+  genstartes heller ikke: træk strømstikket ud. Alt meldes med WiFi-loggen
+  under *Skærmenes hændelser*, når nettet er tilbage.
 
 ### Automatisk opdatering
 
@@ -268,6 +287,7 @@ noget fra det.
 | Automatisk slukning + opdateringer | `usr/lib/badminton-tv/sluk` + generator |
 | Installation på disk | `usr/lib/badminton-tv/installer` |
 | Automatisk opdatering (hent, godkend, status) | `usr/lib/badminton-tv/opdatering` |
+| Hændelser til serveren (hvordan forrige kørsel sluttede, browser-genstarter) | `usr/lib/badminton-tv/rapport` |
 | Fælles for installation og opdatering | `usr/lib/badminton-tv/rod.sh` |
 | GRUB: vælger A/B, og hvert systems opstartslinje | `usr/share/badminton-tv/grub-esp.cfg`, `grub-slot.cfg` |
 

@@ -1,0 +1,12 @@
+# Halvandet minut efter opstart (nettet er oppe), derefter hvert 5. minut:
+# sender hændelser, der ligger i kø (fx fordi nettet var nede).
+[Unit]
+Description=Badminton TV: send hændelser til serveren hvert 5. minut
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=5min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

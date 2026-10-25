@@ -52,6 +52,8 @@ CREATE TABLE IF NOT EXISTS skaerm_haendelser (
   fra TIMESTAMP(3) NOT NULL,
   til TIMESTAMP(3) NULL,
   sek INT NULL,
+  tekst VARCHAR(300) NULL,         -- TV-PC'ens egen rapport (pc-brat, pc-panik …)
+  log MEDIUMTEXT NULL,             -- uddrag af PC'ens log
   oprettet TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_klub_fra (klub, fra),
   INDEX idx_fra (fra)
