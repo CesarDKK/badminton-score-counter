@@ -2734,6 +2734,10 @@ function skaermHaendelseTekst(h) {
         case 'pc-panik': return h.tekst || "Kernenedbrud — PC'en genstartede af sig selv";
         case 'pc-knap': return h.tekst || 'Slukket på tænd/sluk-knappen';
         case 'pc-genstart': return h.tekst || "PC'en blev genstartet";
+        case 'net-wifi': return h.tekst || 'WiFi-forbindelsen var væk og kom igen';
+        case 'net-server': return h.tekst || 'Ingen forbindelse til serveren, men hallens netværk virkede';
+        case 'net-genstart': return h.tekst || "Ingen WiFi-forbindelse — PC'en blev genstartet";
+        case 'net-kort': return h.tekst || "WiFi-kortet svarer ikke — træk strømstikket ud i 1 minut";
         case 'browser-genstart': return 'Browseren frøs og blev genstartet af browser-vagten'
             + (h.tekst ? ` (${h.tekst})` : '');
         default: return h.tekst || h.type;

@@ -5,7 +5,9 @@
 //
 // Ren logik (validering og loft) — ruten ligger i routes/screens.js.
 
-const TYPER = new Set(['pc-brat', 'pc-panik', 'pc-knap', 'pc-genstart', 'browser-genstart']);
+const TYPER = new Set(['pc-brat', 'pc-panik', 'pc-knap', 'pc-genstart', 'browser-genstart',
+    // net-vagten (browservagt): WiFi'en væk og tilbage, serveren væk, genstart, WiFi-kortet dødt
+    'net-wifi', 'net-server', 'net-genstart', 'net-kort']);
 const MAX_PR_RAPPORT = 10;
 const MAX_TEKST = 300;
 const MAX_LOG = 32 * 1024;

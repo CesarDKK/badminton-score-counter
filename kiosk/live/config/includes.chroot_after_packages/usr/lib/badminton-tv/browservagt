@@ -28,6 +28,25 @@ vagten derfor selv en kernepanik (sysrq 'c'): kernebeskederne, inklusive
 diskfejlene, gemmes i pstore, og PC'en genstarter efter 10 s (kernel.panic).
 Det virker, fordi vagten allerede ligger i hukommelsen og kun rører /proc.
 
+Net-vagt: mister PC'en sin egen forbindelse (WiFi'en falder ud, og kun en
+genstart fik den tilbage — set i Lyngby 2026-10-25 på én af 10 skærme), står
+TV'et med "Forbindelse mistet", til nogen genstarter den. Hvert 20. sekund
+tjekkes, om serveren bag TV_URL kan nås. Kan den ikke, og kan PC'en heller
+ikke nå sin egen router (hallens net virker ikke for denne PC):
+
+  efter 1 minut    WiFi'en slås fra og til og forbindes igen
+  efter 3 minutter PC'en genstarter
+  igen og igen     ventetiden før næste genstart vokser (10, så 30 minutter),
+                   og efter 3 genstarter i træk gives der op, til nettet har
+                   virket en halv time. Svarer WiFi-kortet slet ikke (Intel
+                   AC 8265, "error -110"), hjælper kun at trække strømstikket
+                   ud — så genstartes ikke (startsiden siger det).
+
+Kan routeren nås, men ikke serveren, er det internettet eller serveren, der er
+nede — det hjælper ikke at genstarte (og ville genstarte alle hallens skærme).
+Hver hændelse meldes til serveren med PC'ens WiFi-log (rapport koe), når
+nettet er tilbage.
+
 Kun Pythons standardbibliotek: en minimal websocket-klient til Chromium
 DevTools-protokollen (én forespørgsel pr. forbindelse).
 """
@@ -42,6 +61,7 @@ import struct
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 
 PORT = int(os.environ.get('BT_DEVTOOLS_PORT', '9222'))
@@ -57,6 +77,15 @@ SYSRQ = os.environ.get('BT_SYSRQ', '/proc/sysrq-trigger')
 MELD = os.environ.get('BT_MELD', '/usr/lib/badminton-tv/rapport')
 # Filen, der læses fra disken. BT_DISK (tests): en anden fil, tom = ingen disk-vagt.
 DISK_FIL = '/usr/share/badminton-tv/version'
+
+# Net-vagten (se øverst). Tiderne er sekunder uden forbindelse til routeren.
+KIOSK_ENV = os.environ.get('BT_KIOSK_ENV', '/run/badminton-tv/kiosk.env')
+NET_GENFORBIND = int(os.environ.get('BT_NET_GENFORBIND', '60'))
+NET_GENSTART = [int(s) for s in os.environ.get('BT_NET_GENSTART', '180,600,1800').split(',')]
+NET_STABIL = 1800           # så længe skal nettet virke, før genstarterne tælles forfra
+NET_TILSTAND = os.environ.get('BT_NET_TILSTAND', '/var/lib/badminton-tv/netvagt.json')
+PC_GENSTART = os.environ.get('BT_PC_GENSTART', 'systemctl reboot')
+NEDLUKNING = os.environ.get('BT_NEDLUKNING', '/run/badminton-tv/nedlukning')
 
 
 def log(tekst):
@@ -283,17 +312,279 @@ def tjek():
     return None
 
 
+# ── Net-vagt ──────────────────────────────────────────────
+
+def server_fra_kiosk_env():
+    """Serveren bag TV_URL (https://klub.badmintonapp.dk), eller None."""
+    try:
+        ud = subprocess.run(['bash', '-c', '. "$1" 2>/dev/null; printf %s "${BT_TV_URL:-}"', 'bash', KIOSK_ENV],
+                            capture_output=True, text=True, timeout=5).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    m = re.match(r'^(https?://[^/?#\s]+)', ud)
+    return m.group(1) if m else None
+
+
+def server_svarer(server):
+    """Svarer serveren overhovedet? Et HTTP-svar (også 404/503) tæller — kun
+    ingen forbindelse (DNS, timeout, intet net) er et nej."""
+    try:
+        with urllib.request.urlopen(f'{server}/health', timeout=8):
+            return True
+    except urllib.error.HTTPError:
+        return True
+    except Exception:              # noqa: BLE001 — alt andet er "ingen forbindelse"
+        return False
+
+
+def router():
+    """Standard-gatewayens IP fra /proc/net/route, eller None (ingen IP/rute)."""
+    try:
+        with open('/proc/net/route') as f:
+            for linje in f.readlines()[1:]:
+                felter = linje.split()
+                if len(felter) > 3 and felter[1] == '00000000' and int(felter[3], 16) & 2:
+                    return socket.inet_ntoa(struct.pack('<I', int(felter[2], 16)))
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def router_svarer():
+    """Kan PC'en nå sin egen router? Et kort TCP-forsøg — et afslag (RST) er
+    også et svar — eller en færdig ARP-post for routeren efter forsøget.
+    (Ingen ping på PC'en, og mange routere svarer ikke på ping alligevel.)"""
+    gw = router()
+    if not gw:
+        return False
+    for port in (53, 80, 443):
+        try:
+            socket.create_connection((gw, port), timeout=2).close()
+            return True
+        except ConnectionRefusedError:
+            return True
+        except OSError:
+            pass
+    try:
+        with open('/proc/net/arp') as f:
+            for linje in f.readlines()[1:]:
+                felter = linje.split()
+                if felter and felter[0] == gw and int(felter[2], 16) & 2 and felter[3] != '00:00:00:00:00:00':
+                    return True
+    except (OSError, ValueError, IndexError):
+        pass
+    return False
+
+
+def wifi_kort_svarer_ikke():
+    """Intel AC 8265 efter Windows: "probe … failed with error -110" — kun at
+    trække strømstikket ud hjælper (set 2026-10-01), så genstart er nytteløst."""
+    try:
+        ud = subprocess.run(['journalctl', '-k', '-b', '-q', '-n', '1', '--no-pager', '-g',
+                             'failed with error -110'], capture_output=True, text=True, timeout=10).stdout
+        return bool(ud.strip())
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def genforbind_wifi():
+    """WiFi fra og til, og forbind igen (eller hele netværket, hvis der ikke
+    er WiFi — fx et kabel)."""
+    def nm(*args, timeout=15):
+        try:
+            subprocess.run(['nmcli', *args], capture_output=True, timeout=timeout)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    try:
+        wifi = 'badminton-tv-wifi' in subprocess.run(['nmcli', '-t', '-f', 'NAME', 'connection', 'show'],
+                                                     capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        wifi = False
+    if wifi:
+        nm('radio', 'wifi', 'off')
+        time.sleep(3)
+        nm('radio', 'wifi', 'on')
+        time.sleep(3)
+        nm('connection', 'up', 'id', 'badminton-tv-wifi', timeout=45)
+    else:
+        nm('networking', 'off')
+        time.sleep(3)
+        nm('networking', 'on')
+
+
+def pc_er_optaget():
+    """Er den automatiske slukning eller opdatering i gang? Så ingen genstart."""
+    for enhed in ('badminton-tv-sluk.service', 'badminton-tv-opdatering.service'):
+        try:
+            if subprocess.run(['systemctl', 'is-active', '--quiet', enhed], timeout=10).returncode == 0:
+                return True
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return False
+
+
+def koe_haendelse(type_, tekst, fra, til=None):
+    """Lægger en hændelse i rapportens kø (sendes, når nettet er tilbage)."""
+    if not MELD:
+        return
+    args = [MELD, 'koe', type_, tekst, str(int(fra * 1000))] + ([str(int(til * 1000))] if til else [])
+    try:
+        subprocess.run(args, capture_output=True, timeout=30)
+    except (OSError, subprocess.SubprocessError) as e:
+        log(f'kunne ikke lægge hændelsen i kø: {e}')
+
+
+def send_koeen():
+    if MELD:
+        try:
+            subprocess.Popen([MELD, 'send'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             start_new_session=True)
+        except OSError:
+            pass
+
+
+def kl(t):
+    return time.strftime('%H.%M', time.localtime(t))
+
+
+def varighed(sek):
+    sek = int(sek)
+    return f'{sek} s' if sek < 90 else f'{round(sek / 60)} min'
+
+
+class Netvagt:
+    """Tilstanden mellem tjekkene. Funktionerne kan udskiftes (tests)."""
+
+    def __init__(self, server, ur=time.time, server_ok=server_svarer, lokal_ok=router_svarer,
+                 kortfejl=wifi_kort_svarer_ikke, genforbind=genforbind_wifi, genstart=None,
+                 optaget=pc_er_optaget, koe=koe_haendelse, send=send_koeen, tilstand_fil=NET_TILSTAND):
+        self.server, self.ur = server, ur
+        self.server_ok, self.lokal_ok, self.kortfejl = server_ok, lokal_ok, kortfejl
+        self.genforbind, self.optaget, self.koe, self.send = genforbind, optaget, koe, send
+        self.genstart = genstart or self._genstart_pc
+        self.tilstand_fil = tilstand_fil
+        t = self._laes()
+        self.raekke = int(t.get('raekke', 0))     # genstarter i træk uden at nettet kom igen
+        self.nede_fra = None                       # serveren kan ikke nås siden
+        self.lokal_nede_fra = None                 # routeren kan heller ikke nås siden
+        self.var_lokal_nede = False
+        self.genforbundet = False
+        self.kort_meldt = False
+        self.ok_fra = self.ur()
+
+    def _laes(self):
+        try:
+            with open(self.tilstand_fil) as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            return {}
+
+    def _gem(self):
+        try:
+            os.makedirs(os.path.dirname(self.tilstand_fil), exist_ok=True)
+            with open(self.tilstand_fil + '.ny', 'w') as f:
+                json.dump({'raekke': self.raekke}, f)
+            os.replace(self.tilstand_fil + '.ny', self.tilstand_fil)
+        except OSError as e:
+            log(f'net-vagt: kunne ikke gemme tilstanden: {e}')
+
+    def _genstart_pc(self):
+        try:
+            os.makedirs(os.path.dirname(NEDLUKNING), exist_ok=True)
+            with open(NEDLUKNING, 'w') as f:
+                f.write('netvagt\n')      # allerede meldt — rapporten skal ikke melde den igen
+        except OSError:
+            pass
+        subprocess.run(PC_GENSTART, shell=True, check=False)
+
+    def tik(self):
+        nu = self.ur()
+        if self.server_ok(self.server):
+            self._tilbage(nu)
+            return
+        if self.nede_fra is None:
+            self.nede_fra = nu
+            log(f'net-vagt: kan ikke nå {self.server}')
+        if self.lokal_ok():
+            # Hallens net virker (routeren svarer) — internettet eller serveren
+            # er nede. Det hjælper ikke at genstarte.
+            if self.lokal_nede_fra is not None:
+                log('net-vagt: routeren svarer igen (serveren gør ikke endnu)')
+            self.lokal_nede_fra = None
+            return
+        if self.lokal_nede_fra is None:
+            self.lokal_nede_fra = nu
+            self.var_lokal_nede = True
+            log('net-vagt: kan heller ikke nå routeren — PC\'ens egen forbindelse er væk')
+        nede = nu - self.lokal_nede_fra
+
+        if nede >= NET_GENFORBIND and (self.kort_meldt or self.kortfejl()):
+            if not self.kort_meldt:
+                self.kort_meldt = True
+                log('net-vagt: WiFi-kortet svarer ikke (error -110) — genstart hjælper ikke')
+                self.koe('net-kort', 'WiFi-kortet svarer ikke (error -110). Sluk PC\'en og træk '
+                         'strømstikket ud i 1 minut — en genstart hjælper ikke', self.lokal_nede_fra)
+            return
+        if nede >= NET_GENFORBIND and not self.genforbundet:
+            self.genforbundet = True
+            log(f'net-vagt: ingen forbindelse i {varighed(nede)} — slår WiFi fra og til')
+            self.genforbind()
+            return
+        if self.raekke >= len(NET_GENSTART):
+            return                          # opgivet, til nettet har virket en halv time
+        if nede >= NET_GENSTART[self.raekke] and not self.optaget():
+            self.raekke += 1
+            self._gem()
+            tekst = (f'Ingen WiFi-forbindelse i {varighed(nede)} (fra kl. {kl(self.lokal_nede_fra)}), '
+                     f'heller ikke efter at WiFi blev slået fra og til — PC\'en genstartes '
+                     f'(genstart {self.raekke} i træk)')
+            log(f'net-vagt: {tekst}')
+            self.koe('net-genstart', tekst, self.lokal_nede_fra, nu)
+            self.genstart()
+
+    def _tilbage(self, nu):
+        if self.nede_fra is not None:
+            nede = nu - self.nede_fra
+            log(f'net-vagt: forbindelsen er tilbage efter {varighed(nede)}')
+            if nede >= 60:
+                if self.var_lokal_nede:
+                    hvordan = ('efter at WiFi blev slået fra og til' if self.genforbundet
+                               else 'af sig selv')
+                    self.koe('net-wifi', f'WiFi-forbindelsen var væk i {varighed(nede)} '
+                             f'(kl. {kl(self.nede_fra)}–{kl(nu)}) og kom igen {hvordan}', self.nede_fra, nu)
+                else:
+                    self.koe('net-server', f'Ingen forbindelse til serveren i {varighed(nede)} '
+                             f'(kl. {kl(self.nede_fra)}–{kl(nu)}), men hallens netværk virkede',
+                             self.nede_fra, nu)
+                self.send()
+            self.ok_fra = nu
+        self.nede_fra = self.lokal_nede_fra = None
+        self.var_lokal_nede = self.genforbundet = False
+        if self.raekke and nu - self.ok_fra >= NET_STABIL:
+            log('net-vagt: nettet har virket en halv time — genstarter tælles forfra')
+            self.raekke = 0
+            self._gem()
+
+
 def main():
     if 'BT_DISK' in os.environ:
         disk = os.environ['BT_DISK'] or None
     else:
         disk = DISK_FIL if rod_disk() else None
+    server = server_fra_kiosk_env() if os.environ.get('BT_NETVAGT', '1') != '0' else None
+    netvagt = Netvagt(server) if server else None
     log(f'startet — første tjek om {OPSTART_PAUSE} s, derefter hvert {INTERVAL}. sekund'
-        + (f'; disk-vagt på {disk} ({rod_disk() or "?"})' if disk else '; ingen disk-vagt'))
+        + (f'; disk-vagt på {disk} ({rod_disk() or "?"})' if disk else '; ingen disk-vagt')
+        + (f'; net-vagt mod {server}' if netvagt else '; ingen net-vagt'))
     time.sleep(OPSTART_PAUSE)
     fejl = 0
     diskfejl = 0
     while True:
+        if netvagt:
+            try:
+                netvagt.tik()
+            except Exception as e:      # noqa: BLE001 — net-vagten må aldrig stoppe browser-vagten
+                log(f'net-vagt: fejl: {e}')
         if disk:
             problem = tjek_disk(disk)
             if problem:

@@ -155,6 +155,20 @@ forvent "samme dump meldes ikke igen" "$(koe_typer)" "pc-panik pc-genstart"
 ny_opstart boot-7
 forvent "samme opstart to gange: intet nyt" "$(koe)" 2
 
+# 8. Net-vagten: "koe" lægger en hændelse i køen med WiFi-loggen, uden at sende
+FRA=$(( $(date +%s) * 1000 - 300000 ))
+FAKE_JOURNAL='NetworkManager: wlp0s20f3: link disconnected' r koe net-genstart 'Ingen WiFi i 3 min' "$FRA" "$(( FRA + 200000 ))"
+forvent "koe: lagt i køen (ikke sendt)" "$(koe_typer)" "pc-panik pc-genstart net-genstart"
+H=$(cat "$TMP/var/rapporter/"*net-genstart.json)
+indeholder "koe: WiFi-loggen med" "$H" 'link disconnected'
+indeholder "koe: NetworkManager spurgt fra 2 min før" "$H" "--since @$(( FRA / 1000 - 120 ))"
+indeholder "koe: tidspunktet" "$H" "\"fra\": $FRA"
+# … og net-vagtens genstart meldes ikke igen ved næste opstart
+echo netvagt > "$TMP/run/nedlukning"
+r stop
+ny_opstart boot-8
+forvent "net-vagtens genstart: ikke meldt igen ved opstart" "$(koe)" 3
+
 echo "Afsendelse"
 r send
 forvent "send: køen er tom" "$(koe)" 0
@@ -162,7 +176,7 @@ M=$(modtaget)
 indeholder "send: adgangslinkets token" "$M" '"token": "abcdEFGH1234_x"'
 indeholder "send: skærmens navn" "$M" '"navn": "tv-bane-3"'
 indeholder "send: versionen" "$M" '"kioskVersion": "2026.10.25"'
-indeholder "send: begge hændelser" "$M" '"type": "pc-genstart"'
+indeholder "send: alle hændelser" "$M" '"type": "net-genstart"'
 ryd_modtaget
 
 echo 500 > "$TMP/svar"

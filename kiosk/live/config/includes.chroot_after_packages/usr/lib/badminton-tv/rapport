@@ -34,6 +34,10 @@ hvert 5. minut). kiosk.conf sendes aldrig — den indeholder WiFi-koden.
   rapport stop          ved nedlukning (samme service, ExecStop)
   rapport send          hvert 5. minut (badminton-tv-rapport-send.timer)
   rapport meld TYPE TEKST   en hændelse lige nu (browser-vagten)
+  rapport koe TYPE TEKST FRA_MS [TIL_MS]
+                        kun i køen, med WiFi-loggen (net-vagten — nettet er
+                        væk, så den sendes, når det er tilbage):
+                        net-wifi, net-server, net-genstart, net-kort
 
 Kun Pythons standardbibliotek.
 """
@@ -69,7 +73,9 @@ MAKS_LOG = 24 * 1024         # tegn log pr. hændelse (serveren gemmer højst 32
 LIVE_INTERVAL_MS = 10 * 60 * 1000   # "sidst i live" skrives højst så ofte (SD-kort)
 TIMEOUT = 15
 
-PLANLAGT = ('sluk', 'opdatering')
+# Nedlukninger, der ikke meldes ved næste opstart: de planlagte — og net-vagtens
+# genstart, som allerede er meldt (net-genstart)
+PLANLAGT = ('sluk', 'opdatering', 'netvagt')
 
 
 def log(tekst):
@@ -399,6 +405,34 @@ def send():
     return sendt
 
 
+def netlog(fra_ms):
+    """NetworkManagers og WiFi-driverens log fra lidt før forbindelsen forsvandt."""
+    siden = f'@{max(0, fra_ms // 1000 - 120)}'
+    nm = koer(JOURNALCTL, '-b', '--since', siden, '-u', 'NetworkManager.service', '-u', 'wpa_supplicant.service',
+              '-n', '80', '-o', 'short-iso', '--no-pager', '-q', timeout=10)
+    kerne = koer(JOURNALCTL, '-b', '-k', '--since', siden, '-g', 'iwlwifi|wlp|wlan|cfg80211|brcmf|rtw|ath[0-9]|mt7',
+                 '-n', '40', '-o', 'short-iso', '--no-pager', '-q', timeout=10)
+    dele = []
+    if nm.strip():
+        dele.append('== NetworkManager og WiFi (de sidste 80 linjer) ==\n' + nm.strip())
+    if kerne.strip():
+        dele.append('== WiFi-driveren (kernen) ==\n' + kerne.strip())
+    return '\n\n'.join(dele)
+
+
+def koe(type_, tekst, fra_ms, til_ms=None):
+    """En hændelse kun i køen — sendes, når nettet er tilbage (net-vagten)."""
+    h = {'type': type_, 'fra': int(fra_ms), 'tekst': tekst[:300]}
+    if til_ms:
+        h['til'] = max(int(til_ms), h['fra'])
+    if type_.startswith('net-'):
+        uddrag = netlog(h['fra'])
+        if uddrag:
+            h['log'] = afkort(uddrag)
+    koe_tilfoej(h)
+    log(f'{type_}: {tekst}')
+
+
 def meld(type_, tekst):
     h = {'type': type_, 'fra': nu_ms(), 'tekst': tekst[:300]}
     if type_ == 'browser-genstart':
@@ -422,6 +456,8 @@ def main(argv):
         send()
     elif kommando == 'meld' and len(argv) >= 4:
         meld(argv[2], argv[3])
+    elif kommando == 'koe' and len(argv) >= 5:
+        koe(argv[2], argv[3], argv[4], argv[5] if len(argv) >= 6 else None)
     else:
         print(__doc__)
         return 2

@@ -84,3 +84,9 @@ test('loft pr. adgangslink: højst MAX_PR_TIME hændelser i timen', () => {
     assert.equal(indenforLoft('lyngby:8', 5, NU), true, 'et andet link har sit eget loft');
     assert.equal(indenforLoft('lyngby:7', 1, NU + 3600 * 1000 + 1), true, 'en time senere er der plads igen');
 });
+
+test('net-vagtens hændelser (WiFi væk, server væk, genstart, WiFi-kortet dødt) tages imod', () => {
+    const typer = ['net-wifi', 'net-server', 'net-genstart', 'net-kort'];
+    const r = rensRapport(rapport(typer.map(type => ({ type, fra: NU - 60000, tekst: type }))), NU);
+    assert.deepEqual(r.haendelser.map(h => h.type), typer);
+});

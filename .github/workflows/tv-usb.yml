@@ -42,6 +42,9 @@ jobs:
       - name: Rapport til serveren (forrige kørsel, kø, afsendelse)
         run: bash kiosk/test/test-rapport.sh
 
+      - name: Net-vagt (WiFi fra/til efter 1 min, genstart efter 3 min)
+        run: bash kiosk/test/test-netvagt.sh
+
       - name: Browser-vagt (mod headless Chromium)
         run: docker run --rm -v "$PWD/kiosk:/src" debian:trixie bash /src/test/test-browservagt.sh
 
@@ -51,7 +54,7 @@ jobs:
         run: |
           cd kiosk
           shellcheck -S warning -x \
-            build.sh test/vm.sh test/test-conf.sh test/test-netstatus.sh test/test-browservagt.sh test/test-rapport.sh \
+            build.sh test/vm.sh test/test-conf.sh test/test-netstatus.sh test/test-browservagt.sh test/test-rapport.sh test/test-netvagt.sh \
             test/test-opdatering.sh test/opdatering-vm.sh \
             pi/build-pi.sh pi/tilpas.sh pi/test-billede.sh \
             live/auto/config \
