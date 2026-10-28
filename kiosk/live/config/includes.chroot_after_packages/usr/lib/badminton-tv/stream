@@ -1,0 +1,366 @@
+#!/usr/bin/python3
+"""Stream: sender banen fra et USB-kamera i TV-PC'en til YouTube (eller anden
+RTMP-tjeneste) — kun mens der er en kamp på banen.
+
+Serveren bestemmer alt: PC'en spørger hvert par sekunder med sit adgangslink
+(TV_URL i kiosk.conf), og svaret siger, om der skal sendes, hvorhen, med hvilken
+nøgle, og hvad der står i overlayet (navne og stilling). Nøglen ligger kun på
+serveren (admin → Adgangslinks → Livestream) — aldrig på USB-nøglen.
+
+  - ffmpeg læser kameraet som MJPEG 1280x720 @ 30 (alle Logitech-kameraer og
+    de fleste andre UVC-kameraer kan det) og koder H.264 ~3,5 Mbit/s med
+    PC'ens grafikkort (VAAPI). Går det ikke, kodes på CPU'en (libx264).
+  - lydløst lydspor (YouTube vil have lyd med) — hallens lyd sendes aldrig
+  - overlayet læses fra en fil, som opdateres ved hvert svar (drawtext reload)
+  - dør ffmpeg (nettet væk, YouTube afviser), startes den igen efter 5, 15,
+    30, 60 og derefter hvert 120. sekund, og fejlen vises i admin
+  - svarer serveren ikke, sendes der videre i højst et minut
+
+Kameraet stilles til 50 Hz (ingen flimren fra hallens lys) og fast fokus på
+lang afstand (autofokus "pumper", når spillerne løber).
+
+Kun Pythons standardbibliotek.
+"""
+
+import collections
+import glob
+import json
+import os
+import re
+import signal
+import subprocess
+import sys
+import threading
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+KIOSK_ENV = os.environ.get('BT_KIOSK_ENV', '/run/badminton-tv/kiosk.env')
+VERSION_FIL = os.environ.get('BT_VERSION_FIL', '/usr/share/badminton-tv/version')
+MAPPE = os.environ.get('BT_STREAM_MAPPE', '/run/badminton-tv/stream')
+OVERLAY = os.path.join(MAPPE, 'overlay.txt')
+FFMPEG = os.environ.get('BT_FFMPEG', 'ffmpeg')
+V4L2CTL = os.environ.get('BT_V4L2CTL', 'v4l2-ctl')
+KAMERA_GLOB = os.environ.get('BT_KAMERA_GLOB', '/dev/v4l/by-id/*-video-index0')
+RENDER = os.environ.get('BT_RENDER', '/dev/dri/renderD128')
+SKRIFT = os.environ.get('BT_SKRIFT', '/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf')
+STREAM_URL = os.environ.get('BT_STREAM_URL')   # test: i stedet for {server}/api/livestream/pc
+
+
+def _tal(navn, standard):
+    """Ventetiderne kan gøres kortere i testen (test/test-stream.sh)."""
+    try:
+        return float(os.environ.get(navn, standard))
+    except ValueError:
+        return standard
+
+
+OPLOESNING = '1280x720'
+BILLEDER = 30
+BITRATE = '3500k'
+# Sekunder mellem forespørgsler: mens der sendes (overlayet), kamera valgt i
+# admin men ingen kamp, intet kamera valgt til PC'en, serveren svarede ikke
+SPOERG_SENDER = _tal('BT_SPOERG_SENDER', 3)
+SPOERG_KLAR = _tal('BT_SPOERG_KLAR', 10)
+SPOERG_INTET = _tal('BT_SPOERG_INTET', 300)
+SPOERG_FEJL = _tal('BT_SPOERG_FEJL', 15)
+UDEN_SVAR = _tal('BT_UDEN_SVAR', 60)    # sender videre uden svar fra serveren i højst så længe
+GENFORSOEG = [_tal('BT_GENFORSOEG', 5), 15, 30, 60, 120]
+STABIL = _tal('BT_STABIL', 30)          # kørt så længe: fejlen er væk, og forsøgene tælles forfra
+VAAPI_TIDLIG = 20       # dør VAAPI-kodningen inden for så mange sekunder: brug CPU'en
+TIMEOUT = 8
+
+
+def log(tekst):
+    print(f'[stream] {tekst}', flush=True)
+
+
+def laes_tekst(sti):
+    try:
+        with open(sti, encoding='utf-8', errors='replace') as f:
+            return f.read().strip()
+    except OSError:
+        return ''
+
+
+# Samme som rapport: (TV_URL, NAVN) fra setup's kiosk.env og (server, token)
+def kiosk_env():
+    try:
+        ud = subprocess.run(
+            ['bash', '-c', 'set -a; . "$1" 2>/dev/null; printf "%s\\0%s" "${BT_TV_URL:-}" "${BT_NAVN:-}"',
+             'bash', KIOSK_ENV], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        ud = ''
+    url, _, navn = ud.partition('\0')
+    return url.strip(), navn.strip()
+
+
+def adgangslink(tv_url):
+    try:
+        u = urllib.parse.urlsplit(tv_url)
+    except ValueError:
+        return None, None
+    m = re.match(r'^/t/([A-Za-z0-9_-]{8,128})/?$', u.path or '')
+    if u.scheme not in ('http', 'https') or not u.netloc or not m:
+        return None, None
+    return f'{u.scheme}://{u.netloc}', m.group(1)
+
+
+# ---------- Kameraet ----------
+
+def find_kamera():
+    """(enhed, navn) for det første USB-kamera, eller (None, None)."""
+    for sti in sorted(glob.glob(KAMERA_GLOB)):
+        enhed = os.path.realpath(sti)
+        navn = laes_tekst(f'/sys/class/video4linux/{os.path.basename(enhed)}/name')
+        if not navn:
+            # by-id-navnet: usb-046d_HD_Pro_Webcam_C920_1234-video-index0
+            navn = re.sub(r'^usb-[0-9a-f]{4}_|_[0-9A-F]{6,}-video-index0$|-video-index0$', '',
+                          os.path.basename(sti)).replace('_', ' ')
+        return enhed, navn[:100]
+    return None, None
+
+
+def stil_kamera(enhed):
+    """50 Hz og fast fokus — kameraer, der ikke har indstillingen, springer den over."""
+    for ctrl in ('power_line_frequency=1', 'focus_automatic_continuous=0', 'focus_auto=0',
+                 'focus_absolute=0'):
+        try:
+            subprocess.run([V4L2CTL, '-d', enhed, '-c', ctrl], capture_output=True, timeout=5)
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+
+# ---------- ffmpeg ----------
+
+def ffmpeg_args(enhed, maal, overlay, koder):
+    args = [FFMPEG, '-hide_banner', '-nostdin', '-loglevel', 'error']
+    if koder == 'vaapi':
+        args += ['-vaapi_device', RENDER]
+    args += ['-f', 'v4l2', '-input_format', 'mjpeg', '-video_size', OPLOESNING,
+             '-framerate', str(BILLEDER), '-thread_queue_size', '512', '-i', enhed,
+             '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100']
+    filtre = []
+    if overlay:
+        filtre.append(f'drawtext=fontfile={SKRIFT}:textfile={OVERLAY}:reload=1:expansion=none'
+                      ':fontsize=28:fontcolor=white:line_spacing=8'
+                      ':box=1:boxcolor=black@0.6:boxborderw=14:x=28:y=28')
+    gop = str(BILLEDER * 2)   # nøglebillede hvert 2. sekund (YouTube vil have højst 4)
+    if koder == 'vaapi':
+        filtre += ['format=nv12', 'hwupload']
+        video = ['-c:v', 'h264_vaapi', '-b:v', BITRATE, '-maxrate', BITRATE, '-bufsize', '7000k',
+                 '-g', gop, '-bf', '0']
+    else:
+        filtre.append('format=yuv420p')
+        video = ['-c:v', 'libx264', '-preset', 'veryfast', '-b:v', BITRATE, '-maxrate', BITRATE,
+                 '-bufsize', '7000k', '-g', gop, '-keyint_min', gop, '-sc_threshold', '0']
+    args += ['-vf', ','.join(filtre), *video, '-c:a', 'aac', '-b:a', '128k',
+             '-map', '0:v', '-map', '1:a', '-f', 'flv', maal]
+    return args
+
+
+def forklar(linjer):
+    """ffmpegs fejl i ord, admin kan bruge."""
+    alt = '\n'.join(linjer)
+    if re.search(r'Device or resource busy', alt):
+        return 'Kameraet er optaget af et andet program'
+    if re.search(r'No such file or directory|No such device', alt) and '/dev/video' in alt:
+        return 'Kameraet forsvandt — sidder USB-kablet ordentligt?'
+    if re.search(r'Connection refused|Connection reset|Broken pipe|Input/output error|'
+                 r'Server returned 4|Server error|Error in the pull function|handshake', alt, re.I):
+        return 'YouTube afviste forbindelsen — tjek stream-nøglen, og at kanalen må sende live'
+    if re.search(r'Network is unreachable|Name or service not known|Temporary failure in name resolution|'
+                 r'timed out', alt, re.I):
+        return 'Ingen forbindelse til YouTube — nettet i hallen?'
+    if re.search(r'Cannot open|not supported|Invalid argument', alt) and 'mjpeg' in alt.lower():
+        return 'Kameraet kan ikke sende MJPEG 1280x720 — prøv et andet kamera'
+    return (linjer[-1] if linjer else 'ffmpeg stoppede uden besked')[:200]
+
+
+class Stream:
+    def __init__(self):
+        self.proc = None
+        self.noegle = ''
+        self.opsaetning = None      # (enhed, maal, overlay) for den kørende
+        self.startet = 0
+        self.fejl = None
+        self.forsoeg = 0
+        self.naeste = 0             # tidligst næste start efter en fejl
+        self.koder = 'vaapi' if os.path.exists(RENDER) else 'x264'
+        self.linjer = collections.deque(maxlen=20)
+
+    def koerer(self):
+        return self.proc is not None and self.proc.poll() is None
+
+    def _laes(self, proc):
+        for linje in proc.stderr:
+            linje = linje.rstrip()
+            if not linje:
+                continue
+            # Nøglen må hverken stå i journalen eller i admin
+            if self.noegle:
+                linje = linje.replace(self.noegle, '<nøgle>')
+            self.linjer.append(linje)
+            log(f'ffmpeg: {linje}')
+
+    def start(self, enhed, url, noegle, overlay):
+        maal = url.rstrip('/') + '/' + noegle
+        if self.koerer() and self.opsaetning == (enhed, maal, overlay):
+            return
+        self.stop()
+        if time.monotonic() < self.naeste:
+            return
+        stil_kamera(enhed)
+        self.noegle = noegle
+        self.linjer.clear()
+        try:
+            self.proc = subprocess.Popen(ffmpeg_args(enhed, maal, overlay, self.koder),
+                                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                         stderr=subprocess.PIPE, text=True, errors='replace')
+        except OSError as e:
+            self.proc = None
+            self.fejl = f'ffmpeg kunne ikke startes: {e}'[:200]
+            self._vent()
+            return
+        threading.Thread(target=self._laes, args=(self.proc,), daemon=True).start()
+        self.opsaetning = (enhed, maal, overlay)
+        self.startet = time.monotonic()
+        log(f'sender {OPLOESNING} @ {BILLEDER} fra {enhed} ({self.koder}, overlay {"til" if overlay else "fra"})')
+
+    def stop(self):
+        if self.proc is None:
+            return
+        if self.proc.poll() is None:
+            # SIGINT: ffmpeg afslutter streamen pænt, så YouTube ser, den er slut
+            self.proc.send_signal(signal.SIGINT)
+            try:
+                self.proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+                self.proc.wait()
+            log('stoppet')
+        self.proc = None
+        self.opsaetning = None
+
+    def _vent(self):
+        pause = GENFORSOEG[min(self.forsoeg, len(GENFORSOEG) - 1)]
+        self.forsoeg += 1
+        self.naeste = time.monotonic() + pause
+        log(f'prøver igen om {pause} s')
+
+    def tjek(self):
+        """Efter hver forespørgsel: er ffmpeg død, eller har den kørt stabilt?"""
+        if self.proc is None:
+            return
+        kode = self.proc.poll()
+        if kode is None:
+            if time.monotonic() - self.startet > STABIL:
+                self.forsoeg = 0
+                self.fejl = None
+            return
+        time.sleep(0.2)   # så læsetråden når de sidste linjer
+        linjer = list(self.linjer)
+        kort = time.monotonic() - self.startet
+        self.proc = None
+        self.opsaetning = None
+        if self.koder == 'vaapi' and kort < VAAPI_TIDLIG and not any(
+                re.search(r'rtmp|Connection|Input/output|Network|handshake|/dev/video|busy', l, re.I) for l in linjer):
+            # Grafikkortet kunne ikke kode (driver, ældre PC): CPU'en med det samme
+            log(f'VAAPI-kodningen stoppede efter {kort:.0f} s (kode {kode}) — koder på CPU\'en fremover')
+            self.koder = 'x264'
+            return
+        self.fejl = forklar(linjer)
+        log(f'ffmpeg stoppede (kode {kode}) efter {kort:.0f} s: {self.fejl}')
+        self._vent()
+
+
+def skriv_overlay(linjer):
+    os.makedirs(MAPPE, exist_ok=True)
+    ny = OVERLAY + '.ny'
+    with open(ny, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(linjer) if linjer else ' ')
+    os.replace(ny, OVERLAY)
+
+
+_sidste_net_fejl = None
+
+
+def spoerg(url, token, status):
+    """Serverens svar, eller None. Fejlen logges kun, når den skifter (ikke hvert 15. s)."""
+    global _sidste_net_fejl
+    data = json.dumps(status).encode()
+    req = urllib.request.Request(url, data=data, method='POST', headers={
+        'Content-Type': 'application/json', 'X-Adgangslink': token,
+        'User-Agent': 'badminton-tv-stream'})
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+            svar = json.loads(r.read().decode('utf-8', 'replace'))
+    except urllib.error.HTTPError as e:
+        fejl = f'serveren svarede {e.code}'
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        fejl = f'ingen forbindelse til serveren ({getattr(e, "reason", e)})'
+    else:
+        if _sidste_net_fejl:
+            log('serveren svarer igen')
+        _sidste_net_fejl = None
+        return svar
+    if fejl != _sidste_net_fejl:
+        log(fejl)
+    _sidste_net_fejl = fejl
+    return None
+
+
+def main():
+    stream = Stream()
+    stop = threading.Event()
+
+    def afslut(*_):
+        stop.set()
+    signal.signal(signal.SIGTERM, afslut)
+    signal.signal(signal.SIGINT, afslut)
+
+    version = laes_tekst(VERSION_FIL)
+    sidste_svar = time.monotonic()
+    sidst_kamera = None
+    while not stop.is_set():
+        tv_url, navn = kiosk_env()
+        server, token = adgangslink(tv_url)
+        if not server:
+            log('TV_URL er ikke et adgangslink (…/t/<kode>) — kan ikke spørge serveren')
+            stop.wait(SPOERG_INTET)
+            continue
+        enhed, kamera = find_kamera()
+        if kamera != sidst_kamera:
+            log(f'kamera: {kamera} ({enhed})' if kamera else 'intet USB-kamera')
+            sidst_kamera = kamera
+        # Døde ffmpeg siden sidst? Så skal fejlen med i statussen — og læses,
+        # før start() rydder op
+        stream.tjek()
+        svar = spoerg(STREAM_URL or f'{server}/api/livestream/pc', token, {
+            'navn': navn, 'kioskVersion': version, 'kamera': kamera,
+            'sender': stream.koerer(), 'koder': stream.koder, 'fejl': stream.fejl})
+        if svar is None:
+            if stream.koerer() and time.monotonic() - sidste_svar > UDEN_SVAR:
+                log(f'intet svar fra serveren i {UDEN_SVAR:.0f} s — stopper')
+                stream.stop()
+            interval = SPOERG_SENDER if stream.koerer() else SPOERG_FEJL
+        else:
+            sidste_svar = time.monotonic()
+            if svar.get('send') and enhed and svar.get('url') and svar.get('noegle'):
+                if svar.get('overlay'):
+                    skriv_overlay(svar.get('linjer') or [])
+                stream.start(enhed, svar['url'], svar['noegle'], bool(svar.get('overlay')))
+            else:
+                stream.stop()
+                if not enhed:
+                    stream.fejl = None
+            interval = (SPOERG_SENDER if stream.koerer() or svar.get('send')
+                        else SPOERG_KLAR if svar.get('kamera') else SPOERG_INTET)
+        stream.tjek()
+        stop.wait(interval)
+    stream.stop()
+
+
+if __name__ == '__main__':
+    sys.exit(main())

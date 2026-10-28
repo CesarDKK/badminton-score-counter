@@ -147,6 +147,28 @@ Systemet prøver automatisk og bruger CEC, hvis Linux finder det. Ellers:
   det til i TV'ets menu — det hedder fx *Sluk ved intet signal*, *Auto Power
   Off* eller *No Signal Power Off*.
 
+### Livestream fra et USB-kamera (kun PC)
+
+Sæt et USB-webkamera i TV-PC'en, så kan banen sendes til YouTube — fra kampen
+sættes på banen, til 2 minutter efter den er afgjort. Badmintonplanner-kampe
+sendes ikke. Alt indstilles i admin under **Adgangslinks → Livestream**:
+
+1. **Kamera (TV-PC):** vælg adgangslinket til den PC, kameraet sidder i. Det
+   er kameraets bane — også hvis TV'et senere skiftes til en anden bane.
+2. **Stream-nøgle:** fra YouTube Studio → *Gå live* → *Stream*. Én nøgle pr.
+   bane. Nøglen ligger kun på serveren, aldrig på USB-nøglen.
+3. Sæt flueben i **Send banen**, og tryk **Gem**.
+
+Admin viser, om PC'en sender, venter på en kamp, ikke finder kameraet, eller
+om YouTube afviser nøglen. Billedet er 1280x720 med 30 billeder i sekundet
+(~3,5 Mbit/s, ca. 1,6 GB i timen pr. bane), uden lyd fra hallen, med navne og
+stilling øverst til venstre (kan slås fra pr. bane). Kameraet stilles til
+50 Hz og fast fokus på lang afstand.
+
+Kameraet skal kunne sende MJPEG i 1280x720 — det kan alle Logitech-kameraer.
+Til 4 m bag banen skal synsvinklen være mindst ~90° diagonalt (fx Logitech
+C930e eller Brio 505). Et USB-kabel længere end 3–5 m skal være aktivt.
+
 ### Ting der kan drille
 
 | Symptom | Løsning |
@@ -288,6 +310,7 @@ noget fra det.
 | Installation på disk | `usr/lib/badminton-tv/installer` |
 | Automatisk opdatering (hent, godkend, status) | `usr/lib/badminton-tv/opdatering` |
 | Hændelser til serveren (hvordan forrige kørsel sluttede, browser-genstarter) | `usr/lib/badminton-tv/rapport` |
+| Livestream fra USB-kameraet (spørger `/api/livestream/pc`, styrer ffmpeg) — kun PC | `usr/lib/badminton-tv/stream` |
 | Fælles for installation og opdatering | `usr/lib/badminton-tv/rod.sh` |
 | GRUB: vælger A/B, og hvert systems opstartslinje | `usr/share/badminton-tv/grub-esp.cfg`, `grub-slot.cfg` |
 

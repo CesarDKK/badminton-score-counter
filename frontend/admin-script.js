@@ -2867,6 +2867,7 @@ async function loadDeviceTokens() {
     try {
         const tokens = await api.getDeviceTokens();
         renderDeviceTokens(tokens);
+        await loadLivestream();
         await loadSkaermLog();
         await refreshSkaermStatus();
         startSkaermStatusRefresh();
@@ -2891,7 +2892,159 @@ function startSkaermStatusRefresh() {
         // Hændelsesloggen hvert minut, statussen hvert 15. sekund
         if (++skaermStatusTik % 4 === 0) await loadSkaermLog();
         refreshSkaermStatus();
+        refreshLivestreamStatus();
     }, 15000);
+}
+
+// ── Livestream: USB-kamera på TV-PC'en → YouTube (se backend/screens/livestream.js) ──
+// Nøglen vises aldrig igen, når den er gemt — kun de sidste 4 tegn
+let _livestream = null;
+let _livestreamBaner = 0;
+
+async function loadLivestream() {
+    try {
+        _livestream = await api.getLivestream();
+        _livestreamBaner = (await api.getSettings()).courtCount || 4;
+    } catch { return; } // bonus — siden virker uden
+    renderLivestream();
+}
+
+async function refreshLivestreamStatus() {
+    if (!_livestream) return;
+    try { _livestream = await api.getLivestream(); } catch { return; }
+    // Kun statusserne — felterne, admin er i gang med at udfylde, må ikke ryddes
+    document.querySelectorAll('.ls-status').forEach(el => {
+        el.innerHTML = livestreamStatusHtml(Number(el.dataset.bane));
+    });
+}
+
+const LS_GRUND = {
+    'ingen-kamp': 'Klar — venter på en kamp',
+    'afsluttet': 'Klar — venter på næste kamp',
+    'slaaet-fra': 'Klar — livestream er slået fra for banen',
+    'mangler-noegle': 'Mangler stream-nøgle',
+    'badmintonplanner': 'Badmintonplanner-kamp — sendes ikke',
+    'stille': 'Kampen er ikke rørt i 30 minutter — sendes ikke',
+    'ingen-bane': 'Banen findes ikke'
+};
+
+function livestreamStatusHtml(bane) {
+    const pc = (_livestream?.kameraer || []).find(k => k.bane === bane);
+    if (!pc) return '<span class="tekst-daempet">Intet kamera valgt</span>';
+    const s = pc.status;
+    if (!s || !s.online) {
+        return `<span class="maerke maerke--neutral">Ikke meldt</span> <span class="tekst-daempet">${escapeHtml(pc.navn)} har ikke spurgt serveren det seneste minut — slukket, eller ældre Badminton TV uden livestream</span>`;
+    }
+    if (!s.kamera) return `<span class="maerke maerke--afventer">Intet kamera</span> <span class="tekst-daempet">${escapeHtml(pc.navn)} finder intet USB-kamera</span>`;
+    if (s.fejl) return `<span class="maerke maerke--fare">Fejl</span> ${escapeHtml(s.fejl)}`;
+    if (s.sender) {
+        const siden = s.senderSiden ? new Date(s.senderSiden).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' }) : '';
+        return `<span class="maerke maerke--igang">● Sender</span> <span class="tekst-daempet">siden kl. ${siden} · ${escapeHtml(s.kamera)}${s.koder === 'x264' ? ' · kodet på CPU\'en' : ''}</span>`;
+    }
+    return `<span class="tekst-daempet">${escapeHtml(LS_GRUND[s.grund] || 'Klar')} · ${escapeHtml(s.kamera)}</span>`;
+}
+
+function renderLivestream() {
+    const boks = document.getElementById('livestreamBox');
+    if (!boks || !_livestream) return;
+    const baner = _livestream.baner.filter(b => b.bane <= _livestreamBaner);
+    const til = baner.filter(b => b.enabled).length;
+    const kameraValg = (bane) => {
+        const valgt = _livestream.kameraer.find(k => k.bane === bane);
+        return `<select class="admin-input admin-input--sm" onchange="saetLivestreamKamera(${bane}, this.value)">
+            <option value="">Intet kamera</option>
+            ${_livestream.kameraer.map(k => `<option value="${k.tokenId}"${valgt && valgt.tokenId === k.tokenId ? ' selected' : ''}>${escapeHtml(k.navn)}${k.bane && k.bane !== bane ? ` (bane ${k.bane})` : ''}</option>`).join('')}
+        </select>`;
+    };
+    const raekker = baner.map(b => `
+        <div class="ls-bane" data-bane="${b.bane}">
+            <div class="ls-bane-top">
+                <strong>Bane ${b.bane}</strong>
+                <span class="ls-status" data-bane="${b.bane}">${livestreamStatusHtml(b.bane)}</span>
+            </div>
+            <div class="ls-felter">
+                <label><span class="felt-etiket">Kamera (TV-PC)</span>${kameraValg(b.bane)}</label>
+                <label><span class="felt-etiket">Stream-nøgle${b.noegle ? ` · gemt ${escapeHtml(b.noegle)}` : ''}</span>
+                    <input type="password" class="admin-input admin-input--sm ls-noegle" autocomplete="off" spellcheck="false"
+                        placeholder="${b.noegle ? 'Indsæt for at skifte nøgle' : 'Indsæt nøglen fra YouTube Studio'}"></label>
+                <label class="ls-flueben"><input type="checkbox" class="ls-til"${b.enabled ? ' checked' : ''}> Send banen</label>
+                <label class="ls-flueben"><input type="checkbox" class="ls-overlay"${b.overlay ? ' checked' : ''}> Navne og stilling i billedet</label>
+                <button class="btn-primary btn-sm" onclick="gemLivestream(${b.bane})">Gem</button>
+            </div>
+            <details class="ls-avanceret">
+                <summary class="tekst-mindre tekst-daempet">Anden tjeneste end YouTube (Facebook …)</summary>
+                <label><span class="felt-etiket">Stream-adresse (uden nøglen)</span>
+                    <input type="text" class="admin-input admin-input--sm ls-url" value="${escapeHtml(b.streamUrl)}" placeholder="${escapeHtml(_livestream.standardUrl)}"></label>
+                ${b.noegle ? `<a href="#" class="tekst-mindre" onclick="fjernLivestreamNoegle(${b.bane});return false;">Fjern den gemte nøgle</a>` : ''}
+            </details>
+            <div class="ls-besked tekst-mindre" hidden></div>
+        </div>`).join('');
+
+    const aaben = boks.querySelector('details.dt-gruppe')?.open ?? dtGruppeAaben('livestream');
+    boks.innerHTML = `
+        <details class="dt-gruppe" data-gruppe="livestream"${aaben ? ' open' : ''}>
+            <summary>
+                <span class="dt-gruppe-titel">Livestream</span>
+                <span class="dt-gruppe-antal">${til ? `${til} ${til === 1 ? 'bane' : 'baner'} slået til` : 'Ingen baner slået til'}</span>
+            </summary>
+            <div class="dt-gruppe-indhold">
+                <p class="tekst-mindre tekst-daempet ls-intro">
+                    Et USB-kamera i TV-PC'en sender banen til YouTube — fra kampen sættes på banen, til 2 minutter efter den er afgjort.
+                    Badmintonplanner-kampe sendes ikke. Stream-nøglen finder du i YouTube Studio → Gå live → Stream. Én nøgle pr. bane.
+                </p>
+                ${raekker}
+            </div>
+        </details>`;
+    boks.querySelector('details.dt-gruppe').addEventListener('toggle', (e) => saetDtGruppeAaben('livestream', e.target.open));
+}
+
+function livestreamBesked(bane, tekst, fejl = false) {
+    const el = document.querySelector(`.ls-bane[data-bane="${bane}"] .ls-besked`);
+    if (!el) return;
+    el.hidden = !tekst;
+    el.textContent = tekst || '';
+    el.classList.toggle('ls-besked--fejl', fejl);
+}
+
+async function gemLivestream(bane, ekstra = {}) {
+    const el = document.querySelector(`.ls-bane[data-bane="${bane}"]`);
+    if (!el) return;
+    const data = {
+        enabled: el.querySelector('.ls-til').checked,
+        overlay: el.querySelector('.ls-overlay').checked,
+        streamUrl: el.querySelector('.ls-url').value.trim(),
+        streamKey: el.querySelector('.ls-noegle').value.trim(),
+        ...ekstra
+    };
+    try {
+        await api.saveLivestream(bane, data);
+    } catch (e) {
+        livestreamBesked(bane, e.message, true);
+        return;
+    }
+    await loadLivestream();
+    livestreamBesked(bane, 'Gemt');
+    setTimeout(() => livestreamBesked(bane, ''), 3000);
+}
+
+function fjernLivestreamNoegle(bane) {
+    if (!confirm(`Fjern stream-nøglen for bane ${bane}? Banen sendes ikke, før en ny nøgle er indtastet.`)) return;
+    gemLivestream(bane, { fjernNoegle: true, enabled: false, streamKey: '' });
+}
+
+async function saetLivestreamKamera(bane, tokenId) {
+    try {
+        if (tokenId) {
+            await api.setLivestreamCamera(Number(tokenId), bane);
+        } else {
+            const nu = _livestream.kameraer.find(k => k.bane === bane);
+            if (nu) await api.setLivestreamCamera(nu.tokenId, null);
+        }
+    } catch (e) {
+        livestreamBesked(bane, e.message, true);
+        return;
+    }
+    await loadLivestream();
 }
 
 // ── Skærmenes hændelseslog (30 dage, gemt på serveren) ──

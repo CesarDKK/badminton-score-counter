@@ -916,6 +916,57 @@ header > div {
     margin: 0;
 }
 
+/* Livestream: én blok pr. bane — kamera, nøgle, til/fra, overlay, gem */
+.ls-intro { margin: 0 0 6px; }
+
+.ls-bane {
+    padding: 12px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ls-bane-top {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    margin-bottom: 8px;
+}
+
+.ls-status { font-size: 0.85em; }
+
+.ls-felter {
+    display: grid;
+    grid-template-columns: minmax(160px, 1fr) minmax(200px, 1.4fr) auto auto auto;
+    align-items: end;
+    gap: 10px 14px;
+}
+
+.ls-felter .admin-input { width: 100%; box-sizing: border-box; }
+
+.ls-flueben {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9em;
+    white-space: nowrap;
+    padding-bottom: 8px;
+    cursor: pointer;
+}
+
+.ls-flueben input { accent-color: var(--color-accent); }
+
+.ls-avanceret { margin-top: 6px; }
+.ls-avanceret > summary { cursor: pointer; }
+.ls-avanceret label { display: block; max-width: 420px; margin: 6px 0; }
+
+.ls-besked { margin-top: 6px; color: var(--color-win, #45d17e); }
+.ls-besked--fejl { color: rgb(var(--color-danger-rgb, 217, 44, 63)); }
+
+@media (max-width: 760px) {
+    .ls-felter { grid-template-columns: 1fr 1fr; }
+    .ls-felter > label:nth-child(-n+2) { grid-column: 1 / -1; }
+}
+
 /* Skærmenes hændelseslog: tid · skærm · hvad — på en telefon står hvad under skærmen */
 .skaerm-log-raekke {
     display: grid;
