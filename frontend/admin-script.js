@@ -2964,18 +2964,25 @@ function renderLivestream() {
             </div>
             <div class="ls-felter">
                 <label><span class="felt-etiket">Kamera (TV-PC)</span>${kameraValg(b.bane)}</label>
-                <label><span class="felt-etiket">Stream-nøgle${b.noegle ? ` · gemt ${escapeHtml(b.noegle)}` : ''}</span>
+                <label><span class="felt-etiket">Stream-nøgle</span>
                     <input type="password" class="admin-input admin-input--sm ls-noegle" autocomplete="off" spellcheck="false"
+                        oninput="livestreamNoegleIndtastet(this)"
                         placeholder="${b.noegle ? 'Indsæt for at skifte nøgle' : 'Indsæt nøglen fra YouTube Studio'}"></label>
                 <label class="ls-flueben"><input type="checkbox" class="ls-til"${b.enabled ? ' checked' : ''}> Send banen</label>
                 <label class="ls-flueben"><input type="checkbox" class="ls-overlay"${b.overlay ? ' checked' : ''}> Navne og stilling i billedet</label>
                 <button class="btn-primary btn-sm" onclick="gemLivestream(${b.bane})">Gem</button>
             </div>
+            <div class="ls-noegle-status">
+                ${b.noegle
+                    ? `<span class="maerke maerke--vundet">✓ Nøgle gemt</span>
+                       <span class="tekst-mindre tekst-daempet">slutter på <code>${escapeHtml(b.noegle.replace(/^…/, ''))}</code></span>
+                       <button class="btn-danger btn-sm" onclick="fjernLivestreamNoegle(${b.bane})">Fjern nøglen</button>`
+                    : `<span class="maerke maerke--afventer">Ingen nøgle</span>`}
+            </div>
             <details class="ls-avanceret">
                 <summary class="tekst-mindre tekst-daempet">Anden tjeneste end YouTube (Facebook …)</summary>
                 <label><span class="felt-etiket">Stream-adresse (uden nøglen)</span>
                     <input type="text" class="admin-input admin-input--sm ls-url" value="${escapeHtml(b.streamUrl)}" placeholder="${escapeHtml(_livestream.standardUrl)}"></label>
-                ${b.noegle ? `<a href="#" class="tekst-mindre" onclick="fjernLivestreamNoegle(${b.bane});return false;">Fjern den gemte nøgle</a>` : ''}
             </details>
             <div class="ls-besked tekst-mindre" hidden></div>
         </div>`).join('');
@@ -3025,6 +3032,11 @@ async function gemLivestream(bane, ekstra = {}) {
     await loadLivestream();
     livestreamBesked(bane, 'Gemt');
     setTimeout(() => livestreamBesked(bane, ''), 3000);
+}
+
+// En ny nøgle betyder, at banen skal sendes — så man ikke glemmer fluebenet
+function livestreamNoegleIndtastet(input) {
+    if (input.value.trim()) input.closest('.ls-bane').querySelector('.ls-til').checked = true;
 }
 
 function fjernLivestreamNoegle(bane) {
