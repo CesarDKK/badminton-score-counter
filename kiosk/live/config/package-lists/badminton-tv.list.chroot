@@ -44,8 +44,13 @@ fonts-dejavu-core
 fonts-liberation2
 fonts-noto-color-emoji
 
-# HDMI-CEC (cec-ctl)
+# HDMI-CEC (cec-ctl) og USB-kameraet (v4l2-ctl)
 v4l-utils
+
+# Livestream fra USB-kameraet (usr/lib/badminton-tv/stream): ffmpeg og
+# grafikkortets H.264-kodning (Intel, non-free: den fulde kodning)
+ffmpeg
+intel-media-va-driver-non-free
 
 # Installation på disk
 grub-efi-amd64

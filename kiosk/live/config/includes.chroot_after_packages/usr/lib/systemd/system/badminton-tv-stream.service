@@ -1,0 +1,22 @@
+# Livestream fra et USB-kamera i TV-PC'en — kun mens der er kamp på banen, og
+# kun når admin har valgt kameraet og indtastet en stream-nøgle (se
+# /usr/lib/badminton-tv/stream). Uden kamera spørger den bare serveren sjældent.
+[Unit]
+Description=Badminton TV: livestream fra USB-kameraet
+After=badminton-tv-setup.service network-online.target
+Wants=network-online.target
+ConditionKernelCommandLine=!badminton.tilstand=installer
+ConditionKernelCommandLine=!badminton.tilstand=hentlog
+ConditionPathExists=/usr/bin/ffmpeg
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/badminton-tv/stream
+Restart=always
+RestartSec=10
+# TV-siden går forud: kodningen må aldrig gøre browseren sløv
+Nice=5
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

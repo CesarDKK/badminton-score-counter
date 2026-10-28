@@ -20,6 +20,7 @@ const BACKUP_TABLES = [
     'settings',
     'sponsor_settings',
     'courts',
+    'court_streams',
     'sponsor_images',
     'sponsor_image_courts',
     'game_states',

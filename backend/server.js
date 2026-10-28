@@ -65,6 +65,7 @@ app.use('/api/club-admin/login', loginLimiter);
 app.use('/api/club-admin', require('./routes/clubAdmin'));
 app.use('/api/device-tokens', require('./routes/deviceTokens'));
 app.use('/api/screens', require('./routes/screens'));
+app.use('/api/livestream', require('./routes/livestream'));
 
 // Device token entry point — tablet/TV åbner dette bogmærke-link
 app.get('/t/:token', async (req, res, next) => {

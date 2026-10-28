@@ -48,6 +48,9 @@ jobs:
       - name: Browser-vagt (mod headless Chromium)
         run: docker run --rm -v "$PWD/kiosk:/src" debian:trixie bash /src/test/test-browservagt.sh
 
+      - name: Livestream (ffmpeg mod en RTMP-modtager, overlay, fejl)
+        run: docker run --rm -v "$PWD/kiosk:/src" debian:trixie bash /src/test/test-stream.sh
+
       - name: ShellCheck
         env:
           LANG: C.UTF-8   # filerne indeholder æøå
@@ -55,7 +58,7 @@ jobs:
           cd kiosk
           shellcheck -S warning -x \
             build.sh test/vm.sh test/test-conf.sh test/test-netstatus.sh test/test-browservagt.sh test/test-rapport.sh test/test-netvagt.sh \
-            test/test-opdatering.sh test/opdatering-vm.sh \
+            test/test-stream.sh test/test-opdatering.sh test/opdatering-vm.sh \
             pi/build-pi.sh pi/tilpas.sh pi/test-billede.sh \
             live/auto/config \
             live/config/hooks/normal/*.hook.chroot \

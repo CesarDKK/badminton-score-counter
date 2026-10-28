@@ -1081,6 +1081,25 @@ class BadmintonAPI {
         return this.request(`/screens/${encodeURIComponent(klientId)}`, { method: 'DELETE' });
     }
 
+    // Livestream: banernes stream-nøgler og hvilken TV-PC, der har kameraet
+    async getLivestream() {
+        return this.request('/livestream');
+    }
+
+    async saveLivestream(bane, data) {
+        return this.request(`/livestream/baner/${encodeURIComponent(bane)}`, {
+            method: 'PUT',
+            body: JSON.stringify(data)
+        });
+    }
+
+    async setLivestreamCamera(tokenId, bane) {
+        return this.request(`/livestream/kamera/${encodeURIComponent(tokenId)}`, {
+            method: 'PUT',
+            body: JSON.stringify({ bane })
+        });
+    }
+
     async createDeviceToken(name, destination, locked, showQrOnTv) {
         const body = { name, destination, locked };
         if (showQrOnTv !== undefined) body.showQrOnTv = showQrOnTv;
