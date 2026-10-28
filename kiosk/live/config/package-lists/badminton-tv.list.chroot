@@ -48,9 +48,13 @@ fonts-noto-color-emoji
 v4l-utils
 
 # Livestream fra USB-kameraet (usr/lib/badminton-tv/stream): ffmpeg og
-# grafikkortets H.264-kodning (Intel, non-free: den fulde kodning)
+# grafikkortets H.264-kodning (Intel, non-free: den fulde kodning), og
+# scoreboardet i billedet (Pillow, Inter til navne, Bebas Neue til tal)
 ffmpeg
 intel-media-va-driver-non-free
+python3-pil
+fonts-inter
+fonts-bebas-neue
 
 # Installation på disk
 grub-efi-amd64

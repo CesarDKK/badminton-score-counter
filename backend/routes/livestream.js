@@ -144,6 +144,7 @@ router.post('/pc', async (req, res, next) => {
                 svar.noegle = opsaetning.stream_key;
                 svar.overlay = !!opsaetning.overlay;
                 svar.linjer = opsaetning.overlay ? ls.overlayLinjer(rk, dbl) : [];
+                svar.tavle = opsaetning.overlay ? ls.overlayTavle(rk, dbl, bane) : null;
             }
         }
         const { ny } = ls.registrer(tenant, link.id, { ...pc, bane: bane || null, grund: svar.grund }, klientIp(req));

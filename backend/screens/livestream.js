@@ -125,30 +125,54 @@ function sideNavn(navn, makker, standardMakker, double) {
     return fuld.length > NAVN_MAX ? fuld.slice(0, NAVN_MAX - 1) + '…' : fuld;
 }
 
-// To linjer, én pr. side: navn, så sættene, så stillingen i det igangværende
-// sæt. Skrives med en fast-bredde skrift, så tallene står under hinanden.
-//   Hansen / Berg     21 11
-//   Jensen / Olsen    15  8
+// Scoreboardet i billedet (PC'en tegner det): én række pr. side med navn,
+// afsluttede sæt, stillingen i det igangværende sæt og hvem der server.
+// Rækkerne står som i 1. sæt — spillerne hopper ikke, når de bytter side
+// (som oversigten). Tallene er orienteret til rækkerne.
 // rk: game_states- eller last_finished_matches-række; double: banen er double.
-function overlayLinjer(rk, double) {
-    if (!rk) return [];
-    const n1 = sideNavn(rk.player1_name, rk.player1_name2, 'Makker 1', double);
-    const n2 = sideNavn(rk.player2_name, rk.player2_name2, 'Makker 2', double);
-    const kol = [];
-    for (const s of parseSaet(rk.set_scores_history)) {
+function overlayTavle(rk, double, bane = null) {
+    if (!rk) return null;
+    const navne = [sideNavn(rk.player1_name, rk.player1_name2, 'Makker 1', double),
+        sideNavn(rk.player2_name, rk.player2_name2, 'Makker 2', double)];
+    const historik = parseSaet(rk.set_scores_history);
+    const saet = [];
+    for (const s of historik) {
         const score = typeof s === 'string' ? s : s && s.score;
         const m = /^(\d{1,2})-(\d{1,2})$/.exec(String(score || ''));
         if (!m) continue;
         // Sæt-historikken gemmer player1 først — men siderne kan være byttet siden
         const byttet = s && typeof s === 'object' && s.player1Name &&
             s.player1Name === rk.player2_name && s.player1Name !== rk.player1_name;
-        kol.push(byttet ? [m[2], m[1]] : [m[1], m[2]]);
+        saet.push(byttet ? [+m[2], +m[1]] : [+m[1], +m[2]]);
     }
     const iGang = rk.player1_score !== undefined && !rk.match_completed && !rk.match_end_time;
-    if (iGang) kol.push([String(rk.player1_score || 0), String(rk.player2_score || 0)]);
-    const bredde = Math.max(n1.length, n2.length);
-    const linje = (navn, i) => navn.padEnd(bredde) + kol.map(k => ' ' + k[i].padStart(2)).join('');
-    return [linje(n1, 0), linje(n2, 1)];
+    const nu = iGang ? [Number(rk.player1_score) || 0, Number(rk.player2_score) || 0] : null;
+    const s = double ? rk.serving_team : rk.serving_player;
+    const serve = iGang && (s === 1 || s === 2) ? s : null;
+    const t = { bane, navne, saet, nu, serve };
+    // Stod siderne omvendt i 1. sæt? Så vendes det hele tilbage
+    const f = historik[0] && typeof historik[0] === 'object' ? historik[0] : null;
+    if (f && f.player1Name && f.player1Name === rk.player2_name && f.player2Name === rk.player1_name) {
+        const vend = (par) => [par[1], par[0]];
+        t.navne = vend(navne);
+        t.saet = saet.map(vend);
+        t.nu = nu && vend(nu);
+        t.serve = serve && 3 - serve;
+    }
+    return t;
+}
+
+// Den gamle tekstudgave (Badminton TV 2026.10.28 tegner ikke scoreboardet):
+// to linjer i en fast-bredde skrift, så tallene står under hinanden.
+//   Hansen / Berg     21 11
+//   Jensen / Olsen    15  8
+function overlayLinjer(rk, double) {
+    const t = overlayTavle(rk, double);
+    if (!t) return [];
+    const kol = t.nu ? [...t.saet, t.nu] : t.saet;
+    const bredde = Math.max(t.navne[0].length, t.navne[1].length);
+    const linje = (i) => t.navne[i].padEnd(bredde) + kol.map(k => ' ' + String(k[i]).padStart(2)).join('');
+    return [linje(0), linje(1)];
 }
 
 // ---------- PC'ernes status (til admin) ----------
@@ -191,6 +215,6 @@ function statusFor(tenant, nu = Date.now()) {
 module.exports = {
     STANDARD_URL, EFTER_MS, STILLE_MS,
     gyldigUrl, gyldigNoegle, rensOpsaetning, noegleSlut,
-    beslutning, overlayLinjer,
+    beslutning, overlayTavle, overlayLinjer,
     rensStatus, registrer, statusFor
 };

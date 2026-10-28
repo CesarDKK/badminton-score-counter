@@ -157,13 +157,18 @@ sendes ikke. Alt indstilles i admin under **Adgangslinks → Livestream**:
    er kameraets bane — også hvis TV'et senere skiftes til en anden bane.
 2. **Stream-nøgle:** fra YouTube Studio → *Gå live* → *Stream*. Én nøgle pr.
    bane. Nøglen ligger kun på serveren, aldrig på USB-nøglen.
-3. Sæt flueben i **Send banen**, og tryk **Gem**.
+3. Sæt flueben i **Send banen** (sker af sig selv, når en nøgle tastes), og
+   tryk **Gem**.
+
+Om streamen er offentlig, bestemmes i YouTube Studio: *Gå live* → *Stream* →
+*Rediger* → *Synlighed: Offentlig*. YouTube husker valget for nøglen.
 
 Admin viser, om PC'en sender, venter på en kamp, ikke finder kameraet, eller
 om YouTube afviser nøglen. Billedet er 1280x720 med 30 billeder i sekundet
-(~3,5 Mbit/s, ca. 1,6 GB i timen pr. bane), uden lyd fra hallen, med navne og
-stilling øverst til venstre (kan slås fra pr. bane). Kameraet stilles til
-50 Hz og fast fokus på lang afstand.
+(~3,5 Mbit/s, ca. 1,6 GB i timen pr. bane), uden lyd fra hallen, med et
+scoreboard øverst til venstre (kan slås fra pr. bane): banen, navnene, sættene,
+stillingen og hvem der server — tegnet med Pillow (Inter og Bebas Neue).
+Kameraet stilles til 50 Hz og fast fokus på lang afstand.
 
 Kameraet skal kunne sende MJPEG i 1280x720 — det kan alle Logitech-kameraer.
 Til 4 m bag banen skal synsvinklen være mindst ~90° diagonalt (fx Logitech

@@ -11,7 +11,10 @@ serveren (admin → Adgangslinks → Livestream) — aldrig på USB-nøglen.
     de fleste andre UVC-kameraer kan det) og koder H.264 ~3,5 Mbit/s med
     PC'ens grafikkort (VAAPI). Går det ikke, kodes på CPU'en (libx264).
   - lydløst lydspor (YouTube vil have lyd med) — hallens lyd sendes aldrig
-  - overlayet læses fra en fil, som opdateres ved hvert svar (drawtext reload)
+  - scoreboardet (navne, sæt, stilling, serv) tegnes som et PNG-billede med
+    Pillow, hver gang stillingen ændrer sig; ffmpeg læser billedet igen og
+    igen (movie-filteret med loop). Svarer en ældre server uden scoreboard,
+    eller mangler Pillow, skrives to linjer tekst i stedet (drawtext reload).
   - dør ffmpeg (nettet væk, YouTube afviser), startes den igen efter 5, 15,
     30, 60 og derefter hvert 120. sekund, og fejlen vises i admin
   - svarer serveren ikke, sendes der videre i højst et minut
@@ -19,7 +22,7 @@ serveren (admin → Adgangslinks → Livestream) — aldrig på USB-nøglen.
 Kameraet stilles til 50 Hz (ingen flimren fra hallens lys) og fast fokus på
 lang afstand (autofokus "pumper", når spillerne løber).
 
-Kun Pythons standardbibliotek.
+Pythons standardbibliotek + Pillow (python3-pil) til scoreboardet.
 """
 
 import collections
@@ -36,15 +39,23 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+try:
+    from PIL import Image, ImageDraw, ImageFont
+except ImportError:     # så bliver det tekst-overlayet
+    Image = None
+
 KIOSK_ENV = os.environ.get('BT_KIOSK_ENV', '/run/badminton-tv/kiosk.env')
 VERSION_FIL = os.environ.get('BT_VERSION_FIL', '/usr/share/badminton-tv/version')
 MAPPE = os.environ.get('BT_STREAM_MAPPE', '/run/badminton-tv/stream')
 OVERLAY = os.path.join(MAPPE, 'overlay.txt')
+TAVLE = os.path.join(MAPPE, 'tavle.png')
 FFMPEG = os.environ.get('BT_FFMPEG', 'ffmpeg')
 V4L2CTL = os.environ.get('BT_V4L2CTL', 'v4l2-ctl')
 KAMERA_GLOB = os.environ.get('BT_KAMERA_GLOB', '/dev/v4l/by-id/*-video-index0')
 RENDER = os.environ.get('BT_RENDER', '/dev/dri/renderD128')
 SKRIFT = os.environ.get('BT_SKRIFT', '/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf')
+SKRIFT_NAVN = os.environ.get('BT_SKRIFT_NAVN', '/usr/share/fonts/opentype/inter/Inter-SemiBold.otf')
+SKRIFT_TAL = os.environ.get('BT_SKRIFT_TAL', '/usr/share/fonts/opentype/bebas-neue/BebasNeue-Bold.otf')
 STREAM_URL = os.environ.get('BT_STREAM_URL')   # test: i stedet for {server}/api/livestream/pc
 
 
@@ -135,6 +146,7 @@ def stil_kamera(enhed):
 # ---------- ffmpeg ----------
 
 def ffmpeg_args(enhed, maal, overlay, koder):
+    """overlay: None, 'tavle' (scoreboard-billedet) eller 'tekst' (to linjer)."""
     args = [FFMPEG, '-hide_banner', '-nostdin', '-loglevel', 'error']
     if koder == 'vaapi':
         args += ['-vaapi_device', RENDER]
@@ -142,7 +154,14 @@ def ffmpeg_args(enhed, maal, overlay, koder):
              '-framerate', str(BILLEDER), '-thread_queue_size', '512', '-i', enhed,
              '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100']
     filtre = []
-    if overlay:
+    if overlay == 'tavle':
+        # movie-filteret læser billedet igen for hvert halve sekund kamera-
+        # billede, så en ny stilling står i billedet efter ca. et sekund.
+        # (Som ekstra input med -readrate 1 halter ffmpeg efter kameraet og
+        # sender kun få billeder i sekundet.)
+        filtre.append(f'movie=filename={TAVLE}:f=image2:loop=0:format_opts=framerate=2,'
+                      'setpts=N/2/TB[tavle];[0:v][tavle]overlay=0:0')
+    elif overlay:
         filtre.append(f'drawtext=fontfile={SKRIFT}:textfile={OVERLAY}:reload=1:expansion=none'
                       ':fontsize=28:fontcolor=white:line_spacing=8'
                       ':box=1:boxcolor=black@0.6:boxborderw=14:x=28:y=28')
@@ -155,9 +174,121 @@ def ffmpeg_args(enhed, maal, overlay, koder):
         filtre.append('format=yuv420p')
         video = ['-c:v', 'libx264', '-preset', 'veryfast', '-b:v', BITRATE, '-maxrate', BITRATE,
                  '-bufsize', '7000k', '-g', gop, '-keyint_min', gop, '-sc_threshold', '0']
-    args += ['-vf', ','.join(filtre), *video, '-c:a', 'aac', '-b:a', '128k',
-             '-map', '0:v', '-map', '1:a', '-f', 'flv', maal]
+    if overlay == 'tavle':
+        args += ['-filter_complex', ','.join(filtre) + '[v]', '-map', '[v]']
+    else:
+        args += ['-vf', ','.join(filtre), '-map', '0:v']
+    args += [*video, '-c:a', 'aac', '-b:a', '128k', '-map', '1:a', '-f', 'flv', maal]
     return args
+
+
+# ---------- Scoreboardet ----------
+#
+#   ┌ BANE 3 ┐
+#   │ ● Hansen / Berg     21  19 │ 11 │
+#   │   Jensen / Olsen    15  21 │  8 │
+#
+# Tegnes i fuld billedbredde (gennemsigtigt udenom), så billedet har samme
+# størrelse hver gang — ffmpeg vil ikke have, at det skifter størrelse.
+
+TAVLE_STR = (1280, 220)
+PANEL = (12, 16, 24, 235)
+STREG = (255, 255, 255, 26)
+ACCENT = (233, 69, 96, 255)     # appens accentfarve (#e94560)
+FJER = (255, 214, 64, 255)      # hvem der server
+HVID = (255, 255, 255, 255)
+GRAA = (150, 158, 172, 255)     # det tabte sæt
+
+
+_skrifter = {}
+
+
+def skrift(sti, stoerrelse):
+    if (sti, stoerrelse) not in _skrifter:
+        try:
+            _skrifter[(sti, stoerrelse)] = ImageFont.truetype(sti, stoerrelse)
+        except OSError:
+            _skrifter[(sti, stoerrelse)] = ImageFont.load_default(stoerrelse)
+    return _skrifter[(sti, stoerrelse)]
+
+
+def afkort(d, tekst, f, bredde):
+    if d.textlength(tekst, font=f) <= bredde:
+        return tekst
+    while tekst and d.textlength(tekst + '…', font=f) > bredde:
+        tekst = tekst[:-1]
+    return tekst.rstrip() + '…'
+
+
+def tegn_tavle_billede(tavle):
+    """Scoreboardet som RGBA-billede (TAVLE_STR); helt gennemsigtigt uden kamp."""
+    billede = Image.new('RGBA', TAVLE_STR, (0, 0, 0, 0))
+    navne = [str(n or '') for n in (tavle or {}).get('navne') or []][:2]
+    if len(navne) < 2:
+        return billede
+    saet = [s for s in tavle.get('saet') or [] if isinstance(s, list) and len(s) == 2][-5:]
+    nu = tavle.get('nu') if isinstance(tavle.get('nu'), list) and len(tavle['nu']) == 2 else None
+    serve = tavle.get('serve') if nu else None
+    bane = tavle.get('bane')
+
+    d = ImageDraw.Draw(billede)
+    f_navn, f_tal, f_nu, f_fane = (skrift(SKRIFT_NAVN, 25), skrift(SKRIFT_TAL, 34),
+                                   skrift(SKRIFT_TAL, 38), skrift(SKRIFT_TAL, 22))
+    x0, y0 = 28, 26
+    fane_h = 28 if bane else 0
+    raekke, luft = 48, 14
+    navn_b = int(min(max(max(d.textlength(n, font=f_navn) for n in navne), 150), 520))
+    kol, nu_b = 42, 62
+    bredde = luft + 18 + navn_b + 14 + kol * len(saet) + (nu_b + 6 if nu else luft - 6)
+    top = y0 + fane_h
+    hoejde = raekke * 2
+
+    if bane:
+        tekst = f'BANE {bane}'
+        fb = int(d.textlength(tekst, font=f_fane)) + 24
+        d.rounded_rectangle((x0, y0, x0 + fb, top + 8), radius=6, fill=ACCENT,
+                            corners=(True, True, False, False))
+        d.text((x0 + fb / 2, y0 + fane_h / 2 + 1), tekst, font=f_fane, fill=HVID, anchor='mm')
+    d.rounded_rectangle((x0, top, x0 + bredde, top + hoejde), radius=10, fill=PANEL,
+                        corners=(not bane, True, True, True))
+    d.line((x0 + luft, top + raekke, x0 + bredde - (nu_b + 6 if nu else luft), top + raekke),
+           fill=STREG, width=1)
+
+    for i in (0, 1):
+        midt = top + raekke * i + raekke / 2
+        if serve == i + 1:
+            d.ellipse((x0 + luft, midt - 5, x0 + luft + 10, midt + 5), fill=FJER)
+        x = x0 + luft + 18
+        d.text((x, midt), afkort(d, navne[i], f_navn, navn_b), font=f_navn, fill=HVID, anchor='lm')
+        x += navn_b + 14
+        for s in saet:
+            vundet = s[i] > s[1 - i]
+            d.text((x + kol / 2, midt + 2), str(s[i]), font=f_tal,
+                   fill=HVID if vundet else GRAA, anchor='mm')
+            x += kol
+    if nu:
+        x = x0 + bredde - nu_b - 6
+        d.rounded_rectangle((x, top + 6, x + nu_b, top + hoejde - 6), radius=8, fill=ACCENT)
+        d.line((x + 8, top + raekke, x + nu_b - 8, top + raekke), fill=(255, 255, 255, 60), width=1)
+        for i in (0, 1):
+            d.text((x + nu_b / 2, top + raekke * i + raekke / 2 + 2), str(nu[i]), font=f_nu,
+                   fill=HVID, anchor='mm')
+    return billede
+
+
+_sidste_tavle = object()
+
+
+def skriv_tavle(tavle):
+    """Kun når noget har ændret sig — tegningen tager lidt CPU."""
+    global _sidste_tavle
+    if tavle == _sidste_tavle and os.path.exists(TAVLE):
+        return
+    os.makedirs(MAPPE, exist_ok=True)
+    ny = TAVLE + '.ny.png'
+    tegn_tavle_billede(tavle).save(ny)
+    os.replace(ny, TAVLE)
+    _sidste_tavle = tavle
 
 
 def forklar(linjer):
@@ -226,7 +357,7 @@ class Stream:
         threading.Thread(target=self._laes, args=(self.proc,), daemon=True).start()
         self.opsaetning = (enhed, maal, overlay)
         self.startet = time.monotonic()
-        log(f'sender {OPLOESNING} @ {BILLEDER} fra {enhed} ({self.koder}, overlay {"til" if overlay else "fra"})')
+        log(f'sender {OPLOESNING} @ {BILLEDER} fra {enhed} ({self.koder}, overlay {overlay or "fra"})')
 
     def stop(self):
         if self.proc is None:
@@ -348,9 +479,15 @@ def main():
         else:
             sidste_svar = time.monotonic()
             if svar.get('send') and enhed and svar.get('url') and svar.get('noegle'):
+                overlay = None
                 if svar.get('overlay'):
-                    skriv_overlay(svar.get('linjer') or [])
-                stream.start(enhed, svar['url'], svar['noegle'], bool(svar.get('overlay')))
+                    # Scoreboardet, når serveren sender det, og Pillow er der
+                    overlay = 'tavle' if Image is not None and 'tavle' in svar else 'tekst'
+                    if overlay == 'tavle':
+                        skriv_tavle(svar.get('tavle'))
+                    else:
+                        skriv_overlay(svar.get('linjer') or [])
+                stream.start(enhed, svar['url'], svar['noegle'], overlay)
             else:
                 stream.stop()
                 if not enhed:
