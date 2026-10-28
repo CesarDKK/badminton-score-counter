@@ -2979,11 +2979,6 @@ function renderLivestream() {
                        <button class="btn-danger btn-sm" onclick="fjernLivestreamNoegle(${b.bane})">Fjern nøglen</button>`
                     : `<span class="maerke maerke--afventer">Ingen nøgle</span>`}
             </div>
-            <details class="ls-avanceret">
-                <summary class="tekst-mindre tekst-daempet">Anden tjeneste end YouTube (Facebook …)</summary>
-                <label><span class="felt-etiket">Stream-adresse (uden nøglen)</span>
-                    <input type="text" class="admin-input admin-input--sm ls-url" value="${escapeHtml(b.streamUrl)}" placeholder="${escapeHtml(_livestream.standardUrl)}"></label>
-            </details>
             <div class="ls-besked tekst-mindre" hidden></div>
         </div>`).join('');
 
@@ -3019,7 +3014,6 @@ async function gemLivestream(bane, ekstra = {}) {
     const data = {
         enabled: el.querySelector('.ls-til').checked,
         overlay: el.querySelector('.ls-overlay').checked,
-        streamUrl: el.querySelector('.ls-url').value.trim(),
         streamKey: el.querySelector('.ls-noegle').value.trim(),
         ...ekstra
     };
