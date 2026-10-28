@@ -85,12 +85,28 @@ test('overlay: navn, sættene og stillingen under hinanden', () => {
     assert.deepEqual(linjer, ['Hansen 21 11', 'Jensen 15  8']);
 });
 
-test('overlay: double med makker, og byttede sider vendes', () => {
+test('overlay: double med makker — rækkerne står som i 1. sæt, også efter sidebyttet', () => {
     const linjer = ls.overlayLinjer(gs({
         player1_name2: 'Berg', player2_name2: 'Olsen', player1_score: 3, player2_score: 4,
         set_scores_history: JSON.stringify([{ player1Name: 'Jensen', player2Name: 'Hansen', score: '21-19' }])
     }), true);
-    assert.deepEqual(linjer, ['Hansen / Berg  19  3', 'Jensen / Olsen 21  4']);
+    assert.deepEqual(linjer, ['Jensen / Olsen 21  4', 'Hansen / Berg  19  3']);
+});
+
+test('scoreboard: sæt som tal, stillingen, serven og banen — vendt som i 1. sæt', () => {
+    const r = gs({
+        player1_score: 3, player2_score: 4, serving_player: 1,
+        set_scores_history: JSON.stringify([{ player1Name: 'Jensen', player2Name: 'Hansen', score: '21-19' }])
+    });
+    assert.deepEqual(ls.overlayTavle(r, false, 3),
+        { bane: 3, navne: ['Jensen', 'Hansen'], saet: [[21, 19]], nu: [4, 3], serve: 2 });
+    // I double er det holdet, der server
+    assert.equal(ls.overlayTavle(gs({ serving_team: 2, serving_player: 1 }), true).serve, 2);
+    // Afgjort: ingen stilling og ingen serv
+    const slut = ls.overlayTavle(gs({ match_completed: 1, player1_score: 21, serving_player: 1,
+        set_scores_history: JSON.stringify(['21-15', '21-10']) }), false);
+    assert.deepEqual([slut.saet, slut.nu, slut.serve], [[[21, 15], [21, 10]], null, null]);
+    assert.equal(ls.overlayTavle(null, false), null);
 });
 
 test('overlay: afgjort kamp viser kun sættene, lange navne afkortes', () => {

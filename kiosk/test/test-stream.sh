@@ -3,14 +3,15 @@
 # "kameraet" er et testbillede (lavfi), "YouTube" er en ffmpeg, der lytter på
 # RTMP, og "serveren" er en lille Python-server, der svarer, hvad testen vil.
 #   1. kamera, men ingen kamp     → intet sendes, status siger kameraets navn
-#   2. kamp på banen              → sender 1280x720 H.264 + lydløs AAC, overlay
-#   3. stillingen ændres          → overlayet opdateres uden genstart
+#   2. kamp på banen              → sender 1280x720 H.264 + lydløs AAC, scoreboard
+#   3. stillingen ændres          → scoreboardet tegnes igen uden genstart
+#      (5 og 6: en ældre server uden scoreboard → to linjer tekst)
 #   4. kampen er slut             → streamen stoppes pænt
 #   5. YouTube afviser            → fejlen i ord til admin, nøglen aldrig i loggen
 #   6. grafikkortet kan ikke kode → koder på CPU'en i stedet
 #   7. serveren svarer ikke       → stopper efter UDEN_SVAR
 #
-# Køres i en debian:trixie-container (henter ffmpeg + python3):
+# Køres i en debian:trixie-container (henter ffmpeg, python3, Pillow og skrifterne):
 #   docker run --rm -v "$PWD/kiosk:/src" debian:trixie bash /src/test/test-stream.sh
 
 set -uo pipefail
@@ -21,9 +22,9 @@ FEJL=0
 NOEGLE=hemmelig-noegle-1234
 RTMP_PORT=19350
 
-if ! command -v ffmpeg >/dev/null || ! command -v python3 >/dev/null || [ ! -e /usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf ]; then
+if ! command -v ffmpeg >/dev/null || ! python3 -c "import PIL" 2>/dev/null || [ ! -e /usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf ] || [ ! -d /usr/share/fonts/opentype/inter ]; then
     apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg python3 fonts-dejavu-core >/dev/null
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg python3 python3-pil fonts-dejavu-core fonts-inter fonts-bebas-neue >/dev/null
 fi
 
 forvent() { # navn faktisk forventet
@@ -100,8 +101,16 @@ chmod +x "$TMP/bin/ffmpeg-falsk"
 printf '#!/bin/sh\nexit 0\n' > "$TMP/bin/v4l2-ctl"; chmod +x "$TMP/bin/v4l2-ctl"
 
 svar() { printf '%s' "$1" > "$TMP/svar.json"; }
-SEND_SVAR() { # linje1 linje2
-    svar "{\"kamera\":true,\"bane\":3,\"send\":true,\"grund\":\"kamp\",\"url\":\"rtmp://127.0.0.1:$RTMP_PORT/live2\",\"noegle\":\"$NOEGLE\",\"overlay\":true,\"linjer\":[\"$1\",\"$2\"]}"
+SEND_SVAR() { # linje1 linje2 [scoreboard-JSON — uden: en ældre server]
+    svar "{\"kamera\":true,\"bane\":3,\"send\":true,\"grund\":\"kamp\",\"url\":\"rtmp://127.0.0.1:$RTMP_PORT/live2\",\"noegle\":\"$NOEGLE\",\"overlay\":true,\"linjer\":[\"$1\",\"$2\"]${3:+,\"tavle\":$3}}"
+}
+TAVLE_JSON() { # stilling1 stilling2
+    printf '{"bane":3,"navne":["Hansen","Jensen"],"saet":[[21,15]],"nu":[%s,%s],"serve":1}' "$1" "$2"
+}
+# Farven midt i scoreboardets panel i et billede fra streamen: "mørk" eller "lys"
+panel_farve() { # flv-fil
+    ffmpeg -v error -sseof -1 -i "$1" -frames:v 1 -vf "crop=20:10:175:60,scale=1:1" -f rawvideo -pix_fmt gray - 2>/dev/null |
+        od -An -tu1 | awk '{ print ($1 < 60 ? "mørk" : "lys") }'
 }
 INGEN_SVAR='{"kamera":true,"bane":3,"send":false,"grund":"ingen-kamp"}'
 
@@ -137,18 +146,22 @@ forvent "sender ikke" "$(sidste_status | felt sender)" "False"
 
 echo "2. Kamp på banen"
 modtager "$TMP/modtaget.flv"
-SEND_SVAR "Hansen 21  5" "Jensen 15  3"
+SEND_SVAR "Hansen 21  5" "Jensen 15  3" "$(TAVLE_JSON 5 3)"
 vent_paa 10 test -s "$TMP/ffmpeg.log" || true
 forvent "ffmpeg startet én gang" "$(antal_start)" 1
-forvent "overlayet skrevet" "$(cat "$TMP/run/overlay.txt" 2>/dev/null)" "$(printf 'Hansen 21  5\nJensen 15  3')"
+forvent "scoreboardet tegnet (1280x220 PNG)" \
+    "$(python3 -c 'import sys; from PIL import Image; i=Image.open(sys.argv[1]); print(i.format, i.size)' "$TMP/run/tavle.png" 2>&1)" \
+    "PNG (1280, 220)"
+indeholder "overlay: scoreboardet" "$(cat "$TMP/stream.log")" "overlay tavle"
 vent_paa 10 sh -c "tail -n 1 '$TMP/status.jsonl' | grep -q '\"sender\": true'" || true
 forvent "status: sender" "$(sidste_status | felt sender)" "True"
 forvent "status: koder på CPU'en (intet grafikkort)" "$(sidste_status | felt koder)" "x264"
 
 echo "3. Stillingen ændres"
-SEND_SVAR "Hansen 21  6" "Jensen 15  3"
-vent_paa 5 grep -q "21  6" "$TMP/run/overlay.txt" || true
-indeholder "overlayet opdateret" "$(cat "$TMP/run/overlay.txt")" "Hansen 21  6"
+FOER=$(md5sum < "$TMP/run/tavle.png")
+SEND_SVAR "Hansen 21  6" "Jensen 15  3" "$(TAVLE_JSON 6 3)"
+vent_paa 5 sh -c "[ \"\$(md5sum < '$TMP/run/tavle.png')\" != '$FOER' ]" || true
+forvent "scoreboardet tegnet igen" "$([ "$(md5sum < "$TMP/run/tavle.png")" != "$FOER" ] && echo ja || echo nej)" "ja"
 sleep 3
 forvent "ingen genstart af ffmpeg" "$(antal_start)" 1
 
@@ -161,6 +174,12 @@ indeholder "H.264 1280x720" "$INFO" "codec_name=h264|width=1280|height=720"
 indeholder "AAC-lydspor" "$INFO" "codec_name=aac"
 VARIGHED=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$TMP/modtaget.flv" | cut -d. -f1)
 forvent "mindst 5 sekunder modtaget" "$([ "${VARIGHED:-0}" -ge 5 ] && echo ja || echo "nej (${VARIGHED:-0} s)")" "ja"
+forvent "scoreboardet står i billedet" "$(panel_farve "$TMP/modtaget.flv")" "mørk"
+# Halter ffmpeg efter kameraet (fx når scoreboardet styrer tempoet), kommer der
+# langt færre end 30 billeder i sekundet frem
+BILLEDER=$(ffprobe -v error -select_streams v -count_packets -show_entries stream=nb_read_packets -of csv=p=0 "$TMP/modtaget.flv")
+forvent "mindst 25 billeder i sekundet" \
+    "$([ "${BILLEDER:-0}" -ge $(( ${VARIGHED:-1} * 25 )) ] && echo ja || echo "nej (${BILLEDER:-0} på ${VARIGHED:-0} s)")" "ja"
 # Et billede fra streamen med overlayet, til at se på: GEM_BILLEDE=/src/billede.png
 if [ -n "${GEM_BILLEDE:-}" ]; then
     ffmpeg -v error -sseof -1 -i "$TMP/modtaget.flv" -frames:v 1 -y "$GEM_BILLEDE" 2>/dev/null
@@ -190,6 +209,9 @@ vent_paa 20 sh -c "tail -n 1 '$TMP/status.jsonl' | grep -q '\"sender\": true, \"
 indeholder "skiftede til CPU'en" "$(cat "$TMP/stream.log")" "koder på CPU'en fremover"
 forvent "sender med x264" "$(sidste_status | felt koder)/$(sidste_status | felt sender)" "x264/True"
 forvent "ingen fejl til admin" "$(sidste_status | felt fejl)" ""
+# Svaret har ingen scoreboard (en ældre server) → to linjer tekst
+forvent "ældre server: tekst-overlayet" "$(cat "$TMP/run/overlay.txt" 2>/dev/null)" "$(printf 'A 1\nB 0')"
+indeholder "overlay: tekst" "$(cat "$TMP/stream.log")" "overlay tekst"
 
 echo "7. Serveren svarer ikke"
 rm -f "$TMP/svar.json"
