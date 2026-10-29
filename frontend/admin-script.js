@@ -3031,20 +3031,35 @@ function livestreamIndstillingerHtml() {
                 <label><span class="felt-etiket">Efter kampen</span>${livestreamValg('efterMin', i.efterMin)}</label>
             </div>
             <p class="tekst-mindre tekst-daempet ls-hjaelp" id="lsFaellesHjaelp">${livestreamFaellesHjaelp(i)}</p>
-            <div class="ls-logo">
-                <span class="felt-etiket">Klubbens logo i streamen</span>
-                <div class="ls-logo-raekke">
-                    ${i.logo ? `<img class="ls-logo-billede" src="${escapeHtml(i.logo)}" alt="Klubbens logo">` : '<span class="tekst-mindre tekst-daempet">Intet logo</span>'}
-                    <label class="btn-secondary btn-sm ls-logo-vaelg">${i.logo ? 'Skift logo' : 'Upload logo'}
-                        <input type="file" accept="image/png,image/jpeg,image/webp" hidden onchange="uploadLivestreamLogo(this)"></label>
-                    ${i.logo ? '<button class="btn-danger btn-sm" onclick="fjernLivestreamLogo()">Fjern</button>' : ''}
-                </div>
-                <span class="tekst-mindre tekst-daempet">PNG med gennemsigtig baggrund ser bedst ud. Vælg "Klubbens logo" under den bane, det skal vises på.</span>
-            </div>
+            ${livestreamKlubLogoHtml()}
             <div class="ls-faelles-gem">
                 <button class="btn-primary btn-sm" onclick="gemLivestreamIndstillinger()">Gem</button>
                 <span class="ls-besked tekst-mindre" id="lsFaellesBesked" hidden></span>
             </div>
+        </div>`;
+}
+
+// Klubbens logo: fra logo-databasen (klubnavnet) som standard — et uploadet vinder
+function livestreamKlubLogoHtml() {
+    const k = _livestream.klubLogo || {};
+    const db = k.database;
+    const vist = k.upload || (db && db.url);
+    const kilde = k.upload
+        ? `Eget logo${db ? ` — i stedet for "${escapeHtml(db.navn)}" fra logo-databasen` : ''}`
+        : db ? `Fra logo-databasen: ${escapeHtml(db.navn)}`
+        : `Intet logo i logo-databasen${k.klubnavn ? ` for ${escapeHtml(k.klubnavn)}` : ''} — upload klubbens eget`;
+    return `
+        <div class="ls-logo">
+            <span class="felt-etiket">Klubbens logo i streamen</span>
+            <div class="ls-logo-raekke">
+                ${vist ? `<img class="ls-logo-billede" src="${escapeHtml(vist)}" alt="Klubbens logo">` : ''}
+                <span class="tekst-mindre">${kilde}</span>
+                <label class="btn-secondary btn-sm ls-logo-vaelg">${k.upload ? 'Skift logo' : 'Upload et andet logo'}
+                    <input type="file" accept="image/png,image/jpeg,image/webp" hidden onchange="uploadLivestreamLogo(this)"></label>
+                ${k.upload ? `<button class="btn-danger btn-sm" onclick="fjernLivestreamLogo()">${db ? 'Brug logo-databasens igen' : 'Fjern'}</button>` : ''}
+            </div>
+            <span class="tekst-mindre tekst-daempet">Vælg "Klubbens logo" under den bane, det skal vises på. Et eget logo: PNG med gennemsigtig baggrund ser bedst ud.
+                Spillernes klublogoer står ud for navnene i scoreboardet, som på TV'et.</span>
         </div>`;
 }
 
@@ -3104,7 +3119,8 @@ async function uploadLivestreamLogo(input) {
 }
 
 async function fjernLivestreamLogo() {
-    if (!confirm('Fjern klubbens logo fra streamen?')) return;
+    const db = _livestream.klubLogo && _livestream.klubLogo.database;
+    if (!confirm(db ? `Fjern det uploadede logo og brug "${db.navn}" fra logo-databasen igen?` : 'Fjern klubbens logo fra streamen?')) return;
     try {
         await api.deleteLivestreamLogo();
     } catch (e) {

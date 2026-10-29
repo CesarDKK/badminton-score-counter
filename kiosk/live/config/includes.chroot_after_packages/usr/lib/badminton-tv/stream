@@ -14,7 +14,8 @@ serveren (admin → Livestream) — aldrig på USB-nøglen.
     grafikkort (VAAPI); går det ikke, på CPU'en (libx264).
   - lyd: kameraets mikrofon, når det er slået til for banen (samme USB-enhed
     som kameraet), ellers et lydløst lydspor (YouTube vil have lyd med)
-  - scoreboardet (navne, sæt, stilling, serv) og logoet (klubbens eller
+  - scoreboardet (navne med klublogoer som på TV'et, sæt, stilling, serv) og
+    logoet (klubbens eller
     banens sponsor) tegnes som et PNG-billede med Pillow, hver gang noget
     ændrer sig; ffmpeg læser billedet igen og igen (movie-filteret med loop).
     Svarer en ældre server uden scoreboard, eller mangler Pillow, skrives to
@@ -369,9 +370,11 @@ def tavle_str(bredde, stoerrelse):
     return bredde, round(TAVLE_STR[1] * skala(bredde, stoerrelse))
 
 
-def tegn_tavle_billede(tavle, bredde=1280, stoerrelse='normal', placering='top-venstre', logo=None):
+def tegn_tavle_billede(tavle, bredde=1280, stoerrelse='normal', placering='top-venstre', logo=None,
+                       navn_logoer=(None, None)):
     """Scoreboardet (og logoet) som RGBA-billede (tavle_str); helt gennemsigtigt uden
-    kamp og logo. logo: et Pillow-billede eller None."""
+    kamp og logo. logo: et Pillow-billede eller None. navn_logoer: klublogoerne
+    ud for de to rækkers navne (Pillow-billeder eller None), som på TV'et."""
     s = skala(bredde, stoerrelse)
     billede = Image.new('RGBA', tavle_str(bredde, stoerrelse), (0, 0, 0, 0))
     hoejre = placering.endswith('hoejre')
@@ -393,9 +396,12 @@ def tegn_tavle_billede(tavle, bredde=1280, stoerrelse='normal', placering='top-v
                                    skrift(SKRIFT_TAL, round(38 * s)), skrift(SKRIFT_TAL, round(22 * s)))
     fane_h = round(28 * s) if bane else 0
     luft, prik, efter_navn = round(14 * s), round(18 * s), round(14 * s)
-    navn_b = int(min(max(max(d.textlength(n, font=f_navn) for n in navne), 150 * s), 520 * s))
+    # +1: textlength er et kommatal — rundet ned blev det længste navn afkortet
+    navn_b = int(min(max(max(d.textlength(n, font=f_navn) for n in navne), 150 * s), 520 * s)) + 1
     kol, nu_b, nu_luft = round(42 * s), round(62 * s), round(6 * s)
-    panel_b = luft + prik + navn_b + efter_navn + kol * len(saet) + (nu_b + nu_luft if nu else luft - nu_luft)
+    # Klublogoerne står i en kolonne foran navnene — kun når mindst én række har et
+    logo_b = round(38 * s) + round(8 * s) if any(l is not None for l in navn_logoer) else 0
+    panel_b = luft + prik + logo_b + navn_b + efter_navn + kol * len(saet) + (nu_b + nu_luft if nu else luft - nu_luft)
     hoejde = raekke * 2
     # Fanen "BANE 3" står over panelet — nederst i billedet står den stadig over
     # (båndet flyttes, ikke vendes)
@@ -426,6 +432,9 @@ def tegn_tavle_billede(tavle, bredde=1280, stoerrelse='normal', placering='top-v
         if serve == i + 1:
             d.ellipse((venstre + luft, midt - r_prik, venstre + luft + 2 * r_prik, midt + r_prik), fill=FJER)
         x = venstre + luft + prik
+        if navn_logoer[i] is not None:
+            tegn_i_felt(billede, navn_logoer[i], x, midt, round(38 * s), round(34 * s))
+        x += logo_b
         d.text((x, midt), afkort(d, navne[i], f_navn, navn_b), font=f_navn, fill=HVID, anchor='lm')
         x += navn_b + efter_navn
         for k in saet:
@@ -444,6 +453,15 @@ def tegn_tavle_billede(tavle, bredde=1280, stoerrelse='normal', placering='top-v
     return billede
 
 
+def tegn_i_felt(billede, logo, x, midt, max_b, max_h):
+    """Et klublogo så stort som muligt inden for max_b x max_h, centreret i feltet,
+    der starter ved x og har midten i højden midt."""
+    faktor = min(max_b / logo.width, max_h / logo.height)
+    lb, lh = max(1, round(logo.width * faktor)), max(1, round(logo.height * faktor))
+    lille = logo.resize((lb, lh), getattr(Image, 'Resampling', Image).LANCZOS)
+    billede.alpha_composite(lille, (round(x + (max_b - lb) / 2), round(midt - lh / 2)))
+
+
 def tegn_logo(billede, logo, s, x0, y0, hoejde, hoejre, nederst):
     """Logoet i den modsatte side af scoreboardet: højst så højt som scoreboardets
     to rækker og en fjerdedel af billedbredden. Gennemsigtighed bevares."""
@@ -459,16 +477,18 @@ def tegn_logo(billede, logo, s, x0, y0, hoejde, hoejre, nederst):
 _sidste_tavle = object()
 
 
-def skriv_tavle(tavle, video=STANDARD_VIDEO, bredde=1280, logo=None, logo_sti=None):
+def skriv_tavle(tavle, video=STANDARD_VIDEO, bredde=1280, logo=None, logo_sti=None, navn_logoer=(None, None)):
     """Kun når noget har ændret sig — tegningen tager lidt CPU. bredde: den sendte
-    billedbredde; logo_sti: logoets adresse (genkender et logo, der er tegnet før)."""
+    billedbredde; logo_sti: logoets adresse (genkender et logo, der er tegnet før);
+    navn_logoer: klublogoerne ud for navnene (adresserne står i tavle['logoer'])."""
     global _sidste_tavle
-    noegle = (tavle, bredde, video['stoerrelse'], video['placering'], logo_sti if logo is not None else None)
+    noegle = (json.dumps(tavle, sort_keys=True), bredde, video['stoerrelse'], video['placering'],
+              logo_sti if logo is not None else None, tuple(l is not None for l in navn_logoer))
     if noegle == _sidste_tavle and os.path.exists(TAVLE):
         return
     os.makedirs(MAPPE, exist_ok=True)
     ny = TAVLE + '.ny.png'
-    tegn_tavle_billede(tavle, bredde, video['stoerrelse'], video['placering'], logo).save(ny)
+    tegn_tavle_billede(tavle, bredde, video['stoerrelse'], video['placering'], logo, navn_logoer).save(ny)
     os.replace(ny, TAVLE)
     _sidste_tavle = noegle
 
@@ -477,7 +497,7 @@ def skriv_tavle(tavle, video=STANDARD_VIDEO, bredde=1280, logo=None, logo_sti=No
 
 LOGO_MAX_BYTES = 5 * 1024 * 1024
 LOGO_IGEN = _tal('BT_LOGO_IGEN', 60)   # et logo, der ikke kunne hentes, prøves igen efter så længe
-_logoer = collections.OrderedDict()    # adresse -> Pillow-billede (de seneste få: sponsorer skifter)
+_logoer = collections.OrderedDict()    # adresse -> Pillow-billede (de seneste: sponsorer og klubber skifter)
 _logo_fejl = {}                        # adresse -> tidspunkt for seneste fejl
 
 
@@ -505,7 +525,7 @@ def hent_logo(server, sti):
         _logo_fejl[sti] = time.monotonic()
         return None
     _logoer[sti] = billede
-    while len(_logoer) > 8:
+    while len(_logoer) > 24:
         _logoer.popitem(last=False)
     return billede
 
@@ -755,8 +775,13 @@ def main():
                 if stream.opsaetning and stream.opsaetning[2:] != (overlay, fmt):
                     stream.stop()
                 if overlay == 'tavle':
-                    skriv_tavle(svar.get('tavle') if svar.get('overlay') else None, video, bredde,
-                                logo, svar.get('logo'))
+                    tavle = svar.get('tavle') if svar.get('overlay') else None
+                    # Klublogoerne ud for navnene (nye servere) — hentes én gang hver
+                    adresser = (tavle or {}).get('logoer') if isinstance(tavle, dict) else None
+                    navn_logoer = tuple(hent_logo(server, a) if a else None
+                                        for a in (adresser if isinstance(adresser, list) and len(adresser) == 2
+                                                  else (None, None)))
+                    skriv_tavle(tavle, video, bredde, logo, svar.get('logo'), navn_logoer)
                 elif overlay:
                     skriv_overlay(svar.get('linjer') or [])
                 stream.start(enhed, svar['url'], svar['noegle'], overlay, fmt)

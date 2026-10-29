@@ -178,8 +178,9 @@ Om streamen er offentlig, bestemmes i YouTube Studio: *Gå live* → *Stream* �
 
 Admin viser, om PC'en sender (og i hvilken opløsning), venter på en kamp,
 ikke finder kameraet, eller om YouTube afviser nøglen. Et scoreboard (kan slås
-fra pr. bane) viser banen, navnene, sættene, stillingen og hvem der server —
-tegnet med Pillow (Inter og Bebas Neue).
+fra pr. bane) viser banen, navnene med klublogoer (de samme som på TV'et:
+holdenes i en holdkamp, ellers spillernes klubber), sættene, stillingen og
+hvem der server — tegnet med Pillow (Inter og Bebas Neue).
 
 **Billede og overlay** (fælles for alle baner, i admin):
 
@@ -191,7 +192,7 @@ tegnet med Pillow (Inter og Bebas Neue).
 | Overlay: placering | de fire hjørner | øverst til venstre |
 | Overlay: størrelse | lille, normal, stor | normal |
 | Efter kampen | 0–10 minutter | 2 min |
-| Klubbens logo | upload (PNG med gennemsigtighed) | intet |
+| Klubbens logo | klubbens eget fra logo-databasen, eller et uploadet (vinder) | logo-databasens |
 
 Kan kameraet ikke det valgte, sender det det bedste, det kan derunder
 (`v4l2-ctl --list-formats-ext`): opløsningen går forud for billederne, så

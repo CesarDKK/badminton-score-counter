@@ -22,6 +22,8 @@
 // Ren logik (validering, beslutning, overlay, PC'ernes status) — ruterne ligger
 // i routes/livestream.js.
 
+const LogoMatch = require('../config/logoMatch');
+
 const STANDARD_URL = 'rtmps://a.rtmps.youtube.com:443/live2';
 const EFTER_MS = 2 * 60 * 1000;
 const STILLE_MS = 30 * 60 * 1000;
@@ -330,8 +332,9 @@ function sideNavn(navn, makker, standardMakker, double) {
 // afsluttede sæt, stillingen i det igangværende sæt og hvem der server.
 // Rækkerne står som i 1. sæt — spillerne hopper ikke, når de bytter side
 // (som oversigten). Tallene er orienteret til rækkerne.
-// rk: game_states- eller last_finished_matches-række; double: banen er double.
-function overlayTavle(rk, double, bane = null) {
+// rk: game_states- eller last_finished_matches-række; double: banen er double;
+// logoer: [player1-sidens, player2-sidens] klublogo (spillerLogoer) eller null.
+function overlayTavle(rk, double, bane = null, logoer = null) {
     if (!rk) return null;
     const navne = [sideNavn(rk.player1_name, rk.player1_name2, 'Makker 1', double),
         sideNavn(rk.player2_name, rk.player2_name2, 'Makker 2', double)];
@@ -351,6 +354,7 @@ function overlayTavle(rk, double, bane = null) {
     const s = double ? rk.serving_team : rk.serving_player;
     const serve = iGang && (s === 1 || s === 2) ? s : null;
     const t = { bane, navne, saet, nu, serve };
+    if (logoer) t.logoer = logoer;
     // Stod siderne omvendt i 1. sæt? Så vendes det hele tilbage
     const f = historik[0] && typeof historik[0] === 'object' ? historik[0] : null;
     if (f && f.player1Name && f.player1Name === rk.player2_name && f.player2Name === rk.player1_name) {
@@ -359,8 +363,53 @@ function overlayTavle(rk, double, bane = null) {
         t.saet = saet.map(vend);
         t.nu = nu && vend(nu);
         t.serve = serve && 3 - serve;
+        if (logoer) t.logoer = vend(logoer);
     }
     return t;
+}
+
+// Hvilket hold (1/2) i holdkampens delkamp spiller en side med disse navne for?
+function holdFor(navne, game) {
+    const n = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const hold1 = [game.team1_player1, game.team1_player2].map(n).filter(Boolean);
+    const hold2 = [game.team2_player1, game.team2_player2].map(n).filter(Boolean);
+    for (const navn of navne.map(n).filter(Boolean)) {
+        if (hold1.includes(navn)) return 1;
+        if (hold2.includes(navn)) return 2;
+    }
+    return null;
+}
+
+// Klublogoerne ud for navnene i streamen — samme regler som TV'et
+// (tv-script-v3.js, updateTvTeamLogos): i en holdkamp holdenes logoer, ellers
+// spillernes (player_logos vinder, ellers spillerens klub). I double tages
+// makkerens, hvis spilleren ingen har. Returnerer [player1-sidens,
+// player2-sidens] adresse (null: intet logo), eller null uden nogen logoer.
+// holdkamp: team_matches-rækken med .game (delkampen på banen); logos: de
+// centrale logoer med url; clubByName: normaliseret spillernavn → klub.
+function spillerLogoer(rk, double, { holdkamp = null, logos = [], playerLogos = [], clubByName = {} } = {}) {
+    if (!rk || !logos.length) return null;
+    const sider = [1, 2].map(i => [rk[`player${i}_name`], double ? rk[`player${i}_name2`] : null]);
+    const url = (l) => (l && l.url) || null;
+    let ud;
+    const hold = holdkamp && holdkamp.game ? sider.map(navne => holdFor(navne, holdkamp.game)) : [null, null];
+    // Kun når mindst én side spiller i holdkampen — ellers er det en anden kamp
+    // på banen (holdkampen havde banen tidligere), og spillernes logoer gælder
+    if (hold[0] || hold[1]) {
+        if (!hold[1]) hold[1] = 3 - hold[0];
+        if (!hold[0]) hold[0] = 3 - hold[1];
+        ud = hold.map(n => url(LogoMatch.resolveTeamLogo(holdkamp, n, logos)));
+    } else {
+        const o = { playerLogos, clubByName, logos };
+        ud = sider.map(([a, b]) => url(LogoMatch.resolvePlayerLogo(a, o) || (b ? LogoMatch.resolvePlayerLogo(b, o) : null)));
+    }
+    return ud.some(Boolean) ? ud : null;
+}
+
+// Klubbens eget logo i logo-databasen (klubnavnet fra master-databasen), eller null
+function klubLogoFraDatabase(klubnavn, logos) {
+    const l = klubnavn ? LogoMatch.matchLogo(klubnavn, logos) : null;
+    return l ? { url: l.url, navn: l.club_name } : null;
 }
 
 // Den gamle tekstudgave (Badminton TV 2026.10.28 tegner ikke scoreboardet):
@@ -431,5 +480,6 @@ module.exports = {
     gyldigUrl, gyldigNoegle, rensOpsaetning, noegleSlut,
     STANDARD_INDSTILLINGER, laesIndstillinger, rensIndstillinger, videoTilPc, sponsorNu, gyldigLogoFil,
     beslutning, startet, holdkampNu, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,
+    spillerLogoer, klubLogoFraDatabase,
     rensStatus, registrer, statusFor, senderBane
 };

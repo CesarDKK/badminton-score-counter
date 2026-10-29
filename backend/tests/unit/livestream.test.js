@@ -285,3 +285,56 @@ test('PC-status: formatet og mikrofonen valideres', () => {
     assert.equal(s.mikrofon, 'HD Pro Webcam C920');
     assert.equal(ls.rensStatus({ format: '<script>' }).format, null);
 });
+
+const LOGOER = [
+    { id: 1, club_name: 'Lyngby', aliases: null, url: '/uploads/central_logos/lyngby.png' },
+    { id: 2, club_name: 'Gladsaxe Søborg', aliases: 'GSB', url: '/uploads/central_logos/gsb.png' },
+    { id: 3, club_name: 'Holte', aliases: null, url: '/uploads/central_logos/holte.png' }
+];
+
+test('klubbens logo findes i logo-databasen ud fra klubnavnet', () => {
+    assert.deepEqual(ls.klubLogoFraDatabase('Gladsaxe Søborg Badminton', LOGOER),
+        { url: '/uploads/central_logos/gsb.png', navn: 'Gladsaxe Søborg' });
+    assert.equal(ls.klubLogoFraDatabase('Ukendt BK', LOGOER), null);
+    assert.equal(ls.klubLogoFraDatabase(null, LOGOER), null);
+});
+
+test('logoer ud for navnene: spillernes klubber, override og makkeren i double', () => {
+    const rk = gs({ player1_name: 'Hansen', player2_name: 'Jensen', player1_name2: 'Berg', player2_name2: 'Olsen' });
+    const clubByName = { hansen: 'Lyngby', olsen: 'Holte' };
+    assert.deepEqual(ls.spillerLogoer(rk, false, { logos: LOGOER, clubByName }), ['/uploads/central_logos/lyngby.png', null]);
+    // Double: Jensen har ingen klub, makkeren Olsen har
+    assert.deepEqual(ls.spillerLogoer(rk, true, { logos: LOGOER, clubByName }),
+        ['/uploads/central_logos/lyngby.png', '/uploads/central_logos/holte.png']);
+    // player_logos vinder: 0 = intet logo, ellers et bestemt
+    const playerLogos = [{ player_name: 'Hansen', logo_id: 0 }, { player_name: 'Jensen', logo_id: 2 }];
+    assert.deepEqual(ls.spillerLogoer(rk, false, { logos: LOGOER, clubByName, playerLogos }),
+        [null, '/uploads/central_logos/gsb.png']);
+    assert.equal(ls.spillerLogoer(rk, false, { logos: LOGOER, clubByName: {} }), null);
+    assert.equal(ls.spillerLogoer(rk, false, { logos: [], clubByName }), null);
+});
+
+test('logoer ud for navnene: holdenes logoer i en holdkamp, også når siderne er byttet', () => {
+    const holdkamp = { team1_name: 'Lyngby 1', team2_name: 'Holte 2', team1_logo_id: null, team2_logo_id: null,
+        game: { team1_player1: 'Hansen', team1_player2: null, team2_player1: 'Jensen', team2_player2: null } };
+    // Jensen (hold 2) står i player1-siden
+    const rk = gs({ player1_name: 'Jensen', player2_name: 'Hansen' });
+    assert.deepEqual(ls.spillerLogoer(rk, false, { holdkamp, logos: LOGOER }),
+        ['/uploads/central_logos/holte.png', '/uploads/central_logos/lyngby.png']);
+    // Logo valgt på holdkampen (2) og "intet logo" (0)
+    assert.deepEqual(ls.spillerLogoer(rk, false, { holdkamp: { ...holdkamp, team1_logo_id: 2, team2_logo_id: 0 }, logos: LOGOER }),
+        [null, '/uploads/central_logos/gsb.png']);
+    // En anden kamp på banen (ingen af spillerne er i holdkampen): spillernes egne klubber
+    const anden = gs({ player1_name: 'Berg', player2_name: 'Olsen' });
+    assert.deepEqual(ls.spillerLogoer(anden, false, { holdkamp, logos: LOGOER, clubByName: { olsen: 'Holte' } }),
+        [null, '/uploads/central_logos/holte.png']);
+});
+
+test('logoerne vendes med siderne i scoreboardet', () => {
+    const rk = gs({ player1_name: 'Hansen', player2_name: 'Jensen',
+        set_scores_history: JSON.stringify([{ score: '21-15', player1Name: 'Jensen', player2Name: 'Hansen' }]) });
+    const t = ls.overlayTavle(rk, false, 3, ['/a.png', null]);
+    assert.deepEqual(t.navne, ['Jensen', 'Hansen']);
+    assert.deepEqual(t.logoer, [null, '/a.png']);
+    assert.equal(ls.overlayTavle(rk, false, 3).logoer, undefined);
+});

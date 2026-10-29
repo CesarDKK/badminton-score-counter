@@ -13,6 +13,7 @@
 #   8. 1080p @ 60 valgt           → kameraets bedste (1080p @ 30), bitrate efter kvalitet
 #   9. vendt, nederst til højre   → hflip+vflip, båndet nederst, stort scoreboard, logo, lyd
 #  10. mikrofonen kan ikke åbnes  → sender uden lyd i stedet for slet ikke
+#  11. klublogoer i scoreboardet  → logoerne ud for navnene, hentet fra serveren
 #
 # Køres i en debian:trixie-container (henter ffmpeg, python3, Pillow og skrifterne):
 #   docker run --rm -v "$PWD/kiosk:/src" debian:trixie bash /src/test/test-stream.sh
@@ -346,6 +347,29 @@ forvent "status: ingen mikrofon" "$(sidste_status | felt mikrofon)" ""
 forvent "ingen fejl til admin" "$(sidste_status | felt fejl)" ""
 stop_stream
 kill "$MODTAGER_PID" 2>/dev/null
+
+echo "11. Klublogoer ud for navnene (som på TV'et)"
+mkdir -p "$TMP/uploads/central_logos"
+python3 - "$TMP/uploads/central_logos" <<'EOF'
+import sys
+from PIL import Image, ImageDraw
+for navn, farve in (('blaa.png', (40, 90, 230, 255)), ('groen.png', (30, 170, 80, 255))):
+    b = Image.new('RGBA', (120, 120), (0, 0, 0, 0))
+    ImageDraw.Draw(b).ellipse((0, 0, 119, 119), fill=farve)
+    b.save(f'{sys.argv[1]}/{navn}')
+EOF
+modtager "$TMP/modtaget6.flv"
+svar "{\"kamera\":true,\"bane\":3,\"send\":true,\"grund\":\"kamp\",\"url\":\"rtmp://127.0.0.1:$RTMP_PORT/live2\",\"noegle\":\"$NOEGLE\",\"overlay\":true,\"linjer\":[\"A\",\"B\"],\"tavle\":{\"bane\":3,\"navne\":[\"Hansen / Berg\",\"Jensen / Olsen\"],\"saet\":[[21,15]],\"nu\":[5,3],\"serve\":1,\"logoer\":[\"/uploads/central_logos/blaa.png\",\"/uploads/central_logos/groen.png\"]},\"video\":{\"bredde\":1280,\"hoejde\":720,\"billeder\":30}}"
+start_stream
+vent_sender
+# Logo-kolonnen: x 60–98, rækkernes midte y 78 og 126 (normal størrelse, øverst til venstre)
+forvent "1. rækkes logo (blåt)" "$(pixel 79 78)" "40 90 230 255"
+forvent "2. rækkes logo (grønt)" "$(pixel 79 126)" "30 170 80 255"
+sleep 3
+svar "$INGEN_SVAR"
+vent_paa 10 sh -c "! kill -0 $MODTAGER_PID 2>/dev/null" || true
+[ -n "${GEM_MAPPE:-}" ] && ffmpeg -v error -sseof -1 -i "$TMP/modtaget6.flv" -frames:v 1 -y "$GEM_MAPPE/klublogoer-ved-navnene.png"
+stop_stream
 
 echo
 if [ "$FEJL" -eq 0 ]; then echo "Alle test bestået"; else echo "$FEJL fejl"; tail -n 30 "$TMP/stream.log"; fi

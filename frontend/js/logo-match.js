@@ -1,6 +1,11 @@
 // Delt logo-matcher: udleder et centralt klub-logo ud fra et hold-/klubnavn.
 // Delvist match — normaliseret navn INDEHOLDER klubnavn/alias; laengste noegle vinder.
-(function (global) {
+(function (root, factory) {
+    // Både <script> (window.LogoMatch: TV, oversigt, admin) og require() (backend:
+    // livestreamens overlay, routes/livestream.js) — samme logoer i streamen som på TV'et
+    if (typeof module === 'object' && module.exports) module.exports = factory();
+    else root.LogoMatch = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
     function norm(s) {
         return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
     }
@@ -51,5 +56,5 @@
         const club = o.clubByName && o.clubByName[normalizeName(raw)];
         return club ? matchLogo(club, o.logos) : null;
     }
-    global.LogoMatch = { normalizeName, matchLogo, resolveTeamLogo, resolvePlayerLogo };
-})(window);
+    return { normalizeName, matchLogo, resolveTeamLogo, resolvePlayerLogo };
+});

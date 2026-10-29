@@ -17,6 +17,8 @@ COPY backend/ ./
 # og oversigt loader frontend/js/holdkamp-formater.js, backend læser den samme
 # fil herfra (se config/holdkampFormater.js).
 COPY frontend/js/holdkamp-formater.js ./shared/holdkamp-formater.js
+# Logo-matcheren (TV, oversigt) — livestreamens overlay viser de samme logoer
+COPY frontend/js/logo-match.js ./shared/logo-match.js
 
 # Uploads og klubbernes automatiske backups (begge er volumes i docker-compose)
 RUN mkdir -p uploads club-backups && chmod 755 uploads && chmod 700 club-backups

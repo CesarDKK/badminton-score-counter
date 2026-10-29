@@ -11,6 +11,8 @@ const { validateImageMagic } = require('../config/imageUpload');
 const { UPLOAD_DIR, klubMappe } = require('../config/sponsorFiler');
 const { gyldigtToken } = require('../screens/pcRapport');
 const ls = require('../screens/livestream');
+const masterDb = require('../config/masterDatabase');
+const LogoMatch = require('../config/logoMatch');
 const sharp = require('sharp');
 const crypto = require('crypto');
 const fs = require('fs').promises;
@@ -41,6 +43,62 @@ async function sponsorPaaBane(bane) {
     const varighed = (await queryOne('SELECT banner_duration FROM sponsor_settings LIMIT 1'))?.banner_duration;
     const fil = ls.sponsorNu(bannere, varighed);
     return fil ? `/uploads/${fil}` : null;
+}
+
+// ---- Klublogoer: den centrale logo-database (master) og klubbens spillere ----
+// PC'en spørger hvert 3. sekund, så listerne huskes et minut ad gangen. Ændres
+// et logo, står det rigtigt i streamen senest et minut efter.
+const LOGO_CACHE_MS = 60 * 1000;
+let _logoer = null;              // { t, logos } — fælles for alle klubber
+const _klubLogoData = new Map(); // tenant -> { t, klubnavn, playerLogos, clubByName }
+
+async function centraleLogoer() {
+    if (_logoer && Date.now() - _logoer.t < LOGO_CACHE_MS) return _logoer.logos;
+    const rows = await masterDb.query('SELECT id, club_name, aliases, filename FROM club_logos');
+    const logos = rows.map(r => ({ id: r.id, club_name: r.club_name, aliases: r.aliases, url: `/uploads/${r.filename}` }));
+    _logoer = { t: Date.now(), logos };
+    return logos;
+}
+
+async function klubLogoData(req) {
+    const gemt = _klubLogoData.get(tenantKey(req));
+    if (gemt && Date.now() - gemt.t < LOGO_CACHE_MS) return gemt;
+    const [klub, playerLogos, info, tpc] = await Promise.all([
+        req.clubSubdomain ? masterDb.queryOne('SELECT name FROM clubs WHERE subdomain = ?', [req.clubSubdomain]) : null,
+        query('SELECT player_name, logo_id FROM player_logos'),
+        query('SELECT name, club FROM player_info'),
+        query('SELECT player_name AS name, club FROM tournament_player_clubs')
+    ]);
+    // Som /api/player-clubs: player_info vinder over turneringernes klubber
+    const clubByName = {};
+    for (const r of [...tpc, ...info]) {
+        if (r.name && r.club) clubByName[LogoMatch.normalizeName(r.name)] = r.club;
+    }
+    const data = { t: Date.now(), klubnavn: klub ? klub.name : null, playerLogos, clubByName };
+    _klubLogoData.set(tenantKey(req), data);
+    return data;
+}
+
+// Klubbens logo i streamen: det uploadede, ellers klubbens eget fra logo-databasen
+async function klubLogo(req, indst) {
+    const upload = logoUrl(req, indst.logo);
+    const database = ls.klubLogoFraDatabase((await klubLogoData(req)).klubnavn, await centraleLogoer());
+    return { upload, database, url: upload || (database && database.url) || null };
+}
+
+// Logoerne ud for navnene: holdkampens delkamp på banen (også en afgjort, så
+// logoerne bliver stående de sidste minutter), ellers spillernes klubber
+async function navneLogoer(req, rk, double, bane) {
+    const r = await queryOne(
+        `SELECT tm.team1_name, tm.team2_name, tm.team1_logo_id, tm.team2_logo_id,
+                g.team1_player1, g.team1_player2, g.team2_player1, g.team2_player2
+           FROM team_match_games g JOIN team_matches tm ON tm.id = g.team_match_id
+          WHERE g.court_number = ? AND tm.status = 'active'
+          ORDER BY g.status = 'active' DESC, g.started_at DESC LIMIT 1`, [bane]);
+    const holdkamp = r && { ...r, game: r };
+    const d = await klubLogoData(req);
+    return ls.spillerLogoer(rk, double, { holdkamp, logos: await centraleLogoer(),
+        playerLogos: d.playerLogos, clubByName: d.clubByName });
 }
 
 // Samme adgang som Adgangslinks (siden devicetokens); i direct-mode det lokale login
@@ -98,9 +156,12 @@ router.get('/', livestreamAdmin, async (req, res, next) => {
               ORDER BY name`);
         const status = ls.statusFor(tenantKey(req));
         const indst = await hentIndstillinger();
+        const klub = await klubLogo(req, indst).catch(() => ({ upload: logoUrl(req, indst.logo), database: null }));
         res.json({
             standardUrl: ls.STANDARD_URL,
             indstillinger: { ...indst, logo: logoUrl(req, indst.logo) },
+            // Klubbens logo: det uploadede vinder over logo-databasens
+            klubLogo: { upload: klub.upload, database: klub.database, klubnavn: _klubLogoData.get(tenantKey(req))?.klubnavn || null },
             baner: baner.map(({ court_number: n }) => {
                 const o = opsaetning.get(n);
                 const s = ls.startet(o);
@@ -353,10 +414,16 @@ router.post('/pc', async (req, res, next) => {
                 svar.noegle = opsaetning.stream_key;
                 svar.overlay = !!opsaetning.overlay;
                 svar.linjer = opsaetning.overlay ? ls.overlayLinjer(rk, dbl) : [];
-                svar.tavle = opsaetning.overlay ? ls.overlayTavle(rk, dbl, bane) : null;
+                // Klublogoerne ud for navnene (som på TV'et) — en fejl i logoerne må
+                // aldrig stoppe streamen
+                const navnLogoer = opsaetning.overlay && rk
+                    ? await navneLogoer(req, rk, dbl, bane).catch(e => { console.error('[livestream] logoer:', e.message); return null; })
+                    : null;
+                svar.tavle = opsaetning.overlay ? ls.overlayTavle(rk, dbl, bane, navnLogoer) : null;
                 // Nye Badminton TV-versioner: opløsning, kvalitet, kameraet og logoet (ældre ser bort fra det)
                 svar.video = ls.videoTilPc(indst, opsaetning);
-                svar.logo = opsaetning.logo === 'klub' ? logoUrl(req, indst.logo)
+                svar.logo = opsaetning.logo === 'klub'
+                    ? (await klubLogo(req, indst).catch(() => ({ url: logoUrl(req, indst.logo) }))).url
                     : opsaetning.logo === 'sponsor' ? await sponsorPaaBane(bane) : null;
             }
         }
