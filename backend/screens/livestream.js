@@ -9,7 +9,7 @@
 //     2026-10-29): fra første delkamp sættes på banen, også mellem
 //     delkampene, til 2 minutter efter holdkampens sidste delkamp er afgjort
 //     — også når den sidste spilles på en anden bane
-//   - en afgjort kamp sendes 2 minutter mere — også hvis banen ryddes inden
+//   - en afgjort kamp sendes 2 minutter mere (admin: 0–10) — også hvis banen ryddes inden
 //     (sidste afsluttede kamp)
 //   - andre kampe kun, når nogen har trykket "Start livestream" på tabletten:
 //     kampen på banen, eller den næste, hvis den starter inden 5 minutter —
@@ -68,6 +68,14 @@ function rensOpsaetning(body) {
         stream_url: body.streamUrl ? tekst(body.streamUrl, 255) : STANDARD_URL
     };
     if (!gyldigUrl(ud.stream_url)) return { fejl: 'Stream-adressen skal starte med rtmp:// eller rtmps://' };
+    // Kameraet på banen (migration 035) — undefined = uændret
+    for (const [felt, kolonne] of [['vend', 'flip_180'], ['spejl', 'mirror'], ['autofokus', 'autofocus'], ['lyd', 'sound']]) {
+        if (body[felt] !== undefined) ud[kolonne] = !!body[felt];
+    }
+    if (body.logo !== undefined) {
+        if (!LOGOER.includes(body.logo)) return { fejl: 'Ugyldigt logo' };
+        ud.logo = body.logo;
+    }
     if (body.fjernNoegle) {
         ud.stream_key = null;
     } else if (body.streamKey !== undefined && body.streamKey !== '') {
@@ -81,6 +89,103 @@ function rensOpsaetning(body) {
 // Til admin: kun slutningen af nøglen, så den kan genkendes
 function noegleSlut(n) {
     return n ? '…' + String(n).slice(-4) : null;
+}
+
+// ---------- Indstillinger for streamen (admin → Livestream) ----------
+//
+// Fælles for klubben: settings 'livestream' (JSON). Pr. bane: court_streams
+// (vend, spejl, autofokus, lyd, logo). PC'en får det hele i svaret og falder
+// selv tilbage til det bedste, kameraet kan (fx 30 billeder i sekundet, når
+// kameraet ikke kan 60) — og melder, hvad den faktisk sender (format).
+
+const OPLOESNINGER = { 480: [854, 480], 720: [1280, 720], 1080: [1920, 1080] };
+const BILLEDER = [25, 30, 50, 60];
+const KVALITETER = ['lav', 'normal', 'hoej'];
+const PLACERINGER = ['top-venstre', 'top-hoejre', 'bund-venstre', 'bund-hoejre'];
+const STOERRELSER = ['lille', 'normal', 'stor'];
+const LOGOER = ['ingen', 'sponsor', 'klub'];
+const EFTER_MAX_MIN = 10;
+const STANDARD_INDSTILLINGER = Object.freeze({
+    oploesning: 720, billeder: 30, kvalitet: 'normal', placering: 'top-venstre',
+    stoerrelse: 'normal', efterMin: 2, logo: null
+});
+
+// Klubbens logo: et filnavn i klubbens upload-mappe (routes: livestream-logo-….png)
+const gyldigLogoFil = (v) => typeof v === 'string' && /^livestream-logo-[a-f0-9]{16,32}\.png$/.test(v);
+
+// settings-værdien (JSON-tekst eller null) → indstillingerne; ukendte eller
+// ugyldige felter bliver standard, så en ødelagt værdi aldrig stopper streamen
+function laesIndstillinger(vaerdi) {
+    let r = {};
+    try { r = typeof vaerdi === 'string' ? JSON.parse(vaerdi) || {} : vaerdi || {}; } catch { r = {}; }
+    const ud = { ...STANDARD_INDSTILLINGER };
+    if (OPLOESNINGER[r.oploesning]) ud.oploesning = Number(r.oploesning);
+    if (BILLEDER.includes(Number(r.billeder))) ud.billeder = Number(r.billeder);
+    if (KVALITETER.includes(r.kvalitet)) ud.kvalitet = r.kvalitet;
+    if (PLACERINGER.includes(r.placering)) ud.placering = r.placering;
+    if (STOERRELSER.includes(r.stoerrelse)) ud.stoerrelse = r.stoerrelse;
+    if (Number.isInteger(r.efterMin) && r.efterMin >= 0 && r.efterMin <= EFTER_MAX_MIN) ud.efterMin = r.efterMin;
+    if (gyldigLogoFil(r.logo)) ud.logo = r.logo;
+    return ud;
+}
+
+// Admins PUT /api/livestream/indstillinger: { fejl } eller de nye indstillinger
+// (logoet ændres kun med upload/slet og bevares fra foer)
+function rensIndstillinger(body, foer = STANDARD_INDSTILLINGER) {
+    if (!body || typeof body !== 'object') return { fejl: 'Ugyldige data' };
+    const ud = { ...laesIndstillinger(foer) };
+    const efter = Number(body.efterMin);
+    if (body.oploesning !== undefined) {
+        if (!OPLOESNINGER[body.oploesning]) return { fejl: 'Ugyldig opløsning' };
+        ud.oploesning = Number(body.oploesning);
+    }
+    if (body.billeder !== undefined) {
+        if (!BILLEDER.includes(Number(body.billeder))) return { fejl: 'Ugyldigt antal billeder i sekundet' };
+        ud.billeder = Number(body.billeder);
+    }
+    if (body.kvalitet !== undefined) {
+        if (!KVALITETER.includes(body.kvalitet)) return { fejl: 'Ugyldig kvalitet' };
+        ud.kvalitet = body.kvalitet;
+    }
+    if (body.placering !== undefined) {
+        if (!PLACERINGER.includes(body.placering)) return { fejl: 'Ugyldig placering' };
+        ud.placering = body.placering;
+    }
+    if (body.stoerrelse !== undefined) {
+        if (!STOERRELSER.includes(body.stoerrelse)) return { fejl: 'Ugyldig størrelse' };
+        ud.stoerrelse = body.stoerrelse;
+    }
+    if (body.efterMin !== undefined) {
+        if (!Number.isInteger(efter) || efter < 0 || efter > EFTER_MAX_MIN) {
+            return { fejl: `Minutter efter kampen skal være 0–${EFTER_MAX_MIN}` };
+        }
+        ud.efterMin = efter;
+    }
+    return ud;
+}
+
+// Til PC'en, når der skal sendes: hvad den skal sende, og hvordan kameraet sidder
+function videoTilPc(indst, o) {
+    const [bredde, hoejde] = OPLOESNINGER[indst.oploesning] || OPLOESNINGER[720];
+    return {
+        bredde, hoejde,
+        billeder: indst.billeder,
+        kvalitet: indst.kvalitet,
+        placering: indst.placering,
+        stoerrelse: indst.stoerrelse,
+        vend: !!(o && o.flip_180),
+        spejl: !!(o && o.mirror),
+        autofokus: !!(o && o.autofocus),
+        lyd: !!(o && o.sound)
+    };
+}
+
+// Banens sponsor-banner i streamen: bannerne roterer som på TV'et (varighed i
+// sekunder), så PC'en får det, der står nu. bannere: { filename } i visningsrækkefølge
+function sponsorNu(bannere, varighed, nu = Date.now()) {
+    if (!Array.isArray(bannere) || !bannere.length) return null;
+    const ms = Math.max(5, Number(varighed) || 20) * 1000;
+    return bannere[Math.floor(nu / ms) % bannere.length].filename || null;
 }
 
 // ---------- Skal banen sendes nu? ----------
@@ -140,13 +245,15 @@ function holdkampNu(h, nu = Date.now()) {
 // opsaetning: court_streams-rækken; gs: banens game_states-række; sidste:
 // last_finished_matches (banen er ryddet); planner: banen har en
 // badmintonplanner-tildeling; holdkamp: holdkampen, banen er med i
-// (se holdkampNu); senderNu: PC'en sender allerede. De 2 minutter efter en afgjort
+// (se holdkampNu); senderNu: PC'en sender allerede; efterMs: så længe sendes der
+// efter kampen (admin, standard 2 minutter). Tiden efter en afgjort
 // kamp er kun en forlængelse — en stream startes aldrig på en afgjort kamp
 // (fx en badmintonplanner-kamp, hvis tildeling forsvinder, når banen ryddes).
 // Returnerer { send, grund, kilde } — kilde: hvis kamp der står i billedet
 // ('gs', 'sidste' eller null). vaelg: tablettens "klar" bliver til kampen på
 // banen; glem: den valgte kamp er forbi, så den næste ikke sendes.
-function beslutning({ opsaetning, gs, sidste, planner, holdkamp = null, senderNu = false, nu = Date.now() }) {
+function beslutning({ opsaetning, gs, sidste, planner, holdkamp = null, senderNu = false,
+    efterMs = EFTER_MS, nu = Date.now() }) {
     if (!opsaetning || !opsaetning.enabled) return { send: false, grund: 'slaaet-fra' };
     if (!opsaetning.stream_key) return { send: false, grund: 'mangler-noegle' };
     if (planner) return { send: false, grund: 'badmintonplanner' };
@@ -167,9 +274,9 @@ function beslutning({ opsaetning, gs, sidste, planner, holdkamp = null, senderNu
         return { send: false, grund: 'ikke-startet' };
     }
     // Holdkampens sidste delkamp er afgjort — måske på en anden bane
-    if (hk.slut !== null && senderNu && nu - hk.slut < EFTER_MS) return { send: true, grund: 'afgjort', kilde, ...glem };
+    if (hk.slut !== null && senderNu && nu - hk.slut < efterMs) return { send: true, grund: 'afgjort', kilde, ...glem };
     if (k.tilstand === 'afgjort') {
-        return senderNu && k.slut !== null && nu - k.slut < EFTER_MS
+        return senderNu && k.slut !== null && nu - k.slut < efterMs
             ? { send: true, grund: 'afgjort', kilde: k.ryddet ? 'sidste' : 'gs', ...glem }
             : { send: false, grund: k.ryddet ? 'ingen-kamp' : 'afsluttet', ...glem };
     }
@@ -284,6 +391,10 @@ function rensStatus(body) {
         kamera: b.kamera ? tekst(b.kamera, 100) : null,
         sender: !!b.sender,
         koder: ['vaapi', 'x264'].includes(b.koder) ? b.koder : null,
+        // Det, PC'en faktisk sender (kameraet kan måske ikke det valgte): 1280x720@30
+        format: typeof b.format === 'string' && /^\d{3,4}x\d{3,4}@\d{1,3}$/.test(b.format) ? b.format : null,
+        // Kameraets mikrofon, når lyden er slået til (null: ingen fundet eller lyd fra)
+        mikrofon: b.mikrofon ? tekst(b.mikrofon, 100) : null,
         fejl: b.fejl ? tekst(b.fejl, 300) : null
     };
 }
@@ -318,6 +429,7 @@ function senderBane(tenant, bane, nu = Date.now()) {
 module.exports = {
     STANDARD_URL, EFTER_MS, STILLE_MS, KLAR_MS,
     gyldigUrl, gyldigNoegle, rensOpsaetning, noegleSlut,
+    STANDARD_INDSTILLINGER, laesIndstillinger, rensIndstillinger, videoTilPc, sponsorNu, gyldigLogoFil,
     beslutning, startet, holdkampNu, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,
     rensStatus, registrer, statusFor, senderBane
 };

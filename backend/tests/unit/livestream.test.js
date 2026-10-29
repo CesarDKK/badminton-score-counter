@@ -190,7 +190,8 @@ test('overlay: afgjort kamp viser kun sættene, lange navne afkortes', () => {
 
 test('status: PC\'ens oplysninger renses, og "sender siden" huskes', () => {
     const s = ls.rensStatus({ navn: 'tv-bane3', kamera: 'HD Pro Webcam C920', sender: true, koder: 'vaapi', fejl: '' });
-    assert.deepEqual(s, { navn: 'tv-bane3', kioskVersion: '', kamera: 'HD Pro Webcam C920', sender: true, koder: 'vaapi', fejl: null });
+    assert.deepEqual(s, { navn: 'tv-bane3', kioskVersion: '', kamera: 'HD Pro Webcam C920', sender: true, koder: 'vaapi',
+        format: null, mikrofon: null, fejl: null });
     assert.equal(ls.rensStatus({ navn: '../x', koder: 'nvenc' }).navn, '');
     assert.equal(ls.rensStatus({ koder: 'nvenc' }).koder, null);
 
@@ -212,4 +213,75 @@ test('TV\'ets LIVE-mærke: kun mens banens PC selv melder, at den sender', () =>
     assert.equal(ls.senderBane('t-live', 2, NU + 2 * MIN), false);   // PC'en er væk
     ls.registrer('t-live', 9, { ...s, sender: false, bane: 2 }, null, NU + 3000);
     assert.equal(ls.senderBane('t-live', 2, NU + 4000), false);
+});
+
+test('indstillinger: standard, når intet er gemt eller værdien er ødelagt', () => {
+    assert.deepEqual(ls.laesIndstillinger(null), { ...ls.STANDARD_INDSTILLINGER });
+    assert.deepEqual(ls.laesIndstillinger('{ikke json'), { ...ls.STANDARD_INDSTILLINGER });
+    const gemt = ls.laesIndstillinger(JSON.stringify({ oploesning: 1080, billeder: 60, kvalitet: 'hoej',
+        placering: 'bund-hoejre', stoerrelse: 'stor', efterMin: 0, logo: 'livestream-logo-0123456789abcdef.png' }));
+    assert.equal(gemt.oploesning, 1080);
+    assert.equal(gemt.billeder, 60);
+    assert.equal(gemt.efterMin, 0);
+    assert.equal(gemt.logo, 'livestream-logo-0123456789abcdef.png');
+    // Ukendte værdier og et logo uden for mønstret (sti) bliver standard
+    const forkert = ls.laesIndstillinger({ oploesning: 4000, billeder: 24, efterMin: 99, logo: '../server.js' });
+    assert.deepEqual(forkert, { ...ls.STANDARD_INDSTILLINGER });
+});
+
+test('indstillinger: admin ændrer kun det sendte, og logoet bevares', () => {
+    const foer = { ...ls.STANDARD_INDSTILLINGER, logo: 'livestream-logo-0123456789abcdef.png' };
+    const ny = ls.rensIndstillinger({ oploesning: '1080', billeder: '50', efterMin: '5' }, foer);
+    assert.equal(ny.oploesning, 1080);
+    assert.equal(ny.billeder, 50);
+    assert.equal(ny.efterMin, 5);
+    assert.equal(ny.kvalitet, 'normal');
+    assert.equal(ny.logo, foer.logo);
+    assert.match(ls.rensIndstillinger({ oploesning: 1440 }).fejl, /opløsning/);
+    assert.match(ls.rensIndstillinger({ billeder: 24 }).fejl, /billeder/);
+    assert.match(ls.rensIndstillinger({ efterMin: 11 }).fejl, /0–10/);
+    assert.match(ls.rensIndstillinger({ efterMin: 1.5 }).fejl, /0–10/);
+    assert.match(ls.rensIndstillinger({ placering: 'midt' }).fejl, /placering/);
+});
+
+test('opsætning pr. bane: kameraets felter er uændrede, når de ikke er med', () => {
+    const o = ls.rensOpsaetning({ enabled: true, vend: true, lyd: 1, logo: 'sponsor' });
+    assert.equal(o.flip_180, true);
+    assert.equal(o.sound, true);
+    assert.equal(o.logo, 'sponsor');
+    assert.equal(o.mirror, undefined);
+    assert.equal(ls.rensOpsaetning({ enabled: true }).logo, undefined);
+    assert.match(ls.rensOpsaetning({ logo: 'hjemmeside' }).fejl, /logo/);
+});
+
+test('PC\'en får opløsning, billeder og kameraet i svaret', () => {
+    const v = ls.videoTilPc({ ...ls.STANDARD_INDSTILLINGER, oploesning: 1080, billeder: 60 },
+        { flip_180: 1, mirror: 0, autofocus: 1, sound: 0 });
+    assert.deepEqual(v, { bredde: 1920, hoejde: 1080, billeder: 60, kvalitet: 'normal', placering: 'top-venstre',
+        stoerrelse: 'normal', vend: true, spejl: false, autofokus: true, lyd: false });
+    assert.equal(ls.videoTilPc(ls.STANDARD_INDSTILLINGER, null).bredde, 1280);
+});
+
+test('sponsor-logoet roterer som TV\'ets bannere', () => {
+    const b = [{ filename: 'k/a.jpg' }, { filename: 'k/b.jpg' }];
+    assert.equal(ls.sponsorNu([], 20, NU), null);
+    assert.equal(ls.sponsorNu(b, 20, 0), 'k/a.jpg');
+    assert.equal(ls.sponsorNu(b, 20, 20_000), 'k/b.jpg');
+    assert.equal(ls.sponsorNu(b, 20, 40_000), 'k/a.jpg');
+});
+
+test('minutter efter kampen kan sættes i admin (0 = stop med det samme)', () => {
+    const afgjort = gs({ player1_score: 21, match_completed: 1, match_end_time: new Date(NU - 3 * MIN) });
+    const valgt = { ...OPS, manual_since: new Date(NU - 30 * MIN) };
+    const spoerg = (efterMs) => ls.beslutning({ opsaetning: valgt, gs: afgjort, senderNu: true, efterMs, nu: NU }).send;
+    assert.equal(spoerg(undefined), false);     // standard 2 minutter
+    assert.equal(spoerg(5 * MIN), true);
+    assert.equal(spoerg(0), false);
+});
+
+test('PC-status: formatet og mikrofonen valideres', () => {
+    const s = ls.rensStatus({ format: '1920x1080@30', mikrofon: 'HD Pro Webcam C920' });
+    assert.equal(s.format, '1920x1080@30');
+    assert.equal(s.mikrofon, 'HD Pro Webcam C920');
+    assert.equal(ls.rensStatus({ format: '<script>' }).format, null);
 });

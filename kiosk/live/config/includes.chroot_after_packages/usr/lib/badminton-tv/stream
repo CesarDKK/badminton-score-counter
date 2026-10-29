@@ -7,26 +7,32 @@ Serveren bestemmer alt: PC'en spørger hvert par sekunder med sit adgangslink
 nøgle, og hvad der står i overlayet (navne og stilling). Nøglen ligger kun på
 serveren (admin → Livestream) — aldrig på USB-nøglen.
 
-  - ffmpeg læser kameraet som MJPEG 1280x720 @ 30 (alle Logitech-kameraer og
-    de fleste andre UVC-kameraer kan det) og koder H.264 ~3,5 Mbit/s med
-    PC'ens grafikkort (VAAPI). Går det ikke, kodes på CPU'en (libx264).
-  - lydløst lydspor (YouTube vil have lyd med) — hallens lyd sendes aldrig
-  - scoreboardet (navne, sæt, stilling, serv) tegnes som et PNG-billede med
-    Pillow, hver gang stillingen ændrer sig; ffmpeg læser billedet igen og
-    igen (movie-filteret med loop). Svarer en ældre server uden scoreboard,
-    eller mangler Pillow, skrives to linjer tekst i stedet (drawtext reload).
+  - ffmpeg læser kameraet som MJPEG i den opløsning og med de billeder i
+    sekundet, admin har valgt (standard 1280x720 @ 30). Kan kameraet ikke
+    det, tages det bedste, det kan derunder (v4l2-ctl --list-formats-ext) —
+    og PC'en melder, hvad den faktisk sender. H.264 kodes med PC'ens
+    grafikkort (VAAPI); går det ikke, på CPU'en (libx264).
+  - lyd: kameraets mikrofon, når det er slået til for banen (samme USB-enhed
+    som kameraet), ellers et lydløst lydspor (YouTube vil have lyd med)
+  - scoreboardet (navne, sæt, stilling, serv) og logoet (klubbens eller
+    banens sponsor) tegnes som et PNG-billede med Pillow, hver gang noget
+    ændrer sig; ffmpeg læser billedet igen og igen (movie-filteret med loop).
+    Svarer en ældre server uden scoreboard, eller mangler Pillow, skrives to
+    linjer tekst i stedet (drawtext reload).
   - dør ffmpeg (nettet væk, YouTube afviser), startes den igen efter 5, 15,
     30, 60 og derefter hvert 120. sekund, og fejlen vises i admin
   - svarer serveren ikke, sendes der videre i højst et minut
 
 Kameraet stilles til 50 Hz (ingen flimren fra hallens lys) og fast fokus på
-lang afstand (autofokus "pumper", når spillerne løber).
+lang afstand (autofokus "pumper", når spillerne løber) — autofokus kan slås
+til for banen i admin, og billedet kan vendes 180° og spejlvendes.
 
 Pythons standardbibliotek + Pillow (python3-pil) til scoreboardet.
 """
 
 import collections
 import glob
+import io
 import json
 import os
 import re
@@ -57,6 +63,7 @@ SKRIFT = os.environ.get('BT_SKRIFT', '/usr/share/fonts/truetype/dejavu/DejaVuSan
 SKRIFT_NAVN = os.environ.get('BT_SKRIFT_NAVN', '/usr/share/fonts/opentype/inter/Inter-SemiBold.otf')
 SKRIFT_TAL = os.environ.get('BT_SKRIFT_TAL', '/usr/share/fonts/opentype/bebas-neue/BebasNeue-Bold.otf')
 STREAM_URL = os.environ.get('BT_STREAM_URL')   # test: i stedet for {server}/api/livestream/pc
+SYS = os.environ.get('BT_SYS', '/sys')         # test: kameraets mikrofon findes her
 
 
 def _tal(navn, standard):
@@ -67,9 +74,18 @@ def _tal(navn, standard):
         return standard
 
 
-OPLOESNING = '1280x720'
-BILLEDER = 30
-BITRATE = '3500k'
+# Det, der sendes, når serveren ikke siger andet (en ældre server): som før
+STANDARD_VIDEO = {'bredde': 1280, 'hoejde': 720, 'billeder': 30, 'kvalitet': 'normal',
+                  'placering': 'top-venstre', 'stoerrelse': 'normal',
+                  'vend': False, 'spejl': False, 'autofokus': False, 'lyd': False}
+OPLOESNINGER = {(854, 480), (1280, 720), (1920, 1080)}
+BILLEDER = (25, 30, 50, 60)
+# kbit/s ved "normal" kvalitet: (til og med 30, over 30 billeder i sekundet).
+# Samme tabel som admin (frontend/admin-script.js, livestreamMbit)
+BITRATE = {480: (1500, 2500), 720: (3500, 5000), 1080: (6000, 9000)}
+KVALITET = {'lav': 0.6, 'normal': 1.0, 'hoej': 1.5}
+BITRATE_MAX = 12000
+STOERRELSE = {'lille': 0.8, 'normal': 1.0, 'stor': 1.25}
 # Sekunder mellem forespørgsler: mens der sendes (overlayet), kamera valgt i
 # admin men ingen kamp, intet kamera valgt til PC'en, serveren svarede ikke
 SPOERG_SENDER = _tal('BT_SPOERG_SENDER', 3)
@@ -133,52 +149,173 @@ def find_kamera():
     return None, None
 
 
-def stil_kamera(enhed):
-    """50 Hz og fast fokus — kameraer, der ikke har indstillingen, springer den over."""
-    for ctrl in ('power_line_frequency=1', 'focus_automatic_continuous=0', 'focus_auto=0',
-                 'focus_absolute=0'):
+def stil_kamera(enhed, autofokus=False):
+    """50 Hz og fast fokus (eller autofokus) — kameraer, der ikke har indstillingen, springer den over."""
+    fokus = (('focus_automatic_continuous=1', 'focus_auto=1') if autofokus else
+             ('focus_automatic_continuous=0', 'focus_auto=0', 'focus_absolute=0'))
+    for ctrl in ('power_line_frequency=1', *fokus):
         try:
             subprocess.run([V4L2CTL, '-d', enhed, '-c', ctrl], capture_output=True, timeout=5)
         except (OSError, subprocess.SubprocessError):
             pass
 
 
+def kamera_formater(enhed):
+    """Kameraets MJPEG-formater: {(bredde, hoejde): [billeder i sekundet, …]}, eller {} (ukendt)."""
+    try:
+        ud = subprocess.run([V4L2CTL, '-d', enhed, '--list-formats-ext'],
+                            capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    formater, mjpeg, str_ = {}, False, None
+    for linje in ud.splitlines():
+        m = re.search(r"\[\d+\]: '(\w+)'", linje)
+        if m:
+            mjpeg, str_ = m.group(1) == 'MJPG', None
+            continue
+        if not mjpeg:
+            continue
+        m = re.search(r'Size: Discrete (\d+)x(\d+)', linje)
+        if m:
+            str_ = (int(m.group(1)), int(m.group(2)))
+            formater.setdefault(str_, set())
+            continue
+        m = re.search(r'\(([\d.]+) fps\)', linje)
+        if m and str_:
+            formater[str_].add(round(float(m.group(1))))
+    return {s: sorted(r) for s, r in formater.items() if r}
+
+
+def vaelg_format(formater, bredde, hoejde, billeder):
+    """((kamera-bredde, -højde), billeder, (sendt bredde, højde)): det valgte, eller det
+    bedste, kameraet kan. Har kameraet ikke opløsningen, men en større i 16:9, skaleres
+    den ned; ellers tages den største derunder. Opløsningen går forud for billederne:
+    1080p med 60 valgt, kameraet kan 1080p med 30 og 720p med 60 → 1080p med 30.
+    Billeder: de flest, kameraet kan, men ikke flere end valgt. Ukendte formater
+    (v4l2-ctl kunne ikke spørge): det valgte, så driveren selv vælger det nærmeste."""
+    if not formater:
+        return (bredde, hoejde), billeder, (bredde, hoejde)
+    bred = [s for s in formater if abs(s[0] / s[1] - 16 / 9) < 0.02]
+    if (bredde, hoejde) in formater:
+        str_, ud = (bredde, hoejde), (bredde, hoejde)
+    elif [s for s in bred if s[1] > hoejde]:
+        str_, ud = min((s for s in bred if s[1] > hoejde), key=lambda s: s[1]), (bredde, hoejde)
+    else:
+        under = [s for s in bred if s[1] < hoejde] or [s for s in formater if s[1] < hoejde] or list(formater)
+        str_ = max(under, key=lambda s: (s[1], s[0]))
+        ud = str_
+    rater = formater[str_]
+    passer = [r for r in rater if r <= billeder]
+    return str_, max(passer) if passer else min(rater), ud
+
+
+def find_mikrofon(enhed):
+    """Kameraets mikrofon: (ALSA-enhed, navn) for lydkortet i samme USB-enhed som
+    kameraet, eller (None, None). Aldrig en anden mikrofon (eller TV'ets HDMI-lyd)."""
+    usb = os.path.realpath(os.path.join(SYS, 'class/video4linux', os.path.basename(enhed), 'device', '..'))
+    for kort in sorted(glob.glob(os.path.join(usb, '*', 'sound', 'card[0-9]*'))):
+        nr = os.path.basename(kort)[4:]
+        return f'plughw:{nr},0', (laes_tekst(os.path.join(kort, 'id')) or f'kort {nr}')[:100]
+    return None, None
+
+
+def rens_video(v):
+    """Serverens video-indstillinger (nye servere) — alt ukendt bliver standard."""
+    ud = dict(STANDARD_VIDEO)
+    if not isinstance(v, dict):
+        return ud
+    if (v.get('bredde'), v.get('hoejde')) in OPLOESNINGER:
+        ud['bredde'], ud['hoejde'] = v['bredde'], v['hoejde']
+    if v.get('billeder') in BILLEDER:
+        ud['billeder'] = v['billeder']
+    for felt, lovlige in (('kvalitet', KVALITET), ('stoerrelse', STOERRELSE),
+                          ('placering', ('top-venstre', 'top-hoejre', 'bund-venstre', 'bund-hoejre'))):
+        if v.get(felt) in lovlige:
+            ud[felt] = v[felt]
+    for felt in ('vend', 'spejl', 'autofokus', 'lyd'):
+        ud[felt] = bool(v.get(felt))
+    return ud
+
+
+def bitrate(hoejde, billeder, kvalitet):
+    """kbit/s for det, der faktisk sendes (se BITRATE)."""
+    trin = min(BITRATE, key=lambda h: abs(h - hoejde))
+    return min(int(BITRATE[trin][1 if billeder > 30 else 0] * KVALITET.get(kvalitet, 1.0)), BITRATE_MAX)
+
+
 # ---------- ffmpeg ----------
 
-def ffmpeg_args(enhed, maal, overlay, koder):
-    """overlay: None, 'tavle' (scoreboard-billedet) eller 'tekst' (to linjer)."""
+def sendeformat(enhed, video, formater, mikrofon):
+    """Det, der sendes, ud fra admins valg (video) og det, kameraet kan — som tuple,
+    så en ændring (ny opløsning, kameraet vendt …) genstarter ffmpeg."""
+    kamera, billeder, ud = vaelg_format(formater, video['bredde'], video['hoejde'], video['billeder'])
+    return (('kamera', kamera), ('billeder', billeder), ('ud', ud),
+            ('kbit', bitrate(ud[1], billeder, video['kvalitet'])),
+            ('vend', video['vend']), ('spejl', video['spejl']), ('autofokus', video['autofokus']),
+            ('placering', video['placering']), ('stoerrelse', video['stoerrelse']),
+            ('mikrofon', mikrofon))
+
+
+def ffmpeg_args(enhed, maal, overlay, koder, fmt=None):
+    """overlay: None, 'tavle' (scoreboard-billedet) eller 'tekst' (to linjer).
+    fmt: sendeformat() — uden: standard (1280x720 @ 30, lydløst)."""
+    f = dict(fmt or sendeformat(enhed, STANDARD_VIDEO, {}, None))
+    (kb, kh), billeder, (ub, uh), kbit = f['kamera'], f['billeder'], f['ud'], f['kbit']
     args = [FFMPEG, '-hide_banner', '-nostdin', '-loglevel', 'error']
     if koder == 'vaapi':
         args += ['-vaapi_device', RENDER]
-    args += ['-f', 'v4l2', '-input_format', 'mjpeg', '-video_size', OPLOESNING,
-             '-framerate', str(BILLEDER), '-thread_queue_size', '512', '-i', enhed,
-             '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100']
+    args += ['-f', 'v4l2', '-input_format', 'mjpeg', '-video_size', f'{kb}x{kh}',
+             '-framerate', str(billeder), '-thread_queue_size', '512', '-i', enhed]
+    if f['mikrofon']:
+        args += ['-f', 'alsa', '-thread_queue_size', '1024', '-i', f['mikrofon']]
+    else:
+        args += ['-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100']
+    # Kameraet: vendt 180° (= vandret + lodret), spejlvendt, skaleret ned
+    kamera = []
+    if f['vend'] != f['spejl']:
+        kamera.append('hflip')
+    if f['vend']:
+        kamera.append('vflip')
+    if (kb, kh) != (ub, uh):
+        kamera.append(f'scale={ub}:{uh}')
+    nederst = f['placering'].startswith('bund')
     filtre = []
     if overlay == 'tavle':
         # movie-filteret læser billedet igen for hvert halve sekund kamera-
         # billede, så en ny stilling står i billedet efter ca. et sekund.
         # (Som ekstra input med -readrate 1 halter ffmpeg efter kameraet og
         # sender kun få billeder i sekundet.)
+        kilde = f'[0:v]{",".join(kamera)}[kam];[kam]' if kamera else '[0:v]'
         filtre.append(f'movie=filename={TAVLE}:f=image2:loop=0:format_opts=framerate=2,'
-                      'setpts=N/2/TB[tavle];[0:v][tavle]overlay=0:0')
-    elif overlay:
-        filtre.append(f'drawtext=fontfile={SKRIFT}:textfile={OVERLAY}:reload=1:expansion=none'
-                      ':fontsize=28:fontcolor=white:line_spacing=8'
-                      ':box=1:boxcolor=black@0.6:boxborderw=14:x=28:y=28')
-    gop = str(BILLEDER * 2)   # nøglebillede hvert 2. sekund (YouTube vil have højst 4)
+                      f'setpts=N/2/TB[tavle];{kilde}[tavle]overlay=0:{"main_h-overlay_h" if nederst else 0}')
+    else:
+        filtre += kamera
+        if overlay:
+            s = ub / 1280 * STOERRELSE.get(f['stoerrelse'], 1.0)
+            kant = round(28 * s)
+            x = f'w-tw-{kant}' if f['placering'].endswith('hoejre') else str(kant)
+            y = f'h-th-{kant}' if nederst else str(kant)
+            filtre.append(f'drawtext=fontfile={SKRIFT}:textfile={OVERLAY}:reload=1:expansion=none'
+                          f':fontsize={round(28 * s)}:fontcolor=white:line_spacing={round(8 * s)}'
+                          f':box=1:boxcolor=black@0.6:boxborderw={round(14 * s)}:x={x}:y={y}')
+    gop = str(billeder * 2)   # nøglebillede hvert 2. sekund (YouTube vil have højst 4)
+    rate = [f'-b:v', f'{kbit}k', '-maxrate', f'{kbit}k', '-bufsize', f'{kbit * 2}k']
     if koder == 'vaapi':
         filtre += ['format=nv12', 'hwupload']
-        video = ['-c:v', 'h264_vaapi', '-b:v', BITRATE, '-maxrate', BITRATE, '-bufsize', '7000k',
-                 '-g', gop, '-bf', '0']
+        video = ['-c:v', 'h264_vaapi', *rate, '-g', gop, '-bf', '0']
     else:
         filtre.append('format=yuv420p')
-        video = ['-c:v', 'libx264', '-preset', 'veryfast', '-b:v', BITRATE, '-maxrate', BITRATE,
-                 '-bufsize', '7000k', '-g', gop, '-keyint_min', gop, '-sc_threshold', '0']
+        # Over 720p @ 30 er veryfast for tungt for en lille PC's CPU
+        preset = 'veryfast' if uh * billeder <= 720 * 30 else 'superfast'
+        video = ['-c:v', 'libx264', '-preset', preset, *rate, '-g', gop, '-keyint_min', gop,
+                 '-sc_threshold', '0']
     if overlay == 'tavle':
         args += ['-filter_complex', ','.join(filtre) + '[v]', '-map', '[v]']
     else:
         args += ['-vf', ','.join(filtre), '-map', '0:v']
-    args += [*video, '-c:a', 'aac', '-b:a', '128k', '-map', '1:a', '-f', 'flv', maal]
+    # Mikrofonens ur går ikke helt i takt med kameraets: aresample retter det
+    lyd = ['-af', 'aresample=async=1'] if f['mikrofon'] else []
+    args += [*video, *lyd, '-c:a', 'aac', '-b:a', '128k', '-map', '1:a', '-f', 'flv', maal]
     return args
 
 
@@ -190,6 +327,10 @@ def ffmpeg_args(enhed, maal, overlay, koder):
 #
 # Tegnes i fuld billedbredde (gennemsigtigt udenom), så billedet har samme
 # størrelse hver gang — ffmpeg vil ikke have, at det skifter størrelse.
+# Målene er til 1280 i bredden med størrelsen "normal" og ganges med
+# skala(); placeringen (øverst/nederst, venstre/højre) spejler det hele, og
+# logoet står i den modsatte side af samme bånd. ffmpeg lægger båndet øverst
+# eller nederst i billedet.
 
 TAVLE_STR = (1280, 220)
 PANEL = (12, 16, 24, 235)
@@ -220,80 +361,160 @@ def afkort(d, tekst, f, bredde):
     return tekst.rstrip() + '…'
 
 
-def tegn_tavle_billede(tavle):
-    """Scoreboardet som RGBA-billede (TAVLE_STR); helt gennemsigtigt uden kamp."""
-    billede = Image.new('RGBA', TAVLE_STR, (0, 0, 0, 0))
+def skala(bredde, stoerrelse):
+    return bredde / 1280 * STOERRELSE.get(stoerrelse, 1.0)
+
+
+def tavle_str(bredde, stoerrelse):
+    return bredde, round(TAVLE_STR[1] * skala(bredde, stoerrelse))
+
+
+def tegn_tavle_billede(tavle, bredde=1280, stoerrelse='normal', placering='top-venstre', logo=None):
+    """Scoreboardet (og logoet) som RGBA-billede (tavle_str); helt gennemsigtigt uden
+    kamp og logo. logo: et Pillow-billede eller None."""
+    s = skala(bredde, stoerrelse)
+    billede = Image.new('RGBA', tavle_str(bredde, stoerrelse), (0, 0, 0, 0))
+    hoejre = placering.endswith('hoejre')
+    nederst = placering.startswith('bund')
+    x0, y0 = round(28 * s), round(26 * s)
+    raekke = round(48 * s)
+    if logo is not None:
+        tegn_logo(billede, logo, s, x0, y0, raekke * 2, hoejre, nederst)
     navne = [str(n or '') for n in (tavle or {}).get('navne') or []][:2]
     if len(navne) < 2:
         return billede
-    saet = [s for s in tavle.get('saet') or [] if isinstance(s, list) and len(s) == 2][-5:]
+    saet = [k for k in tavle.get('saet') or [] if isinstance(k, list) and len(k) == 2][-5:]
     nu = tavle.get('nu') if isinstance(tavle.get('nu'), list) and len(tavle['nu']) == 2 else None
     serve = tavle.get('serve') if nu else None
     bane = tavle.get('bane')
 
     d = ImageDraw.Draw(billede)
-    f_navn, f_tal, f_nu, f_fane = (skrift(SKRIFT_NAVN, 25), skrift(SKRIFT_TAL, 34),
-                                   skrift(SKRIFT_TAL, 38), skrift(SKRIFT_TAL, 22))
-    x0, y0 = 28, 26
-    fane_h = 28 if bane else 0
-    raekke, luft = 48, 14
-    navn_b = int(min(max(max(d.textlength(n, font=f_navn) for n in navne), 150), 520))
-    kol, nu_b = 42, 62
-    bredde = luft + 18 + navn_b + 14 + kol * len(saet) + (nu_b + 6 if nu else luft - 6)
-    top = y0 + fane_h
+    f_navn, f_tal, f_nu, f_fane = (skrift(SKRIFT_NAVN, round(25 * s)), skrift(SKRIFT_TAL, round(34 * s)),
+                                   skrift(SKRIFT_TAL, round(38 * s)), skrift(SKRIFT_TAL, round(22 * s)))
+    fane_h = round(28 * s) if bane else 0
+    luft, prik, efter_navn = round(14 * s), round(18 * s), round(14 * s)
+    navn_b = int(min(max(max(d.textlength(n, font=f_navn) for n in navne), 150 * s), 520 * s))
+    kol, nu_b, nu_luft = round(42 * s), round(62 * s), round(6 * s)
+    panel_b = luft + prik + navn_b + efter_navn + kol * len(saet) + (nu_b + nu_luft if nu else luft - nu_luft)
     hoejde = raekke * 2
+    # Fanen "BANE 3" står over panelet — nederst i billedet står den stadig over
+    # (båndet flyttes, ikke vendes)
+    if nederst:
+        top = billede.height - y0 - hoejde
+        fane_top = top - fane_h
+    else:
+        fane_top = y0
+        top = y0 + fane_h
+    venstre = bredde - x0 - panel_b if hoejre else x0
 
     if bane:
         tekst = f'BANE {bane}'
-        fb = int(d.textlength(tekst, font=f_fane)) + 24
-        d.rounded_rectangle((x0, y0, x0 + fb, top + 8), radius=6, fill=ACCENT,
+        fb = int(d.textlength(tekst, font=f_fane)) + round(24 * s)
+        fx = venstre + panel_b - fb if hoejre else venstre
+        d.rounded_rectangle((fx, fane_top, fx + fb, top + round(8 * s)), radius=round(6 * s), fill=ACCENT,
                             corners=(True, True, False, False))
-        d.text((x0 + fb / 2, y0 + fane_h / 2 + 1), tekst, font=f_fane, fill=HVID, anchor='mm')
-    d.rounded_rectangle((x0, top, x0 + bredde, top + hoejde), radius=10, fill=PANEL,
-                        corners=(not bane, True, True, True))
-    d.line((x0 + luft, top + raekke, x0 + bredde - (nu_b + 6 if nu else luft), top + raekke),
+        d.text((fx + fb / 2, fane_top + fane_h / 2 + 1), tekst, font=f_fane, fill=HVID, anchor='mm')
+    # Hjørnet under fanen er skarpt
+    d.rounded_rectangle((venstre, top, venstre + panel_b, top + hoejde), radius=round(10 * s), fill=PANEL,
+                        corners=(not bane or hoejre, not bane or not hoejre, True, True))
+    d.line((venstre + luft, top + raekke, venstre + panel_b - (nu_b + nu_luft if nu else luft), top + raekke),
            fill=STREG, width=1)
 
+    r_prik = round(5 * s)
     for i in (0, 1):
         midt = top + raekke * i + raekke / 2
         if serve == i + 1:
-            d.ellipse((x0 + luft, midt - 5, x0 + luft + 10, midt + 5), fill=FJER)
-        x = x0 + luft + 18
+            d.ellipse((venstre + luft, midt - r_prik, venstre + luft + 2 * r_prik, midt + r_prik), fill=FJER)
+        x = venstre + luft + prik
         d.text((x, midt), afkort(d, navne[i], f_navn, navn_b), font=f_navn, fill=HVID, anchor='lm')
-        x += navn_b + 14
-        for s in saet:
-            vundet = s[i] > s[1 - i]
-            d.text((x + kol / 2, midt + 2), str(s[i]), font=f_tal,
+        x += navn_b + efter_navn
+        for k in saet:
+            vundet = k[i] > k[1 - i]
+            d.text((x + kol / 2, midt + 2), str(k[i]), font=f_tal,
                    fill=HVID if vundet else GRAA, anchor='mm')
             x += kol
     if nu:
-        x = x0 + bredde - nu_b - 6
-        d.rounded_rectangle((x, top + 6, x + nu_b, top + hoejde - 6), radius=8, fill=ACCENT)
-        d.line((x + 8, top + raekke, x + nu_b - 8, top + raekke), fill=(255, 255, 255, 60), width=1)
+        x = venstre + panel_b - nu_b - nu_luft
+        d.rounded_rectangle((x, top + nu_luft, x + nu_b, top + hoejde - nu_luft), radius=round(8 * s), fill=ACCENT)
+        d.line((x + round(8 * s), top + raekke, x + nu_b - round(8 * s), top + raekke),
+               fill=(255, 255, 255, 60), width=1)
         for i in (0, 1):
             d.text((x + nu_b / 2, top + raekke * i + raekke / 2 + 2), str(nu[i]), font=f_nu,
                    fill=HVID, anchor='mm')
     return billede
 
 
+def tegn_logo(billede, logo, s, x0, y0, hoejde, hoejre, nederst):
+    """Logoet i den modsatte side af scoreboardet: højst så højt som scoreboardets
+    to rækker og en fjerdedel af billedbredden. Gennemsigtighed bevares."""
+    max_b, max_h = int(billede.width * 0.25), hoejde
+    faktor = min(max_b / logo.width, max_h / logo.height)
+    lb, lh = max(1, round(logo.width * faktor)), max(1, round(logo.height * faktor))
+    lille = logo.resize((lb, lh), getattr(Image, 'Resampling', Image).LANCZOS)
+    x = x0 if hoejre else billede.width - x0 - lb
+    y = billede.height - y0 - lh if nederst else y0
+    billede.alpha_composite(lille, (x, y))
+
+
 _sidste_tavle = object()
 
 
-def skriv_tavle(tavle):
-    """Kun når noget har ændret sig — tegningen tager lidt CPU."""
+def skriv_tavle(tavle, video=STANDARD_VIDEO, bredde=1280, logo=None, logo_sti=None):
+    """Kun når noget har ændret sig — tegningen tager lidt CPU. bredde: den sendte
+    billedbredde; logo_sti: logoets adresse (genkender et logo, der er tegnet før)."""
     global _sidste_tavle
-    if tavle == _sidste_tavle and os.path.exists(TAVLE):
+    noegle = (tavle, bredde, video['stoerrelse'], video['placering'], logo_sti if logo is not None else None)
+    if noegle == _sidste_tavle and os.path.exists(TAVLE):
         return
     os.makedirs(MAPPE, exist_ok=True)
     ny = TAVLE + '.ny.png'
-    tegn_tavle_billede(tavle).save(ny)
+    tegn_tavle_billede(tavle, bredde, video['stoerrelse'], video['placering'], logo).save(ny)
     os.replace(ny, TAVLE)
-    _sidste_tavle = tavle
+    _sidste_tavle = noegle
 
 
-def forklar(linjer):
-    """ffmpegs fejl i ord, admin kan bruge."""
+# ---------- Logoet (klubbens eller banens sponsor) ----------
+
+LOGO_MAX_BYTES = 5 * 1024 * 1024
+LOGO_IGEN = _tal('BT_LOGO_IGEN', 60)   # et logo, der ikke kunne hentes, prøves igen efter så længe
+_logoer = collections.OrderedDict()    # adresse -> Pillow-billede (de seneste få: sponsorer skifter)
+_logo_fejl = {}                        # adresse -> tidspunkt for seneste fejl
+
+
+def hent_logo(server, sti):
+    """Logoet fra serverens /uploads/… som RGBA-billede, eller None. Hentes én gang."""
+    if Image is None or not isinstance(sti, str) or '..' in sti or \
+            not re.match(r'^/uploads/[A-Za-z0-9_./-]+\.(png|jpe?g|webp|gif)$', sti, re.I):
+        return None
+    if sti in _logoer:
+        _logoer.move_to_end(sti)
+        return _logoer[sti]
+    if time.monotonic() - _logo_fejl.get(sti, -LOGO_IGEN) < LOGO_IGEN:
+        return None
+    try:
+        req = urllib.request.Request(server + sti, headers={'User-Agent': 'badminton-tv-stream'})
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+            data = r.read(LOGO_MAX_BYTES + 1)
+        if len(data) > LOGO_MAX_BYTES:
+            raise ValueError('for stort')
+        billede = Image.open(io.BytesIO(data))
+        billede.thumbnail((1920, 1080))
+        billede = billede.convert('RGBA')
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        log(f'logoet kunne ikke hentes ({sti}): {getattr(e, "reason", e)}')
+        _logo_fejl[sti] = time.monotonic()
+        return None
+    _logoer[sti] = billede
+    while len(_logoer) > 8:
+        _logoer.popitem(last=False)
+    return billede
+
+
+def forklar(linjer, str_='1280x720'):
+    """ffmpegs fejl i ord, admin kan bruge. str_: den opløsning, kameraet blev bedt om."""
     alt = '\n'.join(linjer)
+    if MIKROFON_FEJL.search(alt):
+        return 'Kameraets mikrofon kunne ikke bruges — sender uden lyd'
     if re.search(r'Device or resource busy', alt):
         return 'Kameraet er optaget af et andet program'
     if re.search(r'No such file or directory|No such device', alt) and '/dev/video' in alt:
@@ -305,21 +526,37 @@ def forklar(linjer):
                  r'timed out', alt, re.I):
         return 'Ingen forbindelse til YouTube — nettet i hallen?'
     if re.search(r'Cannot open|not supported|Invalid argument', alt) and 'mjpeg' in alt.lower():
-        return 'Kameraet kan ikke sende MJPEG 1280x720 — prøv et andet kamera'
+        return f'Kameraet kan ikke sende MJPEG {str_} — vælg en lavere opløsning, eller prøv et andet kamera'
     return (linjer[-1] if linjer else 'ffmpeg stoppede uden besked')[:200]
+
+
+MIKROFON_FEJL = re.compile(r'\balsa\b|plughw:|cannot open audio device|ALSA', re.I)
 
 
 class Stream:
     def __init__(self):
         self.proc = None
         self.noegle = ''
-        self.opsaetning = None      # (enhed, maal, overlay) for den kørende
+        self.opsaetning = None      # (enhed, maal, overlay, format) for den kørende
+        self.fmt = None             # sendeformat() for den kørende
         self.startet = 0
         self.fejl = None
         self.forsoeg = 0
         self.naeste = 0             # tidligst næste start efter en fejl
         self.koder = 'vaapi' if os.path.exists(RENDER) else 'x264'
+        self.uden_mikrofon = set()  # kameraer, hvis mikrofon ikke kunne bruges
+        self.formater = {}          # enhed -> kamera_formater() (spørges én gang)
         self.linjer = collections.deque(maxlen=20)
+
+    def format_tekst(self):
+        """Til admin: det, der faktisk sendes, fx '1280x720@30' (None: sender ikke)."""
+        if not self.koerer() or not self.fmt:
+            return None
+        f = dict(self.fmt)
+        return f'{f["ud"][0]}x{f["ud"][1]}@{f["billeder"]}'
+
+    def mikrofon_navn(self):
+        return dict(self.fmt).get('mikrofon_navn') if self.koerer() and self.fmt else None
 
     def koerer(self):
         return self.proc is not None and self.proc.poll() is None
@@ -335,18 +572,29 @@ class Stream:
             self.linjer.append(linje)
             log(f'ffmpeg: {linje}')
 
-    def start(self, enhed, url, noegle, overlay):
+    def sendeformat(self, enhed, video):
+        """Det, der skal sendes (sendeformat) — kameraets formater og mikrofon slås op her."""
+        if enhed not in self.formater:
+            self.formater[enhed] = kamera_formater(enhed)
+            if self.formater[enhed]:
+                log('kameraet kan: ' + ', '.join(f'{b}x{h}@{max(r)}' for (b, h), r in sorted(self.formater[enhed].items())))
+        mikrofon, navn = find_mikrofon(enhed) if video['lyd'] and enhed not in self.uden_mikrofon else (None, None)
+        return sendeformat(enhed, video, self.formater[enhed], mikrofon) + (('mikrofon_navn', navn),)
+
+    def start(self, enhed, url, noegle, overlay, fmt=None):
         maal = url.rstrip('/') + '/' + noegle
-        if self.koerer() and self.opsaetning == (enhed, maal, overlay):
+        fmt = fmt or self.sendeformat(enhed, STANDARD_VIDEO)
+        if self.koerer() and self.opsaetning == (enhed, maal, overlay, fmt):
             return
         self.stop()
         if time.monotonic() < self.naeste:
             return
-        stil_kamera(enhed)
+        f = dict(fmt)
+        stil_kamera(enhed, f['autofokus'])
         self.noegle = noegle
         self.linjer.clear()
         try:
-            self.proc = subprocess.Popen(ffmpeg_args(enhed, maal, overlay, self.koder),
+            self.proc = subprocess.Popen(ffmpeg_args(enhed, maal, overlay, self.koder, fmt),
                                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                          stderr=subprocess.PIPE, text=True, errors='replace')
         except OSError as e:
@@ -355,9 +603,13 @@ class Stream:
             self._vent()
             return
         threading.Thread(target=self._laes, args=(self.proc,), daemon=True).start()
-        self.opsaetning = (enhed, maal, overlay)
+        self.opsaetning = (enhed, maal, overlay, fmt)
+        self.fmt = fmt
         self.startet = time.monotonic()
-        log(f'sender {OPLOESNING} @ {BILLEDER} fra {enhed} ({self.koder}, overlay {overlay or "fra"})')
+        (kb, kh), (ub, uh) = f['kamera'], f['ud']
+        log(f'sender {ub}x{uh} @ {f["billeder"]}' + (f' (kameraet {kb}x{kh})' if (kb, kh) != (ub, uh) else '') +
+            f', {f["kbit"]} kbit/s fra {enhed} ({self.koder}, overlay {overlay or "fra"}, '
+            f'lyd {f["mikrofon_navn"] or "fra"})')
 
     def stop(self):
         if self.proc is None:
@@ -393,15 +645,22 @@ class Stream:
         time.sleep(0.2)   # så læsetråden når de sidste linjer
         linjer = list(self.linjer)
         kort = time.monotonic() - self.startet
+        f = dict(self.fmt or ())
+        enhed = self.opsaetning[0] if self.opsaetning else None
         self.proc = None
         self.opsaetning = None
+        if f.get('mikrofon') and MIKROFON_FEJL.search('\n'.join(linjer)):
+            # Mikrofonen kunne ikke åbnes: send uden lyd i stedet for slet ikke
+            log(f'mikrofonen {f["mikrofon"]} kunne ikke bruges — sender uden lyd fremover')
+            self.uden_mikrofon.add(enhed)
+            return
         if self.koder == 'vaapi' and kort < VAAPI_TIDLIG and not any(
                 re.search(r'rtmp|Connection|Input/output|Network|handshake|/dev/video|busy', l, re.I) for l in linjer):
             # Grafikkortet kunne ikke kode (driver, ældre PC): CPU'en med det samme
             log(f'VAAPI-kodningen stoppede efter {kort:.0f} s (kode {kode}) — koder på CPU\'en fremover')
             self.koder = 'x264'
             return
-        self.fejl = forklar(linjer)
+        self.fejl = forklar(linjer, '{}x{}'.format(*f['kamera']) if f else '1280x720')
         log(f'ffmpeg stoppede (kode {kode}) efter {kort:.0f} s: {self.fejl}')
         self._vent()
 
@@ -465,12 +724,16 @@ def main():
         if kamera != sidst_kamera:
             log(f'kamera: {kamera} ({enhed})' if kamera else 'intet USB-kamera')
             sidst_kamera = kamera
+            # Et andet kamera i stikket kan noget andet
+            stream.formater.clear()
+            stream.uden_mikrofon.clear()
         # Døde ffmpeg siden sidst? Så skal fejlen med i statussen — og læses,
         # før start() rydder op
         stream.tjek()
         svar = spoerg(STREAM_URL or f'{server}/api/livestream/pc', token, {
             'navn': navn, 'kioskVersion': version, 'kamera': kamera,
-            'sender': stream.koerer(), 'koder': stream.koder, 'fejl': stream.fejl})
+            'sender': stream.koerer(), 'koder': stream.koder, 'fejl': stream.fejl,
+            'format': stream.format_tekst(), 'mikrofon': stream.mikrofon_navn()})
         if svar is None:
             if stream.koerer() and time.monotonic() - sidste_svar > UDEN_SVAR:
                 log(f'intet svar fra serveren i {UDEN_SVAR:.0f} s — stopper')
@@ -479,15 +742,24 @@ def main():
         else:
             sidste_svar = time.monotonic()
             if svar.get('send') and enhed and svar.get('url') and svar.get('noegle'):
+                video = rens_video(svar.get('video'))
+                fmt = stream.sendeformat(enhed, video)
+                bredde = dict(fmt)['ud'][0]
+                logo = hent_logo(server, svar.get('logo')) if svar.get('logo') else None
                 overlay = None
-                if svar.get('overlay'):
-                    # Scoreboardet, når serveren sender det, og Pillow er der
-                    overlay = 'tavle' if Image is not None and 'tavle' in svar else 'tekst'
-                    if overlay == 'tavle':
-                        skriv_tavle(svar.get('tavle'))
-                    else:
-                        skriv_overlay(svar.get('linjer') or [])
-                stream.start(enhed, svar['url'], svar['noegle'], overlay)
+                if svar.get('overlay') or logo is not None:
+                    # Scoreboardet (og logoet), når serveren sender det, og Pillow er der
+                    overlay = 'tavle' if Image is not None and ('tavle' in svar or logo is not None) else 'tekst'
+                # Nyt format eller overlay: stop først, så den kørende ffmpeg ikke
+                # læser et scoreboard i en ny størrelse (den dør af det)
+                if stream.opsaetning and stream.opsaetning[2:] != (overlay, fmt):
+                    stream.stop()
+                if overlay == 'tavle':
+                    skriv_tavle(svar.get('tavle') if svar.get('overlay') else None, video, bredde,
+                                logo, svar.get('logo'))
+                elif overlay:
+                    skriv_overlay(svar.get('linjer') or [])
+                stream.start(enhed, svar['url'], svar['noegle'], overlay, fmt)
             else:
                 stream.stop()
                 if not enhed:

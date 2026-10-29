@@ -5,13 +5,43 @@ const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/au
 const { ikkeQrSession } = require('../middleware/qrSession');
 const { clubAdminAuth } = require('../middleware/clubAdminAuth');
 const { requirePage } = require('../middleware/pagePermission');
-const { klientIp } = require('../middleware/rateLimiter');
+const { klientIp, uploadLimiter } = require('../middleware/rateLimiter');
+const upload = require('../config/multer');
+const { validateImageMagic } = require('../config/imageUpload');
+const { UPLOAD_DIR, klubMappe } = require('../config/sponsorFiler');
 const { gyldigtToken } = require('../screens/pcRapport');
 const ls = require('../screens/livestream');
+const sharp = require('sharp');
+const crypto = require('crypto');
+const fs = require('fs').promises;
+const path = require('path');
 
 // Livestream fra TV-PC'ernes USB-kamera — se screens/livestream.js
 
 const tenantKey = (req) => req.clubDbName || 'direct';
+
+// Klubbens fælles indstillinger (settings 'livestream', se ls.laesIndstillinger)
+const hentIndstillinger = async () => ls.laesIndstillinger(
+    (await queryOne("SELECT setting_value FROM settings WHERE setting_key = 'livestream'"))?.setting_value);
+const gemIndstillinger = (indst) => query(
+    "INSERT INTO settings (setting_key, setting_value) VALUES ('livestream', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)",
+    [JSON.stringify(indst)]);
+
+const logoUrl = (req, fil) => fil ? `/uploads/${klubMappe(req)}/${fil}` : null;
+const logoSti = (req, fil) => ls.gyldigLogoFil(fil) ? path.join(UPLOAD_DIR, klubMappe(req), fil) : null;
+
+// Banens sponsor-banner lige nu (som TV'ets bundbjælke), eller null
+async function sponsorPaaBane(bane) {
+    const bannere = await query(
+        `SELECT s.filename FROM sponsor_images s
+          WHERE s.type = 'court' AND s.is_active = TRUE
+            AND (s.court_scope = 'alle' OR EXISTS (SELECT 1 FROM sponsor_image_courts c
+                  WHERE c.sponsor_image_id = s.id AND c.court_number = ?))
+          ORDER BY s.display_order, s.upload_date DESC`, [bane]);
+    const varighed = (await queryOne('SELECT banner_duration FROM sponsor_settings LIMIT 1'))?.banner_duration;
+    const fil = ls.sponsorNu(bannere, varighed);
+    return fil ? `/uploads/${fil}` : null;
+}
 
 // Samme adgang som Adgangslinks (siden devicetokens); i direct-mode det lokale login
 const livestreamAdmin = (req, res, next) => {
@@ -67,8 +97,10 @@ router.get('/', livestreamAdmin, async (req, res, next) => {
               WHERE is_active = 1 AND token_type = 'permanent' AND destination LIKE 'tv%'
               ORDER BY name`);
         const status = ls.statusFor(tenantKey(req));
+        const indst = await hentIndstillinger();
         res.json({
             standardUrl: ls.STANDARD_URL,
+            indstillinger: { ...indst, logo: logoUrl(req, indst.logo) },
             baner: baner.map(({ court_number: n }) => {
                 const o = opsaetning.get(n);
                 const s = ls.startet(o);
@@ -78,6 +110,11 @@ router.get('/', livestreamAdmin, async (req, res, next) => {
                     streamUrl: o ? o.stream_url : ls.STANDARD_URL,
                     noegle: o ? ls.noegleSlut(o.stream_key) : null,
                     overlay: o ? !!o.overlay : true,
+                    vend: !!(o && o.flip_180),
+                    spejl: !!(o && o.mirror),
+                    autofokus: !!(o && o.autofocus),
+                    lyd: !!(o && o.sound),
+                    logo: (o && o.logo) || 'ingen',
                     start: s ? s.start : null,
                     til: s && s.til ? new Date(s.til).toISOString() : null
                 };
@@ -95,7 +132,56 @@ router.get('/', livestreamAdmin, async (req, res, next) => {
     }
 });
 
-// PUT /api/livestream/baner/:bane — til/fra, adresse, nøgle og overlay
+// PUT /api/livestream/indstillinger — klubbens fælles indstillinger for streamen
+router.put('/indstillinger', livestreamAdmin, async (req, res, next) => {
+    try {
+        const indst = ls.rensIndstillinger(req.body, await hentIndstillinger());
+        if (indst.fejl) return res.status(400).json({ error: indst.fejl });
+        await gemIndstillinger(indst);
+        console.log(`[livestream] ${tenantKey(req)}: indstillinger ${indst.oploesning}p ${indst.billeder} bill./s ` +
+            `${indst.kvalitet}, overlay ${indst.placering} ${indst.stoerrelse}, ${indst.efterMin} min efter`);
+        res.json({ success: true, indstillinger: { ...indst, logo: logoUrl(req, indst.logo) } });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /api/livestream/logo — klubbens logo i streamen (felt "logo"). Gemmes
+// som PNG (gennemsigtighed bevares) i højst 600x240, så PC'en ikke skal skalere meget
+router.post('/logo', uploadLimiter, livestreamAdmin, upload.single('logo'), validateImageMagic, async (req, res, next) => {
+    const fil = req.file;
+    try {
+        if (!fil) return res.status(400).json({ error: 'Vælg et billede' });
+        const navn = `livestream-logo-${crypto.randomBytes(8).toString('hex')}.png`;
+        await sharp(fil.path).rotate().resize(600, 240, { fit: 'inside', withoutEnlargement: true })
+            .png().toFile(logoSti(req, navn));
+        const foer = await hentIndstillinger();
+        await gemIndstillinger({ ...foer, logo: navn });
+        const gammel = logoSti(req, foer.logo);
+        if (gammel) await fs.unlink(gammel).catch(() => {});
+        console.log(`[livestream] ${tenantKey(req)}: nyt klublogo`);
+        res.json({ success: true, logo: logoUrl(req, navn) });
+    } catch (error) {
+        next(error);
+    } finally {
+        if (fil) await fs.unlink(fil.path).catch(() => {});
+    }
+});
+
+router.delete('/logo', livestreamAdmin, async (req, res, next) => {
+    try {
+        const foer = await hentIndstillinger();
+        await gemIndstillinger({ ...foer, logo: null });
+        const gammel = logoSti(req, foer.logo);
+        if (gammel) await fs.unlink(gammel).catch(() => {});
+        res.json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// PUT /api/livestream/baner/:bane — til/fra, adresse, nøgle, overlay og kameraet
+// (vend, spejl, autofokus, lyd, logo — felter, der ikke er med, er uændrede)
 router.put('/baner/:bane', livestreamAdmin, async (req, res, next) => {
     try {
         const bane = baneNr(req.params.bane);
@@ -104,15 +190,19 @@ router.put('/baner/:bane', livestreamAdmin, async (req, res, next) => {
         }
         const o = ls.rensOpsaetning(req.body);
         if (o.fejl) return res.status(400).json({ error: o.fejl });
-        const nu = await queryOne('SELECT stream_key FROM court_streams WHERE court_number = ?', [bane]);
+        const nu = await queryOne('SELECT * FROM court_streams WHERE court_number = ?', [bane]);
         const noegle = o.stream_key === undefined ? (nu ? nu.stream_key : null) : o.stream_key;
         if (o.enabled && !noegle) return res.status(400).json({ error: 'Indtast stream-nøglen, før banen slås til' });
+        const kamera = (kolonne, standard) => o[kolonne] !== undefined ? o[kolonne] : nu ? nu[kolonne] : standard;
         await query(
-            `INSERT INTO court_streams (court_number, enabled, stream_url, stream_key, overlay)
-             VALUES (?, ?, ?, ?, ?)
+            `INSERT INTO court_streams (court_number, enabled, stream_url, stream_key, overlay,
+                flip_180, mirror, autofocus, sound, logo)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), stream_url = VALUES(stream_url),
-                stream_key = VALUES(stream_key), overlay = VALUES(overlay)`,
-            [bane, o.enabled, o.stream_url, noegle, o.overlay]);
+                stream_key = VALUES(stream_key), overlay = VALUES(overlay), flip_180 = VALUES(flip_180),
+                mirror = VALUES(mirror), autofocus = VALUES(autofocus), sound = VALUES(sound), logo = VALUES(logo)`,
+            [bane, o.enabled, o.stream_url, noegle, o.overlay, !!kamera('flip_180', false), !!kamera('mirror', false),
+                !!kamera('autofocus', false), !!kamera('sound', false), kamera('logo', 'ingen')]);
         console.log(`[livestream] ${tenantKey(req)} bane ${bane}: ${o.enabled ? 'slået til' : 'slået fra'}` +
             (o.stream_key !== undefined ? (o.stream_key ? ', ny nøgle' : ', nøgle fjernet') : ''));
         res.json({ success: true, noegle: ls.noegleSlut(noegle) });
@@ -243,9 +333,10 @@ router.post('/pc', async (req, res, next) => {
             const gs = court && await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
             const sidste = court && !gs && await queryOne('SELECT * FROM last_finished_matches WHERE court_id = ?', [court.id]);
             const planner = await plannerPaaBane(bane);
+            const indst = await hentIndstillinger();
             const b = court
                 ? ls.beslutning({ opsaetning, gs, sidste, planner, holdkamp: await holdkampPaaBane(bane),
-                    senderNu: !!(foer && foer.online && foer.sender) })
+                    senderNu: !!(foer && foer.online && foer.sender), efterMs: indst.efterMin * 60 * 1000 })
                 : { send: false, grund: 'ingen-bane' };
             // Tablettens "Start livestream" gælder nu kampen på banen — og kun den
             if (b.vaelg) {
@@ -263,6 +354,10 @@ router.post('/pc', async (req, res, next) => {
                 svar.overlay = !!opsaetning.overlay;
                 svar.linjer = opsaetning.overlay ? ls.overlayLinjer(rk, dbl) : [];
                 svar.tavle = opsaetning.overlay ? ls.overlayTavle(rk, dbl, bane) : null;
+                // Nye Badminton TV-versioner: opløsning, kvalitet, kameraet og logoet (ældre ser bort fra det)
+                svar.video = ls.videoTilPc(indst, opsaetning);
+                svar.logo = opsaetning.logo === 'klub' ? logoUrl(req, indst.logo)
+                    : opsaetning.logo === 'sponsor' ? await sponsorPaaBane(bane) : null;
             }
         }
         const { ny } = ls.registrer(tenant, link.id, { ...pc, bane: bane || null, grund: svar.grund }, klientIp(req));

@@ -1093,6 +1093,34 @@ class BadmintonAPI {
         });
     }
 
+    // Fælles for alle baner: opløsning, billeder, kvalitet, overlay, minutter efter kampen
+    async saveLivestreamSettings(data) {
+        return this.request('/livestream/indstillinger', {
+            method: 'PUT',
+            body: JSON.stringify(data)
+        });
+    }
+
+    // Klubbens logo i streamen (felt "logo")
+    async uploadLivestreamLogo(file) {
+        const fd = new FormData();
+        fd.append('logo', file);
+        const headers = {};
+        if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+        const response = await fetch(`${API_BASE_URL}/livestream/logo`, {
+            method: 'POST', headers, body: fd
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ error: response.statusText }));
+            throw new Error(error.error || `Upload Error: HTTP ${response.status}`);
+        }
+        return await response.json();
+    }
+
+    async deleteLivestreamLogo() {
+        return this.request('/livestream/logo', { method: 'DELETE' });
+    }
+
     async setLivestreamCamera(tokenId, bane) {
         return this.request(`/livestream/kamera/${encodeURIComponent(tokenId)}`, {
             method: 'PUT',

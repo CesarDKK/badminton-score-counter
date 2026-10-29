@@ -10,6 +10,9 @@
 #   5. YouTube afviser            → fejlen i ord til admin, nøglen aldrig i loggen
 #   6. grafikkortet kan ikke kode → koder på CPU'en i stedet
 #   7. serveren svarer ikke       → stopper efter UDEN_SVAR
+#   8. 1080p @ 60 valgt           → kameraets bedste (1080p @ 30), bitrate efter kvalitet
+#   9. vendt, nederst til højre   → hflip+vflip, båndet nederst, stort scoreboard, logo, lyd
+#  10. mikrofonen kan ikke åbnes  → sender uden lyd i stedet for slet ikke
 #
 # Køres i en debian:trixie-container (henter ffmpeg, python3, Pillow og skrifterne):
 #   docker run --rm -v "$PWD/kiosk:/src" debian:trixie bash /src/test/test-stream.sh
@@ -66,6 +69,12 @@ class H(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-Type', 'application/json'); self.end_headers()
         self.wfile.write(svar)
+    def do_GET(self):   # logoet: /uploads/… fra $TMP/uploads
+        sti = os.path.join(ROD, self.path.lstrip('/'))
+        if not self.path.startswith('/uploads/') or not os.path.isfile(sti):
+            self.send_response(404); self.end_headers(); return
+        self.send_response(200); self.end_headers()
+        self.wfile.write(open(sti, 'rb').read())
     def log_message(self, *a): pass
 s = http.server.HTTPServer(('127.0.0.1', 0), H)
 open(os.path.join(ROD, 'port'), 'w').write(str(s.server_port))
@@ -82,23 +91,63 @@ printf "BT_TV_URL=http://127.0.0.1:%s/t/TESTTOKEN12\nBT_NAVN=tv-bane3\n" "$PORT"
 mkdir -p "$TMP/by-id" "$TMP/bin"
 : > "$TMP/video0"
 ln -s "$TMP/video0" "$TMP/by-id/usb-046d_HD_Pro_Webcam_C920_ABCDEF12-video-index0"
+# Kameraet sender den størrelse og de billeder, det bliver bedt om; mikrofonen
+# (-f alsa) bliver en tone — eller en fejl som ALSA's, med MIKROFON_FEJL=1
 cat > "$TMP/bin/ffmpeg-falsk" <<'EOF'
 #!/bin/bash
 ud=()
+str=1280x720; rate=30
+alle="$*"
 while [ $# -gt 0 ]; do
     if [ "$1" = -f ] && [ "${2:-}" = v4l2 ]; then
-        while [ "$1" != -i ]; do shift; done
+        while [ "$1" != -i ]; do
+            [ "$1" = -video_size ] && str=$2
+            [ "$1" = -framerate ] && rate=$2
+            shift
+        done
         shift 2
-        ud+=(-re -f lavfi -i testsrc2=size=1280x720:rate=30)
+        ud+=(-re -f lavfi -i "testsrc2=size=$str:rate=$rate")
+        continue
+    fi
+    if [ "$1" = -f ] && [ "${2:-}" = alsa ]; then
+        while [ "$1" != -i ]; do shift; done
+        if [ -n "${MIKROFON_FEJL:-}" ]; then
+            echo "[alsa @ 0x1] cannot open audio device $2 (No such file or directory)" >&2
+            exit 1
+        fi
+        shift 2
+        ud+=(-f lavfi -i sine=frequency=440:sample_rate=48000)
         continue
     fi
     ud+=("$1"); shift
 done
 echo "$$" >> "$FFMPEG_LOG"
+printf '%s\n' "$alle" >> "$FFMPEG_LOG.args"
 exec ffmpeg "${ud[@]}"
 EOF
 chmod +x "$TMP/bin/ffmpeg-falsk"
-printf '#!/bin/sh\nexit 0\n' > "$TMP/bin/v4l2-ctl"; chmod +x "$TMP/bin/v4l2-ctl"
+# v4l2-ctl --list-formats-ext: kameraets formater fra $TMP/formater (uden: ukendt)
+cat > "$TMP/bin/v4l2-ctl" <<'EOF'
+#!/bin/sh
+case "$*" in *--list-formats-ext*) cat "$FORMATER" 2>/dev/null ;; esac
+exit 0
+EOF
+chmod +x "$TMP/bin/v4l2-ctl"
+# Kameraets mikrofon: lydkortet i samme USB-enhed som kameraet (BT_SYS)
+mkdir -p "$TMP/sys/devices/usb1/1-1/1-1:1.0" "$TMP/sys/devices/usb1/1-1/1-1:1.2/sound/card1" "$TMP/sys/class/video4linux/video0"
+ln -s "$TMP/sys/devices/usb1/1-1/1-1:1.0" "$TMP/sys/class/video4linux/video0/device"
+echo C920 > "$TMP/sys/devices/usb1/1-1/1-1:1.2/sound/card1/id"
+# Logoet: et rødt felt på gennemsigtig baggrund
+mkdir -p "$TMP/uploads/klub"
+python3 - "$TMP/uploads/klub/logo.png" <<'EOF'
+import sys
+from PIL import Image, ImageDraw, ImageFont
+b = Image.new("RGBA", (400, 160), (0, 0, 0, 0))
+d = ImageDraw.Draw(b)
+d.rounded_rectangle((0, 0, 399, 159), radius=24, fill=(220, 30, 30, 255))
+d.text((200, 80), "KLUB", font=ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 72), fill=(255, 255, 255, 255), anchor="mm")
+b.save(sys.argv[1])
+EOF
 
 svar() { printf '%s' "$1" > "$TMP/svar.json"; }
 SEND_SVAR() { # linje1 linje2 [scoreboard-JSON — uden: en ældre server]
@@ -115,8 +164,9 @@ panel_farve() { # flv-fil
 INGEN_SVAR='{"kamera":true,"bane":3,"send":false,"grund":"ingen-kamp"}'
 
 start_stream() { # [ekstra miljø…]
-    : > "$TMP/ffmpeg.log"; : > "$TMP/status.jsonl"
-    env FFMPEG_LOG="$TMP/ffmpeg.log" BT_KIOSK_ENV="$TMP/kiosk.env" BT_VERSION_FIL=/dev/null \
+    : > "$TMP/ffmpeg.log"; : > "$TMP/ffmpeg.log.args"; : > "$TMP/status.jsonl"
+    env FFMPEG_LOG="$TMP/ffmpeg.log" FORMATER="$TMP/formater" BT_SYS="$TMP/sys" \
+        BT_KIOSK_ENV="$TMP/kiosk.env" BT_VERSION_FIL=/dev/null \
         BT_STREAM_MAPPE="$TMP/run" BT_FFMPEG="$TMP/bin/ffmpeg-falsk" BT_V4L2CTL="$TMP/bin/v4l2-ctl" \
         BT_KAMERA_GLOB="$TMP/by-id/*-video-index0" BT_RENDER="$TMP/ingen-render" \
         BT_SPOERG_SENDER=1 BT_SPOERG_KLAR=1 BT_SPOERG_FEJL=1 BT_GENFORSOEG=2 BT_STABIL=3 BT_UDEN_SVAR=4 "$@" \
@@ -219,6 +269,81 @@ START=$SECONDS
 vent_paa 30 grep -q "intet svar fra serveren" "$TMP/stream.log" || true
 indeholder "stopper uden svar" "$(cat "$TMP/stream.log")" "intet svar fra serveren i 4"
 forvent "efter ca. 4 sekunder" "$([ $((SECONDS - START)) -le 12 ] && echo ja || echo "nej ($((SECONDS - START)) s)")" "ja"
+stop_stream
+kill "$MODTAGER_PID" 2>/dev/null
+
+SEND_VIDEO() { # video-JSON [logo-JSON] — en ny server med admins indstillinger
+    svar "{\"kamera\":true,\"bane\":3,\"send\":true,\"grund\":\"kamp\",\"url\":\"rtmp://127.0.0.1:$RTMP_PORT/live2\",\"noegle\":\"$NOEGLE\",\"overlay\":true,\"linjer\":[\"A\",\"B\"],\"tavle\":$(TAVLE_JSON 5 3),\"video\":$1${2:+,\"logo\":$2}}"
+}
+vent_sender() { vent_paa "${1:-20}" sh -c "tail -n 1 '$TMP/status.jsonl' | grep -q '\"sender\": true'" || true; }
+pixel() { # x y — RGBA i scoreboard-billedet
+    python3 -c 'import sys; from PIL import Image; print(*Image.open(sys.argv[1]).getpixel((int(sys.argv[2]), int(sys.argv[3]))))' "$TMP/run/tavle.png" "$1" "$2"
+}
+tavle_str() { python3 -c 'import sys; from PIL import Image; print(Image.open(sys.argv[1]).size)' "$TMP/run/tavle.png"; }
+args() { tail -n 1 "$TMP/ffmpeg.log.args"; }
+
+echo "8. 1080p med 60 valgt — kameraet kan 1080p med 30 og 720p med 60"
+cat > "$TMP/formater" <<'EOF'
+ioctl: VIDIOC_ENUM_FMT
+	Type: Video Capture
+
+	[0]: 'YUYV' (YUYV 4:2:2)
+		Size: Discrete 1920x1080
+			Interval: Discrete 0.200s (5.000 fps)
+	[1]: 'MJPG' (Motion-JPEG, compressed)
+		Size: Discrete 1920x1080
+			Interval: Discrete 0.033s (30.000 fps)
+			Interval: Discrete 0.042s (24.000 fps)
+		Size: Discrete 1280x720
+			Interval: Discrete 0.017s (60.000 fps)
+			Interval: Discrete 0.033s (30.000 fps)
+EOF
+modtager "$TMP/modtaget3.flv"
+SEND_VIDEO '{"bredde":1920,"hoejde":1080,"billeder":60,"kvalitet":"lav","placering":"top-venstre","stoerrelse":"normal","vend":false,"spejl":false,"autofokus":false,"lyd":false}'
+start_stream
+vent_sender
+forvent "status: sender 1080p med 30 (kameraets bedste)" "$(sidste_status | felt format)" "1920x1080@30"
+indeholder "kameraet bedt om 1920x1080 @ 30" "$(args)" "-video_size 1920x1080 -framerate 30"
+indeholder "lav kvalitet: 3,6 Mbit/s" "$(args)" "-b:v 3600k"
+forvent "scoreboardet i 1920-bredde" "$(tavle_str)" "(1920, 330)"
+indeholder "kameraets formater i loggen" "$(cat "$TMP/stream.log")" "kameraet kan: 1280x720@60, 1920x1080@30"
+svar "$INGEN_SVAR"
+vent_paa 10 sh -c "! kill -0 $MODTAGER_PID 2>/dev/null" || true
+[ -n "${GEM_MAPPE:-}" ] && ffmpeg -v error -sseof -1 -i "$TMP/modtaget3.flv" -frames:v 1 -y "$GEM_MAPPE/1080p-normal.png"
+indeholder "modtaget i 1920x1080" "$(ffprobe -v error -show_entries stream=width,height -of compact "$TMP/modtaget3.flv" 2>&1)" "width=1920|height=1080"
+stop_stream
+
+echo "9. Kameraet vendt, overlay nederst til højre i stor, klublogo og lyd"
+rm -f "$TMP/formater"   # ukendte formater: det valgte
+modtager "$TMP/modtaget4.flv"
+SEND_VIDEO '{"bredde":1280,"hoejde":720,"billeder":30,"kvalitet":"normal","placering":"bund-hoejre","stoerrelse":"stor","vend":true,"spejl":false,"autofokus":true,"lyd":true}' '"/uploads/klub/logo.png"'
+start_stream
+vent_sender
+forvent "status: kameraets mikrofon" "$(sidste_status | felt mikrofon)" "C920"
+indeholder "mikrofonen fra samme USB-enhed" "$(args)" "-f alsa -thread_queue_size 1024 -i plughw:1,0"
+indeholder "vendt 180°" "$(args)" "[0:v]hflip,vflip[kam]"
+indeholder "båndet nederst" "$(args)" "overlay=0:main_h-overlay_h"
+forvent "scoreboardet i stor (1,25)" "$(tavle_str)" "(1280, 275)"
+forvent "logoet nederst til venstre" "$(pixel 60 200)" "220 30 30 255"
+forvent "scoreboardet nederst til højre" "$(pixel 1241 200 | awk '{ print ($4 > 200 ? "panel" : "tomt") }')" "panel"
+forvent "øverst er tomt" "$(pixel 10 10 | awk '{ print $4 }')" "0"
+sleep 3
+svar "$INGEN_SVAR"
+vent_paa 10 sh -c "! kill -0 $MODTAGER_PID 2>/dev/null" || true
+[ -n "${GEM_MAPPE:-}" ] && ffmpeg -v error -sseof -1 -i "$TMP/modtaget4.flv" -frames:v 1 -y "$GEM_MAPPE/nederst-hoejre-stor-logo.png"
+LYD=$(ffmpeg -v info -i "$TMP/modtaget4.flv" -vn -af volumedetect -f null - 2>&1 | sed -n 's/.*mean_volume: \(-\?[0-9.]*\) dB/\1/p')
+forvent "lyd i streamen (ikke lydløs)" "$(awk -v v="${LYD:--999}" 'BEGIN { print (v > -40 ? "ja" : "nej (" v " dB)") }')" "ja"
+stop_stream
+
+echo "10. Kameraets mikrofon kan ikke åbnes"
+modtager "$TMP/modtaget5.flv"
+SEND_VIDEO '{"bredde":1280,"hoejde":720,"billeder":30,"kvalitet":"normal","placering":"top-venstre","stoerrelse":"normal","vend":false,"spejl":false,"autofokus":false,"lyd":true}'
+start_stream MIKROFON_FEJL=1
+vent_sender
+indeholder "sender uden lyd i stedet" "$(cat "$TMP/stream.log")" "sender uden lyd fremover"
+forvent "sender" "$(sidste_status | felt sender)" "True"
+forvent "status: ingen mikrofon" "$(sidste_status | felt mikrofon)" ""
+forvent "ingen fejl til admin" "$(sidste_status | felt fejl)" ""
 stop_stream
 kill "$MODTAGER_PID" 2>/dev/null
 
