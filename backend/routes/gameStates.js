@@ -12,6 +12,8 @@ const { varighedTekst } = require('../config/matchTiming');
 const { gemSidsteAfsluttedeKamp } = require('../config/banerydning');
 // Kun én tæller ad gangen pr. bane (se taeller/ejerskab.js og migration 031)
 const ejerskab = require('../taeller/ejerskab');
+// TV'ets LIVE-mærke: sender banens TV-PC kameraet lige nu?
+const { senderBane } = require('../screens/livestream');
 
 // Hvor længe (i minutter) et "last finished match" snapshot vises på TV efter Ryd bane
 const FINISHED_SNAPSHOT_TTL_MINUTES = 5;
@@ -303,6 +305,7 @@ router.get('/:courtId', async (req, res, next) => {
         if (!court) {
             return res.status(404).json({ error: 'Bane ikke fundet' });
         }
+        const livestream = senderBane(req.clubDbName || 'direct', parseInt(courtId, 10));
 
         // Get game state using the actual court id from database.
         // elapsed_seconds beregnes af databasen så starttid og "nu" måles
@@ -341,7 +344,8 @@ router.get('/:courtId', async (req, res, next) => {
                 betweenSets: false,
                 version: 0,
                 lastFinishedMatch,
-                planner: null
+                planner: null,
+                livestream
             });
         }
 
@@ -360,7 +364,8 @@ router.get('/:courtId', async (req, res, next) => {
         res.json({
             ...formatStateRow(gameState, court),
             lastFinishedMatch,
-            planner
+            planner,
+            livestream
         });
     } catch (error) {
         next(error);

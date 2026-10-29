@@ -306,9 +306,18 @@ function statusFor(tenant, nu = Date.now()) {
     return ud;
 }
 
+// Sender en TV-PC banen lige nu? Til TV'ets LIVE-mærke — kun det, PC'en selv
+// har meldt (ikke bare at banen er sat op til det), og uden databaseopslag
+function senderBane(tenant, bane, nu = Date.now()) {
+    for (const s of (status.get(tenant) || new Map()).values()) {
+        if (s.bane === bane && s.sender && nu - s.sidst < TABT_MS) return true;
+    }
+    return false;
+}
+
 module.exports = {
     STANDARD_URL, EFTER_MS, STILLE_MS, KLAR_MS,
     gyldigUrl, gyldigNoegle, rensOpsaetning, noegleSlut,
     beslutning, startet, holdkampNu, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,
-    rensStatus, registrer, statusFor
+    rensStatus, registrer, statusFor, senderBane
 };

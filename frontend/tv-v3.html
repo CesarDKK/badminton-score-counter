@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" href="/favicon.png?v=5">
     <link rel="stylesheet" href="fonts.css?v=2">
     <link rel="stylesheet" href="fundament.css?v=2">
-    <link rel="stylesheet" href="tv-v3-styles.css?v=19">
+    <link rel="stylesheet" href="tv-v3-styles.css?v=20">
     <script src="js/theme-loader.js?v=15"></script>
 </head>
 <body>
@@ -23,7 +23,7 @@
                 <span class="tv-planner-next" id="tvPlannerNext"></span>
             </div>
             <!-- "2. SÆT · 14:32" (afgjort: "AFGJORT · 52:40", pause: "PAUSE · 3. SÆT NÆSTE") -->
-            <div class="timer-display"><span class="tv-set-label" id="tvSetLabel"></span><span id="timerDisplay">00:00</span></div>
+            <div class="timer-display"><span class="tv-live-maerke" aria-hidden="true"><span class="tv-live-prik"></span>LIVE</span><span class="tv-set-label" id="tvSetLabel"></span><span id="timerDisplay">00:00</span></div>
             <!-- Pause: hvor meget af pausen der er gået -->
             <span class="tv-pause-fremdrift" id="tvPauseFremdrift" aria-hidden="true"></span>
         </div>
@@ -94,6 +94,11 @@
         <img id="qrCounterImage" class="qr-counter__image" alt="Scan med telefon for at tælle kampen">
     </div>
 
+    <!-- Livestream: rød ramme om skærmen, mens banens TV-PC sender kameraet (body.tv-live).
+         Uden header (sponsorskærm mellem kampene) hænger LIVE-fanen i rammens hjørne. -->
+    <div class="tv-live-ramme" aria-hidden="true"></div>
+    <div class="tv-live-fane" aria-hidden="true"><span class="tv-live-prik"></span>LIVE</div>
+
     <!-- Afgjort kamp vises direkte på tavlen (.tv-container.afgjort) — intet overlay -->
 
     <script src="js/api.js?v=33"></script>
@@ -102,6 +107,6 @@
     <script src="js/logo-match.js?v=1"></script>
     <script src="js/live-updates.js?v=2"></script>
     <script src="js/name-display.js?v=2"></script>
-    <script src="tv-script-v3.js?v=60"></script>
+    <script src="tv-script-v3.js?v=61"></script>
 </body>
 </html>

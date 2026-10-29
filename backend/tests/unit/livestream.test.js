@@ -202,3 +202,14 @@ test('status: PC\'ens oplysninger renses, og "sender siden" huskes', () => {
     ls.registrer('t-test', 7, { ...s, sender: false }, '1.2.3.4', NU + 6000);
     assert.equal(ls.statusFor('t-test', NU + 6000)[7].senderSiden, null);
 });
+
+test('TV\'ets LIVE-mærke: kun mens banens PC selv melder, at den sender', () => {
+    const s = ls.rensStatus({ navn: 'tv-bane2', kamera: 'C920', sender: true });
+    ls.registrer('t-live', 9, { ...s, bane: 2 }, null, NU);
+    assert.equal(ls.senderBane('t-live', 2, NU + 1000), true);
+    assert.equal(ls.senderBane('t-live', 3, NU + 1000), false);      // en anden bane
+    assert.equal(ls.senderBane('t-andenklub', 2, NU + 1000), false); // en anden klub
+    assert.equal(ls.senderBane('t-live', 2, NU + 2 * MIN), false);   // PC'en er væk
+    ls.registrer('t-live', 9, { ...s, sender: false, bane: 2 }, null, NU + 3000);
+    assert.equal(ls.senderBane('t-live', 2, NU + 4000), false);
+});

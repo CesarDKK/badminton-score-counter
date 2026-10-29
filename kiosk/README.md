@@ -160,6 +160,9 @@ Sæt et USB-webkamera i TV-PC'en, så kan banen sendes til YouTube:
 - **Hele dagen** (fx en turnering): *Send hele dagen* i admin. Alt på banen
   sendes, også mellem kampene, til PC'en slukker kl. 23:59.
 
+Mens banen sendes, har TV'et en rød ramme og "● LIVE" ved uret (mellem
+kampene i rammens hjørne), så spillerne kan se, at de bliver filmet.
+
 Badmintonplanner-kampe sendes aldrig. Alt indstilles i admin under
 **Livestream**:
 
