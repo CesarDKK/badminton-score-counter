@@ -162,6 +162,24 @@ test('overlay: double med makker — rækkerne står som i 1. sæt, også efter 
     assert.deepEqual(linjer, ['Jensen / Olsen 21  4', 'Hansen / Berg  19  3']);
 });
 
+test('scoreboard: double viser fornavne som TV\'et (forbogstav ved sammenfald), single hele navnet', () => {
+    const d = ls.overlayTavle(gs({
+        player1_name: 'Ella Brink Sørensen', player1_name2: 'Bertram Holm',
+        player2_name: 'Konrad Lilholm Beltoft', player2_name2: 'Yudan Li'
+    }), true);
+    assert.deepEqual(d.navne, ['Ella / Bertram', 'Konrad / Yudan']);
+    // To med samme fornavn — også på tværs af siderne
+    const ens = ls.overlayTavle(gs({
+        player1_name: 'Anna Jensen', player1_name2: 'Mads Berg',
+        player2_name: 'Anna Krogh', player2_name2: 'Ole Nielsen'
+    }), true);
+    assert.deepEqual(ens.navne, ['Anna J. / Mads', 'Anna K. / Ole']);
+    // Makker ikke udfyldt: kun fornavnet
+    assert.equal(ls.overlayTavle(gs({ player1_name: 'Ella Brink Sørensen' }), true).navne[0], 'Ella');
+    // Single: hele navnet, der er plads til det
+    assert.equal(ls.overlayTavle(gs({ player1_name: 'Konrad Lilholm Beltoft' }), false).navne[0], 'Konrad Lilholm Beltoft');
+});
+
 test('scoreboard: sæt som tal, stillingen, serven og banen — vendt som i 1. sæt', () => {
     const r = gs({
         player1_score: 3, player2_score: 4, serving_player: 1,

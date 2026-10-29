@@ -19,6 +19,8 @@ COPY backend/ ./
 COPY frontend/js/holdkamp-formater.js ./shared/holdkamp-formater.js
 # Logo-matcheren (TV, oversigt) — livestreamens overlay viser de samme logoer
 COPY frontend/js/logo-match.js ./shared/logo-match.js
+# Visningsnavnene (TV, oversigt) — double-navne i overlayet kortes af ens
+COPY frontend/js/name-display.js ./shared/name-display.js
 
 # Uploads og klubbernes automatiske backups (begge er volumes i docker-compose)
 RUN mkdir -p uploads club-backups && chmod 755 uploads && chmod 700 club-backups
