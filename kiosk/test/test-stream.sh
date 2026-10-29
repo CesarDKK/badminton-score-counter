@@ -276,7 +276,7 @@ kill "$MODTAGER_PID" 2>/dev/null
 SEND_VIDEO() { # video-JSON [logo-JSON] — en ny server med admins indstillinger
     svar "{\"kamera\":true,\"bane\":3,\"send\":true,\"grund\":\"kamp\",\"url\":\"rtmp://127.0.0.1:$RTMP_PORT/live2\",\"noegle\":\"$NOEGLE\",\"overlay\":true,\"linjer\":[\"A\",\"B\"],\"tavle\":$(TAVLE_JSON 5 3),\"video\":$1${2:+,\"logo\":$2}}"
 }
-vent_sender() { vent_paa "${1:-20}" sh -c "tail -n 1 '$TMP/status.jsonl' | grep -q '\"sender\": true'" || true; }
+vent_sender() { vent_paa 20 sh -c "tail -n 1 '$TMP/status.jsonl' | grep -q '\"sender\": true'" || true; }
 pixel() { # x y — RGBA i scoreboard-billedet
     python3 -c 'import sys; from PIL import Image; print(*Image.open(sys.argv[1]).getpixel((int(sys.argv[2]), int(sys.argv[3]))))' "$TMP/run/tavle.png" "$1" "$2"
 }
