@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="fonts.css?v=2">
     <link rel="stylesheet" href="fundament.css?v=2">
     <link rel="stylesheet" href="styles.css?v=11">
-    <link rel="stylesheet" href="super-admin-styles.css?v=12">
+    <link rel="stylesheet" href="super-admin-styles.css?v=13">
     <script src="js/theme-loader.js?v=15"></script>
 </head>
 <body>
@@ -178,6 +178,41 @@
                 <div id="logoList" style="margin-top:16px;">
                     <div class="empty-state"><div class="spinner"></div></div>
                 </div>
+            </div>
+
+            <!-- YouTube: Badmintonapps login-klient hos Google (fælles for alle klubber) -->
+            <div class="card" id="youtubeCard">
+                <div class="card-header">
+                    <span class="card-title">YouTube (livestream)</span>
+                </div>
+                <p class="yt-intro">Badmintonapps adgang til YouTube. Den sættes op én gang for hele serveren — bagefter forbinder hver klub sin egen kanal under Livestream i klubbens admin. Indtil den er sat op, ser klubberne ikke YouTube-delen.</p>
+                <div id="ytStatus" class="yt-status"></div>
+                <details id="ytVejledning" class="yt-vejledning">
+                    <summary>Hvor finder jeg Client ID og Client secret?</summary>
+                    <ol>
+                        <li>Gå til <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">console.cloud.google.com</a> og log ind med Badmintonapps Google-konto. Vælg projektet <strong>Badmintonapp</strong> i projektvælgeren øverst. (Findes det ikke endnu: følg trin 1–5 og 7 i vejledningen <code>docs/youtube-api-opsaetning.md</code> først.)</li>
+                        <li>Menuen ☰ → <strong>Google Auth Platform</strong> → <strong>Clients</strong> → <strong>Create client</strong>.</li>
+                        <li>Application type: <strong>Web application</strong>. Name: <code>Badmintonapp server</code>.</li>
+                        <li>Under <strong>Authorized redirect URIs</strong> → <strong>Add URI</strong>, indsæt præcis denne adresse:
+                            <div class="yt-kopi"><code id="ytTilbage"></code> <button type="button" id="ytKopierBtn" class="btn-secondary btn-sm">Kopiér</button></div></li>
+                        <li>Tryk <strong>Create</strong>. Google viser nu <strong>Client ID</strong> og <strong>Client secret</strong> — kopiér begge herned og tryk Gem. Secret'en vises kun den ene gang; er den væk, så åbn klienten under Clients og vælg <strong>Add secret</strong>.</li>
+                    </ol>
+                </details>
+                <div id="ytFelter" class="create-form" style="margin-top:14px;">
+                    <div class="form-group" style="margin-bottom:0">
+                        <label for="ytClientId">Client ID</label>
+                        <input type="text" id="ytClientId" placeholder="…apps.googleusercontent.com" autocomplete="off" spellcheck="false">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label for="ytClientSecret">Client secret</label>
+                        <input type="password" id="ytClientSecret" placeholder="GOCSPX-…" autocomplete="new-password" spellcheck="false">
+                    </div>
+                    <div class="yt-knapper">
+                        <button id="ytGemBtn" class="btn-primary">Gem</button>
+                        <button id="ytFjernBtn" class="btn-danger" style="display:none;">Fjern</button>
+                    </div>
+                </div>
+                <div id="ytMsg" class="msg" style="display:none;"></div>
             </div>
 
             </div><!-- /badmintonSection -->
@@ -364,10 +399,10 @@
         </div>
     </div>
 
-    <script src="js/api.js?v=35"></script>
+    <script src="js/api.js?v=36"></script>
     <script src="js/session-vagt.js?v=2"></script>
     <script src="js/logo-match.js?v=2"></script>
     <script src="js/ikoner.js?v=2"></script>
-    <script src="super-admin-script.js?v=28"></script>
+    <script src="super-admin-script.js?v=29"></script>
 </body>
 </html>

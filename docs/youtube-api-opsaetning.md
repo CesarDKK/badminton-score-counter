@@ -80,15 +80,19 @@ Under **Clients → Create client**:
 Én fælles adresse for alle klubber (Google tillader ikke `*.badmintonapp.dk`).
 Serveren sender klubbens admin tilbage til klubbens eget subdomæne bagefter.
 
-Efter **Create** vises **Client ID** og **Client secret**. De skal i prod-`.env`:
+Efter **Create** vises **Client ID** og **Client secret**. Secret'en vises kun
+den ene gang — er den væk, åbn klienten under Clients og vælg **Add secret**.
 
-```
-YOUTUBE_CLIENT_ID=...
-YOUTUBE_CLIENT_SECRET=...
-```
+Begge indtastes i **super-admin → YouTube (livestream)** → **Gem**. Serveren
+tjekker hos Google, at de hører sammen, og gemmer secret'en krypteret i
+master-databasen. Kortet har også en kort udgave af dette trin og en knap til at
+kopiere tilbage-adressen. Det er fælles for hele serveren — klubberne forbinder
+bagefter hver deres egen kanal.
 
-Secret'en må **ikke** sendes i chatten eller lægges i repoet — kun i prod-`.env`
-(som de andre secrets).
+(Alternativt kan de sættes som `YOUTUBE_CLIENT_ID` / `YOUTUBE_CLIENT_SECRET` i
+serverens `.env`; så går de forud, og super-admin viser dem kun.)
+
+Secret'en må **ikke** sendes i chatten eller lægges i repoet.
 
 ## 7. Test-brugere (Audience)
 
@@ -168,5 +172,6 @@ test, søges auditten her:
   streamen: fejlen står ved banen i admin, og der prøves igen efter 2 minutter.
 - Kun serveren ændres — TV-PC'erne sender som i dag, så der kræves ingen ny
   TV-USB-release. Deploy: backend + frontend (nginx-ruten `/youtube/callback` på
-  badmintonapp.dk) og `YOUTUBE_CLIENT_ID`/`YOUTUBE_CLIENT_SECRET` i `.env`. Uden de
-  to vises YouTube-delen slet ikke.
+  badmintonapp.dk). Client ID og Client secret indtastes bagefter i super-admin
+  (trin 6) — indtil da vises YouTube-delen slet ikke for klubberne. Fjernes de i
+  super-admin, sender banerne videre til en indtastet nøgle.

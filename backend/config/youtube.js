@@ -4,7 +4,9 @@
  * Klubben forbinder sin kanal én gang (admin → Livestream). Så kan serveren
  * oprette en udsendelse, hver gang en bane begynder at sende, og en fast
  * stream (nøgle) pr. bane. Se docs/youtube-api-opsaetning.md for opsætningen
- * hos Google (YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET i .env).
+ * hos Google. Login-klienten (Client ID + Client secret) indtastes i super-admin
+ * (config/youtubeKlient.js gemmer den i master-databasen) eller sættes som
+ * YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET i .env, som går forud.
  *
  * Adresserne kan peges om (YOUTUBE_*_URL) — det bruger testene til en falsk
  * Google-server.
@@ -21,7 +23,22 @@ const adresser = () => ({
     api: env('YOUTUBE_API_URL', 'https://www.googleapis.com/youtube/v3')
 });
 
-const konfigureret = () => !!(process.env.YOUTUBE_CLIENT_ID && process.env.YOUTUBE_CLIENT_SECRET);
+// Badmintonapps login-klient hos Google. .env går forud for den, super-admin har gemt.
+let _gemt = null; // { id, secret }
+function klient() {
+    if (process.env.YOUTUBE_CLIENT_ID && process.env.YOUTUBE_CLIENT_SECRET) {
+        return { id: process.env.YOUTUBE_CLIENT_ID, secret: process.env.YOUTUBE_CLIENT_SECRET, kilde: 'env' };
+    }
+    return _gemt ? { ..._gemt, kilde: 'admin' } : null;
+}
+const konfigureret = () => !!klient();
+
+// Den gemte klient (fra master-databasen) — null fjerner den. Klubbernes
+// adgangstokens hører til klienten, så de glemmes.
+function brugKlient(id, secret) {
+    _gemt = id && secret ? { id, secret } : null;
+    _adgang.clear();
+}
 
 // Den fælles adresse, Google sender klubben tilbage til (registreret hos Google)
 const tilbageAdresse = () => process.env.YOUTUBE_REDIRECT_URI ||
@@ -80,7 +97,7 @@ const api = (sti, params, opts = {}) =>
 
 function loginAdresse(state) {
     const q = new URLSearchParams({
-        client_id: process.env.YOUTUBE_CLIENT_ID,
+        client_id: klient().id,
         redirect_uri: tilbageAdresse(),
         response_type: 'code',
         scope: SCOPE,
@@ -97,7 +114,7 @@ function loginAdresse(state) {
 // Koden fra Google → { refresh_token, access_token, expires_in }
 async function byttKode(code) {
     const t = await kald(adresser().token, { method: 'POST', form: {
-        code, client_id: process.env.YOUTUBE_CLIENT_ID, client_secret: process.env.YOUTUBE_CLIENT_SECRET,
+        code, client_id: klient().id, client_secret: klient().secret,
         redirect_uri: tilbageAdresse(), grant_type: 'authorization_code'
     } });
     if (!t || !t.refresh_token) throw new YoutubeFejl('Google gav ingen varig adgang — prøv at forbinde igen');
@@ -111,14 +128,29 @@ async function adgangsToken(tenant, refresh) {
     const gemt = _adgang.get(tenant);
     if (gemt && gemt.refresh === refresh && gemt.udloeber - Date.now() > 60 * 1000) return gemt.token;
     const t = await kald(adresser().token, { method: 'POST', form: {
-        refresh_token: refresh, client_id: process.env.YOUTUBE_CLIENT_ID,
-        client_secret: process.env.YOUTUBE_CLIENT_SECRET, grant_type: 'refresh_token'
+        refresh_token: refresh, client_id: klient().id,
+        client_secret: klient().secret, grant_type: 'refresh_token'
     } });
     _adgang.set(tenant, { refresh, token: t.access_token, udloeber: Date.now() + (Number(t.expires_in) || 3600) * 1000 });
     return t.access_token;
 }
 
 const glemAdgang = (tenant) => _adgang.delete(tenant);
+
+// Kender Google klienten? Et kodebytte med en ugyldig kode afslører det:
+// invalid_client = forkert Client ID eller secret, alt andet = klienten findes.
+async function tjekKlient(id, secret) {
+    try {
+        await kald(adresser().token, { method: 'POST', form: {
+            code: 'badmintonapp-tjek', client_id: id, client_secret: secret,
+            redirect_uri: tilbageAdresse(), grant_type: 'authorization_code'
+        } });
+    } catch (e) {
+        if (e.grund === 'invalid_client' || e.grund === 'unauthorized_client') return false;
+        if (!e.status) throw e; // kunne ikke nå Google
+    }
+    return true;
+}
 
 async function tilbagekald(refresh) {
     await kald(adresser().revoke, { method: 'POST', form: { token: refresh } }).catch(() => {});
@@ -197,6 +229,6 @@ async function afslut(token, id) {
 }
 
 module.exports = {
-    SCOPE, YoutubeFejl, konfigureret, tilbageAdresse, loginAdresse, byttKode, adgangsToken, glemAdgang,
+    SCOPE, YoutubeFejl, konfigureret, klient, brugKlient, tjekKlient, tilbageAdresse, loginAdresse, byttKode, adgangsToken, glemAdgang,
     tilbagekald, kanal, opretStream, opretUdsendelse, udsendelsesStatus, gaaLive, afslut
 };

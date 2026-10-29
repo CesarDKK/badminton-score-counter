@@ -209,3 +209,32 @@ test('youtube: en udsendelse, der aldrig kom i gang, slettes — og en fejlet ko
     assert.deepEqual(kald.map(k => `${k.metode} ${k.sti.split('/').pop()}`),
         ['POST liveBroadcasts', 'POST bind', 'DELETE liveBroadcasts']);
 });
+
+test('youtube: nøgler fra super-admin bruges, når .env ingen har — .env går forud', () => {
+    const { YOUTUBE_CLIENT_ID: id, YOUTUBE_CLIENT_SECRET: secret } = process.env;
+    try {
+        delete process.env.YOUTUBE_CLIENT_ID;
+        delete process.env.YOUTUBE_CLIENT_SECRET;
+        youtube.brugKlient(null, null);
+        assert.equal(youtube.konfigureret(), false);
+        youtube.brugKlient('gemt.apps.googleusercontent.com', 'gemt-hemmelighed');
+        assert.deepEqual(youtube.klient(), { id: 'gemt.apps.googleusercontent.com', secret: 'gemt-hemmelighed', kilde: 'admin' });
+        assert.equal(new URL(youtube.loginAdresse('S')).searchParams.get('client_id'), 'gemt.apps.googleusercontent.com');
+        Object.assign(process.env, { YOUTUBE_CLIENT_ID: id, YOUTUBE_CLIENT_SECRET: secret });
+        assert.equal(youtube.klient().kilde, 'env');
+        assert.equal(youtube.klient().id, 'klient-id');
+    } finally {
+        Object.assign(process.env, { YOUTUBE_CLIENT_ID: id, YOUTUBE_CLIENT_SECRET: secret });
+        youtube.brugKlient(null, null);
+    }
+});
+
+test('youtube: tjekKlient — Google kender klienten (invalid_grant) eller ej (invalid_client)', async () => {
+    nulstil({ 'POST /token': (k) => k.body.client_secret === 'rigtig'
+        ? [400, { error: 'invalid_grant', error_description: 'Malformed auth code.' }]
+        : [401, { error: 'invalid_client', error_description: 'Unauthorized' }] });
+    assert.equal(await youtube.tjekKlient('x.apps.googleusercontent.com', 'rigtig'), true);
+    assert.equal(await youtube.tjekKlient('x.apps.googleusercontent.com', 'forkert'), false);
+    assert.equal(kald[0].body.grant_type, 'authorization_code');
+    assert.equal(kald[0].body.redirect_uri, 'https://badmintonapp.dk/youtube/callback');
+});

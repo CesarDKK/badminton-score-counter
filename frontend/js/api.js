@@ -1221,6 +1221,22 @@ class BadmintonAPI {
         return this.request('/super-admin/clubs');
     }
 
+    // YouTube-login-klienten (fælles for serveren) — secret'en kommer aldrig tilbage
+    async getSuperAdminYoutube() {
+        return this.request('/super-admin/youtube');
+    }
+
+    async saveSuperAdminYoutube(clientId, clientSecret) {
+        return this.request('/super-admin/youtube', {
+            method: 'PUT',
+            body: JSON.stringify({ clientId, clientSecret })
+        });
+    }
+
+    async removeSuperAdminYoutube() {
+        return this.request('/super-admin/youtube', { method: 'DELETE' });
+    }
+
     async createClub(name, subdomain) {
         return this.request('/super-admin/clubs', {
             method: 'POST',
