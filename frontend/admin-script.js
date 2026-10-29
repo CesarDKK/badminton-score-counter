@@ -32,9 +32,10 @@ async function initializeAdmin() {
             window.location.href = '/club-login.html';
             return;
         }
-        // Vis "Adgangslinks" knap kun til klub admins på klub-subdomains
+        // Vis "Adgangslinks" og "Livestream" kun til klub admins på klub-subdomains
         if (mode.mode === 'club' && api.isClubAdminSession()) {
             document.getElementById('deviceTokensBtn').style.display = 'inline-block';
+            document.getElementById('livestreamBtn').style.display = 'inline-block';
         }
     } catch {}
 
@@ -59,6 +60,7 @@ function setupEventListeners() {
 
     // Device Tokens
     document.getElementById('deviceTokensBtn').addEventListener('click', showDeviceTokens);
+    document.getElementById('livestreamBtn').addEventListener('click', showLivestream);
     document.getElementById('createDtBtn').addEventListener('click', handleCreateDeviceToken);
 
     // Badmintonplanner
@@ -235,6 +237,8 @@ async function showDashboard() {
             await showMatchHistory();
         } else if (hash === '#device-tokens' && canAccess('devicetokens')) {
             showDeviceTokens();
+        } else if (hash === '#livestream' && canAccess('devicetokens')) {
+            showLivestream();
         }
     } catch (error) {
         console.error('Failed to load dashboard:', error);
@@ -1048,7 +1052,7 @@ function hideAllSections() {
     stopTournamentRefresh();
     stopAutoRefresh();
 
-    ['courtOverviewSection', 'holdkampSection', 'tournamentSection', 'matchHistorySection', 'deviceTokensSection', 'plannerSection']
+    ['courtOverviewSection', 'holdkampSection', 'tournamentSection', 'matchHistorySection', 'deviceTokensSection', 'livestreamSection', 'plannerSection']
         .forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
@@ -1063,6 +1067,7 @@ function showCourtOverview() {
     const tournamentSection = document.getElementById('tournamentSection');
     if (tournamentSection) tournamentSection.style.display = 'none';
     document.getElementById('deviceTokensSection').style.display = 'none';
+    document.getElementById('livestreamSection').style.display = 'none';
     const plannerSection = document.getElementById('plannerSection');
     if (plannerSection) plannerSection.style.display = 'none';
     document.getElementById('courtOverviewSection').style.display = 'block';
@@ -2867,7 +2872,6 @@ async function loadDeviceTokens() {
     try {
         const tokens = await api.getDeviceTokens();
         renderDeviceTokens(tokens);
-        await loadLivestream();
         await loadSkaermLog();
         await refreshSkaermStatus();
         startSkaermStatusRefresh();
@@ -2892,7 +2896,6 @@ function startSkaermStatusRefresh() {
         // Hændelsesloggen hvert minut, statussen hvert 15. sekund
         if (++skaermStatusTik % 4 === 0) await loadSkaermLog();
         refreshSkaermStatus();
-        refreshLivestreamStatus();
     }, 15000);
 }
 
@@ -2900,12 +2903,36 @@ function startSkaermStatusRefresh() {
 // Nøglen vises aldrig igen, når den er gemt — kun de sidste 4 tegn
 let _livestream = null;
 let _livestreamBaner = 0;
+let livestreamInterval = null;
+
+async function showLivestream() {
+    hideAllSections();
+    document.getElementById('livestreamSection').style.display = 'block';
+    setNavActive('livestream');
+    history.replaceState(null, '', '#livestream');
+    document.getElementById('livestreamBox').innerHTML = '<p class="tom-besked tom-besked--lille">Indlæser...</p>';
+    await loadLivestream();
+    // Statussen hvert 10. sekund — stopper af sig selv, når siden er skiftet væk
+    if (livestreamInterval) clearInterval(livestreamInterval);
+    livestreamInterval = setInterval(() => {
+        if (document.getElementById('livestreamSection').style.display === 'none') {
+            clearInterval(livestreamInterval);
+            livestreamInterval = null;
+            return;
+        }
+        refreshLivestreamStatus();
+    }, 10000);
+}
 
 async function loadLivestream() {
     try {
         _livestream = await api.getLivestream();
         _livestreamBaner = (await api.getSettings()).courtCount || 4;
-    } catch { return; } // bonus — siden virker uden
+    } catch (e) {
+        document.getElementById('livestreamBox').innerHTML =
+            `<p class="tom-besked tom-besked--lille">Kunne ikke hente livestream: ${escapeHtml(e.message)}</p>`;
+        return;
+    }
     renderLivestream();
 }
 
@@ -2916,11 +2943,17 @@ async function refreshLivestreamStatus() {
     document.querySelectorAll('.ls-status').forEach(el => {
         el.innerHTML = livestreamStatusHtml(Number(el.dataset.bane));
     });
+    // … og om banen er startet (tabletten kan have startet den imens)
+    document.querySelectorAll('.ls-start').forEach(el => {
+        const b = _livestream.baner.find(x => x.bane === Number(el.dataset.bane));
+        if (b) el.innerHTML = livestreamStartHtml(b);
+    });
 }
 
 const LS_GRUND = {
     'ingen-kamp': 'Klar — venter på en kamp',
     'afsluttet': 'Klar — venter på næste kamp',
+    'ikke-startet': 'Klar — kampen er ikke startet på tabletten (kun holdkampe sendes af sig selv)',
     'slaaet-fra': 'Klar — livestream er slået fra for banen',
     'mangler-noegle': 'Mangler stream-nøgle',
     'badmintonplanner': 'Badmintonplanner-kamp — sendes ikke',
@@ -2942,6 +2975,41 @@ function livestreamStatusHtml(bane) {
         return `<span class="maerke maerke--igang">● Sender</span> <span class="tekst-daempet">siden kl. ${siden} · ${escapeHtml(s.kamera)}${s.koder === 'x264' ? ' · kodet på CPU\'en' : ''}</span>`;
     }
     return `<span class="tekst-daempet">${escapeHtml(LS_GRUND[s.grund] || 'Klar')} · ${escapeHtml(s.kamera)}</span>`;
+}
+
+// "Send hele dagen" (en turnering), eller hvad tabletten har startet
+function livestreamStartHtml(b) {
+    if (!b.enabled || !b.noegle) return '';
+    const kl = (iso) => new Date(iso).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
+    const stop = `<button class="btn-danger btn-sm" onclick="stopLivestreamBane(${b.bane})">Stop</button>`;
+    if (b.start === 'hele-dagen') {
+        return `<span class="maerke maerke--igang">Sendes hele dagen</span>
+            <span class="tekst-mindre tekst-daempet">også mellem kampene, til kl. ${kl(b.til)}</span>${stop}`;
+    }
+    if (b.start === 'valgt') return `<span class="tekst-mindre tekst-daempet">Startet på tabletten — kampen på banen sendes</span>${stop}`;
+    if (b.start === 'klar') return `<span class="tekst-mindre tekst-daempet">Startet på tabletten — den næste kamp sendes, hvis den starter inden kl. ${kl(b.til)}</span>${stop}`;
+    return `<button class="btn-secondary btn-sm" onclick="startLivestreamHeleDagen(${b.bane})">Send hele dagen</button>
+        <span class="tekst-mindre tekst-daempet">fx til en turnering: alt på banen, også mellem kampene, til TV-PC'en slukker kl. 23:59</span>`;
+}
+
+async function startLivestreamHeleDagen(bane) {
+    try {
+        await api.request(`/livestream/baner/${bane}/hele-dagen`, { method: 'POST' });
+    } catch (e) {
+        livestreamBesked(bane, e.message, true);
+        return;
+    }
+    await loadLivestream();
+}
+
+async function stopLivestreamBane(bane) {
+    try {
+        await api.request(`/livestream/baner/${bane}/hele-dagen`, { method: 'DELETE' });
+    } catch (e) {
+        livestreamBesked(bane, e.message, true);
+        return;
+    }
+    await loadLivestream();
 }
 
 function renderLivestream() {
@@ -2979,25 +3047,19 @@ function renderLivestream() {
                        <button class="btn-danger btn-sm" onclick="fjernLivestreamNoegle(${b.bane})">Fjern nøglen</button>`
                     : `<span class="maerke maerke--afventer">Ingen nøgle</span>`}
             </div>
+            <div class="ls-start" data-bane="${b.bane}">${livestreamStartHtml(b)}</div>
             <div class="ls-besked tekst-mindre" hidden></div>
         </div>`).join('');
 
-    const aaben = boks.querySelector('details.dt-gruppe')?.open ?? dtGruppeAaben('livestream');
     boks.innerHTML = `
-        <details class="dt-gruppe" data-gruppe="livestream"${aaben ? ' open' : ''}>
-            <summary>
-                <span class="dt-gruppe-titel">Livestream</span>
-                <span class="dt-gruppe-antal">${til ? `${til} ${til === 1 ? 'bane' : 'baner'} slået til` : 'Ingen baner slået til'}</span>
-            </summary>
-            <div class="dt-gruppe-indhold">
-                <p class="tekst-mindre tekst-daempet ls-intro">
-                    Et USB-kamera i TV-PC'en sender banen til YouTube — fra kampen sættes på banen, til 2 minutter efter den er afgjort.
-                    Badmintonplanner-kampe sendes ikke. Stream-nøglen finder du i YouTube Studio → Gå live → Stream. Én nøgle pr. bane.
-                </p>
-                ${raekker}
-            </div>
-        </details>`;
-    boks.querySelector('details.dt-gruppe').addEventListener('toggle', (e) => saetDtGruppeAaben('livestream', e.target.open));
+        <p class="tekst-mindre tekst-daempet ls-intro">
+            Et USB-kamera i TV-PC'en sender banen til YouTube. Holdkampe sendes af sig selv — uden afbrydelser, fra første delkamp
+            sættes på banen, til 2 minutter efter den sidste delkamp er afgjort.
+            Andre kampe startes på tabletten (Indstillinger → Start livestream) — én kamp ad gangen — eller her med "Send hele dagen".
+            Badmintonplanner-kampe sendes ikke. Stream-nøglen finder du i YouTube Studio → Gå live → Stream. Én nøgle pr. bane.
+        </p>
+        <p class="tekst-mindre ls-intro">${til ? `${til} ${til === 1 ? 'bane' : 'baner'} slået til` : 'Ingen baner slået til endnu'}</p>
+        ${raekker}`;
 }
 
 function livestreamBesked(bane, tekst, fejl = false) {

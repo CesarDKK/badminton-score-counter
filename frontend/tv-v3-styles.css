@@ -282,6 +282,74 @@ body::before {
     white-space: nowrap;
 }
 
+/* =================== LIVESTREAM =================== */
+/* Mens banens TV-PC sender kameraet (body.tv-live): rød ramme om hele
+   skærmen og LIVE ved uret. Rammen ligger oven på alt (også sponsorskærmen)
+   men under QR-boksen og tager ingen plads — banneret i bunden står, hvor det
+   står. Uden header (sponsorskærm mellem kampene, body.tv-uden-top) hænger
+   LIVE som en fane i rammens øverste højre hjørne. */
+.tv-live-ramme,
+.tv-live-maerke,
+.tv-live-fane {
+    display: none;
+}
+
+body.tv-live .tv-live-ramme {
+    display: block;
+    position: fixed;
+    inset: 0;
+    border: 0.6vh solid var(--color-accent);
+    pointer-events: none;
+    z-index: 9000;
+}
+
+body.tv-live .tv-live-maerke {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    margin-right: 0.6em;
+    padding: 0.12em 0.45em 0.06em;
+    font-size: 0.5em;
+    letter-spacing: 3px;
+    color: #ffffff;
+    background: var(--color-accent);
+    border-radius: 0.25em;
+    vertical-align: middle;
+    position: relative;
+    top: -0.12em;
+}
+
+body.tv-live.tv-uden-top .tv-live-fane {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    position: fixed;
+    top: 0;
+    right: 3vh;
+    z-index: 9001;
+    padding: 0.35em 0.8em 0.45em;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 3.4vh;
+    letter-spacing: 3px;
+    color: #ffffff;
+    background: var(--color-accent);
+    border-radius: 0 0 0.5em 0.5em;
+}
+
+/* Prikken blinker langsomt — som "on air" */
+.tv-live-prik {
+    width: 0.55em;
+    height: 0.55em;
+    border-radius: 50%;
+    background: #ffffff;
+    animation: tv-live-puls 1.6s ease-in-out infinite;
+}
+
+@keyframes tv-live-puls {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.25; }
+}
+
 /* =================== SCOREBOARD =================== */
 .scoreboard {
     flex: 1;

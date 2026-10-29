@@ -12,6 +12,8 @@ const { varighedTekst } = require('../config/matchTiming');
 const { gemSidsteAfsluttedeKamp } = require('../config/banerydning');
 // Kun én tæller ad gangen pr. bane (se taeller/ejerskab.js og migration 031)
 const ejerskab = require('../taeller/ejerskab');
+// TV'ets LIVE-mærke: sender banens TV-PC kameraet lige nu?
+const { senderBane } = require('../screens/livestream');
 
 // Hvor længe (i minutter) et "last finished match" snapshot vises på TV efter Ryd bane
 const FINISHED_SNAPSHOT_TTL_MINUTES = 5;
@@ -303,6 +305,7 @@ router.get('/:courtId', async (req, res, next) => {
         if (!court) {
             return res.status(404).json({ error: 'Bane ikke fundet' });
         }
+        const livestream = senderBane(req.clubDbName || 'direct', parseInt(courtId, 10));
 
         // Get game state using the actual court id from database.
         // elapsed_seconds beregnes af databasen så starttid og "nu" måles
@@ -341,7 +344,8 @@ router.get('/:courtId', async (req, res, next) => {
                 betweenSets: false,
                 version: 0,
                 lastFinishedMatch,
-                planner: null
+                planner: null,
+                livestream
             });
         }
 
@@ -360,7 +364,8 @@ router.get('/:courtId', async (req, res, next) => {
         res.json({
             ...formatStateRow(gameState, court),
             lastFinishedMatch,
-            planner
+            planner,
+            livestream
         });
     } catch (error) {
         next(error);
@@ -937,6 +942,12 @@ router.delete('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), a
         try {
             await query('DELETE FROM planner_court_assignments WHERE court_number = ?', [parseInt(courtId, 10)]);
         } catch (e) { /* tabellen findes først efter migration 027 */ }
+
+        // Livestream: kampen, der blev startet på tabletten, er væk — den næste
+        // sendes ikke (et "Start livestream" lige før Ryd banen gælder stadig)
+        try {
+            await query('UPDATE court_streams SET manual_since = NULL WHERE court_number = ?', [parseInt(courtId, 10)]);
+        } catch (e) { /* kolonnen findes først efter migration 034 */ }
 
         // Invalidér eventuelle aktive QR-tokens — næste TV-request genererer en ny
         try { await invalidateCourtTokens(parseInt(courtId, 10)); } catch (e) { console.error('Token invalidation failed:', e); }

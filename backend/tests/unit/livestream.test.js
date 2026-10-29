@@ -54,9 +54,78 @@ test('sendes ikke: slået fra, uden nøgle, badmintonplanner eller ingen kamp', 
     assert.equal(ls.beslutning({ opsaetning: OPS, gs: null, sidste: null, nu: NU }).grund, 'ingen-kamp');
 });
 
-test('sendes fra kampen sættes på banen — navne er nok, før første point', () => {
-    assert.deepEqual(ls.beslutning({ opsaetning: OPS, gs: gs(), nu: NU }), { send: true, grund: 'kamp', kilde: 'gs' });
-    assert.ok(ls.beslutning({ opsaetning: OPS, gs: gs({ player1_name: 'Spiller 1', player2_name: 'Spiller 2', player2_score: 1 }), nu: NU }).send);
+test('holdkampe sendes af sig selv — uden afbrydelser mellem delkampene', () => {
+    const iGang = { mangler: 5, igang: 1, slut: null, start: new Date(NU - 10 * MIN) };
+    assert.deepEqual(ls.beslutning({ opsaetning: OPS, gs: gs(), holdkamp: iGang, nu: NU }), { send: true, grund: 'holdkamp', kilde: 'gs' });
+    // Mellem delkampene: banen er ryddet, ingen delkamp i gang — der sendes stadig
+    const pause = { mangler: 3, igang: 0, slut: new Date(NU - 8 * MIN), start: new Date(NU - 40 * MIN) };
+    assert.deepEqual(ls.beslutning({ opsaetning: OPS, gs: null, sidste: null, holdkamp: pause, nu: NU }),
+        { send: true, grund: 'holdkamp', kilde: null });
+    // … også mens den afgjorte delkamp står på banen
+    const afgjort = gs({ player1_games: 2, match_completed: 1, match_end_time: new Date(NU - 8 * MIN) });
+    assert.equal(ls.beslutning({ opsaetning: OPS, gs: afgjort, holdkamp: pause, nu: NU }).kilde, 'gs');
+    // En holdkamp, ingen har rørt i 45 minutter, er forladt
+    const forladt = { mangler: 3, igang: 0, slut: new Date(NU - 50 * MIN), start: new Date(NU - 90 * MIN) };
+    assert.equal(ls.beslutning({ opsaetning: OPS, gs: null, holdkamp: forladt, nu: NU }).send, false);
+    // Alle delkampe færdige (den sidste måske på en anden bane): 2 minutter mere — hvis PC'en sender
+    const faerdig = { mangler: 0, igang: 0, slut: new Date(NU - MIN), start: new Date(NU - 30 * MIN) };
+    assert.deepEqual(ls.beslutning({ opsaetning: OPS, gs: null, holdkamp: faerdig, senderNu: true, nu: NU }),
+        { send: true, grund: 'afgjort', kilde: null });
+    assert.equal(ls.beslutning({ opsaetning: OPS, gs: null, holdkamp: faerdig, senderNu: false, nu: NU }).send, false);
+    assert.equal(ls.beslutning({ opsaetning: OPS, gs: null, holdkamp: { ...faerdig, slut: new Date(NU - 3 * MIN) },
+        senderNu: true, nu: NU }).send, false);
+    // Andre kampe kun, når de er startet med en knap
+    assert.deepEqual(ls.beslutning({ opsaetning: OPS, gs: gs({ player1_score: 5 }), nu: NU }), { send: false, grund: 'ikke-startet' });
+});
+
+test('tablettens "Start livestream": kampen på banen — og ikke den næste', () => {
+    const klar = { ...OPS, armed_until: new Date(NU + 4 * MIN) };
+    // Kampen på banen (eller den næste, der sættes på inden 5 minutter) bliver valgt
+    assert.deepEqual(ls.beslutning({ opsaetning: klar, gs: gs(), nu: NU }), { send: true, grund: 'valgt', kilde: 'gs', vaelg: true });
+    // Ingen kamp endnu: venter — og glemmes efter 5 minutter
+    assert.equal(ls.beslutning({ opsaetning: klar, gs: null, nu: NU }).send, false);
+    assert.equal(ls.beslutning({ opsaetning: { ...OPS, armed_until: new Date(NU - 1) }, gs: gs(), nu: NU }).grund, 'ikke-startet');
+    // Den valgte kamp sendes, til den er afgjort (+ 2 minutter) …
+    const valgt = { ...OPS, manual_since: new Date(NU - 30 * MIN) };
+    assert.deepEqual(ls.beslutning({ opsaetning: valgt, gs: gs({ player1_score: 9 }), nu: NU }), { send: true, grund: 'valgt', kilde: 'gs' });
+    const afgjort = gs({ player1_games: 2, match_completed: 1, match_end_time: new Date(NU - MIN) });
+    assert.deepEqual(ls.beslutning({ opsaetning: valgt, gs: afgjort, senderNu: true, nu: NU }),
+        { send: true, grund: 'afgjort', kilde: 'gs', glem: true });
+    // … og så glemmes den, så den næste kamp ikke sendes
+    assert.equal(ls.beslutning({ opsaetning: valgt, gs: null, nu: NU }).glem, true);
+    // En valgt kamp, der aldrig blev afgjort, glemmes efter 4 timer
+    assert.equal(ls.beslutning({ opsaetning: { ...OPS, manual_since: new Date(NU - 5 * 60 * MIN) }, gs: gs(), nu: NU }).grund, 'ikke-startet');
+    // Badmintonplanner-kampe sendes heller ikke med knappen
+    assert.equal(ls.beslutning({ opsaetning: klar, gs: gs(), planner: { court_number: 3 }, nu: NU }).grund, 'badmintonplanner');
+});
+
+test('hele dagen (admin): alt sendes, også mellem kampene — scoreboardet tomt uden kamp', () => {
+    const dag = { ...OPS, all_day_until: new Date(NU + 60 * MIN) };
+    assert.deepEqual(ls.beslutning({ opsaetning: dag, gs: gs(), nu: NU }), { send: true, grund: 'hele-dagen', kilde: 'gs' });
+    assert.deepEqual(ls.beslutning({ opsaetning: dag, gs: null, sidste: null, nu: NU }), { send: true, grund: 'hele-dagen', kilde: null });
+    // Den ryddede kamp står i billedet i 5 minutter, som på TV'et
+    const sidste = { match_end_time: new Date(NU - 2 * MIN) };
+    assert.equal(ls.beslutning({ opsaetning: dag, gs: null, sidste, nu: NU }).kilde, 'sidste');
+    assert.equal(ls.beslutning({ opsaetning: dag, gs: null, sidste: { match_end_time: new Date(NU - 6 * MIN) }, nu: NU }).kilde, null);
+    // Udløbet (dagen er gået): så er det de almindelige regler igen
+    assert.equal(ls.beslutning({ opsaetning: { ...OPS, all_day_until: new Date(NU - 1) }, gs: gs(), nu: NU }).grund, 'ikke-startet');
+});
+
+test('tabletten: knappen kun når banen er sat op med nøgle og kamera', () => {
+    assert.equal(ls.tabletStatus({ opsaetning: OPS, kamera: false, nu: NU }).kan, false);
+    assert.equal(ls.tabletStatus({ opsaetning: { ...OPS, enabled: 0 }, kamera: true, nu: NU }).kan, false);
+    assert.deepEqual(ls.tabletStatus({ opsaetning: { ...OPS, armed_until: new Date(NU + MIN) }, kamera: true,
+        pc: { online: true, sender: false }, nu: NU }),
+        { kan: true, start: 'klar', til: new Date(NU + MIN).toISOString(), holdkamp: false, planner: false, sender: false });
+});
+
+test('hele dagen slutter kl. 23:59 dansk tid — sommer- og vintertid', () => {
+    // 29. oktober 2026 kl. 10 dansk vintertid (UTC+1) → 22:59 UTC
+    assert.equal(new Date(ls.dagensSlut(Date.UTC(2026, 9, 29, 9))).toISOString(), '2026-10-29T22:59:00.000Z');
+    // 15. juni kl. 10 dansk sommertid (UTC+2) → 21:59 UTC
+    assert.equal(new Date(ls.dagensSlut(Date.UTC(2026, 5, 15, 8))).toISOString(), '2026-06-15T21:59:00.000Z');
+    // Lige efter midnat dansk tid (23:30 UTC den 28.) er det allerede den 29.
+    assert.equal(new Date(ls.dagensSlut(Date.UTC(2026, 9, 28, 23, 30))).toISOString(), '2026-10-29T22:59:00.000Z');
 });
 
 test('en kamp, ingen har rørt i 30 minutter, sendes ikke', () => {
@@ -132,4 +201,15 @@ test('status: PC\'ens oplysninger renses, og "sender siden" huskes', () => {
     assert.equal(ls.statusFor('t-test', NU + 3 * MIN)[7].online, false);
     ls.registrer('t-test', 7, { ...s, sender: false }, '1.2.3.4', NU + 6000);
     assert.equal(ls.statusFor('t-test', NU + 6000)[7].senderSiden, null);
+});
+
+test('TV\'ets LIVE-mærke: kun mens banens PC selv melder, at den sender', () => {
+    const s = ls.rensStatus({ navn: 'tv-bane2', kamera: 'C920', sender: true });
+    ls.registrer('t-live', 9, { ...s, bane: 2 }, null, NU);
+    assert.equal(ls.senderBane('t-live', 2, NU + 1000), true);
+    assert.equal(ls.senderBane('t-live', 3, NU + 1000), false);      // en anden bane
+    assert.equal(ls.senderBane('t-andenklub', 2, NU + 1000), false); // en anden klub
+    assert.equal(ls.senderBane('t-live', 2, NU + 2 * MIN), false);   // PC'en er væk
+    ls.registrer('t-live', 9, { ...s, sender: false, bane: 2 }, null, NU + 3000);
+    assert.equal(ls.senderBane('t-live', 2, NU + 4000), false);
 });

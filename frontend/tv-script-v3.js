@@ -510,6 +510,9 @@ async function loadCourtData() {
         _loadFailCount = 0;
         setTvConnectionLost(false);
 
+        // Livestream: banens TV-PC sender kameraet — rød ramme og LIVE (tv-v3-styles.css)
+        document.body.classList.toggle('tv-live', gameState.livestream === true);
+
         // Vis kampen paa TV saa snart navne er sat — selv foer is_active flippes,
         // saa holdkamp/turneringskamp/admin-redigering rammer skaermen straks.
         const hasRealPlayerNames =
@@ -1459,6 +1462,8 @@ function hideScoreboard() {
     if (scoreboard) scoreboard.style.display = 'none';
     if (header) header.style.display = 'none';
     if (footer) footer.style.display = 'none';
+    // Uden header hænger LIVE-mærket i rammens hjørne i stedet
+    document.body.classList.add('tv-uden-top');
 }
 
 function showScoreboard() {
@@ -1469,6 +1474,7 @@ function showScoreboard() {
     if (scoreboard) scoreboard.style.display = 'flex';
     if (header) header.style.display = 'flex';
     if (footer) footer.style.display = 'flex';
+    document.body.classList.remove('tv-uden-top');
 }
 
 function createSlideshowContainer() {

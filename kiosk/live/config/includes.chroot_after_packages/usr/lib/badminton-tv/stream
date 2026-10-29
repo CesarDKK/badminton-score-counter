@@ -5,7 +5,7 @@ RTMP-tjeneste) — kun mens der er en kamp på banen.
 Serveren bestemmer alt: PC'en spørger hvert par sekunder med sit adgangslink
 (TV_URL i kiosk.conf), og svaret siger, om der skal sendes, hvorhen, med hvilken
 nøgle, og hvad der står i overlayet (navne og stilling). Nøglen ligger kun på
-serveren (admin → Adgangslinks → Livestream) — aldrig på USB-nøglen.
+serveren (admin → Livestream) — aldrig på USB-nøglen.
 
   - ffmpeg læser kameraet som MJPEG 1280x720 @ 30 (alle Logitech-kameraer og
     de fleste andre UVC-kameraer kan det) og koder H.264 ~3,5 Mbit/s med
