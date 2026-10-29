@@ -1121,6 +1121,15 @@ class BadmintonAPI {
         return this.request('/livestream/logo', { method: 'DELETE' });
     }
 
+    // YouTube-kanalen: adressen til Googles login ({ url }), og fjern forbindelsen
+    async connectLivestreamYoutube() {
+        return this.request('/livestream/youtube/forbind', { method: 'POST' });
+    }
+
+    async disconnectLivestreamYoutube() {
+        return this.request('/livestream/youtube', { method: 'DELETE' });
+    }
+
     async setLivestreamCamera(tokenId, bane) {
         return this.request(`/livestream/kamera/${encodeURIComponent(tokenId)}`, {
             method: 'PUT',

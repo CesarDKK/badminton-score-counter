@@ -110,11 +110,12 @@ Googles godkendelse kræver:
   der lægges i DNS hos Cloudflare. (Er det allerede gjort for sitemap'en, er
   det klaret — det skal være samme Google-konto som projektets ejer, eller
   ejeren skal tilføjes i Search Console.)
-- **En privatlivspolitik** på `https://badmintonapp.dk/privatliv.html`, der siger,
-  hvad vi gør med YouTube-adgangen: opretter udsendelser og stream-nøgler på
-  klubbens kanal, gemmer adgangen krypteret, læser ikke andet, og at klubben
-  kan fjerne adgangen i admin og på <https://myaccount.google.com/permissions>.
-  Udkastet skriver jeg sammen med funktionen.
+- **En privatlivspolitik** på `https://badmintonapp.dk/privatliv.html` (ligger i
+  `marketing/privatliv.html`, linket fra forsidens bund — Google kræver begge).
+  Den siger, hvad vi gør med YouTube-adgangen, at vi følger Googles "Limited
+  Use"-krav, og linker til YouTubes servicevilkår og Googles privatlivspolitik
+  (kræves af YouTube API Services). **Læs den igennem, før den går i luften** —
+  den beskriver også klubbernes øvrige data.
 
 ## 9. Sæt appen i produktion og send den til godkendelse
 
@@ -147,17 +148,25 @@ test, søges auditten her:
 
 ---
 
-## Det, jeg bygger bagefter (besluttet 2026-10-29)
+## Sådan virker det (bygget 2026-10-29)
 
-- **Admin → Livestream → "Forbind YouTube-kanal"** (én kanal pr. klub). Adgangen
-  gemmes krypteret pr. klub og kan fjernes igen.
-- **Stream-nøglerne oprettes automatisk** pr. bane, når kanalen er forbundet. En
-  indsat nøgle (som i dag) bruges stadig som reserve, hvis kanalen ikke er forbundet.
+- **Admin → Livestream → "Forbind YouTube-kanal"** (én kanal pr. klub; kun på
+  klubbernes subdomæner, ikke demoen). Adgangen gemmes krypteret
+  (`config/hemmelig.js`, nøgle afledt af `JWT_SECRET` — skiftes den, skal
+  klubberne forbinde igen) og kan fjernes igen ("Fjern forbindelsen").
+- **Stream-nøglerne oprettes automatisk** pr. bane, første gang banen sender. En
+  indtastet nøgle bruges som reserve, hvis kanalen ikke virker.
 - **En ny udsendelse oprettes**, når banen skal sende — én pr. holdkamp, pr.
   "Send hele dagen" og pr. kamp startet på tabletten. Titel fx
-  "Bane 3: Lyngby 2 – Gentofte 2". Den går live af sig selv, når billedet kommer,
-  og afsluttes af sig selv, når PC'en stopper.
+  "Lyngby 2 – Gentofte 2 (bane 3, 29. okt. 2026)". Den går live af sig selv, når
+  billedet kommer, og afsluttes, når banen holder op (eller af YouTube ca. et
+  minut efter, at billedet er væk). Afsluttes den i YouTube Studio, mens banen
+  stadig sender, oprettes en ny inden for 5 minutter.
 - **Standarder:** offentlig, **lavet til børn** (chat og kommentarer fra). Begge
   kan ændres pr. klub i admin.
+- En fejl hos YouTube (fx kvote eller livestreaming ikke slået til) stopper aldrig
+  streamen: fejlen står ved banen i admin, og der prøves igen efter 2 minutter.
 - Kun serveren ændres — TV-PC'erne sender som i dag, så der kræves ingen ny
-  TV-USB-release.
+  TV-USB-release. Deploy: backend + frontend (nginx-ruten `/youtube/callback` på
+  badmintonapp.dk) og `YOUTUBE_CLIENT_ID`/`YOUTUBE_CLIENT_SECRET` i `.env`. Uden de
+  to vises YouTube-delen slet ikke.
