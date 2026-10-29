@@ -23,6 +23,7 @@
 // i routes/livestream.js.
 
 const LogoMatch = require('../config/logoMatch');
+const NameDisplay = require('../config/nameDisplay');
 
 const STANDARD_URL = 'rtmps://a.rtmps.youtube.com:443/live2';
 const EFTER_MS = 2 * 60 * 1000;
@@ -321,11 +322,18 @@ function parseSaet(raw) {
     try { return JSON.parse(raw) || []; } catch { return []; }
 }
 
-function sideNavn(navn, makker, standardMakker, double) {
-    const a = tekst(navn, 60);
-    const b = tekst(makker, 60);
-    const fuld = double && b && b !== standardMakker ? `${a} / ${b}` : a;
-    return fuld.length > NAVN_MAX ? fuld.slice(0, NAVN_MAX - 1) + '…' : fuld;
+// Navnet pr. side. Double: fornavne med forbogstav ved sammenfald — som TV'et
+// og oversigten (name-display.js) — så begge makkere kan stå der. Single: hele navnet.
+function sideNavne(rk, double) {
+    const makker = (n, std) => { const b = tekst(n, 60); return double && b && b !== std ? b : ''; };
+    const fulde = [tekst(rk.player1_name, 60), makker(rk.player1_name2, 'Makker 1'),
+        tekst(rk.player2_name, 60), makker(rk.player2_name2, 'Makker 2')];
+    const vis = double ? NameDisplay.visningsnavne(fulde) : fulde;
+    const side = (a, b) => {
+        const fuld = b ? `${a} / ${b}` : a;
+        return fuld.length > NAVN_MAX ? fuld.slice(0, NAVN_MAX - 1) + '…' : fuld;
+    };
+    return [side(vis[0], vis[1]), side(vis[2], vis[3])];
 }
 
 // Scoreboardet i billedet (PC'en tegner det): én række pr. side med navn,
@@ -336,8 +344,7 @@ function sideNavn(navn, makker, standardMakker, double) {
 // logoer: [player1-sidens, player2-sidens] klublogo (spillerLogoer) eller null.
 function overlayTavle(rk, double, bane = null, logoer = null) {
     if (!rk) return null;
-    const navne = [sideNavn(rk.player1_name, rk.player1_name2, 'Makker 1', double),
-        sideNavn(rk.player2_name, rk.player2_name2, 'Makker 2', double)];
+    const navne = sideNavne(rk, double);
     const historik = parseSaet(rk.set_scores_history);
     const saet = [];
     for (const s of historik) {
