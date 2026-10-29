@@ -31,10 +31,17 @@ const plannerPaaBane = (bane) => queryOne(
     `SELECT a.court_number FROM planner_court_assignments a
        JOIN planner_rounds r ON r.id = a.round_id WHERE a.court_number = ?`, [bane]);
 
-// En delkamp i en holdkamp står på banen — kun dem sendes af sig selv
-const holdkampPaaBane = async (bane) => !!await queryOne(
-    `SELECT g.id FROM team_match_games g JOIN team_matches tm ON tm.id = g.team_match_id
-      WHERE g.court_number = ? AND g.status = 'active' AND tm.status = 'active' LIMIT 1`, [bane]);
+// Den igangværende holdkamp, banen har haft en delkamp i — kun holdkampe
+// sendes af sig selv, og hele holdkampen i ét (se ls.holdkampNu). null: ingen
+const holdkampPaaBane = async (bane) => {
+    const r = await queryOne(
+        `SELECT SUM(g.status <> 'finished') AS mangler, SUM(g.status = 'active') AS igang,
+                MAX(g.finished_at) AS slut, MAX(g.started_at) AS start
+           FROM team_matches tm JOIN team_match_games g ON g.team_match_id = tm.id
+          WHERE tm.status = 'active'
+            AND tm.id IN (SELECT team_match_id FROM team_match_games WHERE court_number = ?)`, [bane]);
+    return r && r.mangler != null ? r : null;
+};
 
 // Tablettens og admins oversigt over én bane
 async function baneStatus(req, bane) {

@@ -60,6 +60,7 @@
                         <a href="player-info.html" class="btn-primary" data-page="playerinfo">Spillere</a>
                         <a href="sponsor.html" class="btn-primary" data-page="sponsors">Sponsorer</a>
                         <button id="deviceTokensBtn" class="btn-primary" data-section="deviceTokens" data-page="devicetokens" style="display:none;">Adgangslinks</button>
+                        <button id="livestreamBtn" class="btn-primary" data-section="livestream" data-page="devicetokens" style="display:none;">Livestream</button>
                         <button id="plannerBtn" class="btn-primary" data-section="planner" data-page="planner">Badmintonplanner</button>
                         <a href="settings.html" class="btn-primary" data-page="settings">Indstillinger</a>
                     </div>
@@ -366,11 +367,14 @@
                 <!-- Liste over tokens -->
                 <div id="deviceTokensList"></div>
 
-                <!-- Livestream fra TV-PC'ernes USB-kamera — udfyldes af renderLivestream() -->
-                <div id="livestreamBox" class="luft-over-12"></div>
-
                 <!-- Skærmenes hændelseslog (30 dage) — udfyldes af renderSkaermLog() -->
                 <div id="skaermLogBox" class="luft-over-12"></div>
+            </div>
+
+            <!-- Livestream fra TV-PC'ernes USB-kamera — udfyldes af renderLivestream() -->
+            <div id="livestreamSection" class="overview-section" style="display: none;">
+                <h2>Livestream <span class="tekst-daempet" style="font-family:'DM Sans';font-size:0.5em;font-weight:400;">USB-kamera i TV-PC'en → YouTube</span></h2>
+                <div id="livestreamBox"></div>
             </div>
 
             <!-- Badmintonplanner Section -->

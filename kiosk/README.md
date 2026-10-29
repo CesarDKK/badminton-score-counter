@@ -151,8 +151,9 @@ Systemet prøver automatisk og bruger CEC, hvis Linux finder det. Ellers:
 
 Sæt et USB-webkamera i TV-PC'en, så kan banen sendes til YouTube:
 
-- **Holdkampe** sendes af sig selv — fra delkampen sættes på banen, til 2
-  minutter efter den er afgjort.
+- **Holdkampe** sendes af sig selv og uden afbrydelser — fra første delkamp
+  sættes på banen, også mellem delkampene, til 2 minutter efter holdkampens
+  sidste delkamp er afgjort.
 - **Andre kampe** startes på tabletten: *Indstillinger → Start livestream*.
   Kampen på banen sendes, eller den næste, hvis den sættes på inden 5
   minutter — og kun den ene kamp.
@@ -160,7 +161,7 @@ Sæt et USB-webkamera i TV-PC'en, så kan banen sendes til YouTube:
   sendes, også mellem kampene, til PC'en slukker kl. 23:59.
 
 Badmintonplanner-kampe sendes aldrig. Alt indstilles i admin under
-**Adgangslinks → Livestream**:
+**Livestream**:
 
 1. **Kamera (TV-PC):** vælg adgangslinket til den PC, kameraet sidder i. Det
    er kameraets bane — også hvis TV'et senere skiftes til en anden bane.

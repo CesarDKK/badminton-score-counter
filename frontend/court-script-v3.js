@@ -637,7 +637,7 @@ async function livestreamKnap() {
     const l = livestream;
     if (!l) return;
     if (l.start === 'hele-dagen') {
-        showMessage('Livestream', 'Banen sendes hele dagen, også mellem kampene. Det er startet i admin under Adgangslinks → Livestream, og stoppes også der.');
+        showMessage('Livestream', 'Banen sendes hele dagen, også mellem kampene. Det er startet i admin under Livestream, og stoppes også der.');
         return;
     }
     if (l.holdkamp && !l.start) {

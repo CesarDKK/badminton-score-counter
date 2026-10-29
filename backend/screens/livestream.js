@@ -5,9 +5,12 @@
 // camera_court). PC'en spørger hvert par sekunder med sit adgangslink, og
 // serveren afgør, om der skal sendes — så reglen ligger ét sted:
 //
-//   - holdkampe sendes af sig selv, fra delkampen er sat på banen (rigtige
-//     navne eller første point), til 2 minutter efter den er afgjort — også
-//     hvis banen ryddes inden (sidste afsluttede kamp)
+//   - holdkampe sendes af sig selv og uden afbrydelser (Jespers valg
+//     2026-10-29): fra første delkamp sættes på banen, også mellem
+//     delkampene, til 2 minutter efter holdkampens sidste delkamp er afgjort
+//     — også når den sidste spilles på en anden bane
+//   - en afgjort kamp sendes 2 minutter mere — også hvis banen ryddes inden
+//     (sidste afsluttede kamp)
 //   - andre kampe kun, når nogen har trykket "Start livestream" på tabletten:
 //     kampen på banen, eller den næste, hvis den starter inden 5 minutter —
 //     og kun den ene kamp (Jespers valg 2026-10-29)
@@ -25,6 +28,7 @@ const STILLE_MS = 30 * 60 * 1000;
 const KLAR_MS = 5 * 60 * 1000;           // "Start livestream" venter så længe på en kamp
 const VALGT_MAX_MS = 4 * 60 * 60 * 1000; // en valgt kamp glemmes senest efter 4 timer
 const SIDSTE_MS = 5 * 60 * 1000;         // hele dagen: den sidste kamp i billedet så længe (som TV'et)
+const HOLDKAMP_PAUSE_MS = 45 * 60 * 1000; // holdkamp uden delkamp i gang så længe: forladt
 const NAVN_MAX = 26;
 
 const tekst = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, max);
@@ -120,34 +124,50 @@ function startet(o, nu = Date.now()) {
     return null;
 }
 
+// Holdkampen, banen er med i (routes: holdkampPaaBane): { mangler, igang,
+// slut, start } — delkampe der ikke er færdige, delkampe i gang, og hvornår
+// den seneste sluttede og startede. koerer: der er delkampe tilbage, og
+// holdkampen er ikke forladt; slut: alle delkampe er færdige, den sidste da
+function holdkampNu(h, nu = Date.now()) {
+    if (!h) return { koerer: false, slut: null };
+    if (Number(h.mangler) > 0) {
+        const sidst = Math.max(tid(h.slut) ?? 0, tid(h.start) ?? 0);
+        return { koerer: Number(h.igang) > 0 || nu - sidst < HOLDKAMP_PAUSE_MS, slut: null };
+    }
+    return { koerer: false, slut: tid(h.slut) };
+}
+
 // opsaetning: court_streams-rækken; gs: banens game_states-række; sidste:
 // last_finished_matches (banen er ryddet); planner: banen har en
-// badmintonplanner-tildeling; holdkamp: banens kamp er en delkamp i en
-// holdkamp; senderNu: PC'en sender allerede. De 2 minutter efter en afgjort
+// badmintonplanner-tildeling; holdkamp: holdkampen, banen er med i
+// (se holdkampNu); senderNu: PC'en sender allerede. De 2 minutter efter en afgjort
 // kamp er kun en forlængelse — en stream startes aldrig på en afgjort kamp
 // (fx en badmintonplanner-kamp, hvis tildeling forsvinder, når banen ryddes).
 // Returnerer { send, grund, kilde } — kilde: hvis kamp der står i billedet
 // ('gs', 'sidste' eller null). vaelg: tablettens "klar" bliver til kampen på
 // banen; glem: den valgte kamp er forbi, så den næste ikke sendes.
-function beslutning({ opsaetning, gs, sidste, planner, holdkamp = false, senderNu = false, nu = Date.now() }) {
+function beslutning({ opsaetning, gs, sidste, planner, holdkamp = null, senderNu = false, nu = Date.now() }) {
     if (!opsaetning || !opsaetning.enabled) return { send: false, grund: 'slaaet-fra' };
     if (!opsaetning.stream_key) return { send: false, grund: 'mangler-noegle' };
     if (planner) return { send: false, grund: 'badmintonplanner' };
     const k = kampNu(gs, sidste, nu);
     const s = startet(opsaetning, nu);
+    const hk = holdkampNu(holdkamp, nu);
     const glem = s && s.start === 'valgt' && k.tilstand !== 'kamp' ? { glem: true } : {};
+    // Sendes hele banen (også mellem kampene): kampen på banen i billedet,
+    // ellers den ryddede i 5 minutter, ellers et tomt scoreboard
+    const kilde = k.tilstand === 'kamp' || (k.tilstand === 'afgjort' && !k.ryddet) ? 'gs'
+        : k.tilstand === 'afgjort' && nu - k.slut < SIDSTE_MS ? 'sidste' : null;
 
-    if (s && s.start === 'hele-dagen') {
-        const kilde = k.tilstand === 'kamp' || (k.tilstand === 'afgjort' && !k.ryddet) ? 'gs'
-            : k.tilstand === 'afgjort' && nu - k.slut < SIDSTE_MS ? 'sidste' : null;
-        return { send: true, grund: 'hele-dagen', kilde, ...glem };
-    }
+    if (s && s.start === 'hele-dagen') return { send: true, grund: 'hele-dagen', kilde, ...glem };
+    if (hk.koerer) return { send: true, grund: 'holdkamp', kilde, ...glem };
     if (k.tilstand === 'kamp') {
-        if (holdkamp) return { send: true, grund: 'holdkamp', kilde: 'gs' };
         if (s && s.start === 'valgt') return { send: true, grund: 'valgt', kilde: 'gs' };
         if (s && s.start === 'klar') return { send: true, grund: 'valgt', kilde: 'gs', vaelg: true };
         return { send: false, grund: 'ikke-startet' };
     }
+    // Holdkampens sidste delkamp er afgjort — måske på en anden bane
+    if (hk.slut !== null && senderNu && nu - hk.slut < EFTER_MS) return { send: true, grund: 'afgjort', kilde, ...glem };
     if (k.tilstand === 'afgjort') {
         return senderNu && k.slut !== null && nu - k.slut < EFTER_MS
             ? { send: true, grund: 'afgjort', kilde: k.ryddet ? 'sidste' : 'gs', ...glem }
@@ -158,14 +178,14 @@ function beslutning({ opsaetning, gs, sidste, planner, holdkamp = false, senderN
 
 // Til tabletten: kan banen sendes, og hvad er startet? kamera: et adgangslink
 // har kameraet på banen; pc: dets status (statusFor)
-function tabletStatus({ opsaetning, kamera, pc, holdkamp = false, planner = false, nu = Date.now() }) {
+function tabletStatus({ opsaetning, kamera, pc, holdkamp = null, planner = false, nu = Date.now() }) {
     const kan = !!(opsaetning && opsaetning.enabled && opsaetning.stream_key && kamera);
     const s = kan ? startet(opsaetning, nu) : null;
     return {
         kan,
         start: s ? s.start : null,
         til: s && s.til ? new Date(s.til).toISOString() : null,
-        holdkamp: !!holdkamp,
+        holdkamp: holdkampNu(holdkamp, nu).koerer,
         planner: !!planner,
         sender: !!(pc && pc.online && pc.sender)
     };
@@ -289,6 +309,6 @@ function statusFor(tenant, nu = Date.now()) {
 module.exports = {
     STANDARD_URL, EFTER_MS, STILLE_MS, KLAR_MS,
     gyldigUrl, gyldigNoegle, rensOpsaetning, noegleSlut,
-    beslutning, startet, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,
+    beslutning, startet, holdkampNu, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,
     rensStatus, registrer, statusFor
 };
