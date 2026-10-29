@@ -10,6 +10,7 @@
 // sponsorbillederne peges ind i klubbens egen mappe (config/sponsorFiler.js).
 
 const { backupFilnavn, tilpasSponsorRaekker, hentSponsorFiler, skrivSponsorFiler } = require('./sponsorFiler');
+const { laesIndstillinger } = require('../screens/livestream');
 
 const BACKUP_VERSION = '1.0';
 
@@ -48,6 +49,14 @@ function normalizeValue(v) {
     return v;
 }
 
+// Klubbens logo i livestreamen (settings 'livestream', kun filnavnet) kommer med
+// som en sponsorfil, så det står i klubbens mappe igen efter en gendannelse
+function livestreamLogo(settings, mappe) {
+    const r = (settings || []).find(s => s.setting_key === 'livestream');
+    const fil = r && laesIndstillinger(r.setting_value).logo;
+    return fil ? [{ filename: `${mappe}/${fil}` }] : [];
+}
+
 // Klubbens data som backup-objekt. conn: en mysql2-forbindelse til klubbens
 // database (query giver [rows]); mappe: klubbens upload-mappe (db_name).
 async function lavBackup(conn, { mappe, clubSubdomain = null, clubName } = {}) {
@@ -61,8 +70,8 @@ async function lavBackup(conn, { mappe, clubSubdomain = null, clubName } = {}) {
         timestamp: new Date().toISOString(),
         clubSubdomain,
         tables,
-        // Sponsorbillederne som base64 — fra klubbens egen mappe
-        files: hentSponsorFiler(tables.sponsor_images, mappe),
+        // Sponsorbillederne og livestream-logoet som base64 — fra klubbens egen mappe
+        files: hentSponsorFiler([...tables.sponsor_images, ...livestreamLogo(tables.settings, mappe)], mappe),
     };
     if (clubName) backup.clubName = clubName;
     return backup;

@@ -2972,9 +2972,168 @@ function livestreamStatusHtml(bane) {
     if (s.fejl) return `<span class="maerke maerke--fare">Fejl</span> ${escapeHtml(s.fejl)}`;
     if (s.sender) {
         const siden = s.senderSiden ? new Date(s.senderSiden).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' }) : '';
-        return `<span class="maerke maerke--igang">● Sender</span> <span class="tekst-daempet">siden kl. ${siden} · ${escapeHtml(s.kamera)}${s.koder === 'x264' ? ' · kodet på CPU\'en' : ''}</span>`;
+        const b = _livestream.baner.find(x => x.bane === bane);
+        return `<span class="maerke maerke--igang">● Sender</span> <span class="tekst-daempet">siden kl. ${siden} · ${escapeHtml(s.kamera)}${livestreamFormatTekst(s.format)}${s.koder === 'x264' ? ' · kodet på CPU\'en' : ''}${b && b.lyd ? (s.mikrofon ? ' · med lyd' : ' · uden lyd (ingen mikrofon i kameraet)') : ''}</span>`;
     }
     return `<span class="tekst-daempet">${escapeHtml(LS_GRUND[s.grund] || 'Klar')} · ${escapeHtml(s.kamera)}</span>`;
+}
+
+// " · 1280×720, 30 billeder/s" — og hvorfor, hvis kameraet ikke kan det valgte.
+// format: det PC'en melder (nye Badminton TV-versioner), fx "1280x720@30"
+function livestreamFormatTekst(format) {
+    const m = /^(\d+)x(\d+)@(\d+)$/.exec(format || '');
+    if (!m) return '';
+    const i = _livestream.indstillinger;
+    const [h, fps] = [Number(m[2]), Number(m[3])];
+    const mangler = [h < i.oploesning ? `${i.oploesning}p` : '', fps < i.billeder ? `${i.billeder} billeder/s` : '']
+        .filter(Boolean).join(' eller ');
+    return ` · ${m[1]}×${h}, ${fps} billeder/s${mangler ? ` (kameraet kan ikke ${mangler})` : ''}`;
+}
+
+// Kvaliteten i Mbit/s for opløsning og billeder — samme tabel som TV-PC'en
+// (kiosk: stream, BITRATE). Vist i admin, så man kan se, hvad hallens net skal klare
+function livestreamMbit(oploesning, billeder, kvalitet) {
+    const normal = { 480: [1500, 2500], 720: [3500, 5000], 1080: [6000, 9000] }[oploesning] || [3500, 5000];
+    const kbit = normal[billeder > 30 ? 1 : 0] * ({ lav: 0.6, normal: 1, hoej: 1.5 }[kvalitet] || 1);
+    return Math.min(Math.round(kbit), 12000) / 1000;
+}
+
+const mbitTekst = (mbit) => mbit.toLocaleString('da-DK', { maximumFractionDigits: 1 });
+
+const LS_VALG = {
+    oploesning: [[480, '480p (854×480)'], [720, '720p (1280×720)'], [1080, '1080p (1920×1080)']],
+    billeder: [[25, '25'], [30, '30'], [50, '50'], [60, '60']],
+    kvalitet: [['lav', 'Lav'], ['normal', 'Normal'], ['hoej', 'Høj']],
+    placering: [['top-venstre', 'Øverst til venstre'], ['top-hoejre', 'Øverst til højre'],
+        ['bund-venstre', 'Nederst til venstre'], ['bund-hoejre', 'Nederst til højre']],
+    stoerrelse: [['lille', 'Lille'], ['normal', 'Normal'], ['stor', 'Stor']],
+    efterMin: Array.from({ length: 11 }, (_, n) => [n, n === 0 ? 'Stop med det samme' : `${n} min`])
+};
+
+function livestreamValg(felt, vaerdi) {
+    return `<select class="admin-input admin-input--sm" data-felt="${felt}" onchange="livestreamIndstillingAendret()">
+        ${LS_VALG[felt].map(([v, t]) => `<option value="${v}"${String(v) === String(vaerdi) ? ' selected' : ''}>${t}</option>`).join('')}
+    </select>`;
+}
+
+// Fælles for alle baner: billede, overlay, tid efter kampen og klubbens logo
+function livestreamIndstillingerHtml() {
+    const i = _livestream.indstillinger;
+    return `
+        <div class="ls-faelles">
+            <h3 class="ls-overskrift">Billede og overlay <span class="tekst-mindre tekst-daempet">— fælles for alle baner</span></h3>
+            <div class="ls-faelles-felter">
+                <label><span class="felt-etiket">Opløsning</span>${livestreamValg('oploesning', i.oploesning)}</label>
+                <label><span class="felt-etiket">Billeder i sekundet</span>${livestreamValg('billeder', i.billeder)}</label>
+                <label><span class="felt-etiket">Kvalitet</span>${livestreamValg('kvalitet', i.kvalitet)}</label>
+                <label><span class="felt-etiket">Overlay: placering</span>${livestreamValg('placering', i.placering)}</label>
+                <label><span class="felt-etiket">Overlay: størrelse</span>${livestreamValg('stoerrelse', i.stoerrelse)}</label>
+                <label><span class="felt-etiket">Efter kampen</span>${livestreamValg('efterMin', i.efterMin)}</label>
+            </div>
+            <p class="tekst-mindre tekst-daempet ls-hjaelp" id="lsFaellesHjaelp">${livestreamFaellesHjaelp(i)}</p>
+            ${livestreamKlubLogoHtml()}
+            <div class="ls-faelles-gem">
+                <button class="btn-primary btn-sm" onclick="gemLivestreamIndstillinger()">Gem</button>
+                <span class="ls-besked tekst-mindre" id="lsFaellesBesked" hidden></span>
+            </div>
+        </div>`;
+}
+
+// Klubbens logo: fra logo-databasen (klubnavnet) som standard — et uploadet vinder
+function livestreamKlubLogoHtml() {
+    const k = _livestream.klubLogo || {};
+    const db = k.database;
+    const vist = k.upload || (db && db.url);
+    const kilde = k.upload
+        ? `Eget logo${db ? ` — i stedet for "${escapeHtml(db.navn)}" fra logo-databasen` : ''}`
+        : db ? `Fra logo-databasen: ${escapeHtml(db.navn)}`
+        : `Intet logo i logo-databasen${k.klubnavn ? ` for ${escapeHtml(k.klubnavn)}` : ''} — upload klubbens eget`;
+    return `
+        <div class="ls-logo">
+            <span class="felt-etiket">Klubbens logo i streamen</span>
+            <div class="ls-logo-raekke">
+                ${vist ? `<img class="ls-logo-billede" src="${escapeHtml(vist)}" alt="Klubbens logo">` : ''}
+                <span class="tekst-mindre">${kilde}</span>
+                <label class="btn-secondary btn-sm ls-logo-vaelg">${k.upload ? 'Skift logo' : 'Upload et andet logo'}
+                    <input type="file" accept="image/png,image/jpeg,image/webp" hidden onchange="uploadLivestreamLogo(this)"></label>
+                ${k.upload ? `<button class="btn-danger btn-sm" onclick="fjernLivestreamLogo()">${db ? 'Brug logo-databasens igen' : 'Fjern'}</button>` : ''}
+            </div>
+            <span class="tekst-mindre tekst-daempet">Vælg "Klubbens logo" under den bane, det skal vises på. Et eget logo: PNG med gennemsigtig baggrund ser bedst ud.
+                Spillernes klublogoer står ud for navnene i scoreboardet, som på TV'et.</span>
+        </div>`;
+}
+
+function livestreamFaellesHjaelp(i) {
+    const baner = (_livestream?.baner || []).filter(b => b.enabled && b.bane <= _livestreamBaner).length || 1;
+    const mbit = livestreamMbit(Number(i.oploesning), Number(i.billeder), i.kvalitet);
+    return `Ca. ${mbitTekst(mbit)} Mbit/s upload pr. bane${baner > 1 ? ` — ${baner} baner på én gang kræver ca. ${mbitTekst(mbit * baner)} Mbit/s` : ''}.
+        Kan kameraet ikke det valgte, sender det det bedste, det kan — statussen ved banen viser, hvad der faktisk sendes.
+        Kræver den nye Badminton TV-version på TV-PC'en (kommer med den automatiske opdatering) — ældre sender 720p med 30 billeder/s.`;
+}
+
+function livestreamFaellesData() {
+    const data = {};
+    document.querySelectorAll('.ls-faelles select[data-felt]').forEach(s => { data[s.dataset.felt] = s.value; });
+    return data;
+}
+
+function livestreamIndstillingAendret() {
+    const el = document.getElementById('lsFaellesHjaelp');
+    if (el) el.innerHTML = livestreamFaellesHjaelp(livestreamFaellesData());
+}
+
+function livestreamFaellesBesked(tekst, fejl = false) {
+    const el = document.getElementById('lsFaellesBesked');
+    if (!el) return;
+    el.hidden = !tekst;
+    el.textContent = tekst || '';
+    el.classList.toggle('ls-besked--fejl', fejl);
+}
+
+async function gemLivestreamIndstillinger() {
+    const data = livestreamFaellesData();
+    data.efterMin = Number(data.efterMin);
+    try {
+        await api.saveLivestreamSettings(data);
+    } catch (e) {
+        livestreamFaellesBesked(e.message, true);
+        return;
+    }
+    await loadLivestream();
+    livestreamFaellesBesked('Gemt — TV-PC\'er, der sender nu, genstarter streamen med de nye indstillinger');
+    setTimeout(() => livestreamFaellesBesked(''), 5000);
+}
+
+async function uploadLivestreamLogo(input) {
+    const fil = input.files && input.files[0];
+    if (!fil) return;
+    try {
+        await api.uploadLivestreamLogo(fil);
+    } catch (e) {
+        livestreamFaellesBesked(e.message, true);
+        return;
+    }
+    await loadLivestream();
+    livestreamFaellesBesked('Logoet er gemt');
+    setTimeout(() => livestreamFaellesBesked(''), 3000);
+}
+
+async function fjernLivestreamLogo() {
+    const db = _livestream.klubLogo && _livestream.klubLogo.database;
+    if (!confirm(db ? `Fjern det uploadede logo og brug "${db.navn}" fra logo-databasen igen?` : 'Fjern klubbens logo fra streamen?')) return;
+    try {
+        await api.deleteLivestreamLogo();
+    } catch (e) {
+        livestreamFaellesBesked(e.message, true);
+        return;
+    }
+    await loadLivestream();
+}
+
+// Lyden fra kameraets mikrofon: musik i hallen kan give problemer med ophavsretten
+function livestreamLydAendret(input) {
+    const advarsel = input.closest('.ls-bane').querySelector('.ls-lyd-advarsel');
+    if (advarsel) advarsel.hidden = !input.checked;
 }
 
 // "Send hele dagen" (en turnering), eller hvad tabletten har startet
@@ -3017,6 +3176,8 @@ function renderLivestream() {
     if (!boks || !_livestream) return;
     const baner = _livestream.baner.filter(b => b.bane <= _livestreamBaner);
     const til = baner.filter(b => b.enabled).length;
+    // Foldede kamera-bokse forbliver åbne, når siden tegnes igen efter "Gem"
+    const aabne = new Set([...boks.querySelectorAll('.ls-kamera[open]')].map(d => d.closest('.ls-bane').dataset.bane));
     const kameraValg = (bane) => {
         const valgt = _livestream.kameraer.find(k => k.bane === bane);
         return `<select class="admin-input admin-input--sm" onchange="saetLivestreamKamera(${bane}, this.value)">
@@ -3047,19 +3208,49 @@ function renderLivestream() {
                        <button class="btn-danger btn-sm" onclick="fjernLivestreamNoegle(${b.bane})">Fjern nøglen</button>`
                     : `<span class="maerke maerke--afventer">Ingen nøgle</span>`}
             </div>
+            <details class="ls-kamera"${aabne.has(String(b.bane)) ? ' open' : ''}>
+                <summary class="tekst-mindre">Kameraet på banen${livestreamKameraResume(b)}</summary>
+                <div class="ls-kamera-felter">
+                    <label class="ls-flueben"><input type="checkbox" class="ls-vend"${b.vend ? ' checked' : ''}> Vend billedet 180°</label>
+                    <label class="ls-flueben"><input type="checkbox" class="ls-spejl"${b.spejl ? ' checked' : ''}> Spejlvend</label>
+                    <label class="ls-flueben"><input type="checkbox" class="ls-autofokus"${b.autofokus ? ' checked' : ''}> Autofokus</label>
+                    <label class="ls-flueben"><input type="checkbox" class="ls-lyd"${b.lyd ? ' checked' : ''} onchange="livestreamLydAendret(this)"> Lyd fra kameraets mikrofon</label>
+                    <label><span class="felt-etiket">Logo i hjørnet</span>
+                        <select class="admin-input admin-input--sm ls-logo-valg">
+                            <option value="ingen"${b.logo === 'ingen' ? ' selected' : ''}>Intet logo</option>
+                            <option value="sponsor"${b.logo === 'sponsor' ? ' selected' : ''}>Banens sponsor</option>
+                            <option value="klub"${b.logo === 'klub' ? ' selected' : ''}>Klubbens logo</option>
+                        </select></label>
+                </div>
+                <div class="advarsel-boks tekst-mindre ls-lyd-advarsel"${b.lyd ? '' : ' hidden'}>
+                    <strong>Pas på med musik i hallen.</strong> Spilles der musik (opvarmning, højttalere, en telefon), kan YouTube
+                    slå lyden fra eller blokere streamen på grund af ophavsretten til musikken. Slå kun lyden til, når der ikke spilles musik.
+                </div>
+                <p class="tekst-mindre tekst-daempet ls-hjaelp">Autofokus er fra som standard: det "pumper", når spillerne løber, så fast fokus på lang afstand er
+                    normalt skarpest. "Banens sponsor" er bane-bannerne fra Sponsorer — de skifter som på TV'et. Gem med knappen ovenfor.</p>
+            </details>
             <div class="ls-start" data-bane="${b.bane}">${livestreamStartHtml(b)}</div>
             <div class="ls-besked tekst-mindre" hidden></div>
         </div>`).join('');
 
+    const efter = _livestream.indstillinger.efterMin;
     boks.innerHTML = `
         <p class="tekst-mindre tekst-daempet ls-intro">
             Et USB-kamera i TV-PC'en sender banen til YouTube. Holdkampe sendes af sig selv — uden afbrydelser, fra første delkamp
-            sættes på banen, til 2 minutter efter den sidste delkamp er afgjort.
+            sættes på banen, til ${efter ? `${efter} ${efter === 1 ? 'minut' : 'minutter'} efter` : 'lige når'} den sidste delkamp er afgjort.
             Andre kampe startes på tabletten (Indstillinger → Start livestream) — én kamp ad gangen — eller her med "Send hele dagen".
             Badmintonplanner-kampe sendes ikke. Stream-nøglen finder du i YouTube Studio → Gå live → Stream. Én nøgle pr. bane.
         </p>
+        ${livestreamIndstillingerHtml()}
         <p class="tekst-mindre ls-intro">${til ? `${til} ${til === 1 ? 'bane' : 'baner'} slået til` : 'Ingen baner slået til endnu'}</p>
         ${raekker}`;
+}
+
+// Det, der er slået til for kameraet, i overskriften på den foldede boks
+function livestreamKameraResume(b) {
+    const dele = [b.vend && 'vendt 180°', b.spejl && 'spejlvendt', b.autofokus && 'autofokus', b.lyd && 'med lyd',
+        b.logo === 'sponsor' && 'sponsor-logo', b.logo === 'klub' && 'klublogo'].filter(Boolean);
+    return dele.length ? ` <span class="tekst-daempet">· ${dele.join(' · ')}</span>` : '';
 }
 
 function livestreamBesked(bane, tekst, fejl = false) {
@@ -3077,6 +3268,11 @@ async function gemLivestream(bane, ekstra = {}) {
         enabled: el.querySelector('.ls-til').checked,
         overlay: el.querySelector('.ls-overlay').checked,
         streamKey: el.querySelector('.ls-noegle').value.trim(),
+        vend: el.querySelector('.ls-vend').checked,
+        spejl: el.querySelector('.ls-spejl').checked,
+        autofokus: el.querySelector('.ls-autofokus').checked,
+        lyd: el.querySelector('.ls-lyd').checked,
+        logo: el.querySelector('.ls-logo-valg').value,
         ...ekstra
     };
     try {

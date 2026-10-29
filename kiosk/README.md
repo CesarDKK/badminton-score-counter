@@ -152,8 +152,8 @@ Systemet prøver automatisk og bruger CEC, hvis Linux finder det. Ellers:
 Sæt et USB-webkamera i TV-PC'en, så kan banen sendes til YouTube:
 
 - **Holdkampe** sendes af sig selv og uden afbrydelser — fra første delkamp
-  sættes på banen, også mellem delkampene, til 2 minutter efter holdkampens
-  sidste delkamp er afgjort.
+  sættes på banen, også mellem delkampene, til 2 minutter (kan sættes til
+  0–10 i admin) efter holdkampens sidste delkamp er afgjort.
 - **Andre kampe** startes på tabletten: *Indstillinger → Start livestream*.
   Kampen på banen sendes, eller den næste, hvis den sættes på inden 5
   minutter — og kun den ene kamp.
@@ -176,14 +176,48 @@ Badmintonplanner-kampe sendes aldrig. Alt indstilles i admin under
 Om streamen er offentlig, bestemmes i YouTube Studio: *Gå live* → *Stream* →
 *Rediger* → *Synlighed: Offentlig*. YouTube husker valget for nøglen.
 
-Admin viser, om PC'en sender, venter på en kamp, ikke finder kameraet, eller
-om YouTube afviser nøglen. Billedet er 1280x720 med 30 billeder i sekundet
-(~3,5 Mbit/s, ca. 1,6 GB i timen pr. bane), uden lyd fra hallen, med et
-scoreboard øverst til venstre (kan slås fra pr. bane): banen, navnene, sættene,
-stillingen og hvem der server — tegnet med Pillow (Inter og Bebas Neue).
-Kameraet stilles til 50 Hz og fast fokus på lang afstand.
+Admin viser, om PC'en sender (og i hvilken opløsning), venter på en kamp,
+ikke finder kameraet, eller om YouTube afviser nøglen. Et scoreboard (kan slås
+fra pr. bane) viser banen, navnene med klublogoer (de samme som på TV'et:
+holdenes i en holdkamp, ellers spillernes klubber), sættene, stillingen og
+hvem der server — tegnet med Pillow (Inter og Bebas Neue).
 
-Kameraet skal kunne sende MJPEG i 1280x720 — det kan alle Logitech-kameraer.
+**Billede og overlay** (fælles for alle baner, i admin):
+
+| Indstilling | Valg | Standard |
+|---|---|---|
+| Opløsning | 480p, 720p, 1080p | 720p |
+| Billeder i sekundet | 25, 30, 50, 60 | 30 |
+| Kvalitet | lav, normal, høj (fx 720p @ 30: 2,1 / 3,5 / 5,3 Mbit/s) | normal |
+| Overlay: placering | de fire hjørner | øverst til venstre |
+| Overlay: størrelse | lille, normal, stor | normal |
+| Efter kampen | 0–10 minutter | 2 min |
+| Klubbens logo | klubbens eget fra logo-databasen, eller et uploadet (vinder) | logo-databasens |
+
+Kan kameraet ikke det valgte, sender det det bedste, det kan derunder
+(`v4l2-ctl --list-formats-ext`): opløsningen går forud for billederne, så
+1080p @ 60 bliver 1080p @ 30 på et kamera, der kun kan 60 i 720p. Har kameraet
+ikke opløsningen, men en større, skaleres den ned. Admin viser, hvad der
+faktisk sendes.
+
+**Kameraet på banen** (pr. bane): vend billedet 180° (kameraet hænger på
+hovedet), spejlvend, autofokus (fra som standard — fast fokus på lang afstand
+er skarpest, autofokus "pumper", når spillerne løber), lyd fra kameraets
+mikrofon, og logo i hjørnet: intet, banens sponsor (bane-bannerne, de skifter
+som på TV'et) eller klubbens logo. Logoet står i den modsatte side af
+scoreboardet.
+
+Lyden tages kun fra mikrofonen i selve kameraet (samme USB-enhed), aldrig fra
+en anden mikrofon. Uden lyd sendes et lydløst lydspor (YouTube vil have lyd).
+Kan mikrofonen ikke åbnes, sendes der uden lyd i stedet for slet ikke. **Musik
+i hallen** kan få YouTube til at slå lyden fra eller blokere streamen pga.
+ophavsret — admin advarer, når lyden slås til.
+
+Kameraet stilles altid til 50 Hz. Indstillingerne kræver Badminton TV fra
+denne version — ældre versioner sender 1280x720 @ 30 uden lyd som før.
+
+Kameraet skal kunne sende MJPEG — det kan alle Logitech-kameraer (C920:
+1080p @ 30, 720p @ 30).
 Til 4 m bag banen skal synsvinklen være mindst ~90° diagonalt (fx Logitech
 C930e eller Brio 505). Et USB-kabel længere end 3–5 m skal være aktivt.
 
