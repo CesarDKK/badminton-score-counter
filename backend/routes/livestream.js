@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
+const { ikkeQrSession } = require('../middleware/qrSession');
 const { clubAdminAuth } = require('../middleware/clubAdminAuth');
 const { requirePage } = require('../middleware/pagePermission');
 const { klientIp } = require('../middleware/rateLimiter');
@@ -26,6 +27,29 @@ const baneNr = (v) => {
     return Number.isInteger(n) && n >= 1 && n <= 20 ? n : null;
 };
 
+const plannerPaaBane = (bane) => queryOne(
+    `SELECT a.court_number FROM planner_court_assignments a
+       JOIN planner_rounds r ON r.id = a.round_id WHERE a.court_number = ?`, [bane]);
+
+// En delkamp i en holdkamp står på banen — kun dem sendes af sig selv
+const holdkampPaaBane = async (bane) => !!await queryOne(
+    `SELECT g.id FROM team_match_games g JOIN team_matches tm ON tm.id = g.team_match_id
+      WHERE g.court_number = ? AND g.status = 'active' AND tm.status = 'active' LIMIT 1`, [bane]);
+
+// Tablettens og admins oversigt over én bane
+async function baneStatus(req, bane) {
+    const opsaetning = await queryOne('SELECT * FROM court_streams WHERE court_number = ?', [bane]);
+    const link = await queryOne(
+        'SELECT id FROM device_tokens WHERE camera_court = ? AND is_active = 1 LIMIT 1', [bane]);
+    return ls.tabletStatus({
+        opsaetning,
+        kamera: !!link,
+        pc: link ? ls.statusFor(tenantKey(req))[link.id] : null,
+        holdkamp: await holdkampPaaBane(bane),
+        planner: !!await plannerPaaBane(bane)
+    });
+}
+
 // GET /api/livestream — banernes opsætning og TV-PC'erne, der kan have kamera
 router.get('/', livestreamAdmin, async (req, res, next) => {
     try {
@@ -40,12 +64,15 @@ router.get('/', livestreamAdmin, async (req, res, next) => {
             standardUrl: ls.STANDARD_URL,
             baner: baner.map(({ court_number: n }) => {
                 const o = opsaetning.get(n);
+                const s = ls.startet(o);
                 return {
                     bane: n,
                     enabled: !!(o && o.enabled),
                     streamUrl: o ? o.stream_url : ls.STANDARD_URL,
                     noegle: o ? ls.noegleSlut(o.stream_key) : null,
-                    overlay: o ? !!o.overlay : true
+                    overlay: o ? !!o.overlay : true,
+                    start: s ? s.start : null,
+                    til: s && s.til ? new Date(s.til).toISOString() : null
                 };
             }),
             kameraer: links.map(l => ({
@@ -105,6 +132,84 @@ router.put('/kamera/:tokenId', livestreamAdmin, async (req, res, next) => {
     }
 });
 
+// POST/DELETE /api/livestream/baner/:bane/hele-dagen — admin starter banen
+// for resten af dagen (en turnering): alt sendes, også mellem kampene, til
+// TV-PC'en slukker kl. 23:59
+router.post('/baner/:bane/hele-dagen', livestreamAdmin, async (req, res, next) => {
+    try {
+        const bane = baneNr(req.params.bane);
+        const o = bane && await queryOne('SELECT enabled, stream_key FROM court_streams WHERE court_number = ?', [bane]);
+        if (!o || !o.enabled || !o.stream_key) {
+            return res.status(400).json({ error: 'Slå "Send banen" til med en stream-nøgle først' });
+        }
+        await query('UPDATE court_streams SET all_day_until = ? WHERE court_number = ?', [new Date(ls.dagensSlut()), bane]);
+        console.log(`[livestream] ${tenantKey(req)} bane ${bane}: sendes hele dagen`);
+        res.json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.delete('/baner/:bane/hele-dagen', livestreamAdmin, async (req, res, next) => {
+    try {
+        const bane = baneNr(req.params.bane);
+        if (!bane) return res.status(404).json({ error: 'Bane ikke fundet' });
+        await query('UPDATE court_streams SET all_day_until = NULL, armed_until = NULL, manual_since = NULL WHERE court_number = ?', [bane]);
+        console.log(`[livestream] ${tenantKey(req)} bane ${bane}: stoppet i admin`);
+        res.json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// Tabletten på banen (Indstillinger → Start livestream). Ikke QR-telefoner:
+// det er klubbens tablet, der beslutter, om kampen kommer på YouTube
+const tablet = [requireWriteAuthInClubMode, ikkeQrSession];
+
+// GET /api/livestream/bane/:bane — kan banen sendes, og er den startet?
+router.get('/bane/:bane', tablet, async (req, res, next) => {
+    try {
+        const bane = baneNr(req.params.bane);
+        if (!bane) return res.status(404).json({ error: 'Bane ikke fundet' });
+        res.json(await baneStatus(req, bane));
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /api/livestream/bane/:bane/start — kampen på banen sendes, eller den
+// næste, hvis den starter inden 5 minutter
+router.post('/bane/:bane/start', tablet, async (req, res, next) => {
+    try {
+        const bane = baneNr(req.params.bane);
+        if (!bane) return res.status(404).json({ error: 'Bane ikke fundet' });
+        const foer = await baneStatus(req, bane);
+        if (!foer.kan) return res.status(409).json({ error: 'Livestream er ikke sat op til banen i admin' });
+        if (foer.start !== 'hele-dagen') {
+            await query('UPDATE court_streams SET armed_until = ?, manual_since = NULL WHERE court_number = ?',
+                [new Date(Date.now() + ls.KLAR_MS), bane]);
+            console.log(`[livestream] ${tenantKey(req)} bane ${bane}: startet på tabletten`);
+        }
+        res.json(await baneStatus(req, bane));
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /api/livestream/bane/:bane/stop — tablettens start fortrydes. Hele
+// dagen stoppes kun i admin, og holdkampe sendes stadig af sig selv
+router.post('/bane/:bane/stop', tablet, async (req, res, next) => {
+    try {
+        const bane = baneNr(req.params.bane);
+        if (!bane) return res.status(404).json({ error: 'Bane ikke fundet' });
+        await query('UPDATE court_streams SET armed_until = NULL, manual_since = NULL WHERE court_number = ?', [bane]);
+        console.log(`[livestream] ${tenantKey(req)} bane ${bane}: stoppet på tabletten`);
+        res.json(await baneStatus(req, bane));
+    } catch (error) {
+        next(error);
+    }
+});
+
 // POST /api/livestream/pc — TV-PC'ens stream-tjeneste (kiosk: stream) spørger
 // hvert par sekunder, om den skal sende, og fortæller, hvordan det går. Ingen
 // login: adgangslinkets token i X-Adgangslink, som rapporten (pc-rapport).
@@ -130,15 +235,21 @@ router.post('/pc', async (req, res, next) => {
             const opsaetning = await queryOne('SELECT * FROM court_streams WHERE court_number = ?', [bane]);
             const gs = court && await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
             const sidste = court && !gs && await queryOne('SELECT * FROM last_finished_matches WHERE court_id = ?', [court.id]);
-            const planner = await queryOne(
-                `SELECT a.court_number FROM planner_court_assignments a
-                   JOIN planner_rounds r ON r.id = a.round_id WHERE a.court_number = ?`, [bane]);
+            const planner = await plannerPaaBane(bane);
             const b = court
-                ? ls.beslutning({ opsaetning, gs, sidste, planner, senderNu: !!(foer && foer.online && foer.sender) })
+                ? ls.beslutning({ opsaetning, gs, sidste, planner, holdkamp: await holdkampPaaBane(bane),
+                    senderNu: !!(foer && foer.online && foer.sender) })
                 : { send: false, grund: 'ingen-bane' };
+            // Tablettens "Start livestream" gælder nu kampen på banen — og kun den
+            if (b.vaelg) {
+                await query('UPDATE court_streams SET manual_since = UTC_TIMESTAMP(), armed_until = NULL WHERE court_number = ?', [bane]);
+            } else if (b.glem) {
+                await query('UPDATE court_streams SET manual_since = NULL WHERE court_number = ?', [bane]);
+            }
             svar = { kamera: true, bane, send: b.send, grund: b.grund };
             if (b.send) {
-                const rk = b.kilde === 'gs' ? gs : sidste;
+                // Hele dagen mellem kampene: et tomt scoreboard (gennemsigtigt billede)
+                const rk = b.kilde === 'gs' ? gs : b.kilde === 'sidste' ? sidste : null;
                 const dbl = rk && rk.is_doubles != null ? !!rk.is_doubles : !!court.is_doubles;
                 svar.url = opsaetning.stream_url;
                 svar.noegle = opsaetning.stream_key;

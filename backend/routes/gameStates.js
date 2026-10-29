@@ -938,6 +938,12 @@ router.delete('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), a
             await query('DELETE FROM planner_court_assignments WHERE court_number = ?', [parseInt(courtId, 10)]);
         } catch (e) { /* tabellen findes først efter migration 027 */ }
 
+        // Livestream: kampen, der blev startet på tabletten, er væk — den næste
+        // sendes ikke (et "Start livestream" lige før Ryd banen gælder stadig)
+        try {
+            await query('UPDATE court_streams SET manual_since = NULL WHERE court_number = ?', [parseInt(courtId, 10)]);
+        } catch (e) { /* kolonnen findes først efter migration 034 */ }
+
         // Invalidér eventuelle aktive QR-tokens — næste TV-request genererer en ny
         try { await invalidateCourtTokens(parseInt(courtId, 10)); } catch (e) { console.error('Token invalidation failed:', e); }
 

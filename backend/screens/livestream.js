@@ -5,9 +5,14 @@
 // camera_court). PC'en spørger hvert par sekunder med sit adgangslink, og
 // serveren afgør, om der skal sendes — så reglen ligger ét sted:
 //
-//   - der sendes, fra kampen er sat på banen (rigtige navne eller første
-//     point), til 2 minutter efter den er afgjort — også hvis banen ryddes
-//     inden (sidste afsluttede kamp)
+//   - holdkampe sendes af sig selv, fra delkampen er sat på banen (rigtige
+//     navne eller første point), til 2 minutter efter den er afgjort — også
+//     hvis banen ryddes inden (sidste afsluttede kamp)
+//   - andre kampe kun, når nogen har trykket "Start livestream" på tabletten:
+//     kampen på banen, eller den næste, hvis den starter inden 5 minutter —
+//     og kun den ene kamp (Jespers valg 2026-10-29)
+//   - "Send hele dagen" i admin: alt på banen, også mellem kampene, til
+//     PC'en slukker om aftenen (en turnering med mange kampe i træk)
 //   - badmintonplanner-kampe sendes aldrig (Jespers valg 2026-10-28)
 //   - en kamp, ingen har rørt i 30 minutter, er glemt på banen — ingen stream
 //
@@ -17,6 +22,9 @@
 const STANDARD_URL = 'rtmps://a.rtmps.youtube.com:443/live2';
 const EFTER_MS = 2 * 60 * 1000;
 const STILLE_MS = 30 * 60 * 1000;
+const KLAR_MS = 5 * 60 * 1000;           // "Start livestream" venter så længe på en kamp
+const VALGT_MAX_MS = 4 * 60 * 60 * 1000; // en valgt kamp glemmes senest efter 4 timer
+const SIDSTE_MS = 5 * 60 * 1000;         // hele dagen: den sidste kamp i billedet så længe (som TV'et)
 const NAVN_MAX = 26;
 
 const tekst = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, max);
@@ -83,31 +91,97 @@ function aktivitet(gs) {
         gs.player2_games > 0 || gs.match_start_time != null;
 }
 
+// Banens kamp lige nu: 'kamp' (i gang eller sat på), 'afgjort' (med slut og
+// om det er den ryddede, sidste kamp), 'stille' eller 'ingen-kamp'
+function kampNu(gs, sidste, nu) {
+    if (gs) {
+        if (gs.match_completed || gs.match_end_time) {
+            return { tilstand: 'afgjort', slut: tid(gs.match_end_time) ?? tid(gs.updated_at) };
+        }
+        if (!rigtigeNavne(gs) && !aktivitet(gs)) return { tilstand: 'ingen-kamp' };
+        const sidstRoert = tid(gs.updated_at);
+        if (sidstRoert !== null && nu - sidstRoert > STILLE_MS) return { tilstand: 'stille' };
+        return { tilstand: 'kamp' };
+    }
+    const slut = sidste ? tid(sidste.match_end_time) : null;
+    return slut !== null ? { tilstand: 'afgjort', slut, ryddet: true } : { tilstand: 'ingen-kamp' };
+}
+
+// Hvad der er startet med en knap: 'hele-dagen' (admin), 'valgt' (kampen på
+// banen, fra tabletten) eller 'klar' (tabletten venter på næste kamp) — eller null
+function startet(o, nu = Date.now()) {
+    if (!o) return null;
+    const dag = tid(o.all_day_until);
+    if (dag !== null && dag > nu) return { start: 'hele-dagen', til: dag };
+    const valgt = tid(o.manual_since);
+    if (valgt !== null && nu - valgt < VALGT_MAX_MS) return { start: 'valgt' };
+    const klar = tid(o.armed_until);
+    if (klar !== null && klar > nu) return { start: 'klar', til: klar };
+    return null;
+}
+
 // opsaetning: court_streams-rækken; gs: banens game_states-række; sidste:
 // last_finished_matches (banen er ryddet); planner: banen har en
-// badmintonplanner-tildeling; senderNu: PC'en sender allerede. De 2 minutter
-// efter en afgjort kamp er kun en forlængelse — en stream startes aldrig på
-// en afgjort kamp (fx en badmintonplanner-kamp, hvis tildeling forsvinder,
-// når banen ryddes). Returnerer { send, grund, kilde }.
-function beslutning({ opsaetning, gs, sidste, planner, senderNu = false, nu = Date.now() }) {
+// badmintonplanner-tildeling; holdkamp: banens kamp er en delkamp i en
+// holdkamp; senderNu: PC'en sender allerede. De 2 minutter efter en afgjort
+// kamp er kun en forlængelse — en stream startes aldrig på en afgjort kamp
+// (fx en badmintonplanner-kamp, hvis tildeling forsvinder, når banen ryddes).
+// Returnerer { send, grund, kilde } — kilde: hvis kamp der står i billedet
+// ('gs', 'sidste' eller null). vaelg: tablettens "klar" bliver til kampen på
+// banen; glem: den valgte kamp er forbi, så den næste ikke sendes.
+function beslutning({ opsaetning, gs, sidste, planner, holdkamp = false, senderNu = false, nu = Date.now() }) {
     if (!opsaetning || !opsaetning.enabled) return { send: false, grund: 'slaaet-fra' };
     if (!opsaetning.stream_key) return { send: false, grund: 'mangler-noegle' };
     if (planner) return { send: false, grund: 'badmintonplanner' };
-    if (gs) {
-        if (gs.match_completed || gs.match_end_time) {
-            const slut = tid(gs.match_end_time) ?? tid(gs.updated_at);
-            return senderNu && slut !== null && nu - slut < EFTER_MS
-                ? { send: true, grund: 'afgjort', kilde: 'gs' }
-                : { send: false, grund: 'afsluttet' };
-        }
-        if (!rigtigeNavne(gs) && !aktivitet(gs)) return { send: false, grund: 'ingen-kamp' };
-        const sidstRoert = tid(gs.updated_at);
-        if (sidstRoert !== null && nu - sidstRoert > STILLE_MS) return { send: false, grund: 'stille' };
-        return { send: true, grund: 'kamp', kilde: 'gs' };
+    const k = kampNu(gs, sidste, nu);
+    const s = startet(opsaetning, nu);
+    const glem = s && s.start === 'valgt' && k.tilstand !== 'kamp' ? { glem: true } : {};
+
+    if (s && s.start === 'hele-dagen') {
+        const kilde = k.tilstand === 'kamp' || (k.tilstand === 'afgjort' && !k.ryddet) ? 'gs'
+            : k.tilstand === 'afgjort' && nu - k.slut < SIDSTE_MS ? 'sidste' : null;
+        return { send: true, grund: 'hele-dagen', kilde, ...glem };
     }
-    const slut = sidste ? tid(sidste.match_end_time) : null;
-    if (senderNu && slut !== null && nu - slut < EFTER_MS) return { send: true, grund: 'afgjort', kilde: 'sidste' };
-    return { send: false, grund: 'ingen-kamp' };
+    if (k.tilstand === 'kamp') {
+        if (holdkamp) return { send: true, grund: 'holdkamp', kilde: 'gs' };
+        if (s && s.start === 'valgt') return { send: true, grund: 'valgt', kilde: 'gs' };
+        if (s && s.start === 'klar') return { send: true, grund: 'valgt', kilde: 'gs', vaelg: true };
+        return { send: false, grund: 'ikke-startet' };
+    }
+    if (k.tilstand === 'afgjort') {
+        return senderNu && k.slut !== null && nu - k.slut < EFTER_MS
+            ? { send: true, grund: 'afgjort', kilde: k.ryddet ? 'sidste' : 'gs', ...glem }
+            : { send: false, grund: k.ryddet ? 'ingen-kamp' : 'afsluttet', ...glem };
+    }
+    return { send: false, grund: k.tilstand, ...glem };
+}
+
+// Til tabletten: kan banen sendes, og hvad er startet? kamera: et adgangslink
+// har kameraet på banen; pc: dets status (statusFor)
+function tabletStatus({ opsaetning, kamera, pc, holdkamp = false, planner = false, nu = Date.now() }) {
+    const kan = !!(opsaetning && opsaetning.enabled && opsaetning.stream_key && kamera);
+    const s = kan ? startet(opsaetning, nu) : null;
+    return {
+        kan,
+        start: s ? s.start : null,
+        til: s && s.til ? new Date(s.til).toISOString() : null,
+        holdkamp: !!holdkamp,
+        planner: !!planner,
+        sender: !!(pc && pc.online && pc.sender)
+    };
+}
+
+// Slutningen af dagen i dansk tid (kl. 23:59, når TV-PC'en slukker) som ms
+function dagensSlut(nu = Date.now(), tz = 'Europe/Copenhagen') {
+    const dele = (t) => Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+        timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+    }).formatToParts(t).map(p => [p.type, p.value]));
+    const d = dele(nu);
+    const slut = Date.UTC(+d.year, +d.month - 1, +d.day, 23, 59);
+    // slut er 23:59 UTC — træk tidszonens forskydning på det tidspunkt fra
+    const x = dele(slut);
+    return slut - (Date.UTC(+x.year, +x.month - 1, +x.day, +x.hour, +x.minute) - slut);
 }
 
 // ---------- Overlay i billedet ----------
@@ -213,8 +287,8 @@ function statusFor(tenant, nu = Date.now()) {
 }
 
 module.exports = {
-    STANDARD_URL, EFTER_MS, STILLE_MS,
+    STANDARD_URL, EFTER_MS, STILLE_MS, KLAR_MS,
     gyldigUrl, gyldigNoegle, rensOpsaetning, noegleSlut,
-    beslutning, overlayTavle, overlayLinjer,
+    beslutning, startet, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,
     rensStatus, registrer, statusFor
 };

@@ -606,6 +606,12 @@ html, body {
     transform: translateX(4px);
 }
 
+/* Livestream startet eller holdkamp, der sendes */
+.menu-item--live {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+}
+
 .menu-link {
     text-decoration: none;
 }

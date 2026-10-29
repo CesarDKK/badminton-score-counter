@@ -518,6 +518,9 @@ function setupEventListeners() {
     });
     setupResultForm();
 
+    // Livestream fra TV-PC'ens kamera (kun når banen er sat op til det i admin)
+    document.getElementById('livestreamMenuBtn').addEventListener('click', livestreamKnap);
+
     // Editable player names
     // Top fields edit main player names, bottom fields can edit partner names in doubles
     setupEditablePlayerName('player1Name1Display', 'player1', 'name', 'name2');
@@ -597,10 +600,64 @@ function setStanding(on) {
 
 function openSettingsMenu() {
     document.getElementById('settingsMenu').style.display = 'flex';
+    opdaterLivestreamKnap();
 }
 
 function closeSettingsMenu() {
     document.getElementById('settingsMenu').style.display = 'none';
+}
+
+// ===== Livestream (se backend/screens/livestream.js) =====
+// Holdkampe sendes af sig selv. Ellers starter tabletten kampen på banen —
+// eller den næste, hvis den sættes på inden 5 minutter — og kun den ene kamp.
+// "Hele dagen" startes og stoppes i admin.
+let livestream = null;
+
+async function opdaterLivestreamKnap() {
+    const btn = document.getElementById('livestreamMenuBtn');
+    try {
+        livestream = await api.request(`/livestream/bane/${courtId}`, {}, 1);
+    } catch {
+        livestream = null;   // QR-telefon, ældre server eller intet net: ingen knap
+    }
+    const l = livestream;
+    // Badmintonplanner-kampe sendes aldrig — så heller ingen knap
+    btn.style.display = l && l.kan && !l.planner ? 'block' : 'none';
+    if (!l) return;
+    btn.classList.toggle('menu-item--live', !!(l.start || l.holdkamp));
+    btn.textContent =
+        l.start === 'hele-dagen' ? '● Livestream kører hele dagen'
+        : l.start === 'valgt' ? '● Stop livestream'
+        : l.start === 'klar' ? 'Livestream venter på kampen — fortryd'
+        : l.holdkamp ? '● Livestream: holdkampen sendes'
+        : 'Start livestream';
+}
+
+async function livestreamKnap() {
+    const l = livestream;
+    if (!l) return;
+    if (l.start === 'hele-dagen') {
+        showMessage('Livestream', 'Banen sendes hele dagen, også mellem kampene. Det er startet i admin under Adgangslinks → Livestream, og stoppes også der.');
+        return;
+    }
+    if (l.holdkamp && !l.start) {
+        showMessage('Livestream', 'Holdkampe sendes af sig selv — til 2 minutter efter delkampen er afgjort.');
+        return;
+    }
+    closeSettingsMenu();
+    const handling = l.start ? 'stop' : 'start';
+    try {
+        livestream = await api.request(`/livestream/bane/${courtId}/${handling}`, { method: 'POST' });
+    } catch (e) {
+        showMessage('Livestream', e.message || 'Kunne ikke nå serveren — prøv igen');
+        return;
+    }
+    if (handling === 'start') {
+        showMessage('Livestream startet', 'Kampen på banen sendes — eller den næste, hvis den sættes på inden 5 minutter. ' +
+            'Streamen stopper 2 minutter efter kampen er afgjort, og den næste kamp sendes ikke.');
+    } else {
+        showMessage('Livestream stoppet', l.start === 'klar' ? 'Den næste kamp sendes ikke.' : 'Kampen sendes ikke længere.');
+    }
 }
 
 function swapPlayers(team) {

@@ -2916,11 +2916,17 @@ async function refreshLivestreamStatus() {
     document.querySelectorAll('.ls-status').forEach(el => {
         el.innerHTML = livestreamStatusHtml(Number(el.dataset.bane));
     });
+    // … og om banen er startet (tabletten kan have startet den imens)
+    document.querySelectorAll('.ls-start').forEach(el => {
+        const b = _livestream.baner.find(x => x.bane === Number(el.dataset.bane));
+        if (b) el.innerHTML = livestreamStartHtml(b);
+    });
 }
 
 const LS_GRUND = {
     'ingen-kamp': 'Klar — venter på en kamp',
     'afsluttet': 'Klar — venter på næste kamp',
+    'ikke-startet': 'Klar — kampen er ikke startet på tabletten (kun holdkampe sendes af sig selv)',
     'slaaet-fra': 'Klar — livestream er slået fra for banen',
     'mangler-noegle': 'Mangler stream-nøgle',
     'badmintonplanner': 'Badmintonplanner-kamp — sendes ikke',
@@ -2942,6 +2948,41 @@ function livestreamStatusHtml(bane) {
         return `<span class="maerke maerke--igang">● Sender</span> <span class="tekst-daempet">siden kl. ${siden} · ${escapeHtml(s.kamera)}${s.koder === 'x264' ? ' · kodet på CPU\'en' : ''}</span>`;
     }
     return `<span class="tekst-daempet">${escapeHtml(LS_GRUND[s.grund] || 'Klar')} · ${escapeHtml(s.kamera)}</span>`;
+}
+
+// "Send hele dagen" (en turnering), eller hvad tabletten har startet
+function livestreamStartHtml(b) {
+    if (!b.enabled || !b.noegle) return '';
+    const kl = (iso) => new Date(iso).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
+    const stop = `<button class="btn-danger btn-sm" onclick="stopLivestreamBane(${b.bane})">Stop</button>`;
+    if (b.start === 'hele-dagen') {
+        return `<span class="maerke maerke--igang">Sendes hele dagen</span>
+            <span class="tekst-mindre tekst-daempet">også mellem kampene, til kl. ${kl(b.til)}</span>${stop}`;
+    }
+    if (b.start === 'valgt') return `<span class="tekst-mindre tekst-daempet">Startet på tabletten — kampen på banen sendes</span>${stop}`;
+    if (b.start === 'klar') return `<span class="tekst-mindre tekst-daempet">Startet på tabletten — den næste kamp sendes, hvis den starter inden kl. ${kl(b.til)}</span>${stop}`;
+    return `<button class="btn-secondary btn-sm" onclick="startLivestreamHeleDagen(${b.bane})">Send hele dagen</button>
+        <span class="tekst-mindre tekst-daempet">fx til en turnering: alt på banen, også mellem kampene, til TV-PC'en slukker kl. 23:59</span>`;
+}
+
+async function startLivestreamHeleDagen(bane) {
+    try {
+        await api.request(`/livestream/baner/${bane}/hele-dagen`, { method: 'POST' });
+    } catch (e) {
+        livestreamBesked(bane, e.message, true);
+        return;
+    }
+    await loadLivestream();
+}
+
+async function stopLivestreamBane(bane) {
+    try {
+        await api.request(`/livestream/baner/${bane}/hele-dagen`, { method: 'DELETE' });
+    } catch (e) {
+        livestreamBesked(bane, e.message, true);
+        return;
+    }
+    await loadLivestream();
 }
 
 function renderLivestream() {
@@ -2979,6 +3020,7 @@ function renderLivestream() {
                        <button class="btn-danger btn-sm" onclick="fjernLivestreamNoegle(${b.bane})">Fjern nøglen</button>`
                     : `<span class="maerke maerke--afventer">Ingen nøgle</span>`}
             </div>
+            <div class="ls-start" data-bane="${b.bane}">${livestreamStartHtml(b)}</div>
             <div class="ls-besked tekst-mindre" hidden></div>
         </div>`).join('');
 
@@ -2991,7 +3033,8 @@ function renderLivestream() {
             </summary>
             <div class="dt-gruppe-indhold">
                 <p class="tekst-mindre tekst-daempet ls-intro">
-                    Et USB-kamera i TV-PC'en sender banen til YouTube — fra kampen sættes på banen, til 2 minutter efter den er afgjort.
+                    Et USB-kamera i TV-PC'en sender banen til YouTube. Holdkampe sendes af sig selv, fra delkampen sættes på banen, til 2 minutter efter den er afgjort.
+                    Andre kampe startes på tabletten (Indstillinger → Start livestream) — én kamp ad gangen — eller her med "Send hele dagen".
                     Badmintonplanner-kampe sendes ikke. Stream-nøglen finder du i YouTube Studio → Gå live → Stream. Én nøgle pr. bane.
                 </p>
                 ${raekker}
