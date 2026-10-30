@@ -1121,6 +1121,15 @@ class BadmintonAPI {
         return this.request('/livestream/logo', { method: 'DELETE' });
     }
 
+    // YouTube-kanalen: adressen til Googles login ({ url }), og fjern forbindelsen
+    async connectLivestreamYoutube() {
+        return this.request('/livestream/youtube/forbind', { method: 'POST' });
+    }
+
+    async disconnectLivestreamYoutube() {
+        return this.request('/livestream/youtube', { method: 'DELETE' });
+    }
+
     async setLivestreamCamera(tokenId, bane) {
         return this.request(`/livestream/kamera/${encodeURIComponent(tokenId)}`, {
             method: 'PUT',
@@ -1210,6 +1219,22 @@ class BadmintonAPI {
 
     async getSuperAdminClubs() {
         return this.request('/super-admin/clubs');
+    }
+
+    // YouTube-login-klienten (fælles for serveren) — secret'en kommer aldrig tilbage
+    async getSuperAdminYoutube() {
+        return this.request('/super-admin/youtube');
+    }
+
+    async saveSuperAdminYoutube(clientId, clientSecret) {
+        return this.request('/super-admin/youtube', {
+            method: 'PUT',
+            body: JSON.stringify({ clientId, clientSecret })
+        });
+    }
+
+    async removeSuperAdminYoutube() {
+        return this.request('/super-admin/youtube', { method: 'DELETE' });
     }
 
     async createClub(name, subdomain) {

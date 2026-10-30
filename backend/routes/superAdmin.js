@@ -7,6 +7,8 @@ const { superAdminAuth, generateSuperAdminToken } = require('../middleware/super
 const { forkertLogin } = require('../middleware/rateLimiter');
 const { normaliserMail } = require('../config/adminMail');
 const skaermHaendelser = require('../screens/haendelseslog');
+const youtube = require('../config/youtube');
+const youtubeKlient = require('../config/youtubeKlient');
 const fs = require('fs');
 const sharp = require('sharp');
 const AdmZip = require('adm-zip');
@@ -976,6 +978,65 @@ router.delete('/logos/:id', superAdminAuth, async (req, res, next) => {
         try { fs.unlinkSync(logo.file_path); } catch (e) { console.error('Kunne ikke slette logo-fil:', e.message); }
 
         res.json({ success: true });
+    } catch (error) { next(error); }
+});
+
+// ==================== YOUTUBE (login-klienten hos Google) ====================
+// Fælles for hele serveren — klubberne forbinder hver deres kanal gennem den.
+// Secret'en sendes aldrig tilbage.
+
+async function youtubeStatus() {
+    const k = youtube.klient();
+    const gemt = await youtubeKlient.indlaes();
+    return {
+        kilde: k && k.kilde === 'env' ? 'env' : (gemt.gemt ? 'admin' : null),
+        clientId: k ? k.id : '',
+        ulaeselig: gemt.ulaeselig,
+        opdateret: gemt.opdateret,
+        tilbageAdresse: youtube.tilbageAdresse()
+    };
+}
+
+// GET /api/super-admin/youtube
+router.get('/youtube', superAdminAuth, async (req, res, next) => {
+    try {
+        res.json(await youtubeStatus());
+    } catch (error) { next(error); }
+});
+
+// PUT /api/super-admin/youtube — { clientId, clientSecret }
+router.put('/youtube', superAdminAuth, async (req, res, next) => {
+    try {
+        if (process.env.YOUTUBE_CLIENT_ID && process.env.YOUTUBE_CLIENT_SECRET) {
+            return res.status(409).json({ error: 'YouTube er sat op i serverens .env og kan ikke ændres her' });
+        }
+        const id = String(req.body.clientId || '').trim();
+        const secret = String(req.body.clientSecret || '').trim();
+        if (!/^[A-Za-z0-9._-]{1,200}\.apps\.googleusercontent\.com$/.test(id)) {
+            return res.status(400).json({ error: 'Client ID ser forkert ud — det ender på .apps.googleusercontent.com' });
+        }
+        if (!/^\S{10,200}$/.test(secret)) {
+            return res.status(400).json({ error: 'Client secret ser forkert ud — kopiér hele værdien (den starter typisk med GOCSPX-)' });
+        }
+        let kendt;
+        try {
+            kendt = await youtube.tjekKlient(id, secret);
+        } catch (e) {
+            return res.status(502).json({ error: `Kunne ikke tjekke nøglerne hos Google: ${e.message}` });
+        }
+        if (!kendt) {
+            return res.status(400).json({ error: 'Google kender ikke den kombination af Client ID og Client secret — tjek, at begge er kopieret fra samme klient' });
+        }
+        await youtubeKlient.gem(id, secret);
+        res.json(await youtubeStatus());
+    } catch (error) { next(error); }
+});
+
+// DELETE /api/super-admin/youtube — klubbernes forbindelser holder op med at virke
+router.delete('/youtube', superAdminAuth, async (req, res, next) => {
+    try {
+        await youtubeKlient.fjern();
+        res.json(await youtubeStatus());
     } catch (error) { next(error); }
 });
 

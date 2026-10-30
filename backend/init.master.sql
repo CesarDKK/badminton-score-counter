@@ -59,6 +59,13 @@ CREATE TABLE IF NOT EXISTS skaerm_haendelser (
   INDEX idx_fra (fra)
 ) ENGINE=InnoDB;
 
+-- Serverens egne indstillinger (fx YouTube-login-klienten, secret'en krypteret)
+CREATE TABLE IF NOT EXISTS indstillinger (
+  noegle VARCHAR(60) PRIMARY KEY,
+  vaerdi TEXT NULL,
+  opdateret TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
 -- Centralt klub-logo-bibliotek (delt paa tvaers af alle klubber, kun superadmin)
 CREATE TABLE IF NOT EXISTS club_logos (
   id INT PRIMARY KEY AUTO_INCREMENT,

@@ -124,6 +124,12 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('downloadSeedBundleBtn').addEventListener('click', downloadSeedBundle);
     document.getElementById('importSeedBundleBtn').addEventListener('click', triggerImportSeedBundle);
 
+    // YouTube (login-klienten hos Google)
+    document.getElementById('ytGemBtn').addEventListener('click', gemYoutube);
+    document.getElementById('ytFjernBtn').addEventListener('click', fjernYoutube);
+    document.getElementById('ytKopierBtn').addEventListener('click', kopierYoutubeAdresse);
+    bindEnterSubmit(['ytClientId', 'ytClientSecret'], gemYoutube);
+
     // Admin modal
     document.getElementById('adminModalClose').addEventListener('click', closeModal);
     document.getElementById('createAdminBtn').addEventListener('click', handleCreateAdmin);
@@ -279,6 +285,7 @@ function switchApp(app) {
         loadSkaermLog();
         loadLogos();
         loadMissingLogos();
+        loadYoutube();
     } else {
         loadFootballClubs();
     }
@@ -1057,6 +1064,83 @@ async function handleCreateFootballAdmin() {
     } finally {
         btn.disabled = false;
         btn.textContent = 'Opret admin';
+    }
+}
+
+// ==================== YOUTUBE ====================
+
+async function loadYoutube() {
+    try {
+        renderYoutube(await api.getSuperAdminYoutube());
+    } catch (err) {
+        document.getElementById('ytStatus').textContent = 'Fejl: ' + (err.message || 'kunne ikke hente YouTube-opsætningen');
+    }
+}
+
+function renderYoutube(s) {
+    const status = document.getElementById('ytStatus');
+    document.getElementById('ytTilbage').textContent = s.tilbageAdresse;
+    const env = s.kilde === 'env';
+    if (env) {
+        status.innerHTML = `<strong>✓ Sat op i serverens .env</strong> <small>(${escapeHtml(s.clientId)}) — ændres der, ikke her</small>`;
+    } else if (s.kilde === 'admin') {
+        const dato = s.opdateret ? ` · gemt ${escapeHtml(formatDate(s.opdateret))}` : '';
+        status.innerHTML = `<strong>✓ Sat op</strong> <small>${escapeHtml(s.clientId)}${dato}</small><br><small>Klubberne kan forbinde deres kanal. Gem nye nøgler herunder for at skifte dem — så skal klubberne forbinde igen.</small>`;
+    } else if (s.ulaeselig) {
+        status.innerHTML = '<strong>Den gemte secret kan ikke læses</strong> <small>(serverens JWT_SECRET er skiftet) — indtast nøglerne igen</small>';
+    } else {
+        status.innerHTML = '<strong>Ikke sat op</strong> <small>— klubberne kan ikke forbinde YouTube endnu</small>';
+    }
+    document.getElementById('ytFelter').style.display = env ? 'none' : '';
+    document.getElementById('ytFjernBtn').style.display = s.kilde === 'admin' ? '' : 'none';
+    document.getElementById('ytVejledning').open = !s.kilde;
+    const idFelt = document.getElementById('ytClientId');
+    if (!idFelt.value) idFelt.value = s.kilde === 'admin' ? s.clientId : '';
+}
+
+async function gemYoutube() {
+    const msgEl = document.getElementById('ytMsg');
+    const btn = document.getElementById('ytGemBtn');
+    const clientId = document.getElementById('ytClientId').value.trim();
+    const clientSecret = document.getElementById('ytClientSecret').value.trim();
+    if (!clientId || !clientSecret) return showMsg(msgEl, 'Udfyld både Client ID og Client secret', 'error');
+    btn.disabled = true;
+    btn.textContent = 'Tjekker hos Google…';
+    try {
+        const s = await api.saveSuperAdminYoutube(clientId, clientSecret);
+        document.getElementById('ytClientSecret').value = '';
+        renderYoutube(s);
+        showMsg(msgEl, 'Gemt — Google kender nøglerne. Klubberne kan nu forbinde deres kanal under Livestream.', 'success');
+    } catch (err) {
+        showMsg(msgEl, err.message || 'Kunne ikke gemme', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Gem';
+    }
+}
+
+async function fjernYoutube() {
+    const ok = await confirmModal('Fjern YouTube-nøglerne?',
+        'Klubberne kan ikke længere oprette udsendelser på YouTube. Baner med en indtastet stream-nøgle sender stadig til den.',
+        { danger: true, okText: 'Fjern' });
+    if (!ok) return;
+    const msgEl = document.getElementById('ytMsg');
+    try {
+        document.getElementById('ytClientId').value = '';
+        renderYoutube(await api.removeSuperAdminYoutube());
+        showMsg(msgEl, 'Nøglerne er fjernet', 'success');
+    } catch (err) {
+        showMsg(msgEl, err.message || 'Kunne ikke fjerne', 'error');
+    }
+}
+
+async function kopierYoutubeAdresse() {
+    const tekst = document.getElementById('ytTilbage').textContent;
+    try {
+        await navigator.clipboard.writeText(tekst);
+        notify('Adressen er kopieret', 'success');
+    } catch {
+        notify('Kunne ikke kopiere — markér adressen og kopiér den selv', 'error');
     }
 }
 

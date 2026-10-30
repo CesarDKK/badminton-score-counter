@@ -301,3 +301,18 @@ header .subtitle {
     border-bottom-color: var(--color-accent, #e94560);
 }
 
+
+/* YouTube (livestream): Badmintonapps login-klient hos Google */
+.yt-intro { color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.82em; margin-bottom: 10px; }
+.yt-status { font-size: 0.92em; margin-bottom: 10px; }
+.yt-status small { color: var(--text-muted, rgba(255, 255, 255, 0.62)); }
+.yt-vejledning { background: rgba(255, 255, 255, 0.04); border-radius: 8px; padding: 10px 14px; font-size: 0.88em; }
+.yt-vejledning summary { cursor: pointer; font-weight: 600; }
+.yt-vejledning ol { margin: 10px 0 2px; padding-left: 1.3em; line-height: 1.6; }
+.yt-vejledning li { margin: 6px 0; }
+.yt-vejledning code, .yt-intro code { background: rgba(0, 0, 0, 0.3); padding: 1px 5px; border-radius: 3px; }
+.yt-kopi { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+.yt-kopi code { word-break: break-all; }
+.yt-kopi button { padding: 4px 12px; font-size: 0.9em; }
+.yt-knapper { display: flex; gap: 10px; grid-column: 1 / -1; }
+.yt-vejledning a { color: var(--color-accent, #e94560); }

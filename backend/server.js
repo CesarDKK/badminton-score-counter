@@ -156,6 +156,8 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
 
         const masterDb = require('./config/masterDatabase');
         await masterDb.initialize();
+        await require('./config/youtubeKlient').indlaes()
+            .catch(e => console.error('✗ YouTube-klienten kunne ikke indlæses:', e.message));
 
         const { runMigrationsForAllDatabases } = require('./config/migrationRunner');
         await runMigrationsForAllDatabases();

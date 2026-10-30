@@ -108,9 +108,12 @@ const PLACERINGER = ['top-venstre', 'top-hoejre', 'bund-venstre', 'bund-hoejre']
 const STOERRELSER = ['lille', 'normal', 'stor'];
 const LOGOER = ['ingen', 'sponsor', 'klub'];
 const EFTER_MAX_MIN = 10;
+// YouTube-udsendelserne (kun når kanalen er forbundet): synlighed og "lavet til
+// børn" — Jespers standard er offentlig og lavet til børn (chat og kommentarer fra)
+const SYNLIGHEDER = ['public', 'unlisted', 'private'];
 const STANDARD_INDSTILLINGER = Object.freeze({
     oploesning: 720, billeder: 30, kvalitet: 'normal', placering: 'top-venstre',
-    stoerrelse: 'normal', efterMin: 2, logo: null
+    stoerrelse: 'normal', efterMin: 2, logo: null, ytSynlighed: 'public', ytBoern: true
 });
 
 // Klubbens logo: et filnavn i klubbens upload-mappe (routes: livestream-logo-….png)
@@ -129,6 +132,8 @@ function laesIndstillinger(vaerdi) {
     if (STOERRELSER.includes(r.stoerrelse)) ud.stoerrelse = r.stoerrelse;
     if (Number.isInteger(r.efterMin) && r.efterMin >= 0 && r.efterMin <= EFTER_MAX_MIN) ud.efterMin = r.efterMin;
     if (gyldigLogoFil(r.logo)) ud.logo = r.logo;
+    if (SYNLIGHEDER.includes(r.ytSynlighed)) ud.ytSynlighed = r.ytSynlighed;
+    if (typeof r.ytBoern === 'boolean') ud.ytBoern = r.ytBoern;
     return ud;
 }
 
@@ -163,6 +168,14 @@ function rensIndstillinger(body, foer = STANDARD_INDSTILLINGER) {
             return { fejl: `Minutter efter kampen skal være 0–${EFTER_MAX_MIN}` };
         }
         ud.efterMin = efter;
+    }
+    if (body.ytSynlighed !== undefined) {
+        if (!SYNLIGHEDER.includes(body.ytSynlighed)) return { fejl: 'Ugyldig synlighed' };
+        ud.ytSynlighed = body.ytSynlighed;
+    }
+    if (body.ytBoern !== undefined) {
+        if (typeof body.ytBoern !== 'boolean') return { fejl: 'Ugyldigt valg for "lavet til børn"' };
+        ud.ytBoern = body.ytBoern;
     }
     return ud;
 }
@@ -252,13 +265,14 @@ function holdkampNu(h, nu = Date.now()) {
 // efter kampen (admin, standard 2 minutter). Tiden efter en afgjort
 // kamp er kun en forlængelse — en stream startes aldrig på en afgjort kamp
 // (fx en badmintonplanner-kamp, hvis tildeling forsvinder, når banen ryddes).
+// youtube: klubbens YouTube-kanal er forbundet (nøglen kommer derfra).
 // Returnerer { send, grund, kilde } — kilde: hvis kamp der står i billedet
 // ('gs', 'sidste' eller null). vaelg: tablettens "klar" bliver til kampen på
 // banen; glem: den valgte kamp er forbi, så den næste ikke sendes.
 function beslutning({ opsaetning, gs, sidste, planner, holdkamp = null, senderNu = false,
-    efterMs = EFTER_MS, nu = Date.now() }) {
+    efterMs = EFTER_MS, youtube = false, nu = Date.now() }) {
     if (!opsaetning || !opsaetning.enabled) return { send: false, grund: 'slaaet-fra' };
-    if (!opsaetning.stream_key) return { send: false, grund: 'mangler-noegle' };
+    if (!opsaetning.stream_key && !youtube) return { send: false, grund: 'mangler-noegle' };
     if (planner) return { send: false, grund: 'badmintonplanner' };
     const k = kampNu(gs, sidste, nu);
     const s = startet(opsaetning, nu);
@@ -288,8 +302,8 @@ function beslutning({ opsaetning, gs, sidste, planner, holdkamp = null, senderNu
 
 // Til tabletten: kan banen sendes, og hvad er startet? kamera: et adgangslink
 // har kameraet på banen; pc: dets status (statusFor)
-function tabletStatus({ opsaetning, kamera, pc, holdkamp = null, planner = false, nu = Date.now() }) {
-    const kan = !!(opsaetning && opsaetning.enabled && opsaetning.stream_key && kamera);
+function tabletStatus({ opsaetning, kamera, pc, holdkamp = null, planner = false, youtube = false, nu = Date.now() }) {
+    const kan = !!(opsaetning && opsaetning.enabled && (opsaetning.stream_key || youtube) && kamera);
     const s = kan ? startet(opsaetning, nu) : null;
     return {
         kan,
@@ -482,8 +496,47 @@ function senderBane(tenant, bane, nu = Date.now()) {
     return false;
 }
 
+// ---------- YouTube-udsendelserne (kanalen forbundet med API'et) ----------
+//
+// Én udsendelse pr. "send-periode": fra beslutning() siger send, til den ikke
+// gør længere — en hel holdkamp, en dag ("Send hele dagen") eller én kamp
+// startet på tabletten. Routes (routes/livestream.js) gør det, ytHandling siger.
+
+const YT_TJEK_MS = 5 * 60 * 1000;        // udsendelsen tjekkes så tit, mens der sendes (afsluttet i Studio?)
+const YT_FEJL_PAUSE_MS = 2 * 60 * 1000;  // efter en fejl hos YouTube prøves der igen efter så længe
+
+// send: beslutningen; udsendelse: banens yt_broadcast_id; tjek: sidste tjek;
+// fejlTid: sidste fejl. → 'opret', 'tjek', 'afslut' eller null
+function ytHandling({ send, udsendelse, tjek = null, fejlTid = null, nu = Date.now() }) {
+    const pause = tid(fejlTid) !== null && nu - tid(fejlTid) < YT_FEJL_PAUSE_MS;
+    if (!send) return udsendelse && !pause ? 'afslut' : null;
+    if (!udsendelse) return pause ? null : 'opret';
+    return tid(tjek) === null || nu - tid(tjek) >= YT_TJEK_MS ? 'tjek' : null;
+}
+
+const datoTekst = (nu = Date.now()) => new Intl.DateTimeFormat('da-DK',
+    { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/Copenhagen' }).format(nu);
+
+// Udsendelsens titel (højst 100 tegn, uden < og >, som YouTube kræver):
+// holdkampens hold, ellers navnene i scoreboardet, ellers klubben og banen
+function ytTitel({ grund, bane, hold = null, navne = null, klubnavn = null, nu = Date.now() }) {
+    const ren = (s) => tekst(s, 100).replace(/[<>]/g, '');
+    const hvor = `bane ${bane}, ${datoTekst(nu)}`;
+    let titel;
+    if (grund === 'holdkamp' && hold && hold[0] && hold[1]) titel = `${ren(hold[0])} – ${ren(hold[1])} (${hvor})`;
+    else if (grund !== 'hele-dagen' && navne && navne[0] && navne[1]) titel = `${ren(navne[0])} – ${ren(navne[1])} (${hvor})`;
+    else titel = `${klubnavn ? `${ren(klubnavn)} – ` : ''}Bane ${bane} (${datoTekst(nu)})`;
+    return titel.length > 100 ? titel.slice(0, 99) + '…' : titel;
+}
+
+function ytBeskrivelse(klubnavn = null) {
+    return `${klubnavn ? `${tekst(klubnavn, 100).replace(/[<>]/g, '')}. ` : ''}` +
+        'Sendt automatisk fra banen med Badmintonapp — https://badmintonapp.dk';
+}
+
 module.exports = {
-    STANDARD_URL, EFTER_MS, STILLE_MS, KLAR_MS,
+    STANDARD_URL, EFTER_MS, STILLE_MS, KLAR_MS, YT_TJEK_MS, YT_FEJL_PAUSE_MS,
+    ytHandling, ytTitel, ytBeskrivelse,
     gyldigUrl, gyldigNoegle, rensOpsaetning, noegleSlut,
     STANDARD_INDSTILLINGER, laesIndstillinger, rensIndstillinger, videoTilPc, sponsorNu, gyldigLogoFil,
     beslutning, startet, holdkampNu, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,

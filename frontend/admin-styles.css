@@ -1035,6 +1035,18 @@ header > div {
 
 .ls-faelles-gem .ls-besked { margin-top: 0; }
 
+/* YouTube-kanalen: forbundet, synlighed, lavet til børn */
+.ls-youtube-raekke {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    margin-bottom: 10px;
+}
+
+.ls-youtube .ls-faelles-felter { align-items: end; }
+.ls-yt:empty { display: none; }
+
 /* Kameraet på banen (foldes ud) */
 .ls-kamera { margin-top: 8px; }
 .ls-kamera > summary { cursor: pointer; padding: 4px 0; }

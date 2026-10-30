@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Privatlivspolitik for BadmintonApp.dk — hvilke oplysninger appen behandler, og hvordan YouTube-forbindelsen til livestream bruges.">
+    <title>Privatlivspolitik — BadmintonApp.dk</title>
+    <link rel="canonical" href="https://badmintonapp.dk/privatliv.html">
+    <link rel="stylesheet" href="fonts.css">
+    <link rel="stylesheet" href="fundament.css?v=2">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+
+        :root {
+            --red: #e94560;
+            --bg: #0d0d1a;
+            --border-soft: rgba(255, 255, 255, 0.08);
+            --text: #eaeaea;
+            --muted: var(--text-secondary, rgba(255, 255, 255, 0.78));
+        }
+
+        body {
+            margin: 0;
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.65;
+        }
+
+        main {
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 48px 16px 64px;
+        }
+
+        a { color: var(--red); }
+
+        .tilbage { display: inline-block; margin-bottom: 28px; color: var(--muted); text-decoration: none; }
+        .tilbage:hover { color: var(--text); }
+
+        h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 6px; }
+        h2 { font-size: 1.25rem; margin: 40px 0 8px; padding-top: 20px; border-top: 1px solid var(--border-soft); }
+        h3 { font-size: 1.05rem; margin: 24px 0 6px; }
+        p, li { color: var(--muted); }
+        ul { padding-left: 1.2em; }
+        li { margin: 4px 0; }
+        strong { color: var(--text); }
+        .opdateret { margin: 0 0 24px; font-size: 0.9rem; }
+
+        footer {
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 24px 16px 48px;
+            border-top: 1px solid var(--border-soft);
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+<main>
+    <a class="tilbage" href="/">← BadmintonApp.dk</a>
+    <h1>Privatlivspolitik</h1>
+    <p class="opdateret">Senest opdateret 29. oktober 2026</p>
+
+    <p>BadmintonApp.dk er et system til pointtælling, TV-skærme, holdkampe, turneringer og livestream for
+        badmintonklubber. Her står, hvilke oplysninger systemet behandler, hvorfor, og hvad du kan gøre.</p>
+
+    <h2>Hvem står bag</h2>
+    <p>BadmintonApp.dk drives af Jesper Brink Sørensen. Kontakt: <a href="mailto:info@badmintonapp.dk">info@badmintonapp.dk</a>.</p>
+
+    <h2>Klubbens oplysninger</h2>
+    <p>Hver klub har sin egen afdeling (fx <em>klubnavn</em>.badmintonapp.dk) med sin egen database. Klubben bestemmer, hvad der lægges
+        ind, og er dataansvarlig for det. BadmintonApp.dk opbevarer og behandler det for klubben. Det drejer sig om:</p>
+    <ul>
+        <li>spillernes navne, klub, køn og aldersgruppe, når klubben lægger dem ind eller importerer en holdkamp eller turnering</li>
+        <li>kampe, stillinger og resultater</li>
+        <li>klubbens logoer, sponsorbilleder og indstillinger</li>
+        <li>klubadministratorernes brugernavne (adgangskoder gemmes kun som hash)</li>
+        <li>adgangslinks til klubbens tablets og TV-skærme</li>
+    </ul>
+    <p>Oplysningerne bruges kun til at vise og tælle kampene i klubben. De sælges ikke og deles ikke med andre. Klubben kan selv rette og
+        slette dem i admin, og klubbens backup indeholder dem.</p>
+
+    <h2>Livestream og YouTube</h2>
+    <p>Klubben kan sende baner live fra et USB-kamera i TV-PC'en. Billedet går direkte fra TV-PC'en til klubbens egen kanal hos
+        YouTube — BadmintonApp.dk gemmer ingen video. Det er klubben, der beslutter, hvilke kampe der sendes.</p>
+
+    <h3>Når klubben forbinder sin YouTube-kanal</h3>
+    <p>Klubben kan give BadmintonApp.dk adgang til sin YouTube-kanal med Googles login (adgangen "Administrer din YouTube-konto",
+        <code>https://www.googleapis.com/auth/youtube</code>). Adgangen bruges <strong>kun</strong> til at:</p>
+    <ul>
+        <li>læse kanalens navn og id, så admin kan se, hvilken kanal der er forbundet</li>
+        <li>oprette en fast stream (stream-nøgle) pr. bane</li>
+        <li>oprette en ny udsendelse, når en bane begynder at sende, koble den til banens stream, tjekke dens status og afslutte den,
+            når banen holder op</li>
+    </ul>
+    <p>BadmintonApp.dk læser og ændrer ikke andre videoer, playlister, kommentarer, abonnenter eller andet på kanalen.</p>
+
+    <h3>Hvad der gemmes</h3>
+    <ul>
+        <li>et adgangstoken fra Google (refresh-token), krypteret, i klubbens database</li>
+        <li>kanalens navn og id</li>
+        <li>id'er og stream-nøgler for banernes streams og den igangværende udsendelse</li>
+    </ul>
+    <p>Oplysninger fra Google bruges kun til livestream-funktionen. De overføres ikke til andre, bruges ikke til reklame og bruges ikke
+        til at træne AI-modeller. BadmintonApp.dk's brug af oplysninger fra Googles API'er følger
+        <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
+        herunder kravene om begrænset brug (Limited Use).</p>
+
+    <h3>YouTube og Google</h3>
+    <p>Livestream bruger YouTube API Services. Ved at forbinde kanalen accepterer klubben
+        <a href="https://www.youtube.com/t/terms">YouTubes servicevilkår</a>, og Googles behandling af oplysninger er beskrevet i
+        <a href="https://policies.google.com/privacy">Googles privatlivspolitik</a>.</p>
+
+    <h3>Fjern adgangen</h3>
+    <p>Klubben kan altid fjerne forbindelsen i admin under Livestream → "Fjern forbindelsen". Så tilbagekaldes adgangen hos Google, og
+        den gemte adgang slettes med det samme. Adgangen kan også fjernes på
+        <a href="https://myaccount.google.com/permissions">Googles side for tredjepartsadgang</a>.</p>
+
+    <h2>Cookies og lagring i browseren</h2>
+    <p>BadmintonApp.dk bruger ingen cookies til sporing eller reklame. Login gemmes i browserens sessionslager, og tablets og TV-skærme
+        husker deres adgangslink i browseren. Siderne leveres gennem Cloudflare, som beskytter mod angreb.</p>
+
+    <h2>Spørgsmål</h2>
+    <p>Skriv til <a href="mailto:info@badmintonapp.dk">info@badmintonapp.dk</a>. Spillere, der vil have rettet eller slettet
+        oplysninger, kan også henvende sig til deres klub.</p>
+
+    <h2 lang="en">In English: Google user data</h2>
+    <div lang="en">
+        <p>When a club connects its YouTube channel, BadmintonApp.dk requests the <code>https://www.googleapis.com/auth/youtube</code>
+            scope. It is used only to read the channel's name and id, create one reusable live stream (stream key) per court, and
+            create, bind, check and end a live broadcast when a court starts and stops streaming. No other channel data is read or changed.</p>
+        <p>BadmintonApp.dk stores an encrypted refresh token, the channel name and id, and the ids and stream keys of the courts' streams
+            and the current broadcast. Google user data is used only to provide this live streaming feature, is not transferred to others,
+            is not used for advertising and is not used to train AI models. BadmintonApp.dk's use of information received from Google APIs
+            adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
+            including the Limited Use requirements.</p>
+        <p>By connecting a channel, the club agrees to the <a href="https://www.youtube.com/t/terms">YouTube Terms of Service</a>; see also
+            the <a href="https://policies.google.com/privacy">Google Privacy Policy</a>. Access can be removed at any time in the club's
+            admin (Livestream → "Fjern forbindelsen"), which revokes the token at Google and deletes it immediately, or at
+            <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.
+            Contact: <a href="mailto:info@badmintonapp.dk">info@badmintonapp.dk</a>.</p>
+    </div>
+</main>
+<footer>© 2026 Jesper Brink Sørensen &nbsp;·&nbsp; <a href="mailto:info@badmintonapp.dk">info@badmintonapp.dk</a></footer>
+</body>
+</html>

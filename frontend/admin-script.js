@@ -2909,9 +2909,15 @@ async function showLivestream() {
     hideAllSections();
     document.getElementById('livestreamSection').style.display = 'block';
     setNavActive('livestream');
-    history.replaceState(null, '', '#livestream');
+    // Tilbage fra Googles login: ?youtube=forbundet|afbrudt|fejl&besked=…
+    const svar = new URLSearchParams(location.search);
+    const ytSvar = svar.get('youtube');
+    history.replaceState(null, '', location.pathname + '#livestream');
     document.getElementById('livestreamBox').innerHTML = '<p class="tom-besked tom-besked--lille">Indlæser...</p>';
     await loadLivestream();
+    if (ytSvar === 'forbundet') livestreamYoutubeBesked('YouTube-kanalen er forbundet');
+    else if (ytSvar === 'afbrudt') livestreamYoutubeBesked('Afbrudt hos Google — intet er ændret', true);
+    else if (ytSvar === 'fejl') livestreamYoutubeBesked(svar.get('besked') || 'Kanalen kunne ikke forbindes', true);
     // Statussen hvert 10. sekund — stopper af sig selv, når siden er skiftet væk
     if (livestreamInterval) clearInterval(livestreamInterval);
     livestreamInterval = setInterval(() => {
@@ -2943,6 +2949,10 @@ async function refreshLivestreamStatus() {
     document.querySelectorAll('.ls-status').forEach(el => {
         el.innerHTML = livestreamStatusHtml(Number(el.dataset.bane));
     });
+    document.querySelectorAll('.ls-yt').forEach(el => {
+        const b = _livestream.baner.find(x => x.bane === Number(el.dataset.bane));
+        if (b) el.innerHTML = livestreamYtBaneHtml(b);
+    });
     // … og om banen er startet (tabletten kan have startet den imens)
     document.querySelectorAll('.ls-start').forEach(el => {
         const b = _livestream.baner.find(x => x.bane === Number(el.dataset.bane));
@@ -2957,6 +2967,7 @@ const LS_GRUND = {
     'slaaet-fra': 'Klar — livestream er slået fra for banen',
     'mangler-noegle': 'Mangler stream-nøgle',
     'badmintonplanner': 'Badmintonplanner-kamp — sendes ikke',
+    'youtube-fejl': 'Venter på YouTube — se fejlen ved banen',
     'stille': 'Kampen er ikke rørt i 30 minutter — sendes ikke',
     'ingen-bane': 'Banen findes ikke'
 };
@@ -3037,6 +3048,118 @@ function livestreamIndstillingerHtml() {
                 <span class="ls-besked tekst-mindre" id="lsFaellesBesked" hidden></span>
             </div>
         </div>`;
+}
+
+// ---- YouTube-kanalen (kun når serveren har YouTube-API'et) ----
+
+// Kanalen er forbundet og virker: nøgler og udsendelser kommer fra YouTube
+const livestreamYoutubeVirker = () => !!(_livestream?.youtube?.forbundet && !_livestream.youtube.fejl);
+
+const LS_SYNLIGHED = [['public', 'Alle (offentlig)'], ['unlisted', 'Kun med linket (ikke opført)'], ['private', 'Kun kanalen (privat)']];
+
+function livestreamYoutubeHtml() {
+    const y = _livestream.youtube;
+    if (!y) return '';
+    const besked = '<span class="ls-besked tekst-mindre" id="lsYoutubeBesked" hidden></span>';
+    if (!y.forbundet) {
+        return `
+        <div class="ls-faelles ls-youtube">
+            <h3 class="ls-overskrift">YouTube-kanal</h3>
+            <p class="tekst-mindre ls-hjaelp">Forbind klubbens YouTube-kanal, så opretter Badmintonapp selv en ny udsendelse, hver gang en bane
+                begynder at sende — ingen skal ind i YouTube Studio først. Stream-nøglerne til banerne oprettes også af sig selv.</p>
+            <div class="ls-faelles-gem">
+                <button class="btn-primary btn-sm" onclick="forbindLivestreamYoutube()">Forbind YouTube-kanal</button>
+                <span class="tekst-mindre tekst-daempet">Log ind med den Google-konto, der ejer kanalen. Kanalen skal have livestreaming slået til.</span>
+            </div>
+            <p class="tekst-mindre tekst-daempet ls-hjaelp">Ved at forbinde kanalen accepterer klubben
+                <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">YouTubes servicevilkår</a>
+                (se også <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Googles privatlivspolitik</a>).
+                Hvad Badmintonapp bruger adgangen til, står i
+                <a href="https://badmintonapp.dk/privatliv.html" target="_blank" rel="noopener">privatlivspolitikken</a>.</p>
+            ${besked}
+        </div>`;
+    }
+    const i = _livestream.indstillinger;
+    const status = y.fejl
+        ? `<span class="maerke maerke--fare">Virker ikke</span> <span class="tekst-mindre">${escapeHtml(y.fejl)}</span>
+           <button class="btn-primary btn-sm" onclick="forbindLivestreamYoutube()">Forbind igen</button>`
+        : `<span class="maerke maerke--vundet">✓ Forbundet</span> <strong>${escapeHtml(y.kanal || 'YouTube-kanal')}</strong>`;
+    return `
+        <div class="ls-faelles ls-youtube">
+            <h3 class="ls-overskrift">YouTube-kanal</h3>
+            <div class="ls-youtube-raekke">${status}
+                <button class="btn-danger btn-sm" onclick="fjernLivestreamYoutube()">Fjern forbindelsen</button></div>
+            <div class="ls-faelles-felter">
+                <label><span class="felt-etiket">Hvem kan se udsendelserne</span>
+                    <select class="admin-input admin-input--sm" id="lsYtSynlighed" onchange="gemLivestreamYoutube()">
+                        ${LS_SYNLIGHED.map(([v, t]) => `<option value="${v}"${i.ytSynlighed === v ? ' selected' : ''}>${t}</option>`).join('')}
+                    </select></label>
+                <label class="ls-flueben"><input type="checkbox" id="lsYtBoern"${i.ytBoern ? ' checked' : ''} onchange="gemLivestreamYoutube()"> Lavet til børn</label>
+            </div>
+            <p class="tekst-mindre tekst-daempet ls-hjaelp">En ny udsendelse oprettes, hver gang en bane begynder at sende — én pr. holdkamp,
+                pr. kamp startet på tabletten og pr. "Send hele dagen". Den går live af sig selv og afsluttes, når banen holder op; videoen
+                bliver liggende på kanalen. YouTube kræver, at udsendelser for børn markeres "Lavet til børn" — så er chat og kommentarer
+                slået fra. Ændringer gælder de næste udsendelser.</p>
+            ${besked}
+        </div>`;
+}
+
+// Ved banen: nøglen fra YouTube, udsendelsen lige nu og en fejl hos YouTube
+function livestreamYtBaneHtml(b) {
+    if (!livestreamYoutubeVirker() || !b.yt) return '';
+    const dele = [b.yt.noegle
+        ? '<span class="maerke maerke--vundet">✓ Nøgle fra YouTube</span>'
+        : '<span class="tekst-mindre tekst-daempet">Nøglen oprettes på YouTube, første gang banen sender</span>'];
+    if (b.yt.udsendelse) {
+        dele.push(`<a class="btn-secondary btn-sm" href="https://www.youtube.com/watch?v=${encodeURIComponent(b.yt.udsendelse)}" target="_blank" rel="noopener">Se udsendelsen på YouTube</a>`);
+    }
+    if (b.yt.fejl) dele.push(`<span class="maerke maerke--fare">YouTube</span> <span class="tekst-mindre">${escapeHtml(b.yt.fejl)} — prøver igen om lidt</span>`);
+    return dele.join(' ');
+}
+
+function livestreamYoutubeBesked(tekst, fejl = false) {
+    const el = document.getElementById('lsYoutubeBesked');
+    if (!el) return;
+    el.hidden = !tekst;
+    el.textContent = tekst || '';
+    el.classList.toggle('ls-besked--fejl', fejl);
+}
+
+async function forbindLivestreamYoutube() {
+    try {
+        const { url } = await api.connectLivestreamYoutube();
+        window.location.href = url;
+    } catch (e) {
+        livestreamYoutubeBesked(e.message, true);
+    }
+}
+
+async function fjernLivestreamYoutube() {
+    if (!confirm('Fjern forbindelsen til YouTube-kanalen? Udsendelser, der kører nu, afsluttes, og banerne bruger igen deres egen stream-nøgle (hvis der er indtastet en).')) return;
+    try {
+        await api.disconnectLivestreamYoutube();
+    } catch (e) {
+        livestreamYoutubeBesked(e.message, true);
+        return;
+    }
+    await loadLivestream();
+    livestreamYoutubeBesked('Forbindelsen er fjernet');
+}
+
+async function gemLivestreamYoutube() {
+    const data = {
+        ytSynlighed: document.getElementById('lsYtSynlighed').value,
+        ytBoern: document.getElementById('lsYtBoern').checked
+    };
+    try {
+        await api.saveLivestreamSettings(data);
+    } catch (e) {
+        livestreamYoutubeBesked(e.message, true);
+        return;
+    }
+    Object.assign(_livestream.indstillinger, data);
+    livestreamYoutubeBesked('Gemt — gælder de næste udsendelser');
+    setTimeout(() => livestreamYoutubeBesked(''), 4000);
 }
 
 // Klubbens logo: fra logo-databasen (klubnavnet) som standard — et uploadet vinder
@@ -3138,7 +3261,7 @@ function livestreamLydAendret(input) {
 
 // "Send hele dagen" (en turnering), eller hvad tabletten har startet
 function livestreamStartHtml(b) {
-    if (!b.enabled || !b.noegle) return '';
+    if (!b.enabled || !(b.noegle || livestreamYoutubeVirker())) return '';
     const kl = (iso) => new Date(iso).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
     const stop = `<button class="btn-danger btn-sm" onclick="stopLivestreamBane(${b.bane})">Stop</button>`;
     if (b.start === 'hele-dagen') {
@@ -3185,6 +3308,8 @@ function renderLivestream() {
             ${_livestream.kameraer.map(k => `<option value="${k.tokenId}"${valgt && valgt.tokenId === k.tokenId ? ' selected' : ''}>${escapeHtml(k.navn)}${k.bane && k.bane !== bane ? ` (bane ${k.bane})` : ''}</option>`).join('')}
         </select>`;
     };
+    // Med YouTube-kanalen forbundet er en indtastet nøgle kun reserve
+    const yt = livestreamYoutubeVirker();
     const raekker = baner.map(b => `
         <div class="ls-bane" data-bane="${b.bane}">
             <div class="ls-bane-top">
@@ -3193,20 +3318,21 @@ function renderLivestream() {
             </div>
             <div class="ls-felter">
                 <label><span class="felt-etiket">Kamera (TV-PC)</span>${kameraValg(b.bane)}</label>
-                <label><span class="felt-etiket">Stream-nøgle</span>
+                <label><span class="felt-etiket">${yt ? 'Egen stream-nøgle (reserve)' : 'Stream-nøgle'}</span>
                     <input type="password" class="admin-input admin-input--sm ls-noegle" autocomplete="off" spellcheck="false"
                         oninput="livestreamNoegleIndtastet(this)"
-                        placeholder="${b.noegle ? 'Indsæt for at skifte nøgle' : 'Indsæt nøglen fra YouTube Studio'}"></label>
+                        placeholder="${b.noegle ? 'Indsæt for at skifte nøgle' : yt ? 'Kun hvis YouTube-kanalen ikke virker' : 'Indsæt nøglen fra YouTube Studio'}"></label>
                 <label class="ls-flueben"><input type="checkbox" class="ls-til"${b.enabled ? ' checked' : ''}> Send banen</label>
                 <label class="ls-flueben"><input type="checkbox" class="ls-overlay"${b.overlay ? ' checked' : ''}> Navne og stilling i billedet</label>
                 <button class="btn-primary btn-sm" onclick="gemLivestream(${b.bane})">Gem</button>
             </div>
+            <div class="ls-noegle-status ls-yt" data-bane="${b.bane}">${livestreamYtBaneHtml(b)}</div>
             <div class="ls-noegle-status">
                 ${b.noegle
-                    ? `<span class="maerke maerke--vundet">✓ Nøgle gemt</span>
-                       <span class="tekst-mindre tekst-daempet">slutter på <code>${escapeHtml(b.noegle.replace(/^…/, ''))}</code></span>
+                    ? `<span class="maerke maerke--vundet">✓ ${yt ? 'Egen nøgle gemt' : 'Nøgle gemt'}</span>
+                       <span class="tekst-mindre tekst-daempet">slutter på <code>${escapeHtml(b.noegle.replace(/^…/, ''))}</code>${yt ? ' — bruges, hvis YouTube-kanalen ikke virker' : ''}</span>
                        <button class="btn-danger btn-sm" onclick="fjernLivestreamNoegle(${b.bane})">Fjern nøglen</button>`
-                    : `<span class="maerke maerke--afventer">Ingen nøgle</span>`}
+                    : yt ? '' : `<span class="maerke maerke--afventer">Ingen nøgle</span>`}
             </div>
             <details class="ls-kamera"${aabne.has(String(b.bane)) ? ' open' : ''}>
                 <summary class="tekst-mindre">Kameraet på banen${livestreamKameraResume(b)}</summary>
@@ -3239,8 +3365,11 @@ function renderLivestream() {
             Et USB-kamera i TV-PC'en sender banen til YouTube. Holdkampe sendes af sig selv — uden afbrydelser, fra første delkamp
             sættes på banen, til ${efter ? `${efter} ${efter === 1 ? 'minut' : 'minutter'} efter` : 'lige når'} den sidste delkamp er afgjort.
             Andre kampe startes på tabletten (Indstillinger → Start livestream) — én kamp ad gangen — eller her med "Send hele dagen".
-            Badmintonplanner-kampe sendes ikke. Stream-nøglen finder du i YouTube Studio → Gå live → Stream. Én nøgle pr. bane.
+            Badmintonplanner-kampe sendes ikke. ${yt
+                ? 'Udsendelserne og stream-nøglerne oprettes af sig selv på klubbens YouTube-kanal.'
+                : 'Stream-nøglen finder du i YouTube Studio → Gå live → Stream. Én nøgle pr. bane.'}
         </p>
+        ${livestreamYoutubeHtml()}
         ${livestreamIndstillingerHtml()}
         <p class="tekst-mindre ls-intro">${til ? `${til} ${til === 1 ? 'bane' : 'baner'} slået til` : 'Ingen baner slået til endnu'}</p>
         ${raekker}`;
@@ -3292,6 +3421,12 @@ function livestreamNoegleIndtastet(input) {
 }
 
 function fjernLivestreamNoegle(bane) {
+    // Med YouTube-kanalen forbundet sendes banen stadig — med nøglen derfra
+    if (livestreamYoutubeVirker()) {
+        if (!confirm(`Fjern den indtastede reserve-nøgle for bane ${bane}? Banen sender stadig med nøglen fra YouTube-kanalen.`)) return;
+        gemLivestream(bane, { fjernNoegle: true, streamKey: '' });
+        return;
+    }
     if (!confirm(`Fjern stream-nøglen for bane ${bane}? Banen sendes ikke, før en ny nøgle er indtastet.`)) return;
     gemLivestream(bane, { fjernNoegle: true, enabled: false, streamKey: '' });
 }

@@ -192,6 +192,15 @@ async function initialize() {
             console.log('✓ skaerm_haendelser.tekst/log kolonner tilfoejet');
         }
 
+        // Serverens egne indstillinger (fx YouTube-login-klienten, config/youtubeKlient.js)
+        await query(`
+            CREATE TABLE IF NOT EXISTS indstillinger (
+                noegle VARCHAR(60) PRIMARY KEY,
+                vaerdi TEXT NULL,
+                opdateret TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB
+        `);
+
         // Seed standard klub-logoer (idempotent). Lazy require for at undgaa
         // cirkulaer afhaengighed (seedLogos kraever dette modul ved load).
         try {

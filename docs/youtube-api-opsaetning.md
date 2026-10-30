@@ -80,15 +80,19 @@ Under **Clients → Create client**:
 Én fælles adresse for alle klubber (Google tillader ikke `*.badmintonapp.dk`).
 Serveren sender klubbens admin tilbage til klubbens eget subdomæne bagefter.
 
-Efter **Create** vises **Client ID** og **Client secret**. De skal i prod-`.env`:
+Efter **Create** vises **Client ID** og **Client secret**. Secret'en vises kun
+den ene gang — er den væk, åbn klienten under Clients og vælg **Add secret**.
 
-```
-YOUTUBE_CLIENT_ID=...
-YOUTUBE_CLIENT_SECRET=...
-```
+Begge indtastes i **super-admin → YouTube (livestream)** → **Gem**. Serveren
+tjekker hos Google, at de hører sammen, og gemmer secret'en krypteret i
+master-databasen. Kortet har også en kort udgave af dette trin og en knap til at
+kopiere tilbage-adressen. Det er fælles for hele serveren — klubberne forbinder
+bagefter hver deres egen kanal.
 
-Secret'en må **ikke** sendes i chatten eller lægges i repoet — kun i prod-`.env`
-(som de andre secrets).
+(Alternativt kan de sættes som `YOUTUBE_CLIENT_ID` / `YOUTUBE_CLIENT_SECRET` i
+serverens `.env`; så går de forud, og super-admin viser dem kun.)
+
+Secret'en må **ikke** sendes i chatten eller lægges i repoet.
 
 ## 7. Test-brugere (Audience)
 
@@ -110,11 +114,12 @@ Googles godkendelse kræver:
   der lægges i DNS hos Cloudflare. (Er det allerede gjort for sitemap'en, er
   det klaret — det skal være samme Google-konto som projektets ejer, eller
   ejeren skal tilføjes i Search Console.)
-- **En privatlivspolitik** på `https://badmintonapp.dk/privatliv.html`, der siger,
-  hvad vi gør med YouTube-adgangen: opretter udsendelser og stream-nøgler på
-  klubbens kanal, gemmer adgangen krypteret, læser ikke andet, og at klubben
-  kan fjerne adgangen i admin og på <https://myaccount.google.com/permissions>.
-  Udkastet skriver jeg sammen med funktionen.
+- **En privatlivspolitik** på `https://badmintonapp.dk/privatliv.html` (ligger i
+  `marketing/privatliv.html`, linket fra forsidens bund — Google kræver begge).
+  Den siger, hvad vi gør med YouTube-adgangen, at vi følger Googles "Limited
+  Use"-krav, og linker til YouTubes servicevilkår og Googles privatlivspolitik
+  (kræves af YouTube API Services). **Læs den igennem, før den går i luften** —
+  den beskriver også klubbernes øvrige data.
 
 ## 9. Sæt appen i produktion og send den til godkendelse
 
@@ -147,17 +152,26 @@ test, søges auditten her:
 
 ---
 
-## Det, jeg bygger bagefter (besluttet 2026-10-29)
+## Sådan virker det (bygget 2026-10-29)
 
-- **Admin → Livestream → "Forbind YouTube-kanal"** (én kanal pr. klub). Adgangen
-  gemmes krypteret pr. klub og kan fjernes igen.
-- **Stream-nøglerne oprettes automatisk** pr. bane, når kanalen er forbundet. En
-  indsat nøgle (som i dag) bruges stadig som reserve, hvis kanalen ikke er forbundet.
+- **Admin → Livestream → "Forbind YouTube-kanal"** (én kanal pr. klub; kun på
+  klubbernes subdomæner, ikke demoen). Adgangen gemmes krypteret
+  (`config/hemmelig.js`, nøgle afledt af `JWT_SECRET` — skiftes den, skal
+  klubberne forbinde igen) og kan fjernes igen ("Fjern forbindelsen").
+- **Stream-nøglerne oprettes automatisk** pr. bane, første gang banen sender. En
+  indtastet nøgle bruges som reserve, hvis kanalen ikke virker.
 - **En ny udsendelse oprettes**, når banen skal sende — én pr. holdkamp, pr.
   "Send hele dagen" og pr. kamp startet på tabletten. Titel fx
-  "Bane 3: Lyngby 2 – Gentofte 2". Den går live af sig selv, når billedet kommer,
-  og afsluttes af sig selv, når PC'en stopper.
+  "Lyngby 2 – Gentofte 2 (bane 3, 29. okt. 2026)". Den går live af sig selv, når
+  billedet kommer, og afsluttes, når banen holder op (eller af YouTube ca. et
+  minut efter, at billedet er væk). Afsluttes den i YouTube Studio, mens banen
+  stadig sender, oprettes en ny inden for 5 minutter.
 - **Standarder:** offentlig, **lavet til børn** (chat og kommentarer fra). Begge
   kan ændres pr. klub i admin.
+- En fejl hos YouTube (fx kvote eller livestreaming ikke slået til) stopper aldrig
+  streamen: fejlen står ved banen i admin, og der prøves igen efter 2 minutter.
 - Kun serveren ændres — TV-PC'erne sender som i dag, så der kræves ingen ny
-  TV-USB-release.
+  TV-USB-release. Deploy: backend + frontend (nginx-ruten `/youtube/callback` på
+  badmintonapp.dk). Client ID og Client secret indtastes bagefter i super-admin
+  (trin 6) — indtil da vises YouTube-delen slet ikke for klubberne. Fjernes de i
+  super-admin, sender banerne videre til en indtastet nøgle.

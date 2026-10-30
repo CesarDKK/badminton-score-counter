@@ -56,6 +56,9 @@ services:
       DB_NAME: badminton_counter
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?sæt MYSQL_ROOT_PASSWORD i .env}
       JWT_SECRET: ${JWT_SECRET:?sæt JWT_SECRET i .env (mindst 32 tegn)}
+      # Valgfrit: YouTube-API'et (docs/youtube-api-opsaetning.md)
+      YOUTUBE_CLIENT_ID: ${YOUTUBE_CLIENT_ID:-}
+      YOUTUBE_CLIENT_SECRET: ${YOUTUBE_CLIENT_SECRET:-}
       UPLOAD_DIR: /app/uploads
       CLUB_BACKUP_DIR: /app/club-backups
       MAX_FILE_SIZE: 10485760
