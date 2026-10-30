@@ -308,7 +308,7 @@ router.get('/', livestreamAdmin, async (req, res, next) => {
                     spejl: !!(o && o.mirror),
                     autofokus: !!(o && o.autofocus),
                     lyd: !!(o && o.sound),
-                    logo: (o && o.logo) || 'ingen',
+                    logo: (o && o.logo) || 'klub',
                     // Banens stream og udsendelse på den forbundne kanal
                     yt: yt && o ? { noegle: !!o.yt_stream_key, udsendelse: o.yt_broadcast_id || null, fejl: o.yt_fejl || null } : null,
                     start: s ? s.start : null,
@@ -400,7 +400,7 @@ router.put('/baner/:bane', livestreamAdmin, async (req, res, next) => {
                 stream_key = VALUES(stream_key), overlay = VALUES(overlay), flip_180 = VALUES(flip_180),
                 mirror = VALUES(mirror), autofocus = VALUES(autofocus), sound = VALUES(sound), logo = VALUES(logo)`,
             [bane, o.enabled, o.stream_url, noegle, o.overlay, !!kamera('flip_180', false), !!kamera('mirror', false),
-                !!kamera('autofocus', false), !!kamera('sound', false), kamera('logo', 'ingen')]);
+                !!kamera('autofocus', false), !!kamera('sound', false), kamera('logo', 'klub')]);
         console.log(`[livestream] ${tenantKey(req)} bane ${bane}: ${o.enabled ? 'slået til' : 'slået fra'}` +
             (o.stream_key !== undefined ? (o.stream_key ? ', ny nøgle' : ', nøgle fjernet') : ''));
         res.json({ success: true, noegle: ls.noegleSlut(noegle) });

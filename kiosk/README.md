@@ -206,7 +206,7 @@ faktisk sendes.
 hovedet), spejlvend, autofokus (fra som standard — fast fokus på lang afstand
 er skarpest, autofokus "pumper", når spillerne løber), lyd fra kameraets
 mikrofon, og logo i hjørnet: intet, banens sponsor (bane-bannerne, de skifter
-som på TV'et) eller klubbens logo. Logoet står i den modsatte side af
+som på TV'et) eller klubbens logo (standard). Logoet står i den modsatte side af
 scoreboardet.
 
 Lyden tages kun fra mikrofonen i selve kameraet (samme USB-enhed), aldrig fra

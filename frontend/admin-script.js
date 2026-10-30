@@ -3181,7 +3181,7 @@ function livestreamKlubLogoHtml() {
                     <input type="file" accept="image/png,image/jpeg,image/webp" hidden onchange="uploadLivestreamLogo(this)"></label>
                 ${k.upload ? `<button class="btn-danger btn-sm" onclick="fjernLivestreamLogo()">${db ? 'Brug logo-databasens igen' : 'Fjern'}</button>` : ''}
             </div>
-            <span class="tekst-mindre tekst-daempet">Vælg "Klubbens logo" under den bane, det skal vises på. Et eget logo: PNG med gennemsigtig baggrund ser bedst ud.
+            <span class="tekst-mindre tekst-daempet">Vises i hjørnet på alle baner — under banens kamera kan "Logo i hjørnet" sættes til banens sponsor eller intet logo. Et eget logo: PNG med gennemsigtig baggrund ser bedst ud.
                 Spillernes klublogoer står ud for navnene i scoreboardet, som på TV'et.</span>
         </div>`;
 }
@@ -3346,7 +3346,7 @@ function renderLivestream() {
                         <select class="admin-input admin-input--sm ls-logo-valg">
                             <option value="ingen"${b.logo === 'ingen' ? ' selected' : ''}>Intet logo</option>
                             <option value="sponsor"${b.logo === 'sponsor' ? ' selected' : ''}>Banens sponsor</option>
-                            <option value="klub"${b.logo === 'klub' ? ' selected' : ''}>Klubbens logo</option>
+                            <option value="klub"${b.logo === 'klub' ? ' selected' : ''}>Klubbens logo${livestreamHarKlubLogo() ? '' : ' (klubben har intet logo)'}</option>
                         </select></label>
                 </div>
                 <div class="advarsel-boks tekst-mindre ls-lyd-advarsel"${b.lyd ? '' : ' hidden'}>
@@ -3376,10 +3376,16 @@ function renderLivestream() {
         ${raekker}`;
 }
 
+// Har klubben et logo til streamen (uploadet eller fra logo-databasen)?
+function livestreamHarKlubLogo() {
+    const k = _livestream?.klubLogo || {};
+    return !!(k.upload || (k.database && k.database.url));
+}
+
 // Det, der er slået til for kameraet, i overskriften på den foldede boks
 function livestreamKameraResume(b) {
     const dele = [b.vend && 'vendt 180°', b.spejl && 'spejlvendt', b.autofokus && 'autofokus', b.lyd && 'med lyd',
-        b.logo === 'sponsor' && 'sponsor-logo', b.logo === 'klub' && 'klublogo'].filter(Boolean);
+        b.logo === 'sponsor' && 'sponsor-logo', b.logo === 'klub' && livestreamHarKlubLogo() && 'klublogo'].filter(Boolean);
     return dele.length ? ` <span class="tekst-daempet">· ${dele.join(' · ')}</span>` : '';
 }
 
