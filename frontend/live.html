@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live</title>
+    <meta name="description" content="Klubbens baner live: kampene, der sendes på YouTube lige nu.">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=5">
+    <link rel="icon" type="image/png" href="/favicon.png?v=5">
+    <link rel="stylesheet" href="fonts.css?v=2">
+    <link rel="stylesheet" href="fundament.css?v=2">
+    <link rel="stylesheet" href="live-styles.css?v=1">
+    <script src="js/theme-loader.js?v=15"></script>
+</head>
+<body>
+    <header class="live-top">
+        <div class="live-klub">
+            <img id="klubLogo" class="live-klub-logo" alt="" hidden>
+            <div>
+                <h1 id="klubNavn">Live</h1>
+                <p class="live-undertitel">Baner, der sendes live lige nu</p>
+            </div>
+        </div>
+        <a id="kanalLink" class="btn-secondary btn-sm" target="_blank" rel="noopener" hidden>Klubbens YouTube-kanal</a>
+    </header>
+
+    <main>
+        <p id="indlaeser" class="live-tom">Henter banerne…</p>
+        <div id="baner" class="live-baner"></div>
+        <div id="ingen" class="live-tom" hidden>
+            <p class="live-tom-titel">Ingen baner sendes lige nu</p>
+            <p>Siden opdateres af sig selv, når en kamp går i gang.</p>
+        </div>
+        <p id="fejl" class="live-fejl" hidden>Kunne ikke hente banerne — prøver igen om lidt.</p>
+        <p class="live-note">Stillingen kommer direkte fra banen og kan være et par sekunder foran videoen.</p>
+    </main>
+
+    <script src="live-script.js?v=1"></script>
+</body>
+</html>

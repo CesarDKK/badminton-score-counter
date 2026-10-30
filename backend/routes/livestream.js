@@ -626,6 +626,7 @@ router.post('/pc', async (req, res, next) => {
         const foer = ls.statusFor(tenant)[link.id];
         const bane = link.camera_court;
         let svar = { kamera: false, send: false, grund: 'intet-kamera' };
+        let livetavle = null;   // til live-siden — også når overlayet er slået fra
         if (bane) {
             const court = await queryOne('SELECT id, is_doubles FROM courts WHERE court_number = ?', [bane]);
             const opsaetning = await queryOne('SELECT * FROM court_streams WHERE court_number = ?', [bane]);
@@ -674,15 +675,75 @@ router.post('/pc', async (req, res, next) => {
                 svar.logo = opsaetning.logo === 'klub'
                     ? (await klubLogo(req, indst).catch(() => ({ url: logoUrl(req, indst.logo) }))).url
                     : opsaetning.logo === 'sponsor' ? await sponsorPaaBane(bane) : null;
+                livetavle = svar.tavle || ls.overlayTavle(rk, dbl, bane);
             }
         }
-        const { ny } = ls.registrer(tenant, link.id, { ...pc, bane: bane || null, grund: svar.grund }, klientIp(req));
+        const { ny } = ls.registrer(tenant, link.id, { ...pc, bane: bane || null, grund: svar.grund, skalSende: !!svar.send, tavle: livetavle }, klientIp(req));
         // Til backend-loggen, når PC'en begynder/holder op med at sende eller får en ny fejl
         if (!foer || foer.sender !== ny.sender || (ny.fejl && foer.fejl !== ny.fejl)) {
             console.log(`[livestream] ${tenant} "${ny.navn || link.id}" bane ${bane || '-'}: ` +
                 (ny.fejl ? `fejl: ${ny.fejl}` : ny.sender ? 'sender' : `sender ikke (${svar.grund})`));
         }
         res.json(svar);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// ---- Klubbens live-side (/live) ----
+// Offentlig som oversigten: banerne, der sender lige nu, med stillingen og
+// YouTube-udsendelsen. Kun det, seerne alligevel kan se — private udsendelser
+// vises ikke. Svaret gemmes et par sekunder, så mange seere ikke giver mange opslag.
+const LIVE_CACHE_MS = 3000;
+const _live = new Map();   // tenant -> { t, data }
+const INDLEJR_CACHE_MS = 10 * 60 * 1000;
+const _indlejr = new Map(); // video-id -> { t, ok }
+
+// Må udsendelsen vises på andre sider? YouTubes oEmbed svarer 401, når kanalen
+// ikke tillader indlejring (så viser live-siden et billede med link i stedet)
+async function kanIndlejres(id) {
+    const gemt = _indlejr.get(id);
+    if (gemt && Date.now() - gemt.t < INDLEJR_CACHE_MS) return gemt.ok;
+    let ok = false;
+    try {
+        const r = await fetch('https://www.youtube.com/oembed?format=json&url=' +
+            encodeURIComponent(`https://www.youtube.com/watch?v=${id}`), { signal: AbortSignal.timeout(5000) });
+        ok = r.ok;
+    } catch { /* YouTube kunne ikke nås: link i stedet */ }
+    _indlejr.set(id, { t: Date.now(), ok });
+    if (_indlejr.size > 500) _indlejr.delete(_indlejr.keys().next().value);
+    return ok;
+}
+
+// GET /api/livestream/live — til live-siden, uden login
+router.get('/live', async (req, res, next) => {
+    try {
+        if (req.accessMode !== 'club' && req.accessMode !== 'direct') {
+            return res.status(404).json({ error: 'Endpoint ikke fundet' });
+        }
+        const tenant = tenantKey(req);
+        const gemt = _live.get(tenant);
+        if (gemt && Date.now() - gemt.t < LIVE_CACHE_MS) return res.json(gemt.data);
+
+        const indst = await hentIndstillinger();
+        const yt = await ytForbindelse(req);
+        const video = ytBrugbar(yt) && indst.ytSynlighed !== 'private';
+        const udsendelser = new Map((await query('SELECT court_number, yt_broadcast_id FROM court_streams'))
+            .map(r => [r.court_number, r.yt_broadcast_id]));
+        const baner = ls.liveBaner(ls.statusFor(tenant), udsendelser, { video });
+        for (const b of baner) if (b.video) b.video.indlejres = await kanIndlejres(b.video.id);
+        const klub = await klubLogoData(req).catch(() => ({}));
+        const logo = await klubLogo(req, indst).catch(() => ({ url: null }));
+        const data = {
+            klub: klub.klubnavn || null,
+            logo: logo.url || null,
+            kanal: yt && yt.kanal_id && video
+                ? { navn: yt.kanal_navn || '', url: `https://www.youtube.com/channel/${encodeURIComponent(yt.kanal_id)}` } : null,
+            baner
+        };
+        _live.set(tenant, { t: Date.now(), data });
+        res.set('Cache-Control', 'no-store');
+        res.json(data);
     } catch (error) {
         next(error);
     }

@@ -496,6 +496,30 @@ function senderBane(tenant, bane, nu = Date.now()) {
     return false;
 }
 
+// ---------- Klubbens live-side (/live) ----------
+
+// Banerne, der sender lige nu, til den offentlige live-side: scoreboardet, som
+// TV-PC'en fik det (kamp: null mellem kampene), og banens YouTube-udsendelse.
+// Kun når PC'en sender, og serveren har bedt den om det (ikke de sidste
+// sekunder, efter banen er stoppet).
+// status: statusFor(); udsendelser: Map(bane -> yt_broadcast_id); video: må
+// udsendelserne vises (kanalen forbundet og ikke privat)?
+const YT_VIDEO_ID = /^[A-Za-z0-9_-]{6,20}$/;
+function liveBaner(status, udsendelser, { video = false } = {}) {
+    const baner = new Map();
+    for (const s of Object.values(status || {})) {
+        if (s.online && s.sender && s.skalSende && Number.isInteger(s.bane) && !baner.has(s.bane)) {
+            const id = video ? udsendelser.get(s.bane) : null;
+            baner.set(s.bane, {
+                bane: s.bane,
+                kamp: s.tavle || null,
+                video: id && YT_VIDEO_ID.test(id) ? { id, url: `https://www.youtube.com/watch?v=${id}` } : null
+            });
+        }
+    }
+    return [...baner.values()].sort((a, b) => a.bane - b.bane);
+}
+
 // ---------- YouTube-udsendelserne (kanalen forbundet med API'et) ----------
 //
 // Én udsendelse pr. "send-periode": fra beslutning() siger send, til den ikke
@@ -541,5 +565,5 @@ module.exports = {
     STANDARD_INDSTILLINGER, laesIndstillinger, rensIndstillinger, videoTilPc, sponsorNu, gyldigLogoFil,
     beslutning, startet, holdkampNu, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,
     spillerLogoer, klubLogoFraDatabase,
-    rensStatus, registrer, statusFor, senderBane
+    rensStatus, registrer, statusFor, senderBane, liveBaner
 };
