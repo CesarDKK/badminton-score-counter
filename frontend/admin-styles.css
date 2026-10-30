@@ -934,9 +934,11 @@ header > div {
 
 .ls-status { font-size: 0.85em; }
 
+/* Faste bredder til fluebenene, så kolonnerne står ens på alle baner — med
+   "auto" fik hver bane sine egne bredder efter indholdet */
 .ls-felter {
     display: grid;
-    grid-template-columns: minmax(160px, 1fr) minmax(200px, 1.4fr) auto auto auto;
+    grid-template-columns: minmax(160px, 1fr) minmax(200px, 1.4fr) 11.5em 15em auto;
     align-items: end;
     gap: 10px 14px;
 }
@@ -1066,6 +1068,9 @@ header > div {
 @media (max-width: 760px) {
     .ls-felter { grid-template-columns: 1fr 1fr; }
     .ls-felter > label:nth-child(-n+2) { grid-column: 1 / -1; }
+    /* På telefonen står hvert felt for sig — så må teksten gerne fylde i rækken */
+    .ls-felter .ls-flueben--laast { flex-wrap: wrap; }
+    .ls-felter .ls-mangler { position: static; flex-basis: 100%; }
 }
 
 /* Skærmenes hændelseslog: tid · skærm · hvad — på en telefon står hvad under skærmen */
@@ -1671,6 +1676,7 @@ header > div {
     .holdkamp-oprettet { animation: none; }
 }
 
-/* "Livestream slået til" er gråt, til banen har kamera og nøgle */
-.ls-flueben--laast { flex-wrap: wrap; cursor: not-allowed; color: var(--text-muted, rgba(255, 255, 255, 0.62)); }
-.ls-mangler { flex-basis: 100%; font-size: 0.85em; }
+/* "Livestream slået til" er gråt, til banen har kamera og nøgle. Hvad der
+   mangler, hænger under fluebenet uden at gøre rækken højere */
+.ls-flueben--laast { position: relative; cursor: not-allowed; color: var(--text-muted, rgba(255, 255, 255, 0.62)); }
+.ls-mangler { position: absolute; left: 0; top: calc(100% - 6px); font-size: 0.85em; white-space: nowrap; }
