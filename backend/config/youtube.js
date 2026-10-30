@@ -189,8 +189,10 @@ async function opretUdsendelse(token, { titel, beskrivelse, synlighed, boern, st
     const b = await api('liveBroadcasts', { part: 'snippet,status,contentDetails' }, { token, method: 'POST', body: {
         snippet: { title: titel, description: beskrivelse, scheduledStartTime: new Date().toISOString() },
         status: { privacyStatus: synlighed, selfDeclaredMadeForKids: !!boern },
+        // enableEmbed sættes ikke: YouTube svarer invalidEmbedSetting på kanaler, der
+        // ikke må indlejre livestreams — kanalens egen standard gælder
         contentDetails: {
-            enableAutoStart: true, enableAutoStop: true, enableDvr: true, enableEmbed: true,
+            enableAutoStart: true, enableAutoStop: true, enableDvr: true,
             recordFromStart: true, latencyPreference: 'normal', monitorStream: { enableMonitorStream: false }
         }
     } });
