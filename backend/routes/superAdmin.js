@@ -1018,14 +1018,17 @@ router.put('/youtube', superAdminAuth, async (req, res, next) => {
         if (!/^\S{10,200}$/.test(secret)) {
             return res.status(400).json({ error: 'Client secret ser forkert ud — kopiér hele værdien (den starter typisk med GOCSPX-)' });
         }
-        let kendt;
+        let svar;
         try {
-            kendt = await youtube.tjekKlient(id, secret);
+            svar = await youtube.tjekKlient(id, secret);
         } catch (e) {
             return res.status(502).json({ error: `Kunne ikke tjekke nøglerne hos Google: ${e.message}` });
         }
-        if (!kendt) {
-            return res.status(400).json({ error: 'Google kender ikke den kombination af Client ID og Client secret — tjek, at begge er kopieret fra samme klient' });
+        if (svar === 'ukendt-id') {
+            return res.status(400).json({ error: 'Google kan ikke finde en klient med det Client ID. Er klienten lige oprettet, så vent 5–10 minutter og prøv igen — Google er lidt om at slå nye klienter til. Ellers tjek, at hele Client ID er kopieret.' });
+        }
+        if (svar === 'forkert-secret') {
+            return res.status(400).json({ error: 'Google kender Client ID, men Client secret passer ikke til det — kopiér secret fra samme klient (eller lav en ny med Add secret)' });
         }
         await youtubeKlient.gem(id, secret);
         res.json(await youtubeStatus());

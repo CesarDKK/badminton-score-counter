@@ -82,6 +82,8 @@ Serveren sender klubbens admin tilbage til klubbens eget subdomæne bagefter.
 
 Efter **Create** vises **Client ID** og **Client secret**. Secret'en vises kun
 den ene gang — er den væk, åbn klienten under Clients og vælg **Add secret**.
+En ny klient kan være 5–10 minutter om at virke hos Google — indtil da svarer
+super-admin, at Google ikke kan finde klienten.
 
 Begge indtastes i **super-admin → YouTube (livestream)** → **Gem**. Serveren
 tjekker hos Google, at de hører sammen, og gemmer secret'en krypteret i
