@@ -186,6 +186,7 @@ test('youtube: stream, udsendelse koblet til streamen, og afslutning', async () 
     assert.equal(b.status.selfDeclaredMadeForKids, true);
     assert.equal(b.contentDetails.enableAutoStart, true);
     assert.equal(b.contentDetails.enableAutoStop, true);
+    assert.equal('enableEmbed' in b.contentDetails, false);
     assert.deepEqual([kald[1].sti, kald[1].query.id, kald[1].query.streamId], ['/youtube/v3/liveBroadcasts/bind', 'b1', 's1']);
 
     kald.length = 0;
