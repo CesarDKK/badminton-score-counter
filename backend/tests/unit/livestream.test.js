@@ -362,3 +362,24 @@ test('logoerne vendes med siderne i scoreboardet', () => {
     assert.deepEqual(t.logoer, [null, '/a.png']);
     assert.equal(ls.overlayTavle(rk, false, 3).logoer, undefined);
 });
+
+test('live-siden: kun baner, der sender, med scoreboard og udsendelse', () => {
+    const tavle = { bane: 2, navne: ['A', 'B'], saet: [], nu: [3, 1], serve: 1 };
+    const status = {
+        7: { online: true, sender: true, skalSende: true, bane: 2, tavle },
+        8: { online: true, sender: true, skalSende: true, bane: 1, tavle: null },   // mellem kampene
+        9: { online: true, sender: false, skalSende: true, bane: 3, tavle },        // sender ikke (endnu)
+        10: { online: false, sender: true, skalSende: true, bane: 4, tavle },       // PC'en er væk
+        11: { online: true, sender: true, skalSende: false, bane: 5, tavle }        // stoppet, PC'en er ved at holde op
+    };
+    const udsendelser = new Map([[1, null], [2, 'abcDEF12345'], [3, 'xyz12345678']]);
+    assert.deepEqual(ls.liveBaner(status, udsendelser, { video: true }), [
+        { bane: 1, kamp: null, video: null },
+        { bane: 2, kamp: tavle, video: { id: 'abcDEF12345', url: 'https://www.youtube.com/watch?v=abcDEF12345' } }
+    ]);
+    // Kanalen ikke forbundet, eller udsendelserne er private: ingen video
+    assert.equal(ls.liveBaner(status, udsendelser).find(b => b.bane === 2).video, null);
+    // Et id, der ikke ligner YouTubes, kommer aldrig med i en adresse
+    assert.equal(ls.liveBaner(status, new Map([[2, 'a"><script>']]), { video: true })[1].video, null);
+    assert.deepEqual(ls.liveBaner({}, new Map()), []);
+});
