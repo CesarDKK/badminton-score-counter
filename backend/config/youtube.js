@@ -12,6 +12,8 @@
  * Google-server.
  */
 
+const kvote = require('./youtubeKvote');
+
 const SCOPE = 'https://www.googleapis.com/auth/youtube';
 const TIMEOUT_MS = 15000;
 
@@ -90,8 +92,21 @@ async function kald(url, { method = 'GET', token, body, form } = {}) {
     throw new YoutubeFejl(besked, { status: r.status, grund });
 }
 
-const api = (sti, params, opts = {}) =>
-    kald(`${adresser().api}/${sti}?${new URLSearchParams(params).toString()}`, opts);
+// Hvert kald til Data API'et tæller i dagskvoten (config/youtubeKvote.js):
+// opslag 1 enhed, alt der opretter, ændrer eller sletter 50. Login (OAuth) er gratis
+async function api(sti, params, opts = {}) {
+    const enheder = (opts.method || 'GET') === 'GET' ? 1 : 50;
+    try {
+        const svar = await kald(`${adresser().api}/${sti}?${new URLSearchParams(params).toString()}`, opts);
+        kvote.tael(enheder);
+        return svar;
+    } catch (e) {
+        // Svarede Google (også med en fejl), er kaldet talt — kvoten opbrugt koster intet
+        const opbrugt = e.grund === 'quotaExceeded' || e.grund === 'dailyLimitExceeded';
+        if (e.status) kvote.tael(opbrugt ? 0 : enheder, { opbrugt });
+        throw e;
+    }
+}
 
 // ---- Login (OAuth) ----
 

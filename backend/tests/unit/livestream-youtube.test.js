@@ -14,6 +14,8 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-hemmelighed-mindst-32-t
 const { krypter, dekrypter } = require('../../config/hemmelig');
 const ls = require('../../screens/livestream');
 const youtube = require('../../config/youtube');
+const kvote = require('../../config/youtubeKvote');
+kvote.nulstil({ gem: false });   // ingen database i testene
 
 const NU = 1_800_000_000_000;
 const MIN = 60 * 1000;
@@ -241,4 +243,49 @@ test('youtube: tjekKlient — klienten findes (invalid_grant), ukendt ID eller f
     assert.equal(await youtube.tjekKlient('y.apps.googleusercontent.com', 'rigtig'), 'ukendt-id');
     assert.equal(kald[0].body.grant_type, 'authorization_code');
     assert.equal(kald[0].body.redirect_uri, 'https://badmintonapp.dk/youtube/callback');
+});
+
+// ---------- Dagskvoten (config/youtubeKvote.js) ----------
+
+test('kvote: opslag koster 1, oprettelse 50, login intet — og "kvoten er brugt op" markeres', async () => {
+    kvote.nulstil({ gem: false });
+    nulstil({
+        'GET /youtube/v3/channels': () => [200, { items: [{ id: 'UC1', snippet: { title: 'Kanal' } }] }],
+        'POST /youtube/v3/liveStreams': () => [403, { error: { code: 403, message: 'quota', errors: [{ reason: 'quotaExceeded' }] } }]
+    });
+    await youtube.kanal('a');
+    await youtube.kanal('a');
+    let s = kvote.status();
+    assert.deepEqual([s.enheder, s.kald, s.opbrugt, s.graense], [2, 2, null, 10000]);
+    await assert.rejects(youtube.opretStream('a', 'Bane 1'));
+    s = kvote.status();
+    assert.equal(s.enheder, 2);               // et afvist kald koster intet
+    assert.ok(s.opbrugt);
+    // En almindelig fejl (fx en udsendelse, der ikke findes) koster stadig
+    nulstil({ 'POST /youtube/v3/liveStreams': () => [404, { error: { code: 404, message: 'x', errors: [{ reason: 'notFound' }] } }] });
+    await assert.rejects(youtube.opretStream('a', 'Bane 1'));
+    assert.equal(kvote.status().enheder, 52);
+    kvote.saetGraense(50000);
+    assert.equal(kvote.status().graense, 50000);
+    kvote.nulstil({ gem: false });
+});
+
+test('kvote: Googles døgn går fra midnat Pacific-tid — også over sommertidsskiftet', () => {
+    // 30. okt. 2026 kl. 10 UTC = kl. 3 i Californien (sommertid, UTC-7)
+    assert.equal(kvote.googleDag(Date.UTC(2026, 9, 30, 10)), '2026-10-30');
+    assert.equal(new Date(kvote.nulstilles(Date.UTC(2026, 9, 30, 10))).toISOString(), '2026-10-31T07:00:00.000Z');
+    assert.equal(kvote.googleDag(Date.UTC(2026, 9, 30, 6, 59)), '2026-10-29');
+    // 1. nov. 2026 skifter USA til vintertid (UTC-8): næste midnat er kl. 8 UTC
+    assert.equal(new Date(kvote.nulstilles(Date.UTC(2026, 10, 1, 12))).toISOString(), '2026-11-02T08:00:00.000Z');
+    // Tallene pr. dag: i går står i historikken, i dag starter forfra
+    kvote.nulstil({ gem: false });
+    kvote.tael(50, { nu: Date.UTC(2026, 9, 29, 20) });
+    kvote.tael(1, { nu: Date.UTC(2026, 9, 30, 10) });
+    const s = kvote.status(Date.UTC(2026, 9, 30, 12));
+    assert.equal(s.enheder, 1);
+    assert.deepEqual(s.historik, [{ dag: '2026-10-29', enheder: 50, opbrugt: false }]);
+    // Kun de seneste 14 dage gemmes
+    for (let d = 0; d < 20; d++) kvote.tael(1, { nu: Date.UTC(2026, 10, 1 + d, 20) });
+    assert.equal(kvote.status(Date.UTC(2026, 10, 20, 20)).historik.length, 7);
+    kvote.nulstil({ gem: false });
 });

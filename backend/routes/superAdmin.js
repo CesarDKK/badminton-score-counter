@@ -9,6 +9,7 @@ const { normaliserMail } = require('../config/adminMail');
 const skaermHaendelser = require('../screens/haendelseslog');
 const youtube = require('../config/youtube');
 const youtubeKlient = require('../config/youtubeKlient');
+const youtubeKvote = require('../config/youtubeKvote');
 const fs = require('fs');
 const sharp = require('sharp');
 const AdmZip = require('adm-zip');
@@ -993,9 +994,24 @@ async function youtubeStatus() {
         clientId: k ? k.id : '',
         ulaeselig: gemt.ulaeselig,
         opdateret: gemt.opdateret,
-        tilbageAdresse: youtube.tilbageAdresse()
+        tilbageAdresse: youtube.tilbageAdresse(),
+        kvote: youtubeKvote.status()
     };
 }
+
+// PUT /api/super-admin/youtube/kvote — { graense }: Googles dagskvote, når der
+// er givet mere end standarden på 10.000 enheder
+router.put('/youtube/kvote', superAdminAuth, async (req, res, next) => {
+    try {
+        const graense = Number(req.body.graense);
+        if (!Number.isInteger(graense) || graense < 1000 || graense > 100000000) {
+            return res.status(400).json({ error: 'Kvoten skal være et helt antal enheder (mindst 1.000)' });
+        }
+        youtubeKvote.saetGraense(graense);
+        await youtubeKvote.gem();
+        res.json(await youtubeStatus());
+    } catch (error) { next(error); }
+});
 
 // GET /api/super-admin/youtube
 router.get('/youtube', superAdminAuth, async (req, res, next) => {
