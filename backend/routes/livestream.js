@@ -267,7 +267,8 @@ async function baneStatus(req, bane) {
         pc: link ? ls.statusFor(tenantKey(req))[link.id] : null,
         holdkamp: await holdkampPaaBane(bane),
         planner: !!await plannerPaaBane(bane),
-        youtube: ytBrugbar(await ytForbindelse(req))
+        youtube: ytBrugbar(await ytForbindelse(req)),
+        efterMin: (await hentIndstillinger()).efterMin
     });
 }
 

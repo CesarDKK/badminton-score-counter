@@ -613,6 +613,13 @@ function closeSettingsMenu() {
 // "Hele dagen" startes og stoppes i admin.
 let livestream = null;
 
+// Hvornår streamen stopper: "2 minutter efter kampen er afgjort" — efter
+// klubbens indstilling i admin
+function livestreamStopTekst(l, kamp = 'kampen') {
+    const min = l && Number.isInteger(l.efterMin) ? l.efterMin : 2;
+    return min === 0 ? `når ${kamp} er afgjort` : `${min} ${min === 1 ? 'minut' : 'minutter'} efter ${kamp} er afgjort`;
+}
+
 async function opdaterLivestreamKnap() {
     const btn = document.getElementById('livestreamMenuBtn');
     try {
@@ -621,8 +628,10 @@ async function opdaterLivestreamKnap() {
         livestream = null;   // QR-telefon, ældre server eller intet net: ingen knap
     }
     const l = livestream;
-    // Badmintonplanner-kampe sendes aldrig — så heller ingen knap
-    btn.style.display = l && l.kan && !l.planner ? 'block' : 'none';
+    // Badmintonplanner-kampe sendes aldrig — så heller ingen knap. Heller ikke,
+    // når TV-PC'en er slukket eller intet kamera finder, medmindre noget er
+    // startet (så det kan stoppes)
+    btn.style.display = l && l.kan && !l.planner && (l.kameraKlar || l.start) ? 'block' : 'none';
     if (!l) return;
     btn.classList.toggle('menu-item--live', !!(l.start || l.holdkamp));
     btn.textContent =
@@ -641,7 +650,7 @@ async function livestreamKnap() {
         return;
     }
     if (l.holdkamp && !l.start) {
-        showMessage('Livestream', 'Holdkampe sendes af sig selv — til 2 minutter efter delkampen er afgjort.');
+        showMessage('Livestream', `Holdkampe sendes af sig selv og stopper ${livestreamStopTekst(l, 'delkampen')}.`);
         return;
     }
     closeSettingsMenu();
@@ -654,7 +663,7 @@ async function livestreamKnap() {
     }
     if (handling === 'start') {
         showMessage('Livestream startet', 'Kampen på banen sendes — eller den næste, hvis den sættes på inden 5 minutter. ' +
-            'Streamen stopper 2 minutter efter kampen er afgjort, og den næste kamp sendes ikke.');
+            `Streamen stopper ${livestreamStopTekst(livestream)}, og den næste kamp sendes ikke.`);
     } else {
         showMessage('Livestream stoppet', l.start === 'klar' ? 'Den næste kamp sendes ikke.' : 'Kampen sendes ikke længere.');
     }

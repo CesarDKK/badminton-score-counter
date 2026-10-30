@@ -301,8 +301,11 @@ function beslutning({ opsaetning, gs, sidste, planner, holdkamp = null, senderNu
 }
 
 // Til tabletten: kan banen sendes, og hvad er startet? kamera: et adgangslink
-// har kameraet på banen; pc: dets status (statusFor)
-function tabletStatus({ opsaetning, kamera, pc, holdkamp = null, planner = false, youtube = false, nu = Date.now() }) {
+// har kameraet på banen; pc: dets status (statusFor). kameraKlar: PC'en er
+// tændt og finder et USB-kamera — ellers skjuler tabletten knappen.
+// efterMin: hvor længe der sendes efter kampen (indstillingerne)
+function tabletStatus({ opsaetning, kamera, pc, holdkamp = null, planner = false, youtube = false,
+    efterMin = EFTER_MS / 60000, nu = Date.now() }) {
     const kan = !!(opsaetning && opsaetning.enabled && (opsaetning.stream_key || youtube) && kamera);
     const s = kan ? startet(opsaetning, nu) : null;
     return {
@@ -311,7 +314,9 @@ function tabletStatus({ opsaetning, kamera, pc, holdkamp = null, planner = false
         til: s && s.til ? new Date(s.til).toISOString() : null,
         holdkamp: holdkampNu(holdkamp, nu).koerer,
         planner: !!planner,
-        sender: !!(pc && pc.online && pc.sender)
+        sender: !!(pc && pc.online && pc.sender),
+        kameraKlar: !!(pc && pc.online && pc.kamera),
+        efterMin
     };
 }
 

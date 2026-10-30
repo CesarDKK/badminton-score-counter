@@ -115,8 +115,14 @@ test('tabletten: knappen kun når banen er sat op med nøgle og kamera', () => {
     assert.equal(ls.tabletStatus({ opsaetning: OPS, kamera: false, nu: NU }).kan, false);
     assert.equal(ls.tabletStatus({ opsaetning: { ...OPS, enabled: 0 }, kamera: true, nu: NU }).kan, false);
     assert.deepEqual(ls.tabletStatus({ opsaetning: { ...OPS, armed_until: new Date(NU + MIN) }, kamera: true,
-        pc: { online: true, sender: false }, nu: NU }),
-        { kan: true, start: 'klar', til: new Date(NU + MIN).toISOString(), holdkamp: false, planner: false, sender: false });
+        pc: { online: true, sender: false, kamera: 'Lenovo 500' }, efterMin: 5, nu: NU }),
+        { kan: true, start: 'klar', til: new Date(NU + MIN).toISOString(), holdkamp: false, planner: false, sender: false,
+          kameraKlar: true, efterMin: 5 });
+    // PC'en finder intet kamera, er slukket eller har ikke meldt sig: tabletten skjuler knappen
+    assert.equal(ls.tabletStatus({ opsaetning: OPS, kamera: true, pc: { online: true, kamera: null }, nu: NU }).kameraKlar, false);
+    assert.equal(ls.tabletStatus({ opsaetning: OPS, kamera: true, pc: { online: false, kamera: 'x' }, nu: NU }).kameraKlar, false);
+    assert.equal(ls.tabletStatus({ opsaetning: OPS, kamera: true, pc: null, nu: NU }).kameraKlar, false);
+    assert.equal(ls.tabletStatus({ opsaetning: OPS, kamera: true, nu: NU }).efterMin, 2);
 });
 
 test('hele dagen slutter kl. 23:59 dansk tid — sommer- og vintertid', () => {
