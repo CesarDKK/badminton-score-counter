@@ -375,7 +375,15 @@ function overlayTavle(rk, double, bane = null, logoer = null) {
             s.player1Name === rk.player2_name && s.player1Name !== rk.player1_name;
         saet.push(byttet ? [+m[2], +m[1]] : [+m[1], +m[2]]);
     }
-    const iGang = rk.player1_score !== undefined && !rk.match_completed && !rk.match_end_time;
+    let iGang = rk.player1_score !== undefined && !rk.match_completed && !rk.match_end_time;
+    // Pausen efter et sæt: tælleren har gemt sættet, men nulstiller først
+    // stillingen, når pausen er slut — så står det afsluttede sæts point stadig
+    // som stillingen. Dem viser sætkolonnen allerede; ingen stilling før næste sæt
+    const sidste = saet[saet.length - 1];
+    if (iGang && sidste && saet.length === (Number(rk.player1_games) || 0) + (Number(rk.player2_games) || 0) &&
+        sidste[0] === (Number(rk.player1_score) || 0) && sidste[1] === (Number(rk.player2_score) || 0)) {
+        iGang = false;
+    }
     const nu = iGang ? [Number(rk.player1_score) || 0, Number(rk.player2_score) || 0] : null;
     const s = double ? rk.serving_team : rk.serving_player;
     const serve = iGang && (s === 1 || s === 2) ? s : null;

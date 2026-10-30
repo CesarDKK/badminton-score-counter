@@ -383,3 +383,22 @@ test('live-siden: kun baner, der sender, med scoreboard og udsendelse', () => {
     assert.equal(ls.liveBaner(status, new Map([[2, 'a"><script>']]), { video: true })[1].video, null);
     assert.deepEqual(ls.liveBaner({}, new Map()), []);
 });
+
+test('scoreboard: i pausen efter et sæt står sættet kun én gang — ingen stilling før næste sæt', () => {
+    // Tælleren har gemt 1. sæt (15-5), men stillingen nulstilles først efter pausen
+    const pause = gs({ player1_score: 15, player2_score: 5, player1_games: 1, serving_player: 1,
+        set_scores_history: JSON.stringify([{ player1Name: 'Hansen', player2Name: 'Jensen', score: '15-5' }]) });
+    assert.deepEqual(ls.overlayTavle(pause, false, 3),
+        { bane: 3, navne: ['Hansen', 'Jensen'], saet: [[15, 5]], nu: null, serve: null });
+    // 2. sæt i gang: stillingen er tilbage
+    const andet = gs({ player1_score: 0, player2_score: 0, player1_games: 1, serving_player: 1,
+        set_scores_history: JSON.stringify([{ player1Name: 'Hansen', player2Name: 'Jensen', score: '15-5' }]) });
+    assert.deepEqual(ls.overlayTavle(andet, false, 3).nu, [0, 0]);
+    // Siderne byttet i 2. sæt — pausen efter 2. sæt (1-1) genkendes også
+    const pause2 = gs({ player1_name: 'Jensen', player2_name: 'Hansen', player1_score: 15, player2_score: 12,
+        player1_games: 1, player2_games: 1, set_scores_history: JSON.stringify([
+            { player1Name: 'Hansen', player2Name: 'Jensen', score: '15-5' },
+            { player1Name: 'Jensen', player2Name: 'Hansen', score: '15-12' }]) });
+    const t = ls.overlayTavle(pause2, false, 3);
+    assert.deepEqual([t.navne, t.saet, t.nu], [['Hansen', 'Jensen'], [[15, 5], [12, 15]], null]);
+});
