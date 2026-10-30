@@ -3310,7 +3310,7 @@ function renderLivestream() {
     };
     // Med YouTube-kanalen forbundet er en indtastet nøgle kun reserve
     const yt = livestreamYoutubeVirker();
-    const raekker = baner.map(b => `
+    const raekker = baner.map(b => { const mangler = livestreamMangler(b), laast = !!mangler && !b.enabled; return `
         <div class="ls-bane" data-bane="${b.bane}">
             <div class="ls-bane-top">
                 <strong>Bane ${b.bane}</strong>
@@ -3322,7 +3322,8 @@ function renderLivestream() {
                     <input type="password" class="admin-input admin-input--sm ls-noegle" autocomplete="off" spellcheck="false"
                         oninput="livestreamNoegleIndtastet(this)"
                         placeholder="${b.noegle ? 'Indsæt for at skifte nøgle' : yt ? 'Kun hvis YouTube-kanalen ikke virker' : 'Indsæt nøglen fra YouTube Studio'}"></label>
-                <label class="ls-flueben"><input type="checkbox" class="ls-til"${b.enabled ? ' checked' : ''}> Send banen</label>
+                <label class="ls-flueben ls-til-felt${laast ? ' ls-flueben--laast' : ''}"><input type="checkbox" class="ls-til"${b.enabled ? ' checked' : ''}${laast ? ' disabled' : ''}> Livestream slået til
+                    <small class="ls-mangler"${laast ? '' : ' hidden'}>${escapeHtml(mangler)}</small></label>
                 <label class="ls-flueben"><input type="checkbox" class="ls-overlay"${b.overlay ? ' checked' : ''}> Navne og stilling i billedet</label>
                 <button class="btn-primary btn-sm" onclick="gemLivestream(${b.bane})">Gem</button>
             </div>
@@ -3357,7 +3358,7 @@ function renderLivestream() {
             </details>
             <div class="ls-start" data-bane="${b.bane}">${livestreamStartHtml(b)}</div>
             <div class="ls-besked tekst-mindre" hidden></div>
-        </div>`).join('');
+        </div>`; }).join('');
 
     const efter = _livestream.indstillinger.efterMin;
     boks.innerHTML = `
@@ -3394,7 +3395,7 @@ async function gemLivestream(bane, ekstra = {}) {
     const el = document.querySelector(`.ls-bane[data-bane="${bane}"]`);
     if (!el) return;
     const data = {
-        enabled: el.querySelector('.ls-til').checked,
+        enabled: el.querySelector('.ls-til').checked && !el.querySelector('.ls-til').disabled,
         overlay: el.querySelector('.ls-overlay').checked,
         streamKey: el.querySelector('.ls-noegle').value.trim(),
         vend: el.querySelector('.ls-vend').checked,
@@ -3415,9 +3416,30 @@ async function gemLivestream(bane, ekstra = {}) {
     setTimeout(() => livestreamBesked(bane, ''), 3000);
 }
 
+// "Livestream slået til" kan først sættes, når banen kan sende: et kamera og en
+// nøgle (indtastet eller fra YouTube-kanalen). Returnerer det, der mangler.
+function livestreamMangler(b, nyNoegle = false) {
+    const kamera = _livestream.kameraer.some(k => k.bane === b.bane);
+    const noegle = !!b.noegle || nyNoegle || livestreamYoutubeVirker();
+    if (!kamera && !noegle) return 'Mangler kamera og nøgle';
+    if (!kamera) return 'Vælg kamera først';
+    return noegle ? '' : 'Indsæt nøgle først';
+}
+
 // En ny nøgle betyder, at banen skal sendes — så man ikke glemmer fluebenet
 function livestreamNoegleIndtastet(input) {
-    if (input.value.trim()) input.closest('.ls-bane').querySelector('.ls-til').checked = true;
+    const el = input.closest('.ls-bane');
+    const b = _livestream.baner.find(x => x.bane === Number(el.dataset.bane));
+    const ny = !!input.value.trim();
+    const mangler = livestreamMangler(b, ny);
+    const laast = !!mangler && !b.enabled;
+    const til = el.querySelector('.ls-til');
+    til.disabled = laast;
+    el.querySelector('.ls-til-felt').classList.toggle('ls-flueben--laast', laast);
+    const tekst = el.querySelector('.ls-mangler');
+    tekst.textContent = mangler;
+    tekst.hidden = !laast;
+    if (ny && !laast) til.checked = true;
 }
 
 function fjernLivestreamNoegle(bane) {
@@ -3432,6 +3454,9 @@ function fjernLivestreamNoegle(bane) {
 }
 
 async function saetLivestreamKamera(bane, tokenId) {
+    // Får banen sit første kamera og har den en nøgle, slås den til af sig selv
+    const b = _livestream.baner.find(x => x.bane === bane);
+    const foersteKamera = tokenId && b && !b.enabled && !_livestream.kameraer.some(k => k.bane === bane);
     try {
         if (tokenId) {
             await api.setLivestreamCamera(Number(tokenId), bane);
@@ -3444,6 +3469,11 @@ async function saetLivestreamKamera(bane, tokenId) {
         return;
     }
     await loadLivestream();
+    if (foersteKamera && !livestreamMangler(_livestream.baner.find(x => x.bane === bane) || b)) {
+        await gemLivestream(bane, { enabled: true });
+        livestreamBesked(bane, 'Kameraet er valgt, og livestream er slået til for banen');
+        setTimeout(() => livestreamBesked(bane, ''), 5000);
+    }
 }
 
 // ── Skærmenes hændelseslog (30 dage, gemt på serveren) ──
