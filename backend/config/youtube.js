@@ -137,7 +137,7 @@ async function adgangsToken(tenant, refresh) {
 
 const glemAdgang = (tenant) => _adgang.delete(tenant);
 
-// Kender Google klienten? Et kodebytte med en ugyldig kode afslører det:
+// Kender Google klienten? Et kodebytte med en ugyldig kode afslører det (ok / ukendt-id / forkert-secret):
 // invalid_client = forkert Client ID eller secret, alt andet = klienten findes.
 async function tjekKlient(id, secret) {
     try {
@@ -146,10 +146,13 @@ async function tjekKlient(id, secret) {
             redirect_uri: tilbageAdresse(), grant_type: 'authorization_code'
         } });
     } catch (e) {
-        if (e.grund === 'invalid_client' || e.grund === 'unauthorized_client') return false;
+        if (e.grund === 'invalid_client' || e.grund === 'unauthorized_client') {
+            // Google skelner: "The OAuth client was not found." / "The provided client secret is invalid."
+            return /not found/i.test(e.message) ? 'ukendt-id' : 'forkert-secret';
+        }
         if (!e.status) throw e; // kunne ikke nå Google
     }
-    return true;
+    return 'ok';
 }
 
 async function tilbagekald(refresh) {

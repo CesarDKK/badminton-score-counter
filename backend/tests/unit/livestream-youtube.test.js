@@ -229,12 +229,15 @@ test('youtube: nøgler fra super-admin bruges, når .env ingen har — .env går
     }
 });
 
-test('youtube: tjekKlient — Google kender klienten (invalid_grant) eller ej (invalid_client)', async () => {
-    nulstil({ 'POST /token': (k) => k.body.client_secret === 'rigtig'
-        ? [400, { error: 'invalid_grant', error_description: 'Malformed auth code.' }]
-        : [401, { error: 'invalid_client', error_description: 'Unauthorized' }] });
-    assert.equal(await youtube.tjekKlient('x.apps.googleusercontent.com', 'rigtig'), true);
-    assert.equal(await youtube.tjekKlient('x.apps.googleusercontent.com', 'forkert'), false);
+test('youtube: tjekKlient — klienten findes (invalid_grant), ukendt ID eller forkert secret (invalid_client)', async () => {
+    nulstil({ 'POST /token': (k) => k.body.client_id !== 'x.apps.googleusercontent.com'
+        ? [401, { error: 'invalid_client', error_description: 'The OAuth client was not found.' }]
+        : k.body.client_secret === 'rigtig'
+            ? [400, { error: 'invalid_grant', error_description: 'Malformed auth code.' }]
+            : [401, { error: 'invalid_client', error_description: 'The provided client secret is invalid.' }] });
+    assert.equal(await youtube.tjekKlient('x.apps.googleusercontent.com', 'rigtig'), 'ok');
+    assert.equal(await youtube.tjekKlient('x.apps.googleusercontent.com', 'forkert'), 'forkert-secret');
+    assert.equal(await youtube.tjekKlient('y.apps.googleusercontent.com', 'rigtig'), 'ukendt-id');
     assert.equal(kald[0].body.grant_type, 'authorization_code');
     assert.equal(kald[0].body.redirect_uri, 'https://badmintonapp.dk/youtube/callback');
 });
