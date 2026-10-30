@@ -1237,6 +1237,13 @@ class BadmintonAPI {
         return this.request('/super-admin/youtube', { method: 'DELETE' });
     }
 
+    async saveSuperAdminYoutubeKvote(graense) {
+        return this.request('/super-admin/youtube/kvote', {
+            method: 'PUT',
+            body: JSON.stringify({ graense })
+        });
+    }
+
     async createClub(name, subdomain) {
         return this.request('/super-admin/clubs', {
             method: 'POST',

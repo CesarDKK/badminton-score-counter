@@ -158,6 +158,8 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
         await masterDb.initialize();
         await require('./config/youtubeKlient').indlaes()
             .catch(e => console.error('✗ YouTube-klienten kunne ikke indlæses:', e.message));
+        await require('./config/youtubeKvote').indlaes()
+            .catch(e => console.error('✗ YouTube-kvoten kunne ikke indlæses:', e.message));
 
         const { runMigrationsForAllDatabases } = require('./config/migrationRunner');
         await runMigrationsForAllDatabases();
@@ -180,6 +182,8 @@ const gracefulShutdown = async (signal) => {
     console.log(`${signal} signal received: starting graceful shutdown`);
     server.close(async () => {
         console.log('✓ HTTP server closed');
+        // Dagens YouTube-forbrug gemmes ellers først et par sekunder efter sidste kald
+        await require('./config/youtubeKvote').gem().catch(() => {});
         try {
             const { closeAll } = require('./config/tenantPools');
             await closeAll();

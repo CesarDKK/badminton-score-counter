@@ -127,6 +127,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // YouTube (login-klienten hos Google)
     document.getElementById('ytGemBtn').addEventListener('click', gemYoutube);
     document.getElementById('ytFjernBtn').addEventListener('click', fjernYoutube);
+    document.getElementById('ytKvoteGemBtn').addEventListener('click', gemYoutubeKvote);
     document.getElementById('ytKopierBtn').addEventListener('click', kopierYoutubeAdresse);
     bindEnterSubmit(['ytClientId', 'ytClientSecret'], gemYoutube);
 
@@ -1096,6 +1097,57 @@ function renderYoutube(s) {
     document.getElementById('ytVejledning').open = !s.kilde;
     const idFelt = document.getElementById('ytClientId');
     if (!idFelt.value) idFelt.value = s.kilde === 'admin' ? s.clientId : '';
+    renderYoutubeKvote(s.kilde ? s.kvote : null);
+}
+
+// En udsendelse koster ca. 175 enheder: opret + kobl + afslut (50 hver) og
+// statustjek (1 hver 5. minut)
+const YT_ENHEDER_PR_UDSENDELSE = 175;
+const ytTal = (n) => Number(n).toLocaleString('da-DK');
+
+function renderYoutubeKvote(k) {
+    const boks = document.getElementById('ytKvote');
+    boks.style.display = k ? '' : 'none';
+    if (!k) return;
+    const pct = Math.min(100, Math.round(k.enheder / k.graense * 100));
+    document.getElementById('ytKvoteTal').textContent = `${ytTal(k.enheder)} af ${ytTal(k.graense)} enheder (${pct} %)`;
+    const fyld = document.getElementById('ytKvoteFyld');
+    fyld.style.width = `${pct}%`;
+    fyld.className = k.opbrugt ? 'yt-kvote--opbrugt' : pct >= 80 ? 'yt-kvote--hoej' : '';
+    const tilbage = Math.max(0, Math.floor((k.graense - k.enheder) / YT_ENHEDER_PR_UDSENDELSE));
+    const kl = new Date(k.nulstilles).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
+    const plads = k.opbrugt || tilbage === 0
+        ? 'Ikke plads til flere udsendelser i dag'
+        : `Plads til ca. ${ytTal(tilbage)} ${tilbage === 1 ? 'udsendelse' : 'udsendelser'} mere i dag`;
+    document.getElementById('ytKvoteInfo').textContent =
+        `${plads} (ca. ${YT_ENHEDER_PR_UDSENDELSE} enheder pr. udsendelse) · ${ytTal(k.kald)} kald. ` +
+        `Google nulstiller kvoten kl. ${kl} dansk tid. Fælles for alle klubber.`;
+    const advarsel = document.getElementById('ytKvoteAdvarsel');
+    const formular = '<a href="https://support.google.com/youtube/contact/yt_api_form" target="_blank" rel="noopener">Googles formular</a>';
+    if (k.opbrugt) {
+        advarsel.innerHTML = `<strong>Kvoten blev brugt op i dag</strong> — der kunne ikke oprettes flere udsendelser, før den nulstilles. Baner med en egen stream-nøgle sendte videre med den. Søg om mere kvote med ${formular}.`;
+    } else if (pct >= 80) {
+        advarsel.innerHTML = `Over 80 % af dagens kvote er brugt. Sker det ofte, så søg om mere kvote med ${formular}.`;
+    }
+    advarsel.style.display = k.opbrugt || pct >= 80 ? '' : 'none';
+    const hist = (k.historik || []).map(h => {
+        const [, m, d] = h.dag.split('-');
+        return `${+d}/${+m}: ${ytTal(h.enheder)}${h.opbrugt ? ' (opbrugt)' : ''}`;
+    });
+    document.getElementById('ytKvoteHistorik').textContent = hist.length ? `Seneste dage: ${hist.join(' · ')}` : '';
+    const felt = document.getElementById('ytKvoteGraense');
+    if (document.activeElement !== felt) felt.value = k.graense;
+}
+
+async function gemYoutubeKvote() {
+    const msgEl = document.getElementById('ytMsg');
+    const graense = Number(document.getElementById('ytKvoteGraense').value);
+    try {
+        renderYoutube(await api.saveSuperAdminYoutubeKvote(graense));
+        showMsg(msgEl, `Daglig kvote sat til ${ytTal(graense)} enheder`, 'success');
+    } catch (err) {
+        showMsg(msgEl, err.message || 'Kunne ikke gemme kvoten', 'error');
+    }
 }
 
 async function gemYoutube() {

@@ -316,3 +316,16 @@ header .subtitle {
 .yt-kopi button { padding: 4px 12px; font-size: 0.9em; }
 .yt-knapper { display: flex; gap: 10px; grid-column: 1 / -1; }
 .yt-vejledning a { color: var(--color-accent, #e94560); }
+
+/* YouTube-kvoten: dagens forbrug som bjælke */
+.yt-kvote { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.08); font-size: 0.9em; }
+.yt-kvote-top { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.yt-kvote-bar { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.yt-kvote-bar > div { height: 100%; width: 0; background: var(--color-win, #45d17e); transition: width 0.3s; }
+.yt-kvote-bar > div.yt-kvote--hoej { background: var(--color-warning, #ffb02e); }
+.yt-kvote-bar > div.yt-kvote--opbrugt { background: var(--color-danger, #d92c3f); }
+.yt-kvote-info { color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.9em; margin: 6px 0 0; }
+.yt-kvote-advarsel { color: var(--color-warning, #ffb02e); font-size: 0.9em; margin: 8px 0 0; }
+.yt-kvote-advarsel a { color: inherit; }
+.yt-kvote .yt-vejledning { margin-top: 10px; }
+.yt-kvote input[type=number] { width: 9em; }

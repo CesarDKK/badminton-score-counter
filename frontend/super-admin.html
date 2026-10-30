@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="fonts.css?v=2">
     <link rel="stylesheet" href="fundament.css?v=2">
     <link rel="stylesheet" href="styles.css?v=11">
-    <link rel="stylesheet" href="super-admin-styles.css?v=13">
+    <link rel="stylesheet" href="super-admin-styles.css?v=14">
     <script src="js/theme-loader.js?v=15"></script>
 </head>
 <body>
@@ -213,6 +213,22 @@
                     </div>
                 </div>
                 <div id="ytMsg" class="msg" style="display:none;"></div>
+                <!-- Dagens forbrug af Googles kvote — fælles for alle klubber -->
+                <div id="ytKvote" class="yt-kvote" style="display:none;">
+                    <div class="yt-kvote-top"><strong>Forbrug i dag</strong><span id="ytKvoteTal"></span></div>
+                    <div class="yt-kvote-bar"><div id="ytKvoteFyld"></div></div>
+                    <p id="ytKvoteInfo" class="yt-kvote-info"></p>
+                    <p id="ytKvoteAdvarsel" class="yt-kvote-advarsel" style="display:none;"></p>
+                    <p id="ytKvoteHistorik" class="yt-kvote-info"></p>
+                    <details class="yt-vejledning">
+                        <summary>Har Google givet mere kvote?</summary>
+                        <p class="yt-kvote-info">Google giver 10.000 enheder om dagen. Er der søgt om og givet mere, skrives den nye daglige kvote her, så procenten passer.</p>
+                        <div class="yt-kopi">
+                            <input type="number" id="ytKvoteGraense" min="1000" step="1000" aria-label="Daglig kvote i enheder">
+                            <button id="ytKvoteGemBtn" class="btn-secondary">Gem kvote</button>
+                        </div>
+                    </details>
+                </div>
             </div>
 
             </div><!-- /badmintonSection -->
@@ -399,10 +415,10 @@
         </div>
     </div>
 
-    <script src="js/api.js?v=36"></script>
+    <script src="js/api.js?v=37"></script>
     <script src="js/session-vagt.js?v=2"></script>
     <script src="js/logo-match.js?v=2"></script>
     <script src="js/ikoner.js?v=2"></script>
-    <script src="super-admin-script.js?v=29"></script>
+    <script src="super-admin-script.js?v=30"></script>
 </body>
 </html>
