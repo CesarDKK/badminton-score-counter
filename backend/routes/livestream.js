@@ -536,7 +536,7 @@ router.post('/baner/:bane/hele-dagen', livestreamAdmin, async (req, res, next) =
         const bane = baneNr(req.params.bane);
         const o = bane && await queryOne('SELECT enabled, stream_key FROM court_streams WHERE court_number = ?', [bane]);
         if (!o || !o.enabled || (!o.stream_key && !ytBrugbar(await ytForbindelse(req)))) {
-            return res.status(400).json({ error: 'Slå "Send banen" til med en stream-nøgle (eller en forbundet YouTube-kanal) først' });
+            return res.status(400).json({ error: 'Banen skal have en stream-nøgle (eller en forbundet YouTube-kanal) og flueben i "Livestream slået til" først' });
         }
         await query('UPDATE court_streams SET all_day_until = ? WHERE court_number = ?', [new Date(ls.dagensSlut()), bane]);
         console.log(`[livestream] ${tenantKey(req)} bane ${bane}: sendes hele dagen`);

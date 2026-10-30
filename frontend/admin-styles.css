@@ -1670,3 +1670,7 @@ header > div {
 @media (prefers-reduced-motion: reduce) {
     .holdkamp-oprettet { animation: none; }
 }
+
+/* "Livestream slået til" er gråt, til banen har kamera og nøgle */
+.ls-flueben--laast { flex-wrap: wrap; cursor: not-allowed; color: var(--text-muted, rgba(255, 255, 255, 0.62)); }
+.ls-mangler { flex-basis: 100%; font-size: 0.85em; }

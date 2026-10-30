@@ -170,8 +170,10 @@ Badmintonplanner-kampe sendes aldrig. Alt indstilles i admin under
    er kameraets bane — også hvis TV'et senere skiftes til en anden bane.
 2. **Stream-nøgle:** fra YouTube Studio → *Gå live* → *Stream*. Én nøgle pr.
    bane. Nøglen ligger kun på serveren, aldrig på USB-nøglen.
-3. Sæt flueben i **Send banen** (sker af sig selv, når en nøgle tastes), og
-   tryk **Gem**.
+3. **Livestream slået til** sættes af sig selv, når banen har både kamera og
+   nøgle (eller klubbens YouTube-kanal er forbundet). Før det er fluebenet gråt.
+   Tryk **Gem**. Fjern fluebenet for at holde banen ude af livestream uden at
+   miste kamera og nøgle.
 
 Om streamen er offentlig, bestemmes i YouTube Studio: *Gå live* → *Stream* →
 *Rediger* → *Synlighed: Offentlig*. YouTube husker valget for nøglen.
