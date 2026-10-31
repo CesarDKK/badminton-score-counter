@@ -1,0 +1,13 @@
+# Spørger serveren hvert 2. minut, om admin har bedt om nyeste version nu.
+# Et spørgsmål er en lille POST; selve systemet hentes kun, når der er bedt om
+# det (og der er en nyere version).
+[Unit]
+Description=Badminton TV: spørg om nyeste version skal installeres nu
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=2min
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

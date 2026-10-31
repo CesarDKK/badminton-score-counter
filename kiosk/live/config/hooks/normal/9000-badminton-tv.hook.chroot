@@ -41,7 +41,8 @@ systemctl enable NetworkManager.service systemd-timesyncd.service
 systemctl enable badminton-tv-ur.timer badminton-tv-ur-nedlukning.service   # hardware-uret i dansk tid
 systemctl enable badminton-tv-rapport.service badminton-tv-rapport-send.timer   # hændelser til serveren
 systemctl enable badminton-tv-stream.service   # livestream fra USB-kameraet (kun PC)
-systemctl enable badminton-tv-opdatering.timer badminton-tv-opdatering-bekraeft.service   # automatisk opdatering
+systemctl enable badminton-tv-opdatering.timer badminton-tv-opdatering-bekraeft.service \
+                 badminton-tv-opdatering-spoerg.timer   # automatisk opdatering (og "installér nu" fra admin)
 systemctl set-default multi-user.target
 
 # Aldrig dvale.

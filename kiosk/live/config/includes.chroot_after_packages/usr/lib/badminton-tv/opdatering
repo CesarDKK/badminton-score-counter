@@ -19,6 +19,10 @@
 #                         TV-siden har kørt i 5 minutter — eller genstart til
 #                         det gamle, hvis den ikke er kommet efter 20 minutter
 #   opdatering status     vis tilstanden
+#   opdatering spoerg     har admin bedt om nyeste version nu (Adgangslinks →
+#                         "Installér nyeste nu")? Så hent den med det samme og
+#                         genstart, når den er klar
+#                         (badminton-tv-opdatering-spoerg.timer, hvert 2. minut)
 #
 # Versionerne hentes fra GitHub-udgivelserne (tags tv-usb-v*): manifestet
 # (opdatering.json / opdatering-pi.json), signeret med Badminton TV's nøgle
@@ -43,6 +47,7 @@ NOEGLE=${BT_NOEGLE:-/usr/share/badminton-tv/opdatering.pub}
 BTENV=/boot/efi/EFI/debian/badminton-tv.env
 KORT=${BT_KORT:-/boot/kort}
 ARB=/run/badminton-tv/opdatering
+KIOSK_ENV=${BT_KIOSK_ENV:-/run/badminton-tv/kiosk.env}
 SUND_SEK=300        # så længe skal TV-siden have kørt, før et nyt system godkendes
 FRIST_SEK=1200      # … og senest så længe efter opstarten
 MAKS_FORSOEG=3      # forsøg pr. version, før den opgives
@@ -53,7 +58,7 @@ fi
 
 if [ -n "${BT_PLATFORM:-}" ]; then
     PLATFORM=$BT_PLATFORM
-elif tr -d '\0' < /proc/device-tree/model 2>/dev/null | grep -q 'Raspberry Pi'; then
+elif tr -d '\0' 2>/dev/null < /proc/device-tree/model | grep -q 'Raspberry Pi'; then   # (2>/dev/null først: PC'en har ingen device tree)
     PLATFORM=pi
 else
     PLATFORM=pc
@@ -172,6 +177,14 @@ planlagt_genstart() {
     { mkdir -p "${fil%/*}" && echo opdatering > "$fil"; } 2>/dev/null || true
 }
 
+# Med BT_NU=1 (spoerg: admin har bedt om nyeste version nu) skriver tjek, hvordan
+# det endte, i $ARB/udfald: "klar <version>" | nyeste | fra | kan-ikke. Ingen
+# fil: prøv igen senere (uret, nettet, en anden hentning i gang) — eller, med
+# fejlkode, en fejl.
+udfald() {
+    [ -z "${BT_NU:-}" ] || printf '%s\n' "$*" > "$ARB/udfald"
+}
+
 # ── tjek ───────────────────────────────────────────────────
 tjek() {
     if [ -z "$SLOT" ]; then
@@ -180,6 +193,7 @@ tjek() {
         else
             echo "PC'en har det gamle disklayout med ét system — installér den forfra fra USB-nøglen for at få automatisk opdatering."
         fi
+        udfald kan-ikke
         return 0
     fi
     if paa_proeve; then
@@ -195,8 +209,13 @@ tjek() {
     fi
     if [ "$BT_OPDATERING" = fra ]; then
         echo "Automatisk opdatering er slået fra (OPDATERING=fra i kiosk.conf)."
+        udfald fra
         return 0
     fi
+    # Bedt om det fra admin: med det samme, som "foerst" — og også en version,
+    # der er opgivet efter 3 forsøg, prøves én gang til
+    local tilstand=$BT_OPDATERING
+    [ -z "${BT_NU:-}" ] || tilstand=foerst
     # Uret skal passe: udgivelsestidspunktet sammenlignes med det, og HTTPS
     # afviser certifikaterne med et forkert ur.
     if [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" != yes ]; then
@@ -227,13 +246,21 @@ tjek() {
         antal=$(env_hent proev_antal)
         [ -n "$proev" ] && klar=$pv
     fi
-    svar=$(beslut "$VERSION_NU" "$M_VERSION" "$M_UDGIVET" "$M_VENT" "$BT_OPDATERING" "$(date +%s)" "$klar" "${antal:-0}")
+    [ -z "${BT_NU:-}" ] || antal=0
+    svar=$(beslut "$VERSION_NU" "$M_VERSION" "$M_UDGIVET" "$M_VENT" "$tilstand" "$(date +%s)" "$klar" "${antal:-0}")
     case "$svar" in
-        nyeste)  echo "Kører den nyeste version ($VERSION_NU)." ;;
+        nyeste)  echo "Kører den nyeste version ($VERSION_NU)."; udfald nyeste ;;
         venter*) echo "Version $M_VERSION er udgivet. Henter den om ca. $(( (${svar#venter } + 3599) / 3600 )) time(r) (OPDATERING=auto)." ;;
-        klar)    echo "Version $M_VERSION er klar og startes ved næste opstart." ;;
+        klar)    echo "Version $M_VERSION er klar og startes ved næste opstart."; udfald klar "$M_VERSION" ;;
         opgivet) echo "Version $M_VERSION er prøvet $antal gange uden at virke — venter på en nyere version." ;;
-        hent)    klargoer ;;
+        hent)
+            # (ikke "klargoer && …": så gjaldt set -e ikke inde i klargoer)
+            klargoer
+            if [ "$(env_hent proev_version)" = "$M_VERSION" ] && [ -n "$(env_hent proev)" ]; then
+                udfald klar "$M_VERSION"
+            else
+                udfald kan-ikke   # SD-kortet er for lille
+            fi ;;
     esac
 }
 
@@ -482,6 +509,73 @@ bekraeft() {
     systemctl reboot
 }
 
+# ── spoerg ─────────────────────────────────────────────────
+# Kommer der nye versioner tit, når de skærme, der venter et døgn (auto), aldrig
+# frem. Admin kan derfor bede en PC om at tage den nyeste med det samme
+# (Adgangslinks → "Installér nyeste nu"). PC'en spørger serveren bag TV_URL med
+# adgangslinkets token og melder tilbage, hvordan det gik — at den spørger,
+# viser også admin, at den kan.
+
+# meld [STATUS [TEKST [MÅL]]] — til serveren; svaret (JSON) på stdout
+meld() {
+    local data
+    data=$(jq -nc --arg navn "$BT_NAVN" --arg v "$VERSION_NU" --arg s "${1:-}" --arg t "${2:-}" --arg m "${3:-}" \
+        '{navn: $navn, kioskVersion: $v, status: $s, tekst: $t, maal: $m}')
+    curl -fsS --proto '=https,http' --connect-timeout 15 --max-time 30 \
+        -H 'Content-Type: application/json' -H "X-Adgangslink: $TOKEN" \
+        -H 'User-Agent: badminton-tv-opdatering' --data-binary "$data" \
+        "${BT_SPOERG_URL:-$SERVER/api/screens/pc-opdatering}"
+}
+
+# tjek i en ny proces, så set -e gælder i den (ikke i "… || kode=$?")
+tjek_nu() { BT_NU=1 "$BT_LIB/opdatering" tjek; }
+
+spoerg() {
+    [ -n "$SLOT" ] || return 0
+    paa_proeve && return 0    # først når den nye version er godkendt
+    [ -f "$KIOSK_ENV" ] || return 0
+    # TV_URL og NAVN (setup skriver dem %q-citeret)
+    local BT_TV_URL='' BT_NAVN=''
+    # shellcheck source=/dev/null
+    . "$KIOSK_ENV"
+    [[ "$BT_NAVN" =~ ^[a-z0-9][a-z0-9-]{0,59}$ ]] || return 0
+    # Adgangslinket: https://klub.badmintonapp.dk/t/<token>
+    [[ "$BT_TV_URL" =~ ^(https?://[^/?#]+)/t/([A-Za-z0-9_-]{8,128})/?$ ]] || return 0
+    local SERVER=${BASH_REMATCH[1]} TOKEN=${BASH_REMATCH[2]} svar
+
+    svar=$(meld) || return 0   # intet net — spørger igen om 2 minutter
+    [ "$(jq -r '.opdater == true' <<<"$svar" 2>/dev/null)" = true ] || return 0
+
+    echo "Admin har bedt om nyeste version nu."
+    meld i-gang "Tjekker for en ny version …" >/dev/null || true
+    mkdir -p "$ARB"
+    rm -f "$ARB/udfald"
+    local log=$ARB/nu.log kode=0 resultat sidste
+    tjek_nu > "$log" 2>&1 || kode=$?
+    cat "$log"
+    resultat=$(cat "$ARB/udfald" 2>/dev/null || true)
+    sidste=$(grep -v '^[[:space:]]*$' "$log" | tail -1 | cut -c1-300 || true)
+    # Ved en fejl: den første FEJL-linje (fx "System b findes ikke på disken") —
+    # den sidste er fejlfælden ("… prøver igen næste gang"), der ikke passer her
+    [ "$kode" = 0 ] || sidste=$(grep -m1 '^FEJL' "$log" | cut -c1-300 || printf '%s' "$sidste")
+    case "$resultat" in
+        "klar "*)
+            local v=${resultat#klar }
+            meld genstarter "Version $v er klar — genstarter." "$v" >/dev/null || true
+            echo "Genstarter for at starte version $v …"
+            planlagt_genstart
+            systemctl reboot ;;
+        nyeste|fra|kan-ikke)
+            meld "$resultat" "$sidste" >/dev/null || true ;;
+        *)
+            if [ "$kode" != 0 ]; then
+                meld fejl "$sidste" >/dev/null || true
+            else
+                meld venter "$sidste" >/dev/null || true   # prøver igen om 2 minutter
+            fi ;;
+    esac
+}
+
 # ── status ─────────────────────────────────────────────────
 status() {
     printf 'Kører: system %s, version %s%s\n' "${SLOT:-(gammelt layout)}" "$VERSION_NU" \
@@ -509,6 +603,7 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
         proev)    proev ;;
         bekraeft) bekraeft ;;
         status)   status ;;
-        *) sed -n '2,35p' "$0"; exit 1 ;;
+        spoerg)   spoerg ;;
+        *) sed -n '2,39p' "$0"; exit 1 ;;
     esac
 fi

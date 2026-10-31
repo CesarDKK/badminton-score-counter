@@ -140,6 +140,7 @@ for p in /usr/bin/curl /usr/bin/openssl /usr/bin/rsync /usr/sbin/sfdisk /usr/bin
     tjek "findes: $p" test -x "$R$p"
 done
 tjek "aktiv: badminton-tv-opdatering.timer" aktiveret timers.target badminton-tv-opdatering.timer
+tjek "aktiv: badminton-tv-opdatering-spoerg.timer" aktiveret timers.target badminton-tv-opdatering-spoerg.timer
 tjek "aktiv: badminton-tv-opdatering-proev" aktiveret multi-user.target badminton-tv-opdatering-proev.service
 tjek "aktiv: badminton-tv-opdatering-bekraeft" aktiveret multi-user.target badminton-tv-opdatering-bekraeft.service
 tjek "opdatering status kører i billedet" chroot "$R" env BT_PLATFORM=pi /usr/lib/badminton-tv/opdatering status

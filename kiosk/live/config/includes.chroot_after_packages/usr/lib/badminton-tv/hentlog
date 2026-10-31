@@ -172,8 +172,11 @@ saml() {
                 printf '%5s  %s  →  %s\n' "$nr" "$rest" "$(afslutning "$nr")"
             done
             printf '\n== Automatisk opdatering ==\n'
+            # (spoerg kører hvert 2. minut — systemd's egne start/stop-linjer for den udelades)
             jc -u badminton-tv-opdatering.service -u badminton-tv-opdatering-bekraeft.service \
-                -o short-iso -n 60 | grep -v '^-- ' || printf 'ingen\n'
+                -u badminton-tv-opdatering-spoerg.service -o short-iso -n 2000 \
+                | grep -v -e '^-- ' -e 'spørg serveren, om' -e 'opdatering-spoerg.service: ' \
+                | tail -n 60 | grep . || printf 'ingen\n'
         else
             printf "Ingen log fundet på PC'ens disk (/var/log/journal mangler).\n"
         fi

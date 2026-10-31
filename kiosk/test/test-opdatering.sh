@@ -24,16 +24,26 @@ mkdir -p "$TMP/bin" "$TMP/udgivelser/latest/download"
 # curl: https://test/releases/<sti> → $TMP/udgivelser/<sti>
 cat > "$TMP/bin/curl" <<EOF
 #!/bin/bash
-ud='' url=''
+ud='' url='' data=''
 while [ \$# -gt 0 ]; do
     case "\$1" in
         -o) ud=\$2; shift ;;
+        -H) [[ "\$2" == X-Adgangslink:* ]] && echo "\$2" >> "$TMP/server-token.log"; shift ;;
+        --data-binary) data=\$2; shift ;;
         http://*|https://*) url=\$1 ;;
     esac
     shift
 done
 # Chromiums fejlsøgningsport (bekraeft): siderne fra FAKE_SIDER
 case "\$url" in http://127.0.0.1:9222/*) printf '%s' "\${FAKE_SIDER:-[]}"; exit 0 ;; esac
+# Klubbens server (spoerg): POST'en noteres, svaret er FAKE_SVAR
+if [ "\$url" = https://klub.test/api/screens/pc-opdatering ]; then
+    [ "\${FAKE_SERVER_KODE:-0}" = 0 ] || exit "\$FAKE_SERVER_KODE"
+    printf '%s\n' "\$data" >> "$TMP/server.log"
+    standard='{"opdater":false}'
+    printf '%s' "\${FAKE_SVAR:-\$standard}"
+    exit 0
+fi
 fil="$TMP/udgivelser/\${url#https://test/releases/}"
 [ -f "\$fil" ] || exit 22
 cp "\$fil" "\$ud"
@@ -220,7 +230,100 @@ env_saet aktiv=a
 SLOT=''
 indeholder "Gammelt disklayout" "$(tjek)" "det gamle disklayout"
 
-# ── 5. Raspberry Pi ────────────────────────────────────────
+# ── 5. "Installér nyeste nu" fra admin ─────────────────────
+# tjek med BT_NU=1: med det samme (også med auto), og udfaldet i $ARB/udfald
+nu_tjek() { rm -f "$ARB/udfald"; ( BT_NU=1 tjek ); }
+nu_udfald() { cat "$ARB/udfald" 2>/dev/null; }
+SLOT=a VERSION_NU=2026.10.12
+: > "$BTENV"; env_saet aktiv=a
+conf auto; UDGIVET=$(date +%s) udgiv 2026.10.13
+indeholder "auto venter uden BT_NU" "$(tjek)" "Henter den om ca. 24 time(r)"
+forvent "Uden BT_NU: intet udfald" "$(nu_udfald)" ""
+indeholder "BT_NU: henter med det samme" "$(nu_tjek)" "KLARGØR 2026.10.13"
+forvent "BT_NU: klar" "$(nu_udfald)" "klar 2026.10.13"
+indeholder "BT_NU: allerede klar → hentes ikke igen" "$(nu_tjek)" "er klar og startes ved næste opstart"
+forvent "BT_NU: allerede klar → klar" "$(nu_udfald)" "klar 2026.10.13"
+# Opgivet efter 3 forsøg — admin kan bede om ét forsøg til
+env_saet proev= proev_antal=3
+conf foerst; indeholder "Uden BT_NU: opgivet" "$(tjek)" "prøvet 3 gange"; conf auto
+indeholder "BT_NU: opgivet version prøves igen" "$(nu_tjek)" "KLARGØR 2026.10.13"
+: > "$BTENV"; env_saet aktiv=a
+VERSION_NU=2026.10.13
+nu_tjek >/dev/null
+forvent "BT_NU: kører nyeste" "$(nu_udfald)" nyeste
+conf fra; VERSION_NU=2026.10.12
+nu_tjek >/dev/null
+forvent "BT_NU: OPDATERING=fra respekteres" "$(nu_udfald)" fra
+conf auto
+indeholder "BT_NU: uret ikke sat" "$(FAKE_NTP=no nu_tjek)" "Uret er ikke sat"
+forvent "BT_NU: uret ikke sat → intet udfald (prøv igen)" "$(nu_udfald)" ""
+SLOT=''
+nu_tjek >/dev/null
+forvent "BT_NU: gammelt disklayout" "$(nu_udfald)" kan-ikke
+SLOT=a
+
+# spoerg: serveren spørges med adgangslinkets token; ja → tjek og genstart
+KIOSK_ENV=$TMP/kiosk.env
+export BT_NEDLUKNING=$TMP/nedlukning
+printf 'BT_TV_URL=%q\nBT_NAVN=%q\n' 'https://klub.test/t/abcDEF_123-x' 'tv-bane-1' > "$KIOSK_ENV"
+tjek_nu() { nu_tjek; }
+server() { cat "$TMP/server.log" 2>/dev/null; }
+# Statusserne i rækkefølge — den første er selve spørgsmålet (tom status)
+status_i() { jq -r '.status' "$TMP/server.log" 2>/dev/null | tr '\n' ' '; }
+nulstil_server() { rm -f "$TMP/server.log" "$TMP/server-token.log" "$TMP/nedlukning"; : > "$TMP/systemctl.log"; }
+: > "$BTENV"; env_saet aktiv=a
+
+nulstil_server
+forvent "spoerg: ikke bedt om noget — siger intet" "$(spoerg)" ""
+forvent "spoerg: ét spørgsmål med navn og version" "$(jq -c '[.navn, .kioskVersion, .status]' "$TMP/server.log")" '["tv-bane-1","2026.10.12",""]'
+forvent "spoerg: adgangslinkets token i X-Adgangslink" "$(cat "$TMP/server-token.log")" "X-Adgangslink: abcDEF_123-x"
+forvent "spoerg: ingen genstart" "$(cat "$TMP/systemctl.log")" ""
+
+nulstil_server
+indeholder "spoerg: bedt om det → henter" "$(FAKE_SVAR='{"opdater":true}' spoerg)" "KLARGØR 2026.10.13"
+forvent "spoerg: melder i gang og genstarter" "$(status_i)" " i-gang genstarter "
+forvent "spoerg: målversionen med" "$(tail -1 "$TMP/server.log" | jq -r .maal)" 2026.10.13
+forvent "spoerg: genstarter" "$(cat "$TMP/systemctl.log")" reboot
+forvent "spoerg: genstarten er planlagt (ingen hændelse)" "$(cat "$TMP/nedlukning")" opdatering
+
+nulstil_server
+VERSION_NU=2026.10.13
+FAKE_SVAR='{"opdater":true}' spoerg >/dev/null
+forvent "spoerg: kører nyeste → melder det, ingen genstart" "$(status_i)|$(cat "$TMP/systemctl.log")" " i-gang nyeste |"
+indeholder "spoerg: teksten med" "$(tail -1 "$TMP/server.log" | jq -r .tekst)" "Kører den nyeste version (2026.10.13)"
+VERSION_NU=2026.10.12
+
+nulstil_server
+FAKE_NTP=no FAKE_SVAR='{"opdater":true}' spoerg >/dev/null
+forvent "spoerg: uret ikke sat → venter (spørges igen)" "$(status_i)" " i-gang venter "
+
+nulstil_server
+udgiv 2026.10.14 "$TMP/fremmed.pem"
+FAKE_SVAR='{"opdater":true}' spoerg >/dev/null
+forvent "spoerg: forkert signatur → fejl" "$(status_i)|$(cat "$TMP/systemctl.log")" " i-gang fejl |"
+indeholder "spoerg: fejlteksten med" "$(tail -1 "$TMP/server.log" | jq -r .tekst)" "signatur passer ikke"
+udgiv 2026.10.13
+
+nulstil_server
+FAKE_SERVER_KODE=7 spoerg >/dev/null; kode=$?
+forvent "spoerg: intet net → stille, ingen fejl" "$kode|$(server)" "0|"
+
+nulstil_server
+SLOT=b
+FAKE_SVAR='{"opdater":true}' spoerg >/dev/null
+forvent "spoerg: på prøve → spørger ikke" "$(server)" ""
+SLOT=a
+
+nulstil_server
+printf 'BT_TV_URL=%q\nBT_NAVN=%q\n' 'https://klub.test/tv-v3.html?bane=1' 'tv-bane-1' > "$KIOSK_ENV"
+FAKE_SVAR='{"opdater":true}' spoerg >/dev/null
+forvent "spoerg: TV_URL uden adgangslink → spørger ikke" "$(server)" ""
+printf 'BT_TV_URL=%q\nBT_NAVN=%q\n' 'https://klub.test/t/abcDEF_123-x' '' > "$KIOSK_ENV"
+spoerg >/dev/null
+forvent "spoerg: uden navn → spørger ikke" "$(server)" ""
+unset -f tjek_nu
+
+# ── 6. Raspberry Pi ────────────────────────────────────────
 PLATFORM=pi MANIFEST=opdatering-pi.json ROD_NAVN=badminton-tv-pi-rod
 KORT=$TMP/kort
 PI_ENV=$KORT/badminton-tv-opdatering.txt

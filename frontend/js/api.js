@@ -1081,6 +1081,15 @@ class BadmintonAPI {
         return this.request(`/screens/${encodeURIComponent(klientId)}`, { method: 'DELETE' });
     }
 
+    // "Installér nyeste nu": TV-PC'en henter nyeste version med det samme (DELETE fortryder)
+    async requestScreenUpdate(klientId) {
+        return this.request(`/screens/${encodeURIComponent(klientId)}/opdater`, { method: 'POST' });
+    }
+
+    async cancelScreenUpdate(klientId) {
+        return this.request(`/screens/${encodeURIComponent(klientId)}/opdater`, { method: 'DELETE' });
+    }
+
     // Livestream: banernes stream-nøgler og hvilken TV-PC, der har kameraet
     async getLivestream() {
         return this.request('/livestream');

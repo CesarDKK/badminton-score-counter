@@ -7,6 +7,7 @@ const { klientIp } = require('../middleware/rateLimiter');
 const { registrer, liste, fjern } = require('../screens/skaermStatus');
 const haendelseslog = require('../screens/haendelseslog');
 const pcRapport = require('../screens/pcRapport');
+const pcOpdatering = require('../screens/pcOpdatering');
 
 const tenantKey = (req) => req.clubDbName || 'direct';
 const kl = (ms) => new Date(ms).toLocaleTimeString('da-DK', { timeZone: 'Europe/Copenhagen' });
@@ -48,7 +49,31 @@ const skaermAdmin = (req, res, next) => {
 };
 
 router.get('/', skaermAdmin, (req, res) => {
-    res.json(liste(tenantKey(req)));
+    const tenant = tenantKey(req);
+    res.json(liste(tenant).map(s => ({ ...s, opdatering: pcOpdatering.forSkaerm(tenant, s.tokenId, s.navn) })));
+});
+
+// POST /api/screens/:klientId/opdater — admin beder TV-PC'en om at installere
+// nyeste version nu (i stedet for et døgn efter udgivelsen). DELETE fortryder,
+// så længe PC'en ikke er gået i gang.
+router.post('/:klientId/opdater', skaermAdmin, (req, res) => {
+    const tenant = tenantKey(req);
+    const s = liste(tenant).find(x => x.klientId === req.params.klientId);
+    if (!s) return res.status(404).json({ error: 'Skærmen findes ikke (længere)' });
+    if (pcOpdatering.bestil(tenant, s.tokenId, s.navn) !== 'ok') {
+        return res.status(409).json({ error: 'PC\'en har ikke spurgt efter opdateringer de seneste minutter — den er slukket, uden net eller har en ældre version, der ikke kan dette.' });
+    }
+    console.log(`[skærm] ${tenant} "${s.navn}": admin bad om nyeste version nu (kører ${s.kioskVersion || '?'})`);
+    res.json({ success: true, opdatering: pcOpdatering.forSkaerm(tenant, s.tokenId, s.navn) });
+});
+
+router.delete('/:klientId/opdater', skaermAdmin, (req, res) => {
+    const tenant = tenantKey(req);
+    const s = liste(tenant).find(x => x.klientId === req.params.klientId);
+    if (!s || !pcOpdatering.fortryd(tenant, s.tokenId, s.navn)) {
+        return res.status(409).json({ error: 'PC\'en er allerede gået i gang — det kan ikke fortrydes' });
+    }
+    res.json({ success: true });
 });
 
 // GET /api/screens/haendelser?dage=30 — klubbens hændelseslog (højst 30 dage)
@@ -75,17 +100,29 @@ router.get('/haendelser/:id/log', skaermAdmin, async (req, res, next) => {
 // forrige kørsel sluttede, og browser-vagtens genstarter. Ingen login: PC'en
 // sender sit adgangslinks token i X-Adgangslink (fra TV_URL i kiosk.conf), og
 // linket skal være aktivt i klubben.
+// TV-PC'ens adgangslink fra X-Adgangslink (aktivt i klubben). Sender selv
+// fejlsvaret og returnerer null, hvis det mangler eller er ugyldigt.
+async function pcLink(req, res) {
+    if (req.accessMode !== 'club' && req.accessMode !== 'direct') {
+        res.status(404).json({ error: 'Endpoint ikke fundet' });
+        return null;
+    }
+    const token = req.get('X-Adgangslink');
+    if (!pcRapport.gyldigtToken(token)) {
+        res.status(401).json({ error: 'Mangler adgangslink' });
+        return null;
+    }
+    const { queryOne } = require('../config/database');
+    const deviceToken = await queryOne(
+        'SELECT id, destination FROM device_tokens WHERE token = ? AND is_active = 1', [token]);
+    if (!deviceToken) res.status(403).json({ error: 'Ugyldigt eller tilbagekaldt adgangslink' });
+    return deviceToken || null;
+}
+
 router.post('/pc-rapport', async (req, res, next) => {
     try {
-        if (req.accessMode !== 'club' && req.accessMode !== 'direct') {
-            return res.status(404).json({ error: 'Endpoint ikke fundet' });
-        }
-        const token = req.get('X-Adgangslink');
-        if (!pcRapport.gyldigtToken(token)) return res.status(401).json({ error: 'Mangler adgangslink' });
-        const { queryOne } = require('../config/database');
-        const deviceToken = await queryOne(
-            'SELECT id, destination FROM device_tokens WHERE token = ? AND is_active = 1', [token]);
-        if (!deviceToken) return res.status(403).json({ error: 'Ugyldigt eller tilbagekaldt adgangslink' });
+        const deviceToken = await pcLink(req, res);
+        if (!deviceToken) return;
 
         const rapport = pcRapport.rensRapport(req.body);
         if (!rapport) return res.status(400).json({ error: 'Ugyldig rapport' });
@@ -99,6 +136,24 @@ router.post('/pc-rapport', async (req, res, next) => {
         }
         await haendelseslog.gem(tenantKey(req), skaerm, rapport.haendelser);
         res.json({ ok: true, modtaget: rapport.haendelser.length });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /api/screens/pc-opdatering — TV-PC'en spørger hvert 2. minut, om admin har
+// bedt den installere nyeste version nu (kiosk: opdatering spoerg), og melder,
+// hvordan det gik. Samme adgang som pc-rapport (X-Adgangslink).
+router.post('/pc-opdatering', async (req, res, next) => {
+    try {
+        const deviceToken = await pcLink(req, res);
+        if (!deviceToken) return;
+        const m = pcOpdatering.rensMelding(req.body);
+        if (!m) return res.status(400).json({ error: 'Ugyldig forespørgsel' });
+        if (m.status) {
+            console.log(`[skærm] ${tenantKey(req)} "${m.navn}" (Badminton TV ${m.kioskVersion || '?'}): opdatering ${m.status}${m.tekst ? ' — ' + m.tekst : ''}`);
+        }
+        res.json(pcOpdatering.spoerg(tenantKey(req), deviceToken.id, m));
     } catch (error) {
         next(error);
     }
