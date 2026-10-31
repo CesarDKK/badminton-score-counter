@@ -439,6 +439,11 @@ git tag tv-usb-v2026.10.1
 git push origin tv-usb-v2026.10.1
 ```
 
+Versionen er datoen (`ÅÅÅÅ.M.D`); en ekstra udgivelse samme dag får `.1`,
+`.2` … PC'er med 2026.10.29.1 eller ældre godtager kun tre dele — de sprang
+`2026.10.28.1` og `2026.10.29.1` over (manifestet "kan ikke læses"). Fra
+2026.10.31 godtages en fjerde del.
+
 Udgivelsen får også `opdatering.json` og `opdatering.json.sig`, som de
 installerede PC'er henter via `releases/latest/download/` — så **den seneste
 udgivelse, der ikke er pre-release, er den, PC'erne opdaterer til**. Andre

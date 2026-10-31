@@ -118,6 +118,9 @@ forvent "2026.10.10 → 2026.9.30 er ikke nyere" "$(er 2026.10.10 2026.9.30)" ne
 forvent "samme version er ikke nyere" "$(er 2026.10.9 2026.10.9)" nej
 forvent "2026.12.31 → 2027.1.1 er nyere" "$(er 2026.12.31 2027.1.1)" ja
 forvent "udviklingsbyg 2026.10.13-dev → udgivelse 2026.10.14" "$(er 2026.10.13-dev 2026.10.14)" ja
+forvent "2026.10.29 → ekstra udgivelse 2026.10.29.1 er nyere" "$(er 2026.10.29 2026.10.29.1)" ja
+forvent "2026.10.29.1 → 2026.10.31 er nyere" "$(er 2026.10.29.1 2026.10.31)" ja
+forvent "2026.10.29.2 → 2026.10.29.10 er nyere" "$(er 2026.10.29.2 2026.10.29.10)" ja
 
 # ── 2. Beslutningen ────────────────────────────────────────
 NU=1800000000
@@ -145,6 +148,10 @@ laes() { if laes_manifest "$TMP/m.json"; then echo "$M_VERSION $M_FIL $M_VENT $M
 
 manifest 2026.10.10 > "$TMP/m.json"
 forvent "Gyldigt manifest" "$(laes)" "2026.10.10 badminton-tv-rod-2026.10.10.squashfs 24 700000000"
+manifest 2026.10.29.1 > "$TMP/m.json"
+forvent "Ekstra udgivelse samme dag (2026.10.29.1)" "$(laes)" "2026.10.29.1 badminton-tv-rod-2026.10.29.1.squashfs 24 700000000"
+manifest 2026.10.29.1.5 > "$TMP/m.json"
+forvent "Fem dele afvises" "$(laes)" ugyldig
 manifest 2026.10.10 "../../etc/passwd" > "$TMP/m.json"
 forvent "Filnavn med sti afvises" "$(laes)" ugyldig
 manifest 2026.10.10 badminton-tv-rod-2026.10.9.squashfs > "$TMP/m.json"

@@ -152,7 +152,9 @@ laes_manifest() {
     felter=$(jq -er '[.version, .udgivet, (.vent_timer // 24), .rod.fil, .rod.sha256, .rod.bytes]
                      | map(tostring) | join("\t")' "$1" 2>/dev/null) || return 1
     IFS=$'\t' read -r M_VERSION M_UDGIVET M_VENT M_FIL M_SHA256 M_BYTES <<<"$felter"
-    [[ "$M_VERSION" =~ ^[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,3}$ ]] &&
+    # Også en ekstra udgivelse samme dag (tv-usb-v2026.10.29.1) — før blev de
+    # afvist, så PC'erne aldrig fik dem
+    [[ "$M_VERSION" =~ ^[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,3}(\.[0-9]{1,3})?$ ]] &&
     [[ "$M_UDGIVET" =~ ^[0-9]{9,11}$ ]] &&
     [[ "$M_VENT" =~ ^[0-9]{1,3}$ ]] &&
     [ "$M_FIL" = "$ROD_NAVN-$M_VERSION.squashfs" ] &&
