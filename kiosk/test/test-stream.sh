@@ -14,6 +14,9 @@
 #   9. vendt, nederst til højre   → hflip+vflip, båndet nederst, stort scoreboard, logo, lyd
 #  10. mikrofonen kan ikke åbnes  → sender uden lyd i stedet for slet ikke
 #  11. klublogoer i scoreboardet  → logoerne ud for navnene, hentet fra serveren
+#  12. kamera uden MJPEG          → råt YUYV, en opløsning med mindst 20 billeder
+#  13. — og formaterne ukendte    → MJPEG afvises af kameraet, så YUYV uden fejl
+#  14. MJPEG hedder JPEG, kun 720p → MJPEG i 720p, når 1080p er valgt
 #
 # Køres i en debian:trixie-container (henter ffmpeg, python3, Pillow og skrifterne):
 #   docker run --rm -v "$PWD/kiosk:/src" debian:trixie bash /src/test/test-stream.sh
@@ -93,7 +96,8 @@ mkdir -p "$TMP/by-id" "$TMP/bin"
 : > "$TMP/video0"
 ln -s "$TMP/video0" "$TMP/by-id/usb-046d_HD_Pro_Webcam_C920_ABCDEF12-video-index0"
 # Kameraet sender den størrelse og de billeder, det bliver bedt om; mikrofonen
-# (-f alsa) bliver en tone — eller en fejl som ALSA's, med MIKROFON_FEJL=1
+# (-f alsa) bliver en tone — eller en fejl som ALSA's, med MIKROFON_FEJL=1.
+# KUN_YUYV=1: et kamera uden MJPEG (fejlen som ffmpegs v4l2)
 cat > "$TMP/bin/ffmpeg-falsk" <<'EOF'
 #!/bin/bash
 ud=()
@@ -104,6 +108,13 @@ while [ $# -gt 0 ]; do
         while [ "$1" != -i ]; do
             [ "$1" = -video_size ] && str=$2
             [ "$1" = -framerate ] && rate=$2
+            if [ "$1" = -input_format ] && [ "$2" = mjpeg ] && [ -n "${KUN_YUYV:-}" ]; then
+                echo "$$" >> "$FFMPEG_LOG"
+                printf '%s\n' "$alle" >> "$FFMPEG_LOG.args"
+                echo "[video4linux2,v4l2 @ 0x1] Cannot find a proper format for codec 'mjpeg' (id 7), pixel format 'none' (id -1)" >&2
+                echo "/dev/video0: Invalid argument" >&2
+                exit 1
+            fi
             shift
         done
         shift 2
@@ -370,6 +381,65 @@ svar "$INGEN_SVAR"
 vent_paa 10 sh -c "! kill -0 $MODTAGER_PID 2>/dev/null" || true
 [ -n "${GEM_MAPPE:-}" ] && ffmpeg -v error -sseof -1 -i "$TMP/modtaget6.flv" -frames:v 1 -y "$GEM_MAPPE/klublogoer-ved-navnene.png"
 stop_stream
+
+VIDEO_1080='{"bredde":1920,"hoejde":1080,"billeder":30,"kvalitet":"normal","placering":"top-venstre","stoerrelse":"normal","vend":false,"spejl":false,"autofokus":false,"lyd":false}'
+
+echo "12. Kamera uden MJPEG (kun YUYV) — formaterne kendes, 1080p valgt"
+cat > "$TMP/formater" <<'EOF'
+ioctl: VIDIOC_ENUM_FMT
+	Type: Video Capture
+
+	[0]: 'YUYV' (YUYV 4:2:2)
+		Size: Discrete 1920x1080
+			Interval: Discrete 0.200s (5.000 fps)
+		Size: Discrete 1280x720
+			Interval: Discrete 0.100s (10.000 fps)
+		Size: Discrete 640x480
+			Interval: Discrete 0.033s (30.000 fps)
+EOF
+modtager "$TMP/modtaget7.flv"
+SEND_VIDEO "$VIDEO_1080"
+start_stream KUN_YUYV=1
+vent_sender
+forvent "status: 640x480 med 30 (ikke 1080p med 5)" "$(sidste_status | felt format)" "640x480@30"
+indeholder "råt YUYV fra kameraet" "$(args)" "-input_format yuyv422 -video_size 640x480 -framerate 30"
+forvent "MJPEG aldrig prøvet" "$(antal_start)" 1
+indeholder "kameraets formater i loggen" "$(cat "$TMP/stream.log")" "kameraet kan (YUYV): 640x480@30, 1280x720@10, 1920x1080@5"
+forvent "ingen fejl til admin" "$(sidste_status | felt fejl)" ""
+stop_stream
+kill "$MODTAGER_PID" 2>/dev/null
+
+echo "13. Kamera uden MJPEG — formaterne ukendte: MJPEG afvises, så YUYV"
+rm -f "$TMP/formater"
+modtager "$TMP/modtaget8.flv"
+SEND_VIDEO "$VIDEO_1080"
+start_stream KUN_YUYV=1
+vent_sender
+indeholder "prøver YUYV efter MJPEG" "$(cat "$TMP/stream.log")" "kameraet kunne ikke åbnes som MJPEG — prøver YUYV"
+indeholder "første forsøg: MJPEG" "$(head -n 1 "$TMP/ffmpeg.log.args")" "-input_format mjpeg"
+indeholder "derefter råt YUYV i det valgte" "$(args)" "-input_format yuyv422 -video_size 1920x1080"
+forvent "sender" "$(sidste_status | felt sender)" "True"
+forvent "ingen fejl til admin" "$(sidste_status | felt fejl)" ""
+stop_stream
+kill "$MODTAGER_PID" 2>/dev/null
+
+echo "14. Kameraet kalder MJPEG for JPEG, og kan højst 720p"
+cat > "$TMP/formater" <<'EOF'
+	[0]: 'JPEG' (JFIF JPEG, compressed)
+		Size: Discrete 1280x720
+			Interval: Discrete 0.033s (30.000 fps)
+	[1]: 'YUYV' (YUYV 4:2:2)
+		Size: Discrete 640x480
+			Interval: Discrete 0.033s (30.000 fps)
+EOF
+modtager "$TMP/modtaget9.flv"
+SEND_VIDEO "$VIDEO_1080"
+start_stream
+vent_sender
+forvent "status: kameraets bedste (720p)" "$(sidste_status | felt format)" "1280x720@30"
+indeholder "som MJPEG" "$(args)" "-input_format mjpeg -video_size 1280x720 -framerate 30"
+stop_stream
+kill "$MODTAGER_PID" 2>/dev/null
 
 echo
 if [ "$FEJL" -eq 0 ]; then echo "Alle test bestået"; else echo "$FEJL fejl"; tail -n 30 "$TMP/stream.log"; fi

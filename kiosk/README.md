@@ -209,7 +209,14 @@ Kan kameraet ikke det valgte, sender det det bedste, det kan derunder
 (`v4l2-ctl --list-formats-ext`): opløsningen går forud for billederne, så
 1080p @ 60 bliver 1080p @ 30 på et kamera, der kun kan 60 i 720p. Har kameraet
 ikke opløsningen, men en større, skaleres den ned. Admin viser, hvad der
-faktisk sendes.
+faktisk sendes. Admins valg er altså et loft: forskellige kameraer kan sidde på
+banerne, og hver PC sender det bedste, dens kamera kan op til det valgte.
+
+Kameraer uden MJPEG (eller som kalder det JPEG) sender råt YUYV; her tages kun
+opløsninger med mindst 20 billeder i sekundet (typisk 640x480 over USB 2 —
+hellere det end 1080p med 5 billeder). Svarer kameraet ikke på, hvilke formater
+det har, prøves MJPEG og så YUYV. Kameraets formater står i journalen
+(`kameraet kan: …`).
 
 **Kameraet på banen** (pr. bane): vend billedet 180° (kameraet hænger på
 hovedet), spejlvend, autofokus (fra som standard — fast fokus på lang afstand
