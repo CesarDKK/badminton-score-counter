@@ -77,6 +77,9 @@ let pendingDeleteFootballAdminId = null;
 let activeApp = 'badminton'; // 'badminton' | 'football'
 
 document.addEventListener('DOMContentLoaded', function () {
+    // Fold-ud-kortene sættes op før dashboardet vises (listerne skriver i overskrifterne)
+    opsaetFoldKort();
+
     // Hvis allerede logget ind som super admin
     if (api.isSuperAdminSession()) {
         // Et must-change-token (fx efter genindlæsning midt i skiftet) skal
@@ -108,16 +111,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Opdater klubber
     document.getElementById('refreshClubsBtn').addEventListener('click', loadClubs);
+    document.getElementById('klubSoeg').addEventListener('input', renderClubs);
+    document.getElementById('klubFilter').addEventListener('change', renderClubs);
 
     // Skærm-hændelser
     document.getElementById('refreshSkaermLogBtn').addEventListener('click', loadSkaermLog);
     document.getElementById('skaermLogDage').addEventListener('change', loadSkaermLog);
-    document.getElementById('skaermLogKlub').addEventListener('change', function () {
+    ['skaermLogKlub', 'skaermLogType'].forEach(id => document.getElementById(id).addEventListener('change', function () {
         this.dataset.valgt = this.value;
         renderSkaermLog();
-    });
+    }));
 
     // Klub-logoer
+    document.getElementById('logoSoeg').addEventListener('input', visLogos);
+    document.getElementById('udenLogoSoeg').addEventListener('input', visMissingLogos);
     document.getElementById('uploadLogoBtn').addEventListener('click', handleUploadLogo);
     document.getElementById('refreshLogosBtn').addEventListener('click', loadLogos);
     document.getElementById('refreshMissingLogosBtn').addEventListener('click', loadMissingLogos);
@@ -190,6 +197,113 @@ function bindEnterSubmit(ids, handler) {
             }
         });
     });
+}
+
+// ==================== FOLD-UD-KORT OG LANGE LISTER ====================
+// Kortene med data-fold foldes ud/sammen ved klik på overskriften, så siden
+// ikke bliver uendelig lang. Valget huskes i browseren; kan localStorage ikke
+// bruges (privat vindue), gælder kortets standard (data-fold-standard).
+
+const FOLD_NOEGLE = 'superAdminFold';
+const LISTE_TRIN = 25;     // rækker ad gangen i de lange lister
+const visAntal = {};       // liste → antal viste rækker (Infinity = alle)
+const hentet = new Set();  // lister hvis data er hentet (før det står spinneren)
+const LISTER = {
+    skaerm: () => renderSkaermLog(),
+    'uden-logo': () => visMissingLogos(),
+    logoer: () => visLogos()
+};
+
+function foldValg() {
+    try { return JSON.parse(localStorage.getItem(FOLD_NOEGLE)) || {}; } catch (e) { return {}; }
+}
+
+function gemFoldValg(valg) {
+    try { localStorage.setItem(FOLD_NOEGLE, JSON.stringify(valg)); } catch (e) { /* privat vindue */ }
+}
+
+function opsaetFoldKort() {
+    const valg = foldValg();
+    document.querySelectorAll('.card[data-fold]').forEach(kort => {
+        const titel = kort.querySelector('.card-header > .card-title');
+        const knap = document.createElement('button');
+        knap.type = 'button';
+        knap.className = 'fold-knap';
+        knap.innerHTML = '<svg class="fold-pil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
+        titel.replaceWith(knap);
+        const tekst = Object.assign(document.createElement('span'), { className: 'fold-tekst' });
+        tekst.append(titel, Object.assign(document.createElement('span'), { className: 'fold-resume' }));
+        knap.append(tekst);
+        knap.addEventListener('click', () => foldKort(kort.dataset.fold, !kort.classList.contains('card--sammen')));
+        const navn = kort.dataset.fold;
+        saetFold(kort, navn in valg ? !!valg[navn] : kort.dataset.foldStandard === 'sammen');
+    });
+    document.getElementById('foldAltUdBtn').addEventListener('click', () => foldAlt(false));
+    document.getElementById('foldAltSammenBtn').addEventListener('click', () => foldAlt(true));
+}
+
+function saetFold(kort, sammen) {
+    kort.classList.toggle('card--sammen', sammen);
+    kort.querySelector('.fold-knap').setAttribute('aria-expanded', String(!sammen));
+}
+
+// Fold ét kort ud eller sammen og husk det
+function foldKort(navn, sammen) {
+    const kort = document.querySelector(`.card[data-fold="${navn}"]`);
+    if (!kort) return;
+    saetFold(kort, sammen);
+    const valg = foldValg();
+    valg[navn] = sammen;
+    gemFoldValg(valg);
+}
+
+// Alle kort; "ud" viser også alle rækker i de lange lister, "sammen" går
+// tilbage til de første LISTE_TRIN. Filtrene lades være — dem har man valgt.
+function foldAlt(sammen) {
+    const valg = foldValg();
+    document.querySelectorAll('.card[data-fold]').forEach(kort => {
+        saetFold(kort, sammen);
+        valg[kort.dataset.fold] = sammen;
+    });
+    gemFoldValg(valg);
+    Object.keys(LISTER).forEach(liste => {
+        visAntal[liste] = sammen ? LISTE_TRIN : Infinity;
+        if (hentet.has(liste)) LISTER[liste]();
+    });
+}
+
+// Kort tekst efter overskriften (antal), så man kan se indholdet sammenfoldet
+function saetResume(navn, tekst) {
+    const el = document.querySelector(`.card[data-fold="${navn}"] .fold-resume`);
+    if (el) el.textContent = tekst || '';
+}
+
+// De første rækker af en lang liste + knapper til resten
+function begraens(liste, raekker) {
+    const n = visAntal[liste] || LISTE_TRIN;
+    const resten = raekker.length - n;
+    if (resten <= 0) return { viste: raekker, flere: '' };
+    const mere = resten > LISTE_TRIN
+        ? `<button type="button" class="btn-secondary btn-sm" onclick="visFlere('${liste}', ${LISTE_TRIN})">Vis ${LISTE_TRIN} mere</button>`
+        : '';
+    return {
+        viste: raekker.slice(0, n),
+        flere: `<div class="vis-flere">${mere}<button type="button" class="btn-secondary btn-sm" onclick="visFlere('${liste}', Infinity)">Vis ${resten > LISTE_TRIN ? `alle (${resten} mere)` : `de sidste ${resten}`}</button></div>`
+    };
+}
+
+function visFlere(liste, flere) {
+    visAntal[liste] = (visAntal[liste] || LISTE_TRIN) + flere;
+    LISTER[liste]();
+}
+
+// Søgefeltets tekst, til sammenligning uden store/små bogstaver
+function soegeOrd(id) {
+    return document.getElementById(id).value.trim().toLocaleLowerCase('da');
+}
+
+function passer(ord, ...felter) {
+    return !ord || felter.some(f => (f || '').toLocaleLowerCase('da').includes(ord));
 }
 
 async function handleLogin() {
@@ -308,11 +422,27 @@ function renderClubs() {
     const listEl = document.getElementById('clubList');
 
     if (clubs.length === 0) {
+        saetResume('klubber', '');
         listEl.innerHTML = '<div class="empty-state">Ingen klubber endnu — opret den første ovenfor</div>';
         return;
     }
 
-    listEl.innerHTML = '<div class="club-list">' + clubs.map(club => `
+    const ord = soegeOrd('klubSoeg');
+    const filter = document.getElementById('klubFilter').value;
+    const viste = clubs.filter(club => passer(ord, club.name, club.subdomain, club.db_name) && (
+        !filter
+        || (filter === 'skaerm' && club.skaerm_haendelser_doegn > 0)
+        || (filter === 'login' && sidstLoginGammel(club.last_login_at))
+        || (filter === 'backup' && !!club.last_auto_backup_error)
+        || (filter === 'inaktiv' && !club.is_active)));
+    saetResume('klubber', `${clubs.length} ${clubs.length === 1 ? 'klub' : 'klubber'}`
+        + (viste.length < clubs.length ? ` · ${viste.length} vist` : ''));
+    if (!viste.length) {
+        listEl.innerHTML = '<div class="empty-state" style="padding:12px;">Ingen klubber passer til søgningen</div>';
+        return;
+    }
+
+    listEl.innerHTML = '<div class="club-list">' + viste.map(club => `
         <div class="club-item" id="club-${club.id}">
             <div class="club-info">
                 <div class="club-name">${escapeHtml(club.name)}</div>
@@ -832,6 +962,7 @@ async function loadFootballClubs() {
 
 function renderFootballClubs() {
     const listEl = document.getElementById('footballClubList');
+    saetResume('fb-klubber', footballClubs.length ? `${footballClubs.length} ${footballClubs.length === 1 ? 'klub' : 'klubber'}` : '');
     if (footballClubs.length === 0) {
         listEl.innerHTML = '<div class="empty-state">Ingen football-klubber endnu — opret den første ovenfor</div>';
         return;
@@ -1092,6 +1223,7 @@ function renderYoutube(s) {
     } else {
         status.innerHTML = '<strong>Ikke sat op</strong> <small>— klubberne kan ikke forbinde YouTube endnu</small>';
     }
+    saetResume('youtube', s.kilde ? 'Sat op' : s.ulaeselig ? 'Secret kan ikke læses' : 'Ikke sat op');
     document.getElementById('ytFelter').style.display = env ? 'none' : '';
     document.getElementById('ytFjernBtn').style.display = s.kilde === 'admin' ? '' : 'none';
     document.getElementById('ytVejledning').open = !s.kilde;
@@ -1363,6 +1495,7 @@ async function loadSkaermLog() {
     const dage = document.getElementById('skaermLogDage').value;
     try {
         skaermLogCache = await api.getAllScreenEvents(dage);
+        hentet.add('skaerm');
         renderSkaermLog();
     } catch (err) {
         listEl.innerHTML = `<div class="empty-state">Fejl: ${escapeHtml(err.message)}</div>`;
@@ -1372,13 +1505,28 @@ async function loadSkaermLog() {
 function visSkaermLogForKlub(dbName) {
     const valg = document.getElementById('skaermLogKlub');
     valg.dataset.valgt = dbName;
+    document.getElementById('skaermLogType').dataset.valgt = '';
     document.getElementById('skaermLogDage').value = '1';
+    foldKort('skaerm', false);
     loadSkaermLog().then(() => valg.closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }));
+}
+
+// Slags-filteret samler hændelsestyperne i grupper; ukendte typer er "Andet"
+const SKAERM_SLAGS = [
+    { navn: 'frys', tekst: 'Frosset', typer: ['frys', 'browser-genstart'] },
+    { navn: 'net', tekst: 'Netværk og WiFi', typer: ['net', 'net-wifi', 'net-server', 'net-genstart', 'net-kort'] },
+    { navn: 'genstart', tekst: 'Genstart, strøm og væk', typer: ['genstart', 'vaek', 'pc-brat', 'pc-panik', 'pc-knap', 'pc-genstart'] }
+];
+
+function skaermSlags(h) {
+    const s = SKAERM_SLAGS.find(g => g.typer.includes(h.type));
+    return s ? s.navn : 'andet';
 }
 
 function renderSkaermLog() {
     const listEl = document.getElementById('skaermLogList');
     const valg = document.getElementById('skaermLogKlub');
+    const slagsValg = document.getElementById('skaermLogType');
     const klubNavn = (h) => h.klub_navn || h.klub;
 
     // Klubvalget: alle klubber med hændelser i perioden
@@ -1388,13 +1536,26 @@ function renderSkaermLog() {
     valg.innerHTML = `<option value="">Alle klubber</option>`
         + klubber.map(([k, n]) => `<option value="${escapeHtml(k)}"${k === valgt ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('');
 
-    const viste = skaermLogCache.filter(h => !valgt || h.klub === valgt);
+    // Slags-valget med antal for den valgte klub; kun slags der findes i perioden
+    const iKlub = skaermLogCache.filter(h => !valgt || h.klub === valgt);
+    const antal = {};
+    iKlub.forEach(h => { const s = skaermSlags(h); antal[s] = (antal[s] || 0) + 1; });
+    const slags = [...SKAERM_SLAGS, { navn: 'andet', tekst: 'Andet' }].filter(g => antal[g.navn]);
+    const valgtSlags = slags.some(g => g.navn === slagsValg.dataset.valgt) ? slagsValg.dataset.valgt : '';
+    slagsValg.innerHTML = `<option value="">Alle slags (${iKlub.length})</option>`
+        + slags.map(g => `<option value="${g.navn}"${g.navn === valgtSlags ? ' selected' : ''}>${g.tekst} (${antal[g.navn]})</option>`).join('');
+
+    const viste = iKlub.filter(h => !valgtSlags || skaermSlags(h) === valgtSlags);
+    const periode = document.getElementById('skaermLogDage').selectedOptions[0];
+    saetResume('skaerm', `${skaermLogCache.length} ${skaermLogCache.length === 1 ? 'hændelse' : 'hændelser'} · ${periode ? periode.textContent.toLowerCase() : ''}`
+        + (viste.length < skaermLogCache.length ? ` · ${viste.length} vist` : ''));
     if (!viste.length) {
         listEl.innerHTML = '<div class="empty-state" style="padding:12px;">Ingen skærm-hændelser i perioden</div>';
         return;
     }
+    const { viste: raekker, flere } = begraens('skaerm', viste);
     let sidsteDag = '';
-    listEl.innerHTML = viste.map(h => {
+    listEl.innerHTML = raekker.map(h => {
         const d = new Date(h.fra);
         const dag = d.toLocaleDateString('da-DK', { weekday: 'long', day: 'numeric', month: 'long' });
         const overskrift = dag !== sidsteDag ? `<div class="skaerm-log-dag">${escapeHtml(dag)}</div>` : '';
@@ -1407,7 +1568,7 @@ function renderSkaermLog() {
                 <span class="skaerm"><strong>${escapeHtml(h.navn || h.klient_id)}</strong> <small>${hvor}</small></span>
                 <span class="hvad">${escapeHtml(skaermHaendelseTekst(h))}${haendelseLogHtml(h)}</span>
             </div>`;
-    }).join('');
+    }).join('') + flere;
 }
 
 // Ingen login i en måned (eller aldrig): fremhæves, så inaktive klubber springer i øjnene
@@ -1433,15 +1594,29 @@ async function loadLogos() {
 }
 
 function renderLogos(logos) {
-    const listEl = document.getElementById('logoList');
     logoCache = logos || [];
-    if (!logos || logos.length === 0) {
+    hentet.add('logoer');
+    visLogos();
+}
+
+// Biblioteket filtreret efter søgefeltet, LISTE_TRIN ad gangen
+function visLogos() {
+    const listEl = document.getElementById('logoList');
+    saetResume('logoer', logoCache.length ? `${logoCache.length} ${logoCache.length === 1 ? 'logo' : 'logoer'}` : '');
+    if (logoCache.length === 0) {
         listEl.innerHTML = '<div class="empty-state" style="padding:12px;">Ingen logoer endnu</div>';
         return;
     }
-    listEl.innerHTML = logos.map(l => `
+    const ord = soegeOrd('logoSoeg');
+    const fundne = logoCache.filter(l => passer(ord, l.club_name, l.aliases));
+    if (!fundne.length) {
+        listEl.innerHTML = '<div class="empty-state" style="padding:12px;">Ingen logoer passer til søgningen</div>';
+        return;
+    }
+    const { viste, flere } = begraens('logoer', fundne);
+    listEl.innerHTML = (ord ? `<div class="sa-antal">${fundne.length} af ${logoCache.length}</div>` : '') + viste.map(l => `
         <div class="admin-item" id="logo-row-${l.id}" style="gap:12px;">
-            <img src="${escapeHtml(l.url)}" alt="" style="width:48px;height:48px;object-fit:contain;background:rgba(255,255,255,0.06);border-radius:6px;flex-shrink:0;">
+            <img src="${escapeHtml(l.url)}" alt="" loading="lazy" style="width:48px;height:48px;object-fit:contain;background:rgba(255,255,255,0.06);border-radius:6px;flex-shrink:0;">
             <div style="flex:1; min-width:0;">
                 <div class="admin-name">${escapeHtml(l.club_name)}</div>
                 ${l.aliases ? `<div class="admin-email">${escapeHtml(l.aliases)}</div>` : ''}
@@ -1453,7 +1628,7 @@ function renderLogos(logos) {
                     onclick="handleDeleteLogo(${l.id})">Slet</button>
             </div>
         </div>
-    `).join('');
+    `).join('') + flere;
 }
 
 // ---- Klubber uden logo ----
@@ -1473,16 +1648,31 @@ async function loadMissingLogos() {
 }
 
 function renderMissingLogos(list) {
+    // Navnene sendes ikke gennem onclick-strengen (JS-injektion via ' og \) —
+    // knapperne refererer i stedet et indeks i den cachede liste.
+    missingLogoCache = list;
+    hentet.add('uden-logo');
+    visMissingLogos();
+}
+
+// Listen filtreret efter søgefeltet; indekset er stadig det i missingLogoCache
+function visMissingLogos() {
     const listEl = document.getElementById('missingLogoList');
+    const list = missingLogoCache;
+    saetResume('uden-logo', list.length ? `${list.length} ${list.length === 1 ? 'klub' : 'klubber'}` : 'Alle har logo');
     if (!list.length) {
         listEl.innerHTML = '<div class="empty-state" style="padding:12px;">Alle kendte klubber har et logo</div>';
         return;
     }
+    const ord = soegeOrd('udenLogoSoeg');
+    const fundne = list.map((c, i) => [c, i]).filter(([c]) => passer(ord, c.name));
+    if (!fundne.length) {
+        listEl.innerHTML = '<div class="empty-state" style="padding:12px;">Ingen klubber passer til søgningen</div>';
+        return;
+    }
     const opts = logoCache.map(l => `<option value="${l.id}">${escapeHtml(l.club_name)}</option>`).join('');
-    // Navnene sendes ikke gennem onclick-strengen (JS-injektion via ' og \) —
-    // knapperne refererer i stedet et indeks i den cachede liste.
-    missingLogoCache = list;
-    listEl.innerHTML = list.map((c, i) => {
+    const { viste, flere } = begraens('uden-logo', fundne);
+    listEl.innerHTML = (ord ? `<div class="sa-antal">${fundne.length} af ${list.length}</div>` : '') + viste.map(([c, i]) => {
         const safe = escapeHtml(c.name);
         return `
         <div class="admin-item" style="gap:10px; flex-wrap:wrap;">
@@ -1498,12 +1688,13 @@ function renderMissingLogos(list) {
                 <button class="btn-secondary btn-sm" onclick="linkClubToLogo(${i}, this.previousElementSibling)">Knyt</button>
             </div>
         </div>`;
-    }).join('');
+    }).join('') + flere;
 }
 
 function prefillUploadLogo(index) {
     const entry = missingLogoCache[index];
     if (!entry) return;
+    foldKort('logoer', false);
     const inp = document.getElementById('newLogoClubName');
     if (inp) { inp.value = entry.name; inp.focus(); inp.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 }
