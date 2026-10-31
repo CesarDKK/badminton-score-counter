@@ -257,6 +257,26 @@ test('én PC pr. adgangslink: den første med kamera sender, de andre vises som 
     assert.equal(st.navn, 'tv-b');
     assert.deepEqual(st.andenPc, { navn: 'tv-a', ip: '5.6.7.8', kamera: 'C270' });
     assert.equal(ls.statusFor('t-pc', NU + MIN)[4].andenPc, null);
+
+    // Flere TV'er ved samme bane på samme link: kun en PC med kamera er en
+    // advarsel værd — de andre får bare "intet kamera"
+    assert.deepEqual(ls.svarTilAnden(ls.rensStatus({ navn: 'tv-a', kamera: 'C270' }), 4),
+        { advar: true, svar: { kamera: true, bane: 4, send: false, grund: 'anden-pc' } });
+    assert.deepEqual(ls.svarTilAnden(ls.rensStatus({ navn: 'tv-c' }), 4),
+        { advar: false, svar: { kamera: false, send: false, grund: 'intet-kamera' } });
+});
+
+test('nyt kamera i en TV-PC: linkets egen bane, kun når admin ikke har valgt', () => {
+    const link = (ekstra) => ({ destination: 'tv/4', token_type: 'permanent', camera_court: null, camera_manual: 0, ...ekstra });
+    assert.equal(ls.autoKameraBane(link(), true), 4);
+    assert.equal(ls.autoKameraBane(link({ destination: 'tv/12' }), true), 12);
+    assert.equal(ls.autoKameraBane(link(), false), null, 'intet kamera');
+    assert.equal(ls.autoKameraBane(link({ camera_court: 3 }), true), null, 'har allerede en bane');
+    assert.equal(ls.autoKameraBane(link({ camera_manual: 1 }), true), null, 'admin har valgt (også "Intet kamera")');
+    assert.equal(ls.autoKameraBane(link({ destination: 'oversigt' }), true), null, 'oversigten har ingen bane');
+    assert.equal(ls.autoKameraBane(link({ destination: 'court/4' }), true), null, 'tabletter er ikke TV-PC\'er');
+    assert.equal(ls.autoKameraBane(link({ token_type: 'match_session' }), true), null);
+    assert.equal(ls.autoKameraBane(null, true), null);
 });
 
 test('TV\'ets LIVE-mærke: kun mens banens PC selv melder, at den sender', () => {
