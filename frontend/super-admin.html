@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="fonts.css?v=2">
     <link rel="stylesheet" href="fundament.css?v=2">
     <link rel="stylesheet" href="styles.css?v=11">
-    <link rel="stylesheet" href="super-admin-styles.css?v=14">
+    <link rel="stylesheet" href="super-admin-styles.css?v=15">
     <script src="js/theme-loader.js?v=15"></script>
 </head>
 <body>
@@ -88,11 +88,17 @@
                 </div>
             </div>
 
+            <!-- Kortene kan foldes sammen (klik på overskriften); valget huskes i browseren -->
+            <div class="fold-alle">
+                <button type="button" id="foldAltUdBtn" class="btn-secondary btn-sm">Fold alt ud og vis alt</button>
+                <button type="button" id="foldAltSammenBtn" class="btn-secondary btn-sm">Fold alt sammen</button>
+            </div>
+
             <!-- ════════════════════ BADMINTON SECTION ════════════════════ -->
             <div id="badmintonSection">
 
             <!-- Opret ny klub -->
-            <div class="card">
+            <div class="card" data-fold="opret" data-fold-standard="sammen">
                 <div class="card-header">
                     <span class="card-title">Opret Ny Badminton-Klub</span>
                 </div>
@@ -111,10 +117,20 @@
             </div>
 
             <!-- Klub liste -->
-            <div class="card">
+            <div class="card" data-fold="klubber">
                 <div class="card-header">
                     <span class="card-title">Badminton-Klubber</span>
                     <button id="refreshClubsBtn" class="btn-secondary">↻ Opdater</button>
+                </div>
+                <div class="sa-filtre">
+                    <input type="search" id="klubSoeg" class="sa-soeg" placeholder="Søg klub eller subdomain" aria-label="Søg i klubberne">
+                    <select id="klubFilter" class="sa-select" aria-label="Vis klubber">
+                        <option value="">Alle klubber</option>
+                        <option value="skaerm">Med skærm-hændelser seneste døgn</option>
+                        <option value="login">Ingen login i en måned</option>
+                        <option value="backup">Backup-problemer</option>
+                        <option value="inaktiv">Inaktive</option>
+                    </select>
                 </div>
                 <div id="clubList">
                     <div class="empty-state"><div class="spinner"></div></div>
@@ -122,35 +138,39 @@
             </div>
 
             <!-- Skærm-hændelser på tværs af klubberne (gemmes i 30 dage) -->
-            <div class="card">
+            <div class="card" data-fold="skaerm">
                 <div class="card-header">
                     <span class="card-title">Skærm-hændelser</span>
-                    <div style="display:flex; gap:8px;">
-                        <select id="skaermLogKlub" class="sa-select"></select>
-                        <select id="skaermLogDage" class="sa-select">
-                            <option value="1">Seneste døgn</option>
-                            <option value="7" selected>7 dage</option>
-                            <option value="30">30 dage</option>
-                        </select>
-                        <button id="refreshSkaermLogBtn" class="btn-secondary">↻ Opdater</button>
-                    </div>
+                    <button id="refreshSkaermLogBtn" class="btn-secondary">↻ Opdater</button>
                 </div>
                 <p style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-bottom:10px;">TV-skærme og oversigter, der har stået stille, mistet forbindelsen eller er startet forfra (genstartet af nogen i hallen, eller frosset). Klubberne ser deres egne under Adgangslinks.</p>
+                <div class="sa-filtre">
+                    <select id="skaermLogKlub" class="sa-select" aria-label="Klub"></select>
+                    <select id="skaermLogType" class="sa-select" aria-label="Slags hændelse"></select>
+                    <select id="skaermLogDage" class="sa-select" aria-label="Periode">
+                        <option value="1">Seneste døgn</option>
+                        <option value="7" selected>7 dage</option>
+                        <option value="30">30 dage</option>
+                    </select>
+                </div>
                 <div id="skaermLogList"><div class="empty-state"><div class="spinner"></div></div></div>
             </div>
 
             <!-- Klubber uden logo -->
-            <div class="card">
+            <div class="card" data-fold="uden-logo" data-fold-standard="sammen">
                 <div class="card-header">
                     <span class="card-title">Klubber uden logo</span>
                     <button id="refreshMissingLogosBtn" class="btn-secondary">↻ Opdater</button>
                 </div>
                 <p style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-bottom:10px;">Kendte klubnavne (turnering, holdkamp, spillere) der ikke auto-matcher et logo. Upload eller knyt til et eksisterende logo.</p>
+                <div class="sa-filtre">
+                    <input type="search" id="udenLogoSoeg" class="sa-soeg" placeholder="Søg klubnavn" aria-label="Søg i klubber uden logo">
+                </div>
                 <div id="missingLogoList"><div class="empty-state"><div class="spinner"></div></div></div>
             </div>
 
             <!-- Klub-logoer (centralt bibliotek) -->
-            <div class="card">
+            <div class="card" data-fold="logoer" data-fold-standard="sammen">
                 <div class="card-header">
                     <span class="card-title">Klub-logoer (centralt bibliotek)</span>
                     <div style="display:flex; gap:8px;">
@@ -175,13 +195,16 @@
                     <button id="uploadLogoBtn" class="btn-primary" style="height:46px; margin-top:22px;">Upload logo</button>
                 </div>
                 <div id="uploadLogoMsg" class="msg" style="display:none;"></div>
-                <div id="logoList" style="margin-top:16px;">
+                <div class="sa-filtre" style="margin-top:16px;">
+                    <input type="search" id="logoSoeg" class="sa-soeg" placeholder="Søg klubnavn eller alias" aria-label="Søg i logoerne">
+                </div>
+                <div id="logoList">
                     <div class="empty-state"><div class="spinner"></div></div>
                 </div>
             </div>
 
             <!-- YouTube: Badmintonapps login-klient hos Google (fælles for alle klubber) -->
-            <div class="card" id="youtubeCard">
+            <div class="card" id="youtubeCard" data-fold="youtube" data-fold-standard="sammen">
                 <div class="card-header">
                     <span class="card-title">YouTube (livestream)</span>
                 </div>
@@ -237,7 +260,7 @@
             <div id="footballSection" style="display:none;">
 
             <!-- Opret football-klub -->
-            <div class="card">
+            <div class="card" data-fold="fb-opret" data-fold-standard="sammen">
                 <div class="card-header">
                     <span class="card-title">Opret Ny Football-Klub</span>
                 </div>
@@ -259,7 +282,7 @@
             </div>
 
             <!-- Football klub liste -->
-            <div class="card">
+            <div class="card" data-fold="fb-klubber">
                 <div class="card-header">
                     <span class="card-title">Football-Klubber</span>
                     <button id="refreshFootballClubsBtn" class="btn-secondary">↻ Opdater</button>
@@ -272,7 +295,7 @@
             </div><!-- /footballSection -->
 
             <!-- Skift adgangskode (delt for begge apps) -->
-            <div class="card">
+            <div class="card" data-fold="adgangskode" data-fold-standard="sammen">
                 <div class="card-header">
                     <span class="card-title">Skift adgangskode</span>
                 </div>
@@ -419,6 +442,6 @@
     <script src="js/session-vagt.js?v=2"></script>
     <script src="js/logo-match.js?v=2"></script>
     <script src="js/ikoner.js?v=2"></script>
-    <script src="super-admin-script.js?v=30"></script>
+    <script src="super-admin-script.js?v=31"></script>
 </body>
 </html>

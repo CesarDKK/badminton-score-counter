@@ -122,6 +122,60 @@ header .subtitle {
     font-size: 0.9em;
 }
 .sa-select option { background: var(--color-bg-card); }
+
+/* Fold-ud-kort: klik på overskriften folder kortet sammen til kun overskrift + antal */
+.fold-alle { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin: -8px 0 16px; }
+.fold-knap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 0;
+    margin: 0;
+    background: none;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.fold-knap:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; border-radius: 4px; }
+.fold-pil {
+    width: 1.1em;
+    height: 1.1em;
+    flex-shrink: 0;
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
+    transform: rotate(90deg);
+    transition: transform 0.15s;
+}
+.card--sammen .fold-pil { transform: none; }
+.fold-knap:hover .fold-pil { color: var(--text-primary, #eaeaea); }
+.fold-tekst { min-width: 0; }
+.fold-resume { display: inline-block; margin-left: 10px; font-size: 0.82em; color: var(--text-muted, rgba(255, 255, 255, 0.62)); }
+.card[data-fold] > .card-header { gap: 12px; }
+.card--sammen { padding-top: 18px; padding-bottom: 18px; }
+.card--sammen > .card-header { margin-bottom: 0; }
+/* !important: nogle af kortenes dele vises/skjules med inline style.display */
+.card--sammen > :not(.card-header),
+.card--sammen > .card-header > :not(.fold-knap) { display: none !important; }
+@media (prefers-reduced-motion: reduce) { .fold-pil { transition: none; } }
+
+/* Søgning og filtre over listerne */
+.sa-filtre { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.sa-soeg {
+    flex: 1 1 220px;
+    max-width: 360px;
+    background: var(--color-bg-card);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: var(--text-primary, #eaeaea);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9em;
+}
+.sa-soeg::placeholder { color: var(--text-muted, rgba(255, 255, 255, 0.62)); }
+.sa-antal { font-size: 0.8em; color: var(--text-muted, rgba(255, 255, 255, 0.62)); margin-bottom: 6px; }
+.vis-flere { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .skaerm-log-dag {
     margin: 14px 0 4px;
     font-size: 0.72em;
