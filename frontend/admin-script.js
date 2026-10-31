@@ -3174,7 +3174,9 @@ async function forbindLivestreamYoutube() {
 }
 
 async function fjernLivestreamYoutube() {
-    if (!confirm('Fjern forbindelsen til YouTube-kanalen? Udsendelser, der kører nu, afsluttes, og banerne bruger igen deres egen stream-nøgle (hvis der er indtastet en).')) return;
+    if (!await BadmintonUtils.confirmDialog('Fjern YouTube-kanalen',
+        'Fjern forbindelsen til YouTube-kanalen? Udsendelser, der kører nu, afsluttes, og banerne bruger igen deres egen stream-nøgle (hvis der er indtastet en).',
+        { danger: true, okText: 'Fjern forbindelsen' })) return;
     try {
         await api.disconnectLivestreamYoutube();
     } catch (e) {
@@ -3282,7 +3284,9 @@ async function uploadLivestreamLogo(input) {
 
 async function fjernLivestreamLogo() {
     const db = _livestream.klubLogo && _livestream.klubLogo.database;
-    if (!confirm(db ? `Fjern det uploadede logo og brug "${db.navn}" fra logo-databasen igen?` : 'Fjern klubbens logo fra streamen?')) return;
+    if (!await BadmintonUtils.confirmDialog(db ? 'Brug logo-databasens logo' : 'Fjern logoet',
+        db ? `Fjern det uploadede logo og brug "${db.navn}" fra logo-databasen igen?` : 'Fjern klubbens logo fra streamen?',
+        { danger: !db, okText: db ? 'Brug logo-databasens' : 'Fjern' })) return;
     try {
         await api.deleteLivestreamLogo();
     } catch (e) {
@@ -3487,14 +3491,18 @@ function livestreamNoegleIndtastet(input) {
     if (ny && !laast) til.checked = true;
 }
 
-function fjernLivestreamNoegle(bane) {
+async function fjernLivestreamNoegle(bane) {
     // Med YouTube-kanalen forbundet sendes banen stadig — med nøglen derfra
     if (livestreamYoutubeVirker()) {
-        if (!confirm(`Fjern den indtastede reserve-nøgle for bane ${bane}? Banen sender stadig med nøglen fra YouTube-kanalen.`)) return;
+        if (!await BadmintonUtils.confirmDialog('Fjern reserve-nøglen',
+            `Fjern den indtastede reserve-nøgle for bane ${bane}? Banen sender stadig med nøglen fra YouTube-kanalen.`,
+            { okText: 'Fjern nøglen' })) return;
         gemLivestream(bane, { fjernNoegle: true, streamKey: '' });
         return;
     }
-    if (!confirm(`Fjern stream-nøglen for bane ${bane}? Banen sendes ikke, før en ny nøgle er indtastet.`)) return;
+    if (!await BadmintonUtils.confirmDialog('Fjern stream-nøglen',
+        `Fjern stream-nøglen for bane ${bane}? Banen sendes ikke, før en ny nøgle er indtastet.`,
+        { danger: true, okText: 'Fjern nøglen' })) return;
     gemLivestream(bane, { fjernNoegle: true, enabled: false, streamKey: '' });
 }
 
@@ -3644,7 +3652,7 @@ async function fjernSkaerm(klientId) {
     try {
         await api.deleteScreen(klientId);
     } catch (e) {
-        if (e.status !== 404) { alert('Skærmen kunne ikke fjernes: ' + e.message); return; }
+        if (e.status !== 404) { BadmintonUtils.showMessage('Skærmen kunne ikke fjernes', e.message); return; }
     }
     refreshSkaermStatus();
 }
@@ -3653,13 +3661,15 @@ async function fjernSkaerm(klientId) {
 // udgivelsen (oversigten med det samme). Den spørger hvert 2. minut, om den skal
 // tage den nu (backend/screens/pcOpdatering.js).
 async function opdaterSkaerm(klientId, navn) {
-    if (!confirm(`Installér nyeste version på ${navn} nu?\n\n` +
+    if (!await BadmintonUtils.confirmDialog('Installér nyeste version',
+        `Installér nyeste version på ${navn} nu?\n\n` +
         'PC\'en henter den inden for et par minutter og genstarter, så snart den er klar — ' +
-        'skærmen er sort i 1–2 minutter. Kører den allerede den nyeste version, sker der intet.')) return;
+        'skærmen er sort i 1–2 minutter. Kører den allerede den nyeste version, sker der intet.',
+        { okText: 'Installér nu' })) return;
     try {
         await api.requestScreenUpdate(klientId);
     } catch (e) {
-        alert('Kunne ikke bede PC\'en om at opdatere: ' + e.message);
+        BadmintonUtils.showMessage('Kunne ikke bede PC\'en om at opdatere', e.message);
     }
     refreshSkaermStatus();
 }
@@ -3668,7 +3678,7 @@ async function fortrydSkaermOpdatering(klientId) {
     try {
         await api.cancelScreenUpdate(klientId);
     } catch (e) {
-        alert(e.message);
+        BadmintonUtils.showMessage('Kunne ikke fortryde opdateringen', e.message);
     }
     refreshSkaermStatus();
 }
