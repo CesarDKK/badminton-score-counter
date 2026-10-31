@@ -521,6 +521,16 @@ function registrerAnden(tenant, tokenId, pc, ip, nu = Date.now()) {
     andre.get(tenant).set(tokenId, { navn: pc.navn || null, ip: ip || null, kamera: pc.kamera || null, sidst: nu });
 }
 
+// Svaret til en PC, der ikke må bruge linkets kamera. Har den selv et kamera,
+// er der to kameraer på ét link — det skal admin se (advar). Uden kamera er den
+// bare endnu en skærm ved banen (flere TV'er på samme link er almindeligt): den
+// skal hverken give en advarsel eller skrive over den sendende PC's status
+function svarTilAnden(pc, bane) {
+    return pc.kamera
+        ? { advar: true, svar: { kamera: true, bane, send: false, grund: 'anden-pc' } }
+        : { advar: false, svar: { kamera: false, send: false, grund: 'intet-kamera' } };
+}
+
 function registrer(tenant, tokenId, data, ip, nu = Date.now()) {
     if (!status.has(tenant)) status.set(tenant, new Map());
     const klub = status.get(tenant);
@@ -621,5 +631,5 @@ module.exports = {
     beslutning, startet, holdkampNu, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,
     spillerLogoer, klubLogoFraDatabase,
     rensStatus, registrer, statusFor, senderBane, liveBaner,
-    pcNoegle, maaBrugeKamera, registrerAnden
+    pcNoegle, maaBrugeKamera, registrerAnden, svarTilAnden
 };

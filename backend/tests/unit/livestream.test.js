@@ -257,6 +257,13 @@ test('én PC pr. adgangslink: den første med kamera sender, de andre vises som 
     assert.equal(st.navn, 'tv-b');
     assert.deepEqual(st.andenPc, { navn: 'tv-a', ip: '5.6.7.8', kamera: 'C270' });
     assert.equal(ls.statusFor('t-pc', NU + MIN)[4].andenPc, null);
+
+    // Flere TV'er ved samme bane på samme link: kun en PC med kamera er en
+    // advarsel værd — de andre får bare "intet kamera"
+    assert.deepEqual(ls.svarTilAnden(ls.rensStatus({ navn: 'tv-a', kamera: 'C270' }), 4),
+        { advar: true, svar: { kamera: true, bane: 4, send: false, grund: 'anden-pc' } });
+    assert.deepEqual(ls.svarTilAnden(ls.rensStatus({ navn: 'tv-c' }), 4),
+        { advar: false, svar: { kamera: false, send: false, grund: 'intet-kamera' } });
 });
 
 test('TV\'ets LIVE-mærke: kun mens banens PC selv melder, at den sender', () => {

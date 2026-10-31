@@ -627,10 +627,12 @@ router.post('/pc', async (req, res, next) => {
         const tenant = tenantKey(req);
         const bane = link.camera_court;
         // Én PC pr. adgangslink sender (se ls.maaBrugeKamera). De andre får
-        // "anden-pc" og ser ikke nøglen; banen og statussen røres ikke
+        // "anden-pc" og ser ikke nøglen; banen og statussen røres ikke (og
+        // en PC uden kamera er ikke en advarsel værd — se ls.svarTilAnden)
         if (bane && !ls.maaBrugeKamera(tenant, link.id, ls.pcNoegle(pc, klientIp(req)), !!pc.kamera)) {
-            ls.registrerAnden(tenant, link.id, pc, klientIp(req));
-            return res.json({ kamera: true, bane, send: false, grund: 'anden-pc' });
+            const { advar, svar } = ls.svarTilAnden(pc, bane);
+            if (advar) ls.registrerAnden(tenant, link.id, pc, klientIp(req));
+            return res.json(svar);
         }
         const foer = ls.statusFor(tenant)[link.id];
         let svar = { kamera: false, send: false, grund: 'intet-kamera' };
