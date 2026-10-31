@@ -478,8 +478,47 @@ function rensStatus(body) {
         format: typeof b.format === 'string' && /^\d{3,4}x\d{3,4}@\d{1,3}$/.test(b.format) ? b.format : null,
         // Kameraets mikrofon, når lyden er slået til (null: ingen fundet eller lyd fra)
         mikrofon: b.mikrofon ? tekst(b.mikrofon, 100) : null,
-        fejl: b.fejl ? tekst(b.fejl, 300) : null
+        fejl: b.fejl ? tekst(b.fejl, 300) : null,
+        // PC'ens eget id (et hash af maskine-id'et) — nye Badminton TV-versioner
+        pcId: typeof b.pcId === 'string' && /^[a-f0-9]{16,64}$/.test(b.pcId) ? b.pcId : null
     };
+}
+
+// ---------- Én PC pr. adgangslink sender ----------
+// Flere TV-PC'er kan bruge samme adgangslink (skærm-status skelner dem på
+// navnet), men banens kamera er sat på linket. Sendte de alle, gik de til den
+// samme YouTube-nøgle, og YouTube tager kun imod én: streamen hakkede, og
+// statussen i admin hoppede mellem dem. Den første PC med et kamera får derfor
+// linkets kamera og beholder det, så længe den spørger og har kameraet; de andre
+// sender ikke, og admin får besked om dem.
+
+const ejere = new Map();    // tenant -> Map(tokenId -> { pc, sidst })
+const andre = new Map();    // tenant -> Map(tokenId -> { navn, ip, kamera, sidst })
+
+// Hvem PC'en er: maskine-id'et, ellers navnet, ellers IP'en (ældre versioner).
+// To ældre PC'er med samme navn bag samme IP kan ikke skelnes
+function pcNoegle(pc, ip) {
+    return pc.pcId ? `id:${pc.pcId}` : pc.navn ? `navn:${pc.navn}` : `ip:${ip || '?'}`;
+}
+
+// Må PC'en bruge linkets kamera? false: en anden PC med kamera har det
+function maaBrugeKamera(tenant, tokenId, noegle, harKamera, nu = Date.now()) {
+    if (!ejere.has(tenant)) ejere.set(tenant, new Map());
+    const klub = ejere.get(tenant);
+    const e = klub.get(tokenId);
+    if (e && e.pc !== noegle && nu - e.sidst < TABT_MS) return false;
+    // Ledigt, eller PC'en har det selv: et kamera i stikket holder fast i det,
+    // uden kamera gives det fri, så en anden PC med kamera kan tage over
+    if (harKamera) klub.set(tokenId, { pc: noegle, sidst: nu });
+    else klub.delete(tokenId);
+    return true;
+}
+
+// En PC, der ikke må sende, fordi en anden har linkets kamera. Dens status
+// skriver ikke over den sendende PC's — admin ser den som en advarsel
+function registrerAnden(tenant, tokenId, pc, ip, nu = Date.now()) {
+    if (!andre.has(tenant)) andre.set(tenant, new Map());
+    andre.get(tenant).set(tokenId, { navn: pc.navn || null, ip: ip || null, kamera: pc.kamera || null, sidst: nu });
 }
 
 function registrer(tenant, tokenId, data, ip, nu = Date.now()) {
@@ -494,8 +533,11 @@ function registrer(tenant, tokenId, data, ip, nu = Date.now()) {
 
 function statusFor(tenant, nu = Date.now()) {
     const ud = {};
+    const anden = andre.get(tenant) || new Map();
     for (const [tokenId, s] of status.get(tenant) || []) {
-        ud[tokenId] = { ...s, online: nu - s.sidst < TABT_MS };
+        const a = anden.get(tokenId);
+        ud[tokenId] = { ...s, online: nu - s.sidst < TABT_MS,
+            andenPc: a && nu - a.sidst < TABT_MS ? { navn: a.navn, ip: a.ip, kamera: a.kamera } : null };
     }
     return ud;
 }
@@ -578,5 +620,6 @@ module.exports = {
     STANDARD_INDSTILLINGER, laesIndstillinger, rensIndstillinger, videoTilPc, sponsorNu, gyldigLogoFil,
     beslutning, startet, holdkampNu, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,
     spillerLogoer, klubLogoFraDatabase,
-    rensStatus, registrer, statusFor, senderBane, liveBaner
+    rensStatus, registrer, statusFor, senderBane, liveBaner,
+    pcNoegle, maaBrugeKamera, registrerAnden
 };

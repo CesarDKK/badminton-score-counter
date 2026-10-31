@@ -33,6 +33,7 @@ Pythons standardbibliotek + Pillow (python3-pil) til scoreboardet.
 
 import collections
 import glob
+import hashlib
 import io
 import json
 import os
@@ -696,6 +697,13 @@ def skriv_overlay(linjer):
 _sidste_net_fejl = None
 
 
+def maskine_id():
+    """PC'ens id over for serveren: et hash af /etc/machine-id (selve id'et sendes
+    ikke). Bruger flere TV-PC'er samme adgangslink, sender kun én af dem banen."""
+    mid = laes_tekst('/etc/machine-id')
+    return hashlib.sha256(('badminton-tv:' + mid).encode()).hexdigest()[:32] if mid else None
+
+
 def spoerg(url, token, status):
     """Serverens svar, eller None. Fejlen logges kun, når den skifter (ikke hvert 15. s)."""
     global _sidste_net_fejl
@@ -731,8 +739,10 @@ def main():
     signal.signal(signal.SIGINT, afslut)
 
     version = laes_tekst(VERSION_FIL)
+    pc_id = maskine_id()
     sidste_svar = time.monotonic()
     sidst_kamera = None
+    sidst_anden = False
     while not stop.is_set():
         tv_url, navn = kiosk_env()
         server, token = adgangslink(tv_url)
@@ -753,7 +763,7 @@ def main():
         svar = spoerg(STREAM_URL or f'{server}/api/livestream/pc', token, {
             'navn': navn, 'kioskVersion': version, 'kamera': kamera,
             'sender': stream.koerer(), 'koder': stream.koder, 'fejl': stream.fejl,
-            'format': stream.format_tekst(), 'mikrofon': stream.mikrofon_navn()})
+            'format': stream.format_tekst(), 'mikrofon': stream.mikrofon_navn(), 'pcId': pc_id})
         if svar is None:
             if stream.koerer() and time.monotonic() - sidste_svar > UDEN_SVAR:
                 log(f'intet svar fra serveren i {UDEN_SVAR:.0f} s — stopper')
@@ -761,6 +771,11 @@ def main():
             interval = SPOERG_SENDER if stream.koerer() else SPOERG_FEJL
         else:
             sidste_svar = time.monotonic()
+            anden = svar.get('grund') == 'anden-pc'
+            if anden != sidst_anden:
+                log('en anden TV-PC på samme adgangslink sender banen — sender ikke' if anden
+                    else 'ingen anden TV-PC sender banen længere')
+                sidst_anden = anden
             if svar.get('send') and enhed and svar.get('url') and svar.get('noegle'):
                 video = rens_video(svar.get('video'))
                 fmt = stream.sendeformat(enhed, video)

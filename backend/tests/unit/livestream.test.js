@@ -215,7 +215,7 @@ test('overlay: afgjort kamp viser kun sættene, lange navne afkortes', () => {
 test('status: PC\'ens oplysninger renses, og "sender siden" huskes', () => {
     const s = ls.rensStatus({ navn: 'tv-bane3', kamera: 'HD Pro Webcam C920', sender: true, koder: 'vaapi', fejl: '' });
     assert.deepEqual(s, { navn: 'tv-bane3', kioskVersion: '', kamera: 'HD Pro Webcam C920', sender: true, koder: 'vaapi',
-        format: null, mikrofon: null, fejl: null });
+        format: null, mikrofon: null, fejl: null, pcId: null });
     assert.equal(ls.rensStatus({ navn: '../x', koder: 'nvenc' }).navn, '');
     assert.equal(ls.rensStatus({ koder: 'nvenc' }).koder, null);
 
@@ -226,6 +226,37 @@ test('status: PC\'ens oplysninger renses, og "sender siden" huskes', () => {
     assert.equal(ls.statusFor('t-test', NU + 3 * MIN)[7].online, false);
     ls.registrer('t-test', 7, { ...s, sender: false }, '1.2.3.4', NU + 6000);
     assert.equal(ls.statusFor('t-test', NU + 6000)[7].senderSiden, null);
+});
+
+test('én PC pr. adgangslink: den første med kamera sender, de andre vises som advarsel', () => {
+    const a = ls.pcNoegle(ls.rensStatus({ navn: 'tv-a', pcId: 'a'.repeat(32) }), '5.6.7.8');
+    const b = ls.pcNoegle(ls.rensStatus({ navn: 'tv-b', pcId: 'b'.repeat(32) }), '5.6.7.8');
+    assert.notEqual(a, b);                                  // samme hal (IP), forskellige PC'er
+    assert.equal(ls.rensStatus({ pcId: 'ikke hex!' }).pcId, null);
+    // Ældre versioner uden id: navnet, ellers IP'en
+    assert.equal(ls.pcNoegle(ls.rensStatus({ navn: 'tv-c' }), '1.1.1.1'), 'navn:tv-c');
+    assert.equal(ls.pcNoegle(ls.rensStatus({}), '1.1.1.1'), 'ip:1.1.1.1');
+
+    // En PC uden kamera tager ikke linket, så den med kamera kan få det
+    assert.equal(ls.maaBrugeKamera('t-pc', 4, a, false, NU), true);
+    assert.equal(ls.maaBrugeKamera('t-pc', 4, b, true, NU + 1000), true);
+    assert.equal(ls.maaBrugeKamera('t-pc', 4, a, true, NU + 2000), false);    // b har kameraet
+    assert.equal(ls.maaBrugeKamera('t-pc', 4, b, true, NU + 3000), true);
+    assert.equal(ls.maaBrugeKamera('t-pc', 5, a, true, NU + 3000), true);     // et andet link
+    // b tager kameraet ud: a kan tage over
+    assert.equal(ls.maaBrugeKamera('t-pc', 4, b, false, NU + 4000), true);
+    assert.equal(ls.maaBrugeKamera('t-pc', 4, a, true, NU + 5000), true);
+    // a holder op med at spørge: efter et minut kan b tage over
+    assert.equal(ls.maaBrugeKamera('t-pc', 4, b, true, NU + 5000 + MIN - 1000), false);
+    assert.equal(ls.maaBrugeKamera('t-pc', 4, b, true, NU + 5000 + MIN), true);
+
+    // Den anden PC skriver ikke over statussen, men står som advarsel et minut
+    ls.registrer('t-pc', 4, ls.rensStatus({ navn: 'tv-b', kamera: 'C920', sender: true }), null, NU);
+    ls.registrerAnden('t-pc', 4, ls.rensStatus({ navn: 'tv-a', kamera: 'C270' }), '5.6.7.8', NU);
+    const st = ls.statusFor('t-pc', NU + 1000)[4];
+    assert.equal(st.navn, 'tv-b');
+    assert.deepEqual(st.andenPc, { navn: 'tv-a', ip: '5.6.7.8', kamera: 'C270' });
+    assert.equal(ls.statusFor('t-pc', NU + MIN)[4].andenPc, null);
 });
 
 test('TV\'ets LIVE-mærke: kun mens banens PC selv melder, at den sender', () => {

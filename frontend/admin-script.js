@@ -2975,6 +2975,15 @@ const LS_GRUND = {
 function livestreamStatusHtml(bane) {
     const pc = (_livestream?.kameraer || []).find(k => k.bane === bane);
     if (!pc) return '<span class="tekst-daempet">Intet kamera valgt</span>';
+    // Flere TV-PC'er på samme adgangslink: kun den første med kamera sender
+    const a = pc.status && pc.status.online && pc.status.andenPc;
+    const anden = a
+        ? `<div class="tekst-advarsel tekst-mindre luft-over-4">⚠ En anden TV-PC${a.navn ? ` (${escapeHtml(a.navn)})` : ''} bruger også adgangslinket ${escapeHtml(pc.navn)}${a.kamera ? ' og har et kamera' : ''}. Kun én PC kan sende banen — giv den anden PC sit eget adgangslink, eller tag kameraet ud af den.</div>`
+        : '';
+    return livestreamPcStatusHtml(pc, bane) + anden;
+}
+
+function livestreamPcStatusHtml(pc, bane) {
     const s = pc.status;
     if (!s || !s.online) {
         return `<span class="maerke maerke--neutral">Ikke meldt</span> <span class="tekst-daempet">${escapeHtml(pc.navn)} har ikke spurgt serveren det seneste minut — slukket, eller ældre Badminton TV uden livestream</span>`;
