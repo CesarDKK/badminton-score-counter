@@ -10,8 +10,9 @@ serveren (admin → Livestream) — aldrig på USB-nøglen.
   - ffmpeg læser kameraet som MJPEG i den opløsning og med de billeder i
     sekundet, admin har valgt (standard 1280x720 @ 30). Kan kameraet ikke
     det, tages det bedste, det kan derunder (v4l2-ctl --list-formats-ext) —
-    og PC'en melder, hvad den faktisk sender. H.264 kodes med PC'ens
-    grafikkort (VAAPI); går det ikke, på CPU'en (libx264).
+    og PC'en melder, hvad den faktisk sender. Kameraer uden MJPEG sender
+    råt YUYV; kan kameraet ikke åbnes i et format, prøves det næste.
+    H.264 kodes med PC'ens grafikkort (VAAPI); går det ikke, på CPU'en (libx264).
   - lyd: kameraets mikrofon, når det er slået til for banen (samme USB-enhed
     som kameraet), ellers et lydløst lydspor (YouTube vil have lyd med)
   - scoreboardet (navne med klublogoer som på TV'et, sæt, stilling, serv) og
@@ -162,20 +163,31 @@ def stil_kamera(enhed, autofokus=False):
             pass
 
 
+# Kameraets billedformat (v4l2-ctl) → ffmpegs -input_format, i den rækkefølge de
+# foretrækkes: MJPEG er komprimeret, så 1080p @ 30 kan nå gennem USB 2 (nogle
+# kameraer kalder det JPEG); billige kameraer uden MJPEG sender råt YUYV
+INPUTFORMATER = {'MJPG': 'mjpeg', 'JPEG': 'mjpeg', 'YUYV': 'yuyv422'}
+INPUT_ORDEN = ('mjpeg', 'yuyv422')
+INPUT_NAVN = {'mjpeg': 'MJPEG', 'yuyv422': 'YUYV'}
+RAA_MIN_BILLEDER = 20   # råt billede: hellere en lavere opløsning end 5–10 billeder i sekundet
+
+
 def kamera_formater(enhed):
-    """Kameraets MJPEG-formater: {(bredde, hoejde): [billeder i sekundet, …]}, eller {} (ukendt)."""
+    """Kameraets formater pr. inputformat: {'mjpeg': {(bredde, hoejde): [billeder
+    i sekundet, …]}, 'yuyv422': …} — {} når v4l2-ctl ikke kunne spørge."""
     try:
         ud = subprocess.run([V4L2CTL, '-d', enhed, '--list-formats-ext'],
                             capture_output=True, text=True, timeout=5).stdout
     except (OSError, subprocess.SubprocessError):
         return {}
-    formater, mjpeg, str_ = {}, False, None
+    alle, formater, str_ = {}, None, None
     for linje in ud.splitlines():
         m = re.search(r"\[\d+\]: '(\w+)'", linje)
         if m:
-            mjpeg, str_ = m.group(1) == 'MJPG', None
+            navn = INPUTFORMATER.get(m.group(1))
+            formater, str_ = alle.setdefault(navn, {}) if navn else None, None
             continue
-        if not mjpeg:
+        if formater is None:
             continue
         m = re.search(r'Size: Discrete (\d+)x(\d+)', linje)
         if m:
@@ -185,16 +197,29 @@ def kamera_formater(enhed):
         m = re.search(r'\(([\d.]+) fps\)', linje)
         if m and str_:
             formater[str_].add(round(float(m.group(1))))
-    return {s: sorted(r) for s, r in formater.items() if r}
+    alle = {n: {s: sorted(r) for s, r in f.items() if r} for n, f in alle.items()}
+    return {n: f for n, f in alle.items() if f}
 
 
-def vaelg_format(formater, bredde, hoejde, billeder):
+def vaelg_input(alle, afvist=()):
+    """(inputformat, formater): det første i INPUT_ORDEN, kameraet har — og som
+    ffmpeg ikke allerede har fået afvist (afvist). Kender vi ikke kameraets formater,
+    prøves de i rækkefølge; er alle afvist, det første (så fejlen vises i admin)."""
+    kandidater = [n for n in INPUT_ORDEN if alle.get(n)] + [n for n in INPUT_ORDEN if not alle.get(n)]
+    navn = next((n for n in kandidater if n not in afvist), kandidater[0])
+    return navn, alle.get(navn, {})
+
+
+def vaelg_format(formater, bredde, hoejde, billeder, raa=False):
     """((kamera-bredde, -højde), billeder, (sendt bredde, højde)): det valgte, eller det
     bedste, kameraet kan. Har kameraet ikke opløsningen, men en større i 16:9, skaleres
     den ned; ellers tages den største derunder. Opløsningen går forud for billederne:
     1080p med 60 valgt, kameraet kan 1080p med 30 og 720p med 60 → 1080p med 30.
-    Billeder: de flest, kameraet kan, men ikke flere end valgt. Ukendte formater
-    (v4l2-ctl kunne ikke spørge): det valgte, så driveren selv vælger det nærmeste."""
+    Billeder: de flest, kameraet kan, men ikke flere end valgt. Råt billede (raa):
+    kun opløsninger med mindst RAA_MIN_BILLEDER, hvis kameraet har nogen. Ukendte
+    formater (v4l2-ctl kunne ikke spørge): det valgte, så driveren selv vælger det nærmeste."""
+    if raa:
+        formater = {s: r for s, r in formater.items() if max(r) >= RAA_MIN_BILLEDER} or formater
     if not formater:
         return (bredde, hoejde), billeder, (bredde, hoejde)
     bred = [s for s in formater if abs(s[0] / s[1] - 16 / 9) < 0.02]
@@ -247,11 +272,12 @@ def bitrate(hoejde, billeder, kvalitet):
 
 # ---------- ffmpeg ----------
 
-def sendeformat(enhed, video, formater, mikrofon):
-    """Det, der sendes, ud fra admins valg (video) og det, kameraet kan — som tuple,
-    så en ændring (ny opløsning, kameraet vendt …) genstarter ffmpeg."""
-    kamera, billeder, ud = vaelg_format(formater, video['bredde'], video['hoejde'], video['billeder'])
-    return (('kamera', kamera), ('billeder', billeder), ('ud', ud),
+def sendeformat(enhed, video, formater, mikrofon, input_='mjpeg'):
+    """Det, der sendes, ud fra admins valg (video) og det, kameraet kan i inputformatet
+    input_ — som tuple, så en ændring (ny opløsning, kameraet vendt …) genstarter ffmpeg."""
+    kamera, billeder, ud = vaelg_format(formater, video['bredde'], video['hoejde'], video['billeder'],
+                                        raa=input_ != 'mjpeg')
+    return (('input', input_), ('kamera', kamera), ('billeder', billeder), ('ud', ud),
             ('kbit', bitrate(ud[1], billeder, video['kvalitet'])),
             ('vend', video['vend']), ('spejl', video['spejl']), ('autofokus', video['autofokus']),
             ('placering', video['placering']), ('stoerrelse', video['stoerrelse']),
@@ -266,7 +292,7 @@ def ffmpeg_args(enhed, maal, overlay, koder, fmt=None):
     args = [FFMPEG, '-hide_banner', '-nostdin', '-loglevel', 'error']
     if koder == 'vaapi':
         args += ['-vaapi_device', RENDER]
-    args += ['-f', 'v4l2', '-input_format', 'mjpeg', '-video_size', f'{kb}x{kh}',
+    args += ['-f', 'v4l2', '-input_format', f['input'], '-video_size', f'{kb}x{kh}',
              '-framerate', str(billeder), '-thread_queue_size', '512', '-i', enhed]
     if f['mikrofon']:
         args += ['-f', 'alsa', '-thread_queue_size', '1024', '-i', f['mikrofon']]
@@ -531,8 +557,13 @@ def hent_logo(server, sti):
     return billede
 
 
-def forklar(linjer, str_='1280x720'):
-    """ffmpegs fejl i ord, admin kan bruge. str_: den opløsning, kameraet blev bedt om."""
+# ffmpeg kunne ikke åbne kameraet i det inputformat (og den størrelse), den bad om
+KAMERA_FORMAT_FEJL = re.compile(r'Cannot find a proper format|'
+                                r'(video4linux2|/dev/video|mjpeg|yuyv).*(not supported|Invalid argument)', re.I)
+
+
+def forklar(linjer, str_='1280x720', input_='mjpeg'):
+    """ffmpegs fejl i ord, admin kan bruge. str_ og input_: det, kameraet blev bedt om."""
     alt = '\n'.join(linjer)
     if MIKROFON_FEJL.search(alt):
         return 'Kameraets mikrofon kunne ikke bruges — sender uden lyd'
@@ -546,8 +577,9 @@ def forklar(linjer, str_='1280x720'):
     if re.search(r'Network is unreachable|Name or service not known|Temporary failure in name resolution|'
                  r'timed out', alt, re.I):
         return 'Ingen forbindelse til YouTube — nettet i hallen?'
-    if re.search(r'Cannot open|not supported|Invalid argument', alt) and 'mjpeg' in alt.lower():
-        return f'Kameraet kan ikke sende MJPEG {str_} — vælg en lavere opløsning, eller prøv et andet kamera'
+    if KAMERA_FORMAT_FEJL.search(alt) or (re.search(r'Cannot open|not supported|Invalid argument', alt)
+                                          and 'mjpeg' in alt.lower()):
+        return f'Kameraet kunne ikke åbnes som {INPUT_NAVN.get(input_, input_)} {str_} — prøv et andet kamera'
     return (linjer[-1] if linjer else 'ffmpeg stoppede uden besked')[:200]
 
 
@@ -567,6 +599,7 @@ class Stream:
         self.koder = 'vaapi' if os.path.exists(RENDER) else 'x264'
         self.uden_mikrofon = set()  # kameraer, hvis mikrofon ikke kunne bruges
         self.formater = {}          # enhed -> kamera_formater() (spørges én gang)
+        self.afvist = {}            # enhed -> inputformater, kameraet ikke kunne åbnes i
         self.linjer = collections.deque(maxlen=20)
 
     def format_tekst(self):
@@ -597,10 +630,15 @@ class Stream:
         """Det, der skal sendes (sendeformat) — kameraets formater og mikrofon slås op her."""
         if enhed not in self.formater:
             self.formater[enhed] = kamera_formater(enhed)
-            if self.formater[enhed]:
-                log('kameraet kan: ' + ', '.join(f'{b}x{h}@{max(r)}' for (b, h), r in sorted(self.formater[enhed].items())))
+            for n in INPUT_ORDEN:
+                if self.formater[enhed].get(n):
+                    log(('kameraet kan: ' if n == 'mjpeg' else f'kameraet kan ({INPUT_NAVN[n]}): ') +
+                        ', '.join(f'{b}x{h}@{max(r)}' for (b, h), r in sorted(self.formater[enhed][n].items())))
+            if not self.formater[enhed]:
+                log('kameraets formater er ukendte (v4l2-ctl svarede ikke) — prøver MJPEG, så YUYV')
+        input_, formater = vaelg_input(self.formater[enhed], self.afvist.get(enhed, ()))
         mikrofon, navn = find_mikrofon(enhed) if video['lyd'] and enhed not in self.uden_mikrofon else (None, None)
-        return sendeformat(enhed, video, self.formater[enhed], mikrofon) + (('mikrofon_navn', navn),)
+        return sendeformat(enhed, video, formater, mikrofon, input_) + (('mikrofon_navn', navn),)
 
     def start(self, enhed, url, noegle, overlay, fmt=None):
         maal = url.rstrip('/') + '/' + noegle
@@ -675,13 +713,21 @@ class Stream:
             log(f'mikrofonen {f["mikrofon"]} kunne ikke bruges — sender uden lyd fremover')
             self.uden_mikrofon.add(enhed)
             return
+        afvist = self.afvist.setdefault(enhed, set())
+        if (f and kort < VAAPI_TIDLIG and KAMERA_FORMAT_FEJL.search('\n'.join(linjer))
+                and f['input'] not in afvist and len(afvist) < len(INPUT_ORDEN) - 1):
+            # Kameraet kunne ikke åbnes i formatet (fx intet MJPEG): det næste med det samme
+            afvist.add(f['input'])
+            log(f'kameraet kunne ikke åbnes som {INPUT_NAVN.get(f["input"], f["input"])} — prøver '
+                f'{INPUT_NAVN[vaelg_input(self.formater.get(enhed, {}), afvist)[0]]}')
+            return
         if self.koder == 'vaapi' and kort < VAAPI_TIDLIG and not any(
                 re.search(r'rtmp|Connection|Input/output|Network|handshake|/dev/video|busy', l, re.I) for l in linjer):
             # Grafikkortet kunne ikke kode (driver, ældre PC): CPU'en med det samme
             log(f'VAAPI-kodningen stoppede efter {kort:.0f} s (kode {kode}) — koder på CPU\'en fremover')
             self.koder = 'x264'
             return
-        self.fejl = forklar(linjer, '{}x{}'.format(*f['kamera']) if f else '1280x720')
+        self.fejl = forklar(linjer, '{}x{}'.format(*f['kamera']) if f else '1280x720', f.get('input', 'mjpeg'))
         log(f'ffmpeg stoppede (kode {kode}) efter {kort:.0f} s: {self.fejl}')
         self._vent()
 
@@ -756,6 +802,7 @@ def main():
             sidst_kamera = kamera
             # Et andet kamera i stikket kan noget andet
             stream.formater.clear()
+            stream.afvist.clear()
             stream.uden_mikrofon.clear()
         # Døde ffmpeg siden sidst? Så skal fejlen med i statussen — og læses,
         # før start() rydder op
