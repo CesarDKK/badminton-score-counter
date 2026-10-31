@@ -266,6 +266,19 @@ test('én PC pr. adgangslink: den første med kamera sender, de andre vises som 
         { advar: false, svar: { kamera: false, send: false, grund: 'intet-kamera' } });
 });
 
+test('nyt kamera i en TV-PC: linkets egen bane, kun når admin ikke har valgt', () => {
+    const link = (ekstra) => ({ destination: 'tv/4', token_type: 'permanent', camera_court: null, camera_manual: 0, ...ekstra });
+    assert.equal(ls.autoKameraBane(link(), true), 4);
+    assert.equal(ls.autoKameraBane(link({ destination: 'tv/12' }), true), 12);
+    assert.equal(ls.autoKameraBane(link(), false), null, 'intet kamera');
+    assert.equal(ls.autoKameraBane(link({ camera_court: 3 }), true), null, 'har allerede en bane');
+    assert.equal(ls.autoKameraBane(link({ camera_manual: 1 }), true), null, 'admin har valgt (også "Intet kamera")');
+    assert.equal(ls.autoKameraBane(link({ destination: 'oversigt' }), true), null, 'oversigten har ingen bane');
+    assert.equal(ls.autoKameraBane(link({ destination: 'court/4' }), true), null, 'tabletter er ikke TV-PC\'er');
+    assert.equal(ls.autoKameraBane(link({ token_type: 'match_session' }), true), null);
+    assert.equal(ls.autoKameraBane(null, true), null);
+});
+
 test('TV\'ets LIVE-mærke: kun mens banens PC selv melder, at den sender', () => {
     const s = ls.rensStatus({ navn: 'tv-bane2', kamera: 'C920', sender: true });
     ls.registrer('t-live', 9, { ...s, bane: 2 }, null, NU);

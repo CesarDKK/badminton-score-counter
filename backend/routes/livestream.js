@@ -278,7 +278,7 @@ router.get('/', livestreamAdmin, async (req, res, next) => {
         const baner = await query('SELECT court_number FROM courts ORDER BY court_number');
         const opsaetning = new Map((await query('SELECT * FROM court_streams')).map(r => [r.court_number, r]));
         const links = await query(
-            `SELECT id, name, destination, camera_court FROM device_tokens
+            `SELECT id, name, destination, camera_court, camera_manual FROM device_tokens
               WHERE is_active = 1 AND token_type = 'permanent' AND destination LIKE 'tv%'
               ORDER BY name`);
         const status = ls.statusFor(tenantKey(req));
@@ -321,6 +321,8 @@ router.get('/', livestreamAdmin, async (req, res, next) => {
                 navn: l.name,
                 destination: l.destination,
                 bane: l.camera_court,
+                // Sat af sig selv, da PC'en fandt kameraet (admin har ikke valgt)
+                automatisk: !!l.camera_court && !l.camera_manual,
                 status: status[l.id] || null
             }))
         });
@@ -523,7 +525,8 @@ router.put('/kamera/:tokenId', livestreamAdmin, async (req, res, next) => {
         const bane = req.body && req.body.bane != null ? baneNr(req.body.bane) : null;
         if (req.body && req.body.bane != null && !bane) return res.status(400).json({ error: 'Ugyldig bane' });
         if (bane) await query('UPDATE device_tokens SET camera_court = NULL WHERE camera_court = ? AND id <> ?', [bane, id]);
-        await query('UPDATE device_tokens SET camera_court = ? WHERE id = ?', [bane, id]);
+        // camera_manual: admin har valgt — den automatiske (POST /pc) rører ikke linket mere
+        await query('UPDATE device_tokens SET camera_court = ?, camera_manual = 1 WHERE id = ?', [bane, id]);
         res.json({ success: true });
     } catch (error) {
         next(error);
@@ -620,12 +623,26 @@ router.post('/pc', async (req, res, next) => {
         const token = req.get('X-Adgangslink');
         if (!gyldigtToken(token)) return res.status(401).json({ error: 'Mangler adgangslink' });
         const link = await queryOne(
-            'SELECT id, camera_court FROM device_tokens WHERE token = ? AND is_active = 1', [token]);
+            `SELECT id, camera_court, camera_manual, destination, token_type
+               FROM device_tokens WHERE token = ? AND is_active = 1`, [token]);
         if (!link) return res.status(403).json({ error: 'Ugyldigt eller tilbagekaldt adgangslink' });
 
         const pc = ls.rensStatus(req.body);
         const tenant = tenantKey(req);
-        const bane = link.camera_court;
+        let bane = link.camera_court;
+        // Nyt kamera i en TV-PC: på linkets egen bane, hvis den er ledig (se ls.autoKameraBane)
+        const auto = ls.autoKameraBane(link, !!pc.kamera);
+        if (auto) {
+            const findes = await queryOne('SELECT id FROM courts WHERE court_number = ?', [auto]);
+            const optaget = await queryOne(
+                'SELECT id FROM device_tokens WHERE camera_court = ? AND is_active = 1 AND id <> ?', [auto, link.id]);
+            if (findes && !optaget) {
+                await query('UPDATE device_tokens SET camera_court = ? WHERE id = ? AND camera_court IS NULL AND camera_manual = 0',
+                    [auto, link.id]);
+                bane = auto;
+                console.log(`[livestream] ${tenant} bane ${auto}: kameraet ved "${pc.navn || link.id}" (${pc.kamera}) sat på banen af sig selv`);
+            }
+        }
         // Én PC pr. adgangslink sender (se ls.maaBrugeKamera). De andre får
         // "anden-pc" og ser ikke nøglen; banen og statussen røres ikke (og
         // en PC uden kamera er ikke en advarsel værd — se ls.svarTilAnden)

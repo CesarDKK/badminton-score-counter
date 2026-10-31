@@ -2980,7 +2980,12 @@ function livestreamStatusHtml(bane) {
     const anden = a
         ? `<div class="tekst-advarsel tekst-mindre luft-over-4">⚠ En anden TV-PC${a.navn ? ` (${escapeHtml(a.navn)})` : ''} bruger også adgangslinket ${escapeHtml(pc.navn)}${a.kamera ? ' og har et kamera' : ''}. Kun én PC kan sende banen — giv den anden PC sit eget adgangslink, eller tag kameraet ud af den.</div>`
         : '';
-    return livestreamPcStatusHtml(pc, bane) + anden;
+    // Sat på banen af sig selv, da TV-PC'en fandt kameraet — livestream slås ikke til af sig selv
+    const b = (_livestream?.baner || []).find(x => x.bane === bane);
+    const auto = pc.automatisk
+        ? `<div class="tekst-daempet tekst-mindre luft-over-4">Kameraet ved ${escapeHtml(pc.navn)} blev sat på banen af sig selv, da PC'en fandt det.${b && !b.enabled ? ' Sæt flueben i "Livestream slået til" for at sende banen.' : ''}</div>`
+        : '';
+    return livestreamPcStatusHtml(pc, bane) + anden + auto;
 }
 
 function livestreamPcStatusHtml(pc, bane) {
