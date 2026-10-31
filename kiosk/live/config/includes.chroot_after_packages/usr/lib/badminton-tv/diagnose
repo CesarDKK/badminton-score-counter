@@ -50,9 +50,10 @@ rapport() {
         /usr/lib/badminton-tv/opdatering status 2>&1
         # Denne opstart (Pi'ens journal ligger kun i RAM — tilstanden ovenfor
         # fortæller, hvordan en tidligere prøve gik)
+        # (spoerg kører hvert 2. minut — systemd's egne start/stop-linjer for den udelades)
         journalctl -b -u badminton-tv-opdatering -u badminton-tv-opdatering-proev \
-            -u badminton-tv-opdatering-bekraeft -o short-iso --no-pager 2>/dev/null \
-            | grep -v '^-- ' | tail -n 30
+            -u badminton-tv-opdatering-bekraeft -u badminton-tv-opdatering-spoerg -o short-iso --no-pager 2>/dev/null \
+            | grep -v -e '^-- ' -e 'spørg serveren, om' -e 'opdatering-spoerg.service: ' | tail -n 30
     fi
 
     afsnit 'kiosk.conf (WiFi-koden er skjult)'

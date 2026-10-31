@@ -128,6 +128,15 @@ er ingen grund til at køre ud og installere forfra med USB-nøglen.
   oversigten forkert ud efter en opdatering, så **markér udgivelsen som
   "pre-release"** på GitHub (rediger udgivelsen → *Set as a pre-release*). Så
   henter de andre den ikke, og en rettet version kan udgives i stedet.
+- **Installér nyeste nu:** kommer der nye versioner tit, når de skærme, der
+  venter et døgn, aldrig frem. Under *Adgangslinks* i admin har hver TV-PC en
+  knap **Installér nyeste nu**. PC'en spørger serveren hvert 2. minut
+  (`opdatering spoerg`), henter så nyeste version med det samme og
+  genstarter, når den er klar (skærmen er sort i 1–2 minutter). Admin viser,
+  hvordan det går: henter, genstarter, opdateret — eller fejlen, og om den
+  nye version ikke blev godkendt, så PC'en er gået tilbage til den forrige.
+  Knappen vises kun for en PC, der har spurgt de seneste 10 minutter (tændt og
+  med en version, der kan det). `OPDATERING=fra` gælder også her.
 - `OPDATERING=fra` slår det fra.
 - Kun PC'er, der er installeret med en version med automatisk opdatering,
   opdaterer sig selv (de har to systemer på disken, se nedenfor). Ældre

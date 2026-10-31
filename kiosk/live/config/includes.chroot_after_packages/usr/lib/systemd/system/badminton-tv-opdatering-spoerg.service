@@ -1,0 +1,18 @@
+# Har admin bedt om nyeste version nu (Adgangslinks → "Installér nyeste nu")?
+# Så hent den med det samme og genstart, når den er klar. Startes af
+# badminton-tv-opdatering-spoerg.timer. Se /usr/lib/badminton-tv/opdatering.
+[Unit]
+Description=Badminton TV: spørg serveren, om nyeste version skal installeres nu
+Wants=network-online.target
+After=network-online.target time-sync.target
+# Kun på en PC installeret med to systemer (A/B), som opdateringen
+ConditionKernelCommandLine=badminton.slot
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/badminton-tv/opdatering spoerg
+# TV'et må ikke mærke hentningen: laveste prioritet til CPU og disk
+Nice=19
+CPUSchedulingPolicy=idle
+IOSchedulingClass=idle
+TimeoutStartSec=2h

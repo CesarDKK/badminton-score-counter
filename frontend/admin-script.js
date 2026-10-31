@@ -3622,13 +3622,46 @@ async function fjernSkaerm(klientId) {
     refreshSkaermStatus();
 }
 
+// "Installér nyeste nu": TV-PC'en henter ellers selv en ny version et døgn efter
+// udgivelsen (oversigten med det samme). Den spørger hvert 2. minut, om den skal
+// tage den nu (backend/screens/pcOpdatering.js).
+async function opdaterSkaerm(klientId, navn) {
+    if (!confirm(`Installér nyeste version på ${navn} nu?\n\n` +
+        'PC\'en henter den inden for et par minutter og genstarter, så snart den er klar — ' +
+        'skærmen er sort i 1–2 minutter. Kører den allerede den nyeste version, sker der intet.')) return;
+    try {
+        await api.requestScreenUpdate(klientId);
+    } catch (e) {
+        alert('Kunne ikke bede PC\'en om at opdatere: ' + e.message);
+    }
+    refreshSkaermStatus();
+}
+
+async function fortrydSkaermOpdatering(klientId) {
+    try {
+        await api.cancelScreenUpdate(klientId);
+    } catch (e) {
+        alert(e.message);
+    }
+    refreshSkaermStatus();
+}
+
+// Mens en PC er ved at opdatere, følges den uden at siden skal genindlæses
+const SKAERM_OPDATERING_IGANG = new Set(['bestilt', 'i-gang', 'venter', 'genstarter']);
+let _skaermOpdateringTimer = null;
+
 async function refreshSkaermStatus() {
     let skaerme;
     try { skaerme = await api.getScreens(); } catch { return; } // status er en bonus — lad listen stå
-    document.querySelectorAll('.dt-skaerme').forEach(el => {
+    const bokse = document.querySelectorAll('.dt-skaerme');
+    bokse.forEach(el => {
         const id = Number(el.dataset.tokenId);
         el.innerHTML = renderSkaerme(skaerme.filter(s => s.tokenId === id));
     });
+    clearTimeout(_skaermOpdateringTimer);
+    if (bokse.length && skaerme.some(s => s.opdatering && SKAERM_OPDATERING_IGANG.has(s.opdatering.status))) {
+        _skaermOpdateringTimer = setTimeout(refreshSkaermStatus, 15000);
+    }
 }
 
 // ── kiosk.conf til TV-PC'er / Raspberry Pi (kiosk-USB'en, se Indstillinger → TV-skærme) ──
@@ -3739,6 +3772,40 @@ function skaermVarighed(sek) {
     return `${Math.round(sek / 3600)} t`;
 }
 
+// "Installér nyeste nu" for en TV-PC: knappen (kun når PC'en har spurgt de
+// seneste minutter, dvs. kører og har en version, der kan det) og hvordan det går
+function skaermOpdateringHtml(s, kl) {
+    const o = s.opdatering;
+    if (!o) return { linje: '', knap: '' };
+    const tid = o.tid ? ` (kl. ${kl(o.tid)})` : '';
+    const tekst = o.tekst ? ` — ${escapeHtml(o.tekst.replace(/^FEJL:\s*/, ''))}` : '';
+    const maal = escapeHtml(o.maal || '');
+    const [farve, beskrivelse] = {
+        bestilt: ['var(--text-muted, rgba(255, 255, 255, 0.62))', `Bedt om nyeste version${tid} — PC'en spørger hvert 2. minut`],
+        'i-gang': ['var(--text-muted, rgba(255, 255, 255, 0.62))', `Henter nyeste version${tid} — det kan tage 5–15 minutter`],
+        venter: ['var(--color-warning, #ffb02e)', `Venter med at opdatere${tid}${tekst} — prøver igen om 2 minutter`],
+        genstarter: ['var(--text-muted, rgba(255, 255, 255, 0.62))', `Genstarter med version ${maal}${tid}`],
+        opdateret: ['var(--color-win)', `Opdateret til version ${maal}${tid}`],
+        nyeste: ['var(--color-win)', `Kører allerede den nyeste version${tid}`],
+        fra: ['var(--color-warning, #ffb02e)', `Automatisk opdatering er slået fra i PC'ens kiosk.conf (OPDATERING=fra)${tid}`],
+        'kan-ikke': ['var(--color-warning, #ffb02e)', `Kan ikke opdatere${tid}${tekst}`],
+        fejl: ['var(--color-danger)', `Opdateringen mislykkedes${tid}${tekst}`],
+        mislykket: ['var(--color-danger)', `Version ${maal} startede ikke rigtigt — PC'en er gået tilbage til ${escapeHtml(s.kioskVersion || 'den forrige')}${tid}`]
+    }[o.status] || [];
+    const linje = beskrivelse
+        ? `<div style="color:${farve};font-size:0.9em;margin-top:2px;">${beskrivelse}</div>` : '';
+    let knap = '';
+    if (o.status === 'bestilt') {
+        knap = `<button type="button" class="btn-secondary btn-sm ingen-krymp" onclick="fortrydSkaermOpdatering('${escapeHtml(s.klientId)}')"
+            title="PC'en er ikke gået i gang endnu">Fortryd</button>`;
+    } else if (o.kan && !SKAERM_OPDATERING_IGANG.has(o.status)) {
+        knap = `<button type="button" class="btn-secondary btn-sm ingen-krymp"
+            onclick="opdaterSkaerm(this.dataset.klient, this.dataset.navn)" data-klient="${escapeHtml(s.klientId)}" data-navn="${escapeHtml(s.navn)}"
+            title="Hent nyeste version af Badminton TV nu i stedet for et døgn efter udgivelsen. PC'en genstarter, når den er klar.">Installér nyeste nu</button>`;
+    }
+    return { linje, knap };
+}
+
 function renderSkaerme(skaerme) {
     if (!skaerme.length) return '';
     const kl = (ms) => new Date(ms).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
@@ -3763,6 +3830,7 @@ function renderSkaerme(skaerme) {
         const logLink = iLog
             ? ` &nbsp;•&nbsp; <a href="#" onclick="visSkaermLog(this.dataset.skaerm);return false;" data-skaerm="${escapeHtml(noegle)}"
                 style="color:var(--color-warning, #ffb02e);">${iLog} ${iLog === 1 ? 'hændelse' : 'hændelser'} seneste døgn</a>` : '';
+        const opd = skaermOpdateringHtml(s, kl);
         return `
             <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid rgba(255,255,255,0.06);">
                 <span style="width:9px;height:9px;border-radius:50%;background:${farve};margin-top:6px;flex-shrink:0;"></span>
@@ -3772,7 +3840,9 @@ function renderSkaerme(skaerme) {
                         ${s.side === 'oversigt' ? 'Oversigt' : `Bane ${s.bane || '?'}`}${s.kioskVersion ? ` &nbsp;•&nbsp; Badminton TV ${escapeHtml(s.kioskVersion)}` : ''} &nbsp;•&nbsp; sidst set ${skaermVarighed(s.sekunderSiden)} siden &nbsp;•&nbsp; IP ${escapeHtml(s.ip || '?')}${data}${logLink}
                     </div>
                     ${haendelser ? `<div style="color:var(--color-warning, #ffb02e);font-size:0.9em;margin-top:2px;">${Ikon('advarsel')} ${haendelser}</div>` : ''}
+                    ${opd.linje}
                 </div>
+                ${opd.knap}
                 ${s.sekunderSiden >= 60 ? `<button type="button" class="btn-secondary btn-sm ingen-krymp" onclick="fjernSkaerm('${escapeHtml(s.klientId)}')"
                     title="Fjern skærmen fra listen. Tænder den igen, kommer den tilbage af sig selv.">Fjern</button>` : ''}
             </div>`;

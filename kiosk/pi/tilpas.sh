@@ -62,7 +62,7 @@ systemctl enable badminton-tv-ur.timer badminton-tv-ur-nedlukning.service   # ha
 systemctl enable badminton-tv-rapport.service badminton-tv-rapport-send.timer   # hændelser til serveren
 # Automatisk opdatering med to systemer (A/B) — se usr/lib/badminton-tv/opdatering
 systemctl enable badminton-tv-opdatering.timer badminton-tv-opdatering-proev.service \
-                 badminton-tv-opdatering-bekraeft.service
+                 badminton-tv-opdatering-bekraeft.service badminton-tv-opdatering-spoerg.timer
 systemctl set-default multi-user.target
 
 # Aldrig dvale.
