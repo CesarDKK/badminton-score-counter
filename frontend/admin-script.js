@@ -3687,13 +3687,46 @@ async function fortrydSkaermOpdatering(klientId) {
 const SKAERM_OPDATERING_IGANG = new Set(['bestilt', 'i-gang', 'venter', 'genstarter']);
 let _skaermOpdateringTimer = null;
 
+// Nyeste udgivne Badminton TV-version (samme opslag som Indstillinger → TV-skærme;
+// pre-releases tæller ikke, ligesom for PC'ernes automatiske opdatering). En PC,
+// der kører den, får ingen "Installér nyeste nu"-knap. Slås op én gang pr.
+// sideindlæsning — GitHub tillader 60 opslag i timen pr. IP uden login. Kan det
+// ikke, er den null, og knappen vises som før.
+const TV_REPO = 'CesarDKK/badminton-score-counter';
+let _nyesteTvVersion = null;
+function hentNyesteTvVersion() {
+    _nyesteTvVersion = _nyesteTvVersion || fetch(`https://api.github.com/repos/${TV_REPO}/releases?per_page=20`, {
+        headers: { Accept: 'application/vnd.github+json' }
+    })
+        .then(r => r.ok ? r.json() : [])
+        .then(liste => {
+            const u = liste.find(x => !x.draft && !x.prerelease && /^tv-usb-v/.test(x.tag_name));
+            return u ? u.tag_name.replace(/^tv-usb-v/, '') : null;
+        })
+        .catch(() => null);
+    return _nyesteTvVersion;
+}
+
+// Er version a nyere end b? Som PC'ens sort -V: tal for tal
+function tvVersionNyere(a, b) {
+    const da = a.split(/[.-]/), db = b.split(/[.-]/);
+    for (let i = 0; i < Math.max(da.length, db.length); i++) {
+        const x = da[i] ?? '', y = db[i] ?? '';
+        if (x === y) continue;
+        return /^\d+$/.test(x) && /^\d+$/.test(y) ? Number(x) > Number(y) : x > y;
+    }
+    return false;
+}
+
 async function refreshSkaermStatus() {
     let skaerme;
+    const nyeste = hentNyesteTvVersion();
     try { skaerme = await api.getScreens(); } catch { return; } // status er en bonus — lad listen stå
+    const nyesteVersion = await nyeste;
     const bokse = document.querySelectorAll('.dt-skaerme');
     bokse.forEach(el => {
         const id = Number(el.dataset.tokenId);
-        el.innerHTML = renderSkaerme(skaerme.filter(s => s.tokenId === id));
+        el.innerHTML = renderSkaerme(skaerme.filter(s => s.tokenId === id), nyesteVersion);
     });
     clearTimeout(_skaermOpdateringTimer);
     if (bokse.length && skaerme.some(s => s.opdatering && SKAERM_OPDATERING_IGANG.has(s.opdatering.status))) {
@@ -3810,8 +3843,9 @@ function skaermVarighed(sek) {
 }
 
 // "Installér nyeste nu" for en TV-PC: knappen (kun når PC'en har spurgt de
-// seneste minutter, dvs. kører og har en version, der kan det) og hvordan det går
-function skaermOpdateringHtml(s, kl) {
+// seneste minutter, dvs. kører og har en version, der kan det, og ikke allerede
+// kører den nyeste) og hvordan det går
+function skaermOpdateringHtml(s, kl, paaNyeste) {
     const o = s.opdatering;
     if (!o) return { linje: '', knap: '' };
     const tid = o.tid ? ` (kl. ${kl(o.tid)})` : '';
@@ -3835,7 +3869,7 @@ function skaermOpdateringHtml(s, kl) {
     if (o.status === 'bestilt') {
         knap = `<button type="button" class="btn-secondary btn-sm ingen-krymp" onclick="fortrydSkaermOpdatering('${escapeHtml(s.klientId)}')"
             title="PC'en er ikke gået i gang endnu">Fortryd</button>`;
-    } else if (o.kan && !SKAERM_OPDATERING_IGANG.has(o.status)) {
+    } else if (o.kan && !paaNyeste && !SKAERM_OPDATERING_IGANG.has(o.status)) {
         knap = `<button type="button" class="btn-secondary btn-sm ingen-krymp"
             onclick="opdaterSkaerm(this.dataset.klient, this.dataset.navn)" data-klient="${escapeHtml(s.klientId)}" data-navn="${escapeHtml(s.navn)}"
             title="Hent nyeste version af Badminton TV nu i stedet for et døgn efter udgivelsen. PC'en genstarter, når den er klar.">Installér nyeste nu</button>`;
@@ -3843,7 +3877,7 @@ function skaermOpdateringHtml(s, kl) {
     return { linje, knap };
 }
 
-function renderSkaerme(skaerme) {
+function renderSkaerme(skaerme, nyesteVersion) {
     if (!skaerme.length) return '';
     const kl = (ms) => new Date(ms).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
     const linjer = skaerme.map(s => {
@@ -3867,14 +3901,19 @@ function renderSkaerme(skaerme) {
         const logLink = iLog
             ? ` &nbsp;•&nbsp; <a href="#" onclick="visSkaermLog(this.dataset.skaerm);return false;" data-skaerm="${escapeHtml(noegle)}"
                 style="color:var(--color-warning, #ffb02e);">${iLog} ${iLog === 1 ? 'hændelse' : 'hændelser'} seneste døgn</a>` : '';
-        const opd = skaermOpdateringHtml(s, kl);
+        // Kører den nyeste udgivne version (eller en nyere testudgave)?
+        const paaNyeste = !!(nyesteVersion && s.kioskVersion && !tvVersionNyere(nyesteVersion, s.kioskVersion));
+        const version = !s.kioskVersion ? ''
+            : ` &nbsp;•&nbsp; Badminton TV ${escapeHtml(s.kioskVersion)}` + (!nyesteVersion ? ''
+                : paaNyeste ? ' (nyeste)' : ` <span class="tekst-advarsel">(${escapeHtml(nyesteVersion)} er udgivet)</span>`);
+        const opd = skaermOpdateringHtml(s, kl, paaNyeste);
         return `
             <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid rgba(255,255,255,0.06);">
                 <span style="width:9px;height:9px;border-radius:50%;background:${farve};margin-top:6px;flex-shrink:0;"></span>
                 <div class="fyld tekst-mindre">
                     <div><strong>${navn}</strong> &nbsp;<span style="color:${farve};">${status}</span></div>
                     <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.9em;margin-top:2px;">
-                        ${s.side === 'oversigt' ? 'Oversigt' : `Bane ${s.bane || '?'}`}${s.kioskVersion ? ` &nbsp;•&nbsp; Badminton TV ${escapeHtml(s.kioskVersion)}` : ''} &nbsp;•&nbsp; sidst set ${skaermVarighed(s.sekunderSiden)} siden &nbsp;•&nbsp; IP ${escapeHtml(s.ip || '?')}${data}${logLink}
+                        ${s.side === 'oversigt' ? 'Oversigt' : `Bane ${s.bane || '?'}`}${version} &nbsp;•&nbsp; sidst set ${skaermVarighed(s.sekunderSiden)} siden &nbsp;•&nbsp; IP ${escapeHtml(s.ip || '?')}${data}${logLink}
                     </div>
                     ${haendelser ? `<div style="color:var(--color-warning, #ffb02e);font-size:0.9em;margin-top:2px;">${Ikon('advarsel')} ${haendelser}</div>` : ''}
                     ${opd.linje}
