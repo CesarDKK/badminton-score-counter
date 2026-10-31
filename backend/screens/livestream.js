@@ -479,6 +479,11 @@ function rensStatus(body) {
         // Kameraets mikrofon, når lyden er slået til (null: ingen fundet eller lyd fra)
         mikrofon: b.mikrofon ? tekst(b.mikrofon, 100) : null,
         fejl: b.fejl ? tekst(b.fejl, 300) : null,
+        // ffmpegs sidste linjer til fejlen og det, kameraet selv siger, det kan
+        // (nye Badminton TV-versioner) — så fejlen kan ses i admin uden PC'ens log
+        fejllog: Array.isArray(b.fejllog) && b.fejllog.length
+            ? b.fejllog.slice(-12).map(l => tekst(l, 300)).filter(Boolean) : null,
+        kameraFormater: b.kameraFormater ? tekst(b.kameraFormater, 400) : null,
         // PC'ens eget id (et hash af maskine-id'et) — nye Badminton TV-versioner
         pcId: typeof b.pcId === 'string' && /^[a-f0-9]{16,64}$/.test(b.pcId) ? b.pcId : null
     };

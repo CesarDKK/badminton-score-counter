@@ -260,6 +260,7 @@ forvent "prøver igen" "$([ "$(antal_start)" -ge 2 ] && echo ja || echo nej)" "j
 forvent "nøglen står ikke i loggen" "$(grep -c "$NOEGLE" "$TMP/stream.log")" 0
 forvent "nøglen står ikke i statussen" "$(grep -c "$NOEGLE" "$TMP/status.jsonl")" 0
 indeholder "fejlen står i loggen med <nøgle>" "$(cat "$TMP/stream.log")" "<nøgle>"
+indeholder "ffmpegs linjer med til admin, med <nøgle>" "$(grep afviste "$TMP/status.jsonl" | tail -n 1 | felt fejllog)" "<nøgle>"
 stop_stream
 
 echo "6. Grafikkortet kan ikke kode"
@@ -404,6 +405,7 @@ vent_sender
 forvent "status: 640x480 med 30 (ikke 1080p med 5)" "$(sidste_status | felt format)" "640x480@30"
 indeholder "råt YUYV fra kameraet" "$(args)" "-input_format yuyv422 -video_size 640x480 -framerate 30"
 forvent "MJPEG aldrig prøvet" "$(antal_start)" 1
+forvent "status: kameraets formater, største først" "$(sidste_status | felt kameraFormater)" "YUYV 1920x1080@5, 1280x720@10, 640x480@30"
 indeholder "kameraets formater i loggen" "$(cat "$TMP/stream.log")" "kameraet kan (YUYV): 640x480@30, 1280x720@10, 1920x1080@5"
 forvent "ingen fejl til admin" "$(sidste_status | felt fejl)" ""
 stop_stream
@@ -418,6 +420,7 @@ vent_sender
 indeholder "prøver YUYV efter MJPEG" "$(cat "$TMP/stream.log")" "kameraet kunne ikke åbnes som MJPEG — prøver YUYV"
 indeholder "første forsøg: MJPEG" "$(head -n 1 "$TMP/ffmpeg.log.args")" "-input_format mjpeg"
 indeholder "derefter råt YUYV i det valgte" "$(args)" "-input_format yuyv422 -video_size 1920x1080"
+forvent "status: formaterne ukendte" "$(sidste_status | felt kameraFormater)" "ukendt (kameraet svarede ikke)"
 forvent "sender" "$(sidste_status | felt sender)" "True"
 forvent "ingen fejl til admin" "$(sidste_status | felt fejl)" ""
 stop_stream

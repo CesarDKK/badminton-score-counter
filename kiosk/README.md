@@ -216,7 +216,11 @@ Kameraer uden MJPEG (eller som kalder det JPEG) sender råt YUYV; her tages kun
 opløsninger med mindst 20 billeder i sekundet (typisk 640x480 over USB 2 —
 hellere det end 1080p med 5 billeder). Svarer kameraet ikke på, hvilke formater
 det har, prøves MJPEG og så YUYV. Kameraets formater står i journalen
-(`kameraet kan: …`).
+(`kameraet kan: …`) og i admin: som værktøjstip på kameraets navn, og under
+*Vis detaljer* ved en fejl sammen med ffmpegs sidste linjer (nøglen skiftet ud
+med `<nøgle>`). Mangler MJPEG på et kamera, der plejer at have det, sidder det
+typisk i en USB-hub eller forlænger og kører med USB 1.1-fart. Tages kameraet
+ud og sættes i igen, spørges det forfra.
 
 **Kameraet på banen** (pr. bane): vend billedet 180° (kameraet hænger på
 hovedet), spejlvend, autofokus (fra som standard — fast fokus på lang afstand
