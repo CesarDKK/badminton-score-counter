@@ -512,7 +512,8 @@ router.delete('/youtube', livestreamAdmin, async (req, res, next) => {
 });
 
 // PUT /api/livestream/kamera/:tokenId — kameraet ved denne TV-PC filmer bane N
-// (null = intet kamera). Én PC pr. bane: to PC'er på samme nøgle afviser hinanden
+// (null = intet kamera). Ét adgangslink pr. bane: to PC'er på samme nøgle
+// afviser hinanden — og bruger flere PC'er linket, sender kun én (POST /pc)
 router.put('/kamera/:tokenId', livestreamAdmin, async (req, res, next) => {
     try {
         const id = Number(req.params.tokenId);
@@ -624,8 +625,14 @@ router.post('/pc', async (req, res, next) => {
 
         const pc = ls.rensStatus(req.body);
         const tenant = tenantKey(req);
-        const foer = ls.statusFor(tenant)[link.id];
         const bane = link.camera_court;
+        // Én PC pr. adgangslink sender (se ls.maaBrugeKamera). De andre får
+        // "anden-pc" og ser ikke nøglen; banen og statussen røres ikke
+        if (bane && !ls.maaBrugeKamera(tenant, link.id, ls.pcNoegle(pc, klientIp(req)), !!pc.kamera)) {
+            ls.registrerAnden(tenant, link.id, pc, klientIp(req));
+            return res.json({ kamera: true, bane, send: false, grund: 'anden-pc' });
+        }
+        const foer = ls.statusFor(tenant)[link.id];
         let svar = { kamera: false, send: false, grund: 'intet-kamera' };
         let livetavle = null;   // til live-siden — også når overlayet er slået fra
         if (bane) {
