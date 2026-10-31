@@ -652,7 +652,10 @@ router.post('/pc', async (req, res, next) => {
             return res.json(svar);
         }
         const foer = ls.statusFor(tenant)[link.id];
-        let svar = { kamera: false, send: false, grund: 'intet-kamera' };
+        // Et kamera, men ingen bane endnu: "kamera: true" får PC'en til at spørge
+        // hvert 10. sekund (ellers hvert 5. minut) — så admin ser den med det
+        // samme og den er klar, så snart en bane vælges
+        let svar = { kamera: !!pc.kamera, send: false, grund: pc.kamera ? 'ingen-bane-valgt' : 'intet-kamera' };
         let livetavle = null;   // til live-siden — også når overlayet er slået fra
         if (bane) {
             const court = await queryOne('SELECT id, is_doubles FROM courts WHERE court_number = ?', [bane]);
