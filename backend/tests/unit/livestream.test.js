@@ -215,8 +215,14 @@ test('overlay: afgjort kamp viser kun sættene, lange navne afkortes', () => {
 test('status: PC\'ens oplysninger renses, og "sender siden" huskes', () => {
     const s = ls.rensStatus({ navn: 'tv-bane3', kamera: 'HD Pro Webcam C920', sender: true, koder: 'vaapi', fejl: '' });
     assert.deepEqual(s, { navn: 'tv-bane3', kioskVersion: '', kamera: 'HD Pro Webcam C920', sender: true, koder: 'vaapi',
-        format: null, mikrofon: null, fejl: null, pcId: null });
+        format: null, mikrofon: null, fejl: null, fejllog: null, kameraFormater: null, pcId: null });
     assert.equal(ls.rensStatus({ navn: '../x', koder: 'nvenc' }).navn, '');
+    // ffmpegs sidste linjer: højst 12, uden styretegn; kameraets formater som tekst
+    const f = ls.rensStatus({ fejllog: [...Array(15)].map((_, i) => `linje ${i}\u0007`), kameraFormater: 'YUYV 640x480@30' });
+    assert.equal(f.fejllog.length, 12);
+    assert.equal(f.fejllog[0], 'linje 3');
+    assert.equal(f.kameraFormater, 'YUYV 640x480@30');
+    assert.equal(ls.rensStatus({ fejllog: 'ikke en liste' }).fejllog, null);
     assert.equal(ls.rensStatus({ koder: 'nvenc' }).koder, null);
 
     ls.registrer('t-test', 7, s, '1.2.3.4', NU);

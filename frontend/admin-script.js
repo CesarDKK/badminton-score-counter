@@ -2994,13 +2994,35 @@ function livestreamPcStatusHtml(pc, bane) {
         return `<span class="maerke maerke--neutral">Ikke meldt</span> <span class="tekst-daempet">${escapeHtml(pc.navn)} har ikke spurgt serveren det seneste minut — slukket, eller ældre Badminton TV uden livestream</span>`;
     }
     if (!s.kamera) return `<span class="maerke maerke--afventer">Intet kamera</span> <span class="tekst-daempet">${escapeHtml(pc.navn)} finder intet USB-kamera</span>`;
-    if (s.fejl) return `<span class="maerke maerke--fare">Fejl</span> ${escapeHtml(s.fejl)}`;
+    if (s.fejl) return `<span class="maerke maerke--fare">Fejl</span> ${escapeHtml(s.fejl)}${livestreamFejlDetaljer(s, bane)}`;
+    // Kameraets formater som værktøjstip på navnet (nye Badminton TV-versioner)
+    const kamera = `<span${s.kameraFormater ? ` title="Kameraet kan: ${escapeHtml(s.kameraFormater)}"` : ''}>${escapeHtml(s.kamera)}</span>`;
     if (s.sender) {
         const siden = s.senderSiden ? new Date(s.senderSiden).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' }) : '';
         const b = _livestream.baner.find(x => x.bane === bane);
-        return `<span class="maerke maerke--igang">● Sender</span> <span class="tekst-daempet">siden kl. ${siden} · ${escapeHtml(s.kamera)}${livestreamFormatTekst(s.format)}${s.koder === 'x264' ? ' · kodet på CPU\'en' : ''}${b && b.lyd ? (s.mikrofon ? ' · med lyd' : ' · uden lyd (ingen mikrofon i kameraet)') : ''}</span>`;
+        return `<span class="maerke maerke--igang">● Sender</span> <span class="tekst-daempet">siden kl. ${siden} · ${kamera}${livestreamFormatTekst(s.format)}${s.koder === 'x264' ? ' · kodet på CPU\'en' : ''}${b && b.lyd ? (s.mikrofon ? ' · med lyd' : ' · uden lyd (ingen mikrofon i kameraet)') : ''}</span>`;
     }
-    return `<span class="tekst-daempet">${escapeHtml(LS_GRUND[s.grund] || 'Klar')} · ${escapeHtml(s.kamera)}</span>`;
+    return `<span class="tekst-daempet">${escapeHtml(LS_GRUND[s.grund] || 'Klar')} · ${kamera}</span>`;
+}
+
+// Fejlens detaljer fra TV-PC'en: det, kameraet selv siger, det kan, og ffmpegs
+// sidste linjer. Åben/lukket huskes pr. bane, da statussen tegnes igen hvert 10. s
+const _lsFejlAabne = new Set();
+
+function livestreamFejlDetaljer(s, bane) {
+    if (!s.kameraFormater && !(s.fejllog && s.fejllog.length)) return '';
+    const aaben = _lsFejlAabne.has(bane);
+    const tekst = (s.kameraFormater ? `Kameraet kan: ${s.kameraFormater}\n` : '')
+        + (s.fejllog && s.fejllog.length ? `\nffmpeg:\n${s.fejllog.join('\n')}` : '');
+    return ` <a href="#" onclick="visLivestreamFejl(${Number(bane)});return false;" class="haendelse-log-link">${aaben ? 'Skjul detaljer' : 'Vis detaljer'}</a>`
+        + (aaben ? `<pre class="haendelse-log">${escapeHtml(tekst.trim())}</pre>` : '');
+}
+
+function visLivestreamFejl(bane) {
+    if (_lsFejlAabne.has(bane)) _lsFejlAabne.delete(bane); else _lsFejlAabne.add(bane);
+    document.querySelectorAll(`.ls-status[data-bane="${bane}"]`).forEach(el => {
+        el.innerHTML = livestreamStatusHtml(bane);
+    });
 }
 
 // " · 1280×720, 30 billeder/s" — og hvorfor, hvis kameraet ikke kan det valgte.

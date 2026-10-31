@@ -557,9 +557,11 @@ def hent_logo(server, sti):
     return billede
 
 
-# ffmpeg kunne ikke åbne kameraet i det inputformat (og den størrelse), den bad om
-KAMERA_FORMAT_FEJL = re.compile(r'Cannot find a proper format|'
-                                r'(video4linux2|/dev/video|mjpeg|yuyv).*(not supported|Invalid argument)', re.I)
+# ffmpeg kunne ikke åbne kameraet i det inputformat (og den størrelse), den bad om.
+# Kun v4l2's egne linjer: "Invalid argument" fra fx kodningen er en anden fejl
+KAMERA_FORMAT_FEJL = re.compile(r'Cannot find a proper format|video4linux2.*(not supported|Invalid argument)|'
+                                r'/dev/video\d+: Invalid argument', re.I)
+FEJLLOG_LINJER = 10     # ffmpegs sidste linjer til admin, når den stopper med en fejl
 
 
 def forklar(linjer, str_='1280x720', input_='mjpeg'):
@@ -577,9 +579,9 @@ def forklar(linjer, str_='1280x720', input_='mjpeg'):
     if re.search(r'Network is unreachable|Name or service not known|Temporary failure in name resolution|'
                  r'timed out', alt, re.I):
         return 'Ingen forbindelse til YouTube — nettet i hallen?'
-    if KAMERA_FORMAT_FEJL.search(alt) or (re.search(r'Cannot open|not supported|Invalid argument', alt)
-                                          and 'mjpeg' in alt.lower()):
-        return f'Kameraet kunne ikke åbnes som {INPUT_NAVN.get(input_, input_)} {str_} — prøv et andet kamera'
+    if KAMERA_FORMAT_FEJL.search(alt):
+        return (f'Kameraet kunne ikke åbnes som {INPUT_NAVN.get(input_, input_)} {str_} — sidder det i en '
+                f'USB-hub eller forlænger, så prøv direkte i PC\'en, ellers et andet kamera')
     return (linjer[-1] if linjer else 'ffmpeg stoppede uden besked')[:200]
 
 
@@ -594,6 +596,7 @@ class Stream:
         self.fmt = None             # sendeformat() for den kørende
         self.startet = 0
         self.fejl = None
+        self.fejllog = None         # ffmpegs sidste linjer til fejlen (admin)
         self.forsoeg = 0
         self.naeste = 0             # tidligst næste start efter en fejl
         self.koder = 'vaapi' if os.path.exists(RENDER) else 'x264'
@@ -626,8 +629,8 @@ class Stream:
             self.linjer.append(linje)
             log(f'ffmpeg: {linje}')
 
-    def sendeformat(self, enhed, video):
-        """Det, der skal sendes (sendeformat) — kameraets formater og mikrofon slås op her."""
+    def kameraets_formater(self, enhed):
+        """kamera_formater() for enheden — spørges (og logges) én gang pr. kamera."""
         if enhed not in self.formater:
             self.formater[enhed] = kamera_formater(enhed)
             for n in INPUT_ORDEN:
@@ -636,7 +639,28 @@ class Stream:
                         ', '.join(f'{b}x{h}@{max(r)}' for (b, h), r in sorted(self.formater[enhed][n].items())))
             if not self.formater[enhed]:
                 log('kameraets formater er ukendte (v4l2-ctl svarede ikke) — prøver MJPEG, så YUYV')
-        input_, formater = vaelg_input(self.formater[enhed], self.afvist.get(enhed, ()))
+        return self.formater[enhed]
+
+    def formater_tekst(self, enhed):
+        """Til admin: det, kameraet selv siger, det kan — de største først, fx
+        'MJPEG 1920x1080@30, 1280x720@60 · YUYV 640x480@30'. Mangler MJPEG her, sidder
+        kameraet ofte i en USB-hub/-forlænger eller på USB 1.1-fart."""
+        if not enhed:
+            return None
+        alle = self.kameraets_formater(enhed)
+        if not alle:
+            return 'ukendt (kameraet svarede ikke)'
+        dele = []
+        for n in INPUT_ORDEN:
+            f = sorted(alle.get(n, {}).items(), key=lambda x: (-x[0][1], -x[0][0]))
+            if f:
+                dele.append(INPUT_NAVN[n] + ' ' + ', '.join(f'{b}x{h}@{max(r)}' for (b, h), r in f[:6]) +
+                            (' …' if len(f) > 6 else ''))
+        return ' · '.join(dele)
+
+    def sendeformat(self, enhed, video):
+        """Det, der skal sendes (sendeformat) — kameraets formater og mikrofon slås op her."""
+        input_, formater = vaelg_input(self.kameraets_formater(enhed), self.afvist.get(enhed, ()))
         mikrofon, navn = find_mikrofon(enhed) if video['lyd'] and enhed not in self.uden_mikrofon else (None, None)
         return sendeformat(enhed, video, formater, mikrofon, input_) + (('mikrofon_navn', navn),)
 
@@ -659,6 +683,7 @@ class Stream:
         except OSError as e:
             self.proc = None
             self.fejl = f'ffmpeg kunne ikke startes: {e}'[:200]
+            self.fejllog = None
             self._vent()
             return
         threading.Thread(target=self._laes, args=(self.proc,), daemon=True).start()
@@ -699,7 +724,7 @@ class Stream:
         if kode is None:
             if time.monotonic() - self.startet > STABIL:
                 self.forsoeg = 0
-                self.fejl = None
+                self.fejl = self.fejllog = None
             return
         time.sleep(0.2)   # så læsetråden når de sidste linjer
         linjer = list(self.linjer)
@@ -728,6 +753,8 @@ class Stream:
             self.koder = 'x264'
             return
         self.fejl = forklar(linjer, '{}x{}'.format(*f['kamera']) if f else '1280x720', f.get('input', 'mjpeg'))
+        # ffmpegs egne ord med til admin (nøglen er allerede skiftet ud i _laes)
+        self.fejllog = linjer[-FEJLLOG_LINJER:] or None
         log(f'ffmpeg stoppede (kode {kode}) efter {kort:.0f} s: {self.fejl}')
         self._vent()
 
@@ -797,9 +824,18 @@ def main():
             stop.wait(SPOERG_INTET)
             continue
         enhed, kamera = find_kamera()
-        if kamera != sidst_kamera:
-            log(f'kamera: {kamera} ({enhed})' if kamera else 'intet USB-kamera')
-            sidst_kamera = kamera
+        # Kameraet taget ud og sat i igen (fx i et andet stik): enheden oprettes på
+        # ny — og formaterne kan være andre (USB 1.1-fart i en hub har intet MJPEG)
+        try:
+            kamera_id = (kamera, enhed, os.stat(enhed).st_ctime if enhed else None)
+        except OSError:
+            kamera_id = (kamera, enhed, None)
+        if kamera_id != sidst_kamera:
+            if kamera != (sidst_kamera or (None,))[0]:
+                log(f'kamera: {kamera} ({enhed})' if kamera else 'intet USB-kamera')
+            else:
+                log(f'kameraet er sat i igen ({enhed})')
+            sidst_kamera = kamera_id
             # Et andet kamera i stikket kan noget andet
             stream.formater.clear()
             stream.afvist.clear()
@@ -810,7 +846,8 @@ def main():
         svar = spoerg(STREAM_URL or f'{server}/api/livestream/pc', token, {
             'navn': navn, 'kioskVersion': version, 'kamera': kamera,
             'sender': stream.koerer(), 'koder': stream.koder, 'fejl': stream.fejl,
-            'format': stream.format_tekst(), 'mikrofon': stream.mikrofon_navn(), 'pcId': pc_id})
+            'format': stream.format_tekst(), 'mikrofon': stream.mikrofon_navn(), 'pcId': pc_id,
+            'kameraFormater': stream.formater_tekst(enhed), 'fejllog': stream.fejllog})
         if svar is None:
             if stream.koerer() and time.monotonic() - sidste_svar > UDEN_SVAR:
                 log(f'intet svar fra serveren i {UDEN_SVAR:.0f} s — stopper')
@@ -850,7 +887,7 @@ def main():
             else:
                 stream.stop()
                 if not enhed:
-                    stream.fejl = None
+                    stream.fejl = stream.fejllog = None
             interval = (SPOERG_SENDER if stream.koerer() or svar.get('send')
                         else SPOERG_KLAR if svar.get('kamera') else SPOERG_INTET)
         stream.tjek()
