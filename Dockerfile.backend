@@ -19,6 +19,8 @@ COPY backend/ ./
 COPY frontend/js/holdkamp-formater.js ./shared/holdkamp-formater.js
 # Logo-matcheren (TV, oversigt) — livestreamens overlay viser de samme logoer
 COPY frontend/js/logo-match.js ./shared/logo-match.js
+# Pointreglerne (tælleren) — tabletten og serveren regner med den samme fil
+COPY frontend/js/taeller-regler.js ./shared/taeller-regler.js
 # Visningsnavnene (TV, oversigt) — double-navne i overlayet kortes af ens
 COPY frontend/js/name-display.js ./shared/name-display.js
 

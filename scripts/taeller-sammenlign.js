@@ -9,6 +9,7 @@
 // Kræver en kørende installation (fx scripts/cloud-test-deploy.sh) og
 // Playwright med Chromium:
 //   node scripts/taeller-sammenlign.js [--url http://localhost:8080] [--bane 5] [--kampe 80] [--seed 1]
+//   node scripts/taeller-sammenlign.js --afspil   # de gemte kampe på den nuværende tablet
 // Banen bruges kun i browseren — intet gemmes på serveren (gemningerne er slået fra).
 
 const path = require('path');
@@ -113,6 +114,61 @@ async function main() {
         window.releaseWakeLock = () => {};
     });
 
+    // Kampens start på tabletten: navnene og opsætningen, ingen point
+    const nulstil = (o) => page.evaluate((o) => {
+        if (gameState.restBreakInterval) clearInterval(gameState.restBreakInterval);
+        if (gameState.timerInterval) clearInterval(gameState.timerInterval);
+        Object.assign(gameState, {
+            player1: { name: o.navne.p1, name2: o.navne.p1b || 'Makker 1', score: 0, games: 0 },
+            player2: { name: o.navne.p2, name2: o.navne.p2b || 'Makker 2', score: 0, games: 0 },
+            isDoubles: o.isDoubles, gameMode: o.gameMode, setsToWin: o.setsToWin,
+            isActive: false, matchStartTime: null, matchEndTime: null, matchCompleted: false,
+            decidingGameSwitched: false, sidesManuallySwitched: false, setScoresHistory: [],
+            restBreakTaken: false, restBreakActive: false, restBreakInterval: null, restBreakCallback: null,
+            restBreakSecondsLeft: 0, restBreakTitle: '', restBreakDuration: 60, restBreakStartedAt: null,
+            servingPlayer: null, initialServer: null, servingTeam: null, servingPlayerOnTeam: null,
+            team1RightCourt: 1, team2RightCourt: 1, betweenSets: false, timerSeconds: 0,
+            timerInterval: null, resultOutcome: null, resultWinner: null, history: []
+        });
+        hideMessage && hideMessage();
+    }, o);
+    // Ét tryk på tabletten, som en dommer ville trykke — tilstanden bagefter
+    const tryk = async (h) => regler.signatur(await page.evaluate(async (h) => {
+        _lastPointTime = 0;
+        const kald = { S1: () => selectServer(1), S2: () => selectServer(2),
+            X1: () => swapPlayers(1), X2: () => swapPlayers(2),
+            P1: () => addPoint(1), P2: () => addPoint(2),
+            K: () => startMatch(), B: () => endRestBreak(), U: () => undoLastAction() }[h];
+        await kald();
+        await new Promise(res => setTimeout(res, 0));
+        if (gameState.restBreakInterval) { clearInterval(gameState.restBreakInterval); gameState.restBreakInterval = null; }
+        return JSON.parse(JSON.stringify({ ...gameState, timerInterval: null, restBreakInterval: null, restBreakCallback: null }));
+    }, h));
+
+    // --afspil: de gemte kampe (optaget på tabletten) spilles igen på den
+    // nuværende tablet — tabletten skal regne som da de blev optaget
+    if (process.argv.includes('--afspil')) {
+        const { kampe } = JSON.parse(fs.readFileSync(UD, 'utf8'));
+        let forskelle = 0, antal = 0;
+        for (const [i, k] of kampe.entries()) {
+            await nulstil(k.opsaetning);
+            const handlinger = k.handlinger.split(' ');
+            const forventet = k.aftryk.split(' ');
+            for (const [n, h] of handlinger.entries()) {
+                const sig = await tryk(h);
+                antal++;
+                if (fingeraftryk(sig) !== forventet[n]) {
+                    forskelle++;
+                    console.log(`Kamp ${i} ${JSON.stringify(k.opsaetning)}, tryk ${n} (${handlinger.slice(0, n + 1).join(' ')}):\n  tablet nu: ${sig}`);
+                    break;
+                }
+            }
+        }
+        await browser.close();
+        console.log(`Afspillet: ${kampe.length} kampe, ${antal} tryk, ${forskelle} forskelle${fejl.length ? `, sidefejl: ${fejl.slice(0, 3).join(' | ')}` : ''}`);
+        process.exit(forskelle || fejl.length ? 1 : 0);
+    }
+
     const r = rng(SEED);
     const kampe = [];
     let forskelle = 0;
@@ -120,23 +176,7 @@ async function main() {
         const ops = opsaetning(r, i);
         const styrke = 0.3 + r() * 0.4;
         const st = regler.nyKamp(ops);
-        await page.evaluate((o) => {
-            if (gameState.restBreakInterval) clearInterval(gameState.restBreakInterval);
-            if (gameState.timerInterval) clearInterval(gameState.timerInterval);
-            Object.assign(gameState, {
-                player1: { name: o.navne.p1, name2: o.navne.p1b || 'Makker 1', score: 0, games: 0 },
-                player2: { name: o.navne.p2, name2: o.navne.p2b || 'Makker 2', score: 0, games: 0 },
-                isDoubles: o.isDoubles, gameMode: o.gameMode, setsToWin: o.setsToWin,
-                isActive: false, matchStartTime: null, matchEndTime: null, matchCompleted: false,
-                decidingGameSwitched: false, sidesManuallySwitched: false, setScoresHistory: [],
-                restBreakTaken: false, restBreakActive: false, restBreakInterval: null, restBreakCallback: null,
-                restBreakSecondsLeft: 0, restBreakTitle: '', restBreakDuration: 60, restBreakStartedAt: null,
-                servingPlayer: null, initialServer: null, servingTeam: null, servingPlayerOnTeam: null,
-                team1RightCourt: 1, team2RightCourt: 1, betweenSets: false, timerSeconds: 0,
-                timerInterval: null, resultOutcome: null, resultWinner: null, history: []
-            });
-            hideMessage && hideMessage();
-        }, ops);
+        await nulstil(ops);
 
         const handlinger = [];
         const sig = [];
@@ -144,18 +184,7 @@ async function main() {
             const h = naesteHandling(st, r, styrke);
             if (!h) break;
             anvend(st, h, 1_800_000_000_000 + n * 1000);
-            const tablet = await page.evaluate(async (h) => {
-                _lastPointTime = 0;
-                const kald = { S1: () => selectServer(1), S2: () => selectServer(2),
-                    X1: () => swapPlayers(1), X2: () => swapPlayers(2),
-                    P1: () => addPoint(1), P2: () => addPoint(2),
-                    K: () => startMatch(), B: () => endRestBreak(), U: () => undoLastAction() }[h];
-                await kald();
-                await new Promise(res => setTimeout(res, 0));
-                if (gameState.restBreakInterval) { clearInterval(gameState.restBreakInterval); gameState.restBreakInterval = null; }
-                return JSON.parse(JSON.stringify({ ...gameState, timerInterval: null, restBreakInterval: null, restBreakCallback: null }));
-            }, h);
-            const a = regler.signatur(tablet), b = regler.signatur(st);
+            const a = await tryk(h), b = regler.signatur(st);
             handlinger.push(h);
             sig.push(a);
             if (a !== b) {
@@ -171,8 +200,8 @@ async function main() {
     }
     await browser.close();
 
-    const tryk = kampe.reduce((s, k) => s + k.aftryk.split(' ').length, 0);
-    console.log(`${KAMPE} kampe, ${tryk} tryk, ${forskelle} forskelle${fejl.length ? `, sidefejl: ${fejl.slice(0, 3).join(' | ')}` : ''}`);
+    const antalTryk = kampe.reduce((s, k) => s + k.aftryk.split(' ').length, 0);
+    console.log(`${KAMPE} kampe, ${antalTryk} tryk, ${forskelle} forskelle${fejl.length ? `, sidefejl: ${fejl.slice(0, 3).join(' | ')}` : ''}`);
     if (forskelle === 0) {
         fs.mkdirSync(path.dirname(UD), { recursive: true });
         fs.writeFileSync(UD, JSON.stringify({ seed: SEED, kampe }, null, 1) + '\n');

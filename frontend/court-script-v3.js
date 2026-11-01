@@ -670,70 +670,10 @@ async function livestreamKnap() {
 }
 
 function swapPlayers(team) {
-    // Can only swap before match starts OR between sets (in doubles mode)
-    if (!gameState.isDoubles || (gameState.matchStartTime && !gameState.betweenSets)) {
-        return;
-    }
-
-    // Flip the right court position for the team
-    if (team === 1) {
-        gameState.team1RightCourt = gameState.team1RightCourt === 1 ? 2 : 1;
-    } else {
-        gameState.team2RightCourt = gameState.team2RightCourt === 1 ? 2 : 1;
-    }
-
-    // Update which player serves when the serving team's positions are swapped
-    if (gameState.isDoubles && gameState.servingTeam) {
-        const servingTeam = gameState.servingTeam;
-        gameState.servingPlayerOnTeam = servingTeam === 1 ? gameState.team1RightCourt : gameState.team2RightCourt;
-    }
-
+    // Double, før kampen eller mellem sæt (regler: TaellerRegler.bytPladser)
+    if (!TaellerRegler.bytPladser(gameState, team).ok) return;
     updateDisplay();
     saveGameState();
-}
-
-// Save current game state to history before making changes
-function saveToHistory() {
-    const snapshot = {
-        // Navne skal med i snapshottet: switchSides() (efter sætafslutning) bytter
-        // player1/player2-navnene, så uden dem gendanner Fortryd scoren til den
-        // gamle orientering mens navnene forbliver byttede — point på forkert side.
-        player1: {
-            name: gameState.player1.name,
-            name2: gameState.player1.name2,
-            score: gameState.player1.score,
-            games: gameState.player1.games
-        },
-        player2: {
-            name: gameState.player2.name,
-            name2: gameState.player2.name2,
-            score: gameState.player2.score,
-            games: gameState.player2.games
-        },
-        sidesManuallySwitched: gameState.sidesManuallySwitched,
-        restBreakTaken: gameState.restBreakTaken,
-        servingPlayer: gameState.servingPlayer,
-        servingTeam: gameState.servingTeam,
-        servingPlayerOnTeam: gameState.servingPlayerOnTeam,
-        team1RightCourt: gameState.team1RightCourt,
-        team2RightCourt: gameState.team2RightCourt,
-        betweenSets: gameState.betweenSets,
-        decidingGameSwitched: gameState.decidingGameSwitched,
-        timerSeconds: gameState.timerSeconds,
-        isActive: gameState.isActive,
-        // Så "Fortryd" kan genåbne en netop afsluttet kamp: gem også afslutnings-
-        // og sæthistorik-tilstanden fra FØR dette point (kopi, ikke reference).
-        matchCompleted: gameState.matchCompleted,
-        matchEndTime: gameState.matchEndTime,
-        setScoresHistory: gameState.setScoresHistory.map(s => (s && typeof s === 'object' ? { ...s } : s))
-    };
-
-    gameState.history.push(snapshot);
-
-    // Limit history to last 20 actions to prevent memory issues
-    if (gameState.history.length > 20) {
-        gameState.history.shift();
-    }
 }
 
 // Dobbelttryk-værn: to point på SAMME spiller inden for 250 ms er næsten altid
@@ -743,23 +683,10 @@ let _lastPointTime = 0;
 let _lastPointPlayer = null;
 
 function addPoint(player) {
-    // Kampen er afgjort (2 sæt vundet): lås tælling, så man ikke kan spille
-    // videre til et 4. sæt hvis man annullerer "Ryd bane"-prompten. Brug "Fortryd"
-    // hvis point-vindet var en fejl, eller "Ryd bane" for at afslutte.
-    if (gameState.matchCompleted) {
-        return;
-    }
-
-    // Sættet er vundet, men endnu ikke nulstillet (sætpausen kører — den starter
-    // straks ved sætbolden, før gemningen): ét tryk mere gav før 22-15, et nyt
-    // "vundet" sæt og en kamp afsluttet 2-0 på et falsk sæt. Kun under pausen —
-    // ændrer admin spilletypen midt i et sæt (17-12 i 21 → 15), må banen ikke låses.
-    if (gameState.restBreakActive && erSaetAfgjort()) {
-        return;
-    }
-
-    // Cannot add points if match hasn't selected server yet
-    if (!gameState.servingPlayer) {
+    // Afgjort kamp, sætpausen eller ingen server: reglerne afviser pointet, og
+    // dobbelttryk-værnet skal ikke huske et afvist tryk
+    if (gameState.matchCompleted || !gameState.servingPlayer ||
+        (gameState.restBreakActive && erSaetAfgjort())) {
         return;
     }
 
@@ -770,72 +697,34 @@ function addPoint(player) {
     _lastPointTime = now;
     _lastPointPlayer = player;
 
-    // Save state to history before adding point
-    saveToHistory();
+    // Reglerne (serv, pause, sideskift, sæt og kamp) ligger i TaellerRegler —
+    // her vises det, der skete
+    const { ok, haendelser } = TaellerRegler.point(gameState, player, now);
+    if (!ok) return;
 
-    // If we're between sets in doubles, lock in positions
-    if (gameState.betweenSets && gameState.isDoubles) {
-        gameState.betweenSets = false;
-
-        // Only determine server based on court positions if not already set
-        // (i.e., at the very start of the match)
-        if (gameState.servingPlayerOnTeam === null) {
-            // Score is 0 (even), so player in right court serves
-            const servingTeam = gameState.servingTeam;
-            if (servingTeam === 1) {
-                gameState.servingPlayerOnTeam = gameState.team1RightCourt;
-            } else {
-                gameState.servingPlayerOnTeam = gameState.team2RightCourt;
-            }
-        }
-        // Otherwise, keep the current server (same player continues from previous set)
-    }
-
-    // Auto-start timer on first point
-    const isFirstPoint = gameState.player1.score === 0 &&
-                        gameState.player2.score === 0 &&
-                        gameState.player1.games === 0 &&
-                        gameState.player2.games === 0 &&
-                        !gameState.matchStartTime;
-
-    if (player === 1) {
-        gameState.player1.score++;
-    } else {
-        gameState.player2.score++;
-    }
-
-    // Update serving player based on who won the point
-    updateServingPlayer(player);
-
-    // Start match automatically on first point
-    if (isFirstPoint) {
-        gameState.matchStartTime = Date.now();
+    if (haendelser.includes('start')) {
         gameState._sendStartNow = true; // serveren stempler starttiden med sit eget ur
         anchorTimer(0);
-        gameState.isActive = true;
         document.getElementById('holdkampPanel').style.display = 'none';
         startTimer();
     }
 
-    // Check for rest break at 11 points
-    checkRestBreak();
-
-    // Check for side switch at mid-point in deciding game (1-1 — eller golden
-    // set, som er ét sæt spillet som et 3. sæt: afgørende fra første bold)
-    // 21/30 format: 11 points · 15/21 format: 8 points
-    const afgoerende = saetForSejr() - 1;
-    const isDecidingGame = gameState.player1.games === afgoerende && gameState.player2.games === afgoerende;
-    const decidingMidPoint = gameState.gameMode === '21' ? 11 : 8;
-    const scoredToMid = gameState.player1.score === decidingMidPoint || gameState.player2.score === decidingMidPoint;
-
-    if (isDecidingGame && scoredToMid && !gameState.decidingGameSwitched) {
-        gameState.decidingGameSwitched = true;
-        switchSides();
-        fixDoublesServePosition();
-        showMessage('Skift Sider!', `Point har nået ${decidingMidPoint} i afgørende sæt. Spillere har skiftet side!`);
+    // Pausen ved 11 (8): reglerne har sat den, her tælles den ned
+    if (haendelser.includes('pause')) {
+        startRestBreak(TaellerRegler.PAUSE_11.sek, TaellerRegler.PAUSE_11.titel);
     }
 
-    checkGameWin();
+    // Sideskift ved 11 (8) i det afgørende sæt. Gemmes straks — ellers kan
+    // sync-loopet nå at rulle det tilbage
+    if (haendelser.includes('sideskift')) {
+        performSave();
+        const midt = gameState.gameMode === '21' ? 11 : 8;
+        showMessage('Skift Sider!', `Point har nået ${midt} i afgørende sæt. Spillere har skiftet side!`);
+    }
+
+    if (haendelser.includes('kamp')) kampVundet();
+    else if (haendelser.includes('saet')) saetVundet();
+
     updateDisplay();
     flashPointFeedback(player);
     saveGameState();
@@ -874,7 +763,7 @@ function flashPointFeedback(player) {
 
 // Boldpoint-status (punkt 3): returnerer 'match' | 'set' | null for hver spiller.
 // En spiller er til boldpoint hvis ét point mere opfylder vinderbetingelsen
-// (jf. checkGameWin). Er det deres 2. sæt (games === 1) er det matchbold, ellers sætbold.
+// (jf. TaellerRegler.point). Er det deres 2. sæt (games === 1) er det matchbold, ellers sætbold.
 function getBoldpointState() {
     const none = { player1: null, player2: null };
 
@@ -930,75 +819,50 @@ function updateBoldpointIndicator() {
     });
 }
 
-async function checkGameWin() {
-    const p1Score = gameState.player1.score;
-    const p2Score = gameState.player2.score;
-
-    // Determine win conditions based on game mode
-    const winScore = gameState.gameMode === '21' ? 21 : 15;
-    const maxScore = gameState.gameMode === '21' ? 30 : 21;
-
-    // Badminton rules: first to winScore, must win by 2, max maxScore.
-    // De to grene var før identiske pånær hvem der vinder — samlet i handleSetWin.
-    if ((p1Score >= winScore && p1Score - p2Score >= 2) || p1Score === maxScore) {
-        await handleSetWin('player1', 'player2', p1Score, p2Score);
-    } else if ((p2Score >= winScore && p2Score - p1Score >= 2) || p2Score === maxScore) {
-        await handleSetWin('player2', 'player1', p1Score, p2Score);
-    }
+// Hvem vandt det netop afsluttede sæt: 'player1'/'player2' som de står nu
+// (siderne byttes først, når sætpausen slutter)
+function saetVinder() {
+    const sidste = gameState.setScoresHistory[gameState.setScoresHistory.length - 1];
+    const [a, b] = String((sidste && sidste.score) || '0-0').split('-').map(Number);
+    return a > b ? ['player1', 'player2'] : ['player2', 'player1'];
 }
 
-// Håndterer at 'winnerKey' (player1/player2) netop vandt et sæt. p1Score/p2Score
-// er scoren FØR nulstilling (til sæt-historikken, som altid gemmer player1 først).
-async function handleSetWin(winnerKey, loserKey, p1Score, p2Score) {
+// Kampen er vundet (reglerne har sat matchCompleted og sluttiden)
+function kampVundet() {
+    const [winnerKey, loserKey] = saetVinder();
     const winner = gameState[winnerKey];
     const loser = gameState[loserKey];
-
-    // Gem sæt-score i historik FØR games øges/scores nulstilles
-    gameState.setScoresHistory.push({
-        player1Name: gameState.player1.name,
-        player1Name2: gameState.player1.name2 || null,
-        player2Name: gameState.player2.name,
-        player2Name2: gameState.player2.name2 || null,
-        score: `${p1Score}-${p2Score}`
-    });
-
-    winner.games++;
-
-    // Kampen vundet (2 sæt — eller 1 i golden set)?
-    if (winner.games >= saetForSejr()) {
-        gameState.matchEndTime = Date.now();
-        gameState.matchCompleted = true;
-        // Frys den forløbne tid og stop interval'et — tiden ændrer sig ikke mere,
-        // så det er spild at lade timeren tikke videre og skrive samme tal hvert sek.
-        updateTimer();
-        if (gameState.timerInterval) {
-            clearInterval(gameState.timerInterval);
-            gameState.timerInterval = null;
-        }
-        const winnerNames = formatPlayerNames(winner.name, winner.name2);
-        const loserNames = formatPlayerNames(loser.name, loser.name2);
-        // Fang FOR saveMatchResult, fordi den synkront nuller de globale assigned-vars.
-        const isReportedMatch = !!(assignedHoldkampGameId || assignedTournamentMatchId);
-
-        // Gem øjeblikkeligt (afbryd debounced timer) så oversigt ser matchCompleted=true
-        // inden brugeren evt. klikker "Ny Kamp" og nulstiller tilstanden.
-        if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
-        const kampGemt = performSave();
-
-        // Save match result to database — først når kampslut er gemt (er
-        // tællingen overtaget, må denne enhed ikke melde resultatet ind)
-        saveMatchResult(winnerNames, loserNames, winner.games, loser.games, winnerKey, kampGemt);
-
-        showMatchWonMessage(isReportedMatch);
-        return;
+    // Frys den forløbne tid og stop interval'et — tiden ændrer sig ikke mere,
+    // så det er spild at lade timeren tikke videre og skrive samme tal hvert sek.
+    updateTimer();
+    if (gameState.timerInterval) {
+        clearInterval(gameState.timerInterval);
+        gameState.timerInterval = null;
     }
-
-    // Set won but not match - start 2-minute rest break in background, show on Fortsæt
     const winnerNames = formatPlayerNames(winner.name, winner.name2);
+    const loserNames = formatPlayerNames(loser.name, loser.name2);
+    // Fang FOR saveMatchResult, fordi den synkront nuller de globale assigned-vars.
+    const isReportedMatch = !!(assignedHoldkampGameId || assignedTournamentMatchId);
 
-    // Beskeden vises straks — før ventede den på gemningen (op til ~40 s uden net)
-    const pauseStartet = startRestBreak(120, 'Pause mellem Sæt - 2 Minutter', mellemSaet, false); // timer kører i baggrunden
+    // Gem øjeblikkeligt (afbryd debounced timer) så oversigt ser matchCompleted=true
+    // inden brugeren evt. klikker "Ny Kamp" og nulstiller tilstanden.
+    if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
+    const kampGemt = performSave();
 
+    // Save match result to database — først når kampslut er gemt (er
+    // tællingen overtaget, må denne enhed ikke melde resultatet ind)
+    saveMatchResult(winnerNames, loserNames, winner.games, loser.games, winnerKey, kampGemt);
+
+    showMatchWonMessage(isReportedMatch);
+}
+
+// Et sæt er vundet, men ikke kampen: reglerne har sat sætpausen (2 min), her
+// tælles den ned i baggrunden og vises på "Fortsæt". Næste sæt begynder, når
+// den slutter (naesteSaet)
+function saetVundet() {
+    const winner = gameState[saetVinder()[0]];
+    const winnerNames = formatPlayerNames(winner.name, winner.name2);
+    startRestBreak(TaellerRegler.PAUSE_SAET.sek, TaellerRegler.PAUSE_SAET.titel, naesteSaet, false);
     showMessage(
         'Sæt Vundet!',
         `${winnerNames} vinder dette sæt!`,
@@ -1011,25 +875,20 @@ async function handleSetWin(winnerKey, loserKey, p1Score, p2Score) {
             }
         ]
     );
-    await pauseStartet;
 }
 
-// Efter sætpausen: nyt sæt, siderne byttes
-function mellemSaet() {
-    resetScores();
-    gameState.decidingGameSwitched = false;
-    switchSides();
-    fixDoublesStartPosition();
+// Efter sætpausen: nyt sæt, siderne byttes (TaellerRegler.nytSaet)
+function naesteSaet() {
+    TaellerRegler.nytSaet(gameState);
     showDoublesPositionMessage();
+    updateDisplay();
+    performSave();
 }
 
-// Står scoren til et vundet sæt (jf. checkGameWin)?
+// Står scoren til et vundet sæt? En indlæst tilstand uden spilletype læses
+// med banens
 function erSaetAfgjort(st = gameState) {
-    const mode = st.gameMode || gameState.gameMode;
-    const vind = mode === '21' ? 21 : 15;
-    const maks = mode === '21' ? 30 : 21;
-    const a = st.player1?.score || 0, b = st.player2?.score || 0;
-    return (a >= vind && a - b >= 2) || a === maks || (b >= vind && b - a >= 2) || b === maks;
+    return TaellerRegler.erSaetAfgjort({ ...st, gameMode: st.gameMode || gameState.gameMode });
 }
 
 // To enheder på samme bane: den anden har afsluttet pausen (sprunget den over)
@@ -1070,41 +929,12 @@ function genoptagPause() {
     const taget = gameState.restBreakTaken;
     gameState.restBreakActive = false;
     if (tilbage > 0) {
-        startRestBreak(tilbage, titel, setVundet ? mellemSaet : null, true);
+        startRestBreak(tilbage, titel, setVundet ? naesteSaet : null, true);
         gameState.restBreakTaken = taget || !setVundet;
     } else {
-        if (setVundet) mellemSaet();
+        if (setVundet) naesteSaet();
         performSave();
     }
-}
-
-function fixDoublesServePosition() {
-    // Correct serving player's court position based on current score (even=right, odd=left)
-    if (!gameState.isDoubles || !gameState.servingTeam || !gameState.servingPlayerOnTeam) return;
-    const st = gameState.servingTeam;
-    const score = st === 1 ? gameState.player1.score : gameState.player2.score;
-    const serverInRightCourt = score % 2 === 0;
-    const serverPlayer = gameState.servingPlayerOnTeam;
-    const otherPlayer = serverPlayer === 1 ? 2 : 1;
-    if (st === 1) {
-        gameState.team1RightCourt = serverInRightCourt ? serverPlayer : otherPlayer;
-    } else {
-        gameState.team2RightCourt = serverInRightCourt ? serverPlayer : otherPlayer;
-    }
-    updateDisplay();
-    saveGameState();
-}
-
-function fixDoublesStartPosition() {
-    if (!gameState.isDoubles || !gameState.betweenSets || !gameState.servingTeam) return;
-    if (!gameState.servingPlayerOnTeam) return;
-    if (gameState.servingTeam === 1) {
-        gameState.team1RightCourt = gameState.servingPlayerOnTeam;
-    } else {
-        gameState.team2RightCourt = gameState.servingPlayerOnTeam;
-    }
-    updateDisplay();
-    saveGameState();
 }
 
 function showDoublesPositionMessage() {
@@ -1116,79 +946,9 @@ function showDoublesPositionMessage() {
     );
 }
 
-function resetScores() {
-    gameState.player1.score = 0;
-    gameState.player2.score = 0;
-    gameState.restBreakTaken = false; // Reset for next set
-
-    // In badminton, the winner of the previous game serves first in the next game
-    // The same PLAYER who was serving at the end continues to serve
-    // Determine who won the last game
-    if (gameState.player1.games > gameState.player2.games) {
-        gameState.servingPlayer = 1;
-        if (gameState.isDoubles) {
-            gameState.servingTeam = 1;
-            // servingPlayerOnTeam preserved — same player who served at end of set continues
-            gameState.betweenSets = true;
-        }
-    } else if (gameState.player2.games > gameState.player1.games) {
-        gameState.servingPlayer = 2;
-        if (gameState.isDoubles) {
-            gameState.servingTeam = 2;
-            // servingPlayerOnTeam preserved — same player who served at end of set continues
-            gameState.betweenSets = true;
-        }
-    } else if (gameState.isDoubles) {
-        // Tied (1-1) = deciding set — keep current server, but still flag betweenSets
-        gameState.betweenSets = true;
-    }
-
-    updateDisplay();
-    saveGameState();
-}
-
+// "Skift side" før kampen (knappen på banen): begge hold bytter banehalvdel
 function switchSides() {
-    // Swap all player data
-    const tempPlayer = {
-        name: gameState.player1.name,
-        name2: gameState.player1.name2,
-        score: gameState.player1.score,
-        games: gameState.player1.games
-    };
-
-    gameState.player1.name = gameState.player2.name;
-    gameState.player1.name2 = gameState.player2.name2;
-    gameState.player1.score = gameState.player2.score;
-    gameState.player1.games = gameState.player2.games;
-
-    gameState.player2.name = tempPlayer.name;
-    gameState.player2.name2 = tempPlayer.name2;
-    gameState.player2.score = tempPlayer.score;
-    gameState.player2.games = tempPlayer.games;
-
-    // Swap serving state to follow the teams to their new positions
-    if (gameState.servingPlayer === 1) {
-        gameState.servingPlayer = 2;
-    } else if (gameState.servingPlayer === 2) {
-        gameState.servingPlayer = 1;
-    }
-
-    if (gameState.servingTeam === 1) {
-        gameState.servingTeam = 2;
-    } else if (gameState.servingTeam === 2) {
-        gameState.servingTeam = 1;
-    }
-
-    // Swap and mirror court positions — Team A's data follows Team A to its new slot, mirrored
-    if (gameState.isDoubles) {
-        const temp = gameState.team1RightCourt;
-        gameState.team1RightCourt = gameState.team2RightCourt === 1 ? 2 : 1;
-        gameState.team2RightCourt = temp === 1 ? 2 : 1;
-    }
-
-    // Marker swap'et så sync-loopet ikke ruller det tilbage på næste tick
-    gameState.sidesManuallySwitched = true;
-
+    TaellerRegler.skiftSider(gameState);
     updateDisplay();
     // Øjeblikkelig save (ingen debounce) — ellers kan sync-loopet ramme det 500ms-vindue
     // hvor serveren stadig har de gamle navne og overskrive det netop gennemførte swap
@@ -1657,36 +1417,10 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { fi
 
 // Select which team serves first
 async function selectServer(team) {
-    if (gameState.matchStartTime) {
-        return; // Cannot change server after match started
-    }
-
-    gameState.servingTeam = team;
-    gameState.servingPlayer = team; // For compatibility
-    gameState.initialServer = team;
-
-    if (gameState.isDoubles) {
-        // Doubles mode: Determine who serves based on current court positions
-        // Score is 0 (even), so player in right court serves
-        const rightCourtPlayer = team === 1 ? gameState.team1RightCourt : gameState.team2RightCourt;
-        gameState.servingPlayerOnTeam = rightCourtPlayer;
-
-        const playerName = team === 1
-            ? (rightCourtPlayer === 1 ? gameState.player1.name : gameState.player1.name2)
-            : (rightCourtPlayer === 1 ? gameState.player2.name : gameState.player2.name2);
-
-        console.log(`Team ${team} will serve first (${playerName} from right court)`);
-    } else {
-        // Singles mode
-        console.log(`Player ${team} will serve first`);
-    }
-
-    // Set match as active so TV displays will show it immediately
-    gameState.isActive = true;
-
-    // Enable +1 buttons and Start Kamp button
+    // Kun før kampen (TaellerRegler.vaelgServer): i double server den, der står
+    // i højre side. Banen bliver aktiv, så TV'et viser den straks
+    if (!TaellerRegler.vaelgServer(gameState, team).ok) return;
     updateDisplay();
-
     // Save immediately without debounce so TV sees the change right away
     await performSave();
 }
@@ -1703,61 +1437,6 @@ function getServingSide() {
         if (!gameState.servingPlayer) return null;
         const serverScore = gameState.servingPlayer === 1 ? gameState.player1.score : gameState.player2.score;
         return serverScore % 2 === 0 ? 'right' : 'left';
-    }
-}
-
-// Update serving player after a point
-function updateServingPlayer(pointWinner) {
-    if (gameState.isDoubles) {
-        // Doubles logic based on official badminton rules
-        const winningTeam = pointWinner; // Team 1 or 2
-
-        if (winningTeam === gameState.servingTeam) {
-            // Serving team won - they scored a point
-            // Rule: Same player continues serving, but they switch sides
-            // This means we flip who is in right court vs left court
-            if (gameState.servingTeam === 1) {
-                // Team 1 scored - flip their court positions
-                gameState.team1RightCourt = gameState.team1RightCourt === 1 ? 2 : 1;
-            } else {
-                // Team 2 scored - flip their court positions
-                gameState.team2RightCourt = gameState.team2RightCourt === 1 ? 2 : 1;
-            }
-
-            // Update servingPlayerOnTeam based on new positions
-            const newTeamScore = winningTeam === 1 ? gameState.player1.score : gameState.player2.score;
-            const rightCourtPlayer = winningTeam === 1 ? gameState.team1RightCourt : gameState.team2RightCourt;
-
-            // Who serves? Player in right court if score is even, player in left court if odd
-            if (newTeamScore % 2 === 0) {
-                gameState.servingPlayerOnTeam = rightCourtPlayer;
-            } else {
-                gameState.servingPlayerOnTeam = rightCourtPlayer === 1 ? 2 : 1;
-            }
-        } else {
-            // Receiving team won - serve changes
-            // Rule: Serve goes to the other team, they serve from the court matching their score
-            // Their positions don't change
-            gameState.servingTeam = winningTeam;
-
-            // Determine who serves based on their score and court positions
-            const newTeamScore = winningTeam === 1 ? gameState.player1.score : gameState.player2.score;
-            const rightCourtPlayer = winningTeam === 1 ? gameState.team1RightCourt : gameState.team2RightCourt;
-
-            // Who serves? Player in right court if score is even, player in left court if odd
-            if (newTeamScore % 2 === 0) {
-                gameState.servingPlayerOnTeam = rightCourtPlayer;
-            } else {
-                gameState.servingPlayerOnTeam = rightCourtPlayer === 1 ? 2 : 1;
-            }
-        }
-
-        gameState.servingPlayer = gameState.servingTeam; // For compatibility
-    } else {
-        // Singles logic: server only changes when server loses the rally
-        if (pointWinner !== gameState.servingPlayer) {
-            gameState.servingPlayer = pointWinner;
-        }
     }
 }
 
@@ -1924,82 +1603,30 @@ function fitPlayerNames() {
 
 // Undo last action
 async function undoLastAction() {
-    // If server selected but no points scored yet, allow resetting server selection
-    const serverSelected = gameState.isDoubles ? gameState.servingTeam : gameState.servingPlayer;
-    const noPointsScored = gameState.player1.score === 0 &&
-                          gameState.player2.score === 0 &&
-                          gameState.player1.games === 0 &&
-                          gameState.player2.games === 0;
+    // TaellerRegler.fortryd: kun serveren valgt → valget fortrydes, ellers
+    // tilbage til før seneste point (højst 20)
+    const varPause = gameState.restBreakActive;
+    const { ok, haendelser } = TaellerRegler.fortryd(gameState);
+    if (!ok) {
+        showMessage('Fortryd', 'Der er ingen handlinger at fortryde.');
+        return;
+    }
 
-    if (serverSelected && noPointsScored) {
-        // Reset server selection and deactivate match
-        gameState.servingPlayer = null;
-        gameState.initialServer = null;
-        gameState.servingTeam = null;
-        gameState.servingPlayerOnTeam = null;
-        gameState.isActive = false;
-        gameState.matchStartTime = null;
-        gameState.timerSeconds = 0;
+    if (haendelser.includes('server-fortrudt')) {
         if (gameState.timerInterval) {
             clearInterval(gameState.timerInterval);
             gameState.timerInterval = null;
         }
         updateDisplay();
         await performSave();  // Save immediately so TV sees the change
-        console.log('Server selection reset');
         return;
     }
 
-    // Check if there's history to undo
-    if (gameState.history.length === 0) {
-        showMessage('Fortryd', 'Der er ingen handlinger at fortryde.');
-        return;
-    }
-
-    // Pop last state from history
-    const previousState = gameState.history.pop();
-
-    // Fortrydes sætbolden mens sætpausen stadig kører, skal pausen annulleres —
-    // ellers fyrer dens callback (resetScores + switchSides) senere oven i den
-    // gendannede tilstand og bytter score/navne.
-    if (gameState.restBreakActive) {
+    // Blev sætbolden fortrudt under sætpausen, er pausen annulleret — stop
+    // nedtællingen uden at næste sæt begynder
+    if (varPause) {
         gameState.restBreakCallback = null;
         await endRestBreak();
-    }
-
-    // Restore all game state from snapshot
-    gameState.player1.name = previousState.player1.name;
-    gameState.player1.name2 = previousState.player1.name2;
-    gameState.player1.score = previousState.player1.score;
-    gameState.player1.games = previousState.player1.games;
-    gameState.player2.name = previousState.player2.name;
-    gameState.player2.name2 = previousState.player2.name2;
-    gameState.player2.score = previousState.player2.score;
-    gameState.player2.games = previousState.player2.games;
-
-    gameState.sidesManuallySwitched = previousState.sidesManuallySwitched || false;
-    gameState.restBreakTaken = previousState.restBreakTaken || false;
-
-    gameState.servingPlayer = previousState.servingPlayer;
-    gameState.servingTeam = previousState.servingTeam;
-    gameState.servingPlayerOnTeam = previousState.servingPlayerOnTeam;
-
-    // Restore player positions (important for doubles)
-    gameState.team1RightCourt = previousState.team1RightCourt;
-    gameState.team2RightCourt = previousState.team2RightCourt;
-
-    gameState.betweenSets = previousState.betweenSets;
-    gameState.decidingGameSwitched = previousState.decidingGameSwitched;
-    gameState.timerSeconds = previousState.timerSeconds;
-    gameState.isActive = previousState.isActive;
-
-    // Genåbn en afsluttet kamp hvis point-vindet fortrydes (misklik): gendan
-    // afslutnings-flag, sluttidspunkt og sæthistorik fra snapshottet, så man kan
-    // spille videre til det rigtige resultat.
-    gameState.matchCompleted = previousState.matchCompleted || false;
-    gameState.matchEndTime = previousState.matchEndTime || null;
-    if (Array.isArray(previousState.setScoresHistory)) {
-        gameState.setScoresHistory = previousState.setScoresHistory;
     }
 
     // Kampen kører igen — genstart uret hvis det var stoppet ved kampafslutning
@@ -2011,11 +1638,8 @@ async function undoLastAction() {
     // frigav wake lock'en, så genanskaf den hvis kampen kører igen.
     if (matchIsLive() && !_wakeLock) acquireWakeLock();
 
-    // Update display and save restored state
     updateDisplay();
     saveGameState();
-
-    console.log('Undid last action, history size:', gameState.history.length);
 }
 
 async function startMatch() {
@@ -2026,10 +1650,9 @@ async function startMatch() {
         return;
     }
 
-    gameState.matchStartTime = Date.now();
+    if (!TaellerRegler.startKamp(gameState, Date.now()).ok) return;   // allerede i gang
     gameState._sendStartNow = true; // serveren stempler starttiden med sit eget ur
     anchorTimer(0);
-    gameState.isActive = true;
     document.getElementById('holdkampPanel').style.display = 'none';
     updateDisplay();
     startTimer();
@@ -2606,14 +2229,6 @@ function showRestBreakOverlay() {
     overlay.style.display = 'flex';
 }
 
-function checkRestBreak() {
-    if (gameState.restBreakTaken || gameState.restBreakActive) return;
-    const breakPoint = gameState.gameMode === '21' ? 11 : 8;
-    if (gameState.player1.score === breakPoint || gameState.player2.score === breakPoint) {
-        startRestBreak();
-    }
-}
-
 // Message overlay functions (replaces alert/confirm dialogs)
 // options.bodyHtml: hvis sat, indsaettes som innerHTML i stedet for text — bruges
 // af showMatchWonMessage for at rendere en struktureret saet-tabel.
@@ -3144,7 +2759,7 @@ async function saveMatchResult(winner, loser, winnerGames, loserGames, winnerKey
     };
 
     // Fang state-oplysninger med det samme og nulstil assigned-IDs straks.
-    // saveMatchResult køres IKKE-afventet fra checkGameWin, så clearCourt() kan
+    // saveMatchResult køres IKKE-afventet fra kampVundet, så clearCourt() kan
     // køre parallelt og overskrive de globale assigned-vars inden vi når at rapportere.
     let capturedGameId = assignedHoldkampGameId;
     let capturedTeamMatch = activeTeamMatch;
