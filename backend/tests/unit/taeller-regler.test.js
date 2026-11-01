@@ -46,7 +46,7 @@ test('tælleren regner som tabletten — efter hvert tryk i kampene fra tablet-s
 });
 
 test('single 21: serv, pause ved 11, sæt, sideskift og kampslut', () => {
-    const st = regler.nyKamp({ navne: { p1: 'Anna', p2: 'Bo' } });
+    const st = regler.nyKamp({ navne: { p1: 'Anna', p2: 'Bo' }, gameMode: '21' });
     assert.equal(regler.point(st, 1).ok, false);          // ingen server valgt
     regler.vaelgServer(st, 2);
     for (let i = 0; i < 10; i++) regler.point(st, 1, NU);
@@ -80,7 +80,7 @@ test('afgørende sæt: siderne skiftes ved 11 (8 i 15/21), og 29-29 afgøres ved
     assert.equal(st.player2.name, foer);
     assert.equal(st.player2.score, 8);
 
-    const lang = regler.nyKamp({});
+    const lang = regler.nyKamp({ gameMode: '21' });
     regler.vaelgServer(lang, 1);
     for (let i = 0; i < 29; i++) { regler.point(lang, 1, NU); regler.point(lang, 2, NU); if (lang.restBreakActive) regler.afslutPause(lang); }
     assert.equal(lang.player1.score, 29);
@@ -89,7 +89,7 @@ test('afgørende sæt: siderne skiftes ved 11 (8 i 15/21), og 29-29 afgøres ved
 });
 
 test('golden set: ét sæt afgør kampen', () => {
-    const st = regler.nyKamp({ setsToWin: 1, navne: { p1: 'A', p2: 'B' } });
+    const st = regler.nyKamp({ setsToWin: 1, navne: { p1: 'A', p2: 'B' }, gameMode: '21' });
     // Golden set er afgørende fra første bold: siderne skiftes ved 11, så
     // point gives efter navn
     const tilB = () => regler.point(st, st.player1.name === 'B' ? 1 : 2, NU);
@@ -134,7 +134,7 @@ test('fortryd: kun serveren valgt fortryder valget; højst 20 tryk tilbage', () 
 });
 
 test('"Skift side" kun før kampen (og efter den), og fortryd hen over et sideskift', () => {
-    const st = regler.nyKamp({ isDoubles: true, navne: { p1: 'A', p1b: 'a', p2: 'B', p2b: 'b' } });
+    const st = regler.nyKamp({ isDoubles: true, navne: { p1: 'A', p1b: 'a', p2: 'B', p2b: 'b' }, gameMode: '21' });
     regler.bytPladser(st, 1);                              // a i højre hos hold 1
     regler.vaelgServer(st, 1);
     assert.equal(regler.skiftSide(st).ok, true);
@@ -156,7 +156,7 @@ test('"Skift side" kun før kampen (og efter den), og fortryd hen over et sidesk
 });
 
 test('sætbold og matchbold', () => {
-    const st = regler.nyKamp({ navne: { p1: 'A', p2: 'B' } });
+    const st = regler.nyKamp({ navne: { p1: 'A', p2: 'B' }, gameMode: '21' });
     assert.deepEqual(regler.boldpoint(st), { player1: null, player2: null });   // ingen server
     regler.vaelgServer(st, 1);
     for (let i = 0; i < 20; i++) regler.point(st, 1, NU);
@@ -178,13 +178,14 @@ test('sætbold og matchbold', () => {
     assert.deepEqual(regler.boldpoint(st), { player1: 'match', player2: null });
 });
 
-test('en tilstand uden spilletype regnes til 21, som nyKamp og tabletten', () => {
+test('15/21 er standarden: en tilstand uden spilletype regnes til 15, som resten af systemet', () => {
     const st = regler.nyKamp({});
+    assert.equal(st.gameMode, '15');
     delete st.gameMode;
-    assert.deepEqual(regler.saetGraense(st), { vind: 21, maks: 30 });
-    assert.equal(regler.midtpunkt(st), 11);
+    assert.deepEqual(regler.saetGraense(st), { vind: 15, maks: 21 });
+    assert.equal(regler.midtpunkt(st), 8);
     st.player1.score = 15; st.player2.score = 3;
-    assert.equal(regler.erSaetAfgjort(st), false);
-    assert.equal(regler.nyKamp({ gameMode: '15' }).gameMode, '15');
-    assert.equal(regler.nyKamp({ gameMode: 'x' }).gameMode, '21');
+    assert.equal(regler.erSaetAfgjort(st), true);
+    assert.equal(regler.nyKamp({ gameMode: '21' }).gameMode, '21');
+    assert.equal(regler.nyKamp({ gameMode: 'x' }).gameMode, '15');
 });

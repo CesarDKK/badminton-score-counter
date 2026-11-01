@@ -335,7 +335,7 @@ let gameState = {
     currentCourt: courtId,
     isActive: false,
     isDoubles: false,
-    gameMode: '21',
+    gameMode: '15',   // standarden i hele systemet — overskrives af settings/banens tilstand ved indlæsning
     decidingGameSwitched: false,
     // True når brugeren manuelt har trykket "Skift side" og swappet player1/player2.
     // Beskytter swap'et mod at blive overskrevet af sync-loopet mens en holdkamp/

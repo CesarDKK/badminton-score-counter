@@ -28,9 +28,10 @@
 
     const HISTORIK_MAKS = 20;
 
-    // Spilletypen: 21/30 er standard (som nyKamp og tabletten) — kun '15' giver
-    // 15/21, så en gemt tilstand uden gameMode regnes til 21
-    const kort = (st) => st.gameMode === '15';
+    // Spilletypen: 15/21 er standard i hele systemet (settings, courts, tablet,
+    // TV, resultat-indtastning) — kun '21' giver 21/30, så en gemt tilstand
+    // uden gameMode regnes til 15
+    const kort = (st) => st.gameMode !== '21';
     // Point i et sæt og loftet: 21/30 eller 15/21
     const saetGraense = (st) => (kort(st) ? { vind: 15, maks: 21 } : { vind: 21, maks: 30 });
     // Pause og sideskift i afgørende sæt ved 11 (21/30) eller 8 (15/21)
@@ -42,12 +43,12 @@
     const PAUSE_11 = { sek: 60, titel: 'Pause 1 minut', taget: true };
     const PAUSE_SAET = { sek: 120, titel: 'Pause mellem Sæt - 2 Minutter', taget: false };
 
-    function nyKamp({ navne = {}, isDoubles = false, gameMode = '21', setsToWin = 2 } = {}) {
+    function nyKamp({ navne = {}, isDoubles = false, gameMode = '15', setsToWin = 2 } = {}) {
         return {
             player1: { name: navne.p1 || 'Spiller 1', name2: navne.p1b || 'Makker 1', score: 0, games: 0 },
             player2: { name: navne.p2 || 'Spiller 2', name2: navne.p2b || 'Makker 2', score: 0, games: 0 },
             isDoubles: !!isDoubles,
-            gameMode: gameMode === '15' ? '15' : '21',
+            gameMode: gameMode === '21' ? '21' : '15',
             setsToWin: setsToWin === 1 ? 1 : 2,
             isActive: false,
             matchStartTime: null,
