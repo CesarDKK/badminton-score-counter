@@ -1,7 +1,9 @@
-// Serverens pointregler (taeller/regler.js) mod tabletten: kampene i
-// data/taeller-kampe.json er spillet på den rigtige tablet-side af
-// scripts/taeller-sammenlign.js, og tilstanden skal være den samme efter hvert
-// tryk. Ændres tablettens regler, køres scriptet igen.
+// Pointreglerne (taeller/regler.js) mod tabletten: kampene i
+// data/taeller-kampe.json blev spillet på den rigtige tablet-side, FØR den selv
+// kom til at regne med reglerne (scripts/taeller-sammenlign.js), og tilstanden
+// skal være den samme efter hvert tryk. Filen er facit for reglerne — en ny
+// optagelse laves kun ved en bevidst regelændring, og så gennemgås diffen af
+// "slut"-linjerne.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -16,6 +18,7 @@ function anvend(st, h, nu) {
     const n = Number(h[1]);
     switch (h[0]) {
         case 'S': return regler.vaelgServer(st, n);
+        case 'V': return regler.skiftSide(st);
         case 'X': return regler.bytPladser(st, n);
         case 'P': return regler.point(st, n, nu);
         case 'K': return regler.startKamp(st, nu);
@@ -128,4 +131,60 @@ test('fortryd: kun serveren valgt fortryder valget; højst 20 tryk tilbage', () 
     let n = 0;
     while (regler.fortryd(st).ok && n < 100) n++;
     assert.equal(n, regler.HISTORIK_MAKS);
+});
+
+test('"Skift side" kun før kampen (og efter den), og fortryd hen over et sideskift', () => {
+    const st = regler.nyKamp({ isDoubles: true, navne: { p1: 'A', p1b: 'a', p2: 'B', p2b: 'b' } });
+    regler.bytPladser(st, 1);                              // a i højre hos hold 1
+    regler.vaelgServer(st, 1);
+    assert.equal(regler.skiftSide(st).ok, true);
+    assert.equal(st.player1.name, 'B');
+    assert.equal(st.servingTeam, 2);                       // serven følger med holdet
+    assert.equal(st.team2RightCourt, 1);                   // spejlet: a står nu i venstre
+    assert.equal(st.servingPlayerOnTeam, 2);
+    regler.point(st, 2, NU);                               // A&a (nu side 2) vinder bolden
+    assert.equal(regler.skiftSide(st).ok, false);          // kampen er i gang
+    assert.equal(st.player2.score, 1);
+    regler.fortryd(st);
+    assert.equal(st.player1.name, 'B');                    // sideskiftet før kampen bliver stående
+    assert.equal(st.player2.score, 0);
+    for (let i = 0; i < 21; i++) regler.point(st, 2, NU);
+    regler.afslutPause(st);
+    for (let i = 0; i < 21; i++) regler.point(st, 1, NU);
+    assert.equal(st.matchCompleted, true);
+    assert.equal(regler.skiftSide(st).ok, true);           // efter kampen er slut
+});
+
+test('sætbold og matchbold', () => {
+    const st = regler.nyKamp({ navne: { p1: 'A', p2: 'B' } });
+    assert.deepEqual(regler.boldpoint(st), { player1: null, player2: null });   // ingen server
+    regler.vaelgServer(st, 1);
+    for (let i = 0; i < 20; i++) regler.point(st, 1, NU);
+    regler.afslutPause(st);                                // pausen ved 11 (point tæller videre)
+    assert.deepEqual(regler.boldpoint(st), { player1: 'set', player2: null });
+    regler.point(st, 2, NU);
+    for (let i = 0; i < 19; i++) regler.point(st, 2, NU);  // 20-20
+    assert.deepEqual(regler.boldpoint(st), { player1: null, player2: null });
+    regler.point(st, 2, NU);                               // 20-21
+    assert.deepEqual(regler.boldpoint(st), { player1: null, player2: 'set' });
+    for (let i = 0; i < 8; i++) { regler.point(st, 1, NU); regler.point(st, 2, NU); }   // 28-29
+    assert.deepEqual(regler.boldpoint(st), { player1: null, player2: 'set' });
+    regler.point(st, 1, NU);                               // 29-29: 30 er loftet, begge til sætbold
+    assert.deepEqual(regler.boldpoint(st), { player1: 'set', player2: 'set' });
+    assert.deepEqual(regler.point(st, 2, NU).haendelser, ['saet']);   // 29-30
+    regler.afslutPause(st);                                // B står nu som player1 med 1 sæt
+    for (let i = 0; i < 20; i++) regler.point(st, 1, NU);
+    if (st.restBreakActive) regler.afslutPause(st);
+    assert.deepEqual(regler.boldpoint(st), { player1: 'match', player2: null });
+});
+
+test('en tilstand uden spilletype regnes til 21, som nyKamp og tabletten', () => {
+    const st = regler.nyKamp({});
+    delete st.gameMode;
+    assert.deepEqual(regler.saetGraense(st), { vind: 21, maks: 30 });
+    assert.equal(regler.midtpunkt(st), 11);
+    st.player1.score = 15; st.player2.score = 3;
+    assert.equal(regler.erSaetAfgjort(st), false);
+    assert.equal(regler.nyKamp({ gameMode: '15' }).gameMode, '15');
+    assert.equal(regler.nyKamp({ gameMode: 'x' }).gameMode, '21');
 });

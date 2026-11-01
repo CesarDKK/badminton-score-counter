@@ -303,10 +303,9 @@ let isTournamentMode = false;
 let activeTeamMatch = null;
 let assignedHoldkampGameId = null;
 
-// Sæt der skal vindes: 2 — men 1 i golden set (holdkamp, § 7 stk. 1 e), som er
+// gameState.setsToWin: 2 — men 1 i golden set (holdkamp, § 7 stk. 1 e), som er
 // ét sæt spillet som et 3. sæt. Sættes ud fra den bundne delkamps kategori
 // (applyHoldkampGameToState og holdkamp-synken) og nulstilles ved afbinding.
-function saetForSejr() { return (typeof gameState !== "undefined" && gameState.setsToWin) || 2; }
 let holdkampSelectFocused = false; // true mens delkamp-dropdownen er i fokus/aaben
 let holdkampMatches = []; // alle aktive holdkampe (cache til de to dropdowns)
 
@@ -469,10 +468,7 @@ function setupEventListeners() {
     // Settings menu
     document.getElementById('settingsBtn').addEventListener('click', openSettingsMenu);
     document.getElementById('closeSettingsBtn').addEventListener('click', closeSettingsMenu);
-    document.getElementById('switchSidesCourtBtn').addEventListener('click', () => {
-        if (gameState.matchStartTime && !gameState.matchEndTime) return;
-        switchSides();
-    });
+    document.getElementById('switchSidesCourtBtn').addEventListener('click', switchSides);
     document.getElementById('doublesToggle').addEventListener('click', () => {
         toggleDoubles();
         closeSettingsMenu();
@@ -683,24 +679,18 @@ let _lastPointTime = 0;
 let _lastPointPlayer = null;
 
 function addPoint(player) {
-    // Afgjort kamp, sætpausen eller ingen server: reglerne afviser pointet, og
-    // dobbelttryk-værnet skal ikke huske et afvist tryk
-    if (gameState.matchCompleted || !gameState.servingPlayer ||
-        (gameState.restBreakActive && erSaetAfgjort())) {
-        return;
-    }
-
     const now = Date.now();
     if (player === _lastPointPlayer && (now - _lastPointTime) < 250) {
         return;
     }
-    _lastPointTime = now;
-    _lastPointPlayer = player;
 
     // Reglerne (serv, pause, sideskift, sæt og kamp) ligger i TaellerRegler —
-    // her vises det, der skete
-    const { ok, haendelser } = TaellerRegler.point(gameState, player, now);
+    // her vises det, der skete. Et afvist tryk (afgjort kamp, sætpausen, ingen
+    // server) skal dobbelttryk-værnet ikke huske
+    const { ok, haendelser, vinder } = TaellerRegler.point(gameState, player, now);
     if (!ok) return;
+    _lastPointTime = now;
+    _lastPointPlayer = player;
 
     if (haendelser.includes('start')) {
         gameState._sendStartNow = true; // serveren stempler starttiden med sit eget ur
@@ -718,12 +708,11 @@ function addPoint(player) {
     // sync-loopet nå at rulle det tilbage
     if (haendelser.includes('sideskift')) {
         performSave();
-        const midt = gameState.gameMode === '21' ? 11 : 8;
-        showMessage('Skift Sider!', `Point har nået ${midt} i afgørende sæt. Spillere har skiftet side!`);
+        showMessage('Skift Sider!', `Point har nået ${TaellerRegler.midtpunkt(gameState)} i afgørende sæt. Spillere har skiftet side!`);
     }
 
-    if (haendelser.includes('kamp')) kampVundet();
-    else if (haendelser.includes('saet')) saetVundet();
+    if (haendelser.includes('kamp')) kampVundet(vinder);
+    else if (haendelser.includes('saet')) saetVundet(vinder);
 
     updateDisplay();
     flashPointFeedback(player);
@@ -761,38 +750,10 @@ function flashPointFeedback(player) {
     }
 }
 
-// Boldpoint-status (punkt 3): returnerer 'match' | 'set' | null for hver spiller.
-// En spiller er til boldpoint hvis ét point mere opfylder vinderbetingelsen
-// (jf. TaellerRegler.point). Er det deres 2. sæt (games === 1) er det matchbold, ellers sætbold.
-function getBoldpointState() {
-    const none = { player1: null, player2: null };
-
-    // Kun relevant under en aktiv duel — ikke før server er valgt, mellem sæt eller når kampen er slut
-    const serverSelected = gameState.isDoubles ? gameState.servingTeam : gameState.servingPlayer;
-    if (!serverSelected || !gameState.matchStartTime || gameState.matchEndTime ||
-        gameState.matchCompleted || gameState.betweenSets) {
-        return none;
-    }
-
-    const winScore = gameState.gameMode === '21' ? 21 : 15;
-    const maxScore = gameState.gameMode === '21' ? 30 : 21;
-
-    const evaluate = (p, o) => {
-        const next = p.score + 1;
-        const wins = (next >= winScore && next - o.score >= 2) || next === maxScore;
-        if (!wins) return null;
-        return p.games === saetForSejr() - 1 ? 'match' : 'set';
-    };
-
-    return {
-        player1: evaluate(gameState.player1, gameState.player2),
-        player2: evaluate(gameState.player2, gameState.player1)
-    };
-}
-
-// Opdater score-fremhævning + label ud fra boldpoint-status
+// Opdater score-fremhævning + label ud fra boldpoint-status (punkt 3):
+// 'match' | 'set' | null pr. spiller — reglerne i TaellerRegler.boldpoint
 function updateBoldpointIndicator() {
-    const state = getBoldpointState();
+    const state = TaellerRegler.boldpoint(gameState);
     const sides = [
         { key: 'player1', scoreId: 'player1PointScore', labelId: 'player1Boldpoint' },
         { key: 'player2', scoreId: 'player2PointScore', labelId: 'player2Boldpoint' }
@@ -819,17 +780,11 @@ function updateBoldpointIndicator() {
     });
 }
 
-// Hvem vandt det netop afsluttede sæt: 'player1'/'player2' som de står nu
-// (siderne byttes først, når sætpausen slutter)
-function saetVinder() {
-    const sidste = gameState.setScoresHistory[gameState.setScoresHistory.length - 1];
-    const [a, b] = String((sidste && sidste.score) || '0-0').split('-').map(Number);
-    return a > b ? ['player1', 'player2'] : ['player2', 'player1'];
-}
-
-// Kampen er vundet (reglerne har sat matchCompleted og sluttiden)
-function kampVundet() {
-    const [winnerKey, loserKey] = saetVinder();
+// Kampen er vundet af side 1 eller 2, som de står nu (reglerne har sat
+// matchCompleted og sluttiden; siderne byttes først, når sætpausen slutter)
+function kampVundet(vinder) {
+    const winnerKey = vinder === 1 ? 'player1' : 'player2';
+    const loserKey = vinder === 1 ? 'player2' : 'player1';
     const winner = gameState[winnerKey];
     const loser = gameState[loserKey];
     // Frys den forløbne tid og stop interval'et — tiden ændrer sig ikke mere,
@@ -859,8 +814,8 @@ function kampVundet() {
 // Et sæt er vundet, men ikke kampen: reglerne har sat sætpausen (2 min), her
 // tælles den ned i baggrunden og vises på "Fortsæt". Næste sæt begynder, når
 // den slutter (naesteSaet)
-function saetVundet() {
-    const winner = gameState[saetVinder()[0]];
+function saetVundet(vinder) {
+    const winner = vinder === 1 ? gameState.player1 : gameState.player2;
     const winnerNames = formatPlayerNames(winner.name, winner.name2);
     startRestBreak(TaellerRegler.PAUSE_SAET.sek, TaellerRegler.PAUSE_SAET.titel, naesteSaet, false);
     showMessage(
@@ -946,9 +901,10 @@ function showDoublesPositionMessage() {
     );
 }
 
-// "Skift side" før kampen (knappen på banen): begge hold bytter banehalvdel
+// "Skift side" (knappen på banen), kun før kampen eller efter den er slut:
+// begge hold bytter banehalvdel
 function switchSides() {
-    TaellerRegler.skiftSider(gameState);
+    if (!TaellerRegler.skiftSide(gameState).ok) return;
     updateDisplay();
     // Øjeblikkelig save (ingen debounce) — ellers kan sync-loopet ramme det 500ms-vindue
     // hvor serveren stadig har de gamle navne og overskrive det netop gennemførte swap
@@ -2163,9 +2119,8 @@ async function startRestBreak(duration = 60, title = 'Pause 1 minut', callback =
     gameState.restBreakDuration = duration;
     gameState.restBreakSecondsLeft = duration;
     gameState.restBreakTitle = title;
-    if (duration === 60) {
-        gameState.restBreakTaken = true; // Only set this for 11-point break
-    }
+    // restBreakTaken (pausen ved 11 er taget) sættes af reglerne (TaellerRegler.point)
+    // og af genoptagPause — ikke her
 
     const overlay = document.getElementById('restBreakOverlay');
     const timerDisplay = document.getElementById('restBreakTimer');
@@ -2607,7 +2562,7 @@ function resultNumpadKey(key) {
         resultForm.values[i] = resultForm.fresh ? '' : resultForm.values[i].slice(0, -1);
         resultForm.fresh = false;
     } else {
-        const maks = gameState.gameMode === '21' ? 30 : 21;
+        const { maks } = TaellerRegler.saetGraense(gameState);
         let tal = resultForm.fresh ? key : resultForm.values[i] + key;
         if (Number(tal) > maks || tal.length > 2) tal = key; // kan ikke være et point-tal → start forfra
         tal = String(Number(tal));

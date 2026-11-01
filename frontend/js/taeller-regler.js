@@ -10,7 +10,9 @@
  * 11 (8 i 15/21), sæt, sideskift i afgørende sæt, golden set, pladsbyt og
  * fortryd (20 tryk). backend/tests/unit/taeller-regler.test.js afspiller kampe,
  * der blev spillet på tabletten FØR flytningen (scripts/taeller-sammenlign.js),
- * og kræver samme tilstand efter hvert tryk.
+ * og kræver samme tilstand efter hvert tryk. De optagne kampe er facit for
+ * reglerne — tabletten regner nu selv med denne fil, så en ny optagelse
+ * sammenligner ikke længere med noget uafhængigt.
  *
  * Tilstanden har tablettens feltnavne (player1/player2, servingTeam, ...), så
  * den gemmes i game_states og vises af TV, Oversigt og tablet uden ændringer.
@@ -26,15 +28,19 @@
 
     const HISTORIK_MAKS = 20;
 
+    // Spilletypen: 21/30 er standard (som nyKamp og tabletten) — kun '15' giver
+    // 15/21, så en gemt tilstand uden gameMode regnes til 21
+    const kort = (st) => st.gameMode === '15';
     // Point i et sæt og loftet: 21/30 eller 15/21
-    const saetGraense = (st) => (st.gameMode === '21' ? { vind: 21, maks: 30 } : { vind: 15, maks: 21 });
+    const saetGraense = (st) => (kort(st) ? { vind: 15, maks: 21 } : { vind: 21, maks: 30 });
     // Pause og sideskift i afgørende sæt ved 11 (21/30) eller 8 (15/21)
-    const midtpunkt = (st) => (st.gameMode === '21' ? 11 : 8);
+    const midtpunkt = (st) => (kort(st) ? 8 : 11);
     // Sæt der skal vindes: 2 — 1 i golden set (holdkamp, § 7 stk. 1 e)
     const saetForSejr = (st) => st.setsToWin || 2;
 
-    const PAUSE_11 = { sek: 60, titel: 'Pause 1 minut' };
-    const PAUSE_SAET = { sek: 120, titel: 'Pause mellem Sæt - 2 Minutter' };
+    // taget: pausen ved 11 tages én gang pr. sæt (restBreakTaken)
+    const PAUSE_11 = { sek: 60, titel: 'Pause 1 minut', taget: true };
+    const PAUSE_SAET = { sek: 120, titel: 'Pause mellem Sæt - 2 Minutter', taget: false };
 
     function nyKamp({ navne = {}, isDoubles = false, gameMode = '21', setsToWin = 2 } = {}) {
         return {
@@ -71,9 +77,8 @@
     const vend = (n) => (n === 1 ? 2 : 1);
 
     function erSaetAfgjort(st) {
-        const { vind, maks } = saetGraense(st);
         const a = (st.player1 && st.player1.score) || 0, b = (st.player2 && st.player2.score) || 0;
-        return (a >= vind && a - b >= 2) || a === maks || (b >= vind && b - a >= 2) || b === maks;
+        return vinderMed(st, a, b) || vinderMed(st, b, a);
     }
 
     function gemHistorik(st) {
@@ -98,13 +103,31 @@
         if (st.history.length > HISTORIK_MAKS) st.history.shift();
     }
 
-    function startPause(st, { sek, titel }, nu) {
+    function startPause(st, { sek, titel, taget }, nu) {
         st.restBreakActive = true;
         st.restBreakStartedAt = nu;
         st.restBreakDuration = sek;
         st.restBreakSecondsLeft = sek;
         st.restBreakTitle = titel;
-        if (sek === 60) st.restBreakTaken = true;   // kun pausen ved 11
+        if (taget) st.restBreakTaken = true;
+    }
+
+    // Vandt side a sættet med ét point mere? (a/b er pointene som de står)
+    const vinderMed = (st, a, b) => {
+        const { vind, maks } = saetGraense(st);
+        return (a >= vind && a - b >= 2) || a === maks;
+    };
+
+    // Sætbold/matchbold: 'set' | 'match' | null pr. side. Kun i en duel — ikke
+    // før serveren er valgt, mellem sæt eller når kampen er slut
+    function boldpoint(st) {
+        const serverValgt = st.isDoubles ? st.servingTeam : st.servingPlayer;
+        if (!serverValgt || !st.matchStartTime || st.matchEndTime || st.matchCompleted || st.betweenSets) {
+            return { player1: null, player2: null };
+        }
+        const bold = (p, o) => (vinderMed(st, p.score + 1, o.score)
+            ? (p.games === saetForSejr(st) - 1 ? 'match' : 'set') : null);
+        return { player1: bold(st.player1, st.player2), player2: bold(st.player2, st.player1) };
     }
 
     // Begge hold skifter banehalvdel: navne, point, sæt, serv og (double) pladser
@@ -121,6 +144,13 @@
             st.team2RightCourt = vend(t1);
         }
         st.sidesManuallySwitched = true;
+    }
+
+    // "Skift side"-knappen: kun før kampen er i gang (eller efter den er slut)
+    function skiftSide(st) {
+        if (st.matchStartTime && !st.matchEndTime) return { ok: false, haendelser: [] };
+        skiftSider(st);
+        return { ok: true, haendelser: [] };
     }
 
     // Double: serveren står i højre side ved lige point, venstre ved ulige
@@ -191,9 +221,10 @@
         return { ok: true, haendelser: ['start'] };
     }
 
-    // Point til side 1 eller 2 (player1/player2, som de står nu)
+    // Point til side 1 eller 2 (player1/player2, som de står nu). vinder: den
+    // side, der netop vandt sættet eller kampen (hændelsen 'saet'/'kamp'), ellers null
     function point(st, side, nu = Date.now()) {
-        const nej = { ok: false, haendelser: [] };
+        const nej = { ok: false, haendelser: [], vinder: null };
         if (st.matchCompleted || (side !== 1 && side !== 2)) return nej;
         if (st.restBreakActive && erSaetAfgjort(st)) return nej;   // sætpausen: sættet er vundet
         if (!st.servingPlayer) return nej;
@@ -237,10 +268,8 @@
             haendelser.push('sideskift');
         }
 
-        const { vind, maks } = saetGraense(st);
         const a = st.player1.score, b = st.player2.score;
-        const vinder = (a >= vind && a - b >= 2) || a === maks ? 1
-            : (b >= vind && b - a >= 2) || b === maks ? 2 : 0;
+        const vinder = vinderMed(st, a, b) ? 1 : vinderMed(st, b, a) ? 2 : null;
         if (vinder) {
             st.setScoresHistory.push({
                 player1Name: st.player1.name,
@@ -260,7 +289,7 @@
                 haendelser.push('saet');
             }
         }
-        return { ok: true, haendelser };
+        return { ok: true, haendelser, vinder };
     }
 
     // Pausen slutter (tiden er gået, eller den springes over). Var det sætpausen,
@@ -348,8 +377,9 @@
     }
 
     return {
-            HISTORIK_MAKS, PAUSE_11, PAUSE_SAET,
-            nyKamp, erSaetAfgjort, vaelgServer, startKamp, point, afslutPause, nytSaet, skiftSider,
-            bytPladser, fortryd, signatur
-        };
+        HISTORIK_MAKS, PAUSE_11, PAUSE_SAET,
+        saetGraense, midtpunkt, erSaetAfgjort, boldpoint,
+        nyKamp, vaelgServer, startKamp, point, afslutPause, nytSaet, skiftSide, skiftSider,
+        bytPladser, fortryd, signatur
+    };
 });

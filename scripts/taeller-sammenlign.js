@@ -1,10 +1,16 @@
 #!/usr/bin/env node
-// Sammenligner serverens pointregler (backend/taeller/regler.js) med den rigtige
+// Sammenligner pointreglerne (backend/taeller/regler.js) med den rigtige
 // tablet-side (frontend/court-script-v3.js): mange tilfældige kampe spilles på
 // begge, og tilstanden skal være den samme efter hvert tryk. Kampene og
 // tablettens tilstand efter hvert tryk gemmes i
-// backend/tests/unit/data/taeller-kampe.json, som unit-testen afspiller — kør
-// scriptet igen, når tablettens regler ændres.
+// backend/tests/unit/data/taeller-kampe.json, som unit-testen afspiller.
+//
+// Den gemte fil blev optaget, FØR tabletten selv kom til at regne med reglerne,
+// og er facit for dem. Tabletten bruger nu samme fil, så en ny optagelse
+// sammenligner reglerne med sig selv — den viser kun, at tablettens kobling
+// (tryk, pauser, fortryd) stadig passer. Optag kun igen ved en bevidst
+// regelændring, og gennemgå diffen af "slut"-linjerne. --afspil er den daglige
+// brug: de gemte kampe på den nuværende tablet.
 //
 // Kræver en kørende installation (fx scripts/cloud-test-deploy.sh) og
 // Playwright med Chromium:
@@ -68,6 +74,7 @@ function naesteHandling(st, r, styrke) {
         if (x < 0.7) return 'B';
     }
     if (st.isDoubles && st.betweenSets && r() < 0.25) return r() < 0.5 ? 'X1' : 'X2';
+    if (!st.matchStartTime && r() < 0.1) return 'V';   // "Skift side" før kampen
     if (!st.matchStartTime && r() < 0.2) return 'K';
     const x = r();
     if (x < 0.05) return 'U';
@@ -77,6 +84,7 @@ function naesteHandling(st, r, styrke) {
 function anvend(st, h, nu) {
     switch (h) {
         case 'S1': case 'S2': return regler.vaelgServer(st, Number(h[1]));
+        case 'V': return regler.skiftSide(st);
         case 'X1': case 'X2': return regler.bytPladser(st, Number(h[1]));
         case 'P1': case 'P2': return regler.point(st, Number(h[1]), nu);
         case 'K': return regler.startKamp(st, nu);
@@ -136,6 +144,7 @@ async function main() {
     const tryk = async (h) => regler.signatur(await page.evaluate(async (h) => {
         _lastPointTime = 0;
         const kald = { S1: () => selectServer(1), S2: () => selectServer(2),
+            V: () => switchSides(),
             X1: () => swapPlayers(1), X2: () => swapPlayers(2),
             P1: () => addPoint(1), P2: () => addPoint(2),
             K: () => startMatch(), B: () => endRestBreak(), U: () => undoLastAction() }[h];
