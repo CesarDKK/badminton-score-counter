@@ -47,6 +47,12 @@ function formatStateRow(row, court) {
         restBreakActive: !!row.rest_break_active,
         restBreakSecondsLeft: row.rest_break_seconds_left || 0,
         restBreakTitle: row.rest_break_title || '',
+        // Resten af reglernes pausetilstand (migration 039): pausen ved 11 (8) er
+        // taget i sættet, og den kørende pauses start (tablettens ur, ms) og længde
+        restBreakTaken: !!row.rest_break_taken,
+        restBreakStartedAt: row.rest_break_started_at == null ? null : Number(row.rest_break_started_at),
+        restBreakDuration: row.rest_break_duration || 60,
+        sidesManuallySwitched: !!row.sides_manually_switched,
         setScoresHistory: parseSetScores(row.set_scores_history),
         matchStartTime: row.match_start_time,
         matchEndTime: row.match_end_time,
@@ -328,6 +334,10 @@ router.get('/:courtId', async (req, res, next) => {
                 restBreakActive: false,
                 restBreakSecondsLeft: 0,
                 restBreakTitle: '',
+                restBreakTaken: false,
+                restBreakStartedAt: null,
+                restBreakDuration: 60,
+                sidesManuallySwitched: false,
                 setScoresHistory: [],
                 matchStartTime: null,
                 matchEndTime: null,
@@ -469,6 +479,12 @@ router.put('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), asyn
         const restBreakActive = has('restBreakActive') ? (body.restBreakActive || false) : (existing ? !!existing.rest_break_active : false);
         const restBreakSecondsLeft = has('restBreakSecondsLeft') ? (body.restBreakSecondsLeft || 0) : (existing ? existing.rest_break_seconds_left : 0);
         const restBreakTitle = has('restBreakTitle') ? (body.restBreakTitle || '') : (existing ? (existing.rest_break_title || '') : '');
+        const restBreakTaken = has('restBreakTaken') ? !!body.restBreakTaken : (existing ? !!existing.rest_break_taken : false);
+        const restBreakStartedAt = has('restBreakStartedAt')
+            ? (body.restBreakStartedAt != null && Number.isFinite(Number(body.restBreakStartedAt)) ? Math.round(Number(body.restBreakStartedAt)) : null)
+            : (existing ? existing.rest_break_started_at : null);
+        const restBreakDuration = has('restBreakDuration') ? (Number(body.restBreakDuration) || 60) : (existing ? (existing.rest_break_duration || 60) : 60);
+        const sidesManuallySwitched = has('sidesManuallySwitched') ? !!body.sidesManuallySwitched : (existing ? !!existing.sides_manually_switched : false);
         const matchCompleted = has('matchCompleted') ? (body.matchCompleted || false) : (existing ? !!existing.match_completed : false);
         const servingPlayer = has('servingPlayer') ? (body.servingPlayer || null) : (existing ? existing.serving_player : null);
         const initialServer = has('initialServer') ? (body.initialServer || null) : (existing ? existing.initial_server : null);
@@ -546,6 +562,7 @@ router.put('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), asyn
             player2.name, player2.name2, player2.score, player2.games,
             timerSeconds, decidingGameSwitched,
             restBreakActive, restBreakSecondsLeft, restBreakTitle,
+            restBreakTaken, restBreakStartedAt, restBreakDuration, sidesManuallySwitched,
             setScoresHistoryJson, matchCompleted,
             servingPlayer, initialServer, servingTeam, servingPlayerOnTeam,
             team1RightCourt, team2RightCourt, betweenSets
@@ -591,6 +608,7 @@ router.put('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), asyn
                     player2_name = ?, player2_name2 = ?, player2_score = ?, player2_games = ?,
                     timer_seconds = ?, deciding_game_switched = ?,
                     rest_break_active = ?, rest_break_seconds_left = ?, rest_break_title = ?,
+                    rest_break_taken = ?, rest_break_started_at = ?, rest_break_duration = ?, sides_manually_switched = ?,
                     set_scores_history = ?, match_completed = ?,
                     serving_player = ?, initial_server = ?, serving_team = ?, serving_player_on_team = ?,
                     team1_right_court = ?, team2_right_court = ?, between_sets = ?,
@@ -618,11 +636,12 @@ router.put('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), asyn
                         player2_name, player2_name2, player2_score, player2_games,
                         timer_seconds, deciding_game_switched,
                         rest_break_active, rest_break_seconds_left, rest_break_title,
+                        rest_break_taken, rest_break_started_at, rest_break_duration, sides_manually_switched,
                         set_scores_history, match_completed,
                         serving_player, initial_server, serving_team, serving_player_on_team,
                         team1_right_court, team2_right_court, between_sets,
                         match_start_time, match_end_time, version
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${startExprInsert}, NULL, 1)`,
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${startExprInsert}, NULL, 1)`,
                     [court.id, ...columnValues, ...startParamsInsert]
                 );
             } catch (error) {

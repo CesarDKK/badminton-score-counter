@@ -873,19 +873,20 @@ function foelgServerEfterPause(s) {
     updateDisplay();
 }
 
-// Siden blev genindlæst midt i en pause (fx træk-ned-for-at-opdatere). Serveren
-// husker ikke pausens timer eller hvad der skal ske bagefter, så sætpausen
-// nulstillede aldrig sættet: 21-15 stod, og næste point afsluttede kampen.
+// Siden blev genindlæst midt i en pause (fx træk-ned-for-at-opdatere). Reglernes
+// pausetilstand er gemt på serveren, men nedtællingen og "hvad der sker
+// bagefter" lever i tabletten — uden dette nulstillede sætpausen aldrig
+// sættet: 21-15 stod, og næste point afsluttede kampen. Resten af pausen tages
+// fra det gemte sekundtal (gemmes hvert 10. sekund), ikke fra starttidspunktet:
+// overtages tællingen fra en anden enhed, er dens ur ikke vores.
 function genoptagPause() {
     if (serMed || !gameState.restBreakActive || gameState.restBreakInterval) return;
     const setVundet = erSaetAfgjort();
-    const tilbage = Math.max(0, Math.min(gameState.restBreakSecondsLeft || 0, 120));
-    const titel = gameState.restBreakTitle || (setVundet ? 'Pause mellem Sæt - 2 Minutter' : 'Pause 1 minut');
-    const taget = gameState.restBreakTaken;
+    const tilbage = Math.max(0, Math.min(gameState.restBreakSecondsLeft || 0, TaellerRegler.PAUSE_SAET.sek));
+    const titel = gameState.restBreakTitle || (setVundet ? TaellerRegler.PAUSE_SAET : TaellerRegler.PAUSE_11).titel;
     gameState.restBreakActive = false;
     if (tilbage > 0) {
         startRestBreak(tilbage, titel, setVundet ? naesteSaet : null, true);
-        gameState.restBreakTaken = taget || !setVundet;
     } else {
         if (setVundet) naesteSaet();
         performSave();
@@ -945,50 +946,14 @@ async function performClearCourtNow() {
     // Ny kamp starter altid liggende
     setStanding(false);
 
-    // Nulstil swap-flag når banen ryddes
-    gameState.sidesManuallySwitched = false;
-
     // Cancel any active rest break first
     if (gameState.restBreakActive) {
         gameState.restBreakCallback = null;
         await endRestBreak();
     }
 
-    // Stop timer if running
-    if (gameState.timerInterval) {
-        clearInterval(gameState.timerInterval);
-        gameState.timerInterval = null;
-    }
-
-    // Reset game state to defaults
-    gameState.player1.name = 'Spiller 1';
-    gameState.player1.name2 = 'Makker 1';
-    gameState.player1.score = 0;
-    gameState.player1.games = 0;
-
-    gameState.player2.name = 'Spiller 2';
-    gameState.player2.name2 = 'Makker 2';
-    gameState.player2.score = 0;
-    gameState.player2.games = 0;
-
-    gameState.matchStartTime = null;
-    gameState.matchEndTime = null;
-    gameState.timerSeconds = 0;
-    gameState.isActive = false;  // Set court as inactive
-    gameState.decidingGameSwitched = false;
-    gameState.matchCompleted = false;
-    gameState.setsToWin = 2; // en bundet golden set-delkamp sætter det igen via holdkamp-synken
-    gameState.resultOutcome = null;
-    gameState.resultWinner = null;
-    gameState.restBreakTaken = false;
-    gameState.servingPlayer = null;  // Reset serving player
-    gameState.initialServer = null;
-    gameState.servingTeam = null;  // Reset doubles serving state
-    gameState.servingPlayerOnTeam = null;
-    gameState.team1RightCourt = 1;  // Reset court positions
-    gameState.team2RightCourt = 1;
-    gameState.setScoresHistory = [];  // Clear set history so TV doesn't show old results
-    gameState.history = [];  // Clear undo history
+    // Banen er tom: ingen navne, ingen kamp
+    nulstilKamp();
     gameState.version = 0;  // Rækken slettes — næste save opretter forfra
 
     // Update display
@@ -1085,6 +1050,22 @@ async function loadGameState() {
     }
 }
 
+// Én måde at begynde en kamp på: reglernes nyKamp giver hele kamptilstanden
+// (point, sæt, serv, pladser, pause, fortryd), og tabletten lægger kun det
+// oveni, som ikke er kamp — det indtastede resultat og timeren. Spilletype og
+// single/double er banens og beholdes, medmindre andet gives. version og
+// planner-blokken rører den ikke: dem bestemmer den, der kalder.
+function nulstilKamp({ navne, isDoubles = gameState.isDoubles, gameMode = gameState.gameMode } = {}) {
+    if (gameState.timerInterval) {
+        clearInterval(gameState.timerInterval);
+        gameState.timerInterval = null;
+    }
+    // setsToWin bliver 2 — en bundet golden set-delkamp sætter det igen via holdkamp-synken
+    Object.assign(gameState, TaellerRegler.nyKamp({ navne, isDoubles, gameMode }));
+    gameState.resultOutcome = null;
+    gameState.resultWinner = null;
+}
+
 // Overtag banens tilstand fra serveren (GET, eller svaret på et indtastet resultat)
 function applyLoadedState(loaded) {
     gameState.player1 = loaded.player1;
@@ -1110,13 +1091,10 @@ function applyLoadedState(loaded) {
     gameState.restBreakActive = loaded.restBreakActive || false;
     gameState.restBreakSecondsLeft = loaded.restBreakSecondsLeft || 0;
     gameState.restBreakTitle = loaded.restBreakTitle || '';
-    // Serveren gemmer ikke restBreakTaken — er en af siderne nået pausepunktet,
-    // er pausen taget (ellers startede en ny 60 s-pause efter genindlæsning)
-    const pausePunkt = (loaded.gameMode || gameState.gameMode) === '21' ? 11 : 8;
-    gameState.restBreakTaken = loaded.restBreakTaken ||
-        Math.max(loaded.player1?.score || 0, loaded.player2?.score || 0) >= pausePunkt;
+    gameState.restBreakTaken = loaded.restBreakTaken || false;
     gameState.restBreakStartedAt = loaded.restBreakStartedAt || null;
     gameState.restBreakDuration = loaded.restBreakDuration || 60;
+    gameState.sidesManuallySwitched = loaded.sidesManuallySwitched || false;
 
     // Load serving state
     gameState.servingPlayer = loaded.servingPlayer || null;
@@ -1746,6 +1724,7 @@ function buildSavePayload() {
         restBreakTaken: gameState.restBreakTaken,
         restBreakStartedAt: gameState.restBreakStartedAt,
         restBreakDuration: gameState.restBreakDuration,
+        sidesManuallySwitched: gameState.sidesManuallySwitched,
         servingPlayer: gameState.servingPlayer,
         initialServer: gameState.initialServer,
         servingTeam: gameState.servingTeam,
@@ -1930,36 +1909,17 @@ async function adoptServerReset(loaded) {
         await endRestBreak();
     }
 
-    // Reset to loaded state
-    gameState.player1 = loaded.player1;
-    gameState.player2 = loaded.player2;
-    gameState.player1.score = 0;
-    gameState.player2.score = 0;
-    gameState.player1.games = 0;
-    gameState.player2.games = 0;
-    gameState.matchStartTime = null;
-    gameState.matchEndTime = null;
-    gameState.timerSeconds = 0;
-    gameState.isActive = false;
-    gameState.decidingGameSwitched = false;
-    gameState.sidesManuallySwitched = false;
-    gameState.matchCompleted = false;
-    gameState.setsToWin = 2; // en bundet golden set-delkamp sætter det igen via holdkamp-synken
-    gameState.restBreakTaken = false;
+    // Serverens tomme tilstand: navnene (admin kan have sat dem), banens
+    // spilletype og single/double — men ingen point, serv, sæt eller fortryd,
+    // de hører til forrige kamp (før blev de stående: TV'et viste forrige kamps
+    // sæt, og Fortryd hentede forrige kamp frem)
+    const p1 = loaded.player1 || {}, p2 = loaded.player2 || {};
+    nulstilKamp({
+        navne: { p1: p1.name, p1b: p1.name2, p2: p2.name, p2b: p2.name2 },
+        isDoubles: loaded.isDoubles || false,
+        gameMode: loaded.gameMode || gameState.gameMode
+    });
     gameState.planner = loaded.planner || null;
-    gameState.isDoubles = loaded.isDoubles || false;
-    // Som performClearCourtNow: server, sæt og fortryd hører til forrige kamp.
-    // Før blev de stående — TV'et viste forrige kamps sæt, og Fortryd hentede
-    // forrige kamp frem.
-    gameState.servingPlayer = null;
-    gameState.initialServer = null;
-    gameState.servingTeam = null;
-    gameState.servingPlayerOnTeam = null;
-    gameState.team1RightCourt = 1;
-    gameState.team2RightCourt = 1;
-    gameState.betweenSets = false;
-    gameState.setScoresHistory = [];
-    gameState.history = [];
     // Serveren har frigivet holdkamp-/turneringskampen — glem koblingen, ellers
     // blev banens næste resultat meldt ind på den gamle delkamp
     assignedHoldkampGameId = null;
@@ -1968,10 +1928,6 @@ async function adoptServerReset(loaded) {
     activeTournament = null;
     const tilknyttet = document.getElementById('holdkampAssigned');
     if (tilknyttet) tilknyttet.style.display = 'none';
-
-    // Ensure name2 exists
-    if (!gameState.player1.name2) gameState.player1.name2 = 'Makker 1';
-    if (!gameState.player2.name2) gameState.player2.name2 = 'Makker 2';
 
     updateDisplay();
 }
@@ -2010,38 +1966,8 @@ async function startFreshMatchInSession() {
         gameState.restBreakCallback = null;
         await endRestBreak();
     }
-    if (gameState.timerInterval) {
-        clearInterval(gameState.timerInterval);
-        gameState.timerInterval = null;
-    }
-
-    gameState.player1.name = 'Spiller 1';
-    gameState.player1.name2 = 'Makker 1';
-    gameState.player1.score = 0;
-    gameState.player1.games = 0;
-    gameState.player2.name = 'Spiller 2';
-    gameState.player2.name2 = 'Makker 2';
-    gameState.player2.score = 0;
-    gameState.player2.games = 0;
-    gameState.matchStartTime = null;
-    gameState.matchEndTime = null;
-    gameState.timerSeconds = 0;
-    gameState.isActive = false;
-    gameState.decidingGameSwitched = false;
-    gameState.matchCompleted = false;
-    gameState.setsToWin = 2; // en bundet golden set-delkamp sætter det igen via holdkamp-synken
-    gameState.resultOutcome = null;
-    gameState.resultWinner = null;
-    gameState.restBreakTaken = false;
-    gameState.servingPlayer = null;
-    gameState.initialServer = null;
-    gameState.servingTeam = null;
-    gameState.servingPlayerOnTeam = null;
-    gameState.team1RightCourt = 1;
-    gameState.team2RightCourt = 1;
-    gameState.setScoresHistory = [];
-    gameState.sidesManuallySwitched = false;
-    gameState.history = [];
+    // Rent scoreboard uden navne
+    nulstilKamp();
 
     updateDisplay();
     // PUT med det samme så serverens afsluttede tilstand overskrives før
@@ -2119,8 +2045,7 @@ async function startRestBreak(duration = 60, title = 'Pause 1 minut', callback =
     gameState.restBreakDuration = duration;
     gameState.restBreakSecondsLeft = duration;
     gameState.restBreakTitle = title;
-    // restBreakTaken (pausen ved 11 er taget) sættes af reglerne (TaellerRegler.point)
-    // og af genoptagPause — ikke her
+    // restBreakTaken (pausen ved 11 er taget) sættes af reglerne (TaellerRegler.point) — ikke her
 
     const overlay = document.getElementById('restBreakOverlay');
     const timerDisplay = document.getElementById('restBreakTimer');
