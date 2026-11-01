@@ -31,6 +31,23 @@
     color: var(--color-accent);
 }
 
+/* Teksten og (Tæl fra uret) ur-koden under hinanden til venstre for QR-koden */
+.qr-counter__tekst {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.6vh;
+}
+
+.qr-counter__ur {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(12px, 2.4vh, 54px);
+    line-height: 1;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    color: #ffffff;
+}
+
 .qr-counter__image {
     width: clamp(60px, 9vh, 200px);
     height: clamp(60px, 9vh, 200px);
@@ -173,6 +190,14 @@ body.tv-qr-synlig .tv-footer {
     display: block;
     font-size: clamp(0.9em, 2.1vh, 2em);
     color: var(--text-secondary, rgba(255, 255, 255, 0.78));
+}
+
+.ledig-kort.har-qr .ledig-ur {
+    margin-top: 1vh;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(1.1em, 3.6vh, 3.6em);
+    letter-spacing: 0.04em;
+    color: #ffffff;
 }
 
 .ledig-kort.har-qr .ledig-qr {

@@ -44,11 +44,17 @@ router.get('/', async (req, res, next) => {
             ['hide_tv_qr']
         );
 
+        const urTaellingSetting = await queryOne(
+            'SELECT setting_value FROM settings WHERE setting_key = ?',
+            ['ur_taelling']
+        );
+
         res.json({
             courtCount: parseInt(courtCountSetting?.setting_value || '4'),
             showResetButton: showResetButtonSetting?.setting_value !== 'false',
             defaultGameMode: defaultGameModeSetting?.setting_value || '15',
-            hideTvQr: hideTvQrSetting?.setting_value === 'true'
+            hideTvQr: hideTvQrSetting?.setting_value === 'true',
+            urTaelling: urTaellingSetting?.setting_value === 'true'
         });
     } catch (error) {
         next(error);
@@ -147,6 +153,24 @@ router.put('/tv-qr', authMiddleware, requirePage('settings'), async (req, res, n
         await query(
             'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
             ['hide_tv_qr', hideTvQr.toString(), hideTvQr.toString()]
+        );
+        res.json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// PUT /api/settings/ur-taelling - Tæl fra uret: ur-koden vises på TV'et under
+// QR-koden, og uret kan koble sig på med den (routes/urTaeller.js)
+router.put('/ur-taelling', authMiddleware, requirePage('settings'), async (req, res, next) => {
+    try {
+        const { urTaelling } = req.body;
+        if (typeof urTaelling !== 'boolean') {
+            return res.status(400).json({ error: 'urTaelling skal være true eller false' });
+        }
+        await query(
+            'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
+            ['ur_taelling', urTaelling.toString(), urTaelling.toString()]
         );
         res.json({ success: true });
     } catch (error) {

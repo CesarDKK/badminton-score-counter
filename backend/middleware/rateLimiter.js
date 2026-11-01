@@ -110,7 +110,19 @@ const plannerIpLimiter = rateLimit({
     message: { error: 'For mange kald fra denne adresse. Prøv igen om lidt.', code: 'rate_limited' },
 });
 
+// Urets kode fra TV'et (routes/urTaeller.js): 6 cifre, så gæt bremses. Alle
+// spillere i en hal deler IP — 30 forsøg pr. 10 min giver plads til tastefejl,
+// og en kode gælder kun banens QR-session (samme adgang som QR-koden på TV'et)
+const urKodeLimiter = rateLimit({
+    ...FAELLES,
+    windowMs: 10 * 60 * 1000,
+    max: 30,
+    keyGenerator: (req) => 'ur-kode:' + klientIp(req),
+    message: { error: 'For mange forsøg med koden. Prøv igen om lidt.' },
+});
+
 module.exports = {
+    urKodeLimiter,
     loginLimiter,
     superAdminLoginLimiter,
     uploadLimiter,

@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" href="/favicon.png?v=5">
     <link rel="stylesheet" href="fonts.css?v=2">
     <link rel="stylesheet" href="fundament.css?v=2">
-    <link rel="stylesheet" href="tv-v3-styles.css?v=20">
+    <link rel="stylesheet" href="tv-v3-styles.css?v=21">
     <script src="js/theme-loader.js?v=15"></script>
 </head>
 <body>
@@ -90,7 +90,11 @@
 
     <!-- QR Counter — kun synlig i klub-mode når banen er ledig. Vises ovenpå slideshow. -->
     <div id="qrCounter" class="qr-counter" style="display: none;">
-        <div class="qr-counter__label">TÆL MED DIN TELEFON</div>
+        <div class="qr-counter__tekst">
+            <div class="qr-counter__label">TÆL MED DIN TELEFON</div>
+            <!-- Tæl fra uret (Indstillinger): banens ur-kode, som uret tastes med -->
+            <div id="qrUrKode" class="qr-counter__ur" style="display: none;"></div>
+        </div>
         <img id="qrCounterImage" class="qr-counter__image" alt="Scan med telefon for at tælle kampen">
     </div>
 
@@ -101,12 +105,12 @@
 
     <!-- Afgjort kamp vises direkte på tavlen (.tv-container.afgjort) — intet overlay -->
 
-    <script src="js/api.js?v=38"></script>
+    <script src="js/api.js?v=39"></script>
     <script src="js/adgangslink-vagt.js?v=1"></script>
     <script src="js/auth-guard.js?v=3"></script>
     <script src="js/logo-match.js?v=2"></script>
     <script src="js/live-updates.js?v=2"></script>
     <script src="js/name-display.js?v=2"></script>
-    <script src="tv-script-v3.js?v=61"></script>
+    <script src="tv-script-v3.js?v=62"></script>
 </body>
 </html>
