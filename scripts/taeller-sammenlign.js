@@ -122,21 +122,14 @@ async function main() {
         window.releaseWakeLock = () => {};
     });
 
-    // Kampens start på tabletten: navnene og opsætningen, ingen point
+    // Kampens start på tabletten: navnene og opsætningen, ingen point — samme
+    // nyKamp som tabletten selv bruger, plus de felter kun tabletten har
     const nulstil = (o) => page.evaluate((o) => {
         if (gameState.restBreakInterval) clearInterval(gameState.restBreakInterval);
         if (gameState.timerInterval) clearInterval(gameState.timerInterval);
-        Object.assign(gameState, {
-            player1: { name: o.navne.p1, name2: o.navne.p1b || 'Makker 1', score: 0, games: 0 },
-            player2: { name: o.navne.p2, name2: o.navne.p2b || 'Makker 2', score: 0, games: 0 },
-            isDoubles: o.isDoubles, gameMode: o.gameMode, setsToWin: o.setsToWin,
-            isActive: false, matchStartTime: null, matchEndTime: null, matchCompleted: false,
-            decidingGameSwitched: false, sidesManuallySwitched: false, setScoresHistory: [],
-            restBreakTaken: false, restBreakActive: false, restBreakInterval: null, restBreakCallback: null,
-            restBreakSecondsLeft: 0, restBreakTitle: '', restBreakDuration: 60, restBreakStartedAt: null,
-            servingPlayer: null, initialServer: null, servingTeam: null, servingPlayerOnTeam: null,
-            team1RightCourt: 1, team2RightCourt: 1, betweenSets: false, timerSeconds: 0,
-            timerInterval: null, resultOutcome: null, resultWinner: null, history: []
+        Object.assign(gameState, TaellerRegler.nyKamp(o), {
+            restBreakInterval: null, restBreakCallback: null, timerInterval: null,
+            resultOutcome: null, resultWinner: null
         });
         hideMessage && hideMessage();
     }, o);

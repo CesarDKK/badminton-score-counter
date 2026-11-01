@@ -125,6 +125,51 @@ test('GameStates: partiel PUT bevarer ikke-medsendte felter (merge-semantik)', a
     assert.equal(after.setScoresHistory[0].player1, 15);
 });
 
+test('GameStates: reglernes pause- og sidetilstand gemmes og læses, som den blev sendt', async () => {
+    const courtNum = await getFirstCourt();
+    const startedAt = Date.now() - 15_000;
+
+    // Tabletten midt i pausen ved 8 (15/21), siderne byttet med "Skift side"
+    const { status } = await req(`/api/game-states/${courtNum}`, {
+        method: 'PUT',
+        body: {
+            player1: { name: 'Pause 1', name2: '', score: 8, games: 0 },
+            player2: { name: 'Pause 2', name2: '', score: 5, games: 0 },
+            restBreakActive: true,
+            restBreakSecondsLeft: 45,
+            restBreakTitle: 'Pause 1 minut',
+            restBreakTaken: true,
+            restBreakStartedAt: startedAt,
+            restBreakDuration: 60,
+            sidesManuallySwitched: true
+        }
+    });
+    assert.equal(status, 200);
+
+    const { body: after } = await req(`/api/game-states/${courtNum}`);
+    assert.equal(after.restBreakTaken, true);
+    assert.equal(after.restBreakStartedAt, startedAt);
+    assert.equal(after.restBreakDuration, 60);
+    assert.equal(after.sidesManuallySwitched, true);
+
+    // En partiel PUT (admin retter et navn) rører ikke felterne
+    await req(`/api/game-states/${courtNum}`, { method: 'PUT', body: { player1: { name: 'Pause 1b' } } });
+    const { body: urørt } = await req(`/api/game-states/${courtNum}`);
+    assert.equal(urørt.restBreakTaken, true);
+    assert.equal(urørt.restBreakStartedAt, startedAt);
+    assert.equal(urørt.sidesManuallySwitched, true);
+
+    // Pausen slut, nyt sæt: felterne følger med tilbage
+    await req(`/api/game-states/${courtNum}`, {
+        method: 'PUT',
+        body: { restBreakActive: false, restBreakTaken: false, restBreakStartedAt: null, sidesManuallySwitched: false }
+    });
+    const { body: efter } = await req(`/api/game-states/${courtNum}`);
+    assert.equal(efter.restBreakTaken, false);
+    assert.equal(efter.restBreakStartedAt, null);
+    assert.equal(efter.sidesManuallySwitched, false);
+});
+
 test('GameStates: PUT med forældet expectedVersion returnerer 409 med aktuel tilstand', async () => {
     const courtNum = await getFirstCourt();
     const { body: current } = await req(`/api/game-states/${courtNum}`);
