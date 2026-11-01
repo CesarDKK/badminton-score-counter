@@ -61,7 +61,7 @@
 <main>
     <a class="tilbage" href="/">← BadmintonApp.dk</a>
     <h1>Privatlivspolitik</h1>
-    <p class="opdateret">Senest opdateret 29. oktober 2026</p>
+    <p class="opdateret">Senest opdateret 1. november 2026</p>
 
     <p>BadmintonApp.dk er et system til pointtælling, TV-skærme, holdkampe, turneringer og livestream for
         badmintonklubber. Her står, hvilke oplysninger systemet behandler, hvorfor, og hvad du kan gøre.</p>
@@ -108,6 +108,28 @@
         <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
         herunder kravene om begrænset brug (Limited Use).</p>
 
+    <h3>Sådan beskyttes oplysningerne</h3>
+    <ul>
+        <li><strong>Kryptering ved opbevaring:</strong> adgangstokenet fra Google gemmes krypteret med AES-256-GCM. Nøglen ligger ikke
+            i databasen, men udledes af en hemmelighed, der kun findes i serverens opsætning — en kopi af databasen alene kan ikke
+            bruges til at få adgang til kanalen.</li>
+        <li><strong>Kryptering undervejs:</strong> siderne og API'et leveres over HTTPS. Serveren taler med Googles API'er over HTTPS,
+            og videoen sendes til YouTube over RTMPS.</li>
+        <li><strong>Adskilte klubber:</strong> hver klub har sin egen database, og oplysninger fra én klubs kanal kan ikke ses af andre
+            klubber. Databaserne kan ikke nås fra internettet — kun fra selve serveren.</li>
+        <li><strong>Adgangskontrol:</strong> kun klubbens administratorer med adgang til Livestream kan forbinde eller fjerne kanalen.
+            Login kræver brugernavn og adgangskode (gemt som hash), og gentagne forsøg bremses. Admin viser kun de sidste tegn af en
+            stream-nøgle.</li>
+        <li><strong>Stream-nøglen</strong> sendes kun til den TV-PC, der filmer banen, og kun mens banen sender. Den skrives ikke i logs.</li>
+        <li><strong>Mindst mulig adgang:</strong> adgangen til kanalen bruges kun af serveren til de handlinger, der står ovenfor. Kun
+            den driftsansvarlige har adgang til serveren og databaserne.</li>
+        <li><strong>Sletning:</strong> fjerner klubben forbindelsen, tilbagekaldes adgangen hos Google, og tokenet, kanalens navn og id
+            og banernes stream-oplysninger slettes med det samme. Serverens backups slettes efter 14 dage. Lukkes klubbens afdeling,
+            slettes klubbens database.</li>
+        <li><strong>Sikkerhedsbrud:</strong> berører et sikkerhedsbrud oplysninger fra Google, får de berørte klubber og Google besked
+            hurtigst muligt, og adgangen tilbagekaldes.</li>
+    </ul>
+
     <h3>YouTube og Google</h3>
     <p>Livestream bruger YouTube API Services. Ved at forbinde kanalen accepterer klubben
         <a href="https://www.youtube.com/t/terms">YouTubes servicevilkår</a>, og Googles behandling af oplysninger er beskrevet i
@@ -136,6 +158,17 @@
             is not used for advertising and is not used to train AI models. BadmintonApp.dk's use of information received from Google APIs
             adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
             including the Limited Use requirements.</p>
+        <p><strong>Data protection.</strong> The refresh token is encrypted at rest with AES-256-GCM; the key is not stored in the
+            database but derived from a secret that exists only in the server configuration, so a copy of the database alone cannot be
+            used to access the channel. Pages and the API are served over HTTPS, the server calls Google APIs over HTTPS, and video is
+            sent to YouTube over RTMPS. Each club has its own database, so one club's channel data cannot be seen by other clubs, and the
+            databases are not reachable from the internet. Only the club's administrators with access to Livestream can connect or remove
+            the channel; logins require a username and password (stored as a hash) and repeated attempts are rate-limited, and the admin
+            only shows the last characters of a stream key. A court's stream key is sent only to the TV PC filming that court, only while it
+            is streaming, and is not written to logs. Only the operator has access to the server and databases. When a club removes the
+            connection, the token is revoked at Google and the token, channel name and id and the courts' stream data are deleted
+            immediately; server backups are deleted after 14 days, and a club's database is deleted when its account is closed. If a
+            security incident affects Google user data, the affected clubs and Google are notified as soon as possible and access is revoked.</p>
         <p>By connecting a channel, the club agrees to the <a href="https://www.youtube.com/t/terms">YouTube Terms of Service</a>; see also
             the <a href="https://policies.google.com/privacy">Google Privacy Policy</a>. Access can be removed at any time in the club's
             admin (Livestream → "Fjern forbindelsen"), which revokes the token at Google and deletes it immediately, or at
