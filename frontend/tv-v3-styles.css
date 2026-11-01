@@ -287,7 +287,9 @@ body::before {
    skærmen og LIVE ved uret. Rammen ligger oven på alt (også sponsorskærmen)
    men under QR-boksen og tager ingen plads — banneret i bunden står, hvor det
    står. Uden header (sponsorskærm mellem kampene, body.tv-uden-top) hænger
-   LIVE som en fane i rammens øverste højre hjørne. */
+   LIVE som en fane i rammens øverste højre hjørne.
+   Farven er den faste "on air"-rød (--color-danger fra fundament.css), ikke
+   temaets accent: i et grønt tema (Skov, lime-accent) druknede LIVE ellers. */
 .tv-live-ramme,
 .tv-live-maerke,
 .tv-live-fane {
@@ -298,7 +300,7 @@ body.tv-live .tv-live-ramme {
     display: block;
     position: fixed;
     inset: 0;
-    border: 0.6vh solid var(--color-accent);
+    border: 0.6vh solid var(--color-danger);
     pointer-events: none;
     z-index: 9000;
 }
@@ -312,7 +314,7 @@ body.tv-live .tv-live-maerke {
     font-size: 0.5em;
     letter-spacing: 3px;
     color: #ffffff;
-    background: var(--color-accent);
+    background: var(--color-danger);
     border-radius: 0.25em;
     vertical-align: middle;
     position: relative;
@@ -332,7 +334,7 @@ body.tv-live.tv-uden-top .tv-live-fane {
     font-size: 3.4vh;
     letter-spacing: 3px;
     color: #ffffff;
-    background: var(--color-accent);
+    background: var(--color-danger);
     border-radius: 0 0 0.5em 0.5em;
 }
 
