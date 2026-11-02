@@ -1515,6 +1515,7 @@ function showDefaultMessage() {
                 <div class="ledig-pille">LEDIG</div>
                 <div class="ledig-kald">TÆL KAMPEN MED<br>DIN TELEFON</div>
                 <div class="ledig-hjaelp">Scan koden og start kampen på telefonen.</div>
+                <div class="ledig-ur" style="display: none;"></div>
             </div>
             <img class="ledig-qr" alt="Scan med telefon for at tælle kampen">
         </div>
@@ -1535,6 +1536,11 @@ function synkLedigQr() {
     kort.classList.toggle('har-qr', vis);
     const img = kort.querySelector('.ledig-qr');
     if (vis && img && img.src !== qrCounterObjectUrl) img.src = qrCounterObjectUrl;
+    const ur = kort.querySelector('.ledig-ur');
+    if (ur) {
+        ur.textContent = vis && qrUrKode ? `Eller tæl fra uret med koden ${urKodeTekst()}` : '';
+        ur.style.display = vis && qrUrKode ? 'block' : 'none';
+    }
 }
 
 function startScreensaver() {
@@ -1867,9 +1873,15 @@ function showQrCounter(mode = 'idle', noegle = '') {
     const q = cfg.peek ? 'resume=1' : '';
     const headers = api.token ? { Authorization: `Bearer ${api.token}` } : {};
     fetch(`/api/qr-code/${courtId}?${q}`, { headers, cache: 'no-store' })
-        .then((res) => (res.ok ? res.blob() : Promise.reject(res.status)))
+        .then((res) => {
+            if (!res.ok) return Promise.reject(res.status);
+            // Tæl fra uret slået til: serveren sender banens ur-kode med
+            qrUrKode = res.headers.get('X-Ur-Kode') || null;
+            return res.blob();
+        })
         .then((blob) => {
             if (qrCounterMode !== tilstand) return;
+            visUrKode();
             if (qrCounterObjectUrl) URL.revokeObjectURL(qrCounterObjectUrl);
             qrCounterObjectUrl = URL.createObjectURL(blob);
             img.src = qrCounterObjectUrl;
@@ -1887,6 +1899,18 @@ function showQrCounter(mode = 'idle', noegle = '') {
             }
             hideQrCounter(); // andre fejl: prøv igen ved næste poll
         });
+}
+
+// Banens ur-kode (Tæl fra uret) under QR-koden og på ledig-kortet, "482 913"
+let qrUrKode = null;
+function urKodeTekst() {
+    return qrUrKode ? `${qrUrKode.slice(0, 3)} ${qrUrKode.slice(3)}` : '';
+}
+function visUrKode() {
+    const el = document.getElementById('qrUrKode');
+    if (!el) return;
+    el.textContent = qrUrKode ? `UR-KODE ${urKodeTekst()}` : '';
+    el.style.display = qrUrKode ? 'block' : 'none';
 }
 
 // Mens QR-boksen vises, reserverer CSS'en plads til højre i holdrækkerne

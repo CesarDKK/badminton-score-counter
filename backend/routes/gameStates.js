@@ -89,7 +89,8 @@ function formatStateRow(row, court) {
 // altid "Telefon (QR-kode)"
 async function taellerNavn(req, hint) {
     const u = req.user;
-    if (u && u.tokenType === 'match_session') return 'Telefon (QR-kode)';
+    // QR-sessionen bruges af telefonen og af uret (ur-koden, routes/urTaeller.js)
+    if (u && u.tokenType === 'match_session') return hint === 'Ur' ? 'Ur (ur-kode)' : 'Telefon (QR-kode)';
     let navn = ejerskab.rensNavn(hint) || 'En enhed';
     if (u && u.role === 'device' && u.tokenId) {
         try {
@@ -394,339 +395,345 @@ router.get('/:courtId', async (req, res, next) => {
 // Ved mismatch svares 409 + serverens aktuelle tilstand, saa klienten kan merge og
 // proeve igen i stedet for stiltiende at overskrive en anden enheds aendring.
 // Klienter uden expectedVersion (aeldre court/tv-sider) beholder last-write-wins.
-router.put('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), async (req, res, next) => {
-    try {
-        const { courtId } = req.params;
-        const body = req.body || {};
-        const has = (key) => Object.prototype.hasOwnProperty.call(body, key);
+// Gemmer banens tilstand ud fra en krop som tablettens (fletter med rækken,
+// tjekker tæller og version, stempler start/slut, giver TV'erne besked).
+// Bruges af PUT herunder og af urets tryk (routes/urTaeller.js), så alle
+// enheder gemmer på præcis samme måde. Returnerer { status, json }.
+async function gemTilstand(req, courtId, body, { skipAutoActive = false } = {}) {
+    const has = (key) => Object.prototype.hasOwnProperty.call(body, key);
 
-        // Check if we should skip auto-updating active status (for admin edits)
-        const skipAutoActive = req.query.skipAutoActive === 'true';
+    // Verify court exists by court_number
+    const court = await queryOne(
+        'SELECT id, is_active, is_doubles, game_mode FROM courts WHERE court_number = ?',
+        [courtId]
+    );
 
-        // Verify court exists by court_number
-        const court = await queryOne(
-            'SELECT id, is_active, is_doubles, game_mode FROM courts WHERE court_number = ?',
-            [courtId]
+    if (!court) {
+        return { status: 404, json: { error: 'Bane ikke fundet' } };
+    }
+
+    const existing = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
+
+    const conflictResponse = (row) => ({ status: 409, json: {
+        error: 'Banens tilstand er ændret af en anden enhed',
+        conflict: true,
+        version: row ? (row.version || 0) : 0,
+        state: row ? formatStateRow(row, court) : null
+    } });
+
+    // Kun én tæller ad gangen: tæller en anden enhed kampen, svares 423 med
+    // banens tilstand, så enheden kan vise stillingen og tilbyde "Overtag"
+    const taellerId = ejerskab.rensId(body.taellerId);
+    if (taellerId && !ejerskab.maaGemme(existing, taellerId, Date.now())) {
+        return { status: 423, json: {
+            error: 'En anden enhed tæller denne kamp',
+            taellerSpaerret: true,
+            ...ejerskab.status(existing, taellerId, Date.now()),
+            version: existing.version || 0,
+            state: formatStateRow(existing, court)
+        } };
+    }
+
+    const expectedVersion = has('expectedVersion') ? Number(body.expectedVersion) : null;
+    if (expectedVersion !== null) {
+        if (!existing && expectedVersion > 0) {
+            // Rækken er slettet siden klientens seneste læsning — banen er nulstillet
+            return conflictResponse(null);
+        }
+        if (existing && (existing.version || 0) !== expectedVersion) {
+            return conflictResponse(existing);
+        }
+    }
+
+    // Ved oprettelse kræves spillerdata (som før); på eksisterende række er partiel opdatering ok
+    if (!existing && (!body.player1 || !body.player2)) {
+        return { status: 400, json: { error: 'Spillerdata mangler' } };
+    }
+
+    // Update court's is_active status if provided
+    if (typeof body.isActive === 'boolean') {
+        await query(
+            'UPDATE courts SET is_active = ? WHERE court_number = ?',
+            [body.isActive, courtId]
+        );
+    }
+
+    // ---- Merge body med eksisterende række ----
+    const mergePlayer = (provided, prefix, defName, defName2) => {
+        const p = provided || {};
+        const hasP = (k) => Object.prototype.hasOwnProperty.call(p, k);
+        const ex = (col, def) => existing ? existing[col] : def;
+        return {
+            name:  hasP('name')  ? (p.name  || defName)  : ex(`${prefix}_name`, defName),
+            name2: hasP('name2') ? (p.name2 || defName2) : ex(`${prefix}_name2`, defName2),
+            score: hasP('score') ? (p.score || 0) : ex(`${prefix}_score`, 0),
+            games: hasP('games') ? (p.games || 0) : ex(`${prefix}_games`, 0)
+        };
+    };
+    const player1 = mergePlayer(body.player1, 'player1', 'Spiller 1', 'Makker 1');
+    const player2 = mergePlayer(body.player2, 'player2', 'Spiller 2', 'Makker 2');
+
+    const timerSeconds = has('timerSeconds') ? (body.timerSeconds || 0) : (existing ? existing.timer_seconds : 0);
+    const decidingGameSwitched = has('decidingGameSwitched') ? (body.decidingGameSwitched || false) : (existing ? !!existing.deciding_game_switched : false);
+    const restBreakActive = has('restBreakActive') ? (body.restBreakActive || false) : (existing ? !!existing.rest_break_active : false);
+    const restBreakSecondsLeft = has('restBreakSecondsLeft') ? (body.restBreakSecondsLeft || 0) : (existing ? existing.rest_break_seconds_left : 0);
+    const restBreakTitle = has('restBreakTitle') ? (body.restBreakTitle || '') : (existing ? (existing.rest_break_title || '') : '');
+    const restBreakTaken = has('restBreakTaken') ? !!body.restBreakTaken : (existing ? !!existing.rest_break_taken : false);
+    const restBreakStartedAt = has('restBreakStartedAt')
+        ? (body.restBreakStartedAt != null && Number.isFinite(Number(body.restBreakStartedAt)) ? Math.round(Number(body.restBreakStartedAt)) : null)
+        : (existing ? existing.rest_break_started_at : null);
+    const restBreakDuration = has('restBreakDuration') ? (Number(body.restBreakDuration) || 60) : (existing ? (existing.rest_break_duration || 60) : 60);
+    const sidesManuallySwitched = has('sidesManuallySwitched') ? !!body.sidesManuallySwitched : (existing ? !!existing.sides_manually_switched : false);
+    const matchCompleted = has('matchCompleted') ? (body.matchCompleted || false) : (existing ? !!existing.match_completed : false);
+    const servingPlayer = has('servingPlayer') ? (body.servingPlayer || null) : (existing ? existing.serving_player : null);
+    const initialServer = has('initialServer') ? (body.initialServer || null) : (existing ? existing.initial_server : null);
+    const servingTeam = has('servingTeam') ? (body.servingTeam || null) : (existing ? existing.serving_team : null);
+    const servingPlayerOnTeam = has('servingPlayerOnTeam') ? (body.servingPlayerOnTeam || null) : (existing ? existing.serving_player_on_team : null);
+    const team1RightCourt = has('team1RightCourt') ? (body.team1RightCourt || 1) : (existing ? (existing.team1_right_court || 1) : 1);
+    const team2RightCourt = has('team2RightCourt') ? (body.team2RightCourt || 1) : (existing ? (existing.team2_right_court || 1) : 1);
+    const betweenSets = has('betweenSets') ? (body.betweenSets || false) : (existing ? !!existing.between_sets : false);
+    const setScoresHistoryJson = has('setScoresHistory')
+        ? (body.setScoresHistory ? JSON.stringify(body.setScoresHistory) : '[]')
+        : (existing && existing.set_scores_history
+            ? (typeof existing.set_scores_history === 'string'
+                ? existing.set_scores_history
+                : JSON.stringify(existing.set_scores_history))
+            : '[]');
+
+    // Check if frontend explicitly provided matchStartTime
+    const hasExplicitStartTime = has('matchStartTime') && !!body.matchStartTime;
+
+    // Sentinel 'now': klienten beder serveren stemple starttiden med sit
+    // eget ur (NOW()) — klient-ure kan være skæve, og skævheden ville ellers
+    // lande direkte i den viste kamptid på TV/oversigt.
+    const startTimeIsNow = hasExplicitStartTime && body.matchStartTime === 'now';
+
+    // Convert ISO 8601 timestamp to MySQL datetime format
+    let mysqlStartTime = null;
+    if (hasExplicitStartTime && !startTimeIsNow) {
+        // Convert '2026-01-21T10:34:08.440Z' to '2026-01-21 10:34:08'
+        mysqlStartTime = new Date(body.matchStartTime).toISOString().slice(0, 19).replace('T', ' ');
+    }
+
+    // Check if frontend explicitly wants to clear matchEndTime (undo scenario)
+    const shouldClearMatchEndTime = has('matchEndTime') && body.matchEndTime === null;
+
+    // Aktivitet vurderes på den MERGEDE tilstand — en partiel opdatering
+    // (fx navnerettelse) midt i en kamp må ikke ligne et reset
+    const existingStartTime = existing ? existing.match_start_time : null;
+    const hasActivity =
+        (player1.score > 0) ||
+        (player2.score > 0) ||
+        (player1.games > 0) ||
+        (player2.games > 0) ||
+        (timerSeconds > 0) ||
+        hasExplicitStartTime ||
+        (!has('matchStartTime') && existingStartTime !== null);
+
+    // Check if this is a reset (no activity at all)
+    const isReset = !hasActivity;
+
+    // Kampen er slut: en side har vundet 2 sæt. En kamp der meldes afsluttet
+    // på anden vis (golden set = ét sæt, slutter 1–0) får sluttid længere nede.
+    const matchEnding = (player1.games >= 2 || player2.games >= 2);
+
+    // Hvis match_start_time ændres fra null til værdi, invalidér QR-tokens for banen
+    const matchIsStarting =
+        (!existing || existing.match_start_time === null) &&
+        (hasExplicitStartTime || player1.score > 0 || player2.score > 0);
+
+    // Ryd snapshot når en ny kamp/tildeling påvirker banen:
+    //  - der er reel aktivitet (point/games/start)
+    //  - eller navne er ikke længere defaults (typisk fordi en holdkamp/
+    //    turneringskamp er tildelt eller en bruger har indtastet spillere)
+    const hasRealPlayerNames =
+        (player1.name && player1.name !== 'Spiller 1') ||
+        (player2.name && player2.name !== 'Spiller 2');
+    if (hasActivity || hasRealPlayerNames) {
+        await query('DELETE FROM last_finished_matches WHERE court_id = ?', [court.id]);
+    }
+
+    // ---- Skriv rækken ----
+    // match_start_time/match_end_time har betinget logik — udtrykkene bygges
+    // som SQL-fragmenter så NOW() evalueres i databasen præcis som før
+    const columnValues = [
+        player1.name, player1.name2, player1.score, player1.games,
+        player2.name, player2.name2, player2.score, player2.games,
+        timerSeconds, decidingGameSwitched,
+        restBreakActive, restBreakSecondsLeft, restBreakTitle,
+        restBreakTaken, restBreakStartedAt, restBreakDuration, sidesManuallySwitched,
+        setScoresHistoryJson, matchCompleted,
+        servingPlayer, initialServer, servingTeam, servingPlayerOnTeam,
+        team1RightCourt, team2RightCourt, betweenSets
+    ];
+
+    if (existing) {
+        let startExpr;
+        let startParams = [];
+        if (isReset) {
+            startExpr = 'NULL';
+        } else if (startTimeIsNow) {
+            // Bevar en allerede sat starttid — 'now' må ikke nulstille et
+            // gentaget/forsinket start-kald midt i en kamp
+            startExpr = 'COALESCE(match_start_time, NOW())';
+        } else if (hasExplicitStartTime) {
+            startExpr = '?';
+            startParams = [mysqlStartTime];
+        } else {
+            startExpr = `COALESCE(match_start_time, ${hasActivity ? 'NOW()' : 'NULL'})`;
+        }
+
+        let endExpr;
+        if (isReset || shouldClearMatchEndTime) {
+            endExpr = 'NULL';
+        } else if (matchEnding) {
+            endExpr = 'COALESCE(match_end_time, NOW())'; // ellers flytter en navnerettelse efter kampen sluttiden
+        } else if (matchCompleted && (player1.games >= 1 || player2.games >= 1)) {
+            // Golden set (ét sæt) meldt afsluttet ved 1–0 — sæt sluttid én gang
+            endExpr = 'COALESCE(match_end_time, NOW())';
+        } else {
+            endExpr = 'match_end_time';
+        }
+
+        // Compare-and-swap: med expectedVersion opdateres kun hvis versionen
+        // stadig matcher — ellers har en anden enhed skrevet imellem, og vi
+        // svarer 409 i stedet for at overskrive dens ændring
+        const casClause = expectedVersion !== null ? ' AND version = ?' : '';
+        const casParams = expectedVersion !== null ? [expectedVersion] : [];
+
+        const result = await query(
+            `UPDATE game_states SET
+                player1_name = ?, player1_name2 = ?, player1_score = ?, player1_games = ?,
+                player2_name = ?, player2_name2 = ?, player2_score = ?, player2_games = ?,
+                timer_seconds = ?, deciding_game_switched = ?,
+                rest_break_active = ?, rest_break_seconds_left = ?, rest_break_title = ?,
+                rest_break_taken = ?, rest_break_started_at = ?, rest_break_duration = ?, sides_manually_switched = ?,
+                set_scores_history = ?, match_completed = ?,
+                serving_player = ?, initial_server = ?, serving_team = ?, serving_player_on_team = ?,
+                team1_right_court = ?, team2_right_court = ?, between_sets = ?,
+                match_start_time = ${startExpr},
+                match_end_time = ${endExpr},
+                version = version + 1
+             WHERE court_id = ?${casClause}`,
+            [...columnValues, ...startParams, court.id, ...casParams]
         );
 
-        if (!court) {
-            return res.status(404).json({ error: 'Bane ikke fundet' });
+        if (result.affectedRows === 0) {
+            const fresh = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
+            return conflictResponse(fresh);
         }
-
-        const existing = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
-
-        const conflictResponse = (row) => res.status(409).json({
-            error: 'Banens tilstand er ændret af en anden enhed',
-            conflict: true,
-            version: row ? (row.version || 0) : 0,
-            state: row ? formatStateRow(row, court) : null
-        });
-
-        // Kun én tæller ad gangen: tæller en anden enhed kampen, svares 423 med
-        // banens tilstand, så enheden kan vise stillingen og tilbyde "Overtag"
-        const taellerId = ejerskab.rensId(body.taellerId);
-        if (taellerId && !ejerskab.maaGemme(existing, taellerId, Date.now())) {
-            return res.status(423).json({
-                error: 'En anden enhed tæller denne kamp',
-                taellerSpaerret: true,
-                ...ejerskab.status(existing, taellerId, Date.now()),
-                version: existing.version || 0,
-                state: formatStateRow(existing, court)
-            });
-        }
-
-        const expectedVersion = has('expectedVersion') ? Number(body.expectedVersion) : null;
-        if (expectedVersion !== null) {
-            if (!existing && expectedVersion > 0) {
-                // Rækken er slettet siden klientens seneste læsning — banen er nulstillet
-                return conflictResponse(null);
-            }
-            if (existing && (existing.version || 0) !== expectedVersion) {
-                return conflictResponse(existing);
-            }
-        }
-
-        // Ved oprettelse kræves spillerdata (som før); på eksisterende række er partiel opdatering ok
-        if (!existing && (!body.player1 || !body.player2)) {
-            return res.status(400).json({ error: 'Spillerdata mangler' });
-        }
-
-        // Update court's is_active status if provided
-        if (typeof body.isActive === 'boolean') {
+    } else {
+        const startExprInsert = startTimeIsNow ? 'NOW()'
+            : hasExplicitStartTime ? '?'
+            : (hasActivity ? 'NOW()' : 'NULL');
+        const startParamsInsert = (hasExplicitStartTime && !startTimeIsNow) ? [mysqlStartTime] : [];
+        try {
             await query(
-                'UPDATE courts SET is_active = ? WHERE court_number = ?',
-                [body.isActive, courtId]
+                `INSERT INTO game_states (
+                    court_id,
+                    player1_name, player1_name2, player1_score, player1_games,
+                    player2_name, player2_name2, player2_score, player2_games,
+                    timer_seconds, deciding_game_switched,
+                    rest_break_active, rest_break_seconds_left, rest_break_title,
+                    rest_break_taken, rest_break_started_at, rest_break_duration, sides_manually_switched,
+                    set_scores_history, match_completed,
+                    serving_player, initial_server, serving_team, serving_player_on_team,
+                    team1_right_court, team2_right_court, between_sets,
+                    match_start_time, match_end_time, version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${startExprInsert}, NULL, 1)`,
+                [court.id, ...columnValues, ...startParamsInsert]
             );
-        }
-
-        // ---- Merge body med eksisterende række ----
-        const mergePlayer = (provided, prefix, defName, defName2) => {
-            const p = provided || {};
-            const hasP = (k) => Object.prototype.hasOwnProperty.call(p, k);
-            const ex = (col, def) => existing ? existing[col] : def;
-            return {
-                name:  hasP('name')  ? (p.name  || defName)  : ex(`${prefix}_name`, defName),
-                name2: hasP('name2') ? (p.name2 || defName2) : ex(`${prefix}_name2`, defName2),
-                score: hasP('score') ? (p.score || 0) : ex(`${prefix}_score`, 0),
-                games: hasP('games') ? (p.games || 0) : ex(`${prefix}_games`, 0)
-            };
-        };
-        const player1 = mergePlayer(body.player1, 'player1', 'Spiller 1', 'Makker 1');
-        const player2 = mergePlayer(body.player2, 'player2', 'Spiller 2', 'Makker 2');
-
-        const timerSeconds = has('timerSeconds') ? (body.timerSeconds || 0) : (existing ? existing.timer_seconds : 0);
-        const decidingGameSwitched = has('decidingGameSwitched') ? (body.decidingGameSwitched || false) : (existing ? !!existing.deciding_game_switched : false);
-        const restBreakActive = has('restBreakActive') ? (body.restBreakActive || false) : (existing ? !!existing.rest_break_active : false);
-        const restBreakSecondsLeft = has('restBreakSecondsLeft') ? (body.restBreakSecondsLeft || 0) : (existing ? existing.rest_break_seconds_left : 0);
-        const restBreakTitle = has('restBreakTitle') ? (body.restBreakTitle || '') : (existing ? (existing.rest_break_title || '') : '');
-        const restBreakTaken = has('restBreakTaken') ? !!body.restBreakTaken : (existing ? !!existing.rest_break_taken : false);
-        const restBreakStartedAt = has('restBreakStartedAt')
-            ? (body.restBreakStartedAt != null && Number.isFinite(Number(body.restBreakStartedAt)) ? Math.round(Number(body.restBreakStartedAt)) : null)
-            : (existing ? existing.rest_break_started_at : null);
-        const restBreakDuration = has('restBreakDuration') ? (Number(body.restBreakDuration) || 60) : (existing ? (existing.rest_break_duration || 60) : 60);
-        const sidesManuallySwitched = has('sidesManuallySwitched') ? !!body.sidesManuallySwitched : (existing ? !!existing.sides_manually_switched : false);
-        const matchCompleted = has('matchCompleted') ? (body.matchCompleted || false) : (existing ? !!existing.match_completed : false);
-        const servingPlayer = has('servingPlayer') ? (body.servingPlayer || null) : (existing ? existing.serving_player : null);
-        const initialServer = has('initialServer') ? (body.initialServer || null) : (existing ? existing.initial_server : null);
-        const servingTeam = has('servingTeam') ? (body.servingTeam || null) : (existing ? existing.serving_team : null);
-        const servingPlayerOnTeam = has('servingPlayerOnTeam') ? (body.servingPlayerOnTeam || null) : (existing ? existing.serving_player_on_team : null);
-        const team1RightCourt = has('team1RightCourt') ? (body.team1RightCourt || 1) : (existing ? (existing.team1_right_court || 1) : 1);
-        const team2RightCourt = has('team2RightCourt') ? (body.team2RightCourt || 1) : (existing ? (existing.team2_right_court || 1) : 1);
-        const betweenSets = has('betweenSets') ? (body.betweenSets || false) : (existing ? !!existing.between_sets : false);
-        const setScoresHistoryJson = has('setScoresHistory')
-            ? (body.setScoresHistory ? JSON.stringify(body.setScoresHistory) : '[]')
-            : (existing && existing.set_scores_history
-                ? (typeof existing.set_scores_history === 'string'
-                    ? existing.set_scores_history
-                    : JSON.stringify(existing.set_scores_history))
-                : '[]');
-
-        // Check if frontend explicitly provided matchStartTime
-        const hasExplicitStartTime = has('matchStartTime') && !!body.matchStartTime;
-
-        // Sentinel 'now': klienten beder serveren stemple starttiden med sit
-        // eget ur (NOW()) — klient-ure kan være skæve, og skævheden ville ellers
-        // lande direkte i den viste kamptid på TV/oversigt.
-        const startTimeIsNow = hasExplicitStartTime && body.matchStartTime === 'now';
-
-        // Convert ISO 8601 timestamp to MySQL datetime format
-        let mysqlStartTime = null;
-        if (hasExplicitStartTime && !startTimeIsNow) {
-            // Convert '2026-01-21T10:34:08.440Z' to '2026-01-21 10:34:08'
-            mysqlStartTime = new Date(body.matchStartTime).toISOString().slice(0, 19).replace('T', ' ');
-        }
-
-        // Check if frontend explicitly wants to clear matchEndTime (undo scenario)
-        const shouldClearMatchEndTime = has('matchEndTime') && body.matchEndTime === null;
-
-        // Aktivitet vurderes på den MERGEDE tilstand — en partiel opdatering
-        // (fx navnerettelse) midt i en kamp må ikke ligne et reset
-        const existingStartTime = existing ? existing.match_start_time : null;
-        const hasActivity =
-            (player1.score > 0) ||
-            (player2.score > 0) ||
-            (player1.games > 0) ||
-            (player2.games > 0) ||
-            (timerSeconds > 0) ||
-            hasExplicitStartTime ||
-            (!has('matchStartTime') && existingStartTime !== null);
-
-        // Check if this is a reset (no activity at all)
-        const isReset = !hasActivity;
-
-        // Kampen er slut: en side har vundet 2 sæt. En kamp der meldes afsluttet
-        // på anden vis (golden set = ét sæt, slutter 1–0) får sluttid længere nede.
-        const matchEnding = (player1.games >= 2 || player2.games >= 2);
-
-        // Hvis match_start_time ændres fra null til værdi, invalidér QR-tokens for banen
-        const matchIsStarting =
-            (!existing || existing.match_start_time === null) &&
-            (hasExplicitStartTime || player1.score > 0 || player2.score > 0);
-
-        // Ryd snapshot når en ny kamp/tildeling påvirker banen:
-        //  - der er reel aktivitet (point/games/start)
-        //  - eller navne er ikke længere defaults (typisk fordi en holdkamp/
-        //    turneringskamp er tildelt eller en bruger har indtastet spillere)
-        const hasRealPlayerNames =
-            (player1.name && player1.name !== 'Spiller 1') ||
-            (player2.name && player2.name !== 'Spiller 2');
-        if (hasActivity || hasRealPlayerNames) {
-            await query('DELETE FROM last_finished_matches WHERE court_id = ?', [court.id]);
-        }
-
-        // ---- Skriv rækken ----
-        // match_start_time/match_end_time har betinget logik — udtrykkene bygges
-        // som SQL-fragmenter så NOW() evalueres i databasen præcis som før
-        const columnValues = [
-            player1.name, player1.name2, player1.score, player1.games,
-            player2.name, player2.name2, player2.score, player2.games,
-            timerSeconds, decidingGameSwitched,
-            restBreakActive, restBreakSecondsLeft, restBreakTitle,
-            restBreakTaken, restBreakStartedAt, restBreakDuration, sidesManuallySwitched,
-            setScoresHistoryJson, matchCompleted,
-            servingPlayer, initialServer, servingTeam, servingPlayerOnTeam,
-            team1RightCourt, team2RightCourt, betweenSets
-        ];
-
-        if (existing) {
-            let startExpr;
-            let startParams = [];
-            if (isReset) {
-                startExpr = 'NULL';
-            } else if (startTimeIsNow) {
-                // Bevar en allerede sat starttid — 'now' må ikke nulstille et
-                // gentaget/forsinket start-kald midt i en kamp
-                startExpr = 'COALESCE(match_start_time, NOW())';
-            } else if (hasExplicitStartTime) {
-                startExpr = '?';
-                startParams = [mysqlStartTime];
-            } else {
-                startExpr = `COALESCE(match_start_time, ${hasActivity ? 'NOW()' : 'NULL'})`;
-            }
-
-            let endExpr;
-            if (isReset || shouldClearMatchEndTime) {
-                endExpr = 'NULL';
-            } else if (matchEnding) {
-                endExpr = 'COALESCE(match_end_time, NOW())'; // ellers flytter en navnerettelse efter kampen sluttiden
-            } else if (matchCompleted && (player1.games >= 1 || player2.games >= 1)) {
-                // Golden set (ét sæt) meldt afsluttet ved 1–0 — sæt sluttid én gang
-                endExpr = 'COALESCE(match_end_time, NOW())';
-            } else {
-                endExpr = 'match_end_time';
-            }
-
-            // Compare-and-swap: med expectedVersion opdateres kun hvis versionen
-            // stadig matcher — ellers har en anden enhed skrevet imellem, og vi
-            // svarer 409 i stedet for at overskrive dens ændring
-            const casClause = expectedVersion !== null ? ' AND version = ?' : '';
-            const casParams = expectedVersion !== null ? [expectedVersion] : [];
-
-            const result = await query(
-                `UPDATE game_states SET
-                    player1_name = ?, player1_name2 = ?, player1_score = ?, player1_games = ?,
-                    player2_name = ?, player2_name2 = ?, player2_score = ?, player2_games = ?,
-                    timer_seconds = ?, deciding_game_switched = ?,
-                    rest_break_active = ?, rest_break_seconds_left = ?, rest_break_title = ?,
-                    rest_break_taken = ?, rest_break_started_at = ?, rest_break_duration = ?, sides_manually_switched = ?,
-                    set_scores_history = ?, match_completed = ?,
-                    serving_player = ?, initial_server = ?, serving_team = ?, serving_player_on_team = ?,
-                    team1_right_court = ?, team2_right_court = ?, between_sets = ?,
-                    match_start_time = ${startExpr},
-                    match_end_time = ${endExpr},
-                    version = version + 1
-                 WHERE court_id = ?${casClause}`,
-                [...columnValues, ...startParams, court.id, ...casParams]
-            );
-
-            if (result.affectedRows === 0) {
+        } catch (error) {
+            if (error && error.code === 'ER_DUP_ENTRY') {
+                // To klienter oprettede tilstanden samtidig — den anden vandt
                 const fresh = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
                 return conflictResponse(fresh);
             }
-        } else {
-            const startExprInsert = startTimeIsNow ? 'NOW()'
-                : hasExplicitStartTime ? '?'
-                : (hasActivity ? 'NOW()' : 'NULL');
-            const startParamsInsert = (hasExplicitStartTime && !startTimeIsNow) ? [mysqlStartTime] : [];
-            try {
-                await query(
-                    `INSERT INTO game_states (
-                        court_id,
-                        player1_name, player1_name2, player1_score, player1_games,
-                        player2_name, player2_name2, player2_score, player2_games,
-                        timer_seconds, deciding_game_switched,
-                        rest_break_active, rest_break_seconds_left, rest_break_title,
-                        rest_break_taken, rest_break_started_at, rest_break_duration, sides_manually_switched,
-                        set_scores_history, match_completed,
-                        serving_player, initial_server, serving_team, serving_player_on_team,
-                        team1_right_court, team2_right_court, between_sets,
-                        match_start_time, match_end_time, version
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${startExprInsert}, NULL, 1)`,
-                    [court.id, ...columnValues, ...startParamsInsert]
-                );
-            } catch (error) {
-                if (error && error.code === 'ER_DUP_ENTRY') {
-                    // To klienter oprettede tilstanden samtidig — den anden vandt
-                    const fresh = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
-                    return conflictResponse(fresh);
-                }
-                throw error;
-            }
+            throw error;
         }
+    }
 
-        // Et indtastet resultat hører kun til en afsluttet kamp — fortrydes den,
-        // eller starter en ny, glemmes det
-        if (!matchCompleted && existing && (existing.result_outcome || existing.result_winner || existing.result_history_id)) {
-            // Fortrudt matchbold (samme kamp spiller videre): kampen er ikke afgjort
-            // alligevel, så dens række i kamphistorikken slettes. Vindes den igen,
-            // gemmes en ny — før gav det to rækker for samme kamp. En ny kamp
-            // (isReset) beholder selvfølgelig den forriges række.
-            if (existing.match_completed && !isReset && existing.result_history_id) {
-                await query('DELETE FROM match_history WHERE id = ? AND court_id = ?',
-                    [existing.result_history_id, court.id]);
-            }
-            await query(
-                'UPDATE game_states SET result_outcome = NULL, result_winner = NULL, result_history_id = NULL WHERE court_id = ?',
-                [court.id]
-            );
+    // Et indtastet resultat hører kun til en afsluttet kamp — fortrydes den,
+    // eller starter en ny, glemmes det
+    if (!matchCompleted && existing && (existing.result_outcome || existing.result_winner || existing.result_history_id)) {
+        // Fortrudt matchbold (samme kamp spiller videre): kampen er ikke afgjort
+        // alligevel, så dens række i kamphistorikken slettes. Vindes den igen,
+        // gemmes en ny — før gav det to rækker for samme kamp. En ny kamp
+        // (isReset) beholder selvfølgelig den forriges række.
+        if (existing.match_completed && !isReset && existing.result_history_id) {
+            await query('DELETE FROM match_history WHERE id = ? AND court_id = ?',
+                [existing.result_history_id, court.id]);
         }
+        await query(
+            'UPDATE game_states SET result_outcome = NULL, result_winner = NULL, result_history_id = NULL WHERE court_id = ?',
+            [court.id]
+        );
+    }
 
-        // badmintonplanner: resultatet gemmes, når en talt kamp bliver afgjort, og
-        // rettes til 'unfinished', hvis afslutningen fortrydes
-        const varAfsluttet = !!(existing && existing.match_completed);
-        if (matchCompleted !== varAfsluttet) {
-            try {
-                const frisk = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
-                await gemPlannerResultat(parseInt(courtId, 10), frisk, { kunHvisFindes: !matchCompleted });
-            } catch (e) { console.error('Planner-resultat fejlede:', e.message); }
-        }
-
-        // Auto-update court active status based on activity (unless skipped by admin)
-        // Only set to active if there IS activity, never set to inactive
-        // This allows admin to manually mark courts as active without gameplay interference
-        if (!skipAutoActive && hasActivity) {
-            await query('UPDATE courts SET is_active = TRUE WHERE id = ?', [court.id]);
-        }
-
-        // Update court's isDoubles setting if provided
-        if (body.isDoubles !== undefined && typeof body.isDoubles === 'boolean') {
-            await query('UPDATE courts SET is_doubles = ? WHERE id = ?', [body.isDoubles, court.id]);
-        }
-
-        // Update court's gameMode (21/30 vs 15/21) if provided — synker court-sidens
-        // toggle med DB saa periodic sync ikke ruller den tilbage.
-        if (body.gameMode !== undefined && (body.gameMode === '15' || body.gameMode === '21')) {
-            await query('UPDATE courts SET game_mode = ? WHERE id = ?', [body.gameMode, court.id]);
-        }
-
-        // NB: QR-token'et slettes IKKE ved kampstart mere. Det bevares under hele
-        // kampen, så en gæst der lukker browseren kan scanne QR'en på TV'et igen
-        // og genoptage kampen med stillingen intakt. Token'et ryddes først når
-        // banen nulstilles (DELETE) eller tildeles en holdkamp/turnering.
-        // matchIsStarting bruges ikke længere her, men beholdes hvis anden logik
-        // senere skal reagere på kampstart.
-        void matchIsStarting;
-
-        // Enheden der gemte, tæller nu banen (og giver lyd) — men kun når der
-        // tælles en kamp. Navne, double/single eller valg af server gør ikke en
-        // tablet til tæller (ellers spærrede den for QR-telefonen, der skal tælle).
-        // En nulstilling glemmer tællerne, så ingen får "overtaget" om en gammel kamp.
+    // badmintonplanner: resultatet gemmes, når en talt kamp bliver afgjort, og
+    // rettes til 'unfinished', hvis afslutningen fortrydes
+    const varAfsluttet = !!(existing && existing.match_completed);
+    if (matchCompleted !== varAfsluttet) {
         try {
-            if (isReset) {
-                await query(
-                    `UPDATE game_states SET taeller_id = NULL, taeller_navn = NULL, taeller_set_at = NULL,
-                        forrige_taeller_id = NULL, forrige_taeller_navn = NULL, overtaget_at = NULL
-                     WHERE court_id = ?`, [court.id]);
-            } else if (taellerId && (hasActivity || (existing && existing.taeller_id === taellerId))) {
-                await saetTaeller(req, court.id, existing, taellerId, body.taellerNavn);
-            }
-        } catch (e) { console.error('Kunne ikke registrere tælleren:', e.message); }
+            const frisk = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
+            await gemPlannerResultat(parseInt(courtId, 10), frisk, { kunHvisFindes: !matchCompleted });
+        } catch (e) { console.error('Planner-resultat fejlede:', e.message); }
+    }
 
-        const updatedRow = await queryOne('SELECT version FROM game_states WHERE court_id = ?', [court.id]);
+    // Auto-update court active status based on activity (unless skipped by admin)
+    // Only set to active if there IS activity, never set to inactive
+    // This allows admin to manually mark courts as active without gameplay interference
+    if (!skipAutoActive && hasActivity) {
+        await query('UPDATE courts SET is_active = TRUE WHERE id = ?', [court.id]);
+    }
 
-        publishGameStateChange(req, courtId, 'update');
+    // Update court's isDoubles setting if provided
+    if (body.isDoubles !== undefined && typeof body.isDoubles === 'boolean') {
+        await query('UPDATE courts SET is_doubles = ? WHERE id = ?', [body.isDoubles, court.id]);
+    }
 
-        res.json({ success: true, version: updatedRow ? updatedRow.version : 1 });
+    // Update court's gameMode (21/30 vs 15/21) if provided — synker court-sidens
+    // toggle med DB saa periodic sync ikke ruller den tilbage.
+    if (body.gameMode !== undefined && (body.gameMode === '15' || body.gameMode === '21')) {
+        await query('UPDATE courts SET game_mode = ? WHERE id = ?', [body.gameMode, court.id]);
+    }
+
+    // NB: QR-token'et slettes IKKE ved kampstart mere. Det bevares under hele
+    // kampen, så en gæst der lukker browseren kan scanne QR'en på TV'et igen
+    // og genoptage kampen med stillingen intakt. Token'et ryddes først når
+    // banen nulstilles (DELETE) eller tildeles en holdkamp/turnering.
+    // matchIsStarting bruges ikke længere her, men beholdes hvis anden logik
+    // senere skal reagere på kampstart.
+    void matchIsStarting;
+
+    // Enheden der gemte, tæller nu banen (og giver lyd) — men kun når der
+    // tælles en kamp. Navne, double/single eller valg af server gør ikke en
+    // tablet til tæller (ellers spærrede den for QR-telefonen, der skal tælle).
+    // En nulstilling glemmer tællerne, så ingen får "overtaget" om en gammel kamp.
+    try {
+        if (isReset) {
+            await query(
+                `UPDATE game_states SET taeller_id = NULL, taeller_navn = NULL, taeller_set_at = NULL,
+                    forrige_taeller_id = NULL, forrige_taeller_navn = NULL, overtaget_at = NULL
+                 WHERE court_id = ?`, [court.id]);
+        } else if (taellerId && (hasActivity || (existing && existing.taeller_id === taellerId))) {
+            await saetTaeller(req, court.id, existing, taellerId, body.taellerNavn);
+        }
+    } catch (e) { console.error('Kunne ikke registrere tælleren:', e.message); }
+
+    const updatedRow = await queryOne('SELECT version FROM game_states WHERE court_id = ?', [court.id]);
+
+    publishGameStateChange(req, courtId, 'update');
+
+    return { status: 200, json: { success: true, version: updatedRow ? updatedRow.version : 1 } };
+}
+
+router.put('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), async (req, res, next) => {
+    try {
+        // skipAutoActive: admins redigering må ikke gøre banen aktiv
+        const r = await gemTilstand(req, req.params.courtId, req.body || {},
+            { skipAutoActive: req.query.skipAutoActive === 'true' });
+        res.status(r.status).json(r.json);
     } catch (error) {
         next(error);
     }
@@ -980,3 +987,5 @@ router.delete('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), a
 });
 
 module.exports = router;
+module.exports.gemTilstand = gemTilstand;
+module.exports.formatStateRow = formatStateRow;

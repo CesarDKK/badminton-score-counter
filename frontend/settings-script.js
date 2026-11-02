@@ -124,6 +124,7 @@ function setupEventListeners() {
 
     // QR-kode på TV
     document.getElementById('hideTvQr').addEventListener('change', toggleTvQr);
+    document.getElementById('urTaelling').addEventListener('change', toggleUrTaelling);
 
     // Password
     document.getElementById('changePasswordBtn').addEventListener('click', changePassword);
@@ -188,6 +189,7 @@ async function loadSettings() {
         // Invert logic: checked = tournament mode ON (showResetButton false)
         document.getElementById('showResetButton').checked = settings.showResetButton === false;
         document.getElementById('hideTvQr').checked = settings.hideTvQr === true;
+        document.getElementById('urTaelling').checked = settings.urTaelling === true;
         document.getElementById('defaultGameMode').value = settings.defaultGameMode || '15';
     } catch (error) {
         console.error('Failed to load settings:', error);
@@ -281,6 +283,20 @@ async function toggleTvQr() {
         console.error('Failed to toggle TV QR:', error);
         showMessage('Fejl', error.message);
         document.getElementById('hideTvQr').checked = !hide;
+    }
+}
+
+async function toggleUrTaelling() {
+    const til = document.getElementById('urTaelling').checked;
+    try {
+        await api.updateUrTaelling(til);
+        showMessage('Succes', til
+            ? 'Tæl fra uret er slået til — ur-koden vises på TV\'et under QR-koden'
+            : 'Tæl fra uret er slået fra');
+    } catch (error) {
+        console.error('Failed to toggle watch counting:', error);
+        showMessage('Fejl', error.message);
+        document.getElementById('urTaelling').checked = !til;
     }
 }
 

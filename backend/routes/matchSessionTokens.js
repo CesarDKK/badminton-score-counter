@@ -41,6 +41,24 @@ async function getOrCreateActiveToken(courtNumber) {
     return token;
 }
 
+// Banens ur-kode (6 cifre) til QR-sessionen — laves første gang, den skal vises.
+// Unik blandt de aktive sessioner, så en kode altid peger på én bane.
+async function urKodeFor(token) {
+    const row = await queryOne(
+        "SELECT id, ur_kode FROM device_tokens WHERE token = ? AND token_type = 'match_session' AND is_active = 1", [token]);
+    if (!row) return null;
+    if (row.ur_kode) return row.ur_kode;
+    for (let i = 0; i < 20; i++) {
+        const kode = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+        const optaget = await queryOne(
+            "SELECT id FROM device_tokens WHERE ur_kode = ? AND token_type = 'match_session' AND is_active = 1", [kode]);
+        if (optaget) continue;
+        await query('UPDATE device_tokens SET ur_kode = ? WHERE id = ? AND ur_kode IS NULL', [kode, row.id]);
+        return (await queryOne('SELECT ur_kode FROM device_tokens WHERE id = ?', [row.id])).ur_kode;
+    }
+    return null;
+}
+
 // Sletter alle match-session tokens for en bane permanent.
 // Kaldes når en kamp starter eller banen ryddes.
 // Match-session tokens (QR-kode) giver ingen værdi efter brug og ryddes straks.
@@ -88,6 +106,12 @@ router.get('/:courtId', async (req, res) => {
 
         res.setHeader('Content-Type', 'image/png');
         res.setHeader('Cache-Control', 'no-store');
+        // Tæl fra uret slået til: TV'et viser banens ur-kode under QR-koden
+        const ur = await queryOne("SELECT setting_value FROM settings WHERE setting_key = 'ur_taelling'");
+        if (ur && ur.setting_value === 'true') {
+            const kode = await urKodeFor(token);
+            if (kode) res.setHeader('X-Ur-Kode', kode);
+        }
         res.end(buffer);
     } catch (err) {
         console.error('QR-generering fejlede:', err);
@@ -98,3 +122,4 @@ router.get('/:courtId', async (req, res) => {
 module.exports = router;
 module.exports.invalidateCourtTokens = invalidateCourtTokens;
 module.exports.getActiveToken = getActiveToken;
+module.exports.urKodeFor = urKodeFor;

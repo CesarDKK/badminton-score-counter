@@ -516,6 +516,7 @@ function setupEventListeners() {
 
     // Livestream fra TV-PC'ens kamera (kun når banen er sat op til det i admin)
     document.getElementById('livestreamMenuBtn').addEventListener('click', livestreamKnap);
+    document.getElementById('urMenuBtn').addEventListener('click', sendUrLink);
 
     // Editable player names
     // Top fields edit main player names, bottom fields can edit partner names in doubles
@@ -597,6 +598,42 @@ function setStanding(on) {
 function openSettingsMenu() {
     document.getElementById('settingsMenu').style.display = 'flex';
     opdaterLivestreamKnap();
+    opdaterUrKnap();
+}
+
+// ===== Tæl fra uret (backend/routes/urTaeller.js) =====
+// QR-telefonen kan sende sig selv et link med banens ur-kode i Beskeder; på
+// uret åbnes linket, og uret tæller kampen. Kun når klubben har slået det til
+// (serveren svarer 404 ellers) og kun for QR-telefonen — knappen er skjult ellers.
+let urKode = null;
+
+async function opdaterUrKnap() {
+    const btn = document.getElementById('urMenuBtn');
+    urKode = null;
+    btn.style.display = 'none';
+    if (!isMatchSessionToken()) return;
+    try {
+        urKode = (await api.request('/ur/kode', {}, 1)).kode;
+    } catch {
+        return;   // slået fra, ældre server eller intet net
+    }
+    btn.style.display = urKode ? 'block' : 'none';
+}
+
+function sendUrLink() {
+    if (!urKode) return;
+    closeSettingsMenu();
+    const link = `${location.origin}/ur.html?k=${urKode}`;
+    showMessage(
+        'Tæl fra dit Apple Watch',
+        'Beskeder åbner med et link til uret. Skriv dig selv som modtager, og tryk send.\n\n' +
+        'Åbn så beskeden på uret og tryk på linket — uret tæller banen. Kampen kan stadig tælles her på telefonen.',
+        [
+            { text: 'Åbn Beskeder', style: 'primary',
+              callback: () => { location.href = 'sms:&body=' + encodeURIComponent(`Tæl kampen på bane ${courtId}: ${link}`); } },
+            { text: 'Annuller', style: 'secondary', callback: null }
+        ]
+    );
 }
 
 function closeSettingsMenu() {

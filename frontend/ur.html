@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <!-- Apple Watch: vis siden i urets egen størrelse i stedet for at skalere en
+         telefonside ned (disabled-adaptations) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="disabled-adaptations" content="watch">
+    <meta name="theme-color" content="#0f0e17">
+    <title>Tæl fra uret — BadmintonApp</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=5">
+    <style>
+        :root {
+            --bg: #0f0e17;
+            --kort: #1d1b2e;
+            --kant: rgba(255, 255, 255, 0.12);
+            --tekst: #ffffff;
+            --daempet: rgba(255, 255, 255, 0.62);
+            --accent: #e94560;
+            --vind: #45d17e;
+            --advarsel: #ffb02e;
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body { margin: 0; height: 100%; background: var(--bg); color: var(--tekst); }
+        body {
+            font-family: -apple-system, system-ui, sans-serif;
+            padding: max(4px, env(safe-area-inset-top)) 4px max(4px, env(safe-area-inset-bottom));
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        button { font: inherit; color: inherit; border: 0; cursor: pointer; }
+        .skjult { display: none !important; }
+        .side { display: flex; flex-direction: column; gap: 4px; min-height: 100%; }
+        .lille { font-size: 11px; color: var(--daempet); text-align: center; line-height: 1.25; }
+        h1 { font-size: 15px; margin: 2px 0; text-align: center; }
+
+        /* Koden */
+        #kodeVisning { font-size: 24px; letter-spacing: 0.12em; text-align: center; min-height: 30px; font-variant-numeric: tabular-nums; }
+        .tastatur { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+        .tastatur button { background: var(--kort); border-radius: 8px; padding: 6px 0; font-size: 17px; }
+        .tastatur .ok { background: var(--accent); }
+
+        /* Tællingen: to store knapper, spillerne står fast hele kampen */
+        .spiller {
+            flex: 1;
+            display: flex; align-items: center; justify-content: space-between; gap: 6px;
+            background: var(--kort);
+            border: 2px solid var(--kant);
+            border-radius: 14px;
+            padding: 6px 10px;
+            min-height: 58px;
+            text-align: left;
+        }
+        .spiller:active { background: #2a2740; }
+        .spiller[disabled] { opacity: 0.45; }
+        .spiller.serv { border-color: var(--accent); }
+        .spiller .navn { font-size: 13px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .spiller .saet { font-size: 11px; color: var(--daempet); }
+        .spiller .point { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .spiller.vinder { border-color: var(--vind); }
+        .raekke { display: flex; gap: 4px; }
+        .raekke button { flex: 1; background: var(--kort); border-radius: 10px; padding: 6px 0; font-size: 13px; }
+        .raekke .primaer { background: var(--accent); }
+        #status { min-height: 14px; }
+        #status.venter { color: var(--daempet); }
+        #status.fejl { color: var(--advarsel); }
+        .pause { text-align: center; font-size: 13px; color: var(--advarsel); }
+        .pause b { font-size: 18px; font-variant-numeric: tabular-nums; }
+    </style>
+</head>
+<body>
+    <!-- 1. Banens kode fra TV'et -->
+    <div id="kodeSide" class="side skjult">
+        <h1>Tæl fra uret</h1>
+        <div class="lille">Tast ur-koden fra banens TV</div>
+        <div id="kodeVisning"></div>
+        <div class="tastatur" id="tastatur"></div>
+        <div id="kodeFejl" class="lille" style="color: var(--advarsel)"></div>
+    </div>
+
+    <!-- 2. Kampen -->
+    <div id="kampSide" class="side skjult">
+        <div class="lille" id="overskrift"></div>
+        <div id="pause" class="pause skjult"></div>
+        <button class="spiller" id="side0"><span><span class="navn"></span><br><span class="saet"></span></span><span class="point"></span></button>
+        <button class="spiller" id="side1"><span><span class="navn"></span><br><span class="saet"></span></span><span class="point"></span></button>
+        <div class="raekke">
+            <button id="fortryd">↶ Fortryd</button>
+            <button id="naeste" class="primaer skjult">Næste sæt</button>
+            <button id="overtag" class="primaer skjult">Overtag</button>
+        </div>
+        <div id="status" class="lille"></div>
+    </div>
+
+    <script src="js/taeller-regler.js?v=2"></script>
+    <script src="ur-script.js?v=1"></script>
+</body>
+</html>

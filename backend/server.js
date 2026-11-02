@@ -107,6 +107,7 @@ app.get('/t/:token', async (req, res, next) => {
 });
 
 app.use('/api/qr-code', require('./routes/matchSessionTokens'));
+app.use('/api/ur', require('./routes/urTaeller'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/player-info', require('./routes/playerInfo'));
 app.use('/api/player-logos', require('./routes/playerLogos'));

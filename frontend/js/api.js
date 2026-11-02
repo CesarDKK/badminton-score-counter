@@ -335,6 +335,14 @@ class BadmintonAPI {
         });
     }
 
+    /** Tæl fra uret til/fra (ur-koden på TV'et) */
+    async updateUrTaelling(urTaelling) {
+        return this.request('/settings/ur-taelling', {
+            method: 'PUT',
+            body: JSON.stringify({ urTaelling })
+        });
+    }
+
     async updateDefaultGameMode(gameMode) {
         return this.request('/settings/game-mode', {
             method: 'PUT',
