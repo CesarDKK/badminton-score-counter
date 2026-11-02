@@ -2070,7 +2070,14 @@ window.addEventListener('pagehide', () => {
         if (api.token) headers['Authorization'] = `Bearer ${api.token}`;
         // Samme fulde payload som performSave — ellers merger backend per-felt og
         // efterlader serve-position/sider/pause uændret for den flushede score.
-        const body = JSON.stringify(buildSavePayload());
+        const payload = buildSavePayload();
+        // Er vores egen gemning stadig på vej, har serveren allerede (eller om
+        // lidt) talt versionen op, som vi endnu ikke kender — med den gamle
+        // version blev flushen afvist (409), og det seneste point gik tabt.
+        // Flushen er hele den nyeste tilstand, og andre tællere holdes ude af
+        // taellerId (423), så den sendes uden versionstjek.
+        if (isSaving) delete payload.expectedVersion;
+        const body = JSON.stringify(payload);
         fetch(`/api/game-states/${courtId}`, { method: 'PUT', headers, body, keepalive: true });
     } catch { /* bedst muligt — intet at gøre hvis flush fejler under unload */ }
 });
