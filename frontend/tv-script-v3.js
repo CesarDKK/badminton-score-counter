@@ -1538,7 +1538,7 @@ function synkLedigQr() {
     if (vis && img && img.src !== qrCounterObjectUrl) img.src = qrCounterObjectUrl;
     const ur = kort.querySelector('.ledig-ur');
     if (ur) {
-        ur.textContent = vis && qrUrKode ? `Eller tæl fra uret med koden ${urKodeTekst()}` : '';
+        ur.textContent = vis && qrUrKode ? `Apple Watch: tæl med koden ${urKodeTekst()}` : '';
         ur.style.display = vis && qrUrKode ? 'block' : 'none';
     }
 }
@@ -1909,7 +1909,7 @@ function urKodeTekst() {
 function visUrKode() {
     const el = document.getElementById('qrUrKode');
     if (!el) return;
-    el.textContent = qrUrKode ? `UR-KODE ${urKodeTekst()}` : '';
+    el.textContent = qrUrKode ? `APPLE WATCH ${urKodeTekst()}` : '';
     el.style.display = qrUrKode ? 'block' : 'none';
 }
 
