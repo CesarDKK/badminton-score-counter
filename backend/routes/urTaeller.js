@@ -251,6 +251,14 @@ router.post('/tryk', requireWriteAuthInClubMode, async (req, res, next) => {
                 : handling === 'B' ? regler.afslutPause(st)
                 : regler.fortryd(st);
             haendelser.push(...r.haendelser);
+            // Kampen er vundet: en pause ved 11 (8), der stadig står (der blev talt
+            // videre, før den løb ud), hører ikke til en afgjort kamp. Tabletten
+            // slutter den med sin nedtælling; uret har ingen, når kampen er slut
+            if (haendelser.includes('kamp') && st.restBreakActive) {
+                st.restBreakActive = false;
+                st.restBreakSecondsLeft = 0;
+                st.restBreakTitle = '';
+            }
 
             if (!r.ok && !haendelser.length) {
                 // Afvist (fx point i sætpausen): intet at gemme, men nummeret huskes
