@@ -139,17 +139,41 @@ def adgangslink(tv_url):
 
 # ---------- Kameraet ----------
 
-def find_kamera():
-    """(enhed, navn) for det første USB-kamera, eller (None, None)."""
+def kamera_navn(sti, enhed):
+    """Kameraets navn fra kernen — ellers af by-id-linket."""
+    navn = laes_tekst(f'/sys/class/video4linux/{os.path.basename(enhed)}/name')
+    if not navn:
+        # by-id-navnet: usb-046d_HD_Pro_Webcam_C920_1234-video-index0 — nyere udev
+        # laver også et link med interface-nummer: …_1234-if00-video-index0
+        navn = re.sub(r'^usb-[0-9a-f]{4}_|_[0-9A-F]{6,}(-if\d+)?-video-index0$|(-if\d+)?-video-index0$', '',
+                      os.path.basename(sti)).replace('_', ' ')
+    return navn[:100]
+
+
+def find_kamera(formater=None):
+    """(enhed, navn) for det USB-kamera, der kan sende billede — eller (None, None).
+    Ét kamera kan vise sig som flere videoenheder: Brio 4K har et infrarødt kamera
+    (Windows Hello, kun GREY) ved siden af billedet, og udev laver både et link med
+    interface-nummer (-if00-) og et uden, så det første link er ikke altid billedet.
+    Tages den første enhed (i linkenes rækkefølge, hvert kamera én gang), der har
+    MJPEG — ellers YUYV; har ingen et format, vi kan sende (eller v4l2-ctl svarede
+    ikke), den første som før. formater: enhed -> kamera_formater(); Sender giver
+    sin cache med, så hvert kamera kun spørges én gang."""
+    formater = formater or kamera_formater
+    kandidater, set_ = [], set()
     for sti in sorted(glob.glob(KAMERA_GLOB)):
         enhed = os.path.realpath(sti)
-        navn = laes_tekst(f'/sys/class/video4linux/{os.path.basename(enhed)}/name')
-        if not navn:
-            # by-id-navnet: usb-046d_HD_Pro_Webcam_C920_1234-video-index0
-            navn = re.sub(r'^usb-[0-9a-f]{4}_|_[0-9A-F]{6,}-video-index0$|-video-index0$', '',
-                          os.path.basename(sti)).replace('_', ' ')
-        return enhed, navn[:100]
-    return None, None
+        if enhed not in set_:
+            set_.add(enhed)
+            kandidater.append((sti, enhed))
+    if not kandidater:
+        return None, None
+    for input_ in INPUT_ORDEN:
+        for sti, enhed in kandidater:
+            if formater(enhed).get(input_):
+                return enhed, kamera_navn(sti, enhed)
+    sti, enhed = kandidater[0]
+    return enhed, kamera_navn(sti, enhed)
 
 
 def stil_kamera(enhed, autofokus=False):
@@ -638,7 +662,8 @@ class Stream:
                     log(('kameraet kan: ' if n == 'mjpeg' else f'kameraet kan ({INPUT_NAVN[n]}): ') +
                         ', '.join(f'{b}x{h}@{max(r)}' for (b, h), r in sorted(self.formater[enhed][n].items())))
             if not self.formater[enhed]:
-                log('kameraets formater er ukendte (v4l2-ctl svarede ikke) — prøver MJPEG, så YUYV')
+                log(f'{enhed}: ingen formater, vi kan sende (v4l2-ctl svarede ikke, eller kun '
+                    f'fx GREY) — vælges enheden, prøves MJPEG, så YUYV')
         return self.formater[enhed]
 
     def formater_tekst(self, enhed):
@@ -823,7 +848,7 @@ def main():
             log('TV_URL er ikke et adgangslink (…/t/<kode>) — kan ikke spørge serveren')
             stop.wait(SPOERG_INTET)
             continue
-        enhed, kamera = find_kamera()
+        enhed, kamera = find_kamera(stream.kameraets_formater)
         # Kameraet taget ud og sat i igen (fx i et andet stik): enheden oprettes på
         # ny — og formaterne kan være andre (USB 1.1-fart i en hub har intet MJPEG)
         try:

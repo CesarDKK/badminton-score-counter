@@ -242,6 +242,9 @@ Kameraet skal kunne sende MJPEG — det kan alle Logitech-kameraer (C920:
 1080p @ 30, 720p @ 30).
 Til 4 m bag banen skal synsvinklen være mindst ~90° diagonalt (fx Logitech
 C930e eller Brio 505). Et USB-kabel længere end 3–5 m skal være aktivt.
+USB-C eller USB-A på kameraet gør ingen forskel. Viser kameraet sig som flere
+enheder (Brio 4K har et infrarødt kamera til Windows Hello ved siden af
+billedet), tages den enhed, der har MJPEG, ellers YUYV — ikke bare den første.
 
 ### Ting der kan drille
 

@@ -17,6 +17,7 @@
 #  12. kamera uden MJPEG          → råt YUYV, en opløsning med mindst 20 billeder
 #  13. — og formaterne ukendte    → MJPEG afvises af kameraet, så YUYV uden fejl
 #  14. MJPEG hedder JPEG, kun 720p → MJPEG i 720p, når 1080p er valgt
+#  15. kameraet er flere enheder   → den med MJPEG tages, ikke det infrarøde først i rækken
 #
 # Køres i en debian:trixie-container (henter ffmpeg, python3, Pillow og skrifterne):
 #   docker run --rm -v "$PWD/kiosk:/src" debian:trixie bash /src/test/test-stream.sh
@@ -139,9 +140,17 @@ exec ffmpeg "${ud[@]}"
 EOF
 chmod +x "$TMP/bin/ffmpeg-falsk"
 # v4l2-ctl --list-formats-ext: kameraets formater fra $TMP/formater (uden: ukendt)
+# — eller $TMP/formater.<enhed> (fx formater.video1), når enhederne er forskellige
 cat > "$TMP/bin/v4l2-ctl" <<'EOF'
 #!/bin/sh
-case "$*" in *--list-formats-ext*) cat "$FORMATER" 2>/dev/null ;; esac
+enhed=
+while [ $# -gt 0 ]; do
+    case "$1" in -d) enhed=$(basename "$2"); shift ;; --list-formats-ext) liste=1 ;; esac
+    shift
+done
+if [ -n "${liste:-}" ]; then
+    if [ -n "$enhed" ] && [ -e "$FORMATER.$enhed" ]; then cat "$FORMATER.$enhed"; else cat "$FORMATER" 2>/dev/null; fi
+fi
 exit 0
 EOF
 chmod +x "$TMP/bin/v4l2-ctl"
@@ -441,6 +450,39 @@ start_stream
 vent_sender
 forvent "status: kameraets bedste (720p)" "$(sidste_status | felt format)" "1280x720@30"
 indeholder "som MJPEG" "$(args)" "-input_format mjpeg -video_size 1280x720 -framerate 30"
+stop_stream
+kill "$MODTAGER_PID" 2>/dev/null
+
+echo "15. Kameraet viser sig som flere enheder (Brio 4K: infrarødt kamera først i rækken)"
+# Tre by-id-links til to enheder: det infrarøde kamera (kun GREY) står først og
+# har desuden linket uden interface-nummer; billedet (MJPEG) er den anden enhed
+rm -f "$TMP/formater" "$TMP/by-id/"*
+: > "$TMP/video1"; : > "$TMP/video2"
+ln -s "$TMP/video1" "$TMP/by-id/usb-046d_Logitech_BRIO_ABCDEF12-if03-video-index0"
+ln -s "$TMP/video1" "$TMP/by-id/usb-046d_Logitech_BRIO_ABCDEF12-video-index0"
+ln -s "$TMP/video2" "$TMP/by-id/usb-046d_Logitech_BRIO_ABCDEF12-if09-video-index0"
+cat > "$TMP/formater.video1" <<'EOF'
+	[0]: 'GREY' (8-bit Greyscale)
+		Size: Discrete 340x340
+			Interval: Discrete 0.033s (30.000 fps)
+EOF
+cat > "$TMP/formater.video2" <<'EOF'
+	[0]: 'MJPG' (Motion-JPEG, compressed)
+		Size: Discrete 1920x1080
+			Interval: Discrete 0.033s (30.000 fps)
+	[1]: 'YUYV' (YUYV 4:2:2)
+		Size: Discrete 640x480
+			Interval: Discrete 0.033s (30.000 fps)
+EOF
+modtager "$TMP/modtaget10.flv"
+SEND_VIDEO "$VIDEO_1080"
+start_stream
+vent_sender
+indeholder "billedet valgt, ikke det infrarøde kamera" "$(cat "$TMP/stream.log")" "kamera: Logitech BRIO ($TMP/video2)"
+forvent "navnet uden interface-nummer" "$(sidste_status | felt kamera)" "Logitech BRIO"
+forvent "status: 1080p med 30 som MJPEG" "$(sidste_status | felt format)" "1920x1080@30"
+forvent "ingen fejl til admin" "$(sidste_status | felt fejl)" ""
+forvent "sender" "$(sidste_status | felt sender)" "True"
 stop_stream
 kill "$MODTAGER_PID" 2>/dev/null
 
