@@ -1457,6 +1457,7 @@ function skaermHaendelseTekst(h) {
         case 'pc-genstart': return h.tekst || "PC'en blev genstartet";
         case 'net-wifi': return h.tekst || 'WiFi-forbindelsen var væk og kom igen';
         case 'net-server': return h.tekst || 'Ingen forbindelse til serveren, men hallens netværk virkede';
+        case 'net-ipv6': return h.tekst || 'Serveren kunne kun nås over IPv4 — hallens IPv6 driller';
         case 'net-genstart': return h.tekst || "Ingen WiFi-forbindelse — PC'en blev genstartet";
         case 'net-kort': return h.tekst || "WiFi-kortet svarer ikke — træk strømstikket ud i 1 minut";
         case 'browser-genstart': return 'Browseren frøs og blev genstartet af browser-vagten'
@@ -1514,7 +1515,7 @@ function visSkaermLogForKlub(dbName) {
 // Slags-filteret samler hændelsestyperne i grupper; ukendte typer er "Andet"
 const SKAERM_SLAGS = [
     { navn: 'frys', tekst: 'Frosset', typer: ['frys', 'browser-genstart'] },
-    { navn: 'net', tekst: 'Netværk og WiFi', typer: ['net', 'net-wifi', 'net-server', 'net-genstart', 'net-kort'] },
+    { navn: 'net', tekst: 'Netværk og WiFi', typer: ['net', 'net-wifi', 'net-server', 'net-ipv6', 'net-genstart', 'net-kort'] },
     { navn: 'genstart', tekst: 'Genstart, strøm og væk', typer: ['genstart', 'vaek', 'pc-brat', 'pc-panik', 'pc-knap', 'pc-genstart'] }
 ];
 

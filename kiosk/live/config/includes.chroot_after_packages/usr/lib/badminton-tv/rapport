@@ -37,7 +37,7 @@ hvert 5. minut). kiosk.conf sendes aldrig — den indeholder WiFi-koden.
   rapport koe TYPE TEKST FRA_MS [TIL_MS]
                         kun i køen, med WiFi-loggen (net-vagten — nettet er
                         væk, så den sendes, når det er tilbage):
-                        net-wifi, net-server, net-genstart, net-kort
+                        net-wifi, net-server, net-ipv6, net-genstart, net-kort
 
 Kun Pythons standardbibliotek.
 """

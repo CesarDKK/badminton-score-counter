@@ -19,6 +19,7 @@ spec = importlib.util.spec_from_loader('browservagt', loader)
 v = importlib.util.module_from_spec(spec)
 loader.exec_module(v)
 v.log = lambda tekst: None
+import socket
 
 fejl = 0
 def forvent(navn, faktisk, forventet):
@@ -136,8 +137,108 @@ forvent('… net-kort meldes én gang', h.typer(), ['net-kort'])
 h = Hal(optaget=True); h.nede(); h.koer(600)
 forvent('slukning/opdatering i gang: ingen genstart', h.genstart, [])
 
+# Grunden kommer med i net-server-hændelsen
+h = Hal(); h.server = v.Svar(False, 'timeout ved forbindelsen (104.21.5.133)', False); h.router = True
+h.koer(120); h.oppe(); h.koer(20)
+forvent('net-server med grunden', h.haendelser[0][1].endswith('hallens netværk virkede — timeout ved forbindelsen (104.21.5.133)'), True)
+h = Hal(); h.nede(router=True); h.koer(120); h.oppe(); h.koer(20)
+forvent('… uden grund (gammel/udskiftet tjek-funktion) som før', h.haendelser[0][1].endswith('hallens netværk virkede'), True)
+
+# Serveren svarer kun over IPv4: ingen udfald (TV'et mærker det ikke), men net-ipv6 meldes bagefter
+KUN4 = v.Svar(True, 'over IPv6: timeout efter forbindelsen (kryptering/svar) (2606:4700::1)', True)
+h = Hal(); h.server = KUN4; h.koer(300)
+forvent('kun IPv4 i 5 min: ingen genforbindelse, genstart eller hændelse endnu', (h.genforbind, h.genstart, h.typer()), (0, [], []))
+h.oppe(); h.koer(20)
+forvent('… IPv6 igen: net-ipv6 meldes', h.typer(), ['net-ipv6'])
+forvent('… med grunden og varigheden', ('5 min' in h.haendelser[0][1], '2606:4700::1' in h.haendelser[0][1]), (True, True))
+h = Hal(); h.server = KUN4; h.koer(40); h.oppe(); h.koer(20)
+forvent('kun IPv4 i 40 s: intet meldes', h.typer(), [])
+h = Hal(); h.server = KUN4; h.koer(100); h.nede(router=True); h.koer(100); h.oppe(); h.koer(20)
+forvent('kun IPv4, så helt væk, så tilbage: net-ipv6 og net-server', h.typer(), ['net-ipv6', 'net-server'])
+
+# enhed_koerer: oneshot-tjenester er 'activating', mens de kører (is-active svarer da 3)
+import subprocess as sp
+aegte_run = v.subprocess.run
+for tilstand, kode, forventet in (('activating', 3, True), ('active', 0, True), ('inactive', 3, False),
+                                  ('failed', 3, False), ('', 4, False)):
+    v.subprocess.run = lambda *a, t=tilstand, k=kode, **kw: sp.CompletedProcess(a, k, stdout=t + '\n', stderr='')
+    forvent(f'enhed_koerer: {tilstand or "ukendt enhed"} → {forventet}', v.enhed_koerer('badminton-tv-sluk.service'), forventet)
+def uden_systemctl(*a, **kw):
+    raise FileNotFoundError('systemctl')
+v.subprocess.run = uden_systemctl
+forvent('enhed_koerer: uden systemctl → nej', v.enhed_koerer('x.service'), False)
+kald = []
+v.subprocess.run = lambda args, **kw: (kald.append(args[-1]), sp.CompletedProcess(args, 3, stdout='inactive\n'))[1]
+forvent('pc_er_optaget spørger slukning og opdatering', (v.pc_er_optaget(), kald),
+        (False, ['badminton-tv-sluk.service', 'badminton-tv-opdatering.service']))
+v.subprocess.run = aegte_run
+
+# beskriv_fejl: fejlene i ord
+import errno as en
+forvent('fejl: DNS', v.beskriv_fejl(socket.gaierror(-3, 'Temporary failure in name resolution'), False), 'navneopslaget (DNS) fejlede')
+forvent('fejl: timeout før forbindelsen', v.beskriv_fejl(TimeoutError('timed out'), False), 'timeout ved forbindelsen')
+forvent('fejl: timeout efter forbindelsen', v.beskriv_fejl(TimeoutError('timed out'), True), 'timeout efter forbindelsen (kryptering/svar)')
+forvent('fejl: ingen rute', v.beskriv_fejl(OSError(en.ENETUNREACH, 'Network is unreachable'), False), 'ingen rute til serveren')
+forvent('fejl: afvist', v.beskriv_fejl(ConnectionRefusedError(111, 'refused'), True), 'forbindelsen blev afvist')
+
+# spoerg_server/server_svarer mod rigtige sokler på maskinen
+import threading
+v.SERVER_TIMEOUT = 1
+
+def lyt(familie, adresse, svar):
+    """En server, der svarer HTTP (svar=bytes) eller tager imod og tier (svar=None)."""
+    s = socket.socket(familie, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind((adresse, 0)); s.listen(8)
+    def koer():
+        while True:
+            try:
+                k, _ = s.accept()
+            except OSError:
+                return
+            if svar is not None:
+                k.recv(4096); k.sendall(svar); k.close()
+    threading.Thread(target=koer, daemon=True).start()
+    return s, s.getsockname()[1]
+
+FORBUDT = b'HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n'
+s403, p = lyt(socket.AF_INET, '127.0.0.1', FORBUDT)
+forvent('server svarer 403 (Cloudflare mod bots): det er et svar', v.server_svarer(f'http://127.0.0.1:{p}'), v.Svar(True, None, False))
+lukket = socket.socket(); lukket.bind(('127.0.0.1', 0)); p = lukket.getsockname()[1]   # lytter aldrig
+forvent('lukket port: afvist med adressen', v.server_svarer(f'http://127.0.0.1:{p}'),
+        v.Svar(False, 'forbindelsen blev afvist (127.0.0.1)', False))
+stille, p = lyt(socket.AF_INET, '127.0.0.1', None)
+forvent('serveren tager imod, men svarer aldrig: timeout efter forbindelsen', v.server_svarer(f'http://127.0.0.1:{p}'),
+        v.Svar(False, 'timeout efter forbindelsen (kryptering/svar) (127.0.0.1)', False))
+stille.close()
+forvent('navnet findes ikke: DNS', v.spoerg_server('http://findes-ikke.invalid')[0], 'navneopslaget (DNS) fejlede')
+
+# IPv6 hænger, IPv4 svarer — på samme navn og port (localhost har ::1 og 127.0.0.1)
+try:
+    s6 = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+    s6.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+    s6.bind(('::1', 0)); s6.listen(8)
+    p = s6.getsockname()[1]
+    s4 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s4.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s4.bind(('127.0.0.1', p)); s4.listen(8)
+    ipv6 = [a[4][0] for a in socket.getaddrinfo('localhost', p, 0, socket.SOCK_STREAM)][:1] == ['::1']
+except OSError:
+    ipv6 = False
+if ipv6:
+    threading.Thread(target=lambda: [s6.accept() for _ in range(8)], daemon=True).start()   # tier
+    def svar4():
+        while True:
+            k, _ = s4.accept(); k.recv(4096); k.sendall(FORBUDT); k.close()
+    threading.Thread(target=svar4, daemon=True).start()
+    forvent('IPv6 tier, IPv4 svarer: ok, men kun over IPv4 — med IPv6-grunden',
+            v.server_svarer(f'http://localhost:{p}'),
+            v.Svar(True, 'over IPv6: timeout efter forbindelsen (kryptering/svar) (::1)', True))
+else:
+    print('  (sprunget over: localhost har ikke ::1 først i denne container)')
+
 # Routeren findes ud fra /proc/net/route (little-endian hex)
-import socket, struct
+import struct
 forvent('gateway fra /proc/net/route-format', socket.inet_ntoa(struct.pack('<I', int('0102A8C0', 16))), '192.168.2.1')
 
 print()
