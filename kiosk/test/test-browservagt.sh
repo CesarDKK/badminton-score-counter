@@ -7,6 +7,7 @@
 #   5. disken er væk      → kernepanik (sysrq 'c' — skrives til en testfil her)
 #   6. kernelog-filteret  → kun advarsler om disken gentages før panikken
 #   7. skjult side (TV'et slukket) med stoppet hjerteslag → ingen genstart
+#   8. browseren stoppet af den automatiske slukning → ingen genstart (uden: genstart)
 #
 # Køres i en debian:trixie-container (henter chromium + python3):
 #   docker run --rm -v "$PWD/kiosk:/src" debian:trixie bash /src/test/test-browservagt.sh
@@ -117,6 +118,22 @@ koer_vagt 12 "$ARB/disk.img"; panik_udloest; tjek "disken svarer" nej $?
 koer_vagt 12 "$ARB/findes-ikke"; panik_udloest; tjek "disken er væk → kernepanik" ja $?
 grep -q "disk-vagt på $ARB/findes-ikke" "$ARB/vagt.log" || { echo "  FEJL  disk-vagten blev ikke slået til"; FEJL=$((FEJL + 1)); }
 kill -9 "$CHROME" 2>/dev/null
+wait "$CHROME" 2>/dev/null
+
+# Den automatiske slukning (kl. 23:59) stopper browseren med vilje og installerer
+# opdateringer: browseren må ikke startes igen. En falsk systemctl svarer som
+# systemd: en oneshot-tjeneste er 'activating', mens den kører (og exit 3).
+mkdir -p "$ARB/bin"
+cat > "$ARB/bin/systemctl" <<'EOF'
+#!/bin/sh
+if [ "$1" = is-active ] && [ "$2" = badminton-tv-sluk.service ]; then
+    echo "${SLUK_TILSTAND:-inactive}"; [ "${SLUK_TILSTAND:-}" = active ] && exit 0; exit 3
+fi
+echo inactive; exit 3
+EOF
+chmod +x "$ARB/bin/systemctl"
+( export SLUK_TILSTAND=activating PATH="$ARB/bin:$PATH"; koer_vagt 15 ); tjek "browseren stoppet af slukningen (activating)" nej $?
+( export SLUK_TILSTAND=inactive PATH="$ARB/bin:$PATH"; koer_vagt 15 ); tjek "browseren væk uden slukning" ja $?
 
 # Kernelog-filteret: hvilke /dev/kmsg-poster gentages før panikken
 python3 - "$VAGT" <<'EOF'

@@ -45,23 +45,37 @@ ikke nå sin egen router (hallens net virker ikke for denne PC):
 Kan routeren nås, men ikke serveren, er det internettet eller serveren, der er
 nede — det hjælper ikke at genstarte (og ville genstarte alle hallens skærme).
 Hver hændelse meldes til serveren med PC'ens WiFi-log (rapport koe), når
-nettet er tilbage.
+nettet er tilbage — med grunden til, at serveren ikke svarede (navneopslag,
+timeout før eller efter forbindelsen, kryptering …) og adressen, det fejlede på.
+
+Fejler tjekket over IPv6, prøves IPv4 med det samme: browseren skifter selv til
+IPv4 på et øjeblik (Happy Eyeballs), så et IPv6-hul er ikke et hul for TV'et.
+Svarer serveren kun over IPv4 i mindst et minut, meldes det for sig (net-ipv6)
+— det er hallens IPv6, der driller (set i Lyngby 2026-11-03).
+
+Den automatiske slukning (kl. SLUK_KL) stopper browseren med vilje og
+installerer opdateringer — imens genstartes hverken browseren eller PC'en.
+Det samme under den automatiske opdatering (kun PC'en).
 
 Kun Pythons standardbibliotek: en minimal websocket-klient til Chromium
 DevTools-protokollen (én forespørgsel pr. forbindelse).
 """
 
 import base64
+import collections
+import errno
+import http.client
 import json
 import mmap
 import os
 import re
 import socket
+import ssl
 import struct
 import subprocess
 import sys
 import time
-import urllib.error
+import urllib.parse
 import urllib.request
 
 PORT = int(os.environ.get('BT_DEVTOOLS_PORT', '9222'))
@@ -325,16 +339,82 @@ def server_fra_kiosk_env():
     return m.group(1) if m else None
 
 
-def server_svarer(server):
-    """Svarer serveren overhovedet? Et HTTP-svar (også 404/503) tæller — kun
-    ingen forbindelse (DNS, timeout, intet net) er et nej."""
+# Svaret fra server_svarer: ok, grunden når noget fejlede (også når IPv4 reddede
+# det), og om serveren kun kunne nås over IPv4
+Svar = collections.namedtuple('Svar', 'ok grund kun_ipv4')
+SERVER_TIMEOUT = 8
+
+
+def beskriv_fejl(e, forbundet):
+    """Fejlen i ord til admin. forbundet: TCP-forbindelsen var oprettet, så det
+    gik galt under krypteringen eller svaret (fx store pakker, der forsvinder)."""
+    if isinstance(e, socket.gaierror):
+        return 'navneopslaget (DNS) fejlede'
+    if isinstance(e, TimeoutError):
+        return 'timeout efter forbindelsen (kryptering/svar)' if forbundet else 'timeout ved forbindelsen'
+    if isinstance(e, ConnectionRefusedError):
+        return 'forbindelsen blev afvist'
+    if isinstance(e, (ConnectionResetError, ConnectionAbortedError, http.client.RemoteDisconnected)):
+        return 'forbindelsen blev afbrudt'
+    if isinstance(e, ssl.SSLError):
+        return 'krypteringen (TLS) fejlede'
+    if isinstance(e, OSError) and e.errno in (errno.ENETUNREACH, errno.EHOSTUNREACH):
+        return 'ingen rute til serveren'
+    return f'{type(e).__name__}: {e}'[:120]
+
+
+def spoerg_server(server, familie=socket.AF_UNSPEC):
+    """(None, adresse) når serveren svarer — et HTTP-svar (også 403/404/503 fra
+    Cloudflare) tæller — ellers (grund, adressen det fejlede på eller None).
+    Forbinder selv (som socket.create_connection), så vi ved hvilken adresse og
+    om forbindelsen nåede at blive oprettet. familie: AF_INET = kun IPv4."""
+    u = urllib.parse.urlsplit(server)
+    https = u.scheme == 'https'
+    port = u.port or (443 if https else 80)
+    spor = {'adresse': None, 'forbundet': False}
+
+    def forbind(adresse, timeout=None, source_address=None):
+        sidste = None
+        for af, typ, proto, _, sa in socket.getaddrinfo(adresse[0], adresse[1], familie, socket.SOCK_STREAM):
+            spor['adresse'] = sa[0]
+            s = socket.socket(af, typ, proto)
+            try:
+                s.settimeout(timeout)
+                s.connect(sa)
+                spor['forbundet'] = True
+                return s
+            except OSError as e:
+                s.close()
+                sidste = e
+        raise sidste or OSError('ingen adresser')
+
+    cls = http.client.HTTPSConnection if https else http.client.HTTPConnection
+    c = cls(u.hostname, port, timeout=SERVER_TIMEOUT)
+    c._create_connection = forbind
     try:
-        with urllib.request.urlopen(f'{server}/health', timeout=8):
-            return True
-    except urllib.error.HTTPError:
-        return True
-    except Exception:              # noqa: BLE001 — alt andet er "ingen forbindelse"
-        return False
+        c.request('GET', '/health', headers={'User-Agent': 'BadmintonTV-netvagt'})
+        c.getresponse().read(64)
+        return None, spor['adresse']
+    except Exception as e:         # noqa: BLE001 — alt andet er "ingen forbindelse"
+        return beskriv_fejl(e, spor['forbundet']), spor['adresse']
+    finally:
+        c.close()
+
+
+def server_svarer(server):
+    """Svar(ok, grund, kun_ipv4). Fejler det over IPv6, prøves IPv4 alene —
+    browseren gør det samme selv, så TV'et kan stadig nå serveren."""
+    grund, adresse = spoerg_server(server)
+    if grund is None:
+        return Svar(True, None, False)
+    hvor = f' ({adresse})' if adresse else ''
+    if adresse and ':' in adresse:
+        grund4, adresse4 = spoerg_server(server, socket.AF_INET)
+        if grund4 is None:
+            return Svar(True, f'over IPv6: {grund}{hvor}', True)
+        hvor4 = f' ({adresse4})' if adresse4 else ''
+        return Svar(False, f'{grund4}{hvor4}, og over IPv6: {grund}{hvor}', False)
+    return Svar(False, f'{grund}{hvor}', False)
 
 
 def router():
@@ -412,15 +492,31 @@ def genforbind_wifi():
         nm('networking', 'on')
 
 
+SLUK_ENHED = 'badminton-tv-sluk.service'
+OPDATERING_ENHED = 'badminton-tv-opdatering.service'
+
+
+def enhed_koerer(enhed):
+    """Kører systemd-enheden? Slukningen og opdateringen er oneshot-tjenester:
+    mens de kører, er de 'activating' — og dét svarer `systemctl is-active` nej
+    til (kun 'active' er ja). Derfor læses tilstanden selv."""
+    try:
+        ud = subprocess.run(['systemctl', 'is-active', enhed], capture_output=True,
+                            text=True, timeout=10).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return ud in ('active', 'activating', 'reloading', 'refreshing')
+
+
+def slukning_koerer():
+    """Den automatiske slukning har stoppet browseren med vilje og installerer
+    opdateringer (også af Chromium) — så må browseren ikke startes igen."""
+    return enhed_koerer(SLUK_ENHED)
+
+
 def pc_er_optaget():
-    """Er den automatiske slukning eller opdatering i gang? Så ingen genstart."""
-    for enhed in ('badminton-tv-sluk.service', 'badminton-tv-opdatering.service'):
-        try:
-            if subprocess.run(['systemctl', 'is-active', '--quiet', enhed], timeout=10).returncode == 0:
-                return True
-        except (OSError, subprocess.SubprocessError):
-            pass
-    return False
+    """Er den automatiske slukning eller opdatering i gang? Så ingen genstart af PC'en."""
+    return enhed_koerer(SLUK_ENHED) or enhed_koerer(OPDATERING_ENHED)
 
 
 def koe_haendelse(type_, tekst, fra, til=None):
@@ -470,6 +566,9 @@ class Netvagt:
         self.var_lokal_nede = False
         self.genforbundet = False
         self.kort_meldt = False
+        self.grund = None                          # hvorfor serveren ikke svarede (sidste tjek)
+        self.ipv6_nede_fra = None                  # serveren svarer kun over IPv4 siden
+        self.ipv6_grund = None
         self.ok_fra = self.ur()
 
     def _laes(self):
@@ -497,11 +596,44 @@ class Netvagt:
             pass
         subprocess.run(PC_GENSTART, shell=True, check=False)
 
+    def _spoerg(self):
+        """server_ok som Svar — en udskiftet funktion (tests) må svare bare sand/falsk."""
+        svar = self.server_ok(self.server)
+        return svar if isinstance(svar, Svar) else Svar(bool(svar), None, False)
+
+    def _ipv6(self, nu, svar):
+        """Holder øje med, om serveren kun kan nås over IPv4 — meldes, når IPv6
+        virker igen (eller PC'en mister forbindelsen helt), hvis det varede ≥ 1 min."""
+        if svar.ok and svar.kun_ipv4:
+            if self.ipv6_nede_fra is None:
+                self.ipv6_nede_fra = nu
+                log(f'net-vagt: serveren svarer kun over IPv4 — {svar.grund}')
+            self.ipv6_grund = svar.grund
+            return
+        if self.ipv6_nede_fra is None:
+            return
+        nede = nu - self.ipv6_nede_fra
+        log(f'net-vagt: IPv6 virker igen efter {varighed(nede)}' if svar.ok
+            else f'net-vagt: heller ikke IPv4 svarer nu (IPv6 fejlede i {varighed(nede)})')
+        if nede >= 60:
+            self.koe('net-ipv6', f'Serveren kunne kun nås over IPv4 i {varighed(nede)} '
+                     f'(kl. {kl(self.ipv6_nede_fra)}–{kl(nu)}) — {self.ipv6_grund}. '
+                     f'TV\'et mærker det ikke (browseren skifter selv til IPv4), '
+                     f'men hallens IPv6 driller', self.ipv6_nede_fra, nu)
+            self.send()
+        self.ipv6_nede_fra = self.ipv6_grund = None
+
     def tik(self):
         nu = self.ur()
-        if self.server_ok(self.server):
+        svar = self._spoerg()
+        self._ipv6(nu, svar)
+        if svar.ok:
             self._tilbage(nu)
             return
+        if svar.grund:
+            if svar.grund != self.grund:
+                log(f'net-vagt: {svar.grund}')
+            self.grund = svar.grund
         if self.nede_fra is None:
             self.nede_fra = nu
             log(f'net-vagt: kan ikke nå {self.server}')
@@ -554,12 +686,14 @@ class Netvagt:
                              f'(kl. {kl(self.nede_fra)}–{kl(nu)}) og kom igen {hvordan}', self.nede_fra, nu)
                 else:
                     self.koe('net-server', f'Ingen forbindelse til serveren i {varighed(nede)} '
-                             f'(kl. {kl(self.nede_fra)}–{kl(nu)}), men hallens netværk virkede',
+                             f'(kl. {kl(self.nede_fra)}–{kl(nu)}), men hallens netværk virkede'
+                             + (f' — {self.grund}' if self.grund else ''),
                              self.nede_fra, nu)
                 self.send()
             self.ok_fra = nu
         self.nede_fra = self.lokal_nede_fra = None
         self.var_lokal_nede = self.genforbundet = False
+        self.grund = None
         if self.raekke and nu - self.ok_fra >= NET_STABIL:
             log('net-vagt: nettet har virket en halv time — genstarter tælles forfra')
             self.raekke = 0
@@ -597,6 +731,12 @@ def main():
                 log('disken svarer igen')
                 diskfejl = 0
         problem = tjek()
+        if problem and slukning_koerer():
+            # Slukningen har stoppet browseren med vilje — den må ikke startes
+            # igen, mens opdateringerne installeres (heller ikke meldes som frosset)
+            if fejl:
+                log('den automatiske slukning kører — browseren genstartes ikke')
+            problem, fejl = None, 0
         if problem:
             fejl += 1
             log(f'fejl {fejl}/{FEJL_FOER_GENSTART}: {problem}')
