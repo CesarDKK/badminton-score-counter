@@ -301,6 +301,42 @@ ledigt_system() {
     readlink -f "$dev"
 }
 
+# Holder noget stadig fast i partitionen? Samme spørgsmål, mkfs selv stiller
+# (åbn med O_EXCL → EBUSY): et filsystem, der er monteret — også et, der blev
+# afmonteret "dovent" (umount -l) i et tidligere forsøg og ikke længere ses i
+# findmnt, men lever, til ingen bruger det — eller som kernen bruger.
+i_brug() { # enhed
+    python3 - "$1" <<'EOF' 2>/dev/null
+import errno, os, sys
+try:
+    os.close(os.open(sys.argv[1], os.O_RDONLY | os.O_EXCL))
+except OSError as e:
+    sys.exit(3 if e.errno == errno.EBUSY else 0)
+EOF
+    [ $? = 3 ]
+}
+
+# Fejlteksten til admin ud fra loggen (LOG). Den første FEJL-linje — er det
+# fejlfælden ("FEJL: linje N: kommando (kode K) …"), står kommandoens egen
+# besked (fx mkfs.ext4: "… is apparently in use by the system") på linjen
+# før, og den sættes forrest. Ellers så admin kun linjenummeret. Uden en
+# FEJL-linje: den sidste linje. Højst 300 tegn (serverens loft).
+fejltekst() { # log
+    local linje nr foer
+    if ! linje=$(grep -m1 -n '^FEJL' "$1"); then
+        grep -v '^[[:space:]]*$' "$1" | tail -1 | cut -c1-300 || true
+        return 0
+    fi
+    nr=${linje%%:*}
+    linje=${linje#*:}
+    if [[ "$linje" == "FEJL: linje "* ]]; then
+        linje=${linje% — prøver igen næste gang.}
+        foer=$(head -n "$((nr - 1))" "$1" | grep -v '^[[:space:]]*$' | tail -1 || true)
+        [ -n "$foer" ] && linje="FEJL: $foer (${linje#FEJL: })"
+    fi
+    printf '%s\n' "$linje" | cut -c1-300
+}
+
 # Skriver M_VERSION til det ledige system og sætter det til at blive prøvet.
 klargoer() {
     local andet dev status=0
@@ -320,6 +356,10 @@ klargoer() {
     fi
     if findmnt -rno TARGET "$dev" >/dev/null; then
         echo "FEJL: System $andet ($dev) er i brug."
+        return 1
+    fi
+    if i_brug "$dev"; then
+        echo "FEJL: System $andet ($dev) er stadig i brug efter et tidligere forsøg — genstart PC'en, og prøv igen."
         return 1
     fi
     NY=$ARB/system-$andet
@@ -342,7 +382,15 @@ klargoer() {
     fi
 
     echo "Henter version $M_VERSION ($((M_BYTES / 1000000)) MB) til system $andet ($dev) …"
-    mkfs.ext4 -F -q -L "badminton-tv-$andet" "$dev"
+    # Lige efter afmonteringen ovenfor kan udev stadig have fat i partitionen —
+    # så venter vi et øjeblik og prøver én gang til (fejlen meldes med mkfs'
+    # egen besked, se fejltekst)
+    if ! mkfs.ext4 -F -q -L "badminton-tv-$andet" "$dev"; then
+        echo "Formateringen af system $andet fejlede — prøver igen om lidt …"
+        udevadm settle 2>/dev/null || true
+        sleep 3
+        mkfs.ext4 -F -q -L "badminton-tv-$andet" "$dev"
+    fi
     mount "$dev" "$NY"
     local sq=$NY/.badminton-tv-hentning.squashfs
     # Giver op, hvis der ikke er kommet 10 KB/s i 2 minutter — prøver igen
@@ -414,7 +462,12 @@ klargoer_pi_opstart() { # slot
 oprydning() {
     if [ -n "${NY:-}" ] && mountpoint -q "$NY"; then
         bt_rod_afmonter "$NY" 2>/dev/null || true
-        umount -R "$NY" 2>/dev/null || umount -Rl "$NY" 2>/dev/null || true
+        if ! umount -R "$NY" 2>/dev/null; then
+            # Noget har stadig fat i det — afmonteres "dovent", når det slipper.
+            # Indtil da kan næste forsøg ikke formatere det (se i_brug).
+            echo "System-mappen $NY kunne ikke afmonteres helt (noget bruger den stadig)."
+            umount -Rl "$NY" 2>/dev/null || true
+        fi
     fi
     if [ -n "${KILDE_MNT:-}" ] && mountpoint -q "$KILDE_MNT"; then
         umount "$KILDE_MNT" 2>/dev/null || true
@@ -557,9 +610,9 @@ spoerg() {
     cat "$log"
     resultat=$(cat "$ARB/udfald" 2>/dev/null || true)
     sidste=$(grep -v '^[[:space:]]*$' "$log" | tail -1 | cut -c1-300 || true)
-    # Ved en fejl: den første FEJL-linje (fx "System b findes ikke på disken") —
-    # den sidste er fejlfælden ("… prøver igen næste gang"), der ikke passer her
-    [ "$kode" = 0 ] || sidste=$(grep -m1 '^FEJL' "$log" | cut -c1-300 || printf '%s' "$sidste")
+    # Ved en fejl: den første FEJL-linje (fx "System b findes ikke på disken"),
+    # og er det fejlfælden, med kommandoens egen besked forrest (fejltekst)
+    [ "$kode" = 0 ] || sidste=$(fejltekst "$log")
     case "$resultat" in
         "klar "*)
             local v=${resultat#klar }

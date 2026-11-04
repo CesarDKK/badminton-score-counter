@@ -315,6 +315,37 @@ nulstil_server
 FAKE_SERVER_KODE=7 spoerg >/dev/null; kode=$?
 forvent "spoerg: intet net → stille, ingen fejl" "$kode|$(server)" "0|"
 
+# Fejlfælden ("FEJL: linje …") alene siger kun linjenummeret — kommandoens egen
+# besked (mkfs.ext4 på badminton-tv55 2026-11-04) står på linjen før
+MKFS_LOG='Henter version 2026.11.2 (750 MB) til system b (/dev/nvme0n1p3) …
+/dev/nvme0n1p3 is apparently in use by the system; will not make a filesystem here!
+FEJL: linje 345: mkfs.ext4 -F -q -L "badminton-tv-$andet" "$dev" (kode 1) — prøver igen næste gang.'
+printf '%s\n' "$MKFS_LOG" > "$TMP/fejl.log"
+forvent "fejltekst: kommandoens besked forrest, så linjen" "$(fejltekst "$TMP/fejl.log")" \
+    'FEJL: /dev/nvme0n1p3 is apparently in use by the system; will not make a filesystem here! (linje 345: mkfs.ext4 -F -q -L "badminton-tv-$andet" "$dev" (kode 1))'
+printf 'Tjekker …\nFEJL: System b findes ikke på disken.\nFEJL: linje 9: klargoer (kode 1) — prøver igen næste gang.\n' > "$TMP/fejl.log"
+forvent "fejltekst: scriptets egen FEJL-linje som før" "$(fejltekst "$TMP/fejl.log")" 'FEJL: System b findes ikke på disken.'
+printf 'FEJL: linje 3: false (kode 1) — prøver igen næste gang.\n' > "$TMP/fejl.log"
+forvent "fejltekst: fælden uden noget før" "$(fejltekst "$TMP/fejl.log")" 'FEJL: linje 3: false (kode 1)'
+printf 'Tjekker …\n\nVenter på nettet\n\n' > "$TMP/fejl.log"
+forvent "fejltekst: ingen FEJL → sidste linje" "$(fejltekst "$TMP/fejl.log")" 'Venter på nettet'
+: > "$TMP/fejl.log"
+forvent "fejltekst: tom log → tom tekst (og ingen fejlfælde)" "$(fejltekst "$TMP/fejl.log")" ''
+printf "FEJL: $(printf 'x%.0s' $(seq 400))\n" > "$TMP/fejl.log"
+forvent "fejltekst: højst 300 tegn" "$(fejltekst "$TMP/fejl.log" | wc -c | tr -d ' ')" 301
+
+nulstil_server
+tjek_nu() { printf '%s\n' "$MKFS_LOG"; return 1; }
+FAKE_SVAR='{"opdater":true}' spoerg >/dev/null
+forvent "spoerg: mkfs fejler → fejl til admin" "$(status_i)|$(cat "$TMP/systemctl.log")" " i-gang fejl |"
+indeholder "spoerg: mkfs' egen besked med" "$(tail -1 "$TMP/server.log" | jq -r .tekst)" "is apparently in use by the system"
+tjek_nu() { nu_tjek; }
+
+# i_brug: en almindelig fil og en sti, der ikke findes, er ikke "i brug"
+: > "$TMP/fil"
+forvent "i_brug: almindelig fil → nej" "$(i_brug "$TMP/fil" && echo ja || echo nej)" nej
+forvent "i_brug: findes ikke → nej" "$(i_brug "$TMP/findes-ikke" && echo ja || echo nej)" nej
+
 nulstil_server
 SLOT=b
 FAKE_SVAR='{"opdater":true}' spoerg >/dev/null
