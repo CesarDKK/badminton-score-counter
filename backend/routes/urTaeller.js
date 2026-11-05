@@ -28,7 +28,7 @@ const ejerskab = require('../taeller/ejerskab');
 // Hvert tryk har et løbenummer fra uret. Er svaret gået tabt, sender uret
 // trykket igen; serveren kender nummeret og tæller det ikke to gange.
 
-const HANDLINGER = ['S1', 'S2', 'P1', 'P2', 'K', 'B', 'U', 'N'];
+const HANDLINGER = ['S1', 'S2', 'P1', 'P2', 'K', 'B', 'U', 'N', 'F'];
 
 async function urTaellingSlaaetTil() {
     const r = await queryOne("SELECT setting_value FROM settings WHERE setting_key = 'ur_taelling'");
@@ -169,7 +169,34 @@ function tilstandUdenHistorik(row, court) {
 }
 
 const hentBane = (bane) => queryOne('SELECT id, court_number, is_active, is_doubles, game_mode FROM courts WHERE court_number = ?', [bane]);
-const hentRaekke = (courtPk) => queryOne('SELECT * FROM game_states WHERE court_id = ?', [courtPk]);
+const hentRaekke = (courtPk) => queryOne(
+    'SELECT *, TIMESTAMPDIFF(SECOND, tryk_at, NOW()) AS tryk_alder_sek FROM game_states WHERE court_id = ?', [courtPk]);
+
+// ---- Uret logges ud, når det ikke bruges ----
+//
+// QR-sessionen gælder, til banen ryddes (eller midnat), og "Ny kamp" rydder den
+// ikke. Et glemt ur kunne derfor tælle på banen resten af dagen. Har uret ikke
+// trykket i UR_LEDIG_MIN minutter (eller er det koblet på for så længe siden
+// uden at trykke), er det logget ud og skal taste koden fra TV'et igen — undtagen
+// mens det tæller en kamp, der er i gang: en forladt kamp frigives allerede
+// efter 10 minutter (scheduler.js releaseInactiveCourts).
+const UR_LEDIG_MIN = 15;
+
+// Ren funktion (testes i tests/unit/ur-log-ud.test.js). row har tryk_alder_sek
+// (sekunder siden tryk_at), iat er urets adgangs udstedelse (sekunder), nuSek nu
+function urLoggetUd(row, iat, taellerId, nuSek = Math.floor(Date.now() / 1000)) {
+    if (row && row.match_start_time && !row.match_completed && row.taeller_id === taellerId) return false;
+    const siden = [];
+    if (Number.isFinite(Number(iat)) && iat) siden.push(nuSek - Number(iat));
+    if (row && row.tryk_taeller === taellerId && row.tryk_alder_sek != null) siden.push(Number(row.tryk_alder_sek));
+    // Den seneste af koblingen og urets eget seneste tryk
+    return siden.length > 0 && Math.min(...siden) > UR_LEDIG_MIN * 60;
+}
+
+const LOGGET_UD = { error: 'Uret er logget ud — tast koden fra TV\'et igen', loggetUd: true };
+// Kun i club-mode: lokalt er der ingen session at logge ud af
+const erLoggetUd = (req, row, taellerId) =>
+    req.accessMode === 'club' && !!req.user && urLoggetUd(row, req.user.iat, taellerId);
 
 // GET /api/ur/bane — stillingen på urets bane
 router.get('/bane', requireWriteAuthInClubMode, async (req, res, next) => {
@@ -179,6 +206,7 @@ router.get('/bane', requireWriteAuthInClubMode, async (req, res, next) => {
         if (!court) return res.status(404).json({ error: 'Bane ikke fundet' });
         const row = await hentRaekke(court.id);
         const taellerId = ejerskab.rensId(req.query.taellerId);
+        if (taellerId && erLoggetUd(req, row, taellerId)) return res.status(401).json(LOGGET_UD);
         res.json(visning(row, court, { spaerret: !!(taellerId && row && !ejerskab.maaGemme(row, taellerId, Date.now())) }));
     } catch (error) {
         next(error);
@@ -220,7 +248,7 @@ async function erPlannerBane(bane) {
 
 // POST /api/ur/tryk — { handling, nr, taellerId }
 //   handling: S1/S2 vælg server, P1/P2 point, K start, B afslut pausen, U fortryd,
-//   N ny kamp (kun når kampen er slut)
+//   N ny kamp (kun når kampen er slut), F færdig (uret logges ud)
 router.post('/tryk', requireWriteAuthInClubMode, async (req, res, next) => {
     try {
         const body = req.body || {};
@@ -240,6 +268,29 @@ router.post('/tryk', requireWriteAuthInClubMode, async (req, res, next) => {
         // Skriver en tablet imellem (409), regnes trykket igen på dens tilstand
         for (let forsoeg = 0; forsoeg < 3; forsoeg++) {
             const row = await hentRaekke(court.id);
+            if (erLoggetUd(req, row, taellerId)) return res.status(401).json(LOGGET_UD);
+
+            // "Færdig": uret logges ud. Er kampen slut, får banen et rent
+            // scoreboard som ved "Ny kamp" (kun af den, der tæller, og ikke på en
+            // badmintonplanner-bane). Uret smider selv sin adgang væk på svaret
+            if (handling === 'F') {
+                const st = tilstandFra(row, court);
+                if (row && st.matchCompleted && ejerskab.maaGemme(row, taellerId, Date.now()) &&
+                    !await erPlannerBane(court.court_number)) {
+                    const g = await gemTilstand(req, court.court_number,
+                        await nyKampKrop(court, row, st, row.version || 0, taellerId));
+                    if (g.status === 409) continue;
+                    if (g.status !== 200) return res.status(g.status).json(g.json);
+                    await query('UPDATE game_states SET tryk_taeller = NULL, tryk_nr = NULL, tryk_at = NULL, fortryd_historik = NULL WHERE court_id = ?',
+                        [court.id]);
+                } else if (row && row.tryk_taeller === taellerId) {
+                    // Løbenummeret følger med, så urets næste tryk (efter ny kobling) ikke er et hul
+                    await query('UPDATE game_states SET tryk_nr = GREATEST(COALESCE(tryk_nr, 0), ?) WHERE court_id = ? AND tryk_taeller = ?',
+                        [nr, court.id, taellerId]);
+                }
+                return res.json({ loggetUd: true });
+            }
+
             // Samme tryk igen (svaret gik tabt): tæl det ikke to gange
             if (row && row.tryk_taeller === taellerId && row.tryk_nr != null) {
                 if (nr <= row.tryk_nr) return res.json(visning(row, court, { dublet: true }));
@@ -260,14 +311,14 @@ router.post('/tryk', requireWriteAuthInClubMode, async (req, res, next) => {
 
             if (handling === 'N') {
                 if (!row || !st.matchCompleted || await erPlannerBane(court.court_number)) {
-                    if (row) await query('UPDATE game_states SET tryk_taeller = ?, tryk_nr = ? WHERE court_id = ?', [taellerId, nr, court.id]);
+                    if (row) await query('UPDATE game_states SET tryk_taeller = ?, tryk_nr = ?, tryk_at = NOW() WHERE court_id = ?', [taellerId, nr, court.id]);
                     return res.json(visning(row && { ...row, tryk_taeller: taellerId, tryk_nr: nr }, court, { afvist: true, haendelser }));
                 }
                 const g = await gemTilstand(req, court.court_number,
                     await nyKampKrop(court, row, st, row.version || 0, taellerId));
                 if (g.status === 409) continue;
                 if (g.status !== 200) return res.status(g.status).json(g.json);
-                await query('UPDATE game_states SET tryk_taeller = ?, tryk_nr = ?, fortryd_historik = NULL WHERE court_id = ?',
+                await query('UPDATE game_states SET tryk_taeller = ?, tryk_nr = ?, tryk_at = NOW(), fortryd_historik = NULL WHERE court_id = ?',
                     [taellerId, nr, court.id]);
                 return res.json(visning(await hentRaekke(court.id), court, { haendelser: ['ny-kamp'] }));
             }
@@ -303,7 +354,7 @@ router.post('/tryk', requireWriteAuthInClubMode, async (req, res, next) => {
 
             if (!r.ok && !haendelser.length) {
                 // Afvist (fx point i sætpausen): intet at gemme, men nummeret huskes
-                if (row) await query('UPDATE game_states SET tryk_taeller = ?, tryk_nr = ? WHERE court_id = ?', [taellerId, nr, court.id]);
+                if (row) await query('UPDATE game_states SET tryk_taeller = ?, tryk_nr = ?, tryk_at = NOW() WHERE court_id = ?', [taellerId, nr, court.id]);
                 return res.json(visning(row && { ...row, tryk_taeller: taellerId, tryk_nr: nr }, court, { afvist: true, haendelser }));
             }
 
@@ -311,7 +362,7 @@ router.post('/tryk', requireWriteAuthInClubMode, async (req, res, next) => {
             if (g.status === 409) continue;   // en anden enhed skrev imellem — regn igen
             if (g.status !== 200) return res.status(g.status).json(g.json);
 
-            await query('UPDATE game_states SET tryk_taeller = ?, tryk_nr = ?, fortryd_historik = ? WHERE court_id = ?',
+            await query('UPDATE game_states SET tryk_taeller = ?, tryk_nr = ?, tryk_at = NOW(), fortryd_historik = ? WHERE court_id = ?',
                 [taellerId, nr, JSON.stringify({ version: g.json.version, historik: st.history }), court.id]);
             if (haendelser.includes('kamp')) {
                 try { await gemKampresultat(court, st); } catch (e) { console.error('[ur] kamphistorik:', e.message); }
@@ -326,3 +377,5 @@ router.post('/tryk', requireWriteAuthInClubMode, async (req, res, next) => {
 
 module.exports = router;
 module.exports.urTaellingSlaaetTil = urTaellingSlaaetTil;
+module.exports.urLoggetUd = urLoggetUd;
+module.exports.UR_LEDIG_MIN = UR_LEDIG_MIN;

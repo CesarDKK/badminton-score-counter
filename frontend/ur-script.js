@@ -112,11 +112,14 @@ function modtag(data) {
     tegn();
 }
 
+// Serveren har logget uret ud (15 min uden tryk) eller ryddet banen
+const udTekst = (data) => (data && data.loggetUd && data.error) || 'Banen er ryddet — tast koden igen';
+
 async function hent() {
     if (!gemt.token || sender || gemt.ko.length) return;
     try {
         const { status, data } = await kald(`/ur/bane?taellerId=${gemt.taeller}`);
-        if (status === 401 || status === 403) return sessionSlut('Banen er ryddet — tast koden igen');
+        if (status === 401 || status === 403) return sessionSlut(udTekst(data));
         if (status !== 200) return;
         spaerret = !!data.spaerret;
         modtag(data);
@@ -191,7 +194,7 @@ async function send() {
             return;
         }
         const { status, data } = svar;
-        if (status === 401 || status === 403) { sender = false; return sessionSlut('Banen er ryddet — tast koden igen'); }
+        if (status === 401 || status === 403) { sender = false; return sessionSlut(udTekst(data)); }
         if (status === 423) {
             // En anden enhed tæller kampen: trykkene her tælles ikke
             spaerret = true;
@@ -213,6 +216,8 @@ async function send() {
             setTimeout(send, 2000);
             return;
         }
+        // "Færdig": uret er logget ud (banen er nulstillet, hvis kampen var slut)
+        if (t.handling === 'F') { sender = false; return sessionSlut('Tak for kampen — tast koden fra TV\'et for at tælle igen'); }
         gemt.ko.shift();
         gem();
         spaerret = false;
@@ -271,27 +276,35 @@ function tegn() {
         : st.matchCompleted ? 'Kampen er slut'
         : `Bane ${server.bane} · ${(st.player1.games || 0) + (st.player2.games || 0) + 1}. sæt`;
 
-    // Pausen: nedtælling. Pausen ved 11 (8) slutter med "Fortsæt kamp" eller
-    // næste point, sætpausen kan springes over med "Næste sæt"
-    const pEl = $('pause');
+    // Pausen (ved 11/8 og mellem sæt) og kampslut: stillingen står på TV'et, så
+    // spillerne skjules, og store knapper fylder skærmen
+    const iPause = pause && !st.matchCompleted && !spaerret;
+    const slut = st.matchCompleted && !spaerret;
+    $('kampSide').classList.toggle('i-pause', iPause);
+    $('kampSide').classList.toggle('slut', slut);
+    if (iPause) $('overskrift').textContent = saetPause ? 'Sæt vundet · pause' : 'Pause';
+
+    // "Fortsæt" med nedtællingen. Pausen ved 11 (8) slutter også ved næste
+    // point; er nedtællingen slut, sender uret selv "Fortsæt" (én gang, kun mens
+    // siden er åben) — efter sætpausen begynder næste sæt
+    const tid = $('naeste').querySelector('.tid');
     if (pause && server.pause && server.pause.slutter) {
         const tilbage = server.pause.slutter - (Date.now() + tidsforskel);
-        pEl.innerHTML = saetPause ? `Sæt vundet · næste sæt om <b>${mmss(tilbage)}</b>` : `Pause <b>${mmss(tilbage)}</b>`;
-        pEl.classList.remove('skjult');
-        // Pausen er slut: næste sæt begynder (én gang, kun mens siden er åben)
+        tid.textContent = saetPause ? `Næste sæt om ${mmss(tilbage)}` : `Pause ${mmss(tilbage)}`;
         if (tilbage <= 0 && !pauseSendt && !gemt.ko.length && !spaerret) { pauseSendt = true; tryk('B'); }
     } else {
-        pEl.classList.add('skjult');
+        tid.textContent = saetPause ? 'Næste sæt' : '';
         pauseSendt = false;
     }
-    $('naeste').textContent = saetPause ? 'Næste sæt' : 'Fortsæt kamp';
-    $('naeste').classList.toggle('skjult', !pause || st.matchCompleted || spaerret);
+    $('naeste').classList.toggle('skjult', !iPause);
     // Kampen er slut: "Ny kamp" giver banen et rent scoreboard (TV'et viser
-    // resultatet et par minutter), og uret bliver koblet på banen
-    $('nyKamp').classList.toggle('skjult', !st.matchCompleted || spaerret);
+    // resultatet et par minutter), og uret bliver koblet på banen. "Færdig" gør
+    // det samme og logger uret ud — også når en anden enhed har taget over
+    $('nyKamp').classList.toggle('skjult', !slut);
+    $('faerdig').classList.toggle('skjult', !slut);
+    $('faerdigLille').classList.toggle('skjult', !spaerret);
     $('overtag').classList.toggle('skjult', !spaerret);
     $('fortryd').classList.toggle('skjult', spaerret);
-
     // Status: sendes, ikke nået frem, eller en besked
     const s = $('status');
     if (spaerret) {
@@ -326,6 +339,8 @@ $('side1').addEventListener('click', () => trykPaaSpiller(1));
 $('fortryd').addEventListener('click', () => { if (!spaerret) tryk('U'); });
 $('naeste').addEventListener('click', () => tryk('B'));
 $('nyKamp').addEventListener('click', () => { if (!spaerret) tryk('N'); });
+$('faerdig').addEventListener('click', () => tryk('F'));
+$('faerdigLille').addEventListener('click', () => tryk('F'));
 $('overtag').addEventListener('click', overtag);
 
 const k = new URLSearchParams(location.search).get('k');
