@@ -87,13 +87,17 @@
         <div class="raekke">
             <button id="fortryd">↶ Fortryd</button>
             <button id="naeste" class="primaer skjult">Næste sæt</button>
-            <button id="nyKamp" class="primaer skjult">Ny kamp</button>
             <button id="overtag" class="primaer skjult">Overtag</button>
+        </div>
+        <!-- Kampen er slut: spil videre, eller log uret ud -->
+        <div class="raekke skjult" id="slutRaekke">
+            <button id="nyKamp" class="primaer skjult">Ny kamp</button>
+            <button id="faerdig" class="skjult">Færdig</button>
         </div>
         <div id="status" class="lille"></div>
     </div>
 
     <script src="js/taeller-regler.js?v=2"></script>
-    <script src="ur-script.js?v=2"></script>
+    <script src="ur-script.js?v=3"></script>
 </body>
 </html>
