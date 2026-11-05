@@ -29,6 +29,17 @@ const VERSION = /^[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,3}([.-][0-9A-Za-z.-]+)?$/;
 
 const register = new Map();   // tenant -> Map(`${tokenId}:${navn}` -> tilstand)
 
+// Sammenligner to versioner ("2026.11.3", "2026.10.29.1") tal for tal: <0, 0, >0
+function sammenlign(a, b) {
+    const dele = v => String(v).split(/[.-]/).map(d => parseInt(d, 10) || 0);
+    const x = dele(a), y = dele(b);
+    for (let i = 0; i < Math.max(x.length, y.length); i++) {
+        const d = (x[i] || 0) - (y[i] || 0);
+        if (d) return d;
+    }
+    return 0;
+}
+
 const tekst = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, max);
 const noegle = (tokenId, navn) => `${tokenId}:${navn}`;
 
@@ -86,6 +97,11 @@ function spoerg(tenant, tokenId, m, nu = Date.now()) {
             saetStatus(t, m.status, m.tekst, nu, m.status === 'genstarter' ? m.maal : t.maal);
         }
         if (SLUT.has(m.status)) t.bestilt = null;
+    } else if (t.maal && m.kioskVersion && sammenlign(m.kioskVersion, t.maal) > 0
+               && ['genstarter', 'opdateret', 'mislykket'].includes(t.status)) {
+        // PC'en har siden selv hentet en endnu nyere version (oversigten tager
+        // nye versioner med det samme) — den gamle tilbagemelding passer ikke mere
+        saetStatus(t, null, '', null, '');
     } else if (t.status === 'genstarter' && m.kioskVersion) {
         // Første spørgsmål efter genstarten: kører den nye version?
         if (m.kioskVersion === t.maal) {
@@ -142,4 +158,4 @@ function forSkaerm(tenant, tokenId, navn, nu = Date.now()) {
 
 function _nulstil() { register.clear(); }
 
-module.exports = { rensMelding, spoerg, bestil, fortryd, forSkaerm, _nulstil, KAN_MS, BESTILT_MAX_MS, GENSTART_MS };
+module.exports = { sammenlign, rensMelding, spoerg, bestil, fortryd, forSkaerm, _nulstil, KAN_MS, BESTILT_MAX_MS, GENSTART_MS };

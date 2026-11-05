@@ -69,6 +69,33 @@ test('startede aldrig den nye: gammel version efter genstarten → mislykket, me
     assert.equal(op.forSkaerm('lyngby', 7, 'tv-bane-1', NU + 5 * MIN).status, 'mislykket');
 });
 
+test('PC\'en har siden selv hentet en nyere version → ingen falsk "startede ikke rigtigt"', () => {
+    // I går: "Installér nyeste nu" → 2026.11.2, opdateret
+    op.spoerg('lyngby', 7, pc({ kioskVersion: '2026.11.1' }), NU);
+    op.bestil('lyngby', 7, 'tv-bane-1', NU);
+    op.spoerg('lyngby', 7, pc({ kioskVersion: '2026.11.1', status: 'genstarter', maal: '2026.11.2' }), NU + MIN);
+    op.spoerg('lyngby', 7, pc({ kioskVersion: '2026.11.2' }), NU + 4 * MIN);
+    assert.equal(op.forSkaerm('lyngby', 7, 'tv-bane-1', NU + 4 * MIN).status, 'opdateret');
+    // I morges: den automatiske opdatering tog 2026.11.3
+    op.spoerg('lyngby', 7, pc({ kioskVersion: '2026.11.3' }), NU + 15 * 60 * MIN);
+    const s = op.forSkaerm('lyngby', 7, 'tv-bane-1', NU + 15 * 60 * MIN);
+    assert.equal(s.status, null);
+    assert.equal(s.maal, '');
+    // … også en punktversion, og også mens den stod på "genstarter"
+    op.bestil('lyngby', 7, 'tv-bane-1', NU + 16 * 60 * MIN);
+    op.spoerg('lyngby', 7, pc({ kioskVersion: '2026.11.3', status: 'genstarter', maal: '2026.11.4' }), NU + 16 * 60 * MIN);
+    op.spoerg('lyngby', 7, pc({ kioskVersion: '2026.11.4.1' }), NU + 17 * 60 * MIN);
+    assert.equal(op.forSkaerm('lyngby', 7, 'tv-bane-1', NU + 17 * 60 * MIN).status, null);
+});
+
+test('versioner sammenlignes tal for tal', () => {
+    assert.ok(op.sammenlign('2026.11.3', '2026.11.2') > 0);
+    assert.ok(op.sammenlign('2026.11.10', '2026.11.9') > 0, 'ikke som tekst');
+    assert.ok(op.sammenlign('2026.10.29.1', '2026.10.29') > 0);
+    assert.ok(op.sammenlign('2026.10.33', '2026.11.1') < 0);
+    assert.equal(op.sammenlign('2026.11.2', '2026.11.2'), 0);
+});
+
 test('nyeste / fejl afslutter bestillingen; venter gør ikke', () => {
     op.spoerg('lyngby', 7, pc(), NU);
     op.bestil('lyngby', 7, 'tv-bane-1', NU);
