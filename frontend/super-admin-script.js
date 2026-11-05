@@ -138,6 +138,14 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('ytKopierBtn').addEventListener('click', kopierYoutubeAdresse);
     bindEnterSubmit(['ytClientId', 'ytClientSecret'], gemYoutube);
 
+    // Serverens helbred (Hetzner)
+    document.getElementById('helbredPeriode').addEventListener('change', loadHelbred);
+    document.getElementById('helbredOpdaterBtn').addEventListener('click', loadHelbred);
+    document.getElementById('helbredGemBtn').addEventListener('click', gemHetzner);
+    document.getElementById('helbredFjernBtn').addEventListener('click', fjernHetzner);
+    document.getElementById('helbredVaelgBtn').addEventListener('click', vaelgHetznerServer);
+    bindEnterSubmit(['helbredToken'], gemHetzner);
+
     // Admin modal
     document.getElementById('adminModalClose').addEventListener('click', closeModal);
     document.getElementById('createAdminBtn').addEventListener('click', handleCreateAdmin);
@@ -383,6 +391,7 @@ function showDashboard() {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('dashboard').style.display = 'block';
     switchApp(activeApp);
+    loadHelbred();
 }
 
 function switchApp(app) {
@@ -1856,3 +1865,369 @@ async function handleDeleteLogo(id) {
         notify(err.message || 'Sletning mislykkedes', 'error');
     }
 }
+
+// ==================== SERVERENS HELBRED ====================
+// Hetzners målinger af prod-serveren (kun med en læse-nøgle) og det, serveren
+// selv kan se: ledig diskplads, hukommelse og belastning.
+
+const HELBRED_GRAF_H = 170;
+let helbredData = null;
+let helbredHenter = false;
+
+const shTal = (n, dec = 0) => Number(n).toLocaleString('da-DK', { maximumFractionDigits: dec });
+
+function shBytes(b, dec = 1) {
+    if (b == null || !Number.isFinite(b)) return '–';
+    const enheder = ['B', 'kB', 'MB', 'GB', 'TB'];
+    let i = 0;
+    while (Math.abs(b) >= 1000 && i < enheder.length - 1) { b /= 1000; i++; }
+    return `${shTal(b, i === 0 ? 0 : dec)} ${enheder[i]}`;
+}
+
+function shVarighed(sek) {
+    const d = Math.floor(sek / 86400);
+    const t = Math.floor((sek % 86400) / 3600);
+    if (d >= 1) return `${d} ${d === 1 ? 'dag' : 'dage'}${t ? ` og ${t} t` : ''}`;
+    const m = Math.floor((sek % 3600) / 60);
+    return t ? `${t} t og ${m} min` : `${m} min`;
+}
+
+async function loadHelbred() {
+    if (helbredHenter) return;
+    helbredHenter = true;
+    const periode = document.getElementById('helbredPeriode').value;
+    try {
+        renderHelbred(await api.getServerHelbred(periode));
+    } catch (err) {
+        document.getElementById('helbredStatus').textContent = 'Fejl: ' + (err.message || 'kunne ikke hente serverens tal');
+    } finally {
+        helbredHenter = false;
+    }
+}
+
+function renderHelbred(d) {
+    helbredData = d;
+    renderHelbredNoegle(d);
+    renderHelbredFliser(d);
+
+    const status = document.getElementById('helbredStatus');
+    if (!d.opsat) {
+        status.innerHTML = '<small>Viser kun serverens egne tal. Sæt en Hetzner-nøgle op herunder for CPU, disk og netværk over tid og månedens trafik.</small>';
+    } else if (d.vaelg) {
+        status.innerHTML = '<small>Vælg prod-serveren under Hetzner-nøglen herunder.</small>';
+    } else if (d.fejl) {
+        status.innerHTML = `<span class="sh-advarsel">${ikonAdvarsel()} Hetzner: ${escapeHtml(d.fejl)}</span>`;
+    } else {
+        status.innerHTML = '';
+    }
+    renderHelbredGrafer();
+    renderHelbredTabel();
+
+    const disk = d.lokal && d.lokal.disk;
+    const dele = [];
+    if (disk && disk.total) dele.push(`${shTal(disk.ledig / disk.total * 100)} % fri disk`);
+    const cpu = d.hetzner && d.hetzner.serier.cpu;
+    if (cpu && cpu.length) dele.push(`CPU ${shTal(gennemsnit(cpu))} % i snit`);
+    saetResume('helbred', dele.join(' · '));
+}
+
+function ikonAdvarsel() {
+    return '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.125em" aria-hidden="true"><path d="M12 3 2 21h20zM12 10v5M12 18h.01"/></svg>';
+}
+
+function renderHelbredNoegle(d) {
+    const el = document.getElementById('helbredNoegleStatus');
+    if (d.kilde === 'env') {
+        el.innerHTML = '<strong>✓ Sat i serverens .env</strong> <small>(HETZNER_API_TOKEN) — ændres der, ikke her</small>';
+    } else if (d.kilde === 'admin') {
+        const dato = d.opdateret ? ` · gemt ${escapeHtml(formatDate(d.opdateret))}` : '';
+        el.innerHTML = `<strong>✓ Sat op</strong><small>${dato}</small><br><small>Gem en ny nøgle herunder for at skifte den.</small>`;
+    } else if (d.ulaeselig) {
+        el.innerHTML = '<strong>Den gemte nøgle kan ikke læses</strong> <small>(serverens JWT_SECRET er skiftet) — indtast den igen</small>';
+    } else {
+        el.innerHTML = '<strong>Ikke sat op</strong>';
+    }
+    document.getElementById('helbredFelter').style.display = d.kilde === 'env' ? 'none' : '';
+    document.getElementById('helbredFjernBtn').style.display = d.kilde === 'admin' ? '' : 'none';
+    if (!d.opsat || d.vaelg) document.getElementById('helbredOpsaet').open = true;
+
+    const vaelg = document.getElementById('helbredVaelg');
+    vaelg.style.display = d.vaelg ? '' : 'none';
+    if (d.vaelg) {
+        document.getElementById('helbredServer').innerHTML = d.vaelg
+            .map(s => `<option value="${Number(s.id)}">${escapeHtml(s.navn)}</option>`).join('');
+    }
+}
+
+// Én flise: titel, stort tal, lille tekst og evt. en bjælke (0–1) med niveau
+// ('advarsel' / 'kritisk' — altid med ikon og tekst, ikke kun farve)
+function shFlise(titel, tal, info, andel, niveau, niveauTekst) {
+    const bar = andel == null ? '' : `<div class="sh-bar" role="presentation"><div class="sh-bar-fyld${niveau ? ` sh-bar--${niveau}` : ''}" style="width:${Math.max(0, Math.min(100, andel * 100)).toFixed(1)}%"></div></div>`;
+    const maerke = niveau ? `<div class="sh-maerke sh-maerke--${niveau}">${ikonAdvarsel()} ${niveauTekst}</div>` : '';
+    return `<div class="sh-flise"><div class="sh-flise-titel">${titel}</div><div class="sh-flise-tal">${tal}</div>${bar}<div class="sh-flise-info">${info}</div>${maerke}</div>`;
+}
+
+function renderHelbredFliser(d) {
+    const l = d.lokal || {};
+    const s = d.hetzner && d.hetzner.server;
+    const fliser = [];
+
+    if (l.disk && l.disk.total) {
+        const fri = l.disk.ledig / l.disk.total;
+        const niveau = fri < 0.05 ? 'kritisk' : fri < 0.15 ? 'advarsel' : '';
+        fliser.push(shFlise('Ledig diskplads', `${shBytes(l.disk.ledig)} fri`,
+            `af ${shBytes(l.disk.total)} (${shTal(fri * 100)} % fri)`, 1 - fri, niveau,
+            niveau === 'kritisk' ? 'Disken er næsten fuld' : 'Lidt plads tilbage'));
+    }
+    if (l.hukommelse && l.hukommelse.total) {
+        const brugt = l.hukommelse.total - l.hukommelse.tilgaengelig;
+        fliser.push(shFlise('Hukommelse i brug', shBytes(brugt),
+            `af ${shBytes(l.hukommelse.total)} (${shTal(brugt / l.hukommelse.total * 100)} %)`, brugt / l.hukommelse.total));
+    }
+    if (l.belastning) {
+        const [b1, , b15] = l.belastning;
+        fliser.push(shFlise('Belastning', shTal(b1, 2),
+            `seneste minut · ${shTal(b15, 2)} over 15 min<br>${l.kerner} ${l.kerner === 1 ? 'kerne' : 'kerner'} — ${shTal(l.kerner)} betyder fuldt optaget`));
+    }
+    if (s && s.trafik && s.trafik.inkluderet) {
+        const t = s.trafik;
+        const andel = t.ud / t.inkluderet;
+        const niveau = andel > 0.9 ? 'kritisk' : andel > 0.75 ? 'advarsel' : '';
+        fliser.push(shFlise('Trafik ud denne måned', shBytes(t.ud),
+            `af ${shBytes(t.inkluderet, 0)} inkluderet · ind: ${shBytes(t.ind)}`, andel, niveau,
+            niveau === 'kritisk' ? 'Tæt på grænsen — mere koster ekstra' : 'Over 75 % af det inkluderede'));
+    }
+    if (s || l.oppetidSek) {
+        const navn = s ? `${escapeHtml(s.navn)} <small>${escapeHtml(s.type)}</small>` : 'Serveren';
+        const info = [];
+        if (s) info.push(`${s.kerner} kerner · ${shTal(s.hukommelseGb)} GB RAM · ${shTal(s.diskGb)} GB disk${s.by ? ` · ${escapeHtml(s.by)}` : ''}`);
+        if (l.oppetidSek) info.push(`kørt i ${shVarighed(l.oppetidSek)} siden sidste genstart`);
+        if (s && s.status && s.status !== 'running') info.push(`status hos Hetzner: ${escapeHtml(s.status)}`);
+        fliser.push(shFlise('Server', navn, info.join('<br>')));
+    }
+    document.getElementById('helbredFliser').innerHTML = fliser.join('');
+}
+
+function gennemsnit(punkter) {
+    return punkter.length ? punkter.reduce((sum, p) => sum + p[1], 0) / punkter.length : 0;
+}
+
+// Pænt loft for y-aksen: 1, 2, 5 eller 10 gange en tierpotens (så midten også er pæn)
+function shPaentLoft(v) {
+    if (!(v > 0)) return 1;
+    const p = Math.pow(10, Math.floor(Math.log10(v)));
+    for (const f of [1, 2, 5, 10]) if (v <= f * p) return f * p;
+    return 10 * p;
+}
+
+// Tidsaksens mærker på hele klokkeslæt/dage (dansk tid), højst `maks` styk
+const SH_TRIN_MS = [5, 10, 15, 30, 60, 120, 180, 360, 720, 1440, 2880, 10080].map(m => m * 60000);
+function shTidsMaerker(t0, t1, maks) {
+    const trin = SH_TRIN_MS.find(s => (t1 - t0) / s <= maks) || SH_TRIN_MS[SH_TRIN_MS.length - 1];
+    // Forskydningen til dansk tid, så mærkerne lander på hele timer og midnat
+    const forskyd = -new Date(t0).getTimezoneOffset() * 60000;
+    const maerker = [];
+    for (let t = Math.ceil((t0 + forskyd) / trin) * trin - forskyd; t <= t1; t += trin) maerker.push(t);
+    return maerker;
+}
+
+function shTidsTekst(ms, periode, lang) {
+    const d = new Date(ms);
+    const kl = d.toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
+    const dag = `${d.getDate()}/${d.getMonth() + 1}`;
+    const ugedag = d.toLocaleDateString('da-DK', { weekday: 'short' });
+    if (lang) return `${ugedag} ${dag} kl. ${kl}`;
+    if (periode === '1t' || periode === '24t') return kl;
+    if (periode === '7d') return `${ugedag} ${dag}`;
+    return dag;
+}
+
+const SH_GRAFER = [
+    { titel: 'CPU', fmt: v => `${shTal(v, v < 10 ? 1 : 0)} %`, minLoft: 10, maksLoft: 100,
+        serier: [{ noegle: 'cpu', navn: 'CPU', nr: 1 }] },
+    { titel: 'Netværk', fmt: v => `${shBytes(v)}/s`,
+        serier: [{ noegle: 'netInd', navn: 'Ind', nr: 1 }, { noegle: 'netUd', navn: 'Ud', nr: 2 }] },
+    { titel: 'Disk', fmt: v => `${shBytes(v)}/s`,
+        serier: [{ noegle: 'diskLaes', navn: 'Læst', nr: 1 }, { noegle: 'diskSkriv', navn: 'Skrevet', nr: 2 }] }
+];
+
+function renderHelbredGrafer() {
+    const boks = document.getElementById('helbredGrafer');
+    const h = helbredData && helbredData.hetzner;
+    if (!h) { boks.innerHTML = ''; return; }
+    const bredde = boks.clientWidth;
+    if (!bredde) return;   // kortet er foldet sammen — tegnes, når det foldes ud
+    boks.innerHTML = '';
+    SH_GRAFER.forEach(g => {
+        const serier = g.serier.map(s => ({ ...s, punkter: h.serier[s.noegle] || [] }));
+        boks.appendChild(shGraf(g, serier, bredde, helbredData.periode));
+    });
+}
+
+// Linjegraf med fælles tidsakse, krydsstreg og værdier ved musen/fingeren
+function shGraf(g, serier, W, periode) {
+    const wrap = document.createElement('div');
+    wrap.className = 'sh-graf';
+    const flere = serier.length > 1;
+    const seneste = s => s.punkter.length ? g.fmt(s.punkter[s.punkter.length - 1][1]) : '–';
+    wrap.innerHTML = `<div class="sh-graf-top"><span class="sh-graf-titel">${g.titel}</span><span class="sh-legende">`
+        + (flere
+            ? serier.map(s => `<span><i class="sh-prik sh-prik--${s.nr}"></i>${s.navn} <small>nu ${seneste(s)}</small></span>`).join('')
+            : `<span><small>nu ${seneste(serier[0])}</small></span>`)
+        + '</span></div>';
+
+    const alle = serier.flatMap(s => s.punkter);
+    if (!alle.length) {
+        wrap.insertAdjacentHTML('beforeend', '<div class="sh-tom">Ingen målinger i perioden</div>');
+        return wrap;
+    }
+    const H = HELBRED_GRAF_H, V = 64, Hm = 8, T = 8, B = 22;
+    let t0 = Infinity, t1 = -Infinity, vMaks = g.minLoft || 0;
+    for (const [t, v] of alle) { t0 = Math.min(t0, t); t1 = Math.max(t1, t); vMaks = Math.max(vMaks, v); }
+    const loft = Math.min(g.maksLoft || Infinity, shPaentLoft(vMaks));
+    const x = t => V + (t1 > t0 ? (t - t0) / (t1 - t0) : 0.5) * (W - V - Hm);
+    const y = v => T + (1 - v / loft) * (H - T - B);
+
+    let indhold = '';
+    for (const andel of [0, 0.5, 1]) {
+        const yy = y(loft * andel);
+        indhold += `<line class="sh-gitter${andel === 0 ? ' sh-gitter--bund' : ''}" x1="${V}" x2="${W - Hm}" y1="${yy}" y2="${yy}"/>`
+            + `<text class="sh-akse" x="${V - 8}" y="${yy + 4}" text-anchor="end">${escapeHtml(g.fmt(loft * andel))}</text>`;
+    }
+    const maerker = shTidsMaerker(t0, t1, Math.max(2, Math.min(6, Math.floor((W - V) / 90))));
+    for (const t of maerker) {
+        const xx = x(t);
+        const anker = xx < V + 24 ? 'start' : xx > W - Hm - 24 ? 'end' : 'middle';
+        indhold += `<line class="sh-gitter" x1="${xx}" x2="${xx}" y1="${H - B}" y2="${H - B + 4}"/>`
+            + `<text class="sh-akse" x="${xx}" y="${H - 5}" text-anchor="${anker}">${escapeHtml(shTidsTekst(t, periode))}</text>`;
+    }
+    for (const s of serier) {
+        if (!s.punkter.length) continue;
+        const d = s.punkter.map((p, i) => `${i ? 'L' : 'M'}${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join('');
+        indhold += `<path class="sh-linje sh-linje--${s.nr}" d="${d}"/>`;
+    }
+    indhold += `<line class="sh-kryds" y1="${T}" y2="${H - B}" style="display:none"/>`
+        + serier.map(s => `<circle class="sh-punkt sh-punkt--${s.nr}" r="4" style="display:none"/>`).join('')
+        + `<rect class="sh-flade" x="${V}" y="0" width="${W - V - Hm}" height="${H}"/>`;
+    const etiket = `${g.titel}: ${serier.map(s => `${s.navn} nu ${seneste(s)}`).join(', ')}`;
+    wrap.insertAdjacentHTML('beforeend', `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escapeHtml(etiket)}">${indhold}</svg>`);
+    const svg = wrap.querySelector('svg');
+
+    const tip = document.createElement('div');
+    tip.className = 'sh-tip';
+    tip.style.display = 'none';
+    wrap.appendChild(tip);
+
+    const kryds = svg.querySelector('.sh-kryds');
+    const prikker = [...svg.querySelectorAll('.sh-punkt')];
+    const naermeste = (pkt, t) => {
+        let bedst = null;
+        for (const p of pkt) if (!bedst || Math.abs(p[0] - t) < Math.abs(bedst[0] - t)) bedst = p;
+        return bedst;
+    };
+    const vis = (e) => {
+        const r = svg.getBoundingClientRect();
+        const px = Math.max(V, Math.min(W - Hm, e.clientX - r.left));
+        const ref = naermeste(alle, t0 + (px - V) / (W - V - Hm) * (t1 - t0));
+        const xx = x(ref[0]);
+        kryds.setAttribute('x1', xx);
+        kryds.setAttribute('x2', xx);
+        kryds.style.display = '';
+        const linjer = serier.map((s, i) => {
+            const p = naermeste(s.punkter, ref[0]);
+            if (!p) { prikker[i].style.display = 'none'; return ''; }
+            prikker[i].setAttribute('cx', x(p[0]));
+            prikker[i].setAttribute('cy', y(p[1]));
+            prikker[i].style.display = '';
+            return `<div>${flere ? `<i class="sh-prik sh-prik--${s.nr}"></i>${s.navn}: ` : ''}<strong>${escapeHtml(g.fmt(p[1]))}</strong></div>`;
+        }).join('');
+        tip.innerHTML = `<div class="sh-tip-tid">${escapeHtml(shTidsTekst(ref[0], periode, true))}</div>${linjer}`;
+        tip.style.display = '';
+        const tw = tip.offsetWidth;
+        tip.style.left = `${Math.max(0, Math.min(W - tw, xx + (xx > W / 2 ? -tw - 12 : 12)))}px`;
+    };
+    const skjul = () => {
+        kryds.style.display = 'none';
+        prikker.forEach(p => { p.style.display = 'none'; });
+        tip.style.display = 'none';
+    };
+    const flade = svg.querySelector('.sh-flade');
+    flade.addEventListener('pointermove', vis);
+    flade.addEventListener('pointerdown', vis);
+    flade.addEventListener('pointerleave', skjul);
+    return wrap;
+}
+
+function renderHelbredTabel() {
+    const boks = document.getElementById('helbredTabel');
+    const h = helbredData && helbredData.hetzner;
+    boks.style.display = h ? '' : 'none';
+    if (!h) return;
+    const raekker = SH_GRAFER.flatMap(g => g.serier.map(s => {
+        const p = h.serier[s.noegle] || [];
+        const maks = p.reduce((m, q) => Math.max(m, q[1]), 0);
+        const navn = g.serier.length > 1 ? `${g.titel} — ${s.navn.toLowerCase()}` : g.titel;
+        const tal = (f) => p.length ? escapeHtml(f()) : '–';
+        return `<tr><td>${navn}</td><td>${tal(() => g.fmt(p[p.length - 1][1]))}</td><td>${tal(() => g.fmt(gennemsnit(p)))}</td><td>${tal(() => g.fmt(maks))}</td></tr>`;
+    }));
+    document.getElementById('helbredTabelIndhold').innerHTML =
+        `<table class="sh-tabel"><thead><tr><th>Måling</th><th>Seneste</th><th>Gennemsnit</th><th>Højeste</th></tr></thead><tbody>${raekker.join('')}</tbody></table>`;
+}
+
+async function gemHetzner() {
+    const msgEl = document.getElementById('helbredMsg');
+    const btn = document.getElementById('helbredGemBtn');
+    const token = document.getElementById('helbredToken').value.trim();
+    if (!token) return showMsg(msgEl, 'Indsæt API-nøglen', 'error');
+    btn.disabled = true;
+    btn.textContent = 'Tjekker hos Hetzner…';
+    try {
+        const d = await api.saveSuperAdminHetzner({ token });
+        document.getElementById('helbredToken').value = '';
+        document.getElementById('helbredPeriode').value = d.periode;
+        renderHelbred(d);
+        showMsg(msgEl, 'Gemt — Hetzner kender nøglen.', 'success');
+    } catch (err) {
+        showMsg(msgEl, err.message || 'Kunne ikke gemme', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Gem';
+    }
+}
+
+async function vaelgHetznerServer() {
+    const msgEl = document.getElementById('helbredMsg');
+    try {
+        const d = await api.saveSuperAdminHetzner({ serverId: Number(document.getElementById('helbredServer').value) });
+        document.getElementById('helbredPeriode').value = d.periode;
+        renderHelbred(d);
+    } catch (err) {
+        showMsg(msgEl, err.message || 'Kunne ikke vælge serveren', 'error');
+    }
+}
+
+async function fjernHetzner() {
+    if (!await confirmModal('Fjern Hetzner-nøglen', 'Super-admin viser så kun serverens egne tal. Slet også nøglen i Hetzner Console, hvis den ikke skal bruges mere.', { danger: true, okText: 'Fjern' })) return;
+    try {
+        renderHelbred(await api.removeSuperAdminHetzner());
+    } catch (err) {
+        showMsg(document.getElementById('helbredMsg'), err.message || 'Kunne ikke fjerne nøglen', 'error');
+    }
+}
+
+// Graferne følger kortets bredde; et sammenfoldet kort tegnes, når det foldes ud
+let helbredResize = null;
+window.addEventListener('resize', () => {
+    clearTimeout(helbredResize);
+    helbredResize = setTimeout(renderHelbredGrafer, 150);
+});
+document.addEventListener('click', (e) => {
+    if (e.target.closest('#helbredCard .fold-knap')) requestAnimationFrame(renderHelbredGrafer);
+});
+// Hvert minut, mens siden ses og kortet er foldet ud (Hetzner måler pr. minut)
+setInterval(() => {
+    const kort = document.getElementById('helbredCard');
+    if (document.hidden || !helbredData || !kort || kort.classList.contains('card--sammen')
+        || document.getElementById('dashboard').style.display === 'none') return;
+    loadHelbred();
+}, 60 * 1000);
