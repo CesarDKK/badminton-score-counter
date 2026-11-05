@@ -86,6 +86,12 @@ const tjek = (navn, betingelse, info = '') => { if (!betingelse) antalFejl++; co
     tjek('fortryd matchbolden genåbner kampen', u.status === 200 && !u.data.slut, `slut=${u.data.slut}`);
     const p = await tryk(sidste.tilstand.player1.games > sidste.tilstand.player2.games ? 'P1' : 'P2', ++nr);
     tjek('vind kampen igen', p.data.slut === true);
+    // i) Ny kamp: rent scoreboard, uret er stadig koblet, og TV'et viser resultatet
+    const ny = await tryk('N', ++nr);
+    const tv = (await kald('GET', `/game-states/${BANE}`, null, CA)).data;
+    tjek('ny kamp efter kampslut: rent scoreboard', ny.status === 200 && !ny.data.slut && ny.data.sider[0].point === 0 && ny.data.sider[0].saet === 0,
+        `status ${ny.status}`);
+    tjek('ny kamp: TV\'et viser resultatet', tv && !tv.matchCompleted && !!tv.lastFinishedMatch);
 
     // f) Udløbet sætpause: næste tryk begynder næste sæt først — via ny kamp
     // g) Slået fra

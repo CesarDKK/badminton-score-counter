@@ -26,6 +26,21 @@ function parseSetScores(raw) {
     return raw;
 }
 
+// Sekunder tilbage af pausen. Tabletten tæller selv ned og gemmer sekundtallet
+// hvert 10. sekund. Tæller uret kampen (serveren regner for det, routes/
+// urTaeller.js), gemmes kun pausens start — stemplet med serverens ur — så her
+// regnes resten ud. Ellers stod pausen på 60 hele vejen, og TV'et, der tæller
+// selv og starter forfra, når serveren viser over 30 sek. mere end det selv,
+// begyndte forfra ved ca. 20 sek. tilbage
+function pauseSekunderTilbage(row, nu = Date.now()) {
+    const gemt = row.rest_break_seconds_left || 0;
+    const urTaeller = row.tryk_taeller && row.tryk_taeller === row.taeller_id;
+    if (!row.rest_break_active || !urTaeller || row.rest_break_started_at == null) return gemt;
+    const slut = Number(row.rest_break_started_at) + (row.rest_break_duration || 60) * 1000;
+    if (!Number.isFinite(slut)) return gemt;
+    return Math.max(0, Math.min(row.rest_break_duration || 60, Math.ceil((slut - nu) / 1000)));
+}
+
 // Formaterer en game_states-raekke til API-formatet — bruges af GET, 409-konflikt-
 // svar og PUT, saa klienterne altid ser praecis samme felt-struktur.
 function formatStateRow(row, court) {
@@ -45,7 +60,7 @@ function formatStateRow(row, court) {
         timerSeconds: row.timer_seconds,
         decidingGameSwitched: !!row.deciding_game_switched,
         restBreakActive: !!row.rest_break_active,
-        restBreakSecondsLeft: row.rest_break_seconds_left || 0,
+        restBreakSecondsLeft: pauseSekunderTilbage(row),
         restBreakTitle: row.rest_break_title || '',
         // Resten af reglernes pausetilstand (migration 039): pausen ved 11 (8) er
         // taget i sættet, og den kørende pauses start (tablettens ur, ms) og længde
@@ -168,6 +183,7 @@ router.get('/batch/all', async (req, res, next) => {
                 gs.player2_name, gs.player2_name2, gs.player2_score, gs.player2_games,
                 gs.timer_seconds, gs.deciding_game_switched,
                 gs.rest_break_active, gs.rest_break_seconds_left, gs.rest_break_title,
+                gs.rest_break_started_at, gs.rest_break_duration, gs.tryk_taeller, gs.taeller_id,
                 gs.set_scores_history, gs.match_start_time, gs.match_end_time, gs.match_completed,
                 gs.result_outcome, gs.result_winner,
                 gs.serving_player, gs.serving_team,
@@ -227,7 +243,7 @@ router.get('/batch/all', async (req, res, next) => {
                 timerSeconds: row.timer_seconds,
                 decidingGameSwitched: !!row.deciding_game_switched,
                 restBreakActive: !!row.rest_break_active,
-                restBreakSecondsLeft: row.rest_break_seconds_left || 0,
+                restBreakSecondsLeft: pauseSekunderTilbage(row),
                 restBreakTitle: row.rest_break_title || '',
                 setScoresHistory: setScoresHistory,
                 matchStartTime: row.match_start_time,
@@ -989,3 +1005,5 @@ router.delete('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), a
 module.exports = router;
 module.exports.gemTilstand = gemTilstand;
 module.exports.formatStateRow = formatStateRow;
+
+module.exports.pauseSekunderTilbage = pauseSekunderTilbage;
