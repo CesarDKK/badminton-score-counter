@@ -130,12 +130,22 @@ function forventet() {
     st.history = [];
     for (const t of gemt.ko) {
         const n = Number(t.handling[1]);
-        if (t.handling[0] === 'P') R.point(st, n, Date.now() + tidsforskel);
+        if (t.handling[0] === 'P') pointLokalt(st, n);
         else if (t.handling[0] === 'S') R.vaelgServer(st, n);
         else if (t.handling === 'B') R.afslutPause(st);
+        else if (t.handling === 'N' && st.matchCompleted) {
+            Object.assign(st, R.nyKamp({ isDoubles: st.isDoubles, gameMode: st.gameMode }));
+        }
         // Fortryd vises først, når serveren har svaret (uret har ikke historikken)
     }
     return st;
+}
+
+// Et point, som serveren regner det: et point i pausen ved 11 (8) afslutter
+// pausen først — spillerne er i gang igen (backend/routes/urTaeller.js)
+function pointLokalt(st, side) {
+    if (st.restBreakActive && !R.erSaetAfgjort(st)) R.afslutPause(st);
+    return R.point(st, side, Date.now() + tidsforskel);
 }
 
 // Hvilken side (1/2) står spilleren på nu
@@ -158,7 +168,7 @@ function trykPaaSpiller(i) {
     // Afvises reglerne trykket (afgjort kamp, sætpause), sendes det ikke
     const proeve = JSON.parse(JSON.stringify(st));
     proeve.history = [];
-    if (!R.point(proeve, side, Date.now() + tidsforskel).ok) return;
+    if (!pointLokalt(proeve, side).ok) return;
     tryk('P' + side);
 }
 
@@ -209,6 +219,8 @@ async function send() {
         modtag(data);
         if (data.haendelser && data.haendelser.includes('sideskift')) visBesked('Skift side!');
         if (data.haendelser && data.haendelser.includes('kamp')) pauseSendt = false;
+        // Ny kamp afvist: badmintonplanner-banens resultat står til næste runde
+        if (t.handling === 'N' && data.afvist && data.slut) visBesked('Resultatet bliver stående til næste runde');
     }
     sender = false;
     tegn();
@@ -259,7 +271,8 @@ function tegn() {
         : st.matchCompleted ? 'Kampen er slut'
         : `Bane ${server.bane} · ${(st.player1.games || 0) + (st.player2.games || 0) + 1}. sæt`;
 
-    // Pausen: nedtælling; sætpausen kan springes over med "Næste sæt"
+    // Pausen: nedtælling. Pausen ved 11 (8) slutter med "Fortsæt kamp" eller
+    // næste point, sætpausen kan springes over med "Næste sæt"
     const pEl = $('pause');
     if (pause && server.pause && server.pause.slutter) {
         const tilbage = server.pause.slutter - (Date.now() + tidsforskel);
@@ -271,7 +284,11 @@ function tegn() {
         pEl.classList.add('skjult');
         pauseSendt = false;
     }
-    $('naeste').classList.toggle('skjult', !saetPause || spaerret);
+    $('naeste').textContent = saetPause ? 'Næste sæt' : 'Fortsæt kamp';
+    $('naeste').classList.toggle('skjult', !pause || st.matchCompleted || spaerret);
+    // Kampen er slut: "Ny kamp" giver banen et rent scoreboard (TV'et viser
+    // resultatet et par minutter), og uret bliver koblet på banen
+    $('nyKamp').classList.toggle('skjult', !st.matchCompleted || spaerret);
     $('overtag').classList.toggle('skjult', !spaerret);
     $('fortryd').classList.toggle('skjult', spaerret);
 
@@ -308,6 +325,7 @@ $('side0').addEventListener('click', () => trykPaaSpiller(0));
 $('side1').addEventListener('click', () => trykPaaSpiller(1));
 $('fortryd').addEventListener('click', () => { if (!spaerret) tryk('U'); });
 $('naeste').addEventListener('click', () => tryk('B'));
+$('nyKamp').addEventListener('click', () => { if (!spaerret) tryk('N'); });
 $('overtag').addEventListener('click', overtag);
 
 const k = new URLSearchParams(location.search).get('k');

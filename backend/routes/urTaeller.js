@@ -6,6 +6,8 @@ const { requireWriteAuthInClubMode } = require('../middleware/auth');
 const { baneFraDestination } = require('../middleware/qrSession');
 const { urKodeLimiter } = require('../middleware/rateLimiter');
 const { gemTilstand, formatStateRow } = require('./gameStates');
+const { gemSidsteAfsluttedeKamp } = require('../config/banerydning');
+const { hentPlannerVisning, plannerForBane } = require('./plannerIntegration');
 const { urKodeFor } = require('./matchSessionTokens');
 const { varighedTekst } = require('../config/matchTiming');
 const regler = require('../taeller/regler');
@@ -26,7 +28,7 @@ const ejerskab = require('../taeller/ejerskab');
 // Hvert tryk har et løbenummer fra uret. Er svaret gået tabt, sender uret
 // trykket igen; serveren kender nummeret og tæller det ikke to gange.
 
-const HANDLINGER = ['S1', 'S2', 'P1', 'P2', 'K', 'B', 'U'];
+const HANDLINGER = ['S1', 'S2', 'P1', 'P2', 'K', 'B', 'U', 'N'];
 
 async function urTaellingSlaaetTil() {
     const r = await queryOne("SELECT setting_value FROM settings WHERE setting_key = 'ur_taelling'");
@@ -198,8 +200,27 @@ async function gemKampresultat(court, st) {
     await query('UPDATE game_states SET result_history_id = ? WHERE court_id = ?', [r.insertId, court.id]);
 }
 
+// "Ny kamp" efter en afsluttet kamp: banen står ledig med et rent scoreboard,
+// og TV'et viser resultatet et par minutter (som tablettens "Ny kamp"). Banen
+// ryddes ikke med DELETE — det ville slette QR-sessionen, og uret skulle taste
+// koden igen før hver kamp (samme vej som QR-tablettens "Start ny kamp")
+async function nyKampKrop(court, row, st, version, taellerId) {
+    await gemSidsteAfsluttedeKamp(court.id, row);
+    const ny = regler.nyKamp({ isDoubles: st.isDoubles, gameMode: st.gameMode });
+    return {
+        ...kropFra(ny, [], version, taellerId),
+        matchStartTime: null, matchEndTime: null, timerSeconds: 0
+    };
+}
+
+// En badmintonplanner-bane: resultatet står til næste runde og må ikke ryddes
+async function erPlannerBane(bane) {
+    try { return !!plannerForBane(await hentPlannerVisning(), bane); } catch { return false; }
+}
+
 // POST /api/ur/tryk — { handling, nr, taellerId }
-//   handling: S1/S2 vælg server, P1/P2 point, K start, B afslut pausen, U fortryd
+//   handling: S1/S2 vælg server, P1/P2 point, K start, B afslut pausen, U fortryd,
+//   N ny kamp (kun når kampen er slut)
 router.post('/tryk', requireWriteAuthInClubMode, async (req, res, next) => {
     try {
         const body = req.body || {};
@@ -236,12 +257,32 @@ router.post('/tryk', requireWriteAuthInClubMode, async (req, res, next) => {
 
             const st = tilstandFra(row, court);
             const haendelser = [];
-            // Er pausen ved 11 (8) løbet ud, slutter den, før trykket regnes. Sætpausen
-            // slutter kun med "B" (uret sender det, når nedtællingen er slut): næste
-            // sæt bytter siderne, så et point regnet efter et skjult sideskift ville
-            // ramme den forkerte spiller — reglerne afviser point i sætpausen
-            if (st.restBreakActive && !regler.erSaetAfgjort(st) && st.restBreakStartedAt &&
-                nu >= Number(st.restBreakStartedAt) + (st.restBreakDuration || 60) * 1000 && handling !== 'U') {
+
+            if (handling === 'N') {
+                if (!row || !st.matchCompleted || await erPlannerBane(court.court_number)) {
+                    if (row) await query('UPDATE game_states SET tryk_taeller = ?, tryk_nr = ? WHERE court_id = ?', [taellerId, nr, court.id]);
+                    return res.json(visning(row && { ...row, tryk_taeller: taellerId, tryk_nr: nr }, court, { afvist: true, haendelser }));
+                }
+                const g = await gemTilstand(req, court.court_number,
+                    await nyKampKrop(court, row, st, row.version || 0, taellerId));
+                if (g.status === 409) continue;
+                if (g.status !== 200) return res.status(g.status).json(g.json);
+                await query('UPDATE game_states SET tryk_taeller = ?, tryk_nr = ?, fortryd_historik = NULL WHERE court_id = ?',
+                    [taellerId, nr, court.id]);
+                return res.json(visning(await hentRaekke(court.id), court, { haendelser: ['ny-kamp'] }));
+            }
+
+            // Pausen ved 11 (8) slutter, før trykket regnes: når den er løbet ud,
+            // og når der tælles et point (spillerne er i gang igen — på tabletten
+            // dækker pausen pointknapperne, på uret gør den ikke). Ellers stod
+            // pausen på TV'et resten af sættet. Sætpausen slutter kun med "B" (uret
+            // sender det, når nedtællingen er slut): næste sæt bytter siderne, så et
+            // point regnet efter et skjult sideskift ville ramme den forkerte
+            // spiller — reglerne afviser point i sætpausen
+            const pauseUdloebet = st.restBreakStartedAt &&
+                nu >= Number(st.restBreakStartedAt) + (st.restBreakDuration || 60) * 1000;
+            if (st.restBreakActive && !regler.erSaetAfgjort(st) &&
+                (handling[0] === 'P' || (pauseUdloebet && handling !== 'U'))) {
                 haendelser.push(...regler.afslutPause(st).haendelser);
             }
             const n = Number(handling[1]);
