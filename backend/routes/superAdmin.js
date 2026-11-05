@@ -10,6 +10,7 @@ const skaermHaendelser = require('../screens/haendelseslog');
 const youtube = require('../config/youtube');
 const youtubeKlient = require('../config/youtubeKlient');
 const youtubeKvote = require('../config/youtubeKvote');
+const hetzner = require('../config/hetzner');
 const fs = require('fs');
 const sharp = require('sharp');
 const AdmZip = require('adm-zip');
@@ -1056,6 +1057,55 @@ router.delete('/youtube', superAdminAuth, async (req, res, next) => {
     try {
         await youtubeKlient.fjern();
         res.json(await youtubeStatus());
+    } catch (error) { next(error); }
+});
+
+// ==================== SERVERENS HELBRED (Hetzner) ====================
+// Kun læsning hos Hetzner. API-nøglen sendes aldrig tilbage.
+
+// GET /api/super-admin/server-helbred?periode=1t|24t|7d|30d
+router.get('/server-helbred', superAdminAuth, async (req, res, next) => {
+    try {
+        res.json(await hetzner.helbred(String(req.query.periode || '24t')));
+    } catch (error) { next(error); }
+});
+
+// PUT /api/super-admin/hetzner — { token } eller { serverId } (valg, når
+// projektet har flere servere)
+router.put('/hetzner', superAdminAuth, async (req, res, next) => {
+    try {
+        if (req.body.serverId !== undefined) {
+            const id = Number(req.body.serverId);
+            if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Ugyldig server' });
+            await hetzner.vaelgServer(id);
+            return res.json(await hetzner.helbred('24t'));
+        }
+        if (process.env.HETZNER_API_TOKEN) {
+            return res.status(409).json({ error: 'Hetzner-nøglen er sat i serverens .env og kan ikke ændres her' });
+        }
+        const token = String(req.body.token || '').trim();
+        if (!/^[A-Za-z0-9]{20,200}$/.test(token)) {
+            return res.status(400).json({ error: 'API-nøglen ser forkert ud — kopiér hele nøglen (64 tegn, kun bogstaver og tal)' });
+        }
+        let t;
+        try {
+            t = await hetzner.tjek(token);
+        } catch (e) {
+            return res.status(e.status === 401 ? 400 : 502).json({ error: e.message });
+        }
+        if (!t.servere.length) {
+            return res.status(400).json({ error: 'Nøglen virker, men projektet har ingen servere — er nøglen lavet i det projekt, prod-serveren ligger i?' });
+        }
+        await hetzner.gem(token, t.serverId);
+        res.json(await hetzner.helbred('24t'));
+    } catch (error) { next(error); }
+});
+
+// DELETE /api/super-admin/hetzner
+router.delete('/hetzner', superAdminAuth, async (req, res, next) => {
+    try {
+        await hetzner.fjern();
+        res.json(await hetzner.helbred('24t'));
     } catch (error) { next(error); }
 });
 

@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="fonts.css?v=2">
     <link rel="stylesheet" href="fundament.css?v=2">
     <link rel="stylesheet" href="styles.css?v=11">
-    <link rel="stylesheet" href="super-admin-styles.css?v=15">
+    <link rel="stylesheet" href="super-admin-styles.css?v=16">
     <script src="js/theme-loader.js?v=15"></script>
 </head>
 <body>
@@ -294,6 +294,57 @@
 
             </div><!-- /footballSection -->
 
+            <!-- Serverens helbred (delt for begge apps): Hetzners målinger + serverens egne -->
+            <div class="card" id="helbredCard" data-fold="helbred">
+                <div class="card-header">
+                    <span class="card-title">Serverens helbred</span>
+                    <div class="sh-top-knapper">
+                        <select id="helbredPeriode" class="sa-select" aria-label="Periode">
+                            <option value="1t">Seneste time</option>
+                            <option value="24t" selected>Seneste døgn</option>
+                            <option value="7d">7 dage</option>
+                            <option value="30d">30 dage</option>
+                        </select>
+                        <button id="helbredOpdaterBtn" class="btn-secondary">↻ Opdater</button>
+                    </div>
+                </div>
+                <div id="helbredFliser" class="sh-fliser"></div>
+                <div id="helbredStatus" class="sh-status"></div>
+                <div id="helbredGrafer" class="sh-grafer"></div>
+                <details id="helbredTabel" class="yt-vejledning" style="display:none;">
+                    <summary>Vis tallene som tabel</summary>
+                    <div id="helbredTabelIndhold"></div>
+                </details>
+                <details id="helbredOpsaet" class="yt-vejledning sh-opsaet">
+                    <summary>Hetzner-nøglen</summary>
+                    <div id="helbredNoegleStatus" class="yt-status" style="margin-top:10px;"></div>
+                    <ol>
+                        <li>Log ind på <a href="https://console.hetzner.com/" target="_blank" rel="noopener">console.hetzner.com</a> og åbn det projekt, prod-serveren ligger i.</li>
+                        <li><strong>Security</strong> → <strong>API Tokens</strong> → <strong>Generate API Token</strong>.</li>
+                        <li>Navn: <code>Badmintonapp super-admin</code>. Rettigheder: <strong>Read</strong> — <em>ikke</em> Read &amp; Write. Nøglen kan så kun se, ikke ændre eller slette noget.</li>
+                        <li>Kopiér nøglen herned og tryk Gem. Hetzner viser den kun den ene gang.</li>
+                    </ol>
+                    <div id="helbredFelter" class="create-form" style="margin-top:10px;">
+                        <div class="form-group" style="margin-bottom:0">
+                            <label for="helbredToken">API-nøgle (kun læsning)</label>
+                            <input type="password" id="helbredToken" placeholder="64 tegn" autocomplete="new-password" spellcheck="false">
+                        </div>
+                        <div class="yt-knapper">
+                            <button id="helbredGemBtn" class="btn-primary">Gem</button>
+                            <button id="helbredFjernBtn" class="btn-danger" style="display:none;">Fjern</button>
+                        </div>
+                    </div>
+                    <div id="helbredVaelg" style="display:none; margin-top:10px;">
+                        <label for="helbredServer">Projektet har flere servere — hvilken er prod?</label>
+                        <div class="yt-kopi">
+                            <select id="helbredServer" class="sa-select"></select>
+                            <button id="helbredVaelgBtn" class="btn-secondary">Brug den</button>
+                        </div>
+                    </div>
+                </details>
+                <div id="helbredMsg" class="msg" style="display:none;"></div>
+            </div>
+
             <!-- Skift adgangskode (delt for begge apps) -->
             <div class="card" data-fold="adgangskode" data-fold-standard="sammen">
                 <div class="card-header">
@@ -438,10 +489,10 @@
         </div>
     </div>
 
-    <script src="js/api.js?v=39"></script>
+    <script src="js/api.js?v=40"></script>
     <script src="js/session-vagt.js?v=2"></script>
     <script src="js/logo-match.js?v=2"></script>
     <script src="js/ikoner.js?v=2"></script>
-    <script src="super-admin-script.js?v=32"></script>
+    <script src="super-admin-script.js?v=33"></script>
 </body>
 </html>

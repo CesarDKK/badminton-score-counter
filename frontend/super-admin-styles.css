@@ -383,3 +383,58 @@ header .subtitle {
 .yt-kvote-advarsel a { color: inherit; }
 .yt-kvote .yt-vejledning { margin-top: 10px; }
 .yt-kvote input[type=number] { width: 9em; }
+
+/* ── Serverens helbred ─────────────────────────────────────
+   Serie-farverne er valideret mod kortets flade (--color-bg-container):
+   farveblind-sikre og over 3:1 i kontrast. Status (advarsel/kritisk) bruger
+   fundamentets egne farver og altid ikon + tekst. */
+#helbredCard {
+    --sh-serie-1: #3987e5;
+    --sh-serie-2: #d95926;
+}
+.sh-top-knapper { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sh-fliser { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.sh-flise { background: rgba(255, 255, 255, 0.04); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.sh-flise-titel { font-size: 0.78em; color: var(--text-muted, rgba(255, 255, 255, 0.62)); text-transform: uppercase; letter-spacing: 0.04em; }
+.sh-flise-tal { font-size: 1.3em; font-weight: 600; color: var(--text-primary, #eaeaea); margin: 2px 0 6px; overflow-wrap: anywhere; }
+.sh-flise-tal small { font-size: 0.62em; font-weight: 400; color: var(--text-muted, rgba(255, 255, 255, 0.62)); }
+.sh-flise-info { font-size: 0.8em; color: var(--text-secondary, rgba(255, 255, 255, 0.78)); line-height: 1.5; }
+.sh-bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; margin-bottom: 6px; }
+.sh-bar-fyld { height: 100%; border-radius: 3px; background: var(--sh-serie-1); }
+.sh-bar--advarsel { background: var(--color-warning, #ffb02e); }
+.sh-bar--kritisk { background: var(--color-danger, #d92c3f); }
+.sh-maerke { margin-top: 6px; font-size: 0.8em; font-weight: 600; }
+.sh-maerke--advarsel { color: var(--color-warning, #ffb02e); }
+.sh-maerke--kritisk { color: var(--color-danger-text, #ff6b7a); }
+.sh-status { margin: 12px 0 0; font-size: 0.88em; color: var(--text-muted, rgba(255, 255, 255, 0.62)); }
+.sh-status:empty { display: none; }
+.sh-advarsel { color: var(--color-warning, #ffb02e); }
+.sh-grafer { margin-top: 6px; }
+.sh-graf { position: relative; margin-top: 18px; }
+.sh-graf svg { display: block; overflow: visible; touch-action: pan-y; }
+.sh-graf-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+.sh-graf-titel { font-weight: 600; color: var(--text-primary, #eaeaea); }
+.sh-legende { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.82em; color: var(--text-secondary, rgba(255, 255, 255, 0.78)); }
+.sh-legende small { color: var(--text-muted, rgba(255, 255, 255, 0.62)); }
+.sh-prik { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -0.05em; }
+.sh-prik--1 { background: var(--sh-serie-1); }
+.sh-prik--2 { background: var(--sh-serie-2); }
+.sh-gitter { stroke: rgba(255, 255, 255, 0.07); stroke-width: 1; }
+.sh-gitter--bund { stroke: rgba(255, 255, 255, 0.18); }
+.sh-akse { fill: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 11px; font-variant-numeric: tabular-nums; }
+.sh-linje { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.sh-linje--1 { stroke: var(--sh-serie-1); }
+.sh-linje--2 { stroke: var(--sh-serie-2); }
+.sh-kryds { stroke: rgba(255, 255, 255, 0.35); stroke-width: 1; }
+.sh-punkt { stroke: var(--color-bg-container, #16213e); stroke-width: 2; }
+.sh-punkt--1 { fill: var(--sh-serie-1); }
+.sh-punkt--2 { fill: var(--sh-serie-2); }
+.sh-flade { fill: transparent; cursor: crosshair; }
+.sh-tip { position: absolute; top: 34px; pointer-events: none; background: var(--color-bg-card, #252347); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; padding: 6px 10px; font-size: 0.8em; line-height: 1.5; white-space: nowrap; color: var(--text-primary, #eaeaea); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); z-index: 2; }
+.sh-tip-tid { color: var(--text-muted, rgba(255, 255, 255, 0.62)); }
+.sh-tom { font-size: 0.85em; color: var(--text-muted, rgba(255, 255, 255, 0.62)); padding: 18px 0; }
+.sh-opsaet { margin-top: 18px; }
+.sh-tabel { width: 100%; border-collapse: collapse; margin-top: 10px; font-variant-numeric: tabular-nums; }
+.sh-tabel th, .sh-tabel td { text-align: right; padding: 5px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
+.sh-tabel th:first-child, .sh-tabel td:first-child { text-align: left; }
+.sh-tabel th { font-weight: 600; color: var(--text-muted, rgba(255, 255, 255, 0.62)); }

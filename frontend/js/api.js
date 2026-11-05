@@ -1261,6 +1261,21 @@ class BadmintonAPI {
         });
     }
 
+    async getServerHelbred(periode) {
+        return this.request(`/super-admin/server-helbred?periode=${encodeURIComponent(periode)}`);
+    }
+
+    async saveSuperAdminHetzner(data) {
+        return this.request('/super-admin/hetzner', {
+            method: 'PUT',
+            body: JSON.stringify(data)
+        });
+    }
+
+    async removeSuperAdminHetzner() {
+        return this.request('/super-admin/hetzner', { method: 'DELETE' });
+    }
+
     async createClub(name, subdomain) {
         return this.request('/super-admin/clubs', {
             method: 'POST',
