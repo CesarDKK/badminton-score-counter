@@ -64,8 +64,25 @@
         #status { min-height: 14px; }
         #status.venter { color: var(--daempet); }
         #status.fejl { color: var(--advarsel); }
-        .pause { text-align: center; font-size: 13px; color: var(--advarsel); }
-        .pause b { font-size: 18px; font-variant-numeric: tabular-nums; }
+
+        /* Pausen og kampslut: stillingen står på TV'et, så uret viser kun det,
+           der skal trykkes på — store knapper, der fylder skærmen */
+        .stor {
+            flex: 1;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+            background: var(--kort);
+            border: 2px solid var(--kant);
+            border-radius: 14px;
+            font-size: 20px; font-weight: 700;
+        }
+        .stor:active { background: #2a2740; }
+        .stor.primaer { background: var(--accent); border-color: var(--accent); }
+        .stor.primaer:active { filter: brightness(0.9); }
+        .stor .tid { font-size: 13px; font-weight: 400; font-variant-numeric: tabular-nums; }
+        #kampSide.i-pause .spiller, #kampSide.slut .spiller { display: none; }
+        /* Kampslut: Fortryd er lige så stor som "Ny kamp" og "Færdig" */
+        #kampSide.slut .raekke { flex: 1; }
+        #kampSide.slut .raekke button { border: 2px solid var(--kant); border-radius: 14px; font-size: 20px; font-weight: 700; }
     </style>
 </head>
 <body>
@@ -81,23 +98,22 @@
     <!-- 2. Kampen -->
     <div id="kampSide" class="side skjult">
         <div class="lille" id="overskrift"></div>
-        <div id="pause" class="pause skjult"></div>
         <button class="spiller" id="side0"><span><span class="navn"></span><br><span class="saet"></span></span><span class="point"></span></button>
         <button class="spiller" id="side1"><span><span class="navn"></span><br><span class="saet"></span></span><span class="point"></span></button>
+        <!-- Pausen ved 11 (8) og mellem sæt: kun "Fortsæt" med nedtællingen -->
+        <button id="naeste" class="stor primaer skjult"><span>Fortsæt</span><span class="tid"></span></button>
+        <!-- Kampen er slut: spil videre, eller log uret ud -->
+        <button id="nyKamp" class="stor primaer skjult">Ny kamp</button>
+        <button id="faerdig" class="stor skjult">Færdig</button>
         <div class="raekke">
             <button id="fortryd">↶ Fortryd</button>
-            <button id="naeste" class="primaer skjult">Næste sæt</button>
             <button id="overtag" class="primaer skjult">Overtag</button>
-        </div>
-        <!-- Kampen er slut: spil videre, eller log uret ud -->
-        <div class="raekke skjult" id="slutRaekke">
-            <button id="nyKamp" class="primaer skjult">Ny kamp</button>
-            <button id="faerdig" class="skjult">Færdig</button>
+            <button id="faerdigLille" class="skjult">Færdig</button>
         </div>
         <div id="status" class="lille"></div>
     </div>
 
     <script src="js/taeller-regler.js?v=2"></script>
-    <script src="ur-script.js?v=3"></script>
+    <script src="ur-script.js?v=4"></script>
 </body>
 </html>
