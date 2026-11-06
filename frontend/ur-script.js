@@ -170,8 +170,18 @@ function pointLokalt(st, side) {
     return R.point(st, side, Date.now() + tidsforskel);
 }
 
-// Serveren er valgt, men kampen er ikke begyndt
-const klarTilStart = (st) => !!st.servingPlayer && !st.matchStartTime && !st.matchCompleted;
+// Kampen er ikke begyndt: uret viser kun "Start kamp"
+const klarTilStart = (st) => !st.matchStartTime && !st.matchCompleted;
+
+// "Start kamp": uret vælger ikke server — den venstre side server første bold,
+// og derefter server den, der vinder bolden (reglerne), så tællingen retter sig
+// selv efter første point. Kampen begynder (TV'et skifter fra "banen er ledig")
+function startKamp() {
+    const st = forventet();
+    if (!st || !raekkefoelge || spaerret || !klarTilStart(st)) return;
+    if (!st.servingPlayer) tryk('S' + sideFor(st, raekkefoelge[0]));
+    tryk('K');
+}
 
 // Hvilken side (1/2) står spilleren på nu
 const sideFor = (st, navn) => (st.player1.name === navn ? 1 : 2);
@@ -193,12 +203,8 @@ function trykPaaSpiller(i) {
     const st = forventet();
     if (!st || !raekkefoelge || spaerret) return;
     const side = sideFor(st, raekkefoelge[i]);
-    // Før kampen: et tryk vælger (eller skifter) serveren — kampen begynder
-    // med "Start kamp", som på tabletten
-    if (!st.matchStartTime && !st.matchCompleted) {
-        const valgt = st.isDoubles ? st.servingTeam : st.servingPlayer;
-        return valgt === side ? undefined : tryk('S' + side);
-    }
+    // Før kampen tælles intet — kampen begynder med "Start kamp"
+    if (klarTilStart(st)) return;
     // Afvises reglerne trykket (afgjort kamp, sætpause), sendes det ikke
     const proeve = JSON.parse(JSON.stringify(st));
     proeve.history = [];
@@ -295,14 +301,13 @@ function tegn() {
         const a = st['player' + (3 - side)];
         const el = $('side' + i);
         el.querySelector('.navn').textContent = visNavn(st, p);
-        el.querySelector('.point').textContent = st.servingPlayer ? p.score : '';
+        el.querySelector('.point').textContent = p.score || 0;
         el.classList.toggle('serv', !!serv && serv === side && !st.matchCompleted);
         el.classList.toggle('vinder', st.matchCompleted && p.games > a.games);
         el.disabled = spaerret || st.matchCompleted || saetPause;
     });
 
     $('overskrift').textContent = spaerret ? `Bane ${server.bane}`
-        : !st.servingPlayer ? `Bane ${server.bane} · tryk på den, der server`
         : klarTilStart(st) ? `Bane ${server.bane} · tryk Start kamp`
         : st.matchCompleted ? 'Kampen er slut'
         : `Bane ${server.bane} · ${(st.player1.games || 0) + (st.player2.games || 0) + 1}. sæt`;
@@ -335,9 +340,9 @@ function tegn() {
     $('faerdig').classList.toggle('skjult', !slut);
     $('faerdigLille').classList.toggle('skjult', !spaerret);
     $('overtag').classList.toggle('skjult', !spaerret);
-    $('fortryd').classList.toggle('skjult', spaerret || !st.servingPlayer);   // intet at fortryde før servervalget
-    // Serveren er valgt, kampen er ikke begyndt: "Start kamp" (TV'et skifter
-    // fra "banen er ledig" til kampen). Et tryk på en spiller skifter serveren
+    $('fortryd').classList.toggle('skjult', spaerret || klarTilStart(st));   // intet at fortryde før kampen
+    // Kampen er ikke begyndt: kun "Start kamp" (TV'et skifter fra "banen er
+    // ledig" til kampen)
     $('startKamp').classList.toggle('skjult', !klarTilStart(st) || spaerret);
     // Status: sendes, ikke nået frem, eller en besked
     const s = $('status');
@@ -372,7 +377,7 @@ $('side0').addEventListener('click', () => trykPaaSpiller(0));
 $('side1').addEventListener('click', () => trykPaaSpiller(1));
 $('fortryd').addEventListener('click', () => { if (!spaerret) tryk('U'); });
 $('naeste').addEventListener('click', () => tryk('B'));
-$('startKamp').addEventListener('click', () => { const st = forventet(); if (st && klarTilStart(st) && !spaerret) tryk('K'); });
+$('startKamp').addEventListener('click', startKamp);
 $('nyKamp').addEventListener('click', () => { if (!spaerret) tryk('N'); });
 $('faerdig').addEventListener('click', () => tryk('F'));
 $('faerdigLille').addEventListener('click', () => tryk('F'));
