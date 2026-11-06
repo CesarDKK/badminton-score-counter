@@ -59,6 +59,18 @@ async function urKodeFor(token) {
     return null;
 }
 
+// Kampen er slut og banen står klar til næste ("Ny kamp"/"Færdig" på uret,
+// "Start ny kamp" på QR-telefonen): banen får en ny ur-kode, så koden fra
+// forrige kamp ikke kan kobles på igen. QR-sessionen og et ur, der allerede er
+// koblet på, beholdes — den nye kode laves, næste gang TV'et henter QR-koden
+async function nyUrKode(courtNumber) {
+    await query(
+        `UPDATE device_tokens SET ur_kode = NULL
+          WHERE token_type = 'match_session' AND court_number = ? AND is_active = 1`,
+        [courtNumber]
+    );
+}
+
 // Sletter alle match-session tokens for en bane permanent.
 // Kaldes når en kamp starter eller banen ryddes.
 // Match-session tokens (QR-kode) giver ingen værdi efter brug og ryddes straks.
@@ -123,3 +135,4 @@ module.exports = router;
 module.exports.invalidateCourtTokens = invalidateCourtTokens;
 module.exports.getActiveToken = getActiveToken;
 module.exports.urKodeFor = urKodeFor;
+module.exports.nyUrKode = nyUrKode;
