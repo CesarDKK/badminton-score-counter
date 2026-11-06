@@ -61,6 +61,8 @@ services:
       YOUTUBE_CLIENT_SECRET: ${YOUTUBE_CLIENT_SECRET:-}
       UPLOAD_DIR: /app/uploads
       CLUB_BACKUP_DIR: /app/club-backups
+      # Den fulde backups status (status.json fra backup-tjenesten) til super-admin
+      FULD_BACKUP_DIR: /app/fuld-backup
       MAX_FILE_SIZE: 10485760
       # Super-admin har brug for adgang til football_tournament-DB for at administrere
       # football-klubber + admins (Phase 2 feature)
@@ -74,6 +76,9 @@ services:
       - uploads_data:/app/uploads
       # Klubbernes automatiske ugentlige backups (de 4 nyeste pr. klub)
       - club_backups:/app/club-backups
+      # Den fulde backup — kun læsning: backenden læser status.json, så
+      # super-admin kan vise, om den natlige dump virker (config/fuldBackup.js)
+      - backups:/app/fuld-backup:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -252,6 +257,8 @@ services:
   # Tager en dump hver ${BACKUP_INTERVAL_HOURS}. time og beholder dem i
   # ${BACKUP_RETENTION_DAYS} dage. Backup'erne ligger i det navngivne volume
   # "backups" (host-sti fås med: docker volume inspect badminton-app_backups).
+  # Dumpen kontrolleres, og udfaldet skrives i status.json — super-admin viser
+  # det under Serverens helbred ("Fuld backup").
   backup:
     image: mysql:8.4
     container_name: badminton-backup
@@ -264,6 +271,8 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?sæt MYSQL_ROOT_PASSWORD i .env}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
       BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+      # En dump under så mange bytes er ikke en rigtig dump (se backup-loop.sh)
+      BACKUP_MIN_BYTES: ${BACKUP_MIN_BYTES:-20000}
     volumes:
       - backups:/backups
       - uploads_data:/data/uploads:ro
