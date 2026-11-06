@@ -664,13 +664,39 @@ function liveBaner(status, udsendelser, { video = false } = {}) {
 
 const YT_TJEK_MS = 5 * 60 * 1000;        // udsendelsen tjekkes så tit, mens der sendes (afsluttet i Studio?)
 const YT_FEJL_PAUSE_MS = 2 * 60 * 1000;  // efter en fejl hos YouTube prøves der igen efter så længe
+// Fejl, der ikke går over af sig selv på to minutter: kanalen har ikke
+// livestreaming slået til (tager op til 24 timer første gang), er spærret, eller
+// Badmintonapp mangler adgang — og dagens kvote er brugt op. Der prøves sjældnere.
+const YT_VARIG_PAUSE_MS = 30 * 60 * 1000;
+const YT_KVOTE_PAUSE_MS = 60 * 60 * 1000;
+const YT_VARIGE_FEJL = new Set(['liveStreamingNotEnabled', 'livePermissionBlocked', 'insufficientLivePermissions',
+    'insufficientPermissions', 'forbidden']);
+const YT_KVOTE_FEJL = new Set(['quotaExceeded', 'dailyLimitExceeded', 'rateLimitExceeded', 'userRateLimitExceeded']);
+
+// Hvor længe der ventes efter en fejl fra YouTube med denne årsag (e.grund)
+function ytFejlPauseMs(grund) {
+    if (YT_KVOTE_FEJL.has(grund)) return YT_KVOTE_PAUSE_MS;
+    if (YT_VARIGE_FEJL.has(grund)) return YT_VARIG_PAUSE_MS;
+    return YT_FEJL_PAUSE_MS;
+}
+
+// Er banen i pause efter en fejl? fejlTid: court_streams.yt_fejl_tid (de to
+// minutter, som overlever en genstart); pauseTil: den længere pause for varige
+// fejl (ms, i hukommelsen). I pausen kaldes YouTube SLET ikke for banen.
+function ytIPause(fejlTid, pauseTil = null, nu = Date.now()) {
+    if (pauseTil && nu < pauseTil) return true;
+    return tid(fejlTid) !== null && nu - tid(fejlTid) < YT_FEJL_PAUSE_MS;
+}
 
 // send: beslutningen; udsendelse: banens yt_broadcast_id; tjek: sidste tjek;
-// fejlTid: sidste fejl. → 'opret', 'tjek', 'afslut' eller null
+// fejlTid: sidste fejl. → 'opret', 'tjek', 'afslut' eller null.
+// Pausen efter en fejl gælder alle tre: før gjaldt den ikke tjekket, så en
+// fejl dér (YouTube nede, udsendelsen ville ikke gå live) blev gentaget ved
+// hver forespørgsel fra PC'en — hvert 3. sekund, op til 51 enheder pr. gang.
 function ytHandling({ send, udsendelse, tjek = null, fejlTid = null, nu = Date.now() }) {
-    const pause = tid(fejlTid) !== null && nu - tid(fejlTid) < YT_FEJL_PAUSE_MS;
-    if (!send) return udsendelse && !pause ? 'afslut' : null;
-    if (!udsendelse) return pause ? null : 'opret';
+    if (ytIPause(fejlTid, null, nu)) return null;
+    if (!send) return udsendelse ? 'afslut' : null;
+    if (!udsendelse) return 'opret';
     return tid(tjek) === null || nu - tid(tjek) >= YT_TJEK_MS ? 'tjek' : null;
 }
 
@@ -696,7 +722,7 @@ function ytBeskrivelse(klubnavn = null) {
 
 module.exports = {
     STANDARD_URL, EFTER_MS, STILLE_MS, KLAR_MS, YT_TJEK_MS, YT_FEJL_PAUSE_MS,
-    ytHandling, ytTitel, ytBeskrivelse,
+    ytHandling, ytIPause, ytFejlPauseMs, YT_VARIG_PAUSE_MS, YT_KVOTE_PAUSE_MS, ytTitel, ytBeskrivelse,
     gyldigUrl, gyldigNoegle, rensOpsaetning, noegleSlut,
     STANDARD_INDSTILLINGER, laesIndstillinger, rensIndstillinger, videoTilPc, sponsorNu, gyldigLogoFil,
     beslutning, startet, holdkampNu, holdkampStoppet, holdkampTilAdmin, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,

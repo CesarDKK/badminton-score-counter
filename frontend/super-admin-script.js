@@ -1276,6 +1276,14 @@ function renderYoutubeKvote(k) {
         return `${+d}/${+m}: ${ytTal(h.enheder)}${h.opbrugt ? ' (opbrugt)' : ''}`;
     });
     document.getElementById('ytKvoteHistorik').textContent = hist.length ? `Seneste dage: ${hist.join(' · ')}` : '';
+    // Pr. klub i dag — og loftet, så én klub ikke kan bruge hele den fælles kvote.
+    // Klubben står med navn, når den kendes (db_name ellers; 'direct' er demoen).
+    const klubNavn = (db) => (db === 'direct' ? 'demoen' : ((clubs || []).find(c => c.db_name === db) || {}).name || db);
+    const prKlub = (k.klubber || []).map(x =>
+        `${klubNavn(x.klub)}: ${ytTal(x.enheder)}${k.klubLoft && x.enheder >= k.klubLoft ? ' (loftet nået)' : ''}`);
+    document.getElementById('ytKvoteKlubber').textContent = k.klubLoft
+        ? `${prKlub.length ? `Pr. klub i dag: ${prKlub.join(' · ')}. ` : ''}Hver klub kan højst bruge ${ytTal(k.klubLoft)} enheder på et døgn (halvdelen) — derefter oprettes der ikke nye udsendelser for klubben før nulstillingen.`
+        : '';
     const felt = document.getElementById('ytKvoteGraense');
     if (document.activeElement !== felt) felt.value = k.graense;
 }
