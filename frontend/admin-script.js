@@ -247,6 +247,8 @@ async function showDashboard() {
 }
 
 function startAutoRefresh() {
+    // Kaldes igen ved retur til baneoversigten — start ikke to pollere
+    if (refreshInterval) clearInterval(refreshInterval);
     loadCourtOverview();
     // Reduced from 1000ms to 2500ms to decrease server load (saves 60% API calls)
     refreshInterval = setInterval(loadCourtOverview, 2500);
@@ -501,8 +503,8 @@ async function deleteAllMatchHistory() {
             refresh: () => loadAllMatches()
         },
         team: {
-            msg1: 'Er du sikker på at du vil slette AL holdkamphistorik? Dette kan ikke fortrydes!',
-            msg2: 'Dette vil permanent slette hele holdkamphistorikken. Er du helt sikker?',
+            msg1: 'Er du sikker på at du vil slette al holdkamphistorik? (holdkampe i gang bevares)',
+            msg2: 'Dette vil permanent slette alle AFSLUTTEDE holdkampe og deres kampe. Holdkampe i gang bevares. Er du helt sikker?',
             success: 'Al holdkamphistorik er blevet slettet!',
             apiCall: () => api.deleteAllTeamMatches(),
             refresh: () => loadTeamMatchHistory()
@@ -1047,7 +1049,7 @@ function hideAllSections() {
     // Stop ALLE sektions-pollere når vi skifter væk. Tidligere stoppede hver
     // show*-funktion kun nogle af dem, så fx holdkamp- og turnerings-pollerne
     // (3 sek.) kunne blive ved med at køre — og hobe sig op — resten af sessionen.
-    // showCourtOverview kalder ikke denne funktion og styrer selv sin egen poller.
+    // Baneoversigtens poller stoppes også her; showCourtOverview starter den igen.
     stopHoldkampRefresh();
     stopTournamentRefresh();
     stopAutoRefresh();
@@ -1073,8 +1075,10 @@ function showCourtOverview() {
     document.getElementById('courtOverviewSection').style.display = 'block';
     setNavActive('overview');
     history.replaceState(null, '', '#');
-    // Render straks ved retur (loadCourtOverview springer over mens skjult)
-    loadCourtOverview();
+    // Tegn straks, og start poller, SSE og ur igen: hideAllSections stoppede dem,
+    // da en anden fane blev åbnet (også ved start på admin.html#holdkamp) — uden
+    // dette stod point, status og varighed stille, til siden blev genindlæst
+    startAutoRefresh();
 }
 
 function setNavActive(section) {
