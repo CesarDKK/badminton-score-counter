@@ -13,8 +13,9 @@ const fs = require('fs');
 const os = require('os');
 const masterDb = require('./masterDatabase');
 const { krypter, dekrypter } = require('./hemmelig');
+const fuldBackup = require('./fuldBackup');
 
-const API = 'https://api.hetzner.cloud/v1';
+const API ='https://api.hetzner.cloud/v1';
 const TIMEOUT_MS = 8000;
 const TOKEN = 'hetzner_token';
 const SERVER = 'hetzner_server_id';
@@ -198,7 +199,9 @@ function lokal() {
         hukommelse,
         belastning: os.loadavg(),
         kerner: os.cpus().length,
-        oppetidSek: Math.round(os.uptime())
+        oppetidSek: Math.round(os.uptime()),
+        // Den fulde backup (alle databaser + billeder): seneste kørsel og gode dump
+        fuldBackup: fuldBackup.status()
     };
 }
 

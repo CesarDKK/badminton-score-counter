@@ -1997,6 +1997,21 @@ function renderHelbredFliser(d) {
             `af ${shBytes(t.inkluderet, 0)} inkluderet · ind: ${shBytes(t.ind)}`, andel, niveau,
             niveau === 'kritisk' ? 'Tæt på grænsen — mere koster ekstra' : 'Over 75 % af det inkluderede'));
     }
+    // Den fulde backup (alle databaser + billeder, hver nat): den eneste kopi af
+    // bl.a. master-databasen og klub-admins — så den skal kunne ses, når den fejler
+    const fb = l.fuldBackup;
+    if (fb && fb.opsat) {
+        const alderSek = fb.senesteGode ? Math.max(0, (Date.now() - new Date(fb.senesteGode).getTime()) / 1000) : null;
+        const info = [];
+        if (fb.senesteGode) info.push(`${escapeHtml(formatDate(fb.senesteGode))} · ${shBytes(fb.senesteGodeBytes)}`);
+        info.push(`${shTal(fb.antal)} gemt (${shTal(fb.beholdDage)} dage) · alle databaser og billeder`);
+        if (!fb.ok && fb.fejl) info.push(`Seneste kørsel (${escapeHtml(formatDate(fb.tid))}): ${escapeHtml(fb.fejl)}`);
+        fliser.push(shFlise('Fuld backup', alderSek === null ? 'Ingen' : `${shVarighed(alderSek)} siden`,
+            info.join('<br>'), null, fb.niveau || '', escapeHtml(fb.besked || '')));
+    } else if (fb) {
+        fliser.push(shFlise('Fuld backup', 'Ukendt',
+            'Ingen status fra backup-tjenesten endnu — den skriver efter sin næste kørsel (kræver den nye docker-compose)'));
+    }
     if (s || l.oppetidSek) {
         const navn = s ? `${escapeHtml(s.navn)} <small>${escapeHtml(s.type)}</small>` : 'Serveren';
         const info = [];
