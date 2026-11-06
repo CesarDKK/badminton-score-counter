@@ -459,11 +459,14 @@ async function autoAfslutHoldkampe() {
     return lukket;
 }
 
-// DELETE /api/team-matches - Delete ALL team matches (requires auth)
+// DELETE /api/team-matches - Slet alle AFSLUTTEDE holdkampe (kræver auth)
+// Knappen står under Kamphistorik, som kun viser afsluttede holdkampe — en
+// holdkamp, der spilles lige nu, må ikke forsvinde med historikken (som for
+// turneringer). CASCADE på team_match_games fjerner delkampene.
 router.delete('/', authMiddleware, requirePage('history'), async (req, res, next) => {
     try {
-        await query(`DELETE FROM team_matches`);
-        res.json({ success: true });
+        const result = await query(`DELETE FROM team_matches WHERE status = 'finished'`);
+        res.json({ success: true, deleted: result.affectedRows || 0 });
     } catch (error) {
         next(error);
     }
