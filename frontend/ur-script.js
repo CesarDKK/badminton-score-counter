@@ -175,7 +175,11 @@ const klarTilStart = (st) => !!st.servingPlayer && !st.matchStartTime && !st.mat
 
 // Hvilken side (1/2) står spilleren på nu
 const sideFor = (st, navn) => (st.player1.name === navn ? 1 : 2);
-const visNavn = (st, p) => (st.isDoubles && p.name2 && !/^Makker [12]$/.test(p.name2) ? `${p.name} & ${p.name2}` : p.name);
+// Double: kun fornavnene ("Anders & Carl") — to fulde navne er for lange til
+// urets halve skærm; de fulde navne står på TV'et
+const fornavn = (n) => String(n || '').trim().split(/\s+/)[0];
+const visNavn = (st, p) => (st.isDoubles && p.name2 && !/^Makker [12]$/.test(p.name2)
+    ? `${fornavn(p.name)} & ${fornavn(p.name2)}` : p.name);
 
 function tryk(handling) {
     gemt.nr += 1;
