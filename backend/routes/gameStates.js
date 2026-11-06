@@ -3,7 +3,7 @@ const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
 const { kunEgenBane } = require('../middleware/qrSession');
-const { invalidateCourtTokens } = require('./matchSessionTokens');
+const { invalidateCourtTokens, nyUrKode } = require('./matchSessionTokens');
 const { publishGameStateChange, subscribeGameStateChanges } = require('../events/gameStateEvents');
 // badmintonplanner.dk: rundenavn/næste runde/udskiftere/note pr. bane (fase 2-visning)
 const { hentPlannerVisning, plannerForBane, gemPlannerResultat, kampIGang } = require('./plannerIntegration');
@@ -732,6 +732,10 @@ async function gemTilstand(req, courtId, body, { skipAutoActive = false } = {}) 
                 `UPDATE game_states SET taeller_id = NULL, taeller_navn = NULL, taeller_set_at = NULL,
                     forrige_taeller_id = NULL, forrige_taeller_navn = NULL, overtaget_at = NULL
                  WHERE court_id = ?`, [court.id]);
+            // En kamp er slut (eller opgivet): koden til uret skifter
+            if (existing && (existing.match_start_time || existing.match_completed)) {
+                await nyUrKode(parseInt(courtId, 10));
+            }
         } else if (taellerId && (hasActivity || (existing && existing.taeller_id === taellerId))) {
             await saetTaeller(req, court.id, existing, taellerId, body.taellerNavn);
         }
