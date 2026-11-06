@@ -291,32 +291,32 @@ test('kvote: opslag koster 1, oprettelse 50, login intet — og "kvoten er brugt
     kvote.nulstil({ gem: false });
 });
 
-test('kvote: én klub kan højst bruge halvdelen af dagens kvote på nye udsendelser', () => {
+test('kvote: intet loft pr. klub — men forbruget ses pr. klub, i dag og over 7 dage', () => {
     kvote.nulstil({ gem: false });
+    const DOEGN = 24 * 3600 * 1000;
     const dag = Date.UTC(2026, 9, 30, 10);
-    assert.equal(kvote.klubLoft(), 5000);
-    assert.equal(kvote.spaerretForNyt('lyngby', dag), null);
-    // 30 omgange Start/Stop livestream på en tablet (ca. 150 enheder pr. omgang)
-    for (let i = 0; i < 30; i++) kvote.tael(150, { klub: 'lyngby', nu: dag });
-    assert.equal(kvote.klubBrugt('lyngby', dag), 4500);
-    assert.equal(kvote.spaerretForNyt('lyngby', dag), null);
-    for (let i = 0; i < 4; i++) kvote.tael(150, { klub: 'lyngby', nu: dag });
-    assert.equal(kvote.spaerretForNyt('lyngby', dag), 'klub');
-    // De andre klubber kan stadig oprette udsendelser
-    assert.equal(kvote.spaerretForNyt('gladsaxe', dag), null);
+    // Lyngby bruger langt over halvdelen af dagens kvote: intet spærres
+    for (let i = 0; i < 60; i++) kvote.tael(150, { klub: 'lyngby', nu: dag });
+    assert.equal(kvote.opbrugtIDag(dag), false);
     kvote.tael(200, { klub: 'gladsaxe', nu: dag });
+    // Tidligere på ugen: holte for 3 dage siden (ikke i dag), lyngby i går,
+    // og gladsaxe for 8 dage siden (uden for de 7 dage)
+    kvote.tael(400, { klub: 'holte', nu: dag - 3 * DOEGN });
+    kvote.tael(1000, { klub: 'lyngby', nu: dag - DOEGN });
+    kvote.tael(5000, { klub: 'gladsaxe', nu: dag - 8 * DOEGN });
     const s = kvote.status(dag);
-    assert.equal(s.enheder, 5300);
-    assert.equal(s.klubLoft, 5000);
-    assert.deepEqual(s.klubber, [{ klub: 'lyngby', enheder: 5100 }, { klub: 'gladsaxe', enheder: 200 }]);
-    // Næste Google-døgn starter klubben forfra
-    assert.equal(kvote.spaerretForNyt('lyngby', dag + 24 * 3600 * 1000), null);
-    // Har Google meldt hele kvoten brugt, oprettes intet nyt for nogen
+    assert.equal(s.enheder, 9200);
+    assert.equal('klubLoft' in s, false);
+    assert.deepEqual(s.klubber, [
+        { klub: 'lyngby', enheder: 9000, uge: 10000 },
+        { klub: 'gladsaxe', enheder: 200, uge: 200 },
+        { klub: 'holte', enheder: 0, uge: 400 }
+    ]);
+    // Kun når Google selv har meldt kvoten brugt, oprettes intet nyt — for alle
     kvote.tael(0, { opbrugt: true, klub: 'gladsaxe', nu: dag });
-    assert.equal(kvote.spaerretForNyt('holte', dag), 'opbrugt');
-    // Større kvote fra Google giver større loft pr. klub
-    kvote.saetGraense(50000);
-    assert.equal(kvote.klubLoft(), 25000);
+    assert.equal(kvote.opbrugtIDag(dag), true);
+    // ...og næste Google-døgn er der åbent igen
+    assert.equal(kvote.opbrugtIDag(dag + DOEGN), false);
     kvote.nulstil({ gem: false });
 });
 
@@ -328,7 +328,7 @@ test('kvote: hvert kald til YouTube tælles under den klub, det blev lavet for',
     await runWithTenant('lyngby', () => youtube.kanal('a'));
     await runWithTenant('gladsaxe', () => youtube.kanal('a'));
     await youtube.kanal('a');   // uden klub (demoen/lokal installation)
-    assert.deepEqual(kvote.status().klubber, [{ klub: 'lyngby', enheder: 2 }, { klub: 'gladsaxe', enheder: 1 }, { klub: 'direct', enheder: 1 }]);
+    assert.deepEqual(kvote.status().klubber, [{ klub: 'lyngby', enheder: 2, uge: 2 }, { klub: 'gladsaxe', enheder: 1, uge: 1 }, { klub: 'direct', enheder: 1, uge: 1 }]);
     kvote.nulstil({ gem: false });
 });
 
