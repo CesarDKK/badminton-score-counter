@@ -68,9 +68,10 @@ function hentSponsorFiler(raekker, mappe) {
     return filer;
 }
 
-// Gendannelse: skriv filerne i klubbens mappe (nøglerne er valideret med backupFilnavn)
-function skrivSponsorFiler(filer, mappe) {
-    const noegler = Object.keys(filer || {});
+// Gendannelse: skriv filerne i klubbens mappe (nøglerne er valideret med backupFilnavn).
+// kun: et Set af filnavne — så skrives kun dem (demoen: kun filer, databasen bruger).
+function skrivSponsorFiler(filer, mappe, kun = null) {
+    const noegler = Object.keys(filer || {}).filter(n => !kun || kun.has(backupFilnavn(n)));
     if (!noegler.length) return 0;
     const dir = path.join(UPLOAD_DIR, mappe);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -80,7 +81,39 @@ function skrivSponsorFiler(filer, mappe) {
     return noegler.length;
 }
 
+// Hvor meget mappen fylder i bytes (0, hvis den ikke findes)
+function mappeStoerrelse(mappe) {
+    const dir = path.join(UPLOAD_DIR, mappe);
+    if (!fs.existsSync(dir)) return 0;
+    let bytes = 0;
+    for (const f of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (f.isFile()) bytes += fs.statSync(path.join(dir, f.name)).size;
+    }
+    return bytes;
+}
+
+// Slet filer i mappen, der ikke står i iBrug (et Set af filnavne). Filer yngre
+// end minAlderMs røres ikke: det kan være et billede, der er ved at blive
+// uploadet, og som endnu ikke har sin række i databasen. Returnerer antal slettede.
+function rydUbrugteFiler(mappe, iBrug, { minAlderMs = 60 * 1000, nu = Date.now() } = {}) {
+    const dir = path.join(UPLOAD_DIR, mappe);
+    if (!fs.existsSync(dir)) return 0;
+    let slettet = 0;
+    for (const f of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (!f.isFile() || iBrug.has(f.name)) continue;
+        const sti = path.join(dir, f.name);
+        try {
+            if (nu - fs.statSync(sti).mtimeMs < minAlderMs) continue;
+            fs.unlinkSync(sti);
+            slettet++;
+        } catch { /* væk i forvejen */ }
+    }
+    return slettet;
+}
+
 module.exports = {
+    mappeStoerrelse,
+    rydUbrugteFiler,
     UPLOAD_DIR,
     klubMappe,
     sponsorFilSti,

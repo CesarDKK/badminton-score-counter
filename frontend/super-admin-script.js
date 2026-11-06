@@ -564,10 +564,16 @@ async function confirmDeleteClub() {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>';
     try {
-        await api.deleteClub(pendingDeleteId);
+        const svar = await api.deleteClub(pendingDeleteId);
         clubs = clubs.filter(c => c.id !== pendingDeleteId);
         closeDeleteModal();
         renderClubs();
+        // Pegede klubben på en systemdatabase eller en anden klubs, er kun
+        // klubben fjernet — databasen står der endnu
+        if (svar && svar.databaseBevaret) {
+            showMsg(document.getElementById('createClubMsg'),
+                `Klubben er fjernet fra listen, men databasen ${svar.databaseBevaret} er ikke slettet: den bruges af andet end klubben.`, 'error');
+        }
     } catch (err) {
         showMsg(msgEl, err.message || 'Sletning mislykkedes', 'error');
         btn.disabled = false;

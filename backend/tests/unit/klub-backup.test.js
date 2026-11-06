@@ -162,3 +162,82 @@ test('næste kørsel: mandag kl. 02.00 dansk tid, sommer og vinter', () => {
     // Natten til mandag kl. 01.30 dansk tid → samme nat
     assert.equal(autoBackup.naesteKoersel(new Date('2026-10-18T23:30:00Z')).toISOString(), '2026-10-19T00:00:00.000Z');
 });
+
+// ── Demoen: kun filer, databasen bruger (config/demo.js) ───────────────────
+
+// Falsk forbindelse, der også svarer på "hvilke filer bruger databasen nu?"
+function forbindelseMedBilleder(filnavne) {
+    const conn = falskForbindelse();
+    const almindelig = conn.query;
+    conn.query = async (sql, vals) => {
+        if (sql.startsWith('SELECT filename FROM `sponsor_images`')) return [filnavne.map(filename => ({ filename }))];
+        if (sql.startsWith('SELECT setting_key, setting_value FROM `settings`')) return [[]];
+        return almindelig(sql, vals);
+    };
+    return conn;
+}
+
+test('gendanBackup på demoen: kun brugte filer skrives, og ubrugte gamle filer ryddes', async () => {
+    const dir = path.join(process.env.UPLOAD_DIR, 'local');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'gammel.png'), 'fra en tidligere gendannelse');
+    const foer = new Date(Date.now() - 5 * 60 * 1000);
+    fs.utimesSync(path.join(dir, 'gammel.png'), foer, foer);
+    fs.writeFileSync(path.join(dir, 'paa-vej.png'), 'et billede, der er ved at blive uploadet');
+    const b64 = (s) => Buffer.from(s).toString('base64');
+
+    const r = await gendanBackup(forbindelseMedBilleder(['local/a.png']), {
+        version: '1.0',
+        tables: { sponsor_images: [{ id: 1, filename: 'local/a.png' }] },
+        files: { 'a.png': b64('billede a'), 'ekstra.png': b64('ingen række bruger den'), 'local/b.jpg': b64('heller ikke den') },
+    }, 'local', { kunBrugte: true });
+
+    assert.equal(r.files, 1);
+    assert.deepEqual(fs.readdirSync(dir).sort(), ['a.png', 'paa-vej.png']);
+    assert.equal(fs.readFileSync(path.join(dir, 'a.png'), 'utf8'), 'billede a');
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('gendanBackup i en klub: alle backuppens filer skrives, og intet ryddes', async () => {
+    const dir = path.join(process.env.UPLOAD_DIR, 'lyngby');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'gammel.png'), 'x');
+    const foer = new Date(Date.now() - 5 * 60 * 1000);
+    fs.utimesSync(path.join(dir, 'gammel.png'), foer, foer);
+    const b64 = (s) => Buffer.from(s).toString('base64');
+
+    const r = await gendanBackup(falskForbindelse(), {
+        version: '1.0',
+        tables: { sponsor_images: [{ id: 1, filename: 'lyngby/a.png' }] },
+        files: { 'a.png': b64('a'), 'ekstra.png': b64('e') },
+    }, 'lyngby');
+
+    assert.equal(r.files, 2);
+    assert.deepEqual(fs.readdirSync(dir).sort(), ['a.png', 'ekstra.png', 'gammel.png']);
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('demoen kendes på direkte adgang på en server med klubber', () => {
+    const { erDemo, DEMO_GENDAN_MAKS, DEMO_LAGER_MAKS } = require('../../config/demo');
+    const { mappeStoerrelse } = require('../../config/sponsorFiler');
+    const foer = process.env.APP_DOMAIN;
+    try {
+        process.env.APP_DOMAIN = 'badmintonapp.dk';
+        assert.equal(erDemo({ accessMode: 'direct' }), true);
+        assert.equal(erDemo({ accessMode: 'club', clubDbName: 'lyngby' }), false);
+        assert.equal(erDemo({ accessMode: 'admin' }), false);
+        delete process.env.APP_DOMAIN;
+        assert.equal(erDemo({ accessMode: 'direct' }), false, 'en lokal installation uden klubber har ingen loft');
+    } finally {
+        if (foer === undefined) delete process.env.APP_DOMAIN; else process.env.APP_DOMAIN = foer;
+    }
+    assert.ok(DEMO_GENDAN_MAKS < 50 * 1024 * 1024 && DEMO_LAGER_MAKS >= DEMO_GENDAN_MAKS);
+
+    const dir = path.join(process.env.UPLOAD_DIR, 'maal');
+    assert.equal(mappeStoerrelse('maal'), 0);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'a.png'), Buffer.alloc(1000));
+    fs.writeFileSync(path.join(dir, 'b.png'), Buffer.alloc(234));
+    assert.equal(mappeStoerrelse('maal'), 1234);
+    fs.rmSync(dir, { recursive: true, force: true });
+});

@@ -9,7 +9,30 @@ const { lavBackup, validerBackup, gendanBackup, BackupFejl } = require('../confi
 const autoBackup = require('../config/autoBackup');
 const { bevarKlub, currentTenant } = require('../config/tenantPools');
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
+const { erDemo, DEMO_GENDAN_MAKS, MB } = require('../config/demo');
+
+const KLUB_GENDAN_MAKS = 100 * MB;
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: KLUB_GENDAN_MAKS } });
+// Demoen er åben for alle og deler proces med klubberne: filen holdes i
+// hukommelsen og fortolkes i ét stræk, så den får et lavere loft (config/demo.js)
+const uploadDemo = multer({ storage: multer.memoryStorage(), limits: { fileSize: DEMO_GENDAN_MAKS } });
+
+// Modtag backup-filen med det loft, der gælder her, og sig det rigtige loft,
+// hvis filen er for stor (den fælles fejlhåndtering skriver "10MB" for billeder)
+const modtagKlub = bevarKlub(upload.single('backup'));
+const modtagDemo = bevarKlub(uploadDemo.single('backup'));
+function modtagBackup(req, res, next) {
+    const demo = erDemo(req);
+    (demo ? modtagDemo : modtagKlub)(req, res, (err) => {
+        if (err && err.code === 'LIMIT_FILE_SIZE') {
+            const maks = (demo ? DEMO_GENDAN_MAKS : KLUB_GENDAN_MAKS) / MB;
+            return res.status(413).json({ error: demo
+                ? `Backup-filen er for stor til demoen (højst ${maks} MB)`
+                : `Backup-filen er for stor (højst ${maks} MB)` });
+        }
+        next(err);
+    });
+}
 
 // Indstillinger → Backup & Gendannelse. Selve backup-formatet og gendannelsen
 // ligger i config/klubBackup.js (fælles med super-admin og den automatiske backup).
@@ -48,7 +71,8 @@ async function gendanOgSvar(req, res, next, backup) {
         const klub = await aktuelKlub(req);
         const resultat = await medForbindelse(async (conn) => {
             const foer = klub ? await autoBackup.tagBackup(conn, klub, 'foer-gendannelse') : null;
-            const r = await gendanBackup(conn, backup, klubMappe(req));
+            // Demoen: kun filer, databasen bruger, og ryd dem, den ikke bruger mere
+            const r = await gendanBackup(conn, backup, klubMappe(req), { kunBrugte: erDemo(req) });
             return { ...r, foerGendannelse: foer };
         });
         res.json({ success: true, ...resultat });
@@ -72,8 +96,9 @@ router.get('/', authMiddleware, requireFuldAdgang, async (req, res, next) => {
 });
 
 // POST /api/backup/restore — gendan fra en uploadet backup-fil
-router.post('/restore', authMiddleware, requireFuldAdgang, bevarKlub(upload.single('backup')), async (req, res, next) => {
+router.post('/restore', authMiddleware, requireFuldAdgang, modtagBackup, async (req, res, next) => {
     let backup;
+    if (!req.file) return res.status(400).json({ error: 'Vælg en backup-fil' });
     try {
         backup = JSON.parse(req.file.buffer.toString('utf8'));
     } catch {
