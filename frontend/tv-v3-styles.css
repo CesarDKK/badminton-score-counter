@@ -377,6 +377,57 @@ body.tv-live.tv-uden-top .tv-live-fane {
     50% { opacity: 0.25; }
 }
 
+/* =================== FORBINDELSE MISTET =================== */
+/* To trin (se loadCourtData i tv-script-v3.js):
+   1. Et kort udfald: kun det lille mærke i hjørnet. Stillingen står urørt.
+   2. Et længere udfald midt i en kamp (body.tv-uden-data): stillingen bliver
+      stående, nedtonet, og mærket bliver til en tydelig besked nederst med
+      klokkeslættet for den stilling, der vises. Så viser TV'et hverken "LEDIG"
+      på en bane i brug eller en gammel stilling, der ligner en frisk.
+   Advarselsfarven er den faste (--color-warning), ikke temaets accent. */
+#tvConnectionBadge {
+    position: fixed;
+    bottom: 16px;
+    left: 16px;
+    z-index: 9000;
+    padding: 8px 16px;
+    border-radius: var(--r-pill);
+    background: rgba(var(--color-warning-rgb), 0.15);
+    border: 1px solid rgba(var(--color-warning-rgb), 0.5);
+    color: var(--color-warning);
+    font-size: 1rem;
+    font-weight: 600;
+    backdrop-filter: blur(4px);
+}
+
+/* Toningen glider ind; når der kommer data igen, er stillingen der med det samme */
+body.tv-uden-data .tv-header,
+body.tv-uden-data .scoreboard,
+body.tv-uden-data .tv-footer {
+    opacity: 0.38;
+    filter: saturate(0.35);
+    transition: opacity 0.8s var(--ease), filter 0.8s var(--ease);
+}
+
+body.tv-uden-data #tvConnectionBadge {
+    left: 50%;
+    bottom: clamp(16px, 3.5vh, 64px);
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: 92vw;
+    padding: 0.45em 1.1em;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.78);
+    border: 2px solid rgba(var(--color-warning-rgb), 0.7);
+    box-shadow: var(--shadow-lg);
+    font-size: clamp(18px, 3.4vh, 72px);
+}
+
+#tvConnectionBadge .tv-conn-fra {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
 /* =================== SCOREBOARD =================== */
 .scoreboard {
     flex: 1;

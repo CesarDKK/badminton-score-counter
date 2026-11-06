@@ -35,6 +35,15 @@ function publishConfigChange(req, scope) {
     emitter.emit(tenantKey(req), { courtId: null, type: 'config', scope });
 }
 
+// Holdkamp-events: en holdkamp er oprettet, ændret, afsluttet eller slettet
+// uden at det er bundet til én bane (ny holdkamp, golden set, hold-logoer, et
+// resultat uden bane, sletning). Oversigten og admin henter holdkampene igen
+// med det samme; før så oversigten dem kun, fordi den spurgte hvert 2. sekund.
+// courtId er null, så et TV, der kun lytter på sin egen bane, får dem ikke.
+function publishHoldkampChange(req) {
+    emitter.emit(tenantKey(req), { courtId: null, type: 'holdkamp' });
+}
+
 // Returnerer en unsubscribe-funktion
 function subscribeGameStateChanges(req, handler) {
     const key = tenantKey(req);
@@ -42,4 +51,4 @@ function subscribeGameStateChanges(req, handler) {
     return () => emitter.removeListener(key, handler);
 }
 
-module.exports = { publishGameStateChange, publishConfigChange, subscribeGameStateChanges };
+module.exports = { publishGameStateChange, publishConfigChange, publishHoldkampChange, subscribeGameStateChanges };

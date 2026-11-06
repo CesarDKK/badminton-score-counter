@@ -6,7 +6,13 @@ let allCourtData = [];
 let activeCourts = [];
 let currentPage = 0;
 const COURTS_PER_PAGE = 6;
-const REFRESH_INTERVAL = 2000; // 2 seconds - fast updates with batch API
+// Uden live-forbindelse (SSE) spørges serveren hvert 2. sekund. Med den kommer
+// ændringerne som events, og pollingen er kun et sikkerhedsnet hvert 5. sekund
+// — som på TV'et. Før spurgte oversigten hvert 2. sekund uanset (to kald pr.
+// gang, døgnet rundt), fordi holdkamp-ændringer ikke gav events; det gør de nu
+// (type 'holdkamp', se backend/events/gameStateEvents.js).
+const FALLBACK_POLL_MS = 2000;
+const SAFETY_POLL_MS = 5000;
 const SCROLL_INTERVAL = 10000; // 10 seconds between page changes
 let scrollTimer = null;
 let refreshTimer = null;
@@ -522,10 +528,52 @@ function isHoldkampCourt(courtId) {
     );
 }
 
+// ==================== FORBINDELSE MISTET ====================
+// Før viste oversigten bare de sidst kendte stillinger, når serveren ikke
+// kunne nås — uden noget tegn, og med kampurene tællende videre. To trin som
+// på TV'et, så et lille udfald ikke giver et stort udslag på skærmen:
+//   1. Første fejl: et lille mærke i hjørnet. Stillingerne står urørt.
+//   2. Et længere udfald (mindst to fejl i træk OG 30 s uden data), mens der
+//      vises kampe: stillingerne tones ned, og mærket bliver til en tydelig
+//      besked med klokkeslættet for det, der vises.
+// Udseendet ligger i oversigt-styles.css (#ovForbindelse, body.ov-uden-data).
+const OV_FEJL_FOER_TRIN2 = 2;
+const OV_MS_UDEN_DATA_FOER_TRIN2 = 30000;
+const OV_FORBINDELSE_IKON = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.125em" aria-hidden="true"><path d="M12 3 2 21h20zM12 10v5M12 18h.01"/></svg>';
+let _ovSidsteDataOk = null;
+let _ovFejlITraek = 0;
+let _ovForbindelse = null;
+
+function setOversigtForbindelseMistet(mistet, udenData = false) {
+    document.body.classList.toggle('ov-uden-data', mistet && udenData);
+    if (!mistet) {
+        if (_ovForbindelse) _ovForbindelse.style.display = 'none';
+        return;
+    }
+    if (!_ovForbindelse) {
+        _ovForbindelse = document.createElement('div');
+        _ovForbindelse.id = 'ovForbindelse';
+        document.body.appendChild(_ovForbindelse);
+    }
+    const tekst = udenData
+        ? `Forbindelse mistet <span class="ov-forbindelse-fra">· stillingerne er fra kl. ${
+            new Date(_ovSidsteDataOk).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' })}</span>`
+        : 'Forbindelse mistet';
+    if (_ovForbindelse.dataset.tekst !== tekst) {
+        _ovForbindelse.dataset.tekst = tekst;
+        _ovForbindelse.innerHTML = `${OV_FORBINDELSE_IKON} ${tekst}`;
+    }
+    _ovForbindelse.style.display = 'block';
+}
+
 async function loadAllCourts() {
     try {
         // Fetch all court data in a single batch request (much more efficient!)
         const allGameStates = await api.getAllGameStates();
+
+        _ovSidsteDataOk = Date.now();
+        _ovFejlITraek = 0;
+        setOversigtForbindelseMistet(false);
 
         allCourtData = allGameStates.map(gameState => ({ ...gameState }));
 
@@ -711,6 +759,13 @@ async function loadAllCourts() {
     } catch (error) {
         console.error('Failed to load courts:', error);
         hideLoading();
+        // Data blev hentet lige nu — så er fejlen i visningen, ikke forbindelsen
+        if (_ovSidsteDataOk && Date.now() - _ovSidsteDataOk < 2000) return;
+        _ovFejlITraek++;
+        // Trin 2 kun, når der står kampe på skærmen (ikke på tomgangsskærmen)
+        const udenData = _ovFejlITraek >= OV_FEJL_FOER_TRIN2 && !!_ovSidsteDataOk &&
+            Date.now() - _ovSidsteDataOk >= OV_MS_UDEN_DATA_FOER_TRIN2 && !_isIdleVisible;
+        setOversigtForbindelseMistet(true, udenData);
     }
 }
 
@@ -1263,15 +1318,12 @@ function startAutoRefresh() {
     // loadHoldkamp køres FØRST så activeTeamMatch er frisk når loadAllCourts
     // kalder isHoldkampCourt() — ellers bruger den stale data hvor afsluttede
     // holdkamp-spil stadig har status='active' og ekskluderer banen fra visning.
-    // Lille tilfældigt offset så oversigten ikke rammer serveren i præcis samme
-    // sekund som TV-skærmene efter en fælles genstart/udfald (spredning).
-    setTimeout(() => {
-        refreshTimer = setInterval(scheduleRefresh, REFRESH_INTERVAL);
-    }, Math.floor(Math.random() * 1000));
+    startPolling(FALLBACK_POLL_MS);
 
-    // SSE-poke: opdater med det samme når en bane ændrer sig i stedet for at
-    // vente på næste poll. Pollingen beholdes uændret som sikkerhedsnet (og
-    // fanger holdkamp-ændringer der ikke udløser game-state events).
+    // SSE-poke: opdater med det samme, når en bane eller en holdkamp ændrer sig,
+    // i stedet for at vente på næste poll. Mens forbindelsen virker, er
+    // pollingen kun et sikkerhedsnet (SAFETY_POLL_MS); ryger den, polles der
+    // hurtigt igen (FALLBACK_POLL_MS).
     if (window.LiveUpdates) {
         liveUpdatesHandle = window.LiveUpdates.connect({
             onEvent: (event) => {
@@ -1280,9 +1332,31 @@ function startAutoRefresh() {
                 } else {
                     scheduleRefresh();
                 }
-            }
+            },
+            onStateChange: (connected) => startPolling(connected ? SAFETY_POLL_MS : FALLBACK_POLL_MS)
         });
     }
+}
+
+let _pollTimeout = null;
+let _currentPollMs = null;
+
+function startPolling(ms) {
+    // Uændret interval? Lad den køre. onStateChange kan komme flere gange, mens
+    // EventSource prøver at genforbinde — blev timeren genstartet hver gang,
+    // kunne pollen i værste fald aldrig nå at køre.
+    if (_currentPollMs === ms && (refreshTimer || _pollTimeout)) return;
+    _currentPollMs = ms;
+    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+    if (_pollTimeout) { clearTimeout(_pollTimeout); _pollTimeout = null; }
+
+    // Lille tilfældigt offset, så oversigten ikke rammer serveren i præcis samme
+    // sekund som TV-skærmene efter en fælles genstart/udfald (spredning).
+    _pollTimeout = setTimeout(() => {
+        _pollTimeout = null;
+        scheduleRefresh();
+        refreshTimer = setInterval(scheduleRefresh, ms);
+    }, Math.floor(Math.random() * Math.min(ms, 1000)));
 }
 
 // Reager på et SSE config-event: invalidér den relevante cache og gen-render.

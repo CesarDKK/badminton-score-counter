@@ -494,12 +494,21 @@ function updateTimerDisplay() {
 // rive stillingen ned og skifte til sponsor-slideshow — vi beholder sidste
 // kendte skærmbillede og viser en diskret "forbindelse mistet"-badge, indtil
 // flere forsøg i træk fejler.
+//
+// To trin, så et lille udfald ikke giver et stort udslag på skærmen:
+//   1. Første fejl: kun det lille mærke i hjørnet. Stillingen står urørt.
+//   2. Et længere udfald (mindst to fejl i træk OG 30 s uden data): var der en
+//      kamp på banen, bliver stillingen stående, nedtonet, med en tydelig
+//      besked om, hvornår den er fra. Før skiftede TV'et til sponsorer eller
+//      "LEDIG" — på en bane, hvor kampen stadig blev spillet. Kun en bane
+//      uden kamp går til sponsorer/"LEDIG" som før.
 let _loadFailCount = 0;
-const LOAD_FAILS_BEFORE_SLIDESHOW = 4;
-// ...og først når der ikke er kommet data i 30 s. Før var det 4 fejl i træk
-// (~8 s), så alle TV'er skiftede til sponsorer midt i kampene ved hver deploy,
-// mens backenden genstartede.
-const OFFLINE_MS_BEFORE_SLIDESHOW = 30000;
+const LOAD_FAILS_BEFORE_TRIN2 = 2;
+// De 30 s: før var det 4 fejl i træk (~8 s), så alle TV'er skiftede midt i
+// kampene ved hver deploy, mens backenden genstartede.
+const OFFLINE_MS_BEFORE_TRIN2 = 30000;
+// Var der en kamp på banen (i gang, eller navne sat på), sidst der kom data?
+let _kampVedSidsteData = false;
 
 async function loadCourtData() {
     try {
@@ -520,6 +529,7 @@ async function loadCourtData() {
             (gameState.player2 && gameState.player2.name && gameState.player2.name !== 'Spiller 2');
 
         const isMatchActive = gameState.isActive === true || hasRealPlayerNames;
+        _kampVedSidsteData = isMatchActive;
 
         // Check if there's any game activity OR if a serving player has been selected
         const hasGameActivity =
@@ -688,39 +698,45 @@ async function loadCourtData() {
         // Den må ikke vise "Forbindelse mistet" eller skifte til sponsorer.
         if (_sidsteDataOk && Date.now() - _sidsteDataOk < 2000) return;
         _loadFailCount++;
-        // Behold sidste kendte skærmbillede og vis en diskret badge. Først når
-        // flere forsøg i træk fejler antager vi et reelt udfald og falder tilbage
-        // til slideshow (så en tom/frossen skærm ikke bare står med gammel score).
-        setTvConnectionLost(true);
-        if (_loadFailCount >= LOAD_FAILS_BEFORE_SLIDESHOW &&
-            Date.now() - (_sidsteDataOk || 0) >= OFFLINE_MS_BEFORE_SLIDESHOW) {
-            showSponsorSlideshow();
-        }
+        const laengereUdfald = _loadFailCount >= LOAD_FAILS_BEFORE_TRIN2 &&
+            Date.now() - (_sidsteDataOk || 0) >= OFFLINE_MS_BEFORE_TRIN2;
+        // Trin 2 med en kamp på banen: behold stillingen, nedtonet og mærket
+        const beholdStilling = laengereUdfald && !!_sidsteDataOk && _kampVedSidsteData;
+        setTvConnectionLost(true, beholdStilling);
+        // Trin 2 uden kamp (tom bane, eller et afgjort resultat): sponsorer/"LEDIG"
+        if (laengereUdfald && !beholdStilling) showSponsorSlideshow();
     }
 }
 
-// Diskret "forbindelse mistet"-badge på TV — bygges/vises on demand, så den
-// ikke kræver ændringer i alle tv-v3.html varianter.
+// "Forbindelse mistet" på TV — bygges on demand, så den ikke kræver ændringer
+// i tv-v3.html. Udseendet ligger i tv-v3-styles.css (#tvConnectionBadge).
+//   lost:      det lille mærke i hjørnet
+//   udenData:  længere udfald midt i en kamp — body.tv-uden-data toner
+//              stillingen ned, og mærket bliver til en tydelig besked med
+//              klokkeslættet for den stilling, der vises
 let _tvConnBadge = null;
-function setTvConnectionLost(lost) {
-    if (lost) {
-        if (!_tvConnBadge) {
-            _tvConnBadge = document.createElement('div');
-            _tvConnBadge.id = 'tvConnectionBadge';
-            _tvConnBadge.innerHTML = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.125em" aria-hidden="true"><path d="M12 3 2 21h20zM12 10v5M12 18h.01"/></svg> Forbindelse mistet';
-            // Farver fra --color-warning-tokenet (styles.css) i stedet for
-            // hårdkodede literaler — holder tema-reglen for TV-fladen.
-            _tvConnBadge.style.cssText =
-                'position:fixed;bottom:16px;left:16px;z-index:9000;padding:8px 16px;' +
-                'border-radius:999px;background:rgba(var(--color-warning-rgb),0.15);' +
-                'border:1px solid rgba(var(--color-warning-rgb),0.5);color:var(--color-warning);' +
-                'font-size:1rem;font-weight:600;backdrop-filter:blur(4px);';
-            document.body.appendChild(_tvConnBadge);
-        }
-        _tvConnBadge.style.display = 'block';
-    } else if (_tvConnBadge) {
-        _tvConnBadge.style.display = 'none';
+const TV_CONN_IKON = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.125em" aria-hidden="true"><path d="M12 3 2 21h20zM12 10v5M12 18h.01"/></svg>';
+function setTvConnectionLost(lost, udenData = false) {
+    document.body.classList.toggle('tv-uden-data', lost && udenData);
+    if (!lost) {
+        if (_tvConnBadge) _tvConnBadge.style.display = 'none';
+        return;
     }
+    if (!_tvConnBadge) {
+        _tvConnBadge = document.createElement('div');
+        _tvConnBadge.id = 'tvConnectionBadge';
+        document.body.appendChild(_tvConnBadge);
+    }
+    const tekst = udenData && _sidsteDataOk
+        ? `Forbindelse mistet <span class="tv-conn-fra">· stillingen er fra kl. ${
+            new Date(_sidsteDataOk).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' })}</span>`
+        : 'Forbindelse mistet';
+    // Skriv kun til DOM, når teksten skifter (fejlene kommer med få sekunders mellemrum)
+    if (_tvConnBadge.dataset.tekst !== tekst) {
+        _tvConnBadge.dataset.tekst = tekst;
+        _tvConnBadge.innerHTML = `${TV_CONN_IKON} ${tekst}`;
+    }
+    _tvConnBadge.style.display = 'block';
 }
 
 // ---- Hold-logoer på TV (kun holdkamp-delkampe) ----
