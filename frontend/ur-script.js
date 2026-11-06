@@ -45,18 +45,6 @@ async function kald(sti, opt = {}) {
     return { status: res.status, data };
 }
 
-// ---- Adresselinjen ----
-// På uret står adresselinjen (og ✕) øverst og tager næsten halvdelen af
-// skærmen, men den ruller væk med siden. Siden er lige så høj som hele skærmen
-// (ur.html, 100lvh), og her rulles helt ned, så adresselinjen er væk, og
-// knapperne fylder skærmen. Flere forsøg: uret lægger siden ud lidt efter
-function skjulAdresselinje() {
-    const rul = () => window.scrollTo(0, document.documentElement.scrollHeight);
-    requestAnimationFrame(rul);
-    setTimeout(rul, 150);
-    setTimeout(rul, 600);
-}
-
 // ?maal: viser skærmens mål på uret (til at tilpasse siden)
 if (/[?&]maal\b/.test(location.search)) {
     const m = document.createElement('div');
@@ -74,17 +62,22 @@ let kode = '';
 function visKode(fejl = '') {
     $('kampSide').classList.add('skjult');
     $('kodeSide').classList.remove('skjult');
-    $('kodeFejl').textContent = fejl;
+    kodeTekst(fejl);
     kode = '';
     tegnKode();
-    skjulAdresselinje();
+}
+// Linjen over koden: vejledningen, eller hvad der gik galt
+function kodeTekst(fejl = '') {
+    $('kodeTekst').textContent = fejl || 'Tast koden fra banens TV';
+    $('kodeTekst').classList.toggle('fejl', !!fejl);
 }
 function tegnKode() {
     $('kodeVisning').textContent = (kode + '······').slice(0, 6).replace(/(...)(...)/, '$1 $2');
 }
 function byggTastatur() {
     const t = $('tastatur');
-    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', 'OK'].forEach(k => {
+    // 4 × 3: tastaturet skal passe under urets adresselinje
+    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '⌫', 'OK'].forEach(k => {
         const b = document.createElement('button');
         b.textContent = k;
         if (k === 'OK') b.className = 'ok';
@@ -100,7 +93,7 @@ function byggTastatur() {
 }
 
 async function kobl(k) {
-    $('kodeFejl').textContent = 'Kobler på …';
+    kodeTekst('Kobler på …');
     try {
         const { status, data } = await kald('/ur/kobl', { method: 'POST', body: JSON.stringify({ kode: k }) });
         if (status !== 200) {
@@ -129,7 +122,6 @@ function sessionSlut(tekst) {
 function visKamp() {
     $('kodeSide').classList.add('skjult');
     $('kampSide').classList.remove('skjult');
-    skjulAdresselinje();
 }
 
 function modtag(data) {
@@ -162,6 +154,7 @@ function forventet() {
         if (t.handling[0] === 'P') pointLokalt(st, n);
         else if (t.handling[0] === 'S') R.vaelgServer(st, n);
         else if (t.handling === 'B') R.afslutPause(st);
+        else if (t.handling === 'K') R.startKamp(st, Date.now() + tidsforskel);
         else if (t.handling === 'N' && st.matchCompleted) {
             Object.assign(st, R.nyKamp({ isDoubles: st.isDoubles, gameMode: st.gameMode }));
         }
@@ -176,6 +169,9 @@ function pointLokalt(st, side) {
     if (st.restBreakActive && !R.erSaetAfgjort(st)) R.afslutPause(st);
     return R.point(st, side, Date.now() + tidsforskel);
 }
+
+// Serveren er valgt, men kampen er ikke begyndt
+const klarTilStart = (st) => !!st.servingPlayer && !st.matchStartTime && !st.matchCompleted;
 
 // Hvilken side (1/2) står spilleren på nu
 const sideFor = (st, navn) => (st.player1.name === navn ? 1 : 2);
@@ -193,7 +189,12 @@ function trykPaaSpiller(i) {
     const st = forventet();
     if (!st || !raekkefoelge || spaerret) return;
     const side = sideFor(st, raekkefoelge[i]);
-    if (!st.servingPlayer) return tryk('S' + side);
+    // Før kampen: et tryk vælger (eller skifter) serveren — kampen begynder
+    // med "Start kamp", som på tabletten
+    if (!st.matchStartTime && !st.matchCompleted) {
+        const valgt = st.isDoubles ? st.servingTeam : st.servingPlayer;
+        return valgt === side ? undefined : tryk('S' + side);
+    }
     // Afvises reglerne trykket (afgjort kamp, sætpause), sendes det ikke
     const proeve = JSON.parse(JSON.stringify(st));
     proeve.history = [];
@@ -290,7 +291,6 @@ function tegn() {
         const a = st['player' + (3 - side)];
         const el = $('side' + i);
         el.querySelector('.navn').textContent = visNavn(st, p);
-        el.querySelector('.saet').textContent = st.matchStartTime || p.games || a.games ? `Sæt ${p.games}` : '';
         el.querySelector('.point').textContent = st.servingPlayer ? p.score : '';
         el.classList.toggle('serv', !!serv && serv === side && !st.matchCompleted);
         el.classList.toggle('vinder', st.matchCompleted && p.games > a.games);
@@ -299,6 +299,7 @@ function tegn() {
 
     $('overskrift').textContent = spaerret ? `Bane ${server.bane}`
         : !st.servingPlayer ? `Bane ${server.bane} · tryk på den, der server`
+        : klarTilStart(st) ? `Bane ${server.bane} · tryk Start kamp`
         : st.matchCompleted ? 'Kampen er slut'
         : `Bane ${server.bane} · ${(st.player1.games || 0) + (st.player2.games || 0) + 1}. sæt`;
 
@@ -306,13 +307,8 @@ function tegn() {
     // spillerne skjules, og store knapper fylder skærmen
     const iPause = pause && !st.matchCompleted && !spaerret;
     const slut = st.matchCompleted && !spaerret;
-    const visning = iPause ? 'i-pause' : slut ? 'slut' : '';
-    if (visning !== $('kampSide').dataset.visning) {
-        $('kampSide').dataset.visning = visning;
-        $('kampSide').classList.toggle('i-pause', iPause);
-        $('kampSide').classList.toggle('slut', slut);
-        skjulAdresselinje();   // knapperne er skiftet: hold adresselinjen væk
-    }
+    $('kampSide').classList.toggle('i-pause', iPause);
+    $('kampSide').classList.toggle('slut', slut);
     if (iPause) $('overskrift').textContent = saetPause ? 'Sæt vundet · pause' : 'Pause';
 
     // "Fortsæt" med nedtællingen. Pausen ved 11 (8) slutter også ved næste
@@ -335,7 +331,10 @@ function tegn() {
     $('faerdig').classList.toggle('skjult', !slut);
     $('faerdigLille').classList.toggle('skjult', !spaerret);
     $('overtag').classList.toggle('skjult', !spaerret);
-    $('fortryd').classList.toggle('skjult', spaerret);
+    $('fortryd').classList.toggle('skjult', spaerret || !st.servingPlayer);   // intet at fortryde før servervalget
+    // Serveren er valgt, kampen er ikke begyndt: "Start kamp" (TV'et skifter
+    // fra "banen er ledig" til kampen). Et tryk på en spiller skifter serveren
+    $('startKamp').classList.toggle('skjult', !klarTilStart(st) || spaerret);
     // Status: sendes, ikke nået frem, eller en besked
     const s = $('status');
     if (spaerret) {
@@ -369,6 +368,7 @@ $('side0').addEventListener('click', () => trykPaaSpiller(0));
 $('side1').addEventListener('click', () => trykPaaSpiller(1));
 $('fortryd').addEventListener('click', () => { if (!spaerret) tryk('U'); });
 $('naeste').addEventListener('click', () => tryk('B'));
+$('startKamp').addEventListener('click', () => { const st = forventet(); if (st && klarTilStart(st) && !spaerret) tryk('K'); });
 $('nyKamp').addEventListener('click', () => { if (!spaerret) tryk('N'); });
 $('faerdig').addEventListener('click', () => tryk('F'));
 $('faerdigLille').addEventListener('click', () => tryk('F'));
@@ -390,4 +390,4 @@ setInterval(() => {
     if (gemt.ko.length) send(); else hent();
 }, POLL_MS);
 setInterval(tegn, 1000);   // pausens nedtælling og "ikke sendt endnu"
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { hent(); send(); skjulAdresselinje(); } });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { hent(); send(); } });
