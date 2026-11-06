@@ -772,7 +772,8 @@ router.post('/:courtId/taeller', requireWriteAuthInClubMode, kunEgenBane('courtI
         if (!court) return res.status(404).json({ error: 'Bane ikke fundet' });
 
         const hent = () => queryOne(
-            `SELECT taeller_id, taeller_navn, taeller_set_at, forrige_taeller_id, forrige_taeller_navn, match_completed
+            `SELECT taeller_id, taeller_navn, taeller_set_at, forrige_taeller_id, forrige_taeller_navn,
+                    match_start_time, match_completed
              FROM game_states WHERE court_id = ?`, [court.id]);
         let row = await hent();
 

@@ -6,6 +6,10 @@
 //
 // - Ingen tæller, eller tælleren har ikke givet lyd i AKTIV_SEK: banen er ledig,
 //   og den første der gemmer, bliver tæller.
+// - Midt i en kamp bliver banen IKKE ledig af stilhed: uret giver kun lyd, når
+//   der trykkes (en pause varer 60-120 s), og en telefon med en gammel 0-0-skærm
+//   kunne ellers gemme oven i kampen, så den blev nulstillet. Tælleren beholder
+//   kampen, til den er slut eller ryddet — andre skal trykke "Overtag".
 // - En anden enhed må ikke gemme, men kan "Overtage" — så husker banen, hvem
 //   der blev overtaget fra, så den enhed kan få besked og tage tællingen tilbage.
 // - Gemninger uden id (admin, ældre sider) spærres ikke.
@@ -51,12 +55,26 @@ function erAktiv(row, nuMs) {
     return s !== null && s <= AKTIV_SEK;
 }
 
+// En kamp er i gang på banen (startet og ikke afgjort)
+function kampIGang(row) {
+    return !!row && !!row.match_start_time && !row.match_completed;
+}
+
+// Banen har en tæller, andre ikke bare må gemme forbi: den giver lyd, eller den
+// er midt i en kamp (se øverst). aktiv siger stadig kun, om den giver lyd —
+// det er den, "X har ikke givet lyd i et stykke tid" og bekræftelsen ved
+// "Overtag" går efter.
+function optaget(row, nuMs) {
+    if (!row || !row.taeller_id) return false;
+    return erAktiv(row, nuMs) || kampIGang(row);
+}
+
 // Må enheden med dette id gemme banens tilstand?
 function maaGemme(row, id, nuMs) {
     if (!id) return true;                       // admin/ældre sider
     if (!row || !row.taeller_id) return true;   // ingen tæller endnu
     if (row.taeller_id === id) return true;     // det er os
-    return !erAktiv(row, nuMs);                 // den anden er gået
+    return !optaget(row, nuMs);                 // den anden er gået, og ingen kamp er i gang
 }
 
 // Status til enheden: tæller den selv, er banen ledig, hvem tæller ellers,
@@ -67,7 +85,7 @@ function status(row, id, nuMs) {
     const s = sekSidenLyd(row, nuMs);
     return {
         ejer,
-        ledig: !ejer && !aktiv,
+        ledig: !ejer && !optaget(row, nuMs),
         taeller: row && row.taeller_id && !ejer
             ? { navn: row.taeller_navn || 'En anden enhed', sekSidenLyd: s === Infinity ? null : Math.round(s), aktiv }
             : null,
@@ -94,4 +112,4 @@ function kortId(id) {
     return id ? String(id).slice(0, 8) : null;
 }
 
-module.exports = { AKTIV_SEK, rensId, rensNavn, sekSidenLyd, erAktiv, maaGemme, status, kraev, kortId };
+module.exports = { AKTIV_SEK, rensId, rensNavn, sekSidenLyd, erAktiv, kampIGang, optaget, maaGemme, status, kraev, kortId };
