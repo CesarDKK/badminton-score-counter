@@ -30,7 +30,7 @@ let server = null;          // serverens seneste svar
 let tidsforskel = 0;        // serverens ur minus urets eget
 let raekkefoelge = null;    // [navn øverst, navn nederst]
 let sender = false;
-let senderSiden = 0;
+let senderSiden = Date.now();   // hvornår det ældste tryk i køen blev trykket
 let spaerret = false;
 let pauseSendt = false;
 
@@ -192,6 +192,7 @@ const visNavn = (st, p) => (st.isDoubles && p.name2 && !/^Makker [12]$/.test(p.n
     ? `${fornavn(p.name)} & ${fornavn(p.name2)}` : p.name);
 
 function tryk(handling) {
+    if (!gemt.ko.length) senderSiden = Date.now();
     gemt.nr += 1;
     gemt.ko.push({ nr: gemt.nr, handling });
     gem();
@@ -215,7 +216,6 @@ function trykPaaSpiller(i) {
 async function send() {
     if (sender || !gemt.ko.length || !gemt.token) return;
     sender = true;
-    senderSiden = Date.now();
     tegn();
     while (gemt.ko.length) {
         const t = gemt.ko[0];
@@ -256,6 +256,7 @@ async function send() {
         // "Færdig": uret er logget ud (banen er nulstillet, hvis kampen var slut)
         if (t.handling === 'F') { sender = false; return sessionSlut('Tak for kampen — tast koden fra TV\'et for at tælle igen'); }
         gemt.ko.shift();
+        senderSiden = Date.now();
         gem();
         spaerret = false;
         modtag(data);
@@ -344,15 +345,15 @@ function tegn() {
     // Kampen er ikke begyndt: kun "Start kamp" (TV'et skifter fra "banen er
     // ledig" til kampen)
     $('startKamp').classList.toggle('skjult', !klarTilStart(st) || spaerret);
-    // Status: sendes, ikke nået frem, eller en besked
+    // Status: ikke nået frem, eller en besked. "Sender …" vises ikke: linjen
+    // kom og gik ved hvert tryk, og knapperne hoppede op og ned
     const s = $('status');
     if (spaerret) {
         s.textContent = 'En anden enhed tæller kampen';
         s.className = 'lille fejl';
-    } else if (gemt.ko.length) {
-        const laenge = Date.now() - senderSiden > IKKE_SENDT_MS;
-        s.textContent = laenge ? 'Ikke sendt endnu — prøver igen' : 'Sender …';
-        s.className = 'lille ' + (laenge ? 'fejl' : 'venter');
+    } else if (gemt.ko.length && Date.now() - senderSiden > IKKE_SENDT_MS) {
+        s.textContent = 'Ikke sendt endnu — prøver igen';
+        s.className = 'lille fejl';
     } else if (Date.now() < beskedTil) {
         s.textContent = besked;
         s.className = 'lille';

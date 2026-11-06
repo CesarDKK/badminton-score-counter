@@ -246,6 +246,19 @@ async function erPlannerBane(bane) {
     try { return !!plannerForBane(await hentPlannerVisning(), bane); } catch { return false; }
 }
 
+// Skal pausen ved 11 (8) slutte, før trykket regnes? Ved et point, og når
+// pausen er løbet ud — men ikke for "B" (Fortsæt) og "U" (fortryd): "B" slutter
+// selv pausen, og blev den sluttet her først, afviste reglerne "B" bagefter
+// (ingen pause at slutte), så intet blev gemt, og TV'et hang på 0:00.
+// Sætpausen slutter aldrig her (se /tryk). Ren funktion (tests/unit/ur-pause-slut.test.js)
+function pauseSlutterFoerTryk(st, handling, nu) {
+    if (!st.restBreakActive || regler.erSaetAfgjort(st)) return false;
+    if (handling[0] === 'P') return true;
+    if (handling === 'B' || handling === 'U') return false;
+    return !!st.restBreakStartedAt &&
+        nu >= Number(st.restBreakStartedAt) + (st.restBreakDuration || 60) * 1000;
+}
+
 // POST /api/ur/tryk — { handling, nr, taellerId }
 //   handling: S1/S2 vælg server, P1/P2 point, K start, B afslut pausen, U fortryd,
 //   N ny kamp (kun når kampen er slut), F færdig (uret logges ud)
@@ -330,10 +343,7 @@ router.post('/tryk', requireWriteAuthInClubMode, async (req, res, next) => {
             // sender det, når nedtællingen er slut): næste sæt bytter siderne, så et
             // point regnet efter et skjult sideskift ville ramme den forkerte
             // spiller — reglerne afviser point i sætpausen
-            const pauseUdloebet = st.restBreakStartedAt &&
-                nu >= Number(st.restBreakStartedAt) + (st.restBreakDuration || 60) * 1000;
-            if (st.restBreakActive && !regler.erSaetAfgjort(st) &&
-                (handling[0] === 'P' || (pauseUdloebet && handling !== 'U'))) {
+            if (pauseSlutterFoerTryk(st, handling, nu)) {
                 haendelser.push(...regler.afslutPause(st).haendelser);
             }
             const n = Number(handling[1]);
@@ -379,3 +389,4 @@ module.exports = router;
 module.exports.urTaellingSlaaetTil = urTaellingSlaaetTil;
 module.exports.urLoggetUd = urLoggetUd;
 module.exports.UR_LEDIG_MIN = UR_LEDIG_MIN;
+module.exports.pauseSlutterFoerTryk = pauseSlutterFoerTryk;
