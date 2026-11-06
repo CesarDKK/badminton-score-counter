@@ -62,8 +62,8 @@ test('holdkamp-ændringer og frigivelse af baner udsender events', () => {
         'alle vellykkede ændringer i routes/teamMatches.js skal give et holdkamp-event');
     assert.match(holdkamp, /async function afslutHoldkamp[\s\S]*?publishHoldkampChange\(req\);\s*\}\s*\/\/ Automatisk lukning/,
         'også den automatiske lukning');
-    assert.match(laes('routes/importHoldkamp.js'), /opretHoldkamp\(\{[\s\S]{0,400}publishHoldkampChange\(/,
+    assert.match(laes('routes/importHoldkamp.js'), /await opretHoldkamp\(\{[\s\S]{0,800}publishHoldkampChange\(\{/,
         'en automatisk hentet holdkamp');
-    assert.match(laes('scheduler.js'), /DELETE FROM game_states WHERE court_id = \?[\s\S]{0,500}publishGameStateChange\([^)]*'reset'\)/,
+    assert.match(laes('scheduler.js'), /DELETE FROM game_states WHERE court_id = \?[\s\S]{0,500}publishGameStateChange\(.*court\.court_number, 'reset'\)/,
         'en bane, der frigives efter 10 minutter');
 });
