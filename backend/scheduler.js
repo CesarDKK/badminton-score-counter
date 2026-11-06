@@ -437,4 +437,44 @@ function startSkaermLogOprydning() {
     });
 }
 
-module.exports = { startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk, startUgentligBackup, ugentligBackup, startSkaermLogOprydning };
+/**
+ * Tæl fra uret: pausen ved 11 (8) og mellem sæt slutter af sig selv ved 0:00
+ * (routes/urTaeller.js afslutUdloebnePauser). Uret kan ikke selv gøre det, når
+ * skærmen er slukket. Hvert 2. sekund; uden pauser en lille forespørgsel pr. klub.
+ */
+function startUrPauser() {
+    const { afslutUdloebnePauser } = require('./routes/urTaeller');
+    let koerer = false;
+    cron.schedule('*/2 * * * * *', async () => {
+        if (koerer) return;
+        koerer = true;
+        try {
+            // 1. Standard/direkte database
+            try {
+                await afslutUdloebnePauser();
+            } catch (err) {
+                console.error('❌ Urets pauser (default):', err.message);
+            }
+            // 2. Alle aktive klub-databaser (multi-tenant)
+            try {
+                const masterDb = require('./config/masterDatabase');
+                const clubs = await masterDb.query('SELECT db_name FROM clubs WHERE is_active = 1');
+                for (const club of clubs) {
+                    try {
+                        await runWithTenant(club.db_name, () => afslutUdloebnePauser());
+                    } catch (err) {
+                        console.error(`❌ Urets pauser for ${club.db_name}:`, err.message);
+                    }
+                }
+            } catch (err) { /* master DB ikke tilgængelig i direkte mode */ }
+        } finally {
+            koerer = false;
+        }
+    }, {
+        scheduled: true,
+        timezone: 'Europe/Copenhagen'
+    });
+    console.log('⏰ Scheduled urets pauser hvert 2. sekund (slutter ved 0:00, når uret tæller)');
+}
+
+module.exports = { startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk, startUgentligBackup, ugentligBackup, startSkaermLogOprydning, startUrPauser };

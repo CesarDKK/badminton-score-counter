@@ -12,6 +12,7 @@ const { urKodeFor } = require('./matchSessionTokens');
 const { varighedTekst } = require('../config/matchTiming');
 const regler = require('../taeller/regler');
 const ejerskab = require('../taeller/ejerskab');
+const { currentTenant } = require('../config/tenantPools');
 
 // ---- Tæl fra uret ----
 //
@@ -246,6 +247,56 @@ async function erPlannerBane(bane) {
     try { return !!plannerForBane(await hentPlannerVisning(), bane); } catch { return false; }
 }
 
+// Skal pausen ved 11 (8) slutte, før trykket regnes? Ved et point, og når
+// pausen er løbet ud — men ikke for "B" (Fortsæt) og "U" (fortryd): "B" slutter
+// selv pausen, og blev den sluttet her først, afviste reglerne "B" bagefter
+// (ingen pause at slutte), så intet blev gemt, og TV'et hang på 0:00.
+// Sætpausen slutter aldrig her (se /tryk). Ren funktion (tests/unit/ur-pause-slut.test.js)
+function pauseSlutterFoerTryk(st, handling, nu) {
+    if (!st.restBreakActive || regler.erSaetAfgjort(st)) return false;
+    if (handling[0] === 'P') return true;
+    if (handling === 'B' || handling === 'U') return false;
+    return !!st.restBreakStartedAt &&
+        nu >= Number(st.restBreakStartedAt) + (st.restBreakDuration || 60) * 1000;
+}
+
+// Pausen er løbet ud på en bane, uret tæller: serveren slutter den selv
+// (scheduler.js, hvert 2. sekund). Tabletten slutter pausen med sin egen
+// nedtælling; uret sender også "Fortsæt" ved 0:00, men kun mens skærmen er
+// tændt — sænkes håndleddet, sover siden, og TV'et hang på 0:00. Efter
+// sætpausen begynder næste sæt (som ved "B"). Returnerer antal sluttede pauser
+async function afslutUdloebnePauser(nu = Date.now()) {
+    const raekker = await query(
+        `SELECT court_id FROM game_states
+          WHERE rest_break_active = 1 AND match_completed = 0
+            AND tryk_taeller IS NOT NULL AND tryk_taeller = taeller_id
+            AND rest_break_started_at IS NOT NULL
+            AND rest_break_started_at + COALESCE(rest_break_duration, 60) * 1000 <= ?`, [nu]);
+    let antal = 0;
+    for (const { court_id } of raekker) {
+        try {
+            const court = await queryOne('SELECT id, court_number, is_active, is_doubles, game_mode FROM courts WHERE id = ?', [court_id]);
+            const row = court && await hentRaekke(court.id);
+            if (!row) continue;
+            const st = tilstandFra(row, court);
+            const r = regler.afslutPause(st);
+            if (!r.ok) continue;
+            // Versionen sikrer, at et samtidigt tryk fra uret ikke slutter pausen to gange
+            // Ingen forespørgsel: TV'ernes besked går til klubben, scheduleren kører for
+            const g = await gemTilstand({ clubDbName: currentTenant(), user: null }, court.court_number,
+                kropFra(st, r.haendelser, row.version || 0, row.taeller_id));
+            if (g.status !== 200) continue;
+            // Fortryd virker stadig bagefter (historikken følger den nye version)
+            await query('UPDATE game_states SET fortryd_historik = ? WHERE court_id = ?',
+                [JSON.stringify({ version: g.json.version, historik: st.history }), court.id]);
+            antal++;
+        } catch (e) {
+            console.error('[ur] pausen kunne ikke sluttes:', e.message);
+        }
+    }
+    return antal;
+}
+
 // POST /api/ur/tryk — { handling, nr, taellerId }
 //   handling: S1/S2 vælg server, P1/P2 point, K start, B afslut pausen, U fortryd,
 //   N ny kamp (kun når kampen er slut), F færdig (uret logges ud)
@@ -330,10 +381,7 @@ router.post('/tryk', requireWriteAuthInClubMode, async (req, res, next) => {
             // sender det, når nedtællingen er slut): næste sæt bytter siderne, så et
             // point regnet efter et skjult sideskift ville ramme den forkerte
             // spiller — reglerne afviser point i sætpausen
-            const pauseUdloebet = st.restBreakStartedAt &&
-                nu >= Number(st.restBreakStartedAt) + (st.restBreakDuration || 60) * 1000;
-            if (st.restBreakActive && !regler.erSaetAfgjort(st) &&
-                (handling[0] === 'P' || (pauseUdloebet && handling !== 'U'))) {
+            if (pauseSlutterFoerTryk(st, handling, nu)) {
                 haendelser.push(...regler.afslutPause(st).haendelser);
             }
             const n = Number(handling[1]);
@@ -379,3 +427,5 @@ module.exports = router;
 module.exports.urTaellingSlaaetTil = urTaellingSlaaetTil;
 module.exports.urLoggetUd = urLoggetUd;
 module.exports.UR_LEDIG_MIN = UR_LEDIG_MIN;
+module.exports.pauseSlutterFoerTryk = pauseSlutterFoerTryk;
+module.exports.afslutUdloebnePauser = afslutUdloebnePauser;
