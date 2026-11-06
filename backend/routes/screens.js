@@ -12,10 +12,23 @@ const pcOpdatering = require('../screens/pcOpdatering');
 const tenantKey = (req) => req.clubDbName || 'direct';
 const kl = (ms) => new Date(ms).toLocaleTimeString('da-DK', { timeZone: 'Europe/Copenhagen' });
 
+// Gemmes skærmens hændelser i 30 dage? Hændelsesloggen ligger i master-databasen,
+// som alle klubber deler. Demoen (direct-mode på en server med klubber, dvs.
+// APP_DOMAIN er sat) er åben for alle uden login, så dens hændelser gemmes ikke —
+// ellers kunne hvem som helst fylde den fælles tabel. Demoens skærme vises
+// stadig "lige nu" under Adgangslinks. En lokal installation uden klubber
+// (ingen APP_DOMAIN) gemmer som før.
+const gemmerHaendelser = (req) => req.accessMode === 'club' || !process.env.APP_DOMAIN;
+
 // POST /api/screens/heartbeat — TV'ets livstegn (hvert 20. sekund).
 // Samme adgang som TV'ets øvrige kald: adgangslinkets token i club-mode, åbent
 // i direct-mode. tokenId kommer fra tokenet, så skærmen kan vises under sit link.
 router.post('/heartbeat', requireWriteAuthInClubMode, (req, res) => {
+    // Kun skærme sender livstegn — ikke en telefon, der tæller via QR-koden
+    // (den kunne ellers fylde klubbens skærmliste og hændelseslog)
+    if (req.user && req.user.role === 'device' && req.user.tokenType === 'match_session') {
+        return res.status(403).json({ error: 'QR-tælleren sender ikke livstegn' });
+    }
     const tokenId = req.user && req.user.role === 'device' ? req.user.tokenId : null;
     const r = registrer(tenantKey(req), req.body || {}, { tokenId, ip: klientIp(req) });
     if (!r) return res.status(400).json({ error: 'Ugyldigt livstegn' });
@@ -33,8 +46,9 @@ router.post('/heartbeat', requireWriteAuthInClubMode, (req, res) => {
         }[h.type];
         console.log(`[skærm] ${hvem}: ${hvad} i ${h.sek} s fra kl. ${kl(h.fra)}`);
     }
-    // Gemmes i 30 dage til admin (venter ikke — livstegnet svares med det samme)
-    haendelseslog.gem(tenantKey(req), r.skaerm, r.nye);
+    // Gemmes i 30 dage til admin (venter ikke — livstegnet svares med det samme).
+    // Loftet pr. skærm og pr. klub ligger i haendelseslog.gem.
+    if (gemmerHaendelser(req)) haendelseslog.gem(tenantKey(req), r.skaerm, r.nye);
     res.json({ ok: true });
 });
 
@@ -134,7 +148,7 @@ router.post('/pc-rapport', async (req, res, next) => {
         for (const h of rapport.haendelser) {
             console.log(`[skærm] ${tenantKey(req)} "${skaerm.navn}" (${klientIp(req)}, Badminton TV ${rapport.kioskVersion || '?'}): ${h.type} — ${h.tekst || ''}`);
         }
-        await haendelseslog.gem(tenantKey(req), skaerm, rapport.haendelser);
+        if (gemmerHaendelser(req)) await haendelseslog.gem(tenantKey(req), skaerm, rapport.haendelser);
         res.json({ ok: true, modtaget: rapport.haendelser.length });
     } catch (error) {
         next(error);
