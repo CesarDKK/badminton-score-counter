@@ -116,6 +116,55 @@ test('holdkamp fra i går sendes ikke af sig selv — heller ikke når nogen tæ
     assert.equal(ls.beslutning({ opsaetning: heleDagen, gs: null, holdkamp: iGaar, nu: NU }).grund, 'hele-dagen');
 });
 
+test('"Stop for i dag": holdkampen sendes ikke af sig selv, men det, der startes med en knap, gør', () => {
+    const iGang = { mangler: 5, igang: 1, slut: null, start: new Date(NU - 10 * MIN), roert: null };
+    const stop = { ...OPS, holdkamp_stop_until: new Date(NU + 6 * 60 * MIN) };
+    assert.equal(ls.holdkampStoppet(stop, NU), true);
+    assert.deepEqual(ls.beslutning({ opsaetning: stop, gs: gs(), holdkamp: iGang, nu: NU }), { send: false, grund: 'holdkamp-stoppet' });
+    assert.equal(ls.beslutning({ opsaetning: stop, gs: null, holdkamp: iGang, nu: NU }).grund, 'holdkamp-stoppet');
+    // Stoppet gælder til dagens slutning — i morgen sendes holdkampe igen
+    const iGaar = { ...OPS, holdkamp_stop_until: new Date(NU - MIN) };
+    assert.equal(ls.holdkampStoppet(iGaar, NU), false);
+    assert.equal(ls.beslutning({ opsaetning: iGaar, gs: gs(), holdkamp: iGang, nu: NU }).grund, 'holdkamp');
+    // "Send hele dagen" og tablettens start virker stadig
+    assert.equal(ls.beslutning({ opsaetning: { ...stop, all_day_until: new Date(NU + 60 * MIN) }, gs: gs(), holdkamp: iGang, nu: NU }).grund, 'hele-dagen');
+    assert.deepEqual(ls.beslutning({ opsaetning: { ...stop, manual_since: new Date(NU - 5 * MIN) }, gs: gs({ player1_score: 3 }), holdkamp: iGang, nu: NU }),
+        { send: true, grund: 'valgt', kilde: 'gs' });
+    // Uden en holdkamp betyder stoppet intet
+    assert.equal(ls.beslutning({ opsaetning: stop, gs: gs({ player1_score: 5 }), nu: NU }).grund, 'ikke-startet');
+    // Tabletten viser ikke "holdkampen sendes", når den er stoppet
+    assert.equal(ls.tabletStatus({ opsaetning: OPS, kamera: true, holdkamp: iGang, nu: NU }).holdkamp, true);
+    assert.equal(ls.tabletStatus({ opsaetning: stop, kamera: true, holdkamp: iGang, nu: NU }).holdkamp, false);
+});
+
+test('admin ser, hvorfor holdkampen sendes — eller ikke gør', () => {
+    const info = { hold1: 'Lyngby 2', hold2: 'Gentofte', delkamp: { side1: 'Anna & Clara', side2: 'Berit & Dorte', bane: 3, start: new Date(NU - 80 * MIN) } };
+    const taelles = { mangler: 2, igang: 1, slut: new Date(NU - 60 * MIN), start: new Date(NU - 80 * MIN), roert: new Date(NU - MIN) };
+    assert.deepEqual(ls.holdkampTilAdmin({ holdkamp: taelles, info, opsaetning: OPS, nu: NU }), {
+        hold: 'Lyngby 2 – Gentofte', sendes: true, stoppet: false, forladt: null,
+        delkamp: { navne: 'Anna & Clara – Berit & Dorte', bane: 3, min: 80 }
+    });
+    // Stoppet for i dag
+    const stoppet = ls.holdkampTilAdmin({ holdkamp: taelles, info, opsaetning: { ...OPS, holdkamp_stop_until: new Date(NU + 60 * MIN) }, nu: NU });
+    assert.equal(stoppet.sendes, false);
+    assert.equal(stoppet.stoppet, true);
+    // Forladt: delkampen står som i gang, men ingen tæller
+    const glemt = ls.holdkampTilAdmin({ holdkamp: { ...taelles, roert: null }, info, opsaetning: OPS, nu: NU });
+    assert.equal(glemt.sendes, false);
+    assert.equal(glemt.forladt, 'stille');
+    assert.equal(glemt.delkamp.min, 80);
+    // Fra en tidligere dag
+    const gammel = { mangler: 1, igang: 1, slut: null, start: new Date(NU - 20 * 60 * MIN), roert: null };
+    assert.equal(ls.holdkampTilAdmin({ holdkamp: gammel, info, opsaetning: OPS, nu: NU }).forladt, 'ny-dag');
+    // Ingen delkamp i gang lige nu (mellem delkampene)
+    const pause = { mangler: 3, igang: 0, slut: new Date(NU - 5 * MIN), start: new Date(NU - 40 * MIN), roert: null };
+    assert.deepEqual(ls.holdkampTilAdmin({ holdkamp: pause, info: { hold1: 'A', hold2: null, delkamp: null }, opsaetning: null, nu: NU }),
+        { hold: 'A – Hold 2', sendes: true, stoppet: false, forladt: null, delkamp: null });
+    // Ingen holdkamp, eller alle delkampe er færdige: intet at vise
+    assert.equal(ls.holdkampTilAdmin({ holdkamp: null, info, opsaetning: OPS, nu: NU }), null);
+    assert.equal(ls.holdkampTilAdmin({ holdkamp: { mangler: 0, igang: 0, slut: new Date(NU - MIN), start: null }, info, opsaetning: OPS, nu: NU }), null);
+});
+
 test('tablettens "Start livestream": kampen på banen — og ikke den næste', () => {
     const klar = { ...OPS, armed_until: new Date(NU + 4 * MIN) };
     // Kampen på banen (eller den næste, der sættes på inden 5 minutter) bliver valgt

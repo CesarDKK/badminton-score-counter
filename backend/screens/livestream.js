@@ -304,20 +304,54 @@ function beslutning({ opsaetning, gs, sidste, planner, holdkamp = null, senderNu
         : k.tilstand === 'afgjort' && nu - k.slut < SIDSTE_MS ? 'sidste' : null;
 
     if (s && s.start === 'hele-dagen') return { send: true, grund: 'hele-dagen', kilde, ...glem };
-    if (hk.koerer) return { send: true, grund: 'holdkamp', kilde, ...glem };
+    // Admin har trykket "Stop for i dag": holdkampen sendes ikke af sig selv —
+    // men det, der er startet med en knap, sendes stadig
+    const stoppet = hk.koerer && holdkampStoppet(opsaetning, nu);
+    if (hk.koerer && !stoppet) return { send: true, grund: 'holdkamp', kilde, ...glem };
     if (k.tilstand === 'kamp') {
         if (s && s.start === 'valgt') return { send: true, grund: 'valgt', kilde: 'gs' };
         if (s && s.start === 'klar') return { send: true, grund: 'valgt', kilde: 'gs', vaelg: true };
-        return { send: false, grund: 'ikke-startet' };
+        return { send: false, grund: stoppet ? 'holdkamp-stoppet' : 'ikke-startet' };
     }
     // Holdkampens sidste delkamp er afgjort — måske på en anden bane
     if (hk.slut !== null && senderNu && nu - hk.slut < efterMs) return { send: true, grund: 'afgjort', kilde, ...glem };
     if (k.tilstand === 'afgjort') {
         return senderNu && k.slut !== null && nu - k.slut < efterMs
             ? { send: true, grund: 'afgjort', kilde: k.ryddet ? 'sidste' : 'gs', ...glem }
-            : { send: false, grund: k.ryddet ? 'ingen-kamp' : 'afsluttet', ...glem };
+            : { send: false, grund: stoppet ? 'holdkamp-stoppet' : (k.ryddet ? 'ingen-kamp' : 'afsluttet'), ...glem };
     }
-    return { send: false, grund: k.tilstand, ...glem };
+    return { send: false, grund: stoppet ? 'holdkamp-stoppet' : k.tilstand, ...glem };
+}
+
+// "Stop for i dag" i admin (court_streams.holdkamp_stop_until, migration 042)
+function holdkampStoppet(o, nu = Date.now()) {
+    const til = tid(o && o.holdkamp_stop_until);
+    return til !== null && til > nu;
+}
+
+// Til admin (Livestream): banens holdkamp, og hvorfor den sendes eller ikke.
+// h: holdkampPaaBane; info: { hold1, hold2, delkamp } — delkamp er den, der har
+// stået længst som i gang: { side1, side2, bane, start }. null: ingen holdkamp
+// med delkampe tilbage. sendes: holdkampen får banen til at sende nu.
+function holdkampTilAdmin({ holdkamp, info, opsaetning, nu = Date.now() }) {
+    if (!holdkamp || !info || !(Number(holdkamp.mangler) > 0)) return null;
+    const hk = holdkampNu(holdkamp, nu);
+    const stoppet = holdkampStoppet(opsaetning, nu);
+    const d = info.delkamp;
+    const start = d ? tid(d.start) : null;
+    return {
+        hold: `${info.hold1 || 'Hold 1'} – ${info.hold2 || 'Hold 2'}`,
+        sendes: hk.koerer && !stoppet,
+        stoppet,
+        // 'stille' (ingen har talt i 30 min) eller 'ny-dag' — null: ikke forladt
+        forladt: hk.forladt || null,
+        delkamp: d ? {
+            navne: `${d.side1 || 'Hold 1'} – ${d.side2 || 'Hold 2'}`,
+            bane: d.bane || null,
+            // Hele minutter, delkampen har stået som i gang (sat på en bane)
+            min: start !== null ? Math.max(0, Math.floor((nu - start) / 60000)) : null
+        } : null
+    };
 }
 
 // Til tabletten: kan banen sendes, og hvad er startet? kamera: et adgangslink
@@ -332,7 +366,8 @@ function tabletStatus({ opsaetning, kamera, pc, holdkamp = null, planner = false
         kan,
         start: s ? s.start : null,
         til: s && s.til ? new Date(s.til).toISOString() : null,
-        holdkamp: holdkampNu(holdkamp, nu).koerer,
+        // "● Livestream: holdkampen sendes" på tabletten — ikke når admin har stoppet den for i dag
+        holdkamp: holdkampNu(holdkamp, nu).koerer && !holdkampStoppet(opsaetning, nu),
         planner: !!planner,
         sender: !!(pc && pc.online && pc.sender),
         kameraKlar: !!(pc && pc.online && pc.kamera),
@@ -664,7 +699,7 @@ module.exports = {
     ytHandling, ytTitel, ytBeskrivelse,
     gyldigUrl, gyldigNoegle, rensOpsaetning, noegleSlut,
     STANDARD_INDSTILLINGER, laesIndstillinger, rensIndstillinger, videoTilPc, sponsorNu, gyldigLogoFil,
-    beslutning, startet, holdkampNu, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,
+    beslutning, startet, holdkampNu, holdkampStoppet, holdkampTilAdmin, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,
     spillerLogoer, klubLogoFraDatabase,
     rensStatus, registrer, statusFor, senderBane, liveBaner,
     pcNoegle, maaBrugeKamera, registrerAnden, svarTilAnden, autoKameraBane

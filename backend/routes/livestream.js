@@ -263,6 +263,30 @@ const holdkampPaaBane = async (bane) => {
     return r && r.mangler != null ? r : null;
 };
 
+// Til admin: holdkampens navn og den delkamp, der har stået længst som i gang
+// (se ls.holdkampTilAdmin). Kaldes kun, når banen har en holdkamp.
+const holdkampInfo = async (bane) => {
+    const banens = 'tm.id IN (SELECT team_match_id FROM team_match_games WHERE court_number = ?)';
+    const tm = await queryOne(
+        `SELECT tm.team1_name, tm.team2_name FROM team_matches tm
+          WHERE tm.status = 'active' AND ${banens} ORDER BY tm.id DESC LIMIT 1`, [bane]);
+    if (!tm) return null;
+    const g = await queryOne(
+        `SELECT g.team1_player1, g.team1_player2, g.team2_player1, g.team2_player2, g.court_number, g.started_at
+           FROM team_match_games g JOIN team_matches tm ON tm.id = g.team_match_id
+          WHERE tm.status = 'active' AND g.status = 'active' AND ${banens}
+          ORDER BY g.started_at, g.id LIMIT 1`, [bane]);
+    const side = (a, b) => [a, b].filter(Boolean).join(' & ') || null;
+    return {
+        hold1: tm.team1_name,
+        hold2: tm.team2_name,
+        delkamp: g ? {
+            side1: side(g.team1_player1, g.team1_player2), side2: side(g.team2_player1, g.team2_player2),
+            bane: g.court_number, start: g.started_at
+        } : null
+    };
+};
+
 // Tablettens og admins oversigt over én bane
 async function baneStatus(req, bane) {
     const opsaetning = await queryOne('SELECT * FROM court_streams WHERE court_number = ?', [bane]);
@@ -292,6 +316,12 @@ router.get('/', livestreamAdmin, async (req, res, next) => {
         const indst = await hentIndstillinger();
         const klub = await klubLogo(req, indst).catch(() => ({ upload: logoUrl(req, indst.logo), database: null }));
         const yt = await ytForbindelse(req);
+        // Holdkampen bag hver bane: sendes den, er den stoppet for i dag eller forladt?
+        const holdkampe = new Map();
+        for (const { court_number: n } of baner) {
+            const h = await holdkampPaaBane(n);
+            if (h) holdkampe.set(n, ls.holdkampTilAdmin({ holdkamp: h, info: await holdkampInfo(n), opsaetning: opsaetning.get(n) }));
+        }
         res.json({
             standardUrl: ls.STANDARD_URL,
             indstillinger: { ...indst, logo: logoUrl(req, indst.logo) },
@@ -320,7 +350,9 @@ router.get('/', livestreamAdmin, async (req, res, next) => {
                     // Banens stream og udsendelse på den forbundne kanal
                     yt: yt && o ? { noegle: !!o.yt_stream_key, udsendelse: o.yt_broadcast_id || null, fejl: o.yt_fejl || null } : null,
                     start: s ? s.start : null,
-                    til: s && s.til ? new Date(s.til).toISOString() : null
+                    til: s && s.til ? new Date(s.til).toISOString() : null,
+                    // null: banen er ikke med i en holdkamp med delkampe tilbage
+                    holdkamp: holdkampe.get(n) || null
                 };
             }),
             kameraer: links.map(l => ({
@@ -564,6 +596,35 @@ router.delete('/baner/:bane/hele-dagen', livestreamAdmin, async (req, res, next)
         if (!bane) return res.status(404).json({ error: 'Bane ikke fundet' });
         await query('UPDATE court_streams SET all_day_until = NULL, armed_until = NULL, manual_since = NULL WHERE court_number = ?', [bane]);
         console.log(`[livestream] ${tenantKey(req)} bane ${bane}: stoppet i admin`);
+        res.json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST/DELETE /api/livestream/baner/:bane/holdkamp-stop — "Stop for i dag":
+// banen sendes ikke af sig selv på grund af en holdkamp resten af dagen (til
+// kl. 23:59). DELETE: "Send holdkampen igen". Det, der er startet med en knap
+// (hele dagen, tablettens start), røres ikke — det har sit eget Stop.
+router.post('/baner/:bane/holdkamp-stop', livestreamAdmin, async (req, res, next) => {
+    try {
+        const bane = baneNr(req.params.bane);
+        const o = bane && await queryOne('SELECT court_number FROM court_streams WHERE court_number = ?', [bane]);
+        if (!o) return res.status(404).json({ error: 'Banen har ingen livestream-opsætning' });
+        await query('UPDATE court_streams SET holdkamp_stop_until = ? WHERE court_number = ?', [new Date(ls.dagensSlut()), bane]);
+        console.log(`[livestream] ${tenantKey(req)} bane ${bane}: holdkampen stoppet for i dag i admin`);
+        res.json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.delete('/baner/:bane/holdkamp-stop', livestreamAdmin, async (req, res, next) => {
+    try {
+        const bane = baneNr(req.params.bane);
+        if (!bane) return res.status(404).json({ error: 'Bane ikke fundet' });
+        await query('UPDATE court_streams SET holdkamp_stop_until = NULL WHERE court_number = ?', [bane]);
+        console.log(`[livestream] ${tenantKey(req)} bane ${bane}: holdkampen sendes igen`);
         res.json({ success: true });
     } catch (error) {
         next(error);

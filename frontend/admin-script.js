@@ -2973,6 +2973,7 @@ const LS_GRUND = {
     'badmintonplanner': 'Badmintonplanner-kamp — sendes ikke',
     'youtube-fejl': 'Venter på YouTube — se fejlen ved banen',
     'stille': 'Kampen er ikke rørt i 30 minutter — sendes ikke',
+    'holdkamp-stoppet': 'Holdkampen er stoppet for i dag — sendes ikke af sig selv',
     'ingen-bane': 'Banen findes ikke'
 };
 
@@ -3306,19 +3307,62 @@ function livestreamLydAendret(input) {
     if (advarsel) advarsel.hidden = !input.checked;
 }
 
+// Holdkampen bag banen: holdkampe sendes af sig selv, så her står hvorfor banen
+// sendes (eller ikke gør), og den kan stoppes for resten af dagen. Før kunne en
+// holdkamp kun stoppes ved at slå livestream fra for banen.
+function livestreamHoldkampHtml(b) {
+    const h = b.holdkamp;
+    if (!h) return '';
+    const hold = escapeHtml(h.hold);
+    const varighed = (min) => (min >= 60 ? `${Math.floor(min / 60)} t ${min % 60} min` : `${min} min`);
+    // En delkamp, der har stået længe som i gang (walkover ikke tastet, skade),
+    // er oftest forklaringen — sig hvilken
+    const d = h.delkamp;
+    const delkamp = d && d.min !== null && d.min >= 45
+        ? ` · ${escapeHtml(d.navne)}${d.bane ? ` på bane ${d.bane}` : ''} har stået som i gang i ${varighed(d.min)}`
+        : '';
+    if (h.stoppet) {
+        return `<div class="ls-holdkamp"><span class="maerke maerke--neutral">Stoppet for i dag</span>
+            <span class="tekst-mindre tekst-daempet">Holdkampen ${hold} sendes ikke af sig selv før i morgen</span>
+            <button class="btn-secondary btn-sm" onclick="stopLivestreamHoldkamp(${b.bane}, false)">Send holdkampen igen</button></div>`;
+    }
+    if (h.sendes) {
+        return `<div class="ls-holdkamp"><span class="maerke maerke--igang">Holdkamp</span>
+            <span class="tekst-mindre tekst-daempet">${hold} sendes af sig selv, så længe den spilles${delkamp}</span>
+            <button class="btn-danger btn-sm" onclick="stopLivestreamHoldkamp(${b.bane}, true)">Stop for i dag</button></div>`;
+    }
+    const hvorfor = h.forladt === 'ny-dag' ? 'den er fra en tidligere dag'
+        : h.forladt === 'stille' ? 'ingen har talt på den i 30 minutter'
+        : 'den venter på en delkamp';
+    return `<div class="ls-holdkamp"><span class="tekst-mindre tekst-daempet">Holdkampen ${hold} sendes ikke af sig selv: ${hvorfor}${delkamp}</span></div>`;
+}
+
 // "Send hele dagen" (en turnering), eller hvad tabletten har startet
 function livestreamStartHtml(b) {
     if (!b.enabled || !(b.noegle || livestreamYoutubeVirker())) return '';
     const kl = (iso) => new Date(iso).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
     const stop = `<button class="btn-danger btn-sm" onclick="stopLivestreamBane(${b.bane})">Stop</button>`;
     if (b.start === 'hele-dagen') {
+        // Hele dagen sender alt på banen — holdkampens egen linje ville kun forvirre
         return `<span class="maerke maerke--igang">Sendes hele dagen</span>
             <span class="tekst-mindre tekst-daempet">også mellem kampene, til kl. ${kl(b.til)}</span>${stop}`;
     }
-    if (b.start === 'valgt') return `<span class="tekst-mindre tekst-daempet">Startet på tabletten — kampen på banen sendes</span>${stop}`;
-    if (b.start === 'klar') return `<span class="tekst-mindre tekst-daempet">Startet på tabletten — den næste kamp sendes, hvis den starter inden kl. ${kl(b.til)}</span>${stop}`;
-    return `<button class="btn-secondary btn-sm" onclick="startLivestreamHeleDagen(${b.bane})">Send hele dagen</button>
+    const holdkamp = livestreamHoldkampHtml(b);
+    if (b.start === 'valgt') return `${holdkamp}<span class="tekst-mindre tekst-daempet">Startet på tabletten — kampen på banen sendes</span>${stop}`;
+    if (b.start === 'klar') return `${holdkamp}<span class="tekst-mindre tekst-daempet">Startet på tabletten — den næste kamp sendes, hvis den starter inden kl. ${kl(b.til)}</span>${stop}`;
+    return `${holdkamp}<button class="btn-secondary btn-sm" onclick="startLivestreamHeleDagen(${b.bane})">Send hele dagen</button>
         <span class="tekst-mindre tekst-daempet">fx til en turnering: alt på banen, også mellem kampene, til TV-PC'en slukker kl. 23:59</span>`;
+}
+
+// "Stop for i dag" (stop = true) eller "Send holdkampen igen"
+async function stopLivestreamHoldkamp(bane, stop) {
+    try {
+        await api.request(`/livestream/baner/${bane}/holdkamp-stop`, { method: stop ? 'POST' : 'DELETE' });
+    } catch (e) {
+        livestreamBesked(bane, e.message, true);
+        return;
+    }
+    await loadLivestream();
 }
 
 async function startLivestreamHeleDagen(bane) {
