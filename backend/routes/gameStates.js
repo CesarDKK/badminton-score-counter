@@ -800,7 +800,12 @@ router.post('/:courtId/taeller', requireWriteAuthInClubMode, kunEgenBane('courtI
                 publishGameStateChange(req, req.params.courtId, 'taeller');
             }
         } else if (row && row.taeller_id === id) {
-            await query('UPDATE game_states SET taeller_set_at = UTC_TIMESTAMP(3) WHERE court_id = ?', [court.id]);
+            // updated_at = updated_at: et livstegn er ikke en ændring af stillingen.
+            // updated_at er "sidst talt/gemt" (livestreamens "ingen har rørt kampen i
+            // 30 minutter") — før flyttede livstegnet den hvert 10. sekund, så en
+            // tablet, der bare stod tændt på en forladt kamp, så aktiv ud. Om
+            // enheden lever, står i taeller_set_at (se scheduler: frigivelse efter 10 min).
+            await query('UPDATE game_states SET taeller_set_at = UTC_TIMESTAMP(3), updated_at = updated_at WHERE court_id = ?', [court.id]);
             row = await hent();
         }
 

@@ -123,6 +123,9 @@ async function releaseInactiveCourts(dbLabel) {
            AND gs.match_start_time IS NOT NULL
            AND gs.match_completed = FALSE
            AND gs.updated_at < NOW() - INTERVAL ${INACTIVITY_MINUTES} MINUTE
+           -- ...og tælleren (tablettens livstegn hvert 10. sekund) har heller ikke givet lyd.
+           -- Livstegnet flytter ikke længere updated_at; taeller_set_at er i UTC.
+           AND (gs.taeller_set_at IS NULL OR gs.taeller_set_at < UTC_TIMESTAMP() - INTERVAL ${INACTIVITY_MINUTES} MINUTE)
            AND NOT EXISTS (
                SELECT 1 FROM team_match_games g
                  JOIN team_matches tm ON tm.id = g.team_match_id

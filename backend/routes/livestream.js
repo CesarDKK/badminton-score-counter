@@ -246,12 +246,18 @@ const plannerPaaBane = (bane) => queryOne(
        JOIN planner_rounds r ON r.id = a.round_id WHERE a.court_number = ?`, [bane]);
 
 // Den igangværende holdkamp, banen har haft en delkamp i — kun holdkampe
-// sendes af sig selv, og hele holdkampen i ét (se ls.holdkampNu). null: ingen
+// sendes af sig selv, og hele holdkampen i ét (se ls.holdkampNu). null: ingen.
+// roert: hvornår der sidst blev gemt en stilling på en bane med en delkamp i
+// gang (game_states.updated_at — tablettens livstegn flytter den ikke)
 const holdkampPaaBane = async (bane) => {
     const r = await queryOne(
         `SELECT SUM(g.status <> 'finished') AS mangler, SUM(g.status = 'active') AS igang,
-                MAX(g.finished_at) AS slut, MAX(g.started_at) AS start
-           FROM team_matches tm JOIN team_match_games g ON g.team_match_id = tm.id
+                MAX(g.finished_at) AS slut, MAX(g.started_at) AS start,
+                MAX(CASE WHEN g.status = 'active' THEN gs.updated_at END) AS roert
+           FROM team_matches tm
+           JOIN team_match_games g ON g.team_match_id = tm.id
+           LEFT JOIN courts c ON c.court_number = g.court_number
+           LEFT JOIN game_states gs ON gs.court_id = c.id
           WHERE tm.status = 'active'
             AND tm.id IN (SELECT team_match_id FROM team_match_games WHERE court_number = ?)`, [bane]);
     return r && r.mangler != null ? r : null;

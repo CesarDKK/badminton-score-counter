@@ -31,7 +31,7 @@ const STILLE_MS = 30 * 60 * 1000;
 const KLAR_MS = 5 * 60 * 1000;           // "Start livestream" venter så længe på en kamp
 const VALGT_MAX_MS = 4 * 60 * 60 * 1000; // en valgt kamp glemmes senest efter 4 timer
 const SIDSTE_MS = 5 * 60 * 1000;         // hele dagen: den sidste kamp i billedet så længe (som TV'et)
-const HOLDKAMP_PAUSE_MS = 45 * 60 * 1000; // holdkamp uden delkamp i gang så længe: forladt
+const HOLDKAMP_PAUSE_MS = 45 * 60 * 1000; // holdkamp uden start/slut på en delkamp så længe (og ingen tælling i STILLE_MS): forladt
 const NAVN_MAX = 26;
 
 const tekst = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, max);
@@ -245,15 +245,35 @@ function startet(o, nu = Date.now()) {
     return null;
 }
 
+// Datoen i dansk tid ('2026-11-06') — en holdkamp sendes kun den dag, den spilles
+const danskDato = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Copenhagen' }).format(ms);
+
 // Holdkampen, banen er med i (routes: holdkampPaaBane): { mangler, igang,
-// slut, start } — delkampe der ikke er færdige, delkampe i gang, og hvornår
-// den seneste sluttede og startede. koerer: der er delkampe tilbage, og
-// holdkampen er ikke forladt; slut: alle delkampe er færdige, den sidste da
+// slut, start, roert } — delkampe der ikke er færdige, delkampe i gang, hvornår
+// den seneste sluttede og startede (blev sat på en bane), og hvornår der sidst
+// blev talt på en bane med en delkamp i gang. koerer: der er delkampe tilbage,
+// og holdkampen er ikke forladt; slut: alle delkampe er færdige, den sidste da.
+//
+// Forladt (forladt: 'stille' eller 'ny-dag') er en holdkamp, hvor
+//   - ingen delkamp er startet eller afsluttet i 45 minutter, og der ikke er
+//     talt på en delkamp i gang i 30 minutter. Før holdt en delkamp, der bare
+//     STOD som i gang (walkover aldrig tastet, skade), banen i luften uden
+//     grænse — også dagen efter, mens andre trænede på den;
+//   - eller den seneste delkamp startede eller sluttede en tidligere dag. En
+//     holdkamp fra i går sendes aldrig af sig selv, heller ikke hvis nogen
+//     tæller på dens bane i dag. (Sættes delkampene på banerne dagen før,
+//     sendes der derfor først fra den første, der startes eller afsluttes på dagen.)
 function holdkampNu(h, nu = Date.now()) {
     if (!h) return { koerer: false, slut: null };
     if (Number(h.mangler) > 0) {
         const sidst = Math.max(tid(h.slut) ?? 0, tid(h.start) ?? 0);
-        return { koerer: Number(h.igang) > 0 || nu - sidst < HOLDKAMP_PAUSE_MS, slut: null };
+        if (!sidst) return { koerer: false, slut: null };   // ingen delkamp har været på en bane
+        if (danskDato(sidst) !== danskDato(nu)) return { koerer: false, slut: null, forladt: 'ny-dag' };
+        const nylig = nu - sidst < HOLDKAMP_PAUSE_MS;
+        const roert = tid(h.roert);
+        const taelles = Number(h.igang) > 0 && roert !== null && nu - roert < STILLE_MS;
+        if (nylig || taelles) return { koerer: true, slut: null };
+        return { koerer: false, slut: null, forladt: 'stille' };
     }
     return { koerer: false, slut: tid(h.slut) };
 }

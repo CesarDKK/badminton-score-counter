@@ -78,6 +78,44 @@ test('holdkampe sendes af sig selv — uden afbrydelser mellem delkampene', () =
     assert.deepEqual(ls.beslutning({ opsaetning: OPS, gs: gs({ player1_score: 5 }), nu: NU }), { send: false, grund: 'ikke-startet' });
 });
 
+test('holdkamp: en delkamp, der bare STÅR som i gang, holder ikke banen i luften', () => {
+    // Walkover aldrig tastet: delkampen blev sat på en bane for 2 timer siden,
+    // ingen har talt på den, og intet andet er sket i holdkampen
+    const glemt = { mangler: 2, igang: 1, slut: new Date(NU - 100 * MIN), start: new Date(NU - 120 * MIN), roert: null };
+    assert.deepEqual(ls.holdkampNu(glemt, NU), { koerer: false, slut: null, forladt: 'stille' });
+    assert.equal(ls.beslutning({ opsaetning: OPS, gs: null, holdkamp: glemt, nu: NU }).send, false);
+    // ...heller ikke når stillingen sidst blev gemt for 40 minutter siden (skade, tablet stadig tændt)
+    assert.equal(ls.holdkampNu({ ...glemt, roert: new Date(NU - 40 * MIN) }, NU).koerer, false);
+
+    // En lang delkamp, der stadig tælles, sendes — også når den blev sat på banen for længe siden
+    const lang = { mangler: 1, igang: 1, slut: new Date(NU - 70 * MIN), start: new Date(NU - 65 * MIN), roert: new Date(NU - MIN) };
+    assert.deepEqual(ls.holdkampNu(lang, NU), { koerer: true, slut: null });
+    assert.equal(ls.beslutning({ opsaetning: OPS, gs: gs(), holdkamp: lang, nu: NU }).grund, 'holdkamp');
+    // Tælling på en bane tæller kun, når en delkamp står i gang
+    assert.equal(ls.holdkampNu({ ...lang, igang: 0 }, NU).koerer, false);
+    // Lige startet eller afsluttet delkamp: sendes som før, uanset tælling
+    assert.equal(ls.holdkampNu({ mangler: 5, igang: 1, slut: null, start: new Date(NU - 44 * MIN), roert: null }, NU).koerer, true);
+    assert.equal(ls.holdkampNu({ mangler: 5, igang: 1, slut: null, start: new Date(NU - 46 * MIN), roert: null }, NU).koerer, false);
+    // Ingen delkamp har været på en bane endnu
+    assert.deepEqual(ls.holdkampNu({ mangler: 6, igang: 0, slut: null, start: null, roert: null }, NU), { koerer: false, slut: null });
+});
+
+test('holdkamp fra i går sendes ikke af sig selv — heller ikke når nogen tæller på dens bane', () => {
+    // NU er 15. jan. 2027 kl. 09:00 dansk tid; delkampen blev sat på banen i går aftes
+    const iGaar = { mangler: 1, igang: 1, slut: new Date(NU - 13 * 60 * MIN), start: new Date(NU - 12 * 60 * MIN), roert: new Date(NU - MIN) };
+    assert.deepEqual(ls.holdkampNu(iGaar, NU), { koerer: false, slut: null, forladt: 'ny-dag' });
+    assert.equal(ls.beslutning({ opsaetning: OPS, gs: gs({ player1_score: 4 }), holdkamp: iGaar, nu: NU }).grund, 'ikke-startet');
+    // Datoen er den danske: kl. 00:30 dansk tid er 23:30 UTC dagen før — samme danske dag som 00:10
+    const midnat = Date.UTC(2027, 0, 14, 23, 30);   // 15. jan. 00:30 dansk tid
+    const lidtFoer = { mangler: 1, igang: 1, slut: null, start: new Date(midnat - 20 * MIN), roert: null };   // 00:10 dansk tid
+    assert.equal(ls.holdkampNu(lidtFoer, midnat).koerer, true);
+    // ...men 23:50 dansk tid aftenen før er en anden dag
+    assert.equal(ls.holdkampNu({ ...lidtFoer, start: new Date(midnat - 40 * MIN) }, midnat).forladt, 'ny-dag');
+    // "Send hele dagen" og tablettens start gælder stadig
+    const heleDagen = { ...OPS, all_day_until: new Date(NU + 60 * MIN) };
+    assert.equal(ls.beslutning({ opsaetning: heleDagen, gs: null, holdkamp: iGaar, nu: NU }).grund, 'hele-dagen');
+});
+
 test('tablettens "Start livestream": kampen på banen — og ikke den næste', () => {
     const klar = { ...OPS, armed_until: new Date(NU + 4 * MIN) };
     // Kampen på banen (eller den næste, der sættes på inden 5 minutter) bliver valgt
