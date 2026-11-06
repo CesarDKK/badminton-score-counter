@@ -103,17 +103,14 @@ async function ytStyr(req, f, bane, o, b, { rk, dbl, senderNu, tvingTjek }) {
     const handling = ls.ytHandling({ send: b.send, udsendelse: o.yt_broadcast_id,
         tjek: tvingTjek ? null : o.yt_broadcast_tjek, fejlTid: o.yt_fejl_tid });
     if (!handling && (gemt || !b.send)) return gemt;
-    // Skal der oprettes noget nyt (nøgle eller udsendelse)? Ikke når klubben har
-    // brugt sin del af dagens kvote, eller Google har meldt den brugt op. En
-    // udsendelse, der kører, tjekkes og afsluttes stadig.
+    // Skal der oprettes noget nyt (nøgle eller udsendelse)? Ikke når Google har
+    // meldt dagens kvote brugt op — kaldet ville bare blive afvist. Der er intet
+    // loft pr. klub. En udsendelse, der kører, tjekkes og afsluttes stadig.
     if (handling === 'opret' || (b.send && !gemt)) {
-        const spaerret = youtubeKvote.spaerretForNyt(tenantKey(req));
-        if (spaerret) {
+        if (youtubeKvote.opbrugtIDag()) {
             const kl = new Date(youtubeKvote.nulstilles()).toLocaleTimeString('da-DK',
                 { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Copenhagen' });
-            const besked = spaerret === 'klub'
-                ? `Klubbens del af dagens YouTube-kvote er brugt (${youtubeKvote.klubLoft()} enheder) — nye udsendelser kan oprettes igen kl. ${kl}`
-                : `YouTube-API'ets kvote for i dag er brugt op — nye udsendelser kan oprettes igen kl. ${kl}`;
+            const besked = `YouTube-API'ets kvote for i dag er brugt op — nye udsendelser kan oprettes igen kl. ${kl}`;
             await query('UPDATE court_streams SET yt_fejl = ?, yt_fejl_tid = UTC_TIMESTAMP() WHERE court_number = ?', [besked, bane]);
             _ytPauseTil.set(laas, Date.now() + ls.YT_KVOTE_PAUSE_MS);
             if (o.yt_fejl !== besked) console.log(`[livestream] ${laas}: ${besked}`);

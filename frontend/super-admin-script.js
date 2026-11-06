@@ -1282,13 +1282,14 @@ function renderYoutubeKvote(k) {
         return `${+d}/${+m}: ${ytTal(h.enheder)}${h.opbrugt ? ' (opbrugt)' : ''}`;
     });
     document.getElementById('ytKvoteHistorik').textContent = hist.length ? `Seneste dage: ${hist.join(' · ')}` : '';
-    // Pr. klub i dag — og loftet, så én klub ikke kan bruge hele den fælles kvote.
+    // Hvem bruger hvad: pr. klub i dag (med andel af dagens kvote) og de seneste
+    // 7 dage. Der er intet loft pr. klub — tallene er til at tage en snak ud fra.
     // Klubben står med navn, når den kendes (db_name ellers; 'direct' er demoen).
     const klubNavn = (db) => (db === 'direct' ? 'demoen' : ((clubs || []).find(c => c.db_name === db) || {}).name || db);
     const prKlub = (k.klubber || []).map(x =>
-        `${klubNavn(x.klub)}: ${ytTal(x.enheder)}${k.klubLoft && x.enheder >= k.klubLoft ? ' (loftet nået)' : ''}`);
-    document.getElementById('ytKvoteKlubber').textContent = k.klubLoft
-        ? `${prKlub.length ? `Pr. klub i dag: ${prKlub.join(' · ')}. ` : ''}Hver klub kan højst bruge ${ytTal(k.klubLoft)} enheder på et døgn (halvdelen) — derefter oprettes der ikke nye udsendelser for klubben før nulstillingen.`
+        `${klubNavn(x.klub)}: ${ytTal(x.enheder)} i dag (${Math.round(x.enheder / k.graense * 100)} %), ${ytTal(x.uge)} på 7 dage`);
+    document.getElementById('ytKvoteKlubber').textContent = prKlub.length
+        ? `Pr. klub: ${prKlub.join(' · ')}. Klubberne bruger frit af den fælles kvote.`
         : '';
     const felt = document.getElementById('ytKvoteGraense');
     if (document.activeElement !== felt) felt.value = k.graense;
