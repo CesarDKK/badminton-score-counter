@@ -22,95 +22,92 @@
         }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         html, body { margin: 0; background: var(--bg); color: var(--tekst); }
-        /* Siden fylder hele urets skærm (100lvh: som når adresselinjen er rullet
-           væk), og ur-script.js ruller selv adresselinjen væk. At presse siden ind
-           under adresselinjen (100dvh) gav ikke plads nok — den tager næsten
-           halvdelen af skærmen, og tastaturet blev klemt sammen. Knapperne har en
-           mindstehøjde: passer noget alligevel ikke, kan der rulles i stedet for,
-           at det klemmes. Ingen overflow: hidden på body — den gælder hele
-           siden, så adresselinjen ikke kunne rulles væk */
+        /* Urets adresselinje (✕, klokken og adressen) tager næsten halvdelen af
+           skærmen og kan ikke rulles væk — den kommer tilbage, når rulningen
+           stopper. Siden passer derfor i området under den (100dvh), og alt er
+           lavet kompakt til det: én linje pr. spiller, tastatur i 3 rækker, ingen
+           overskrift på kodesiden. Knapperne har en mindstehøjde, så de aldrig
+           klemmes sammen — er skærmen for lille, kan der rulles i stedet */
         body {
             min-height: 100vh;
-            min-height: 100lvh;
+            min-height: 100dvh;
             display: flex; flex-direction: column;
             font-family: -apple-system, system-ui, sans-serif;
-            padding: max(4px, env(safe-area-inset-top)) 4px max(4px, env(safe-area-inset-bottom));
+            padding: 2px 3px max(3px, env(safe-area-inset-bottom));
             user-select: none;
             -webkit-user-select: none;
         }
         button { font: inherit; color: inherit; border: 0; cursor: pointer; }
         .skjult { display: none !important; }
-        .side { display: flex; flex-direction: column; gap: 4px; flex: 1 0 auto; }
+        .side { display: flex; flex-direction: column; gap: 3px; flex: 1 0 auto; }
         .side > * { flex-shrink: 0; }
         .lille { font-size: 11px; color: var(--daempet); text-align: center; line-height: 1.25; }
-        h1 { font-size: 15px; margin: 2px 0; text-align: center; }
 
-        /* Koden: tastaturet fylder resten af skærmen */
-        #kodeVisning { font-size: 22px; letter-spacing: 0.12em; text-align: center; line-height: 1.2; font-variant-numeric: tabular-nums; }
+        /* Koden: tastaturet (4 × 3) fylder resten af skærmen */
+        #kodeVisning { font-size: 20px; letter-spacing: 0.12em; text-align: center; line-height: 1.15; font-variant-numeric: tabular-nums; }
+        #kodeTekst.fejl { color: var(--advarsel); }
         .side > .tastatur { flex: 1 0 auto; }
-        .tastatur { display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: minmax(28px, 1fr); gap: 3px; }
+        .tastatur { display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: minmax(26px, 1fr); gap: 3px; }
         .tastatur button { background: var(--kort); border-radius: 8px; padding: 0; font-size: 17px; }
-        .tastatur .ok { background: var(--accent); }
+        .tastatur .ok { background: var(--accent); font-size: 14px; font-weight: 700; }
 
-        /* Tællingen: to store knapper, spillerne står fast hele kampen */
-        .side > .spiller, .side > .stor { flex: 1 0 0; min-height: 48px; }
+        /* Tællingen: to store knapper, spillerne står fast hele kampen. Kun navn
+           og point — sættene står på TV'et */
+        .side > .spiller, .side > .stor { flex: 1 0 0; min-height: 34px; }
         .spiller {
             display: flex; align-items: center; justify-content: space-between; gap: 6px;
             background: var(--kort);
             border: 2px solid var(--kant);
-            border-radius: 14px;
-            padding: 4px 10px;
+            border-radius: 12px;
+            padding: 0 10px;
             overflow: hidden;
             text-align: left;
         }
         .spiller:active { background: #2a2740; }
         .spiller[disabled] { opacity: 0.45; }
         .spiller.serv { border-color: var(--accent); }
-        .spiller .navn { font-size: 13px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-        .spiller .saet { font-size: 11px; color: var(--daempet); }
-        .spiller .point { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .spiller .navn { flex: 1; min-width: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .spiller .point { font-size: 30px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
         .spiller.vinder { border-color: var(--vind); }
-        .raekke { display: flex; gap: 4px; }
-        .raekke button { flex: 1; background: var(--kort); border-radius: 10px; padding: 6px 0; font-size: 13px; }
-        .raekke .primaer { background: var(--accent); }
-        #status { min-height: 14px; }
+        .raekke { display: flex; gap: 3px; }
+        .raekke button { flex: 1; background: var(--kort); border-radius: 10px; padding: 5px 0; font-size: 13px; }
+        .raekke .primaer { background: var(--accent); font-weight: 700; }
+        #status:empty { display: none; }
         #status.venter { color: var(--daempet); }
         #status.fejl { color: var(--advarsel); }
 
         /* Pausen og kampslut: stillingen står på TV'et, så uret viser kun det,
            der skal trykkes på — store knapper, der fylder skærmen */
         .stor {
-            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
             background: var(--kort);
             border: 2px solid var(--kant);
-            border-radius: 14px;
-            font-size: 20px; font-weight: 700;
+            border-radius: 12px;
+            font-size: 18px; font-weight: 700;
         }
         .stor:active { background: #2a2740; }
         .stor.primaer { background: var(--accent); border-color: var(--accent); }
         .stor.primaer:active { filter: brightness(0.9); }
-        .stor .tid { font-size: 13px; font-weight: 400; font-variant-numeric: tabular-nums; }
+        .stor .tid { font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
         #kampSide.i-pause .spiller, #kampSide.slut .spiller { display: none; }
         /* Kampslut: Fortryd er lige så stor som "Ny kamp" og "Færdig" */
-        #kampSide.slut .raekke { flex: 1 0 0; min-height: 48px; }
-        #kampSide.slut .raekke button { border: 2px solid var(--kant); border-radius: 14px; font-size: 20px; font-weight: 700; }
+        #kampSide.slut .raekke { flex: 1 0 0; min-height: 34px; }
+        #kampSide.slut .raekke button { border: 2px solid var(--kant); border-radius: 12px; font-size: 18px; font-weight: 700; }
     </style>
 </head>
 <body>
     <!-- 1. Banens kode fra TV'et -->
     <div id="kodeSide" class="side skjult">
-        <h1>Tæl fra Apple Watch</h1>
-        <div class="lille">Tast koden fra banens TV</div>
+        <div id="kodeTekst" class="lille">Tast koden fra banens TV</div>
         <div id="kodeVisning"></div>
         <div class="tastatur" id="tastatur"></div>
-        <div id="kodeFejl" class="lille" style="color: var(--advarsel)"></div>
     </div>
 
     <!-- 2. Kampen -->
     <div id="kampSide" class="side skjult">
         <div class="lille" id="overskrift"></div>
-        <button class="spiller" id="side0"><span><span class="navn"></span><br><span class="saet"></span></span><span class="point"></span></button>
-        <button class="spiller" id="side1"><span><span class="navn"></span><br><span class="saet"></span></span><span class="point"></span></button>
+        <button class="spiller" id="side0"><span class="navn"></span><span class="point"></span></button>
+        <button class="spiller" id="side1"><span class="navn"></span><span class="point"></span></button>
         <!-- Pausen ved 11 (8) og mellem sæt: kun "Fortsæt" med nedtællingen -->
         <button id="naeste" class="stor primaer skjult"><span>Fortsæt</span><span class="tid"></span></button>
         <!-- Kampen er slut: spil videre, eller log uret ud -->
@@ -118,6 +115,8 @@
         <button id="faerdig" class="stor skjult">Færdig</button>
         <div class="raekke">
             <button id="fortryd">↶ Fortryd</button>
+            <!-- Serveren er valgt: kampen begynder (TV'et skifter til kampen) -->
+            <button id="startKamp" class="primaer skjult">Start kamp</button>
             <button id="overtag" class="primaer skjult">Overtag</button>
             <button id="faerdigLille" class="skjult">Færdig</button>
         </div>
@@ -125,6 +124,6 @@
     </div>
 
     <script src="js/taeller-regler.js?v=2"></script>
-    <script src="ur-script.js?v=6"></script>
+    <script src="ur-script.js?v=7"></script>
 </body>
 </html>
