@@ -16,6 +16,7 @@ const sharp = require('sharp');
 const AdmZip = require('adm-zip');
 const logoUpload = require('../config/logoUpload');
 const { bevarKlub } = require('../config/tenantPools');
+const migrationRunner = require('../config/migrationRunner');
 const { validateImageMagic } = require('../config/imageUpload');
 
 // Gyldige side-noegler for klub-admins per-side adgangsstyring.
@@ -116,6 +117,8 @@ router.get('/clubs', superAdminAuth, async (req, res, next) => {
         let haendelser = {};
         try { haendelser = await skaermHaendelser.antalSenesteDoegn(); } catch { /* vises bare ikke */ }
         for (const c of clubs) c.skaerm_haendelser_doegn = haendelser[c.db_name] || 0;
+        // Migrationer, der fejlede ved seneste opstart (eller da klubben blev oprettet)
+        for (const c of clubs) c.migrationsfejl = (migrationRunner.statusFor(c.db_name) || { fejl: [] }).fejl;
         res.json(clubs);
     } catch (error) {
         next(error);
@@ -170,8 +173,8 @@ router.post('/clubs', superAdminAuth, async (req, res, next) => {
         // Generer database navn ud fra subdomain (fx aarhus-badminton → aarhus_badminton)
         const dbName = subdomain.replace(/-/g, '_');
 
-        // Opret klub-database
-        await masterDb.createClubDatabase(dbName);
+        // Opret klub-database (init.sql + migrationerne)
+        const migreret = await masterDb.createClubDatabase(dbName);
 
         // Gem klub i master databasen
         const result = await masterDb.query(
@@ -183,6 +186,9 @@ router.post('/clubs', superAdminAuth, async (req, res, next) => {
             'SELECT id, name, subdomain, db_name, is_active, created_at FROM clubs WHERE id = ?',
             [result.insertId]
         );
+        // Klubben er oprettet, men en migration fejlede: sig det, i stedet for
+        // at svare, som om alt er godt (før stod det kun i loggen)
+        club.migrationsfejl = (migreret && migreret.fejl) || [];
 
         res.status(201).json(club);
     } catch (error) {

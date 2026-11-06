@@ -7,6 +7,7 @@ require('dotenv').config();
 
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk, startUgentligBackup, startSkaermLogOprydning, startUrPauser } = require('./scheduler');
+const opstart = require('./config/opstart');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -38,19 +39,22 @@ app.get('/api/mode', (req, res) => {
     });
 });
 
-// Health check
+// Health check. Først "healthy", når opstarten er færdig: databasen har svaret,
+// migrationerne er kørt, og baggrundsjobbene er startet (config/opstart.js). Før
+// var den grøn, så snart databasen svarede — også når opstarten havde givet op.
 app.get('/health', async (req, res) => {
+    const felter = { timestamp: new Date().toISOString(), uptime: process.uptime() };
+    if (!opstart.erKlar()) {
+        return res.status(503).json({ status: 'starting', ...felter, database: 'waiting' });
+    }
     try {
         const db = require('./config/database');
         await db.query('SELECT 1');
-        res.json({
-            status: 'healthy',
-            timestamp: new Date().toISOString(),
-            uptime: process.uptime(),
-            database: 'connected'
-        });
+        res.json({ status: 'healthy', ...felter, database: 'connected' });
     } catch (error) {
-        res.status(503).json({ status: 'unhealthy', error: error.message, database: 'disconnected' });
+        // Fejlteksten (fx adresse og bruger på databasen) hører ikke hjemme i et offentligt svar
+        console.error('✗ /health: databasen svarer ikke:', error.message);
+        res.status(503).json({ status: 'unhealthy', ...felter, database: 'disconnected' });
     }
 });
 
@@ -145,39 +149,64 @@ async function waitForDatabase(maxRetries = 10, initialDelayMs = 2000) {
     }
 }
 
-const server = app.listen(PORT, '0.0.0.0', async () => {
+// Opstarten: vent på databasen, klargør master-databasen, kør migrationerne og
+// start baggrundsjobbene. Lykkes det ikke (databasen er længe om at komme op
+// efter en genstart af serveren), prøves der igen, til det gør — før gav den op
+// efter ca. halvandet minut, og så kørte hverken migrationer eller job, før
+// nogen tilfældigt genstartede backenden.
+const OPSTART_IGEN_MS = 15000;
+let jobStartet = false;
+
+async function startOp() {
+    for (;;) {
+        opstart.forsoeg();
+        try {
+            await waitForDatabase();
+            console.log('✓ Database connection successful');
+
+            const masterDb = require('./config/masterDatabase');
+            await masterDb.initialize();
+            await require('./config/youtubeKlient').indlaes()
+                .catch(e => console.error('✗ YouTube-klienten kunne ikke indlæses:', e.message));
+            await require('./config/youtubeKvote').indlaes()
+                .catch(e => console.error('✗ YouTube-kvoten kunne ikke indlæses:', e.message));
+
+            const { runMigrationsForAllDatabases } = require('./config/migrationRunner');
+            const m = await runMigrationsForAllDatabases();
+            if (m.medFejl) console.error(`✗ ${m.medFejl} database(r) har migrationer, der fejlede — se Serverens helbred i super-admin`);
+
+            // Jobbene startes kun én gang, også hvis et forsøg mere bliver nødvendigt
+            if (!jobStartet) {
+                jobStartet = true;
+                startMidnightReset();
+                startExpirationCheck();
+                startInactivityCheck();
+                startTournamentAutoSync();
+                startHoldkampWatch();
+                startHoldkampAutoAfslut();
+                startPlannerVindueLuk();
+                startUgentligBackup();
+                startSkaermLogOprydning();
+                startUrPauser();
+            }
+
+            opstart.nuKlar();
+            console.log('✓ Opstarten er færdig — baggrundsjobbene kører');
+            return;
+        } catch (error) {
+            opstart.fejlede(error.message);
+            console.error(`✗ Opstarten lykkedes ikke (${error.message}) — prøver igen om ${OPSTART_IGEN_MS / 1000} s. Ingen baggrundsjob kører endnu.`);
+            await new Promise(resolve => setTimeout(resolve, OPSTART_IGEN_MS));
+        }
+    }
+}
+
+const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`✓ Server running on port ${PORT}`);
     console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`✓ APP_DOMAIN: ${process.env.APP_DOMAIN || '(ikke sat — lokal mode)'}`);
     console.log(`✓ Health check: http://localhost:${PORT}/health`);
-
-    try {
-        await waitForDatabase();
-        console.log('✓ Database connection successful');
-
-        const masterDb = require('./config/masterDatabase');
-        await masterDb.initialize();
-        await require('./config/youtubeKlient').indlaes()
-            .catch(e => console.error('✗ YouTube-klienten kunne ikke indlæses:', e.message));
-        await require('./config/youtubeKvote').indlaes()
-            .catch(e => console.error('✗ YouTube-kvoten kunne ikke indlæses:', e.message));
-
-        const { runMigrationsForAllDatabases } = require('./config/migrationRunner');
-        await runMigrationsForAllDatabases();
-
-        startMidnightReset();
-        startExpirationCheck();
-        startInactivityCheck();
-        startTournamentAutoSync();
-        startHoldkampWatch();
-        startHoldkampAutoAfslut();
-        startPlannerVindueLuk();
-        startUgentligBackup();
-        startSkaermLogOprydning();
-        startUrPauser();
-    } catch (error) {
-        console.error('✗ Database connection failed:', error.message);
-    }
+    startOp();
 });
 
 const gracefulShutdown = async (signal) => {

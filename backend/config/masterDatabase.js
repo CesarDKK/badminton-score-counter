@@ -254,8 +254,10 @@ async function createClubDatabase(dbName) {
         // migrationerne som koerte uden at koere dem efterlod nye klubber uden
         // turneringsfunktion. Migrationskoereren ignorerer "findes allerede"
         // for alt det init.sql daekker, og opretter kun det der mangler.
+        // Returnerer { db, koert, fejl } — fejl er migrationer, der ikke kunne
+        // køres, så den, der opretter klubben, kan få det at vide.
         const { runMigrationsForDatabase } = require('./migrationRunner');
-        await runMigrationsForDatabase(dbName);
+        return await runMigrationsForDatabase(dbName);
     } finally {
         await conn.end();
     }
