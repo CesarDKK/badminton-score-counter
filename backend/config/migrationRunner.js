@@ -133,14 +133,50 @@ function splitStatements(sql) {
     return statements.filter(s => !/^USE\b/i.test(udenKommentarer(s)));
 }
 
+// Udfaldet af den seneste kørsel pr. database, til super-admin. En fejlet
+// migration stod før kun i containerens log: klubben fik fejl på alt, der brugte
+// de nye kolonner, og ingen kunne se hvorfor.
+// db -> { tid, koert, fejl: [{ fil, besked }] }   (fil = null: databasen kunne ikke nås)
+const sidsteKoersel = new Map();
+
+function husk(dbName, koert, fejl) {
+    sidsteKoersel.set(dbName, { tid: new Date().toISOString(), koert, fejl });
+    return { db: dbName, koert, fejl };
+}
+
+// Seneste kørsel for én database (null: ikke kørt i denne proces)
+function statusFor(dbName) {
+    return sidsteKoersel.get(dbName) || null;
+}
+
+// Samlet til super-admin: kun databaser med fejl listes
+function status() {
+    const databaser = [...sidsteKoersel.entries()]
+        .filter(([, r]) => r.fejl.length)
+        .map(([db, r]) => ({ db, tid: r.tid, fejl: r.fejl }));
+    return { antal: sidsteKoersel.size, medFejl: databaser.length, databaser };
+}
+
+function _nulstilStatus() { sidsteKoersel.clear(); }
+
+// Kører de migrationer, databasen mangler. Returnerer { db, koert, fejl } —
+// fejl er de migrationer, der ikke kunne køres ([{ fil, besked }]). Kan
+// databasen slet ikke nås, kastes fejlen (og huskes til super-admin).
 async function runMigrationsForDatabase(dbName) {
-    const conn = await getConnection(dbName);
+    let conn;
+    try {
+        conn = await getConnection(dbName);
+    } catch (err) {
+        husk(dbName, 0, [{ fil: null, besked: `Databasen kunne ikke nås: ${err.message}`.slice(0, 300) }]);
+        throw err;
+    }
+    const fejl = [];
+    let count = 0;
     try {
         await ensureMigrationsTable(conn);
         const applied = await getAppliedMigrations(conn);
         const files = getMigrationFiles();
 
-        let count = 0;
         for (const file of files) {
             if (applied.has(file)) continue;
 
@@ -164,6 +200,7 @@ async function runMigrationsForDatabase(dbName) {
                         console.log(`  ⚠ ${file} [${dbName}]: "${err.sqlMessage}" — springer over`);
                     } else {
                         console.error(`  ✗ Migration ${file} fejlede mod ${dbName}: ${err.message}`);
+                        fejl.push({ fil: file, besked: String(err.sqlMessage || err.message).slice(0, 300) });
                         ok = false;
                         break;
                     }
@@ -183,37 +220,56 @@ async function runMigrationsForDatabase(dbName) {
         if (count > 0) {
             console.log(`✓ ${count} migration(er) kørt mod ${dbName}`);
         }
+    } catch (err) {
+        // Fejl uden for selve migrationerne (fx migrations-tabellen) — også til super-admin
+        husk(dbName, count, [...fejl, { fil: null, besked: String(err.message).slice(0, 300) }]);
+        throw err;
     } finally {
         await conn.end();
     }
+    return husk(dbName, count, fejl);
 }
 
 async function runMigrationsForAllDatabases() {
     const defaultDb = process.env.DB_NAME || 'badminton_counter';
     console.log('⏳ Kører database migrationer...');
 
-    // Standard database
+    // Standard database — kan den ikke nås, er databasen ikke klar: opstarten prøver igen
     await runMigrationsForDatabase(defaultDb);
 
     // Multi-tenant: alle aktive klub-databaser
+    let clubs = [];
     try {
         const masterDb = require('./masterDatabase');
-        const clubs = await masterDb.query(
-            'SELECT db_name, is_active FROM clubs WHERE is_active = TRUE'
+        clubs = await masterDb.query(
+            'SELECT db_name, is_active FROM clubs WHERE is_active = TRUE ORDER BY db_name'
         );
-        for (const club of clubs) {
-            await runMigrationsForDatabase(club.db_name);
-        }
-        if (clubs.length > 0) {
-            console.log(`✓ Migrationer tjekket for ${clubs.length} klub(ber)`);
-        }
     } catch (error) {
         if (error.code !== 'ER_NO_SUCH_TABLE' && !error.message.includes("doesn't exist")) {
             console.error('⚠ Kunne ikke hente klub-liste til migrationer:', error.message);
         }
     }
+    // Én klub ad gangen, hver for sig: før stod løkken i én try, så en klub,
+    // hvis database ikke kunne nås, fik alle de efterfølgende klubber sprunget over
+    let fejlede = 0;
+    for (const club of clubs) {
+        try {
+            const r = await runMigrationsForDatabase(club.db_name);
+            if (r.fejl.length) fejlede++;
+        } catch (error) {
+            fejlede++;
+            console.error(`  ✗ Migrationer kunne ikke køres mod ${club.db_name}: ${error.message}`);
+        }
+    }
+    if (clubs.length > 0) {
+        console.log(`✓ Migrationer tjekket for ${clubs.length} klub(ber)${fejlede ? ` — ${fejlede} med fejl (se super-admin)` : ''}`);
+    }
 
     console.log('✓ Database migrationer gennemført');
+    return status();
 }
 
-module.exports = { runMigrationsForDatabase, runMigrationsForAllDatabases, splitStatements };
+module.exports = {
+    runMigrationsForDatabase, runMigrationsForAllDatabases, splitStatements,
+    status, statusFor, _nulstilStatus
+};

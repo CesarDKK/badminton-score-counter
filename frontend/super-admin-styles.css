@@ -398,7 +398,8 @@ header .subtitle {
 .sh-flise-titel { font-size: 0.78em; color: var(--text-muted, rgba(255, 255, 255, 0.62)); text-transform: uppercase; letter-spacing: 0.04em; }
 .sh-flise-tal { font-size: 1.3em; font-weight: 600; color: var(--text-primary, #eaeaea); margin: 2px 0 6px; overflow-wrap: anywhere; }
 .sh-flise-tal small { font-size: 0.62em; font-weight: 400; color: var(--text-muted, rgba(255, 255, 255, 0.62)); }
-.sh-flise-info { font-size: 0.8em; color: var(--text-secondary, rgba(255, 255, 255, 0.78)); line-height: 1.5; }
+/* overflow-wrap: lange filnavne og fejltekster (migrationer, backup) må ikke løbe ud over flisen */
+.sh-flise-info { font-size: 0.8em; color: var(--text-secondary, rgba(255, 255, 255, 0.78)); line-height: 1.5; overflow-wrap: anywhere; }
 .sh-bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; margin-bottom: 6px; }
 .sh-bar-fyld { height: 100%; border-radius: 3px; background: var(--sh-serie-1); }
 .sh-bar--advarsel { background: var(--color-warning, #ffb02e); }

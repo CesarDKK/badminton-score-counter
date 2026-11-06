@@ -14,6 +14,8 @@ const os = require('os');
 const masterDb = require('./masterDatabase');
 const { krypter, dekrypter } = require('./hemmelig');
 const fuldBackup = require('./fuldBackup');
+const opstart = require('./opstart');
+const migrationRunner = require('./migrationRunner');
 
 const API ='https://api.hetzner.cloud/v1';
 const TIMEOUT_MS = 8000;
@@ -201,7 +203,10 @@ function lokal() {
         kerner: os.cpus().length,
         oppetidSek: Math.round(os.uptime()),
         // Den fulde backup (alle databaser + billeder): seneste kørsel og gode dump
-        fuldBackup: fuldBackup.status()
+        fuldBackup: fuldBackup.status(),
+        // Backend-processen: hvornår den startede, om opstarten lykkedes, og
+        // databaser med migrationer, der fejlede
+        backend: opstart.status(migrationRunner.status())
     };
 }
 

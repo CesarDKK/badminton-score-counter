@@ -465,6 +465,7 @@ function renderClubs() {
                     </span>
                     ${autoBackupLinje(club)}
                     ${skaermLinje(club)}
+                    ${migrationsLinje(club)}
                 </div>
             </div>
             <div class="club-actions">
@@ -521,7 +522,12 @@ async function handleCreateClub() {
         renderClubs();
         document.getElementById('newClubName').value = '';
         document.getElementById('newClubSubdomain').value = '';
-        showMsg(msgEl, `✓ ${club.name} er oprettet (${club.subdomain}.badmintonapp.dk)`, 'success');
+        if (club.migrationsfejl && club.migrationsfejl.length) {
+            // Klubben findes, men dens database er ikke helt klar — sig det tydeligt
+            showMsg(msgEl, `${club.name} er oprettet, men ${migrationsTekst(club.migrationsfejl)}. Klubben kan mangle funktioner, til det er rettet.`, 'error');
+        } else {
+            showMsg(msgEl, `✓ ${club.name} er oprettet (${club.subdomain}.badmintonapp.dk)`, 'success');
+        }
     } catch (err) {
         showMsg(msgEl, err.message || 'Oprettelse mislykkedes', 'error');
     } finally {
@@ -1432,6 +1438,22 @@ function autoBackupLinje(club) {
             </span>`;
 }
 
+// "migrationen 040_ur_taelling.sql fejlede: …" — til klubkortet og opret-beskeden
+function migrationsTekst(fejl) {
+    const en = (f) => (f.fil ? `migrationen ${f.fil} fejlede: ${f.besked}` : f.besked);
+    return fejl.length === 1 ? en(fejl[0]) : `${fejl.length} migrationer fejlede (${fejl.map(f => f.fil || 'databasen').join(', ')})`;
+}
+
+// En databaseændring, der ikke kunne køres for klubben ved seneste opstart: så
+// mangler den kolonner eller tabeller, og de nye funktioner giver fejl for den
+function migrationsLinje(club) {
+    const fejl = club.migrationsfejl || [];
+    if (!fejl.length) return '';
+    return `<span class="club-sidst-login club-sidst-login--gammel" title="${escapeHtml(fejl.map(f => `${f.fil || 'databasen'}: ${f.besked}`).join('\n'))}">
+                ${Ikon('advarsel')} Databasen er ikke opdateret: ${escapeHtml(migrationsTekst(fejl))}
+            </span>`;
+}
+
 // Skærm-hændelser det seneste døgn — klik viser klubbens hændelser i loggen nedenfor
 function skaermLinje(club) {
     const n = club.skaerm_haendelser_doegn || 0;
@@ -2011,6 +2033,23 @@ function renderHelbredFliser(d) {
     } else if (fb) {
         fliser.push(shFlise('Fuld backup', 'Ukendt',
             'Ingen status fra backup-tjenesten endnu — den skriver efter sin næste kørsel (kræver den nye docker-compose)'));
+    }
+    // Backend-processen: hvornår den startede, om opstarten lykkedes første gang,
+    // og databaser, hvor en migration fejlede (så mangler de kolonner/tabeller)
+    const be = l.backend;
+    if (be) {
+        const m = be.migrationer || { medFejl: 0, databaser: [], antal: 0 };
+        const info = [`startet ${escapeHtml(formatDate(be.startet))}`];
+        if (be.klarEfterSek !== null) info.push(`klar efter ${shTal(be.klarEfterSek)} s${be.forsoeg > 1 ? ` (${be.forsoeg} forsøg — databasen var længe om at svare)` : ''}`);
+        if (!be.klar) info.push(`Opstarten er ikke færdig (${be.forsoeg} forsøg)${be.fejl ? `: ${escapeHtml(be.fejl)}` : ''} — ingen baggrundsjob kører endnu`);
+        if (m.medFejl) {
+            info.push(...m.databaser.map(d => `${escapeHtml(d.db)}: ${escapeHtml(migrationsTekst(d.fejl))}`));
+        } else if (be.klar) {
+            info.push(`migrationer kørt uden fejl for ${shTal(m.antal)} ${m.antal === 1 ? 'database' : 'databaser'}`);
+        }
+        const niveau = !be.klar ? 'kritisk' : m.medFejl ? 'kritisk' : '';
+        fliser.push(shFlise('Backend', `kørt i ${shVarighed(be.koertSek)}`, info.join('<br>'), null, niveau,
+            !be.klar ? 'Opstarten er ikke færdig' : `${m.medFejl} ${m.medFejl === 1 ? 'database' : 'databaser'} med migrationsfejl`));
     }
     if (s || l.oppetidSek) {
         const navn = s ? `${escapeHtml(s.navn)} <small>${escapeHtml(s.type)}</small>` : 'Serveren';
