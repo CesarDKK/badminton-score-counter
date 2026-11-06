@@ -15,6 +15,7 @@ const fs = require('fs');
 const sharp = require('sharp');
 const AdmZip = require('adm-zip');
 const logoUpload = require('../config/logoUpload');
+const { bevarKlub } = require('../config/tenantPools');
 const { validateImageMagic } = require('../config/imageUpload');
 
 // Gyldige side-noegler for klub-admins per-side adgangsstyring.
@@ -483,7 +484,7 @@ router.get('/clubs/:id/backup', superAdminAuth, async (req, res, next) => {
 // POST /api/super-admin/clubs/:id/restore — restore backup for one club.
 // Først tages en "før gendannelse"-backup (som på klubbens egen side), så
 // gendannelsen kan fortrydes; fejler den, gendannes der ikke.
-router.post('/clubs/:id/restore', superAdminAuth, backupMulter.single('backup'), async (req, res, next) => {
+router.post('/clubs/:id/restore', superAdminAuth, bevarKlub(backupMulter.single('backup')), async (req, res, next) => {
     let backup;
     try {
         backup = JSON.parse(req.file.buffer.toString('utf8'));
@@ -720,7 +721,7 @@ router.put('/football/clubs/:id/admins/:adminId/password', superAdminAuth, async
 // ==================== KLUB-LOGO-BIBLIOTEK (centralt, master-DB) ====================
 
 // POST /api/super-admin/logos — upload nyt logo
-router.post('/logos', superAdminAuth, logoUpload.single('image'), validateImageMagic, async (req, res, next) => {
+router.post('/logos', superAdminAuth, bevarKlub(logoUpload.single('image')), validateImageMagic, async (req, res, next) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'Billede er påkrævet' });
 
@@ -852,7 +853,7 @@ router.get('/logos/seed-bundle', superAdminAuth, async (req, res, next) => {
 // POST /api/super-admin/logos/import-bundle — indlæs en seed-bundle-zip live i biblioteket.
 // Upsert pr. club_name: overskriv billede+aliasser for eksisterende, INSERT (seed_key=NULL)
 // for nye. Format: <club_name>.<ext>-filer + valgfri aliases.json ({filnavn: aliasser}).
-router.post('/logos/import-bundle', superAdminAuth, backupMulter.single('bundle'), async (req, res, next) => {
+router.post('/logos/import-bundle', superAdminAuth, bevarKlub(backupMulter.single('bundle')), async (req, res, next) => {
     try {
         if (!req.file || !req.file.buffer) {
             return res.status(400).json({ error: 'Zip-fil er påkrævet (felt: bundle)' });

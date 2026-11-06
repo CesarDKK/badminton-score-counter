@@ -5,6 +5,7 @@ const { authMiddleware } = require('../middleware/auth');
 const { requirePage } = require('../middleware/pagePermission');
 const { uploadLimiter } = require('../middleware/rateLimiter');
 const upload = require('../config/multer');
+const { bevarKlub } = require('../config/tenantPools');
 const { validateImageMagic } = require('../config/imageUpload');
 const { klubMappe, sponsorFilSti } = require('../config/sponsorFiler');
 const { publishConfigChange } = require('../events/gameStateEvents');
@@ -178,7 +179,7 @@ router.put('/settings', authMiddleware, requirePage('sponsors'), async (req, res
 });
 
 // POST /api/sponsors/upload - Upload sponsor images (requires auth)
-router.post('/upload', uploadLimiter, authMiddleware, requirePage('sponsors'), upload.array('images', 10), validateImageMagic, async (req, res, next) => {
+router.post('/upload', uploadLimiter, authMiddleware, requirePage('sponsors'), bevarKlub(upload.array('images', 10)), validateImageMagic, async (req, res, next) => {
     try {
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ error: 'Ingen filer uploadet' });

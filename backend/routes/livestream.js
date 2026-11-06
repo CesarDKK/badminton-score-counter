@@ -7,6 +7,7 @@ const { clubAdminAuth } = require('../middleware/clubAdminAuth');
 const { requirePage } = require('../middleware/pagePermission');
 const { klientIp, uploadLimiter } = require('../middleware/rateLimiter');
 const upload = require('../config/multer');
+const { bevarKlub } = require('../config/tenantPools');
 const { validateImageMagic } = require('../config/imageUpload');
 const { UPLOAD_DIR, klubMappe } = require('../config/sponsorFiler');
 const { gyldigtToken } = require('../screens/pcRapport');
@@ -347,7 +348,7 @@ router.put('/indstillinger', livestreamAdmin, async (req, res, next) => {
 
 // POST /api/livestream/logo — klubbens logo i streamen (felt "logo"). Gemmes
 // som PNG (gennemsigtighed bevares) i højst 600x240, så PC'en ikke skal skalere meget
-router.post('/logo', uploadLimiter, livestreamAdmin, upload.single('logo'), validateImageMagic, async (req, res, next) => {
+router.post('/logo', uploadLimiter, livestreamAdmin, bevarKlub(upload.single('logo')), validateImageMagic, async (req, res, next) => {
     const fil = req.file;
     try {
         if (!fil) return res.status(400).json({ error: 'Vælg et billede' });

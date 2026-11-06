@@ -7,6 +7,7 @@ const { requireFuldAdgang } = require('../middleware/pagePermission');
 const { klubMappe } = require('../config/sponsorFiler');
 const { lavBackup, validerBackup, gendanBackup, BackupFejl } = require('../config/klubBackup');
 const autoBackup = require('../config/autoBackup');
+const { bevarKlub, currentTenant } = require('../config/tenantPools');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
@@ -36,6 +37,13 @@ async function aktuelKlub(req) {
 async function gendanOgSvar(req, res, next, backup) {
     const fejl = validerBackup(backup);
     if (fejl) return res.status(400).json({ error: fejl });
+    // Værn: gendannelsen sletter og erstatter data, så den må kun ramme den klub,
+    // kaldet kom til. Er klubben mistet undervejs (se bevarKlub), stoppes der her
+    // i stedet for at gendanne i standard-databasen.
+    if (req.accessMode === 'club' && currentTenant() !== req.clubDbName) {
+        console.error(`✗ Gendannelse stoppet: kaldet gælder ${req.clubDbName}, men databasen er ${currentTenant()}`);
+        return res.status(500).json({ error: 'Gendannelsen blev stoppet: klubbens database kunne ikke vælges. Intet er ændret.' });
+    }
     try {
         const klub = await aktuelKlub(req);
         const resultat = await medForbindelse(async (conn) => {
@@ -64,7 +72,7 @@ router.get('/', authMiddleware, requireFuldAdgang, async (req, res, next) => {
 });
 
 // POST /api/backup/restore — gendan fra en uploadet backup-fil
-router.post('/restore', authMiddleware, requireFuldAdgang, upload.single('backup'), async (req, res, next) => {
+router.post('/restore', authMiddleware, requireFuldAdgang, bevarKlub(upload.single('backup')), async (req, res, next) => {
     let backup;
     try {
         backup = JSON.parse(req.file.buffer.toString('utf8'));
