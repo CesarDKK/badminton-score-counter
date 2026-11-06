@@ -45,6 +45,30 @@ async function kald(sti, opt = {}) {
     return { status: res.status, data };
 }
 
+// ---- Adresselinjen ----
+// På uret står adresselinjen (og ✕) øverst og tager næsten halvdelen af
+// skærmen, men den ruller væk med siden. Siden er lige så høj som hele skærmen
+// (ur.html, 100lvh), og her rulles helt ned, så adresselinjen er væk, og
+// knapperne fylder skærmen. Flere forsøg: uret lægger siden ud lidt efter
+function skjulAdresselinje() {
+    const rul = () => window.scrollTo(0, document.documentElement.scrollHeight);
+    requestAnimationFrame(rul);
+    setTimeout(rul, 150);
+    setTimeout(rul, 600);
+}
+
+// ?maal: viser skærmens mål på uret (til at tilpasse siden)
+if (/[?&]maal\b/.test(location.search)) {
+    const m = document.createElement('div');
+    m.style.cssText = 'position:fixed;left:0;right:0;bottom:0;font-size:10px;background:#000c;color:#ffb02e;text-align:center;z-index:9;pointer-events:none';
+    const proeve = (h) => { const d = document.createElement('div'); d.style.cssText = `position:absolute;visibility:hidden;height:${h}`; document.body.appendChild(d); const v = d.offsetHeight; d.remove(); return v; };
+    document.body.appendChild(m);
+    setInterval(() => {
+        m.textContent = `${innerWidth}×${innerHeight} rul ${Math.round(scrollY)}/${document.documentElement.scrollHeight} ` +
+            `lvh ${proeve('100lvh')} svh ${proeve('100svh')} dvh ${proeve('100dvh')}`;
+    }, 500);
+}
+
 // ---- Koden ----
 let kode = '';
 function visKode(fejl = '') {
@@ -53,6 +77,7 @@ function visKode(fejl = '') {
     $('kodeFejl').textContent = fejl;
     kode = '';
     tegnKode();
+    skjulAdresselinje();
 }
 function tegnKode() {
     $('kodeVisning').textContent = (kode + '······').slice(0, 6).replace(/(...)(...)/, '$1 $2');
@@ -104,6 +129,7 @@ function sessionSlut(tekst) {
 function visKamp() {
     $('kodeSide').classList.add('skjult');
     $('kampSide').classList.remove('skjult');
+    skjulAdresselinje();
 }
 
 function modtag(data) {
@@ -280,8 +306,13 @@ function tegn() {
     // spillerne skjules, og store knapper fylder skærmen
     const iPause = pause && !st.matchCompleted && !spaerret;
     const slut = st.matchCompleted && !spaerret;
-    $('kampSide').classList.toggle('i-pause', iPause);
-    $('kampSide').classList.toggle('slut', slut);
+    const visning = iPause ? 'i-pause' : slut ? 'slut' : '';
+    if (visning !== $('kampSide').dataset.visning) {
+        $('kampSide').dataset.visning = visning;
+        $('kampSide').classList.toggle('i-pause', iPause);
+        $('kampSide').classList.toggle('slut', slut);
+        skjulAdresselinje();   // knapperne er skiftet: hold adresselinjen væk
+    }
     if (iPause) $('overskrift').textContent = saetPause ? 'Sæt vundet · pause' : 'Pause';
 
     // "Fortsæt" med nedtællingen. Pausen ved 11 (8) slutter også ved næste
@@ -359,4 +390,4 @@ setInterval(() => {
     if (gemt.ko.length) send(); else hent();
 }, POLL_MS);
 setInterval(tegn, 1000);   // pausens nedtælling og "ikke sendt endnu"
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { hent(); send(); } });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { hent(); send(); skjulAdresselinje(); } });
