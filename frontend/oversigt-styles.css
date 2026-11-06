@@ -68,6 +68,54 @@ body::before {
     flex-direction: column;
 }
 
+/* =================== FORBINDELSE MISTET =================== */
+/* To trin som på TV'et (se loadAllCourts i oversigt-script.js):
+   1. Et kort udfald: kun det lille mærke i hjørnet.
+   2. Et længere udfald, mens der vises kampe (body.ov-uden-data):
+      stillingerne tones ned, og mærket bliver til en tydelig besked nederst
+      med klokkeslættet for det, der vises.
+   Advarselsfarven er den faste (--color-warning), ikke temaets accent. */
+#ovForbindelse {
+    position: fixed;
+    bottom: 16px;
+    left: 16px;
+    z-index: 9000;
+    padding: 8px 16px;
+    border-radius: var(--r-pill);
+    background: rgba(var(--color-warning-rgb), 0.15);
+    border: 1px solid rgba(var(--color-warning-rgb), 0.5);
+    color: var(--color-warning);
+    font-size: 1rem;
+    font-weight: 600;
+    backdrop-filter: blur(4px);
+}
+
+/* Toningen glider ind; når der kommer data igen, er stillingerne der med det samme */
+body.ov-uden-data .overview-container {
+    opacity: 0.38;
+    filter: saturate(0.35);
+    transition: opacity 0.8s var(--ease), filter 0.8s var(--ease);
+}
+
+body.ov-uden-data #ovForbindelse {
+    left: 50%;
+    bottom: clamp(16px, 3.5vh, 64px);
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: 92vw;
+    padding: 0.45em 1.1em;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.78);
+    border: 2px solid rgba(var(--color-warning-rgb), 0.7);
+    box-shadow: var(--shadow-lg);
+    font-size: clamp(18px, 3.4vh, 72px);
+}
+
+#ovForbindelse .ov-forbindelse-fra {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
 /* =================== HEADER =================== */
 .overview-header {
     padding: 18px 32px;
