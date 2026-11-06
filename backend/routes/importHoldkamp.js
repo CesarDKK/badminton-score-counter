@@ -565,6 +565,11 @@ async function tjekWatcher(w, { kilde = 'auto' } = {}) {
             team2Name: seddel.team2Name,
             games: seddel.games
         });
+        // Oprettet uden om holdkamp-ruterne (baggrundsjob eller "hent nu"):
+        // giv oversigten og admin besked, så holdkampen ses med det samme
+        const { publishHoldkampChange } = require('../events/gameStateEvents');
+        const { currentTenant } = require('../config/tenantPools');
+        publishHoldkampChange({ clubDbName: currentTenant() });
 
         await query(
             `UPDATE holdkamp_watchers SET status = 'oprettet', team_match_id = ?, last_error = NULL WHERE id = ?`,

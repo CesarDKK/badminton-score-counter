@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const { query, queryOne } = require('./config/database');
-const { runWithTenant } = require('./config/tenantPools');
+const { runWithTenant, currentTenant } = require('./config/tenantPools');
+const { publishGameStateChange } = require('./events/gameStateEvents');
 
 async function resetDatabase(dbLabel) {
     const deleteResult = await query('DELETE FROM game_states');
@@ -151,6 +152,8 @@ async function releaseInactiveCourts(dbLabel) {
             `DELETE FROM device_tokens WHERE token_type = 'match_session' AND court_number = ?`,
             [court.court_number]
         );
+        // TV og oversigt får besked med det samme (før så de det ved næste poll)
+        publishGameStateChange({ clubDbName: currentTenant() }, court.court_number, 'reset');
     }
 
     console.log(`  ♻️  ${dbLabel}: frigivet ${staleCourts.length} inaktiv(e) bane(r) efter ${INACTIVITY_MINUTES} min uden aktivitet`);

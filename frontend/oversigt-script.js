@@ -6,7 +6,13 @@ let allCourtData = [];
 let activeCourts = [];
 let currentPage = 0;
 const COURTS_PER_PAGE = 6;
-const REFRESH_INTERVAL = 2000; // 2 seconds - fast updates with batch API
+// Uden live-forbindelse (SSE) spørges serveren hvert 2. sekund. Med den kommer
+// ændringerne som events, og pollingen er kun et sikkerhedsnet hvert 5. sekund
+// — som på TV'et. Før spurgte oversigten hvert 2. sekund uanset (to kald pr.
+// gang, døgnet rundt), fordi holdkamp-ændringer ikke gav events; det gør de nu
+// (type 'holdkamp', se backend/events/gameStateEvents.js).
+const FALLBACK_POLL_MS = 2000;
+const SAFETY_POLL_MS = 5000;
 const SCROLL_INTERVAL = 10000; // 10 seconds between page changes
 let scrollTimer = null;
 let refreshTimer = null;
@@ -1312,15 +1318,12 @@ function startAutoRefresh() {
     // loadHoldkamp køres FØRST så activeTeamMatch er frisk når loadAllCourts
     // kalder isHoldkampCourt() — ellers bruger den stale data hvor afsluttede
     // holdkamp-spil stadig har status='active' og ekskluderer banen fra visning.
-    // Lille tilfældigt offset så oversigten ikke rammer serveren i præcis samme
-    // sekund som TV-skærmene efter en fælles genstart/udfald (spredning).
-    setTimeout(() => {
-        refreshTimer = setInterval(scheduleRefresh, REFRESH_INTERVAL);
-    }, Math.floor(Math.random() * 1000));
+    startPolling(FALLBACK_POLL_MS);
 
-    // SSE-poke: opdater med det samme når en bane ændrer sig i stedet for at
-    // vente på næste poll. Pollingen beholdes uændret som sikkerhedsnet (og
-    // fanger holdkamp-ændringer der ikke udløser game-state events).
+    // SSE-poke: opdater med det samme, når en bane eller en holdkamp ændrer sig,
+    // i stedet for at vente på næste poll. Mens forbindelsen virker, er
+    // pollingen kun et sikkerhedsnet (SAFETY_POLL_MS); ryger den, polles der
+    // hurtigt igen (FALLBACK_POLL_MS).
     if (window.LiveUpdates) {
         liveUpdatesHandle = window.LiveUpdates.connect({
             onEvent: (event) => {
@@ -1329,9 +1332,31 @@ function startAutoRefresh() {
                 } else {
                     scheduleRefresh();
                 }
-            }
+            },
+            onStateChange: (connected) => startPolling(connected ? SAFETY_POLL_MS : FALLBACK_POLL_MS)
         });
     }
+}
+
+let _pollTimeout = null;
+let _currentPollMs = null;
+
+function startPolling(ms) {
+    // Uændret interval? Lad den køre. onStateChange kan komme flere gange, mens
+    // EventSource prøver at genforbinde — blev timeren genstartet hver gang,
+    // kunne pollen i værste fald aldrig nå at køre.
+    if (_currentPollMs === ms && (refreshTimer || _pollTimeout)) return;
+    _currentPollMs = ms;
+    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+    if (_pollTimeout) { clearTimeout(_pollTimeout); _pollTimeout = null; }
+
+    // Lille tilfældigt offset, så oversigten ikke rammer serveren i præcis samme
+    // sekund som TV-skærmene efter en fælles genstart/udfald (spredning).
+    _pollTimeout = setTimeout(() => {
+        _pollTimeout = null;
+        scheduleRefresh();
+        refreshTimer = setInterval(scheduleRefresh, ms);
+    }, Math.floor(Math.random() * Math.min(ms, 1000)));
 }
 
 // Reager på et SSE config-event: invalidér den relevante cache og gen-render.

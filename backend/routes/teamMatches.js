@@ -6,10 +6,23 @@ const { requirePage } = require('../middleware/pagePermission');
 const { ikkeQrSession } = require('../middleware/qrSession');
 const { currentTenant } = require('../config/tenantPools');
 const { banensStartTid } = require('../config/matchTiming');
-const { publishGameStateChange } = require('../events/gameStateEvents');
+const { publishGameStateChange, publishHoldkampChange } = require('../events/gameStateEvents');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
 const { rydAfsluttetBane } = require('../config/banerydning');
 const holdkampFormater = require('../config/holdkampFormater');
+
+// Efter enhver vellykket ændring (opret, golden set, logoer, delkamp, afslut,
+// slet) får oversigten og admin et 'holdkamp'-event og henter holdkampene igen.
+// De bane-bundne 'assignment'-events nedenfor når kun de berørte baner — en
+// ny holdkamp eller et resultat uden bane gav før intet event.
+router.use((req, res, next) => {
+    if (req.method !== 'GET') {
+        res.on('finish', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) publishHoldkampChange(req);
+        });
+    }
+    next();
+});
 
 /**
  * Opretter en holdkamp med dens delkampe.
@@ -413,6 +426,8 @@ async function afslutHoldkamp(id, req) {
         }
     }
     for (const court of courts) publishGameStateChange(req, court, 'assignment');
+    // Også den automatiske lukning (baggrundsjobbet) skal ses på oversigten med det samme
+    publishHoldkampChange(req);
 }
 
 // Automatisk lukning: når ALLE delkampe i en holdkamp er færdige, lukkes den
