@@ -17,6 +17,7 @@ const AdmZip = require('adm-zip');
 const logoUpload = require('../config/logoUpload');
 const { bevarKlub } = require('../config/tenantPools');
 const migrationRunner = require('../config/migrationRunner');
+const klubNavn = require('../config/klubNavn');
 const { validateImageMagic } = require('../config/imageUpload');
 
 // Gyldige side-noegler for klub-admins per-side adgangsstyring.
@@ -154,27 +155,34 @@ router.post('/clubs', superAdminAuth, async (req, res, next) => {
             return res.status(400).json({ error: 'Navn og subdomain er påkrævet' });
         }
 
-        // Valider subdomain: kun bogstaver, tal og bindestreger
-        if (!/^[a-z0-9-]+$/.test(subdomain)) {
-            return res.status(400).json({
-                error: 'Subdomain må kun indeholde små bogstaver, tal og bindestreger'
-            });
-        }
+        // Valider subdomain: et DNS-navn, og ikke et af de reserverede (app, admin,
+        // … og alt, der ville give en systemdatabase som klubbens — se config/klubNavn)
+        const ugyldigt = klubNavn.validerSubdomain(subdomain);
+        if (ugyldigt) return res.status(400).json({ error: ugyldigt });
 
-        // Tjek om subdomain allerede er i brug
+        // Generer database navn ud fra subdomain (fx aarhus-badminton → aarhus_badminton)
+        const dbName = klubNavn.dbNavn(subdomain);
+
+        // Tjek om subdomain (eller dets database) allerede er i brug
         const existing = await masterDb.queryOne(
-            'SELECT id FROM clubs WHERE subdomain = ?',
-            [subdomain]
+            'SELECT id FROM clubs WHERE subdomain = ? OR db_name = ?',
+            [subdomain, dbName]
         );
         if (existing) {
             return res.status(409).json({ error: 'Subdomain er allerede i brug' });
         }
 
-        // Generer database navn ud fra subdomain (fx aarhus-badminton → aarhus_badminton)
-        const dbName = subdomain.replace(/-/g, '_');
-
-        // Opret klub-database (init.sql + migrationerne)
-        const migreret = await masterDb.createClubDatabase(dbName);
+        // Opret klub-database (init.sql + migrationerne). Findes der allerede en
+        // database med det navn, er den ikke klubbens: der oprettes intet oven i den.
+        let migreret;
+        try {
+            migreret = await masterDb.createClubDatabase(dbName);
+        } catch (error) {
+            if (error.kode === 'DATABASE_FINDES') {
+                return res.status(409).json({ error: `Der findes allerede en database med navnet ${dbName} — vælg et andet subdomain` });
+            }
+            throw error;
+        }
 
         // Gem klub i master databasen
         const result = await masterDb.query(
@@ -208,18 +216,27 @@ router.delete('/clubs/:id', superAdminAuth, async (req, res, next) => {
             return res.status(400).json({ error: 'Klub skal deaktiveres før den kan slettes' });
         }
 
-        // Drop klub-databasen med root-adgang
-        const adminConn = await masterDb.createAdminConnection();
-        try {
-            await adminConn.execute(`DROP DATABASE IF EXISTS \`${club.db_name}\``);
-        } finally {
-            await adminConn.end();
+        // Databasen droppes kun, når den er klubbens egen — aldrig en systemdatabase
+        // (master, demoen, football, MySQL's egne). Så fjernes klubben kun fra
+        // listen, og svaret siger det. (To klubber kan ikke dele database:
+        // clubs.db_name er unik.)
+        const bevar = klubNavn.erBeskyttetDatabase(club.db_name);
+        if (bevar) {
+            console.warn(`⚠ Slet klub ${club.name}: databasen ${club.db_name} er en systemdatabase og slettes ikke`);
+        } else {
+            // Drop klub-databasen med root-adgang
+            const adminConn = await masterDb.createAdminConnection();
+            try {
+                await adminConn.execute(`DROP DATABASE IF EXISTS \`${club.db_name}\``);
+            } finally {
+                await adminConn.end();
+            }
         }
 
         // Fjern klub fra master
         await masterDb.query('DELETE FROM clubs WHERE id = ?', [req.params.id]);
 
-        res.json({ success: true });
+        res.json({ success: true, databaseBevaret: bevar ? club.db_name : null });
     } catch (error) { next(error); }
 });
 

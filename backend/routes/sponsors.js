@@ -7,7 +7,8 @@ const { uploadLimiter } = require('../middleware/rateLimiter');
 const upload = require('../config/multer');
 const { bevarKlub } = require('../config/tenantPools');
 const { validateImageMagic } = require('../config/imageUpload');
-const { klubMappe, sponsorFilSti } = require('../config/sponsorFiler');
+const { klubMappe, sponsorFilSti, mappeStoerrelse } = require('../config/sponsorFiler');
+const { erDemo, DEMO_LAGER_MAKS, MB } = require('../config/demo');
 const { publishConfigChange } = require('../events/gameStateEvents');
 const sharp = require('sharp');
 const fs = require('fs').promises;
@@ -178,8 +179,17 @@ router.put('/settings', authMiddleware, requirePage('sponsors'), async (req, res
     }
 });
 
+// Demoen er åben for alle, og billederne ligger på den disk, klubberne deler:
+// fylder demoens mappe mere end loftet (config/demo.js), afvises nye billeder,
+// til der er slettet nogen. De netop modtagne filer fjernes igen.
+async function demoLagerLoft(req, res, next) {
+    if (!erDemo(req) || mappeStoerrelse(klubMappe(req)) <= DEMO_LAGER_MAKS) return next();
+    for (const fil of req.files || []) await fs.unlink(fil.path).catch(() => {});
+    res.status(413).json({ error: `Demoens lager til billeder er fyldt (højst ${DEMO_LAGER_MAKS / MB} MB) — slet nogle billeder først` });
+}
+
 // POST /api/sponsors/upload - Upload sponsor images (requires auth)
-router.post('/upload', uploadLimiter, authMiddleware, requirePage('sponsors'), bevarKlub(upload.array('images', 10)), validateImageMagic, async (req, res, next) => {
+router.post('/upload', uploadLimiter, authMiddleware, requirePage('sponsors'), bevarKlub(upload.array('images', 10)), demoLagerLoft, validateImageMagic, async (req, res, next) => {
     try {
         if (!req.files || req.files.length === 0) {
             return res.status(400).json({ error: 'Ingen filer uploadet' });

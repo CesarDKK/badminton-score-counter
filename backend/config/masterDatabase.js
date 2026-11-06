@@ -222,11 +222,25 @@ async function createClubDatabase(dbName) {
     const fs = require('fs');
     const path = require('path');
 
+    // Sidste værn (ruten har allerede tjekket navnet): en klub får aldrig en
+    // systemdatabase, og intet oprettes oven i en database, der findes i forvejen
+    // — før kørte klubbens skema ind i fx badminton_master (IF NOT EXISTS).
+    const optaget = (tekst) => Object.assign(new Error(tekst), { kode: 'DATABASE_FINDES' });
+    if (!/^[a-z0-9_]{1,64}$/.test(dbName) || require('./klubNavn').erBeskyttetDatabase(dbName)) {
+        throw optaget(`Databasenavnet ${dbName} kan ikke bruges til en klub`);
+    }
+
     const conn = await createAdminConnection();
+    let oprettet = false;
     try {
+        const [findes] = await conn.query(
+            'SELECT 1 FROM information_schema.schemata WHERE schema_name = ?', [dbName]);
+        if (findes.length) throw optaget(`Databasen ${dbName} findes allerede`);
+
         // Opret database
-        await conn.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\`
+        await conn.query(`CREATE DATABASE \`${dbName}\`
             CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+        oprettet = true;
 
         // Giv badminton_user adgang
         await conn.query(
@@ -244,7 +258,14 @@ async function createClubDatabase(dbName) {
         const cleanedSql = initSql
             .replace(/CREATE DATABASE[^;]+;/gi, '')
             .replace(/USE [^;]+;/gi, '');
-        await conn.query(cleanedSql);
+        try {
+            await conn.query(cleanedSql);
+        } catch (error) {
+            // Skemaet kunne ikke køres: fjern den database, vi lige har oprettet
+            // (den fandtes ikke før), så subdomænet ikke er spærret ved næste forsøg
+            if (oprettet) await conn.query(`DROP DATABASE IF EXISTS \`${dbName}\``).catch(() => {});
+            throw error;
+        }
 
         console.log(`✓ Klub database oprettet: ${dbName}`);
 

@@ -9,7 +9,8 @@
 // backticks i SQL (identifier injection). Alt valideres FØR noget skrives, og
 // sponsorbillederne peges ind i klubbens egen mappe (config/sponsorFiler.js).
 
-const { backupFilnavn, tilpasSponsorRaekker, hentSponsorFiler, skrivSponsorFiler } = require('./sponsorFiler');
+const path = require('path');
+const { backupFilnavn, tilpasSponsorRaekker, hentSponsorFiler, skrivSponsorFiler, sponsorFilSti, rydUbrugteFiler } = require('./sponsorFiler');
 const { laesIndstillinger } = require('../screens/livestream');
 
 const BACKUP_VERSION = '1.0';
@@ -102,6 +103,19 @@ function validerBackup(backup) {
     return null;
 }
 
+// Filnavnene i klubbens mappe, databasen bruger lige nu: sponsorbillederne og
+// livestream-logoet
+async function brugteFiler(conn, mappe) {
+    const [billeder] = await conn.query('SELECT filename FROM `sponsor_images`');
+    const [settings] = await conn.query("SELECT setting_key, setting_value FROM `settings` WHERE setting_key = 'livestream'");
+    const navne = new Set();
+    for (const r of [...billeder, ...livestreamLogo(settings, mappe)]) {
+        const sti = sponsorFilSti(mappe, r.filename);
+        if (sti) navne.add(path.basename(sti));
+    }
+    return navne;
+}
+
 // Fejl med en tekst, brugeren må se (400 i stedet for 500)
 class BackupFejl extends Error {}
 
@@ -110,7 +124,11 @@ class BackupFejl extends Error {}
 // med (fx turneringer før de kom med), røres ikke.
 // Alt sker i én transaktion: fejler et INSERT, rulles alt tilbage, så klubbens
 // data ikke efterlades halvt slettet. Billedfilerne skrives først efter commit.
-async function gendanBackup(conn, backup, mappe) {
+//
+// kunBrugte (demoen): der skrives kun filer, den gendannede database bruger, og
+// filer i mappen, som den ikke længere bruger, slettes. Ellers kunne gentagne
+// gendannelser med nye filnavne fylde disken med billeder, ingen kan slette igen.
+async function gendanBackup(conn, backup, mappe, { kunBrugte = false } = {}) {
     const fejl = validerBackup(backup) || tilpasSponsorRaekker(backup.tables.sponsor_images, mappe);
     if (fejl) throw new BackupFejl(fejl);
 
@@ -135,7 +153,9 @@ async function gendanBackup(conn, backup, mappe) {
         throw error;
     }
 
-    const files = skrivSponsorFiler(backup.files, mappe);
+    const brugte = kunBrugte ? await brugteFiler(conn, mappe) : null;
+    const files = skrivSponsorFiler(backup.files, mappe, brugte);
+    if (brugte) rydUbrugteFiler(mappe, brugte);
     return {
         restored: Object.fromEntries(BACKUP_TABLES.map(t => [t, backup.tables[t]?.length ?? 0])),
         files,
