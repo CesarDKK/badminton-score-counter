@@ -57,6 +57,22 @@ function runWithTenant(dbName, fn) {
     return tenantStorage.run(dbName, fn);
 }
 
+// Upload-middleware (multer) skal ALTID bruges gennem bevarKlub.
+//
+// multer kalder next() fra request-streamens hændelser, og de kører uden for
+// den kontekst, tenant-middlewaren satte. Efter en upload, der kommer i flere
+// bidder (fra ca. 64 KB), var klubben derfor væk, og getPool() faldt tilbage til
+// demoens database: "Gendan fra fil" på et klub-subdomæne svarede "gendannet",
+// men tømte og fyldte demoen, mens klubbens egne data stod urørt.
+// Her sættes klubben igen ud fra req.clubDbName, før ruten fortsætter.
+// Uden for club-mode (demoen, lokal installation, admin.) ændres intet.
+function bevarKlub(middleware) {
+    return (req, res, next) => middleware(req, res, (err) => {
+        if (req.clubDbName) return runWithTenant(req.clubDbName, () => next(err));
+        next(err);
+    });
+}
+
 // Luk alle pools ved graceful shutdown
 async function closeAll() {
     for (const pool of pools.values()) {
@@ -71,4 +87,4 @@ function currentTenant() {
     return tenantStorage.getStore() || 'direct';
 }
 
-module.exports = { getPool, runWithTenant, closeAll, currentTenant, utcSession };
+module.exports = { getPool, runWithTenant, bevarKlub, closeAll, currentTenant, utcSession };
