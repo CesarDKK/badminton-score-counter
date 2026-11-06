@@ -13,6 +13,8 @@
  */
 
 const kvote = require('./youtubeKvote');
+// Hvilken klub kaldet tælles under (loftet pr. klub i config/youtubeKvote.js)
+const { currentTenant } = require('./tenantPools');
 
 const SCOPE = 'https://www.googleapis.com/auth/youtube';
 const TIMEOUT_MS = 15000;
@@ -96,14 +98,15 @@ async function kald(url, { method = 'GET', token, body, form } = {}) {
 // opslag 1 enhed, alt der opretter, ændrer eller sletter 50. Login (OAuth) er gratis
 async function api(sti, params, opts = {}) {
     const enheder = (opts.method || 'GET') === 'GET' ? 1 : 50;
+    const klub = currentTenant();
     try {
         const svar = await kald(`${adresser().api}/${sti}?${new URLSearchParams(params).toString()}`, opts);
-        kvote.tael(enheder);
+        kvote.tael(enheder, { klub });
         return svar;
     } catch (e) {
         // Svarede Google (også med en fejl), er kaldet talt — kvoten opbrugt koster intet
         const opbrugt = e.grund === 'quotaExceeded' || e.grund === 'dailyLimitExceeded';
-        if (e.status) kvote.tael(opbrugt ? 0 : enheder, { opbrugt });
+        if (e.status) kvote.tael(opbrugt ? 0 : enheder, { opbrugt, klub });
         throw e;
     }
 }

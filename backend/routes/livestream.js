@@ -15,6 +15,7 @@ const ls = require('../screens/livestream');
 const masterDb = require('../config/masterDatabase');
 const LogoMatch = require('../config/logoMatch');
 const youtube = require('../config/youtube');
+const youtubeKvote = require('../config/youtubeKvote');
 const { krypter, dekrypter } = require('../config/hemmelig');
 const sharp = require('sharp');
 const crypto = require('crypto');
@@ -75,6 +76,15 @@ async function ytTitelFor(req, bane, b, rk, dbl) {
 
 // Én ad gangen pr. bane (PC'en spørger igen, før YouTube har svaret)
 const _ytLaas = new Set();
+// Den lange pause efter en varig fejl (se ls.ytFejlPauseMs): 'klub:bane' -> ms.
+// Kun i hukommelsen — efter en genstart gælder de to minutter fra yt_fejl_tid.
+const _ytPauseTil = new Map();
+// Kanalen er forbundet igen (eller fjernet): det, der var galt, kan være rettet
+function ytGlemPauser(tenant) {
+    for (const k of [..._ytPauseTil.keys()]) {
+        if (k.startsWith(`${tenant}:`)) _ytPauseTil.delete(k);
+    }
+}
 
 // Banens stream og udsendelse på YouTube, som beslutningen siger (ls.ytHandling).
 // Returnerer { url, noegle } at sende til — eller null (så bruges den
@@ -84,9 +94,33 @@ async function ytStyr(req, f, bane, o, b, { rk, dbl, senderNu, tvingTjek }) {
     const laas = `${tenantKey(req)}:${bane}`;
     const gemt = o.yt_stream_key ? { url: o.yt_ingest_url, noegle: o.yt_stream_key } : null;
     if (_ytLaas.has(laas)) return gemt;
+    // I pausen efter en fejl kaldes YouTube slet ikke for banen. Før gjaldt
+    // pausen kun oprettelse og afslutning af udsendelsen: manglede banen en
+    // stream-nøgle (fx en ny kanal uden livestreaming slået til), blev den
+    // forsøgt oprettet ved hver forespørgsel fra PC'en — 50 enheder hvert 3.
+    // sekund af den kvote, alle klubber deler.
+    if (ls.ytIPause(o.yt_fejl_tid, _ytPauseTil.get(laas))) return gemt;
     const handling = ls.ytHandling({ send: b.send, udsendelse: o.yt_broadcast_id,
         tjek: tvingTjek ? null : o.yt_broadcast_tjek, fejlTid: o.yt_fejl_tid });
     if (!handling && (gemt || !b.send)) return gemt;
+    // Skal der oprettes noget nyt (nøgle eller udsendelse)? Ikke når klubben har
+    // brugt sin del af dagens kvote, eller Google har meldt den brugt op. En
+    // udsendelse, der kører, tjekkes og afsluttes stadig.
+    if (handling === 'opret' || (b.send && !gemt)) {
+        const spaerret = youtubeKvote.spaerretForNyt(tenantKey(req));
+        if (spaerret) {
+            const kl = new Date(youtubeKvote.nulstilles()).toLocaleTimeString('da-DK',
+                { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Copenhagen' });
+            const besked = spaerret === 'klub'
+                ? `Klubbens del af dagens YouTube-kvote er brugt (${youtubeKvote.klubLoft()} enheder) — nye udsendelser kan oprettes igen kl. ${kl}`
+                : `YouTube-API'ets kvote for i dag er brugt op — nye udsendelser kan oprettes igen kl. ${kl}`;
+            await query('UPDATE court_streams SET yt_fejl = ?, yt_fejl_tid = UTC_TIMESTAMP() WHERE court_number = ?', [besked, bane]);
+            _ytPauseTil.set(laas, Date.now() + ls.YT_KVOTE_PAUSE_MS);
+            if (o.yt_fejl !== besked) console.log(`[livestream] ${laas}: ${besked}`);
+            // Uden udsendelse er der intet at sende til — PC'en skal ikke sende ud i det blå
+            return null;
+        }
+    }
     _ytLaas.add(laas);
     let stream = gemt;
     try {
@@ -131,6 +165,10 @@ async function ytStyr(req, f, bane, o, b, { rk, dbl, senderNu, tvingTjek }) {
         if (!(e instanceof youtube.YoutubeFejl)) throw e;
         await query('UPDATE court_streams SET yt_fejl = ?, yt_fejl_tid = UTC_TIMESTAMP() WHERE court_number = ?',
             [e.message.slice(0, 255), bane]);
+        // To minutters pause (yt_fejl_tid) — længere for fejl, der ikke går over af sig selv
+        const pause = ls.ytFejlPauseMs(e.grund);
+        if (pause > ls.YT_FEJL_PAUSE_MS) _ytPauseTil.set(laas, Date.now() + pause);
+        else _ytPauseTil.delete(laas);
         // Streamen findes ikke længere på kanalen (slettet i Studio): en ny næste gang
         if (e.status === 404 && /stream/i.test(e.grund)) {
             await query(`UPDATE court_streams SET ${ytStreamFelter}, yt_fejl = ?, yt_fejl_tid = UTC_TIMESTAMP() WHERE court_number = ?`,
@@ -518,6 +556,7 @@ router.get('/youtube/svar', async (req, res, next) => {
         // Nøglerne hører til kanalen — en anden (eller samme igen) får nye
         await query(`UPDATE court_streams SET ${ytStreamFelter}`);
         youtube.glemAdgang(tenantKey(req));
+        ytGlemPauser(tenantKey(req));
         console.log(`[livestream] ${tenantKey(req)}: YouTube-kanalen "${k.navn}" er forbundet`);
         tilAdmin('forbundet');
     } catch (error) {
@@ -545,6 +584,7 @@ router.delete('/youtube', livestreamAdmin, async (req, res, next) => {
         await query('DELETE FROM livestream_youtube WHERE id = 1');
         await query(`UPDATE court_streams SET ${ytStreamFelter}`);
         youtube.glemAdgang(tenantKey(req));
+        ytGlemPauser(tenantKey(req));
         console.log(`[livestream] ${tenantKey(req)}: YouTube-kanalen er fjernet`);
         res.json({ success: true });
     } catch (error) {

@@ -69,6 +69,27 @@ test('ytHandling: opret, tjek hvert 5. minut, afslut — og pause efter en fejl'
     assert.equal(ls.ytHandling({ send: true, udsendelse: null, fejlTid: new Date(NU - MIN), nu: NU }), null);
     assert.equal(ls.ytHandling({ send: true, udsendelse: null, fejlTid: new Date(NU - 3 * MIN), nu: NU }), 'opret');
     assert.equal(ls.ytHandling({ send: false, udsendelse: 'b1', fejlTid: new Date(NU - MIN), nu: NU }), null);
+    // Pausen gælder også tjekket af en udsendelse — før blev en fejl dér gentaget ved hver forespørgsel
+    assert.equal(ls.ytHandling({ send: true, udsendelse: 'b1', tjek: null, fejlTid: new Date(NU - MIN), nu: NU }), null);
+    assert.equal(ls.ytHandling({ send: true, udsendelse: 'b1', tjek: new Date(NU - 9 * MIN), fejlTid: new Date(NU - MIN), nu: NU }), null);
+    assert.equal(ls.ytHandling({ send: true, udsendelse: 'b1', tjek: new Date(NU - 9 * MIN), fejlTid: new Date(NU - 3 * MIN), nu: NU }), 'tjek');
+});
+
+test('pause efter en fejl: 2 minutter — længere, når fejlen ikke går over af sig selv', () => {
+    assert.equal(ls.ytFejlPauseMs('backendError'), ls.YT_FEJL_PAUSE_MS);
+    assert.equal(ls.ytFejlPauseMs(''), ls.YT_FEJL_PAUSE_MS);
+    // Kanalen har ikke livestreaming slået til (op til 24 timer første gang), er spærret, eller adgangen mangler
+    for (const grund of ['liveStreamingNotEnabled', 'livePermissionBlocked', 'insufficientPermissions']) {
+        assert.equal(ls.ytFejlPauseMs(grund), 30 * MIN, grund);
+    }
+    // Dagens kvote er brugt op
+    assert.equal(ls.ytFejlPauseMs('quotaExceeded'), 60 * MIN);
+    // I pausen kaldes YouTube slet ikke for banen (ytStyr) — heller ikke for at oprette en nøgle
+    assert.equal(ls.ytIPause(new Date(NU - MIN), null, NU), true);
+    assert.equal(ls.ytIPause(new Date(NU - 3 * MIN), null, NU), false);
+    assert.equal(ls.ytIPause(new Date(NU - 10 * MIN), NU + 20 * MIN, NU), true);     // den lange pause
+    assert.equal(ls.ytIPause(new Date(NU - 40 * MIN), NU - MIN, NU), false);
+    assert.equal(ls.ytIPause(null, null, NU), false);
 });
 
 test('ytTitel: holdene, navnene eller klubben og banen — med dato og højst 100 tegn', () => {
@@ -267,6 +288,47 @@ test('kvote: opslag koster 1, oprettelse 50, login intet — og "kvoten er brugt
     assert.equal(kvote.status().enheder, 52);
     kvote.saetGraense(50000);
     assert.equal(kvote.status().graense, 50000);
+    kvote.nulstil({ gem: false });
+});
+
+test('kvote: én klub kan højst bruge halvdelen af dagens kvote på nye udsendelser', () => {
+    kvote.nulstil({ gem: false });
+    const dag = Date.UTC(2026, 9, 30, 10);
+    assert.equal(kvote.klubLoft(), 5000);
+    assert.equal(kvote.spaerretForNyt('lyngby', dag), null);
+    // 30 omgange Start/Stop livestream på en tablet (ca. 150 enheder pr. omgang)
+    for (let i = 0; i < 30; i++) kvote.tael(150, { klub: 'lyngby', nu: dag });
+    assert.equal(kvote.klubBrugt('lyngby', dag), 4500);
+    assert.equal(kvote.spaerretForNyt('lyngby', dag), null);
+    for (let i = 0; i < 4; i++) kvote.tael(150, { klub: 'lyngby', nu: dag });
+    assert.equal(kvote.spaerretForNyt('lyngby', dag), 'klub');
+    // De andre klubber kan stadig oprette udsendelser
+    assert.equal(kvote.spaerretForNyt('gladsaxe', dag), null);
+    kvote.tael(200, { klub: 'gladsaxe', nu: dag });
+    const s = kvote.status(dag);
+    assert.equal(s.enheder, 5300);
+    assert.equal(s.klubLoft, 5000);
+    assert.deepEqual(s.klubber, [{ klub: 'lyngby', enheder: 5100 }, { klub: 'gladsaxe', enheder: 200 }]);
+    // Næste Google-døgn starter klubben forfra
+    assert.equal(kvote.spaerretForNyt('lyngby', dag + 24 * 3600 * 1000), null);
+    // Har Google meldt hele kvoten brugt, oprettes intet nyt for nogen
+    kvote.tael(0, { opbrugt: true, klub: 'gladsaxe', nu: dag });
+    assert.equal(kvote.spaerretForNyt('holte', dag), 'opbrugt');
+    // Større kvote fra Google giver større loft pr. klub
+    kvote.saetGraense(50000);
+    assert.equal(kvote.klubLoft(), 25000);
+    kvote.nulstil({ gem: false });
+});
+
+test('kvote: hvert kald til YouTube tælles under den klub, det blev lavet for', async () => {
+    kvote.nulstil({ gem: false });
+    nulstil({ 'GET /youtube/v3/channels': () => [200, { items: [{ id: 'UC1', snippet: { title: 'Kanal' } }] }] });
+    const { runWithTenant } = require('../../config/tenantPools');
+    await runWithTenant('lyngby', () => youtube.kanal('a'));
+    await runWithTenant('lyngby', () => youtube.kanal('a'));
+    await runWithTenant('gladsaxe', () => youtube.kanal('a'));
+    await youtube.kanal('a');   // uden klub (demoen/lokal installation)
+    assert.deepEqual(kvote.status().klubber, [{ klub: 'lyngby', enheder: 2 }, { klub: 'gladsaxe', enheder: 1 }, { klub: 'direct', enheder: 1 }]);
     kvote.nulstil({ gem: false });
 });
 
