@@ -5,7 +5,7 @@
  */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { AKTIV_SEK, rensId, rensNavn, maaGemme, status, kraev, kortId } = require('../../taeller/ejerskab');
+const { AKTIV_SEK, rensId, rensNavn, kampIGang, optaget, maaGemme, status, kraev, kortId } = require('../../taeller/ejerskab');
 
 const NU = 1_800_000_000_000;
 const TABLET = 'tablet-aaaaaaaa';
@@ -43,12 +43,40 @@ test('en anden enhed må ikke gemme, mens tælleren er aktiv — og ser hvem der
     assert.equal(s.overtagetFraDig, false);
 });
 
-test(`tæller uden lyd i over ${AKTIV_SEK} s (tablet løbet tør): banen er ledig igen`, () => {
+test(`tæller uden lyd i over ${AKTIV_SEK} s, og ingen kamp i gang: banen er ledig igen`, () => {
     const r = raekke({ taeller_set_at: sek(AKTIV_SEK + 1) });
     assert.equal(maaGemme(r, TELEFON, NU), true);
     assert.equal(status(r, TELEFON, NU).ledig, true);
     const lige = raekke({ taeller_set_at: sek(AKTIV_SEK) });
     assert.equal(maaGemme(lige, TELEFON, NU), false);
+});
+
+test('midt i en kamp bliver banen ikke ledig af stilhed (uret i pausen, telefon med gammel 0-0-skærm)', () => {
+    // Uret gav sidst lyd for 2 minutter siden — pausen mellem sæt
+    const r = raekke({ taeller_id: 'ur-cccccccccccc', taeller_navn: 'Ur', taeller_set_at: sek(120),
+        match_start_time: sek(900), match_completed: 0 });
+    assert.equal(maaGemme(r, TELEFON, NU), false);
+    const s = status(r, TELEFON, NU);
+    assert.equal(s.ledig, false);            // telefonen går i "Ser med" og må trykke "Overtag"
+    assert.equal(s.taeller.navn, 'Ur');
+    assert.equal(s.taeller.aktiv, false);    // "har ikke givet lyd i et stykke tid" — ingen bekræftelse ved Overtag
+    // Tælleren selv fortsætter bare
+    assert.equal(maaGemme(r, 'ur-cccccccccccc', NU), true);
+    assert.equal(status(r, 'ur-cccccccccccc', NU).ejer, true);
+    // Også efter lang tid (skadespause)
+    assert.equal(maaGemme({ ...r, taeller_set_at: sek(3600) }, TELEFON, NU), false);
+});
+
+test('kampen er ikke startet eller er slut: stilhed gør banen ledig som før', () => {
+    const foerStart = raekke({ taeller_set_at: sek(120), match_start_time: null, match_completed: 0 });
+    assert.equal(optaget(foerStart, NU), false);
+    assert.equal(maaGemme(foerStart, TELEFON, NU), true);
+    const slut = raekke({ taeller_set_at: sek(120), match_start_time: sek(900), match_completed: 1 });
+    assert.equal(kampIGang(slut), false);
+    assert.equal(maaGemme(slut, TELEFON, NU), true);
+    assert.equal(status(slut, TELEFON, NU).ledig, true);
+    // En startet kamp uden tæller (fx sat i gang fra admin) spærrer ingen
+    assert.equal(maaGemme({ taeller_id: null, match_start_time: sek(900), match_completed: 0 }, TELEFON, NU), true);
 });
 
 test('gemninger uden tæller-id (admin, ældre sider) spærres aldrig', () => {

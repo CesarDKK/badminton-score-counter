@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const { query } = require('./config/database');
+const { query, queryOne } = require('./config/database');
 const { runWithTenant } = require('./config/tenantPools');
 
 async function resetDatabase(dbLabel) {
@@ -98,18 +98,46 @@ function startExpirationCheck() {
 
 const INACTIVITY_MINUTES = 10;
 
+// Har banen en badmintonplanner-kamp? (tabellen findes først efter migration 027)
+async function harPlannerKamp(courtNumber) {
+    try {
+        return !!(await queryOne('SELECT court_number FROM planner_court_assignments WHERE court_number = ?', [courtNumber]));
+    } catch (e) {
+        return false;
+    }
+}
+
 async function releaseInactiveCourts(dbLabel) {
     // Find aktive baner hvor en kamp er startet men ikke afsluttet,
     // og der ikke har været aktivitet i INACTIVITY_MINUTES minutter.
-    const staleCourts = await query(
+    //
+    // Baner med en delkamp fra en holdkamp eller en turneringskamp røres ikke:
+    // en skadespause eller en tablet uden net i 10 minutter slettede før kampen
+    // uden spor, og delkampen bandt sig til banen igen som 0-0. De kampe styres
+    // fra admin og ryddes af deres eget forløb (resultat, "Ryd banen", afslutning).
+    const kandidater = await query(
         `SELECT c.id, c.court_number
          FROM courts c
          JOIN game_states gs ON gs.court_id = c.id
          WHERE c.is_active = TRUE
            AND gs.match_start_time IS NOT NULL
            AND gs.match_completed = FALSE
-           AND gs.updated_at < NOW() - INTERVAL ${INACTIVITY_MINUTES} MINUTE`
+           AND gs.updated_at < NOW() - INTERVAL ${INACTIVITY_MINUTES} MINUTE
+           AND NOT EXISTS (
+               SELECT 1 FROM team_match_games g
+                 JOIN team_matches tm ON tm.id = g.team_match_id
+                WHERE g.court_number = c.court_number AND g.status = 'active' AND tm.status = 'active')
+           AND NOT EXISTS (
+               SELECT 1 FROM tournament_matches m
+                 JOIN tournaments t ON t.id = m.tournament_id
+                WHERE m.court_number = c.court_number AND m.status = 'active' AND t.status = 'active')`
     );
+
+    // Heller ikke en kamp fra badmintonplanner: den står, til næste runde lægges på banen
+    const staleCourts = [];
+    for (const court of kandidater) {
+        if (!await harPlannerKamp(court.court_number)) staleCourts.push(court);
+    }
 
     if (!staleCourts.length) return;
 
@@ -477,4 +505,4 @@ function startUrPauser() {
     console.log('⏰ Scheduled urets pauser hvert 2. sekund (slutter ved 0:00, når uret tæller)');
 }
 
-module.exports = { startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk, startUgentligBackup, ugentligBackup, startSkaermLogOprydning, startUrPauser };
+module.exports = { releaseInactiveCourts, startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk, startUgentligBackup, ugentligBackup, startSkaermLogOprydning, startUrPauser };

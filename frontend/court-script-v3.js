@@ -1077,13 +1077,30 @@ async function initializeApp() {
     }
 }
 
-// Load game state from API
+// Banens tilstand hentes, før der kan tælles. Svarer serveren ikke (wifi-hik,
+// deploy), prøves der igen, til den gør: før fortsatte tabletten på en tom
+// 0-0-bane, og den næste gemning nulstillede den kamp, der var i gang.
+// Knapperne får først deres funktioner bagefter (setupEventListeners), så der
+// kan ikke tælles imens — beskeden siger hvorfor.
+const HENT_BANE_IGEN_MS = 3000;
 async function loadGameState() {
-    try {
-        applyLoadedState(await api.getGameState(courtId));
-    } catch (error) {
-        console.error('Failed to load game state:', error);
-        // Continue with default state
+    let fejlet = false;
+    for (;;) {
+        try {
+            applyLoadedState(await api.getGameState(courtId));
+            if (fejlet) hideMessage();
+            return;
+        } catch (error) {
+            console.error('Failed to load game state:', error);
+            // Et afslag fra serveren (fx banen findes ikke) ændrer sig ikke ved at vente
+            if (error && error.status >= 400 && error.status < 500) return;
+            if (!fejlet) {
+                fejlet = true;
+                showMessage('Henter banen …',
+                    'Der er ingen forbindelse til serveren lige nu.\nStillingen hentes, så snart den svarer — du behøver ikke gøre noget.', []);
+            }
+            await new Promise(resolve => setTimeout(resolve, HENT_BANE_IGEN_MS));
+        }
     }
 }
 
