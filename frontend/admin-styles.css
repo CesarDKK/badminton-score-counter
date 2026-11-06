@@ -978,6 +978,15 @@ header > div {
 
 .ls-start:empty { display: none; }
 
+/* Holdkampen bag banen (hvorfor den sendes, "Stop for i dag") — på sin egen linje over resten */
+.ls-holdkamp {
+    flex: 1 0 100%;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+}
+
 .ls-besked { margin-top: 6px; color: var(--color-win, #45d17e); }
 .ls-besked--fejl { color: rgb(var(--color-danger-rgb, 217, 44, 63)); }
 
