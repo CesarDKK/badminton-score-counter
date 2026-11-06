@@ -12,6 +12,8 @@ const { varighedTekst } = require('../config/matchTiming');
 const { gemSidsteAfsluttedeKamp } = require('../config/banerydning');
 // Kun én tæller ad gangen pr. bane (se taeller/ejerskab.js og migration 031)
 const ejerskab = require('../taeller/ejerskab');
+// Afgjorte holdkamp-/turneringskampe meldes ind af serveren
+const { meldAfgjortKamp } = require('../taeller/resultatMelding');
 // TV'ets LIVE-mærke: sender banens TV-PC kameraet lige nu?
 const { senderBane } = require('../screens/livestream');
 
@@ -690,10 +692,19 @@ async function gemTilstand(req, courtId, body, { skipAutoActive = false } = {}) 
     // rettes til 'unfinished', hvis afslutningen fortrydes
     const varAfsluttet = !!(existing && existing.match_completed);
     if (matchCompleted !== varAfsluttet) {
+        let frisk = null;
         try {
-            const frisk = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
+            frisk = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
             await gemPlannerResultat(parseInt(courtId, 10), frisk, { kunHvisFindes: !matchCompleted });
         } catch (e) { console.error('Planner-resultat fejlede:', e.message); }
+
+        // Holdkamp/turnering: kampen er netop afgjort — serveren melder selv
+        // resultatet ind til delkampen/turneringskampen på banen, så det ikke
+        // afhænger af, at tablettens eget kald når frem (taeller/resultatMelding.js)
+        if (matchCompleted && frisk) {
+            try { await meldAfgjortKamp(req, courtId, frisk); }
+            catch (e) { console.error('Indmelding af kampresultat fejlede:', e.message); }
+        }
     }
 
     // Auto-update court active status based on activity (unless skipped by admin)
@@ -962,6 +973,14 @@ router.delete('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), a
 
         // Set court to inactive and reset doubles mode
         await query('UPDATE courts SET is_active = FALSE, is_doubles = FALSE WHERE id = ?', [court.id]);
+
+        // En afgjort kamp, hvis delkamp/turneringskamp stadig står som i gang
+        // (indmeldingen nåede ikke frem), meldes ind nu — ellers satte linjerne
+        // herunder den tilbage til "afventer", og resultatet var væk
+        if (existing && existing.match_completed) {
+            try { await meldAfgjortKamp(req, courtId, existing); }
+            catch (e) { console.error('Indmelding af kampresultat fejlede:', e.message); }
+        }
 
         // Frigiv aktive tildelinger fra holdkamp/turnering — ellers vil court-sidens
         // næste sync re-binde den samme tildeling og bringe navnene tilbage straks
