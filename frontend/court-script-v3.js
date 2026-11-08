@@ -28,19 +28,26 @@ function matchIsLive() {
 }
 
 // ── Sync-status (offline-indikator) ──
-// Vises kun efter gentagne fejlede gemninger, så et enkelt blip ikke blinker.
-let _saveFailCount = 0;
+// Mærket "Ingen forbindelse — tæl videre, genindlæs ikke" vises, når en gemning
+// er fejlet (api.js har da allerede prøvet tre gange), eller når en gemning har
+// hængt i SYNC_LANGSOM_MS uden svar — før kom det først efter to fejlede
+// gemninger, dvs. 11 s ved dødt net og op mod 80 s ved halvdødt wifi, mens
+// TV'et stod stille uden et ord. Det ligger over dialogerne (sæt vundet, pause,
+// kampslut), så det ses midt i en sætpause. Skjules, når en gemning lykkes.
+const SYNC_LANGSOM_MS = 5000;
+let _syncLangsomTimer = null;
 function setSyncStatus(ok) {
     const badge = document.getElementById('syncStatusBadge');
     if (!badge) return;
-    if (ok) {
-        _saveFailCount = 0;
-        badge.style.display = 'none';
-    } else {
-        _saveFailCount++;
-        // Vis først efter 2 fejl i træk (ét kortvarigt blip skjules)
-        if (_saveFailCount >= 2) badge.style.display = 'flex';
-    }
+    badge.style.display = ok ? 'none' : 'flex';
+}
+// En gemning er begyndt: viser mærket, hvis den ikke er færdig om SYNC_LANGSOM_MS
+function syncGemningBegyndt() {
+    if (_syncLangsomTimer) clearTimeout(_syncLangsomTimer);
+    _syncLangsomTimer = setTimeout(() => { _syncLangsomTimer = null; setSyncStatus(false); }, SYNC_LANGSOM_MS);
+}
+function syncGemningFaerdig() {
+    if (_syncLangsomTimer) { clearTimeout(_syncLangsomTimer); _syncLangsomTimer = null; }
 }
 
 // ── Kun én tæller ad gangen pr. bane ──
@@ -400,11 +407,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     startTaellerPing();
     genoptagPause();
 
-    // QR-gæst der scanner ind i en allerede afsluttet kamp (banen er endnu ikke
-    // ryddet): tilbyd at starte en frisk kamp i samme session — så man ikke skal
-    // vente på "Ryd bane" eller admin for at komme i gang.
-    promptStartFreshIfCompleted();
-
     // Start timer if match is already in progress
     if (gameState.matchStartTime && !gameState.matchEndTime) {
         startTimer();
@@ -418,6 +420,12 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Load holdkamp panel
     await initHoldkampPanel();
+
+    // Banen står med en afsluttet kamp (ikke ryddet endnu): QR-gæsten tilbydes
+    // en frisk kamp i samme session, den faste tablet får kampslut-dialogen igen.
+    // Efter holdkamp-bindingen, så en delkamp, der stadig er aktiv (resultatet
+    // nåede ikke frem), får hold-knappen og dommerbeskeden som ved kampslut
+    promptStartFreshIfCompleted();
 
     // Klublogoer ved scoren (navnene kendes nu)
     refreshCourtLogos();
@@ -463,6 +471,7 @@ function setupEventListeners() {
     document.getElementById('startMatchBtn').addEventListener('click', startMatch);
     document.getElementById('undoBtn').addEventListener('click', undoLastAction);
     document.getElementById('skipRestBreak').addEventListener('click', endRestBreak);
+    document.getElementById('undoInRestBreak').addEventListener('click', undoLastAction);
     document.getElementById('clearCourtBtn').addEventListener('click', clearCourt);
 
     // Settings menu
@@ -864,7 +873,10 @@ function saetVundet(vinder) {
                 // Er pausen udløbet imens, er sættet allerede nulstillet
                 callback: () => { if (gameState.restBreakActive) showRestBreakOverlay(); },
                 style: 'primary'
-            }
+            },
+            // En forkert sætbold opdages her — før skulle man først springe
+            // pausen over (næste sæt begyndte, siderne byttedes) for at nå Fortryd
+            { text: 'Fortryd sidste point', callback: () => undoLastAction(), style: 'secondary' }
         ]
     );
 }
@@ -1804,11 +1816,13 @@ async function performSave() {
     isSaving = true;
     pendingSave = false;
     lastSaveStartedAt = Date.now();
+    syncGemningBegyndt();
 
     try {
         const stateToSave = buildSavePayload();
 
         const result = await api.updateGameState(courtId, stateToSave);
+        syncGemningFaerdig();
         if (result && typeof result.version === 'number') {
             gameState.version = result.version;
         }
@@ -1817,6 +1831,7 @@ async function performSave() {
         setSyncStatus(true); // gemning lykkedes — skjul evt. offline-badge
         console.log('Game state saved');
     } catch (error) {
+        syncGemningFaerdig();
         if (error && error.status === 409) {
             // Konflikt — merge og lad finally-blokken genkøre gemningen.
             // En 409 er et svar fra serveren, ikke et forbindelsestab.
@@ -1987,8 +2002,10 @@ async function adoptServerReset(loaded) {
 }
 
 // Ved indlæsning: hvis banen står med en afsluttet QR-kamp (ikke ryddet endnu),
-// så tilbyd den scannende gæst at starte en frisk kamp. Kun for QR-sessioner —
-// holdkamp/turnering og direkte tilstand håndteres af admin/tablet som hidtil.
+// så tilbyd den scannende gæst at starte en frisk kamp. På en fast tablet vises
+// kampslut-dialogen igen (resultatet og "Ny kamp") — ellers stod tavlen død med
+// grå +1-knapper og ingen Start-knap, og i turneringstilstand (uden "Ryd banen"
+// i menuen) kunne kun admin komme videre.
 function promptStartFreshIfCompleted() {
     if (serMed || !gameState.matchCompleted) return;
     // Planner-bane: resultatet står til næste runde — vis det, så det kan rettes
@@ -1996,7 +2013,10 @@ function promptStartFreshIfCompleted() {
         showMatchWonMessage();
         return;
     }
-    if (!isMatchSessionToken()) return;
+    if (!isMatchSessionToken()) {
+        showMatchWonMessage(!!(assignedHoldkampGameId || assignedTournamentMatchId));
+        return;
+    }
 
     const p1Won = (gameState.player1.games || 0) > (gameState.player2.games || 0);
     const winnerNames = p1Won
@@ -2401,13 +2421,18 @@ function showMatchWonMessage(isReportedMatch = false) {
     const bodyHtml = `<div style="display:flex;flex-direction:column;align-items:center;">${winnerLine}${tableHtml}${noticeHtml}</div>`;
 
     // Planner-bane: resultatet bliver stående til næste runde (TV viser det), og
-    // kan rettes — "Ny kamp" ville slette rundens navne fra banen
+    // kan rettes — "Ny kamp" ville slette rundens navne fra banen.
+    // En talt kamp: "Ny kamp" rydder banen med det samme — resultatet er gemt i
+    // kamphistorikken, og en bekræftelse oveni efterlod en død tavle, når man
+    // trykkede Annuller (kampslut-dialogen var væk, og Start-knappen grå). En
+    // forkert matchbold fortrydes her i stedet for bag dialogen
     const buttons = isReportedMatch
         ? [{ text: 'Ryd banen (hold 3 sek.)', callback: () => performClearCourtNow(), style: 'danger', holdDurationMs: 3000 }]
         : gameState.planner
         ? [{ text: 'Ret resultat', callback: () => openResultForm(), style: 'secondary' },
            { text: 'Luk', callback: null, style: 'primary' }]
-        : [{ text: 'Ny kamp', callback: () => clearCourt(), style: 'primary' }];
+        : [{ text: 'Ny kamp', callback: () => performClearCourtNow(), style: 'primary' },
+           ...(outcome ? [] : [{ text: 'Fortryd sidste point', callback: () => undoLastAction(), style: 'secondary' }])];
 
     const titel = outcome === 'walkover' ? 'Walkover'
         : outcome === 'ended_early' ? 'Kamp Afsluttet'

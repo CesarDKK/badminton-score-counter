@@ -1,15 +1,22 @@
 /**
  * Adgangslink-vagt til enhederne (TV, bane-tablet, oversigt; loades efter api.js).
  *
- * Enhedens session gælder længe (TV: 180 dage) og har bane og låsning bagt ind,
- * og TV'ets QR-valg står i adressen. Redigerer admin linket (bane, type, låsning,
- * QR), spørger enheden her hvert minut, om linket stadig peger samme sted hen —
- * og er det ændret, henter den en ny session og skifter side. Navnet alene
+ * Enhedens session gælder længe (TV: 180 dage, tablet: 14) og har bane og låsning
+ * bagt ind, og TV'ets QR-valg står i adressen. Redigerer admin linket (bane, type,
+ * låsning, QR), spørger enheden her hvert minut, om linket stadig peger samme sted
+ * hen — og er det ændret, henter den en ny session og skifter side. Navnet alene
  * udløser intet skift.
+ *
+ * Sessionen fornys også, før den udløber: en tablet i holderen med samme fane
+ * åben røg ellers på login-siden præcis 14 dage efter, at linket blev åbnet —
+ * samme ugedag og klokkeslæt, typisk midt i den samme ugentlige træning. Er der
+ * under FORNY_FOER_MS tilbage, byttes sessionen ud med en ny uden at genindlæse
+ * siden. Et spærret eller slettet link kan ikke fornys (siden håndterer det selv).
  */
 (function () {
     const api = window.BadmintonAPI;
     const INTERVAL_MS = 60 * 1000;
+    const FORNY_FOER_MS = 3 * 24 * 60 * 60 * 1000;
 
     // Sessionen fra enhedens faste adgangslink — ikke et admin-login eller en QR-tæller
     function linkSession() {
@@ -29,6 +36,28 @@
         return nu.destination.startsWith('tv/') && qr !== null && qr !== (nu.showQrOnTv ? '1' : '0');
     }
 
+    // Under FORNY_FOER_MS tilbage af sessionen? (exp er i sekunder)
+    function skalFornys(p) {
+        return !!p.exp && p.exp * 1000 - Date.now() < FORNY_FOER_MS;
+    }
+
+    // Ny session fra serveren (samme link, samme sted): sessionen i adressen,
+    // serveren sender tilbage, tages i brug her — uden genindlæsning, så en kamp
+    // midt i det hele ikke forstyrres. Ren funktion, så den kan testes
+    function sessionFraAdresse(url) {
+        try { return new URL(url, window.location.origin).searchParams.get('dt'); } catch { return null; }
+    }
+    window.AdgangslinkVagt = { sessionFraAdresse, skalFornys, FORNY_FOER_MS, tjek: () => tjek() };
+
+    async function forny() {
+        const svar = await api.request('/device-tokens/mit/skift', { method: 'POST' }, 1);
+        const ny = sessionFraAdresse(svar && svar.url);
+        if (!ny) return;
+        sessionStorage.setItem('deviceToken', ny);
+        api.token = ny;
+        console.log('[adgangslink] sessionen er fornyet');
+    }
+
     let igang = false;
     async function tjek() {
         const p = linkSession();
@@ -36,7 +65,11 @@
         igang = true;
         try {
             const nu = await api.request('/device-tokens/mit', {}, 1);
-            if (!nu || !nu.destination || !erAendret(p, nu)) return;
+            if (!nu || !nu.destination) return;
+            if (!erAendret(p, nu)) {
+                if (skalFornys(p)) await forny();
+                return;
+            }
             const svar = await api.request('/device-tokens/mit/skift', { method: 'POST' }, 1);
             // Skærmens navn og TV-PC'ens version (fra kiosk-PC'en) følger med videre
             const ny = new URL(svar.url, window.location.origin);
@@ -55,4 +88,7 @@
 
     setInterval(tjek, INTERVAL_MS);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) tjek(); });
+    // Også ved start: en tablet, der tændes med to dage tilbage, skal ikke vente
+    // på det første minut-tjek — men først når siden er klar
+    window.addEventListener('load', () => setTimeout(tjek, 3000));
 })();
