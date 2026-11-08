@@ -1506,27 +1506,39 @@ html, body {
     border-radius: var(--radius-pill);
 }
 
+/* "Fortryd sidste point" i pausen: under "Fortsæt kamp", mindre og dæmpet, så
+   den ikke tages for hovedknappen */
+.court-overlay-undo {
+    display: block;
+    margin: 18px auto 0;
+    font-size: 1.05em;
+    padding: 12px 28px;
+    opacity: 0.85;
+}
+
 /* (Tandhjulets størrelser pr. breakpoint styres af --cv-ctrl-h /
    --cv-gear-pad / --cv-gear-icon tokens i media-blokkene ovenfor) */
 
 
 /* ── Sync-status badge (offline-indikator) ──
-   Vises kun når en gemning fejler. Fast, diskret placering øverst til højre
-   så den ikke dækker score/knapper. Farve fra --color-warning (styles.css). */
+   Vises når en gemning fejler eller hænger. Fast placering øverst til højre,
+   så den ikke dækker score/knapper — og over dialogerne (pause/sæt/kampslut
+   ligger på 9999–10000), så den også ses midt i en sætpause. Mørk bund, så den
+   kan læses oven på dialogernes sorte flade. Farve fra --color-warning. */
 #syncStatusBadge {
     position: fixed;
     top: 10px;
     right: 12px;
-    z-index: 9000;
+    z-index: 10001;
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 12px;
+    padding: 8px 14px;
     border-radius: 999px;
-    background: rgba(var(--color-warning-rgb), 0.15);
-    border: 1px solid rgba(var(--color-warning-rgb), 0.5);
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(var(--color-warning-rgb), 0.6);
     color: var(--color-warning);
-    font-size: 0.8rem;
+    font-size: 0.95rem;
     font-weight: 600;
     letter-spacing: 0.02em;
     backdrop-filter: blur(4px);

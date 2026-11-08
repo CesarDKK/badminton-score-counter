@@ -50,6 +50,12 @@
     if (deviceToken && isExpired(deviceToken)) {
         sessionStorage.removeItem('deviceToken');
         deviceToken = null;
+        // Login-siden forklarer, hvorfor enheden står der (session-vagt.js viser
+        // beskeden) — en adgangskode hjælper ikke, linket skal åbnes igen
+        if (!authToken) {
+            sessionStorage.setItem('loginBesked',
+                'Enhedens adgang er udløbet. Åbn adgangslinket fra admin igen for at komme tilbage til skærmen.');
+        }
     }
 
     // Ingen gyldig auth — send til klub-login med redirect tilbage

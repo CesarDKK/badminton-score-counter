@@ -14,6 +14,16 @@ const R = window.TaellerRegler;
 const LAGER = 'ur-taeller';
 const POLL_MS = 3000;
 const IKKE_SENDT_MS = 3000;
+// Et kald, der hænger, spærrer køen — derfor en timeout, så næste forsøg kommer
+const KALD_TIMEOUT_MS = 8000;
+// Dobbelttryk: to point på samme side inden for så kort tid er ét tryk (som
+// tabletten, court-script-v3.js addPoint)
+const DOBBELTTRYK_MS = 300;
+// Ved sæt- og matchbold forsvinder spillerne, og store knapper ("Fortsæt", "Ny
+// kamp", "Færdig") fylder skærmen dér, hvor fingeren lige var. De er spærret et
+// øjeblik efter skiftet, så et dobbelttryk ikke springer pausen over eller
+// starter en ny kamp
+const SKIFT_SPAERRING_MS = 800;
 
 // Det, uret husker mellem åbningerne: sessionen, enhedens id, løbenummeret og
 // tryk, der ikke er nået frem endnu
@@ -33,13 +43,23 @@ let sender = false;
 let senderSiden = Date.now();   // hvornår det ældste tryk i køen blev trykket
 let spaerret = false;
 let pauseSendt = false;
+let sidstePoint = { side: 0, tid: 0 };   // dobbelttryk-værn
+let skaermSkiftTid = 0;                  // hvornår de store knapper kom frem
+let koblerPaa = false;                   // tastaturet er låst, mens der kobles
 
 const $ = (id) => document.getElementById(id);
 
 async function kald(sti, opt = {}) {
     const headers = { 'Content-Type': 'application/json' };
     if (gemt.token) headers.Authorization = 'Bearer ' + gemt.token;
-    const res = await fetch('/api' + sti, { ...opt, headers, cache: 'no-store' });
+    const styring = new AbortController();
+    const timer = setTimeout(() => styring.abort(), KALD_TIMEOUT_MS);
+    let res;
+    try {
+        res = await fetch('/api' + sti, { ...opt, headers, cache: 'no-store', signal: styring.signal });
+    } finally {
+        clearTimeout(timer);
+    }
     let data = null;
     try { data = await res.json(); } catch { /* tomt svar */ }
     return { status: res.status, data };
@@ -82,6 +102,8 @@ function byggTastatur() {
         b.textContent = k;
         if (k === 'OK') b.className = 'ok';
         b.addEventListener('click', () => {
+            // Mens der kobles, sendes koden ikke igen (et 7. ciffer talte mod grænsen)
+            if (koblerPaa) return;
             if (k === '⌫') kode = kode.slice(0, -1);
             else if (k === 'OK') { if (kode.length === 6) kobl(kode); }
             else if (kode.length < 6) kode += k;
@@ -92,23 +114,41 @@ function byggTastatur() {
     });
 }
 
-async function kobl(k) {
+// fraLink: koden kom fra telefonens link (?k=). Linket åbnes tit igen til næste
+// kamp, men banen har fået en ny kode efter forrige kamp — så er uret stadig
+// koblet på, og den gemte kobling bruges i stedet for at smide den væk
+async function kobl(k, fraLink = false) {
+    koblerPaa = true;
     kodeTekst('Kobler på …');
     try {
         const { status, data } = await kald('/ur/kobl', { method: 'POST', body: JSON.stringify({ kode: k }) });
         if (status !== 200) {
+            if (fraLink && gemt.token) return brugGemtKobling('Koden er fra forrige kamp — uret er stadig på banen');
             visKode((data && data.error) || 'Koden virker ikke');
             return;
         }
-        // Ny bane: trykkene til den forrige bane hører ikke til her
-        gemt = { ...gemt, token: data.token, bane: data.bane, ko: [] };
+        // Samme bane: usendte tryk hører stadig til her. Ny bane: trykkene til
+        // den forrige bane gør ikke
+        const ko = gemt.token && data.bane === gemt.bane ? gemt.ko : [];
+        gemt = { ...gemt, token: data.token, bane: data.bane, ko };
         gem();
         raekkefoelge = null;
         visKamp();
         hent();
+        send();
     } catch {
+        if (fraLink && gemt.token) return brugGemtKobling('Ingen forbindelse — uret er stadig på banen');
         visKode('Ingen forbindelse — prøv igen');
+    } finally {
+        koblerPaa = false;
     }
+}
+
+function brugGemtKobling(tekst) {
+    visKamp();
+    visBesked(tekst, 6000);
+    hent();
+    send();
 }
 
 function sessionSlut(tekst) {
@@ -139,6 +179,9 @@ async function hent() {
         const { status, data } = await kald(`/ur/bane?taellerId=${gemt.taeller}`);
         if (status === 401 || status === 403) return sessionSlut(udTekst(data));
         if (status !== 200) return;
+        // Trykket imens: svaret er ældre end trykket og ville vise stillingen
+        // et point tilbage, til trykkets svar kommer
+        if (gemt.ko.length || sender) return;
         spaerret = !!data.spaerret;
         modtag(data);
     } catch { /* intet net: prøv igen ved næste poll */ }
@@ -206,11 +249,22 @@ function trykPaaSpiller(i) {
     const side = sideFor(st, raekkefoelge[i]);
     // Før kampen tælles intet — kampen begynder med "Start kamp"
     if (klarTilStart(st)) return;
+    // Dobbelttryk på samme side er ét tryk (hvert tryk har ellers sit eget
+    // løbenummer, så serveren ville tælle begge)
+    const nu = Date.now();
+    if (sidstePoint.side === side && nu - sidstePoint.tid < DOBBELTTRYK_MS) return;
     // Afvises reglerne trykket (afgjort kamp, sætpause), sendes det ikke
     const proeve = JSON.parse(JSON.stringify(st));
     proeve.history = [];
     if (!pointLokalt(proeve, side).ok) return;
+    sidstePoint = { side, tid: nu };
     tryk('P' + side);
+}
+
+// De store knapper lige efter et skærmskift: trykket var ment til spilleren,
+// der stod der for et øjeblik siden
+function storKnapSpaerret() {
+    return Date.now() - skaermSkiftTid < SKIFT_SPAERRING_MS;
 }
 
 async function send() {
@@ -247,7 +301,23 @@ async function send() {
             modtag(data);
             continue;
         }
+        if (status === 404 && data && data.error) {
+            // Banen findes ikke længere, eller tælling fra ur er slået fra midt i
+            // kampen: trykkene kan aldrig sendes — før stod uret på "prøver igen" for evigt
+            sender = false;
+            return sessionSlut(data.error);
+        }
+        if (status >= 400 && status < 500 && status !== 429 && status !== 409) {
+            // Afvist af serveren (fx ugyldigt tryk): at sende det igen hjælper
+            // ikke. Køen tømmes, så næste tryk kan komme frem, og fejlen vises
+            gemt.ko = [];
+            gem();
+            visBesked((data && data.error) || 'Trykket blev afvist', 6000);
+            break;
+        }
         if (status !== 200) {
+            // Serveren er nede, nettet er væk, 429 (for mange kald) eller 409
+            // ("banen blev ændret samtidig"): prøv igen om lidt
             sender = false;
             tegn();
             setTimeout(send, 2000);
@@ -264,6 +334,9 @@ async function send() {
         if (data.haendelser && data.haendelser.includes('kamp')) pauseSendt = false;
         // Ny kamp afvist: badmintonplanner-banens resultat står til næste runde
         if (t.handling === 'N' && data.afvist && data.slut) visBesked('Resultatet bliver stående til næste runde');
+        // Fortryd uden virkning (fx efter en navnerettelse i admin eller en
+        // overtagelse, hvor historikken ikke længere gælder): sig det
+        if (t.handling === 'U' && data.afvist) visBesked('Intet at fortryde');
     }
     sender = false;
     tegn();
@@ -271,9 +344,9 @@ async function send() {
 
 let beskedTil = 0;
 let besked = '';
-function visBesked(tekst) {
+function visBesked(tekst, ms = 4000) {
     besked = tekst;
-    beskedTil = Date.now() + 4000;
+    beskedTil = Date.now() + ms;
 }
 
 function mmss(ms) {
@@ -317,8 +390,15 @@ function tegn() {
     // spillerne skjules, og store knapper fylder skærmen
     const iPause = pause && !st.matchCompleted && !spaerret;
     const slut = st.matchCompleted && !spaerret;
-    $('kampSide').classList.toggle('i-pause', iPause);
-    $('kampSide').classList.toggle('slut', slut);
+    const kamp = $('kampSide');
+    // Spillerne forsvinder, og de store knapper kommer frem: spær dem et øjeblik
+    if ((iPause && !kamp.classList.contains('i-pause')) || (slut && !kamp.classList.contains('slut'))) {
+        skaermSkiftTid = Date.now();
+    }
+    kamp.classList.toggle('i-pause', iPause);
+    kamp.classList.toggle('slut', slut);
+    // Tryk, der ikke er nået frem, vises nedtonet, til serveren har svaret
+    kamp.classList.toggle('venter', gemt.ko.length > 0);
     if (iPause) $('overskrift').textContent = saetPause ? 'Sæt vundet · pause' : 'Pause';
 
     // "Fortsæt" med nedtællingen. Pausen ved 11 (8) slutter også ved næste
@@ -377,17 +457,18 @@ byggTastatur();
 $('side0').addEventListener('click', () => trykPaaSpiller(0));
 $('side1').addEventListener('click', () => trykPaaSpiller(1));
 $('fortryd').addEventListener('click', () => { if (!spaerret) tryk('U'); });
-$('naeste').addEventListener('click', () => tryk('B'));
+// De store knapper efter sæt- og matchbold er spærret lige efter skiftet
+$('naeste').addEventListener('click', () => { if (!storKnapSpaerret()) tryk('B'); });
 $('startKamp').addEventListener('click', startKamp);
-$('nyKamp').addEventListener('click', () => { if (!spaerret) tryk('N'); });
-$('faerdig').addEventListener('click', () => tryk('F'));
+$('nyKamp').addEventListener('click', () => { if (!spaerret && !storKnapSpaerret()) tryk('N'); });
+$('faerdig').addEventListener('click', () => { if (!storKnapSpaerret()) tryk('F'); });
 $('faerdigLille').addEventListener('click', () => tryk('F'));
 $('overtag').addEventListener('click', overtag);
 
 const k = new URLSearchParams(location.search).get('k');
 if (k && /^\d{6}$/.test(k)) {
     history.replaceState(null, '', location.pathname);
-    kobl(k);
+    kobl(k, true);
 } else if (gemt.token) {
     visKamp();
     hent();

@@ -96,6 +96,12 @@
         .stor.primaer:active { filter: brightness(0.9); }
         .stor .tid { font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
         #kampSide.i-pause .spillere, #kampSide.slut .spillere { display: none; }
+        /* Tryk, der ikke er nået frem: pointtallene står nedtonet, til serveren har svaret */
+        #kampSide.venter .spiller .point { opacity: 0.45; }
+        /* De store knapper er spærret et øjeblik, når de kommer frem (ur-script.js
+           SKIFT_SPAERRING_MS) — de toner ind, så det kan ses, at de ikke er klar endnu */
+        #kampSide.i-pause .stor, #kampSide.slut .stor { animation: knapKlar 0.8s ease-out both; }
+        @keyframes knapKlar { from { opacity: 0.25; } 60% { opacity: 0.25; } to { opacity: 1; } }
         /* Kampslut: Fortryd er lige så stor som "Ny kamp" og "Færdig" */
         #kampSide.slut .raekke { flex: 1 0 0; min-height: 34px; }
         #kampSide.slut .raekke button { border: 2px solid var(--kant); border-radius: 12px; font-size: 18px; font-weight: 700; }
@@ -132,6 +138,6 @@
     </div>
 
     <script src="js/taeller-regler.js?v=2"></script>
-    <script src="ur-script.js?v=10"></script>
+    <script src="ur-script.js?v=11"></script>
 </body>
 </html>

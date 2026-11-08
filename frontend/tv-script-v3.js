@@ -73,6 +73,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         refreshSponsorSettings();
         invalidateTvLogoCache();
         _tvByCourtDirty = true; // genhent også holdkamp-bindingen som sikkerhedsnet
+        qrCounterMode = null;   // og QR-koden (et misset 'reset'-event må ikke efterlade en død QR)
         scheduleCourtDataLoad();
     }, 5 * 60 * 1000);
 });
@@ -120,6 +121,9 @@ async function initializeTVDisplay() {
         qrCounterEnabled = !!modeData.qrCounter && qrAllowedByToken;
     } catch (e) {
         qrCounterEnabled = false;
+        // Kiosk-PC'en kan nå at åbne siden, før nettet er klar: uden et nyt
+        // forsøg stod TV'et uden QR-kode resten af dagen
+        hentQrTilladelseIgen(qrAllowedByToken);
     }
 
     try {
@@ -142,6 +146,23 @@ async function initializeTVDisplay() {
     } catch (error) {
         console.error('Failed to initialize TV display:', error);
     }
+}
+
+// /api/mode svarede ikke ved start: prøv igen hvert 15. sekund, til svaret er
+// der, og vis så QR-koden (hideTvQr læses med, som ved start)
+const QR_TILLADELSE_RETRY_MS = 15000;
+function hentQrTilladelseIgen(qrAllowedByToken) {
+    setTimeout(async () => {
+        try {
+            const modeData = await (await fetch('/api/mode')).json();
+            let skjult = false;
+            try { skjult = !!(await api.getSettings()).hideTvQr; } catch { /* settings følger ved næste config-event */ }
+            qrCounterEnabled = !!modeData.qrCounter && qrAllowedByToken && !skjult;
+            scheduleCourtDataLoad();
+        } catch {
+            hentQrTilladelseIgen(qrAllowedByToken);
+        }
+    }, QR_TILLADELSE_RETRY_MS);
 }
 
 // Med SSE er polling kun et sikkerhedsnet; uden SSE polles som hidtil.
@@ -167,6 +188,13 @@ function startAutoRefresh() {
                     // 'assignment': admin har (af)tildelt en holdkamp til banen →
                     // genhent bindingen så hold-logoerne opdateres.
                     if (event && event.type === 'assignment') _tvByCourtDirty = true;
+                    // 'reset': banen er ryddet, og serveren har slettet banens
+                    // QR-token. Stod TV'et allerede på "ledig" (admin nulstillede en
+                    // tom bane, eller en QR-telefon trykkede "Ryd banen"), skiftede
+                    // tilstanden ikke, og den gamle, døde QR-kode blev stående
+                    // resten af dagen — "Ugyldigt eller deaktiveret adgangslink"
+                    // ved scanning. Hent den igen
+                    if (event && event.type === 'reset') qrCounterMode = null;
                     scheduleCourtDataLoad();
                 }
             },
