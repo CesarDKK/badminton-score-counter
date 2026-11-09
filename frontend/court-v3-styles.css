@@ -1450,7 +1450,7 @@ html, body {
     flex: 1;
     min-width: 180px;
     padding: 8px 12px;
-    background: #1a1a2e;
+    background: var(--color-bg-dark, #11212d);
     color: var(--text-primary, #eaeaea);
     border: 1px solid var(--glass-border);
     border-radius: 10px;

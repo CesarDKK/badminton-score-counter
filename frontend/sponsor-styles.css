@@ -120,14 +120,14 @@
     padding: 28px;
     background: rgba(255, 255, 255, 0.02);
     border-radius: 12px;
-    border: 1px dashed rgba(var(--color-primary-rgb, 83, 52, 131), 0.4);
+    border: 1px dashed rgba(var(--color-primary-rgb, 74, 92, 106), 0.4);
     width: 100%;
     transition: border-color 0.2s ease, background 0.2s ease;
 }
 
 .upload-box:hover {
     border-color: var(--color-primary);
-    background: rgba(var(--color-primary-rgb, 83, 52, 131), 0.05);
+    background: rgba(var(--color-primary-rgb, 74, 92, 106), 0.05);
 }
 
 .upload-box .btn-primary {
@@ -182,7 +182,7 @@
 .gallery-item:hover {
     transform: translateY(-3px);
     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
-    border-color: rgba(var(--color-primary-rgb, 83, 52, 131), 0.35);
+    border-color: rgba(var(--color-primary-rgb, 74, 92, 106), 0.35);
 }
 
 /* Inactive and expired gallery items - dimmed appearance */

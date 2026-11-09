@@ -7,11 +7,11 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=5">
     <link rel="icon" type="image/png" href="/favicon.png?v=5">
     <link rel="stylesheet" href="fonts.css?v=2">
-    <link rel="stylesheet" href="fundament.css?v=2">
+    <link rel="stylesheet" href="fundament.css?v=3">
     <link rel="stylesheet" href="styles.css?v=11">
     <link rel="stylesheet" href="admin-styles.css?v=14">
     <link rel="stylesheet" href="settings-styles.css?v=3">
-    <script src="js/theme-loader.js?v=15"></script>
+    <script src="js/theme-loader.js?v=16"></script>
 </head>
 <body>
     <div class="bg-glow"></div>
@@ -53,11 +53,19 @@
                     <div class="preset-grid">
                         <button class="preset-btn active" data-theme="default">
                             <div class="preset-preview">
+                                <span class="color-dot" style="background: #4a5c6a;"></span>
+                                <span class="color-dot" style="background: #e94560;"></span>
+                                <span class="color-dot" style="background: #11212d;"></span>
+                            </div>
+                            <span class="preset-name">Standard</span>
+                        </button>
+                        <button class="preset-btn" data-theme="classic">
+                            <div class="preset-preview">
                                 <span class="color-dot" style="background: #533483;"></span>
                                 <span class="color-dot" style="background: #e94560;"></span>
                                 <span class="color-dot" style="background: #1a1a2e;"></span>
                             </div>
-                            <span class="preset-name">Standard</span>
+                            <span class="preset-name">Klassisk</span>
                         </button>
                         <button class="preset-btn" data-theme="ocean">
                             <div class="preset-preview">
@@ -99,14 +107,6 @@
                             </div>
                             <span class="preset-name">Monokrom</span>
                         </button>
-                        <button class="preset-btn" data-theme="slate">
-                            <div class="preset-preview">
-                                <span class="color-dot" style="background: #4a5c6a;"></span>
-                                <span class="color-dot" style="background: #e94560;"></span>
-                                <span class="color-dot" style="background: #11212d;"></span>
-                            </div>
-                            <span class="preset-name">Skifer</span>
-                        </button>
                     </div>
                 </div>
 
@@ -118,8 +118,8 @@
                     <div class="color-picker-row">
                         <label>Primær farve:</label>
                         <div class="color-input-group">
-                            <input type="color" id="colorPrimary" value="#533483">
-                            <input type="text" id="colorPrimaryHex" value="#533483" pattern="^#[0-9A-Fa-f]{6}$">
+                            <input type="color" id="colorPrimary" value="#4a5c6a">
+                            <input type="text" id="colorPrimaryHex" value="#4a5c6a" pattern="^#[0-9A-Fa-f]{6}$">
                         </div>
                     </div>
 
@@ -134,24 +134,24 @@
                     <div class="color-picker-row">
                         <label>Mørk baggrund:</label>
                         <div class="color-input-group">
-                            <input type="color" id="colorBgDark" value="#1a1a2e">
-                            <input type="text" id="colorBgDarkHex" value="#1a1a2e" pattern="^#[0-9A-Fa-f]{6}$">
+                            <input type="color" id="colorBgDark" value="#11212d">
+                            <input type="text" id="colorBgDarkHex" value="#11212d" pattern="^#[0-9A-Fa-f]{6}$">
                         </div>
                     </div>
 
                     <div class="color-picker-row">
                         <label>Container baggrund:</label>
                         <div class="color-input-group">
-                            <input type="color" id="colorBgContainer" value="#16213e">
-                            <input type="text" id="colorBgContainerHex" value="#16213e" pattern="^#[0-9A-Fa-f]{6}$">
+                            <input type="color" id="colorBgContainer" value="#253745">
+                            <input type="text" id="colorBgContainerHex" value="#253745" pattern="^#[0-9A-Fa-f]{6}$">
                         </div>
                     </div>
 
                     <div class="color-picker-row">
                         <label>Kort baggrund:</label>
                         <div class="color-input-group">
-                            <input type="color" id="colorBgCard" value="#252347">
-                            <input type="text" id="colorBgCardHex" value="#252347" pattern="^#[0-9A-Fa-f]{6}$">
+                            <input type="color" id="colorBgCard" value="#06141b">
+                            <input type="text" id="colorBgCardHex" value="#06141b" pattern="^#[0-9A-Fa-f]{6}$">
                         </div>
                     </div>
 
@@ -194,6 +194,6 @@
     <script src="js/api.js?v=39"></script>
     <script src="js/session-vagt.js?v=2"></script>
     <script src="js/auth-guard.js?v=4"></script>
-    <script src="theme-script.js?v=10"></script>
+    <script src="theme-script.js?v=11"></script>
 </body>
 </html>

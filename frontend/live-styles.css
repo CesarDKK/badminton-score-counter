@@ -2,11 +2,11 @@
 
 /* Tema-standarder; theme-loader.js overskriver dem med klubbens farver */
 :root {
-    --color-primary: #533483;
+    --color-primary: #4a5c6a;
     --color-accent: #e94560;
     --color-bg-dark: #0f0e17;
-    --color-bg-card: #252347;
-    --color-primary-rgb: 83, 52, 131;
+    --color-bg-card: #06141b;
+    --color-primary-rgb: 74, 92, 106;
     --color-accent-rgb: 233, 69, 96;
 }
 

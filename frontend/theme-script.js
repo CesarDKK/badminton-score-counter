@@ -2,9 +2,20 @@
 const api = window.BadmintonAPI;
 
 // Theme Presets
+// Standard er skifer-paletten (fra nov. 2026). Det tidligere lilla standardtema
+// hedder nu Klassisk. Migration 043 flytter klubber, der stadig havde det gamle
+// standardtema, over på det nye.
 const THEME_PRESETS = {
     default: {
         name: 'Standard',
+        colorPrimary: '#4a5c6a',
+        colorAccent: '#e94560',
+        colorBgDark: '#11212d',
+        colorBgContainer: '#253745',
+        colorBgCard: '#06141b'
+    },
+    classic: {
+        name: 'Klassisk',
         colorPrimary: '#533483',
         colorAccent: '#e94560',
         colorBgDark: '#1a1a2e',
@@ -50,14 +61,6 @@ const THEME_PRESETS = {
         colorBgDark: '#111827',
         colorBgContainer: '#1f2937',
         colorBgCard: '#374151'
-    },
-    slate: {
-        name: 'Skifer',
-        colorPrimary: '#4a5c6a',
-        colorAccent: '#e94560',
-        colorBgDark: '#11212d',
-        colorBgContainer: '#253745',
-        colorBgCard: '#06141b'
     }
 };
 
