@@ -7,8 +7,10 @@ import android.net.Network
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.text.InputType
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.*
 import android.widget.*
@@ -24,12 +26,17 @@ class MainActivity : AppCompatActivity() {
     private var screenTimeoutRunnable: Runnable? = null
 
     private lateinit var offlineOverlay: View
+    private lateinit var offlineTitle: TextView
     private lateinit var offlineMessage: TextView
     private var pageFailed = false
     private var failedUrl: String? = null
     private var isActive = false
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private val retryRunnable = Runnable { retryNow() }
+
+    // WebView'en gik ned (se genskabWebView)
+    private val nedbrud = ArrayDeque<Long>()
+    private var genindlaesVedResume = false
 
     companion object {
         private const val PREF_NAME = "BadmintonCourtCounter"
@@ -40,6 +47,10 @@ class MainActivity : AppCompatActivity() {
         private const val DEFAULT_COURT_ID = "1"
         private const val SCREEN_TIMEOUT_MS = 10 * 60 * 1000L
         private const val RETRY_MS = 5_000L
+
+        // WebView'en går ned så mange gange inden for NEDBRUD_VINDUE_MS: stop og vis en knap
+        private const val NEDBRUD_MAX = 3
+        private const val NEDBRUD_VINDUE_MS = 2 * 60 * 1000L
 
         // Et adgangslink indeholder /t/ i URL'en
         fun isTokenUrl(url: String) = url.contains("/t/")
@@ -145,6 +156,14 @@ class MainActivity : AppCompatActivity() {
                 if ((errorResponse?.statusCode ?: 0) >= 500) {
                     showOffline(request.url.toString(), R.string.offline_message_server)
                 }
+            }
+
+            // Android 8+: WebView'ens proces gik ned (eller blev lukket for at spare
+            // hukommelse, mens skærmen var slukket). Uden dette lukker hele appen,
+            // og tabletten står på startskærmen
+            override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
+                genskabWebView(view)
+                return true
             }
         }
 
@@ -274,6 +293,8 @@ class MainActivity : AppCompatActivity() {
         resetScreenTimeout()
         // Skærmen tændt igen efter en fejl: prøv straks (og derefter hvert RETRY_MS)
         if (pageFailed) retryNow()
+        else if (genindlaesVedResume) loadPage()
+        genindlaesVedResume = false
     }
 
     override fun onPause() {
@@ -302,6 +323,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupOfflineOverlay() {
         offlineOverlay = findViewById(R.id.offlineOverlay)
+        offlineTitle = findViewById(R.id.offlineTitle)
         offlineMessage = findViewById(R.id.offlineMessage)
         findViewById<Button>(R.id.offlineReload).setOnClickListener { retryNow() }
 
@@ -323,6 +345,7 @@ class MainActivity : AppCompatActivity() {
     private fun showOffline(url: String, messageRes: Int) {
         pageFailed = true
         failedUrl = url
+        offlineTitle.setText(R.string.offline_title)
         offlineMessage.setText(messageRes)
         offlineOverlay.visibility = View.VISIBLE
         scheduleRetry()
@@ -343,5 +366,47 @@ class MainActivity : AppCompatActivity() {
         val url = failedUrl
         if (url != null) webView.loadUrl(url) else loadPage()
         resetScreenTimeout()
+    }
+
+    // ── WebView'en gik ned ──
+    // Den døde WebView kan ikke bruges igen: skift den ud med en ny på samme plads
+    // (under "Ingen forbindelse"-skærmen) og indlæs tælleren forfra. Stillingen
+    // ligger på serveren; kun et point, der ikke nåede at blive gemt, er væk.
+    // Går den ned igen og igen, stopper appen og viser en knap i stedet for at
+    // genstarte i ring.
+
+    private fun genskabWebView(doed: WebView?) {
+        if (doed != null && doed !== webView) {
+            doed.destroy()
+            return
+        }
+        val gammel = webView
+        val foraelder = gammel.parent as ViewGroup
+        val plads = foraelder.indexOfChild(gammel)
+        val params = gammel.layoutParams
+        foraelder.removeView(gammel)
+        gammel.destroy()
+
+        webView = WebView(this).apply { id = R.id.webView }
+        foraelder.addView(webView, plads, params)
+        setupWebView()
+        if (!isActive) webView.onPause()
+
+        val nu = SystemClock.elapsedRealtime()
+        nedbrud.addLast(nu)
+        while (nedbrud.first() < nu - NEDBRUD_VINDUE_MS) nedbrud.removeFirst()
+
+        if (nedbrud.size >= NEDBRUD_MAX) {
+            handler.removeCallbacks(retryRunnable)
+            pageFailed = true
+            failedUrl = null           // "Genindlæs" starter forfra med loadPage()
+            offlineTitle.setText(R.string.crash_title)
+            offlineMessage.setText(R.string.crash_message)
+            offlineOverlay.visibility = View.VISIBLE
+        } else if (isActive) {
+            loadPage()
+        } else {
+            genindlaesVedResume = true  // skærmen er slukket: indlæs, når den tændes
+        }
     }
 }

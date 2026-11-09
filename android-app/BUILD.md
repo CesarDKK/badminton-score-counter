@@ -162,7 +162,7 @@ gradlew.bat assembleDebug
 
 ---
 
-**Senest opdateret:** Juli 2026
-**App Version:** 1.7.2 (versionCode 10)
+**Senest opdateret:** November 2026
+**App Version:** 1.7.4 (versionCode 12)
 **Min Android Version:** 7.0 (API 24)
 **Target Android Version:** 15 (API 35)
