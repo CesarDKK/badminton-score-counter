@@ -9,4 +9,6 @@
     <string name="offline_message">Siden kunne ikke hentes. Appen prøver selv igen, så snart netværket er tilbage.</string>
     <string name="offline_message_server">Serveren svarer ikke lige nu. Appen prøver selv igen om lidt.</string>
     <string name="offline_settings">Forkert link? Slet app-data i Android-indstillinger for at indtaste et nyt.</string>
+    <string name="crash_title">Tælleren gik ned</string>
+    <string name="crash_message">Tælleren er gået ned flere gange lige efter hinanden. Stillingen er gemt på serveren. Tryk Genindlæs for at prøve igen.</string>
 </resources>
