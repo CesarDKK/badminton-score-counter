@@ -50,6 +50,14 @@ const THEME_PRESETS = {
         colorBgDark: '#111827',
         colorBgContainer: '#1f2937',
         colorBgCard: '#374151'
+    },
+    slate: {
+        name: 'Skifer',
+        colorPrimary: '#4a5c6a',
+        colorAccent: '#e94560',
+        colorBgDark: '#11212d',
+        colorBgContainer: '#253745',
+        colorBgCard: '#06141b'
     }
 };
 
