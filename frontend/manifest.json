@@ -4,8 +4,8 @@
     "description": "Real-time badminton score tracking",
     "start_url": "/landing.html",
     "display": "standalone",
-    "background_color": "#1a1a2e",
-    "theme_color": "#533483",
+    "background_color": "#11212d",
+    "theme_color": "#4a5c6a",
     "icons": [
         {
             "src": "/favicon.svg",

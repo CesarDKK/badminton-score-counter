@@ -427,11 +427,11 @@ header .subtitle {
 .sh-linje--1 { stroke: var(--sh-serie-1); }
 .sh-linje--2 { stroke: var(--sh-serie-2); }
 .sh-kryds { stroke: rgba(255, 255, 255, 0.35); stroke-width: 1; }
-.sh-punkt { stroke: var(--color-bg-container, #16213e); stroke-width: 2; }
+.sh-punkt { stroke: var(--color-bg-container, #253745); stroke-width: 2; }
 .sh-punkt--1 { fill: var(--sh-serie-1); }
 .sh-punkt--2 { fill: var(--sh-serie-2); }
 .sh-flade { fill: transparent; cursor: crosshair; }
-.sh-tip { position: absolute; top: 34px; pointer-events: none; background: var(--color-bg-card, #252347); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; padding: 6px 10px; font-size: 0.8em; line-height: 1.5; white-space: nowrap; color: var(--text-primary, #eaeaea); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); z-index: 2; }
+.sh-tip { position: absolute; top: 34px; pointer-events: none; background: var(--color-bg-card, #06141b); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; padding: 6px 10px; font-size: 0.8em; line-height: 1.5; white-space: nowrap; color: var(--text-primary, #eaeaea); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); z-index: 2; }
 .sh-tip-tid { color: var(--text-muted, rgba(255, 255, 255, 0.62)); }
 .sh-tom { font-size: 0.85em; color: var(--text-muted, rgba(255, 255, 255, 0.62)); padding: 18px 0; }
 .sh-opsaet { margin-top: 18px; }

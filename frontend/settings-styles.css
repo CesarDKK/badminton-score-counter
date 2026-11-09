@@ -70,7 +70,7 @@
 .setting-card select:focus {
     outline: none;
     border-color: var(--color-primary);
-    background: rgba(var(--color-primary-rgb, 83, 52, 131), 0.08);
+    background: rgba(var(--color-primary-rgb, 74, 92, 106), 0.08);
 }
 
 .setting-card select {
@@ -127,7 +127,7 @@
 .preset-btn:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-    border-color: rgba(var(--color-primary-rgb, 83, 52, 131), 0.4);
+    border-color: rgba(var(--color-primary-rgb, 74, 92, 106), 0.4);
     color: white;
 }
 
@@ -212,7 +212,7 @@
     padding: 20px;
     background: rgba(255, 255, 255, 0.04);
     border-radius: 12px;
-    border: 1px solid rgba(var(--color-primary-rgb, 83, 52, 131), 0.25);
+    border: 1px solid rgba(var(--color-primary-rgb, 74, 92, 106), 0.25);
 }
 
 .theme-name {
@@ -306,7 +306,7 @@
 .modal form select:focus {
     outline: none;
     border-color: var(--color-primary);
-    background: rgba(var(--color-primary-rgb, 83, 52, 131), 0.08);
+    background: rgba(var(--color-primary-rgb, 74, 92, 106), 0.08);
 }
 
 .modal form select option {

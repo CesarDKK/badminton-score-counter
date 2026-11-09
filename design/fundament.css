@@ -68,16 +68,16 @@
     --text-muted: rgba(255, 255, 255, 0.62);
 
     /* ── Produktfarver — standard er badmintonappen; hvert produkt overskriver ── */
-    --color-primary: #533483;
-    --color-primary-rgb: 83, 52, 131;
+    --color-primary: #4a5c6a;
+    --color-primary-rgb: 74, 92, 106;
     --color-accent: #e94560;
     --color-accent-rgb: 233, 69, 96;
     --color-on-accent: #ffffff;
     --color-on-primary: #ffffff;
-    --color-bg-dark: #1a1a2e;
-    --color-bg-container: #16213e;
-    --color-bg-card: #252347;
-    --color-bg-card-rgb: 37, 35, 71;
+    --color-bg-dark: #11212d;
+    --color-bg-container: #253745;
+    --color-bg-card: #06141b;
+    --color-bg-card-rgb: 6, 20, 27;
 }
 
 /* ═════════ Tastaturfokus (F4) ═════════

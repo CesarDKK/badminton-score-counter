@@ -24,11 +24,11 @@ INSERT INTO settings (setting_key, setting_value) VALUES
   ('court_count', '5'),
   ('show_reset_button', 'true'),
   ('theme_name', 'default'),
-  ('color_primary', '#533483'),
+  ('color_primary', '#4a5c6a'),
   ('color_accent', '#e94560'),
-  ('color_bg_dark', '#1a1a2e'),
-  ('color_bg_container', '#16213e'),
-  ('color_bg_card', '#252347')
+  ('color_bg_dark', '#11212d'),
+  ('color_bg_container', '#253745'),
+  ('color_bg_card', '#06141b')
 ON DUPLICATE KEY UPDATE setting_key=setting_key;
 
 -- Courts table (stores court-specific settings)

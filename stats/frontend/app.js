@@ -318,9 +318,9 @@
 
     // ── Grafer ──────────────────────────────────────────────────────────────
     const FORLOEB = `<defs><linearGradient id="stat-forloeb" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0%" stop-color="#533483"/><stop offset="100%" stop-color="#e94560"/></linearGradient>
+        <stop offset="0%" stop-color="#4a5c6a"/><stop offset="100%" stop-color="#e94560"/></linearGradient>
         <linearGradient id="stat-lodret" x1="0" y1="1" x2="0" y2="0">
-        <stop offset="0%" stop-color="#533483"/><stop offset="100%" stop-color="#e94560"/></linearGradient></defs>`;
+        <stop offset="0%" stop-color="#4a5c6a"/><stop offset="100%" stop-color="#e94560"/></linearGradient></defs>`;
 
     function tom(node, tekst) { node.innerHTML = `<p class="graf-tom">${esc(tekst)}</p>`; }
 
@@ -389,8 +389,8 @@
 
         node.innerHTML = `<svg viewBox="0 0 ${bredde} ${hoejde}" role="img"
             aria-label="Kampe og spillere pr. årgang">${FORLOEB}${gitter}${dele}</svg>`
-            + `<div class="forklaring"><span><i style="background:linear-gradient(90deg,#533483,#e94560)"></i>Kampe</span>`
-            + `<span><i style="background:rgba(83,52,131,0.75)"></i>Spillere</span></div>`;
+            + `<div class="forklaring"><span><i style="background:linear-gradient(90deg,#4a5c6a,#e94560)"></i>Kampe</span>`
+            + `<span><i style="background:rgba(74,92,106,0.75)"></i>Spillere</span></div>`;
     }
 
     /** Klik viser netop de spillere der er brugt på så mange hold. */
@@ -505,8 +505,8 @@
 
         node.innerHTML = `<svg viewBox="0 0 ${bredde} ${hoejde}" role="img"
             aria-label="Antal discipliner spillet og vundet">${FORLOEB}${gitter}${dele}</svg>`
-            + `<div class="forklaring"><span><i style="background:linear-gradient(90deg,#533483,#e94560)"></i>Spillet</span>`
-            + `<span><i style="background:rgba(83,52,131,0.75)"></i>Vundet</span></div>`;
+            + `<div class="forklaring"><span><i style="background:linear-gradient(90deg,#4a5c6a,#e94560)"></i>Spillet</span>`
+            + `<span><i style="background:rgba(74,92,106,0.75)"></i>Vundet</span></div>`;
     }
 
     /** Kampe måned for måned. */

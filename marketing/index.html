@@ -8,19 +8,18 @@
     <link rel="canonical" href="https://badmintonapp.dk/">
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%23e94560' transform='translate(0 1.2)'%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-33 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(-14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(14 12 14.5)'/%3E%3Cellipse cx='12' cy='7.7' rx='1.5' ry='6.8' transform='rotate(33 12 14.5)'/%3E%3Crect x='9.4' y='14.3' width='5.2' height='1.7' rx='0.85'/%3E%3Cpath d='M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z'/%3E%3C/g%3E%3C/svg%3E">
     <link rel="stylesheet" href="fonts.css">
-    <link rel="stylesheet" href="fundament.css?v=2">
+    <link rel="stylesheet" href="fundament.css?v=3">
     <style>
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
         :root {
-            --purple: #533483;
-            --purple-light: #6a45a8;
-            --purple-soft: #b89fe0;
+            --primary: #4a5c6a;
+            --primary-soft: #9ba8ab;
             --red: #e94560;
-            --bg: #0d0d1a;
-            --bg-raise: #14142a;
+            --bg: #06141b;
+            --bg-raise: #11212d;
             --card: rgba(255, 255, 255, 0.03);
-            --border: rgba(83, 52, 131, 0.35);
+            --border: rgba(155, 168, 171, 0.35);
             --border-soft: rgba(255, 255, 255, 0.08);
             --text: #eaeaea;
             /* Brødtekst: fundamentets sekundære tekst (lysere end før, ≥ 4,5:1) */
@@ -61,7 +60,7 @@
             position: fixed;
             inset: 0;
             background:
-                radial-gradient(ellipse 80% 50% at 50% -10%, rgba(83,52,131,0.45) 0%, transparent 70%),
+                radial-gradient(ellipse 80% 50% at 50% -10%, rgba(74,92,106,0.5) 0%, transparent 70%),
                 radial-gradient(ellipse 40% 30% at 85% 20%, rgba(233,69,96,0.10) 0%, transparent 70%);
             pointer-events: none;
             z-index: 0;
@@ -165,7 +164,7 @@
 
         .hero h1 .accent {
             color: transparent;
-            background: linear-gradient(120deg, var(--purple-soft), var(--red));
+            background: linear-gradient(120deg, var(--primary-soft), var(--red));
             -webkit-background-clip: text;
             background-clip: text;
         }
@@ -217,7 +216,7 @@
         /* ── Skærme: TV med fod og tablet ── */
         .tv {
             position: relative;
-            background: #07070d;
+            background: #030a0e;
             padding: 1.2%;
             border-radius: 14px;
             border: 1px solid rgba(255,255,255,0.1);
@@ -233,7 +232,7 @@
             transform: translateX(-50%);
             width: 18%;
             height: 9px;
-            background: linear-gradient(#15151f, #0a0a12);
+            background: linear-gradient(#13202a, #050d12);
             border-radius: 0 0 10px 10px;
         }
 
@@ -245,7 +244,7 @@
         }
 
         .tablet {
-            background: #07070d;
+            background: #030a0e;
             padding: 2.4%;
             border-radius: 26px;
             border: 1px solid rgba(255,255,255,0.14);
@@ -333,7 +332,7 @@
         .show-row.flip .show-media { order: 1; }
 
         .kicker {
-            color: var(--purple-soft);
+            color: var(--primary-soft);
             font-size: 0.78em;
             font-weight: 700;
             letter-spacing: 2.5px;
@@ -403,7 +402,7 @@
 
         .feature-card:hover {
             border-color: var(--border);
-            background: rgba(83, 52, 131, 0.12);
+            background: rgba(74, 92, 106, 0.2);
             transform: translateY(-3px);
         }
 
@@ -435,7 +434,7 @@
             line-height: 1.65;
         }
 
-        .feature-card a { color: var(--purple-soft); text-decoration: none; }
+        .feature-card a { color: var(--primary-soft); text-decoration: underline; text-underline-offset: 3px; }
         .feature-card a:hover { color: #fff; }
 
         /* ── Kom i gang ── */
@@ -459,7 +458,7 @@
             font-size: 2.6em;
             line-height: 1;
             color: transparent;
-            background: linear-gradient(135deg, var(--purple-soft), var(--red));
+            background: linear-gradient(135deg, var(--primary-soft), var(--red));
             -webkit-background-clip: text;
             background-clip: text;
             margin-bottom: 12px;
@@ -478,7 +477,7 @@
             line-height: 1.65;
         }
 
-        .step-card a, .selfhost-note a, .cta-mail a, footer a { color: var(--purple-soft); text-decoration: none; }
+        .step-card a, .selfhost-note a, .cta-mail a, footer a { color: var(--primary-soft); text-decoration: underline; text-underline-offset: 3px; }
         .step-card a:hover, .selfhost-note a:hover, .cta-mail a:hover, footer a:hover { color: #fff; }
 
         .selfhost-note {
@@ -492,7 +491,7 @@
 
         /* ── CTA ── */
         .cta-box {
-            background: linear-gradient(135deg, rgba(83,52,131,0.32) 0%, rgba(233,69,96,0.14) 100%);
+            background: linear-gradient(135deg, rgba(74,92,106,0.42) 0%, rgba(233,69,96,0.14) 100%);
             border: 1px solid var(--border);
             border-radius: 22px;
             padding: 64px 40px;
@@ -614,10 +613,10 @@
 
         <figure class="hero-scene">
             <div class="tv">
-                <img src="tv-kamp.jpg" alt="TV ved banen: Mathilde og Freja mod Line og Katrine, 2. sæt, 11–9" width="1600" height="900">
+                <img src="tv-kamp-skifer.jpg" alt="TV ved banen: Mathilde og Freja mod Line og Katrine, 2. sæt, 11–9" width="1600" height="900">
             </div>
             <div class="tablet">
-                <img src="taeller.jpg" alt="Tælleren på tabletten: Mathilde mod Freja, 11–9 i 2. sæt" width="960" height="525">
+                <img src="taeller-skifer.jpg" alt="Tælleren på tabletten: Mathilde mod Freja, 11–9 i 2. sæt" width="960" height="525">
             </div>
         </figure>
     </div>
@@ -642,7 +641,7 @@
                 <p>Når kampen er afgjort, vises alle sæt i stor størrelse med vinderen markeret — indtil banen ryddes.</p>
             </div>
             <div class="show-media">
-                <div class="tv"><img src="tv-afgjort.jpg" alt="Afgjort kamp: Mathilde og Freja vinder 15–12, 13–15, 15–11" width="1600" height="900" loading="lazy"></div>
+                <div class="tv"><img src="tv-afgjort-skifer.jpg" alt="Afgjort kamp: Mathilde og Freja vinder 15–12, 13–15, 15–11" width="1600" height="900" loading="lazy"></div>
             </div>
         </div>
 
@@ -654,7 +653,7 @@
                 <p>Tælleren fortsætter selv kampen, når pausen er slut.</p>
             </div>
             <div class="show-media">
-                <div class="tv"><img src="tv-pausen.jpg" alt="Pause mellem sæt: 1:22 tilbage af 2 minutter, sætstilling 1–1" width="1600" height="900" loading="lazy"></div>
+                <div class="tv"><img src="tv-pausen-skifer.jpg" alt="Pause mellem sæt: 1:22 tilbage af 2 minutter, sætstilling 1–1" width="1600" height="900" loading="lazy"></div>
             </div>
         </div>
 
@@ -666,7 +665,7 @@
                 <p>Har klubben sponsorbilleder, kører de som diasshow imens, med QR-koden i hjørnet.</p>
             </div>
             <div class="show-media">
-                <div class="tv"><img src="tv-ledig.jpg" alt="Ledig bane: Bane 3 med QR-kode til at tælle kampen på telefonen" width="1600" height="900" loading="lazy"></div>
+                <div class="tv"><img src="tv-ledig-skifer.jpg" alt="Ledig bane: Bane 3 med QR-kode til at tælle kampen på telefonen" width="1600" height="900" loading="lazy"></div>
             </div>
         </div>
 
@@ -676,7 +675,7 @@
                 <h3>Hele hallen på én skærm</h3>
                 <p>Hæng en skærm op i foyeren og følg alle baner live: stilling, sæt, kamptid, pauser og afgjorte kampe.</p>
             </div>
-            <div class="tv"><img src="oversigt-baner.jpg" alt="Kampstatus-oversigt med seks baner: kampe i gang, en pause og en afgjort kamp" width="1600" height="900" loading="lazy"></div>
+            <div class="tv"><img src="oversigt-baner-skifer.jpg" alt="Kampstatus-oversigt med seks baner: kampe i gang, en pause og en afgjort kamp" width="1600" height="900" loading="lazy"></div>
         </div>
 
         <div class="show-wide">
@@ -685,7 +684,7 @@
                 <h3>Holdkampdag på storskærmen</h3>
                 <p>Holdstillingen øverst, delkampene der spilles nu som små tavler, og alle delkampe med hvert sæt nederst. Spilles der flere holdkampe på én gang, skifter skærmen selv mellem dem.</p>
             </div>
-            <div class="tv"><img src="oversigt-holdkamp.jpg" alt="Holdkamp Lyngby BK mod Gentofte, 6–3, med fire delkampe i gang" width="1600" height="900" loading="lazy"></div>
+            <div class="tv"><img src="oversigt-holdkamp-skifer.jpg" alt="Holdkamp Lyngby BK mod Gentofte, 6–3, med fire delkampe i gang" width="1600" height="900" loading="lazy"></div>
         </div>
     </div>
 </section>

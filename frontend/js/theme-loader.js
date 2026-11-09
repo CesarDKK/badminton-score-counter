@@ -12,11 +12,11 @@
     const CACHE_KEY = 'cachedTheme';
 
     const DEFAULTS = {
-        color_primary:      '#533483',
+        color_primary:      '#4a5c6a',
         color_accent:       '#e94560',
-        color_bg_dark:      '#1a1a2e',
-        color_bg_container: '#16213e',
-        color_bg_card:      '#252347'
+        color_bg_dark:      '#11212d',
+        color_bg_container: '#253745',
+        color_bg_card:      '#06141b'
     };
 
     const isHex = v => typeof v === 'string' && /^#[0-9A-Fa-f]{6}$/.test(v);
