@@ -7,17 +7,17 @@
 [hidden] { display: none !important; }
 
 :root {
-    --purple: #533483;
-    --purple-light: #6a45a8;
-    --purple-soft: #b89fe0;
+    --primary: #4a5c6a;
+    --primary-light: #7d909d;
+    --primary-soft: #9ba8ab;
     --red: #e94560;
-    --bg: #0d0d1a;
-    --bg-raise: #14142a;
-    --card: rgba(83, 52, 131, 0.12);
-    --border: rgba(83, 52, 131, 0.35);
+    --bg: #06141b;
+    --bg-raise: #11212d;
+    --card: rgba(74, 92, 106, 0.12);
+    --border: rgba(155, 168, 171, 0.35);
     --border-soft: rgba(255, 255, 255, 0.08);
     --text: #eaeaea;
-    --muted: #9494a6;
+    --muted: #8f9ca2;
     /* Hvid tekst på knappen skal have mindst 4,5:1 (#e94560 gav 3,8:1) — som planneren */
     --color-knap: #d02c4a;
     --color-knap-hover: #b8243f;
@@ -51,7 +51,7 @@ body::before {
     position: fixed;
     inset: 0;
     background:
-        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(83,52,131,0.45) 0%, transparent 70%),
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(74, 92, 106,0.45) 0%, transparent 70%),
         radial-gradient(ellipse 40% 30% at 85% 20%, rgba(233,69,96,0.10) 0%, transparent 70%);
     pointer-events: none;
     z-index: 0;
@@ -65,7 +65,7 @@ body::before {
     z-index: 1;
 }
 
-a { color: var(--purple-soft); }
+a { color: var(--primary-soft); }
 
 /* ── Nav ── */
 nav {
@@ -102,7 +102,7 @@ nav {
     transition: border-color 0.2s, background 0.2s;
     white-space: nowrap;
 }
-.nav-cta:hover { border-color: var(--purple-light); background: rgba(83,52,131,0.25); }
+.nav-cta:hover { border-color: var(--primary-light); background: rgba(74, 92, 106,0.25); }
 
 /* ── Hero ── */
 .hero { text-align: center; padding: 56px 24px 46px; }
@@ -175,7 +175,7 @@ nav {
     padding: 13px 15px;
     transition: border-color 0.2s;
 }
-.felt input:focus, .felt select:focus { outline: none; border-color: var(--purple-light); }
+.felt input:focus, .felt select:focus { outline: none; border-color: var(--primary-light); }
 .felt input::placeholder { color: #5b5b70; }
 
 /* Knapstilen (.knap, .knap--sekundaer, .knap--lille) kommer fra fundament.css (E1/E8) */
@@ -215,7 +215,7 @@ nav {
     cursor: pointer;
     transition: background 0.2s, border-color 0.2s;
 }
-.klubvalg:hover { background: rgba(83,52,131,0.35); border-color: var(--purple-light); }
+.klubvalg:hover { background: rgba(74, 92, 106,0.35); border-color: var(--primary-light); }
 
 /* ── Fremdrift ── */
 .bar {
@@ -228,11 +228,11 @@ nav {
 .bar-fill {
     height: 100%;
     width: 0;
-    background: linear-gradient(90deg, var(--purple), var(--red));
+    background: linear-gradient(90deg, var(--primary), var(--red));
     border-radius: 100px;
     transition: width 0.4s ease;
 }
-.fremdrift-meta { margin-top: 10px; font-size: 0.88em; color: var(--purple-soft); }
+.fremdrift-meta { margin-top: 10px; font-size: 0.88em; color: var(--primary-soft); }
 .fremdrift-hint { margin-top: 14px; font-size: 0.85em; color: var(--muted); line-height: 1.6; max-width: 640px; }
 
 /* ── Klubhoved ── */
@@ -306,7 +306,7 @@ nav {
 .graf .klikbar:hover .ramme, .graf .navn-link:hover .ramme { fill: rgba(255,255,255,0.06); }
 /* Navnet i topgrafen fører til profilen — søjlen åbner spilleren i tabellen */
 .graf .navn-link:hover .etiket { fill: #fff; text-decoration: underline; }
-.graf .soejle--alt { fill: rgba(83,52,131,0.55); }
+.graf .soejle--alt { fill: rgba(74, 92, 106,0.55); }
 .graf .linje { fill: none; stroke: var(--red); stroke-width: 2.5; }
 .graf .flade { fill: rgba(233,69,96,0.14); }
 .graf .prik { fill: var(--red); }
@@ -336,16 +336,16 @@ nav {
     background: #131324;
 }
 .tabel .tal { text-align: right; }
-.tabel tbody tr:hover { background: rgba(83,52,131,0.16); }
+.tabel tbody tr:hover { background: rgba(74, 92, 106,0.16); }
 
 .tabel--spillere th[data-sort] { cursor: pointer; user-select: none; }
-.tabel--spillere th[data-sort]:hover { color: var(--purple-soft); }
+.tabel--spillere th[data-sort]:hover { color: var(--primary-soft); }
 .tabel--spillere th.aktiv { color: var(--red); }
 .tabel .navn { white-space: normal; }
 
 /* Rækker man kan klikke op — både spillere og hold */
 .tabel tbody tr.spiller, .tabel tbody tr.hold { cursor: pointer; }
-.tabel tbody tr.aaben { background: rgba(83,52,131,0.22); }
+.tabel tbody tr.aaben { background: rgba(74, 92, 106,0.22); }
 .tabel tbody tr.hold td:first-child { position: relative; padding-left: 24px; }
 .tabel tbody tr.hold td:first-child::before {
     content: '';
@@ -354,8 +354,8 @@ nav {
     top: 50%;
     width: 6px;
     height: 6px;
-    border-right: 2px solid var(--purple-soft);
-    border-bottom: 2px solid var(--purple-soft);
+    border-right: 2px solid var(--primary-soft);
+    border-bottom: 2px solid var(--primary-soft);
     transform: translateY(-60%) rotate(-45deg);
     transition: transform 0.15s;
 }
@@ -370,7 +370,7 @@ nav {
 }
 .detalje-hoved {
     display: block;
-    color: var(--purple-soft);
+    color: var(--primary-soft);
     font-size: 0.9em;
     letter-spacing: 0.03em;
     text-transform: uppercase;
@@ -412,24 +412,24 @@ nav {
 .spiller-link {
     color: var(--text);
     text-decoration: none;
-    border-bottom: 1px dotted rgba(184,159,224,0.45);
+    border-bottom: 1px dotted rgba(155, 168, 171,0.45);
 }
-.spiller-link:hover { color: #fff; border-bottom-color: var(--purple-soft); }
+.spiller-link:hover { color: #fff; border-bottom-color: var(--primary-soft); }
 .spiller-link .ud,
 .hold-chip .ud {
-    color: var(--purple-soft);
+    color: var(--primary-soft);
     font-size: 0.85em;
     margin-left: 4px;
     opacity: 0.55;
 }
 .spiller-link:hover .ud, .hold-chip:hover .ud { opacity: 1; }
-.detalje-hoved .spiller-link { color: var(--purple-soft); border-bottom-color: rgba(184,159,224,0.35); }
+.detalje-hoved .spiller-link { color: var(--primary-soft); border-bottom-color: rgba(155, 168, 171,0.35); }
 .detalje-hoved .spiller-link:hover { color: #fff; }
 
 .hold-chip {
     display: inline-block;
     text-decoration: none;
-    background: rgba(83,52,131,0.35);
+    background: rgba(74, 92, 106,0.35);
     border: 1px solid var(--border);
     border-radius: 100px;
     padding: 3px 11px;
@@ -440,10 +440,10 @@ nav {
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s;
 }
-.hold-chip:hover { background: rgba(83,52,131,0.6); border-color: var(--purple-light); }
+.hold-chip:hover { background: rgba(74, 92, 106,0.6); border-color: var(--primary-light); }
 .hold-chip b { color: #fff; font-weight: 600; }
 .hold-chip--lille { font-size: 0.86em; padding: 2px 9px; }
-.hold-chip--lille .disc { color: var(--purple-soft); font-weight: 600; margin-right: 3px; }
+.hold-chip--lille .disc { color: var(--primary-soft); font-weight: 600; margin-right: 3px; }
 
 /* Kampene under et hold */
 .kamp-blok { margin-top: 14px; }
@@ -454,8 +454,8 @@ nav {
     white-space: nowrap;
 }
 .minitabel tr.kamp { cursor: pointer; }
-.minitabel tr.kamp:hover { background: rgba(83,52,131,0.22); }
-.minitabel tr.kamp.aaben { background: rgba(83,52,131,0.3); }
+.minitabel tr.kamp:hover { background: rgba(74, 92, 106,0.22); }
+.minitabel tr.kamp.aaben { background: rgba(74, 92, 106,0.3); }
 .minitabel .dato { color: var(--muted); width: 1%; }
 .minitabel .modstander { white-space: normal; color: var(--text); }
 .minitabel .modstander .mod { color: var(--muted); }
@@ -487,7 +487,7 @@ nav {
     padding: 6px 14px;
     cursor: pointer;
 }
-.filter-ryd:hover { background: rgba(83,52,131,0.4); }
+.filter-ryd:hover { background: rgba(74, 92, 106,0.4); }
 
 /* ── Årgangsfilter — styrer hele siden ── */
 .aargang-filter {
@@ -516,7 +516,7 @@ nav {
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-.aargang-knap:hover { background: rgba(83,52,131,0.35); border-color: var(--purple-light); color: #fff; }
+.aargang-knap:hover { background: rgba(74, 92, 106,0.35); border-color: var(--primary-light); color: #fff; }
 .aargang-knap.aktiv {
     background: rgba(233,69,96,0.16);
     border-color: rgba(233,69,96,0.55);
@@ -537,7 +537,7 @@ nav {
     padding: 9px 13px;
     min-width: 220px;
 }
-.filter:focus { outline: none; border-color: var(--purple-light); }
+.filter:focus { outline: none; border-color: var(--primary-light); }
 
 .tabel-tom { color: var(--muted); font-size: 0.9em; padding: 14px 2px 2px; }
 
