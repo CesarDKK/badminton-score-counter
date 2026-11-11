@@ -72,13 +72,43 @@ test('nr. 27: under 3 dage tilbage → ny session tages i brug uden genindlæsni
     assert.equal(b.window.skiftetTil, undefined, 'siden genindlæses ikke midt i en kamp');
 });
 
-test('nr. 27: 11 dage tilbage → intet skift, kun det sædvanlige tjek', async () => {
-    const t = tablet(nu + 11 * dag);
+// Nr. 63: en tablet, der sover mellem de ugentlige træninger, nåede sjældent
+// 3-dages-vinduet. Nu fornys sessionen, når den er over et døgn gammel (iat).
+const session = (iat, exp) => falskJwt({ role: 'device', tokenId: 7, destination: 'court/2', locked: 1, tokenType: 'permanent', iat, exp });
+
+test('nr. 63: en session over et døgn gammel fornys, selv med 11 dage tilbage', async () => {
+    const t = tablet(nu + 11 * dag); // udstedt for 11 dage siden, 11 dage tilbage
+    const ny = session(nu, nu + 14 * dag);
+    const b = browser({ token: t, svar: { '/device-tokens/mit': mit, '/device-tokens/mit/skift': { url: `/court-v3.html?court=2&dt=${ny}` } } });
+    assert.equal(b.window.AdgangslinkVagt.skalFornys(b.window.decodeJwtPayload(t)), true);
+    await b.window.AdgangslinkVagt.tjek();
+    assert.deepEqual(b.kald, ['GET /device-tokens/mit', 'POST /device-tokens/mit/skift']);
+    assert.equal(b.lager.deviceToken, ny);
+    assert.equal(b.window.skiftetTil, undefined, 'siden genindlæses ikke');
+});
+
+test('nr. 63: en ugentlig træning holder tabletten logget ind — 25 timer gammel fornys, 23 timer ikke', () => {
+    const b = browser({ token: tablet(nu + 13 * dag), svar: {} });
+    const { skalFornys } = b.window.AdgangslinkVagt;
+    assert.equal(skalFornys({ iat: nu - 25 * 3600, exp: nu + 13 * dag }), true);
+    assert.equal(skalFornys({ iat: nu - 23 * 3600, exp: nu + 13 * dag }), false);
+});
+
+test('nr. 63: en frisk session (under et døgn) → intet skift, kun det sædvanlige tjek', async () => {
+    const t = session(nu - 3600, nu + 14 * dag);
     const b = browser({ token: t, svar: { '/device-tokens/mit': mit } });
     assert.equal(b.window.AdgangslinkVagt.skalFornys(b.window.decodeJwtPayload(t)), false);
     await b.window.AdgangslinkVagt.tjek();
     assert.deepEqual(b.kald, ['GET /device-tokens/mit']);
     assert.equal(b.lager.deviceToken, t);
+});
+
+test('nr. 63: uden iat gælder 3-dages-reglen stadig som reserve', () => {
+    const b = browser({ token: tablet(nu + 13 * dag), svar: {} });
+    const { skalFornys } = b.window.AdgangslinkVagt;
+    assert.equal(skalFornys({ exp: nu + 2 * dag }), true);
+    assert.equal(skalFornys({ exp: nu + 11 * dag }), false);
+    assert.equal(skalFornys({}), false);
 });
 
 test('nr. 27: et ændret link skifter stadig side (som før) — også med kort tid tilbage', async () => {
@@ -160,15 +190,17 @@ test('nr. 26: fortryd i "Sæt Vundet!", pausen og kampslut; "Ny kamp" rydder dir
     assert.match(src, /getElementById\('undoInRestBreak'\)\.addEventListener\('click', undoLastAction\)/);
     assert.match(laes('court-v3.html'), /id="undoInRestBreak"/);
     assert.match(src, /\{ text: 'Ny kamp', callback: \(\) => performClearCourtNow\(\), style: 'primary' \}/);
-    assert.match(src, /outcome \? \[\] : \[\{ text: 'Fortryd sidste point'/);
+    // (nr. 67: og kun når der er noget at fortryde)
+    assert.match(src, /outcome \|\| !\(gameState\.history && gameState\.history\.length > 0\) \? \[\]\s*: \[\{ text: 'Fortryd sidste point'/);
     // Fast tablet med afsluttet kamp: dialogen igen i stedet for en død tavle
     assert.match(src, /if \(!isMatchSessionToken\(\)\) \{\s*\n\s*showMatchWonMessage\(!!\(assignedHoldkampGameId \|\| assignedTournamentMatchId\)\)/);
 });
 
 test('nr. 31: TV\'et henter QR-koden igen ved reset og i sikkerhedsnettet, og prøver /api/mode igen', () => {
     const src = laes('tv-script-v3.js');
-    assert.match(src, /event\.type === 'reset'\) qrCounterMode = null/);
-    assert.match(src, /_tvByCourtDirty = true;[^\n]*\n\s*qrCounterMode = null;/);
+    // (nr. 68: hentes igen i baggrunden — den viste kode står, til den nye er der)
+    assert.match(src, /event\.type === 'reset'\) qrGenhent = true/);
+    assert.match(src, /_tvByCourtDirty = true;[^\n]*\n\s*qrGenhent = true;/);
     assert.match(src, /function hentQrTilladelseIgen\(/);
     assert.match(src, /qrCounterEnabled = false;\s*\n[\s\S]{0,300}hentQrTilladelseIgen\(qrAllowedByToken\)/);
 });

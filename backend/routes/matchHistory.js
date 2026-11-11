@@ -1,10 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
+const { synligBane } = require('../config/baner');
 const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
 const { requirePage } = require('../middleware/pagePermission');
 const { kunEgenBane } = require('../middleware/qrSession');
 const { varighedTekst } = require('../config/matchTiming');
+const { historikFelterFejl } = require('../config/historikFelter');
 
 // GET /api/match-history/all - Get all match history (public)
 // NOTE: This route must come BEFORE /:courtId to avoid matching "all" as a courtId
@@ -236,9 +238,12 @@ router.post('/', requireWriteAuthInClubMode, kunEgenBane((req) => req.body && re
         if (!courtId || !winnerName || !loserName || !gamesWon || !duration) {
             return res.status(400).json({ error: 'Alle felter er påkrævet' });
         }
+        // Kun de formater, tabletten sender — felterne vises i admin (nr. 61)
+        const feltFejl = historikFelterFejl({ gamesWon, duration });
+        if (feltFejl) return res.status(400).json({ error: feltFejl });
 
         // Get court by court_number to get actual database id
-        const court = await queryOne('SELECT id FROM courts WHERE court_number = ?', [courtId]);
+        const court = await queryOne(`SELECT id FROM courts WHERE court_number = ? AND ${synligBane()}`, [courtId]);
 
         if (!court) {
             return res.status(400).json({ error: 'Bane ikke fundet' });

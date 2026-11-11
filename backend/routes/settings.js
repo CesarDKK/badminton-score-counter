@@ -5,6 +5,7 @@ const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
 const { requirePage } = require('../middleware/pagePermission');
 const { publishConfigChange } = require('../events/gameStateEvents');
+const { nedsaettelseAfvist, MAKS_BANER } = require('../config/baner');
 
 // Efter enhver vellykket settings-mutation pushes et config-event, så TV/
 // oversigt henter de nye værdier straks. Tema-ændringer får scope 'theme'
@@ -88,11 +89,37 @@ router.put('/password', authMiddleware, requirePage('settings'), async (req, res
 // PUT /api/settings/court-count - Update court count (requires auth)
 router.put('/court-count', authMiddleware, requirePage('settings'), async (req, res, next) => {
     try {
-        const { courtCount } = req.body;
+        const courtCount = Number(req.body.courtCount);
 
-        if (!courtCount || courtCount < 1 || courtCount > 20) {
+        if (!Number.isInteger(courtCount) || courtCount < 1 || courtCount > MAKS_BANER) {
             return res.status(400).json({ error: 'Antal baner skal være mellem 1 og 20' });
         }
+
+        // En bane, der skjules, må ikke være i brug: en kamp i gang, en aktiv
+        // delkamp fra en holdkamp eller en aktiv turneringskamp ville ellers
+        // forsvinde fra tabletten, TV'et og oversigten midt i spillet.
+        const optaget = [
+            ...(await query(
+                `SELECT c.court_number, 'kamp i gang' AS grund
+                   FROM courts c JOIN game_states gs ON gs.court_id = c.id
+                  WHERE c.court_number > ? AND gs.match_completed = FALSE
+                    AND (gs.match_start_time IS NOT NULL
+                         OR gs.player1_score > 0 OR gs.player2_score > 0
+                         OR gs.player1_games > 0 OR gs.player2_games > 0 OR gs.timer_seconds > 0)`,
+                [courtCount])),
+            ...(await query(
+                `SELECT g.court_number, 'delkamp fra en holdkamp' AS grund
+                   FROM team_match_games g JOIN team_matches tm ON tm.id = g.team_match_id
+                  WHERE g.court_number > ? AND g.status = 'active' AND tm.status = 'active'`,
+                [courtCount])),
+            ...(await query(
+                `SELECT m.court_number, 'turneringskamp' AS grund
+                   FROM tournament_matches m JOIN tournaments t ON t.id = m.tournament_id
+                  WHERE m.court_number > ? AND m.status = 'active' AND t.status = 'active'`,
+                [courtCount]))
+        ];
+        const afvist = nedsaettelseAfvist(courtCount, optaget);
+        if (afvist) return res.status(409).json({ error: afvist });
 
         // Update court count
         await query(
@@ -111,10 +138,19 @@ router.put('/court-count', authMiddleware, requirePage('settings'), async (req, 
             }
         }
 
-        // Fjern baner ud over antallet. Gates IKKE på rækkeantal: med et hul i
-        // banenumrene (fx 1,2,4) kunne "courtCount < antal rækker" være falsk,
-        // så en bane med højt nummer blev hængende. DELETE'et er korrekt alene.
-        await query('DELETE FROM courts WHERE court_number > ?', [courtCount]);
+        // Baner ud over antallet SLETTES IKKE: match_history hænger på courts(id)
+        // med ON DELETE CASCADE, så sletningen tog hele banens kamphistorik med
+        // sig. Rækkerne bliver liggende og skjules af court_count (se
+        // config/baner.js), og de kommer tilbage, når antallet hæves igen.
+        // Kun banens øjebliksbillede ryddes, så den kommer tilbage som en tom
+        // bane — som en ny række gjorde før — i stedet for med en gammel stilling.
+        await query(
+            `DELETE gs FROM game_states gs JOIN courts c ON c.id = gs.court_id WHERE c.court_number > ?`,
+            [courtCount]);
+        await query(
+            `DELETE lf FROM last_finished_matches lf JOIN courts c ON c.id = lf.court_id WHERE c.court_number > ?`,
+            [courtCount]);
+        await query('UPDATE courts SET is_active = FALSE WHERE court_number > ?', [courtCount]);
 
         res.json({ success: true });
     } catch (error) {

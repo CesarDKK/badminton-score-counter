@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
+const { synligBane } = require('../config/baner');
 const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
 const { ikkeQrSession } = require('../middleware/qrSession');
 const { clubAdminAuth } = require('../middleware/clubAdminAuth');
@@ -341,7 +342,7 @@ async function baneStatus(req, bane) {
 // GET /api/livestream — banernes opsætning og TV-PC'erne, der kan have kamera
 router.get('/', livestreamAdmin, async (req, res, next) => {
     try {
-        const baner = await query('SELECT court_number FROM courts ORDER BY court_number');
+        const baner = await query(`SELECT court_number FROM courts WHERE ${synligBane()} ORDER BY court_number`);
         const opsaetning = new Map((await query('SELECT * FROM court_streams')).map(r => [r.court_number, r]));
         const links = await query(
             `SELECT id, name, destination, camera_court, camera_manual FROM device_tokens
@@ -458,7 +459,7 @@ router.delete('/logo', livestreamAdmin, async (req, res, next) => {
 router.put('/baner/:bane', livestreamAdmin, async (req, res, next) => {
     try {
         const bane = baneNr(req.params.bane);
-        if (!bane || !await queryOne('SELECT id FROM courts WHERE court_number = ?', [bane])) {
+        if (!bane || !await queryOne(`SELECT id FROM courts WHERE court_number = ? AND ${synligBane()}`, [bane])) {
             return res.status(404).json({ error: 'Bane ikke fundet' });
         }
         const o = ls.rensOpsaetning(req.body);
@@ -738,7 +739,7 @@ router.post('/pc', async (req, res, next) => {
         // Nyt kamera i en TV-PC: på linkets egen bane, hvis den er ledig (se ls.autoKameraBane)
         const auto = ls.autoKameraBane(link, !!pc.kamera);
         if (auto) {
-            const findes = await queryOne('SELECT id FROM courts WHERE court_number = ?', [auto]);
+            const findes = await queryOne(`SELECT id FROM courts WHERE court_number = ? AND ${synligBane()}`, [auto]);
             const optaget = await queryOne(
                 'SELECT id FROM device_tokens WHERE camera_court = ? AND is_active = 1 AND id <> ?', [auto, link.id]);
             if (findes && !optaget) {
@@ -763,7 +764,7 @@ router.post('/pc', async (req, res, next) => {
         let svar = { kamera: !!pc.kamera, send: false, grund: pc.kamera ? 'ingen-bane-valgt' : 'intet-kamera' };
         let livetavle = null;   // til live-siden — også når overlayet er slået fra
         if (bane) {
-            const court = await queryOne('SELECT id, is_doubles FROM courts WHERE court_number = ?', [bane]);
+            const court = await queryOne(`SELECT id, is_doubles FROM courts WHERE court_number = ? AND ${synligBane()}`, [bane]);
             const opsaetning = await queryOne('SELECT * FROM court_streams WHERE court_number = ?', [bane]);
             const gs = court && await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
             const sidste = court && !gs && await queryOne('SELECT * FROM last_finished_matches WHERE court_id = ?', [court.id]);

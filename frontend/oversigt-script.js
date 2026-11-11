@@ -1386,16 +1386,27 @@ async function handleOversigtConfigEvent(scope) {
 // kommer der events mens en opdatering kører, køres der præcis én gang til.
 let _refreshRunning = false;
 let _refreshPending = false;
+let _refreshStartedAt = 0;
+let _refreshGeneration = 0;
+// Samme vagt som TV'et (LOAD_STUCK_MS i tv-script-v3.js): alle kald har en
+// tidsgrænse, men hænger en opdatering alligevel, opgives den, så én fastlåst
+// opdatering ikke fryser oversigten resten af dagen (nr. 65)
+const REFRESH_STUCK_MS = 45000;
 async function scheduleRefresh() {
-    if (_refreshRunning) {
+    if (_refreshRunning && Date.now() - _refreshStartedAt < REFRESH_STUCK_MS) {
         _refreshPending = true;
         return;
     }
+    if (_refreshRunning) console.warn('Opdateringen hang i over 45 s — starter forfra');
+    const generation = ++_refreshGeneration;
     _refreshRunning = true;
+    _refreshStartedAt = Date.now();
     try {
         await loadHoldkamp();
         await loadAllCourts();
     } finally {
+        // En opgivet opdatering, der alligevel bliver færdig, må ikke røre flagene
+        if (generation !== _refreshGeneration) return;
         _refreshRunning = false;
         if (_refreshPending) {
             _refreshPending = false;

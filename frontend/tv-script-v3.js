@@ -51,6 +51,10 @@ let qrCounterEnabled = false;
 let qrCounterObjectUrl = null; // blob-URL til den senest hentede QR-kode
 let qrCounterVisible = false;
 let qrCounterMode = null; // 'idle' | 'resume' | 'finished' | 'planner' (+ '|nøgle') | null
+// Hent QR-koden igen ved næste visning, selv i samme tilstand ('reset'-event og
+// 5-minutters-sikkerhedsnettet) — den viste står, til den nye er hentet
+let qrGenhent = false;
+let qrHentNr = 0; // kun det nyeste QR-svar må skifte billedet
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async function() {
@@ -73,7 +77,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         refreshSponsorSettings();
         invalidateTvLogoCache();
         _tvByCourtDirty = true; // genhent også holdkamp-bindingen som sikkerhedsnet
-        qrCounterMode = null;   // og QR-koden (et misset 'reset'-event må ikke efterlade en død QR)
+        qrGenhent = true;       // og QR-koden (et misset 'reset'-event må ikke efterlade en død QR)
         scheduleCourtDataLoad();
     }, 5 * 60 * 1000);
 });
@@ -194,7 +198,7 @@ function startAutoRefresh() {
                     // tilstanden ikke, og den gamle, døde QR-kode blev stående
                     // resten af dagen — "Ugyldigt eller deaktiveret adgangslink"
                     // ved scanning. Hent den igen
-                    if (event && event.type === 'reset') qrCounterMode = null;
+                    if (event && event.type === 'reset') qrGenhent = true;
                     scheduleCourtDataLoad();
                 }
             },
@@ -1901,8 +1905,16 @@ function showQrCounter(mode = 'idle', noegle = '') {
     if (!container || !img) return;
 
     const tilstand = noegle ? `${mode}|${noegle}` : mode;
-    if (qrCounterMode === tilstand) return; // allerede vist i denne tilstand
+    // allerede vist i denne tilstand (og ingen har bedt om en frisk kode)
+    if (qrCounterMode === tilstand && !qrGenhent) return;
+    // Vises koden allerede i samme tilstand, hentes den nye i baggrunden, og
+    // billedet og ur-koden skiftes først, når svaret er der. Før blev boksen
+    // skjult, til den nye var hentet — QR-koden blinkede hvert 5. minut og ved
+    // hvert 'reset' (nr. 68)
+    const iBaggrunden = qrCounterMode === tilstand && qrCounterVisible;
+    qrGenhent = false;
     qrCounterMode = tilstand;
+    const hentNr = ++qrHentNr;
 
     const label = container.querySelector('.qr-counter__label');
     container.classList.toggle('qr-counter--compact', cfg.compact);
@@ -1912,19 +1924,23 @@ function showQrCounter(mode = 'idle', noegle = '') {
     // banens TV: den hentes med TV'ets adgangslink og vises som blob. Boksen vises
     // først, når billedet er hentet — så en bane uden guest-session (fx holdkamp,
     // 404 i peek-tilstand) ikke blinker en tom QR-ramme.
-    container.style.display = 'none';
-    qrCounterVisible = false; markerQrPlads(false);
+    if (!iBaggrunden) {
+        container.style.display = 'none';
+        qrCounterVisible = false; markerQrPlads(false);
+    }
     const q = cfg.peek ? 'resume=1' : '';
     const headers = api.token ? { Authorization: `Bearer ${api.token}` } : {};
     fetch(`/api/qr-code/${courtId}?${q}`, { headers, cache: 'no-store' })
         .then((res) => {
             if (!res.ok) return Promise.reject(res.status);
             // Tæl fra uret slået til: serveren sender banens ur-kode med
-            qrUrKode = res.headers.get('X-Ur-Kode') || null;
-            return res.blob();
+            const urKode = res.headers.get('X-Ur-Kode') || null;
+            return res.blob().then((blob) => ({ blob, urKode }));
         })
-        .then((blob) => {
-            if (qrCounterMode !== tilstand) return;
+        .then(({ blob, urKode }) => {
+            // Kun det nyeste svar i den aktuelle tilstand må skifte billedet
+            if (hentNr !== qrHentNr || qrCounterMode !== tilstand) return;
+            qrUrKode = urKode;
             visUrKode();
             if (qrCounterObjectUrl) URL.revokeObjectURL(qrCounterObjectUrl);
             qrCounterObjectUrl = URL.createObjectURL(blob);
@@ -1933,12 +1949,17 @@ function showQrCounter(mode = 'idle', noegle = '') {
             qrCounterVisible = true; markerQrPlads(true);
         })
         .catch((status) => {
-            if (qrCounterMode !== tilstand) return;
+            if (hentNr !== qrHentNr || qrCounterMode !== tilstand) return;
             if (status === 404) {
                 // Ingen QR i denne tilstand (fx holdkamp/turnering) — husk
                 // tilstanden, så den ikke hentes igen ved hver eneste poll
                 container.style.display = 'none';
                 qrCounterVisible = false; markerQrPlads(false);
+                return;
+            }
+            if (iBaggrunden) {
+                // Intet net lige nu: behold den viste kode og prøv igen ved næste poll
+                qrGenhent = true;
                 return;
             }
             hideQrCounter(); // andre fejl: prøv igen ved næste poll

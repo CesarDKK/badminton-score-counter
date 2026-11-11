@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
+const { synligBane } = require('../config/baner');
 const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
 const { kunEgenBane } = require('../middleware/qrSession');
 const { invalidateCourtTokens, nyUrKode } = require('./matchSessionTokens');
@@ -193,6 +194,7 @@ router.get('/batch/all', async (req, res, next) => {
                 TIMESTAMPDIFF(SECOND, gs.match_start_time, COALESCE(gs.match_end_time, NOW())) AS elapsed_seconds
             FROM courts c
             LEFT JOIN game_states gs ON c.id = gs.court_id
+            WHERE ${synligBane('c')}
             ORDER BY c.court_number ASC
         `);
 
@@ -325,7 +327,7 @@ router.get('/:courtId', async (req, res, next) => {
         const { courtId } = req.params;
 
         // Get court info by court_number (not id)
-        const court = await queryOne('SELECT id, is_active, is_doubles, game_mode FROM courts WHERE court_number = ?', [courtId]);
+        const court = await queryOne(`SELECT id, is_active, is_doubles, game_mode FROM courts WHERE court_number = ? AND ${synligBane()}`, [courtId]);
 
         if (!court) {
             return res.status(404).json({ error: 'Bane ikke fundet' });
@@ -422,7 +424,7 @@ async function gemTilstand(req, courtId, body, { skipAutoActive = false } = {}) 
 
     // Verify court exists by court_number
     const court = await queryOne(
-        'SELECT id, is_active, is_doubles, game_mode FROM courts WHERE court_number = ?',
+        `SELECT id, is_active, is_doubles, game_mode FROM courts WHERE court_number = ? AND ${synligBane()}`,
         [courtId]
     );
 
@@ -779,7 +781,7 @@ router.post('/:courtId/taeller', requireWriteAuthInClubMode, kunEgenBane('courtI
         const id = ejerskab.rensId(body.taellerId);
         if (!id) return res.status(400).json({ error: 'Ugyldigt tæller-id' });
 
-        const court = await queryOne('SELECT id FROM courts WHERE court_number = ?', [req.params.courtId]);
+        const court = await queryOne(`SELECT id FROM courts WHERE court_number = ? AND ${synligBane()}`, [req.params.courtId]);
         if (!court) return res.status(404).json({ error: 'Bane ikke fundet' });
 
         const hent = () => queryOne(
@@ -827,7 +829,7 @@ router.post('/:courtId/result', requireWriteAuthInClubMode, kunEgenBane('courtId
     try {
         const courtNumber = parseInt(req.params.courtId, 10);
         const court = await queryOne(
-            'SELECT id, is_active, is_doubles, game_mode FROM courts WHERE court_number = ?',
+            `SELECT id, is_active, is_doubles, game_mode FROM courts WHERE court_number = ? AND ${synligBane()}`,
             [courtNumber]
         );
         if (!court) return res.status(404).json({ error: 'Bane ikke fundet' });
@@ -948,7 +950,7 @@ router.delete('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), a
         const { courtId } = req.params;
 
         // Get court by court_number
-        const court = await queryOne('SELECT id FROM courts WHERE court_number = ?', [courtId]);
+        const court = await queryOne(`SELECT id FROM courts WHERE court_number = ? AND ${synligBane()}`, [courtId]);
 
         if (!court) {
             return res.status(404).json({ error: 'Bane ikke fundet' });

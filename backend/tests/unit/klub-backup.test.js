@@ -225,9 +225,14 @@ test('demoen kendes på direkte adgang på en server med klubber', () => {
         process.env.APP_DOMAIN = 'badmintonapp.dk';
         assert.equal(erDemo({ accessMode: 'direct' }), true);
         assert.equal(erDemo({ accessMode: 'club', clubDbName: 'lyngby' }), false);
-        assert.equal(erDemo({ accessMode: 'admin' }), false);
+        // Nr. 64: på admin. og mail./smtp./ftp./roden er databasen og mappen
+        // stadig demoens — lofterne må ikke kunne omgås derfra
+        assert.equal(erDemo({ accessMode: 'admin' }), true);
+        assert.equal(erDemo({ accessMode: 'marketing' }), true);
+        assert.equal(erDemo({}), true, 'ukendt adgang = ikke en klub = demoens lofter');
         delete process.env.APP_DOMAIN;
         assert.equal(erDemo({ accessMode: 'direct' }), false, 'en lokal installation uden klubber har ingen loft');
+        assert.equal(erDemo({ accessMode: 'admin' }), false);
     } finally {
         if (foer === undefined) delete process.env.APP_DOMAIN; else process.env.APP_DOMAIN = foer;
     }

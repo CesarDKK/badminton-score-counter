@@ -1025,7 +1025,7 @@ async function loadTeamMatchHistory() {
                 <div class="historik-gruppe__hoved" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
                     <div class="historik-gruppe__titel-linje">
                         <span class="historik-gruppe__titel">${escapeHtml(tm.team1_name)} <span class="hold-farve--1">${team1Wins}</span> – <span class="hold-farve--2">${team2Wins}</span> ${escapeHtml(tm.team2_name)}</span>
-                        <span class="tekst-daempet tekst-lille">${formatLabel}</span>
+                        <span class="tekst-daempet tekst-lille">${escapeHtml(formatLabel || '')}</span>
                         <span class="tekst-daempet tekst-lille">${date}</span>
                     </div>
                     <span class="tekst-daempet tekst-mindre">▼ Se delkampe</span>
@@ -2418,7 +2418,7 @@ function createMatchCard(match, index) {
                 </div>
                 ${setOverviewBadges ? `<div style="margin: 10px 0;">${setOverviewBadges}</div>` : ''}
                 <div style="color: var(--text-muted, rgba(255, 255, 255, 0.62)); font-size: 0.9em; margin-top: 8px;">
-                    <span style="margin-right: 15px;">${Ikon('ur')} ${match.duration}</span>
+                    <span style="margin-right: 15px;">${Ikon('ur')} ${escapeHtml(match.duration || '')}</span>
                     <span style="margin-right: 15px;"><svg viewBox="0 0 24 24" fill="currentColor" class="ikon-tekst" aria-hidden="true"><g transform="translate(0 1.2)"><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-33 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(-14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(14 12 14.5)"/><ellipse cx="12" cy="7.7" rx="1.5" ry="6.8" transform="rotate(33 12 14.5)"/><rect x="9.4" y="14.3" width="5.2" height="1.7" rx="0.85"/><path d="M9.7 16.6h4.6v0.5a2.3 2.3 0 0 1-4.6 0z"/></g></svg> Bane ${match.court_id}</span>
                     <span>${Ikon('kalender')} ${new Date(match.match_date).toLocaleDateString('da-DK', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                 </div>
