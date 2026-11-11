@@ -1,5 +1,6 @@
 const cron = require('node-cron');
 const { query, queryOne } = require('./config/database');
+const { synligBane } = require('./config/baner');
 const { runWithTenant, currentTenant } = require('./config/tenantPools');
 const { publishGameStateChange } = require('./events/gameStateEvents');
 
@@ -120,7 +121,7 @@ async function releaseInactiveCourts(dbLabel) {
         `SELECT c.id, c.court_number
          FROM courts c
          JOIN game_states gs ON gs.court_id = c.id
-         WHERE c.is_active = TRUE
+         WHERE c.is_active = TRUE AND ${synligBane('c')}
            AND gs.match_start_time IS NOT NULL
            AND gs.match_completed = FALSE
            AND gs.updated_at < NOW() - INTERVAL ${INACTIVITY_MINUTES} MINUTE

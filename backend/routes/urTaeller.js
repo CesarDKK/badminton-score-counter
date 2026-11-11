@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const { query, queryOne } = require('../config/database');
+const { synligBane } = require('../config/baner');
 const { requireWriteAuthInClubMode } = require('../middleware/auth');
 const { baneFraDestination } = require('../middleware/qrSession');
 const { urKodeLimiter } = require('../middleware/rateLimiter');
@@ -169,7 +170,7 @@ function tilstandUdenHistorik(row, court) {
     return st;
 }
 
-const hentBane = (bane) => queryOne('SELECT id, court_number, is_active, is_doubles, game_mode FROM courts WHERE court_number = ?', [bane]);
+const hentBane = (bane) => queryOne(`SELECT id, court_number, is_active, is_doubles, game_mode FROM courts WHERE court_number = ? AND ${synligBane()}`, [bane]);
 const hentRaekke = (courtPk) => queryOne(
     'SELECT *, TIMESTAMPDIFF(SECOND, tryk_at, NOW()) AS tryk_alder_sek FROM game_states WHERE court_id = ?', [courtPk]);
 

@@ -120,18 +120,19 @@ class BadmintonAPI {
         const maxRetries = isIdempotent ? retries : 1;
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            // Tidsgrænsen gælder HELE kaldet, til kroppen er læst — også i
+            // fejl-grenen. Før blev timeren ryddet, så snart headerne kom, og et
+            // svar, der gik i stå midt i kroppen, hang så for altid: oversigten
+            // frøs, og tablettens gemninger stoppede (nr. 65). Abort under
+            // response.json() giver en AbortError, der behandles som en timeout.
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
             try {
-                // Create abort controller for timeout
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), timeout);
-
                 const response = await fetch(`${API_BASE_URL}${endpoint}`, {
                     ...options,
                     headers,
                     signal: controller.signal
                 });
-
-                clearTimeout(timeoutId);
 
                 if (!response.ok) {
                     const error = await response.json().catch(() => ({ error: response.statusText }));
@@ -184,6 +185,9 @@ class BadmintonAPI {
 
                 console.error(`API Error [${endpoint}] - All retries exhausted:`, error);
                 throw error;
+            } finally {
+                // Kroppen er læst (eller kaldet opgivet): timeren må ikke afbryde noget senere
+                clearTimeout(timeoutId);
             }
         }
     }

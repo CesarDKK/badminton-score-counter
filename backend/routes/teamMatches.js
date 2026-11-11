@@ -10,6 +10,19 @@ const { publishGameStateChange, publishHoldkampChange } = require('../events/gam
 const { invalidateCourtTokens } = require('./matchSessionTokens');
 const { rydAfsluttetBane } = require('../config/banerydning');
 const holdkampFormater = require('../config/holdkampFormater');
+const { banenErIGang, delkampAendringAfvist, sammeBane } = require('../config/delkampRegler');
+
+// Banens stilling (point, sæt, ur) — til "er banen i gang?" i banenErIGang
+function banensStilling(courtNumber) {
+    return queryOne(
+        `SELECT gs.player1_score, gs.player2_score,
+                gs.player1_games, gs.player2_games, gs.timer_seconds
+         FROM courts c
+         JOIN game_states gs ON c.id = gs.court_id
+         WHERE c.court_number = ?`,
+        [courtNumber]
+    );
+}
 
 // Efter enhver vellykket ændring (opret, golden set, logoer, delkamp, afslut,
 // slet) får oversigten og admin et 'holdkamp'-event og henter holdkampene igen.
@@ -194,6 +207,11 @@ router.post('/', authMiddleware, requirePage('holdkamp'), async (req, res, next)
         if (!format || !team1Name || !team2Name || !games || !Array.isArray(games)) {
             return res.status(400).json({ error: 'Alle felter er påkrævet' });
         }
+        // Formatet vises i admin og styrer reglerne — kun kendte formater
+        // (inkl. 'imported' fra holdsedler, der ikke passer på et af dem)
+        if (!holdkampFormater.kendtFormat(format)) {
+            return res.status(400).json({ error: 'Ukendt holdkamp-format' });
+        }
 
         const teamMatchId = await opretHoldkamp({ format, team1Name, team2Name, games, team1LogoId, team2LogoId });
         res.json({ success: true, id: teamMatchId });
@@ -269,12 +287,25 @@ router.put('/:id/games/:gameId', requireWriteAuthInClubMode, requirePage('holdka
 
         // Verify game belongs to this team match
         const game = await queryOne(
-            `SELECT id, court_number, started_at FROM team_match_games WHERE id = ? AND team_match_id = ?`,
+            `SELECT id, court_number, started_at, status FROM team_match_games WHERE id = ? AND team_match_id = ?`,
             [gameId, id]
         );
 
         if (!game) {
             return res.status(404).json({ error: 'Delkamp ikke fundet' });
+        }
+
+        // En tablet (adgangslink) må ikke genåbne en færdig delkamp eller trække
+        // en, der spilles på en anden bane, over til sig — se delkampRegler.js.
+        // Admin må stadig.
+        const erEnhed = req.user?.role === 'device';
+        if (erEnhed) {
+            const flytterIgangvaerende = game.status === 'active' && game.court_number !== null
+                && courtNumber !== undefined && courtNumber !== null
+                && !sammeBane(courtNumber, game.court_number);
+            const egenBaneIGang = flytterIgangvaerende && banenErIGang(await banensStilling(game.court_number));
+            const afvist = delkampAendringAfvist({ erEnhed, delkamp: game, status, courtNumber, egenBaneIGang });
+            if (afvist) return res.status(409).json({ error: afvist });
         }
 
         const fields = [];
@@ -294,20 +325,7 @@ router.put('/:id/games/:gameId', requireWriteAuthInClubMode, requirePage('holdka
 
                 if (occupant) {
                     // Er banen i gang? (samme definition som admin-dropdownen)
-                    const gs = await queryOne(
-                        `SELECT gs.player1_score, gs.player2_score,
-                                gs.player1_games, gs.player2_games, gs.timer_seconds
-                         FROM courts c
-                         JOIN game_states gs ON c.id = gs.court_id
-                         WHERE c.court_number = ?`,
-                        [courtNumber]
-                    );
-                    const inProgress = gs && (
-                        gs.player1_score > 0 || gs.player2_score > 0 ||
-                        gs.player1_games > 0 || gs.player2_games > 0 ||
-                        gs.timer_seconds > 0
-                    );
-                    if (inProgress) {
+                    if (banenErIGang(await banensStilling(courtNumber))) {
                         return res.status(409).json({
                             error: 'Bane optaget — der spilles allerede en kamp på denne bane.'
                         });

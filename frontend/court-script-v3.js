@@ -1608,7 +1608,14 @@ async function undoLastAction() {
     const varPause = gameState.restBreakActive;
     const { ok, haendelser } = TaellerRegler.fortryd(gameState);
     if (!ok) {
-        showMessage('Fortryd', 'Der er ingen handlinger at fortryde.');
+        // Er kampen afgjort, fører OK tilbage til kampslut-dialogen — ellers
+        // lukkede den dialogen og efterlod en død tavle (nr. 67), som i
+        // visAdvarselOgKampSlut
+        showMessage('Fortryd', 'Der er ingen handlinger at fortryde.', [{
+            text: 'OK',
+            callback: () => { if (gameState.matchCompleted) showMatchWonMessage(_kampSlutRapporteret); },
+            style: 'primary'
+        }]);
         return;
     }
 
@@ -2305,6 +2312,7 @@ function escapeMessageHtml(s) {
 // tid og walkover). Læser alt fra gameState, så den også kan vises igen, når
 // en afsluttet kamp indlæses eller et resultat er tastet på en anden enhed.
 let _kampSlutVist = false;
+let _kampSlutRapporteret = false; // seneste kampslut-dialog var holdkamp/turnering
 function showMatchWonMessage(isReportedMatch = false) {
     releaseWakeLock(); // kampen er afgjort — skærmen må gerne gå i dvale igen
     const history = gameState.setScoresHistory || [];
@@ -2432,7 +2440,11 @@ function showMatchWonMessage(isReportedMatch = false) {
         ? [{ text: 'Ret resultat', callback: () => openResultForm(), style: 'secondary' },
            { text: 'Luk', callback: null, style: 'primary' }]
         : [{ text: 'Ny kamp', callback: () => performClearCourtNow(), style: 'primary' },
-           ...(outcome ? [] : [{ text: 'Fortryd sidste point', callback: () => undoLastAction(), style: 'secondary' }])];
+           // Kun med noget at fortryde: efter en genindlæsning er historikken tom
+           // (applyLoadedState), og knappen gav en død tavle (nr. 67)
+           ...(outcome || !(gameState.history && gameState.history.length > 0) ? []
+               : [{ text: 'Fortryd sidste point', callback: () => undoLastAction(), style: 'secondary' }])];
+    _kampSlutRapporteret = isReportedMatch;
 
     const titel = outcome === 'walkover' ? 'Walkover'
         : outcome === 'ended_early' ? 'Kamp Afsluttet'
@@ -2862,6 +2874,9 @@ function visAdvarselOgKampSlut(tekst, rapporteret) {
 }
 
 function formatDuration(seconds) {
+    // Aldrig negativ eller brøkdel: serveren tager kun imod "MM:SS" i
+    // kamphistorikken (nr. 61), og et skævt ur må ikke koste resultatet
+    seconds = Math.max(0, Math.floor(Number(seconds) || 0));
     const minutes = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
@@ -3093,7 +3108,11 @@ async function serverSyncTick(reason) {
                     const panel = document.getElementById('holdkampPanel');
                     const matchSel = document.getElementById('holdkampMatchSelect');
                     const gameSel = document.getElementById('holdkampGameSelect');
-                    const userIsSelecting = holdkampSelectFocused || (matchSel && matchSel.value) || (gameSel && gameSel.value);
+                    // Er der kun én holdkamp, sætter populateHoldkampMatchSelect selv
+                    // holdkamp-valget (og skjuler det) — det er ikke brugerens valg, og
+                    // talte det med, blev listen over ventende delkampe aldrig opdateret
+                    const holdkampValgt = matchSel && matchSel.style.display !== 'none' && matchSel.value;
+                    const userIsSelecting = holdkampSelectFocused || holdkampValgt || (gameSel && gameSel.value);
                     if (hasPending && !activeTeamMatch) {
                         // Åbn panelet én gang (activeTeamMatch markerer "initialiseret")
                         activeTeamMatch = matches[0];
@@ -3469,9 +3488,25 @@ async function assignHoldkampGame() {
     const matchId = parseInt(document.getElementById('holdkampMatchSelect').value, 10);
     const gameId = parseInt(document.getElementById('holdkampGameSelect').value, 10);
     if (!matchId || !gameId) return;
-    const tm = holdkampMatches.find(m => m.id === matchId);
+
+    // Hent listen igen lige før tildelingen: den, der står i panelet, kan være
+    // flere minutter gammel, og en anden tablet kan have taget delkampen eller
+    // spillet den færdig imens. Fejler hentningen, bruges den kendte liste —
+    // serveren afviser selv en færdig eller igangværende delkamp (409).
+    let matches = holdkampMatches;
+    try {
+        matches = await api.getActiveTeamMatches() || [];
+    } catch (e) {
+        console.warn('Kunne ikke hente holdkampene igen før tildelingen:', e);
+    }
+    const tm = matches.find(m => m.id === matchId);
     const game = tm && (tm.games || []).find(g => g.id === gameId);
-    if (!tm || !game) return;
+    if (!tm || !game || game.status !== 'pending') {
+        showMessage('Delkampen er ikke ledig længere',
+            'Delkampen er allerede tildelt en bane eller færdigspillet. Listen er opdateret — vælg en anden.');
+        populateHoldkampMatchSelect(matches);
+        return;
+    }
 
     try {
         await api.updateTeamMatchGame(matchId, gameId, { courtNumber: courtId, status: 'active' });
@@ -3482,8 +3517,12 @@ async function assignHoldkampGame() {
     } catch (error) {
         console.error('Failed to assign holdkamp game:', error);
         if (error.status === 409) {
-            showMessage('Bane optaget', error.message);
+            // Serverens tekst siger hvorfor (banen optaget, delkampen færdig
+            // eller i gang på en anden bane)
+            showMessage('Kan ikke tildele delkampen', error.message);
             await refreshHoldkampPanel();
+        } else {
+            showMessage('Kan ikke tildele delkampen', 'Der skete en fejl. Prøv igen om lidt.');
         }
     }
 }

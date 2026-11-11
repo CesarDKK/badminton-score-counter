@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
+const { synligBane } = require('../config/baner');
 const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
 const { kunEgenBane } = require('../middleware/qrSession');
 const { publishGameStateChange } = require('../events/gameStateEvents');
@@ -9,7 +10,7 @@ const { publishGameStateChange } = require('../events/gameStateEvents');
 router.get('/', async (req, res, next) => {
     try {
         const courts = await query(
-            'SELECT id, court_number, is_active, is_doubles, game_mode, created_at, updated_at FROM courts ORDER BY court_number'
+            `SELECT id, court_number, is_active, is_doubles, game_mode, created_at, updated_at FROM courts WHERE ${synligBane()} ORDER BY court_number`
         );
 
         // Convert MySQL booleans (0/1) to JavaScript booleans (true/false)
@@ -31,7 +32,7 @@ router.get('/:id', async (req, res, next) => {
         const { id } = req.params;
 
         const court = await queryOne(
-            'SELECT id, court_number, is_active, is_doubles, game_mode, created_at, updated_at FROM courts WHERE court_number = ?',
+            `SELECT id, court_number, is_active, is_doubles, game_mode, created_at, updated_at FROM courts WHERE court_number = ? AND ${synligBane()}`,
             [id]
         );
 
@@ -95,9 +96,9 @@ router.put('/:id', requireWriteAuthInClubMode, kunEgenBane('id'), async (req, re
 
         values.push(id);
 
-        // Update court using court_number
+        // Update court using court_number (en skjult bane over "Antal baner" = ikke fundet)
         const result = await query(
-            `UPDATE courts SET ${updates.join(', ')} WHERE court_number = ?`,
+            `UPDATE courts SET ${updates.join(', ')} WHERE court_number = ? AND ${synligBane()}`,
             values
         );
 

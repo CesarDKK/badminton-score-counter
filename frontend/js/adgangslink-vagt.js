@@ -9,13 +9,19 @@
  *
  * Sessionen fornys også, før den udløber: en tablet i holderen med samme fane
  * åben røg ellers på login-siden præcis 14 dage efter, at linket blev åbnet —
- * samme ugedag og klokkeslæt, typisk midt i den samme ugentlige træning. Er der
- * under FORNY_FOER_MS tilbage, byttes sessionen ud med en ny uden at genindlæse
- * siden. Et spærret eller slettet link kan ikke fornys (siden håndterer det selv).
+ * samme ugedag og klokkeslæt, typisk midt i den samme ugentlige træning. Er
+ * sessionen over FORNY_EFTER_MS gammel (iat), byttes den ud med en ny uden at
+ * genindlæse siden. Før blev den først fornyet med under 3 dage tilbage — men en
+ * tablet, der sover fra den ene ugentlige træning til den næste, er kun vågen
+ * få timer om ugen og ramte sjældent det vindue; en udløbet session kan ikke
+ * fornys. Fornyes den hver dag, den er vågen, holder den 14 dage efter sidste
+ * træning. 3-dages-reglen er tilbage som reserve for sessioner uden iat.
+ * Et spærret eller slettet link kan ikke fornys (siden håndterer det selv).
  */
 (function () {
     const api = window.BadmintonAPI;
     const INTERVAL_MS = 60 * 1000;
+    const FORNY_EFTER_MS = 24 * 60 * 60 * 1000;
     const FORNY_FOER_MS = 3 * 24 * 60 * 60 * 1000;
 
     // Sessionen fra enhedens faste adgangslink — ikke et admin-login eller en QR-tæller
@@ -36,9 +42,12 @@
         return nu.destination.startsWith('tv/') && qr !== null && qr !== (nu.showQrOnTv ? '1' : '0');
     }
 
-    // Under FORNY_FOER_MS tilbage af sessionen? (exp er i sekunder)
+    // Over et døgn gammel, eller (reserve) under FORNY_FOER_MS tilbage?
+    // iat og exp er i sekunder
     function skalFornys(p) {
-        return !!p.exp && p.exp * 1000 - Date.now() < FORNY_FOER_MS;
+        const nu = Date.now();
+        if (p.iat && nu - p.iat * 1000 > FORNY_EFTER_MS) return true;
+        return !!p.exp && p.exp * 1000 - nu < FORNY_FOER_MS;
     }
 
     // Ny session fra serveren (samme link, samme sted): sessionen i adressen,
@@ -47,7 +56,7 @@
     function sessionFraAdresse(url) {
         try { return new URL(url, window.location.origin).searchParams.get('dt'); } catch { return null; }
     }
-    window.AdgangslinkVagt = { sessionFraAdresse, skalFornys, FORNY_FOER_MS, tjek: () => tjek() };
+    window.AdgangslinkVagt = { sessionFraAdresse, skalFornys, FORNY_EFTER_MS, FORNY_FOER_MS, tjek: () => tjek() };
 
     async function forny() {
         const svar = await api.request('/device-tokens/mit/skift', { method: 'POST' }, 1);

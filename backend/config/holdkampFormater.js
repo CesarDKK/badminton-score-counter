@@ -41,4 +41,14 @@ function detectFormat(games) {
     return 'imported';
 }
 
-module.exports = { ...formater, detectFormat };
+/**
+ * Er formatet et, vi kender? Formaterne i FORMATER plus 'imported', som
+ * detectFormat giver en holdseddel, der ikke passer på nogen af dem.
+ * POST /api/team-matches afviser alt andet (formatet vises i admin).
+ */
+function kendtFormat(format) {
+    return typeof format === 'string'
+        && (format === 'imported' || Object.prototype.hasOwnProperty.call(formater.FORMATER, format));
+}
+
+module.exports = { ...formater, detectFormat, kendtFormat };

@@ -22,6 +22,7 @@
 const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
+const { synligBane } = require('../config/baner');
 const { currentTenant } = require('../config/tenantPools');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
 const { publishGameStateChange } = require('../events/gameStateEvents');
@@ -329,7 +330,7 @@ async function anvendRunde(runde, tilladteBaner) {
 
     for (const courtNumber of [...tilladt].sort((a, b) => a - b)) {
         const m = pr.get(courtNumber) || null;
-        const court = await queryOne('SELECT id, court_number, is_active, is_doubles FROM courts WHERE court_number = ?', [courtNumber]);
+        const court = await queryOne(`SELECT id, court_number, is_active, is_doubles FROM courts WHERE court_number = ? AND ${synligBane()}`, [courtNumber]);
         if (!court) {
             if (m) results.push({ courtNumber, status: 'rejected', reason: 'court_not_found', previous: null });
             continue;
@@ -408,7 +409,7 @@ async function plannerVindueLuk() {
         const baner = await query('SELECT court_number FROM planner_court_assignments WHERE round_id = ?', [runde.id]);
         const ryddet = [];
         for (const { court_number } of baner) {
-            const court = await queryOne('SELECT id, court_number, is_active, is_doubles FROM courts WHERE court_number = ?', [court_number]);
+            const court = await queryOne(`SELECT id, court_number, is_active, is_doubles FROM courts WHERE court_number = ? AND ${synligBane()}`, [court_number]);
             if (!court) continue;
             const gs = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
             if (kampIGang(gs)) continue;

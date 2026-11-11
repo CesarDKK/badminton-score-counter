@@ -182,10 +182,14 @@ async function showSettingsDashboard() {
     loadAutoBackups();
 }
 
+// Det gemte "Antal baner" — så gemningen kan spørge, før antallet sænkes
+let gemtAntalBaner = null;
+
 async function loadSettings() {
     try {
         const settings = await api.getSettings();
         document.getElementById('courtCount').value = settings.courtCount;
+        gemtAntalBaner = parseInt(settings.courtCount, 10) || null;
         // Invert logic: checked = tournament mode ON (showResetButton false)
         document.getElementById('showResetButton').checked = settings.showResetButton === false;
         document.getElementById('hideTvQr').checked = settings.hideTvQr === true;
@@ -207,8 +211,22 @@ async function saveCourtCount() {
         return;
     }
 
+    // Færre baner: de øverste forsvinder fra tablet, TV, oversigt og admin.
+    // Kamphistorikken bevares, og banerne kommer igen, hvis antallet hæves.
+    if (gemtAntalBaner && courtCount < gemtAntalBaner) {
+        const skjules = courtCount + 1 === gemtAntalBaner
+            ? `Bane ${gemtAntalBaner}`
+            : `Bane ${courtCount + 1}–${gemtAntalBaner}`;
+        const ok = await showConfirm('Færre baner',
+            `${skjules} forsvinder fra tabletterne, TV'erne, oversigten og admin. ` +
+            'Kamphistorikken bevares, og banerne kommer tilbage, hvis du sætter antallet op igen.',
+            `Sæt ned til ${courtCount}`);
+        if (!ok) return;
+    }
+
     try {
         await api.updateCourtCount(courtCount);
+        gemtAntalBaner = courtCount;
         showMessage('Succes', 'Antal baner opdateret!');
     } catch (error) {
         console.error('Failed to update court count:', error);
