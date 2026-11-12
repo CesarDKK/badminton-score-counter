@@ -161,6 +161,10 @@ tjek "kiosk.conf på SD-kortet" test -f "$KC"
 tjek "kiosk.conf har BOM" test "$(head -c 3 "$KC" | od -An -tx1 | tr -d ' \n')" = efbbbf
 tjek "kiosk.conf har CRLF" grep -q $'\r$' "$KC"
 tjek "VEJLEDNING.txt på SD-kortet" test -f "$K/VEJLEDNING.txt"
+# Nr. 62: uden tilstandsfilen kunne Pi'en aldrig opdatere sig selv
+tjek "opdateringens tilstandsfil: aktiv=a" grep -qx 'aktiv=a' "$K/badminton-tv-opdatering.txt"
+tjek "tilstandsfilen uden CRLF" bash -c "! grep -q \$'\\r' '$K/badminton-tv-opdatering.txt'"
+tjek "ingen unattended-upgrades (nr. 98)" bash -c "! chroot '$R' dpkg -s unattended-upgrades >/dev/null 2>&1"
 
 # Funktion inde i billedet: setup og generator læser kiosk.conf fra SD-kortet
 printf '\xEF\xBB\xBFTV_URL=https://a.dk/t/abc&qr=0\r\nNAVN=TV Bane Ø\r\nWIFI_NAVN=Hal æ\r\nWIFI_KODE=min kode 1\r\nSLUK_KL=22.30\r\n' > "$KC"

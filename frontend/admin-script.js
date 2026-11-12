@@ -3676,6 +3676,9 @@ function skaermHaendelseTekst(h) {
         case 'net-ipv6': return h.tekst || 'Serveren kunne kun nås over IPv4 — hallens IPv6 driller';
         case 'net-genstart': return h.tekst || "Ingen WiFi-forbindelse — PC'en blev genstartet";
         case 'net-kort': return h.tekst || "WiFi-kortet svarer ikke — træk strømstikket ud i 1 minut";
+        // Den automatiske opdatering (nr. 99)
+        case 'opd-fejl': return h.tekst || 'Den automatiske opdatering fejlede';
+        case 'opd-tilbage': return h.tekst || "En ny version startede ikke rigtigt — PC'en kører den forrige igen";
         case 'browser-genstart': return 'Browseren frøs og blev genstartet af browser-vagten'
             + (h.tekst ? ` (${h.tekst})` : '');
         default: return h.tekst || h.type;
@@ -4002,6 +4005,25 @@ function skaermOpdateringHtml(s, kl, paaNyeste) {
     return { linje, knap };
 }
 
+// Den automatiske opdatering gik galt (nr. 99): PC'en melder det i sin rapport
+// (opd-fejl: hentningen fejlede, opd-tilbage: en ny version startede ikke
+// rigtigt, så den forrige kører igen). Den seneste fra de sidste 7 dage vises
+// med rødt ved PC'en — indtil den kører den nyeste version.
+const OPD_HAENDELSER = ['opd-fejl', 'opd-tilbage'];
+function skaermOpdateringFejlHtml(noegle, paaNyeste) {
+    if (paaNyeste) return '';
+    const uge = Date.now() - 7 * 24 * 3600 * 1000;
+    const h = _skaermLog
+        .filter(x => skaermNoegle(x) === noegle && OPD_HAENDELSER.includes(x.type) && new Date(x.fra).getTime() >= uge)
+        .sort((a, b) => new Date(b.fra) - new Date(a.fra))[0];
+    if (!h) return '';
+    const tid = new Date(h.fra).toLocaleString('da-DK', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return `<div style="color:var(--color-danger);font-size:0.9em;margin-top:2px;">
+        ${Ikon('advarsel')} ${escapeHtml(skaermHaendelseTekst(h))} (${escapeHtml(tid)})
+        <a href="#" onclick="visSkaermLog(this.dataset.skaerm);return false;" data-skaerm="${escapeHtml(noegle)}"
+            style="color:inherit;">Vis log</a></div>`;
+}
+
 function renderSkaerme(skaerme, nyesteVersion) {
     if (!skaerme.length) return '';
     const kl = (ms) => new Date(ms).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
@@ -4032,6 +4054,7 @@ function renderSkaerme(skaerme, nyesteVersion) {
             : ` &nbsp;•&nbsp; Badminton TV ${escapeHtml(s.kioskVersion)}` + (!nyesteVersion ? ''
                 : paaNyeste ? ' (nyeste)' : ` <span class="tekst-advarsel">(${escapeHtml(nyesteVersion)} er udgivet)</span>`);
         const opd = skaermOpdateringHtml(s, kl, paaNyeste);
+        const opdFejl = skaermOpdateringFejlHtml(noegle, paaNyeste);
         return `
             <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid rgba(255,255,255,0.06);">
                 <span style="width:9px;height:9px;border-radius:50%;background:${farve};margin-top:6px;flex-shrink:0;"></span>
@@ -4042,6 +4065,7 @@ function renderSkaerme(skaerme, nyesteVersion) {
                     </div>
                     ${haendelser ? `<div style="color:var(--color-warning, #ffb02e);font-size:0.9em;margin-top:2px;">${Ikon('advarsel')} ${haendelser}</div>` : ''}
                     ${opd.linje}
+                    ${opdFejl}
                 </div>
                 ${opd.knap}
                 ${s.sekunderSiden >= 60 ? `<button type="button" class="btn-secondary btn-sm ingen-krymp" onclick="fjernSkaerm('${escapeHtml(s.klientId)}')"

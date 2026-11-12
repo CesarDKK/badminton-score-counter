@@ -201,6 +201,12 @@ til_windows() { printf '\xEF\xBB\xBF'; sed 's/$/\r/' "$1"; }
 til_windows "$SRC/usb/kiosk.conf" > "$FAT/kiosk.conf"
 til_windows "$SRC/pi/VEJLEDNING.txt" > "$FAT/VEJLEDNING.txt"
 printf '%s\r\n' "$VERSION" > "$FAT/badminton-tv-version.txt"
+# Den automatiske opdaterings tilstand (system A kører). Uden filen startede
+# badminton-tv-opdatering-proev.service aldrig, og opdatering døde i set -e,
+# så en Pi kunne aldrig opdatere sig selv (nr. 62). Unix-linjeskift — kun
+# opdatering læser og skriver den.
+printf '# Badminton TV: automatisk opdatering. Rør ikke filen.\naktiv=a\n' \
+    > "$FAT/badminton-tv-opdatering.txt"
 
 bt_pi_kan_starte "$FAT" a "$DISKID" "$VERSION" "$ROD"
 df -h "$ROD" "$FAT" | tail -2

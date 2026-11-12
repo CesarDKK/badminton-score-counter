@@ -9,7 +9,10 @@ const TYPER = new Set(['pc-brat', 'pc-panik', 'pc-knap', 'pc-genstart', 'browser
     // net-vagten (browservagt): WiFi'en væk og tilbage, serveren væk, genstart, WiFi-kortet dødt
     'net-wifi', 'net-server', 'net-genstart', 'net-kort',
     // serveren kunne kun nås over IPv4 (hallens IPv6 driller — TV'et mærker det ikke)
-    'net-ipv6']);
+    'net-ipv6',
+    // den automatiske opdatering: hentningen fejlede / en ny version startede
+    // ikke rigtigt, så PC'en kører den forrige igen (nr. 99)
+    'opd-fejl', 'opd-tilbage']);
 const MAX_PR_RAPPORT = 10;
 const MAX_TEKST = 300;
 const MAX_LOG = 32 * 1024;

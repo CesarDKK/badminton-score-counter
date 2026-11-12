@@ -41,7 +41,8 @@ I DAGLIG BRUG
       Pi 3 og 4: har ingen knap — tag strømmen fra og sæt den i igen
       (en stikdåse med afbryder gør det nemt).
   - Den går aldrig i dvale.
-  - Den opdaterer sig selv: en ny version hentes, mens TV'et kører. Næste
+  - Den opdaterer sig selv: en ny version hentes ved den automatiske
+    slukning (eller med det samme, se OPDATERING i kiosk.conf). Næste
     gang Pi'en tændes, genstarter den én gang ekstra (ca. 1 minut) og
     prøver den nye version. Virker den ikke, går Pi'en selv tilbage til den
     forrige inden for 20 minutter. Kræver et SD-kort på mindst 16 GB (se

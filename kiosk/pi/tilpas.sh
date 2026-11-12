@@ -8,6 +8,11 @@ export DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8
 
 apt-get update -q
 
+# Alle sikkerhedsrettelser med i billedet: Pi'en installerer ingen pakker selv
+# (de kommer med hver udgivelse, A/B med prøvestart). Vores egne filer er
+# lagt ind før — dpkg beholder dem (confold).
+apt-get full-upgrade -y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold
+
 # --no-install-recommends som på PC'en: kun det der bruges. Raspberry Pi OS
 # Lite har allerede NetworkManager, WiFi-firmware, timesyncd og zram-swap.
 PAKKER=(
@@ -16,7 +21,6 @@ PAKKER=(
     fonts-dejavu-core fonts-liberation2 fonts-noto-color-emoji
     jq kbd console-setup-linux util-linux-extra
     v4l-utils iw rfkill wireless-regdb pciutils usbutils
-    unattended-upgrades
     # Automatisk opdatering: hent, tjek signaturen, kopiér systemet
     curl openssl rsync fdisk
 )
@@ -69,7 +73,8 @@ systemctl set-default multi-user.target
 systemctl mask sleep.target suspend.target hibernate.target \
                hybrid-sleep.target suspend-then-hibernate.target
 
-# Opdateringer kun ved automatisk slukning, ikke på tilfældige tidspunkter.
+# Ingen pakkeopdateringer på Pi'en — de kommer med Badminton TV's egne
+# udgivelser (A/B med prøvestart), se usr/lib/badminton-tv/sluk.
 systemctl mask apt-daily.timer apt-daily-upgrade.timer
 
 # ── Raspberry Pi OS' førstegangsopsætning ──────────────────

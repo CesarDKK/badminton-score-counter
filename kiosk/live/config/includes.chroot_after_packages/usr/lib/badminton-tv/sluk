@@ -1,7 +1,13 @@
 #!/bin/bash
 # Automatisk slukning (SLUK_KL, standard 23:59), hvis ingen har slukket PC'en
-# manuelt. Installerer sikkerhedsopdateringer lige inden — det er det eneste
-# tidspunkt, hvor vi ved at ingen kigger på skærmen.
+# manuelt. Henter en ny version af Badminton TV lige inden — det er det
+# eneste tidspunkt, hvor vi ved at ingen kigger på skærmen, og hallens net
+# ikke bruges til livestream (nr. 102).
+#
+# Der installeres ikke længere pakker fra Debian om natten (nr. 98): de gik
+# uden om A/B-opdateringen, så en dårlig pakke ramte alle PC'er på én nat
+# uden vej tilbage. Sikkerhedsrettelserne kommer nu med appens egne
+# udgivelser (hele systemet bygges forfra og udrulles med prøvestart).
 #
 # Startes af badminton-tv-sluk.timer, som genereres ud fra kiosk.conf.
 
@@ -28,20 +34,18 @@ if [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" != yes ]; then
     exit 0
 fi
 
-# Stop browseren først: Chromium må ikke opdateres, mens den kører. En
-# hentning af en ny version, der ikke er nået at blive færdig, stoppes også —
-# den starter forfra næste gang.
-systemctl stop badminton-tv.service badminton-tv-opdatering.service
+# Stop browseren først. En hentning, der er i gang fra dagen (timeren eller
+# "Installér nyeste nu"), stoppes også — den fortsætter herunder, hvor den slap.
+systemctl stop badminton-tv.service badminton-tv-opdatering.service \
+    badminton-tv-opdatering-spoerg.timer badminton-tv-opdatering-spoerg.service
 setterm --term linux --blank 0 --cursor off > "$TTY" 2>/dev/null
 skrift
-besked "Badminton TV slukker - installerer opdateringer først (det kan tage et par minutter) ..."
+besked "Badminton TV slukker - tjekker først for en ny version (det kan tage et par minutter) ..."
 
-if timeout 10m apt-get update -q >/dev/null 2>&1; then
-    timeout 20m unattended-upgrade -v || echo "Opdateringen blev ikke færdig — prøver igen næste gang."
-else
-    echo "Ingen forbindelse til opdateringsserveren — springer opdatering over."
-fi
-apt-get clean
+# BT_NAT=1: nu må den nye version hentes i fuld fart (OPDATERING=auto venter
+# på slukningen). Den startes først ved næste opstart — med prøvestart.
+BT_NAT=1 timeout 40m /usr/lib/badminton-tv/opdatering tjek \
+    || echo "Tjekket for en ny version blev ikke færdigt — prøver igen i morgen."
 
 besked "Badminton TV slukker ..."
 # Planlagt — rapporten (/usr/lib/badminton-tv/rapport) skal ikke melde det
