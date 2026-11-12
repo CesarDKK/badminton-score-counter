@@ -124,7 +124,7 @@ function mapCategory(raw) {
 
 // Formatgenkendelse (også 4 piger, U9 3 spillere og 8-kamps-varianten) ligger
 // i config/holdkampFormater.js sammen med reglerne for formaterne.
-const { detectFormat } = require('../config/holdkampFormater');
+const { detectFormat, holdseddelKlar } = require('../config/holdkampFormater');
 
 /**
  * Kampinfo-tabellen. Den findes ogsaa foer holdsedlen er frigivet, og det er
@@ -539,7 +539,9 @@ async function tjekWatcher(w, { kilde = 'auto' } = {}) {
     try {
         const { info, seddel } = await hentKamp(w.url);
 
-        if (!seddel.team1Name || !seddel.team2Name || seddel.games.length === 0) {
+        // Frigivet = hold, delkampe OG spillere (nr. 80) — se holdseddelKlar
+        const { klar, mangler } = holdseddelKlar(seddel, { start: info.tid || w.start_time });
+        if (!klar) {
             // Ikke frigivet endnu. Kamptidspunktet genlæses hver gang, så en
             // flyttet kamp får sit vindue på det rigtige tidspunkt.
             await query(
@@ -552,33 +554,37 @@ async function tjekWatcher(w, { kilde = 'auto' } = {}) {
             }
             const naeste = vagt.naesteTjek({ ...w, start_time: info.tid || w.start_time, last_checked_at: new Date() });
             await vagtLog(w, 'info',
-                `${hvem}: holdsedlen er ikke frigivet endnu (${svarBeskrivelse(info, seddel)}).`
+                (mangler
+                    ? `${hvem}: holdsedlen mangler stadig spillere i ${mangler} af ${seddel.games.length} delkampe.`
+                    : `${hvem}: holdsedlen er ikke frigivet endnu (${svarBeskrivelse(info, seddel)}).`)
                 + (flyttet ? ` Kamptidspunktet er ændret fra ${danskTid(w.start_time)} til ${danskTid(info.tid)}.` : '')
                 + ` Næste tjek ${danskTid(naeste)}.`);
             return { udfald: 'ikke_frigivet' };
         }
 
+        // Holdkampen og køens 'oprettet' i én transaktion (nr. 81): før kunne
+        // holdkampen blive oprettet, mens opdateringen af køen fejlede — så stod
+        // kampen stadig som 'venter' og blev oprettet igen ved næste tjek.
         const { opretHoldkamp } = require('./teamMatches');
         const teamMatchId = await opretHoldkamp({
             format: seddel.format,
             team1Name: seddel.team1Name,
             team2Name: seddel.team2Name,
             games: seddel.games
-        });
+        }, (tx, id) => tx.query(
+            `UPDATE holdkamp_watchers SET status = 'oprettet', team_match_id = ?, last_error = NULL WHERE id = ?`,
+            [id, w.id]
+        ));
         // Oprettet uden om holdkamp-ruterne (baggrundsjob eller "hent nu"):
         // giv oversigten og admin besked, så holdkampen ses med det samme
         const { publishHoldkampChange } = require('../events/gameStateEvents');
         const { currentTenant } = require('../config/tenantPools');
         publishHoldkampChange({ clubDbName: currentTenant() });
-
-        await query(
-            `UPDATE holdkamp_watchers SET status = 'oprettet', team_match_id = ?, last_error = NULL WHERE id = ?`,
-            [teamMatchId, w.id]
-        );
         console.log(`✓ Holdkamp hentet ${kilde === 'manuel' ? 'manuelt' : 'automatisk'}: ${seddel.team1Name} – ${seddel.team2Name} (kamp ${w.league_match_id})`);
         await vagtLog(w, 'info',
             `${hvem}: holdsedlen er frigivet — holdkampen er oprettet (${seddel.team1Name} – ${seddel.team2Name}, `
-            + `format ${seddel.format}, ${seddel.games.length} delkampe).`);
+            + `format ${seddel.format}, ${seddel.games.length} delkampe`
+            + (mangler ? `; ${mangler} med tomme pladser, oprettet tæt på kampstart` : '') + ').');
         return { udfald: 'oprettet', teamMatchId };
     } catch (err) {
         // En turnering kan blokere oprettelsen. Holdsedlen er der, men vi kan

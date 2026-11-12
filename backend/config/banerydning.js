@@ -85,24 +85,35 @@ async function rydAfsluttetBane(courtNumber, req, skalVaere = null) {
 // Kun baner, hvor kampen er afsluttet, og hvor navnene er en færdigmeldt
 // holdkamp-/turneringskamps fra den bane. En almindelig kamp eller en
 // badmintonplanner-runde (resultatet skal stå til næste runde) røres ikke.
+//
+// Delkampen/turneringskampen skal være færdigmeldt EFTER kampen på banen
+// begyndte (nr. 79). Før talte enhver færdig delkamp fra banen — også fra en
+// holdkamp i sidste uge — så en almindelig kamp mellem de samme spillere på
+// samme bane blev ryddet væk efter 5 minutter. Begge tider er serverens NOW().
 const AUTO_RYD_EFTER_MIN = 5;
 
-async function autoRydAfsluttedeBaner(req) {
+function autoRydSql() {
     const spillere = (a1, a2, b1, b2) => `(${a1}, ${a2}, ${b1}, ${b2})`;
     const holdkamp = spillere('g.team1_player1', 'g.team1_player2', 'g.team2_player1', 'g.team2_player2');
     const turnering = spillere('m.side1_player1', 'm.side1_player2', 'm.side2_player1', 'm.side2_player2');
-    const baner = await query(
-        `SELECT c.court_number
+    return `SELECT c.court_number
            FROM game_states gs
            JOIN courts c ON c.id = gs.court_id
           WHERE gs.match_completed = TRUE
+            AND gs.match_start_time IS NOT NULL
             AND gs.match_end_time <= NOW() - INTERVAL ? MINUTE
             AND (EXISTS (SELECT 1 FROM team_match_games g
                           WHERE g.court_number = c.court_number AND g.status = 'finished'
+                            AND g.finished_at >= gs.match_start_time
                             AND gs.player1_name IN ${holdkamp} AND gs.player2_name IN ${holdkamp})
               OR EXISTS (SELECT 1 FROM tournament_matches m
                           WHERE m.court_number = c.court_number AND m.status = 'finished'
-                            AND gs.player1_name IN ${turnering} AND gs.player2_name IN ${turnering}))`,
+                            AND m.finished_at >= gs.match_start_time
+                            AND gs.player1_name IN ${turnering} AND gs.player2_name IN ${turnering}))`;
+}
+
+async function autoRydAfsluttedeBaner(req) {
+    const baner = await query(autoRydSql(),
         [AUTO_RYD_EFTER_MIN]
     );
     let ryddet = 0;
@@ -115,4 +126,4 @@ async function autoRydAfsluttedeBaner(req) {
     return ryddet;
 }
 
-module.exports = { gemSidsteAfsluttedeKamp, rydAfsluttetBane, autoRydAfsluttedeBaner, AUTO_RYD_EFTER_MIN };
+module.exports = { gemSidsteAfsluttedeKamp, rydAfsluttetBane, autoRydAfsluttedeBaner, autoRydSql, AUTO_RYD_EFTER_MIN };

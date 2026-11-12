@@ -755,6 +755,26 @@ async function performSaveCourtChanges(isActive) {
     const gameMode = document.getElementById('editGameMode').checked ? '15' : '21';
 
     try {
+        // Valgt planlagt kamp: tildel den FØRST. Spilles der på banen, afviser
+        // serveren (nr. 78), og admin skal bekræfte, at kampen afbrydes — ellers
+        // gemmes intet. Før blev navnene skrevet først, og den igangværende kamps
+        // stilling stod videre under turneringskampens navne.
+        // Backend frigør automatisk samme bane fra andre matches i samme turnering.
+        if (tournamentId && tournamentMatchId) {
+            try {
+                const svar = await medBaneBekraeftelse((force) => api.updateTournamentMatch(tournamentId, tournamentMatchId, {
+                    courtNumber: currentEditingCourt,
+                    status: 'active',
+                    ...(force ? { force: true } : {})
+                }));
+                if (svar === BANE_ANNULLERET) return;
+            } catch (e) {
+                console.error('Failed to assign tournament match:', e);
+                showMessage('Fejl', 'Turneringskampen kunne ikke tildeles banen, så intet er gemt. Prøv igen.');
+                return;
+            }
+        }
+
         // Update court settings (isActive, isDoubles, gameMode) - separate endpoint
         const courtResult = await api.updateCourt(currentEditingCourt, {
             isActive: isActive,
@@ -773,20 +793,6 @@ async function performSaveCourtChanges(isActive) {
         };
 
         const stateResult = await api.updateGameState(currentEditingCourt, updatedState, true);
-
-        // Hvis brugeren valgte en planlagt kamp — tildel banen til kampen og marker den aktiv.
-        // Backend frigør automatisk samme bane fra andre matches i samme turnering.
-        if (tournamentId && tournamentMatchId) {
-            try {
-                await api.updateTournamentMatch(tournamentId, tournamentMatchId, {
-                    courtNumber: currentEditingCourt,
-                    status: 'active'
-                });
-            } catch (e) {
-                console.error('Failed to assign tournament match:', e);
-                showMessage('Advarsel', 'Banedata blev gemt, men turneringskampen kunne ikke tildeles. Prøv igen.');
-            }
-        }
 
         document.getElementById('editCourtModal').style.display = 'none';
         currentEditingCourt = null;
@@ -1654,6 +1660,25 @@ function visNyHoldkamp() {
     }, Math.max(0, nyHoldkamp.til - Date.now()));
 }
 
+// Serveren afviser at sætte en kamp på en bane, hvor der spilles (409 med
+// code 'bane_i_gang', nr. 78) — admin-sidens egen liste over optagne baner kan
+// være minutter gammel. Admin får det at vide og kan afbryde kampen på banen:
+// kald(force) sendes så igen med force. Returnerer BANE_ANNULLERET, hvis admin
+// fortryder; andre fejl kastes videre.
+const BANE_ANNULLERET = Symbol('bane-annulleret');
+async function medBaneBekraeftelse(kald) {
+    try {
+        return await kald(false);
+    } catch (error) {
+        if (error.status !== 409 || error.body?.code !== 'bane_i_gang') throw error;
+        const ok = await BadmintonUtils.confirmDialog('Der spilles på banen',
+            'Der er en kamp i gang på banen lige nu. Vil du afbryde den og sætte den nye kamp på? Stillingen i den igangværende kamp går tabt.',
+            { danger: true, okText: 'Afbryd kampen' });
+        if (!ok) return BANE_ANNULLERET;
+        return await kald(true);
+    }
+}
+
 async function assignCourtToGame(teamMatchId, gameId) {
     const select = document.getElementById(`courtSelect_${gameId}`);
     const courtNumber = parseInt(select?.value);
@@ -1663,10 +1688,12 @@ async function assignCourtToGame(teamMatchId, gameId) {
         return;
     }
     try {
-        await api.updateTeamMatchGame(teamMatchId, gameId, {
+        const svar = await medBaneBekraeftelse((force) => api.updateTeamMatchGame(teamMatchId, gameId, {
             courtNumber,
-            status: 'active'
-        });
+            status: 'active',
+            ...(force ? { force: true } : {})
+        }));
+        if (svar === BANE_ANNULLERET) { await loadActiveHoldkamp(); return; }
 
         // Pre-populate game state med spillernavne så banen vises på baneoversigten
         const teamMatches = await api.getActiveTeamMatches();
@@ -5740,8 +5767,9 @@ async function confirmTournamentImport() {
     tsImportStatus(`Opretter turnering og importerer ${matches.length} kampe...`, 'info');
 
     try {
-        const created = await api.createTournament(name, tsImportData.tournamentId || null);
-        const bulkResult = await api.addTournamentMatchesBulk(created.id, matches);
+        // Turnering og kampe oprettes i ét kald — fejler det, er intet oprettet
+        const created = await api.importTournament(name, tsImportData.tournamentId || null, matches);
+        const bulkResult = created;
 
         // Kampene er oprettet. Er turneringen TS-importeret, henter serveren nu
         // klubinfo (til logoer) i baggrunden — vis en progressbar mens det kører,

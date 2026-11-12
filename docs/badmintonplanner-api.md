@@ -108,11 +108,18 @@ sammenfoldes; for lange værdier klippes.
 | `status` | `shown` (navne vist), `cleared` (banen ryddet, fordi den ikke var med i listen) eller `rejected`. |
 | `reason` | Kun ved `rejected`: `match_in_progress`, `court_not_allowed` (banen er ikke åbnet i klubbens ugeplan i dag) eller `court_not_found` (klubben har ikke så mange baner). |
 | `previous` | Det der stod på banen før skiftet, eller `null` hvis banen var tom. `counted` fortæller, om klubben har talt på banen; ellers er `side1`/`side2` bare forrige rundes navne. `score` er de færdige sæt, plus et igangværende sæt hvis kampen ikke er afsluttet. |
+| `unchanged` | `true` (kun ved `shown`) når banen allerede havde netop denne kamp fra en tidligere runde, og den ikke er spillet færdig. Banen røres ikke — heller ikke, hvis der tælles på den — og kampens resultat kommer i `results` under den runde, den først blev sendt i. |
 | `replayed` | `true` når svaret er en gentagelse af et tidligere kald med samme `roundId`. |
 
-Genforsøg kun baner, der blev afvist, og kun indtil næste runde starter. En
-talt kamp med mindst ét færdigt sæt, som overskrives, gemmes i klubbens
-kamphistorik, så resultatet ikke går tabt.
+**Genforsøg** (fx efter `match_in_progress`): send hele runden igen med samme
+`sequence` og et nyt `roundId` (fx `2026-09-07-r2-b`) — samme `roundId` giver
+kun det første svar igen uden at røre banerne. Send ikke kun de afviste baner:
+åbnede baner, der ikke er med i listen, ryddes. Baner, der allerede har samme
+kamp, svarer `shown` med `unchanged: true` og røres ikke. En afvist bane
+beholder sin kamp fra forrige runde, og dens resultat når frem som normalt.
+Genforsøg kun indtil næste runde starter. En talt kamp med mindst ét færdigt
+sæt, som overskrives, gemmes i klubbens kamphistorik, så resultatet ikke går
+tabt.
 
 ### Fejlsvar
 
@@ -220,8 +227,9 @@ Til at tjekke nøglen, når klubben sætter den ind, og til at vise
 
 1. Ved opsætning: kald `status` og vis fejl, hvis 401.
 2. Ved hver rundestart: send `planned-round` med `roundId` og `sequence`.
-3. Ved `rejected` med `match_in_progress`: prøv den bane igen efter fx 60
-   sekunder, indtil næste runde starter.
+3. Ved `rejected` med `match_in_progress`: send hele runden igen efter fx
+   60 sekunder med et nyt `roundId` (se Genforsøg), indtil næste runde
+   starter. Baner, der allerede har deres kamp, svarer `unchanged`.
 4. Ved sidste runde: send den med tom `nextRoundStartsAt`. Send gerne et
    ekstra kald med tom `matches`-liste, når aftenen er slut, så banerne
    ryddes med det samme; ellers ryddes de, når tidsrummet slutter.

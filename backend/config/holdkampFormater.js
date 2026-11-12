@@ -51,4 +51,44 @@ function kendtFormat(format) {
         && (format === 'imported' || Object.prototype.hasOwnProperty.call(formater.FORMATER, format));
 }
 
-module.exports = { ...formater, detectFormat, kendtFormat };
+/**
+ * Delkampe på holdsedlen, hvor en side mangler spillere (begge makkere i en
+ * double). Badmintonplayer.dk kan vise holdene og kategorierne, før spillerne
+ * er sat på.
+ */
+function delkampeUdenSpillere(games) {
+    return (games || []).filter(g => {
+        const dbl = formater.erDouble(g.category);
+        return !g.team1Player1 || !g.team2Player1 || (dbl && (!g.team1Player2 || !g.team2Player2));
+    }).length;
+}
+
+// Fra så lang tid før kampstart godtages en holdseddel med tomme pladser: så
+// er de et afbud (w.o.), ikke en seddel, der stadig udfyldes.
+const DELVIS_FRA_MIN_FOER_START = 30;
+
+/**
+ * Er holdsedlen frigivet, så holdkamp-køen kan oprette holdkampen (nr. 80)?
+ * Før var hold og delkampe nok: kom spillerne på bagefter, blev holdkampen
+ * oprettet uden dem og blev aldrig opdateret.
+ *  start   kamptidspunktet (Date) eller null
+ *  nu      nu (Date)
+ * Returnerer { klar, mangler } — mangler = delkampe uden spillere.
+ */
+function holdseddelKlar(seddel, { start = null, nu = new Date() } = {}) {
+    if (!seddel || !seddel.team1Name || !seddel.team2Name || !(seddel.games || []).length) {
+        return { klar: false, mangler: 0 };
+    }
+    const mangler = delkampeUdenSpillere(seddel.games);
+    if (mangler === 0) return { klar: true, mangler };
+    // Begge hold skal have sat mindst én spiller på; uden kamptidspunkt eller
+    // tæt på kampstart er de tomme pladser afbud
+    const harSpillere = (n) => seddel.games.some(g => g[`team${n}Player1`] || g[`team${n}Player2`]);
+    if (!harSpillere(1) || !harSpillere(2)) return { klar: false, mangler };
+    const startMs = start ? new Date(start).getTime() : NaN;
+    const taetPaa = !Number.isFinite(startMs)
+        || new Date(nu).getTime() >= startMs - DELVIS_FRA_MIN_FOER_START * 60 * 1000;
+    return { klar: taetPaa, mangler };
+}
+
+module.exports = { ...formater, detectFormat, kendtFormat, delkampeUdenSpillere, holdseddelKlar, DELVIS_FRA_MIN_FOER_START };

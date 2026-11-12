@@ -75,4 +75,4 @@ async function afvisQrKode(req, courtNumber) {
     return 403;
 }
 
-module.exports = { kunEgenBane, ikkeQrSession, afvisQrKode, baneFraDestination };
+module.exports = { kunEgenBane, ikkeQrSession, afvisQrKode, baneFraDestination, erQrSession };

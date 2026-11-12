@@ -116,7 +116,15 @@ router.put('/court-count', authMiddleware, requirePage('settings'), async (req, 
                 `SELECT m.court_number, 'turneringskamp' AS grund
                    FROM tournament_matches m JOIN tournaments t ON t.id = m.tournament_id
                   WHERE m.court_number > ? AND m.status = 'active' AND t.status = 'active'`,
-                [courtCount]))
+                [courtCount])),
+            // badmintonplanner-rundens kamp på banen (dens resultat skal tilbage)
+            ...(await query(
+                `SELECT court_number, 'kamp fra badmintonplanner' AS grund
+                   FROM planner_court_assignments WHERE court_number > ?`,
+                [courtCount]).catch((e) => {
+                    if (e.code === 'ER_NO_SUCH_TABLE') return [];   // før migration 027
+                    throw e;
+                }))
         ];
         const afvist = nedsaettelseAfvist(courtCount, optaget);
         if (afvist) return res.status(409).json({ error: afvist });
