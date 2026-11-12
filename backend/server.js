@@ -21,7 +21,14 @@ app.set('trust proxy', false);
 app.use(helmet());
 app.use(cors());
 app.use(compression());
-app.use(express.json());
+// JSON-kroppe: 100 kB som standard. Turneringsimporten sender alle kampe på én
+// gang (ca. 250 byte pr. kamp), så over ca. 400 kampe fik den 413 — og efterlod
+// en tom, aktiv turnering, der spærrede holdkamp-køen (nr. 75). Netop de ruter
+// må få 5 MB; resten har stadig standarden.
+const STOR_JSON = /^\/api\/tournaments\/(import|\d+\/matches\/bulk)$/;
+const storJson = express.json({ limit: '5mb' });
+const almJson = express.json();
+app.use((req, res, next) => (STOR_JSON.test(req.path) ? storJson : almJson)(req, res, next));
 app.use(express.urlencoded({ extended: true }));
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

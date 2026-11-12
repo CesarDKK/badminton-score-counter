@@ -933,6 +933,15 @@ class BadmintonAPI {
         return this.request('/tournaments/history');
     }
 
+    /** Importér en turnering med alle kampe i ét kald — alt eller intet (nr. 75/81). */
+    async importTournament(name, sourceTournamentId, matches) {
+        return this.request('/tournaments/import', {
+            method: 'POST',
+            body: JSON.stringify({ name, sourceTournamentId, matches }),
+            timeout: 60000 // mange kampe i én transaktion
+        });
+    }
+
     /** Create a new tournament. sourceTournamentId (valgfri) = TS-UUID, gør senere "Opdater" muligt. */
     async createTournament(name, sourceTournamentId = null) {
         return this.request('/tournaments', {

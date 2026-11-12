@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { query, queryOne } = require('../config/database');
+const { query, queryOne, transaktion } = require('../config/database');
 const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
 const { requirePage } = require('../middleware/pagePermission');
 const { ikkeQrSession } = require('../middleware/qrSession');
@@ -9,6 +9,7 @@ const { invalidateCourtTokens } = require('./matchSessionTokens');
 const { fetchAndParseTournamentMatches, resolveClubNames, buildPlayerClubRows } = require('./importTournament');
 const { currentTenant } = require('../config/tenantPools');
 const { banensStartTid } = require('../config/matchTiming');
+const baneTildeling = require('../config/baneTildeling');
 
 // ── Import-fremskridt (in-memory) ──
 // Klub-opsamlingen kører i baggrunden efter kampene er indsat; frontend poller
@@ -140,6 +141,104 @@ function computeFillOnlyChanges(row, incoming) {
 
     if (!!incoming.doubles !== !!row.doubles) changes.doubles = incoming.doubles ? 1 : 0;
     return changes;
+}
+
+// ---- Parring af TS-kampe med vores rækker ved sync (nr. 74) ----
+//
+// Kilde-id'et er "draw#runde#løbenummer" efter TS' rækkefølge. Flytter TS en
+// kamp (ny dag/tid), skifter løbenumrene, og før parrede sync alene på id'et:
+// en ventende række kunne få en anden kamps spillere — også en færdigspillet
+// kamps. Nu parres der først på spillerne, så på id'et (hvis spillerne ikke
+// modsiger det), så med en tom pladsholder i samme runde. En kamp, der ikke
+// kan parres, får et nyt, unikt id (id~n), hvis dens id allerede er brugt.
+
+// "draw#runde" for et kilde-id (uden løbenummer og ~n)
+function rundeScopeOf(sourceMatchId) {
+    const base = String(sourceMatchId || '').split('~')[0];
+    const i = base.lastIndexOf('#');
+    return i === -1 ? base : base.slice(0, i);
+}
+
+function ordinalOf(sourceMatchId) {
+    const n = parseInt(String(sourceMatchId || '').split('~')[0].split('#').pop(), 10);
+    return Number.isFinite(n) ? n : 0;
+}
+
+// Rigtige navne pr. side, normaliseret
+function sideNavne(a, b) {
+    return [a, b].filter(isRealName).map(normalizeName).sort();
+}
+function kampNavne(x, erRaekke) {
+    return erRaekke
+        ? { s1: sideNavne(x.side1_player1, x.side1_player2), s2: sideNavne(x.side2_player1, x.side2_player2) }
+        : { s1: sideNavne(x.side1Player1, x.side1Player2), s2: sideNavne(x.side2Player1, x.side2Player2) };
+}
+const ensListe = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+const begge = (n) => n.s1.length > 0 && n.s2.length > 0;
+
+// Samme spillere på begge sider (siderne må være byttet)
+function sammeSpillere(a, b) {
+    if (!begge(a) || !begge(b)) return false;
+    return (ensListe(a.s1, b.s1) && ensListe(a.s2, b.s2)) || (ensListe(a.s1, b.s2) && ensListe(a.s2, b.s1));
+}
+
+// Begge kender spillerne på begge sider, men ikke én spiller er fælles: en
+// anden kamp. (En udskiftning af én spiller deler stadig mindst én.)
+function modsigerHinanden(a, b) {
+    if (!begge(a) || !begge(b)) return false;
+    const b2 = new Set([...b.s1, ...b.s2]);
+    return ![...a.s1, ...a.s2].some(n => b2.has(n));
+}
+
+/**
+ * Parrer indkommende TS-kampe med eksisterende rækker. Ren funktion.
+ * Returnerer [{ m, row, sourceMatchId }] i incoming-rækkefølge; row er null for
+ * en ny kamp, og sourceMatchId er det id, en ny kamp skal gemmes med.
+ */
+function parSyncKampe(existing, incoming) {
+    const raekker = existing.filter(r => r.source_match_id)
+        .map(r => ({ r, navne: kampNavne(r, true), scope: rundeScopeOf(r.source_match_id) }));
+    const byKey = new Map(raekker.map(x => [x.r.source_match_id, x]));
+    const taget = new Set();
+    const ind = incoming.map(m => ({ m, navne: kampNavne(m, false), scope: rundeScopeOf(m.sourceMatchId), row: null }));
+
+    // 1. Samme spillere i samme draw og runde — uanset løbenummer
+    for (const x of ind) {
+        if (!x.m.sourceMatchId || !begge(x.navne)) continue;
+        const kandidater = raekker.filter(y => !taget.has(y) && y.scope === x.scope && sammeSpillere(x.navne, y.navne));
+        const valgt = kandidater.find(y => y.r.source_match_id === x.m.sourceMatchId) || kandidater[0];
+        if (valgt) { x.row = valgt; taget.add(valgt); }
+    }
+    // 2. Samme id, hvis spillerne ikke modsiger det
+    for (const x of ind) {
+        if (x.row || !x.m.sourceMatchId) continue;
+        const y = byKey.get(x.m.sourceMatchId);
+        if (y && !taget.has(y) && !modsigerHinanden(x.navne, y.navne)) { x.row = y; taget.add(y); }
+    }
+    // 3. En ventende pladsholder (ingen navne) i samme draw og runde, nærmest
+    //    i løbenummer — to pladsholdere, der har byttet plads, finder hinanden
+    for (const x of ind) {
+        if (x.row || !x.m.sourceMatchId) continue;
+        const ord = ordinalOf(x.m.sourceMatchId);
+        const fri = raekker
+            .filter(y => !taget.has(y) && y.scope === x.scope && y.r.status === 'pending'
+                && !y.navne.s1.length && !y.navne.s2.length)
+            .sort((a, b) => Math.abs(ordinalOf(a.r.source_match_id) - ord) - Math.abs(ordinalOf(b.r.source_match_id) - ord));
+        if (fri[0]) { x.row = fri[0]; taget.add(fri[0]); }
+    }
+    // 4. Nye kampe: unikt id, hvis TS-id'et allerede er brugt af en anden række
+    const brugt = new Set(raekker.map(y => y.r.source_match_id));
+    return ind.map(x => {
+        if (x.row) return { m: x.m, row: x.row.r, sourceMatchId: x.row.r.source_match_id };
+        let id = x.m.sourceMatchId || null;
+        if (id && brugt.has(id)) {
+            let n = 2;
+            while (brugt.has(`${id}~${n}`)) n++;
+            id = `${id}~${n}`;
+        }
+        if (id) brugt.add(id);
+        return { m: x.m, row: null, sourceMatchId: id };
+    });
 }
 
 // Per-turnering in-flight guard mod samtidige sync-kald (dobbeltklik / overlap /
@@ -287,8 +386,94 @@ router.post('/:id/matches', authMiddleware, requirePage('tournament'), async (re
     }
 });
 
+// Indsæt kampe i en turnering inde i en transaktion (tx fra transaktion()).
+// Kampe med et kilde-id, turneringen allerede har (eller som står to gange i
+// listen), springes over — databasen har UNIQUE (tournament_id, source_match_id).
+async function indsaetKampe(tx, tournamentId, matches) {
+    const maxRow = await tx.queryOne(
+        'SELECT COALESCE(MAX(match_order), 0) AS max_order FROM tournament_matches WHERE tournament_id = ?',
+        [tournamentId]
+    );
+    const kendte = new Set((await tx.query(
+        'SELECT source_match_id FROM tournament_matches WHERE tournament_id = ? AND source_match_id IS NOT NULL',
+        [tournamentId]
+    )).map(r => r.source_match_id));
+    let nextOrder = (maxRow?.max_order || 0) + 1;
+    let inserted = 0, skipped = 0;
+    for (const m of matches) {
+        const kilde = m.sourceMatchId || null;
+        if (kilde && kendte.has(kilde)) { skipped++; continue; }
+        if (kilde) kendte.add(kilde);
+        await tx.query(
+            `INSERT INTO tournament_matches
+             (tournament_id, match_order, label, doubles, source_match_id,
+              side1_player1, side1_player2, side2_player1, side2_player2)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                tournamentId, nextOrder++, m.label || null, m.doubles ? 1 : 0, kilde,
+                clampName(m.side1Player1) || null, clampName(m.side1Player2) || null,
+                clampName(m.side2Player1) || null, clampName(m.side2Player2) || null
+            ]
+        );
+        inserted++;
+    }
+    return { inserted, skipped };
+}
+
+// Klub-opsamling for en TS-importeret turnering — i BAGGRUNDEN (ikke await'et),
+// så HTTP-svaret kommer straks; frontend poller GET /:id/import-progress.
+async function startKlubOpsamling(id) {
+    const t = await queryOne('SELECT source_tournament_id FROM tournaments WHERE id = ?', [id]);
+    const clubCapture = !!(t && t.source_tournament_id);
+    if (clubCapture) {
+        setImportProgress(id, { phase: 'fetching-matches', current: 0, total: 0 });
+        captureTournamentClubs(id, t.source_tournament_id, null, true);
+    }
+    return clubCapture;
+}
+
+// POST /api/tournaments/import — opret en importeret turnering med alle dens
+// kampe i ÉN transaktion (nr. 75/81). Før var det to kald (opret, så kampe):
+// fejlede det andet (fx for stor JSON-krop), stod der en tom, aktiv turnering,
+// som spærrede holdkamp-køen, og et nyt forsøg lavede en turnering mere.
+router.post('/import', authMiddleware, requirePage('tournament'), async (req, res, next) => {
+    try {
+        const { name, sourceTournamentId, matches } = req.body || {};
+        if (!name || !String(name).trim()) {
+            return res.status(400).json({ error: 'Navn er påkrævet' });
+        }
+        if (!Array.isArray(matches) || matches.length === 0) {
+            return res.status(400).json({ error: 'Ingen kampe at importere' });
+        }
+        if (matches.length > 5000) {
+            return res.status(400).json({ error: 'For mange kampe (højst 5000)' });
+        }
+        const svar = await transaktion(async (tx) => {
+            const aktiv = await tx.queryOne(
+                `SELECT id, team1_name, team2_name FROM team_matches WHERE status = 'active' LIMIT 1`
+            );
+            if (aktiv) {
+                const err = new Error(`Du har en aktiv holdkamp ("${aktiv.team1_name} vs ${aktiv.team2_name}"). Afslut eller slet den før du opretter en turnering.`);
+                err.status = 409;
+                throw err;
+            }
+            const r = await tx.query(
+                `INSERT INTO tournaments (name, status, source_tournament_id) VALUES (?, 'active', ?)`,
+                [String(name).trim(), sourceTournamentId || null]
+            );
+            const { inserted, skipped } = await indsaetKampe(tx, r.insertId, matches);
+            return { id: r.insertId, inserted, skipped };
+        });
+        const clubCapture = await startKlubOpsamling(svar.id);
+        res.json({ success: true, ...svar, clubCapture });
+    } catch (error) {
+        if (error.status === 409) return res.status(409).json({ error: error.message });
+        next(error);
+    }
+});
+
 // POST /api/tournaments/:id/matches/bulk - Tilføj mange kampe på én gang (kræver auth)
-// Bruges af import-flowet så vi ikke laver hundredvis af enkelt-kald.
+// Bruges når brugeren tilføjer nye kampe fra "Opdater" (kandidaterne).
 router.post('/:id/matches/bulk', authMiddleware, requirePage('tournament'), async (req, res, next) => {
     try {
         const { id } = req.params;
@@ -303,43 +488,11 @@ router.post('/:id/matches/bulk', authMiddleware, requirePage('tournament'), asyn
             return res.status(404).json({ error: 'Turnering ikke fundet' });
         }
 
-        const maxRow = await queryOne(
-            'SELECT COALESCE(MAX(match_order), 0) AS max_order FROM tournament_matches WHERE tournament_id = ?',
-            [id]
-        );
-        let nextOrder = (maxRow?.max_order || 0) + 1;
-        let inserted = 0;
-
-        for (const m of matches) {
-            await query(
-                `INSERT INTO tournament_matches
-                 (tournament_id, match_order, label, doubles, source_match_id,
-                  side1_player1, side1_player2, side2_player1, side2_player2)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [
-                    id, nextOrder, m.label || null, m.doubles ? 1 : 0, m.sourceMatchId || null,
-                    clampName(m.side1Player1) || null, clampName(m.side1Player2) || null,
-                    clampName(m.side2Player1) || null, clampName(m.side2Player2) || null
-                ]
-            );
-            nextOrder++;
-            inserted++;
-        }
-
-        // Klub-opsamling hvis turneringen er TS-importeret. Kører nu i BAGGRUNDEN
-        // (ikke await'et) så HTTP-svaret returnerer straks — det er den langsomme,
-        // netværkstunge del (henter klubsider fra TS). Frontend viser en progressbar
-        // ved at polle GET /:id/import-progress mens den kører.
-        const t = await queryOne('SELECT source_tournament_id FROM tournaments WHERE id = ?', [id]);
-        const clubCapture = !!(t && t.source_tournament_id);
-        if (clubCapture) {
-            // Sæt en initial status FØR svaret, så en poll umiddelbart efter altid ser et job
-            setImportProgress(id, { phase: 'fetching-matches', current: 0, total: 0 });
-            // Ingen await — fejl fanges internt i captureTournamentClubs
-            captureTournamentClubs(id, t.source_tournament_id, null, true);
-        }
-
-        res.json({ success: true, inserted, clubCapture });
+        // Alle eller ingen (nr. 81). En kamp, hvis kilde-id allerede findes (fx
+        // auto-tilføjet af synken, mens kandidat-listen stod åben), springes over.
+        const { inserted, skipped } = await transaktion((tx) => indsaetKampe(tx, id, matches));
+        const clubCapture = await startKlubOpsamling(id);
+        res.json({ success: true, inserted, skipped, clubCapture });
     } catch (error) {
         next(error);
     }
@@ -383,11 +536,9 @@ async function syncTournamentCore(tournament, { skipClubs = false } = {}) {
     const { matches: incoming } = await fetchAndParseTournamentMatches(tournament.source_tournament_id);
     const existing = await getMatchesForTournament(tournament.id);
 
-    const byKey = new Map();
     const knownDraws = new Set();
     for (const row of existing) {
         if (row.source_match_id) {
-            byKey.set(row.source_match_id, row);
             const scope = drawScopeOf(row.source_match_id);
             if (scope) knownDraws.add(scope);
         }
@@ -397,12 +548,11 @@ async function syncTournamentCore(tournament, { skipClubs = false } = {}) {
     const newCandidates = []; // kræver manuel godkendelse (ny draw/kategori)
     const autoAdd = [];       // bracket-progression i kendt draw → tilføjes automatisk
 
-    for (const m of incoming) {
-        const row = m.sourceMatchId ? byKey.get(m.sourceMatchId) : null;
-
+    // Spillerne først, så id'et (nr. 74) — se parSyncKampe
+    for (const { m, row, sourceMatchId } of parSyncKampe(existing, incoming)) {
         if (!row) {
             const cand = {
-                sourceMatchId: m.sourceMatchId,
+                sourceMatchId,
                 label: m.round ? `${m.category} — ${m.round}` : m.category,
                 category: m.category,
                 round: m.round,
@@ -414,7 +564,7 @@ async function syncTournamentCore(tournament, { skipClubs = false } = {}) {
             // Auto-tilføj hvis: kampen har et matchbart source-id (så den ikke
             // gen-tilføjes næste sync), hører til en draw vi allerede tracker,
             // og mindst ét rigtigt spillernavn er kendt.
-            const inKnownDraw = m.sourceMatchId && knownDraws.has(drawScopeOf(m.sourceMatchId));
+            const inKnownDraw = sourceMatchId && knownDraws.has(drawScopeOf(sourceMatchId));
             const hasName = [m.side1Player1, m.side1Player2, m.side2Player1, m.side2Player2].some(isRealName);
             if (inKnownDraw && hasName) {
                 autoAdd.push(cand);
@@ -605,6 +755,14 @@ router.put('/:id/matches/:matchId', requireWriteAuthInClubMode, requirePage('tou
         const values = [];
 
         if (courtNumber !== undefined) {
+            // Spilles der på mål-banen, afvises admins tildeling, til admin
+            // bekræfter (force). Før stod den igangværende kamps stilling videre
+            // under den nye kamps navne og blev meldt ind som dens resultat (nr. 78)
+            if (courtNumber !== null && req.user?.role !== 'device'
+                && Number(courtNumber) !== Number(match.court_number)) {
+                const afvist = await baneTildeling.tjekOgRydBane(courtNumber, req);
+                if (afvist) return res.status(409).json(afvist);
+            }
             // Frigør banen fra andre matches i samme turnering hvis den re-allokeres
             if (courtNumber !== null) {
                 await query(
@@ -662,6 +820,9 @@ router.put('/:id/matches/:matchId', requireWriteAuthInClubMode, requirePage('tou
         // ikke viser en "overtag kampen"-QR under en turneringskamp
         if (courtNumber !== undefined && courtNumber !== null) {
             try { await invalidateCourtTokens(courtNumber); } catch (e) { console.error('QR-token oprydning fejlede:', e); }
+            // Banen er nu en turneringsbane: en tidligere badmintonplanner-
+            // tildeling må ikke få kampens resultat meldt ind som sit (nr. 78)
+            await baneTildeling.fjernPlannerTildeling(courtNumber);
         }
 
         res.json({ success: true });
@@ -734,3 +895,7 @@ module.exports = router;
 // Eksportér auto-sync-kørslen til scheduleren (routeren er en funktion,
 // så app.use(...) virker stadig — samme mønster som importTournament.js).
 module.exports.runTournamentAutoSync = runTournamentAutoSync;
+// Rene hjælpere til unit-tests (tests/unit/pakke-k.test.js)
+module.exports.parSyncKampe = parSyncKampe;
+module.exports.rundeScopeOf = rundeScopeOf;
+module.exports.computeFillOnlyChanges = computeFillOnlyChanges;

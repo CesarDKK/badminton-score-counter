@@ -20,11 +20,33 @@ async function queryOne(sql, params) {
     return results[0] || null;
 }
 
+// Kør fn i én transaktion på én forbindelse fra den aktuelle tenants pulje.
+// fn får { query, queryOne } bundet til forbindelsen. Kaster fn (eller en
+// forespørgsel), rulles alt tilbage — så en import, der fejler halvvejs, ikke
+// efterlader en halv turnering eller holdkamp (nr. 81).
+async function transaktion(fn) {
+    const conn = await getPool().getConnection();
+    const tq = async (sql, params) => (await conn.execute(sql, params))[0];
+    const tqOne = async (sql, params) => (await tq(sql, params))[0] || null;
+    try {
+        await conn.beginTransaction();
+        const r = await fn({ query: tq, queryOne: tqOne });
+        await conn.commit();
+        return r;
+    } catch (error) {
+        try { await conn.rollback(); } catch { /* forbindelsen er væk — intet at rulle tilbage */ }
+        throw error;
+    } finally {
+        conn.release();
+    }
+}
+
 // pool eksporteres for bagudkompatibilitet (health check, graceful shutdown)
 // Bemærk: brug closeAll() ved shutdown for at lukke alle tenant-pools
 module.exports = {
     get pool() { return getPool(); },
     query,
     queryOne,
+    transaktion,
     closeAll
 };

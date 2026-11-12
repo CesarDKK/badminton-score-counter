@@ -92,11 +92,18 @@ const uploadLimiter = rateLimit({
 // i minuttet pr. noegle er rigeligt til genforsoeg og stopper et loebsk system.
 // Noeglen kendes foerst efter token-opslaget (req.plannerToken); indtil da
 // taelles paa IP. Ingen fritagelse for private net — kaldene kommer udefra.
+// Noeglens id er kun unikt i klubbens egen database (nr. 77): uden klubben i
+// noeglen delte nøgle 1 i Lyngby og nøgle 1 i Holte de samme 30 kald.
+function plannerNoegle(req) {
+    if (!req.plannerToken) return 'planner-token:ip:' + klientIp(req);
+    return `planner-token:${req.clubDbName || 'direct'}:${req.plannerToken.id}`;
+}
+
 const plannerTokenLimiter = rateLimit({
     ...FAELLES,
     windowMs: 60 * 1000,
     max: 30,
-    keyGenerator: (req) => 'planner-token:' + (req.plannerToken ? req.plannerToken.id : klientIp(req)),
+    keyGenerator: plannerNoegle,
     message: { error: 'For mange kald. Vent lidt og prøv igen.', code: 'rate_limited' },
 });
 
@@ -127,6 +134,7 @@ module.exports = {
     superAdminLoginLimiter,
     uploadLimiter,
     plannerTokenLimiter,
+    plannerNoegle,
     plannerIpLimiter,
     klientIp,
     forkertLogin,

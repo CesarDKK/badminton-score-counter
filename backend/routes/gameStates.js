@@ -3,7 +3,8 @@ const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { synligBane } = require('../config/baner');
 const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
-const { kunEgenBane } = require('../middleware/qrSession');
+const { kunEgenBane, erQrSession } = require('../middleware/qrSession');
+const { officielKampPaaBane } = require('../config/baneTildeling');
 const { invalidateCourtTokens, nyUrKode } = require('./matchSessionTokens');
 const { publishGameStateChange, subscribeGameStateChanges } = require('../events/gameStateEvents');
 // badmintonplanner.dk: rundenavn/næste runde/udskiftere/note pr. bane (fase 2-visning)
@@ -703,7 +704,8 @@ async function gemTilstand(req, courtId, body, { skipAutoActive = false } = {}) 
         // Holdkamp/turnering: kampen er netop afgjort — serveren melder selv
         // resultatet ind til delkampen/turneringskampen på banen, så det ikke
         // afhænger af, at tablettens eget kald når frem (taeller/resultatMelding.js)
-        if (matchCompleted && frisk) {
+        // Aldrig fra en QR-session: holdkamp- og turneringsresultater er officielle (nr. 82)
+        if (matchCompleted && frisk && !erQrSession(req.user)) {
             try { await meldAfgjortKamp(req, courtId, frisk); }
             catch (e) { console.error('Indmelding af kampresultat fejlede:', e.message); }
         }
@@ -761,7 +763,23 @@ async function gemTilstand(req, courtId, body, { skipAutoActive = false } = {}) 
     return { status: 200, json: { success: true, version: updatedRow ? updatedRow.version : 1 } };
 }
 
-router.put('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), async (req, res, next) => {
+// En QR-session må ikke tælle eller rydde en bane, der spiller en holdkamp-
+// eller turneringskamp (nr. 82). Tildelingen ugyldiggør banens QR-session,
+// og et TV udsteder ikke en ny, så længe kampen står på banen — dette er
+// sikkerhedsnettet, hvis en session alligevel findes.
+async function qrIkkeOfficielBane(req, res, next) {
+    try {
+        if (!erQrSession(req.user)) return next();
+        if (await officielKampPaaBane(parseInt(req.params.courtId, 10))) {
+            return res.status(403).json({ error: 'QR-tælleren kan ikke bruges, mens banen spiller en holdkamp eller turneringskamp' });
+        }
+        next();
+    } catch (error) {
+        next(error);
+    }
+}
+
+router.put('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), qrIkkeOfficielBane, async (req, res, next) => {
     try {
         // skipAutoActive: admins redigering må ikke gøre banen aktiv
         const r = await gemTilstand(req, req.params.courtId, req.body || {},
@@ -775,7 +793,7 @@ router.put('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), asyn
 // POST /api/game-states/:courtId/taeller - livstegn fra tælleren, eller "Overtag"
 // Body: { taellerId, taellerNavn, handling: 'ping' | 'overtag' }
 // Svar: { ejer, ledig, taeller: {navn, sekSidenLyd, aktiv} | null, overtagetFraDig }
-router.post('/:courtId/taeller', requireWriteAuthInClubMode, kunEgenBane('courtId'), async (req, res, next) => {
+router.post('/:courtId/taeller', requireWriteAuthInClubMode, kunEgenBane('courtId'), qrIkkeOfficielBane, async (req, res, next) => {
     try {
         const body = req.body || {};
         const id = ejerskab.rensId(body.taellerId);
@@ -825,7 +843,7 @@ router.post('/:courtId/taeller', requireWriteAuthInClubMode, kunEgenBane('courtI
 // Body: { sets: [[p1, p2], ...], winner: 1|2, walkover: bool, expectedVersion? }
 // — set fra banens player1/player2, som tællersiden viser dem. Kan kaldes igen
 // for at rette resultatet.
-router.post('/:courtId/result', requireWriteAuthInClubMode, kunEgenBane('courtId'), async (req, res, next) => {
+router.post('/:courtId/result', requireWriteAuthInClubMode, kunEgenBane('courtId'), qrIkkeOfficielBane, async (req, res, next) => {
     try {
         const courtNumber = parseInt(req.params.courtId, 10);
         const court = await queryOne(
@@ -945,7 +963,7 @@ router.post('/:courtId/result', requireWriteAuthInClubMode, kunEgenBane('courtId
 });
 
 // DELETE /api/game-states/:courtId - Reset court (public - used during gameplay)
-router.delete('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), async (req, res, next) => {
+router.delete('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), qrIkkeOfficielBane, async (req, res, next) => {
     try {
         const { courtId } = req.params;
 
@@ -984,7 +1002,7 @@ router.delete('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), a
         // En afgjort kamp, hvis delkamp/turneringskamp stadig står som i gang
         // (indmeldingen nåede ikke frem), meldes ind nu — ellers satte linjerne
         // herunder den tilbage til "afventer", og resultatet var væk
-        if (existing && existing.match_completed) {
+        if (existing && existing.match_completed && !erQrSession(req.user)) {
             try { await meldAfgjortKamp(req, courtId, existing); }
             catch (e) { console.error('Indmelding af kampresultat fejlede:', e.message); }
         }

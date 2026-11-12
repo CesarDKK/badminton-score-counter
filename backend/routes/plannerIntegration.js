@@ -338,6 +338,20 @@ async function anvendRunde(runde, tilladteBaner) {
         const gs = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
         const previous = tidligereTilstand(gs, court);
 
+        // Samme kamp som banen allerede har fra en tidligere runde, og den er
+        // ikke spillet færdig (nr. 76): et genforsøg med hele runden må ikke
+        // nulstille den — heller ikke, hvis der tælles på den. Banen og dens
+        // tildeling bliver stående, så resultatet når frem som før.
+        if (m && gs && !gs.match_completed) {
+            const a = await queryOne(
+                `SELECT side1_player1, side1_player2, side2_player1, side2_player2
+                   FROM planner_court_assignments WHERE court_number = ?`, [courtNumber]);
+            if (a && sammeKamp(a, m)) {
+                results.push({ courtNumber, status: 'shown', unchanged: true, previous });
+                continue;
+            }
+        }
+
         if (kampIGang(gs) && !runde.forceNewMatch) {
             results.push({ courtNumber, status: 'rejected', reason: 'match_in_progress', previous });
             continue;
@@ -360,12 +374,38 @@ async function anvendRunde(runde, tilladteBaner) {
     return results;
 }
 
+// Har banen allerede netop denne kamp? (samme fire pladser; tomme makkere ens)
+function sammeKamp(a, m) {
+    const n = (x) => x || null;
+    return n(a.side1_player1) === n(m.side1[0]) && n(a.side1_player2) === n(m.side1[1])
+        && n(a.side2_player1) === n(m.side2[0]) && n(a.side2_player2) === n(m.side2[1]);
+}
+
+// Baner, hvis tildeling fra en tidligere runde skal blive stående (nr. 76):
+// afvist fordi der tælles (forceNewMatch: false), eller uændret samme kamp.
+function beholdTildeling(results) {
+    return results
+        .filter(x => (x.status === 'rejected' && x.reason === 'match_in_progress') || (x.status === 'shown' && x.unchanged))
+        .map(x => x.courtNumber);
+}
+
 /** Gem runden som "aktuel runde" (kun én ad gangen) med bane-tildelinger. */
 async function gemRunde(runde, tokenId, results) {
     // Én aktuel runde PR. NØGLE: to nøgler kan dele en aften på hver sine baner
     // uden at overskrive hinandens rundedata (label, udskiftere, noter).
-    await query('DELETE FROM planner_rounds WHERE token_id = ? OR token_id IS NULL', [tokenId]);
-    const naeste =runde.nextRoundStartsAt ? tid.klokkeslaetIDagTilUtc(runde.nextRoundStartsAt) : null;
+    // Nøglens tidligere runder slettes — men en bane, der beholder sin kamp
+    // (beholdTildeling), beholder også sin tildeling og den runde, den hører
+    // til. Før slettede runden den med (ON DELETE CASCADE), og kampen, der blev
+    // talt færdig bagefter, gav aldrig et resultat til badmintonplanner (nr. 76).
+    const behold = beholdTildeling(results);
+    await query(
+        `DELETE a FROM planner_court_assignments a JOIN planner_rounds r ON r.id = a.round_id
+          WHERE (r.token_id = ? OR r.token_id IS NULL)${behold.length ? ` AND a.court_number NOT IN (${behold.map(() => '?').join(', ')})` : ''}`,
+        [tokenId, ...behold]);
+    await query(
+        `DELETE FROM planner_rounds WHERE (token_id = ? OR token_id IS NULL)
+            AND id NOT IN (SELECT round_id FROM planner_court_assignments)`, [tokenId]);
+    const naeste = runde.nextRoundStartsAt ? tid.klokkeslaetIDagTilUtc(runde.nextRoundStartsAt) : null;
     const r = await query(
         `INSERT INTO planner_rounds (round_id, sequence, label, note, next_round_at, token_id, result_json)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -373,7 +413,8 @@ async function gemRunde(runde, tokenId, results) {
          naeste ? naeste.toISOString().slice(0, 19).replace('T', ' ') : null,
          tokenId, JSON.stringify(results)]
     );
-    const vist = new Set(results.filter(x => x.status === 'shown').map(x => x.courtNumber));
+    // En uændret bane (unchanged) har stadig sin gamle tildeling — den røres ikke
+    const vist = new Set(results.filter(x => x.status === 'shown' && !x.unchanged).map(x => x.courtNumber));
     for (const m of runde.matches) {
         if (!vist.has(m.courtNumber)) continue;
         await query(
@@ -668,4 +709,7 @@ module.exports.plannerVindueLuk = plannerVindueLuk;
 module.exports.anvendRunde = anvendRunde;
 module.exports.tidligereTilstand = tidligereTilstand;
 module.exports.kampIGang = kampIGang;
+module.exports.sammeKamp = sammeKamp;
+module.exports.beholdTildeling = beholdTildeling;
+module.exports.gemRunde = gemRunde;
 module.exports.ENDPOINT_STI = ENDPOINT_STI;

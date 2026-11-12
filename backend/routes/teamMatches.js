@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { query, queryOne } = require('../config/database');
+const { query, queryOne, transaktion } = require('../config/database');
 const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
 const { requirePage } = require('../middleware/pagePermission');
 const { ikkeQrSession } = require('../middleware/qrSession');
@@ -11,6 +11,7 @@ const { invalidateCourtTokens } = require('./matchSessionTokens');
 const { rydAfsluttetBane } = require('../config/banerydning');
 const holdkampFormater = require('../config/holdkampFormater');
 const { banenErIGang, delkampAendringAfvist, sammeBane } = require('../config/delkampRegler');
+const baneTildeling = require('../config/baneTildeling');
 
 // Banens stilling (point, sæt, ur) — til "er banen i gang?" i banenErIGang
 function banensStilling(courtNumber) {
@@ -46,37 +47,44 @@ router.use((req, res, next) => {
  * samtidig.
  *
  * Kaster en fejl med .status = 409 hvis en turnering blokerer.
+ *
+ * Alt sker i én transaktion (nr. 81): fejler en delkamp, findes holdkampen
+ * ikke halvt. `efter(tx, teamMatchId)` køres i samme transaktion — holdkamp-
+ * køen markerer sin kamp som oprettet der.
  */
-async function opretHoldkamp({ format, team1Name, team2Name, games, team1LogoId, team2LogoId }) {
-    const activeTournament = await queryOne(
-        `SELECT id, name FROM tournaments WHERE status = 'active' LIMIT 1`
-    );
-    if (activeTournament) {
-        const err = new Error(`Du har en aktiv turnering ("${activeTournament.name}"). Afslut eller slet den før du opretter en holdkamp.`);
-        err.status = 409;
-        throw err;
-    }
-
-    const result = await query(
-        `INSERT INTO team_matches (format, team1_name, team2_name, team1_logo_id, team2_logo_id, status)
-         VALUES (?, ?, ?, ?, ?, 'active')`,
-        [format, team1Name, team2Name, team1LogoId || null, team2LogoId || null]
-    );
-    const teamMatchId = result.insertId;
-
-    for (let i = 0; i < games.length; i++) {
-        const g = games[i];
-        await query(
-            `INSERT INTO team_match_games
-             (team_match_id, game_number, category, team1_player1, team1_player2, team2_player1, team2_player2)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [teamMatchId, i + 1, g.category,
-             g.team1Player1 || null, g.team1Player2 || null,
-             g.team2Player1 || null, g.team2Player2 || null]
+async function opretHoldkamp({ format, team1Name, team2Name, games, team1LogoId, team2LogoId }, efter = null) {
+    return transaktion(async (tx) => {
+        const activeTournament = await tx.queryOne(
+            `SELECT id, name FROM tournaments WHERE status = 'active' LIMIT 1`
         );
-    }
+        if (activeTournament) {
+            const err = new Error(`Du har en aktiv turnering ("${activeTournament.name}"). Afslut eller slet den før du opretter en holdkamp.`);
+            err.status = 409;
+            throw err;
+        }
 
-    return teamMatchId;
+        const result = await tx.query(
+            `INSERT INTO team_matches (format, team1_name, team2_name, team1_logo_id, team2_logo_id, status)
+             VALUES (?, ?, ?, ?, ?, 'active')`,
+            [format, team1Name, team2Name, team1LogoId || null, team2LogoId || null]
+        );
+        const teamMatchId = result.insertId;
+
+        for (let i = 0; i < games.length; i++) {
+            const g = games[i];
+            await tx.query(
+                `INSERT INTO team_match_games
+                 (team_match_id, game_number, category, team1_player1, team1_player2, team2_player1, team2_player2)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [teamMatchId, i + 1, g.category,
+                 g.team1Player1 || null, g.team1Player2 || null,
+                 g.team2Player1 || null, g.team2Player2 || null]
+            );
+        }
+
+        if (efter) await efter(tx, teamMatchId);
+        return teamMatchId;
+    });
 }
 
 // GET /api/team-matches/history - Get all finished team matches with games (public)
@@ -337,6 +345,12 @@ router.put('/:id/games/:gameId', requireWriteAuthInClubMode, requirePage('holdka
                         [occupant.id]
                     );
                 } else if (Number(courtNumber) !== Number(game.court_number)) {
+                    // Spilles der på banen (fri kamp, turnering, planner), afvises
+                    // admins tildeling, til admin bekræfter (force) — nr. 78
+                    if (!erEnhed) {
+                        const afvist = await baneTildeling.tjekOgRydBane(courtNumber, req);
+                        if (afvist) return res.status(409).json(afvist);
+                    }
                     // Står forrige kamps resultat stadig på banen (ingen trykkede
                     // "Ryd banen" på tabletten), ryddes den, så den nye delkamp kan
                     // starte. En afsluttet kamp, hvis delkamp stadig er 'active'
@@ -390,6 +404,9 @@ router.put('/:id/games/:gameId', requireWriteAuthInClubMode, requirePage('holdka
         // ikke viser en "overtag kampen"-QR under en holdkamp
         if (courtNumber !== undefined && courtNumber !== null) {
             try { await invalidateCourtTokens(courtNumber); } catch (e) { console.error('QR-token oprydning fejlede:', e); }
+            // Banen er nu en holdkampbane: en tidligere badmintonplanner-tildeling
+            // må ikke få delkampens resultat meldt ind som sit (nr. 78)
+            await baneTildeling.fjernPlannerTildeling(courtNumber);
         }
 
         res.json({ success: true });
