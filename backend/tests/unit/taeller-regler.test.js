@@ -133,6 +133,22 @@ test('fortryd: kun serveren valgt fortryder valget; højst 20 tryk tilbage', () 
     assert.equal(n, regler.HISTORIK_MAKS);
 });
 
+test('kanFortryde svarer som fortryd: tom bane nej, server valgt ja, efter genindlæsning nej', () => {
+    const st = regler.nyKamp({});
+    assert.equal(regler.kanFortryde(st), false);                 // tom bane: knappen skjules
+    regler.vaelgServer(st, 1);
+    assert.equal(regler.kanFortryde(st), true);                  // valget kan fortrydes
+    regler.point(st, 1, NU);
+    assert.equal(regler.kanFortryde(st), true);
+    st.history = [];                                             // som efter en genindlæsning
+    assert.equal(regler.kanFortryde(st), false);
+    assert.equal(regler.fortryd(st).ok, false);
+    // Altid samme svar som fortryd selv
+    for (const k of [regler.nyKamp({}), (() => { const x = regler.nyKamp({}); regler.vaelgServer(x, 2); return x; })()]) {
+        assert.equal(regler.kanFortryde(k), regler.fortryd(k).ok);
+    }
+});
+
 test('"Skift side" kun før kampen (og efter den), og fortryd hen over et sideskift', () => {
     const st = regler.nyKamp({ isDoubles: true, navne: { p1: 'A', p1b: 'a', p2: 'B', p2b: 'b' }, gameMode: '21' });
     regler.bytPladser(st, 1);                              // a i højre hos hold 1

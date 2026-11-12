@@ -1210,6 +1210,13 @@ function updateDisplay() {
     // Boldpoint-indikator (punkt 3)
     updateBoldpointIndicator();
 
+    // Fortryd vises kun, når der er noget at fortryde — på en tom bane eller
+    // efter en genindlæsning (historikken er tom) førte den kun til
+    // "ingen handlinger"
+    const kanFortryde = TaellerRegler.kanFortryde(gameState);
+    document.getElementById('undoBtn').style.display = kanFortryde ? '' : 'none';
+    document.getElementById('undoInRestBreak').style.display = kanFortryde ? '' : 'none';
+
     // Update doubles toggle button text
     const doublesBtn = document.getElementById('doublesToggle');
     if (doublesBtn) {
