@@ -51,6 +51,7 @@ KIOSK_ENV=${BT_KIOSK_ENV:-/run/badminton-tv/kiosk.env}
 SUND_SEK=300        # så længe skal TV-siden have kørt, før et nyt system godkendes
 FRIST_SEK=1200      # … og senest så længe efter opstarten
 MAKS_FORSOEG=3      # forsøg pr. version, før den opgives
+HASTIGHED_DAG=1M    # curl --limit-rate for en auto-hentning om dagen (8 Mbit/s)
 # Kun til test (kiosk/test/opdatering-vm.sh): anden KILDE og kortere tider.
 if [ -f /etc/badminton-tv/opdatering.env ]; then
     . /etc/badminton-tv/opdatering.env
@@ -78,9 +79,15 @@ VERSION_NU=$(cat /usr/share/badminton-tv/version 2>/dev/null || echo ukendt)
 
 # Tilstanden (aktiv, proev, proev_version, proev_antal …): på PC'en i GRUB's
 # miljøfil, på Pi'en i en tekstfil på SD-kortets FAT-partition.
+#
+# Pi'ens fil findes ikke på et nyt SD-kort, før den første opdatering skriver
+# den (nr. 62). Før fejlede både læsning (sed på en manglende fil) og
+# skrivning (grep uden linjer) under set -e/pipefail — så døde scriptet, og en
+# Pi kunne aldrig opdatere sig selv.
 env_hent() {
     if [ "$PLATFORM" = pi ]; then
-        sed -n "s/^$1=//p" "$PI_ENV" 2>/dev/null | tail -1
+        [ -f "$PI_ENV" ] || return 0
+        sed -n "s/^$1=//p" "$PI_ENV" | tail -1
     else
         grub-editenv "$BTENV" list 2>/dev/null | sed -n "s/^$1=//p"
     fi
@@ -88,7 +95,7 @@ env_hent() {
 pi_env_skriv() { # awk-program, der får filen ind og skriver den nye
     {
         printf '# Badminton TV: automatisk opdatering. Rør ikke filen.\n'
-        grep -v '^#' "$PI_ENV" 2>/dev/null | awk "$1"
+        { grep -v '^#' "$PI_ENV" 2>/dev/null || true; } | awk "$1"
     } > "$PI_ENV.ny"
     sync
     mv "$PI_ENV.ny" "$PI_ENV"
@@ -127,20 +134,32 @@ er_nyere() {
     [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" = "$2" ]
 }
 
-# beslut KØRENDE NY UDGIVET VENT_TIMER TILSTAND NU KLAR ANTAL
+# beslut KØRENDE NY UDGIVET VENT_TIMER TILSTAND NU KLAR ANTAL [NAT]
 #   KLAR:  versionen der allerede venter på næste opstart (tom: ingen)
 #   ANTAL: hvor mange gange NY er gjort klar før
-# Udskriver: fra | nyeste | venter <sekunder> | klar | opgivet | hent
+#   NAT:   1, når PC'en er ved at slukke (sluk, kl. SLUK_KL)
+# Udskriver: fra | nyeste | venter <sekunder> | klar | opgivet | nat | hent
+#
+# OPDATERING=auto henter ved slukningen (nr. 102): systemet er ca. 700 MB, og
+# alle hallens auto-skærme passerer ventetiden på samme tid — før hentede de
+# alle samtidig midt i åbningstiden. Kommer PC'en ikke til at slukke af sig
+# selv (slukkes på knappen hver aften), hentes den alligevel, når den har
+# ventet NAT_FRIST_T timer mere — langsomt (HASTIGHED_DAG). "foerst" og
+# "Installér nyeste nu" (BT_NU) henter stadig med det samme.
+NAT_FRIST_T=48
 beslut() {
-    local koer=$1 ny=$2 udgivet=$3 vent=$4 tilstand=$5 nu=$6 klar=$7 antal=$8
+    local koer=$1 ny=$2 udgivet=$3 vent=$4 tilstand=$5 nu=$6 klar=$7 antal=$8 nat=${9:-}
     if [ "$tilstand" = fra ]; then echo fra; return; fi
     if ! er_nyere "$koer" "$ny"; then echo nyeste; return; fi
+    local frem=$((udgivet + vent * 3600 - nu))
     if [ "$tilstand" != foerst ]; then
-        local frem=$((udgivet + vent * 3600 - nu))
         if [ "$frem" -gt 0 ]; then echo "venter $frem"; return; fi
     fi
     if [ "$klar" = "$ny" ]; then echo klar; return; fi
     if [ "${antal:-0}" -ge "$MAKS_FORSOEG" ]; then echo opgivet; return; fi
+    if [ "$tilstand" = auto ] && [ "$nat" != 1 ] && [ "$frem" -gt $((-NAT_FRIST_T * 3600)) ]; then
+        echo nat; return
+    fi
     echo hent
 }
 
@@ -244,18 +263,35 @@ tjek() {
     local proev pv antal=0 klar='' svar
     proev=$(env_hent proev)
     pv=$(env_hent proev_version)
+    # "Stop udrulningen" (udgivelsen markeret som pre-release, nr. 66): står en
+    # version klar til næste opstart, som serveren ikke længere tilbyder (den
+    # er nyere end den nyeste udgivne), kasseres den — før blev den startet
+    # alligevel. Kommer udgivelsen tilbage, hentes den forfra.
+    if [ -n "$proev" ] && [ -n "$pv" ] && er_nyere "$M_VERSION" "$pv"; then
+        echo "Version $pv er ikke længere udgivet (den nyeste er $M_VERSION) — den startes ikke."
+        env_slet proev proev_version proev_antal
+        proev='' pv=''
+    fi
     if [ "$pv" = "$M_VERSION" ]; then
         antal=$(env_hent proev_antal)
         [ -n "$proev" ] && klar=$pv
     fi
     [ -z "${BT_NU:-}" ] || antal=0
-    svar=$(beslut "$VERSION_NU" "$M_VERSION" "$M_UDGIVET" "$M_VENT" "$tilstand" "$(date +%s)" "$klar" "${antal:-0}")
+    # Slukker PC'en aldrig selv (SLUK_KL=aldrig), er der ingen slukning at vente på
+    local nat=${BT_NAT:-}
+    [ "${BT_SLUK_KL:-23:59}" != aldrig ] || nat=1
+    svar=$(beslut "$VERSION_NU" "$M_VERSION" "$M_UDGIVET" "$M_VENT" "$tilstand" "$(date +%s)" "$klar" "${antal:-0}" "$nat")
     case "$svar" in
         nyeste)  echo "Kører den nyeste version ($VERSION_NU)."; udfald nyeste ;;
         venter*) echo "Version $M_VERSION er udgivet. Henter den om ca. $(( (${svar#venter } + 3599) / 3600 )) time(r) (OPDATERING=auto)." ;;
         klar)    echo "Version $M_VERSION er klar og startes ved næste opstart."; udfald klar "$M_VERSION" ;;
         opgivet) echo "Version $M_VERSION er prøvet $antal gange uden at virke — venter på en nyere version." ;;
+        nat)     echo "Version $M_VERSION hentes ved den automatiske slukning (kl. ${BT_SLUK_KL:-23:59}), ikke i åbningstiden (OPDATERING=auto)." ;;
         hent)
+            # Om dagen (auto, der aldrig nåede en slukning): langsomt, så
+            # hallens net ikke mærker det
+            HASTIGHED=''
+            [ "$tilstand" != auto ] || [ "${BT_NAT:-}" = 1 ] || HASTIGHED=$HASTIGHED_DAG
             # (ikke "klargoer && …": så gjaldt set -e ikke inde i klargoer)
             klargoer
             if [ "$(env_hent proev_version)" = "$M_VERSION" ] && [ -n "$(env_hent proev)" ]; then
@@ -396,7 +432,8 @@ klargoer() {
     # Giver op, hvis der ikke er kommet 10 KB/s i 2 minutter — prøver igen
     # næste gang (hele forløbet starter forfra, med et tomt filsystem).
     hent "$KILDE/download/tv-usb-v$M_VERSION/$M_FIL" "$sq" \
-        --retry 3 --retry-delay 30 --speed-limit 10000 --speed-time 120
+        --retry 3 --retry-delay 30 --speed-limit 10000 --speed-time 120 \
+        ${HASTIGHED:+--limit-rate "$HASTIGHED"}
     if [ "$(stat -c %s "$sq")" != "$M_BYTES" ] \
        || ! printf '%s  %s\n' "$M_SHA256" "$sq" | sha256sum -c --quiet; then
         echo "FEJL: Den hentede fil passer ikke med manifestet (størrelse eller SHA256)."
@@ -528,8 +565,75 @@ sund() {
         | jq -e 'any(.[]; .type == "page" and (.url | test("^https?://")))' >/dev/null
 }
 
+rapport_koe() { # TYPE TEKST [LOGFIL] — en skærm-hændelse i rapportens kø
+    BT_RAPPORT_LOG=${3:-} "$BT_LIB/rapport" koe "$1" "$2" "$(date +%s%3N)" >/dev/null 2>&1 || true
+}
+
+# Samme hændelse højst én gang i døgnet (tjek kører hver anden time)
+MELDT=${BT_MELDT:-/var/lib/badminton-tv/opdatering-meldt}
+meld_en_gang() { # TYPE TEKST [LOGFIL]
+    local noegle nu sidst_noegle='' sidst=0
+    noegle=$(printf '%s %s' "$1" "$2" | sha256sum | cut -c1-16)
+    nu=$(date +%s)
+    [ ! -f "$MELDT" ] || read -r sidst_noegle sidst < "$MELDT" || true
+    if [ "$sidst_noegle" = "$noegle" ] && [ $((nu - ${sidst:-0})) -lt 86400 ]; then
+        return 0
+    fi
+    rapport_koe "$@"
+    mkdir -p "${MELDT%/*}"
+    printf '%s %s\n' "$noegle" "$nu" > "$MELDT"
+}
+
+# Fejler den automatiske hentning, skal det kunne ses i admin (nr. 99) — før
+# stod det kun i PC'ens journal. tjek køres i en ny proces (så gælder set -e i
+# den), og ved en fejl lægges en skærm-hændelse (opd-fejl) i rapportens kø.
+tjek_meld_fejl() {
+    local log=$ARB/tjek.log kode=0 tekst
+    mkdir -p "$ARB"
+    # tee: linjerne står i journalen undervejs (en hentning tager minutter)
+    BT_INDRE=1 "$BT_LIB/opdatering" tjek 2>&1 | tee "$log" || kode=${PIPESTATUS[0]}
+    if [ "$kode" != 0 ]; then
+        tekst=$(fejltekst "$log")
+        meld_en_gang opd-fejl "Den automatiske opdatering fejlede: ${tekst#FEJL: }" "$log"
+    fi
+    exit "$kode"
+}
+
+# Kom vi tilbage fra en ny version, der ikke blev godkendt (nr. 99)? Så står
+# proev_version (nyere end den kørende) uden proev: GRUB (PC) eller proev
+# (Pi) har brugt forsøget, og det tidligere system kører igen. Før så ingen
+# det — genstarten tilbage regnes som planlagt og meldes ikke. Nu meldes det
+# én gang pr. forsøg som skærm-hændelse (opd-tilbage).
+meld_tilbagerulning() {
+    local pv antal fejl tekst
+    pv=$(env_hent proev_version)
+    { [ -n "$pv" ] && er_nyere "$VERSION_NU" "$pv"; } || return 0
+    [ -z "$(env_hent proev)" ] || return 0          # venter stadig på at blive prøvet
+    [ -z "$(env_hent proev_igang)" ] || return 0    # Pi: tryboot-genstarten er i gang
+    antal=$(env_hent proev_antal)
+    antal=${antal:-1}
+    [ "$(env_hent proev_meldt)" != "$pv-$antal" ] || return 0
+    tekst="Version $pv startede ikke rigtigt (forsøg $antal af $MAKS_FORSOEG) — kører $VERSION_NU igen."
+    # sidste_fejl skrives af bekraeft (PC og Pi) og proev (Pi) og slettes
+    # herunder, så den hører til netop dette forsøg
+    fejl=$(env_hent sidste_fejl)
+    case "$fejl" in
+        "$pv "*tryboot*) tekst="$tekst Pi'en startede den ikke (tryboot virker måske ikke på denne model)." ;;
+        "$pv "*) tekst="$tekst TV-siden kom ikke frem inden for $((FRIST_SEK / 60)) minutter." ;;
+        *) tekst="$tekst Den gik i stå eller blev slukket under opstarten." ;;
+    esac
+    [ "$antal" -lt "$MAKS_FORSOEG" ] || tekst="$tekst Versionen opgives — venter på en nyere."
+    echo "$tekst"
+    rapport_koe opd-tilbage "$tekst"
+    env_saet proev_meldt="$pv-$antal"
+    env_slet sidste_fejl
+}
+
 bekraeft() {
-    paa_proeve || return 0
+    if ! paa_proeve; then
+        meld_tilbagerulning
+        return 0
+    fi
     [ "$PLATFORM" = pi ] && env_saet proev_startet="$VERSION_NU"
     echo "System $SLOT (version $VERSION_NU) er startet på prøve. Det bliver det aktive system, når TV-siden har kørt i $SUND_SEK sekunder."
     # Oppetiden og ikke $SECONDS: den følger uret, som springer, når det
@@ -545,10 +649,10 @@ bekraeft() {
                     # Først config.txt (hvad firmwaren starter), så tilstanden
                     bt_pi_config "$KORT/config.txt" "$SLOT"
                     env_saet aktiv="$SLOT"
-                    env_slet proev proev_version proev_antal proev_igang proev_startet
+                    env_slet proev proev_version proev_antal proev_igang proev_startet proev_meldt
                 else
                     env_saet aktiv="$SLOT"
-                    env_slet proev proev_version proev_antal
+                    env_slet proev proev_version proev_antal proev_meldt
                 fi
                 echo "Opdateret til version $VERSION_NU — system $SLOT er nu det aktive."
                 return 0
@@ -647,14 +751,22 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     trap 'echo "FEJL: linje $LINENO: $BASH_COMMAND (kode $?) — prøver igen næste gang."' ERR
     case "${1:-}" in
         tjek)
-            # Én hentning ad gangen (timeren og et manuelt kald)
-            mkdir -p "$ARB"
-            exec 9>"$ARB/laas"
-            if ! flock -n 9; then
-                echo "En anden opdatering kører allerede."
-                exit 0
+            # Én hentning ad gangen (timeren, slukningen og et manuelt kald).
+            # Den indre proces (tjek_meld_fejl) har låsen fra den ydre.
+            if [ -z "${BT_INDRE:-}" ]; then
+                mkdir -p "$ARB"
+                exec 9>"$ARB/laas"
+                if ! flock -n 9; then
+                    echo "En anden opdatering kører allerede."
+                    exit 0
+                fi
             fi
-            tjek ;;
+            # Bedt om fra admin (BT_NU): admin ser selv udfaldet (spoerg)
+            if [ -n "${BT_NU:-}${BT_INDRE:-}" ]; then
+                tjek
+            else
+                tjek_meld_fejl
+            fi ;;
         proev)    proev ;;
         bekraeft) bekraeft ;;
         status)   status ;;

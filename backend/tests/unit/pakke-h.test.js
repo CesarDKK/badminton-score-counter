@@ -269,6 +269,8 @@ test('83: admin og indstillinger viser en forståelig fejl, når nginx/Cloudflar
         assert.deepEqual(await uploadSvar(ok), { files: 3 });
         assert.doesNotMatch(src, /const data = await res\.json\(\);\s*\r?\n\s*if \(!res\.ok\) throw new Error\(data\.error \|\| res\.statusText\);\s*\r?\n\s*(visGendannelsesResultat|notify\(`Gendannelse|notify\(`✓ Import)/);
     }
-    assert.match(laes('frontend/settings.html'), /settings-script\.js\?v=24/);
-    assert.match(laes('frontend/super-admin.html'), /super-admin-script\.js\?v=39/);
+    // Mindst den version, rettelsen kom med (senere pakker hæver den)
+    const v = (html, re) => Number((laes(html).match(re) || [])[1]);
+    assert.ok(v('frontend/settings.html', /settings-script\.js\?v=(\d+)/) >= 24);
+    assert.ok(v('frontend/super-admin.html', /super-admin-script\.js\?v=(\d+)/) >= 39);
 });

@@ -91,7 +91,11 @@ KILDE=https://test/releases
 BTENV=$TMP/badminton-tv.env
 ARB=$TMP/arb
 # Selve hentningen og skrivningen testes i VM'en — her noteres kun kaldet
-klargoer() { echo "KLARGØR $M_VERSION"; saet_proev b; }
+klargoer() { echo "KLARGØR $M_VERSION ${HASTIGHED:-fuld fart}"; saet_proev b; }
+# Skærm-hændelser (nr. 99) i en fil i stedet for rapportens kø
+rapport_koe() { echo "$1|$2|${3:+log}" >> "$TMP/rapport.log"; }
+MELDT=$TMP/opdatering-meldt
+rapport() { cat "$TMP/rapport.log" 2>/dev/null; }
 
 ok=0 fejl=0
 forvent() { # navn faktisk forventet
@@ -128,14 +132,25 @@ T=3600
 forvent "Samme version" "$(beslut 2026.10.9 2026.10.9 $NU 24 auto $NU '' 0)" nyeste
 forvent "Ældre udgivelse: aldrig nedgradering" "$(beslut 2026.10.9 2026.10.8 $NU 24 auto $NU '' 0)" nyeste
 forvent "auto venter et døgn" "$(beslut 2026.10.9 2026.10.10 $((NU - 2 * T)) 24 auto $NU '' 0)" "venter $((22 * T))"
-forvent "auto efter et døgn" "$(beslut 2026.10.9 2026.10.10 $((NU - 25 * T)) 24 auto $NU '' 0)" hent
+forvent "auto efter et døgn" "$(beslut 2026.10.9 2026.10.10 $((NU - 25 * T)) 24 auto $NU '' 0 1)" hent
 forvent "foerst henter med det samme" "$(beslut 2026.10.9 2026.10.10 $NU 24 foerst $NU '' 0)" hent
-forvent "vent_timer 0 i manifestet" "$(beslut 2026.10.9 2026.10.10 $NU 0 auto $NU '' 0)" hent
+forvent "vent_timer 0 i manifestet" "$(beslut 2026.10.9 2026.10.10 $NU 0 auto $NU '' 0 1)" hent
 forvent "fra" "$(beslut 2026.10.9 2026.10.10 $NU 0 fra $NU '' 0)" fra
 forvent "Allerede klar" "$(beslut 2026.10.9 2026.10.10 $NU 0 auto $NU 2026.10.10 1)" klar
-forvent "Klar med en ældre version: hent den nye" "$(beslut 2026.10.9 2026.10.11 $NU 0 auto $NU 2026.10.10 1)" hent
-forvent "2 mislykkede forsøg: prøv igen" "$(beslut 2026.10.9 2026.10.10 $NU 0 auto $NU '' 2)" hent
+forvent "Klar med en ældre version: hent den nye" "$(beslut 2026.10.9 2026.10.11 $NU 0 auto $NU 2026.10.10 1 1)" hent
+forvent "2 mislykkede forsøg: prøv igen" "$(beslut 2026.10.9 2026.10.10 $NU 0 auto $NU '' 2 1)" hent
 forvent "3 mislykkede forsøg: opgiv" "$(beslut 2026.10.9 2026.10.10 $NU 0 auto $NU '' 3)" opgivet
+
+# Nr. 102: auto henter ved slukningen (NAT=1), ikke i åbningstiden — men ikke
+# længere end 2 døgn efter, at den skulle have hentet
+forvent "auto efter et døgn, om dagen: vent på slukningen" "$(beslut 2026.10.9 2026.10.10 $((NU - 25 * T)) 24 auto $NU '' 0 '')" nat
+forvent "auto efter et døgn, ved slukningen: hent" "$(beslut 2026.10.9 2026.10.10 $((NU - 25 * T)) 24 auto $NU '' 0 1)" hent
+forvent "auto 2 døgn efter: hent om dagen alligevel" "$(beslut 2026.10.9 2026.10.10 $((NU - 73 * T)) 24 auto $NU '' 0 '')" hent
+forvent "auto lige før de 2 døgn: stadig nat" "$(beslut 2026.10.9 2026.10.10 $((NU - 71 * T)) 24 auto $NU '' 0 '')" nat
+forvent "auto ved slukningen før døgnet: venter" "$(beslut 2026.10.9 2026.10.10 $((NU - 2 * T)) 24 auto $NU '' 0 1)" "venter $((22 * T))"
+forvent "foerst om dagen: hent med det samme" "$(beslut 2026.10.9 2026.10.10 $NU 24 foerst $NU '' 0 '')" hent
+forvent "auto, allerede klar: klar (ikke nat)" "$(beslut 2026.10.9 2026.10.10 $((NU - 25 * T)) 24 auto $NU 2026.10.10 1 '')" klar
+forvent "auto, opgivet: opgivet (ikke nat)" "$(beslut 2026.10.9 2026.10.10 $((NU - 25 * T)) 24 auto $NU '' 3 '')" opgivet
 
 # ── 3. Manifestet ──────────────────────────────────────────
 SHA=$(printf 'a%.0s' {1..64})
@@ -236,6 +251,107 @@ indeholder "Godkendt: tjekker igen uden genstart" "$(tjek)" "KLARGØR 2026.10.12
 env_saet aktiv=a
 SLOT=''
 indeholder "Gammelt disklayout" "$(tjek)" "det gamle disklayout"
+
+# ── 4b. Nr. 102: auto henter ved slukningen, ikke i åbningstiden ──
+SLOT=a VERSION_NU=2026.10.9
+: > "$BTENV"; env_saet aktiv=a
+conf auto; UDGIVET=$(( $(date +%s) - 25 * 3600 )) udgiv 2026.10.10
+indeholder "auto om dagen: venter på slukningen" "$(tjek)" "hentes ved den automatiske slukning (kl. 23:59)"
+forvent "auto om dagen: intet klargjort" "$(env_vaerdi proev)" ""
+indeholder "auto ved slukningen (BT_NAT): fuld fart" "$(BT_NAT=1 tjek)" "KLARGØR 2026.10.10 fuld fart"
+: > "$BTENV"; env_saet aktiv=a
+UDGIVET=$(( $(date +%s) - 80 * 3600 )) udgiv 2026.10.10
+indeholder "auto 2 døgn for sent: om dagen, men højst 1 MB/s" "$(tjek)" "KLARGØR 2026.10.10 1M"
+: > "$BTENV"; env_saet aktiv=a
+printf 'TV_URL=https://a.dk/\nOPDATERING=auto\nSLUK_KL=Aldrig\n' > "$TMP/kiosk.conf"
+UDGIVET=$(( $(date +%s) - 25 * 3600 )) udgiv 2026.10.10
+indeholder "SLUK_KL=aldrig: ingen slukning at vente på — 1 MB/s" "$(tjek)" "KLARGØR 2026.10.10 1M"
+: > "$BTENV"; env_saet aktiv=a
+printf 'TV_URL=https://a.dk/\nOPDATERING=auto\nSLUK_KL=22.30\n' > "$TMP/kiosk.conf"
+indeholder "SLUK_KL i teksten" "$(tjek)" "slukning (kl. 22:30)"
+conf foerst
+indeholder "foerst: med det samme i fuld fart" "$(tjek)" "KLARGØR 2026.10.10 fuld fart"
+: > "$BTENV"; env_saet aktiv=a
+conf auto
+indeholder "auto + BT_NU (Installér nyeste nu): fuld fart" "$(BT_NU=1 tjek)" "KLARGØR 2026.10.10 fuld fart"
+
+# ── 4c. Nr. 66: "stop udrulningen" med en version, der står klar ──
+: > "$BTENV"; env_saet aktiv=a
+conf foerst; udgiv 2026.10.10
+tjek >/dev/null
+forvent "klar til næste opstart" "$(env_vaerdi proev) $(env_vaerdi proev_version)" "b 2026.10.10"
+# 2026.10.10 markeres som pre-release: "latest" er igen den, PC'en kører
+udgiv 2026.10.9
+indeholder "trukket tilbage: startes ikke" "$(tjek)" "Version 2026.10.10 er ikke længere udgivet"
+forvent "trukket tilbage: proev slettet (GRUB starter den ikke)" "$(env_vaerdi proev)|$(env_vaerdi proev_version)|$(env_vaerdi proev_antal)" "||"
+forvent "trukket tilbage: aktiv uændret" "$(env_vaerdi aktiv)" a
+indeholder "trukket tilbage: kører nyeste" "$(tjek)" "Kører den nyeste version (2026.10.9)"
+# Også når en ældre udgivelse end den kørende er "latest"
+udgiv 2026.10.10; tjek >/dev/null
+udgiv 2026.10.8
+indeholder "trukket tilbage til en ældre: startes ikke" "$(tjek)" "ikke længere udgivet"
+forvent "trukket tilbage til en ældre: proev slettet" "$(env_vaerdi proev)" ""
+# En rettet version erstatter den: hentes som normalt
+udgiv 2026.10.11
+indeholder "rettet version: hentes" "$(tjek)" "KLARGØR 2026.10.11"
+# Står den stadig som udgivet, bliver den klar
+indeholder "stadig udgivet: forbliver klar" "$(tjek)" "er klar og startes ved næste opstart"
+
+# ── 4d. Nr. 99: tilbagerullet ny version meldes som skærm-hændelse ──
+: > "$BTENV"; env_saet aktiv=a
+: > "$TMP/rapport.log"
+SLOT=a VERSION_NU=2026.10.9
+forvent "intet at melde uden prøve" "$(bekraeft)|$(rapport)" "|"
+env_saet proev=b proev_version=2026.10.10 proev_antal=1
+bekraeft >/dev/null
+forvent "venter på prøven: meldes ikke" "$(rapport)" ""
+# GRUB startede b (og slettede proev); bekraeft fandt ikke TV-siden og
+# genstartede til a — sådan står det efter bekraeft's fejlvej
+env_saet proev= sidste_fejl="2026.10.10 2026-11-12 08:14"
+svar=$(bekraeft)
+indeholder "tilbagerullet: forklaring" "$svar" "Version 2026.10.10 startede ikke rigtigt (forsøg 1 af 3) — kører 2026.10.9 igen."
+indeholder "tilbagerullet: grunden" "$svar" "TV-siden kom ikke frem inden for 20 minutter"
+indeholder "tilbagerullet: opd-tilbage i køen" "$(rapport)" "opd-tilbage|Version 2026.10.10 startede ikke rigtigt"
+forvent "tilbagerullet: sidste_fejl brugt" "$(env_vaerdi sidste_fejl)" ""
+bekraeft >/dev/null
+forvent "tilbagerullet: meldes kun én gang pr. forsøg" "$(rapport | wc -l | tr -d ' ')" 1
+# Forsøg 2 frøs (GRUB faldt tilbage uden sidste_fejl)
+env_saet proev_antal=2
+indeholder "forsøg 2: meldes igen" "$(bekraeft)" "(forsøg 2 af 3)"
+indeholder "frøs: grunden" "$(rapport | tail -1)" "gik i stå eller blev slukket under opstarten"
+env_saet proev_antal=3
+indeholder "forsøg 3: opgives" "$(bekraeft)" "Versionen opgives"
+forvent "tre forsøg, tre hændelser" "$(rapport | wc -l | tr -d ' ')" 3
+# Godkendt version: intet at melde
+: > "$BTENV"; env_saet aktiv=a; : > "$TMP/rapport.log"
+env_saet proev_version=2026.10.10
+VERSION_NU=2026.10.10
+forvent "samme version kører: intet" "$(bekraeft)|$(rapport)" "|"
+VERSION_NU=2026.10.9
+
+# tjek der fejler (fx forkert signatur): opd-fejl med loggen — højst én
+# gang i døgnet for den samme fejl
+mkdir -p "$TMP/falsk-lib"
+printf '#!/bin/bash\necho "Henter manifestet …"\necho "FEJL: ${FALSK_FEJL:-Opdateringsmanifestets signatur passer ikke}"\nexit 1\n' > "$TMP/falsk-lib/opdatering"
+chmod +x "$TMP/falsk-lib/opdatering"
+: > "$TMP/rapport.log"; rm -f "$MELDT"
+svar=$(BT_LIB=$TMP/falsk-lib tjek_meld_fejl); kode=$?
+forvent "tjek fejler: fejlkoden bevares" "$kode" 1
+indeholder "tjek fejler: output vises stadig" "$svar" "Henter manifestet"
+forvent "tjek fejler: opd-fejl med log" "$(rapport)" "opd-fejl|Den automatiske opdatering fejlede: Opdateringsmanifestets signatur passer ikke|log"
+(BT_LIB=$TMP/falsk-lib tjek_meld_fejl) >/dev/null
+forvent "samme fejl igen: ikke meldt igen" "$(rapport | wc -l | tr -d ' ')" 1
+(FALSK_FEJL='System b findes ikke på disken.' BT_LIB=$TMP/falsk-lib tjek_meld_fejl) >/dev/null
+forvent "en anden fejl: meldt" "$(rapport | wc -l | tr -d ' ')" 2
+# Et døgn senere: samme fejl meldes igen
+read -r n _ < "$MELDT"; echo "$n $(( $(date +%s) - 90000 ))" > "$MELDT"
+(FALSK_FEJL='System b findes ikke på disken.' BT_LIB=$TMP/falsk-lib tjek_meld_fejl) >/dev/null
+forvent "et døgn efter: meldt igen" "$(rapport | wc -l | tr -d ' ')" 3
+printf '#!/bin/bash\necho "Kører den nyeste version."\n' > "$TMP/falsk-lib/opdatering"
+(BT_LIB=$TMP/falsk-lib tjek_meld_fejl) >/dev/null; kode=$?
+forvent "tjek i orden: intet meldt" "$kode $(rapport | wc -l | tr -d ' ')" "0 3"
+: > "$BTENV"; env_saet aktiv=a
+rm -f "$ARB/udfald"
 
 # ── 5. "Installér nyeste nu" fra admin ─────────────────────
 # tjek med BT_NU=1: med det samme (også med auto), og udfaldet i $ARB/udfald
@@ -380,6 +496,16 @@ forvent "Pi: env_slet" "$(env_hent proev)$(env_hent sidste_fejl)" ""
 forvent "Pi: resten bevaret" "$(env_hent aktiv) $(env_hent proev_version)" "a 2026.10.10"
 indeholder "Pi: forklaring øverst i filen" "$(head -1 "$PI_ENV")" "Rør ikke filen"
 
+# Nr. 62: SD-kortet havde ingen tilstandsfil (build-pi.sh lavede den ikke) —
+# så døde opdatering i set -e/pipefail ved første læsning og skrivning
+rm -f "$PI_ENV"
+forvent "Pi uden tilstandsfil: læsning dør ikke" "$( set -Eeuo pipefail; v=$(env_hent proev); a=$(aktiv); echo "ok:$v:$a" )" "ok::a"
+forvent "Pi uden tilstandsfil: env_slet dør ikke" "$( set -Eeuo pipefail; env_slet proev; echo ok )" ok
+rm -f "$PI_ENV"
+forvent "Pi uden tilstandsfil: env_saet opretter den" "$( set -Eeuo pipefail; env_saet proev=b; echo ok )|$(pi_env proev)" "ok|b"
+printf '# Badminton TV: automatisk opdatering. Rør ikke filen.\n' > "$PI_ENV"
+forvent "Pi: fil kun med kommentaren: env_saet" "$( set -Eeuo pipefail; env_saet aktiv=a; echo ok )|$(pi_env aktiv)" "ok|a"
+
 # config.txt: Badminton TV-blokken sidst, uden at røre resten
 printf 'dtparam=audio=on\n[pi5]\ndtoverlay=nospi10\n[all]\n' > "$KORT/config.txt"
 bt_pi_config "$KORT/config.txt" a
@@ -392,13 +518,13 @@ forvent "Pi config: skift til b, kun én blok" "$(grep -c 'os_prefix=' "$KORT/co
 bt_pi_config "$KORT/config.txt" a
 
 # tjek med Pi-manifestet
-: > "$PI_ENV"; env_saet aktiv=a
+rm -f "$PI_ENV"   # som et SD-kort fra før nr. 62 — hele tjek i set -e
 SLOT=a VERSION_NU=2026.10.9
 conf foerst
 manifest 2026.10.10 badminton-tv-rod-2026.10.10.squashfs > "$TMP/m.json"
 forvent "Pi: PC'ens system afvises" "$(laes)" ugyldig
 udgiv 2026.10.10
-indeholder "Pi: henter fra opdatering-pi.json" "$(tjek)" "KLARGØR 2026.10.10"
+indeholder "Pi: henter fra opdatering-pi.json (uden tilstandsfil, set -e)" "$( set -Eeuo pipefail; tjek )" "KLARGØR 2026.10.10"
 forvent "Pi: proev sat" "$(pi_env proev) $(pi_env proev_antal)" "b 1"
 
 # proev: genstart med tryboot, og slet proev først (én gang)
@@ -415,6 +541,11 @@ forvent "Pi proev: ikke igen uden ny proev" "$(cat "$TMP/systemctl.log")" ""
 indeholder "Pi proev: tryboot virkede ikke" "$svar" "understøtter måske ikke tryboot"
 indeholder "Pi proev: gemt som sidste fejl" "$(pi_env sidste_fejl)" "ikke startet med tryboot"
 forvent "Pi proev: meldes kun én gang" "$(pi_env proev_igang)" ""
+# Nr. 99: tilbage i system a uden at tryboot startede b — meldes
+SLOT=a VERSION_NU=2026.10.9
+: > "$TMP/rapport.log"
+indeholder "Pi bekraeft: tryboot-fejlen meldes" "$(bekraeft)" "Pi'en startede den ikke (tryboot"
+indeholder "Pi bekraeft: opd-tilbage i køen" "$(rapport)" "opd-tilbage|Version 2026.10.10 startede ikke rigtigt (forsøg 1 af 3)"
 
 # bekraeft i det nye system (b), mens a stadig er det aktive
 env_saet proev_igang=2026.10.10
@@ -438,6 +569,14 @@ indeholder "Pi bekraeft fejlet: sidste fejl" "$(pi_env sidste_fejl)" "2026.10.10
 # Tilbage i a: prøven blev startet, men ikke godkendt
 SLOT=a
 indeholder "Pi proev: prøvet, ikke godkendt" "$(proev)" "blev prøvet, men ikke godkendt"
+# (bekraeft ovenfor kørte uden proev_version — på Pi'en
+# står den, fra tjek klargjorde versionen)
+env_saet proev_version=2026.10.10 proev_antal=2
+SLOT=a VERSION_NU=2026.10.9
+: > "$TMP/rapport.log"
+indeholder "Pi bekraeft: prøven meldes" "$(bekraeft)" "TV-siden kom ikke frem"
+forvent "Pi bekraeft: én hændelse" "$(rapport | grep -c '^opd-tilbage|')" 1
+forvent "Pi bekraeft: meldt-mærket gemt (meldes ikke igen)" "$(grep -c '^proev_meldt=' "$PI_ENV")" 1
 
 echo "$ok bestået, $fejl fejlet"
 [ "$fejl" -eq 0 ]

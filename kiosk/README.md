@@ -79,8 +79,11 @@ WiFi-koden kommer ikke med — kun dens længde og om den har mellemrum.
 
 - **Tænd** på knappen — TV-siden vises efter ca. 20 sekunder.
 - **Sluk** med et kort tryk på knappen. PC'en lukker pænt ned.
-- Er den ikke slukket kl. `SLUK_KL`, slukker den selv. Lige før installeres
-  sikkerhedsopdateringer — så sker det aldrig midt i en kamp.
+- Er den ikke slukket kl. `SLUK_KL`, slukker den selv. Lige før hentes en ny
+  version af Badminton TV, hvis der er en (se *Automatisk opdatering*). Der
+  installeres ingen pakker fra Debian om natten (versioner efter 2026.11.3) —
+  sikkerhedsrettelserne kommer med Badminton TV's egne udgivelser, der
+  bygges forfra og prøvestartes som enhver anden ny version.
 - **Tænd automatisk:** sæt en opstartstid i BIOS (*Wake on alarm* el.lign.).
   PC'ens BIOS-ur kører dansk tid (fra 2026.10.8), så kl. 8 i BIOS er kl. 8.
   Natten efter et skift til/fra sommertid kan den ene opstart ligge en time
@@ -93,7 +96,10 @@ WiFi-koden kommer ikke med — kun dens længde og om den har mellemrum.
   *stoppede brat* (frøs eller mistede strømmen), *kernenedbrud*, slukket på
   knappen eller genstartet — med slutningen af PC'ens log (*Vis log*). Den
   planlagte slukning kl. `SLUK_KL` og genstarter fra den automatiske
-  opdatering meldes ikke. Genstarter browser-vagten en frossen TV-side,
+  opdatering meldes ikke — men fejler en hentning, eller starter en ny
+  version ikke rigtigt, så PC'en går tilbage til den forrige, meldes det
+  (*Opdatering fejlede* / *Ny version gik tilbage*, også med rødt ved PC'en
+  under *Adgangslinks*). Genstarter browser-vagten en frossen TV-side,
   meldes det med det samme. Uden net venter hændelserne på PC'en, til nettet
   er tilbage. Det kræver, at `TV_URL` er et adgangslink (`…/t/<kode>`);
   `kiosk.conf` sendes aldrig.
@@ -116,7 +122,13 @@ er ingen grund til at køre ud og installere forfra med USB-nøglen.
 
 - PC'en tjekker 10 minutter efter, den er tændt, og derefter hver anden time.
   Et tjek er en lille fil; selve systemet (ca. 700 MB) hentes kun, når der er
-  en ny version. TV-siden kører videre imens.
+  en ny version. Med `OPDATERING=auto` hentes det **ved den automatiske
+  slukning** (kl. `SLUK_KL`), så hallens net ikke deles med 10 skærme, der
+  henter 700 MB hver, mens der spilles og streames. Har en PC ikke nået en
+  slukning 2 døgn efter, at den skulle have hentet, henter den om dagen med
+  højst 1 MB/s. Med `SLUK_KL=aldrig` hentes om dagen med 1 MB/s.
+  `OPDATERING=foerst` og *Installér nyeste nu* henter med det samme i fuld
+  fart. TV-siden kører videre imens.
 - Den nye version startes, **næste gang PC'en tændes**. Kommer TV-siden frem og
   kører i 5 minutter, beholdes den. Ellers genstarter PC'en selv til den
   forrige version efter højst 20 minutter. Det samme sker, hvis den nye
@@ -127,7 +139,9 @@ er ingen grund til at køre ud og installere forfra med USB-nøglen.
   (`OPDATERING=auto`) venter, til versionen har været ude i et døgn. Ser
   oversigten forkert ud efter en opdatering, så **markér udgivelsen som
   "pre-release"** på GitHub (rediger udgivelsen → *Set as a pre-release*). Så
-  henter de andre den ikke, og en rettet version kan udgives i stedet.
+  henter de andre den ikke, og en rettet version kan udgives i stedet. En PC,
+  der allerede har hentet den, men ikke startet den endnu, kasserer den ved
+  næste tjek (versioner efter 2026.11.3; før blev den startet alligevel).
 - **Installér nyeste nu:** kommer der nye versioner tit, når de skærme, der
   venter et døgn, aldrig frem. Under *Adgangslinks* i admin har hver TV-PC en
   knap **Installér nyeste nu**. PC'en spørger serveren hvert 2. minut
@@ -360,7 +374,9 @@ monteret på `/boot/kort`, og det kørende systems mappe er bundet til
 `/boot/firmware`, så Raspberry Pi OS' kerneopdateringer lander i den rigtige
 mappe. Roden (system A) er låst til 6 GB (ingen `resize`), og system B
 oprettes af den første opdatering bag den. Tilstanden ligger i
-`badminton-tv-opdatering.txt` på FAT-partitionen. Ved opstart genstarter
+`badminton-tv-opdatering.txt` på FAT-partitionen. (Billeder til og med 2026.11.3
+manglede filen, og så kunne Pi'en aldrig opdatere sig selv — skriv et nyt
+billede på kortet én gang.) Ved opstart genstarter
 `badminton-tv-opdatering-proev` med `reboot "0 tryboot"`, hvis en ny version
 venter (og sletter `proev` først); firmwaren glemmer tryboot igen, så en
 mislykket prøve, et strømsvigt eller `panic=10` ender i det gamle system.
@@ -383,7 +399,7 @@ noget fra det.
 | Netværksstatus til skærmen (`status.js`) | `usr/lib/badminton-tv/netstatus` |
 | `diagnose.txt` på nøglen i prøvetilstand | `usr/lib/badminton-tv/diagnose` |
 | HDMI-CEC (`cec-ctl`) | `usr/lib/badminton-tv/cec` |
-| Automatisk slukning + opdateringer | `usr/lib/badminton-tv/sluk` + generator |
+| Automatisk slukning (henter en ny version først) | `usr/lib/badminton-tv/sluk` + generator |
 | Installation på disk | `usr/lib/badminton-tv/installer` |
 | Automatisk opdatering (hent, godkend, status) | `usr/lib/badminton-tv/opdatering` |
 | Hændelser til serveren (hvordan forrige kørsel sluttede, browser-genstarter) | `usr/lib/badminton-tv/rapport` |

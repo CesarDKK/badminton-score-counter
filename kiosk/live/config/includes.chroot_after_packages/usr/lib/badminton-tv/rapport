@@ -38,6 +38,8 @@ hvert 5. minut). kiosk.conf sendes aldrig — den indeholder WiFi-koden.
                         kun i køen, med WiFi-loggen (net-vagten — nettet er
                         væk, så den sendes, når det er tilbage):
                         net-wifi, net-server, net-ipv6, net-genstart, net-kort
+                        — og fra den automatiske opdatering: opd-fejl og
+                        opd-tilbage (loggen fra filen i BT_RAPPORT_LOG)
 
 Kun Pythons standardbibliotek.
 """
@@ -429,6 +431,11 @@ def koe(type_, tekst, fra_ms, til_ms=None):
         uddrag = netlog(h['fra'])
         if uddrag:
             h['log'] = afkort(uddrag)
+    elif type_.startswith('opd-') and os.environ.get('BT_RAPPORT_LOG'):
+        # Den automatiske opdaterings eget output (opdatering tjek)
+        uddrag = laes_tekst(os.environ['BT_RAPPORT_LOG'])
+        if uddrag and uddrag.strip():
+            h['log'] = afkort('== Den automatiske opdatering ==\n' + uddrag.strip())
     koe_tilfoej(h)
     log(f'{type_}: {tekst}')
 

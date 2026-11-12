@@ -1516,6 +1516,9 @@ function skaermHaendelseTekst(h) {
         case 'net-ipv6': return h.tekst || 'Serveren kunne kun nås over IPv4 — hallens IPv6 driller';
         case 'net-genstart': return h.tekst || "Ingen WiFi-forbindelse — PC'en blev genstartet";
         case 'net-kort': return h.tekst || "WiFi-kortet svarer ikke — træk strømstikket ud i 1 minut";
+        // Den automatiske opdatering (nr. 99)
+        case 'opd-fejl': return h.tekst || 'Den automatiske opdatering fejlede';
+        case 'opd-tilbage': return h.tekst || "En ny version startede ikke rigtigt — PC'en kører den forrige igen";
         case 'browser-genstart': return 'Browseren frøs og blev genstartet af browser-vagten'
             + (h.tekst ? ` (${h.tekst})` : '');
         default: return h.tekst || h.type;
@@ -1572,7 +1575,8 @@ function visSkaermLogForKlub(dbName) {
 const SKAERM_SLAGS = [
     { navn: 'frys', tekst: 'Frosset', typer: ['frys', 'browser-genstart'] },
     { navn: 'net', tekst: 'Netværk og WiFi', typer: ['net', 'net-wifi', 'net-server', 'net-ipv6', 'net-genstart', 'net-kort'] },
-    { navn: 'genstart', tekst: 'Genstart, strøm og væk', typer: ['genstart', 'vaek', 'pc-brat', 'pc-panik', 'pc-knap', 'pc-genstart'] }
+    { navn: 'genstart', tekst: 'Genstart, strøm og væk', typer: ['genstart', 'vaek', 'pc-brat', 'pc-panik', 'pc-knap', 'pc-genstart'] },
+    { navn: 'opd', tekst: 'Opdatering', typer: ['opd-fejl', 'opd-tilbage'] }
 ];
 
 function skaermSlags(h) {
