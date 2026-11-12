@@ -233,3 +233,8 @@ const gracefulShutdown = async (signal) => {
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
+
+// Uhåndterede fejl logges i stedet for at lade processen dø stille (nr. 95)
+require('./config/procesNet').installer({
+    foerAfslut: () => require('./config/youtubeKvote').gem()
+});

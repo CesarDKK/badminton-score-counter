@@ -477,6 +477,16 @@ function onRestoreFileChosen(e) {
     }
 }
 
+// Svaret på en upload. Er filen for stor til nginx eller Cloudflare, svarer de
+// 413 med en HTML-side, ikke JSON — før blev det til en rå "Unexpected token"-fejl
+// (nr. 83). Backenden selv svarer 413 med JSON og det rigtige loft.
+async function uploadSvar(res) {
+    let data = {};
+    try { data = await res.json(); } catch { /* ikke JSON */ }
+    if (res.status === 413 && !data.error) data.error = 'Filen er for stor til at blive sendt (højst 100 MB)';
+    return data;
+}
+
 async function doRestore() {
     if (!restoreFile) return;
     if (!await showConfirmTekst('Gendan fra fil?',
@@ -496,7 +506,7 @@ async function doRestore() {
             headers: { 'Authorization': `Bearer ${token}` },
             body: form
         });
-        const data = await res.json();
+        const data = await uploadSvar(res);
         if (!res.ok) throw new Error(data.error || res.statusText);
 
         visGendannelsesResultat(data);

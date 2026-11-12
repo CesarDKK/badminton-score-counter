@@ -476,7 +476,19 @@ router.put('/clubs/:id/admins/:adminId/permissions', superAdminAuth, async (req,
 const backupFs = require('fs');
 const backupPath = require('path');
 const crypto = require('crypto');
-const backupMulter = require('multer')({ storage: require('multer').memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
+const SUPER_UPLOAD_MAKS_MB = 100;
+const backupMulter = require('multer')({ storage: require('multer').memoryStorage(), limits: { fileSize: SUPER_UPLOAD_MAKS_MB * 1024 * 1024 } });
+// Modtag backup/bundle med en forståelig fejl, hvis filen er for stor — den
+// fælles fejlhåndtering ville skrive "Maksimum 10MB" (billedernes loft) (nr. 83)
+const modtagStorFil = (felt) => {
+    const mw = bevarKlub(backupMulter.single(felt));
+    return (req, res, next) => mw(req, res, (err) => {
+        if (err && err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(413).json({ error: `Filen er for stor (højst ${SUPER_UPLOAD_MAKS_MB} MB)` });
+        }
+        next(err);
+    });
+};
 const { lavBackup, validerBackup, gendanBackup, BackupFejl } = require('../config/klubBackup');
 const autoBackup = require('../config/autoBackup');
 
@@ -507,7 +519,7 @@ router.get('/clubs/:id/backup', superAdminAuth, async (req, res, next) => {
 // POST /api/super-admin/clubs/:id/restore — restore backup for one club.
 // Først tages en "før gendannelse"-backup (som på klubbens egen side), så
 // gendannelsen kan fortrydes; fejler den, gendannes der ikke.
-router.post('/clubs/:id/restore', superAdminAuth, bevarKlub(backupMulter.single('backup')), async (req, res, next) => {
+router.post('/clubs/:id/restore', superAdminAuth, modtagStorFil('backup'), async (req, res, next) => {
     let backup;
     try {
         backup = JSON.parse(req.file.buffer.toString('utf8'));
@@ -876,7 +888,7 @@ router.get('/logos/seed-bundle', superAdminAuth, async (req, res, next) => {
 // POST /api/super-admin/logos/import-bundle — indlæs en seed-bundle-zip live i biblioteket.
 // Upsert pr. club_name: overskriv billede+aliasser for eksisterende, INSERT (seed_key=NULL)
 // for nye. Format: <club_name>.<ext>-filer + valgfri aliases.json ({filnavn: aliasser}).
-router.post('/logos/import-bundle', superAdminAuth, bevarKlub(backupMulter.single('bundle')), async (req, res, next) => {
+router.post('/logos/import-bundle', superAdminAuth, modtagStorFil('bundle'), async (req, res, next) => {
     try {
         if (!req.file || !req.file.buffer) {
             return res.status(400).json({ error: 'Zip-fil er påkrævet (felt: bundle)' });

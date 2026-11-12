@@ -16,8 +16,12 @@ const emitter = new EventEmitter();
 // Hver TV/admin/oversigt-skaerm er en lytter — fjern default-graensen paa 10
 emitter.setMaxListeners(0);
 
+// Nøglen får præfikset "klub:", så den aldrig kan blive en af EventEmitterens
+// særlige hændelser. Uden præfiks hed en klub med subdomænet "error" også
+// "error" — og emit('error') uden lytter kaster: den første pointgemning fra
+// klubben væltede hele backenden for alle klubber (nr. 95).
 function tenantKey(req) {
-    return req.clubDbName || 'direct';
+    return `klub:${req.clubDbName || 'direct'}`;
 }
 
 // type: 'update' (PUT) eller 'reset' (DELETE / Ryd bane)
@@ -51,4 +55,4 @@ function subscribeGameStateChanges(req, handler) {
     return () => emitter.removeListener(key, handler);
 }
 
-module.exports = { publishGameStateChange, publishConfigChange, publishHoldkampChange, subscribeGameStateChanges };
+module.exports = { publishGameStateChange, publishConfigChange, publishHoldkampChange, subscribeGameStateChanges, tenantKey };

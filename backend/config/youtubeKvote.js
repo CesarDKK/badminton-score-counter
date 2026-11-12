@@ -128,7 +128,23 @@ async function gem() {
         [NOEGLE, JSON.stringify(_data)]);
 }
 
-async function indlaes() {
+// De gemte tal læses kun én gang. Bagefter er tallene i hukommelsen de
+// rigtige (de er de gemte plus alt talt siden) — læses de igen, lægges de
+// oven i sig selv. Det skete, når opstarten måtte prøve igen (databasen var
+// længe om at komme op): hvert forsøg fordoblede dagens forbrug (nr. 72).
+// Kører to indlæsninger samtidig (opstarten og en gemning lige efter et kald),
+// venter den anden på den første. Fejler læsningen, kan den prøves igen.
+let _indlaesning = null;
+
+function indlaes() {
+    if (_indlaest) return Promise.resolve();
+    if (!_indlaesning) {
+        _indlaesning = laesGemte().finally(() => { _indlaesning = null; });
+    }
+    return _indlaesning;
+}
+
+async function laesGemte() {
     const masterDb = require('./masterDatabase');
     const rows = await masterDb.query('SELECT vaerdi FROM indstillinger WHERE noegle = ?', [NOEGLE]);
     let gemt = null;
@@ -151,6 +167,7 @@ async function indlaes() {
 function nulstil({ gem = true } = {}) {
     _data = { dage: {}, graense: STANDARD_GRAENSE };
     _indlaest = false;
+    _indlaesning = null;
     _gemmes = gem;
     clearTimeout(_gemTimer);
     _gemTimer = null;

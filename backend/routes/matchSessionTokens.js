@@ -5,6 +5,20 @@ const QRCode = require('qrcode');
 const { query, queryOne } = require('../config/database');
 const { afvisQrKode } = require('../middleware/qrSession');
 
+// http eller https i QR-linket (nr. 96). Bag Cloudflare taler nginx kun http
+// med backenden, så X-Forwarded-Proto er altid "http" — QR-koden pegede derfor
+// på http://, og telefonen tog en omvej over Cloudflares omdirigering (og fik
+// ingen wake lock, før den var på https). Under APP_DOMAIN (badmintonapp.dk og
+// klubbernes subdomæner) er det altid https. Andre steder (lokal installation,
+// localhost, en hal-PC på en IP-adresse) bruges den protokol, forbindelsen har.
+function linkProtokol(req) {
+    const domaene = String(process.env.APP_DOMAIN || '').toLowerCase();
+    const vaert = String(req.hostname || '').toLowerCase();
+    if (domaene && (vaert === domaene || vaert.endsWith('.' + domaene))) return 'https';
+    const p = String(req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0].trim();
+    return p === 'https' ? 'https' : 'http';
+}
+
 // Henter den aktive match-session token for en bane, eller null hvis ingen findes.
 // Bruges i "resume"-mode hvor vi KUN vil vise QR hvis banen allerede kører i
 // QR-selvbetjening — vi opretter ikke en ny token (så officielle holdkamp-/
@@ -107,8 +121,7 @@ router.get('/:courtId', async (req, res) => {
 
         if (!token) return res.status(404).end();
 
-        const protocol = req.headers['x-forwarded-proto'] || 'https';
-        const url = `${protocol}://${req.hostname}/t/${token}`;
+        const url = `${linkProtokol(req)}://${req.hostname}/t/${token}`;
 
         const buffer = await QRCode.toBuffer(url, {
             width: 220,
@@ -136,3 +149,4 @@ module.exports.invalidateCourtTokens = invalidateCourtTokens;
 module.exports.getActiveToken = getActiveToken;
 module.exports.urKodeFor = urKodeFor;
 module.exports.nyUrKode = nyUrKode;
+module.exports.linkProtokol = linkProtokol;
