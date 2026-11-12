@@ -2949,6 +2949,14 @@ async function loadLivestream() {
 async function refreshLivestreamStatus() {
     if (!_livestream) return;
     try { _livestream = await api.getLivestream(); } catch { return; }
+    // En bane, der har fået eller mistet sit kamera (TV-PC'en satte det selv på),
+    // tegnes forfra: den klappes ud eller sammen. Ellers kun kortets kant.
+    document.querySelectorAll('.ls-bane').forEach(el => {
+        const b = _livestream.baner.find(x => x.bane === Number(el.dataset.bane));
+        if (!b) return;
+        if (el.classList.contains('ls-bane--tom') !== livestreamBaneTom(b)) el.outerHTML = livestreamBaneHtml(b);
+        else el.dataset.tilstand = livestreamTilstand(b.bane);
+    });
     // Kun statusserne — felterne, admin er i gang med at udfylde, må ikke ryddes
     document.querySelectorAll('.ls-status').forEach(el => {
         el.innerHTML = livestreamStatusHtml(Number(el.dataset.bane));
@@ -3007,7 +3015,20 @@ function livestreamPcStatusHtml(pc, bane) {
         const b = _livestream.baner.find(x => x.bane === bane);
         return `<span class="maerke maerke--igang">● Sender</span> <span class="tekst-daempet">siden kl. ${siden} · ${kamera}${livestreamFormatTekst(s.format)}${s.koder === 'x264' ? ' · kodet på CPU\'en' : ''}${b && b.lyd ? (s.mikrofon ? ' · med lyd' : ' · uden lyd (ingen mikrofon i kameraet)') : ''}</span>`;
     }
-    return `<span class="tekst-daempet">${escapeHtml(LS_GRUND[s.grund] || 'Klar')} · ${kamera}</span>`;
+    // "Klar — venter på en kamp" → mærket "Klar" + resten; andre grunde i gult
+    const [hoved, rest] = (LS_GRUND[s.grund] || 'Klar').split(' — ');
+    return `<span class="maerke ${hoved === 'Klar' ? 'maerke--neutral' : 'maerke--afventer'}">${escapeHtml(hoved)}</span> <span class="tekst-daempet">${rest ? `${escapeHtml(rest)} · ` : ''}${kamera}</span>`;
+}
+
+// Banekortets tilstand (farven på kortets venstre kant): ingen, afventer, fejl, klar, sender
+function livestreamTilstand(bane) {
+    const pc = (_livestream?.kameraer || []).find(k => k.bane === bane);
+    if (!pc) return 'ingen';
+    const s = pc.status;
+    if (!s || !s.online || !s.kamera) return 'afventer';
+    if (s.fejl) return 'fejl';
+    if (s.sender) return 'sender';
+    return LS_GRUND[s.grund] && !LS_GRUND[s.grund].startsWith('Klar') ? 'afventer' : 'klar';
 }
 
 // Fejlens detaljer fra TV-PC'en: det, kameraet selv siger, det kan, og ffmpegs
@@ -3392,23 +3413,64 @@ function renderLivestream() {
     const til = baner.filter(b => b.enabled).length;
     // Foldede kamera-bokse forbliver åbne, når siden tegnes igen efter "Gem"
     const aabne = new Set([...boks.querySelectorAll('.ls-kamera[open]')].map(d => d.closest('.ls-bane').dataset.bane));
-    const kameraValg = (bane) => {
-        const valgt = _livestream.kameraer.find(k => k.bane === bane);
-        return `<select class="admin-input admin-input--sm" onchange="saetLivestreamKamera(${bane}, this.value)">
-            <option value="">Intet kamera</option>
-            ${_livestream.kameraer.map(k => `<option value="${k.tokenId}"${valgt && valgt.tokenId === k.tokenId ? ' selected' : ''}>${escapeHtml(k.navn)}${k.bane && k.bane !== bane ? ` (bane ${k.bane})` : ''}</option>`).join('')}
-        </select>`;
-    };
+    const raekker = baner.map(b => livestreamBaneHtml(b, aabne.has(String(b.bane)))).join('');
+    const yt = livestreamYoutubeVirker();
+
+    const efter = _livestream.indstillinger.efterMin;
+    boks.innerHTML = `
+        <p class="tekst-mindre tekst-daempet ls-intro">
+            Et USB-kamera i TV-PC'en sender banen til YouTube. Holdkampe sendes af sig selv — uden afbrydelser, fra første delkamp
+            sættes på banen, til ${efter ? `${efter} ${efter === 1 ? 'minut' : 'minutter'} efter` : 'lige når'} den sidste delkamp er afgjort.
+            Andre kampe startes på tabletten (Indstillinger → Start livestream) — én kamp ad gangen — eller her med "Send hele dagen".
+            Badmintonplanner-kampe sendes ikke. ${yt
+                ? 'Udsendelserne og stream-nøglerne oprettes af sig selv på klubbens YouTube-kanal.'
+                : 'Stream-nøglen finder du i YouTube Studio → Gå live → Stream. Én nøgle pr. bane.'}
+        </p>
+        ${livestreamYoutubeHtml()}
+        ${livestreamIndstillingerHtml()}
+        <p class="tekst-mindre ls-intro">${til ? `${til} ${til === 1 ? 'bane' : 'baner'} slået til` : 'Ingen baner slået til endnu'}</p>
+        <div class="ls-baner">${raekker}</div>`;
+}
+
+function livestreamKameraValg(bane) {
+    const valgt = _livestream.kameraer.find(k => k.bane === bane);
+    return `<select class="admin-input admin-input--sm" aria-label="Kamera til bane ${bane}" onchange="saetLivestreamKamera(${bane}, this.value)">
+        <option value="">Intet kamera</option>
+        ${_livestream.kameraer.map(k => `<option value="${k.tokenId}"${valgt && valgt.tokenId === k.tokenId ? ' selected' : ''}>${escapeHtml(k.navn)}${k.bane && k.bane !== bane ? ` (bane ${k.bane})` : ''}</option>`).join('')}
+    </select>`;
+}
+
+// En bane uden kamera, der ikke er slået til og ikke har en egen nøgle, har
+// intet at indstille — den står som én linje, til der vælges et kamera
+function livestreamBaneTom(b) {
+    return !_livestream.kameraer.some(k => k.bane === b.bane) && !b.enabled && !b.noegle;
+}
+
+// Ét kort pr. bane: top (navn + status), felterne, nøglen, og en bund med
+// kameraets indstillinger og "Send hele dagen". Kanten farves efter tilstanden.
+function livestreamBaneHtml(b, kameraAaben = false) {
+    if (livestreamBaneTom(b)) {
+        return `
+        <div class="ls-bane ls-bane--tom" data-bane="${b.bane}" data-tilstand="ingen">
+            <div class="ls-bane-top">
+                <strong class="ls-bane-navn">Bane ${b.bane}</strong>
+                <span class="ls-status" data-bane="${b.bane}">${livestreamStatusHtml(b.bane)}</span>
+                <span class="ls-tom-valg">${livestreamKameraValg(b.bane)}</span>
+            </div>
+            <div class="ls-besked tekst-mindre" hidden></div>
+        </div>`;
+    }
+    const mangler = livestreamMangler(b), laast = !!mangler && !b.enabled;
     // Med YouTube-kanalen forbundet er en indtastet nøgle kun reserve
     const yt = livestreamYoutubeVirker();
-    const raekker = baner.map(b => { const mangler = livestreamMangler(b), laast = !!mangler && !b.enabled; return `
-        <div class="ls-bane" data-bane="${b.bane}">
+    return `
+        <div class="ls-bane" data-bane="${b.bane}" data-tilstand="${livestreamTilstand(b.bane)}">
             <div class="ls-bane-top">
-                <strong>Bane ${b.bane}</strong>
+                <strong class="ls-bane-navn">Bane ${b.bane}</strong>
                 <span class="ls-status" data-bane="${b.bane}">${livestreamStatusHtml(b.bane)}</span>
             </div>
             <div class="ls-felter">
-                <label><span class="felt-etiket">Kamera (TV-PC)</span>${kameraValg(b.bane)}</label>
+                <label><span class="felt-etiket">Kamera (TV-PC)</span>${livestreamKameraValg(b.bane)}</label>
                 <label><span class="felt-etiket">${yt ? 'Egen stream-nøgle (reserve)' : 'Stream-nøgle'}</span>
                     <input type="password" class="admin-input admin-input--sm ls-noegle" autocomplete="off" spellcheck="false"
                         oninput="livestreamNoegleIndtastet(this)"
@@ -3426,7 +3488,9 @@ function renderLivestream() {
                        <button class="btn-danger btn-sm" onclick="fjernLivestreamNoegle(${b.bane})">Fjern nøglen</button>`
                     : yt ? '' : `<span class="maerke maerke--afventer">Ingen nøgle</span>`}
             </div>
-            <details class="ls-kamera"${aabne.has(String(b.bane)) ? ' open' : ''}>
+            <div class="ls-besked tekst-mindre" hidden></div>
+            <div class="ls-bund">
+            <details class="ls-kamera"${kameraAaben ? ' open' : ''}>
                 <summary class="tekst-mindre">Kameraet på banen${livestreamKameraResume(b)}</summary>
                 <div class="ls-kamera-felter">
                     <label class="ls-flueben"><input type="checkbox" class="ls-vend"${b.vend ? ' checked' : ''}> Vend billedet 180°</label>
@@ -3448,23 +3512,8 @@ function renderLivestream() {
                     normalt skarpest. "Banens sponsor" er bane-bannerne fra Sponsorer — de skifter som på TV'et. Gem med knappen ovenfor.</p>
             </details>
             <div class="ls-start" data-bane="${b.bane}">${livestreamStartHtml(b)}</div>
-            <div class="ls-besked tekst-mindre" hidden></div>
-        </div>`; }).join('');
-
-    const efter = _livestream.indstillinger.efterMin;
-    boks.innerHTML = `
-        <p class="tekst-mindre tekst-daempet ls-intro">
-            Et USB-kamera i TV-PC'en sender banen til YouTube. Holdkampe sendes af sig selv — uden afbrydelser, fra første delkamp
-            sættes på banen, til ${efter ? `${efter} ${efter === 1 ? 'minut' : 'minutter'} efter` : 'lige når'} den sidste delkamp er afgjort.
-            Andre kampe startes på tabletten (Indstillinger → Start livestream) — én kamp ad gangen — eller her med "Send hele dagen".
-            Badmintonplanner-kampe sendes ikke. ${yt
-                ? 'Udsendelserne og stream-nøglerne oprettes af sig selv på klubbens YouTube-kanal.'
-                : 'Stream-nøglen finder du i YouTube Studio → Gå live → Stream. Én nøgle pr. bane.'}
-        </p>
-        ${livestreamYoutubeHtml()}
-        ${livestreamIndstillingerHtml()}
-        <p class="tekst-mindre ls-intro">${til ? `${til} ${til === 1 ? 'bane' : 'baner'} slået til` : 'Ingen baner slået til endnu'}</p>
-        ${raekker}`;
+            </div>
+        </div>`;
 }
 
 // Har klubben et logo til streamen (uploadet eller fra logo-databasen)?
