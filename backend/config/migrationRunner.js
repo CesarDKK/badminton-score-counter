@@ -230,6 +230,14 @@ async function runMigrationsForDatabase(dbName) {
     return husk(dbName, count, fejl);
 }
 
+// Alle klubber — også de deaktiverede. Før fik kun de aktive migrationerne,
+// så en klub, der blev genaktiveret, stod med det gamle skema, til backenden
+// tilfældigvis blev genstartet igen (nr. 84). En deaktiveret klub beholder
+// sin database (kun "Slet klub" dropper den), så den kan migreres som de andre.
+function klubberTilMigration(masterDb) {
+    return masterDb.query('SELECT db_name, is_active FROM clubs ORDER BY db_name');
+}
+
 async function runMigrationsForAllDatabases() {
     const defaultDb = process.env.DB_NAME || 'badminton_counter';
     console.log('⏳ Kører database migrationer...');
@@ -237,13 +245,10 @@ async function runMigrationsForAllDatabases() {
     // Standard database — kan den ikke nås, er databasen ikke klar: opstarten prøver igen
     await runMigrationsForDatabase(defaultDb);
 
-    // Multi-tenant: alle aktive klub-databaser
+    // Multi-tenant: alle klub-databaser
     let clubs = [];
     try {
-        const masterDb = require('./masterDatabase');
-        clubs = await masterDb.query(
-            'SELECT db_name, is_active FROM clubs WHERE is_active = TRUE ORDER BY db_name'
-        );
+        clubs = await klubberTilMigration(require('./masterDatabase'));
     } catch (error) {
         if (error.code !== 'ER_NO_SUCH_TABLE' && !error.message.includes("doesn't exist")) {
             console.error('⚠ Kunne ikke hente klub-liste til migrationer:', error.message);
@@ -270,6 +275,6 @@ async function runMigrationsForAllDatabases() {
 }
 
 module.exports = {
-    runMigrationsForDatabase, runMigrationsForAllDatabases, splitStatements,
+    runMigrationsForDatabase, runMigrationsForAllDatabases, splitStatements, klubberTilMigration,
     status, statusFor, _nulstilStatus
 };

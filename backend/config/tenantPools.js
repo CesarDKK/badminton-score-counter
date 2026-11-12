@@ -19,7 +19,22 @@ function utcSession(pool) {
 }
 
 function createPool(dbName) {
-    return utcSession(mysql.createPool({
+    return utcSession(mysql.createPool(poolIndstillinger(dbName)));
+}
+
+// Ledige forbindelser (nr. 85): før holdt hver klubs pulje på alle de
+// forbindelser, den nogensinde havde åbnet, så summen over klubberne kunne nå
+// MySQL's 151 efter en travl dag — og så fik en ny klub "Too many connections".
+// mysql2 rydder kun op, når maxIdle er mindre end connectionLimit (som standard
+// er de ens, og så kører oprydningen aldrig). Oprydningen lukker så hver
+// forbindelse, der har været ledig i idleTimeout (DB_POOL_IDLE_MS, 60 s), og
+// straks dem over maxIdle. maxIdle sættes derfor til connectionLimit − 1: under
+// en turnering beholdes forbindelserne og genbruges som før, og når klubben har
+// været stille i et minut, er puljen tom. Første forespørgsel bagefter åbner
+// en ny forbindelse (et par ms).
+function poolIndstillinger(dbName) {
+    const connectionLimit = Number(process.env.DB_POOL_SIZE) || 15;
+    return {
         host: process.env.DB_HOST || 'localhost',
         port: process.env.DB_PORT || 3306,
         user: process.env.DB_USER || 'badminton_user',
@@ -31,16 +46,18 @@ function createPool(dbName) {
         // hik vokser til synlige timeouts på alle skærme.
         // NB: MySQL 8 tillader 151 forbindelser i alt, og puljen er PER klub-database
         // — 15 × antal aktive klubber (+ fodbold-appens 10) skal holdes under den grænse.
-        connectionLimit: Number(process.env.DB_POOL_SIZE) || 15,
+        connectionLimit,
         // Bundet kø (var 0 = ubegrænset). Med ubegrænset kø hobede requests sig op
         // under pres, og klienterne løb i timeout efter at have ventet i lang tid.
         // Med en grænse fejler de overskydende straks — skærmene prøver bare igen
         // ved næste poll i stedet for at trække serveren længere ned.
         queueLimit: Number(process.env.DB_QUEUE_LIMIT) || 60,
+        maxIdle: Math.max(0, connectionLimit - 1),
+        idleTimeout: Number(process.env.DB_POOL_IDLE_MS) || 60000,
         enableKeepAlive: true,
         keepAliveInitialDelay: 0,
         timezone: '+00:00'   // Fortolk TIMESTAMP/DATETIME som UTC — undgår +2t fejl i sommertid
-    }));
+    };
 }
 
 // Returnerer pool for den aktuelle tenant (eller default hvis ingen tenant)
@@ -87,4 +104,4 @@ function currentTenant() {
     return tenantStorage.getStore() || 'direct';
 }
 
-module.exports = { getPool, runWithTenant, bevarKlub, closeAll, currentTenant, utcSession };
+module.exports = { getPool, runWithTenant, bevarKlub, closeAll, currentTenant, utcSession, poolIndstillinger };

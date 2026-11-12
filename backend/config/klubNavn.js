@@ -21,7 +21,10 @@ const systemDatabaser = () => new Set([
 // (middleware/tenant.js og nginx.conf), og navne, der er optaget som mappe/nøgle
 const RESERVEREDE = new Set([
     'app', 'api', 'admin', 'www', 'mail', 'smtp', 'ftp', 'statistik', 'planner', 'live',
-    'localhost', 'local', 'direct', 'central-logos', 'backup', 'backups', 'uploads'
+    'localhost', 'local', 'direct', 'central-logos', 'backup', 'backups', 'uploads',
+    // Navne, der har en særlig betydning for Node's EventEmitter (nr. 95). Nøglerne
+    // har præfiks nu, men en klub med de navne giver kun forvirring i logs og kode
+    'error', 'newlistener', 'removelistener'
 ]);
 
 // Et DNS-navn: små bogstaver, tal og bindestreg, ikke bindestreg først eller sidst
