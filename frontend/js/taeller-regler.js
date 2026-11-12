@@ -319,10 +319,20 @@
         return { ok: true, haendelser: [] };
     }
 
-    function fortryd(st) {
+    // Kun serveren er valgt (ingen point endnu) — så fortryder Fortryd valget
+    function kunServerValgt(st) {
         const serverValgt = st.isDoubles ? st.servingTeam : st.servingPlayer;
         const ingenPoint = !st.player1.score && !st.player2.score && !st.player1.games && !st.player2.games;
-        if (serverValgt && ingenPoint) {
+        return !!(serverValgt && ingenPoint);
+    }
+
+    // Har Fortryd noget at gøre? Tabletten skjuler knappen, når svaret er nej
+    function kanFortryde(st) {
+        return kunServerValgt(st) || !!(st.history && st.history.length > 0);
+    }
+
+    function fortryd(st) {
+        if (kunServerValgt(st)) {
             // Kun serveren er valgt: valget fortrydes
             st.servingPlayer = null;
             st.initialServer = null;
@@ -381,6 +391,6 @@
         HISTORIK_MAKS, PAUSE_11, PAUSE_SAET,
         saetGraense, midtpunkt, erSaetAfgjort, boldpoint,
         nyKamp, vaelgServer, startKamp, point, afslutPause, nytSaet, skiftSide, skiftSider,
-        bytPladser, fortryd, signatur
+        bytPladser, fortryd, kanFortryde, signatur
     };
 });
