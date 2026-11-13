@@ -52,6 +52,7 @@ export function lavKampprogram(projekt, { fastKamplaengde = false, behold = fals
     let bedst = null;
     if (behold) grund = 'behold';
     else if (fastKamplaengde) grund = 'fast';
+    else if (projekt.opsaetning.kamplaengdeValgt) grund = 'valgt';
     else if ((projekt.laast || []).length) grund = 'laast';
     else {
         bedst = bedsteKamplaengde(sammenlignKamplaengder(medMiddelvej(projekt, () => false)));
@@ -246,7 +247,7 @@ function afproev(projekt, foer, g, aendring) {
     // Swiss i grupper kan gøre en anden kamplængde mulig (målt 2026-10-12: med grupperne gik 20 min op, hvor 25 min
     // var valgt uden dem) — så prøves de andre længder også; "Lav kampprogram" vælger kamplængden igen bagefter
     let andenLaengde = null;
-    if (aendring.pris === 'grupper') {
+    if (aendring.pris === 'grupper' && !projekt.opsaetning.kamplaengdeValgt) {
         for (const min of kandidatLaengder(p)) {
             if (min === p.opsaetning.slotMin) continue;
             const q = genberegnKampe(saetSlotMin(p, min));

@@ -126,6 +126,9 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
         turnering: { navn: model.turnering.navn, hal: model.turnering.hal, dage: alleDage },
         opsaetning: {
             slotMin: model.tpGitter.slotMin || 30,
+            // Brugeren har selv valgt kamplængde og pause: "Lav kampprogram" vælger dem så ikke om (Jesper 2026-11-13: "mit
+            // valg respekteres ikke" — 30 min blev hver gang til 20). false = planneren vælger ud fra sammenligningen.
+            kamplaengdeValgt: false,
             kampVarighed: 'minimum', // 'minimum' = reglementets minimumstid (som TP), 'slot' = et helt slot
             antiSamtidighed: false,  // HS/HD, DS/DD og MD i samme række ikke samtidig — fra som standard (Jesper 2026-09-08: gav rene double-spillere lange huller)
             maxVentetidMin: 90,      // Tjek advarer, når en spiller venter længere end dette mellem egne kampe

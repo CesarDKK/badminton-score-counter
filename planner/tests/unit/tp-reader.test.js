@@ -203,6 +203,19 @@ describe('tp-reader: syntetisk turnering', () => {
         assert.equal(swiss[2].tpTid, null);
     });
 
+    test('Swiss Ladder uden lodtrækning i TP: 1. runde laves også som pladsholdere (Lyngby U9/U11 2026)', () => {
+        const t = syntetisk();
+        const rows = t.hent('PlayerMatch');
+        for (const r of rows) if (r.draw === 104 && r.roundnr === 1) { r.van1 = 0; r.van2 = 0; }
+        rows.push({ draw: 104, planning: 3001, entry: null, van1: 0, van2: 0, roundnr: 1, plandate: TOM, link: null, matchnr: 0, duration: 0 });
+        const m = laesTP(t, { filnavn: 'test.tp', nu: d('2026-09-07T12:00:00Z') });
+        const swiss = m.kampe.filter((k) => k.fase === 'swiss');
+        assert.deepEqual(swiss.map((k) => [k.id, k.runde]), [['d104:r1:1', 1], ['d104:r2:1', 2], ['d104:r3:1', 3], ['d104:r4:1', 4]]);
+        assert.deepEqual(swiss[0].muligeSpillere, ['p1', 'p2', 'p3']);
+        assert.deepEqual(swiss[0].afhaengerAf, []);
+        assert.deepEqual(swiss[1].afhaengerAf, ['d104:r1:1']);
+    });
+
     test('TP-gitter: slotlængde, dage, baner og halve baner', () => {
         assert.equal(model.tpGitter.slotMin, 30);
         assert.deepEqual(model.tpGitter.dage, [

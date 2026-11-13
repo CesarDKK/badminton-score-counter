@@ -727,3 +727,13 @@ kun, når turneringen har flere dage.
 
 Afprøvet lokalt på Lyngby U9/U11 med alt som Swiss: lørdagens 197 kampe stod præcis, hvor de stod, og 134 af
 søndagens 180 kampe blev flyttet.
+
+## Kamplængden respekteres, og Swiss uden lodtrækning (2026-11-13)
+
+- **Eget valg af kamplængde.** "Lav kampprogram" valgte altid kamplængde og pause ud fra sammenligningen, så en
+  kamplængde sat til 30 min blev til 20 ved hver beregning (Jesper: "mit valg respekteres ikke"). Sætter brugeren
+  kamplængden eller en pause selv (feltet, "Brug …" i anbefalingen/sammenligningen), gemmes
+  `opsaetning.kamplaengdeValgt = true`, og autopiloten beholder valget (`valg.grund = 'valgt'`), også når Swiss deles
+  i grupper. "Lad planneren vælge" sætter den tilbage til automatisk.
+- **Swiss Ladder uden lodtrækning.** Har TP endnu ikke trukket 1. runde (alle `van1`/`van2` er 0), blev runden
+  sprunget over, og kun runde 2–n kom med (Lyngby U9/U11 BCD 2026). Nu laves 1. runde også som pladsholdere.
