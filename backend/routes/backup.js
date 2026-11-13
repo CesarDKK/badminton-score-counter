@@ -5,7 +5,7 @@ const db = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
 const { requireFuldAdgang } = require('../middleware/pagePermission');
 const { klubMappe } = require('../config/sponsorFiler');
-const { lavBackup, validerBackup, gendanBackup, BackupFejl } = require('../config/klubBackup');
+const { lavBackup, validerBackup, gendanBackup, BackupFejl, backupFraAndenKlub } = require('../config/klubBackup');
 const autoBackup = require('../config/autoBackup');
 const { bevarKlub, currentTenant } = require('../config/tenantPools');
 
@@ -69,6 +69,15 @@ async function gendanOgSvar(req, res, next, backup) {
     }
     try {
         const klub = await aktuelKlub(req);
+        // En backup fra en anden klub gendannes ikke her (nr. 47): det er næsten
+        // altid den forkerte fil. Super-admin kan flytte data mellem klubber.
+        const fra = backupFraAndenKlub(backup, klub);
+        if (fra) {
+            return res.status(409).json({
+                code: 'anden_klub',
+                error: `Backuppen er fra en anden klub (${fra}) og kan ikke gendannes her. Intet er ændret. Skal data flyttes mellem klubber, kan super-admin gøre det.`
+            });
+        }
         const resultat = await medForbindelse(async (conn) => {
             const foer = klub ? await autoBackup.tagBackup(conn, klub, 'foer-gendannelse') : null;
             // Demoen: kun filer, databasen bruger, og ryd dem, den ikke bruger mere
@@ -85,8 +94,12 @@ async function gendanOgSvar(req, res, next, backup) {
 // GET /api/backup — hent en backup af klubbens data som fil
 router.get('/', authMiddleware, requireFuldAdgang, async (req, res, next) => {
     try {
+        const klub = await aktuelKlub(req);
         const backup = await medForbindelse(conn =>
-            lavBackup(conn, { mappe: klubMappe(req), clubSubdomain: req.clubSubdomain || null }));
+            lavBackup(conn, {
+                mappe: klubMappe(req), clubSubdomain: req.clubSubdomain || null,
+                ...(klub ? { clubName: klub.name, clubDbName: klub.db_name } : {})
+            }));
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Content-Disposition', `attachment; filename="backup_${req.clubSubdomain || 'lokal'}_${tidsstempel()}.json"`);
         res.send(JSON.stringify(backup, null, 2));

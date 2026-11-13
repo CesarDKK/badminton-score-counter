@@ -400,7 +400,7 @@ async function loadAutoBackups() {
         `Der tages automatisk en backup hver mandag kl. 02.00, og de ${data.behold} nyeste gemmes.`
         + (naeste ? ` Næste: ${naeste}.` : '');
     document.getElementById('restoreAdvarsel').textContent =
-        'Gendannelse overskriver alle nuværende data. Lige før gemmes en backup af det nuværende ("Før gendannelse"), så det kan fortrydes.';
+        'Gendannelse overskriver alle nuværende data. Lige før gemmes en backup af det nuværende ("Før gendannelse"), så det kan fortrydes. Adgangslinks og admin-logins røres ikke.';
 
     const liste = document.getElementById('autoBackupList');
     liste.innerHTML = '';
@@ -431,7 +431,7 @@ async function loadAutoBackups() {
 async function gendanAutoBackup(b) {
     const ok = await showConfirmTekst(
         'Gendan backup?',
-        `Alle klubbens nuværende data erstattes med backuppen fra ${backupTidspunkt(b.tidspunkt).toLowerCase()}. Skriv GENDAN for at fortsætte.`,
+        `Alle klubbens nuværende data erstattes med backuppen fra ${backupTidspunkt(b.tidspunkt).toLowerCase()} (adgangslinks og admin-logins bevares). Skriv GENDAN for at fortsætte.`,
         'GENDAN',
         'Gendan'
     );
@@ -490,7 +490,7 @@ async function uploadSvar(res) {
 async function doRestore() {
     if (!restoreFile) return;
     if (!await showConfirmTekst('Gendan fra fil?',
-        `Alle klubbens nuværende data erstattes med indholdet af ${restoreFile.name}. Skriv GENDAN for at fortsætte.`,
+        `Alle klubbens nuværende data erstattes med indholdet af ${restoreFile.name} (adgangslinks og admin-logins bevares). Skriv GENDAN for at fortsætte.`,
         'GENDAN', 'Gendan')) return;
 
     const btn = document.getElementById('restoreBtn');

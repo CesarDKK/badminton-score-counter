@@ -2119,14 +2119,21 @@ async function setTournamentPlayerLogo(playerName) {
     });
 }
 
+// "Holdkampen Hold A – Hold B" (nr. 46: bekræftelser siger, hvad der rammes)
+function holdkampBetegnelse(id) {
+    const tm = sidsteHoldkampe.find(t => t.id === id);
+    return tm ? `Holdkampen ${tm.team1_name} – ${tm.team2_name}` : 'Holdkampen';
+}
+
 function finishHoldkamp(id) {
     const tm = sidsteHoldkampe.find(t => t.id === id);
     const manglerGoldenSet = tm && HoldkampFormater.goldenSetStatus(tm).kraeves;
+    const navn = holdkampBetegnelse(id);
     showMessage(
         'Afslut holdkamp',
         manglerGoldenSet
-            ? 'Holdkampen står 3–3, og golden set er ikke spillet. Afsluttes den uden golden set, får hvert hold 2 stillingspoint (§ 18 stk. 3). Holdkampen kan ikke genoptages.'
-            : 'Holdkampen afsluttes og kan ikke genoptages.',
+            ? `${navn} står 3–3, og golden set er ikke spillet. Afsluttes den uden golden set, får hvert hold 2 stillingspoint (§ 18 stk. 3). Holdkampen kan ikke genoptages.`
+            : `${navn} afsluttes og kan ikke genoptages.`,
         [
             {
                 text: 'Afslut',
@@ -2147,8 +2154,8 @@ function finishHoldkamp(id) {
 
 function deleteHoldkamp(id) {
     showMessage(
-        'Slet Holdkamp',
-        'Holdkampen og al tilhørende data slettes permanent.',
+        'Slet holdkamp',
+        `${holdkampBetegnelse(id)} og alle dens delkampe og resultater slettes permanent. Det kan ikke fortrydes.`,
         [
             {
                 text: 'Slet',
@@ -2896,12 +2903,20 @@ async function showDeviceTokens() {
     loadDeviceTokens();
 }
 
+// De viste adgangslinks — dialogerne navngiver linket (nr. 44)
+let sidsteAdgangslinks = [];
+function adgangslinkNavn(id) {
+    const t = sidsteAdgangslinks.find(x => x.id === id);
+    return t ? `"${t.name}"` : 'dette link';
+}
+
 async function loadDeviceTokens() {
     const listEl = document.getElementById('deviceTokensList');
     listEl.innerHTML = '<p class="tom-besked tom-besked--lille">Indlæser...</p>';
 
     try {
         const tokens = await api.getDeviceTokens();
+        sidsteAdgangslinks = tokens || [];
         renderDeviceTokens(tokens);
         await loadSkaermLog();
         await refreshSkaermStatus();
@@ -2961,7 +2976,9 @@ async function showLivestream() {
     }, 10000);
 }
 
-async function loadLivestream() {
+// gemt: det, der lige er gemt (et banenummer eller 'faelles') — dets felter
+// tegnes fra serveren; alle andre ugemte ændringer bevares (nr. 43)
+async function loadLivestream(gemt = null) {
     try {
         _livestream = await api.getLivestream();
         _livestreamBaner = (await api.getSettings()).courtCount || 4;
@@ -2970,7 +2987,70 @@ async function loadLivestream() {
             `<p class="tom-besked tom-besked--lille">Kunne ikke hente livestream: ${escapeHtml(e.message)}</p>`;
         return;
     }
-    renderLivestream();
+    renderLivestream(gemt);
+}
+
+// ---- Ugemte ændringer (nr. 43) ----
+// Siden tegnes forfra efter hver "Gem", kameravalg, logo m.m. Før mistede de
+// andre baner (og de fælles indstillinger) det, admin havde ændret uden at gemme.
+// Nu huskes hvert ændret felt (forskelligt fra det, siden blev tegnet med) og
+// sættes ind igen; kortet viser "Ikke gemt", til det gemmes.
+const LS_UGEMTE_FELTER = '.ls-noegle, .ls-til, .ls-overlay, .ls-vend, .ls-spejl, .ls-autofokus, .ls-lyd, .ls-logo-valg, .ls-faelles select[data-felt]';
+
+function lsFeltAendret(f) {
+    if (f.type === 'checkbox') return f.checked !== f.defaultChecked;
+    if (f.tagName === 'SELECT') return [...f.options].some(o => o.selected !== o.defaultSelected);
+    return f.value !== f.defaultValue;
+}
+
+// "3:ls-vend" eller "faelles:oploesning"
+function lsFeltNoegle(f) {
+    const kort = f.closest('.ls-bane');
+    const navn = f.dataset.felt || [...f.classList].find(c => c.startsWith('ls-'));
+    return `${kort ? kort.dataset.bane : 'faelles'}:${navn}`;
+}
+
+// Ændrede felter under rod som Map(nøgle → værdi); undtagen: et banenummer
+// eller 'faelles', hvis ændringer lige er gemt
+function lsUgemteAendringer(rod, undtagen = null) {
+    const aendringer = new Map();
+    if (!rod) return aendringer;
+    rod.querySelectorAll(LS_UGEMTE_FELTER).forEach(f => {
+        if (!lsFeltAendret(f)) return;
+        const n = lsFeltNoegle(f);
+        if (undtagen !== null && n.startsWith(`${undtagen}:`)) return;
+        aendringer.set(n, f.type === 'checkbox' ? f.checked : f.value);
+    });
+    return aendringer;
+}
+
+function lsGenskabAendringer(rod, aendringer) {
+    if (!rod || !aendringer.size) return;
+    // DOM-rækkefølgen: nøglen før "slået til", så fluebenet, nøglen låser op, kan sættes bagefter
+    rod.querySelectorAll(LS_UGEMTE_FELTER).forEach(f => {
+        const n = lsFeltNoegle(f);
+        if (!aendringer.has(n)) return;
+        const v = aendringer.get(n);
+        if (f.type === 'checkbox') { if (!f.disabled) f.checked = v; }
+        else f.value = v;
+        if (f.classList.contains('ls-noegle')) livestreamNoegleIndtastet(f);
+        if (f.classList.contains('ls-lyd')) livestreamLydAendret(f);
+    });
+    if ([...aendringer.keys()].some(n => n.startsWith('faelles:'))) livestreamIndstillingAendret();
+}
+
+// "Ikke gemt" ved hvert kort (og de fælles indstillinger) med ugemte ændringer
+function lsMarkerUgemte() {
+    const boks = document.getElementById('livestreamBox');
+    if (!boks) return;
+    boks.querySelectorAll('.ls-bane, .ls-faelles').forEach(kort => {
+        const maerke = kort.querySelector('.ls-ugemt');
+        if (!maerke) return;
+        const felter = kort.classList.contains('ls-bane')
+            ? kort.querySelectorAll(LS_UGEMTE_FELTER)
+            : kort.querySelectorAll('select[data-felt]');
+        maerke.hidden = ![...felter].some(lsFeltAendret);
+    });
 }
 
 async function refreshLivestreamStatus() {
@@ -2981,8 +3061,15 @@ async function refreshLivestreamStatus() {
     document.querySelectorAll('.ls-bane').forEach(el => {
         const b = _livestream.baner.find(x => x.bane === Number(el.dataset.bane));
         if (!b) return;
-        if (el.classList.contains('ls-bane--tom') !== livestreamBaneTom(b)) el.outerHTML = livestreamBaneHtml(b);
-        else el.dataset.tilstand = livestreamTilstand(b.bane);
+        const tom = livestreamBaneTom(b);
+        // Et kort med ugemte ændringer klappes ikke sammen — ændringerne ville gå tabt
+        const ugemte = lsUgemteAendringer(el);
+        if (el.classList.contains('ls-bane--tom') !== tom && !(tom && ugemte.size)) {
+            const aaben = !!el.querySelector('.ls-kamera[open]');
+            el.outerHTML = livestreamBaneHtml(b, aaben);
+            const nyt = document.querySelector(`.ls-bane[data-bane="${b.bane}"]`);
+            lsGenskabAendringer(nyt, ugemte);
+        } else el.dataset.tilstand = livestreamTilstand(b.bane);
     });
     // Kun statusserne — felterne, admin er i gang med at udfylde, må ikke ryddes
     document.querySelectorAll('.ls-status').forEach(el => {
@@ -3040,7 +3127,7 @@ function livestreamPcStatusHtml(pc, bane) {
     if (s.sender) {
         const siden = s.senderSiden ? new Date(s.senderSiden).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' }) : '';
         const b = _livestream.baner.find(x => x.bane === bane);
-        return `<span class="maerke maerke--igang">● Sender</span> <span class="tekst-daempet">siden kl. ${siden} · ${kamera}${livestreamFormatTekst(s.format)}${s.koder === 'x264' ? ' · kodet på CPU\'en' : ''}${b && b.lyd ? (s.mikrofon ? ' · med lyd' : ' · uden lyd (ingen mikrofon i kameraet)') : ''}</span>`;
+        return `<span class="maerke maerke--igang">● Sender</span> <span class="tekst-daempet">siden kl. ${siden} · ${kamera}${livestreamFormatTekst(s.format)}${s.koder === 'x264' ? ' · kodes af processoren (uden grafikkortets hjælp)' : ''}${b && b.lyd ? (s.mikrofon ? ' · med lyd' : ' · uden lyd (ingen mikrofon i kameraet)') : ''}</span>`;
     }
     // "Klar — venter på en kamp" → mærket "Klar" + resten; andre grunde i gult
     const [hoved, rest] = (LS_GRUND[s.grund] || 'Klar').split(' — ');
@@ -3066,7 +3153,7 @@ function livestreamFejlDetaljer(s, bane) {
     if (!s.kameraFormater && !(s.fejllog && s.fejllog.length)) return '';
     const aaben = _lsFejlAabne.has(bane);
     const tekst = (s.kameraFormater ? `Kameraet kan: ${s.kameraFormater}\n` : '')
-        + (s.fejllog && s.fejllog.length ? `\nffmpeg:\n${s.fejllog.join('\n')}` : '');
+        + (s.fejllog && s.fejllog.length ? `\nKodningens sidste linjer:\n${s.fejllog.join('\n')}` : '');
     return ` <a href="#" onclick="visLivestreamFejl(${Number(bane)});return false;" class="haendelse-log-link">${aaben ? 'Skjul detaljer' : 'Vis detaljer'}</a>`
         + (aaben ? `<pre class="haendelse-log">${escapeHtml(tekst.trim())}</pre>` : '');
 }
@@ -3121,19 +3208,20 @@ function livestreamIndstillingerHtml() {
     const i = _livestream.indstillinger;
     return `
         <div class="ls-faelles">
-            <h3 class="ls-overskrift">Billede og overlay <span class="tekst-mindre tekst-daempet">— fælles for alle baner</span></h3>
+            <h3 class="ls-overskrift">Billede og scoreboard <span class="tekst-mindre tekst-daempet">— fælles for alle baner</span></h3>
             <div class="ls-faelles-felter">
                 <label><span class="felt-etiket">Opløsning</span>${livestreamValg('oploesning', i.oploesning)}</label>
                 <label><span class="felt-etiket">Billeder i sekundet</span>${livestreamValg('billeder', i.billeder)}</label>
                 <label><span class="felt-etiket">Kvalitet</span>${livestreamValg('kvalitet', i.kvalitet)}</label>
-                <label><span class="felt-etiket">Overlay: placering</span>${livestreamValg('placering', i.placering)}</label>
-                <label><span class="felt-etiket">Overlay: størrelse</span>${livestreamValg('stoerrelse', i.stoerrelse)}</label>
+                <label><span class="felt-etiket">Scoreboard: placering</span>${livestreamValg('placering', i.placering)}</label>
+                <label><span class="felt-etiket">Scoreboard: størrelse</span>${livestreamValg('stoerrelse', i.stoerrelse)}</label>
                 <label><span class="felt-etiket">Efter kampen</span>${livestreamValg('efterMin', i.efterMin)}</label>
             </div>
             <p class="tekst-mindre tekst-daempet ls-hjaelp" id="lsFaellesHjaelp">${livestreamFaellesHjaelp(i)}</p>
             ${livestreamKlubLogoHtml()}
             <div class="ls-faelles-gem">
-                <button class="btn-primary btn-sm" onclick="gemLivestreamIndstillinger()">Gem</button>
+                <button class="btn-primary btn-sm" onclick="gemLivestreamIndstillinger()">Gem fælles indstillinger</button>
+                <span class="maerke maerke--afventer ls-ugemt" hidden>Ikke gemt</span>
                 <span class="ls-besked tekst-mindre" id="lsFaellesBesked" hidden></span>
             </div>
         </div>`;
@@ -3316,7 +3404,7 @@ async function gemLivestreamIndstillinger() {
         livestreamFaellesBesked(e.message, true);
         return;
     }
-    await loadLivestream();
+    await loadLivestream('faelles');
     livestreamFaellesBesked('Gemt — TV-PC\'er, der sender nu, genstarter streamen med de nye indstillinger');
     setTimeout(() => livestreamFaellesBesked(''), 5000);
 }
@@ -3404,6 +3492,11 @@ function livestreamStartHtml(b) {
 
 // "Stop for i dag" (stop = true) eller "Send holdkampen igen"
 async function stopLivestreamHoldkamp(bane, stop) {
+    const b = _livestream && _livestream.baner.find(x => x.bane === bane);
+    const hold = b && b.holdkamp ? b.holdkamp.hold : '';
+    if (stop && !await BadmintonUtils.confirmDialog('Stop udsendelsen for i dag',
+        `Stop udsendelsen af ${hold ? `holdkampen ${hold}` : 'holdkampen'} på bane ${bane}? Den sendes ikke af sig selv igen før i morgen.`,
+        { danger: true, okText: 'Stop for i dag' })) return;
     try {
         await api.request(`/livestream/baner/${bane}/holdkamp-stop`, { method: stop ? 'POST' : 'DELETE' });
     } catch (e) {
@@ -3424,6 +3517,9 @@ async function startLivestreamHeleDagen(bane) {
 }
 
 async function stopLivestreamBane(bane) {
+    if (!await BadmintonUtils.confirmDialog('Stop udsendelsen',
+        `Stop udsendelsen fra bane ${bane}? Seerne på YouTube ser den slutte med det samme.`,
+        { danger: true, okText: 'Stop' })) return;
     try {
         await api.request(`/livestream/baner/${bane}/hele-dagen`, { method: 'DELETE' });
     } catch (e) {
@@ -3433,13 +3529,15 @@ async function stopLivestreamBane(bane) {
     await loadLivestream();
 }
 
-function renderLivestream() {
+function renderLivestream(gemt = null) {
     const boks = document.getElementById('livestreamBox');
     if (!boks || !_livestream) return;
     const baner = _livestream.baner.filter(b => b.bane <= _livestreamBaner);
     const til = baner.filter(b => b.enabled).length;
     // Foldede kamera-bokse forbliver åbne, når siden tegnes igen efter "Gem"
     const aabne = new Set([...boks.querySelectorAll('.ls-kamera[open]')].map(d => d.closest('.ls-bane').dataset.bane));
+    // … og det, der er ændret uden at blive gemt, står der stadig bagefter
+    const ugemte = lsUgemteAendringer(boks, gemt === null ? null : String(gemt));
     const raekker = baner.map(b => livestreamBaneHtml(b, aabne.has(String(b.bane)))).join('');
     const yt = livestreamYoutubeVirker();
 
@@ -3457,6 +3555,9 @@ function renderLivestream() {
         ${livestreamIndstillingerHtml()}
         <p class="tekst-mindre ls-intro">${til ? `${til} ${til === 1 ? 'bane' : 'baner'} slået til` : 'Ingen baner slået til endnu'}</p>
         <div class="ls-baner">${raekker}</div>`;
+    lsGenskabAendringer(boks, ugemte);
+    lsMarkerUgemte();
+    boks.oninput = boks.onchange = lsMarkerUgemte;
 }
 
 function livestreamKameraValg(bane) {
@@ -3505,7 +3606,8 @@ function livestreamBaneHtml(b, kameraAaben = false) {
                 <label class="ls-flueben ls-til-felt${laast ? ' ls-flueben--laast' : ''}"><input type="checkbox" class="ls-til"${b.enabled ? ' checked' : ''}${laast ? ' disabled' : ''}> Livestream slået til
                     <small class="ls-mangler"${laast ? '' : ' hidden'}>${escapeHtml(mangler)}</small></label>
                 <label class="ls-flueben"><input type="checkbox" class="ls-overlay"${b.overlay ? ' checked' : ''}> Navne og stilling i billedet</label>
-                <button class="btn-primary btn-sm" onclick="gemLivestream(${b.bane})">Gem</button>
+                <span class="raekke"><span class="maerke maerke--afventer ls-ugemt" hidden>Ikke gemt</span>
+                    <button class="btn-primary btn-sm" onclick="gemLivestream(${b.bane})">Gem bane ${b.bane}</button></span>
             </div>
             <div class="ls-noegle-status ls-yt" data-bane="${b.bane}">${livestreamYtBaneHtml(b)}</div>
             <div class="ls-noegle-status">
@@ -3536,7 +3638,7 @@ function livestreamBaneHtml(b, kameraAaben = false) {
                     slå lyden fra eller blokere streamen på grund af ophavsretten til musikken. Slå kun lyden til, når der ikke spilles musik.
                 </div>
                 <p class="tekst-mindre tekst-daempet ls-hjaelp">Autofokus er fra som standard: det "pumper", når spillerne løber, så fast fokus på lang afstand er
-                    normalt skarpest. "Banens sponsor" er bane-bannerne fra Sponsorer — de skifter som på TV'et. Gem med knappen ovenfor.</p>
+                    normalt skarpest. "Banens sponsor" er bane-bannerne fra Sponsorer — de skifter som på TV'et. Gem med "Gem bane ${b.bane}" ovenfor.</p>
             </details>
             <div class="ls-start" data-bane="${b.bane}">${livestreamStartHtml(b)}</div>
             </div>
@@ -3584,7 +3686,7 @@ async function gemLivestream(bane, ekstra = {}) {
         livestreamBesked(bane, e.message, true);
         return;
     }
-    await loadLivestream();
+    await loadLivestream(bane);
     livestreamBesked(bane, 'Gemt');
     setTimeout(() => livestreamBesked(bane, ''), 3000);
 }
@@ -4204,6 +4306,7 @@ function deviceTokenKort(tokens) {
                             Tilbagekald
                            </button>`
                         : `<span class="tekst-daempet tekst-lille status-tekst">Tilbagekaldt</span>
+                           <button onclick="handleGenaktiverDeviceToken(${t.id})" class="btn-secondary btn-sm">Genaktivér</button>
                            <button onclick="handlePermanentDeleteDeviceToken(${t.id})" style="background:rgba(var(--color-accent-rgb),0.18);border:1px solid rgba(var(--color-accent-rgb),0.35);border-radius:6px;padding:6px 14px;color:var(--color-accent);font-size:0.85em;cursor:pointer;">
                             ${Ikon('slet')} Slet
                            </button>`
@@ -4358,8 +4461,10 @@ async function handleCreateDeviceToken() {
 
 function handleDeleteDeviceToken(id) {
     showMessage(
-        'Tilbagekald Adgangslink',
-        'Enheder der bruger dette link mister adgang med det samme.',
+        'Tilbagekald adgangslink',
+        `Enheder, der bruger linket ${adgangslinkNavn(id)}, mister adgang med det samme.
+
+Linket kan genaktiveres bagefter, men får så en ny adresse — enhederne skal have det nye link.`,
         [
             {
                 text: 'Tilbagekald',
@@ -4378,10 +4483,26 @@ function handleDeleteDeviceToken(id) {
     );
 }
 
+// Et tilbagekaldt link tages i brug igen (nr. 44). Serveren giver det en ny
+// adresse, og de gamle sessioner virker ikke igen — enhederne skal have det nye link.
+async function handleGenaktiverDeviceToken(id) {
+    if (!await BadmintonUtils.confirmDialog('Genaktivér adgangslink',
+        `Genaktivér linket ${adgangslinkNavn(id)}?
+
+Det får en ny adresse: den gamle virker ikke igen, og enheder, der brugte linket før, skal have det nye link (eller en ny kiosk.conf). Navn, bane og indstillinger bevares.`,
+        { okText: 'Genaktivér' })) return;
+    try {
+        await api.request(`/device-tokens/${id}/genaktiver`, { method: 'PUT' });
+        await loadDeviceTokens();
+    } catch (err) {
+        showMessage('Fejl', err.message);
+    }
+}
+
 function handlePermanentDeleteDeviceToken(id) {
     showMessage(
         'Slet permanent',
-        'Adgangslinket slettes permanent og kan ikke gendannes.',
+        `Adgangslinket ${adgangslinkNavn(id)} slettes permanent og kan ikke gendannes.`,
         [
             {
                 text: 'Slet',
@@ -4478,6 +4599,7 @@ let bpWatcherTick = null;
 let bpNaesteTjek = {};
 let bpGenindlaesPlanlagt = false;
 let bpTjekBesked = {}; // id -> kort besked efter "Tjek nu"
+let bpSidsteListe = [];  // de viste kampe i kø (Stop-bekræftelsen navngiver kampen)
 let bpSidsteStatus = {}; // id -> status ved forrige indlæsning (opdager venter → oprettet)
 
 function bpFormatStart(iso) {
@@ -4553,6 +4675,7 @@ async function bpLoadWatchers() {
     // (score-pollingen står stille, når der ikke var nogen aktiv holdkamp).
     const nyOprettet = liste.some(w => w.status === 'oprettet' && bpSidsteStatus[w.id] === 'venter');
     bpSidsteStatus = {};
+    bpSidsteListe = liste;
     liste.forEach(w => { bpSidsteStatus[w.id] = w.status; });
     if (nyOprettet) {
         loadActiveHoldkamp();
@@ -4720,6 +4843,11 @@ async function bpKopierVagtLog(knap) {
 }
 
 async function bpStopWatcher(id) {
+    const w = bpSidsteListe.find(x => x.id === id);
+    const hvad = w ? `${w.team1_name || '?'} – ${w.team2_name || '?'}` : 'kampen';
+    if (!await BadmintonUtils.confirmDialog('Stop overvågningen',
+        `Stop med at holde øje med ${hvad}? Holdkampen bliver så ikke oprettet af sig selv, når holdsammensætningen kommer — du kan sætte linket i kø igen.`,
+        { danger: true, okText: 'Stop overvågningen' })) return;
     try {
         await api.deleteHoldkampWatcher(id);
         delete bpTjekBesked[id];
@@ -4808,7 +4936,7 @@ function bpRenderPreview(data) {
                 </div>
             </div>
             ${gameRows}
-            <button onclick="bpCreate()" class="btn-primary btn-lg btn-block luft-over-8">
+            <button onclick="bpCreate()" id="bpCreateBtn" class="btn-primary btn-lg btn-block luft-over-8">
                 Opret Holdkamp
             </button>
         </div>`;
@@ -4816,13 +4944,18 @@ function bpRenderPreview(data) {
     // Store original game structure for bpCreate
     preview.dataset.games   = JSON.stringify(games);
     preview.dataset.format  = data.format;
+    preview.dataset.kilde   = data.sourceMatchId || '';
     preview.style.display   = 'block';
 
     // Scroll to preview
     preview.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// Et ekstra klik (eller dobbeltklik), mens holdkampen oprettes, gør intet (nr. 45)
+let bpOpretter = false;
+
 async function bpCreate() {
+    if (bpOpretter) return;
     const preview  = document.getElementById('bpImportPreview');
     const games    = JSON.parse(preview.dataset.games);
     const format   = preview.dataset.format;
@@ -4845,8 +4978,12 @@ async function bpCreate() {
         };
     });
 
+    const btn = document.getElementById('bpCreateBtn');
+    bpOpretter = true;
+    if (btn) { btn.disabled = true; btn.textContent = 'Opretter …'; }
     try {
-        await api.createTeamMatch({ format, team1Name, team2Name, games: gamesData });
+        const sourceMatchId = preview.dataset.kilde || undefined;
+        await api.createTeamMatch({ format, team1Name, team2Name, games: gamesData, sourceMatchId });
         // Reset import section
         document.getElementById('bpImportUrl').value = '';
         preview.style.display = 'none';
@@ -4855,10 +4992,13 @@ async function bpCreate() {
         await loadActiveHoldkamp();
     } catch (err) {
         if (err.status === 409) {
-            showMessage('Kan ikke oprette holdkamp', err.message);
+            showMessage(err.body?.code === 'holdkamp_findes' ? 'Holdkampen findes allerede' : 'Kan ikke oprette holdkamp', err.message);
         } else {
             showMessage('Fejl', 'Kunne ikke oprette holdkamp: ' + err.message);
         }
+    } finally {
+        bpOpretter = false;
+        if (btn) { btn.disabled = false; btn.textContent = 'Opret Holdkamp'; }
     }
 }
 
@@ -4981,6 +5121,11 @@ async function handleCreateTournament() {
 // Bevarer åbne "tilføj kamp"-forms mellem refresh så brugerens input ikke forsvinder.
 // Map<tournamentId, { label, doubles, p1, p2, p3, p4 }>
 const tournamentDraftState = new Map();
+// Det, der er tastet i "Rediger kamp", pr. kamp-id (nr. 45): listen tegnes forfra
+// hvert 3. sekund, og uden fokus i et felt (klik på et autoforslag, rul på siden)
+// stod kampens gemte navne der igen bagefter.
+const tournamentEditDrafts = new Map();
+const TE_FELTER = ['label', 's1p1', 's1p2', 's2p1', 's2p2'];
 
 // Turneringer der lige nu opdateres fra Tournament Software (Set<string tournamentId>).
 // Bruges til at deaktivere knappen + genanvende "Opdaterer…"-tilstand efter 3-sek auto-refresh.
@@ -5122,6 +5267,13 @@ async function addSelectedNewCandidates(tournamentId) {
 }
 
 function captureTournamentDrafts() {
+    document.querySelectorAll('[data-tournament-edit]').forEach(form => {
+        const id = Number(form.getAttribute('data-tournament-edit'));
+        if (!editingTournamentMatchIds.has(id)) return;
+        const draft = { doubles: !!form.querySelector(`#te_${id}_doubles`)?.checked };
+        TE_FELTER.forEach(f => { draft[f] = form.querySelector(`#te_${id}_${f}`)?.value ?? ''; });
+        tournamentEditDrafts.set(id, draft);
+    });
     document.querySelectorAll('[data-tournament-add-form]').forEach(form => {
         const tId = form.getAttribute('data-tournament-add-form');
         const draft = {
@@ -5138,8 +5290,22 @@ function captureTournamentDrafts() {
     });
 }
 
+// De viste turneringer — bekræftelserne navngiver kampen, der slettes
+let sidsteTurneringer = [];
+
+// "Herresingle 1: A – B" eller "A – B"
+function turneringskampBetegnelse(tournamentId, matchId) {
+    const t = sidsteTurneringer.find(x => x.id === tournamentId);
+    const m = t && (t.matches || []).find(x => x.id === matchId);
+    if (!m) return 'på listen';
+    const side = (a, b) => [a, b].filter(Boolean).join(' / ') || '?';
+    const navne = `${side(m.side1_player1, m.side1_player2)} – ${side(m.side2_player1, m.side2_player2)}`;
+    return m.label ? `"${m.label}": ${navne}` : navne;
+}
+
 function renderTournaments(tournaments) {
     captureTournamentDrafts();
+    sidsteTurneringer = tournaments || [];
 
     const container = document.getElementById('activeTournamentsContainer');
     if (!container) return;
@@ -5198,6 +5364,18 @@ function renderTournaments(tournaments) {
         // Setup edit-form inputs for kampe i edit-mode i denne turnering
         for (const m of (t.matches || [])) {
             if (!editingTournamentMatchIds.has(m.id)) continue;
+
+            // Det tastede står der igen efter genoptegningen
+            const editDraft = tournamentEditDrafts.get(m.id);
+            if (editDraft) {
+                TE_FELTER.forEach(f => {
+                    const el = document.getElementById(`te_${m.id}_${f}`);
+                    if (el) el.value = editDraft[f];
+                });
+                const d = document.getElementById(`te_${m.id}_doubles`);
+                if (d) d.checked = editDraft.doubles;
+                toggleEditMatchDoublesUI(m.id);
+            }
 
             const editDoublesEl = document.getElementById(`te_${m.id}_doubles`);
             if (editDoublesEl) editDoublesEl.addEventListener('change', () => toggleEditMatchDoublesUI(m.id));
@@ -5447,7 +5625,7 @@ async function addTournamentMatchFromForm(tournamentId) {
 }
 
 async function confirmDeleteTournamentMatch(tournamentId, matchId) {
-    if (!await BadmintonUtils.confirmDialog('Slet kamp', 'Slet denne kamp?', { danger: true, okText: 'Slet' })) return;
+    if (!await BadmintonUtils.confirmDialog('Slet kamp', `Slet kampen ${turneringskampBetegnelse(tournamentId, matchId)}?`, { danger: true, okText: 'Slet' })) return;
     try {
         await api.deleteTournamentMatch(tournamentId, matchId);
         await loadActiveTournaments();
@@ -5457,7 +5635,7 @@ async function confirmDeleteTournamentMatch(tournamentId, matchId) {
 }
 
 async function handleFinishTournament(tournamentId, name) {
-    if (!await BadmintonUtils.confirmDialog('Afslut turnering', `Afslut turneringen ""? Den flyttes til historikken.`, { okText: 'Afslut' })) return;
+    if (!await BadmintonUtils.confirmDialog('Afslut turnering', `Afslut turneringen "${name}"? Den flyttes til historikken.`, { okText: 'Afslut' })) return;
     try {
         await api.finishTournament(tournamentId);
         await loadActiveTournaments();
@@ -5467,7 +5645,7 @@ async function handleFinishTournament(tournamentId, name) {
 }
 
 async function handleDeleteTournament(tournamentId, name) {
-    if (!await BadmintonUtils.confirmDialog('Slet turnering', `Slet turneringen "" og alle dens kampe? Dette kan ikke fortrydes.`, { danger: true, okText: 'Slet' })) return;
+    if (!await BadmintonUtils.confirmDialog('Slet turnering', `Slet turneringen "${name}" og alle dens kampe? Dette kan ikke fortrydes.`, { danger: true, okText: 'Slet' })) return;
     try {
         await api.deleteTournament(tournamentId);
         tournamentDraftState.delete(String(tournamentId));
@@ -5484,6 +5662,7 @@ function startEditTournamentMatch(tournamentId, matchId) {
 
 function cancelEditTournamentMatch(matchId) {
     editingTournamentMatchIds.delete(matchId);
+    tournamentEditDrafts.delete(matchId);
     loadActiveTournaments();
 }
 
@@ -5511,6 +5690,7 @@ async function saveEditTournamentMatch(tournamentId, matchId) {
             side2Player1, side2Player2
         });
         editingTournamentMatchIds.delete(matchId);
+        tournamentEditDrafts.delete(matchId);
         await loadActiveTournaments();
     } catch (err) {
         showMessage('Fejl', 'Kunne ikke gemme ændringer: ' + (err.message || err));
@@ -6134,10 +6314,15 @@ async function handleCreatePlannerToken() {
     }
 }
 
+function plannerNoegleNavn(id) {
+    const t = (plannerTokensCache || []).find(x => x.id === id);
+    return t && t.name ? `"${t.name}"` : '';
+}
+
 function handleRevokePlannerToken(id) {
     showMessage(
         'Tilbagekald API-nøgle',
-        'badmintonplanner.dk mister adgang med det samme. Du kan oprette en ny nøgle bagefter.',
+        `Nøglen ${plannerNoegleNavn(id)} tilbagekaldes: badmintonplanner.dk mister adgang med den med det samme. Du kan oprette en ny nøgle bagefter.`,
         [
             { text: 'Tilbagekald', style: 'danger', callback: async () => {
                 try { await api.revokePlannerToken(id); await loadPlannerTokens(); }
@@ -6151,7 +6336,7 @@ function handleRevokePlannerToken(id) {
 function handlePermanentDeletePlannerToken(id) {
     showMessage(
         'Slet nøgle',
-        'Nøglen slettes permanent.',
+        `Nøglen ${plannerNoegleNavn(id)} slettes permanent.`,
         [
             { text: 'Slet', style: 'danger', callback: async () => {
                 try { await api.permanentlyDeletePlannerToken(id); await loadPlannerTokens(); }

@@ -136,13 +136,28 @@ test('tagBackup: gemmer gzippet JSON og beholder kun de 4 nyeste', async () => {
     assert.ok(!fs.readdirSync(dir).some(f => f.endsWith('.part')));
 });
 
-test('"før gendannelse": kun den nyeste gemmes', async () => {
+test('"før gendannelse": gemmes lige så mange som de ugentlige (nr. 47)', async () => {
     const klub = { ...KLUB, db_name: 'holte' };
     const dir = autoBackup.klubDir(klub.db_name);
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, 'foer-gendannelse-20260101-120000.json.gz'), 'x');
     await autoBackup.tagBackup(falskForbindelse(), klub, 'foer-gendannelse');
-    assert.equal(autoBackup.listBackups(klub.db_name).length, 1);
+    assert.equal(autoBackup.BEHOLD['foer-gendannelse'], autoBackup.BEHOLD.auto);
+    assert.equal(autoBackup.listBackups(klub.db_name).length, 2, 'den forrige "før" står der stadig');
+    // … men kun de nyeste BEHOLD: ældre ryddes som de ugentlige
+    for (let d = 2; d <= 6; d++) {
+        fs.writeFileSync(path.join(dir, `foer-gendannelse-2026010${d}-120000.json.gz`), 'x');
+    }
+    autoBackup.ryd(klub.db_name, 'foer-gendannelse');
+    assert.equal(autoBackup.listBackups(klub.db_name).length, autoBackup.BEHOLD.auto);
+});
+
+test('to backups i samme sekund overskriver ikke hinanden', async () => {
+    const klub = { ...KLUB, db_name: 'vedbaek' };
+    const a = await autoBackup.tagBackup(falskForbindelse(), klub, 'foer-gendannelse');
+    const b = await autoBackup.tagBackup(falskForbindelse(), klub, 'foer-gendannelse');
+    assert.notEqual(a, b);
+    assert.equal(autoBackup.listBackups(klub.db_name).length, 2);
 });
 
 test('laesBackup: ukendt eller ugyldigt filnavn giver null', () => {

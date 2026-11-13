@@ -399,7 +399,9 @@ router.post('/holdkamp-url', authMiddleware, requirePage('holdkamp'), async (req
 
         // Holdsedlen er klar → som før
         if (seddel.team1Name && seddel.team2Name && seddel.games.length > 0) {
-            return res.json({ success: true, pending: false, ...seddel });
+            // Kampens id følger med tilbage ved "Opret Holdkamp", så serveren kan
+            // afvise den samme kamp to gange (nr. 45)
+            return res.json({ success: true, pending: false, ...seddel, sourceMatchId: String(params.leagueMatchID) });
         }
 
         // Ellers: kender vi tidspunktet, kan vi hente den selv når den kommer
@@ -570,7 +572,8 @@ async function tjekWatcher(w, { kilde = 'auto' } = {}) {
             format: seddel.format,
             team1Name: seddel.team1Name,
             team2Name: seddel.team2Name,
-            games: seddel.games
+            games: seddel.games,
+            sourceMatchId: w.league_match_id
         }, (tx, id) => tx.query(
             `UPDATE holdkamp_watchers SET status = 'oprettet', team_match_id = ?, last_error = NULL WHERE id = ?`,
             [id, w.id]
@@ -587,6 +590,16 @@ async function tjekWatcher(w, { kilde = 'auto' } = {}) {
             + (mangler ? `; ${mangler} med tomme pladser, oprettet tæt på kampstart` : '') + ').');
         return { udfald: 'oprettet', teamMatchId };
     } catch (err) {
+        // Holdkampen er allerede oprettet fra samme kamp (i hånden fra importen,
+        // nr. 45): køen er færdig med den — den skal ikke oprettes en gang til
+        if (err.code === 'holdkamp_findes') {
+            await query(
+                `UPDATE holdkamp_watchers SET status = 'oprettet', team_match_id = ?, last_error = NULL WHERE id = ?`,
+                [err.teamMatchId || null, w.id]
+            );
+            await vagtLog(w, 'info', `${hvem}: holdsedlen er frigivet, men holdkampen findes allerede (oprettet i hånden) — ikke oprettet igen.`);
+            return { udfald: 'oprettet', teamMatchId: err.teamMatchId || null };
+        }
         // En turnering kan blokere oprettelsen. Holdsedlen er der, men vi kan
         // ikke oprette — markér som fejl så admin kan gøre det manuelt. Alle
         // andre fejl (netværk, timeout) prøves igen ved næste tjek.

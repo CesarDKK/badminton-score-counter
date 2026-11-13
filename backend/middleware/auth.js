@@ -78,19 +78,31 @@ function generateToken(payload) {
 
 // Er adgangslinket (device_tokens-rækken) stadig aktivt? JWT'en fra /t/:token
 // gælder 12 timer (QR) eller 14 dage (faste links), så uden dette opslag virkede
-// et tilbagekaldt eller slettet link, til JWT'en udløb. Kan udskiftes i tests.
-let erAdgangslinkAktiv = async (tokenId) => {
+// et tilbagekaldt eller slettet link virkede, til JWT'en udløb. Kan udskiftes i tests.
+//
+// iat: hvornår sessionen er udstedt. Et genaktiveret link (nr. 44) har
+// sessioner_fra = genaktiveringen; sessioner fra før (dem, der virkede, da linket
+// blev tilbagekaldt) får ikke liv igen.
+let erAdgangslinkAktiv = async (tokenId, iat) => {
     const { queryOne } = require('../config/database');
-    const row = await queryOne('SELECT id FROM device_tokens WHERE id = ? AND is_active = 1', [tokenId]);
-    return !!row;
+    const row = await queryOne(
+        'SELECT id, UNIX_TIMESTAMP(sessioner_fra) AS fra FROM device_tokens WHERE id = ? AND is_active = 1', [tokenId]);
+    return !!row && sessionGyldigFra(iat, row.fra);
 };
 function _saetAdgangslinkOpslag(fn) { erAdgangslinkAktiv = fn; }
+
+// Er en session udstedt på tidspunktet iat (sekunder) gyldig for et link, der
+// er genaktiveret på tidspunktet fra (sekunder, null = aldrig)?
+function sessionGyldigFra(iat, fra) {
+    if (fra === null || fra === undefined) return true;
+    return typeof iat === 'number' && iat >= Math.floor(Number(fra));
+}
 
 // Svaret, når et adgangslink ikke længere gælder. QR-tællere (match_session)
 // får "kampen er afsluttet" — deres session slutter, når banen ryddes.
 async function adgangslinkAfvist(decoded) {
     if (decoded.role !== 'device') return null;
-    if (decoded.tokenId && await erAdgangslinkAktiv(decoded.tokenId)) return null;
+    if (decoded.tokenId && await erAdgangslinkAktiv(decoded.tokenId, decoded.iat)) return null;
     const qr = decoded.tokenType === 'match_session';
     return {
         error: qr ? 'Kampen er afsluttet — scan QR-koden igen' : 'Adgangslinket er tilbagekaldt',
@@ -164,5 +176,6 @@ module.exports = {
     generateToken,
     requireWriteAuthInClubMode,
     adgangslinkAfvist,
-    _saetAdgangslinkOpslag
+    _saetAdgangslinkOpslag,
+    sessionGyldigFra
 };
