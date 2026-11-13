@@ -434,6 +434,11 @@ export function laasKamp(projekt, kampId, vaerdi = true) {
     return { ...projekt, laast: [...set] };
 }
 
+/** Låser alle kampe op, så "Lav kampprogram", forslag og løseren må flytte dem igen. */
+export function laasAlleOp(projekt) {
+    return { ...projekt, laast: [] };
+}
+
 /** Låser eller frigiver alle placerede kampe i en kategori. */
 export function laasKategori(projekt, kategoriId, vaerdi = true) {
     const set = new Set(projekt.laast || []);

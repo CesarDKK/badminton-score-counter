@@ -737,3 +737,13 @@ søndagens 180 kampe blev flyttet.
   i grupper. "Lad planneren vælge" sætter den tilbage til automatisk.
 - **Swiss Ladder uden lodtrækning.** Har TP endnu ikke trukket 1. runde (alle `van1`/`van2` er 0), blev runden
   sprunget over, og kun runde 2–n kom med (Lyngby U9/U11 BCD 2026). Nu laves 1. runde også som pladsholdere.
+
+## Låste kampe kan låses op (2026-11-13)
+
+En kamp, der flyttes i hånden, låses, så den beholder tiden — men det var kun muligt at låse op med dobbeltklik, og
+det fandt Jesper ikke ("kan jeg ikke fjerne låsen"). Nu:
+
+- **Tilbage på sin plads:** flyttes kampen tilbage til den tid, den havde, før den blev flyttet, er den ikke længere låst
+  (den gamle tid huskes i fanen, `tilstand.flyttetFra`).
+- **"Lås op"/"Lås"** i "Den valgte kamp", og **"Lås alle op"** i statuslinjen og i kampprogrammets panel (`laasAlleOp`).
+- Rettet: "Lav forslag med nuværende kamplængde" og "Lav forslag kun for …" gik ned (`r.projekt` uden `r`).
