@@ -350,6 +350,9 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 /* ── Lås og forslag ── */
 .kort.er-laast { border-style: dashed; }
 .kort.er-laast b { color: #fff; }
+/* Låsen på et låst kort: en knap — klik låser op (dobbeltklik virkede ikke, fordi gitteret tegnes om efter første klik) */
+.kort-laas { position: absolute; top: -8px; left: -8px; z-index: 1; display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 1px solid rgba(255,255,255,0.7); background: var(--bg, #06141b); color: #fff; font-size: 12px; cursor: pointer; }
+.kort-laas:hover, .kort-laas:focus-visible { background: #fff; color: #06141b; outline: none; }
 .forslag-info { color: var(--primary-soft); }
 
 /* ── Swiss Ladder-blokke ── */

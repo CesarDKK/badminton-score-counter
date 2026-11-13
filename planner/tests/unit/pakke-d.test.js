@@ -2,7 +2,7 @@
 // igangsættelsesgrænsen som advarsel) og stabil omplanlægning ("Planlæg kun kampe uden tid").
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { nytProjekt, saetForm, opdaterDag, opdaterRaekke, flytKamp, anvendForslag, saetSlotMin, opdaterOpsaetning, laasKamp, laasAlleOp } from '../../src/store.js';
+import { nytProjekt, saetForm, opdaterDag, opdaterRaekke, flytKamp, anvendForslag, saetSlotMin, opdaterOpsaetning, laasKamp, laasAlleOp, flytOgLaas, validerProjekt } from '../../src/store.js';
 import { prognoseDag, bedsteKamplaengde } from '../../src/kamplaengde.js';
 import { lavKampprogram } from '../../src/kampprogram.js';
 import { lavForslag } from '../../src/scheduler.js';
@@ -90,5 +90,26 @@ describe('Låste kampe kan låses op igen (Jesper 2026-11-13)', () => {
         const op = laasAlleOp(p);
         assert.deepEqual(op.laast, []);
         assert.equal(lavKampprogram(op).valg.grund, null, 'uden låse vælger planneren igen');
+    });
+});
+
+describe('Flyt tilbage låser op — også efter genindlæsning (projektet husker tiden)', () => {
+    test('flyt låser, flyt tilbage låser op; låst før flytning bliver låst', () => {
+        const p0 = lavKampprogram(projekt()).projekt;
+        const id = Object.keys(p0.plan)[0];
+        const start = p0.plan[id];
+        const a = flytOgLaas(p0, [id], LOER, '19:00');
+        assert.deepEqual(a.projekt.laast, [id]);
+        assert.deepEqual(a.projekt.flyttetFra[id], { dag: start.dag, slot: start.slot });
+        assert.equal(validerProjekt(JSON.parse(JSON.stringify(a.projekt))), null, 'gemmes og kan åbnes igen');
+        const b = flytOgLaas(flytOgLaas(a.projekt, [id], LOER, '18:00').projekt, [id], start.dag, start.slot);
+        assert.equal(b.retur, 1);
+        assert.deepEqual(b.projekt.laast, []);
+        assert.equal(b.projekt.flyttetFra[id], undefined);
+        // Låst i hånden på sin plads: at flytte den væk og tilbage ændrer ikke, at den var låst der
+        const c = laasKamp(p0, id, true);
+        const d = flytOgLaas(flytOgLaas(c, [id], LOER, '19:00').projekt, [id], start.dag, start.slot);
+        assert.deepEqual(d.projekt.laast, [id]);
+        assert.deepEqual(laasKamp(a.projekt, id, false).flyttetFra, {});
     });
 });

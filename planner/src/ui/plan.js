@@ -100,7 +100,7 @@ export function kampprogramPanel(kp, aabneKort, projekt, { travl = false, sek = 
     const detaljer = [
         kp.prognose?.length ? `<span title="Dagen simuleret 100 gange med tilfældige kamplængder omkring sæsondataenes gennemsnit; kampe kan sættes i gang op til ${TIDLIG_START_MIN} min før tid (spillerne skal være klar), dog ikke før dagens start.">Prognose: ${kp.prognose.map((d) => `${esc(datoTekst(d.dato, { kort: true }))} plan slut ${d.planSlut}, forventet ca. ${d.slutMedian} (80 %: ${d.slut80})`).join(' · ')}.</span>` : '',
         kp.udfoert.length ? `Gjort undervejs: ${esc(kp.udfoert.join(' · '))}.` : '',
-        (projekt.laast || []).length ? `${laaseIkon} ${projekt.laast.length} ${projekt.laast.length === 1 ? 'kamp er låst' : 'kampe er låst'} og beholder ${projekt.laast.length === 1 ? 'sin' : 'deres'} tid, når programmet laves igen. <button class="knap knap--sekundaer knap--lille" data-handling="laas-alle-op"${dis}>Lås alle op</button>` : '',
+        (projekt.laast || []).length ? `${laaseIkon} ${projekt.laast.length} ${projekt.laast.length === 1 ? 'kamp er låst' : 'kampe er låst'} og beholder ${projekt.laast.length === 1 ? 'sin' : 'deres'} tid, når programmet laves igen (klik på låsen på et kort for at låse det op). <button class="knap knap--sekundaer knap--lille" data-handling="laas-alle-op"${dis}>Lås alle op</button>` : '',
         rettet ? 'Du har flyttet eller låst kampe, siden programmet blev lavet — Tjek viser, hvordan det står nu.' : '',
         beholdt && aabneKort.length ? `${beholdt} beholdt som det er.` : '',
     ].filter(Boolean);
@@ -291,7 +291,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
             titel = tooltip(projekt, tjek, k);
             tekst = kortNavn(k);
         }
-        return `<div class="${klasser.join(' ')}" draggable="true" tabindex="0" role="button" data-kamp="${esc(ids.join(','))}" style="--hue:${hueFor(projekt, k.kategori)}" title="${esc(titel)}${laast ? '\nLåst — dobbeltklik for at låse op' : ''}"><b>${esc(k.kategori)}${laast ? ' <svg viewBox="0 0 24 24" width="0.9em" height="0.9em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.1em" aria-label="låst"><path d="M6 11h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2zM8 11V7a4 4 0 0 1 8 0v4"/></svg>' : ''}</b><span>${esc(tekst)}</span></div>`;
+        return `<div class="${klasser.join(' ')}" draggable="true" tabindex="0" role="button" data-kamp="${esc(ids.join(','))}" style="--hue:${hueFor(projekt, k.kategori)}" title="${esc(titel)}${laast ? '\nLåst — klik på låsen for at låse op' : ''}">${laast ? `<button type="button" class="kort-laas" data-laas="${esc(ids.join(','))}" title="Låst: beholder tiden, når programmet laves igen. Klik for at låse op." aria-label="Lås op"><svg viewBox="0 0 24 24" width="0.9em" height="0.9em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.1em" aria-hidden="true"><path d="M6 11h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2zM8 11V7a4 4 0 0 1 8 0v4"/></svg></button>` : ''}<b>${esc(k.kategori)}</b><span>${esc(tekst)}</span></div>`;
     };
 
     // Kampe pr. slot på den valgte dag
@@ -438,13 +438,13 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
         ${laaste.size ? `<button class="knap knap--sekundaer knap--lille" data-handling="laas-alle-op" ${travl ? 'disabled' : ''} title="Alle låste kampe kan flyttes igen, når du laver kampprogrammet, et forslag eller bruger løseren">Lås alle op</button>` : ''}
     </div>
     ${tilstand.fortryd?.efter === projekt ? `<p class="fortryd-bjaelke">${esc(tilstand.fortryd.tekst)} <button class="knap knap--sekundaer knap--lille" data-handling="fortryd">Fortryd</button></p>`
-        : gitterTop?.efter === projekt ? `<p class="fortryd-bjaelke">${esc(gitterTop.tekst)} <button class="knap knap--sekundaer knap--lille" data-handling="fortryd-gitter" title="Ctrl+Z">Fortryd${gitterAntal > 1 ? ` (${gitterAntal})` : ''}</button></p>` : ''}
+        : gitterTop?.efter === projekt ? `<p class="fortryd-bjaelke">${esc(gitterTop.tekst)} ${gitterTop.laasOp && gitterTop.laasOp.split(',').every((id) => laaste.has(id)) ? '<button class="knap knap--sekundaer knap--lille" data-handling="laas-op-flyttet">Lås op</button> ' : ''}<button class="knap knap--sekundaer knap--lille" data-handling="fortryd-gitter" title="Ctrl+Z">Fortryd${gitterAntal > 1 ? ` (${gitterAntal})` : ''}</button></p>` : ''}
     ${anbefalLoeser ? `<p class="anbefaling"><b>Anbefalet:</b> tryk "Forbedr med løseren". Den regner i op til ${sek < 120 ? `${sek} sekunder` : `${sek / 60} minutter`} og finder som regel en plan med kortere ventetid og tid i hallen. Du vælger selv, om du vil bruge den.</p>` : ''}
     <div class="visning-skift" role="tablist" aria-label="Visning">
         <button role="tab" class="visning ${problemer ? '' : 'er-aktiv'}" data-visning="gitter" aria-selected="${!problemer}">Plan</button>
         <button role="tab" class="visning ${problemer ? 'er-aktiv' : ''}" data-visning="problemer" aria-selected="${problemer}">Problemer${antalFejl ? ` <span class="maerke maerke--fejl">${antalFejl} fejl</span>` : ''}${antalAdv ? ` <span class="maerke maerke--advarsel">${antalAdv}</span>` : ''}</button>
     </div>
-    ${problemer ? '' : `<p class="plan-hjaelp daempet">Træk et kort til et slot — eller klik på kortet og derefter på et slot. Træk det til listen til højre for at fjerne tiden. En flyttet kamp låses; lås den op under "Den valgte kamp" eller med dobbeltklik. <span title="${esc('Vægtet sum af de bløde kriterier — lavere er bedre. Vægtene står under Avanceret i opsætningen.\n' + scoreTitel)}">Programmets score: ${score.total} (lavere er bedre).</span></p>`}
+    ${problemer ? '' : `<p class="plan-hjaelp daempet">Træk et kort til et slot — eller klik på kortet og derefter på et slot. Træk det til listen til højre for at fjerne tiden. En flyttet kamp låses (hængelåsen på kortet) — klik på låsen for at låse den op. <span title="${esc('Vægtet sum af de bløde kriterier — lavere er bedre. Vægtene står under Avanceret i opsætningen.\n' + scoreTitel)}">Programmets score: ${score.total} (lavere er bedre).</span></p>`}
     ${tilstand.forslag && !kp ? `<p class="plan-status forslag-info">${esc(tilstand.forslag.tekst)}${tilstand.forslag.ikkePlaceret.length ? ` Berørte kampe: ${tilstand.forslag.ikkePlaceret.slice(0, 6).map((x) => `${esc(x.kategori)} ${esc(x.navn)} (${esc(x.brud || x.aarsag)})`).join('; ')}${tilstand.forslag.ikkePlaceret.length > 6 ? ' …' : ''}` : ''}</p>
     ${tilstand.forslag.handlinger?.length ? `<p class="diagnose-knapper">${tilstand.forslag.handlinger.map((x, i) => `<button class="knap knap--sekundaer" data-handling="diagnose" data-index="${i}">${esc(x.tekst)}</button>`).join(' ')}</p>` : ''}
     ${tilstand.forslag.ikkePlaceret.length ? `<ul class="loesninger">${loesningsforslag(projekt, tilstand.forslag.ikkePlaceret).map((f, i) => `<li><span>${esc(f.tekst)}</span>${f.handling ? ` <button class="knap knap--sekundaer knap--lille" data-handling="loesning" data-index="${i}">${esc(f.handling.tekst)} og lav forslag igen</button>` : ''}</li>`).join('')}</ul>
@@ -553,6 +553,7 @@ function bind(container, h) {
             else if (hd === 'fjern-valgte') { const ids = h.valgteIds(); if (ids) { h.vaelgKamp(ids); h.fjern(ids); } }
             else if (hd === 'laas-valgte') h.laasKamp(knap.dataset.ids);
             else if (hd === 'laas-alle-op') h.laasAlleOp();
+            else if (hd === 'laas-op-flyttet') h.laasOpFlyttet();
             else if (hd === 'fravaelg') { const ids = h.valgteIds(); if (ids) h.vaelgKamp(ids); }
             return;
         }
@@ -560,6 +561,8 @@ function bind(container, h) {
         if (vis) { h.visning(vis.dataset.visning); return; }
         const li = e.target.closest('li[data-kamp]');
         if (li) { h.visKamp(li.dataset.kamp); return; }
+        const laasKnap = e.target.closest('.kort-laas[data-laas]');
+        if (laasKnap) { h.laasKamp(laasKnap.dataset.laas); return; }
         const kort = e.target.closest('.kort[data-kamp]');
         if (kort) { h.vaelgKamp(kort.dataset.kamp); return; }
         const celle = e.target.closest('.celle[data-slot]');
@@ -570,10 +573,6 @@ function bind(container, h) {
         if (e.key !== 'Enter' && e.key !== ' ') return;
         const kort = e.target.closest?.('.kort[data-kamp]');
         if (kort) { e.preventDefault(); h.vaelgKamp(kort.dataset.kamp); }
-    });
-    container.addEventListener('dblclick', (e) => {
-        const kort = e.target.closest('.kort[data-kamp]');
-        if (kort) { e.preventDefault(); h.laasKamp(kort.dataset.kamp); }
     });
     container.addEventListener('change', (e) => {
         if (e.target.dataset.felt === 'filter') h.filter(e.target.value);
