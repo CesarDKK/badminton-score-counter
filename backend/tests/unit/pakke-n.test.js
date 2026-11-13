@@ -291,11 +291,14 @@ test('45: "Opret Holdkamp" fra importen kan ikke trykkes to gange og sender kild
     const f = adminFunktion('bpCreate');
     assert.match(f, /if \(bpOpretter\) return;/);
     assert.ok(f.indexOf('bpOpretter = true') < f.indexOf('api.createTeamMatch'), 'spærret før kaldet');
-    assert.match(f, /btn\.disabled = true/);
+    // Knappen findes både i toppen og i bunden af gennemsynet — begge slås fra
+    assert.match(f, /const knapper = document\.querySelectorAll\('#bpImportPreview \.bp-opret-knap'\);/);
+    assert.match(f, /knapper\.forEach\(k => \{ k\.disabled = true;/);
     assert.match(f, /finally \{\s+bpOpretter = false;/);
     assert.match(f, /games: gamesData, sourceMatchId \}/);
     assert.match(adminScript, /preview\.dataset\.kilde\s+= data\.sourceMatchId \|\| '';/);
-    assert.match(adminScript, /onclick="bpCreate\(\)" id="bpCreateBtn"/);
+    assert.match(adminScript, /onclick="bpCreate\(\)" id="bpCreateBtn" type="button" class="[^"]*bp-opret-knap/);
+    assert.equal((adminScript.match(/onclick="bpCreate\(\)"[^>]*bp-opret-knap/g) || []).length, 2, 'en knap i toppen og en i bunden');
 });
 
 test('45: "Rediger kamp" i turneringen beholder det tastede, når listen tegnes forfra', () => {
