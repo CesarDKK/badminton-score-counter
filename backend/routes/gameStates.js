@@ -30,19 +30,32 @@ function parseSetScores(raw) {
     return raw;
 }
 
-// Sekunder tilbage af pausen. Tabletten tæller selv ned og gemmer sekundtallet
-// hvert 10. sekund. Tæller uret kampen (serveren regner for det, routes/
-// urTaeller.js), gemmes kun pausens start — stemplet med serverens ur — så her
-// regnes resten ud. Ellers stod pausen på 60 hele vejen, og TV'et, der tæller
-// selv og starter forfra, når serveren viser over 30 sek. mere end det selv,
-// begyndte forfra ved ca. 20 sek. tilbage
+// Sekunder tilbage af pausen, regnet ud fra pausens start. Starten stemples
+// altid med serverens ur (pauseStartetVed), uanset hvem der tæller — før gjorde
+// den kun det for uret, mens tabletten stemplede med sit eget ur og kun gemte
+// sekundtallet hvert 10. sekund. Skiftede tællingen mellem ur og tablet midt i
+// en pause, regnede den ene videre på den andens ur, eller pausen stod stille
+// på det sidst gemte sekundtal (nr. 30). Uden start: det gemte sekundtal.
+// (Før stod pausen på 60 hele vejen for uret, og TV'et, der tæller selv og
+// starter forfra, når serveren viser over 30 sek. mere, begyndte forfra.)
 function pauseSekunderTilbage(row, nu = Date.now()) {
     const gemt = row.rest_break_seconds_left || 0;
-    const urTaeller = row.tryk_taeller && row.tryk_taeller === row.taeller_id;
-    if (!row.rest_break_active || !urTaeller || row.rest_break_started_at == null) return gemt;
+    if (!row.rest_break_active || row.rest_break_started_at == null) return gemt;
     const slut = Number(row.rest_break_started_at) + (row.rest_break_duration || 60) * 1000;
     if (!Number.isFinite(slut)) return gemt;
     return Math.max(0, Math.min(row.rest_break_duration || 60, Math.ceil((slut - nu) / 1000)));
+}
+
+// Hvornår begyndte pausen (serverens ur, ms)? En ny pause — eller en pause med
+// en anden titel eller længde (tabletten genoptager efter genindlæsning med det,
+// der er tilbage) — stemples nu; en pause, der kører videre, beholder sin start.
+// Klientens restBreakStartedAt bruges ikke: tablettens ur kan gå forkert (nr. 30)
+function pauseStartetVed(existing, { restBreakActive, restBreakTitle, restBreakDuration }, nu = Date.now()) {
+    if (!restBreakActive) return existing ? existing.rest_break_started_at : null;
+    const koerer = existing && existing.rest_break_active && existing.rest_break_started_at != null &&
+        (existing.rest_break_title || '') === (restBreakTitle || '') &&
+        (existing.rest_break_duration || 60) === (restBreakDuration || 60);
+    return koerer ? Number(existing.rest_break_started_at) : nu;
 }
 
 // Formaterer en game_states-raekke til API-formatet — bruges af GET, 409-konflikt-
@@ -72,6 +85,10 @@ function formatStateRow(row, court) {
         restBreakStartedAt: row.rest_break_started_at == null ? null : Number(row.rest_break_started_at),
         restBreakDuration: row.rest_break_duration || 60,
         sidesManuallySwitched: !!row.sides_manually_switched,
+        // Migration 046 (nr. 28): sidernes orientering uafhængigt af navnene
+        sidesSwapped: !!row.sides_swapped,
+        // Golden set (ét sæt) — gemmes, så det overlever en genindlæsning (nr. 30)
+        setsToWin: row.sets_to_win === 1 ? 1 : 2,
         setScoresHistory: parseSetScores(row.set_scores_history),
         matchStartTime: row.match_start_time,
         matchEndTime: row.match_end_time,
@@ -420,7 +437,13 @@ router.get('/:courtId', async (req, res, next) => {
 // tjekker tæller og version, stempler start/slut, giver TV'erne besked).
 // Bruges af PUT herunder og af urets tryk (routes/urTaeller.js), så alle
 // enheder gemmer på præcis samme måde. Returnerer { status, json }.
-async function gemTilstand(req, courtId, body, { skipAutoActive = false } = {}) {
+// tryk (kun uret, routes/urTaeller.js): { taeller, nr, historik } skrives i
+// SAMME UPDATE/INSERT som stillingen (nr. 30). Før skrev uret løbenummeret
+// bagefter: et gentaget tryk (svaret gik tabt, uret sendte igen), der kom ind
+// imellem, fik 409, læste rækken igen med den nye version men det gamle
+// løbenummer — og talte pointet en gang til. historik: fortryd-historikken
+// (null = ingen), gemt mod den version, skrivningen giver.
+async function gemTilstand(req, courtId, body, { skipAutoActive = false, tryk = null } = {}) {
     const has = (key) => Object.prototype.hasOwnProperty.call(body, key);
 
     // Verify court exists by court_number
@@ -500,10 +523,8 @@ async function gemTilstand(req, courtId, body, { skipAutoActive = false } = {}) 
     const restBreakSecondsLeft = has('restBreakSecondsLeft') ? (body.restBreakSecondsLeft || 0) : (existing ? existing.rest_break_seconds_left : 0);
     const restBreakTitle = has('restBreakTitle') ? (body.restBreakTitle || '') : (existing ? (existing.rest_break_title || '') : '');
     const restBreakTaken = has('restBreakTaken') ? !!body.restBreakTaken : (existing ? !!existing.rest_break_taken : false);
-    const restBreakStartedAt = has('restBreakStartedAt')
-        ? (body.restBreakStartedAt != null && Number.isFinite(Number(body.restBreakStartedAt)) ? Math.round(Number(body.restBreakStartedAt)) : null)
-        : (existing ? existing.rest_break_started_at : null);
     const restBreakDuration = has('restBreakDuration') ? (Number(body.restBreakDuration) || 60) : (existing ? (existing.rest_break_duration || 60) : 60);
+    const restBreakStartedAt = pauseStartetVed(existing, { restBreakActive, restBreakTitle, restBreakDuration });
     const sidesManuallySwitched = has('sidesManuallySwitched') ? !!body.sidesManuallySwitched : (existing ? !!existing.sides_manually_switched : false);
     const matchCompleted = has('matchCompleted') ? (body.matchCompleted || false) : (existing ? !!existing.match_completed : false);
     const servingPlayer = has('servingPlayer') ? (body.servingPlayer || null) : (existing ? existing.serving_player : null);
@@ -553,6 +574,13 @@ async function gemTilstand(req, courtId, body, { skipAutoActive = false } = {}) 
 
     // Check if this is a reset (no activity at all)
     const isReset = !hasActivity;
+    // En ny kamp begynder altid med siderne, som de står (reglernes nyKamp);
+    // en ældre tablet, der ikke kender feltet, må ikke tage det med videre
+    const sidesSwapped = has('sidesSwapped') ? !!body.sidesSwapped
+        : (isReset ? false : (existing ? !!existing.sides_swapped : false));
+    // Golden set: 1, ellers 2. Samme regel for en ældre tablet ved ny kamp
+    const setsToWin = has('setsToWin') ? (Number(body.setsToWin) === 1 ? 1 : 2)
+        : (isReset ? 2 : (existing && existing.sets_to_win === 1 ? 1 : 2));
 
     // Kampen er slut: en side har vundet 2 sæt. En kamp der meldes afsluttet
     // på anden vis (golden set = ét sæt, slutter 1–0) får sluttid længere nede.
@@ -574,6 +602,14 @@ async function gemTilstand(req, courtId, body, { skipAutoActive = false } = {}) 
         await query('DELETE FROM last_finished_matches WHERE court_id = ?', [court.id]);
     }
 
+    // Urets løbenummer i samme skrivning (se tryk ovenfor)
+    const nyVersion = (existing ? (existing.version || 0) : 0) + 1;
+    const trykHistorik = tryk && tryk.historik ? JSON.stringify({ version: nyVersion, historik: tryk.historik }) : null;
+    const trykSet = tryk ? ', tryk_taeller = ?, tryk_nr = ?, tryk_at = NOW(), fortryd_historik = ?' : '';
+    const trykKolonner = tryk ? ', tryk_taeller, tryk_nr, tryk_at, fortryd_historik' : '';
+    const trykVaerdier = tryk ? ', ?, ?, NOW(), ?' : '';
+    const trykParams = tryk ? [tryk.taeller, tryk.nr, trykHistorik] : [];
+
     // ---- Skriv rækken ----
     // match_start_time/match_end_time har betinget logik — udtrykkene bygges
     // som SQL-fragmenter så NOW() evalueres i databasen præcis som før
@@ -582,7 +618,7 @@ async function gemTilstand(req, courtId, body, { skipAutoActive = false } = {}) 
         player2.name, player2.name2, player2.score, player2.games,
         timerSeconds, decidingGameSwitched,
         restBreakActive, restBreakSecondsLeft, restBreakTitle,
-        restBreakTaken, restBreakStartedAt, restBreakDuration, sidesManuallySwitched,
+        restBreakTaken, restBreakStartedAt, restBreakDuration, sidesManuallySwitched, sidesSwapped, setsToWin,
         setScoresHistoryJson, matchCompleted,
         servingPlayer, initialServer, servingTeam, servingPlayerOnTeam,
         team1RightCourt, team2RightCourt, betweenSets
@@ -628,15 +664,15 @@ async function gemTilstand(req, courtId, body, { skipAutoActive = false } = {}) 
                 player2_name = ?, player2_name2 = ?, player2_score = ?, player2_games = ?,
                 timer_seconds = ?, deciding_game_switched = ?,
                 rest_break_active = ?, rest_break_seconds_left = ?, rest_break_title = ?,
-                rest_break_taken = ?, rest_break_started_at = ?, rest_break_duration = ?, sides_manually_switched = ?,
+                rest_break_taken = ?, rest_break_started_at = ?, rest_break_duration = ?, sides_manually_switched = ?, sides_swapped = ?, sets_to_win = ?,
                 set_scores_history = ?, match_completed = ?,
                 serving_player = ?, initial_server = ?, serving_team = ?, serving_player_on_team = ?,
                 team1_right_court = ?, team2_right_court = ?, between_sets = ?,
                 match_start_time = ${startExpr},
                 match_end_time = ${endExpr},
-                version = version + 1
+                version = version + 1${trykSet}
              WHERE court_id = ?${casClause}`,
-            [...columnValues, ...startParams, court.id, ...casParams]
+            [...columnValues, ...startParams, ...trykParams, court.id, ...casParams]
         );
 
         if (result.affectedRows === 0) {
@@ -656,13 +692,13 @@ async function gemTilstand(req, courtId, body, { skipAutoActive = false } = {}) 
                     player2_name, player2_name2, player2_score, player2_games,
                     timer_seconds, deciding_game_switched,
                     rest_break_active, rest_break_seconds_left, rest_break_title,
-                    rest_break_taken, rest_break_started_at, rest_break_duration, sides_manually_switched,
+                    rest_break_taken, rest_break_started_at, rest_break_duration, sides_manually_switched, sides_swapped, sets_to_win,
                     set_scores_history, match_completed,
                     serving_player, initial_server, serving_team, serving_player_on_team,
                     team1_right_court, team2_right_court, between_sets,
-                    match_start_time, match_end_time, version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${startExprInsert}, NULL, 1)`,
-                [court.id, ...columnValues, ...startParamsInsert]
+                    match_start_time, match_end_time, version${trykKolonner}
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${startExprInsert}, NULL, 1${trykVaerdier})`,
+                [court.id, ...columnValues, ...startParamsInsert, ...trykParams]
             );
         } catch (error) {
             if (error && error.code === 'ER_DUP_ENTRY') {
@@ -877,6 +913,9 @@ router.post('/:courtId/result', requireWriteAuthInClubMode, kunEgenBane('courtId
         const v = validerIndtastning(body, court.game_mode);
         if (v.error) return res.status(422).json({ error: v.error, code: 'invalid_result' });
         const { sets, winner, walkover, outcome } = v.resultat;
+        // En rettelse af resultatet flytter ikke sluttiden (match_end_time
+        // COALESCE herunder): før forlængede hver rettelse kampens varighed i
+        // kamphistorikken og statistikken (nr. 30)
 
         const navne = {
             player1Name: gs.player1_name, player1Name2: gs.player1_name2 || null,
@@ -892,7 +931,7 @@ router.post('/:courtId/result', requireWriteAuthInClubMode, kunEgenBane('courtId
                 result_outcome = ?, result_winner = ?,
                 rest_break_active = FALSE, rest_break_seconds_left = 0, between_sets = FALSE,
                 match_start_time = COALESCE(match_start_time, NOW()),
-                match_end_time = NOW(),
+                match_end_time = COALESCE(match_end_time, NOW()),
                 version = version + 1
              WHERE court_id = ? AND version = ?`,
             [g1, g2, JSON.stringify(historik), outcome, winner, court.id, gs.version || 0]
@@ -968,7 +1007,7 @@ router.delete('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), q
         const { courtId } = req.params;
 
         // Get court by court_number
-        const court = await queryOne(`SELECT id FROM courts WHERE court_number = ? AND ${synligBane()}`, [courtId]);
+        const court = await queryOne(`SELECT id, is_doubles FROM courts WHERE court_number = ? AND ${synligBane()}`, [courtId]);
 
         if (!court) {
             return res.status(404).json({ error: 'Bane ikke fundet' });
@@ -993,19 +1032,21 @@ router.delete('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), q
             if (finished) await gemSidsteAfsluttedeKamp(court.id, existing);
         }
 
+        // En afgjort kamp, hvis delkamp/turneringskamp stadig står som i gang
+        // (indmeldingen nåede ikke frem), meldes ind nu — ellers satte linjerne
+        // herunder den tilbage til "afventer", og resultatet var væk.
+        // FØR banen nulstilles (nr. 71): nulstillingen sætter is_doubles = FALSE,
+        // og en afgjort double blev så aldrig genkendt som sin double-delkamp
+        if (existing && existing.match_completed && !erQrSession(req.user)) {
+            try { await meldAfgjortKamp(req, courtId, existing, { erDouble: !!court.is_doubles }); }
+            catch (e) { console.error('Indmelding af kampresultat fejlede:', e.message); }
+        }
+
         // Delete game state
         await query('DELETE FROM game_states WHERE court_id = ?', [court.id]);
 
         // Set court to inactive and reset doubles mode
         await query('UPDATE courts SET is_active = FALSE, is_doubles = FALSE WHERE id = ?', [court.id]);
-
-        // En afgjort kamp, hvis delkamp/turneringskamp stadig står som i gang
-        // (indmeldingen nåede ikke frem), meldes ind nu — ellers satte linjerne
-        // herunder den tilbage til "afventer", og resultatet var væk
-        if (existing && existing.match_completed && !erQrSession(req.user)) {
-            try { await meldAfgjortKamp(req, courtId, existing); }
-            catch (e) { console.error('Indmelding af kampresultat fejlede:', e.message); }
-        }
 
         // Frigiv aktive tildelinger fra holdkamp/turnering — ellers vil court-sidens
         // næste sync re-binde den samme tildeling og bringe navnene tilbage straks
@@ -1056,3 +1097,4 @@ module.exports.gemTilstand = gemTilstand;
 module.exports.formatStateRow = formatStateRow;
 
 module.exports.pauseSekunderTilbage = pauseSekunderTilbage;
+module.exports.pauseStartetVed = pauseStartetVed;

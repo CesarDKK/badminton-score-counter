@@ -165,8 +165,9 @@ test('nr. 23: kald har timeout, 4xx tømmer køen med besked, 404 logger uret ud
 
 test('nr. 24: linkets kode fejler → den gemte kobling bruges; samme bane beholder køen; tastaturet er låst under kobling', () => {
     const src = laes('ur-script.js');
-    assert.match(src, /kobl\(k, true\)/);
-    assert.match(src, /if \(fraLink && gemt\.token\) return brugGemtKobling\(/);
+    // Kun til linkets egen bane (nr. 70, pakke-j.test.js)
+    assert.match(src, /kobl\(k, true, linkBane\)/);
+    assert.match(src, /if \(kanBrugeGemtKobling\(fraLink, linkBane\)\) return brugGemtKobling\(/);
     assert.match(src, /const ko = gemt\.token && data\.bane === gemt\.bane \? gemt\.ko : \[\]/);
     assert.match(src, /if \(koblerPaa\) return;/);
 });
@@ -189,7 +190,8 @@ test('nr. 26: fortryd i "Sæt Vundet!", pausen og kampslut; "Ny kamp" rydder dir
     assert.match(src, /'Sæt Vundet!',[\s\S]{0,700}text: 'Fortryd sidste point', callback: \(\) => undoLastAction\(\)/);
     assert.match(src, /getElementById\('undoInRestBreak'\)\.addEventListener\('click', undoLastAction\)/);
     assert.match(laes('court-v3.html'), /id="undoInRestBreak"/);
-    assert.match(src, /\{ text: 'Ny kamp', callback: \(\) => performClearCourtNow\(\), style: 'primary' \}/);
+    // Den faste tablet rydder stadig direkte; QR-telefonen spørger først (nr. 69, pakke-j.test.js)
+    assert.match(src, /\{ text: 'Ny kamp', style: 'primary',[\s\S]{0,300}callback: \(\) => \(isMatchSessionToken\(\) \? bekraeftNyKampQr\(isReportedMatch\) : performClearCourtNow\(\)\) \}/);
     // (nr. 67: og kun når der er noget at fortryde)
     assert.match(src, /outcome \|\| !\(gameState\.history && gameState\.history\.length > 0\) \? \[\]\s*: \[\{ text: 'Fortryd sidste point'/);
     // Fast tablet med afsluttet kamp: dialogen igen i stedet for en død tavle

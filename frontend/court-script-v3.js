@@ -348,6 +348,8 @@ let gameState = {
     // Beskytter swap'et mod at blive overskrevet af sync-loopet mens en holdkamp/
     // turneringskamp er tildelt. Ephemeral — nulstilles ved ny tildeling/clearCourt/reset.
     sidesManuallySwitched: false,
+    // Sidernes orientering uafhængigt af navnene (taeller-regler.js, nr. 28)
+    sidesSwapped: false,
     setScoresHistory: [],
     restBreakTaken: false,
     restBreakActive: false,
@@ -398,7 +400,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     const courtNameDisplay = document.getElementById('courtNameDisplay');
     if (courtNameDisplay) courtNameDisplay.textContent = 'Bane ' + courtId;
 
-    await initializeApp();
+    // false: ugyldig bane, siden er på vej til landing
+    if (await initializeApp() === false) return;
     await loadGameState();
     updateDisplay();
     setupEventListeners();
@@ -632,7 +635,9 @@ async function opdaterUrKnap() {
 function sendUrLink() {
     if (!urKode) return;
     closeSettingsMenu();
-    const link = `${location.origin}/ur.html?k=${urKode}`;
+    // b: banen — en død kode fra linket må kun falde tilbage til urets gemte
+    // kobling, når den er til samme bane (ur-script.js, nr. 70)
+    const link = `${location.origin}/ur.html?k=${urKode}&b=${courtId}`;
     showMessage(
         'Tæl fra dit Apple Watch',
         'Beskeder åbner med et link til uret. Skriv dig selv som modtager, og tryk send.\n\n' +
@@ -965,9 +970,14 @@ function switchSides() {
 // og fra den 3-sekunders hold-knap der vises efter holdkamp/turneringskamp.
 async function performClearCourtNow() {
     releaseWakeLock(); // banen ryddes — ingen aktiv kamp at holde skærmen vågen for
+    // En afgjort kamp frigives IKKE her (nr. 71): serverens "Ryd banen" (DELETE)
+    // melder resultatet ind, hvis delkampen/turneringskampen stadig står som i
+    // gang, og frigiver selv resten. Satte tabletten den til "afventer" først,
+    // var der intet at melde ind, og resultatet var væk
+    const kampAfgjort = !!gameState.matchCompleted;
     // Release holdkamp game back to pending if assigned
     if (assignedHoldkampGameId && activeTeamMatch) {
-        try {
+        if (!kampAfgjort) try {
             await api.updateTeamMatchGame(activeTeamMatch.id, assignedHoldkampGameId, {
                 status: 'pending',
                 courtNumber: null
@@ -981,7 +991,7 @@ async function performClearCourtNow() {
 
     // Release tournament match back to pending if assigned
     if (assignedTournamentMatchId && activeTournament) {
-        try {
+        if (!kampAfgjort) try {
             await api.updateTournamentMatch(activeTournament.id, assignedTournamentMatchId, {
                 status: 'pending',
                 courtNumber: null
@@ -1050,42 +1060,92 @@ function clearCourt() {
     );
 }
 
-async function initializeApp() {
+// Indstillingerne (turneringstilstand, standard-spilletype, antal baner) skal
+// kendes, før tælleren tager beslutninger ud fra dem (nr. 73). Før blev de
+// hentet én gang; fejlede kaldet (wifi-hik ved opstart), kørte tabletten resten
+// af dagen uden turneringstilstand — "Ryd Banen" og "Skift til Double" var
+// synlige på en officiel bane. Nu: de seneste hentede gemmes på tabletten og
+// bruges straks, hvis serveren ikke svarer; uden dem ventes der som på banen.
+// Der hentes igen i baggrunden, til serveren svarer.
+const INDSTILLINGER_NOEGLE = 'btTaellerIndstillinger';
+const HENT_INDSTILLINGER_IGEN_MS = 3000;
+
+function gemteIndstillinger() {
     try {
-        // Verify court is valid
+        const v = JSON.parse(localStorage.getItem(INDSTILLINGER_NOEGLE) || 'null');
+        return v && typeof v === 'object' ? v : null;
+    } catch (e) { return null; }
+}
+
+function anvendIndstillinger(settings, { fraServeren }) {
+    // Store default game mode for use when no game state exists yet
+    gameState._defaultGameMode = settings.defaultGameMode || '15';
+
+    // Ugyldig bane — kun på serverens svar (antallet kan være sænket siden sidst)
+    if (fraServeren && (courtId < 1 || courtId > settings.courtCount)) {
+        // Send til landing uden blokerende alert, og stop resten af initialiseringen
+        window.location.href = 'landing.html';
+        return false;
+    }
+
+    // Show/hide elements based on tournament mode settings
+    isTournamentMode = settings.showResetButton === false;
+    // Hide "Ryd Banen", "Skift til Double" (updateDisplay styrer den bagefter —
+    // modul-variablen bruges dér) og "Skift til 15/21" i turneringstilstand.
+    // Vises igen, hvis en gemt kopi sagde turnering, og serveren siger andet
+    for (const id of ['clearCourtBtn', 'doublesToggle', 'gameModeToggle']) {
+        const el = document.getElementById(id);
+        if (el) el.style.display = isTournamentMode ? 'none' : '';
+    }
+    console.log('Court V3 ready, tournament mode:', isTournamentMode, fraServeren ? '' : '(gemte indstillinger)');
+    return true;
+}
+
+async function initializeApp() {
+    let fejlet = false;
+    let brugtGemte = false;
+    for (;;) {
+        try {
+            const settings = await api.getSettings();
+            try { localStorage.setItem(INDSTILLINGER_NOEGLE, JSON.stringify(settings)); } catch (e) { /* privat tilstand */ }
+            if (fejlet && !brugtGemte) hideMessage();
+            const ok = anvendIndstillinger(settings, { fraServeren: true });
+            if (ok && brugtGemte) updateDisplay();
+            return ok;
+        } catch (error) {
+            console.error('Failed to load settings:', error);
+            // Et afslag fra serveren ændrer sig ikke ved at vente
+            const afslag = error && error.status >= 400 && error.status < 500;
+            if (!brugtGemte) {
+                const gemte = gemteIndstillinger();
+                if (gemte || afslag) {
+                    // Tæl videre på de seneste kendte indstillinger, hent de nye i baggrunden
+                    brugtGemte = true;
+                    if (fejlet) hideMessage();
+                    const ok = anvendIndstillinger(gemte || {}, { fraServeren: false });
+                    if (!afslag) setTimeout(hentIndstillingerIgen, HENT_INDSTILLINGER_IGEN_MS);
+                    return ok;
+                }
+                if (!fejlet) {
+                    fejlet = true;
+                    showMessage('Henter banen …',
+                        'Der er ingen forbindelse til serveren lige nu.\nBanen hentes, så snart den svarer — du behøver ikke gøre noget.', []);
+                }
+            }
+            await new Promise(resolve => setTimeout(resolve, HENT_INDSTILLINGER_IGEN_MS));
+        }
+    }
+}
+
+// Baggrundshentning efter at de gemte indstillinger er taget i brug
+async function hentIndstillingerIgen() {
+    try {
         const settings = await api.getSettings();
-        const courtCount = settings.courtCount;
-        // Store default game mode for use when no game state exists yet
-        gameState._defaultGameMode = settings.defaultGameMode || '15';
-
-        if (courtId < 1 || courtId > courtCount) {
-            // Ugyldig bane — send til landing uden blokerende alert, og stop
-            // resten af initialiseringen (kørte før videre på en ugyldig bane).
-            window.location.href = 'landing.html';
-            return;
-        }
-
-        // Show/hide elements based on tournament mode settings
-        isTournamentMode = settings.showResetButton === false;
-
-        if (isTournamentMode) {
-            // Hide "Ryd Banen" button in settings menu
-            const clearBtn = document.getElementById('clearCourtBtn');
-            if (clearBtn) clearBtn.style.display = 'none';
-
-            // Hide "Skift til Double" button (updateDisplay may override — modul-variablen bruges dér)
-            const doublesToggle = document.getElementById('doublesToggle');
-            if (doublesToggle) doublesToggle.style.display = 'none';
-
-            // Hide "Skift til 15/21" button
-            const gameModeToggle = document.getElementById('gameModeToggle');
-            if (gameModeToggle) gameModeToggle.style.display = 'none';
-
-        }
-
-        console.log('Court V3 ready, tournament mode:', isTournamentMode);
+        try { localStorage.setItem(INDSTILLINGER_NOEGLE, JSON.stringify(settings)); } catch (e) { /* privat tilstand */ }
+        if (anvendIndstillinger(settings, { fraServeren: true })) updateDisplay();
     } catch (error) {
-        console.error('Failed to initialize Court V3:', error);
+        if (error && error.status >= 400 && error.status < 500) return;
+        setTimeout(hentIndstillingerIgen, HENT_INDSTILLINGER_IGEN_MS);
     }
 }
 
@@ -1158,9 +1218,18 @@ function applyLoadedState(loaded) {
     gameState.restBreakSecondsLeft = loaded.restBreakSecondsLeft || 0;
     gameState.restBreakTitle = loaded.restBreakTitle || '';
     gameState.restBreakTaken = loaded.restBreakTaken || false;
-    gameState.restBreakStartedAt = loaded.restBreakStartedAt || null;
+    // Serverens restBreakStartedAt er serverens ur; tabletten regner med sit
+    // eget (_restBreakSecondsRemaining), så starten flyttes over på tablettens
+    // ur ud fra de sekunder, serveren siger er tilbage (nr. 30)
+    gameState.restBreakStartedAt = loaded.restBreakActive
+        ? Date.now() - Math.max(0, (loaded.restBreakDuration || 60) - (loaded.restBreakSecondsLeft || 0)) * 1000
+        : null;
     gameState.restBreakDuration = loaded.restBreakDuration || 60;
     gameState.sidesManuallySwitched = loaded.sidesManuallySwitched || false;
+    gameState.sidesSwapped = !!loaded.sidesSwapped;
+    // Golden set gemmes på serveren (nr. 30): en genindlæst tablet tæller ét sæt
+    // med det samme — før først, når holdkamp-synken nåede at binde delkampen
+    gameState.setsToWin = loaded.setsToWin === 1 ? 1 : 2;
 
     // Load serving state
     gameState.servingPlayer = loaded.servingPlayer || null;
@@ -1805,6 +1874,8 @@ function buildSavePayload() {
         restBreakStartedAt: gameState.restBreakStartedAt,
         restBreakDuration: gameState.restBreakDuration,
         sidesManuallySwitched: gameState.sidesManuallySwitched,
+        sidesSwapped: !!gameState.sidesSwapped,
+        setsToWin: gameState.setsToWin === 1 ? 1 : 2,
         servingPlayer: gameState.servingPlayer,
         initialServer: gameState.initialServer,
         servingTeam: gameState.servingTeam,
@@ -2013,6 +2084,21 @@ async function adoptServerReset(loaded) {
     if (tilknyttet) tilknyttet.style.display = 'none';
 
     updateDisplay();
+}
+
+// "Ny kamp" på QR-telefonen rydder banen (DELETE), og så udløber telefonens
+// adgang og et ur, der er koblet på samme bane (nr. 69). Før skete det uden at
+// spørge. Annuller viser kampslut-dialogen igen — ellers stod tavlen død
+function bekraeftNyKampQr(isReportedMatch) {
+    showMessage(
+        'Ny kamp?',
+        'Banen ryddes, og denne telefon og et Apple Watch, der tæller banen, logges ud.\n\n' +
+        'Scan QR-koden på TV\'et igen for at tælle næste kamp.',
+        [
+            { text: 'Ja, ryd banen', style: 'danger', callback: () => performClearCourtNow() },
+            { text: 'Annuller', style: 'secondary', callback: () => showMatchWonMessage(isReportedMatch) }
+        ]
+    );
 }
 
 // Ved indlæsning: hvis banen står med en afsluttet QR-kamp (ikke ryddet endnu),
@@ -2350,7 +2436,10 @@ function showMatchWonMessage(isReportedMatch = false) {
         const parts = String(raw || '').split('-').map(s => parseInt(s.trim(), 10));
         let scoreA = parts[0];
         let scoreB = parts[1];
-        if (typeof set === 'object' && set.player1Name && set.player1Name !== sideAName) {
+        if (ensNavneISaet(set) && typeof history[0].byttet === 'boolean') {
+            // Ens navne (nr. 28): sættet ved selv, om siderne var byttet i forhold til 1. sæt
+            if (set.byttet !== history[0].byttet) { scoreA = parts[1]; scoreB = parts[0]; }
+        } else if (typeof set === 'object' && set.player1Name && set.player1Name !== sideAName) {
             // Positioner var byttet om i dette saet — flip score saa side A altid er side A.
             scoreA = parts[1];
             scoreB = parts[0];
@@ -2446,7 +2535,10 @@ function showMatchWonMessage(isReportedMatch = false) {
         : gameState.planner
         ? [{ text: 'Ret resultat', callback: () => openResultForm(), style: 'secondary' },
            { text: 'Luk', callback: null, style: 'primary' }]
-        : [{ text: 'Ny kamp', callback: () => performClearCourtNow(), style: 'primary' },
+        : [{ text: 'Ny kamp', style: 'primary',
+             // QR-telefonen: banen ryddes, og telefonen og et koblet ur logges ud —
+             // spørg først (nr. 69). Den faste tablet rydder direkte som før
+             callback: () => (isMatchSessionToken() ? bekraeftNyKampQr(isReportedMatch) : performClearCourtNow()) },
            // Kun med noget at fortryde: efter en genindlæsning er historikken tom
            // (applyLoadedState), og knappen gav en død tavle (nr. 67)
            ...(outcome || !(gameState.history && gameState.history.length > 0) ? []
@@ -2538,7 +2630,9 @@ function openResultForm() {
         const raw = typeof set === 'string' ? set : set.score;
         const [a, b] = String(raw || '').split('-').map(x => parseInt(x, 10));
         if (!Number.isInteger(a) || !Number.isInteger(b)) continue;
-        const vendt = typeof set === 'object' && set.player1Name && set.player1Name !== gameState.player1.name;
+        const vendt = ensNavneISaet(set)
+            ? set.byttet !== !!gameState.sidesSwapped
+            : (typeof set === 'object' && set.player1Name && set.player1Name !== gameState.player1.name);
         saet.push(vendt ? [b, a] : [a, b]);
     }
     if (!gameState.matchCompleted && (gameState.player1.score > 0 || gameState.player2.score > 0)) {
@@ -3432,8 +3526,10 @@ function applyHoldkampGameToState(game) {
 
     // Genindlæst/genbundet midt i kampen: navnene står allerede (evt. efter
     // sideskift) — at skrive dem i oprindelig orientering satte navne og
-    // point på hver sin side
-    const fortsaetter = kampIGang() && sideOrientering(hold1, hold2) !== null;
+    // point på hver sin side. Også når kampen er afgjort (nr. 71): en 2-0 slutter
+    // med holdene byttet, og navnene tilbage på sættene gav det tabende hold
+    // sejren, når tabletten gemte og serveren meldte resultatet ind
+    const fortsaetter = kampStartet() && sideOrientering(hold1, hold2) !== null;
     if (!fortsaetter) {
         gameState.player1.name = hold1[0];
         gameState.player2.name = hold2[0];
@@ -3459,6 +3555,11 @@ function kampIGang() {
     return !!gameState.matchStartTime && !gameState.matchCompleted;
 }
 
+// Kampen er startet (i gang eller afgjort) — navnene på banen hører til den
+function kampStartet() {
+    return !!gameState.matchStartTime;
+}
+
 // Holdenes navne for en delkamp, med de pladsholdere applyHoldkampGameToState
 // bruger, når et navn mangler: [[hold1 spiller, makker], [hold2 spiller, makker]]
 function holdkampHoldNavne(game, tm) {
@@ -3473,6 +3574,13 @@ function holdkampHoldNavne(game, tm) {
 // Står hold 1 i player1 ('lige') eller i player2 ('byttet', efter sideskift)?
 // null hvis ingen af navnene genkendes. Ét genkendt navn er nok, så en rettet
 // stavefejl i et af de andre ikke vender det.
+// Et sæt med samme navn på begge sider ("Emil" mod "Emil"), som selv ved, om
+// siderne var byttet (taeller-regler.js gemmer byttet i hvert sæt, nr. 28)
+function ensNavneISaet(set) {
+    return !!set && typeof set === 'object' && !!set.player1Name &&
+        set.player1Name === set.player2Name && typeof set.byttet === 'boolean';
+}
+
 function sideOrientering(hold1, hold2, spillere = gameState) {
     const p1 = spillere.player1, p2 = spillere.player2;
     // Standardnavnene står på alle baner (name2 er 'Makker 1' i single) og
@@ -3663,8 +3771,8 @@ function turneringSideNavne(match) {
 function applyTournamentMatchToCourt(match) {
     const isDoubles = !!match.doubles;
     const [side1, side2] = turneringSideNavne(match);
-    // Genindlæst midt i kampen: behold navnene, hvor de står (se applyHoldkampGameToState)
-    const fortsaetter = kampIGang() && sideOrientering(side1, side2) !== null;
+    // Genindlæst midt i (eller efter) kampen: behold navnene, hvor de står (se applyHoldkampGameToState)
+    const fortsaetter = kampStartet() && sideOrientering(side1, side2) !== null;
     if (!fortsaetter) {
         gameState.player1.name = side1[0];
         gameState.player2.name = side2[0];

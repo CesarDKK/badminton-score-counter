@@ -117,6 +117,8 @@ function kropFra(st, haendelser, version, taellerId) {
         team1RightCourt: st.team1RightCourt, team2RightCourt: st.team2RightCourt,
         betweenSets: st.betweenSets, decidingGameSwitched: st.decidingGameSwitched,
         sidesManuallySwitched: st.sidesManuallySwitched,
+        sidesSwapped: !!st.sidesSwapped,
+        setsToWin: st.setsToWin === 1 ? 1 : 2,
         setScoresHistory: st.setScoresHistory,
         restBreakActive: st.restBreakActive, restBreakTaken: st.restBreakTaken,
         restBreakSecondsLeft: st.restBreakActive ? st.restBreakSecondsLeft : 0,
@@ -367,11 +369,10 @@ router.post('/tryk', requireWriteAuthInClubMode, async (req, res, next) => {
                     return res.json(visning(row && { ...row, tryk_taeller: taellerId, tryk_nr: nr }, court, { afvist: true, haendelser }));
                 }
                 const g = await gemTilstand(req, court.court_number,
-                    await nyKampKrop(court, row, st, row.version || 0, taellerId));
+                    await nyKampKrop(court, row, st, row.version || 0, taellerId),
+                    { tryk: { taeller: taellerId, nr, historik: null } });
                 if (g.status === 409) continue;
                 if (g.status !== 200) return res.status(g.status).json(g.json);
-                await query('UPDATE game_states SET tryk_taeller = ?, tryk_nr = ?, tryk_at = NOW(), fortryd_historik = NULL WHERE court_id = ?',
-                    [taellerId, nr, court.id]);
                 return res.json(visning(await hentRaekke(court.id), court, { haendelser: ['ny-kamp'] }));
             }
 
@@ -407,12 +408,13 @@ router.post('/tryk', requireWriteAuthInClubMode, async (req, res, next) => {
                 return res.json(visning(row && { ...row, tryk_taeller: taellerId, tryk_nr: nr }, court, { afvist: true, haendelser }));
             }
 
-            const g = await gemTilstand(req, court.court_number, kropFra(st, haendelser, row ? row.version || 0 : 0, taellerId));
+            // Løbenummeret skrives i samme skrivning som stillingen (nr. 30): et
+            // gentaget tryk, der kommer ind imellem, får 409, læser rækken igen
+            // og ser nummeret — så tælles det ikke to gange
+            const g = await gemTilstand(req, court.court_number, kropFra(st, haendelser, row ? row.version || 0 : 0, taellerId),
+                { tryk: { taeller: taellerId, nr, historik: st.history } });
             if (g.status === 409) continue;   // en anden enhed skrev imellem — regn igen
             if (g.status !== 200) return res.status(g.status).json(g.json);
-
-            await query('UPDATE game_states SET tryk_taeller = ?, tryk_nr = ?, tryk_at = NOW(), fortryd_historik = ? WHERE court_id = ?',
-                [taellerId, nr, JSON.stringify({ version: g.json.version, historik: st.history }), court.id]);
             if (haendelser.includes('kamp')) {
                 try { await gemKampresultat(court, st); } catch (e) { console.error('[ur] kamphistorik:', e.message); }
             }

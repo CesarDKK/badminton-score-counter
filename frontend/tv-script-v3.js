@@ -278,6 +278,9 @@ async function scheduleCourtDataLoad() {
 // - Nye spillere (ny kamp / navnene skrevet ind / TV'et genstartet): sæt 1's
 //   sider, hvis et sæt er spillet, ellers de nuværende.
 // Sæt-scorerne vendes efter navn (orientSetScore), så de passer uanset rækkefølge.
+// Er navnene ens på begge sider ("Emil" mod "Emil"), kan de ikke afgøre noget —
+// så står den side, der begyndte som player1, øverst, og serverens sidesSwapped
+// siger, hvor den står nu (nr. 28; se sidernByttet).
 function laesOprindeligeSider(gameState) {
     const p1 = gameState.player1, p2 = gameState.player2;
     const saet = (a, b) => {
@@ -305,6 +308,15 @@ function laesOprindeligeSider(gameState) {
                     { name: foerste.player2Name, name2: foerste.player2Name2 });
     }
     saet(p1, p2);
+}
+
+// Ens navne på begge sider: navnene kan ikke skille siderne ad
+const ensNavne = (gs) => !!(gs && gs.player1 && gs.player2) && gs.player1.name === gs.player2.name;
+
+// Står player2 øverst på tavlen (siderne byttet i forhold til TV'ets rækkefølge)?
+function sidernByttet(gs) {
+    if (ensNavne(gs) && typeof gs.sidesSwapped === 'boolean') return gs.sidesSwapped;
+    return !!originalPlayer1Name && gs.player1.name === originalPlayer2Name;
 }
 
 function startLocalTimer() {
@@ -640,8 +652,7 @@ async function loadCourtData() {
         laesOprindeligeSider(gameState);
 
         // Check if players have been swapped
-        const playersSwapped = originalPlayer1Name &&
-                               gameState.player1.name === originalPlayer2Name;
+        const playersSwapped = sidernByttet(gameState);
 
         // Check if match is finished
         // Også en kamp, hvis resultat er tastet ind (afsluttet før tid / walkover)
@@ -697,7 +708,7 @@ async function loadCourtData() {
                     console.log(`[TV V3] Fresh data after rest break. setScoresHistory length: ${freshGameState.setScoresHistory?.length || 0}`);
 
                     // Re-determine swap status
-                    const freshPlayersSwapped = originalPlayer1Name && freshGameState.player1.name === originalPlayer2Name;
+                    const freshPlayersSwapped = sidernByttet(freshGameState);
 
                     // Update display with fresh data from database
                     updateSetScores(freshGameState, freshPlayersSwapped);
@@ -830,7 +841,7 @@ async function updateTvTeamLogos(gameState, isMatchActive) {
         const byCourt = _tvByCourt;
 
         // Bestem viste venstre/højre spiller (samme swap-logik som updatePlayerNames)
-        const playersSwapped = originalPlayer1Name && gameState.player1.name === originalPlayer2Name;
+        const playersSwapped = sidernByttet(gameState);
         const left = playersSwapped ? gameState.player2 : gameState.player1;
         const right = playersSwapped ? gameState.player1 : gameState.player2;
 
@@ -1237,6 +1248,10 @@ function orientSetScore(setData) {
     let scoreText;
     if (typeof setData === 'string') {
         scoreText = setData; // gammelt format: "21-15"
+    } else if (setData.player1Name === setData.player2Name && typeof setData.byttet === 'boolean') {
+        // Ens navne (nr. 28): sættet ved selv, om siderne var byttet
+        const s = setData.score.split('-').map(x => x.trim());
+        scoreText = setData.byttet ? `${s[1]}-${s[0]}` : setData.score;
     } else if (setData.player1Name === originalPlayer1Name ||
                setData.player2Name === originalPlayer2Name) {
         // Navne i original rækkefølge — også når kun det ene navn genkendes

@@ -98,12 +98,19 @@ function holdkampNavne(g) {
  * Melder banens afgjorte kamp ind til dens delkamp eller turneringskamp.
  * gs: den netop gemte game_states-række (match_completed). Returnerer
  * { type, id, winnerTeam, setScores } når noget blev meldt ind, ellers null.
+ * opts.erDouble: banens single/double, som den var under kampen — når banen
+ * er ved at blive ryddet (DELETE nulstiller is_doubles), læses den ikke igen.
  */
-async function meldAfgjortKamp(req, courtNumber, gs) {
+async function meldAfgjortKamp(req, courtNumber, gs, opts = {}) {
     const bane = parseInt(courtNumber, 10);
     if (!Number.isInteger(bane) || !gs || !gs.match_completed) return null;
-    const court = await queryOne('SELECT is_doubles FROM courts WHERE court_number = ?', [bane]);
-    const erDouble = !!(court && court.is_doubles);
+    let erDouble;
+    if (typeof opts.erDouble === 'boolean') {
+        erDouble = opts.erDouble;
+    } else {
+        const court = await queryOne('SELECT is_doubles FROM courts WHERE court_number = ?', [bane]);
+        erDouble = !!(court && court.is_doubles);
+    }
 
     const g = await queryOne(
         `SELECT g.id, g.category, g.started_at,

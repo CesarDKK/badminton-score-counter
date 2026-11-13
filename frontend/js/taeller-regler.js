@@ -56,6 +56,10 @@
             matchCompleted: false,
             decidingGameSwitched: false,
             sidesManuallySwitched: false,
+            // Står den side, der begyndte som player2, nu i player1? Skiftes ved
+            // hvert sideskift. Navnene kan ikke afgøre det, når de er ens på
+            // begge sider ("Emil" mod "Emil") — så bruger uret og TV'et dette (nr. 28)
+            sidesSwapped: false,
             setScoresHistory: [],
             restBreakTaken: false,
             restBreakActive: false,
@@ -87,6 +91,7 @@
             player1: { ...st.player1 },
             player2: { ...st.player2 },
             sidesManuallySwitched: st.sidesManuallySwitched,
+            sidesSwapped: !!st.sidesSwapped,
             restBreakTaken: st.restBreakTaken,
             servingPlayer: st.servingPlayer,
             servingTeam: st.servingTeam,
@@ -131,8 +136,15 @@
         return { player1: bold(st.player1, st.player2), player2: bold(st.player2, st.player1) };
     }
 
-    // Begge hold skifter banehalvdel: navne, point, sæt, serv og (double) pladser
-    function skiftSider(st) {
+    // Begge hold skifter banehalvdel: navne, point, sæt, serv og (double) pladser.
+    // teamNRightCourt er spilleren i HØJRE servefelt set fra spillerne selv.
+    // midtISaet: sideskiftet ved 11 (8) i det afgørende sæt. Der bliver alle
+    // stående i deres servefelt — Spilleregler for badminton (BWF 4.1) § 11.1.5:
+    // "Spillerne skal først skifte servefelt, når de har servet og vundet et
+    // point", § 11.1.3 (modtagerparten bliver stående) og § 8.2 (stillingen
+    // bibeholdes). Før blev modtagerparret spejlet (nr. 29). Mellem sæt vælger
+    // parrene selv (§ 11.6), så dér er pladserne uændret fra før.
+    function skiftSider(st, { midtISaet = false } = {}) {
         [st.player1, st.player2] = [
             { ...st.player1, name: st.player2.name, name2: st.player2.name2, score: st.player2.score, games: st.player2.games },
             { ...st.player2, name: st.player1.name, name2: st.player1.name2, score: st.player1.score, games: st.player1.games }
@@ -141,10 +153,16 @@
         if (st.servingTeam === 1 || st.servingTeam === 2) st.servingTeam = vend(st.servingTeam);
         if (st.isDoubles) {
             const t1 = st.team1RightCourt;
-            st.team1RightCourt = vend(st.team2RightCourt);
-            st.team2RightCourt = vend(t1);
+            if (midtISaet) {
+                st.team1RightCourt = st.team2RightCourt;
+                st.team2RightCourt = t1;
+            } else {
+                st.team1RightCourt = vend(st.team2RightCourt);
+                st.team2RightCourt = vend(t1);
+            }
         }
         st.sidesManuallySwitched = true;
+        st.sidesSwapped = !st.sidesSwapped;
     }
 
     // "Skift side"-knappen: kun før kampen er i gang (eller efter den er slut)
@@ -264,7 +282,7 @@
         if (st.player1.games === afgoerende && st.player2.games === afgoerende &&
             (st.player1.score === midtpunkt(st) || st.player2.score === midtpunkt(st)) && !st.decidingGameSwitched) {
             st.decidingGameSwitched = true;
-            skiftSider(st);
+            skiftSider(st, { midtISaet: true });
             retDoubleServeposition(st);
             haendelser.push('sideskift');
         }
@@ -277,7 +295,9 @@
                 player1Name2: st.player1.name2 || null,
                 player2Name: st.player2.name,
                 player2Name2: st.player2.name2 || null,
-                score: `${a}-${b}`
+                score: `${a}-${b}`,
+                // Siderne, som de stod i sættet (se sidesSwapped)
+                byttet: !!st.sidesSwapped
             });
             const v = vinder === 1 ? st.player1 : st.player2;
             v.games++;
@@ -354,6 +374,7 @@
         st.player1 = { ...st.player1, ...f.player1 };
         st.player2 = { ...st.player2, ...f.player2 };
         st.sidesManuallySwitched = f.sidesManuallySwitched || false;
+        st.sidesSwapped = !!f.sidesSwapped;
         st.restBreakTaken = f.restBreakTaken || false;
         st.servingPlayer = f.servingPlayer;
         st.servingTeam = f.servingTeam;

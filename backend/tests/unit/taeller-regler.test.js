@@ -64,7 +64,8 @@ test('single 21: serv, pause ved 11, sæt, sideskift og kampslut', () => {
     assert.equal(st.player2.name, 'Anna');
     assert.equal(st.player2.games, 1);
     assert.equal(st.servingPlayer, 2);
-    assert.deepEqual(st.setScoresHistory, [{ player1Name: 'Anna', player1Name2: 'Makker 1', player2Name: 'Bo', player2Name2: 'Makker 2', score: '21-0' }]);
+    // byttet: siderne, som de stod i sættet (nr. 28)
+    assert.deepEqual(st.setScoresHistory, [{ player1Name: 'Anna', player1Name2: 'Makker 1', player2Name: 'Bo', player2Name2: 'Makker 2', score: '21-0', byttet: false }]);
 });
 
 test('afgørende sæt: siderne skiftes ved 11 (8 i 15/21), og 29-29 afgøres ved 30', () => {
