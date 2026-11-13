@@ -250,13 +250,13 @@ const handlers = {
     slotMin(v) {
         // Sammenligningen afhænger ikke af den valgte kamplængde — den bliver stående, når man vælger én
         const sammenligning = tilstand.kamplaengde?.projekt === projekt ? tilstand.kamplaengde.resultat : null;
-        saetOpsaetning(store.saetSlotMin(projekt, v));
+        saetOpsaetning(store.opdaterOpsaetning(store.saetSlotMin(projekt, v), { kamplaengdeValgt: true }));
         if (sammenligning) { tilstand.kamplaengde = { projekt, resultat: sammenligning }; render(); }
     },
     brugKamplaengde(min, udenPause) {
         const sammenligning = tilstand.kamplaengde?.projekt === projekt ? tilstand.kamplaengde.resultat : null;
         const pauseMin = udenPause ? { ...INGEN_PAUSE } : reglementetsPause(projekt.raekker);
-        saetOpsaetning(store.opdaterOpsaetning(store.saetSlotMin(projekt, min), { pauseMin }));
+        saetOpsaetning(store.opdaterOpsaetning(store.saetSlotMin(projekt, min), { pauseMin, kamplaengdeValgt: true }));
         if (sammenligning) { tilstand.kamplaengde = { projekt, resultat: sammenligning }; render(); }
     },
     sammenlignKamplaengder() {
@@ -269,7 +269,9 @@ const handlers = {
     raekke: (id, aendringer) => saetOpsaetning(store.opdaterRaekke(projekt, id, aendringer)),
     minKampeSamlet: (id, vaerdi) => saetOpsaetning(store.opdaterRaekke(projekt, id, { minKampeSamlet: vaerdi })),
     kategori: (id, aendringer) => saetOpsaetning(store.opdaterKategori(projekt, id, aendringer)),
-    pause: (klasse, v) => saet(store.opdaterPause(projekt, klasse, v)),
+    pause: (klasse, v) => saet(store.opdaterOpsaetning(store.opdaterPause(projekt, klasse, v), { kamplaengdeValgt: true })),
+    // "Lad planneren vælge": næste "Lav kampprogram" vælger kamplængde og pause ud fra sammenligningen igen
+    autoKamplaengde: () => saet(store.opdaterOpsaetning(projekt, { kamplaengdeValgt: false })),
     regler: (sti, v) => saetOpsaetning(store.opdaterRegler(projekt, sti, v)),
     nulstilRegler: () => saetOpsaetning(store.nulstilRegler(projekt)),
     form: (id, aendringer) => saet(store.saetForm(projekt, id, aendringer)),

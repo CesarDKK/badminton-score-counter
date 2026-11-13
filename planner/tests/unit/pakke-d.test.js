@@ -2,7 +2,7 @@
 // igangsættelsesgrænsen som advarsel) og stabil omplanlægning ("Planlæg kun kampe uden tid").
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { nytProjekt, saetForm, opdaterDag, opdaterRaekke, flytKamp, anvendForslag } from '../../src/store.js';
+import { nytProjekt, saetForm, opdaterDag, opdaterRaekke, flytKamp, anvendForslag, saetSlotMin, opdaterOpsaetning } from '../../src/store.js';
 import { prognoseDag, bedsteKamplaengde } from '../../src/kamplaengde.js';
 import { lavKampprogram } from '../../src/kampprogram.js';
 import { lavForslag } from '../../src/scheduler.js';
@@ -60,5 +60,22 @@ describe('U6/I2: planlæg kun kampe uden tid', () => {
         const prob = bygProblem(med, med.plan, { stabil: ids });
         assert.equal(prob.stabil.kampe.length, 3);
         assert.equal(bygProblem(med, med.plan).stabil, undefined);
+    });
+});
+
+describe('Kamplængden: brugerens eget valg respekteres (Jesper 2026-11-13)', () => {
+    test('nyt projekt: planneren vælger selv', () => {
+        assert.equal(projekt().opsaetning.kamplaengdeValgt, false);
+    });
+    test('"Lav kampprogram" beholder en valgt kamplængde og pause — også en anden end den, sammenligningen ville vælge', () => {
+        const p0 = projekt();
+        const auto = lavKampprogram(p0).valg.minutter;
+        const egen = auto === 45 ? 40 : 45;
+        const p = opdaterOpsaetning(saetSlotMin(p0, egen), { kamplaengdeValgt: true });
+        const r = lavKampprogram(p);
+        assert.equal(r.valg.grund, 'valgt');
+        assert.equal(r.valg.aendret, false);
+        assert.equal(r.projekt.opsaetning.slotMin, egen);
+        assert.deepEqual(r.projekt.opsaetning.pauseMin, p.opsaetning.pauseMin);
     });
 });

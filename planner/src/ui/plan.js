@@ -55,6 +55,7 @@ export function kampprogramPanel(kp, aabneKort, projekt, { travl = false, sek = 
     if (!v) valgTekst = ''; // brugerens eget program: intet er valgt for dem
     else if (v.grund === 'laast') valgTekst = `Kamplængden er ikke ændret (${kamplaengdeTekst(v.minutter, v.udenPause)}), fordi der er låste kampe.`;
     else if (v.grund === 'behold') valgTekst = `Kun kampe uden tid er planlagt — alle andre har beholdt deres tid. Kamplængde: ${kamplaengdeTekst(v.minutter, v.udenPause)}.`;
+    else if (v.grund === 'valgt') valgTekst = `Kamplængde: ${kamplaengdeTekst(v.minutter, v.udenPause)} — dit eget valg, så planneren har ikke valgt en anden. Under Opsætning → Kamplængde kan du lade planneren vælge igen.`;
     else if (v.grund === 'fast' || v.grund === 'tidligere') valgTekst = `Kamplængde: ${kamplaengdeTekst(v.minutter, v.udenPause)}.`;
     else if (v.grund === 'proeve') valgTekst = `Kamplængde: ${kamplaengdeTekst(v.minutter, v.udenPause)}.${v.aendret ? ' Husk at sætte den samme kamplængde i TP.' : ''}`;
     else if (v.aendret) valgTekst = `Valgt for dig ud fra sammenligningen af kamplængder: <b>${esc(kamplaengdeTekst(v.minutter, v.udenPause))}</b>. Husk at sætte den samme kamplængde i TP.`;

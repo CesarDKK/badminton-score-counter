@@ -336,7 +336,9 @@ export function laesTP(tabeller, valg = {}) {
         let forrige = [];
         for (const k of runde1) tilfoej(k);
         forrige = runde1.map((k) => k.id);
-        for (let runde = 2; runde <= antalRunder; runde += 1) {
+        // Er 1. runde ikke trukket endnu i TP (Swiss uden lodtrækning: alle van1/van2 er 0), er den lige så ukendt som de
+        // næste — så den laves også som pladsholdere i stedet for at forsvinde (Lyngby U9/U11 BCD 2026, Jesper 2026-11-13)
+        for (let runde = runde1.length ? 2 : 1; runde <= antalRunder; runde += 1) {
             const rundeRow = rows.find((r) => r.roundnr === runde && r.planning % 1000 !== 0);
             const rundeTid = rundeRow ? tid(rundeRow) : null;
             const nye = [];

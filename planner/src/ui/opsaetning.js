@@ -205,7 +205,10 @@ function kamplaengdePanel(p, ui = {}) {
     return `
     <section class="panel" id="afsnit-kamplaengde">
         <h2>Kamplængde og pauser</h2>
-        <p class="panel-sub">Vælges automatisk, når du trykker "Lav kampprogram" — ud fra en sammenligning af kamplængderne. Nu: <b>${slotMin} min, ${udenPause ? 'pausen gives på dagen' : 'reglementets pause i planen'}</b>. Turneringen har én kamplængde, som også sættes i TP.</p>
+        ${p.opsaetning.kamplaengdeValgt
+        ? `<p class="panel-sub">Du har selv valgt: <b>${slotMin} min, ${udenPause ? 'pausen gives på dagen' : 'reglementets pause i planen'}</b>. "Lav kampprogram" bruger dit valg og vælger ikke en anden kamplængde. Turneringen har én kamplængde, som også sættes i TP.
+            <button type="button" class="knap knap--sekundaer knap--lille" data-handling="auto-kamplaengde">Lad planneren vælge</button></p>`
+        : `<p class="panel-sub">Vælges automatisk, når du trykker "Lav kampprogram" — ud fra en sammenligning af kamplængderne. Nu: <b>${slotMin} min, ${udenPause ? 'pausen gives på dagen' : 'reglementets pause i planen'}</b>. Sætter du den selv herunder, bruges dit valg. Turneringen har én kamplængde, som også sættes i TP.</p>`}
         <details class="fold" data-id="kamplaengde-ret">
             <summary><span class="fold-titel">Sæt den selv eller sammenlign</span></summary>
             <p class="panel-sub">Reglementet: mindst 10 min pause i A–D-rækker, 15 i M, 20 i E, og 12 når M og A–D spilles i samme turnering.</p>
@@ -705,6 +708,7 @@ function bind(container, projekt, h) {
             else h.slotMin(Number(knap.dataset.min));
         }
         else if (handling === 'sammenlign-kamplaengder') h.sammenlignKamplaengder();
+        else if (handling === 'auto-kamplaengde') h.autoKamplaengde();
         else if (handling === 'fjern-spaerring') {
             const dag = projekt().opsaetning.dage.find((d) => d.dato === dato);
             h.dag(dato, { spaerret: dag.spaerret.filter((_, i) => i !== Number(index)) });
