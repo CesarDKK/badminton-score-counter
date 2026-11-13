@@ -781,3 +781,21 @@ fritekst, så det kan ikke ses sikkert, om TP-filen har de halve baner med.
 - **Spørgsmålet** under Turneringen → Dage og baner: "Er de halve baner talt med i de 15?" Ja (med antal delte) / Nej.
   Gættet står med gul ramme, til det er bekræftet (`dag.halveBaner = { tp, delte, gaet }`, `store.saetHalveBaner`).
 - TP-filer med et særligt tidsrum med ekstra baner (Lyngby 2025: 15 kl. 12–16:30) klares som før med rækkens vindue.
+
+## Start tidligt: U9's tidsrum efter behov, og tomme baner vejer mere (2026-11-13)
+
+Prod-test (Lyngby 2026, 30 min, pause 0, U9 + U11 D lørdag): løseren lagde U11 D HS kl. 14–16 med hele runder på 10 baner
+og lod 5 baner stå tomme hele formiddagen — lørdagen sluttede kl. 17. Grunden: U9 havde de 5 delte baner reserveret
+09–14 (dagens start + 5 timer), så U11 D kun havde 5 baner, og en Swiss-runde på 10 kampe fyldte to slots; løseren
+vægtede spillernes ventetid og tid i hallen langt over tomme baner (0,1). Jesper: "de skal starte tidligt".
+
+- **U9's tidsrum efter behov** (`store.anslaaSenest`): det største af bane-slots på de egne baner (halve tæller ½, med
+  fyldningsgraden) og spilleren med flest kampe (med pause imellem; Swiss-pladsholdere tæller én kamp pr. runde) plus ét
+  slot luft — højst rækkens max varighed. Tidsrummet, planneren selv har sat (`raekke.tidsrumAuto`), regnes om, når
+  kampene bygges (`genberegnKampe` → `medAutoTidsrum`), så det følger kamplængde, pause og form; et tidsrum, brugeren
+  har sat, røres ikke. Lyngby: 09–13 ved 30 min, 09–11:40 ved 20 min.
+- **Tomme baner midt på dagen** vejer 1,5 i standarden (før 0,1) og 3 i "Tidlig slut" (før 0,3). Gemte projekter med
+  skabelonens uændrede vægt opgraderes (projektversion 4).
+
+Med løseren på Lyngby-filen: U9 09:00–12:30, U11 D HS fra 10:00 på de fælles baner og med hele runder fra 13:00, når U9's
+baner er fri — lørdagen slutter kl. 14:00 (før 17:00).

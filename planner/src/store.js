@@ -4,13 +4,13 @@
 import { planFraTP, minutter, klokkeFraMinutter } from './tp-reader.js';
 import { foreslaaForm, byggKampe, seedTilmeldinger, minKampeSamlet, sikreKampe, formTekst } from './form.js';
 import { pladsPaaDag, fordelRaekkerPaaDage, FYLDNINGSGRAD, kapacitetPrDag } from './kapacitet.js';
-import { lavRegelmodel } from './regelmodel.js';
+import { lavRegelmodel, minKampMin, pauseForRaekke } from './regelmodel.js';
 import { VAEGT_SKABELONER } from './kriterier.js';
 import { STANDARD_PAUSE, TIDSVINDUE, STANDARD_REGLER, reglerFor, reglementetsPause } from './regler.js';
 
 export { STANDARD_PAUSE, TIDSVINDUE, STANDARD_REGLER, reglerFor };
 
-export const PROJEKT_VERSION = 3; // hæves, når et gemt projekt skal opgraderes — se OPGRADERINGER
+export const PROJEKT_VERSION = 4; // hæves, når et gemt projekt skal opgraderes — se OPGRADERINGER
 export const GEM_NOEGLE = 'planner.projekt.v1';
 
 const klon = (x) => JSON.parse(JSON.stringify(x));
@@ -209,14 +209,49 @@ export function saetHalveBaner(projekt, dato, delte, { gaet = false, tp = null }
     const halvRaekker = new Set(p.kategorier.filter((k) => k.halvBane).map((k) => k.raekke));
     for (const r of p.raekker) {
         if (!halvRaekker.has(r.id) || !r.dage.includes(dato)) continue;
-        const start = minutter(dag.start);
-        const til = r.maxRaekkeMin ? klokkeFraMinutter(Math.min(start + r.maxRaekkeMin, minutter(dag.slut))) : dag.slut;
-        // "Nej": ingen egne baner — og det tidsrum, planneren selv satte med dem, fjernes igen
-        const egetTidsrum = r.tidligst === dag.start && r.senest === til;
-        if (!n) { p = opdaterRaekke(p, r.id, { reserveredeBaner: 0, ...(egetTidsrum ? { tidligst: null, senest: null } : {}) }); continue; }
-        p = opdaterRaekke(p, r.id, { reserveredeBaner: n, tidligst: r.tidligst || dag.start, senest: r.senest || til });
+        // Tidsrummet, planneren selv har sat (tidsrumAuto), regnes om; et tidsrum, brugeren har sat, røres ikke.
+        // "Nej": ingen egne baner — og planneren fjerner sit eget tidsrum igen
+        const auto = r.tidsrumAuto || (!r.tidligst && !r.senest);
+        if (!n) { p = opdaterRaekke(p, r.id, { reserveredeBaner: 0, ...(auto ? { tidligst: null, senest: null, tidsrumAuto: false } : {}) }); continue; }
+        p = opdaterRaekke(p, r.id, { reserveredeBaner: n, ...(auto ? { tidligst: dag.start, senest: anslaaSenest(p, r, dag, n), tidsrumAuto: true } : {}) });
     }
     return p;
+}
+
+/**
+ * Hvor længe en række på egne baner skal bruge (Jesper 2026-11-13: U9's 5 baner stod tomme efter U9 var færdig, og
+ * U11 D måtte vente på dem). Det største af: bane-slots (halve baner tæller ½) delt på de egne baner med plannerens
+ * fyldningsgrad, og den spiller, der har flest kampe (med pause imellem) — plus ét slot luft. Højst rækkens max
+ * varighed og dagens slut. Returnerer klokkeslættet for "senest".
+ */
+export function anslaaSenest(projekt, r, dag, baner) {
+    const { slotMin, kampVarighed, pauseMin } = projekt.opsaetning;
+    const kategorier = projekt.kategorier.filter((k) => k.raekke === r.id);
+    const halv = new Set(kategorier.filter((k) => k.halvBane).map((k) => k.id));
+    const kampe = projekt.kampe.filter((k) => kategorier.some((x) => x.id === k.kategori));
+    const start = minutter(dag.start);
+    // Ingen kampe endnu (ingen lodtrækning): rækkens max varighed
+    if (!kampe.length) return klokkeFraMinutter(Math.min(start + (r.maxRaekkeMin || Infinity), minutter(dag.slut)));
+    const baneSlots = kampe.reduce((s, k) => s + (halv.has(k.kategori) ? 0.5 : 1), 0);
+    const banerSlots = Math.ceil(baneSlots / Math.max(1, baner) / FYLDNINGSGRAD);
+    // Kampe pr. spiller: kendte spillere, og i runder uden spillere (Swiss, cup) én kamp pr. runde for hver mulig spiller
+    const prSpiller = new Map();
+    const set = new Set();
+    for (const k of kampe) {
+        if (k.spillere.length) { for (const s of k.spillere) prSpiller.set(s, (prSpiller.get(s) || 0) + 1); continue; }
+        for (const s of k.muligeSpillere || []) {
+            const n = `${k.kategori}|${k.runde}|${s}`;
+            if (set.has(n)) continue;
+            set.add(n);
+            prSpiller.set(s, (prSpiller.get(s) || 0) + 1);
+        }
+    }
+    const flest = Math.max(0, ...prSpiller.values());
+    const varighed = kampVarighed === 'slot' ? slotMin : Math.min(slotMin, minKampMin(r.aargang, r.raekke, reglerFor(projekt)));
+    const afstand = Math.max(1, Math.ceil((varighed + pauseForRaekke(pauseMin, r.pauseKlasse)) / slotMin));
+    const spillerSlots = flest ? 1 + (flest - 1) * afstand : 0;
+    const min = (Math.max(banerSlots, spillerSlots) + 1) * slotMin;
+    return klokkeFraMinutter(Math.min(start + min, start + (r.maxRaekkeMin || Infinity), minutter(dag.slut)));
 }
 
 /**
@@ -336,6 +371,14 @@ const OPGRADERINGER = {
     },
     // Version 2 → 3: varighed for doublerne (U9 4 t, U11 3 t) og hele U9-rækken (5 t) — Jesper 2026-10-12
     2: (p) => ({ ...p, raekker: p.raekker.map((r) => ({ ...standardVarighed(r.aargang), ...r })) }),
+    // Version 3 → 4: tomme baner vejer mere (Jesper 2026-11-13: "de skal starte tidligt") — kun projekter med en
+    // skabelons uændrede vægt; en vægt, brugeren selv har sat, bliver stående
+    3: (p) => {
+        const v = p.opsaetning?.vaegte;
+        const gammel = { standard: 0.1, tidligSlut: 0.3 }[p.opsaetning?.vaegtSkabelon];
+        if (!v || gammel === undefined || v.tommeBaner !== gammel) return p;
+        return { ...p, opsaetning: { ...p.opsaetning, vaegte: { ...v, tommeBaner: VAEGT_SKABELONER[p.opsaetning.vaegtSkabelon].vaegte.tommeBaner } } };
+    },
 };
 
 /**
@@ -671,14 +714,30 @@ export function genberegnKampe(projekt, valg = {}) {
     });
     const ids = new Set(kampe.map((k) => k.id));
     const { plan, laast } = overfoerPlan(valg.gamleKampe || projekt.kampe, kampe, projekt.plan || {}, projekt.laast || []);
-    return {
+    return medAutoTidsrum({
         ...projekt,
         kategorier,
         kampe,
         plan,
         laast,
         sidsteForslag: projekt.sidsteForslag ? { ikkePlaceret: (projekt.sidsteForslag.ikkePlaceret || []).filter((x) => ids.has(x.id)) } : projekt.sidsteForslag,
-    };
+    });
+}
+
+/**
+ * Tidsrum, planneren selv har sat for en række på egne baner (tidsrumAuto), regnes om, når kampene er bygget — så det
+ * følger kamplængde, pause og form (anslaaSenest). Rækker med ét spilledag; ellers bliver tidsrummet stående.
+ */
+function medAutoTidsrum(projekt) {
+    if (!projekt.raekker.some((r) => r.tidsrumAuto && r.reserveredeBaner > 0)) return projekt;
+    const raekker = projekt.raekker.map((r) => {
+        if (!r.tidsrumAuto || !(r.reserveredeBaner > 0) || r.dage.length !== 1) return r;
+        const dag = projekt.opsaetning.dage.find((d) => d.dato === r.dage[0]);
+        if (!dag) return r;
+        const senest = anslaaSenest(projekt, r, dag, r.reserveredeBaner);
+        return senest === r.senest && r.tidligst === dag.start ? r : { ...r, tidligst: dag.start, senest };
+    });
+    return { ...projekt, raekker };
 }
 
 /** Middelvejen for U9/U11 tages kun, når rækkens dage højst er så fyldt (andel af de lovlige bane-slots). */

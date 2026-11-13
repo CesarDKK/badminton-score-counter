@@ -776,7 +776,7 @@ function bind(container, projekt, h) {
         // så én-dags-reglen kunne slås fra i stilhed (gennemgangen 2026-10-11, A4)
         if (d.raekkeTal === 'maxDage') { h.raekke(d.raekke, { maxDage: el.value === '' ? (d.standard ? Number(d.standard) : null) : Number(el.value) <= 0 ? null : Number(el.value) }); return; }
         if (d.raekkeTal) { h.raekke(d.raekke, { [d.raekkeTal]: el.value === '' || Number(el.value) <= 0 ? null : Number(el.value) }); return; }
-        if (d.raekkeTid) { h.raekke(d.raekke, { [d.raekkeTid]: el.value || null }); return; }
+        if (d.raekkeTid) { h.raekke(d.raekke, { [d.raekkeTid]: el.value || null, tidsrumAuto: false }); return; }
         if (d.raekkeBaner) { h.raekke(d.raekkeBaner, { reserveredeBaner: Math.max(0, Number(el.value) || 0) }); return; }
         if (d.halve) {
             const tal = container.querySelector(`[data-halve-antal="${d.halve}"]`);
