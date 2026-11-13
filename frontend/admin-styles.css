@@ -1736,3 +1736,11 @@ header > div {
    mangler, hænger under fluebenet uden at gøre rækken højere */
 .ls-flueben--laast { position: relative; cursor: not-allowed; color: var(--text-muted, rgba(255, 255, 255, 0.62)); }
 .ls-mangler { position: absolute; left: 0; top: calc(100% - 6px); font-size: 0.85em; white-space: nowrap; }
+
+/* Holdkamp-import: "Opret Holdkamp" i toppen af gennemsynet. På smalle skærme
+   lægger knappen sig under overskriften i fuld bredde */
+.bp-gennemse-head { flex-wrap: wrap; }
+.bp-gennemse-head > div { flex: 1 1 260px; }
+@media (max-width: 600px) {
+    .bp-gennemse-head > .bp-opret-knap { width: 100%; }
+}

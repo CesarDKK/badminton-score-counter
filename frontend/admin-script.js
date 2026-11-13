@@ -4923,7 +4923,7 @@ function bpRenderPreview(data) {
 
     preview.innerHTML = `
         <div style="background:rgba(255,255,255,0.03);border:1px solid var(--color-primary);border-radius:10px;padding:20px;">
-            <div class="admin-panel-head">
+            <div class="admin-panel-head bp-gennemse-head">
                 <div>
                     <h4 style="color:var(--text-primary, #eaeaea);margin-bottom:6px;">Gennemse og ret inden oprettelse</h4>
                     <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.88em;">Format: ${escapeHtml(HOLDKAMP_FORMATS[data.format]?.name || 'ukendt — oprettes med kampene som de står på holdsedlen')}</div>
