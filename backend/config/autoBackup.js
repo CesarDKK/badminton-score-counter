@@ -1,7 +1,8 @@
 // Automatisk backup af klubberne: hver mandag kl. 02.00 dansk tid (scheduler.js)
 // tages en backup af hver aktiv klub, og de 4 nyeste gemmes. Lige før en
-// gendannelse tages en "før gendannelse"-backup, så en gendannelse kan fortrydes
-// (kun den nyeste af dem gemmes).
+// gendannelse tages en "før gendannelse"-backup, så en gendannelse kan fortrydes.
+// Af dem gemmes lige så mange som af de ugentlige (nr. 47): før blev kun den
+// nyeste gemt, så to gendannelser i træk slettede det, der var før den første.
 //
 // Filerne ligger på serveren i <CLUB_BACKUP_DIR>/<klubbens db_name>/, som
 // gzippet JSON i samme format som "Download backup" (config/klubBackup.js).
@@ -15,7 +16,7 @@ const { lavBackup } = require('./klubBackup');
 const BACKUP_DIR = path.resolve(process.env.CLUB_BACKUP_DIR || path.join(__dirname, '..', 'club-backups'));
 
 // Hvor mange af hver slags der gemmes
-const BEHOLD = { auto: 4, 'foer-gendannelse': 1 };
+const BEHOLD = { auto: 4, 'foer-gendannelse': 4 };
 
 // auto-20261020-000012.json.gz — tidspunktet er UTC
 const FILNAVN = /^(auto|foer-gendannelse)-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})\.json\.gz$/;
@@ -74,10 +75,17 @@ function laesBackup(dbName, fil) {
 // Tag og gem en backup af klubben. conn: forbindelse til klubbens database.
 // Skrives først til en .part-fil, så en afbrudt backup aldrig ligner en hel.
 async function tagBackup(conn, club, type) {
-    const backup = await lavBackup(conn, { mappe: club.db_name, clubSubdomain: club.subdomain, clubName: club.name });
+    const backup = await lavBackup(conn, { mappe: club.db_name, clubSubdomain: club.subdomain, clubName: club.name, clubDbName: club.db_name });
     const dir = klubDir(club.db_name);
     fs.mkdirSync(dir, { recursive: true });
-    const fil = filnavnFor(type);
+    // To backups i samme sekund (to gendannelser lige efter hinanden) fik før
+    // samme filnavn, og den første "før gendannelse" blev overskrevet
+    let dato = new Date();
+    let fil = filnavnFor(type, dato);
+    while (fs.existsSync(path.join(dir, fil))) {
+        dato = new Date(dato.getTime() + 1000);
+        fil = filnavnFor(type, dato);
+    }
     const sti = path.join(dir, fil);
     fs.writeFileSync(sti + '.part', zlib.gzipSync(JSON.stringify(backup)));
     fs.renameSync(sti + '.part', sti);

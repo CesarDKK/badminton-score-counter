@@ -1034,6 +1034,8 @@ header > div {
 
 .ls-besked { margin-top: 6px; color: var(--color-win, #45d17e); }
 .ls-besked--fejl { color: rgb(var(--color-danger-rgb, 217, 44, 63)); }
+/* "Ikke gemt" (nr. 43) og andre mærker med hidden: .maerke sætter display, som ellers vinder over hidden-attributten */
+.maerke[hidden] { display: none; }
 
 /* Fælles for alle baner: billede, overlay, tid efter kampen, klubbens logo */
 .ls-faelles {

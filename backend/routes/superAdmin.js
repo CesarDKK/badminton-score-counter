@@ -489,7 +489,7 @@ const modtagStorFil = (felt) => {
         next(err);
     });
 };
-const { lavBackup, validerBackup, gendanBackup, BackupFejl } = require('../config/klubBackup');
+const { lavBackup, validerBackup, gendanBackup, BackupFejl, backupFraAndenKlub } = require('../config/klubBackup');
 const autoBackup = require('../config/autoBackup');
 
 // GET /api/super-admin/clubs/:id/backup — download backup for one club
@@ -504,7 +504,7 @@ router.get('/clubs/:id/backup', superAdminAuth, async (req, res, next) => {
         const conn = await clubConn(club.db_name);
         let backup;
         try {
-            backup = await lavBackup(conn, { mappe: club.db_name, clubSubdomain: club.subdomain, clubName: club.name });
+            backup = await lavBackup(conn, { mappe: club.db_name, clubSubdomain: club.subdomain, clubName: club.name, clubDbName: club.db_name });
         } finally {
             await conn.end();
         }
@@ -519,6 +519,10 @@ router.get('/clubs/:id/backup', superAdminAuth, async (req, res, next) => {
 // POST /api/super-admin/clubs/:id/restore — restore backup for one club.
 // Først tages en "før gendannelse"-backup (som på klubbens egen side), så
 // gendannelsen kan fortrydes; fejler den, gendannes der ikke.
+//
+// Er backuppen fra en anden klub, svares 409 (code 'anden_klub') — super-admin
+// kan flytte data mellem klubber, men kun med ?andenKlub=1 efter at have
+// bekræftet det (nr. 47).
 router.post('/clubs/:id/restore', superAdminAuth, modtagStorFil('backup'), async (req, res, next) => {
     let backup;
     try {
@@ -536,6 +540,14 @@ router.post('/clubs/:id/restore', superAdminAuth, modtagStorFil('backup'), async
             [req.params.id]
         );
         if (!club) return res.status(404).json({ error: 'Klub ikke fundet' });
+
+        const fra = backupFraAndenKlub(backup, club);
+        if (fra && req.query.andenKlub !== '1') {
+            return res.status(409).json({
+                code: 'anden_klub', fra,
+                error: `Backuppen er fra en anden klub (${fra}), ikke ${club.name}.`
+            });
+        }
 
         const conn = await clubConn(club.db_name);
         let resultat;

@@ -17,7 +17,11 @@ const BACKUP_VERSION = '1.0';
 
 // Tabellerne i en backup, i gendannelses-rækkefølge (forældre før børn).
 // Klub-admins og deres adgangskoder er bevidst IKKE med: en gendannelse må ikke
-// låse nogen ude eller give en gammel adgangskode liv igen.
+// låse nogen ude eller give en gammel adgangskode liv igen. Det samme gælder
+// adgangslinkene (device_tokens, nr. 47): før rullede en gendannelse dem
+// tilbage — tilbagekaldte links virkede igen, og nye links (og TV'erne på dem)
+// holdt op med at virke. Nu bevares klubbens nuværende links; ældre backups,
+// der har dem med, gendannes uden dem.
 const BACKUP_TABLES = [
     'settings',
     'sponsor_settings',
@@ -29,7 +33,6 @@ const BACKUP_TABLES = [
     'match_history',
     'team_matches',
     'team_match_games',
-    'device_tokens',
     'player_info',
     'tournaments',
     'tournament_matches',
@@ -60,7 +63,10 @@ function livestreamLogo(settings, mappe) {
 
 // Klubbens data som backup-objekt. conn: en mysql2-forbindelse til klubbens
 // database (query giver [rows]); mappe: klubbens upload-mappe (db_name).
-async function lavBackup(conn, { mappe, clubSubdomain = null, clubName } = {}) {
+//
+// clubDbName (nr. 47): klubbens identitet — en gendannelse i en anden klub
+// opdages (backupFraAndenKlub). Subdomænet kan ændres; databasenavnet ikke.
+async function lavBackup(conn, { mappe, clubSubdomain = null, clubName, clubDbName } = {}) {
     const tables = {};
     for (const table of BACKUP_TABLES) {
         const [rows] = await conn.query(`SELECT * FROM \`${table}\``);
@@ -75,7 +81,21 @@ async function lavBackup(conn, { mappe, clubSubdomain = null, clubName } = {}) {
         files: hentSponsorFiler([...tables.sponsor_images, ...livestreamLogo(tables.settings, mappe)], mappe),
     };
     if (clubName) backup.clubName = clubName;
+    if (clubDbName) backup.clubDbName = clubDbName;
     return backup;
+}
+
+// Er backuppen fra en anden klub end klub ({ db_name, subdomain })? Svarer med
+// en tekst om, hvor den er fra, ellers null. Backups uden klub (demoen, en lokal
+// installation) kan ikke tjekkes og godtages. Ældre backups har kun subdomænet.
+function backupFraAndenKlub(backup, klub) {
+    if (!backup || !klub) return null;
+    const fra = backup.clubName
+        ? `${backup.clubName}${backup.clubSubdomain ? ` (${backup.clubSubdomain})` : ''}`
+        : backup.clubSubdomain || backup.clubDbName;
+    if (backup.clubDbName) return backup.clubDbName === klub.db_name ? null : fra;
+    if (backup.clubSubdomain) return backup.clubSubdomain === klub.subdomain ? null : fra;
+    return null;
 }
 
 // Fejltekst, hvis backuppen ikke kan gendannes; ellers null. Ændrer intet.
@@ -162,4 +182,4 @@ async function gendanBackup(conn, backup, mappe, { kunBrugte = false } = {}) {
     };
 }
 
-module.exports = { BACKUP_TABLES, lavBackup, validerBackup, gendanBackup, BackupFejl, normalizeValue };
+module.exports = { BACKUP_TABLES, lavBackup, validerBackup, gendanBackup, BackupFejl, normalizeValue, backupFraAndenKlub };

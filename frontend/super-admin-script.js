@@ -939,7 +939,11 @@ async function downloadClubBackup(clubId) {
 }
 
 async function triggerClubRestore(clubId) {
-    if (!await confirmModal('Gendan klub', 'Er du sikker? Alle data for denne klub vil blive overskrevet. Kan ikke fortrydes.', { danger: true, okText: 'Gendan' })) return;
+    const club = clubs.find(c => c.id === clubId);
+    // Teksten siger, hvad der faktisk sker (nr. 47): der tages en kopi først
+    if (!await confirmModal('Gendan klub',
+        `Alle data for klubben "${club ? club.name : ''}" overskrives med backuppen. Lige før gemmes en kopi af det nuværende ("Før gendannelse"), som klubben kan gendanne under Indstillinger → Backup & Gendannelse. Adgangslinks og admin-logins røres ikke.`,
+        { danger: true, okText: 'Gendan' })) return;
     _restoreClubId = clubId;
     _restoreInput.click();
 }
@@ -954,19 +958,30 @@ async function uploadSvar(res) {
     return data;
 }
 
-async function doClubRestore(clubId, file) {
+// andenKlub: super-admin har bekræftet, at backuppen fra en anden klub skal
+// flyttes hertil (serveren svarer ellers 409 'anden_klub', nr. 47)
+async function doClubRestore(clubId, file, andenKlub = false) {
     const token = sessionStorage.getItem('superAdminToken') || sessionStorage.getItem('authToken');
     const form = new FormData();
     form.append('backup', file);
     try {
-        const res = await fetch(`/api/super-admin/clubs/${clubId}/restore`, {
+        const res = await fetch(`/api/super-admin/clubs/${clubId}/restore${andenKlub ? '?andenKlub=1' : ''}`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` },
             body: form
         });
         const data = await uploadSvar(res);
+        if (res.status === 409 && data.code === 'anden_klub' && !andenKlub) {
+            const club = clubs.find(c => c.id === clubId);
+            if (await confirmModal('Backup fra en anden klub',
+                `Backuppen er fra ${data.fra}, ikke fra "${club ? club.name : ''}". Vil du flytte dens data over i "${club ? club.name : ''}"? Klubbens nuværende data overskrives (en kopi gemmes som "Før gendannelse").`,
+                { danger: true, okText: 'Flyt data hertil' })) {
+                return doClubRestore(clubId, file, true);
+            }
+            return;
+        }
         if (!res.ok) throw new Error(data.error || res.statusText);
-        notify(`Gendannelse fuldført! Billeder: ${data.files}`, 'success');
+        notify(`Gendannelse fuldført! Billeder: ${data.files}. Det, der var før, er gemt som "Før gendannelse".`, 'success');
     } catch (err) {
         notify('Gendannelse fejlede: ' + err.message, 'error');
     }

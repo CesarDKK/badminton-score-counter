@@ -221,6 +221,38 @@ router.delete('/:id', adgangslinkAdmin, async (req, res, next) => {
     }
 });
 
+// PUT /api/device-tokens/:id/genaktiver — et tilbagekaldt link tages i brug igen (nr. 44).
+//
+// Sikkert, fordi intet gammelt får liv igen: linket får en ny adresse (ny
+// token-værdi — den gamle, der måske er delt eller skrevet ned, virker ikke
+// mere), og sessionerne, enhederne havde før tilbagekaldelsen, afvises stadig
+// (sessioner_fra, se middleware/auth.js). Navn, bane, låsning, QR og kameraet
+// bevares. Enhederne skal have den nye adresse (eller kiosk.conf) igen.
+router.put('/:id/genaktiver', adgangslinkAdmin, async (req, res, next) => {
+    try {
+        const existing = await queryOne(
+            'SELECT id, is_active, token_type FROM device_tokens WHERE id = ?', [req.params.id]);
+        if (!existing || existing.token_type === 'match_session') {
+            return res.status(404).json({ error: 'Token ikke fundet' });
+        }
+        if (existing.is_active) {
+            return res.status(400).json({ error: 'Linket er ikke tilbagekaldt' });
+        }
+        const token = crypto.randomBytes(32).toString('hex');
+        await query(
+            'UPDATE device_tokens SET token = ?, is_active = 1, sessioner_fra = UTC_TIMESTAMP(), last_used_at = NULL WHERE id = ?',
+            [token, req.params.id]
+        );
+        const updated = await queryOne(
+            'SELECT id, token, name, destination, locked, show_qr_on_tv, is_active, created_at, last_used_at FROM device_tokens WHERE id = ?',
+            [req.params.id]
+        );
+        res.json(updated);
+    } catch (error) {
+        next(error);
+    }
+});
+
 // DELETE /api/device-tokens/:id/permanent — slet token permanent (kun tilbagekaldte)
 router.delete('/:id/permanent', adgangslinkAdmin, async (req, res, next) => {
     try {
