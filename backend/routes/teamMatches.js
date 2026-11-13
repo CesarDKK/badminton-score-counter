@@ -3,14 +3,14 @@ const router = express.Router();
 const { query, queryOne, transaktion } = require('../config/database');
 const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
 const { requirePage } = require('../middleware/pagePermission');
-const { ikkeQrSession } = require('../middleware/qrSession');
+const { erQrSession, baneFraDestination } = require('../middleware/qrSession');
 const { currentTenant } = require('../config/tenantPools');
 const { banensStartTid } = require('../config/matchTiming');
 const { publishGameStateChange, publishHoldkampChange } = require('../events/gameStateEvents');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
 const { rydAfsluttetBane } = require('../config/banerydning');
 const holdkampFormater = require('../config/holdkampFormater');
-const { banenErIGang, delkampAendringAfvist, sammeBane } = require('../config/delkampRegler');
+const { banenErIGang, delkampAendringAfvist, qrDelkampAfvist, sammeBane } = require('../config/delkampRegler');
 const baneTildeling = require('../config/baneTildeling');
 
 // Banens stilling (point, sæt, ur) — til "er banen i gang?" i banenErIGang
@@ -328,8 +328,9 @@ router.put('/:id/logos', authMiddleware, requirePage('holdkamp'), async (req, re
 
 // PUT /api/team-matches/:id/games/:gameId - Update a game (bruges fra court-siden;
 // i club-mode kræves device/club_admin-token ligesom game-states — åben var den
-// et hul hvor enhver kunne omskrive spillere og vindere i en igangværende holdkamp)
-router.put('/:id/games/:gameId', requireWriteAuthInClubMode, requirePage('holdkamp'), ikkeQrSession, async (req, res, next) => {
+// et hul hvor enhver kunne omskrive spillere og vindere i en igangværende holdkamp).
+// En QR-telefon må kun røre delkampe på sin egen bane (qrDelkampAfvist).
+router.put('/:id/games/:gameId', requireWriteAuthInClubMode, requirePage('holdkamp'), async (req, res, next) => {
     try {
         const { id, gameId } = req.params;
         const { courtNumber, status, winnerTeam, setScores, team1Player1, team1Player2, team2Player1, team2Player2 } = req.body;
@@ -342,6 +343,14 @@ router.put('/:id/games/:gameId', requireWriteAuthInClubMode, requirePage('holdka
 
         if (!game) {
             return res.status(404).json({ error: 'Delkamp ikke fundet' });
+        }
+
+        // QR-telefonen (scannet på banens TV): kun delkampe på sin egen bane
+        const qr = erQrSession(req.user);
+        const egenBane = qr ? baneFraDestination(req.user.destination) : null;
+        if (qr) {
+            const afvist = qrDelkampAfvist({ egenBane, delkamp: game, courtNumber });
+            if (afvist) return res.status(403).json({ error: afvist });
         }
 
         // En tablet (adgangslink) må ikke genåbne en færdig delkamp eller trække
@@ -441,10 +450,13 @@ router.put('/:id/games/:gameId', requireWriteAuthInClubMode, requirePage('holdka
         if (courtNumber !== undefined && courtNumber !== null) affectedCourts.add(courtNumber);
         for (const c of affectedCourts) publishGameStateChange(req, c, 'assignment');
 
-        // Officiel kamp tildelt en bane → ryd evt. guest QR-session, så TV'et
-        // ikke viser en "overtag kampen"-QR under en holdkamp
+        // Admin eller en tablet tildeler delkampen en bane → ryd evt. QR-session,
+        // så en telefon fra forrige kamp ikke tæller med. Tildeler QR-telefonen
+        // selv delkampen til sin bane, beholder den sin session — den skal tælle.
         if (courtNumber !== undefined && courtNumber !== null) {
-            try { await invalidateCourtTokens(courtNumber); } catch (e) { console.error('QR-token oprydning fejlede:', e); }
+            if (!qr) {
+                try { await invalidateCourtTokens(courtNumber); } catch (e) { console.error('QR-token oprydning fejlede:', e); }
+            }
             // Banen er nu en holdkampbane: en tidligere badmintonplanner-tildeling
             // må ikke få delkampens resultat meldt ind som sit (nr. 78)
             await baneTildeling.fjernPlannerTildeling(courtNumber);

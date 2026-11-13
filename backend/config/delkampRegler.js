@@ -63,4 +63,31 @@ function delkampAendringAfvist({ erEnhed, delkamp, status, courtNumber, egenBane
     return null;
 }
 
-module.exports = { banenErIGang, delkampAendringAfvist, sammeBane };
+/**
+ * En QR-telefon (session fra TV'ets QR-kode) må tælle en holdkamps delkamp,
+ * men kun på sin egen bane: tildele en ventende delkamp til banen, rette navne,
+ * melde resultatet og frigive den igen. Ikke røre en delkamp på en anden bane
+ * eller flytte en til en anden bane. Reglerne for tablets (delkampAendringAfvist)
+ * gælder oveni.
+ *
+ * @param {object} p
+ * @param {number|null} p.egenBane   banen QR-sessionen hører til (null = ukendt)
+ * @param {object}  p.delkamp        { status, court_number } som den står i databasen
+ * @param {*}       p.courtNumber    ny bane fra kaldet (undefined = uændret, null = frigiv)
+ * @returns {string|null} dansk fejltekst til et 403-svar, eller null hvis det er tilladt
+ */
+function qrDelkampAfvist({ egenBane, delkamp, courtNumber }) {
+    if (!egenBane) return 'QR-koden er ikke knyttet til en bane';
+    const paaBane = delkamp && delkamp.court_number !== null && delkamp.court_number !== undefined;
+    if (paaBane && !sammeBane(delkamp.court_number, egenBane)) {
+        return `Delkampen er tildelt bane ${delkamp.court_number} — QR-koden gælder bane ${egenBane}`;
+    }
+    if (courtNumber !== undefined && courtNumber !== null && !sammeBane(courtNumber, egenBane)) {
+        return 'QR-koden gælder en anden bane';
+    }
+    // Frigivelse (null) giver kun mening for en delkamp på banen
+    if (courtNumber === null && !paaBane) return 'Delkampen er ikke tildelt denne bane';
+    return null;
+}
+
+module.exports = { banenErIGang, delkampAendringAfvist, qrDelkampAfvist, sammeBane };

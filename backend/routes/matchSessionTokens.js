@@ -38,12 +38,12 @@ async function getActiveToken(courtNumber) {
 // Henter eller opretter en aktiv match-session token for en bane.
 // Returneres som raw streng (bruges internt af QR-endpointet).
 async function getOrCreateActiveToken(courtNumber) {
-    // Spiller banen en holdkamp- eller turneringskamp, vises ingen QR-session
-    // (nr. 82): før kunne et TV i tomgangstilstand få udstedt en QR-kode, og
-    // telefonen kunne tælle — og melde — den officielle kamp. Ruten svarer 404
-    // som uden kode.
-    const { officielKampPaaBane } = require('../config/baneTildeling');
-    if (await officielKampPaaBane(courtNumber)) return null;
+    // Spiller banen en turneringskamp, vises ingen QR-session (nr. 82): før
+    // kunne et TV i tomgangstilstand få udstedt en QR-kode, og telefonen kunne
+    // tælle — og melde — turneringskampen. Ruten svarer 404 som uden kode.
+    // En holdkamps delkamp må telefonen gerne tælle (se qrSession.js).
+    const { turneringPaaBane } = require('../config/baneTildeling');
+    if (await turneringPaaBane(courtNumber)) return null;
 
     const existing = await getActiveToken(courtNumber);
     if (existing) return existing;

@@ -8,10 +8,13 @@ const { klubAdminAfvist } = require('./klubAdminSession');
 //
 //   1. Kun et TV (eller en admin) kan få udstedt QR-koden. Ellers kunne alle på
 //      internettet hente /api/qr-code/1 og få skriveadgang til klubben.
-//   2. En QR-session (tokenType 'match_session') gælder kun sin egen bane og
-//      kun almindelig tælling — ikke holdkamp- og turneringsresultater.
-//   3. Den ophører, når banen ryddes, tildeles en holdkamp/turneringskamp eller
-//      frigives efter inaktivitet (rækken i device_tokens slettes). JWT'en
+//   2. En QR-session (tokenType 'match_session') gælder kun sin egen bane:
+//      almindelig tælling og en holdkamps delkamp på banen (Jesper, 2026-11-13 —
+//      klubben slår QR-koden fra, når der afvikles turneringer), men aldrig
+//      turneringsresultater (config/delkampRegler.js, qrDelkampAfvist).
+//   3. Den ophører, når banen ryddes, tildeles en turneringskamp, af admin eller
+//      en tablet tildeles en delkamp, eller frigives efter inaktivitet
+//      (rækken i device_tokens slettes). JWT'en
 //      gælder 12 timer, så rækken tjekkes ved hver skrivning — det gør
 //      requireWriteAuthInClubMode for alle adgangslinks (middleware/auth.js).
 
@@ -38,11 +41,12 @@ function kunEgenBane(param) {
     };
 }
 
-// Holdkamp- og turneringsresultater er officielle: dem må en QR-session ikke skrive.
-// (En bane, der får tildelt en sådan kamp, mister i forvejen sin QR-session.)
+// Turneringsresultater er officielle: dem må en QR-session ikke skrive.
+// (En bane, der får tildelt en turneringskamp, mister i forvejen sin QR-session.)
+// En holdkamps delkamp har sin egen regel (qrDelkampAfvist i config/delkampRegler.js).
 function ikkeQrSession(req, res, next) {
     if (erQrSession(req.user)) {
-        return res.status(403).json({ error: 'QR-tælleren kan ikke indrapportere holdkamp- eller turneringsresultater' });
+        return res.status(403).json({ error: 'QR-tælleren kan ikke bruges til dette — brug banens tablet eller admin' });
     }
     next();
 }
