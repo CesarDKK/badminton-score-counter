@@ -4923,8 +4923,14 @@ function bpRenderPreview(data) {
 
     preview.innerHTML = `
         <div style="background:rgba(255,255,255,0.03);border:1px solid var(--color-primary);border-radius:10px;padding:20px;">
-            <h4 style="color:var(--text-primary, #eaeaea);margin-bottom:6px;">Gennemse og ret inden oprettelse</h4>
-            <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.88em;margin-bottom:15px;">Format: ${escapeHtml(HOLDKAMP_FORMATS[data.format]?.name || 'ukendt — oprettes med kampene som de står på holdsedlen')}</div>
+            <div class="admin-panel-head bp-gennemse-head">
+                <div>
+                    <h4 style="color:var(--text-primary, #eaeaea);margin-bottom:6px;">Gennemse og ret inden oprettelse</h4>
+                    <div style="color:var(--text-muted, rgba(255, 255, 255, 0.62));font-size:0.88em;">Format: ${escapeHtml(HOLDKAMP_FORMATS[data.format]?.name || 'ukendt — oprettes med kampene som de står på holdsedlen')}</div>
+                </div>
+                <!-- Samme knap i toppen, så man ikke skal rulle forbi alle delkampe -->
+                <button onclick="bpCreate()" type="button" class="btn-primary bp-opret-knap nowrap">Opret Holdkamp</button>
+            </div>
             <div class="gitter-2 luft-under-18">
                 <div>
                     <label class="tekst-daempet tekst-mindre">Hold 1</label>
@@ -4936,7 +4942,7 @@ function bpRenderPreview(data) {
                 </div>
             </div>
             ${gameRows}
-            <button onclick="bpCreate()" id="bpCreateBtn" class="btn-primary btn-lg btn-block luft-over-8">
+            <button onclick="bpCreate()" id="bpCreateBtn" type="button" class="btn-primary btn-lg btn-block luft-over-8 bp-opret-knap">
                 Opret Holdkamp
             </button>
         </div>`;
@@ -4978,9 +4984,9 @@ async function bpCreate() {
         };
     });
 
-    const btn = document.getElementById('bpCreateBtn');
+    const knapper = document.querySelectorAll('#bpImportPreview .bp-opret-knap');
     bpOpretter = true;
-    if (btn) { btn.disabled = true; btn.textContent = 'Opretter …'; }
+    knapper.forEach(k => { k.disabled = true; k.textContent = 'Opretter …'; });
     try {
         const sourceMatchId = preview.dataset.kilde || undefined;
         await api.createTeamMatch({ format, team1Name, team2Name, games: gamesData, sourceMatchId });
@@ -4998,7 +5004,7 @@ async function bpCreate() {
         }
     } finally {
         bpOpretter = false;
-        if (btn) { btn.disabled = false; btn.textContent = 'Opret Holdkamp'; }
+        knapper.forEach(k => { k.disabled = false; k.textContent = 'Opret Holdkamp'; });
     }
 }
 
