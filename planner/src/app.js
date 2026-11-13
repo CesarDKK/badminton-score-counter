@@ -690,10 +690,23 @@ const planHandlers = {
     // id kan være flere kampe adskilt af komma (Swiss Ladder-runder flyttes samlet)
     // Flyt i hånden: kampen låses, så den beholder tiden ved "Lav kampprogram igen" og i løseren — og hvert flyt kan
     // fortrydes trin for trin (Ctrl+Z). Gennemgangen 2026-10-11, U3: håndarbejde forsvandt ved næste beregning.
+    // Flyttes kampen tilbage, hvor den lå, før den blev flyttet og låst, er den ikke længere låst (Jesper 2026-11-13: "hvis
+    // jeg fortryder og rykker kampen retur … kan jeg ikke fjerne låsen"). Den oprindelige tid huskes kun i denne fane.
     flyt(id, dag, slot) {
         let p = projekt;
-        for (const x of id.split(',')) p = store.laasKamp(store.flytKamp(p, x, dag, slot), x, true);
-        redigerGitter(p, `Kampen er flyttet til ${datoTekst(dag, { kort: true })} ${slot} og låst (dobbeltklik for at låse den op).`);
+        const fra = tilstand.flyttetFra || (tilstand.flyttetFra = {});
+        let retur = 0;
+        const ids = id.split(',');
+        for (const x of ids) {
+            const nu = projekt.plan[x];
+            if (nu && !(projekt.laast || []).includes(x)) fra[x] = { dag: nu.dag, slot: nu.slot };
+            const tilbage = fra[x] && fra[x].dag === dag && fra[x].slot === slot;
+            p = store.laasKamp(store.flytKamp(p, x, dag, slot), x, !tilbage);
+            if (tilbage) { delete fra[x]; retur += 1; }
+        }
+        redigerGitter(p, retur === ids.length
+            ? `Kampen er tilbage på ${datoTekst(dag, { kort: true })} ${slot}, hvor den lå, og er ikke længere låst.`
+            : `Kampen er flyttet til ${datoTekst(dag, { kort: true })} ${slot} og låst, så den beholder tiden, når programmet laves igen. Lås den op i "Den valgte kamp" eller med dobbeltklik.`);
     },
     fjern(id) { let p = projekt; for (const x of id.split(',')) p = store.fjernFraPlan(p, x); redigerGitter(p, 'Kampens tid er fjernet.'); },
     fortrydGitter() {
@@ -717,11 +730,10 @@ const planHandlers = {
         const t0 = performance.now();
         const f = lavForslag(projekt, kunDenneDag ? { kunDage: [tilstand.dag] } : {});
         const ms = Math.round(performance.now() - t0);
-        const katMap = new Map(projekt.kampe.map((k) => [k.id, k]));
         const brud = [...f.brud, ...f.ikkePlaceret];
         tilstand.forslag = {
             tekst: `Forslag lavet på ${ms} ms: alle ${Object.keys(f.plan).length} kampe har tid${brud.length ? `, men ${brud.length} kunne kun placeres ved at bryde en regel — se forslagene nedenfor og fejlene i Tjek.` : ' uden regelbrud.'}`,
-            ikkePlaceret: katFelter(r.projekt, brud),
+            ikkePlaceret: katFelter(projekt, brud),
             kilde: 'graadig', // Plan-fanen anbefaler løseren, indtil dens plan er taget i brug
         };
         saet({ ...store.anvendForslag(projekt, f), sidsteForslag: { ikkePlaceret: brud } });
@@ -747,7 +759,14 @@ const planHandlers = {
         const vaerdi = !(projekt.laast || []).includes(ids[0]);
         let p = projekt;
         for (const x of ids) p = store.laasKamp(p, x, vaerdi);
-        redigerGitter(p, vaerdi ? 'Kampen er låst.' : 'Kampen er låst op.');
+        if (!vaerdi && tilstand.flyttetFra) for (const x of ids) delete tilstand.flyttetFra[x];
+        redigerGitter(p, vaerdi ? 'Kampen er låst.' : 'Kampen er låst op — den kan flyttes, når programmet laves igen.');
+    },
+    laasAlleOp() {
+        const n = (projekt.laast || []).length;
+        if (!n) return;
+        tilstand.flyttetFra = {};
+        redigerGitter(store.laasAlleOp(projekt), n === 1 ? 'Kampen er låst op — den kan flyttes, når programmet laves igen.' : `${n} kampe er låst op — de kan flyttes, når programmet laves igen.`);
     },
     laasKategori(vaerdi) { if (tilstand.filter) saet(store.laasKategori(projekt, tilstand.filter, vaerdi)); },
 

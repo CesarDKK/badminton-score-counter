@@ -100,7 +100,7 @@ export function kampprogramPanel(kp, aabneKort, projekt, { travl = false, sek = 
     const detaljer = [
         kp.prognose?.length ? `<span title="Dagen simuleret 100 gange med tilfældige kamplængder omkring sæsondataenes gennemsnit; kampe kan sættes i gang op til ${TIDLIG_START_MIN} min før tid (spillerne skal være klar), dog ikke før dagens start.">Prognose: ${kp.prognose.map((d) => `${esc(datoTekst(d.dato, { kort: true }))} plan slut ${d.planSlut}, forventet ca. ${d.slutMedian} (80 %: ${d.slut80})`).join(' · ')}.</span>` : '',
         kp.udfoert.length ? `Gjort undervejs: ${esc(kp.udfoert.join(' · '))}.` : '',
-        (projekt.laast || []).length ? `${laaseIkon} ${projekt.laast.length} ${projekt.laast.length === 1 ? 'kamp er låst' : 'kampe er låst'} og beholder ${projekt.laast.length === 1 ? 'sin' : 'deres'} tid, når programmet laves igen. Dobbeltklik på en kamp for at låse den op.` : '',
+        (projekt.laast || []).length ? `${laaseIkon} ${projekt.laast.length} ${projekt.laast.length === 1 ? 'kamp er låst' : 'kampe er låst'} og beholder ${projekt.laast.length === 1 ? 'sin' : 'deres'} tid, når programmet laves igen. <button class="knap knap--sekundaer knap--lille" data-handling="laas-alle-op"${dis}>Lås alle op</button>` : '',
         rettet ? 'Du har flyttet eller låst kampe, siden programmet blev lavet — Tjek viser, hvordan det står nu.' : '',
         beholdt && aabneKort.length ? `${beholdt} beholdt som det er.` : '',
     ].filter(Boolean);
@@ -435,6 +435,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
         ${harPlan ? statusTal(`${statistik.haltidGnsMin} min`, 'tid i hallen, gns.') : ''}
         ${harPlan ? statusTal(statistik.langeHuller, `venter over ${statistik.maxVentetidMin} min`, statistik.langeHuller ? 'er-gul' : '') : ''}
         ${laaste.size ? statusTal(laaste.size, laaste.size === 1 ? 'låst kamp' : 'låste kampe') : ''}
+        ${laaste.size ? `<button class="knap knap--sekundaer knap--lille" data-handling="laas-alle-op" ${travl ? 'disabled' : ''} title="Alle låste kampe kan flyttes igen, når du laver kampprogrammet, et forslag eller bruger løseren">Lås alle op</button>` : ''}
     </div>
     ${tilstand.fortryd?.efter === projekt ? `<p class="fortryd-bjaelke">${esc(tilstand.fortryd.tekst)} <button class="knap knap--sekundaer knap--lille" data-handling="fortryd">Fortryd</button></p>`
         : gitterTop?.efter === projekt ? `<p class="fortryd-bjaelke">${esc(gitterTop.tekst)} <button class="knap knap--sekundaer knap--lille" data-handling="fortryd-gitter" title="Ctrl+Z">Fortryd${gitterAntal > 1 ? ` (${gitterAntal})` : ''}</button></p>` : ''}
@@ -443,7 +444,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
         <button role="tab" class="visning ${problemer ? '' : 'er-aktiv'}" data-visning="gitter" aria-selected="${!problemer}">Plan</button>
         <button role="tab" class="visning ${problemer ? 'er-aktiv' : ''}" data-visning="problemer" aria-selected="${problemer}">Problemer${antalFejl ? ` <span class="maerke maerke--fejl">${antalFejl} fejl</span>` : ''}${antalAdv ? ` <span class="maerke maerke--advarsel">${antalAdv}</span>` : ''}</button>
     </div>
-    ${problemer ? '' : `<p class="plan-hjaelp daempet">Træk et kort til et slot — eller klik på kortet og derefter på et slot. Træk det til listen til højre for at fjerne tiden. Dobbeltklik låser. <span title="${esc('Vægtet sum af de bløde kriterier — lavere er bedre. Vægtene står under Avanceret i opsætningen.\n' + scoreTitel)}">Programmets score: ${score.total} (lavere er bedre).</span></p>`}
+    ${problemer ? '' : `<p class="plan-hjaelp daempet">Træk et kort til et slot — eller klik på kortet og derefter på et slot. Træk det til listen til højre for at fjerne tiden. En flyttet kamp låses; lås den op under "Den valgte kamp" eller med dobbeltklik. <span title="${esc('Vægtet sum af de bløde kriterier — lavere er bedre. Vægtene står under Avanceret i opsætningen.\n' + scoreTitel)}">Programmets score: ${score.total} (lavere er bedre).</span></p>`}
     ${tilstand.forslag && !kp ? `<p class="plan-status forslag-info">${esc(tilstand.forslag.tekst)}${tilstand.forslag.ikkePlaceret.length ? ` Berørte kampe: ${tilstand.forslag.ikkePlaceret.slice(0, 6).map((x) => `${esc(x.kategori)} ${esc(x.navn)} (${esc(x.brud || x.aarsag)})`).join('; ')}${tilstand.forslag.ikkePlaceret.length > 6 ? ' …' : ''}` : ''}</p>
     ${tilstand.forslag.handlinger?.length ? `<p class="diagnose-knapper">${tilstand.forslag.handlinger.map((x, i) => `<button class="knap knap--sekundaer" data-handling="diagnose" data-index="${i}">${esc(x.tekst)}</button>`).join(' ')}</p>` : ''}
     ${tilstand.forslag.ikkePlaceret.length ? `<ul class="loesninger">${loesningsforslag(projekt, tilstand.forslag.ikkePlaceret).map((f, i) => `<li><span>${esc(f.tekst)}</span>${f.handling ? ` <button class="knap knap--sekundaer knap--lille" data-handling="loesning" data-index="${i}">${esc(f.handling.tekst)} og lav forslag igen</button>` : ''}</li>`).join('')}</ul>
@@ -462,7 +463,8 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
             </section>
             ${valgt ? `<section class="spillerpanel"><h3>Den valgte kamp</h3>
                 <p class="daempet">Klik på et slot i gitteret for at flytte kampen dertil.</p>
-                <p class="raekke-knapper" style="margin:6px 0 4px"><button class="knap knap--sekundaer knap--lille" data-handling="fjern-valgte">Fjern tiden</button><button class="knap knap--sekundaer knap--lille" data-handling="fravaelg">Fravælg</button></p>
+                <p class="raekke-knapper" style="margin:6px 0 4px"><button class="knap knap--sekundaer knap--lille" data-handling="fjern-valgte">Fjern tiden</button>${projekt.plan[valgt.id] ? `<button class="knap knap--sekundaer knap--lille" data-handling="laas-valgte" data-ids="${esc(tilstand.valgtIds || valgt.id)}" title="${laaste.has(valgt.id) ? 'Kampen må flyttes igen, når programmet laves igen' : 'Kampen beholder sin tid, når programmet laves igen'}">${laaste.has(valgt.id) ? 'Lås op' : 'Lås'}</button>` : ''}<button class="knap knap--sekundaer knap--lille" data-handling="fravaelg">Fravælg</button></p>
+                ${laaste.has(valgt.id) ? '<p class="daempet">Kampen er låst og beholder sin tid, når programmet laves igen.</p>' : ''}
                 ${spillerPanel}</section>` : ''}
         </aside>
     </div>`}`;
@@ -549,6 +551,8 @@ function bind(container, h) {
             else if (hd === 'fortryd') h.fortryd();
             else if (hd === 'fortryd-gitter') h.fortrydGitter();
             else if (hd === 'fjern-valgte') { const ids = h.valgteIds(); if (ids) { h.vaelgKamp(ids); h.fjern(ids); } }
+            else if (hd === 'laas-valgte') h.laasKamp(knap.dataset.ids);
+            else if (hd === 'laas-alle-op') h.laasAlleOp();
             else if (hd === 'fravaelg') { const ids = h.valgteIds(); if (ids) h.vaelgKamp(ids); }
             return;
         }

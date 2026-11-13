@@ -2,7 +2,7 @@
 // igangsættelsesgrænsen som advarsel) og stabil omplanlægning ("Planlæg kun kampe uden tid").
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { nytProjekt, saetForm, opdaterDag, opdaterRaekke, flytKamp, anvendForslag, saetSlotMin, opdaterOpsaetning } from '../../src/store.js';
+import { nytProjekt, saetForm, opdaterDag, opdaterRaekke, flytKamp, anvendForslag, saetSlotMin, opdaterOpsaetning, laasKamp, laasAlleOp } from '../../src/store.js';
 import { prognoseDag, bedsteKamplaengde } from '../../src/kamplaengde.js';
 import { lavKampprogram } from '../../src/kampprogram.js';
 import { lavForslag } from '../../src/scheduler.js';
@@ -77,5 +77,18 @@ describe('Kamplængden: brugerens eget valg respekteres (Jesper 2026-11-13)', ()
         assert.equal(r.valg.aendret, false);
         assert.equal(r.projekt.opsaetning.slotMin, egen);
         assert.deepEqual(r.projekt.opsaetning.pauseMin, p.opsaetning.pauseMin);
+    });
+});
+
+describe('Låste kampe kan låses op igen (Jesper 2026-11-13)', () => {
+    test('"Lås alle op": "Lav kampprogram" må flytte kampene igen', () => {
+        let p = lavKampprogram(projekt()).projekt;
+        const id = Object.keys(p.plan)[0];
+        p = laasKamp(flytKamp(p, id, LOER, '19:00'), id, true);
+        assert.deepEqual(p.laast, [id]);
+        assert.equal(lavKampprogram(p).projekt.plan[id].slot, '19:00', 'låst: beholder tiden');
+        const op = laasAlleOp(p);
+        assert.deepEqual(op.laast, []);
+        assert.equal(lavKampprogram(op).valg.grund, null, 'uden låse vælger planneren igen');
     });
 });
