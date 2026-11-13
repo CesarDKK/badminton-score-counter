@@ -524,6 +524,18 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 .arbejder { display: flex; align-items: center; gap: 10px; border: 1px solid var(--border); background: var(--card); border-radius: 12px; padding: 12px 16px; margin-bottom: 12px; }
 .spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.15); border-top-color: var(--red); animation: drej 0.8s linear infinite; flex-shrink: 0; }
 @keyframes drej { to { transform: rotate(360deg); } }
+/* Løseren arbejder (Jesper 2026-11-13: det første udkast blev taget for resultatet) */
+.arbejder--loeser { border: 2px solid var(--accent, var(--red)); background: var(--bg-raise); padding: 14px 18px; }
+.arbejder--loeser .spinner { width: 26px; height: 26px; border-width: 3px; }
+.arbejder-tekst { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.fremdrift { display: block; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.1); overflow: hidden; }
+.fremdrift > span { display: block; height: 100%; background: var(--accent, var(--red)); transition: width 1s linear; }
+.spinner--lille { display: inline-block; width: 0.9em; height: 0.9em; border-width: 2px; vertical-align: -0.1em; }
+.kampprogram.er-udkast { border-style: dashed; border-color: var(--accent, var(--red)); }
+.gitter-hylster.er-udkast { outline: 2px dashed var(--accent, var(--red)); outline-offset: 4px; border-radius: 6px; }
+.gitter-hylster.er-udkast .gitter { opacity: 0.75; }
+.udkast-maerke { position: sticky; top: 0; left: 0; z-index: 3; margin: 0 0 6px; display: inline-block; padding: 4px 12px; border-radius: 999px; background: var(--accent, var(--red)); color: #fff; font-weight: 700; font-size: 0.85em; }
+.fane-maerke.er-regner { background: var(--accent, var(--red)); color: #fff; }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
 .kampprogram { border: 1px solid var(--border); background: var(--card); border-radius: var(--r-lg); padding: 16px 20px; margin-bottom: 14px; }
 .kampprogram.er-ok { border-color: rgba(var(--color-win-rgb), 0.45); }

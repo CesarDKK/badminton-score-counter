@@ -756,3 +756,14 @@ det fandt Jesper ikke ("kan jeg ikke fjerne låsen"). Nu:
 - **Tilbage på pladsen virkede kun i samme fane:** tiden fra før flytningen huskes nu i projektet (`flyttetFra`,
   `store.flytOgLaas`), så det virker også efter genindlæsning. Kampe, der var låst, før denne udgave kom i prod, har
   ingen husket tid — dem låser man op med låsen.
+
+## Tydeligt, at løseren arbejder (2026-11-13)
+
+Jesper: det første program blev taget for resultatet, mens løseren stadig forbedrede det. Mens løseren arbejder på hele
+programmet (ikke en prøve på en kopi):
+
+- Statusboksen er stor og fremhævet, med en **fremdriftsbjælke** mod fristen og teksten "Programmet herunder er et første
+  udkast. Vent med at taste det i TP …".
+- Panelets titel er **"Første udkast — løseren arbejder på et bedre program"** (ikke "✓ går op"), og "Videre til Til TP"
+  vises først, når løseren er færdig.
+- Gitteret har en stiplet ramme og mærket **"Udkast — løseren arbejder"**; fanen Program viser "løseren regner …".

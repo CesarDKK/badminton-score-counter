@@ -44,7 +44,7 @@ const kamplaengdeTekst = (min, udenPause) => `${min} min, ${udenPause ? 'pausen 
  * til — løserens besked, det kort, der er nu (de næste står som en linje; programmet laves om efter hvert valg), og
  * tilbuddet — så programmerne uden kompromiserne, og nederst detaljerne (prognose, gjort undervejs, låste kampe).
  */
-export function kampprogramPanel(kp, aabneKort, projekt, { travl = false, sek = 60 } = {}) {
+export function kampprogramPanel(kp, aabneKort, projekt, { travl = false, sek = 60, udkast = false } = {}) {
     const v = kp.valg;
     const gaarOp = kp.beslutninger.brud === 0;
     const rettet = kp.projekt !== projekt; // flyttet eller låst siden (panelGaelder)
@@ -89,7 +89,9 @@ export function kampprogramPanel(kp, aabneKort, projekt, { travl = false, sek = 
     })() : '';
     // Løseren har bevist, at der ingen lovlig plan er (kp.note), selv om planlæggeren ikke fandt noget at rette
     const loeserNej = !!kp.note && gaarOp;
-    const titel = kp.egetProgram ? 'Løseren fandt ingen plan, der overholder alle de hårde regler — dit program er ikke ændret'
+    // Mens løseren forbedrer programmet, er det, der vises, et første udkast — ikke resultatet (Jesper 2026-11-13)
+    const titel = udkast ? 'Første udkast — løseren arbejder på et bedre program'
+        : kp.egetProgram ? 'Løseren fandt ingen plan, der overholder alle de hårde regler — dit program er ikke ændret'
         : loeserNej ? 'Løseren fandt ingen plan, der overholder alle de hårde regler'
         : gaarOp ? 'Kampprogrammet går op'
         : kp.beslutninger.fraLoeser ? `Løserens program har ${kp.beslutninger.brud} fejl i Tjek`
@@ -105,11 +107,11 @@ export function kampprogramPanel(kp, aabneKort, projekt, { travl = false, sek = 
         beholdt && aabneKort.length ? `${beholdt} beholdt som det er.` : '',
     ].filter(Boolean);
     return `
-    <section class="kampprogram ${kp.egetProgram || loeserNej || aabneKort.length ? 'er-valg' : gaarOp ? 'er-ok' : ''}">
+    <section class="kampprogram ${udkast ? 'er-udkast' : kp.egetProgram || loeserNej || aabneKort.length ? 'er-valg' : gaarOp ? 'er-ok' : ''}">
         <div class="kampprogram-hoved">
-            <h3>${gaarOp && !loeserNej && !kp.egetProgram ? '<span class="er-groen">✓</span> ' : ''}${esc(titel)}</h3>
+            <h3>${udkast ? '<span class="spinner spinner--lille" aria-hidden="true"></span> ' : gaarOp && !loeserNej && !kp.egetProgram ? '<span class="er-groen">✓</span> ' : ''}${esc(titel)}</h3>
             <span class="kampprogram-hoved-knapper">
-                ${gaarOp && !loeserNej && !kp.egetProgram && !aabneKort.length ? '<button class="knap knap--lille" data-handling="til-tp">Videre til Til TP →</button>' : ''}
+                ${!udkast && gaarOp && !loeserNej && !kp.egetProgram && !aabneKort.length ? '<button class="knap knap--lille" data-handling="til-tp">Videre til Til TP →</button>' : ''}
                 ${kp.egetProgram ? '' : '<button class="knap knap--sekundaer knap--lille" data-handling="kp-fortryd" title="Går tilbage til planen og opsætningen fra før">Fortryd</button>'}
             </span>
         </div>
@@ -375,6 +377,8 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
     const gitterAntal = gitterHistorik.length;
     const aabneKort = kp ? kp.beslutninger.kort.filter((k) => !kp.beholdt.includes(k.noegle)) : [];
     const travl = !!tilstand.arbejder || !!tilstand.optimerer;
+    // Løseren forbedrer hele programmet (ikke en prøve på en kopi): det, der vises, er et udkast, som bliver skiftet ud
+    const udkast = !!tilstand.optimerer && !tilstand.optimerProeve;
     const anbefalLoeser = projekt.opsaetning.autoLoeser === false && harPlan && !travl && !tilstand.alternativer && !aabneKort.length && tilstand.forslag?.kilde !== 'loeser';
     const sek = tilstand.optimerSek || 60;
     // Løseren kører af sig selv efter "Lav kampprogram" (opsaetning.autoLoeser); så ligger knappen under "Mere"
@@ -424,9 +428,15 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
     </div>
     ${tilstand.alternativer ? alternativBjaelke(tilstand.alternativer) : ''}
     ${tilstand.arbejder ? `<p class="arbejder" role="status"><span class="spinner" aria-hidden="true"></span>${esc(tilstand.arbejder)}</p>` : ''}
-    ${tilstand.optimerer ? `<p class="arbejder" role="status"><span class="spinner" aria-hidden="true"></span><span>${esc(loeserStatus)} <span data-optimer-ur>${esc(tilstand.optimerUr?.() || '')}</span></span>
-        <button class="knap knap--sekundaer knap--lille" data-handling="stopOptimer" ${tilstand.optimerStopper ? 'disabled' : ''} title="Løseren stopper nu og afleverer den bedste plan, den har fundet indtil nu.">${tilstand.optimerStopper ? 'Stopper …' : 'Stop og brug det bedste'}</button></p>` : ''}
-    ${kp ? kampprogramPanel(kp, aabneKort, projekt, { travl, sek }) : ''}
+    ${tilstand.optimerer ? `<div class="arbejder arbejder--loeser" role="status">
+        <span class="spinner" aria-hidden="true"></span>
+        <div class="arbejder-tekst">
+            <b>${esc(loeserStatus)}</b> <span class="daempet" data-optimer-ur>${esc(tilstand.optimerUr?.() || '')}</span>
+            <span class="fremdrift" aria-hidden="true"><span data-optimer-bar style="width:${Math.round((tilstand.optimerFremdrift?.() || 0) * 100)}%"></span></span>
+            ${udkast ? '<span class="daempet">Programmet herunder er et <b>første udkast</b>. Vent med at taste det i TP, til løseren er færdig — så skifter det til løserens program.</span>' : ''}
+        </div>
+        <button class="knap knap--sekundaer knap--lille" data-handling="stopOptimer" ${tilstand.optimerStopper ? 'disabled' : ''} title="Løseren stopper nu og afleverer den bedste plan, den har fundet indtil nu.">${tilstand.optimerStopper ? 'Stopper …' : 'Stop og brug det bedste'}</button></div>` : ''}
+    ${kp ? kampprogramPanel(kp, aabneKort, projekt, { travl, sek, udkast }) : ''}
     <div class="status-linje">
         ${statusTal(`${placeret.size}/${projekt.kampe.length}`, 'kampe har tid', ikkePlacerede.length ? 'er-roed' : '')}
         ${statusTal(antalFejl, 'fejl', antalFejl ? 'er-roed' : 'er-ok')}
@@ -451,7 +461,7 @@ export function renderPlan(container, projekt, tjek, tilstand, handlers) {
     ${tilstand.nedskaering ? '' : `<p><button class="knap knap--sekundaer" data-handling="ned-find" title="Afprøver færre Swiss Ladder-runder og spil over to dage med planlæggeren, og viser hvad hvert forslag koster i kampe pr. spiller. Intet ændres, før du vælger.">Prøv færre runder eller to dage</button></p>`}` : ''}` : ''}
     ${tilstand.nedskaering ? nedskaeringPanel(tilstand.nedskaering) : ''}
     ${problemer ? '<div class="tjek-indhold"></div>' : `<div class="plan-layout">
-        <div class="gitter-hylster">
+        <div class="gitter-hylster${udkast ? ' er-udkast' : ''}">${udkast ? '<p class="udkast-maerke"><span class="spinner spinner--lille" aria-hidden="true"></span> Udkast — løseren arbejder</p>' : ''}
             <table class="gitter ${tilstand.valgtIds ? 'kan-flyttes' : ''}">
                 <tbody>${raekker}</tbody>
             </table>

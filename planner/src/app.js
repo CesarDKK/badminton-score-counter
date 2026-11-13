@@ -116,8 +116,9 @@ function render() {
     const maerke = document.querySelector('[data-program-maerke]');
     if (maerke) {
         const udenTid = projekt ? projekt.kampe.length - Object.keys(projekt.plan).length : 0;
-        maerke.textContent = !projekt ? '' : tjek.antal.fejl ? `${tjek.antal.fejl} fejl` : udenTid && udenTid < projekt.kampe.length ? `${udenTid} uden tid` : '';
-        maerke.classList.toggle('er-fejl', !!projekt && tjek.antal.fejl > 0);
+        maerke.textContent = !projekt ? '' : tilstand.optimerer ? 'løseren regner …' : tjek.antal.fejl ? `${tjek.antal.fejl} fejl` : udenTid && udenTid < projekt.kampe.length ? `${udenTid} uden tid` : '';
+        maerke.classList.toggle('er-fejl', !!projekt && !tilstand.optimerer && tjek.antal.fejl > 0);
+        maerke.classList.toggle('er-regner', !!projekt && !!tilstand.optimerer);
     }
     visStatus();
 }
@@ -806,7 +807,9 @@ const planHandlers = {
         // fået): først den valgte tid, så den tid, løseren selv melder (restSekunder) — også når den går videre til planen
         // med færrest brud eller diagnosen. "Højst", fordi den ofte stopper før, når den ikke finder bedre planer. I kø
         // står uret stille, og fristen starter forfra, når kørslen går i gang.
-        let frist = Date.now() + sekunder * 1000, iKoe = false;
+        let frist = Date.now() + sekunder * 1000, start = Date.now(), iKoe = false;
+        // Fremdriften (0–1) til bjælken: tid brugt af tiden til fristen (Jesper 2026-11-13: man skal kunne se, at løseren arbejder)
+        tilstand.optimerFremdrift = () => (iKoe ? 0 : Math.min(1, Math.max(0, (Date.now() - start) / Math.max(1, frist - start))));
         tilstand.optimerUr = () => {
             if (iKoe) return '';
             const s = Math.max(0, Math.ceil((frist - Date.now()) / 1000));
@@ -814,10 +817,15 @@ const planHandlers = {
         };
         render();
         // Uret opdateres direkte i statuslinjen, så gitteret ikke tegnes om hvert sekund
-        const visUr = () => { const el = document.querySelector('[data-optimer-ur]'); if (el) el.textContent = tilstand.optimerUr?.() || ''; };
+        const visUr = () => {
+            const el = document.querySelector('[data-optimer-ur]');
+            if (el) el.textContent = tilstand.optimerUr?.() || '';
+            const bar = document.querySelector('[data-optimer-bar]');
+            if (bar) bar.style.width = `${Math.round((tilstand.optimerFremdrift?.() || 0) * 100)}%`;
+        };
         const ur = setInterval(visUr, 1000);
         let afbryd = null;
-        const faerdig = () => { clearInterval(ur); tilstand.optimerUr = null; tilstand.optimerer = false; tilstand.optimerJob = null; tilstand.optimerStopper = false; tilstand.optimerDiagnose = false; tilstand.optimerElastisk = false; tilstand.optimerAfbryd = null; tilstand.optimerAuto = false; tilstand.loeserKoe = null; tilstand.optimerProeve = null; tilstand.optimerDag = null; };
+        const faerdig = () => { clearInterval(ur); tilstand.optimerUr = null; tilstand.optimerFremdrift = null; tilstand.optimerer = false; tilstand.optimerJob = null; tilstand.optimerStopper = false; tilstand.optimerDiagnose = false; tilstand.optimerElastisk = false; tilstand.optimerAfbryd = null; tilstand.optimerAuto = false; tilstand.loeserKoe = null; tilstand.optimerProeve = null; tilstand.optimerDag = null; };
         tilstand.optimerProeve = proeve ? proeve.tekst : null;
         try {
             let ventede = false;
@@ -836,6 +844,7 @@ const planHandlers = {
                     iKoe = false;
                     if (!Number.isFinite(s.restSekunder)) frist = Date.now() + sekunder * 1000;
                     tilstand.loeserKoe = null;
+                    start = Date.now();
                     render(); visUr();
                 } else if (s.fase === 'elastisk' && !tilstand.optimerElastisk) { tilstand.optimerElastisk = true; render(); visUr(); }
                 else if (s.fase === 'diagnose' && !tilstand.optimerDiagnose) { tilstand.optimerDiagnose = true; render(); visUr(); }
