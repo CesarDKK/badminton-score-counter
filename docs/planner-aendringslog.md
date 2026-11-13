@@ -747,3 +747,12 @@ det fandt Jesper ikke ("kan jeg ikke fjerne låsen"). Nu:
   (den gamle tid huskes i fanen, `tilstand.flyttetFra`).
 - **"Lås op"/"Lås"** i "Den valgte kamp", og **"Lås alle op"** i statuslinjen og i kampprogrammets panel (`laasAlleOp`).
 - Rettet: "Lav forslag med nuværende kamplængde" og "Lav forslag kun for …" gik ned (`r.projekt` uden `r`).
+
+## Låsen på kortet (2026-11-13, efter prod)
+
+- **Dobbeltklik virkede ikke:** første klik vælger kampen, og gitteret tegnes om, så andet klik rammer et nyt kort, og
+  browseren melder aldrig et dobbeltklik. Dobbeltklik er fjernet; et låst kort har nu en **hængelås-knap** i hjørnet —
+  klik på den låser op. Linjen efter en flytning har også **"Lås op"**.
+- **Tilbage på pladsen virkede kun i samme fane:** tiden fra før flytningen huskes nu i projektet (`flyttetFra`,
+  `store.flytOgLaas`), så det virker også efter genindlæsning. Kampe, der var låst, før denne udgave kom i prod, har
+  ingen husket tid — dem låser man op med låsen.

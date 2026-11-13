@@ -359,6 +359,7 @@ export function validerProjekt(obj) {
     }
     for (const p of Object.values(obj.plan)) if (!erObjekt(p) || !DATO.test(p.dag) || !erKlokke(p.slot)) return fejl('plan');
     if (obj.laast !== undefined && !Array.isArray(obj.laast)) return fejl('låste kampe');
+    if (obj.flyttetFra !== undefined && (!erObjekt(obj.flyttetFra) || !Object.values(obj.flyttetFra).every((p) => erObjekt(p) && DATO.test(p.dag) && erKlokke(p.slot)))) return fejl('flyttede kampe');
     return null;
 }
 
@@ -431,12 +432,33 @@ export function kvitter(projekt, noegle, vaerdi = true) {
 export function laasKamp(projekt, kampId, vaerdi = true) {
     const set = new Set(projekt.laast || []);
     if (vaerdi && projekt.plan[kampId]) set.add(kampId); else set.delete(kampId);
-    return { ...projekt, laast: [...set] };
+    let flyttetFra = projekt.flyttetFra;
+    if (!vaerdi && flyttetFra?.[kampId]) { flyttetFra = { ...flyttetFra }; delete flyttetFra[kampId]; }
+    return { ...projekt, laast: [...set], ...(flyttetFra ? { flyttetFra } : {}) };
+}
+
+/**
+ * Flyt i hånden: kampen låses, så den beholder tiden, når programmet laves igen. Tiden fra før den første flytning huskes
+ * i projektet (flyttetFra) — flyttes kampen tilbage dertil, er den ikke længere låst (Jesper 2026-11-13). Returnerer
+ * { projekt, retur } — retur: antal kampe, der kom tilbage på deres plads.
+ */
+export function flytOgLaas(projekt, ids, dag, slot) {
+    const laast = new Set(projekt.laast || []);
+    const fra = { ...(projekt.flyttetFra || {}) };
+    let p = projekt, retur = 0;
+    for (const id of ids) {
+        const nu = projekt.plan[id];
+        if (!laast.has(id)) { if (nu) fra[id] = { dag: nu.dag, slot: nu.slot }; else delete fra[id]; }
+        const tilbage = !!fra[id] && fra[id].dag === dag && fra[id].slot === slot;
+        p = flytKamp(p, id, dag, slot);
+        if (tilbage) { laast.delete(id); delete fra[id]; retur += 1; } else laast.add(id);
+    }
+    return { projekt: { ...p, laast: [...laast], flyttetFra: fra }, retur };
 }
 
 /** Låser alle kampe op, så "Lav kampprogram", forslag og løseren må flytte dem igen. */
 export function laasAlleOp(projekt) {
-    return { ...projekt, laast: [] };
+    return { ...projekt, laast: [], flyttetFra: {} };
 }
 
 /** Låser eller frigiver alle placerede kampe i en kategori. */
