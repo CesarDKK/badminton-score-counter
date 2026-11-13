@@ -193,7 +193,28 @@ export function dagePanel(p) {
                 <tbody>${raekker}</tbody>
             </table>
         </div>
+        ${dage.filter((d) => d.halveBaner).map((d) => halveBanerBoks(p, d)).join('')}
     </section>`;
+}
+
+/**
+ * U9 på halve baner (Jesper 2026-11-13): er de halve baner talt med i TP's baneantal? Banenavnene er fritekst, så
+ * planneren gætter ud fra antallet og spørger, til brugeren har svaret.
+ */
+function halveBanerBoks(p, d) {
+    const { tp, delte, gaet } = d.halveBaner;
+    const u9 = p.raekker.filter((r) => r.dage.includes(d.dato) && p.kategorier.some((k) => k.raekke === r.id && k.halvBane)).map((r) => r.id);
+    const hvem = u9.length ? u9.join(', ') : 'U9';
+    const antal = delte || Math.round(tp / 3);
+    return `
+        <div class="halve-baner ${gaet ? 'er-gaet' : ''}">
+            <p><b>${esc(hvem)} spiller på halve baner ${esc(datoTekst(d.dato, { kort: true }))}.</b> TP-filen har ${tp} baner den dag. Er de halve baner talt med i de ${tp}?</p>
+            <label class="valg"><input type="radio" name="halve-${d.dato}" value="ja" data-halve="${d.dato}" ${delte ? 'checked' : ''}>
+                <span>Ja — <input type="number" min="1" max="${Math.floor(tp / 2)}" value="${antal}" data-halve-antal="${d.dato}" aria-label="Antal delte baner"> af hallens baner er delt i halve og står to gange i TP. Planneren regner med <b>${tp - antal} baner</b>, og ${esc(hvem)} har de ${antal} delte (2 kampe pr. bane).</span></label>
+            <label class="valg"><input type="radio" name="halve-${d.dato}" value="nej" data-halve="${d.dato}" ${delte ? '' : 'checked'}>
+                <span>Nej — hallen har <b>${tp} hele baner</b>. ${esc(hvem)}'s kampe deler baner med 2 kampe pr. bane.</span></label>
+            ${gaet ? `<p class="daempet">Planneren har gættet ud fra antallet af baner (navnene i TP kan hedde hvad som helst). <button type="button" class="knap knap--sekundaer knap--lille" data-handling="bekraeft-halve" data-dato="${d.dato}">Det er rigtigt</button></p>` : ''}
+        </div>`;
 }
 
 function kamplaengdePanel(p, ui = {}) {
@@ -709,6 +730,7 @@ function bind(container, projekt, h) {
         }
         else if (handling === 'sammenlign-kamplaengder') h.sammenlignKamplaengder();
         else if (handling === 'auto-kamplaengde') h.autoKamplaengde();
+        else if (handling === 'bekraeft-halve') { const dag = projekt().opsaetning.dage.find((x) => x.dato === knap.dataset.dato); if (dag?.halveBaner) h.halveBaner(dag.dato, dag.halveBaner.delte); }
         else if (handling === 'fjern-spaerring') {
             const dag = projekt().opsaetning.dage.find((d) => d.dato === dato);
             h.dag(dato, { spaerret: dag.spaerret.filter((_, i) => i !== Number(index)) });
@@ -756,6 +778,16 @@ function bind(container, projekt, h) {
         if (d.raekkeTal) { h.raekke(d.raekke, { [d.raekkeTal]: el.value === '' || Number(el.value) <= 0 ? null : Number(el.value) }); return; }
         if (d.raekkeTid) { h.raekke(d.raekke, { [d.raekkeTid]: el.value || null }); return; }
         if (d.raekkeBaner) { h.raekke(d.raekkeBaner, { reserveredeBaner: Math.max(0, Number(el.value) || 0) }); return; }
+        if (d.halve) {
+            const tal = container.querySelector(`[data-halve-antal="${d.halve}"]`);
+            h.halveBaner(d.halve, el.value === 'ja' ? Number(tal?.value) || 1 : 0);
+            return;
+        }
+        if (d.halveAntal) {
+            const ja = container.querySelector(`[data-halve="${d.halveAntal}"][value="ja"]`);
+            if (ja?.checked) h.halveBaner(d.halveAntal, Number(el.value) || 1);
+            return;
+        }
         if (d.skoledag) h.dag(d.skoledag, { foerSkoledag: el.checked });
         else if (d.felt === 'slotMin') h.slotMin(el.value);
         else if (d.felt && d.dato) {

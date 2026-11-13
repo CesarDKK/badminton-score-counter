@@ -767,3 +767,17 @@ programmet (ikke en prøve på en kopi):
 - Panelets titel er **"Første udkast — løseren arbejder på et bedre program"** (ikke "✓ går op"), og "Videre til Til TP"
   vises først, når løseren er færdig.
 - Gitteret har en stiplet ramme og mærket **"Udkast — løseren arbejder"**; fanen Program viser "løseren regner …".
+
+## U9 på halve baner: er de talt med i TP's baneantal? (2026-11-13)
+
+Lyngby 2026 har 10 baner, hvor 5 deles i halve til U9 om lørdagen — i TP står det som 15 baner (01-B1/01-B2 … 05-B1/05-B2
+og 06–10). Planneren læste 15 hele baner og lod samtidig U9 spille 2 kampe pr. bane: ALT for mange baner. Banenavnene er
+fritekst, så det kan ikke ses sikkert, om TP-filen har de halve baner med.
+
+- **Gættet** (`store.medHalveBanerGaet`): på U9-dagen (fra TP's tider, ellers dagen med flest baner) er de halve baner
+  talt med, når dagen har flere baner end turneringens andre dage — eller banenavnene tyder på delte baner
+  (`tp-reader.fysiskeBaner`, kun et fingerpeg). 15 mod søndagens 10 → 5 delte baner: 10 baner, og U9 får de 5 delte
+  reserveret kl. 09–14 (dagens start + rækkens max varighed, så de andre rækker får banerne bagefter) og lægges på dagen.
+- **Spørgsmålet** under Turneringen → Dage og baner: "Er de halve baner talt med i de 15?" Ja (med antal delte) / Nej.
+  Gættet står med gul ramme, til det er bekræftet (`dag.halveBaner = { tp, delte, gaet }`, `store.saetHalveBaner`).
+- TP-filer med et særligt tidsrum med ekstra baner (Lyngby 2025: 15 kl. 12–16:30) klares som før med rækkens vindue.
