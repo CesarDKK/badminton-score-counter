@@ -38,3 +38,11 @@ describe('planen med færrest brud og prøven', () => {
         assert.equal(vurderProeve({ lovlig: false, fejlProeve: 1, fejlNu: 2, scoreProeve: 1, scoreNu: 10 }).tilbud, true);
     });
 });
+
+describe('løseren efter et hurtigt program med regelbrud (Jesper 2026-11-13)', () => {
+    test('færre fejl i Tjek vinder, også med højere score', () => {
+        const x = { auto: true, harProgram: true, scoreLoeser: 30, scoreFoer: 12, fejlLoeser: 0, fejlFoer: 2 };
+        assert.equal(vurderLoeserPlan(x), 'indlaeg');
+        assert.equal(vurderLoeserPlan({ ...x, listeSet: true }), 'tilbud');
+    });
+});

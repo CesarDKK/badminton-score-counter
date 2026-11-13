@@ -8,7 +8,7 @@
 // deres tid; alt andet placeres forfra.
 import { minutter } from './tp-reader.js';
 import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt, fordelRaekkerPaaDage } from './kapacitet.js';
-import { lavRegelmodel, banerBrugt, pauseForRaekke, VARIGHEDER, spillerOphold } from './regelmodel.js';
+import { lavRegelmodel, banerBrugt, pauseForRaekke, VARIGHEDER, spillerOphold, swissMaxSpaend, varighedsSpaend } from './regelmodel.js';
 import { standardRaekkefoelge } from './store.js';
 import { scorePlan } from './kriterier.js';
 
@@ -23,6 +23,7 @@ const AARSAG_RANG = {
     'før rækkens tidligste start': 4, 'efter rækkens seneste slut': 4,
     'rækken spiller ikke den dag': 3, 'single og double samtidig i rækken': 3,
     'bygger på en senere kamp': 2, 'bygger på en kamp uden tid': 1,
+    'ikke plads til hele swiss-runden': 6, 'swiss-runden spredt': 5,
 };
 
 /**
@@ -30,8 +31,8 @@ const AARSAG_RANG = {
  * @param {{ kunDage?: string[] }} [valg]  begræns forslaget til bestemte dage (andre dage røres ikke)
  */
 export function lavForslag(projekt, valg = {}) {
-    let bedst = lavForslagEnGang(projekt, valg);
     const mangler = (f) => f.brud.length + f.ikkePlaceret.length;
+    let bedst = medVarighedsReparation(projekt, valg, lavForslagEnGang(projekt, valg), mangler);
     if (!mangler(bedst) || valg.dagTvang || valg.udenDagforsoeg) return bedst;
     // Dagfordelingen af én-dags-rækker er et skøn. Giver den regelbrud, prøves de ramte rækker på deres
     // andre mulige dage (de øvrige rækker holdes fast), og det bedste resultat vinder. Højst 6 ekstra forsøg.
@@ -51,6 +52,29 @@ export function lavForslag(projekt, valg = {}) {
             if (mangler(f) < mangler(bedst)) bedst = f;
             if (!mangler(bedst)) return bedst;
         }
+    }
+    return bedst;
+}
+
+/**
+ * Max varighed (singlerne, doublerne, hele rækken) brudt: planlæggeren lægger kampe, så snart der er plads, og en kamp
+ * tidligt på dagen kan gøre rækkens spænd for langt, når resten først kan spilles senere — fx en enkelt finale kl. 9,
+ * når Swiss-runderne først har baner nok kl. 13 (Lyngby 2026-11-13). Så laves forslaget igen, hvor rækkens kampe af den
+ * art tidligst må starte, så de kan nås inden for grænsen (valg.artTidligst). Højst tre runder, og kun hvis det hjælper.
+ */
+function medVarighedsReparation(projekt, valg, f, mangler) {
+    if (valg.artTidligst || !f.brud.some((b) => b.brud === 'max-haltid')) return f;
+    const M = lavRegelmodel(projekt);
+    let bedst = f, artTidligst = {};
+    for (let i = 0; i < 3; i += 1) {
+        const over = [...varighedsSpaend(M, projekt.kampe, bedst.plan).values()].filter((d) => d.sidste - d.foerste + M.slotMin > d.graense);
+        if (!over.length) break;
+        const nye = { ...artTidligst };
+        for (const d of over) { const n = `${d.raekkeId}|${d.art}|${d.dag}`; nye[n] = Math.max(nye[n] || 0, d.sidste + M.slotMin - d.graense); }
+        const g = lavForslagEnGang(projekt, { ...valg, artTidligst: nye });
+        if (mangler(g) >= mangler(bedst)) break;
+        bedst = g;
+        artTidligst = nye;
     }
     return bedst;
 }
@@ -103,6 +127,15 @@ function lavForslagEnGang(projekt, valg = {}) {
     // tæller med i max kampe pr. dag (Tjek gør det samme). Nøgle: spiller|draw|runde|dag
     const swissTalt = new Set();
     const erSwissRunde = (k) => k.fase === 'swiss' && !k.spillere.length;
+    // Swiss-runderne spilles samlet (regelmodel.swissMaxSpaend): rundens kampe pr. draw|runde
+    const swissRunde = new Map();
+    for (const k of projekt.kampe) {
+        if (k.fase !== 'swiss') continue;
+        const n = `${k.tpRef.draw}|${k.runde}`;
+        if (!swissRunde.has(n)) swissRunde.set(n, []);
+        swissRunde.get(n).push(k);
+    }
+    const rundeFor = (k) => (k.fase === 'swiss' ? swissRunde.get(`${k.tpRef.draw}|${k.runde}`) || [k] : null);
     const finalerunderPrDag = new Map(); // `${kategori}|${dag}` → Set(rundeNavn) for cup-finalerunder
     const slotBrug = new Map();      // `${dag}|${slot}|${pulje}` → { hele, halve, kampe: [] }
     const spaendFor = new Map();     // `${raekke}|${art}|${dag}` → { foerste, sidste } — rækkens kampe pr. varighedsgrænse
@@ -218,6 +251,8 @@ function lavForslagEnGang(projekt, valg = {}) {
         // Rækkens eget tidsrum (valgfrit, fx U9 kun 12–17)
         if (!lemp.tidsrum) {
             if (r.tidligst && slotStart < minutter(r.tidligst)) return 'før rækkens tidligste start';
+            // Fra varighedsreparationen: rækkens kampe af en art må tidligst starte her (se medVarighedsReparation)
+            if (valg.artTidligst) for (const g of M.varighedsGraenser(k)) if (slotStart < (valg.artTidligst[`${r.id}|${g.art}|${dag.dato}`] ?? -1)) return 'før rækkens tidligste start';
             if (r.senest && slotStart + slotMin > minutter(r.senest)) return 'efter rækkens seneste slut';
         }
         const v = M.aargangsVindue(r, dag);
@@ -252,6 +287,31 @@ function lavForslagEnGang(projekt, valg = {}) {
             const t = tidFor.get(dep);
             if (!t) return 'bygger på en kamp uden tid';
             if (t.dag > dag.dato || (t.dag === dag.dato && t.min >= slotStart)) return 'bygger på en senere kamp';
+        }
+        // Swiss-runden samlet: rundens kampe i samme slot (flere kun, når runden har flere kampe end dagens baner), og
+        // er det rundens første kamp, skal der være plads til rundens første slot nu — ellers bliver runden spredt
+        const runde = rundeFor(k);
+        if (runde && runde.length > 1 && !lemp.swissSamlet) {
+            const halvR = !!kat(k)?.halvBane;
+            const maks = swissMaxSpaend(runde.length, halvR, dag.baner, slotMin);
+            const placeret = runde.filter((x) => x.id !== k.id && tidFor.has(x.id)).map((x) => tidFor.get(x.id));
+            if (placeret.length) {
+                if (placeret.some((t) => t.dag !== dag.dato)) return 'swiss-runden spredt';
+                const lo = Math.min(slotStart, ...placeret.map((t) => t.min)), hi = Math.max(slotStart, ...placeret.map((t) => t.min));
+                if (hi - lo > maks) return 'swiss-runden spredt';
+            } else if (!lemp.kapacitet) {
+                // Hele runden skal kunne ligge i dette og de følgende tilladte slots på dagen
+                const behov = halvR ? Math.ceil(runde.length / 2) : runde.length;
+                const alle = slotsForDag(dag, slotMin);
+                const i0 = alle.indexOf(slot);
+                let ledige = 0;
+                for (const s2 of alle.slice(i0, i0 + maks / slotMin + 1)) {
+                    const pulje = puljeForKamp(k, dag.dato, s2);
+                    const fri = (pl) => { const b = brugFor(dag.dato, s2, pl); return Math.max(0, (banerIPulje(dag.dato, s2, pl) || 0) - banerBrugt(b.hele, b.halve)); };
+                    ledige += fri(pulje) + (lemp.reserveret && pulje !== 'faelles' ? fri('faelles') : 0);
+                }
+                if (ledige < behov) return 'ikke plads til hele swiss-runden';
+            }
         }
         if (!lemp.kapacitet) {
             const pulje = puljeForKamp(k, dag.dato, slot);
@@ -414,6 +474,12 @@ function lavForslagEnGang(projekt, valg = {}) {
                 }
                 registrer(k, dag.dato, slot);
                 for (const s of k.spillere) dagSet.add(s);
+                // Resten af Swiss-runden lægges med det samme, så andre kampe ikke tager banerne imellem
+                for (const x of rundeFor(k) || []) {
+                    if (plan[x.id] || aarsagFor(x, dag, slot, slotStart, baner)) continue;
+                    registrer(x, dag.dato, slot);
+                    for (const s of x.spillere) dagSet.add(s);
+                }
             }
             // Andet gennemløb: rækker med egne baner må låne en fælles bane, der stadig står fri, når alle kandidater har
             // haft deres chance i slottet — det er lovligt (Tjek: banebrugISlot) og var før først muligt i fase 2, så fx
@@ -440,7 +506,7 @@ function lavForslagEnGang(projekt, valg = {}) {
         // kun spille de valgte dage; dispensation til flere dage må ikke forudsættes) — først efter pause,
         // max haltid, tidsvindue og max kampe, men før banekapaciteten, som er fysisk umulig.
         ['reserveret', 'reserveret'], ['anti-samtidighed', 'antiSamtidighed'], ['tidsrum', 'tidsrum'],
-        ['pause', 'pause'], ['max-haltid', 'maxHaltid'], ['tidsvindue', 'tidsvindue'], ['max-kampe', 'maxKampe'], ['dag', 'dag'], ['kapacitet', 'kapacitet'],
+        ['pause', 'pause'], ['max-haltid', 'maxHaltid'], ['tidsvindue', 'tidsvindue'], ['max-kampe', 'maxKampe'], ['swiss-samlet', 'swissSamlet'], ['dag', 'dag'], ['kapacitet', 'kapacitet'],
         ['raekkefoelge', 'afhaengighed'],  // sidste udvej: fx en finale, hvis semifinalen ligger i dagens sidste slot
         ['dobbeltbooket', 'samtidig'],     // allersidste udvej: kun når dagene slet ikke rækker
     ];

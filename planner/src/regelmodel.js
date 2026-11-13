@@ -80,6 +80,17 @@ export function minKampMin(aargang, raekke, regler = STANDARD_REGLER) {
     return em ? m.ungdomEM : m.ungdomABCD;
 }
 
+/**
+ * Swiss-runden spilles samlet (Jesper 2026-11-13: "runderne strækkes over flere runder, så spillerne kommer til at
+ * sidde stille MEGET længe, det må ikke ske"): alle rundens kampe starter i samme slot — kun hvis runden har flere
+ * kampe, end dagen har baner, må den fylde de få slots, det kræver. Returnerer det største tilladte spænd i minutter
+ * mellem rundens første og sidste starttid. Halve baner (U9) tæller ½.
+ */
+export function swissMaxSpaend(antalKampe, halv, dagBaner, slotMin) {
+    const baner = halv ? Math.ceil(antalKampe / 2) : antalKampe;
+    return (Math.max(1, Math.ceil(baner / Math.max(1, dagBaner || 1))) - 1) * slotMin;
+}
+
 export function erSenior(aargang) {
     return aargang === 'SEN' || /^\+/.test(aargang || '');
 }

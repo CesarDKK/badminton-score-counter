@@ -33,7 +33,7 @@ ARBEJDERE = int(os.environ.get("SOLVER_ARBEJDERE", "2"))
 SAMTIDIGE = threading.Semaphore(int(os.environ.get("SOLVER_SAMTIDIGE", "1")))
 # Elastisk løsning (ingen lovlig plan): pris pr. brud — pr. kamp, pr. minut eller pr. ekstra kamp/dag. Billigst først:
 # pause (pr. minut), max varighed (pr. minut), tidsrum, single/double samtidig, tidsvindue, max kampe, senior, dage, max dage.
-ELASTISK_PRIS = {"pause": 0.2, "haltid": 0.1, "tidsrum": 1, "antiSamtidighed": 1, "tidsvindue": 3, "maxKampe": 5, "senior": 5, "dage": 10, "maxDage": 20}
+ELASTISK_PRIS = {"pause": 0.2, "haltid": 0.1, "swissSamlet": 0.5, "tidsrum": 1, "antiSamtidighed": 1, "tidsvindue": 3, "maxKampe": 5, "senior": 5, "dage": 10, "maxDage": 20}
 ELASTISK_SKALA = 10 ** 8  # et brud til pris 1 vejer mere end alle bløde ønsker tilsammen
 ELASTISK_SEKUNDER = float(os.environ.get("SOLVER_ELASTISK_SEKUNDER", "30"))  # tid til planen med færrest brud
 RO_SEKUNDER = float(os.environ.get("SOLVER_RO_SEKUNDER", "15"))  # stop efter så længe uden en bedre plan (0 = aldrig)
@@ -118,6 +118,9 @@ def _valider(problem) -> str | None:
     for runder in problem.get("puljerunder", []):
         if not isinstance(runder, list) or not all(isinstance(r, list) and all(inde(i) for i in r) for r in runder):
             return "ugyldige puljerunder"
+    for g in problem.get("swissSamlet", []):
+        if not isinstance(g, dict) or not isinstance(g.get("kampe"), list) or not all(inde(i) for i in g["kampe"]) or not isinstance(g.get("spaend"), int) or g["spaend"] < 0:
+            return "ugyldigt swissSamlet"
     for navn in ("haltid", "spillerGrupper", "halTid", "maxDage", "maxPrGruppe", "alternativer"):
         for g in problem.get(navn, []):
             if not isinstance(g, dict) or not all(inde(i) for i in g.get("kampe", [])):
@@ -354,6 +357,18 @@ def _loes(problem: dict, sekunder: float, arbejdere: int | None, stop: threading
     for h in problem.get("haltid", []):
         for s_ in spaend(h["kampe"]):
             begraens(s_ + slot, int(h["graense"]), "haltid", raekke=h.get("raekke", ""), art=h.get("art", "single"), graense=int(h["graense"]))
+
+    # ── Swiss-runden spilles samlet (planner/src/regelmodel.js swissMaxSpaend): rundens kampe højst "spaend" min fra
+    # hinanden — 0 = samme slot (Jesper 2026-11-13: spredte runder lader spillerne sidde stille alt for længe) ──
+    for g in problem.get("swissSamlet", []):
+        ids = g["kampe"]
+        if len(ids) < 2:
+            continue
+        lo = m.NewIntVar(0, MAX_DAGE * DAG, "")
+        hi = m.NewIntVar(0, MAX_DAGE * DAG, "")
+        m.AddMinEquality(lo, [T[i] for i in ids])
+        m.AddMaxEquality(hi, [T[i] for i in ids])
+        begraens(hi - lo, int(g["spaend"]), "swissSamlet", maksOver=MAX_DAGE * DAG, raekke=g.get("raekke", ""), kategori=g.get("kategori", ""), runde=g.get("runde", 0))
 
     # ── Max dage pr. række ──
     for r in problem.get("maxDage", []):
@@ -703,6 +718,7 @@ def delproblem(problem: dict, ids: list[int], dag: int) -> dict:
     p["nethoejde"] = {n: inde(net.get(n, [])) for n in ("saenket", "normal")}
     p["puljerunder"] = [r for r in ([inde(x) for x in runder] for runder in problem.get("puljerunder", [])) if sum(1 for x in r if x) > 1]
     p["maxDage"] = [{**r, "kampe": inde(r["kampe"])} for r in problem.get("maxDage", []) if inde(r["kampe"])]
+    p["swissSamlet"] = [{**g, "kampe": inde(g["kampe"])} for g in problem.get("swissSamlet", []) if len(inde(g["kampe"])) > 1]
     p["mangeKampe"] = [x for x in (inde(l) for l in problem.get("mangeKampe", [])) if x]
     p["maxPrGruppe"] = [{**g, "kampe": inde(g["kampe"])} for g in problem.get("maxPrGruppe", []) if inde(g["kampe"])]
     nyt_forbudt = lambda e: {"forbudt": [[ny[i], t] for i, t in e["forbudt"] if i in ny]} if e.get("forbudt") else {}

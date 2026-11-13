@@ -137,6 +137,8 @@ const PLADS_TEKST = {
     'max-kampe': 'for mange kampe pr. spiller pr. dag', 'spiller har max kampe den dag': 'for mange kampe pr. spiller pr. dag',
     'raekkefoelge': 'før de kampe, de bygger på', 'dobbeltbooket': 'spiller i to kampe samtidig',
     'spiller er i en anden kamp i slottet': 'spiller i to kampe samtidig',
+    'swiss-samlet': 'Swiss-runden kan ikke spilles samlet', 'swiss-runden spredt': 'Swiss-runden kan ikke spilles samlet',
+    'ikke plads til hele swiss-runden': 'ikke plads til hele Swiss-runden på én gang',
 };
 
 /** Planlæggerens problemer (regelbrud + kampe uden tid) samlet pr. familie og række. */

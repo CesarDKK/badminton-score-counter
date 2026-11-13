@@ -7,7 +7,7 @@
 // kan dele spillere) ligger her i JS, så løseren kun kender tal og par.
 import { minutter, klokkeFraMinutter } from './tp-reader.js';
 import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt } from './kapacitet.js';
-import { lavRegelmodel, VARIGHEDER } from './regelmodel.js';
+import { lavRegelmodel, VARIGHEDER, swissMaxSpaend } from './regelmodel.js';
 import { vaegteFor, SAENKET_NET } from './kriterier.js';
 import { INGEN_PAUSE } from './regler.js';
 
@@ -342,12 +342,31 @@ export function bygProblem(projekt, hintPlan = null, { stabil = null, kunDag = n
         for (const f of finaler.values()) for (const a of f.Kvartfinale) for (const b of [...f.Semifinale, ...f.Finale]) ikkeSammeDag.push([a, b]);
     }
 
+    // Swiss-runden spilles samlet (regelmodel.swissMaxSpaend): rundens kampe højst `spaend` minutter fra hinanden. Spænder
+    // rækken over flere dage, gælder den dag med flest baner (det strengeste), så løserens plan altid holder i Tjek.
+    const swissSamlet = [];
+    {
+        const runder = new Map();
+        for (const k of projekt.kampe) {
+            if (k.fase !== 'swiss' || !indeks.has(k.id)) continue;
+            const n = `${k.tpRef.draw}|${k.runde}`;
+            if (!runder.has(n)) runder.set(n, []);
+            runder.get(n).push(k);
+        }
+        for (const liste of runder.values()) {
+            if (liste.length < 2) continue;
+            const r = raekke(liste[0]);
+            const baner = Math.max(1, ...dage.filter((d) => (r?.dage || []).includes(d.dato)).map((d) => d.baner || 0));
+            swissSamlet.push({ kampe: liste.map((k) => indeks.get(k.id)), spaend: swissMaxSpaend(liste.length, !!kat(liste[0])?.halvBane, baner, slotMin), raekke: r?.id || '', kategori: liste[0].kategori, runde: liste[0].runde });
+        }
+    }
+
     return {
         version: 1,
         slotMin,
         dage: dage.map((d, i) => ({ index: i, baner: d.baner })),
         kapacitet, kampe, foer, konflikter, ikkeSamtidig, haltid, spillerGrupper, traek, huller, puljerunder, maxDage,
-        cupVent, nethoejde, halTid, maxKampePrDag: maxPrDag, mangeKampe,
+        cupVent, nethoejde, halTid, maxKampePrDag: maxPrDag, mangeKampe, swissSamlet,
         // Stabil omplanlægning: kampe, der havde tid, flyttes helst ikke (pr. flyttet kamp koster det som 3 timers ventetid)
         ...(stabil?.length ? { stabil: { vaegt: 3, kampe: kampe.map((k, i) => (stabil.includes(k.id) && k.hint != null && k.tilladte.length > 1 ? i : -1)).filter((i) => i >= 0) } } : {}), maxPrGruppe, ikkeSammeDag, alternativer,
         maxVent: projekt.opsaetning.maxVentetidMin ?? 90, // til "lange huller" (kriteriet langeHuller)
@@ -402,6 +421,7 @@ export function brudTekster(brud, projekt) {
         else if (regel === 'maxDage') ud.push(`${raekke} spiller ${sum} ${sum === 1 ? 'dag' : 'dage'} mere end tilladt (kræver dispensation)`);
         else if (regel === 'maxKampe') ud.push(`${antal} ${antal === 1 ? 'spiller får' : 'spillere får'} flere kampe på en dag end de ${liste[0].graense} tilladte (kræver dispensation)`);
         else if (regel === 'antiSamtidighed') ud.push(`${antal} ${antal === 1 ? 'gang' : 'gange'} single og double samtidig i ${raekke}`);
+        else if (regel === 'swissSamlet') ud.push(`${antal} Swiss-${antal === 1 ? 'runde' : 'runder'} i ${raekke} spilles ikke samlet`);
         else if (regel === 'senior') ud.push(`${antal} ${antal === 1 ? 'brud' : 'brud'} på seniorreglerne (kampe pr. kategori pr. dag eller finalerunder samme dag)`);
         else ud.push(`${regel}: ${antal}`);
     }

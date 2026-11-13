@@ -6,7 +6,7 @@
 // `noegle` sættes på advarsler, brugeren kan kvittere (projekt.kvitteret).
 import { minutter } from './tp-reader.js';
 import { slotsForDag, puljeKapacitet, puljeFor, katKonflikt, banebrugISlot, banerISlot } from './kapacitet.js';
-import { lavRegelmodel, minKampMin, pauseForRaekke, foerSkoledag, tidsvindue, banerBrugt, varighedsSpaend, spillerOphold } from './regelmodel.js';
+import { lavRegelmodel, minKampMin, pauseForRaekke, foerSkoledag, tidsvindue, banerBrugt, varighedsSpaend, spillerOphold, swissMaxSpaend } from './regelmodel.js';
 import { reglementetsPause } from './regler.js';
 import { effektivForm, minKampeSamlet, sikreKampe, minKampeKrav, swissOversiddere } from './form.js';
 
@@ -219,6 +219,19 @@ export function tjekPlan(projekt) {
         if (t < r.foerste) { r.foerste = t; r.foersteMin = min; r.dag = p.dag; }
         if (t > r.sidste) { r.sidste = t; r.sidsteMin = min; r.sidsteDag = p.dag; }
         r.kampe.push(k.id);
+    }
+    // Runden spilles samlet: alle kampe i samme slot (flere slots kun, når runden har flere kampe end dagen har baner)
+    const rundeAntal = new Map();
+    for (const k of projekt.kampe) if (k.fase === 'swiss') { const n = `${k.tpRef.draw}|${k.runde}`; rundeAntal.set(n, (rundeAntal.get(n) || 0) + 1); }
+    for (const [draw, m] of swissRunder) {
+        for (const [runde, r] of m) {
+            const k0 = kampMap.get(r.kampe[0]);
+            const dagObj = projekt.opsaetning.dage.find((d) => d.dato === r.dag);
+            const maks = swissMaxSpaend(rundeAntal.get(`${draw}|${runde}`) || r.kampe.length, !!kat(k0)?.halvBane, dagObj?.baner, slotMin);
+            if (r.sidsteDag !== r.dag || r.sidsteMin - r.foersteMin > maks) {
+                tilfoej({ type: 'swiss-samlet', alvor: 'fejl', tekst: `${k0.kategori}: runde ${runde} er spredt fra kl. ${r.foerste.slice(11)} til kl. ${r.sidste.slice(11)}${r.sidsteDag !== r.dag ? ` (${r.sidsteDag})` : ''} — en Swiss-runde skal spilles samlet${maks ? ` (højst ${maks / slotMin + 1} slots, fordi runden har flere kampe end dagens baner)` : ' i ét slot'}, ellers venter spillerne længe.`, kampe: r.kampe, dag: r.dag, slot: r.foerste.slice(11) });
+            }
+        }
     }
     for (const [, m] of swissRunder) {
         for (const [runde, r] of m) {

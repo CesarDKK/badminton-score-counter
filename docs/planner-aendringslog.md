@@ -799,3 +799,23 @@ vægtede spillernes ventetid og tid i hallen langt over tomme baner (0,1). Jespe
 
 Med løseren på Lyngby-filen: U9 09:00–12:30, U11 D HS fra 10:00 på de fælles baner og med hele runder fra 13:00, når U9's
 baner er fri — lørdagen slutter kl. 14:00 (før 17:00).
+
+## Swiss-runden spilles samlet (2026-11-13)
+
+Prod-test (Lyngby 2026): U11 B DS-runderne blev spredt over op til tre slots (2 + 1 + 1 kamp), og U11 D HS over to — Jesper:
+"spillerne kommer til at sidde stille MEGET længe, det må ikke ske".
+
+- **Hård regel** (`regelmodel.swissMaxSpaend`): alle kampe i en Swiss-runde starter i samme slot. Kun når runden har flere
+  kampe, end dagen har baner (halve baner tæller ½), må den fylde de få slots, det kræver.
+- **Tjek**: en spredt runde er en fejl (`swiss-samlet`).
+- **Planlæggeren**: en runde startes kun, hvis der er plads til hele runden i de slots, den må fylde, og resten af runden
+  lægges med det samme i samme slot. Brydes max varighed, fordi en tidlig kamp (fx en enkelt finale kl. 9) gør rækkens
+  spænd for langt, når Swiss-runderne først har baner nok senere, laves forslaget igen med en tidligste start for rækkens
+  kampe af den art (`medVarighedsReparation`).
+- **Løseren**: `swissSamlet` (rundens kampe højst `spaend` min fra hinanden; elastisk pris 0,5).
+- **Løseren starter også, når det hurtige program har regelbrud**: med samlede runder finder den ofte en lovlig plan,
+  hvor den hurtige planlægger ikke kan. Har dens plan færre fejl i Tjek, lægges den ind (også med højere score), og
+  beslutningskortene forsvinder (`loeser-svar.vurderLoeserPlan`).
+
+Lyngby med løseren (30 min, pause 0): alle runder samlet, 0 fejl i Tjek — U11 D HS i hele runder kl. 13–15:30, U11 B HS
+09–11:30 og U11 C HS 13:30–16 om søndagen.
