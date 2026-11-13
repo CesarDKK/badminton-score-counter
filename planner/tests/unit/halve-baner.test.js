@@ -19,7 +19,7 @@ function tpModel({ loer = 15, soen = 10, navne = [] } = {}) {
 }
 
 describe('Halve baner: gættet ved import', () => {
-    test('U9-dagen har flere baner end de andre dage: de ekstra er halve — 10 baner, U9 har 5 delte kl. 9–14', () => {
+    test('U9-dagen har flere baner end de andre dage: de ekstra er halve — 10 baner, U9 har 5 delte kl. 9–14 (uden kampe: rækkens max varighed)', () => {
         const p = nytProjekt(tpModel());
         const l = p.opsaetning.dage.find((d) => d.dato === LOER);
         assert.equal(l.baner, 10);
@@ -54,5 +54,21 @@ describe('Halve baner: brugerens svar', () => {
         assert.equal(ja.opsaetning.dage.find((d) => d.dato === LOER).baner, 11);
         assert.deepEqual(ja.opsaetning.dage.find((d) => d.dato === LOER).halveBaner, { tp: 15, delte: 4, gaet: false });
         assert.equal(ja.raekker.find((r) => r.id === 'U09 D').reserveredeBaner, 4);
+    });
+});
+
+describe('U9\'s tidsrum følger, hvor længe U9 skal bruge (Jesper 2026-11-13: "de skal starte tidligt")', () => {
+    test('anslaaSenest: bane-slots på de egne baner og spilleren med flest kampe, plus ét slot luft', async () => {
+        const { anslaaSenest } = await import('../../src/store.js');
+        const p0 = nytProjekt(tpModel());
+        const r = p0.raekker.find((x) => x.id === 'U09 D');
+        const dag = p0.opsaetning.dage.find((d) => d.dato === LOER);
+        // 4 kampe (halve baner) med to spillere hver: 2 kampe pr. spiller → 1 + 1 slot (+ pause), plus luft
+        const kampe = [['a', 'b'], ['c', 'd'], ['a', 'c'], ['b', 'd']].map(([x, y], i) => ({ id: `k${i}`, kategori: 'U09 D HS', runde: 1, spillere: [x, y], muligeSpillere: [x, y], afhaengerAf: [], tpRef: {} }));
+        const p = { ...p0, kampe, opsaetning: { ...p0.opsaetning, slotMin: 30, pauseMin: { ABCD: 0, M: 0, E: 0, faelles: null } } };
+        assert.equal(anslaaSenest(p, r, dag, 5), '10:30');
+        // Swiss-pladsholdere tæller én kamp pr. spiller pr. runde, ikke én pr. pladsholder
+        const swiss = [1, 2].map((i) => ({ id: `s${i}`, kategori: 'U09 D HS', runde: 2, spillere: [], muligeSpillere: ['a', 'b', 'c', 'd'], afhaengerAf: [], tpRef: {} }));
+        assert.equal(anslaaSenest({ ...p, kampe: [...kampe, ...swiss] }, r, dag, 5), '11:00');
     });
 });
