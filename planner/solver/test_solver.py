@@ -30,6 +30,16 @@ class SolverTest(unittest.TestCase):
         tider = sorted(r["tider"].values())
         self.assertEqual(tider, [540, 540, 570, 570, 600], "to baner: to kampe pr. slot, pakket fra morgenen")
 
+    def test_swiss_runde_samlet(self):
+        # 4 kampe i en Swiss-runde på 4 baner: samme slot, selv om to andre kampe helst vil starte kl. 9
+        kampe = [kamp(i) for i in range(6)]
+        kap = {"faelles": [{"t": t, "baner": 4} for t in range(540, 720, 30)]}
+        r = loes(problem(kampe, kapacitet=kap, swissSamlet=[{"kampe": [0, 1, 2, 3], "spaend": 0}]), 5)
+        self.assertEqual(len({r["tider"][f"k{i}"] for i in range(4)}), 1, "runden i ét slot")
+        r2 = loes(problem(kampe, kapacitet=kap, swissSamlet=[{"kampe": [0, 1, 2, 3, 4, 5], "spaend": 30}]), 5)
+        tider = [r2["tider"][f"k{i}"] for i in range(6)]
+        self.assertLessEqual(max(tider) - min(tider), 30, "6 kampe på 4 baner: højst to slots i træk")
+
     def test_halve_baner_deler_en_bane(self):
         kampe = [kamp(0, halv=True), kamp(1, halv=True), kamp(2), kamp(3)]
         r = loes(problem(kampe, kapacitet={"faelles": [{"t": t, "baner": 2} for t in range(540, 720, 30)]}), 5)

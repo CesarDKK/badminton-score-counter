@@ -4,7 +4,8 @@
 
 /**
  * Løserens lovlige plan:
- *   'indlaeg'      — lægges ind (løseren kørte af sig selv efter "Lav kampprogram", bedre score, ikke flere fejl)
+ *   'indlaeg'      — lægges ind (løseren kørte af sig selv efter "Lav kampprogram": færre fejl i Tjek, eller bedre
+ *                    score og ikke flere fejl)
  *   'tilbud'       — som 'indlaeg', men brugeren har set listen til TP imens: et tilbud, tiderne ændres ikke
  *   'beholdt-fejl' — bedre score, men flere fejl i Tjek: programmet beholdes
  *   'beholdt'      — ikke bedre: programmet beholdes
@@ -12,6 +13,8 @@
  */
 export function vurderLoeserPlan({ auto, harProgram, scoreLoeser, scoreFoer, fejlLoeser, fejlFoer, listeSet = false }) {
     if (!auto || !harProgram) return 'vaelg';
+    // Færre fejl i Tjek vinder over scoren: det hurtige program havde regelbrud, løseren fandt et, der går (mere) op
+    if (fejlLoeser < fejlFoer) return listeSet ? 'tilbud' : 'indlaeg';
     const bedre = scoreLoeser < scoreFoer;
     if (!bedre) return 'beholdt';
     if (fejlLoeser > fejlFoer) return 'beholdt-fejl';

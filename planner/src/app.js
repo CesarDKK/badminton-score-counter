@@ -450,13 +450,14 @@ function visKampprogram(r, { foer, valg, udfoert = [], note = null, beslutninger
 }
 
 /**
- * Løseren starter af sig selv, når "Lav kampprogram" har lavet et program, der går op (Jesper 2026-10-10): det hurtige
- * program vises med det samme, og løseren forbedrer det bagefter. Går programmet ikke op, venter den, til kortene er
- * taget stilling til. Kan slås fra under Avanceret (opsaetning.autoLoeser).
+ * Løseren starter af sig selv, når "Lav kampprogram" har lavet et program (Jesper 2026-10-10): det hurtige program
+ * vises med det samme, og løseren forbedrer det bagefter. Går det hurtige program ikke op, prøver løseren også — den
+ * finder ofte en lovlig plan, hvor den hurtige planlægger ikke kan (Swiss-runder samlet, Jesper 2026-11-13); så
+ * lægges den ind, og kortene forsvinder. Ellers står kortene, som før. Kan slås fra under Avanceret (opsaetning.autoLoeser).
  */
 function startAutoLoeser() {
     const kp = tilstand.kampprogram;
-    if (!kp || kp.projekt !== projekt || kp.beslutninger.brud || projekt.opsaetning.autoLoeser === false) return;
+    if (!kp || kp.projekt !== projekt || projekt.opsaetning.autoLoeser === false) return;
     setTimeout(() => planHandlers.optimer({ auto: true }), 0);
 }
 
@@ -884,7 +885,7 @@ const planHandlers = {
                 // Sikkerhedsnet: automatisk kun, når løserens plan ikke har flere fejl i Tjek end programmet — så en
                 // uenighed mellem løseren og Tjek aldrig skifter et lovligt program ud (loeser-svar.js)
                 const valg = vurderLoeserPlan({ auto, harProgram, scoreLoeser: opt.score, scoreFoer: sammenlign.score,
-                    fejlLoeser: bedre ? tjekPlan(p2).antal.fejl : 0, fejlFoer: bedre ? tjekPlan(projekt).antal.fejl : 0, listeSet: tilstand.listeSetUnderLoeser });
+                    fejlLoeser: tjekPlan(p2).antal.fejl, fejlFoer: tjekPlan(projekt).antal.fejl, listeSet: tilstand.listeSetUnderLoeser });
                 if (valg !== 'vaelg') {
                     const kp = panelGaelder(tilstand.kampprogram, projekt) ? tilstand.kampprogram : null;
                     if (valg === 'tilbud') {
@@ -895,10 +896,16 @@ const planHandlers = {
                     } else if (valg === 'indlaeg') {
                         const foerP = projekt;
                         saet({ ...projekt, plan });
-                        const tekst = `Løseren har forbedret programmet på ${svar.sekunder} s (score ${sammenlign.score} → ${opt.score}; lavere er bedre).`;
+                        const fejlEfter = tjekPlan(projekt).antal.fejl;
+                        // Det hurtige program gik ikke op, men løserens gør: kortene er ikke længere nødvendige
+                        const loestKort = kp && kp.beslutninger.brud > 0 && fejlEfter === 0;
+                        const tekst = loestKort
+                            ? `Løseren fandt et program på ${svar.sekunder} s, der overholder alle reglerne — det hurtige program kunne ikke. Ingen ændringer af opsætningen var nødvendige.`
+                            : `Løseren har forbedret programmet på ${svar.sekunder} s (score ${sammenlign.score} → ${opt.score}; lavere er bedre).`;
                         tilstand.fortryd = { projekt: foerP, efter: projekt, tekst };
                         tilstand.forslag = { tekst, ikkePlaceret: [], kilde: 'loeser' };
                         if (kp) { kp.projekt = projekt; kp.forbedret = tekst; }
+                        if (loestKort) { kp.beslutninger = { kort: [], brud: 0, fraLoeser: true }; kp.varianter = null; }
                     } else {
                         const tekst = valg === 'beholdt-fejl'
                             ? `Løseren fandt en plan med bedre score, men flere fejl i Tjek end programmet — programmet er beholdt.`

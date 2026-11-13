@@ -28,6 +28,7 @@ export const TYPE_TEKST = {
     'senior-finalerunder': 'Senior E/M: finalerunder samme dag',
     'senior-finaledag': 'Senior A/B: finaledagen',
     'swiss-runde': 'Swiss Ladder: runder for tæt',
+    'swiss-samlet': 'Swiss Ladder: runde spredt over flere slots',
     'slot-for-kort': 'Slotlængde under minimum',
     'form': 'Turneringsform (rettes i TP)',
     'uden-tid': 'Kampe uden tid',

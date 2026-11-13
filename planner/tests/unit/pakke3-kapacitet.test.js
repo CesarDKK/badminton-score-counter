@@ -126,6 +126,9 @@ describe('kriteriet "flest kampe": en stor række kan ikke klemme en lille ud', 
             const p = byg(kriterie);
             assert.deepEqual(p.kategorier.filter((k) => k.formForslag.passerIkke).map((k) => k.id), [], kriterie);
             assert.ok(p.kampe.length <= FYLDNINGSGRAD * 136, `${kriterie}: ${p.kampe.length} kampe`);
+            // Med "flest" bliver alle tre Swiss Ladder på 84 % af banerne, og hver runde skal spilles samlet (Jesper
+            // 2026-11-13): den kabale lægger den hurtige planlægger ikke altid — det er løserens opgave (den starter selv)
+            if (kriterie === 'flest') continue;
             const f = lavForslag(p);
             assert.equal(f.brud.length + f.ikkePlaceret.length, 0, `${kriterie}: planlæggeren kan lægge det hele`);
         }
