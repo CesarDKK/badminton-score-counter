@@ -1,7 +1,7 @@
 // Projektstore: projektfilen (design § 6) som rene funktioner. Ingen DOM.
 // Persistens (localStorage, JSON-fil) ligger i gem/hent-hjælperne nederst og
 // kan bruges fra app.js; alt andet er testbart i Node.
-import { planFraTP, minutter } from './tp-reader.js';
+import { planFraTP, minutter, klokkeFraMinutter } from './tp-reader.js';
 import { foreslaaForm, byggKampe, seedTilmeldinger, minKampeSamlet, sikreKampe, formTekst } from './form.js';
 import { pladsPaaDag, fordelRaekkerPaaDage, FYLDNINGSGRAD, kapacitetPrDag } from './kapacitet.js';
 import { lavRegelmodel } from './regelmodel.js';
@@ -56,6 +56,10 @@ function senesteSlut(aargange) {
  * @param {{tagTiderMed: boolean}} valg  "tag tidsplanen med" eller "kun spillere og kampe"
  */
 export function nytProjekt(model, valg = { tagTiderMed: false }) {
+    return medHalveBanerGaet(byggNytProjekt(model, valg), model);
+}
+
+function byggNytProjekt(model, valg) {
     const aargange = new Set(model.raekker.map((r) => r.aargang));
     const slutStandard = senesteSlut(aargange);
     const dage = model.turnering.dage.map((dato) => {
@@ -153,6 +157,66 @@ export function nytProjekt(model, valg = { tagTiderMed: false }) {
         tpGitter: model.tpGitter,
         bemaerkninger: model.bemaerkninger || [],
     };
+}
+
+// ── Halve baner (U9) i TP's baneantal ─────────────────────────
+
+/**
+ * U9 spiller på halve baner. Nogle TP-filer har de halve baner med i baneantallet (Lyngby 2026: 10 baner, hvor 5 er delt
+ * i halve, står som 15 i TP), andre ikke — og banenavnene er fritekst, så det kan ikke ses sikkert (Jesper 2026-11-13).
+ * Planneren gætter derfor og spørger under Turneringen, til brugeren har bekræftet (dag.halveBaner.gaet).
+ *
+ * Gættet gælder U9-dagen, når TP ikke har et særligt tidsrum med ekstra baner (det klarer rækkens vindue som før):
+ * har den flere baner end turneringens andre dage, eller tyder banenavnene på delte baner, er de halve talt med.
+ */
+function medHalveBanerGaet(projekt, model) {
+    const halvKat = new Set(model.kategorier.filter((k) => k.halvBane).map((k) => k.id));
+    if (!halvKat.size) return projekt;
+    const halvRaekker = projekt.raekker.filter((r) => model.kategorier.some((k) => k.raekke === r.id && k.halvBane));
+    if (halvRaekker.some((r) => r.reserveredeBaner > 0)) return projekt; // TP har et tidsrum med ekstra baner (2025)
+    const tpBaner = (dato) => model.tpGitter.dage.find((d) => d.dato === dato)?.baner || null;
+    // U9-dagen: fra TP's tider, ellers den dag med flest baner
+    const tpDage = [...new Set(model.kampe.filter((k) => halvKat.has(k.kategori) && k.tpTid).map((k) => k.tpTid.dag))];
+    const kandidater = projekt.opsaetning.dage.filter((d) => tpBaner(d.dato));
+    const dag = (tpDage.length === 1 && kandidater.find((d) => d.dato === tpDage[0]))
+        || [...kandidater].sort((a, b) => tpBaner(b.dato) - tpBaner(a.dato))[0];
+    if (!dag) return projekt;
+    const tp = tpBaner(dag.dato);
+    const andre = kandidater.filter((d) => d.dato !== dag.dato).map((d) => tpBaner(d.dato));
+    const fraAndreDage = andre.length ? Math.max(0, tp - Math.min(...andre)) : 0;
+    const fraNavne = model.tpGitter.baner?.delte || 0;
+    // Delte baner kan højst være halvdelen af TP's poster (hver delt bane er to poster)
+    const delte = Math.min(Math.floor(tp / 2), fraAndreDage || fraNavne);
+    // De ekstra baner er på den dag: rækker på halve baner, der kun spiller én dag, lægges der (ellers ville
+    // reservationen også tage baner fra de andre rækker på de andre dage)
+    let p = projekt;
+    if (delte) for (const r of halvRaekker) if (r.maxDage === 1 && r.dage.length > 1 && r.dage.includes(dag.dato)) p = opdaterRaekke(p, r.id, { dage: [dag.dato] });
+    return saetHalveBaner(p, dag.dato, delte, { gaet: true, tp });
+}
+
+/**
+ * Brugerens svar (eller gættet): på dagen er `delte` af TP's baner delt i halve og talt med to gange i TP's antal.
+ * delte = 0: TP's antal er hele baner. Dagens baner bliver TP's antal minus de delte, og U9-rækkerne, der spiller den
+ * dag, får de delte baner reserveret i deres tidsrum (sat til dagens start + rækkens max varighed, hvis de ikke har et):
+ * så ligger U9 samlet på egne baner, og de andre rækker får banerne, når U9 er færdig.
+ */
+export function saetHalveBaner(projekt, dato, delte, { gaet = false, tp = null } = {}) {
+    const dag = projekt.opsaetning.dage.find((d) => d.dato === dato);
+    if (!dag) return projekt;
+    const tpAntal = tp ?? dag.halveBaner?.tp ?? dag.baner;
+    const n = Math.max(0, Math.min(Math.floor(tpAntal / 2), Math.round(Number(delte) || 0)));
+    let p = opdaterDag(projekt, dato, { baner: tpAntal - n, halveBaner: { tp: tpAntal, delte: n, gaet } });
+    const halvRaekker = new Set(p.kategorier.filter((k) => k.halvBane).map((k) => k.raekke));
+    for (const r of p.raekker) {
+        if (!halvRaekker.has(r.id) || !r.dage.includes(dato)) continue;
+        const start = minutter(dag.start);
+        const til = r.maxRaekkeMin ? klokkeFraMinutter(Math.min(start + r.maxRaekkeMin, minutter(dag.slut))) : dag.slut;
+        // "Nej": ingen egne baner — og det tidsrum, planneren selv satte med dem, fjernes igen
+        const egetTidsrum = r.tidligst === dag.start && r.senest === til;
+        if (!n) { p = opdaterRaekke(p, r.id, { reserveredeBaner: 0, ...(egetTidsrum ? { tidligst: null, senest: null } : {}) }); continue; }
+        p = opdaterRaekke(p, r.id, { reserveredeBaner: n, tidligst: r.tidligst || dag.start, senest: r.senest || til });
+    }
+    return p;
 }
 
 /**
@@ -341,6 +405,7 @@ export function validerProjekt(obj) {
     if (!Number.isFinite(obj.opsaetning.slotMin) || obj.opsaetning.slotMin < 5) return fejl('slotlængde');
     for (const d of obj.opsaetning.dage) {
         if (!erObjekt(d) || !DATO.test(d.dato) || !erKlokke(d.start) || !erKlokke(d.slut) || !erTalEllerTomt(d.baner)) return fejl('spilledage');
+        if (d.halveBaner !== undefined && (!erObjekt(d.halveBaner) || !Number.isFinite(d.halveBaner.tp) || !Number.isFinite(d.halveBaner.delte))) return fejl('halve baner');
         for (const s of d.spaerret || []) if (!erObjekt(s) || !erKlokke(s.fra) || !erKlokke(s.til) || !erTalEllerTomt(s.baner)) return fejl('spærrede baner');
     }
     if (!Array.isArray(obj.raekker) || !Array.isArray(obj.kategorier) || !erObjekt(obj.spillere) || !erObjekt(obj.plan)) return fejl('rækker, kategorier, spillere eller plan');

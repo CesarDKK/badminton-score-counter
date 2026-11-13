@@ -267,6 +267,8 @@ const handlers = {
     },
     opsaetning: (aendringer) => saet(store.opdaterOpsaetning(projekt, aendringer)),
     dag: (dato, aendringer) => saetOpsaetning(store.opdaterDag(projekt, dato, aendringer)),
+    // U9 på halve baner: brugerens svar på, om de halve baner er talt med i TP's antal (store.saetHalveBaner)
+    halveBaner: (dato, delte) => saetOpsaetning(store.saetHalveBaner(projekt, dato, delte)),
     raekke: (id, aendringer) => saetOpsaetning(store.opdaterRaekke(projekt, id, aendringer)),
     minKampeSamlet: (id, vaerdi) => saetOpsaetning(store.opdaterRaekke(projekt, id, { minKampeSamlet: vaerdi })),
     kategori: (id, aendringer) => saetOpsaetning(store.opdaterKategori(projekt, id, aendringer)),

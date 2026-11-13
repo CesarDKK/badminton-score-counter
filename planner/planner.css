@@ -531,6 +531,11 @@ label.valg { display: inline-flex; align-items: center; gap: 6px; cursor: pointe
 .fremdrift { display: block; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.1); overflow: hidden; }
 .fremdrift > span { display: block; height: 100%; background: var(--accent, var(--red)); transition: width 1s linear; }
 .spinner--lille { display: inline-block; width: 0.9em; height: 0.9em; border-width: 2px; vertical-align: -0.1em; }
+.halve-baner { margin-top: 14px; padding: 12px 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-raise); }
+.halve-baner.er-gaet { border: 2px solid var(--amber); }
+.halve-baner p { margin: 0 0 8px; }
+.halve-baner .valg { display: flex; gap: 8px; align-items: baseline; margin: 6px 0; }
+.halve-baner input[type="number"] { width: 4em; }
 .kampprogram.er-udkast { border-style: dashed; border-color: var(--accent, var(--red)); }
 .gitter-hylster.er-udkast { outline: 2px dashed var(--accent, var(--red)); outline-offset: 4px; border-radius: 6px; }
 .gitter-hylster.er-udkast .gitter { opacity: 0.75; }

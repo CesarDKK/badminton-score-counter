@@ -41,6 +41,25 @@ export function klokkeStr(d) {
     return `${to(d.getUTCHours())}:${to(d.getUTCMinutes())}`;
 }
 
+/**
+ * Fysiske baner ud fra TP's banenavne — kun et fingerpeg, for navnene er fritekst. En bane delt i to halve står i TP som to poster: "01-B" + "01-B½" (eller
+ * "1/2"), eller "01-B1" + "01-B2". Et par med 1/2 til sidst tæller kun som delt, når resten af navnet har et banenummer
+ * og ender på et bogstav eller tegn ("01-B1"/"01-B2") — ikke "Bane 1"/"Bane 2" eller "01"/"02", som er to baner.
+ * Returnerer { fysiske, delte }: antal fysiske baner, og hvor mange af dem der er delt i halve.
+ */
+export function fysiskeBaner(navne) {
+    const grund = (n) => n.trim().replace(/\s*(½|1\/2)$/, '');
+    const grupper = new Map();
+    const saet = new Set(navne.map((n) => n.trim()));
+    for (const n of navne) {
+        let g = grund(n);
+        const m = /^(.*\d.*[^\d\s])([12])$/.exec(g);
+        if (m && saet.has(`${m[1]}1`) && saet.has(`${m[1]}2`)) g = m[1];
+        grupper.set(g, (grupper.get(g) || 0) + 1);
+    }
+    return { fysiske: grupper.size, delte: [...grupper.values()].filter((x) => x > 1).length };
+}
+
 /** "TT:MM" → minutter siden midnat */
 export function minutter(klokke) {
     const [t, m] = klokke.split(':').map(Number);
@@ -468,6 +487,9 @@ export function laesTP(tabeller, valg = {}) {
     const courts = tabeller.hent('Court');
     const halve = courts.filter((c) => /½|1\/2/.test(c.name || '')).length;
     const hele = courts.length - halve;
+    // Banenavnene er fritekst i TP: hvor mange baner der ser ud til at være delt i halve, er kun et fingerpeg til gættet
+    // i nytProjekt — brugeren bekræfter det under Turneringen (Jesper 2026-11-13)
+    const { delte } = fysiskeBaner(courts.map((c) => c.name || ''));
 
     const tiderPrDag = new Map();
     for (const t of tabeller.hent('TournamentTime')) {
@@ -520,7 +542,7 @@ export function laesTP(tabeller, valg = {}) {
         tpGitter: {
             slotMin,
             dage: gitterDage,
-            baner: { hele, halve, navne: courts.map((c) => c.name) },
+            baner: { hele, halve, delte, navne: courts.map((c) => c.name) },
             harTider: kampe.some((k) => k.tpTid),
             advarsler: tabeller.har('MatchWarning') ? tabeller.hent('MatchWarning').length : 0,
         },
