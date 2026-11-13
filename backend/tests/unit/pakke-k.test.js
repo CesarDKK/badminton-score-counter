@@ -320,25 +320,29 @@ test('81: migration 044 fjerner dubletter ikke-destruktivt før UNIQUE', () => {
 
 // ---------- Nr. 82: QR-sessioner og officielle kampe ----------
 
-test('82: ingen QR-session på en bane med holdkamp- eller turneringskamp', async () => {
+// En holdkamps delkamp må QR-telefonen gerne tælle (Jesper, 2026-11-13) —
+// turneringskampe stadig ikke
+test('82: ingen QR-session på en bane med en turneringskamp', async () => {
     nulstil(async (sql) => (/AS optaget/.test(sql) ? [{ optaget: 1 }] : []));
-    assert.equal(await baneTildeling.officielKampPaaBane(3), true);
-    nulstil(async (sql) => (/AS optaget/.test(sql) ? [{ optaget: 1 }] : [{ token: 'gammel' }]));
+    assert.equal(await baneTildeling.turneringPaaBane(3), true);
+    assert.match(kald[0].sql, /FROM tournament_matches/);
+    assert.doesNotMatch(kald[0].sql, /team_match_games/, 'en holdkamp spærrer ikke QR-koden');
     // getOrCreateActiveToken er ikke eksporteret — QR-ruten kalder den; tjek kilden
     const kilde = laes('backend/routes/matchSessionTokens.js');
     const fn = kilde.slice(kilde.indexOf('async function getOrCreateActiveToken'));
-    assert.ok(fn.indexOf('officielKampPaaBane') < fn.indexOf('getActiveToken(courtNumber)'),
+    assert.ok(fn.indexOf('turneringPaaBane') < fn.indexOf('getActiveToken(courtNumber)'),
         'tjekkes før en eksisterende session genbruges');
-    assert.match(fn, /if \(await officielKampPaaBane\(courtNumber\)\) return null;/);
+    assert.match(fn, /if \(await turneringPaaBane\(courtNumber\)\) return null;/);
     nulstil(async () => [{ optaget: 0 }]);
-    assert.equal(await baneTildeling.officielKampPaaBane(3), false);
+    assert.equal(await baneTildeling.turneringPaaBane(3), false);
     assert.ok(matchSessionTokens.getActiveToken);
 });
 
-test('82: game-states melder aldrig ind fra en QR-session og spærrer den på officielle baner', () => {
+test('82: game-states melder kun en delkamp ind fra en QR-session og spærrer den på turneringsbaner', () => {
     const kilde = laes('backend/routes/gameStates.js');
-    assert.match(kilde, /if \(matchCompleted && frisk && !erQrSession\(req\.user\)\)/);
-    assert.match(kilde, /if \(existing && existing\.match_completed && !erQrSession\(req\.user\)\)/);
+    assert.match(kilde, /meldAfgjortKamp\(req, courtId, frisk, \{ kunHoldkamp: erQrSession\(req\.user\) \}\)/);
+    assert.match(kilde, /meldAfgjortKamp\(req, courtId, existing, \{ erDouble: !!court\.is_doubles, kunHoldkamp: erQrSession\(req\.user\) \}\)/);
+    assert.match(kilde, /if \(await turneringPaaBane\(parseInt\(req\.params\.courtId, 10\)\)\)/);
     for (const rute of ["router.put('/:courtId'", "router.post('/:courtId/taeller'", "router.post('/:courtId/result'", "router.delete('/:courtId'"]) {
         const linje = kilde.slice(kilde.indexOf(rute)).split('\n')[0];
         assert.match(linje, /kunEgenBane\('courtId'\), qrIkkeOfficielBane,/, rute);

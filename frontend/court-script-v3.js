@@ -1959,8 +1959,8 @@ async function performSave() {
 // Genindlæs siden så auth-guard kører og fornyer/omdirigerer. Reload-guard på
 // 30s forhindrer en løkke hvis tilstanden ikke retter sig ved genindlæsning.
 function handleAuthExpired(body) {
-    // QR-tælleren: sessionen er afsluttet (banen ryddet, tildelt en holdkamp/
-    // turneringskamp eller frigivet). En genindlæsning hjælper ikke — man skal
+    // QR-tælleren: sessionen er afsluttet (banen ryddet, tildelt en turneringskamp,
+    // af admin/en tablet tildelt en delkamp, eller frigivet). En genindlæsning hjælper ikke — man skal
     // scanne QR-koden på TV'et igen.
     if (isMatchSessionToken()) {
         showQrSessionExpired();

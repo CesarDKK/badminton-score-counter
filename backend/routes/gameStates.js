@@ -4,7 +4,7 @@ const { query, queryOne } = require('../config/database');
 const { synligBane } = require('../config/baner');
 const { authMiddleware, requireWriteAuthInClubMode } = require('../middleware/auth');
 const { kunEgenBane, erQrSession } = require('../middleware/qrSession');
-const { officielKampPaaBane } = require('../config/baneTildeling');
+const { turneringPaaBane } = require('../config/baneTildeling');
 const { invalidateCourtTokens, nyUrKode } = require('./matchSessionTokens');
 const { publishGameStateChange, subscribeGameStateChanges } = require('../events/gameStateEvents');
 // badmintonplanner.dk: rundenavn/næste runde/udskiftere/note pr. bane (fase 2-visning)
@@ -740,9 +740,9 @@ async function gemTilstand(req, courtId, body, { skipAutoActive = false, tryk = 
         // Holdkamp/turnering: kampen er netop afgjort — serveren melder selv
         // resultatet ind til delkampen/turneringskampen på banen, så det ikke
         // afhænger af, at tablettens eget kald når frem (taeller/resultatMelding.js)
-        // Aldrig fra en QR-session: holdkamp- og turneringsresultater er officielle (nr. 82)
-        if (matchCompleted && frisk && !erQrSession(req.user)) {
-            try { await meldAfgjortKamp(req, courtId, frisk); }
+        // Fra en QR-session kun en holdkamps delkamp — aldrig en turneringskamp (nr. 82)
+        if (matchCompleted && frisk) {
+            try { await meldAfgjortKamp(req, courtId, frisk, { kunHoldkamp: erQrSession(req.user) }); }
             catch (e) { console.error('Indmelding af kampresultat fejlede:', e.message); }
         }
     }
@@ -799,15 +799,16 @@ async function gemTilstand(req, courtId, body, { skipAutoActive = false, tryk = 
     return { status: 200, json: { success: true, version: updatedRow ? updatedRow.version : 1 } };
 }
 
-// En QR-session må ikke tælle eller rydde en bane, der spiller en holdkamp-
-// eller turneringskamp (nr. 82). Tildelingen ugyldiggør banens QR-session,
-// og et TV udsteder ikke en ny, så længe kampen står på banen — dette er
-// sikkerhedsnettet, hvis en session alligevel findes.
+// En QR-session må ikke tælle eller rydde en bane, der spiller en
+// turneringskamp (nr. 82). Tildelingen ugyldiggør banens QR-session, og et TV
+// udsteder ikke en ny, så længe kampen står på banen — dette er
+// sikkerhedsnettet, hvis en session alligevel findes. En holdkamps delkamp må
+// telefonen gerne tælle (Jesper, 2026-11-13).
 async function qrIkkeOfficielBane(req, res, next) {
     try {
         if (!erQrSession(req.user)) return next();
-        if (await officielKampPaaBane(parseInt(req.params.courtId, 10))) {
-            return res.status(403).json({ error: 'QR-tælleren kan ikke bruges, mens banen spiller en holdkamp eller turneringskamp' });
+        if (await turneringPaaBane(parseInt(req.params.courtId, 10))) {
+            return res.status(403).json({ error: 'QR-tælleren kan ikke bruges, mens banen spiller en turneringskamp' });
         }
         next();
     } catch (error) {
@@ -1037,8 +1038,9 @@ router.delete('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), q
         // herunder den tilbage til "afventer", og resultatet var væk.
         // FØR banen nulstilles (nr. 71): nulstillingen sætter is_doubles = FALSE,
         // og en afgjort double blev så aldrig genkendt som sin double-delkamp
-        if (existing && existing.match_completed && !erQrSession(req.user)) {
-            try { await meldAfgjortKamp(req, courtId, existing, { erDouble: !!court.is_doubles }); }
+        // Fra en QR-session kun en holdkamps delkamp (nr. 82)
+        if (existing && existing.match_completed) {
+            try { await meldAfgjortKamp(req, courtId, existing, { erDouble: !!court.is_doubles, kunHoldkamp: erQrSession(req.user) }); }
             catch (e) { console.error('Indmelding af kampresultat fejlede:', e.message); }
         }
 

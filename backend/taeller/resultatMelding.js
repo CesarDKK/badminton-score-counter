@@ -100,6 +100,8 @@ function holdkampNavne(g) {
  * { type, id, winnerTeam, setScores } når noget blev meldt ind, ellers null.
  * opts.erDouble: banens single/double, som den var under kampen — når banen
  * er ved at blive ryddet (DELETE nulstiller is_doubles), læses den ikke igen.
+ * opts.kunHoldkamp: meld kun en delkamp ind, aldrig en turneringskamp — når
+ * banen tælles fra en QR-telefon (nr. 82).
  */
 async function meldAfgjortKamp(req, courtNumber, gs, opts = {}) {
     const bane = parseInt(courtNumber, 10);
@@ -140,6 +142,7 @@ async function meldAfgjortKamp(req, courtNumber, gs, opts = {}) {
         console.log(`✓ Bane ${bane}: delkamp #${g.id} meldt ind af serveren (hold ${r.winnerTeam} vandt)`);
         return { type: 'holdkamp', id: g.id, ...r };
     }
+    if (opts.kunHoldkamp) return null;
 
     const m = await queryOne(
         `SELECT m.id, m.doubles, m.started_at,

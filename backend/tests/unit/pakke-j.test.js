@@ -118,6 +118,30 @@ test('71: meldAfgjortKamp bruger den medsendte single/double og læser ikke bane
     assert.ok(indeks(/FROM courts/) >= 0);
 });
 
+test('QR-telefonen (kunHoldkamp) melder en delkamp ind, men aldrig en turneringskamp', async () => {
+    rydBaneDb({ isDoubles: false });
+    const gs = (await db.queryOne('SELECT * FROM game_states WHERE court_id = ?', [7]));
+    // Ingen delkamp på banen, men en turneringskamp
+    svar = async (sql) => {
+        if (/FROM team_match_games g/.test(sql)) return [];
+        if (/FROM tournament_matches m/.test(sql)) return [{ id: 9, doubles: 0, started_at: null,
+            side1_player1: 'Anna', side2_player1: 'Carl' }];
+        return { affectedRows: 1 };
+    };
+    kald = [];
+    assert.equal(await meldAfgjortKamp({}, 3, gs, { erDouble: false, kunHoldkamp: true }), null);
+    assert.equal(indeks(/FROM tournament_matches m/), -1, 'turneringskampen slås ikke engang op');
+    assert.equal(indeks(/UPDATE tournament_matches/), -1);
+    // Delkampen meldes ind som fra en tablet
+    svar = async (sql) => {
+        if (/FROM team_match_games g/.test(sql)) return [{ id: 41, category: 'HS', started_at: null,
+            team1_player1: 'Anna', team1_player2: null, team2_player1: 'Carl', team2_player2: null }];
+        return { affectedRows: 1 };
+    };
+    const r = await meldAfgjortKamp({}, 3, gs, { erDouble: false, kunHoldkamp: true });
+    assert.equal(r && r.type, 'holdkamp');
+});
+
 test('71: tablettens "Ryd banen" sætter ikke en afgjort kamps delkamp/turneringskamp til "afventer" først', () => {
     const kilde = laes('frontend/court-script-v3.js');
     const fn = udsnit(kilde, 'async function performClearCourtNow() {', '// Ny kamp starter altid liggende');

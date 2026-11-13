@@ -24,7 +24,42 @@ const laes = (fil) => fs.readFileSync(path.join(rod, fil), 'utf8');
 
 // ---------------- nr. 59 ----------------
 
-const { banenErIGang, delkampAendringAfvist } = require('../../config/delkampRegler');
+const { banenErIGang, delkampAendringAfvist, qrDelkampAfvist } = require('../../config/delkampRegler');
+
+// ---------------- QR-telefonen og holdkamp (2026-11-13) ----------------
+
+test('QR-telefonen må tildele en ventende delkamp til sin egen bane og tælle den', () => {
+    const ventende = { status: 'pending', court_number: null };
+    assert.equal(qrDelkampAfvist({ egenBane: 3, delkamp: ventende, courtNumber: 3 }), null);
+    assert.equal(qrDelkampAfvist({ egenBane: 3, delkamp: ventende, courtNumber: '3' }), null);
+    // Navne, resultat og frigivelse på egen bane
+    const paaBanen = { status: 'active', court_number: 3 };
+    assert.equal(qrDelkampAfvist({ egenBane: 3, delkamp: paaBanen }), null);
+    assert.equal(qrDelkampAfvist({ egenBane: 3, delkamp: paaBanen, courtNumber: null }), null);
+    assert.equal(qrDelkampAfvist({ egenBane: 3, delkamp: { status: 'finished', court_number: 3 } }), null);
+});
+
+test('QR-telefonen må ikke røre delkampe på andre baner eller flytte dem', () => {
+    assert.match(qrDelkampAfvist({ egenBane: 3, delkamp: { status: 'pending', court_number: null }, courtNumber: 4 }), /anden bane/);
+    assert.match(qrDelkampAfvist({ egenBane: 3, delkamp: { status: 'active', court_number: 5 } }), /tildelt bane 5/);
+    assert.match(qrDelkampAfvist({ egenBane: 3, delkamp: { status: 'active', court_number: 5 }, courtNumber: 3 }), /tildelt bane 5/);
+    assert.match(qrDelkampAfvist({ egenBane: 3, delkamp: { status: 'active', court_number: 5 }, courtNumber: null }), /tildelt bane 5/);
+    // Frigive en delkamp, der ikke står på en bane
+    assert.match(qrDelkampAfvist({ egenBane: 3, delkamp: { status: 'pending', court_number: null }, courtNumber: null }), /ikke tildelt/);
+    // Ukendt bane i sessionen
+    assert.match(qrDelkampAfvist({ egenBane: null, delkamp: { status: 'pending', court_number: null }, courtNumber: 3 }), /ikke knyttet/);
+});
+
+test('QR-telefonen: ruten bruger reglen og beholder telefonens session ved egen tildeling', () => {
+    const rute = laes('backend/routes/teamMatches.js');
+    const linje = rute.slice(rute.indexOf("router.put('/:id/games/:gameId'")).split('\n')[0];
+    assert.doesNotMatch(linje, /ikkeQrSession/);
+    assert.match(rute, /const afvist = qrDelkampAfvist\(\{ egenBane, delkamp: game, courtNumber \}\);\s+if \(afvist\) return res\.status\(403\)/);
+    assert.match(rute, /if \(!qr\) \{\s+try \{ await invalidateCourtTokens\(courtNumber\); \}/);
+    // Turneringskampe er stadig lukket for QR-telefonen
+    const turnering = laes('backend/routes/tournaments.js');
+    assert.match(turnering.slice(turnering.indexOf("router.put('/:id/matches/:matchId'")).split('\n')[0], /ikkeQrSession/);
+});
 
 test('nr. 59: banen er i gang ved point, vundne sæt eller et startet ur', () => {
     assert.equal(banenErIGang(null), false);

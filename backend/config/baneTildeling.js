@@ -71,15 +71,14 @@ async function tjekOgRydBane(courtNumber, req) {
     return null;
 }
 
-// Spiller banen en holdkamps delkamp eller en turneringskamp (status 'active')?
-// Så må der ikke udstedes en QR-session til den (nr. 82).
-async function officielKampPaaBane(courtNumber) {
+// Spiller banen en turneringskamp (status 'active')? En QR-session må tælle en
+// holdkamps delkamp på sin egen bane (Jesper, 2026-11-13: klubben slår QR-koden
+// fra, når der afvikles turneringer), men aldrig en turneringskamp (nr. 82).
+async function turneringPaaBane(courtNumber) {
     const r = await queryOne(
-        `SELECT (EXISTS (SELECT 1 FROM team_match_games g JOIN team_matches tm ON tm.id = g.team_match_id
-                          WHERE g.court_number = ? AND g.status = 'active' AND tm.status = 'active'))
-             OR (EXISTS (SELECT 1 FROM tournament_matches m JOIN tournaments t ON t.id = m.tournament_id
-                          WHERE m.court_number = ? AND m.status = 'active' AND t.status = 'active')) AS optaget`,
-        [courtNumber, courtNumber]
+        `SELECT EXISTS (SELECT 1 FROM tournament_matches m JOIN tournaments t ON t.id = m.tournament_id
+                         WHERE m.court_number = ? AND m.status = 'active' AND t.status = 'active') AS optaget`,
+        [courtNumber]
     );
     return !!(r && Number(r.optaget));
 }
@@ -94,4 +93,4 @@ async function fjernPlannerTildeling(courtNumber) {
     }
 }
 
-module.exports = { banensStilling, kampKoerer, tildelingAfvist, afbrydKamp, tjekOgRydBane, officielKampPaaBane, fjernPlannerTildeling };
+module.exports = { banensStilling, kampKoerer, tildelingAfvist, afbrydKamp, tjekOgRydBane, turneringPaaBane, fjernPlannerTildeling };
