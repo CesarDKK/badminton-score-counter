@@ -38,7 +38,7 @@ function gem() {
 
 let server = null;          // serverens seneste svar
 let tidsforskel = 0;        // serverens ur minus urets eget
-let raekkefoelge = null;    // [navn øverst, navn nederst]
+let raekkefoelge = null;    // [navn øverst, navn nederst] — ved ens navne { start: 1|2 } (se sideFor)
 let sender = false;
 let senderSiden = Date.now();   // hvornår det ældste tryk i køen blev trykket
 let spaerret = false;
@@ -114,17 +114,30 @@ function byggTastatur() {
     });
 }
 
-// fraLink: koden kom fra telefonens link (?k=). Linket åbnes tit igen til næste
-// kamp, men banen har fået en ny kode efter forrige kamp — så er uret stadig
-// koblet på, og den gemte kobling bruges i stedet for at smide den væk
-async function kobl(k, fraLink = false) {
+// fraLink: koden kom fra telefonens link (?k=…&b=bane). Linket åbnes tit igen
+// til næste kamp, men banen har fået en ny kode efter forrige kamp — så er uret
+// stadig koblet på, og den gemte kobling bruges i stedet for at smide den væk.
+// Kun når den gemte kobling er til linkets bane (nr. 70): før faldt et link til
+// bane 3 tilbage til en kobling til bane 5, og uret talte den forkerte bane.
+// Et ældre link uden bane kan ikke afgøre det — så tastes koden.
+// linkBane: banen fra linket (null = ukendt)
+function kanBrugeGemtKobling(fraLink, linkBane) {
+    return !!(fraLink && gemt.token && linkBane && Number(gemt.bane) === linkBane);
+}
+function linkKodeUdloebet(linkBane) {
+    return linkBane
+        ? `Koden fra linket er udløbet — tast koden fra TV'et på bane ${linkBane}`
+        : 'Koden fra linket er udløbet — tast koden fra banens TV';
+}
+
+async function kobl(k, fraLink = false, linkBane = null) {
     koblerPaa = true;
     kodeTekst('Kobler på …');
     try {
         const { status, data } = await kald('/ur/kobl', { method: 'POST', body: JSON.stringify({ kode: k }) });
         if (status !== 200) {
-            if (fraLink && gemt.token) return brugGemtKobling('Koden er fra forrige kamp — uret er stadig på banen');
-            visKode((data && data.error) || 'Koden virker ikke');
+            if (kanBrugeGemtKobling(fraLink, linkBane)) return brugGemtKobling('Koden er fra forrige kamp — uret er stadig på banen');
+            visKode(fraLink ? linkKodeUdloebet(linkBane) : ((data && data.error) || 'Koden virker ikke'));
             return;
         }
         // Samme bane: usendte tryk hører stadig til her. Ny bane: trykkene til
@@ -137,7 +150,7 @@ async function kobl(k, fraLink = false) {
         hent();
         send();
     } catch {
-        if (fraLink && gemt.token) return brugGemtKobling('Ingen forbindelse — uret er stadig på banen');
+        if (kanBrugeGemtKobling(fraLink, linkBane)) return brugGemtKobling('Ingen forbindelse — uret er stadig på banen');
         visKode('Ingen forbindelse — prøv igen');
     } finally {
         koblerPaa = false;
@@ -226,8 +239,32 @@ function startKamp() {
     tryk('K');
 }
 
-// Hvilken side (1/2) står spilleren på nu
-const sideFor = (st, navn) => (st.player1.name === navn ? 1 : 2);
+// Hvilken side (1/2) står spilleren på nu. Med ens navne ("Emil" mod "Emil")
+// kan navnet ikke afgøre det — begge knapper talte før for side 1 (nr. 28). Så
+// holder rækkefølgen den side, kampen begyndte med ({ start: 1|2 }), og
+// reglernes sidesSwapped siger, hvor den står nu
+const sideFor = (st, x) => (x && typeof x === 'object'
+    ? (st.sidesSwapped ? 3 - x.start : x.start)
+    : (st.player1.name === x ? 1 : 2));
+
+// Rækkefølgen på uret: som i 1. sæt (eller som nu, før første sæt), og den står
+// fast resten af kampen. nu: den hidtidige rækkefølge (null første gang)
+function raekkefoelgeFor(st, nu) {
+    const par = [st.player1.name, st.player2.name];
+    if (par[0] === par[1]) {
+        // Ens navne: siderne efter, hvordan de begyndte; øverst står den, der
+        // stod som player1 i 1. sæt (eller nu, før første sæt)
+        if (nu && typeof nu[0] === 'object') return nu;
+        const f = (st.setScoresHistory || [])[0];
+        const byttet = f && typeof f.byttet === 'boolean' ? f.byttet : !!st.sidesSwapped;
+        return byttet ? [{ start: 2 }, { start: 1 }] : [{ start: 1 }, { start: 2 }];
+    }
+    if (nu && par.includes(nu[0]) && par.includes(nu[1])) return nu;
+    const f = (st.setScoresHistory || [])[0];
+    return f && par.includes(f.player1Name) && par.includes(f.player2Name)
+        ? [f.player1Name, f.player2Name] : par;
+}
+
 // Double: kun fornavnene ("Anders & Carl") — to fulde navne er for lange til
 // urets halve skærm; de fulde navne står på TV'et
 const fornavn = (n) => String(n || '').trim().split(/\s+/)[0];
@@ -357,14 +394,7 @@ function mmss(ms) {
 function tegn() {
     if (!server) return;
     const st = forventet();
-    // Rækkefølgen: som i 1. sæt (eller som nu, før første sæt), og den står
-    // fast resten af kampen
-    const par = [st.player1.name, st.player2.name];
-    if (!raekkefoelge || !par.includes(raekkefoelge[0]) || !par.includes(raekkefoelge[1])) {
-        const f = (st.setScoresHistory || [])[0];
-        raekkefoelge = f && par.includes(f.player1Name) && par.includes(f.player2Name)
-            ? [f.player1Name, f.player2Name] : par;
-    }
+    raekkefoelge = raekkefoelgeFor(st, raekkefoelge);
     const serv = st.isDoubles ? st.servingTeam : st.servingPlayer;
     const pause = st.restBreakActive;
     const saetPause = pause && R.erSaetAfgjort(st);
@@ -465,10 +495,12 @@ $('faerdig').addEventListener('click', () => { if (!storKnapSpaerret()) tryk('F'
 $('faerdigLille').addEventListener('click', () => tryk('F'));
 $('overtag').addEventListener('click', overtag);
 
-const k = new URLSearchParams(location.search).get('k');
+const linkParam = new URLSearchParams(location.search);
+const k = linkParam.get('k');
+const linkBane = /^\d{1,2}$/.test(linkParam.get('b') || '') ? Number(linkParam.get('b')) : null;
 if (k && /^\d{6}$/.test(k)) {
     history.replaceState(null, '', location.pathname);
-    kobl(k, true);
+    kobl(k, true, linkBane);
 } else if (gemt.token) {
     visKamp();
     hent();

@@ -28,11 +28,13 @@ test('uret tæller: sekundtallet regnes ud fra pausens start', () => {
     assert.equal(pauseSekunderTilbage(urRaekke({ rest_break_duration: 120, rest_break_seconds_left: 120 }), START + 30 * 1000), 90);
 });
 
-test('tabletten tæller: det gemte sekundtal bruges uændret', () => {
-    // En tablet har overtaget tællingen fra uret
-    assert.equal(pauseSekunderTilbage(urRaekke({ taeller_id: 'bbbb', rest_break_seconds_left: 37 }), START + 40 * 1000), 37);
+test('tabletten tæller: også her regnes sekundtallet ud fra pausens start (nr. 30)', () => {
+    // Før blev tablettens gemte sekundtal (gemt hvert 10. sek.) brugt uændret,
+    // og skiftede tællingen fra uret til tabletten midt i pausen, stod pausen
+    // stille på urets 60. Starten stemples nu altid med serverens ur (pauseStartetVed)
+    assert.equal(pauseSekunderTilbage(urRaekke({ taeller_id: 'bbbb', rest_break_seconds_left: 37 }), START + 40 * 1000), 20);
     // Uret har aldrig talt på banen
-    assert.equal(pauseSekunderTilbage(urRaekke({ tryk_taeller: null, taeller_id: 'bbbb', rest_break_seconds_left: 50 }), START + 40 * 1000), 50);
+    assert.equal(pauseSekunderTilbage(urRaekke({ tryk_taeller: null, taeller_id: 'bbbb', rest_break_seconds_left: 50 }), START + 40 * 1000), 20);
     // Ingen pause / ingen starttid
     assert.equal(pauseSekunderTilbage(urRaekke({ rest_break_active: 0, rest_break_seconds_left: 0 }), START + 40 * 1000), 0);
     assert.equal(pauseSekunderTilbage(urRaekke({ rest_break_started_at: null }), START + 40 * 1000), 60);
