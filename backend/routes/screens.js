@@ -1,4 +1,5 @@
 const express = require('express');
+const fs = require('fs');
 const router = express.Router();
 const { requireWriteAuthInClubMode, authMiddleware } = require('../middleware/auth');
 const { clubAdminAuth } = require('../middleware/clubAdminAuth');
@@ -8,6 +9,8 @@ const { registrer, liste, fjern } = require('../screens/skaermStatus');
 const haendelseslog = require('../screens/haendelseslog');
 const pcRapport = require('../screens/pcRapport');
 const pcOpdatering = require('../screens/pcOpdatering');
+const pcFejllog = require('../screens/pcFejllog');
+const { bevarKlub } = require('../config/tenantPools');
 
 const tenantKey = (req) => req.clubDbName || 'direct';
 const kl = (ms) => new Date(ms).toLocaleTimeString('da-DK', { timeZone: 'Europe/Copenhagen' });
@@ -64,7 +67,11 @@ const skaermAdmin = (req, res, next) => {
 
 router.get('/', skaermAdmin, (req, res) => {
     const tenant = tenantKey(req);
-    res.json(liste(tenant).map(s => ({ ...s, opdatering: pcOpdatering.forSkaerm(tenant, s.tokenId, s.navn) })));
+    res.json(liste(tenant).map(s => ({
+        ...s,
+        opdatering: pcOpdatering.forSkaerm(tenant, s.tokenId, s.navn),
+        fejllog: pcFejllog.forSkaerm(tenant, s.tokenId, s.navn)
+    })));
 });
 
 // POST /api/screens/:klientId/opdater — admin beder TV-PC'en om at installere
@@ -88,6 +95,31 @@ router.delete('/:klientId/opdater', skaermAdmin, (req, res) => {
         return res.status(409).json({ error: 'PC\'en er allerede gået i gang — det kan ikke fortrydes' });
     }
     res.json({ success: true });
+});
+
+// POST /api/screens/:klientId/fejllog — admin beder TV-PC'en sende sin fejllog
+// (kiosk: fejllog). PC'en spørger hvert 2. minut og sender den som zip.
+router.post('/:klientId/fejllog', skaermAdmin, (req, res) => {
+    const tenant = tenantKey(req);
+    const s = liste(tenant).find(x => x.klientId === req.params.klientId);
+    if (!s) return res.status(404).json({ error: 'Skærmen findes ikke (længere)' });
+    if (pcFejllog.bestil(tenant, s.tokenId, s.navn) !== 'ok') {
+        return res.status(409).json({ error: 'PC\'en har ikke spurgt efter fejlloggen de seneste minutter — den er slukket, uden net eller har en ældre version, der ikke kan dette.' });
+    }
+    console.log(`[skærm] ${tenant} "${s.navn}": admin bad om fejlloggen`);
+    res.json({ success: true, fejllog: pcFejllog.forSkaerm(tenant, s.tokenId, s.navn) });
+});
+
+// GET /api/screens/:klientId/fejllog — hent PC'ens seneste fejllog (zip)
+router.get('/:klientId/fejllog', skaermAdmin, (req, res) => {
+    const tenant = tenantKey(req);
+    const s = liste(tenant).find(x => x.klientId === req.params.klientId);
+    const fil = s && pcFejllog.hentFil(tenant, s.tokenId, s.navn);
+    if (!fil) return res.status(404).json({ error: 'Der er ingen fejllog fra denne PC' });
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${pcFejllog.downloadNavn(s.navn, fil.meta.tid)}"`);
+    res.setHeader('Cache-Control', 'no-store');
+    fs.createReadStream(fil.sti).on('error', () => res.destroy()).pipe(res);
 });
 
 // GET /api/screens/haendelser?dage=30 — klubbens hændelseslog (højst 30 dage)
@@ -170,6 +202,56 @@ router.post('/pc-opdatering', async (req, res, next) => {
         res.json(pcOpdatering.spoerg(tenantKey(req), deviceToken.id, m));
     } catch (error) {
         next(error);
+    }
+});
+
+// POST /api/screens/pc-fejllog/spoerg — TV-PC'en spørger hvert 2. minut, om admin
+// har bedt om fejlloggen (kiosk: fejllog spoerg), og melder evt. status
+// ('samler', 'fejl'). Samme adgang som pc-rapport (X-Adgangslink).
+router.post('/pc-fejllog/spoerg', async (req, res, next) => {
+    try {
+        const deviceToken = await pcLink(req, res);
+        if (!deviceToken) return;
+        const m = pcFejllog.rensMelding(req.body);
+        if (!m) return res.status(400).json({ error: 'Ugyldig forespørgsel' });
+        if (m.status) console.log(`[skærm] ${tenantKey(req)} "${m.navn}": fejllog ${m.status}${m.tekst ? ' — ' + m.tekst : ''}`);
+        res.json(pcFejllog.spoerg(tenantKey(req), deviceToken.id, m));
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /api/screens/pc-fejllog?navn=… — PC'ens fejllog som zip (højst 10 MB).
+// Adgangslinket tjekkes, FØR kroppen læses, og loggen tages kun imod, når
+// admin har bedt om den. bevarKlub: kroppen læses fra request-streamen, hvis
+// hændelser kører uden for klubbens kontekst (se config/tenantPools.js).
+async function fejllogAdgang(req, res, next) {
+    try {
+        const deviceToken = await pcLink(req, res);
+        if (!deviceToken) return;
+        const navn = String(req.query.navn || '');
+        if (!pcFejllog.venterPaaLog(tenantKey(req), deviceToken.id, navn)) {
+            return res.status(409).json({ error: 'Admin har ikke bedt om fejlloggen' });
+        }
+        req.pcLink = deviceToken;
+        next();
+    } catch (error) {
+        next(error);
+    }
+}
+const laesZip = bevarKlub(express.raw({ type: 'application/zip', limit: pcFejllog.MAX_BYTES }));
+
+router.post('/pc-fejllog', fejllogAdgang, laesZip, (req, res) => {
+    const tenant = tenantKey(req);
+    const navn = String(req.query.navn);
+    try {
+        const meta = pcFejllog.gem(tenant, req.pcLink.id, navn, req.body,
+            { opstarter: req.query.opstarter, kioskVersion: req.query.kioskVersion });
+        console.log(`[skærm] ${tenant} "${navn}" (${klientIp(req)}): fejllog modtaget (${Math.round(meta.stoerrelse / 1024)} KB)`);
+        res.json({ ok: true });
+    } catch (error) {
+        res.status(error.status || 500).json({ error: error.status ? error.message : 'Loggen kunne ikke gemmes' });
+        if (!error.status) console.error('[skærm] fejllog kunne ikke gemmes:', error.message);
     }
 });
 

@@ -1,0 +1,17 @@
+# Har admin bedt om PC'ens fejllog (Adgangslinks → "Hent fejllog")? Så samles
+# den og sendes til serveren. Startes af badminton-tv-fejllog.timer.
+# Se /usr/lib/badminton-tv/fejllog.
+[Unit]
+Description=Badminton TV: send fejlloggen, hvis admin har bedt om den
+After=badminton-tv-rapport.service network-online.target
+ConditionKernelCommandLine=!badminton.tilstand=installer
+ConditionKernelCommandLine=!badminton.tilstand=hentlog
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/badminton-tv/fejllog spoerg
+# TV'et må ikke mærke indsamlingen: laveste prioritet til CPU og disk
+Nice=19
+CPUSchedulingPolicy=idle
+IOSchedulingClass=idle
+TimeoutStartSec=15min

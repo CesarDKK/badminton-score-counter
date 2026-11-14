@@ -1,0 +1,12 @@
+# Spørger serveren hvert 2. minut, om admin har bedt om fejlloggen. Et
+# spørgsmål er en lille POST; loggen samles og sendes kun, når der er bedt om den.
+[Unit]
+Description=Badminton TV: spørg om fejlloggen skal sendes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

@@ -3913,8 +3913,46 @@ async function fortrydSkaermOpdatering(klientId) {
     refreshSkaermStatus();
 }
 
-// Mens en PC er ved at opdatere, følges den uden at siden skal genindlæses
+// "Hent fejllog": TV-PC'en samler sin log (det samme som "Hent fejllog" fra
+// USB-nøglen) og sender den til serveren. Den spørger hvert 2. minut
+// (backend/screens/pcFejllog.js, kiosk: /usr/lib/badminton-tv/fejllog).
+async function bestilSkaermFejllog(klientId) {
+    try {
+        await api.request(`/screens/${encodeURIComponent(klientId)}/fejllog`, { method: 'POST' });
+    } catch (e) {
+        BadmintonUtils.showMessage('Kunne ikke bede PC\'en om fejlloggen', e.message);
+    }
+    refreshSkaermStatus();
+}
+
+// Zip'en hentes med admins login (Authorization), så den kan ikke være et
+// almindeligt link — den hentes som blob og gemmes med serverens filnavn
+async function downloadSkaermFejllog(klientId) {
+    try {
+        const svar = await fetch(`/api/screens/${encodeURIComponent(klientId)}/fejllog`, {
+            headers: api.token ? { Authorization: `Bearer ${api.token}` } : {},
+            cache: 'no-store'
+        });
+        if (!svar.ok) {
+            const fejl = await svar.json().catch(() => ({}));
+            throw new Error(fejl.error || `HTTP ${svar.status}`);
+        }
+        const navn = /filename="([^"]+)"/.exec(svar.headers.get('Content-Disposition') || '')?.[1] || 'fejllog.zip';
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(await svar.blob());
+        a.download = navn;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    } catch (e) {
+        BadmintonUtils.showMessage('Fejlloggen kunne ikke hentes', e.message);
+    }
+}
+
+// Mens en PC er ved at opdatere eller samle sin fejllog, følges den uden at siden skal genindlæses
 const SKAERM_OPDATERING_IGANG = new Set(['bestilt', 'i-gang', 'venter', 'genstarter']);
+const SKAERM_FEJLLOG_IGANG = new Set(['bestilt', 'samler']);
 let _skaermOpdateringTimer = null;
 
 // Nyeste udgivne Badminton TV-version (samme opslag som Indstillinger → TV-skærme;
@@ -3959,7 +3997,8 @@ async function refreshSkaermStatus() {
         el.innerHTML = renderSkaerme(skaerme.filter(s => s.tokenId === id), nyesteVersion);
     });
     clearTimeout(_skaermOpdateringTimer);
-    if (bokse.length && skaerme.some(s => s.opdatering && SKAERM_OPDATERING_IGANG.has(s.opdatering.status))) {
+    if (bokse.length && skaerme.some(s => (s.opdatering && SKAERM_OPDATERING_IGANG.has(s.opdatering.status))
+            || (s.fejllog && SKAERM_FEJLLOG_IGANG.has(s.fejllog.status)))) {
         _skaermOpdateringTimer = setTimeout(refreshSkaermStatus, 15000);
     }
 }
@@ -4107,6 +4146,38 @@ function skaermOpdateringHtml(s, kl, paaNyeste) {
     return { linje, knap };
 }
 
+// "Hent fejllog" for en TV-PC: knappen (kun når PC'en har spurgt de seneste
+// minutter — den kører og har en version, der kan det), hvordan det går, og
+// den seneste log (højst 7 dage), der kan hentes
+function skaermFejllogHtml(s, kl) {
+    const f = s.fejllog;
+    if (!f) return { linje: '', knap: '' };
+    const tid = f.tid ? ` (kl. ${kl(f.tid)})` : '';
+    const tekst = f.tekst ? ` — ${escapeHtml(f.tekst)}` : '';
+    const linjer = [];
+    if (f.status === 'bestilt') {
+        linjer.push(`<div class="tekst-daempet" style="font-size:0.9em;margin-top:2px;">Bedt om fejlloggen${tid} — PC'en spørger hvert 2. minut</div>`);
+    } else if (f.status === 'samler') {
+        linjer.push(`<div class="tekst-daempet" style="font-size:0.9em;margin-top:2px;">Samler og sender fejlloggen${tid} — det tager et par minutter</div>`);
+    } else if (f.status === 'fejl') {
+        linjer.push(`<div style="color:var(--color-danger);font-size:0.9em;margin-top:2px;">Fejlloggen kom ikke${tid}${tekst}</div>`);
+    }
+    if (f.fil) {
+        const dato = new Date(f.fil.tid).toLocaleString('da-DK', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+        const kb = Math.max(1, Math.round(f.fil.stoerrelse / 1024));
+        const opstarter = f.fil.opstarter ? `, ${f.fil.opstarter} opstarter` : '';
+        linjer.push(`<div class="tekst-daempet" style="font-size:0.9em;margin-top:2px;">Fejllog fra ${escapeHtml(dato)} (${kb} KB${opstarter}) —
+            <a href="#" onclick="downloadSkaermFejllog(this.dataset.klient);return false;" data-klient="${escapeHtml(s.klientId)}"
+                style="color:inherit;">Download</a></div>`);
+    }
+    const knap = f.kan && !SKAERM_FEJLLOG_IGANG.has(f.status)
+        ? `<button type="button" class="btn-secondary btn-sm ingen-krymp"
+            onclick="bestilSkaermFejllog(this.dataset.klient)" data-klient="${escapeHtml(s.klientId)}"
+            title="PC'en samler sin log (som &quot;Hent fejllog&quot; fra USB-nøglen) og sender den hertil inden for et par minutter. Skærmen mærker det ikke.">Hent fejllog</button>`
+        : '';
+    return { linje: linjer.join(''), knap };
+}
+
 // Den automatiske opdatering gik galt (nr. 99): PC'en melder det i sin rapport
 // (opd-fejl: hentningen fejlede, opd-tilbage: en ny version startede ikke
 // rigtigt, så den forrige kører igen). Den seneste fra de sidste 7 dage vises
@@ -4157,6 +4228,7 @@ function renderSkaerme(skaerme, nyesteVersion) {
                 : paaNyeste ? ' (nyeste)' : ` <span class="tekst-advarsel">(${escapeHtml(nyesteVersion)} er udgivet)</span>`);
         const opd = skaermOpdateringHtml(s, kl, paaNyeste);
         const opdFejl = skaermOpdateringFejlHtml(noegle, paaNyeste);
+        const fejllog = skaermFejllogHtml(s, kl);
         return `
             <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid rgba(255,255,255,0.06);">
                 <span style="width:9px;height:9px;border-radius:50%;background:${farve};margin-top:6px;flex-shrink:0;"></span>
@@ -4168,8 +4240,10 @@ function renderSkaerme(skaerme, nyesteVersion) {
                     ${haendelser ? `<div style="color:var(--color-warning, #ffb02e);font-size:0.9em;margin-top:2px;">${Ikon('advarsel')} ${haendelser}</div>` : ''}
                     ${opd.linje}
                     ${opdFejl}
+                    ${fejllog.linje}
                 </div>
                 ${opd.knap}
+                ${fejllog.knap}
                 ${s.sekunderSiden >= 60 ? `<button type="button" class="btn-secondary btn-sm ingen-krymp" onclick="fjernSkaerm('${escapeHtml(s.klientId)}')"
                     title="Fjern skærmen fra listen. Tænder den igen, kommer den tilbage af sig selv.">Fjern</button>` : ''}
             </div>`;
