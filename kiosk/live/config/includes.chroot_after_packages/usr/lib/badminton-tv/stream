@@ -680,10 +680,11 @@ def ffmpeg_args(enhed, maal, overlay, koder, fmt=None):
 
 # ---------- Scoreboardet ----------
 #
-#   ┌ BANE 3 ┐
 #   │ ● Hansen / Berg     21  19 │ 11 │
 #   │   Jensen / Olsen    15  21 │  8 │
+#   └ BANE 3 ┘
 #
+# (nederst i billedet står fanen over panelet)
 # Tegnes i fuld billedbredde (gennemsigtigt udenom), så billedet har samme
 # størrelse hver gang — ffmpeg vil ikke have, at det skifter størrelse.
 # Målene er til 1280 i bredden med størrelsen "normal" og ganges med
@@ -761,26 +762,37 @@ def tegn_tavle_billede(tavle, bredde=1280, stoerrelse='normal', placering='top-v
     logo_b = round(38 * s) + round(8 * s) if any(l is not None for l in navn_logoer) else 0
     panel_b = luft + prik + logo_b + navn_b + efter_navn + kol * len(saet) + (nu_b + nu_luft if nu else luft - nu_luft)
     hoejde = raekke * 2
-    # Fanen "BANE 3" står over panelet — nederst i billedet står den stadig over
-    # (båndet flyttes, ikke vendes)
+    # Fanen "BANE 3" står på panelets side ind mod billedets midte: under
+    # panelet øverst i billedet, over det nederst — så navne og stilling sidder
+    # helt ude i kanten, og der er mest bane at se
     if nederst:
         top = billede.height - y0 - hoejde
         fane_top = top - fane_h
     else:
-        fane_top = y0
-        top = y0 + fane_h
+        top = y0
+        fane_top = top + hoejde
     venstre = bredde - x0 - panel_b if hoejre else x0
 
     if bane:
         tekst = f'BANE {bane}'
         fb = int(d.textlength(tekst, font=f_fane)) + round(24 * s)
         fx = venstre + panel_b - fb if hoejre else venstre
-        d.rounded_rectangle((fx, fane_top, fx + fb, top + round(8 * s)), radius=round(6 * s), fill=ACCENT,
-                            corners=(True, True, False, False))
+        # Fanen går 8 px ind under panelet, så de hænger sammen
+        if nederst:
+            d.rounded_rectangle((fx, fane_top, fx + fb, top + round(8 * s)), radius=round(6 * s), fill=ACCENT,
+                                corners=(True, True, False, False))
+        else:
+            d.rounded_rectangle((fx, top + hoejde - round(8 * s), fx + fb, fane_top + fane_h), radius=round(6 * s),
+                                fill=ACCENT, corners=(False, False, True, True))
         d.text((fx + fb / 2, fane_top + fane_h / 2 + 1), tekst, font=f_fane, fill=HVID, anchor='mm')
-    # Hjørnet under fanen er skarpt
+    # Hjørnet ved fanen er skarpt (Pillows rækkefølge: øv, øh, nh, nv)
+    skarp_v, skarp_h = bool(bane) and not hoejre, bool(bane) and hoejre
+    if nederst:
+        hjoerner = (not skarp_v, not skarp_h, True, True)
+    else:
+        hjoerner = (True, True, not skarp_h, not skarp_v)
     d.rounded_rectangle((venstre, top, venstre + panel_b, top + hoejde), radius=round(10 * s), fill=PANEL,
-                        corners=(not bane or hoejre, not bane or not hoejre, True, True))
+                        corners=hjoerner)
     d.line((venstre + luft, top + raekke, venstre + panel_b - (nu_b + nu_luft if nu else luft), top + raekke),
            fill=STREG, width=1)
 

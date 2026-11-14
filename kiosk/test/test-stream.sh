@@ -418,9 +418,9 @@ modtager "$TMP/modtaget6.flv"
 svar "{\"kamera\":true,\"bane\":3,\"send\":true,\"grund\":\"kamp\",\"url\":\"rtmp://127.0.0.1:$RTMP_PORT/live2\",\"noegle\":\"$NOEGLE\",\"overlay\":true,\"linjer\":[\"A\",\"B\"],\"tavle\":{\"bane\":3,\"navne\":[\"Hansen / Berg\",\"Jensen / Olsen\"],\"saet\":[[21,15]],\"nu\":[5,3],\"serve\":1,\"logoer\":[\"/uploads/central_logos/blaa.png\",\"/uploads/central_logos/groen.png\"]},\"video\":{\"bredde\":1280,\"hoejde\":720,\"billeder\":30}}"
 start_stream
 vent_sender
-# Logo-kolonnen: x 60–98, rækkernes midte y 78 og 126 (normal størrelse, øverst til venstre)
-forvent "1. rækkes logo (blåt)" "$(pixel 79 78)" "40 90 230 255"
-forvent "2. rækkes logo (grønt)" "$(pixel 79 126)" "30 170 80 255"
+# Logo-kolonnen: x 60–98, rækkernes midte y 50 og 98 (normal størrelse, øverst til venstre; fanen står under)
+forvent "1. rækkes logo (blåt)" "$(pixel 79 50)" "40 90 230 255"
+forvent "2. rækkes logo (grønt)" "$(pixel 79 98)" "30 170 80 255"
 sleep 3
 svar "$INGEN_SVAR"
 vent_paa 10 sh -c "! kill -0 $MODTAGER_PID 2>/dev/null" || true
