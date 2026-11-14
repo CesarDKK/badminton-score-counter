@@ -949,7 +949,17 @@ header > div {
 
 .ls-bane-navn { font-size: 1.15em; }
 
-.ls-status { font-size: 0.85em; }
+.ls-status { font-size: 0.85em; min-width: 0; max-width: 100%; }
+/* Kameravalget i statuslinjen: kameraets navn er selv et lille valg */
+.ls-status .ls-kamera-valg {
+    display: inline-block;
+    width: auto;
+    max-width: 20em;   /* fast loft: en procent tæller ikke med i kortets mindste bredde */
+    padding: 2px 6px;
+    font-size: 1em;
+    vertical-align: baseline;
+    text-overflow: ellipsis;
+}
 
 /* Bane uden kamera: én lav linje med kameravalget til højre */
 .ls-bane--tom {

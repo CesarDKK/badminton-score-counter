@@ -3073,6 +3073,8 @@ async function refreshLivestreamStatus() {
     });
     // Kun statusserne — felterne, admin er i gang med at udfylde, må ikke ryddes
     document.querySelectorAll('.ls-status').forEach(el => {
+        // Kameravalget i linjen: tegnes ikke om, mens admin er ved at vælge
+        if (el.contains(document.activeElement) && document.activeElement.tagName === 'SELECT') return;
         el.innerHTML = livestreamStatusHtml(Number(el.dataset.bane));
     });
     document.querySelectorAll('.ls-yt').forEach(el => {
@@ -3120,10 +3122,11 @@ function livestreamPcStatusHtml(pc, bane) {
     if (!s || !s.online) {
         return `<span class="maerke maerke--neutral">Ikke meldt</span> <span class="tekst-daempet">${escapeHtml(pc.navn)} har ikke spurgt serveren det seneste minut — slukket, eller ældre Badminton TV uden livestream</span>`;
     }
-    if (!s.kamera) return `<span class="maerke maerke--afventer">Intet kamera</span> <span class="tekst-daempet">${escapeHtml(pc.navn)} finder intet USB-kamera</span>`;
+    if (!s.kamera) return `<span class="maerke maerke--afventer">Intet kamera</span> <span class="tekst-daempet">${escapeHtml(pc.navn)} finder intet USB-kamera${(s.kameraer || []).length || pc.enhed ? ` · ${livestreamPcKameraValg(pc, '')}` : ''}</span>`;
     if (s.fejl) return `<span class="maerke maerke--fare">Fejl</span> ${escapeHtml(s.fejl)}${livestreamFejlDetaljer(s, bane)}`;
     // Kameraets formater som værktøjstip på navnet (nye Badminton TV-versioner)
-    const kamera = `<span${s.kameraFormater ? ` title="Kameraet kan: ${escapeHtml(s.kameraFormater)}"` : ''}>${escapeHtml(s.kamera)}</span>`;
+    // … og selv et valg af PC'ens kamera, når PC'en har meldt dem
+    const kamera = livestreamPcKameraValg(pc, `<span${s.kameraFormater ? ` title="Kameraet kan: ${escapeHtml(s.kameraFormater)}"` : ''}>${escapeHtml(s.kamera)}</span>`);
     if (s.sender) {
         const siden = s.senderSiden ? new Date(s.senderSiden).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' }) : '';
         const b = _livestream.baner.find(x => x.bane === bane);
@@ -3599,23 +3602,26 @@ function livestreamKameraValg(bane) {
 // Hvilket af TV-PC'ens kameraer der sender. Nogle webcams (Windows Hello, fx
 // Lenovo 500 FHD) er to kameraer med samme navn: billedet og et infrarødt.
 // PC'en vælger selv billedet (prøvebillede i farver); valget her er kun, hvis
-// den en dag tager fejl. Vises, når PC'en melder flere kameraer (eller et er valgt)
-function livestreamPcKameraValg(bane) {
-    const pc = (_livestream?.kameraer || []).find(k => k.bane === bane);
-    const liste = (pc && pc.status && pc.status.kameraer) || [];
-    if (!pc || (liste.length < 2 && !pc.enhed)) return '';
+// den en dag tager fejl. Det står i statuslinjen, hvor kameraets navn står:
+// navnet er selv et lille valg, når PC'en har meldt sine kameraer (eller et er
+// valgt) — ellers ren tekst (navn: kameraets navn som HTML, med værktøjstip)
+function livestreamPcKameraValg(pc, navn) {
+    const s = pc.status || {};
+    const liste = s.kameraer || [];
+    if (!liste.length && !pc.enhed) return navn;
     const tekst = (k) => [k.navn, k.node && `${k.node}${k.interface ? ` · interface ${k.interface}` : ''}`,
         k.format && k.format.replace('x', '×'),
         k.billede === 'graa' ? 'gråt billede (infrarødt)' : k.billede === 'farve' ? 'billede i farver'
             : k.billede === 'moerk' ? 'for mørkt til prøvebillede' : '']
         .filter(Boolean).join(' · ');
     const kendt = liste.some(k => k.id === pc.enhed);
-    return `<label><span class="felt-etiket">Kamera på PC'en</span>
-        <select class="admin-input admin-input--sm" aria-label="Kamera på PC'en til bane ${bane}" onchange="saetLivestreamPcKamera(${bane}, ${Number(pc.tokenId)}, this.value)">
-            <option value="">Automatisk (anbefalet)</option>
+    // Det automatiske valg viser det kamera, PC'en selv har valgt
+    const auto = s.kamera ? `${s.kamera} · automatisk` : 'Automatisk (anbefalet)';
+    return `<select class="admin-input admin-input--sm ls-kamera-valg" aria-label="Kamera på PC'en til bane ${pc.bane}"${s.kameraFormater ? ` title="Kameraet kan: ${escapeHtml(s.kameraFormater)}"` : ''} onchange="saetLivestreamPcKamera(${pc.bane}, ${Number(pc.tokenId)}, this.value)">
+            <option value="">${escapeHtml(auto)}</option>
             ${liste.map(k => `<option value="${escapeHtml(k.id)}"${k.id === pc.enhed ? ' selected' : ''}>${escapeHtml(tekst(k))}</option>`).join('')}
             ${pc.enhed && !kendt ? `<option value="${escapeHtml(pc.enhed)}" selected>${escapeHtml(pc.enhed)} (ikke fundet på PC'en)</option>` : ''}
-        </select></label>`;
+        </select>`;
 }
 
 async function saetLivestreamPcKamera(bane, tokenId, enhed) {
@@ -3661,7 +3667,6 @@ function livestreamBaneHtml(b, kameraAaben = false) {
             </div>
             <div class="ls-felter">
                 <label><span class="felt-etiket">Kamera (TV-PC)</span>${livestreamKameraValg(b.bane)}</label>
-                ${livestreamPcKameraValg(b.bane)}
                 <label><span class="felt-etiket">${yt ? 'Egen stream-nøgle (reserve)' : 'Stream-nøgle'}</span>
                     <input type="password" class="admin-input admin-input--sm ls-noegle" autocomplete="off" spellcheck="false"
                         oninput="livestreamNoegleIndtastet(this)"
