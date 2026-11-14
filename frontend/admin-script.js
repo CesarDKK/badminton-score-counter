@@ -3127,11 +3127,20 @@ function livestreamPcStatusHtml(pc, bane) {
     if (s.sender) {
         const siden = s.senderSiden ? new Date(s.senderSiden).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' }) : '';
         const b = _livestream.baner.find(x => x.bane === bane);
-        return `<span class="maerke maerke--igang">● Sender</span> <span class="tekst-daempet">siden kl. ${siden} · ${kamera}${livestreamFormatTekst(s.format)}${s.koder === 'x264' ? ' · kodes af processoren (uden grafikkortets hjælp)' : ''}${b && b.lyd ? (s.mikrofon ? ' · med lyd' : ' · uden lyd (ingen mikrofon i kameraet)') : ''}</span>`;
+        // Det, kameraet leverer, og noden ("fra kameraet MJPEG 1920×1080, video0 ·
+        // interface 00"): et infrarødt Windows Hello-kamera har samme navn som billedet
+        const fra = s.kameraInput || s.kameraNode
+            ? ` (fra kameraet ${escapeHtml([s.kameraInput && s.kameraInput.replace('x', '×'), s.kameraNode].filter(Boolean).join(', '))})`
+            : '';
+        // Prøvebillederne kunne ikke skille PC'ens kameraer ad (for mørkt i hallen):
+        // valgt efter navn, formater og interface — prøven tages igen før næste start
+        const uafgjort = s.kameraValg === 'uafgjort' ? ' · kameraet valgt uden prøvebillede (for mørkt) — tjek billedet' : '';
+        return `<span class="maerke maerke--igang">● Sender</span> <span class="tekst-daempet">siden kl. ${siden} · ${kamera}${fra}${uafgjort}${livestreamFormatTekst(s.format)}${s.koder === 'x264' ? ' · kodes af processoren (uden grafikkortets hjælp)' : ''}${b && b.lyd ? (s.mikrofon ? ' · med lyd' : ' · uden lyd (ingen mikrofon i kameraet)') : ''}</span>`;
     }
     // "Klar — venter på en kamp" → mærket "Klar" + resten; andre grunde i gult
     const [hoved, rest] = (LS_GRUND[s.grund] || 'Klar').split(' — ');
-    return `<span class="maerke ${hoved === 'Klar' ? 'maerke--neutral' : 'maerke--afventer'}">${escapeHtml(hoved)}</span> <span class="tekst-daempet">${rest ? `${escapeHtml(rest)} · ` : ''}${kamera}</span>`;
+    const uafgjortKlar = s.kameraValg === 'uafgjort' ? ' · kameraet valgt uden prøvebillede (for mørkt) — tages igen før start' : '';
+    return `<span class="maerke ${hoved === 'Klar' ? 'maerke--neutral' : 'maerke--afventer'}">${escapeHtml(hoved)}</span> <span class="tekst-daempet">${rest ? `${escapeHtml(rest)} · ` : ''}${kamera}${uafgjortKlar}</span>`;
 }
 
 // Banekortets tilstand (farven på kortets venstre kant): ingen, afventer, fejl, klar, sender
@@ -3568,6 +3577,40 @@ function livestreamKameraValg(bane) {
     </select>`;
 }
 
+// Hvilket af TV-PC'ens kameraer der sender. Nogle webcams (Windows Hello, fx
+// Lenovo 500 FHD) er to kameraer med samme navn: billedet og et infrarødt.
+// PC'en vælger selv billedet (prøvebillede i farver); valget her er kun, hvis
+// den en dag tager fejl. Vises, når PC'en melder flere kameraer (eller et er valgt)
+function livestreamPcKameraValg(bane) {
+    const pc = (_livestream?.kameraer || []).find(k => k.bane === bane);
+    const liste = (pc && pc.status && pc.status.kameraer) || [];
+    if (!pc || (liste.length < 2 && !pc.enhed)) return '';
+    const tekst = (k) => [k.navn, k.node && `${k.node}${k.interface ? ` · interface ${k.interface}` : ''}`,
+        k.format && k.format.replace('x', '×'),
+        k.billede === 'graa' ? 'gråt billede (infrarødt)' : k.billede === 'farve' ? 'billede i farver'
+            : k.billede === 'moerk' ? 'for mørkt til prøvebillede' : '']
+        .filter(Boolean).join(' · ');
+    const kendt = liste.some(k => k.id === pc.enhed);
+    return `<label><span class="felt-etiket">Kamera på PC'en</span>
+        <select class="admin-input admin-input--sm" aria-label="Kamera på PC'en til bane ${bane}" onchange="saetLivestreamPcKamera(${bane}, ${Number(pc.tokenId)}, this.value)">
+            <option value="">Automatisk (anbefalet)</option>
+            ${liste.map(k => `<option value="${escapeHtml(k.id)}"${k.id === pc.enhed ? ' selected' : ''}>${escapeHtml(tekst(k))}</option>`).join('')}
+            ${pc.enhed && !kendt ? `<option value="${escapeHtml(pc.enhed)}" selected>${escapeHtml(pc.enhed)} (ikke fundet på PC'en)</option>` : ''}
+        </select></label>`;
+}
+
+async function saetLivestreamPcKamera(bane, tokenId, enhed) {
+    try {
+        await api.setLivestreamPcKamera(tokenId, enhed || null);
+    } catch (e) {
+        livestreamBesked(bane, e.message, true);
+        return;
+    }
+    await loadLivestream();
+    livestreamBesked(bane, enhed ? 'Kameraet er valgt — PC\'en skifter inden for få sekunder' : 'PC\'en vælger selv kameraet igen');
+    setTimeout(() => livestreamBesked(bane, ''), 5000);
+}
+
 // En bane uden kamera, der ikke er slået til og ikke har en egen nøgle, har
 // intet at indstille — den står som én linje, til der vælges et kamera
 function livestreamBaneTom(b) {
@@ -3599,6 +3642,7 @@ function livestreamBaneHtml(b, kameraAaben = false) {
             </div>
             <div class="ls-felter">
                 <label><span class="felt-etiket">Kamera (TV-PC)</span>${livestreamKameraValg(b.bane)}</label>
+                ${livestreamPcKameraValg(b.bane)}
                 <label><span class="felt-etiket">${yt ? 'Egen stream-nøgle (reserve)' : 'Stream-nøgle'}</span>
                     <input type="password" class="admin-input admin-input--sm ls-noegle" autocomplete="off" spellcheck="false"
                         oninput="livestreamNoegleIndtastet(this)"

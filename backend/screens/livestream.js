@@ -519,6 +519,28 @@ function overlayLinjer(rk, double) {
 const status = new Map();   // tenant -> Map(tokenId -> status)
 const TABT_MS = 60 * 1000;  // ingen forespørgsel i et minut: PC'en er væk
 
+// Et kamera på TV-PC'en: by-id-linket, fx usb-17ef_Lenovo_500_RGB_Camera_…-if00-video-index0
+// (null hvis ugyldigt)
+function rensKameraEnhed(v) {
+    return typeof v === 'string' && /^[\w.:+-]{1,160}$/.test(v) && /-video-index\d+$/.test(v) ? v : null;
+}
+
+// PC'ens kameraer (højst 6) til admins valg: link, navn, node, interface, bedste
+// format og prøvebilledet ('farve' / 'graa' / 'moerk' = for mørkt til at afgøre
+// det / null = ikke optaget)
+function rensKameraListe(v) {
+    if (!Array.isArray(v)) return null;
+    const liste = v.slice(0, 6).map(k => k && typeof k === 'object' && rensKameraEnhed(k.id) ? {
+        id: k.id,
+        navn: tekst(k.navn, 100),
+        node: typeof k.node === 'string' && /^video\d{1,3}$/.test(k.node) ? k.node : null,
+        interface: typeof k.interface === 'string' && /^\d{2}$/.test(k.interface) ? k.interface : null,
+        format: typeof k.format === 'string' && /^(MJPEG|YUYV) \d{2,4}x\d{2,4}$/.test(k.format) ? k.format : null,
+        billede: ['farve', 'graa', 'moerk'].includes(k.billede) ? k.billede : null
+    } : null).filter(Boolean);
+    return liste.length ? liste : null;
+}
+
 // Det PC'en fortæller i sin forespørgsel
 function rensStatus(body) {
     const b = body && typeof body === 'object' ? body : {};
@@ -539,6 +561,17 @@ function rensStatus(body) {
         fejllog: Array.isArray(b.fejllog) && b.fejllog.length
             ? b.fejllog.slice(-12).map(l => tekst(l, 300)).filter(Boolean) : null,
         kameraFormater: b.kameraFormater ? tekst(b.kameraFormater, 400) : null,
+        // Det, kameraet leverer til den kørende stream: "MJPEG 1920x1080". Et
+        // infrarødt Windows Hello-kamera ses som fx "YUYV 640x360"
+        kameraInput: typeof b.kameraInput === 'string' && /^(MJPEG|YUYV) \d{2,4}x\d{2,4}$/.test(b.kameraInput)
+            ? b.kameraInput : null,
+        // Den node, der sender: "video0 · interface 00" (billedet er typisk 00, IR'en 02)
+        kameraNode: typeof b.kameraNode === 'string' && /^video\d{1,3}( · interface \d{2})?$/.test(b.kameraNode)
+            ? b.kameraNode : null,
+        kameraer: rensKameraListe(b.kameraer),
+        // Hvordan PC'en valgte kameraet: admin, eneste, proeve (prøvebilledet) eller
+        // uafgjort (prøvebillederne for mørke — valgt efter navn, formater og interface)
+        kameraValg: ['admin', 'eneste', 'proeve', 'uafgjort'].includes(b.kameraValg) ? b.kameraValg : null,
         // PC'ens eget id (et hash af maskine-id'et) — nye Badminton TV-versioner
         pcId: typeof b.pcId === 'string' && /^[a-f0-9]{16,64}$/.test(b.pcId) ? b.pcId : null
     };
@@ -727,6 +760,6 @@ module.exports = {
     STANDARD_INDSTILLINGER, laesIndstillinger, rensIndstillinger, videoTilPc, sponsorNu, gyldigLogoFil,
     beslutning, startet, holdkampNu, holdkampStoppet, holdkampTilAdmin, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,
     spillerLogoer, klubLogoFraDatabase,
-    rensStatus, registrer, statusFor, senderBane, liveBaner,
+    rensStatus, rensKameraEnhed, registrer, statusFor, senderBane, liveBaner,
     pcNoegle, maaBrugeKamera, registrerAnden, svarTilAnden, autoKameraBane
 };

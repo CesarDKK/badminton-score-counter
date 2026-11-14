@@ -345,7 +345,7 @@ router.get('/', livestreamAdmin, async (req, res, next) => {
         const baner = await query(`SELECT court_number FROM courts WHERE ${synligBane()} ORDER BY court_number`);
         const opsaetning = new Map((await query('SELECT * FROM court_streams')).map(r => [r.court_number, r]));
         const links = await query(
-            `SELECT id, name, destination, camera_court, camera_manual FROM device_tokens
+            `SELECT id, name, destination, camera_court, camera_manual, camera_device FROM device_tokens
               WHERE is_active = 1 AND token_type = 'permanent' AND destination LIKE 'tv%'
               ORDER BY name`);
         const status = ls.statusFor(tenantKey(req));
@@ -398,6 +398,8 @@ router.get('/', livestreamAdmin, async (req, res, next) => {
                 bane: l.camera_court,
                 // Sat af sig selv, da PC'en fandt kameraet (admin har ikke valgt)
                 automatisk: !!l.camera_court && !l.camera_manual,
+                // Kameraet på PC'en, admin har valgt (by-id-link) — null: PC'en vælger selv
+                enhed: l.camera_device || null,
                 status: status[l.id] || null
             }))
         });
@@ -599,6 +601,14 @@ router.put('/kamera/:tokenId', livestreamAdmin, async (req, res, next) => {
         const link = Number.isInteger(id) && await queryOne(
             "SELECT id FROM device_tokens WHERE id = ? AND token_type = 'permanent'", [id]);
         if (!link) return res.status(404).json({ error: 'Adgangslinket findes ikke' });
+        // Kun kameraet på PC'en ({ enhed }): by-id-linket, eller null = PC'en vælger selv.
+        // Banen røres ikke
+        if (req.body && 'enhed' in req.body && !('bane' in req.body)) {
+            const enhed = ls.rensKameraEnhed(req.body.enhed);
+            if (req.body.enhed != null && !enhed) return res.status(400).json({ error: 'Ugyldigt kamera' });
+            await query('UPDATE device_tokens SET camera_device = ? WHERE id = ?', [enhed, id]);
+            return res.json({ success: true });
+        }
         const bane = req.body && req.body.bane != null ? baneNr(req.body.bane) : null;
         if (req.body && req.body.bane != null && !bane) return res.status(400).json({ error: 'Ugyldig bane' });
         if (bane) await query('UPDATE device_tokens SET camera_court = NULL WHERE camera_court = ? AND id <> ?', [bane, id]);
@@ -729,7 +739,7 @@ router.post('/pc', async (req, res, next) => {
         const token = req.get('X-Adgangslink');
         if (!gyldigtToken(token)) return res.status(401).json({ error: 'Mangler adgangslink' });
         const link = await queryOne(
-            `SELECT id, camera_court, camera_manual, destination, token_type
+            `SELECT id, camera_court, camera_manual, camera_device, destination, token_type
                FROM device_tokens WHERE token = ? AND is_active = 1`, [token]);
         if (!link) return res.status(403).json({ error: 'Ugyldigt eller tilbagekaldt adgangslink' });
 
@@ -820,6 +830,8 @@ router.post('/pc', async (req, res, next) => {
             console.log(`[livestream] ${tenant} "${ny.navn || link.id}" bane ${bane || '-'}: ` +
                 (ny.fejl ? `fejl: ${ny.fejl}` : ny.sender ? 'sender' : `sender ikke (${svar.grund})`));
         }
+        // Kameraet, admin har valgt for PC'en (migration 047) — null: PC'en vælger selv
+        svar.kameraEnhed = link.camera_device || null;
         res.json(svar);
     } catch (error) {
         next(error);

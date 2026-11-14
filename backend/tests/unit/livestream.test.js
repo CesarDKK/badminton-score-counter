@@ -302,7 +302,13 @@ test('overlay: afgjort kamp viser kun sættene, lange navne afkortes', () => {
 test('status: PC\'ens oplysninger renses, og "sender siden" huskes', () => {
     const s = ls.rensStatus({ navn: 'tv-bane3', kamera: 'HD Pro Webcam C920', sender: true, koder: 'vaapi', fejl: '' });
     assert.deepEqual(s, { navn: 'tv-bane3', kioskVersion: '', kamera: 'HD Pro Webcam C920', sender: true, koder: 'vaapi',
-        format: null, mikrofon: null, fejl: null, fejllog: null, kameraFormater: null, pcId: null });
+        format: null, mikrofon: null, fejl: null, fejllog: null, kameraFormater: null, kameraInput: null, kameraNode: null,
+        kameraer: null, kameraValg: null, pcId: null });
+    // Det, kameraet leverer (et infrarødt kamera ses på den lille opløsning) — kun i fast form
+    assert.equal(ls.rensStatus({ kameraInput: 'MJPEG 1920x1080' }).kameraInput, 'MJPEG 1920x1080');
+    assert.equal(ls.rensStatus({ kameraInput: 'YUYV 640x360' }).kameraInput, 'YUYV 640x360');
+    assert.equal(ls.rensStatus({ kameraInput: '<b>MJPEG</b> 1x1' }).kameraInput, null);
+    assert.equal(ls.rensStatus({ kameraInput: 'GREY 340x340' }).kameraInput, null);
     assert.equal(ls.rensStatus({ navn: '../x', koder: 'nvenc' }).navn, '');
     // ffmpegs sidste linjer: højst 12, uden styretegn; kameraets formater som tekst
     const f = ls.rensStatus({ fejllog: [...Array(15)].map((_, i) => `linje ${i}\u0007`), kameraFormater: 'YUYV 640x480@30' });
