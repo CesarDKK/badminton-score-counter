@@ -124,3 +124,14 @@ test('POST /pc sender admins valg med (kameraEnhed), og admin får det i listen'
     assert.match(kilde, /enhed: l\.camera_device \|\| null,/);
     assert.match(laes('backend/migrations/047_kamera_enhed.sql'), /ADD COLUMN camera_device VARCHAR\(160\) NULL/);
 });
+
+test('Brio i svagt lys: PC\'en melder den faktiske billedhastighed, og admin viser den', () => {
+    assert.equal(ls.rensStatus({ billedhastighed: 14.86 }).billedhastighed, 14.9);
+    assert.equal(ls.rensStatus({ billedhastighed: 0 }).billedhastighed, 0);
+    for (const ugyldig of [-1, 500, '30', NaN, Infinity, null, undefined]) {
+        assert.equal(ls.rensStatus({ billedhastighed: ugyldig }).billedhastighed, null, String(ugyldig));
+    }
+    const admin = laes('frontend/admin-script.js');
+    assert.match(admin, /livestreamFormatTekst\(s\.format, s\.billedhastighed\)/);
+    assert.match(admin, /faktisk < bedt \* 0\.9/);
+});

@@ -21,6 +21,7 @@
 #  16. Windows Hello: IR kan YUYV  → billedet, også når det ikke svarer ved opstart
 #  17. IR-navn med MJPEG           → afvist på navnet; billedets YUYV tages
 #  18. kun et infrarødt kamera     → intet kamera, intet sendes
+#  19. Brio i svagt lys           → auto-prioritet fra (manglende kontrol tåles), faktisk billedhastighed meldt
 #
 # Køres i en debian:trixie-container (henter ffmpeg, python3, Pillow og skrifterne):
 #   docker run --rm -v "$PWD/kiosk:/src" debian:trixie bash /src/test/test-stream.sh
@@ -126,6 +127,8 @@ while [ $# -gt 0 ]; do
         kilde="testsrc2=size=$str:rate=$rate"
         [ -e "$2.ir" ] && kilde="$kilde,hue=s=0"
         [ -e "$2.moerk" ] && kilde="color=c=black:size=$str:rate=$rate"
+        # Et kamera, der selv sænker billedhastigheden ($enhed.fps: det, det faktisk leverer)
+        [ -e "$2.fps" ] && kilde="testsrc2=size=$str:rate=$(cat "$2.fps")"
         shift 2
         ud+=(-re -f lavfi -i "$kilde")
         continue
@@ -152,13 +155,22 @@ chmod +x "$TMP/bin/ffmpeg-falsk"
 # v4l2-ctl --list-formats-ext: kameraets formater fra $TMP/formater (uden: ukendt)
 # — eller $TMP/formater.<enhed> (fx formater.video1), når enhederne er forskellige.
 # $TMP/formater.<enhed>.tavs: antal gange, enheden ikke svarer først (ikke klar ved opstart)
+# -c kontrol=værdi: logges i $TMP/formater.styr; kontroller i $TMP/formater.mangler
+# (én pr. linje) har kameraet ikke — v4l2-ctl fejler som den rigtige
 cat > "$TMP/bin/v4l2-ctl" <<'EOF'
 #!/bin/sh
 enhed=
 while [ $# -gt 0 ]; do
-    case "$1" in -d) enhed=$(basename "$2"); shift ;; --list-formats-ext) liste=1 ;; esac
+    case "$1" in -d) enhed=$(basename "$2"); shift ;; -c) styr=$2; shift ;; --list-formats-ext) liste=1 ;; esac
     shift
 done
+if [ -n "${styr:-}" ]; then
+    echo "$enhed $styr" >> "$FORMATER.styr"
+    if grep -qx "${styr%%=*}" "$FORMATER.mangler" 2>/dev/null; then
+        echo "unknown control '${styr%%=*}'" >&2
+        exit 255
+    fi
+fi
 if [ -n "${liste:-}" ]; then
     echo "$enhed" >> "$FORMATER.kald"
     if [ -n "$enhed" ] && [ -e "$FORMATER.$enhed.tavs" ]; then
@@ -754,6 +766,52 @@ forvent "status: intet kamera" "$(sidste_status | felt kamera)" ""
 forvent "ffmpeg startes ikke" "$(antal_start)" "0"
 indeholder "fravalget i loggen" "$(cat "$TMP/stream.log")" "kun GREY"
 stop_stream
+
+echo "19. Brio i svagt lys: auto-prioritet slås fra, og PC'en melder den faktiske billedhastighed"
+# Kameraet leverer kun 15 billeder i sekundet (exposure auto priority i svagt
+# lys), og kernen kender ikke det nye navn exposure_dynamic_framerate
+rm -f "$TMP/formater"* "$TMP/by-id/"*
+: > "$TMP/video10"
+ln -s "$TMP/video10" "$TMP/by-id/usb-046d_Logitech_BRIO_ABCD1234-video-index0"
+cat > "$TMP/formater" <<'EOF'
+	[0]: 'MJPG' (Motion-JPEG, compressed)
+		Size: Discrete 1920x1080
+			Interval: Discrete 0.033s (30.000 fps)
+EOF
+echo exposure_dynamic_framerate > "$TMP/formater.mangler"
+echo 15 > "$TMP/video10.fps"
+modtager "$TMP/modtaget19.flv"
+SEND_VIDEO "$VIDEO_1080"
+start_stream
+vent_sender
+vent_paa 20 sh -c "tail -n 1 '$TMP/status.jsonl' | grep -q '\"billedhastighed\": [0-9]'" || true
+STYR=$(cat "$TMP/formater.styr" 2>/dev/null)
+indeholder "auto-prioritet slået fra" "$STYR" "video10 exposure_auto_priority=0"
+indeholder "også det nye kontrolnavn forsøgt" "$STYR" "video10 exposure_dynamic_framerate=0"
+indeholder "50 Hz som før" "$STYR" "video10 power_line_frequency=1"
+forvent "den manglende kontrol stopper ikke streamen" "$(sidste_status | felt sender)" "True"
+forvent "ingen fejl til admin" "$(sidste_status | felt fejl)" ""
+FPS=$(sidste_status | felt billedhastighed)
+forvent "status: faktisk ca. 15 billeder/s (bedt om 30) — fik $FPS" \
+    "$(awk -v v="${FPS:-0}" 'BEGIN { print (v >= 13 && v <= 16.5 ? "ja" : "nej") }')" "ja"
+forvent "status: stadig bedt om 1080p med 30" "$(sidste_status | felt format)" "1920x1080@30"
+stop_stream
+kill "$MODTAGER_PID" 2>/dev/null
+
+echo "19b. Samme kamera i godt lys (som C920'eren) → de fulde 30 billeder/s"
+rm -f "$TMP/video10.fps" "$TMP/formater.mangler"
+modtager "$TMP/modtaget20.flv"
+SEND_VIDEO "$VIDEO_1080"
+start_stream
+vent_sender
+vent_paa 20 sh -c "tail -n 1 '$TMP/status.jsonl' | grep -q '\"billedhastighed\": [0-9]'" || true
+FPS=$(sidste_status | felt billedhastighed)
+forvent "status: faktisk ca. 30 billeder/s — fik $FPS" \
+    "$(awk -v v="${FPS:-0}" 'BEGIN { print (v >= 27 && v <= 32 ? "ja" : "nej") }')" "ja"
+stop_stream
+vent_paa 5 sh -c "tail -n 1 '$TMP/status.jsonl' | grep -q '\"sender\": false'" || true
+kill "$MODTAGER_PID" 2>/dev/null
+rm -f "$TMP/video10" "$TMP/by-id/"*
 
 echo
 if [ "$FEJL" -eq 0 ]; then echo "Alle test bestået"; else echo "$FEJL fejl"; tail -n 30 "$TMP/stream.log"; fi
