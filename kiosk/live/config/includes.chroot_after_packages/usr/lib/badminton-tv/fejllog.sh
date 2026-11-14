@@ -115,6 +115,8 @@ fejllog_saml() {
             | sort -t '[' -k2,2n | awk '!set[$0]++' | head -60 | sed 's/^/  /'
         printf '\n== Hardware ==\n'
         lspci -nn 2>/dev/null | grep -iE 'vga|display|network|ethernet|wireless'
+
+        fl_kameraer
     } > "$ud/OVERSIGT.txt"
 
     # ── Hver opstart ──
@@ -144,6 +146,39 @@ fejllog_saml() {
         printf '# WIFI_KODE er fjernet\n' >> "$ud/kiosk.conf.txt"
     fi
     fejllog_rens "$ud"
+}
+
+# Livestreamens kamera: hvad streamen valgte (journalen) — og på det kørende
+# system alle videonoder, deres links og hvad kernen siger, de kan. Kameraer med
+# to UVC-interfaces (billede + Windows Hello-IR) kan dele et by-id-link, så det
+# afgørende er nodernes interface og "Device Caps" (Video vs. Metadata Capture).
+fl_kameraer() {
+    printf '\n== Kameraer ==\n'
+    if fl_har_journal; then
+        printf 'Livestreamens kameravalg (seneste):\n'
+        jc -u badminton-tv-stream.service -o short-iso -n 5000 \
+            | grep -E 'videonoder:|kamera:|kameraet |intet USB-kamera|springes over|prøvebillede|valgt i admin|kameravalget|kan: ' \
+            | tail -n 30 | sed 's/^/  /' | grep . || printf '  intet\n'
+    fi
+    [ -z "$FL_ROD" ] || return 0
+    local d n v
+    for d in /dev/v4l/by-id /dev/v4l/by-path; do
+        printf '\n%s:\n' "$d"
+        find "$d" -mindepth 1 -maxdepth 1 -printf '  %f -> %l\n' 2>/dev/null | sort | grep . || printf '  (ingen)\n'
+    done
+    printf '\nv4l2-ctl --list-devices:\n'
+    timeout 5 v4l2-ctl --list-devices 2>&1 | head -n 40 | sed 's/^/  /'
+    for n in /dev/video*; do
+        if [ ! -e "$n" ]; then printf '\ningen /dev/video*\n'; break; fi
+        v=/sys/class/video4linux/${n##*/}
+        printf '\n%s: %s | interface: %s | bInterfaceNumber: %s | index: %s\n' "$n" \
+            "$(cat "$v/name" 2>/dev/null)" "$(cat "$v/device/interface" 2>/dev/null)" \
+            "$(cat "$v/device/bInterfaceNumber" 2>/dev/null)" "$(cat "$v/index" 2>/dev/null)"
+        timeout 5 v4l2-ctl -d "$n" --info 2>&1 \
+            | awk '/Bus info|Device Caps/ { p = 1; print; next } p && /^\t\t/ { print; next } { p = 0 }' | sed 's/^\s*/  /'
+        timeout 5 v4l2-ctl -d "$n" --list-formats-ext 2>&1 | grep -E "\[[0-9]+\]: |Size: " | head -n 12 | sed 's/^\s*/  /'
+    done
+    return 0
 }
 
 # Kun på det kørende system: tilstanden lige nu (frøs skærmen, men PC'en kører,

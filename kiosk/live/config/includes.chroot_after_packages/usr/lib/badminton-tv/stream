@@ -44,6 +44,7 @@ import json
 import os
 import re
 import signal
+import struct
 import subprocess
 import sys
 import threading
@@ -64,7 +65,8 @@ OVERLAY = os.path.join(MAPPE, 'overlay.txt')
 TAVLE = os.path.join(MAPPE, 'tavle.png')
 FFMPEG = os.environ.get('BT_FFMPEG', 'ffmpeg')
 V4L2CTL = os.environ.get('BT_V4L2CTL', 'v4l2-ctl')
-KAMERA_GLOB = os.environ.get('BT_KAMERA_GLOB', '/dev/v4l/by-id/*-video-index0')
+KAMERA_GLOB = os.environ.get('BT_KAMERA_GLOB', '/dev/v4l/by-id/*-video-index0')   # kun til navne og id'er
+VIDEO_GLOB = os.environ.get('BT_VIDEO_GLOB', '/dev/video*')
 RENDER = os.environ.get('BT_RENDER', '/dev/dri/renderD128')
 SKRIFT = os.environ.get('BT_SKRIFT', '/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf')
 SKRIFT_NAVN = os.environ.get('BT_SKRIFT_NAVN', '/usr/share/fonts/opentype/inter/Inter-SemiBold.otf')
@@ -144,15 +146,164 @@ def adgangslink(tv_url):
 
 # ---------- Kameraet ----------
 
-def kamera_navn(sti, enhed):
+# Kameraets noder: ALLE /dev/video*, der kan optage billeder (VIDIOC_QUERYCAP).
+# by-id-linkene (/dev/v4l/by-id/…-video-index0) bruges kun til navn, id og
+# interface — aldrig til at finde kameraerne: har et kamera to UVC-interfaces
+# (billedet og Windows Hello-IR'en) og laver udev links uden interface-nummer,
+# hedder de to links det samme, og kun det sidst oprettede overlever. Så havde
+# kun IR-noden et link, og farvekameraet var usynligt (badminton-tv2,
+# 2026-11-14) — eller det skiftede fra opstart til opstart.
+VIDIOC_QUERYCAP = 0x80685600        # _IOR('V', 0, struct v4l2_capability) — 104 byte
+CAP_VIDEO_CAPTURE = 0x00000001
+CAP_VIDEO_CAPTURE_MPLANE = 0x00001000
+CAP_META_CAPTURE = 0x00800000
+CAP_DEVICE_CAPS = 0x80000000
+
+_noder_info = {}    # (enhed, rdev, ctime) -> (info, hvornår) — info None: ukendt
+
+
+def _stat_noegle(enhed):
+    try:
+        st = os.stat(enhed)
+        return enhed, st.st_rdev, st.st_ctime
+    except OSError:
+        return enhed, None, None
+
+
+def _querycap(enhed):
+    """{'kort', 'bus', 'caps'} fra kernen (VIDIOC_QUERYCAP) — ellers None."""
+    try:
+        import fcntl
+        fd = os.open(enhed, os.O_RDWR | os.O_NONBLOCK)
+    except (ImportError, OSError):
+        return None
+    try:
+        buf = bytearray(104)
+        fcntl.ioctl(fd, VIDIOC_QUERYCAP, buf)
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+    _driver, kort, bus, _version, caps, dcaps = struct.unpack_from('16s32s32sIII', buf)
+    return {'kort': kort.split(b'\0', 1)[0].decode('utf-8', 'replace'),
+            'bus': bus.split(b'\0', 1)[0].decode('utf-8', 'replace'),
+            'caps': dcaps if caps & CAP_DEVICE_CAPS else caps}
+
+
+def _v4l2_info(enhed):
+    """Som _querycap, men fra v4l2-ctl --info (kan ioctl'en ikke bruges) — ellers None."""
+    try:
+        ud = subprocess.run([V4L2CTL, '-d', enhed, '--info'], capture_output=True, text=True,
+                            timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    felter = dict(re.findall(r'^\s*(Card type|Bus info|Capabilities|Device Caps)\s*:\s*(.*?)\s*$', ud, re.M))
+    caps = felter.get('Device Caps') or felter.get('Capabilities')
+    if not caps or not re.fullmatch(r'0x[0-9a-fA-F]+', caps):
+        return None
+    return {'kort': felter.get('Card type', ''), 'bus': felter.get('Bus info', ''), 'caps': int(caps, 16)}
+
+
+def node_info(enhed):
+    """{'kort', 'bus', 'caps', 'optag'} for en /dev/videoN — None, hvis den ikke kunne
+    spørges (et ukendt svar spørges igen efter UNDERSOEG_IGEN). optag: noden kan
+    optage billeder (ikke uvcvideo's metadata-node ved siden af hvert kamera)."""
+    noegle = _stat_noegle(enhed)
+    gemt = _noder_info.get(noegle)
+    if gemt and (gemt[0] is not None or time.monotonic() - gemt[1] < UNDERSOEG_IGEN):
+        return gemt[0]
+    info = _querycap(enhed) or _v4l2_info(enhed)
+    if info is not None:
+        info['optag'] = bool(info['caps'] & (CAP_VIDEO_CAPTURE | CAP_VIDEO_CAPTURE_MPLANE)) \
+            and not info['caps'] & CAP_META_CAPTURE
+    _noder_info[noegle] = (info, time.monotonic())
+    return info
+
+
+def _sys(enhed, *sti):
+    return laes_tekst(os.path.join(SYS, 'class/video4linux', os.path.basename(enhed), *sti))
+
+
+def interface_nr(sti):
+    """USB-interfacet fra by-id-linket ('00' for …-if00-video-index0), ellers None."""
+    m = re.search(r'-if(\d+)-video-index\d+$', os.path.basename(sti or ''))
+    return m.group(1) if m else None
+
+
+Node = collections.namedtuple('Node', 'id enhed links interface info')
+
+
+def _node_id(enhed, links, interface, info):
+    """Et stabilt id til admins valg: by-id-linket med interface-nummer (ét pr. node);
+    ellers USB-porten + interfacet (bus_info); ellers linket uden interface-nummer
+    (det kan flere noder dele) — og som det sidste nodens navn."""
+    for sti in links:
+        if interface_nr(sti):
+            return os.path.basename(sti)
+    if info and info['bus'] and interface:
+        bus = re.sub(r'[^\w.:+-]', '_', info['bus'])[:120]
+        return f'{bus}-if{interface}-video-index{_sys(enhed, "index") or "0"}'
+    if links:
+        return os.path.basename(links[0])
+    return f'node-{os.path.basename(enhed)}-video-index0'
+
+
+_sidst_noder = [None]
+
+
+def kamera_noder():
+    """[Node] — PC'ens kameranoder, der kan optage billeder, sorteret efter USB-interface
+    og node. En node, der ikke kunne spørges (VIDIOC_QUERYCAP og v4l2-ctl --info), tages
+    med, hvis den har et by-id-link eller ifølge kernen er nodens første (index 0) —
+    ellers ikke. Metadata-noder (uvcvideo laver én ved hvert kamera) aldrig."""
+    links = {}
+    for sti in sorted(glob.glob(KAMERA_GLOB)):
+        links.setdefault(os.path.realpath(sti), []).append(sti)
+    # Linket med interface-nummer først (…-if00-video-index0 før …-video-index0)
+    for liste in links.values():
+        liste.sort(key=lambda s: (interface_nr(s) is None, s))
+    enheder = set(links)
+    for sti in glob.glob(VIDEO_GLOB):
+        if re.fullmatch(r'video\d+', os.path.basename(sti)):
+            enheder.add(os.path.realpath(sti))
+    noder, alle = [], []
+    for enhed in enheder:
+        info = node_info(enhed)
+        egne = links.get(enhed, [])
+        interface = (_sys(enhed, 'device/bInterfaceNumber') or
+                     next((interface_nr(s) for s in egne if interface_nr(s)), None))
+        if interface and not re.fullmatch(r'[0-9a-fA-F]{2}', interface):
+            interface = None
+        if info is None:
+            med = bool(egne) or _sys(enhed, 'index') == '0'
+            grund = 'ukendt' + (' (link)' if egne else ' (index 0)' if med else '')
+        else:
+            med = info['optag']
+            grund = 'billeder' if med else 'metadata' if info['caps'] & CAP_META_CAPTURE else 'kan ikke optage'
+        alle.append(f'{os.path.basename(enhed)} [{grund}' + (f', if{interface}' if interface else '') +
+                    (f', {info["bus"]}' if info and info['bus'] else '') +
+                    (f', {os.path.basename(egne[0])}' if egne else ', intet by-id-link') + ']')
+        if med:
+            noder.append(Node(_node_id(enhed, egne, interface, info), enhed, egne, interface, info))
+    tal = (lambda e: int(re.sub(r'\D', '', os.path.basename(e)) or 0))
+    noder.sort(key=lambda n: (int(n.interface, 16) if n.interface else 999, tal(n.enhed), n.enhed))
+    # Loggen fortæller, hvad kernen har — hver gang det ændrer sig
+    tekst = '; '.join(sorted(alle, key=lambda t: tal(t.split(' ', 1)[0]))) or 'ingen'
+    if tekst != _sidst_noder[0]:
+        _sidst_noder[0] = tekst
+        log(f'videonoder: {tekst}')
+    return noder
+
+
+def kamera_navn(node):
     """Kameraets navn fra kernen — ellers af by-id-linket."""
-    navn = laes_tekst(os.path.join(SYS, 'class/video4linux', os.path.basename(enhed), 'name'))
-    if not navn:
+    navn = _sys(node.enhed, 'name') or (node.info or {}).get('kort')
+    if not navn and node.links:
         # by-id-navnet: usb-046d_HD_Pro_Webcam_C920_1234-video-index0 — nyere udev
         # laver også et link med interface-nummer: …_1234-if00-video-index0
         navn = re.sub(r'^usb-[0-9a-f]{4}_|_[0-9A-F]{6,}(-if\d+)?-video-index0$|(-if\d+)?-video-index0$', '',
-                      os.path.basename(sti)).replace('_', ' ')
-    return navn[:100]
+                      os.path.basename(node.links[0])).replace('_', ' ')
+    return (navn or os.path.basename(node.enhed))[:100]
 
 
 # Det infrarøde kamera til Windows Hello (og dybdekameraer) står i navnet på
@@ -164,43 +315,25 @@ IR_NAVN = re.compile(r'(^|[^a-z0-9])(ir|infra ?red|infrarød|hello|depth)([^a-z0
 STORT = 1280 * 720
 
 
-def er_infraroed(sti, enhed):
-    """Navnet på enheden, USB-interfacet eller linket siger infrarødt/Hello/dybde."""
-    v4l = os.path.join(SYS, 'class/video4linux', os.path.basename(enhed))
-    navne = [laes_tekst(os.path.join(v4l, 'name')), laes_tekst(os.path.join(v4l, 'device/interface')),
-             os.path.basename(sti)]
+def er_infraroed(node):
+    """Navnet på enheden, USB-interfacet eller et link siger infrarødt/Hello/dybde."""
+    navne = [_sys(node.enhed, 'name'), _sys(node.enhed, 'device/interface'), (node.info or {}).get('kort'),
+             *(os.path.basename(s) for s in node.links)]
     return any(n and IR_NAVN.search(n.replace('_', ' ').replace('-', ' ')) for n in navne)
 
 
 _fravalgt = set()   # (enhed, grund) — hvert fravalg logges én gang
 
 
-def kamera_links():
-    """[(by-id-link, enhed)] — hvert kamera én gang, med det første link i sorteret
-    rækkefølge: linket med interface-nummer (…-if00-video-index0) før det uden."""
-    kandidater, set_ = [], set()
-    for sti in sorted(glob.glob(KAMERA_GLOB)):
-        enhed = os.path.realpath(sti)
-        if enhed not in set_:
-            set_.add(enhed)
-            kandidater.append((sti, enhed))
-    return kandidater
-
-
-def interface_nr(sti):
-    """USB-interfacet fra by-id-linket ('00' for …-if00-video-index0), ellers None."""
-    m = re.search(r'-if(\d+)-video-index\d+$', os.path.basename(sti or ''))
-    return m.group(1) if m else None
-
-
 def find_kamera(undersoeg=None, proev=None, valgt=None, valg=None):
     """(enhed, navn) for det USB-kamera, der skal sende billedet — eller (None, None).
-    Ét kamera kan vise sig som flere videoenheder: Windows Hello-kameraer (Lenovo 500
+    Ét kamera kan vise sig som flere videonoder: Windows Hello-kameraer (Lenovo 500
     FHD, Brio 4K …) har et infrarødt kamera ved siden af billedet — ofte med SAMME
-    navn (kernen klipper det ved 31 tegn) og måske samme formatliste — og udev laver
-    både et link med interface-nummer (-if00-) og et uden.
+    navn (kernen klipper det ved 31 tegn) og måske samme formatliste. Kandidaterne
+    er alle noder, der kan optage (kamera_noder) — ikke kun dem med et by-id-link.
 
-    valgt: by-id-linket, admin har valgt for PC'en — det bruges, når det findes.
+    valgt: nodens id (eller et af dens by-id-links), admin har valgt for PC'en —
+    den bruges, når den findes.
     Ellers aldrig det infrarøde: enheder med IR/Infrared/Hello/Depth i navnet og
     enheder, der kun har gråtoner (GREY, Y8, Y16 …), springes over. Er der derefter
     flere, optages et prøvebillede fra hver (proev): et infrarødt billede har ingen
@@ -221,19 +354,18 @@ def find_kamera(undersoeg=None, proev=None, valgt=None, valg=None):
     undersoeg = undersoeg or kamera_undersoeg
     valg = {} if valg is None else valg
     valg['valg'] = None
-    kandidater = kamera_links()
+    kandidater = kamera_noder()
     if not kandidater:
         return None, None
 
     if valgt:
-        for sti in sorted(glob.glob(KAMERA_GLOB)):
-            if os.path.basename(sti) == valgt:
-                enhed = os.path.realpath(sti)
-                if (enhed, 'valgt') not in _fravalgt:
-                    _fravalgt.add((enhed, 'valgt'))
-                    log(f'{enhed}: valgt i admin ({valgt})')
+        for node in kandidater:
+            if valgt == node.id or valgt in (os.path.basename(s) for s in node.links):
+                if (node.enhed, 'valgt') not in _fravalgt:
+                    _fravalgt.add((node.enhed, 'valgt'))
+                    log(f'{node.enhed}: valgt i admin ({valgt})')
                 valg['valg'] = 'admin'
-                return enhed, kamera_navn(sti, enhed)
+                return node.enhed, kamera_navn(node)
         if (valgt, 'mangler') not in _fravalgt:
             _fravalgt.add((valgt, 'mangler'))
             log(f'kameraet valgt i admin ({valgt}) findes ikke — vælger selv')
@@ -243,43 +375,41 @@ def find_kamera(undersoeg=None, proev=None, valgt=None, valg=None):
             _fravalgt.add((enhed, grund))
             log(f'{enhed}: springes over — {grund}')
 
-    # Et infrarødt link til en enhed gælder enheden (Brio: et link med og et uden interface)
-    ir = {enhed for sti, enhed in kandidater if er_infraroed(sti, enhed)}
     rest = []
-    for nr, (sti, enhed) in enumerate(kandidater):
-        if enhed in ir:
-            fravalg(enhed, 'infrarødt kamera (Windows Hello/dybde) efter navnet')
+    for nr, node in enumerate(kandidater):
+        if er_infraroed(node):
+            fravalg(node.enhed, 'infrarødt kamera (Windows Hello/dybde) efter navnet')
             continue
-        formater, navne = undersoeg(enhed)
+        formater, navne = undersoeg(node.enhed)
         farve = [n for n in INPUT_ORDEN if formater.get(n)]
         if navne and not navne & INPUTFORMATER.keys():
-            fravalg(enhed, f'kun {", ".join(sorted(navne))} — gråtoner (infrarødt kamera) eller '
-                           f'formater, vi ikke kan sende')
+            fravalg(node.enhed, f'kun {", ".join(sorted(navne))} — gråtoner (infrarødt kamera) eller '
+                                f'formater, vi ikke kan sende')
             continue
         if farve:
             pixels = max(b * h for n in farve for (b, h) in formater[n])
             noegle = (2 if pixels >= STORT else 0, 'mjpeg' in farve, pixels, -nr)
         else:
             noegle = (1, False, 0, -nr)
-        rest.append((noegle, sti, enhed, formater))
+        rest.append((noegle, node, formater))
     if not rest:
         return None, None
     if len(rest) == 1 or not proev:
         valg['valg'] = 'eneste' if len(rest) == 1 else 'uafgjort'
-        _, sti, enhed, _ = max(rest, key=lambda r: r[0])
-        return enhed, kamera_navn(sti, enhed)
+        _, node, _ = max(rest, key=lambda r: r[0])
+        return node.enhed, kamera_navn(node)
     # Flere tilbage: prøvebilledet skiller billedet fra det infrarøde kamera, også
     # når de hedder det samme og har samme formater. Farver > uafgjort > gråt: et
     # for mørkt billede ('moerk') og et kamera, der ikke kunne optage (None — fx i
     # brug), tælles hverken som farver eller gråt
-    rest = sorted((((PROEVE_RANG.get(proev(enhed, formater), 1),) + noegle, sti, enhed, formater)
-                   for noegle, sti, enhed, formater in rest), key=lambda r: r[0], reverse=True)
+    rest = sorted((((PROEVE_RANG.get(proev(node.enhed, formater), 1),) + noegle, node, formater)
+                   for noegle, node, formater in rest), key=lambda r: r[0], reverse=True)
     # Uafgjort: vinderen har ikke farver, og den næste er lige så god efter prøven
     # (fx begge for mørke) — så har navn, formater og interface valgt
     vinder, naest = rest[0][0][0], rest[1][0][0]
     valg['valg'] = 'uafgjort' if vinder < PROEVE_RANG['farve'] and vinder == naest else 'proeve'
-    _, sti, enhed, _ = rest[0]
-    return enhed, kamera_navn(sti, enhed)
+    _, node, _ = rest[0]
+    return node.enhed, kamera_navn(node)
 
 
 # Billedhastigheden før lyset: med "exposure auto priority" slået til (Logitech
@@ -931,10 +1061,11 @@ class Stream:
 
     def kamera_liste(self):
         """Til admin: PC'ens kameraer (højst 6), så et bestemt kan vælges, hvis det
-        automatiske valg en dag tager fejl: by-id-link, navn, interface, bedste
-        format og prøvebilledet (hvis det er optaget)."""
+        automatiske valg en dag tager fejl: nodens id (by-id-linket eller USB-port +
+        interface), navn, interface, bedste format og prøvebilledet (hvis det er optaget)."""
         liste = []
-        for sti, enhed in kamera_links()[:6]:
+        for node in kamera_noder()[:6]:
+            enhed = node.enhed
             formater = self.formater.get(enhed, ({}, set()))[0]
             bedste = None
             for n in INPUT_ORDEN:
@@ -943,8 +1074,8 @@ class Stream:
                     bedste = f'{INPUT_NAVN[n]} {b}x{h}'
                     break
             billede = self.billede.get(self._billede_noegle(enhed))
-            liste.append({'id': os.path.basename(sti), 'navn': kamera_navn(sti, enhed),
-                          'node': os.path.basename(enhed), 'interface': interface_nr(sti),
+            liste.append({'id': node.id, 'navn': kamera_navn(node),
+                          'node': os.path.basename(enhed), 'interface': node.interface,
                           'format': bedste, 'billede': billede[0] if billede else None})
         return liste
 
@@ -953,8 +1084,7 @@ class Stream:
         if not self.koerer() or not self.opsaetning:
             return None
         enhed = self.opsaetning[0]
-        sti = next((s for s, e in kamera_links() if e == enhed), None)
-        nr = interface_nr(sti)
+        nr = next((n.interface for n in kamera_noder() if n.enhed == enhed), None)
         return os.path.basename(enhed) + (f' · interface {nr}' if nr else '')
 
     def input_tekst(self):
@@ -1140,9 +1270,10 @@ def main():
     version = laes_tekst(VERSION_FIL)
     pc_id = maskine_id()
     sidste_svar = time.monotonic()
-    sidst_kamera = None
+    sidst_kamera = (None, None, None)    # intet kamera: første gennemløb uden kamera logger det
+    logget = False
     sidst_anden = False
-    valgt = None            # by-id-linket, admin har valgt for PC'en (serverens seneste svar)
+    valgt = None            # nodens id, admin har valgt for PC'en (serverens seneste svar)
     valg = {'valg': None}   # hvordan kameraet blev valgt (find_kamera) — til admin
     meldt = [None]
 
@@ -1174,9 +1305,10 @@ def main():
             kamera_id = (kamera, enhed, os.stat(enhed).st_ctime if enhed else None)
         except OSError:
             kamera_id = (kamera, enhed, None)
-        if kamera_id != sidst_kamera:
+        if kamera_id != sidst_kamera or not logget:
+            logget = True
             # Samme navn, anden enhed (Lenovo 500: billedet og IR'en hedder det samme): et skift
-            if (kamera, enhed) != tuple((sidst_kamera or (None, None))[:2]):
+            if (kamera, enhed) != sidst_kamera[:2] or not enhed:
                 log(f'kamera: {kamera} ({enhed})' if kamera else 'intet USB-kamera')
             else:
                 log(f'kameraet er sat i igen ({enhed})')

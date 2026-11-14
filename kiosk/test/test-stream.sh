@@ -21,6 +21,8 @@
 #  16. Windows Hello: IR kan YUYV  → billedet, også når det ikke svarer ved opstart
 #  17. IR-navn med MJPEG           → afvist på navnet; billedets YUYV tages
 #  18. kun et infrarødt kamera     → intet kamera, intet sendes
+#  18g. kun IR-noden har et link  → farvenoden uden link findes alligevel (VIDIOC_QUERYCAP),
+#       metadata-noder er aldrig kandidater, og admin kan vælge noden uden link
 #  19. Brio i svagt lys           → auto-prioritet fra (manglende kontrol tåles), faktisk billedhastighed meldt
 #
 # Køres i en debian:trixie-container (henter ffmpeg, python3, Pillow og skrifterne):
@@ -161,7 +163,7 @@ cat > "$TMP/bin/v4l2-ctl" <<'EOF'
 #!/bin/sh
 enhed=
 while [ $# -gt 0 ]; do
-    case "$1" in -d) enhed=$(basename "$2"); shift ;; -c) styr=$2; shift ;; --list-formats-ext) liste=1 ;; esac
+    case "$1" in -d) enhed=$(basename "$2"); shift ;; -c) styr=$2; shift ;; --list-formats-ext) liste=1 ;; --info) info=1 ;; esac
     shift
 done
 if [ -n "${styr:-}" ]; then
@@ -170,6 +172,11 @@ if [ -n "${styr:-}" ]; then
         echo "unknown control '${styr%%=*}'" >&2
         exit 255
     fi
+fi
+# --info: nodens "Device Caps" fra $TMP/formater.<enhed>.info (uden: intet svar)
+if [ -n "${info:-}" ]; then
+    echo "$enhed" >> "$FORMATER.info.kald"
+    if [ -e "$FORMATER.$enhed.info" ]; then cat "$FORMATER.$enhed.info"; else exit 1; fi
 fi
 if [ -n "${liste:-}" ]; then
     echo "$enhed" >> "$FORMATER.kald"
@@ -217,7 +224,7 @@ start_stream() { # [ekstra miljø…]
     env FFMPEG_LOG="$TMP/ffmpeg.log" FORMATER="$TMP/formater" BT_SYS="$TMP/sys" \
         BT_KIOSK_ENV="$TMP/kiosk.env" BT_VERSION_FIL=/dev/null \
         BT_STREAM_MAPPE="$TMP/run" BT_FFMPEG="$TMP/bin/ffmpeg-falsk" BT_V4L2CTL="$TMP/bin/v4l2-ctl" \
-        BT_KAMERA_GLOB="$TMP/by-id/*-video-index0" BT_RENDER="$TMP/ingen-render" \
+        BT_KAMERA_GLOB="$TMP/by-id/*-video-index0" BT_VIDEO_GLOB="$TMP/video*" BT_RENDER="$TMP/ingen-render" \
         BT_SPOERG_SENDER=1 BT_SPOERG_KLAR=1 BT_SPOERG_FEJL=1 BT_GENFORSOEG=2 BT_STABIL=3 BT_UDEN_SVAR=4 "$@" \
         python3 "$STREAM" > "$TMP/stream.log" 2>&1 &
     STREAM_PID=$!
@@ -749,6 +756,73 @@ stop_stream
 kill "$MODTAGER_PID" 2>/dev/null
 rm -rf "$TMP/sys/class/video4linux/video8" "$TMP/sys/class/video4linux/video9" "$TMP/video8."* "$TMP/video9."*
 
+echo "18g. (badminton-tv2) kun IR-noden har et by-id-link — farvenoden findes alligevel"
+# Lenovo 500 FHD på Debian 13 (2026-11-14): udev laver kun links uden interface-
+# nummer, og de to UVC-interfaces giver samme linknavn — kun IR-nodens overlevede.
+# 2026.11.5 fandt slet intet kamera. Hver UVC-node har desuden en metadata-node
+rm -f "$TMP/formater"* "$TMP/by-id/"* "$TMP/ffmpeg.log.proever"
+USB="$TMP/sys/devices/usb2/2-2"
+mkdir -p "$USB/2-2:1.0" "$USB/2-2:1.2"
+echo 00 > "$USB/2-2:1.0/bInterfaceNumber"; echo "Lenovo 500 RGB Camera" > "$USB/2-2:1.0/interface"
+echo 02 > "$USB/2-2:1.2/bInterfaceNumber"; echo "Lenovo 500 IR Camera" > "$USB/2-2:1.2/interface"
+for n in 20 21 22 23; do
+    : > "$TMP/video$n"
+    mkdir -p "$TMP/sys/class/video4linux/video$n"
+    echo "Lenovo 500 RGB Camera: Lenovo 5" > "$TMP/sys/class/video4linux/video$n/name"
+    echo $(( n % 2 )) > "$TMP/sys/class/video4linux/video$n/index"
+    ln -s "$USB/2-2:1.$(( n < 22 ? 0 : 2 ))" "$TMP/sys/class/video4linux/video$n/device"
+    if [ $(( n % 2 )) = 0 ]; then caps="0x04200001"; type="Video Capture"; else caps="0x04a00000"; type="Metadata Capture"; fi
+    printf 'Driver Info:\n\tDriver name      : uvcvideo\n\tCard type        : Lenovo 500 RGB Camera: Lenovo 5\n\tBus info         : usb-0000:00:14.0-2\n\tDriver version   : 6.12.48\n\tCapabilities     : 0x84a00001\n\tDevice Caps      : %s\n\t\t%s\n' \
+        "$caps" "$type" > "$TMP/formater.video$n.info"
+done
+ln -s "$TMP/video22" "$TMP/by-id/$LENOVO-video-index0"
+cat > "$TMP/formater" <<'EOF'
+	[0]: 'MJPG' (Motion-JPEG, compressed)
+		Size: Discrete 1920x1080
+			Interval: Discrete 0.033s (30.000 fps)
+EOF
+FARVE_ID="usb-0000:00:14.0-2-if00-video-index0"
+modtager "$TMP/modtaget21.flv"
+SEND_VIDEO "$VIDEO_1080"
+start_stream
+vent_sender
+vent_paa 10 sh -c "tail -n 1 '$TMP/status.jsonl' | grep -q 'video20 · interface 00'" || true
+indeholder "farvenoden uden link sendes" "$(args)" "-i $TMP/video20"
+forvent "IR-noden bruges aldrig" "$(grep -c "$TMP/video22" "$TMP/ffmpeg.log.args")" "0"
+indeholder "IR-noden fravalgt på navnet" "$(cat "$TMP/stream.log")" "video22: springes over — infrarødt kamera"
+forvent "metadata-noderne spørges aldrig om formater" "$(grep -cE 'video2[13]' "$TMP/formater.kald")" "0"
+forvent "… og optages aldrig" "$(cat "$TMP/ffmpeg.log.proever" 2>/dev/null | grep -cE "video2[13]")" "0"
+indeholder "videonoderne i loggen" "$(cat "$TMP/stream.log")" "video20 [billeder, if00, usb-0000:00:14.0-2, intet by-id-link]"
+indeholder "metadata-noden i loggen" "$(cat "$TMP/stream.log")" "video21 [metadata"
+forvent "status: noden, der sender" "$(sidste_status | felt kameraNode)" "video20 · interface 00"
+KAMERAER=$(sidste_status | python3 -c 'import json,sys; print(";".join("|".join(str(k[f]) for f in ("id", "node", "interface")) for k in json.load(sys.stdin)["kameraer"]))')
+forvent "status: begge kameranoder til admins valg (id: USB-port + interface, ikke det delte link), ingen metadata" "$KAMERAER" \
+    "$FARVE_ID|video20|00;usb-0000:00:14.0-2-if02-video-index0|video22|02"
+forvent "ingen fejl til admin" "$(sidste_status | felt fejl)" ""
+stop_stream
+kill "$MODTAGER_PID" 2>/dev/null
+
+echo "18h. Admin vælger farvenoden uden link (USB-port + interface) — og linket peger nu på den"
+rm -f "$TMP/by-id/"*
+ln -s "$TMP/video20" "$TMP/by-id/$LENOVO-video-index0"   # næste opstart: linket peger på farvenoden
+modtager "$TMP/modtaget22.flv"
+SEND_VIDEO "$VIDEO_1080"
+python3 - "$TMP/svar.json" "$FARVE_ID" <<'EOF'
+import json, sys
+d = json.load(open(sys.argv[1])); d['kameraEnhed'] = sys.argv[2]; json.dump(d, open(sys.argv[1], 'w'))
+EOF
+start_stream
+vent_sender
+indeholder "admins valg bruges" "$(args)" "-i $TMP/video20"
+forvent "status: valgt i admin" "$(sidste_status | felt kameraValg)" "admin"
+KAMERAER=$(sidste_status | python3 -c 'import json,sys; print(";".join("|".join(str(k[f]) for f in ("id", "node")) for k in json.load(sys.stdin)["kameraer"]))')
+forvent "id'et er det samme, uanset hvor linket peger" "$KAMERAER" \
+    "$FARVE_ID|video20;usb-0000:00:14.0-2-if02-video-index0|video22"
+stop_stream
+kill "$MODTAGER_PID" 2>/dev/null
+for n in 20 21 22 23; do rm -rf "$TMP/sys/class/video4linux/video$n" "$TMP/video$n"; done
+rm -rf "$TMP/sys/devices/usb2" "$TMP/by-id/"*
+
 echo "18. Kun et infrarødt kamera (GREY) → intet kamera, intet sendes"
 rm -f "$TMP/formater"* "$TMP/by-id/"*
 : > "$TMP/video7"
@@ -765,6 +839,8 @@ vent_paa 5 sh -c "grep -q 'springes over' '$TMP/stream.log'" || true
 forvent "status: intet kamera" "$(sidste_status | felt kamera)" ""
 forvent "ffmpeg startes ikke" "$(antal_start)" "0"
 indeholder "fravalget i loggen" "$(cat "$TMP/stream.log")" "kun GREY"
+indeholder "loggen siger intet USB-kamera" "$(cat "$TMP/stream.log")" "intet USB-kamera"
+forvent "ikke 'sat i igen (None)'" "$(grep -c 'sat i igen (None)' "$TMP/stream.log")" "0"
 stop_stream
 
 echo "19. Brio i svagt lys: auto-prioritet slås fra, og PC'en melder den faktiske billedhastighed"
