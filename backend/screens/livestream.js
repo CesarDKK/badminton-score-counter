@@ -518,6 +518,30 @@ function overlayLinjer(rk, double) {
 
 const status = new Map();   // tenant -> Map(tokenId -> status)
 const TABT_MS = 60 * 1000;  // ingen forespørgsel i et minut: PC'en er væk
+// Vagten over udsendelserne: en PC, der har været tavs så længe, får sin
+// YouTube-udsendelse afsluttet af serveren (se ytVagtGrund)
+const YT_PC_TAVS_MS = 10 * 60 * 1000;
+// … og en udsendelse lukkes senest efter så længe, også med PC'en i live: YouTube
+// gemmer kun udsendelser under 12 timer som video
+const YT_MAKS_MS = 11 * 60 * 60 * 1000;
+
+// Skal vagten (scheduler, hvert minut) afslutte banens udsendelse? YouTube
+// lukker ikke længere udsendelser selv (config/youtube.js opretUdsendelse,
+// enableAutoStop: false), så et kort udfald bliver i samme video — til gengæld
+// må serveren selv lukke, når PC'en er væk for alvor (slukket, uden net, kommer
+// først igen i morgen), ellers står udsendelsen åben hele natten. send/grund:
+// beslutning() for banen; pcSidst: hvornår banens PC sidst spurgte serveren
+// (eller udsendelsen sidst blev tjekket) — null: aldrig set siden opstarten; start:
+// hvornår udsendelsen begyndte (null: ukendt). → 'pc-tavs', beslutningens grund
+// (send: false), 'for-lang' (11 timer), 'ny-dag' (midnat i dansk tid — en PC, der
+// sender videre, må ikke holde én video åben i døgnvis) eller null (lad den køre).
+function ytVagtGrund({ send, grund = null, pcSidst = null, start = null, nu = Date.now() }) {
+    if (!send) return grund || 'send-ikke';
+    if (pcSidst === null || nu - pcSidst >= YT_PC_TAVS_MS) return 'pc-tavs';
+    if (start !== null && nu - start >= YT_MAKS_MS) return 'for-lang';
+    if (start !== null && danskDato(start) !== danskDato(nu)) return 'ny-dag';
+    return null;
+}
 
 // Et kamera på TV-PC'en: by-id-linket, fx usb-17ef_Lenovo_500_RGB_Camera_…-if00-video-index0
 // (null hvis ugyldigt)
@@ -669,6 +693,16 @@ function senderBane(tenant, bane, nu = Date.now()) {
     return false;
 }
 
+// Hvornår en TV-PC på banen sidst spurgte serveren (ms) — null: ingen PC på
+// banen har spurgt siden opstarten. Til vagten over udsendelserne (ytVagtGrund).
+function pcSidstPaaBane(tenant, bane) {
+    let sidst = null;
+    for (const s of (status.get(tenant) || new Map()).values()) {
+        if (s.bane === bane && (sidst === null || s.sidst > sidst)) sidst = s.sidst;
+    }
+    return sidst;
+}
+
 // ---------- Klubbens live-side (/live) ----------
 
 // Banerne, der sender lige nu, til den offentlige live-side: scoreboardet, som
@@ -757,13 +791,20 @@ function ytBeskrivelse(klubnavn = null) {
         'Sendt automatisk fra banen med Badmintonapp — https://badmintonapp.dk';
 }
 
+// Til tests: glem alle PC'er (status, ejere, andre)
+function _nulstilStatus() {
+    status.clear();
+    ejere.clear();
+    andre.clear();
+}
+
 module.exports = {
-    STANDARD_URL, EFTER_MS, STILLE_MS, KLAR_MS, YT_TJEK_MS, YT_FEJL_PAUSE_MS,
+    STANDARD_URL, EFTER_MS, STILLE_MS, KLAR_MS, YT_TJEK_MS, YT_FEJL_PAUSE_MS, YT_PC_TAVS_MS, YT_MAKS_MS, ytVagtGrund,
     ytHandling, ytIPause, ytFejlPauseMs, YT_VARIG_PAUSE_MS, YT_KVOTE_PAUSE_MS, ytTitel, ytBeskrivelse,
     gyldigUrl, gyldigNoegle, rensOpsaetning, noegleSlut,
     STANDARD_INDSTILLINGER, laesIndstillinger, rensIndstillinger, videoTilPc, sponsorNu, gyldigLogoFil,
     beslutning, startet, holdkampNu, holdkampStoppet, holdkampTilAdmin, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,
     spillerLogoer, klubLogoFraDatabase,
-    rensStatus, rensKameraEnhed, registrer, statusFor, senderBane, liveBaner,
-    pcNoegle, maaBrugeKamera, registrerAnden, svarTilAnden, autoKameraBane
+    rensStatus, rensKameraEnhed, registrer, statusFor, senderBane, pcSidstPaaBane, liveBaner,
+    pcNoegle, maaBrugeKamera, registrerAnden, svarTilAnden, autoKameraBane, _nulstilStatus
 };

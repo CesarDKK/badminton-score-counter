@@ -200,9 +200,12 @@ async function opretStream(token, titel) {
 
 // En ny udsendelse, der går live af sig selv, når billedet kommer, koblet til
 // banens stream. Serveren afslutter den, når banen holder op med at sende
-// (afslut); YouTube afslutter den selv ca. et minut efter, at billedet er væk
-// (PC'en slukket) — en kort pause, mens PC'en genstarter streamen, lukker den
-// ikke. Returnerer id'et.
+// (afslut) — og vagten (routes/livestream.js ytVagt), når PC'en har været tavs
+// i 10 minutter. YouTube lukker den IKKE selv (enableAutoStop: false): før
+// gjorde den det ca. et minut efter, at billedet var væk, så hver genstart af
+// streamen (kameraet, net-vagten, en genstart af PC'en) gav en ny video —
+// holdkampen i Lyngby 2026-11-14 blev til fem. Nu bliver et kort udfald i
+// samme video (seerne ser "offline" imens). Returnerer id'et.
 async function opretUdsendelse(token, { titel, beskrivelse, synlighed, boern, streamId }) {
     const b = await api('liveBroadcasts', { part: 'snippet,status,contentDetails' }, { token, method: 'POST', body: {
         snippet: { title: titel, description: beskrivelse, scheduledStartTime: new Date().toISOString() },
@@ -210,7 +213,7 @@ async function opretUdsendelse(token, { titel, beskrivelse, synlighed, boern, st
         // enableEmbed sættes ikke: YouTube svarer invalidEmbedSetting på kanaler, der
         // ikke må indlejre livestreams — kanalens egen standard gælder
         contentDetails: {
-            enableAutoStart: true, enableAutoStop: true, enableDvr: true,
+            enableAutoStart: true, enableAutoStop: false, enableDvr: true,
             recordFromStart: true, latencyPreference: 'normal', monitorStream: { enableMonitorStream: false }
         }
     } });

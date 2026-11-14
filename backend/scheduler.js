@@ -477,6 +477,48 @@ function startSkaermLogOprydning() {
  * (routes/urTaeller.js afslutUdloebnePauser). Uret kan ikke selv gøre det, når
  * skærmen er slukket. Hvert 2. sekund; uden pauser en lille forespørgsel pr. klub.
  */
+/**
+ * Vagten over YouTube-udsendelserne: YouTube lukker dem ikke selv længere
+ * (et kort udfald skal blive i samme video), så serveren afslutter en
+ * udsendelse, hvis PC'en har været tavs i 10 minutter, eller banen ikke skal
+ * sende mere (se routes/livestream.js ytVagt). Hvert minut; uden åbne
+ * udsendelser én lille forespørgsel pr. klub.
+ */
+function startYoutubeVagt() {
+    const { ytVagt } = require('./routes/livestream');
+    let koerer = false;
+    cron.schedule('* * * * *', async () => {
+        if (koerer) return;
+        koerer = true;
+        try {
+            // 1. Standard/direkte database
+            try {
+                await ytVagt();
+            } catch (err) {
+                console.error('❌ Vagten over YouTube-udsendelser (default):', err.message);
+            }
+            // 2. Alle aktive klub-databaser (multi-tenant)
+            try {
+                const masterDb = require('./config/masterDatabase');
+                const clubs = await masterDb.query('SELECT db_name FROM clubs WHERE is_active = 1');
+                for (const club of clubs) {
+                    try {
+                        await runWithTenant(club.db_name, () => ytVagt());
+                    } catch (err) {
+                        console.error(`❌ Vagten over YouTube-udsendelser for ${club.db_name}:`, err.message);
+                    }
+                }
+            } catch (err) { /* master DB ikke tilgængelig i direkte mode */ }
+        } finally {
+            koerer = false;
+        }
+    }, {
+        scheduled: true,
+        timezone: 'Europe/Copenhagen'
+    });
+    console.log('⏰ Scheduled vagten over YouTube-udsendelser hvert minut (afslutter efter 10 min uden PC)');
+}
+
 function startUrPauser() {
     const { afslutUdloebnePauser } = require('./routes/urTaeller');
     let koerer = false;
@@ -512,4 +554,4 @@ function startUrPauser() {
     console.log('⏰ Scheduled urets pauser hvert 2. sekund (slutter ved 0:00, når uret tæller)');
 }
 
-module.exports = { releaseInactiveCourts, startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk, startUgentligBackup, ugentligBackup, startSkaermLogOprydning, startUrPauser };
+module.exports = { releaseInactiveCourts, startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk, startUgentligBackup, ugentligBackup, startSkaermLogOprydning, startUrPauser, startYoutubeVagt };

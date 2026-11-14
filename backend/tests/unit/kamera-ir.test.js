@@ -12,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-hemmelighed-kamera-ir';
+process.env.UPLOAD_DIR = process.env.UPLOAD_DIR || require('os').tmpdir();   // ruten indlæser multer, som laver mappen (skrivebeskyttet repo)
 
 const ROD = path.join(__dirname, '..', '..', '..');
 const laes = (f) => fs.readFileSync(path.join(ROD, f), 'utf8');

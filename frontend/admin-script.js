@@ -3312,6 +3312,14 @@ function livestreamYtBaneHtml(b) {
         : '<span class="tekst-mindre tekst-daempet">Nøglen oprettes på YouTube, første gang banen sender</span>'];
     if (b.yt.udsendelse) {
         dele.push(`<a class="btn-secondary btn-sm" href="https://www.youtube.com/watch?v=${encodeURIComponent(b.yt.udsendelse)}" target="_blank" rel="noopener">Se udsendelsen på YouTube</a>`);
+        // Udsendelsen står åben, men PC'en er tavs: YouTube lukker den ikke selv
+        // (et kort udfald bliver i samme video) — serveren lukker efter 10 minutter
+        if (b.yt.afsluttesOmSek != null) {
+            const tavs = b.yt.pcTavsSek == null ? 'PC\'en har ikke meldt sig siden serveren startede'
+                : `PC'en har ikke meldt sig i ${Math.max(1, Math.round(b.yt.pcTavsSek / 60))} min`;
+            const om = b.yt.afsluttesOmSek <= 30 ? 'om lidt' : `om ${Math.max(1, Math.round(b.yt.afsluttesOmSek / 60))} min`;
+            dele.push(`<span class="maerke maerke--afventer">PC'en tavs</span> <span class="tekst-mindre">${tavs} — udsendelsen afsluttes ${om}, hvis den ikke kommer tilbage (et kort udfald bliver i samme video)</span>`);
+        }
     }
     if (b.yt.fejl) dele.push(`<span class="maerke maerke--fare">YouTube</span> <span class="tekst-mindre">${escapeHtml(b.yt.fejl)} — prøver igen om lidt</span>`);
     return dele.join(' ');
