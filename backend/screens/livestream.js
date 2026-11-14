@@ -526,7 +526,8 @@ function rensKameraEnhed(v) {
 }
 
 // PC'ens kameraer (højst 6) til admins valg: link, navn, node, interface, bedste
-// format og prøvebilledet ('farve' / 'graa' / null = ikke optaget)
+// format og prøvebilledet ('farve' / 'graa' / 'moerk' = for mørkt til at afgøre
+// det / null = ikke optaget)
 function rensKameraListe(v) {
     if (!Array.isArray(v)) return null;
     const liste = v.slice(0, 6).map(k => k && typeof k === 'object' && rensKameraEnhed(k.id) ? {
@@ -535,7 +536,7 @@ function rensKameraListe(v) {
         node: typeof k.node === 'string' && /^video\d{1,3}$/.test(k.node) ? k.node : null,
         interface: typeof k.interface === 'string' && /^\d{2}$/.test(k.interface) ? k.interface : null,
         format: typeof k.format === 'string' && /^(MJPEG|YUYV) \d{2,4}x\d{2,4}$/.test(k.format) ? k.format : null,
-        billede: ['farve', 'graa'].includes(k.billede) ? k.billede : null
+        billede: ['farve', 'graa', 'moerk'].includes(k.billede) ? k.billede : null
     } : null).filter(Boolean);
     return liste.length ? liste : null;
 }
@@ -568,6 +569,9 @@ function rensStatus(body) {
         kameraNode: typeof b.kameraNode === 'string' && /^video\d{1,3}( · interface \d{2})?$/.test(b.kameraNode)
             ? b.kameraNode : null,
         kameraer: rensKameraListe(b.kameraer),
+        // Hvordan PC'en valgte kameraet: admin, eneste, proeve (prøvebilledet) eller
+        // uafgjort (prøvebillederne for mørke — valgt efter navn, formater og interface)
+        kameraValg: ['admin', 'eneste', 'proeve', 'uafgjort'].includes(b.kameraValg) ? b.kameraValg : null,
         // PC'ens eget id (et hash af maskine-id'et) — nye Badminton TV-versioner
         pcId: typeof b.pcId === 'string' && /^[a-f0-9]{16,64}$/.test(b.pcId) ? b.pcId : null
     };

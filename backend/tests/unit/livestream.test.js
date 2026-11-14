@@ -303,7 +303,7 @@ test('status: PC\'ens oplysninger renses, og "sender siden" huskes', () => {
     const s = ls.rensStatus({ navn: 'tv-bane3', kamera: 'HD Pro Webcam C920', sender: true, koder: 'vaapi', fejl: '' });
     assert.deepEqual(s, { navn: 'tv-bane3', kioskVersion: '', kamera: 'HD Pro Webcam C920', sender: true, koder: 'vaapi',
         format: null, mikrofon: null, fejl: null, fejllog: null, kameraFormater: null, kameraInput: null, kameraNode: null,
-        kameraer: null, pcId: null });
+        kameraer: null, kameraValg: null, pcId: null });
     // Det, kameraet leverer (et infrarødt kamera ses på den lille opløsning) — kun i fast form
     assert.equal(ls.rensStatus({ kameraInput: 'MJPEG 1920x1080' }).kameraInput, 'MJPEG 1920x1080');
     assert.equal(ls.rensStatus({ kameraInput: 'YUYV 640x360' }).kameraInput, 'YUYV 640x360');

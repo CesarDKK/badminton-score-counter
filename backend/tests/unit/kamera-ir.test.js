@@ -73,6 +73,21 @@ test('PC\'ens status: noden, der sender, og listen over kameraer renses', () => 
     assert.equal(ls.rensStatus({ kameraer: Array(9).fill({ id: RGB }) }).kameraer.length, 6, 'højst 6');
 });
 
+test('mørk hal: prøvebilledet "for mørkt" og et uafgjort kameravalg når frem til admin', () => {
+    const s = ls.rensStatus({
+        kameraValg: 'uafgjort',
+        kameraer: [{ id: RGB, billede: 'moerk' }, { id: IR, billede: 'graa' }]
+    });
+    assert.equal(s.kameraValg, 'uafgjort');
+    assert.deepEqual(s.kameraer.map(k => k.billede), ['moerk', 'graa']);
+    for (const v of ['admin', 'eneste', 'proeve']) assert.equal(ls.rensStatus({ kameraValg: v }).kameraValg, v);
+    assert.equal(ls.rensStatus({ kameraValg: 'lysest' }).kameraValg, null);
+    assert.equal(ls.rensStatus({}).kameraValg, null);
+    const admin = laes('frontend/admin-script.js');
+    assert.match(admin, /s\.kameraValg === 'uafgjort'/);
+    assert.match(admin, /k\.billede === 'moerk' \? 'for mørkt til prøvebillede'/);
+});
+
 test('PUT /kamera/:tokenId { enhed }: kun kameraet på PC\'en gemmes — banen røres ikke', async () => {
     const put = rute(livestream, 'put', '/kamera/:tokenId');
     nulstil(async (sql) => (/SELECT id FROM device_tokens/.test(sql) ? [{ id: 5 }] : { affectedRows: 1 }));

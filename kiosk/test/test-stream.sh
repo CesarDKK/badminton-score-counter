@@ -121,10 +121,13 @@ while [ $# -gt 0 ]; do
             fi
             shift
         done
-        # Et infrarødt kamera ($enhed.ir findes): samme testbillede uden farver
-        graa=; [ -e "$2.ir" ] && graa=,hue=s=0
+        # Et infrarødt kamera ($enhed.ir findes): samme testbillede uden farver.
+        # En mørk hal ($enhed.moerk): sort
+        kilde="testsrc2=size=$str:rate=$rate"
+        [ -e "$2.ir" ] && kilde="$kilde,hue=s=0"
+        [ -e "$2.moerk" ] && kilde="color=c=black:size=$str:rate=$rate"
         shift 2
-        ud+=(-re -f lavfi -i "testsrc2=size=$str:rate=$rate$graa")
+        ud+=(-re -f lavfi -i "$kilde")
         continue
     fi
     if [ "$1" = -f ] && [ "${2:-}" = alsa ]; then
@@ -632,6 +635,107 @@ indeholder "et valgt kamera, der ikke findes: PC'en vælger selv" "$(args)" "-i 
 stop_stream
 kill "$MODTAGER_PID" 2>/dev/null
 rm -rf "$TMP/sys/class/video4linux/video8" "$TMP/sys/class/video4linux/video9"
+
+# ── Mørk hal: når PC'en starter, er lyset i hallen ofte slukket ──
+lenovo() { # IR-nodens formatfil|-  farvenodens formatfil|-  — video8 (if00) og video9 (if02), samme navn
+    rm -f "$TMP/formater"* "$TMP/by-id/"* "$TMP/ffmpeg.log.proever" "$TMP/video8."* "$TMP/video9."*
+    : > "$TMP/video8"; : > "$TMP/video9"
+    mkdir -p "$TMP/sys/class/video4linux/video8" "$TMP/sys/class/video4linux/video9"
+    echo "Lenovo 500 RGB Camera: Lenovo 5" > "$TMP/sys/class/video4linux/video8/name"
+    echo "Lenovo 500 RGB Camera: Lenovo 5" > "$TMP/sys/class/video4linux/video9/name"
+    ln -s "$TMP/video8" "$TMP/by-id/$LENOVO-if00-video-index0"
+    ln -s "$TMP/video9" "$TMP/by-id/$LENOVO-if02-video-index0"
+    cat > "$TMP/formater" <<'EOF'
+	[0]: 'MJPG' (Motion-JPEG, compressed)
+		Size: Discrete 1920x1080
+			Interval: Discrete 0.033s (30.000 fps)
+		Size: Discrete 640x360
+			Interval: Discrete 0.033s (30.000 fps)
+EOF
+}
+billeder() { sidste_status | python3 -c 'import json,sys; print(";".join("=".join((k["node"], str(k["billede"]))) for k in json.load(sys.stdin)["kameraer"]))' 2>/dev/null; }
+
+echo "18c. Mørk hal: begge prøvebilleder sorte → uafgjort, formaterne afgør (ikke lysstyrken)"
+lenovo
+# IR-noden kan kun YUYV 640x360; billedet MJPEG 1920x1080 — men står efter IR'en
+cat > "$TMP/formater.video8" <<'EOF'
+	[0]: 'YUYV' (YUYV 4:2:2)
+		Size: Discrete 640x360
+			Interval: Discrete 0.033s (30.000 fps)
+EOF
+: > "$TMP/video8.moerk"; : > "$TMP/video9.moerk"
+modtager "$TMP/modtaget15.flv"
+SEND_VIDEO "$VIDEO_1080"
+start_stream
+vent_sender
+vent_paa 10 sh -c "tail -n 1 '$TMP/status.jsonl' | grep -q '\"kameraValg\": \"uafgjort\"'" || true
+indeholder "billedet sendes (MJPEG 1920x1080 slår YUYV 640x360)" "$(args)" "-i $TMP/video9"
+forvent "IR-enheden bruges aldrig" "$(grep -c "$TMP/video8" "$TMP/ffmpeg.log.args")" "0"
+forvent "status: valget er uafgjort" "$(sidste_status | felt kameraValg)" "uafgjort"
+forvent "status: begge for mørke" "$(billeder)" "video8=moerk;video9=moerk"
+indeholder "for mørkt i loggen" "$(cat "$TMP/stream.log")" "video9: prøvebillede for mørkt til at afgøre det"
+indeholder "uafgjort i loggen" "$(cat "$TMP/stream.log")" "kameravalget er uafgjort"
+stop_stream
+kill "$MODTAGER_PID" 2>/dev/null
+
+echo "18d. Mørk hal: farvekameraet sort, IR-kameraet lyst og gråt (eget IR-lys) → IR'en vinder IKKE"
+lenovo
+: > "$TMP/video8.ir"; : > "$TMP/video9.moerk"
+modtager "$TMP/modtaget16.flv"
+SEND_VIDEO "$VIDEO_1080"
+start_stream
+vent_sender
+indeholder "billedet sendes" "$(args)" "-i $TMP/video9"
+forvent "IR-enheden bruges aldrig" "$(grep -c "$TMP/video8" "$TMP/ffmpeg.log.args")" "0"
+forvent "status: prøven afgjorde det" "$(sidste_status | felt kameraValg)" "proeve"
+forvent "status: IR gråt, billedet for mørkt" "$(billeder)" "video8=graa;video9=moerk"
+stop_stream
+kill "$MODTAGER_PID" 2>/dev/null
+
+echo "18e. Lyset tændes, mens PC'en står ledig → prøven tages igen, farvekameraet vælges"
+lenovo
+: > "$TMP/video8.moerk"; : > "$TMP/video9.moerk"
+svar "$INGEN_SVAR"
+start_stream BT_PROEVE_MOERK=2
+vent_paa 10 grep -q "kameravalget er uafgjort" "$TMP/stream.log" || true
+indeholder "i mørke: uafgjort, interfacet vælger" "$(cat "$TMP/stream.log")" "kamera: Lenovo 500 RGB Camera: Lenovo 5 ($TMP/video8)"
+rm -f "$TMP/video8.moerk" "$TMP/video9.moerk"; : > "$TMP/video8.ir"
+vent_paa 15 grep -q "kamera: Lenovo 500 RGB Camera: Lenovo 5 ($TMP/video9)" "$TMP/stream.log" || true
+indeholder "lyst: farvekameraet vælges, mens PC'en er ledig" "$(cat "$TMP/stream.log")" "kamera: Lenovo 500 RGB Camera: Lenovo 5 ($TMP/video9)"
+indeholder "afgjort i loggen" "$(cat "$TMP/stream.log")" "kameravalget er afgjort af prøvebilledet"
+forvent "intet sendt imens" "$(antal_start)" "0"
+modtager "$TMP/modtaget17.flv"
+SEND_VIDEO "$VIDEO_1080"
+vent_sender
+indeholder "kampen sendes fra farvekameraet" "$(args)" "-i $TMP/video9"
+forvent "status: prøven afgjorde det" "$(sidste_status | felt kameraValg)" "proeve"
+stop_stream
+kill "$MODTAGER_PID" 2>/dev/null
+
+echo "18f. Prøven tages igen før start — og aldrig midt i en udsendelse"
+lenovo
+: > "$TMP/video8.moerk"; : > "$TMP/video9.moerk"
+svar "$INGEN_SVAR"
+start_stream BT_PROEVE_MOERK=999 BT_PROEVE_START=0
+vent_paa 10 grep -q "kameravalget er uafgjort" "$TMP/stream.log" || true
+rm -f "$TMP/video8.moerk" "$TMP/video9.moerk"; : > "$TMP/video8.ir"
+sleep 3
+forvent "ledig: ingen ny prøve før tid" "$(grep -c "video9: prøvebillede i farver" "$TMP/stream.log")" "0"
+modtager "$TMP/modtaget18.flv"
+SEND_VIDEO "$VIDEO_1080"
+vent_sender
+indeholder "ved start: nyt prøvebillede i farver" "$(cat "$TMP/stream.log")" "video9: prøvebillede i farver"
+indeholder "startet på farvekameraet" "$(args)" "-i $TMP/video9"
+forvent "aldrig på IR'en" "$(grep -c "$TMP/video8" "$TMP/ffmpeg.log.args")" "0"
+PROEVER=$(wc -l < "$TMP/ffmpeg.log.proever")
+: > "$TMP/video9.moerk"   # lyset slukkes midt i kampen
+sleep 4
+forvent "ingen prøver, mens der sendes" "$(wc -l < "$TMP/ffmpeg.log.proever")" "$PROEVER"
+forvent "ingen genstart midt i udsendelsen" "$(antal_start)" "1"
+forvent "stadig farvekameraet" "$(sidste_status | felt kameraNode)" "video9 · interface 02"
+stop_stream
+kill "$MODTAGER_PID" 2>/dev/null
+rm -rf "$TMP/sys/class/video4linux/video8" "$TMP/sys/class/video4linux/video9" "$TMP/video8."* "$TMP/video9."*
 
 echo "18. Kun et infrarødt kamera (GREY) → intet kamera, intet sendes"
 rm -f "$TMP/formater"* "$TMP/by-id/"*

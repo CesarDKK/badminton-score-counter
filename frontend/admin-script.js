@@ -3132,11 +3132,15 @@ function livestreamPcStatusHtml(pc, bane) {
         const fra = s.kameraInput || s.kameraNode
             ? ` (fra kameraet ${escapeHtml([s.kameraInput && s.kameraInput.replace('x', '×'), s.kameraNode].filter(Boolean).join(', '))})`
             : '';
-        return `<span class="maerke maerke--igang">● Sender</span> <span class="tekst-daempet">siden kl. ${siden} · ${kamera}${fra}${livestreamFormatTekst(s.format)}${s.koder === 'x264' ? ' · kodes af processoren (uden grafikkortets hjælp)' : ''}${b && b.lyd ? (s.mikrofon ? ' · med lyd' : ' · uden lyd (ingen mikrofon i kameraet)') : ''}</span>`;
+        // Prøvebillederne kunne ikke skille PC'ens kameraer ad (for mørkt i hallen):
+        // valgt efter navn, formater og interface — prøven tages igen før næste start
+        const uafgjort = s.kameraValg === 'uafgjort' ? ' · kameraet valgt uden prøvebillede (for mørkt) — tjek billedet' : '';
+        return `<span class="maerke maerke--igang">● Sender</span> <span class="tekst-daempet">siden kl. ${siden} · ${kamera}${fra}${uafgjort}${livestreamFormatTekst(s.format)}${s.koder === 'x264' ? ' · kodes af processoren (uden grafikkortets hjælp)' : ''}${b && b.lyd ? (s.mikrofon ? ' · med lyd' : ' · uden lyd (ingen mikrofon i kameraet)') : ''}</span>`;
     }
     // "Klar — venter på en kamp" → mærket "Klar" + resten; andre grunde i gult
     const [hoved, rest] = (LS_GRUND[s.grund] || 'Klar').split(' — ');
-    return `<span class="maerke ${hoved === 'Klar' ? 'maerke--neutral' : 'maerke--afventer'}">${escapeHtml(hoved)}</span> <span class="tekst-daempet">${rest ? `${escapeHtml(rest)} · ` : ''}${kamera}</span>`;
+    const uafgjortKlar = s.kameraValg === 'uafgjort' ? ' · kameraet valgt uden prøvebillede (for mørkt) — tages igen før start' : '';
+    return `<span class="maerke ${hoved === 'Klar' ? 'maerke--neutral' : 'maerke--afventer'}">${escapeHtml(hoved)}</span> <span class="tekst-daempet">${rest ? `${escapeHtml(rest)} · ` : ''}${kamera}${uafgjortKlar}</span>`;
 }
 
 // Banekortets tilstand (farven på kortets venstre kant): ingen, afventer, fejl, klar, sender
@@ -3583,7 +3587,8 @@ function livestreamPcKameraValg(bane) {
     if (!pc || (liste.length < 2 && !pc.enhed)) return '';
     const tekst = (k) => [k.navn, k.node && `${k.node}${k.interface ? ` · interface ${k.interface}` : ''}`,
         k.format && k.format.replace('x', '×'),
-        k.billede === 'graa' ? 'gråt billede (infrarødt)' : k.billede === 'farve' ? 'billede i farver' : '']
+        k.billede === 'graa' ? 'gråt billede (infrarødt)' : k.billede === 'farve' ? 'billede i farver'
+            : k.billede === 'moerk' ? 'for mørkt til prøvebillede' : '']
         .filter(Boolean).join(' · ');
     const kendt = liste.some(k => k.id === pc.enhed);
     return `<label><span class="felt-etiket">Kamera på PC'en</span>
