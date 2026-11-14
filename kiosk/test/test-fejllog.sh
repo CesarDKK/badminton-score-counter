@@ -83,6 +83,7 @@ indeholder "oversigt: PC-navnet" "$OV" 'PC-navn: badminton-tv2'
 indeholder "oversigt: opstart -1 frøs" "$OV" '*** IKKE LUKKET NED'
 indeholder "oversigt: opstart 0 kører nu" "$OV" 'kører nu'
 indeholder "oversigt: 'Lige nu' på det kørende system" "$OV" '== Lige nu =='
+indeholder "oversigt: kameraerne (videonoder og links)" "$OV" '/dev/v4l/by-id:'
 OPSTARTER=("$UD"/opstart-*)
 forvent "en fil pr. opstart" "${#OPSTARTER[@]}" 2
 O1=$(cat "$UD"/opstart-001-*.txt)
@@ -102,6 +103,8 @@ PATH="$TMP/bin:$PATH" FL_ROD=$PC bash -c '. "$1/fejllog.sh"; fejllog_saml "$2" "
 OV=$(cat "$UD/OVERSIGT.txt")
 indeholder "disk: den installerede version" "$OV" 'Installeret version: 2026.11.4'
 mangler "disk: ingen 'Lige nu' (PC'en kører ikke)" "$OV" '== Lige nu =='
+indeholder "disk: kameravalget fra journalen" "$OV" 'Livestreamens kameravalg'
+mangler "disk: ingen videonoder (PC'en kører ikke)" "$OV" '/dev/v4l/by-id:'
 mangler "disk: opstart 0 er ikke 'kører nu'" "$OV" 'kører nu'
 K=$(cat "$UD/kiosk.conf.txt")
 mangler "kiosk.conf: WiFi-koden er fjernet" "$K" 'hemmelig123'
