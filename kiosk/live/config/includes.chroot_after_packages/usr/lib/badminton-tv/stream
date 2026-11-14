@@ -7,6 +7,9 @@ Serveren bestemmer alt: PC'en spørger hvert par sekunder med sit adgangslink
 nøgle, og hvad der står i overlayet (navne og stilling). Nøglen ligger kun på
 serveren (admin → Livestream) — aldrig på USB-nøglen.
 
+  - kameraet: aldrig det infrarøde Windows Hello-kamera, der sidder i nogle
+    webcams ved siden af billedet (navnet eller kun gråtoner afslører det);
+    det bedste farvekamera vinder (find_kamera)
   - ffmpeg læser kameraet som MJPEG i den opløsning og med de billeder i
     sekundet, admin har valgt (standard 1280x720 @ 30). Kan kameraet ikke
     det, tages det bedste, det kan derunder (v4l2-ctl --list-formats-ext) —
@@ -98,6 +101,7 @@ SPOERG_FEJL = _tal('BT_SPOERG_FEJL', 15)
 UDEN_SVAR = _tal('BT_UDEN_SVAR', 60)    # sender videre uden svar fra serveren i højst så længe
 GENFORSOEG = [_tal('BT_GENFORSOEG', 5), 15, 30, 60, 120]
 STABIL = _tal('BT_STABIL', 30)          # kørt så længe: fejlen er væk, og forsøgene tælles forfra
+UNDERSOEG_IGEN = _tal('BT_UNDERSOEG_IGEN', 10)  # et kamera, der ikke svarede, spørges igen efter så længe
 VAAPI_TIDLIG = 20       # dør VAAPI-kodningen inden for så mange sekunder: brug CPU'en
 TIMEOUT = 8
 
@@ -141,7 +145,7 @@ def adgangslink(tv_url):
 
 def kamera_navn(sti, enhed):
     """Kameraets navn fra kernen — ellers af by-id-linket."""
-    navn = laes_tekst(f'/sys/class/video4linux/{os.path.basename(enhed)}/name')
+    navn = laes_tekst(os.path.join(SYS, 'class/video4linux', os.path.basename(enhed), 'name'))
     if not navn:
         # by-id-navnet: usb-046d_HD_Pro_Webcam_C920_1234-video-index0 — nyere udev
         # laver også et link med interface-nummer: …_1234-if00-video-index0
@@ -150,29 +154,114 @@ def kamera_navn(sti, enhed):
     return navn[:100]
 
 
-def find_kamera(formater=None):
-    """(enhed, navn) for det USB-kamera, der kan sende billede — eller (None, None).
-    Ét kamera kan vise sig som flere videoenheder: Brio 4K har et infrarødt kamera
-    (Windows Hello, kun GREY) ved siden af billedet, og udev laver både et link med
-    interface-nummer (-if00-) og et uden, så det første link er ikke altid billedet.
-    Tages den første enhed (i linkenes rækkefølge, hvert kamera én gang), der har
-    MJPEG — ellers YUYV; har ingen et format, vi kan sende (eller v4l2-ctl svarede
-    ikke), den første som før. formater: enhed -> kamera_formater(); Sender giver
-    sin cache med, så hvert kamera kun spørges én gang."""
-    formater = formater or kamera_formater
+# Det infrarøde kamera til Windows Hello (og dybdekameraer) står i navnet på
+# enheden, USB-interfacet eller by-id-linket: "Integrated IR Camera", "…_IR_Camera…"
+IR_NAVN = re.compile(r'(^|[^a-z0-9])(ir|infra ?red|infrarød|hello|depth)([^a-z0-9]|$)', re.I)
+# Under denne størrelse er et kamera med farveformat sandsynligvis det infrarøde
+# (Windows Hello-kameraer tilbyder ofte YUYV i 340x340, 640x360 eller 640x400) —
+# det vælges kun, hvis intet andet kamera kan noget
+STORT = 1280 * 720
+
+
+def er_infraroed(sti, enhed):
+    """Navnet på enheden, USB-interfacet eller linket siger infrarødt/Hello/dybde."""
+    v4l = os.path.join(SYS, 'class/video4linux', os.path.basename(enhed))
+    navne = [laes_tekst(os.path.join(v4l, 'name')), laes_tekst(os.path.join(v4l, 'device/interface')),
+             os.path.basename(sti)]
+    return any(n and IR_NAVN.search(n.replace('_', ' ').replace('-', ' ')) for n in navne)
+
+
+_fravalgt = set()   # (enhed, grund) — hvert fravalg logges én gang
+
+
+def kamera_links():
+    """[(by-id-link, enhed)] — hvert kamera én gang, med det første link i sorteret
+    rækkefølge: linket med interface-nummer (…-if00-video-index0) før det uden."""
     kandidater, set_ = [], set()
     for sti in sorted(glob.glob(KAMERA_GLOB)):
         enhed = os.path.realpath(sti)
         if enhed not in set_:
             set_.add(enhed)
             kandidater.append((sti, enhed))
+    return kandidater
+
+
+def interface_nr(sti):
+    """USB-interfacet fra by-id-linket ('00' for …-if00-video-index0), ellers None."""
+    m = re.search(r'-if(\d+)-video-index\d+$', os.path.basename(sti or ''))
+    return m.group(1) if m else None
+
+
+def find_kamera(undersoeg=None, proev=None, valgt=None):
+    """(enhed, navn) for det USB-kamera, der skal sende billedet — eller (None, None).
+    Ét kamera kan vise sig som flere videoenheder: Windows Hello-kameraer (Lenovo 500
+    FHD, Brio 4K …) har et infrarødt kamera ved siden af billedet — ofte med SAMME
+    navn (kernen klipper det ved 31 tegn) og måske samme formatliste — og udev laver
+    både et link med interface-nummer (-if00-) og et uden.
+
+    valgt: by-id-linket, admin har valgt for PC'en — det bruges, når det findes.
+    Ellers aldrig det infrarøde: enheder med IR/Infrared/Hello/Depth i navnet og
+    enheder, der kun har gråtoner (GREY, Y8, Y16 …), springes over. Er der derefter
+    flere, optages et prøvebillede fra hver (proev): et infrarødt billede har ingen
+    farver, og en enhed med farver vinder altid over en grå. Så vinder:
+      1. et farvekamera i mindst 1280x720 — MJPEG før YUYV, så den største opløsning
+      2. en enhed, v4l2-ctl ikke svarede for (fx endnu ikke klar ved opstart) —
+         den spørges igen hver gang, og svarer den med et godt format, skiftes der
+      3. et farvekamera under 1280x720 (et billigt kamera — eller et IR-kamera,
+         der også kan YUYV; det tages kun, når der ikke er andet)
+      4. ved lige: det laveste USB-interface (billedet er typisk if00, IR'en if02)
+    undersoeg: enhed -> kamera_undersoeg(); proev: (enhed, formater) -> 'farve',
+    'graa' eller None (kunne ikke optage). Sender giver sine caches med."""
+    undersoeg = undersoeg or kamera_undersoeg
+    kandidater = kamera_links()
     if not kandidater:
         return None, None
-    for input_ in INPUT_ORDEN:
-        for sti, enhed in kandidater:
-            if formater(enhed).get(input_):
+
+    if valgt:
+        for sti in sorted(glob.glob(KAMERA_GLOB)):
+            if os.path.basename(sti) == valgt:
+                enhed = os.path.realpath(sti)
+                if (enhed, 'valgt') not in _fravalgt:
+                    _fravalgt.add((enhed, 'valgt'))
+                    log(f'{enhed}: valgt i admin ({valgt})')
                 return enhed, kamera_navn(sti, enhed)
-    sti, enhed = kandidater[0]
+        if (valgt, 'mangler') not in _fravalgt:
+            _fravalgt.add((valgt, 'mangler'))
+            log(f'kameraet valgt i admin ({valgt}) findes ikke — vælger selv')
+
+    def fravalg(enhed, grund):
+        if (enhed, grund) not in _fravalgt:
+            _fravalgt.add((enhed, grund))
+            log(f'{enhed}: springes over — {grund}')
+
+    # Et infrarødt link til en enhed gælder enheden (Brio: et link med og et uden interface)
+    ir = {enhed for sti, enhed in kandidater if er_infraroed(sti, enhed)}
+    rest = []
+    for nr, (sti, enhed) in enumerate(kandidater):
+        if enhed in ir:
+            fravalg(enhed, 'infrarødt kamera (Windows Hello/dybde) efter navnet')
+            continue
+        formater, navne = undersoeg(enhed)
+        farve = [n for n in INPUT_ORDEN if formater.get(n)]
+        if navne and not navne & INPUTFORMATER.keys():
+            fravalg(enhed, f'kun {", ".join(sorted(navne))} — gråtoner (infrarødt kamera) eller '
+                           f'formater, vi ikke kan sende')
+            continue
+        if farve:
+            pixels = max(b * h for n in farve for (b, h) in formater[n])
+            noegle = (2 if pixels >= STORT else 0, 'mjpeg' in farve, pixels, -nr)
+        else:
+            noegle = (1, False, 0, -nr)
+        rest.append((noegle, sti, enhed, formater))
+    if not rest:
+        return None, None
+    # Flere tilbage: prøvebilledet skiller billedet fra det infrarøde kamera, også
+    # når de hedder det samme og har samme formater. Et kamera, der ikke kunne
+    # optage (None — fx i brug), tælles ikke som gråt
+    if len(rest) > 1 and proev:
+        rest = [((proev(enhed, formater) != 'graa',) + noegle, sti, enhed, formater)
+                for noegle, sti, enhed, formater in rest]
+    _, sti, enhed, _ = max(rest, key=lambda r: r[0])
     return enhed, kamera_navn(sti, enhed)
 
 
@@ -199,15 +288,24 @@ RAA_MIN_BILLEDER = 20   # råt billede: hellere en lavere opløsning end 5–10 
 def kamera_formater(enhed):
     """Kameraets formater pr. inputformat: {'mjpeg': {(bredde, hoejde): [billeder
     i sekundet, …]}, 'yuyv422': …} — {} når v4l2-ctl ikke kunne spørge."""
+    return kamera_undersoeg(enhed)[0]
+
+
+def kamera_undersoeg(enhed):
+    """(formater, formatnavne): kamera_formater() — og alle de formater, v4l2-ctl
+    nævnte (fx {'GREY'} for et infrarødt kamera; tom: kameraet svarede ikke, fx
+    fordi det endnu ikke var klar ved opstart)."""
     try:
         ud = subprocess.run([V4L2CTL, '-d', enhed, '--list-formats-ext'],
                             capture_output=True, text=True, timeout=5).stdout
     except (OSError, subprocess.SubprocessError):
-        return {}
+        return {}, set()
     alle, formater, str_ = {}, None, None
+    navne = set()
     for linje in ud.splitlines():
         m = re.search(r"\[\d+\]: '(\w+)'", linje)
         if m:
+            navne.add(m.group(1))
             navn = INPUTFORMATER.get(m.group(1))
             formater, str_ = alle.setdefault(navn, {}) if navn else None, None
             continue
@@ -222,7 +320,40 @@ def kamera_formater(enhed):
         if m and str_:
             formater[str_].add(round(float(m.group(1))))
     alle = {n: {s: sorted(r) for s, r in f.items() if r} for n, f in alle.items()}
-    return {n: f for n, f in alle.items() if f}
+    return {n: f for n, f in alle.items() if f}, navne
+
+
+# Prøvebilledet: farvemætningen (gennemsnitlig afstand fra gråt i U og V, 0–128).
+# Et infrarødt billede er gråt (U = V = 128, højst lidt støj fra komprimeringen);
+# en hal i farver — også en mørk — ligger langt over
+GRAA_KROMA = 2.0
+PROEVE_STR = (64, 36)       # billedet skaleres ned: kun farverne tæller
+PROEVE_BILLEDER = 8         # de første springes over (eksponering, IR-lyset tænder)
+
+
+def proev_billede(enhed, formater):
+    """('farve' | 'graa' | None, kroma): optag et par billeder fra enheden og mål
+    farvemætningen. None: kunne ikke optage (i brug, ikke klar …)."""
+    input_, f = vaelg_input(formater)
+    args = [FFMPEG, '-hide_banner', '-loglevel', 'error', '-f', 'v4l2', '-input_format', input_]
+    if f:
+        # Den mindste størrelse, kameraet har i formatet — hurtigst
+        (b, h), _ = min(f.items(), key=lambda x: x[0][0] * x[0][1])
+        args += ['-video_size', f'{b}x{h}']
+    args += ['-i', enhed, '-frames:v', str(PROEVE_BILLEDER),
+             '-vf', f'scale={PROEVE_STR[0]}:{PROEVE_STR[1]},format=yuv444p', '-f', 'rawvideo', '-']
+    try:
+        ud = subprocess.run(args, capture_output=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None, None
+    flade = PROEVE_STR[0] * PROEVE_STR[1]
+    billeder = [ud[i:i + 3 * flade] for i in range(0, len(ud) - 3 * flade + 1, 3 * flade)]
+    if len(billeder) < 2:
+        return None, None
+    # Det mest farverige af de sidste billeder: Hello-kameraer tænder IR-lyset hvert
+    # andet billede, men grå er de alle; et farvekamera har farver i dem alle
+    kroma = max(sum(abs(x - 128) for x in b[flade:]) / (2 * flade) for b in billeder[len(billeder) // 2:])
+    return ('farve' if kroma >= GRAA_KROMA else 'graa'), round(kroma, 1)
 
 
 def vaelg_input(alle, afvist=()):
@@ -625,7 +756,10 @@ class Stream:
         self.naeste = 0             # tidligst næste start efter en fejl
         self.koder = 'vaapi' if os.path.exists(RENDER) else 'x264'
         self.uden_mikrofon = set()  # kameraer, hvis mikrofon ikke kunne bruges
-        self.formater = {}          # enhed -> kamera_formater() (spørges én gang)
+        self.formater = {}          # enhed -> kamera_undersoeg() (et svar gemmes)
+        self.uden_svar = {}         # enhed -> hvornår v4l2-ctl sidst ikke svarede
+        self.billede = {}           # (enhed, ctime) -> (proev_billede(), kroma) — et svar gemmes
+        self.uden_billede = {}      # enhed -> hvornår prøvebilledet sidst ikke kunne optages
         self.afvist = {}            # enhed -> inputformater, kameraet ikke kunne åbnes i
         self.linjer = collections.deque(maxlen=20)
 
@@ -653,18 +787,99 @@ class Stream:
             self.linjer.append(linje)
             log(f'ffmpeg: {linje}')
 
+    def kameraets_info(self, enhed):
+        """kamera_undersoeg() for enheden. Et svar gemmes (og logges) én gang pr. kamera.
+        Et tomt svar gemmes IKKE: v4l2-ctl kan spørge, før kameraet er klar ved opstart,
+        og blev "ingen formater" husket, vandt et infrarødt kamera ved siden af for
+        altid. Det spørges igen (højst hvert UNDERSOEG_IGEN sekund)."""
+        if enhed in self.formater:
+            return self.formater[enhed]
+        if time.monotonic() - self.uden_svar.get(enhed, -UNDERSOEG_IGEN) < UNDERSOEG_IGEN:
+            return {}, set()
+        formater, navne = kamera_undersoeg(enhed)
+        if not navne:
+            if enhed not in self.uden_svar:
+                log(f'{enhed}: v4l2-ctl svarede ikke (kameraet er måske ikke klar endnu) — spørges igen')
+            self.uden_svar[enhed] = time.monotonic()
+            return formater, navne
+        self.uden_svar.pop(enhed, None)
+        self.formater[enhed] = (formater, navne)
+        for n in INPUT_ORDEN:
+            if formater.get(n):
+                log(f'{enhed}: ' + ('kameraet kan: ' if n == 'mjpeg' else f'kameraet kan ({INPUT_NAVN[n]}): ') +
+                    ', '.join(f'{b}x{h}@{max(r)}' for (b, h), r in sorted(formater[n].items())))
+        if not formater:
+            log(f'{enhed}: kan kun {", ".join(sorted(navne))} — intet, vi kan sende')
+        return formater, navne
+
     def kameraets_formater(self, enhed):
-        """kamera_formater() for enheden — spørges (og logges) én gang pr. kamera."""
-        if enhed not in self.formater:
-            self.formater[enhed] = kamera_formater(enhed)
+        """kamera_formater() for enheden (fra kameraets_info)."""
+        return self.kameraets_info(enhed)[0]
+
+    def _billede_noegle(self, enhed):
+        try:
+            return enhed, os.stat(enhed).st_ctime   # sat i igen: optages igen
+        except OSError:
+            return enhed, None
+
+    def kameraets_billede(self, enhed, formater):
+        """proev_billede() for enheden: 'farve', 'graa' eller None. Et svar gemmes,
+        til kameraet sættes i igen; kunne der ikke optages, prøves igen senere. Den
+        enhed, der sender lige nu, er i brug — dér bruges det gemte svar."""
+        noegle = self._billede_noegle(enhed)
+        if noegle in self.billede:
+            return self.billede[noegle][0]
+        if self.koerer() and self.opsaetning and self.opsaetning[0] == enhed:
+            return None
+        if time.monotonic() - self.uden_billede.get(enhed, -UNDERSOEG_IGEN) < UNDERSOEG_IGEN:
+            return None
+        res, kroma = proev_billede(enhed, formater)
+        if res is None:
+            if enhed not in self.uden_billede:
+                log(f'{enhed}: prøvebilledet kunne ikke optages — prøver igen')
+            self.uden_billede[enhed] = time.monotonic()
+            return None
+        self.uden_billede.pop(enhed, None)
+        self.billede[noegle] = (res, kroma)
+        log(f'{enhed}: prøvebillede ' + (f'i farver (farvemætning {kroma})' if res == 'farve'
+                                          else f'GRÅT (farvemætning {kroma}) — et infrarødt kamera'))
+        return res
+
+    def kamera_liste(self):
+        """Til admin: PC'ens kameraer (højst 6), så et bestemt kan vælges, hvis det
+        automatiske valg en dag tager fejl: by-id-link, navn, interface, bedste
+        format og prøvebilledet (hvis det er optaget)."""
+        liste = []
+        for sti, enhed in kamera_links()[:6]:
+            formater = self.formater.get(enhed, ({}, set()))[0]
+            bedste = None
             for n in INPUT_ORDEN:
-                if self.formater[enhed].get(n):
-                    log(('kameraet kan: ' if n == 'mjpeg' else f'kameraet kan ({INPUT_NAVN[n]}): ') +
-                        ', '.join(f'{b}x{h}@{max(r)}' for (b, h), r in sorted(self.formater[enhed][n].items())))
-            if not self.formater[enhed]:
-                log(f'{enhed}: ingen formater, vi kan sende (v4l2-ctl svarede ikke, eller kun '
-                    f'fx GREY) — vælges enheden, prøves MJPEG, så YUYV')
-        return self.formater[enhed]
+                if formater.get(n):
+                    b, h = max(formater[n], key=lambda s: s[0] * s[1])
+                    bedste = f'{INPUT_NAVN[n]} {b}x{h}'
+                    break
+            billede = self.billede.get(self._billede_noegle(enhed))
+            liste.append({'id': os.path.basename(sti), 'navn': kamera_navn(sti, enhed),
+                          'node': os.path.basename(enhed), 'interface': interface_nr(sti),
+                          'format': bedste, 'billede': billede[0] if billede else None})
+        return liste
+
+    def node_tekst(self):
+        """Til admin: den node, der sender, fx 'video0 · interface 00'."""
+        if not self.koerer() or not self.opsaetning:
+            return None
+        enhed = self.opsaetning[0]
+        sti = next((s for s, e in kamera_links() if e == enhed), None)
+        nr = interface_nr(sti)
+        return os.path.basename(enhed) + (f' · interface {nr}' if nr else '')
+
+    def input_tekst(self):
+        """Til admin: det, kameraet leverer til den kørende stream, fx 'MJPEG 1920x1080'
+        (et infrarødt kamera ses som fx 'YUYV 640x360')."""
+        if not self.koerer() or not self.fmt:
+            return None
+        f = dict(self.fmt)
+        return f'{INPUT_NAVN.get(f["input"], f["input"])} {f["kamera"][0]}x{f["kamera"][1]}'
 
     def formater_tekst(self, enhed):
         """Til admin: det, kameraet selv siger, det kan — de største først, fx
@@ -841,6 +1056,7 @@ def main():
     sidste_svar = time.monotonic()
     sidst_kamera = None
     sidst_anden = False
+    valgt = None            # by-id-linket, admin har valgt for PC'en (serverens seneste svar)
     while not stop.is_set():
         tv_url, navn = kiosk_env()
         server, token = adgangslink(tv_url)
@@ -848,7 +1064,9 @@ def main():
             log('TV_URL er ikke et adgangslink (…/t/<kode>) — kan ikke spørge serveren')
             stop.wait(SPOERG_INTET)
             continue
-        enhed, kamera = find_kamera(stream.kameraets_formater)
+        # Hver gang: svarer et kamera først nu (eller sættes et bedre i), skiftes der —
+        # også midt i en udsendelse (start() genstarter ffmpeg på den nye enhed)
+        enhed, kamera = find_kamera(stream.kameraets_info, stream.kameraets_billede, valgt)
         # Kameraet taget ud og sat i igen (fx i et andet stik): enheden oprettes på
         # ny — og formaterne kan være andre (USB 1.1-fart i en hub har intet MJPEG)
         try:
@@ -865,6 +1083,7 @@ def main():
             stream.formater.clear()
             stream.afvist.clear()
             stream.uden_mikrofon.clear()
+            stream.uden_svar.clear()
         # Døde ffmpeg siden sidst? Så skal fejlen med i statussen — og læses,
         # før start() rydder op
         stream.tjek()
@@ -872,7 +1091,9 @@ def main():
             'navn': navn, 'kioskVersion': version, 'kamera': kamera,
             'sender': stream.koerer(), 'koder': stream.koder, 'fejl': stream.fejl,
             'format': stream.format_tekst(), 'mikrofon': stream.mikrofon_navn(), 'pcId': pc_id,
-            'kameraFormater': stream.formater_tekst(enhed), 'fejllog': stream.fejllog})
+            'kameraFormater': stream.formater_tekst(enhed), 'fejllog': stream.fejllog,
+            'kameraInput': stream.input_tekst(), 'kameraNode': stream.node_tekst(),
+            'kameraer': stream.kamera_liste()})
         if svar is None:
             if stream.koerer() and time.monotonic() - sidste_svar > UDEN_SVAR:
                 log(f'intet svar fra serveren i {UDEN_SVAR:.0f} s — stopper')
@@ -880,6 +1101,8 @@ def main():
             interval = SPOERG_SENDER if stream.koerer() else SPOERG_FEJL
         else:
             sidste_svar = time.monotonic()
+            k = svar.get('kameraEnhed')
+            valgt = k if isinstance(k, str) and re.fullmatch(r'[\w.:+-]{1,160}', k) else None
             anden = svar.get('grund') == 'anden-pc'
             if anden != sidst_anden:
                 log('en anden TV-PC på samme adgangslink sender banen — sender ikke' if anden

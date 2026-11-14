@@ -1167,6 +1167,14 @@ class BadmintonAPI {
         });
     }
 
+    // Hvilket af TV-PC'ens kameraer der sender (by-id-link) — null: PC'en vælger selv
+    async setLivestreamPcKamera(tokenId, enhed) {
+        return this.request(`/livestream/kamera/${encodeURIComponent(tokenId)}`, {
+            method: 'PUT',
+            body: JSON.stringify({ enhed })
+        });
+    }
+
     async createDeviceToken(name, destination, locked, showQrOnTv) {
         const body = { name, destination, locked };
         if (showQrOnTv !== undefined) body.showQrOnTv = showQrOnTv;

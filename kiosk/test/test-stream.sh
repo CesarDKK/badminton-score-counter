@@ -18,6 +18,9 @@
 #  13. — og formaterne ukendte    → MJPEG afvises af kameraet, så YUYV uden fejl
 #  14. MJPEG hedder JPEG, kun 720p → MJPEG i 720p, når 1080p er valgt
 #  15. kameraet er flere enheder   → den med MJPEG tages, ikke det infrarøde først i rækken
+#  16. Windows Hello: IR kan YUYV  → billedet, også når det ikke svarer ved opstart
+#  17. IR-navn med MJPEG           → afvist på navnet; billedets YUYV tages
+#  18. kun et infrarødt kamera     → intet kamera, intet sendes
 #
 # Køres i en debian:trixie-container (henter ffmpeg, python3, Pillow og skrifterne):
 #   docker run --rm -v "$PWD/kiosk:/src" debian:trixie bash /src/test/test-stream.sh
@@ -118,8 +121,10 @@ while [ $# -gt 0 ]; do
             fi
             shift
         done
+        # Et infrarødt kamera ($enhed.ir findes): samme testbillede uden farver
+        graa=; [ -e "$2.ir" ] && graa=,hue=s=0
         shift 2
-        ud+=(-re -f lavfi -i "testsrc2=size=$str:rate=$rate")
+        ud+=(-re -f lavfi -i "testsrc2=size=$str:rate=$rate$graa")
         continue
     fi
     if [ "$1" = -f ] && [ "${2:-}" = alsa ]; then
@@ -134,13 +139,16 @@ while [ $# -gt 0 ]; do
     fi
     ud+=("$1"); shift
 done
+# Prøvebilledet (find_kamera): et par billeder, tælles ikke som en udsendelse
+case " $alle " in *" -frames:v "*) echo "$alle" >> "$FFMPEG_LOG.proever"; exec ffmpeg "${ud[@]}" ;; esac
 echo "$$" >> "$FFMPEG_LOG"
 printf '%s\n' "$alle" >> "$FFMPEG_LOG.args"
 exec ffmpeg "${ud[@]}"
 EOF
 chmod +x "$TMP/bin/ffmpeg-falsk"
 # v4l2-ctl --list-formats-ext: kameraets formater fra $TMP/formater (uden: ukendt)
-# — eller $TMP/formater.<enhed> (fx formater.video1), når enhederne er forskellige
+# — eller $TMP/formater.<enhed> (fx formater.video1), når enhederne er forskellige.
+# $TMP/formater.<enhed>.tavs: antal gange, enheden ikke svarer først (ikke klar ved opstart)
 cat > "$TMP/bin/v4l2-ctl" <<'EOF'
 #!/bin/sh
 enhed=
@@ -149,6 +157,11 @@ while [ $# -gt 0 ]; do
     shift
 done
 if [ -n "${liste:-}" ]; then
+    echo "$enhed" >> "$FORMATER.kald"
+    if [ -n "$enhed" ] && [ -e "$FORMATER.$enhed.tavs" ]; then
+        n=$(cat "$FORMATER.$enhed.tavs")
+        if [ "$n" -gt 0 ]; then echo $((n - 1)) > "$FORMATER.$enhed.tavs"; exit 0; fi
+    fi
     if [ -n "$enhed" ] && [ -e "$FORMATER.$enhed" ]; then cat "$FORMATER.$enhed"; else cat "$FORMATER" 2>/dev/null; fi
 fi
 exit 0
@@ -485,6 +498,158 @@ forvent "ingen fejl til admin" "$(sidste_status | felt fejl)" ""
 forvent "sender" "$(sidste_status | felt sender)" "True"
 stop_stream
 kill "$MODTAGER_PID" 2>/dev/null
+
+echo "16. Windows Hello-kamera: IR-enheden kan YUYV og står først, billedet svarer ikke ved opstart"
+# Lyngby 2026-11-14: streamen sendte det infrarøde billede (gråt, blinkende). Svarede
+# v4l2-ctl ikke for farvekameraet første gang, blev "ingen formater" husket, og
+# IR-enheden (YUYV 640x360) vandt for altid
+rm -f "$TMP/formater"* "$TMP/by-id/"*
+: > "$TMP/video3"; : > "$TMP/video4"
+ln -s "$TMP/video3" "$TMP/by-id/usb-0bda_FHD_Webcam_200901010001-if00-video-index0"
+ln -s "$TMP/video3" "$TMP/by-id/usb-0bda_FHD_Webcam_200901010001-video-index0"
+ln -s "$TMP/video4" "$TMP/by-id/usb-0bda_FHD_Webcam_200901010001-if02-video-index0"
+cat > "$TMP/formater.video3" <<'EOF'
+	[0]: 'YUYV' (YUYV 4:2:2)
+		Size: Discrete 640x360
+			Interval: Discrete 0.033s (30.000 fps)
+EOF
+cat > "$TMP/formater.video4" <<'EOF'
+	[0]: 'MJPG' (Motion-JPEG, compressed)
+		Size: Discrete 1920x1080
+			Interval: Discrete 0.033s (30.000 fps)
+	[1]: 'YUYV' (YUYV 4:2:2)
+		Size: Discrete 640x480
+			Interval: Discrete 0.033s (30.000 fps)
+EOF
+echo 2 > "$TMP/formater.video4.tavs"
+modtager "$TMP/modtaget11.flv"
+SEND_VIDEO "$VIDEO_1080"
+start_stream BT_UNDERSOEG_IGEN=1
+vent_sender
+vent_paa 15 sh -c "grep -q 'video4: kameraet kan: 1920x1080@30' '$TMP/stream.log'" || true
+vent_paa 10 sh -c "tail -n 1 '$TMP/status.jsonl' | grep -q 'MJPEG 1920x1080'" || true
+forvent "IR-enheden bruges aldrig" "$(grep -c "$TMP/video3" "$TMP/ffmpeg.log.args")" "0"
+indeholder "billedet sendes" "$(args)" "-i $TMP/video4"
+forvent "status: fra kameraet MJPEG 1920x1080" "$(sidste_status | felt kameraInput)" "MJPEG 1920x1080"
+indeholder "det tavse kamera spørges igen" "$(cat "$TMP/stream.log")" "video4: v4l2-ctl svarede ikke"
+forvent "spurgt igen, til det svarede (mindst 3 gange)" "$([ "$(grep -c video4 "$TMP/formater.kald")" -ge 3 ] && echo ja)" "ja"
+forvent "ingen fejl til admin" "$(sidste_status | felt fejl)" ""
+stop_stream
+kill "$MODTAGER_PID" 2>/dev/null
+
+echo "17. IR-kameraet afsløres af navnet — også når det kan MJPEG, og billedet kun YUYV"
+rm -f "$TMP/formater"* "$TMP/by-id/"*
+: > "$TMP/video5"; : > "$TMP/video6"
+mkdir -p "$TMP/sys/class/video4linux/video5" "$TMP/sys/class/video4linux/video6"
+echo "Integrated IR Camera: Integrate" > "$TMP/sys/class/video4linux/video5/name"
+echo "Integrated Camera: Integrated C" > "$TMP/sys/class/video4linux/video6/name"
+ln -s "$TMP/video5" "$TMP/by-id/usb-5986_Integrated_Camera_0001-if02-video-index0"
+ln -s "$TMP/video6" "$TMP/by-id/usb-5986_Integrated_Camera_0001-if04-video-index0"
+cat > "$TMP/formater.video5" <<'EOF'
+	[0]: 'MJPG' (Motion-JPEG, compressed)
+		Size: Discrete 640x400
+			Interval: Discrete 0.033s (30.000 fps)
+EOF
+cat > "$TMP/formater.video6" <<'EOF'
+	[0]: 'YUYV' (YUYV 4:2:2)
+		Size: Discrete 1280x720
+			Interval: Discrete 0.033s (30.000 fps)
+		Size: Discrete 640x480
+			Interval: Discrete 0.033s (30.000 fps)
+EOF
+modtager "$TMP/modtaget12.flv"
+SEND_VIDEO "$VIDEO_1080"
+start_stream
+vent_sender
+forvent "IR-enheden bruges aldrig" "$(grep -c "$TMP/video5" "$TMP/ffmpeg.log.args")" "0"
+indeholder "billedet sendes" "$(args)" "-input_format yuyv422 -video_size 1280x720"
+forvent "status: kameraets navn" "$(sidste_status | felt kamera)" "Integrated Camera: Integrated C"
+forvent "status: fra kameraet YUYV 1280x720" "$(sidste_status | felt kameraInput)" "YUYV 1280x720"
+indeholder "fravalget i loggen" "$(cat "$TMP/stream.log")" "video5: springes over — infrarødt kamera"
+stop_stream
+kill "$MODTAGER_PID" 2>/dev/null
+rm -rf "$TMP/sys/class/video4linux/video5" "$TMP/sys/class/video4linux/video6"
+
+echo "18a. (Lenovo 500 FHD) samme navn og samme formater — prøvebilledet afgør det"
+# Lenovo 500 FHD: kernen klipper navnet ved 31 tegn, så billedet og IR-kameraet
+# hedder det samme, og her har de også samme formater. IR'en står først (if00)
+rm -f "$TMP/formater"* "$TMP/by-id/"* "$TMP/ffmpeg.log.proever"
+: > "$TMP/video8"; : > "$TMP/video9"; : > "$TMP/video8.ir"
+mkdir -p "$TMP/sys/class/video4linux/video8" "$TMP/sys/class/video4linux/video9"
+echo "Lenovo 500 RGB Camera: Lenovo 5" > "$TMP/sys/class/video4linux/video8/name"
+echo "Lenovo 500 RGB Camera: Lenovo 5" > "$TMP/sys/class/video4linux/video9/name"
+LENOVO=usb-17ef_Lenovo_500_RGB_Camera_SN0001
+ln -s "$TMP/video8" "$TMP/by-id/$LENOVO-if00-video-index0"
+ln -s "$TMP/video9" "$TMP/by-id/$LENOVO-if02-video-index0"
+ln -s "$TMP/video8" "$TMP/by-id/$LENOVO-video-index0"
+cat > "$TMP/formater" <<'EOF'
+	[0]: 'MJPG' (Motion-JPEG, compressed)
+		Size: Discrete 1920x1080
+			Interval: Discrete 0.033s (30.000 fps)
+		Size: Discrete 640x360
+			Interval: Discrete 0.033s (30.000 fps)
+	[1]: 'YUYV' (YUYV 4:2:2)
+		Size: Discrete 640x480
+			Interval: Discrete 0.033s (30.000 fps)
+EOF
+modtager "$TMP/modtaget13.flv"
+SEND_VIDEO "$VIDEO_1080"
+start_stream
+vent_sender
+vent_paa 10 sh -c "tail -n 1 '$TMP/status.jsonl' | grep -q 'video9 · interface 02'" || true
+forvent "IR-enheden bruges aldrig" "$(grep -c "$TMP/video8" "$TMP/ffmpeg.log.args")" "0"
+indeholder "billedet sendes" "$(args)" "-i $TMP/video9"
+indeholder "IR-prøvebilledet er gråt" "$(cat "$TMP/stream.log")" "video8: prøvebillede GRÅT"
+indeholder "billedets prøvebillede har farver" "$(cat "$TMP/stream.log")" "video9: prøvebillede i farver"
+forvent "prøvebilledet i den mindste størrelse" "$(grep -c -- '-video_size 640x360' "$TMP/ffmpeg.log.proever")" "2"
+forvent "status: noden, der sender" "$(sidste_status | felt kameraNode)" "video9 · interface 02"
+KAMERAER=$(sidste_status | python3 -c 'import json,sys; print(";".join("|".join(str(k[f]) for f in ("id", "node", "interface", "format", "billede")) for k in json.load(sys.stdin)["kameraer"]))')
+forvent "status: PC'ens kameraer til admins valg" "$KAMERAER" \
+    "$LENOVO-if00-video-index0|video8|00|MJPEG 1920x1080|graa;$LENOVO-if02-video-index0|video9|02|MJPEG 1920x1080|farve"
+forvent "ingen fejl til admin" "$(sidste_status | felt fejl)" ""
+stop_stream
+kill "$MODTAGER_PID" 2>/dev/null
+
+echo "18b. Admin har valgt et bestemt kamera på PC'en — det bruges (også midt i en udsendelse)"
+modtager "$TMP/modtaget14.flv"
+SEND_VIDEO "$VIDEO_1080"
+start_stream
+vent_sender
+indeholder "først det automatiske valg" "$(args)" "-i $TMP/video9"
+python3 - "$TMP/svar.json" "$LENOVO-if00-video-index0" <<'EOF'
+import json, sys
+d = json.load(open(sys.argv[1])); d['kameraEnhed'] = sys.argv[2]; json.dump(d, open(sys.argv[1], 'w'))
+EOF
+vent_paa 15 sh -c "tail -n 1 '$TMP/ffmpeg.log.args' | grep -q -- '-i $TMP/video8 '" || true
+indeholder "admins valg vinder (genstartet på den valgte enhed)" "$(args)" "-i $TMP/video8"
+indeholder "valget i loggen" "$(cat "$TMP/stream.log")" "valgt i admin ($LENOVO-if00-video-index0)"
+python3 - "$TMP/svar.json" <<'EOF'
+import json, sys
+d = json.load(open(sys.argv[1])); d['kameraEnhed'] = 'usb-0000_Findes_ikke-if00-video-index0'; json.dump(d, open(sys.argv[1], 'w'))
+EOF
+vent_paa 15 sh -c "tail -n 1 '$TMP/ffmpeg.log.args' | grep -q -- '-i $TMP/video9 '" || true
+indeholder "et valgt kamera, der ikke findes: PC'en vælger selv" "$(args)" "-i $TMP/video9"
+stop_stream
+kill "$MODTAGER_PID" 2>/dev/null
+rm -rf "$TMP/sys/class/video4linux/video8" "$TMP/sys/class/video4linux/video9"
+
+echo "18. Kun et infrarødt kamera (GREY) → intet kamera, intet sendes"
+rm -f "$TMP/formater"* "$TMP/by-id/"*
+: > "$TMP/video7"
+ln -s "$TMP/video7" "$TMP/by-id/usb-046d_Logitech_BRIO_ABCDEF12-if03-video-index0"
+cat > "$TMP/formater.video7" <<'EOF'
+	[0]: 'GREY' (8-bit Greyscale)
+		Size: Discrete 340x340
+			Interval: Discrete 0.033s (30.000 fps)
+EOF
+SEND_VIDEO "$VIDEO_1080"
+start_stream
+vent_paa 10 sh -c "[ -s '$TMP/status.jsonl' ]" || true
+vent_paa 5 sh -c "grep -q 'springes over' '$TMP/stream.log'" || true
+forvent "status: intet kamera" "$(sidste_status | felt kamera)" ""
+forvent "ffmpeg startes ikke" "$(antal_start)" "0"
+indeholder "fravalget i loggen" "$(cat "$TMP/stream.log")" "kun GREY"
+stop_stream
 
 echo
 if [ "$FEJL" -eq 0 ]; then echo "Alle test bestået"; else echo "$FEJL fejl"; tail -n 30 "$TMP/stream.log"; fi
