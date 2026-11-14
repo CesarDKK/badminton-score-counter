@@ -8,7 +8,7 @@ const { clubAdminAuth } = require('../middleware/clubAdminAuth');
 const { requirePage } = require('../middleware/pagePermission');
 const { klientIp, uploadLimiter } = require('../middleware/rateLimiter');
 const upload = require('../config/multer');
-const { bevarKlub } = require('../config/tenantPools');
+const { bevarKlub, currentTenant } = require('../config/tenantPools');
 const { validateImageMagic } = require('../config/imageUpload');
 const { UPLOAD_DIR, klubMappe } = require('../config/sponsorFiler');
 const { gyldigtToken } = require('../screens/pcRapport');
@@ -91,7 +91,7 @@ function ytGlemPauser(tenant) {
 // Returnerer { url, noegle } at sende til — eller null (så bruges den
 // indtastede nøgle). En fejl hos YouTube stopper aldrig streamen: den gemmes
 // på banen, vises i admin, og der prøves igen om lidt.
-async function ytStyr(req, f, bane, o, b, { rk, dbl, senderNu, tvingTjek }) {
+async function ytStyr(req, f, bane, o, b, { rk, dbl, senderNu, tvingTjek, vagt = null }) {
     const laas = `${tenantKey(req)}:${bane}`;
     const gemt = o.yt_stream_key ? { url: o.yt_ingest_url, noegle: o.yt_stream_key } : null;
     if (_ytLaas.has(laas)) return gemt;
@@ -157,7 +157,8 @@ async function ytStyr(req, f, bane, o, b, { rk, dbl, senderNu, tvingTjek }) {
         } else if (handling === 'afslut') {
             const hvad = await youtube.afslut(token, o.yt_broadcast_id);
             await query('UPDATE court_streams SET yt_broadcast_id = NULL, yt_broadcast_tjek = NULL, yt_fejl = NULL, yt_fejl_tid = NULL WHERE court_number = ?', [bane]);
-            console.log(`[livestream] ${tenantKey(req)} bane ${bane}: YouTube-udsendelsen ${hvad}`);
+            console.log(`[livestream] ${tenantKey(req)} bane ${bane}: YouTube-udsendelsen ${hvad}` +
+                (vagt ? ` af vagten (${vagt})` : ''));
         }
     } catch (e) {
         if (!(e instanceof youtube.YoutubeFejl)) throw e;
@@ -299,6 +300,84 @@ const holdkampPaaBane = async (bane) => {
     return r && r.mangler != null ? r : null;
 };
 
+// Skal banen sende lige nu (ls.beslutning) — og det, beslutningen bygger på.
+// Bruges af PC'ens forespørgsel (POST /pc) og af vagten over udsendelserne
+// (ytVagt), så de to aldrig dømmer forskelligt. court: null, når banen ikke
+// findes (eller er skjult) — så sendes der ikke ('ingen-bane').
+async function banensBeslutning(bane, { senderNu, indst, youtube: ytOk, nu = Date.now() }) {
+    const court = await queryOne(`SELECT id, is_doubles FROM courts WHERE court_number = ? AND ${synligBane()}`, [bane]);
+    const opsaetning = await queryOne('SELECT * FROM court_streams WHERE court_number = ?', [bane]);
+    const gs = court && await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
+    const sidste = court && !gs && await queryOne('SELECT * FROM last_finished_matches WHERE court_id = ?', [court.id]);
+    const planner = await plannerPaaBane(bane);
+    const b = court
+        ? ls.beslutning({ opsaetning, gs, sidste, planner, holdkamp: await holdkampPaaBane(bane),
+            senderNu, efterMs: indst.efterMin * 60 * 1000, youtube: ytOk, nu })
+        : { send: false, grund: 'ingen-bane' };
+    return { court, opsaetning, gs, sidste, b };
+}
+
+// Hvornår banens PC sidst var i kontakt med serveren (ms) — PC'ens egen
+// forespørgsel, ellers det seneste tjek af udsendelsen (overlever en genstart af
+// backenden, hvor PC-statussen i hukommelsen er tom). null: aldrig.
+function pcSidstFor(tenant, bane, opsaetning) {
+    const pc = ls.pcSidstPaaBane(tenant, bane);
+    const tjek = opsaetning && opsaetning.yt_broadcast_tjek ? new Date(opsaetning.yt_broadcast_tjek).getTime() : null;
+    if (pc === null) return Number.isFinite(tjek) ? tjek : null;
+    return Number.isFinite(tjek) ? Math.max(pc, tjek) : pc;
+}
+
+// Til admin (GET /): står udsendelsen åben, mens banens PC er tavs (over et
+// minut)? → { pcTavsSek, afsluttesOmSek } — pcTavsSek null: ingen PC har meldt
+// sig siden serveren startede. Ellers {}.
+function pcTavsTilAdmin(tenant, bane, o, nu = Date.now()) {
+    if (!o || !o.yt_broadcast_id) return {};
+    const sidst = pcSidstFor(tenant, bane, o);
+    const tavs = sidst === null ? null : nu - sidst;
+    if (tavs !== null && tavs < 60 * 1000) return {};
+    return {
+        pcTavsSek: tavs === null ? null : Math.round(tavs / 1000),
+        afsluttesOmSek: tavs === null ? 0 : Math.max(0, Math.round((ls.YT_PC_TAVS_MS - tavs) / 1000))
+    };
+}
+
+// ---- Vagten over udsendelserne (scheduler.js startYoutubeVagt, hvert minut) ----
+// YouTube lukker ikke længere udsendelser selv (config/youtube.js
+// opretUdsendelse), så serveren må: ellers står en udsendelse åben hele
+// natten, når PC'en dør og først kommer igen i morgen — og indtil da spurgte
+// kun PC'en selv (POST /pc), så en død PC afsluttede aldrig noget. Afslutter
+// banens udsendelse, når PC'en har været tavs i 10 minutter (ls.YT_PC_TAVS_MS)
+// eller beslutningen siger "send ikke" (holdkampen slut eller forladt, dagen
+// omme, slået fra …). Pausen efter en YouTube-fejl og kvoten respekteres af
+// ytStyr; udsendelsen glemmes, når den er afsluttet, så der prøves ikke igen
+// og igen. Returnerer [{ bane, grund }] for det, der blev afsluttet (til log/test).
+async function ytVagt(nu = Date.now()) {
+    const tenant = currentTenant();
+    const req = { clubDbName: tenant === 'direct' ? null : tenant, accessMode: tenant === 'direct' ? 'direct' : 'club' };
+    if (!ytTilladt(req)) return [];
+    const aabne = await query('SELECT court_number FROM court_streams WHERE yt_broadcast_id IS NOT NULL');
+    if (!aabne.length) return [];
+    const yt = await ytForbindelse(req);
+    if (!ytBrugbar(yt)) return [];
+    const indst = await hentIndstillinger();
+    const ud = [];
+    for (const { court_number: bane } of aabne) {
+        try {
+            const pcSidst0 = ls.pcSidstPaaBane(tenant, bane);
+            const senderNu = pcSidst0 !== null && nu - pcSidst0 < 60 * 1000 && ls.senderBane(tenant, bane, nu);
+            const { opsaetning, b } = await banensBeslutning(bane, { senderNu, indst, youtube: true, nu });
+            if (!opsaetning || !opsaetning.yt_broadcast_id) continue;   // afsluttet imens
+            const grund = ls.ytVagtGrund({ send: b.send, grund: b.grund, pcSidst: pcSidstFor(tenant, bane, opsaetning), nu });
+            if (!grund) continue;
+            await ytStyr(req, yt, bane, opsaetning, { send: false, grund }, { rk: null, dbl: false, senderNu: false, tvingTjek: false, vagt: grund });
+            ud.push({ bane, grund });
+        } catch (e) {
+            console.error(`[livestream] ${tenant} bane ${bane}: vagten over udsendelsen fejlede — ${e.message}`);
+        }
+    }
+    return ud;
+}
+
 // Til admin: holdkampens navn og den delkamp, der har stået længst som i gang
 // (se ls.holdkampTilAdmin). Kaldes kun, når banen har en holdkamp.
 const holdkampInfo = async (bane) => {
@@ -383,8 +462,10 @@ router.get('/', livestreamAdmin, async (req, res, next) => {
                     autofokus: !!(o && o.autofocus),
                     lyd: !!(o && o.sound),
                     logo: (o && o.logo) || 'klub',
-                    // Banens stream og udsendelse på den forbundne kanal
-                    yt: yt && o ? { noegle: !!o.yt_stream_key, udsendelse: o.yt_broadcast_id || null, fejl: o.yt_fejl || null } : null,
+                    // Banens stream og udsendelse på den forbundne kanal — og om PC'en er
+                    // tavs, mens udsendelsen står åben (vagten lukker den efter 10 min)
+                    yt: yt && o ? { noegle: !!o.yt_stream_key, udsendelse: o.yt_broadcast_id || null, fejl: o.yt_fejl || null,
+                        ...pcTavsTilAdmin(tenantKey(req), n, o) } : null,
                     start: s ? s.start : null,
                     til: s && s.til ? new Date(s.til).toISOString() : null,
                     // null: banen er ikke med i en holdkamp med delkampe tilbage
@@ -774,18 +855,10 @@ router.post('/pc', async (req, res, next) => {
         let svar = { kamera: !!pc.kamera, send: false, grund: pc.kamera ? 'ingen-bane-valgt' : 'intet-kamera' };
         let livetavle = null;   // til live-siden — også når overlayet er slået fra
         if (bane) {
-            const court = await queryOne(`SELECT id, is_doubles FROM courts WHERE court_number = ? AND ${synligBane()}`, [bane]);
-            const opsaetning = await queryOne('SELECT * FROM court_streams WHERE court_number = ?', [bane]);
-            const gs = court && await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
-            const sidste = court && !gs && await queryOne('SELECT * FROM last_finished_matches WHERE court_id = ?', [court.id]);
-            const planner = await plannerPaaBane(bane);
             const indst = await hentIndstillinger();
             const yt = await ytForbindelse(req);
-            const b = court
-                ? ls.beslutning({ opsaetning, gs, sidste, planner, holdkamp: await holdkampPaaBane(bane),
-                    senderNu: !!(foer && foer.online && foer.sender), efterMs: indst.efterMin * 60 * 1000,
-                    youtube: ytBrugbar(yt) })
-                : { send: false, grund: 'ingen-bane' };
+            const { court, opsaetning, gs, sidste, b } = await banensBeslutning(bane, {
+                senderNu: !!(foer && foer.online && foer.sender), indst, youtube: ytBrugbar(yt) });
             // Tablettens "Start livestream" gælder nu kampen på banen — og kun den
             if (b.vaelg) {
                 await query('UPDATE court_streams SET manual_since = UTC_TIMESTAMP(), armed_until = NULL WHERE court_number = ?', [bane]);
@@ -898,3 +971,4 @@ router.get('/live', async (req, res, next) => {
 });
 
 module.exports = router;
+module.exports.ytVagt = ytVagt;
