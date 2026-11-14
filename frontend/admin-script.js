@@ -3135,7 +3135,7 @@ function livestreamPcStatusHtml(pc, bane) {
         // Prøvebillederne kunne ikke skille PC'ens kameraer ad (for mørkt i hallen):
         // valgt efter navn, formater og interface — prøven tages igen før næste start
         const uafgjort = s.kameraValg === 'uafgjort' ? ' · kameraet valgt uden prøvebillede (for mørkt) — tjek billedet' : '';
-        return `<span class="maerke maerke--igang">● Sender</span> <span class="tekst-daempet">siden kl. ${siden} · ${kamera}${fra}${uafgjort}${livestreamFormatTekst(s.format)}${s.koder === 'x264' ? ' · kodes af processoren (uden grafikkortets hjælp)' : ''}${b && b.lyd ? (s.mikrofon ? ' · med lyd' : ' · uden lyd (ingen mikrofon i kameraet)') : ''}</span>`;
+        return `<span class="maerke maerke--igang">● Sender</span> <span class="tekst-daempet">siden kl. ${siden} · ${kamera}${fra}${uafgjort}${livestreamFormatTekst(s.format, s.billedhastighed)}${s.koder === 'x264' ? ' · kodes af processoren (uden grafikkortets hjælp)' : ''}${b && b.lyd ? (s.mikrofon ? ' · med lyd' : ' · uden lyd (ingen mikrofon i kameraet)') : ''}</span>`;
     }
     // "Klar — venter på en kamp" → mærket "Klar" + resten; andre grunde i gult
     const [hoved, rest] = (LS_GRUND[s.grund] || 'Klar').split(' — ');
@@ -3176,14 +3176,25 @@ function visLivestreamFejl(bane) {
 
 // " · 1280×720, 30 billeder/s" — og hvorfor, hvis kameraet ikke kan det valgte.
 // format: det PC'en melder (nye Badminton TV-versioner), fx "1280x720@30"
-function livestreamFormatTekst(format) {
+function livestreamFormatTekst(format, faktisk = null) {
     const m = /^(\d+)x(\d+)@(\d+)$/.exec(format || '');
     if (!m) return '';
     const i = _livestream.indstillinger;
     const [h, fps] = [Number(m[2]), Number(m[3])];
     const mangler = [h < i.oploesning ? `${i.oploesning}p` : '', fps < i.billeder ? `${i.billeder} billeder/s` : '']
         .filter(Boolean).join(' eller ');
-    return ` · ${m[1]}×${h}, ${fps} billeder/s${mangler ? ` (kameraet kan ikke ${mangler})` : ''}`;
+    return ` · ${m[1]}×${h}, ${fps} billeder/s${mangler ? ` (kameraet kan ikke ${mangler})` : ''}${livestreamFaktiskTekst(fps, faktisk)}`;
+}
+
+// De billeder i sekundet, kameraet faktisk leverer (de seneste ca. 10 sekunder).
+// Under 90 % af det bedte hakker billedet — typisk et kamera, der selv sænker
+// billedhastigheden i svagt lys (nye Badminton TV-versioner slår det fra)
+function livestreamFaktiskTekst(bedt, faktisk) {
+    if (typeof faktisk !== 'number') return '';
+    const tal = faktisk.toLocaleString('da-DK', { maximumFractionDigits: 1 });
+    return faktisk < bedt * 0.9
+        ? ` · <span class="tekst-advarsel">kameraet leverer kun ${tal} billeder/s — billedet hakker</span>`
+        : ` · faktisk ${tal} billeder/s`;
 }
 
 // Kvaliteten i Mbit/s for opløsning og billeder — samme tabel som TV-PC'en

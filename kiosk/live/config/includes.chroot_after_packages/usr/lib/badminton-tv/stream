@@ -282,11 +282,20 @@ def find_kamera(undersoeg=None, proev=None, valgt=None, valg=None):
     return enhed, kamera_navn(sti, enhed)
 
 
+# Billedhastigheden før lyset: med "exposure auto priority" slået til (Logitech
+# Brio's standard) forlænger kameraet selv belysningstiden i svagt lys og sender
+# færre billeder i sekundet — streamen hakker, selvom netværket er fint. Slået
+# fra holder kameraet de billeder i sekundet, det er bedt om (billedet bliver i
+# stedet lidt mørkere). Nyere kerner kalder kontrollen exposure_dynamic_framerate
+FAST_BILLEDHASTIGHED = ('exposure_auto_priority=0', 'exposure_dynamic_framerate=0')
+
+
 def stil_kamera(enhed, autofokus=False):
-    """50 Hz og fast fokus (eller autofokus) — kameraer, der ikke har indstillingen, springer den over."""
+    """50 Hz, fast billedhastighed og fast fokus (eller autofokus) — kameraer, der
+    ikke har indstillingen, springer den over (v4l2-ctl fejler, og det ignoreres)."""
     fokus = (('focus_automatic_continuous=1', 'focus_auto=1') if autofokus else
              ('focus_automatic_continuous=0', 'focus_auto=0', 'focus_absolute=0'))
-    for ctrl in ('power_line_frequency=1', *fokus):
+    for ctrl in ('power_line_frequency=1', *FAST_BILLEDHASTIGHED, *fokus):
         try:
             subprocess.run([V4L2CTL, '-d', enhed, '-c', ctrl], capture_output=True, timeout=5)
         except (OSError, subprocess.SubprocessError):
@@ -478,7 +487,10 @@ def ffmpeg_args(enhed, maal, overlay, koder, fmt=None):
     fmt: sendeformat() — uden: standard (1280x720 @ 30, lydløst)."""
     f = dict(fmt or sendeformat(enhed, STANDARD_VIDEO, {}, None))
     (kb, kh), billeder, (ub, uh), kbit = f['kamera'], f['billeder'], f['ud'], f['kbit']
-    args = [FFMPEG, '-hide_banner', '-nostdin', '-loglevel', 'error']
+    # -progress: antal billeder hvert 2. sekund på stdout — så kan PC'en melde, hvor
+    # mange billeder i sekundet kameraet faktisk leverer (Stream._laes_fremdrift)
+    args = [FFMPEG, '-hide_banner', '-nostdin', '-loglevel', 'error',
+            '-progress', 'pipe:1', '-stats_period', '2']
     if koder == 'vaapi':
         args += ['-vaapi_device', RENDER]
     args += ['-f', 'v4l2', '-input_format', f['input'], '-video_size', f'{kb}x{kh}',
@@ -796,6 +808,7 @@ class Stream:
         self.uden_billede = {}      # enhed -> hvornår prøvebilledet sidst ikke kunne optages
         self.afvist = {}            # enhed -> inputformater, kameraet ikke kunne åbnes i
         self.linjer = collections.deque(maxlen=20)
+        self.billedtal = collections.deque(maxlen=6)    # (tid, antal billeder) fra -progress
 
     def format_tekst(self):
         """Til admin: det, der faktisk sendes, fx '1280x720@30' (None: sender ikke)."""
@@ -809,6 +822,27 @@ class Stream:
 
     def koerer(self):
         return self.proc is not None and self.proc.poll() is None
+
+    def _laes_fremdrift(self, proc):
+        """ffmpegs -progress (stdout): 'frame=N' for hver blok (hvert 2. sekund)."""
+        for linje in proc.stdout:
+            # En stoppet ffmpeg (genstart) må ikke blande sine tal med den nye
+            if linje.startswith('frame=') and proc is self.proc:
+                try:
+                    self.billedtal.append((time.monotonic(), int(linje[6:].strip())))
+                except ValueError:
+                    pass
+
+    def billedhastighed(self):
+        """Til admin: de billeder i sekundet, kameraet faktisk har leveret de seneste
+        ca. 10 sekunder (ffmpegs egen fps= er et gennemsnit siden start og skjuler et
+        fald midt i kampen) — fx 29.9. None: sender ikke, eller endnu for tidligt."""
+        if not self.koerer() or len(self.billedtal) < 2:
+            return None
+        (t0, n0), (t1, n1) = self.billedtal[0], self.billedtal[-1]
+        if t1 - t0 < 3:
+            return None
+        return round(max(0, n1 - n0) / (t1 - t0), 1)
 
     def _laes(self, proc):
         for linje in proc.stderr:
@@ -968,7 +1002,7 @@ class Stream:
         self.linjer.clear()
         try:
             self.proc = subprocess.Popen(ffmpeg_args(enhed, maal, overlay, self.koder, fmt),
-                                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                         stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                          stderr=subprocess.PIPE, text=True, errors='replace')
         except OSError as e:
             self.proc = None
@@ -977,6 +1011,8 @@ class Stream:
             self._vent()
             return
         threading.Thread(target=self._laes, args=(self.proc,), daemon=True).start()
+        self.billedtal.clear()
+        threading.Thread(target=self._laes_fremdrift, args=(self.proc,), daemon=True).start()
         self.opsaetning = (enhed, maal, overlay, fmt)
         self.fmt = fmt
         self.startet = time.monotonic()
@@ -1159,7 +1195,8 @@ def main():
             'format': stream.format_tekst(), 'mikrofon': stream.mikrofon_navn(), 'pcId': pc_id,
             'kameraFormater': stream.formater_tekst(enhed), 'fejllog': stream.fejllog,
             'kameraInput': stream.input_tekst(), 'kameraNode': stream.node_tekst(),
-            'kameraer': stream.kamera_liste(), 'kameraValg': valg['valg']})
+            'kameraer': stream.kamera_liste(), 'kameraValg': valg['valg'],
+            'billedhastighed': stream.billedhastighed()})
         if svar is None:
             if stream.koerer() and time.monotonic() - sidste_svar > UDEN_SVAR:
                 log(f'intet svar fra serveren i {UDEN_SVAR:.0f} s — stopper')

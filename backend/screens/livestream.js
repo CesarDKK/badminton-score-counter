@@ -572,6 +572,10 @@ function rensStatus(body) {
         // Hvordan PC'en valgte kameraet: admin, eneste, proeve (prøvebilledet) eller
         // uafgjort (prøvebillederne for mørke — valgt efter navn, formater og interface)
         kameraValg: ['admin', 'eneste', 'proeve', 'uafgjort'].includes(b.kameraValg) ? b.kameraValg : null,
+        // De billeder i sekundet, kameraet faktisk leverer (de seneste ca. 10 s) —
+        // fx en Brio, der sænker billedhastigheden i svagt lys
+        billedhastighed: typeof b.billedhastighed === 'number' && Number.isFinite(b.billedhastighed)
+            && b.billedhastighed >= 0 && b.billedhastighed <= 240 ? Math.round(b.billedhastighed * 10) / 10 : null,
         // PC'ens eget id (et hash af maskine-id'et) — nye Badminton TV-versioner
         pcId: typeof b.pcId === 'string' && /^[a-f0-9]{16,64}$/.test(b.pcId) ? b.pcId : null
     };
