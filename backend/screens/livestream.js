@@ -521,6 +521,9 @@ const TABT_MS = 60 * 1000;  // ingen forespørgsel i et minut: PC'en er væk
 // Vagten over udsendelserne: en PC, der har været tavs så længe, får sin
 // YouTube-udsendelse afsluttet af serveren (se ytVagtGrund)
 const YT_PC_TAVS_MS = 10 * 60 * 1000;
+// … og en udsendelse lukkes senest efter så længe, også med PC'en i live: YouTube
+// gemmer kun udsendelser under 12 timer som video
+const YT_MAKS_MS = 11 * 60 * 60 * 1000;
 
 // Skal vagten (scheduler, hvert minut) afslutte banens udsendelse? YouTube
 // lukker ikke længere udsendelser selv (config/youtube.js opretUdsendelse,
@@ -528,11 +531,15 @@ const YT_PC_TAVS_MS = 10 * 60 * 1000;
 // må serveren selv lukke, når PC'en er væk for alvor (slukket, uden net, kommer
 // først igen i morgen), ellers står udsendelsen åben hele natten. send/grund:
 // beslutning() for banen; pcSidst: hvornår banens PC sidst spurgte serveren
-// (eller udsendelsen sidst blev tjekket) — null: aldrig set siden opstarten.
-// → 'pc-tavs', beslutningens grund (send: false) eller null (lad den køre).
-function ytVagtGrund({ send, grund = null, pcSidst = null, nu = Date.now() }) {
+// (eller udsendelsen sidst blev tjekket) — null: aldrig set siden opstarten; start:
+// hvornår udsendelsen begyndte (null: ukendt). → 'pc-tavs', beslutningens grund
+// (send: false), 'for-lang' (11 timer), 'ny-dag' (midnat i dansk tid — en PC, der
+// sender videre, må ikke holde én video åben i døgnvis) eller null (lad den køre).
+function ytVagtGrund({ send, grund = null, pcSidst = null, start = null, nu = Date.now() }) {
     if (!send) return grund || 'send-ikke';
     if (pcSidst === null || nu - pcSidst >= YT_PC_TAVS_MS) return 'pc-tavs';
+    if (start !== null && nu - start >= YT_MAKS_MS) return 'for-lang';
+    if (start !== null && danskDato(start) !== danskDato(nu)) return 'ny-dag';
     return null;
 }
 
@@ -792,7 +799,7 @@ function _nulstilStatus() {
 }
 
 module.exports = {
-    STANDARD_URL, EFTER_MS, STILLE_MS, KLAR_MS, YT_TJEK_MS, YT_FEJL_PAUSE_MS, YT_PC_TAVS_MS, ytVagtGrund,
+    STANDARD_URL, EFTER_MS, STILLE_MS, KLAR_MS, YT_TJEK_MS, YT_FEJL_PAUSE_MS, YT_PC_TAVS_MS, YT_MAKS_MS, ytVagtGrund,
     ytHandling, ytIPause, ytFejlPauseMs, YT_VARIG_PAUSE_MS, YT_KVOTE_PAUSE_MS, ytTitel, ytBeskrivelse,
     gyldigUrl, gyldigNoegle, rensOpsaetning, noegleSlut,
     STANDARD_INDSTILLINGER, laesIndstillinger, rensIndstillinger, videoTilPc, sponsorNu, gyldigLogoFil,

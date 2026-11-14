@@ -59,7 +59,7 @@ async function ytToken(req, f) {
 }
 
 const ytStreamFelter = 'yt_stream_id = NULL, yt_ingest_url = NULL, yt_stream_key = NULL, ' +
-    'yt_broadcast_id = NULL, yt_broadcast_tjek = NULL, yt_fejl = NULL, yt_fejl_tid = NULL';
+    'yt_broadcast_id = NULL, yt_broadcast_start = NULL, yt_broadcast_tjek = NULL, yt_fejl = NULL, yt_fejl_tid = NULL';
 
 // Udsendelsens titel: holdkampens hold, ellers navnene i scoreboardet
 async function ytTitelFor(req, bane, b, rk, dbl) {
@@ -137,14 +137,14 @@ async function ytStyr(req, f, bane, o, b, { rk, dbl, senderNu, tvingTjek, vagt =
             const id = await youtube.opretUdsendelse(token, { titel, beskrivelse, synlighed: indst.ytSynlighed,
                 boern: indst.ytBoern, streamId: o.yt_stream_id });
             // Første tjek efter et minut: gik den live, da billedet kom?
-            await query(`UPDATE court_streams SET yt_broadcast_id = ?, yt_broadcast_tjek = ?, yt_fejl = NULL, yt_fejl_tid = NULL
+            await query(`UPDATE court_streams SET yt_broadcast_id = ?, yt_broadcast_start = UTC_TIMESTAMP(), yt_broadcast_tjek = ?, yt_fejl = NULL, yt_fejl_tid = NULL
                           WHERE court_number = ?`, [id, new Date(Date.now() - ls.YT_TJEK_MS + 60 * 1000), bane]);
             console.log(`[livestream] ${tenantKey(req)} bane ${bane}: YouTube-udsendelse oprettet "${titel}" (${id})`);
         } else if (handling === 'tjek') {
             const status = await youtube.udsendelsesStatus(token, o.yt_broadcast_id);
             if (!status || status === 'complete' || status === 'revoked') {
                 // Afsluttet på YouTube (i Studio, eller billedet var væk i over et minut) — en ny oprettes
-                await query('UPDATE court_streams SET yt_broadcast_id = NULL, yt_broadcast_tjek = NULL WHERE court_number = ?', [bane]);
+                await query('UPDATE court_streams SET yt_broadcast_id = NULL, yt_broadcast_start = NULL, yt_broadcast_tjek = NULL WHERE court_number = ?', [bane]);
                 console.log(`[livestream] ${tenantKey(req)} bane ${bane}: YouTube-udsendelsen er ${status || 'væk'} — opretter en ny`);
             } else {
                 // Billedet kommer, men udsendelsen er ikke gået live af sig selv
@@ -156,7 +156,7 @@ async function ytStyr(req, f, bane, o, b, { rk, dbl, senderNu, tvingTjek, vagt =
             }
         } else if (handling === 'afslut') {
             const hvad = await youtube.afslut(token, o.yt_broadcast_id);
-            await query('UPDATE court_streams SET yt_broadcast_id = NULL, yt_broadcast_tjek = NULL, yt_fejl = NULL, yt_fejl_tid = NULL WHERE court_number = ?', [bane]);
+            await query('UPDATE court_streams SET yt_broadcast_id = NULL, yt_broadcast_start = NULL, yt_broadcast_tjek = NULL, yt_fejl = NULL, yt_fejl_tid = NULL WHERE court_number = ?', [bane]);
             console.log(`[livestream] ${tenantKey(req)} bane ${bane}: YouTube-udsendelsen ${hvad}` +
                 (vagt ? ` af vagten (${vagt})` : ''));
         }
@@ -176,7 +176,7 @@ async function ytStyr(req, f, bane, o, b, { rk, dbl, senderNu, tvingTjek, vagt =
         }
         // Udsendelsen findes ikke længere: glem den
         if (handling === 'afslut' && e.status === 404) {
-            await query('UPDATE court_streams SET yt_broadcast_id = NULL WHERE court_number = ?', [bane]);
+            await query('UPDATE court_streams SET yt_broadcast_id = NULL, yt_broadcast_start = NULL WHERE court_number = ?', [bane]);
         }
         if (o.yt_fejl !== e.message) console.log(`[livestream] ${tenantKey(req)} bane ${bane}: YouTube-fejl (${handling || 'nøgle'}): ${e.message}`);
     } finally {
@@ -320,11 +320,32 @@ async function banensBeslutning(bane, { senderNu, indst, youtube: ytOk, nu = Dat
 // Hvornår banens PC sidst var i kontakt med serveren (ms) — PC'ens egen
 // forespørgsel, ellers det seneste tjek af udsendelsen (overlever en genstart af
 // backenden, hvor PC-statussen i hukommelsen er tom). null: aldrig.
-function pcSidstFor(tenant, bane, opsaetning) {
-    const pc = ls.pcSidstPaaBane(tenant, bane);
-    const tjek = opsaetning && opsaetning.yt_broadcast_tjek ? new Date(opsaetning.yt_broadcast_tjek).getTime() : null;
-    if (pc === null) return Number.isFinite(tjek) ? tjek : null;
-    return Number.isFinite(tjek) ? Math.max(pc, tjek) : pc;
+const tid = (v) => { if (v == null) return null; const t = new Date(v).getTime(); return Number.isFinite(t) ? t : null; };
+
+// Første gang vagten så udsendelsen ('klub:bane:id' -> ms): reserve for livstegn
+// og starttid efter en genstart af backenden, hvor PC-statussen i hukommelsen er
+// tom og yt_broadcast_tjek kan være op til 5 minutter gammel — så går der altid
+// mindst 10 minutter efter en genstart, før en udsendelse lukkes
+const _ytSet = new Map();
+function ytSetFoerst(tenant, bane, o, nu = Date.now()) {
+    const k = `${tenant}:${bane}:${o.yt_broadcast_id}`;
+    if (!_ytSet.has(k)) {
+        _ytSet.set(k, nu);
+        if (_ytSet.size > 1000) _ytSet.delete(_ytSet.keys().next().value);
+    }
+    return _ytSet.get(k);
+}
+
+function pcSidstFor(tenant, bane, opsaetning, nu = Date.now()) {
+    const t = [ls.pcSidstPaaBane(tenant, bane), tid(opsaetning && opsaetning.yt_broadcast_tjek),
+        opsaetning && opsaetning.yt_broadcast_id ? ytSetFoerst(tenant, bane, opsaetning, nu) : null].filter(x => x !== null);
+    return t.length ? Math.max(...t) : null;
+}
+
+// Hvornår udsendelsen begyndte: yt_broadcast_start (migration 048) — for en
+// udsendelse fra før migrationen, første gang vagten så den
+function ytStartFor(tenant, bane, o, nu = Date.now()) {
+    return tid(o.yt_broadcast_start) ?? ytSetFoerst(tenant, bane, o, nu);
 }
 
 // Til admin (GET /): står udsendelsen åben, mens banens PC er tavs (over et
@@ -367,7 +388,8 @@ async function ytVagt(nu = Date.now()) {
             const senderNu = pcSidst0 !== null && nu - pcSidst0 < 60 * 1000 && ls.senderBane(tenant, bane, nu);
             const { opsaetning, b } = await banensBeslutning(bane, { senderNu, indst, youtube: true, nu });
             if (!opsaetning || !opsaetning.yt_broadcast_id) continue;   // afsluttet imens
-            const grund = ls.ytVagtGrund({ send: b.send, grund: b.grund, pcSidst: pcSidstFor(tenant, bane, opsaetning), nu });
+            const grund = ls.ytVagtGrund({ send: b.send, grund: b.grund, pcSidst: pcSidstFor(tenant, bane, opsaetning, nu),
+                start: ytStartFor(tenant, bane, opsaetning, nu), nu });
             if (!grund) continue;
             await ytStyr(req, yt, bane, opsaetning, { send: false, grund }, { rk: null, dbl: false, senderNu: false, tvingTjek: false, vagt: grund });
             ud.push({ bane, grund });
@@ -972,3 +994,4 @@ router.get('/live', async (req, res, next) => {
 
 module.exports = router;
 module.exports.ytVagt = ytVagt;
+module.exports._ytGlemSet = () => _ytSet.clear();   // til tests
