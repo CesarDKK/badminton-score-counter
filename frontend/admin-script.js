@@ -135,6 +135,7 @@ function setupEventListeners() {
     document.getElementById('resetCourt').addEventListener('click', resetCourtConfirm);
     document.getElementById('editDoublesMode').addEventListener('change', toggleEditDoublesMode);
     document.getElementById('editTournamentMatchSelect').addEventListener('change', onEditTournamentMatchChange);
+    document.getElementById('editTournamentMatchSearch').addEventListener('input', visTurneringsValg);
 
     // Setup autocomplete for player name fields
     setupPlayerNameAutocomplete('editPlayer1Name');
@@ -595,6 +596,116 @@ async function openEditModal(courtNumber) {
     }
 }
 
+// ---- Turneringskampe: tidspunkt, søgning og spillere i gang ----
+
+const UGEDAG_KORT = ['sø', 'ma', 'ti', 'on', 'to', 'fr', 'lø'];
+
+// TS' planlagte tidspunkt ("2026-11-21 09:30") som "lø 09:30"; '' uden tidspunkt
+function turneringTid(planned) {
+    const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2})$/.exec(planned || '');
+    if (!m) return '';
+    const dag = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getDay();
+    return `${UGEDAG_KORT[dag]} ${m[4]}`;
+}
+
+// Rækken: label uden runde ("U11 D HS — Runde 2" → "U11 D HS")
+function turneringRaekke(label) {
+    return String(label || '').split(' — ')[0].trim();
+}
+
+function turneringSide(m, side) {
+    const a = m[`side${side}_player1`], b = m[`side${side}_player2`];
+    return m.doubles ? `${a || '?'}${b ? ' & ' + b : ''}` : (a || '?');
+}
+
+// Navn uden seed-mærke ("Anna [3/4]" → "anna"), til sammenligning
+const turneringNavn = (s) => String(s || '').replace(/\s*\[[^\]]*\]\s*$/, '').trim().toLowerCase();
+
+// Spillere i en igangværende turneringskamp → banen ("anna" → 3)
+function spillereIGang(tournaments) {
+    const iGang = new Map();
+    for (const t of (tournaments || [])) {
+        for (const m of (t.matches || [])) {
+            if (m.status !== 'active' || m.court_number == null) continue;
+            for (const n of [m.side1_player1, m.side1_player2, m.side2_player1, m.side2_player2]) {
+                if (n) iGang.set(turneringNavn(n), m.court_number);
+            }
+        }
+    }
+    return iGang;
+}
+
+// "Anna (bane 3)" for kampens spillere, der lige nu spiller på en anden bane
+function travleSpillere(m, iGang, egenBane = null) {
+    const ud = [];
+    for (const n of [m.side1_player1, m.side1_player2, m.side2_player1, m.side2_player2]) {
+        const bane = n ? iGang.get(turneringNavn(n)) : undefined;
+        if (bane != null && bane !== egenBane) ud.push(`${n} (bane ${bane})`);
+    }
+    return ud;
+}
+
+// Søgningen skal stå samlet i række, spillere eller turnering ("u11 c hs",
+// "anna berg"). Hvert ord for sig var for løst: "c" fandt alle med et c i navnet.
+function turneringMatcher(soegning, tekst) {
+    const s = String(soegning || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    return !s || tekst.toLowerCase().replace(/\s+/g, ' ').includes(s);
+}
+
+let editTurneringsValg = { items: [], flereTurneringer: false, iGang: new Map() };
+
+// Tegn listen over ventende kampe i bane-dialogen, filtreret på søgefeltet og
+// grupperet efter TS' tidspunkt. Det valgte bevares, hvis det stadig er med.
+function visTurneringsValg() {
+    const select = document.getElementById('editTournamentMatchSelect');
+    if (!select) return;
+    const soegning = document.getElementById('editTournamentMatchSearch')?.value || '';
+    const valgt = select.value;
+    const { items, flereTurneringer, iGang } = editTurneringsValg;
+
+    select.innerHTML = '<option value="">-- Manuel (skriv navne nedenfor) --</option>';
+    let gruppe = null, gruppeNavn = null, vist = 0;
+    for (const { tournament, match } of items) {
+        const side1 = turneringSide(match, 1), side2 = turneringSide(match, 2);
+        const soegetekst = `${match.label || ''} ${side1} ${side2} ${tournament.name}`;
+        // Den valgte kamp bliver stående, selv om søgningen ændres — ellers
+        // forsvandt valget, mens navnene stod udfyldt nedenfor
+        if (!turneringMatcher(soegning, soegetekst) && `${tournament.id}:${match.id}` !== valgt) continue;
+
+        const tid = turneringTid(match.planned_time) || 'Uden tidspunkt';
+        if (tid !== gruppeNavn) {
+            gruppeNavn = tid;
+            gruppe = document.createElement('optgroup');
+            gruppe.label = tid;
+            select.appendChild(gruppe);
+        }
+        const travle = travleSpillere(match, iGang, currentEditingCourt);
+        const opt = document.createElement('option');
+        opt.value = `${tournament.id}:${match.id}`;
+        opt.textContent = `${travle.length ? '⚠ ' : ''}${flereTurneringer ? tournament.name + ': ' : ''}`
+            + `${match.label ? match.label + ' — ' : ''}${side1} vs ${side2}`
+            + (travle.length ? `  (spiller nu: ${travle.join(', ')})` : '');
+        opt.dataset.match = JSON.stringify({
+            id: match.id,
+            doubles: !!match.doubles,
+            side1_player1: match.side1_player1 || '',
+            side1_player2: match.side1_player2 || '',
+            side2_player1: match.side2_player1 || '',
+            side2_player2: match.side2_player2 || ''
+        });
+        if (opt.value === valgt) opt.selected = true;
+        gruppe.appendChild(opt);
+        vist++;
+    }
+
+    const antal = document.getElementById('editTournamentMatchCount');
+    if (antal) {
+        antal.textContent = soegning.trim()
+            ? `${vist} af ${items.length} ventende kampe`
+            : `${items.length} ventende kampe`;
+    }
+}
+
 async function populateEditTournamentDropdown() {
     const wrap = document.getElementById('editTournamentMatchWrap');
     const select = document.getElementById('editTournamentMatchSelect');
@@ -602,7 +713,8 @@ async function populateEditTournamentDropdown() {
 
     try {
         const tournaments = await api.getActiveTournaments();
-        // Saml alle pending matches på tværs af aktive turneringer
+        // Saml alle pending matches på tværs af aktive turneringer (serveren
+        // sorterer efter TS' planlagte tidspunkt)
         const items = [];
         for (const t of (tournaments || [])) {
             for (const m of (t.matches || [])) {
@@ -611,6 +723,16 @@ async function populateEditTournamentDropdown() {
                 }
             }
         }
+        editTurneringsValg = {
+            items,
+            flereTurneringer: (tournaments || []).length > 1,
+            iGang: spillereIGang(tournaments)
+        };
+
+        const soeg = document.getElementById('editTournamentMatchSearch');
+        if (soeg) soeg.value = '';
+        const advarsel = document.getElementById('editTournamentMatchWarn');
+        if (advarsel) advarsel.style.display = 'none';
 
         if (items.length === 0) {
             wrap.style.display = 'none';
@@ -618,29 +740,7 @@ async function populateEditTournamentDropdown() {
             return;
         }
 
-        select.innerHTML = '<option value="">-- Manuel (skriv navne nedenfor) --</option>';
-        for (const { tournament, match } of items) {
-            const side1 = match.doubles
-                ? `${match.side1_player1 || '?'}${match.side1_player2 ? ' & ' + match.side1_player2 : ''}`
-                : (match.side1_player1 || '?');
-            const side2 = match.doubles
-                ? `${match.side2_player1 || '?'}${match.side2_player2 ? ' & ' + match.side2_player2 : ''}`
-                : (match.side2_player1 || '?');
-            const labelPrefix = match.label ? `${match.label} — ` : '';
-            const numPrefix = match.match_order != null ? `#${match.match_order}  ` : '';
-            const opt = document.createElement('option');
-            opt.value = `${tournament.id}:${match.id}`;
-            opt.textContent = `${numPrefix}${tournament.name}: ${labelPrefix}${side1} vs ${side2}`;
-            opt.dataset.match = JSON.stringify({
-                id: match.id,
-                doubles: !!match.doubles,
-                side1_player1: match.side1_player1 || '',
-                side1_player2: match.side1_player2 || '',
-                side2_player1: match.side2_player1 || '',
-                side2_player2: match.side2_player2 || ''
-            });
-            select.appendChild(opt);
-        }
+        visTurneringsValg();
         wrap.style.display = 'block';
     } catch (error) {
         console.error('Failed to populate tournament dropdown:', error);
@@ -707,6 +807,15 @@ async function saveCourtChanges() {
 function onEditTournamentMatchChange() {
     const sel = document.getElementById('editTournamentMatchSelect');
     const value = sel?.value || '';
+
+    // Advarsel, hvis en af kampens spillere lige nu spiller på en anden bane
+    const advarsel = document.getElementById('editTournamentMatchWarn');
+    if (advarsel) {
+        const item = editTurneringsValg.items.find(x => `${x.tournament.id}:${x.match.id}` === value);
+        const travle = item ? travleSpillere(item.match, editTurneringsValg.iGang, currentEditingCourt) : [];
+        advarsel.textContent = travle.length ? `⚠ Spiller lige nu: ${travle.join(', ')}` : '';
+        advarsel.style.display = travle.length ? 'block' : 'none';
+    }
     if (!value) return;
 
     // Værdien er "tournamentId:matchId" og option text indeholder allerede spillerne.
@@ -5213,8 +5322,10 @@ async function loadActiveTournaments() {
         // Vigtigt: tjek KUN for input/textarea — ellers blokerer et fokuseret button
         // (efter klik på "Tilføj kamp" eller "Slet") også re-render.
         const active = document.activeElement;
+        // Undtagen søgefeltet over kamplisten — det genskabes med fokus og markør.
         if (container && active && container.contains(active) &&
-            (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+            (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') &&
+            !active.classList.contains('turnering-filter__soeg')) {
             return;
         }
 
@@ -5325,9 +5436,9 @@ async function handleSyncTournament(tournamentId, tournamentName) {
 }
 
 // ==================== AUTO-OPDATERING FRA TOURNAMENT SOFTWARE ====================
-// Flueben pr. turnering ("Auto-opdater hvert 4. minut", default FRA). Flaget
+// Flueben pr. turnering ("Auto-opdater hvert 2. minut", default FRA). Flaget
 // gemmes i databasen, og selve opdateringen kører i BACKENDens scheduler hvert
-// 4. minut — den fortsætter altså selv om admin-siden/browseren lukkes.
+// 2. minut — den fortsætter altså selv om admin-siden/browseren lukkes.
 // Nye TS-kampe tilføjes aldrig automatisk; statuslinjen viser når der ligger
 // nogle, og de bekræftes via den manuelle Opdater-knap som hidtil.
 
@@ -5348,15 +5459,22 @@ function autoSyncStatusHtml(t) {
     if (!t.auto_sync) return '';
     const s = t.autoSyncStatus;
     if (!s) return `<div class="status-linje">Auto-opdatering aktiv — venter på første kørsel…</div>`;
-    const time = new Date(s.at).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
+    const kl = (ms) => new Date(ms).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
+    // Pauser (serveren skåner Tournament Software) — "Opdater"-knappen virker altid
+    if (s.pause === 'nat') return `<div class="status-linje">Auto-opdatering holder pause om natten (kl. 22–7)</div>`;
+    if (s.pause === 'slut') return `<div class="status-linje">Turneringens dage er ovre — auto-opdatering holder pause</div>`;
+    if (!s.at) return `<div class="status-linje">Auto-opdatering aktiv — venter på første kørsel…</div>`;
+    const time = kl(s.at);
     if (s.error) {
-        return `<div class="status-linje status-linje--fejl">Auto-opdatering fejlede kl. ${time} — prøver igen om lidt</div>`;
+        const igen = s.naeste ? `prøver igen kl. ${kl(s.naeste)}` : 'prøver igen om lidt';
+        return `<div class="status-linje status-linje--fejl">Auto-opdatering fejlede kl. ${time} — ${igen}</div>`;
     }
     const added = s.added > 0 ? ` · ${s.added} nye kampe tilføjet` : '';
     const candidates = s.newCandidates > 0
         ? ` · <span class="tekst-advarsel fed">${s.newCandidates} kampe i ny kategori — tryk Opdater for at tilføje</span>`
         : '';
-    return `<div class="status-linje">Auto-opdateret kl. ${time}${added}${candidates}</div>`;
+    const udenfor = s.pause === 'udenfor' && s.naeste ? ` · ikke en turneringsdag, næste kl. ${kl(s.naeste)}` : '';
+    return `<div class="status-linje">Auto-opdateret kl. ${time}${added}${candidates}${udenfor}</div>`;
 }
 
 // Holder kandidaterne for det åbne bekræftelses-modal så "Tilføj valgte" kan finde dem.
@@ -5404,6 +5522,10 @@ async function addSelectedNewCandidates(tournamentId) {
             label: m.label,
             doubles: !!m.doubles,
             sourceMatchId: m.sourceMatchId || null,
+            plannedAt: m.plannedAt || '',
+            tsStatus: m.tsStatus || '',
+            tsWinner: m.tsWinner || null,
+            tsSets: m.tsSets || [],
             side1Player1: m.side1Player1, side1Player2: m.side1Player2,
             side2Player1: m.side2Player1, side2Player2: m.side2Player2
         }));
@@ -5467,7 +5589,19 @@ function renderTournaments(tournaments) {
         return;
     }
 
-    container.innerHTML = tournaments.map(t => renderTournamentBlock(t)).join('');
+    // Søgefeltet over kamplisten må gerne have fokus under genoptegningen —
+    // fokus og markøren sættes tilbage bagefter
+    const fokus = document.activeElement;
+    const fokusId = fokus && fokus.classList && fokus.classList.contains('turnering-filter__soeg') ? fokus.id : null;
+    const markoer = fokusId ? [fokus.selectionStart, fokus.selectionEnd] : null;
+
+    const iGang = spillereIGang(tournaments);
+    container.innerHTML = tournaments.map(t => renderTournamentBlock(t, iGang)).join('');
+
+    if (fokusId) {
+        const el = document.getElementById(fokusId);
+        if (el) { el.focus(); try { el.setSelectionRange(markoer[0], markoer[1]); } catch (e) { /* type=search */ } }
+    }
 
     // DOM-elementer er lige genskabt — gamle autocomplete-listeners er bundet til
     // forsvundne nodes. Nulstil cachen så bind sker på de NYE input-elementer.
@@ -5496,6 +5630,26 @@ function renderTournaments(tournaments) {
         const autoSyncCheck = document.getElementById(`t${t.id}_autoSync`);
         if (autoSyncCheck) {
             autoSyncCheck.addEventListener('change', () => toggleTournamentAutoSync(t.id, autoSyncCheck));
+        }
+
+        // Filtrene over kamplisten (søg, række, status)
+        const filter = turneringFilterFor(t.id);
+        const soegEl = document.getElementById(`t${t.id}_filterSoeg`);
+        if (soegEl) {
+            let ventTimer = null;
+            soegEl.addEventListener('input', () => {
+                filter.soeg = soegEl.value;
+                clearTimeout(ventTimer);
+                ventTimer = setTimeout(() => renderTournaments(sidsteTurneringer), 200);
+            });
+        }
+        for (const [felt, noegle] of [['filterRaekke', 'raekke'], ['filterStatus', 'status']]) {
+            const el = document.getElementById(`t${t.id}_${felt}`);
+            if (el) el.addEventListener('change', () => {
+                filter[noegle] = el.value;
+                el.blur();
+                renderTournaments(sidsteTurneringer);
+            });
         }
 
         const finishBtn = document.getElementById(`t${t.id}_finishBtn`);
@@ -5561,11 +5715,59 @@ function renderTournaments(tournaments) {
     });
 }
 
-function renderTournamentBlock(t) {
+// Filtre pr. turnering over kamplisten. Overlever genoptegningen hvert 3. sek.
+// Standard: kun kampe, der ikke er færdige — med 200-300 kampe drukner de
+// næste ellers i de spillede.
+const turneringFiltre = new Map();
+function turneringFilterFor(id) {
+    if (!turneringFiltre.has(id)) turneringFiltre.set(id, { soeg: '', raekke: '', status: 'aktuelle' });
+    return turneringFiltre.get(id);
+}
+
+const TURNERING_STATUS_FILTRE = [
+    ['aktuelle', 'Ikke færdige'],
+    ['pending', 'Afventer'],
+    ['active', 'I gang'],
+    ['finished', 'Færdige'],
+    ['alle', 'Alle kampe'],
+];
+
+function turneringFilterHtml(t, filter, vist) {
     const matches = t.matches || [];
+    const raekker = [...new Set(matches.map(m => turneringRaekke(m.label)).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'da', { numeric: true }));
+    const faerdige = matches.filter(m => m.status === 'finished').length;
+    return `
+        <div class="raekke luft-under-12">
+            <input type="search" id="t${t.id}_filterSoeg" class="admin-input admin-input--sm turnering-filter__soeg"
+                placeholder="Søg spiller eller række" value="${escapeHtml(filter.soeg)}" autocomplete="off" style="flex:1; min-width:180px;">
+            ${raekker.length > 1 ? `<select id="t${t.id}_filterRaekke" class="admin-input admin-input--sm" style="width:auto;">
+                <option value="">Alle rækker</option>
+                ${raekker.map(r => `<option value="${escapeHtml(r)}" ${r === filter.raekke ? 'selected' : ''}>${escapeHtml(r)}</option>`).join('')}
+            </select>` : ''}
+            <select id="t${t.id}_filterStatus" class="admin-input admin-input--sm" style="width:auto;">
+                ${TURNERING_STATUS_FILTRE.map(([v, tekst]) => `<option value="${v}" ${v === filter.status ? 'selected' : ''}>${tekst}</option>`).join('')}
+            </select>
+            <span class="tekst-daempet tekst-mindre">${vist} af ${matches.length} kampe${filter.status === 'aktuelle' && faerdige ? ` · ${faerdige} færdige skjult` : ''}</span>
+        </div>`;
+}
+
+function renderTournamentBlock(t, iGang = new Map()) {
+    const matches = t.matches || [];
+    const filter = turneringFilterFor(t.id);
+    const medFilter = matches.length > 10;
+    const viste = !medFilter ? matches : matches.filter(m => {
+        if (filter.status === 'aktuelle' ? m.status === 'finished' : (filter.status !== 'alle' && m.status !== filter.status)) return false;
+        if (filter.raekke && turneringRaekke(m.label) !== filter.raekke) return false;
+        return turneringMatcher(filter.soeg, `${m.label || ''} ${turneringSide(m, 1)} ${turneringSide(m, 2)}`);
+    });
+    // Ved mange kampe: filtrene over listen
+    const filterHtml = medFilter ? turneringFilterHtml(t, filter, viste.length) : '';
     const matchesHtml = matches.length === 0
         ? '<p class="tom-tekst luft-under-8">Ingen kampe endnu — tilføj nedenfor.</p>'
-        : matches.map(m => renderTournamentMatchRow(t.id, m)).join('');
+        : (viste.length === 0
+            ? '<p class="tom-tekst luft-under-8">Ingen kampe passer til filteret.</p>'
+            : viste.map(m => renderTournamentMatchRow(t.id, m, iGang)).join(''));
 
     return `
         <div class="turnering-kort" data-tournament-id="${t.id}">
@@ -5574,7 +5776,7 @@ function renderTournamentBlock(t) {
                 <div class="raekke">
                     ${t.source_tournament_id ? `<label class="afkrydsning tekst-mindre">
                         <input type="checkbox" id="t${t.id}_autoSync" ${t.auto_sync ? 'checked' : ''} class="afkrydsning-boks">
-                        Auto-opdater hvert 4. minut
+                        Auto-opdater hvert 2. minut
                     </label>
                     <button id="t${t.id}_syncBtn" class="btn-primary btn-sm">↻ Opdater fra Tournament Software</button>` : ''}
                     <button id="t${t.id}_finishBtn" class="btn-secondary btn-sm">Afslut turnering</button>
@@ -5583,6 +5785,7 @@ function renderTournamentBlock(t) {
                 </div>
             </div>
 
+            ${filterHtml}
             <div class="luft-under-18">
                 ${matchesHtml}
             </div>
@@ -5623,7 +5826,7 @@ function renderTournamentBlock(t) {
     `;
 }
 
-function renderTournamentMatchRow(tournamentId, m) {
+function renderTournamentMatchRow(tournamentId, m, iGang = new Map()) {
     // Hvis denne kamp er i edit-mode, render formularen i stedet for view-rækken
     if (editingTournamentMatchIds.has(m.id)) {
         return renderTournamentMatchEditForm(tournamentId, m);
@@ -5666,9 +5869,17 @@ function renderTournamentMatchRow(tournamentId, m) {
         }
     }
 
-    const labelHtml = m.label
-        ? `<span class="tekst-daempet tekst-mindre luft-hoejre">${escapeHtml(m.label)}</span>`
-        : '';
+    const tid = turneringTid(m.planned_time);
+    const labelHtml = (tid ? `<span class="maerke maerke--neutral luft-hoejre">${escapeHtml(tid)}</span>` : '')
+        + (m.label ? `<span class="tekst-daempet tekst-mindre luft-hoejre">${escapeHtml(m.label)}</span>` : '');
+
+    // En ventende kamp, hvor en af spillerne lige nu spiller på en bane
+    if (m.status === 'pending') {
+        const travle = travleSpillere(m, iGang);
+        if (travle.length) {
+            courtInfo = `<div class="tekst-advarsel tekst-lille">⚠ Spiller lige nu: ${escapeHtml(travle.join(', '))}</div>`;
+        }
+    }
 
     // Rediger tillades for pending + active (sync-loop pusher navne videre til banen),
     // men ikke for finished — der ville editet kun forvirre.
@@ -5967,12 +6178,20 @@ function renderTournamentImportPreview(data) {
         const roundBadge = m.round
             ? `<span class="tekst-daempet tekst-lille nowrap">${escapeHtml(m.round)}</span>`
             : '';
+        const tidBadge = m.plannedTime
+            ? `<span class="tekst-daempet tekst-lille nowrap">kl. ${escapeHtml(m.plannedTime)}</span>`
+            : '';
+        // TS' status: aflyste kampe importeres ikke, spillede/walkover kommer ind som færdige
+        const tsTekst = { aflyst: 'Aflyst — importeres ikke', walkover: 'Walkover', spillet: 'Spillet' }[m.tsStatus] || '';
+        const tsBadge = tsTekst ? `<span class="maerke maerke--neutral">${tsTekst}</span>` : '';
         return `<label data-category="${escapeHtml(m.category || '')}" data-day="${escapeHtml(m.day || '')}" class="ts-import-row vaelg-raekke">
-            <input type="checkbox" class="ts-import-check afkrydsning-boks" data-idx="${idx}" checked>
+            <input type="checkbox" class="ts-import-check afkrydsning-boks" data-idx="${idx}" ${m.tsStatus === 'aflyst' ? 'disabled' : 'checked'}>
             ${numBadge}
             ${dayBadge}
+            ${tidBadge}
             ${catBadge}
             ${roundBadge}
+            ${tsBadge}
             <span class="kamp-raekke__navne tekst-mindre">${escapeHtml(side1)} <span class="tekst-daempet">vs</span> ${escapeHtml(side2)}</span>
         </label>`;
     }).join('');
@@ -6037,7 +6256,7 @@ function renderTournamentImportPreview(data) {
         cb.addEventListener('change', updateTsSelectedCount);
     });
     document.getElementById('tsCheckAllBtn').addEventListener('click', () => {
-        preview.querySelectorAll('.ts-import-check').forEach(cb => cb.checked = true);
+        preview.querySelectorAll('.ts-import-check').forEach(cb => { if (!cb.disabled) cb.checked = true; });
         updateTsSelectedCount();
     });
     document.getElementById('tsUncheckAllBtn').addEventListener('click', () => {
@@ -6051,7 +6270,7 @@ function renderTournamentImportPreview(data) {
         if (rows.length === 0) return;
         // Toggle: hvis nogen er valgte i kategorien, fravælg alle; ellers vælg alle
         const anyChecked = Array.from(rows).some(r => r.querySelector('.ts-import-check').checked);
-        rows.forEach(r => { r.querySelector('.ts-import-check').checked = !anyChecked; });
+        rows.forEach(r => { const cb = r.querySelector('.ts-import-check'); if (!cb.disabled) cb.checked = !anyChecked; });
         updateTsSelectedCount();
     });
     // Dag-filter: når brugeren toggler en dag, skjul/vis rækker for den dag og
@@ -6063,7 +6282,7 @@ function renderTournamentImportPreview(data) {
             rows.forEach(r => {
                 r.style.display = dayCb.checked ? 'flex' : 'none';
                 const cb = r.querySelector('.ts-import-check');
-                if (cb) cb.checked = dayCb.checked;
+                if (cb && !cb.disabled) cb.checked = dayCb.checked;
             });
             updateTsSelectedCount();
         });
@@ -6111,6 +6330,11 @@ async function confirmTournamentImport() {
             label,
             doubles: !!m.doubles,
             sourceMatchId: m.sourceMatchId || null,
+            // TS' tidspunkt og status (walkover/spillet gemmes som færdig, aflyst springes over)
+            plannedAt: m.plannedAt || '',
+            tsStatus: m.tsStatus || '',
+            tsWinner: m.tsWinner || null,
+            tsSets: m.tsSets || [],
             side1Player1: m.side1Player1,
             side1Player2: m.side1Player2,
             side2Player1: m.side2Player1,

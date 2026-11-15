@@ -93,11 +93,31 @@ function extractTournamentId(input) {
 }
 
 // Hent en page fra tournamentsoftware.com med etableret consent-session
-async function fetchTournamentPage(tournamentId, subPage, _retry = 0) {
+function fetchTournamentPage(tournamentId, subPage, valg) {
+    return fetchTsSti(subPage ? `/tournament/${tournamentId}/${subPage}` : `/tournament/${tournamentId}`, valg);
+}
+
+// Sider hentet fra TS ("sti" -> { html, at }). Den automatiske opdatering
+// genbruger en side, der er yngre end maxAlder, så TS ikke rammes unødigt
+// (fx søndagens kampe om lørdagen). maxAlder 0 = hent altid (import og
+// "Opdater"-knappen). Ryddes for sider ældre end en time.
+const _sideCache = new Map();
+const SIDE_CACHE_RYD_MS = 60 * 60 * 1000;
+
+// Hent en vilkårlig sti på TS (fx /sport/drawmatches.aspx?...) med consent-session
+async function fetchTsSti(sti, { maxAlder = 0 } = {}) {
+    const nu = Date.now();
+    const gemt = _sideCache.get(sti);
+    if (maxAlder > 0 && gemt && nu - gemt.at < maxAlder) return gemt.html;
+    const html = await hentTsSti(sti);
+    for (const [k, v] of _sideCache) if (nu - v.at > SIDE_CACHE_RYD_MS) _sideCache.delete(k);
+    _sideCache.set(sti, { html, at: nu });
+    return html;
+}
+
+async function hentTsSti(sti, _retry = 0) {
     const cookie = await establishConsent(_retry > 0);
-    const url = subPage
-        ? `${TS_BASE}/tournament/${tournamentId}/${subPage}`
-        : `${TS_BASE}/tournament/${tournamentId}`;
+    const url = `${TS_BASE}${sti}`;
     const resp = await fetch(url, {
         headers: {
             'User-Agent': BROWSER_UA,
@@ -107,13 +127,15 @@ async function fetchTournamentPage(tournamentId, subPage, _retry = 0) {
         signal: AbortSignal.timeout(20000)
     });
     if (!resp.ok) {
-        throw new Error(`Kunne ikke hente turneringsside (HTTP ${resp.status})`);
+        const err = new Error(`Kunne ikke hente turneringsside (HTTP ${resp.status})`);
+        err.status = resp.status;
+        throw err;
     }
     const html = await resp.text();
     const isWall = html.includes('class="message-page__modal"') && html.includes('cookiewall');
     // Hvis vi stadig får cookie-wall-siden, prøv at re-etablere consent én gang
     if (isWall && _retry < 1) {
-        return fetchTournamentPage(tournamentId, subPage, _retry + 1);
+        return hentTsSti(sti, _retry + 1);
     }
     return html;
 }
@@ -176,9 +198,17 @@ function parseTournamentDays(html) {
 // <a data-player-id="..."><span class="nav-link__value">NAVN</span></a>.
 function parseMatchesHtml(html) {
     const matches = [];
-    const chunks = html.split('<div class="match match--list">').slice(1);
+    const alle = html.split('<div class="match match--list">');
+    const chunks = alle.slice(1);
+    // Kampene står grupperet under et tidspunkt (<h5 class="match-group__header">09:30</h5>).
+    // Overskriften for den næste gruppe står sidst i den forrige kamps stykke.
+    let tid = sidsteTidsoverskrift(alle[0]) || '';
 
     for (const chunk of chunks) {
+        const plannedTime = tid;
+        const nyTid = sidsteTidsoverskrift(chunk);
+        if (nyTid !== null) tid = nyTid;
+
         // Begræns til denne match-blok. Vi splittede allerede på match__list-opener,
         // så chunk indeholder denne match + start af næste matchs <li>-wrapper. Cut'er
         // ved den næste match-group__item så vi ikke ved en fejl plukker den næste
@@ -230,6 +260,8 @@ function parseMatchesHtml(html) {
         }
         const side2Section = body.substring(rowPositions[1], side2End);
 
+        const ts = kampStatus(body, rowPositions);
+
         const side1Full = extractPlayers(side1Section);
         const side2Full = extractPlayers(side2Section);
         const side1Players = side1Full.map(p => p.name);
@@ -248,6 +280,10 @@ function parseMatchesHtml(html) {
             round,
             drawId,
             doubles: isDoubles,
+            plannedTime,
+            tsStatus: ts.status,
+            tsWinner: ts.winner,
+            tsSets: ts.sets,
             side1Player1: side1Players[0] || '',
             side1Player2: side1Players[1] || '',
             side2Player1: side2Players[0] || '',
@@ -258,6 +294,38 @@ function parseMatchesHtml(html) {
     }
 
     return matches;
+}
+
+// Seneste tidsoverskrift i et stykke HTML: "HH:MM", '' hvis overskriften ikke er
+// et tidspunkt, og null hvis stykket ingen overskrift har.
+function sidsteTidsoverskrift(s) {
+    const alle = [...String(s || '').matchAll(/class="[^"]*match-group__header[^"]*"[^>]*>\s*([^<]*?)\s*</g)];
+    if (!alle.length) return null;
+    const t = alle[alle.length - 1][1];
+    const m = t.match(/^(\d{1,2}):(\d{2})$/);
+    return m ? `${m[1].padStart(2, '0')}:${m[2]}` : '';
+}
+
+// Kampens status på TS: 'aflyst', 'walkover', 'spillet' (resultat indtastet)
+// eller '' (ikke spillet). winner er 1/2 (has-won på rækken), sets [[s1, s2], ...].
+function kampStatus(body, rowPositions) {
+    const besked = [...body.matchAll(/match__message">\s*([^<]*?)\s*</g)].map(m => m[1].toLowerCase()).join(' ');
+    const vandt = (i) => /^<div class="match__row\s[^"]*has-won/.test(body.substring(rowPositions[i], rowPositions[i] + 60));
+    const winner = vandt(0) ? 1 : (vandt(1) ? 2 : null);
+    const sets = [];
+    const resIdx = body.indexOf('<div class="match__result"');
+    if (resIdx > -1) {
+        const res = body.substring(resIdx, body.indexOf('</div>', resIdx));
+        for (const ul of res.split('<ul class="points">').slice(1)) {
+            const tal = [...ul.matchAll(/points__cell[^>]*>\s*(\d+)\s*</g)].map(m => parseInt(m[1], 10));
+            if (tal.length >= 2) sets.push([tal[0], tal[1]]);
+        }
+    }
+    let status = '';
+    if (/aflyst|cancel/.test(besked)) status = 'aflyst';
+    else if (/walkover|w\.o/.test(besked)) status = 'walkover';
+    else if (winner) status = 'spillet';
+    return { status, winner, sets };
 }
 
 // Træk spillernavne ud af en match__row-sektion. Kun navne i anchors med data-player-id —
@@ -300,11 +368,22 @@ function assignSourceMatchIds(matches) {
 // Genbrugelig kerne: hent + parse alle kampe for en TS-turnering på tværs af alle dage.
 // Bruges både af /preview (import) og af tournaments.js' sync-import (gen-import).
 // Returnerer { tournamentName, days, matches } hvor hver match har sourceMatchId.
-async function fetchAndParseTournamentMatches(tournamentId) {
+//
+// auto (den automatiske opdatering): sider, der sjældent ændrer sig, genbruges
+// i op til AUTO_GEMT_MS — forsiden (navn og dage), de andre dages kampe og
+// Swiss-rækker, hvor vi stadig har ventende kampe (rækken kan ikke få en ny
+// runde, før de er spillet). Dagens kampe og en Swiss-række, der venter på
+// næste runde, hentes hver gang. Alle dage er stadig med (fra cachen), så
+// løbenumrene i kilde-id'erne er de samme som ved importen.
+//   auto = { idag: 'YYYY-MM-DD', travleSwiss: Set<drawId> }
+const AUTO_GEMT_MS = 15 * 60 * 1000;
+
+async function fetchAndParseTournamentMatches(tournamentId, auto = null) {
+    const gemt = auto ? { maxAlder: AUTO_GEMT_MS } : undefined;
     // Hent Matches-siden — bruges til at extrahere turneringsnavn + liste af dage.
     // OBS: /Matches defaulter til dag 1's kampe, så vi henter eksplicit per-dag bagefter
     // for at få ALLE kampe på tværs af multi-day turneringer.
-    const mainHtml = await fetchTournamentPage(tournamentId, 'Matches');
+    const mainHtml = await fetchTournamentPage(tournamentId, 'Matches', gemt);
     const tournamentName = parseTournamentName(mainHtml);
     const days = parseTournamentDays(mainHtml);
 
@@ -316,7 +395,8 @@ async function fetchAndParseTournamentMatches(tournamentId) {
     } else {
         // Hent hver dag parallelt og tag kampene med deres dag
         const dayHtmls = await Promise.all(
-            days.map(d => fetchTournamentPage(tournamentId, `matches/${d.value}`))
+            days.map(d => fetchTournamentPage(tournamentId, `matches/${d.value}`,
+                auto && d.date !== auto.idag ? gemt : undefined))
         );
         for (let i = 0; i < days.length; i++) {
             const dayMatches = parseMatchesHtml(dayHtmls[i]);
@@ -326,7 +406,123 @@ async function fetchAndParseTournamentMatches(tournamentId) {
     }
 
     assignSourceMatchIds(allMatches);
+    for (const m of allMatches) {
+        m.plannedAt = m.day && m.plannedTime ? `${m.day} ${m.plannedTime}` : '';
+    }
+    await supplerSwissKampe(tournamentId, allMatches,
+        auto ? (d) => (auto.travleSwiss && auto.travleSwiss.has(d) ? gemt : undefined) : () => undefined);
     return { tournamentName, days, matches: allMatches };
+}
+
+// ---- Swiss ladder: kampe der endnu ikke har en dato ----
+//
+// En Swiss-række (TS viser ingen runde på dens kampe) får sin næste runde, når
+// stævnekontoret har tastet den forriges resultater i Tournament Planner. Kampe-
+// siden viser kun kampe med en dato, så en ny runde, der ikke er planlagt
+// endnu, ville ikke komme med. Rækkens egen kampliste (drawmatches.aspx)
+// viser alle rækkens kampe — de kampe derfra, der ikke står på Kampe-siden,
+// tilføjes med kilde-id "draw#?#u<TS' kamp-nr>". Når kampen senere får en
+// dato, kender synken den igen på spillerne (samme draw og runde "?").
+
+const SWISS_HENT_HOLD = 3;
+
+// Parser /sport/drawmatches.aspx: én række pr. kamp, afsluttet af et
+// match-info-link med TS' faste kamp-nr. Returnerer
+// [{ tsId, plannedAt, side1: [navne], side2: [navne], walkover }]
+function parseDrawMatchesHtml(html) {
+    const ud = [];
+    const tbody = html.indexOf('<tbody');
+    if (tbody === -1) return ud;
+    const links = [...html.matchAll(/\/match-info\/[0-9a-f-]+\/\d+\/(\d+)/gi)].filter(l => l.index > tbody);
+    let fra = tbody;
+    for (const l of links) {
+        const seg = html.substring(fra, l.index);
+        fra = l.index + l[0].length;
+        const s1 = seg.indexOf('<table align="Right">');
+        if (s1 === -1) continue;
+        const e1 = seg.indexOf('</table>', s1);
+        const s2 = seg.indexOf('<table', e1);
+        const e2 = s2 > -1 ? seg.indexOf('</table>', s2) : -1;
+        if (e1 === -1 || s2 === -1 || e2 === -1) continue;
+        const navne = (del) => [...del.matchAll(/player=\d+"[^>]*>([^<]+)<\/a>/g)]
+            .map(m => decodeHtmlEntities(m[1]).trim()).filter(Boolean);
+        const side1 = navne(seg.substring(s1, e1));
+        const side2 = navne(seg.substring(s2, e2));
+        const t = seg.match(/(\d{2})-(\d{2})-(\d{4})\s*<span class="time">\s*(\d{1,2}):(\d{2})/);
+        const plannedAt = t ? `${t[3]}-${t[2]}-${t[1]} ${t[4].padStart(2, '0')}:${t[5]}` : '';
+        const score = (seg.match(/<span class="score">([\s\S]*?)<\/span>\s*<\/td>/) || [])[1] || '';
+        ud.push({ tsId: l[1], plannedAt, side1, side2, walkover: /w\.o/i.test(score) });
+    }
+    return ud;
+}
+
+const sammenlignNavn = (s) => String(s || '').replace(/\s*\[[^\]]*\]\s*$/, '').replace(/\s+/g, ' ').trim().toLowerCase();
+const spillerNoegle = (a, b) => [a.map(sammenlignNavn).sort().join('+'), b.map(sammenlignNavn).sort().join('+')].sort().join('|');
+
+// hentValg(drawId) → valg til fetchTsSti (fx { maxAlder }) eller undefined
+async function supplerSwissKampe(tournamentId, matches, hentValg = () => undefined) {
+    const swiss = new Map(); // drawId -> en kamp fra rækken (kategori, double)
+    for (const m of matches) {
+        if (m.drawId && !m.round && !swiss.has(m.drawId)) swiss.set(m.drawId, m);
+    }
+    const draws = [...swiss.keys()];
+    for (let i = 0; i < draws.length; i += SWISS_HENT_HOLD) {
+        const hold = draws.slice(i, i + SWISS_HENT_HOLD);
+        const svar = await Promise.all(hold.map(async (d) => {
+            try {
+                return [d, parseDrawMatchesHtml(await fetchTsSti(`/sport/drawmatches.aspx?id=${tournamentId}&draw=${d}`, hentValg(d)))];
+            } catch (e) {
+                // TS beder os holde igen: hele opdateringen fejler, så den
+                // automatiske opdatering venter længere (se runTournamentAutoSync)
+                if (e.status === 429 || e.status === 503) throw e;
+                console.error(`Swiss-række ${d}: kunne ikke hente rækkens kampe:`, e.message);
+                return [d, []];
+            }
+        }));
+        for (const [d, raekker] of svar) {
+            const paaKampesiden = matches.filter(m => m.drawId === d).map(m => ({
+                noegle: spillerNoegle(m.side1.map(p => p.name), m.side2.map(p => p.name)),
+                navne: [...m.side1, ...m.side2].map(p => sammenlignNavn(p.name)),
+                plannedAt: m.plannedAt || '',
+                brugt: false
+            }));
+            // Kendt på Kampe-siden: 1) samme spillere — 2) ellers (en kamp med en
+            // afmeldt spiller: Kampe-siden viser ikke hans navn, rækkesiden gør)
+            // samme tidspunkt, og alle Kampe-sidens navne findes i rækkens kamp.
+            // Hver kamp på Kampe-siden dækker højst én række, eksakte par først.
+            const tag = (find) => { const k = paaKampesiden.find(x => !x.brugt && find(x)); if (k) k.brugt = true; return !!k; };
+            const forbillede = swiss.get(d);
+            const ukendte = raekker
+                .filter(r => r.side1.length && r.side2.length) // ikke oversidderen (bye)
+                .filter(r => !tag(x => x.noegle === spillerNoegle(r.side1, r.side2)))
+                .filter(r => {
+                    if (!r.plannedAt) return true;
+                    const rn = new Set([...r.side1, ...r.side2].map(sammenlignNavn));
+                    return !tag(x => x.plannedAt === r.plannedAt && x.navne.length > 0 && x.navne.every(n => rn.has(n)));
+                });
+            for (const r of ukendte) {
+                matches.push({
+                    category: forbillede.category,
+                    round: '',
+                    drawId: d,
+                    doubles: forbillede.doubles || r.side1.length > 1 || r.side2.length > 1,
+                    plannedTime: r.plannedAt ? r.plannedAt.slice(11) : '',
+                    plannedAt: r.plannedAt,
+                    day: r.plannedAt ? r.plannedAt.slice(0, 10) : '',
+                    dayLabel: '',
+                    tsStatus: r.walkover ? 'walkover' : '',
+                    tsWinner: null,
+                    tsSets: [],
+                    side1Player1: r.side1[0] || '', side1Player2: r.side1[1] || '',
+                    side2Player1: r.side2[0] || '', side2Player2: r.side2[1] || '',
+                    side1: r.side1.map(name => ({ name, playerId: '', clubId: '' })),
+                    side2: r.side2.map(name => ({ name, playerId: '', clubId: '' })),
+                    sourceMatchId: `${d}#?#u${r.tsId}`
+                });
+            }
+        }
+    }
+    return matches;
 }
 
 // POST /api/import/tournament/preview
@@ -462,3 +658,7 @@ module.exports.fetchAndParseTournamentMatches = fetchAndParseTournamentMatches;
 module.exports.extractTournamentId = extractTournamentId;
 module.exports.resolveClubNames = resolveClubNames;
 module.exports.buildPlayerClubRows = buildPlayerClubRows;
+// Rene parsere til unit-tests
+module.exports.parseMatchesHtml = parseMatchesHtml;
+module.exports.parseDrawMatchesHtml = parseDrawMatchesHtml;
+module.exports.supplerSwissKampe = supplerSwissKampe;

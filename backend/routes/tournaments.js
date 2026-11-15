@@ -92,14 +92,14 @@ function isRealName(s) {
     if (!t || t === '?') return false;
     const lower = t.toLowerCase();
     if (lower === 'bye' || lower.startsWith('winner of') || lower.startsWith('vinder af')) return false;
-    // Kun et seed-mærke som "[1]" uden navn
-    if (/^\[\d+\]$/.test(t)) return false;
+    // Kun et seed-mærke som "[1]" eller "[3/4]" uden navn
+    if (/^\[[^\]]*\]$/.test(t)) return false;
     return true;
 }
 
-// Normaliser et navn til sammenligning: fjern seed-suffiks "[1]" og kollaps whitespace.
+// Normaliser et navn til sammenligning: fjern seed-suffiks ("[1]", "[3/4]") og kollaps whitespace.
 function normalizeName(s) {
-    return String(s || '').replace(/\s*\[\d+\]\s*$/, '').replace(/\s+/g, ' ').trim().toLowerCase();
+    return String(s || '').replace(/\s*\[[^\]]*\]\s*$/, '').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 // Trunkér til kolonne-grænsen (VARCHAR(100)) så et langt navn ikke fejler hele UPDATE'en.
@@ -184,13 +184,55 @@ function sammeSpillere(a, b) {
     return (ensListe(a.s1, b.s1) && ensListe(a.s2, b.s2)) || (ensListe(a.s1, b.s2) && ensListe(a.s2, b.s1));
 }
 
-// Begge kender spillerne på begge sider, men ikke én spiller er fælles: en
-// anden kamp. (En udskiftning af én spiller deler stadig mindst én.)
+// Begge kender mindst én spiller, men ikke én spiller er fælles: en anden
+// kamp. (En udskiftning af én spiller deler stadig mindst én.) Før skulle
+// begge kende begge sider — så kunne en walkover med en afmeldt spiller
+// ("C mod [WDN]") parres på id med en helt anden kamp ("A mod B").
 function modsigerHinanden(a, b) {
-    if (!begge(a) || !begge(b)) return false;
+    const a2 = [...a.s1, ...a.s2];
     const b2 = new Set([...b.s1, ...b.s2]);
-    return ![...a.s1, ...a.s2].some(n => b2.has(n));
+    if (!a2.length || !b2.size) return false;
+    return !a2.some(n => b2.has(n));
 }
+
+// Alle TS' rigtige navne findes i rækken (og der er mindst ét): sikkert nok
+// til at flytte et resultat fra TS over på rækken.
+function navneForenelige(row, m) {
+    const r = kampNavne(row, true);
+    const i = kampNavne(m, false);
+    const rs = new Set([...r.s1, ...r.s2]);
+    const is = [...i.s1, ...i.s2];
+    return is.length > 0 && is.every(n => rs.has(n));
+}
+
+// TS viser kampens sider ombyttet ift. rækken (afgjort på navne-overlap)
+function sideOmbyttet(row, m) {
+    const r = kampNavne(row, true);
+    const i = kampNavne(m, false);
+    const faelles = (a, b) => a.filter(n => b.includes(n)).length;
+    return faelles(i.s1, r.s2) + faelles(i.s2, r.s1) > faelles(i.s1, r.s1) + faelles(i.s2, r.s2);
+}
+
+// Resultatet fra TS som kolonner (vinder/sæt), når TS har kampen som spillet
+// eller walkover — ellers null. s1/s2 er rækkens holdnavne (side 1/2), byttet =
+// TS' sider er ombyttet ift. rækken. Sættene skrives i banernes format
+// ("A 21-15 B, A 18-21 B"), så Turnering og Kamphistorik viser dem som ellers.
+function tsResultat(m, s1, s2, byttet = false) {
+    if (m.tsStatus !== 'walkover' && m.tsStatus !== 'spillet') return null;
+    let vinder = m.tsWinner === 1 || m.tsWinner === 2 ? m.tsWinner : null;
+    if (vinder && byttet) vinder = 3 - vinder;
+    let saet = 'W.O.';
+    if (m.tsStatus === 'spillet') {
+        const sets = (m.tsSets || []).map(([a, b]) => (byttet ? [b, a] : [a, b]));
+        saet = sets.length ? sets.map(([a, b]) => `${s1} ${a}-${b} ${s2}`).join(', ') : null;
+    }
+    return { winner_team: vinder, set_scores: saet ? saet.substring(0, 200) : null };
+}
+
+const holdNavn = (a, b) => [a, b].filter(Boolean).join(' / ');
+
+// Planlagt tidspunkt fra TS ("YYYY-MM-DD HH:MM") eller null
+const planlagt = (m) => (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(m.plannedAt || '') ? m.plannedAt : null);
 
 /**
  * Parrer indkommende TS-kampe med eksisterende rækker. Ren funktion.
@@ -274,18 +316,39 @@ function demoSyncVent(id, nu = Date.now()) {
 }
 const demoUset = (id, nu = Date.now()) => nu - (_demoSidstSet.get(Number(id)) || _demoStart) > demo.DEMO_AUTO_SYNC_USET_MS;
 
-// Hjælper: hent alle matches for en turnering (sorteret efter match_order)
+// Hjælper: hent alle matches for en turnering — efter TS' planlagte tidspunkt
+// (kampe uden tidspunkt sidst), ellers i den rækkefølge, de blev tilføjet
 async function getMatchesForTournament(tournamentId) {
     return query(
-        `SELECT id, match_order, label, doubles, source_match_id,
+        `SELECT id, match_order, label, planned_time, doubles, source_match_id,
                 side1_player1, side1_player2, side2_player1, side2_player2,
                 court_number, status, winner_team, set_scores, created_at,
                 started_at, finished_at
          FROM tournament_matches
          WHERE tournament_id = ?
-         ORDER BY match_order ASC`,
+         ORDER BY planned_time IS NULL, planned_time, match_order ASC`,
         [tournamentId]
     );
+}
+
+// Én række til tournament_matches ud fra en kamp fra import/kandidater/sync.
+// Har TS allerede kampen som spillet eller walkover, gemmes den som færdig.
+function nyKampRaekke(tournamentId, matchOrder, m, kilde) {
+    const s1 = [clampName(m.side1Player1) || null, clampName(m.side1Player2) || null];
+    const s2 = [clampName(m.side2Player1) || null, clampName(m.side2Player2) || null];
+    const res = tsResultat(m, holdNavn(s1[0], s1[1]), holdNavn(s2[0], s2[1]));
+    return {
+        sql: `INSERT INTO tournament_matches
+              (tournament_id, match_order, label, planned_time, doubles, source_match_id,
+               side1_player1, side1_player2, side2_player1, side2_player2,
+               status, winner_team, set_scores, finished_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${res ? 'CURRENT_TIMESTAMP' : 'NULL'})`,
+        params: [
+            tournamentId, matchOrder, m.label || null, planlagt(m), m.doubles ? 1 : 0, kilde,
+            s1[0], s1[1], s2[0], s2[1],
+            res ? 'finished' : 'pending', res ? res.winner_team : null, res ? res.set_scores : null
+        ]
+    };
 }
 
 // GET /api/tournaments/active - Alle aktive turneringer med matches (public)
@@ -312,6 +375,33 @@ router.get('/active', async (req, res, next) => {
         }
 
         res.json(result);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/tournaments/court/:courtNumber - Den turneringskamp, der spilles på
+// banen (public, som /active). Tabletten spørger her i stedet for at hente
+// hele turneringen ved hvert point — med 200-300 kampe var det ~100 kB pr.
+// point pr. tablet. Svarer { tournament: { id, name, matches: [kampen] } }
+// eller { tournament: null }.
+router.get('/court/:courtNumber', async (req, res, next) => {
+    try {
+        const bane = parseInt(req.params.courtNumber, 10);
+        if (!Number.isFinite(bane)) return res.status(400).json({ error: 'Ugyldig bane' });
+        const m = await queryOne(
+            `SELECT m.id, m.tournament_id, m.match_order, m.label, m.planned_time, m.doubles, m.source_match_id,
+                    m.side1_player1, m.side1_player2, m.side2_player1, m.side2_player2,
+                    m.court_number, m.status, m.winner_team, m.set_scores, m.created_at,
+                    m.started_at, m.finished_at, t.name AS tournament_name
+             FROM tournament_matches m JOIN tournaments t ON t.id = m.tournament_id
+             WHERE t.status = 'active' AND m.court_number = ? AND m.status = 'active'
+             ORDER BY t.created_at DESC LIMIT 1`,
+            [bane]
+        );
+        if (!m) return res.json({ tournament: null });
+        const { tournament_id, tournament_name, ...kamp } = m;
+        res.json({ tournament: { id: tournament_id, name: tournament_name, matches: [kamp] } });
     } catch (error) {
         next(error);
     }
@@ -427,18 +517,10 @@ async function indsaetKampe(tx, tournamentId, matches) {
     for (const m of matches) {
         const kilde = m.sourceMatchId || null;
         if (kilde && kendte.has(kilde)) { skipped++; continue; }
+        if (m.tsStatus === 'aflyst') { skipped++; continue; } // aflyst på TS — spilles ikke
         if (kilde) kendte.add(kilde);
-        await tx.query(
-            `INSERT INTO tournament_matches
-             (tournament_id, match_order, label, doubles, source_match_id,
-              side1_player1, side1_player2, side2_player1, side2_player2)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-                tournamentId, nextOrder++, m.label || null, m.doubles ? 1 : 0, kilde,
-                clampName(m.side1Player1) || null, clampName(m.side1Player2) || null,
-                clampName(m.side2Player1) || null, clampName(m.side2Player2) || null
-            ]
-        );
+        const r = nyKampRaekke(tournamentId, nextOrder++, m, kilde);
+        await tx.query(r.sql, r.params);
         inserted++;
     }
     return { inserted, skipped };
@@ -556,9 +638,14 @@ function drawScopeOf(sourceMatchId) {
 //     spillerne er afgjort → auto-tilføjes HVIS den hører til en draw/pulje
 //     vi allerede har kampe fra, og mindst ét rigtigt navn er kendt.
 // Genuint nye kategorier (draw vi ikke kender) forbliver manuelle kandidater.
-async function syncTournamentCore(tournament, { skipClubs = false } = {}) {
-    const { matches: incoming } = await fetchAndParseTournamentMatches(tournament.source_tournament_id);
+async function syncTournamentCore(tournament, { skipClubs = false, idag = null } = {}) {
     const existing = await getMatchesForTournament(tournament.id);
+    // Den automatiske opdatering (idag sat) skåner TS: kun dagens kampe og
+    // Swiss-rækker uden ventende kampe hentes hver gang — se
+    // fetchAndParseTournamentMatches. En Swiss-række med ventende kampe kan
+    // ikke få en ny runde endnu.
+    const auto = idag ? { idag, travleSwiss: travleSwissRaekker(existing) } : null;
+    const { matches: incoming } = await fetchAndParseTournamentMatches(tournament.source_tournament_id, auto);
 
     const knownDraws = new Set();
     for (const row of existing) {
@@ -572,8 +659,13 @@ async function syncTournamentCore(tournament, { skipClubs = false } = {}) {
     const newCandidates = []; // kræver manuel godkendelse (ny draw/kategori)
     const autoAdd = [];       // bracket-progression i kendt draw → tilføjes automatisk
 
+    // Aflyste kampe på TS spilles ikke: de tilføjes ikke og parres ikke (en
+    // aflyst kamp har ofte kun afmeldte spillere uden navn og ville ellers
+    // blive tilbudt som "ny kamp" ved hver opdatering)
+    const spilbare = incoming.filter(m => m.tsStatus !== 'aflyst');
+
     // Spillerne først, så id'et (nr. 74) — se parSyncKampe
-    for (const { m, row, sourceMatchId } of parSyncKampe(existing, incoming)) {
+    for (const { m, row, sourceMatchId } of parSyncKampe(existing, spilbare)) {
         if (!row) {
             const cand = {
                 sourceMatchId,
@@ -581,6 +673,10 @@ async function syncTournamentCore(tournament, { skipClubs = false } = {}) {
                 category: m.category,
                 round: m.round,
                 dayLabel: m.dayLabel || '',
+                plannedAt: planlagt(m) || '',
+                tsStatus: m.tsStatus || '',
+                tsWinner: m.tsWinner || null,
+                tsSets: m.tsSets || [],
                 doubles: !!m.doubles,
                 side1Player1: m.side1Player1, side1Player2: m.side1Player2,
                 side2Player1: m.side2Player1, side2Player2: m.side2Player2
@@ -601,10 +697,31 @@ async function syncTournamentCore(tournament, { skipClubs = false } = {}) {
         if (row.status !== 'pending') { skipped++; continue; } // aktiv/afsluttet — rør aldrig
 
         const changes = computeFillOnlyChanges(row, m);
+
+        // TS' planlagte tidspunkt følger med, når TS flytter kampen
+        const tid = planlagt(m);
+        if (tid && tid !== (row.planned_time || null)) changes.planned_time = tid;
+
+        // Spillet eller walkover på TS (fx tastet på stævnekontoret, eller
+        // spillet på en bane uden tablet): kampen er færdig og skal ikke kunne
+        // sættes på en bane. Kun når TS' navne alle findes i rækken.
+        let afslut = '';
+        if ((m.tsStatus === 'walkover' || m.tsStatus === 'spillet') && navneForenelige(row, m)) {
+            const n = { ...row, ...changes };
+            const res = tsResultat(m, holdNavn(n.side1_player1, n.side1_player2),
+                holdNavn(n.side2_player1, n.side2_player2), sideOmbyttet(row, m));
+            if (res) {
+                changes.status = 'finished';
+                changes.winner_team = res.winner_team;
+                changes.set_scores = res.set_scores;
+                afslut = ', finished_at = CURRENT_TIMESTAMP';
+            }
+        }
+
         if (Object.keys(changes).length === 0) { unchanged++; continue; }
 
         const cols = Object.keys(changes);
-        const setSql = cols.map(c => `${c} = ?`).join(', ');
+        const setSql = cols.map(c => `${c} = ?`).join(', ') + afslut;
         const vals = cols.map(c => changes[c]);
         // status='pending'-guard: hvis en bane lige har aktiveret kampen midt i sync,
         // rammer UPDATE'en 0 rækker → tæl som skipped i stedet for at overskrive.
@@ -624,24 +741,15 @@ async function syncTournamentCore(tournament, { skipClubs = false } = {}) {
         );
         let nextOrder = (maxRow?.max_order || 0) + 1;
         for (const c of autoAdd) {
-            await query(
-                `INSERT INTO tournament_matches
-                 (tournament_id, match_order, label, doubles, source_match_id,
-                  side1_player1, side1_player2, side2_player1, side2_player2)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [
-                    tournament.id, nextOrder++, c.label || null, c.doubles ? 1 : 0, c.sourceMatchId || null,
-                    clampName(c.side1Player1) || null, clampName(c.side1Player2) || null,
-                    clampName(c.side2Player1) || null, clampName(c.side2Player2) || null
-                ]
-            );
+            const r = nyKampRaekke(tournament.id, nextOrder++, c, c.sourceMatchId || null);
+            await query(r.sql, r.params);
             added++;
         }
     }
 
     // Klub-opsamling genbruger de allerede hentede kampe. Auto-opdateringer
     // (skipClubs) springer den helt over — klub-logoer ændrer sig ikke hvert
-    // 4. minut, og det sparer klubside-kald mod TS.
+    // 2. minut, og det sparer klubside-kald mod TS.
     if (!skipClubs) {
         await captureTournamentClubs(tournament.id, tournament.source_tournament_id, incoming);
     }
@@ -650,14 +758,15 @@ async function syncTournamentCore(tournament, { skipClubs = false } = {}) {
 }
 
 // Kør auto-sync for alle aktive turneringer med auto_sync slået til.
-// Kaldes af scheduleren hvert 4. minut — SKAL køres i tenant-kontekst
+// Kaldes af scheduleren hvert 2. minut — SKAL køres i tenant-kontekst
 // (runWithTenant) med dbLabel som matcher req.clubDbName-konventionen.
-async function runTournamentAutoSync(dbLabel) {
+async function runTournamentAutoSync(dbLabel, nu = new Date()) {
     const tournaments = await query(
         `SELECT id, source_tournament_id FROM tournaments
          WHERE status = 'active' AND auto_sync = 1 AND source_tournament_id IS NOT NULL
          ORDER BY id DESC`
     );
+    const { dato, time } = koebenhavnNu(nu);
 
     // Demoen (nr. 91): højst DEMO_AUTO_SYNC_MAKS (de nyeste — fx efter en
     // gendannet backup), og en turnering, ingen har set i et døgn, slås fra
@@ -675,27 +784,90 @@ async function runTournamentAutoSync(dbLabel) {
         if (t.fra) continue;
         const key = tenantSyncKey(dbLabel, t.id);
         if (_syncingTournaments.has(key)) continue; // manuel opdatering i gang
+        const dageRaekker = await query(
+            `SELECT DISTINCT LEFT(planned_time, 10) AS d FROM tournament_matches
+             WHERE tournament_id = ? AND planned_time IS NOT NULL ORDER BY d`,
+            [t.id]
+        );
+        const dage = (Array.isArray(dageRaekker) ? dageRaekker : [])
+            .map(r => r && r.d).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d || ''));
+        const plan = autoPlan({ nu: nu.getTime(), dato, time, dage, tidligere: _autoSyncPlan.get(key) });
+        const status = _autoSyncStatus.get(key);
+        if (!plan.koer) {
+            if (status || plan.pause !== 'venter') _autoSyncStatus.set(key, { ...(status || {}), pause: plan.pause, naeste: plan.naeste || null });
+            continue;
+        }
         if (erDemo && demoSyncVent(t.id) > 0) continue; // lige hentet manuelt
+
         _syncingTournaments.add(key);
         try {
-            const res = await syncTournamentCore(t, { skipClubs: true });
+            const res = await syncTournamentCore(t, { skipClubs: true, idag: dato });
+            const naeste = plan.turneringsdag ? 0 : nu.getTime() + AUTO_UDEN_FOR_DAGE_MS;
+            _autoSyncPlan.set(key, { fejl: 0, naeste });
             _autoSyncStatus.set(key, {
                 at: Date.now(),
                 updated: res.updated,
                 added: res.added,
                 newCandidates: res.newCandidates.length,
-                error: null
+                error: null,
+                pause: plan.turneringsdag ? null : 'udenfor',
+                naeste: naeste || null
             });
             if (res.updated > 0 || res.added > 0 || res.newCandidates.length > 0) {
                 console.log(`  ↻ ${dbLabel}: turnering ${t.id} auto-opdateret — ${res.updated} opdateret, ${res.added} tilføjet, ${res.newCandidates.length} nye kandidater`);
             }
         } catch (e) {
-            _autoSyncStatus.set(key, { at: Date.now(), updated: 0, added: 0, newCandidates: 0, error: e.message || String(e) });
-            console.error(`❌ Auto-opdatering fejlede for turnering ${t.id} (${dbLabel}):`, e.message);
+            // Venter længere for hver fejl i træk (5, 10, 20, 30 min), så vi ikke
+            // bliver ved med at ramme TS, hvis den siger fra eller er nede
+            const fejl = ((_autoSyncPlan.get(key) || {}).fejl || 0) + 1;
+            const naeste = nu.getTime() + AUTO_FEJL_PAUSE_MIN[Math.min(fejl, AUTO_FEJL_PAUSE_MIN.length) - 1] * 60000;
+            _autoSyncPlan.set(key, { fejl, naeste });
+            _autoSyncStatus.set(key, { at: Date.now(), updated: 0, added: 0, newCandidates: 0, error: e.message || String(e), pause: 'fejl', naeste });
+            console.error(`❌ Auto-opdatering fejlede for turnering ${t.id} (${dbLabel}, fejl nr. ${fejl}):`, e.message);
         } finally {
             _syncingTournaments.delete(key);
         }
     }
+}
+
+// ---- Den automatiske opdaterings rytme ----
+//
+// Scheduleren kalder hvert 2. minut. På turneringens dage hentes der hver
+// gang (dagens kampe — resten genbruges, se fetchAndParseTournamentMatches),
+// andre dage højst hver halve time, aldrig om natten (22-7) og ikke når
+// turneringens sidste dag er ovre. Fejler TS, ventes der længere og længere.
+const AUTO_UDEN_FOR_DAGE_MS = 30 * 60 * 1000;
+const AUTO_FEJL_PAUSE_MIN = [5, 10, 20, 30];
+const AUTO_NAT_FRA = 22, AUTO_NAT_TIL = 7;
+const _autoSyncPlan = new Map(); // "tenant:id" -> { fejl, naeste }
+
+// Dato ("YYYY-MM-DD") og time (0-23) i Danmark
+function koebenhavnNu(nu = new Date()) {
+    const dato = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Copenhagen', year: 'numeric', month: '2-digit', day: '2-digit' }).format(nu);
+    const time = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhagen', hour: '2-digit', hourCycle: 'h23' }).format(nu));
+    return { dato, time };
+}
+
+// Skal den automatiske opdatering køre nu? Ren funktion.
+// dage: turneringens datoer (fra TS' tidspunkter), tidligere: { fejl, naeste }.
+// → { koer: true, turneringsdag } eller { koer: false, pause: 'nat'|'slut'|'fejl'|'venter', naeste? }
+function autoPlan({ nu, dato, time, dage, tidligere }) {
+    if (time >= AUTO_NAT_FRA || time < AUTO_NAT_TIL) return { koer: false, pause: 'nat' };
+    if (dage.length && dato > dage[dage.length - 1]) return { koer: false, pause: 'slut' };
+    if (tidligere && tidligere.naeste && nu < tidligere.naeste) {
+        return { koer: false, pause: tidligere.fejl ? 'fejl' : 'venter', naeste: tidligere.naeste };
+    }
+    return { koer: true, turneringsdag: dage.length === 0 || dage.includes(dato) };
+}
+
+// Swiss-rækker (draw med runde "?") hvor vi stadig har ventende kampe
+function travleSwissRaekker(rows) {
+    const travle = new Set();
+    for (const r of rows) {
+        if (r.status !== 'pending' || !r.source_match_id) continue;
+        if (rundeScopeOf(r.source_match_id).endsWith('#?')) travle.add(drawScopeOf(r.source_match_id));
+    }
+    return travle;
 }
 
 router.post('/:id/sync-import', authMiddleware, requirePage('tournament'), async (req, res, next) => {
@@ -737,7 +909,7 @@ router.post('/:id/sync-import', authMiddleware, requirePage('tournament'), async
 });
 
 // PUT /api/tournaments/:id/auto-sync - Slå serverbaseret auto-opdatering til/fra (kræver auth)
-// Flaget gemmes i databasen, så schedulerens 4-minutters job kører uafhængigt
+// Flaget gemmes i databasen, så schedulerens 2-minutters job kører uafhængigt
 // af om admin-siden (eller browseren) er åben.
 router.put('/:id/auto-sync', authMiddleware, requirePage('tournament'), async (req, res, next) => {
     try {
@@ -764,7 +936,7 @@ router.put('/:id/auto-sync', authMiddleware, requirePage('tournament'), async (r
         await query('UPDATE tournaments SET auto_sync = ? WHERE id = ?', [enabled ? 1 : 0, id]);
 
         // Kør første opdatering med det samme (fire-and-forget) så brugeren ikke
-        // skal vente op til 4 minutter på effekten. Tenant-konteksten følger med
+        // skal vente op til 2 minutter på effekten. Tenant-konteksten følger med
         // promise-kæden (AsyncLocalStorage).
         if (enabled) {
             const key = tenantSyncKey(req.clubDbName, tournament.id);
@@ -952,3 +1124,11 @@ module.exports._demo = { sidstSet: _demoSidstSet, sidstHentet: _demoSidstHentet,
 module.exports.parSyncKampe = parSyncKampe;
 module.exports.rundeScopeOf = rundeScopeOf;
 module.exports.computeFillOnlyChanges = computeFillOnlyChanges;
+module.exports.navneForenelige = navneForenelige;
+module.exports.sideOmbyttet = sideOmbyttet;
+module.exports.tsResultat = tsResultat;
+module.exports.nyKampRaekke = nyKampRaekke;
+module.exports.syncTournamentCore = syncTournamentCore;
+module.exports.autoPlan = autoPlan;
+module.exports.koebenhavnNu = koebenhavnNu;
+module.exports.travleSwissRaekker = travleSwissRaekker;

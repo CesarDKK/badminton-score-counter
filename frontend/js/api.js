@@ -928,6 +928,16 @@ class BadmintonAPI {
         return this.request('/tournaments/active');
     }
 
+    /**
+     * Turneringskampen, der spilles på banen, i samme form som
+     * getActiveTournaments() (en liste med højst én turnering med én kamp).
+     * Tabletten bruger den i stedet for at hente alle turneringens kampe.
+     */
+    async getTournamentForCourt(courtNumber) {
+        const svar = await this.request(`/tournaments/court/${encodeURIComponent(courtNumber)}`);
+        return svar && svar.tournament ? [svar.tournament] : [];
+    }
+
     /** Get tournament history (finished) */
     async getTournamentHistory() {
         return this.request('/tournaments/history?limit=200');

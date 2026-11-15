@@ -2867,7 +2867,7 @@ async function saveMatchResult(winner, loser, winnerGames, loserGames, winnerKey
         // tildelingen op direkte her, så afslutningen altid registreres korrekt.
         if (!capturedTournamentMatchId && !capturedGameId) {
             try {
-                const tournaments = await api.getActiveTournaments();
+                const tournaments = await api.getTournamentForCourt(courtId);
                 for (const t of (tournaments || [])) {
                     const m = (t.matches || []).find(mm => mm.court_number === courtId && mm.status === 'active');
                     if (m) { capturedTournamentMatchId = m.id; capturedTournament = t; break; }
@@ -3234,7 +3234,9 @@ async function serverSyncTick(reason) {
         try {
             if (assignedHoldkampGameId) return;
             if (!assignedTournamentMatchId && !checkAssignments) return;
-            const tournaments = await api.getActiveTournaments();
+            // Kun banens egen kamp — hele turneringen (200-300 kampe) ved hvert
+            // point belastede hallens WiFi
+            const tournaments = await api.getTournamentForCourt(courtId);
             let myMatch = null;
             let parentTournament = null;
             for (const t of (tournaments || [])) {

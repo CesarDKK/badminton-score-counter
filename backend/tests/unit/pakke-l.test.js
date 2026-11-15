@@ -458,13 +458,16 @@ test('91: demoen — højst 2 turneringer med auto-sync, uset i et døgn slås f
     console.log = () => {};
     process.env.APP_DOMAIN = 'badmintonapp.dk';
     try {
+        let naesteNu = new Date('2026-11-18T08:00:00Z');
         const kør = async (label) => {
             fejl.length = 0;
             tournaments._demo.sidstHentet.clear();
             nulstil(async (sql) => (/FROM tournaments/.test(sql)
                 ? [{ id: 9, source_tournament_id: 'a' }, { id: 8, source_tournament_id: 'b' }, { id: 7, source_tournament_id: 'c' }]
                 : { affectedRows: 1 }));
-            await tournaments.runTournamentAutoSync(label);
+            // Fast tidspunkt om dagen (ingen natpause), en time frem pr. kørsel (ingen fejl-pause fra forrige)
+            naesteNu = new Date(naesteNu.getTime() + 3600000);
+            await tournaments.runTournamentAutoSync(label, naesteNu);
             return {
                 fra: kald.filter(k => /SET auto_sync = 0/.test(k.sql)).map(k => k.params[0]),
                 hentet: [9, 8, 7].filter(id => fejl.some(f => f.includes(`turnering ${id} `))),
