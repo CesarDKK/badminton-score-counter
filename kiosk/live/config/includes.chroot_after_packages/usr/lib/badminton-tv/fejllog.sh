@@ -10,6 +10,8 @@
 #   opstart-NNN-<dato>.txt    kernebeskeder + advarsler + slutningen af hver opstart
 #   kernenedbrud/             pstore-dumps (kerne-panik), hvis der er nogen
 #   kiosk.conf.txt            uden WiFi-kode
+#   andet-system/             (fra admin, PC) det samme for det andet system på
+#                             disken: loggen fra før seneste opdatering
 #
 # Variabler (sættes før fejllog_saml):
 #   FL_ROD            roden af systemet, der læses ('' = det kørende system)
@@ -203,6 +205,54 @@ fl_lige_nu() {
     done
     command -v vcgencmd >/dev/null 2>&1 && printf '  Pi-drosling: %s\n' "$(vcgencmd get_throttled 2>/dev/null)"
     return 0
+}
+
+# ── Det andet system på PC'ens disk (A/B) ──
+# En opdatering starter i det andet system, og loggen fra før ligger på dét
+# systems disk — uden den begyndte fejlloggen forfra efter hver opdatering
+# (set på badminton-tv55 2026-11-15: kun 4 minutters log). Kun PC'en: Pi'ens
+# log ligger i RAM. Monteres skrivebeskyttet, mens opdateringens lås holdes,
+# så en installation i det andet system ikke er i gang imens.
+FL_CMDLINE=${FL_CMDLINE:-/proc/cmdline}
+FL_OPD_LAAS=${FL_OPD_LAAS:-/run/badminton-tv/opdatering/laas}
+FL_ANDET_MNT=${FL_ANDET_MNT:-/run/badminton-tv/fejllog-andet}
+
+fl_andet_enhed() {
+    local slot
+    slot=$(tr ' ' '\n' < "$FL_CMDLINE" 2>/dev/null | sed -n 's/^badminton\.slot=//p' | tail -1)
+    case "$slot" in
+        a) blkid -L badminton-tv-b 2>/dev/null ;;
+        b) blkid -L badminton-tv-a 2>/dev/null ;;
+    esac
+}
+
+# fejllog_andet_system UD NAVN — det andet systems log i UD (intet uden A/B)
+fejllog_andet_system() {
+    local ud=$1 navn=$2 enhed
+    enhed=$(fl_andet_enhed)
+    [ -n "$enhed" ] || return 0
+    mkdir -p "$ud" "$(dirname "$FL_OPD_LAAS")" "$FL_ANDET_MNT"
+    (
+        if ! flock -n 9; then
+            printf 'Det andet system (%s) blev ikke læst: en opdatering er i gang lige nu.\nHent fejlloggen igen om lidt.\n' \
+                "$enhed" > "$ud/OVERSIGT.txt"
+            exit 0
+        fi
+        if findmnt -rn -S "$enhed" >/dev/null 2>&1; then
+            printf 'Det andet system (%s) blev ikke læst: det er i brug.\n' "$enhed" > "$ud/OVERSIGT.txt"
+            exit 0
+        fi
+        # noload: en journal, der ikke blev afsluttet (frøs PC'en), afspilles
+        # ikke — intet skrives på det andet system
+        if ! mount -o ro,noload "$enhed" "$FL_ANDET_MNT" 2>/dev/null && ! mount -o ro "$enhed" "$FL_ANDET_MNT"; then
+            printf 'Det andet system (%s) kunne ikke åbnes.\n' "$enhed" > "$ud/OVERSIGT.txt"
+            exit 0
+        fi
+        FL_ROD=$FL_ANDET_MNT fejllog_saml "$ud" "det andet system på disken ($enhed) — loggen fra før seneste opdatering" "$navn"
+        umount "$FL_ANDET_MNT" 2>/dev/null || umount -l "$FL_ANDET_MNT"
+    ) 9>"$FL_OPD_LAAS"
+    printf '\nDet andet system på disken (loggen fra før seneste opdatering): se mappen andet-system\n' \
+        >> "$(dirname "$ud")/OVERSIGT.txt"
 }
 
 # Adgangslinkets kode må ikke stå i loggen (TV_URL står i browserens

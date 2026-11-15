@@ -69,8 +69,36 @@ function indenforLoft(klub, klientId, haendelser, nu = Date.now()) {
 
 function _nulstilLoft() { talt.clear(); advaret.clear(); }
 
+// Dubletter: på et dårligt net får serveren TV-PC'ens rapport, men svaret når
+// ikke tilbage — så sender PC'en den igen senere. Samme skærm, type og
+// starttid er den samme hændelse og gemmes kun én gang (også inden for én
+// rapport). Kan databasen ikke svare, gemmes de hellere for mange gange end
+// slet ikke.
+async function nyeHaendelser(klub, klientId, haendelser) {
+    const set = new Set();
+    const unikke = haendelser.filter(h => {
+        const n = `${h.type}|${h.fra}`;
+        if (set.has(n)) return false;
+        set.add(n);
+        return true;
+    });
+    try {
+        const sql = unikke.map((_, i) =>
+            `SELECT ${i} AS i FROM DUAL WHERE EXISTS (SELECT 1 FROM skaerm_haendelser
+                WHERE klub = ? AND klient_id = ? AND type = ? AND fra = ?)`).join(' UNION ALL ');
+        const findes = await masterDb.query(sql, unikke.flatMap(h => [klub, klientId, h.type, dato(h.fra)]));
+        const gemt = new Set(findes.map(r => Number(r.i)));
+        return unikke.filter((_, i) => !gemt.has(i));
+    } catch (e) {
+        console.error('Skærm-hændelser: kunne ikke tjekke for dubletter:', e.message);
+        return unikke;
+    }
+}
+
 async function gem(klub, skaerm, haendelser) {
     if (!haendelser || !haendelser.length) return;
+    haendelser = await nyeHaendelser(klub, skaerm.klientId, haendelser);
+    if (!haendelser.length) return;
     haendelser = indenforLoft(klub, skaerm.klientId, haendelser);
     if (!haendelser.length) return;
     try {
@@ -148,6 +176,6 @@ async function ryd() {
 }
 
 module.exports = {
-    gem, forKlub, alle, hentLog, antalSenesteDoegn, ryd, BEHOLD_DAGE,
+    gem, nyeHaendelser, forKlub, alle, hentLog, antalSenesteDoegn, ryd, BEHOLD_DAGE,
     plads, pladsTilLog, indenforLoft, _nulstilLoft, MAX_PR_TIME_SKAERM, MAX_PR_TIME_KLUB, MAX_LOG_PR_TIME_KLUB
 };
