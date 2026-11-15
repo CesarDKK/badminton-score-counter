@@ -3096,7 +3096,7 @@ const LS_GRUND = {
     'mangler-noegle': 'Mangler stream-nøgle',
     'badmintonplanner': 'Badmintonplanner-kamp — sendes ikke',
     'youtube-fejl': 'Venter på YouTube — se fejlen ved banen',
-    'stille': 'Kampen er ikke rørt i 30 minutter — sendes ikke',
+    'stille': 'Sender ikke: kampen står stille — ingen har talt på kampen i 30 minutter. Tæl et point for at sende igen, eller afslut/nulstil banen',
     'holdkamp-stoppet': 'Holdkampen er stoppet for i dag — sendes ikke af sig selv',
     'ingen-bane': 'Banen findes ikke'
 };
