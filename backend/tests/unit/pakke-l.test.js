@@ -32,6 +32,11 @@ const nulstil = (fn = async () => []) => { svar = fn; kald = []; };
 const jwt = require('jsonwebtoken');
 const auth = require('../../middleware/auth');
 const rl = require('../../middleware/rateLimiter');
+const { generateSuperAdminToken, _saetSuperAdminOpslag } = require('../../middleware/superAdminAuth');
+const { kodeAftryk } = require('../../middleware/klubAdminSession');
+// Super-admin 1 findes i master-databasen med hash 'super-1' (nr. 18)
+let superAdminRaekke = { password_hash: 'super-1' };
+_saetSuperAdminOpslag(async (id) => (id === 1 ? superAdminRaekke : null));
 
 // Rutens sidste handler (efter middleware)
 function rute(router, metode, sti) {
@@ -229,7 +234,7 @@ test('16: en ny QR-kode til banen rydder den udløbne session først', async () 
         // getOrCreateActiveToken er intern — kør den via QR-ruten som admin
         const qr = rute(mst, 'get', '/:courtId');
         nulstil(async (sql) => (/^\s*SELECT token FROM device_tokens/.test(sql) ? [] : { affectedRows: 1 }));
-        const admin = jwt.sign({ role: 'super_admin' }, process.env.JWT_SECRET);
+        const admin = generateSuperAdminToken(1, 'superadmin', false, 'super-1');
         const res = svarObjekt();
         await qr({ accessMode: 'club', params: { courtId: '4' }, query: {}, hostname: 'lyngby.badmintonapp.dk', headers: { authorization: `Bearer ${admin}` } }, res);
         const i = kald.findIndex(k => /DELETE FROM device_tokens/.test(k.sql));
@@ -307,4 +312,70 @@ test('17: /youtube/svar kræver cookien fra den browser, der trykkede "Forbind"'
     } finally {
         console.warn = advar; console.log = log;
     }
+});
+
+// ======================= Nr. 18: super-admin-sessioner kan trækkes tilbage =======================
+
+async function koer(mw, request) {
+    const res = svarObjekt();
+    let videre = false;
+    await mw(request, res, (e) => { if (e) throw e; videre = true; });
+    return videre ? 'videre' : res;
+}
+const medToken = (token, extra = {}) => ({ headers: { authorization: `Bearer ${token}` }, accessMode: 'club', clubSubdomain: 'lyngby', path: '/x', originalUrl: '/api/x', ...extra });
+
+test('18: super-admin-tokenet bærer et aftryk af adgangskoden og slås op ved hvert kald', async () => {
+    const token = generateSuperAdminToken(1, 'superadmin', false, 'super-1');
+    assert.equal(jwt.decode(token).pv, kodeAftryk('super-1'));
+    assert.equal(await koer(auth.authMiddleware, medToken(token)), 'videre');
+    assert.equal(await koer(auth.requireWriteAuthInClubMode, medToken(token)), 'videre');
+    // Adgangskoden skiftet (eller lækket token efter skiftet): afvist overalt
+    superAdminRaekke = { password_hash: 'ny-hash' };
+    try {
+        for (const mw of [auth.authMiddleware, auth.requireWriteAuthInClubMode, require('../../middleware/superAdminAuth').superAdminAuth]) {
+            const r = await koer(mw, medToken(token));
+            assert.equal(r.statusCode, 401);
+            assert.equal(r.body.sessionEnded, true);
+        }
+    } finally {
+        superAdminRaekke = { password_hash: 'super-1' };
+    }
+});
+
+test('18: "Jeg er her stadig" fornyer ikke et super-admin-token efter skiftet adgangskode', async () => {
+    const session = require('../../routes/session');
+    const lag = ruteLag(session, 'post', '/forny');
+    const token = generateSuperAdminToken(1, 'superadmin', false, 'super-1');
+    const kørForny = async () => {
+        const req = medToken(token, { accessMode: 'direct' });
+        const r = await koer(lag[0], req);
+        if (r !== 'videre') return r;
+        const res = svarObjekt();
+        lag[1](req, res);
+        return res;
+    };
+    const ok = await kørForny();
+    assert.equal(ok.statusCode, 200);
+    assert.equal(jwt.decode(ok.body.token).pv, kodeAftryk('super-1'), 'aftrykket følger med det fornyede token');
+    superAdminRaekke = { password_hash: 'ny-hash' };
+    try {
+        assert.equal((await kørForny()).statusCode, 401);
+    } finally {
+        superAdminRaekke = { password_hash: 'super-1' };
+    }
+});
+
+test('18: et must-change-token virker ikke på klubbernes API', async () => {
+    const token = generateSuperAdminToken(1, 'superadmin', true, 'super-1');
+    for (const mw of [auth.authMiddleware, auth.requireWriteAuthInClubMode]) {
+        const r = await koer(mw, medToken(token));
+        assert.equal(r.statusCode, 403);
+        assert.equal(r.body.mustChangePassword, true);
+    }
+});
+
+test('18: login og skift af adgangskode udsteder tokenet med det aktuelle aftryk', async () => {
+    const src = laes('backend/routes/superAdmin.js');
+    assert.match(src, /generateSuperAdminToken\(admin\.id, admin\.username, mustChange, admin\.password_hash\)/);
+    assert.match(src, /generateSuperAdminToken\(admin\.id, req\.superAdmin\.username, false, hash\)/);
 });

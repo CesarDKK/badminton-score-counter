@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { klubAdminAfvist } = require('./klubAdminSession');
+const { superAdminAfvist, MAA_SKIFTE } = require('./superAdminAuth');
 
 // Admin-auth til beskyttede endpoints (backup, indstillinger, sponsorer, sletning m.m.).
 //
@@ -8,7 +9,8 @@ const { klubAdminAfvist } = require('./klubAdminSession');
 // eller et token udstedt til klub A kalde admin-endpoints hos klub B.
 //
 // Accepteres:
-//   - super_admin: altid (styrer alle klubber)
+//   - super_admin: altid (styrer alle klubber) — så længe admin'en findes og
+//                  adgangskoden er den samme, og ikke med et must-change-token (nr. 18)
 //   - club_admin:  kun på den klub tokenet er udstedt til, og kun så længe
 //                  admin'en findes og adgangskoden er den samme (klubAdminSession.js)
 //   - { admin: true } (simpelt admin-login): kun uden for club-mode — i club-mode
@@ -49,6 +51,11 @@ async function authMiddleware(req, res, next) {
         // Slettet admin eller skiftet adgangskode: sessionen gælder ikke længere
         if (decoded.role === 'club_admin') {
             const afvist = await klubAdminAfvist(decoded);
+            if (afvist) return res.status(401).json({ error: afvist, sessionEnded: true });
+        }
+        if (decoded.role === 'super_admin') {
+            if (decoded.mustChange) return res.status(403).json(MAA_SKIFTE);
+            const afvist = await superAdminAfvist(decoded);
             if (afvist) return res.status(401).json({ error: afvist, sessionEnded: true });
         }
 
@@ -174,6 +181,11 @@ async function requireWriteAuthInClubMode(req, res, next) {
         if (afvist) return res.status(401).json(afvist);
         if (decoded.role === 'club_admin') {
             const fejl = await klubAdminAfvist(decoded);
+            if (fejl) return res.status(401).json({ error: fejl, authRequired: true, sessionEnded: true });
+        }
+        if (decoded.role === 'super_admin') {
+            if (decoded.mustChange) return res.status(403).json(MAA_SKIFTE);
+            const fejl = await superAdminAfvist(decoded);
             if (fejl) return res.status(401).json({ error: fejl, authRequired: true, sessionEnded: true });
         }
     } catch (err) {

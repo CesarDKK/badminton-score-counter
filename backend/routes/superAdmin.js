@@ -59,7 +59,7 @@ router.post('/login', async (req, res, next) => {
         }
 
         const mustChange = !!admin.must_change_password;
-        const token = generateSuperAdminToken(admin.id, admin.username, mustChange);
+        const token = generateSuperAdminToken(admin.id, admin.username, mustChange, admin.password_hash);
         res.json({ success: true, token, mustChangePassword: mustChange });
     } catch (error) {
         next(error);
@@ -95,7 +95,8 @@ router.put('/change-password', superAdminAuth, async (req, res, next) => {
         );
 
         // Nyt token uden must-change, saa brugeren kan fortsaette uden at logge ind igen.
-        const token = generateSuperAdminToken(admin.id, req.superAdmin.username, false);
+        // Det nye aftryk (pv) gør alle andre sessioner ugyldige (nr. 18)
+        const token = generateSuperAdminToken(admin.id, req.superAdmin.username, false, hash);
         res.json({ success: true, token });
     } catch (error) { next(error); }
 });
