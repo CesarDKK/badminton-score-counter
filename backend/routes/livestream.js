@@ -429,6 +429,7 @@ async function baneStatus(req, bane) {
     const opsaetning = await queryOne('SELECT * FROM court_streams WHERE court_number = ?', [bane]);
     const link = await queryOne(
         'SELECT id FROM device_tokens WHERE camera_court = ? AND is_active = 1 LIMIT 1', [bane]);
+    const indst = await hentIndstillinger();
     return ls.tabletStatus({
         opsaetning,
         kamera: !!link,
@@ -436,7 +437,8 @@ async function baneStatus(req, bane) {
         holdkamp: await holdkampPaaBane(bane),
         planner: !!await plannerPaaBane(bane),
         youtube: ytBrugbar(await ytForbindelse(req)),
-        efterMin: (await hentIndstillinger()).efterMin
+        efterMin: indst.efterMin,
+        ytSynlighed: indst.ytSynlighed
     });
 }
 

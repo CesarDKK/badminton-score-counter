@@ -689,6 +689,17 @@ async function opdaterLivestreamKnap() {
         : 'Start livestream';
 }
 
+// Bekræftelsen før "Start livestream" (nr. 12B): videoen bliver liggende på
+// klubbens kanal — spillerne skal vide det. synlighed: klubbens indstilling i
+// admin (kun når kanalen er forbundet; ellers ved tabletten det ikke og siger
+// "offentlig", det mest vidtgående).
+function livestreamBekraeftTekst(l) {
+    const hvor = l && l.synlighed === 'unlisted' ? 'lægges på klubbens YouTube-kanal (kun med linket)'
+        : l && l.synlighed === 'private' ? 'lægges på klubbens YouTube-kanal (privat)'
+        : 'er offentlig på klubbens YouTube-kanal';
+    return `Udsendelsen ${hvor} og bliver liggende. Spillerne skal være indforstået.`;
+}
+
 async function livestreamKnap() {
     const l = livestream;
     if (!l) return;
@@ -701,12 +712,29 @@ async function livestreamKnap() {
         return;
     }
     closeSettingsMenu();
-    const handling = l.start ? 'stop' : 'start';
+    if (l.start) {
+        await livestreamSkift('stop', l);
+        return;
+    }
+    // Hver gang, ingen "husk mit valg". Knapperne er spærret et øjeblik, så et
+    // dobbelttryk på menuknappen ikke også rammer "Start livestream" (som nr. 22)
+    showMessage('Start livestream?', livestreamBekraeftTekst(l), [
+        { text: 'Start livestream', style: 'primary', callback: () => livestreamSkift('start', l) },
+        { text: 'Fortryd', style: 'secondary', callback: null }
+    ], { spaerMs: 800 });
+}
+
+let _livestreamIgang = false;   // ét kald ad gangen — et dobbelttryk starter ikke to gange
+async function livestreamSkift(handling, l) {
+    if (_livestreamIgang) return;
+    _livestreamIgang = true;
     try {
         livestream = await api.request(`/livestream/bane/${courtId}/${handling}`, { method: 'POST' });
     } catch (e) {
         showMessage('Livestream', e.message || 'Kunne ikke nå serveren — prøv igen');
         return;
+    } finally {
+        _livestreamIgang = false;
     }
     if (handling === 'start') {
         showMessage('Livestream startet', 'Kampen på banen sendes — eller den næste, hvis den sættes på inden 5 minutter. ' +
@@ -2373,6 +2401,12 @@ function showMessage(title, text, buttons = [{ text: 'OK', callback: null, style
                     button.callback();
                 }
             };
+        }
+
+        // options.spaerMs: knapperne virker først efter så længe (dobbelttryk-værn)
+        if (options.spaerMs > 0) {
+            btn.disabled = true;
+            setTimeout(() => { btn.disabled = false; }, options.spaerMs);
         }
 
         buttonsContainer.appendChild(btn);

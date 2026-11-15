@@ -2030,3 +2030,9 @@ html, body {
     .ser-med-tekst { font-size: 0.85rem; }
     .cv-ser-med .ser-med-banner .ser-med-knap { padding: 8px 14px; font-size: 0.85rem; }
 }
+
+/* Dialogens knapper, mens de er spærret efter de kom frem (showMessage spaerMs — dobbelttryk-værn) */
+.court-overlay-message-buttons button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}

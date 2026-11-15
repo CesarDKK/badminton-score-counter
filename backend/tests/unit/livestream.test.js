@@ -204,7 +204,7 @@ test('tabletten: knappen kun når banen er sat op med nøgle og kamera', () => {
     assert.deepEqual(ls.tabletStatus({ opsaetning: { ...OPS, armed_until: new Date(NU + MIN) }, kamera: true,
         pc: { online: true, sender: false, kamera: 'Lenovo 500' }, efterMin: 5, nu: NU }),
         { kan: true, start: 'klar', til: new Date(NU + MIN).toISOString(), holdkamp: false, planner: false, sender: false,
-          kameraKlar: true, efterMin: 5 });
+          kameraKlar: true, efterMin: 5, synlighed: null });
     // PC'en finder intet kamera, er slukket eller har ikke meldt sig: tabletten skjuler knappen
     assert.equal(ls.tabletStatus({ opsaetning: OPS, kamera: true, pc: { online: true, kamera: null }, nu: NU }).kameraKlar, false);
     assert.equal(ls.tabletStatus({ opsaetning: OPS, kamera: true, pc: { online: false, kamera: 'x' }, nu: NU }).kameraKlar, false);
