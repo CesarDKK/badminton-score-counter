@@ -90,14 +90,14 @@ function isRealName(s) {
     if (!t || t === '?') return false;
     const lower = t.toLowerCase();
     if (lower === 'bye' || lower.startsWith('winner of') || lower.startsWith('vinder af')) return false;
-    // Kun et seed-mærke som "[1]" uden navn
-    if (/^\[\d+\]$/.test(t)) return false;
+    // Kun et seed-mærke som "[1]" eller "[3/4]" uden navn
+    if (/^\[[^\]]*\]$/.test(t)) return false;
     return true;
 }
 
-// Normaliser et navn til sammenligning: fjern seed-suffiks "[1]" og kollaps whitespace.
+// Normaliser et navn til sammenligning: fjern seed-suffiks ("[1]", "[3/4]") og kollaps whitespace.
 function normalizeName(s) {
-    return String(s || '').replace(/\s*\[\d+\]\s*$/, '').replace(/\s+/g, ' ').trim().toLowerCase();
+    return String(s || '').replace(/\s*\[[^\]]*\]\s*$/, '').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 // Trunkér til kolonne-grænsen (VARCHAR(100)) så et langt navn ikke fejler hele UPDATE'en.
@@ -182,13 +182,55 @@ function sammeSpillere(a, b) {
     return (ensListe(a.s1, b.s1) && ensListe(a.s2, b.s2)) || (ensListe(a.s1, b.s2) && ensListe(a.s2, b.s1));
 }
 
-// Begge kender spillerne på begge sider, men ikke én spiller er fælles: en
-// anden kamp. (En udskiftning af én spiller deler stadig mindst én.)
+// Begge kender mindst én spiller, men ikke én spiller er fælles: en anden
+// kamp. (En udskiftning af én spiller deler stadig mindst én.) Før skulle
+// begge kende begge sider — så kunne en walkover med en afmeldt spiller
+// ("C mod [WDN]") parres på id med en helt anden kamp ("A mod B").
 function modsigerHinanden(a, b) {
-    if (!begge(a) || !begge(b)) return false;
+    const a2 = [...a.s1, ...a.s2];
     const b2 = new Set([...b.s1, ...b.s2]);
-    return ![...a.s1, ...a.s2].some(n => b2.has(n));
+    if (!a2.length || !b2.size) return false;
+    return !a2.some(n => b2.has(n));
 }
+
+// Alle TS' rigtige navne findes i rækken (og der er mindst ét): sikkert nok
+// til at flytte et resultat fra TS over på rækken.
+function navneForenelige(row, m) {
+    const r = kampNavne(row, true);
+    const i = kampNavne(m, false);
+    const rs = new Set([...r.s1, ...r.s2]);
+    const is = [...i.s1, ...i.s2];
+    return is.length > 0 && is.every(n => rs.has(n));
+}
+
+// TS viser kampens sider ombyttet ift. rækken (afgjort på navne-overlap)
+function sideOmbyttet(row, m) {
+    const r = kampNavne(row, true);
+    const i = kampNavne(m, false);
+    const faelles = (a, b) => a.filter(n => b.includes(n)).length;
+    return faelles(i.s1, r.s2) + faelles(i.s2, r.s1) > faelles(i.s1, r.s1) + faelles(i.s2, r.s2);
+}
+
+// Resultatet fra TS som kolonner (vinder/sæt), når TS har kampen som spillet
+// eller walkover — ellers null. s1/s2 er rækkens holdnavne (side 1/2), byttet =
+// TS' sider er ombyttet ift. rækken. Sættene skrives i banernes format
+// ("A 21-15 B, A 18-21 B"), så Turnering og Kamphistorik viser dem som ellers.
+function tsResultat(m, s1, s2, byttet = false) {
+    if (m.tsStatus !== 'walkover' && m.tsStatus !== 'spillet') return null;
+    let vinder = m.tsWinner === 1 || m.tsWinner === 2 ? m.tsWinner : null;
+    if (vinder && byttet) vinder = 3 - vinder;
+    let saet = 'W.O.';
+    if (m.tsStatus === 'spillet') {
+        const sets = (m.tsSets || []).map(([a, b]) => (byttet ? [b, a] : [a, b]));
+        saet = sets.length ? sets.map(([a, b]) => `${s1} ${a}-${b} ${s2}`).join(', ') : null;
+    }
+    return { winner_team: vinder, set_scores: saet ? saet.substring(0, 200) : null };
+}
+
+const holdNavn = (a, b) => [a, b].filter(Boolean).join(' / ');
+
+// Planlagt tidspunkt fra TS ("YYYY-MM-DD HH:MM") eller null
+const planlagt = (m) => (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(m.plannedAt || '') ? m.plannedAt : null);
 
 /**
  * Parrer indkommende TS-kampe med eksisterende rækker. Ren funktion.
@@ -255,18 +297,39 @@ function tenantSyncKey(tenant, tournamentId) {
     return `${tenant || 'direct'}:${tournamentId}`;
 }
 
-// Hjælper: hent alle matches for en turnering (sorteret efter match_order)
+// Hjælper: hent alle matches for en turnering — efter TS' planlagte tidspunkt
+// (kampe uden tidspunkt sidst), ellers i den rækkefølge, de blev tilføjet
 async function getMatchesForTournament(tournamentId) {
     return query(
-        `SELECT id, match_order, label, doubles, source_match_id,
+        `SELECT id, match_order, label, planned_time, doubles, source_match_id,
                 side1_player1, side1_player2, side2_player1, side2_player2,
                 court_number, status, winner_team, set_scores, created_at,
                 started_at, finished_at
          FROM tournament_matches
          WHERE tournament_id = ?
-         ORDER BY match_order ASC`,
+         ORDER BY planned_time IS NULL, planned_time, match_order ASC`,
         [tournamentId]
     );
+}
+
+// Én række til tournament_matches ud fra en kamp fra import/kandidater/sync.
+// Har TS allerede kampen som spillet eller walkover, gemmes den som færdig.
+function nyKampRaekke(tournamentId, matchOrder, m, kilde) {
+    const s1 = [clampName(m.side1Player1) || null, clampName(m.side1Player2) || null];
+    const s2 = [clampName(m.side2Player1) || null, clampName(m.side2Player2) || null];
+    const res = tsResultat(m, holdNavn(s1[0], s1[1]), holdNavn(s2[0], s2[1]));
+    return {
+        sql: `INSERT INTO tournament_matches
+              (tournament_id, match_order, label, planned_time, doubles, source_match_id,
+               side1_player1, side1_player2, side2_player1, side2_player2,
+               status, winner_team, set_scores, finished_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${res ? 'CURRENT_TIMESTAMP' : 'NULL'})`,
+        params: [
+            tournamentId, matchOrder, m.label || null, planlagt(m), m.doubles ? 1 : 0, kilde,
+            s1[0], s1[1], s2[0], s2[1],
+            res ? 'finished' : 'pending', res ? res.winner_team : null, res ? res.set_scores : null
+        ]
+    };
 }
 
 // GET /api/tournaments/active - Alle aktive turneringer med matches (public)
@@ -292,6 +355,33 @@ router.get('/active', async (req, res, next) => {
         }
 
         res.json(result);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/tournaments/court/:courtNumber - Den turneringskamp, der spilles på
+// banen (public, som /active). Tabletten spørger her i stedet for at hente
+// hele turneringen ved hvert point — med 200-300 kampe var det ~100 kB pr.
+// point pr. tablet. Svarer { tournament: { id, name, matches: [kampen] } }
+// eller { tournament: null }.
+router.get('/court/:courtNumber', async (req, res, next) => {
+    try {
+        const bane = parseInt(req.params.courtNumber, 10);
+        if (!Number.isFinite(bane)) return res.status(400).json({ error: 'Ugyldig bane' });
+        const m = await queryOne(
+            `SELECT m.id, m.tournament_id, m.match_order, m.label, m.planned_time, m.doubles, m.source_match_id,
+                    m.side1_player1, m.side1_player2, m.side2_player1, m.side2_player2,
+                    m.court_number, m.status, m.winner_team, m.set_scores, m.created_at,
+                    m.started_at, m.finished_at, t.name AS tournament_name
+             FROM tournament_matches m JOIN tournaments t ON t.id = m.tournament_id
+             WHERE t.status = 'active' AND m.court_number = ? AND m.status = 'active'
+             ORDER BY t.created_at DESC LIMIT 1`,
+            [bane]
+        );
+        if (!m) return res.json({ tournament: null });
+        const { tournament_id, tournament_name, ...kamp } = m;
+        res.json({ tournament: { id: tournament_id, name: tournament_name, matches: [kamp] } });
     } catch (error) {
         next(error);
     }
@@ -403,18 +493,10 @@ async function indsaetKampe(tx, tournamentId, matches) {
     for (const m of matches) {
         const kilde = m.sourceMatchId || null;
         if (kilde && kendte.has(kilde)) { skipped++; continue; }
+        if (m.tsStatus === 'aflyst') { skipped++; continue; } // aflyst på TS — spilles ikke
         if (kilde) kendte.add(kilde);
-        await tx.query(
-            `INSERT INTO tournament_matches
-             (tournament_id, match_order, label, doubles, source_match_id,
-              side1_player1, side1_player2, side2_player1, side2_player2)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-                tournamentId, nextOrder++, m.label || null, m.doubles ? 1 : 0, kilde,
-                clampName(m.side1Player1) || null, clampName(m.side1Player2) || null,
-                clampName(m.side2Player1) || null, clampName(m.side2Player2) || null
-            ]
-        );
+        const r = nyKampRaekke(tournamentId, nextOrder++, m, kilde);
+        await tx.query(r.sql, r.params);
         inserted++;
     }
     return { inserted, skipped };
@@ -548,8 +630,13 @@ async function syncTournamentCore(tournament, { skipClubs = false } = {}) {
     const newCandidates = []; // kræver manuel godkendelse (ny draw/kategori)
     const autoAdd = [];       // bracket-progression i kendt draw → tilføjes automatisk
 
+    // Aflyste kampe på TS spilles ikke: de tilføjes ikke og parres ikke (en
+    // aflyst kamp har ofte kun afmeldte spillere uden navn og ville ellers
+    // blive tilbudt som "ny kamp" ved hver opdatering)
+    const spilbare = incoming.filter(m => m.tsStatus !== 'aflyst');
+
     // Spillerne først, så id'et (nr. 74) — se parSyncKampe
-    for (const { m, row, sourceMatchId } of parSyncKampe(existing, incoming)) {
+    for (const { m, row, sourceMatchId } of parSyncKampe(existing, spilbare)) {
         if (!row) {
             const cand = {
                 sourceMatchId,
@@ -557,6 +644,10 @@ async function syncTournamentCore(tournament, { skipClubs = false } = {}) {
                 category: m.category,
                 round: m.round,
                 dayLabel: m.dayLabel || '',
+                plannedAt: planlagt(m) || '',
+                tsStatus: m.tsStatus || '',
+                tsWinner: m.tsWinner || null,
+                tsSets: m.tsSets || [],
                 doubles: !!m.doubles,
                 side1Player1: m.side1Player1, side1Player2: m.side1Player2,
                 side2Player1: m.side2Player1, side2Player2: m.side2Player2
@@ -577,10 +668,31 @@ async function syncTournamentCore(tournament, { skipClubs = false } = {}) {
         if (row.status !== 'pending') { skipped++; continue; } // aktiv/afsluttet — rør aldrig
 
         const changes = computeFillOnlyChanges(row, m);
+
+        // TS' planlagte tidspunkt følger med, når TS flytter kampen
+        const tid = planlagt(m);
+        if (tid && tid !== (row.planned_time || null)) changes.planned_time = tid;
+
+        // Spillet eller walkover på TS (fx tastet på stævnekontoret, eller
+        // spillet på en bane uden tablet): kampen er færdig og skal ikke kunne
+        // sættes på en bane. Kun når TS' navne alle findes i rækken.
+        let afslut = '';
+        if ((m.tsStatus === 'walkover' || m.tsStatus === 'spillet') && navneForenelige(row, m)) {
+            const n = { ...row, ...changes };
+            const res = tsResultat(m, holdNavn(n.side1_player1, n.side1_player2),
+                holdNavn(n.side2_player1, n.side2_player2), sideOmbyttet(row, m));
+            if (res) {
+                changes.status = 'finished';
+                changes.winner_team = res.winner_team;
+                changes.set_scores = res.set_scores;
+                afslut = ', finished_at = CURRENT_TIMESTAMP';
+            }
+        }
+
         if (Object.keys(changes).length === 0) { unchanged++; continue; }
 
         const cols = Object.keys(changes);
-        const setSql = cols.map(c => `${c} = ?`).join(', ');
+        const setSql = cols.map(c => `${c} = ?`).join(', ') + afslut;
         const vals = cols.map(c => changes[c]);
         // status='pending'-guard: hvis en bane lige har aktiveret kampen midt i sync,
         // rammer UPDATE'en 0 rækker → tæl som skipped i stedet for at overskrive.
@@ -600,17 +712,8 @@ async function syncTournamentCore(tournament, { skipClubs = false } = {}) {
         );
         let nextOrder = (maxRow?.max_order || 0) + 1;
         for (const c of autoAdd) {
-            await query(
-                `INSERT INTO tournament_matches
-                 (tournament_id, match_order, label, doubles, source_match_id,
-                  side1_player1, side1_player2, side2_player1, side2_player2)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [
-                    tournament.id, nextOrder++, c.label || null, c.doubles ? 1 : 0, c.sourceMatchId || null,
-                    clampName(c.side1Player1) || null, clampName(c.side1Player2) || null,
-                    clampName(c.side2Player1) || null, clampName(c.side2Player2) || null
-                ]
-            );
+            const r = nyKampRaekke(tournament.id, nextOrder++, c, c.sourceMatchId || null);
+            await query(r.sql, r.params);
             added++;
         }
     }
@@ -899,3 +1002,8 @@ module.exports.runTournamentAutoSync = runTournamentAutoSync;
 module.exports.parSyncKampe = parSyncKampe;
 module.exports.rundeScopeOf = rundeScopeOf;
 module.exports.computeFillOnlyChanges = computeFillOnlyChanges;
+module.exports.navneForenelige = navneForenelige;
+module.exports.sideOmbyttet = sideOmbyttet;
+module.exports.tsResultat = tsResultat;
+module.exports.nyKampRaekke = nyKampRaekke;
+module.exports.syncTournamentCore = syncTournamentCore;

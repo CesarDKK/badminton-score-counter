@@ -268,11 +268,14 @@
 
                         <!-- 2. Planlagt kamp fra turnering -->
                         <div id="editTournamentMatchWrap" style="margin-bottom: 20px; display: none;">
-                            <label>Planlagt kamp fra turnering:</label>
+                            <label for="editTournamentMatchSearch">Planlagt kamp fra turnering:</label>
+                            <input type="search" id="editTournamentMatchSearch" class="admin-input" placeholder="Søg spiller eller række, fx Anna eller U11 D HS" autocomplete="off" style="margin-top:5px;">
+                            <div id="editTournamentMatchCount" class="tekst-daempet tekst-lille" style="margin-top:4px;"></div>
                             <select id="editTournamentMatchSelect" style="width:100%; padding:10px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid var(--color-primary); border-radius:5px; margin-top:5px;">
                                 <option value="">-- Manuel (skriv navne nedenfor) --</option>
                             </select>
-                            <p style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-top:6px; margin-bottom:0;">Vælg en pending kamp fra en aktiv turnering for at fylde spillernavne ind og markere kampen som i gang på denne bane.</p>
+                            <p id="editTournamentMatchWarn" style="display:none; color:var(--color-warning, #ffb02e); margin-top:6px; margin-bottom:0;"></p>
+                            <p style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-top:6px; margin-bottom:0;">Kampene står efter tidspunktet i Tournament Software. Vælg en kamp for at fylde spillernavnene ind og sætte den i gang på denne bane. ⚠ betyder, at en af spillerne lige nu spiller på en anden bane.</p>
                         </div>
 
                         <!-- 3. Spillernavne -->
@@ -574,13 +577,13 @@
         </div>
     </div>
 
-    <script src="js/api.js?v=43"></script>
+    <script src="js/api.js?v=44"></script>
     <script src="js/session-vagt.js?v=2"></script>
     <script src="js/auth-guard.js?v=4"></script>
     <script src="js/logo-match.js?v=2"></script>
     <script src="js/live-updates.js?v=2"></script>
     <script src="js/holdkamp-formater.js?v=1"></script>
     <script src="js/ikoner.js?v=2"></script>
-    <script src="admin-script.js?v=114"></script>
+    <script src="admin-script.js?v=115"></script>
 </body>
 </html>
