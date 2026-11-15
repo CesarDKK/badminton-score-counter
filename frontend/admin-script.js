@@ -3409,6 +3409,7 @@ function livestreamYoutubeHtml() {
                 pr. kamp startet på tabletten og pr. "Send hele dagen". Den går live af sig selv og afsluttes, når banen holder op; videoen
                 bliver liggende på kanalen. YouTube kræver, at udsendelser for børn markeres "Lavet til børn" — så er chat og kommentarer
                 slået fra. Ændringer gælder de næste udsendelser.</p>
+            <p class="tekst-mindre ls-hjaelp">Udsendelser bliver automatisk "kun med linket" efter 60 dage.</p>
             <p class="tekst-mindre ls-hjaelp">Klubbens live-side viser de baner, der sender, med videoen og stillingen — link til den fra
                 klubbens hjemmeside: <a href="/live" target="_blank" rel="noopener">${escapeHtml(location.host)}/live</a>
                 ${i.ytSynlighed === 'private' ? '<span class="tekst-daempet">(private udsendelser vises ikke på siden)</span>' : ''}</p>

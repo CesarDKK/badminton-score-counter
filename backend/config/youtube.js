@@ -254,7 +254,48 @@ async function afslut(token, id) {
     return status || 'findes-ikke';
 }
 
+// ---- Synligheden efter 60 dage (nr. 12C, routes/livestream.js ytSynlighedJob) ----
+
+// Én side (højst 50) af kanalens afsluttede udsendelser: { items: [{ id,
+// titel, beskrivelse, start }], naeste } — naeste er sidens pageToken eller null.
+// broadcastStatus er selv et filter på den forbundne kanal (mine må ikke
+// sendes med). 1 enhed pr. side.
+async function afsluttedeUdsendelser(token, side = null) {
+    const params = { part: 'snippet', broadcastStatus: 'completed', broadcastType: 'all', maxResults: '50' };
+    if (side) params.pageToken = side;
+    const r = await api('liveBroadcasts', params, { token });
+    return {
+        items: ((r && r.items) || []).map(b => ({
+            id: b.id,
+            titel: (b.snippet && b.snippet.title) || '',
+            beskrivelse: (b.snippet && b.snippet.description) || '',
+            start: (b.snippet && (b.snippet.actualStartTime || b.snippet.scheduledStartTime || b.snippet.publishedAt)) || null
+        })),
+        naeste: (r && r.nextPageToken) || null
+    };
+}
+
+// Videoernes status (højst 50 id'er): Map id -> status-objektet. En video,
+// der ikke findes (slettet i Studio), er ikke med. 1 enhed.
+async function videoStatus(token, ids) {
+    const r = await api('videos', { part: 'status', id: ids.join(','), maxResults: '50' }, { token });
+    return new Map(((r && r.items) || []).map(v => [v.id, v.status || {}]));
+}
+
+// Ny synlighed på en video (en afsluttet udsendelse er en video med samme
+// id). videos.update sletter de status-felter, der ikke sendes med, så de
+// skrivbare sendes videre, som de er — kun privacyStatus ændres. publishAt
+// gælder kun private videoer, der aldrig er udgivet, og sendes ikke.
+// 50 enheder.
+const VIDEO_STATUS_FELTER = ['embeddable', 'license', 'publicStatsViewable', 'selfDeclaredMadeForKids', 'containsSyntheticMedia'];
+async function saetSynlighed(token, id, status, privacyStatus) {
+    const ny = { privacyStatus };
+    for (const f of VIDEO_STATUS_FELTER) if (status && status[f] !== undefined) ny[f] = status[f];
+    await api('videos', { part: 'status' }, { token, method: 'PUT', body: { id, status: ny } });
+}
+
 module.exports = {
     SCOPE, YoutubeFejl, konfigureret, klient, brugKlient, tjekKlient, tilbageAdresse, loginAdresse, byttKode, adgangsToken, glemAdgang,
-    tilbagekald, kanal, opretStream, opretUdsendelse, udsendelsesStatus, gaaLive, afslut
+    tilbagekald, kanal, opretStream, opretUdsendelse, udsendelsesStatus, gaaLive, afslut,
+    afsluttedeUdsendelser, videoStatus, saetSynlighed
 };

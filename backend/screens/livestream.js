@@ -791,9 +791,40 @@ function ytTitel({ grund, bane, hold = null, klubnavn = null, nu = Date.now() })
     return titel.length > 100 ? titel.slice(0, 99) + '…' : titel;
 }
 
+// Appens faste sætning i hver udsendelses beskrivelse (sådan siden den første
+// udsendelse, 98906d0). Den er kendetegnet for "oprettet af Badmintonapp", når
+// ældre udsendelser findes på kanalen (nr. 12C) — ændr den ikke.
+const YT_KENDETEGN = 'Sendt automatisk fra banen med Badmintonapp';
+
 function ytBeskrivelse(klubnavn = null) {
     return `${klubnavn ? `${tekst(klubnavn, 100).replace(/[<>]/g, '')}. ` : ''}` +
-        'Sendt automatisk fra banen med Badmintonapp — https://badmintonapp.dk';
+        `${YT_KENDETEGN} — https://badmintonapp.dk`;
+}
+
+// ---------- "Kun med linket" efter 60 dage (nr. 12C, routes/livestream.js ytSynlighedJob) ----------
+// Appens egne udsendelser, der er over YT_SYNLIG_DAGE gamle og stadig
+// offentlige, bliver "kun med linket" (unlisted) — én gang om natten, højst
+// YT_SYNLIG_MAKS pr. klub (50 enheder hver af den fælles kvote).
+const YT_SYNLIG_DAGE = 60;
+const YT_SYNLIG_MAKS = 20;
+
+const erAppensUdsendelse = (beskrivelse) => typeof beskrivelse === 'string' && beskrivelse.includes(YT_KENDETEGN);
+
+// Stopper fejlen nattens kørsel for klubben (kvoten brugt, adgangen væk,
+// YouTube nede eller ikke nået) — eller gælder den kun den ene video (findes
+// ikke, afvist)? En video-fejl noteres på rækken, så den ikke prøves igen.
+function ytSynligFejlStopper(e) {
+    return !e.status || e.status >= 500 || e.status === 401 || YT_KVOTE_FEJL.has(e.grund) ||
+        e.grund === 'insufficientPermissions' || e.grund === 'invalid_grant';
+}
+
+// Hvad jobbet gør ved en video: status fra YouTube (videos.list) eller
+// undefined, når den ikke findes. → { saet: true } eller { resultat }.
+// Klubbens nuværende indstilling er ligegyldig: kun offentlige videoer røres.
+function ytSynligHandling(status) {
+    if (!status) return { resultat: 'findes ikke' };
+    if (status.privacyStatus !== 'public') return { resultat: `allerede ${status.privacyStatus || 'ukendt'}` };
+    return { saet: true };
 }
 
 // Til tests: glem alle PC'er (status, ejere, andre)
@@ -806,6 +837,7 @@ function _nulstilStatus() {
 module.exports = {
     STANDARD_URL, EFTER_MS, STILLE_MS, KLAR_MS, YT_TJEK_MS, YT_FEJL_PAUSE_MS, YT_PC_TAVS_MS, YT_MAKS_MS, ytVagtGrund,
     ytHandling, ytIPause, ytFejlPauseMs, YT_VARIG_PAUSE_MS, YT_KVOTE_PAUSE_MS, ytTitel, ytBeskrivelse,
+    YT_KENDETEGN, YT_SYNLIG_DAGE, YT_SYNLIG_MAKS, erAppensUdsendelse, ytSynligFejlStopper, ytSynligHandling,
     gyldigUrl, gyldigNoegle, rensOpsaetning, noegleSlut,
     STANDARD_INDSTILLINGER, laesIndstillinger, rensIndstillinger, videoTilPc, sponsorNu, gyldigLogoFil,
     beslutning, startet, holdkampNu, holdkampStoppet, holdkampTilAdmin, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,
