@@ -379,3 +379,24 @@ test('18: login og skift af adgangskode udsteder tokenet med det aktuelle aftryk
     assert.match(src, /generateSuperAdminToken\(admin\.id, admin\.username, mustChange, admin\.password_hash\)/);
     assert.match(src, /generateSuperAdminToken\(admin\.id, req\.superAdmin\.username, false, hash\)/);
 });
+
+// ======================= Nr. 92: åben omdirigering fra /t/<kode> =======================
+
+test('92: et adgangslink sender kun videre til en relativ sti på egen vært', () => {
+    const { adgangslinkSession, sikkerSti } = require('../../middleware/adgangslinkSession');
+    const url = (destination) => adgangslinkSession({ id: 1, destination, token_type: 'permanent', locked: 0 }, 'lyngby').url;
+    // Kendte destinationer som før
+    assert.match(url('tv/3'), /^\/tv-v3\.html\?court=3&dt=/);
+    assert.match(url('court/2'), /^\/court-v3\.html\?court=2&dt=/);
+    assert.match(url('oversigt'), /^\/oversigt\.html\?dt=/);
+    assert.match(url('landing.html'), /^\/landing\.html\?dt=/);
+    // Fra en gendannet backup: aldrig en anden vært
+    for (const ond of ['/evil.com', '//evil.com', '\\evil.com', '/\\evil.com', 'https://evil.com', 'http:evil.com',
+        '\t/evil.com', ' /evil.com', '../x', 'a/../../x', 'javascript:alert(1)', '%2F%2Fevil.com', '']) {
+        const u = url(ond);
+        assert.ok(u.startsWith('/') && !u.startsWith('//') && !u.startsWith('/\\'), `${JSON.stringify(ond)} → ${u}`);
+        assert.equal(new URL(u, 'https://lyngby.badmintonapp.dk').host, 'lyngby.badmintonapp.dk', JSON.stringify(ond));
+    }
+    assert.equal(sikkerSti('/evil.com'), '/');
+    assert.equal(sikkerSti('mappe/side.html'), '/mappe/side.html');
+});
