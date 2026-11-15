@@ -92,8 +92,11 @@ async function showDeviceTokensNavIfClubAdmin() {
     try {
         const mode = await api.getMode();
         if (mode.mode === 'club' && api.isClubAdminSession()) {
-            const btn = document.getElementById('deviceTokensNavBtn');
-            if (btn) btn.style.display = 'inline-block';
+            // Adgangslinks og Livestream (samme ret) — som i admin.html's menu
+            for (const id of ['deviceTokensNavBtn', 'livestreamNavBtn']) {
+                const btn = document.getElementById(id);
+                if (btn) btn.style.display = 'inline-block';
+            }
             // Club admin: vis "nuværende adgangskode"-felt
             const wrap = document.getElementById('currentPasswordWrap');
             if (wrap) wrap.style.display = 'block';
