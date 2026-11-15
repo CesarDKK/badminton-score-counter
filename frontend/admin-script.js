@@ -262,6 +262,7 @@ function startAutoRefresh() {
                 // 'settings'-config-event: courtCount kan være ændret — nulstil cachen
                 if (event && event.type === 'config' && event.scope === 'settings') {
                     _overviewCourtCount = null;
+                    turneringBaneAntal = null;
                 }
                 scheduleOverviewRefresh();
             }
@@ -643,6 +644,98 @@ function travleSpillere(m, iGang, egenBane = null) {
         if (bane != null && bane !== egenBane) ud.push(`${n} (bane ${bane})`);
     }
     return ud;
+}
+
+// ---- Tildel bane direkte fra turneringslisten (som "Tildel bane" i holdkampen) ----
+let turneringBaneAntal = null;              // klubbens antal baner (nulstilles ved 'settings')
+let turneringOptagneBaner = new Map();      // bane → { match } (turneringskamp) eller { spilles: true }
+const turneringBaneValg = new Map();        // kamp-id → valgt bane; overlever genoptegningen hvert 3. sekund
+
+// Baner med en turneringskamp i gang, eller hvor der tælles på tabletten lige nu
+function optagneBaner(tournaments, gameStates) {
+    const optaget = new Map();
+    for (const t of (tournaments || [])) {
+        for (const m of (t.matches || [])) {
+            if (m.status === 'active' && m.court_number != null) optaget.set(Number(m.court_number), { match: m });
+        }
+    }
+    for (const c of (gameStates || [])) {
+        const spilles = c && c.isActive && !c.matchCompleted && (c.player1?.score > 0 || c.player2?.score > 0
+            || c.player1?.games > 0 || c.player2?.games > 0 || c.timerSeconds > 0);
+        if (spilles && !optaget.has(Number(c.courtId))) optaget.set(Number(c.courtId), { spilles: true });
+    }
+    return optaget;
+}
+
+function turneringBaneVaelger(tournamentId, m) {
+    if (!turneringBaneAntal) return '';
+    const valgt = String(turneringBaneValg.get(m.id) || '');
+    const baner = Array.from({ length: turneringBaneAntal }, (_, i) => {
+        const n = i + 1;
+        const iBrug = turneringOptagneBaner.has(n);
+        return `<option value="${n}" ${String(n) === valgt ? 'selected' : ''}>Bane ${n}${iBrug ? ' · i brug' : ''}</option>`;
+    }).join('');
+    return `<span class="kamp-linje__bane">
+            <select id="tBane_${m.id}" class="admin-input admin-input--sm turnering-bane-valg" aria-label="Bane"
+                onchange="turneringBaneValg.set(${m.id}, this.value)">
+                <option value="">Bane…</option>${baner}
+            </select>
+            <button onclick="tildelTurneringskampBane(${tournamentId}, ${m.id})" class="btn-primary btn-sm">Sæt på bane</button>
+        </span>`;
+}
+
+// Samme vej som bane-dialogen: tildel kampen (serveren afviser, hvis der
+// spilles på banen), og skriv navnene på banen, så baneoversigten viser dem
+// med det samme — tabletten henter selv kampen.
+async function tildelTurneringskampBane(tournamentId, matchId) {
+    const t = sidsteTurneringer.find(x => x.id === tournamentId);
+    const m = t && (t.matches || []).find(x => x.id === matchId);
+    if (!m) return;
+    const bane = parseInt(document.getElementById(`tBane_${matchId}`)?.value, 10);
+    if (!bane) {
+        showMessage('Vælg bane', 'Vælg hvilken bane kampen skal spilles på.');
+        return;
+    }
+
+    const advarsler = [];
+    const paaBanen = turneringOptagneBaner.get(bane);
+    if (paaBanen && paaBanen.match && paaBanen.match.id !== m.id) {
+        const a = paaBanen.match;
+        advarsler.push(`Bane ${bane} har allerede kampen ${turneringSide(a, 1)} vs ${turneringSide(a, 2)}. Den kommer tilbage på listen som ventende.`);
+    }
+    const travle = travleSpillere(m, spillereIGang(sidsteTurneringer), bane);
+    if (travle.length) advarsler.push(`Spiller lige nu: ${travle.join(', ')}.`);
+    if (advarsler.length) {
+        const ok = await BadmintonUtils.confirmDialog(`Sæt kampen på bane ${bane}?`, advarsler.join('\n\n'),
+            { okText: 'Sæt på bane' });
+        if (!ok) return;
+    }
+
+    try {
+        const svar = await medBaneBekraeftelse((force) => api.updateTournamentMatch(tournamentId, matchId, {
+            courtNumber: bane,
+            status: 'active',
+            ...(force ? { force: true } : {})
+        }));
+        if (svar === BANE_ANNULLERET) return;
+    } catch (error) {
+        console.error('Failed to assign tournament match from list:', error);
+        showMessage('Fejl', 'Kampen kunne ikke sættes på banen. Prøv igen.');
+        return;
+    }
+    turneringBaneValg.delete(matchId);
+
+    try {
+        await api.updateCourt(bane, { isActive: true, isDoubles: !!m.doubles });
+        await api.updateGameState(bane, {
+            player1: { name: m.side1_player1 || 'Spiller 1', name2: m.side1_player2 || 'Makker 1' },
+            player2: { name: m.side2_player1 || 'Spiller 2', name2: m.side2_player2 || 'Makker 2' }
+        }, true);
+    } catch (error) {
+        // Kampen ER tildelt — tabletten henter den selv; kun baneoversigten venter lidt
+        console.error('Names to court after assignment failed:', error);
+    }
+    await loadActiveTournaments();
 }
 
 // Søgningen skal stå samlet i række, spillere eller turnering ("u11 c hs",
@@ -5285,10 +5378,15 @@ function stopTournamentRefresh() {
 
 async function loadActiveTournaments() {
     try {
-        const [tournaments, activeTeamMatch] = await Promise.all([
+        const [tournaments, activeTeamMatch, gameStates] = await Promise.all([
             api.getActiveTournaments(),
-            api.getActiveTeamMatch()
+            api.getActiveTeamMatch(),
+            api.getAllGameStates().catch(() => [])
         ]);
+        if (turneringBaneAntal == null) {
+            try { turneringBaneAntal = (await api.getSettings()).courtCount || 0; } catch (e) { /* prøv igen næste gang */ }
+        }
+        turneringOptagneBaner = optagneBaner(tournaments, gameStates);
 
         const createForm = document.getElementById('createTournamentForm');
         const tsImportForm = document.getElementById('tsImportForm');
@@ -5318,9 +5416,11 @@ async function loadActiveTournaments() {
         // (efter klik på "Tilføj kamp" eller "Slet") også re-render.
         const active = document.activeElement;
         // Undtagen søgefeltet over kamplisten — det genskabes med fokus og markør.
+        // Banevælgeren må heller ikke genskabes, mens den er åben.
         if (container && active && container.contains(active) &&
-            (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') &&
-            !active.classList.contains('turnering-filter__soeg')) {
+            (((active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') &&
+              !active.classList.contains('turnering-filter__soeg')) ||
+             active.classList.contains('turnering-bane-valg'))) {
             return;
         }
 
@@ -5845,7 +5945,8 @@ function renderTournamentMatchRow(tournamentId, m, iGang = new Map()) {
     let statusBadge = '';
     let courtInfo = '';
     if (m.status === 'pending') {
-        statusBadge = '<span class="maerke maerke--afventer">Afventer</span>';
+        // Banevælgeren står i stedet for "Afventer" (falder tilbage, hvis antal baner ikke er hentet)
+        statusBadge = turneringBaneVaelger(tournamentId, m) || '<span class="maerke maerke--afventer">Afventer</span>';
     } else if (m.status === 'active') {
         statusBadge = `<span class="maerke maerke--igang">I gang – Bane ${m.court_number ?? '?'}</span>`;
     } else if (m.status === 'finished') {
