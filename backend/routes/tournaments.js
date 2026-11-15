@@ -614,9 +614,14 @@ function drawScopeOf(sourceMatchId) {
 //     spillerne er afgjort → auto-tilføjes HVIS den hører til en draw/pulje
 //     vi allerede har kampe fra, og mindst ét rigtigt navn er kendt.
 // Genuint nye kategorier (draw vi ikke kender) forbliver manuelle kandidater.
-async function syncTournamentCore(tournament, { skipClubs = false } = {}) {
-    const { matches: incoming } = await fetchAndParseTournamentMatches(tournament.source_tournament_id);
+async function syncTournamentCore(tournament, { skipClubs = false, idag = null } = {}) {
     const existing = await getMatchesForTournament(tournament.id);
+    // Den automatiske opdatering (idag sat) skåner TS: kun dagens kampe og
+    // Swiss-rækker uden ventende kampe hentes hver gang — se
+    // fetchAndParseTournamentMatches. En Swiss-række med ventende kampe kan
+    // ikke få en ny runde endnu.
+    const auto = idag ? { idag, travleSwiss: travleSwissRaekker(existing) } : null;
+    const { matches: incoming } = await fetchAndParseTournamentMatches(tournament.source_tournament_id, auto);
 
     const knownDraws = new Set();
     for (const row of existing) {
@@ -720,7 +725,7 @@ async function syncTournamentCore(tournament, { skipClubs = false } = {}) {
 
     // Klub-opsamling genbruger de allerede hentede kampe. Auto-opdateringer
     // (skipClubs) springer den helt over — klub-logoer ændrer sig ikke hvert
-    // 4. minut, og det sparer klubside-kald mod TS.
+    // 2. minut, og det sparer klubside-kald mod TS.
     if (!skipClubs) {
         await captureTournamentClubs(tournament.id, tournament.source_tournament_id, incoming);
     }
@@ -729,37 +734,99 @@ async function syncTournamentCore(tournament, { skipClubs = false } = {}) {
 }
 
 // Kør auto-sync for alle aktive turneringer med auto_sync slået til.
-// Kaldes af scheduleren hvert 4. minut — SKAL køres i tenant-kontekst
+// Kaldes af scheduleren hvert 2. minut — SKAL køres i tenant-kontekst
 // (runWithTenant) med dbLabel som matcher req.clubDbName-konventionen.
-async function runTournamentAutoSync(dbLabel) {
+async function runTournamentAutoSync(dbLabel, nu = new Date()) {
     const tournaments = await query(
         `SELECT id, source_tournament_id FROM tournaments
          WHERE status = 'active' AND auto_sync = 1 AND source_tournament_id IS NOT NULL`
     );
+    const { dato, time } = koebenhavnNu(nu);
 
     for (const t of tournaments) {
         const key = tenantSyncKey(dbLabel, t.id);
         if (_syncingTournaments.has(key)) continue; // manuel opdatering i gang
+        const dage = (await query(
+            `SELECT DISTINCT LEFT(planned_time, 10) AS d FROM tournament_matches
+             WHERE tournament_id = ? AND planned_time IS NOT NULL ORDER BY d`,
+            [t.id]
+        )).map(r => r.d);
+        const plan = autoPlan({ nu: nu.getTime(), dato, time, dage, tidligere: _autoSyncPlan.get(key) });
+        const status = _autoSyncStatus.get(key);
+        if (!plan.koer) {
+            if (status || plan.pause !== 'venter') _autoSyncStatus.set(key, { ...(status || {}), pause: plan.pause, naeste: plan.naeste || null });
+            continue;
+        }
+
         _syncingTournaments.add(key);
         try {
-            const res = await syncTournamentCore(t, { skipClubs: true });
+            const res = await syncTournamentCore(t, { skipClubs: true, idag: dato });
+            const naeste = plan.turneringsdag ? 0 : nu.getTime() + AUTO_UDEN_FOR_DAGE_MS;
+            _autoSyncPlan.set(key, { fejl: 0, naeste });
             _autoSyncStatus.set(key, {
                 at: Date.now(),
                 updated: res.updated,
                 added: res.added,
                 newCandidates: res.newCandidates.length,
-                error: null
+                error: null,
+                pause: plan.turneringsdag ? null : 'udenfor',
+                naeste: naeste || null
             });
             if (res.updated > 0 || res.added > 0 || res.newCandidates.length > 0) {
                 console.log(`  ↻ ${dbLabel}: turnering ${t.id} auto-opdateret — ${res.updated} opdateret, ${res.added} tilføjet, ${res.newCandidates.length} nye kandidater`);
             }
         } catch (e) {
-            _autoSyncStatus.set(key, { at: Date.now(), updated: 0, added: 0, newCandidates: 0, error: e.message || String(e) });
-            console.error(`❌ Auto-opdatering fejlede for turnering ${t.id} (${dbLabel}):`, e.message);
+            // Venter længere for hver fejl i træk (5, 10, 20, 30 min), så vi ikke
+            // bliver ved med at ramme TS, hvis den siger fra eller er nede
+            const fejl = ((_autoSyncPlan.get(key) || {}).fejl || 0) + 1;
+            const naeste = nu.getTime() + AUTO_FEJL_PAUSE_MIN[Math.min(fejl, AUTO_FEJL_PAUSE_MIN.length) - 1] * 60000;
+            _autoSyncPlan.set(key, { fejl, naeste });
+            _autoSyncStatus.set(key, { at: Date.now(), updated: 0, added: 0, newCandidates: 0, error: e.message || String(e), pause: 'fejl', naeste });
+            console.error(`❌ Auto-opdatering fejlede for turnering ${t.id} (${dbLabel}, fejl nr. ${fejl}):`, e.message);
         } finally {
             _syncingTournaments.delete(key);
         }
     }
+}
+
+// ---- Den automatiske opdaterings rytme ----
+//
+// Scheduleren kalder hvert 2. minut. På turneringens dage hentes der hver
+// gang (dagens kampe — resten genbruges, se fetchAndParseTournamentMatches),
+// andre dage højst hver halve time, aldrig om natten (22-7) og ikke når
+// turneringens sidste dag er ovre. Fejler TS, ventes der længere og længere.
+const AUTO_UDEN_FOR_DAGE_MS = 30 * 60 * 1000;
+const AUTO_FEJL_PAUSE_MIN = [5, 10, 20, 30];
+const AUTO_NAT_FRA = 22, AUTO_NAT_TIL = 7;
+const _autoSyncPlan = new Map(); // "tenant:id" -> { fejl, naeste }
+
+// Dato ("YYYY-MM-DD") og time (0-23) i Danmark
+function koebenhavnNu(nu = new Date()) {
+    const dato = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Copenhagen', year: 'numeric', month: '2-digit', day: '2-digit' }).format(nu);
+    const time = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhagen', hour: '2-digit', hourCycle: 'h23' }).format(nu));
+    return { dato, time };
+}
+
+// Skal den automatiske opdatering køre nu? Ren funktion.
+// dage: turneringens datoer (fra TS' tidspunkter), tidligere: { fejl, naeste }.
+// → { koer: true, turneringsdag } eller { koer: false, pause: 'nat'|'slut'|'fejl'|'venter', naeste? }
+function autoPlan({ nu, dato, time, dage, tidligere }) {
+    if (time >= AUTO_NAT_FRA || time < AUTO_NAT_TIL) return { koer: false, pause: 'nat' };
+    if (dage.length && dato > dage[dage.length - 1]) return { koer: false, pause: 'slut' };
+    if (tidligere && tidligere.naeste && nu < tidligere.naeste) {
+        return { koer: false, pause: tidligere.fejl ? 'fejl' : 'venter', naeste: tidligere.naeste };
+    }
+    return { koer: true, turneringsdag: dage.length === 0 || dage.includes(dato) };
+}
+
+// Swiss-rækker (draw med runde "?") hvor vi stadig har ventende kampe
+function travleSwissRaekker(rows) {
+    const travle = new Set();
+    for (const r of rows) {
+        if (r.status !== 'pending' || !r.source_match_id) continue;
+        if (rundeScopeOf(r.source_match_id).endsWith('#?')) travle.add(drawScopeOf(r.source_match_id));
+    }
+    return travle;
 }
 
 router.post('/:id/sync-import', authMiddleware, requirePage('tournament'), async (req, res, next) => {
@@ -797,7 +864,7 @@ router.post('/:id/sync-import', authMiddleware, requirePage('tournament'), async
 });
 
 // PUT /api/tournaments/:id/auto-sync - Slå serverbaseret auto-opdatering til/fra (kræver auth)
-// Flaget gemmes i databasen, så schedulerens 4-minutters job kører uafhængigt
+// Flaget gemmes i databasen, så schedulerens 2-minutters job kører uafhængigt
 // af om admin-siden (eller browseren) er åben.
 router.put('/:id/auto-sync', authMiddleware, requirePage('tournament'), async (req, res, next) => {
     try {
@@ -816,7 +883,7 @@ router.put('/:id/auto-sync', authMiddleware, requirePage('tournament'), async (r
         await query('UPDATE tournaments SET auto_sync = ? WHERE id = ?', [enabled ? 1 : 0, id]);
 
         // Kør første opdatering med det samme (fire-and-forget) så brugeren ikke
-        // skal vente op til 4 minutter på effekten. Tenant-konteksten følger med
+        // skal vente op til 2 minutter på effekten. Tenant-konteksten følger med
         // promise-kæden (AsyncLocalStorage).
         if (enabled) {
             const key = tenantSyncKey(req.clubDbName, tournament.id);
@@ -1007,3 +1074,6 @@ module.exports.sideOmbyttet = sideOmbyttet;
 module.exports.tsResultat = tsResultat;
 module.exports.nyKampRaekke = nyKampRaekke;
 module.exports.syncTournamentCore = syncTournamentCore;
+module.exports.autoPlan = autoPlan;
+module.exports.koebenhavnNu = koebenhavnNu;
+module.exports.travleSwissRaekker = travleSwissRaekker;

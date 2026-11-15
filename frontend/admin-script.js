@@ -5436,9 +5436,9 @@ async function handleSyncTournament(tournamentId, tournamentName) {
 }
 
 // ==================== AUTO-OPDATERING FRA TOURNAMENT SOFTWARE ====================
-// Flueben pr. turnering ("Auto-opdater hvert 4. minut", default FRA). Flaget
+// Flueben pr. turnering ("Auto-opdater hvert 2. minut", default FRA). Flaget
 // gemmes i databasen, og selve opdateringen kører i BACKENDens scheduler hvert
-// 4. minut — den fortsætter altså selv om admin-siden/browseren lukkes.
+// 2. minut — den fortsætter altså selv om admin-siden/browseren lukkes.
 // Nye TS-kampe tilføjes aldrig automatisk; statuslinjen viser når der ligger
 // nogle, og de bekræftes via den manuelle Opdater-knap som hidtil.
 
@@ -5459,15 +5459,22 @@ function autoSyncStatusHtml(t) {
     if (!t.auto_sync) return '';
     const s = t.autoSyncStatus;
     if (!s) return `<div class="status-linje">Auto-opdatering aktiv — venter på første kørsel…</div>`;
-    const time = new Date(s.at).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
+    const kl = (ms) => new Date(ms).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
+    // Pauser (serveren skåner Tournament Software) — "Opdater"-knappen virker altid
+    if (s.pause === 'nat') return `<div class="status-linje">Auto-opdatering holder pause om natten (kl. 22–7)</div>`;
+    if (s.pause === 'slut') return `<div class="status-linje">Turneringens dage er ovre — auto-opdatering holder pause</div>`;
+    if (!s.at) return `<div class="status-linje">Auto-opdatering aktiv — venter på første kørsel…</div>`;
+    const time = kl(s.at);
     if (s.error) {
-        return `<div class="status-linje status-linje--fejl">Auto-opdatering fejlede kl. ${time} — prøver igen om lidt</div>`;
+        const igen = s.naeste ? `prøver igen kl. ${kl(s.naeste)}` : 'prøver igen om lidt';
+        return `<div class="status-linje status-linje--fejl">Auto-opdatering fejlede kl. ${time} — ${igen}</div>`;
     }
     const added = s.added > 0 ? ` · ${s.added} nye kampe tilføjet` : '';
     const candidates = s.newCandidates > 0
         ? ` · <span class="tekst-advarsel fed">${s.newCandidates} kampe i ny kategori — tryk Opdater for at tilføje</span>`
         : '';
-    return `<div class="status-linje">Auto-opdateret kl. ${time}${added}${candidates}</div>`;
+    const udenfor = s.pause === 'udenfor' && s.naeste ? ` · ikke en turneringsdag, næste kl. ${kl(s.naeste)}` : '';
+    return `<div class="status-linje">Auto-opdateret kl. ${time}${added}${candidates}${udenfor}</div>`;
 }
 
 // Holder kandidaterne for det åbne bekræftelses-modal så "Tilføj valgte" kan finde dem.
@@ -5769,7 +5776,7 @@ function renderTournamentBlock(t, iGang = new Map()) {
                 <div class="raekke">
                     ${t.source_tournament_id ? `<label class="afkrydsning tekst-mindre">
                         <input type="checkbox" id="t${t.id}_autoSync" ${t.auto_sync ? 'checked' : ''} class="afkrydsning-boks">
-                        Auto-opdater hvert 4. minut
+                        Auto-opdater hvert 2. minut
                     </label>
                     <button id="t${t.id}_syncBtn" class="btn-primary btn-sm">↻ Opdater fra Tournament Software</button>` : ''}
                     <button id="t${t.id}_finishBtn" class="btn-secondary btn-sm">Afslut turnering</button>

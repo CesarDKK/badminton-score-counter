@@ -306,3 +306,83 @@ test('Tabletten henter kun sin egen kamp', async () => {
     await lag.route.stack[0].handle({ params: { courtNumber: '5' } }, { json: (x) => { ud = x; }, status() { return this; } }, (e) => { throw e; });
     assert.deepEqual(ud, { tournament: { id: 3, name: 'Lyngby', matches: [{ id: 4, court_number: 5, status: 'active', side1_player1: 'A' }] } });
 });
+
+// ---------- Den automatiske opdaterings rytme ----------
+
+test('koebenhavnNu: dansk dato og time (vintertid)', () => {
+    assert.deepEqual(tournaments.koebenhavnNu(new Date('2026-11-21T21:30:00Z')), { dato: '2026-11-21', time: 22 });
+    assert.deepEqual(tournaments.koebenhavnNu(new Date('2026-11-21T23:30:00Z')), { dato: '2026-11-22', time: 0 });
+});
+
+test('autoPlan: nat, efter turneringen, pause efter fejl, turneringsdag eller ej', () => {
+    const dage = ['2026-11-21', '2026-11-22'];
+    const p = (o) => tournaments.autoPlan({ nu: 1000, dato: '2026-11-21', time: 12, dage, tidligere: null, ...o });
+    assert.deepEqual(p({ time: 22 }), { koer: false, pause: 'nat' });
+    assert.deepEqual(p({ time: 6 }), { koer: false, pause: 'nat' });
+    assert.deepEqual(p({ dato: '2026-11-23' }), { koer: false, pause: 'slut' });
+    assert.deepEqual(p({ tidligere: { fejl: 2, naeste: 5000 } }), { koer: false, pause: 'fejl', naeste: 5000 });
+    assert.deepEqual(p({ tidligere: { fejl: 0, naeste: 5000 } }), { koer: false, pause: 'venter', naeste: 5000 });
+    assert.deepEqual(p({ tidligere: { fejl: 1, naeste: 900 } }), { koer: true, turneringsdag: true });
+    assert.deepEqual(p({ dato: '2026-11-20' }), { koer: true, turneringsdag: false });
+    assert.deepEqual(p({ dage: [] }), { koer: true, turneringsdag: true }, 'uden tidspunkter: altid');
+});
+
+test('travleSwissRaekker: kun Swiss-rækker med ventende kampe', () => {
+    const r = (sid, status) => ({ source_match_id: sid, status });
+    assert.deepEqual([...tournaments.travleSwissRaekker([
+        r('1#?#0', 'finished'), r('1#?#u31', 'pending'), r('4#?#2', 'finished'),
+        r('7#Finale#0', 'pending'), r(null, 'pending'),
+    ])], ['1']);
+});
+
+test('Auto: dagens kampe hentes hver gang, forsiden og travle Swiss-rækker genbruges', async () => {
+    tsEfterRunde1();
+    await imp.fetchAndParseTournamentMatches(TID); // frisk hentning af alt
+    hentet = [];
+    await imp.fetchAndParseTournamentMatches(TID, { idag: '2026-11-21', travleSwiss: new Set(['1']) });
+    assert.ok(hentet.some(u => u.endsWith('/matches/20261121')), 'dagens kampe');
+    assert.ok(!hentet.some(u => u.endsWith('/Matches')), 'forsiden genbruges');
+    assert.ok(!hentet.some(u => u.includes('draw=1')), 'Swiss-række med ventende kampe genbruges');
+
+    hentet = [];
+    await imp.fetchAndParseTournamentMatches(TID, { idag: '2026-11-22', travleSwiss: new Set() });
+    assert.ok(!hentet.some(u => u.includes('/matches/20261121')), 'en anden dags kampe genbruges');
+    assert.ok(hentet.some(u => u.includes('draw=1')), 'Swiss-række, der venter på næste runde, hentes');
+});
+
+test('Auto: TS svarer 429 — der ventes 5 min, så 10 min, før der prøves igen', async () => {
+    tsEfterRunde1();
+    // TS siger fra: alle sider svarer 429
+    const ægteFetch = global.fetch;
+    global.fetch = async (url) => (String(url).includes('/cookiewall')
+        ? new Response('', { status: 200 })
+        : (hentet.push(String(url)), new Response('stop', { status: 429 })));
+    nulstil(async (sql) => {
+        if (/FROM tournaments\s+WHERE status = 'active' AND auto_sync = 1/.test(sql)) return [{ id: 77, source_tournament_id: TID }];
+        if (/SELECT DISTINCT LEFT\(planned_time/.test(sql)) return [{ d: '2026-11-21' }];
+        if (/FROM tournament_matches\s+WHERE tournament_id = \?\s+ORDER BY/.test(sql)) return [];
+        return [];
+    });
+    const kl = (hhmm) => new Date(`2026-11-21T${hhmm}:00+01:00`);
+    try {
+        hentet = [];
+        await tournaments.runTournamentAutoSync('test', kl('12:00'));
+        assert.equal(hentet.length, 1, 'første forsøg rammer TS');
+        hentet = [];
+        await tournaments.runTournamentAutoSync('test', kl('12:02'));
+        await tournaments.runTournamentAutoSync('test', kl('12:04'));
+        assert.equal(hentet.length, 0, 'ingen forsøg i pausen');
+        await tournaments.runTournamentAutoSync('test', kl('12:06'));
+        assert.equal(hentet.length, 1, 'efter 5 min');
+        hentet = [];
+        await tournaments.runTournamentAutoSync('test', kl('12:14'));
+        assert.equal(hentet.length, 0, 'anden fejl: 10 min');
+        await tournaments.runTournamentAutoSync('test', kl('12:16'));
+        assert.equal(hentet.length, 1);
+        hentet = [];
+        await tournaments.runTournamentAutoSync('test', kl('22:30'));
+        assert.equal(hentet.length, 0, 'aldrig om natten');
+    } finally {
+        global.fetch = ægteFetch;
+    }
+});

@@ -93,12 +93,29 @@ function extractTournamentId(input) {
 }
 
 // Hent en page fra tournamentsoftware.com med etableret consent-session
-function fetchTournamentPage(tournamentId, subPage) {
-    return fetchTsSti(subPage ? `/tournament/${tournamentId}/${subPage}` : `/tournament/${tournamentId}`);
+function fetchTournamentPage(tournamentId, subPage, valg) {
+    return fetchTsSti(subPage ? `/tournament/${tournamentId}/${subPage}` : `/tournament/${tournamentId}`, valg);
 }
 
+// Sider hentet fra TS ("sti" -> { html, at }). Den automatiske opdatering
+// genbruger en side, der er yngre end maxAlder, så TS ikke rammes unødigt
+// (fx søndagens kampe om lørdagen). maxAlder 0 = hent altid (import og
+// "Opdater"-knappen). Ryddes for sider ældre end en time.
+const _sideCache = new Map();
+const SIDE_CACHE_RYD_MS = 60 * 60 * 1000;
+
 // Hent en vilkårlig sti på TS (fx /sport/drawmatches.aspx?...) med consent-session
-async function fetchTsSti(sti, _retry = 0) {
+async function fetchTsSti(sti, { maxAlder = 0 } = {}) {
+    const nu = Date.now();
+    const gemt = _sideCache.get(sti);
+    if (maxAlder > 0 && gemt && nu - gemt.at < maxAlder) return gemt.html;
+    const html = await hentTsSti(sti);
+    for (const [k, v] of _sideCache) if (nu - v.at > SIDE_CACHE_RYD_MS) _sideCache.delete(k);
+    _sideCache.set(sti, { html, at: nu });
+    return html;
+}
+
+async function hentTsSti(sti, _retry = 0) {
     const cookie = await establishConsent(_retry > 0);
     const url = `${TS_BASE}${sti}`;
     const resp = await fetch(url, {
@@ -110,13 +127,15 @@ async function fetchTsSti(sti, _retry = 0) {
         signal: AbortSignal.timeout(20000)
     });
     if (!resp.ok) {
-        throw new Error(`Kunne ikke hente turneringsside (HTTP ${resp.status})`);
+        const err = new Error(`Kunne ikke hente turneringsside (HTTP ${resp.status})`);
+        err.status = resp.status;
+        throw err;
     }
     const html = await resp.text();
     const isWall = html.includes('class="message-page__modal"') && html.includes('cookiewall');
     // Hvis vi stadig får cookie-wall-siden, prøv at re-etablere consent én gang
     if (isWall && _retry < 1) {
-        return fetchTsSti(sti, _retry + 1);
+        return hentTsSti(sti, _retry + 1);
     }
     return html;
 }
@@ -349,11 +368,22 @@ function assignSourceMatchIds(matches) {
 // Genbrugelig kerne: hent + parse alle kampe for en TS-turnering på tværs af alle dage.
 // Bruges både af /preview (import) og af tournaments.js' sync-import (gen-import).
 // Returnerer { tournamentName, days, matches } hvor hver match har sourceMatchId.
-async function fetchAndParseTournamentMatches(tournamentId) {
+//
+// auto (den automatiske opdatering): sider, der sjældent ændrer sig, genbruges
+// i op til AUTO_GEMT_MS — forsiden (navn og dage), de andre dages kampe og
+// Swiss-rækker, hvor vi stadig har ventende kampe (rækken kan ikke få en ny
+// runde, før de er spillet). Dagens kampe og en Swiss-række, der venter på
+// næste runde, hentes hver gang. Alle dage er stadig med (fra cachen), så
+// løbenumrene i kilde-id'erne er de samme som ved importen.
+//   auto = { idag: 'YYYY-MM-DD', travleSwiss: Set<drawId> }
+const AUTO_GEMT_MS = 15 * 60 * 1000;
+
+async function fetchAndParseTournamentMatches(tournamentId, auto = null) {
+    const gemt = auto ? { maxAlder: AUTO_GEMT_MS } : undefined;
     // Hent Matches-siden — bruges til at extrahere turneringsnavn + liste af dage.
     // OBS: /Matches defaulter til dag 1's kampe, så vi henter eksplicit per-dag bagefter
     // for at få ALLE kampe på tværs af multi-day turneringer.
-    const mainHtml = await fetchTournamentPage(tournamentId, 'Matches');
+    const mainHtml = await fetchTournamentPage(tournamentId, 'Matches', gemt);
     const tournamentName = parseTournamentName(mainHtml);
     const days = parseTournamentDays(mainHtml);
 
@@ -365,7 +395,8 @@ async function fetchAndParseTournamentMatches(tournamentId) {
     } else {
         // Hent hver dag parallelt og tag kampene med deres dag
         const dayHtmls = await Promise.all(
-            days.map(d => fetchTournamentPage(tournamentId, `matches/${d.value}`))
+            days.map(d => fetchTournamentPage(tournamentId, `matches/${d.value}`,
+                auto && d.date !== auto.idag ? gemt : undefined))
         );
         for (let i = 0; i < days.length; i++) {
             const dayMatches = parseMatchesHtml(dayHtmls[i]);
@@ -378,7 +409,8 @@ async function fetchAndParseTournamentMatches(tournamentId) {
     for (const m of allMatches) {
         m.plannedAt = m.day && m.plannedTime ? `${m.day} ${m.plannedTime}` : '';
     }
-    await supplerSwissKampe(tournamentId, allMatches);
+    await supplerSwissKampe(tournamentId, allMatches,
+        auto ? (d) => (auto.travleSwiss && auto.travleSwiss.has(d) ? gemt : undefined) : () => undefined);
     return { tournamentName, days, matches: allMatches };
 }
 
@@ -427,7 +459,8 @@ function parseDrawMatchesHtml(html) {
 const sammenlignNavn = (s) => String(s || '').replace(/\s*\[[^\]]*\]\s*$/, '').replace(/\s+/g, ' ').trim().toLowerCase();
 const spillerNoegle = (a, b) => [a.map(sammenlignNavn).sort().join('+'), b.map(sammenlignNavn).sort().join('+')].sort().join('|');
 
-async function supplerSwissKampe(tournamentId, matches) {
+// hentValg(drawId) → valg til fetchTsSti (fx { maxAlder }) eller undefined
+async function supplerSwissKampe(tournamentId, matches, hentValg = () => undefined) {
     const swiss = new Map(); // drawId -> en kamp fra rækken (kategori, double)
     for (const m of matches) {
         if (m.drawId && !m.round && !swiss.has(m.drawId)) swiss.set(m.drawId, m);
@@ -437,8 +470,11 @@ async function supplerSwissKampe(tournamentId, matches) {
         const hold = draws.slice(i, i + SWISS_HENT_HOLD);
         const svar = await Promise.all(hold.map(async (d) => {
             try {
-                return [d, parseDrawMatchesHtml(await fetchTsSti(`/sport/drawmatches.aspx?id=${tournamentId}&draw=${d}`))];
+                return [d, parseDrawMatchesHtml(await fetchTsSti(`/sport/drawmatches.aspx?id=${tournamentId}&draw=${d}`, hentValg(d)))];
             } catch (e) {
+                // TS beder os holde igen: hele opdateringen fejler, så den
+                // automatiske opdatering venter længere (se runTournamentAutoSync)
+                if (e.status === 429 || e.status === 503) throw e;
                 console.error(`Swiss-række ${d}: kunne ikke hente rækkens kampe:`, e.message);
                 return [d, []];
             }

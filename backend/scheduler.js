@@ -190,7 +190,7 @@ function startInactivityCheck() {
 }
 
 /**
- * Serverbaseret auto-opdatering fra Tournament Software hvert 4. minut.
+ * Serverbaseret auto-opdatering fra Tournament Software hvert 2. minut (rytmen pr. turnering: se autoPlan i routes/tournaments.js).
  * Kører kun for turneringer hvor admin har slået auto_sync til — og kører
  * uafhængigt af om admin-siden/browseren er åben.
  */
@@ -198,7 +198,7 @@ function startTournamentAutoSync() {
     // Lazy require — undgår require-cyklus ved opstart
     const { runTournamentAutoSync } = require('./routes/tournaments');
 
-    cron.schedule('*/4 * * * *', async () => {
+    cron.schedule('*/2 * * * *', async () => {
         // 1. Standard/direkte database
         try {
             await runTournamentAutoSync('direct');
@@ -223,7 +223,7 @@ function startTournamentAutoSync() {
         timezone: 'Europe/Copenhagen'
     });
 
-    console.log('⏰ Scheduled tournament auto-sync every 4 minutes (TS-turneringer med auto_sync slået til)');
+    console.log('⏰ Scheduled tournament auto-sync every 2 minutes (TS-turneringer med auto_sync slået til)');
 }
 
 /**
