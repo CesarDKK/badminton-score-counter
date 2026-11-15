@@ -4268,7 +4268,11 @@ function skaermOpdateringFejlHtml(noegle, paaNyeste) {
 function renderSkaerme(skaerme, nyesteVersion) {
     if (!skaerme.length) return '';
     const kl = (ms) => new Date(ms).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
-    const linjer = skaerme.map(s => {
+    // Fast rækkefølge efter navn (tv2 før tv10) — serverens rækkefølge følger
+    // livstegnene, så skærmene byttede plads hen ad vejen. Uden navn: klient-id.
+    const linjer = [...skaerme].sort((a, b) =>
+        (a.navn || a.klientId || '').localeCompare(b.navn || b.klientId || '', 'da', { numeric: true })
+    ).map(s => {
         const farve = s.sekunderSiden < 60 ? 'var(--color-win)'
             : s.sekunderSiden < 300 ? 'var(--color-warning, #ffb02e)' : 'var(--color-danger)';
         const status = s.sekunderSiden < 60 ? 'Kører'
