@@ -378,3 +378,71 @@ test('13: frontenden sender admin-tokenet til spillerlisten — og kun admin kal
         assert.doesNotMatch(laes(f), /player-info|getPlayers\(|getPlayer\(|searchPlayers\(/, f);
     }
 });
+
+// ======================= 14A: TV- og oversigt-links kan kun læse =======================
+
+const auth = require('../../middleware/auth');
+auth._saetAdgangslinkOpslag(async () => true);   // alle adgangslinks i testen er aktive
+
+const deviceToken = (destination, ekstra = {}) => jwt.sign({ role: 'device', tokenId: 7, destination, tokenType: 'permanent',
+    clubSubdomain: 'lyngby', ...ekstra }, process.env.JWT_SECRET);
+
+// requireWriteAuthInClubMode køres direkte: { nexted } eller { status, body }
+async function vagt(token, metode, sti) {
+    const req = { accessMode: 'club', clubSubdomain: 'lyngby', method: metode, originalUrl: sti, url: sti,
+        headers: { authorization: `Bearer ${token}` } };
+    const ud = {};
+    const res = { status(s) { ud.status = s; return this; }, json(b) { ud.body = b; return this; } };
+    await auth.requireWriteAuthInClubMode(req, res, () => { ud.nexted = true; });
+    return ud;
+}
+
+test('14A: et TV- eller oversigt-link må ikke skrive — kun læse og skærmens egne ruter', async () => {
+    for (const dest of ['tv/3', 'tv', 'tv-v3', 'oversigt', 'noget-fra-en-gammel-backup']) {
+        const t = deviceToken(dest);
+        for (const [m, sti] of [['PUT', '/api/game-states/3'], ['DELETE', '/api/game-states/3'], ['POST', '/api/match-history'],
+            ['POST', '/api/team-matches'], ['PUT', '/api/settings/theme'], ['POST', '/api/ur/tryk'], ['POST', '/api/livestream/bane/3/start']]) {
+            const r = await vagt(t, m, sti);
+            assert.equal(r.status, 403, `${dest}: ${m} ${sti}`);
+            assert.equal(r.body.error, 'Skærmens adgangslink kan kun læse');
+        }
+        for (const [m, sti] of [['GET', '/api/game-states/3'], ['GET', '/api/device-tokens/mit'], ['GET', '/api/ur/kode?bane=3'],
+            ['POST', '/api/screens/heartbeat'], ['POST', '/api/screens/pc-rapport'], ['POST', '/api/livestream/pc'],
+            ['POST', '/api/device-tokens/mit/skift']]) {
+            assert.equal((await vagt(t, m, sti)).nexted, true, `${dest}: ${m} ${sti} er tilladt`);
+        }
+    }
+});
+
+test('14A: tablet-links (court/N), QR-sessioner og admin er uændrede', async () => {
+    const tablet = deviceToken('court/3');
+    const qr = deviceToken('court/3', { tokenType: 'match_session' });
+    for (const t of [tablet, qr, fuldAdmin]) {
+        assert.equal((await vagt(t, 'PUT', '/api/game-states/3')).nexted, true);
+        assert.equal((await vagt(t, 'POST', '/api/match-history')).nexted, true);
+    }
+    assert.equal(auth.erSkaermLink(jwt.decode(tablet)), false);
+    assert.equal(auth.erSkaermLink(jwt.decode(deviceToken('tv/12'))), true);
+    assert.equal(auth.erSkaermLink(jwt.decode(fuldAdmin)), false);
+});
+
+test('14A: PUT /api/game-states/:bane med TV-tokenet afvises gennem den rigtige rute; tabletten kommer forbi vagten', async () => {
+    dbSvar = async () => [];
+    const hent = klubApp(a => a.use('/api/game-states', require('../../routes/gameStates')));
+    const krop = { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ player1: { name: 'A' } }) };
+    const tv = await hent('/api/game-states/3', { ...krop, headers: { ...krop.headers, Authorization: `Bearer ${deviceToken('tv/3')}` } });
+    assert.equal(tv.status, 403);
+    assert.equal((await tv.json()).error, 'Skærmens adgangslink kan kun læse');
+    const tab = await hent('/api/game-states/3', { ...krop, headers: { ...krop.headers, Authorization: `Bearer ${deviceToken('court/3')}` } });
+    assert.notEqual((await tab.json()).error, 'Skærmens adgangslink kan kun læse');
+});
+
+test('14A: TV og oversigt skriver kun hjerteslaget og deres eget link — begge er tilladt', () => {
+    for (const f of ['frontend/tv-script-v3.js', 'frontend/oversigt-script.js']) {
+        const k = laes(f);
+        assert.doesNotMatch(k, /method: *'(POST|PUT|DELETE|PATCH)'/, `${f} skriver ikke selv`);
+    }
+    const api = laes('frontend/js/api.js');
+    assert.match(udsnit(api, 'async sendScreenHeartbeat(', 'async getScreens('), /'\/screens\/heartbeat'/);
+    assert.match(laes('frontend/js/adgangslink-vagt.js'), /'\/device-tokens\/mit\/skift', \{ method: 'POST' \}/);
+});
