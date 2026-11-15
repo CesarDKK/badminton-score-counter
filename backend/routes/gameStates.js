@@ -7,6 +7,7 @@ const { kunEgenBane, erQrSession } = require('../middleware/qrSession');
 const { turneringPaaBane } = require('../config/baneTildeling');
 const { invalidateCourtTokens, nyUrKode } = require('./matchSessionTokens');
 const { publishGameStateChange, subscribeGameStateChanges } = require('../events/gameStateEvents');
+const { optagSse } = require('../events/sseLoft');
 // badmintonplanner.dk: rundenavn/næste runde/udskiftere/note pr. bane (fase 2-visning)
 const { hentPlannerVisning, plannerForBane, gemPlannerResultat, kampIGang } = require('./plannerIntegration');
 const { validerIndtastning, vundneSaet } = require('../config/kampResultat');
@@ -299,6 +300,10 @@ router.get('/batch/all', async (req, res, next) => {
 router.get('/events/stream', (req, res) => {
     const courtFilter = req.query.court ? parseInt(req.query.court, 10) : null;
 
+    // Loft pr. adresse og pr. klub (nr. 93, events/sseLoft.js)
+    const plads = optagSse(req);
+    if (plads.afvist) return res.status(429).json({ error: plads.afvist });
+
     res.set({
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
@@ -336,6 +341,7 @@ router.get('/events/stream', (req, res) => {
     req.on('close', () => {
         clearInterval(heartbeat);
         unsubscribe();
+        plads.slip();
     });
 });
 

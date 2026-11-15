@@ -514,3 +514,71 @@ test('91: demoen — manuel opdatering højst hvert 2. minut, og "slå til" afvi
         if (gammelDomaene === undefined) delete process.env.APP_DOMAIN; else process.env.APP_DOMAIN = gammelDomaene;
     }
 });
+
+// ======================= Nr. 93: loft over live-strømmene (SSE) =======================
+
+test('93: optagSse — 60 pr. adresse (IPv6 pr. /64), 300 pr. klub, lokalt net tælles ikke pr. adresse', () => {
+    const { optagSse, SSE_MAKS_PR_IP, SSE_MAKS_PR_KLUB, _antalFor } = require('../../events/sseLoft');
+    const advar = [], gammel = console.warn;
+    console.warn = (t) => advar.push(t);
+    try {
+        const r = (ip, klub = 'klub_a') => ({ clubDbName: klub, headers: { 'cf-connecting-ip': ip }, socket: {} });
+        const pladser = [];
+        for (let i = 0; i < SSE_MAKS_PR_IP; i++) pladser.push(optagSse(r(`2001:db8:5:6::${i + 1}`)));
+        assert.ok(pladser.every(p => p.slip));
+        assert.match(optagSse(r('2001:db8:5:6::ffff')).afvist, /denne adresse/);
+        assert.equal(advar.length, 1);
+        assert.ok(optagSse(r('2001:db8:5:6::fffe')).afvist);
+        assert.equal(advar.length, 1, 'én log-linje pr. minut');
+        // En anden klub på samme adresse: stadig adressens loft
+        assert.ok(optagSse(r('2001:db8:5:6::1', 'klub_b')).afvist);
+        // Én lukker → plads til én ny
+        pladser.pop().slip();
+        pladser.pop().slip(); pladser[0].slip(); pladser[0].slip(); // slip to gange tæller én
+        assert.equal(_antalFor('ip:2001:db8:5:6::/64'), SSE_MAKS_PR_IP - 3);
+        pladser.forEach(p => p.slip());
+        assert.equal(_antalFor('klub:klub_a'), 0);
+        // Klubbens loft — fra mange adresser
+        const mange = [];
+        for (let i = 0; i < SSE_MAKS_PR_KLUB; i++) mange.push(optagSse(r(`198.51.${Math.floor(i / 50)}.${i % 50}`)));
+        assert.ok(mange.every(p => p.slip));
+        assert.match(optagSse(r('203.0.113.1')).afvist, /i klubben/);
+        assert.ok(optagSse(r('203.0.113.1', 'klub_b')).slip, 'en anden klub mærker intet');
+        mange.forEach(p => p.slip());
+        // Lokal installation: hallens net tælles ikke pr. adresse
+        const lokale = [];
+        for (let i = 0; i < SSE_MAKS_PR_IP + 5; i++) lokale.push(optagSse({ clubDbName: undefined, headers: { 'x-real-ip': '192.168.1.20' }, socket: {} }));
+        assert.ok(lokale.every(p => p.slip));
+        lokale.forEach(p => p.slip());
+    } finally {
+        console.warn = gammel;
+    }
+});
+
+test('93: SSE-ruten afviser med 429 over loftet og frigiver pladsen, når klienten går', async () => {
+    const http = require('http');
+    const { _antalFor, SSE_MAKS_PR_IP } = require('../../events/sseLoft');
+    const hent = app(a => a.use('/api/game-states', require('../../routes/gameStates')));
+    const port = servere[servere.length - 1].address().port;
+    const aaben = () => new Promise((ok) => {
+        const r = http.get({ port, path: '/api/game-states/events/stream?court=2', headers: { 'cf-connecting-ip': '203.0.113.99' } }, (res) => {
+            res.once('data', () => ok({ r, status: res.statusCode }));
+        });
+    });
+    const aabne = [];
+    for (let i = 0; i < SSE_MAKS_PR_IP; i++) aabne.push(await aaben());
+    assert.ok(aabne.every(a => a.status === 200));
+    await new Promise(ok => setTimeout(ok, 50));
+    assert.equal(_antalFor('ip:203.0.113.99'), SSE_MAKS_PR_IP, 'pladsen holdes, mens forbindelsen er åben');
+    const gammel = console.warn;
+    console.warn = () => {};
+    try {
+        const afvist = await hent('/api/game-states/events/stream', { headers: { 'cf-connecting-ip': '203.0.113.99' } });
+        assert.equal(afvist.status, 429);
+    } finally {
+        console.warn = gammel;
+    }
+    aabne.forEach(a => a.r.destroy());
+    await new Promise(ok => setTimeout(ok, 100));
+    assert.equal(_antalFor('ip:203.0.113.99'), 0);
+});
