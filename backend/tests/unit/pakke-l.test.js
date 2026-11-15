@@ -400,3 +400,47 @@ test('92: et adgangslink sender kun videre til en relativ sti på egen vært', (
     assert.equal(sikkerSti('/evil.com'), '/');
     assert.equal(sikkerSti('mappe/side.html'), '/mappe/side.html');
 });
+
+// ======================= Nr. 88: historikken kræver admin og har et loft =======================
+
+test('88: historikken for holdkampe, turneringer og alle kampe kræver admin (siden Kamphistorik)', () => {
+    const { requirePage } = require('../../middleware/pagePermission');
+    for (const [fil, sti] of [['teamMatches', '/history'], ['tournaments', '/history'], ['matchHistory', '/all']]) {
+        const lag = ruteLag(require(`../../routes/${fil}`), 'get', sti);
+        assert.equal(lag[0], auth.authMiddleware, `${fil} ${sti}: login`);
+        assert.equal(lag.length, 3, `${fil} ${sti}: side-rettighed`);
+    }
+    assert.ok(requirePage);
+    // Admin sender sit token med (ikke requiresAuth: false) og beder om 200
+    const api = laes('frontend/js/api.js');
+    assert.match(api, /this\.request\(`\/match-history\/all\?limit=\$\{limit\}&offset=\$\{offset\}`\);/);
+    assert.match(api, /this\.request\('\/team-matches\/history\?limit=200'\)/);
+    assert.match(api, /this\.request\('\/tournaments\/history\?limit=200'\)/);
+});
+
+test('88: historikSide — højst 200 pr. side, offset fra 0', () => {
+    const { historikSide } = require('../../config/historikSide');
+    assert.deepEqual(historikSide({}), { limit: 200, offset: 0 });
+    assert.deepEqual(historikSide({ limit: '5000', offset: '-3' }), { limit: 200, offset: 0 });
+    assert.deepEqual(historikSide({ limit: '20', offset: '40' }), { limit: 20, offset: 40 });
+    assert.deepEqual(historikSide({ limit: 'x; DROP', offset: '1 OR 1' }), { limit: 200, offset: 1 });
+    assert.deepEqual(historikSide({ limit: '0' }), { limit: 1, offset: 0 });
+});
+
+test('88: holdkamp-historikken henter delkampene i én forespørgsel og fordeler dem', async () => {
+    const hist = rute(require('../../routes/teamMatches'), 'get', '/history');
+    nulstil(async (sql) => {
+        if (/FROM team_matches/.test(sql)) return [{ id: 7, team1_name: 'A' }, { id: 5, team1_name: 'B' }];
+        if (/FROM team_match_games/.test(sql)) return [
+            { id: 1, team_match_id: 5, game_number: 1 }, { id: 2, team_match_id: 7, game_number: 1 }, { id: 3, team_match_id: 7, game_number: 2 }];
+        return [];
+    });
+    const res = svarObjekt();
+    await hist({ query: { limit: '10', offset: '20' } }, res, (e) => { throw e; });
+    assert.match(kald[0].sql, /LIMIT 10 OFFSET 20/);
+    assert.equal(kald.length, 2);
+    assert.match(kald[1].sql, /team_match_id IN \(\?, \?\)/);
+    assert.deepEqual(kald[1].params, [7, 5]);
+    assert.deepEqual(res.body.map(t => t.games.map(g => g.id)), [[2, 3], [1]]);
+    assert.equal(res.body[0].games[0].team_match_id, undefined);
+});

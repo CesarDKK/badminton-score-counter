@@ -513,7 +513,7 @@ class BadmintonAPI {
      * @returns {Promise<Array>} - Array of match objects
      */
     async getAllMatchHistory(limit = 30, offset = 0) {
-        return this.request(`/match-history/all?limit=${limit}&offset=${offset}`, { requiresAuth: false });
+        return this.request(`/match-history/all?limit=${limit}&offset=${offset}`);
     }
 
     /**
@@ -873,7 +873,7 @@ class BadmintonAPI {
 
     /** Get all finished team matches with games */
     async getTeamMatchHistory() {
-        return this.request('/team-matches/history');
+        return this.request('/team-matches/history?limit=200');
     }
 
     /** Create a new team match */
@@ -930,7 +930,7 @@ class BadmintonAPI {
 
     /** Get tournament history (finished) */
     async getTournamentHistory() {
-        return this.request('/tournaments/history');
+        return this.request('/tournaments/history?limit=200');
     }
 
     /** Importér en turnering med alle kampe i ét kald — alt eller intet (nr. 75/81). */

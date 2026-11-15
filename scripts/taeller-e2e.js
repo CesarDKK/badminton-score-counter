@@ -277,7 +277,7 @@ async function main() {
     check('golden set: udeholdet vandt', gsFaerdig.winner_team === 2 && harSaet(gsFaerdig.set_scores, 21, 12), gsFaerdig);
     await rydBane();
     await api(`/api/team-matches/${tm.id}/finish`, 'PUT', {}, true);
-    const hkHist = await api('/api/team-matches/history');
+    const hkHist = await api('/api/team-matches/history', 'GET', undefined, true);   // kun admin (nr. 88)
     check('holdkampen afsluttet: 7 delkampe i historikken, 3-4', hkHist[0].id === tm.id && hkHist[0].games.length === 7 &&
         hkHist[0].games.filter(g => g.winner_team === 1).length === 3 && hkHist[0].games.filter(g => g.winner_team === 2).length === 4);
 

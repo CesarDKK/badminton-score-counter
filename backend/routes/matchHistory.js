@@ -8,9 +8,10 @@ const { kunEgenBane } = require('../middleware/qrSession');
 const { varighedTekst } = require('../config/matchTiming');
 const { historikFelterFejl } = require('../config/historikFelter');
 
-// GET /api/match-history/all - Get all match history (public)
+// GET /api/match-history/all - hele kamphistorikken side for side. Kun admin
+// (siden Kamphistorik, nr. 88) — før uden login.
 // NOTE: This route must come BEFORE /:courtId to avoid matching "all" as a courtId
-router.get('/all', async (req, res, next) => {
+router.get('/all', authMiddleware, requirePage('history'), async (req, res, next) => {
     try {
         // Validate and sanitize limit/offset to prevent SQL injection via interpolation
         const limit = Math.min(Math.max(parseInt(req.query.limit) || 30, 1), 1000); // 1-1000

@@ -740,7 +740,7 @@ All admin endpoints require JWT token in `Authorization: Bearer <token>` header.
 
 **GET** `/api/match-history/:courtId` - Get history for court (public)
 
-**GET** `/api/match-history/all` - Get all match history (public)
+**GET** `/api/match-history/all` - Get all match history (admin, page by page)
 - Query params: `limit` (default: 30), `offset` (default: 0)
 
 **POST** `/api/match-history` - Save match result (public)

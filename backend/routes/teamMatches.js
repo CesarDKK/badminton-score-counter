@@ -10,6 +10,7 @@ const { publishGameStateChange, publishHoldkampChange } = require('../events/gam
 const { invalidateCourtTokens } = require('./matchSessionTokens');
 const { rydAfsluttetBane } = require('../config/banerydning');
 const holdkampFormater = require('../config/holdkampFormater');
+const { historikSide } = require('../config/historikSide');
 const { banenErIGang, delkampAendringAfvist, qrDelkampAfvist, sammeBane } = require('../config/delkampRegler');
 const baneTildeling = require('../config/baneTildeling');
 
@@ -125,29 +126,35 @@ async function opretHoldkamp({ format, team1Name, team2Name, games, team1LogoId,
     }
 }
 
-// GET /api/team-matches/history - Get all finished team matches with games (public)
-router.get('/history', async (req, res, next) => {
+// GET /api/team-matches/history - afsluttede holdkampe med delkampe, nyeste først.
+// Kun admin (siden Kamphistorik) og højst 200 pr. side (?limit=, ?offset=) —
+// nr. 88: før uden login og uden loft. Oversigt og TV bruger /active og /by-court.
+router.get('/history', authMiddleware, requirePage('history'), async (req, res, next) => {
     try {
+        const { limit, offset } = historikSide(req.query);
         const teamMatches = await query(
             `SELECT id, format, team1_name, team2_name, status, created_at
              FROM team_matches WHERE status = 'finished'
-             ORDER BY created_at DESC`
+             ORDER BY created_at DESC
+             LIMIT ${limit} OFFSET ${offset}`
         );
 
-        const result = [];
-        for (const tm of teamMatches) {
-            const games = await query(
-                `SELECT id, game_number, category,
-                        team1_player1, team1_player2, team2_player1, team2_player2,
-                        court_number, status, winner_team, set_scores,
-                        started_at, finished_at
-                 FROM team_match_games
-                 WHERE team_match_id = ?
-                 ORDER BY game_number ASC`,
-                [tm.id]
-            );
-            result.push({ ...tm, games });
-        }
+        // Alle delkampe på siden i én forespørgsel
+        const ids = teamMatches.map(tm => tm.id);
+        const games = ids.length ? await query(
+            `SELECT id, team_match_id, game_number, category,
+                    team1_player1, team1_player2, team2_player1, team2_player2,
+                    court_number, status, winner_team, set_scores,
+                    started_at, finished_at
+             FROM team_match_games
+             WHERE team_match_id IN (${ids.map(() => '?').join(', ')})
+             ORDER BY team_match_id, game_number ASC`,
+            ids
+        ) : [];
+        const result = teamMatches.map(tm => ({
+            ...tm,
+            games: games.filter(g => g.team_match_id === tm.id).map(({ team_match_id, ...g }) => g)
+        }));
 
         res.json(result);
     } catch (error) {

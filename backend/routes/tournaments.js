@@ -10,6 +10,7 @@ const { fetchAndParseTournamentMatches, resolveClubNames, buildPlayerClubRows } 
 const { currentTenant } = require('../config/tenantPools');
 const { banensStartTid } = require('../config/matchTiming');
 const baneTildeling = require('../config/baneTildeling');
+const { historikSide } = require('../config/historikSide');
 
 // ── Import-fremskridt (in-memory) ──
 // Klub-opsamlingen kører i baggrunden efter kampene er indsat; frontend poller
@@ -297,13 +298,17 @@ router.get('/active', async (req, res, next) => {
     }
 });
 
-// GET /api/tournaments/history - Alle afsluttede turneringer (public)
-router.get('/history', async (req, res, next) => {
+// GET /api/tournaments/history - afsluttede turneringer, nyeste først. Kun admin
+// (siden Kamphistorik) og højst 200 pr. side (?limit=, ?offset=) — nr. 88: før
+// uden login og uden loft. Oversigt og TV bruger /active.
+router.get('/history', authMiddleware, requirePage('history'), async (req, res, next) => {
     try {
+        const { limit, offset } = historikSide(req.query);
         const tournaments = await query(
             `SELECT id, name, status, created_at
              FROM tournaments WHERE status = 'finished'
-             ORDER BY created_at DESC`
+             ORDER BY created_at DESC
+             LIMIT ${limit} OFFSET ${offset}`
         );
 
         const result = [];
