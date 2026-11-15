@@ -9,7 +9,7 @@ const { urKodeLimiter, urKodeKlubLimiter } = require('../middleware/rateLimiter'
 const { gemTilstand, formatStateRow } = require('./gameStates');
 const { gemSidsteAfsluttedeKamp } = require('../config/banerydning');
 const { hentPlannerVisning, plannerForBane } = require('./plannerIntegration');
-const { urKodeFor } = require('./matchSessionTokens');
+const { urKodeFor, matchSessionFrisk } = require('./matchSessionTokens');
 const { varighedTekst } = require('../config/matchTiming');
 const regler = require('../taeller/regler');
 const ejerskab = require('../taeller/ejerskab');
@@ -68,7 +68,7 @@ router.post('/kobl', urKodeLimiter, urKodeKlubLimiter, async (req, res, next) =>
         const s = await queryOne(
             `SELECT id, destination, locked, court_number FROM device_tokens
               WHERE token_type = 'match_session' AND is_active = 1 AND ur_kode = ?
-                ${medBane ? 'AND court_number = ?' : ''}
+                ${medBane ? 'AND court_number = ?' : ''} AND ${matchSessionFrisk()}
               ORDER BY id DESC LIMIT 1`, medBane ? [kode, bane] : [kode]);
         if (!s) return res.status(404).json({ error: 'Koden findes ikke — tjek koden på TV\'et' });
         await query('UPDATE device_tokens SET last_used_at = NOW() WHERE id = ?', [s.id]);
@@ -192,7 +192,7 @@ const hentRaekke = (courtPk) => queryOne(
 
 // ---- Uret logges ud, når det ikke bruges ----
 //
-// QR-sessionen gælder, til banen ryddes (eller midnat), og "Ny kamp" rydder den
+// QR-sessionen gælder, til banen ryddes (eller midnat, nr. 16), og "Ny kamp" rydder den
 // ikke. Et glemt ur kunne derfor tælle på banen resten af dagen. Har uret ikke
 // trykket i UR_LEDIG_MIN minutter (eller er det koblet på for så længe siden
 // uden at trykke), er det logget ud og skal taste koden fra TV'et igen — undtagen

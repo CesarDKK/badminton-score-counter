@@ -9,7 +9,11 @@ async function resetDatabase(dbLabel) {
     const updateResult = await query('UPDATE courts SET is_active = FALSE');
     // badmintonplanner-runden hører til aftenen — væk ved midnat (tildelinger følger med via FK)
     try { await query('DELETE FROM planner_rounds'); } catch (e) { /* før migration 027 */ }
-    console.log(`  ✅ ${dbLabel}: cleared ${deleteResult.affectedRows} game states, set ${updateResult.affectedRows} courts inactive`);
+    // QR- og ur-sessionerne hører til dagen (nr. 16): før kunne gårsdagens
+    // QR-link åbnes fra telefonens historik, når ingen havde ryddet banen.
+    // TV'erne henter selv en ny QR-kode (i baggrunden, hvert 5. minut).
+    const qr = await query("DELETE FROM device_tokens WHERE token_type = 'match_session'");
+    console.log(`  ✅ ${dbLabel}: cleared ${deleteResult.affectedRows} game states, set ${updateResult.affectedRows} courts inactive, removed ${qr.affectedRows} QR sessions`);
 }
 
 /**
@@ -554,4 +558,4 @@ function startUrPauser() {
     console.log('⏰ Scheduled urets pauser hvert 2. sekund (slutter ved 0:00, når uret tæller)');
 }
 
-module.exports = { releaseInactiveCourts, startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk, startUgentligBackup, ugentligBackup, startSkaermLogOprydning, startUrPauser, startYoutubeVagt };
+module.exports = { resetDatabase, releaseInactiveCourts, startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk, startUgentligBackup, ugentligBackup, startSkaermLogOprydning, startUrPauser, startYoutubeVagt };

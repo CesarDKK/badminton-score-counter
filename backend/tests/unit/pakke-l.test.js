@@ -185,3 +185,57 @@ test('15c: et ur-token virker kun på urets egne kald, ikke direkte på banens s
     // QR-telefonen (uden via) er uændret
     assert.equal(await kør(qrToken, '/api/game-states/3'), 'videre');
 });
+
+// ======================= Nr. 16: QR- og ur-sessioner dør =======================
+
+const mst = require('../../routes/matchSessionTokens');
+
+test('16: midnat sletter alle QR-/ur-sessioner sammen med stillingerne', async () => {
+    const { resetDatabase } = require('../../scheduler');
+    nulstil(async () => ({ affectedRows: 2 }));
+    const log = console.log;
+    console.log = () => {};
+    try { await resetDatabase('test'); } finally { console.log = log; }
+    assert.ok(kald.some(k => /DELETE FROM game_states/.test(k.sql)));
+    assert.ok(kald.some(k => /DELETE FROM device_tokens WHERE token_type = 'match_session'/.test(k.sql)));
+    // Kun QR-sessioner — faste adgangslinks (TV, tablets) røres ikke
+    assert.ok(!kald.some(k => /DELETE FROM device_tokens(?! WHERE token_type = 'match_session')/.test(k.sql)));
+});
+
+test('16: en session, ingen har åbnet i 12 timer, giver ikke nye sessioner og vises ikke på TV\'et', async () => {
+    assert.equal(mst.matchSessionFrisk(), 'GREATEST(created_at, COALESCE(last_used_at, created_at)) > NOW() - INTERVAL 12 HOUR');
+    nulstil(async () => []);
+    assert.equal(await mst.getActiveToken(4), null);
+    assert.match(kald[0].sql, /AND GREATEST\(created_at, COALESCE\(last_used_at, created_at\)\) > NOW\(\) - INTERVAL 12 HOUR/);
+    // /t/<token> og /validate: kun faste links eller friske QR-sessioner
+    assert.match(laes('backend/server.js'), /WHERE token = \? AND is_active = 1 AND \(token_type <> 'match_session' OR \$\{matchSessionFrisk\(\)\}\)/);
+    const validate = rute(require('../../routes/deviceTokens'), 'get', '/validate/:token');
+    nulstil(async () => []);
+    const res = svarObjekt();
+    await validate({ params: { token: 'x' } }, res, (e) => { throw e; });
+    assert.equal(res.statusCode, 401);
+    assert.match(kald[0].sql, /token_type <> 'match_session' OR GREATEST/);
+    // Uret kan ikke koble på en udløbet session
+    assert.match(laes('backend/routes/urTaeller.js'), /\$\{medBane \? 'AND court_number = \?' : ''\} AND \$\{matchSessionFrisk\(\)\}/);
+});
+
+test('16: en ny QR-kode til banen rydder den udløbne session først', async () => {
+    const baneTildeling = require('../../config/baneTildeling');
+    const gammel = baneTildeling.turneringPaaBane;
+    baneTildeling.turneringPaaBane = async () => false;
+    try {
+        // getOrCreateActiveToken er intern — kør den via QR-ruten som admin
+        const qr = rute(mst, 'get', '/:courtId');
+        nulstil(async (sql) => (/^\s*SELECT token FROM device_tokens/.test(sql) ? [] : { affectedRows: 1 }));
+        const admin = jwt.sign({ role: 'super_admin' }, process.env.JWT_SECRET);
+        const res = svarObjekt();
+        await qr({ accessMode: 'club', params: { courtId: '4' }, query: {}, hostname: 'lyngby.badmintonapp.dk', headers: { authorization: `Bearer ${admin}` } }, res);
+        const i = kald.findIndex(k => /DELETE FROM device_tokens/.test(k.sql));
+        const j = kald.findIndex(k => /INSERT INTO device_tokens/.test(k.sql));
+        assert.ok(i >= 0 && j > i, 'slettes før den nye oprettes');
+        assert.match(kald[i].sql, /court_number = \? AND NOT \(GREATEST/);
+        assert.deepEqual(kald[i].params, [4]);
+    } finally {
+        baneTildeling.turneringPaaBane = gammel;
+    }
+});
