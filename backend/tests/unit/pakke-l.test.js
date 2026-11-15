@@ -15,6 +15,8 @@ const path = require('path');
 const express = require('express');
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-hemmelighed';
+// routes/livestream.js (nr. 17) kræver en upload-mappe
+process.env.UPLOAD_DIR = process.env.UPLOAD_DIR || require('os').tmpdir();
 
 const ROD = path.join(__dirname, '..', '..', '..');
 const laes = (f) => fs.readFileSync(path.join(ROD, f), 'utf8');
@@ -237,5 +239,72 @@ test('16: en ny QR-kode til banen rydder den udløbne session først', async () 
         assert.deepEqual(kald[i].params, [4]);
     } finally {
         baneTildeling.turneringPaaBane = gammel;
+    }
+});
+
+// ======================= Nr. 17: YouTube-forbindelsen følger browseren =======================
+
+
+test('17: /youtube/svar kræver cookien fra den browser, der trykkede "Forbind"', async () => {
+    const youtube = require('../../config/youtube');
+    const livestream = require('../../routes/livestream');
+    youtube.brugKlient('klient-id', 'klient-hemmelighed');
+    const byttet = [];
+    youtube.byttKode = async (kode) => { byttet.push(kode); return { access_token: 'a', refresh_token: 'r' }; };
+    youtube.kanal = async () => ({ id: 'UC1', navn: 'Lyngby BK' });
+    youtube.glemAdgang = () => {};
+    nulstil(async () => ({ affectedRows: 1 }));
+
+    // 1. "Forbind": nonce i state og i en HttpOnly-cookie på klubbens adresse
+    const forbind = rute(livestream, 'post', '/youtube/forbind');
+    const res1 = svarObjekt();
+    res1.cookie = (navn, vaerdi, valg) => { res1.cookies[navn] = { vaerdi, valg }; };
+    const req = { accessMode: 'club', hostname: 'lyngby.badmintonapp.dk', clubDbName: 'klub_lyngby', headers: {} };
+    process.env.APP_DOMAIN = 'badmintonapp.dk';
+    await forbind(req, res1, (e) => { throw e; });
+    const c = res1.cookies.yt_forbind;
+    assert.ok(c, 'cookien sættes');
+    assert.deepEqual({ ...c.valg, maxAge: undefined }, { httpOnly: true, sameSite: 'lax', path: '/api/livestream/youtube', secure: true, maxAge: undefined });
+    const state = new URL(res1.body.url).searchParams.get('state');
+    assert.equal(jwt.verify(state, process.env.JWT_SECRET).n, c.vaerdi);
+
+    // 2. Svaret fra Google
+    const svarRute = rute(livestream, 'get', '/youtube/svar');
+    const kør = async (cookie, st = state) => {
+        const res = svarObjekt();
+        res.clearCookie = (navn) => { res.ryddet = navn; };
+        await svarRute({ ...req, headers: cookie ? { cookie } : {}, query: { state: st, code: 'kode-fra-google' } }, res, (e) => { throw e; });
+        return res;
+    };
+    const advar = console.warn; const log = console.log;
+    console.warn = () => {}; console.log = () => {};
+    try {
+        // En andens browser (uden cookien): afvist, koden byttes ikke
+        let res = await kør(null);
+        assert.match(res.location, /youtube=fejl/);
+        assert.match(decodeURIComponent(res.location), /i den browser, hvor du trykkede/);
+        assert.equal(byttet.length, 0);
+        // …og staten er brugt op
+        res = await kør(`yt_forbind=${c.vaerdi}`);
+        assert.match(decodeURIComponent(res.location), /allerede brugt/);
+
+        // Ny runde i admins browser: forbundet
+        const res2 = svarObjekt();
+        res2.cookie = (navn, vaerdi) => { res2.cookies[navn] = vaerdi; };
+        await forbind(req, res2, (e) => { throw e; });
+        const st2 = new URL(res2.body.url).searchParams.get('state');
+        // Forkert nonce i cookien
+        res = await kør('andet=1; yt_forbind=000000000000000000000000', st2);
+        assert.match(res.location, /youtube=fejl/);
+        const res3 = svarObjekt();
+        res3.cookie = (navn, vaerdi) => { res3.cookies[navn] = vaerdi; };
+        await forbind(req, res3, (e) => { throw e; });
+        const st3 = new URL(res3.body.url).searchParams.get('state');
+        res = await kør(`andet=1; yt_forbind=${res3.cookies.yt_forbind}`, st3);
+        assert.match(res.location, /youtube=forbundet/);
+        assert.equal(res.ryddet, 'yt_forbind');
+        assert.deepEqual(byttet, ['kode-fra-google']);
+    } finally {
+        console.warn = advar; console.log = log;
     }
 });
