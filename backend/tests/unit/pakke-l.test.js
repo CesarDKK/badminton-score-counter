@@ -444,3 +444,73 @@ test('88: holdkamp-historikken henter delkampene i én forespørgsel og fordeler
     assert.deepEqual(res.body.map(t => t.games.map(g => g.id)), [[2, 3], [1]]);
     assert.equal(res.body[0].games[0].team_match_id, undefined);
 });
+
+// ======================= Nr. 91: demoens auto-sync mod tournamentsoftware =======================
+
+test('91: demoen — højst 2 turneringer med auto-sync, uset i et døgn slås fra, klubberne mærker intet', async () => {
+    const tournaments = require('../../routes/tournaments');
+    const demo = require('../../config/demo');
+    const gammelFetch = globalThis.fetch;
+    const gammelDomaene = process.env.APP_DOMAIN;
+    const fejl = [], log = console.log, err = console.error;
+    globalThis.fetch = async () => { throw new Error('intet net i testen'); };
+    console.error = (...a) => fejl.push(a.join(' '));
+    console.log = () => {};
+    process.env.APP_DOMAIN = 'badmintonapp.dk';
+    try {
+        const kør = async (label) => {
+            fejl.length = 0;
+            tournaments._demo.sidstHentet.clear();
+            nulstil(async (sql) => (/FROM tournaments/.test(sql)
+                ? [{ id: 9, source_tournament_id: 'a' }, { id: 8, source_tournament_id: 'b' }, { id: 7, source_tournament_id: 'c' }]
+                : { affectedRows: 1 }));
+            await tournaments.runTournamentAutoSync(label);
+            return {
+                fra: kald.filter(k => /SET auto_sync = 0/.test(k.sql)).map(k => k.params[0]),
+                hentet: [9, 8, 7].filter(id => fejl.some(f => f.includes(`turnering ${id} `))),
+            };
+        };
+        tournaments._demo.sidstSet.set(9, Date.now());
+        tournaments._demo.sidstSet.set(8, Date.now() - demo.DEMO_AUTO_SYNC_USET_MS - 60000);
+        assert.deepEqual(await kør('direct'), { fra: [8, 7], hentet: [9] }, 'demoen');
+        assert.deepEqual(await kør('klub_lyngby'), { fra: [], hentet: [9, 8, 7] }, 'en klub');
+        // Lokal installation (ingen APP_DOMAIN) er ikke demoen
+        delete process.env.APP_DOMAIN;
+        assert.deepEqual(await kør('direct'), { fra: [], hentet: [9, 8, 7] }, 'lokal installation');
+    } finally {
+        globalThis.fetch = gammelFetch;
+        console.error = err; console.log = log;
+        if (gammelDomaene === undefined) delete process.env.APP_DOMAIN; else process.env.APP_DOMAIN = gammelDomaene;
+    }
+});
+
+test('91: demoen — manuel opdatering højst hvert 2. minut, og "slå til" afvises over loftet', async () => {
+    const tournaments = require('../../routes/tournaments');
+    const gammelDomaene = process.env.APP_DOMAIN;
+    process.env.APP_DOMAIN = 'badmintonapp.dk';
+    try {
+        tournaments._demo.sidstHentet.clear();
+        assert.equal(tournaments._demo.demoSyncVent(4), 0);
+        assert.ok(tournaments._demo.demoSyncVent(4) > 100, 'lige hentet');
+        assert.equal(tournaments._demo.demoSyncVent(4, Date.now() + 121000), 0, 'efter 2 minutter');
+        const sync = rute(tournaments, 'post', '/:id/sync-import');
+        const res = svarObjekt();
+        await sync({ accessMode: 'direct', params: { id: '4' }, query: {} }, res, (e) => { throw e; });
+        assert.equal(res.statusCode, 429);
+        // Slå til, når to andre allerede henter
+        const auto = rute(tournaments, 'put', '/:id/auto-sync');
+        nulstil(async (sql) => (/COUNT\(\*\)/.test(sql) ? [{ n: 2 }] : [{ id: 5, source_tournament_id: 'x' }]));
+        const r2 = svarObjekt();
+        await auto({ accessMode: 'direct', params: { id: '5' }, body: { enabled: true } }, r2, (e) => { throw e; });
+        assert.equal(r2.statusCode, 409);
+        assert.ok(!kald.some(k => /SET auto_sync = \?/.test(k.sql)));
+        // En klub har intet loft
+        const r3 = svarObjekt();
+        nulstil(async (sql) => (/COUNT\(\*\)/.test(sql) ? [{ n: 9 }] : /SELECT id, source/.test(sql) ? [{ id: 5, source_tournament_id: null }] : { affectedRows: 1 }));
+        await auto({ accessMode: 'club', clubDbName: 'klub_lyngby', params: { id: '5' }, body: { enabled: false } }, r3, (e) => { throw e; });
+        assert.equal(r3.statusCode, 200);
+        assert.ok(!kald.some(k => /COUNT\(\*\)/.test(k.sql)));
+    } finally {
+        if (gammelDomaene === undefined) delete process.env.APP_DOMAIN; else process.env.APP_DOMAIN = gammelDomaene;
+    }
+});
