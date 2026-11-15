@@ -7,6 +7,7 @@ const { clubAdminAuth } = require('../middleware/clubAdminAuth');
 const { requirePage } = require('../middleware/pagePermission');
 const { requireWriteAuthInClubMode } = require('../middleware/auth');
 const { adgangslinkSession } = require('../middleware/adgangslinkSession');
+const { matchSessionFrisk } = require('./matchSessionTokens');
 
 // Klub-admin med adgang til siden "Adgangslinks" (side-rettigheden devicetokens)
 const adgangslinkAdmin = [clubAdminAuth, requirePage('devicetokens')];
@@ -27,8 +28,10 @@ const VALID_DESTINATIONS = (() => {
 // (dette endpoint bruges af frontend når tabletten åbner sit bogmærke-link)
 router.get('/validate/:token', async (req, res, next) => {
     try {
+        // En udløbet QR-session (nr. 16) giver ikke en ny session
         const deviceToken = await queryOne(
-            'SELECT id, name, destination, locked, token_type FROM device_tokens WHERE token = ? AND is_active = 1',
+            `SELECT id, name, destination, locked, token_type FROM device_tokens
+              WHERE token = ? AND is_active = 1 AND (token_type <> 'match_session' OR ${matchSessionFrisk()})`,
             [req.params.token]
         );
 

@@ -19,6 +19,20 @@ function linkProtokol(req) {
     return p === 'https' ? 'https' : 'http';
 }
 
+// En QR-session dør (nr. 16):
+//   - ved midnat: scheduler.js sletter alle match_session-rækker sammen med
+//     stillingerne, så gårsdagens QR-link ikke kan åbnes fra telefonens historik
+//   - når ingen har åbnet den (scannet /t/<token> eller koblet et ur på) i 12
+//     timer: så er alle sessioner fra den udløbet (de gælder 12 timer), og
+//     rækken giver ikke nye. Alderen regnes fra seneste åbning, ikke fra
+//     oprettelsen — en bane, der tælles via QR hele dagen, beholder sin kode.
+// SQL-betingelsen (alias = tabellens alias med punktum, eller '')
+const MATCH_SESSION_TIMER = 12;
+function matchSessionFrisk(alias = '') {
+    const a = alias;
+    return `GREATEST(${a}created_at, COALESCE(${a}last_used_at, ${a}created_at)) > NOW() - INTERVAL ${MATCH_SESSION_TIMER} HOUR`;
+}
+
 // Henter den aktive match-session token for en bane, eller null hvis ingen findes.
 // Bruges i "resume"-mode hvor vi KUN vil vise QR hvis banen allerede kører i
 // QR-selvbetjening — vi opretter ikke en ny token (så officielle holdkamp-/
@@ -29,6 +43,7 @@ async function getActiveToken(courtNumber) {
          WHERE token_type = 'match_session'
            AND court_number = ?
            AND is_active = 1
+           AND ${matchSessionFrisk()}
          ORDER BY id DESC LIMIT 1`,
         [courtNumber]
     );
@@ -47,6 +62,11 @@ async function getOrCreateActiveToken(courtNumber) {
 
     const existing = await getActiveToken(courtNumber);
     if (existing) return existing;
+    // En udløbet session (nr. 16) ryddes, før banen får en ny
+    await query(
+        `DELETE FROM device_tokens
+          WHERE token_type = 'match_session' AND court_number = ? AND NOT (${matchSessionFrisk()})`,
+        [courtNumber]);
 
     const token = crypto.randomBytes(32).toString('hex');
     const destination = `court/${courtNumber}`;
@@ -157,3 +177,4 @@ module.exports.getActiveToken = getActiveToken;
 module.exports.urKodeFor = urKodeFor;
 module.exports.nyUrKode = nyUrKode;
 module.exports.linkProtokol = linkProtokol;
+module.exports.matchSessionFrisk = matchSessionFrisk;

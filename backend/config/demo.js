@@ -21,4 +21,16 @@ const DEMO_LAGER_MAKS = 50 * MB;
 
 const erDemo = (req) => req.accessMode !== 'club' && !!process.env.APP_DOMAIN;
 
-module.exports = { erDemo, DEMO_GENDAN_MAKS, DEMO_LAGER_MAKS, MB };
+// Det samme for et job i scheduleren: demoens database er 'direct' (klubbernes
+// har deres db-navn)
+const erDemoDb = (dbLabel) => (dbLabel || 'direct') === 'direct' && !!process.env.APP_DOMAIN;
+
+// Turneringer fra tournamentsoftware med automatisk opdatering (nr. 91): uden
+// loft kunne hvem som helst lade serveren hente fra tournamentsoftware hvert
+// 4. minut for et vilkårligt antal turneringer — i det uendelige.
+const DEMO_AUTO_SYNC_MAKS = 2;                    // turneringer med auto-sync
+const DEMO_AUTO_SYNC_USET_MS = 24 * 3600 * 1000;  // stop, når ingen har set den i et døgn
+const DEMO_SYNC_PAUSE_MS = 2 * 60 * 1000;         // mellem to hentninger af samme turnering
+
+module.exports = { erDemo, erDemoDb, DEMO_GENDAN_MAKS, DEMO_LAGER_MAKS, MB,
+    DEMO_AUTO_SYNC_MAKS, DEMO_AUTO_SYNC_USET_MS, DEMO_SYNC_PAUSE_MS };

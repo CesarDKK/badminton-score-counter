@@ -21,6 +21,10 @@ const { _saetKlubAdminOpslag, kodeAftryk } = require('../../middleware/klubAdmin
 _saetKlubAdminOpslag(async (id) => (id === 1 ? { password_hash: 'hash-1', page_permissions: null } : null));
 const ADMIN = { role: 'club_admin', id: 1, pv: kodeAftryk('hash-1') };
 
+// Super-admins i master-databasen (nr. 18): super-admin 1 findes med hash 'super-1'
+require('../../middleware/superAdminAuth')._saetSuperAdminOpslag(async (id) => (id === 1 ? { password_hash: 'super-1' } : null));
+const SUPER = { role: 'super_admin', id: 1, pv: kodeAftryk('super-1') };
+
 const sign = (payload) => jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
 
 function req({ token, accessMode, clubSubdomain }) {
@@ -67,7 +71,7 @@ test('authMiddleware: club_admin for EGEN klub tillades', async () => {
 });
 
 test('authMiddleware: super_admin tillades på tværs af klubber', async () => {
-    const r = await run(authMiddleware, req({ token: sign({ role: 'super_admin' }), accessMode: 'club', clubSubdomain: 'lyngby' }));
+    const r = await run(authMiddleware, req({ token: sign(SUPER), accessMode: 'club', clubSubdomain: 'lyngby' }));
     assert.equal(r.nexted, true);
 });
 
@@ -129,7 +133,7 @@ test('write: club_admin for egen klub tillades', async () => {
 });
 
 test('write: super_admin tillades', async () => {
-    const r = await run(requireWriteAuthInClubMode, req({ token: sign({ role: 'super_admin' }), accessMode: 'club', clubSubdomain: 'lyngby' }));
+    const r = await run(requireWriteAuthInClubMode, req({ token: sign(SUPER), accessMode: 'club', clubSubdomain: 'lyngby' }));
     assert.equal(r.nexted, true);
 });
 
@@ -165,7 +169,7 @@ test('write: admins slås ikke op i device_tokens', async () => {
     _saetAdgangslinkOpslag(async () => { throw new Error('må ikke slå op'); });
     try {
         assert.equal((await run(requireWriteAuthInClubMode, club(ADMIN))).nexted, true);
-        assert.equal((await run(requireWriteAuthInClubMode, club({ role: 'super_admin' }))).nexted, true);
+        assert.equal((await run(requireWriteAuthInClubMode, club(SUPER))).nexted, true);
     } finally {
         _saetAdgangslinkOpslag(async (id) => id >= 1 && id < 100);
     }

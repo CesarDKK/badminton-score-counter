@@ -7,6 +7,7 @@ const { ikkeQrSession } = require('../middleware/qrSession');
 const { clubAdminAuth } = require('../middleware/clubAdminAuth');
 const { requirePage } = require('../middleware/pagePermission');
 const { klientIp, uploadLimiter } = require('../middleware/rateLimiter');
+const { linkProtokol } = require('./matchSessionTokens');
 const upload = require('../config/multer');
 const { bevarKlub, currentTenant } = require('../config/tenantPools');
 const { validateImageMagic } = require('../config/imageUpload');
@@ -600,16 +601,40 @@ router.put('/baner/:bane', livestreamAdmin, async (req, res, next) => {
 //    → nginx → GET /youtube/svar på roddomænet), der sender videre til klubbens
 //    eget subdomæne — Google tillader ikke *.badmintonapp.dk som adresse.
 // 3. Klubbens GET /youtube/svar bytter koden til en varig adgang og gemmer den krypteret.
+//
+// Svaret skal komme tilbage til den browser, der startede (nr. 17): stateens
+// engangs-nonce lægges også i en kort HttpOnly-cookie på klubbens adresse, og
+// /youtube/svar kræver den. Uden det kunne en klub-admin sende Google-adressen
+// til en anden, og den andens kanal blev forbundet til klubben, når vedkommende
+// godkendte på Googles (ægte) side. SameSite=Lax: Googles svar er en
+// almindelig navigation (Google → roddomænet → klubbens adresse), og den
+// sender Lax-cookies med.
 
 const STATE_LEVETID = '15m';
 const tekst255 = (v) => String(v || '').slice(0, 255);
 const _brugteStates = new Map(); // nonce -> udløb (ms): en state kan kun bruges én gang
+const YT_COOKIE = 'yt_forbind';
+const YT_COOKIE_STI = '/api/livestream/youtube';
+const ytCookieValg = (req) => ({ httpOnly: true, sameSite: 'lax', path: YT_COOKIE_STI, secure: linkProtokol(req) === 'https' });
+
+// En cookie fra Cookie-headeren (ingen cookie-parser i appen)
+function laesCookie(req, navn) {
+    for (const del of String(req.headers.cookie || '').split(';')) {
+        const i = del.indexOf('=');
+        if (i > 0 && del.slice(0, i).trim() === navn) return decodeURIComponent(del.slice(i + 1).trim());
+    }
+    return null;
+}
+const sammeNonce = (a, b) => !!a && !!b && a.length === b.length &&
+    crypto.timingSafeEqual(Buffer.from(String(a)), Buffer.from(String(b)));
 
 router.post('/youtube/forbind', livestreamAdmin, async (req, res, next) => {
     try {
         if (!ytTilladt(req)) return res.status(404).json({ error: 'YouTube er ikke sat op på serveren' });
-        const state = jwt.sign({ typ: 'youtube', vaert: req.hostname, tenant: tenantKey(req),
-            n: crypto.randomBytes(12).toString('hex') }, process.env.JWT_SECRET, { expiresIn: STATE_LEVETID });
+        const n = crypto.randomBytes(12).toString('hex');
+        const state = jwt.sign({ typ: 'youtube', vaert: req.hostname, tenant: tenantKey(req), n },
+            process.env.JWT_SECRET, { expiresIn: STATE_LEVETID });
+        res.cookie(YT_COOKIE, n, { ...ytCookieValg(req), maxAge: 15 * 60 * 1000 });
         res.json({ url: youtube.loginAdresse(state) });
     } catch (error) {
         next(error);
@@ -642,6 +667,12 @@ router.get('/youtube/svar', async (req, res, next) => {
         for (const [n, udloeb] of _brugteStates) if (udloeb < nu) _brugteStates.delete(n);
         if (_brugteStates.has(s.n)) return tilAdmin('fejl', 'Linket er allerede brugt — prøv igen');
         _brugteStates.set(s.n, s.exp * 1000);
+        const cookie = laesCookie(req, YT_COOKIE);
+        res.clearCookie(YT_COOKIE, ytCookieValg(req));
+        if (!sammeNonce(cookie, s.n)) {
+            console.warn(`[livestream] ${tenantKey(req)}: YouTube-svar uden browserens cookie afvist`);
+            return tilAdmin('fejl', 'Forbindelsen skal gøres færdig i den browser, hvor du trykkede "Forbind YouTube-kanal" — prøv igen');
+        }
         // Afbrudt hos Google (fx "Annuller")
         if (req.query.error || !req.query.code) return tilAdmin('afbrudt');
 

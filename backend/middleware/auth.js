@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { klubAdminAfvist } = require('./klubAdminSession');
+const { superAdminAfvist, MAA_SKIFTE } = require('./superAdminAuth');
 
 // Admin-auth til beskyttede endpoints (backup, indstillinger, sponsorer, sletning m.m.).
 //
@@ -8,7 +9,8 @@ const { klubAdminAfvist } = require('./klubAdminSession');
 // eller et token udstedt til klub A kalde admin-endpoints hos klub B.
 //
 // Accepteres:
-//   - super_admin: altid (styrer alle klubber)
+//   - super_admin: altid (styrer alle klubber) — så længe admin'en findes og
+//                  adgangskoden er den samme, og ikke med et must-change-token (nr. 18)
 //   - club_admin:  kun på den klub tokenet er udstedt til, og kun så længe
 //                  admin'en findes og adgangskoden er den samme (klubAdminSession.js)
 //   - { admin: true } (simpelt admin-login): kun uden for club-mode — i club-mode
@@ -49,6 +51,11 @@ async function authMiddleware(req, res, next) {
         // Slettet admin eller skiftet adgangskode: sessionen gælder ikke længere
         if (decoded.role === 'club_admin') {
             const afvist = await klubAdminAfvist(decoded);
+            if (afvist) return res.status(401).json({ error: afvist, sessionEnded: true });
+        }
+        if (decoded.role === 'super_admin') {
+            if (decoded.mustChange) return res.status(403).json(MAA_SKIFTE);
+            const afvist = await superAdminAfvist(decoded);
             if (afvist) return res.status(401).json({ error: afvist, sessionEnded: true });
         }
 
@@ -112,6 +119,16 @@ async function adgangslinkAfvist(decoded) {
     };
 }
 
+// Urets adgang (via: 'ur', routes/urTaeller.js /kobl) gælder kun urets egne
+// kald: /api/ur/* og "overtag tælleren" på banen. Før var den en fuld
+// QR-session, som også kunne ændre/rydde stillingen direkte (PUT/DELETE
+// /api/game-states/:bane), skrive kamphistorik og melde planner-resultater —
+// og "logget ud efter 15 minutter" gjaldt kun i /api/ur/* (nr. 15).
+function urKaldTilladt(req) {
+    const sti = String(req.originalUrl || req.url || '').split('?')[0];
+    return sti.startsWith('/api/ur/') || /^\/api\/game-states\/\d+\/taeller\/?$/.test(sti);
+}
+
 // Håndhæv gyldigt token på skrive-operationer — men KUN i club-mode.
 //
 // I club-mode er API'et offentligt på internettet (klub.badmintonapp.dk), så en
@@ -153,6 +170,9 @@ async function requireWriteAuthInClubMode(req, res, next) {
     if (decoded.role !== 'super_admin' && decoded.clubSubdomain !== req.clubSubdomain) {
         return res.status(403).json({ error: 'Adgangslink hører til en anden klub', authRequired: true });
     }
+    if (decoded.via === 'ur' && !urKaldTilladt(req)) {
+        return res.status(403).json({ error: 'Urets adgang gælder kun tælling fra uret' });
+    }
 
     // Tilbagekaldt, slettet eller (QR) afsluttet adgangslink — og for klub-admins:
     // slettet bruger eller skiftet adgangskode
@@ -161,6 +181,11 @@ async function requireWriteAuthInClubMode(req, res, next) {
         if (afvist) return res.status(401).json(afvist);
         if (decoded.role === 'club_admin') {
             const fejl = await klubAdminAfvist(decoded);
+            if (fejl) return res.status(401).json({ error: fejl, authRequired: true, sessionEnded: true });
+        }
+        if (decoded.role === 'super_admin') {
+            if (decoded.mustChange) return res.status(403).json(MAA_SKIFTE);
+            const fejl = await superAdminAfvist(decoded);
             if (fejl) return res.status(401).json({ error: fejl, authRequired: true, sessionEnded: true });
         }
     } catch (err) {
@@ -176,6 +201,7 @@ module.exports = {
     generateToken,
     requireWriteAuthInClubMode,
     adgangslinkAfvist,
+    urKaldTilladt,
     _saetAdgangslinkOpslag,
     sessionGyldigFra
 };

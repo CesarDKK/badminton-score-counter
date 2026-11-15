@@ -10,6 +10,8 @@ const { fetchAndParseTournamentMatches, resolveClubNames, buildPlayerClubRows } 
 const { currentTenant } = require('../config/tenantPools');
 const { banensStartTid } = require('../config/matchTiming');
 const baneTildeling = require('../config/baneTildeling');
+const { historikSide } = require('../config/historikSide');
+const demo = require('../config/demo');
 
 // ── Import-fremskridt (in-memory) ──
 // Klub-opsamlingen kører i baggrunden efter kampene er indsat; frontend poller
@@ -255,6 +257,23 @@ function tenantSyncKey(tenant, tournamentId) {
     return `${tenant || 'direct'}:${tournamentId}`;
 }
 
+// ---- Demoen og tournamentsoftware (nr. 91, lofterne i config/demo.js) ----
+// Hvornår en turnering i demoen sidst er set (GET /active — admin, TV og
+// oversigt henter den) og sidst hentet fra tournamentsoftware. Kun i hukommelsen:
+// efter en genstart regnes alle som set ved opstarten.
+const _demoStart = Date.now();
+const _demoSidstSet = new Map();      // turnering-id -> ms
+const _demoSidstHentet = new Map();   // turnering-id -> ms
+
+// Sekunder til turneringen må hentes igen (0 = nu, og hentningen noteres)
+function demoSyncVent(id, nu = Date.now()) {
+    const sidst = _demoSidstHentet.get(Number(id));
+    if (sidst && nu - sidst < demo.DEMO_SYNC_PAUSE_MS) return Math.ceil((demo.DEMO_SYNC_PAUSE_MS - (nu - sidst)) / 1000);
+    _demoSidstHentet.set(Number(id), nu);
+    return 0;
+}
+const demoUset = (id, nu = Date.now()) => nu - (_demoSidstSet.get(Number(id)) || _demoStart) > demo.DEMO_AUTO_SYNC_USET_MS;
+
 // Hjælper: hent alle matches for en turnering (sorteret efter match_order)
 async function getMatchesForTournament(tournamentId) {
     return query(
@@ -279,6 +298,7 @@ router.get('/active', async (req, res, next) => {
         );
 
         const tenant = req.clubDbName || 'direct';
+        if (demo.erDemo(req)) for (const t of tournaments) _demoSidstSet.set(t.id, Date.now());
         const result = [];
         for (const t of tournaments) {
             const matches = await getMatchesForTournament(t.id);
@@ -297,13 +317,17 @@ router.get('/active', async (req, res, next) => {
     }
 });
 
-// GET /api/tournaments/history - Alle afsluttede turneringer (public)
-router.get('/history', async (req, res, next) => {
+// GET /api/tournaments/history - afsluttede turneringer, nyeste først. Kun admin
+// (siden Kamphistorik) og højst 200 pr. side (?limit=, ?offset=) — nr. 88: før
+// uden login og uden loft. Oversigt og TV bruger /active.
+router.get('/history', authMiddleware, requirePage('history'), async (req, res, next) => {
     try {
+        const { limit, offset } = historikSide(req.query);
         const tournaments = await query(
             `SELECT id, name, status, created_at
              FROM tournaments WHERE status = 'finished'
-             ORDER BY created_at DESC`
+             ORDER BY created_at DESC
+             LIMIT ${limit} OFFSET ${offset}`
         );
 
         const result = [];
@@ -631,12 +655,27 @@ async function syncTournamentCore(tournament, { skipClubs = false } = {}) {
 async function runTournamentAutoSync(dbLabel) {
     const tournaments = await query(
         `SELECT id, source_tournament_id FROM tournaments
-         WHERE status = 'active' AND auto_sync = 1 AND source_tournament_id IS NOT NULL`
+         WHERE status = 'active' AND auto_sync = 1 AND source_tournament_id IS NOT NULL
+         ORDER BY id DESC`
     );
 
+    // Demoen (nr. 91): højst DEMO_AUTO_SYNC_MAKS (de nyeste — fx efter en
+    // gendannet backup), og en turnering, ingen har set i et døgn, slås fra
+    const erDemo = demo.erDemoDb(dbLabel);
+    for (const [i, t] of tournaments.entries()) {
+        if (!erDemo) continue;
+        if (i >= demo.DEMO_AUTO_SYNC_MAKS || demoUset(t.id)) {
+            await query('UPDATE tournaments SET auto_sync = 0 WHERE id = ?', [t.id]);
+            console.log(`  ⏹ ${dbLabel}: demoens turnering ${t.id} — automatisk opdatering slået fra (${i >= demo.DEMO_AUTO_SYNC_MAKS ? 'over loftet' : 'ikke set i et døgn'})`);
+            t.fra = true;
+        }
+    }
+
     for (const t of tournaments) {
+        if (t.fra) continue;
         const key = tenantSyncKey(dbLabel, t.id);
         if (_syncingTournaments.has(key)) continue; // manuel opdatering i gang
+        if (erDemo && demoSyncVent(t.id) > 0) continue; // lige hentet manuelt
         _syncingTournaments.add(key);
         try {
             const res = await syncTournamentCore(t, { skipClubs: true });
@@ -664,6 +703,10 @@ router.post('/:id/sync-import', authMiddleware, requirePage('tournament'), async
     const key = tenantSyncKey(req.clubDbName, id);
     if (_syncingTournaments.has(key)) {
         return res.status(409).json({ error: 'Opdatering kører allerede for denne turnering — vent til den er færdig.' });
+    }
+    const vent = demo.erDemo(req) ? demoSyncVent(id) : 0;
+    if (vent > 0) {
+        return res.status(429).json({ error: `Demoen henter højst hvert ${demo.DEMO_SYNC_PAUSE_MS / 60000}. minut fra tournamentsoftware — prøv igen om ${vent} sekunder.` });
     }
     _syncingTournaments.add(key);
     try {
@@ -709,6 +752,14 @@ router.put('/:id/auto-sync', authMiddleware, requirePage('tournament'), async (r
         if (enabled && !tournament.source_tournament_id) {
             return res.status(400).json({ error: 'Denne turnering er ikke importeret fra Tournament Software.' });
         }
+        if (enabled && demo.erDemo(req)) {
+            const andre = await queryOne(
+                `SELECT COUNT(*) AS n FROM tournaments WHERE status = 'active' AND auto_sync = 1 AND id <> ?`, [id]);
+            if (andre && Number(andre.n) >= demo.DEMO_AUTO_SYNC_MAKS) {
+                return res.status(409).json({ error: `Demoen kan højst have ${demo.DEMO_AUTO_SYNC_MAKS} turneringer med automatisk opdatering. Slå den fra på en anden først.` });
+            }
+            _demoSidstSet.set(Number(id), Date.now());
+        }
 
         await query('UPDATE tournaments SET auto_sync = ? WHERE id = ?', [enabled ? 1 : 0, id]);
 
@@ -717,7 +768,8 @@ router.put('/:id/auto-sync', authMiddleware, requirePage('tournament'), async (r
         // promise-kæden (AsyncLocalStorage).
         if (enabled) {
             const key = tenantSyncKey(req.clubDbName, tournament.id);
-            if (!_syncingTournaments.has(key)) {
+            // Demoen: ikke en hentning pr. til/fra-klik (nr. 91) — scheduleren tager den
+            if (!_syncingTournaments.has(key) && !(demo.erDemo(req) && demoSyncVent(tournament.id) > 0)) {
                 _syncingTournaments.add(key);
                 syncTournamentCore(tournament, { skipClubs: true })
                     .then(r => _autoSyncStatus.set(key, { at: Date.now(), updated: r.updated, added: r.added, newCandidates: r.newCandidates.length, error: null }))
@@ -895,6 +947,7 @@ module.exports = router;
 // Eksportér auto-sync-kørslen til scheduleren (routeren er en funktion,
 // så app.use(...) virker stadig — samme mønster som importTournament.js).
 module.exports.runTournamentAutoSync = runTournamentAutoSync;
+module.exports._demo = { sidstSet: _demoSidstSet, sidstHentet: _demoSidstHentet, demoSyncVent };
 // Rene hjælpere til unit-tests (tests/unit/pakke-k.test.js)
 module.exports.parSyncKampe = parSyncKampe;
 module.exports.rundeScopeOf = rundeScopeOf;

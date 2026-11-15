@@ -26,7 +26,7 @@ const { synligBane } = require('../config/baner');
 const { currentTenant } = require('../config/tenantPools');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
 const { publishGameStateChange } = require('../events/gameStateEvents');
-const { plannerTokenLimiter, plannerIpLimiter, klientIp } = require('../middleware/rateLimiter');
+const { plannerTokenLimiter, plannerIpLimiter, klientIp, graenseIp } = require('../middleware/rateLimiter');
 const { varighedTekst } = require('../config/matchTiming');
 const tid = require('../config/plannerTid');
 const { danskVaeggurTilUtc } = require('./importHoldkamp');
@@ -65,7 +65,7 @@ function eventReq() {
 
 async function gemLog({ req, tokenName, endpoint, status, roundId, label, matchCount, result, error }) {
     try {
-        await query(
+        const r = await query(
             `INSERT INTO planner_log (token_name, ip, endpoint, http_status, round_id, label, match_count, result_json, error_text)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
@@ -84,9 +84,39 @@ async function gemLog({ req, tokenName, endpoint, status, roundId, label, matchC
             `DELETE FROM planner_log WHERE id NOT IN (
                 SELECT id FROM (SELECT id FROM planner_log ORDER BY id DESC LIMIT ${LOG_MAKS}) x)`
         );
+        return r && r.insertId;
     } catch (e) {
         console.error('planner_log fejlede:', e.message);
+        return null;
     }
+}
+
+// Kald uden gyldig nøgle (nr. 94): loggen har et fast loft (LOG_MAKS), så en
+// strøm af forkerte kald skyllede de nyttige linjer væk. Nu én linje pr.
+// adresse (IPv6 pr. /64) pr. time i klubbens log; de følgende kald tælles i
+// den samme linje.
+const AFVIST_VINDUE_MS = 60 * 60 * 1000;
+const AFVIST_TEKST = 'Ugyldig eller tilbagekaldt API-nøgle';
+const _afviste = new Map(); // "klub|adresse" -> { id, antal, start }
+
+async function logAfvist(req, nu = Date.now()) {
+    const noegle = `${req.clubDbName || currentTenant() || 'direct'}|${graenseIp(req)}`;
+    const f = _afviste.get(noegle);
+    if (f && f.id && nu - f.start < AFVIST_VINDUE_MS) {
+        f.antal++;
+        try {
+            await query('UPDATE planner_log SET error_text = ? WHERE id = ?',
+                [`${AFVIST_TEKST} — ${f.antal} afviste kald fra adressen den seneste time`, f.id]);
+        } catch (e) {
+            console.error('planner_log fejlede:', e.message);
+        }
+        return;
+    }
+    if (_afviste.size > 1000) {
+        for (const [k, v] of _afviste) if (nu - v.start >= AFVIST_VINDUE_MS) _afviste.delete(k);
+    }
+    const id = await gemLog({ req, endpoint: req.path, status: 401, error: AFVIST_TEKST });
+    _afviste.set(noegle, { id, antal: 1, start: nu });
 }
 
 function parseSetScores(raw) {
@@ -535,7 +565,7 @@ async function plannerAuth(req, res, next) {
             ? await queryOne('SELECT id, name FROM planner_tokens WHERE token = ? AND is_active = 1', [token])
             : null;
         if (!row) {
-            await gemLog({ req, endpoint: req.path, status: 401, error: 'Ugyldig eller tilbagekaldt API-nøgle' });
+            await logAfvist(req);
             return res.status(401).json({ error: 'Ugyldig eller manglende API-nøgle', code: 'invalid_token' });
         }
         req.plannerToken = row;
@@ -713,3 +743,4 @@ module.exports.sammeKamp = sammeKamp;
 module.exports.beholdTildeling = beholdTildeling;
 module.exports.gemRunde = gemRunde;
 module.exports.ENDPOINT_STI = ENDPOINT_STI;
+module.exports._logAfvist = logAfvist;

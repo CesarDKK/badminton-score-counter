@@ -83,9 +83,12 @@ app.get('/t/:token', async (req, res, next) => {
     try {
         const { query, queryOne } = require('./config/database');
         const { adgangslinkSession } = require('./middleware/adgangslinkSession');
+        const { matchSessionFrisk } = require('./routes/matchSessionTokens');
 
+        // En udløbet QR-session (nr. 16) giver ikke en ny session
         const deviceToken = await queryOne(
-            'SELECT id, name, destination, locked, token_type, consumed_at, show_qr_on_tv FROM device_tokens WHERE token = ? AND is_active = 1',
+            `SELECT id, name, destination, locked, token_type, consumed_at, show_qr_on_tv FROM device_tokens
+              WHERE token = ? AND is_active = 1 AND (token_type <> 'match_session' OR ${matchSessionFrisk()})`,
             [req.params.token]
         );
 

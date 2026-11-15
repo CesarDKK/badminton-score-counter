@@ -40,7 +40,17 @@ function adgangslinkAdresse(deviceToken, sessionToken) {
     }
     // Legacy destinations
     const legacyMap = { tv: '/tv-v3.html', 'tv-v3': '/tv-v3.html', oversigt: '/oversigt.html' };
-    return `${legacyMap[dest] || '/' + dest}?dt=${sessionToken}`;
+    return `${legacyMap[dest] || sikkerSti(dest)}?dt=${sessionToken}`;
 }
 
-module.exports = { adgangslinkSession };
+// Destinationen kan komme fra data, admin ikke har indtastet her — fx en
+// gendannet backup (nr. 92). '/' + '/evil.com' gav '//evil.com?dt=<session>':
+// en omdirigering til en fremmed vært, der fik sessionen med. Kun en relativ
+// sti på egen vært (bogstaver, tal, . _ - og /, begyndende med et bogstav
+// eller tal, uden '..') — alt andet åbner forsiden.
+function sikkerSti(dest) {
+    const d = String(dest || '');
+    return /^[a-z0-9][a-z0-9._-]*(\/[a-z0-9._-]+)*$/i.test(d) && !d.split('/').includes('..') ? '/' + d : '/';
+}
+
+module.exports = { adgangslinkSession, sikkerSti };

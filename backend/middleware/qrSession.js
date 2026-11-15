@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { adgangslinkAfvist } = require('./auth');
 const { klubAdminAfvist } = require('./klubAdminSession');
+const { superAdminAfvist } = require('./superAdminAuth');
 
 // QR-tælleren: enhver telefon må scanne QR-koden på banens TV og tælle kampen
 // uden login. Det skal blive ved med at være sådan — men adgangen skal følge
@@ -65,7 +66,7 @@ async function afvisQrKode(req, courtNumber) {
         return 401;
     }
 
-    if (decoded.role === 'super_admin') return null;
+    if (decoded.role === 'super_admin') return (decoded.mustChange || await superAdminAfvist(decoded)) ? 401 : null;
     if (decoded.clubSubdomain !== req.clubSubdomain) return 403;
     if (decoded.role === 'club_admin') return (await klubAdminAfvist(decoded)) ? 401 : null;
 

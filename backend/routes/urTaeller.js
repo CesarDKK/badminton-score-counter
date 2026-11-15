@@ -5,11 +5,11 @@ const { query, queryOne } = require('../config/database');
 const { synligBane } = require('../config/baner');
 const { requireWriteAuthInClubMode } = require('../middleware/auth');
 const { baneFraDestination } = require('../middleware/qrSession');
-const { urKodeLimiter } = require('../middleware/rateLimiter');
+const { urKodeLimiter, urKodeKlubLimiter } = require('../middleware/rateLimiter');
 const { gemTilstand, formatStateRow } = require('./gameStates');
 const { gemSidsteAfsluttedeKamp } = require('../config/banerydning');
 const { hentPlannerVisning, plannerForBane } = require('./plannerIntegration');
-const { urKodeFor } = require('./matchSessionTokens');
+const { urKodeFor, matchSessionFrisk } = require('./matchSessionTokens');
 const { varighedTekst } = require('../config/matchTiming');
 const regler = require('../taeller/regler');
 const ejerskab = require('../taeller/ejerskab');
@@ -44,25 +44,39 @@ function baneFor(req) {
     return Number.isInteger(n) && n >= 1 && n <= 20 ? n : null;
 }
 
-// POST /api/ur/kobl — ur-koden fra TV'et giver banens QR-session
-router.post('/kobl', urKodeLimiter, async (req, res, next) => {
+// Urets adgang (nr. 15): QR-sessionens rettigheder, men kun til urets egne kald
+// (middleware/auth.js urKaldTilladt) og kortere end QR-telefonens 12 timer. Et
+// ur logges i forvejen ud efter 15 minutter uden tryk (UR_LEDIG_MIN), så
+// levetiden betyder kun noget for en kopieret adgang. Et ur, der tæller, når
+// den udløber, taster koden fra TV'et igen.
+const UR_ADGANG_LEVETID = '6h';
+
+// POST /api/ur/kobl — ur-koden fra TV'et giver banens QR-session.
+// Koden er unik blandt klubbens aktive QR-sessioner. Kommer kaldet fra
+// telefonens link (bane med, nr. 70), skal koden også være til den bane — så
+// rammer et gæt kun én bane i stedet for alle. Gamle links og en kode tastet på
+// uret har ingen bane og slås op blandt alle.
+router.post('/kobl', urKodeLimiter, urKodeKlubLimiter, async (req, res, next) => {
     try {
         if (req.accessMode !== 'club' || !await urTaellingSlaaetTil()) {
             return res.status(404).json({ error: 'Tælling fra ur er ikke slået til' });
         }
         const kode = String((req.body && req.body.kode) || '').replace(/\D/g, '');
         if (kode.length !== 6) return res.status(400).json({ error: 'Koden har 6 cifre' });
+        const bane = parseInt(req.body && req.body.bane, 10);
+        const medBane = Number.isInteger(bane) && bane >= 1 && bane <= 20;
         const s = await queryOne(
             `SELECT id, destination, locked, court_number FROM device_tokens
               WHERE token_type = 'match_session' AND is_active = 1 AND ur_kode = ?
-              ORDER BY id DESC LIMIT 1`, [kode]);
+                ${medBane ? 'AND court_number = ?' : ''} AND ${matchSessionFrisk()}
+              ORDER BY id DESC LIMIT 1`, medBane ? [kode, bane] : [kode]);
         if (!s) return res.status(404).json({ error: 'Koden findes ikke — tjek koden på TV\'et' });
         await query('UPDATE device_tokens SET last_used_at = NOW() WHERE id = ?', [s.id]);
-        // Samme session som QR-koden giver (routes/deviceTokens.js /validate)
+        // Samme rettigheder som QR-koden giver (routes/deviceTokens.js /validate), men låst til uret
         const token = jwt.sign({
             role: 'device', tokenId: s.id, destination: s.destination, locked: s.locked,
-            tokenType: 'match_session', clubSubdomain: req.clubSubdomain
-        }, process.env.JWT_SECRET, { expiresIn: '12h' });
+            tokenType: 'match_session', clubSubdomain: req.clubSubdomain, via: 'ur'
+        }, process.env.JWT_SECRET, { expiresIn: UR_ADGANG_LEVETID });
         res.json({ token, bane: s.court_number });
     } catch (error) {
         next(error);
@@ -178,7 +192,7 @@ const hentRaekke = (courtPk) => queryOne(
 
 // ---- Uret logges ud, når det ikke bruges ----
 //
-// QR-sessionen gælder, til banen ryddes (eller midnat), og "Ny kamp" rydder den
+// QR-sessionen gælder, til banen ryddes (eller midnat, nr. 16), og "Ny kamp" rydder den
 // ikke. Et glemt ur kunne derfor tælle på banen resten af dagen. Har uret ikke
 // trykket i UR_LEDIG_MIN minutter (eller er det koblet på for så længe siden
 // uden at trykke), er det logget ud og skal taste koden fra TV'et igen — undtagen
