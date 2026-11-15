@@ -46,7 +46,7 @@ Status: ☐ = åben · ☑ = lavet · ✗ = fravalgt
 | A11 | **Port 80 og 8080 er bundet til 0.0.0.0,** og Docker går uden om ufw. Kan serveren nås uden om Cloudflare, kan `CF-Connecting-IP` forfalskes (statistik, planner). Tjek firewall/tunnel hos udbyderen, og fjern 8080 i prod. | `docker-compose.yml:92-93` | ☑ tjekket: port 80/8080 kan ikke nås uden om Cloudflare (Jesper, 23/9) |
 | A12 | **Kun planneren har CSP.** App, admin, statistik, football og marketing har ingen. Football har heller ingen sikkerhedsheadere. | `nginx-security-headers.conf` | ☐ |
 | A13 | **Containere kører som root, og backenden har MySQL-root-kodeordet.** | `Dockerfile.backend`, `docker-compose.yml:57` | ☐ |
-| A14 | `GET /api/player-info` er offentlig og viser navn, klub, køn og årgang på alle spillere, også U9–U19. Det er et GDPR-spørgsmål. | `routes/playerInfo.js:31` | ☐ |
+| A14 | `GET /api/player-info` er offentlig og viser navn, klub, køn og årgang på alle spillere, også U9–U19. Det er et GDPR-spørgsmål. | `routes/playerInfo.js:31` | ☑ Lukket (nr. 13, pakke O): listen og én spiller kræver admin med siden Spillere, navnesøgningen enhver admin |
 
 **Forslag:** A1–A7 i én branch, med tests af cross-club og tokentype. De ville have fanget A1 og A3. Derefter A8–A9.
 

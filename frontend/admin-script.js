@@ -2919,14 +2919,8 @@ function setupPlayerNameAutocomplete(inputId) {
 
 async function searchPlayers(searchTerm, inputId) {
     try {
-        const response = await fetch(`/api/player-info/search?q=${encodeURIComponent(searchTerm)}`);
-
-        if (!response.ok) {
-            console.error('Failed to search players:', response.statusText);
-            return;
-        }
-
-        const players = await response.json();
+        // Med admin-tokenet: søgningen kræver admin (nr. 13)
+        const players = await api.searchPlayers(searchTerm);
         showAutocompleteResults(players, inputId);
     } catch (error) {
         console.error('Error searching players:', error);

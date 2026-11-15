@@ -315,3 +315,66 @@ test('12C: Google-kaldene — videos.update sender de skrivbare status-felter vi
         global.fetch = gem;
     }
 });
+
+// ======================= 13: spillerlisten kræver admin =======================
+
+const express = require('express');
+const jwt = require('jsonwebtoken');
+const { after } = require('node:test');
+const { generateClubAdminToken } = require('../../middleware/clubAdminAuth');
+const klubAdminSession = require('../../middleware/klubAdminSession');
+
+const servere = [];
+after(() => servere.forEach(s => s.close()));
+// En lille express-app på en tilfældig port, i club-mode for klubben lyngby
+function klubApp(opsaet) {
+    const a = express();
+    a.use(express.json());
+    a.use((req, res, next) => { req.accessMode = 'club'; req.clubSubdomain = 'lyngby'; req.clubDbName = 'club_lyngby'; next(); });
+    opsaet(a);
+    const s = a.listen(0);
+    servere.push(s);
+    return (p, opt = {}) => fetch(`http://127.0.0.1:${s.address().port}${p}`, opt);
+}
+const bearer = (t) => ({ headers: { Authorization: `Bearer ${t}` } });
+
+// Klubbens admins i testen: 1 = alle sider, 2 = kun Holdkamp
+klubAdminSession._saetKlubAdminOpslag(async (id) => ({
+    1: { password_hash: 'h1', page_permissions: null },
+    2: { password_hash: 'h2', page_permissions: JSON.stringify(['holdkamp']) }
+})[id] || null);
+const fuldAdmin = generateClubAdminToken(1, 'formand', 'lyngby', null, 'h1');
+const holdkampAdmin = generateClubAdminToken(2, 'holdleder', 'lyngby', ['holdkamp'], 'h2');
+const qrToken = jwt.sign({ role: 'device', tokenId: 9, destination: 'court/3', tokenType: 'match_session', clubSubdomain: 'lyngby' }, process.env.JWT_SECRET);
+const tvToken = jwt.sign({ role: 'device', tokenId: 7, destination: 'tv/3', tokenType: 'permanent', clubSubdomain: 'lyngby' }, process.env.JWT_SECRET);
+
+test('13: spillerlisten, én spiller og søgningen — 401 uden token, 403 for adgangslinks, 200 for admin', async () => {
+    dbSvar = async (sql) => sql.includes('FROM player_info') ? [{ id: 5, name: 'Ella Hansen', club: 'Lyngby', gender: 'Dame', age_group: 'U11' }] : [];
+    const hent = klubApp(a => a.use('/api/player-info', require('../../routes/playerInfo')));
+    for (const sti of ['/api/player-info', '/api/player-info/5', '/api/player-info/search?q=Ella']) {
+        assert.equal((await hent(sti)).status, 401, `${sti} uden token`);
+        assert.equal((await hent(sti, bearer(qrToken))).status, 403, `${sti} med QR-telefonens token`);
+        assert.equal((await hent(sti, bearer(tvToken))).status, 403, `${sti} med TV'ets token`);
+        const r = await hent(sti, bearer(fuldAdmin));
+        assert.equal(r.status, 200, `${sti} med admin`);
+    }
+    assert.equal((await (await hent('/api/player-info/search?q=Ella', bearer(fuldAdmin))).json())[0].name, 'Ella Hansen');
+    // Admin uden siden Spillere: ikke listen — men navneforslagene i holdkamp og baneredigering
+    assert.equal((await hent('/api/player-info', bearer(holdkampAdmin))).status, 403);
+    assert.equal((await hent('/api/player-info/5', bearer(holdkampAdmin))).status, 403);
+    assert.equal((await hent('/api/player-info/search?q=Ella', bearer(holdkampAdmin))).status, 200);
+});
+
+test('13: frontenden sender admin-tokenet til spillerlisten — og kun admin kalder den', () => {
+    const api = laes('frontend/js/api.js');
+    assert.doesNotMatch(api, /\/player-info[^\n]*requiresAuth: false/);
+    assert.match(api, /async searchPlayers\(q\)/);
+    const admin = laes('frontend/admin-script.js');
+    assert.doesNotMatch(admin, /fetch\(`\/api\/player-info/);
+    assert.match(admin, /await api\.searchPlayers\(searchTerm\)/);
+    // Tablet, TV, oversigt, ur, /live og QR-telefonen (samme side som tabletten) rører den ikke
+    for (const f of ['frontend/court-script-v3.js', 'frontend/tv-script-v3.js', 'frontend/oversigt-script.js', 'frontend/ur-script.js', 'frontend/live-script.js']) {
+        if (!fs.existsSync(path.join(ROD, f))) continue;
+        assert.doesNotMatch(laes(f), /player-info|getPlayers\(|getPlayer\(|searchPlayers\(/, f);
+    }
+});

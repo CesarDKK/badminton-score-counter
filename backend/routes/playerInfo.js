@@ -4,8 +4,14 @@ const { query, queryOne } = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
 const { requirePage } = require('../middleware/pagePermission');
 
-// GET /api/player-info/search?q=searchTerm - Search players by name (public)
-router.get('/search', async (req, res, next) => {
+// Spillerlisten er klubbens oplysninger om spillerne (navn, klub, køn, årgang —
+// ofte børn) og kræver admin (nr. 13). Før kunne alle med adressen hente hele
+// listen. Tablet, TV, oversigt, ur, /live og QR-telefonen bruger den ikke.
+
+// GET /api/player-info/search?q=searchTerm - Search players by name (admin)
+// Navneforslagene i admins baneredigering og holdkamp — derfor enhver admin i
+// klubben, ikke kun dem med siden Spillere. Højst 10 navne, der matcher det skrevne.
+router.get('/search', authMiddleware, async (req, res, next) => {
     try {
         const searchTerm = req.query.q || '';
 
@@ -28,8 +34,8 @@ router.get('/search', async (req, res, next) => {
     }
 });
 
-// GET /api/player-info - Get all players (public)
-router.get('/', async (req, res, next) => {
+// GET /api/player-info - Get all players (admin med siden Spillere)
+router.get('/', authMiddleware, requirePage('playerinfo'), async (req, res, next) => {
     try {
         const players = await query(
             `SELECT id, name, club, gender, age_group, created_at, updated_at
@@ -43,8 +49,8 @@ router.get('/', async (req, res, next) => {
     }
 });
 
-// GET /api/player-info/:id - Get specific player (public)
-router.get('/:id', async (req, res, next) => {
+// GET /api/player-info/:id - Get specific player (admin med siden Spillere)
+router.get('/:id', authMiddleware, requirePage('playerinfo'), async (req, res, next) => {
     try {
         const { id } = req.params;
 
