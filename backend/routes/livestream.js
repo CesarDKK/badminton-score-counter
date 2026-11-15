@@ -62,16 +62,15 @@ async function ytToken(req, f) {
 const ytStreamFelter = 'yt_stream_id = NULL, yt_ingest_url = NULL, yt_stream_key = NULL, ' +
     'yt_broadcast_id = NULL, yt_broadcast_start = NULL, yt_broadcast_tjek = NULL, yt_fejl = NULL, yt_fejl_tid = NULL';
 
-// Udsendelsens titel: holdkampens hold, ellers navnene i scoreboardet
-async function ytTitelFor(req, bane, b, rk, dbl) {
+// Udsendelsens titel: holdkampens hold, ellers klubben og banen (ingen spillernavne, nr. 12A)
+async function ytTitelFor(req, bane, b) {
     const hk = b.grund === 'holdkamp' ? await queryOne(
         `SELECT tm.team1_name, tm.team2_name FROM team_match_games g JOIN team_matches tm ON tm.id = g.team_match_id
           WHERE g.court_number = ? AND tm.status = 'active' ORDER BY g.status = 'active' DESC, g.started_at DESC LIMIT 1`,
         [bane]) : null;
-    const t = rk ? ls.overlayTavle(rk, dbl, bane) : null;
     const klubnavn = (await klubLogoData(req).catch(() => ({}))).klubnavn || null;
     return {
-        titel: ls.ytTitel({ grund: b.grund, bane, hold: hk && [hk.team1_name, hk.team2_name], navne: t && t.navne, klubnavn }),
+        titel: ls.ytTitel({ grund: b.grund, bane, hold: hk && [hk.team1_name, hk.team2_name], klubnavn }),
         beskrivelse: ls.ytBeskrivelse(klubnavn)
     };
 }
@@ -92,7 +91,7 @@ function ytGlemPauser(tenant) {
 // Returnerer { url, noegle } at sende til — eller null (så bruges den
 // indtastede nøgle). En fejl hos YouTube stopper aldrig streamen: den gemmes
 // på banen, vises i admin, og der prøves igen om lidt.
-async function ytStyr(req, f, bane, o, b, { rk, dbl, senderNu, tvingTjek, vagt = null }) {
+async function ytStyr(req, f, bane, o, b, { senderNu, tvingTjek, vagt = null }) {
     const laas = `${tenantKey(req)}:${bane}`;
     const gemt = o.yt_stream_key ? { url: o.yt_ingest_url, noegle: o.yt_stream_key } : null;
     if (_ytLaas.has(laas)) return gemt;
@@ -133,10 +132,11 @@ async function ytStyr(req, f, bane, o, b, { rk, dbl, senderNu, tvingTjek, vagt =
             console.log(`[livestream] ${tenantKey(req)} bane ${bane}: stream-nøgle oprettet på YouTube`);
         }
         if (handling === 'opret') {
-            const { titel, beskrivelse } = await ytTitelFor(req, bane, b, rk, dbl);
+            const { titel, beskrivelse } = await ytTitelFor(req, bane, b);
             const indst = await hentIndstillinger();
             const id = await youtube.opretUdsendelse(token, { titel, beskrivelse, synlighed: indst.ytSynlighed,
                 boern: indst.ytBoern, streamId: o.yt_stream_id });
+            await ytHuskUdsendelse(req, bane, id, titel);
             // Første tjek efter et minut: gik den live, da billedet kom?
             await query(`UPDATE court_streams SET yt_broadcast_id = ?, yt_broadcast_start = UTC_TIMESTAMP(), yt_broadcast_tjek = ?, yt_fejl = NULL, yt_fejl_tid = NULL
                           WHERE court_number = ?`, [id, new Date(Date.now() - ls.YT_TJEK_MS + 60 * 1000), bane]);
@@ -392,11 +392,136 @@ async function ytVagt(nu = Date.now()) {
             const grund = ls.ytVagtGrund({ send: b.send, grund: b.grund, pcSidst: pcSidstFor(tenant, bane, opsaetning, nu),
                 start: ytStartFor(tenant, bane, opsaetning, nu), nu });
             if (!grund) continue;
-            await ytStyr(req, yt, bane, opsaetning, { send: false, grund }, { rk: null, dbl: false, senderNu: false, tvingTjek: false, vagt: grund });
+            await ytStyr(req, yt, bane, opsaetning, { send: false, grund }, { senderNu: false, tvingTjek: false, vagt: grund });
             ud.push({ bane, grund });
         } catch (e) {
             console.error(`[livestream] ${tenant} bane ${bane}: vagten over udsendelsen fejlede — ${e.message}`);
         }
+    }
+    return ud;
+}
+
+// ---- "Kun med linket" efter 60 dage (nr. 12C) ----
+//
+// Udsendelser, appen har oprettet, bliver "kun med linket", når de er over
+// ls.YT_SYNLIG_DAGE gamle og stadig offentlige. Kun appens egne (tabellen
+// yt_udsendelser, migration 050) — klubbens andre videoer røres ikke. Kører én
+// gang om natten pr. klub (scheduler startYoutubeSynlighed).
+
+const mysqlTid = (t) => {
+    const d = new Date(t);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 19).replace('T', ' ');
+};
+
+// Udsendelsen er oprettet: husk den. En fejl her må aldrig stoppe streamen
+async function ytHuskUdsendelse(req, bane, id, titel) {
+    try {
+        await query('INSERT IGNORE INTO yt_udsendelser (broadcast_id, bane, titel, oprettet) VALUES (?, ?, ?, UTC_TIMESTAMP())',
+            [id, bane, String(titel || '').slice(0, 255)]);
+    } catch (e) {
+        console.error(`[livestream] ${tenantKey(req)} bane ${bane}: udsendelsen ${id} kunne ikke huskes — ${e.message}`);
+    }
+}
+
+const YT_BACKFILL_NOEGLE = 'yt_udsendelser_backfill';
+const YT_BACKFILL_SIDER = 20;      // højst 1000 ældre udsendelser (1 enhed pr. side à 50)
+// Jobbet bruger af den fælles kvote, som klubbernes udsendelser skal have:
+// det kalder ikke YouTube, når Google har meldt kvoten brugt, eller når over
+// 80 % af dagens kvote er brugt (det kører om natten, sidst i Googles døgn).
+const YT_SYNLIG_KVOTE_ANDEL = 0.8;
+function ytKvoteTilJob(enheder) {
+    if (youtubeKvote.opbrugtIDag()) return false;
+    const s = youtubeKvote.status();
+    return s.enheder + enheder <= s.graense * YT_SYNLIG_KVOTE_ANDEL;
+}
+
+// Er en af klubbens baner i pausen efter en fejl hos YouTube (ytStyr)? Så
+// venter jobbet til næste nat
+function ytKlubIPause(tenant, nu = Date.now()) {
+    for (const [k, til] of _ytPauseTil) if (k.startsWith(`${tenant}:`) && til > nu) return true;
+    return false;
+}
+
+// Udsendelser fra før tabellen: én gang pr. klub findes kanalens afsluttede
+// udsendelser med appens faste sætning i beskrivelsen (ls.YT_KENDETEGN).
+// Returnerer antallet fundet — null, når den ikke blev færdig (prøves igen
+// næste nat; INSERT IGNORE gør det ufarligt) — eller 0, når den er gjort før.
+async function ytBackfill(token, tenant, nu) {
+    if (await queryOne('SELECT setting_value FROM settings WHERE setting_key = ?', [YT_BACKFILL_NOEGLE])) return 0;
+    let side = null;
+    let fundet = 0;
+    let sider = 0;
+    do {
+        if (!ytKvoteTilJob(1)) return null;
+        const r = await youtube.afsluttedeUdsendelser(token, side);
+        sider++;
+        for (const b of r.items) {
+            if (!b.id || !ls.erAppensUdsendelse(b.beskrivelse)) continue;
+            await query('INSERT IGNORE INTO yt_udsendelser (broadcast_id, titel, oprettet) VALUES (?, ?, COALESCE(?, UTC_TIMESTAMP()))',
+                [b.id, String(b.titel || '').slice(0, 255), mysqlTid(b.start)]);
+            fundet++;
+        }
+        side = r.naeste;
+    } while (side && sider < YT_BACKFILL_SIDER);
+    await query('INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)',
+        [YT_BACKFILL_NOEGLE, new Date(nu).toISOString()]);
+    console.log(`[livestream] ${tenant}: ${fundet} ældre udsendelser fra Badmintonapp fundet på kanalen` +
+        (side ? ` (stoppede efter ${sider * 50} — de resterende kommer ikke med)` : ''));
+    return fundet;
+}
+
+// Nattens kørsel for klubben (currentTenant). Returnerer null, når klubben
+// ikke har en forbundet kanal, ellers { backfill, unlisted, uaendret, fejl,
+// sprunget, stoppet } (til log og test).
+async function ytSynlighedJob(nu = Date.now()) {
+    const tenant = currentTenant();
+    const req = { clubDbName: tenant === 'direct' ? null : tenant, accessMode: tenant === 'direct' ? 'direct' : 'club' };
+    if (!ytTilladt(req)) return null;
+    const yt = await ytForbindelse(req);
+    if (!ytBrugbar(yt)) return null;
+    const ud = { backfill: 0, unlisted: 0, uaendret: 0, fejl: 0, sprunget: null, stoppet: null };
+    if (ytKlubIPause(tenant, nu)) { ud.sprunget = 'fejlpause'; return ud; }
+    if (!ytKvoteTilJob(1)) { ud.sprunget = 'kvote'; return ud; }
+    try {
+        const token = await ytToken(req, yt);
+        ud.backfill = await ytBackfill(token, tenant, nu);
+        const raekker = await query(
+            `SELECT broadcast_id FROM yt_udsendelser
+              WHERE synlighed_sat_at IS NULL AND oprettet < UTC_TIMESTAMP() - INTERVAL ${ls.YT_SYNLIG_DAGE} DAY
+              ORDER BY oprettet LIMIT ${ls.YT_SYNLIG_MAKS}`);
+        if (raekker.length && ytKvoteTilJob(1)) {
+            const ids = raekker.map(r => r.broadcast_id);
+            const status = await youtube.videoStatus(token, ids);
+            for (const id of ids) {
+                const h = ls.ytSynligHandling(status.get(id));
+                let resultat = h.resultat;
+                if (h.saet) {
+                    if (!ytKvoteTilJob(50)) { ud.sprunget = 'kvote'; break; }
+                    try {
+                        await youtube.saetSynlighed(token, id, status.get(id), 'unlisted');
+                        resultat = 'kun med linket';
+                        ud.unlisted++;
+                    } catch (e) {
+                        if (!(e instanceof youtube.YoutubeFejl) || ls.ytSynligFejlStopper(e)) throw e;
+                        resultat = `fejl: ${e.message}`;
+                        ud.fejl++;
+                    }
+                } else {
+                    ud.uaendret++;
+                }
+                await query('UPDATE yt_udsendelser SET synlighed_sat_at = UTC_TIMESTAMP(), resultat = ? WHERE broadcast_id = ?',
+                    [resultat.slice(0, 255), id]);
+            }
+        }
+    } catch (e) {
+        if (!(e instanceof youtube.YoutubeFejl)) throw e;
+        // Kvoten, adgangen eller YouTube selv: ingen videoer noteres — næste nat igen
+        ud.stoppet = e.message;
+        console.log(`[livestream] ${tenant}: "kun med linket" efter ${ls.YT_SYNLIG_DAGE} dage stoppet — ${e.message}`);
+    }
+    if (ud.unlisted || ud.fejl) {
+        console.log(`[livestream] ${tenant}: ${ud.unlisted} udsendelser over ${ls.YT_SYNLIG_DAGE} dage sat til "kun med linket"` +
+            (ud.fejl ? `, ${ud.fejl} afvist af YouTube` : ''));
     }
     return ud;
 }
@@ -430,6 +555,7 @@ async function baneStatus(req, bane) {
     const opsaetning = await queryOne('SELECT * FROM court_streams WHERE court_number = ?', [bane]);
     const link = await queryOne(
         'SELECT id FROM device_tokens WHERE camera_court = ? AND is_active = 1 LIMIT 1', [bane]);
+    const indst = await hentIndstillinger();
     return ls.tabletStatus({
         opsaetning,
         kamera: !!link,
@@ -437,7 +563,8 @@ async function baneStatus(req, bane) {
         holdkamp: await holdkampPaaBane(bane),
         planner: !!await plannerPaaBane(bane),
         youtube: ytBrugbar(await ytForbindelse(req)),
-        efterMin: (await hentIndstillinger()).efterMin
+        efterMin: indst.efterMin,
+        ytSynlighed: indst.ytSynlighed
     });
 }
 
@@ -924,7 +1051,7 @@ router.post('/pc', async (req, res, next) => {
             // YouTube-kanalen forbundet: banens nøgle derfra, en ny udsendelse, når
             // banen begynder at sende, og den afsluttes, når banen holder op
             const ytKilde = ytBrugbar(yt) && opsaetning && (b.send || opsaetning.yt_broadcast_id)
-                ? await ytStyr(req, yt, bane, opsaetning, b, { rk, dbl,
+                ? await ytStyr(req, yt, bane, opsaetning, b, {
                     senderNu: !!(foer && foer.sender && pc.sender && Date.now() - foer.senderSiden > 60 * 1000),
                     tvingTjek: !!(pc.sender && foer && !foer.sender) })
                 : null;
@@ -1026,3 +1153,5 @@ router.get('/live', async (req, res, next) => {
 module.exports = router;
 module.exports.ytVagt = ytVagt;
 module.exports._ytGlemSet = () => _ytSet.clear();   // til tests
+module.exports.ytSynlighedJob = ytSynlighedJob;
+module.exports._ytPauseTil = _ytPauseTil;        // til tests

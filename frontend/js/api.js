@@ -775,7 +775,8 @@ class BadmintonAPI {
      * @returns {Promise<Array>} - Array of player objects
      */
     async getPlayers() {
-        return this.request('/player-info', { requiresAuth: false });
+        // Kræver admin (nr. 13) — sender admin-tokenet
+        return this.request('/player-info');
     }
 
     /**
@@ -784,7 +785,16 @@ class BadmintonAPI {
      * @returns {Promise<object>} - Player object
      */
     async getPlayer(playerId) {
-        return this.request(`/player-info/${playerId}`, { requiresAuth: false });
+        return this.request(`/player-info/${playerId}`);
+    }
+
+    /**
+     * Navneforslag (højst 10) til admins spillerfelter — kræver admin (nr. 13)
+     * @param {string} q - det skrevne
+     * @returns {Promise<Array>}
+     */
+    async searchPlayers(q) {
+        return this.request(`/player-info/search?q=${encodeURIComponent(q)}`, {}, 1);
     }
 
     /**

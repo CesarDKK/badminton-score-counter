@@ -92,17 +92,23 @@ test('pause efter en fejl: 2 minutter — længere, når fejlen ikke går over a
     assert.equal(ls.ytIPause(null, null, NU), false);
 });
 
-test('ytTitel: holdene, navnene eller klubben og banen — med dato og højst 100 tegn', () => {
+test('ytTitel: holdkampens hold, ellers klubben og banen — aldrig spillernavne (nr. 12A), med dato og højst 100 tegn', () => {
     const dato = new Intl.DateTimeFormat('da-DK', { day: 'numeric', month: 'short', year: 'numeric',
         timeZone: 'Europe/Copenhagen' }).format(NU);
     assert.equal(ls.ytTitel({ grund: 'holdkamp', bane: 3, hold: ['Lyngby 2', 'Gentofte 2'], navne: ['Ella / Bertram', 'Konrad / Yudan'], nu: NU }),
         `Lyngby 2 – Gentofte 2 (bane 3, ${dato})`);
-    assert.equal(ls.ytTitel({ grund: 'valgt', bane: 1, navne: ['Hansen', 'Jensen'], nu: NU }), `Hansen – Jensen (bane 1, ${dato})`);
+    // Kamp startet fra tabletten: som hele dagen — navnene i scoreboardet kommer ikke med
+    assert.equal(ls.ytTitel({ grund: 'valgt', bane: 1, navne: ['Hansen', 'Jensen'], klubnavn: 'Lyngby Badmintonklub', nu: NU }),
+        `Lyngby Badmintonklub – Bane 1 (${dato})`);
+    assert.equal(ls.ytTitel({ grund: 'afgjort', bane: 1, navne: ['Hansen', 'Jensen'], nu: NU }), `Bane 1 (${dato})`);
     assert.equal(ls.ytTitel({ grund: 'hele-dagen', bane: 2, navne: ['Hansen', 'Jensen'], klubnavn: 'Lyngby Badmintonklub', nu: NU }),
         `Lyngby Badmintonklub – Bane 2 (${dato})`);
     assert.equal(ls.ytTitel({ grund: 'valgt', bane: 2, nu: NU }), `Bane 2 (${dato})`);
+    // Holdkamp uden hold: klubben og banen
+    assert.equal(ls.ytTitel({ grund: 'holdkamp', bane: 4, klubnavn: 'Lyngby', nu: NU }), `Lyngby – Bane 4 (${dato})`);
     // YouTube afviser < og > i titler
-    assert.doesNotMatch(ls.ytTitel({ grund: 'valgt', bane: 1, navne: ['<b>A', 'B>'], nu: NU }), /[<>]/);
+    assert.doesNotMatch(ls.ytTitel({ grund: 'holdkamp', bane: 1, hold: ['<b>A', 'B>'], nu: NU }), /[<>]/);
+    assert.doesNotMatch(ls.ytTitel({ grund: 'valgt', bane: 1, klubnavn: '<b>Klub', nu: NU }), /[<>]/);
     const lang = ls.ytTitel({ grund: 'holdkamp', bane: 1, hold: ['A'.repeat(80), 'B'.repeat(80)], nu: NU });
     assert.ok(lang.length <= 100);
     assert.match(ls.ytBeskrivelse('Lyngby'), /^Lyngby\. Sendt automatisk/);

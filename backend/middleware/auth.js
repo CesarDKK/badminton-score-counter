@@ -129,6 +129,24 @@ function urKaldTilladt(req) {
     return sti.startsWith('/api/ur/') || /^\/api\/game-states\/\d+\/taeller\/?$/.test(sti);
 }
 
+// TV- og oversigt-links kan kun læse (nr. 14A). Et skærm-link er ethvert
+// adgangslink, der ikke er en banes tablet (court/N) — tv/N, tv, tv-v3,
+// oversigt og hvad en gammel backup måtte have. Før kunne linket (det står i
+// adresselinjen på et TV i hallen) også tælle, rydde baner, starte holdkampe og
+// ændre indstillinger med direkte kald. Det må stadig: læse alt (GET), melde
+// sig (/api/screens/*: hjerteslag; PC'ens rapport, opdatering og fejllog),
+// spørge om livestream (/api/livestream/pc) og hente sit redigerede link
+// (/api/device-tokens/mit/skift, js/adgangslink-vagt.js). Tablets og
+// QR-sessioner (court/N) er uændrede.
+const erSkaermLink = (d) => !!d && d.role === 'device' && !/^court\/\d+$/.test(d.destination || '');
+function skaermKaldTilladt(req) {
+    const metode = String(req.method || 'GET').toUpperCase();
+    if (metode === 'GET' || metode === 'HEAD' || metode === 'OPTIONS') return true;
+    const sti = String(req.originalUrl || req.url || '').split('?')[0];
+    return sti.startsWith('/api/screens/') || /^\/api\/livestream\/pc\/?$/.test(sti) ||
+        /^\/api\/device-tokens\/mit\/skift\/?$/.test(sti);
+}
+
 // Håndhæv gyldigt token på skrive-operationer — men KUN i club-mode.
 //
 // I club-mode er API'et offentligt på internettet (klub.badmintonapp.dk), så en
@@ -173,6 +191,9 @@ async function requireWriteAuthInClubMode(req, res, next) {
     if (decoded.via === 'ur' && !urKaldTilladt(req)) {
         return res.status(403).json({ error: 'Urets adgang gælder kun tælling fra uret' });
     }
+    if (erSkaermLink(decoded) && !skaermKaldTilladt(req)) {
+        return res.status(403).json({ error: 'Skærmens adgangslink kan kun læse' });
+    }
 
     // Tilbagekaldt, slettet eller (QR) afsluttet adgangslink — og for klub-admins:
     // slettet bruger eller skiftet adgangskode
@@ -202,6 +223,8 @@ module.exports = {
     requireWriteAuthInClubMode,
     adgangslinkAfvist,
     urKaldTilladt,
+    skaermKaldTilladt,
+    erSkaermLink,
     _saetAdgangslinkOpslag,
     sessionGyldigFra
 };

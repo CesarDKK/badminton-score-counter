@@ -523,6 +523,40 @@ function startYoutubeVagt() {
     console.log('⏰ Scheduled vagten over YouTube-udsendelser hvert minut (afslutter efter 10 min uden PC)');
 }
 
+/**
+ * Nr. 12C: appens YouTube-udsendelser bliver "kun med linket", når de er over
+ * 60 dage gamle og stadig offentlige (routes/livestream.js ytSynlighedJob).
+ * Hver nat kl. 03:40 dansk tid — sidst i Googles kvote-døgn, der nulstilles
+ * kl. 9 (midnat Pacific), så jobbet bruger af det, dagens udsendelser ikke brugte.
+ */
+async function youtubeSynlighed() {
+    const { ytSynlighedJob } = require('./routes/livestream');
+    try {
+        await ytSynlighedJob();
+    } catch (err) {
+        console.error('❌ YouTube "kun med linket" (default):', err.message);
+    }
+    try {
+        const masterDb = require('./config/masterDatabase');
+        const clubs = await masterDb.query('SELECT db_name FROM clubs WHERE is_active = 1');
+        for (const club of clubs) {
+            try {
+                await runWithTenant(club.db_name, () => ytSynlighedJob());
+            } catch (err) {
+                console.error(`❌ YouTube "kun med linket" for ${club.db_name}:`, err.message);
+            }
+        }
+    } catch (err) { /* master DB ikke tilgængelig i direkte mode */ }
+}
+
+function startYoutubeSynlighed() {
+    cron.schedule('40 3 * * *', youtubeSynlighed, {
+        scheduled: true,
+        timezone: 'Europe/Copenhagen'
+    });
+    console.log('⏰ Scheduled YouTube "kun med linket" efter 60 dage hver nat kl. 03:40');
+}
+
 function startUrPauser() {
     const { afslutUdloebnePauser } = require('./routes/urTaeller');
     let koerer = false;
@@ -558,4 +592,4 @@ function startUrPauser() {
     console.log('⏰ Scheduled urets pauser hvert 2. sekund (slutter ved 0:00, når uret tæller)');
 }
 
-module.exports = { resetDatabase, releaseInactiveCourts, startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk, startUgentligBackup, ugentligBackup, startSkaermLogOprydning, startUrPauser, startYoutubeVagt };
+module.exports = { resetDatabase, releaseInactiveCourts, startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk, startUgentligBackup, ugentligBackup, startSkaermLogOprydning, startUrPauser, startYoutubeVagt, startYoutubeSynlighed, youtubeSynlighed };
