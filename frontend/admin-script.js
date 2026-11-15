@@ -738,6 +738,159 @@ async function tildelTurneringskampBane(tournamentId, matchId) {
     await loadActiveTournaments();
 }
 
+// ---- Manuelt resultat for en turneringskamp (baner uden tæller) ----
+const turneringResultatAaben = new Set();      // kamp-id'er med formularen åben
+const turneringResultatKladde = new Map();     // kamp-id → { saet: [[a,b] x3], vinder, wo } — overlever genoptegningen
+
+const turneringHold = (a, b) => [a, b].filter(Boolean).join(' / ');
+
+// Eksisterende resultat som udgangspunkt (Ret resultat)
+function turneringResultatFraKamp(m) {
+    const wo = m.set_scores === 'W.O.';
+    const tal = wo ? [] : orientHistorySetScoreNumbers(m.set_scores, turneringHold(m.side1_player1, m.side1_player2));
+    const saet = [0, 1, 2].map(i => (tal[i] ? tal[i].split('-') : ['', '']));
+    return { saet, vinder: m.winner_team === 1 || m.winner_team === 2 ? m.winner_team : null, wo };
+}
+
+function laesTurneringResultat(id) {
+    const form = document.querySelector(`[data-turnering-resultat="${id}"]`);
+    const vaerdi = el => (document.getElementById(el)?.value || '').trim();
+    const vinder = document.querySelector(`input[name="trVinder_${id}"]:checked`);
+    return {
+        saet: [1, 2, 3].map(s => [vaerdi(`trS${s}a_${id}`), vaerdi(`trS${s}b_${id}`)]),
+        vinder: vinder ? Number(vinder.value) : null,
+        wo: form?.dataset.wo === 'true'
+    };
+}
+
+function toggleTurneringResultat(id) {
+    if (turneringResultatAaben.has(id)) {
+        turneringResultatAaben.delete(id);
+        turneringResultatKladde.delete(id);
+    } else {
+        turneringResultatAaben.add(id);
+    }
+    renderTournaments(sidsteTurneringer);
+}
+
+function renderTurneringResultatForm(tournamentId, m) {
+    const k = turneringResultatKladde.get(m.id) || turneringResultatFraKamp(m);
+    const side = n => escapeHtml(n === 1 ? turneringSide(m, 1) : turneringSide(m, 2));
+    const felt = (s, i) => `<input id="trS${s}${i ? 'b' : 'a'}_${m.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2"
+        placeholder="–" value="${escapeHtml(k.saet[s - 1][i] || '')}" class="saet-felt saet-felt--${i + 1}"
+        oninput="this.value=this.value.replace(/[^0-9]/g,''); turneringResultatVinder(${m.id})">`;
+    const paaBane = m.status === 'active' && m.court_number != null
+        ? `<div class="formular-boks__note">Kampen står på bane ${m.court_number}. Når resultatet gemmes, ryddes banen.</div>` : '';
+    return `
+        <div data-turnering-resultat="${m.id}" data-wo="${k.wo}" class="formular-boks formular-boks--advarsel">
+            <div class="formular-boks__titel">${m.status === 'finished' ? 'Ret resultat' : 'Indtast resultat'}</div>
+            <div class="formular-boks__afsnit">
+                <div class="formular-boks__etiket">Sætscore (${side(1)} – ${side(2)})</div>
+                <div class="saet-felter">
+                    ${[1, 2, 3].map(s => `
+                    <div class="saet-kolonne">
+                        <span class="tekst-daempet tekst-lille">Sæt ${s}${s === 3 ? ' *' : ''}</span>
+                        <div class="saet-par">${felt(s, 0)}<span class="tekst-daempet" style="font-size:1.2em;">–</span>${felt(s, 1)}</div>
+                    </div>`).join('')}
+                </div>
+                <div class="formular-boks__note">* Sæt 3 kun hvis nødvendigt</div>
+            </div>
+            <div class="formular-boks__afsnit">
+                <div class="formular-boks__etiket">Vinder</div>
+                <div class="formular-boks__knapper">
+                    <label class="vinder-valg vinder-valg--1"><input type="radio" name="trVinder_${m.id}" value="1" ${k.vinder === 1 ? 'checked' : ''}> ${side(1)}</label>
+                    <label class="vinder-valg vinder-valg--2"><input type="radio" name="trVinder_${m.id}" value="2" ${k.vinder === 2 ? 'checked' : ''}> ${side(2)}</label>
+                    <button id="trWO_${m.id}" onclick="toggleTurneringWO(${m.id})" class="btn-secondary btn-sm${k.wo ? ' er-valgt' : ''}">W.O.</button>
+                </div>
+            </div>
+            ${paaBane}
+            <div class="formular-boks__knapper">
+                <button onclick="gemTurneringResultat(${tournamentId}, ${m.id})" class="btn-primary btn-sm">Gem resultat</button>
+                <button onclick="toggleTurneringResultat(${m.id})" class="btn-secondary btn-sm">Annuller</button>
+            </div>
+        </div>`;
+}
+
+function toggleTurneringWO(id) {
+    const form = document.querySelector(`[data-turnering-resultat="${id}"]`);
+    if (!form) return;
+    const wo = form.dataset.wo !== 'true';
+    form.dataset.wo = String(wo);
+    document.getElementById(`trWO_${id}`)?.classList.toggle('er-valgt', wo);
+}
+
+// Sættenes vinder: den højeste score (pointreglerne er forskellige fra række
+// til række, 15 eller 21, så her tælles kun hvem der fik flest i sættet)
+function turneringSaetVinder([a, b]) {
+    if (a === '' || b === '') return null;
+    const x = Number(a), y = Number(b);
+    return x > y ? 1 : y > x ? 2 : null;
+}
+
+function turneringResultatVinder(id) {
+    const { saet } = laesTurneringResultat(id);
+    let v1 = 0, v2 = 0;
+    for (const s of saet) { const w = turneringSaetVinder(s); if (w === 1) v1++; else if (w === 2) v2++; }
+    const vinder = v1 >= 2 ? 1 : v2 >= 2 ? 2 : null;
+    if (vinder) {
+        const radio = document.querySelector(`input[name="trVinder_${id}"][value="${vinder}"]`);
+        if (radio) radio.checked = true;
+    }
+}
+
+async function gemTurneringResultat(tournamentId, matchId) {
+    const t = sidsteTurneringer.find(x => x.id === tournamentId);
+    const m = t && (t.matches || []).find(x => x.id === matchId);
+    if (!m) return;
+    const { saet, vinder, wo } = laesTurneringResultat(matchId);
+    if (!vinder) { showMessage('Mangler vinder', 'Vælg hvem der vandt kampen.'); return; }
+
+    let setScores = 'W.O.';
+    if (!wo) {
+        const udfyldt = saet.filter(([a, b]) => a !== '' && b !== '');
+        if (saet.some(([a, b]) => (a === '') !== (b === ''))) {
+            showMessage('Mangler score', 'Udfyld begge felter i hvert sæt, der er spillet.'); return;
+        }
+        if (udfyldt.length < 2) { showMessage('Mangler sætscore', 'Udfyld sæt 1 og 2 — eller vælg W.O.'); return; }
+        if (udfyldt.some(s => !turneringSaetVinder(s))) { showMessage('Ugyldig score', 'Et sæt kan ikke ende uafgjort.'); return; }
+        const vundne = [1, 2].map(v => udfyldt.filter(s => turneringSaetVinder(s) === v).length);
+        if (udfyldt.length === 2 && vundne[0] === 1) { showMessage('Mangler sætscore', 'Sæt 3 skal udfyldes, når det står 1-1 i sæt.'); return; }
+        if (vundne[vinder - 1] < vundne[2 - vinder]) {
+            showMessage('Vinderen passer ikke', 'Den valgte vinder har vundet færrest sæt. Ret vinderen eller sætscoren.'); return;
+        }
+        const s1 = turneringHold(m.side1_player1, m.side1_player2) || 'Side 1';
+        const s2 = turneringHold(m.side2_player1, m.side2_player2) || 'Side 2';
+        setScores = udfyldt.map(([a, b]) => `${s1} ${Number(a)}-${Number(b)} ${s2}`).join(', ');
+    }
+
+    // Kampen står på en bane: banen ryddes — admin bekræfter først
+    const bane = m.status === 'active' && m.court_number != null ? Number(m.court_number) : null;
+    if (bane) {
+        const ok = await BadmintonUtils.confirmDialog(`Gem resultat og ryd bane ${bane}?`,
+            `Kampen står på bane ${bane}. Tælles der på banen lige nu, går den stilling tabt.`,
+            { danger: true, okText: 'Gem og ryd banen' });
+        if (!ok) return;
+    }
+
+    try {
+        await api.updateTournamentMatch(tournamentId, matchId, {
+            ...(m.status !== 'finished' ? { status: 'finished' } : {}),
+            winnerTeam: vinder,
+            setScores
+        });
+    } catch (error) {
+        console.error('Failed to save tournament result:', error);
+        showMessage('Fejl', 'Resultatet kunne ikke gemmes. Prøv igen.');
+        return;
+    }
+    if (bane) {
+        try { await api.resetGameState(bane); } catch (e) { console.error('Rydning af banen fejlede:', e); }
+    }
+    turneringResultatAaben.delete(matchId);
+    turneringResultatKladde.delete(matchId);
+    await loadActiveTournaments();
+}
+
 // Søgningen skal stå samlet i række, spillere eller turnering ("u11 c hs",
 // "anna berg"). Hvert ord for sig var for løst: "c" fandt alle med et c i navnet.
 function turneringMatcher(soegning, tekst) {
@@ -1107,7 +1260,10 @@ async function loadTournamentMatchHistory() {
 
         const cards = tournaments.map(t => {
             // I historik-visning viser vi KUN færdige kampe (pending/active er irrelevant her)
-            const finishedMatches = (t.matches || []).filter(m => m.status === 'finished');
+            // Senest færdige øverst — under et stævne er det de nye resultater, man leder efter
+            const faerdigTid = m => (m.finished_at ? new Date(m.finished_at).getTime() : 0) || 0;
+            const finishedMatches = (t.matches || []).filter(m => m.status === 'finished')
+                .sort((a, b) => faerdigTid(b) - faerdigTid(a));
             const playedCount = finishedMatches.length;
             const totalCount = (t.matches || []).length;
             const date = new Date(t.created_at).toLocaleDateString('da-DK', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -1131,7 +1287,7 @@ async function loadTournamentMatchHistory() {
                 const side1Key = m.doubles && m.side1_player2
                     ? `${m.side1_player1 || ''} / ${m.side1_player2}`
                     : (m.side1_player1 || '');
-                const scoreNums = orientHistorySetScoreNumbers(m.set_scores, side1Key).join(' · ');
+                const scoreNums = m.set_scores === 'W.O.' ? 'W.O.' : orientHistorySetScoreNumbers(m.set_scores, side1Key).join(' · ');
                 const scores = scoreNums ? `<span class="tekst-daempet tekst-lille luft-venstre">${scoreNums}</span>` : '';
                 const resultHtml = `<span class="resultat" style="color:${winnerColor};">✓ ${escapeHtml(winnerLabel)}</span>${scores}`;
                 const varighed = varighedFra(m.started_at, m.finished_at);
@@ -1158,7 +1314,7 @@ async function loadTournamentMatchHistory() {
                     </div>
                     <span class="tekst-daempet tekst-mindre">▼ Se kampe</span>
                 </div>
-                <div class="historik-gruppe__indhold" style="display:none;">
+                <div class="historik-gruppe__indhold" style="display:${t.status === 'active' ? 'block' : 'none'};">
                     ${matchRows}
                 </div>
             </div>`;
@@ -5636,6 +5792,10 @@ async function addSelectedNewCandidates(tournamentId) {
 }
 
 function captureTournamentDrafts() {
+    document.querySelectorAll('[data-turnering-resultat]').forEach(form => {
+        const id = Number(form.getAttribute('data-turnering-resultat'));
+        if (turneringResultatAaben.has(id)) turneringResultatKladde.set(id, laesTurneringResultat(id));
+    });
     document.querySelectorAll('[data-tournament-edit]').forEach(form => {
         const id = Number(form.getAttribute('data-tournament-edit'));
         if (!editingTournamentMatchIds.has(id)) return;
@@ -5987,6 +6147,9 @@ function renderTournamentMatchRow(tournamentId, m, iGang = new Map()) {
     const deleteBtn = canDelete
         ? `<button onclick="confirmDeleteTournamentMatch(${tournamentId}, ${m.id})" class="btn-danger btn-sm">Slet</button>`
         : '';
+    // Manuelt resultat — fx baner uden tæller, eller et forkert resultat fra banen
+    const resultatAaben = turneringResultatAaben.has(m.id);
+    const resultatBtn = `<button onclick="toggleTurneringResultat(${m.id})" class="btn-secondary btn-sm${resultatAaben ? ' er-valgt' : ''}">${m.status === 'finished' ? 'Ret resultat' : 'Resultat'}</button>`;
 
     return `
         <div class="kamp-linje">
@@ -5998,10 +6161,12 @@ function renderTournamentMatchRow(tournamentId, m, iGang = new Map()) {
             </div>
             <div class="raekke">
                 ${statusBadge}
+                ${resultatBtn}
                 ${editBtn}
                 ${deleteBtn}
             </div>
         </div>
+        ${resultatAaben ? renderTurneringResultatForm(tournamentId, m) : ''}
     `;
 }
 
