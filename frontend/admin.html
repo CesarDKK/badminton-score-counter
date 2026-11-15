@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="fonts.css?v=2">
     <link rel="stylesheet" href="fundament.css?v=3">
     <link rel="stylesheet" href="styles.css?v=11">
-    <link rel="stylesheet" href="admin-styles.css?v=33">
+    <link rel="stylesheet" href="admin-styles.css?v=34">
     <script src="js/theme-loader.js?v=16"></script>
 </head>
 <body>
@@ -253,57 +253,53 @@
 
             <!-- Edit Court Modal -->
             <div id="editCourtModal" class="modal">
-                <div class="modal-content">
+                <div class="modal-content bane-dialog">
                     <span class="close-modal">&times;</span>
                     <h2>Redigér Bane <span id="editCourtNumber"></span></h2>
                     <div class="edit-form">
-                        <!-- 1. Markér som Aktiv -->
-                        <div class="active-toggle" style="margin-bottom: 20px;">
-                            <label class="toggle-label">
-                                <input type="checkbox" id="editCourtActive">
-                                <span class="toggle-text">Markér som Aktiv (Bane i brug)</span>
-                            </label>
-                            <p class="toggle-hint">Aktivér dette for at angive at banen er optaget eller reserveret, selv før pointtælling begynder.</p>
-                        </div>
-
-                        <!-- 2. Planlagt kamp fra turnering -->
-                        <div id="editTournamentMatchWrap" style="margin-bottom: 20px; display: none;">
-                            <label for="editTournamentMatchSearch">Planlagt kamp fra turnering:</label>
-                            <input type="search" id="editTournamentMatchSearch" class="admin-input" placeholder="Søg spiller eller række, fx Anna eller U11 D HS" autocomplete="off" style="margin-top:5px;">
-                            <div id="editTournamentMatchCount" class="tekst-daempet tekst-lille" style="margin-top:4px;"></div>
-                            <select id="editTournamentMatchSelect" style="width:100%; padding:10px; background:var(--color-bg-dark); color:var(--text-primary, #eaeaea); border:1px solid var(--color-primary); border-radius:5px; margin-top:5px;">
+                        <!-- 1. Planlagt kamp fra turnering (kun når der er en aktiv turnering) -->
+                        <div id="editTournamentMatchWrap" class="bane-dialog__turnering" style="display: none;">
+                            <div class="bane-dialog__turnering-hoved">
+                                <label for="editTournamentMatchSearch">Kamp fra turnering</label>
+                                <span id="editTournamentMatchCount" class="tekst-daempet tekst-lille"></span>
+                            </div>
+                            <input type="search" id="editTournamentMatchSearch" placeholder="Søg spiller eller række, fx Anna eller U11 D HS" autocomplete="off">
+                            <select id="editTournamentMatchSelect" class="bane-dialog__vaelger">
                                 <option value="">-- Manuel (skriv navne nedenfor) --</option>
                             </select>
-                            <p id="editTournamentMatchWarn" style="display:none; color:var(--color-warning, #ffb02e); margin-top:6px; margin-bottom:0;"></p>
-                            <p style="color:var(--text-muted, rgba(255, 255, 255, 0.62)); font-size:0.82em; margin-top:6px; margin-bottom:0;">Kampene står efter tidspunktet i Tournament Software. Vælg en kamp for at fylde spillernavnene ind og sætte den i gang på denne bane. ⚠ betyder, at en af spillerne lige nu spiller på en anden bane.</p>
+                            <p id="editTournamentMatchWarn" class="bane-dialog__advarsel" style="display:none;"></p>
+                            <p class="bane-dialog__hjaelp">Sorteret efter tidspunkt i Tournament Software · ⚠ = en spiller er i gang på en anden bane</p>
                         </div>
 
-                        <!-- 3. Spillernavne -->
-                        <label>Spiller 1:</label>
-                        <input type="text" id="editPlayer1Name" placeholder="Spiller 1">
+                        <!-- 2. Spillernavne, side om side -->
+                        <div class="bane-dialog__sider">
+                            <div class="bane-dialog__side">
+                                <label for="editPlayer1Name">Spiller 1</label>
+                                <input type="text" id="editPlayer1Name" placeholder="Spiller 1">
+                                <label id="editPlayer1Name2Label" for="editPlayer1Name2" style="display: none;">Makker</label>
+                                <input type="text" id="editPlayer1Name2" placeholder="Makker 1" style="display: none;">
+                            </div>
+                            <div class="bane-dialog__side">
+                                <label for="editPlayer2Name">Spiller 2</label>
+                                <input type="text" id="editPlayer2Name" placeholder="Spiller 2">
+                                <label id="editPlayer2Name2Label" for="editPlayer2Name2" style="display: none;">Makker</label>
+                                <input type="text" id="editPlayer2Name2" placeholder="Makker 2" style="display: none;">
+                            </div>
+                        </div>
 
-                        <label id="editPlayer1Name2Label" style="display: none;">Spiller 1 Makker:</label>
-                        <input type="text" id="editPlayer1Name2" placeholder="Makker 1" style="display: none;">
-
-                        <label>Spiller 2:</label>
-                        <input type="text" id="editPlayer2Name" placeholder="Spiller 2">
-
-                        <label id="editPlayer2Name2Label" style="display: none;">Spiller 2 Makker:</label>
-                        <input type="text" id="editPlayer2Name2" placeholder="Makker 2" style="display: none;">
-
-                        <!-- 3. Double-Tilstand -->
-                        <div class="active-toggle" style="margin-bottom: 20px;">
+                        <!-- 3. Indstillinger på én linje -->
+                        <div class="bane-dialog__valg">
+                            <label class="toggle-label" title="Banen er optaget eller reserveret, selv før pointtælling begynder">
+                                <input type="checkbox" id="editCourtActive">
+                                <span class="toggle-text">Bane i brug</span>
+                            </label>
                             <label class="toggle-label">
                                 <input type="checkbox" id="editDoublesMode">
-                                <span class="toggle-text">Double-Tilstand</span>
+                                <span class="toggle-text">Double</span>
                             </label>
-                        </div>
-
-                        <!-- 4. Spiltilstand -->
-                        <div class="active-toggle" style="margin-bottom: 20px;">
-                            <label class="toggle-label">
+                            <label class="toggle-label" title="Ikke markeret = spil til 21 (maks. 30)">
                                 <input type="checkbox" id="editGameMode">
-                                <span class="toggle-text">Spiltilstand: 15/21 (ikke markeret = 21/30)</span>
+                                <span class="toggle-text">Spil til 15 (maks. 21)</span>
                             </label>
                         </div>
 
