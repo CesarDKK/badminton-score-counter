@@ -134,7 +134,9 @@ async function kobl(k, fraLink = false, linkBane = null) {
     koblerPaa = true;
     kodeTekst('Kobler på …');
     try {
-        const { status, data } = await kald('/ur/kobl', { method: 'POST', body: JSON.stringify({ kode: k }) });
+        // Fra linket er banen kendt: koden skal så være til den bane (nr. 15)
+        const krop = fraLink && linkBane ? { kode: k, bane: linkBane } : { kode: k };
+        const { status, data } = await kald('/ur/kobl', { method: 'POST', body: JSON.stringify(krop) });
         if (status !== 200) {
             if (kanBrugeGemtKobling(fraLink, linkBane)) return brugGemtKobling('Koden er fra forrige kamp — uret er stadig på banen');
             visKode(fraLink ? linkKodeUdloebet(linkBane) : ((data && data.error) || 'Koden virker ikke'));

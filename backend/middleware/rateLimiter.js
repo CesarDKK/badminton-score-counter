@@ -16,6 +16,31 @@ function klientIp(req) {
     return String(ip).trim().replace('::ffff:', '');
 }
 
+// Adressen, grænserne tæller på (nr. 15): IPv4 som den er, IPv6 pr. /64.
+// En almindelig internetforbindelse får et helt /64 (2^64 adresser) af sin
+// udbyder, så med den fulde IPv6-adresse kunne én klient få en ny tæller pr.
+// forsøg — grænsen var reelt ingen grænse. Ren funktion (tests/unit/pakke-l.test.js)
+function ipNoegle(ip) {
+    const s = String(ip || '').trim().toLowerCase().replace(/^\[|\]$/g, '').split('%')[0];
+    if (!s.includes(':')) return s;
+    const v4 = /^(?:0{0,4}:){0,5}ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(s.replace(/^::/, '0:'));
+    if (v4) return v4[1];
+    const dele = s.split('::');
+    if (dele.length > 2) return s;
+    const grupper = (t) => (t ? t.split(':') : []);
+    const hoved = grupper(dele[0]);
+    const hale = dele.length === 2 ? grupper(dele[1]) : [];
+    // En IPv4-hale (64:ff9b::1.2.3.4) fylder to grupper
+    const sidste = hale.length ? hale : hoved;
+    if (sidste.length && sidste[sidste.length - 1].includes('.')) sidste.splice(-1, 1, '0', '0');
+    const mangler = 8 - hoved.length - hale.length;
+    if (mangler < 0 || (dele.length === 1 && mangler !== 0)) return s;
+    const alle = [...hoved, ...Array(dele.length === 2 ? mangler : 0).fill('0'), ...hale];
+    if (alle.length !== 8 || !alle.every(g => /^[0-9a-f]{1,4}$/.test(g))) return s;
+    return alle.slice(0, 4).map(g => parseInt(g, 16).toString(16)).join(':') + '::/64';
+}
+const graenseIp = (req) => ipNoegle(klientIp(req));
+
 // Lokale net (TV'er og tablets i en lokal installation) fritages — men kun når
 // trafikken ikke kommer via Cloudflare. Bag Cloudflare er adressen altid klientens
 // offentlige, og en "privat" CF-Connecting-IP er forfalsket.
@@ -64,7 +89,7 @@ const loginLimiter = rateLimit({
     ...FAELLES,
     windowMs: 5 * 60 * 1000,
     max: 10,
-    keyGenerator: (req) => 'login:' + klientIp(req),
+    keyGenerator: (req) => 'login:' + graenseIp(req),
     message: spaerret,
     skip: erLokaltNet,
 });
@@ -74,7 +99,7 @@ const superAdminLoginLimiter = rateLimit({
     ...FAELLES,
     windowMs: 15 * 60 * 1000,
     max: 5,
-    keyGenerator: (req) => 'super-admin-login:' + klientIp(req),
+    keyGenerator: (req) => 'super-admin-login:' + graenseIp(req),
     message: spaerret,
 });
 
@@ -83,7 +108,7 @@ const uploadLimiter = rateLimit({
     ...FAELLES,
     windowMs: 5 * 60 * 1000,
     max: 20,
-    keyGenerator: (req) => 'upload:' + klientIp(req),
+    keyGenerator: (req) => 'upload:' + graenseIp(req),
     message: { error: 'For mange upload forsøg. Prøv igen om 5 minutter.' },
     skip: erLokaltNet,
 });
@@ -95,7 +120,7 @@ const uploadLimiter = rateLimit({
 // Noeglens id er kun unikt i klubbens egen database (nr. 77): uden klubben i
 // noeglen delte nøgle 1 i Lyngby og nøgle 1 i Holte de samme 30 kald.
 function plannerNoegle(req) {
-    if (!req.plannerToken) return 'planner-token:ip:' + klientIp(req);
+    if (!req.plannerToken) return 'planner-token:ip:' + graenseIp(req);
     return `planner-token:${req.clubDbName || 'direct'}:${req.plannerToken.id}`;
 }
 
@@ -113,7 +138,7 @@ const plannerIpLimiter = rateLimit({
     ...FAELLES,
     windowMs: 5 * 60 * 1000,
     max: 120,
-    keyGenerator: (req) => 'planner-ip:' + klientIp(req),
+    keyGenerator: (req) => 'planner-ip:' + graenseIp(req),
     message: { error: 'For mange kald fra denne adresse. Prøv igen om lidt.', code: 'rate_limited' },
 });
 
@@ -124,12 +149,37 @@ const urKodeLimiter = rateLimit({
     ...FAELLES,
     windowMs: 10 * 60 * 1000,
     max: 30,
-    keyGenerator: (req) => 'ur-kode:' + klientIp(req),
+    keyGenerator: (req) => 'ur-kode:' + graenseIp(req),
     message: { error: 'For mange forsøg med koden. Prøv igen om lidt.' },
+});
+
+// Forkerte ur-koder pr. klub (nr. 15): grænsen pr. adresse alene stopper ikke
+// én, der gætter fra mange adresser. Kun forkerte forsøg tæller (et uret, der
+// kobler på, tæller ikke). Er loftet nået, kan ingen i klubben koble et ur på
+// i resten af vinduet — det skriver én linje i loggen pr. vindue, så det kan ses.
+const UR_KODE_KLUB_MAX = 60;
+const urKodeKlubLogget = new Map();
+const urKodeKlubLimiter = rateLimit({
+    ...FAELLES,
+    windowMs: 10 * 60 * 1000,
+    max: UR_KODE_KLUB_MAX,
+    skipSuccessfulRequests: true,
+    keyGenerator: (req) => 'ur-kode-klub:' + (req.clubSubdomain || req.clubDbName || 'direct'),
+    handler: (req, res) => {
+        const klub = req.clubSubdomain || req.clubDbName || 'direct';
+        const reset = req.rateLimit && req.rateLimit.resetTime ? req.rateLimit.resetTime.getTime() : 0;
+        if (urKodeKlubLogget.get(klub) !== reset) {
+            urKodeKlubLogget.set(klub, reset);
+            console.warn(`[ur] ${klub}: ${UR_KODE_KLUB_MAX} forkerte ur-koder på 10 minutter — kobling af ur spærret i klubben til ${reset ? new Date(reset).toISOString() : '?'} (sidst fra ${klientIp(req)})`);
+        }
+        res.status(429).json({ error: 'For mange forkerte koder lige nu. Prøv igen om lidt.' });
+    },
 });
 
 module.exports = {
     urKodeLimiter,
+    urKodeKlubLimiter,
+    UR_KODE_KLUB_MAX,
     loginLimiter,
     superAdminLoginLimiter,
     uploadLimiter,
@@ -137,6 +187,8 @@ module.exports = {
     plannerNoegle,
     plannerIpLimiter,
     klientIp,
+    ipNoegle,
+    graenseIp,
     forkertLogin,
     erLokaltNet
 };

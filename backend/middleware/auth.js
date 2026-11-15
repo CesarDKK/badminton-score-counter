@@ -112,6 +112,16 @@ async function adgangslinkAfvist(decoded) {
     };
 }
 
+// Urets adgang (via: 'ur', routes/urTaeller.js /kobl) gælder kun urets egne
+// kald: /api/ur/* og "overtag tælleren" på banen. Før var den en fuld
+// QR-session, som også kunne ændre/rydde stillingen direkte (PUT/DELETE
+// /api/game-states/:bane), skrive kamphistorik og melde planner-resultater —
+// og "logget ud efter 15 minutter" gjaldt kun i /api/ur/* (nr. 15).
+function urKaldTilladt(req) {
+    const sti = String(req.originalUrl || req.url || '').split('?')[0];
+    return sti.startsWith('/api/ur/') || /^\/api\/game-states\/\d+\/taeller\/?$/.test(sti);
+}
+
 // Håndhæv gyldigt token på skrive-operationer — men KUN i club-mode.
 //
 // I club-mode er API'et offentligt på internettet (klub.badmintonapp.dk), så en
@@ -153,6 +163,9 @@ async function requireWriteAuthInClubMode(req, res, next) {
     if (decoded.role !== 'super_admin' && decoded.clubSubdomain !== req.clubSubdomain) {
         return res.status(403).json({ error: 'Adgangslink hører til en anden klub', authRequired: true });
     }
+    if (decoded.via === 'ur' && !urKaldTilladt(req)) {
+        return res.status(403).json({ error: 'Urets adgang gælder kun tælling fra uret' });
+    }
 
     // Tilbagekaldt, slettet eller (QR) afsluttet adgangslink — og for klub-admins:
     // slettet bruger eller skiftet adgangskode
@@ -176,6 +189,7 @@ module.exports = {
     generateToken,
     requireWriteAuthInClubMode,
     adgangslinkAfvist,
+    urKaldTilladt,
     _saetAdgangslinkOpslag,
     sessionGyldigFra
 };
