@@ -157,12 +157,13 @@ forvent "samme opstart to gange: intet nyt" "$(koe)" 2
 
 # 8. Net-vagten: "koe" lægger en hændelse i køen med WiFi-loggen, uden at sende
 FRA=$(( $(date +%s) * 1000 - 300000 ))
-FAKE_JOURNAL='NetworkManager: wlp0s20f3: link disconnected' r koe net-genstart 'Ingen WiFi i 3 min' "$FRA" "$(( FRA + 200000 ))"
+BT_RAPPORT_EKSTRA=$'== WiFi, da forbindelsen forsvandt ==\nsignal: -74 dBm' FAKE_JOURNAL='NetworkManager: wlp0s20f3: link disconnected' r koe net-genstart 'Ingen WiFi i 3 min' "$FRA" "$(( FRA + 200000 ))"
 forvent "koe: lagt i køen (ikke sendt)" "$(koe_typer)" "pc-panik pc-genstart net-genstart"
 H=$(cat "$TMP/var/rapporter/"*net-genstart.json)
 indeholder "koe: WiFi-loggen med" "$H" 'link disconnected'
 indeholder "koe: NetworkManager spurgt fra 2 min før" "$H" "--since @$(( FRA / 1000 - 120 ))"
 indeholder "koe: tidspunktet" "$H" "\"fra\": $FRA"
+indeholder "koe: net-vagtens WiFi-billede øverst i loggen" "$H" '"log": "== WiFi, da forbindelsen forsvandt ==\nsignal: -74 dBm\n\n== NetworkManager'
 # … og net-vagtens genstart meldes ikke igen ved næste opstart
 echo netvagt > "$TMP/run/nedlukning"
 r stop

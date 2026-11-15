@@ -428,9 +428,15 @@ def koe(type_, tekst, fra_ms, til_ms=None):
     if til_ms:
         h['til'] = max(int(til_ms), h['fra'])
     if type_.startswith('net-'):
+        # Net-vagtens WiFi-øjebliksbilleder (BT_RAPPORT_EKSTRA) øverst — de
+        # afkortes ikke; NetworkManagers log fylder resten
+        ekstra = (os.environ.get('BT_RAPPORT_EKSTRA') or '').strip()[:MAKS_LOG // 2]
         uddrag = netlog(h['fra'])
+        dele = [ekstra] if ekstra else []
         if uddrag:
-            h['log'] = afkort(uddrag)
+            dele.append(afkort(uddrag, MAKS_LOG - len(ekstra) - 2))
+        if dele:
+            h['log'] = '\n\n'.join(dele)
     elif type_.startswith('opd-') and os.environ.get('BT_RAPPORT_LOG'):
         # Den automatiske opdaterings eget output (opdatering tjek)
         uddrag = laes_tekst(os.environ['BT_RAPPORT_LOG'])

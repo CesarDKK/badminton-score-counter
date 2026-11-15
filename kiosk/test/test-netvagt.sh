@@ -44,13 +44,14 @@ class Hal:
         self.server = True
         self.router = True
         self.haendelser, self.genforbind, self.genstart = [], 0, []
+        self.wifi_nu = {}          # {} = ingen WiFi (kabel) — som før
         self.vagt = v.Netvagt(
             'https://klub.test', ur=lambda: self.t,
             server_ok=lambda s: self.server, lokal_ok=lambda: self.router,
             kortfejl=lambda: kortfejl, optaget=lambda: optaget,
             genforbind=self._genforbind, genstart=self._genstart,
-            koe=lambda typ, tekst, fra, til=None: self.haendelser.append((typ, tekst, fra, til)),
-            send=lambda: None)
+            koe=lambda typ, tekst, fra, til=None, ekstra=None: self.haendelser.append((typ, tekst, fra, til, ekstra)),
+            send=lambda: None, wifi=lambda: self.wifi_nu)
 
     def _genforbind(self):
         self.genforbind += 1
@@ -155,6 +156,72 @@ h = Hal(); h.server = KUN4; h.koer(40); h.oppe(); h.koer(20)
 forvent('kun IPv4 i 40 s: intet meldes', h.typer(), [])
 h = Hal(); h.server = KUN4; h.koer(100); h.nede(router=True); h.koer(100); h.oppe(); h.koer(20)
 forvent('kun IPv4, så helt væk, så tilbage: net-ipv6 og net-server', h.typer(), ['net-ipv6', 'net-server'])
+
+# WiFi-signalet med i net-hændelserne (badminton-tv55, 2026-11-14): iw's output
+print('WiFi-signalet')
+LINK = '''Connected to AA:BB:CC:00:11:22 (on wlp2s0)
+\tSSID: LBK-Screen
+\tfreq: 5180.0
+\tRX: 1234 bytes (10 packets)
+\tTX: 567 bytes (5 packets)
+\tsignal: -74 dBm
+\trx bitrate: 6.0 MBit/s
+\ttx bitrate: 6.0 MBit/s
+
+\tbss flags:\tshort-slot-time
+\tdtim period:\t1
+\tbeacon int:\t100
+'''
+def dump(retries, failed, beacon):
+    return (f'Station aa:bb:cc:00:11:22 (on wlp2s0)\n\tinactive time:\t36 ms\n\ttx retries:\t{retries}\n'
+            f'\ttx failed:\t{failed}\n\tbeacon loss:\t{beacon}\n\tsignal:  \t-74 [-74] dBm\n')
+s = v.wifi_tolk(LINK, dump(100, 2, 0))
+forvent('iw: tolket', {k: s.get(k) for k in ('bssid', 'ssid', 'mhz', 'signal', 'bitrate', 'retries', 'failed', 'beacon_loss')},
+        {'bssid': 'aa:bb:cc:00:11:22', 'ssid': 'LBK-Screen', 'mhz': 5180.0, 'signal': -74, 'bitrate': 6.0,
+         'retries': 100, 'failed': 2, 'beacon_loss': 0})
+forvent('iw: ikke forbundet', v.wifi_tolk('Not connected.\n', ''), {})
+forvent('kort tekst', v.wifi_kort(s), '5 GHz kanal 36, signal -74 dBm (svagt), 6 Mbit/s')
+forvent('kanaler: 2,4 GHz, 14, 6 GHz', (v.wifi_kanal(2437), v.wifi_kanal(2484), v.wifi_kanal(5955), v.wifi_kanal(5180)), (6, 14, 1, 36))
+forvent('signalet i ord', [v.signal_ord(d) for d in (-55, -65, -75, -85)], ['godt', 'middel', 'svagt', 'meget svagt'])
+
+h = Hal(); h.wifi_nu = s; h.nede(router=True); h.koer(100)
+h.wifi_nu = v.wifi_tolk(LINK, dump(450, 9, 3)); h.oppe(); h.koer(20)
+typ, tekst, _, _, ekstra = h.haendelser[0]
+forvent('net-server med WiFi\'en under udfaldet', 'virkede — WiFi: 5 GHz kanal 36, signal -74 dBm (svagt), 6 Mbit/s' in tekst, True)
+forvent('… loggen: iw\'s output og de gensendte pakker imens',
+        ('SSID: LBK-Screen' in ekstra, 'pakker sendt om (tx retries) +350' in ekstra,
+         'pakker opgivet (tx failed) +7' in ekstra, 'mistede beacons +3' in ekstra), (True, True, True, True))
+
+ANDEN = LINK.replace('AA:BB:CC:00:11:22', 'aa:bb:cc:00:99:99').replace('freq: 5180.0', 'freq: 2437')
+h = Hal(); h.wifi_nu = s; h.nede(router=True); h.koer(100)
+h.wifi_nu = v.wifi_tolk(ANDEN, dump(5, 0, 0)); h.oppe(); h.koer(20)
+forvent('skift af adgangspunkt og bånd står i teksten', 'skiftede adgangspunkt undervejs og fra 5 GHz til 2,4 GHz' in h.haendelser[0][1], True)
+forvent('… ingen pakketal på tværs af adgangspunkter', 'Under udfaldet' in h.haendelser[0][4], False)
+
+h = Hal(); h.wifi_nu = s; h.server = v.Svar(False, 'timeout ' * 60, False); h.router = True
+h.koer(100); h.oppe(); h.koer(20)
+tekst = h.haendelser[0][1]
+forvent('lang grund: højst 300 tegn, WiFi\'en med, afkortet med …', (len(tekst) <= 300, 'WiFi: 5 GHz' in tekst, tekst.endswith('…')), (True, True, True))
+
+h = Hal(); h.wifi_nu = s; h.nede(); h.koer(100); h.wifi_nu = v.wifi_tolk(ANDEN, ''); h.oppe(); h.koer(20)
+forvent('net-wifi: WiFi\'en bagefter', 'WiFi bagefter: 2,4 GHz kanal 6' in h.haendelser[0][1], True)
+
+def gaar_galt():
+    raise OSError('iw mangler')
+h = Hal(); h.vagt.wifi_fn = gaar_galt; h.nede(router=True); h.koer(100); h.oppe(); h.koer(20)
+forvent('WiFi kan ikke læses: vagten kører videre og melder uden WiFi', (h.typer(), 'WiFi' in h.haendelser[0][1]), (['net-server'], False))
+
+# koe_haendelse sender WiFi-billedet videre til rapport (BT_RAPPORT_EKSTRA)
+import subprocess as sp
+aegte_run = v.subprocess.run
+fanget = {}
+gammel_meld, v.MELD = v.MELD, '/bin/rapport'
+v.subprocess.run = lambda args, **kw: (fanget.update(args=args, env=kw.get('env')), sp.CompletedProcess(args, 0))[1]
+v.koe_haendelse('net-server', 'tekst', 1000.0, 1100.0, ekstra='== WiFi ==')
+forvent('koe_haendelse: WiFi-billedet i BT_RAPPORT_EKSTRA', (fanget['args'][1:3], fanget['env'].get('BT_RAPPORT_EKSTRA')), (['koe', 'net-server'], '== WiFi =='))
+v.koe_haendelse('net-kort', 'tekst', 1000.0)
+forvent('… uden WiFi-billede: miljøet uændret', fanget['env'], None)
+v.subprocess.run, v.MELD = aegte_run, gammel_meld
 
 # enhed_koerer: oneshot-tjenester er 'activating', mens de kører (is-active svarer da 3)
 import subprocess as sp

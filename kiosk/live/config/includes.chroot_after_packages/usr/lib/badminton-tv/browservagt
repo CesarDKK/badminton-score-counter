@@ -64,6 +64,7 @@ DevTools-protokollen (én forespørgsel pr. forbindelse).
 import base64
 import collections
 import errno
+import glob
 import http.client
 import json
 import mmap
@@ -519,15 +520,134 @@ def pc_er_optaget():
     return enhed_koerer(SLUK_ENHED) or enhed_koerer(OPDATERING_ENHED)
 
 
-def koe_haendelse(type_, tekst, fra, til=None):
-    """Lægger en hændelse i rapportens kø (sendes, når nettet er tilbage)."""
+def koe_haendelse(type_, tekst, fra, til=None, ekstra=None):
+    """Lægger en hændelse i rapportens kø (sendes, når nettet er tilbage).
+    ekstra: tekst øverst i hændelsens log (WiFi-signalet under udfaldet)."""
     if not MELD:
         return
     args = [MELD, 'koe', type_, tekst, str(int(fra * 1000))] + ([str(int(til * 1000))] if til else [])
+    env = dict(os.environ, BT_RAPPORT_EKSTRA=ekstra) if ekstra else None
     try:
-        subprocess.run(args, capture_output=True, timeout=30)
+        subprocess.run(args, capture_output=True, timeout=30, env=env)
     except (OSError, subprocess.SubprocessError) as e:
         log(f'kunne ikke lægge hændelsen i kø: {e}')
+
+
+# ── WiFi-signalet (med i net-hændelserne) ──
+# Hvorfor forsvinder forbindelsen for én PC, når hallens net virker? Svagt
+# signal, skift mellem 2,4 og 5 GHz eller adgangspunkt, eller mange gensendte
+# pakker — det står i `iw`, mens det sker (set på badminton-tv55 2026-11-14).
+
+def wifi_enhed():
+    for sti in sorted(glob.glob('/sys/class/net/*/wireless')):
+        return sti.split('/')[-2]
+    return None
+
+
+def wifi_tolk(link, dump):
+    """`iw dev X link` og `iw dev X station dump` → {bssid, ssid, mhz, signal,
+    bitrate, retries, failed, beacon_loss, raa}; {} uden forbindelse."""
+    m = re.search(r'Connected to ([0-9a-fA-F:]{17})', link or '')
+    if not m:
+        return {}
+    s = {'bssid': m.group(1).lower()}
+    for noegle, monster, typ in (('ssid', r'^\s*SSID: (.*)$', str), ('mhz', r'^\s*freq: ([0-9.]+)', float),
+                                 ('signal', r'^\s*signal: (-?[0-9]+) dBm', int),
+                                 ('bitrate', r'^\s*tx bitrate: ([0-9.]+) MBit/s', float)):
+        m = re.search(monster, link, re.M)
+        if m:
+            s[noegle] = typ(m.group(1).strip())
+    # station dump: i managed-tilstand kun adgangspunktet; tallene tæller siden tilslutningen
+    for noegle, monster in (('retries', r'tx retries:\s*([0-9]+)'), ('failed', r'tx failed:\s*([0-9]+)'),
+                            ('beacon_loss', r'beacon loss:\s*([0-9]+)')):
+        m = re.search(monster, dump or '')
+        if m:
+            s[noegle] = int(m.group(1))
+    s['raa'] = '\n\n'.join(d.strip() for d in (link, dump) if d and d.strip())
+    return s
+
+
+def wifi_status():
+    enhed = wifi_enhed()
+    if not enhed:
+        return {}
+    try:
+        link, dump = (subprocess.run(['iw', 'dev', enhed] + a, capture_output=True, text=True, timeout=5).stdout
+                      for a in (['link'], ['station', 'dump']))
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    return wifi_tolk(link, dump)
+
+
+def wifi_kanal(mhz):
+    mhz = int(round(mhz))
+    if mhz == 2484:
+        return 14
+    if 2412 <= mhz < 2484:
+        return (mhz - 2407) // 5
+    if 5000 < mhz < 5925:
+        return (mhz - 5000) // 5
+    if 5925 <= mhz <= 7125:
+        return (mhz - 5950) // 5
+    return None
+
+
+def wifi_baand(mhz):
+    return '2,4 GHz' if mhz < 3000 else '5 GHz' if mhz < 5925 else '6 GHz'
+
+
+def signal_ord(dbm):
+    return 'godt' if dbm >= -60 else 'middel' if dbm >= -70 else 'svagt' if dbm >= -80 else 'meget svagt'
+
+
+def wifi_kort(s):
+    """'5 GHz kanal 36, signal -74 dBm (svagt), 6 Mbit/s' — eller 'ikke forbundet'."""
+    if not s:
+        return 'ikke forbundet'
+    dele = []
+    if 'mhz' in s:
+        kanal = wifi_kanal(s['mhz'])
+        dele.append(wifi_baand(s['mhz']) + (f' kanal {kanal}' if kanal else ''))
+    if 'signal' in s:
+        dele.append(f'signal {s["signal"]} dBm ({signal_ord(s["signal"])})')
+    if 'bitrate' in s:
+        dele.append(f'{s["bitrate"]:g} Mbit/s')
+    return ', '.join(dele) or 'forbundet'
+
+
+def wifi_skift(fra, til):
+    """Hvad ændrede sig fra udfaldets start til slut — '' hvis intet."""
+    if not fra or not til:
+        return ''
+    if fra.get('bssid') != til.get('bssid'):
+        baand = ''
+        if 'mhz' in fra and 'mhz' in til and wifi_baand(fra['mhz']) != wifi_baand(til['mhz']):
+            baand = f' og fra {wifi_baand(fra["mhz"])} til {wifi_baand(til["mhz"])}'
+        return f'skiftede adgangspunkt undervejs{baand}'
+    return ''
+
+
+def wifi_log(fra, t_fra, til, t_til):
+    """Hændelsens log: iw's eget output ved udfaldets start og slut, og hvor
+    mange pakker der blev sendt om imens (samme adgangspunkt). None uden WiFi."""
+    if not fra and not til and wifi_enhed() is None:
+        return None
+    dele = [f'== WiFi, da forbindelsen forsvandt (kl. {kl(t_fra)}) ==\n' + (fra.get('raa') or 'ikke forbundet')]
+    if t_til is not None:
+        dele.append(f'== WiFi, da den kom igen (kl. {kl(t_til)}) ==\n' + (til.get('raa') or 'ikke forbundet'))
+    if fra and til and fra.get('bssid') == til.get('bssid'):
+        tal = [f'{navn} +{til[n] - fra[n]}' for n, navn in (('retries', 'pakker sendt om (tx retries)'),
+                                                           ('failed', 'pakker opgivet (tx failed)'),
+                                                           ('beacon_loss', 'mistede beacons'))
+               if n in fra and n in til and til[n] >= fra[n]]
+        if tal:
+            dele.append('Under udfaldet: ' + ', '.join(tal))
+    return '\n\n'.join(dele)
+
+
+def kort_tekst(tekst, maks=300):
+    """Serveren gemmer højst 300 tegn — afkort med … (slutningen er grunden)."""
+    return tekst if len(tekst) <= maks else tekst[:maks - 1].rstrip() + '…'
 
 
 def send_koeen():
@@ -553,8 +673,12 @@ class Netvagt:
 
     def __init__(self, server, ur=time.time, server_ok=server_svarer, lokal_ok=router_svarer,
                  kortfejl=wifi_kort_svarer_ikke, genforbind=genforbind_wifi, genstart=None,
-                 optaget=pc_er_optaget, koe=koe_haendelse, send=send_koeen, tilstand_fil=NET_TILSTAND):
+                 optaget=pc_er_optaget, koe=koe_haendelse, send=send_koeen, tilstand_fil=NET_TILSTAND,
+                 wifi=wifi_status):
         self.server, self.ur = server, ur
+        self.wifi_fn = wifi
+        self.wifi_fra = {}                         # WiFi, da serveren forsvandt
+        self.ipv6_wifi = {}                        # WiFi, da IPv6 holdt op
         self.server_ok, self.lokal_ok, self.kortfejl = server_ok, lokal_ok, kortfejl
         self.genforbind, self.optaget, self.koe, self.send = genforbind, optaget, koe, send
         self.genstart = genstart or self._genstart_pc
@@ -587,6 +711,13 @@ class Netvagt:
         except OSError as e:
             log(f'net-vagt: kunne ikke gemme tilstanden: {e}')
 
+    def _wifi(self):
+        try:
+            return self.wifi_fn() or {}
+        except Exception as e:      # et WiFi-øjebliksbillede må aldrig stoppe vagten
+            log(f'net-vagt: kunne ikke læse WiFi-signalet: {e}')
+            return {}
+
     def _genstart_pc(self):
         try:
             os.makedirs(os.path.dirname(NEDLUKNING), exist_ok=True)
@@ -607,6 +738,7 @@ class Netvagt:
         if svar.ok and svar.kun_ipv4:
             if self.ipv6_nede_fra is None:
                 self.ipv6_nede_fra = nu
+                self.ipv6_wifi = self._wifi()
                 log(f'net-vagt: serveren svarer kun over IPv4 — {svar.grund}')
             self.ipv6_grund = svar.grund
             return
@@ -616,12 +748,14 @@ class Netvagt:
         log(f'net-vagt: IPv6 virker igen efter {varighed(nede)}' if svar.ok
             else f'net-vagt: heller ikke IPv4 svarer nu (IPv6 fejlede i {varighed(nede)})')
         if nede >= 60:
-            self.koe('net-ipv6', f'Serveren kunne kun nås over IPv4 i {varighed(nede)} '
+            self.koe('net-ipv6', kort_tekst(f'Serveren kunne kun nås over IPv4 i {varighed(nede)} '
                      f'(kl. {kl(self.ipv6_nede_fra)}–{kl(nu)}) — {self.ipv6_grund}. '
                      f'TV\'et mærker det ikke (browseren skifter selv til IPv4), '
-                     f'men hallens IPv6 driller', self.ipv6_nede_fra, nu)
+                     f'men hallens IPv6 driller'), self.ipv6_nede_fra, nu,
+                     ekstra=wifi_log(self.ipv6_wifi, self.ipv6_nede_fra, self._wifi(), nu))
             self.send()
         self.ipv6_nede_fra = self.ipv6_grund = None
+        self.ipv6_wifi = {}
 
     def tik(self):
         nu = self.ur()
@@ -636,7 +770,8 @@ class Netvagt:
             self.grund = svar.grund
         if self.nede_fra is None:
             self.nede_fra = nu
-            log(f'net-vagt: kan ikke nå {self.server}')
+            self.wifi_fra = self._wifi()
+            log(f'net-vagt: kan ikke nå {self.server} (WiFi: {wifi_kort(self.wifi_fra)})')
         if self.lokal_ok():
             # Hallens net virker (routeren svarer) — internettet eller serveren
             # er nede. Det hjælper ikke at genstarte.
@@ -671,7 +806,8 @@ class Netvagt:
                      f'heller ikke efter at WiFi blev slået fra og til — PC\'en genstartes '
                      f'(genstart {self.raekke} i træk)')
             log(f'net-vagt: {tekst}')
-            self.koe('net-genstart', tekst, self.lokal_nede_fra, nu)
+            self.koe('net-genstart', tekst, self.lokal_nede_fra, nu,
+                     ekstra=wifi_log(self.wifi_fra, self.nede_fra, self._wifi(), nu))
             self.genstart()
 
     def _tilbage(self, nu):
@@ -679,21 +815,31 @@ class Netvagt:
             nede = nu - self.nede_fra
             log(f'net-vagt: forbindelsen er tilbage efter {varighed(nede)}')
             if nede >= 60:
+                til = self._wifi()
+                ekstra = wifi_log(self.wifi_fra, self.nede_fra, til, nu)
+                skift = wifi_skift(self.wifi_fra, til)
+                skift = f', {skift}' if skift else ''
+                # Uden WiFi-forbindelse (fx et kabel) står der intet om WiFi
                 if self.var_lokal_nede:
                     hvordan = ('efter at WiFi blev slået fra og til' if self.genforbundet
                                else 'af sig selv')
-                    self.koe('net-wifi', f'WiFi-forbindelsen var væk i {varighed(nede)} '
-                             f'(kl. {kl(self.nede_fra)}–{kl(nu)}) og kom igen {hvordan}', self.nede_fra, nu)
+                    self.koe('net-wifi', kort_tekst(f'WiFi-forbindelsen var væk i {varighed(nede)} '
+                             f'(kl. {kl(self.nede_fra)}–{kl(nu)}) og kom igen {hvordan}'
+                             + (f' — WiFi bagefter: {wifi_kort(til)}{skift}' if til else '')),
+                             self.nede_fra, nu, ekstra=ekstra)
                 else:
-                    self.koe('net-server', f'Ingen forbindelse til serveren i {varighed(nede)} '
+                    # WiFi'en før grunden: grunden er lang og afkortes først
+                    self.koe('net-server', kort_tekst(f'Ingen forbindelse til serveren i {varighed(nede)} '
                              f'(kl. {kl(self.nede_fra)}–{kl(nu)}), men hallens netværk virkede'
-                             + (f' — {self.grund}' if self.grund else ''),
-                             self.nede_fra, nu)
+                             + (f' — WiFi: {wifi_kort(self.wifi_fra)}{skift}' if self.wifi_fra else '')
+                             + (f' — {self.grund}' if self.grund else '')),
+                             self.nede_fra, nu, ekstra=ekstra)
                 self.send()
             self.ok_fra = nu
         self.nede_fra = self.lokal_nede_fra = None
         self.var_lokal_nede = self.genforbundet = False
         self.grund = None
+        self.wifi_fra = {}
         if self.raekke and nu - self.ok_fra >= NET_STABIL:
             log('net-vagt: nettet har virket en halv time — genstarter tælles forfra')
             self.raekke = 0
