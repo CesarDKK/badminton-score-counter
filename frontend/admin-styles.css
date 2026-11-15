@@ -803,6 +803,127 @@ header > div {
     position: relative;
 }
 
+/* ---- Bane-dialogen: alt skal kunne ses uden at rulle ---- */
+.modal .modal-content.bane-dialog {
+    max-width: 640px;
+    margin: 4vh auto;
+    max-height: 92vh;
+    padding: 24px 28px;
+}
+
+.bane-dialog h2 {
+    margin-bottom: 16px;
+}
+
+.bane-dialog .edit-form label {
+    margin: 0 0 6px;
+}
+
+.bane-dialog .edit-form input[type="text"],
+.bane-dialog .edit-form input[type="search"] {
+    padding: 10px 14px;
+    margin-bottom: 10px;
+}
+
+.bane-dialog__turnering {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.bane-dialog__turnering-hoved {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+}
+
+.bane-dialog .bane-dialog__turnering input[type="search"] {
+    margin-bottom: 8px;
+}
+
+.bane-dialog__vaelger {
+    width: 100%;
+    padding: 10px;
+    background: var(--color-bg-dark);
+    color: var(--text-primary, #eaeaea);
+    border: 1px solid var(--color-primary);
+    border-radius: 10px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.95em;
+}
+
+.bane-dialog__advarsel {
+    color: var(--color-warning, #ffb02e);
+    margin: 6px 0 0;
+    font-size: 0.88em;
+}
+
+.bane-dialog__hjaelp {
+    color: var(--text-muted, rgba(255, 255, 255, 0.62));
+    font-size: 0.8em;
+    margin: 6px 0 0;
+}
+
+.bane-dialog__sider {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 16px;
+}
+
+/* Autocomplete-listen følger sin kolonne */
+.bane-dialog__side {
+    position: relative;
+    min-width: 0;
+}
+
+.bane-dialog__valg {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 22px;
+    margin-top: 4px;
+    padding: 12px 16px;
+    background: rgba(var(--color-primary-rgb), 0.08);
+    border: 1px solid rgba(var(--color-primary-rgb), 0.2);
+    border-radius: 12px;
+}
+
+.bane-dialog__valg .toggle-label {
+    display: inline-flex;
+    gap: 8px;
+    margin: 0;
+    color: var(--text-primary, #eaeaea);
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 0.95em;
+}
+
+.bane-dialog__valg .toggle-label input[type="checkbox"] {
+    margin: 0;
+    flex: none;
+}
+
+.bane-dialog .modal-actions {
+    margin-top: 16px;
+}
+
+.bane-dialog .modal-actions button {
+    margin-top: 0;
+}
+
+@media (max-width: 560px) {
+    .modal .modal-content.bane-dialog {
+        padding: 20px 18px;
+        margin: 2vh auto;
+        max-height: 96vh;
+    }
+
+    .bane-dialog__sider {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* ---- Responsive ---- */
 @media (max-width: 768px) {
     .container {
