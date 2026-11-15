@@ -582,3 +582,32 @@ test('93: SSE-ruten afviser med 429 over loftet og frigiver pladsen, når klient
     await new Promise(ok => setTimeout(ok, 100));
     assert.equal(_antalFor('ip:203.0.113.99'), 0);
 });
+
+// ======================= Nr. 94: afviste planner-kald skyller ikke loggen væk =======================
+
+test('94: kald uden gyldig nøgle — én log-linje pr. adresse pr. time, resten tælles i den', async () => {
+    const planner = require('../../routes/plannerIntegration');
+    const plannerAuth = ruteLag(planner, 'get', '/status')[1];
+    let nr = 100;
+    nulstil(async (sql) => (/INSERT INTO planner_log/.test(sql) ? { insertId: ++nr } : /SELECT id, name FROM planner_tokens/.test(sql) ? [] : { affectedRows: 1 }));
+    const kør = async (ip) => {
+        const res = svarObjekt();
+        await plannerAuth({ path: '/status', clubDbName: 'klub_a', headers: { authorization: 'Bearer forkert', 'cf-connecting-ip': ip } }, res, (e) => { throw e; });
+        return res.statusCode;
+    };
+    for (let i = 0; i < 5; i++) assert.equal(await kør('203.0.113.5'), 401);
+    const indsat = () => kald.filter(k => /INSERT INTO planner_log/.test(k.sql));
+    const opdateret = () => kald.filter(k => /UPDATE planner_log SET error_text/.test(k.sql));
+    assert.equal(indsat().length, 1, 'én linje');
+    assert.equal(opdateret().length, 4);
+    assert.deepEqual(opdateret()[3].params, ['Ugyldig eller tilbagekaldt API-nøgle — 5 afviste kald fra adressen den seneste time', 101]);
+    // Loggens oprydning (loftet) køres kun ved nye linjer
+    assert.equal(kald.filter(k => /DELETE FROM planner_log/.test(k.sql)).length, 1);
+    // En anden adresse (og IPv6 i et andet /64) får sin egen linje
+    await kør('2001:db8:1:1::1');
+    await kør('2001:db8:1:1::2');
+    assert.equal(indsat().length, 2);
+    // Efter en time: en ny linje
+    await planner._logAfvist({ path: '/status', clubDbName: 'klub_a', headers: { 'cf-connecting-ip': '203.0.113.5' } }, Date.now() + 61 * 60 * 1000);
+    assert.equal(indsat().length, 3);
+});
