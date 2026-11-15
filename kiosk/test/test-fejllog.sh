@@ -111,6 +111,57 @@ mangler "kiosk.conf: WiFi-koden er fjernet" "$K" 'hemmelig123'
 mangler "kiosk.conf: adgangslinkets kode er fjernet" "$K" 'abcdEFGH1234_x'
 indeholder "kiosk.conf: WiFi-navnet er med" "$K" 'WIFI_NAVN=Hallen'
 
+# 2b. Det andet system på disken (A/B): loggen fra før seneste opdatering.
+# Falske blkid/mount/umount/findmnt: "mount" kopierer en mappe ind i målet.
+ANDET=$TMP/andet-kilde
+mkdir -p "$ANDET/var/log/journal" "$ANDET/usr/share/badminton-tv"
+printf '2026.11.4\n' > "$ANDET/usr/share/badminton-tv/version"
+cat > "$TMP/bin/blkid" <<'EOF'
+#!/bin/bash
+case "$*" in *badminton-tv-a*) echo /dev/nvme0n1p2 ;; esac
+EOF
+cat > "$TMP/bin/mount" <<'EOF'
+#!/bin/bash
+echo "mount $*" >> "$MOUNT_LOG"
+cp -a "$FAKE_ANDET/." "${*: -1}/"
+EOF
+cat > "$TMP/bin/umount" <<'EOF'
+#!/bin/bash
+echo "umount $*" >> "$MOUNT_LOG"
+rm -rf "${*: -1:1}"/*
+EOF
+printf '#!/bin/bash\nexit 1\n' > "$TMP/bin/findmnt"
+chmod +x "$TMP/bin/"*
+andet() { # cmdline UD
+    printf '%s\n' "$1" > "$TMP/cmdline"
+    mkdir -p "$2"
+    printf 'Oversigt over det kørende system\n' > "$2/OVERSIGT.txt"
+    PATH="$TMP/bin:$PATH" FL_CMDLINE="$TMP/cmdline" FL_OPD_LAAS="$TMP/opd/laas" FL_ANDET_MNT="$TMP/mnt" \
+        FAKE_ANDET="$ANDET" MOUNT_LOG="$TMP/mount.log" \
+        bash -c '. "$1/fejllog.sh"; fejllog_andet_system "$2/andet-system" badminton-tv2' bash "$LIB" "$2"
+}
+: > "$TMP/mount.log"
+andet 'BOOT_IMAGE=/vmlinuz root=UUID=x badminton.slot=b quiet' "$TMP/saml3"
+OV=$(cat "$TMP/saml3/andet-system/OVERSIGT.txt" 2>/dev/null)
+indeholder "andet system: dets version (før opdateringen)" "$OV" 'Installeret version: 2026.11.4'
+indeholder "andet system: beskrevet som loggen fra før" "$OV" 'det andet system på disken (/dev/nvme0n1p2)'
+indeholder "andet system: monteret skrivebeskyttet" "$(cat "$TMP/mount.log")" 'mount -o ro,noload /dev/nvme0n1p2'
+indeholder "andet system: afmonteret igen" "$(cat "$TMP/mount.log")" "umount $TMP/mnt"
+indeholder "hovedoversigten peger på mappen" "$(cat "$TMP/saml3/OVERSIGT.txt")" 'se mappen andet-system'
+# En opdatering kører (har låsen): det andet system røres ikke
+mkdir -p "$TMP/opd"
+exec 8>"$TMP/opd/laas"
+flock 8
+: > "$TMP/mount.log"
+andet 'root=UUID=x badminton.slot=b' "$TMP/saml4"
+flock -u 8
+indeholder "opdatering i gang: ikke læst, med besked" "$(cat "$TMP/saml4/andet-system/OVERSIGT.txt" 2>/dev/null)" 'en opdatering er i gang'
+forvent "… og intet monteret" "$(cat "$TMP/mount.log")" ''
+# Uden A/B (Pi'en, USB-nøglen): ingen mappe
+andet 'root=UUID=x quiet' "$TMP/saml5"
+forvent "uden badminton.slot: intet andet system" "$(test -e "$TMP/saml5/andet-system" && echo ja || echo nej)" nej
+rm -f "$TMP/bin/blkid" "$TMP/bin/mount" "$TMP/bin/umount" "$TMP/bin/findmnt"
+
 echo "Fejllog fra admin (fejllog spoerg)"
 
 # ── Falsk server: /spoerg svarer $TMP/hent, uploadet gemmes i $TMP/modtaget.zip ──

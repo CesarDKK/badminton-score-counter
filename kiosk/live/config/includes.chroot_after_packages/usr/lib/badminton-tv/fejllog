@@ -73,10 +73,12 @@ def post(url, token, data, content_type='application/json', timeout=TIMEOUT):
 
 
 def saml(mappe, antal):
-    """Samler loggen i mappe med fejllog.sh (det kørende system)."""
+    """Samler loggen i mappe med fejllog.sh: det kørende system og (PC'en) det
+    andet system på disken i andet-system/ — loggen fra før seneste opdatering."""
     navn = R.kiosk_env()[1] or R.laes_tekst('/etc/hostname') or 'ukendt-pc'
     kode = subprocess.run(
-        ['bash', '-c', '. "$1/fejllog.sh"; FL_ANTAL=$2 fejllog_saml "$3" "$4" "$5"', 'bash',
+        ['bash', '-c', '. "$1/fejllog.sh"; FL_ANTAL=$2 fejllog_saml "$3" "$4" "$5"; '
+         'FL_ANTAL=$2 fejllog_andet_system "$3/andet-system" "$5"', 'bash',
          BT_LIB, str(antal), mappe, 'det kørende system (hentet fra admin)', navn],
         stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, errors='replace',
         timeout=600).returncode
