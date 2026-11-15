@@ -62,16 +62,15 @@ async function ytToken(req, f) {
 const ytStreamFelter = 'yt_stream_id = NULL, yt_ingest_url = NULL, yt_stream_key = NULL, ' +
     'yt_broadcast_id = NULL, yt_broadcast_start = NULL, yt_broadcast_tjek = NULL, yt_fejl = NULL, yt_fejl_tid = NULL';
 
-// Udsendelsens titel: holdkampens hold, ellers navnene i scoreboardet
-async function ytTitelFor(req, bane, b, rk, dbl) {
+// Udsendelsens titel: holdkampens hold, ellers klubben og banen (ingen spillernavne, nr. 12A)
+async function ytTitelFor(req, bane, b) {
     const hk = b.grund === 'holdkamp' ? await queryOne(
         `SELECT tm.team1_name, tm.team2_name FROM team_match_games g JOIN team_matches tm ON tm.id = g.team_match_id
           WHERE g.court_number = ? AND tm.status = 'active' ORDER BY g.status = 'active' DESC, g.started_at DESC LIMIT 1`,
         [bane]) : null;
-    const t = rk ? ls.overlayTavle(rk, dbl, bane) : null;
     const klubnavn = (await klubLogoData(req).catch(() => ({}))).klubnavn || null;
     return {
-        titel: ls.ytTitel({ grund: b.grund, bane, hold: hk && [hk.team1_name, hk.team2_name], navne: t && t.navne, klubnavn }),
+        titel: ls.ytTitel({ grund: b.grund, bane, hold: hk && [hk.team1_name, hk.team2_name], klubnavn }),
         beskrivelse: ls.ytBeskrivelse(klubnavn)
     };
 }
@@ -92,7 +91,7 @@ function ytGlemPauser(tenant) {
 // Returnerer { url, noegle } at sende til — eller null (så bruges den
 // indtastede nøgle). En fejl hos YouTube stopper aldrig streamen: den gemmes
 // på banen, vises i admin, og der prøves igen om lidt.
-async function ytStyr(req, f, bane, o, b, { rk, dbl, senderNu, tvingTjek, vagt = null }) {
+async function ytStyr(req, f, bane, o, b, { senderNu, tvingTjek, vagt = null }) {
     const laas = `${tenantKey(req)}:${bane}`;
     const gemt = o.yt_stream_key ? { url: o.yt_ingest_url, noegle: o.yt_stream_key } : null;
     if (_ytLaas.has(laas)) return gemt;
@@ -133,7 +132,7 @@ async function ytStyr(req, f, bane, o, b, { rk, dbl, senderNu, tvingTjek, vagt =
             console.log(`[livestream] ${tenantKey(req)} bane ${bane}: stream-nøgle oprettet på YouTube`);
         }
         if (handling === 'opret') {
-            const { titel, beskrivelse } = await ytTitelFor(req, bane, b, rk, dbl);
+            const { titel, beskrivelse } = await ytTitelFor(req, bane, b);
             const indst = await hentIndstillinger();
             const id = await youtube.opretUdsendelse(token, { titel, beskrivelse, synlighed: indst.ytSynlighed,
                 boern: indst.ytBoern, streamId: o.yt_stream_id });
@@ -392,7 +391,7 @@ async function ytVagt(nu = Date.now()) {
             const grund = ls.ytVagtGrund({ send: b.send, grund: b.grund, pcSidst: pcSidstFor(tenant, bane, opsaetning, nu),
                 start: ytStartFor(tenant, bane, opsaetning, nu), nu });
             if (!grund) continue;
-            await ytStyr(req, yt, bane, opsaetning, { send: false, grund }, { rk: null, dbl: false, senderNu: false, tvingTjek: false, vagt: grund });
+            await ytStyr(req, yt, bane, opsaetning, { send: false, grund }, { senderNu: false, tvingTjek: false, vagt: grund });
             ud.push({ bane, grund });
         } catch (e) {
             console.error(`[livestream] ${tenant} bane ${bane}: vagten over udsendelsen fejlede — ${e.message}`);
@@ -924,7 +923,7 @@ router.post('/pc', async (req, res, next) => {
             // YouTube-kanalen forbundet: banens nøgle derfra, en ny udsendelse, når
             // banen begynder at sende, og den afsluttes, når banen holder op
             const ytKilde = ytBrugbar(yt) && opsaetning && (b.send || opsaetning.yt_broadcast_id)
-                ? await ytStyr(req, yt, bane, opsaetning, b, { rk, dbl,
+                ? await ytStyr(req, yt, bane, opsaetning, b, {
                     senderNu: !!(foer && foer.sender && pc.sender && Date.now() - foer.senderSiden > 60 * 1000),
                     tvingTjek: !!(pc.sender && foer && !foer.sender) })
                 : null;

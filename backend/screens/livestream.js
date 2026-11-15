@@ -775,13 +775,14 @@ const datoTekst = (nu = Date.now()) => new Intl.DateTimeFormat('da-DK',
     { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/Copenhagen' }).format(nu);
 
 // Udsendelsens titel (højst 100 tegn, uden < og >, som YouTube kræver):
-// holdkampens hold, ellers navnene i scoreboardet, ellers klubben og banen
-function ytTitel({ grund, bane, hold = null, navne = null, klubnavn = null, nu = Date.now() }) {
+// holdkampens hold, ellers klubben og banen. Spillernes navne kommer ikke i
+// titlen (nr. 12A): en kamp startet fra tabletten er ofte børn og unge, og
+// titlen er det, YouTube og søgemaskiner viser og finder videoen på — også når
+// den er gammel. Navnene står stadig i scoreboardet i billedet og på /live.
+function ytTitel({ grund, bane, hold = null, klubnavn = null, nu = Date.now() }) {
     const ren = (s) => tekst(s, 100).replace(/[<>]/g, '');
-    const hvor = `bane ${bane}, ${datoTekst(nu)}`;
     let titel;
-    if (grund === 'holdkamp' && hold && hold[0] && hold[1]) titel = `${ren(hold[0])} – ${ren(hold[1])} (${hvor})`;
-    else if (grund !== 'hele-dagen' && navne && navne[0] && navne[1]) titel = `${ren(navne[0])} – ${ren(navne[1])} (${hvor})`;
+    if (grund === 'holdkamp' && hold && hold[0] && hold[1]) titel = `${ren(hold[0])} – ${ren(hold[1])} (bane ${bane}, ${datoTekst(nu)})`;
     else titel = `${klubnavn ? `${ren(klubnavn)} – ` : ''}Bane ${bane} (${datoTekst(nu)})`;
     return titel.length > 100 ? titel.slice(0, 99) + '…' : titel;
 }
