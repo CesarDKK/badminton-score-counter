@@ -139,7 +139,7 @@ async function ytStyr(req, f, bane, o, b, { senderNu, tvingTjek, vagt = null }) 
             await ytHuskUdsendelse(req, bane, id, titel);
             // Første tjek efter et minut: gik den live, da billedet kom?
             await query(`UPDATE court_streams SET yt_broadcast_id = ?, yt_broadcast_start = UTC_TIMESTAMP(), yt_broadcast_tjek = ?, yt_fejl = NULL, yt_fejl_tid = NULL
-                          WHERE court_number = ?`, [id, new Date(Date.now() - ls.YT_TJEK_MS + 60 * 1000), bane]);
+                          WHERE court_number = ?`, [id, ls.ytTjekOm(ls.YT_FOERSTE_TJEK_MS), bane]);
             console.log(`[livestream] ${tenantKey(req)} bane ${bane}: YouTube-udsendelse oprettet "${titel}" (${id})`);
         } else if (handling === 'tjek') {
             const status = await youtube.udsendelsesStatus(token, o.yt_broadcast_id);
@@ -149,11 +149,15 @@ async function ytStyr(req, f, bane, o, b, { senderNu, tvingTjek, vagt = null }) 
                 console.log(`[livestream] ${tenantKey(req)} bane ${bane}: YouTube-udsendelsen er ${status || 'væk'} — opretter en ny`);
             } else {
                 // Billedet kommer, men udsendelsen er ikke gået live af sig selv
+                let nu = status;
                 if (status === 'ready' && senderNu) {
                     await youtube.gaaLive(token, o.yt_broadcast_id);
+                    nu = 'live';
                     console.log(`[livestream] ${tenantKey(req)} bane ${bane}: YouTube-udsendelsen sat live`);
                 }
-                await query('UPDATE court_streams SET yt_broadcast_tjek = UTC_TIMESTAMP(), yt_fejl = NULL, yt_fejl_tid = NULL WHERE court_number = ?', [bane]);
+                // Venter den stadig på at gå live, tjekkes den igen om 30 s (nr. 38)
+                await query('UPDATE court_streams SET yt_broadcast_tjek = ?, yt_fejl = NULL, yt_fejl_tid = NULL WHERE court_number = ?',
+                    [ls.ytNaesteTjek(nu, o.yt_broadcast_start), bane]);
             }
         } else if (handling === 'afslut') {
             const hvad = await youtube.afslut(token, o.yt_broadcast_id);
@@ -1052,7 +1056,7 @@ router.post('/pc', async (req, res, next) => {
             // banen begynder at sende, og den afsluttes, når banen holder op
             const ytKilde = ytBrugbar(yt) && opsaetning && (b.send || opsaetning.yt_broadcast_id)
                 ? await ytStyr(req, yt, bane, opsaetning, b, {
-                    senderNu: !!(foer && foer.sender && pc.sender && Date.now() - foer.senderSiden > 60 * 1000),
+                    senderNu: !!(foer && foer.sender && pc.sender && Date.now() - foer.senderSiden >= 60 * 1000),
                     tvingTjek: !!(pc.sender && foer && !foer.sender) })
                 : null;
             const kilde = ytKilde ||

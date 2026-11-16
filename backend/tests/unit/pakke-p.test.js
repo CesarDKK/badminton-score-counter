@@ -431,3 +431,190 @@ test('4: synken og 409-håndteringen går gennem haandterTomBane, og gemning ven
     const gem = udsnit(kilde, 'async function performSave() {', 'isSaving = true;');
     assert.match(gem, /if \(fortsaetDialogVises\(\)\) \{ pendingSave = false; return; \}/);
 });
+
+// ======================= Livestream: POST /pc og ytStyr med en falsk YouTube =======================
+// Én PC på bane 3, der spørger, som Badman TV gør (hvert par sekunder), og en
+// falsk YouTube, der husker kaldene. Uret er falsk (Date.now), og databasen
+// husker banens court_streams-række, så forløbet kan følges over minutter.
+
+process.env.YOUTUBE_DIREKTE = '1';   // YouTube-delen kører i direct mode i testen
+const ls = require('../../screens/livestream');
+const youtube = require('../../config/youtube');
+const youtubeKvote = require('../../config/youtubeKvote');
+const { krypter } = require('../../config/hemmelig');
+const livestream = require('../../routes/livestream');
+
+const SEK = 1000;
+const MIN = 60 * SEK;
+const NU = 1_800_000_000_000;   // 2027-01-15 kl. 09:00 dansk tid
+
+// Falsk YouTube
+let yt;
+function nyYoutube(status = 'ready') {
+    yt = { status, kald: [], nr: 0, fejl: {} };
+}
+const ytFejl = (grund, status = 403) => new youtube.YoutubeFejl(`YouTube: ${grund}`, { status, grund });
+youtube.konfigureret = () => true;
+youtube.adgangsToken = async () => 'token';
+youtube.opretStream = async () => {
+    yt.kald.push('opretStream');
+    if (yt.fejl.opretStream) throw yt.fejl.opretStream;
+    return { id: 's1', url: 'rtmp://a.rtmp.youtube.com/live2', noegle: 'yt-noegle' };
+};
+youtube.opretUdsendelse = async () => {
+    yt.kald.push('opretUdsendelse');
+    if (yt.fejl.opretUdsendelse) throw yt.fejl.opretUdsendelse;
+    yt.nr += 1;
+    return `b${yt.nr}`;
+};
+youtube.udsendelsesStatus = async (token, id) => {
+    yt.kald.push(`status:${id}`);
+    if (yt.fejl.status) throw yt.fejl.status;
+    return yt.status;
+};
+youtube.gaaLive = async (token, id) => {
+    yt.kald.push(`gaaLive:${id}`);
+    if (yt.fejl.gaaLive) throw yt.fejl.gaaLive;
+    yt.status = 'live';
+};
+youtube.afslut = async (token, id) => { yt.kald.push(`afslut:${id}`); return 'afsluttet'; };
+
+// Falsk ur
+const aegteNu = Date.now;
+let klokke = NU;
+const medUr = (fn) => async () => {
+    Date.now = () => klokke;
+    try { await fn(); } finally { Date.now = aegteNu; }
+};
+
+// UPDATE court_streams SET a = ?, b = UTC_TIMESTAMP(), c = NULL WHERE … → rækken
+function anvendSet(sql, params, raekke) {
+    const set = sql.slice(sql.indexOf('SET') + 3, sql.lastIndexOf('WHERE'));
+    let i = 0;
+    for (const del of set.split(',')) {
+        const m = /^\s*(\w+)\s*=\s*([\s\S]+?)\s*$/.exec(del);
+        if (!m) continue;
+        const [, kol, v] = m;
+        if (v === '?') raekke[kol] = params[i++];
+        else if (/UTC_TIMESTAMP\(\)|NOW\(\)/.test(v)) raekke[kol] = new Date(Date.now());
+        else if (v === 'NULL') raekke[kol] = null;
+    }
+}
+
+// Banens verden: court_streams-rækken (hele dagen, så banen skal sende) og
+// klubbens forbundne YouTube-kanal
+function lsVerden(cs = {}, { kanal = true } = {}) {
+    const v = {
+        cs: {
+            court_number: 3, enabled: 1, stream_key: null, stream_url: null, overlay: 0, logo: null,
+            yt_stream_id: null, yt_ingest_url: null, yt_stream_key: null,
+            yt_broadcast_id: null, yt_broadcast_start: null, yt_broadcast_tjek: null, yt_fejl: null, yt_fejl_tid: null,
+            all_day_until: new Date(NU + 12 * 60 * MIN), armed_until: null, manual_since: null, holdkamp_stop_until: null,
+            ...cs
+        }
+    };
+    nulstil(async (sql, params) => {
+        if (/FROM device_tokens WHERE token = \?/.test(sql)) {
+            return [{ id: 9, camera_court: 3, camera_manual: 1, camera_device: null, destination: 'tv/3', token_type: 'permanent' }];
+        }
+        if (/FROM livestream_youtube/.test(sql)) return kanal ? [{ id: 1, refresh_token: krypter('r'), fejl: null, kanal_navn: 'Klubben' }] : [];
+        if (/FROM courts WHERE court_number/.test(sql)) return [{ id: 33, is_doubles: 0 }];
+        if (/FROM court_streams WHERE court_number/.test(sql)) return [{ ...v.cs }];
+        if (/^\s*UPDATE court_streams SET/.test(sql)) { anvendSet(sql, params, v.cs); return { affectedRows: 1 }; }
+        if (/^\s*(UPDATE|INSERT|DELETE)/.test(sql)) return { affectedRows: 1 };
+        return [];
+    });
+    ls._nulstilStatus();
+    livestream._ytPauseTil.clear();
+    youtubeKvote.nulstil({ gem: false });
+    return v;
+}
+
+// PC'en spørger: sender den allerede?
+async function pcSpoerger(sender) {
+    const req = {
+        accessMode: 'direct', headers: {}, socket: { remoteAddress: '10.0.0.3' },
+        get: (h) => (h.toLowerCase() === 'x-adgangslink' ? 'pc-token-bane3' : undefined),
+        body: { navn: 'tv3', kamera: 'C920', sender }
+    };
+    return (await koer(rute(livestream, 'post', '/pc'), req)).krop;
+}
+
+// PC'en spørger hvert 5. sekund fra nu til nu + ms (sender hele tiden)
+async function sendI(ms, trin = 5 * SEK) {
+    const slut = klokke + ms;
+    while (klokke < slut) {
+        klokke += trin;
+        await pcSpoerger(true);
+    }
+}
+const tidFor = (re) => yt.tider.filter(([, k]) => re.test(k)).map(([t]) => t);
+
+// Husk, hvornår hvert YouTube-kald skete
+function medTider() {
+    yt.tider = [];
+    const push = yt.kald.push.bind(yt.kald);
+    yt.kald.push = (k) => { yt.tider.push([klokke, k]); return push(k); };
+}
+
+// ======================= Nr. 38: første tjek efter et minut =======================
+
+test('38: opret → (ca. 1 min billede) → tjek + gaaLive → (5 min) → tjek', medUr(async () => {
+    klokke = NU;
+    lsVerden();
+    nyYoutube('ready');      // YouTube går ikke live af sig selv (enableAutoStart svigtede)
+    medTider();
+
+    // PC'en er klar, men sender ikke: nøgle og udsendelse oprettes, nøglen sendes
+    const r = await pcSpoerger(false);
+    assert.equal(r.send, true);
+    assert.equal(r.noegle, 'yt-noegle');
+    assert.deepEqual(yt.kald.slice(), ['opretStream', 'opretUdsendelse']);
+    const billede = klokke + 5 * SEK;   // PC'en melder "sender" ved næste forespørgsel
+
+    await sendI(7 * MIN);
+    const live = tidFor(/^gaaLive:b1$/);
+    assert.equal(live.length, 1, 'sat live én gang');
+    const efterBillede = live[0] - billede;
+    assert.ok(efterBillede >= 60 * SEK && efterBillede <= 70 * SEK,
+        `sat live ca. et minut efter billedet kom (${efterBillede / SEK} s) — før gik der over 5 minutter`);
+
+    // Bagefter: næste tjek først efter 5 minutter
+    const tjek = tidFor(/^status:b1$/);
+    const efterLive = tjek.filter(t => t > live[0]);
+    assert.ok(efterLive.length >= 1, 'tjekket igen');
+    assert.ok(efterLive[0] - live[0] >= 5 * MIN && efterLive[0] - live[0] <= 5 * MIN + 5 * SEK,
+        `næste tjek efter 5 min (${(efterLive[0] - live[0]) / SEK} s)`);
+    // Ventetiden kostede få kald: tjek hvert halve minut, kun indtil den var live
+    assert.ok(tjek.filter(t => t <= live[0]).length <= 4, `få tjek før live (${tjek.filter(t => t <= live[0]).length})`);
+    assert.equal(yt.kald.filter(k => k === 'opretUdsendelse').length, 1);
+}));
+
+test('38: går udsendelsen live af sig selv, sættes den ikke live, og der tjekkes hvert 5. minut', medUr(async () => {
+    klokke = NU;
+    lsVerden();
+    nyYoutube('live');
+    medTider();
+    await pcSpoerger(false);
+    await sendI(11 * MIN);
+    assert.equal(tidFor(/^gaaLive/).length, 0);
+    const tjek = tidFor(/^status:b1$/);
+    // Det tvungne tjek, da billedet kom, og derefter hvert 5. minut
+    assert.equal(tjek.length, 3, `tjek: ${tjek.map(t => (t - NU) / SEK).join(', ')} s`);
+    assert.ok(tjek[1] - tjek[0] >= 5 * MIN && tjek[2] - tjek[1] >= 5 * MIN);
+}));
+
+test('38: ytNaesteTjek — 30 s, mens den venter de første 5 minutter, ellers 5 minutter', () => {
+    const start = NU - 2 * MIN;
+    const om = (status, s) => ls.ytNaesteTjek(status, s, NU).getTime() - (NU - ls.YT_TJEK_MS);
+    assert.equal(om('ready', start), 30 * SEK);
+    assert.equal(om('testing', start), 30 * SEK);
+    assert.equal(om('live', start), 5 * MIN);
+    assert.equal(om('ready', NU - 6 * MIN), 5 * MIN, 'går den aldrig live, tjekkes der ikke hvert halve minut hele dagen');
+    assert.equal(om('ready', null), 5 * MIN);
+    assert.equal(ls.ytTjekOm(ls.YT_FOERSTE_TJEK_MS, NU).getTime(), NU - ls.YT_TJEK_MS + MIN);
+    // ytHandling giver 'tjek', præcis når tiden er gået
+    const tjek = ls.ytNaesteTjek('ready', start, NU);
+    assert.equal(ls.ytHandling({ send: true, udsendelse: 'b1', tjek, nu: NU + 29 * SEK }), null);
+    assert.equal(ls.ytHandling({ send: true, udsendelse: 'b1', tjek, nu: NU + 30 * SEK }), 'tjek');
+});

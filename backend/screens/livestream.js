@@ -738,6 +738,29 @@ function liveBaner(status, udsendelser, { video = false } = {}) {
 // startet på tabletten. Routes (routes/livestream.js) gør det, ytHandling siger.
 
 const YT_TJEK_MS = 5 * 60 * 1000;        // udsendelsen tjekkes så tit, mens der sendes (afsluttet i Studio?)
+// Mens udsendelsen venter på at gå live, tjekkes den så tit (nr. 38) — men kun
+// de første YT_TJEK_MS efter oprettelsen, så en udsendelse, der aldrig går
+// live, ikke koster et kald hvert halve minut hele dagen
+const YT_LIVE_TJEK_MS = 30 * 1000;
+const YT_FOERSTE_TJEK_MS = 60 * 1000;    // første tjek efter oprettelsen: gik den live, da billedet kom?
+
+// Værdien til court_streams.yt_broadcast_tjek, så ytHandling giver 'tjek' om
+// omMs (den tjekker igen YT_TJEK_MS efter værdien).
+function ytTjekOm(omMs, nu = Date.now()) {
+    return new Date(nu - YT_TJEK_MS + omMs);
+}
+
+// Hvornår udsendelsen tjekkes næste gang, efter et tjek, der så status (nr. 38).
+// Før blev det altid om 5 minutter: PC'en melder "sender" få sekunder efter
+// oprettelsen, og det tvungne tjek dér (endnu ikke 60 s billede, så ikke
+// gaaLive) flyttede det planlagte tjek efter et minut 5 minutter frem — og
+// gik udsendelsen ikke live af sig selv, manglede kampens første minutter.
+// live: om 5 minutter. Ellers om 30 sekunder, de første 5 minutter efter start.
+function ytNaesteTjek(status, start, nu = Date.now()) {
+    const s = tid(start);
+    const venter = status !== 'live' && s !== null && nu - s < YT_TJEK_MS;
+    return ytTjekOm(venter ? YT_LIVE_TJEK_MS : YT_TJEK_MS, nu);
+}
 const YT_FEJL_PAUSE_MS = 2 * 60 * 1000;  // efter en fejl hos YouTube prøves der igen efter så længe
 // Fejl, der ikke går over af sig selv på to minutter: kanalen har ikke
 // livestreaming slået til (tager op til 24 timer første gang), er spærret, eller
@@ -835,7 +858,7 @@ function _nulstilStatus() {
 }
 
 module.exports = {
-    STANDARD_URL, EFTER_MS, STILLE_MS, KLAR_MS, YT_TJEK_MS, YT_FEJL_PAUSE_MS, YT_PC_TAVS_MS, YT_MAKS_MS, ytVagtGrund,
+    STANDARD_URL, EFTER_MS, STILLE_MS, KLAR_MS, YT_TJEK_MS, YT_LIVE_TJEK_MS, YT_FOERSTE_TJEK_MS, ytTjekOm, ytNaesteTjek, YT_FEJL_PAUSE_MS, YT_PC_TAVS_MS, YT_MAKS_MS, ytVagtGrund,
     ytHandling, ytIPause, ytFejlPauseMs, YT_VARIG_PAUSE_MS, YT_KVOTE_PAUSE_MS, ytTitel, ytBeskrivelse,
     YT_KENDETEGN, YT_SYNLIG_DAGE, YT_SYNLIG_MAKS, erAppensUdsendelse, ytSynligFejlStopper, ytSynligHandling,
     gyldigUrl, gyldigNoegle, rensOpsaetning, noegleSlut,
