@@ -390,6 +390,7 @@ let gameState = {
 let saveTimeout = null;
 let isSaving = false;
 let pendingSave = false;
+let _fortsaetSpoerges = false;   // "Fortsæt kampen?" står fremme (rest af nr. 4, se haandterTomBane)
 // Tidspunkt for seneste egen gemning — bruges til at ignorere SSE-events
 // udløst af vores egne skrivninger (se handleCourtEvent)
 let lastOwnSaveAt = 0;
@@ -680,13 +681,25 @@ async function opdaterLivestreamKnap() {
     // startet (så det kan stoppes)
     btn.style.display = l && l.kan && !l.planner && (l.kameraKlar || l.start) ? 'block' : 'none';
     if (!l) return;
-    btn.classList.toggle('menu-item--live', !!(l.start || l.holdkamp));
-    btn.textContent =
-        l.start === 'hele-dagen' ? '● Livestream kører hele dagen'
-        : l.start === 'valgt' ? '● Stop livestream'
+    const k = livestreamKnapTekst(l);
+    btn.classList.toggle('menu-item--live', k.live);
+    btn.textContent = k.tekst;
+}
+
+// Knappens tekst, og om den viser "live" (●). Med klubbens YouTube-kanal
+// forbundet (l.youtube) kun, når YouTube selv viser udsendelsen (nr. 40) —
+// før det "starter". Uden kanal (egen nøgle) som før: startet = live.
+function livestreamKnapTekst(l) {
+    const sendes = l.start === 'hele-dagen' || l.start === 'valgt' || (!l.start && l.holdkamp);
+    const starter = !!sendes && l.youtube === 'starter';
+    const live = !!(l.start || l.holdkamp) && !starter;
+    const tekst =
+        l.start === 'hele-dagen' ? (starter ? 'Livestream starter (hele dagen) …' : '● Livestream kører hele dagen')
+        : l.start === 'valgt' ? (starter ? 'Livestream starter … — stop' : '● Stop livestream')
         : l.start === 'klar' ? 'Livestream venter på kampen — fortryd'
-        : l.holdkamp ? '● Livestream: holdkampen sendes'
+        : l.holdkamp ? (starter ? 'Livestream: holdkampen starter …' : '● Livestream: holdkampen sendes')
         : 'Start livestream';
+    return { tekst, live };
 }
 
 // Bekræftelsen før "Start livestream" (nr. 12B): videoen bliver liggende på
@@ -1920,6 +1933,14 @@ function buildSavePayload() {
 
 async function performSave() {
     if (serMed) { pendingSave = false; return; }
+    // "Fortsæt kampen?" står fremme: banen er tom på serveren, og intet gemmes,
+    // før der er svaret (Fortsæt gemmer selv hele kampen)
+    if (_fortsaetSpoerges) {
+        if (fortsaetDialogVises()) { pendingSave = false; return; }
+        // En anden meddelelse har taget dialogens plads: gem igen, og få
+        // spørgsmålet frem på ny (409 → handleSaveConflict → haandterTomBane)
+        _fortsaetSpoerges = false;
+    }
     if (isSaving) {
         // Already saving, will retry
         pendingSave = true;
@@ -2017,6 +2038,21 @@ function handleAuthExpired(body) {
 // slettet — banen er nulstillet (admin: Ryd bane) — og vores gemning droppes.
 // Ellers adopteres serverens version + navne og gemningen prøves igen:
 // tælleren er autoritativ for point/serve under spil, admin for navne.
+// navneEfterKonflikt: serverens navne lagt til rette efter tablettens sider.
+// Spillerobjekterne byttes ved sideskift (reglernes skiftSider), og
+// sidesSwapped følger med. Står serveren med en anden orientering end
+// tabletten (tabletten har byttet side, men gemningen er ikke nået frem),
+// byttes serverens navne om, før de bruges.
+function navneEfterKonflikt(lokal, server) {
+    if (!server || !server.player1 || !server.player2) return null;
+    const byttet = !!server.sidesSwapped !== !!lokal.sidesSwapped;
+    const [s1, s2] = byttet ? [server.player2, server.player1] : [server.player1, server.player2];
+    return {
+        player1: { name: s1.name || lokal.player1.name, name2: s1.name2 || lokal.player1.name2 },
+        player2: { name: s2.name || lokal.player2.name, name2: s2.name2 || lokal.player2.name2 }
+    };
+}
+
 async function handleSaveConflict(conflict) {
     if (conflict && conflict.state && serverErVidereEfterPause(conflict.state)) {
         // Ikke gem igen — vores gemning ville overskrive den andens point
@@ -2027,7 +2063,7 @@ async function handleSaveConflict(conflict) {
         console.warn('Save-konflikt: banen er nulstillet af en anden enhed');
         try {
             const fresh = await api.getGameState(courtId);
-            await adoptServerReset(fresh);
+            await haandterTomBane(fresh);
         } catch (e) {
             console.error('Kunne ikke hente frisk tilstand efter reset-konflikt:', e);
             gameState.version = 0;
@@ -2039,23 +2075,108 @@ async function handleSaveConflict(conflict) {
     console.warn('Save-konflikt: adopterer serverversion', conflict.version, 'og prøver igen');
     gameState.version = conflict.version || server.version || 0;
 
-    // Navne adopteres kun når de ikke styres af en holdkamp/turnering og
-    // siderne ikke er byttet lokalt — samme regler som periodic sync
-    const sidesSwitched = gameState.sidesManuallySwitched ||
-        gameState.player1.games > 0 || gameState.player2.games > 0;
-    if (!assignedHoldkampGameId && !assignedTournamentMatchId && !sidesSwitched) {
-        if (server.player1) {
-            gameState.player1.name = server.player1.name || gameState.player1.name;
-            gameState.player1.name2 = server.player1.name2 || gameState.player1.name2;
-        }
-        if (server.player2) {
-            gameState.player2.name = server.player2.name || gameState.player2.name;
-            gameState.player2.name2 = server.player2.name2 || gameState.player2.name2;
-        }
+    // Navne adopteres kun når de ikke styres af en holdkamp/turnering — samme
+    // regel som periodic sync. Før blev de heller ikke adopteret, når siderne
+    // var byttet (dvs. fra andet sæt): så skrev genforsøget tablettens gamle
+    // navne oven i admins navnerettelse (nr. 89). Nu vendes serverens navne
+    // efter dens egen side-orientering, før de adopteres.
+    const navne = !assignedHoldkampGameId && !assignedTournamentMatchId
+        ? navneEfterKonflikt(gameState, server) : null;
+    if (navne) {
+        Object.assign(gameState.player1, navne.player1);
+        Object.assign(gameState.player2, navne.player2);
         updateDisplay();
     }
 
     pendingSave = true; // finally-blokken i performSave genkører gemningen
+}
+
+// ---- Rest af nr. 4: en kamp, serveren har frigivet efter inaktivitet ----
+// Scheduleren frigiver en bane, hvor kampen har stået stille i 20 minutter
+// (tablet uden net, ur under opvarmning, lang skadespause), men gemmer den først
+// (frigivne_kampe). Kommer tabletten tilbage med kampen i gang, spørges der,
+// i stedet for at begynde forfra eller skrive kampen tilbage uden at spørge.
+// (_fortsaetSpoerges er erklæret ved isSaving/pendingSave)
+
+// Er den frigivne kamp tablettens egen? Talt af den selv, eller samme spillere
+// (sorteret: siderne kan være byttet)
+function erFrigivetKampHer(lokal, frigivet) {
+    if (!frigivet || !lokal || !lokal.matchStartTime || lokal.matchCompleted) return false;
+    if (frigivet.taeller && typeof TAELLER_ID === 'string' && frigivet.taeller.kort === TAELLER_ID.slice(0, 8)) return true;
+    const navne = (a, b) => [a.name, a.name2, b.name, b.name2].map(n => n || '').sort().join('|');
+    return !!(frigivet.player1 && frigivet.player2) &&
+        navne(frigivet.player1, frigivet.player2) === navne(lokal.player1, lokal.player2);
+}
+
+function fortsaetKampTekst(st) {
+    const hold = (p) => (st.isDoubles && p.name2 ? `${p.name} / ${p.name2}` : p.name);
+    const saet = (st.player1.games || st.player2.games) ? `\nSæt: ${st.player1.games}–${st.player2.games}` : '';
+    return `Banen blev frigivet, fordi der ikke var nogen aktivitet i lang tid. Kampen her på tabletten står:\n\n` +
+        `${hold(st.player1)}  ${st.player1.score} – ${st.player2.score}  ${hold(st.player2)}${saet}\n\n` +
+        `Vil I fortsætte kampen?`;
+}
+
+// Banen er tom på serveren, mens tabletten har en kamp. Returnerer true, når
+// der spørges (eller allerede spørges) — så venter kalderen på svaret.
+function fortsaetDialogVises() {
+    const overlay = document.getElementById('messageOverlay');
+    const titel = document.getElementById('messageTitle');
+    return !!(overlay && titel && overlay.style.display !== 'none' && titel.textContent === 'Fortsæt kampen?');
+}
+
+async function haandterTomBane(loaded) {
+    if (_fortsaetSpoerges && fortsaetDialogVises()) return true;
+    _fortsaetSpoerges = false;
+    if (!serMed && !isMatchSessionToken() && loaded && erFrigivetKampHer(gameState, loaded.frigivetKamp)) {
+        _fortsaetSpoerges = true;
+        if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
+        pendingSave = false;
+        showMessage('Fortsæt kampen?', fortsaetKampTekst(gameState), [
+            { text: 'Fortsæt kampen', style: 'primary', callback: () => fortsaetFrigivetKamp() },
+            { text: 'Ny kamp', style: 'secondary', callback: async () => {
+                _fortsaetSpoerges = false;
+                await adoptServerReset(await api.getGameState(courtId).catch(() => loaded));
+            } }
+        ], { spaerMs: 800 });
+        return true;
+    }
+    await adoptServerReset(loaded);
+    return false;
+}
+
+// "Fortsæt kampen": tablettens kamp gemmes igen som en ny række (version 0),
+// med den oprindelige starttid. Er en anden enhed gået i gang på banen
+// imellem (409), følges den — dens kamp overskrives ikke.
+async function fortsaetFrigivetKamp() {
+    // Som en almindelig gemning (isSaving): synken ser banen som tom, indtil
+    // svaret er her, og må ikke nulstille kampen imens (ownSaveRacing)
+    isSaving = true;
+    gameState.version = 0;
+    const payload = buildSavePayload();
+    payload.expectedVersion = 0;
+    payload.matchStartTime = new Date(gameState.matchStartTime).toISOString();
+    try {
+        const svar = await api.updateGameState(courtId, payload);
+        if (svar && typeof svar.version === 'number') gameState.version = svar.version;
+        lastOwnSaveAt = Date.now();
+        setSyncStatus(true);
+    } catch (e) {
+        if (e && (e.status === 409 || e.status === 423) && e.body && e.body.state) {
+            applyLoadedState(e.body.state);
+            updateDisplay();
+            showMessage('Banen er i brug', 'En anden enhed er gået i gang på banen i mellemtiden. Tabletten viser nu banens kamp.');
+        } else {
+            // Ingen forbindelse: den almindelige gemning prøver igen (som en ny
+            // række, version 0 — starttiden bliver så serverens nu)
+            console.error('Kunne ikke fortsætte kampen:', e);
+            setSyncStatus(false);
+            setTimeout(performSave, 5000);
+        }
+    } finally {
+        _fortsaetSpoerges = false;
+        isSaving = false;
+        if (pendingSave) setTimeout(performSave, 100);
+    }
 }
 
 // Banen er nulstillet på serveren (admin: Ryd bane / Nulstil) — adopter den
@@ -3146,9 +3267,9 @@ async function serverSyncTick(reason) {
             // !ownSaveRacing(): en GET besvaret før vores første point blev gemt,
             // ligner ellers en nulstilling, og pointet faldt tilbage til 0-0
             if (wasReset && gameState.matchStartTime && !ownSaveRacing()) {
-                // Court was reset from admin while we had an active match
-                console.log('Court was reset from admin, resetting local state');
-                await adoptServerReset(loaded);
+                // Banen er tom, mens vi har en kamp i gang: nulstillet fra admin,
+                // eller frigivet efter inaktivitet (så spørges "Fortsæt kampen?")
+                if (await haandterTomBane(loaded)) return;
                 if (isMatchSessionToken()) return;
             } else if (!ownSaveRacing() && (loaded.version || 0) !== gameState.version &&
                        serverErVidereEfterPause(loaded)) {

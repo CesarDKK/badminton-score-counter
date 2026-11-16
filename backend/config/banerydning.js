@@ -1,5 +1,6 @@
 const { query, queryOne } = require('./database');
 const { publishGameStateChange } = require('../events/gameStateEvents');
+const { glemFrigivetKamp } = require('./frigivneKampe');
 const { invalidateCourtTokens } = require('../routes/matchSessionTokens');
 
 /**
@@ -68,6 +69,7 @@ async function rydAfsluttetBane(courtNumber, req, skalVaere = null) {
 
     await gemSidsteAfsluttedeKamp(court.id, existing);
     await query('DELETE FROM game_states WHERE court_id = ?', [court.id]);
+    await glemFrigivetKamp(court.id);   // ryddet med vilje (rest af nr. 4)
     await query('UPDATE courts SET is_active = FALSE, is_doubles = FALSE WHERE id = ?', [court.id]);
 
     try { await invalidateCourtTokens(courtNumber); } catch (e) { console.error('Token invalidation failed:', e); }

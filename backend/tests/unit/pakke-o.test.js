@@ -127,7 +127,8 @@ test('12B: showMessage spærrer knapperne med spaerMs; tabletStatus giver synlig
     assert.equal(ls.tabletStatus({ opsaetning: ops, kamera: true, youtube: true, ytSynlighed: 'unlisted' }).synlighed, 'unlisted');
     assert.equal(ls.tabletStatus({ opsaetning: ops, kamera: true, youtube: false, ytSynlighed: 'unlisted' }).synlighed, null);
     assert.equal(ls.tabletStatus({ opsaetning: ops, kamera: true, youtube: true, ytSynlighed: 'noget' }).synlighed, null);
-    assert.match(laes('frontend/court-v3.html'), /court-script-v3\.js\?v=69/);
+    // Mindst v69 (pakke O) — senere pakker hæver den
+    assert.ok(Number(/court-script-v3\.js\?v=(\d+)/.exec(laes('frontend/court-v3.html'))[1]) >= 69);
 });
 
 // ======================= 12C: "kun med linket" efter 60 dage =======================

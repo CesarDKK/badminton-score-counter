@@ -204,7 +204,7 @@ test('tabletten: knappen kun når banen er sat op med nøgle og kamera', () => {
     assert.deepEqual(ls.tabletStatus({ opsaetning: { ...OPS, armed_until: new Date(NU + MIN) }, kamera: true,
         pc: { online: true, sender: false, kamera: 'Lenovo 500' }, efterMin: 5, nu: NU }),
         { kan: true, start: 'klar', til: new Date(NU + MIN).toISOString(), holdkamp: false, planner: false, sender: false,
-          kameraKlar: true, efterMin: 5, synlighed: null });
+          kameraKlar: true, efterMin: 5, synlighed: null, youtube: null });
     // PC'en finder intet kamera, er slukket eller har ikke meldt sig: tabletten skjuler knappen
     assert.equal(ls.tabletStatus({ opsaetning: OPS, kamera: true, pc: { online: true, kamera: null }, nu: NU }).kameraKlar, false);
     assert.equal(ls.tabletStatus({ opsaetning: OPS, kamera: true, pc: { online: false, kamera: 'x' }, nu: NU }).kameraKlar, false);
@@ -524,8 +524,8 @@ test('live-siden: kun baner, der sender, med scoreboard og udsendelse', () => {
     };
     const udsendelser = new Map([[1, null], [2, 'abcDEF12345'], [3, 'xyz12345678']]);
     assert.deepEqual(ls.liveBaner(status, udsendelser, { video: true }), [
-        { bane: 1, kamp: null, video: null },
-        { bane: 2, kamp: tavle, video: { id: 'abcDEF12345', url: 'https://www.youtube.com/watch?v=abcDEF12345' } }
+        { bane: 1, kamp: null, video: null, live: true },
+        { bane: 2, kamp: tavle, video: { id: 'abcDEF12345', url: 'https://www.youtube.com/watch?v=abcDEF12345' }, live: true }
     ]);
     // Kanalen ikke forbundet, eller udsendelserne er private: ingen video
     assert.equal(ls.liveBaner(status, udsendelser).find(b => b.bane === 2).video, null);

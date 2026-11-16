@@ -2037,6 +2037,51 @@ async function medBaneBekraeftelse(kald) {
     }
 }
 
+// Banens tilstand for en delkamp, der netop er sat på banen: navnene og en ny
+// kamp fra 0-0 — og intet andet. Før blev hele den læste tilstand sendt med
+// tilbage (inkl. forrige kamps sidebytte og golden set) uden versionstjek, så en
+// tablet, der var gået i gang imellem læsning og gemning, fik sine point
+// overskrevet. Nu medsendes versionen fra læsningen (409 i stedet) — nr. 89.
+function delkampPaaBaneKrop(game, teamMatch, currentState) {
+    const krop = {
+        player1: {
+            name: game.team1_player1 || `${teamMatch.team1_name} spiller`,
+            name2: game.team1_player2 || '',
+            score: 0, games: 0
+        },
+        player2: {
+            name: game.team2_player1 || `${teamMatch.team2_name} spiller`,
+            name2: game.team2_player2 || '',
+            score: 0, games: 0
+        },
+        isActive: true,
+        isDoubles: DOUBLES_CATEGORIES.includes(game.category),
+        setsToWin: HoldkampFormater.saetForSejr(game.category),
+        matchStartTime: null,
+        matchEndTime: null,
+        matchCompleted: false,
+        timerSeconds: 0,
+        servingPlayer: null,
+        initialServer: null,
+        servingTeam: null,
+        servingPlayerOnTeam: null,
+        setScoresHistory: [],
+        restBreakActive: false,
+        restBreakSecondsLeft: 0,
+        restBreakTitle: '',
+        restBreakTaken: false,
+        decidingGameSwitched: false,
+        sidesManuallySwitched: false,
+        sidesSwapped: false,
+        team1RightCourt: 1,
+        team2RightCourt: 1,
+        betweenSets: false,
+        expectedVersion: (currentState && typeof currentState.version === 'number') ? currentState.version : 0
+    };
+    if (currentState && currentState.gameMode) krop.gameMode = currentState.gameMode;
+    return krop;
+}
+
 async function assignCourtToGame(teamMatchId, gameId) {
     const select = document.getElementById(`courtSelect_${gameId}`);
     const courtNumber = parseInt(select?.value);
@@ -2058,42 +2103,16 @@ async function assignCourtToGame(teamMatchId, gameId) {
         const teamMatch = (teamMatches || []).find(tm => tm.id === teamMatchId);
         const game = teamMatch?.games?.find(g => g.id === gameId);
         if (game) {
-            const isDoubles = DOUBLES_CATEGORIES.includes(game.category);
             const currentState = await api.getGameState(courtNumber);
-            await api.updateGameState(courtNumber, {
-                ...(currentState || {}),
-                player1: {
-                    name: game.team1_player1 || `${teamMatch.team1_name} spiller`,
-                    name2: game.team1_player2 || '',
-                    score: 0, games: 0
-                },
-                player2: {
-                    name: game.team2_player1 || `${teamMatch.team2_name} spiller`,
-                    name2: game.team2_player2 || '',
-                    score: 0, games: 0
-                },
-                isActive: true,
-                isDoubles,
-                matchStartTime: null,
-                matchEndTime: null,
-                matchCompleted: false,
-                timerSeconds: 0,
-                servingPlayer: null,
-                initialServer: null,
-                servingTeam: null,
-                servingPlayerOnTeam: null,
-                setScoresHistory: [],
-                restBreakActive: false,
-                restBreakSecondsLeft: 0,
-                restBreakTitle: '',
-                restBreakTaken: false,
-                decidingGameSwitched: false,
-                team1RightCourt: 1,
-                team2RightCourt: 1,
-                betweenSets: false,
-                gameMode: currentState?.gameMode || '21',
-                isActive: true
-            });
+            try {
+                await api.updateGameState(courtNumber, delkampPaaBaneKrop(game, teamMatch, currentState));
+            } catch (e) {
+                // 409: tabletten har skrevet på banen siden læsningen (typisk fordi
+                // den allerede har hentet delkampen og er gået i gang) — så er
+                // banen dens, og den nye kamp må ikke nulstilles oven i pointene (nr. 89)
+                if (e.status !== 409) throw e;
+                console.warn('Banen er ændret siden læsningen — delkampens navne skrives ikke');
+            }
         }
 
         await loadActiveHoldkamp();

@@ -13,6 +13,7 @@ const { hentPlannerVisning, plannerForBane, gemPlannerResultat, kampIGang } = re
 const { validerIndtastning, vundneSaet } = require('../config/kampResultat');
 const { varighedTekst } = require('../config/matchTiming');
 const { gemSidsteAfsluttedeKamp } = require('../config/banerydning');
+const { glemFrigivetKamp } = require('../config/frigivneKampe');
 // Kun én tæller ad gangen pr. bane (se taeller/ejerskab.js og migration 031)
 const ejerskab = require('../taeller/ejerskab');
 // Afgjorte holdkamp-/turneringskampe meldes ind af serveren
@@ -157,6 +158,33 @@ async function saetTaeller(req, courtPk, row, id, hint, { bumpVersion = false } 
 }
 
 // Henter og auto-udløber snapshot for en bane. Returnerer null hvis intet/udløbet.
+// En kamp, scheduleren har frigivet efter inaktivitet (migration 051, rest af
+// nr. 4) — vises kun på en tom bane, så en tablet, der kommer tilbage med
+// kampen i gang, kan spørge "Fortsæt kampen?". Kun det, tabletten skal bruge
+// til at genkende kampen og vise den.
+async function hentFrigivetKamp(court) {
+    try {
+        const r = await queryOne(
+            `SELECT data, frigivet_at FROM frigivne_kampe
+              WHERE court_id = ? AND frigivet_at > NOW() - INTERVAL 24 HOUR`,
+            [court.id]
+        );
+        if (!r) return null;
+        const raekke = typeof r.data === 'string' ? JSON.parse(r.data) : r.data;
+        const s = formatStateRow(raekke, court);
+        return {
+            frigivetAt: r.frigivet_at,
+            player1: s.player1,
+            player2: s.player2,
+            setScoresHistory: s.setScoresHistory,
+            matchStartTime: s.matchStartTime,
+            taeller: s.taeller ? { kort: s.taeller.kort } : null
+        };
+    } catch (e) {
+        return null;   // før migration 051, eller en ulæselig række: banen er bare tom
+    }
+}
+
 async function fetchFinishedSnapshot(courtPk) {
     const snap = await queryOne(
         `SELECT player1_name, player1_name2, player2_name, player2_name2,
@@ -371,7 +399,9 @@ router.get('/:courtId', async (req, res, next) => {
         if (!gameState) {
             // Return default state if no game state exists, men evt. med snapshot
             const lastFinishedMatch = await fetchFinishedSnapshot(court.id);
+            const frigivetKamp = await hentFrigivetKamp(court);
             return res.json({
+                ...(frigivetKamp ? { frigivetKamp } : {}),
                 player1: { name: 'Spiller 1', name2: 'Makker 1', score: 0, games: 0 },
                 player2: { name: 'Spiller 2', name2: 'Makker 2', score: 0, games: 0 },
                 timerSeconds: 0,
@@ -714,6 +744,9 @@ async function gemTilstand(req, courtId, body, { skipAutoActive = false, tryk = 
             }
             throw error;
         }
+        // Banen har en ny række (ny kamp, "Fortsæt kampen", en tildeling): en
+        // tidligere frigivet kamp må ikke tilbydes igen (rest af nr. 4)
+        await glemFrigivetKamp(court.id);
     }
 
     // Et indtastet resultat hører kun til en afsluttet kamp — fortrydes den,
@@ -1052,6 +1085,8 @@ router.delete('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), q
 
         // Delete game state
         await query('DELETE FROM game_states WHERE court_id = ?', [court.id]);
+        // Banen er ryddet med vilje: en frigivet kamp skal ikke tilbydes igen
+        await glemFrigivetKamp(court.id);
 
         // Set court to inactive and reset doubles mode
         await query('UPDATE courts SET is_active = FALSE, is_doubles = FALSE WHERE id = ?', [court.id]);
@@ -1103,6 +1138,7 @@ router.delete('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), q
 module.exports = router;
 module.exports.gemTilstand = gemTilstand;
 module.exports.formatStateRow = formatStateRow;
+module.exports.hentFrigivetKamp = hentFrigivetKamp;
 
 module.exports.pauseSekunderTilbage = pauseSekunderTilbage;
 module.exports.pauseStartetVed = pauseStartetVed;
