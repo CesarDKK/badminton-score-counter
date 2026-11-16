@@ -341,7 +341,7 @@
     }
 
     .upload-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);   /* ikke bredere end skærmen (nr. 50) */
         gap: 20px;
     }
 
@@ -726,4 +726,16 @@
         font-size: 0.9em;
         padding: 8px;
     }
+}
+
+/* Touch-skærme har ingen hover: Vis/Slet ligger fast i bunden af billedet,
+   så de kan nås med en finger (nr. 50). Mus/skrivebord er uændret. */
+@media (hover: none) {
+    .gallery-overlay {
+        opacity: 1;
+        top: auto;
+        padding: 10px;
+        background: linear-gradient(transparent, rgba(0, 0, 0, 0.75));
+    }
+    .gallery-overlay .btn-danger { margin-left: 8px; }
 }

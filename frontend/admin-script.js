@@ -1,5 +1,74 @@
 ﻿// Admin JavaScript
 const api = window.BadmintonAPI;
+
+// ── Pollerne: pause i en skjult fane og "Ingen forbindelse" (nr. 49) ──
+// Én fælles mekanisme for alle admins pollere (baneoversigt, holdkamp, kø,
+// turnering, skærmstatus, livestream):
+//  - synligInterval(fn, ms) er setInterval, der springer over, mens fanen er
+//    skjult, og kalder fn med det samme, når fanen ses igen. stopInterval stopper.
+//  - Forbindelse: api.request pakkes ind her (kun på admin-siden; api.js er
+//    urørt). Efter 2 fejlede kald i træk — netværk, timeout eller 5xx, og api.js
+//    har allerede prøvet hvert kald 3 gange — vises "Ingen forbindelse — viser
+//    tal fra kl. HH:MM" øverst. Det første vellykkede svar fjerner den.
+//    401/403 (login udløbet) håndteres som før af api.js og tæller ikke; andre
+//    4xx betyder, at serveren svarer.
+const synligeIntervaller = new Map();   // interval-id → fn
+function synligInterval(fn, ms) {
+    const id = setInterval(() => { if (!document.hidden) fn(); }, ms);
+    synligeIntervaller.set(id, fn);
+    return id;
+}
+function stopInterval(id) {
+    if (!id) return;
+    clearInterval(id);
+    synligeIntervaller.delete(id);
+}
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    for (const fn of new Set(synligeIntervaller.values())) {
+        try { fn(); } catch (e) { console.error('Opdatering ved synlig fane fejlede:', e); }
+    }
+});
+
+const Forbindelse = (() => {
+    const GRAENSE = 2;
+    let fejlITraek = 0;
+    let sidstOk = null;
+    const kl = (d) => d.toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
+    function maerke() { return document.getElementById('forbindelseMaerke'); }
+    function ok() {
+        fejlITraek = 0;
+        sidstOk = new Date();
+        const el = maerke();
+        if (el && !el.hidden) el.hidden = true;
+    }
+    function fejl(err) {
+        const status = err && err.status;
+        if (status === 401 || status === 403) return;   // login — som før
+        if (status && status < 500) { ok(); return; }   // serveren svarede
+        if (++fejlITraek < GRAENSE) return;
+        const el = maerke();
+        if (!el) return;
+        el.textContent = sidstOk
+            ? `Ingen forbindelse — viser tal fra kl. ${kl(sidstOk)}`
+            : 'Ingen forbindelse — prøver igen …';
+        el.hidden = false;
+    }
+    return { ok, fejl, GRAENSE };
+})();
+{
+    const _request = api.request.bind(api);
+    api.request = async function (...args) {
+        try {
+            const svar = await _request(...args);
+            Forbindelse.ok();
+            return svar;
+        } catch (err) {
+            Forbindelse.fejl(err);
+            throw err;
+        }
+    };
+}
 let refreshInterval = null;
 let liveUpdatesHandle = null; // SSE-forbindelse til live game-state opdateringer
 let _overviewCourtCount = null; // cachet courtCount til baneoversigten (nulstilles ved 'settings'-event)
@@ -114,6 +183,9 @@ function setupEventListeners() {
     document.getElementById('matchSearchInput').addEventListener('input', handleMatchSearch);
     document.getElementById('courtFilterSelect').addEventListener('change', handleCourtFilter);
     document.getElementById('deleteAllMatchHistoryBtn').addEventListener('click', deleteAllMatchHistory);
+    // Eksport til Excel — én knap pr. historik-fane (nr. 48)
+    document.querySelectorAll('[data-eksport]').forEach(knap =>
+        knap.addEventListener('click', () => eksporterHistorik(knap.dataset.eksport, knap)));
 
     // Edit Court Modal
     const modal = document.getElementById('editCourtModal');
@@ -249,10 +321,10 @@ async function showDashboard() {
 
 function startAutoRefresh() {
     // Kaldes igen ved retur til baneoversigten — start ikke to pollere
-    if (refreshInterval) clearInterval(refreshInterval);
+    stopInterval(refreshInterval);
     loadCourtOverview();
     // Reduced from 1000ms to 2500ms to decrease server load (saves 60% API calls)
-    refreshInterval = setInterval(loadCourtOverview, 2500);
+    refreshInterval = synligInterval(loadCourtOverview, 2500);
 
     // SSE-poke: opdater med det samme naar en bane aendrer sig i stedet for
     // at vente paa naeste poll. Pollingen beholdes uaendret som sikkerhedsnet.
@@ -278,7 +350,7 @@ function startAutoRefresh() {
 // Saml hurtige events til een opdatering (fx naar flere baner gemmer samtidig)
 let _overviewRefreshTimer = null;
 function scheduleOverviewRefresh() {
-    if (_overviewRefreshTimer) return;
+    if (_overviewRefreshTimer || document.hidden) return;   // skjult fane: hentes, når den ses igen
     _overviewRefreshTimer = setTimeout(() => {
         _overviewRefreshTimer = null;
         loadCourtOverview();
@@ -287,7 +359,7 @@ function scheduleOverviewRefresh() {
 
 function stopAutoRefresh() {
     if (refreshInterval) {
-        clearInterval(refreshInterval);
+        stopInterval(refreshInterval);
         refreshInterval = null;
     }
     if (timerUpdateInterval) {
@@ -739,17 +811,22 @@ async function tildelTurneringskampBane(tournamentId, matchId) {
 }
 
 // ---- Manuelt resultat for en turneringskamp (baner uden tæller) ----
-const turneringResultatAaben = new Set();      // kamp-id'er med formularen åben
-const turneringResultatKladde = new Map();     // kamp-id → { saet: [[a,b] x3], vinder, wo } — overlever genoptegningen
+// kamp-id → hvor formularen er åben: 'turnering' (Turnering-siden) eller
+// 'historik' (Kamphistorik → Turnering). Kun ét sted ad gangen, så felternes
+// id'er aldrig findes to gange i siden.
+const turneringResultatAaben = new Map();
+const turneringResultatKladde = new Map();     // kamp-id → { saet: [[a,b] x3], vinder, wo, foerTid } — overlever genoptegningen
 
 const turneringHold = (a, b) => [a, b].filter(Boolean).join(' / ');
+const AFSLUTTET_FOER_TID = ' (afsluttet før tid)';
 
 // Eksisterende resultat som udgangspunkt (Ret resultat)
 function turneringResultatFraKamp(m) {
     const wo = m.set_scores === 'W.O.';
+    const foerTid = !wo && String(m.set_scores || '').endsWith(AFSLUTTET_FOER_TID);
     const tal = wo ? [] : orientHistorySetScoreNumbers(m.set_scores, turneringHold(m.side1_player1, m.side1_player2));
     const saet = [0, 1, 2].map(i => (tal[i] ? tal[i].split('-') : ['', '']));
-    return { saet, vinder: m.winner_team === 1 || m.winner_team === 2 ? m.winner_team : null, wo };
+    return { saet, vinder: m.winner_team === 1 || m.winner_team === 2 ? m.winner_team : null, wo, foerTid };
 }
 
 function laesTurneringResultat(id) {
@@ -759,21 +836,33 @@ function laesTurneringResultat(id) {
     return {
         saet: [1, 2, 3].map(s => [vaerdi(`trS${s}a_${id}`), vaerdi(`trS${s}b_${id}`)]),
         vinder: vinder ? Number(vinder.value) : null,
-        wo: form?.dataset.wo === 'true'
+        wo: form?.dataset.wo === 'true',
+        foerTid: form?.dataset.foerTid === 'true'
     };
 }
 
-function toggleTurneringResultat(id) {
-    if (turneringResultatAaben.has(id)) {
+function toggleTurneringResultat(id, hvor = 'turnering') {
+    if (turneringResultatAaben.get(id) === hvor) {
         turneringResultatAaben.delete(id);
         turneringResultatKladde.delete(id);
     } else {
-        turneringResultatAaben.add(id);
+        turneringResultatAaben.set(id, hvor);
     }
-    renderTournaments(sidsteTurneringer);
+    if (hvor === 'historik') visTurneringHistorik();
+    else renderTournaments(sidsteTurneringer);
 }
 
-function renderTurneringResultatForm(tournamentId, m) {
+// Kampen fra Turnering-siden eller fra historikken (også afsluttede turneringer)
+function findTurneringskamp(tournamentId, matchId) {
+    for (const liste of [sidsteTurneringer, sidsteTurneringHistorik]) {
+        const t = (liste || []).find(x => x.id === tournamentId);
+        const m = t && (t.matches || []).find(x => x.id === matchId);
+        if (m) return m;
+    }
+    return null;
+}
+
+function renderTurneringResultatForm(tournamentId, m, hvor = 'turnering') {
     const k = turneringResultatKladde.get(m.id) || turneringResultatFraKamp(m);
     const side = n => escapeHtml(n === 1 ? turneringSide(m, 1) : turneringSide(m, 2));
     const felt = (s, i) => `<input id="trS${s}${i ? 'b' : 'a'}_${m.id}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2"
@@ -782,7 +871,7 @@ function renderTurneringResultatForm(tournamentId, m) {
     const paaBane = m.status === 'active' && m.court_number != null
         ? `<div class="formular-boks__note">Kampen står på bane ${m.court_number}. Når resultatet gemmes, ryddes banen.</div>` : '';
     return `
-        <div data-turnering-resultat="${m.id}" data-wo="${k.wo}" class="formular-boks formular-boks--advarsel">
+        <div data-turnering-resultat="${m.id}" data-wo="${k.wo}" data-foer-tid="${!!k.foerTid}" class="formular-boks formular-boks--advarsel">
             <div class="formular-boks__titel">${m.status === 'finished' ? 'Ret resultat' : 'Indtast resultat'}</div>
             <div class="formular-boks__afsnit">
                 <div class="formular-boks__etiket">Sætscore (${side(1)} – ${side(2)})</div>
@@ -793,7 +882,7 @@ function renderTurneringResultatForm(tournamentId, m) {
                         <div class="saet-par">${felt(s, 0)}<span class="tekst-daempet" style="font-size:1.2em;">–</span>${felt(s, 1)}</div>
                     </div>`).join('')}
                 </div>
-                <div class="formular-boks__note">* Sæt 3 kun hvis nødvendigt</div>
+                <div class="formular-boks__note">* Sæt 3 kun hvis nødvendigt. "Før tid": kampen blev stoppet (fx skade) — kun sidste sæt må være uafsluttet, og vinderen er den, du vælger.</div>
             </div>
             <div class="formular-boks__afsnit">
                 <div class="formular-boks__etiket">Vinder</div>
@@ -801,12 +890,13 @@ function renderTurneringResultatForm(tournamentId, m) {
                     <label class="vinder-valg vinder-valg--1"><input type="radio" name="trVinder_${m.id}" value="1" ${k.vinder === 1 ? 'checked' : ''}> ${side(1)}</label>
                     <label class="vinder-valg vinder-valg--2"><input type="radio" name="trVinder_${m.id}" value="2" ${k.vinder === 2 ? 'checked' : ''}> ${side(2)}</label>
                     <button id="trWO_${m.id}" onclick="toggleTurneringWO(${m.id})" class="btn-secondary btn-sm${k.wo ? ' er-valgt' : ''}">W.O.</button>
+                    <button id="trFoerTid_${m.id}" onclick="toggleTurneringFoerTid(${m.id})" class="btn-secondary btn-sm${k.foerTid ? ' er-valgt' : ''}">Før tid</button>
                 </div>
             </div>
             ${paaBane}
             <div class="formular-boks__knapper">
                 <button onclick="gemTurneringResultat(${tournamentId}, ${m.id})" class="btn-primary btn-sm">Gem resultat</button>
-                <button onclick="toggleTurneringResultat(${m.id})" class="btn-secondary btn-sm">Annuller</button>
+                <button onclick="toggleTurneringResultat(${m.id}, '${hvor}')" class="btn-secondary btn-sm">Annuller</button>
             </div>
         </div>`;
 }
@@ -817,6 +907,24 @@ function toggleTurneringWO(id) {
     const wo = form.dataset.wo !== 'true';
     form.dataset.wo = String(wo);
     document.getElementById(`trWO_${id}`)?.classList.toggle('er-valgt', wo);
+    if (wo) {
+        form.dataset.foerTid = 'false';
+        document.getElementById(`trFoerTid_${id}`)?.classList.remove('er-valgt');
+    }
+}
+
+// "Før tid": kampen blev stoppet (skade, opgivet) — sidste sæt må være
+// uafsluttet, og vinderen vælges frit (nr. 48). Udelukker W.O.
+function toggleTurneringFoerTid(id) {
+    const form = document.querySelector(`[data-turnering-resultat="${id}"]`);
+    if (!form) return;
+    const til = form.dataset.foerTid !== 'true';
+    form.dataset.foerTid = String(til);
+    document.getElementById(`trFoerTid_${id}`)?.classList.toggle('er-valgt', til);
+    if (til) {
+        form.dataset.wo = 'false';
+        document.getElementById(`trWO_${id}`)?.classList.remove('er-valgt');
+    }
 }
 
 // Sættenes vinder: den højeste score (pointreglerne er forskellige fra række
@@ -839,10 +947,10 @@ function turneringResultatVinder(id) {
 }
 
 async function gemTurneringResultat(tournamentId, matchId) {
-    const t = sidsteTurneringer.find(x => x.id === tournamentId);
-    const m = t && (t.matches || []).find(x => x.id === matchId);
+    const m = findTurneringskamp(tournamentId, matchId);
     if (!m) return;
-    const { saet, vinder, wo } = laesTurneringResultat(matchId);
+    const hvor = turneringResultatAaben.get(matchId) || 'turnering';
+    const { saet, vinder, wo, foerTid } = laesTurneringResultat(matchId);
     if (!vinder) { showMessage('Mangler vinder', 'Vælg hvem der vandt kampen.'); return; }
 
     let setScores = 'W.O.';
@@ -851,16 +959,30 @@ async function gemTurneringResultat(tournamentId, matchId) {
         if (saet.some(([a, b]) => (a === '') !== (b === ''))) {
             showMessage('Mangler score', 'Udfyld begge felter i hvert sæt, der er spillet.'); return;
         }
-        if (udfyldt.length < 2) { showMessage('Mangler sætscore', 'Udfyld sæt 1 og 2 — eller vælg W.O.'); return; }
-        if (udfyldt.some(s => !turneringSaetVinder(s))) { showMessage('Ugyldig score', 'Et sæt kan ikke ende uafgjort.'); return; }
-        const vundne = [1, 2].map(v => udfyldt.filter(s => turneringSaetVinder(s) === v).length);
-        if (udfyldt.length === 2 && vundne[0] === 1) { showMessage('Mangler sætscore', 'Sæt 3 skal udfyldes, når det står 1-1 i sæt.'); return; }
-        if (vundne[vinder - 1] < vundne[2 - vinder]) {
-            showMessage('Vinderen passer ikke', 'Den valgte vinder har vundet færrest sæt. Ret vinderen eller sætscoren.'); return;
+        // Sættene skal stå i rækkefølge (et tomt sæt 2 før et udfyldt sæt 3 giver ikke mening)
+        const sidsteUdfyldte = saet.reduce((n, [a], i) => (a !== '' ? i + 1 : n), 0);
+        if (udfyldt.length !== sidsteUdfyldte) { showMessage('Mangler sætscore', 'Udfyld sættene i rækkefølge.'); return; }
+        if (foerTid) {
+            // Stoppet før tid: mindst ét sæt; alle sæt før det sidste skal være afgjort
+            if (!udfyldt.length) { showMessage('Mangler sætscore', 'Udfyld mindst det sæt, kampen blev stoppet i.'); return; }
+            if (udfyldt.slice(0, -1).some(s => !turneringSaetVinder(s))) {
+                showMessage('Ugyldig score', 'Kun sidste sæt må være uafgjort eller uafsluttet.'); return;
+            }
+            const vundneFoer = [1, 2].map(v => udfyldt.slice(0, -1).filter(s => turneringSaetVinder(s) === v).length);
+            if (Math.max(...vundneFoer) >= 2) { showMessage('Ugyldig score', 'Kampen var allerede afgjort før sidste sæt — slå "Før tid" fra.'); return; }
+        } else {
+            if (udfyldt.length < 2) { showMessage('Mangler sætscore', 'Udfyld sæt 1 og 2 — eller vælg W.O. eller "Før tid".'); return; }
+            if (udfyldt.some(s => !turneringSaetVinder(s))) { showMessage('Ugyldig score', 'Et sæt kan ikke ende uafgjort.'); return; }
+            const vundne = [1, 2].map(v => udfyldt.filter(s => turneringSaetVinder(s) === v).length);
+            if (udfyldt.length === 2 && vundne[0] === 1) { showMessage('Mangler sætscore', 'Sæt 3 skal udfyldes, når det står 1-1 i sæt.'); return; }
+            if (vundne[vinder - 1] < vundne[2 - vinder]) {
+                showMessage('Vinderen passer ikke', 'Den valgte vinder har vundet færrest sæt. Ret vinderen eller sætscoren.'); return;
+            }
         }
         const s1 = turneringHold(m.side1_player1, m.side1_player2) || 'Side 1';
         const s2 = turneringHold(m.side2_player1, m.side2_player2) || 'Side 2';
-        setScores = udfyldt.map(([a, b]) => `${s1} ${Number(a)}-${Number(b)} ${s2}`).join(', ');
+        setScores = udfyldt.map(([a, b]) => `${s1} ${Number(a)}-${Number(b)} ${s2}`).join(', ')
+            + (foerTid ? AFSLUTTET_FOER_TID : '');
     }
 
     // Kampen står på en bane: banen ryddes — admin bekræfter først
@@ -889,6 +1011,7 @@ async function gemTurneringResultat(tournamentId, matchId) {
     turneringResultatAaben.delete(matchId);
     turneringResultatKladde.delete(matchId);
     await loadActiveTournaments();
+    if (hvor === 'historik') await loadTournamentMatchHistory();
 }
 
 // Søgningen skal stå samlet i række, spillere eller turnering ("u11 c hs",
@@ -1238,6 +1361,11 @@ async function loadActiveHistoryTab() {
     }
 }
 
+// Turneringerne i historik-fanen (aktive + afsluttede) — "Ret resultat" slår op her
+let sidsteTurneringHistorik = [];
+// Turneringer, hvis kampliste er foldet ud (overlever genoptegningen)
+const turneringHistorikUdfoldet = new Set();
+
 async function loadTournamentMatchHistory() {
     const container = document.getElementById('tournamentMatchHistoryContainer');
     if (!container) return;
@@ -1249,9 +1377,27 @@ async function loadTournamentMatchHistory() {
             api.getActiveTournaments(),
             api.getTournamentHistory()
         ]);
-        const combined = [...(active || []), ...(history || [])];
+        sidsteTurneringHistorik = [...(active || []), ...(history || [])];
+        visTurneringHistorik();
+    } catch (error) {
+        console.error('Failed to load tournament history:', error);
+        container.innerHTML = '<p class="tekst-fare">Kunne ikke indlæse turneringshistorik.</p>';
+    }
+}
+
+function toggleTurneringHistorikGruppe(id) {
+    if (turneringHistorikUdfoldet.has(id)) turneringHistorikUdfoldet.delete(id);
+    else turneringHistorikUdfoldet.add(id);
+    visTurneringHistorik();
+}
+
+function visTurneringHistorik() {
+    const container = document.getElementById('tournamentMatchHistoryContainer');
+    if (!container) return;
+    captureTournamentDrafts();
+    try {
         // Kun turneringer der har mindst én afsluttet kamp
-        const tournaments = combined.filter(t => (t.matches || []).some(m => m.status === 'finished'));
+        const tournaments = sidsteTurneringHistorik.filter(t => (t.matches || []).some(m => m.status === 'finished'));
 
         if (tournaments.length === 0) {
             container.innerHTML = '<p class="tom-tekst">Ingen afsluttede turneringskampe endnu.</p>';
@@ -1287,7 +1433,8 @@ async function loadTournamentMatchHistory() {
                 const side1Key = m.doubles && m.side1_player2
                     ? `${m.side1_player1 || ''} / ${m.side1_player2}`
                     : (m.side1_player1 || '');
-                const scoreNums = m.set_scores === 'W.O.' ? 'W.O.' : orientHistorySetScoreNumbers(m.set_scores, side1Key).join(' · ');
+                const foerTid = String(m.set_scores || '').endsWith(AFSLUTTET_FOER_TID) ? ' · før tid' : '';
+                const scoreNums = m.set_scores === 'W.O.' ? 'W.O.' : orientHistorySetScoreNumbers(m.set_scores, side1Key).join(' · ') + foerTid;
                 const scores = scoreNums ? `<span class="tekst-daempet tekst-lille luft-venstre">${scoreNums}</span>` : '';
                 const resultHtml = `<span class="resultat" style="color:${winnerColor};">✓ ${escapeHtml(winnerLabel)}</span>${scores}`;
                 const varighed = varighedFra(m.started_at, m.finished_at);
@@ -1297,16 +1444,24 @@ async function loadTournamentMatchHistory() {
                     ? `<span class="maerke maerke--kategori">${escapeHtml(m.label)}</span>`
                     : `<span class="maerke maerke--neutral">#${m.match_order}</span>`;
 
+                // Ret resultatet (nr. 48) — også i en afsluttet turnering. TS-synken
+                // rører aldrig en afsluttet kamp, så rettelsen bliver stående.
+                const aaben = turneringResultatAaben.get(m.id) === 'historik';
+                const retBtn = `<button onclick="toggleTurneringResultat(${m.id}, 'historik')" class="btn-secondary btn-sm historik-raekke__knap${aaben ? ' er-valgt' : ''}">Ret resultat</button>`;
                 return `<div class="historik-raekke" style="border-left-color:${winnerColor};">
                     ${labelBadge}
                     <span class="kamp-raekke__navne tekst-mindre">${escapeHtml(side1)} <span class="tekst-daempet">vs</span> ${escapeHtml(side2)}</span>
                     ${resultHtml}
                     ${varighedHtml}
-                </div>`;
+                    ${retBtn}
+                </div>
+                ${aaben ? renderTurneringResultatForm(t.id, m, 'historik') : ''}`;
             }).join('');
 
+            // Aktive turneringer er foldet ud fra start; ellers som brugeren satte dem
+            const udfoldet = turneringHistorikUdfoldet.has(t.id) !== (t.status === 'active');
             return `<div class="historik-gruppe">
-                <div class="historik-gruppe__hoved" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                <div class="historik-gruppe__hoved" onclick="toggleTurneringHistorikGruppe(${t.id})">
                     <div class="historik-gruppe__titel-linje">
                         <span class="historik-gruppe__titel">${escapeHtml(t.name)}${statusBadge}</span>
                         <span class="tekst-daempet tekst-mindre">${playedCount}/${totalCount} kampe spillet</span>
@@ -1314,7 +1469,7 @@ async function loadTournamentMatchHistory() {
                     </div>
                     <span class="tekst-daempet tekst-mindre">▼ Se kampe</span>
                 </div>
-                <div class="historik-gruppe__indhold" style="display:${t.status === 'active' ? 'block' : 'none'};">
+                <div class="historik-gruppe__indhold" style="display:${udfoldet ? 'block' : 'none'};">
                     ${matchRows}
                 </div>
             </div>`;
@@ -1324,8 +1479,8 @@ async function loadTournamentMatchHistory() {
             <h3 class="historik-overskrift">${Ikon('pokal')} Turneringer (${tournaments.length})</h3>
             ${cards}`;
     } catch (error) {
-        console.error('Failed to load tournament history:', error);
-        container.innerHTML = '<p class="tekst-fare">Kunne ikke indlæse turneringshistorik.</p>';
+        console.error('Failed to render tournament history:', error);
+        container.innerHTML = '<p class="tekst-fare">Kunne ikke vise turneringshistorik.</p>';
     }
 }
 
@@ -1509,7 +1664,7 @@ async function showHoldkamp() {
     bpStartWatcherRefresh();
     // Poll every 3 seconds for live scores
     if (!holdkampRefreshTimer) {
-        holdkampRefreshTimer = setInterval(loadActiveHoldkamp, 3000);
+        holdkampRefreshTimer = synligInterval(loadActiveHoldkamp, 3000);
     }
 }
 
@@ -1517,14 +1672,14 @@ async function showHoldkamp() {
 // holdkamp at vise — køen med ventende kampe kører videre for sig.
 function stopHoldkampPoll() {
     if (holdkampRefreshTimer) {
-        clearInterval(holdkampRefreshTimer);
+        stopInterval(holdkampRefreshTimer);
         holdkampRefreshTimer = null;
     }
 }
 
 function startHoldkampPoll() {
     if (!holdkampRefreshTimer) {
-        holdkampRefreshTimer = setInterval(loadActiveHoldkamp, 3000);
+        holdkampRefreshTimer = synligInterval(loadActiveHoldkamp, 3000);
     }
 }
 
@@ -1569,7 +1724,7 @@ async function loadActiveHoldkamp() {
 
         // Polling may have been stopped when there was no active match; restart it.
         if (!holdkampRefreshTimer) {
-            holdkampRefreshTimer = setInterval(loadActiveHoldkamp, 3000);
+            holdkampRefreshTimer = synligInterval(loadActiveHoldkamp, 3000);
         }
 
         // Don't re-render while an edit form is open eller mens en bane-dropdown
@@ -2912,9 +3067,203 @@ function createMatchCard(match, index) {
     }
 
     card.appendChild(mainInfo);
+
+    // Ret / slet netop denne kamp (nr. 48). Uden for mainInfo, så et tryk ikke
+    // også folder sætdetaljerne ud.
+    if (match.id != null) {
+        const handlinger = document.createElement('div');
+        handlinger.className = 'knap-raekke historik-handlinger';
+        handlinger.innerHTML = `
+            <button type="button" class="btn-secondary btn-sm" data-handling="ret">${historikRetId === match.id ? 'Luk' : 'Ret resultat'}</button>
+            <button type="button" class="btn-danger btn-sm knap-raekke__fare" data-handling="slet">Slet</button>`;
+        handlinger.querySelector('[data-handling="ret"]').addEventListener('click', () => toggleHistorikRet(match.id));
+        handlinger.querySelector('[data-handling="slet"]').addEventListener('click', () => sletHistorikKamp(match.id));
+        card.appendChild(handlinger);
+        if (historikRetId === match.id) {
+            const form = document.createElement('div');
+            form.innerHTML = renderHistorikRetForm(match);
+            card.appendChild(form.firstElementChild);
+        }
+    }
+
     card.appendChild(details);
 
     return card;
+}
+
+// ---- Ret eller slet én kamp i kamphistorikken (nr. 48) ----
+// Reglerne (15/21, 2 vundne sæt, kun sidste sæt afbrudt, walkover) håndhæves
+// af serveren med tællerens egen validering (config/kampResultat.js); her
+// vises bare, hvad serveren siger.
+let historikRetId = null;   // id på kampen, hvis formular er åben (kun én ad gangen)
+
+function toggleHistorikRet(id) {
+    historikRetId = historikRetId === id ? null : id;
+    displayFilteredMatches();
+}
+
+// 21-format, hvis et sæt gik over 21 eller blev vundet ved 21 med mere end 2 i forspring
+function gaetPointformat(saet) {
+    for (const [a, b] of saet) {
+        const hoj = Math.max(a, b), lav = Math.min(a, b);
+        if (hoj > 21 || (hoj === 21 && lav <= 19)) return '21';
+    }
+    return '15';
+}
+
+function renderHistorikRetForm(match) {
+    const wo = match.games_won === 'W.O.';
+    // Sættene set fra vinderen (side 1 i formularen = den nuværende vinder)
+    const tal = wo ? [] : orientHistorySetScoreNumbers(match.set_scores, match.winner_name)
+        .map(t => t.split('-').map(Number));
+    const format = gaetPointformat(tal);
+    const felt = (s, i) => `<input id="hrS${s}${i ? 'b' : 'a'}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2"
+        placeholder="–" value="${tal[s - 1] ? tal[s - 1][i] : ''}" class="saet-felt saet-felt--${i + 1}"
+        oninput="this.value=this.value.replace(/[^0-9]/g,'')">`;
+    return `
+        <div class="formular-boks formular-boks--advarsel" data-historik-ret="${match.id}" data-wo="${wo}">
+            <div class="formular-boks__titel">Ret resultat</div>
+            <div class="formular-boks__gitter">
+                <label class="formular-felt"><span class="formular-boks__etiket">Side 1</span>
+                    <input id="hrNavn1" type="text" maxlength="100" value="${escapeHtml(match.winner_name || '')}"></label>
+                <label class="formular-felt"><span class="formular-boks__etiket">Side 2</span>
+                    <input id="hrNavn2" type="text" maxlength="100" value="${escapeHtml(match.loser_name || '')}"></label>
+            </div>
+            <div class="formular-boks__afsnit">
+                <div class="formular-boks__etiket">Sæt til</div>
+                <select id="hrFormat">
+                    <option value="15"${format === '15' ? ' selected' : ''}>15 point</option>
+                    <option value="21"${format === '21' ? ' selected' : ''}>21 point</option>
+                </select>
+            </div>
+            <div class="formular-boks__afsnit">
+                <div class="formular-boks__etiket">Sætscore (side 1 – side 2)</div>
+                <div class="saet-felter">
+                    ${[1, 2, 3].map(s => `
+                    <div class="saet-kolonne">
+                        <span class="tekst-daempet tekst-lille">Sæt ${s}</span>
+                        <div class="saet-par">${felt(s, 0)}<span class="tekst-daempet">–</span>${felt(s, 1)}</div>
+                    </div>`).join('')}
+                </div>
+                <div class="formular-boks__note">Kun sidste sæt må være uafsluttet — så gemmes kampen som "afsluttet før tid", og vinderen er den, du vælger.</div>
+            </div>
+            <div class="formular-boks__afsnit">
+                <div class="formular-boks__etiket">Vinder</div>
+                <div class="formular-boks__knapper">
+                    <label class="vinder-valg vinder-valg--1"><input type="radio" name="hrVinder" value="1" checked> Side 1</label>
+                    <label class="vinder-valg vinder-valg--2"><input type="radio" name="hrVinder" value="2"> Side 2</label>
+                    <button type="button" id="hrWO" onclick="toggleHistorikWO()" class="btn-secondary btn-sm${wo ? ' er-valgt' : ''}">W.O.</button>
+                </div>
+            </div>
+            <div id="hrFejl" class="tekst-fare tekst-lille" role="alert"></div>
+            <div class="formular-boks__knapper">
+                <button type="button" onclick="gemHistorikRet(${match.id})" class="btn-primary btn-sm">Gem resultat</button>
+                <button type="button" onclick="toggleHistorikRet(${match.id})" class="btn-secondary btn-sm">Annuller</button>
+            </div>
+        </div>`;
+}
+
+function toggleHistorikWO() {
+    const form = document.querySelector('[data-historik-ret]');
+    if (!form) return;
+    const wo = form.dataset.wo !== 'true';
+    form.dataset.wo = String(wo);
+    document.getElementById('hrWO')?.classList.toggle('er-valgt', wo);
+}
+
+async function gemHistorikRet(id) {
+    const form = document.querySelector(`[data-historik-ret="${id}"]`);
+    if (!form) return;
+    const fejl = document.getElementById('hrFejl');
+    const vis = (t) => { fejl.textContent = t; };
+    const v = (el) => (document.getElementById(el)?.value || '').trim();
+    const walkover = form.dataset.wo === 'true';
+    const saet = [1, 2, 3].map(s => [v(`hrS${s}a`), v(`hrS${s}b`)]);
+    if (!walkover && saet.some(([a, b]) => (a === '') !== (b === ''))) return vis('Udfyld begge felter i hvert sæt, der er spillet.');
+    const sidste = saet.reduce((n, [a], i) => (a !== '' ? i + 1 : n), 0);
+    const udfyldt = saet.slice(0, sidste);
+    if (!walkover && udfyldt.some(([a]) => a === '')) return vis('Udfyld sættene i rækkefølge.');
+    const body = {
+        side1: v('hrNavn1'), side2: v('hrNavn2'), gameMode: v('hrFormat'),
+        winner: Number(form.querySelector('input[name="hrVinder"]:checked')?.value),
+        walkover,
+        sets: walkover ? [] : udfyldt.map(([a, b]) => [Number(a), Number(b)])
+    };
+    try {
+        const svar = await api.request(`/match-history/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+        const i = allMatchesData.findIndex(m => m.id === id);
+        if (i >= 0 && svar && svar.match) allMatchesData[i] = svar.match;
+        historikRetId = null;
+        displayFilteredMatches();
+    } catch (error) {
+        if (error.status === 422 || error.status === 400) return vis(error.message);
+        if (error.status === 404) { historikRetId = null; await loadAllMatches(); return showMessage('Findes ikke', 'Kampen er slettet i mellemtiden.'); }
+        console.error('Rettelse af kamp fejlede:', error);
+        vis('Resultatet kunne ikke gemmes. Prøv igen.');
+    }
+}
+
+async function sletHistorikKamp(id) {
+    const m = allMatchesData.find(x => x.id === id);
+    if (!m) return;
+    const dato = formatHistoryDate(m.match_date);
+    const ok = await BadmintonUtils.confirmDialog('Slet kampen?',
+        `${m.winner_name} – ${m.loser_name} (${dato}) slettes fra kamphistorikken og statistikken. Det kan ikke fortrydes.`,
+        { danger: true, okText: 'Slet kampen' });
+    if (!ok) return;
+    try {
+        await api.request(`/match-history/${id}`, { method: 'DELETE' });
+    } catch (error) {
+        if (error.status !== 404) {
+            console.error('Sletning af kamp fejlede:', error);
+            return showMessage('Fejl', 'Kampen kunne ikke slettes. Prøv igen.');
+        }
+    }
+    allMatchesData = allMatchesData.filter(x => x.id !== id);
+    if (historikRetId === id) historikRetId = null;
+    displayFilteredMatches();
+}
+
+// ---- Eksport til Excel (nr. 48) ----
+// Serveren bygger CSV'en (UTF-8 med BOM, semikolon, dansk dato) med samme
+// adgangskrav som historikken; her hentes den med login og gemmes som fil.
+const EKSPORT_STIER = {
+    single: '/match-history/export.csv',
+    team: '/team-matches/export.csv',
+    tournament: '/tournaments/export.csv'
+};
+
+async function eksporterHistorik(type, knap) {
+    const sti = EKSPORT_STIER[type];
+    if (!sti) return;
+    const tekst = knap.textContent;
+    knap.disabled = true;
+    knap.textContent = 'Henter …';
+    try {
+        const svar = await fetch(API_BASE_URL + sti, { headers: api.token ? { Authorization: `Bearer ${api.token}` } : {} });
+        if (!svar.ok) {
+            const b = await svar.json().catch(() => ({}));
+            if (svar.status === 401 && b.sessionExpired) return api.sessionUdloebet();
+            if (svar.status === 401 && b.sessionEnded) return api.afslutSession(b.error);
+            return showMessage('Eksport', b.error || 'Eksporten kunne ikke hentes. Prøv igen.');
+        }
+        const blob = await svar.blob();
+        const navn = ((svar.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/) || [])[1] || 'kamphistorik.csv';
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = navn;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (error) {
+        console.error('Eksport fejlede:', error);
+        showMessage('Eksport', 'Eksporten kunne ikke hentes. Tjek forbindelsen og prøv igen.');
+    } finally {
+        knap.disabled = false;
+        knap.textContent = tekst;
+    }
 }
 
 function showMoreMatches() {
@@ -2937,6 +3286,7 @@ const hideMessage = window.BadmintonUtils.hideMessage;
 //             formatPlayerNames laver). Tomt -> ingen orientering, kun raw scores.
 function orientHistorySetScoreNumbers(rawSetScores, side1Key) {
     if (!rawSetScores) return [];
+    rawSetScores = String(rawSetScores).replace(/ \(afsluttet før tid\)$/, '');
 
     // Del et holdnavn op i medlemmer — court-siden gemmer doubles med " & ",
     // visningerne bygger side1Key med " / "; begge separatorer accepteres
@@ -3302,11 +3652,11 @@ let skaermStatusInterval = null;
 let skaermStatusTik = 0;
 
 function startSkaermStatusRefresh() {
-    if (skaermStatusInterval) clearInterval(skaermStatusInterval);
-    skaermStatusInterval = setInterval(async () => {
+    stopInterval(skaermStatusInterval);
+    skaermStatusInterval = synligInterval(async () => {
         // Stop af sig selv, når siden er skiftet væk fra Adgangslinks
         if (document.getElementById('deviceTokensSection').style.display === 'none') {
-            clearInterval(skaermStatusInterval);
+            stopInterval(skaermStatusInterval);
             skaermStatusInterval = null;
             return;
         }
@@ -3336,10 +3686,10 @@ async function showLivestream() {
     else if (ytSvar === 'afbrudt') livestreamYoutubeBesked('Afbrudt hos Google — intet er ændret', true);
     else if (ytSvar === 'fejl') livestreamYoutubeBesked(svar.get('besked') || 'Kanalen kunne ikke forbindes', true);
     // Statussen hvert 10. sekund — stopper af sig selv, når siden er skiftet væk
-    if (livestreamInterval) clearInterval(livestreamInterval);
-    livestreamInterval = setInterval(() => {
+    stopInterval(livestreamInterval);
+    livestreamInterval = synligInterval(() => {
         if (document.getElementById('livestreamSection').style.display === 'none') {
-            clearInterval(livestreamInterval);
+            stopInterval(livestreamInterval);
             livestreamInterval = null;
             return;
         }
@@ -5379,17 +5729,17 @@ async function bpStopWatcher(id) {
 function bpStartWatcherRefresh() {
     bpStopWatcherRefresh();
     bpLoadWatchers();
-    bpWatcherTimer = setInterval(() => {
+    bpWatcherTimer = synligInterval(() => {
         bpLoadWatchers();
         const logBoks = document.getElementById('bpVagtLogBoks');
         if (logBoks && logBoks.open) bpLoadVagtLog();
     }, 60000);
-    bpWatcherTick = setInterval(bpTikNedtaelling, 1000);
+    bpWatcherTick = synligInterval(bpTikNedtaelling, 1000);
 }
 
 function bpStopWatcherRefresh() {
-    if (bpWatcherTimer) { clearInterval(bpWatcherTimer); bpWatcherTimer = null; }
-    if (bpWatcherTick) { clearInterval(bpWatcherTick); bpWatcherTick = null; }
+    if (bpWatcherTimer) { stopInterval(bpWatcherTimer); bpWatcherTimer = null; }
+    if (bpWatcherTick) { stopInterval(bpWatcherTick); bpWatcherTick = null; }
 }
 
 function bpStatus(msg, type) {
@@ -5540,13 +5890,13 @@ async function showTournament() {
     history.replaceState(null, '', '#tournament');
     await loadActiveTournaments();
     if (!tournamentRefreshTimer) {
-        tournamentRefreshTimer = setInterval(loadActiveTournaments, 3000);
+        tournamentRefreshTimer = synligInterval(loadActiveTournaments, 3000);
     }
 }
 
 function stopTournamentRefresh() {
     if (tournamentRefreshTimer) {
-        clearInterval(tournamentRefreshTimer);
+        stopInterval(tournamentRefreshTimer);
         tournamentRefreshTimer = null;
     }
 }
@@ -6167,7 +6517,7 @@ function renderTournamentMatchRow(tournamentId, m, iGang = new Map()) {
         ? `<button onclick="confirmDeleteTournamentMatch(${tournamentId}, ${m.id})" class="btn-danger btn-sm">Slet</button>`
         : '';
     // Manuelt resultat — fx baner uden tæller, eller et forkert resultat fra banen
-    const resultatAaben = turneringResultatAaben.has(m.id);
+    const resultatAaben = turneringResultatAaben.get(m.id) === 'turnering';
     const resultatBtn = `<button onclick="toggleTurneringResultat(${m.id})" class="btn-secondary btn-sm${resultatAaben ? ' er-valgt' : ''}">${m.status === 'finished' ? 'Ret resultat' : 'Resultat'}</button>`;
 
     return `

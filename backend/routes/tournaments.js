@@ -407,6 +407,28 @@ router.get('/court/:courtNumber', async (req, res, next) => {
     }
 });
 
+// GET /api/tournaments/export.csv - alle afsluttede turneringskampe (også i
+// turneringer, der stadig er i gang — som historik-fanen) som CSV til Excel
+// (nr. 48). Samme adgang som historikken; hentes i bidder (config/historikEksport.js).
+router.get('/export.csv', authMiddleware, requirePage('history'), async (req, res, next) => {
+    const eksport = require('../config/historikEksport');
+    try {
+        await eksport.skrivCsv(res, eksport.filnavn('turneringskampe'), eksport.TURNERING_HOVED,
+            (efter, antal) => query(
+                `SELECT m.id, m.label, m.match_order, m.court_number, m.winner_team, m.set_scores,
+                        m.side1_player1, m.side1_player2, m.side2_player1, m.side2_player2,
+                        m.started_at, m.finished_at, t.name AS tournament_name
+                 FROM tournament_matches m JOIN tournaments t ON t.id = m.tournament_id
+                 WHERE m.status = 'finished' ${efter === null ? '' : 'AND m.id < ?'}
+                 ORDER BY m.id DESC LIMIT ${Number(antal)}`,
+                efter === null ? [] : [efter]),
+            eksport.turneringRaekke);
+    } catch (error) {
+        if (res.headersSent) { console.error('Eksport af turneringskampe fejlede:', error.message); return res.destroy(); }
+        next(error);
+    }
+});
+
 // GET /api/tournaments/history - afsluttede turneringer, nyeste først. Kun admin
 // (siden Kamphistorik) og højst 200 pr. side (?limit=, ?offset=) — nr. 88: før
 // uden login og uden loft. Oversigt og TV bruger /active.

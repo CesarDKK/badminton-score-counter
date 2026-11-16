@@ -7,6 +7,11 @@ const { requirePage } = require('../middleware/pagePermission');
 const { kunEgenBane } = require('../middleware/qrSession');
 const { varighedTekst } = require('../config/matchTiming');
 const { historikFelterFejl } = require('../config/historikFelter');
+const { rettetRaekke } = require('../config/historikRettelse');
+const eksport = require('../config/historikEksport');
+
+// Én kamps id i URL'en (ikke "all")
+const kampId = (v) => (/^\d{1,10}$/.test(String(v)) ? Number(v) : null);
 
 // GET /api/match-history/all - hele kamphistorikken side for side. Kun admin
 // (siden Kamphistorik, nr. 88) — før uden login.
@@ -33,6 +38,26 @@ router.get('/all', authMiddleware, requirePage('history'), async (req, res, next
 
         res.json(history);
     } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/match-history/export.csv - hele kamphistorikken som CSV til Excel
+// (nr. 48). Samme adgang som historikken; hentes i bidder (config/historikEksport.js).
+// Skal stå før /:courtId.
+router.get('/export.csv', authMiddleware, requirePage('history'), async (req, res, next) => {
+    try {
+        await eksport.skrivCsv(res, eksport.filnavn('kamphistorik'), eksport.ENKELT_HOVED,
+            (efter, antal) => query(
+                `SELECT mh.id, mh.winner_name, mh.loser_name, mh.games_won, mh.duration,
+                        mh.set_scores, mh.match_date, c.court_number
+                 FROM match_history mh LEFT JOIN courts c ON c.id = mh.court_id
+                 ${efter === null ? '' : 'WHERE mh.id < ?'}
+                 ORDER BY mh.id DESC LIMIT ${Number(antal)}`,
+                efter === null ? [] : [efter]),
+            eksport.enkeltRaekke);
+    } catch (error) {
+        if (res.headersSent) { console.error('Eksport af kamphistorik fejlede:', error.message); return res.destroy(); }
         next(error);
     }
 });
@@ -288,6 +313,47 @@ router.delete('/all', authMiddleware, requirePage('history'), async (req, res, n
             success: true,
             message: 'Alt kamphistorik er blevet slettet'
         });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// PUT /api/match-history/:id - ret én kamp: navne, sætcifre, vinder, walkover
+// (nr. 48). Reglerne er tællerens (config/historikRettelse.js → kampResultat.js).
+router.put('/:id', authMiddleware, requirePage('history'), async (req, res, next) => {
+    try {
+        const id = kampId(req.params.id);
+        if (id === null) return res.status(400).json({ error: 'Ugyldigt kamp-id' });
+        const r = rettetRaekke(req.body);
+        if (r.error) return res.status(422).json({ error: r.error });
+        const f = r.felter;
+        const svar = await query(
+            'UPDATE match_history SET winner_name = ?, loser_name = ?, games_won = ?, set_scores = ? WHERE id = ?',
+            [f.winner_name, f.loser_name, f.games_won, f.set_scores, id]
+        );
+        if (!svar.affectedRows) return res.status(404).json({ error: 'Kampen findes ikke længere' });
+        const kamp = await queryOne(
+            'SELECT id, court_id, winner_name, loser_name, games_won, duration, set_scores, match_date FROM match_history WHERE id = ?',
+            [id]
+        );
+        res.json({ success: true, match: kamp });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// DELETE /api/match-history/:id - slet én kamp (nr. 48). Efter /all, så "all"
+// aldrig opfattes som et id.
+router.delete('/:id', authMiddleware, requirePage('history'), async (req, res, next) => {
+    try {
+        const id = kampId(req.params.id);
+        if (id === null) return res.status(400).json({ error: 'Ugyldigt kamp-id' });
+        const svar = await query('DELETE FROM match_history WHERE id = ?', [id]);
+        if (!svar.affectedRows) return res.status(404).json({ error: 'Kampen findes ikke længere' });
+        // Banens kobling til rækken ("Ret resultat" på banen laver så en ny)
+        try { await query('UPDATE game_states SET result_history_id = NULL WHERE result_history_id = ?', [id]); }
+        catch (e) { /* kolonnen findes først efter migration 029 */ }
+        res.json({ success: true });
     } catch (error) {
         next(error);
     }
