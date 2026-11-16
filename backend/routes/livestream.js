@@ -91,7 +91,9 @@ function ytGlemPauser(tenant) {
 // Returnerer { url, noegle } at sende til — eller null (så bruges den
 // indtastede nøgle). En fejl hos YouTube stopper aldrig streamen: den gemmes
 // på banen, vises i admin, og der prøves igen om lidt.
-async function ytStyr(req, f, bane, o, b, { senderNu, tvingTjek, vagt = null }) {
+// billede: hvornår PC'en begyndte at sende (ms), null når den ikke sender —
+// vinduet for de hyppige tjek regnes derfra (ls.ytNaesteTjek, nr. 38).
+async function ytStyr(req, f, bane, o, b, { senderNu, tvingTjek, billede = null, vagt = null }) {
     const laas = `${tenantKey(req)}:${bane}`;
     const gemt = o.yt_stream_key ? { url: o.yt_ingest_url, noegle: o.yt_stream_key } : null;
     if (_ytLaas.has(laas)) return gemt;
@@ -151,17 +153,20 @@ async function ytStyr(req, f, bane, o, b, { senderNu, tvingTjek, vagt = null }) 
             } else {
                 // Billedet kommer, men udsendelsen er ikke gået live af sig selv
                 let nu = status;
+                let satLive = false;
                 if (status === 'ready' && senderNu) {
                     await youtube.gaaLive(token, o.yt_broadcast_id);
                     // YouTube skifter til 'liveStarting' og et øjeblik efter 'live' —
                     // det næste tjek (om 30 s) ser, at den er live
                     nu = 'liveStarting';
+                    satLive = true;
                     console.log(`[livestream] ${tenantKey(req)} bane ${bane}: YouTube-udsendelsen sat live`);
                 }
-                // Venter den stadig på at gå live, tjekkes den igen om 30 s (nr. 38).
+                // Venter den stadig på at gå live, tjekkes den igen om 30 s inden for
+                // vinduet fra billedet kom (nr. 38).
                 // yt_status: det YouTube sagde — "LIVE" kun ved 'live' (nr. 40)
                 await query('UPDATE court_streams SET yt_broadcast_tjek = ?, yt_status = ?, yt_fejl = NULL, yt_fejl_tid = NULL WHERE court_number = ?',
-                    [ls.ytNaesteTjek(nu, o.yt_broadcast_start), String(nu).slice(0, 20), bane]);
+                    [ls.ytNaesteTjek(nu, o.yt_broadcast_start, Date.now(), { billede, satLive }), String(nu).slice(0, 20), bane]);
             }
         } else if (handling === 'afslut') {
             const hvad = await youtube.afslut(token, o.yt_broadcast_id);
@@ -1061,7 +1066,9 @@ router.post('/pc', async (req, res, next) => {
             const ytKilde = ytBrugbar(yt) && opsaetning && (b.send || opsaetning.yt_broadcast_id)
                 ? await ytStyr(req, yt, bane, opsaetning, b, {
                     senderNu: !!(foer && foer.sender && pc.sender && Date.now() - foer.senderSiden >= 60 * 1000),
-                    tvingTjek: !!(pc.sender && foer && !foer.sender) })
+                    tvingTjek: !!(pc.sender && foer && !foer.sender),
+                    // Hvornår billedet kom (registrer() sætter senderSiden lidt efter)
+                    billede: pc.sender ? (foer && foer.sender ? foer.senderSiden : Date.now()) : null })
                 : null;
             const kilde = ytKilde ||
                 (opsaetning && opsaetning.stream_key ? { url: opsaetning.stream_url, noegle: opsaetning.stream_key } : null);

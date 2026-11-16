@@ -606,17 +606,28 @@ test('38: går udsendelsen live af sig selv, sættes den ikke live, og der tjekk
     assert.ok(tjek[1] - tjek[0] >= 5 * MIN && tjek[2] - tjek[1] >= 5 * MIN);
 }));
 
-test('38: ytNaesteTjek — 30 s, mens den venter de første 5 minutter, ellers 5 minutter', () => {
+test('38: ytNaesteTjek — 30 s i 5 min fra det seneste af oprettelsen og billedet, ellers 5 minutter', () => {
     const start = NU - 2 * MIN;
-    const om = (status, s) => ls.ytNaesteTjek(status, s, NU).getTime() - (NU - ls.YT_TJEK_MS);
-    assert.equal(om('ready', start), 30 * SEK);
-    assert.equal(om('testing', start), 30 * SEK);
-    assert.equal(om('live', start), 5 * MIN);
-    assert.equal(om('ready', NU - 6 * MIN), 5 * MIN, 'går den aldrig live, tjekkes der ikke hvert halve minut hele dagen');
-    assert.equal(om('ready', null), 5 * MIN);
+    const om = (status, s, o) => ls.ytNaesteTjek(status, s, NU, o).getTime() - (NU - ls.YT_TJEK_MS);
+    const billede = { billede: NU - MIN };
+    assert.equal(om('ready', start, billede), 30 * SEK);
+    assert.equal(om('testing', start, billede), 30 * SEK);
+    assert.equal(om('live', start, billede), 5 * MIN);
+    // Sender PC'en ikke, kan den ikke sættes live — ingen hyppige tjek
+    assert.equal(om('ready', start), 5 * MIN);
+    assert.equal(om('ready', start, { billede: null }), 5 * MIN);
+    // Vinduet fra billedet: oprettet for 10 min siden, billedet kom for 1 min siden
+    assert.equal(om('ready', NU - 10 * MIN, billede), 30 * SEK, 'sen start: vinduet er stadig åbent');
+    // … og fra oprettelsen, når den er det seneste (ny udsendelse, PC'en sendte i forvejen)
+    assert.equal(om('ready', NU - MIN, { billede: NU - 20 * MIN }), 30 * SEK);
+    assert.equal(om('ready', NU - 6 * MIN, { billede: NU - 8 * MIN }), 5 * MIN, 'går den aldrig live, tjekkes der ikke hvert halve minut hele dagen');
+    // liveStarting, som YouTube selv melder, følger vinduet; vores eget gaaLive giver ét hurtigt gentjek
+    assert.equal(om('liveStarting', start, billede), 30 * SEK);
+    assert.equal(om('liveStarting', NU - 7 * MIN, { billede: NU - 6 * MIN }), 5 * MIN, 'intet 30 s-tjek uden loft');
+    assert.equal(om('liveStarting', NU - 6 * MIN, { billede: NU - 6 * MIN, satLive: true }), 30 * SEK);
     assert.equal(ls.ytTjekOm(ls.YT_FOERSTE_TJEK_MS, NU).getTime(), NU - ls.YT_TJEK_MS + MIN);
     // ytHandling giver 'tjek', præcis når tiden er gået
-    const tjek = ls.ytNaesteTjek('ready', start, NU);
+    const tjek = ls.ytNaesteTjek('ready', start, NU, billede);
     assert.equal(ls.ytHandling({ send: true, udsendelse: 'b1', tjek, nu: NU + 29 * SEK }), null);
     assert.equal(ls.ytHandling({ send: true, udsendelse: 'b1', tjek, nu: NU + 30 * SEK }), 'tjek');
 });
@@ -975,3 +986,69 @@ test('A: en almindelig gemning på en eksisterende række rører ikke frigivne_k
     assert.equal(v.frigivne.size, 1);
     assert.ok(!kald.some(k => /frigivne_kampe/.test(k.sql)));
 });
+
+// ======================= Rettelse B (nr. 38): vinduet fra billedet, loft på liveStarting =======================
+
+test('B: billedet kommer 10 min efter oprettelsen — live ca. 60–90 s efter billedet', medUr(async () => {
+    klokke = NU;
+    lsVerden();
+    nyYoutube('ready');
+    medTider();
+    await pcSpoerger(false);                      // udsendelsen oprettes, PC'en sender ikke endnu
+    // 10 minutter uden billede (ffmpeg/kameraet er længe om det): PC'en spørger hvert 5. sekund
+    const slut = klokke + 10 * MIN;
+    while (klokke < slut) { klokke += 5 * SEK; await pcSpoerger(false); }
+    const foer = tidFor(/^status:b1$/).length;
+    assert.ok(foer <= 3, `kun det første tjek og hvert 5. minut, mens der intet billede er (${foer})`);
+
+    const billede = klokke + 5 * SEK;
+    await sendI(3 * MIN);
+    const live = tidFor(/^gaaLive:b1$/);
+    assert.equal(live.length, 1, 'sat live');
+    const efter = live[0] - billede;
+    assert.ok(efter >= 60 * SEK && efter <= 90 * SEK, `live ${efter / SEK} s efter billedet — ikke 5 min`);
+}));
+
+test('B: YouTube hænger i liveStarting — højst vinduets tjek, derefter hvert 5. minut', medUr(async () => {
+    klokke = NU;
+    lsVerden();
+    nyYoutube('liveStarting');                    // YouTube selv: går aldrig helt live (dårligt stream-helbred)
+    medTider();
+    await pcSpoerger(false);
+    const billede = klokke + 5 * SEK;
+    await sendI(30 * MIN);
+    const tjek = tidFor(/^status:b1$/);
+    const iVinduet = tjek.filter(t => t - billede < 5 * MIN);
+    assert.ok(iVinduet.length <= 11, `højst vinduets tjek (${iVinduet.length})`);
+    const efter = tjek.filter(t => t - billede >= 5 * MIN);
+    for (let i = 1; i < efter.length; i++) {
+        assert.ok(efter[i] - efter[i - 1] >= 5 * MIN, `hvert 5. minut efter vinduet (${(efter[i] - efter[i - 1]) / SEK} s)`);
+    }
+    assert.ok(tjek.length <= 18, `30 minutter koster ${tjek.length} tjek — ikke 60`);
+    assert.equal(tidFor(/^gaaLive/).length, 0, 'ikke ready: sættes ikke live');
+}));
+
+test('B: efter vores eget gaaLive ét hurtigt gentjek — hænger den, følger den vinduet', medUr(async () => {
+    klokke = NU;
+    lsVerden();
+    nyYoutube('ready');
+    medTider();
+    youtube.gaaLive = async (token, id) => { yt.kald.push(`gaaLive:${id}`); yt.status = 'liveStarting'; };
+    try {
+        await pcSpoerger(false);
+        const billede = klokke + 5 * SEK;
+        await sendI(20 * MIN);
+        const live = tidFor(/^gaaLive:b1$/)[0];
+        const efter = tidFor(/^status:b1$/).filter(t => t > live);
+        assert.equal(efter[0] - live, 30 * SEK, 'gentjek efter 30 s');
+        const sent = efter.filter(t => t - billede >= 5 * MIN);
+        for (let i = 1; i < sent.length; i++) assert.ok(sent[i] - sent[i - 1] >= 5 * MIN);
+        assert.ok(efter.length <= 12, `${efter.length} tjek efter gaaLive på 19 min`);
+    } finally {
+        youtube.gaaLive = async (token, id) => {
+            yt.kald.push(`gaaLive:${id}`);
+            if (yt.fejl.gaaLive) throw yt.fejl.gaaLive;
+            yt.status = 'live';
+        };
+    }
+}));

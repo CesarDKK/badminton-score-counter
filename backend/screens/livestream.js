@@ -766,12 +766,19 @@ function ytTjekOm(omMs, nu = Date.now()) {
 // oprettelsen, og det tvungne tjek dér (endnu ikke 60 s billede, så ikke
 // gaaLive) flyttede det planlagte tjek efter et minut 5 minutter frem — og
 // gik udsendelsen ikke live af sig selv, manglede kampens første minutter.
-// live: om 5 minutter. Ellers om 30 sekunder, de første 5 minutter efter start
-// — og altid lige efter gaaLive ('liveStarting'), så "LIVE" vises, når YouTube
-// er live (nr. 40), og ikke først 5 minutter senere.
-function ytNaesteTjek(status, start, nu = Date.now()) {
-    const s = tid(start);
-    const venter = status === 'liveStarting' || (status !== 'live' && s !== null && nu - s < YT_TJEK_MS);
+// live: om 5 minutter. Ellers om 30 sekunder, men kun i et vindue på 5 minutter,
+// der regnes fra det seneste af udsendelsens oprettelse (start) og tidspunktet,
+// PC'en begyndte at sende (billede, ms — null: den sender ikke, og så kan den
+// alligevel ikke sættes live). Kom billedet først 10 minutter efter
+// oprettelsen, er vinduet altså stadig åbent. Uden for vinduet hvert 5. minut,
+// også når YouTube hænger i 'liveStarting' — kvoten er fælles for alle klubber.
+// satLive: vi har lige selv sat den live (gaaLive) — ét hurtigt gentjek, så
+// "LIVE" vises, når YouTube er live (nr. 40), og ikke først 5 minutter senere.
+function ytNaesteTjek(status, start, nu = Date.now(), { billede = null, satLive = false } = {}) {
+    if (satLive) return ytTjekOm(YT_LIVE_TJEK_MS, nu);
+    const b = tid(billede);
+    const fra = b === null ? null : Math.max(b, tid(start) ?? b);
+    const venter = status !== 'live' && fra !== null && nu - fra < YT_TJEK_MS;
     return ytTjekOm(venter ? YT_LIVE_TJEK_MS : YT_TJEK_MS, nu);
 }
 const YT_FEJL_PAUSE_MS = 2 * 60 * 1000;  // efter en fejl hos YouTube prøves der igen efter så længe
