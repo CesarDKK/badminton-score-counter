@@ -59,6 +59,14 @@ if [ "$SUND" -ne 1 ]; then
 fi
 echo "Backenden er sund (efter ca. $VENTET s)."
 
+# Den offentlige helbredsadresse gennem nginx (den, overvågningen udefra kalder)
+# — kun en advarsel
+if docker exec badminton-frontend wget -q -O /dev/null http://127.0.0.1/api/health >/dev/null 2>&1; then
+    echo "Helbredsadressen /api/health svarer gennem nginx."
+else
+    echo "Advarsel: /api/health svarer ikke gennem nginx. Appen kan stadig virke — tjek den i browseren."
+fi
+
 # Gamle images, som ingen container bruger mere (hvert build efterlader det
 # forrige uden navn). Kun dangling images: ingen volumes, ingen data.
 echo ""

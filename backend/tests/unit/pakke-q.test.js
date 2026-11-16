@@ -644,3 +644,53 @@ test('54: et oprydningstrin, der hænger (databasen svarer ikke), springes over 
     assert.ok(nedlukning.GRACE_MS + 2 * nedlukning.TRIN_MS < nedlukning.MAKS_MS, 'grace + to trin når inden loftet');
     nedlukning._nulstil();
 });
+
+// ======================= Nr. 53: offentlig helbredsadresse =======================
+
+const { lavHelbred } = require('../../config/offentligHelbred');
+
+test('53: /api/health — 200 kun når opstarten er færdig og master-databasen svarer; ingen detaljer', async () => {
+    let dbKald = 0;
+    const ok = lavHelbred({ master: async () => { dbKald++; return [{ 1: 1 }]; }, klar: () => true });
+    const r = await koer(ok.rute, {});
+    assert.equal(r.statusKode, 200);
+    assert.deepEqual(r.krop, { status: 'ok' });
+    assert.equal(r.headers['Cache-Control'], 'no-store');
+
+    const nede = lavHelbred({ master: async () => { throw new Error('connect ECONNREFUSED 172.18.0.2:3306 (badminton_user)'); }, klar: () => true });
+    const r2 = await koer(nede.rute, {});
+    assert.equal(r2.statusKode, 503);
+    assert.deepEqual(r2.krop, { status: 'fejl' }, 'ingen adresse, bruger eller fejltekst');
+
+    const starter = lavHelbred({ master: async () => [], klar: () => false });
+    assert.equal((await koer(starter.rute, {})).statusKode, 503, 'opstarten er ikke færdig');
+
+    const haenger = lavHelbred({ master: () => new Promise(() => {}), klar: () => true, loftMs: 50 });
+    const t0 = Date.now();
+    assert.equal((await koer(haenger.rute, {})).statusKode, 503);
+    assert.ok(Date.now() - t0 < 1000, 'en database, der ikke svarer, giver 503 efter loftet');
+});
+
+test('53: svaret huskes i 5 s, og samtidige kald deler ét tjek — adressen kan ikke belaste databasen', async () => {
+    let dbKald = 0;
+    let klokke = 1_000_000;
+    const h = lavHelbred({ master: async () => { dbKald++; await new Promise(r => setTimeout(r, 10)); }, klar: () => true, nu: () => klokke });
+    await Promise.all(Array.from({ length: 50 }, () => h.tjek()));
+    assert.equal(dbKald, 1, '50 samtidige kald → ét tjek');
+    for (let i = 0; i < 20; i++) { klokke += 200; await h.tjek(); }
+    assert.equal(dbKald, 1, 'inden for 5 s → fra hukommelsen');
+    klokke += 1000;
+    await h.tjek();
+    assert.equal(dbKald, 2, 'efter 5 s → nyt tjek');
+});
+
+test('53: ruten står før klub-opslaget og nås gennem nginx\' /api/ på app.-domænet', () => {
+    const s = laes('backend/server.js');
+    const rute = s.indexOf("app.get('/api/health', require('./config/offentligHelbred').rute)");
+    assert.ok(rute > 0 && rute < s.indexOf("app.use(require('./middleware/tenant'))"), 'før tenant-middlewaren');
+    assert.match(s, /app\.get\('\/health'/, 'Dockers interne /health er uændret');
+    const nginx = laes('nginx.conf');
+    const app = nginx.slice(nginx.indexOf('listen 80 default_server'));
+    assert.match(app, /location \/api\/ \{[\s\S]*?proxy_pass \$backend;/);
+    assert.match(laes('deploy.sh'), /wget -q -O \/dev\/null http:\/\/127\.0\.0\.1\/api\/health/);
+});

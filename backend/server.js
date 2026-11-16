@@ -34,6 +34,11 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
 
+// Offentlig helbredsadresse til overvågning udefra (nr. 53): 200/503 uden
+// detaljer, 5 s cache. Før klub-opslaget, så den virker på alle subdomæner og
+// ikke koster et opslag i master-databasen pr. kald.
+app.get('/api/health', require('./config/offentligHelbred').rute);
+
 // Tenant middleware kører på alle requests og sætter req.accessMode
 app.use(require('./middleware/tenant'));
 
