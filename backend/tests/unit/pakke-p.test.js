@@ -699,3 +699,205 @@ test('40: tablettens knap — "●" og live-farven kun, når YouTube er live', (
     assert.match(laes('frontend/live.html'), /live-script\.js\?v=2/);
     assert.match(laes('backend/migrations/052_yt_status.sql'), /ALTER TABLE court_streams ADD COLUMN yt_status VARCHAR\(20\) NULL/);
 });
+
+// ======================= Nr. 42: ytStyr og POST /pc =======================
+
+test('42: første forespørgsel opretter stream-nøgle og udsendelse og sender til YouTubes nøgle', medUr(async () => {
+    klokke = NU;
+    const v = lsVerden({ stream_key: 'egen-noegle', stream_url: 'rtmp://egen' });
+    nyYoutube('ready');
+    const r = await pcSpoerger(false);
+    assert.deepEqual(yt.kald.slice(), ['opretStream', 'opretUdsendelse']);
+    assert.equal(r.send, true);
+    assert.equal(r.url, 'rtmp://a.rtmp.youtube.com/live2', 'kanalens nøgle går forud for den indtastede');
+    assert.equal(r.noegle, 'yt-noegle');
+    assert.equal(v.cs.yt_stream_key, 'yt-noegle');
+    assert.equal(v.cs.yt_broadcast_id, 'b1');
+    assert.ok(v.cs.yt_broadcast_start instanceof Date);
+    assert.ok(kald.some(k => /INSERT IGNORE INTO yt_udsendelser/.test(k.sql)), 'udsendelsen huskes (nr. 12C)');
+
+    // Næste forespørgsel: intet nyt hos YouTube (nøglen er gemt, tjekket er om et minut)
+    klokke += 3 * SEK;
+    const r2 = await pcSpoerger(false);
+    assert.equal(yt.kald.length, 2);
+    assert.equal(r2.noegle, 'yt-noegle');
+}));
+
+test('42 (nr. 5): dagens kvote brugt op — intet oprettes, send:false med grund youtube-fejl, og pause', medUr(async () => {
+    klokke = NU;
+    const v = lsVerden();
+    nyYoutube('ready');
+    youtubeKvote.tael(0, { opbrugt: true, nu: klokke });
+    const r = await pcSpoerger(false);
+    assert.deepEqual(yt.kald.slice(), [], 'ingen kald til YouTube');
+    assert.equal(r.send, false);
+    assert.equal(r.grund, 'youtube-fejl');
+    assert.match(v.cs.yt_fejl, /kvote for i dag er brugt op/);
+    assert.ok(livestream._ytPauseTil.get('direct:3') >= klokke + ls.YT_KVOTE_PAUSE_MS - SEK, 'en times pause for banen');
+
+    // Med en indtastet nøgle sendes der stadig — dertil
+    lsVerden({ stream_key: 'egen-noegle', stream_url: 'rtmp://egen' });
+    youtubeKvote.tael(0, { opbrugt: true, nu: klokke });
+    const r2 = await pcSpoerger(false);
+    assert.equal(r2.send, true);
+    assert.equal(r2.noegle, 'egen-noegle');
+    assert.deepEqual(yt.kald.slice(), []);
+}));
+
+test('42 (nr. 5): med kvoten brugt op tjekkes og afsluttes en kørende udsendelse stadig', medUr(async () => {
+    klokke = NU;
+    const v = lsVerden({ yt_stream_key: 'yt-noegle', yt_ingest_url: 'rtmp://yt', yt_broadcast_id: 'b7',
+        yt_broadcast_start: new Date(NU - 20 * MIN), yt_broadcast_tjek: new Date(NU - 6 * MIN), yt_status: 'live' });
+    nyYoutube('live');
+    youtubeKvote.tael(0, { opbrugt: true, nu: klokke });
+    const r = await pcSpoerger(true);
+    assert.deepEqual(yt.kald.slice(), ['status:b7']);
+    assert.equal(r.send, true);
+    assert.equal(r.noegle, 'yt-noegle');
+
+    v.cs.all_day_until = new Date(NU - MIN);    // banen holder op
+    klokke += 3 * SEK;
+    const r2 = await pcSpoerger(true);
+    assert.ok(yt.kald.includes('afslut:b7'));
+    assert.equal(r2.send, false);
+    assert.equal(v.cs.yt_broadcast_id, null);
+}));
+
+test('42: fejlpausen gælder alle handlinger — opret, tjek og afslut', medUr(async () => {
+    // Opret: banen sender, men YouTube fejlede for et minut siden
+    klokke = NU;
+    let v = lsVerden({ yt_stream_key: 'yt-noegle', yt_ingest_url: 'rtmp://yt', yt_fejl: 'YouTube nede', yt_fejl_tid: new Date(NU - MIN) });
+    nyYoutube('ready');
+    let r = await pcSpoerger(false);
+    assert.deepEqual(yt.kald.slice(), []);
+    assert.equal(r.send, true, 'den gemte nøgle bruges stadig — en fejl stopper aldrig streamen');
+    // … efter de to minutter prøves der igen
+    klokke += 61 * SEK;
+    await pcSpoerger(false);
+    assert.deepEqual(yt.kald.slice(), ['opretUdsendelse']);
+
+    // Tjek: forfaldent, men i pause
+    klokke = NU;
+    v = lsVerden({ yt_stream_key: 'yt-noegle', yt_ingest_url: 'rtmp://yt', yt_broadcast_id: 'b7',
+        yt_broadcast_tjek: new Date(NU - 10 * MIN), yt_fejl_tid: new Date(NU - MIN) });
+    nyYoutube('ready');
+    await pcSpoerger(true);
+    assert.deepEqual(yt.kald.slice(), []);
+
+    // Afslut: banen holder op, men i pause
+    v.cs.all_day_until = new Date(NU - MIN);
+    r = await pcSpoerger(true);
+    assert.deepEqual(yt.kald.slice(), []);
+    assert.equal(r.send, false);
+    assert.equal(v.cs.yt_broadcast_id, 'b7', 'afsluttes efter pausen');
+
+    // Den lange pause (i hukommelsen) efter en varig fejl
+    v.cs.yt_fejl_tid = null;
+    livestream._ytPauseTil.set('direct:3', NU + 30 * MIN);
+    klokke += 5 * MIN;
+    await pcSpoerger(true);
+    assert.deepEqual(yt.kald.slice(), []);
+    klokke = NU + 31 * MIN;
+    await pcSpoerger(true);
+    assert.deepEqual(yt.kald.slice(), ['afslut:b7']);
+}));
+
+test('42: en varig fejl ved oprettelsen gemmes på banen og giver en lang pause — streamen fortsætter', medUr(async () => {
+    klokke = NU;
+    const v = lsVerden();
+    nyYoutube('ready');
+    yt.fejl.opretUdsendelse = ytFejl('liveStreamingNotEnabled');
+    const r = await pcSpoerger(false);
+    assert.deepEqual(yt.kald.slice(), ['opretStream', 'opretUdsendelse']);
+    assert.equal(v.cs.yt_stream_key, 'yt-noegle', 'nøglen fra før fejlen er gemt');
+    assert.match(v.cs.yt_fejl, /liveStreamingNotEnabled/);
+    assert.ok(v.cs.yt_fejl_tid instanceof Date);
+    assert.ok(livestream._ytPauseTil.get('direct:3') >= NU + ls.YT_VARIG_PAUSE_MS - SEK);
+    assert.equal(r.send, true);
+    assert.equal(r.noegle, 'yt-noegle');
+    // Ingen nye forsøg i pausen, selv hvert 3. sekund
+    for (let i = 0; i < 20; i++) { klokke += 3 * SEK; await pcSpoerger(true); }
+    assert.equal(yt.kald.length, 2);
+}));
+
+test('42: tjek → afsluttet i Studio → glemt, og en ny udsendelse oprettes', medUr(async () => {
+    klokke = NU;
+    const v = lsVerden({ yt_stream_key: 'yt-noegle', yt_ingest_url: 'rtmp://yt', yt_stream_id: 's1', yt_broadcast_id: 'b7',
+        yt_broadcast_start: new Date(NU - 30 * MIN), yt_broadcast_tjek: new Date(NU - 5 * MIN), yt_status: 'live' });
+    nyYoutube('complete');
+    yt.nr = 7;
+    await pcSpoerger(true);
+    assert.deepEqual(yt.kald.slice(), ['status:b7']);
+    assert.equal(v.cs.yt_broadcast_id, null);
+    klokke += 3 * SEK;
+    await pcSpoerger(true);
+    assert.deepEqual(yt.kald.slice(), ['status:b7', 'opretUdsendelse']);
+    assert.equal(v.cs.yt_broadcast_id, 'b8');
+    assert.equal(v.cs.yt_status, null);
+}));
+
+test('42: banen holder op — udsendelsen afsluttes, og PC\'en får send:false', medUr(async () => {
+    klokke = NU;
+    const v = lsVerden({ yt_stream_key: 'yt-noegle', yt_ingest_url: 'rtmp://yt', yt_broadcast_id: 'b7',
+        yt_broadcast_start: new Date(NU - 30 * MIN), yt_broadcast_tjek: new Date(NU - MIN), yt_status: 'live',
+        all_day_until: new Date(NU - SEK) });
+    nyYoutube('live');
+    const r = await pcSpoerger(true);
+    assert.deepEqual(yt.kald.slice(), ['afslut:b7']);
+    assert.equal(r.send, false);
+    assert.equal(v.cs.yt_broadcast_id, null);
+    assert.equal(v.cs.yt_stream_key, 'yt-noegle', 'stream-nøglen genbruges næste gang');
+    // Bagefter: intet mere hos YouTube
+    klokke += 3 * SEK;
+    await pcSpoerger(false);
+    assert.equal(yt.kald.length, 1);
+}));
+
+test("42: POST /pc — tvingTjek, når PC'en begynder at sende; senderNu først efter 60 s billede", medUr(async () => {
+    klokke = NU;
+    const v = lsVerden({ yt_stream_key: 'yt-noegle', yt_ingest_url: 'rtmp://yt', yt_broadcast_id: 'b7',
+        yt_broadcast_start: new Date(NU - 2 * MIN), yt_broadcast_tjek: new Date(NU) });
+    nyYoutube('ready');
+    // PC'en har spurgt uden at sende: tjekket er ikke forfaldent — intet kald
+    await pcSpoerger(false);
+    assert.deepEqual(yt.kald.slice(), []);
+    // Den begynder at sende: tvunget tjek (lever udsendelsen?), men ikke gaaLive endnu
+    klokke += 3 * SEK;
+    await pcSpoerger(true);
+    assert.deepEqual(yt.kald.slice(), ['status:b7']);
+    // Sender videre: intet tvunget tjek ved hver forespørgsel
+    klokke += 3 * SEK;
+    await pcSpoerger(true);
+    assert.equal(yt.kald.length, 1);
+    // 33 s billede: tjekket kommer (30 s-rytmen), men ikke gaaLive
+    klokke = NU + 3 * SEK + 33 * SEK;
+    await pcSpoerger(true);
+    assert.deepEqual(yt.kald.slice(), ['status:b7', 'status:b7']);
+    // Holder PC'en op med at sende, sættes den ikke live
+    klokke = NU + 3 * SEK + 66 * SEK;
+    await pcSpoerger(false);
+    assert.ok(!yt.kald.some(k => /^gaaLive/.test(k)));
+    // Sender igen: nyt tvunget tjek, og senderSiden starter forfra
+    klokke += 3 * SEK;
+    await pcSpoerger(true);
+    assert.equal(yt.kald.at(-1), 'status:b7');
+    assert.ok(!yt.kald.some(k => /^gaaLive/.test(k)), 'ikke live på billede fra før pausen');
+    await sendI(100 * SEK);   // 60 s: gaaLive, 30 s efter: bekræftet live
+    const live = yt.kald.indexOf('gaaLive:b7');
+    assert.ok(live > 0, 'sat live efter 60 s billede');
+    assert.equal(v.cs.yt_status, 'live');
+}));
+
+test("42: POST /pc — ukendt eller tilbagekaldt adgangslink, og en PC uden bane", medUr(async () => {
+    klokke = NU;
+    lsVerden();
+    nyYoutube('ready');
+    const handler = rute(livestream, 'post', '/pc');
+    const req = (token) => ({ accessMode: 'direct', headers: {}, socket: {}, get: () => token, body: { kamera: 'C920' } });
+    assert.equal((await koer(handler, req(undefined))).statusKode, 401);
+    nulstil(async () => []);
+    assert.equal((await koer(handler, req('tilbagekaldt-link'))).statusKode, 403);
+    // Demoen (eller en ukendt vært) har ingen PC-rute
+    assert.equal((await koer(handler, { ...req('pc-token-bane3'), accessMode: 'landing' })).statusKode, 404);
+    assert.deepEqual(yt.kald.slice(), []);
+}));
