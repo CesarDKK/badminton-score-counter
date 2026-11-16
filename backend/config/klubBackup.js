@@ -13,6 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const { backupFilnavn, tilpasSponsorRaekker, skrivSponsorFiler, sponsorFilSti, rydUbrugteFiler } = require('./sponsorFiler');
 const { laesIndstillinger } = require('../screens/livestream');
+const { tilGendannelse, statements } = require('./dataMigrationer');
 
 const BACKUP_VERSION = '1.0';
 
@@ -81,6 +82,7 @@ function livestreamLogo(settings, mappe) {
 async function lavBackup(conn, { mappe, clubSubdomain = null, clubName, clubDbName, clubCreatedAt = null } = {}) {
     const tables = {};
     let timestamp;
+    let migrationer = null;
     await conn.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
     await conn.query('START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY');
     try {
@@ -89,6 +91,8 @@ async function lavBackup(conn, { mappe, clubSubdomain = null, clubName, clubDbNa
             const [rows] = await conn.query(`SELECT * FROM \`${table}\``);
             tables[table] = rows;
         }
+        // Skemaets og data-migrationernes stand (nr. 87) — i samme snapshot
+        migrationer = await koerteMigrationer(conn);
     } finally {
         // Kun læst — afslut transaktionen, også når en SELECT fejlede, så
         // forbindelsen ikke går tilbage til puljen midt i en transaktion
@@ -106,6 +110,12 @@ async function lavBackup(conn, { mappe, clubSubdomain = null, clubName, clubDbNa
     if (mangler.length) {
         backup.manglendeFiler = mangler;
         console.warn(`⚠ Backup af ${clubDbName || mappe}: ${mangler.length} billedfil(er) mangler på disken og er ikke med: ${mangler.join(', ')}`);
+    }
+    // Hvilke migrationer databasen havde kørt (nr. 87): den nyeste og hele
+    // listen. Gendannelsen kører de data-migrationer, backuppen er ældre end.
+    if (migrationer) {
+        backup.migration = migrationer.length ? migrationer[migrationer.length - 1] : null;
+        backup.migrationer = migrationer;
     }
     if (clubName) backup.clubName = clubName;
     if (clubDbName) backup.clubDbName = clubDbName;
@@ -220,9 +230,16 @@ class BackupFejl extends Error {}
 // kunBrugte (demoen): der skrives kun filer, den gendannede database bruger, og
 // filer i mappen, som den ikke længere bruger, slettes. Ellers kunne gentagne
 // gendannelser med nye filnavne fylde disken med billeder, ingen kan slette igen.
+//
+// Data-migrationer (nr. 87): er backuppen ældre end en data-migration, som
+// klubbens database har kørt, køres den på de gendannede rækker i samme
+// transaktion (config/dataMigrationer.js har reglen og listen).
 async function gendanBackup(conn, backup, mappe, { kunBrugte = false } = {}) {
     const fejl = validerBackup(backup) || tilpasSponsorRaekker(backup.tables.sponsor_images, mappe);
     if (fejl) throw new BackupFejl(fejl);
+
+    const dataMigrationer = tilGendannelse(backup, new Set((await koerteMigrationer(conn)) || []));
+    for (const m of dataMigrationer) if (m.foer) m.foer(backup.tables);
 
     try {
         await conn.beginTransaction();
@@ -239,10 +256,16 @@ async function gendanBackup(conn, backup, mappe, { kunBrugte = false } = {}) {
                 );
             }
         }
+        for (const m of dataMigrationer) {
+            for (const stmt of statements(m)) await conn.query(stmt);
+        }
         await conn.commit();
     } catch (error) {
         try { await conn.rollback(); } catch {}
         throw error;
+    }
+    if (dataMigrationer.length) {
+        console.log(`✓ Gendannelse: backuppen var ældre end ${dataMigrationer.map(m => m.fil).join(', ')} — kørt igen på de gendannede data`);
     }
 
     const brugte = kunBrugte ? await brugteFiler(conn, mappe) : null;
@@ -251,7 +274,18 @@ async function gendanBackup(conn, backup, mappe, { kunBrugte = false } = {}) {
     return {
         restored: Object.fromEntries(BACKUP_TABLES.map(t => [t, backup.tables[t]?.length ?? 0])),
         files,
+        dataMigrationer: dataMigrationer.map(m => m.fil),
     };
+}
+
+// Migrationerne, databasen har kørt (sorteret). null: tabellen kunne ikke læses.
+async function koerteMigrationer(conn) {
+    try {
+        const [rows] = await conn.query('SELECT filename FROM `migrations` ORDER BY filename');
+        return Array.isArray(rows) ? rows.map(r => r.filename).filter(f => typeof f === 'string') : null;
+    } catch {
+        return null;
+    }
 }
 
 module.exports = { BACKUP_TABLES, lavBackup, validerBackup, gendanBackup, BackupFejl, normalizeValue, backupFraAndenKlub };

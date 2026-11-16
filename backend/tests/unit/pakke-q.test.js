@@ -408,3 +408,97 @@ test('86: Download backup, super-admin og den automatiske går alle gennem lavBa
     // Den fulde backup (mysqldump) er allerede ét snapshot
     assert.match(laes('scripts/backup-loop.sh'), /--all-databases --single-transaction/);
 });
+
+// ======================= Nr. 87: backuppen ved, hvilke migrationer den er fra =======================
+
+const dataMigrationer = require('../../config/dataMigrationer');
+const ALLE_MIGRATIONER = fs.readdirSync(path.join(ROD, 'backend/migrations')).filter(f => f.endsWith('.sql')).sort();
+const migrationsRaekker = (filer) => filer.map(filename => ({ filename }));
+
+test('87: backuppen har den nyeste kørte migration og hele listen — læst i samme snapshot', async () => {
+    const conn = falskForbindelse({ migrations: migrationsRaekker(['001_a.sql', '043_ny_standard_skifer.sql', '052_yt_status.sql']) });
+    const b = await klubBackup.lavBackup(conn, { mappe: 'holte' });
+    assert.equal(b.migration, '052_yt_status.sql');
+    assert.deepEqual(b.migrationer, ['001_a.sql', '043_ny_standard_skifer.sql', '052_yt_status.sql']);
+    const i = conn.log.findIndex(s => /FROM `migrations`/.test(s));
+    assert.ok(i > conn.log.findIndex(s => /^START TRANSACTION/.test(s)) && i < conn.log.indexOf('COMMIT'), 'inde i snapshottet');
+    // Uden migrations-tabel: ingen felter (som en ældre backup)
+    const uden = falskForbindelse();
+    uden.query = async (sql) => { if (/migrations/.test(sql)) throw new Error("Table 'migrations' doesn't exist"); return [[]]; };
+    const b2 = await klubBackup.lavBackup(uden, { mappe: 'holte' });
+    assert.ok(!('migrationer' in b2) && !('migration' in b2));
+});
+
+// Gendan backup i en database, der har kørt alle migrationer; giver SQL-loggen
+async function gendanOgLog(backup, { koert = ALLE_MIGRATIONER } = {}) {
+    const conn = falskForbindelse({ migrations: migrationsRaekker(koert) });
+    const r = await klubBackup.gendanBackup(conn, backup, 'holte');
+    return { log: conn.log, r };
+}
+const LILLA = [['color_primary', '#533483'], ['color_accent', '#e94560'], ['color_bg_dark', '#1a1a2e'],
+    ['color_bg_container', '#16213e'], ['color_bg_card', '#252347'], ['theme_name', 'default']]
+    .map(([setting_key, setting_value]) => ({ setting_key, setting_value }));
+
+test('87: en backup fra før 043 får Skifer-migrationen kørt på de gendannede data, i samme transaktion', async () => {
+    const foer043 = ALLE_MIGRATIONER.filter(f => f < '043');
+    const { log, r } = await gendanOgLog({ version: '1.0', timestamp: '2026-11-20T10:00:00Z', migrationer: foer043, tables: { settings: LILLA } });
+    assert.deepEqual(r.dataMigrationer, ['043_ny_standard_skifer.sql']);
+    const sidsteInsert = log.map((s, i) => [s, i]).filter(([s]) => /^INSERT INTO `settings`/.test(s)).pop()[1];
+    const skifer = log.findIndex(s => /SET @gammel_standard/.test(s));
+    assert.ok(skifer > sidsteInsert && skifer < log.indexOf('COMMIT'), 'efter indsættelsen, før commit');
+    assert.ok(log.some(s => /UPDATE settings SET setting_value = CASE setting_key/.test(s)));
+    assert.ok(!log.some(s => /^USE\b/.test(s)));
+});
+
+test('87: en backup, der allerede har migrationen, får den ikke igen (aldrig to gange)', async () => {
+    const { log, r } = await gendanOgLog({ version: '1.0', timestamp: '2026-11-20T10:00:00Z', migrationer: ALLE_MIGRATIONER, tables: { settings: LILLA } });
+    assert.deepEqual(r.dataMigrationer, []);
+    assert.ok(!log.some(s => /@gammel_standard/.test(s)));
+    // Migrations-tabellen er ikke i backuppen og røres aldrig af gendannelsen
+    assert.ok(!klubBackup.BACKUP_TABLES.includes('migrations'));
+    assert.ok(!log.some(s => /(INSERT INTO|DELETE FROM) `migrations`/.test(s)));
+});
+
+test('87: ældre backups uden listen — afgøres af tidspunktet; uden tidspunkt som i dag', async () => {
+    const gammel = await gendanOgLog({ version: '1.0', timestamp: '2026-10-20T10:00:00Z', tables: { settings: LILLA, court_streams: [] } });
+    assert.deepEqual(gammel.r.dataMigrationer, ['037_livestream_logo_standard.sql', '043_ny_standard_skifer.sql']);
+    const ny = await gendanOgLog({ version: '1.0', timestamp: '2026-11-10T10:00:00Z', tables: { settings: LILLA } });
+    assert.deepEqual(ny.r.dataMigrationer, [], 'taget efter 043 kom');
+    const ukendt = await gendanOgLog({ version: '1.0', tables: { settings: LILLA } });
+    assert.deepEqual(ukendt.r.dataMigrationer, []);
+});
+
+test('87: kun hvis backuppen har tabellen, og kun hvis klubbens database selv har kørt migrationen', async () => {
+    const uden043 = ALLE_MIGRATIONER.filter(f => f < '043');
+    const ingenSettings = await gendanOgLog({ version: '1.0', migrationer: uden043, tables: { courts: [] } });
+    assert.deepEqual(ingenSettings.r.dataMigrationer, []);
+    const ikkeKoert = await gendanOgLog({ version: '1.0', migrationer: uden043, tables: { settings: LILLA } }, { koert: uden043 });
+    assert.deepEqual(ikkeKoert.r.dataMigrationer, [], 'databasen mangler selv 043 (migrationsfejl) — kør den ikke her');
+});
+
+test('87: 044 — en ældre backups dubletter får en unik kilde før indsættelsen', async () => {
+    const tm = [
+        { id: 5, tournament_id: 1, source_match_id: 'K1' }, { id: 3, tournament_id: 1, source_match_id: 'K1' },
+        { id: 7, tournament_id: 2, source_match_id: 'K1' }, { id: 8, tournament_id: 1, source_match_id: null },
+    ];
+    const { r } = await gendanOgLog({ version: '1.0', migrationer: ALLE_MIGRATIONER.filter(f => f < '044'), tables: { tournament_matches: tm } });
+    assert.deepEqual(r.dataMigrationer, ['044_unik_turneringskamp_kilde.sql']);
+    assert.deepEqual(tm.map(t => t.source_match_id), ['K1~d5', 'K1', 'K1', null], 'den laveste id beholder kilden, som migrationen gør');
+});
+
+test('87: listen er ærlig — hver migration, der ændrer data i en backup-tabel, er med eller bevidst fravalgt', () => {
+    const dm = new Set(dataMigrationer.DATA_MIGRATIONER.map(m => m.fil));
+    for (const fil of ALLE_MIGRATIONER) {
+        const sql = laes(`backend/migrations/${fil}`).replace(/--[^\n]*/g, '');
+        const tabeller = [...sql.matchAll(/^\s*(?:UPDATE|INSERT(?:\s+IGNORE)?\s+INTO|DELETE\s+FROM|REPLACE\s+INTO)\s+`?(\w+)/gim)].map(m => m[1]);
+        const iBackup = tabeller.filter(t => klubBackup.BACKUP_TABLES.includes(t) || t === 'device_tokens');
+        if (!iBackup.length) continue;
+        assert.ok(dm.has(fil) || dataMigrationer.IKKE_RELEVANTE.has(fil),
+            `${fil} ændrer ${iBackup.join(', ')} — tilføj den til DATA_MIGRATIONER i config/dataMigrationer.js (eller IKKE_RELEVANTE med en begrundelse)`);
+    }
+    for (const m of dataMigrationer.DATA_MIGRATIONER) {
+        assert.ok(ALLE_MIGRATIONER.includes(m.fil), `${m.fil} findes`);
+        assert.match(m.indfoert, /^\d{4}-\d{2}-\d{2}$/);
+        if (!m.sql) assert.ok(dataMigrationer.statements(m).length > 0);
+    }
+});
