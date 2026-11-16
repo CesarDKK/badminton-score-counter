@@ -13,6 +13,7 @@
 
 const { queryOne, query } = require('./database');
 const { banenErIGang } = require('./delkampRegler');
+const { glemFrigivetKamp } = require('./frigivneKampe');
 const { publishGameStateChange } = require('../events/gameStateEvents');
 
 // Banens stilling (også om kampen er afsluttet)
@@ -54,6 +55,7 @@ async function afbrydKamp(courtNumber, req) {
     const court = await queryOne('SELECT id FROM courts WHERE court_number = ?', [courtNumber]);
     if (!court) return false;
     await query('DELETE FROM game_states WHERE court_id = ?', [court.id]);
+    await glemFrigivetKamp(court.id);   // ryddet med vilje (rest af nr. 4)
     await query('UPDATE courts SET is_active = FALSE WHERE id = ?', [court.id]);
     publishGameStateChange(req, courtNumber, 'reset');
     return true;

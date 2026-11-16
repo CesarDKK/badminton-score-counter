@@ -13,6 +13,7 @@ const { hentPlannerVisning, plannerForBane, gemPlannerResultat, kampIGang } = re
 const { validerIndtastning, vundneSaet } = require('../config/kampResultat');
 const { varighedTekst } = require('../config/matchTiming');
 const { gemSidsteAfsluttedeKamp } = require('../config/banerydning');
+const { glemFrigivetKamp } = require('../config/frigivneKampe');
 // Kun én tæller ad gangen pr. bane (se taeller/ejerskab.js og migration 031)
 const ejerskab = require('../taeller/ejerskab');
 // Afgjorte holdkamp-/turneringskampe meldes ind af serveren
@@ -743,6 +744,9 @@ async function gemTilstand(req, courtId, body, { skipAutoActive = false, tryk = 
             }
             throw error;
         }
+        // Banen har en ny række (ny kamp, "Fortsæt kampen", en tildeling): en
+        // tidligere frigivet kamp må ikke tilbydes igen (rest af nr. 4)
+        await glemFrigivetKamp(court.id);
     }
 
     // Et indtastet resultat hører kun til en afsluttet kamp — fortrydes den,
@@ -1082,8 +1086,7 @@ router.delete('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), q
         // Delete game state
         await query('DELETE FROM game_states WHERE court_id = ?', [court.id]);
         // Banen er ryddet med vilje: en frigivet kamp skal ikke tilbydes igen
-        try { await query('DELETE FROM frigivne_kampe WHERE court_id = ?', [court.id]); }
-        catch (e) { /* før migration 051 */ }
+        await glemFrigivetKamp(court.id);
 
         // Set court to inactive and reset doubles mode
         await query('UPDATE courts SET is_active = FALSE, is_doubles = FALSE WHERE id = ?', [court.id]);

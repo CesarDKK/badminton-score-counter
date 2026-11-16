@@ -158,6 +158,12 @@ router.put('/court-count', authMiddleware, requirePage('settings'), async (req, 
         await query(
             `DELETE lf FROM last_finished_matches lf JOIN courts c ON c.id = lf.court_id WHERE c.court_number > ?`,
             [courtCount]);
+        // En frigivet kamp (migration 051) skal heller ikke dukke op igen
+        try {
+            await query(
+                `DELETE fk FROM frigivne_kampe fk JOIN courts c ON c.id = fk.court_id WHERE c.court_number > ?`,
+                [courtCount]);
+        } catch (e) { /* før migration 051 */ }
         await query('UPDATE courts SET is_active = FALSE WHERE court_number > ?', [courtCount]);
 
         res.json({ success: true });

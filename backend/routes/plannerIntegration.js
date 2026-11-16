@@ -23,6 +23,7 @@ const express = require('express');
 const router = express.Router();
 const { query, queryOne } = require('../config/database');
 const { synligBane } = require('../config/baner');
+const { glemFrigivetKamp } = require('../config/frigivneKampe');
 const { currentTenant } = require('../config/tenantPools');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
 const { publishGameStateChange } = require('../events/gameStateEvents');
@@ -320,6 +321,7 @@ async function frigivTildelinger(courtNumber) {
 async function visNavne(court, m) {
     const erDouble = !!(m.side1[1] || m.side2[1]);
     await query('DELETE FROM game_states WHERE court_id = ?', [court.id]);
+    await glemFrigivetKamp(court.id);   // ryddet med vilje (rest af nr. 4)
     await query(
         `INSERT INTO game_states (court_id, player1_name, player1_name2, player2_name, player2_name2)
          VALUES (?, ?, ?, ?, ?)`,
@@ -335,6 +337,7 @@ async function visNavne(court, m) {
 /** Ryd banen helt (tilbage til sponsor-slideshow). */
 async function rydBane(court) {
     await query('DELETE FROM game_states WHERE court_id = ?', [court.id]);
+    await glemFrigivetKamp(court.id);   // ryddet med vilje (rest af nr. 4)
     await query('UPDATE courts SET is_active = FALSE, is_doubles = FALSE WHERE id = ?', [court.id]);
     await query('DELETE FROM last_finished_matches WHERE court_id = ?', [court.id]);
     await frigivTildelinger(court.court_number);

@@ -901,3 +901,77 @@ test("42: POST /pc — ukendt eller tilbagekaldt adgangslink, og en PC uden bane
     assert.equal((await koer(handler, { ...req('pc-token-bane3'), accessMode: 'landing' })).statusKode, 404);
     assert.deepEqual(yt.kald.slice(), []);
 }));
+
+// ======================= Rettelse A (rest af nr. 4): en frigivet kamp glemmes =======================
+// Forløbet, der ikke må kunne ske: bane 3 frigives (tablet T), T vælger
+// "Fortsæt", tæller videre; senere sættes en turneringskamp på banen (rækken
+// slettes), og T's synk ser en tom bane + den gamle frigivne kamp med sit eget
+// tæller-id → "Fortsæt kampen?" → den gamle kamp oven på den nye tildeling.
+
+const baneTildeling = require('../../config/baneTildeling');
+const banerydning = require('../../config/banerydning');
+
+// Database med hukommelse for banens game_states-række og frigivne_kampe
+function frigivetVerden({ raekke = null } = {}) {
+    const v = { gs: raekke, frigivne: new Map([[7, { data: JSON.stringify(koerendeKamp()), frigivet_at: new Date() }]]) };
+    nulstil(async (sql, params) => {
+        if (/FROM courts WHERE court_number/.test(sql)) return [{ id: 7, court_number: 3, is_active: 0, is_doubles: 1, game_mode: '15' }];
+        if (/DELETE FROM frigivne_kampe WHERE court_id = \?/.test(sql)) { v.frigivne.delete(params[0]); return { affectedRows: 1 }; }
+        if (/FROM frigivne_kampe/.test(sql)) { const r = v.frigivne.get(params[0]); return r ? [r] : []; }
+        if (/INSERT INTO game_states/.test(sql)) { v.gs = koerendeKamp({ version: 1 }); return { affectedRows: 1 }; }
+        if (/DELETE FROM game_states/.test(sql)) { v.gs = null; return { affectedRows: 1 }; }
+        if (/FROM game_states WHERE court_id/.test(sql)) return v.gs ? [v.gs] : [];
+        if (/^\s*(UPDATE|INSERT|DELETE)/.test(sql)) return { affectedRows: 1 };
+        return [];
+    });
+    return v;
+}
+const tomBaneGet = async () => (await koer(rute(gameStates, 'get', '/:courtId'), { params: { courtId: '3' }, query: {} })).krop;
+
+test('A: "Fortsæt kampen" (en ny række) glemmer den frigivne kamp — den tilbydes ikke igen', async () => {
+    const v = frigivetVerden();
+    assert.ok((await tomBaneGet()).frigivetKamp, 'før: tilbydes på den tomme bane');
+    const r = await gameStates.gemTilstand({}, 3, {
+        player1: { name: 'Carl', name2: 'Dorte', score: 5, games: 0 }, player2: { name: 'Anna', name2: 'Bo', score: 7, games: 1 },
+        matchStartTime: '2026-11-16T10:00:00.000Z', expectedVersion: 0, taellerId: 'tablet-1-abcdef' });
+    assert.equal(r.status, 200);
+    assert.equal(v.frigivne.size, 0, 'rækken i frigivne_kampe er væk');
+    // Turneringskampen sættes på banen (tjekOgRydBane → afbrydKamp): tom bane, intet tilbud
+    await baneTildeling.afbrydKamp(3, {});
+    assert.equal(v.gs, null);
+    assert.ok(!('frigivetKamp' in await tomBaneGet()), 'tabletten får ikke "Fortsæt kampen?" om den gamle kamp');
+});
+
+test('A: rydning og tildeling glemmer den frigivne kamp — alle steder, game_states slettes med vilje', async () => {
+    // Afbrudt af en tildeling (baneTildeling.afbrydKamp)
+    let v = frigivetVerden({ raekke: koerendeKamp() });
+    await baneTildeling.afbrydKamp(3, {});
+    assert.equal(v.frigivne.size, 0);
+    assert.ok(!('frigivetKamp' in await tomBaneGet()));
+
+    // En afsluttet kamp ryddet ved en ny delkamp (banerydning.rydAfsluttetBane)
+    v = frigivetVerden({ raekke: koerendeKamp({ match_completed: 1, player1_games: 2 }) });
+    assert.equal(await banerydning.rydAfsluttetBane(3, {}), true);
+    assert.equal(v.frigivne.size, 0);
+    assert.ok(!('frigivetKamp' in await tomBaneGet()));
+
+    // Admin/tablet "Ryd banen" (DELETE-ruten)
+    v = frigivetVerden({ raekke: koerendeKamp() });
+    await koer(rute(gameStates, 'delete', '/:courtId'), { params: { courtId: '3' }, user: { admin: true }, body: {} });
+    assert.equal(v.frigivne.size, 0);
+
+    // Planneren (navne på banen / ryd banen) og skjulte baner (Antal baner)
+    const planner = laes('backend/routes/plannerIntegration.js');
+    assert.match(udsnit(planner, 'async function visNavne(', '\n}'), /DELETE FROM game_states[^\n]*\n\s*await glemFrigivetKamp\(court\.id\)/);
+    assert.match(udsnit(planner, 'async function rydBane(', '\n}'), /DELETE FROM game_states[^\n]*\n\s*await glemFrigivetKamp\(court\.id\)/);
+    assert.match(laes('backend/routes/settings.js'), /DELETE fk FROM frigivne_kampe fk JOIN courts c ON c\.id = fk\.court_id WHERE c\.court_number > \?/);
+    // Scheduleren er den eneste, der sletter game_states og lader rækken stå
+    assert.doesNotMatch(udsnit(laes('backend/scheduler.js'), 'async function releaseInactiveCourts(', '\nfunction startInactivityCheck('), /glemFrigivetKamp/);
+});
+
+test('A: en almindelig gemning på en eksisterende række rører ikke frigivne_kampe', async () => {
+    const v = frigivetVerden({ raekke: koerendeKamp() });
+    await gameStates.gemTilstand({}, 3, { player1: { score: 8 } });
+    assert.equal(v.frigivne.size, 1);
+    assert.ok(!kald.some(k => /frigivne_kampe/.test(k.sql)));
+});
