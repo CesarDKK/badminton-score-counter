@@ -1927,3 +1927,31 @@ header > div {
     text-align: center;
 }
 .forbindelse-maerke[hidden] { display: none; }
+
+/* ── Admin på mobil (nr. 50) ──
+   Kun admin-sidernes stylesheet (admin, sponsor, indstillinger …). fundament.css,
+   som tablet/TV/oversigt deler, er urørt; skrivebordet (fin mus, bred skærm) er uændret. */
+@media (pointer: coarse), (max-width: 600px) {
+    /* Små knapper får et rigtigt berøringsmål (~40 px) — kun på touch eller smal skærm */
+    .btn-sm, .knap--lille {
+        min-height: 40px;
+        min-width: 40px;
+        padding-top: 9px;
+        padding-bottom: 9px;
+    }
+    /* En destruktiv lille knap holdes på afstand af naboen */
+    .btn-sm + .btn-danger.btn-sm,
+    .btn-danger.btn-sm + .btn-sm { margin-left: 12px; }
+}
+/* Dialogen (showMessage/confirmDialog på admin + sponsor): knapperne har inline-stil
+   fra utils.js, derfor !important. På smal skærm står knapperne under hinanden i fuld
+   bredde, og en farlig knap får ekstra luft. */
+#messageOverlay > div { max-height: 100%; overflow-y: auto; }
+@media (max-width: 600px) {
+    #messageOverlay > div { padding: 24px 16px !important; }
+    #messageTitle { font-size: 1.7em !important; margin-bottom: 16px !important; overflow-wrap: anywhere; }
+    #messageText { font-size: 1.1em !important; margin-bottom: 24px !important; }
+    #messageButtons { flex-direction: column; gap: 12px !important; }
+    #messageButtons button { width: 100%; font-size: 1.1em !important; padding: 12px 20px !important; }
+    #messageButtons .btn-danger { margin-top: 8px; }
+}

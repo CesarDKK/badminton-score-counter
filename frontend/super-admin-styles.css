@@ -439,3 +439,24 @@ header .subtitle {
 .sh-tabel th, .sh-tabel td { text-align: right; padding: 5px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
 .sh-tabel th:first-child, .sh-tabel td:first-child { text-align: left; }
 .sh-tabel th { font-weight: 600; color: var(--text-muted, rgba(255, 255, 255, 0.62)); }
+
+/* ── Super-admin på mobil (nr. 50) ── klubkortets knapper brydes under navnet,
+   og de farlige knapper (Deaktiver/Slet) får luft til naboen. */
+@media (max-width: 640px) {
+    .club-item { flex-wrap: wrap; }
+    .club-info { flex-basis: 100%; }
+    .club-actions { flex-wrap: wrap; }
+    .club-actions .btn-secondary + .btn-danger { margin-left: 8px; }
+}
+@media (pointer: coarse), (max-width: 600px) {
+    /* Små knapper får et rigtigt berøringsmål (~40 px) — kun på touch eller smal skærm */
+    .btn-sm, .knap--lille {
+        min-height: 40px;
+        min-width: 40px;
+        padding-top: 9px;
+        padding-bottom: 9px;
+    }
+    /* En destruktiv lille knap holdes på afstand af naboen */
+    .btn-sm + .btn-danger.btn-sm,
+    .btn-danger.btn-sm + .btn-sm { margin-left: 12px; }
+}

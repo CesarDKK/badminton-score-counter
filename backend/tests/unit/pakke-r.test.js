@@ -398,3 +398,74 @@ test('49: alle admins pollere bruger den fælles mekanisme — ingen kopier', ()
     assert.match(laes('frontend/admin-styles.css'), /\.forbindelse-maerke\[hidden\] \{ display: none; \}/);
     assert.equal(laes('frontend/js/api.js').includes('Forbindelse'), false, 'api.js (fælles med tablet/TV) er urørt');
 });
+
+// ── Nr. 50: admin på mobil ──────────────────────────────────────────────
+
+// Teksten i den @media-blok, der starter med `hoved` (til den matchende "}")
+function medieblok(css, hoved) {
+    const fra = css.indexOf(hoved);
+    assert.ok(fra >= 0, `mangler ${hoved}`);
+    let dybde = 0;
+    for (let i = css.indexOf('{', fra); i < css.length; i++) {
+        if (css[i] === '{') dybde++;
+        else if (css[i] === '}' && --dybde === 0) return css.slice(fra, i + 1);
+    }
+    throw new Error(`${hoved} lukkes ikke`);
+}
+
+test('50: kun admin-sidernes stylesheets er ændret — tablet, TV, oversigt, live og uret indlæser dem ikke', () => {
+    const adminCss = /(admin-styles|sponsor-styles|super-admin-styles)\.css/;
+    for (const side of ['court-v3.html', 'tv-v3.html', 'oversigt.html', 'live.html', 'ur.html', 'index.html', 'landing.html']) {
+        assert.doesNotMatch(laes(`frontend/${side}`), adminCss, side);
+    }
+    // fundament.css (delt med tablet/TV) har stadig de små knapper som før
+    assert.match(laes('design/fundament.css'), /\.btn-sm, \.knap--lille \{ padding: 5px 13px; font-size: 0\.8em; \}/);
+    assert.doesNotMatch(laes('design/fundament.css'), /pointer: coarse|hover: none/);
+});
+
+test('50: små knapper ~40 px kun på touch/smal skærm; farlig knap med afstand; skrivebordet uændret', () => {
+    for (const fil of ['frontend/admin-styles.css', 'frontend/super-admin-styles.css']) {
+        const css = laes(fil).replace(/\r\n/g, '\n');
+        const blok = medieblok(css, '@media (pointer: coarse), (max-width: 600px) {');
+        assert.match(blok, /\.btn-sm, \.knap--lille \{[^}]*min-height: 40px;[^}]*min-width: 40px;/, fil);
+        assert.match(blok, /\.btn-sm \+ \.btn-danger\.btn-sm,\s*\.btn-danger\.btn-sm \+ \.btn-sm \{ margin-left: 12px; \}/, fil);
+        // reglen findes kun inde i medieblokken
+        assert.equal(css.split('min-height: 40px').length - 1, 1, fil);
+    }
+});
+
+test('50: dialogens knapper brydes og står i fuld bredde på smal skærm (admin + sponsor)', () => {
+    for (const side of ['admin.html', 'sponsor.html']) {
+        assert.match(laes(`frontend/${side}`), /<div id="messageButtons" style="display: flex; flex-wrap: wrap; gap: 20px; justify-content: center;">/, side);
+    }
+    const blok = medieblok(laes('frontend/admin-styles.css').replace(/\r\n/g, '\n'), '@media (max-width: 600px) {\n    #messageOverlay');
+    assert.match(blok, /#messageButtons \{ flex-direction: column;/);
+    assert.match(blok, /#messageButtons button \{ width: 100%;/);
+    assert.match(blok, /#messageButtons \.btn-danger \{ margin-top: 8px; \}/);
+});
+
+test('50: sponsorgalleriets Vis/Slet ses på touch (hover: none); musen beholder hover', () => {
+    const css = laes('frontend/sponsor-styles.css').replace(/\r\n/g, '\n');
+    const blok = medieblok(css, '@media (hover: none) {');
+    assert.match(blok, /\.gallery-overlay \{[^}]*opacity: 1;/);
+    assert.match(blok, /\.gallery-overlay \.btn-danger \{ margin-left: 8px; \}/);
+    assert.match(css, /\.gallery-item:hover \.gallery-overlay \{\s*opacity: 1;/);   // skrivebordet som før
+    // upload-gitteret bliver ikke bredere end skærmen, og galleriets overskrift brydes
+    assert.match(css, /grid-template-columns: minmax\(0, 1fr\);/);
+    assert.equal((laes('frontend/sponsor.html').match(/display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between;/g) || []).length, 2);
+});
+
+test('50: super-admins klubkort bryder knapperne under navnet på smal skærm', () => {
+    const blok = medieblok(laes('frontend/super-admin-styles.css').replace(/\r\n/g, '\n'), '@media (max-width: 640px) {\n    .club-item');
+    assert.match(blok, /\.club-item \{ flex-wrap: wrap; \}/);
+    assert.match(blok, /\.club-info \{ flex-basis: 100%; \}/);
+    assert.match(blok, /\.club-actions \{ flex-wrap: wrap; \}/);
+    assert.match(blok, /\.club-actions \.btn-secondary \+ \.btn-danger \{ margin-left: 8px; \}/);
+});
+
+test('50: cache-versionerne er hævet', () => {
+    assert.ok(version(laes('frontend/admin.html'), 'admin-styles.css') >= 38);
+    assert.ok(version(laes('frontend/sponsor.html'), 'admin-styles.css') >= 38);
+    assert.ok(version(laes('frontend/sponsor.html'), 'sponsor-styles.css') >= 9);
+    assert.ok(version(laes('frontend/super-admin.html'), 'super-admin-styles.css') >= 18);
+});
