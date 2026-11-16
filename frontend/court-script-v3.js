@@ -2017,6 +2017,21 @@ function handleAuthExpired(body) {
 // slettet — banen er nulstillet (admin: Ryd bane) — og vores gemning droppes.
 // Ellers adopteres serverens version + navne og gemningen prøves igen:
 // tælleren er autoritativ for point/serve under spil, admin for navne.
+// navneEfterKonflikt: serverens navne lagt til rette efter tablettens sider.
+// Spillerobjekterne byttes ved sideskift (reglernes skiftSider), og
+// sidesSwapped følger med. Står serveren med en anden orientering end
+// tabletten (tabletten har byttet side, men gemningen er ikke nået frem),
+// byttes serverens navne om, før de bruges.
+function navneEfterKonflikt(lokal, server) {
+    if (!server || !server.player1 || !server.player2) return null;
+    const byttet = !!server.sidesSwapped !== !!lokal.sidesSwapped;
+    const [s1, s2] = byttet ? [server.player2, server.player1] : [server.player1, server.player2];
+    return {
+        player1: { name: s1.name || lokal.player1.name, name2: s1.name2 || lokal.player1.name2 },
+        player2: { name: s2.name || lokal.player2.name, name2: s2.name2 || lokal.player2.name2 }
+    };
+}
+
 async function handleSaveConflict(conflict) {
     if (conflict && conflict.state && serverErVidereEfterPause(conflict.state)) {
         // Ikke gem igen — vores gemning ville overskrive den andens point
@@ -2039,19 +2054,16 @@ async function handleSaveConflict(conflict) {
     console.warn('Save-konflikt: adopterer serverversion', conflict.version, 'og prøver igen');
     gameState.version = conflict.version || server.version || 0;
 
-    // Navne adopteres kun når de ikke styres af en holdkamp/turnering og
-    // siderne ikke er byttet lokalt — samme regler som periodic sync
-    const sidesSwitched = gameState.sidesManuallySwitched ||
-        gameState.player1.games > 0 || gameState.player2.games > 0;
-    if (!assignedHoldkampGameId && !assignedTournamentMatchId && !sidesSwitched) {
-        if (server.player1) {
-            gameState.player1.name = server.player1.name || gameState.player1.name;
-            gameState.player1.name2 = server.player1.name2 || gameState.player1.name2;
-        }
-        if (server.player2) {
-            gameState.player2.name = server.player2.name || gameState.player2.name;
-            gameState.player2.name2 = server.player2.name2 || gameState.player2.name2;
-        }
+    // Navne adopteres kun når de ikke styres af en holdkamp/turnering — samme
+    // regel som periodic sync. Før blev de heller ikke adopteret, når siderne
+    // var byttet (dvs. fra andet sæt): så skrev genforsøget tablettens gamle
+    // navne oven i admins navnerettelse (nr. 89). Nu vendes serverens navne
+    // efter dens egen side-orientering, før de adopteres.
+    const navne = !assignedHoldkampGameId && !assignedTournamentMatchId
+        ? navneEfterKonflikt(gameState, server) : null;
+    if (navne) {
+        Object.assign(gameState.player1, navne.player1);
+        Object.assign(gameState.player2, navne.player2);
         updateDisplay();
     }
 
