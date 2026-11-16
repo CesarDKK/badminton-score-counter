@@ -1890,3 +1890,23 @@ header > div {
 @media (max-width: 600px) {
     .bp-gennemse-head > .bp-opret-knap { width: 100%; }
 }
+
+/* Kamphistorik: ret/slet én kamp og eksport til Excel (nr. 48) */
+.historik-handlinger {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+.historik-raekke__knap { margin-left: auto; }
+.historik-eksport {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+}
+.formular-felt {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}

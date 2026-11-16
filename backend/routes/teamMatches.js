@@ -126,6 +126,28 @@ async function opretHoldkamp({ format, team1Name, team2Name, games, team1LogoId,
     }
 }
 
+// GET /api/team-matches/export.csv - delkampene i alle afsluttede holdkampe som
+// CSV til Excel (nr. 48), én række pr. delkamp. Samme adgang som historikken;
+// hentes i bidder (config/historikEksport.js).
+router.get('/export.csv', authMiddleware, requirePage('history'), async (req, res, next) => {
+    const eksport = require('../config/historikEksport');
+    try {
+        await eksport.skrivCsv(res, eksport.filnavn('holdkampe'), eksport.HOLD_HOVED,
+            (efter, antal) => query(
+                `SELECT g.id, g.category, g.court_number, g.status, g.winner_team, g.set_scores,
+                        g.team1_player1, g.team1_player2, g.team2_player1, g.team2_player2,
+                        g.started_at, g.finished_at, tm.team1_name, tm.team2_name, tm.created_at
+                 FROM team_match_games g JOIN team_matches tm ON tm.id = g.team_match_id
+                 WHERE tm.status = 'finished' ${efter === null ? '' : 'AND g.id < ?'}
+                 ORDER BY g.id DESC LIMIT ${Number(antal)}`,
+                efter === null ? [] : [efter]),
+            eksport.holdRaekke);
+    } catch (error) {
+        if (res.headersSent) { console.error('Eksport af holdkampe fejlede:', error.message); return res.destroy(); }
+        next(error);
+    }
+});
+
 // GET /api/team-matches/history - afsluttede holdkampe med delkampe, nyeste først.
 // Kun admin (siden Kamphistorik) og højst 200 pr. side (?limit=, ?offset=) —
 // nr. 88: før uden login og uden loft. Oversigt og TV bruger /active og /by-court.
