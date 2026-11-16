@@ -1,5 +1,74 @@
 ﻿// Admin JavaScript
 const api = window.BadmintonAPI;
+
+// ── Pollerne: pause i en skjult fane og "Ingen forbindelse" (nr. 49) ──
+// Én fælles mekanisme for alle admins pollere (baneoversigt, holdkamp, kø,
+// turnering, skærmstatus, livestream):
+//  - synligInterval(fn, ms) er setInterval, der springer over, mens fanen er
+//    skjult, og kalder fn med det samme, når fanen ses igen. stopInterval stopper.
+//  - Forbindelse: api.request pakkes ind her (kun på admin-siden; api.js er
+//    urørt). Efter 2 fejlede kald i træk — netværk, timeout eller 5xx, og api.js
+//    har allerede prøvet hvert kald 3 gange — vises "Ingen forbindelse — viser
+//    tal fra kl. HH:MM" øverst. Det første vellykkede svar fjerner den.
+//    401/403 (login udløbet) håndteres som før af api.js og tæller ikke; andre
+//    4xx betyder, at serveren svarer.
+const synligeIntervaller = new Map();   // interval-id → fn
+function synligInterval(fn, ms) {
+    const id = setInterval(() => { if (!document.hidden) fn(); }, ms);
+    synligeIntervaller.set(id, fn);
+    return id;
+}
+function stopInterval(id) {
+    if (!id) return;
+    clearInterval(id);
+    synligeIntervaller.delete(id);
+}
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    for (const fn of new Set(synligeIntervaller.values())) {
+        try { fn(); } catch (e) { console.error('Opdatering ved synlig fane fejlede:', e); }
+    }
+});
+
+const Forbindelse = (() => {
+    const GRAENSE = 2;
+    let fejlITraek = 0;
+    let sidstOk = null;
+    const kl = (d) => d.toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
+    function maerke() { return document.getElementById('forbindelseMaerke'); }
+    function ok() {
+        fejlITraek = 0;
+        sidstOk = new Date();
+        const el = maerke();
+        if (el && !el.hidden) el.hidden = true;
+    }
+    function fejl(err) {
+        const status = err && err.status;
+        if (status === 401 || status === 403) return;   // login — som før
+        if (status && status < 500) { ok(); return; }   // serveren svarede
+        if (++fejlITraek < GRAENSE) return;
+        const el = maerke();
+        if (!el) return;
+        el.textContent = sidstOk
+            ? `Ingen forbindelse — viser tal fra kl. ${kl(sidstOk)}`
+            : 'Ingen forbindelse — prøver igen …';
+        el.hidden = false;
+    }
+    return { ok, fejl, GRAENSE };
+})();
+{
+    const _request = api.request.bind(api);
+    api.request = async function (...args) {
+        try {
+            const svar = await _request(...args);
+            Forbindelse.ok();
+            return svar;
+        } catch (err) {
+            Forbindelse.fejl(err);
+            throw err;
+        }
+    };
+}
 let refreshInterval = null;
 let liveUpdatesHandle = null; // SSE-forbindelse til live game-state opdateringer
 let _overviewCourtCount = null; // cachet courtCount til baneoversigten (nulstilles ved 'settings'-event)
@@ -252,10 +321,10 @@ async function showDashboard() {
 
 function startAutoRefresh() {
     // Kaldes igen ved retur til baneoversigten — start ikke to pollere
-    if (refreshInterval) clearInterval(refreshInterval);
+    stopInterval(refreshInterval);
     loadCourtOverview();
     // Reduced from 1000ms to 2500ms to decrease server load (saves 60% API calls)
-    refreshInterval = setInterval(loadCourtOverview, 2500);
+    refreshInterval = synligInterval(loadCourtOverview, 2500);
 
     // SSE-poke: opdater med det samme naar en bane aendrer sig i stedet for
     // at vente paa naeste poll. Pollingen beholdes uaendret som sikkerhedsnet.
@@ -281,7 +350,7 @@ function startAutoRefresh() {
 // Saml hurtige events til een opdatering (fx naar flere baner gemmer samtidig)
 let _overviewRefreshTimer = null;
 function scheduleOverviewRefresh() {
-    if (_overviewRefreshTimer) return;
+    if (_overviewRefreshTimer || document.hidden) return;   // skjult fane: hentes, når den ses igen
     _overviewRefreshTimer = setTimeout(() => {
         _overviewRefreshTimer = null;
         loadCourtOverview();
@@ -290,7 +359,7 @@ function scheduleOverviewRefresh() {
 
 function stopAutoRefresh() {
     if (refreshInterval) {
-        clearInterval(refreshInterval);
+        stopInterval(refreshInterval);
         refreshInterval = null;
     }
     if (timerUpdateInterval) {
@@ -1595,7 +1664,7 @@ async function showHoldkamp() {
     bpStartWatcherRefresh();
     // Poll every 3 seconds for live scores
     if (!holdkampRefreshTimer) {
-        holdkampRefreshTimer = setInterval(loadActiveHoldkamp, 3000);
+        holdkampRefreshTimer = synligInterval(loadActiveHoldkamp, 3000);
     }
 }
 
@@ -1603,14 +1672,14 @@ async function showHoldkamp() {
 // holdkamp at vise — køen med ventende kampe kører videre for sig.
 function stopHoldkampPoll() {
     if (holdkampRefreshTimer) {
-        clearInterval(holdkampRefreshTimer);
+        stopInterval(holdkampRefreshTimer);
         holdkampRefreshTimer = null;
     }
 }
 
 function startHoldkampPoll() {
     if (!holdkampRefreshTimer) {
-        holdkampRefreshTimer = setInterval(loadActiveHoldkamp, 3000);
+        holdkampRefreshTimer = synligInterval(loadActiveHoldkamp, 3000);
     }
 }
 
@@ -1655,7 +1724,7 @@ async function loadActiveHoldkamp() {
 
         // Polling may have been stopped when there was no active match; restart it.
         if (!holdkampRefreshTimer) {
-            holdkampRefreshTimer = setInterval(loadActiveHoldkamp, 3000);
+            holdkampRefreshTimer = synligInterval(loadActiveHoldkamp, 3000);
         }
 
         // Don't re-render while an edit form is open eller mens en bane-dropdown
@@ -3583,11 +3652,11 @@ let skaermStatusInterval = null;
 let skaermStatusTik = 0;
 
 function startSkaermStatusRefresh() {
-    if (skaermStatusInterval) clearInterval(skaermStatusInterval);
-    skaermStatusInterval = setInterval(async () => {
+    stopInterval(skaermStatusInterval);
+    skaermStatusInterval = synligInterval(async () => {
         // Stop af sig selv, når siden er skiftet væk fra Adgangslinks
         if (document.getElementById('deviceTokensSection').style.display === 'none') {
-            clearInterval(skaermStatusInterval);
+            stopInterval(skaermStatusInterval);
             skaermStatusInterval = null;
             return;
         }
@@ -3617,10 +3686,10 @@ async function showLivestream() {
     else if (ytSvar === 'afbrudt') livestreamYoutubeBesked('Afbrudt hos Google — intet er ændret', true);
     else if (ytSvar === 'fejl') livestreamYoutubeBesked(svar.get('besked') || 'Kanalen kunne ikke forbindes', true);
     // Statussen hvert 10. sekund — stopper af sig selv, når siden er skiftet væk
-    if (livestreamInterval) clearInterval(livestreamInterval);
-    livestreamInterval = setInterval(() => {
+    stopInterval(livestreamInterval);
+    livestreamInterval = synligInterval(() => {
         if (document.getElementById('livestreamSection').style.display === 'none') {
-            clearInterval(livestreamInterval);
+            stopInterval(livestreamInterval);
             livestreamInterval = null;
             return;
         }
@@ -5660,17 +5729,17 @@ async function bpStopWatcher(id) {
 function bpStartWatcherRefresh() {
     bpStopWatcherRefresh();
     bpLoadWatchers();
-    bpWatcherTimer = setInterval(() => {
+    bpWatcherTimer = synligInterval(() => {
         bpLoadWatchers();
         const logBoks = document.getElementById('bpVagtLogBoks');
         if (logBoks && logBoks.open) bpLoadVagtLog();
     }, 60000);
-    bpWatcherTick = setInterval(bpTikNedtaelling, 1000);
+    bpWatcherTick = synligInterval(bpTikNedtaelling, 1000);
 }
 
 function bpStopWatcherRefresh() {
-    if (bpWatcherTimer) { clearInterval(bpWatcherTimer); bpWatcherTimer = null; }
-    if (bpWatcherTick) { clearInterval(bpWatcherTick); bpWatcherTick = null; }
+    if (bpWatcherTimer) { stopInterval(bpWatcherTimer); bpWatcherTimer = null; }
+    if (bpWatcherTick) { stopInterval(bpWatcherTick); bpWatcherTick = null; }
 }
 
 function bpStatus(msg, type) {
@@ -5821,13 +5890,13 @@ async function showTournament() {
     history.replaceState(null, '', '#tournament');
     await loadActiveTournaments();
     if (!tournamentRefreshTimer) {
-        tournamentRefreshTimer = setInterval(loadActiveTournaments, 3000);
+        tournamentRefreshTimer = synligInterval(loadActiveTournaments, 3000);
     }
 }
 
 function stopTournamentRefresh() {
     if (tournamentRefreshTimer) {
-        clearInterval(tournamentRefreshTimer);
+        stopInterval(tournamentRefreshTimer);
         tournamentRefreshTimer = null;
     }
 }

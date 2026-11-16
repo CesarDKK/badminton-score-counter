@@ -1910,3 +1910,20 @@ header > div {
     flex-direction: column;
     min-width: 0;
 }
+
+/* "Ingen forbindelse — viser tal fra kl. …" øverst, mens hentningerne fejler (nr. 49) */
+.forbindelse-maerke {
+    position: sticky;
+    top: 0;
+    z-index: 900;
+    margin: 0 0 12px;
+    padding: 8px 14px;
+    border-radius: 6px;
+    background: rgba(var(--color-warning-rgb, 255, 176, 46), 0.15);
+    border: 1px solid rgba(var(--color-warning-rgb, 255, 176, 46), 0.5);
+    color: var(--color-warning, #ffb02e);
+    font-size: 0.9em;
+    font-weight: 600;
+    text-align: center;
+}
+.forbindelse-maerke[hidden] { display: none; }

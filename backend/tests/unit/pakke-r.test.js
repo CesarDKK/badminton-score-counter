@@ -1,6 +1,7 @@
 /**
  * Pakke R — admin på kampdagen.
  *   48  ret/slet én kamp, "før tid" + ret i turneringshistorikken, eksport til Excel
+ *   49  pollerne holder pause i en skjult fane og siger til, når forbindelsen er væk
  *
  * Kør: npm run test:unit
  */
@@ -293,6 +294,107 @@ test('48: admin — ret/slet pr. kamp med bekræftelse, før tid og ret i turner
     assert.match(a, /tournament: '\/tournaments\/export\.csv'/);
     assert.match(a, /Authorization: `Bearer \$\{api\.token\}`/);
     // Versioner
-    assert.match(html, /admin-script\.js\?v=120/);
-    assert.match(html, /admin-styles\.css\?v=36/);
+    assert.ok(version(html, 'admin-script.js') >= 120);
+    assert.ok(version(html, 'admin-styles.css') >= 36);
+});
+
+const version = (html, fil) => Number((html.match(new RegExp(`${fil.replace('.', '\\.')}\\?v=(\\d+)`)) || [])[1]);
+
+// ======================= Nr. 49: pollerne =======================
+
+// Kør admins fælles mekanisme (fra synligInterval til api.request-indpakningen)
+// med en falsk document, timere og api
+function polleMekanisme() {
+    const src = laes('frontend/admin-script.js').replace(/\r\n/g, '\n');
+    const fra = src.indexOf('const synligeIntervaller');
+    const til = src.indexOf('\n}\n', src.indexOf('api.request = async function')) + 3;
+    assert.ok(fra > 0 && til > fra);
+    const timere = new Map();
+    let naesteId = 1;
+    const lyttere = {};
+    const maerke = { hidden: true, textContent: '' };
+    const document = {
+        hidden: false,
+        addEventListener: (t, fn) => { (lyttere[t] = lyttere[t] || []).push(fn); },
+        getElementById: (id) => (id === 'forbindelseMaerke' ? maerke : null)
+    };
+    let naesteSvar = null;
+    const api = { kald: 0, async request() { this.kald++; const s = naesteSvar; if (s instanceof Error) throw s; return s; } };
+    const ctx = {
+        document, api, console,
+        setInterval: (fn) => { const id = naesteId++; timere.set(id, fn); return id; },
+        clearInterval: (id) => { timere.delete(id); }
+    };
+    require('vm').runInNewContext(src.slice(fra, til) + '\nthis.synligInterval = synligInterval; this.stopInterval = stopInterval; this.Forbindelse = Forbindelse;', ctx);
+    return {
+        ...ctx, maerke, timere, lyttere,
+        tik: () => [...timere.values()].forEach(fn => fn()),
+        svar: (s) => { naesteSvar = s; },
+        fejl: (status) => Object.assign(new Error('x'), status ? { status } : {}),
+        synlig: (s) => { document.hidden = !s; (lyttere.visibilitychange || []).forEach(fn => fn()); }
+    };
+}
+
+test('49: synligInterval holder pause i en skjult fane og henter straks, når den ses igen', () => {
+    const m = polleMekanisme();
+    let a = 0, b = 0;
+    const idA = m.synligInterval(() => a++, 2500);
+    m.synligInterval(() => b++, 3000);
+    m.tik();
+    assert.deepEqual([a, b], [1, 1]);
+    m.synlig(false);
+    m.tik(); m.tik();
+    assert.deepEqual([a, b], [1, 1], 'intet hentes i en skjult fane');
+    m.synlig(true);
+    assert.deepEqual([a, b], [2, 2], 'straks, når fanen ses igen');
+    m.stopInterval(idA);
+    m.synlig(false); m.synlig(true);
+    assert.deepEqual([a, b], [2, 3], 'en stoppet poller vækkes ikke');
+    m.stopInterval(null);   // tåler tomt id
+});
+
+test('49: "Ingen forbindelse — viser tal fra kl. HH:MM" efter 2 fejl i træk, væk ved næste svar; 401/403 som før', async () => {
+    const m = polleMekanisme();
+    const kald = async () => { try { await m.api.request('/x'); } catch { /* poller logger selv */ } };
+    m.svar({ ok: 1 }); await kald();
+    m.svar(m.fejl()); await kald();
+    assert.equal(m.maerke.hidden, true, 'én fejl er ikke nok');
+    m.svar(m.fejl(502)); await kald();
+    assert.equal(m.maerke.hidden, false);
+    assert.match(m.maerke.textContent, /^Ingen forbindelse — viser tal fra kl\. \d{2}[.:]\d{2}$/);
+    m.svar({ ok: 1 }); await kald();
+    assert.equal(m.maerke.hidden, true, 'væk ved første vellykkede hentning');
+    // Login udløbet: tæller ikke som "ingen forbindelse"
+    m.svar(m.fejl(401)); await kald(); await kald(); await kald();
+    m.svar(m.fejl(403)); await kald();
+    assert.equal(m.maerke.hidden, true);
+    // Andre 4xx: serveren svarer → nulstiller
+    m.svar(m.fejl()); await kald();
+    m.svar(m.fejl(409)); await kald();
+    m.svar(m.fejl()); await kald();
+    assert.equal(m.maerke.hidden, true);
+    // Fejlen kastes stadig videre til kalderen
+    m.svar(m.fejl(500));
+    await assert.rejects(m.api.request('/x'));
+});
+
+test('49: alle admins pollere bruger den fælles mekanisme — ingen kopier', () => {
+    const a = laes('frontend/admin-script.js');
+    for (const poller of ['loadCourtOverview, 2500', 'loadActiveHoldkamp, 3000', 'loadActiveTournaments, 3000', 'bpTikNedtaelling, 1000']) {
+        assert.match(a, new RegExp(`synligInterval\\(${poller.replace(/[(),]/g, '\\$&')}\\)`), poller);
+    }
+    assert.match(a, /skaermStatusInterval = synligInterval\(/);
+    assert.match(a, /livestreamInterval = synligInterval\(/);
+    assert.match(a, /bpWatcherTimer = synligInterval\(/);
+    // Kun to setInterval tilbage: i synligInterval selv og det lokale ur (ingen netværk)
+    const rest = [...a.matchAll(/setInterval\(([^,]*)/g)].map(m => m[1].trim());
+    assert.deepEqual(rest, ['() => { if (!document.hidden) fn(); }', 'updateAllTimerDisplays']);
+    assert.equal((a.match(/addEventListener\('visibilitychange'/g) || []).length, 1, 'én lytter');
+    assert.match(a, /if \(_overviewRefreshTimer \|\| document\.hidden\) return;/, 'SSE-puf venter også');
+    const html = laes('frontend/admin.html');
+    assert.match(html, /id="forbindelseMaerke"[^>]*role="status"[^>]*hidden/);
+    assert.ok(version(html, 'admin-script.js') >= 121);
+    assert.ok(version(html, 'admin-styles.css') >= 37);
+    assert.match(laes('frontend/admin-styles.css'), /\.forbindelse-maerke\[hidden\] \{ display: none; \}/);
+    assert.equal(laes('frontend/js/api.js').includes('Forbindelse'), false, 'api.js (fælles med tablet/TV) er urørt');
 });
