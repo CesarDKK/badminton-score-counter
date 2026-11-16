@@ -469,3 +469,14 @@ test('50: cache-versionerne er hævet', () => {
     assert.ok(version(laes('frontend/sponsor.html'), 'sponsor-styles.css') >= 9);
     assert.ok(version(laes('frontend/super-admin.html'), 'super-admin-styles.css') >= 18);
 });
+
+test('50: alle sider, der indlæser admin-styles.css, bruger samme version', () => {
+    const sider = fs.readdirSync(path.join(ROD, 'frontend')).filter(f => f.endsWith('.html'));
+    const versioner = new Map();
+    for (const side of sider) {
+        const v = Number((laes(`frontend/${side}`).match(/href="admin-styles\.css\?v=(\d+)"/) || [])[1]);   // ikke super-admin-styles
+        if (v) versioner.set(side, v);
+    }
+    assert.ok(versioner.size >= 6, [...versioner.keys()].join(', '));
+    assert.equal(new Set(versioner.values()).size, 1, JSON.stringify(Object.fromEntries(versioner)));
+});
