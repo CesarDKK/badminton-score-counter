@@ -6,7 +6,7 @@ const path = require('path');
 require('dotenv').config();
 
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
-const { startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk, startUgentligBackup, startSkaermLogOprydning, startUrPauser, startYoutubeVagt, startYoutubeSynlighed } = require('./scheduler');
+const { startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk, startUgentligBackup, startSkaermLogOprydning, startSlettetOprydning, startUrPauser, startYoutubeVagt, startYoutubeSynlighed } = require('./scheduler');
 const opstart = require('./config/opstart');
 
 const app = express();
@@ -202,6 +202,7 @@ async function startOp() {
                 startPlannerVindueLuk();
                 startUgentligBackup();
                 startSkaermLogOprydning();
+                startSlettetOprydning();
                 startUrPauser();
                 startYoutubeVagt();
                 startYoutubeSynlighed();

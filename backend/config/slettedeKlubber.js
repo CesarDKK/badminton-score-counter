@@ -14,9 +14,21 @@
 // blive en klubs egen og står aldrig i nogen listning. Den ligger i
 // club-backups-volumet, som ikke udstilles på nettet (det gør uploads).
 //
-// Der slettes intet: en klub, der blev slettet ved en fejl, kan reddes ved at
-// gendanne en af backupperne (super-admin → Gendan, "fra en anden klub").
-// Mapperne ryddes ikke af sig selv (se pakke-q-rapport.md for kommandoerne).
+// Ved sletningen slettes intet: en klub, der blev slettet ved en fejl, kan
+// reddes ved at gendanne en af backupperne (super-admin → Gendan, "fra en
+// anden klub") — i 60 dage (SLETTET_BEHOLD_DAGE, besluttet af Jesper
+// 2026-11-16). Derefter sletter natjobbet (scheduler.js startSlettetOprydning)
+// mappen; fristen står som "slettes" i slettet.json. Kommandoerne til at se,
+// redde og slette nu står i pakke-q-rapport.md.
+//
+// Natjobbet er et rm -rf i mappen med ALLE klubbers backups, så det er stramt
+// (rydGamle). Først springes enhver mappe over, hvis navn er en klubs db_name
+// i master-databasen (aktiv eller deaktiveret) — uden klublisten slettes intet
+// den nat. Derudover kun rigtige mapper (ikke symlinks) direkte under
+// CLUB_BACKUP_DIR med præcis navneformen slettet-ÅÅÅÅMMDD-TTMMSS-<db>[-N]; en
+// klubs mappe hedder <db_name>, som aldrig har '-', og matcher heller ikke. Alderen
+// regnes fra "flyttet" i slettet.json, ellers fra tidsstemplet i navnet — aldrig
+// fra filsystemets mtime. Kan den ikke afgøres, røres mappen ikke.
 //
 // Samme flytning sker, når en klub oprettes, og der allerede ligger mapper
 // med dens db_name (rester fra en sletning før denne rettelse).
@@ -27,6 +39,11 @@ const { BACKUP_DIR } = require('./autoBackup');
 const { UPLOAD_DIR } = require('./sponsorFiler');
 
 const SIKKER_DB = /^[A-Za-z0-9_]+$/;
+const SLETTET_BEHOLD_DAGE = 60;
+const SLETTET_NAVN = /^slettet-(\d{8})-(\d{6})-[A-Za-z0-9_]+(-\d+)?$/;
+const DAG_MS = 24 * 60 * 60 * 1000;
+
+const slettesTid = (flyttet) => new Date(flyttet.getTime() + SLETTET_BEHOLD_DAGE * DAG_MS);
 
 function stempel(d) {
     const p = (n) => String(n).padStart(2, '0');
@@ -68,7 +85,7 @@ function flytTilSide(klub, { grund = 'klubben blev slettet', nu = new Date() } =
     fs.writeFileSync(path.join(dest, 'slettet.json'), JSON.stringify({
         klub: klub.name || null, subdomain: klub.subdomain || null, db_name: dbName,
         oprettet: klub.created_at ? new Date(klub.created_at).toISOString() : null,
-        flyttet: nu.toISOString(), grund
+        flyttet: nu.toISOString(), slettes: slettesTid(nu).toISOString(), grund
     }, null, 2) + '\n');
     for (const [del, sti] of mapper) flyt(sti, path.join(dest, del));
     return navn;
@@ -87,4 +104,94 @@ function liste() {
         .sort((a, b) => b.navn.localeCompare(a.navn));
 }
 
-module.exports = { flytTilSide, liste };
+// Tidsstemplet i mappenavnet (UTC, som stempel() skriver det), eller null
+function navnetsTid(navn) {
+    const m = SLETTET_NAVN.exec(navn);
+    if (!m) return null;
+    const [, d, t] = m;
+    const tal = [d.slice(0, 4), d.slice(4, 6), d.slice(6, 8), t.slice(0, 2), t.slice(2, 4), t.slice(4, 6)].map(Number);
+    const tid = new Date(Date.UTC(tal[0], tal[1] - 1, tal[2], tal[3], tal[4], tal[5]));
+    // 20261340-… o.l. ruller over i Date — så er det ikke et tidsstempel
+    return stempel(tid) === `${d}-${t}` ? tid : null;
+}
+
+// Hvornår mappen blev lavet: "flyttet" i slettet.json, ellers navnets
+// tidsstempel. { tid: Date | null, kilde, info }
+function flyttetTid(sti, navn) {
+    let info = null;
+    try { info = JSON.parse(fs.readFileSync(path.join(sti, 'slettet.json'), 'utf8')); } catch { /* mangler/ulæselig */ }
+    if (info && typeof info.flyttet === 'string') {
+        const t = new Date(info.flyttet);
+        if (!isNaN(t.getTime())) return { tid: t, kilde: 'slettet.json', info };
+    }
+    const t = navnetsTid(navn);
+    return { tid: t, kilde: t ? 'mappenavnet' : null, info };
+}
+
+/**
+ * Natjobbet: slet slettet-mapper, der er ældre end SLETTET_BEHOLD_DAGE.
+ * klubMapper: Set med db_name på ALLE klubber i master-databasen (aktive og
+ * deaktiverede) — påkrævet; uden det slettes intet.
+ * Returnerer { slettet: [navn], beholdt: [navn], sprunget: [navn], fejl: [navn] }
+ * (+ afvist: tekst, når der intet blev gjort). En fejl på én mappe stopper
+ * ikke de næste.
+ */
+function rydGamle({ nu = new Date(), log = console, klubMapper } = {}) {
+    const res = { slettet: [], beholdt: [], sprunget: [], fejl: [] };
+    // Værn 1: uden klublisten slettes intet — så kan ingen kalder glemme den
+    if (!(klubMapper instanceof Set)) {
+        res.afvist = 'klublisten mangler';
+        log.warn('⚠️ Oprydning af slettede klubber: kaldt uden klublisten — intet slettes');
+        return res;
+    }
+    // Store/små bogstaver ignoreres i sammenligningen (ekstra forsigtighed)
+    const klubber = new Set([...klubMapper].map(n => String(n).toLowerCase()));
+    if (!fs.existsSync(BACKUP_DIR)) return res;
+    const rod = fs.realpathSync(BACKUP_DIR);
+    for (const d of fs.readdirSync(BACKUP_DIR, { withFileTypes: true })) {
+        // Værn 2, før alt andet: en mappe med en klubs db_name røres aldrig
+        if (klubber.has(d.name.toLowerCase())) {
+            if (SLETTET_NAVN.test(d.name)) {
+                log.warn(`⚠️ Oprydning af slettede klubber: ${d.name} er en klubs egen mappe — røres ikke`);
+                res.sprunget.push(d.name);
+            }
+            continue;
+        }
+        // Værn 3: navnet. En klubs mappe (<db_name>, uden '-') matcher aldrig
+        if (!SLETTET_NAVN.test(d.name)) continue;
+        const sti = path.join(BACKUP_DIR, d.name);
+        try {
+            if (d.isSymbolicLink() || !d.isDirectory()) {
+                log.warn(`⚠️ Oprydning af slettede klubber: ${d.name} er ikke en almindelig mappe — røres ikke`);
+                res.sprunget.push(d.name);
+                continue;
+            }
+            const st = fs.lstatSync(sti);
+            if (st.isSymbolicLink() || !st.isDirectory()) { res.sprunget.push(d.name); continue; }
+            const opl = fs.realpathSync(sti);
+            if (path.dirname(opl) !== rod || path.basename(opl) !== d.name) {
+                log.warn(`⚠️ Oprydning af slettede klubber: ${d.name} peger uden for ${BACKUP_DIR} — røres ikke`);
+                res.sprunget.push(d.name);
+                continue;
+            }
+            const { tid, kilde, info } = flyttetTid(opl, d.name);
+            if (!tid) {
+                log.warn(`⚠️ Oprydning af slettede klubber: alderen på ${d.name} kan ikke afgøres — røres ikke`);
+                res.sprunget.push(d.name);
+                continue;
+            }
+            if (nu.getTime() < slettesTid(tid).getTime()) { res.beholdt.push(d.name); continue; }
+            const dage = Math.floor((nu.getTime() - tid.getTime()) / DAG_MS);
+            const klub = (info && (info.klub || info.db_name)) || '?';
+            fs.rmSync(opl, { recursive: true, force: true });
+            log.log(`🧹 Slettet klubs filer fjernet: ${d.name} (klub ${klub}, ${dage} dage gammel efter ${kilde})`);
+            res.slettet.push(d.name);
+        } catch (e) {
+            log.error(`❌ Oprydning af ${d.name} fejlede:`, e.message);
+            res.fejl.push(d.name);
+        }
+    }
+    return res;
+}
+
+module.exports = { flytTilSide, liste, rydGamle, navnetsTid, SLETTET_BEHOLD_DAGE, SLETTET_NAVN };

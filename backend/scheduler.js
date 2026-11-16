@@ -562,6 +562,44 @@ function startSkaermLogOprydning() {
 }
 
 /**
+ * En slettet klubs gemte filer (club-backups/slettet-*, nr. 57) slettes efter
+ * 60 dage (config/slettedeKlubber.js rydGamle) — hver nat kl. 04:45, væk fra
+ * mandagens backup kl. 02:00 og YouTube-jobbet kl. 03:40, og i backup-køen, så
+ * den aldrig kører samtidig med en backup. Ikke ved opstarten: en deploy skal
+ * ikke slette noget.
+ *
+ * Værn: lige før oprydningen hentes db_name på ALLE klubber (aktive og
+ * deaktiverede) fra master-databasen, og en mappe med en klubs navn røres
+ * aldrig. Kan listen ikke hentes, slettes intet den nat.
+ */
+const SLETTET_OPRYDNING_CRON = '45 4 * * *';
+
+async function slettetOprydning({ nu = () => new Date(), log = console } = {}) {
+    return enBackupAdGangen(async () => {
+        let klubMapper;
+        try {
+            const raekker = await require('./config/masterDatabase').query('SELECT db_name FROM clubs');
+            if (!Array.isArray(raekker)) throw new Error('uventet svar fra master-databasen');
+            klubMapper = new Set(raekker.map(r => r.db_name).filter(Boolean));
+        } catch (err) {
+            log.error('❌ Oprydning af slettede klubber: klublisten kunne ikke hentes — intet slettes i nat:', err.message);
+            return { slettet: [], beholdt: [], sprunget: [], fejl: [], afvist: 'klublisten kunne ikke hentes' };
+        }
+        return require('./config/slettedeKlubber').rydGamle({ nu: nu(), log, klubMapper });
+    });
+}
+
+function startSlettetOprydning() {
+    cron.schedule(SLETTET_OPRYDNING_CRON, async () => {
+        try { await slettetOprydning(); }
+        catch (err) { console.error('❌ Oprydning af slettede klubbers filer fejlede:', err.message); }
+    }, {
+        scheduled: true,
+        timezone: 'Europe/Copenhagen'
+    });
+}
+
+/**
  * Tæl fra uret: pausen ved 11 (8) og mellem sæt slutter af sig selv ved 0:00
  * (routes/urTaeller.js afslutUdloebnePauser). Uret kan ikke selv gøre det, når
  * skærmen er slukket. Hvert 2. sekund; uden pauser en lille forespørgsel pr. klub.
@@ -677,4 +715,4 @@ function startUrPauser() {
     console.log('⏰ Scheduled urets pauser hvert 2. sekund (slutter ved 0:00, når uret tæller)');
 }
 
-module.exports = { resetDatabase, releaseInactiveCourts, startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk, startUgentligBackup, ugentligBackup, indhentUgentligBackup, startSkaermLogOprydning, startUrPauser, startYoutubeVagt, startYoutubeSynlighed, youtubeSynlighed };
+module.exports = { resetDatabase, releaseInactiveCourts, startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk, startUgentligBackup, ugentligBackup, indhentUgentligBackup, startSkaermLogOprydning, startSlettetOprydning, slettetOprydning, SLETTET_OPRYDNING_CRON, startUrPauser, startYoutubeVagt, startYoutubeSynlighed, youtubeSynlighed };
