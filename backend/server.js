@@ -221,27 +221,22 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     startOp();
 });
 
-const gracefulShutdown = async (signal) => {
-    console.log(`${signal} signal received: starting graceful shutdown`);
-    server.close(async () => {
-        console.log('✓ HTTP server closed');
+// Nedlukning ved deploy/genstart (nr. 54, config/nedlukning.js): de åbne
+// live-strømme lukkes aktivt, så processen er ude på få sekunder i stedet for
+// at vente på Dockers SIGKILL efter 10 s
+const gracefulShutdown = require('./config/nedlukning').lavNedlukning({
+    server,
+    oprydning: [
         // Dagens YouTube-forbrug gemmes ellers først et par sekunder efter sidste kald
-        await require('./config/youtubeKvote').gem().catch(() => {});
-        try {
-            const { closeAll } = require('./config/tenantPools');
-            await closeAll();
-            console.log('✓ Database pools lukket');
-        } catch (error) {
-            console.error('✗ Fejl ved lukning af database pools:', error);
+        () => require('./config/youtubeKvote').gem(),
+        async () => {
+            await require('./config/tenantPools').closeAll();
+            await require('./config/masterDatabase').pool.end();
+            await require('./config/footballDatabase').pool.end();
+            console.log('✓ Database-puljerne er lukket');
         }
-        console.log('✓ Graceful shutdown complete');
-        process.exit(0);
-    });
-    setTimeout(() => {
-        console.error('✗ Graceful shutdown timeout, forcing exit');
-        process.exit(1);
-    }, 10000);
-};
+    ]
+});
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT',  () => gracefulShutdown('SIGINT'));

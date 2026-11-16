@@ -502,3 +502,145 @@ test('87: listen er ærlig — hver migration, der ændrer data i en backup-tabe
         if (!m.sql) assert.ok(dataMigrationer.statements(m).length > 0);
     }
 });
+
+// ======================= Nr. 54: deploy =======================
+
+const http = require('http');
+const nedlukning = require('../../config/nedlukning');
+
+// En lille server med en live-strøm (som SSE-endpointet) og en langsom forespørgsel
+function testServer() {
+    const server = http.createServer((req, res) => {
+        if (req.url === '/stroem') {
+            res.writeHead(200, { 'Content-Type': 'text/event-stream', Connection: 'keep-alive' });
+            res.write('retry: 2000\n\n');
+            const glem = nedlukning.huskStroem(res);
+            req.on('close', glem);
+        } else if (req.url === '/langsom') {
+            setTimeout(() => res.end('svar'), 60000).unref();
+        } else {
+            res.end('ok');
+        }
+    });
+    return new Promise(r => server.listen(0, '127.0.0.1', () => r(server)));
+}
+const aabn = (server, sti) => new Promise((resolve) => {
+    const req = http.get({ host: '127.0.0.1', port: server.address().port, path: sti, agent: false }, (res) => {
+        res.resume();
+        resolve({ res, slut: new Promise(r => { res.on('end', r); res.on('close', r); res.on('error', r); }) });
+    });
+    req.on('error', () => resolve({ res: null, slut: Promise.resolve() }));
+});
+
+test('54: SIGTERM med åbne live-strømme — lukket, ryddet op og ude på under et sekund', async () => {
+    nedlukning._nulstil();
+    const server = await testServer();
+    const stroemme = await Promise.all([aabn(server, '/stroem'), aabn(server, '/stroem'), aabn(server, '/stroem')]);
+    assert.equal(nedlukning.antalStroemme(), 3);
+    const raekkefoelge = [];
+    let udKode = null;
+    const nedluk = nedlukning.lavNedlukning({
+        server, log: { log() {}, error() {} },
+        oprydning: [async () => raekkefoelge.push('youtube'), async () => { throw new Error('pulje'); }, async () => raekkefoelge.push('puljer')],
+        exit: (k) => { udKode = k; }
+    });
+    const t0 = Date.now();
+    const p = nedluk('SIGTERM');
+    assert.equal(nedluk('SIGINT'), p, 'et signal mere starter ikke forfra');
+    assert.equal(nedlukning.erLukkende(), true);
+    await p;
+    const tid = Date.now() - t0;
+    await Promise.all(stroemme.map(s => s.slut));
+    assert.equal(udKode, 0);
+    assert.ok(tid < 1000, `ude efter ${tid} ms (før: Dockers 10 s og SIGKILL)`);
+    assert.deepEqual(raekkefoelge, ['youtube', 'puljer'], 'en fejl i ét trin stopper ikke de næste');
+    assert.equal(nedlukning.antalStroemme(), 0);
+    nedlukning._nulstil();
+});
+
+test('54: en forespørgsel, der hænger, lukkes efter grace — og et hængende oprydningstrin giver exit(1) til tiden', async () => {
+    nedlukning._nulstil();
+    const server = await testServer();
+    const langsom = aabn(server, '/langsom');
+    await new Promise(r => setTimeout(r, 50));
+    let udKode = null;
+    const t0 = Date.now();
+    await nedlukning.lavNedlukning({ server, graceMs: 150, log: { log() {}, error() {} }, exit: (k) => { udKode = k; } })('SIGTERM');
+    assert.equal(udKode, 0);
+    assert.ok(Date.now() - t0 < 1000);
+    await (await langsom).slut;
+
+    nedlukning._nulstil();
+    const server2 = await testServer();
+    let kode2 = null;
+    nedlukning.lavNedlukning({ server: server2, maksMs: 200, log: { log() {}, error() {} },
+        oprydning: [() => new Promise(() => {})], exit: (k) => { kode2 = k; } })('SIGTERM');
+    await new Promise(r => setTimeout(r, 350));
+    assert.equal(kode2, 1, 'loftet under Dockers 10 s holder');
+    nedlukning._nulstil();
+});
+
+test('54: live-strømmen melder sig til nedlukningen og afviser nye under nedlukning (503)', async () => {
+    const gs = laes('backend/routes/gameStates.js');
+    const sse = gs.slice(gs.indexOf("router.get('/events/stream'"), gs.indexOf("router.get('/:courtId'"));
+    assert.match(sse, /if \(nedlukning\.erLukkende\(\)\) return res\.status\(503\)/);
+    assert.match(sse, /const glem = nedlukning\.huskStroem\(res\);/);
+    assert.match(sse, /glem\(\);/);
+    assert.match(sse, /if \(res\.writableEnded\) return;/, 'ingen write after end fra hjerteslaget');
+    const server = laes('backend/server.js');
+    assert.match(server, /require\('\.\/config\/nedlukning'\)\.lavNedlukning\(\{/);
+    assert.match(server, /masterDatabase'\)\.pool\.end\(\)/);
+    assert.match(server, /footballDatabase'\)\.pool\.end\(\)/);
+    assert.match(server, /process\.on\('SIGTERM', \(\) => gracefulShutdown\('SIGTERM'\)\)/);
+    assert.ok(nedlukning.MAKS_MS < 10000, 'under Dockers stop-timeout');
+});
+
+test('54: deploy.sh venter på en sund backend, siger tydeligt fra og rydder kun dangling images', () => {
+    const d = laes('deploy.sh');
+    const { spawnSync } = require('child_process');
+    const syntaks = spawnSync('sh', ['-n', path.join(ROD, 'deploy.sh')]);
+    assert.equal(syntaks.status, 0, `sh -n deploy.sh: ${syntaks.stderr}`);
+    assert.match(d, /set -eu/);
+    assert.match(d, /sh scripts\/ensure-env\.sh/, 'hemmelighederne som før');
+    assert.match(d, /http:\/\/127\.0\.0\.1:3000\/health/);
+    assert.match(d, /while \[ "\$VENTET" -lt 60 \]/);
+    assert.match(d, /FEJL: backenden svarer ikke sundt efter 60 s[\s\S]*docker compose logs --tail 40 backend[\s\S]*exit 1/);
+    assert.match(d, /docker image prune -f/);
+    assert.doesNotMatch(d, /prune -a|--all|volume prune|system prune|--volumes|down -v/, 'aldrig noget, der kan slette data');
+    assert.match(d, /export GIT_SHA BUILD_TIME/);
+    assert.match(d, /rev-parse --short=12 HEAD/);
+});
+
+test('54: versionen bygges ind (build-arg → ENV) og vises i super-admins helbredskort', () => {
+    const compose = laes('docker-compose.yml');
+    assert.match(compose, /args:\s+GIT_SHA: \$\{GIT_SHA:-ukendt\}\s+BUILD_TIME: \$\{BUILD_TIME:-\}/);
+    const df = laes('Dockerfile.backend');
+    assert.ok(df.indexOf('ARG GIT_SHA') > df.indexOf('npm ci'), 'efter npm ci — byggetidspunktet ugyldiggør ikke cachen');
+    assert.match(df, /ENV APP_GIT_SHA=\$GIT_SHA/);
+    const { deployVersion } = require('../../config/hetzner');
+    assert.deepEqual(deployVersion({ APP_GIT_SHA: '1f35ad3abcde+ændret', APP_BUILD_TIME: '2026-11-16T20:00:00Z' }),
+        { sha: '1f35ad3abcde+ændret', bygget: '2026-11-16T20:00:00.000Z' });
+    assert.deepEqual(deployVersion({}), { sha: 'ukendt', bygget: null });
+    assert.equal(deployVersion({ APP_GIT_SHA: '<script>' }).sha, 'script');
+    const sa = laes('frontend/super-admin-script.js');
+    assert.match(sa, /version \$\{escapeHtml\(v\.sha\)\}/);
+    assert.match(laes('frontend/super-admin.html'), /super-admin-script\.js\?v=42/);
+    assert.doesNotMatch(laes('backend/config/hetzner.js'), /child_process|execSync|git rev-parse/, 'backenden kalder ikke git');
+});
+
+test('54: et oprydningstrin, der hænger (databasen svarer ikke), springes over efter sit loft — de næste kører', async () => {
+    nedlukning._nulstil();
+    const server = await testServer();
+    const koert = [];
+    const hold = setInterval(() => {}, 20);   // i serveren holder andet processen i live; her gør denne
+    let udKode = null;
+    const t0 = Date.now();
+    await nedlukning.lavNedlukning({ server, trinMs: 100, log: { log() {}, error() {} },
+        oprydning: [() => new Promise(() => {}), async () => koert.push('puljer')], exit: (k) => { udKode = k; } })('SIGTERM');
+    assert.equal(udKode, 0);
+    assert.deepEqual(koert, ['puljer']);
+    assert.ok(Date.now() - t0 < 1000);
+    clearInterval(hold);
+    assert.ok(nedlukning.GRACE_MS + 2 * nedlukning.TRIN_MS < nedlukning.MAKS_MS, 'grace + to trin når inden loftet');
+    nedlukning._nulstil();
+});

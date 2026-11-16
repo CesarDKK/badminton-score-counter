@@ -2084,6 +2084,9 @@ function renderHelbredFliser(d) {
     if (be) {
         const m = be.migrationer || { medFejl: 0, databaser: [], antal: 0 };
         const info = [`startet ${escapeHtml(formatDate(be.startet))}`];
+        // Den deployede version (nr. 54): commit og byggetidspunkt fra deploy.sh
+        const v = l.version;
+        if (v) info.push(`version ${escapeHtml(v.sha)}${v.bygget ? ` · bygget ${escapeHtml(formatDate(v.bygget))}` : ''}`);
         if (be.klarEfterSek !== null) info.push(`klar efter ${shTal(be.klarEfterSek)} s${be.forsoeg > 1 ? ` (${be.forsoeg} forsøg — databasen var længe om at svare)` : ''}`);
         if (!be.klar) info.push(`Opstarten er ikke færdig (${be.forsoeg} forsøg)${be.fejl ? `: ${escapeHtml(be.fejl)}` : ''} — ingen baggrundsjob kører endnu`);
         if (m.medFejl) {

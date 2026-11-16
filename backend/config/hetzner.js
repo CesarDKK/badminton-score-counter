@@ -206,8 +206,17 @@ function lokal() {
         fuldBackup: fuldBackup.status(),
         // Backend-processen: hvornår den startede, om opstarten lykkedes, og
         // databaser med migrationer, der fejlede
-        backend: opstart.status(migrationRunner.status())
+        backend: opstart.status(migrationRunner.status()),
+        // Den deployede version (nr. 54): bygget ind af deploy.sh (Dockerfile.backend)
+        version: deployVersion()
     };
+}
+
+// { sha, bygget } — sha 'ukendt', når imaget ikke er bygget af deploy.sh
+function deployVersion(env = process.env) {
+    const sha = String(env.APP_GIT_SHA || '').replace(/[^0-9A-Za-zæøåÆØÅ+._-]/g, '').slice(0, 40) || 'ukendt';
+    const t = Date.parse(env.APP_BUILD_TIME || '');
+    return { sha, bygget: Number.isFinite(t) ? new Date(t).toISOString() : null };
 }
 
 // ── til ruten ──────────────────────────────────────────────
@@ -255,4 +264,4 @@ async function helbred(periode, nu = Date.now()) {
     }
 }
 
-module.exports = { opsaetning, gem, vaelgServer, fjern, tjek, helbred, omform, laesMeminfo, serie, PERIODER, HetznerFejl };
+module.exports = { opsaetning, gem, vaelgServer, fjern, tjek, helbred, omform, laesMeminfo, serie, PERIODER, HetznerFejl, deployVersion };

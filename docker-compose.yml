@@ -41,6 +41,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
+      # Versionen, super-admin viser (deploy.sh sætter dem; ellers "ukendt")
+      args:
+        GIT_SHA: ${GIT_SHA:-ukendt}
+        BUILD_TIME: ${BUILD_TIME:-}
     container_name: badminton-backend
     restart: unless-stopped
     logging: *default-logging

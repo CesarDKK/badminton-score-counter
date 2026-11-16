@@ -8,6 +8,8 @@ const { turneringPaaBane } = require('../config/baneTildeling');
 const { invalidateCourtTokens, nyUrKode } = require('./matchSessionTokens');
 const { publishGameStateChange, subscribeGameStateChanges } = require('../events/gameStateEvents');
 const { optagSse } = require('../events/sseLoft');
+// Nedlukningen (nr. 54) lukker de åbne strømme aktivt og afviser nye
+const nedlukning = require('../config/nedlukning');
 // badmintonplanner.dk: rundenavn/næste runde/udskiftere/note pr. bane (fase 2-visning)
 const { hentPlannerVisning, plannerForBane, gemPlannerResultat, kampIGang } = require('./plannerIntegration');
 const { validerIndtastning, vundneSaet } = require('../config/kampResultat');
@@ -328,6 +330,10 @@ router.get('/batch/all', async (req, res, next) => {
 router.get('/events/stream', (req, res) => {
     const courtFilter = req.query.court ? parseInt(req.query.court, 10) : null;
 
+    // Backenden lukker ned (deploy): klienten poller imens og forbinder igen
+    // til den nye container
+    if (nedlukning.erLukkende()) return res.status(503).json({ error: 'Serveren genstarter' });
+
     // Loft pr. adresse og pr. klub (nr. 93, events/sseLoft.js)
     const plads = optagSse(req);
     if (plads.afvist) return res.status(429).json({ error: plads.afvist });
@@ -345,6 +351,7 @@ router.get('/events/stream', (req, res) => {
     // res.flush findes naar compression-middleware er aktiv — uden flush
     // holder den paa dataene og eventet kommer aldrig ud
     const send = (payload) => {
+        if (res.writableEnded) return;   // lukket af nedlukningen — ingen write after end
         res.write(payload);
         if (typeof res.flush === 'function') res.flush();
     };
@@ -365,11 +372,13 @@ router.get('/events/stream', (req, res) => {
     // forbindelsen stadig lever. Et navngivet event rammer ikke onmessage, saa
     // eksisterende poke-haandtering er uaendret.
     const heartbeat = setInterval(() => send('event: ping\ndata: {}\n\n'), 25000);
+    const glem = nedlukning.huskStroem(res);
 
     req.on('close', () => {
         clearInterval(heartbeat);
         unsubscribe();
         plads.slip();
+        glem();
     });
 });
 
