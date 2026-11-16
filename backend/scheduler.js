@@ -567,11 +567,26 @@ function startSkaermLogOprydning() {
  * mandagens backup kl. 02:00 og YouTube-jobbet kl. 03:40, og i backup-køen, så
  * den aldrig kører samtidig med en backup. Ikke ved opstarten: en deploy skal
  * ikke slette noget.
+ *
+ * Værn: lige før oprydningen hentes db_name på ALLE klubber (aktive og
+ * deaktiverede) fra master-databasen, og en mappe med en klubs navn røres
+ * aldrig. Kan listen ikke hentes, slettes intet den nat.
  */
 const SLETTET_OPRYDNING_CRON = '45 4 * * *';
 
 async function slettetOprydning({ nu = () => new Date(), log = console } = {}) {
-    return enBackupAdGangen(() => require('./config/slettedeKlubber').rydGamle({ nu: nu(), log }));
+    return enBackupAdGangen(async () => {
+        let klubMapper;
+        try {
+            const raekker = await require('./config/masterDatabase').query('SELECT db_name FROM clubs');
+            if (!Array.isArray(raekker)) throw new Error('uventet svar fra master-databasen');
+            klubMapper = new Set(raekker.map(r => r.db_name).filter(Boolean));
+        } catch (err) {
+            log.error('❌ Oprydning af slettede klubber: klublisten kunne ikke hentes — intet slettes i nat:', err.message);
+            return { slettet: [], beholdt: [], sprunget: [], fejl: [], afvist: 'klublisten kunne ikke hentes' };
+        }
+        return require('./config/slettedeKlubber').rydGamle({ nu: nu(), log, klubMapper });
+    });
 }
 
 function startSlettetOprydning() {

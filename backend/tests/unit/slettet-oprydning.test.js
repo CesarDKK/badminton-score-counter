@@ -20,6 +20,8 @@ const { UPLOAD_DIR } = require('../../config/sponsorFiler');
 const ROD = path.join(__dirname, '..', '..', '..');
 const DAG = 24 * 60 * 60 * 1000;
 const NU = new Date('2026-11-16T03:45:00Z');
+// Ingen klubber i master-databasen: kun navnereglen og de andre tjek gælder
+const INGEN = new Set();
 
 function ryd() {
     fs.rmSync(BACKUP_DIR, { recursive: true, force: true });
@@ -74,7 +76,7 @@ test('ældre end 60 dage efter slettet.json slettes og logges med navn, klub og 
     lagMappe('slettet-20260917-034500-paa', { flyttet: new Date(NU.getTime() - 60 * DAG).toISOString() });
     lagMappe('slettet-20260917-034501-lige', { flyttet: new Date(NU.getTime() - 60 * DAG + 1000).toISOString() });
     const l = stille();
-    const r = slettedeKlubber.rydGamle({ nu: NU, log: l });
+    const r = slettedeKlubber.rydGamle({ nu: NU, log: l, klubMapper: INGEN });
     assert.deepEqual(r.slettet.sort(), ['slettet-20260901-100000-gammel', 'slettet-20260917-034500-paa']);
     assert.deepEqual(r.beholdt.sort(), ['slettet-20260917-034501-lige', 'slettet-20261001-100000-ung']);
     assert.ok(!findes('slettet-20260901-100000-gammel'));
@@ -94,7 +96,7 @@ test('"flyttet" i slettet.json går forud for navnet; mangler/ulæselig fil → 
     // slettet.json uden gyldig dato → navnet
     lagMappe('slettet-20261110-120000-baddato', { flyttet: 'i går' });
     const l = stille();
-    const r = slettedeKlubber.rydGamle({ nu: NU, log: l });
+    const r = slettedeKlubber.rydGamle({ nu: NU, log: l, klubMapper: INGEN });
     assert.deepEqual(r.slettet.sort(), ['slettet-20260801-120000-udeninfo', 'slettet-20260801-120000-ulaeselig']);
     assert.deepEqual(r.beholdt.sort(), ['slettet-20250101-000000-navngammel', 'slettet-20261110-120000-baddato']);
     assert.match(l.linjer.log.join('\n'), /udeninfo \(klub \?, 106 dage gammel efter mappenavnet\)/);
@@ -106,7 +108,7 @@ test('aldrig filsystemets mtime: en gammel mtime på en ny mappe sletter den ikk
     const gammel = new Date('2020-01-01T00:00:00Z');
     fs.utimesSync(sti, gammel, gammel);
     fs.utimesSync(path.join(sti, 'slettet.json'), gammel, gammel);
-    const r = slettedeKlubber.rydGamle({ nu: NU, log: stille() });
+    const r = slettedeKlubber.rydGamle({ nu: NU, log: stille(), klubMapper: INGEN });
     assert.deepEqual(r.slettet, []);
     assert.ok(findes('slettet-20261110-120000-nymtime'));
     assert.doesNotMatch(fs.readFileSync(path.join(ROD, 'backend/config/slettedeKlubber.js'), 'utf8'), /\.mtime|mtimeMs|\.ctime|birthtime/);
@@ -119,7 +121,7 @@ test('kan alderen ikke afgøres, røres mappen ikke (og der advares)', () => {
     assert.equal(slettedeKlubber.navnetsTid('slettet-20261301-120000-umulig'), null);
     assert.equal(slettedeKlubber.navnetsTid('slettet-20261116-102030-holte').toISOString(), '2026-11-16T10:20:30.000Z');
     const l = stille();
-    const r = slettedeKlubber.rydGamle({ nu: new Date('2030-01-01T00:00:00Z'), log: l });
+    const r = slettedeKlubber.rydGamle({ nu: new Date('2030-01-01T00:00:00Z'), log: l, klubMapper: INGEN });
     assert.deepEqual(r.slettet, []);
     assert.deepEqual(r.sprunget, ['slettet-20261301-120000-umulig']);
     assert.ok(findes('slettet-20261301-120000-umulig'));
@@ -144,14 +146,14 @@ test('aktive klubbers mapper kan aldrig matche — heller ikke en klub, hvis db_
         lagMappe(n, { flyttet: '2020-01-01T00:00:00Z' });
     }
     assert.match('slettet-20200101-000000-x-2', slettedeKlubber.SLETTET_NAVN);
-    const r = slettedeKlubber.rydGamle({ nu: NU, log: stille() });
+    const r = slettedeKlubber.rydGamle({ nu: NU, log: stille(), klubMapper: INGEN });
     assert.deepEqual(r, { slettet: [], beholdt: [], sprunget: [], fejl: [] });
     for (const db of aktive) assert.ok(fs.existsSync(path.join(BACKUP_DIR, db, 'auto-2020-01-01.json.gz')), db);
     // Og en rigtig slettet klub, hvis db_name begynder med "slettet", ryddes som andre
     fs.mkdirSync(path.join(UPLOAD_DIR, 'slettet_bk'), { recursive: true });
     const navn = slettedeKlubber.flytTilSide({ name: 'Slettet BK', db_name: 'slettet_bk' }, { nu: new Date('2026-08-01T00:00:00Z') });
     assert.equal(navn, 'slettet-20260801-000000-slettet_bk');
-    assert.deepEqual(slettedeKlubber.rydGamle({ nu: NU, log: stille() }).slettet, [navn]);
+    assert.deepEqual(slettedeKlubber.rydGamle({ nu: NU, log: stille(), klubMapper: INGEN }).slettet, [navn]);
     assert.ok(!fs.existsSync(path.join(BACKUP_DIR, 'slettet_bk')), 'flyttet til side før — derfor væk');
 });
 
@@ -176,7 +178,7 @@ test('kun rigtige mapper: en fil eller et symlink med det rigtige navn røres ik
     if (link) fs.symlinkSync(ude, path.join(gammel, 'uploads'), 'dir');
 
     const l = stille();
-    const r = slettedeKlubber.rydGamle({ nu: NU, log: l });
+    const r = slettedeKlubber.rydGamle({ nu: NU, log: l, klubMapper: INGEN });
     assert.deepEqual(r.slettet, ['slettet-20200101-000000-medlink']);
     assert.ok(fs.existsSync(path.join(BACKUP_DIR, 'slettet-20200101-000000-fil')));
     assert.ok(fs.existsSync(path.join(BACKUP_DIR, 'holte', 'auto-1.json.gz')), 'den aktive klubs backup');
@@ -199,7 +201,7 @@ test('en fejl på én mappe stopper ikke de næste', () => {
     };
     let r;
     const l = stille();
-    try { r = slettedeKlubber.rydGamle({ nu: NU, log: l }); } finally { fs.rmSync = rm; }
+    try { r = slettedeKlubber.rydGamle({ nu: NU, log: l, klubMapper: INGEN }); } finally { fs.rmSync = rm; }
     assert.deepEqual(r.slettet, ['slettet-20200101-000000-a', 'slettet-20200101-000000-c']);
     assert.deepEqual(r.fejl, ['slettet-20200101-000000-b']);
     assert.ok(findes('slettet-20200101-000000-b'));
@@ -208,7 +210,7 @@ test('en fejl på én mappe stopper ikke de næste', () => {
 
 test('ingen club-backups-mappe → intet sker', () => {
     fs.rmSync(BACKUP_DIR, { recursive: true, force: true });
-    assert.deepEqual(slettedeKlubber.rydGamle({ nu: NU, log: stille() }), { slettet: [], beholdt: [], sprunget: [], fejl: [] });
+    assert.deepEqual(slettedeKlubber.rydGamle({ nu: NU, log: stille(), klubMapper: INGEN }), { slettet: [], beholdt: [], sprunget: [], fejl: [] });
 });
 
 test('natjobbet: kl. 04:45 dansk tid, i backup-køen, ikke ved opstarten', async () => {
@@ -224,12 +226,90 @@ test('natjobbet: kl. 04:45 dansk tid, i backup-køen, ikke ved opstarten', async
     }
     assert.match(kilde, /cron\.schedule\('0 2 \* \* 1'/);
     assert.match(kilde, /cron\.schedule\('40 3 \* \* \*'/);
-    assert.match(kilde, /return enBackupAdGangen\(\(\) => require\('\.\/config\/slettedeKlubber'\)\.rydGamle/);
+    assert.match(kilde, /return enBackupAdGangen\(async \(\) => \{[\s\S]*?rydGamle\(\{ nu: nu\(\), log, klubMapper \}\)/);
     const server = fs.readFileSync(path.join(ROD, 'backend/server.js'), 'utf8');
     assert.match(server, /startSkaermLogOprydning\(\);\s+startSlettetOprydning\(\);/);
 
     ryd();
     lagMappe('slettet-20200101-000000-job', { flyttet: '2020-01-01T00:00:00Z' });
-    const r = await scheduler.slettetOprydning({ nu: () => NU, log: stille() });
+    const r = await medMaster(async () => [{ db_name: 'holte' }], (kald) =>
+        scheduler.slettetOprydning({ nu: () => NU, log: stille() }).then(r => {
+            assert.deepEqual(kald, ['SELECT db_name FROM clubs'], 'alle klubber, også deaktiverede');
+            return r;
+        }));
     assert.deepEqual(r.slettet, ['slettet-20200101-000000-job']);
+});
+
+// ======================= Værnet: klublisten fra master-databasen =======================
+
+// Kør fn med masterDatabase.query udskiftet; fn får listen af SQL-kald
+async function medMaster(svar, fn) {
+    const master = require('../../config/masterDatabase');
+    const gammel = master.query;
+    const kald = [];
+    master.query = async (sql, ...rest) => { kald.push(sql); return svar(sql, ...rest); };
+    try { return await fn(kald); } finally { master.query = gammel; }
+}
+
+// En klub, hvis db_name (mod konventionen) har præcis en slettet-mappes form
+const KONSTRUERET = 'slettet-20260101-101010-x';
+
+test('værn: en mappe med en klubs db_name røres aldrig — også når navnet ligner en gammel slettet-mappe', () => {
+    ryd();
+    assert.match(KONSTRUERET, slettedeKlubber.SLETTET_NAVN, 'navnereglen alene ville have ramt den');
+    lagMappe(KONSTRUERET, { flyttet: '2026-01-01T10:10:10.000Z' });   // over 60 dage
+    lagMappe('slettet-20260101-101010-y', { flyttet: '2026-01-01T10:10:10.000Z' });
+    // Også deaktiverede klubber står i listen; store/små bogstaver gør ingen forskel
+    lagMappe('SLETTET-20260101-101010-Z'.replace('SLETTET', 'slettet'), { flyttet: '2026-01-01T10:10:10.000Z' });
+    const l = stille();
+    const r = slettedeKlubber.rydGamle({ nu: NU, log: l, klubMapper: new Set([KONSTRUERET, 'holte', 'slettet-20260101-101010-z']) });
+    assert.deepEqual(r.slettet, ['slettet-20260101-101010-y']);
+    assert.deepEqual(r.sprunget.sort(), ['slettet-20260101-101010-Z', KONSTRUERET].sort());
+    assert.ok(findes(KONSTRUERET));
+    assert.ok(fs.existsSync(path.join(BACKUP_DIR, KONSTRUERET, 'backups', 'auto-x.json.gz')));
+    assert.match(l.linjer.warn.join('\n'), new RegExp(`${KONSTRUERET} er en klubs egen mappe — røres ikke`));
+});
+
+test('værn: natjobbet giver alle klubbers db_name videre — den konstruerede klub bliver stående', async () => {
+    ryd();
+    lagMappe(KONSTRUERET, { flyttet: '2026-01-01T10:10:10.000Z' });
+    lagMappe('slettet-20260101-101010-y', { flyttet: '2026-01-01T10:10:10.000Z' });
+    const r = await medMaster(async () => [{ db_name: 'holte' }, { db_name: KONSTRUERET }],
+        () => require('../../scheduler').slettetOprydning({ nu: () => NU, log: stille() }));
+    assert.deepEqual(r.slettet, ['slettet-20260101-101010-y']);
+    assert.deepEqual(r.sprunget, [KONSTRUERET]);
+    assert.ok(findes(KONSTRUERET));
+});
+
+test('værn: svarer master-databasen ikke (eller svarer forkert), slettes intet den nat', async () => {
+    const scheduler = require('../../scheduler');
+    for (const svar of [async () => { throw new Error('connect ECONNREFUSED'); }, async () => undefined, async () => ({})]) {
+        ryd();
+        lagMappe('slettet-20200101-000000-gammel', { flyttet: '2020-01-01T00:00:00Z' });
+        const l = stille();
+        const r = await medMaster(svar, () => scheduler.slettetOprydning({ nu: () => NU, log: l }));
+        assert.deepEqual(r.slettet, []);
+        assert.equal(r.afvist, 'klublisten kunne ikke hentes');
+        assert.ok(findes('slettet-20200101-000000-gammel'));
+        assert.match(l.linjer.error.join('\n'), /klublisten kunne ikke hentes — intet slettes i nat/);
+    }
+});
+
+test('værn: rydGamle uden klubliste (eller med en forkert type) sletter intet', () => {
+    for (const arg of [{}, { klubMapper: undefined }, { klubMapper: null }, { klubMapper: ['holte'] }, { klubMapper: 'holte' }]) {
+        ryd();
+        lagMappe('slettet-20200101-000000-gammel', { flyttet: '2020-01-01T00:00:00Z' });
+        const l = stille();
+        const r = slettedeKlubber.rydGamle({ nu: NU, log: l, ...arg });
+        assert.deepEqual(r, { slettet: [], beholdt: [], sprunget: [], fejl: [], afvist: 'klublisten mangler' });
+        assert.ok(findes('slettet-20200101-000000-gammel'));
+        assert.match(l.linjer.warn.join('\n'), /uden klublisten — intet slettes/);
+    }
+    // Og helt uden argumenter (standard-loggen) kaster den ikke
+    ryd();
+    lagMappe('slettet-20200101-000000-gammel', { flyttet: '2020-01-01T00:00:00Z' });
+    const warn = console.warn;
+    console.warn = () => {};
+    try { assert.equal(slettedeKlubber.rydGamle().afvist, 'klublisten mangler'); } finally { console.warn = warn; }
+    assert.ok(findes('slettet-20200101-000000-gammel'));
 });

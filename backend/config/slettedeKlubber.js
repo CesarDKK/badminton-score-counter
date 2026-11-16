@@ -22,9 +22,11 @@
 // redde og slette nu står i pakke-q-rapport.md.
 //
 // Natjobbet er et rm -rf i mappen med ALLE klubbers backups, så det er stramt
-// (rydGamle): kun rigtige mapper (ikke symlinks) direkte under CLUB_BACKUP_DIR
-// med præcis navneformen slettet-ÅÅÅÅMMDD-TTMMSS-<db>[-N]. En aktiv klubs
-// mappe hedder <db_name>, som aldrig har '-', og kan derfor ikke matche. Alderen
+// (rydGamle). Først springes enhver mappe over, hvis navn er en klubs db_name
+// i master-databasen (aktiv eller deaktiveret) — uden klublisten slettes intet
+// den nat. Derudover kun rigtige mapper (ikke symlinks) direkte under
+// CLUB_BACKUP_DIR med præcis navneformen slettet-ÅÅÅÅMMDD-TTMMSS-<db>[-N]; en
+// klubs mappe hedder <db_name>, som aldrig har '-', og matcher heller ikke. Alderen
 // regnes fra "flyttet" i slettet.json, ellers fra tidsstemplet i navnet — aldrig
 // fra filsystemets mtime. Kan den ikke afgøres, røres mappen ikke.
 //
@@ -128,15 +130,34 @@ function flyttetTid(sti, navn) {
 
 /**
  * Natjobbet: slet slettet-mapper, der er ældre end SLETTET_BEHOLD_DAGE.
- * Returnerer { slettet: [navn], beholdt: [navn], sprunget: [navn], fejl: [navn] }.
- * En fejl på én mappe stopper ikke de næste.
+ * klubMapper: Set med db_name på ALLE klubber i master-databasen (aktive og
+ * deaktiverede) — påkrævet; uden det slettes intet.
+ * Returnerer { slettet: [navn], beholdt: [navn], sprunget: [navn], fejl: [navn] }
+ * (+ afvist: tekst, når der intet blev gjort). En fejl på én mappe stopper
+ * ikke de næste.
  */
-function rydGamle({ nu = new Date(), log = console } = {}) {
+function rydGamle({ nu = new Date(), log = console, klubMapper } = {}) {
     const res = { slettet: [], beholdt: [], sprunget: [], fejl: [] };
+    // Værn 1: uden klublisten slettes intet — så kan ingen kalder glemme den
+    if (!(klubMapper instanceof Set)) {
+        res.afvist = 'klublisten mangler';
+        log.warn('⚠️ Oprydning af slettede klubber: kaldt uden klublisten — intet slettes');
+        return res;
+    }
+    // Store/små bogstaver ignoreres i sammenligningen (ekstra forsigtighed)
+    const klubber = new Set([...klubMapper].map(n => String(n).toLowerCase()));
     if (!fs.existsSync(BACKUP_DIR)) return res;
     const rod = fs.realpathSync(BACKUP_DIR);
     for (const d of fs.readdirSync(BACKUP_DIR, { withFileTypes: true })) {
-        // Navnet først: en aktiv klubs mappe (<db_name>, uden '-') matcher aldrig
+        // Værn 2, før alt andet: en mappe med en klubs db_name røres aldrig
+        if (klubber.has(d.name.toLowerCase())) {
+            if (SLETTET_NAVN.test(d.name)) {
+                log.warn(`⚠️ Oprydning af slettede klubber: ${d.name} er en klubs egen mappe — røres ikke`);
+                res.sprunget.push(d.name);
+            }
+            continue;
+        }
+        // Værn 3: navnet. En klubs mappe (<db_name>, uden '-') matcher aldrig
         if (!SLETTET_NAVN.test(d.name)) continue;
         const sti = path.join(BACKUP_DIR, d.name);
         try {
