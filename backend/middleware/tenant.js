@@ -1,4 +1,4 @@
-const masterDb = require('../config/masterDatabase');
+const klubOpslag = require('../config/klubOpslag');
 const { runWithTenant } = require('../config/tenantPools');
 
 const DIRECT_SUBDOMAINS  = new Set(['app', 'api']);
@@ -37,13 +37,10 @@ async function tenantMiddleware(req, res, next) {
         return next();
     }
 
-    // Klub-subdomain → opslag i master DB
+    // Klub-subdomain → opslag i master DB (husket 30 s, config/klubOpslag.js)
     let club;
     try {
-        club = await masterDb.queryOne(
-            'SELECT db_name, is_active FROM clubs WHERE subdomain = ?',
-            [subdomain]
-        );
+        club = await klubOpslag.slaaOp(subdomain);
     } catch (error) {
         console.error('Tenant lookup fejl:', error.message);
         return res.status(500).json({ error: 'Serverfejl' });

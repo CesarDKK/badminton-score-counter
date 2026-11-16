@@ -227,6 +227,8 @@ async function helbred(periode, nu = Date.now()) {
     const o = await opsaetning();
     const svar = { opsat: !!o.token, kilde: o.kilde, ulaeselig: o.ulaeselig, opdateret: o.opdateret,
         periode: PERIODER[periode] ? periode : '24t', lokal: lokal() };
+    // Databasens forbindelser (nr. 55) — kan databasen ikke spørges, vises de bare ikke
+    try { svar.lokal.database = await require('./dbForbindelser').status(); } catch { svar.lokal.database = null; }
     if (!o.token) return svar;
 
     let serverId = o.serverId;

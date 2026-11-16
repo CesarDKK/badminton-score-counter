@@ -2078,6 +2078,13 @@ function renderHelbredFliser(d) {
         fliser.push(shFlise('Fuld backup', 'Ukendt',
             'Ingen status fra backup-tjenesten endnu — den skriver efter sin næste kørsel (kræver den nye docker-compose)'));
     }
+    // Databasens forbindelser (nr. 55): åbne i alt mod MySQL's loft, og puljerne
+    const db = l.database;
+    if (db && db.maks) {
+        fliser.push(shFlise('Databaseforbindelser', `${shTal(db.aabne)} åbne`,
+            `af højst ${shTal(db.maks)} (${shTal(db.andel * 100)} %)<br>${shTal(db.klubPuljer)} ${db.klubPuljer === 1 ? 'klubpulje' : 'klubpuljer'} (op til ${shTal(db.puljeStoerrelse)} hver) + master og football`,
+            db.andel, db.niveau || '', escapeHtml(db.besked || '')));
+    }
     // Backend-processen: hvornår den startede, om opstarten lykkedes første gang,
     // og databaser, hvor en migration fejlede (så mangler de kolonner/tabeller)
     const be = l.backend;

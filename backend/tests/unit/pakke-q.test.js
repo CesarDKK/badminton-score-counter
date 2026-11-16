@@ -624,7 +624,7 @@ test('54: versionen bygges ind (build-arg → ENV) og vises i super-admins helbr
     assert.equal(deployVersion({ APP_GIT_SHA: '<script>' }).sha, 'script');
     const sa = laes('frontend/super-admin-script.js');
     assert.match(sa, /version \$\{escapeHtml\(v\.sha\)\}/);
-    assert.match(laes('frontend/super-admin.html'), /super-admin-script\.js\?v=42/);
+    assert.ok(Number(/super-admin-script\.js\?v=(\d+)/.exec(laes('frontend/super-admin.html'))[1]) >= 42, 'versionen er skruet op');
     assert.doesNotMatch(laes('backend/config/hetzner.js'), /child_process|execSync|git rev-parse/, 'backenden kalder ikke git');
 });
 
@@ -693,4 +693,110 @@ test('53: ruten står før klub-opslaget og nås gennem nginx\' /api/ på app.-d
     const app = nginx.slice(nginx.indexOf('listen 80 default_server'));
     assert.match(app, /location \/api\/ \{[\s\S]*?proxy_pass \$backend;/);
     assert.match(laes('deploy.sh'), /wget -q -O \/dev\/null http:\/\/127\.0\.0\.1\/api\/health/);
+});
+
+// ======================= Nr. 55: databasens forbindelser og klub-opslaget =======================
+
+const dbForbindelser = require('../../config/dbForbindelser');
+const klubOpslag = require('../../config/klubOpslag');
+
+test('55: forbindelserne — åbne, loftet, puljerne, og advarsel over 80 %', async () => {
+    assert.equal(dbForbindelser.vurder({ aabne: 120, maks: 300, klubPuljer: 4, puljeStoerrelse: 15 }).niveau, null);
+    const v = dbForbindelser.vurder({ aabne: 241, maks: 300, klubPuljer: 12, puljeStoerrelse: 15 });
+    assert.equal(v.niveau, 'advarsel');
+    assert.match(v.besked, /80 %/);
+    assert.equal(dbForbindelser.vurder({ aabne: 290, maks: 300 }).niveau, 'kritisk');
+
+    const sql = [];
+    const pool = { query: async (s) => { sql.push(s); return /Threads_connected/.test(s)
+        ? [[{ Variable_name: 'Threads_connected', Value: '37' }]] : [[{ maks: 300 }]]; } };
+    const s = await dbForbindelser.status({ masterPool: () => pool, klubPuljer: () => 6 });
+    assert.deepEqual({ aabne: s.aabne, maks: s.maks, klubPuljer: s.klubPuljer, puljeStoerrelse: s.puljeStoerrelse }, { aabne: 37, maks: 300, klubPuljer: 6, puljeStoerrelse: 15 });
+    assert.equal(s.niveau, null);
+    assert.deepEqual(sql, ["SHOW GLOBAL STATUS LIKE 'Threads_connected'", 'SELECT @@GLOBAL.max_connections AS maks']);
+    assert.equal(typeof require('../../config/tenantPools').antalPuljer(), 'number');
+});
+
+test('55: helbredskortet viser forbindelserne (og kan undvære dem)', async () => {
+    const h = laes('backend/config/hetzner.js');
+    assert.match(h, /try \{ svar\.lokal\.database = await require\('\.\/dbForbindelser'\)\.status\(\); \} catch \{ svar\.lokal\.database = null; \}/);
+    const sa = laes('frontend/super-admin-script.js');
+    assert.match(sa, /shFlise\('Databaseforbindelser'/);
+    assert.match(sa, /db\.andel, db\.niveau \|\| ''/);
+});
+
+test('55: max_connections hæves i MySQL\'s opsætning — volumes og porte er uændrede', () => {
+    const c = laes('docker-compose.yml');
+    const mysqlDel = c.slice(c.indexOf('  mysql:'), c.indexOf('  backend:'));
+    assert.match(mysqlDel, /command: \["--max-connections=\$\{MYSQL_MAX_CONNECTIONS:-300\}"\]/);
+    assert.match(mysqlDel, /- "127\.0\.0\.1:3306:3306"/);
+    assert.match(mysqlDel, /- mysql_data:\/var\/lib\/mysql/);
+    for (const v of ['mysql_data', 'uploads_data', 'football_uploads', 'stats_cache', 'club_backups', 'backups']) {
+        assert.match(c.slice(c.lastIndexOf('\nvolumes:')), new RegExp(`\n  ${v}:\r?\n    driver: local`), v);
+    }
+});
+
+const tenant = require('../../middleware/tenant');
+async function viaTenant(host) {
+    const req = { hostname: host };
+    const res = { statusKode: 200, status(s) { this.statusKode = s; return this; }, send() { return this; }, json() { return this; } };
+    let videre = false;
+    await tenant(req, res, () => { videre = true; });
+    return { status: videre ? 200 : res.statusKode, db: req.clubDbName };
+}
+
+test('55: klub-opslaget huskes 30 s — og en deaktivering lukker klubben med det samme', async () => {
+    process.env.APP_DOMAIN = 'badmintonapp.dk';
+    klubOpslag.glemKlubber();
+    let aktiv = 1;
+    let opslag = 0;
+    masterSvar = async (sql) => {
+        if (/SELECT db_name, is_active FROM clubs WHERE subdomain/.test(sql)) { opslag++; return [{ db_name: 'holte', is_active: aktiv }]; }
+        if (/SELECT id, is_active FROM clubs WHERE id/.test(sql)) return [{ id: 4, is_active: aktiv }];
+        if (/^UPDATE clubs SET is_active/.test(sql)) { aktiv = 0; return { affectedRows: 1 }; }
+        return [];
+    };
+    try {
+        for (let i = 0; i < 20; i++) assert.deepEqual(await viaTenant('holte.badmintonapp.dk'), { status: 200, db: 'holte' });
+        assert.equal(opslag, 1, '20 forespørgsler → ét opslag i master-databasen');
+
+        // Super-admin deaktiverer: næste forespørgsel afvises — uden at vente 30 s
+        await koer(rute(superAdmin, 'put', '/clubs/:id/toggle'), { params: { id: '4' } });
+        assert.equal((await viaTenant('holte.badmintonapp.dk')).status, 403);
+        assert.equal(opslag, 2);
+    } finally {
+        delete process.env.APP_DOMAIN;
+        klubOpslag.glemKlubber();
+    }
+});
+
+test('55: cachen udløber efter 30 s, husker "findes ikke", men aldrig en fejl — og vokser ikke uden loft', async () => {
+    klubOpslag.glemKlubber();
+    let opslag = 0;
+    let fejl = false;
+    masterSvar = async (sql, params) => {
+        opslag++;
+        if (fejl) throw new Error('master nede');
+        return params[0] === 'holte' ? [{ db_name: 'holte', is_active: 1 }] : [];
+    };
+    const t = 5_000_000;
+    await klubOpslag.slaaOp('holte', t);
+    await klubOpslag.slaaOp('holte', t + 29_000);
+    assert.equal(opslag, 1);
+    await klubOpslag.slaaOp('holte', t + 31_000);
+    assert.equal(opslag, 2, 'efter 30 s slås den op igen');
+    assert.equal(await klubOpslag.slaaOp('ukendt', t), null);
+    assert.equal(await klubOpslag.slaaOp('ukendt', t + 1000), null);
+    assert.equal(opslag, 3, '"findes ikke" huskes også');
+    fejl = true;
+    await assert.rejects(klubOpslag.slaaOp('ny', t));
+    fejl = false;
+    assert.deepEqual(await klubOpslag.slaaOp('ny', t), null);
+    assert.equal(opslag, 5, 'fejlen blev ikke husket');
+    for (let i = 0; i < klubOpslag.MAKS + 10; i++) await klubOpslag.slaaOp(`tilfaeldig${i}`, t);
+    assert.ok(klubOpslag._antal() <= klubOpslag.MAKS);
+    // Oprettelse og sletning tømmer også cachen
+    const s = laes('backend/routes/superAdmin.js');
+    assert.ok((s.match(/klubOpslag\.glemKlubber\(\);/g) || []).length >= 3);
+    klubOpslag.glemKlubber();
 });

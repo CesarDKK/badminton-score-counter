@@ -18,6 +18,15 @@ services:
       MYSQL_DATABASE: badminton_counter
       MYSQL_USER: badminton_user
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?sæt MYSQL_PASSWORD i .env}
+    # Forbindelsesloftet (nr. 55). MySQL's standard er 151, men hver klub har sin
+    # egen pulje på op til 15 (DB_POOL_SIZE), plus master 5 + football 5 i
+    # backenden, football-appens 10 og backup-tjenesten. Puljerne lukker ledige
+    # forbindelser efter et minut, så det er klubberne, der er i gang SAMTIDIG,
+    # der tæller: 300 rækker til 18 klubber, der alle bruger hele puljen på én
+    # gang (15 × 18 + ca. 25) — rigeligt til 10–30 klubber. En ledig forbindelse
+    # koster MySQL ca. 1–2 MB (tråd + buffere), så 300 er højst ca. 0,5 GB på en
+    # lille Hetzner-maskine. Super-admin viser forbruget og advarer over 80 %.
+    command: ["--max-connections=${MYSQL_MAX_CONNECTIONS:-300}"]
     # Kun tilgængelig fra selve serveren (host-side mysqldump/fejlsøgning).
     # Docker's egne iptables-regler omgår ufw, så "0.0.0.0:3306" ville udstille
     # databasen på den offentlige IP uanset firewall — bind derfor til localhost.

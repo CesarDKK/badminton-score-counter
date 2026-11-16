@@ -19,6 +19,7 @@ const { bevarKlub } = require('../config/tenantPools');
 const migrationRunner = require('../config/migrationRunner');
 const klubNavn = require('../config/klubNavn');
 const slettedeKlubber = require('../config/slettedeKlubber');
+const klubOpslag = require('../config/klubOpslag');
 const { validateImageMagic } = require('../config/imageUpload');
 
 // Gyldige side-noegler for klub-admins per-side adgangsstyring.
@@ -204,6 +205,8 @@ router.post('/clubs', superAdminAuth, async (req, res, next) => {
             'INSERT INTO clubs (name, subdomain, db_name) VALUES (?, ?, ?)',
             [name, subdomain, dbName]
         );
+        // Et "findes ikke" for subdomænet må ikke huskes længere (nr. 55)
+        klubOpslag.glemKlubber();
 
         const club = await masterDb.queryOne(
             'SELECT id, name, subdomain, db_name, is_active, created_at FROM clubs WHERE id = ?',
@@ -250,6 +253,7 @@ router.delete('/clubs/:id', superAdminAuth, async (req, res, next) => {
 
         // Fjern klub fra master
         await masterDb.query('DELETE FROM clubs WHERE id = ?', [req.params.id]);
+        klubOpslag.glemKlubber();
 
         // Klubbens automatiske backups og upload-mappe flyttes til side (nr. 57),
         // så en ny klub med samme subdomæne ikke arver dem. Intet slettes: en
@@ -283,6 +287,9 @@ router.put('/clubs/:id/toggle', superAdminAuth, async (req, res, next) => {
             'UPDATE clubs SET is_active = ?, updated_at = NOW() WHERE id = ?',
             [!club.is_active, id]
         );
+        // En deaktiveret klub lukkes med det samme — ikke først, når klub-opslaget
+        // udløber af sig selv (30 s, nr. 55)
+        klubOpslag.glemKlubber();
 
         res.json({ success: true, is_active: !club.is_active });
     } catch (error) {
