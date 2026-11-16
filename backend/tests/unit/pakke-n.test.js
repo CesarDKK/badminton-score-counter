@@ -392,7 +392,8 @@ test('47: klubbens egen gendannelse afviser en anden klubs backup; super-admin k
     const r = sa.slice(sa.indexOf("router.post('/clubs/:id/restore'"));
     assert.match(r, /if \(fra && req\.query\.andenKlub !== '1'\)/);
     assert.ok(r.indexOf('backupFraAndenKlub') < r.indexOf("'foer-gendannelse'"));
-    assert.match(sa, /clubName: club\.name, clubDbName: club\.db_name \}\);/);
+    // Pakke Q (nr. 57) har tilføjet clubCreatedAt efter clubDbName
+    assert.match(sa, /clubName: club\.name, clubDbName: club\.db_name,\s+clubCreatedAt: club\.created_at\s+\}\);/);
     assert.match(laes('backend/config/autoBackup.js'), /clubDbName: club\.db_name/);
 
     const sas = laes('frontend/super-admin-script.js');

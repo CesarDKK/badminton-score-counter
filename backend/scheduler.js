@@ -436,51 +436,110 @@ const PLANNER_RESULTAT_DAGE = 90;
  * ingen klub. Resultatet (tidspunkt eller fejl) står på klubben i master-DB'en
  * og vises på super-admin.
  */
-async function ugentligBackup() {
+// Klubbernes backups tages én ad gangen — den ugentlige og indhentningen ved
+// opstarten (nr. 57) står i samme kø, så to aldrig kører samtidig
+let backupKoe = Promise.resolve();
+function enBackupAdGangen(fn) {
+    const p = backupKoe.then(fn, fn);
+    backupKoe = p.catch(() => {});
+    return p;
+}
+
+const AKTIVE_KLUBBER_SQL = 'SELECT id, name, subdomain, db_name, created_at FROM clubs WHERE is_active = 1';
+
+// Tag én klubs ugentlige backup og skriv udfaldet på klubben. true: lykkedes.
+async function ugentligBackupAfKlub(club) {
     const db = require('./config/database');
     const masterDb = require('./config/masterDatabase');
     const { tagBackup } = require('./config/autoBackup');
+    try {
+        const fil = await runWithTenant(club.db_name, async () => {
+            const conn = await db.pool.getConnection();
+            try { return await tagBackup(conn, club, 'auto'); } finally { conn.release(); }
+        });
+        await masterDb.query(
+            'UPDATE clubs SET last_auto_backup_at = NOW(), last_auto_backup_error = NULL, updated_at = updated_at WHERE id = ?',
+            [club.id]
+        );
+        console.log(`  ✅ ${club.db_name}: ${fil}`);
+        return true;
+    } catch (err) {
+        console.error(`  ❌ Backup af ${club.db_name} fejlede:`, err.message);
+        try {
+            await masterDb.query(
+                'UPDATE clubs SET last_auto_backup_error = ?, updated_at = updated_at WHERE id = ?',
+                [String(err.message || err).slice(0, 500), club.id]
+            );
+        } catch { /* master-DB'en kunne heller ikke nås */ }
+        return false;
+    }
+}
 
+async function ugentligBackup() {
+    return enBackupAdGangen(async () => {
+        const masterDb = require('./config/masterDatabase');
+        let clubs;
+        try {
+            clubs = await masterDb.query(AKTIVE_KLUBBER_SQL);
+        } catch (err) {
+            console.error('❌ Automatisk backup: klublisten kunne ikke hentes:', err.message);
+            return;
+        }
+        console.log(`💾 Automatisk backup af ${clubs.length} klubber...`);
+        let ok = 0;
+        for (const club of clubs) {
+            if (await ugentligBackupAfKlub(club)) ok++;
+        }
+        console.log(`💾 Automatisk backup færdig: ${ok} af ${clubs.length} klubber`);
+    });
+}
+
+/**
+ * Indhent den ugentlige backup (nr. 57): var serveren nede mandag kl. 02.00 (en
+ * deploy, en genstart), sprang cron'en den over, og klubben stod en uge mere
+ * uden. Ved opstarten tages den for hver aktiv klub, der mangler en fra den
+ * seneste mandag — én klub ad gangen med en pause imellem, så opstarten og
+ * klubberne, der er i gang, ikke mærker det. Køen deles med den ugentlige.
+ */
+async function indhentUgentligBackup({ nu = () => new Date(), pauseMs = INDHENT_PAUSE_MS } = {}) {
+    const masterDb = require('./config/masterDatabase');
+    const autoBackup = require('./config/autoBackup');
+    const mangler = (club) => {
+        try { return autoBackup.manglerUgentlig(club, nu()); } catch { return false; }
+    };
     let clubs;
     try {
-        clubs = await masterDb.query('SELECT id, name, subdomain, db_name FROM clubs WHERE is_active = 1');
+        clubs = (await masterDb.query(AKTIVE_KLUBBER_SQL)).filter(mangler);
     } catch (err) {
-        console.error('❌ Automatisk backup: klublisten kunne ikke hentes:', err.message);
-        return;
+        console.error('❌ Indhentning af ugentlig backup: klublisten kunne ikke hentes:', err.message);
+        return 0;
     }
-    console.log(`💾 Automatisk backup af ${clubs.length} klubber...`);
-    let ok = 0;
-    for (const club of clubs) {
-        try {
-            const fil = await runWithTenant(club.db_name, async () => {
-                const conn = await db.pool.getConnection();
-                try { return await tagBackup(conn, club, 'auto'); } finally { conn.release(); }
-            });
-            await masterDb.query(
-                'UPDATE clubs SET last_auto_backup_at = NOW(), last_auto_backup_error = NULL, updated_at = updated_at WHERE id = ?',
-                [club.id]
-            );
-            ok++;
-            console.log(`  ✅ ${club.db_name}: ${fil}`);
-        } catch (err) {
-            console.error(`  ❌ Backup af ${club.db_name} fejlede:`, err.message);
-            try {
-                await masterDb.query(
-                    'UPDATE clubs SET last_auto_backup_error = ?, updated_at = updated_at WHERE id = ?',
-                    [String(err.message || err).slice(0, 500), club.id]
-                );
-            } catch { /* master-DB'en kunne heller ikke nås */ }
-        }
+    if (!clubs.length) return 0;
+    console.log(`💾 ${clubs.length} klub(ber) mangler ugens backup (serveren var nede mandag kl. 02.00) — tages nu, én ad gangen`);
+    let taget = 0;
+    for (const [i, club] of clubs.entries()) {
+        if (i > 0 && pauseMs > 0) await new Promise(r => setTimeout(r, pauseMs));
+        // Igen inde i køen: den ugentlige kan være kørt imens
+        await enBackupAdGangen(async () => {
+            if (mangler(club) && await ugentligBackupAfKlub(club)) taget++;
+        });
     }
-    console.log(`💾 Automatisk backup færdig: ${ok} af ${clubs.length} klubber`);
+    console.log(`💾 Indhentning færdig: ${taget} af ${clubs.length} klubber`);
+    return taget;
 }
+
+const INDHENT_EFTER_MS = 2 * 60 * 1000;   // efter opstarten — når migrationer og første forespørgsler er overstået
+const INDHENT_PAUSE_MS = 15 * 1000;       // mellem to klubber
 
 function startUgentligBackup() {
     cron.schedule('0 2 * * 1', ugentligBackup, {
         scheduled: true,
         timezone: 'Europe/Copenhagen'
     });
-    console.log('⏰ Automatisk backup af klubberne hver mandag kl. 02:00 (Europe/Copenhagen)');
+    setTimeout(() => {
+        indhentUgentligBackup().catch(err => console.error('❌ Indhentning af ugentlig backup:', err.message));
+    }, INDHENT_EFTER_MS).unref();
+    console.log('⏰ Automatisk backup af klubberne hver mandag kl. 02:00 (Europe/Copenhagen) — en manglende indhentes 2 min efter opstarten');
 }
 
 /**
@@ -618,4 +677,4 @@ function startUrPauser() {
     console.log('⏰ Scheduled urets pauser hvert 2. sekund (slutter ved 0:00, når uret tæller)');
 }
 
-module.exports = { resetDatabase, releaseInactiveCourts, startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk, startUgentligBackup, ugentligBackup, startSkaermLogOprydning, startUrPauser, startYoutubeVagt, startYoutubeSynlighed, youtubeSynlighed };
+module.exports = { resetDatabase, releaseInactiveCourts, startMidnightReset, startExpirationCheck, startInactivityCheck, startTournamentAutoSync, startHoldkampWatch, startHoldkampAutoAfslut, startPlannerVindueLuk, startUgentligBackup, ugentligBackup, indhentUgentligBackup, startSkaermLogOprydning, startUrPauser, startYoutubeVagt, startYoutubeSynlighed, youtubeSynlighed };

@@ -2078,12 +2078,22 @@ function renderHelbredFliser(d) {
         fliser.push(shFlise('Fuld backup', 'Ukendt',
             'Ingen status fra backup-tjenesten endnu — den skriver efter sin næste kørsel (kræver den nye docker-compose)'));
     }
+    // Databasens forbindelser (nr. 55): åbne i alt mod MySQL's loft, og puljerne
+    const db = l.database;
+    if (db && db.maks) {
+        fliser.push(shFlise('Databaseforbindelser', `${shTal(db.aabne)} åbne`,
+            `af højst ${shTal(db.maks)} (${shTal(db.andel * 100)} %)<br>${shTal(db.klubPuljer)} ${db.klubPuljer === 1 ? 'klubpulje' : 'klubpuljer'} (op til ${shTal(db.puljeStoerrelse)} hver) + master og football`,
+            db.andel, db.niveau || '', escapeHtml(db.besked || '')));
+    }
     // Backend-processen: hvornår den startede, om opstarten lykkedes første gang,
     // og databaser, hvor en migration fejlede (så mangler de kolonner/tabeller)
     const be = l.backend;
     if (be) {
         const m = be.migrationer || { medFejl: 0, databaser: [], antal: 0 };
         const info = [`startet ${escapeHtml(formatDate(be.startet))}`];
+        // Den deployede version (nr. 54): commit og byggetidspunkt fra deploy.sh
+        const v = l.version;
+        if (v) info.push(`version ${escapeHtml(v.sha)}${v.bygget ? ` · bygget ${escapeHtml(formatDate(v.bygget))}` : ''}`);
         if (be.klarEfterSek !== null) info.push(`klar efter ${shTal(be.klarEfterSek)} s${be.forsoeg > 1 ? ` (${be.forsoeg} forsøg — databasen var længe om at svare)` : ''}`);
         if (!be.klar) info.push(`Opstarten er ikke færdig (${be.forsoeg} forsøg)${be.fejl ? `: ${escapeHtml(be.fejl)}` : ''} — ingen baggrundsjob kører endnu`);
         if (m.medFejl) {

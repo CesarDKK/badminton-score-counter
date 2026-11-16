@@ -12,12 +12,24 @@ services:
     image: mysql:8.4
     container_name: badminton-mysql
     restart: unless-stopped
+    # MySQL skal have tid til at lukke rent ned (skrive buffere til disk), når
+    # compose genskaber containeren — Dockers standard er 10 s og derefter SIGKILL.
+    stop_grace_period: 60s
     logging: *default-logging
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?sæt MYSQL_ROOT_PASSWORD i .env}
       MYSQL_DATABASE: badminton_counter
       MYSQL_USER: badminton_user
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?sæt MYSQL_PASSWORD i .env}
+    # Forbindelsesloftet (nr. 55). MySQL's standard er 151, men hver klub har sin
+    # egen pulje på op til 15 (DB_POOL_SIZE), plus master 5 + football 5 i
+    # backenden, football-appens 10 og backup-tjenesten. Puljerne lukker ledige
+    # forbindelser efter et minut, så det er klubberne, der er i gang SAMTIDIG,
+    # der tæller: 300 rækker til 18 klubber, der alle bruger hele puljen på én
+    # gang (15 × 18 + ca. 25) — rigeligt til 10–30 klubber. En ledig forbindelse
+    # koster MySQL ca. 1–2 MB (tråd + buffere), så 300 er højst ca. 0,5 GB på en
+    # lille Hetzner-maskine. Super-admin viser forbruget og advarer over 80 %.
+    command: ["--max-connections=${MYSQL_MAX_CONNECTIONS:-300}"]
     # Kun tilgængelig fra selve serveren (host-side mysqldump/fejlsøgning).
     # Docker's egne iptables-regler omgår ufw, så "0.0.0.0:3306" ville udstille
     # databasen på den offentlige IP uanset firewall — bind derfor til localhost.
@@ -41,6 +53,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
+      # Versionen, super-admin viser (deploy.sh sætter dem; ellers "ukendt")
+      args:
+        GIT_SHA: ${GIT_SHA:-ukendt}
+        BUILD_TIME: ${BUILD_TIME:-}
     container_name: badminton-backend
     restart: unless-stopped
     logging: *default-logging

@@ -104,4 +104,10 @@ function currentTenant() {
     return tenantStorage.getStore() || 'direct';
 }
 
-module.exports = { getPool, runWithTenant, bevarKlub, closeAll, currentTenant, utcSession, poolIndstillinger };
+// Antal puljer, processen har åbnet (én pr. klub-database + demoen), til
+// super-admins helbredskort (nr. 55)
+function antalPuljer() {
+    return pools.size;
+}
+
+module.exports = { getPool, runWithTenant, bevarKlub, closeAll, currentTenant, utcSession, poolIndstillinger, antalPuljer };

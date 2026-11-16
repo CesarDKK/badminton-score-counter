@@ -9,9 +9,11 @@
 // backticks i SQL (identifier injection). Alt valideres FØR noget skrives, og
 // sponsorbillederne peges ind i klubbens egen mappe (config/sponsorFiler.js).
 
+const fs = require('fs');
 const path = require('path');
-const { backupFilnavn, tilpasSponsorRaekker, hentSponsorFiler, skrivSponsorFiler, sponsorFilSti, rydUbrugteFiler } = require('./sponsorFiler');
+const { backupFilnavn, tilpasSponsorRaekker, skrivSponsorFiler, sponsorFilSti, rydUbrugteFiler } = require('./sponsorFiler');
 const { laesIndstillinger } = require('../screens/livestream');
+const { tilGendannelse, statements } = require('./dataMigrationer');
 
 const BACKUP_VERSION = '1.0';
 
@@ -66,36 +68,116 @@ function livestreamLogo(settings, mappe) {
 //
 // clubDbName (nr. 47): klubbens identitet — en gendannelse i en anden klub
 // opdages (backupFraAndenKlub). Subdomænet kan ændres; databasenavnet ikke.
-async function lavBackup(conn, { mappe, clubSubdomain = null, clubName, clubDbName } = {}) {
+//
+// clubCreatedAt (nr. 57): hvornår klubben blev oprettet. Slettes en klub, og
+// oprettes en ny med samme subdomæne, får den samme databasenavn — oprettelsen
+// skiller de to klubber ad.
+//
+// Et øjebliksbillede (nr. 86): alle tabeller læses i én transaktion med
+// CONSISTENT SNAPSHOT (REPEATABLE READ) på samme forbindelse. Før blev de læst
+// én efter én, så en kamp, der sluttede midt i en backup, kunne stå i
+// match_history men stadig i game_states, eller et sponsorbillede uden sine
+// baner. Filerne læses bagefter ud fra de rækker, snapshottet gav; en fil, der
+// mangler på disken, vælter ikke backuppen, men står i manglendeFiler.
+async function lavBackup(conn, { mappe, clubSubdomain = null, clubName, clubDbName, clubCreatedAt = null } = {}) {
     const tables = {};
-    for (const table of BACKUP_TABLES) {
-        const [rows] = await conn.query(`SELECT * FROM \`${table}\``);
-        tables[table] = rows;
+    let timestamp;
+    let migrationer = null;
+    await conn.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+    await conn.query('START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY');
+    try {
+        timestamp = new Date().toISOString();
+        for (const table of BACKUP_TABLES) {
+            const [rows] = await conn.query(`SELECT * FROM \`${table}\``);
+            tables[table] = rows;
+        }
+        // Skemaets og data-migrationernes stand (nr. 87) — i samme snapshot
+        migrationer = await koerteMigrationer(conn);
+    } finally {
+        // Kun læst — afslut transaktionen, også når en SELECT fejlede, så
+        // forbindelsen ikke går tilbage til puljen midt i en transaktion
+        try { await conn.query('COMMIT'); } catch { /* forbindelsen er væk */ }
     }
+    // Sponsorbillederne og livestream-logoet som base64 — fra klubbens egen mappe
+    const { filer, mangler } = await hentFiler([...tables.sponsor_images, ...livestreamLogo(tables.settings, mappe)], mappe);
     const backup = {
         version: BACKUP_VERSION,
-        timestamp: new Date().toISOString(),
+        timestamp,
         clubSubdomain,
         tables,
-        // Sponsorbillederne og livestream-logoet som base64 — fra klubbens egen mappe
-        files: hentSponsorFiler([...tables.sponsor_images, ...livestreamLogo(tables.settings, mappe)], mappe),
+        files: filer,
     };
+    if (mangler.length) {
+        backup.manglendeFiler = mangler;
+        console.warn(`⚠ Backup af ${clubDbName || mappe}: ${mangler.length} billedfil(er) mangler på disken og er ikke med: ${mangler.join(', ')}`);
+    }
+    // Hvilke migrationer databasen havde kørt (nr. 87): den nyeste og hele
+    // listen. Gendannelsen kører de data-migrationer, backuppen er ældre end.
+    if (migrationer) {
+        backup.migration = migrationer.length ? migrationer[migrationer.length - 1] : null;
+        backup.migrationer = migrationer;
+    }
     if (clubName) backup.clubName = clubName;
     if (clubDbName) backup.clubDbName = clubDbName;
+    const oprettet = tidMs(clubCreatedAt);
+    if (oprettet !== null) backup.clubCreatedAt = new Date(oprettet).toISOString();
     return backup;
 }
 
-// Er backuppen fra en anden klub end klub ({ db_name, subdomain })? Svarer med
-// en tekst om, hvor den er fra, ellers null. Backups uden klub (demoen, en lokal
-// installation) kan ikke tjekkes og godtages. Ældre backups har kun subdomænet.
+// Klubbens filer som base64 ({ filer }), og de filer, rækkerne peger på, men
+// som ikke kunne læses ({ mangler }: filnavne). Rækker, der ikke peger ind i
+// klubbens egen mappe, springes over som før (sponsorFilSti).
+async function hentFiler(raekker, mappe) {
+    const filer = {};
+    const mangler = [];
+    for (const r of raekker || []) {
+        const sti = sponsorFilSti(mappe, r.filename);
+        if (!sti) continue;
+        const navn = path.basename(sti);
+        if (navn in filer) continue;
+        try {
+            filer[navn] = (await fs.promises.readFile(sti)).toString('base64');
+        } catch {
+            if (!mangler.includes(navn)) mangler.push(navn);
+        }
+    }
+    return { filer, mangler };
+}
+
+function tidMs(v) {
+    if (v === null || v === undefined || v === '') return null;
+    const t = v instanceof Date ? v.getTime() : Date.parse(v);
+    return Number.isFinite(t) ? t : null;
+}
+
+// Er backuppen fra en anden klub end klub ({ db_name, subdomain, created_at })?
+// Svarer med en tekst om, hvor den er fra, ellers null. Backups uden klub (demoen,
+// en lokal installation) kan ikke tjekkes og godtages. Ældre backups har kun
+// subdomænet.
+//
+// Samme navn er ikke nok (nr. 57): en slettet klubs backup har samme
+// databasenavn og subdomæne som en ny klub, der er oprettet med samme
+// subdomæne. Er klubben oprettet efter backuppen (eller har backuppen en anden
+// oprettelse), er den fra den tidligere klub.
 function backupFraAndenKlub(backup, klub) {
     if (!backup || !klub) return null;
     const fra = backup.clubName
         ? `${backup.clubName}${backup.clubSubdomain ? ` (${backup.clubSubdomain})` : ''}`
         : backup.clubSubdomain || backup.clubDbName;
-    if (backup.clubDbName) return backup.clubDbName === klub.db_name ? null : fra;
-    if (backup.clubSubdomain) return backup.clubSubdomain === klub.subdomain ? null : fra;
-    return null;
+    if (backup.clubDbName) {
+        if (backup.clubDbName !== klub.db_name) return fra;
+    } else if (backup.clubSubdomain) {
+        if (backup.clubSubdomain !== klub.subdomain) return fra;
+    } else {
+        return null;
+    }
+    const oprettet = tidMs(klub.created_at);
+    if (oprettet === null) return null;
+    const tidligere = `${fra} — en tidligere, slettet klub med samme navn`;
+    const backupOprettet = tidMs(backup.clubCreatedAt);
+    if (backupOprettet !== null) return Math.abs(backupOprettet - oprettet) <= 1000 ? null : tidligere;
+    const taget = tidMs(backup.timestamp);
+    return taget !== null && taget < oprettet - 1000 ? tidligere : null;
 }
 
 // Fejltekst, hvis backuppen ikke kan gendannes; ellers null. Ændrer intet.
@@ -148,9 +230,16 @@ class BackupFejl extends Error {}
 // kunBrugte (demoen): der skrives kun filer, den gendannede database bruger, og
 // filer i mappen, som den ikke længere bruger, slettes. Ellers kunne gentagne
 // gendannelser med nye filnavne fylde disken med billeder, ingen kan slette igen.
+//
+// Data-migrationer (nr. 87): er backuppen ældre end en data-migration, som
+// klubbens database har kørt, køres den på de gendannede rækker i samme
+// transaktion (config/dataMigrationer.js har reglen og listen).
 async function gendanBackup(conn, backup, mappe, { kunBrugte = false } = {}) {
     const fejl = validerBackup(backup) || tilpasSponsorRaekker(backup.tables.sponsor_images, mappe);
     if (fejl) throw new BackupFejl(fejl);
+
+    const dataMigrationer = tilGendannelse(backup, new Set((await koerteMigrationer(conn)) || []));
+    for (const m of dataMigrationer) if (m.foer) m.foer(backup.tables);
 
     try {
         await conn.beginTransaction();
@@ -167,10 +256,16 @@ async function gendanBackup(conn, backup, mappe, { kunBrugte = false } = {}) {
                 );
             }
         }
+        for (const m of dataMigrationer) {
+            for (const stmt of statements(m)) await conn.query(stmt);
+        }
         await conn.commit();
     } catch (error) {
         try { await conn.rollback(); } catch {}
         throw error;
+    }
+    if (dataMigrationer.length) {
+        console.log(`✓ Gendannelse: backuppen var ældre end ${dataMigrationer.map(m => m.fil).join(', ')} — kørt igen på de gendannede data`);
     }
 
     const brugte = kunBrugte ? await brugteFiler(conn, mappe) : null;
@@ -179,7 +274,18 @@ async function gendanBackup(conn, backup, mappe, { kunBrugte = false } = {}) {
     return {
         restored: Object.fromEntries(BACKUP_TABLES.map(t => [t, backup.tables[t]?.length ?? 0])),
         files,
+        dataMigrationer: dataMigrationer.map(m => m.fil),
     };
+}
+
+// Migrationerne, databasen har kørt (sorteret). null: tabellen kunne ikke læses.
+async function koerteMigrationer(conn) {
+    try {
+        const [rows] = await conn.query('SELECT filename FROM `migrations` ORDER BY filename');
+        return Array.isArray(rows) ? rows.map(r => r.filename).filter(f => typeof f === 'string') : null;
+    } catch {
+        return null;
+    }
 }
 
 module.exports = { BACKUP_TABLES, lavBackup, validerBackup, gendanBackup, BackupFejl, normalizeValue, backupFraAndenKlub };

@@ -129,7 +129,7 @@ test('tagBackup: gemmer gzippet JSON og beholder kun de 4 nyeste', async () => {
     assert.ok(!fs.existsSync(path.join(dir, autoBackup.filnavnFor('auto', new Date(Date.UTC(2026, 8, 7, 0))))), 'ældste slettet');
     assert.equal(autoBackup.listBackups(KLUB.db_name).filter(b => b.type === 'foer-gendannelse').length, 1, 'andre slags røres ikke');
 
-    const b = autoBackup.laesBackup(KLUB.db_name, fil);
+    const b = await autoBackup.laesBackup(KLUB.db_name, fil);
     assert.equal(b.clubSubdomain, 'lyngby');
     assert.deepEqual(b.tables.courts, [{ id: 1 }]);
     assert.ok(zlib.gunzipSync(fs.readFileSync(path.join(dir, fil))).length > 0);
@@ -160,9 +160,9 @@ test('to backups i samme sekund overskriver ikke hinanden', async () => {
     assert.equal(autoBackup.listBackups(klub.db_name).length, 2);
 });
 
-test('laesBackup: ukendt eller ugyldigt filnavn giver null', () => {
-    assert.equal(autoBackup.laesBackup(KLUB.db_name, 'auto-20200101-000000.json.gz'), null);
-    assert.equal(autoBackup.laesBackup(KLUB.db_name, '../../../etc/passwd'), null);
+test('laesBackup: ukendt eller ugyldigt filnavn giver null', async () => {
+    assert.equal(await autoBackup.laesBackup(KLUB.db_name, 'auto-20200101-000000.json.gz'), null);
+    assert.equal(await autoBackup.laesBackup(KLUB.db_name, '../../../etc/passwd'), null);
 });
 
 // ── Næste kørsel: mandag kl. 02.00 dansk tid ──────────────────────────────

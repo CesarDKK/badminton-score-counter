@@ -18,6 +18,8 @@ const logoUpload = require('../config/logoUpload');
 const { bevarKlub } = require('../config/tenantPools');
 const migrationRunner = require('../config/migrationRunner');
 const klubNavn = require('../config/klubNavn');
+const slettedeKlubber = require('../config/slettedeKlubber');
+const klubOpslag = require('../config/klubOpslag');
 const { validateImageMagic } = require('../config/imageUpload');
 
 // Gyldige side-noegler for klub-admins per-side adgangsstyring.
@@ -109,10 +111,11 @@ router.get('/clubs', superAdminAuth, async (req, res, next) => {
                     last_auto_backup_at, last_auto_backup_error
              FROM clubs ORDER BY created_at DESC`
         );
-        // Antal gemte automatiske backups (fra serverens backup-mappe)
+        // Antal gemte automatiske backups (fra serverens backup-mappe) — kun
+        // klubbens egne, ikke en tidligere klubs med samme navn (nr. 57)
         for (const c of clubs) {
             try {
-                c.auto_backups = autoBackup.listBackups(c.db_name).filter(b => b.type === 'auto').length;
+                c.auto_backups = autoBackup.listBackups(c.db_name, { siden: c.created_at }).filter(b => b.type === 'auto').length;
             } catch { c.auto_backups = 0; }
         }
         // Skærm-hændelser det seneste døgn (stod stille, startet forfra …)
@@ -173,6 +176,18 @@ router.post('/clubs', superAdminAuth, async (req, res, next) => {
             return res.status(409).json({ error: 'Subdomain er allerede i brug' });
         }
 
+        // Ligger der backups eller en upload-mappe med klubbens databasenavn
+        // (en klub med samme subdomæne, slettet før nr. 57), flyttes de til side,
+        // så den nye klub aldrig ser den gamles data. Fejler det, oprettes klubben
+        // alligevel: listningen og gendannelsen afviser de gamle backups (created_at).
+        try {
+            const flyttet = slettedeKlubber.flytTilSide({ name: null, subdomain, db_name: dbName },
+                { grund: 'rester fundet, da en ny klub med samme subdomæne blev oprettet' });
+            if (flyttet) console.warn(`⚠ Ny klub ${subdomain}: gamle filer med databasenavnet ${dbName} flyttet til ${flyttet}`);
+        } catch (e) {
+            console.error(`✗ Ny klub ${subdomain}: gamle filer kunne ikke flyttes til side:`, e.message);
+        }
+
         // Opret klub-database (init.sql + migrationerne). Findes der allerede en
         // database med det navn, er den ikke klubbens: der oprettes intet oven i den.
         let migreret;
@@ -190,6 +205,8 @@ router.post('/clubs', superAdminAuth, async (req, res, next) => {
             'INSERT INTO clubs (name, subdomain, db_name) VALUES (?, ?, ?)',
             [name, subdomain, dbName]
         );
+        // Et "findes ikke" for subdomænet må ikke huskes længere (nr. 55)
+        klubOpslag.glemKlubber();
 
         const club = await masterDb.queryOne(
             'SELECT id, name, subdomain, db_name, is_active, created_at FROM clubs WHERE id = ?',
@@ -209,7 +226,7 @@ router.post('/clubs', superAdminAuth, async (req, res, next) => {
 router.delete('/clubs/:id', superAdminAuth, async (req, res, next) => {
     try {
         const club = await masterDb.queryOne(
-            'SELECT id, name, db_name, is_active FROM clubs WHERE id = ?',
+            'SELECT id, name, subdomain, db_name, is_active, created_at FROM clubs WHERE id = ?',
             [req.params.id]
         );
         if (!club) return res.status(404).json({ error: 'Klub ikke fundet' });
@@ -236,8 +253,23 @@ router.delete('/clubs/:id', superAdminAuth, async (req, res, next) => {
 
         // Fjern klub fra master
         await masterDb.query('DELETE FROM clubs WHERE id = ?', [req.params.id]);
+        klubOpslag.glemKlubber();
 
-        res.json({ success: true, databaseBevaret: bevar ? club.db_name : null });
+        // Klubbens automatiske backups og upload-mappe flyttes til side (nr. 57),
+        // så en ny klub med samme subdomæne ikke arver dem. Intet slettes: en
+        // klub, der blev slettet ved en fejl, kan reddes fra backupperne.
+        // En systemdatabase (bevar) har ikke sine egne mapper — de røres ikke.
+        let filerFlyttet = null;
+        if (!bevar) {
+            try {
+                filerFlyttet = slettedeKlubber.flytTilSide(club);
+                if (filerFlyttet) console.log(`✓ Slet klub ${club.name}: backups og billeder flyttet til ${filerFlyttet}`);
+            } catch (e) {
+                console.error(`✗ Slet klub ${club.name}: backups og billeder kunne ikke flyttes til side:`, e.message);
+            }
+        }
+
+        res.json({ success: true, databaseBevaret: bevar ? club.db_name : null, filerFlyttet });
     } catch (error) { next(error); }
 });
 
@@ -255,6 +287,9 @@ router.put('/clubs/:id/toggle', superAdminAuth, async (req, res, next) => {
             'UPDATE clubs SET is_active = ?, updated_at = NOW() WHERE id = ?',
             [!club.is_active, id]
         );
+        // En deaktiveret klub lukkes med det samme — ikke først, når klub-opslaget
+        // udløber af sig selv (30 s, nr. 55)
+        klubOpslag.glemKlubber();
 
         res.json({ success: true, is_active: !club.is_active });
     } catch (error) {
@@ -497,7 +532,7 @@ const autoBackup = require('../config/autoBackup');
 router.get('/clubs/:id/backup', superAdminAuth, async (req, res, next) => {
     try {
         const club = await masterDb.queryOne(
-            'SELECT name, subdomain, db_name FROM clubs WHERE id = ?',
+            'SELECT name, subdomain, db_name, created_at FROM clubs WHERE id = ?',
             [req.params.id]
         );
         if (!club) return res.status(404).json({ error: 'Klub ikke fundet' });
@@ -505,7 +540,10 @@ router.get('/clubs/:id/backup', superAdminAuth, async (req, res, next) => {
         const conn = await clubConn(club.db_name);
         let backup;
         try {
-            backup = await lavBackup(conn, { mappe: club.db_name, clubSubdomain: club.subdomain, clubName: club.name, clubDbName: club.db_name });
+            backup = await lavBackup(conn, {
+                mappe: club.db_name, clubSubdomain: club.subdomain, clubName: club.name, clubDbName: club.db_name,
+                clubCreatedAt: club.created_at
+            });
         } finally {
             await conn.end();
         }
@@ -537,7 +575,7 @@ router.post('/clubs/:id/restore', superAdminAuth, modtagStorFil('backup'), async
 
     try {
         const club = await masterDb.queryOne(
-            'SELECT id, name, db_name, subdomain FROM clubs WHERE id = ?',
+            'SELECT id, name, db_name, subdomain, created_at FROM clubs WHERE id = ?',
             [req.params.id]
         );
         if (!club) return res.status(404).json({ error: 'Klub ikke fundet' });
