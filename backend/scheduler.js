@@ -13,6 +13,8 @@ async function resetDatabase(dbLabel) {
     // QR-link åbnes fra telefonens historik, når ingen havde ryddet banen.
     // TV'erne henter selv en ny QR-kode (i baggrunden, hvert 5. minut).
     const qr = await query("DELETE FROM device_tokens WHERE token_type = 'match_session'");
+    // Frigivne kampe (migration 051) gemmes højst til midnat
+    try { await query('DELETE FROM frigivne_kampe'); } catch (e) { /* før migration 051 */ }
     console.log(`  ✅ ${dbLabel}: cleared ${deleteResult.affectedRows} game states, set ${updateResult.affectedRows} courts inactive, removed ${qr.affectedRows} QR sessions`);
 }
 
@@ -102,7 +104,11 @@ function startExpirationCheck() {
     console.log('⏰ Scheduled hourly sponsor expiration check at minute 0 (Europe/Copenhagen timezone)');
 }
 
-const INACTIVITY_MINUTES = 10;
+// 20 minutter (før 10, pakke P): en tablet med net giver livstegn hvert 10.
+// sekund og frigives aldrig her — det er tabletten uden net, uret under
+// opvarmning og en lang skadespause med QR-telefonen, der rammes, og de skal
+// ikke miste banen efter 10 minutter. Kampen gemmes desuden først (frigivne_kampe).
+const INACTIVITY_MINUTES = 20;
 
 // Har banen en badmintonplanner-kamp? (tabellen findes først efter migration 027)
 async function harPlannerKamp(courtNumber) {
@@ -150,8 +156,28 @@ async function releaseInactiveCourts(dbLabel) {
 
     if (!staleCourts.length) return;
 
+    let frigivet = 0;
     for (const court of staleCourts) {
-        await query('DELETE FROM game_states WHERE court_id = ?', [court.id]);
+        // Ikke uden spor (rest af nr. 4): rækken gemmes i frigivne_kampe, før den
+        // slettes, så tabletten kan tilbyde "Fortsæt kampen?". Kan den ikke
+        // gemmes, bliver banen stående (midnats-nulstillingen tager den).
+        const raekke = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
+        if (!raekke) continue;
+        try {
+            await query(
+                `INSERT INTO frigivne_kampe (court_id, data) VALUES (?, ?)
+                 ON DUPLICATE KEY UPDATE data = VALUES(data), frigivet_at = CURRENT_TIMESTAMP`,
+                [court.id, JSON.stringify(raekke)]
+            );
+        } catch (e) {
+            console.error(`  ❌ ${dbLabel}: bane ${court.court_number} blev ikke frigivet — kampen kunne ikke gemmes:`, e.message);
+            continue;
+        }
+        // Kun den version, der blev gemt: kom et point ind imellem, står banen
+        const slettet = await query('DELETE FROM game_states WHERE court_id = ? AND version = ?',
+            [court.id, raekke.version || 0]);
+        if (!slettet || !slettet.affectedRows) continue;
+        frigivet++;
         await query('UPDATE courts SET is_active = FALSE, is_doubles = FALSE WHERE id = ?', [court.id]);
         await query(
             `DELETE FROM device_tokens WHERE token_type = 'match_session' AND court_number = ?`,
@@ -161,7 +187,7 @@ async function releaseInactiveCourts(dbLabel) {
         publishGameStateChange({ clubDbName: currentTenant() }, court.court_number, 'reset');
     }
 
-    console.log(`  ♻️  ${dbLabel}: frigivet ${staleCourts.length} inaktiv(e) bane(r) efter ${INACTIVITY_MINUTES} min uden aktivitet`);
+    if (frigivet) console.log(`  ♻️  ${dbLabel}: frigivet ${frigivet} inaktiv(e) bane(r) efter ${INACTIVITY_MINUTES} min uden aktivitet (kampen er gemt)`);
 }
 
 function startInactivityCheck() {

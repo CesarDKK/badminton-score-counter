@@ -390,6 +390,7 @@ let gameState = {
 let saveTimeout = null;
 let isSaving = false;
 let pendingSave = false;
+let _fortsaetSpoerges = false;   // "Fortsæt kampen?" står fremme (rest af nr. 4, se haandterTomBane)
 // Tidspunkt for seneste egen gemning — bruges til at ignorere SSE-events
 // udløst af vores egne skrivninger (se handleCourtEvent)
 let lastOwnSaveAt = 0;
@@ -1920,6 +1921,14 @@ function buildSavePayload() {
 
 async function performSave() {
     if (serMed) { pendingSave = false; return; }
+    // "Fortsæt kampen?" står fremme: banen er tom på serveren, og intet gemmes,
+    // før der er svaret (Fortsæt gemmer selv hele kampen)
+    if (_fortsaetSpoerges) {
+        if (fortsaetDialogVises()) { pendingSave = false; return; }
+        // En anden meddelelse har taget dialogens plads: gem igen, og få
+        // spørgsmålet frem på ny (409 → handleSaveConflict → haandterTomBane)
+        _fortsaetSpoerges = false;
+    }
     if (isSaving) {
         // Already saving, will retry
         pendingSave = true;
@@ -2042,7 +2051,7 @@ async function handleSaveConflict(conflict) {
         console.warn('Save-konflikt: banen er nulstillet af en anden enhed');
         try {
             const fresh = await api.getGameState(courtId);
-            await adoptServerReset(fresh);
+            await haandterTomBane(fresh);
         } catch (e) {
             console.error('Kunne ikke hente frisk tilstand efter reset-konflikt:', e);
             gameState.version = 0;
@@ -2068,6 +2077,94 @@ async function handleSaveConflict(conflict) {
     }
 
     pendingSave = true; // finally-blokken i performSave genkører gemningen
+}
+
+// ---- Rest af nr. 4: en kamp, serveren har frigivet efter inaktivitet ----
+// Scheduleren frigiver en bane, hvor kampen har stået stille i 20 minutter
+// (tablet uden net, ur under opvarmning, lang skadespause), men gemmer den først
+// (frigivne_kampe). Kommer tabletten tilbage med kampen i gang, spørges der,
+// i stedet for at begynde forfra eller skrive kampen tilbage uden at spørge.
+// (_fortsaetSpoerges er erklæret ved isSaving/pendingSave)
+
+// Er den frigivne kamp tablettens egen? Talt af den selv, eller samme spillere
+// (sorteret: siderne kan være byttet)
+function erFrigivetKampHer(lokal, frigivet) {
+    if (!frigivet || !lokal || !lokal.matchStartTime || lokal.matchCompleted) return false;
+    if (frigivet.taeller && typeof TAELLER_ID === 'string' && frigivet.taeller.kort === TAELLER_ID.slice(0, 8)) return true;
+    const navne = (a, b) => [a.name, a.name2, b.name, b.name2].map(n => n || '').sort().join('|');
+    return !!(frigivet.player1 && frigivet.player2) &&
+        navne(frigivet.player1, frigivet.player2) === navne(lokal.player1, lokal.player2);
+}
+
+function fortsaetKampTekst(st) {
+    const hold = (p) => (st.isDoubles && p.name2 ? `${p.name} / ${p.name2}` : p.name);
+    const saet = (st.player1.games || st.player2.games) ? `\nSæt: ${st.player1.games}–${st.player2.games}` : '';
+    return `Banen blev frigivet, fordi der ikke var nogen aktivitet i lang tid. Kampen her på tabletten står:\n\n` +
+        `${hold(st.player1)}  ${st.player1.score} – ${st.player2.score}  ${hold(st.player2)}${saet}\n\n` +
+        `Vil I fortsætte kampen?`;
+}
+
+// Banen er tom på serveren, mens tabletten har en kamp. Returnerer true, når
+// der spørges (eller allerede spørges) — så venter kalderen på svaret.
+function fortsaetDialogVises() {
+    const overlay = document.getElementById('messageOverlay');
+    const titel = document.getElementById('messageTitle');
+    return !!(overlay && titel && overlay.style.display !== 'none' && titel.textContent === 'Fortsæt kampen?');
+}
+
+async function haandterTomBane(loaded) {
+    if (_fortsaetSpoerges && fortsaetDialogVises()) return true;
+    _fortsaetSpoerges = false;
+    if (!serMed && !isMatchSessionToken() && loaded && erFrigivetKampHer(gameState, loaded.frigivetKamp)) {
+        _fortsaetSpoerges = true;
+        if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
+        pendingSave = false;
+        showMessage('Fortsæt kampen?', fortsaetKampTekst(gameState), [
+            { text: 'Fortsæt kampen', style: 'primary', callback: () => fortsaetFrigivetKamp() },
+            { text: 'Ny kamp', style: 'secondary', callback: async () => {
+                _fortsaetSpoerges = false;
+                await adoptServerReset(await api.getGameState(courtId).catch(() => loaded));
+            } }
+        ], { spaerMs: 800 });
+        return true;
+    }
+    await adoptServerReset(loaded);
+    return false;
+}
+
+// "Fortsæt kampen": tablettens kamp gemmes igen som en ny række (version 0),
+// med den oprindelige starttid. Er en anden enhed gået i gang på banen
+// imellem (409), følges den — dens kamp overskrives ikke.
+async function fortsaetFrigivetKamp() {
+    // Som en almindelig gemning (isSaving): synken ser banen som tom, indtil
+    // svaret er her, og må ikke nulstille kampen imens (ownSaveRacing)
+    isSaving = true;
+    gameState.version = 0;
+    const payload = buildSavePayload();
+    payload.expectedVersion = 0;
+    payload.matchStartTime = new Date(gameState.matchStartTime).toISOString();
+    try {
+        const svar = await api.updateGameState(courtId, payload);
+        if (svar && typeof svar.version === 'number') gameState.version = svar.version;
+        lastOwnSaveAt = Date.now();
+        setSyncStatus(true);
+    } catch (e) {
+        if (e && (e.status === 409 || e.status === 423) && e.body && e.body.state) {
+            applyLoadedState(e.body.state);
+            updateDisplay();
+            showMessage('Banen er i brug', 'En anden enhed er gået i gang på banen i mellemtiden. Tabletten viser nu banens kamp.');
+        } else {
+            // Ingen forbindelse: den almindelige gemning prøver igen (som en ny
+            // række, version 0 — starttiden bliver så serverens nu)
+            console.error('Kunne ikke fortsætte kampen:', e);
+            setSyncStatus(false);
+            setTimeout(performSave, 5000);
+        }
+    } finally {
+        _fortsaetSpoerges = false;
+        isSaving = false;
+        if (pendingSave) setTimeout(performSave, 100);
+    }
 }
 
 // Banen er nulstillet på serveren (admin: Ryd bane / Nulstil) — adopter den
@@ -3158,9 +3255,9 @@ async function serverSyncTick(reason) {
             // !ownSaveRacing(): en GET besvaret før vores første point blev gemt,
             // ligner ellers en nulstilling, og pointet faldt tilbage til 0-0
             if (wasReset && gameState.matchStartTime && !ownSaveRacing()) {
-                // Court was reset from admin while we had an active match
-                console.log('Court was reset from admin, resetting local state');
-                await adoptServerReset(loaded);
+                // Banen er tom, mens vi har en kamp i gang: nulstillet fra admin,
+                // eller frigivet efter inaktivitet (så spørges "Fortsæt kampen?")
+                if (await haandterTomBane(loaded)) return;
                 if (isMatchSessionToken()) return;
             } else if (!ownSaveRacing() && (loaded.version || 0) !== gameState.version &&
                        serverErVidereEfterPause(loaded)) {
