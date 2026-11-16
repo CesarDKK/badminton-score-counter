@@ -5,7 +5,7 @@
 #   1. Sikrer at .env har alle hemmeligheder (genskaber/genererer efter behov).
 #   2. Bygger og starter alle containere — med commit og byggetidspunkt, som
 #      super-admin viser under Serverens helbred.
-#   3. Venter på, at backenden svarer sundt (højst 60 s), og siger tydeligt
+#   3. Venter på, at backenden svarer sundt (højst 120 s), og siger tydeligt
 #      fra, hvis den ikke gør.
 #   4. Rydder gamle, ubrugte images (kun "dangling" — aldrig volumes eller data).
 #
@@ -35,21 +35,28 @@ docker compose up -d --build
 # Backenden er sund, når opstarten er færdig: databasen svarer, migrationerne
 # er kørt, og baggrundsjobbene kører (/health i backend/server.js)
 echo ""
-echo "Venter på, at backenden svarer sundt (højst 60 s) ..."
+# 120 s: efter en genstart af MySQL (fx når dens opsætning er ændret) og
+# migrationstjek pr. klub kan opstarten godt tage over et minut — en falsk
+# fejlmelding er værre end at vente lidt længere.
+MAKS_VENT=120
+echo "Venter på, at backenden svarer sundt (højst $MAKS_VENT s) ..."
 VENTET=0
 SUND=0
-while [ "$VENTET" -lt 60 ]; do
+while [ "$VENTET" -lt "$MAKS_VENT" ]; do
     if docker exec badminton-backend node -e "require('http').get('http://127.0.0.1:3000/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))" >/dev/null 2>&1; then
         SUND=1
         break
     fi
     sleep 2
     VENTET=$((VENTET + 2))
+    if [ $((VENTET % 10)) -eq 0 ] && [ "$VENTET" -lt "$MAKS_VENT" ]; then
+        echo "  venter stadig ... ($VENTET af højst $MAKS_VENT s)"
+    fi
 done
 
 if [ "$SUND" -ne 1 ]; then
     echo ""
-    echo "!!! FEJL: backenden svarer ikke sundt efter 60 s."
+    echo "!!! FEJL: backenden svarer ikke sundt efter $MAKS_VENT s."
     echo "!!! Appen virker sandsynligvis IKKE lige nu. De seneste linjer fra backendens log:"
     echo ""
     docker compose logs --tail 40 backend || true

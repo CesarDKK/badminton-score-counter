@@ -603,8 +603,11 @@ test('54: deploy.sh venter på en sund backend, siger tydeligt fra og rydder kun
     assert.match(d, /set -eu/);
     assert.match(d, /sh scripts\/ensure-env\.sh/, 'hemmelighederne som før');
     assert.match(d, /http:\/\/127\.0\.0\.1:3000\/health/);
-    assert.match(d, /while \[ "\$VENTET" -lt 60 \]/);
-    assert.match(d, /FEJL: backenden svarer ikke sundt efter 60 s[\s\S]*docker compose logs --tail 40 backend[\s\S]*exit 1/);
+    assert.match(d, /MAKS_VENT=120\n/);
+    assert.match(d, /while \[ "\$VENTET" -lt "\$MAKS_VENT" \]/);
+    assert.match(d, /\$\(\(VENTET % 10\)\) -eq 0[\s\S]*venter stadig/, 'en livstegn-linje hvert 10. sekund');
+    assert.match(d, /FEJL: backenden svarer ikke sundt efter \$MAKS_VENT s[\s\S]*docker compose logs --tail 40 backend[\s\S]*exit 1/);
+    assert.doesNotMatch(d, /højst 60 s/);
     assert.match(d, /docker image prune -f/);
     assert.doesNotMatch(d, /prune -a|--all|volume prune|system prune|--volumes|down -v/, 'aldrig noget, der kan slette data');
     assert.match(d, /export GIT_SHA BUILD_TIME/);
@@ -729,6 +732,10 @@ test('55: max_connections hæves i MySQL\'s opsætning — volumes og porte er u
     const c = laes('docker-compose.yml');
     const mysqlDel = c.slice(c.indexOf('  mysql:'), c.indexOf('  backend:'));
     assert.match(mysqlDel, /command: \["--max-connections=\$\{MYSQL_MAX_CONNECTIONS:-300\}"\]/);
+    assert.match(mysqlDel, /stop_grace_period: 60s/, 'MySQL lukker rent, når compose genskaber den');
+    const backendDel = c.slice(c.indexOf('\n  backend:'), c.indexOf('\n  frontend:'));
+    assert.ok(backendDel.length > 100);
+    assert.doesNotMatch(backendDel, /stop_grace_period/, 'backenden beholder Dockers 10 s');
     assert.match(mysqlDel, /- "127\.0\.0\.1:3306:3306"/);
     assert.match(mysqlDel, /- mysql_data:\/var\/lib\/mysql/);
     for (const v of ['mysql_data', 'uploads_data', 'football_uploads', 'stats_cache', 'club_backups', 'backups']) {

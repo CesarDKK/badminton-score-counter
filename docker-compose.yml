@@ -12,6 +12,9 @@ services:
     image: mysql:8.4
     container_name: badminton-mysql
     restart: unless-stopped
+    # MySQL skal have tid til at lukke rent ned (skrive buffere til disk), når
+    # compose genskaber containeren — Dockers standard er 10 s og derefter SIGKILL.
+    stop_grace_period: 60s
     logging: *default-logging
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?sæt MYSQL_ROOT_PASSWORD i .env}
