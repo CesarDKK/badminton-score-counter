@@ -9,8 +9,9 @@
 // backticks i SQL (identifier injection). Alt valideres FØR noget skrives, og
 // sponsorbillederne peges ind i klubbens egen mappe (config/sponsorFiler.js).
 
+const fs = require('fs');
 const path = require('path');
-const { backupFilnavn, tilpasSponsorRaekker, hentSponsorFiler, skrivSponsorFiler, sponsorFilSti, rydUbrugteFiler } = require('./sponsorFiler');
+const { backupFilnavn, tilpasSponsorRaekker, skrivSponsorFiler, sponsorFilSti, rydUbrugteFiler } = require('./sponsorFiler');
 const { laesIndstillinger } = require('../screens/livestream');
 
 const BACKUP_VERSION = '1.0';
@@ -70,25 +71,67 @@ function livestreamLogo(settings, mappe) {
 // clubCreatedAt (nr. 57): hvornår klubben blev oprettet. Slettes en klub, og
 // oprettes en ny med samme subdomæne, får den samme databasenavn — oprettelsen
 // skiller de to klubber ad.
+//
+// Et øjebliksbillede (nr. 86): alle tabeller læses i én transaktion med
+// CONSISTENT SNAPSHOT (REPEATABLE READ) på samme forbindelse. Før blev de læst
+// én efter én, så en kamp, der sluttede midt i en backup, kunne stå i
+// match_history men stadig i game_states, eller et sponsorbillede uden sine
+// baner. Filerne læses bagefter ud fra de rækker, snapshottet gav; en fil, der
+// mangler på disken, vælter ikke backuppen, men står i manglendeFiler.
 async function lavBackup(conn, { mappe, clubSubdomain = null, clubName, clubDbName, clubCreatedAt = null } = {}) {
     const tables = {};
-    for (const table of BACKUP_TABLES) {
-        const [rows] = await conn.query(`SELECT * FROM \`${table}\``);
-        tables[table] = rows;
+    let timestamp;
+    await conn.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+    await conn.query('START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY');
+    try {
+        timestamp = new Date().toISOString();
+        for (const table of BACKUP_TABLES) {
+            const [rows] = await conn.query(`SELECT * FROM \`${table}\``);
+            tables[table] = rows;
+        }
+    } finally {
+        // Kun læst — afslut transaktionen, også når en SELECT fejlede, så
+        // forbindelsen ikke går tilbage til puljen midt i en transaktion
+        try { await conn.query('COMMIT'); } catch { /* forbindelsen er væk */ }
     }
+    // Sponsorbillederne og livestream-logoet som base64 — fra klubbens egen mappe
+    const { filer, mangler } = await hentFiler([...tables.sponsor_images, ...livestreamLogo(tables.settings, mappe)], mappe);
     const backup = {
         version: BACKUP_VERSION,
-        timestamp: new Date().toISOString(),
+        timestamp,
         clubSubdomain,
         tables,
-        // Sponsorbillederne og livestream-logoet som base64 — fra klubbens egen mappe
-        files: hentSponsorFiler([...tables.sponsor_images, ...livestreamLogo(tables.settings, mappe)], mappe),
+        files: filer,
     };
+    if (mangler.length) {
+        backup.manglendeFiler = mangler;
+        console.warn(`⚠ Backup af ${clubDbName || mappe}: ${mangler.length} billedfil(er) mangler på disken og er ikke med: ${mangler.join(', ')}`);
+    }
     if (clubName) backup.clubName = clubName;
     if (clubDbName) backup.clubDbName = clubDbName;
     const oprettet = tidMs(clubCreatedAt);
     if (oprettet !== null) backup.clubCreatedAt = new Date(oprettet).toISOString();
     return backup;
+}
+
+// Klubbens filer som base64 ({ filer }), og de filer, rækkerne peger på, men
+// som ikke kunne læses ({ mangler }: filnavne). Rækker, der ikke peger ind i
+// klubbens egen mappe, springes over som før (sponsorFilSti).
+async function hentFiler(raekker, mappe) {
+    const filer = {};
+    const mangler = [];
+    for (const r of raekker || []) {
+        const sti = sponsorFilSti(mappe, r.filename);
+        if (!sti) continue;
+        const navn = path.basename(sti);
+        if (navn in filer) continue;
+        try {
+            filer[navn] = (await fs.promises.readFile(sti)).toString('base64');
+        } catch {
+            if (!mangler.includes(navn)) mangler.push(navn);
+        }
+    }
+    return { filer, mangler };
 }
 
 function tidMs(v) {

@@ -145,7 +145,7 @@ async function gemtBackup(req, res) {
     const info = autoBackup.fortolkFilnavn(req.params.fil);
     let backup = null;
     if (klub && info && !autoBackup.foerOprettelsen(info.tidspunkt, klub.created_at)) {
-        backup = autoBackup.laesBackup(klub.db_name, req.params.fil);
+        backup = await autoBackup.laesBackup(klub.db_name, req.params.fil);
         if (backup && backupFraAndenKlub(backup, klub)) backup = null;
     }
     if (!backup) res.status(404).json({ error: 'Backuppen findes ikke' });

@@ -338,3 +338,73 @@ test('57: startUgentligBackup sætter indhentningen i gang efter opstarten', () 
     assert.match(start, /\.unref\(\)/);
     assert.match(s, /return enBackupAdGangen\(async \(\) => \{/);
 });
+
+// ======================= Nr. 86: backuppen er et øjebliksbillede =======================
+
+test('86: alle tabeller læses i én CONSISTENT SNAPSHOT-transaktion på samme forbindelse', async () => {
+    const conn = falskForbindelse({ courts: [{ id: 1 }] });
+    await klubBackup.lavBackup(conn, { mappe: 'holte' });
+    const log = conn.log;
+    const start = log.findIndex(s => /^START TRANSACTION WITH CONSISTENT SNAPSHOT/.test(s));
+    const selects = log.map((s, i) => [s, i]).filter(([s]) => /^SELECT \* FROM/.test(s)).map(([, i]) => i);
+    assert.ok(log.indexOf('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ') < start, 'REPEATABLE READ først');
+    assert.equal(selects.length, klubBackup.BACKUP_TABLES.length);
+    assert.ok(start >= 0 && start < selects[0], 'snapshottet tages før første tabel');
+    const commit = log.indexOf('COMMIT');
+    assert.ok(commit > selects[selects.length - 1], 'og afsluttes efter sidste tabel');
+    assert.equal(log.filter(s => s === 'COMMIT').length, 1);
+});
+
+test('86: fejler en tabel, afsluttes transaktionen alligevel (forbindelsen går tilbage til puljen ren)', async () => {
+    const log = [];
+    const conn = falskForbindelse({}, { log });
+    const query = conn.query.bind(conn);
+    conn.query = async (sql) => { if (/FROM `match_history`/.test(sql)) { log.push(sql); throw new Error('Lost connection'); } return query(sql); };
+    await assert.rejects(klubBackup.lavBackup(conn, { mappe: 'holte' }), /Lost connection/);
+    assert.equal(log[log.length - 1], 'COMMIT');
+});
+
+test('86: en billedfil, der mangler på disken, vælter ikke backuppen — den noteres i manglendeFiler', async () => {
+    ryd();
+    lagUpload('holte', 'findes.png');
+    const conn = falskForbindelse({
+        sponsor_images: [{ id: 1, filename: 'holte/findes.png' }, { id: 2, filename: 'holte/vaek.png' }, { id: 3, filename: 'lyngby/anden.png' }],
+        settings: [{ setting_key: 'livestream', setting_value: JSON.stringify({ logo: 'livestream-logo-0123456789abcdef.png' }) }],
+    });
+    const b = await klubBackup.lavBackup(conn, { mappe: 'holte', clubDbName: 'holte' });
+    assert.deepEqual(Object.keys(b.files), ['findes.png']);
+    assert.equal(Buffer.from(b.files['findes.png'], 'base64').toString(), 'billede');
+    assert.deepEqual(b.manglendeFiler, ['vaek.png', 'livestream-logo-0123456789abcdef.png'], 'en anden klubs fil er ikke "manglende" — den er bare ikke vores');
+    assert.equal(b.tables.sponsor_images.length, 3, 'rækkerne er med, som snapshottet gav dem');
+    // Uden manglende filer: intet felt
+    const ren = await klubBackup.lavBackup(falskForbindelse(), { mappe: 'holte' });
+    assert.ok(!('manglendeFiler' in ren));
+    // Og en sådan backup kan gendannes
+    assert.equal(klubBackup.validerBackup(b), null);
+});
+
+test('86/90: pakning og læsning sker uden at holde processen (ingen gzipSync/gunzipSync)', async () => {
+    const kilde = laes('backend/config/autoBackup.js');
+    assert.doesNotMatch(kilde, /gzipSync\(|gunzipSync\(/);
+    // To "før gendannelse"-backups samtidig får hver sit navn (navnet reserveres før pakningen)
+    ryd();
+    const klub = { id: 1, name: 'Holte', subdomain: 'holte', db_name: 'holte' };
+    const [a, b] = await Promise.all([
+        autoBackup.tagBackup(falskForbindelse({ courts: [{ id: 1 }] }), klub, 'foer-gendannelse'),
+        autoBackup.tagBackup(falskForbindelse({ courts: [{ id: 2 }] }), klub, 'foer-gendannelse'),
+    ]);
+    assert.notEqual(a, b);
+    assert.equal(autoBackup.listBackups('holte').length, 2);
+    assert.ok(!fs.readdirSync(path.join(BACKUP_DIR, 'holte')).some(f => f.endsWith('.part')));
+    const ids = (await Promise.all([a, b].map(f => autoBackup.laesBackup('holte', f)))).map(x => x.tables.courts[0].id).sort();
+    assert.deepEqual(ids, [1, 2]);
+});
+
+test('86: Download backup, super-admin og den automatiske går alle gennem lavBackup', () => {
+    for (const f of ['backend/routes/backup.js', 'backend/routes/superAdmin.js', 'backend/config/autoBackup.js']) {
+        assert.match(laes(f), /lavBackup\(conn, \{/, f);
+        assert.doesNotMatch(laes(f), /SELECT \* FROM \`\$\{table\}\`/, `${f} læser ikke selv tabellerne`);
+    }
+    // Den fulde backup (mysqldump) er allerede ét snapshot
+    assert.match(laes('scripts/backup-loop.sh'), /--all-databases --single-transaction/);
+});
