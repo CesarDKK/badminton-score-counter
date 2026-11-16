@@ -66,7 +66,11 @@ function livestreamLogo(settings, mappe) {
 //
 // clubDbName (nr. 47): klubbens identitet — en gendannelse i en anden klub
 // opdages (backupFraAndenKlub). Subdomænet kan ændres; databasenavnet ikke.
-async function lavBackup(conn, { mappe, clubSubdomain = null, clubName, clubDbName } = {}) {
+//
+// clubCreatedAt (nr. 57): hvornår klubben blev oprettet. Slettes en klub, og
+// oprettes en ny med samme subdomæne, får den samme databasenavn — oprettelsen
+// skiller de to klubber ad.
+async function lavBackup(conn, { mappe, clubSubdomain = null, clubName, clubDbName, clubCreatedAt = null } = {}) {
     const tables = {};
     for (const table of BACKUP_TABLES) {
         const [rows] = await conn.query(`SELECT * FROM \`${table}\``);
@@ -82,20 +86,45 @@ async function lavBackup(conn, { mappe, clubSubdomain = null, clubName, clubDbNa
     };
     if (clubName) backup.clubName = clubName;
     if (clubDbName) backup.clubDbName = clubDbName;
+    const oprettet = tidMs(clubCreatedAt);
+    if (oprettet !== null) backup.clubCreatedAt = new Date(oprettet).toISOString();
     return backup;
 }
 
-// Er backuppen fra en anden klub end klub ({ db_name, subdomain })? Svarer med
-// en tekst om, hvor den er fra, ellers null. Backups uden klub (demoen, en lokal
-// installation) kan ikke tjekkes og godtages. Ældre backups har kun subdomænet.
+function tidMs(v) {
+    if (v === null || v === undefined || v === '') return null;
+    const t = v instanceof Date ? v.getTime() : Date.parse(v);
+    return Number.isFinite(t) ? t : null;
+}
+
+// Er backuppen fra en anden klub end klub ({ db_name, subdomain, created_at })?
+// Svarer med en tekst om, hvor den er fra, ellers null. Backups uden klub (demoen,
+// en lokal installation) kan ikke tjekkes og godtages. Ældre backups har kun
+// subdomænet.
+//
+// Samme navn er ikke nok (nr. 57): en slettet klubs backup har samme
+// databasenavn og subdomæne som en ny klub, der er oprettet med samme
+// subdomæne. Er klubben oprettet efter backuppen (eller har backuppen en anden
+// oprettelse), er den fra den tidligere klub.
 function backupFraAndenKlub(backup, klub) {
     if (!backup || !klub) return null;
     const fra = backup.clubName
         ? `${backup.clubName}${backup.clubSubdomain ? ` (${backup.clubSubdomain})` : ''}`
         : backup.clubSubdomain || backup.clubDbName;
-    if (backup.clubDbName) return backup.clubDbName === klub.db_name ? null : fra;
-    if (backup.clubSubdomain) return backup.clubSubdomain === klub.subdomain ? null : fra;
-    return null;
+    if (backup.clubDbName) {
+        if (backup.clubDbName !== klub.db_name) return fra;
+    } else if (backup.clubSubdomain) {
+        if (backup.clubSubdomain !== klub.subdomain) return fra;
+    } else {
+        return null;
+    }
+    const oprettet = tidMs(klub.created_at);
+    if (oprettet === null) return null;
+    const tidligere = `${fra} — en tidligere, slettet klub med samme navn`;
+    const backupOprettet = tidMs(backup.clubCreatedAt);
+    if (backupOprettet !== null) return Math.abs(backupOprettet - oprettet) <= 1000 ? null : tidligere;
+    const taget = tidMs(backup.timestamp);
+    return taget !== null && taget < oprettet - 1000 ? tidligere : null;
 }
 
 // Fejltekst, hvis backuppen ikke kan gendannes; ellers null. Ændrer intet.

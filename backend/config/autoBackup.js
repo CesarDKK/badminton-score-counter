@@ -42,14 +42,32 @@ function fortolkFilnavn(fil) {
     return { type, tidspunkt: new Date(Date.UTC(+Y, +M - 1, +D, +h, +mi, +s)) };
 }
 
-// Klubbens backups, nyeste først
-function listBackups(dbName) {
+// Millisekunder for en dato (Date, ISO-tekst eller tal), ellers null
+function ms(v) {
+    if (v === null || v === undefined || v === '') return null;
+    const t = v instanceof Date ? v.getTime() : typeof v === 'number' ? v : Date.parse(v);
+    return Number.isFinite(t) ? t : null;
+}
+
+// Er en backup fra dette tidspunkt taget, før klubben blev oprettet (nr. 57)?
+// Så er den fra en tidligere klub med samme databasenavn (slettet og oprettet
+// igen med samme subdomæne). clubs.created_at er hele sekunder; et sekunds
+// margen dækker afrundingen.
+function foerOprettelsen(tidspunkt, oprettet) {
+    const t = ms(tidspunkt);
+    const o = ms(oprettet);
+    return t !== null && o !== null && t < o - 1000;
+}
+
+// Klubbens backups, nyeste først. siden: klubbens oprettelse (clubs.created_at)
+// — backups fra før den er en slettet klubs og vises aldrig (nr. 57)
+function listBackups(dbName, { siden = null } = {}) {
     const dir = klubDir(dbName);
     if (!fs.existsSync(dir)) return [];
     return fs.readdirSync(dir)
         .map(fil => {
             const info = fortolkFilnavn(fil);
-            if (!info) return null;
+            if (!info || foerOprettelsen(info.tidspunkt, siden)) return null;
             return { fil, type: info.type, tidspunkt: info.tidspunkt.toISOString(), stoerrelse: fs.statSync(path.join(dir, fil)).size };
         })
         .filter(Boolean)
@@ -75,7 +93,10 @@ function laesBackup(dbName, fil) {
 // Tag og gem en backup af klubben. conn: forbindelse til klubbens database.
 // Skrives først til en .part-fil, så en afbrudt backup aldrig ligner en hel.
 async function tagBackup(conn, club, type) {
-    const backup = await lavBackup(conn, { mappe: club.db_name, clubSubdomain: club.subdomain, clubName: club.name, clubDbName: club.db_name });
+    const backup = await lavBackup(conn, {
+        mappe: club.db_name, clubSubdomain: club.subdomain, clubName: club.name, clubDbName: club.db_name,
+        clubCreatedAt: club.created_at
+    });
     const dir = klubDir(club.db_name);
     fs.mkdirSync(dir, { recursive: true });
     // To backups i samme sekund (to gendannelser lige efter hinanden) fik før
@@ -119,6 +140,30 @@ function naesteKoersel(nu = new Date()) {
     return null;
 }
 
+// Den seneste mandag kl. 02.00 dansk tid, der er gået (nr. 57: var serveren
+// nede dér, tages backuppen ved opstarten). Der er præcis én mandag kl. 02.00
+// i hver uge; sommertidsskiftet kan flytte den en time, derfor 8 dage som reserve.
+function senesteKoersel(nu = new Date()) {
+    const DAG = 24 * 3600 * 1000;
+    for (const dage of [7, 8]) {
+        const t = naesteKoersel(new Date(nu.getTime() - dage * DAG));
+        if (t && t <= nu) return t;
+    }
+    return null;
+}
+
+// Mangler klubben den ugentlige backup fra den seneste mandag? En klub, der er
+// oprettet efter den mandag, mangler ingen.
+function manglerUgentlig(club, nu = new Date()) {
+    const frist = senesteKoersel(nu);
+    if (!frist) return false;
+    const oprettet = ms(club.created_at);
+    if (oprettet !== null && oprettet > frist.getTime()) return false;
+    return !listBackups(club.db_name, { siden: club.created_at })
+        .some(b => b.type === 'auto' && Date.parse(b.tidspunkt) >= frist.getTime());
+}
+
 module.exports = {
-    BACKUP_DIR, BEHOLD, klubDir, filnavnFor, fortolkFilnavn, listBackups, ryd, laesBackup, tagBackup, naesteKoersel
+    BACKUP_DIR, BEHOLD, klubDir, filnavnFor, fortolkFilnavn, listBackups, ryd, laesBackup, tagBackup, naesteKoersel,
+    senesteKoersel, manglerUgentlig, foerOprettelsen
 };

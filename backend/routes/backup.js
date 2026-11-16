@@ -51,7 +51,7 @@ async function medForbindelse(fn) {
 async function aktuelKlub(req) {
     if (req.accessMode !== 'club' || !req.clubDbName) return null;
     const masterDb = require('../config/masterDatabase');
-    return masterDb.queryOne('SELECT id, name, subdomain, db_name FROM clubs WHERE db_name = ?', [req.clubDbName]);
+    return masterDb.queryOne('SELECT id, name, subdomain, db_name, created_at FROM clubs WHERE db_name = ?', [req.clubDbName]);
 }
 
 // Gendan og svar. På et klub-subdomæne tages der først en "før gendannelse"-
@@ -98,7 +98,7 @@ router.get('/', authMiddleware, requireFuldAdgang, async (req, res, next) => {
         const backup = await medForbindelse(conn =>
             lavBackup(conn, {
                 mappe: klubMappe(req), clubSubdomain: req.clubSubdomain || null,
-                ...(klub ? { clubName: klub.name, clubDbName: klub.db_name } : {})
+                ...(klub ? { clubName: klub.name, clubDbName: klub.db_name, clubCreatedAt: klub.created_at } : {})
             }));
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Content-Disposition', `attachment; filename="backup_${req.clubSubdomain || 'lokal'}_${tidsstempel()}.json"`);
@@ -130,17 +130,24 @@ router.get('/automatisk', authMiddleware, requireFuldAdgang, async (req, res, ne
             aktiv: true,
             naeste: naeste ? naeste.toISOString() : null,
             behold: autoBackup.BEHOLD.auto,
-            backups: autoBackup.listBackups(klub.db_name),
+            backups: autoBackup.listBackups(klub.db_name, { siden: klub.created_at }),
         });
     } catch (error) {
         next(error);
     }
 });
 
-// Den gemte backup, filnavnet peger på — kun klubbens egne (ellers 404)
+// Den gemte backup, filnavnet peger på — kun klubbens egne (ellers 404). En
+// backup fra før klubben blev oprettet, eller fra en anden klub, er en slettet
+// klubs med samme navn: den findes ikke for denne klub (nr. 57).
 async function gemtBackup(req, res) {
     const klub = await aktuelKlub(req);
-    const backup = klub ? autoBackup.laesBackup(klub.db_name, req.params.fil) : null;
+    const info = autoBackup.fortolkFilnavn(req.params.fil);
+    let backup = null;
+    if (klub && info && !autoBackup.foerOprettelsen(info.tidspunkt, klub.created_at)) {
+        backup = autoBackup.laesBackup(klub.db_name, req.params.fil);
+        if (backup && backupFraAndenKlub(backup, klub)) backup = null;
+    }
     if (!backup) res.status(404).json({ error: 'Backuppen findes ikke' });
     return backup;
 }
