@@ -375,7 +375,13 @@ function tabletStatus({ opsaetning, kamera, pc, holdkamp = null, planner = false
         sender: !!(pc && pc.online && pc.sender),
         kameraKlar: !!(pc && pc.online && pc.kamera),
         efterMin,
-        synlighed: youtube && SYNLIGHEDER.includes(ytSynlighed) ? ytSynlighed : null
+        synlighed: youtube && SYNLIGHEDER.includes(ytSynlighed) ? ytSynlighed : null,
+        // YouTubes egen status (nr. 40): 'live', når YouTube viste udsendelsen ved
+        // seneste tjek, ellers 'starter' (ingen udsendelse endnu, eller den er ikke
+        // gået live). null uden forbundet kanal — så ved tabletten kun, at der sendes
+        youtube: youtube
+            ? (opsaetning && opsaetning.yt_broadcast_id && opsaetning.yt_status === 'live' ? 'live' : 'starter')
+            : null
     };
 }
 
@@ -715,8 +721,12 @@ function pcSidstPaaBane(tenant, bane) {
 // sekunder, efter banen er stoppet).
 // status: statusFor(); udsendelser: Map(bane -> yt_broadcast_id); video: må
 // udsendelserne vises (kanalen forbundet og ikke privat)?
+// live (nr. 40): med klubbens YouTube-kanal forbundet (kanal) kun, når YouTube
+// selv sagde 'live' ved seneste tjek (ytStatus: Map(bane -> court_streams.yt_status))
+// — ellers starter udsendelsen stadig. Uden kanal (egen nøgle) ved serveren
+// ikke mere end, at PC'en sender: live som før.
 const YT_VIDEO_ID = /^[A-Za-z0-9_-]{6,20}$/;
-function liveBaner(status, udsendelser, { video = false } = {}) {
+function liveBaner(status, udsendelser, { video = false, kanal = false, ytStatus = null } = {}) {
     const baner = new Map();
     for (const s of Object.values(status || {})) {
         if (s.online && s.sender && s.skalSende && Number.isInteger(s.bane) && !baner.has(s.bane)) {
@@ -724,7 +734,8 @@ function liveBaner(status, udsendelser, { video = false } = {}) {
             baner.set(s.bane, {
                 bane: s.bane,
                 kamp: s.tavle || null,
-                video: id && YT_VIDEO_ID.test(id) ? { id, url: `https://www.youtube.com/watch?v=${id}` } : null
+                video: id && YT_VIDEO_ID.test(id) ? { id, url: `https://www.youtube.com/watch?v=${id}` } : null,
+                live: kanal ? !!udsendelser.get(s.bane) && !!ytStatus && ytStatus.get(s.bane) === 'live' : true
             });
         }
     }
@@ -755,10 +766,12 @@ function ytTjekOm(omMs, nu = Date.now()) {
 // oprettelsen, og det tvungne tjek dér (endnu ikke 60 s billede, så ikke
 // gaaLive) flyttede det planlagte tjek efter et minut 5 minutter frem — og
 // gik udsendelsen ikke live af sig selv, manglede kampens første minutter.
-// live: om 5 minutter. Ellers om 30 sekunder, de første 5 minutter efter start.
+// live: om 5 minutter. Ellers om 30 sekunder, de første 5 minutter efter start
+// — og altid lige efter gaaLive ('liveStarting'), så "LIVE" vises, når YouTube
+// er live (nr. 40), og ikke først 5 minutter senere.
 function ytNaesteTjek(status, start, nu = Date.now()) {
     const s = tid(start);
-    const venter = status !== 'live' && s !== null && nu - s < YT_TJEK_MS;
+    const venter = status === 'liveStarting' || (status !== 'live' && s !== null && nu - s < YT_TJEK_MS);
     return ytTjekOm(venter ? YT_LIVE_TJEK_MS : YT_TJEK_MS, nu);
 }
 const YT_FEJL_PAUSE_MS = 2 * 60 * 1000;  // efter en fejl hos YouTube prøves der igen efter så længe

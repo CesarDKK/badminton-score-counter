@@ -224,7 +224,7 @@ function rute(router, metode, sti) {
 }
 async function koer(handler, req) {
     const res = { statusKode: 200, krop: null,
-        status(s) { this.statusKode = s; return this; }, json(j) { this.krop = j; return this; } };
+        status(s) { this.statusKode = s; return this; }, json(j) { this.krop = j; return this; }, set() { return this; } };
     let fejl = null;
     await handler(req, res, (e) => { fejl = e; });
     if (fejl) throw fejl;
@@ -519,7 +519,7 @@ function lsVerden(cs = {}, { kanal = true } = {}) {
         }
         if (/FROM livestream_youtube/.test(sql)) return kanal ? [{ id: 1, refresh_token: krypter('r'), fejl: null, kanal_navn: 'Klubben' }] : [];
         if (/FROM courts WHERE court_number/.test(sql)) return [{ id: 33, is_doubles: 0 }];
-        if (/FROM court_streams WHERE court_number/.test(sql)) return [{ ...v.cs }];
+        if (/FROM court_streams WHERE court_number/.test(sql) || /FROM court_streams\s*$/.test(sql)) return [{ ...v.cs }];
         if (/^\s*UPDATE court_streams SET/.test(sql)) { anvendSet(sql, params, v.cs); return { affectedRows: 1 }; }
         if (/^\s*(UPDATE|INSERT|DELETE)/.test(sql)) return { affectedRows: 1 };
         return [];
@@ -559,7 +559,7 @@ function medTider() {
 
 // ======================= Nr. 38: første tjek efter et minut =======================
 
-test('38: opret → (ca. 1 min billede) → tjek + gaaLive → (5 min) → tjek', medUr(async () => {
+test('38: opret → (ca. 1 min billede) → tjek + gaaLive → (30 s: er den live? nr. 40) → (5 min) → tjek', medUr(async () => {
     klokke = NU;
     lsVerden();
     nyYoutube('ready');      // YouTube går ikke live af sig selv (enableAutoStart svigtede)
@@ -579,12 +579,14 @@ test('38: opret → (ca. 1 min billede) → tjek + gaaLive → (5 min) → tjek'
     assert.ok(efterBillede >= 60 * SEK && efterBillede <= 70 * SEK,
         `sat live ca. et minut efter billedet kom (${efterBillede / SEK} s) — før gik der over 5 minutter`);
 
-    // Bagefter: næste tjek først efter 5 minutter
+    // Bagefter: ét tjek efter 30 s, der ser den live (til LIVE-mærket, nr. 40),
+    // og så først efter 5 minutter
     const tjek = tidFor(/^status:b1$/);
     const efterLive = tjek.filter(t => t > live[0]);
-    assert.ok(efterLive.length >= 1, 'tjekket igen');
-    assert.ok(efterLive[0] - live[0] >= 5 * MIN && efterLive[0] - live[0] <= 5 * MIN + 5 * SEK,
-        `næste tjek efter 5 min (${(efterLive[0] - live[0]) / SEK} s)`);
+    assert.ok(efterLive.length >= 2, 'tjekket igen');
+    assert.equal(efterLive[0] - live[0], 30 * SEK, 'bekræftet live efter 30 s');
+    assert.ok(efterLive[1] - efterLive[0] >= 5 * MIN && efterLive[1] - efterLive[0] <= 5 * MIN + 5 * SEK,
+        `næste tjek efter 5 min (${(efterLive[1] - efterLive[0]) / SEK} s)`);
     // Ventetiden kostede få kald: tjek hvert halve minut, kun indtil den var live
     assert.ok(tjek.filter(t => t <= live[0]).length <= 4, `få tjek før live (${tjek.filter(t => t <= live[0]).length})`);
     assert.equal(yt.kald.filter(k => k === 'opretUdsendelse').length, 1);
@@ -617,4 +619,83 @@ test('38: ytNaesteTjek — 30 s, mens den venter de første 5 minutter, ellers 5
     const tjek = ls.ytNaesteTjek('ready', start, NU);
     assert.equal(ls.ytHandling({ send: true, udsendelse: 'b1', tjek, nu: NU + 29 * SEK }), null);
     assert.equal(ls.ytHandling({ send: true, udsendelse: 'b1', tjek, nu: NU + 30 * SEK }), 'tjek');
+});
+
+// ======================= Nr. 40: LIVE efter YouTubes status =======================
+
+test('40: YouTubes status gemmes fra tjekket (ingen ekstra kald) — LIVE først, når YouTube er live', medUr(async () => {
+    klokke = NU;
+    const v = lsVerden();
+    nyYoutube('ready');
+    await pcSpoerger(false);
+    assert.equal(v.cs.yt_broadcast_id, 'b1');
+    assert.equal(v.cs.yt_status, null, 'ukendt, indtil den er tjekket');
+
+    klokke += 5 * SEK;
+    await pcSpoerger(true);                 // det tvungne tjek: 'ready'
+    assert.equal(v.cs.yt_status, 'ready');
+    const live = async () => {
+        klokke += 4 * SEK;   // forbi /live's cache på 3 s
+        const res = await koer(rute(livestream, 'get', '/live'), { accessMode: 'direct', headers: {}, get: () => undefined });
+        return res.krop.baner.find(b => b.bane === 3);
+    };
+    assert.equal((await live()).live, false, '/live: Starter …');
+    const tablet = () => ls.tabletStatus({ opsaetning: v.cs, kamera: true, pc: { online: true, sender: true, kamera: 'C920' }, youtube: true, nu: klokke });
+    assert.equal(tablet().youtube, 'starter');
+
+    await sendI(70 * SEK);                  // 60 s billede: sat live → 'liveStarting'
+    assert.ok(yt.kald.includes('gaaLive:b1'));
+    assert.equal(v.cs.yt_status, 'liveStarting');
+    assert.equal(tablet().youtube, 'starter');
+    await sendI(30 * SEK);                  // tjekket efter 30 s ser den live
+    assert.equal(v.cs.yt_status, 'live');
+    assert.equal(tablet().youtube, 'live');
+    assert.equal((await live()).live, true, '/live: LIVE');
+
+    // Afsluttet i Studio: glemt, og en ny udsendelse starter forfra som "Starter …"
+    yt.status = 'complete';
+    await sendI(5 * MIN + 5 * SEK);
+    assert.equal(v.cs.yt_broadcast_id, 'b2');
+    assert.ok(v.cs.yt_status !== 'live');
+    assert.equal(tablet().youtube, 'starter');
+    const opkald = yt.kald.filter(k => /^status:/.test(k)).length;
+    assert.ok(opkald <= 10, `kun de tjek, der var i forvejen (${opkald})`);
+}));
+
+test('40: uden forbundet kanal (egen nøgle) er LIVE som før — PC\'en sender', () => {
+    const status = { 9: { online: true, sender: true, skalSende: true, bane: 3, tavle: null } };
+    const udsendelser = new Map([[3, null]]);
+    assert.equal(ls.liveBaner(status, udsendelser)[0].live, true);
+    assert.equal(ls.liveBaner(status, udsendelser, { kanal: false, ytStatus: new Map([[3, 'ready']]) })[0].live, true);
+    // Med kanal: kun YouTubes 'live' — og kun mens banen har en udsendelse
+    const medId = new Map([[3, 'abcdefghijk']]);
+    assert.equal(ls.liveBaner(status, medId, { kanal: true, ytStatus: new Map([[3, 'live']]) })[0].live, true);
+    assert.equal(ls.liveBaner(status, medId, { kanal: true, ytStatus: new Map([[3, 'ready']]) })[0].live, false);
+    assert.equal(ls.liveBaner(status, udsendelser, { kanal: true, ytStatus: new Map([[3, 'live']]) })[0].live, false);
+
+    const t = (o) => ls.tabletStatus({ opsaetning: { enabled: 1, stream_key: 'egen', ...o }, kamera: true, pc: null, youtube: false });
+    assert.equal(t({ yt_broadcast_id: 'b1', yt_status: 'ready' }).youtube, null);
+});
+
+test('40: tablettens knap — "●" og live-farven kun, når YouTube er live', () => {
+    const kilde = laes('frontend/court-script-v3.js');
+    const ctx = {};
+    vm.createContext(ctx);
+    vm.runInContext(udsnit(kilde, 'function livestreamKnapTekst(', '\n// Bekræftelsen før') + '\nthis.f = livestreamKnapTekst;', ctx);
+    const k = (l) => ({ ...ctx.f(l) });
+    assert.deepEqual(k({ start: 'valgt', youtube: 'live' }), { tekst: '● Stop livestream', live: true });
+    assert.deepEqual(k({ start: 'valgt', youtube: 'starter' }), { tekst: 'Livestream starter … — stop', live: false });
+    assert.deepEqual(k({ start: 'hele-dagen', youtube: 'starter' }), { tekst: 'Livestream starter (hele dagen) …', live: false });
+    assert.deepEqual(k({ start: null, holdkamp: true, youtube: 'starter' }), { tekst: 'Livestream: holdkampen starter …', live: false });
+    assert.deepEqual(k({ start: null, holdkamp: true, youtube: 'live' }), { tekst: '● Livestream: holdkampen sendes', live: true });
+    // Uden kanal (youtube: null) som før
+    assert.deepEqual(k({ start: 'valgt', youtube: null }), { tekst: '● Stop livestream', live: true });
+    assert.deepEqual(k({ start: 'klar', youtube: 'starter' }), { tekst: 'Livestream venter på kampen — fortryd', live: true });
+    assert.deepEqual(k({ start: null, holdkamp: false, youtube: 'starter' }), { tekst: 'Start livestream', live: false });
+
+    const live = laes('frontend/live-script.js');
+    assert.match(live, /maerke\.textContent = live \? 'LIVE' : 'Starter …';/);
+    assert.match(laes('frontend/live-styles.css'), /\.live-maerke--starter \{[^}]*var\(--color-warning-rgb\)/);
+    assert.match(laes('frontend/live.html'), /live-script\.js\?v=2/);
+    assert.match(laes('backend/migrations/052_yt_status.sql'), /ALTER TABLE court_streams ADD COLUMN yt_status VARCHAR\(20\) NULL/);
 });

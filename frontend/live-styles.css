@@ -157,3 +157,10 @@ main { max-width: 1280px; margin: 0 auto; padding: 0 var(--sp-4) var(--sp-8); }
     .live-klub-logo { width: 42px; height: 42px; }
     .live-point { font-size: 1.6rem; }
 }
+
+/* Udsendelsen er oprettet, men YouTube viser den ikke endnu (nr. 40) */
+.live-maerke--starter {
+    background: rgba(var(--color-warning-rgb), 0.16);
+    color: var(--color-warning);
+}
+.live-maerke--starter::before { background: var(--color-warning); animation: none; }

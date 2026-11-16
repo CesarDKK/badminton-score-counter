@@ -681,13 +681,25 @@ async function opdaterLivestreamKnap() {
     // startet (så det kan stoppes)
     btn.style.display = l && l.kan && !l.planner && (l.kameraKlar || l.start) ? 'block' : 'none';
     if (!l) return;
-    btn.classList.toggle('menu-item--live', !!(l.start || l.holdkamp));
-    btn.textContent =
-        l.start === 'hele-dagen' ? '● Livestream kører hele dagen'
-        : l.start === 'valgt' ? '● Stop livestream'
+    const k = livestreamKnapTekst(l);
+    btn.classList.toggle('menu-item--live', k.live);
+    btn.textContent = k.tekst;
+}
+
+// Knappens tekst, og om den viser "live" (●). Med klubbens YouTube-kanal
+// forbundet (l.youtube) kun, når YouTube selv viser udsendelsen (nr. 40) —
+// før det "starter". Uden kanal (egen nøgle) som før: startet = live.
+function livestreamKnapTekst(l) {
+    const sendes = l.start === 'hele-dagen' || l.start === 'valgt' || (!l.start && l.holdkamp);
+    const starter = !!sendes && l.youtube === 'starter';
+    const live = !!(l.start || l.holdkamp) && !starter;
+    const tekst =
+        l.start === 'hele-dagen' ? (starter ? 'Livestream starter (hele dagen) …' : '● Livestream kører hele dagen')
+        : l.start === 'valgt' ? (starter ? 'Livestream starter … — stop' : '● Stop livestream')
         : l.start === 'klar' ? 'Livestream venter på kampen — fortryd'
-        : l.holdkamp ? '● Livestream: holdkampen sendes'
+        : l.holdkamp ? (starter ? 'Livestream: holdkampen starter …' : '● Livestream: holdkampen sendes')
         : 'Start livestream';
+    return { tekst, live };
 }
 
 // Bekræftelsen før "Start livestream" (nr. 12B): videoen bliver liggende på

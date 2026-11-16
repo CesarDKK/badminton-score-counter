@@ -74,6 +74,11 @@
             k.harKanal = harKanal;
         }
         k.el.querySelector('.live-tavle').innerHTML = tavleHtml(b.kamp);
+        // "LIVE" kun når YouTube viser udsendelsen (nr. 40) — ellers "Starter …"
+        const maerke = k.el.querySelector('.live-maerke');
+        const live = b.live !== false;
+        maerke.textContent = live ? 'LIVE' : 'Starter …';
+        maerke.classList.toggle('live-maerke--starter', !live);
         return k.el;
     }
 
