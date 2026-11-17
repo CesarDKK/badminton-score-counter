@@ -63,3 +63,32 @@ test('21a: super-admin og admin-siden henter de nye filer (cache-versioner)', ()
     assert.ok(v(laes('frontend/admin.html'), 'admin-script.js') >= 122);
     assert.ok(v(laes('frontend/super-admin.html'), 'super-admin-script.js') >= 44);
 });
+
+// ── 21b: stream-nøglerne er ikke med i backup-filen ──
+test('21b: court_streams uden stream_key og yt_* i backuppen; gendannelsen sætter de nuværende ind', () => {
+    const { SERVERKOLONNER, udenServerkolonner, medServerkolonner } = require('../../config/klubBackup');
+    assert.deepEqual(Object.keys(SERVERKOLONNER), ['court_streams']);
+    const row = { court_number: 1, enabled: 1, overlay: 1, stream_url: 'rtmps://x', stream_key: 'hemmelig', yt_stream_key: 'yt', yt_stream_id: 's' };
+    assert.deepEqual(udenServerkolonner('court_streams', row), { court_number: 1, enabled: 1, overlay: 1, stream_url: 'rtmps://x' });
+    assert.equal(udenServerkolonner('match_history', row), row, 'andre tabeller røres ikke');
+
+    const nu = new Map([
+        ['1', { stream_key: 'ny', yt_stream_key: null }],
+        ['3', { stream_key: 'tre', yt_stream_key: null }],
+        ['5', { stream_key: null, yt_stream_key: null }],
+    ]);
+    const ud = medServerkolonner('court_streams', [row, { court_number: 2, enabled: 0, stream_key: 'gammel' }], nu);
+    assert.deepEqual(ud, [
+        { court_number: 1, enabled: 1, overlay: 1, stream_url: 'rtmps://x', stream_key: 'ny', yt_stream_key: null },
+        { court_number: 2, enabled: 0 },
+        { court_number: 3, stream_key: 'tre', yt_stream_key: null },
+    ]);
+});
+
+test('21b: tidsstempler fra databasen skrives som Date (ikke som JSON-tekst)', () => {
+    const { normalizeValue } = require('../../config/klubBackup');
+    const d = new Date('2026-11-01T10:00:00Z');
+    assert.equal(normalizeValue(d), d);
+    assert.equal(normalizeValue('2026-11-01T10:00:00.000Z'), '2026-11-01 10:00:00');
+    assert.equal(normalizeValue({ a: 1 }), '{"a":1}');
+});
