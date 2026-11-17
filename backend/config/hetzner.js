@@ -16,6 +16,7 @@ const { krypter, dekrypter } = require('./hemmelig');
 const fuldBackup = require('./fuldBackup');
 const opstart = require('./opstart');
 const migrationRunner = require('./migrationRunner');
+const noeglekontrol = require('./noeglekontrol');
 
 const API ='https://api.hetzner.cloud/v1';
 const TIMEOUT_MS = 8000;
@@ -207,6 +208,8 @@ function lokal() {
         // Backend-processen: hvornår den startede, om opstarten lykkedes, og
         // databaser med migrationer, der fejlede
         backend: opstart.status(migrationRunner.status()),
+        // Kan de krypterede hemmeligheder læses med den nuværende JWT_SECRET? (nr. 21c)
+        noegler: noeglekontrol.status(),
         // Den deployede version (nr. 54): bygget ind af deploy.sh (Dockerfile.backend)
         version: deployVersion()
     };

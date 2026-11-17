@@ -2106,6 +2106,20 @@ function renderHelbredFliser(d) {
         fliser.push(shFlise('Backend', `kørt i ${shVarighed(be.koertSek)}`, info.join('<br>'), null, niveau,
             !be.klar ? 'Opstarten er ikke færdig' : `${m.medFejl} ${m.medFejl === 1 ? 'database' : 'databaser'} med migrationsfejl`));
     }
+    // Krypteringsnøglen (nr. 21c): kan de gemte hemmeligheder læses med den
+    // nuværende JWT_SECRET? Kun vist, når der er noget at sige.
+    const nk = l.noegler;
+    if (nk && nk.tjekket && (nk.ulaeselige.length || nk.fejl.length)) {
+        const info = nk.ulaeselige.map(h => escapeHtml(h));
+        if (nk.ulaeselige.length) {
+            info.push('JWT_SECRET i .env er sandsynligvis skiftet. Læg den gamle .env på plads og genstart, eller indtast/forbind dem igen.');
+        }
+        info.push(...nk.fejl.map(f => `Kunne ikke tjekkes: ${escapeHtml(f)}`));
+        fliser.push(shFlise('Krypteringsnøgle',
+            nk.ulaeselige.length ? `${shTal(nk.ulaeselige.length)} ulæselig${nk.ulaeselige.length === 1 ? '' : 'e'}` : 'Ikke tjekket helt',
+            info.join('<br>'), null, nk.ulaeselige.length ? 'kritisk' : 'advarsel',
+            nk.ulaeselige.length ? 'Gemte hemmeligheder kan ikke læses' : 'Kontrollen kunne ikke læse alt'));
+    }
     if (s || l.oppetidSek) {
         const navn = s ? `${escapeHtml(s.navn)} <small>${escapeHtml(s.type)}</small>` : 'Serveren';
         const info = [];

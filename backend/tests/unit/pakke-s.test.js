@@ -92,3 +92,60 @@ test('21b: tidsstempler fra databasen skrives som Date (ikke som JSON-tekst)', (
     assert.equal(normalizeValue('2026-11-01T10:00:00.000Z'), '2026-11-01 10:00:00');
     assert.equal(normalizeValue({ a: 1 }), '{"a":1}');
 });
+
+// ── 21c (2): opstarten opdager krypterede værdier, den ikke kan læse ──
+test('21c: nøglekontrollen tæller ulæselige værdier i master og klubberne — og vælter ikke på fejl', async () => {
+    process.env.JWT_SECRET = process.env.JWT_SECRET || 'unit-test-jwt-opdigtet';
+    const { krypter } = require('../../config/hemmelig');
+    const masterDb = require('../../config/masterDatabase');
+    const nk = require('../../config/noeglekontrol');
+    const godt = krypter('x');
+    const daarligt = godt.slice(0, -4) + (godt.endsWith('AAAA') ? 'BBBB' : 'AAAA');
+    const orig = masterDb.query;
+    const fejlLog = console.error, advLog = console.warn, okLog = console.log;
+    const logget = [];
+    console.error = console.warn = console.log = (...a) => logget.push(a.join(' '));
+    masterDb.query = async (sql) => {
+        if (/FROM indstillinger/.test(sql)) return [{ noegle: 'youtube_client_secret', vaerdi: godt }, { noegle: 'hetzner_token', vaerdi: daarligt }];
+        if (/FROM clubs/.test(sql)) return [{ name: 'Klub A', subdomain: 'a', db_name: 'club_a' }, { name: 'Klub B', subdomain: 'b', db_name: 'club_b' }];
+        throw new Error('uventet: ' + sql);
+    };
+    const forbind = async (db) => ({
+        query: async () => {
+            if (db === 'club_a') return [[{ refresh_token: daarligt }]];
+            if (db === 'club_b') { const e = new Error('nede'); e.code = 'ECONNREFUSED'; throw e; }
+            const e = new Error('ingen tabel'); e.code = 'ER_NO_SUCH_TABLE'; throw e;
+        },
+        end: async () => {},
+    });
+    try {
+        const s = await nk.kontroller({ forbind });
+        assert.equal(s.antal, 3);
+        assert.deepEqual(s.ulaeselige, [nk.MASTER.hetzner_token, 'Klub A: YouTube-forbindelsen (klubbens admin → Livestream → forbind igen)']);
+        assert.equal(s.fejl.length, 1);
+        assert.match(s.fejl[0], /^club_b: nede/);
+        assert.ok(logget.some(l => /KRYPTERINGSNØGLE: 2 af 3/.test(l)));
+        assert.deepEqual(nk.status(), s);
+
+        // Master nede: ingen undtagelse, fejlen står i status
+        masterDb.query = async () => { throw new Error('master nede'); };
+        const s2 = await nk.kontroller({ forbind });
+        assert.ok(s2.fejl.some(f => /master nede/.test(f)));
+    } finally {
+        masterDb.query = orig;
+        console.error = fejlLog; console.warn = advLog; console.log = okLog;
+        nk._nulstil();
+    }
+});
+
+test('21c: opstarten kører nøglekontrollen, helbredet viser den, og super-admin har et kort til den', () => {
+    const server = laes('backend/server.js');
+    const i = server.indexOf("require('./config/noeglekontrol').kontroller()");
+    assert.ok(i > server.indexOf('runMigrationsForAllDatabases()') && i < server.indexOf('opstart.nuKlar()'));
+    assert.match(server.slice(i, i + 200), /\.catch\(/);
+    assert.match(laes('backend/config/hetzner.js'), /noegler: noeglekontrol\.status\(\)/);
+    const sa = laes('frontend/super-admin-script.js');
+    assert.match(sa, /const nk = l\.noegler;/);
+    assert.match(sa, /shFlise\('Krypteringsnøgle'/);
+    assert.match(laes('frontend/super-admin.html'), /super-admin-script\.js\?v=45/);
+});
