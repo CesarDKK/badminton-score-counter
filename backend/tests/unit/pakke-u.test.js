@@ -363,13 +363,15 @@ test('105: PUT — admin og den lokale tablet', async () => {
     assert.deepEqual(r.krop, { success: true });
 });
 
-test('105: tabletten røres ikke, og den sluger stadig svaret stille (reportTournamentResult)', () => {
+test('105: tabletten sluger stadig svaret stille (reportTournamentResult)', () => {
     const c = laes('frontend/court-script-v3.js');
     const f = udsnit(c, 'async function reportTournamentResult(', '\n}');
     assert.match(f, /try \{\s*await api\.updateTournamentMatch[\s\S]*\} catch \(error\) \{\s*console\.error/);
-    // Admin advarer, når single/double skifter ved et bytte (tabletten skal genindlæses)
+    // Tabletten binder selv om ved et bytte (tablet-ombinding.test.js) — admin
+    // beder ikke længere om at genindlæse den
     const a = udsnit(laes('frontend/admin-script.js'), 'async function tildelTurneringskampBane(', '\n}');
-    assert.match(a, /!!a\.doubles !== !!m\.doubles[\s\S]*Genindlæs tabletten på bane \$\{bane\}/);
+    assert.doesNotMatch(a, /Genindlæs tabletten/);
+    assert.match(a, /Den kommer tilbage på listen som ventende/);
 });
 
 // ======================= Nr. 106 =======================
