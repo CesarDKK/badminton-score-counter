@@ -792,7 +792,7 @@ async function tildelTurneringskampBane(tournamentId, matchId) {
         if (svar === BANE_ANNULLERET) return;
     } catch (error) {
         console.error('Failed to assign tournament match from list:', error);
-        showMessage('Fejl', 'Kampen kunne ikke sættes på banen. Prøv igen.');
+        showMessage('Fejl', baneAfvistTekst(error) || 'Kampen kunne ikke sættes på banen. Prøv igen.');
         return;
     }
     turneringBaneValg.delete(matchId);
@@ -1248,7 +1248,7 @@ async function performSaveCourtChanges(isActive) {
                 if (svar === BANE_ANNULLERET) return;
             } catch (e) {
                 console.error('Failed to assign tournament match:', e);
-                showMessage('Fejl', 'Turneringskampen kunne ikke tildeles banen, så intet er gemt. Prøv igen.');
+                showMessage('Fejl', baneAfvistTekst(e) || 'Turneringskampen kunne ikke tildeles banen, så intet er gemt. Prøv igen.');
                 return;
             }
         }
@@ -2190,6 +2190,13 @@ async function medBaneBekraeftelse(kald) {
         if (!ok) return BANE_ANNULLERET;
         return await kald(true);
     }
+}
+
+// Serverens forklaring, når banen ikke kan tages, fordi forrige kamps resultat
+// ikke er meldt ind (nr. 104) — ellers null, og kalderen viser sin egen tekst
+function baneAfvistTekst(error) {
+    return error && error.status === 409 && error.body?.code === 'bane_resultat_mangler' && error.body.error
+        ? error.body.error : null;
 }
 
 // Banens tilstand for en delkamp, der netop er sat på banen: navnene og en ny

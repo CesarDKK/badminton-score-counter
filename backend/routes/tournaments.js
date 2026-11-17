@@ -1008,12 +1008,19 @@ router.put('/:id/matches/:matchId', requireWriteAuthInClubMode, requirePage('tou
                 && Number(courtNumber) !== Number(match.court_number)) {
                 const afvist = await baneTildeling.tjekOgRydBane(courtNumber, req);
                 if (afvist) return res.status(409).json(afvist);
+                // Står forrige kamps slutstilling stadig på banen, ryddes den, så
+                // den nye kamp starter fra 0-0 — som holdkampens tildeling (nr. 104)
+                const mangler = await baneTildeling.rydAfsluttetFoerTildeling(courtNumber, req, Number(matchId));
+                if (mangler) return res.status(409).json(mangler);
             }
-            // Frigør banen fra andre matches i samme turnering hvis den re-allokeres
+            // Frigør banen fra andre matches i samme turnering hvis den re-allokeres.
+            // started_at nulstilles: en kamp, der sættes på en bane igen, starter
+            // forfra — ellers genbrugte COALESCE nedenfor den gamle tid, og værnet
+            // mod en ældre stilling (resultatMelding.startetFoerTildeling) slog ikke til
             if (courtNumber !== null) {
                 await query(
                     `UPDATE tournament_matches
-                     SET court_number = NULL, status = 'pending'
+                     SET court_number = NULL, status = 'pending', started_at = NULL
                      WHERE tournament_id = ? AND court_number = ? AND id != ? AND status != 'finished'`,
                     [id, courtNumber, matchId]
                 );
@@ -1028,6 +1035,9 @@ router.put('/:id/matches/:matchId', requireWriteAuthInClubMode, requirePage('tou
                 // erstattes den af banens rigtige starttid (foerste serv).
                 fields.push('started_at = COALESCE(started_at, CURRENT_TIMESTAMP)');
             }
+            // Tilbage til afventer (tabletten eller admin frigiver kampen): næste
+            // tildeling får en frisk starttid (nr. 104)
+            if (status === 'pending') fields.push('started_at = NULL');
             // Naar en kamp markeres 'finished', stempler vi tidspunktet saa
             // admin-baneoversigtens "Seneste kamp" kan sortere paa tvaers af
             // match_history, tournament_matches og team_match_games — og saa
