@@ -1012,9 +1012,11 @@ router.post('/pc', async (req, res, next) => {
         }
         const token = req.get('X-Adgangslink');
         if (!gyldigtToken(token)) return res.status(401).json({ error: 'Mangler adgangslink' });
+        // Ikke QR-kodens link (match_session, nr. 21d): dets token står i QR-koden
         const link = await queryOne(
             `SELECT id, camera_court, camera_manual, camera_device, destination, token_type
-               FROM device_tokens WHERE token = ? AND is_active = 1`, [token]);
+               FROM device_tokens WHERE token = ? AND is_active = 1
+                AND COALESCE(token_type, 'permanent') <> 'match_session'`, [token]);
         if (!link) return res.status(403).json({ error: 'Ugyldigt eller tilbagekaldt adgangslink' });
 
         const pc = ls.rensStatus(req.body);

@@ -22,9 +22,9 @@ const ADMIN_HOST = `admin.${DOMAENE}`;
  * body: objekt (JSON) eller { multipart: { felt, filnavn, type, data } }.
  * Svarer { status, body, headers }.
  */
-function kald(sti, { method = 'GET', body, host = '127.0.0.1', token } = {}) {
+function kald(sti, { method = 'GET', body, host = '127.0.0.1', token, ekstra = {} } = {}) {
     return new Promise((resolve, reject) => {
-        const headers = { Host: host };
+        const headers = { Host: host, ...ekstra };
         if (token) headers.Authorization = `Bearer ${token}`;
         let data = null;
         if (body && body.multipart) {
@@ -123,14 +123,20 @@ async function enhedsToken(klub, destination) {
     return enhedsSession(klub, r.body.token);
 }
 
-// En QR-kamp-session (match_session) på banen, som når en telefon scanner TV'ets QR-kode
-async function qrSession(klub, bane = 1) {
+// QR-kodens link (match_session) på banen — som routes/matchSessionTokens.js opretter
+// det. Token-værdien står i QR-koden, så enhver, der har scannet den, kender den.
+async function qrLink(klub, bane = 1) {
     const token = crypto.randomBytes(32).toString('hex');
     await rodQuery(klub.db,
         `INSERT INTO device_tokens (token, name, destination, token_type, court_number, locked, is_active)
          VALUES (?, ?, ?, 'match_session', ?, 1, 1)`,
         [token, `QR kamp-session bane ${bane}`, `court/${bane}`, bane]);
-    return enhedsSession(klub, token);
+    return token;
 }
 
-module.exports = { kald, rod, rodQuery, superToken, opretKlub, enhedsToken, qrSession, ADMIN_HOST, DOMAENE };
+// En QR-kamp-session (JWT), som når en telefon scanner TV'ets QR-kode
+async function qrSession(klub, bane = 1) {
+    return enhedsSession(klub, await qrLink(klub, bane));
+}
+
+module.exports = { kald, rod, rodQuery, superToken, opretKlub, enhedsToken, enhedsSession, qrLink, qrSession, ADMIN_HOST, DOMAENE };
