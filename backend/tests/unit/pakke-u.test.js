@@ -219,12 +219,21 @@ test('105: erEnhed — adgangslinket er en enhed; uden token kun på en lokal in
     assert.equal(erEnhed({ accessMode: 'direct', headers: { authorization: 'Bearer abc' } }), false);
 });
 
-test('105: egenBane — kun adgangslinkets court/N', () => {
+test('105: egenBane — kun et LÅST adgangslinks court/N; "Fri navigation" kan tælle enhver bane', () => {
     const { egenBane } = turneringEnhed;
-    assert.equal(egenBane({ user: { role: 'device', destination: 'court/3' } }), 3);
-    assert.equal(egenBane({ user: { role: 'device', destination: 'tv/3' } }), null);
-    assert.equal(egenBane({ user: { role: 'device', destination: 'oversigt' } }), null);
+    assert.equal(egenBane({ user: { role: 'device', destination: 'court/3', locked: 1 } }), 3);
+    assert.equal(egenBane({ user: { role: 'device', destination: 'court/3', locked: true } }), 3);
+    assert.equal(egenBane({ user: { role: 'device', destination: 'court/3', locked: 0 } }), null);
+    assert.equal(egenBane({ user: { role: 'device', destination: 'court/3' } }), null);
+    assert.equal(egenBane({ user: { role: 'device', destination: 'tv/3', locked: 1 } }), null);
+    assert.equal(egenBane({ user: { role: 'device', destination: 'oversigt', locked: 1 } }), null);
     assert.equal(egenBane({ headers: {} }), null);
+});
+
+test('105: begge udstedere af enhedens session skriver locked med, og enhedssessioner fornyes ikke', () => {
+    assert.match(laes('backend/middleware/adgangslinkSession.js'), /role: 'device',[\s\S]*?locked: deviceToken\.locked,/);
+    assert.match(laes('backend/routes/deviceTokens.js'), /role: 'device',[\s\S]*?locked: deviceToken\.locked,/);
+    assert.match(laes('backend/routes/session.js'), /device-tokens kan ikke fornyes/);
 });
 
 test('105: reglen — kun kampen, der står active på enhedens egen bane', () => {
@@ -257,7 +266,9 @@ function rutenMed(kampen, gs = null) {
     });
     return (req) => koer(rute(tournaments, 'put', '/:id/matches/:matchId'), { params: { id: '1', matchId: '12' }, headers: {}, ...req });
 }
-const tablet3 = { accessMode: 'club', user: { role: 'device', destination: 'court/3' } };
+const tablet3 = { accessMode: 'club', user: { role: 'device', destination: 'court/3', locked: 1 } };
+
+const friTablet = { accessMode: 'club', user: { role: 'device', destination: 'court/1', locked: 0 } };
 const resultat = { status: 'finished', winnerTeam: 2, setScores: 'Carl 21-10 Dorte, Carl 21-12 Dorte' };
 
 test('105: PUT — tablettens resultat på en kamp, der ikke står på dens bane, giver 200 og ændrer intet', async () => {
@@ -282,6 +293,27 @@ test('105: PUT — reserven: kampen står active på tablettens bane, så gælde
     const u = skrevet(/UPDATE tournament_matches SET/);
     assert.equal(u.length, 1);
     assert.match(u[0].sql, /status = \?.*finished_at = CURRENT_TIMESTAMP.*winner_team = \?/s);
+});
+
+test('105: PUT — et ulåst court/1-link, der tæller bane 7: reserven gælder med kampens afsluttede stilling; en gammel binding ændrer intet', async () => {
+    const kampen = { id: 12, status: 'active', court_number: 7, side1_player1: 'Carl', side2_player1: 'Dorte' };
+    let put = rutenMed(kampen, { player1_name: 'Dorte', player2_name: 'Carl', match_completed: 1 });
+    let r = await put({ ...friTablet, body: resultat });
+    assert.deepEqual(r.krop, { success: true }, 'før: "kampen står på bane 7" — tablettens resultat blev droppet');
+    assert.equal(skrevet(/UPDATE tournament_matches SET/).length, 1);
+    // Stillingen på bane 7 er ikke kampens (eller ikke afsluttet) → intet
+    put = rutenMed(kampen, { player1_name: 'Anna', player2_name: 'Berit', match_completed: 1 });
+    r = await put({ ...friTablet, body: resultat });
+    assert.deepEqual(r.krop, { success: true, uaendret: true });
+    // Hovedfejlen: en gammel binding til en kamp, der er skubbet af banen
+    put = rutenMed({ id: 12, status: 'pending', court_number: null });
+    r = await put({ ...friTablet, body: resultat });
+    assert.deepEqual(r.krop, { success: true, uaendret: true });
+    assert.deepEqual(skrevet(/^\s*(UPDATE|INSERT|DELETE)/), []);
+    // Det LÅSTE court/3-link kan ikke melde en kamp på bane 7 ind
+    put = rutenMed(kampen, { player1_name: 'Dorte', player2_name: 'Carl', match_completed: 1 });
+    r = await put({ ...tablet3, body: resultat });
+    assert.deepEqual(r.krop, { success: true, uaendret: true });
 });
 
 test('105: PUT — admin og den lokale tablet', async () => {

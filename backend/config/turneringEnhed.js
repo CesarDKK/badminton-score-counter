@@ -9,7 +9,9 @@
 // opdigtet resultat.
 //
 // Nu må en enhed kun ændre en turneringskamp, der lige nu står 'active' på
-// enhedens egen bane. Alt andet besvares 200 uden ændring: den uændrede
+// enhedens egen bane (et låst court/N-link). Kendes banen ikke (ulåst link,
+// lokal installation), gælder et resultat kun, når kampens bane står med en
+// afsluttet stilling under kampens navne. Alt andet besvares 200 uden ændring: den uændrede
 // tablet (court-script-v3, reportTournamentResult) logger kun fejl i konsollen
 // og prøver ikke igen, så et 200 er det, den tager roligst imod.
 //
@@ -35,10 +37,17 @@ function erEnhed(req) {
     return !/^Bearer /.test((req.headers && req.headers.authorization) || '');
 }
 
-// Enhedens egen bane: adgangslinkets court/N — ellers ukendt (null)
+// Enhedens egen bane: et LÅST adgangslinks court/N — ellers ukendt (null).
+// Et link med "Fri navigation" (locked = 0) kan tælle en hvilken som helst bane
+// (landing-siden → court-v3.html?id=7), og serveren binder det ikke til sin
+// bane — en klub kan have ét sådant link på alle tablets. Dets court/N siger
+// derfor intet om, hvilken bane tabletten tæller. `locked` står i enhedens
+// session fra /t/ (middleware/adgangslinkSession.js) og validate
+// (routes/deviceTokens.js); enhedssessioner fornyes ikke (routes/session.js).
 function egenBane(req) {
-    const d = req.user && req.user.role === 'device' ? req.user.destination : null;
-    return /^court\/\d+$/.test(d || '') ? baneFraDestination(d) : null;
+    const u = req.user;
+    if (!u || u.role !== 'device' || !u.locked) return null;
+    return /^court\/\d+$/.test(u.destination || '') ? baneFraDestination(u.destination) : null;
 }
 
 /**

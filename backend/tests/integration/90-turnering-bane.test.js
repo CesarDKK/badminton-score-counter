@@ -10,7 +10,7 @@
  */
 const { test, before } = require('node:test');
 const assert = require('node:assert/strict');
-const { kald, rodQuery, opretKlub, enhedsToken } = require('./faelles');
+const { kald, rodQuery, opretKlub, enhedsToken, enhedsSession } = require('./faelles');
 
 let K, T;
 const tablet = {};
@@ -259,3 +259,32 @@ test('106: manuelt resultat fra Turnering-siden rydder banen i samme kald — ku
     assert.equal(g.status, 'finished');
     assert.equal(g.set_scores, 'W.O.');
 });
+
+// ======================= Efter gennemgangen: ulåste links og gamle starttider =======================
+
+test('105: et ulåst court/1-link ("Fri navigation"), der tæller bane 5 — reserven gælder; en gammel binding ændrer intet', async () => {
+    const l = await admin('/api/device-tokens', 'POST', { name: 'Fri tablet', destination: 'court/1', locked: false });
+    assert.equal(l.status, 201);
+    const fri = await enhedsSession(K, l.body.token);
+    const friKald = (sti, method, body) => kald(sti, { method, host: K.host, token: fri, body });
+
+    const H = await nyKamp('Åge', 'Bodil', { doubles: true, m1: 'Cæcilie', m2: 'Ditlev' });
+    assert.equal((await saetPaaBane(H, 5)).status, 200);
+    // Tabletten tæller bane 5 i single → serverens melding springer over
+    const g = await friKald('/api/game-states/5', 'PUT', afsluttetKamp('Åge', 'Bodil'));
+    assert.equal(g.status, 200, JSON.stringify(g.body));
+    assert.equal((await kampRaekke(H)).status, 'active');
+
+    const r = await friKald(`/api/tournaments/${T}/matches/${H}`, 'PUT',
+        { status: 'finished', winnerTeam: 1, setScores: 'Åge 21-10 Bodil, Åge 21-15 Bodil' });
+    assert.deepEqual(r.body, { success: true }, 'tablettens resultat gælder (før rettelsen: droppet, fordi linket hedder court/1)');
+    assert.equal((await kampRaekke(H)).status, 'finished');
+    assert.equal((await kampRaekke(H)).winner_team, 1);
+
+    // Gammel binding: en kamp, der er skubbet af banen, ændres ikke
+    const ventende = (await rodQuery(K.db, "SELECT id FROM tournament_matches WHERE status = 'pending' LIMIT 1"))[0].id;
+    const s = await friKald(`/api/tournaments/${T}/matches/${ventende}`, 'PUT', { status: 'finished', winnerTeam: 2, setScores: 'x' });
+    assert.deepEqual(s.body, { success: true, uaendret: true });
+    assert.equal((await kampRaekke(ventende)).status, 'pending');
+});
+
