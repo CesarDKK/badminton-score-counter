@@ -72,12 +72,20 @@ function validateImageMagic(req, res, next) {
     next();
 }
 
+// Forkert filtype er klientens fejl: 400 med beskeden (før gav den fælles
+// fejlhåndtering 500, nr. 58c)
+function forkertType() {
+    const e = new Error('Kun JPEG, PNG, GIF eller WebP er tilladt');
+    e.status = 400;
+    return e;
+}
+
 // Fælles filename-funktion til multer.diskStorage — sikker endelse fra mimetype
 function billedFilnavn(crypto) {
     return (req, file, cb) => {
         const ext = sikkerEndelse(file.mimetype);
         if (!ext) {
-            return cb(new Error('Kun JPEG, PNG, GIF eller WebP er tilladt'), null);
+            return cb(forkertType(), null);
         }
         const uniqueSuffix = Date.now() + '_' + crypto.randomBytes(8).toString('hex');
         const basename = path.basename(file.originalname, path.extname(file.originalname))
@@ -92,7 +100,7 @@ function billedFileFilter(req, file, cb) {
     if (sikkerEndelse(file.mimetype)) {
         cb(null, true);
     } else {
-        cb(new Error('Kun JPEG, PNG, GIF eller WebP er tilladt'), false);
+        cb(forkertType(), false);
     }
 }
 

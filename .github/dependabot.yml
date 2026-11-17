@@ -22,7 +22,7 @@ updates:
     groups:
       npm-mindre: { update-types: [minor, patch] }
     ignore:
-      # Express 5 og multer 2 er større skift, der tages med vilje — se docs
+      # Express 5 og multer 3 er større skift, der tages med vilje (multer 2 kom med pakke T, nr. 58c)
       - dependency-name: express
         update-types: [version-update:semver-major]
       - dependency-name: multer
