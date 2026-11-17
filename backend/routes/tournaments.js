@@ -1049,7 +1049,16 @@ router.put('/:id/matches/:matchId', requireWriteAuthInClubMode, requirePage('tou
             if (status === 'active') {
                 // Starttid = tildelingen til banen (fallback). Ved afslutning
                 // erstattes den af banens rigtige starttid (foerste serv).
-                fields.push('started_at = COALESCE(started_at, CURRENT_TIMESTAMP)');
+                // En ny tildeling får altid en frisk tid — også en kamp, der står
+                // 'pending' med en gammel started_at fra før nr. 104 blev rettet.
+                // Kun når kampen allerede står 'active' på samme bane (admin gemmer
+                // bane-dialogen igen), beholdes tiden. Ellers satte en gammel tid
+                // værnet resultatMelding.startetFoerTildeling ud af spil.
+                const sammeTildeling = match.status === 'active'
+                    && (courtNumber === undefined || Number(courtNumber) === Number(match.court_number));
+                fields.push(sammeTildeling
+                    ? 'started_at = COALESCE(started_at, CURRENT_TIMESTAMP)'
+                    : 'started_at = CURRENT_TIMESTAMP');
             }
             // Tilbage til afventer (tabletten eller admin frigiver kampen): næste
             // tildeling får en frisk starttid (nr. 104)

@@ -288,3 +288,37 @@ test('105: et ulåst court/1-link ("Fri navigation"), der tæller bane 5 — res
     assert.equal((await kampRaekke(ventende)).status, 'pending');
 });
 
+test('104: en afventende kamp med en gammel started_at (fra før rettelsen) får en frisk tid, når den sættes på', async () => {
+    const J = await nyKamp('Egon', 'Fie');
+    await rodQuery(K.db, "UPDATE tournament_matches SET started_at = '2026-11-01 08:00:00' WHERE id = ?", [J]);
+    await enhed(5, '/api/game-states/5', 'DELETE');
+    assert.equal((await saetPaaBane(J, 5)).status, 200);
+    const j = await kampRaekke(J);
+    assert.ok(Date.now() - new Date(j.started_at).getTime() < 5 * 60 * 1000, `frisk starttid (${j.started_at})`);
+    // Admin gemmer bane-dialogen igen for samme bane: tiden står
+    await rodQuery(K.db, "UPDATE tournament_matches SET started_at = '2026-11-21 09:00:00' WHERE id = ?", [J]);
+    assert.equal((await saetPaaBane(J, 5)).status, 200);
+    assert.equal(new Date((await kampRaekke(J)).started_at).toISOString(), '2026-11-21T09:00:00.000Z');
+});
+
+test('104: en bane med B aktiv, B\'s navne og en ældre kamps slutstilling — B meldes ikke færdig, banen ryddes ved næste tildeling', async () => {
+    // Bane 4 har Ida–Jens (fra forløbet ovenfor), sat på for lidt siden. Stillingen
+    // under deres navne begyndte en time før — den gamle fejl (navne skrevet oven
+    // på forrige kamps resultat)
+    const kim = (await rodQuery(K.db, "SELECT * FROM tournament_matches WHERE side1_player1 = 'Ida'"))[0];
+    assert.equal(kim.status, 'active');
+    assert.equal(kim.court_number, 4);
+    const gammel = afsluttetKamp('Ida', 'Jens');
+    gammel.matchStartTime = new Date(Date.now() - 3600 * 1000).toISOString();
+    assert.equal((await enhed(4, '/api/game-states/4', 'PUT', gammel)).status, 200);
+    assert.equal((await kampRaekke(kim.id)).status, 'active', 'serverens melding springer over (startet før tildelingen)');
+
+    const L = await nyKamp('Gorm', 'Hanne');
+    const r = await saetPaaBane(L, 4);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    const k = await kampRaekke(kim.id);
+    assert.equal(k.status, 'pending', 'Ida–Jens tilbage på listen — ikke færdig med den gamle stilling');
+    assert.equal(k.winner_team, null);
+    assert.equal(k.started_at, null);
+    assert.equal(await baneRaekke(4), null);
+});

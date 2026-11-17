@@ -16,7 +16,7 @@ const { banenErIGang } = require('./delkampRegler');
 const { glemFrigivetKamp } = require('./frigivneKampe');
 const { publishGameStateChange } = require('../events/gameStateEvents');
 const { rydAfsluttetBane } = require('./banerydning');
-const { meldAfgjortKamp, holdPaaPlads, holdkampNavne } = require('../taeller/resultatMelding');
+const { meldAfgjortKamp, holdPaaPlads, holdkampNavne, startetFoerTildeling } = require('../taeller/resultatMelding');
 
 // Banens stilling (også om kampen er afsluttet)
 function banensStilling(courtNumber) {
@@ -86,11 +86,13 @@ function stillingErKampens(gs, hold1, hold2) {
 }
 
 // En kamp, der stadig står 'active' på banen (ikke den, der tildeles), og
-// hvis navne står på den afsluttede stilling: dens resultat er ikke meldt ind.
+// hvis navne står på den afsluttede stilling, og som var sat på banen, før
+// stillingen begyndte: dens resultat er ikke meldt ind. (Begyndte stillingen
+// før tildelingen, er den en tidligere kamps — samme værn som resultatMelding.)
 // Returnerer en kort beskrivelse til admin — eller null.
 async function uindmeldtResultat(courtNumber, gs, turneringskampId) {
     const m = await queryOne(
-        `SELECT m.id, m.side1_player1, m.side1_player2, m.side2_player1, m.side2_player2
+        `SELECT m.id, m.started_at, m.side1_player1, m.side1_player2, m.side2_player1, m.side2_player2
            FROM tournament_matches m JOIN tournaments t ON t.id = m.tournament_id
           WHERE m.court_number = ? AND m.status = 'active' AND t.status = 'active' AND m.id != ?
           ORDER BY m.id LIMIT 1`,
@@ -99,12 +101,12 @@ async function uindmeldtResultat(courtNumber, gs, turneringskampId) {
     if (m) {
         const hold1 = [m.side1_player1, m.side1_player2].filter(Boolean);
         const hold2 = [m.side2_player1, m.side2_player2].filter(Boolean);
-        if (stillingErKampens(gs, hold1, hold2)) {
+        if (stillingErKampens(gs, hold1, hold2) && !startetFoerTildeling(gs, m.started_at)) {
             return { hvad: 'turnering', navne: `${hold1.join(' / ')} – ${hold2.join(' / ')}` };
         }
     }
     const g = await queryOne(
-        `SELECT g.team1_player1, g.team1_player2, g.team2_player1, g.team2_player2,
+        `SELECT g.started_at, g.team1_player1, g.team1_player2, g.team2_player1, g.team2_player2,
                 tm.team1_name, tm.team2_name
            FROM team_match_games g JOIN team_matches tm ON tm.id = g.team_match_id
           WHERE g.court_number = ? AND g.status = 'active' AND tm.status = 'active'
@@ -113,7 +115,7 @@ async function uindmeldtResultat(courtNumber, gs, turneringskampId) {
     );
     if (g) {
         const { hold1, hold2 } = holdkampNavne(g);
-        if (stillingErKampens(gs, hold1, hold2)) {
+        if (stillingErKampens(gs, hold1, hold2) && !startetFoerTildeling(gs, g.started_at)) {
             return { hvad: 'holdkamp', navne: `${hold1[0]} – ${hold2[0]}` };
         }
     }

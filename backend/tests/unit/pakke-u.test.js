@@ -267,7 +267,7 @@ function rutenMed(kampen, gs = null) {
     return (req) => koer(rute(tournaments, 'put', '/:id/matches/:matchId'), { params: { id: '1', matchId: '12' }, headers: {}, ...req });
 }
 const tablet3 = { accessMode: 'club', user: { role: 'device', destination: 'court/3', locked: 1 } };
-
+const adminKlubU = { accessMode: 'club', user: { role: 'club_admin' } };
 const friTablet = { accessMode: 'club', user: { role: 'device', destination: 'court/1', locked: 0 } };
 const resultat = { status: 'finished', winnerTeam: 2, setScores: 'Carl 21-10 Dorte, Carl 21-12 Dorte' };
 
@@ -314,6 +314,33 @@ test('105: PUT — et ulåst court/1-link, der tæller bane 7: reserven gælder 
     put = rutenMed(kampen, { player1_name: 'Dorte', player2_name: 'Carl', match_completed: 1 });
     r = await put({ ...tablet3, body: resultat });
     assert.deepEqual(r.krop, { success: true, uaendret: true });
+});
+
+test('104: en ny tildeling får altid en frisk started_at — COALESCE kun, når kampen allerede står på samme bane', async () => {
+    const sql = async (kampen, body) => {
+        const put = rutenMed(kampen);
+        await put({ ...adminKlubU, body });
+        return skrevet(/UPDATE tournament_matches SET/).pop().sql;
+    };
+    // Afventer med en gammel started_at fra før rettelsen
+    assert.match(await sql({ id: 12, status: 'pending', court_number: null, started_at: new Date('2026-11-01T08:00:00Z') },
+        { courtNumber: 3, status: 'active' }), /started_at = CURRENT_TIMESTAMP/);
+    // Admin gemmer bane-dialogen igen for kampen på samme bane
+    assert.match(await sql({ id: 12, status: 'active', court_number: 3, started_at: new Date() },
+        { courtNumber: 3, status: 'active' }), /started_at = COALESCE\(started_at, CURRENT_TIMESTAMP\)/);
+    // Flyttet til en anden bane: ny tildeling
+    assert.match(await sql({ id: 12, status: 'active', court_number: 5, started_at: new Date() },
+        { courtNumber: 3, status: 'active' }), /started_at = CURRENT_TIMESTAMP(?!\))/);
+    assert.doesNotMatch(await sql({ id: 12, status: 'active', court_number: 5 }, { courtNumber: 3, status: 'active' }), /COALESCE/);
+});
+
+test('104: en afsluttet stilling, der begyndte FØR kampen på banen blev sat på, er ikke dens — hverken meldt ind eller 409; banen ryddes', async () => {
+    // Bane 3 står med B (aktiv, B's navne) over A's slutstilling, som begyndte kl. 09:00; B blev sat på kl. 09:10
+    const v = verden({ gs: afsluttet(), aktive: [kamp({ started_at: new Date('2026-11-21T09:10:00Z') })] });
+    assert.equal(await baneTildeling.rydAfsluttetFoerTildeling(3, {}, 12), null);
+    assert.equal(skrevet(/UPDATE tournament_matches\s+SET status = 'finished'/).length, 0, 'B meldes ikke færdig med A\'s resultat');
+    assert.equal(v.aktive.length, 1);
+    assert.equal(v.gs, null, 'banen ryddes');
 });
 
 test('105: PUT — admin og den lokale tablet', async () => {
