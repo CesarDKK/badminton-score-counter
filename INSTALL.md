@@ -139,7 +139,12 @@ Appen kræver en `.env`-fil med adgangskoder og hemmeligheder — men du behøve
 - Værdier der allerede står i `.env` røres aldrig.
 - Kører appen allerede, genskabes de nuværende hemmeligheder fra containerne,
   så databasen bliver ved med at forbinde.
-- Alt der mangler, får en stærk tilfældig værdi.
+- Alt der mangler, får en stærk tilfældig værdi — men kun på en frisk
+  installation. Mangler en MySQL-adgangskode eller `JWT_SECRET`, og kan den
+  ikke genskabes, mens der allerede findes en database, stopper scriptet med en
+  forklaring, før noget er ændret. (`JWT_SECRET` er også nøglen til de gemte
+  hemmeligheder som klubbernes YouTube-forbindelse; en ny nøgle tages kun
+  bevidst med `NY_JWT_SECRET=ja ./deploy.sh`.)
 
 Der er bevidst **ingen** standardværdier i koden, og `.env` er i `.gitignore`,
 så hemmeligheder aldrig havner på GitHub.
