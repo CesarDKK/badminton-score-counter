@@ -23,7 +23,8 @@ const BACKUP_VERSION = '1.0';
 // adgangslinkene (device_tokens, nr. 47): før rullede en gendannelse dem
 // tilbage — tilbagekaldte links virkede igen, og nye links (og TV'erne på dem)
 // holdt op med at virke. Nu bevares klubbens nuværende links; ældre backups,
-// der har dem med, gendannes uden dem.
+// der har dem med, gendannes uden dem. Banernes stream-nøgler følger samme
+// regel (nr. 21b, SERVERKOLONNER herunder).
 const BACKUP_TABLES = [
     'settings',
     'sponsor_settings',
@@ -44,9 +45,58 @@ const BACKUP_TABLES = [
 
 const SIKKERT_KOLONNENAVN = /^[A-Za-z0-9_]+$/;
 
+// Kolonner, der ikke kommer med i backup-filen, og som en gendannelse tager fra
+// klubbens nuværende rækker (nr. 21b). Stream-nøglerne stod før i klar tekst i
+// filen — den downloades, mailes og ligger på laptops, og med nøglen kan enhver
+// sende på klubbens kanal. yt_* er banens stream på den forbundne YouTube-kanal
+// (nøgle, adresse, udsendelse); forbindelsen selv (livestream_youtube) er heller
+// ikke med, så de hører til serveren, ikke til data. Ældre backups, der har
+// kolonnerne med, gendannes uden dem: klubbens nuværende nøgler bevares.
+//   noegle: rækkens nøgle (en bane), skjul: kolonnerne, der holdes ude
+const SERVERKOLONNER = {
+    court_streams: { noegle: 'court_number', skjul: (kol) => kol === 'stream_key' || kol.startsWith('yt_') },
+};
+
+function udenServerkolonner(table, row) {
+    const s = SERVERKOLONNER[table];
+    if (!s || !row || typeof row !== 'object') return row;
+    return Object.fromEntries(Object.entries(row).filter(([k]) => !s.skjul(k)));
+}
+
+// Klubbens nuværende værdier i de skjulte kolonner: Map(nøgle → { kolonne: værdi })
+async function nuvaerendeServerkolonner(conn, table) {
+    const s = SERVERKOLONNER[table];
+    const [rows] = await conn.query(`SELECT * FROM \`${table}\``);
+    const bevar = new Map();
+    for (const r of rows) {
+        bevar.set(String(r[s.noegle]), Object.fromEntries(Object.entries(r).filter(([k]) => s.skjul(k))));
+    }
+    return bevar;
+}
+
+// Backuppens rækker uden de skjulte kolonner, med klubbens nuværende værdier
+// sat ind. En bane, der har en nøgle nu, men ikke er i backuppen, beholder den
+// i en række for sig (slået fra, som en ny bane), så nøglen ikke går tabt.
+function medServerkolonner(table, rows, bevar) {
+    const s = SERVERKOLONNER[table];
+    const brugt = new Set();
+    const ud = rows.map(row => {
+        const k = String(row[s.noegle]);
+        brugt.add(k);
+        return { ...udenServerkolonner(table, row), ...(bevar.get(k) || {}) };
+    });
+    for (const [k, vaerdier] of bevar) {
+        if (brugt.has(k) || !Object.values(vaerdier).some(v => v !== null && v !== undefined)) continue;
+        ud.push({ [s.noegle]: Number(k), ...vaerdier });
+    }
+    return ud;
+}
+
 // ISO 8601-tidsstempler → MySQL DATETIME, og JSON-objekter → tekst
 function normalizeValue(v) {
     if (v === null || v === undefined) return v;
+    // En nuværende værdi fra databasen (SERVERKOLONNER) — driveren skriver den i UTC
+    if (v instanceof Date) return v;
     if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(v)) {
         // "2026-04-09T18:34:24.000Z" → "2026-04-09 18:34:24"
         return v.replace('T', ' ').replace(/\.\d{3}Z$/, '').replace('Z', '');
@@ -89,7 +139,7 @@ async function lavBackup(conn, { mappe, clubSubdomain = null, clubName, clubDbNa
         timestamp = new Date().toISOString();
         for (const table of BACKUP_TABLES) {
             const [rows] = await conn.query(`SELECT * FROM \`${table}\``);
-            tables[table] = rows;
+            tables[table] = rows.map(r => udenServerkolonner(table, r));
         }
         // Skemaets og data-migrationernes stand (nr. 87) — i samme snapshot
         migrationer = await koerteMigrationer(conn);
@@ -246,8 +296,9 @@ async function gendanBackup(conn, backup, mappe, { kunBrugte = false } = {}) {
         for (const table of BACKUP_TABLES) {
             const rows = backup.tables[table];
             if (!Array.isArray(rows)) continue;
+            const bevar = SERVERKOLONNER[table] ? await nuvaerendeServerkolonner(conn, table) : null;
             await conn.query(`DELETE FROM \`${table}\``);
-            for (const row of rows) {
+            for (const row of bevar ? medServerkolonner(table, rows, bevar) : rows) {
                 const cols = Object.keys(row).map(c => `\`${c}\``).join(', ');
                 const placeholders = Object.keys(row).map(() => '?').join(', ');
                 await conn.query(
@@ -288,4 +339,4 @@ async function koerteMigrationer(conn) {
     }
 }
 
-module.exports = { BACKUP_TABLES, lavBackup, validerBackup, gendanBackup, BackupFejl, normalizeValue, backupFraAndenKlub };
+module.exports = { BACKUP_TABLES, SERVERKOLONNER, udenServerkolonner, medServerkolonner, lavBackup, validerBackup, gendanBackup, BackupFejl, normalizeValue, backupFraAndenKlub };

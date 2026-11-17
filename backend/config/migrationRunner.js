@@ -275,6 +275,6 @@ async function runMigrationsForAllDatabases() {
 }
 
 module.exports = {
-    runMigrationsForDatabase, runMigrationsForAllDatabases, splitStatements, klubberTilMigration,
+    runMigrationsForDatabase, runMigrationsForAllDatabases, splitStatements, klubberTilMigration, getConnection,
     status, statusFor, _nulstilStatus
 };

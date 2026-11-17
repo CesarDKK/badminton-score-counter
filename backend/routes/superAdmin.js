@@ -23,7 +23,7 @@ const klubOpslag = require('../config/klubOpslag');
 const { validateImageMagic } = require('../config/imageUpload');
 
 // Gyldige side-noegler for klub-admins per-side adgangsstyring.
-const VALID_PAGE_KEYS = ['holdkamp', 'tournament', 'history', 'playerinfo', 'settings', 'sponsors', 'devicetokens', 'planner'];
+const VALID_PAGE_KEYS = ['holdkamp', 'tournament', 'history', 'playerinfo', 'settings', 'sponsors', 'devicetokens', 'livestream', 'planner'];
 
 // Normaliserer pagePermissions fra request til en gemt vaerdi.
 // null/undefined eller "alle valgt" -> null (= fuld adgang). Ellers JSON-array

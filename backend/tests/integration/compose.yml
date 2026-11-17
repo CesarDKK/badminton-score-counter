@@ -1,0 +1,40 @@
+# Integrationstestene mod en rigtig MySQL 8.4 — lokalt, som CI-jobbet (nr. 56).
+#
+#   docker compose -f backend/tests/integration/compose.yml up --force-recreate --renew-anon-volumes --abort-on-container-exit --exit-code-from tests --attach tests
+#   docker compose -f backend/tests/integration/compose.yml down -v      # ryd op (valgfrit)
+#
+# --force-recreate giver en frisk MySQL hver gang (koer.js nægter at køre mod en,
+# der allerede har data); afslutningskoden er testenes.
+#
+# Eget compose-projekt: egen MySQL i hukommelsen (tmpfs), ingen porte på værten,
+# rører hverken den lokale installation eller dens volumes. Alle adgangskoder er
+# opdigtede. Repoet monteres, så testene kører mod arbejdstræets kode; backendens
+# node_modules installeres i et anonymt volume (ikke i arbejdstræet).
+name: badminton-integrationstest
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: rod-opdigtet
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-prod-opdigtet"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  tests:
+    image: node:22-alpine
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_HOST: mysql
+      MYSQL_ROOT_PASSWORD: rod-opdigtet
+    volumes:
+      - ../../..:/repo
+      - /repo/backend/node_modules
+    working_dir: /repo/backend
+    command: ["sh", "-c", "npm ci --no-audit --no-fund --loglevel=error && node tests/integration/koer.js"]

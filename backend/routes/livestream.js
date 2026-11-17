@@ -278,12 +278,14 @@ async function navneLogoer(req, rk, double, bane) {
         playerLogos: d.playerLogos, clubByName: d.clubByName });
 }
 
-// Samme adgang som Adgangslinks (siden devicetokens); i direct-mode det lokale login
+// Siden Livestream (side-rettigheden livestream, nr. 21a — før fulgte den
+// Adgangslinks, devicetokens; migration 053 gav den til alle, der havde den);
+// i direct-mode det lokale login
 const livestreamAdmin = (req, res, next) => {
     if (req.accessMode !== 'club') return authMiddleware(req, res, next);
     clubAdminAuth(req, res, (err) => {
         if (err) return next(err);
-        requirePage('devicetokens')(req, res, next);
+        requirePage('livestream')(req, res, next);
     });
 };
 
@@ -1012,9 +1014,11 @@ router.post('/pc', async (req, res, next) => {
         }
         const token = req.get('X-Adgangslink');
         if (!gyldigtToken(token)) return res.status(401).json({ error: 'Mangler adgangslink' });
+        // Ikke QR-kodens link (match_session, nr. 21d): dets token står i QR-koden
         const link = await queryOne(
             `SELECT id, camera_court, camera_manual, camera_device, destination, token_type
-               FROM device_tokens WHERE token = ? AND is_active = 1`, [token]);
+               FROM device_tokens WHERE token = ? AND is_active = 1
+                AND COALESCE(token_type, 'permanent') <> 'match_session'`, [token]);
         if (!link) return res.status(403).json({ error: 'Ugyldigt eller tilbagekaldt adgangslink' });
 
         const pc = ls.rensStatus(req.body);

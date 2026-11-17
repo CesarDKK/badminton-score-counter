@@ -1,8 +1,11 @@
-# Unit-tests ved hvert push og pull request.
+# Tests ved hvert push og pull request.
 #
-# Kører KUN de rene unit-tests (ingen database, intet netværk) — de tager under
-# et sekund. Integrationstestene i backend/tests/*.test.js kræver en kørende
-# server og køres stadig manuelt efter deploy.
+# unit:        de rene unit-tests (ingen database, intet netværk).
+# integration: backenden mod en rigtig MySQL 8.4 (nr. 56) — de gamle
+#              integrationstest (backend/tests/0*.test.js) og skema, klub-isolation
+#              og backup → gendan (backend/tests/integration/). Alle hemmeligheder
+#              er opdigtede. Samme kørsel lokalt i Docker, fra repoets rod:
+#                docker compose -f backend/tests/integration/compose.yml up --force-recreate --renew-anon-volumes --abort-on-container-exit --exit-code-from tests --attach tests
 name: Tests
 
 on:
@@ -92,3 +95,37 @@ jobs:
             -v "$PWD/nginx-planner-csp.conf:/etc/nginx/snippets/planner-csp.conf:ro" \
             -v "$PWD/nginx-statiske-sider-csp.conf:/etc/nginx/snippets/statiske-sider-csp.conf:ro" \
             nginx:alpine nginx -t
+
+  integration:
+    name: Integrationstest (backend + MySQL 8.4)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: rod-opdigtet   # kun til testen — ingen rigtig hemmelighed
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -prod-opdigtet"
+          --health-interval 2s --health-timeout 3s --health-retries 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Backend — installer afhængigheder
+        working-directory: backend
+        run: npm ci --no-audit --no-fund
+
+      # Bygger master + databaserne fra init-scripts, starter backenden og kører
+      # testene (backend/tests/integration/koer.js venter selv på MySQL og /health)
+      - name: Integrationstest mod MySQL
+        working-directory: backend
+        env:
+          DB_HOST: 127.0.0.1
+          MYSQL_ROOT_PASSWORD: rod-opdigtet
+        run: node tests/integration/koer.js

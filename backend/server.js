@@ -190,6 +190,11 @@ async function startOp() {
             const m = await runMigrationsForAllDatabases();
             if (m.medFejl) console.error(`✗ ${m.medFejl} database(r) har migrationer, der fejlede — se Serverens helbred i super-admin`);
 
+            // Kan de krypterede hemmeligheder læses med den nuværende JWT_SECRET?
+            // (nr. 21c) Logger og viser det i super-admin; vælter aldrig opstarten.
+            await require('./config/noeglekontrol').kontroller()
+                .catch(e => console.error('✗ Kontrollen af krypteringsnøglen fejlede:', e.message));
+
             // Jobbene startes kun én gang, også hvis et forsøg mere bliver nødvendigt
             if (!jobStartet) {
                 jobStartet = true;

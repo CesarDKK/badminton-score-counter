@@ -159,8 +159,11 @@ async function pcLink(req, res) {
         return null;
     }
     const { queryOne } = require('../config/database');
+    // Ikke QR-kodens link (match_session, nr. 21d): dets token står i QR-koden, så
+    // enhver, der har scannet den, kunne ellers melde sig som PC og skrive skærm-hændelser
     const deviceToken = await queryOne(
-        'SELECT id, destination FROM device_tokens WHERE token = ? AND is_active = 1', [token]);
+        `SELECT id, destination FROM device_tokens WHERE token = ? AND is_active = 1
+            AND COALESCE(token_type, 'permanent') <> 'match_session'`, [token]);
     if (!deviceToken) res.status(403).json({ error: 'Ugyldigt eller tilbagekaldt adgangslink' });
     return deviceToken || null;
 }

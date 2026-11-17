@@ -127,7 +127,10 @@ test('GameStates: partiel PUT bevarer ikke-medsendte felter (merge-semantik)', a
 
 test('GameStates: reglernes pause- og sidetilstand gemmes og læses, som den blev sendt', async () => {
     const courtNum = await getFirstCourt();
-    const startedAt = Date.now() - 15_000;
+    // Tablettens eget bud på starttiden. Serveren bruger det ikke: den sætter
+    // sit eget ur, når pausen begynder (nr. 30, pakke J — tablettens ur kan gå forkert)
+    const tablettensTid = Date.now() - 15_000;
+    const foer = Date.now();
 
     // Tabletten midt i pausen ved 8 (15/21), siderne byttet med "Skift side"
     const { status } = await req(`/api/game-states/${courtNum}`, {
@@ -139,16 +142,19 @@ test('GameStates: reglernes pause- og sidetilstand gemmes og læses, som den ble
             restBreakSecondsLeft: 45,
             restBreakTitle: 'Pause 1 minut',
             restBreakTaken: true,
-            restBreakStartedAt: startedAt,
+            restBreakStartedAt: tablettensTid,
             restBreakDuration: 60,
             sidesManuallySwitched: true
         }
     });
     assert.equal(status, 200);
 
+    const efterPut = Date.now();
     const { body: after } = await req(`/api/game-states/${courtNum}`);
     assert.equal(after.restBreakTaken, true);
-    assert.equal(after.restBreakStartedAt, startedAt);
+    const startedAt = after.restBreakStartedAt;
+    assert.ok(startedAt >= foer - 1000 && startedAt <= efterPut + 1000,
+        `pausen starter på serverens ur (${startedAt}), ikke tablettens (${tablettensTid})`);
     assert.equal(after.restBreakDuration, 60);
     assert.equal(after.sidesManuallySwitched, true);
 
@@ -165,9 +171,12 @@ test('GameStates: reglernes pause- og sidetilstand gemmes og læses, som den ble
         body: { restBreakActive: false, restBreakTaken: false, restBreakStartedAt: null, sidesManuallySwitched: false }
     });
     const { body: efter } = await req(`/api/game-states/${courtNum}`);
+    assert.equal(efter.restBreakActive, false);
     assert.equal(efter.restBreakTaken, false);
-    assert.equal(efter.restBreakStartedAt, null);
     assert.equal(efter.sidesManuallySwitched, false);
+    // restBreakStartedAt: serveren beholder den sidste pauses start, når pausen
+    // slutter (klientens værdi bruges aldrig, nr. 30) — den læses kun, mens en
+    // pause kører, og en ny pause stemples forfra. Derfor tjekkes den ikke her.
 });
 
 test('GameStates: PUT med forældet expectedVersion returnerer 409 med aktuel tilstand', async () => {
