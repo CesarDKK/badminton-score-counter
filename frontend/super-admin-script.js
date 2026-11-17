@@ -13,6 +13,7 @@ const PAGE_OPTIONS = [
     { key: 'settings',   label: 'Indstillinger' },
     { key: 'sponsors',   label: 'Sponsorer' },
     { key: 'devicetokens', label: 'Adgangslinks' },
+    { key: 'livestream', label: 'Livestream' },
     { key: 'planner',    label: 'Badmintonplanner' }
 ];
 

@@ -278,12 +278,14 @@ async function navneLogoer(req, rk, double, bane) {
         playerLogos: d.playerLogos, clubByName: d.clubByName });
 }
 
-// Samme adgang som Adgangslinks (siden devicetokens); i direct-mode det lokale login
+// Siden Livestream (side-rettigheden livestream, nr. 21a — før fulgte den
+// Adgangslinks, devicetokens; migration 053 gav den til alle, der havde den);
+// i direct-mode det lokale login
 const livestreamAdmin = (req, res, next) => {
     if (req.accessMode !== 'club') return authMiddleware(req, res, next);
     clubAdminAuth(req, res, (err) => {
         if (err) return next(err);
-        requirePage('devicetokens')(req, res, next);
+        requirePage('livestream')(req, res, next);
     });
 };
 

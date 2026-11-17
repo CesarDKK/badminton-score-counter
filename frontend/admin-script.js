@@ -310,7 +310,7 @@ async function showDashboard() {
             await showMatchHistory();
         } else if (hash === '#device-tokens' && canAccess('devicetokens')) {
             showDeviceTokens();
-        } else if (hash === '#livestream' && canAccess('devicetokens')) {
+        } else if (hash === '#livestream' && canAccess('livestream')) {
             showLivestream();
         }
     } catch (error) {
