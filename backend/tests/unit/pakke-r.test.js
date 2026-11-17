@@ -283,7 +283,7 @@ test('48: admin — ret/slet pr. kamp med bekræftelse, før tid og ret i turner
     assert.match(a, /function toggleTurneringFoerTid\(id\)/);
     assert.match(a, /\+ \(foerTid \? AFSLUTTET_FOER_TID : ''\)/);
     assert.match(a, /renderTurneringResultatForm\(t\.id, m, 'historik'\)/);
-    assert.match(a, /function findTurneringskamp\(tournamentId, matchId\)/);
+    assert.match(a, /function findTurneringskamp\(tournamentId, matchId, hvor = 'turnering'\)/);   // nr. 106: kun formularens egen liste
     assert.match(a, /rawSetScores = String\(rawSetScores\)\.replace\(\/ \\\(afsluttet før tid\\\)\$\/, ''\)/);
     // Holdkampens "Rediger resultat" er urørt
     assert.match(a, /Rediger resultat/);

@@ -774,6 +774,11 @@ async function tildelTurneringskampBane(tournamentId, matchId) {
     if (paaBanen && paaBanen.match && paaBanen.match.id !== m.id) {
         const a = paaBanen.match;
         advarsler.push(`Bane ${bane} har allerede kampen ${turneringSide(a, 1)} vs ${turneringSide(a, 2)}. Den kommer tilbage på listen som ventende.`);
+        // Tabletten følger den nye kamps navne, men ikke skiftet mellem single og
+        // double, før den genindlæses — så kan resultatet ikke meldes ind (nr. 105)
+        if (!!a.doubles !== !!m.doubles) {
+            advarsler.push(`Den nye kamp er ${m.doubles ? 'double' : 'single'}, kampen på banen er ${a.doubles ? 'double' : 'single'}. Genindlæs tabletten på bane ${bane}, når kampen er sat på.`);
+        }
     }
     const travle = travleSpillere(m, spillereIGang(sidsteTurneringer), bane);
     if (travle.length) advarsler.push(`Spiller lige nu: ${travle.join(', ')}.`);
@@ -792,7 +797,7 @@ async function tildelTurneringskampBane(tournamentId, matchId) {
         if (svar === BANE_ANNULLERET) return;
     } catch (error) {
         console.error('Failed to assign tournament match from list:', error);
-        showMessage('Fejl', 'Kampen kunne ikke sættes på banen. Prøv igen.');
+        showMessage('Fejl', baneAfvistTekst(error) || 'Kampen kunne ikke sættes på banen. Prøv igen.');
         return;
     }
     turneringBaneValg.delete(matchId);
@@ -852,14 +857,15 @@ function toggleTurneringResultat(id, hvor = 'turnering') {
     else renderTournaments(sidsteTurneringer);
 }
 
-// Kampen fra Turnering-siden eller fra historikken (også afsluttede turneringer)
-function findTurneringskamp(tournamentId, matchId) {
-    for (const liste of [sidsteTurneringer, sidsteTurneringHistorik]) {
-        const t = (liste || []).find(x => x.id === tournamentId);
-        const m = t && (t.matches || []).find(x => x.id === matchId);
-        if (m) return m;
-    }
-    return null;
+// Kampen fra den liste, formularen er tegnet fra: Turnering-siden eller
+// historikken (også afsluttede turneringer). Før blev Turnering-sidens liste
+// altid spurgt først — men den fryser, når admin forlader siden, så "Ret
+// resultat" i historikken kunne se en færdig kamp som stadig på banen og
+// rydde den kamp, der spilles der nu (nr. 106)
+function findTurneringskamp(tournamentId, matchId, hvor = 'turnering') {
+    const liste = hvor === 'historik' ? sidsteTurneringHistorik : sidsteTurneringer;
+    const t = (liste || []).find(x => x.id === tournamentId);
+    return (t && (t.matches || []).find(x => x.id === matchId)) || null;
 }
 
 function renderTurneringResultatForm(tournamentId, m, hvor = 'turnering') {
@@ -947,9 +953,9 @@ function turneringResultatVinder(id) {
 }
 
 async function gemTurneringResultat(tournamentId, matchId) {
-    const m = findTurneringskamp(tournamentId, matchId);
-    if (!m) return;
     const hvor = turneringResultatAaben.get(matchId) || 'turnering';
+    const m = findTurneringskamp(tournamentId, matchId, hvor);
+    if (!m) return;
     const { saet, vinder, wo, foerTid } = laesTurneringResultat(matchId);
     if (!vinder) { showMessage('Mangler vinder', 'Vælg hvem der vandt kampen.'); return; }
 
@@ -985,8 +991,12 @@ async function gemTurneringResultat(tournamentId, matchId) {
             + (foerTid ? AFSLUTTET_FOER_TID : '');
     }
 
-    // Kampen står på en bane: banen ryddes — admin bekræfter først
-    const bane = m.status === 'active' && m.court_number != null ? Number(m.court_number) : null;
+    // Fra historikken rettes kun resultatet: ingen status og ingen bane (nr. 106).
+    // Fra Turnering-siden: står kampen på en bane, ryddes den — admin bekræfter
+    // først, og serveren rydder kun, hvis kampen stadig står på netop den bane,
+    // når kaldet lander (før: et separat "Ryd banen" ud fra admins kopi)
+    const fraHistorik = hvor === 'historik';
+    const bane = !fraHistorik && m.status === 'active' && m.court_number != null ? Number(m.court_number) : null;
     if (bane) {
         const ok = await BadmintonUtils.confirmDialog(`Gem resultat og ryd bane ${bane}?`,
             `Kampen står på bane ${bane}. Tælles der på banen lige nu, går den stilling tabt.`,
@@ -996,7 +1006,8 @@ async function gemTurneringResultat(tournamentId, matchId) {
 
     try {
         await api.updateTournamentMatch(tournamentId, matchId, {
-            ...(m.status !== 'finished' ? { status: 'finished' } : {}),
+            ...(!fraHistorik && m.status !== 'finished' ? { status: 'finished' } : {}),
+            ...(bane ? { rydBane: bane } : {}),
             winnerTeam: vinder,
             setScores
         });
@@ -1004,9 +1015,6 @@ async function gemTurneringResultat(tournamentId, matchId) {
         console.error('Failed to save tournament result:', error);
         showMessage('Fejl', 'Resultatet kunne ikke gemmes. Prøv igen.');
         return;
-    }
-    if (bane) {
-        try { await api.resetGameState(bane); } catch (e) { console.error('Rydning af banen fejlede:', e); }
     }
     turneringResultatAaben.delete(matchId);
     turneringResultatKladde.delete(matchId);
@@ -1248,7 +1256,7 @@ async function performSaveCourtChanges(isActive) {
                 if (svar === BANE_ANNULLERET) return;
             } catch (e) {
                 console.error('Failed to assign tournament match:', e);
-                showMessage('Fejl', 'Turneringskampen kunne ikke tildeles banen, så intet er gemt. Prøv igen.');
+                showMessage('Fejl', baneAfvistTekst(e) || 'Turneringskampen kunne ikke tildeles banen, så intet er gemt. Prøv igen.');
                 return;
             }
         }
@@ -2190,6 +2198,13 @@ async function medBaneBekraeftelse(kald) {
         if (!ok) return BANE_ANNULLERET;
         return await kald(true);
     }
+}
+
+// Serverens forklaring, når banen ikke kan tages, fordi forrige kamps resultat
+// ikke er meldt ind (nr. 104) — ellers null, og kalderen viser sin egen tekst
+function baneAfvistTekst(error) {
+    return error && error.status === 409 && error.body?.code === 'bane_resultat_mangler' && error.body.error
+        ? error.body.error : null;
 }
 
 // Banens tilstand for en delkamp, der netop er sat på banen: navnene og en ny
