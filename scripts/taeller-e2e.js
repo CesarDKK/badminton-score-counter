@@ -16,6 +16,9 @@
 //     node:22-alpine sh -c "apk add -q chromium nss freetype harfbuzz ttf-freefont && mkdir -p /tmp/pw && cd /tmp/pw \
 //       && npm i -s playwright && cd /repo && node scripts/taeller-e2e.js"
 //
+// Eller helt isoleret (egen database i hukommelsen, ingen porte, rører ikke den
+// lokale installation) — se scripts/e2e-isoleret/compose.yml.
+//
 // Bruger installationens sidste bane. Kræver, at der ikke er en aktiv holdkamp
 // eller turnering (testens egne fra en afbrudt kørsel ryddes). Det, der laves,
 // bliver stående som afsluttet (Kamphistorik), så det kan ses i admin.
@@ -333,8 +336,8 @@ async function main() {
     // Som admins "Sæt på bane" (tildelTurneringskampBane): kampen, banens
     // single/double og navnene (uden versionstjek)
     let adminNavne = 0;
-    const saetPaa = async (m) => {
-        await api(`/api/tournaments/${tu5.id}/matches/${m.id}`, 'PUT', { courtNumber: BANE, status: 'active' }, true);
+    const saetPaa = async (m, { force = false } = {}) => {
+        await api(`/api/tournaments/${tu5.id}/matches/${m.id}`, 'PUT', { courtNumber: BANE, status: 'active', ...(force ? { force: true } : {}) }, true);
         await api(`/api/courts/${BANE}`, 'PUT', { isActive: true, isDoubles: m.d }, true);
         adminNavne++;
         await api(`/api/game-states/${BANE}?skipAutoActive=true`, 'PUT', {
@@ -411,34 +414,32 @@ async function main() {
         !s.isDoubles && s.player1.name === 'Ib' && s.player1.score === 1, s);
     await spilTilEnde(sC1, 'Ib', 'Jytte', '(c1) singlen');
     await rydSomKnappen();
-    // (c2) Startet ved 0-0 (serveren ser den ikke som i gang endnu, så admin får lov
-    // at bytte): tabletten bliver ved sin kamp, navne og single — dens resultat
-    // afviser serveren (pakke U: kampen står ikke længere på en bane), og det
-    // lander heller ikke på den nye kamp
+    // (c2) "Start kamp" trykket, intet talt (0-0, uret ikke gemt): serveren regner
+    // banen som i gang — admin får "Der spilles på banen" (409). Bekræfter admin
+    // (force), ryddes banen med 'reset': tabletten nulstiller, slipper singlen og
+    // binder doublen. Før gik byttet igennem uden at spørge, og singlens resultat
+    // landede ingen steder
     const sC = await kamp5('HS c2', 'Ærø', 'Øvig');
     await saetPaa(sC); await bundetTil(sC); await visesSom(sC, '(c2) single sat på');
     await page.evaluate(() => selectServer(1)); await sov(200);
-    await page.evaluate(() => startMatch()); await sov(500);
-    check('(c2) kampen er startet', !!(await st()).matchStartTime);
-    await saetPaa(dC);
-    await sov(3000);   // assignment-event + et par synk
-    s = await st();
-    check('(c2) startet kamp: stadig bundet til singlen, single og dens navne', await page.evaluate((id) => assignedTournamentMatchId === id, sC.id) &&
-        !s.isDoubles && s.player1.name === 'Ærø' && s.player2.name === 'Øvig', s);
-    await spilTilEnde(sC, 'Ærø', 'Øvig', '(c2) singlen', { meldes: false });
+    await page.evaluate(() => startMatch()); await sov(800);
+    check('(c2) kampen er startet ved 0-0', !!(await st()).matchStartTime && !!(await serverState()).matchStartTime);
+    let afvist2 = null;
+    try { await saetPaa(dC); } catch (e) { afvist2 = e.message; }
+    check('(c2) serveren afviser byttet efter "Start kamp" (409 bane_i_gang)', /→ 409/.test(afvist2 || '') && /bane_i_gang/.test(afvist2 || ''), afvist2);
     await sov(1500);
-    const gsC = await serverState();
-    // (siderne er byttet efter 1. sæt — og den ventende double må ikke være skrevet over resultatet)
-    check('(c2) stillingen på serveren står under singlens navne (ingen 409-løkke)', gsC.matchCompleted && !gsC.isDoubles &&
-        [gsC.player1.name, gsC.player2.name].sort().join() === ['Ærø', 'Øvig'].sort().join(), gsC);
-    check('(c2) tabletten har ikke bundet doublen oven på resultatet', await page.evaluate(() => assignedTournamentMatchId === null && gameState.matchCompleted));
-    check('(c2) singlen står som ventende uden resultat', (await uroert(sC, '(c2) singlen')).status === 'pending');
-    check('(c2) doublen står stadig aktiv på banen', (await uroert(dC, '(c2) doublen')).status === 'active');
-    await rydSomKnappen();
-    // "Ryd banen" frigiver banens aktive tildelinger (serveren, som før) — doublen
-    // står igen på listen uden resultat, og admin sætter den på igen
-    check('(c2) efter "Ryd banen": doublen ventende uden resultat', (await uroert(dC, '(c2) doublen')).status === 'pending');
-    await saetPaa(dC); await bundetTil(dC); await visesSom(dC, '(c2) doublen sat på igen');
+    s = await st();
+    check('(c2) tabletten er uændret: singlen, startet', await page.evaluate((id) => assignedTournamentMatchId === id, sC.id) &&
+        !s.isDoubles && s.player1.name === 'Ærø' && !!s.matchStartTime, s);
+    check('(c2) singlen står stadig aktiv, doublen ventende', (await kampen(sC)).status === 'active' && (await kampen(dC)).status === 'pending');
+    // Admin bekræfter
+    await saetPaa(dC, { force: true });
+    await bundetTil(dC, 25000); await visesSom(dC, '(c2) efter bekræftelsen: doublen');
+    s = await st();
+    check('(c2) tabletten har nulstillet: ingen starttid, ingen dialog', !s.matchStartTime && !s.matchCompleted &&
+        !(await page.evaluate(() => _kampSlutVist || _fortsaetSpoerges || resultForm.open)), s);
+    check('(c2) singlen tilbage på listen uden resultat', (await uroert(sC, '(c2) singlen')).status === 'pending');
+    check('(c2) doublen står på banen uden resultat', (await uroert(dC, '(c2) doublen')).status === 'active');
 
     // (d) W.O. på en ikke-startet kamp: admin gemmer resultatet og rydder banen —
     // tabletten slipper kampen og står som en ryddet bane; næste kamp bindes og meldes rigtigt

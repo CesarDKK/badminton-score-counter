@@ -322,3 +322,54 @@ test('104: en bane med B aktiv, B\'s navne og en ældre kamps slutstilling — B
     assert.equal(k.started_at, null);
     assert.equal(await baneRaekke(4), null);
 });
+
+// ======================= "Start kamp" uden point (rest af nr. 105) =======================
+
+// Tabletten har trykket "Start kamp": starttid, 0-0, uret ikke gemt endnu
+const startetKamp = (p1, p2, start = new Date()) => ({
+    player1: { name: p1, name2: 'Makker 1', score: 0, games: 0 },
+    player2: { name: p2, name2: 'Makker 2', score: 0, games: 0 },
+    matchStartTime: start.toISOString(), timerSeconds: 0, isActive: true
+});
+
+test('105: "Start kamp" uden point er en kamp i gang — admin spørges (409), force afbryder og rydder banen', async () => {
+    // Sidst i filen: bane 5 (J står på den fra testen ovenfor og skubbes af)
+    await enhed(5, '/api/game-states/5', 'DELETE');
+    const A = await nyKamp('Kaj', 'Lis');
+    const B = await nyKamp('Mona', 'Nils');
+    assert.equal((await saetPaaBane(A, 5)).status, 200);
+    assert.equal((await enhed(5, '/api/game-states/5', 'PUT', startetKamp('Kaj', 'Lis'))).status, 200);
+    const foer = await baneRaekke(5);
+    assert.ok(foer.match_start_time, 'starttiden står på banen');
+    assert.deepEqual([foer.player1_score, foer.player2_score, foer.timer_seconds], [0, 0, 0]);
+
+    // Før: byttet gik igennem uden at spørge, og A's resultat landede ingen steder
+    const r = await saetPaaBane(B, 5);
+    assert.equal(r.status, 409, JSON.stringify(r.body));
+    assert.equal(r.body.code, 'bane_i_gang');
+    const a = await kampRaekke(A);
+    assert.deepEqual([a.status, a.court_number], ['active', 5], 'intet ændret');
+    assert.ok((await baneRaekke(5)).match_start_time);
+
+    // Admin bekræfter: banen ryddes (tabletten får 'reset'), B står på banen, A tilbage på listen
+    const f = await saetPaaBane(B, 5, { force: true });
+    assert.equal(f.status, 200, JSON.stringify(f.body));
+    assert.equal(await baneRaekke(5), null);
+    const a2 = await kampRaekke(A);
+    assert.deepEqual([a2.status, a2.court_number, a2.started_at, a2.winner_team], ['pending', null, null, null]);
+    const b = await kampRaekke(B);
+    assert.deepEqual([b.status, b.court_number], ['active', 5]);
+});
+
+test('105: en gammel, forladt "Start kamp" (0-0) låser ikke admin fast — force virker altid', async () => {
+    const forladt = new Date(Date.now() - 2 * 24 * 3600 * 1000);
+    assert.equal((await enhed(5, '/api/game-states/5', 'PUT', startetKamp('Mona', 'Nils', forladt))).status, 200);
+    const C = await nyKamp('Otto', 'Pernille');
+    const r = await saetPaaBane(C, 5);
+    assert.equal(r.status, 409, JSON.stringify(r.body));
+    assert.equal(r.body.code, 'bane_i_gang');
+    const f = await saetPaaBane(C, 5, { force: true });
+    assert.equal(f.status, 200, JSON.stringify(f.body));
+    assert.equal(await baneRaekke(5), null);
+    assert.deepEqual([(await kampRaekke(C)).status, (await kampRaekke(C)).court_number], ['active', 5]);
+});

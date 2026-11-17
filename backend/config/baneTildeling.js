@@ -22,7 +22,7 @@ const { meldAfgjortKamp, holdPaaPlads, holdkampNavne, startetFoerTildeling } = r
 function banensStilling(courtNumber) {
     return queryOne(
         `SELECT gs.player1_score, gs.player2_score, gs.player1_games, gs.player2_games,
-                gs.timer_seconds, gs.match_completed
+                gs.timer_seconds, gs.match_completed, gs.match_start_time
            FROM courts c JOIN game_states gs ON c.id = gs.court_id
           WHERE c.court_number = ?`,
         [courtNumber]
@@ -32,8 +32,12 @@ function banensStilling(courtNumber) {
 // Kører der en kamp, som tildelingen ville afbryde? En afsluttet kamp gør ikke
 // — dens resultat ryddes, når den nye kamp lander (holdkamp: teamMatches.js,
 // turnering: rydAfsluttetFoerTildeling herunder).
+// Også en kamp, hvor der er trykket "Start kamp", men intet talt endnu (0-0,
+// uret ikke gemt): før kunne admin bytte den ud uden at blive spurgt, og så
+// talte tabletten den gamle kamp færdig, og resultatet landede ingen steder.
+// Kun her — banenErIGang (delkampRegler) bruges også af holdkampens egne regler.
 function kampKoerer(gs) {
-    return banenErIGang(gs) && !gs.match_completed;
+    return (banenErIGang(gs) || !!gs.match_start_time) && !gs.match_completed;
 }
 
 /**

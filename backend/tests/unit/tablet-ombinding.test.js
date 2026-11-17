@@ -249,3 +249,26 @@ test('holdkamp-bundet bane: turneringsdelen springes over som før', async () =>
     await t.turneringsSync(true);
     assert.equal(t.assignedTournamentMatchId, 11);
 });
+
+// ---------- Serveren: "Start kamp" uden point er en kamp i gang (tildelingsvagten) ----------
+
+test('tildelingsvagten: en startet kamp ved 0-0 er i gang; force virker altid; holdkampens banenErIGang er uændret', () => {
+    const baneTildeling = require('../../config/baneTildeling');
+    const { banenErIGang } = require('../../config/delkampRegler');
+    const nul = { player1_score: 0, player2_score: 0, player1_games: 0, player2_games: 0, timer_seconds: 0, match_completed: 0 };
+    const startet = { ...nul, match_start_time: new Date() };
+    const forladt = { ...nul, match_start_time: new Date(Date.now() - 2 * 24 * 3600 * 1000) };
+    assert.equal(baneTildeling.kampKoerer(startet), true);
+    assert.equal(baneTildeling.tildelingAfvist({ stilling: startet }).code, 'bane_i_gang');
+    assert.equal(baneTildeling.tildelingAfvist({ stilling: forladt }).code, 'bane_i_gang');
+    assert.equal(baneTildeling.tildelingAfvist({ stilling: forladt, force: true }), null, 'force virker altid');
+    assert.equal(baneTildeling.tildelingAfvist({ stilling: startet, sammeBane: true }), null);
+    // Uden starttid som før; en afsluttet kamp ryddes som før
+    assert.equal(baneTildeling.tildelingAfvist({ stilling: { ...nul, match_start_time: null } }), null);
+    assert.equal(baneTildeling.tildelingAfvist({ stilling: { ...startet, player1_games: 2, match_completed: 1 } }), null);
+    // banenErIGang (holdkampens egne regler) er urørt
+    assert.equal(banenErIGang(startet), false);
+    // Stillingen hentes med starttiden
+    const kilde = fs.readFileSync(path.join(ROD, 'backend/config/baneTildeling.js'), 'utf8');
+    assert.match(udsnit(kilde, 'function banensStilling(', '\n}'), /gs\.match_start_time/);
+});
