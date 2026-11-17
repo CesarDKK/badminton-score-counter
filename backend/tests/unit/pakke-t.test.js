@@ -77,6 +77,14 @@ test('58c: fejlhåndteringen — for stor fil som før, ødelagt upload og forke
     assert.equal(svar(disk).status, 500);
 });
 
+test('90e: badminton-backendens pulje til football-databasen kører også i UTC', () => {
+    const { pool } = require('../../config/footballDatabase');
+    assert.equal(pool.pool.config.connectionConfig.timezone, '+00:00');
+    const sendt = [];
+    for (const l of pool.listeners('connection')) l({ query: (sql) => sendt.push(sql) });
+    assert.deepEqual(sendt, ["SET time_zone = '+00:00'"]);
+});
+
 test('58c: multer-konfigurationernes lofter er hele tal (multer 2.x afviser andet ved opstart)', () => {
     process.env.UPLOAD_DIR = process.env.UPLOAD_DIR || require('os').tmpdir();
     // Indlæsningen kaster TypeError, hvis et loft ikke er et ikke-negativt heltal
