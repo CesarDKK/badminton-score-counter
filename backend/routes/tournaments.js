@@ -10,6 +10,7 @@ const { fetchAndParseTournamentMatches, resolveClubNames, buildPlayerClubRows } 
 const { currentTenant } = require('../config/tenantPools');
 const { banensStartTid } = require('../config/matchTiming');
 const baneTildeling = require('../config/baneTildeling');
+const turneringEnhed = require('../config/turneringEnhed');
 const { historikSide } = require('../config/historikSide');
 const demo = require('../config/demo');
 
@@ -990,11 +991,25 @@ router.put('/:id/matches/:matchId', requireWriteAuthInClubMode, requirePage('tou
         } = req.body;
 
         const match = await queryOne(
-            'SELECT id, court_number, started_at FROM tournament_matches WHERE id = ? AND tournament_id = ?',
+            `SELECT id, court_number, status, started_at,
+                    side1_player1, side1_player2, side2_player1, side2_player2
+               FROM tournament_matches WHERE id = ? AND tournament_id = ?`,
             [matchId, id]
         );
         if (!match) {
             return res.status(404).json({ error: 'Kamp ikke fundet' });
+        }
+
+        // En tablet må kun ændre den kamp, der står 'active' på dens egen bane.
+        // En tablet, der stadig er bundet til en kamp, admin har byttet ud (eller
+        // tastet W.O.), skrev ellers den nye kamps resultat på den gamle. Svaret er
+        // 200 uden ændring — den uændrede tablet tager stille imod (nr. 105)
+        if (turneringEnhed.erEnhed(req)) {
+            const grund = await turneringEnhed.enhedMaaIkkeAendre(req, match, status);
+            if (grund) {
+                console.log(`Turneringskamp #${match.id}: enhedens ændring (${status || 'ingen status'}) ignoreret — ${grund}`);
+                return res.json({ success: true, uaendret: true });
+            }
         }
 
         const fields = [];

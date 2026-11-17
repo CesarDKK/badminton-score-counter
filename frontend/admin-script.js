@@ -774,6 +774,11 @@ async function tildelTurneringskampBane(tournamentId, matchId) {
     if (paaBanen && paaBanen.match && paaBanen.match.id !== m.id) {
         const a = paaBanen.match;
         advarsler.push(`Bane ${bane} har allerede kampen ${turneringSide(a, 1)} vs ${turneringSide(a, 2)}. Den kommer tilbage på listen som ventende.`);
+        // Tabletten følger den nye kamps navne, men ikke skiftet mellem single og
+        // double, før den genindlæses — så kan resultatet ikke meldes ind (nr. 105)
+        if (!!a.doubles !== !!m.doubles) {
+            advarsler.push(`Den nye kamp er ${m.doubles ? 'double' : 'single'}, kampen på banen er ${a.doubles ? 'double' : 'single'}. Genindlæs tabletten på bane ${bane}, når kampen er sat på.`);
+        }
     }
     const travle = travleSpillere(m, spillereIGang(sidsteTurneringer), bane);
     if (travle.length) advarsler.push(`Spiller lige nu: ${travle.join(', ')}.`);

@@ -200,5 +200,113 @@ test('104: admin viser serverens forklaring, når banen ikke kan tages (begge ve
     assert.match(a, /function baneAfvistTekst\(error\)[\s\S]*?'bane_resultat_mangler'/);
     assert.match(udsnit(a, 'async function tildelTurneringskampBane(', '\n}'), /baneAfvistTekst\(error\) \|\| 'Kampen kunne ikke sættes på banen/);
     assert.match(a, /baneAfvistTekst\(e\) \|\| 'Turneringskampen kunne ikke tildeles banen/);
-    assert.match(laes('frontend/admin.html'), /admin-script\.js\?v=123/);
+    assert.ok(Number(/admin-script\.js\?v=(\d+)/.exec(laes('frontend/admin.html'))[1]) >= 123);
+});
+
+// ======================= Nr. 105 =======================
+
+const turneringEnhed = require('../../config/turneringEnhed');
+
+test('105: erEnhed — adgangslinket er en enhed; uden token kun på en lokal installation, aldrig i klub-mode', () => {
+    const { erEnhed } = turneringEnhed;
+    assert.equal(erEnhed({ accessMode: 'club', user: { role: 'device', destination: 'court/3' }, headers: {} }), true);
+    assert.equal(erEnhed({ accessMode: 'club', user: { role: 'club_admin' }, headers: {} }), false);
+    assert.equal(erEnhed({ accessMode: 'club', headers: {} }), false);
+    // Lokal installation: tabletten har intet token, admin sender sit login
+    assert.equal(erEnhed({ accessMode: 'direct', headers: {} }), true);
+    assert.equal(erEnhed({ accessMode: 'direct', headers: { authorization: 'Bearer abc' } }), false);
+});
+
+test('105: egenBane — kun adgangslinkets court/N', () => {
+    const { egenBane } = turneringEnhed;
+    assert.equal(egenBane({ user: { role: 'device', destination: 'court/3' } }), 3);
+    assert.equal(egenBane({ user: { role: 'device', destination: 'tv/3' } }), null);
+    assert.equal(egenBane({ user: { role: 'device', destination: 'oversigt' } }), null);
+    assert.equal(egenBane({ headers: {} }), null);
+});
+
+test('105: reglen — kun kampen, der står active på enhedens egen bane', () => {
+    const { enhedsAendringAfvist: afvist } = turneringEnhed;
+    const m = (o = {}) => ({ status: 'active', court_number: 3, side1_player1: 'Anna', side2_player1: 'Berit', ...o });
+    // Normalforløbet: serveren har allerede meldt kampen færdig
+    assert.ok(afvist({ match: m({ status: 'finished' }), bane: 3, status: 'finished' }));
+    // Skubbet af banen (afventer), W.O. tastet (færdig), flyttet til en anden bane
+    assert.ok(afvist({ match: m({ status: 'pending', court_number: null }), bane: 3, status: 'finished' }));
+    assert.ok(afvist({ match: m({ court_number: 5 }), bane: 3, status: 'finished' }));
+    assert.ok(afvist({ match: m({ court_number: 5 }), bane: 3, status: 'pending' }), 'en gammel binding trækker ikke kampen af en anden bane');
+    // Reserven: serverens melding sprang over, kampen står stadig på banen
+    assert.equal(afvist({ match: m(), bane: 3, status: 'finished' }), null);
+    assert.equal(afvist({ match: m(), bane: 3, status: 'pending' }), null, 'tabletten frigiver sin egen kamp');
+    // Ukendt bane (lokal installation): resultatet gælder kun med kampens afsluttede stilling
+    const st = (o = {}) => ({ player1_name: 'Berit', player2_name: 'Anna', match_completed: 1, ...o });
+    assert.equal(afvist({ match: m(), bane: null, status: 'finished', stilling: st() }), null);
+    assert.ok(afvist({ match: m(), bane: null, status: 'finished', stilling: st({ match_completed: 0 }) }));
+    assert.ok(afvist({ match: m(), bane: null, status: 'finished', stilling: st({ player1_name: 'Carl', player2_name: 'Dorte' }) }));
+    assert.ok(afvist({ match: m(), bane: null, status: 'finished', stilling: null }));
+    assert.equal(afvist({ match: m(), bane: null, status: 'pending' }), null);
+});
+
+function rutenMed(kampen, gs = null) {
+    nulstil(async (sql) => {
+        if (/FROM tournament_matches WHERE id = \? AND tournament_id = \?/.test(sql)) return kampen ? [kampen] : [];
+        if (/FROM courts c JOIN game_states gs/.test(sql)) return gs ? [gs] : [];
+        if (/^\s*(UPDATE|INSERT|DELETE)/.test(sql)) return { affectedRows: 1 };
+        return [];
+    });
+    return (req) => koer(rute(tournaments, 'put', '/:id/matches/:matchId'), { params: { id: '1', matchId: '12' }, headers: {}, ...req });
+}
+const tablet3 = { accessMode: 'club', user: { role: 'device', destination: 'court/3' } };
+const resultat = { status: 'finished', winnerTeam: 2, setScores: 'Carl 21-10 Dorte, Carl 21-12 Dorte' };
+
+test('105: PUT — tablettens resultat på en kamp, der ikke står på dens bane, giver 200 og ændrer intet', async () => {
+    for (const kampen of [
+        { id: 12, status: 'pending', court_number: null },     // skubbet af banen
+        { id: 12, status: 'finished', court_number: 3 },       // W.O. tastet, eller serveren meldte den ind
+        { id: 12, status: 'active', court_number: 5 }          // sat på en anden bane
+    ]) {
+        const put = rutenMed(kampen);
+        const r = await put({ ...tablet3, body: resultat });
+        assert.equal(r.statusKode, 200, JSON.stringify(kampen));
+        assert.deepEqual(r.krop, { success: true, uaendret: true });
+        assert.deepEqual(skrevet(/^\s*(UPDATE|INSERT|DELETE)/), [], JSON.stringify(kampen));
+    }
+});
+
+test('105: PUT — reserven: kampen står active på tablettens bane, så gælder tablettens resultat', async () => {
+    const put = rutenMed({ id: 12, status: 'active', court_number: 3, started_at: null });
+    const r = await put({ ...tablet3, body: resultat });
+    assert.equal(r.statusKode, 200);
+    assert.deepEqual(r.krop, { success: true });
+    const u = skrevet(/UPDATE tournament_matches SET/);
+    assert.equal(u.length, 1);
+    assert.match(u[0].sql, /status = \?.*finished_at = CURRENT_TIMESTAMP.*winner_team = \?/s);
+});
+
+test('105: PUT — admin og den lokale tablet', async () => {
+    // Admin (klub-mode) må stadig rette en kamp, der ikke står på en bane
+    let put = rutenMed({ id: 12, status: 'pending', court_number: null });
+    let r = await put({ accessMode: 'club', user: { role: 'club_admin' }, body: { label: 'HS U11' } });
+    assert.deepEqual(r.krop, { success: true });
+    assert.equal(skrevet(/UPDATE tournament_matches SET/).length, 1);
+    // Lokal tablet uden token: resultatet kun, når banen står med kampens afsluttede stilling
+    const kampen = { id: 12, status: 'active', court_number: 3, side1_player1: 'Carl', side2_player1: 'Dorte' };
+    put = rutenMed(kampen, { player1_name: 'Anna', player2_name: 'Berit', match_completed: 1 });
+    r = await put({ accessMode: 'direct', body: resultat });
+    assert.deepEqual(r.krop, { success: true, uaendret: true });
+    put = rutenMed(kampen, { player1_name: 'Carl', player2_name: 'Dorte', match_completed: 1 });
+    r = await put({ accessMode: 'direct', body: resultat });
+    assert.deepEqual(r.krop, { success: true });
+    // Lokal admin (med login) som før
+    put = rutenMed({ id: 12, status: 'finished', court_number: null });
+    r = await put({ accessMode: 'direct', headers: { authorization: 'Bearer x' }, body: { winnerTeam: 1 } });
+    assert.deepEqual(r.krop, { success: true });
+});
+
+test('105: tabletten røres ikke, og den sluger stadig svaret stille (reportTournamentResult)', () => {
+    const c = laes('frontend/court-script-v3.js');
+    const f = udsnit(c, 'async function reportTournamentResult(', '\n}');
+    assert.match(f, /try \{\s*await api\.updateTournamentMatch[\s\S]*\} catch \(error\) \{\s*console\.error/);
+    // Admin advarer, når single/double skifter ved et bytte (tabletten skal genindlæses)
+    const a = udsnit(laes('frontend/admin-script.js'), 'async function tildelTurneringskampBane(', '\n}');
+    assert.match(a, /!!a\.doubles !== !!m\.doubles[\s\S]*Genindlæs tabletten på bane \$\{bane\}/);
 });

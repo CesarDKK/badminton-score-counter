@@ -1,6 +1,7 @@
 /**
  * Pakke U (før Lyngby): turneringskampe og banen, gennem databasen.
  *   104  en ny kamp på en bane, hvor forrige kamp er slut, men ikke ryddet
+ *   105  tabletten er bundet til en kamp, admin har byttet ud
  *
  * "Tabletten" her er en enhed med adgangslink court/N, der sender det samme som
  * den uændrede court-script-v3 (tilstand med PUT /api/game-states/N, resultat
@@ -42,7 +43,7 @@ function afsluttetKamp(p1, p2, { isDoubles = false, p1b = 'Makker 1', p2b = 'Mak
 
 before(async () => {
     K = await opretKlub('lyngby', 'Lyngby-test');
-    for (const b of [3, 4, 5, 6]) tablet[b] = await enhedsToken(K, `court/${b}`);
+    for (const b of [1, 2, 3, 4, 5, 6]) tablet[b] = await enhedsToken(K, `court/${b}`);
     const t = await admin('/api/tournaments', 'POST', { name: 'Lyngby Swiss' });
     assert.equal(t.status, 200);
     T = t.body.id;
@@ -133,4 +134,66 @@ test('104: en kamp, der skubbes af banen eller frigives, mister sin starttid —
     assert.equal((await saetPaaBane(B, 6)).status, 200);
     b = await kampRaekke(B);
     assert.ok(Date.now() - new Date(b.started_at).getTime() < 5 * 60 * 1000, `frisk starttid (${b.started_at})`);
+});
+
+// ======================= Nr. 105 =======================
+
+test('105: admin bytter en ikke-startet kamp ud — tablettens resultat på den gamle kamp ændrer intet, den nye meldes ind af serveren', async () => {
+    const B = await nyKamp('Ole', 'Pia');
+    const C = await nyKamp('Rasmus', 'Sara');
+    assert.equal((await saetPaaBane(B, 1)).status, 200);
+    // Tabletten binder sig til B; admin sætter C på bane 1 (B er ikke startet)
+    assert.equal((await saetPaaBane(C, 1)).status, 200);
+    assert.equal((await kampRaekke(B)).status, 'pending');
+
+    // Tabletten tæller C færdig under C's navne — serveren melder C ind
+    assert.equal((await enhed(1, '/api/game-states/1', 'PUT', afsluttetKamp('Rasmus', 'Sara'))).status, 200);
+    const c = await kampRaekke(C);
+    assert.equal(c.status, 'finished');
+    assert.equal(c.winner_team, 1);
+
+    // ...og melder så resultatet ind på B, som den uændrede tablet gør (winnerTeam 2: B findes ikke i dens kopi)
+    const r = await enhed(1, `/api/tournaments/${T}/matches/${B}`, 'PUT',
+        { status: 'finished', winnerTeam: 2, setScores: 'Rasmus 21-10 Sara, Rasmus 21-15 Sara' });
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.body, { success: true, uaendret: true });
+    const b = await kampRaekke(B);
+    assert.equal(b.status, 'pending');
+    assert.equal(b.winner_team, null);
+    assert.equal(b.set_scores, null);
+    assert.equal(b.finished_at, null);
+
+    // Normalforløbet: tablettens melding af en kamp, serveren allerede har meldt ind, ændrer intet
+    const igen = await enhed(1, `/api/tournaments/${T}/matches/${C}`, 'PUT',
+        { status: 'finished', winnerTeam: 1, setScores: 'noget andet' });
+    assert.deepEqual(igen.body, { success: true, uaendret: true });
+    const c2 = await kampRaekke(C);
+    assert.equal(c2.set_scores, c.set_scores);
+    assert.equal(String(c2.finished_at), String(c.finished_at));
+});
+
+test('105: reserven — serveren kunne ikke melde kampen ind (single/double), tablettens resultat på sin egen bane gælder', async () => {
+    const D = await nyKamp('Tom', 'Ulla', { doubles: true, m1: 'Vera', m2: 'Willy' });
+    assert.equal((await saetPaaBane(D, 2)).status, 200);
+    assert.equal((await enhed(2, '/api/game-states/2', 'PUT', afsluttetKamp('Tom', 'Ulla'))).status, 200);
+    assert.equal((await kampRaekke(D)).status, 'active', 'forudsætning: serverens melding sprang over');
+
+    // En anden banes tablet kan ikke melde den ind
+    const fremmed = await enhed(1, `/api/tournaments/${T}/matches/${D}`, 'PUT', { status: 'finished', winnerTeam: 2, setScores: 'x' });
+    assert.deepEqual(fremmed.body, { success: true, uaendret: true });
+    assert.equal((await kampRaekke(D)).status, 'active');
+
+    const r = await enhed(2, `/api/tournaments/${T}/matches/${D}`, 'PUT',
+        { status: 'finished', winnerTeam: 1, setScores: 'Tom 21-10 Ulla, Tom 21-15 Ulla' });
+    assert.deepEqual(r.body, { success: true });
+    const d = await kampRaekke(D);
+    assert.equal(d.status, 'finished');
+    assert.equal(d.winner_team, 1);
+
+    // En gammel binding på bane 1 kan ikke trække en kamp af bane 2
+    const E = await nyKamp('Xenia', 'Yrsa');
+    assert.equal((await saetPaaBane(E, 2)).status, 200, 'D er meldt ind, så banen ryddes');
+    const f = await enhed(1, `/api/tournaments/${T}/matches/${E}`, 'PUT', { status: 'pending', courtNumber: null });
+    assert.deepEqual(f.body, { success: true, uaendret: true });
+    assert.equal((await kampRaekke(E)).court_number, 2);
 });
