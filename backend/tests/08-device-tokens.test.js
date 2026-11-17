@@ -76,11 +76,24 @@ if (!CLUB_HOST) {
         assert.equal(status, 200);
     });
 
-    test('DeviceTokens: slettet token er ikke på listen', async () => {
+    // "Slet" tilbagekalder linket (nr. 44): det står stadig på listen som
+    // tilbagekaldt, så det kan genaktiveres. Først "Slet permanent" fjerner det.
+    test('DeviceTokens: slettet token står som tilbagekaldt på listen', async () => {
         const token = await clubAdminLogin();
         const { body } = await req('/api/device-tokens', {}, { token, host: CLUB_HOST });
         const found = body.find(t => t.id === createdTokenId);
-        assert.ok(!found, 'Slettet token må ikke være på listen');
+        assert.ok(found, 'Tilbagekaldt token står på listen');
+        assert.equal(Number(found.is_active), 0);
+    });
+
+    test('DeviceTokens: slettet permanent er ikke på listen', async () => {
+        const token = await clubAdminLogin();
+        const { status } = await req(`/api/device-tokens/${createdTokenId}/permanent`, {
+            method: 'DELETE'
+        }, { token, host: CLUB_HOST });
+        assert.equal(status, 200);
+        const { body } = await req('/api/device-tokens', {}, { token, host: CLUB_HOST });
+        assert.ok(!body.find(t => t.id === createdTokenId), 'Permanent slettet token må ikke være på listen');
     });
 
     test('DeviceTokens: opret kræver auth', async () => {
