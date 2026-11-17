@@ -1,6 +1,8 @@
 /**
  * Pakke U — tre turneringsfejl før Lyngby (kun server og admin; tabletten er urørt).
  *   104  ny turneringskamp på en bane, hvor forrige kamp er slut, men ikke ryddet
+ *   105  tabletten er bundet til en kamp, admin har byttet ud
+ *   106  "Ret resultat" fra historikken kunne rydde den kamp, der spilles nu
  *
  * Forløbene gennem databasen ligger i tests/integration/90-turnering-bane.test.js.
  *
@@ -309,4 +311,79 @@ test('105: tabletten røres ikke, og den sluger stadig svaret stille (reportTour
     // Admin advarer, når single/double skifter ved et bytte (tabletten skal genindlæses)
     const a = udsnit(laes('frontend/admin-script.js'), 'async function tildelTurneringskampBane(', '\n}');
     assert.match(a, /!!a\.doubles !== !!m\.doubles[\s\S]*Genindlæs tabletten på bane \$\{bane\}/);
+});
+
+// ======================= Nr. 106 =======================
+
+function resultatRute(kampen, gs = afsluttet()) {
+    const v = { gs };
+    haendelser.length = 0;
+    nulstil(async (sql) => {
+        if (/FROM tournament_matches WHERE id = \? AND tournament_id = \?/.test(sql)) return [kampen];
+        if (/SELECT id FROM courts WHERE court_number/.test(sql)) return [{ id: 7 }];
+        if (/SELECT is_doubles FROM courts/.test(sql)) return [{ is_doubles: 0 }];
+        if (/SELECT \* FROM game_states WHERE court_id/.test(sql)) return v.gs ? [v.gs] : [];
+        if (/DELETE FROM game_states/.test(sql)) { v.gs = null; return { affectedRows: 1 }; }
+        if (/^\s*(UPDATE|INSERT|DELETE)/.test(sql)) return { affectedRows: 1 };
+        return [];
+    });
+    const put = (req) => koer(rute(tournaments, 'put', '/:id/matches/:matchId'), { params: { id: '1', matchId: '12' }, headers: {}, ...req });
+    return { v, put };
+}
+const adminKlub = { accessMode: 'club', user: { role: 'club_admin' } };
+const manuelt = { status: 'finished', winnerTeam: 1, setScores: 'Anna 21-10 Berit, Anna 21-15 Berit' };
+
+test('106: manuelt resultat fra Turnering-siden — serveren rydder banen, når kampen stadig står på netop den bane', async () => {
+    const { v, put } = resultatRute({ id: 12, status: 'active', court_number: 3, started_at: null });
+    const r = await put({ ...adminKlub, body: { ...manuelt, rydBane: 3 } });
+    assert.deepEqual(r.krop, { success: true, ryddet: true });
+    assert.equal(v.gs, null);
+    assert.equal(skrevet(/INSERT INTO last_finished_matches/).length, 1, 'et afgjort resultat på banen vises stadig på TV');
+    assert.ok(haendelser.some(e => e.courtId === 3 && e.type === 'reset'));
+    const u = skrevet(/UPDATE tournament_matches SET/)[0];
+    assert.match(u.sql, /finished_at = CURRENT_TIMESTAMP/);
+    // Rydningen kommer efter, at resultatet er gemt
+    assert.ok(kald.indexOf(u) < kald.findIndex(k => /DELETE FROM game_states/.test(k.sql)));
+});
+
+test('106: kampen står ikke (længere) på den bane — banen røres ikke', async () => {
+    for (const kampen of [
+        { id: 12, status: 'active', court_number: 5 },          // flyttet til en anden bane
+        { id: 12, status: 'finished', court_number: 3 },        // tabletten/serveren meldte den ind imens
+        { id: 12, status: 'pending', court_number: null }       // skubbet af banen
+    ]) {
+        const { v, put } = resultatRute(kampen);
+        const r = await put({ ...adminKlub, body: { ...manuelt, rydBane: 3 } });
+        assert.deepEqual(r.krop, { success: true, ryddet: false }, JSON.stringify(kampen));
+        assert.ok(v.gs, JSON.stringify(kampen));
+        assert.deepEqual(skrevet(/DELETE/), []);
+    }
+    // En enhed kan ikke rydde banen med rydBane
+    const { v, put } = resultatRute({ id: 12, status: 'active', court_number: 3 });
+    await put({ ...tablet3, body: { ...manuelt, rydBane: 3 } });
+    assert.ok(v.gs);
+});
+
+test('106: en rettelse af en færdig kamp flytter ikke finished_at eller started_at', async () => {
+    const { put } = resultatRute({ id: 12, status: 'finished', court_number: null, started_at: new Date('2026-11-21T09:00:00Z') });
+    // Også når en forældet kopi sender status 'finished' igen
+    await put({ ...adminKlub, body: manuelt });
+    const u = skrevet(/UPDATE tournament_matches SET/);
+    assert.equal(u.length, 1);
+    assert.doesNotMatch(u[0].sql, /finished_at|started_at/);
+    assert.match(u[0].sql, /winner_team = \?.*set_scores = \?/s);
+});
+
+test('106: admin — historikken slår kun op i sin egen liste og sender aldrig status eller bane; intet separat "Ryd banen"', () => {
+    const a = laes('frontend/admin-script.js');
+    const find = udsnit(a, 'function findTurneringskamp(', '\n}');
+    assert.match(find, /hvor === 'historik' \? sidsteTurneringHistorik : sidsteTurneringer/);
+    assert.doesNotMatch(find, /for \(const liste of/);
+    const gem = udsnit(a, 'async function gemTurneringResultat(', '\n}');
+    assert.match(gem, /const hvor = turneringResultatAaben\.get\(matchId\) \|\| 'turnering';\s*const m = findTurneringskamp\(tournamentId, matchId, hvor\)/);
+    assert.match(gem, /const bane = !fraHistorik && m\.status === 'active'/);
+    assert.match(gem, /\.\.\.\(!fraHistorik && m\.status !== 'finished' \? \{ status: 'finished' \} : \{\}\)/);
+    assert.match(gem, /\.\.\.\(bane \? \{ rydBane: bane \} : \{\}\)/);
+    assert.doesNotMatch(gem, /resetGameState/);
+    assert.ok(Number(/admin-script\.js\?v=(\d+)/.exec(laes('frontend/admin.html'))[1]) >= 125);
 });

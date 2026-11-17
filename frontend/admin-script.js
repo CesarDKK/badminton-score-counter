@@ -857,14 +857,15 @@ function toggleTurneringResultat(id, hvor = 'turnering') {
     else renderTournaments(sidsteTurneringer);
 }
 
-// Kampen fra Turnering-siden eller fra historikken (også afsluttede turneringer)
-function findTurneringskamp(tournamentId, matchId) {
-    for (const liste of [sidsteTurneringer, sidsteTurneringHistorik]) {
-        const t = (liste || []).find(x => x.id === tournamentId);
-        const m = t && (t.matches || []).find(x => x.id === matchId);
-        if (m) return m;
-    }
-    return null;
+// Kampen fra den liste, formularen er tegnet fra: Turnering-siden eller
+// historikken (også afsluttede turneringer). Før blev Turnering-sidens liste
+// altid spurgt først — men den fryser, når admin forlader siden, så "Ret
+// resultat" i historikken kunne se en færdig kamp som stadig på banen og
+// rydde den kamp, der spilles der nu (nr. 106)
+function findTurneringskamp(tournamentId, matchId, hvor = 'turnering') {
+    const liste = hvor === 'historik' ? sidsteTurneringHistorik : sidsteTurneringer;
+    const t = (liste || []).find(x => x.id === tournamentId);
+    return (t && (t.matches || []).find(x => x.id === matchId)) || null;
 }
 
 function renderTurneringResultatForm(tournamentId, m, hvor = 'turnering') {
@@ -952,9 +953,9 @@ function turneringResultatVinder(id) {
 }
 
 async function gemTurneringResultat(tournamentId, matchId) {
-    const m = findTurneringskamp(tournamentId, matchId);
-    if (!m) return;
     const hvor = turneringResultatAaben.get(matchId) || 'turnering';
+    const m = findTurneringskamp(tournamentId, matchId, hvor);
+    if (!m) return;
     const { saet, vinder, wo, foerTid } = laesTurneringResultat(matchId);
     if (!vinder) { showMessage('Mangler vinder', 'Vælg hvem der vandt kampen.'); return; }
 
@@ -990,8 +991,12 @@ async function gemTurneringResultat(tournamentId, matchId) {
             + (foerTid ? AFSLUTTET_FOER_TID : '');
     }
 
-    // Kampen står på en bane: banen ryddes — admin bekræfter først
-    const bane = m.status === 'active' && m.court_number != null ? Number(m.court_number) : null;
+    // Fra historikken rettes kun resultatet: ingen status og ingen bane (nr. 106).
+    // Fra Turnering-siden: står kampen på en bane, ryddes den — admin bekræfter
+    // først, og serveren rydder kun, hvis kampen stadig står på netop den bane,
+    // når kaldet lander (før: et separat "Ryd banen" ud fra admins kopi)
+    const fraHistorik = hvor === 'historik';
+    const bane = !fraHistorik && m.status === 'active' && m.court_number != null ? Number(m.court_number) : null;
     if (bane) {
         const ok = await BadmintonUtils.confirmDialog(`Gem resultat og ryd bane ${bane}?`,
             `Kampen står på bane ${bane}. Tælles der på banen lige nu, går den stilling tabt.`,
@@ -1001,7 +1006,8 @@ async function gemTurneringResultat(tournamentId, matchId) {
 
     try {
         await api.updateTournamentMatch(tournamentId, matchId, {
-            ...(m.status !== 'finished' ? { status: 'finished' } : {}),
+            ...(!fraHistorik && m.status !== 'finished' ? { status: 'finished' } : {}),
+            ...(bane ? { rydBane: bane } : {}),
             winnerTeam: vinder,
             setScores
         });
@@ -1009,9 +1015,6 @@ async function gemTurneringResultat(tournamentId, matchId) {
         console.error('Failed to save tournament result:', error);
         showMessage('Fejl', 'Resultatet kunne ikke gemmes. Prøv igen.');
         return;
-    }
-    if (bane) {
-        try { await api.resetGameState(bane); } catch (e) { console.error('Rydning af banen fejlede:', e); }
     }
     turneringResultatAaben.delete(matchId);
     turneringResultatKladde.delete(matchId);

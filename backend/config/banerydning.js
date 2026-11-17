@@ -78,6 +78,31 @@ async function rydAfsluttetBane(courtNumber, req, skalVaere = null) {
     return true;
 }
 
+/**
+ * Admin har tastet resultatet for turneringskampen på banen (nr. 106): banen
+ * ryddes som ved "Ryd banen" — også en kamp, der tælles (admin har bekræftet).
+ * Et afgjort resultat på banen gemmes til TV'et. Kalderen har sikret, at
+ * kampen stod på netop denne bane, da resultatet blev gemt.
+ */
+async function rydBaneEfterResultat(courtNumber, req) {
+    const court = await queryOne('SELECT id FROM courts WHERE court_number = ?', [courtNumber]);
+    if (!court) return false;
+    const existing = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
+    if (existing && (existing.match_completed || existing.player1_games >= 2 || existing.player2_games >= 2)) {
+        await gemSidsteAfsluttedeKamp(court.id, existing);
+    }
+    await query('DELETE FROM game_states WHERE court_id = ?', [court.id]);
+    await glemFrigivetKamp(court.id);   // ryddet med vilje (rest af nr. 4)
+    await query('UPDATE courts SET is_active = FALSE, is_doubles = FALSE WHERE id = ?', [court.id]);
+    // Livestream: et "Start livestream" på tabletten gjaldt den kamp
+    try {
+        await query('UPDATE court_streams SET manual_since = NULL WHERE court_number = ?', [courtNumber]);
+    } catch (e) { /* kolonnen findes først efter migration 034 */ }
+    try { await invalidateCourtTokens(courtNumber); } catch (e) { console.error('Token invalidation failed:', e); }
+    publishGameStateChange(req, courtNumber, 'reset');
+    return true;
+}
+
 // Automatisk "Ryd banen" efter holdkamp- og turneringskampe: resultatet er meldt
 // ind, så snart kampen er vundet, men banen (tablet og TV) står med "Kamp vundet",
 // til nogen trykker "Ryd banen" — og det glemmes tit efter de sidste kampe. Efter
@@ -128,4 +153,4 @@ async function autoRydAfsluttedeBaner(req) {
     return ryddet;
 }
 
-module.exports = { gemSidsteAfsluttedeKamp, rydAfsluttetBane, autoRydAfsluttedeBaner, autoRydSql, AUTO_RYD_EFTER_MIN };
+module.exports = { gemSidsteAfsluttedeKamp, rydAfsluttetBane, rydBaneEfterResultat, autoRydAfsluttedeBaner, autoRydSql, AUTO_RYD_EFTER_MIN };

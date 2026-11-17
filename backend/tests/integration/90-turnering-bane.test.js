@@ -2,6 +2,7 @@
  * Pakke U (før Lyngby): turneringskampe og banen, gennem databasen.
  *   104  en ny kamp på en bane, hvor forrige kamp er slut, men ikke ryddet
  *   105  tabletten er bundet til en kamp, admin har byttet ud
+ *   106  manuelt resultat og "Ret resultat" fra historikken
  *
  * "Tabletten" her er en enhed med adgangslink court/N, der sender det samme som
  * den uændrede court-script-v3 (tilstand med PUT /api/game-states/N, resultat
@@ -196,4 +197,65 @@ test('105: reserven — serveren kunne ikke melde kampen ind (single/double), ta
     const f = await enhed(1, `/api/tournaments/${T}/matches/${E}`, 'PUT', { status: 'pending', courtNumber: null });
     assert.deepEqual(f.body, { success: true, uaendret: true });
     assert.equal((await kampRaekke(E)).court_number, 2);
+});
+
+// ======================= Nr. 106 =======================
+
+const kampMed = async (s1) => (await rodQuery(K.db, 'SELECT * FROM tournament_matches WHERE side1_player1 = ?', [s1]))[0];
+
+test('106: "Ret resultat" fra historikken (kun vinder og sæt) — tiderne står, og kampen på banen nu røres ikke', async () => {
+    // Bane 3 spiller nu Carl–Dorte (fra 104-forløbet), og der tælles
+    const iGang = await kampMed('Carl');
+    assert.equal(iGang.status, 'active');
+    assert.equal(iGang.court_number, 3);
+    const p = await enhed(3, '/api/game-states/3', 'PUT', {
+        player1: { name: 'Carl', name2: 'Makker 1', score: 7, games: 0 },
+        player2: { name: 'Dorte', name2: 'Makker 2', score: 5, games: 0 },
+        matchStartTime: new Date().toISOString()
+    });
+    assert.equal(p.status, 200, JSON.stringify(p.body));
+
+    const foer = await kampMed('Anna');
+    assert.equal(foer.status, 'finished');
+    const r = await admin(`/api/tournaments/${T}/matches/${foer.id}`, 'PUT',
+        { winnerTeam: 2, setScores: 'Anna 10-21 Berit, Anna 15-21 Berit' });
+    assert.deepEqual(r.body, { success: true });
+    const efter = await kampMed('Anna');
+    assert.equal(efter.winner_team, 2);
+    assert.equal(String(efter.finished_at), String(foer.finished_at));
+    assert.equal(String(efter.started_at), String(foer.started_at));
+
+    // En forældet kopi, der sender status 'finished' igen, flytter heller ikke tiderne
+    await admin(`/api/tournaments/${T}/matches/${foer.id}`, 'PUT', { status: 'finished', winnerTeam: 1, setScores: foer.set_scores });
+    assert.equal(String((await kampMed('Anna')).finished_at), String(foer.finished_at));
+
+    // Kampen på bane 3 tælles videre
+    assert.equal((await kampMed('Carl')).status, 'active');
+    assert.equal((await baneRaekke(3)).player1_score, 7);
+});
+
+test('106: manuelt resultat fra Turnering-siden rydder banen i samme kald — kun når kampen står på netop den bane', async () => {
+    const carl = await kampMed('Carl');
+    // Admins kopi siger bane 4 — men kampen står på bane 3: intet ryddes
+    let r = await admin(`/api/tournaments/${T}/matches/${carl.id}`, 'PUT',
+        { status: 'finished', winnerTeam: 1, setScores: 'Carl 21-10 Dorte, Carl 21-12 Dorte', rydBane: 4 });
+    assert.deepEqual(r.body, { success: true, ryddet: false });
+    assert.ok(await baneRaekke(3), 'bane 3 er ikke ryddet');
+
+    // Ny kamp på bane 3 med tælling i gang, og admin taster resultatet med rydBane 3
+    await enhed(3, '/api/game-states/3', 'DELETE');
+    const G = await nyKamp('Zita', 'Åse');
+    assert.equal((await saetPaaBane(G, 3)).status, 200);
+    await enhed(3, '/api/game-states/3', 'PUT', {
+        player1: { name: 'Zita', name2: 'Makker 1', score: 3, games: 0 },
+        player2: { name: 'Åse', name2: 'Makker 2', score: 2, games: 0 },
+        matchStartTime: new Date().toISOString()
+    });
+    r = await admin(`/api/tournaments/${T}/matches/${G}`, 'PUT',
+        { status: 'finished', winnerTeam: 1, setScores: 'W.O.', rydBane: 3 });
+    assert.deepEqual(r.body, { success: true, ryddet: true });
+    assert.equal(await baneRaekke(3), null);
+    const g = await kampRaekke(G);
+    assert.equal(g.status, 'finished');
+    assert.equal(g.set_scores, 'W.O.');
 });

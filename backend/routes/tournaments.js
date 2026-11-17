@@ -11,6 +11,7 @@ const { currentTenant } = require('../config/tenantPools');
 const { banensStartTid } = require('../config/matchTiming');
 const baneTildeling = require('../config/baneTildeling');
 const turneringEnhed = require('../config/turneringEnhed');
+const { rydBaneEfterResultat } = require('../config/banerydning');
 const { historikSide } = require('../config/historikSide');
 const demo = require('../config/demo');
 
@@ -1057,7 +1058,9 @@ router.put('/:id/matches/:matchId', requireWriteAuthInClubMode, requirePage('tou
             // admin-baneoversigtens "Seneste kamp" kan sortere paa tvaers af
             // match_history, tournament_matches og team_match_games — og saa
             // Kamphistorik kan vise varighed (finished_at - started_at).
-            if (status === 'finished') {
+            // En rettelse af en kamp, der allerede er færdig, flytter ikke dens
+            // tider — ellers blev varighed og rækkefølge forkerte (nr. 106)
+            if (status === 'finished' && match.status !== 'finished') {
                 fields.push('finished_at = CURRENT_TIMESTAMP');
                 const start = await banensStartTid(match.court_number, match.started_at);
                 if (start) { fields.push('started_at = ?'); values.push(start); }
@@ -1077,8 +1080,20 @@ router.put('/:id/matches/:matchId', requireWriteAuthInClubMode, requirePage('tou
             return res.status(400).json({ error: 'Ingen felter at opdatere' });
         }
 
+        // Admins manuelle resultat fra Turnering-siden rydder banen (rydBane = banens
+        // nummer) — men kun, hvis kampen stadig står 'active' på netop den bane nu.
+        // Før ryddede admin selv banen bagefter ud fra sin egen kopi af listen, som
+        // kunne være forældet: så blev den kamp, der spilles der nu, ryddet (nr. 106)
+        const rydBane = req.body.rydBane;
+        const rydNu = status === 'finished' && rydBane !== undefined && rydBane !== null
+            && !turneringEnhed.erEnhed(req)
+            && match.status === 'active' && match.court_number != null
+            && Number(match.court_number) === Number(rydBane);
+
         values.push(matchId);
         await query(`UPDATE tournament_matches SET ${fields.join(', ')} WHERE id = ?`, values);
+
+        if (rydNu) await rydBaneEfterResultat(match.court_number, req);
 
         // Poke SSE-lyttere for beroerte baner — baade den kampen kom fra
         // (frigivelse/flytning) og den den lander paa
@@ -1096,7 +1111,7 @@ router.put('/:id/matches/:matchId', requireWriteAuthInClubMode, requirePage('tou
             await baneTildeling.fjernPlannerTildeling(courtNumber);
         }
 
-        res.json({ success: true });
+        res.json({ success: true, ...(rydBane !== undefined && rydBane !== null ? { ryddet: rydNu } : {}) });
     } catch (error) {
         next(error);
     }
