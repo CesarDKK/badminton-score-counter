@@ -83,11 +83,26 @@ function runWithTenant(dbName, fn) {
 // men tømte og fyldte demoen, mens klubbens egne data stod urørt.
 // Her sættes klubben igen ud fra req.clubDbName, før ruten fortsætter.
 // Uden for club-mode (demoen, lokal installation, admin.) ændres intet.
+// (multer 2.x bevarer selv konteksten; bevarKlub er stadig den ene indgang.)
 function bevarKlub(middleware) {
     return (req, res, next) => middleware(req, res, (err) => {
+        maerkUploadFejl(err);
         if (req.clubDbName) return runWithTenant(req.clubDbName, () => next(err));
         next(err);
     });
+}
+
+// En fejl fra upload-middlewaren uden HTTP-status og uden systemkald er
+// klientens: en afkortet, ødelagt eller afbrudt multipart-krop (busboy:
+// "Unexpected end of form", "Malformed part header", "Multipart: Boundary not
+// found" …) eller multers egne MulterError (LIMIT_*, MISSING_FIELD_NAME …).
+// Den mærkes, så fejlhåndteringen svarer 400 i stedet for 500 (nr. 58c).
+// Diskfejl (ENOSPC, EACCES) har syscall og forbliver 500; express.raw's fejl
+// har allerede en status.
+function maerkUploadFejl(err) {
+    if (err && typeof err === 'object' && err.status === undefined && err.statusCode === undefined && !err.syscall) {
+        err.uploadFejl = true;
+    }
 }
 
 // Luk alle pools ved graceful shutdown
@@ -110,4 +125,4 @@ function antalPuljer() {
     return pools.size;
 }
 
-module.exports = { getPool, runWithTenant, bevarKlub, closeAll, currentTenant, utcSession, poolIndstillinger, antalPuljer };
+module.exports = { getPool, runWithTenant, bevarKlub, maerkUploadFejl, closeAll, currentTenant, utcSession, poolIndstillinger, antalPuljer };

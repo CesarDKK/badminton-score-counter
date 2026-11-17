@@ -7,7 +7,10 @@ const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
 require('dotenv').config();
 
-const pool = mysql.createPool({
+// UTC-session som de øvrige puljer (utcSession): football-tidspunkterne er
+// TIMESTAMP, og uden SET time_zone kom fx klubbernes created_at i super-admin
+// 1–2 timer forskudt ud på en server, hvor MySQL kører CET (nr. 90e)
+const pool = require('./tenantPools').utcSession(mysql.createPool({
     host: process.env.DB_HOST || 'localhost',
     port: process.env.DB_PORT || 3306,
     user: process.env.FOOTBALL_DB_USER || 'football_user',
@@ -19,7 +22,7 @@ const pool = mysql.createPool({
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
     timezone: '+00:00'
-});
+}));
 
 async function query(sql, params) {
     const [results] = await pool.execute(sql, params);

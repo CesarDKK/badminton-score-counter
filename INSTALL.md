@@ -93,19 +93,12 @@ docker compose version
 # Forventet output: Docker Compose version v2.x.x
 ```
 
-Hvis kommandoen ikke findes, installer det manuelt:
+Hvis kommandoen ikke findes, installer Compose-pluginet (`deploy.sh` bruger
+`docker compose`, ikke den gamle `docker-compose`):
 
 ```bash
-# Hent seneste version
-COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
-
-sudo curl -L "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" \
-  -o /usr/local/bin/docker-compose
-
-sudo chmod +x /usr/local/bin/docker-compose
-
-# Verificer
-docker-compose --version
+sudo apt install -y docker-compose-plugin
+docker compose version
 ```
 
 ---
@@ -161,35 +154,38 @@ oprettes separat med `seedClub.js` (ikke via en env-variabel).
 ./deploy.sh
 ```
 
-`deploy.sh` sikrer `.env` og bygger + starter alle containere. Den er sikker at
-køre igen og igen. (Vil du køre det manuelt: `sh scripts/ensure-env.sh` og
-derefter `docker compose up -d --build`.)
+`deploy.sh` sikrer `.env`, bygger + starter alle containere og venter (højst
+120 s) på, at backenden svarer sundt på `/health`; ellers viser den backendens
+log og slutter med en fejl. Den er sikker at køre igen og igen. (Vil du køre det
+manuelt: `sh scripts/ensure-env.sh` og derefter `docker compose up -d --build`.)
 
 **Første gang** tager dette 5–10 minutter da Docker skal:
-1. Downloade base-images (MySQL, Node.js, Nginx)
+1. Downloade base-images (MySQL 8.4, Node 22, nginx, Python)
 2. Bygge dine containers
 3. Initialisere databasen og oprette tabeller
 4. Starte backend og frontend
 
 Følg opstarten i realtid:
 ```bash
-docker-compose logs -f
+docker compose logs -f
 ```
 
 Tryk `Ctrl+C` for at stoppe log-visningen (appen kører stadig).
 
 Tjek at alt kører:
 ```bash
-docker-compose ps
+docker compose ps
 ```
 
-Du bør se 3–4 services med status `Up` eller `healthy`:
+Du bør se disse med status `Up` eller `healthy` (`football-db-init` kører kun
+ved opstart og stopper bagefter):
 ```
-NAME                   STATUS
-badminton-mysql        Up (healthy)
-badminton-backend      Up (healthy)
-badminton-frontend     Up
+badminton-mysql, badminton-backend, badminton-frontend, football-backend,
+football-frontend, badminton-stats, planner-solver, badminton-backup
 ```
+
+Helbred: `curl -s http://127.0.0.1:3000/health` (backenden direkte) og
+`curl -s http://localhost/api/health` (gennem nginx).
 
 ---
 
@@ -203,7 +199,7 @@ hostname -I
 # Eksempel output: 192.168.1.50
 ```
 
-Åbn i browser: `http://192.168.1.50:8080`
+Åbn i browser: `http://192.168.1.50:8080` (eller port 80)
 
 ### Grundopsætning
 
@@ -213,50 +209,22 @@ hostname -I
 4. Gå til **Admin → Indstillinger**
 5. **SKIFT ADGANGSKODEN MED DET SAMME** — standardkoden er ikke sikker
 
-### Anbefalede indstillinger
+### Klubber og super-admin
 
-Under **Admin → Indstillinger**:
-- Skift admin-adgangskode
-- Vælg Court-version: **Bane View (V3)** (anbefalet)
-- Vælg TV-version: **Minimalistisk (V3)** (anbefalet)
+Klubber på egne subdomæner (`klub.<APP_DOMAIN>`) oprettes i super-admin på
+`admin.<APP_DOMAIN>`. Første login er `superadmin` / `superadmin123`, og koden
+skal skiftes ved første login. `APP_DOMAIN` står i `installation.env`.
 
 ---
 
 ## 9. Automatisk opstart ved boot
 
-For at appen starter automatisk når serveren genstartes:
+Alle tjenester har `restart: unless-stopped` i `docker-compose.yml`, så de
+starter selv igen, når Docker starter. Det eneste, der skal til, er at Docker
+starter ved boot:
 
 ```bash
-# Sørg for at Docker starter ved boot
 sudo systemctl enable docker
-
-# Opret en systemd-service til appen
-sudo tee /etc/systemd/system/badminton-app.service > /dev/null <<EOF
-[Unit]
-Description=Badminton Counter App
-Requires=docker.service
-After=docker.service network-online.target
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-WorkingDirectory=$(pwd)
-ExecStart=/usr/bin/docker-compose up -d
-ExecStop=/usr/bin/docker-compose down
-User=$USER
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Aktivér og start servicen
-sudo systemctl daemon-reload
-sudo systemctl enable badminton-app.service
-sudo systemctl start badminton-app.service
-
-# Tjek at den kører
-sudo systemctl status badminton-app.service
 ```
 
 Test at det virker ved at genstarte serveren:
@@ -279,7 +247,8 @@ sudo ufw enable
 # Tillad SSH (VIGTIGT — ellers mister du adgang!)
 sudo ufw allow 22/tcp
 
-# Tillad appen
+# Tillad appen (nginx lytter på 80 og 8080; MySQL og backenden er kun bundet til 127.0.0.1)
+sudo ufw allow 80/tcp
 sudo ufw allow 8080/tcp
 
 # Tjek status
@@ -300,15 +269,12 @@ cd ~/badminton-score-counter
 # Hent nyeste kode
 git pull
 
-# Genbyg og genstart containers
-docker-compose down
-docker-compose up -d --build
+# Byg og genstart — venter på, at backenden er sund
+./deploy.sh
 ```
 
-Tjek at alt kører:
-```bash
-docker-compose ps
-```
+Migrationerne kører af sig selv, når backenden starter; der skal ikke køres
+SQL i hånden, og `docker compose down` er ikke nødvendig.
 
 Hard-refresh i browseren: `Ctrl+Shift+R` (Windows/Linux) eller `Cmd+Shift+R` (Mac).
 
@@ -325,25 +291,34 @@ dem i **14 dage**. Hver backup dækker:
   `badminton_master` og `football_tournament`) — filen `db-<tidsstempel>.sql.gz`.
 - Alle uploadede billeder (badminton + football) — filen `uploads-<tidsstempel>.tar.gz`.
 
-Backup'erne ligger i Docker-volumet `badminton-app_backups`. Se dem, og find
-host-stien:
+Backup'erne ligger i Docker-volumet `<projekt>_backups`, hvor `<projekt>` er
+mappenavnet (efter trin 5: `badminton-score-counter`). Find navnet, og se dem:
 
 ```bash
-docker run --rm -v badminton-app_backups:/b alpine ls -lh /b
+docker volume ls --filter name=backups
 ```
 
 ```bash
-docker volume inspect badminton-app_backups
+docker run --rm -v badminton-score-counter_backups:/b alpine ls -lh /b
 ```
 
 Kopiér de nyeste backups ud til den mappe du står i (fx før du flytter serveren):
 
 ```bash
-docker run --rm -v badminton-app_backups:/b -v "$PWD":/ud alpine sh -c 'cp /b/db-* /b/uploads-* /ud/'
+docker run --rm -v badminton-score-counter_backups:/b -v "$PWD":/ud alpine sh -c 'cp /b/db-* /b/uploads-* /ud/'
 ```
 
 > Interval og opbevaring kan ændres i `.env` med `BACKUP_INTERVAL_HOURS` og
-> `BACKUP_RETENTION_DAYS` (standard 24 og 14).
+> `BACKUP_RETENTION_DAYS` (standard 24 og 14). Status for den seneste kørsel
+> står i super-admin → Serverens helbred.
+
+### Klubbernes egne backups
+
+Backenden tager desuden en backup af hver klub hver mandag kl. 02:00 og før
+hver gendannelse (de 4 seneste af hver slags beholdes, i volumet
+`<projekt>_club_backups`). De kan hentes og gendannes under **Indstillinger →
+Backup & Gendannelse** og i super-admin, hvor man også kan hente en backup-fil
+og gendanne fra fil.
 
 ### Gendannelse
 
@@ -355,12 +330,11 @@ gunzip -c db-YYYYMMDD-HHMMSS.sql.gz | docker exec -i badminton-mysql \
 
 ```bash
 # Gendan billeder (pak arkivet ud i uploads-volumet)
-docker run --rm -v badminton-app_uploads_data:/data -v "$PWD":/ind alpine \
+docker run --rm -v badminton-score-counter_uploads_data:/data -v "$PWD":/ind alpine \
   sh -c 'tar xzf /ind/uploads-YYYYMMDD-HHMMSS.tar.gz -C /data --strip-components=1 uploads'
 ```
 
-> Vil du hellere gendanne én enkelt klub via admin-fladen, findes der stadig en
-> per-klub backup/restore under super-admin.
+> Én enkelt klub gendannes lettest fra dens egne backups (se ovenfor).
 
 ---
 
@@ -370,17 +344,21 @@ docker run --rm -v badminton-app_uploads_data:/data -v "$PWD":/ind alpine \
 
 ```bash
 # Tjek hvad der sker
-docker-compose logs
+docker compose logs --tail 200
 
 # Tjek specifik service
-docker-compose logs backend
-docker-compose logs mysql
+docker compose logs backend
+docker compose logs mysql
+
+# Helbred: backenden direkte og gennem nginx
+curl -s http://127.0.0.1:3000/health
+curl -s http://localhost/api/health
 ```
 
 ### "Port already in use"
 
 ```bash
-# Se hvad der bruger port 8080
+# Se hvad der bruger port 8080 (samme for 80)
 sudo lsof -i :8080
 # Eller
 sudo netstat -tlnp | grep 8080
@@ -392,44 +370,43 @@ sudo netstat -tlnp | grep 8080
 
 MySQL kan tage 1–3 minutter første gang. Vent og tjek:
 ```bash
-docker-compose logs -f mysql
+docker compose logs -f mysql
 # Vent på: "ready for connections"
 ```
 
 ### Ændringer vises ikke
 
 ```bash
-# Tving genbyg af containers
-docker-compose down
-docker-compose up -d --build
+# Byg og genstart igen
+./deploy.sh
 
 # Hard-refresh i browser: Ctrl+Shift+R
 ```
 
-### Nulstil alt og start forfra (sletter al data!)
+### Nulstil alt og start forfra (sletter al data — også backup'erne!)
 
 ```bash
-docker-compose down -v
-docker-compose up -d --build
+docker compose down -v
+./deploy.sh
 ```
 
 ### Nyttige kommandoer
 
 ```bash
 # Se kørende containers
-docker-compose ps
+docker compose ps
 
 # Se live logs
-docker-compose logs -f
+docker compose logs -f
 
 # Stop appen
-docker-compose down
+docker compose down
 
 # Start appen
-docker-compose up -d
+docker compose up -d
 
 # Genstart én service
-docker-compose restart backend
+docker compose restart backend
 ```
 
 ---
@@ -463,14 +440,15 @@ copy .env.example .env
 cp .env.example .env
 ```
 
-Åbn `.env` i Notesblok og sæt sikre adgangskoder:
+Åbn `.env` i Notesblok og sæt sikre adgangskoder for **alle** værdier i filen
+(også football-værdierne — compose stopper med en besked, hvis én mangler):
 ```bash
 notepad .env
 ```
 
 Start appen:
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 Åbn `http://localhost:8080` i browseren.
@@ -491,13 +469,12 @@ Containerne genstarter automatisk fordi `docker-compose.yml` har `restart: unles
 
 | Kommando | Beskrivelse |
 |----------|-------------|
-| `docker-compose up -d` | Start appen |
-| `docker-compose down` | Stop appen |
-| `docker-compose up -d --build` | Genbyg og start |
-| `docker-compose ps` | Tjek status |
-| `docker-compose logs -f` | Se live logs |
-| `docker-compose down -v` | Stop + slet al data |
-| `git pull` | Hent seneste kode |
+| `git pull && ./deploy.sh` | Opdatér: hent seneste kode, byg, start og tjek helbredet |
+| `docker compose up -d` | Start appen |
+| `docker compose down` | Stop appen |
+| `docker compose ps` | Tjek status |
+| `docker compose logs -f` | Se live logs |
+| `docker compose down -v` | Stop + slet al data (også backup'erne) |
 
 **Standard login**: `admin123` — **skift det med det samme!**
 

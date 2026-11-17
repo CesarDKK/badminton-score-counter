@@ -8,9 +8,7 @@ A real-time badminton score tracking system with multi-device support, sponsor s
 
 - **Real-time Score Tracking**: Track scores for multiple courts simultaneously
 - **Multi-Device Sync**: All devices stay in sync via MySQL database
-- **Dual Court Views**:
-  - **Classic View**: Traditional scoring interface
-  - **Court V3 (Bane View)**: Visual court representation with player positioning
+- **Court View (Bane View, V3)**: Visual court representation with player positioning (den klassiske visning er udfaset — kun V3 findes)
 - **Android App**: Native app with WebView for dedicated court displays
 - **Smartwatch View**: Minimalistisk browser-side optimeret til Apple Watch og andre smartwatches
 - **TV Display Mode**: Full-screen display for showing current games
@@ -121,13 +119,7 @@ A real-time badminton score tracking system with multi-device support, sponsor s
 - **TV V3 Screensaver Fix**: Fixed a blank screen issue when no active match was present — screensaver/sponsor slideshow CSS was missing after the redesign
 - **Database Defaults Fix**: `init.sql` defaults for `court_version` and `tv_version` corrected to `'v3'` (were incorrectly set to `'v2'`)
 
-**Upgrading from 1.7.0:**
-```bash
-git pull
-docker-compose down
-docker-compose up -d --build
-```
-Run any new migration files in `backend/migrations/` after rebuilding (see migration list below).
+**Opdatering:** `git pull` og `./deploy.sh` — migrationerne kører af sig selv (se [Deploying Updates](#deploying-updates)).
 
 ---
 
@@ -180,13 +172,7 @@ Run any new migration files in `backend/migrations/` after rebuilding (see migra
 - **Security**: Login attempts limited to 5 per 15 minutes
 - **Dependencies**: Added `express-rate-limit` for rate limiting functionality
 
-**Upgrading from previous versions:**
-```bash
-git pull
-docker-compose down
-docker-compose up -d --build
-```
-The `--build` flag ensures all new dependencies are installed automatically.
+**Opdatering:** `git pull` og `./deploy.sh` (se [Deploying Updates](#deploying-updates)).
 
 ## 📋 Installationsvejledning
 
@@ -202,7 +188,7 @@ A dedicated Android app is available for court-side displays. The app provides a
 
 ### Features
 
-- **Dynamic Court Version**: Automatically loads Klassisk or Bane view based on server settings
+- **Court View**: Loads the court page (Bane View, V3) for the configured court
 - **Fullscreen Mode**: Immersive display without navigation bars
 - **Keep Screen On**: Prevents screen from sleeping during matches (10-minute timeout)
 - **Navigation Lock**: Prevents accidental navigation away from court page
@@ -248,17 +234,7 @@ storeFile=../path/to/keystore.jks
 
 ## 🏸 Court Views
 
-The app offers two court display modes, selectable in Admin → Settings:
-
-### Klassisk View (Classic)
-Traditional scoring interface optimized for quick score entry. Best for simple, fast-paced scoring.
-
-**Features:**
-- Large score displays
-- Quick +1 buttons
-- Timer and set tracking
-- Player name inputs
-- Doubles/singles toggle
+Banesiden findes kun som Bane View (V3); den klassiske visning og valget i Indstillinger er udfaset (juli 2026).
 
 ### Bane View (Court V3)
 Visual court representation showing player positions and serving zones.
@@ -301,383 +277,52 @@ This prevents accidental changes during tournaments while keeping essential cont
 
 ## Quick Start
 
-### Prerequisites
+Kræver Git og Docker med Compose v2 (`docker compose`). Trin for trin, også Windows: **[INSTALL.md](INSTALL.md)**.
 
-- Docker and Docker Compose installed
-- Git installed
-
-### Installation
-
-1. Clone the repository:
 ```bash
-git clone <your-repo-url>
-cd badminton-app
+git clone https://github.com/CesarDKK/badminton-score-counter.git
+cd badminton-score-counter
+./deploy.sh
 ```
 
-2. Create environment file:
-```bash
-cp .env.example .env
-```
+`deploy.sh` sørger selv for `.env` (via `scripts/ensure-env.sh` — ingen manuel redigering), bygger og starter alle tjenester og venter på, at backenden svarer sundt.
 
-3. Edit `.env` and set your passwords and secrets:
-```env
-MYSQL_ROOT_PASSWORD=your_secure_root_password
-MYSQL_PASSWORD=your_secure_db_password
-JWT_SECRET=your_jwt_secret_min_32_chars
-```
-
-4. Start the application:
-```bash
-docker-compose up -d
-```
-
-5. Access the application:
-- **Main App**: http://localhost:8080
-- **Backend API**: http://localhost:3000 (internal use)
+- **Appen**: http://localhost:8080 (og port 80)
+- **Backendens API**: kun internt (bundet til `127.0.0.1:3000`); udefra går alt gennem nginx
 
 ### First Time Setup
 
-1. Open http://localhost:8080
-2. Set the number of courts you want to track
-3. Click on "Admin" and log in with default password: `admin123`
-4. **IMPORTANT**: Change the admin password immediately in Admin > Settings
-
-## Complete Beginner's Guide to Docker Deployment
-
-### What is Docker?
-
-Docker is a tool that packages your application with everything it needs (code, database, web server) into "containers" - think of them as lightweight virtual machines. This means the app will work the same way on any computer.
-
-### Step 1: Install Docker Desktop
-
-**Windows:**
-1. Download Docker Desktop from: https://www.docker.com/products/docker-desktop
-2. Run the installer (DockerDesktop.exe)
-3. Follow the installation wizard
-4. Restart your computer when prompted
-5. Open Docker Desktop - you'll see a whale icon in your system tray when it's running
-6. Wait for "Docker Desktop is running" message
-
-**Mac:**
-1. Download Docker Desktop for Mac from: https://www.docker.com/products/docker-desktop
-2. Open the .dmg file and drag Docker to Applications
-3. Launch Docker from Applications
-4. Grant permissions when asked
-5. Wait for Docker to start (whale icon in menu bar)
-
-**Linux:**
-- Follow instructions at: https://docs.docker.com/engine/install/
-
-### Step 2: Verify Docker is Working
-
-Open a terminal/command prompt and run:
-```bash
-docker --version
-docker-compose --version
-```
-
-You should see version numbers. If you get "command not found", Docker isn't installed correctly.
-
-### Step 3: Get the Code
-
-**Option A: If you have Git installed**
-```bash
-# Open terminal/command prompt and run:
-git clone https://github.com/CesarDKK/badminton-score-counter.git
-cd badminton-score-counter
-```
-
-**Option B: Without Git**
-1. Go to: https://github.com/CesarDKK/badminton-score-counter
-2. Click green "Code" button → "Download ZIP"
-3. Extract the ZIP file
-4. Open terminal/command prompt
-5. Navigate to the extracted folder:
-   ```bash
-   # Windows example:
-   cd C:\Users\YourName\Downloads\badminton-score-counter
-
-   # Mac/Linux example:
-   cd ~/Downloads/badminton-score-counter
-   ```
-
-### Step 4: Configure Environment Variables
-
-**Windows:**
-```bash
-copy .env.example .env
-notepad .env
-```
-
-**Mac/Linux:**
-```bash
-cp .env.example .env
-nano .env
-```
-
-Edit the file and change these values to something secure:
-```env
-MYSQL_ROOT_PASSWORD=MySecurePassword123!
-MYSQL_PASSWORD=AnotherSecurePass456!
-JWT_SECRET=ThisIsMyVeryLongSecretKeyForJWTTokens32CharsMin
-```
-
-**Important:**
-- Use strong passwords (no simple passwords like "password123")
-- JWT_SECRET must be at least 32 characters long
-- Save the file and close the editor
-
-### Step 5: Start the Application
-
-In the terminal (make sure you're in the badminton-score-counter folder):
-
-```bash
-docker-compose up -d
-```
-
-**What this command does:**
-- `docker-compose` - Uses the docker-compose.yml file to start multiple containers
-- `up` - Start the services
-- `-d` - Run in background (detached mode)
-
-**First time running:** This will take 5-10 minutes because Docker needs to:
-1. Download the base images (MySQL, Node.js, Nginx)
-2. Build your custom containers
-3. Start the database and initialize tables
-4. Start the backend and frontend
-
-You'll see lots of text scrolling - this is normal!
-
-### Step 6: Check if Everything is Running
-
-```bash
-docker-compose ps
-```
-
-You should see 3 services running:
-- `badminton-app-mysql-1` (database)
-- `badminton-app-backend-1` (API server)
-- `badminton-app-frontend-1` (web server)
-
-All should show "Up" status.
-
-### Step 7: Access Your Application
-
-Open your web browser and go to:
-```
-http://localhost:8080
-```
-
-You should see the Badminton Counter landing page!
-
-### Step 8: Initial Setup
-
-1. Select how many courts you want (e.g., 4)
-2. Click "Admin Panel" button
-3. Login with password: `admin123`
-4. **IMMEDIATELY** go to Admin → Change Password and set a new password
-5. Start using the app!
-
-### Common Docker Commands
-
-**View running containers:**
-```bash
-docker-compose ps
-```
-
-**View logs (helpful for troubleshooting):**
-```bash
-# All services
-docker-compose logs
-
-# Just backend
-docker-compose logs backend
-
-# Just database
-docker-compose logs mysql
-
-# Follow logs in real-time (Ctrl+C to stop)
-docker-compose logs -f
-```
-
-**Stop the application:**
-```bash
-docker-compose down
-```
-
-**Start again:**
-```bash
-docker-compose up -d
-```
-
-**Restart after making code changes:**
-```bash
-docker-compose down
-docker-compose up -d --build
-```
-
-**Remove everything (including data - careful!):**
-```bash
-docker-compose down -v
-```
-
-### Troubleshooting for Beginners
-
-**Problem: "Port already in use" error**
-
-Another program is using port 8080 or 3000.
-
-Solution:
-```bash
-# Windows - check what's using the port
-netstat -ano | findstr :8080
-
-# Mac/Linux
-lsof -i :8080
-
-# Kill the process or change the port in docker-compose.yml
-```
-
-**Problem: "Cannot connect to Docker daemon"**
-
-Docker Desktop isn't running.
-
-Solution:
-- Open Docker Desktop application
-- Wait for it to fully start (green light in bottom left)
-- Try the command again
-
-**Problem: Application shows error or blank page**
-
-Database might still be initializing.
-
-Solution:
-```bash
-# Check backend logs
-docker-compose logs backend
-
-# Wait 30-60 seconds for MySQL to initialize
-# Look for "ready for connections" in MySQL logs
-docker-compose logs mysql
-```
-
-**Problem: Changes not appearing**
-
-Browser cache issue.
-
-Solution:
-- Hard refresh: Ctrl+Shift+R (Windows) or Cmd+Shift+R (Mac)
-- Or open in incognito/private window
-
-**Problem: Upload images failing**
-
-Permissions issue on uploads folder.
-
-Solution:
-```bash
-# Windows (in PowerShell as Administrator)
-docker exec badminton-app-backend-1 mkdir -p /app/uploads
-docker exec badminton-app-backend-1 chmod 777 /app/uploads
-
-# Mac/Linux
-docker exec badminton-app-backend-1 mkdir -p /app/uploads
-docker exec badminton-app-backend-1 chmod 777 /app/uploads
-```
-
-### Where is My Data Stored?
-
-Your data is stored in Docker volumes (persistent storage):
-- **Database:** All scores, courts, history
-- **Uploads:** Sponsor images
-
-Even if you stop the containers, your data is safe. It only gets deleted if you run `docker-compose down -v` (the `-v` flag removes volumes).
-
-### Accessing from Other Devices (Same Network)
-
-Want to access from tablets/phones on the same WiFi?
-
-1. Find your computer's IP address:
-   ```bash
-   # Windows
-   ipconfig
-   # Look for "IPv4 Address" (usually 192.168.x.x)
-
-   # Mac/Linux
-   ifconfig
-   # Look for inet address (usually 192.168.x.x)
-   ```
-
-2. On other devices, open browser and go to:
-   ```
-   http://192.168.x.x:8080
-   ```
-   (Replace x.x with your actual IP numbers)
-
-3. Make sure your firewall allows connections on port 8080
-
-### Next Steps
-
-Once everything is running:
-- Test scoring on a court
-- Check the TV display updates in real-time
-- Try uploading sponsor images
-- Explore the admin panel
-- View match history
-
-If you run into issues, check the logs with `docker-compose logs` and look for error messages.
+1. Åbn http://localhost:8080
+2. Vælg antal baner
+3. Log ind under "Admin" med standardkoden `admin123` (gælder den lokale/demo-databasen)
+4. **Skift adgangskoden med det samme** under Admin → Indstillinger
+
+Klubber på egne subdomæner oprettes i super-admin (`admin.<domæne>`); første login er `superadmin` / `superadmin123`, og koden skal skiftes ved første login.
 
 ## Architecture
 
+### Tjenester (docker-compose.yml)
+
+| Tjeneste (container) | Hvad | Port |
+|---|---|---|
+| `mysql` (badminton-mysql) | MySQL 8.4: demo-/standarddatabasen `badminton_counter`, `badminton_master`, én database pr. klub og `football_tournament` | `127.0.0.1:3306` |
+| `backend` (badminton-backend) | Node 22 + Express: API, uploads, baggrundsjob, migrationer ved opstart | `127.0.0.1:3000` |
+| `frontend` (badminton-frontend) | nginx: alle statiske sider (app, marketing, statistik, planner m.fl.) og proxy til backenderne | `80`, `8080` |
+| `football-db-init` | Engangsjob: opretter football-databasen og -brugeren, stopper bagefter | — |
+| `football-backend`, `football-frontend` | Football-modulet (footballapp.dk), Node 22 + nginx | kun internt |
+| `stats-backend` (badminton-stats) | Klubstatistik (statistik.badmintonapp.dk), Node 22 | kun internt |
+| `planner-solver` | Planner-løseren (Python 3.12 + OR-Tools CP-SAT) bag planner.badmintonapp.dk | kun internt |
+| `backup` (badminton-backup) | Fuld backup af alle databaser og uploads én gang i døgnet (se [Docker Volumes](#docker-volumes)) | — |
+
+Sundhed: `GET /health` på backenden (bruges af Docker og `deploy.sh`) og den offentlige `GET /api/health` gennem nginx (200/503, til overvågning udefra).
+
 ### Automated Background Tasks
 
-The backend runs scheduled tasks using `node-cron`:
+Backenden kører sine faste job med `node-cron` (`backend/scheduler.js`), bl.a.:
 
-1. **Midnight Court Reset** (Daily at 00:00 Europe/Copenhagen)
-   - Clears all game states
-   - Sets all courts to inactive
-   - Fresh start for each day
-
-2. **Sponsor Expiration Check** (Hourly at minute 0)
-   - Deactivates sponsor images past their expiration date
-   - Ensures expired sponsorships don't display
-   - Runs even when TV displays are off
-
-**Hybrid Expiration Strategy:**
-- On-demand: Checked on every `/api/sponsors/images` request (max 10 sec delay for TV)
-- Scheduled: Hourly background check as safety net
-
-### Three-Tier System
-
-```
-┌─────────────────────────────────────────┐
-│         Frontend (Nginx)                │
-│  - Serves static HTML/CSS/JS            │
-│  - Proxies /api/* to backend            │
-│  - Proxies /uploads/* to backend        │
-│  Port: 8080                             │
-└─────────────────────────────────────────┘
-                   │
-                   ▼
-┌─────────────────────────────────────────┐
-│      Backend (Node.js + Express)        │
-│  - REST API endpoints                   │
-│  - JWT authentication                   │
-│  - Image upload & processing (Sharp)    │
-│  - File storage management              │
-│  Port: 3000                             │
-└─────────────────────────────────────────┘
-                   │
-                   ▼
-┌─────────────────────────────────────────┐
-│         Database (MySQL 8.4)            │
-│  - Courts configuration                 │
-│  - Game states                          │
-│  - Match history                        │
-│  - Sponsor metadata                     │
-│  - Settings                             │
-│  Port: 3306 (internal)                  │
-└─────────────────────────────────────────┘
-```
+- Nulstilling af banerne ved midnat (Europe/Copenhagen) og timevis deaktivering af udløbne sponsorbilleder
+- Holdkamp- og turneringssynkronisering, planner- og livestream-vagter (hvert minut eller oftere)
+- Ugentlig automatisk backup af hver klub (mandag kl. 02:00) og natlig oprydning
 
 ### Database Schema
 
@@ -764,7 +409,7 @@ All admin endpoints require JWT token in `Authorization: Bearer <token>` header.
 - Field name: `images` (supports multiple files, max 10)
 - Field name: `type` (slideshow/court)
 - Max file size: 10MB per image
-- Supported formats: JPG, PNG, GIF
+- Supported formats: JPG, PNG, GIF, WebP (kontrolleret på filens indhold; forkert type giver 400)
 - Images automatically resized to max 1920x1080 (slideshow) or 1920x216 (court banners)
 - EXIF rotation applied automatically
 - New images default to active with no expiration
@@ -792,88 +437,59 @@ All admin endpoints require JWT token in `Authorization: Bearer <token>` header.
 
 ## Environment Variables
 
-### Required Variables
+Hemmelighederne står i `.env` (i `.gitignore`), som `deploy.sh` → `scripts/ensure-env.sh` selv opretter og udfylder: værdier, der står der, røres aldrig; mangler de på en kørende installation, hentes de fra containerne; ellers genereres de — men kun på en frisk installation. Skabelonen er `.env.example`.
 
-**MYSQL_ROOT_PASSWORD**: MySQL root password (used by Docker)
+**Påkrævet** (compose stopper med en besked, hvis én mangler): `MYSQL_ROOT_PASSWORD`, `MYSQL_PASSWORD`, `JWT_SECRET` (også nøglen til de krypterede hemmeligheder i databasen — skift den aldrig i hånden), `FOOTBALL_DB_PASSWORD`, `FOOTBALL_JWT_SECRET`.
 
-**MYSQL_PASSWORD**: Application database password
-
-**JWT_SECRET**: Secret key for JWT token signing (minimum 32 characters)
-
-### Optional Variables
-
-**MAX_FILE_SIZE**: Maximum upload file size in bytes (default: 10485760 = 10MB)
-
-**NODE_ENV**: Environment mode (development|production)
+**Valgfri**: `YOUTUBE_CLIENT_ID`/`YOUTUBE_CLIENT_SECRET` (indtastes normalt i super-admin), `PLANNER_SOLVER_*`, `BACKUP_INTERVAL_HOURS`/`BACKUP_RETENTION_DAYS` (standard 24 og 14), `MYSQL_MAX_CONNECTIONS` (standard 300). `MAX_FILE_SIZE` (10485760 = 10 MB) og `APP_DOMAIN` (i `installation.env`) er sat i compose.
 
 ## Docker Volumes
 
-The application uses persistent volumes for data storage:
+| Volume | Indhold |
+|---|---|
+| `mysql_data` | Alle MySQL-databaser |
+| `uploads_data` | Badmintons uploads (sponsorbilleder, livestream-logoer, logo-biblioteket) |
+| `football_uploads` | Football-modulets uploads |
+| `club_backups` | Klubbernes automatiske backups (gzippet JSON) |
+| `backups` | Den fulde backup (`db-*.sql.gz` + `uploads-*.tar.gz`) |
+| `stats_cache` | Statistikkens cache |
 
-- **mysql_data**: MySQL database files
-- **uploads_data**: Uploaded sponsor images
+Volumenavnene får compose-projektets navn foran (mappenavnet), fx `badminton-score-counter_backups` — find dem med `docker volume ls`.
 
-To backup data:
-```bash
-# Backup database
-docker-compose exec mysql mysqldump -u badminton_user -p badminton_app > backup.sql
+Backup sker af sig selv i tre lag:
 
-# Backup uploads
-docker cp badminton-app-backend-1:/app/uploads ./uploads-backup
-```
+- **Fuld backup** (`backup`-tjenesten): alle databaser og alle uploads én gang i døgnet, beholdes i 14 dage. Status under super-admin → Serverens helbred.
+- **Klubbernes automatiske backup**: hver mandag kl. 02:00 (de 4 seneste beholdes) og før hver gendannelse (de 4 seneste) — kan hentes og gendannes under Indstillinger → Backup & Gendannelse og i super-admin.
+- **Download**: klubbens admin og super-admin kan hente en backup-fil og gendanne fra fil.
 
-To restore data:
-```bash
-# Restore database
-docker-compose exec -T mysql mysql -u badminton_user -p badminton_app < backup.sql
-
-# Restore uploads
-docker cp ./uploads-backup/. badminton-app-backend-1:/app/uploads
-```
+Gendannelse af den fulde backup: se [INSTALL.md → Backup og gendannelse](INSTALL.md#12-backup-og-gendannelse).
 
 ## Tests
 
-Der er to slags tests:
-
-| Type | Hvor | Kræver | Kører |
-|------|------|--------|-------|
-| **Unit-tests** | `backend/tests/unit/`, `stats/backend/tests/unit/` | Kun Node — ingen database, intet netværk | Automatisk i GitHub Actions ved hvert push (`.github/workflows/tests.yml`) |
-| **Integrationstests** | `backend/tests/*.test.js` | En kørende server + database | Manuelt efter deploy |
-
-Unit-testene dækker den logik, hvor en fejl gør mest ondt: auth-modellen (hvem må hvad), upload-validering, migrations-splitteren, tidszoner i holdkamp-hentningen, og statistik-parsning/-aggregering.
+| Type | Hvor | Kører |
+|------|------|-------|
+| **Unit-tests** | `backend/tests/unit/`, `stats/backend/tests/unit/`, `football-app/backend/tests/unit/`, `planner/tests/unit/` (+ planner-løseren i Python og kontrakten JS ↔ Python) | Ingen database eller netværk. GitHub Actions-jobbet `unit` ved hvert push og pull request (`.github/workflows/tests.yml`), sammen med `nginx -t` af konfigurationen |
+| **Integrationstests** | `backend/tests/0*.test.js` og `backend/tests/integration/` (skema, klub-isolation, backup → gendan, uploads m.fl.) | Backenden mod en frisk MySQL 8.4 med opdigtede hemmeligheder. GitHub Actions-jobbet `integration` og lokalt i Docker (kommandoen herunder) |
 
 ```bash
-# Lokalt (kræver Node 18+ og npm install i mappen)
-cd backend && npm run test:unit
-cd stats/backend && npm run test:unit
+# Unit-tests (Node 22 som containerne)
+cd backend && npm ci && npm run test:unit
+cd stats/backend && npm ci && npm run test:unit
+cd football-app/backend && npm ci && npm run test:unit
+cd planner && npm ci && npm run test:unit
 
-# Inde i containerne (uden Node på værtsmaskinen)
-docker exec badminton-backend npm run test:unit
-docker exec badminton-stats npm run test:unit
-
-# Integrationstests mod en kørende stack
-docker exec badminton-backend npm test
+# Integrationstestene lokalt i Docker, fra repoets rod — egen MySQL i hukommelsen,
+# rører hverken den lokale installation eller dens volumes
+docker compose -f backend/tests/integration/compose.yml up --force-recreate --renew-anon-volumes --abort-on-container-exit --exit-code-from tests --attach tests
 ```
+
+Kør ikke `npm test` mod en rigtig installation: de gamle integrationstest (`backend/tests/0*.test.js`) ændrer indstillinger, baner og sponsorbilleder i den database, de rammer. Kør dem med compose-kommandoen ovenfor; `backend/tests/integration/koer.js` nægter at køre mod en MySQL, der allerede har data.
 
 ## Development
 
 ### Running Without Docker
 
-**Backend:**
-```bash
-cd backend
-npm install
-cp .env.example .env
-# Edit .env with your settings
-npm start
-```
-
-**Frontend:**
-Serve the `frontend` directory with any static file server:
-```bash
-cd frontend
-npx http-server -p 8080
-```
+Udvikling og afprøvning sker i Docker (`./deploy.sh` lokalt). Frontenden forventer nginx foran (`/api`, `/uploads` og de andre domæner i `nginx.conf`), og backenden forventer miljøvariablerne fra backend-tjenesten i `docker-compose.yml` (`DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `JWT_SECRET` m.fl.) — der er ingen `backend/.env.example`. Unit-testene kører uden database (se [Tests](#tests)).
 
 ### Project Structure
 
@@ -927,149 +543,29 @@ badminton-app/
 
 ### Making Database Schema Changes
 
-**⚠️ CRITICAL: When adding new database columns or tables, you MUST update BOTH files:**
+Migrationerne kører af sig selv: ved hver opstart kører `backend/config/migrationRunner.js` nye filer i `backend/migrations/` (i navneorden, fx `053_livestream_side.sql`) mod standarddatabasen og alle klubbernes databaser og noterer dem i tabellen `migrations`. Der skal intet køres i hånden.
 
-1. **`backend/init.sql`** - For NEW installations
-   - This file creates the database schema from scratch
-   - Add new columns/tables directly to the CREATE TABLE statements
-   - Example: `ALTER TABLE` → `CREATE TABLE ... new_column TYPE`
-
-2. **`backend/migrations/XXX_description.sql`** - For EXISTING installations
-   - Create a new migration file with the next number (e.g., `004_add_new_feature.sql`)
-   - Use `ALTER TABLE` statements to add columns to existing tables
-   - Include comments explaining the purpose
-   - Example: `ALTER TABLE table_name ADD COLUMN new_column TYPE`
-
-**Why both files?**
-- `init.sql` runs ONLY on fresh installations (first time setup)
-- Migration files run on existing installations to update their schema
-- Without updating `init.sql`, new installations will be missing columns!
-
-**Example workflow:**
-
-If you add a new column `is_active` to the `sponsor_images` table:
-
-```sql
--- backend/init.sql
-CREATE TABLE IF NOT EXISTS sponsor_images (
-  id INT PRIMARY KEY AUTO_INCREMENT,
-  filename VARCHAR(255) UNIQUE NOT NULL,
-  is_active BOOLEAN NOT NULL DEFAULT TRUE,  -- ← ADD HERE
-  ...
-);
-```
-
-```sql
--- backend/migrations/004_add_sponsor_active.sql
-ALTER TABLE sponsor_images
-ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE;
-```
-
-**Running migrations on existing installations:**
-
-The `backend/migrations/` folder is mounted in the MySQL container, making it easy to run migrations:
-
-```bash
-# Option 1: Interactive (connect to MySQL shell)
-docker exec -it badminton-mysql mysql -u badminton_user -p badminton_counter
-
-# In MySQL prompt, run the migration:
-source /docker-entrypoint-initdb.d/migrations/004_add_sponsor_active.sql;
-exit;
-
-# Option 2: One-liner (replace 'password' with your DB password)
-docker exec -i badminton-mysql mysql -u badminton_user -pYOUR_PASSWORD badminton_counter \
-  -e "source /docker-entrypoint-initdb.d/migrations/004_add_sponsor_active.sql"
-```
-
-**Migration folder structure:**
-
-```
-backend/migrations/
-├── 001_add_match_completed.sql
-├── 002_add_sponsor_type.sql
-├── 003_add_sponsor_court_assignments.sql
-├── 004_add_sponsor_active_expiration.sql  # Adds is_active and expiration_date
-├── 005_add_court_version.sql              # Adds court_version to settings
-├── 006_add_tv_version.sql                 # Adds tv_version to settings
-├── 007_add_is_doubles_reset.sql           # Ensures is_doubles resets with court
-└── 008_fix_version_defaults.sql           # Corrects court_version/tv_version defaults to 'v3'
-```
-
-All migration files are automatically available in the container at `/docker-entrypoint-initdb.d/migrations/`.
-
-**Recent Migrations:**
-- **004_add_sponsor_active_expiration.sql**: Adds active/inactive status and automatic expiration for sponsor images
-  - `is_active BOOLEAN NOT NULL DEFAULT TRUE` - Manual visibility control
-  - `expiration_date TIMESTAMP NULL` - Automatic deactivation date
-  - Creates index for efficient filtering
-  - Backwards compatible (existing images set to active, no expiration)
-- **005_add_court_version.sql**: Adds `court_version` column to the settings table
-- **006_add_tv_version.sql**: Adds `tv_version` column to the settings table
-- **007_add_is_doubles_reset.sql**: Ensures `is_doubles` is included in court reset logic
-- **008_fix_version_defaults.sql**: Corrects `court_version` and `tv_version` default values from `'v2'` to `'v3'`
+- Ny tabel eller kolonne: tilføj den både i `backend/init.sql` (nye databaser) og som en ny nummereret migration (eksisterende databaser).
+- En migration, der retter **data** (ikke kun skema), skal også stå i `DATA_MIGRATIONER` i `backend/config/dataMigrationer.js`, så den køres igen, når en ældre backup gendannes.
 
 ## Deploying Updates
 
-When you pull new code changes or make modifications, follow these steps to deploy them:
-
-### For Code Changes (Backend/Frontend)
-
 ```bash
-# 1. Pull latest changes (if from git)
 git pull
-
-# 2. Stop containers
-docker-compose down
-
-# 3. Rebuild and start with new code
-docker-compose up -d --build
-
-# The --build flag ensures Docker rebuilds images with your new code
+./deploy.sh
 ```
 
-### For Database Schema Changes
+`deploy.sh` sikrer `.env` (`scripts/ensure-env.sh`), bygger og starter alle tjenester med commit og byggetidspunkt (vises i super-admin → Serverens helbred), venter højst 120 s på, at backenden svarer sundt på `/health`, tjekker `/api/health` gennem nginx og rydder ubrugte images (aldrig volumes). Migrationerne kører ved backendens opstart. Fejler helbredstjekket, viser scriptet backendens log og slutter med fejlkode.
 
-If the update includes new migration files in `backend/migrations/`:
-
-```bash
-# 1. Deploy the code first (see above)
-docker-compose down
-docker-compose up -d --build
-
-# 2. Check which migrations need to be run
-# Compare migration files with your database state
-
-# 3. Run the new migration
-docker exec -it badminton-mysql mysql -u badminton_user -p badminton_counter
-
-# In MySQL prompt:
-source /docker-entrypoint-initdb.d/migrations/XXX_new_migration.sql;
-exit;
-```
-
-**Important Notes:**
-- `init.sql` only runs on FIRST database creation (new installations)
-- Existing installations MUST run migration files manually
-- Always backup your database before running migrations
-- Test migrations on a development copy first
-
-### Quick Deploy Checklist
-
-- [ ] Backup database: `docker-compose exec mysql mysqldump -u badminton_user -p badminton_counter > backup.sql`
-- [ ] Pull/update code: `git pull` or copy new files
-- [ ] Rebuild containers: `docker-compose down && docker-compose up -d --build`
-- [ ] Run migrations: Check `backend/migrations/` for new files and run them
-- [ ] Verify deployment: Check `/health` endpoint and test functionality
-- [ ] Clear browser cache: Hard refresh (Ctrl+Shift+R) on all devices
+Hard-refresh i browseren efter en opdatering: `Ctrl+Shift+R`.
 
 ## Troubleshooting
 
 ### Application won't start
 
-**Issue**: `docker-compose up` fails
+**Issue**: `./deploy.sh` / `docker compose up` fails
 
-**Solution**: Check if ports 8080 or 3000 are already in use:
+**Solution**: Se loggen (`docker compose logs --tail 200 backend`), og tjek om port 80, 8080 eller 3000 allerede er i brug:
 ```bash
 # Windows
 netstat -ano | findstr :8080
@@ -1086,7 +582,7 @@ lsof -i :3000
 
 **Solution**: Wait for MySQL to fully initialize (can take 30-60 seconds on first run):
 ```bash
-docker-compose logs mysql
+docker compose logs mysql
 # Wait until you see "ready for connections"
 ```
 
@@ -1104,8 +600,8 @@ docker-compose logs mysql
 
 **Solution**: Check backend logs and Nginx configuration:
 ```bash
-docker-compose logs backend
-docker-compose logs frontend
+docker compose logs backend
+docker compose logs frontend
 # Ensure /uploads/ location has ^~ modifier in nginx.conf
 ```
 
@@ -1113,7 +609,7 @@ docker-compose logs frontend
 
 **Issue**: Image upload fails with 413 error
 
-**Solution**: Check `client_max_body_size` in nginx.conf (should be 50M)
+**Solution**: Check `client_max_body_size` in nginx.conf: 50M generelt, 101M for gendan fra fil (`/api/backup/restore` og super-admins restore/logo-pakke). Backenden selv tillader 10 MB pr. billede (5 MB i logo-biblioteket) og 100 MB pr. backup-fil (10 MB på demoen).
 
 ### Scores not syncing
 
@@ -1130,7 +626,7 @@ docker-compose logs frontend
 - **Admin Panel Polling**: Admin overview refreshes every 2.5 seconds (optimized from 1 second)
 - **Database Optimization**: Efficient query batching eliminates N+1 query problems
 - **Image Optimization**: Uploaded images are automatically resized to 1920x1080 max and compressed to 90% quality
-- **Connection Pooling**: Backend uses MySQL connection pool (max 10 connections)
+- **Connection Pooling**: Én MySQL-pulje pr. klub (højst 15 forbindelser, `DB_POOL_SIZE`; ledige lukkes efter 60 s) og en lille til master-databasen
 - **Caching**: Static assets cached for 1 year, API responses not cached
 
 ## Security
@@ -1138,19 +634,18 @@ docker-compose logs frontend
 - **Password Hashing**: Admin password stored with bcrypt (salt rounds: 10)
 - **JWT Authentication**: Protected endpoints require valid JWT token
 - **Rate Limiting**: Protection against brute force and DOS attacks
-  - Login attempts: Max 5 per 15 minutes
-  - Upload operations: Max 10 per 15 minutes
-  - Admin operations: Max 100 per 15 minutes
-  - Public endpoints: Max 200 per 15 minutes
+  - Login (admin/klub-admin): 10 forsøg pr. 5 min pr. IP; super-admin: 5 pr. 15 min
+  - Upload: 20 pr. 5 min pr. IP (lokalt net undtaget)
+  - Ingen grænse på læse-/poll-endpoints (se version 2.5.0)
 - **Input Validation**: All API inputs validated before processing
-- **File Upload Validation**: MIME type and file size checks
+- **File Upload Validation**: type (whitelist), filens indhold (magic bytes) og størrelse; multer 2.x
 - **SQL Injection Prevention**: Parameterized queries only
 - **XSS Prevention**: User input escaped with escapeHtml() on frontend
 - **HTTPS Ready**: Configure reverse proxy (Caddy/Traefik) for production HTTPS
 
 ## License
 
-MIT License - See LICENSE file for details
+MIT (som angivet i `package.json`; der er ingen separat LICENSE-fil)
 
 ## Credits
 

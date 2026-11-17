@@ -15,6 +15,12 @@ function errorHandler(err, req, res, next) {
         return res.status(400).json({ error: 'Uventet fil felt.' });
     }
 
+    // Øvrige fejl fra en upload (mærket i bevarKlub): afkortet, ødelagt eller
+    // afbrudt multipart-krop, manglende feltnavn m.m. — klientens fejl (nr. 58c)
+    if (err.uploadFejl) {
+        return res.status(400).json({ error: 'Uploaden kunne ikke læses — den blev afbrudt eller er ødelagt. Prøv igen.' });
+    }
+
     // Database errors
     if (err.code === 'ER_DUP_ENTRY') {
         return res.status(409).json({ error: 'Duplikat post' });
