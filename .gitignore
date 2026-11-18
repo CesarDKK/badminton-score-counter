@@ -37,3 +37,6 @@ planner/tests/kontrakt/_ud/
 
 # Badminton TV USB-build
 kiosk/ud/
+
+# Den deployede version (deploy.sh skriver den, backenden læser den — nr. 110)
+deploy-info/

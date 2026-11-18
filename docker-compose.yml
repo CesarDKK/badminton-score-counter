@@ -53,10 +53,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
-      # Versionen, super-admin viser (deploy.sh sætter dem; ellers "ukendt")
-      args:
-        GIT_SHA: ${GIT_SHA:-ukendt}
-        BUILD_TIME: ${BUILD_TIME:-}
+      # Ingen build-args med version/tidspunkt (nr. 110): så skiftede imaget ved
+      # hvert deploy, og backenden blev genstartet. Versionen ligger i deploy-info/.
     container_name: badminton-backend
     restart: unless-stopped
     logging: *default-logging
@@ -95,6 +93,10 @@ services:
       # Den fulde backup — kun læsning: backenden læser status.json, så
       # super-admin kan vise, om den natlige dump virker (config/fuldBackup.js)
       - backups:/app/fuld-backup:ro
+      # Den deployede version (nr. 110): deploy.sh skriver deploy-info/version.json,
+      # super-admin viser den. En MAPPE, ikke en fil: en enkelt monteret fil følger
+      # ikke med, når deploy.sh erstatter den. Mangler den, vises "ukendt".
+      - ./deploy-info:/app/deploy-info:ro
     depends_on:
       mysql:
         condition: service_healthy

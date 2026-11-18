@@ -2092,9 +2092,11 @@ function renderHelbredFliser(d) {
     if (be) {
         const m = be.migrationer || { medFejl: 0, databaser: [], antal: 0 };
         const info = [`startet ${escapeHtml(formatDate(be.startet))}`];
-        // Den deployede version (nr. 54): commit og byggetidspunkt fra deploy.sh
+        // Den deployede version (nr. 54, 110): commit og tidspunkt for seneste
+        // deploy (deploy.sh). Backenden kan være startet før — den genstartes kun,
+        // når dens image er ændret
         const v = l.version;
-        if (v) info.push(`version ${escapeHtml(v.sha)}${v.bygget ? ` · bygget ${escapeHtml(formatDate(v.bygget))}` : ''}`);
+        if (v) info.push(`version ${escapeHtml(v.sha)}${v.deployet ? ` · deployet ${escapeHtml(formatDate(v.deployet))}` : ''}`);
         if (be.klarEfterSek !== null) info.push(`klar efter ${shTal(be.klarEfterSek)} s${be.forsoeg > 1 ? ` (${be.forsoeg} forsøg — databasen var længe om at svare)` : ''}`);
         if (!be.klar) info.push(`Opstarten er ikke færdig (${be.forsoeg} forsøg)${be.fejl ? `: ${escapeHtml(be.fejl)}` : ''} — ingen baggrundsjob kører endnu`);
         if (m.medFejl) {

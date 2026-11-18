@@ -5,3 +5,5 @@
 **/*.TP
 **/*.tp
 .env
+# Den deployede version hører ikke til i noget image (nr. 110)
+deploy-info
