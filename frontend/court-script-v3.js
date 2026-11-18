@@ -3408,15 +3408,22 @@ async function serverSyncTick(reason) {
             if (myMatch && parentTournament) {
                 // Første gang vi ser tildelingen — populér gameState og lås id'erne fast
                 if (!assignedTournamentMatchId) {
+                    // Står en anden kamps afgjorte resultat stadig på tabletten ("Kamp vundet"),
+                    // bindes først efter "Ryd banen" — ellers kom kampens navne over resultatet
+                    if (gameState.matchCompleted && sideOrientering(...turneringSideNavne(myMatch)) === null) return;
                     assignedTournamentMatchId = myMatch.id;
                     activeTournament = parentTournament;
                     applyTournamentMatchToCourt(myMatch);
+                } else if (myMatch.id !== assignedTournamentMatchId && turneringskampKanSkiftes()) {
+                    bindOmTilTurneringskamp(myMatch, parentTournament);
                 } else {
                     // Allerede tildelt — opdatér state-referencen så reportTournamentResult
                     // har frisk data, og sync navne ind hvis admin har redigeret dem.
                     activeTournament = parentTournament;
                     const sidesHaveBeenSwitched = gameState.sidesManuallySwitched || gameState.player1.games > 0 || gameState.player2.games > 0;
-                    if (!sidesHaveBeenSwitched) {
+                    // Kun kampens egne navne — en anden kamp på banen (byttet, mens
+                    // der tælles) må ikke skrive sine navne over den igangværende
+                    if (!sidesHaveBeenSwitched && myMatch.id === assignedTournamentMatchId) {
                         const namesChanged =
                             (myMatch.side1_player1 && gameState.player1.name !== myMatch.side1_player1) ||
                             (myMatch.side1_player2 && gameState.player1.name2 !== myMatch.side1_player2) ||
@@ -3432,6 +3439,8 @@ async function serverSyncTick(reason) {
                         }
                     }
                 }
+            } else if (assignedTournamentMatchId && turneringskampKanSkiftes()) {
+                await slipTurneringskamp();
             }
         } catch (error) {
             console.error('Failed to sync tournament:', error);
@@ -3947,6 +3956,44 @@ function applyTournamentMatchToCourt(match) {
     if (!fortsaetter) gameState.sidesManuallySwitched = false;
     updateDisplay();
     saveGameState();
+}
+
+// Admin har byttet banens kamp (eller taget den af), før der blev talt (rest af
+// nr. 105). Før fulgte tabletten kun navnene og blev ved den gamle kamp og dens
+// single/double, til den blev genindlæst. Kun når tabletten står helt i ro: ingen
+// kamp i gang, ingen pause, dialog eller gemning undervejs, og ikke "ser med"/QR.
+function turneringskampKanSkiftes() {
+    const p1 = gameState.player1, p2 = gameState.player2;
+    return !serMed && !isMatchSessionToken() && !kampStartet() && !gameState.matchCompleted &&
+        !p1.score && !p2.score && !p1.games && !p2.games &&
+        !(gameState.setScoresHistory || []).length && !gameState.restBreakActive &&
+        !_kampSlutVist && !_fortsaetSpoerges && !resultForm.open &&
+        !isSaving && !pendingSave && !saveTimeout;
+}
+
+// Ny kamp på banen: som en første tildeling, men fra en tom kamp, så intet fra
+// den gamle hænger ved (fx makkerens navn, når en double byttes til en single)
+function bindOmTilTurneringskamp(match, turnering) {
+    const [side1, side2] = turneringSideNavne(match);
+    assignedTournamentMatchId = match.id;
+    activeTournament = turnering;
+    nulstilKamp({ navne: { p1: side1[0], p1b: side1[1], p2: side2[0], p2b: side2[1] }, isDoubles: !!match.doubles });
+    applyTournamentMatchToCourt(match);
+}
+
+// Banen har ingen turneringskamp mere (W.O. og ryddet, eller taget af): glem
+// koblingen og vis banen, som serveren har den — en tom bane som efter "Nulstil"
+async function slipTurneringskamp() {
+    const loaded = await api.getGameState(courtId);
+    if (!assignedTournamentMatchId || !turneringskampKanSkiftes()) return;
+    const p1 = loaded.player1 || {}, p2 = loaded.player2 || {};
+    if (!loaded.matchStartTime && !p1.score && !p2.score && !p1.games && !p2.games) {
+        await adoptServerReset(loaded);
+    } else {
+        assignedTournamentMatchId = null;
+        activeTournament = null;
+        runServerSync('poll');
+    }
 }
 
 async function reportTournamentResult(winnerTeam, setScores, tournamentId, matchId) {

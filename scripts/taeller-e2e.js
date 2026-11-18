@@ -2,7 +2,8 @@
 // End-to-end for tælleren: den rigtige tablet-side (court-v3.html) mod en kørende
 // installation med gemninger slået TIL — adhoc-kampe (single 21/30 og double
 // 15/21 med pauser, fortryd, sideskift og genindlæsning), holdkamp (4 spillere,
-// 6 delkampe til 3-3 og golden set) og turnering (single og double). Opsætningen
+// 6 delkampe til 3-3 og golden set) og turnering (single og double, admin bytter
+// banens kamp, W.O. og to kampe i træk). Opsætningen
 // sker gennem API'et, som admin gør det, og resultaterne tjekkes i game_states,
 // kamphistorikken, holdkampen, turneringen og på TV-siden.
 //
@@ -14,6 +15,9 @@
 //     -e BT_URL=http://host.docker.internal:8080 -e BT_TOKEN="$T" --add-host=host.docker.internal:host-gateway \
 //     node:22-alpine sh -c "apk add -q chromium nss freetype harfbuzz ttf-freefont && mkdir -p /tmp/pw && cd /tmp/pw \
 //       && npm i -s playwright && cd /repo && node scripts/taeller-e2e.js"
+//
+// Eller helt isoleret (egen database i hukommelsen, ingen porte, rører ikke den
+// lokale installation) — se scripts/e2e-isoleret/compose.yml.
 //
 // Bruger installationens sidste bane. Kræver, at der ikke er en aktiv holdkamp
 // eller turnering (testens egne fra en afbrudt kørsel ryddes). Det, der laves,
@@ -311,6 +315,177 @@ async function main() {
     check('turneringskampe står ikke i kamphistorikken', (await historik()).length === histFoerTu);
     await api(`/api/tournaments/${tu.id}/finish`, 'PUT', {}, true);
     check('turneringen afsluttet', (await api('/api/tournaments/active')).length === 0);
+
+    // ───────── 5. Turnering: admin bytter banens kamp — tabletten binder om uden genindlæsning (rest af nr. 105)
+    console.log('\n5. Turnering: bytte, W.O. og to kampe i træk');
+    // Som dialogens knap: "Kamp vundet" lukkes, før banen ryddes. rydBane() kalder
+    // performClearCourtNow direkte, så dialogen blev stående — og så må tabletten
+    // ikke binde om (den viser stadig forrige kamps resultat)
+    const lukKampVundet = () => page.evaluate(() => { if (_kampSlutVist) hideMessage(); });
+    const rydSomKnappen = async () => { await lukKampVundet(); await rydBane(); };
+    await lukKampVundet();
+    await nyKamp({ gameMode: '15', p1: 'Spiller 1', p2: 'Spiller 2' });
+    const tu5 = await api('/api/tournaments', 'POST', { name: 'E2E-turnering' }, true);
+    const kamp5 = async (label, a1, b1, a2, b2) => {
+        const d = !!(a2 && b2);
+        const m = await api(`/api/tournaments/${tu5.id}/matches`, 'POST',
+            { label, ...(d ? { doubles: true } : {}), side1Player1: a1, side2Player1: b1, ...(d ? { side1Player2: a2, side2Player2: b2 } : {}) }, true);
+        return { id: m.id, d, a1, b1, a2, b2 };
+    };
+    const kampen = async (m) => (await api('/api/tournaments/active')).find(x => x.id === tu5.id).matches.find(x => x.id === m.id);
+    // Som admins "Sæt på bane" (tildelTurneringskampBane): kampen, banens
+    // single/double og navnene (uden versionstjek)
+    let adminNavne = 0;
+    const saetPaa = async (m, { force = false } = {}) => {
+        await api(`/api/tournaments/${tu5.id}/matches/${m.id}`, 'PUT', { courtNumber: BANE, status: 'active', ...(force ? { force: true } : {}) }, true);
+        await api(`/api/courts/${BANE}`, 'PUT', { isActive: true, isDoubles: m.d }, true);
+        adminNavne++;
+        await api(`/api/game-states/${BANE}?skipAutoActive=true`, 'PUT', {
+            player1: { name: m.a1, name2: m.a2 || 'Makker 1' }, player2: { name: m.b1, name2: m.b2 || 'Makker 2' }
+        }, true);
+    };
+    const bundetTil = (m, ms) => vent(`tabletten binder ${m.a1} vs ${m.b1}`, () => page.evaluate((id) => assignedTournamentMatchId === id, m.id), ms);
+    const fejlFoer5 = sidefejl.length;
+    const visesSom = async (m, hvad) => {
+        await sov(800);
+        s = await st();
+        check(`${hvad}: ${m.d ? 'double' : 'single'} med kampens navne på tabletten`, s.isDoubles === m.d && s.setsToWin === 2 &&
+            s.player1.name === m.a1 && s.player2.name === m.b1 &&
+            s.player1.name2 === (m.a2 || 'Makker 1') && s.player2.name2 === (m.b2 || 'Makker 2'), s);
+    };
+    // 2-0 til `vinder` (15-5, 15-8), og resultatet skal lande på kampen
+    const spilTilEnde = async (m, vinder, taber, hvad, { meldes = true } = {}) => {
+        if (!(await st()).servingPlayer) { await page.evaluate(() => selectServer(1)); await sov(200); }
+        await spilSaet(vinder, taber, 5); await skipPause(); await sov(300);
+        await spilSaet(vinder, taber, 8);
+        check(`${hvad}: afsluttet på tabletten`, (await st()).matchCompleted);
+        if (!meldes) return;
+        const f = await vent(`${hvad}: meldt færdig`, async () => { const mm = await kampen(m); return mm.status === 'finished' ? mm : null; });
+        const vSide = vinder === m.a1 ? 1 : 2;
+        check(`${hvad}: resultatet på kampen (side ${vSide}, 15-5 og 15-8)`, f.winner_team === vSide && harSaet(f.set_scores, 15, 5) && harSaet(f.set_scores, 15, 8), f);
+    };
+    const uroert = async (m, hvad) => {
+        const mm = await kampen(m);
+        check(`${hvad}: ingen resultat`, !mm.winner_team && !mm.set_scores, mm);
+        return mm;
+    };
+
+    // (a) Ikke-startet single byttes til double
+    const sA = await kamp5('HS a', 'Mads', 'Niels');
+    const dA = await kamp5('MD a', 'Ole', 'Rasmus', 'Pia', 'Sara');
+    await saetPaa(sA); await bundetTil(sA); await visesSom(sA, '(a) single sat på');
+    await page.evaluate(() => { window.__ikkeGenindlaest = true; });
+    await saetPaa(dA); await bundetTil(dA); await visesSom(dA, '(a) byttet til double');
+    check('(a) uden genindlæsning', await page.evaluate(() => window.__ikkeGenindlaest === true));
+    const srvA = await vent('(a) serveren har doublens navne', async () => {
+        const g = await serverState(); return g.isDoubles && g.player1.name2 === 'Pia' && g.player2.name2 === 'Sara' ? g : null;
+    });
+    check('(a) banen på serveren: doublens navne', srvA.player1.name === 'Ole' && srvA.player2.name === 'Rasmus', srvA);
+    await spilTilEnde(dA, 'Ole', 'Rasmus', '(a) doublen');
+    check('(a) den gamle single står som ventende', (await uroert(sA, '(a) singlen')).status === 'pending');
+    await rydSomKnappen();
+
+    // (b) Double byttes til single — ingen gammel makker bliver hængende
+    const dB = await kamp5('MD b', 'Tine', 'Vagn', 'Ulf', 'Yrsa');
+    const sB = await kamp5('HS b', 'Zenia', 'Åge');
+    await saetPaa(dB); await bundetTil(dB); await visesSom(dB, '(b) double sat på');
+    await saetPaa(sB); await bundetTil(sB); await visesSom(sB, '(b) byttet til single');
+    const srvB = await vent('(b) serveren har singlen', async () => {
+        const g = await serverState(); return !g.isDoubles && g.player1.name === 'Zenia' ? g : null;
+    });
+    check('(b) banen på serveren: single uden doublens makkere', srvB.player1.name2 !== 'Ulf' && srvB.player2.name2 !== 'Yrsa', srvB);
+    await spilTilEnde(sB, 'Åge', 'Zenia', '(b) singlen');
+    check('(b) den gamle double står som ventende', (await uroert(dB, '(b) doublen')).status === 'pending');
+    await rydSomKnappen();
+
+    // (c) En kamp i gang bindes ikke om.
+    // (c1) Der er talt: serveren afviser admins bytte (409), kampen tælles færdig og meldes rigtigt
+    const sC1 = await kamp5('HS c1', 'Ib', 'Jytte');
+    const dC = await kamp5('MD c', 'Bent', 'Dan', 'Cille', 'Eva');
+    await saetPaa(sC1); await bundetTil(sC1); await visesSom(sC1, '(c1) single sat på');
+    await page.evaluate(() => selectServer(1)); await sov(200);
+    await pointTil('Ib'); await sov(800);
+    let afvist = null;
+    try { await saetPaa(dC); } catch (e) { afvist = e.message; }
+    check('(c1) serveren afviser byttet, mens der tælles (409)', /→ 409/.test(afvist || ''), afvist);
+    await sov(1500);
+    s = await st();
+    check('(c1) tabletten er uændret: singlen, 1-0', await page.evaluate((id) => assignedTournamentMatchId === id, sC1.id) &&
+        !s.isDoubles && s.player1.name === 'Ib' && s.player1.score === 1, s);
+    await spilTilEnde(sC1, 'Ib', 'Jytte', '(c1) singlen');
+    await rydSomKnappen();
+    // (c2) "Start kamp" trykket, intet talt (0-0, uret ikke gemt): serveren regner
+    // banen som i gang — admin får "Der spilles på banen" (409). Bekræfter admin
+    // (force), ryddes banen med 'reset': tabletten nulstiller, slipper singlen og
+    // binder doublen. Før gik byttet igennem uden at spørge, og singlens resultat
+    // landede ingen steder
+    const sC = await kamp5('HS c2', 'Ærø', 'Øvig');
+    await saetPaa(sC); await bundetTil(sC); await visesSom(sC, '(c2) single sat på');
+    await page.evaluate(() => selectServer(1)); await sov(200);
+    await page.evaluate(() => startMatch()); await sov(800);
+    check('(c2) kampen er startet ved 0-0', !!(await st()).matchStartTime && !!(await serverState()).matchStartTime);
+    let afvist2 = null;
+    try { await saetPaa(dC); } catch (e) { afvist2 = e.message; }
+    check('(c2) serveren afviser byttet efter "Start kamp" (409 bane_i_gang)', /→ 409/.test(afvist2 || '') && /bane_i_gang/.test(afvist2 || ''), afvist2);
+    await sov(1500);
+    s = await st();
+    check('(c2) tabletten er uændret: singlen, startet', await page.evaluate((id) => assignedTournamentMatchId === id, sC.id) &&
+        !s.isDoubles && s.player1.name === 'Ærø' && !!s.matchStartTime, s);
+    check('(c2) singlen står stadig aktiv, doublen ventende', (await kampen(sC)).status === 'active' && (await kampen(dC)).status === 'pending');
+    // Admin bekræfter
+    await saetPaa(dC, { force: true });
+    await bundetTil(dC, 25000); await visesSom(dC, '(c2) efter bekræftelsen: doublen');
+    s = await st();
+    check('(c2) tabletten har nulstillet: ingen starttid, ingen dialog', !s.matchStartTime && !s.matchCompleted &&
+        !(await page.evaluate(() => _kampSlutVist || _fortsaetSpoerges || resultForm.open)), s);
+    check('(c2) singlen tilbage på listen uden resultat', (await uroert(sC, '(c2) singlen')).status === 'pending');
+    check('(c2) doublen står på banen uden resultat', (await uroert(dC, '(c2) doublen')).status === 'active');
+
+    // (d) W.O. på en ikke-startet kamp: admin gemmer resultatet og rydder banen —
+    // tabletten slipper kampen og står som en ryddet bane; næste kamp bindes og meldes rigtigt
+    await api(`/api/tournaments/${tu5.id}/matches/${dC.id}`, 'PUT', { status: 'finished', rydBane: BANE, winnerTeam: 2, setScores: 'W.O.' }, true);
+    await vent('(d) tabletten slipper kampen', () => page.evaluate(() => assignedTournamentMatchId === null));
+    await sov(800);
+    s = await st();
+    check('(d) ryddet bane på tabletten', !s.isDoubles && s.player1.name === 'Spiller 1' && s.player2.name === 'Spiller 2' &&
+        s.player1.name2 === 'Makker 1' && !s.matchStartTime && !s.matchCompleted && s.player1.score === 0 && s.player1.games === 0, s);
+    check('(d) ingen dialog på tabletten', !(await page.evaluate(() => _kampSlutVist || resultForm.open)));
+    const wo = await kampen(dC);
+    check('(d) W.O. står på doublen', wo.status === 'finished' && wo.winner_team === 2 && wo.set_scores === 'W.O.', wo);
+    const sD = await kamp5('HS d', 'Frode', 'Gerda');
+    await saetPaa(sD); await bundetTil(sD); await visesSom(sD, '(d) næste kamp');
+    await spilTilEnde(sD, 'Gerda', 'Frode', '(d) næste kamp');
+    check('(d) W.O. er uændret', (await kampen(dC)).set_scores === 'W.O.');
+    await rydSomKnappen();
+
+    // (e) Det almindelige forløb, to kampe i træk: den nye kode kaldes aldrig
+    await page.evaluate(() => {
+        window.__nyKode = [];
+        const bindOm = bindOmTilTurneringskamp, slip = slipTurneringskamp;
+        window.bindOmTilTurneringskamp = (...a) => { __nyKode.push('bindOm'); return bindOm(...a); };
+        window.slipTurneringskamp = (...a) => { __nyKode.push('slip'); return slip(...a); };
+    });
+    const sE = await kamp5('HS e', 'Hans', 'Inge');
+    const dE = await kamp5('MD e', 'Jonas', 'Lise', 'Kim', 'Maja');
+    await saetPaa(sE); await bundetTil(sE); await visesSom(sE, '(e) kamp 1');
+    await spilTilEnde(sE, 'Hans', 'Inge', '(e) kamp 1');
+    await rydSomKnappen();
+    await saetPaa(dE); await bundetTil(dE); await visesSom(dE, '(e) kamp 2');
+    await spilTilEnde(dE, 'Lise', 'Jonas', '(e) kamp 2');
+    await rydSomKnappen();
+    check('(e) hverken ombinding eller slip i det almindelige forløb', (await page.evaluate(() => window.__nyKode)).length === 0, await page.evaluate(() => window.__nyKode));
+    await api(`/api/tournaments/${tu5.id}/finish`, 'PUT', {}, true);
+    check('turneringen afsluttet', (await api('/api/tournaments/active')).length === 0);
+    // Admins navne (uden versionstjek) giver tabletten en 409 ved næste gemning,
+    // som den håndterer (overtager versionen, prøver én gang til) — også ved en
+    // almindelig første binding. Browseren og api.js logger svaret som fejl: de
+    // tælles (højst én pr. admin-tildeling = ingen løkke), resten skal være væk
+    const fejl5 = sidefejl.splice(fejlFoer5);
+    const konflikter = fejl5.filter(f => /status of 409/.test(f)).length;
+    const konfliktLog = fejl5.filter(f => /All retries exhausted: Error: Banens tilstand er ændret af en anden enhed/.test(f)).length;
+    console.log(`  (afsnit 5: ${konflikter} håndterede 409-svar ved ${adminNavne} admin-tildelinger)`);
+    check('afsnit 5: højst én håndteret 409 pr. admin-tildeling (ingen løkke)', konflikter <= adminNavne && konfliktLog === konflikter, { konflikter, konfliktLog, adminNavne });
+    check('afsnit 5: ingen andre fejl i tablet-siden', fejl5.length === konflikter + konfliktLog, fejl5);
 
     await browser.close();
     check('ingen fejl i tablet-siden', sidefejl.length === 0, sidefejl);

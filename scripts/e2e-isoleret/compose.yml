@@ -1,0 +1,74 @@
+# Tæller-E2E (scripts/taeller-e2e.js) helt isoleret: repoets backend + frontend med
+# en egen MySQL i hukommelsen (tmpfs). Ingen porte på værten, ingen navngivne
+# volumes, rører ikke den lokale installation eller dens database. Køres fra
+# repoets rod (eller et worktree):
+#
+#   MSYS_NO_PATHCONV=1 docker compose -f scripts/e2e-isoleret/compose.yml up --force-recreate --renew-anon-volumes --abort-on-container-exit --exit-code-from e2e --attach e2e
+#   docker compose -f scripts/e2e-isoleret/compose.yml down -v
+#
+# Valgfrit (miljøvariabler foran kommandoen):
+#   E2E_SCRIPT=taeller-knapper.js   et andet script i scripts/ (standard taeller-e2e.js)
+#   E2E_PAUSE=1                     kør en kopi af taeller-e2e.js med 400 ms pause før
+#                                   genindlæsningen i afsnit 2 (den fejler ellers — se
+#                                   koer.sh). Scriptet i repoet ændres ikke.
+#
+# Backenden kører i direct-mode og serverer selv frontend (ikke nginx). Derfor
+# mangler fundament.css (nginx kopierer den ind fra design/), og backendens CSP
+# blokerer inline-handlere — sluttjekket "ingen fejl i tablet-siden" fejler på
+# det. Chromium kører i app-containerens netværk (localhost): http://app:8080
+# opgraderes til https af chromium.
+# MSYS_NO_PATHCONV=1 er kun nødvendig i Git Bash på Windows.
+name: badminton-e2e-isoleret
+services:
+  mysql:
+    image: mysql:8.4
+    environment: { MYSQL_ROOT_PASSWORD: rod-opdigtet }
+    tmpfs: [/var/lib/mysql]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-prod-opdigtet"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+  app:
+    image: node:22-alpine
+    depends_on: { mysql: { condition: service_healthy } }
+    environment:
+      NODE_ENV: test
+      PORT: "8080"
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_USER: badminton_user
+      DB_PASSWORD: e2e-bruger-opdigtet
+      DB_NAME: badminton_counter
+      MYSQL_ROOT_PASSWORD: rod-opdigtet
+      JWT_SECRET: e2e-opdigtet-hemmelighed-0123456789abcdef0123456789
+      UPLOAD_DIR: /tmp/e2e/uploads
+      CLUB_BACKUP_DIR: /tmp/e2e/club-backups
+      FULD_BACKUP_DIR: /tmp/e2e/fuld-backup
+      FOOTBALL_DB_USER: football_user
+      FOOTBALL_DB_PASSWORD: football-opdigtet
+    volumes:
+      - ../..:/repo
+      - /repo/backend/node_modules      # npm ci her, ikke i arbejdstræet
+    working_dir: /repo/backend
+    command: ["sh", "-c", "npm ci --no-audit --no-fund --loglevel=error && node /repo/scripts/e2e-isoleret/start.js"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 100
+  e2e:
+    image: node:22-alpine
+    depends_on: { app: { condition: service_healthy } }
+    environment:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+      CHROMIUM: /usr/bin/chromium
+      NODE_PATH: /tmp/pw/node_modules
+      BT_URL: http://localhost:8080
+      E2E_SCRIPT: ${E2E_SCRIPT:-taeller-e2e.js}
+      E2E_PAUSE: ${E2E_PAUSE:-0}
+    network_mode: "service:app"
+    volumes:
+      - ../..:/repo:ro
+    working_dir: /repo
+    command: ["sh", "/repo/scripts/e2e-isoleret/koer.sh"]
