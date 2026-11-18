@@ -210,16 +210,30 @@ function lokal() {
         backend: opstart.status(migrationRunner.status()),
         // Kan de krypterede hemmeligheder læses med den nuværende JWT_SECRET? (nr. 21c)
         noegler: noeglekontrol.status(),
-        // Den deployede version (nr. 54): bygget ind af deploy.sh (Dockerfile.backend)
+        // Den deployede version (nr. 54, 110): deploy.sh skriver den i deploy-info/
         version: deployVersion()
     };
 }
 
-// { sha, bygget } — sha 'ukendt', når imaget ikke er bygget af deploy.sh
-function deployVersion(env = process.env) {
-    const sha = String(env.APP_GIT_SHA || '').replace(/[^0-9A-Za-zæøåÆØÅ+._-]/g, '').slice(0, 40) || 'ukendt';
-    const t = Date.parse(env.APP_BUILD_TIME || '');
-    return { sha, bygget: Number.isFinite(t) ? new Date(t).toISOString() : null };
+// Den deployede version (nr. 110): deploy.sh skriver commit og tidspunkt i
+// deploy-info/version.json i repo-roden, som er monteret skrivebeskyttet her
+// (docker-compose.yml). Før lå de i imaget (build-args → ENV), og så skiftede
+// backend-imaget ved HVERT deploy, og backenden blev genstartet — også når kun
+// frontenden var ændret. Læses ved hvert kald, for backenden genstartes ikke
+// nødvendigvis, når deploy.sh skriver en ny version.
+const DEPLOY_INFO = process.env.DEPLOY_INFO_FIL || '/app/deploy-info/version.json';
+
+// { sha, deployet } — sha 'ukendt', når filen mangler (docker compose up uden
+// deploy.sh, eller deploy.sh kunne ikke skrive den) eller ikke kan læses
+function deployVersion(fil = DEPLOY_INFO) {
+    let v = {};
+    try {
+        const j = JSON.parse(fs.readFileSync(fil, 'utf8').slice(0, 4096));
+        if (j && typeof j === 'object') v = j;
+    } catch { /* mangler eller ødelagt: ukendt */ }
+    const sha = (typeof v.sha === 'string' ? v.sha : '').replace(/[^0-9A-Za-zæøåÆØÅ+._-]/g, '').slice(0, 40) || 'ukendt';
+    const t = Date.parse(typeof v.deployet === 'string' ? v.deployet : '');
+    return { sha, deployet: Number.isFinite(t) ? new Date(t).toISOString() : null };
 }
 
 // ── til ruten ──────────────────────────────────────────────

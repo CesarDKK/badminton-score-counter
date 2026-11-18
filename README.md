@@ -555,7 +555,7 @@ git pull
 ./deploy.sh
 ```
 
-`deploy.sh` sikrer `.env` (`scripts/ensure-env.sh`), bygger og starter alle tjenester med commit og byggetidspunkt (vises i super-admin → Serverens helbred), venter højst 120 s på, at backenden svarer sundt på `/health`, tjekker `/api/health` gennem nginx og rydder ubrugte images (aldrig volumes). Migrationerne kører ved backendens opstart. Fejler helbredstjekket, viser scriptet backendens log og slutter med fejlkode.
+`deploy.sh` sikrer `.env` (`scripts/ensure-env.sh`), bygger og starter alle tjenester, skriver commit og deploy-tidspunkt i `deploy-info/version.json` (vises i super-admin → Serverens helbred; mappen er monteret skrivebeskyttet i backenden og er ikke i git eller i noget image), venter højst 120 s på, at backenden svarer sundt på `/health`, tjekker `/api/health` gennem nginx og rydder ubrugte images (aldrig volumes). Migrationerne kører ved backendens opstart. Backenden genstartes kun, når dens image er ændret (backend/, `Dockerfile.backend` og de delte filer fra `frontend/js/`, den kopierer ind) eller dens opsætning i `docker-compose.yml` — et rent frontend-deploy lader den køre videre, og scriptet siger, hvad der skete. Fejler helbredstjekket, viser scriptet backendens log og slutter med fejlkode.
 
 Hard-refresh i browseren efter en opdatering: `Ctrl+Shift+R`.
 

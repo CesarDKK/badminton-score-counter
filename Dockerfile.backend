@@ -34,13 +34,10 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-# Den deployede version (nr. 54): deploy.sh giver commit og byggetidspunkt med
-# som build-args (docker-compose.yml), og super-admin viser dem under Serverens
-# helbred. Står til sidst, så et nyt byggetidspunkt ikke gør npm ci om.
-ARG GIT_SHA=ukendt
-ARG BUILD_TIME=
-ENV APP_GIT_SHA=$GIT_SHA \
-    APP_BUILD_TIME=$BUILD_TIME
+# Den deployede version (nr. 54) ligger IKKE i imaget (nr. 110): deploy.sh
+# skriver den i deploy-info/, som er monteret i containeren. Med commit og
+# tidspunkt som build-args skiftede imaget ved hvert deploy, og backenden blev
+# genstartet — også når kun frontenden var ændret.
 
 # Start application
 CMD ["node", "server.js"]

@@ -147,5 +147,5 @@ test('21c: opstarten kører nøglekontrollen, helbredet viser den, og super-admi
     const sa = laes('frontend/super-admin-script.js');
     assert.match(sa, /const nk = l\.noegler;/);
     assert.match(sa, /shFlise\('Krypteringsnøgle'/);
-    assert.match(laes('frontend/super-admin.html'), /super-admin-script\.js\?v=45/);
+    assert.ok(Number(/super-admin-script\.js\?v=(\d+)/.exec(laes('frontend/super-admin.html'))[1]) >= 45);
 });

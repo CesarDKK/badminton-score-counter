@@ -610,24 +610,20 @@ test('54: deploy.sh venter på en sund backend, siger tydeligt fra og rydder kun
     assert.doesNotMatch(d, /højst 60 s/);
     assert.match(d, /docker image prune -f/);
     assert.doesNotMatch(d, /prune -a|--all|volume prune|system prune|--volumes|down -v/, 'aldrig noget, der kan slette data');
-    assert.match(d, /export GIT_SHA BUILD_TIME/);
+    // Versionen skrives i deploy-info/ (nr. 110 — før build-args: GIT_SHA/BUILD_TIME)
+    assert.match(d, /deploy-info\/version\.json/);
+    assert.doesNotMatch(d, /export GIT_SHA|BUILD_TIME/);
     assert.match(d, /rev-parse --short=12 HEAD/);
 });
 
-test('54: versionen bygges ind (build-arg → ENV) og vises i super-admins helbredskort', () => {
-    const compose = laes('docker-compose.yml');
-    assert.match(compose, /args:\s+GIT_SHA: \$\{GIT_SHA:-ukendt\}\s+BUILD_TIME: \$\{BUILD_TIME:-\}/);
-    const df = laes('Dockerfile.backend');
-    assert.ok(df.indexOf('ARG GIT_SHA') > df.indexOf('npm ci'), 'efter npm ci — byggetidspunktet ugyldiggør ikke cachen');
-    assert.match(df, /ENV APP_GIT_SHA=\$GIT_SHA/);
+test('54: versionen vises i super-admins helbredskort (nr. 110: fra deploy-info/, ikke bygget ind)', () => {
+    // Imaget og deploy-info/ testes i deploy-version.test.js
     const { deployVersion } = require('../../config/hetzner');
-    assert.deepEqual(deployVersion({ APP_GIT_SHA: '1f35ad3abcde+ændret', APP_BUILD_TIME: '2026-11-16T20:00:00Z' }),
-        { sha: '1f35ad3abcde+ændret', bygget: '2026-11-16T20:00:00.000Z' });
-    assert.deepEqual(deployVersion({}), { sha: 'ukendt', bygget: null });
-    assert.equal(deployVersion({ APP_GIT_SHA: '<script>' }).sha, 'script');
+    assert.deepEqual(deployVersion('/findes/ikke/version.json'), { sha: 'ukendt', deployet: null });
     const sa = laes('frontend/super-admin-script.js');
     assert.match(sa, /version \$\{escapeHtml\(v\.sha\)\}/);
-    assert.ok(Number(/super-admin-script\.js\?v=(\d+)/.exec(laes('frontend/super-admin.html'))[1]) >= 42, 'versionen er skruet op');
+    assert.match(sa, /v\.deployet \? ` · deployet \$\{escapeHtml\(formatDate\(v\.deployet\)\)\}`/);
+    assert.ok(Number(/super-admin-script\.js\?v=(\d+)/.exec(laes('frontend/super-admin.html'))[1]) >= 46, 'versionen er skruet op');
     assert.doesNotMatch(laes('backend/config/hetzner.js'), /child_process|execSync|git rev-parse/, 'backenden kalder ikke git');
 });
 
