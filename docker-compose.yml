@@ -114,6 +114,13 @@ services:
       dockerfile: Dockerfile.frontend
     container_name: badminton-frontend
     restart: unless-stopped
+    # nginx-imagets stopsignal er SIGQUIT ("pæn" nedlukning): nginx venter på, at
+    # de åbne forbindelser bliver færdige. Skærmenes live-strømme (SSE) bliver
+    # aldrig færdige, så hvert deploy ventede, til Docker gav op og sendte SIGKILL
+    # (10 s) — og i al den tid tog nginx ingen nye forbindelser. SIGTERM lukker
+    # med det samme; skærmene forbinder selv igen (samme sag som backendens
+    # nedlukning, nr. 54).
+    stop_signal: SIGTERM
     logging: *default-logging
     ports:
       - "80:80"
