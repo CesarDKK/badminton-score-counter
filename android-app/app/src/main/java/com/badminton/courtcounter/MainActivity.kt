@@ -170,9 +170,11 @@ class MainActivity : AppCompatActivity() {
         webView.webChromeClient = WebChromeClient()
     }
 
-    private fun showFirstTimeSetup() {
+    // redigerer = åbnet fra kioskens menu: udfyldt med de nuværende værdier og
+    // med en Annullér-knap (i kiosken kan app-data ikke slettes for at skifte link)
+    private fun showFirstTimeSetup(redigerer: Boolean = false) {
         val linkInput = EditText(this).apply {
-            setText(DEFAULT_SERVER_URL)
+            setText(if (redigerer) prefs.getString(PREF_SERVER_URL, DEFAULT_SERVER_URL) else DEFAULT_SERVER_URL)
             hint = "http://192.168.1.100 eller http://…/t/TOKEN"
             setSingleLine()
         }
@@ -183,7 +185,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val courtInput = EditText(this).apply {
-            setText(DEFAULT_COURT_ID)
+            setText(if (redigerer) prefs.getString(PREF_COURT_ID, DEFAULT_COURT_ID) else DEFAULT_COURT_ID)
             hint = "f.eks. 1"
             inputType = InputType.TYPE_CLASS_NUMBER
             setSingleLine()
@@ -227,7 +229,7 @@ class MainActivity : AppCompatActivity() {
             addView(courtInput)
         }
 
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle("Opsætning")
             .setView(layout)
             .setCancelable(false)
@@ -237,12 +239,12 @@ class MainActivity : AppCompatActivity() {
 
                 if (link.isEmpty()) {
                     Toast.makeText(this, "Link/URL må ikke være tomt", Toast.LENGTH_SHORT).show()
-                    showFirstTimeSetup(); return@setPositiveButton
+                    showFirstTimeSetup(redigerer); return@setPositiveButton
                 }
 
                 if (!isTokenUrl(link) && (court.isEmpty() || court.toIntOrNull() == null)) {
                     Toast.makeText(this, "Bane nummer skal være et tal", Toast.LENGTH_SHORT).show()
-                    showFirstTimeSetup(); return@setPositiveButton
+                    showFirstTimeSetup(redigerer); return@setPositiveButton
                 }
 
                 prefs.edit().apply {
@@ -253,10 +255,12 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 Toast.makeText(this, "Indstillinger gemt!", Toast.LENGTH_SHORT).show()
+                failedUrl = null
                 loadPage()
                 startScreenTimeoutTimer()
             }
-            .show()
+        if (redigerer) dialog.setNegativeButton("Annullér") { _, _ -> resetScreenTimeout() }
+        dialog.show()
     }
 
     private fun startScreenTimeoutTimer() {
@@ -275,18 +279,168 @@ class MainActivity : AppCompatActivity() {
     private fun setupBackButtonHandler() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                resetScreenTimeout()
+                if (Kiosk.erAktiv(this@MainActivity, prefs)) {
+                    visKodeDialog()
+                    return
+                }
                 AlertDialog.Builder(this@MainActivity)
                     .setTitle("Afslut app")
                     .setMessage("Vil du afslutte appen?")
                     .setPositiveButton("Ja") { _, _ -> finish() }
                     .setNegativeButton("Nej") { _, _ -> resetScreenTimeout() }
+                    .setNeutralButton("Kiosktilstand…") { _, _ -> visKioskOpsaetning() }
                     .show()
             }
         })
     }
 
+    // ── Kiosktilstand (se Kiosk.kt) ──
+
+    private var forkerteKoder = 0
+    private var kodeSpaerretTil = 0L
+
+    private fun kodeFelt(hint: String) = EditText(this).apply {
+        this.hint = hint
+        inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        filters = arrayOf(android.text.InputFilter.LengthFilter(Kiosk.KODE_MAX))
+        setSingleLine()
+    }
+
+    private fun dialogLayout(vararg views: View) = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(60, 20, 60, 0)
+        views.forEach { addView(it) }
+    }
+
+    private fun tekst(t: String, lille: Boolean = false) = TextView(this).apply {
+        text = t
+        textSize = if (lille) 13f else 15f
+        setPadding(0, 0, 0, 16)
+        setTextIsSelectable(true)
+    }
+
+    // Kiosken er slået fra: forklar opsætningen, eller slå den til med en ny kode
+    private fun visKioskOpsaetning() {
+        if (!Kiosk.erEjer(this)) {
+            AlertDialog.Builder(this)
+                .setTitle("Kiosktilstand")
+                .setView(dialogLayout(
+                    tekst("I kiosktilstand starter tælleren, når tabletten tændes, og man kan kun forlade den med en kode."),
+                    tekst("Det kræver en engangsopsætning med en PC:"),
+                    tekst("1. Tabletten må ikke have nogen konti (fx Google-konto) — nulstil den, og spring kontoen over.\n" +
+                          "2. Slå USB-fejlfinding til (Indstillinger → Om tabletten → tryk 7 gange på Build-nummer → Indstillinger for udviklere).\n" +
+                          "3. Sæt tabletten til PC'en og kør:", lille = true),
+                    tekst(Kiosk.adbKommando(this), lille = true).apply { setTypeface(android.graphics.Typeface.MONOSPACE) },
+                    tekst("Åbn derefter appen, tryk tilbage → Kiosktilstand… igen og vælg en kode.", lille = true)
+                ))
+                .setPositiveButton("OK") { _, _ -> resetScreenTimeout() }
+                .show()
+            return
+        }
+
+        val kode1 = kodeFelt("Kode (${Kiosk.KODE_MIN}–${Kiosk.KODE_MAX} cifre)")
+        val kode2 = kodeFelt("Gentag koden")
+        AlertDialog.Builder(this)
+            .setTitle("Slå kiosktilstand til")
+            .setView(dialogLayout(
+                tekst("Tælleren bliver tablettens startskærm og starter, når tabletten tændes. " +
+                      "Hjem-knap, oversigt og notifikationer spærres. Man kommer ud med tilbage-knappen og koden."),
+                kode1, kode2
+            ))
+            .setPositiveButton("Slå til") { _, _ ->
+                val k = kode1.text.toString()
+                when {
+                    !Kiosk.gyldigKode(k) -> {
+                        Toast.makeText(this, "Koden skal være ${Kiosk.KODE_MIN}–${Kiosk.KODE_MAX} cifre", Toast.LENGTH_LONG).show()
+                        visKioskOpsaetning()
+                    }
+                    k != kode2.text.toString() -> {
+                        Toast.makeText(this, "De to koder er ikke ens", Toast.LENGTH_LONG).show()
+                        visKioskOpsaetning()
+                    }
+                    Kiosk.slaaTil(this, prefs, k) ->
+                        Toast.makeText(this, "Kiosktilstand er slået til", Toast.LENGTH_LONG).show()
+                    else ->
+                        Toast.makeText(this, "Kunne ikke slå kiosktilstand til", Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNegativeButton("Annullér") { _, _ -> resetScreenTimeout() }
+            .setNeutralButton("Giv tabletten fri…") { _, _ -> visFjernEjer() }
+            .show()
+    }
+
+    private fun visFjernEjer() {
+        AlertDialog.Builder(this)
+            .setTitle("Giv tabletten fri")
+            .setMessage("Appen holder op med at være tablettens ejer, og tabletten kan bruges som normalt igen. " +
+                        "Kiosktilstand kræver derefter adb-kommandoen fra PC'en igen.")
+            .setPositiveButton("Giv fri") { _, _ ->
+                Kiosk.fjernEjer(this, prefs)
+                Toast.makeText(this, "Tabletten er givet fri", Toast.LENGTH_LONG).show()
+            }
+            .setNegativeButton("Annullér", null)
+            .show()
+    }
+
+    // Kiosken er aktiv: tilbage-knappen beder om koden
+    private fun visKodeDialog() {
+        val nu = SystemClock.elapsedRealtime()
+        if (nu < kodeSpaerretTil) {
+            val sek = (kodeSpaerretTil - nu + 999) / 1000
+            Toast.makeText(this, "For mange forkerte koder. Prøv igen om $sek s", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val felt = kodeFelt("Kode")
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Tast koden")
+            .setView(dialogLayout(felt))
+            .setPositiveButton("OK") { _, _ ->
+                if (Kiosk.kodePasser(prefs, felt.text.toString())) {
+                    forkerteKoder = 0
+                    visKioskMenu()
+                } else {
+                    forkerteKoder++
+                    if (forkerteKoder >= 5) {
+                        forkerteKoder = 0
+                        kodeSpaerretTil = SystemClock.elapsedRealtime() + 60_000L
+                    }
+                    Toast.makeText(this, "Forkert kode", Toast.LENGTH_SHORT).show()
+                }
+                resetScreenTimeout()
+            }
+            .setNegativeButton("Annullér") { _, _ -> resetScreenTimeout() }
+            .create()
+        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
+        // Tastaturets OK/Færdig-knap sender koden (tastaturet kan dække dialogens knap)
+        felt.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
+        felt.setOnEditorActionListener { _, _, _ ->
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.performClick()
+            true
+        }
+        dialog.show()
+        felt.requestFocus()
+    }
+
+    private fun visKioskMenu() {
+        AlertDialog.Builder(this)
+            .setTitle("Kiosktilstand")
+            .setItems(arrayOf("Skift link / bane", "Slå kiosktilstand fra", "Annullér")) { _, valg ->
+                when (valg) {
+                    0 -> showFirstTimeSetup(redigerer = true)
+                    1 -> {
+                        Kiosk.slaaFra(this, prefs)
+                        Toast.makeText(this, "Kiosktilstand er slået fra", Toast.LENGTH_LONG).show()
+                    }
+                }
+                resetScreenTimeout()
+            }
+            .show()
+    }
+
     override fun onResume() {
         super.onResume()
+        Kiosk.laas(this, prefs)
         isActive = true
         webView.onResume()
         webView.resumeTimers()
