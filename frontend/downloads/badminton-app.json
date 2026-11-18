@@ -1,9 +1,9 @@
 {
     "file":  "BadmintonApp.apk",
-    "version":  "1.7.4",
-    "versionCode":  12,
-    "builtAt":  "2026-11-09T15:09:47Z",
-    "sizeBytes":  5001167,
-    "sha256":  "dae21241743b6d5bfadb779c265e6ed507a4dfa2bf3db5ebd1b2b5823d6f9879",
+    "version":  "1.8.0",
+    "versionCode":  13,
+    "builtAt":  "2026-11-18T19:38:18Z",
+    "sizeBytes":  5009447,
+    "sha256":  "fafc67490f32e09a938fb4a45eb3c4c834b4700ac99e711e8d6f3c2fd9403945",
     "minAndroid":  "7.0"
 }

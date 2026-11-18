@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kiosktilstand: appen bliver tablettens ejer ("device owner") med én
+     adb-kommando. Ejeren må låse tabletten til appen uden en MDM. -->
+<device-admin>
+    <uses-policies />
+</device-admin>

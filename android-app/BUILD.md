@@ -159,10 +159,11 @@ gradlew.bat assembleDebug
 
 - [../ANDROID_BUILD_GUIDE.md](../ANDROID_BUILD_GUIDE.md) - Detaljeret build guide (inkl. CLI/Android Studio)
 - [ICON_NOTE.md](ICON_NOTE.md) - Sådan skiftes app-ikonet
+- [KIOSK.md](KIOSK.md) - Kiosktilstand: lås tabletten til tælleren (uden MDM)
 
 ---
 
 **Senest opdateret:** November 2026
-**App Version:** 1.7.4 (versionCode 12)
+**App Version:** 1.8.0 (versionCode 13)
 **Min Android Version:** 7.0 (API 24)
 **Target Android Version:** 15 (API 35)
