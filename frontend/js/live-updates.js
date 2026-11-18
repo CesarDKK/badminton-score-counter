@@ -15,6 +15,12 @@
  * og skaermen bliver haengende paa sin langsomme sikkerhedspoll uden at faa pushes.
  * Derfor holder vi selv oje med serverens heartbeat: hoerer vi intet i
  * HEARTBEAT_TIMEOUT_MS, lukker vi forbindelsen og genforbinder aktivt.
+ *
+ * ── Lukket forbindelse (nr. 110) ──
+ * Svarer serveren med en fejl i stedet for strømmen (fx 502 fra nginx, mens
+ * backenden genstarter), giver browseren op: readyState bliver CLOSED, og der
+ * kommer aldrig et nyt forsøg af sig selv. Saa aabner vi selv igen efter 3–7 s,
+ * med stigende ventetid op til et loft (15–19 s), indtil det lykkes.
  */
 (function () {
     'use strict';
@@ -23,6 +29,11 @@
     // rigeligt til at et enkelt langsomt netvaerksoejeblik ikke udloeser reconnect.
     const HEARTBEAT_TIMEOUT_MS = 70000;
     const WATCHDOG_TICK_MS = 15000;
+    // Ventetid efter en LUKKET forbindelse: 3 s, 6 s, 12 s, derefter 15 s — hver
+    // med op til 4 s spredning oveni (altsaa 3–7 s foerst og hoejst 19 s).
+    const GENAABN_START_MS = 3000;
+    const GENAABN_LOFT_MS = 15000;
+    const GENAABN_SPREDNING_MS = 4000;
 
     // Spredning saa 10 skaerme ikke genforbinder i praecis samme sekund efter et
     // netvaerksudfald (ellers rammer de serveren som en mur samtidig).
@@ -42,19 +53,38 @@
         let closed = false;
         let lastActivity = Date.now();
         let reconnectTimer = null;
+        let lukkedeIRaekke = 0; // lukkede forbindelser siden sidste onopen
 
         function markAlive() {
             lastActivity = Date.now();
         }
 
+        // Kun én ventende genaabning ad gangen
+        function planlaegOpen(ms) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(() => {
+                reconnectTimer = null;
+                open();
+            }, ms);
+        }
+
         function open() {
             if (closed) return;
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+            // Aldrig to forbindelser paa en gang
+            if (es) {
+                try { es.close(); } catch (e) { /* ligegyldigt */ }
+                es = null;
+            }
             markAlive(); // giv forbindelsen et frisk vindue at naa at aabne i
 
-            es = new EventSource(url);
+            const kilde = new EventSource(url);
+            es = kilde;
 
             es.onopen = () => {
                 markAlive();
+                lukkedeIRaekke = 0;
                 if (onStateChange) onStateChange(true);
             };
 
@@ -72,9 +102,17 @@
             es.addEventListener('ping', markAlive);
 
             es.onerror = () => {
-                // EventSource genforbinder selv (retry-intervallet styres af serveren).
+                if (kilde !== es) return; // en gammel forbindelse, der allerede er erstattet
                 // Meld frakoblet saa siden kan polle hurtigt imens.
                 if (onStateChange) onStateChange(false);
+                // CONNECTING: EventSource genforbinder selv (retry-intervallet
+                // styres af serveren) — intet at goere. CLOSED: browseren har
+                // givet op, saa vi aabner selv igen.
+                if (closed || kilde.readyState !== 2 /* EventSource.CLOSED */) return;
+                es = null;
+                const ms = Math.min(GENAABN_START_MS * Math.pow(2, lukkedeIRaekke), GENAABN_LOFT_MS);
+                lukkedeIRaekke++;
+                planlaegOpen(jitter(ms, GENAABN_SPREDNING_MS));
             };
         }
 
@@ -88,8 +126,7 @@
                 es = null;
             }
             markAlive(); // undgaa at vagthunden fyrer igen med det samme
-            clearTimeout(reconnectTimer);
-            reconnectTimer = setTimeout(open, jitter(500, 1500));
+            planlaegOpen(jitter(500, 1500));
         }
 
         const watchdog = setInterval(() => {
