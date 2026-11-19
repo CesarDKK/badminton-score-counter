@@ -14,6 +14,7 @@ const { validateImageMagic } = require('../config/imageUpload');
 const { UPLOAD_DIR, klubMappe } = require('../config/sponsorFiler');
 const { gyldigtToken } = require('../screens/pcRapport');
 const ls = require('../screens/livestream');
+const { publishConfigChange } = require('../events/gameStateEvents');
 const masterDb = require('../config/masterDatabase');
 const LogoMatch = require('../config/logoMatch');
 const youtube = require('../config/youtube');
@@ -646,7 +647,9 @@ router.get('/', livestreamAdmin, async (req, res, next) => {
                 automatisk: !!l.camera_court && !l.camera_manual,
                 // Kameraet på PC'en, admin har valgt (by-id-link) — null: PC'en vælger selv
                 enhed: l.camera_device || null,
-                status: status[l.id] || null
+                status: status[l.id] || null,
+                // Kameraet vises på PC'ens TV lige nu (til = hvornår det lukker af sig selv)
+                visning: (v => v ? { til: new Date(v.til).toISOString() } : null)(ls.visning(tenantKey(req), l.id))
             }))
         });
     } catch (error) {
@@ -896,6 +899,68 @@ router.put('/kamera/:tokenId', livestreamAdmin, async (req, res, next) => {
     }
 });
 
+// ---- Kameravisning på TV'et (se ls.startVisning) ----
+
+// POST /api/livestream/kamera/:tokenId/visning { vis: true|false } — admin viser
+// kameraet ved denne TV-PC på PC'ens eget TV i 5 minutter (eller lukker det igen).
+// TV-siden får besked med det samme (config-event) og henter GET /tv/kamera-visning
+router.post('/kamera/:tokenId/visning', livestreamAdmin, async (req, res, next) => {
+    try {
+        const id = Number(req.params.tokenId);
+        const link = Number.isInteger(id) && await queryOne(
+            `SELECT id, name FROM device_tokens WHERE id = ? AND is_active = 1 AND token_type = 'permanent'
+                AND destination LIKE 'tv%'`, [id]);
+        if (!link) return res.status(404).json({ error: 'Adgangslinket findes ikke' });
+        const tenant = tenantKey(req);
+        if (!req.body || req.body.vis !== true) {
+            if (ls.stopVisning(tenant, id)) {
+                console.log(`[livestream] ${tenant} "${link.name}": kameravisningen på TV'et lukket af admin`);
+                publishConfigChange(req, 'kamera-visning');
+            }
+            return res.json({ visning: null });
+        }
+        const s = ls.statusFor(tenant)[id];
+        const spaerret = ls.visningSpaerret(s);
+        if (spaerret) return res.status(409).json({ error: spaerret });
+        const til = ls.startVisning(tenant, id, s.navn);
+        console.log(`[livestream] ${tenant} "${s.navn || link.name}": kameraet vises på TV'et i ${ls.VISNING_MS / 60000} min`);
+        publishConfigChange(req, 'kamera-visning');
+        res.json({ visning: { til: new Date(til).toISOString() } });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/livestream/tv/kamera-visning — TV-siden: skal den vise kameraet nu?
+// Med skærmens eget adgangslink (TV-linket på PC'en med kameraet). Vend, spejl
+// og opløsning som i streamen, så billedet på TV'et er det, YouTube vil få
+router.get('/tv/kamera-visning', requireWriteAuthInClubMode, async (req, res, next) => {
+    try {
+        res.set('Cache-Control', 'no-store');
+        // I direct-mode (lokal installation) sætter middlewaren ingen bruger: læs selv linkets token
+        let bruger = req.user;
+        if (!bruger && req.accessMode !== 'club' && /^Bearer /.test(req.get('Authorization') || '')) {
+            try { bruger = jwt.verify(req.get('Authorization').slice(7), process.env.JWT_SECRET); } catch { bruger = null; }
+        }
+        const tokenId = bruger && bruger.role === 'device' && Number.isInteger(bruger.tokenId) ? bruger.tokenId : null;
+        const tenant = tenantKey(req);
+        const v = tokenId ? ls.visning(tenant, tokenId) : null;
+        if (!v) return res.json({ aktiv: false });
+        const link = await queryOne('SELECT camera_court FROM device_tokens WHERE id = ? AND is_active = 1', [tokenId]);
+        const bane = link ? link.camera_court : null;
+        const opsaetning = bane ? await queryOne('SELECT * FROM court_streams WHERE court_number = ?', [bane]) : null;
+        const indst = await hentIndstillinger();
+        // Logoet i hjørnet: banens valg (standard klubbens), men kun hvis der er et logo at vise
+        const logoValg = (opsaetning && opsaetning.logo) || 'klub';
+        const harLogo = logoValg === 'klub'
+            ? !!(await klubLogo(req, indst).catch(() => ({ url: logoUrl(req, indst.logo) }))).url
+            : logoValg === 'sponsor' && bane ? !!(await sponsorPaaBane(bane).catch(() => null)) : false;
+        res.json(ls.visningTilTv({ v, s: ls.statusFor(tenant)[tokenId], indst, opsaetning, bane, harLogo }));
+    } catch (error) {
+        next(error);
+    }
+});
+
 // POST/DELETE /api/livestream/baner/:bane/hele-dagen — admin starter banen
 // for resten af dagen (en turnering): alt sendes, også mellem kampene, til
 // TV-PC'en slukker kl. 23:59
@@ -1096,6 +1161,21 @@ router.post('/pc', async (req, res, next) => {
                 livetavle = svar.tavle || ls.overlayTavle(rk, dbl, bane);
             }
         }
+        // Kameraet vises på TV'et (admin: "Vis kamera på TV'et"): skal banen sendes
+        // (eller sender PC'en allerede), går udsendelsen forud — visningen lukkes, og
+        // PC'en venter et par sekunder, til browseren har sluppet kameraet
+        if ((svar.send || pc.sender) && ls.visningHolderKamera(tenant, link.id)) {
+            if (ls.stopVisning(tenant, link.id)) {
+                console.log(`[livestream] ${tenant} "${pc.navn || link.id}" bane ${bane || '-'}: kameravisningen på TV'et lukket — banen skal sendes`);
+                publishConfigChange(req, 'kamera-visning');
+            }
+            if (!pc.sender) {
+                svar = { kamera: true, bane, send: false, grund: 'kamera-visning' };
+                livetavle = null;
+            }
+        }
+        // Mens browseren har kameraet, tager PC'en ingen prøvebilleder (nye versioner)
+        svar.kameraVisning = ls.visningHolderKamera(tenant, link.id);
         const { ny } = ls.registrer(tenant, link.id, { ...pc, bane: bane || null, grund: svar.grund, skalSende: !!svar.send, tavle: livetavle }, klientIp(req));
         // Til backend-loggen, når PC'en begynder/holder op med at sende eller får en ny fejl
         if (!foer || foer.sender !== ny.sender || (ny.fejl && foer.fejl !== ny.fejl)) {

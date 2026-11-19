@@ -1,0 +1,253 @@
+/* Kameravisning på TV'et (js/kamera-visning.js): banens kamera i fuld skærm
+   med hjælpelinjer, et eksempel på streamens scoreboard og logoets plads.
+
+   Farverne i scoreboardet er streamens egne (kiosk: stream, PANEL/ACCENT/FJER/
+   GRAA) — de følger ikke klubbens tema, for det gør streamen heller ikke. */
+
+.kv {
+    --kv-baggrund: #000;
+    --kv-panel: rgba(12, 16, 24, 0.92);
+    --kv-accent: #e94560;
+    --kv-serv: #ffd640;
+    --kv-hvid: #fff;
+    --kv-tabt: #969eac;
+    --kv-linje: rgba(255, 255, 255, 0.35);
+    --kv-ramme: rgba(255, 255, 255, 0.75);
+    --kv-skygge: rgba(0, 0, 0, 0.75);
+    --kv-bjaelke: rgba(0, 0, 0, 0.7);
+
+    position: fixed;
+    inset: 0;
+    z-index: 2147483000;
+    background: var(--kv-baggrund);
+    overflow: hidden;
+    cursor: none;
+}
+
+.kv[hidden] { display: none; }
+
+.kv-billede {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    overflow: hidden;
+}
+
+.kv-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    /* Som streamen: kameraets billede skaleres til streamens format */
+    object-fit: fill;
+    background: var(--kv-baggrund);
+}
+
+/* ── Hjælpelinjer: tredjedele og midten ── */
+.kv-linjer { position: absolute; inset: 0; pointer-events: none; }
+.kv-linje { position: absolute; background: var(--kv-linje); }
+.kv-linje--v1, .kv-linje--v2, .kv-linje--mv { top: 0; bottom: 0; width: 2px; }
+.kv-linje--h1, .kv-linje--h2, .kv-linje--mh { left: 0; right: 0; height: 2px; }
+.kv-linje--v1 { left: 33.333%; }
+.kv-linje--v2 { left: 66.667%; }
+.kv-linje--h1 { top: 33.333%; }
+.kv-linje--h2 { top: 66.667%; }
+.kv-linje--mv, .kv-linje--mh { background: none; }
+.kv-linje--mv { left: calc(50% - 1px); border-left: 2px dashed var(--kv-linje); width: 0; }
+.kv-linje--mh { top: calc(50% - 1px); border-top: 2px dashed var(--kv-linje); height: 0; }
+
+/* ── Pladsen, scoreboardet højst kan fylde, og logoets plads ── */
+.kv-ramme, .kv-logo {
+    position: absolute;
+    box-sizing: border-box;
+    border: 2px dashed var(--kv-ramme);
+    border-radius: var(--r-sm, 6px);
+    pointer-events: none;
+}
+
+.kv-etiket {
+    position: absolute;
+    right: var(--sp-2, 8px);
+    bottom: var(--sp-1, 4px);
+    font-family: var(--font-body, sans-serif);
+    font-size: 18px;
+    color: var(--kv-hvid);
+    text-shadow: 0 1px 3px var(--kv-skygge);
+    white-space: nowrap;
+}
+
+/* Scoreboardet til højre: etiketten i rammens venstre side, så den ikke står bag panelet */
+.kv-ramme--hoejre .kv-etiket { right: auto; left: var(--sp-2, 8px); }
+
+.kv-logo .kv-etiket {
+    right: auto;
+    bottom: auto;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.kv-ramme[hidden], .kv-tavle[hidden], .kv-logo[hidden] { display: none; }
+
+/* ── Eksemplet på scoreboardet (målene sættes af scriptet) ── */
+.kv-tavle {
+    --kv-s: 1;
+    position: absolute;
+    box-sizing: border-box;
+    background: var(--kv-panel);
+    border-radius: calc(var(--kv-s) * 10px);
+    color: var(--kv-hvid);
+    pointer-events: none;
+}
+
+/* Hjørnet ved fanen er skarpt, som i streamen */
+.kv-tavle { border-bottom-left-radius: 0; }
+.kv-tavle--hoejre { border-bottom-left-radius: calc(var(--kv-s) * 10px); border-bottom-right-radius: 0; }
+.kv-tavle--nederst { border-bottom-left-radius: calc(var(--kv-s) * 10px); border-top-left-radius: 0; }
+.kv-tavle--nederst.kv-tavle--hoejre { border-top-left-radius: calc(var(--kv-s) * 10px); border-top-right-radius: 0; }
+
+.kv-raekke {
+    position: absolute;
+    left: 0;
+    right: 0;
+}
+
+.kv-raekke + .kv-raekke { border-top: 1px solid rgba(255, 255, 255, 0.1); }
+
+.kv-prik, .kv-klublogo, .kv-navn, .kv-saet {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.kv-prik {
+    width: calc(var(--kv-s) * 10px);
+    height: calc(var(--kv-s) * 10px);
+    border-radius: 50%;
+}
+
+.kv-prik--serv { background: var(--kv-serv); }
+
+.kv-klublogo {
+    width: calc(var(--kv-s) * 38px);
+    height: calc(var(--kv-s) * 34px);
+    border-radius: calc(var(--kv-s) * 6px);
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.kv-navn {
+    font-family: var(--font-body, sans-serif);
+    font-weight: 600;
+    font-size: calc(var(--kv-s) * 25px);
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kv-saet {
+    font-family: var(--font-display, sans-serif);
+    font-size: calc(var(--kv-s) * 34px);
+    line-height: 1;
+    text-align: center;
+}
+
+.kv-saet--tabt { color: var(--kv-tabt); }
+
+.kv-nu {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    background: var(--kv-accent);
+    border-radius: calc(var(--kv-s) * 8px);
+}
+
+.kv-nu-tal {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display, sans-serif);
+    font-size: calc(var(--kv-s) * 38px);
+    line-height: 1;
+}
+
+.kv-nu-tal + .kv-nu-tal { border-top: 1px solid rgba(255, 255, 255, 0.24); }
+
+/* Fanen "BANE 3": under panelet øverst i billedet, over det nederst */
+.kv-fane {
+    position: absolute;
+    left: 0;
+    top: 100%;
+    height: calc(var(--kv-s) * 28px);
+    padding: 0 calc(var(--kv-s) * 12px);
+    display: flex;
+    align-items: center;
+    background: var(--kv-accent);
+    border-radius: 0 0 calc(var(--kv-s) * 6px) calc(var(--kv-s) * 6px);
+    font-family: var(--font-display, sans-serif);
+    font-size: calc(var(--kv-s) * 22px);
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.kv-tavle--hoejre .kv-fane { left: auto; right: 0; }
+
+.kv-tavle--nederst .kv-fane {
+    top: auto;
+    bottom: 100%;
+    border-radius: calc(var(--kv-s) * 6px) calc(var(--kv-s) * 6px) 0 0;
+}
+
+/* ── Bjælken med nedtællingen (i modsat side af scoreboardet) ── */
+.kv-bjaelke {
+    position: absolute;
+    left: 50%;
+    bottom: var(--sp-6, 24px);
+    transform: translateX(-50%);
+    display: flex;
+    align-items: baseline;
+    gap: var(--sp-4, 16px);
+    padding: var(--sp-3, 12px) var(--sp-7, 32px);
+    background: var(--kv-bjaelke);
+    border-radius: var(--r-pill, 999px);
+    color: var(--kv-hvid);
+    font-family: var(--font-body, sans-serif);
+    font-size: 24px;
+    white-space: nowrap;
+}
+
+.kv--bjaelke-top .kv-bjaelke { bottom: auto; top: var(--sp-6, 24px); }
+
+.kv-titel {
+    font-family: var(--font-display, sans-serif);
+    font-size: 34px;
+    letter-spacing: 0.02em;
+}
+
+.kv-hjaelp { opacity: 0.8; }
+
+.kv-tid {
+    font-family: var(--font-display, sans-serif);
+    font-size: 34px;
+    font-variant-numeric: tabular-nums;
+    color: var(--kv-serv);
+}
+
+.kv-besked {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    max-width: 80vw;
+    padding: var(--sp-6, 24px) var(--sp-8, 40px);
+    background: var(--kv-bjaelke);
+    border-radius: var(--r-lg, 16px);
+    color: var(--kv-hvid);
+    font-family: var(--font-body, sans-serif);
+    font-size: 36px;
+    text-align: center;
+}
+
+.kv-besked[hidden] { display: none; }

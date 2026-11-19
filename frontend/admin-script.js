@@ -3819,6 +3819,50 @@ async function refreshLivestreamStatus() {
         const b = _livestream.baner.find(x => x.bane === Number(el.dataset.bane));
         if (b) el.innerHTML = livestreamStartHtml(b);
     });
+    // … og kameravisningen på TV'et (lukker af sig selv efter 5 minutter)
+    document.querySelectorAll('.ls-visning').forEach(el => {
+        el.innerHTML = livestreamVisningHtml(Number(el.dataset.bane));
+    });
+}
+
+// ── Kameravisning på TV'et: banens kamera i fuld skærm på TV'et ved kameraet ──
+// (backend: POST /api/livestream/kamera/:tokenId/visning, TV: js/kamera-visning.js)
+
+// Samme grunde som serveren (ls.visningSpaerret) — knappen er grå, og grunden står ved den
+function livestreamVisningSpaerret(s) {
+    if (!s || !s.online) return 'TV-PC\'en har ikke meldt sig det seneste minut — er den tændt?';
+    if (!s.kamera) return 'TV-PC\'en finder intet USB-kamera';
+    if (!s.kanVise) return 'Kræver en nyere Badminton TV-version på PC\'en (den opdaterer selv)';
+    if (s.sender) return 'Kameraet sender lige nu — det kan vises på TV\'et, når udsendelsen er slut';
+    if (s.skalSende || s.grund === 'kamera-visning') return 'Banen skal sendes nu — kameraet kan vises på TV\'et, når udsendelsen er slut';
+    return null;
+}
+
+function livestreamVisningHtml(bane) {
+    const pc = (_livestream?.kameraer || []).find(k => k.bane === bane);
+    if (!pc) return '';
+    if (pc.visning) {
+        const til = new Date(pc.visning.til).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
+        return `<span class="maerke maerke--igang">Kameraet vises på TV'et</span>
+            <span class="tekst-mindre tekst-daempet">ved ${escapeHtml(pc.navn)} til kl. ${til} — stil kameraet, mens du ser billedet. Starter en kamp, der skal sendes, lukker visningen af sig selv</span>
+            <button class="btn-secondary btn-sm" onclick="livestreamKameraVisning(${Number(pc.tokenId)}, false, ${Number(bane)})">Luk kameravisningen</button>`;
+    }
+    const spaerret = livestreamVisningSpaerret(pc.status);
+    return `<button class="btn-secondary btn-sm" onclick="livestreamKameraVisning(${Number(pc.tokenId)}, true, ${Number(bane)})"${spaerret ? ' disabled' : ''}>Vis kamera på TV'et</button>
+        <span class="tekst-mindre tekst-daempet">${spaerret ? escapeHtml(spaerret)
+            : `Kameraets billede i 5 minutter på TV'et ved ${escapeHtml(pc.navn)}, med hjælpelinjer og scoreboardets plads — til at stille kameraet op`}</span>`;
+}
+
+async function livestreamKameraVisning(tokenId, vis, bane) {
+    try {
+        await api.request(`/livestream/kamera/${encodeURIComponent(tokenId)}/visning`, {
+            method: 'POST', body: JSON.stringify({ vis })
+        });
+        livestreamBesked(bane, '');
+    } catch (e) {
+        livestreamBesked(bane, e.message, true);
+    }
+    await refreshLivestreamStatus();
 }
 
 const LS_GRUND = {
@@ -3831,6 +3875,7 @@ const LS_GRUND = {
     'youtube-fejl': 'Venter på YouTube — se fejlen ved banen',
     'stille': 'Sender ikke: kampen står stille — ingen har talt på kampen i 30 minutter. Tæl et point for at sende igen, eller afslut/nulstil banen',
     'holdkamp-stoppet': 'Holdkampen er stoppet for i dag — sendes ikke af sig selv',
+    'kamera-visning': 'Starter — kameravisningen på TV\'et lukkes, så udsendelsen kan få kameraet',
     'ingen-bane': 'Banen findes ikke'
 };
 
@@ -4421,6 +4466,7 @@ function livestreamBaneHtml(b, kameraAaben = false) {
             </div>
             <div class="ls-besked tekst-mindre" hidden></div>
             <div class="ls-bund">
+            <div class="ls-visning" data-bane="${b.bane}">${livestreamVisningHtml(b.bane)}</div>
             <details class="ls-kamera"${kameraAaben ? ' open' : ''}>
                 <summary class="tekst-mindre">Kameraet på banen${livestreamKameraResume(b)}</summary>
                 <div class="ls-kamera-felter">

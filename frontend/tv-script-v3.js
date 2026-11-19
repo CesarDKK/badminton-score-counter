@@ -68,6 +68,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     startAutoRefresh();
     startLocalTimer();
     startSkaermStatus();
+    // Admin → Livestream → "Vis kamera på TV'et" (kun på en Badminton TV-PC)
+    if (window.KameraVisning) window.KameraVisning.start({ skaermNavn: SKAERM_NAVN, kiosk: !!KIOSK_VERSION });
     startAutoOpdatering();
     // Sponsorer/logoer/settings/tema opdateres nu via SSE-config-events (push).
     // Et langsomt sikkerhedsnet (5 min) selvheler ved missede events (SSE-
@@ -92,7 +94,9 @@ function invalidateTvLogoCache() {
 
 // Reager på et SSE config-event (hjælpe-data ændret et andet sted end game-state)
 async function handleTvConfigEvent(scope) {
-    if (scope === 'sponsors') {
+    if (scope === 'kamera-visning') {
+        if (window.KameraVisning) window.KameraVisning.tjek();
+    } else if (scope === 'sponsors') {
         await refreshSponsorSettings();
     } else if (scope === 'logos') {
         invalidateTvLogoCache();
@@ -391,6 +395,8 @@ async function tjekNyVersion() {
 
 function genindlaesHvisLedig() {
     if (!_ventendeVersion || isMatchCurrentlyActive || isRestBreakActive) return;
+    // Ikke midt i en kameravisning (den kommer ellers igen efter genindlæsningen, men blinker)
+    if (document.documentElement.classList.contains('kamera-visning-aaben')) return;
     // Kun ét forsøg pr. ny version: serverer en cache stadig den gamle side
     // efter genindlæsningen, må TV'et ikke genindlæse i ring
     try {

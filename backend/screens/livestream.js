@@ -611,7 +611,13 @@ function rensStatus(body) {
         billedhastighed: typeof b.billedhastighed === 'number' && Number.isFinite(b.billedhastighed)
             && b.billedhastighed >= 0 && b.billedhastighed <= 240 ? Math.round(b.billedhastighed * 10) / 10 : null,
         // PC'ens eget id (et hash af maskine-id'et) — nye Badminton TV-versioner
-        pcId: typeof b.pcId === 'string' && /^[a-f0-9]{16,64}$/.test(b.pcId) ? b.pcId : null
+        pcId: typeof b.pcId === 'string' && /^[a-f0-9]{16,64}$/.test(b.pcId) ? b.pcId : null,
+        // Kameravisningen på TV'et (nye Badminton TV-versioner): PC'ens browser må
+        // åbne kameraet, og kameraets navn fra kernen og USB-id'et ("17ef:4831"), så
+        // TV-siden kan finde det samme kamera som streamen blandt browserens kameraer
+        kanVise: b.kameraVisning === true,
+        kameraKort: b.kameraKort ? tekst(b.kameraKort, 100) : null,
+        kameraUsb: typeof b.kameraUsb === 'string' && /^[0-9a-f]{4}:[0-9a-f]{4}$/.test(b.kameraUsb) ? b.kameraUsb : null
     };
 }
 
@@ -870,11 +876,87 @@ function ytSynligHandling(status) {
     return { saet: true };
 }
 
-// Til tests: glem alle PC'er (status, ejere, andre)
+// ---------- Kameravisning på TV'et ----------
+// Admin trykker "Vis kamera på TV'et": TV-PC'ens browser viser kameraet i fuld
+// skærm i VISNING_MS, så kameraet kan stilles, mens man ser billedet (ingen
+// YouTube-udsendelse). Kameraet kan kun bruges af én ad gangen: mens det vises,
+// sender PC'en ikke og tager ingen prøvebilleder. Skal banen sendes, slutter
+// visningen, og streamen venter VISNING_FRIGIV_MS, så browseren har sluppet kameraet.
+// Kun i hukommelsen — en genstart af serveren lukker visningen.
+
+const VISNING_MS = 5 * 60 * 1000;
+const VISNING_FRIGIV_MS = 5000;
+const visninger = new Map();   // tenant -> Map(tokenId -> { til, navn, frigiv })
+
+function startVisning(tenant, tokenId, navn, nu = Date.now()) {
+    if (!visninger.has(tenant)) visninger.set(tenant, new Map());
+    const til = nu + VISNING_MS;
+    visninger.get(tenant).set(tokenId, { til, navn: navn || '', frigiv: null });
+    return til;
+}
+
+// true, hvis en visning var i gang
+function stopVisning(tenant, tokenId, nu = Date.now()) {
+    const v = (visninger.get(tenant) || new Map()).get(tokenId);
+    if (!v || v.til <= nu) return false;
+    v.til = nu;
+    v.frigiv = nu + VISNING_FRIGIV_MS;
+    return true;
+}
+
+// { til, navn } for en visning i gang — ellers null (en udløbet glemmes)
+function visning(tenant, tokenId, nu = Date.now()) {
+    const klub = visninger.get(tenant);
+    const v = klub && klub.get(tokenId);
+    if (!v) return null;
+    if (v.til > nu) return { til: v.til, navn: v.navn };
+    // Udløbet af sig selv: browseren slipper kameraet lige så hurtigt som ved et stop
+    if (v.frigiv === null) v.frigiv = v.til + VISNING_FRIGIV_MS;
+    if (v.frigiv <= nu) klub.delete(tokenId);
+    return null;
+}
+
+// Har browseren kameraet (eller er den ved at slippe det)? Så må PC'en ikke sende
+function visningHolderKamera(tenant, tokenId, nu = Date.now()) {
+    if (visning(tenant, tokenId, nu)) return true;
+    const v = (visninger.get(tenant) || new Map()).get(tokenId);
+    return !!(v && v.frigiv > nu);
+}
+
+// Hvorfor kameraet ikke kan vises på TV'et lige nu (til admin) — null: det kan
+function visningSpaerret(s) {
+    if (!s || !s.online) return 'TV-PC\'en har ikke meldt sig det seneste minut — er den tændt?';
+    if (!s.kamera) return 'TV-PC\'en finder intet USB-kamera';
+    if (!s.kanVise) return 'Kræver en nyere Badminton TV-version på PC\'en (den opdaterer selv)';
+    if (s.sender) return 'Kameraet sender lige nu — det kan vises på TV\'et, når udsendelsen er slut';
+    // Banen skal sendes (PC'en venter kun på, at browseren slipper kameraet)
+    if (s.skalSende || s.grund === 'kamera-visning') return 'Banen skal sendes nu — kameraet kan vises på TV\'et, når udsendelsen er slut';
+    return null;
+}
+
+// Til TV-siden: det, den skal bruge for at vise kameraet, som streamen ser det.
+// harLogo: står der et logo i streamen (klubben har et, eller banen en sponsor)?
+// Uden: ud fra banens valg alene
+function visningTilTv({ v, s, indst, opsaetning, bane, harLogo, nu = Date.now() }) {
+    return {
+        aktiv: true,
+        sekunder: Math.max(0, Math.round((v.til - nu) / 1000)),
+        // PC'ens navn: flere skærme kan bruge samme adgangslink — kun PC'en med kameraet viser det
+        navn: v.navn || null,
+        kamera: { navn: (s && s.kamera) || null, kort: (s && s.kameraKort) || null, usb: (s && s.kameraUsb) || null },
+        video: videoTilPc(indst, opsaetning),
+        bane: bane || null,
+        overlay: opsaetning ? !!opsaetning.overlay : true,
+        logo: typeof harLogo === 'boolean' ? harLogo : !!(opsaetning && opsaetning.logo && opsaetning.logo !== 'ingen')
+    };
+}
+
+// Til tests: glem alle PC'er (status, ejere, andre) og kameravisninger
 function _nulstilStatus() {
     status.clear();
     ejere.clear();
     andre.clear();
+    visninger.clear();
 }
 
 module.exports = {
@@ -886,5 +968,7 @@ module.exports = {
     beslutning, startet, holdkampNu, holdkampStoppet, holdkampTilAdmin, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,
     spillerLogoer, klubLogoFraDatabase,
     rensStatus, rensKameraEnhed, registrer, statusFor, senderBane, pcSidstPaaBane, liveBaner,
-    pcNoegle, maaBrugeKamera, registrerAnden, svarTilAnden, autoKameraBane, _nulstilStatus
+    pcNoegle, maaBrugeKamera, registrerAnden, svarTilAnden, autoKameraBane,
+    VISNING_MS, VISNING_FRIGIV_MS, startVisning, stopVisning, visning, visningHolderKamera, visningSpaerret, visningTilTv,
+    _nulstilStatus
 };
