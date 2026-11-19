@@ -28,6 +28,10 @@ serveren (admin → Livestream) — aldrig på USB-nøglen.
   - dør ffmpeg (nettet væk, YouTube afviser), startes den igen efter 5, 15,
     30, 60 og derefter hvert 120. sekund, og fejlen vises i admin
   - svarer serveren ikke, sendes der videre i højst et minut
+  - kameravisningen på TV'et (admin → "Vis kamera på TV'et"): browseren viser
+    kameraet selv; PC'en melder kameraets navn og USB-id, så TV-siden finder
+    det samme kamera, og tager ingen prøvebilleder, mens browseren har det
+    (serveren sender ikke banen imens)
 
 Kameraet stilles til 50 Hz (ingen flimren fra hallens lys) og fast fokus på
 lang afstand (autofokus "pumper", når spillerne løber) — autofokus kan slås
@@ -304,6 +308,22 @@ def kamera_navn(node):
         navn = re.sub(r'^usb-[0-9a-f]{4}_|_[0-9A-F]{6,}(-if\d+)?-video-index0$|(-if\d+)?-video-index0$', '',
                       os.path.basename(node.links[0])).replace('_', ' ')
     return (navn or os.path.basename(node.enhed))[:100]
+
+
+def kamera_til_browser(enhed):
+    """(kort, usb) for kameraet, så TV-siden kan finde det samme kamera blandt
+    browserens: Chromium kalder et kamera "<kort> (<usb>)" — kernens navn
+    (VIDIOC_QUERYCAP) og USB-id'et, fx "Lenovo 500 RGB Camera (17ef:4831)".
+    (None, None) uden kamera; hver del None, hvis den ikke kan læses."""
+    if not enhed:
+        return None, None
+    info = node_info(enhed) or {}
+    kort = (info.get('kort') or _sys(enhed, 'name') or '')[:100] or None
+    leverandoer = _sys(enhed, 'device', '..', 'idVendor').lower()
+    produkt = _sys(enhed, 'device', '..', 'idProduct').lower()
+    usb = f'{leverandoer}:{produkt}' if re.fullmatch(r'[0-9a-f]{4}', leverandoer) \
+        and re.fullmatch(r'[0-9a-f]{4}', produkt) else None
+    return kort, usb
 
 
 # Det infrarøde kamera til Windows Hello (og dybdekameraer) står i navnet på
@@ -951,6 +971,9 @@ class Stream:
         self.afvist = {}            # enhed -> inputformater, kameraet ikke kunne åbnes i
         self.linjer = collections.deque(maxlen=20)
         self.billedtal = collections.deque(maxlen=6)    # (tid, antal billeder) fra -progress
+        # Kameraet vises på TV'et (admin → "Vis kamera på TV'et"): browseren har
+        # kameraet, så ingen prøvebilleder imens (serveren siger det i svaret)
+        self.visning = False
 
     def format_tekst(self):
         """Til admin: det, der faktisk sendes, fx '1280x720@30' (None: sender ikke)."""
@@ -1037,10 +1060,11 @@ class Stream:
         Mens der sendes, tages ingen nye prøver: det gemte svar bruges, så valget
         ikke skifter midt i en udsendelse (heller ikke når lyset slukkes). Står PC'en
         ledig, tages prøven igen efter PROEVE_GYLDIG — et for mørkt svar allerede
-        efter PROEVE_MOERK (lyset tændes) — og før hver start (proev_foer_start)."""
+        efter PROEVE_MOERK (lyset tændes) — og før hver start (proev_foer_start).
+        Vises kameraet på TV'et, har browseren det: heller ingen prøver da."""
         noegle = self._billede_noegle(enhed)
         gemt = self.billede.get(noegle)
-        if self.koerer():
+        if self.koerer() or self.visning:
             return gemt[0] if gemt else None
         if gemt and time.monotonic() - gemt[2] < (PROEVE_MOERK if gemt[0] == 'moerk' else PROEVE_GYLDIG):
             return gemt[0]
@@ -1333,6 +1357,7 @@ def main():
         # Døde ffmpeg siden sidst? Så skal fejlen med i statussen — og læses,
         # før start() rydder op
         stream.tjek()
+        kort, usb = kamera_til_browser(enhed)
         svar = spoerg(STREAM_URL or f'{server}/api/livestream/pc', token, {
             'navn': navn, 'kioskVersion': version, 'kamera': kamera,
             'sender': stream.koerer(), 'koder': stream.koder, 'fejl': stream.fejl,
@@ -1340,14 +1365,22 @@ def main():
             'kameraFormater': stream.formater_tekst(enhed), 'fejllog': stream.fejllog,
             'kameraInput': stream.input_tekst(), 'kameraNode': stream.node_tekst(),
             'kameraer': stream.kamera_liste(), 'kameraValg': valg['valg'],
-            'billedhastighed': stream.billedhastighed()})
+            'billedhastighed': stream.billedhastighed(),
+            # Browseren må vise kameraet på TV'et (kamera-politikken, se setup)
+            'kameraVisning': True, 'kameraKort': kort, 'kameraUsb': usb})
         if svar is None:
             if stream.koerer() and time.monotonic() - sidste_svar > UDEN_SVAR:
                 log(f'intet svar fra serveren i {UDEN_SVAR:.0f} s — stopper')
                 stream.stop()
+            stream.visning = False
             interval = SPOERG_SENDER if stream.koerer() else SPOERG_FEJL
         else:
             sidste_svar = time.monotonic()
+            visning = bool(svar.get('kameraVisning'))
+            if visning != stream.visning:
+                log('kameraet vises på TV\'et — ingen prøvebilleder imens' if visning
+                    else 'kameravisningen på TV\'et er slut')
+                stream.visning = visning
             k = svar.get('kameraEnhed')
             valgt = k if isinstance(k, str) and re.fullmatch(r'[\w.:+-]{1,160}', k) else None
             anden = svar.get('grund') == 'anden-pc'

@@ -90,4 +90,22 @@ fi
     printf 'BT_TILSTAND=%q\n' "$tilstand"
 } > "$RUN/kiosk.env"
 
+# ── Kameraet i browseren ───────────────────────────────────
+# Kameravisningen på TV'et (admin → Livestream → "Vis kamera på TV'et"): kun
+# klubbens egen server (TV_URL's adresse) må åbne USB-kameraet i browseren —
+# uden at spørge. Alle andre sider er spærret (badminton-tv.json:
+# VideoCaptureAllowed false). Skrives ved hver opstart, så et nyt TV_URL gælder.
+KAMERA_POLITIK=/etc/chromium/policies/managed/badminton-tv-kamera.json
+if [[ "$BT_TV_URL" =~ ^(https?)://([A-Za-z0-9.-]+)(:[0-9]{1,5})?(/|$) ]]; then
+    oprindelse="${BASH_REMATCH[1]}://${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
+    printf '{\n  "VideoCaptureAllowedUrls": ["%s"]\n}\n' "$oprindelse" > "$KAMERA_POLITIK.ny"
+    if cmp -s "$KAMERA_POLITIK.ny" "$KAMERA_POLITIK"; then
+        rm -f "$KAMERA_POLITIK.ny"
+    else
+        mv "$KAMERA_POLITIK.ny" "$KAMERA_POLITIK"
+    fi
+else
+    rm -f "$KAMERA_POLITIK"
+fi
+
 exit 0

@@ -1110,6 +1110,17 @@ header > div {
 .ls-bund .ls-kamera[open] { flex-basis: 100%; }
 .ls-bund .ls-start { margin-top: 0; flex: 1 1 320px; }
 
+/* "Vis kamera på TV'et" — på sin egen linje øverst i bunden af kortet */
+.ls-visning {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    flex-basis: 100%;
+}
+
+.ls-visning:empty { display: none; }
+
 /* Faste bredder til fluebenene, så kolonnerne står ens på alle baner — med
    "auto" fik hver bane sine egne bredder efter indholdet */
 .ls-felter {

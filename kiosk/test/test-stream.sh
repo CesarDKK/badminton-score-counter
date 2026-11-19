@@ -24,6 +24,7 @@
 #  18g. kun IR-noden har et link  → farvenoden uden link findes alligevel (VIDIOC_QUERYCAP),
 #       metadata-noder er aldrig kandidater, og admin kan vælge noden uden link
 #  19. Brio i svagt lys           → auto-prioritet fra (manglende kontrol tåles), faktisk billedhastighed meldt
+#  20. kameraet vises på TV'et     → navn og USB-id til browseren, ingen prøvebilleder imens
 #
 # Køres i en debian:trixie-container (henter ffmpeg, python3, Pillow og skrifterne):
 #   docker run --rm -v "$PWD/kiosk:/src" debian:trixie bash /src/test/test-stream.sh
@@ -888,6 +889,47 @@ stop_stream
 vent_paa 5 sh -c "tail -n 1 '$TMP/status.jsonl' | grep -q '\"sender\": false'" || true
 kill "$MODTAGER_PID" 2>/dev/null
 rm -f "$TMP/video10" "$TMP/by-id/"*
+
+echo "20. Kameravisning på TV'et: kameraets navn og USB-id meldes, ingen prøvebilleder imens"
+# Lenovo 500 som i 18a (IR'en og billedet hedder det samme): prøvebillederne
+# tages igen hvert sekund (BT_PROEVE_GYLDIG=1) — undtagen mens browseren har kameraet
+rm -f "$TMP/formater"* "$TMP/by-id/"* "$TMP/ffmpeg.log.proever"
+: > "$TMP/video8"; : > "$TMP/video9"; : > "$TMP/video8.ir"
+ln -s "$TMP/video8" "$TMP/by-id/$LENOVO-if00-video-index0"
+ln -s "$TMP/video9" "$TMP/by-id/$LENOVO-if02-video-index0"
+mkdir -p "$TMP/sys/class/video4linux/video8" "$TMP/sys/class/video4linux/video9" "$TMP/sys/devices/usb2/2-1/2-1:1.2"
+echo "Lenovo 500 RGB Camera: Lenovo 5" > "$TMP/sys/class/video4linux/video8/name"
+echo "Lenovo 500 RGB Camera: Lenovo 5" > "$TMP/sys/class/video4linux/video9/name"
+echo 17ef > "$TMP/sys/devices/usb2/2-1/idVendor"
+echo 4831 > "$TMP/sys/devices/usb2/2-1/idProduct"
+ln -sfn "$TMP/sys/devices/usb2/2-1/2-1:1.2" "$TMP/sys/class/video4linux/video9/device"
+cat > "$TMP/formater" <<'EOF'
+	[0]: 'MJPG' (Motion-JPEG, compressed)
+		Size: Discrete 1920x1080
+			Interval: Discrete 0.033s (30.000 fps)
+EOF
+proever() { if [ -e "$TMP/ffmpeg.log.proever" ]; then wc -l < "$TMP/ffmpeg.log.proever" | tr -d ' '; else echo 0; fi; }
+svar "$INGEN_SVAR"
+start_stream BT_PROEVE_GYLDIG=1
+vent_paa 15 sh -c "[ \$(cat '$TMP/ffmpeg.log.proever' 2>/dev/null | wc -l) -ge 2 ]" || true
+vent_paa 10 sh -c "tail -n 1 '$TMP/status.jsonl' | grep -q '\"kameraUsb\": \"17ef:4831\"'" || true
+forvent "status: browseren må vise kameraet" "$(sidste_status | felt kameraVisning)" "True"
+forvent "status: kameraets navn fra kernen" "$(sidste_status | felt kameraKort)" "Lenovo 500 RGB Camera: Lenovo 5"
+forvent "status: USB-id'et (som Chromium viser det)" "$(sidste_status | felt kameraUsb)" "17ef:4831"
+svar '{"kamera":true,"bane":3,"send":false,"grund":"ingen-kamp","kameraVisning":true}'
+vent_paa 10 grep -q "kameraet vises på TV'et" "$TMP/stream.log" || true
+indeholder "visningen i loggen" "$(cat "$TMP/stream.log")" "kameraet vises på TV'et — ingen prøvebilleder imens"
+sleep 1
+FOER=$(proever)
+sleep 4
+forvent "ingen prøvebilleder, mens kameraet vises" "$(proever)" "$FOER"
+forvent "ffmpeg startes ikke" "$(antal_start)" "0"
+svar "$INGEN_SVAR"
+vent_paa 10 grep -q "kameravisningen på TV'et er slut" "$TMP/stream.log" || true
+vent_paa 10 sh -c "[ \$(cat '$TMP/ffmpeg.log.proever' 2>/dev/null | wc -l) -gt $FOER ]" || true
+forvent "prøvebillederne tages igen bagefter" "$([ "$(proever)" -gt "$FOER" ] && echo ja || echo nej)" "ja"
+stop_stream
+rm -rf "$TMP/sys/class/video4linux/video8" "$TMP/sys/class/video4linux/video9" "$TMP/video8"* "$TMP/video9"* "$TMP/by-id/"*
 
 echo
 if [ "$FEJL" -eq 0 ]; then echo "Alle test bestået"; else echo "$FEJL fejl"; tail -n 30 "$TMP/stream.log"; fi

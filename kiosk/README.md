@@ -260,6 +260,21 @@ USB-C eller USB-A på kameraet gør ingen forskel. Viser kameraet sig som flere
 enheder (Brio 4K har et infrarødt kamera til Windows Hello ved siden af
 billedet), tages den enhed, der har MJPEG, ellers YUYV — ikke bare den første.
 
+**Kameravisning på TV'et** (stil kameraet op uden en YouTube-udsendelse):
+admin → Livestream → banen → **Vis kamera på TV'et**. TV'et ved kameraet viser
+så kameraet i fuld skærm i 5 minutter — levende, direkte fra kameraet i PC'ens
+browser (intet går over nettet). Ovenpå står hjælpelinjer (tredjedele og
+midten), et eksempel på scoreboardet der, hvor det kommer til at stå (den
+stiplede ramme er den plads, lange navne og tre sæt kan fylde), og logoets
+plads. Billedet vendes/spejles og har samme format som streamen. Luk det igen i
+admin, eller lad det lukke af sig selv. Kameraet kan kun bruges af én ad
+gangen: mens det vises, tager stream-tjenesten ingen prøvebilleder, og skal
+banen sendes, lukkes visningen, og udsendelsen starter et par sekunder senere.
+Kun klubbens egen server (TV_URL's adresse) må åbne kameraet i browseren —
+`setup` skriver Chromium-politikken `/etc/chromium/policies/managed/badminton-tv-kamera.json`
+ved hver opstart; alle andre sider er spærret (og browseren kræver https). Kræver
+Badminton TV fra denne version.
+
 ### Ting der kan drille
 
 | Symptom | Løsning |
