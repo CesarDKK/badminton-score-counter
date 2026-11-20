@@ -277,7 +277,25 @@ function parseMatchHtml(html) {
         });
     }
 
-    return { team1Name, team2Name, format: detectFormat(games), games };
+    const { aldersgruppe, ungdom } = aldersgruppeFraHtml(html);
+    return { team1Name, team2Name, format: detectFormat(games), games, aldersgruppe, ungdom };
+}
+
+// Rækkens aldersgruppe: badmintonplayer.dk skriver forbund + aldersgruppe i
+// <h2> ("BADKBH U09", "BADDAN,DGI U17/U19", "BADDAN SEN") og rækken i <h3>
+// ("U09 D 3300 (3 spillere) BD Pulje 1"). En U-gruppe (U09 … U19) er en
+// ungdomsholdkamp — den sendes ikke af sig selv på livestream (migration 054).
+const U_GRUPPE = /(?:^|[\s,/(])U\s?(\d{1,2})(?=$|[\s,/)])/i;
+function aldersgruppeFraHtml(html) {
+    const h2 = textOf((String(html).match(/<h2[^>]*>([\s\S]*?)<\/h2>/i) || [])[1] || '');
+    const h3 = textOf((String(html).match(/<h3[^>]*>([\s\S]*?)<\/h3>/i) || [])[1] || '');
+    // Sidste ord i <h2> er aldersgruppen ("U17/U19", "SEN"); forbundene står foran
+    const aldersgruppe = h2 ? h2.split(' ').pop().slice(0, 30) : null;
+    const ungdom = [h2, h3].some(t => {
+        const m = t.match(U_GRUPPE);
+        return !!m && Number(m[1]) <= 19;
+    });
+    return { aldersgruppe, ungdom };
 }
 
 /**
@@ -573,7 +591,8 @@ async function tjekWatcher(w, { kilde = 'auto' } = {}) {
             team1Name: seddel.team1Name,
             team2Name: seddel.team2Name,
             games: seddel.games,
-            sourceMatchId: w.league_match_id
+            sourceMatchId: w.league_match_id,
+            ungdom: seddel.ungdom
         }, (tx, id) => tx.query(
             `UPDATE holdkamp_watchers SET status = 'oprettet', team_match_id = ?, last_error = NULL WHERE id = ?`,
             [id, w.id]
@@ -689,5 +708,7 @@ module.exports.bpTur = bpTur;
 module.exports.BP_MIN_AFSTAND_MS = BP_MIN_AFSTAND_MS;
 // Rene hjælpefunktioner eksporteres til unit-tests (tests/unit/holdkamp-tid.test.js)
 module.exports.parseDanskTid = parseDanskTid;
+module.exports.parseMatchHtml = parseMatchHtml;
+module.exports.aldersgruppeFraHtml = aldersgruppeFraHtml;
 module.exports.tilMysqlDato = tilMysqlDato;
 module.exports.danskVaeggurTilUtc = danskVaeggurTilUtc;

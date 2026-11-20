@@ -263,6 +263,9 @@ const danskDato = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/C
 //     holdkamp fra i går sendes aldrig af sig selv, heller ikke hvis nogen
 //     tæller på dens bane i dag. (Sættes delkampene på banerne dagen før,
 //     sendes der derfor først fra den første, der startes eller afsluttes på dagen.)
+// Ungdomsholdkamp (team_matches.ungdom, migration 054): sendes ikke af sig selv
+const erUngdomsHoldkamp = (h) => !!h && Number(h.ungdom) > 0;
+
 function holdkampNu(h, nu = Date.now()) {
     if (!h) return { koerer: false, slut: null };
     if (Number(h.mangler) > 0) {
@@ -307,20 +310,25 @@ function beslutning({ opsaetning, gs, sidste, planner, holdkamp = null, senderNu
     // Admin har trykket "Stop for i dag": holdkampen sendes ikke af sig selv —
     // men det, der er startet med en knap, sendes stadig
     const stoppet = hk.koerer && holdkampStoppet(opsaetning, nu);
-    if (hk.koerer && !stoppet) return { send: true, grund: 'holdkamp', kilde, ...glem };
+    // En ungdomsholdkamp sendes heller ikke af sig selv (migration 054: Badminton
+    // Danmark/DIF anbefaler ikke livestream af spillere under 18) — men kan
+    // startes med vilje som en almindelig kamp (tabletten, "Send hele dagen")
+    const ungdom = hk.koerer && erUngdomsHoldkamp(holdkamp);
+    const hkGrund = stoppet ? 'holdkamp-stoppet' : ungdom ? 'holdkamp-ungdom' : null;
+    if (hk.koerer && !stoppet && !ungdom) return { send: true, grund: 'holdkamp', kilde, ...glem };
     if (k.tilstand === 'kamp') {
         if (s && s.start === 'valgt') return { send: true, grund: 'valgt', kilde: 'gs' };
         if (s && s.start === 'klar') return { send: true, grund: 'valgt', kilde: 'gs', vaelg: true };
-        return { send: false, grund: stoppet ? 'holdkamp-stoppet' : 'ikke-startet' };
+        return { send: false, grund: hkGrund || 'ikke-startet' };
     }
     // Holdkampens sidste delkamp er afgjort — måske på en anden bane
     if (hk.slut !== null && senderNu && nu - hk.slut < efterMs) return { send: true, grund: 'afgjort', kilde, ...glem };
     if (k.tilstand === 'afgjort') {
         return senderNu && k.slut !== null && nu - k.slut < efterMs
             ? { send: true, grund: 'afgjort', kilde: k.ryddet ? 'sidste' : 'gs', ...glem }
-            : { send: false, grund: stoppet ? 'holdkamp-stoppet' : (k.ryddet ? 'ingen-kamp' : 'afsluttet'), ...glem };
+            : { send: false, grund: hkGrund || (k.ryddet ? 'ingen-kamp' : 'afsluttet'), ...glem };
     }
-    return { send: false, grund: stoppet ? 'holdkamp-stoppet' : k.tilstand, ...glem };
+    return { send: false, grund: hkGrund || k.tilstand, ...glem };
 }
 
 // "Stop for i dag" i admin (court_streams.holdkamp_stop_until, migration 042)
@@ -341,8 +349,10 @@ function holdkampTilAdmin({ holdkamp, info, opsaetning, nu = Date.now() }) {
     const start = d ? tid(d.start) : null;
     return {
         hold: `${info.hold1 || 'Hold 1'} – ${info.hold2 || 'Hold 2'}`,
-        sendes: hk.koerer && !stoppet,
+        sendes: hk.koerer && !stoppet && !erUngdomsHoldkamp(holdkamp),
         stoppet,
+        // Ungdomsholdkamp: sendes aldrig af sig selv (migration 054)
+        ungdom: erUngdomsHoldkamp(holdkamp),
         // 'stille' (ingen har talt i 30 min) eller 'ny-dag' — null: ikke forladt
         forladt: hk.forladt || null,
         delkamp: d ? {
@@ -369,8 +379,9 @@ function tabletStatus({ opsaetning, kamera, pc, holdkamp = null, planner = false
         kan,
         start: s ? s.start : null,
         til: s && s.til ? new Date(s.til).toISOString() : null,
-        // "● Livestream: holdkampen sendes" på tabletten — ikke når admin har stoppet den for i dag
-        holdkamp: holdkampNu(holdkamp, nu).koerer && !holdkampStoppet(opsaetning, nu),
+        // "● Livestream: holdkampen sendes" på tabletten — ikke når admin har stoppet
+        // den for i dag, og aldrig for en ungdomsholdkamp (sendes ikke af sig selv)
+        holdkamp: holdkampNu(holdkamp, nu).koerer && !holdkampStoppet(opsaetning, nu) && !erUngdomsHoldkamp(holdkamp),
         planner: !!planner,
         sender: !!(pc && pc.online && pc.sender),
         kameraKlar: !!(pc && pc.online && pc.kamera),
@@ -965,7 +976,7 @@ module.exports = {
     YT_KENDETEGN, YT_SYNLIG_DAGE, YT_SYNLIG_MAKS, erAppensUdsendelse, ytSynligFejlStopper, ytSynligHandling,
     gyldigUrl, gyldigNoegle, rensOpsaetning, noegleSlut,
     STANDARD_INDSTILLINGER, laesIndstillinger, rensIndstillinger, videoTilPc, sponsorNu, gyldigLogoFil,
-    beslutning, startet, holdkampNu, holdkampStoppet, holdkampTilAdmin, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,
+    beslutning, startet, holdkampNu, holdkampStoppet, erUngdomsHoldkamp, holdkampTilAdmin, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,
     spillerLogoer, klubLogoFraDatabase,
     rensStatus, rensKameraEnhed, registrer, statusFor, senderBane, pcSidstPaaBane, liveBaner,
     pcNoegle, maaBrugeKamera, registrerAnden, svarTilAnden, autoKameraBane,

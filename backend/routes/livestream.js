@@ -307,7 +307,8 @@ const holdkampPaaBane = async (bane) => {
     const r = await queryOne(
         `SELECT SUM(g.status <> 'finished') AS mangler, SUM(g.status = 'active') AS igang,
                 MAX(g.finished_at) AS slut, MAX(g.started_at) AS start,
-                MAX(CASE WHEN g.status = 'active' THEN gs.updated_at END) AS roert
+                MAX(CASE WHEN g.status = 'active' THEN gs.updated_at END) AS roert,
+                MAX(tm.ungdom) AS ungdom
            FROM team_matches tm
            JOIN team_match_games g ON g.team_match_id = tm.id
            LEFT JOIN courts c ON c.court_number = g.court_number

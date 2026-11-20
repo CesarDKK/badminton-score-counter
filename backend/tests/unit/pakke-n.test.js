@@ -270,7 +270,7 @@ test('45: afsluttet holdkamp frigiver kilden; migration 045; ruten og køen brug
     const tm = laes('backend/routes/teamMatches.js');
     assert.match(tm, /UPDATE team_matches SET status = 'finished', aktiv_kilde_id = NULL WHERE id = \?/);
     assert.doesNotMatch(tm, /SET status = 'finished' WHERE/);
-    assert.match(tm, /opretHoldkamp\(\{ format, team1Name, team2Name, games, team1LogoId, team2LogoId, sourceMatchId \}\)/);
+    assert.match(tm, /opretHoldkamp\(\{ format, team1Name, team2Name, games, team1LogoId, team2LogoId, sourceMatchId(, ungdom)? \}\)/);
     assert.match(tm, /code: error\.code, teamMatchId: error\.teamMatchId/);
 
     const sql = laes('backend/migrations/045_genaktiver_link_og_holdkamp_kilde.sql');
@@ -295,7 +295,7 @@ test('45: "Opret Holdkamp" fra importen kan ikke trykkes to gange og sender kild
     assert.match(f, /const knapper = document\.querySelectorAll\('#bpImportPreview \.bp-opret-knap'\);/);
     assert.match(f, /knapper\.forEach\(k => \{ k\.disabled = true;/);
     assert.match(f, /finally \{\s+bpOpretter = false;/);
-    assert.match(f, /games: gamesData, sourceMatchId \}/);
+    assert.match(f, /games: gamesData, sourceMatchId(, ungdom)? \}/);
     assert.match(adminScript, /preview\.dataset\.kilde\s+= data\.sourceMatchId \|\| '';/);
     assert.match(adminScript, /onclick="bpCreate\(\)" id="bpCreateBtn" type="button" class="[^"]*bp-opret-knap/);
     assert.equal((adminScript.match(/onclick="bpCreate\(\)"[^>]*bp-opret-knap/g) || []).length, 2, 'en knap i toppen og en i bunden');
