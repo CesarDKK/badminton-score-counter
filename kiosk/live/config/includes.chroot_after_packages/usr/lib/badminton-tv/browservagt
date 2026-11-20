@@ -8,7 +8,14 @@ kan også fryse alene (en hængende side, en GPU-fejl), mens PC'en kører videre
 
   - svarer siden slet ikke inden for 10 sekunder, eller
   - står sidens hjerteslag (window.__btTik, sættes hvert sekund af
-    tv-script-v3.js) mere end 30 sekunder stille,
+    tv-script-v3.js) mere end 30 sekunder stille, eller
+  - står sidens billed-hjerteslag (window.__btBillede, sættes hver gang
+    browseren tegner et billede) mere end 30 sekunder stille, mens
+    JavaScript kører: grafikken eller skærmudgangen hænger, og TV'et viser et
+    frossent billede (set på tv44 i Lyngby i november 2026). Kun når en skærm
+    er tilsluttet og siden er synlig — et slukket TV tegner ingenting — og kun
+    når siden har tegnet før, så en side, der aldrig kommer i gang, ikke
+    genstartes i ring,
 
 tæller det som en fejl. Efter 3 fejl i træk (ca. et minut) genstartes
 browseren (badminton-tv.service). PC'en selv kører videre.
@@ -84,6 +91,9 @@ INTERVAL = int(os.environ.get('BT_VAGT_INTERVAL', '20'))
 OPSTART_PAUSE = int(os.environ.get('BT_VAGT_OPSTART', '120'))
 SVAR_TIMEOUT = 10
 TIK_MAX_ALDER_MS = 30000
+BILLEDE_MAX_ALDER_MS = 30000
+# Skærmudgangenes status (connected/disconnected). BT_DRM (tests): en anden sti.
+DRM_STATUS = os.environ.get('BT_DRM', '/sys/class/drm/card*-*/status')
 FEJL_FOER_GENSTART = 3
 GENSTART = os.environ.get('BT_GENSTART', 'systemctl restart badminton-tv.service')
 SYSRQ = os.environ.get('BT_SYSRQ', '/proc/sysrq-trigger')
@@ -314,17 +324,40 @@ def tjek():
         return None                     # startsiden/fejlside — startsiden tager sig af det
     try:
         vaerdi = evaluer(side['webSocketDebuggerUrl'],
-                         '[Date.now(), window.__btTik || 0, document.visibilityState]')
+                         '[Date.now(), window.__btTik || 0, document.visibilityState, window.__btBillede || 0]')
     except Exception as e:
         return f'TV-siden svarer ikke ({e}) — {side.get("url", "")[:80]}'
-    if isinstance(vaerdi, list) and len(vaerdi) >= 2 and vaerdi[1]:
+    if not isinstance(vaerdi, list) or len(vaerdi) < 2:
+        return None
+    # Er TV'et slukket (intet display), regner Chromium siden for skjult og
+    # kan bremse dens timere — det er ikke en frysning, og ingen ser
+    # skærmen. Genstart ville bare starte forfra hvert minut.
+    synlig = len(vaerdi) < 3 or vaerdi[2] != 'hidden'
+    if vaerdi[1]:
         alder = vaerdi[0] - vaerdi[1]
-        # Er TV'et slukket (intet display), regner Chromium siden for skjult og
-        # kan bremse dens timere — det er ikke en frysning, og ingen ser
-        # skærmen. Genstart ville bare starte forfra hvert minut.
-        if alder > TIK_MAX_ALDER_MS and (len(vaerdi) < 3 or vaerdi[2] != 'hidden'):
+        if alder > TIK_MAX_ALDER_MS and synlig:
             return f'TV-sidens hjerteslag har stået stille i {round(alder / 1000)} s'
+    # JavaScript kører, men tegner browseren stadig? (0 = siden har aldrig tegnet
+    # eller er en ældre version uden billed-hjerteslag: intet at tjekke)
+    if len(vaerdi) >= 4 and vaerdi[3] and synlig:
+        alder = vaerdi[0] - vaerdi[3]
+        if alder > BILLEDE_MAX_ALDER_MS and skaerm_tilsluttet():
+            return (f'TV-sidens billede har stået stille i {round(alder / 1000)} s '
+                    '(siden kører, men browseren tegner ikke — grafikken eller skærmudgangen hænger)')
     return None
+
+
+def skaerm_tilsluttet():
+    """False kun når PC'en kender sine skærmudgange, og ingen af dem har en skærm
+    (TV'et slukket/kablet ude: så tegnes der ikke, og det er ikke en frysning)."""
+    status = []
+    for fil in glob.glob(DRM_STATUS):
+        try:
+            with open(fil) as f:
+                status.append(f.read().strip())
+        except OSError:
+            pass
+    return not status or 'connected' in status
 
 
 # ── Net-vagt ──────────────────────────────────────────────

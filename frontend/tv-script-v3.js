@@ -434,6 +434,13 @@ function startSkaermStatus() {
         varSkjult = document.hidden;
     }, 1000);
 
+    // Billed-hjerteslag til browser-vagten: sættes kun, når browseren faktisk
+    // tegner et billede (ét pr. sekund er nok — ikke 60). Hænger grafikken
+    // (eller skærmudgangen), mens JavaScript kører videre, står __btTik ikke
+    // stille — men det gør dette, og vagten genstarter browseren, så TV'et
+    // ikke står frosset.
+    setInterval(() => requestAnimationFrame(() => { window.__btBillede = Date.now(); }), 1000);
+
     sendLivstegn();
     setInterval(sendLivstegn, SKAERM_INTERVAL_MS);
 }

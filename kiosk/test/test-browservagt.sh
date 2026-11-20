@@ -8,6 +8,8 @@
 #   6. kernelog-filteret  → kun advarsler om disken gentages før panikken
 #   7. skjult side (TV'et slukket) med stoppet hjerteslag → ingen genstart
 #   8. browseren stoppet af den automatiske slukning → ingen genstart (uden: genstart)
+#   9. billedet står stille, mens JavaScript kører → genstart — men ikke uden
+#      tilsluttet skærm, og ikke når siden aldrig har tegnet
 #
 # Køres i en debian:trixie-container (henter chromium + python3):
 #   docker run --rm -v "$PWD/kiosk:/src" debian:trixie bash /src/test/test-browservagt.sh
@@ -23,11 +25,18 @@ if ! command -v chromium >/dev/null || ! command -v python3 >/dev/null; then
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq chromium python3 >/dev/null
 fi
 
-# Testsiden: sætter hjerteslaget hvert sekund, ligesom tv-script-v3.js
+# Testsiden: sætter hjerteslaget hvert sekund og billed-hjerteslaget for hvert
+# tegnet billede, ligesom tv-script-v3.js (__btTegn = false: grafikken hænger)
 cat > "$ARB/tv.html" <<'EOF'
 <!doctype html><title>TV</title>
-<script>window.__btTimer = setInterval(() => { window.__btTik = Date.now(); }, 1000);</script>
+<script>window.__btTimer = setInterval(() => { window.__btTik = Date.now(); }, 1000);
+window.__btTegn = true;
+setInterval(() => requestAnimationFrame(() => { if (window.__btTegn) window.__btBillede = Date.now(); }), 1000);</script>
 EOF
+# Skærmudgangene (som /sys/class/drm/card*-*/status): et TV er tilsluttet
+mkdir -p "$ARB/drm/card0-HDMI-A-1" "$ARB/drm/card0-DP-1"
+echo connected > "$ARB/drm/card0-HDMI-A-1/status"
+echo disconnected > "$ARB/drm/card0-DP-1/status"
 (cd "$ARB" && python3 -m http.server 8765 --bind 127.0.0.1 >/dev/null 2>&1) &
 WEB=$!
 
@@ -65,7 +74,7 @@ EOF
 koer_vagt() { # sekunder [disk]
     rm -f "$ARB/genstartet" "$ARB/sysrq"
     BT_VAGT_OPSTART=1 BT_VAGT_INTERVAL=2 BT_GENSTART="touch $ARB/genstartet" BT_MELD='' \
-        BT_DISK="${2:-}" BT_SYSRQ="$ARB/sysrq" \
+        BT_DISK="${2:-}" BT_SYSRQ="$ARB/sysrq" BT_DRM="$ARB/drm/*/status" \
         timeout "$1" python3 "$VAGT" > "$ARB/vagt.log" 2>&1
     [ -f "$ARB/genstartet" ]
 }
@@ -108,6 +117,22 @@ sleep 3
 send_js 'Object.defineProperty(document, "visibilityState", {get: () => "hidden"}); clearInterval(window.__btTimer)'
 sleep 32
 koer_vagt 15; tjek "skjult side med stoppet hjerteslag" nej $?
+kill "$CHROME" 2>/dev/null; wait "$CHROME" 2>/dev/null
+
+# Billedet står stille, mens JavaScript kører (grafikken/skærmudgangen hænger)
+start_chromium
+sleep 3
+send_js 'window.__btTegn = false'
+sleep 32
+koer_vagt 15; tjek "billedet står stille, JavaScript kører" ja $?
+grep -q "billede har stået stille" "$ARB/vagt.log" || { echo "  FEJL  grunden står ikke i loggen"; FEJL=$((FEJL + 1)); }
+# ... men intet TV tilsluttet (slukket/kablet ude): så tegnes der ikke, og ingen ser det
+echo disconnected > "$ARB/drm/card0-HDMI-A-1/status"
+koer_vagt 15; tjek "billedet står stille, ingen skærm tilsluttet" nej $?
+echo connected > "$ARB/drm/card0-HDMI-A-1/status"
+# ... og en side, der aldrig har tegnet (eller en ældre TV-side): intet at tjekke
+send_js 'window.__btBillede = 0'
+koer_vagt 15; tjek "siden har aldrig tegnet" nej $?
 kill "$CHROME" 2>/dev/null; wait "$CHROME" 2>/dev/null
 
 # Disk-vagten: en læsbar "disk" (en fil på 1 MB) og en, der er væk.
