@@ -58,8 +58,16 @@ router.use((req, res, next) => {
  * (aktiv_kilde_id er unik, migration 045, og nulstilles, når holdkampen
  * afsluttes) — et dobbeltklik på "Opret Holdkamp" eller import + kø gav før to.
  * Findes den allerede, kastes 409 med .code = 'holdkamp_findes' og .teamMatchId.
+ *
+ * ungdom (migration 054): ungdomsholdkamp — sendes ikke af sig selv på
+ * livestream. Uden et valg: U9-formatet er altid ungdom, de andre formater
+ * spilles også af seniorer, så de er det ikke.
  */
 const KILDE_ID = /^[A-Za-z0-9_-]{1,40}$/;
+
+function erUngdom(ungdom, format) {
+    return typeof ungdom === 'boolean' ? ungdom : format === 'u9_3spillere';
+}
 
 function holdkampFindes(tm) {
     const err = new Error(`Holdkampen ${tm.team1_name} – ${tm.team2_name} er allerede oprettet fra samme kamp på badmintonplayer.dk.`);
@@ -69,7 +77,7 @@ function holdkampFindes(tm) {
     return err;
 }
 
-async function opretHoldkamp({ format, team1Name, team2Name, games, team1LogoId, team2LogoId, sourceMatchId = null }, efter = null) {
+async function opretHoldkamp({ format, team1Name, team2Name, games, team1LogoId, team2LogoId, sourceMatchId = null, ungdom }, efter = null) {
     const kilde = sourceMatchId === null || sourceMatchId === undefined || sourceMatchId === '' ? null : String(sourceMatchId);
     if (kilde !== null && !KILDE_ID.test(kilde)) {
         const err = new Error('Ugyldigt kamp-id');
@@ -94,9 +102,9 @@ async function opretHoldkamp({ format, team1Name, team2Name, games, team1LogoId,
             }
 
             const result = await tx.query(
-                `INSERT INTO team_matches (format, team1_name, team2_name, team1_logo_id, team2_logo_id, status, aktiv_kilde_id)
-                 VALUES (?, ?, ?, ?, ?, 'active', ?)`,
-                [format, team1Name, team2Name, team1LogoId || null, team2LogoId || null, kilde]
+                `INSERT INTO team_matches (format, team1_name, team2_name, team1_logo_id, team2_logo_id, status, aktiv_kilde_id, ungdom)
+                 VALUES (?, ?, ?, ?, ?, 'active', ?, ?)`,
+                [format, team1Name, team2Name, team1LogoId || null, team2LogoId || null, kilde, erUngdom(ungdom, format) ? 1 : 0]
             );
             const teamMatchId = result.insertId;
 
@@ -277,7 +285,7 @@ router.get('/by-court/:courtId', async (req, res, next) => {
 // POST /api/team-matches - Create new team match (requires auth)
 router.post('/', authMiddleware, requirePage('holdkamp'), async (req, res, next) => {
     try {
-        const { format, team1Name, team2Name, games, team1LogoId, team2LogoId, sourceMatchId } = req.body;
+        const { format, team1Name, team2Name, games, team1LogoId, team2LogoId, sourceMatchId, ungdom } = req.body;
 
         if (!format || !team1Name || !team2Name || !games || !Array.isArray(games)) {
             return res.status(400).json({ error: 'Alle felter er påkrævet' });
@@ -288,7 +296,10 @@ router.post('/', authMiddleware, requirePage('holdkamp'), async (req, res, next)
             return res.status(400).json({ error: 'Ukendt holdkamp-format' });
         }
 
-        const teamMatchId = await opretHoldkamp({ format, team1Name, team2Name, games, team1LogoId, team2LogoId, sourceMatchId });
+        if (ungdom !== undefined && typeof ungdom !== 'boolean') {
+            return res.status(400).json({ error: 'Ugyldigt valg for ungdomsholdkamp' });
+        }
+        const teamMatchId = await opretHoldkamp({ format, team1Name, team2Name, games, team1LogoId, team2LogoId, sourceMatchId, ungdom });
         res.json({ success: true, id: teamMatchId });
     } catch (error) {
         if (error.status === 409) {
@@ -618,6 +629,7 @@ router.delete('/:id', authMiddleware, requirePage('holdkamp'), async (req, res, 
 
 module.exports = router;
 module.exports.opretHoldkamp = opretHoldkamp;
+module.exports.erUngdom = erUngdom;
 
 // Bruges af scheduleren (automatisk lukning af faerdigspillede holdkampe)
 module.exports.autoAfslutHoldkampe = autoAfslutHoldkampe;

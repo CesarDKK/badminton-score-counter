@@ -1989,6 +1989,8 @@ function onHoldkampFormatChange() {
     const format = document.getElementById('holdkampFormat').value;
     const container = document.getElementById('holdkampGamesInputContainer');
     const playerInputs = document.getElementById('holdkampPlayerInputs');
+    // U9-formatet er altid ungdom; de andre spilles også af seniorer (admin vælger)
+    if (format === 'u9_3spillere') document.getElementById('holdkampUngdom').checked = true;
 
     if (!format || !HOLDKAMP_FORMATS[format]) {
         playerInputs.style.display = 'none';
@@ -2074,6 +2076,7 @@ function rydHoldkampForm() {
     document.getElementById('holdkampTeam1Name').value = '';
     document.getElementById('holdkampTeam2Name').value = '';
     document.getElementById('holdkampFormat').value = '';
+    document.getElementById('holdkampUngdom').checked = false;
     ['holdkampTeam1Logo', 'holdkampTeam2Logo'].forEach(id => {
         const sel = document.getElementById(id);
         if (sel) sel.value = '';
@@ -2143,7 +2146,8 @@ async function opretHoldkampFraForm() {
         const t2LogoSel = document.getElementById('holdkampTeam2Logo');
         const team1LogoId = t1LogoSel && t1LogoSel.value ? parseInt(t1LogoSel.value, 10) : autoHoldkampLogoId(team1Name);
         const team2LogoId = t2LogoSel && t2LogoSel.value ? parseInt(t2LogoSel.value, 10) : autoHoldkampLogoId(team2Name);
-        const res = await api.createTeamMatch({ format, team1Name, team2Name, games, team1LogoId, team2LogoId });
+        const ungdom = document.getElementById('holdkampUngdom').checked;
+        const res = await api.createTeamMatch({ format, team1Name, team2Name, games, team1LogoId, team2LogoId, ungdom });
 
         // Oprettet: formularen tømmes, og siden ruller op til den nye holdkamp,
         // der markeres et øjeblik — ellers ligner det, at intet skete
@@ -3875,6 +3879,7 @@ const LS_GRUND = {
     'youtube-fejl': 'Venter på YouTube — se fejlen ved banen',
     'stille': 'Sender ikke: kampen står stille — ingen har talt på kampen i 30 minutter. Tæl et point for at sende igen, eller afslut/nulstil banen',
     'holdkamp-stoppet': 'Holdkampen er stoppet for i dag — sendes ikke af sig selv',
+    'holdkamp-ungdom': 'Klar — ungdomsholdkamp, sendes ikke af sig selv (kan startes på tabletten)',
     'kamera-visning': 'Starter — kameravisningen på TV\'et lukkes, så udsendelsen kan få kameraet',
     'ingen-bane': 'Banen findes ikke'
 };
@@ -4267,6 +4272,13 @@ function livestreamHoldkampHtml(b) {
     const delkamp = d && d.min !== null && d.min >= 45
         ? ` · ${escapeHtml(d.navne)}${d.bane ? ` på bane ${d.bane}` : ''} har stået som i gang i ${varighed(d.min)}`
         : '';
+    // Ungdomsholdkamp (migration 054): sendes aldrig af sig selv — "Stop for i
+    // dag" giver ingen mening, men den kan startes på tabletten eller hele dagen
+    if (h.ungdom) {
+        return `<div class="ls-holdkamp"><span class="maerke maerke--neutral">Ungdom</span>
+            <span class="tekst-mindre tekst-daempet">Holdkampen ${hold} er en ungdomsholdkamp og sendes ikke af sig selv
+            (Badminton Danmark og DIF anbefaler ikke livestream af spillere under 18). En kamp kan stadig startes på tabletten</span></div>`;
+    }
     if (h.stoppet) {
         return `<div class="ls-holdkamp"><span class="maerke maerke--neutral">Stoppet for i dag</span>
             <span class="tekst-mindre tekst-daempet">Holdkampen ${hold} sendes ikke af sig selv før i morgen</span>
@@ -5867,6 +5879,11 @@ function bpRenderPreview(data) {
                     <input id="bp_team2" value="${escapeHtml(team2Name)}" class="admin-input admin-input--hold2 luft-over-4">
                 </div>
             </div>
+            <label class="toggle-label">
+                <input type="checkbox" id="bp_ungdom" ${data.ungdom ? 'checked' : ''}>
+                <span class="toggle-text">Ungdomsholdkamp (spillere under 18)${data.aldersgruppe ? ` — rækken er ${escapeHtml(data.aldersgruppe)} på badmintonplayer.dk` : ''}</span>
+            </label>
+            <div class="toggle-hint luft-under-18">Sendes ikke automatisk på livestream — Badminton Danmark og DIF anbefaler ikke livestream af børn og unge. Kampen kan stadig startes med vilje fra tabletten.</div>
             ${gameRows}
             <button onclick="bpCreate()" id="bpCreateBtn" type="button" class="btn-primary btn-lg btn-block luft-over-8 bp-opret-knap">
                 Opret Holdkamp
@@ -5915,7 +5932,8 @@ async function bpCreate() {
     knapper.forEach(k => { k.disabled = true; k.textContent = 'Opretter …'; });
     try {
         const sourceMatchId = preview.dataset.kilde || undefined;
-        await api.createTeamMatch({ format, team1Name, team2Name, games: gamesData, sourceMatchId });
+        const ungdom = !!document.getElementById('bp_ungdom')?.checked;
+        await api.createTeamMatch({ format, team1Name, team2Name, games: gamesData, sourceMatchId, ungdom });
         // Reset import section
         document.getElementById('bpImportUrl').value = '';
         preview.style.display = 'none';
