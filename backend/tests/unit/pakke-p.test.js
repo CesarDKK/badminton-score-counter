@@ -698,7 +698,7 @@ test('40: tablettens knap — "●" og live-farven kun, når YouTube er live', (
     assert.deepEqual(k({ start: 'valgt', youtube: 'starter' }), { tekst: 'Livestream starter … — stop', live: false });
     assert.deepEqual(k({ start: 'hele-dagen', youtube: 'starter' }), { tekst: 'Livestream starter (hele dagen) …', live: false });
     assert.deepEqual(k({ start: null, holdkamp: true, youtube: 'starter' }), { tekst: 'Livestream: holdkampen starter …', live: false });
-    assert.deepEqual(k({ start: null, holdkamp: true, youtube: 'live' }), { tekst: '● Livestream: holdkampen sendes', live: true });
+    assert.deepEqual(k({ start: null, holdkamp: true, youtube: 'live' }), { tekst: '● Livestream: holdkampen sendes — stop', live: true });
     // Uden kanal (youtube: null) som før
     assert.deepEqual(k({ start: 'valgt', youtube: null }), { tekst: '● Stop livestream', live: true });
     assert.deepEqual(k({ start: 'klar', youtube: 'starter' }), { tekst: 'Livestream venter på kampen — fortryd', live: true });

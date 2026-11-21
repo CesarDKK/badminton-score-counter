@@ -3880,6 +3880,7 @@ const LS_GRUND = {
     'stille': 'Sender ikke: kampen står stille — ingen har talt på kampen i 30 minutter. Tæl et point for at sende igen, eller afslut/nulstil banen',
     'holdkamp-stoppet': 'Holdkampen er stoppet for i dag — sendes ikke af sig selv',
     'holdkamp-ungdom': 'Klar — ungdomsholdkamp, sendes ikke af sig selv (kan startes på tabletten)',
+    'holdkamp-sprunget-over': 'Klar — delkampen er stoppet på tabletten, den næste delkamp sendes af sig selv',
     'kamera-visning': 'Starter — kameravisningen på TV\'et lukkes, så udsendelsen kan få kameraet',
     'ingen-bane': 'Banen findes ikke'
 };
@@ -4283,6 +4284,12 @@ function livestreamHoldkampHtml(b) {
         return `<div class="ls-holdkamp"><span class="maerke maerke--neutral">Stoppet for i dag</span>
             <span class="tekst-mindre tekst-daempet">Holdkampen ${hold} sendes ikke af sig selv før i morgen</span>
             <button class="btn-secondary btn-sm" onclick="stopLivestreamHoldkamp(${b.bane}, false)">Send holdkampen igen</button></div>`;
+    }
+    // Tablettens "Stop for denne kamp" (migration 055): kun delkampen på banen
+    if (h.sprunget) {
+        return `<div class="ls-holdkamp"><span class="maerke maerke--neutral">Kampen stoppet</span>
+            <span class="tekst-mindre tekst-daempet">Delkampen på banen i ${hold} er stoppet på tabletten. Den næste delkamp sendes igen af sig selv</span>
+            <button class="btn-danger btn-sm" onclick="stopLivestreamHoldkamp(${b.bane}, true)">Stop for i dag</button></div>`;
     }
     if (h.sendes) {
         return `<div class="ls-holdkamp"><span class="maerke maerke--igang">Holdkamp</span>

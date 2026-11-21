@@ -141,7 +141,7 @@ test('admin ser, hvorfor holdkampen sendes — eller ikke gør', () => {
     const info = { hold1: 'Lyngby 2', hold2: 'Gentofte', delkamp: { side1: 'Anna & Clara', side2: 'Berit & Dorte', bane: 3, start: new Date(NU - 80 * MIN) } };
     const taelles = { mangler: 2, igang: 1, slut: new Date(NU - 60 * MIN), start: new Date(NU - 80 * MIN), roert: new Date(NU - MIN) };
     assert.deepEqual(ls.holdkampTilAdmin({ holdkamp: taelles, info, opsaetning: OPS, nu: NU }), {
-        hold: 'Lyngby 2 – Gentofte', sendes: true, stoppet: false, ungdom: false, forladt: null,
+        hold: 'Lyngby 2 – Gentofte', sendes: true, stoppet: false, ungdom: false, sprunget: false, forladt: null,
         delkamp: { navne: 'Anna & Clara – Berit & Dorte', bane: 3, min: 80 }
     });
     // Stoppet for i dag
@@ -159,7 +159,7 @@ test('admin ser, hvorfor holdkampen sendes — eller ikke gør', () => {
     // Ingen delkamp i gang lige nu (mellem delkampene)
     const pause = { mangler: 3, igang: 0, slut: new Date(NU - 5 * MIN), start: new Date(NU - 40 * MIN), roert: null };
     assert.deepEqual(ls.holdkampTilAdmin({ holdkamp: pause, info: { hold1: 'A', hold2: null, delkamp: null }, opsaetning: null, nu: NU }),
-        { hold: 'A – Hold 2', sendes: true, stoppet: false, ungdom: false, forladt: null, delkamp: null });
+        { hold: 'A – Hold 2', sendes: true, stoppet: false, ungdom: false, sprunget: false, forladt: null, delkamp: null });
     // Ingen holdkamp, eller alle delkampe er færdige: intet at vise
     assert.equal(ls.holdkampTilAdmin({ holdkamp: null, info, opsaetning: OPS, nu: NU }), null);
     assert.equal(ls.holdkampTilAdmin({ holdkamp: { mangler: 0, igang: 0, slut: new Date(NU - MIN), start: null }, info, opsaetning: OPS, nu: NU }), null);
@@ -203,7 +203,7 @@ test('tabletten: knappen kun når banen er sat op med nøgle og kamera', () => {
     assert.equal(ls.tabletStatus({ opsaetning: { ...OPS, enabled: 0 }, kamera: true, nu: NU }).kan, false);
     assert.deepEqual(ls.tabletStatus({ opsaetning: { ...OPS, armed_until: new Date(NU + MIN) }, kamera: true,
         pc: { online: true, sender: false, kamera: 'Lenovo 500' }, efterMin: 5, nu: NU }),
-        { kan: true, start: 'klar', til: new Date(NU + MIN).toISOString(), holdkamp: false, planner: false, sender: false,
+        { kan: true, start: 'klar', til: new Date(NU + MIN).toISOString(), holdkamp: false, sprunget: false, planner: false, sender: false,
           kameraKlar: true, efterMin: 5, synlighed: null, youtube: null });
     // PC'en finder intet kamera, er slukket eller har ikke meldt sig: tabletten skjuler knappen
     assert.equal(ls.tabletStatus({ opsaetning: OPS, kamera: true, pc: { online: true, kamera: null }, nu: NU }).kameraKlar, false);

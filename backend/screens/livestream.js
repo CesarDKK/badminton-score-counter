@@ -314,8 +314,14 @@ function beslutning({ opsaetning, gs, sidste, planner, holdkamp = null, senderNu
     // Danmark/DIF anbefaler ikke livestream af spillere under 18) — men kan
     // startes med vilje som en almindelig kamp (tabletten, "Send hele dagen")
     const ungdom = hk.koerer && erUngdomsHoldkamp(holdkamp);
-    const hkGrund = stoppet ? 'holdkamp-stoppet' : ungdom ? 'holdkamp-ungdom' : null;
-    if (hk.koerer && !stoppet && !ungdom) return { send: true, grund: 'holdkamp', kilde, ...glem };
+    // Tablettens "Stop for denne kamp" (migration 055): kun delkampen på banen —
+    // den næste delkamp sendes igen af sig selv
+    const sprunget = hk.koerer && delkampSprungetOver(opsaetning, holdkamp);
+    const hkGrund = stoppet ? 'holdkamp-stoppet' : ungdom ? 'holdkamp-ungdom'
+        : sprunget ? 'holdkamp-sprunget-over' : null;
+    if (hk.koerer && !hkGrund) return { send: true, grund: 'holdkamp', kilde, ...glem };
+    // Stoppet for denne kamp: heller ikke minutterne efter, den er afgjort
+    if (hkGrund === 'holdkamp-sprunget-over' && !s) return { send: false, grund: hkGrund };
     if (k.tilstand === 'kamp') {
         if (s && s.start === 'valgt') return { send: true, grund: 'valgt', kilde: 'gs' };
         if (s && s.start === 'klar') return { send: true, grund: 'valgt', kilde: 'gs', vaelg: true };
@@ -337,6 +343,13 @@ function holdkampStoppet(o, nu = Date.now()) {
     return til !== null && til > nu;
 }
 
+// Tablettens "Stop for denne kamp" (court_streams.holdkamp_spring_over,
+// migration 055): er delkampen på banen (holdkampPaaBane.delkamp) sprunget over?
+function delkampSprungetOver(o, h) {
+    const over = o && o.holdkamp_spring_over;
+    return over != null && !!h && h.delkamp != null && Number(over) === Number(h.delkamp);
+}
+
 // Til admin (Livestream): banens holdkamp, og hvorfor den sendes eller ikke.
 // h: holdkampPaaBane; info: { hold1, hold2, delkamp } — delkamp er den, der har
 // stået længst som i gang: { side1, side2, bane, start }. null: ingen holdkamp
@@ -349,10 +362,12 @@ function holdkampTilAdmin({ holdkamp, info, opsaetning, nu = Date.now() }) {
     const start = d ? tid(d.start) : null;
     return {
         hold: `${info.hold1 || 'Hold 1'} – ${info.hold2 || 'Hold 2'}`,
-        sendes: hk.koerer && !stoppet && !erUngdomsHoldkamp(holdkamp),
+        sendes: hk.koerer && !stoppet && !erUngdomsHoldkamp(holdkamp) && !delkampSprungetOver(opsaetning, holdkamp),
         stoppet,
         // Ungdomsholdkamp: sendes aldrig af sig selv (migration 054)
         ungdom: erUngdomsHoldkamp(holdkamp),
+        // Delkampen på banen er sprunget over på tabletten (migration 055)
+        sprunget: delkampSprungetOver(opsaetning, holdkamp),
         // 'stille' (ingen har talt i 30 min) eller 'ny-dag' — null: ikke forladt
         forladt: hk.forladt || null,
         delkamp: d ? {
@@ -381,7 +396,12 @@ function tabletStatus({ opsaetning, kamera, pc, holdkamp = null, planner = false
         til: s && s.til ? new Date(s.til).toISOString() : null,
         // "● Livestream: holdkampen sendes" på tabletten — ikke når admin har stoppet
         // den for i dag, og aldrig for en ungdomsholdkamp (sendes ikke af sig selv)
-        holdkamp: holdkampNu(holdkamp, nu).koerer && !holdkampStoppet(opsaetning, nu) && !erUngdomsHoldkamp(holdkamp),
+        holdkamp: holdkampNu(holdkamp, nu).koerer && !holdkampStoppet(opsaetning, nu) && !erUngdomsHoldkamp(holdkamp)
+            && !delkampSprungetOver(opsaetning, holdkamp),
+        // Holdkampen ville sende, men tabletten har sprunget delkampen over
+        // ("Stop for denne kamp") — knappen tilbyder "Send kampen alligevel"
+        sprunget: holdkampNu(holdkamp, nu).koerer && !holdkampStoppet(opsaetning, nu) && !erUngdomsHoldkamp(holdkamp)
+            && delkampSprungetOver(opsaetning, holdkamp),
         planner: !!planner,
         sender: !!(pc && pc.online && pc.sender),
         kameraKlar: !!(pc && pc.online && pc.kamera),
@@ -976,7 +996,7 @@ module.exports = {
     YT_KENDETEGN, YT_SYNLIG_DAGE, YT_SYNLIG_MAKS, erAppensUdsendelse, ytSynligFejlStopper, ytSynligHandling,
     gyldigUrl, gyldigNoegle, rensOpsaetning, noegleSlut,
     STANDARD_INDSTILLINGER, laesIndstillinger, rensIndstillinger, videoTilPc, sponsorNu, gyldigLogoFil,
-    beslutning, startet, holdkampNu, holdkampStoppet, erUngdomsHoldkamp, holdkampTilAdmin, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,
+    beslutning, startet, holdkampNu, holdkampStoppet, erUngdomsHoldkamp, delkampSprungetOver, holdkampTilAdmin, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,
     spillerLogoer, klubLogoFraDatabase,
     rensStatus, rensKameraEnhed, registrer, statusFor, senderBane, pcSidstPaaBane, liveBaner,
     pcNoegle, maaBrugeKamera, registrerAnden, svarTilAnden, autoKameraBane,

@@ -315,7 +315,14 @@ const holdkampPaaBane = async (bane) => {
            LEFT JOIN game_states gs ON gs.court_id = c.id
           WHERE tm.status = 'active'
             AND tm.id IN (SELECT team_match_id FROM team_match_games WHERE court_number = ?)`, [bane]);
-    return r && r.mangler != null ? r : null;
+    if (!r || r.mangler == null) return null;
+    // delkamp: den delkamp, der står på banen — den i gang, ellers den senest
+    // startede (tablettens "Stop for denne kamp", migration 055)
+    const d = await queryOne(
+        `SELECT g.id FROM team_match_games g JOIN team_matches tm ON tm.id = g.team_match_id
+          WHERE g.court_number = ? AND tm.status = 'active' AND g.started_at IS NOT NULL
+          ORDER BY g.status = 'active' DESC, g.started_at DESC, g.id DESC LIMIT 1`, [bane]);
+    return { ...r, delkamp: d ? d.id : null };
 };
 
 // Skal banen sende lige nu (ls.beslutning) — og det, beslutningen bygger på.
@@ -1063,6 +1070,35 @@ router.post('/bane/:bane/stop', tablet, async (req, res, next) => {
         if (!bane) return res.status(404).json({ error: 'Bane ikke fundet' });
         await query('UPDATE court_streams SET armed_until = NULL, manual_since = NULL WHERE court_number = ?', [bane]);
         console.log(`[livestream] ${tenantKey(req)} bane ${bane}: stoppet på tabletten`);
+        res.json(await baneStatus(req, bane));
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /api/livestream/bane/:bane/spring-over — "Stop for denne kamp" under en
+// holdkamp: delkampen på banen sendes ikke (migration 055). Den næste delkamp,
+// der sættes på banen, sendes igen af sig selv. DELETE: "Send kampen alligevel".
+router.post('/bane/:bane/spring-over', tablet, async (req, res, next) => {
+    try {
+        const bane = baneNr(req.params.bane);
+        if (!bane) return res.status(404).json({ error: 'Bane ikke fundet' });
+        const h = await holdkampPaaBane(bane);
+        if (!h || !h.delkamp) return res.status(409).json({ error: 'Der står ingen holdkamp på banen' });
+        await query('UPDATE court_streams SET holdkamp_spring_over = ? WHERE court_number = ?', [h.delkamp, bane]);
+        console.log(`[livestream] ${tenantKey(req)} bane ${bane}: delkamp ${h.delkamp} sprunget over på tabletten`);
+        res.json(await baneStatus(req, bane));
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.delete('/bane/:bane/spring-over', tablet, async (req, res, next) => {
+    try {
+        const bane = baneNr(req.params.bane);
+        if (!bane) return res.status(404).json({ error: 'Bane ikke fundet' });
+        await query('UPDATE court_streams SET holdkamp_spring_over = NULL WHERE court_number = ?', [bane]);
+        console.log(`[livestream] ${tenantKey(req)} bane ${bane}: delkampen sendes alligevel`);
         res.json(await baneStatus(req, bane));
     } catch (error) {
         next(error);

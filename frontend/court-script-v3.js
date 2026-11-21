@@ -697,7 +697,8 @@ function livestreamKnapTekst(l) {
         l.start === 'hele-dagen' ? (starter ? 'Livestream starter (hele dagen) …' : '● Livestream kører hele dagen')
         : l.start === 'valgt' ? (starter ? 'Livestream starter … — stop' : '● Stop livestream')
         : l.start === 'klar' ? 'Livestream venter på kampen — fortryd'
-        : l.holdkamp ? (starter ? 'Livestream: holdkampen starter …' : '● Livestream: holdkampen sendes')
+        : l.holdkamp ? (starter ? 'Livestream: holdkampen starter …' : '● Livestream: holdkampen sendes — stop')
+        : l.sprunget ? 'Livestream: kampen sendes ikke — send alligevel'
         : 'Start livestream';
     return { tekst, live };
 }
@@ -720,8 +721,24 @@ async function livestreamKnap() {
         showMessage('Livestream', 'Banen sendes hele dagen, også mellem kampene. Det er startet i admin under Livestream, og stoppes også der.');
         return;
     }
+    // Holdkampen sendes af sig selv: tabletten kan springe delkampen på banen
+    // over (migration 055) — den næste delkamp sendes igen af sig selv
     if (l.holdkamp && !l.start) {
-        showMessage('Livestream', `Holdkampe sendes af sig selv og stopper ${livestreamStopTekst(l, 'delkampen')}.`);
+        closeSettingsMenu();
+        showMessage('Stop livestream for denne kamp?',
+            `Holdkampe sendes af sig selv og stopper ${livestreamStopTekst(l, 'delkampen')}.\n\n` +
+            'Stopper du nu, sendes denne kamp ikke. Den næste delkamp, der sættes på banen, sendes igen af sig selv.', [
+            { text: 'Stop for denne kamp', style: 'danger', callback: () => livestreamSpringOver(true) },
+            { text: 'Fortsæt livestream', style: 'secondary', callback: null }
+        ], { spaerMs: 800 });
+        return;
+    }
+    if (l.sprunget && !l.start) {
+        closeSettingsMenu();
+        showMessage('Send kampen alligevel?', livestreamBekraeftTekst(l), [
+            { text: 'Send kampen', style: 'primary', callback: () => livestreamSpringOver(false) },
+            { text: 'Fortryd', style: 'secondary', callback: null }
+        ], { spaerMs: 800 });
         return;
     }
     closeSettingsMenu();
@@ -755,6 +772,24 @@ async function livestreamSkift(handling, l) {
     } else {
         showMessage('Livestream stoppet', l.start === 'klar' ? 'Den næste kamp sendes ikke.' : 'Kampen sendes ikke længere.');
     }
+}
+
+// "Stop for denne kamp" (over = true) eller "Send kampen alligevel" under en holdkamp
+async function livestreamSpringOver(over) {
+    if (_livestreamIgang) return;
+    _livestreamIgang = true;
+    try {
+        livestream = await api.request(`/livestream/bane/${courtId}/spring-over`, { method: over ? 'POST' : 'DELETE' });
+    } catch (e) {
+        showMessage('Livestream', e.message || 'Kunne ikke nå serveren — prøv igen');
+        return;
+    } finally {
+        _livestreamIgang = false;
+    }
+    opdaterLivestreamKnap();
+    showMessage(over ? 'Livestream stoppet' : 'Livestream startet', over
+        ? 'Denne kamp sendes ikke. Den næste delkamp på banen sendes igen af sig selv.'
+        : `Kampen sendes igen og stopper ${livestreamStopTekst(livestream, 'delkampen')}.`);
 }
 
 function swapPlayers(team) {
