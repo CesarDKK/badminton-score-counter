@@ -61,17 +61,25 @@ async function ytToken(req, f) {
 }
 
 const ytStreamFelter = 'yt_stream_id = NULL, yt_ingest_url = NULL, yt_stream_key = NULL, ' +
-    'yt_broadcast_id = NULL, yt_broadcast_start = NULL, yt_broadcast_tjek = NULL, yt_fejl = NULL, yt_fejl_tid = NULL';
+    'yt_broadcast_id = NULL, yt_broadcast_start = NULL, yt_delkamp = NULL, yt_slet = 0, yt_broadcast_tjek = NULL, yt_fejl = NULL, yt_fejl_tid = NULL';
 
-// Udsendelsens titel: holdkampens hold, ellers klubben og banen (ingen spillernavne, nr. 12A)
+// Udsendelsens titel: delkampen og holdkampens hold ("HD1: Lyngby 2 – Gentofte"),
+// ellers klubben og banen (ingen spillernavne, nr. 12A). Delkampens nummer er
+// dens plads blandt holdkampens delkampe i samme kategori.
 async function ytTitelFor(req, bane, b) {
-    const hk = b.grund === 'holdkamp' ? await queryOne(
+    const hk = b.grund !== 'holdkamp' ? null : b.delkamp != null ? await queryOne(
+        `SELECT tm.team1_name, tm.team2_name, g.category,
+                (SELECT COUNT(*) FROM team_match_games x WHERE x.team_match_id = g.team_match_id
+                    AND x.category = g.category AND x.game_number <= g.game_number) AS nr
+           FROM team_match_games g JOIN team_matches tm ON tm.id = g.team_match_id WHERE g.id = ?`, [b.delkamp])
+        : await queryOne(
         `SELECT tm.team1_name, tm.team2_name FROM team_match_games g JOIN team_matches tm ON tm.id = g.team_match_id
           WHERE g.court_number = ? AND tm.status = 'active' ORDER BY g.status = 'active' DESC, g.started_at DESC LIMIT 1`,
-        [bane]) : null;
+        [bane]);
     const klubnavn = (await klubLogoData(req).catch(() => ({}))).klubnavn || null;
     return {
-        titel: ls.ytTitel({ grund: b.grund, bane, hold: hk && [hk.team1_name, hk.team2_name], klubnavn }),
+        titel: ls.ytTitel({ grund: b.grund, bane, hold: hk && [hk.team1_name, hk.team2_name],
+            delkamp: hk && hk.category ? ls.delkampNavn(hk.category, Number(hk.nr)) : null, klubnavn }),
         beskrivelse: ls.ytBeskrivelse(klubnavn)
     };
 }
@@ -105,7 +113,7 @@ async function ytStyr(req, f, bane, o, b, { senderNu, tvingTjek, billede = null,
     // sekund af den kvote, alle klubber deler.
     if (ls.ytIPause(o.yt_fejl_tid, _ytPauseTil.get(laas))) return gemt;
     const handling = ls.ytHandling({ send: b.send, udsendelse: o.yt_broadcast_id,
-        tjek: tvingTjek ? null : o.yt_broadcast_tjek, fejlTid: o.yt_fejl_tid });
+        tjek: tvingTjek ? null : o.yt_broadcast_tjek, fejlTid: o.yt_fejl_tid, skift: ls.ytSkiftDelkamp(o, b) });
     if (!handling && (gemt || !b.send)) return gemt;
     // Skal der oprettes noget nyt (nøgle eller udsendelse)? Ikke når Google har
     // meldt dagens kvote brugt op — kaldet ville bare blive afvist. Der er intet
@@ -142,14 +150,15 @@ async function ytStyr(req, f, bane, o, b, { senderNu, tvingTjek, billede = null,
             await ytHuskUdsendelse(req, bane, id, titel);
             // Første tjek efter et minut: gik den live, da billedet kom?
             // yt_status: YouTubes status kendes først ved tjekket (nr. 40)
-            await query(`UPDATE court_streams SET yt_broadcast_id = ?, yt_broadcast_start = UTC_TIMESTAMP(), yt_broadcast_tjek = ?, yt_status = NULL, yt_fejl = NULL, yt_fejl_tid = NULL
-                          WHERE court_number = ?`, [id, ls.ytTjekOm(ls.YT_FOERSTE_TJEK_MS), bane]);
+            // yt_delkamp: delkampen, udsendelsen er til (én video pr. delkamp, migration 056)
+            await query(`UPDATE court_streams SET yt_broadcast_id = ?, yt_broadcast_start = UTC_TIMESTAMP(), yt_delkamp = ?, yt_slet = 0, yt_broadcast_tjek = ?, yt_status = NULL, yt_fejl = NULL, yt_fejl_tid = NULL
+                          WHERE court_number = ?`, [id, b.delkamp ?? null, ls.ytTjekOm(ls.YT_FOERSTE_TJEK_MS), bane]);
             console.log(`[livestream] ${tenantKey(req)} bane ${bane}: YouTube-udsendelse oprettet "${titel}" (${id})`);
         } else if (handling === 'tjek') {
             const status = await youtube.udsendelsesStatus(token, o.yt_broadcast_id);
             if (!status || status === 'complete' || status === 'revoked') {
                 // Afsluttet på YouTube (i Studio, eller billedet var væk i over et minut) — en ny oprettes
-                await query('UPDATE court_streams SET yt_broadcast_id = NULL, yt_broadcast_start = NULL, yt_broadcast_tjek = NULL WHERE court_number = ?', [bane]);
+                await query('UPDATE court_streams SET yt_broadcast_id = NULL, yt_broadcast_start = NULL, yt_delkamp = NULL, yt_slet = 0, yt_broadcast_tjek = NULL WHERE court_number = ?', [bane]);
                 console.log(`[livestream] ${tenantKey(req)} bane ${bane}: YouTube-udsendelsen er ${status || 'væk'} — opretter en ny`);
             } else {
                 // Billedet kommer, men udsendelsen er ikke gået live af sig selv
@@ -170,10 +179,14 @@ async function ytStyr(req, f, bane, o, b, { senderNu, tvingTjek, billede = null,
                     [ls.ytNaesteTjek(nu, o.yt_broadcast_start, Date.now(), { billede, satLive }), String(nu).slice(0, 20), bane]);
             }
         } else if (handling === 'afslut') {
-            const hvad = await youtube.afslut(token, o.yt_broadcast_id);
-            await query('UPDATE court_streams SET yt_broadcast_id = NULL, yt_broadcast_start = NULL, yt_broadcast_tjek = NULL, yt_fejl = NULL, yt_fejl_tid = NULL WHERE court_number = ?', [bane]);
+            // yt_slet: kampen blev stoppet, mens den blev spillet (ls.sletVedStop) —
+            // så slettes udsendelsen, i stedet for at blive liggende som en halv kamp
+            const sletIt = !!Number(o.yt_slet);
+            const hvad = sletIt ? await youtube.slet(token, o.yt_broadcast_id) : await youtube.afslut(token, o.yt_broadcast_id);
+            await query('UPDATE court_streams SET yt_broadcast_id = NULL, yt_broadcast_start = NULL, yt_delkamp = NULL, yt_slet = 0, yt_broadcast_tjek = NULL, yt_fejl = NULL, yt_fejl_tid = NULL WHERE court_number = ?', [bane]);
+            if (sletIt) await query('DELETE FROM yt_udsendelser WHERE broadcast_id = ?', [o.yt_broadcast_id]);
             console.log(`[livestream] ${tenantKey(req)} bane ${bane}: YouTube-udsendelsen ${hvad}` +
-                (vagt ? ` af vagten (${vagt})` : ''));
+                (sletIt ? ' (kampen blev stoppet undervejs)' : '') + (vagt ? ` af vagten (${vagt})` : ''));
         }
     } catch (e) {
         if (!(e instanceof youtube.YoutubeFejl)) throw e;
@@ -191,7 +204,7 @@ async function ytStyr(req, f, bane, o, b, { senderNu, tvingTjek, billede = null,
         }
         // Udsendelsen findes ikke længere: glem den
         if (handling === 'afslut' && e.status === 404) {
-            await query('UPDATE court_streams SET yt_broadcast_id = NULL, yt_broadcast_start = NULL WHERE court_number = ?', [bane]);
+            await query('UPDATE court_streams SET yt_broadcast_id = NULL, yt_broadcast_start = NULL, yt_delkamp = NULL, yt_slet = 0 WHERE court_number = ?', [bane]);
         }
         if (o.yt_fejl !== e.message) console.log(`[livestream] ${tenantKey(req)} bane ${bane}: YouTube-fejl (${handling || 'nøgle'}): ${e.message}`);
     } finally {
@@ -315,8 +328,32 @@ const holdkampPaaBane = async (bane) => {
            LEFT JOIN game_states gs ON gs.court_id = c.id
           WHERE tm.status = 'active'
             AND tm.id IN (SELECT team_match_id FROM team_match_games WHERE court_number = ?)`, [bane]);
-    return r && r.mangler != null ? r : null;
+    if (!r || r.mangler == null) return null;
+    // delkamp: den delkamp, der står på banen — den i gang, ellers den senest
+    // startede (tablettens "Stop for denne kamp", migration 055)
+    const d = await queryOne(
+        `SELECT g.id, g.status FROM team_match_games g JOIN team_matches tm ON tm.id = g.team_match_id
+          WHERE g.court_number = ? AND tm.status = 'active' AND g.started_at IS NOT NULL
+          ORDER BY g.status = 'active' DESC, g.started_at DESC, g.id DESC LIMIT 1`, [bane]);
+    return { ...r, delkamp: d ? d.id : null, delkampFaerdig: !!d && d.status === 'finished' };
 };
+
+// Er kampen på banen afgjort? (en stoppet kamp, der er afgjort, er hel og
+// bliver liggende på YouTube — ls.sletVedStop). En nulstillet eller ryddet
+// kamp uden resultat er ikke afgjort.
+async function banensKampAfgjort(bane) {
+    const court = await queryOne(`SELECT id FROM courts WHERE court_number = ? AND ${synligBane()}`, [bane]);
+    if (!court) return false;
+    const gs = await queryOne('SELECT * FROM game_states WHERE court_id = ?', [court.id]);
+    const sidste = !gs && await queryOne('SELECT * FROM last_finished_matches WHERE court_id = ?', [court.id]);
+    return ls.kampNu(gs, sidste, Date.now()).tilstand === 'afgjort';
+}
+
+// En holdkamps delkamp stoppes (tabletten eller admin): skal udsendelsen slettes?
+async function sletDelkampVedStop(bane, h) {
+    const o = await queryOne('SELECT yt_broadcast_id, yt_delkamp FROM court_streams WHERE court_number = ?', [bane]);
+    return ls.sletVedStop(o, { delkamp: h.delkamp, faerdig: h.delkampFaerdig || await banensKampAfgjort(bane) });
+}
 
 // Skal banen sende lige nu (ls.beslutning) — og det, beslutningen bygger på.
 // Bruges af PC'ens forespørgsel (POST /pc) og af vagten over udsendelserne
@@ -984,8 +1021,13 @@ router.delete('/baner/:bane/hele-dagen', livestreamAdmin, async (req, res, next)
     try {
         const bane = baneNr(req.params.bane);
         if (!bane) return res.status(404).json({ error: 'Bane ikke fundet' });
-        await query('UPDATE court_streams SET all_day_until = NULL, armed_until = NULL, manual_since = NULL WHERE court_number = ?', [bane]);
-        console.log(`[livestream] ${tenantKey(req)} bane ${bane}: stoppet i admin`);
+        // En kamp startet på tabletten, stoppet midt i: det sendte slettes på
+        // YouTube (ls.sletVedStop). Hele dagen (en turnering) slettes aldrig
+        const o = await queryOne('SELECT yt_broadcast_id, yt_delkamp, manual_since, armed_until, all_day_until FROM court_streams WHERE court_number = ?', [bane]);
+        const s = ls.startet(o);
+        const slet = !!s && s.start === 'valgt' && ls.sletVedStop(o, { faerdig: await banensKampAfgjort(bane) });
+        await query(`UPDATE court_streams SET all_day_until = NULL, armed_until = NULL, manual_since = NULL${slet ? ', yt_slet = 1' : ''} WHERE court_number = ?`, [bane]);
+        console.log(`[livestream] ${tenantKey(req)} bane ${bane}: stoppet i admin${slet ? ' — udsendelsen slettes' : ''}`);
         res.json({ success: true });
     } catch (error) {
         next(error);
@@ -1001,8 +1043,11 @@ router.post('/baner/:bane/holdkamp-stop', livestreamAdmin, async (req, res, next
         const bane = baneNr(req.params.bane);
         const o = bane && await queryOne('SELECT court_number FROM court_streams WHERE court_number = ?', [bane]);
         if (!o) return res.status(404).json({ error: 'Banen har ingen livestream-opsætning' });
-        await query('UPDATE court_streams SET holdkamp_stop_until = ? WHERE court_number = ?', [new Date(ls.dagensSlut()), bane]);
-        console.log(`[livestream] ${tenantKey(req)} bane ${bane}: holdkampen stoppet for i dag i admin`);
+        // Stoppet midt i en delkamp: det sendte slettes på YouTube (ls.sletVedStop)
+        const h = await holdkampPaaBane(bane);
+        const slet = !!h && !!h.delkamp && await sletDelkampVedStop(bane, h);
+        await query(`UPDATE court_streams SET holdkamp_stop_until = ?${slet ? ', yt_slet = 1' : ''} WHERE court_number = ?`, [new Date(ls.dagensSlut()), bane]);
+        console.log(`[livestream] ${tenantKey(req)} bane ${bane}: holdkampen stoppet for i dag i admin${slet ? ' — udsendelsen slettes' : ''}`);
         res.json({ success: true });
     } catch (error) {
         next(error);
@@ -1013,7 +1058,7 @@ router.delete('/baner/:bane/holdkamp-stop', livestreamAdmin, async (req, res, ne
     try {
         const bane = baneNr(req.params.bane);
         if (!bane) return res.status(404).json({ error: 'Bane ikke fundet' });
-        await query('UPDATE court_streams SET holdkamp_stop_until = NULL WHERE court_number = ?', [bane]);
+        await query('UPDATE court_streams SET holdkamp_stop_until = NULL, yt_slet = 0 WHERE court_number = ?', [bane]);
         console.log(`[livestream] ${tenantKey(req)} bane ${bane}: holdkampen sendes igen`);
         res.json({ success: true });
     } catch (error) {
@@ -1061,8 +1106,42 @@ router.post('/bane/:bane/stop', tablet, async (req, res, next) => {
     try {
         const bane = baneNr(req.params.bane);
         if (!bane) return res.status(404).json({ error: 'Bane ikke fundet' });
-        await query('UPDATE court_streams SET armed_until = NULL, manual_since = NULL WHERE court_number = ?', [bane]);
-        console.log(`[livestream] ${tenantKey(req)} bane ${bane}: stoppet på tabletten`);
+        // Stoppet midt i kampen: det sendte slettes på YouTube (ls.sletVedStop)
+        const o = await queryOne('SELECT yt_broadcast_id, yt_delkamp, manual_since, armed_until, all_day_until FROM court_streams WHERE court_number = ?', [bane]);
+        const s = ls.startet(o);
+        const slet = !!s && s.start === 'valgt' && ls.sletVedStop(o, { faerdig: await banensKampAfgjort(bane) });
+        await query(`UPDATE court_streams SET armed_until = NULL, manual_since = NULL${slet ? ', yt_slet = 1' : ''} WHERE court_number = ?`, [bane]);
+        console.log(`[livestream] ${tenantKey(req)} bane ${bane}: stoppet på tabletten${slet ? ' — udsendelsen slettes' : ''}`);
+        res.json(await baneStatus(req, bane));
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /api/livestream/bane/:bane/spring-over — "Stop for denne kamp" under en
+// holdkamp: delkampen på banen sendes ikke (migration 055). Den næste delkamp,
+// der sættes på banen, sendes igen af sig selv. DELETE: "Send kampen alligevel".
+router.post('/bane/:bane/spring-over', tablet, async (req, res, next) => {
+    try {
+        const bane = baneNr(req.params.bane);
+        if (!bane) return res.status(404).json({ error: 'Bane ikke fundet' });
+        const h = await holdkampPaaBane(bane);
+        if (!h || !h.delkamp) return res.status(409).json({ error: 'Der står ingen holdkamp på banen' });
+        const slet = await sletDelkampVedStop(bane, h);
+        await query(`UPDATE court_streams SET holdkamp_spring_over = ?${slet ? ', yt_slet = 1' : ''} WHERE court_number = ?`, [h.delkamp, bane]);
+        console.log(`[livestream] ${tenantKey(req)} bane ${bane}: delkamp ${h.delkamp} sprunget over på tabletten${slet ? ' — udsendelsen slettes' : ''}`);
+        res.json(await baneStatus(req, bane));
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.delete('/bane/:bane/spring-over', tablet, async (req, res, next) => {
+    try {
+        const bane = baneNr(req.params.bane);
+        if (!bane) return res.status(404).json({ error: 'Bane ikke fundet' });
+        await query('UPDATE court_streams SET holdkamp_spring_over = NULL, yt_slet = 0 WHERE court_number = ?', [bane]);
+        console.log(`[livestream] ${tenantKey(req)} bane ${bane}: delkampen sendes alligevel`);
         res.json(await baneStatus(req, bane));
     } catch (error) {
         next(error);

@@ -240,6 +240,30 @@ test('youtube: en udsendelse, der aldrig kom i gang, slettes — og en fejlet ko
         ['POST liveBroadcasts', 'POST bind', 'DELETE liveBroadcasts']);
 });
 
+test('youtube: en stoppet kamp slettes — live afsluttes først, og videoen slettes, hvis udsendelsen ikke kan', async () => {
+    nulstil({
+        'GET /youtube/v3/liveBroadcasts': () => [200, { items: [{ id: 'b4', status: { lifeCycleStatus: 'live' } }] }],
+        'POST /youtube/v3/liveBroadcasts/transition': () => [200, { id: 'b4' }],
+        'DELETE /youtube/v3/liveBroadcasts': () => [204, null]
+    });
+    assert.equal(await youtube.slet('a', 'b4'), 'slettet');
+    assert.deepEqual(kald.map(k => `${k.metode} ${k.sti.split('/').pop()}`),
+        ['GET liveBroadcasts', 'POST transition', 'DELETE liveBroadcasts']);
+    assert.equal(kald[2].query.id, 'b4');
+    // YouTube nægter at slette udsendelsen: videoen (samme id) slettes i stedet
+    nulstil({
+        'GET /youtube/v3/liveBroadcasts': () => [200, { items: [{ id: 'b5', status: { lifeCycleStatus: 'complete' } }] }],
+        'DELETE /youtube/v3/liveBroadcasts': () => [403, { error: { code: 403, message: 'nej', errors: [{ reason: 'forbidden' }] } }],
+        'DELETE /youtube/v3/videos': () => [204, null]
+    });
+    assert.equal(await youtube.slet('a', 'b5'), 'slettet');
+    assert.deepEqual(kald.map(k => `${k.metode} ${k.sti.split('/').pop()}`),
+        ['GET liveBroadcasts', 'DELETE liveBroadcasts', 'DELETE videos']);
+    // Allerede væk (slettet i Studio)
+    nulstil({ 'GET /youtube/v3/liveBroadcasts': () => [200, { items: [] }] });
+    assert.equal(await youtube.slet('a', 'b6'), 'findes-ikke');
+});
+
 test('youtube: nøgler fra super-admin bruges, når .env ingen har — .env går forud', () => {
     const { YOUTUBE_CLIENT_ID: id, YOUTUBE_CLIENT_SECRET: secret } = process.env;
     try {
