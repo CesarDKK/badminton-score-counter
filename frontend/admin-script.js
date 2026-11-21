@@ -4324,7 +4324,8 @@ async function stopLivestreamHoldkamp(bane, stop) {
     const b = _livestream && _livestream.baner.find(x => x.bane === bane);
     const hold = b && b.holdkamp ? b.holdkamp.hold : '';
     if (stop && !await BadmintonUtils.confirmDialog('Stop udsendelsen for i dag',
-        `Stop udsendelsen af ${hold ? `holdkampen ${hold}` : 'holdkampen'} på bane ${bane}? Den sendes ikke af sig selv igen før i morgen.`,
+        `Stop udsendelsen af ${hold ? `holdkampen ${hold}` : 'holdkampen'} på bane ${bane}? Den sendes ikke af sig selv igen før i morgen. ` +
+        'Er en delkamp i gang, slettes det, der er sendt af den, på YouTube.',
         { danger: true, okText: 'Stop for i dag' })) return;
     try {
         await api.request(`/livestream/baner/${bane}/holdkamp-stop`, { method: stop ? 'POST' : 'DELETE' });
@@ -4347,7 +4348,8 @@ async function startLivestreamHeleDagen(bane) {
 
 async function stopLivestreamBane(bane) {
     if (!await BadmintonUtils.confirmDialog('Stop udsendelsen',
-        `Stop udsendelsen fra bane ${bane}? Seerne på YouTube ser den slutte med det samme.`,
+        `Stop udsendelsen fra bane ${bane}? Seerne på YouTube ser den slutte med det samme. ` +
+        'En kamp startet på tabletten, som ikke er afgjort, slettes på YouTube.',
         { danger: true, okText: 'Stop' })) return;
     try {
         await api.request(`/livestream/baner/${bane}/hele-dagen`, { method: 'DELETE' });

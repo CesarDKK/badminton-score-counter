@@ -319,7 +319,14 @@ function beslutning({ opsaetning, gs, sidste, planner, holdkamp = null, senderNu
     const sprunget = hk.koerer && delkampSprungetOver(opsaetning, holdkamp);
     const hkGrund = stoppet ? 'holdkamp-stoppet' : ungdom ? 'holdkamp-ungdom'
         : sprunget ? 'holdkamp-sprunget-over' : null;
-    if (hk.koerer && !hkGrund) return { send: true, grund: 'holdkamp', kilde, ...glem };
+    // Holdkampe sendes af sig selv — én udsendelse pr. delkamp (Jesper
+    // 2026-11-21): mens delkampen spilles på banen og minutterne efter, den er
+    // afgjort (som enhver kamp herunder). Mellem delkampene sendes der ikke, så
+    // hver delkamp bliver sin egen video på YouTube. delkamp: team_match_games.id
+    // — ytStyr afslutter udsendelsen og opretter en ny, når den skifter.
+    if (hk.koerer && !hkGrund && k.tilstand === 'kamp') {
+        return { send: true, grund: 'holdkamp', kilde: 'gs', delkamp: holdkamp.delkamp ?? null };
+    }
     // Stoppet for denne kamp: heller ikke minutterne efter, den er afgjort
     if (hkGrund === 'holdkamp-sprunget-over' && !s) return { send: false, grund: hkGrund };
     if (k.tilstand === 'kamp') {
@@ -327,8 +334,6 @@ function beslutning({ opsaetning, gs, sidste, planner, holdkamp = null, senderNu
         if (s && s.start === 'klar') return { send: true, grund: 'valgt', kilde: 'gs', vaelg: true };
         return { send: false, grund: hkGrund || 'ikke-startet' };
     }
-    // Holdkampens sidste delkamp er afgjort — måske på en anden bane
-    if (hk.slut !== null && senderNu && nu - hk.slut < efterMs) return { send: true, grund: 'afgjort', kilde, ...glem };
     if (k.tilstand === 'afgjort') {
         return senderNu && k.slut !== null && nu - k.slut < efterMs
             ? { send: true, grund: 'afgjort', kilde: k.ryddet ? 'sidste' : 'gs', ...glem }
@@ -348,6 +353,37 @@ function holdkampStoppet(o, nu = Date.now()) {
 function delkampSprungetOver(o, h) {
     const over = o && o.holdkamp_spring_over;
     return over != null && !!h && h.delkamp != null && Number(over) === Number(h.delkamp);
+}
+
+// ---------- Én YouTube-udsendelse pr. delkamp (migration 056) ----------
+// court_streams.yt_delkamp: delkampen, banens åbne udsendelse blev oprettet
+// til. Skifter delkampen på banen, mens der sendes (den næste sættes på inden
+// for minutterne efter den forrige), afsluttes udsendelsen, og en ny oprettes
+// — to delkampe havner aldrig i samme video.
+function ytSkiftDelkamp(o, b) {
+    return !!(b && b.send && o && o.yt_broadcast_id) && b.delkamp != null && o.yt_delkamp != null
+        && Number(b.delkamp) !== Number(o.yt_delkamp);
+}
+
+// Stoppes en kamp, mens den spilles (tablettens "Stop for denne kamp" eller
+// "Stop livestream", admins "Stop for i dag"), slettes det, der er sendt til
+// YouTube — så ligger der ingen halve kampe (Jesper 2026-11-21). En afgjort kamp
+// er hel og bliver liggende. delkamp: den stoppede delkamp — udsendelsen slettes
+// kun, hvis den hører til den (null: banens kamp uden for en holdkamp).
+// Returnerer true, når court_streams.yt_slet skal sættes.
+function sletVedStop(o, { faerdig, delkamp = null }) {
+    if (!o || !o.yt_broadcast_id || faerdig) return false;
+    return delkamp == null || (o.yt_delkamp != null && Number(o.yt_delkamp) === Number(delkamp));
+}
+
+// Delkampens navn i titlen: "HD1", "DS2", "Single 3" — "Golden set" for golden set.
+// nr: nummeret blandt holdkampens delkampe i samme kategori
+function delkampNavn(kat, nr) {
+    const k = tekst(kat, 10);
+    if (!k) return null;
+    if (k === 'GS') return 'Golden set';
+    if (!nr) return k;
+    return k.length <= 2 ? `${k}${nr}` : `${k} ${nr}`;
 }
 
 // Til admin (Livestream): banens holdkamp, og hvorfor den sendes eller ikke.
@@ -848,9 +884,12 @@ function ytIPause(fejlTid, pauseTil = null, nu = Date.now()) {
 // Pausen efter en fejl gælder alle tre: før gjaldt den ikke tjekket, så en
 // fejl dér (YouTube nede, udsendelsen ville ikke gå live) blev gentaget ved
 // hver forespørgsel fra PC'en — hvert 3. sekund, op til 51 enheder pr. gang.
-function ytHandling({ send, udsendelse, tjek = null, fejlTid = null, nu = Date.now() }) {
+function ytHandling({ send, udsendelse, tjek = null, fejlTid = null, skift = false, nu = Date.now() }) {
     if (ytIPause(fejlTid, null, nu)) return null;
     if (!send) return udsendelse ? 'afslut' : null;
+    // En ny delkamp på banen (ytSkiftDelkamp): den gamle udsendelse afsluttes
+    // nu, og den nye oprettes ved næste forespørgsel
+    if (skift && udsendelse) return 'afslut';
     if (!udsendelse) return 'opret';
     return tid(tjek) === null || nu - tid(tjek) >= YT_TJEK_MS ? 'tjek' : null;
 }
@@ -863,11 +902,14 @@ const datoTekst = (nu = Date.now()) => new Intl.DateTimeFormat('da-DK',
 // titlen (nr. 12A): en kamp startet fra tabletten er ofte børn og unge, og
 // titlen er det, YouTube og søgemaskiner viser og finder videoen på — også når
 // den er gammel. Navnene står stadig i scoreboardet i billedet og på /live.
-function ytTitel({ grund, bane, hold = null, klubnavn = null, nu = Date.now() }) {
+// delkamp: delkampens navn ("HD1", se delkampNavn) — først, så kampene er
+// lette at finde i kanalens liste bagefter (én video pr. delkamp, migration 056)
+function ytTitel({ grund, bane, hold = null, delkamp = null, klubnavn = null, nu = Date.now() }) {
     const ren = (s) => tekst(s, 100).replace(/[<>]/g, '');
     let titel;
-    if (grund === 'holdkamp' && hold && hold[0] && hold[1]) titel = `${ren(hold[0])} – ${ren(hold[1])} (bane ${bane}, ${datoTekst(nu)})`;
-    else titel = `${klubnavn ? `${ren(klubnavn)} – ` : ''}Bane ${bane} (${datoTekst(nu)})`;
+    if (grund === 'holdkamp' && hold && hold[0] && hold[1]) {
+        titel = `${delkamp ? `${ren(delkamp)}: ` : ''}${ren(hold[0])} – ${ren(hold[1])} (bane ${bane}, ${datoTekst(nu)})`;
+    } else titel = `${klubnavn ? `${ren(klubnavn)} – ` : ''}Bane ${bane} (${datoTekst(nu)})`;
     return titel.length > 100 ? titel.slice(0, 99) + '…' : titel;
 }
 
@@ -996,7 +1038,7 @@ module.exports = {
     YT_KENDETEGN, YT_SYNLIG_DAGE, YT_SYNLIG_MAKS, erAppensUdsendelse, ytSynligFejlStopper, ytSynligHandling,
     gyldigUrl, gyldigNoegle, rensOpsaetning, noegleSlut,
     STANDARD_INDSTILLINGER, laesIndstillinger, rensIndstillinger, videoTilPc, sponsorNu, gyldigLogoFil,
-    beslutning, startet, holdkampNu, holdkampStoppet, erUngdomsHoldkamp, delkampSprungetOver, holdkampTilAdmin, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,
+    beslutning, kampNu, startet, holdkampNu, holdkampStoppet, erUngdomsHoldkamp, delkampSprungetOver, ytSkiftDelkamp, sletVedStop, delkampNavn, holdkampTilAdmin, tabletStatus, dagensSlut, overlayTavle, overlayLinjer,
     spillerLogoer, klubLogoFraDatabase,
     rensStatus, rensKameraEnhed, registrer, statusFor, senderBane, pcSidstPaaBane, liveBaner,
     pcNoegle, maaBrugeKamera, registrerAnden, svarTilAnden, autoKameraBane,

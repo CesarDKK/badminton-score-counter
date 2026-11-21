@@ -727,7 +727,8 @@ async function livestreamKnap() {
         closeSettingsMenu();
         showMessage('Stop livestream for denne kamp?',
             `Holdkampe sendes af sig selv og stopper ${livestreamStopTekst(l, 'delkampen')}.\n\n` +
-            'Stopper du nu, sendes denne kamp ikke. Den næste delkamp, der sættes på banen, sendes igen af sig selv.', [
+            'Stopper du nu, sendes denne kamp ikke, og det, der er sendt af den, slettes på YouTube. ' +
+            'Den næste delkamp, der sættes på banen, sendes igen af sig selv.', [
             { text: 'Stop for denne kamp', style: 'danger', callback: () => livestreamSpringOver(true) },
             { text: 'Fortsæt livestream', style: 'secondary', callback: null }
         ], { spaerMs: 800 });
@@ -742,6 +743,15 @@ async function livestreamKnap() {
         return;
     }
     closeSettingsMenu();
+    // En kamp, der sendes: det sendte slettes på YouTube, hvis kampen ikke er
+    // afgjort (migration 056) — derfor spørges der først
+    if (l.start === 'valgt') {
+        showMessage('Stop livestream?', 'Kampen sendes ikke længere, og det, der er sendt af den, slettes på YouTube — medmindre kampen er afgjort.', [
+            { text: 'Stop livestream', style: 'danger', callback: () => livestreamSkift('stop', l) },
+            { text: 'Fortsæt livestream', style: 'secondary', callback: null }
+        ], { spaerMs: 800 });
+        return;
+    }
     if (l.start) {
         await livestreamSkift('stop', l);
         return;
@@ -788,7 +798,7 @@ async function livestreamSpringOver(over) {
     }
     opdaterLivestreamKnap();
     showMessage(over ? 'Livestream stoppet' : 'Livestream startet', over
-        ? 'Denne kamp sendes ikke. Den næste delkamp på banen sendes igen af sig selv.'
+        ? 'Denne kamp sendes ikke, og det sendte slettes på YouTube. Den næste delkamp på banen sendes igen af sig selv.'
         : `Kampen sendes igen og stopper ${livestreamStopTekst(livestream, 'delkampen')}.`);
 }
 

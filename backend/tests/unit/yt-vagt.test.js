@@ -44,6 +44,7 @@ youtube.konfigureret = () => true;
 youtube.adgangsToken = async () => 'token';
 youtube.udsendelsesStatus = async (token, id) => { ytKald.push({ hvad: 'status', id }); return 'live'; };
 youtube.afslut = async (token, id) => { ytKald.push({ hvad: 'afslut', id }); return 'afsluttet'; };
+youtube.slet = async (token, id) => { ytKald.push({ hvad: 'slet', id }); return 'slettet'; };
 
 const livestream = require('../../routes/livestream');
 const { ytVagt } = livestream;
@@ -53,7 +54,15 @@ const MIN = 60 * 1000;
 const TIME = 60 * MIN;
 const TENANT = 'direct';
 
-function opsaet({ udsendelse = 'b1', fejlTid = null, tjek = null, start = null, holdkamp = true, enabled = true } = {}) {
+// En delkamp i gang på banen, sidst talt lige før t
+const delkampPaaBanen = (t) => ({
+    player1_name: 'Hansen', player1_name2: null, player1_score: 7, player1_games: 0,
+    player2_name: 'Jensen', player2_name2: null, player2_score: 5, player2_games: 0,
+    match_start_time: new Date(t - 10 * MIN), match_end_time: null, match_completed: 0,
+    set_scores_history: '[]', updated_at: new Date(t - MIN)
+});
+
+function opsaet({ udsendelse = 'b1', fejlTid = null, tjek = null, start = null, holdkamp = true, enabled = true, slet = 0 } = {}) {
     rows = {
         'FROM court_streams WHERE yt_broadcast_id IS NOT NULL': [{ court_number: 3 }],
         'FROM livestream_youtube': [{ id: 1, refresh_token: krypter('r'), fejl: null, kanal_navn: 'Klubben' }],
@@ -61,8 +70,10 @@ function opsaet({ udsendelse = 'b1', fejlTid = null, tjek = null, start = null, 
         'FROM courts WHERE court_number': [{ id: 33, is_doubles: 0 }],
         'FROM court_streams WHERE court_number': [{ court_number: 3, enabled: enabled ? 1 : 0, stream_key: null,
             yt_stream_key: 'k', yt_broadcast_id: udsendelse, yt_broadcast_start: start, yt_broadcast_tjek: tjek,
-            yt_fejl_tid: fejlTid, armed_until: null, manual_since: null, all_day_until: null, holdkamp_stop_until: null }],
-        'FROM game_states WHERE court_id': [],
+            yt_fejl_tid: fejlTid, armed_until: null, manual_since: null, all_day_until: null, holdkamp_stop_until: null,
+            yt_slet: slet, yt_delkamp: null }],
+        // Holdkampe sendes kun, mens en delkamp spilles på banen (én udsendelse pr. delkamp)
+        'FROM game_states WHERE court_id': holdkamp ? [delkampPaaBanen(NU)] : [],
         'FROM last_finished_matches': [],
         'FROM planner_court_assignments': [],
         // Holdkampen kører: delkampe tilbage, en startede for lidt siden (i dag)
@@ -163,6 +174,7 @@ test("vagten: 11 timer eller midnat lukker, selv om PC'en sender videre — star
     pcMeldte(NU + 11 * TIME - 3 * 1000);
     // Holdkampen er stadig i gang 11 timer senere (ellers lukker "forladt" først)
     rows['FROM team_matches tm'] = [{ mangler: 2, igang: 1, slut: null, start: new Date(NU + 11 * TIME - 5 * MIN), roert: new Date(NU + 11 * TIME - MIN) }];
+    rows['FROM game_states WHERE court_id'] = [delkampPaaBanen(NU + 11 * TIME)];
     assert.deepEqual(await ytVagt(NU + 11 * TIME), [{ bane: 3, grund: 'for-lang' }]);
 });
 
@@ -173,6 +185,16 @@ test('vagten: i pausen efter en YouTube-fejl kaldes YouTube ikke — der prøves
     assert.deepEqual(await ytVagt(NU), [{ bane: 3, grund: 'pc-tavs' }]);   // besluttet …
     assert.equal(ytKald.length, 0);                                       // … men ikke kaldt endnu
     assert.equal(glemt(), undefined);
+});
+
+test('vagten: en kamp stoppet undervejs (yt_slet) — udsendelsen slettes og glemmes, også i listen over appens udsendelser', async () => {
+    opsaet({ holdkamp: false, start: new Date(NU - 20 * MIN), slet: 1 });
+    pcMeldte(NU - 5 * 1000);
+    assert.equal((await ytVagt(NU)).length, 1);
+    assert.deepEqual(ytKald.map(k => k.hvad), ['slet']);
+    assert.match(glemt().sql, /yt_delkamp = NULL, yt_slet = 0/);
+    const ud = kald.find(k => /DELETE FROM yt_udsendelser WHERE broadcast_id = \?/.test(k.sql));
+    assert.deepEqual(ud && ud.params, ['b1']);
 });
 
 test('vagten: ingen åbne udsendelser — kun én forespørgsel', async () => {

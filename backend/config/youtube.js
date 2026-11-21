@@ -254,6 +254,28 @@ async function afslut(token, id) {
     return status || 'findes-ikke';
 }
 
+// Udsendelsen skal væk: en kamp blev stoppet, mens den blev spillet, og en
+// halv kamp skal ikke ligge på kanalen (routes/livestream.js ytStyr, yt_slet).
+// En, der er live, afsluttes først; så slettes den (en afsluttet udsendelse
+// er en video med samme id). Kan YouTube ikke slette selve udsendelsen, slettes
+// videoen. Returnerer 'slettet' eller 'findes-ikke'. 101–151 enheder.
+async function slet(token, id) {
+    const status = await udsendelsesStatus(token, id);
+    if (!status) return 'findes-ikke';
+    if (status === 'live' || status === 'testing' || status === 'liveStarting') {
+        await api('liveBroadcasts/transition', { broadcastStatus: 'complete', id, part: 'status' }, { token, method: 'POST' })
+            .catch((e) => { if (!(e instanceof YoutubeFejl)) throw e; });   // slettes alligevel herunder
+    }
+    try {
+        await api('liveBroadcasts', { id }, { token, method: 'DELETE' });
+    } catch (e) {
+        if (!(e instanceof YoutubeFejl)) throw e;
+        if (e.status === 404) return 'findes-ikke';
+        await api('videos', { id }, { token, method: 'DELETE' });
+    }
+    return 'slettet';
+}
+
 // ---- Synligheden efter 60 dage (nr. 12C, routes/livestream.js ytSynlighedJob) ----
 
 // Én side (højst 50) af kanalens afsluttede udsendelser: { items: [{ id,
@@ -296,6 +318,6 @@ async function saetSynlighed(token, id, status, privacyStatus) {
 
 module.exports = {
     SCOPE, YoutubeFejl, konfigureret, klient, brugKlient, tjekKlient, tilbageAdresse, loginAdresse, byttKode, adgangsToken, glemAdgang,
-    tilbagekald, kanal, opretStream, opretUdsendelse, udsendelsesStatus, gaaLive, afslut,
+    tilbagekald, kanal, opretStream, opretUdsendelse, udsendelsesStatus, gaaLive, afslut, slet,
     afsluttedeUdsendelser, videoStatus, saetSynlighed
 };

@@ -113,11 +113,24 @@ test('12B: "Start livestream" spørger først (hver gang); Fortryd starter intet
     assert.equal(sb.kald.length, 1);
 });
 
-test('12B: stop spørger ikke', async () => {
+// Før spurgte stop ikke (12B). Nu slettes det sendte på YouTube, når en kamp
+// stoppes undervejs (migration 056, Jesper 2026-11-21) — så spørges der først.
+// "Fortryd" for en kamp, der venter (klar), er intet sendt og spørger ikke.
+test('12B/056: stop af en kamp, der sendes, spørger først — fortryd af en ventende gør ikke', async () => {
     const sb = tabletSandkasse({ kan: true, start: 'valgt' });
     await sb.livestreamKnap();
+    assert.equal(sb.kald.length, 0, 'intet stoppes, før der svares');
+    const d = sb.dialoger[0];
+    assert.equal(d.titel, 'Stop livestream?');
+    assert.match(d.tekst, /slettes på YouTube — medmindre kampen er afgjort/);
+    assert.deepEqual([...d.knapper.map(k => k.text)], ['Stop livestream', 'Fortsæt livestream']);
+    assert.equal(d.knapper[1].callback, null);
+    await d.knapper[0].callback();
     assert.deepEqual(sb.kald, ['POST /livestream/bane/3/stop']);
-    assert.equal(sb.dialoger[0].titel, 'Livestream stoppet');
+    assert.equal(sb.dialoger[1].titel, 'Livestream stoppet');
+    const klar = tabletSandkasse({ kan: true, start: 'klar' });
+    await klar.livestreamKnap();
+    assert.deepEqual(klar.kald, ['POST /livestream/bane/3/stop']);
 });
 
 test('12B: showMessage spærrer knapperne med spaerMs; tabletStatus giver synligheden kun med forbundet kanal', () => {

@@ -30,8 +30,8 @@ const iGang = { mangler: 5, igang: 1, slut: null, start: new Date(NU - 10 * MIN)
 test('beslutning: den sprungne delkamp sendes ikke — den næste gør', () => {
     const over = { ...OPS, holdkamp_spring_over: 41 };
     assert.deepEqual(ls.beslutning({ opsaetning: over, gs: gs(), holdkamp: iGang, nu: NU }), { send: false, grund: 'holdkamp-sprunget-over' });
-    // Afgjort og ryddet: heller ikke de sidste minutter eller mellem delkampene
-    assert.equal(ls.beslutning({ opsaetning: over, gs: null, sidste: null, holdkamp: { ...iGang, igang: 0 }, nu: NU }).grund, 'holdkamp-sprunget-over');
+    // Afgjort og ryddet: heller ikke de sidste minutter (og mellem delkampene sendes der aldrig)
+    assert.equal(ls.beslutning({ opsaetning: over, gs: null, sidste: null, holdkamp: { ...iGang, igang: 0 }, nu: NU }).send, false);
     const afgjort = gs({ player1_games: 2, match_completed: 1, match_end_time: new Date(NU - MIN) });
     assert.equal(ls.beslutning({ opsaetning: over, gs: afgjort, holdkamp: { ...iGang, igang: 0 }, senderNu: true, nu: NU }).send, false);
     // Næste delkamp sat på banen: sendes igen af sig selv
@@ -73,19 +73,19 @@ test('tablettens knap: stop under holdkampen, send alligevel bagefter', () => {
     assert.equal(ctx.f({ start: null, holdkamp: false, sprunget: true, youtube: null }).live, false);
     assert.match(kilde, /\/livestream\/bane\/\$\{courtId\}\/spring-over`, \{ method: over \? 'POST' : 'DELETE' \}/);
     assert.match(kilde, /text: 'Stop for denne kamp', style: 'danger'/);
-    assert.match(laes('frontend/court-v3.html'), /court-script-v3\.js\?v=72/);
+    assert.match(laes('frontend/court-v3.html'), /court-script-v3\.js\?v=73/);
 });
 
 test('serveren: ruterne og migrationen', () => {
     const r = laes('backend/routes/livestream.js');
     assert.match(r, /router\.post\('\/bane\/:bane\/spring-over', tablet,/);
     assert.match(r, /router\.delete\('\/bane\/:bane\/spring-over', tablet,/);
-    assert.match(r, /UPDATE court_streams SET holdkamp_spring_over = \? WHERE court_number = \?', \[h\.delkamp, bane\]/);
+    assert.match(r, /UPDATE court_streams SET holdkamp_spring_over = \?\$\{slet \? ', yt_slet = 1' : ''\} WHERE court_number = \?`, \[h\.delkamp, bane\]/);
     assert.match(r, /ORDER BY g\.status = 'active' DESC, g\.started_at DESC, g\.id DESC LIMIT 1/);
     assert.match(laes('backend/migrations/055_livestream_spring_delkamp.sql'),
         /ALTER TABLE court_streams ADD COLUMN holdkamp_spring_over INT NULL DEFAULT NULL;/);
     const a = laes('frontend/admin-script.js');
     assert.match(a, /'holdkamp-sprunget-over':/);
     assert.match(a, /if \(h\.sprunget\) \{/);
-    assert.match(laes('frontend/admin.html'), /admin-script\.js\?v=129/);
+    assert.match(laes('frontend/admin.html'), /admin-script\.js\?v=130/);
 });

@@ -54,26 +54,24 @@ test('sendes ikke: slået fra, uden nøgle, badmintonplanner eller ingen kamp', 
     assert.equal(ls.beslutning({ opsaetning: OPS, gs: null, sidste: null, nu: NU }).grund, 'ingen-kamp');
 });
 
-test('holdkampe sendes af sig selv — uden afbrydelser mellem delkampene', () => {
-    const iGang = { mangler: 5, igang: 1, slut: null, start: new Date(NU - 10 * MIN) };
-    assert.deepEqual(ls.beslutning({ opsaetning: OPS, gs: gs(), holdkamp: iGang, nu: NU }), { send: true, grund: 'holdkamp', kilde: 'gs' });
-    // Mellem delkampene: banen er ryddet, ingen delkamp i gang — der sendes stadig
-    const pause = { mangler: 3, igang: 0, slut: new Date(NU - 8 * MIN), start: new Date(NU - 40 * MIN) };
-    assert.deepEqual(ls.beslutning({ opsaetning: OPS, gs: null, sidste: null, holdkamp: pause, nu: NU }),
-        { send: true, grund: 'holdkamp', kilde: null });
-    // … også mens den afgjorte delkamp står på banen
-    const afgjort = gs({ player1_games: 2, match_completed: 1, match_end_time: new Date(NU - 8 * MIN) });
-    assert.equal(ls.beslutning({ opsaetning: OPS, gs: afgjort, holdkamp: pause, nu: NU }).kilde, 'gs');
+test('holdkampe sendes af sig selv — én udsendelse pr. delkamp, intet mellem delkampene', () => {
+    const iGang = { mangler: 5, igang: 1, slut: null, start: new Date(NU - 10 * MIN), delkamp: 41 };
+    assert.deepEqual(ls.beslutning({ opsaetning: OPS, gs: gs(), holdkamp: iGang, nu: NU }), { send: true, grund: 'holdkamp', kilde: 'gs', delkamp: 41 });
+    // Mellem delkampene: banen er ryddet, ingen delkamp i gang — der sendes ikke (Jesper 2026-11-21)
+    const pause = { mangler: 3, igang: 0, slut: new Date(NU - 8 * MIN), start: new Date(NU - 40 * MIN), delkamp: 41 };
+    assert.equal(ls.beslutning({ opsaetning: OPS, gs: null, sidste: null, holdkamp: pause, nu: NU }).send, false);
+    // Den afgjorte delkamp på banen: minutterne efter, hvis PC'en sender — som enhver kamp
+    const afgjort = gs({ player1_games: 2, match_completed: 1, match_end_time: new Date(NU - MIN) });
+    assert.deepEqual(ls.beslutning({ opsaetning: OPS, gs: afgjort, holdkamp: pause, senderNu: true, nu: NU }),
+        { send: true, grund: 'afgjort', kilde: 'gs' });
+    assert.equal(ls.beslutning({ opsaetning: OPS, gs: afgjort, holdkamp: pause, senderNu: false, nu: NU }).send, false);
+    assert.equal(ls.beslutning({ opsaetning: OPS, gs: { ...afgjort, match_end_time: new Date(NU - 8 * MIN) }, holdkamp: pause, senderNu: true, nu: NU }).send, false);
     // En holdkamp, ingen har rørt i 45 minutter, er forladt
     const forladt = { mangler: 3, igang: 0, slut: new Date(NU - 50 * MIN), start: new Date(NU - 90 * MIN) };
-    assert.equal(ls.beslutning({ opsaetning: OPS, gs: null, holdkamp: forladt, nu: NU }).send, false);
-    // Alle delkampe færdige (den sidste måske på en anden bane): 2 minutter mere — hvis PC'en sender
+    assert.equal(ls.beslutning({ opsaetning: OPS, gs: gs(), holdkamp: forladt, nu: NU }).send, false);
+    // Alle delkampe færdige, og banens egen er afgjort for længe siden: intet at sende
     const faerdig = { mangler: 0, igang: 0, slut: new Date(NU - MIN), start: new Date(NU - 30 * MIN) };
-    assert.deepEqual(ls.beslutning({ opsaetning: OPS, gs: null, holdkamp: faerdig, senderNu: true, nu: NU }),
-        { send: true, grund: 'afgjort', kilde: null });
-    assert.equal(ls.beslutning({ opsaetning: OPS, gs: null, holdkamp: faerdig, senderNu: false, nu: NU }).send, false);
-    assert.equal(ls.beslutning({ opsaetning: OPS, gs: null, holdkamp: { ...faerdig, slut: new Date(NU - 3 * MIN) },
-        senderNu: true, nu: NU }).send, false);
+    assert.equal(ls.beslutning({ opsaetning: OPS, gs: null, holdkamp: faerdig, senderNu: true, nu: NU }).send, false);
     // Andre kampe kun, når de er startet med en knap
     assert.deepEqual(ls.beslutning({ opsaetning: OPS, gs: gs({ player1_score: 5 }), nu: NU }), { send: false, grund: 'ikke-startet' });
 });
