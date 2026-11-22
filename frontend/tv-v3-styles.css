@@ -694,11 +694,19 @@ body.tv-uden-data #tvConnectionBadge {
     align-items: center;
 }
 
+/* Banneret fylder bundbjælkens bredde (også et lille uploadet billede skaleres
+   op). Et typisk banner (ca. 9:1) står i fuld bredde på en 1080p-skærm; højden
+   stopper ved 20 % af skærmen, så stillingen altid har mindst 3/4 af den. Før
+   stoppede det ved 9 % — så blev et 9:1-banner kun halvt så bredt som skærmen. */
+.tv-footer.has-banner {
+    padding-top: clamp(6px, 1vh, 16px);
+    padding-bottom: clamp(6px, 1vh, 16px);
+}
+
 .court-banner-image {
     display: block;
-    max-width: 100%;
-    max-height: clamp(50px, 9vh, 200px);
-    width: auto;
+    width: 100%;
+    max-height: clamp(50px, 20vh, 400px);
     height: auto;
     object-fit: contain;
 }
