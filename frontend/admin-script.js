@@ -1727,6 +1727,9 @@ async function loadActiveHoldkamp() {
 
         container.style.display = 'block';
 
+        // Livescore til badmintonplayer.dk: status pr. holdkamp (højst hvert 15. sek.)
+        await hentBpLivescoreStatus(teamMatches);
+
         // Polling may have been stopped when there was no active match; restart it.
         if (!holdkampRefreshTimer) {
             holdkampRefreshTimer = synligInterval(loadActiveHoldkamp, 3000);
@@ -1979,6 +1982,7 @@ function renderActiveHoldkampBlock(teamMatch, allGameStates = [], courtCount = 5
                 </div>
             </div>
             ${renderHoldkampRegelBlok(teamMatch)}
+            ${renderBpLivescoreBlok(teamMatch)}
             ${renderHoldkampAabenStatus(teamMatch, allGameStates)}
             <div>${gamesHtml}</div>
         </div>
@@ -2538,6 +2542,108 @@ function renderHoldkampAabenStatus(tm, allGameStates = []) {
     return regelBoks('240,165,0',
         `<div class="tekst-advarsel fed luft-under-4">Holdkampen afsluttes først, når alle delkampe har et resultat</div>` +
         mangler.map(m => `<div>• ${escapeHtml(m)}</div>`).join(''));
+}
+
+// ===== Livescore til badmintonplayer.dk =====
+// Stillingen fra tabletten sendes til badmintonplayer.dk's livescore for en
+// holdkamp hentet derfra (routes/bpLivescore.js). Status hentes højst hvert
+// 15. sekund — holdkamp-kortet tegnes hvert 3. sekund.
+const bpLivescoreStatus = new Map();   // holdkamp-id → svar fra GET /bp-livescore/:id
+let bpLivescoreHentet = 0;
+let bpLivescoreFormAaben = null;       // holdkamp-id med åben kodeformular
+
+async function hentBpLivescoreStatus(teamMatches, tving = false) {
+    if (!tving && Date.now() - bpLivescoreHentet < 15000) return;
+    bpLivescoreHentet = Date.now();
+    await Promise.all(teamMatches.map(async tm => {
+        try { bpLivescoreStatus.set(tm.id, await api.getBpLivescore(tm.id)); } catch (e) { /* vises bare ikke */ }
+    }));
+}
+
+function renderBpLivescoreBlok(tm) {
+    const s = bpLivescoreStatus.get(tm.id);
+    if (!s || !s.kanBruges) return '';
+    const titel = `<div class="fed luft-under-4">Livescore på badmintonplayer.dk</div>`;
+
+    if (bpLivescoreFormAaben === tm.id) {
+        return regelBoks('74,144,226', titel +
+            `<div class="luft-under-6">Hjemmeklubben åbner for livescore på badmintonplayer.dk under klubnavn → "Indberet resultat" → "Åben for Live Score" og får en kode. Skriv koden her (står der ingen kode, så lad feltet være tomt).</div>
+             <div class="raekke">
+                <input id="bpKode_${tm.id}" type="text" autocomplete="off" maxlength="64" placeholder="Livescore-kode" class="admin-input admin-input--sm" style="width:auto;">
+                <button onclick="gemBpLivescore(${tm.id})" class="btn-primary btn-sm">Send livescore</button>
+                <button onclick="lukBpLivescore()" class="btn-secondary btn-sm">Annuller</button>
+             </div>`);
+    }
+
+    if (!s.til) {
+        return regelBoks('128,128,128', titel +
+            `<div class="raekke"><span class="fyld">Stillingen fra banerne sendes ikke til badmintonplayer.dk (kamp ${escapeHtml(String(s.kampnr))}).</span>
+             <button onclick="aabnBpLivescore(${tm.id})" class="btn-secondary btn-sm">Send livescore</button></div>`);
+    }
+
+    const kl = s.sidstSendt ? new Date(s.sidstSendt).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' }) : null;
+    const fejl = s.status && s.status !== 'ok';
+    const linjer = [
+        fejl ? `<div class="tekst-advarsel">${escapeHtml(s.status)}</div>`
+             : `<div>Stillingen sendes, mens der spilles${kl ? ` · sidst sendt kl. ${kl}` : ''}.</div>`,
+        s.ukoblede && s.ukoblede.length
+            ? `<div class="tekst-advarsel">${s.koblede} af ${s.delkampe} delkampe er fundet på badmintonplayer.dk — de øvrige sendes ikke.</div>`
+            : ''
+    ].join('');
+    return regelBoks(fejl ? '240,165,0' : '69,209,126', titel +
+        `<div class="raekke"><div class="fyld">${linjer}</div>
+         <button onclick="stopBpLivescore(${tm.id})" class="btn-secondary btn-sm">Stop livescore</button></div>`);
+}
+
+function aabnBpLivescore(id) {
+    bpLivescoreFormAaben = id;
+    holdkampEditOpen = true;
+    tegnHoldkampeIgen();
+    const felt = document.getElementById(`bpKode_${id}`);
+    if (felt) felt.focus();
+}
+
+function lukBpLivescore() {
+    bpLivescoreFormAaben = null;
+    holdkampEditOpen = false;
+    tegnHoldkampeIgen();
+}
+
+async function gemBpLivescore(id) {
+    const felt = document.getElementById(`bpKode_${id}`);
+    const kode = felt ? felt.value.trim() : '';
+    try {
+        const s = await api.setBpLivescore(id, { til: true, kode });
+        bpLivescoreStatus.set(id, s);
+        bpLivescoreFormAaben = null;
+        holdkampEditOpen = false;
+        tegnHoldkampeIgen();
+        if (s.ukoblede && s.ukoblede.length) {
+            showMessage('Livescore', `${s.koblede} af ${s.delkampe} delkampe blev fundet på badmintonplayer.dk. De øvrige sendes ikke — tjek at spillernes navne er de samme som på holdsedlen.`);
+        }
+    } catch (e) {
+        showMessage('Livescore', e.message || 'Livescore kunne ikke slås til');
+    }
+}
+
+function stopBpLivescore(id) {
+    showMessage('Stop livescore?', 'Stillingen fra banerne sendes ikke længere til badmintonplayer.dk for denne holdkamp. Det, der allerede er sendt, bliver stående.', [
+        { text: 'Stop livescore', style: 'danger', callback: async () => {
+            try {
+                bpLivescoreStatus.set(id, await api.setBpLivescore(id, { til: false }));
+                tegnHoldkampeIgen();
+            } catch (e) {
+                showMessage('Livescore', e.message || 'Livescore kunne ikke stoppes');
+            }
+        } },
+        { text: 'Fortsæt', style: 'secondary', callback: null }
+    ]);
+}
+
+// Tegn holdkamp-kortene igen med det samme (uden at vente på næste opdatering)
+function tegnHoldkampeIgen() {
+    bpLivescoreHentet = Date.now();   // status er lige hentet/sat — ingen ny hentning
+    loadActiveHoldkamp();
 }
 
 // ===== Genbrugelig logo-vælger modal =====

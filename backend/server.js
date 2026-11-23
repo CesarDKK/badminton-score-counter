@@ -137,6 +137,8 @@ app.use('/api/game-states', require('./routes/gameStates'));
 app.use('/api/match-history', require('./routes/matchHistory'));
 app.use('/api/sponsors', require('./routes/sponsors'));
 app.use('/api/team-matches', require('./routes/teamMatches'));
+// Livescore til badmintonplayer.dk for holdkampe (opsætning + afsendelse)
+app.use('/api/bp-livescore', require('./routes/bpLivescore'));
 app.use('/api/tournaments', require('./routes/tournaments'));
 app.use('/api/import', require('./routes/importHoldkamp'));
 app.use('/api/import/tournament', require('./routes/importTournament'));
