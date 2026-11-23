@@ -675,7 +675,7 @@
     position: absolute;
     right: 35px;
     background: var(--color-accent);
-    color: white;
+    color: var(--color-on-accent, #ffffff);
     border: none;
     border-radius: 50%;
     width: 24px;

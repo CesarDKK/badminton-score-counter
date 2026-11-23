@@ -435,7 +435,7 @@ body.ov-uden-data #ovForbindelse {
     line-height: 1;
     color: #ffffff;
 }
-#holdkampCardsGrid .hk-chip--1 { background: var(--color-knap, var(--color-accent)); }
+#holdkampCardsGrid .hk-chip--1 { background: var(--color-knap, var(--color-accent)); color: var(--color-on-accent, #ffffff); } /* lyse accenter (Skov, Monokrom, Marine) får mørk tekst */
 #holdkampCardsGrid .hk-chip--2 { background: #2b7bbd; } /* mørkere info-blå: hvid tekst ≥ 4,5:1 */
 #holdkampCardsGrid .hk-chip--igang {
     background: rgba(255, 255, 255, 0.04);

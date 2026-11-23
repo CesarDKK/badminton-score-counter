@@ -141,6 +141,7 @@ header h1 {
 
 .btn-start-match:hover:not(:disabled) {
     background: var(--color-accent);
+    color: var(--color-on-accent, #ffffff);
     transform: scale(1.04);
 }
 
