@@ -63,13 +63,14 @@ const THEME_PRESETS = {
         colorBgCard: '#374151'
     },
     marine: {
-        // Mørk marineblå og hvid (fx Hillerød, hvis logo er #00056b på hvid)
+        // Marineblå og hvid (fx Hillerød, logo #00056b på hvid). Sidebaggrunden er næsten
+        // sort-blå, så de blå flader og de hvide 3 %-kort på forsiden kan skelnes
         name: 'Marine',
-        colorPrimary: '#2f3cc4',
+        colorPrimary: '#3b4ee0',
         colorAccent: '#ffffff',
-        colorBgDark: '#000439',
-        colorBgContainer: '#00056b',
-        colorBgCard: '#00022a'
+        colorBgDark: '#00021c',
+        colorBgContainer: '#0a1280',
+        colorBgCard: '#000114'
     }
 };
 
