@@ -865,6 +865,20 @@ class BadmintonAPI {
     }
 
     /** Get ALL active team matches with games */
+    /** Livescore til badmintonplayer.dk for en holdkamp (admin) */
+    async getBpLivescore(teamMatchId) {
+        return this.request(`/bp-livescore/${teamMatchId}`);
+    }
+
+    /** Slå livescore til ({ til: true, kode }) eller fra ({ til: false }) — henter holdkampen hos badmintonplayer */
+    async setBpLivescore(teamMatchId, body) {
+        return this.request(`/bp-livescore/${teamMatchId}`, {
+            method: 'PUT',
+            body: JSON.stringify(body),
+            timeout: 25000
+        }, 1);
+    }
+
     async getActiveTeamMatches() {
         return this.request('/team-matches/active-all');
     }

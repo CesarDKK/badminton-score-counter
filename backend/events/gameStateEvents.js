@@ -24,9 +24,22 @@ function tenantKey(req) {
     return `klub:${req.clubDbName || 'direct'}`;
 }
 
+// Lyttere på alle klubbers baneændringer (fx livescore til badmintonplayer.dk,
+// config/bpLivescore.js). Kaldes med (klubDb | null, bane, type); null = uden
+// multi-tenant. En fejl i en lytter må aldrig vælte den gemning, der udløste den.
+const _alleLyttere = [];
+function onAnyGameStateChange(fn) {
+    _alleLyttere.push(fn);
+    return () => { const i = _alleLyttere.indexOf(fn); if (i >= 0) _alleLyttere.splice(i, 1); };
+}
+
 // type: 'update' (PUT) eller 'reset' (DELETE / Ryd bane)
 function publishGameStateChange(req, courtId, type = 'update') {
     emitter.emit(tenantKey(req), { courtId: Number(courtId), type });
+    const db = req && req.clubDbName && req.clubDbName !== 'direct' ? req.clubDbName : null;
+    for (const fn of _alleLyttere) {
+        try { fn(db, Number(courtId), type); } catch (e) { console.error('Lytter på baneændringer fejlede:', e.message); }
+    }
 }
 
 // Config-events: hjaelpe-data der ikke er bundet til een bane (sponsorer,
@@ -55,4 +68,4 @@ function subscribeGameStateChanges(req, handler) {
     return () => emitter.removeListener(key, handler);
 }
 
-module.exports = { publishGameStateChange, publishConfigChange, publishHoldkampChange, subscribeGameStateChanges, tenantKey };
+module.exports = { publishGameStateChange, publishConfigChange, publishHoldkampChange, subscribeGameStateChanges, onAnyGameStateChange, tenantKey };
