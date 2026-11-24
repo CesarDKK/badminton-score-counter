@@ -87,5 +87,5 @@ test('serveren: ruterne og migrationen', () => {
     const a = laes('frontend/admin-script.js');
     assert.match(a, /'holdkamp-sprunget-over':/);
     assert.match(a, /if \(h\.sprunget\) \{/);
-    assert.match(laes('frontend/admin.html'), /admin-script\.js\?v=131/);
+    assert.ok(Number((laes('frontend/admin.html').match(/admin-script\.js\?v=(\d+)/) || [])[1]) >= 131, 'admin-script.js er talt op');
 });

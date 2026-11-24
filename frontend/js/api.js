@@ -968,10 +968,10 @@ class BadmintonAPI {
     }
 
     /** Importér en turnering med alle kampe i ét kald — alt eller intet (nr. 75/81). */
-    async importTournament(name, sourceTournamentId, matches) {
+    async importTournament(name, sourceTournamentId, matches, sourceLocations = null) {
         return this.request('/tournaments/import', {
             method: 'POST',
-            body: JSON.stringify({ name, sourceTournamentId, matches }),
+            body: JSON.stringify({ name, sourceTournamentId, matches, sourceLocations }),
             timeout: 60000 // mange kampe i én transaktion
         });
     }
