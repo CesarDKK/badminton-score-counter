@@ -6587,7 +6587,8 @@ function renderTournamentBlock(t, iGang = new Map()) {
     return `
         <div class="turnering-kort" data-tournament-id="${t.id}">
             <div class="turnering-kort__hoved">
-                <h3 class="turnering-kort__navn">${escapeHtml(t.name)}</h3>
+                <h3 class="turnering-kort__navn">${escapeHtml(t.name)}${Array.isArray(t.source_locations) && t.source_locations.length
+                    ? ` <span class="tekst-daempet tekst-mindre">— ${escapeHtml(t.source_locations.join(', '))}</span>` : ''}</h3>
                 <div class="raekke">
                     ${t.source_tournament_id ? `<label class="afkrydsning tekst-mindre">
                         <input type="checkbox" id="t${t.id}_autoSync" ${t.auto_sync ? 'checked' : ''} class="afkrydsning-boks">
@@ -6981,6 +6982,9 @@ function renderTournamentImportPreview(data) {
     // Kategorien vises som badge på hver række så den stadig er synlig uden gruppering.
     const allCategories = new Set();
     data.matches.forEach(m => { if (m.category) allCategories.add(m.category); });
+    // Spillesteder — kun når turneringen spilles flere steder. Der startes uden
+    // valgt sted, så man ikke ved et uheld importerer alle stedernes kampe.
+    const steder = Array.isArray(data.locations) && data.locations.length > 1 ? data.locations : [];
 
     const rows = data.matches.map((m, idx) => {
         const side1 = m.doubles
@@ -7005,11 +7009,15 @@ function renderTournamentImportPreview(data) {
         // TS' status: aflyste kampe importeres ikke, spillede/walkover kommer ind som færdige
         const tsTekst = { aflyst: 'Aflyst — importeres ikke', walkover: 'Walkover', spillet: 'Spillet' }[m.tsStatus] || '';
         const tsBadge = tsTekst ? `<span class="maerke maerke--neutral">${tsTekst}</span>` : '';
-        return `<label data-category="${escapeHtml(m.category || '')}" data-day="${escapeHtml(m.day || '')}" class="ts-import-row vaelg-raekke">
+        const stedBadge = steder.length && m.location
+            ? `<span class="tekst-daempet tekst-lille nowrap">${escapeHtml(m.location)}</span>`
+            : '';
+        return `<label data-category="${escapeHtml(m.category || '')}" data-day="${escapeHtml(m.day || '')}" data-location="${escapeHtml(m.location || '')}" class="ts-import-row vaelg-raekke">
             <input type="checkbox" class="ts-import-check afkrydsning-boks" data-idx="${idx}" ${m.tsStatus === 'aflyst' ? 'disabled' : 'checked'}>
             ${numBadge}
             ${dayBadge}
             ${tidBadge}
+            ${stedBadge}
             ${catBadge}
             ${roundBadge}
             ${tsBadge}
@@ -7033,6 +7041,18 @@ function renderTournamentImportPreview(data) {
         </div>`
         : '';
 
+    const stedFilterHtml = steder.length
+        ? `<div class="tilfoej-boks luft-under-12">
+            <div class="felt-overskrift">Vælg spillested — kun kampene herfra importeres og opdateres:</div>
+            <div class="raekke raekke--bred">
+                ${steder.map(s => `<label class="afkrydsning">
+                        <input type="checkbox" class="ts-location-check afkrydsning-boks" data-location="${escapeHtml(s.name)}">
+                        <span class="tekst-primaer">${escapeHtml(s.name)} <span class="tekst-daempet">(${s.count})</span></span>
+                    </label>`).join('')}
+            </div>
+        </div>`
+        : '';
+
     // Build kategori-filter dropdown så brugeren stadig kan vælge/fravælge per kategori
     // uden at vi behøver omgruppere rækkerne
     const categoryOptions = ['<option value="">-- Vælg kategori --</option>']
@@ -7050,6 +7070,7 @@ function renderTournamentImportPreview(data) {
             Kampene importeres i denne rækkefølge — den næste til afvikling ligger øverst.
         </p>
 
+        ${stedFilterHtml}
         ${dayFilterHtml}
 
         <div class="raekke luft-under-12">
@@ -7076,8 +7097,14 @@ function renderTournamentImportPreview(data) {
     preview.querySelectorAll('.ts-import-check').forEach(cb => {
         cb.addEventListener('change', updateTsSelectedCount);
     });
+    // "Vælg alle" og kategori-knappen rører kun de synlige rækker — ellers kom
+    // de fravalgte dages/spillesteders kampe med igen
+    const synlig = (r) => r.style.display !== 'none';
     document.getElementById('tsCheckAllBtn').addEventListener('click', () => {
-        preview.querySelectorAll('.ts-import-check').forEach(cb => { if (!cb.disabled) cb.checked = true; });
+        preview.querySelectorAll('.ts-import-row').forEach(r => {
+            const cb = r.querySelector('.ts-import-check');
+            if (cb && !cb.disabled && synlig(r)) cb.checked = true;
+        });
         updateTsSelectedCount();
     });
     document.getElementById('tsUncheckAllBtn').addEventListener('click', () => {
@@ -7087,38 +7114,52 @@ function renderTournamentImportPreview(data) {
     document.getElementById('tsToggleCategoryBtn').addEventListener('click', () => {
         const cat = document.getElementById('tsCategoryFilter').value;
         if (!cat) return;
-        const rows = preview.querySelectorAll(`.ts-import-row[data-category="${cat.replace(/"/g, '\\"')}"]`);
+        const rows = Array.from(preview.querySelectorAll(`.ts-import-row[data-category="${cat.replace(/"/g, '\\"')}"]`)).filter(synlig);
         if (rows.length === 0) return;
         // Toggle: hvis nogen er valgte i kategorien, fravælg alle; ellers vælg alle
         const anyChecked = Array.from(rows).some(r => r.querySelector('.ts-import-check').checked);
         rows.forEach(r => { const cb = r.querySelector('.ts-import-check'); if (!cb.disabled) cb.checked = !anyChecked; });
         updateTsSelectedCount();
     });
-    // Dag-filter: når brugeren toggler en dag, skjul/vis rækker for den dag og
-    // check/uncheck deres checkboxes (importen respekterer per-række-checkboxes)
-    preview.querySelectorAll('.ts-day-check').forEach(dayCb => {
-        dayCb.addEventListener('change', () => {
-            const day = dayCb.getAttribute('data-day');
-            const rows = preview.querySelectorAll(`.ts-import-row[data-day="${day.replace(/"/g, '\\"')}"]`);
-            rows.forEach(r => {
-                r.style.display = dayCb.checked ? 'flex' : 'none';
-                const cb = r.querySelector('.ts-import-check');
-                if (cb && !cb.disabled) cb.checked = dayCb.checked;
-            });
-            updateTsSelectedCount();
+    // Dag- og spillested-filter: en række vises, når både dens dag og dens
+    // spillested er valgt. Rækker, der skjules, fravælges, og rækker, der
+    // kommer frem, vælges (importen respekterer per-række-checkboxes). Kun de
+    // rækker, hvis synlighed skifter, røres — et enkelt fravalg bevares.
+    const valgte = (sel, attr) => new Set(Array.from(preview.querySelectorAll(sel))
+        .filter(cb => cb.checked).map(cb => cb.getAttribute(attr)));
+    const anvendFiltre = () => {
+        const harDage = preview.querySelector('.ts-day-check');
+        const harSteder = preview.querySelector('.ts-location-check');
+        const dage = valgte('.ts-day-check', 'data-day');
+        const steder = valgte('.ts-location-check', 'data-location');
+        preview.querySelectorAll('.ts-import-row').forEach(r => {
+            const vis = (!harDage || dage.has(r.getAttribute('data-day')))
+                && (!harSteder || steder.has(r.getAttribute('data-location')));
+            if (vis === synlig(r)) return;
+            r.style.display = vis ? 'flex' : 'none';
+            const cb = r.querySelector('.ts-import-check');
+            if (cb && !cb.disabled) cb.checked = vis;
         });
+        updateTsSelectedCount();
+    };
+    preview.querySelectorAll('.ts-day-check, .ts-location-check').forEach(cb => {
+        cb.addEventListener('change', anvendFiltre);
     });
 
     document.getElementById('tsConfirmImportBtn').addEventListener('click', confirmTournamentImport);
-    updateTsSelectedCount();
+    anvendFiltre();
 }
 
 function updateTsSelectedCount() {
-    const checks = document.querySelectorAll('#tsImportPreview .ts-import-check');
-    const total = checks.length;
-    const checked = Array.from(checks).filter(cb => cb.checked).length;
+    const rows = Array.from(document.querySelectorAll('#tsImportPreview .ts-import-row'))
+        .filter(r => r.style.display !== 'none');
+    const total = rows.length;
+    const checked = rows.filter(r => r.querySelector('.ts-import-check')?.checked).length;
     const el = document.getElementById('tsSelectedCount');
-    if (el) el.textContent = `${checked} af ${total} kampe valgt`;
+    if (!el) return;
+    el.textContent = document.querySelector('#tsImportPreview .ts-location-check') && total === 0
+        ? 'Vælg et spillested'
+        : `${checked} af ${total} kampe valgt`;
 }
 
 async function confirmTournamentImport() {
@@ -7136,6 +7177,17 @@ async function confirmTournamentImport() {
         .filter(cb => cb.checked)
         .map(cb => parseInt(cb.getAttribute('data-idx'), 10))
         .sort((a, b) => a - b);
+
+    // Valgte spillesteder (kun når turneringen har flere) — gemmes på
+    // turneringen, så "Opdater" heller ikke henter de andre steders kampe.
+    // Alle valgt = intet filter (null).
+    const stedChecks = Array.from(document.querySelectorAll('#tsImportPreview .ts-location-check'));
+    const valgteSteder = stedChecks.filter(cb => cb.checked).map(cb => cb.getAttribute('data-location'));
+    if (stedChecks.length && valgteSteder.length === 0) {
+        tsImportStatus('Vælg mindst ét spillested.', 'error');
+        return;
+    }
+    const sourceLocations = stedChecks.length && valgteSteder.length < stedChecks.length ? valgteSteder : null;
 
     if (selectedIdxs.length === 0) {
         tsImportStatus('Vælg mindst én kamp at importere.', 'error');
@@ -7169,7 +7221,7 @@ async function confirmTournamentImport() {
 
     try {
         // Turnering og kampe oprettes i ét kald — fejler det, er intet oprettet
-        const created = await api.importTournament(name, tsImportData.tournamentId || null, matches);
+        const created = await api.importTournament(name, tsImportData.tournamentId || null, matches, sourceLocations);
         const bulkResult = created;
 
         // Kampene er oprettet. Er turneringen TS-importeret, henter serveren nu

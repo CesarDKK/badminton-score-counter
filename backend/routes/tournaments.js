@@ -6,7 +6,7 @@ const { requirePage } = require('../middleware/pagePermission');
 const { ikkeQrSession } = require('../middleware/qrSession');
 const { publishGameStateChange } = require('../events/gameStateEvents');
 const { invalidateCourtTokens } = require('./matchSessionTokens');
-const { fetchAndParseTournamentMatches, resolveClubNames, buildPlayerClubRows } = require('./importTournament');
+const { fetchAndParseTournamentMatches, resolveClubNames, buildPlayerClubRows, filtrerSpillesteder } = require('./importTournament');
 const { currentTenant } = require('../config/tenantPools');
 const { banensStartTid } = require('../config/matchTiming');
 const baneTildeling = require('../config/baneTildeling');
@@ -53,8 +53,9 @@ async function captureTournamentClubs(tournamentId, sourceTournamentId, prefetch
     if (!sourceTournamentId) return;
     if (trackProgress) setImportProgress(tournamentId, { phase: 'fetching-matches', current: 0, total: 0 });
     try {
-        const matches = prefetchedMatches
-            || (await fetchAndParseTournamentMatches(sourceTournamentId)).matches;
+        const matches = prefetchedMatches || filtrerSpillesteder(
+            (await fetchAndParseTournamentMatches(sourceTournamentId)).matches,
+            await turneringensSpillesteder(tournamentId));
 
         const onProgress = trackProgress
             ? (done, total) => setImportProgress(tournamentId, { phase: 'fetching-clubs', current: done, total })
@@ -357,7 +358,7 @@ function nyKampRaekke(tournamentId, matchOrder, m, kilde) {
 router.get('/active', async (req, res, next) => {
     try {
         const tournaments = await query(
-            `SELECT id, name, status, source_tournament_id, auto_sync, created_at
+            `SELECT id, name, status, source_tournament_id, source_locations, auto_sync, created_at
              FROM tournaments WHERE status = 'active'
              ORDER BY created_at DESC`
         );
@@ -370,6 +371,7 @@ router.get('/active', async (req, res, next) => {
             result.push({
                 ...t,
                 auto_sync: !!t.auto_sync,
+                source_locations: laesSpillesteder(t.source_locations),
                 matches,
                 // Seneste serverbaserede auto-sync-kørsel (null hvis ingen endnu)
                 autoSyncStatus: _autoSyncStatus.get(tenantSyncKey(tenant, t.id)) || null
@@ -550,6 +552,30 @@ async function indsaetKampe(tx, tournamentId, matches) {
     return { inserted, skipped };
 }
 
+// Turneringens valgte spillesteder (navne) eller null = alle (migration 058)
+async function turneringensSpillesteder(tournamentId) {
+    const t = await queryOne('SELECT source_locations FROM tournaments WHERE id = ?', [tournamentId]);
+    return laesSpillesteder(t && t.source_locations);
+}
+
+function laesSpillesteder(v) {
+    if (!v) return null;
+    try {
+        const a = JSON.parse(v);
+        return Array.isArray(a) && a.length ? a.filter(s => typeof s === 'string') : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+// Spillesteder fra importen: navne (højst 50, hver højst 200 tegn) eller null
+function rensSpillesteder(v) {
+    if (!Array.isArray(v)) return null;
+    const navne = [...new Set(v.filter(s => typeof s === 'string').map(s => s.trim()).filter(Boolean))];
+    if (navne.length === 0 || navne.length > 50 || navne.some(s => s.length > 200)) return null;
+    return navne;
+}
+
 // Klub-opsamling for en TS-importeret turnering — i BAGGRUNDEN (ikke await'et),
 // så HTTP-svaret kommer straks; frontend poller GET /:id/import-progress.
 async function startKlubOpsamling(id) {
@@ -568,12 +594,18 @@ async function startKlubOpsamling(id) {
 // som spærrede holdkamp-køen, og et nyt forsøg lavede en turnering mere.
 router.post('/import', authMiddleware, requirePage('tournament'), async (req, res, next) => {
     try {
-        const { name, sourceTournamentId, matches } = req.body || {};
+        const { name, sourceTournamentId, matches, sourceLocations } = req.body || {};
         if (!name || !String(name).trim()) {
             return res.status(400).json({ error: 'Navn er påkrævet' });
         }
         if (!Array.isArray(matches) || matches.length === 0) {
             return res.status(400).json({ error: 'Ingen kampe at importere' });
+        }
+        // Valgte spillesteder (null/tom = alle) — gemmes, så opdateringen
+        // heller ikke henter de andre steders kampe ind
+        const spillesteder = rensSpillesteder(sourceLocations);
+        if (Array.isArray(sourceLocations) && sourceLocations.length > 0 && !spillesteder) {
+            return res.status(400).json({ error: 'Ugyldige spillesteder' });
         }
         if (matches.length > 5000) {
             return res.status(400).json({ error: 'For mange kampe (højst 5000)' });
@@ -588,8 +620,9 @@ router.post('/import', authMiddleware, requirePage('tournament'), async (req, re
                 throw err;
             }
             const r = await tx.query(
-                `INSERT INTO tournaments (name, status, source_tournament_id) VALUES (?, 'active', ?)`,
-                [String(name).trim(), sourceTournamentId || null]
+                `INSERT INTO tournaments (name, status, source_tournament_id, source_locations) VALUES (?, 'active', ?, ?)`,
+                [String(name).trim(), sourceTournamentId || null,
+                    sourceTournamentId && spillesteder ? JSON.stringify(spillesteder) : null]
             );
             const { inserted, skipped } = await indsaetKampe(tx, r.insertId, matches);
             return { id: r.insertId, inserted, skipped };
@@ -669,7 +702,9 @@ async function syncTournamentCore(tournament, { skipClubs = false, idag = null }
     // fetchAndParseTournamentMatches. En Swiss-række med ventende kampe kan
     // ikke få en ny runde endnu.
     const auto = idag ? { idag, travleSwiss: travleSwissRaekker(existing) } : null;
-    const { matches: incoming } = await fetchAndParseTournamentMatches(tournament.source_tournament_id, auto);
+    const { matches: alleSteder } = await fetchAndParseTournamentMatches(tournament.source_tournament_id, auto);
+    // Kun de spillesteder, turneringen er importeret med (migration 058)
+    const incoming = filtrerSpillesteder(alleSteder, await turneringensSpillesteder(tournament.id));
 
     const knownDraws = new Set();
     for (const row of existing) {
@@ -1200,6 +1235,7 @@ module.exports.sideOmbyttet = sideOmbyttet;
 module.exports.tsResultat = tsResultat;
 module.exports.nyKampRaekke = nyKampRaekke;
 module.exports.syncTournamentCore = syncTournamentCore;
+module.exports._spillesteder = { rensSpillesteder, laesSpillesteder };
 module.exports.autoPlan = autoPlan;
 module.exports.koebenhavnNu = koebenhavnNu;
 module.exports.travleSwissRaekker = travleSwissRaekker;

@@ -164,6 +164,46 @@ function parseTournamentName(html) {
     return '';
 }
 
+// ---- Spillesteder ----
+//
+// En turnering kan spilles flere steder (fx Valbyhallen, KMB 2010, BC37). Kampe-
+// siden har en vælger <select class="js-location-selection-select"> med
+// stederne (value = TS' locationid, 0 = "Alle spillesteder"), og hver kamp har
+// sit sted i hovedets info-knap: title="Valbyhallen", eller når kampen har en
+// bane og en varighed: title="Varighed: 19m | Engelsborghallen - 06".
+// Returnerer [{ id, name }] (tom, hvis turneringen ikke har vælgeren).
+function parseTournamentLocations(html) {
+    const sel = String(html || '').match(/<select[^>]*js-location-selection-select[^>]*>([\s\S]*?)<\/select>/);
+    if (!sel) return [];
+    const steder = [];
+    for (const o of sel[1].matchAll(/<option[^>]*value="(\d+)"[^>]*>\s*([^<]*?)\s*<\/option>/g)) {
+        const id = parseInt(o[1], 10);
+        const name = decodeHtmlEntities(o[2]).trim();
+        if (id > 0 && name && !steder.some(s => s.name === name)) steder.push({ id, name });
+    }
+    return steder;
+}
+
+// Kampens spillested ud fra info-knappens title: det længste kendte sted, der
+// står i teksten (så "Gladsaxe Søborg U9" ikke bliver til "Gladsaxe Søborg").
+// '' hvis intet kendt sted står der.
+function kampensSpillested(title, steder) {
+    const t = String(title || '').toLowerCase();
+    if (!t) return '';
+    let bedst = '';
+    for (const s of steder) {
+        if (s.name.length > bedst.length && t.includes(s.name.toLowerCase())) bedst = s.name;
+    }
+    return bedst;
+}
+
+// Kun kampe fra de valgte spillesteder. steder: navne, eller tom/null = alle.
+function filtrerSpillesteder(matches, steder) {
+    if (!Array.isArray(steder) || steder.length === 0) return matches;
+    const valgt = new Set(steder);
+    return matches.filter(m => valgt.has(m.location || ''));
+}
+
 // Parser dag-tabs fra Matches-siden — strukturen er <a data-value="YYYYMMDD">
 // med en <time datetime="YYYY-MM-DDTHH:MM:SS"> indeni + dansk dato-display.
 // Returnerer liste af {date: "YYYY-MM-DD", value: "YYYYMMDD", label: "lø 30. maj"}
@@ -239,6 +279,10 @@ function parseMatchesHtml(html) {
         const roundMatch = header.match(/<span title="([^"]+)" class="nav-link"><span class="nav-link__value">/);
         const round = roundMatch ? decodeHtmlEntities(roundMatch[1]).trim() : '';
 
+        // Spillestedet står i info-knappens title (se kampensSpillested)
+        const asideMatch = header.match(/match__header-aside[\s\S]*?\stitle="([^"]*)"/);
+        const venueTitle = asideMatch ? decodeHtmlEntities(asideMatch[1]).trim() : '';
+
         // Find positionerne af side 1 og side 2's match__row åbnere
         const rowOpener = /<div class="match__row\s/g;
         const rowPositions = [];
@@ -281,6 +325,7 @@ function parseMatchesHtml(html) {
             drawId,
             doubles: isDoubles,
             plannedTime,
+            venueTitle,
             tsStatus: ts.status,
             tsWinner: ts.winner,
             tsSets: ts.sets,
@@ -388,6 +433,12 @@ async function fetchAndParseTournamentMatches(tournamentId, auto = null) {
     const days = parseTournamentDays(mainHtml);
 
     let allMatches = [];
+    const locations = parseTournamentLocations(mainHtml);
+    const flereSteder = (html) => {
+        for (const s of parseTournamentLocations(html)) {
+            if (!locations.some(x => x.name === s.name)) locations.push(s);
+        }
+    };
 
     if (days.length === 0) {
         // Ingen dag-tabs (måske kun én dag uden tab-UI) — parser main-siden direkte
@@ -398,6 +449,7 @@ async function fetchAndParseTournamentMatches(tournamentId, auto = null) {
             days.map(d => fetchTournamentPage(tournamentId, `matches/${d.value}`,
                 auto && d.date !== auto.idag ? gemt : undefined))
         );
+        dayHtmls.forEach(flereSteder);
         for (let i = 0; i < days.length; i++) {
             const dayMatches = parseMatchesHtml(dayHtmls[i]);
             const tagged = dayMatches.map(m => ({ ...m, day: days[i].date, dayLabel: days[i].label }));
@@ -408,10 +460,15 @@ async function fetchAndParseTournamentMatches(tournamentId, auto = null) {
     assignSourceMatchIds(allMatches);
     for (const m of allMatches) {
         m.plannedAt = m.day && m.plannedTime ? `${m.day} ${m.plannedTime}` : '';
+        m.location = kampensSpillested(m.venueTitle, locations);
+        delete m.venueTitle;
     }
+    // NB: kilde-id'erne (løbenumrene) regnes over ALLE spillesteder, så de er
+    // de samme, uanset hvilke steder en turnering er importeret med —
+    // filtrér først bagefter (filtrerSpillesteder)
     await supplerSwissKampe(tournamentId, allMatches,
         auto ? (d) => (auto.travleSwiss && auto.travleSwiss.has(d) ? gemt : undefined) : () => undefined);
-    return { tournamentName, days, matches: allMatches };
+    return { tournamentName, days, locations, matches: allMatches };
 }
 
 // ---- Swiss ladder: kampe der endnu ikke har en dato ----
@@ -510,6 +567,8 @@ async function supplerSwissKampe(tournamentId, matches, hentValg = () => undefin
                     plannedAt: r.plannedAt,
                     day: r.plannedAt ? r.plannedAt.slice(0, 10) : '',
                     dayLabel: '',
+                    // rækkens kampliste viser ikke stedet — rækken spilles ét sted
+                    location: forbillede.location || '',
                     tsStatus: r.walkover ? 'walkover' : '',
                     tsWinner: null,
                     tsSets: [],
@@ -542,7 +601,7 @@ router.post('/preview', authMiddleware, requirePage('tournament'), async (req, r
             });
         }
 
-        const { tournamentName, days, matches: allMatches } = await fetchAndParseTournamentMatches(tournamentId);
+        const { tournamentName, days, locations, matches: allMatches } = await fetchAndParseTournamentMatches(tournamentId);
 
         if (allMatches.length === 0) {
             return res.status(404).json({
@@ -555,6 +614,10 @@ router.post('/preview', authMiddleware, requirePage('tournament'), async (req, r
             tournamentName,
             matchCount: allMatches.length,
             days, // tom array hvis kun én dag uden tabs
+            // spillesteder med antal kampe — tom hvis turneringen ikke har flere
+            locations: locations
+                .map(l => ({ ...l, count: allMatches.filter(m => m.location === l.name).length }))
+                .filter(l => l.count > 0),
             matches: allMatches
         });
     } catch (error) {
@@ -658,6 +721,9 @@ module.exports.fetchAndParseTournamentMatches = fetchAndParseTournamentMatches;
 module.exports.extractTournamentId = extractTournamentId;
 module.exports.resolveClubNames = resolveClubNames;
 module.exports.buildPlayerClubRows = buildPlayerClubRows;
+module.exports.filtrerSpillesteder = filtrerSpillesteder;
+module.exports.parseTournamentLocations = parseTournamentLocations;
+module.exports.kampensSpillested = kampensSpillested;
 // Rene parsere til unit-tests
 module.exports.parseMatchesHtml = parseMatchesHtml;
 module.exports.parseDrawMatchesHtml = parseDrawMatchesHtml;

@@ -195,7 +195,7 @@ test('serveren: ruten, lytteren, migrationen og admin', () => {
     const a = laes('frontend/admin-script.js');
     assert.match(a, /\$\{renderBpLivescoreBlok\(teamMatch\)\}/);
     assert.match(a, /await hentBpLivescoreStatus\(teamMatches\);/);
-    assert.match(laes('frontend/admin.html'), /admin-script\.js\?v=131/);
+    assert.ok(Number((laes('frontend/admin.html').match(/admin-script\.js\?v=(\d+)/) || [])[1]) >= 131, 'admin-script.js er talt op');
 });
 
 test('lytteren på baneændringer: alle klubber, og en fejl vælter ikke gemningen', () => {

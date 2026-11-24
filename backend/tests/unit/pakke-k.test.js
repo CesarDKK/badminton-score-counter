@@ -129,7 +129,7 @@ test('75: import opretter turnering og kampe i én transaktion', () => {
     const kilde = laes('backend/routes/tournaments.js');
     assert.match(kilde, /router\.post\('\/import'[\s\S]{0,2500}transaktion\(async \(tx\)[\s\S]{0,1500}INSERT INTO tournaments[\s\S]{0,800}indsaetKampe\(tx,/);
     assert.match(laes('frontend/admin-script.js'), /api\.importTournament\(/);
-    assert.match(laes('frontend/js/api.js'), /importTournament\(name, sourceTournamentId, matches\)/);
+    assert.match(laes('frontend/js/api.js'), /importTournament\(name, sourceTournamentId, matches[,)]/);
 });
 
 // ---------- Nr. 76: badmintonplanner — afvist/uændret bane beholder sin tildeling ----------
