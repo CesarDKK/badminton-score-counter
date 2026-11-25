@@ -195,7 +195,19 @@ test('serveren: ruten, lytteren, migrationen og admin', () => {
     const a = laes('frontend/admin-script.js');
     assert.match(a, /\$\{renderBpLivescoreBlok\(teamMatch\)\}/);
     assert.match(a, /await hentBpLivescoreStatus\(teamMatches\);/);
-    assert.ok(Number((laes('frontend/admin.html').match(/admin-script\.js\?v=(\d+)/) || [])[1]) >= 131, 'admin-script.js er talt op');
+    assert.ok(Number((laes('frontend/admin.html').match(/admin-script\.js\?v=(\d+)/) || [])[1]) >= 133, 'admin-script.js er talt op');
+});
+
+test('admin: "Send livescore" tegner kodeformularen, før gentegningen spærres', () => {
+    // Fejlen i prod 2026-11-25: holdkampEditOpen blev sat før gentegningen,
+    // så loadActiveHoldkamp sprang den over, og der skete intet ved klik.
+    const a = fs.readFileSync(path.join(__dirname, '../../../frontend/admin-script.js'), 'utf8');
+    const fn = a.slice(a.indexOf('async function aabnBpLivescore'), a.indexOf('function lukBpLivescore'));
+    assert.ok(fn.length > 0, 'aabnBpLivescore er async');
+    const tegn = fn.indexOf('await tegnHoldkampeIgen()');
+    const spaer = fn.indexOf('holdkampEditOpen = true');
+    assert.ok(tegn > 0 && spaer > tegn, 'formularen tegnes før holdkampEditOpen sættes');
+    assert.match(a, /function tegnHoldkampeIgen\(\) \{[^}]*return loadActiveHoldkamp\(\);/);
 });
 
 test('lytteren på baneændringer: alle klubber, og en fejl vælter ikke gemningen', () => {
