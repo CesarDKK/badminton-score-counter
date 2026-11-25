@@ -2595,10 +2595,12 @@ function renderBpLivescoreBlok(tm) {
          <button onclick="stopBpLivescore(${tm.id})" class="btn-secondary btn-sm">Stop livescore</button></div>`);
 }
 
-function aabnBpLivescore(id) {
+async function aabnBpLivescore(id) {
     bpLivescoreFormAaben = id;
+    // Tegn formularen først — mens holdkampEditOpen er sat, tegnes kortet ikke igen
+    holdkampEditOpen = false;
+    await tegnHoldkampeIgen();
     holdkampEditOpen = true;
-    tegnHoldkampeIgen();
     const felt = document.getElementById(`bpKode_${id}`);
     if (felt) felt.focus();
 }
@@ -2643,7 +2645,7 @@ function stopBpLivescore(id) {
 // Tegn holdkamp-kortene igen med det samme (uden at vente på næste opdatering)
 function tegnHoldkampeIgen() {
     bpLivescoreHentet = Date.now();   // status er lige hentet/sat — ingen ny hentning
-    loadActiveHoldkamp();
+    return loadActiveHoldkamp();
 }
 
 // ===== Genbrugelig logo-vælger modal =====
