@@ -1555,6 +1555,8 @@ async function loadTeamMatchHistory() {
                     <span class="tekst-daempet tekst-mindre">▼ Se delkampe</span>
                 </div>
                 <div class="historik-gruppe__indhold" style="display:none;">
+                    ${Number(tm.bp_kladde) ? `<div class="raekke luft-under-6"><span class="fyld tekst-daempet tekst-mindre">Hentet fra badmintonplayer.dk med livescore-kode</span>
+                        <button onclick="visBpKladde(${tm.id})" class="btn-secondary btn-sm">Overfør resultater til badmintonplayer.dk</button></div>` : ''}
                     ${gameRows}
                 </div>
             </div>`;
@@ -2575,9 +2577,14 @@ function renderBpLivescoreBlok(tm) {
              </div>`);
     }
 
+    // Kun med en gemt kode — den giver lov til at gemme kladden
+    const overfoer = s.kodeSat
+        ? `<button onclick="visBpKladde(${tm.id})" class="btn-secondary btn-sm">Overfør resultater</button>` : '';
+
     if (!s.til) {
         return regelBoks('128,128,128', titel +
             `<div class="raekke"><span class="fyld">Stillingen fra banerne sendes ikke til badmintonplayer.dk (kamp ${escapeHtml(String(s.kampnr))}).</span>
+             ${overfoer}
              <button onclick="aabnBpLivescore(${tm.id})" class="btn-secondary btn-sm">Send livescore</button></div>`);
     }
 
@@ -2592,7 +2599,94 @@ function renderBpLivescoreBlok(tm) {
     ].join('');
     return regelBoks(fejl ? '240,165,0' : '69,209,126', titel +
         `<div class="raekke"><div class="fyld">${linjer}</div>
+         ${overfoer}
          <button onclick="stopBpLivescore(${tm.id})" class="btn-secondary btn-sm">Stop livescore</button></div>`);
+}
+
+// ----- Overfør resultater som kladde (routes/bpLivescore.js, config/bpResultat.js) -----
+// Viser først, hvad der vil blive skrevet for hver delkamp, og gemmer kun de
+// afkrydsede. Hjemmeklubben godkender og indsender selv på badmintonplayer.dk.
+
+function bpKladdeListe(svar, medValg) {
+    const tal = {};
+    const saet = (s) => (s || []).map(([a, b]) => `${a}-${b}`).join(' ');
+    const raekker = svar.linjer.map(l => {
+        tal[l.kategori] = (tal[l.kategori] || 0) + 1;
+        const navn = HoldkampFormater.kategoriNavn(l.kategori, tal[l.kategori]);
+        const spillere = `${escapeHtml(l.hold1 || '?')} <span class="tekst-daempet">vs</span> ${escapeHtml(l.hold2 || '?')}`;
+        let hoejre;
+        if (l.handling === 'skriv') {
+            const valg = medValg ? `<input type="checkbox" class="bp-kladde-valg" value="${l.gameId}" checked aria-label="Overfør ${escapeHtml(navn)}"> ` : '';
+            const efter = l.bekraeftet === true ? ' ✓' : l.bekraeftet === false ? ' <span class="tekst-advarsel">(kunne ikke ses bagefter)</span>' : '';
+            hoejre = `<label class="nowrap fed">${valg}${escapeHtml(saet(l.saet))}${efter}</label>`;
+        } else if (l.handling === 'findes') {
+            hoejre = `<span class="tekst-daempet">${escapeHtml(saet(l.saet))} — står der allerede</span>`;
+        } else {
+            hoejre = `<span class="tekst-daempet">Springes over: ${escapeHtml(l.grund || '')}</span>`;
+        }
+        return `<div class="historik-raekke">
+            <span class="maerke maerke--kategori">${escapeHtml(navn)}</span>
+            <span class="kamp-raekke__navne tekst-mindre">${spillere}</span>
+            <span class="tekst-mindre">${hoejre}</span></div>`;
+    }).join('');
+    return `<div class="rulle-liste">${raekker}</div>`;
+}
+
+// Samme opbygning som de andre lister i besked-dialogen (venstrestillet, mindre tekst)
+const bpKladdeKrop = (...dele) => `<div class="tekst-venstre" style="font-size:0.62em;">${dele.join('')}</div>`;
+
+async function visBpKladde(id) {
+    showMessage('Overfør resultater', 'Henter holdkampen fra badmintonplayer.dk …', []);
+    let svar;
+    try {
+        svar = await api.getBpKladde(id);
+    } catch (e) {
+        showMessage('Overfør resultater', e.message || 'Kunne ikke hente holdkampen fra badmintonplayer.dk');
+        return;
+    }
+    const n = svar.linjer.filter(l => l.handling === 'skriv').length;
+    const hoved = `<div class="tekst-sekundaer luft-under-12">Kamp ${escapeHtml(String(svar.kampnr))} på badmintonplayer.dk. Hjemmeholdet står først, som på badmintonplayer.</div>`;
+    if (svar.spaerret || !n) {
+        const grund = svar.spaerret || 'Der er ingen færdigspillede delkampe at overføre lige nu.';
+        showMessage('Overfør resultater', '', undefined, {
+            bodyHtml: bpKladdeKrop(`<div class="tekst-advarsel fed luft-under-12">${escapeHtml(grund)}</div>`, hoved, bpKladdeListe(svar, false))
+        });
+        return;
+    }
+    showMessage('Overfør resultater', '', [
+        { text: 'Gem som kladde', style: 'primary', callback: () => {
+            const valgte = [...document.querySelectorAll('#messageText .bp-kladde-valg:checked')].map(x => Number(x.value));
+            gemBpKladde(id, valgte);
+        } },
+        { text: 'Annuller', style: 'secondary', callback: null }
+    ], {
+        bodyHtml: bpKladdeKrop(hoved,
+            `<div class="luft-under-12">De afkrydsede delkampe gemmes som <b>kladde</b>. Bagefter åbner hjemmeklubben "Indberet resultat" på badmintonplayer.dk, tjekker tallene og indsender. Delkampe, der allerede har et resultat dér, røres ikke.</div>`,
+            bpKladdeListe(svar, true))
+    });
+}
+
+async function gemBpKladde(id, gameIds) {
+    if (!gameIds.length) {
+        showMessage('Overfør resultater', 'Ingen delkampe var valgt — intet er gemt.');
+        return;
+    }
+    showMessage('Overfør resultater', 'Gemmer kladden på badmintonplayer.dk …', []);
+    try {
+        const svar = await api.gemBpKladde(id, gameIds);
+        const usikker = svar.bekraeftet == null
+            ? '<div class="tekst-advarsel luft-under-12">Kampen kunne ikke hentes igen bagefter — tjek selv på badmintonplayer.dk.</div>'
+            : svar.bekraeftet < svar.skrevet
+                ? `<div class="tekst-advarsel luft-under-12">Kun ${svar.bekraeftet} af ${svar.skrevet} kunne ses på badmintonplayer.dk bagefter — tjek dem under "Indberet resultat".</div>`
+                : '';
+        showMessage('Kladden er gemt', '', undefined, {
+            bodyHtml: bpKladdeKrop(
+                `<div class="luft-under-12">${svar.skrevet} ${svar.skrevet === 1 ? 'delkamp er' : 'delkampe er'} gemt som kladde på badmintonplayer.dk (kamp ${escapeHtml(String(svar.kampnr))}). Hjemmeklubben skal nu åbne "Indberet resultat", tjekke tallene og indsende.</div>`,
+                usikker, bpKladdeListe(svar, false))
+        });
+    } catch (e) {
+        showMessage('Overfør resultater', e.message || 'Kladden blev ikke gemt');
+    }
 }
 
 async function aabnBpLivescore(id) {
