@@ -864,7 +864,6 @@ class BadmintonAPI {
         return this.request('/team-matches/active');
     }
 
-    /** Get ALL active team matches with games */
     /** Livescore til badmintonplayer.dk for en holdkamp (admin) */
     async getBpLivescore(teamMatchId) {
         return this.request(`/bp-livescore/${teamMatchId}`);
@@ -879,6 +878,21 @@ class BadmintonAPI {
         }, 1);
     }
 
+    /** Hvad "Overfør resultater" vil skrive som kladde på badmintonplayer.dk */
+    async getBpKladde(teamMatchId) {
+        return this.request(`/bp-livescore/${teamMatchId}/kladde`, { timeout: 25000 }, 1);
+    }
+
+    /** Gem de valgte delkampes resultater som kladde på badmintonplayer.dk (forsøges kun én gang) */
+    async gemBpKladde(teamMatchId, gameIds) {
+        return this.request(`/bp-livescore/${teamMatchId}/kladde`, {
+            method: 'POST',
+            body: JSON.stringify({ gameIds }),
+            timeout: 60000
+        }, 1);
+    }
+
+    /** Get ALL active team matches with games */
     async getActiveTeamMatches() {
         return this.request('/team-matches/active-all');
     }

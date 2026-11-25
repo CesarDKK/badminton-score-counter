@@ -4,6 +4,8 @@
  *
  *   GET /api/bp-livescore/:teamMatchId   status for holdkampen (admin)
  *   PUT /api/bp-livescore/:teamMatchId   { til: true, kode } slår til, { til: false } fra
+ *   GET /api/bp-livescore/:teamMatchId/kladde    hvad "Overfør resultater" vil skrive
+ *   POST /api/bp-livescore/:teamMatchId/kladde   { gameIds } gem dem som kladde (config/bpResultat.js)
  *
  * Når den er slået til, sendes stillingen på en bane med en koblet delkamp til
  * badmintonplayer.dk hver gang banen ændrer sig (onAnyGameStateChange) — samlet
@@ -21,6 +23,7 @@ const { query, queryOne } = require('../config/database');
 const { runWithTenant } = require('../config/tenantPools');
 const { onAnyGameStateChange } = require('../events/gameStateEvents');
 const bpl = require('../config/bpLivescore');
+const bpr = require('../config/bpResultat');
 
 const hub = new bpl.Hub();
 const SAMLE_MS = 400;
@@ -114,6 +117,95 @@ router.put('/:id', authMiddleware, requirePage('holdkamp'), async (req, res, nex
         const n = await hentTm(id);
         res.json(statusSvar(n.tm, n.games));
     } catch (e) { next(e); }
+});
+
+// ── Resultater som kladde (knappen "Overfør resultater") ────────────────────
+// Kun med en gemt kode. Virker også, efter holdkampen er afsluttet (den
+// afsluttes selv 10 min efter sidste delkamp) — fra Kamphistorik.
+
+async function hentTilKladde(id) {
+    const tm = await queryOne('SELECT id, aktiv_kilde_id, bp_livescore_kode FROM team_matches WHERE id = ?', [id]);
+    if (!tm) return { fejl: [404, 'Holdkampen findes ikke'] };
+    if (!tm.aktiv_kilde_id) return { fejl: [409, 'Kun holdkampe hentet fra badmintonplayer.dk kan overføre resultater'] };
+    if (!tm.bp_livescore_kode) return { fejl: [409, 'Tast først livescore-koden fra badmintonplayer.dk under "Send livescore"'] };
+    const games = await query(
+        `SELECT id, game_number, category, team1_player1, team1_player2, team2_player1, team2_player2,
+                status, winner_team, set_scores
+           FROM team_match_games WHERE team_match_id = ? ORDER BY game_number`, [id]);
+    return { tm, games };
+}
+
+async function hentModel(tm) {
+    try {
+        return { model: await bpr.hentMedKode(tm.aktiv_kilde_id, tm.bp_livescore_kode) };
+    } catch (e) {
+        const tekst = e.name === 'TimeoutError' ? 'badmintonplayer.dk svarer ikke' : e.message;
+        return { fejl: [502, `Kunne ikke hente holdkampen fra badmintonplayer.dk: ${tekst}`] };
+    }
+}
+
+const kladdeSvar = (tm, plan) => ({ kampnr: tm.aktiv_kilde_id, spaerret: plan.spaerret, linjer: plan.linjer });
+
+router.get('/:id/kladde', authMiddleware, requirePage('holdkamp'), async (req, res, next) => {
+    try {
+        const r = await hentTilKladde(Number(req.params.id));
+        if (r.fejl) return res.status(r.fejl[0]).json({ error: r.fejl[1] });
+        const h = await hentModel(r.tm);
+        if (h.fejl) return res.status(h.fejl[0]).json({ error: h.fejl[1] });
+        res.json(kladdeSvar(r.tm, bpr.planKladde(r.games, h.model)));
+    } catch (e) { next(e); }
+});
+
+const _gemmer = new Set();   // holdkamp-id'er, der er ved at gemme (dobbeltklik)
+
+router.post('/:id/kladde', authMiddleware, requirePage('holdkamp'), async (req, res, next) => {
+    const id = Number(req.params.id);
+    const noegle = `${req.clubDbName || ''}|${id}`;
+    if (_gemmer.has(noegle)) return res.status(409).json({ error: 'Resultaterne er ved at blive overført' });
+    _gemmer.add(noegle);
+    try {
+        const valgte = new Set((Array.isArray(req.body && req.body.gameIds) ? req.body.gameIds : []).map(Number));
+        const r = await hentTilKladde(id);
+        if (r.fejl) return res.status(r.fejl[0]).json({ error: r.fejl[1] });
+        // Frisk fra badmintonplayer lige før — og planen regnes igen på den
+        const h = await hentModel(r.tm);
+        if (h.fejl) return res.status(h.fejl[0]).json({ error: h.fejl[1] });
+        const plan = bpr.planKladde(r.games, h.model);
+        if (plan.spaerret) return res.status(409).json({ error: plan.spaerret, ...kladdeSvar(r.tm, plan) });
+        for (const l of plan.linjer) {
+            if (l.handling === 'skriv' && !valgte.has(l.gameId)) { l.handling = 'spring'; l.grund = 'ikke valgt'; }
+        }
+        const skrives = plan.linjer.filter(l => l.handling === 'skriv');
+        if (!skrives.length) {
+            return res.status(409).json({ error: 'Der er intet at overføre — badmintonplayer.dk er ændret siden visningen. Se listen igen.', ...kladdeSvar(r.tm, plan) });
+        }
+
+        try {
+            await bpr.gemKladde(r.tm.aktiv_kilde_id, r.tm.bp_livescore_kode, bpr.anvendKladde(h.model, plan.linjer));
+        } catch (e) {
+            const tekst = e.name === 'TimeoutError' ? 'badmintonplayer.dk svarer ikke' : e.message;
+            console.error(`Resultater til badmintonplayer (holdkamp ${id}, kamp ${r.tm.aktiv_kilde_id}):`, tekst);
+            return res.status(502).json({ error: `Kladden blev ikke gemt: ${tekst}` });
+        }
+        console.log(`✓ Resultater til badmintonplayer som kladde: holdkamp ${id}, kamp ${r.tm.aktiv_kilde_id}, ${skrives.length} delkampe`);
+
+        // Læs efter: står sættene der nu?
+        let bekraeftet = null;
+        const efter = await hentModel(r.tm);
+        if (!efter.fejl) {
+            const ctms = new Map(((efter.model && efter.model.combinedTeamMatches) || []).map(c => [c.leagueMatchIndividualMatchId, c]));
+            bekraeftet = 0;
+            for (const l of skrives) {
+                l.bekraeftet = bpr.saetTekst(bpr.bpSaet(ctms.get(l.bpKampId))) === bpr.saetTekst(l.saet);
+                if (l.bekraeftet) bekraeftet++;
+            }
+        }
+        res.json({ ...kladdeSvar(r.tm, plan), skrevet: skrives.length, bekraeftet });
+    } catch (e) {
+        next(e);
+    } finally {
+        _gemmer.delete(noegle);
+    }
 });
 
 // ── Afsendelsen ─────────────────────────────────────────────────────────────

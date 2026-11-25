@@ -10,6 +10,7 @@ const { publishGameStateChange, publishHoldkampChange } = require('../events/gam
 const { invalidateCourtTokens } = require('./matchSessionTokens');
 const { rydAfsluttetBane } = require('../config/banerydning');
 const holdkampFormater = require('../config/holdkampFormater');
+const { KLADDE_MULIG } = require('../config/bpResultat'); // kun om koden er sat — aldrig koden selv
 const { historikSide } = require('../config/historikSide');
 const { banenErIGang, delkampAendringAfvist, qrDelkampAfvist, sammeBane } = require('../config/delkampRegler');
 const baneTildeling = require('../config/baneTildeling');
@@ -163,7 +164,8 @@ router.get('/history', authMiddleware, requirePage('history'), async (req, res, 
     try {
         const { limit, offset } = historikSide(req.query);
         const teamMatches = await query(
-            `SELECT id, format, team1_name, team2_name, status, created_at
+            `SELECT id, format, team1_name, team2_name, status, created_at,
+                    ${KLADDE_MULIG} AS bp_kladde
              FROM team_matches WHERE status = 'finished'
              ORDER BY created_at DESC
              LIMIT ${limit} OFFSET ${offset}`
