@@ -406,6 +406,9 @@ async function loadCourtOverview() {
         const courtCount = _overviewCourtCount;
         const courtOverview = document.getElementById('courtOverview');
 
+        // Tablets' batteri hvert 30. sekund (ikke i hvert 2,5 s-tick) — venter ikke
+        if (Date.now() - _batterierHentet > BATTERI_HENT_MS) hentTabletBatterier();
+
         // Ét batch-kald til alle baner i stedet for ét getGameState pr. bane
         // (før: N+1 sekventielle requests hver 2,5 sek — 8 baner = 8 kald/tick).
         const allStates = await api.getAllGameStates();
@@ -428,9 +431,69 @@ async function loadCourtOverview() {
     }
 }
 
+// ── Tablets' batteri (klubbens egne tablets, dvs. faste bane-adgangslinks) ──
+// Tælleren sender batteriet med sit livstegn hvert 10. sekund, mens skærmen er
+// tændt; serveren holder det i hukommelsen (backend/taeller/batteri.js).
+// Private telefoner (QR-koden) er der aldrig.
+const BATTERI_HENT_MS = 30000;
+const BATTERI_GAMMEL_SEK = 120;          // ældre = skærmen slukket / ingen forbindelse
+const BATTERI_SKJUL_SEK = 2 * 3600;      // baneoversigten viser ikke en tablet, der har været væk i timevis
+let _tabletBatterier = [];
+let _batterierHentet = 0;
+
+async function hentTabletBatterier() {
+    _batterierHentet = Date.now();
+    try {
+        const liste = await api.getTabletBatterier();
+        _tabletBatterier = (liste || []).map(b => ({ ...b, hentet: Date.now() }));
+    } catch { /* batteriet er en bonus — behold det sidste */ }
+    return _tabletBatterier;
+}
+
+// Sekunder siden tabletten sidst meldte sig, regnet frem til nu
+function batteriAlder(b) {
+    return (b.sekunderSiden || 0) + Math.round((Date.now() - (b.hentet || Date.now())) / 1000);
+}
+
+function batteriTekst(b) {
+    const alder = batteriAlder(b);
+    return `${escapeHtml(b.enhed || 'Tablet')}: ${b.procent} %${b.lader ? ', lader' : ''}`
+        + (alder > BATTERI_GAMMEL_SEK ? ` — sidst set for ${skaermVarighed(alder)} siden` : '');
+}
+
+// Mærket: grøn når den lader, gul under 20 %, rød under 10 %; dæmpet når tallet er gammelt
+function batteriMaerke(b) {
+    const alder = batteriAlder(b);
+    const type = b.lader ? 'vundet' : b.procent <= 10 ? 'fare' : b.procent <= 20 ? 'afventer' : 'neutral';
+    const gammel = alder > BATTERI_GAMMEL_SEK;
+    return `<span class="maerke maerke--${type} batteri-maerke${gammel ? ' batteri-maerke--gammel' : ''}" title="${batteriTekst(b)}">`
+        + `${Ikon(b.lader ? 'lyn' : 'batteri')} ${b.procent} %${gammel ? ` · ${skaermVarighed(alder)}` : ''}</span>`;
+}
+
+// Baneoversigten: den tablet på banen, der senest har meldt sig
+function baneBatteriHtml(courtNumber) {
+    const b = _tabletBatterier
+        .filter(x => x.bane === courtNumber && batteriAlder(x) <= BATTERI_SKJUL_SEK)
+        .sort((x, y) => batteriAlder(x) - batteriAlder(y))[0];
+    return b ? batteriMaerke(b) : '';
+}
+
+// Adgangslinks: alle tablets, der bruger linket
+function renderTabletBatterier(liste) {
+    if (!liste.length) return '';
+    return liste.map(b => {
+        const alder = batteriAlder(b);
+        const hvornaar = alder > BATTERI_GAMMEL_SEK ? `sidst set for ${skaermVarighed(alder)} siden` : 'lige nu';
+        return `
+        <div class="tekst-daempet tekst-lille luft-over-4">${batteriMaerke(b)}
+            ${escapeHtml(b.enhed || 'Tablet')}${b.bane ? ` på bane ${b.bane}` : ''}${b.lader ? ' · lader' : ''} · ${hvornaar}</div>`;
+    }).join('');
+}
+
 function createCourtCard(courtNumber, state) {
     const card = document.createElement('div');
     card.className = 'court-card';
+    const batteriHtml = baneBatteriHtml(courtNumber);
 
     try {
         if (!state || !state.isActive) {
@@ -442,7 +505,7 @@ function createCourtCard(courtNumber, state) {
             card.innerHTML = `
                 <div class="court-header">
                     <h3>Bane ${courtNumber}</h3>
-                    <span class="court-status inactive">Inaktiv</span>
+                    <span class="court-header__hoejre">${batteriHtml}<span class="court-status inactive">Inaktiv</span></span>
                 </div>
                 <div class="court-empty">
                     Ingen aktiv kamp
@@ -474,9 +537,9 @@ function createCourtCard(courtNumber, state) {
         card.innerHTML = `
             <div class="court-header">
                 <h3>Bane ${courtNumber}${isDoubles ? ' <span style="font-size: 0.7em; color: var(--color-accent);">(Double)</span>' : ''}</h3>
-                <span class="court-status ${isActive ? 'active' : 'inactive'}">
+                <span class="court-header__hoejre">${batteriHtml}<span class="court-status ${isActive ? 'active' : 'inactive'}">
                     ${isActive ? 'Aktiv' : 'Inaktiv'}
-                </span>
+                </span></span>
             </div>
             <div class="court-match">
                 <div class="court-players">
@@ -514,7 +577,7 @@ function createCourtCard(courtNumber, state) {
         card.innerHTML = `
             <div class="court-header">
                 <h3>Bane ${courtNumber}</h3>
-                <span class="court-status inactive">Inaktiv</span>
+                <span class="court-header__hoejre">${batteriHtml}<span class="court-status inactive">Inaktiv</span></span>
             </div>
             <div class="court-empty">
                 Kunne ikke indlæse data
@@ -5060,12 +5123,15 @@ function tvVersionNyere(a, b) {
 async function refreshSkaermStatus() {
     let skaerme;
     const nyeste = hentNyesteTvVersion();
+    const batterier = hentTabletBatterier();
     try { skaerme = await api.getScreens(); } catch { return; } // status er en bonus — lad listen stå
     const nyesteVersion = await nyeste;
+    const tablets = await batterier;
     const bokse = document.querySelectorAll('.dt-skaerme');
     bokse.forEach(el => {
         const id = Number(el.dataset.tokenId);
-        el.innerHTML = renderSkaerme(skaerme.filter(s => s.tokenId === id), nyesteVersion);
+        el.innerHTML = renderSkaerme(skaerme.filter(s => s.tokenId === id), nyesteVersion)
+            + renderTabletBatterier(tablets.filter(b => b.tokenId === id));
     });
     clearTimeout(_skaermOpdateringTimer);
     if (bokse.length && skaerme.some(s => (s.opdatering && SKAERM_OPDATERING_IGANG.has(s.opdatering.status))

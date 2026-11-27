@@ -259,6 +259,20 @@ header > div {
     color: var(--text-muted, rgba(255, 255, 255, 0.62));
 }
 
+/* Status + tablettens batteri til højre i banekortets overskrift */
+.court-header__hoejre {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* Tablettens batteri (.maerke--neutral/afventer/fare/vundet). Dæmpet, når
+   tabletten ikke har meldt sig i et par minutter (skærmen slukket) */
+.batteri-maerke { font-variant-numeric: tabular-nums; }
+.batteri-maerke--gammel { opacity: 0.6; }
+
 .court-players {
     display: flex;
     justify-content: space-between;

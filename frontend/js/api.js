@@ -417,10 +417,12 @@ class BadmintonAPI {
      * Kun én tæller ad gangen pr. bane: livstegn ('ping') eller "Overtag tællingen"
      * ('overtag'). Svar: { ejer, ledig, taeller: {navn, sekSidenLyd, aktiv} | null, overtagetFraDig }
      */
-    async taeller(courtId, taellerId, taellerNavn, handling = 'ping') {
+    async taeller(courtId, taellerId, taellerNavn, handling = 'ping', batteri = null) {
+        const body = { taellerId, taellerNavn, handling };
+        if (batteri) body.batteri = batteri;
         return this.request(`/game-states/${courtId}/taeller`, {
             method: 'POST',
-            body: JSON.stringify({ taellerId, taellerNavn, handling }),
+            body: JSON.stringify(body),
             timeout: 8000
         }, 1);
     }
@@ -1129,6 +1131,11 @@ class BadmintonAPI {
 
     async getScreens() {
         return this.request('/screens');
+    }
+
+    // Klubbens tablets' batteri (kun faste bane-adgangslinks) — baneoversigten og Adgangslinks
+    async getTabletBatterier() {
+        return this.request('/screens/batterier', { timeout: 8000 }, 1);
     }
 
     async getScreenEvents(dage = 30) {
