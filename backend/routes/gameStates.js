@@ -18,6 +18,8 @@ const { gemSidsteAfsluttedeKamp } = require('../config/banerydning');
 const { glemFrigivetKamp } = require('../config/frigivneKampe');
 // Kun én tæller ad gangen pr. bane (se taeller/ejerskab.js og migration 031)
 const ejerskab = require('../taeller/ejerskab');
+// Klubbens tablets' batteri til admin (kun faste bane-adgangslinks, se taeller/batteri.js)
+const batteri = require('../taeller/batteri');
 // Afgjorte holdkamp-/turneringskampe meldes ind af serveren
 const { meldAfgjortKamp } = require('../taeller/resultatMelding');
 // TV'ets LIVE-mærke: sender banens TV-PC kameraet lige nu?
@@ -876,8 +878,10 @@ router.put('/:courtId', requireWriteAuthInClubMode, kunEgenBane('courtId'), qrIk
 });
 
 // POST /api/game-states/:courtId/taeller - livstegn fra tælleren, eller "Overtag"
-// Body: { taellerId, taellerNavn, handling: 'ping' | 'overtag' }
+// Body: { taellerId, taellerNavn, handling: 'ping' | 'overtag', batteri?: { niveau, lader } }
 // Svar: { ejer, ledig, taeller: {navn, sekSidenLyd, aktiv} | null, overtagetFraDig }
+// batteri gemmes kun fra klubbens egne tablets (fast adgangslink til en bane) —
+// en privat telefon (QR-koden) eller uret sender det ikke, og det ignoreres.
 router.post('/:courtId/taeller', requireWriteAuthInClubMode, kunEgenBane('courtId'), qrIkkeOfficielBane, async (req, res, next) => {
     try {
         const body = req.body || {};
@@ -886,6 +890,12 @@ router.post('/:courtId/taeller', requireWriteAuthInClubMode, kunEgenBane('courtI
 
         const court = await queryOne(`SELECT id FROM courts WHERE court_number = ? AND ${synligBane()}`, [req.params.courtId]);
         if (!court) return res.status(404).json({ error: 'Bane ikke fundet' });
+
+        if (body.batteri) {
+            batteri.registrer(req.clubDbName || 'direct', req.user, {
+                taellerId: id, bane: req.params.courtId, enhed: body.taellerNavn, batteri: body.batteri
+            });
+        }
 
         const hent = () => queryOne(
             `SELECT taeller_id, taeller_navn, taeller_set_at, forrige_taeller_id, forrige_taeller_navn,

@@ -73,7 +73,8 @@ test('tablettens knap: stop under holdkampen, send alligevel bagefter', () => {
     assert.equal(ctx.f({ start: null, holdkamp: false, sprunget: true, youtube: null }).live, false);
     assert.match(kilde, /\/livestream\/bane\/\$\{courtId\}\/spring-over`, \{ method: over \? 'POST' : 'DELETE' \}/);
     assert.match(kilde, /text: 'Stop for denne kamp', style: 'danger'/);
-    assert.match(laes('frontend/court-v3.html'), /court-script-v3\.js\?v=73/);
+    const v = Number((laes('frontend/court-v3.html').match(/court-script-v3\.js\?v=(\d+)/) || [])[1]);
+    assert.ok(v >= 73, `court-script-v3.js?v=${v} — mindst 73`);
 });
 
 test('serveren: ruterne og migrationen', () => {

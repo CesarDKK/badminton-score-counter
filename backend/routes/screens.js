@@ -10,6 +10,7 @@ const haendelseslog = require('../screens/haendelseslog');
 const pcRapport = require('../screens/pcRapport');
 const pcOpdatering = require('../screens/pcOpdatering');
 const pcFejllog = require('../screens/pcFejllog');
+const batteri = require('../taeller/batteri');
 const { bevarKlub } = require('../config/tenantPools');
 
 const tenantKey = (req) => req.clubDbName || 'direct';
@@ -71,6 +72,17 @@ router.get('/', skaermAdmin, (req, res) => {
         ...s,
         opdatering: pcOpdatering.forSkaerm(tenant, s.tokenId, s.navn),
         fejllog: pcFejllog.forSkaerm(tenant, s.tokenId, s.navn)
+    })));
+});
+
+// GET /api/screens/batterier — klubbens tablets' batteri (taeller/batteri.js).
+// Til baneoversigten og Adgangslinks, så enhver af klubbens admins må se det
+// (baneoversigten kræver ingen side-rettighed). Kun faste bane-adgangslinks —
+// private telefoner (QR-koden) er der aldrig.
+router.get('/batterier', authMiddleware, (req, res) => {
+    res.json(batteri.liste(tenantKey(req)).map(e => ({
+        tokenId: e.tokenId, kort: e.kort, bane: e.bane, enhed: e.enhed,
+        procent: e.procent, lader: e.lader, sekunderSiden: e.sekunderSiden
     })));
 });
 

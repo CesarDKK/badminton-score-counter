@@ -86,9 +86,30 @@ function minTaeller(t) {
     return !!t && t.kort === TAELLER_ID.slice(0, 8);
 }
 
+// Batteriet til admin (Chrome/Android og tablet-appen; iPad/Firefox har ikke
+// navigator.getBattery). Kun fra klubbens egne tablets (fast adgangslink til en
+// bane) — en privat telefon via QR-koden sender det ikke, og serveren ville
+// alligevel smide det væk (taeller/batteri.js).
+function erKlubbensTablet() {
+    const p = getDeviceTokenPayload();
+    return !!p && p.role === 'device' && p.tokenType !== 'match_session'
+        && /^court\/\d+$/.test(p.destination || '');
+}
+let _batteriMaaler = null;
+function batteriNu() {
+    if (!erKlubbensTablet()) return null;
+    if (!_batteriMaaler && typeof navigator.getBattery === 'function') {
+        _batteriMaaler = 'venter';
+        navigator.getBattery().then(b => { _batteriMaaler = b; }).catch(() => { _batteriMaaler = 'ingen'; });
+    }
+    const b = _batteriMaaler;
+    if (!b || typeof b.level !== 'number') return null;
+    return { niveau: b.level, lader: !!b.charging };
+}
+
 async function taellerPing(handling = 'ping') {
     try {
-        const svar = await api.taeller(courtId, TAELLER_ID, TAELLER_NAVN, handling);
+        const svar = await api.taeller(courtId, TAELLER_ID, TAELLER_NAVN, handling, batteriNu());
         taellerStatus(svar);
         return svar;
     } catch (e) {
