@@ -128,6 +128,6 @@ test('admin: mærke på banekortet og linjer under adgangslinket', () => {
     assert.match(a, /b\.lader \? 'vundet' : b\.procent <= 10 \? 'fare' : b\.procent <= 20 \? 'afventer' : 'neutral'/);
     // Hentes hvert 30. sekund, ikke i hvert 2,5 s-tick
     assert.match(a, /if \(Date\.now\(\) - _batterierHentet > BATTERI_HENT_MS\) hentTabletBatterier\(\);/);
-    assert.match(laes('frontend/admin.html'), /admin-script\.js\?v=135/);
+    assert.match(laes('frontend/admin.html'), /admin-script\.js\?v=136/);
     assert.match(laes('frontend/js/ikoner.js'), /batteri: +'M4 7h13/);
 });

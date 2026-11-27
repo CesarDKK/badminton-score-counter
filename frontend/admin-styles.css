@@ -813,6 +813,36 @@ header > div {
     color: var(--text-muted, rgba(255, 255, 255, 0.62));
 }
 
+/* Teksten i et forslag (navn over info); logoet står foran */
+.autocomplete-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.autocomplete-tekst { min-width: 0; }
+
+.autocomplete-item--aktiv {
+    background: rgba(var(--color-primary-rgb), 0.3);
+}
+
+.autocomplete-logo {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+/* Turneringens navnefelter: listen lige under feltet, i feltets bredde */
+.har-forslag { position: relative; }
+
+.har-forslag > .autocomplete-dropdown {
+    left: 0;
+    right: 0;
+    width: auto;
+    margin-top: 4px;
+}
+
 .edit-form {
     position: relative;
 }
