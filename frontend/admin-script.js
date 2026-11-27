@@ -6414,11 +6414,13 @@ async function loadActiveTournaments() {
         // (efter klik på "Tilføj kamp" eller "Slet") også re-render.
         const active = document.activeElement;
         // Undtagen søgefeltet over kamplisten — det genskabes med fokus og markør.
-        // Banevælgeren må heller ikke genskabes, mens den er åben.
+        // Valglister (banevælgeren og filtrene "Alle rækker"/"Ikke færdige") må heller
+        // ikke genskabes, mens de er åbne — så lukker de efter 2-3 sek. Filtrene slipper
+        // selv fokus, når man har valgt, så opdateringen går i gang igen.
         if (container && active && container.contains(active) &&
             (((active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') &&
               !active.classList.contains('turnering-filter__soeg')) ||
-             active.classList.contains('turnering-bane-valg'))) {
+             active.tagName === 'SELECT')) {
             return;
         }
 

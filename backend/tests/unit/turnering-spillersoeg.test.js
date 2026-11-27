@@ -112,3 +112,12 @@ test('begge formularer bruger turneringens spillere; listen lukker når man går
     // Fri indtastning: intet i opsætningen låser feltet til listen
     assert.doesNotMatch(opsaet, /readonly|input\.value = ''/);
 });
+
+test('filtrene over kamplisten lukker ikke af opdateringen hvert 3. sek.', () => {
+    const kilde = laes('frontend/admin-script.js');
+    const hent = udsnit(kilde, 'async function loadActiveTournaments(', 'function renderTournamentBlocker(');
+    // Enhver fokuseret valgliste i turneringen (bane, række, status) stopper genoptegningen
+    assert.match(hent, /active\.tagName === 'SELECT'\)\) \{\s*return;/);
+    // og filtrene slipper selv fokus efter et valg, så opdateringen fortsætter
+    assert.match(kilde, /filter\[noegle\] = el\.value;\s*el\.blur\(\);/);
+});
