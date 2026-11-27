@@ -384,6 +384,65 @@ router.get('/active', async (req, res, next) => {
     }
 });
 
+// GET /api/tournaments/program - Programmet til telefonerne (public): de aktive
+// turneringers kampe — spillede med resultat, i gang og kommende med TS' tid —
+// og spillernes klub, så man kan søge sit navn eller sin klub frem
+// (oversigt.html → fanerne Afsluttet / Program, Jesper 2026-11-27). Kun de
+// felter siden bruger; ved et stævne kan en hel hal have siden åben, så svaret
+// gemmes 10 sekunder pr. klub (Express' ETag giver 304, når intet er ændret).
+const PROGRAM_CACHE_MS = 10 * 1000;
+const _programCache = new Map(); // tenant -> { t, data }
+
+function programKamp(m) {
+    return {
+        id: m.id,
+        raekke: m.label || null,
+        tid: m.planned_time || null,
+        double: !!m.doubles,
+        side1: [m.side1_player1, m.side1_player2].filter(Boolean),
+        side2: [m.side2_player1, m.side2_player2].filter(Boolean),
+        bane: m.status === 'active' ? m.court_number : null,
+        status: m.status,
+        vinder: m.winner_team === 1 || m.winner_team === 2 ? m.winner_team : null,
+        saet: m.status === 'finished' ? (m.set_scores || null) : null,
+        slut: m.status === 'finished' && m.finished_at ? new Date(m.finished_at).toISOString() : null
+    };
+}
+
+async function byggProgram() {
+    const turneringer = await query(
+        `SELECT id, name FROM tournaments WHERE status = 'active' ORDER BY created_at DESC`
+    );
+    const ud = [];
+    for (const t of turneringer) {
+        const kampe = await getMatchesForTournament(t.id);
+        const klubRaekker = await query(
+            'SELECT player_name, club FROM tournament_player_clubs WHERE tournament_id = ?', [t.id]
+        );
+        const klubber = {};
+        for (const r of klubRaekker) if (r.player_name && r.club) klubber[r.player_name] = r.club;
+        ud.push({ id: t.id, navn: t.name, kampe: kampe.map(programKamp), klubber });
+    }
+    return ud;
+}
+
+router.get('/program', async (req, res, next) => {
+    try {
+        const tenant = req.clubDbName || 'direct';
+        const nu = Date.now();
+        let c = _programCache.get(tenant);
+        if (!c || nu - c.t > PROGRAM_CACHE_MS) {
+            c = { t: nu, data: await byggProgram() };
+            _programCache.set(tenant, c);
+        }
+        if (demo.erDemo(req)) for (const t of c.data) _demoSidstSet.set(t.id, nu);
+        res.set('Cache-Control', 'no-cache');
+        res.json(c.data);
+    } catch (error) {
+        next(error);
+    }
+});
+
 // GET /api/tournaments/court/:courtNumber - Den turneringskamp, der spilles på
 // banen (public, som /active). Tabletten spørger her i stedet for at hente
 // hele turneringen ved hvert point — med 200-300 kampe var det ~100 kB pr.
@@ -1239,3 +1298,4 @@ module.exports._spillesteder = { rensSpillesteder, laesSpillesteder };
 module.exports.autoPlan = autoPlan;
 module.exports.koebenhavnNu = koebenhavnNu;
 module.exports.travleSwissRaekker = travleSwissRaekker;
+module.exports._program = { programKamp, cache: _programCache };

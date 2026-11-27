@@ -968,6 +968,11 @@ class BadmintonAPI {
         return this.request('/tournaments/active');
     }
 
+    /** Programmet til telefonerne: aktive turneringers kampe + spillernes klub (oversigtens faner) */
+    async getTurneringsprogram() {
+        return this.request('/tournaments/program', { timeout: 15000 }, 2);
+    }
+
     /**
      * Turneringskampen, der spilles på banen, i samme form som
      * getActiveTournaments() (en liste med højst én turnering med én kamp).

@@ -6,6 +6,11 @@ let allCourtData = [];
 let activeCourts = [];
 let currentPage = 0;
 const COURTS_PER_PAGE = 6;
+// På telefonen med turneringsfaner (js/turnering-program.js) ruller man selv:
+// alle baner på én side, ingen bladren
+function banerPrSide() {
+    return document.body.classList.contains('ov-faner') ? Math.max(activeCourts.length, 1) : COURTS_PER_PAGE;
+}
 // Uden live-forbindelse (SSE) spørges serveren hvert 2. sekund. Med den kommer
 // ændringerne som events, og pollingen er kun et sikkerhedsnet hvert 5. sekund
 // — som på TV'et. Før spurgte oversigten hvert 2. sekund uanset (to kald pr.
@@ -792,7 +797,7 @@ function displayCurrentPage() {
     grid.style.display = 'grid';
 
     // Calculate total pages
-    const totalPages = Math.ceil(activeCourts.length / COURTS_PER_PAGE);
+    const totalPages = Math.ceil(activeCourts.length / banerPrSide());
     // Færre baner end før (fx fra 8 til 6, mens vi stod på side 2): uden dette
     // pegede currentPage ud over sidste side, og skærmen blev helt tom
     if (currentPage >= totalPages) currentPage = 0;
@@ -806,8 +811,8 @@ function displayCurrentPage() {
     }
 
     // Calculate which courts to show on current page
-    const startIndex = currentPage * COURTS_PER_PAGE;
-    const endIndex = startIndex + COURTS_PER_PAGE;
+    const startIndex = currentPage * banerPrSide();
+    const endIndex = startIndex + banerPrSide();
     const courtsToShow = activeCourts.slice(startIndex, endIndex);
 
     // Højst 4 baner: 2 × 2 med ca. 40 % større kort (ellers 3 × 2)
@@ -1181,7 +1186,10 @@ async function refreshIdleSettings() {
 
 function updateIdleState() {
     const hasActivity = activeCourts.length > 0 || activeTeamMatches.length > 0;
-    if (hasActivity) {
+    // Telefonen med turneringsfaner: ingen pauseskærm (den dækker fanerne) —
+    // fanen "Nu" skriver i stedet, at banerne er tomme (body.ov-tom)
+    document.body.classList.toggle('ov-tom', !hasActivity);
+    if (hasActivity || document.body.classList.contains('ov-faner')) {
         _hideIdleScreen();
     } else {
         _showIdleScreen();
@@ -1418,7 +1426,7 @@ async function scheduleRefresh() {
 function startAutoScroll() {
     // Auto-scroll to next page every 10 seconds if there are more than 6 active courts
     scrollTimer = setInterval(() => {
-        if (activeCourts.length > COURTS_PER_PAGE) {
+        if (activeCourts.length > banerPrSide()) {
             nextPage();
         }
     }, SCROLL_INTERVAL);
@@ -1449,7 +1457,7 @@ function updateTimerDisplays() {
 }
 
 function nextPage() {
-    const totalPages = Math.ceil(activeCourts.length / COURTS_PER_PAGE);
+    const totalPages = Math.ceil(activeCourts.length / banerPrSide());
 
     // Move to next page, wrap around to 0 if at end
     currentPage = (currentPage + 1) % totalPages;
