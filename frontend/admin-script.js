@@ -757,6 +757,73 @@ function turneringSide(m, side) {
 // Navn uden seed-mærke ("Anna [3/4]" → "anna"), til sammenligning
 const turneringNavn = (s) => String(s || '').replace(/\s*\[[^\]]*\]\s*$/, '').trim().toLowerCase();
 
+// Rækken uden pulje ("U15 B DS - Pulje 4 — Runde 1" og "U15 B DS — Kvartfinale" → "U15 B DS")
+function turneringRaekkeUdenPulje(label) {
+    return turneringRaekke(label).replace(/\s*[-–]\s*pulje\b.*$/i, '').trim();
+}
+
+// Søgetekst: små bogstaver, uden accenter, ø/æ som o/ae ("Østergaard" findes med "oster")
+function forslagNorm(s) {
+    return String(s || '').toLowerCase().replace(/ø/g, 'o').replace(/æ/g, 'ae')
+        .normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+// Turneringens spillere ud fra kampene: navnet som det står i kampene (så klub og
+// logo følger med) og de rækker, spilleren er med i
+function turneringSpillere(tournamentId) {
+    const t = sidsteTurneringer.find(x => x.id === tournamentId);
+    const spillere = new Map();
+    for (const m of (t && t.matches) || []) {
+        const raekke = turneringRaekkeUdenPulje(m.label);
+        for (const felt of ['side1_player1', 'side1_player2', 'side2_player1', 'side2_player2']) {
+            const navn = String(m[felt] || '').trim();
+            const noegle = turneringNavn(navn);
+            if (!noegle || noegle === '?') continue;
+            let s = spillere.get(noegle);
+            if (!s) { s = { navn, raekker: new Map() }; spillere.set(noegle, s); }
+            if (raekke) s.raekker.set(raekke.toLowerCase(), raekke);
+        }
+    }
+    return [...spillere.values()];
+}
+
+// Forslag til navnefelterne i "Tilføj kamp" og "Rediger": turneringens spillere,
+// søgbare på navn og klub. Spillere fra kampens egen række (labelfeltet) står først;
+// med tomt felt vises kun dem — så en kvartfinale kan udfyldes med to tryk.
+function turneringSpillerForslag(tournamentId, term, labelInputId) {
+    const labelEl = document.getElementById(labelInputId);
+    const raekke = turneringRaekkeUdenPulje(labelEl ? labelEl.value : '').toLowerCase();
+    const ord = forslagNorm(term).split(/\s+/).filter(Boolean);
+    const klubAf = (navn) => (window.LogoMatch && _adminClubByName[LogoMatch.normalizeName(navn)]) || '';
+    const fund = [];
+    for (const s of turneringSpillere(tournamentId)) {
+        // "U15 B HS — Kvartfinale" og "U15 B HS kvartfinale" hører begge til "U15 B HS"
+        const iRaekke = !!raekke && [...s.raekker.keys()].some(k => raekke === k || raekke.startsWith(k + ' '));
+        if (!ord.length && !iRaekke) continue;
+        const klub = klubAf(s.navn);
+        let starter = false;
+        if (ord.length) {
+            if (!ord.every(o => forslagNorm(`${s.navn} ${klub}`).includes(o))) continue;
+            starter = forslagNorm(s.navn).split(/\s+/).some(w => w.startsWith(ord[0]));
+        }
+        fund.push({ s, klub, iRaekke, starter });
+    }
+    fund.sort((a, b) => (b.iRaekke - a.iRaekke) || (b.starter - a.starter) ||
+        a.s.navn.localeCompare(b.s.navn, 'da'));
+    return fund.slice(0, ord.length ? 12 : 40).map(({ s, klub }) => {
+        const logo = window.LogoMatch && LogoMatch.resolvePlayerLogo
+            ? LogoMatch.resolvePlayerLogo(s.navn, {
+                playerLogos: _adminPlayerLogos, clubByName: _adminClubByName, logos: _adminLogoCache
+              })
+            : null;
+        return {
+            name: s.navn,
+            info: [klub, [...s.raekker.values()].join(', ')].filter(Boolean).join(' · '),
+            logoUrl: logo ? logo.url : null
+        };
+    });
+}
+
 // Spillere i en igangværende turneringskamp → banen ("anna" → 3)
 function spillereIGang(tournaments) {
     const iGang = new Map();
@@ -3756,13 +3823,18 @@ window.addEventListener('pagehide', function() {
 });
 
 // ===== Player Name Autocomplete Functionality =====
+// Forslag under et navnefelt. Uden lokalKilde: klubbens spillerdatabase (søges på
+// serveren). Med lokalKilde (turneringens felter): turneringens egne spillere først,
+// med klub og logo, og klubbens database bagefter. Fri indtastning virker altid.
 
 let autocompleteTimeout = null;
 let activeAutocompleteField = null;
 
-function setupPlayerNameAutocomplete(inputId) {
+function setupPlayerNameAutocomplete(inputId, lokalKilde = null) {
     const input = document.getElementById(inputId);
     if (!input) return;
+    input.setAttribute('autocomplete', 'off');
+    if (lokalKilde) input.parentNode.classList.add('har-forslag');
 
     // Create autocomplete container
     const autocompleteContainer = document.createElement('div');
@@ -3773,6 +3845,12 @@ function setupPlayerNameAutocomplete(inputId) {
     // Insert after input field
     input.parentNode.insertBefore(autocompleteContainer, input.nextSibling);
 
+    const visLokale = () => {
+        const lokale = lokalKilde(input.value.trim());
+        showAutocompleteResults(lokale, inputId);
+        return lokale;
+    };
+
     // Add input event listener
     input.addEventListener('input', function(e) {
         const searchTerm = e.target.value.trim();
@@ -3780,47 +3858,77 @@ function setupPlayerNameAutocomplete(inputId) {
         // Clear previous timeout
         if (autocompleteTimeout) {
             clearTimeout(autocompleteTimeout);
+            autocompleteTimeout = null;
         }
+
+        // Turneringens spillere vises med det samme
+        const lokale = lokalKilde ? visLokale() : [];
 
         // Hide dropdown if search term is empty
         if (searchTerm.length === 0) {
-            hideAutocomplete(inputId);
+            if (!lokalKilde) hideAutocomplete(inputId);
             return;
         }
 
         // Debounce search - wait 300ms after user stops typing
         autocompleteTimeout = setTimeout(async () => {
             try {
-                await searchPlayers(searchTerm, inputId);
+                await searchPlayers(searchTerm, inputId, lokale);
             } catch (error) {
                 console.error('Autocomplete search failed:', error);
-                hideAutocomplete(inputId);
+                if (!lokale.length) hideAutocomplete(inputId);
             } finally {
                 autocompleteTimeout = null;
             }
         }, 300);
     });
 
-    // Handle focus
+    // Piletaster, Enter og Escape i listen
+    input.addEventListener('keydown', function(e) {
+        if (autocompleteContainer.style.display === 'none') return;
+        const items = [...autocompleteContainer.querySelectorAll('.autocomplete-item')];
+        if (!items.length) return;
+        let i = items.findIndex(el => el.classList.contains('autocomplete-item--aktiv'));
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            i = e.key === 'ArrowDown' ? Math.min(items.length - 1, i + 1) : Math.max(0, i - 1);
+            items.forEach((el, n) => el.classList.toggle('autocomplete-item--aktiv', n === i));
+            items[i].scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'Enter' && i >= 0) {
+            e.preventDefault();
+            selectPlayer(items[i].dataset.navn, inputId);
+        } else if (e.key === 'Escape') {
+            hideAutocomplete(inputId);
+        }
+    });
+
+    // Handle focus — turneringsfelter viser rækkens spillere straks
     input.addEventListener('focus', function() {
         activeAutocompleteField = inputId;
+        if (lokalKilde) visLokale();
     });
 
     // Handle blur with delay to allow clicking on dropdown
+    // (også når man er gået direkte til et andet navnefelt — så lukker den gamle liste)
     input.addEventListener('blur', function() {
         setTimeout(() => {
-            if (activeAutocompleteField === inputId) {
+            if (document.activeElement !== input) {
                 hideAutocomplete(inputId);
             }
         }, 200);
     });
 }
 
-async function searchPlayers(searchTerm, inputId) {
+async function searchPlayers(searchTerm, inputId, lokale = []) {
     try {
         // Med admin-tokenet: søgningen kræver admin (nr. 13)
         const players = await api.searchPlayers(searchTerm);
-        showAutocompleteResults(players, inputId);
+        // Svaret kom for sent: der er skrevet videre, eller feltet er forladt
+        const input = document.getElementById(inputId);
+        if (!input || input.value.trim() !== searchTerm || document.activeElement !== input) return;
+        const set = new Set(lokale.map(p => turneringNavn(p.name)));
+        const ekstra = (players || []).filter(p => p && p.name && !set.has(turneringNavn(p.name)));
+        showAutocompleteResults(lokale.concat(ekstra).slice(0, Math.max(10, lokale.length)), inputId);
     } catch (error) {
         console.error('Error searching players:', error);
     }
@@ -3838,19 +3946,31 @@ function showAutocompleteResults(players, inputId) {
         return;
     }
 
+    // Logo-kolonnen kun hvis mindst ét forslag har et logo
+    const logoKolonne = players.some(p => p.logoUrl);
+
     // Create dropdown items
     players.forEach(player => {
         const item = document.createElement('div');
         item.className = 'autocomplete-item';
+        item.dataset.navn = player.name;
 
         // Display name with club and age group info
-        const infoText = [player.club, player.age_group, player.gender]
-            .filter(x => x)
-            .join(' • ');
+        const infoText = player.info != null
+            ? player.info
+            : [player.club, player.age_group, player.gender].filter(x => x).join(' • ');
+
+        const logo = !logoKolonne ? ''
+            : player.logoUrl
+                ? `<img class="autocomplete-logo" src="${escapeHtml(player.logoUrl)}" alt="" onerror="this.style.visibility='hidden'">`
+                : '<span class="autocomplete-logo"></span>';
 
         item.innerHTML = `
-            <div class="autocomplete-name">${escapeHtml(player.name)}</div>
-            <div class="autocomplete-info">${escapeHtml(infoText)}</div>
+            ${logo}
+            <div class="autocomplete-tekst">
+                <div class="autocomplete-name">${escapeHtml(player.name)}</div>
+                ${infoText ? `<div class="autocomplete-info">${escapeHtml(infoText)}</div>` : ''}
+            </div>
         `;
 
         item.addEventListener('mousedown', function(e) {
@@ -6639,7 +6759,8 @@ function renderTournaments(tournaments) {
         ['side1p1', 'side1p2', 'side2p1', 'side2p2'].forEach(slot => {
             const inputId = `t${t.id}_${slot}`;
             if (!tournamentAutocompleteSetupIds.has(inputId)) {
-                setupPlayerNameAutocomplete(inputId);
+                setupPlayerNameAutocomplete(inputId,
+                    (term) => turneringSpillerForslag(t.id, term, `t${t.id}_label`));
                 tournamentAutocompleteSetupIds.add(inputId);
             }
         });
@@ -6666,7 +6787,8 @@ function renderTournaments(tournaments) {
             ['s1p1', 's1p2', 's2p1', 's2p2'].forEach(slot => {
                 const inputId = `te_${m.id}_${slot}`;
                 if (!tournamentAutocompleteSetupIds.has(inputId)) {
-                    setupPlayerNameAutocomplete(inputId);
+                    setupPlayerNameAutocomplete(inputId,
+                        (term) => turneringSpillerForslag(t.id, term, `te_${m.id}_label`));
                     tournamentAutocompleteSetupIds.add(inputId);
                 }
             });
