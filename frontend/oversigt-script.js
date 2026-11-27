@@ -97,7 +97,11 @@ async function refreshOverviewLogos() {
         _overviewPlayerLogos = [];
         _overviewClubByName = {};
     }
+    if (window.TurneringProgram) TurneringProgram.logoer();
 }
+
+// Telefonens turneringsfaner (js/turnering-program.js) bruger de samme logoer
+window.ovLogoer = () => ({ logos: _overviewLogos, playerLogos: _overviewPlayerLogos, clubByName: _overviewClubByName });
 
 let _hkRenderedKey = ''; // signatur af struktur (side + match-ids + game-ids + status)
 const HK_DOUBLES = HoldkampFormater.DOUBLE_KATEGORIER; // inkl. GS = golden set
@@ -581,6 +585,8 @@ async function loadAllCourts() {
         setOversigtForbindelseMistet(false);
 
         allCourtData = allGameStates.map(gameState => ({ ...gameState }));
+        // Den live stilling til telefonens Program-fane
+        if (window.TurneringProgram) TurneringProgram.baner(allCourtData);
 
         // Sync pause countdown state from fresh API data.
         // Serveren gemmer kun restBreakSecondsLeft hvert ~10. sekund, så værdien er

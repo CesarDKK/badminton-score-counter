@@ -377,3 +377,19 @@ body.ov-faner.ov-tom #loadingIndicator { display: none; }
     line-height: 1.45;
     color: var(--text-muted, rgba(255, 255, 255, 0.62));
 }
+
+/* Klublogoet foran navnet (som på oversigtens banekort) */
+.tp-logo {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    flex-shrink: 0;
+    align-self: center;
+}
+
+/* Det sæt, der spilles nu: temaets accent, så det skiller sig ud fra de afsluttede */
+.tp-tal--nu {
+    color: var(--color-accent);
+    font-weight: 700;
+    min-width: 26px;
+}

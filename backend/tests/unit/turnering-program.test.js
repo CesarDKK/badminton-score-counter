@@ -183,3 +183,45 @@ test('fanerne kommer aldrig på TV/kiosk: kun touch uden mus, ikke kiosk-paramet
         }
     }
 });
+
+test('live stilling i Program: banens point vendt til kampens side 1', () => {
+    const { liveStilling } = frontend();
+    const k = { side1: ['A Holm'], side2: ['B Lund'] };
+    const bane = (ekstra = {}) => ({
+        isActive: true, matchCompleted: false, restBreakActive: false,
+        player1: { name: 'A Holm', score: 13, games: 1 }, player2: { name: 'B Lund', score: 8, games: 0 },
+        setScoresHistory: [{ score: '21-17', player1Name: 'A Holm', player2Name: 'B Lund' }], ...ekstra
+    });
+    assert.deepEqual(liveStilling(k, bane()), { saet: [[21, 17]], nu: [13, 8], afgjort: false });
+    // Spillerne står omvendt på banen
+    const omvendt = bane({
+        player1: { name: 'B Lund', score: 8, games: 0 }, player2: { name: 'A Holm', score: 13, games: 1 },
+        setScoresHistory: [{ score: '17-21', player1Name: 'B Lund', player2Name: 'A Holm' }]
+    });
+    assert.deepEqual(liveStilling(k, omvendt), { saet: [[21, 17]], nu: [13, 8], afgjort: false });
+    // Sættet gemt fra den anden side (skiftet side efter 1. sæt)
+    assert.deepEqual(liveStilling(k, bane({ setScoresHistory: [{ score: '17-21', player1Name: 'B Lund', player2Name: 'A Holm' }] })).saet, [[21, 17]]);
+    // Pause mellem sæt: pointene står på det afsluttede sæt → 0-0
+    assert.deepEqual(liveStilling(k, bane({ restBreakActive: true, player1: { name: 'A Holm', score: 21, games: 1 }, player2: { name: 'B Lund', score: 17, games: 0 } })).nu, [0, 0]);
+    // Afgjort: ingen point i gang
+    const slut = liveStilling(k, bane({ player1: { name: 'A Holm', score: 21, games: 2 } }));
+    assert.equal(slut.afgjort, true);
+    assert.equal(slut.nu, null);
+    // En anden kamp på banen, eller banen er ryddet
+    assert.equal(liveStilling(k, bane({ player1: { name: 'C', score: 1 }, player2: { name: 'D', score: 0 } })), null);
+    assert.equal(liveStilling(k, bane({ isActive: false })), null);
+    assert.equal(liveStilling(k, undefined), null);
+    // Double: makkeren tæller også
+    assert.ok(liveStilling({ side1: ['X', 'A Holm'], side2: ['Y', 'Z'] }, bane({ player1: { name: 'X', name2: 'A Holm', score: 2 } })));
+});
+
+test('oversigten giver banerne og logoerne videre til telefonens faner', () => {
+    const ov = laes('frontend/oversigt-script.js');
+    assert.match(ov, /allCourtData = allGameStates\.map\(gameState => \(\{ \.\.\.gameState \}\)\);\s*\/\/[^\n]*\s*if \(window\.TurneringProgram\) TurneringProgram\.baner\(allCourtData\);/);
+    assert.match(ov, /window\.ovLogoer = \(\) => \(\{ logos: _overviewLogos, playerLogos: _overviewPlayerLogos, clubByName: _overviewClubByName \}\);/);
+    assert.match(ov, /if \(window\.TurneringProgram\) TurneringProgram\.logoer\(\);/);
+    const src = laes('frontend/js/turnering-program.js');
+    assert.match(src, /window\.LogoMatch\.resolvePlayerLogo\(navn, window\.ovLogoer\(\)\)/);
+    // Stillingen opdateres på stedet — listen tegnes kun forfra, når programmet er hentet på ny
+    assert.match(src, /if \(afsluttet\) hent\(false\)\.then\(ny => \{ if \(ny\) tegn\(\); \}\);/);
+});

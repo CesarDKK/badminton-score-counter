@@ -27,7 +27,8 @@
         turneringId: null,
         tekst: '',
         valgt: null,       // { type: 'spiller' | 'klub', navn }
-        mig: null
+        mig: null,
+        baner: new Map()   // bane-nr (tekst) -> banens tilstand fra oversigten (live)
     };
     let timer = null;
     let henter = null;
@@ -126,6 +127,33 @@
         }).filter(Boolean);
     }
 
+    // Den live stilling for en kamp i gang ud fra banens tilstand (samme data som
+    // fanen "Nu"), set fra kampens side 1: { saet: [[a,b],...], nu: [a,b] | null }.
+    // null, hvis banen ikke spiller kampen (fx allerede ryddet).
+    function liveStilling(k, bane) {
+        if (!bane || !bane.isActive || !bane.player1 || !bane.player2) return null;
+        const n = (s) => norm(s);
+        const p1 = bane.player1.name, p2 = bane.player2.name;
+        const i1 = (k.side1 || []).some(x => n(x) === n(p1) || n(x) === n(bane.player1.name2));
+        const i2 = (k.side2 || []).some(x => n(x) === n(p1) || n(x) === n(bane.player1.name2));
+        if (!i1 && !i2) return null; // en anden kamp står på banen
+        const byttet = !i1 && i2;
+        const saet = (bane.setScoresHistory || []).map(s => {
+            const [a, b] = String((s && s.score) || s || '0-0').split('-').map(x => parseInt(x, 10) || 0);
+            // Sættet er gemt fra den spiller, der stod øverst i sættet
+            const vendt = !!(s && s.player1Name) && s.player1Name !== p1 && !(p2 && s.player2Name === p2);
+            return vendt ? [b, a] : [a, b];
+        });
+        const g1 = bane.player1.games || 0, g2 = bane.player2.games || 0;
+        const afgjort = !!bane.matchCompleted || g1 >= 2 || g2 >= 2;
+        let nu = afgjort ? null : [bane.player1.score || 0, bane.player2.score || 0];
+        // Pausen mellem sæt: pointene står stadig på det afsluttede sæt
+        const sidste = saet[saet.length - 1];
+        if (nu && bane.restBreakActive && sidste && ((nu[0] === sidste[0] && nu[1] === sidste[1]) || (nu[0] === sidste[1] && nu[1] === sidste[0]))) nu = [0, 0];
+        const vend = (x) => (byttet ? [x[1], x[0]] : x);
+        return { saet: saet.map(vend), nu: nu && vend(nu), afgjort };
+    }
+
     // Grupperer en sorteret liste efter dag og klokkeslæt
     function grupper(kampe, tidAf) {
         const dage = [];
@@ -162,7 +190,7 @@
 
     async function hent(tving) {
         if (henter) return henter;
-        if (!tving && Date.now() - tilstand.hentet < 10 * 1000) return;
+        if (!tving && Date.now() - tilstand.hentet < 10 * 1000) return false;
         henter = (async () => {
             try {
                 const data = await window.BadmintonAPI.getTurneringsprogram();
@@ -171,6 +199,7 @@
                     tilstand.hentet = Date.now();
                     if (!data.some(t => t.id === tilstand.turneringId)) tilstand.turneringId = data[0] ? data[0].id : null;
                     saetFejl(false);
+                    return true;
                 }
             } catch {
                 saetFejl(!!tilstand.hentet);
@@ -301,10 +330,46 @@
 
     // ── Tegning ──
 
+    // Klublogoet som på oversigtens banekort (samme lister, se ovLogoer i
+    // oversigt-script.js): spillerens eget logo, ellers klubbens — ellers intet
+    function logoHtml(navn) {
+        if (!window.LogoMatch || typeof window.ovLogoer !== 'function') return '';
+        const logo = window.LogoMatch.resolvePlayerLogo(navn, window.ovLogoer());
+        return logo && logo.url ? `<img class="tp-logo" src="${esc(logo.url)}" alt="" loading="lazy" onerror="this.remove()">` : '';
+    }
+
     function navnKnap(navn, klubber, fremhaev) {
         const klub = klubber[navn];
-        return `<button type="button" class="tp-navn${fremhaev ? ' tp-navn--valgt' : ''}" data-handling="spiller" data-navn="${esc(navn)}">${esc(navn)}</button>`
+        return logoHtml(navn)
+            + `<button type="button" class="tp-navn${fremhaev ? ' tp-navn--valgt' : ''}" data-handling="spiller" data-navn="${esc(navn)}">${esc(navn)}</button>`
             + (klub ? `<span class="tp-klub">${esc(klub)}</span>` : '');
+    }
+
+    // Tallene i en kamp i gang: afsluttede sæt + det sæt, der spilles nu
+    function liveTalHtml(stilling, nr) {
+        if (!stilling) return '';
+        const i = nr - 1;
+        return stilling.saet.map(s => `<span class="tp-tal${s[i] > s[1 - i] ? ' tp-tal--vundet' : ''}">${s[i]}</span>`).join('')
+            + (stilling.nu ? `<span class="tp-tal tp-tal--nu">${stilling.nu[i]}</span>` : '');
+    }
+
+    function liveKort(k, klubber, valgt) {
+        const st = liveStilling(k, tilstand.baner.get(String(k.bane)));
+        const raekke = (side, nr) => `
+            <div class="tp-resultat__raekke">
+                <div class="tp-side">${sideHtml(side, klubber, valgt)}</div>
+                <div class="tp-tallene" data-live="${k.id}:${nr}">${liveTalHtml(st, nr)}</div>
+                <span class="tp-vinder"></span>
+            </div>`;
+        return `
+        <article class="tp-kort tp-kort--igang tp-kort--resultat" data-kamp="${k.id}">
+            <div class="tp-kort__hoved">
+                <span class="tp-raekke">${esc(k.raekke || 'Kamp')}</span>
+                <span class="tp-maerke tp-maerke--igang">${k.bane ? `Bane ${esc(k.bane)} · ` : ''}i gang</span>
+            </div>
+            ${raekke(k.side1 || [], 1)}
+            ${raekke(k.side2 || [], 2)}
+        </article>`;
     }
 
     function sideHtml(navne, klubber, valgt) {
@@ -313,13 +378,11 @@
     }
 
     function programKort(k, klubber, valgt) {
-        const status = k.status === 'active'
-            ? `<span class="tp-maerke tp-maerke--igang">${k.bane ? `Bane ${esc(k.bane)} · ` : ''}i gang</span>`
-            : '';
+        if (k.status === 'active') return liveKort(k, klubber, valgt);
         return `
-        <article class="tp-kort${k.status === 'active' ? ' tp-kort--igang' : ''}">
+        <article class="tp-kort">
             <div class="tp-kort__hoved">
-                <span class="tp-raekke">${esc(k.raekke || 'Kamp')}</span>${status}
+                <span class="tp-raekke">${esc(k.raekke || 'Kamp')}</span>
             </div>
             <div class="tp-side">${sideHtml(k.side1, klubber, valgt)}</div>
             <div class="tp-mod">mod</div>
@@ -474,8 +537,32 @@
         });
     }
 
+    // Oversigten henter banerne hvert 2.-5. sekund (eller ved hvert point via
+    // live-forbindelsen) og giver dem videre her: stillingen i Program opdateres
+    // på stedet, uden at listen tegnes forfra
+    function baner(liste) {
+        tilstand.baner = new Map((liste || []).map(b => [String(b.courtId), b]));
+        if (tilstand.fane !== 'program') return;
+        const t = turnering();
+        if (!t) return;
+        let afsluttet = false;
+        document.querySelectorAll('#tpListe [data-live]').forEach(el => {
+            const [id, nr] = el.dataset.live.split(':').map(Number);
+            const k = t.kampe.find(x => x.id === id);
+            if (!k) return;
+            const st = liveStilling(k, tilstand.baner.get(String(k.bane)));
+            if (!st || st.afgjort) afsluttet = true;
+            const html = liveTalHtml(st, nr);
+            if (el.innerHTML !== html) el.innerHTML = html;
+        });
+        // Kampen er slut på banen: hent programmet, så den flytter til Afsluttet
+        if (afsluttet) hent(false).then(ny => { if (ny) tegn(); });
+    }
+
     window.TurneringProgram = {
-        _test: { norm, passer, forslag, delTid, programKampe, afsluttedeKampe, saetFraSide1, grupper, erSkaerm }
+        baner,
+        logoer: () => tegn(),
+        _test: { norm, passer, forslag, delTid, programKampe, afsluttedeKampe, saetFraSide1, grupper, erSkaerm, liveStilling }
     };
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
